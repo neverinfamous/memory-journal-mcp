@@ -102,9 +102,15 @@ export function createAuditInterceptor(auditLogger: AuditLogger): AuditIntercept
     return {
         async around<T>(toolName: string, args: unknown, fn: () => Promise<T>): Promise<T> {
             const scope = getRequiredScope(toolName)
+            const rawUri =
+                typeof args === 'object' && args !== null
+                    ? (args as Record<string, unknown>)['uri']
+                    : undefined
+            const sensitiveUri =
+                typeof rawUri === 'string' && isSensitiveAuditTarget(rawUri) ? rawUri : undefined
 
-            // Read-scoped tools are only audited when --audit-reads is enabled
-            if (!ALWAYS_AUDITED_SCOPES.has(scope) && !auditReads) {
+            // Read-scoped tools are only audited when --audit-reads is enabled or targeting a sensitive URI
+            if (!ALWAYS_AUDITED_SCOPES.has(scope) && !auditReads && sensitiveUri === undefined) {
                 return fn()
             }
 
@@ -179,13 +185,19 @@ export function createAuditInterceptor(auditLogger: AuditLogger): AuditIntercept
                 }
 
                 if (isReadScope) {
-                    // Compact read entries — omit args, user, scopes for ~100 byte entries
+                    const readCategory =
+                        sensitiveUri !== undefined
+                            ? resolveResourceAuditCategory(sensitiveUri)
+                            : 'read'
+                    const effectiveReadScope =
+                        readCategory === 'audit' || readCategory === 'team' ? readCategory : scope
+                    // Log read entry metadata (omitting args; reads are recorded unless omitted by --audit-reads)
                     auditLogger.log({
                         timestamp: new Date().toISOString(),
                         requestId,
                         tool: toolName,
-                        category: 'read',
-                        scope,
+                        category: readCategory,
+                        scope: effectiveReadScope,
                         user,
                         scopes,
                         sessionId,
@@ -225,6 +237,13 @@ export interface AuditOperationOptions {
     resourceUri?: string | undefined
     workspaceId?: string | undefined
     projectNumber?: number | undefined
+    capabilities?:
+        | {
+              requiresTeamScope?: boolean
+              requiresAuditScope?: boolean
+              requiresAdminScope?: boolean
+          }
+        | undefined
 }
 
 /**
@@ -240,7 +259,9 @@ export async function auditOperation<T>(
 ): Promise<T> {
     const target = options?.resourceUri ?? name
     const isSensitiveResource =
-        options?.forceAudit === true || isSensitiveAuditTarget(target)
+        options?.forceAudit === true ||
+        options?.capabilities?.requiresAdminScope === true ||
+        isSensitiveAuditTarget(target, options?.capabilities)
     if (
         !auditLogger ||
         !auditLogger.config.enabled ||
@@ -257,7 +278,14 @@ export async function auditOperation<T>(
     const uriScope = extractAuditScopeFromUri(target, reqCtx)
     const workspaceId = options?.workspaceId ?? uriScope.workspaceId
     const projectNumber = options?.projectNumber ?? uriScope.projectNumber
-    const category = resolveResourceAuditCategory(target)
+    const category: AuditCategory =
+        options?.capabilities?.requiresAdminScope === true
+            ? 'admin'
+            : options?.capabilities?.requiresAuditScope === true
+              ? 'audit'
+              : options?.capabilities?.requiresTeamScope === true
+                ? 'team'
+                : resolveResourceAuditCategory(target)
 
     const requestId = generateRequestId()
     const start = performance.now()
@@ -298,7 +326,10 @@ export async function auditOperation<T>(
             sessionId,
             tool: `${operationType}:${name}`,
             category,
-            scope: category === 'audit' || category === 'team' ? category : 'read',
+            scope:
+                category === 'admin' || category === 'audit' || category === 'team'
+                    ? category
+                    : 'read',
             user,
             scopes,
             durationMs,

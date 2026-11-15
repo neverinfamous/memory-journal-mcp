@@ -49,7 +49,14 @@ export function formatZodError(error: ZodError): string {
 export function formatHandlerError(err: unknown): ErrorResponse {
     // MemoryJournalMcpError and subclasses (OAuthError, SecurityError, etc.)
     if (err instanceof MemoryJournalMcpError) {
-        return err.toResponse()
+        const response = err.toResponse()
+        if (!err.hasExplicitSuggestion) {
+            const matched = matchSuggestion(err.message)
+            if (matched?.suggestion !== undefined) {
+                response.suggestion = matched.suggestion
+            }
+        }
+        return response
     }
 
     // Native AggregateError handling
@@ -69,12 +76,14 @@ export function formatHandlerError(err: unknown): ErrorResponse {
 
     // Zod validation errors
     if (err instanceof ZodError) {
+        const formatted = formatZodError(err)
+        const matched = matchSuggestion(formatted)
         return {
             success: false,
-            error: formatZodError(err),
+            error: formatted,
             code: 'VALIDATION_ERROR',
             category: 'validation',
-            suggestion: 'Check input parameters against the tool schema',
+            suggestion: matched?.suggestion ?? 'Check input parameters against the tool schema',
             recoverable: false,
         }
     }

@@ -21,6 +21,7 @@ import { appendFile, mkdir, open, rename, stat, readFile } from 'node:fs/promise
 import { dirname } from 'node:path'
 import type { AuditConfig, AuditEntry, AuditSearchFilters } from './types.js'
 import { logger } from '../utils/logger.js'
+import { getRequestContext } from '../utils/request-context.js'
 import { parseAuditLine, matchesAuditFilters } from './audit-query-helpers.js'
 
 // ============================================================================
@@ -93,6 +94,13 @@ export class AuditLogger {
     }
 
     /**
+     * Whether audit logging is configured for write-only stderr output.
+     */
+    isStderrOnly(): boolean {
+        return this.stderrMode
+    }
+
+    /**
      * Append an audit entry to the buffer.
      * Non-blocking — the entry is serialised and queued; the
      * actual file write happens on the next flush cycle.
@@ -142,7 +150,7 @@ export class AuditLogger {
         this.log({
             timestamp: new Date().toISOString(),
             requestId: context?.requestId ?? `denied-${Date.now().toString()}`,
-            sessionId: context?.sessionId ?? undefined,
+            sessionId: context?.sessionId ?? getRequestContext()?.sessionId ?? undefined,
             tool: toolName,
             category: context?.category ?? 'read',
             scope: context?.scope ?? '',
@@ -250,18 +258,14 @@ export class AuditLogger {
             try {
                 fh = await open(this.config.logPath, 'r')
             } catch (openErr) {
-                const code =
-                    typeof openErr === 'object' && openErr !== null && 'code' in openErr
-                        ? (openErr as { code?: unknown }).code
-                        : undefined
-                if (code !== 'ENOENT' && code !== 'EISDIR') {
-                    logger.warning('Failed to open audit log file for reading', {
-                        module: 'AuditLogger',
-                        logPath: this.config.logPath,
-                        error: openErr instanceof Error ? openErr.message : String(openErr),
-                    })
-                }
-                return []
+                const code = nodeErrorCode(openErr)
+                if (code === 'ENOENT' || code === 'EISDIR') return []
+                logger.warning('Failed to open audit log file for reading', {
+                    module: 'AuditLogger',
+                    logPath: this.config.logPath,
+                    error: openErr instanceof Error ? openErr.message : String(openErr),
+                })
+                throw openErr
             }
 
             try {

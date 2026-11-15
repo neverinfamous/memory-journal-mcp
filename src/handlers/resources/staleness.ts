@@ -5,6 +5,7 @@ import type {
     ResourceContext,
     ResourceResult,
 } from './shared.js'
+import { getBaseUri } from './shared.js'
 import { formatHandlerError } from '../../utils/error-helpers.js'
 import { loadProjectRegistryFromConfig } from '../../utils/workspace-resolver.js'
 import { workspacesForProject } from '../../utils/write-scope.js'
@@ -135,7 +136,7 @@ export function getStalenessResourceDefinitions(): InternalResourceDef[] {
             annotations: withPriority(0.6, ASSISTANT_FOCUSED),
             handler: (uri: string, context: ResourceContext): ResourceResult => {
                 try {
-                    const match = /^memory:\/\/staleness\/([^/]+)$/.exec(uri)
+                    const match = /^memory:\/\/staleness\/([^/?#]+)$/.exec(getBaseUri(uri))
                     if (!match) {
                         return { data: { error: 'Invalid project number in URI', code: -32002 } }
                     }

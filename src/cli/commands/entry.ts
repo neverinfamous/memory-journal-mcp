@@ -5,13 +5,12 @@ import { z } from 'zod'
 import { ValidationError } from '../../types/errors.js'
 import { activeProjectRegistry, pairStoredScope } from '../../utils/write-scope.js'
 import { resolveWorkspaceId } from '../../utils/workspace-resolver.js'
+import { resolveAuthor } from '../../utils/security-utils.js'
 import { createEntryOptionsSchema, updateEntryOptionsSchema } from '../schemas.js'
 import {
     getDb,
     parseContent,
     parseFrontmatter,
-    parseRelatedTo,
-    parseRelationships,
     parseMetadata,
     buildEntryPayload,
     type EntryPayload,
@@ -24,16 +23,7 @@ import {
 export const createEntrySchema = createEntryOptionsSchema
 export const updateEntrySchema = updateEntryOptionsSchema
 
-export {
-    getDb,
-    parseContent,
-    parseFrontmatter,
-    parseRelatedTo,
-    parseRelationships,
-    parseMetadata,
-    buildEntryPayload,
-    type EntryPayload,
-}
+export { getDb, parseContent, parseFrontmatter, buildEntryPayload, type EntryPayload }
 
 function handleCliEntryError(e: unknown, actionLabel: 'create' | 'update'): never {
     if (e instanceof z.ZodError) {
@@ -200,6 +190,7 @@ export async function createEntryAction(...args: unknown[]): Promise<void> {
             validationStatus: payload.validationStatus,
             sessionId: payload.sessionId,
             autoContext: payload.autoContextStr,
+            ...(options.team === true ? { isPersonal: false, author: resolveAuthor() } : {}),
         }
 
         const newEntry = db.createEntry(entryInput)

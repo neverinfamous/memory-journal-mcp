@@ -8,10 +8,17 @@
  */
 
 import {
+    ENTRY_TABLE_NAMES,
+    extractParenGroup,
+    extractTopLevelUpdateSetClause,
+    extractTopLevelWhereClause,
+    findTopLevelSqlKeyword,
     hasUnsupportedWherePredicate,
     scopeFromInsertLiterals,
     scopeFromSqlLiterals,
     splitSqlValueList,
+    splitTopLevelSqlAndClauses,
+    stripBalancedOuterParens,
 } from './sql-literal-scope.js'
 
 export interface ParsedSql {
@@ -26,15 +33,8 @@ interface Placeholder {
 
 const UNMAPPED: ParsedSql = { action: 'unmapped', params: {} }
 const UNPARSEABLE = Symbol('unparseable')
-const ENTRY_TABLE_NAMES = new Set([
-    'memory_journal',
-    'entries',
-    'journal',
-    'journal_entries',
-    'memories',
-])
-const WHERE_ID_LITERAL =
-    /\b(?:WHERE|AND)\s+(?:[`"']?[a-zA-Z_][\w]*[`"']?\.)?[`"']?(?:id|entry_id)[`"']?\s*=\s*(\d+)/i
+const CLAUSE_ID_LITERAL =
+    /^(?:[`"']?[a-zA-Z_][\w]*[`"']?\.)?[`"']?(?:id|entry_id)[`"']?\s*=\s*(\d+)$/i
 const COLUMN_BEFORE_PLACEHOLDER = /[`"'[]?([A-Za-z_][\w]*)[`"'\]]?\s*(?:=|==|LIKE)\s*$/i
 
 function isPlainRecord(val: unknown): val is Record<string, unknown> {
@@ -51,23 +51,37 @@ function normalizeColumn(raw: string): string {
 function listPlaceholders(cleanSql: string): Placeholder[] {
     const result: Placeholder[] = []
     let quote: string | null = null
-    let inWhere = false
+    let depth = 0
+    const whereIdx = findTopLevelSqlKeyword(cleanSql, 'WHERE')
     for (let i = 0; i < cleanSql.length; i++) {
         const ch = cleanSql[i] ?? ''
         if (quote !== null) {
-            if (ch === quote) quote = null
+            if (ch === '\\' && i + 1 < cleanSql.length) {
+                i++
+                continue
+            }
+            if (ch === quote) {
+                if (cleanSql[i + 1] === quote) {
+                    i++
+                    continue
+                }
+                quote = null
+            }
             continue
         }
-        if (ch === '"' || ch === "'") {
+        if (ch === '"' || ch === "'" || ch === '`') {
             quote = ch
             continue
         }
-        if (!inWhere && /^WHERE\b/i.test(cleanSql.slice(i, i + 6)) && /\W/.test(cleanSql[i - 1] ?? ' ')) {
-            inWhere = true
-        }
+        if (ch === '(') depth++
+        else if (ch === ')' && depth > 0) depth--
         if (ch === '?') {
             const match = COLUMN_BEFORE_PLACEHOLDER.exec(cleanSql.slice(0, i))
-            result.push({ column: match?.[1] !== undefined ? normalizeColumn(match[1]) : undefined, inWhere })
+            const inWhere = whereIdx >= 0 && i >= whereIdx && depth >= 0
+            result.push({
+                column: match?.[1] !== undefined ? normalizeColumn(match[1]) : undefined,
+                inWhere,
+            })
         }
     }
     return result
@@ -174,7 +188,9 @@ function parseLiteral(raw: string): unknown {
         ((trimmed.startsWith("'") && trimmed.endsWith("'")) ||
             (trimmed.startsWith('"') && trimmed.endsWith('"')))
     ) {
-        return trimmed.slice(1, -1).replace(/''/g, "'")
+        const inner = trimmed.slice(1, -1)
+        const doubled = trimmed.startsWith("'") ? inner.replace(/''/g, "'") : inner.replace(/""/g, '"')
+        return doubled.replace(/\\(['"\\])/g, '$1')
     }
     return UNPARSEABLE
 }
@@ -210,10 +226,13 @@ function applyWhereScope(payload: Record<string, unknown>, cleanSql: string): vo
 }
 
 function literalEntryId(cleanSql: string): number | undefined {
-    const whereClause = /\bWHERE\b[\s\S]*$/i.exec(cleanSql)?.[0]
-    if (whereClause === undefined) return undefined
-    const match = WHERE_ID_LITERAL.exec(whereClause)
-    return match?.[1] !== undefined ? parseInt(match[1], 10) : undefined
+    const whereClause = extractTopLevelWhereClause(cleanSql)
+    if (whereClause === '') return undefined
+    for (const rawClause of splitTopLevelSqlAndClauses(whereClause)) {
+        const match = CLAUSE_ID_LITERAL.exec(stripBalancedOuterParens(rawClause))
+        if (match?.[1] !== undefined) return parseInt(match[1], 10)
+    }
+    return undefined
 }
 
 function parseUpdate(cleanSql: string, args: unknown[]): ParsedSql {
@@ -233,7 +252,7 @@ function parseUpdate(cleanSql: string, args: unknown[]): ParsedSql {
     })
     if (!bound) return UNMAPPED
 
-    const setClause = /\bSET\b([\s\S]*?)(?:\bWHERE\b|$)/i.exec(cleanSql)?.[1] ?? ''
+    const setClause = extractTopLevelUpdateSetClause(cleanSql)
     for (const assignment of splitSqlValueList(setClause)) {
         const eq = assignment.indexOf('=')
         if (eq < 0) continue
@@ -254,7 +273,7 @@ function parseUpdate(cleanSql: string, args: unknown[]): ParsedSql {
         Reflect.deleteProperty(payload, 'workspace_id')
     }
     if (!mergeRecordBinds(payload, args)) return UNMAPPED
-    const whereClause = /\bWHERE\b[\s\S]*$/i.exec(cleanSql)?.[0] ?? ''
+    const whereClause = extractTopLevelWhereClause(cleanSql)
     const whereLiteralScope = scopeFromSqlLiterals(whereClause)
     const whereProj =
         typeof where['project_number'] === 'number'
@@ -313,18 +332,25 @@ function parseInsert(cleanSql: string, args: unknown[]): ParsedSql {
     if (tableName === undefined || !ENTRY_TABLE_NAMES.has(tableName)) return UNMAPPED
 
     const payload: Record<string, unknown> = {}
-    const match = /\bINSERT\s+INTO\b[\s\S]*?\(([^)]*)\)\s*VALUES\s*\(([\s\S]*)\)\s*;?\s*$/i.exec(cleanSql)
     const positional = args.filter((a) => !isPlainRecord(a))
     const hasRecordBind = args.some(isPlainRecord)
-    if (match?.[1] !== undefined && match[2] !== undefined) {
-        const columns = match[1].split(',').map(normalizeColumn)
-        const values = splitSqlValueList(match[2])
+    const valuesIdx = findTopLevelSqlKeyword(cleanSql, 'VALUES')
+    const head = valuesIdx >= 0 ? cleanSql.slice(0, valuesIdx) : ''
+    const openCols = head.indexOf('(')
+    const openVals = valuesIdx >= 0 ? cleanSql.indexOf('(', valuesIdx + 6) : -1
+    const colGroup = openCols >= 0 ? extractParenGroup(head, openCols) : null
+    const valGroup = openVals >= 0 ? extractParenGroup(cleanSql, openVals) : null
+    if (colGroup !== null && valGroup !== null) {
+        const trailing = cleanSql.slice(valGroup.endIdx + 1).replace(/;\s*$/, '').trim()
+        if (trailing !== '' && !/^RETURNING\b/i.test(trailing)) return UNMAPPED
+        const columns = colGroup.inner.split(',').map(normalizeColumn)
+        const values = splitSqlValueList(valGroup.inner)
         if (!bindInsertColumns(payload, columns, values, positional, hasRecordBind)) return UNMAPPED
     } else if (positional.length > 0) {
         return UNMAPPED
     }
     if (!mergeRecordBinds(payload, args)) return UNMAPPED
-    const literalScope = { ...scopeFromSqlLiterals(cleanSql), ...scopeFromInsertLiterals(cleanSql) }
+    const literalScope = scopeFromInsertLiterals(cleanSql)
     if (payload['workspace_id'] === undefined && typeof literalScope['workspace_id'] === 'string') {
         payload['workspace_id'] = literalScope['workspace_id']
     }

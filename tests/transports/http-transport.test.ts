@@ -135,6 +135,8 @@ vi.mock('../../src/utils/logger.js', () => ({
 // ============================================================================
 
 import { HttpTransport, type HttpTransportConfig } from '../../src/transports/http/index.js'
+import { AuthorizationServerDiscovery } from '../../src/auth/authorization-server-discovery.js'
+import { AuthServerDiscoveryError } from '../../src/auth/errors.js'
 
 // ============================================================================
 // Helpers
@@ -722,6 +724,14 @@ describe('HttpTransport', () => {
                 ok: true,
                 json: async () => ({ keys: [] }),
             }) as unknown as typeof fetch
+            const discoverSpy = vi
+                .spyOn(AuthorizationServerDiscovery.prototype, 'discover')
+                .mockRejectedValueOnce(
+                    new AuthServerDiscoveryError(
+                        'https://auth.example.com',
+                        new Error('HTTP 404: Not Found')
+                    )
+                )
 
             try {
                 const config: HttpTransportConfig = {
@@ -739,6 +749,7 @@ describe('HttpTransport', () => {
                 // Should register the well-known route
                 expect(mockRoutes['get']!['/.well-known/oauth-protected-resource']).toBeDefined()
             } finally {
+                discoverSpy.mockRestore()
                 global.fetch = originalFetch
             }
         })

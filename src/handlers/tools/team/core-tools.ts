@@ -114,7 +114,8 @@ export function getTeamCoreTools(context: ToolContext): ToolDefinition[] {
                     const authorResult = resolveTeamCreateAuthor(
                         input.author,
                         teamDb,
-                        context.config
+                        context.config,
+                        wsId
                     )
                     if ('errorResponse' in authorResult) {
                         return authorResult.errorResponse
@@ -222,13 +223,18 @@ export function getTeamCoreTools(context: ToolContext): ToolDefinition[] {
 
                     const { entry_id, include_relationships, project_number, workspace_id } =
                         TeamGetEntryByIdSchema.parse(params)
-                    let wsId = resolveWorkspaceId(workspace_id, project_number, context.config)
-                    const projectNumber = project_number
-                    const entry = teamDb.getEntryById(entry_id, wsId)
-                    if (entry?.workspaceId !== undefined && wsId === '*') {
-                        wsId = entry.workspaceId
+                    const wsId = resolveWorkspaceId(workspace_id, project_number, context.config)
+                    const projectNumber = resolveTeamProjectNumber(
+                        context,
+                        wsId,
+                        project_number,
+                        workspace_id
+                    )
+                    if (projectNumber === undefined || projectNumber === null) {
+                        return missingTeamProjectNumberError()
                     }
 
+                    const entry = teamDb.getEntryById(entry_id, wsId)
                     if (!entry) {
                         return {
                             success: false,
@@ -240,10 +246,10 @@ export function getTeamCoreTools(context: ToolContext): ToolDefinition[] {
                         }
                     }
 
-                    if (projectNumber !== undefined && entry.projectNumber !== projectNumber) {
+                    if (entry.projectNumber !== projectNumber) {
                         return {
                             success: false,
-                            error: `Team entry ${String(entry_id)} does not belong to project ${projectNumber}`,
+                            error: `Team entry ${String(entry_id)} does not belong to project ${String(projectNumber)}`,
                             code: 'RESOURCE_NOT_FOUND',
                             category: 'resource',
                             suggestion: 'Verify the team entry ID and project number, and try again',
@@ -251,6 +257,7 @@ export function getTeamCoreTools(context: ToolContext): ToolDefinition[] {
                         }
                     }
 
+                    const effectiveWsId = entry.workspaceId ?? wsId
                     const author = fetchAuthor(teamDb, entry_id)
                     const result: Record<string, unknown> = {
                         success: true,
@@ -258,11 +265,35 @@ export function getTeamCoreTools(context: ToolContext): ToolDefinition[] {
                     }
 
                     if (include_relationships) {
-                        const relationships = teamDb.getRelationships(entry_id, wsId)
-                        result['relationships'] = relationships
+                        const rawRels = teamDb.getRelationships(entry_id, effectiveWsId)
+                        const peerIds = [
+                            ...new Set(
+                                rawRels.map((rel) =>
+                                    rel.fromEntryId === entry_id ? rel.toEntryId : rel.fromEntryId
+                                )
+                            ),
+                        ]
+                        const peersMap =
+                            peerIds.length > 0 && typeof teamDb.getEntriesByIds === 'function'
+                                ? teamDb.getEntriesByIds(peerIds, effectiveWsId)
+                                : new Map(
+                                      peerIds
+                                          .map((id) => [id, teamDb.getEntryById(id, effectiveWsId)] as const)
+                                          .filter((pair): pair is readonly [number, NonNullable<typeof entry>] => pair[1] !== null && pair[1] !== undefined)
+                                  )
+                        result['relationships'] = rawRels.filter((rel) => {
+                            const peerId =
+                                rel.fromEntryId === entry_id ? rel.toEntryId : rel.fromEntryId
+                            const peer = peersMap.get(peerId)
+                            return (
+                                peer !== undefined &&
+                                peer.projectNumber === entry.projectNumber &&
+                                (effectiveWsId === '*' || peer.workspaceId === effectiveWsId)
+                            )
+                        })
                     }
 
-                    const importance = teamDb.calculateImportance(entry_id, wsId)
+                    const importance = teamDb.calculateImportance(entry_id, effectiveWsId)
                     if (importance !== null) result['importance'] = importance
 
                     return result

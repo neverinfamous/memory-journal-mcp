@@ -51,7 +51,7 @@ function scanContentLines(
     maxResults: number
 ): void {
     if (content.length > 2 * 1024 * 1024) return
-    const lines = content.split('\n')
+    const lines = content.split(/\r?\n/)
     for (let i = 0; i < lines.length; i++) {
         if (results.length >= maxResults) break
         const line = lines[i]
@@ -129,7 +129,14 @@ export function searchDirectory(
         let entries: fs.Dirent[]
         try {
             entries = fs.readdirSync(currentDir, { withFileTypes: true })
-        } catch {
+        } catch (err) {
+            if (typeof err !== 'object' || err === null || !('code' in err) || err.code !== 'ENOENT') {
+                logger.debug('Skipping unreadable directory during search', {
+                    module: 'DirectorySearch',
+                    dir: currentDir,
+                    error: err instanceof Error ? err.message : String(err),
+                })
+            }
             return
         }
         for (const entry of entries) {

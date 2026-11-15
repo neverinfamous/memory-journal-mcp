@@ -206,6 +206,7 @@ export function healValidationAndScoreFields(obj: Record<string, unknown>): bool
             modified = true
         } else if (NONE_VALIDATION_ALIASES.has(vsStr)) {
             obj['validation_status'] = 'none'
+            modified = true
         } else if (typeof rawVs === 'string' && !['passed', 'none', 'failed'].includes(vsStr)) {
             obj['validation_status'] = 'none'
             modified = true

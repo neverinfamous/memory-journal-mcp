@@ -221,4 +221,8 @@ sessionCmd.action(withValidation(searchSchema, async (args: string[], options: R
     await searchAction(query, rest, command);
 }))
 
-program.parse(normalizeCliArgv(process.argv))
+void program.parseAsync(normalizeCliArgv(process.argv)).catch((err: unknown) => {
+    const msg = err instanceof Error ? err.message : String(err)
+    process.stderr.write(`\x1b[31mError:\x1b[0m ${msg}\n`)
+    process.exitCode = 1
+})

@@ -315,6 +315,8 @@ export class BackupManager {
             let rollbackSuccess = false
             try {
                 await fs.promises.copyFile(oldDbBackupPath, this.ctx.getDbPath())
+                await unlinkBestEffort(`${this.ctx.getDbPath()}-wal`)
+                await unlinkBestEffort(`${this.ctx.getDbPath()}-shm`)
                 rollbackSuccess = true
             } catch (rollbackErr) {
                 if ((rollbackErr as NodeJS.ErrnoException).code !== 'ENOENT') {

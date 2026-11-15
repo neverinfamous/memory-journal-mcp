@@ -63,14 +63,29 @@ export function canAccessTeamSilently(toolName = 'search_entries'): boolean {
     }
 }
 
-/** Return true if the caller explicitly passed `include_team: true`. */
+function hasPlainIncludeTeam(record: Record<string, unknown>): boolean {
+    return record['include_team'] === true || record['includeTeam'] === true
+}
+
+/** Return true if the caller explicitly passed `include_team: true` (top-level or nested filter). */
 export function hasExplicitIncludeTeam(rawParams: unknown): boolean {
-    return (
-        typeof rawParams === 'object' &&
-        rawParams !== null &&
-        !Array.isArray(rawParams) &&
-        Reflect.get(rawParams, 'include_team') === true
-    )
+    if (typeof rawParams !== 'object' || rawParams === null || Array.isArray(rawParams)) {
+        return false
+    }
+    const rec = rawParams as Record<string, unknown>
+    if (hasPlainIncludeTeam(rec)) return true
+    for (const key of ['filter', 'filters'] as const) {
+        const nested = rec[key]
+        if (
+            typeof nested === 'object' &&
+            nested !== null &&
+            !Array.isArray(nested) &&
+            hasPlainIncludeTeam(nested as Record<string, unknown>)
+        ) {
+            return true
+        }
+    }
+    return false
 }
 
 /**

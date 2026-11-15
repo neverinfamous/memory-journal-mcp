@@ -58,10 +58,21 @@ function formatTopEntryTypes(stats: Stats): string {
 }
 
 /** Build the "Global Database Health" markdown block, or a placeholder if stats are unavailable. */
-export function buildStatsSnippet(db: IDatabaseAdapter): string {
+export function buildStatsSnippet(
+    db: IDatabaseAdapter,
+    workspaceId = '*',
+    projectNumber?: number
+): string {
     let statsSnippet = '_Could not fetch database statistics_'
     try {
-        const stats = db.getStatistics('week', undefined, undefined, true, '*') as Stats
+        const stats = db.getStatistics(
+            'week',
+            undefined,
+            undefined,
+            projectNumber === undefined,
+            workspaceId,
+            projectNumber
+        ) as Stats
         const totalEntries =
             typeof stats.totalEntries === 'number' ? stats.totalEntries : 'Unknown'
 
@@ -81,7 +92,7 @@ export function buildStatsSnippet(db: IDatabaseAdapter): string {
         let orphanCount: number | string = 'Unknown'
         let orphanDensity = 'Unknown'
         try {
-            orphanCount = db.getOrphanCount('*')
+            orphanCount = db.getOrphanCount(workspaceId)
             if (typeof totalEntries === 'number' && totalEntries > 0) {
                 orphanDensity = Math.round((orphanCount / totalEntries) * 100) + '%'
             }
@@ -93,7 +104,8 @@ export function buildStatsSnippet(db: IDatabaseAdapter): string {
         const causalMetricsText = formatRelationshipTypes(stats)
         const entryTypesText = formatTopEntryTypes(stats)
 
-        const allTags = typeof db.listTags === 'function' ? db.listTags('*') : []
+        const allTags =
+            typeof db.listTags === 'function' ? db.listTags(workspaceId, projectNumber) : []
         const totalTags = allTags.length
 
         statsSnippet = `**Global Database Health & Relationship Graph Metrics:**
@@ -111,10 +123,24 @@ export function buildStatsSnippet(db: IDatabaseAdapter): string {
 }
 
 /** Build the list of recent entries that are unverified or low-trust. */
-export function buildUnverifiedSnippet(db: IDatabaseAdapter, lookback: number): string {
+export function buildUnverifiedSnippet(
+    db: IDatabaseAdapter,
+    lookback: number,
+    workspaceId = '*',
+    projectNumber?: number
+): string {
     let unverifiedSnippet = '_No unverified entries found._'
     try {
-        const { entries } = db.getRecentEntries(50, undefined, 'timestamp', undefined, false, '*')
+        const fetchLimit = Math.min(Math.max(lookback * 3, 50), 2000)
+        const { entries } = db.getRecentEntries(
+            fetchLimit,
+            undefined,
+            'timestamp',
+            undefined,
+            false,
+            workspaceId,
+            projectNumber
+        )
         const unverified = entries
             .filter(
                 (e) =>

@@ -11,6 +11,7 @@ import {
 } from '../../github/github-integration/index.js'
 import type { ResourceContext } from './shared.js'
 import { resourceWorkspace } from './shared.js'
+import { ValidationError } from '../../types/errors.js'
 
 /**
  * Resolve the workspace and working directory for a project-scoped resource.
@@ -23,16 +24,25 @@ export function resolveProjectScope(
 ): { workspaceId: string; cwd: string; repoPath?: string; hasRegistry: boolean; hint?: string } {
     const registry = context.briefingConfig?.projectRegistry ?? loadProjectRegistryFromConfig()
     if (registry !== undefined && Object.keys(registry).length > 0) {
-        for (const [key, entry] of Object.entries(registry)) {
-            if (entry.project_number === projectNumber) {
-                const entryPath =
-                    entry.path !== undefined && entry.path.trim() !== '' ? entry.path : undefined
-                return {
-                    workspaceId: key,
-                    cwd: entryPath ?? process.cwd(),
-                    ...(entryPath !== undefined ? { repoPath: entryPath } : {}),
-                    hasRegistry: true,
-                }
+        const matches = Object.entries(registry).filter(
+            ([, entry]) => entry.project_number === projectNumber
+        )
+        if (matches.length > 1) {
+            const owners = matches.map(([key]) => key).join(', ')
+            throw new ValidationError(
+                `Ambiguous project_number ${String(projectNumber)}: registered to multiple projects (${owners}). Pass an explicit repo/workspace selector.`
+            )
+        }
+        const matched = matches[0]
+        if (matched !== undefined) {
+            const [key, entry] = matched
+            const entryPath =
+                entry.path !== undefined && entry.path.trim() !== '' ? entry.path : undefined
+            return {
+                workspaceId: key,
+                cwd: entryPath ?? process.cwd(),
+                ...(entryPath !== undefined ? { repoPath: entryPath } : {}),
+                hasRegistry: true,
             }
         }
         return {

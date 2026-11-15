@@ -8,6 +8,7 @@ import { isRecord } from '../../../codemode/normalizers/shared-utils.js'
 import { healCodeModeScript } from './code-healer.js'
 import { extractAndRecoverJsonCode } from './json-entry-recovery.js'
 import {
+    appendSharedEntryFlags,
     getNonEmptyString,
     isNaturalLanguagePrompt,
     parseProjectNumberField,
@@ -19,7 +20,7 @@ import {
 export type { ExecuteCodeInput } from './natural-language-synthesizer.js'
 export { buildSandboxUserContext } from './sandbox-user-context.js'
 
-const CODE_ALIAS_KEYS = [
+export const CODE_ALIAS_KEYS = [
     'code', 'script', 'source', 'query', 'content', 'text', 'body', 'js', 'javascript',
     'payload', 'executionCode', 'input', 'command', 'expression', 'fn', 'exec', 'eval',
     'code_snippet', 'raw_code', 'statement', 'statements', 'codeBlock', 'code_block',
@@ -28,8 +29,15 @@ const CODE_ALIAS_KEYS = [
 
 /** [M10] Scope/metadata keys never mistaken for executable code. */
 const NON_CODE_PARAM_KEYS = new Set([
-    'repo', 'workspace_id', 'workspaceId', 'expected_version', 'auto_version',
-    'project_number', 'projectNumber', 'readonly', 'session_id', 'sessionId', 'context',
+    'repo', 'repo_name', 'workspace_id', 'workspaceId', 'workspace', 'expected_version',
+    'auto_version', 'project_number', 'projectNumber', 'readonly', 'session_id', 'sessionId',
+    'context', 'timeout', 'timeout_ms', 'timeoutMs', 'max_result_size', 'maxResultSize',
+    'max_result_size_bytes', 'maxResultSizeBytes', 'max_result_size_kb', 'maxResultSizeKb',
+    'dry_run', 'dryRun', 'use_test_db', 'group_name', 'groupName', 'entry_type', 'entryType',
+    'type', 'significance_type', 'significanceType', 'validation_status', 'validationStatus',
+    'title', 'tags', 'author', 'is_personal', 'isPersonal', 'share_with_team', 'shareWithTeam',
+    'learned_context', 'learnedContext', 'lesson', 'learning', 'insight', 'knowledge', 'rule',
+    'takeaway', 'finding', 'discovery',
 ])
 
 function extractInitialExecutionCode(
@@ -63,16 +71,41 @@ function readCandidateRecord(input: ExecuteCodeInput, params: unknown): Record<s
 
 function recoverCodeFromParamsRecord(params: Record<string, unknown>): string | undefined {
     const entryObj = isRecord(params['entry']) ? params['entry'] : params
-    const contentVal = getNonEmptyString(entryObj, params, ['content', 'instructions'])
-    const hasEntryMeta = ['title', 'type', 'entry_type'].some((k) => typeof entryObj[k] === 'string')
+    const learnedVal = getNonEmptyString(entryObj, params, [
+        'learned_context', 'learnedContext', 'lesson', 'learning', 'insight',
+        'rule', 'takeaway', 'knowledge', 'finding', 'discovery',
+    ])
+    const contentVal =
+        getNonEmptyString(entryObj, params, ['content', 'instructions']) ?? learnedVal
+    const hasEntryMeta = ['title', 'type', 'entry_type', 'group_name', 'groupName'].some(
+        (k) => typeof entryObj[k] === 'string'
+    )
     if (contentVal !== undefined || hasEntryMeta) {
+        const groupNameVal = getNonEmptyString(entryObj, params, ['group_name', 'groupName'])
+        const baseTags = Array.isArray(entryObj['tags'])
+            ? entryObj['tags'].filter((t): t is string => typeof t === 'string')
+            : []
+        const tags =
+            groupNameVal !== undefined && !baseTags.includes(groupNameVal)
+                ? [...baseTags, groupNameVal]
+                : baseTags
+        const finalTags =
+            learnedVal !== undefined && !tags.includes('learned-context') && !tags.includes('learning')
+                ? [...tags, 'learned-context']
+                : tags
+        const defaultTitle =
+            groupNameVal !== undefined
+                ? groupNameVal.charAt(0).toUpperCase() + groupNameVal.slice(1)
+                : learnedVal !== undefined
+                  ? 'Learned Context'
+                  : 'Journal Entry'
         const payload: Record<string, unknown> = {
-            title: typeof entryObj['title'] === 'string' ? entryObj['title'] : 'Journal Entry',
+            title: typeof entryObj['title'] === 'string' ? entryObj['title'] : defaultTitle,
             content: contentVal ?? '',
             entry_type:
                 getNonEmptyString(entryObj, params, ['type', 'entry_type', 'category']) ??
-                'technical_note',
-            tags: Array.isArray(entryObj['tags']) ? entryObj['tags'] : [],
+                (learnedVal !== undefined ? 'personal_reflection' : 'technical_note'),
+            tags: finalTags,
         }
         const entryWs = readWorkspaceField(entryObj, {})
         const outerWs = entryObj !== params ? readWorkspaceField(params, {}) : undefined
@@ -94,16 +127,7 @@ function recoverCodeFromParamsRecord(params: Record<string, unknown>): string | 
         if (typeof trustVal === 'number') payload['trust_score'] = trustVal
         const valStatus = getNonEmptyString(entryObj, params, ['validation_status', 'validationStatus', 'validation'])
         if (valStatus !== undefined) payload['validation_status'] = valStatus
-        const sigType = getNonEmptyString(entryObj, params, ['significance_type', 'significanceType'])
-        if (sigType !== undefined) payload['significance_type'] = sigType
-        const isPersonal = entryObj['is_personal'] ?? entryObj['isPersonal'] ?? params['is_personal'] ?? params['isPersonal']
-        if (typeof isPersonal === 'boolean') payload['is_personal'] = isPersonal
-        const shareTeam = entryObj['share_with_team'] ?? entryObj['shareWithTeam'] ?? params['share_with_team'] ?? params['shareWithTeam']
-        if (typeof shareTeam === 'boolean') payload['share_with_team'] = shareTeam
-        const rels = Array.isArray(entryObj['relationships']) ? entryObj['relationships'] : Array.isArray(params['relationships']) ? params['relationships'] : undefined
-        if (rels !== undefined) payload['relationships'] = rels
-        const anchors = Array.isArray(entryObj['anchors']) ? entryObj['anchors'] : Array.isArray(params['anchors']) ? params['anchors'] : undefined
-        if (anchors !== undefined) payload['anchors'] = anchors
+        appendSharedEntryFlags(payload, entryObj, params)
         return `return await mj.createEntry(${JSON.stringify(payload)});`
     }
 

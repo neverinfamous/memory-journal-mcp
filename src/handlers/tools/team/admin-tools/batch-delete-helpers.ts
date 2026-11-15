@@ -9,7 +9,7 @@ import type { z } from 'zod'
 import type { ToolContext } from '../../../../types/index.js'
 import type { TeamRole } from '../../../../database/core/interfaces.js'
 import { fetchAuthor, batchFetchAuthors, resolveTeamProjectNumber, triggerTeamNotifications } from '../helpers.js'
-import { enforceEntryOwnership } from '../rbac.js'
+import { enforceEntryOwnership, resolveScopedTeamRole } from '../rbac.js'
 import { resolveWriteWorkspaceId } from '../../write-workspace.js'
 import type { TeamBatchDeleteEntriesSchema, TeamBatchUpdateEntriesSchema } from '../schemas.js'
 import { createBatchProgressReporter, sendProgress } from '../../../../utils/progress-utils.js'
@@ -64,27 +64,24 @@ export function buildValidatedTeamBatchUpdates(
     rootProjectNumber: number | undefined,
     context: ToolContext,
     currentUser: string,
-    callerRole: TeamRole | null,
-    codemodeBypass: boolean,
     preFetchedAuthors: Map<number, string | null> | null
 ):
     | { errorResponse: Record<string, unknown> }
     | { updates: Parameters<TeamDbInstance['updateEntries']>[0]; notFound: number[] } {
     const updates: Parameters<TeamDbInstance['updateEntries']>[0] = []
     const notFound: number[] = []
+    if (rootWorkspaceId !== undefined) {
+        resolveWriteWorkspaceId(rootWorkspaceId, rootProjectNumber, context.config)
+    }
+    const rbacActive = typeof teamDb.isTeamRbacActive === 'function' && teamDb.isTeamRbacActive()
+    const defaultRole = context.config?.teamDefaultRole ?? 'denied'
 
     for (const u of rawUpdates) {
         const explicitWs = u.workspace_id ?? rootWorkspaceId
         const explicitPn = u.project_number ?? rootProjectNumber
-        // [INVARIANT] Never infer an existing entry's workspace from content/tags; explicit 'default' is preserved.
-        let wsId =
-            explicitWs === '*'
-                ? '*'
-                : resolveWriteWorkspaceId(explicitWs, explicitPn, context.config)
+        // [INVARIANT] Never infer an existing entry's workspace from content/tags; explicit 'default' is preserved and '*' rejected.
+        const wsId = resolveWriteWorkspaceId(explicitWs, explicitPn, context.config)
         const existing = teamDb.getEntryById(u.entry_id, wsId)
-        if (existing?.workspaceId !== undefined && wsId === '*') {
-            wsId = existing.workspaceId
-        }
         if (
             existing !== null &&
             existing !== undefined &&
@@ -116,23 +113,25 @@ export function buildValidatedTeamBatchUpdates(
             notFound.push(u.entry_id)
             continue
         }
+        const effectiveWs = existing.workspaceId ?? wsId
+        const callerRole: TeamRole | null = rbacActive
+            ? resolveScopedTeamRole(teamDb, currentUser, defaultRole, effectiveWs)
+            : null
         const author = preFetchedAuthors
             ? (preFetchedAuthors.get(u.entry_id) ?? null)
             : fetchAuthor(teamDb, u.entry_id)
-        if (!codemodeBypass) {
-            try {
-                enforceEntryOwnership(currentUser, author, callerRole)
-            } catch {
-                return {
-                    errorResponse: {
-                        success: false,
-                        error: `Permission Denied: Only the original author ("${author ?? 'none recorded'}") or a team admin can modify team entry ${String(u.entry_id)}.`,
-                        code: 'PERMISSION_DENIED',
-                        category: 'auth',
-                        suggestion: 'You can only update entries that you authored.',
-                        recoverable: false,
-                    },
-                }
+        try {
+            enforceEntryOwnership(currentUser, author, callerRole, teamDb, effectiveWs)
+        } catch {
+            return {
+                errorResponse: {
+                    success: false,
+                    error: `Permission Denied: Only the original author ("${author ?? 'none recorded'}") or a team admin can modify team entry ${String(u.entry_id)}.`,
+                    code: 'PERMISSION_DENIED',
+                    category: 'auth',
+                    suggestion: 'You can only update entries that you authored.',
+                    recoverable: false,
+                },
             }
         }
 
@@ -149,17 +148,22 @@ export function checkSingleTeamOwnership(
     teamDb: TeamDbInstance,
     context: ToolContext,
     entryId: number,
-    action: 'modify' | 'delete' | 'restore'
+    action: 'modify' | 'delete' | 'restore',
+    workspaceId?: string
 ): Record<string, unknown> | null {
-    if (context.config?.codemodeInternalFullAccess === true) return null
     const author = fetchAuthor(teamDb, entryId)
     const currentUser = resolveAuthenticatedAuthor()
     const callerRole =
         teamDb.isTeamRbacActive()
-            ? teamDb.resolveTeamRole(currentUser, context.config?.teamDefaultRole ?? 'denied')
+            ? resolveScopedTeamRole(
+                  teamDb,
+                  currentUser,
+                  context.config?.teamDefaultRole ?? 'denied',
+                  workspaceId
+              )
             : null
     try {
-        enforceEntryOwnership(currentUser, author, callerRole)
+        enforceEntryOwnership(currentUser, author, callerRole, teamDb, workspaceId)
         return null
     } catch {
         const actionVerb = action === 'modify' ? 'update' : action
@@ -202,7 +206,6 @@ export interface DeletableIdsOptions {
     projectNumber: number
     currentUser: string
     callerRole: TeamRole | null
-    codemodeBypass: boolean
     permanent?: boolean
 }
 
@@ -214,7 +217,7 @@ export function filterDeletableIds(
     teamDb: TeamDbInstance,
     opts: DeletableIdsOptions
 ): { validIds: number[]; notFound: number[] } | { errorResponse: Record<string, unknown> } {
-    const { entryIds, wsId, projectNumber, currentUser, callerRole, codemodeBypass, permanent } = opts
+    const { entryIds, wsId, projectNumber, currentUser, callerRole, permanent } = opts
     const validIds: number[] = []
     const notFound: number[] = []
 
@@ -248,20 +251,18 @@ export function filterDeletableIds(
         const author = authorMap
             ? (authorMap.get(id) ?? null)
             : fetchAuthor(teamDb, id)
-        if (!codemodeBypass) {
-            try {
-                enforceEntryOwnership(currentUser, author, callerRole)
-            } catch {
-                return {
-                    errorResponse: {
-                        success: false,
-                        error: `Permission Denied: Only the original author ("${author ?? 'none recorded'}") or a team admin can delete team entry ${String(id)}.`,
-                        code: 'PERMISSION_DENIED',
-                        category: 'auth',
-                        suggestion: 'You can only delete entries that you authored.',
-                        recoverable: false,
-                    },
-                }
+        try {
+            enforceEntryOwnership(currentUser, author, callerRole, teamDb, wsId)
+        } catch {
+            return {
+                errorResponse: {
+                    success: false,
+                    error: `Permission Denied: Only the original author ("${author ?? 'none recorded'}") or a team admin can delete team entry ${String(id)}.`,
+                    code: 'PERMISSION_DENIED',
+                    category: 'auth',
+                    suggestion: 'You can only delete entries that you authored.',
+                    recoverable: false,
+                },
             }
         }
         validIds.push(id)
@@ -317,12 +318,8 @@ export async function executeTeamBatchDelete(
 ): Promise<Record<string, unknown>> {
     await sendProgress(context.progress, 0, 2, 'Deleting team entries...')
     const currentUser = resolveAuthenticatedAuthor()
-    const codemodeBypass = context.config?.codemodeInternalFullAccess === true
 
-    let wsId =
-        input.workspace_id === '*'
-            ? '*'
-            : resolveWriteWorkspaceId(input.workspace_id, input.project_number, context.config)
+    let wsId = resolveWriteWorkspaceId(input.workspace_id, input.project_number, context.config)
     const projectNumber = resolveTeamProjectNumber(
         context,
         wsId,
@@ -332,16 +329,18 @@ export async function executeTeamBatchDelete(
     if (projectNumber === undefined || projectNumber === null) {
         return missingProjectNumberResponse()
     }
-    wsId =
-        input.workspace_id === '*' || wsId === '*'
-            ? '*'
-            : resolveWriteWorkspaceId(input.workspace_id ?? wsId, projectNumber, context.config)
+    wsId = resolveWriteWorkspaceId(input.workspace_id ?? wsId, projectNumber, context.config)
 
     const callerRole = teamDb.isTeamRbacActive?.()
-        ? teamDb.resolveTeamRole(currentUser, context.config?.teamDefaultRole ?? 'denied')
+        ? resolveScopedTeamRole(
+              teamDb,
+              currentUser,
+              context.config?.teamDefaultRole ?? 'denied',
+              wsId
+          )
         : null
 
-    if (input.permanent && !codemodeBypass && callerRole !== null && callerRole !== 'admin') {
+    if (input.permanent && callerRole !== null && callerRole !== 'admin') {
         return permanentDeleteDeniedResponse(currentUser, callerRole)
     }
 
@@ -351,7 +350,6 @@ export async function executeTeamBatchDelete(
         projectNumber,
         currentUser,
         callerRole,
-        codemodeBypass,
         ...(input.permanent !== undefined ? { permanent: input.permanent } : {}),
     })
     if ('errorResponse' in filtered) return filtered.errorResponse

@@ -5,6 +5,7 @@ import { resolveActiveBriefingConfig } from '../../server/mcp-server/tool-regist
 import { callTool } from '../../handlers/tools/index.js'
 import { globalSubscriptionManager } from '../../server/subscription-manager.js'
 import type { ToolHandlerConfig } from '../../types/index.js'
+import type { ServerContext } from '../../server/mcp-server/types.js'
 import { ConfigResolver } from '../../utils/config-resolver.js'
 import { findCanonicalRegistryKey } from '../../utils/workspace-resolver.js'
 import { activeProjectRegistry, pairStoredScope } from '../../utils/write-scope.js'
@@ -14,25 +15,23 @@ import { type z } from 'zod'
 import { execOptionsSchema } from '../schemas.js'
 
 export const execSchema = execOptionsSchema
+type ExecOptions = z.infer<typeof execSchema>
 
-export async function execAction(scriptPath: string, options: z.infer<typeof execSchema>, command: Command): Promise<void> {
-    let resolver: ConfigResolver
-    const configPath = options.config ?? process.env['MEMORY_JOURNAL_CONFIG']
-    const configErrors: string[] = []
+interface PreparedExecConfig {
+    serverOptions: ReturnType<typeof buildServerOptions>['serverOptions']
+    execWorkspaceId: string | undefined
+    explicitDefaultProject: boolean
+}
 
-    try {
-        resolver = new ConfigResolver(command, options, configPath)
-    } catch (err) {
-        configErrors.push(err instanceof Error ? err.message : String(err))
-        resolver = new ConfigResolver(command, {}, undefined)
-    }
-
-    const { serverOptions } = buildServerOptions(resolver, options, command, configErrors)
-
+function validateExecScope(
+    options: ExecOptions,
+    command: Command,
+    serverOptions: PreparedExecConfig['serverOptions'],
+    configErrors: string[]
+): { execWorkspaceId: string | undefined; explicitDefaultProject: boolean } {
     if (options.workspace?.trim() === '*' || options.defaultWorkspaceId?.trim() === '*') {
         configErrors.push("Wildcard '*' is not allowed for --workspace or --default-workspace-id.")
     }
-
     const execWorkspaceId =
         options.workspace !== undefined && options.workspace.trim() !== ''
             ? options.workspace.trim()
@@ -43,10 +42,7 @@ export async function execAction(scriptPath: string, options: z.infer<typeof exe
     if (execWorkspaceId !== undefined && execWorkspaceId !== '*') {
         const prevDefaultWs = serverOptions.defaultWorkspaceId
         serverOptions.defaultWorkspaceId = execWorkspaceId
-        if (
-            !explicitDefaultProject &&
-            execWorkspaceId.toLowerCase() !== prevDefaultWs?.trim().toLowerCase()
-        ) {
+        if (!explicitDefaultProject && execWorkspaceId.toLowerCase() !== prevDefaultWs?.trim().toLowerCase()) {
             serverOptions.defaultProjectNumber = undefined
         }
         const preCheckProj =
@@ -54,83 +50,94 @@ export async function execAction(scriptPath: string, options: z.infer<typeof exe
             (explicitDefaultProject ? serverOptions.defaultProjectNumber : undefined)
         if (preCheckProj !== undefined) {
             try {
-                pairStoredScope(
-                    execWorkspaceId,
-                    preCheckProj,
-                    activeProjectRegistry(serverOptions.projectRegistry)
-                )
+                pairStoredScope(execWorkspaceId, preCheckProj, activeProjectRegistry(serverOptions.projectRegistry))
             } catch (err) {
                 configErrors.push(err instanceof Error ? err.message : String(err))
             }
         }
     }
+    return { execWorkspaceId, explicitDefaultProject }
+}
 
+function prepareExecServerOptions(options: ExecOptions, command: Command): PreparedExecConfig {
+    let resolver: ConfigResolver
+    const configPath = options.config ?? process.env['MEMORY_JOURNAL_CONFIG']
+    const configErrors: string[] = []
+    try {
+        resolver = new ConfigResolver(command, options, configPath)
+    } catch (err) {
+        configErrors.push(err instanceof Error ? err.message : String(err))
+        resolver = new ConfigResolver(command, {}, undefined)
+    }
+    const { serverOptions } = buildServerOptions(resolver, options, command, configErrors)
+    const { execWorkspaceId, explicitDefaultProject } = validateExecScope(
+        options,
+        command,
+        serverOptions,
+        configErrors
+    )
     if (configErrors.length > 0) {
         process.stderr.write('Startup Configuration Errors:\n')
         configErrors.forEach((err) => process.stderr.write(` - ${err}\n`))
         process.exit(1)
     }
-
     if (options.dumpConfig === true) {
         dumpConfigAndExit(serverOptions)
     }
-
     // Override config-sourced test databases for exec unless explicitly passed on the CLI
-    if (options.testDb === undefined) {
-        serverOptions.testDbPath = undefined
+    if (options.testDb === undefined) serverOptions.testDbPath = undefined
+    if (options.testTeamDb === undefined) serverOptions.testTeamDbPath = undefined
+    return { serverOptions, execWorkspaceId, explicitDefaultProject }
+}
+
+function readExecScriptOrExit(scriptPath: string): string {
+    try {
+        return readFileSync(scriptPath, 'utf8')
+    } catch (err) {
+        process.stderr.write(
+            `Failed to read script '${scriptPath}': ${err instanceof Error ? err.message : String(err)}\n`
+        )
+        process.exit(1)
     }
-    if (options.testTeamDb === undefined) {
-        serverOptions.testTeamDbPath = undefined
-    }
+}
 
-    const scriptContent = readFileSync(scriptPath, 'utf8')
-
-    const context = await initializeDependencies(serverOptions)
-    const { 
-        db, teamDb, runtime, vectorManager, teamVectorManager, 
-        github, configManager, allowedIoRoots 
-    } = context
-
-    const currentConfig = configManager.getConfig()
-    const filterConfig = currentConfig.toolFilterConfig
+function buildExecToolConfig(
+    context: ServerContext,
+    serverOptions: PreparedExecConfig['serverOptions'],
+    options: ExecOptions,
+    execWorkspaceId: string | undefined,
+    explicitDefaultProject: boolean
+): ToolHandlerConfig {
+    const currentConfig = context.configManager.getConfig()
     const briefingConfig = resolveActiveBriefingConfig(
         currentConfig.briefingConfig,
         serverOptions,
-        allowedIoRoots
+        context.allowedIoRoots
     )
     const effectiveRegistry = serverOptions.projectRegistry ?? briefingConfig.projectRegistry
-    let resolvedDefaultProj =
-        serverOptions.defaultProjectNumber ?? briefingConfig.defaultProjectNumber
+    let resolvedDefaultProj = serverOptions.defaultProjectNumber ?? briefingConfig.defaultProjectNumber
     if (execWorkspaceId !== undefined) {
-        const canonicalExecWs =
-            findCanonicalRegistryKey(execWorkspaceId, effectiveRegistry) ?? execWorkspaceId
+        const canonicalExecWs = findCanonicalRegistryKey(execWorkspaceId, effectiveRegistry) ?? execWorkspaceId
         const registryExecProj = effectiveRegistry?.[canonicalExecWs]?.project_number
         const briefingMatchesExecWs =
-            briefingConfig.defaultWorkspaceId?.trim().toLowerCase() ===
-            canonicalExecWs.toLowerCase()
+            briefingConfig.defaultWorkspaceId?.trim().toLowerCase() === canonicalExecWs.toLowerCase()
         resolvedDefaultProj = explicitDefaultProject
             ? (options.defaultProject ?? serverOptions.defaultProjectNumber)
             : (serverOptions.defaultProjectNumber ??
                   registryExecProj ??
                   (briefingMatchesExecWs ? briefingConfig.defaultProjectNumber : undefined))
         if (resolvedDefaultProj !== undefined) {
-            pairStoredScope(
-                canonicalExecWs,
-                resolvedDefaultProj,
-                activeProjectRegistry(effectiveRegistry)
-            )
+            pairStoredScope(canonicalExecWs, resolvedDefaultProj, activeProjectRegistry(effectiveRegistry))
         }
     }
-    const baseConfig: ToolHandlerConfig = {
+    const customToolHandlerConfig: ToolHandlerConfig = {
         defaultProjectNumber: resolvedDefaultProj,
         defaultWorkspaceId:
-            options.workspace ??
-            serverOptions.defaultWorkspaceId ??
-            briefingConfig.defaultWorkspaceId,
+            options.workspace ?? serverOptions.defaultWorkspaceId ?? briefingConfig.defaultWorkspaceId,
         projectRegistry: effectiveRegistry,
         additionalTeamDbs: serverOptions.additionalTeamDbs,
-        allowedIoRoots,
-        filterConfig,
+        allowedIoRoots: context.allowedIoRoots,
+        filterConfig: currentConfig.toolFilterConfig,
         authEnabled: Boolean(serverOptions.authToken ?? process.env['MCP_AUTH_TOKEN']),
         oauthEnabled: serverOptions.oauthEnabled,
         codemodeEnabled: true, // Force enabled for the exec command
@@ -139,14 +146,38 @@ export async function execAction(scriptPath: string, options: z.infer<typeof exe
         teamDefaultRole: serverOptions.teamDefaultRole,
         teamAdmin: serverOptions.teamAdmin,
         briefingConfig,
-        runtime,
+        runtime: context.runtime,
         subscriptionManager: globalSubscriptionManager,
     }
+    customToolHandlerConfig.dispatch = (name: string, args: Record<string, unknown>): Promise<unknown> =>
+        callTool(
+            name,
+            args,
+            context.db,
+            context.vectorManager,
+            context.github,
+            customToolHandlerConfig,
+            undefined,
+            context.teamDb ?? undefined,
+            context.teamVectorManager ?? undefined
+        )
+    return customToolHandlerConfig
+}
 
-    const customToolHandlerConfig: ToolHandlerConfig = { ...baseConfig }
-    const dispatch = (name: string, args: Record<string, unknown>): Promise<unknown> =>
-        callTool(name, args, db, vectorManager, github, customToolHandlerConfig, undefined, teamDb ?? undefined, teamVectorManager ?? undefined)
-    customToolHandlerConfig.dispatch = dispatch
+export async function execAction(scriptPath: string, options: ExecOptions, command: Command): Promise<void> {
+    const { serverOptions, execWorkspaceId, explicitDefaultProject } = prepareExecServerOptions(
+        options,
+        command
+    )
+    const scriptContent = readExecScriptOrExit(scriptPath)
+    const context = await initializeDependencies(serverOptions)
+    const customToolHandlerConfig = buildExecToolConfig(
+        context,
+        serverOptions,
+        options,
+        execWorkspaceId,
+        explicitDefaultProject
+    )
 
     let exitCode = 0
     try {
@@ -155,38 +186,30 @@ export async function execAction(scriptPath: string, options: z.infer<typeof exe
             {
                 code: scriptContent,
                 ...(execWorkspaceId !== undefined ? { workspace_id: execWorkspaceId } : {}),
-                ...(options.defaultProject !== undefined
-                    ? { project_number: options.defaultProject }
-                    : {}),
+                ...(options.defaultProject !== undefined ? { project_number: options.defaultProject } : {}),
             },
-            db,
-            vectorManager,
-            github,
+            context.db,
+            context.vectorManager,
+            context.github,
             customToolHandlerConfig,
             undefined,
-            teamDb ?? undefined,
-            teamVectorManager ?? undefined
+            context.teamDb ?? undefined,
+            context.teamVectorManager ?? undefined
         )
-        if (
-            typeof result === 'object' &&
-            result !== null &&
-            'success' in result &&
-            result.success === false
-        ) {
+        if (typeof result === 'object' && result !== null && 'success' in result && result.success === false) {
             exitCode = 1
         }
-
         process.stdout.write(JSON.stringify(result, null, 2) + '\n')
     } catch (error) {
-        process.stderr.write("Execution failed: " + (error instanceof Error ? error.message : String(error)) + '\n')
+        process.stderr.write(`Execution failed: ${error instanceof Error ? error.message : String(error)}\n`)
         exitCode = 1
     } finally {
-        runtime.stopBackgroundTasks?.()
-        configManager.close()
-        if (runtime.auditLogger) await runtime.auditLogger.close()
-        if (context.activeMetricsPath) await runtime.metrics.saveToFile(context.activeMetricsPath)
-        db.close()
-        teamDb?.close()
+        context.runtime.stopBackgroundTasks?.()
+        context.configManager.close()
+        if (context.runtime.auditLogger) await context.runtime.auditLogger.close()
+        if (context.activeMetricsPath) await context.runtime.metrics.saveToFile(context.activeMetricsPath)
+        context.db.close()
+        context.teamDb?.close()
     }
     process.exit(exitCode)
 }

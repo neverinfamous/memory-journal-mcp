@@ -9,10 +9,12 @@ import { ICON_GITHUB } from '../../constants/icons.js'
 import { ASSISTANT_FOCUSED } from '../../utils/resource-annotations.js'
 import type { InternalResourceDef, ResourceContext, ResourceResult } from './shared.js'
 import {
+    getBaseUri,
     resolveScopedGitHubRepo,
     isResourceError,
     resourceWorkspace,
 } from './shared.js'
+import { markUntrustedContentInline } from '../../utils/security-utils.js'
 import { ProtocolError, ProtocolErrorCode } from '@modelcontextprotocol/server'
 
 /**
@@ -29,7 +31,7 @@ export function getGraphResourceDefinitions(): InternalResourceDef[] {
             icons: [ICON_GITHUB],
             annotations: ASSISTANT_FOCUSED,
             handler: async (uri: string, context: ResourceContext): Promise<ResourceResult> => {
-                const match = /memory:\/\/actions\/recent\/?(.*)?/.exec(uri)
+                const match = /^memory:\/\/actions\/recent(?:\/(.*))?$/.exec(getBaseUri(uri))
                 const targetRepo = match?.[1] ? decodeURIComponent(match[1]) : undefined
 
                 try {
@@ -42,13 +44,15 @@ export function getGraphResourceDefinitions(): InternalResourceDef[] {
                         const entries = runs.map((run) => ({
                             id: -1 * run.id,
                             entryType: 'tool_output',
-                            content: `Workflow: ${run.name}\nStatus: ${run.status}\nConclusion: ${run.conclusion || 'pending'}\nBranch: ${run.headBranch}\nURL: ${run.url}`,
+                            content: `Workflow: ${markUntrustedContentInline(run.name)}\nStatus: ${markUntrustedContentInline(run.status)}\nConclusion: ${run.conclusion ? markUntrustedContentInline(run.conclusion) : 'pending'}\nBranch: ${markUntrustedContentInline(run.headBranch)}\nURL: ${run.url}`,
                             timestamp: run.createdAt,
                             isPersonal: false,
                             significanceType: null,
                             workflowRunId: run.id,
-                            workflowName: run.name,
-                            workflowStatus: run.conclusion || run.status,
+                            workflowName: markUntrustedContentInline(run.name),
+                            workflowStatus: markUntrustedContentInline(
+                                run.conclusion || run.status
+                            ),
                         }))
 
                         const data = { entries, count: entries.length, source: 'github_api' }

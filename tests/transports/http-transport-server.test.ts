@@ -68,7 +68,13 @@ vi.mock('../../src/transports/http/security.js', () => ({
     setSecurityHeaders: vi.fn(),
     setCorsHeaders: vi.fn(),
     checkRateLimit: vi.fn().mockReturnValue({ allowed: true }),
-    buildAllowedHostHeaders: vi.fn().mockReturnValue(['localhost', '127.0.0.1']),
+    buildAllowedHostHeaders: vi.fn().mockReturnValue(['localhost', '127.0.0.1', '[::1]']),
+    isLoopbackHost: vi.fn((host: string) =>
+        ['localhost', '127.0.0.1', '::1', '[::1]'].includes(host.trim().toLowerCase())
+    ),
+    formatHostForUrl: vi.fn((host: string) =>
+        host.includes(':') && !host.startsWith('[') ? `[${host}]` : host
+    ),
 }))
 
 vi.mock('@modelcontextprotocol/sdk/server/middleware/hostHeaderValidation.js', () => ({

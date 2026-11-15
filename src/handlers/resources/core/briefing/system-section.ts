@@ -81,14 +81,6 @@ export interface SystemContext {
     workspaceId?: string
 }
 
-export interface BuildSystemContextOptions {
-    config?: BriefingConfig
-    filterConfig?: ToolFilterConfig | null
-    targetRepoPath?: string
-}
-
-
-
 // ============================================================================
 // Startup-Cached Parsers
 // ============================================================================

@@ -7,9 +7,20 @@
 
 import { ProtocolError, ProtocolErrorCode } from '@modelcontextprotocol/server'
 import { MEDIUM_PRIORITY } from '../../utils/resource-annotations.js'
+import { markUntrustedContentInline } from '../../utils/security-utils.js'
 import type { InternalResourceDef, ResourceContext } from './shared.js'
 import { getBaseUri, isResourceError, resolveScopedGitHubRepo } from './shared.js'
 import { resolveProjectScope } from './template-helpers.js'
+
+export function fenceInline(value: string): string {
+    if (
+        /^<untrusted_remote_content>[^<>]*<\/untrusted_remote_content>$/.test(value) &&
+        !/&lt;\/?untrusted_remote_content/i.test(value)
+    ) {
+        return value
+    }
+    return markUntrustedContentInline(value)
+}
 
 /** Build Kanban board resource definitions, including dynamic `{+repo}` variants. */
 export function getKanbanTemplateDefinitions(): InternalResourceDef[] {
@@ -60,12 +71,35 @@ export function getKanbanTemplateDefinitions(): InternalResourceDef[] {
                 // [INVARIANT] M10: Return cloned columns/items so cached board data is never mutated.
                 const sanitizedBoard = {
                     ...board,
+                    projectTitle: fenceInline(board.projectTitle),
                     columns: board.columns.map((column) => ({
                         ...column,
+                        status: fenceInline(column.status),
                         items: column.items.map((item) => {
-                            if (!('body' in item)) return item
-                            const cloned = { ...item }
-                            Reflect.deleteProperty(cloned, 'body')
+                            const cloned = {
+                                ...item,
+                                title: fenceInline(item.title),
+                                ...(item.status !== null
+                                    ? { status: fenceInline(item.status) }
+                                    : {}),
+                                ...(item.labels !== undefined
+                                    ? {
+                                          labels: item.labels.map((label) =>
+                                              fenceInline(label)
+                                          ),
+                                      }
+                                    : {}),
+                                ...(item.assignees !== undefined
+                                    ? {
+                                          assignees: item.assignees.map((assignee) =>
+                                              fenceInline(assignee)
+                                          ),
+                                      }
+                                    : {}),
+                            }
+                            if ('body' in cloned) {
+                                Reflect.deleteProperty(cloned, 'body')
+                            }
                             return cloned
                         }),
                     })),

@@ -4,8 +4,17 @@ import { PermissionError, ValidationError } from '../../../../types/errors.js'
 import { VERSION } from '../../../../version.js'
 import { getAllToolNames, isToolVisibleForFilter } from '../../../../filtering/tool-filter.js'
 import { getCoreTools } from '../tools.js'
+import { getStalenessTools } from '../staleness-tools.js'
 import { getSearchTools } from '../../search/index.js'
+import { getAnalyticsTools } from '../../analytics.js'
+import { getRelationshipTools } from '../../relationships.js'
+import { getIoTools } from '../../io/index.js'
 import { getAdminTools } from '../../admin/index.js'
+import { getGitHubTools } from '../../github.js'
+import { getBackupTools } from '../../backup.js'
+import { getTeamTools } from '../../team/index.js'
+import { getCodeModeTools } from '../../codemode/index.js'
+import { getGitTools } from '../../git.js'
 import { readResource, getResources } from '../../../resources/index.js'
 import { ErrorFieldsMixin } from '../../error-fields-mixin.js'
 import { handlePrompt, handleListPrompts, handleGetPrompt } from './mcp-prompt-fallbacks.js'
@@ -131,7 +140,11 @@ export async function handleReadResource(
 export function handleListResources(toolName: string): unknown {
     return {
         success: true,
-        resources: getResources(),
+        resources: getResources().map((r) => {
+            const rest = { ...(r as Record<string, unknown>) }
+            delete rest['capabilities']
+            return rest
+        }),
         _healing_note: `🛠️ AUTONOMOUS HEALING: '${toolName}' was called as an MCP tool instead of an MCP protocol request (resources/list). The available resources were returned successfully.`,
     }
 }
@@ -164,8 +177,17 @@ export function handleListTools(toolName: string, context?: ToolContext): unknow
     const filterConfig = context.config?.filterConfig
     const toolsList = [
         ...getCoreTools(context),
+        ...getStalenessTools(context),
         ...getSearchTools(context),
+        ...getAnalyticsTools(context),
+        ...getRelationshipTools(context),
+        ...getIoTools(context),
         ...getAdminTools(context),
+        ...getGitHubTools(context),
+        ...getBackupTools(context),
+        ...getTeamTools(context),
+        ...getCodeModeTools(context),
+        ...getGitTools(context),
     ]
         .filter(
             (t) =>
@@ -216,7 +238,18 @@ export async function handleServerInfo(
         }
     }
 
-    const dbHealth = healthData ?? context?.db.getHealthStatus()
+    let dbHealth: unknown = healthData
+    if (dbHealth === undefined && context !== undefined) {
+        try {
+            dbHealth = context.db.getHealthStatus()
+        } catch (err: unknown) {
+            healthReadFailed = true
+            dbHealth = {
+                status: 'degraded',
+                error: err instanceof Error ? err.message : String(err),
+            }
+        }
+    }
     const reportedStatus =
         !healthReadFailed && healthData !== undefined && typeof healthData['status'] === 'string'
             ? healthData['status']

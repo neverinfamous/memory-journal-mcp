@@ -11,6 +11,7 @@ import type {
 import { ConfigResolver } from '../../utils/config-resolver.js'
 import { resolveProjectContext } from '../../utils/workspace-resolver.js'
 import { activeProjectRegistry, pairStoredScope } from '../../utils/write-scope.js'
+import { ValidationError } from '../../types/errors.js'
 import { logger } from '../../utils/logger.js'
 import { buildServerOptions } from '../server-options-builder.js'
 import { dumpConfigAndExit } from '../dump-config.js'
@@ -88,6 +89,9 @@ export async function getDb(
     const dbPath = useTeamDb ? String(serverOptions.teamDbPath) : serverOptions.dbPath
     const db = await DatabaseAdapterFactory.create(dbPath, serverOptions)
     await db.initialize()
+    if (useTeamDb) {
+        db.applyTeamSchema()
+    }
     return { db, config: serverOptions }
 }
 
@@ -214,7 +218,20 @@ export function parseRelatedTo(relatedToStr: unknown): number[] {
         .split(',')
         .map((s) => s.trim())
         .filter(Boolean)
-        .map(Number)
+        .map((token) => {
+            if (!/^\d+$/.test(token)) {
+                throw new ValidationError(
+                    `Invalid --related-to entry ID '${token}'. Expected positive integers separated by commas.`
+                )
+            }
+            const parsed = Number.parseInt(token, 10)
+            if (!Number.isSafeInteger(parsed) || parsed < 1) {
+                throw new ValidationError(
+                    `Invalid --related-to entry ID '${token}'. Expected a positive integer.`
+                )
+            }
+            return parsed
+        })
 }
 
 export function parseRelationships(

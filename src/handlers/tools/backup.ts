@@ -251,7 +251,19 @@ export function getBackupTools(context: ToolContext): ToolDefinition[] {
                     let vectorWarningSuffix = ''
                     if (vectorManager?.isInitialized() === true) {
                         try {
-                            await vectorManager.rebuildIndex()
+                            const rebuildRes = await vectorManager.rebuildIndex()
+                            if (!rebuildRes.success || rebuildRes.failed > 0) {
+                                const detail =
+                                    rebuildRes.firstError ??
+                                    `${String(rebuildRes.failed)} entries failed embedding`
+                                logger.warning('Vector index rebuild after restore was incomplete', {
+                                    module: 'TOOL',
+                                    operation: 'restore-backup',
+                                    failed: rebuildRes.failed,
+                                    error: detail,
+                                })
+                                vectorWarningSuffix = ` Vector index rebuild had errors (${detail}); run rebuild_vector_index manually.`
+                            }
                         } catch (vectorErr: unknown) {
                             const msg =
                                 vectorErr instanceof Error

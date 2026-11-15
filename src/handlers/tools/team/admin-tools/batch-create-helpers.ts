@@ -19,7 +19,7 @@ import { collectIndexWorkspaces, indexBatchEntries } from '../../batch-indexing.
 import { linkRequestedRelationships } from '../../relationship-linking.js'
 import { resolveWriteWorkspaceId } from '../../write-workspace.js'
 import { triggerTeamNotifications } from '../helpers.js'
-import { getCallerIdentity } from '../rbac.js'
+import { canonicalizeTeamAuthor, getCallerIdentity, resolveScopedTeamRole } from '../rbac.js'
 import type { TeamBatchCreateEntriesSchema } from '../schemas.js'
 import type { TeamDbInstance } from './batch-delete-helpers.js'
 
@@ -55,7 +55,8 @@ function unknownIdentityError(): Record<string, unknown> {
 export function resolveTeamCreateAuthor(
     inputAuthor: string | undefined,
     teamDb: TeamDbInstance,
-    config: ToolHandlerConfig | undefined
+    config: ToolHandlerConfig | undefined,
+    workspaceId?: string
 ): { author: string } | { errorResponse: Record<string, unknown> } {
     const sanitized = inputAuthor !== undefined ? sanitizeAuthorClaim(inputAuthor) : undefined
     if (sanitized !== undefined && (sanitized === '' || sanitized.toLowerCase() === 'unknown')) {
@@ -94,16 +95,18 @@ export function resolveTeamCreateAuthor(
 
     if (
         sanitized !== undefined &&
-        config?.codemodeInternalFullAccess !== true &&
         typeof teamDb.isTeamRbacActive === 'function' &&
         teamDb.isTeamRbacActive()
     ) {
         const callerIdentity = getCallerIdentity()
-        const callerRole = teamDb.resolveTeamRole?.(
+        const callerRole = resolveScopedTeamRole(
+            teamDb,
             callerIdentity,
-            config?.teamDefaultRole ?? 'denied'
+            config?.teamDefaultRole ?? 'denied',
+            workspaceId
         )
-        if (sanitized !== callerIdentity && callerRole !== 'admin') {
+        const canonicalCaller = canonicalizeTeamAuthor(teamDb, callerIdentity, workspaceId)
+        if (sanitized !== callerIdentity && sanitized !== canonicalCaller && callerRole !== 'admin') {
             return {
                 errorResponse: {
                     success: false,
@@ -185,9 +188,6 @@ function validateTeamBatchCreateEntries(
                 },
             }
         }
-        const authorResult = resolveTeamCreateAuthor(e.author, teamDb, config)
-        if ('errorResponse' in authorResult) return authorResult
-
         const explicitDefault = namedWorkspace?.trim().toLowerCase() === 'default'
         const workspaceId = resolveWriteWorkspaceId(
             explicitDefault ? 'default' : resolved.workspaceId !== 'default' ? resolved.workspaceId : namedWorkspace,
@@ -195,11 +195,15 @@ function validateTeamBatchCreateEntries(
             config
         )
         const paired = pairStoredScope(workspaceId, projectNumber, activeProjectRegistry(config?.projectRegistry))
+        const targetWorkspaceId = paired.workspaceId ?? workspaceId
+        const authorResult = resolveTeamCreateAuthor(e.author, teamDb, config, targetWorkspaceId)
+        if ('errorResponse' in authorResult) return authorResult
+
         resolvedEntries.push({
             e,
             author: authorResult.author,
             projectNumber: paired.projectNumber ?? projectNumber,
-            workspaceId: paired.workspaceId ?? workspaceId,
+            workspaceId: targetWorkspaceId,
         })
     }
     return { resolvedEntries }

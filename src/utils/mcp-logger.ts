@@ -7,6 +7,7 @@
  */
 
 import { type McpServer } from '@modelcontextprotocol/server'
+import { sanitizeErrorForLogging } from './security-utils.js'
 
 /**
  * Narrow interface for MCP protocol log notification dispatch.
@@ -92,19 +93,46 @@ export class McpLogger {
         return LOG_LEVEL_PRIORITY[level] <= LOG_LEVEL_PRIORITY[this.minLevel]
     }
 
+    private sanitizeValue(value: unknown): unknown {
+        if (typeof value === 'string') {
+            return sanitizeErrorForLogging(value).replace(/[\r\n]+/g, ' ')
+        }
+        if (Array.isArray(value)) {
+            return value.map((item) => this.sanitizeValue(item))
+        }
+        if (typeof value === 'object' && value !== null) {
+            const sanitized: Record<string, unknown> = {}
+            for (const [k, v] of Object.entries(value)) {
+                sanitized[k] = this.sanitizeValue(v)
+            }
+            return sanitized
+        }
+        return value
+    }
+
+    private sanitizeData(data: LogData): LogData {
+        const cleanedMessage =
+            typeof data.message === 'string'
+                ? sanitizeErrorForLogging(data.message).replace(/[\r\n]+/g, ' ')
+                : ''
+        const rest = this.sanitizeValue(data) as Record<string, unknown>
+        return { ...rest, message: cleanedMessage }
+    }
+
     /**
      * Format message for stderr fallback
      */
     private formatForStderr(level: McpLogLevel, loggerName: string, data: LogData): string {
+        const sanitized = this.sanitizeData(data)
         const timestamp = new Date().toISOString()
         const levelUpper = level.toUpperCase().padEnd(9)
         const module = loggerName ? `[${loggerName}]` : ''
 
-        let formatted = `[${timestamp}] [${levelUpper}] ${module} ${data.message}`
+        let formatted = `[${timestamp}] [${levelUpper}] ${module} ${sanitized.message}`
 
         // Add extra context (filter out message and module)
         const extras = Object.fromEntries(
-            Object.entries(data).filter(([key]) => key !== 'message' && key !== 'module')
+            Object.entries(sanitized).filter(([key]) => key !== 'message' && key !== 'module')
         )
 
         if (Object.keys(extras).length > 0) {
@@ -120,6 +148,8 @@ export class McpLogger {
     log(level: McpLogLevel, loggerName: string, data: LogData): void {
         if (!this.shouldLog(level)) return
 
+        const sanitized = this.sanitizeData(data)
+
         // Send via MCP protocol if server connected
         if (this.server) {
             try {
@@ -127,7 +157,7 @@ export class McpLogger {
                     this.server.sendLoggingMessage({
                         level,
                         logger: loggerName,
-                        data,
+                        data: sanitized,
                     })
                 ).catch(() => {
                     // stderr fallback is written below
@@ -138,7 +168,7 @@ export class McpLogger {
         }
 
         // Always also log to stderr for local debugging
-        console.error(this.formatForStderr(level, loggerName, data))
+        console.error(this.formatForStderr(level, loggerName, sanitized))
     }
 
     // Convenience methods

@@ -66,6 +66,7 @@ export function getResources(): object[] {
         mimeType: r.mimeType,
         annotations: r.annotations,
         icons: r.icons,
+        ...(r.capabilities !== undefined ? { capabilities: r.capabilities } : {}),
     }))
 }
 

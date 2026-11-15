@@ -242,7 +242,7 @@ export function ftsSearch(
         options
     )
 
-    if (teamDb && options.includeTeam === true && options.isPersonal !== true) {
+    if (canIncludeTeam && teamDb !== undefined) {
         const teamResult = querySingleFtsStore(
             teamDb,
             query,

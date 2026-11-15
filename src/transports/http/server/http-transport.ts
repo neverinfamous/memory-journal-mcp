@@ -17,6 +17,8 @@ import {
     setCorsHeaders,
     checkRateLimit,
     buildAllowedHostHeaders,
+    isLoopbackHost,
+    formatHostForUrl,
 } from '../security.js'
 import {
     handleHealthCheck,
@@ -31,6 +33,9 @@ import {
     oauthErrorHandler,
     SUPPORTED_SCOPES,
 } from '../../../auth/index.js'
+import { requireScope } from '../../../auth/middleware.js'
+import { AuthServerDiscoveryError } from '../../../auth/errors.js'
+import { ConfigurationError } from '../../../types/errors.js'
 import { AuthorizationServerDiscovery } from '../../../auth/authorization-server-discovery.js'
 import { hostHeaderValidation, localhostHostValidation } from '@modelcontextprotocol/express'
 import type { ServerRuntime } from '../../../utils/maintenance-lock.js'
@@ -89,12 +94,13 @@ export class HttpTransport {
             (msg) => logger.warning(msg, { module: 'HTTP' }),
             (msg) => logger.error(msg, { module: 'HTTP' })
         )
-        const isLocalhost = host === 'localhost' || host === '127.0.0.1' || host === '::1'
+        const isLocalhost = isLoopbackHost(host)
+        const baseAllowedHosts = buildAllowedHostHeaders(host, undefined)
         const allowedHosts = buildAllowedHostHeaders(host, this.config.publicOrigin)
         const hasCustomPublicOrigin =
             this.config.publicOrigin !== undefined &&
             this.config.publicOrigin.trim() !== '' &&
-            allowedHosts.length > 4
+            allowedHosts.length > baseAllowedHosts.length
 
         this.app.use(
             isLocalhost && !hasCustomPublicOrigin
@@ -229,15 +235,36 @@ export class HttpTransport {
 
     }
 
-    /** Resolve jwks_uri via RFC 8414 discovery, falling back to the conventional issuer path. */
+    /** Resolve jwks_uri via RFC 8414 discovery, falling back to the conventional path only on HTTP 404 (or explicit plaintext loopback). */
     private async discoverJwksUri(issuer: string): Promise<string> {
         const fallback = `${issuer.replace(/\/+$/, '')}/.well-known/jwks.json`
+        if (this.config.allowPlaintextLoopbackOAuth === true) {
+            try {
+                const parsed = new URL(issuer)
+                if (parsed.protocol === 'http:' && isLoopbackHost(parsed.hostname)) {
+                    return fallback
+                }
+            } catch {
+                // Fall through to discovery for normal error reporting
+            }
+        }
         try {
             const discovery = new AuthorizationServerDiscovery({ authServerUrl: issuer })
             await discovery.discover()
             return discovery.getJwksUri()
         } catch (error) {
-            logger.warning('Authorization server discovery failed; using default JWKS path', {
+            if (error instanceof ConfigurationError) {
+                throw error
+            }
+            const cause =
+                error instanceof AuthServerDiscoveryError
+                    ? error.details?.['cause']
+                    : undefined
+            const isNotFound = typeof cause === 'string' && /^HTTP 404(?::|\b)/.test(cause)
+            if (!isNotFound) {
+                throw error
+            }
+            logger.warning('Authorization server metadata endpoint returned 404; using default JWKS path', {
                 module: 'HTTP',
                 operation: 'oauth-discovery',
                 error: error instanceof Error ? error.message : String(error),
@@ -275,11 +302,7 @@ export class HttpTransport {
                 }
                 try {
                     const url = new URL(this.config.oauthIssuer)
-                    if (
-                        url.hostname !== 'localhost' &&
-                        url.hostname !== '127.0.0.1' &&
-                        url.hostname !== '[::1]'
-                    ) {
+                    if (!isLoopbackHost(url.hostname)) {
                         throw new Error()
                     }
                 } catch {
@@ -311,7 +334,8 @@ export class HttpTransport {
             await tokenValidator.preload()
 
             const resourceServer = createOAuthResourceServer({
-                resource: this.config.publicOrigin ?? `http://${host}:${String(port)}`,
+                resource:
+                    this.config.publicOrigin ?? `http://${formatHostForUrl(host)}:${String(port)}`,
                 authorizationServers: [this.config.oauthIssuer],
                 scopesSupported: [...SUPPORTED_SCOPES],
             })
@@ -346,7 +370,11 @@ export class HttpTransport {
         this.app.get('/health', handleHealthCheck)
 
         if (this.config.metricsExport === 'prometheus') {
-            this.app.get('/metrics', handlePrometheusMetrics(runtime))
+            if (this.config.oauthEnabled === true) {
+                this.app.get('/metrics', requireScope('read'), handlePrometheusMetrics(runtime))
+            } else {
+                this.app.get('/metrics', handlePrometheusMetrics(runtime))
+            }
             logger.info('Prometheus metrics export enabled on /metrics', { module: 'HTTP' })
         }
 

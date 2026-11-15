@@ -28,6 +28,7 @@ export interface IssueDetails extends GitHubIssue {
  * GitHub PR details (extended)
  */
 export interface PullRequestDetails extends GitHubPullRequest {
+    nodeId?: string
     body: string | null
     draft: boolean
     headBranch: string

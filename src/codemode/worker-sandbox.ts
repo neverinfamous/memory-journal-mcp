@@ -212,6 +212,14 @@ export class WorkerSandbox {
         readonlyMode?: boolean,
         maxResultSizeOverride?: number
     ): Promise<SandboxResult> {
+        if (this.isBusy || this.currentExecution !== null) {
+            return {
+                success: false,
+                error: 'WorkerSandbox is already executing a task',
+                metrics: { wallTimeMs: 0, cpuTimeMs: 0, memoryUsedMb: 0 },
+            }
+        }
+
         let effectiveTimeout = timeoutMs ?? this.options.timeoutMs
         if (effectiveTimeout > 30000) effectiveTimeout = 30000
 

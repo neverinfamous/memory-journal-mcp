@@ -55,7 +55,7 @@ export function getKanbanTools(context: ToolContext): ToolDefinition[] {
                     .describe(
                         'Return column summaries only (name + itemCount), omitting individual items. Saves ~80% tokens.'
                     ),
-                item_limit: z.number().max(100)
+                item_limit: z.number().int().min(0).max(100)
                     .optional()
                     .default(25)
                     .describe(
@@ -78,7 +78,7 @@ export function getKanbanTools(context: ToolContext): ToolDefinition[] {
                             repo: z.string().optional(),
                             workspace_id: githubScopeParseFields.workspace_id,
                             summary_only: z.boolean().optional().default(false),
-                            item_limit: z.number().max(100).optional().default(25),
+                            item_limit: z.number().int().min(0).max(100).optional().default(25),
                         })
                         .parse(params)
 
@@ -343,7 +343,16 @@ export function getKanbanTools(context: ToolContext): ToolDefinition[] {
                         resolved.repo,
                         input.issue_number
                     )
-                    if (!issueDetails?.nodeId) {
+                    let nodeId = issueDetails?.nodeId
+                    if (!nodeId) {
+                        const prDetails = await resolved.github.getPullRequest(
+                            resolved.owner,
+                            resolved.repo,
+                            input.issue_number
+                        )
+                        nodeId = prDetails?.nodeId
+                    }
+                    if (!nodeId) {
                         return {
                             success: false,
                             error: `Issue or PR #${String(input.issue_number)} not found or lacks a nodeId`,
@@ -370,7 +379,7 @@ export function getKanbanTools(context: ToolContext): ToolDefinition[] {
 
                     const result = await resolved.github.addProjectItem(
                         board.projectId,
-                        issueDetails.nodeId
+                        nodeId
                     )
 
                     return {

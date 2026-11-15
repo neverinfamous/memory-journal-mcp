@@ -14,7 +14,7 @@ import { HELP_CONTENT } from '../../constants/server-instructions.js'
 import { ASSISTANT_FOCUSED } from '../../utils/resource-annotations.js'
 import { logger } from '../../utils/logger.js'
 import { getAllToolNames, getToolGroup, isToolVisibleForFilter } from '../../filtering/tool-filter.js'
-import type { InternalResourceDef, ResourceContext, ResourceResult } from './shared.js'
+import { getBaseUri, type InternalResourceDef, type ResourceContext, type ResourceResult } from './shared.js'
 import type { getTools } from '../../handlers/tools/index.js'
 import { ProtocolError, ProtocolErrorCode } from '@modelcontextprotocol/server'
 
@@ -270,7 +270,7 @@ export function getHelpResourceDefinitions(): InternalResourceDef[] {
             icons: [ICON_BRIEFING],
             annotations: ASSISTANT_FOCUSED,
             handler: async (uri: string, context: ResourceContext): Promise<ResourceResult> => {
-                const match = /memory:\/\/help\/([a-z][a-z0-9-]*)/.exec(uri)
+                const match = /^memory:\/\/help\/([^/?#]+)$/.exec(getBaseUri(uri))
                 const rawGroupName = match?.[1]
                 const groupName = rawGroupName === 'export' ? 'io' : rawGroupName
 

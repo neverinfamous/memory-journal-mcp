@@ -169,7 +169,7 @@ export function wrapDelegatingTool(
     })
 }
 
-export const SHIM_TABLES = JOURNAL_TABLES
+const SHIM_TABLES = JOURNAL_TABLES
 
 export const schemaHelpFn = (): Promise<unknown> => getSchemaHelp()
 

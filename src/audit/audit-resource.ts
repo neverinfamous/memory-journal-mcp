@@ -86,11 +86,12 @@ export function getAuditResourceDef(getLogger: () => AuditLogger | null): Intern
                 : await auditLogger.recent(50)
 
             if (entries.length === 0) {
+                const note =
+                    typeof auditLogger.isStderrOnly === 'function' && auditLogger.isStderrOnly()
+                        ? 'note: AUDIT_LOG_PATH=stderr is write-only; historical telemetry events are emitted to stderr rather than buffered on disk.'
+                        : 'note: No write/admin operations have been audited yet.'
                 return {
-                    data:
-                        `audit_log: ${auditLogger.config.logPath}\n` +
-                        'entries: 0\n' +
-                        'note: No write/admin operations have been audited yet.',
+                    data: `audit_log: ${auditLogger.config.logPath}\nentries: 0\n${note}`,
                     annotations: { lastModified },
                 }
             }

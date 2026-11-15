@@ -77,35 +77,25 @@ function unclaimedByOtherWorkspace(
  * A stored workspace of `default` is concrete. Only an omitted workspace falls through.
  * Write callers must reject `*` before they persist a row.
  */
-export function resolveProjectContext(
+type RegistryMap = Record<string, RegistryEntry> | undefined
+type SessionScope = ReturnType<typeof getActiveSessionProject>
+
+function parseConfiguredDefaultWs(config: WorkspaceResolverConfig | undefined): string | undefined {
+    if (typeof config?.defaultWorkspaceId !== 'string') return undefined
+    const trimmed = config.defaultWorkspaceId.trim()
+    return trimmed !== '' && trimmed !== '*' ? trimmed : undefined
+}
+
+function resolveExplicitWorkspaceOrProject(
+    sanitizedWorkspaceId: string | undefined,
     input: ResolutionInput,
-    config?: WorkspaceResolverConfig
-): ResolvedContext {
-    const registry = config?.projectRegistry ?? loadProjectRegistryFromConfig()
-
-    const trimmedWorkspaceId =
-        typeof input.workspace_id === 'string' ? input.workspace_id.trim() : undefined
-    const sanitizedWorkspaceId =
-        trimmedWorkspaceId === undefined ||
-        trimmedWorkspaceId === '' ||
-        trimmedWorkspaceId === '*'
-            ? undefined
-            : trimmedWorkspaceId
-
-    const cwdMatch =
-        registry !== undefined
-            ? resolveWorkspaceFromFilePath(process.cwd(), { projectRegistry: registry })
-            : undefined
-    const registeredCwd =
-        cwdMatch !== undefined && cwdMatch.workspaceId.toLowerCase() !== 'test'
-            ? cwdMatch
-            : undefined
-
+    registeredCwd: ResolvedContext | undefined,
+    config: WorkspaceResolverConfig | undefined,
+    registry: RegistryMap
+): ResolvedContext | undefined {
     // 1. Explicit workspace, including `default`. A conflicting project_number is rejected.
     if (sanitizedWorkspaceId !== undefined) {
-        let wsId = sanitizedWorkspaceId
-        const canonicalKey = findCanonicalRegistryKey(wsId, registry)
-        if (canonicalKey !== undefined) wsId = canonicalKey
+        const wsId = findCanonicalRegistryKey(sanitizedWorkspaceId, registry) ?? sanitizedWorkspaceId
         const registryProject = registry?.[wsId]?.project_number
         if (input.project_number !== undefined && input.project_number !== null) {
             if (registryProject !== undefined && input.project_number !== registryProject) {
@@ -118,8 +108,7 @@ export function resolveProjectContext(
                 assertNotForeignProject(wsId, input.project_number, registry)
             }
         }
-        const projectNumber = registryProject ?? input.project_number ?? undefined
-        return { workspaceId: wsId, projectNumber }
+        return { workspaceId: wsId, projectNumber: registryProject ?? input.project_number ?? undefined }
     }
 
     // 2. Explicit project_number. Keywords must not retarget an unregistered number.
@@ -130,10 +119,7 @@ export function resolveProjectContext(
         }
         const sessionCtx = getActiveSessionProject(config?.runtime)
         const rawCandidateWs =
-            registeredCwd?.workspaceId ??
-            config?.defaultWorkspaceId ??
-            sessionCtx.workspaceId ??
-            'default'
+            registeredCwd?.workspaceId ?? config?.defaultWorkspaceId ?? sessionCtx.workspaceId ?? 'default'
         const candidateWs = findCanonicalRegistryKey(rawCandidateWs, registry) ?? rawCandidateWs
         // [INVARIANT] Never pair an unregistered number with a workspace that already owns
         // a different registered number (cwd/session poisoning).
@@ -145,25 +131,15 @@ export function resolveProjectContext(
         return { workspaceId: fallbackWs, projectNumber: input.project_number }
     }
 
-    // 3. Registered cwd, ahead of incidental words in the body.
-    if (registeredCwd !== undefined) {
-        const cwdProject =
-            registeredCwd.projectNumber ??
-            (registeredCwd.workspaceId.toLowerCase() === 'default'
-                ? undefined
-                : unclaimedByOtherWorkspace(
-                      config?.defaultProjectNumber,
-                      registeredCwd.workspaceId,
-                      registry
-                  ))
-        return {
-            workspaceId: registeredCwd.workspaceId,
-            projectNumber: cwdProject,
-        }
-    }
+    return undefined
+}
 
-    // 4. Active session, when the host actually exposes one (tests suppress the global).
-    const sessionCtx = getActiveSessionProject(config?.runtime)
+function resolveSessionScope(
+    sessionCtx: SessionScope,
+    configuredDefaultWs: string | undefined,
+    config: WorkspaceResolverConfig | undefined,
+    registry: RegistryMap
+): ResolvedContext | undefined {
     if (
         sessionCtx.workspaceId !== undefined &&
         sessionCtx.workspaceId !== '' &&
@@ -183,19 +159,9 @@ export function resolveProjectContext(
             unclaimedByOtherWorkspace(sessionCtx.projectNumber, canonicalSessionWs, registry) ??
             (canonicalSessionWs.toLowerCase() === 'default'
                 ? undefined
-                : unclaimedByOtherWorkspace(
-                      config?.defaultProjectNumber,
-                      canonicalSessionWs,
-                      registry
-                  ))
+                : unclaimedByOtherWorkspace(config?.defaultProjectNumber, canonicalSessionWs, registry))
         return { workspaceId: canonicalSessionWs, projectNumber: sessionProject }
     }
-    const configuredDefaultWs =
-        typeof config?.defaultWorkspaceId === 'string' &&
-        config.defaultWorkspaceId.trim() !== '' &&
-        config.defaultWorkspaceId.trim() !== '*'
-            ? config.defaultWorkspaceId.trim()
-            : undefined
     if (sessionCtx.projectNumber !== undefined) {
         const sessionWorkspace = findWorkspaceByProjectNumber(sessionCtx.projectNumber, registry)
         if (sessionWorkspace !== undefined) {
@@ -208,22 +174,26 @@ export function resolveProjectContext(
             defaultOwnerProj !== undefined && defaultOwnerProj !== sessionCtx.projectNumber
                 ? 'default'
                 : canonicalDefaultWs
-        return {
-            workspaceId: fallbackWs,
-            projectNumber: sessionCtx.projectNumber,
-        }
+        return { workspaceId: fallbackWs, projectNumber: sessionCtx.projectNumber }
     }
+    return undefined
+}
 
+function resolveFallbackContext(
+    input: ResolutionInput,
+    sessionCtx: SessionScope,
+    configuredDefaultWs: string | undefined,
+    config: WorkspaceResolverConfig | undefined,
+    registry: RegistryMap
+): ResolvedContext {
     const hasConcreteDefaultWs =
         configuredDefaultWs !== undefined && configuredDefaultWs.toLowerCase() !== 'default'
-
     // 5. Keywords only when no explicit scope, cwd, session, or concrete configured default was available.
     // preferCwdOverKeywords skips this step for CLI callers that already tried cwd.
     if (!hasConcreteDefaultWs && registry !== undefined && input.preferCwdOverKeywords !== true) {
         const matched = matchRegistryByTagsOrContent(input, registry)
         if (matched !== undefined) return matched
     }
-
     const sessionWsFallback =
         sessionCtx.workspaceId !== undefined &&
         sessionCtx.workspaceId.trim() !== '' &&
@@ -243,6 +213,56 @@ export function resolveProjectContext(
                 registry
             ),
     }
+}
+
+export function resolveProjectContext(
+    input: ResolutionInput,
+    config?: WorkspaceResolverConfig
+): ResolvedContext {
+    const registry = config?.projectRegistry ?? loadProjectRegistryFromConfig()
+    const trimmedWorkspaceId =
+        typeof input.workspace_id === 'string' ? input.workspace_id.trim() : undefined
+    const sanitizedWorkspaceId =
+        trimmedWorkspaceId === undefined || trimmedWorkspaceId === '' || trimmedWorkspaceId === '*'
+            ? undefined
+            : trimmedWorkspaceId
+    const cwdMatch =
+        registry !== undefined
+            ? resolveWorkspaceFromFilePath(process.cwd(), { projectRegistry: registry })
+            : undefined
+    const registeredCwd =
+        cwdMatch !== undefined && cwdMatch.workspaceId.toLowerCase() !== 'test' ? cwdMatch : undefined
+
+    const explicit = resolveExplicitWorkspaceOrProject(
+        sanitizedWorkspaceId,
+        input,
+        registeredCwd,
+        config,
+        registry
+    )
+    if (explicit !== undefined) return explicit
+
+    // 3. Registered cwd, ahead of incidental words in the body.
+    if (registeredCwd !== undefined) {
+        const cwdProject =
+            registeredCwd.projectNumber ??
+            (registeredCwd.workspaceId.toLowerCase() === 'default'
+                ? undefined
+                : unclaimedByOtherWorkspace(
+                      config?.defaultProjectNumber,
+                      registeredCwd.workspaceId,
+                      registry
+                  ))
+        return { workspaceId: registeredCwd.workspaceId, projectNumber: cwdProject }
+    }
+
+    // 4. Active session, when the host actually exposes one (tests suppress the global).
+    const sessionCtx = getActiveSessionProject(config?.runtime)
+    const configuredDefaultWs = parseConfiguredDefaultWs(config)
+    return (
+        resolveSessionScope(sessionCtx, configuredDefaultWs, config, registry) ??
+        resolveFallbackContext(input, sessionCtx, configuredDefaultWs, config, registry)
+    )
 }
 
 /**

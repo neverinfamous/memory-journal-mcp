@@ -105,7 +105,8 @@ export function registerResources(
                     enforceAccessBoundary(uri.href, 'resource', resDef.capabilities, auditLog)
                     const forceAudit =
                         resDef.capabilities?.requiresTeamScope === true ||
-                        resDef.capabilities?.requiresAuditScope === true
+                        resDef.capabilities?.requiresAuditScope === true ||
+                        resDef.capabilities?.requiresAdminScope === true
                     return auditOperation(
                         auditLog,
                         'resource',
@@ -115,7 +116,7 @@ export function registerResources(
                                 handleResourceRead(uri, mimeType)
                             )
                         },
-                        { forceAudit, resourceUri: uri.href }
+                        { forceAudit, resourceUri: uri.href, capabilities: resDef.capabilities }
                     )
                 }
             )
@@ -130,7 +131,8 @@ export function registerResources(
                 enforceAccessBoundary(uri.href, 'resource', resDef.capabilities, auditLog)
                 const forceAudit =
                     resDef.capabilities?.requiresTeamScope === true ||
-                    resDef.capabilities?.requiresAuditScope === true
+                    resDef.capabilities?.requiresAuditScope === true ||
+                    resDef.capabilities?.requiresAdminScope === true
                 return auditOperation(
                     auditLog,
                     'resource',
@@ -140,7 +142,7 @@ export function registerResources(
                             handleResourceRead(uri, mimeType)
                         )
                     },
-                    { forceAudit, resourceUri: uri.href }
+                    { forceAudit, resourceUri: uri.href, capabilities: resDef.capabilities }
                 )
             })
         }
@@ -194,35 +196,47 @@ export function registerPrompts(
                 }
                 const auditLog = runtime.auditLogger
                 enforceAccessBoundary(promptDef.name, 'prompt', promptDef.capabilities, auditLog)
-                return auditOperation(auditLog, 'prompt', promptDef.name, async () => {
-                    const executePrompt = async (): Promise<{
-                        messages: {
-                            role: 'user' | 'assistant'
-                            content: { type: 'text'; text: string }
-                        }[]
-                    }> => {
-                        const args = providedArgs as Record<string, string>
-                        const resolvedBriefingConfig =
-                            typeof briefingConfig === 'function' ? briefingConfig() : briefingConfig
-                        const promptResult = await getPrompt(
-                            promptDef.name,
-                            args,
-                            db,
-                            teamDb,
-                            github,
-                            resolvedBriefingConfig,
-                            runtime
-                        )
-                        return {
-                            messages: promptResult.messages.map((m) => ({
-                                role: m.role as 'user' | 'assistant',
-                                content: m.content as { type: 'text'; text: string },
-                            })),
+                const forceAudit =
+                    promptDef.capabilities?.requiresTeamScope === true ||
+                    promptDef.capabilities?.requiresAuditScope === true ||
+                    promptDef.capabilities?.requiresAdminScope === true
+                return auditOperation(
+                    auditLog,
+                    'prompt',
+                    promptDef.name,
+                    async () => {
+                        const executePrompt = async (): Promise<{
+                            messages: {
+                                role: 'user' | 'assistant'
+                                content: { type: 'text'; text: string }
+                            }[]
+                        }> => {
+                            const args = providedArgs as Record<string, string>
+                            const resolvedBriefingConfig =
+                                typeof briefingConfig === 'function'
+                                    ? briefingConfig()
+                                    : briefingConfig
+                            const promptResult = await getPrompt(
+                                promptDef.name,
+                                args,
+                                db,
+                                teamDb,
+                                github,
+                                resolvedBriefingConfig,
+                                runtime
+                            )
+                            return {
+                                messages: promptResult.messages.map((m) => ({
+                                    role: m.role as 'user' | 'assistant',
+                                    content: m.content as { type: 'text'; text: string },
+                                })),
+                            }
                         }
-                    }
 
-                    return await runtime.maintenanceManager.withActiveJob(executePrompt)
-                })
+                        return await runtime.maintenanceManager.withActiveJob(executePrompt)
+                    },
+                    { forceAudit, capabilities: promptDef.capabilities }
+                )
             }
         )
     }

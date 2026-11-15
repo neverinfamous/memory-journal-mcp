@@ -215,14 +215,13 @@ export class AuthorizationServerDiscovery {
         }
 
         // Validate issuer matches the expected URL
-        // Per RFC 8414, issuer MUST be identical to the authorization server URL
+        // Per RFC 8414 §3.3, issuer MUST be identical to the authorization server URL
         const expectedIssuer = this.authServerUrl
-        if (metadata.issuer !== expectedIssuer) {
-            logger.warning(`Issuer mismatch: expected ${expectedIssuer}, got ${metadata.issuer}`, {
-                module: 'AUTH',
-                operation: 'discovery-validation',
-            })
-            // Note: This is a warning, not an error, as some auth servers may use different URLs
+        const actualIssuer = metadata.issuer.replace(/\/+$/, '')
+        if (actualIssuer !== expectedIssuer) {
+            throw new ConfigurationError(
+                `Authorization server issuer mismatch: expected ${expectedIssuer}, got ${metadata.issuer}`
+            )
         }
     }
 

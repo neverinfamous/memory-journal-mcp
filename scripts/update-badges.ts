@@ -35,7 +35,7 @@ function applyCoverageBadge(
     return { content: content.replace(licenseRegex, `$1 ${newCovBadge}`), changed: true };
   }
   console.warn(`Could not find anchor to insert coverage badge in ${file}`);
-  if (process.env.GITHUB_ACTIONS || process.argv.includes("--strict")) {
+  if (process.env['GITHUB_ACTIONS'] || process.argv.includes("--strict")) {
     process.exit(1);
   }
   return { content, changed: false };
@@ -101,7 +101,7 @@ function updateBadges() {
   if (
     !hasCoverage &&
     !hasE2e &&
-    (process.env.GITHUB_ACTIONS || process.argv.includes("--strict"))
+    (process.env['GITHUB_ACTIONS'] || process.argv.includes("--strict"))
   ) {
     console.error("Strict mode active: Failing because neither coverage nor E2E results were found.");
     process.exit(1);
@@ -172,7 +172,7 @@ function updateBadges() {
     }
   }
 
-  if (!process.env.GITHUB_ACTIONS) {
+  if (!process.env['GITHUB_ACTIONS']) {
     const commitScript = path.join(ROOT_DIR, ".agents", "scripts", "commit.ts");
     const dirtyFiles = filesToUpdate.filter((file) => {
       if (updatedFiles.includes(file)) return true;

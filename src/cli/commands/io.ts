@@ -296,6 +296,7 @@ export async function importExternalAction(options: z.infer<typeof importExterna
                 mdFiles.push(dirent.name)
             }
         }
+        mdFiles.sort((a, b) => a.localeCompare(b))
 
         const parsedFiles: ParsedFile[] = []
         const errors: { file: string; error: string }[] = []

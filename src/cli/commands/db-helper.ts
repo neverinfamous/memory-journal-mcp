@@ -43,5 +43,8 @@ export async function getCliCommandDb(
     const dbPath = options.team && teamDb ? teamDb : serverOptions.dbPath
     const db = await DatabaseAdapterFactory.create(dbPath, serverOptions)
     await db.initialize()
+    if (options.team === true) {
+        db.applyTeamSchema()
+    }
     return { db, serverOptions }
 }

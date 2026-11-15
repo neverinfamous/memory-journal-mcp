@@ -147,10 +147,46 @@ export function createProcessOperationFn(shimMj: Record<string, unknown>): (arg:
     }
 }
 
-export function createChildProcessShims(): Record<string, unknown> {
-    const noop = (): void => {
-        // Dummy event listener
+/**
+ * Shared spawn-disabled shim factory reused across sandbox process shims
+ * and mj shim proxy mocks so blocked spawn/spawnSync/fork calls log consistently.
+ */
+export function createDisabledSpawnShim(
+    label = 'spawn'
+): (_cmd?: unknown, cbOrOptions?: unknown, maybeCb?: unknown) => Record<string, unknown> {
+    const shimNoop = (): void => {
+        /* no-op */
     }
+    return (_cmd?: unknown, cbOrOptions?: unknown, maybeCb?: unknown) => {
+        const cb =
+            typeof cbOrOptions === 'function'
+                ? (cbOrOptions as (...args: unknown[]) => unknown)
+                : typeof maybeCb === 'function'
+                  ? (maybeCb as (...args: unknown[]) => unknown)
+                  : undefined
+        if (cb !== undefined) {
+            try {
+                cb(new Error(`${label} is disabled in the sandbox`), '', '')
+            } catch (callbackError) {
+                // Callback errors must not escape the shim; the worker has no logger, so use stderr.
+                process.stderr.write(
+                    `[codemode] ${label} shim callback threw: ${callbackError instanceof Error ? callbackError.message : String(callbackError)}\n`
+                )
+            }
+        }
+        return {
+            on: shimNoop,
+            stdout: { on: shimNoop },
+            stderr: { on: shimNoop },
+            kill: () => false,
+            status: 1,
+            output: ['', '', `${label} is disabled in the sandbox`],
+            error: new Error(`${label} is disabled in the sandbox`),
+        }
+    }
+}
+
+export function createChildProcessShims(): Record<string, unknown> {
     return {
         execSync: (..._args: unknown[]) => {
             const err = new Error('VALIDATION_ERROR: child_process.execSync is disabled inside Code Mode.')
@@ -180,30 +216,7 @@ export function createChildProcessShims(): Record<string, unknown> {
                 }
             }
         },
-        spawn: (_cmd?: unknown, cbOrOptions?: unknown, maybeCb?: unknown) => {
-            const cb =
-                typeof cbOrOptions === 'function'
-                    ? (cbOrOptions as (...args: unknown[]) => unknown)
-                    : typeof maybeCb === 'function'
-                      ? (maybeCb as (...args: unknown[]) => unknown)
-                      : undefined
-            if (cb !== undefined) {
-                try {
-                    cb(new Error('spawn is disabled in the sandbox'), '', '')
-                } catch {
-                    // Ignore user callback errors on no-op child_process shim
-                }
-            }
-            return {
-                on: noop,
-                stdout: { on: noop },
-                stderr: { on: noop },
-                kill: () => false,
-                status: 1,
-                output: ['', '', 'spawn is disabled in the sandbox'],
-                error: new Error('spawn is disabled in the sandbox'),
-            }
-        },
+        spawn: createDisabledSpawnShim('spawn'),
     }
 }
 

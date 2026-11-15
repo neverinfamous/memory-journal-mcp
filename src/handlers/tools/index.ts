@@ -30,11 +30,8 @@ import {
     getStalenessTools,
     getDummyHealingTools,
 } from './core/index.js'
-import {
-    DUMMY_HEALING_TOOL_NAMES,
-    DUMMY_ENTRY_CREATION_TOOL_NAMES,
-    DUMMY_SQL_EXECUTION_TOOL_NAMES,
-} from './core/dummy-healing/alias-catalog.js'
+import { DUMMY_HEALING_TOOL_NAMES } from './core/dummy-healing/alias-catalog.js'
+import { isDummyToolAllowedByFilter } from './dummy-filter-helpers.js'
 import { getSearchTools } from './search/index.js'
 import { getAnalyticsTools } from './analytics.js'
 import { getRelationshipTools } from './relationships.js'
@@ -69,88 +66,6 @@ export {
 // ============================================================================
 // Public API
 // ============================================================================
-
-const MUTATING_DUMMY_TOOL_NAMES = new Set<string>([
-    'create_entry',
-    ...DUMMY_ENTRY_CREATION_TOOL_NAMES,
-    'update_entry',
-    'delete_entry',
-    ...DUMMY_SQL_EXECUTION_TOOL_NAMES,
-    'mj_core_create_entry',
-    'mj_core_update_entry',
-    'mj_core_delete_entry',
-    'mj.core.createEntry',
-    'mj.core.create_entry',
-    'mj.core.updateEntry',
-    'mj.core.update_entry',
-    'mj.core.deleteEntry',
-    'mj.core.delete_entry',
-])
-
-const EXEC_DUMMY_TOOL_NAMES = new Set<string>(DUMMY_SQL_EXECUTION_TOOL_NAMES)
-
-/** [INTENT] H5: map mutating dummy aliases to the real tool they execute so filters apply to it. */
-const DUMMY_CREATE_ALIAS_SET = new Set<string>([
-    'create_entry',
-    'mj_core_create_entry',
-    'mj.core.createEntry',
-    'mj.core.create_entry',
-    ...DUMMY_ENTRY_CREATION_TOOL_NAMES,
-])
-const DUMMY_UPDATE_ALIAS_SET = new Set<string>([
-    'update_entry',
-    'mj_core_update_entry',
-    'mj.core.updateEntry',
-    'mj.core.update_entry',
-])
-const DUMMY_DELETE_ALIAS_SET = new Set<string>([
-    'delete_entry',
-    'mj_core_delete_entry',
-    'mj.core.deleteEntry',
-    'mj.core.delete_entry',
-])
-
-function dummyMutationTarget(name: string): string | undefined {
-    if (EXEC_DUMMY_TOOL_NAMES.has(name)) return 'mj_execute_code'
-    if (DUMMY_CREATE_ALIAS_SET.has(name)) return 'create_entry'
-    if (DUMMY_UPDATE_ALIAS_SET.has(name)) return 'update_entry'
-    if (DUMMY_DELETE_ALIAS_SET.has(name)) return 'delete_entry'
-    return undefined
-}
-
-function isDummyToolAllowedByFilter(
-    name: string,
-    filterConfig: ToolFilterConfig,
-    agentHealingEnabled: boolean
-): boolean {
-    if (!agentHealingEnabled || !DUMMY_HEALING_TOOL_NAMES.has(name)) {
-        return false
-    }
-    // [INVARIANT] H5: tokenize the raw filter — substring matching let `-readonly` /
-    // `-create_entry_x` tokens be misread and let unrelated tokens bypass exclusions.
-    const tokens = new Set(
-        filterConfig.raw
-            .toLowerCase()
-            .split(/[\s,]+/)
-            .map((t) => t.trim())
-            .filter((t) => t !== '')
-    )
-    const isReadonlyFilter = tokens.has('readonly') || tokens.has('+readonly')
-    if (isReadonlyFilter && MUTATING_DUMMY_TOOL_NAMES.has(name)) {
-        return false
-    }
-    if (tokens.has(`-${name.toLowerCase()}`)) {
-        return false
-    }
-    if (MUTATING_DUMMY_TOOL_NAMES.has(name)) {
-        const target = dummyMutationTarget(name)
-        // A mutating alias is only exposed when the tool it executes is itself enabled.
-        if (target === undefined || !filterConfig.enabledTools.has(target)) {
-            return false
-        }
-    }
-    return true
-}
 
 /**
  * Get all tool definitions, optionally filtered by config

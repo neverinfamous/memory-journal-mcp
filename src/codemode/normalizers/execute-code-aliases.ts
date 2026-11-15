@@ -45,7 +45,37 @@ const NON_CODE_METADATA_KEYS = new Set([
     'dry_run',
     'dryRun',
     'use_test_db',
+    'group_name',
+    'groupName',
+    'entry_type',
+    'entryType',
+    'type',
+    'significance_type',
+    'significanceType',
+    'validation_status',
+    'validationStatus',
+    'title',
+    'tags',
+    'author',
+    'is_personal',
+    'isPersonal',
+    'share_with_team',
+    'shareWithTeam',
+    'learned_context',
+    'learnedContext',
+    'lesson',
+    'learning',
+    'insight',
+    'knowledge',
 ])
+
+const ENTRY_CONTENT_ALIAS_KEYS = [
+    'learned_context',
+    'learnedContext',
+    'lesson',
+    'insight',
+    'knowledge',
+] as const
 
 /**
  * Normalizes alternative Code Mode execution payload aliases into `code` while
@@ -75,16 +105,25 @@ export function normalizeExecuteCodeAliases(obj: Record<string, unknown>): void 
         obj['task'] ?? obj['instruction'] ?? obj['instructions'] ?? obj['input'] ?? obj['payload'] ?? obj['text']
 
     if (typeof codeAlias === 'string') obj['code'] = codeAlias
-    else if (isRecord(obj['payload'])) obj['code'] = JSON.stringify(obj['payload'])
-    else if (isRecord(obj['entry'])) obj['code'] = JSON.stringify(obj['entry'])
-    else if (isRecord(obj['input'])) obj['code'] = JSON.stringify(obj['input'])
-    else if (obj['action'] !== undefined || obj['task'] !== undefined || obj['notes'] !== undefined || obj['changes'] !== undefined) {
-        obj['code'] = JSON.stringify(obj)
-    } else {
-        for (const [k, v] of Object.entries(obj)) {
-            if (typeof v === 'string' && v.trim().length > 0 && !NON_CODE_METADATA_KEYS.has(k)) {
-                obj['code'] = v
-                break
+    else {
+        const entryContentAlias = ENTRY_CONTENT_ALIAS_KEYS.map((key) => obj[key]).find(
+            (val): val is string => typeof val === 'string' && val.trim().length > 0
+        )
+        if (entryContentAlias !== undefined) {
+            if (obj['content'] === undefined) obj['content'] = entryContentAlias
+            return
+        }
+        if (isRecord(obj['payload'])) obj['code'] = JSON.stringify(obj['payload'])
+        else if (isRecord(obj['entry'])) obj['code'] = JSON.stringify(obj['entry'])
+        else if (isRecord(obj['input'])) obj['code'] = JSON.stringify(obj['input'])
+        else if (obj['action'] !== undefined || obj['task'] !== undefined || obj['notes'] !== undefined || obj['changes'] !== undefined) {
+            obj['code'] = JSON.stringify(obj)
+        } else {
+            for (const [k, v] of Object.entries(obj)) {
+                if (typeof v === 'string' && v.trim().length > 0 && !NON_CODE_METADATA_KEYS.has(k)) {
+                    obj['code'] = v
+                    break
+                }
             }
         }
     }

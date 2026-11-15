@@ -61,6 +61,12 @@ export function enforceAccessBoundary(
                 operation: 'fail-closed',
                 entityId: targetName,
             })
+            auditLogger?.logDenial(targetName, 'Unauthenticated team access', {
+                user: auth?.claims?.sub ?? null,
+                scopes: auth?.claims?.scopes ?? [],
+                category: 'team',
+                scope: SCOPES.TEAM,
+            })
             throw new PermissionError(
                 `Access to team ${targetType} '${targetName}' denied: missing TEAM_AUTHOR or active OAuth session.`
             )
@@ -70,7 +76,9 @@ export function enforceAccessBoundary(
     if (auth) {
         let requiredScope: string
         if (targetType === 'tool') {
-            if (capabilities?.requiresTeamScope === true) {
+            if (capabilities?.requiresAdminScope === true) {
+                requiredScope = SCOPES.ADMIN
+            } else if (capabilities?.requiresTeamScope === true) {
                 requiredScope = SCOPES.TEAM
             } else if (capabilities?.requiresAuditScope === true) {
                 requiredScope = SCOPES.AUDIT
@@ -79,12 +87,12 @@ export function enforceAccessBoundary(
             }
         } else {
             requiredScope = SCOPES.READ
-            if (isTeam) {
-                requiredScope = SCOPES.TEAM
+            if (isAdmin) {
+                requiredScope = SCOPES.ADMIN
             } else if (isAudit) {
                 requiredScope = SCOPES.AUDIT
-            } else if (isAdmin) {
-                requiredScope = SCOPES.ADMIN
+            } else if (isTeam) {
+                requiredScope = SCOPES.TEAM
             }
         }
 

@@ -31,6 +31,7 @@ import {
     DATE_MIN_SENTINEL,
     DATE_MAX_SENTINEL,
     relaxedNumber,
+    StrictProjectNumberSchema,
     ENTRY_TYPES,
     SOURCE_FORMATS,
 } from '../schemas.js'
@@ -44,7 +45,7 @@ const TeamExportMarkdownSchema = z.object({
     start_date: z.string().regex(DATE_FORMAT_REGEX, DATE_FORMAT_MESSAGE).optional(),
     end_date: z.string().regex(DATE_FORMAT_REGEX, DATE_FORMAT_MESSAGE).optional(),
     tags: z.array(z.string()).optional(),
-    project_number: z.number().optional(),
+    project_number: StrictProjectNumberSchema.optional(),
     limit: z.number().max(500).optional().default(100),
     workspace_id: z.string().optional(),
 })
@@ -75,7 +76,7 @@ const TeamExportMarkdownOutputSchema = z
 const TeamImportMarkdownSchema = z.object({
     source_dir: z.string().min(1),
     dry_run: z.boolean().optional().default(false),
-    project_number: z.number().optional(),
+    project_number: StrictProjectNumberSchema.optional(),
     limit: z.number().max(500).optional().default(100),
     workspace_id: z.string().optional(),
 })
@@ -116,7 +117,7 @@ const TeamImportExternalSchema = z.object({
     source_dir: z.string().min(1),
     source_format: z.enum(SOURCE_FORMATS),
     dry_run: z.boolean().optional().default(false),
-    project_number: z.number().optional(),
+    project_number: StrictProjectNumberSchema.optional(),
     limit: z.number().max(500).optional().default(100),
     default_entry_type: z.enum(ENTRY_TYPES).optional(),
     workspace_id: z.string().optional(),
@@ -263,7 +264,7 @@ export function getTeamIoTools(context: ToolContext): ToolDefinition[] {
                 try {
                     if (!teamDb) return { ...TEAM_IO_NOT_CONFIGURED }
                     const input = TeamImportMarkdownSchema.parse(params)
-                    const { projectNumber, lockedWsId } = resolveTeamImportScope(
+                    const { wsId, projectNumber, lockedWsId } = resolveTeamImportScope(
                         input.source_dir,
                         input.workspace_id,
                         input.project_number,
@@ -277,7 +278,7 @@ export function getTeamIoTools(context: ToolContext): ToolDefinition[] {
                     await sendProgress(progress, 0, 2, 'Reading markdown files...')
                     await sendProgress(progress, 1, 2, 'Importing team entries...')
 
-                    const authorCtx = resolveTeamImportContextAuthor(context)
+                    const authorCtx = resolveTeamImportContextAuthor(context, wsId)
                     if ('errorResponse' in authorCtx) {
                         return authorCtx.errorResponse
                     }
@@ -339,7 +340,7 @@ export function getTeamIoTools(context: ToolContext): ToolDefinition[] {
                 try {
                     if (!teamDb) return { ...TEAM_IO_NOT_CONFIGURED }
                     const input = TeamImportExternalSchema.parse(params)
-                    const { projectNumber, lockedWsId } = resolveTeamImportScope(
+                    const { wsId, projectNumber, lockedWsId } = resolveTeamImportScope(
                         input.source_dir,
                         input.workspace_id,
                         input.project_number,
@@ -362,7 +363,7 @@ export function getTeamIoTools(context: ToolContext): ToolDefinition[] {
                     )
 
                     await sendProgress(progress, 2, 3, 'Importing entries...')
-                    const authorCtx = resolveTeamImportContextAuthor(context)
+                    const authorCtx = resolveTeamImportContextAuthor(context, wsId)
                     if ('errorResponse' in authorCtx) {
                         return authorCtx.errorResponse
                     }

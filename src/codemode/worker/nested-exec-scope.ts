@@ -35,15 +35,174 @@ function findRegistryKey(
     return pathMatches.length === 1 ? pathMatches[0] : undefined
 }
 
-function parsePositiveProjectNumber(rawProj: unknown): number | null {
+function isPlainRecord(val: unknown): val is Record<string, unknown> {
+    return typeof val === 'object' && val !== null && !Array.isArray(val)
+}
+
+function collectNestedScopeRecords(argRec: Record<string, unknown>): Record<string, unknown>[] {
+    const records: Record<string, unknown>[] = [argRec]
+    for (const key of ['metadata', 'context', 'params'] as const) {
+        const nested = argRec[key]
+        if (isPlainRecord(nested)) records.push(nested)
+    }
+    return records
+}
+
+function parseProjectNumberCandidate(
+    rawProj: unknown,
+    registry: Record<string, ProjectRegistryEntry> | undefined
+): number | null {
     if (typeof rawProj === 'number') {
         return Number.isInteger(rawProj) && rawProj > 0 ? rawProj : null
     }
     if (typeof rawProj === 'string') {
         const trimmed = rawProj.trim()
-        if (!/^\d+$/.test(trimmed)) return null
-        const parsed = Number.parseInt(trimmed, 10)
-        return parsed > 0 ? parsed : null
+        const numMatch = /^(?:#|p-)?([1-9]\d*)$/i.exec(trimmed)
+        if (numMatch?.[1] !== undefined) {
+            return Number.parseInt(numMatch[1], 10)
+        }
+        const matchedKey = findRegistryKey(trimmed, registry)
+        const regProj = matchedKey !== undefined ? registry?.[matchedKey]?.project_number : undefined
+        return typeof regProj === 'number' && Number.isInteger(regProj) && regProj > 0
+            ? regProj
+            : null
+    }
+    return null
+}
+
+function isProjectStringValue(val: unknown): val is string {
+    if (typeof val !== 'string') return false
+    const trimmed = val.trim()
+    return trimmed !== '' && !/^(?:#|p-)?\d+$/i.test(trimmed)
+}
+
+function validateWorkspaceAliases(
+    records: Record<string, unknown>[],
+    pinnedWorkspace: string,
+    canonPinned: string,
+    registry: Record<string, ProjectRegistryEntry> | undefined
+): { error: string } | null {
+    const wsKeys = [
+        'workspace_id',
+        'workspaceId',
+        'workspace',
+        'target_workspace_id',
+        'targetWorkspaceId',
+        'project_name',
+        'projectName',
+    ] as const
+    for (const rec of records) {
+        for (const key of wsKeys) {
+            const raw = rec[key]
+            if (typeof raw !== 'string') continue
+            const trimmed = raw.trim()
+            if (trimmed === '' || trimmed === '*') continue
+            const canonArg = findRegistryKey(trimmed, registry) ?? trimmed
+            if (canonArg.toLowerCase() !== canonPinned.toLowerCase()) {
+                return {
+                    error: `Workspace '${trimmed}' conflicts with pinned session workspace '${pinnedWorkspace}'`,
+                }
+            }
+        }
+        const rawProject = rec['project']
+        if (isProjectStringValue(rawProject)) {
+            const trimmed = rawProject.trim()
+            if (trimmed !== '*') {
+                const canonArg = findRegistryKey(trimmed, registry) ?? trimmed
+                if (canonArg.toLowerCase() !== canonPinned.toLowerCase()) {
+                    return {
+                        error: `Workspace '${trimmed}' conflicts with pinned session workspace '${pinnedWorkspace}'`,
+                    }
+                }
+            }
+        }
+    }
+    return null
+}
+
+function validateRepoAliases(
+    records: Record<string, unknown>[],
+    pinnedWorkspace: string,
+    canonPinned: string,
+    registry: Record<string, ProjectRegistryEntry> | undefined
+): { error: string } | null {
+    const repoKeys = ['repo', 'repo_name', 'repoName', 'repository'] as const
+    for (const rec of records) {
+        for (const key of repoKeys) {
+            const rawRepo = rec[key]
+            if (typeof rawRepo !== 'string' || rawRepo.trim() === '') continue
+            const trimmedRepo = rawRepo.trim()
+            const repoSlug = trimmedRepo.split(/[/\\]/).filter(Boolean).pop() ?? trimmedRepo
+            const matchedRepoKey =
+                findRegistryKey(trimmedRepo, registry) ?? findRegistryKey(repoSlug, registry)
+            if (matchedRepoKey !== undefined) {
+                if (matchedRepoKey.toLowerCase() !== canonPinned.toLowerCase()) {
+                    return {
+                        error: `Repository '${trimmedRepo}' conflicts with pinned session workspace '${pinnedWorkspace}'`,
+                    }
+                }
+            } else if (
+                repoSlug.toLowerCase() !== pinnedWorkspace.toLowerCase() &&
+                repoSlug.toLowerCase() !== canonPinned.toLowerCase()
+            ) {
+                return {
+                    error: `Repository '${trimmedRepo}' conflicts with pinned session workspace '${pinnedWorkspace}'`,
+                }
+            }
+        }
+    }
+    return null
+}
+
+function validateProjectNumberAliases(
+    records: Record<string, unknown>[],
+    pinnedWorkspace: string | undefined,
+    pinnedProjectNumber: number | undefined,
+    canonPinned: string | undefined,
+    registry: Record<string, ProjectRegistryEntry> | undefined
+): { error: string } | null {
+    const projKeys = ['project_number', 'projectNumber', 'project_id', 'projectId', 'project'] as const
+    for (const rec of records) {
+        for (const key of projKeys) {
+            const rawProj = rec[key]
+            if (rawProj === undefined || rawProj === null || rawProj === '') continue
+            if (key === 'project' && isProjectStringValue(rawProj)) continue
+            const parsedProj = parseProjectNumberCandidate(rawProj, registry)
+            if (parsedProj === null) {
+                const projDesc =
+                    typeof rawProj === 'string' ||
+                    typeof rawProj === 'number' ||
+                    typeof rawProj === 'boolean'
+                        ? String(rawProj)
+                        : (JSON.stringify(rawProj) ?? 'invalid')
+                return { error: `Invalid project_number '${projDesc}' in nested executeCode` }
+            }
+            if (pinnedProjectNumber !== undefined && parsedProj !== pinnedProjectNumber) {
+                return {
+                    error: `project_number ${String(parsedProj)} conflicts with pinned session project_number ${String(pinnedProjectNumber)}`,
+                }
+            }
+            if (pinnedWorkspace?.toLowerCase() === 'default') {
+                const defaultRegProj = registry?.['default']?.project_number
+                if (parsedProj !== pinnedProjectNumber && parsedProj !== defaultRegProj) {
+                    return {
+                        error: `project_number ${String(parsedProj)} conflicts with pinned session workspace '${pinnedWorkspace}'`,
+                    }
+                }
+            } else if (pinnedWorkspace !== undefined && registry !== undefined && canonPinned !== undefined) {
+                const owners = Object.entries(registry)
+                    .filter(([, entry]) => entry.project_number === parsedProj)
+                    .map(([ownerKey]) => ownerKey)
+                if (
+                    owners.length > 0 &&
+                    !owners.some((k) => k.toLowerCase() === canonPinned.toLowerCase())
+                ) {
+                    return {
+                        error: `project_number ${String(parsedProj)} conflicts with pinned session workspace '${pinnedWorkspace}'`,
+                    }
+                }
+            }
+        }
     }
     return null
 }
@@ -60,85 +219,26 @@ export function validateNestedExecScope(
 ): { error: string } | null {
     if (argRec === undefined) return null
     const registry = readProjectRegistryPayload(projectRegistryRaw)
-
-    const rawArgWs = argRec['workspace_id'] ?? argRec['workspaceId']
-    const argWs =
-        typeof rawArgWs === 'string' && rawArgWs.trim() !== '' && rawArgWs.trim() !== '*'
-            ? rawArgWs.trim()
-            : undefined
+    const records = collectNestedScopeRecords(argRec)
     const canonPinned =
         pinnedWorkspace !== undefined
             ? findRegistryKey(pinnedWorkspace, registry) ?? pinnedWorkspace
             : undefined
 
-    if (argWs !== undefined && pinnedWorkspace !== undefined && canonPinned !== undefined) {
-        const canonArg = findRegistryKey(argWs, registry) ?? argWs
-        if (canonArg.toLowerCase() !== canonPinned.toLowerCase()) {
-            return {
-                error: `Workspace '${argWs}' conflicts with pinned session workspace '${pinnedWorkspace}'`,
-            }
-        }
+    if (pinnedWorkspace !== undefined && canonPinned !== undefined) {
+        const wsErr = validateWorkspaceAliases(records, pinnedWorkspace, canonPinned, registry)
+        if (wsErr !== null) return wsErr
+        const repoErr = validateRepoAliases(records, pinnedWorkspace, canonPinned, registry)
+        if (repoErr !== null) return repoErr
     }
 
-    const rawRepo = argRec['repo'] ?? argRec['repo_name']
-    if (typeof rawRepo === 'string' && rawRepo.trim() !== '' && pinnedWorkspace !== undefined && canonPinned !== undefined) {
-        const trimmedRepo = rawRepo.trim()
-        const repoSlug = trimmedRepo.split(/[/\\]/).filter(Boolean).pop() ?? trimmedRepo
-        const matchedRepoKey =
-            findRegistryKey(trimmedRepo, registry) ?? findRegistryKey(repoSlug, registry)
-        if (matchedRepoKey !== undefined) {
-            if (matchedRepoKey.toLowerCase() !== canonPinned.toLowerCase()) {
-                return {
-                    error: `Repository '${trimmedRepo}' conflicts with pinned session workspace '${pinnedWorkspace}'`,
-                }
-            }
-        } else if (
-            repoSlug.toLowerCase() !== pinnedWorkspace.toLowerCase() &&
-            repoSlug.toLowerCase() !== canonPinned.toLowerCase()
-        ) {
-            return {
-                error: `Repository '${trimmedRepo}' conflicts with pinned session workspace '${pinnedWorkspace}'`,
-            }
-        }
-    }
-
-    const rawProj = argRec['project_number'] ?? argRec['projectNumber']
-    if (rawProj !== undefined && rawProj !== null && rawProj !== '') {
-        const parsedProj = parsePositiveProjectNumber(rawProj)
-        if (parsedProj === null) {
-            const projDesc =
-                typeof rawProj === 'string' ||
-                typeof rawProj === 'number' ||
-                typeof rawProj === 'boolean'
-                    ? String(rawProj)
-                    : (JSON.stringify(rawProj) ?? 'invalid')
-            return {
-                error: `Invalid project_number '${projDesc}' in nested executeCode`,
-            }
-        }
-        if (pinnedProjectNumber !== undefined && parsedProj !== pinnedProjectNumber) {
-            return {
-                error: `project_number ${String(parsedProj)} conflicts with pinned session project_number ${String(pinnedProjectNumber)}`,
-            }
-        }
-        if (pinnedWorkspace !== undefined && registry !== undefined && canonPinned !== undefined) {
-            const owners = Object.entries(registry)
-                .filter(([, entry]) => entry.project_number === parsedProj)
-                .map(([key]) => key)
-            if (owners.length > 0) {
-                if (
-                    pinnedWorkspace.toLowerCase() === 'default' ||
-                    !owners.some((k) => k.toLowerCase() === canonPinned.toLowerCase())
-                ) {
-                    return {
-                        error: `project_number ${String(parsedProj)} conflicts with pinned session workspace '${pinnedWorkspace}'`,
-                    }
-                }
-            }
-        }
-    }
-
-    return null
+    return validateProjectNumberAliases(
+        records,
+        pinnedWorkspace,
+        pinnedProjectNumber,
+        canonPinned,
+        registry
+    )
 }
 
 /**

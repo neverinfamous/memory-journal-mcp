@@ -4,6 +4,7 @@
  */
 
 import { type SafeFsShim, pathShim, consoleShim, createPreparedStatementShim } from './node-shims.js'
+import { createDisabledSpawnShim } from './sandbox-process-shims.js'
 import {
     DB_TO_JOURNAL,
     createCallableShim,
@@ -156,31 +157,7 @@ function resolveNodeAndSqlShims(
     if (prop === 'spawn' || prop === 'fork' || prop === 'execFile') {
         return {
             matched: true,
-            value: (_cmd?: unknown, cbOrOptions?: unknown, maybeCb?: unknown) => {
-                const cb =
-                    typeof cbOrOptions === 'function'
-                        ? (cbOrOptions as (...args: unknown[]) => unknown)
-                        : typeof maybeCb === 'function'
-                          ? (maybeCb as (...args: unknown[]) => unknown)
-                          : undefined
-                if (cb !== undefined) {
-                    try {
-                        cb(new Error('spawn is disabled in the sandbox'), '', '')
-                    } catch {
-                        // Ignore user callback errors on no-op child_process shim
-                    }
-                }
-                const noop = (): void => { /* noop */ }
-                return {
-                    on: noop,
-                    stdout: { on: noop },
-                    stderr: { on: noop },
-                    kill: () => false,
-                    status: 1,
-                    output: ['', '', 'spawn is disabled in the sandbox'],
-                    error: new Error('spawn is disabled in the sandbox'),
-                }
-            },
+            value: createDisabledSpawnShim(prop),
         }
     }
 

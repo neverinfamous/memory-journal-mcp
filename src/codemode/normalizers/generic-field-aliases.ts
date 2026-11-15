@@ -134,6 +134,7 @@ export function coerceNumericStringIds(
         const val = obj[key]
         if (typeof val === 'string') {
             const strVal = val.trim()
+            if (strVal === '') continue
             if (/^-?\d+$/.test(strVal)) {
                 const parsed = parseInt(strVal, 10)
                 if (!isNaN(parsed)) obj[key] = parsed

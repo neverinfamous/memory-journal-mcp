@@ -14,7 +14,7 @@ import {
     InvalidTokenError,
     InsufficientScopeError,
 } from './errors.js'
-import { hasScope as checkScope } from './scopes.js'
+import { hasAnyScope } from './scopes.js'
 
 /**
  * Extract a Bearer token from an Authorization header.
@@ -108,8 +108,7 @@ export async function validateAuth(
     }
 
     if (requiredScopes && requiredScopes.length > 0) {
-        const hasRequired = requiredScopes.some((scope) => checkScope(context.scopes, scope))
-        if (!hasRequired) {
+        if (!hasAnyScope(context.scopes, requiredScopes)) {
             throw new InsufficientScopeError(requiredScopes, context.scopes)
         }
     }

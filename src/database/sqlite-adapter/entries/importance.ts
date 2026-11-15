@@ -67,7 +67,7 @@ export function buildImportanceSqlExpression(): string {
         MAX(COALESCE(e.impact_score, 0.0), CASE WHEN e.significance_type IS NOT NULL THEN ${String(SIGNIFICANCE_TYPE_BASELINE)} ELSE 0.0 END) * ${String(w.significance)}
         + MIN(COALESCE(rs.rel_count, 0) * 1.0 / ${String(MAX_RELATIONSHIP_SCORE_AT)}, 1.0) * ${String(w.relationships)}
         + MIN(COALESCE(rs.causal_count, 0) * 1.0 / ${String(MAX_CAUSAL_SCORE_AT)}, 1.0) * ${String(w.causal)}
-        + MAX(0, 1.0 - (julianday('now') - julianday(e.timestamp)) / ${String(RECENCY_WINDOW_DAYS)}.0) * ${String(w.recency)}
+        + MIN(1.0, MAX(0.0, 1.0 - (julianday('now') - julianday(e.timestamp)) / ${String(RECENCY_WINDOW_DAYS)}.0)) * ${String(w.recency)}
     ) 
     * CASE COALESCE(ans.worst_status_rank, 3) WHEN 1 THEN 0.1 WHEN 2 THEN 0.8 ELSE 1.0 END
     * (0.5 + COALESCE(e.trust_score, 0.5) + CASE e.validation_status WHEN 'passed' THEN 0.5 WHEN 'failed' THEN -0.4 ELSE 0.0 END)
@@ -125,10 +125,11 @@ export function calculateImportance(
     const relationshipsRaw = Math.min(relCount / MAX_RELATIONSHIP_SCORE_AT, 1.0)
     const causalRaw = Math.min(causalCount / MAX_CAUSAL_SCORE_AT, 1.0)
 
-    const entryDate = new Date(timestamp)
-    const now = new Date()
-    const daysSince = Math.floor((now.getTime() - entryDate.getTime()) / (1000 * 60 * 60 * 24))
-    const recencyRaw = Math.max(0, 1 - daysSince / RECENCY_WINDOW_DAYS)
+    const entryMs = new Date(timestamp).getTime()
+    const daysSince = Number.isFinite(entryMs)
+        ? Math.max(0, (Date.now() - entryMs) / 86_400_000)
+        : RECENCY_WINDOW_DAYS
+    const recencyRaw = Math.min(1, Math.max(0, 1 - daysSince / RECENCY_WINDOW_DAYS))
 
     const anchorMultiplier = worstStatusRank === 1 ? 0.1 : (worstStatusRank === 2 ? 0.8 : 1.0)
     const validationMultiplier = validationStatus === 'passed' ? 0.5 : (validationStatus === 'failed' ? -0.4 : 0.0)

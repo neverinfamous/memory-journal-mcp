@@ -1,4 +1,5 @@
 import {
+    loadProjectRegistryFromConfig,
     resolveProjectContext,
     setActiveSessionProject,
 } from '../../../utils/workspace-resolver.js'
@@ -16,12 +17,13 @@ export function getAgentContextResource(): InternalResourceDef {
         annotations: withPriority(1.0, ASSISTANT_FOCUSED),
         handler: (uri: string, context: ResourceContext): ResourceResult => {
             const config = context?.briefingConfig
+            const fallbackRegistry = config?.projectRegistry ?? loadProjectRegistryFromConfig()
 
             const match = /^memory:\/\/(?:agent-context|agent-id)(?:\/(.+))?$/.exec(getBaseUri(uri))
             const rawRepo = match?.[1] !== undefined ? decodeURIComponent(match[1]) : undefined
             if (rawRepo?.toLowerCase() === 'default') {
                 const defaultProjNum =
-                    config?.projectRegistry?.['default']?.project_number ??
+                    fallbackRegistry?.['default']?.project_number ??
                     (config?.defaultWorkspaceId === 'default'
                         ? config.defaultProjectNumber
                         : undefined)
@@ -42,10 +44,10 @@ export function getAgentContextResource(): InternalResourceDef {
             const repo = rawRepo
 
             const numericRepo = repo !== undefined ? /^#?(\d+)$/.exec(repo) : null
-            const exactRepo = repo !== undefined ? exactRegistryKey(repo, config?.projectRegistry) : undefined
+            const exactRepo = repo !== undefined ? exactRegistryKey(repo, fallbackRegistry) : undefined
             const numericWorkspace =
                 numericRepo !== null
-                    ? uniqueWorkspaceForProject(Number(numericRepo[1]), config?.projectRegistry)
+                    ? uniqueWorkspaceForProject(Number(numericRepo[1]), fallbackRegistry)
                     : undefined
             const namedRepo = exactRepo ?? numericWorkspace
             // [INVARIANT] An explicit but unknown repo never falls back to cwd/session/first

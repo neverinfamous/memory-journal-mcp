@@ -159,7 +159,7 @@ function readWorkspaceId(target: Record<string, unknown>): string | undefined {
 /** Maps a `repo` / `owner/repo` value onto a registered workspace key; never copies it verbatim. */
 export function resolveRepoWorkspace(repo: unknown): string | undefined {
     if (typeof repo !== 'string' || repo.trim() === '') return undefined
-    const name = repo.trim().split('/').pop()?.trim() ?? ''
+    const name = repo.trim().split(/[/\\]/).filter(Boolean).pop()?.trim() ?? ''
     if (name === '') return undefined
     const registry = loadProjectRegistryFromConfig()
     if (registry === undefined) return undefined

@@ -323,7 +323,7 @@ describe('GitHub Resource Handlers', () => {
             const result = await readResource('memory://kanban/1', db, undefined, undefined, github)
 
             const data = result.data as { projectTitle: string; totalItems: number }
-            expect(data.projectTitle).toBe('My Board')
+            expect(data.projectTitle).toBe('<untrusted_remote_content>My Board</untrusted_remote_content>')
             expect(data.totalItems).toBe(1)
         })
 
@@ -483,7 +483,7 @@ describe('GitHub Resource Handlers', () => {
 
             expect(data.prNumber).toBe(10)
             expect(data.prMetadata).toBeDefined()
-            expect(data.prMetadata.title).toBe('Feature PR')
+            expect(data.prMetadata.title).toBe('<untrusted_remote_content>Feature PR</untrusted_remote_content>')
             expect(data.timelineNote).toContain('open')
         })
 

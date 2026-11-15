@@ -148,6 +148,14 @@ export const StrictProjectNumberSchema = z
         message:
             'Missing project_number. You MUST provide a valid project_number (e.g., 1) to associate this action with a specific project context.',
     })
+    .int({
+        message:
+            'Invalid project_number. Expected a positive integer (e.g., 1).',
+    })
+    .positive({
+        message:
+            'Invalid project_number. Expected a positive integer (e.g., 1).',
+    })
     .optional()
 
 /**

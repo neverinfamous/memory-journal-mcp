@@ -95,7 +95,7 @@ describe('Pass 25 Option A Regressions', () => {
         it('renders hardened audit prompt with valid Method 2 JS syntax and zero banned strings', async () => {
             const def = getCodeQualityAuditPromptDefinition()
             const text = getPromptText(await def.handler({}, db))
-            expect(AUDIT_PROMPT_REVISION).toBe('2026-11-15-audit-pass27')
+            expect(AUDIT_PROMPT_REVISION).toBe('2026-11-15-audit-pass28')
             expect(text).toContain('memory://agent-context/')
             expect(text).toContain('mj.core.createEntry')
             expect(text).toContain('node <file>')

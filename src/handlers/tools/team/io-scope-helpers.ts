@@ -11,7 +11,7 @@ import { getAuthContext } from '../../../auth/auth-context.js'
 import { resolveAuthenticatedAuthor } from '../../../utils/security-utils.js'
 import { sendProgress } from '../../../utils/progress-utils.js'
 import { resolveTeamCreateAuthor } from './admin-tools/batch-create-helpers.js'
-import { isCallerTeamAdmin } from './rbac.js'
+import { isCallerTeamAdmin, resolveScopedTeamRole } from './rbac.js'
 import { resolveWorkspaceFromFilePath } from '../../../utils/workspace-resolver.js'
 import { activeProjectRegistry, uniqueWorkspaceForProject } from '../../../utils/write-scope.js'
 import { resolveWriteWorkspaceId } from '../write-workspace.js'
@@ -96,14 +96,15 @@ export async function readAndConvertExternalMarkdownFiles(
     progress: ToolContext['progress']
 ): Promise<{ parsedFiles: ParsedFile[]; errors: { file: string; error: string }[] }> {
     assertSafeDirectoryPath(sourceDir, allowedRoots)
-    const mdFiles: string[] = []
+    const allMdFiles: string[] = []
     const dir = await fs.opendir(sourceDir)
     for await (const dirent of dir) {
         if (dirent.isFile() && dirent.name.endsWith('.md')) {
-            mdFiles.push(dirent.name)
-            if (mdFiles.length >= limit) break
+            allMdFiles.push(dirent.name)
         }
     }
+    allMdFiles.sort((a, b) => a.localeCompare(b))
+    const mdFiles = allMdFiles.slice(0, limit)
 
     await sendProgress(progress, 1, 3, 'Converting external formats...')
     const parsedFiles: ParsedFile[] = []
@@ -155,7 +156,10 @@ export type TeamImportContextAuthor =
  * Resolves team import caller identity, enforcing non-viewer RBAC and OAuth authentication
  * while preserving the unauthenticated non-RBAC legacy author flow.
  */
-export function resolveTeamImportContextAuthor(context: ToolContext): TeamImportContextAuthor {
+export function resolveTeamImportContextAuthor(
+    context: ToolContext,
+    workspaceId?: string
+): TeamImportContextAuthor {
     const teamDb = context.teamDb
     if (!teamDb) {
         return { errorResponse: TEAM_IO_NOT_CONFIGURED }
@@ -170,23 +174,14 @@ export function resolveTeamImportContextAuthor(context: ToolContext): TeamImport
             allowAdminAuthorOverride: false,
         }
     }
-    const authorResult = resolveTeamCreateAuthor(undefined, teamDb, context.config)
+    const authorResult = resolveTeamCreateAuthor(undefined, teamDb, context.config, workspaceId)
     if ('errorResponse' in authorResult) {
         return authorResult
     }
     if (rbacActive) {
         const defaultRole = context.config?.teamDefaultRole ?? 'denied'
-        let role =
-            typeof teamDb.resolveTeamRole === 'function'
-                ? teamDb.resolveTeamRole(authorResult.author, defaultRole)
-                : defaultRole
-        if ((role === 'denied' || role === null) && typeof teamDb.resolveAuthor === 'function') {
-            const canonicalAuthor = teamDb.resolveAuthor(authorResult.author)
-            if (canonicalAuthor !== authorResult.author) {
-                role = teamDb.resolveTeamRole(canonicalAuthor, defaultRole)
-            }
-        }
-        if (role === 'denied' || role === null || role === 'viewer') {
+        const role = resolveScopedTeamRole(teamDb, authorResult.author, defaultRole, workspaceId)
+        if (role === null || role === 'viewer') {
             return {
                 errorResponse: {
                     success: false,
@@ -201,6 +196,11 @@ export function resolveTeamImportContextAuthor(context: ToolContext): TeamImport
     return {
         author: authorResult.author,
         enforceStrictTeamOwnership: true,
-        allowAdminAuthorOverride: isCallerTeamAdmin(teamDb, authorResult.author, context.config),
+        allowAdminAuthorOverride: isCallerTeamAdmin(
+            teamDb,
+            authorResult.author,
+            context.config,
+            workspaceId
+        ),
     }
 }

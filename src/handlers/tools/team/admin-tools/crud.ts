@@ -63,20 +63,14 @@ export function getTeamAdminCrudTools(context: ToolContext): ToolDefinition[] {
                     coerceSignificanceAlias(params)
 
                     const input = TeamUpdateEntrySchema.parse(params)
-                    let wsId =
-                        input.workspace_id === '*'
-                            ? '*'
-                            : resolveWriteWorkspaceId(
-                                  input.workspace_id,
-                                  input.project_number,
-                                  context.config
-                              )
+                    let wsId = resolveWriteWorkspaceId(
+                        input.workspace_id,
+                        input.project_number,
+                        context.config
+                    )
 
                     // Verify entry exists
                     const existing = teamDb.getEntryById(input.entry_id, wsId)
-                    if (existing?.workspaceId !== undefined && wsId === '*') {
-                        wsId = existing.workspaceId
-                    }
                     if (!existing) {
                         return {
                             success: false,
@@ -106,9 +100,7 @@ export function getTeamAdminCrudTools(context: ToolContext): ToolDefinition[] {
 
                     // [INVARIANT] Existing entries keep their stored workspace; never re-infer scope from content/tags or pass '*' to the write resolver.
                     wsId = resolveWriteWorkspaceId(
-                        input.workspace_id === undefined || input.workspace_id === '*'
-                            ? existing.workspaceId
-                            : input.workspace_id,
+                        input.workspace_id ?? existing.workspaceId,
                         input.project_number,
                         context.config
                     )
@@ -136,7 +128,7 @@ export function getTeamAdminCrudTools(context: ToolContext): ToolDefinition[] {
                         }
                     }
 
-                    const denied = checkSingleTeamOwnership(teamDb, context, input.entry_id, 'modify')
+                    const denied = checkSingleTeamOwnership(teamDb, context, input.entry_id, 'modify', wsId)
                     if (denied !== null) return denied
                     const author = fetchAuthor(teamDb, input.entry_id)
 
@@ -219,14 +211,8 @@ export function getTeamAdminCrudTools(context: ToolContext): ToolDefinition[] {
 
                     const { entry_id, project_number, expected_version, workspace_id } = TeamDeleteEntrySchema.parse(params)
 
-                    let wsId =
-                        workspace_id === '*'
-                            ? '*'
-                            : resolveWriteWorkspaceId(workspace_id, project_number, context.config)
+                    let wsId = resolveWriteWorkspaceId(workspace_id, project_number, context.config)
                     const existing = teamDb.getEntryByIdIncludeDeleted(entry_id, wsId)
-                    if (existing?.workspaceId !== undefined && wsId === '*') {
-                        wsId = existing.workspaceId
-                    }
 
                     const projectNumber =
                         project_number ??
@@ -236,9 +222,7 @@ export function getTeamAdminCrudTools(context: ToolContext): ToolDefinition[] {
                         return missingProjectNumberResponse()
                     }
                     wsId = resolveWriteWorkspaceId(
-                        workspace_id === undefined || workspace_id === '*'
-                            ? existing?.workspaceId
-                            : workspace_id,
+                        workspace_id ?? existing?.workspaceId,
                         projectNumber,
                         context.config
                     )
@@ -267,7 +251,7 @@ export function getTeamAdminCrudTools(context: ToolContext): ToolDefinition[] {
                         }
                     }
 
-                    const denied = checkSingleTeamOwnership(teamDb, context, entry_id, 'delete')
+                    const denied = checkSingleTeamOwnership(teamDb, context, entry_id, 'delete', wsId)
                     if (denied !== null) return denied
 
                     const deleted = teamDb.deleteEntry(entry_id, false, wsId)
@@ -324,14 +308,8 @@ export function getTeamAdminCrudTools(context: ToolContext): ToolDefinition[] {
 
                     const { entry_id, project_number, workspace_id } = TeamRestoreEntrySchema.parse(params)
 
-                    let wsId =
-                        workspace_id === '*'
-                            ? '*'
-                            : resolveWriteWorkspaceId(workspace_id, project_number, context.config)
+                    let wsId = resolveWriteWorkspaceId(workspace_id, project_number, context.config)
                     const existing = teamDb.getEntryByIdIncludeDeleted(entry_id, wsId)
-                    if (existing?.workspaceId !== undefined && wsId === '*') {
-                        wsId = existing.workspaceId
-                    }
                     const projectNumber =
                         project_number ??
                         existing?.projectNumber ??
@@ -340,9 +318,7 @@ export function getTeamAdminCrudTools(context: ToolContext): ToolDefinition[] {
                         return missingProjectNumberResponse()
                     }
                     wsId = resolveWriteWorkspaceId(
-                        workspace_id === undefined || workspace_id === '*'
-                            ? existing?.workspaceId
-                            : workspace_id,
+                        workspace_id ?? existing?.workspaceId,
                         projectNumber,
                         context.config
                     )
@@ -356,7 +332,7 @@ export function getTeamAdminCrudTools(context: ToolContext): ToolDefinition[] {
                         }
                     }
 
-                    const denied = checkSingleTeamOwnership(teamDb, context, entry_id, 'restore')
+                    const denied = checkSingleTeamOwnership(teamDb, context, entry_id, 'restore', wsId)
                     if (denied !== null) return denied
 
                     const success = teamDb.restoreEntry(entry_id, wsId)

@@ -1,5 +1,6 @@
 import { QueryError } from '../../types/errors.js'
 import { isMissingTableError } from './schema-errors.js'
+import { getSingleRow } from './row-helpers.js'
 import type { IDatabaseConnection, TeamMember, TeamRole } from '../core/interfaces.js'
 
 export class MembersManager {
@@ -8,25 +9,6 @@ export class MembersManager {
 
     constructor(db: IDatabaseConnection) {
         this.db = db
-    }
-
-    /**
-     * Helper to retrieve a single query result row safely
-     */
-    private getSingleRow(queryResult: { columns: string[]; values: unknown[][] }[]): Record<string, unknown> | null {
-        if (queryResult.length === 0 || (queryResult[0]?.values.length ?? 0) === 0 || (queryResult[0]?.columns.length ?? 0) === 0) {
-            return null
-        }
-        const row = queryResult[0]?.values[0]
-        if (!row) return null
-        
-        const result: Record<string, unknown> = {}
-        const columns = queryResult[0]?.columns ?? []
-        for (let i = 0; i < columns.length; i++) {
-            const col = columns[i]
-            if (col) result[col] = row[i]
-        }
-        return result
     }
 
     /**
@@ -118,7 +100,7 @@ export class MembersManager {
                 `SELECT * FROM team_members WHERE author = ? COLLATE NOCASE`,
                 [author]
             )
-            const row = this.getSingleRow(results)
+            const row = getSingleRow(results)
             if (!row) return null
             return this.mapToTeamMember(row)
         } catch (error) {
@@ -165,7 +147,7 @@ export class MembersManager {
     getMemberCount(): number {
         try {
             const results = this.db.exec(`SELECT COUNT(*) as count FROM team_members`)
-            const row = this.getSingleRow(results)
+            const row = getSingleRow(results)
             return typeof row?.['count'] === 'number' ? row['count'] : 0
         } catch (error) {
              if (isMissingTableError(error)) {

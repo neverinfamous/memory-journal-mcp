@@ -89,7 +89,7 @@ function checkUnassignedEntries(): void {
             WHERE workspace_id = 'default' 
                OR workspace_id IS NULL 
                OR TRIM(workspace_id) = '' 
-               OR project_number = 0 
+               OR project_number <= 0 
                OR project_number IS NULL
         `).all() as Array<{
             id: number

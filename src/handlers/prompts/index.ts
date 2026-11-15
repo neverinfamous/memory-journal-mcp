@@ -68,6 +68,7 @@ export function getPrompts(): object[] {
         description: def.description,
         ...(def.arguments !== undefined ? { arguments: def.arguments } : {}),
         ...(def.icons !== undefined ? { icons: def.icons } : {}),
+        ...(def.capabilities !== undefined ? { capabilities: def.capabilities } : {}),
     }))
 }
 

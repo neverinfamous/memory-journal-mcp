@@ -31,17 +31,21 @@ export function getCrossProjectInsights(
         wsParams.push(options.projectNumber)
     }
 
+    let startBound: string | undefined
+    let endBound: string | undefined
     if (options.startDate !== undefined && options.startDate.length > 0) {
         let start = options.startDate
         if (!start.includes('T')) start += 'T00:00:00.000Z'
         where += ' AND timestamp >= ?'
         sqlParams.push(start)
+        startBound = start
     }
     if (options.endDate !== undefined && options.endDate.length > 0) {
         let end = options.endDate
         if (!end.includes('T')) end += 'T23:59:59.999Z'
         where += ' AND timestamp <= ?'
         sqlParams.push(end)
+        endBound = end
     }
 
     const projectsResult = connection.exec(
@@ -70,7 +74,7 @@ export function getCrossProjectInsights(
         }
     }
 
-    attachTopTags(connection, projects, scopeId)
+    attachTopTags(connection, projects, scopeId, startBound, endBound)
 
     const inactiveProjects = queryInactiveProjects(
         connection,
@@ -86,7 +90,9 @@ export function getCrossProjectInsights(
 function attachTopTags(
     connection: NativeConnectionManager,
     projects: Record<string, unknown>[],
-    scopeId: string
+    scopeId: string,
+    startDate?: string,
+    endDate?: string
 ): void {
     if (projects.length > 0) {
         const projectNumbers = projects.map((p) => p['project_number'] as number)
@@ -95,17 +101,28 @@ function attachTopTags(
         // [INVARIANT] Bind only the workspace param here; project filtering is already
         // expressed by the IN (...) list, so extra project params would overflow the binds.
         const wsOnly: unknown[] = scopeId !== '*' ? [scopeId] : []
+        const dateClauses: string[] = []
+        const dateParams: unknown[] = []
+        if (startDate !== undefined) {
+            dateClauses.push('AND mj.timestamp >= ?')
+            dateParams.push(startDate)
+        }
+        if (endDate !== undefined) {
+            dateClauses.push('AND mj.timestamp <= ?')
+            dateParams.push(endDate)
+        }
+        const dateFilter = dateClauses.length > 0 ? ` ${dateClauses.join(' ')}` : ''
         const tagsResult = connection.exec(
             `
             SELECT mj.project_number, t.name, COUNT(*) as count
             FROM memory_journal mj
             JOIN entry_tags et ON mj.id = et.entry_id
             JOIN tags t ON et.tag_id = t.id
-            WHERE mj.deleted_at IS NULL AND mj.project_number IN (${placeholders})${mjWsFilter}
+            WHERE mj.deleted_at IS NULL AND mj.project_number IN (${placeholders})${mjWsFilter}${dateFilter}
             GROUP BY mj.project_number, t.name
             ORDER BY count DESC
             `,
-            [...projectNumbers, ...wsOnly]
+            [...projectNumbers, ...wsOnly, ...dateParams]
         )
         const tagMap = new Map<number, { name: string; count: number }[]>()
         if (tagsResult[0]) {
@@ -160,7 +177,14 @@ function queryInactiveProjects(
 /** Select the entries to render in the relationship graph (by connected entry, tags, or all linked). */
 function queryGraphEntries(
     connection: NativeConnectionManager,
-    options: { entryId?: number; tags?: string[]; depth: number; limit: number; projectNumber?: number },
+    options: {
+        entryId?: number
+        tags?: string[]
+        relationshipType?: string
+        depth: number
+        limit: number
+        projectNumber?: number
+    },
     scopeId: string
 ): QueryResult[] {
     const wsFilter = scopeId !== '*' ? ' AND mj.workspace_id = ?' : ''
@@ -170,6 +194,9 @@ function queryGraphEntries(
     const projSql = options.projectNumber !== undefined ? ' AND mj.project_number = ?' : ''
     const nxProjFilter = options.projectNumber !== undefined ? ' AND nx.project_number = ?' : ''
     const projParam = options.projectNumber !== undefined ? [options.projectNumber] : []
+    const hasRelType = options.relationshipType !== undefined && options.relationshipType.length > 0
+    const relTypeSql = hasRelType ? ' AND r.relationship_type = ?' : ''
+    const relTypeParam = hasRelType ? [options.relationshipType] : []
 
     if (options.entryId !== undefined) {
         return connection.exec(
@@ -189,7 +216,7 @@ function queryGraphEntries(
                         WHEN r.from_entry_id = ce.id THEN r.to_entry_id
                         ELSE r.from_entry_id
                     END
-                WHERE ce.distance < ? AND nx.deleted_at IS NULL${nxWsFilter}${nxProjFilter}
+                WHERE ce.distance < ? AND nx.deleted_at IS NULL${nxWsFilter}${nxProjFilter}${relTypeSql}
             )
             SELECT DISTINCT mj.id, mj.entry_type, mj.content, mj.is_personal
             FROM memory_journal mj
@@ -197,7 +224,18 @@ function queryGraphEntries(
             WHERE mj.deleted_at IS NULL${wsFilter}${projSql}
             LIMIT ?
         `,
-            [options.entryId, ...wsParam, ...projParam, options.depth, ...wsParam, ...projParam, ...wsParam, ...projParam, options.limit]
+            [
+                options.entryId,
+                ...wsParam,
+                ...projParam,
+                options.depth,
+                ...wsParam,
+                ...projParam,
+                ...relTypeParam,
+                ...wsParam,
+                ...projParam,
+                options.limit,
+            ]
         )
     }
     if (options.tags !== undefined && options.tags.length > 0) {
@@ -217,6 +255,8 @@ function queryGraphEntries(
             [...wsParam, ...projParam, ...options.tags, options.limit]
         )
     }
+    const toPeerScope = `${scopeId !== '*' ? ' AND mj_to.workspace_id = ?' : ''}${options.projectNumber !== undefined ? ' AND mj_to.project_number = ?' : ''}`
+    const fromPeerScope = `${scopeId !== '*' ? ' AND mj_from.workspace_id = ?' : ''}${options.projectNumber !== undefined ? ' AND mj_from.project_number = ?' : ''}`
     return connection.exec(
         `
             SELECT DISTINCT mj.id, mj.entry_type, mj.content, mj.is_personal
@@ -225,17 +265,27 @@ function queryGraphEntries(
               AND mj.id IN (
                   SELECT DISTINCT r.from_entry_id FROM relationships r
                   JOIN memory_journal mj_to ON r.to_entry_id = mj_to.id
-                  WHERE mj_to.deleted_at IS NULL
+                  WHERE mj_to.deleted_at IS NULL${toPeerScope}${relTypeSql}
                   UNION
                   SELECT DISTINCT r.to_entry_id FROM relationships r
                   JOIN memory_journal mj_from ON r.from_entry_id = mj_from.id
-                  WHERE mj_from.deleted_at IS NULL
+                  WHERE mj_from.deleted_at IS NULL${fromPeerScope}${relTypeSql}
               )
             ORDER BY mj.id DESC
             LIMIT ?
         `,
-            [...wsParam, ...projParam, options.limit]
-        )
+        [
+            ...wsParam,
+            ...projParam,
+            ...wsParam,
+            ...projParam,
+            ...relTypeParam,
+            ...wsParam,
+            ...projParam,
+            ...relTypeParam,
+            options.limit,
+        ]
+    )
 }
 
 export function visualizeRelationships(

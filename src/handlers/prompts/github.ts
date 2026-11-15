@@ -10,12 +10,28 @@ import { ICON_PROMPT } from '../../constants/icons.js'
 import type { InternalPromptDef } from './index.js'
 import type { JournalEntry } from '../../types/index.js'
 import { markUntrustedContentInline } from '../../utils/security-utils.js'
+import { ValidationError } from '../../types/errors.js'
 import { resourceWorkspace, type BriefingConfig } from '../resources/shared.js'
 
 export function formatPositiveIntOrPlaceholder(raw: string | undefined, placeholder: string): string {
     if (!raw) return placeholder
     const trimmed = raw.trim()
     return /^[1-9]\d*$/.test(trimmed) ? trimmed : placeholder
+}
+
+export function requirePositiveIntOrPlaceholder(
+    raw: string | undefined,
+    placeholder: string,
+    fieldName: string
+): string {
+    if (raw === undefined || raw.trim() === '') {
+        return placeholder
+    }
+    const trimmed = raw.trim()
+    if (/^[1-9]\d*$/.test(trimmed)) {
+        return trimmed
+    }
+    throw new ValidationError(`Invalid ${fieldName}: expected a positive integer`)
 }
 
 function formatPromptEntries(
@@ -59,10 +75,22 @@ export function getGitHubPromptDefinitions(): InternalPromptDef[] {
                     required: false,
                 },
             ],
-            handler: (args: Record<string, string> | undefined, _db: IDatabaseAdapter) => {
-                const projectNumber = args?.['project_number']
+            handler: (
+                args: Record<string, string> | undefined,
+                _db: IDatabaseAdapter,
+                _teamDb?: unknown,
+                _github?: unknown,
+                briefingConfig?: BriefingConfig
+            ) => {
+                const providedProject = args?.['project_number']?.trim()
+                const rawProject =
+                    providedProject !== undefined && providedProject !== ''
+                        ? providedProject
+                        : briefingConfig?.defaultProjectNumber !== undefined
+                          ? String(briefingConfig.defaultProjectNumber)
+                          : undefined
                 const type = args?.['workflow_type'] ?? 'triage'
-                const projectStr = formatPositiveIntOrPlaceholder(projectNumber, '{project_number}')
+                const projectStr = formatPositiveIntOrPlaceholder(rawProject, '{project_number}')
 
                 return {
                     messages: [
@@ -295,7 +323,11 @@ Please provide:
             icons: [ICON_PROMPT],
             arguments: [{ name: 'pr_number', description: 'Pull Request Number', required: true }],
             handler: (args: Record<string, string> | undefined, _db: IDatabaseAdapter) => {
-                const prNumber = formatPositiveIntOrPlaceholder(args?.['pr_number'], '{pr_number}')
+                const prNumber = requirePositiveIntOrPlaceholder(
+                    args?.['pr_number'],
+                    '{pr_number}',
+                    'pr_number'
+                )
                 return {
                     messages: [
                         {
@@ -325,7 +357,11 @@ Please provide:
             icons: [ICON_PROMPT],
             arguments: [{ name: 'pr_number', description: 'Pull Request Number', required: true }],
             handler: (args: Record<string, string> | undefined, _db: IDatabaseAdapter) => {
-                const prNumber = formatPositiveIntOrPlaceholder(args?.['pr_number'], '{pr_number}')
+                const prNumber = requirePositiveIntOrPlaceholder(
+                    args?.['pr_number'],
+                    '{pr_number}',
+                    'pr_number'
+                )
                 return {
                     messages: [
                         {
@@ -355,7 +391,11 @@ Please provide:
             icons: [ICON_PROMPT],
             arguments: [{ name: 'pr_number', description: 'Pull Request Number', required: true }],
             handler: (args: Record<string, string> | undefined, _db: IDatabaseAdapter) => {
-                const prNumber = formatPositiveIntOrPlaceholder(args?.['pr_number'], '{pr_number}')
+                const prNumber = requirePositiveIntOrPlaceholder(
+                    args?.['pr_number'],
+                    '{pr_number}',
+                    'pr_number'
+                )
                 return {
                     messages: [
                         {

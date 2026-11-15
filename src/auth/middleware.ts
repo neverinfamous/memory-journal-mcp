@@ -11,7 +11,7 @@ import type { AuthInfo } from '@modelcontextprotocol/server'
 import type { TokenValidator } from './token-validator.js'
 import type { OAuthResourceServer } from './oauth-resource-server.js'
 import { TokenMissingError, InsufficientScopeError, isOAuthError } from './errors.js'
-import { hasScope as checkScope } from './scopes.js'
+import { hasAnyScope, hasScope as checkScope } from './scopes.js'
 import { getRequiredScope } from './scope-map.js'
 import { logger } from '../utils/logger.js'
 import { extractBearerToken } from './transport-agnostic.js'
@@ -265,9 +265,7 @@ export function requireAnyScope(scopes: string[]): RequestHandler {
             return
         }
 
-        const hasAnyScope = scopes.some((scope) => checkScope(grantedScopes, scope))
-
-        if (!hasAnyScope) {
+        if (!hasAnyScope(grantedScopes, scopes)) {
             const error = new InsufficientScopeError(scopes, authReq.auth.scopes)
 
             logger.warning(`Insufficient scope: required one of [${scopes.join(', ')}]`, {

@@ -5,7 +5,10 @@
  */
 
 import { ICON_GITHUB, ICON_MILESTONE } from '../../constants/icons.js'
-import { findCanonicalRegistryKey } from '../../utils/workspace-resolver.js'
+import {
+    findCanonicalRegistryKey,
+    loadProjectRegistryFromConfig,
+} from '../../utils/workspace-resolver.js'
 import {
     withPriority,
     ASSISTANT_FOCUSED,
@@ -18,6 +21,7 @@ import type {
 } from '../../types/index.js'
 import type { InternalResourceDef, ResourceContext, ResourceResult } from './shared.js'
 import {
+    getBaseUri,
     resolveScopedGitHubRepo,
     isResourceError,
     milestoneCompletionPct,
@@ -114,13 +118,13 @@ async function handleGitHubStatusResource(
     uri: string,
     context: ResourceContext
 ): Promise<ResourceResult> {
-    const match = /memory:\/\/github\/status\/?(.*)?/.exec(uri)
+    const match = /^memory:\/\/github\/status(?:\/(.*))?$/.exec(getBaseUri(uri))
     const targetRepo = match?.[1] ? decodeURIComponent(match[1]) : undefined
     const resolved = await resolveScopedGitHubRepo(context, targetRepo)
     if (isResourceError(resolved)) return resolved
     const { owner, repo, branch, lastModified, github } = resolved
 
-    const registry = context.briefingConfig?.projectRegistry
+    const registry = context.briefingConfig?.projectRegistry ?? loadProjectRegistryFromConfig()
     const activeWs =
         targetRepo !== undefined && targetRepo !== ''
             ? targetRepo
@@ -285,7 +289,7 @@ export function getGitHubResourceDefinitions(): InternalResourceDef[] {
             icons: [ICON_MILESTONE],
             annotations: withPriority(0.6, ASSISTANT_FOCUSED),
             handler: async (uri: string, context: ResourceContext): Promise<ResourceResult> => {
-                const match = /memory:\/\/github\/milestones\/?(.*)?/.exec(uri)
+                const match = /^memory:\/\/github\/milestones(?:\/(.*))?$/.exec(getBaseUri(uri))
                 const targetRepo = match?.[1] ? decodeURIComponent(match[1]) : undefined
                 const resolved = await resolveScopedGitHubRepo(context, targetRepo)
                 if (isResourceError(resolved)) return resolved
@@ -337,7 +341,7 @@ export function getGitHubResourceDefinitions(): InternalResourceDef[] {
             annotations: withPriority(0.6, ASSISTANT_FOCUSED),
             handler: async (uri: string, context: ResourceContext): Promise<ResourceResult> => {
                 const lastModified = new Date().toISOString()
-                const match = /memory:\/\/milestones\/(?:(.*)\/)?(\d+)$/.exec(uri)
+                const match = /^memory:\/\/milestones\/(?:(.*)\/)?(\d+)$/.exec(getBaseUri(uri))
                 const targetRepo = match?.[1] ? decodeURIComponent(match[1]) : undefined
                 const milestoneNumber = match?.[2] ? parseInt(match[2], 10) : null
 

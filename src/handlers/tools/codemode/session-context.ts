@@ -21,8 +21,8 @@ export function lookupRegistryEntry(
     if (direct) return direct
     const canonical = findCanonicalRegistryKey(key, registry)
     if (canonical !== undefined && registry[canonical] !== undefined) return registry[canonical]
-    if (key.includes('/')) {
-        const repoName = key.split('/').pop()
+    if (/[/\\]/.test(key)) {
+        const repoName = key.split(/[/\\]/).filter(Boolean).pop()
         if (repoName !== undefined && repoName !== '') {
             if (registry[repoName] !== undefined) return registry[repoName]
             const repoCanonical = findCanonicalRegistryKey(repoName, registry)
@@ -206,8 +206,8 @@ export async function resolveCodeModeSessionContext(
 
     let repoRegistryKey: string | undefined
     const repoLeaf =
-        hasExplicitRepo && rawRepoTrimmed.includes('/')
-            ? (rawRepoTrimmed.split('/').pop()?.trim() ?? rawRepoTrimmed)
+        hasExplicitRepo && /[/\\]/.test(rawRepoTrimmed)
+            ? (rawRepoTrimmed.split(/[/\\]/).filter(Boolean).pop()?.trim() ?? rawRepoTrimmed)
             : rawRepoTrimmed
     if (hasExplicitRepo && effectiveRegistry !== undefined) {
         repoRegistryKey =

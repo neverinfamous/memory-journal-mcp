@@ -10,7 +10,7 @@ import {
     loadProjectRegistryFromConfig,
 } from '../../../utils/workspace-resolver.js'
 import { z } from 'zod'
-import { relaxedNumber } from '../schemas.js'
+import { relaxedNumber, StrictProjectNumberSchema } from '../schemas.js'
 
 /**
  * [INTENT] Registry scope selectors shared by GitHub tools so `resolveOwnerRepo` can target the
@@ -28,7 +28,7 @@ export const githubScopeInputFields = {
 
 export const githubScopeParseFields = {
     workspace_id: z.string().optional(),
-    project_number: z.number().optional(),
+    project_number: StrictProjectNumberSchema.optional(),
 }
 
 function parseRepoSlug(repo?: string): { owner?: string; repo?: string } {

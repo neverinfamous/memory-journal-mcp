@@ -92,6 +92,7 @@ export class PullRequestsManager {
 
             const details: PullRequestDetails = {
                 number: pr.number,
+                nodeId: pr.node_id,
                 title: markUntrustedContentInline(pr.title),
                 url: pr.html_url,
                 state: pr.merged_at ? 'MERGED' : pr.state === 'open' ? 'OPEN' : 'CLOSED',

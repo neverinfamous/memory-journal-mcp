@@ -46,6 +46,32 @@ const optimizeJournalArgsSchema = z.object({
     ),
 })
 
+function resolveOptimizeTargetScope(
+    targetProject: string | undefined,
+    registry: BriefingConfig['projectRegistry']
+): { workspaceId: string; projectNumber?: number } {
+    if (targetProject === undefined || targetProject === '') {
+        return { workspaceId: '*' }
+    }
+    if (/^[1-9]\d*$/.test(targetProject)) {
+        const parsedNum = Number(targetProject)
+        for (const [key, entry] of Object.entries(registry ?? {})) {
+            if (entry.project_number === parsedNum) {
+                return { workspaceId: key, projectNumber: parsedNum }
+            }
+        }
+        return { workspaceId: '*', projectNumber: parsedNum }
+    }
+    const matchedKey = exactRegistryKey(targetProject, registry)
+    if (matchedKey !== undefined) {
+        const matchedNum = registry?.[matchedKey]?.project_number
+        return matchedNum !== undefined
+            ? { workspaceId: matchedKey, projectNumber: matchedNum }
+            : { workspaceId: matchedKey }
+    }
+    return { workspaceId: targetProject }
+}
+
 function buildExecutionBanner(isAutonomousFull: boolean): string {
     if (isAutonomousFull) {
         return `> [!IMPORTANT]
@@ -313,8 +339,19 @@ export function getOptimizerPromptDefinitions(): InternalPromptDef[] {
                           ? 0
                           : 500
 
-                const statsSnippet = buildStatsSnippet(db)
-                const unverifiedSnippet = buildUnverifiedSnippet(db, lookback)
+                const registry = briefingConfig?.projectRegistry ?? loadProjectRegistryFromConfig()
+                const targetScope = resolveOptimizeTargetScope(targetProject, registry)
+                const statsSnippet = buildStatsSnippet(
+                    db,
+                    targetScope.workspaceId,
+                    targetScope.projectNumber
+                )
+                const unverifiedSnippet = buildUnverifiedSnippet(
+                    db,
+                    lookback,
+                    targetScope.workspaceId,
+                    targetScope.projectNumber
+                )
 
                 const targetProjectText =
                     targetProject !== undefined && targetProject !== ''
@@ -332,7 +369,6 @@ export function getOptimizerPromptDefinitions(): InternalPromptDef[] {
                         ? 'for (let _page = 0; _page < 200; _page++)'
                         : `while (processed < ${String(entryLimit)})`
 
-                const registry = briefingConfig?.projectRegistry ?? loadProjectRegistryFromConfig()
                 const mjRegistryKey = exactRegistryKey('memory-journal-mcp', registry)
                 const mjProjectNumber =
                     mjRegistryKey !== undefined

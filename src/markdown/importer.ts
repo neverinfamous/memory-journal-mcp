@@ -372,6 +372,7 @@ export async function processImportBatch(
         const idRemap = new Map<number, number>()
         const pendingLinks: {
             entryId: number
+            filename: string
             relationships: { type: string; target_id: number }[] | undefined
             workspaceId: string | undefined
             projectNumber: number | undefined
@@ -401,6 +402,7 @@ export async function processImportBatch(
             }
             pendingLinks.push({
                 entryId,
+                filename,
                 relationships: metadata.relationships,
                 workspaceId: entryWsId,
                 projectNumber: entryProjNum,
@@ -420,14 +422,14 @@ export async function processImportBatch(
             result.relationshipsLinked += linked.linked
             for (const targetId of linked.missingTargets) {
                 result.errors.push({
-                    file: '',
+                    file: pending.filename,
                     error: `Relationship target ${String(targetId)} does not exist and was not linked`,
                 })
                 result.success = false
             }
             for (const relType of linked.rejected) {
                 result.errors.push({
-                    file: '',
+                    file: pending.filename,
                     error: `Unknown relationship type '${relType}' was not linked`,
                 })
                 result.success = false

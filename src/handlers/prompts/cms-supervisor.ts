@@ -13,18 +13,29 @@ import { exactRegistryKey } from '../../utils/write-scope.js'
 import { markUntrustedContent } from '../../utils/security-utils.js'
 import { z } from 'zod'
 import { coerceNumber } from '../../utils/query-helpers.js'
+import { ValidationError } from '../../types/errors.js'
 import { logger } from '../../utils/logger.js'
 
-function parseSupervisorBoolean(val: unknown): boolean | undefined {
+function parseSupervisorBoolean(val: unknown): unknown {
     if (val === undefined) return undefined
     if (typeof val === 'boolean') return val
     if (typeof val === 'string') {
         const normalized = val.trim().toLowerCase()
         if (normalized === '') return undefined
-        if (normalized === 'true' || normalized === '1' || normalized === 'yes') return true
-        if (normalized === 'false' || normalized === '0' || normalized === 'no') return false
+        if (normalized === 'true' || normalized === '1' || normalized === 'yes' || normalized === 'on') {
+            return true
+        }
+        if (
+            normalized === 'false' ||
+            normalized === '0' ||
+            normalized === 'no' ||
+            normalized === 'off' ||
+            normalized === 'disabled'
+        ) {
+            return false
+        }
     }
-    return undefined
+    return val
 }
 
 const cmsSupervisorArgsSchema = z.object({
@@ -124,7 +135,12 @@ export function getCmsSupervisorPromptDefinitions(): InternalPromptDef[] {
                 const restoreRes = cmsSupervisorArgsSchema.shape.autoRestore.safeParse(
                     rawArgs['autoRestore']
                 )
-                const autoRestore = restoreRes.success ? restoreRes.data : true
+                if (!restoreRes.success) {
+                    throw new ValidationError(
+                        `Invalid autoRestore value '${String(rawArgs['autoRestore'])}'. Expected boolean (true/false, on/off, yes/no, 1/0, disabled).`
+                    )
+                }
+                const autoRestore = restoreRes.data
                 const registry = briefingConfig?.projectRegistry ?? loadProjectRegistryFromConfig()
                 const mjKey = exactRegistryKey('memory-journal-mcp', registry)
                 const mjProjectNumber =

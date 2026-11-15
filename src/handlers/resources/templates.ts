@@ -10,7 +10,7 @@ import { ICON_ISSUE, ICON_PR } from '../../constants/icons.js'
 import { ASSISTANT_FOCUSED, MEDIUM_PRIORITY } from '../../utils/resource-annotations.js'
 import type { InternalResourceDef, ResourceContext } from './shared.js'
 import { getBaseUri, resolveScopedGitHubRepo, isResourceError, resourceWorkspace } from './shared.js'
-import { getKanbanTemplateDefinitions } from './templates-kanban.js'
+import { fenceInline, getKanbanTemplateDefinitions } from './templates-kanban.js'
 import { parseSessionCommitContext } from '../../types/auto-context.js'
 import { enrichCommits } from '../../github/commit-references/index.js'
 import { ProtocolError, ProtocolErrorCode } from '@modelcontextprotocol/server'
@@ -138,6 +138,9 @@ export function getTemplateResourceDefinitions(): InternalResourceDef[] {
                     baseBranch: string
                 } | null = null
 
+                let rawPrState: string | undefined
+                let rawPrMergedAt: string | null | undefined
+                let rawPrDraft = false
                 try {
                     const resolvedRepo = await resolveScopedGitHubRepo(context)
                     if (!isResourceError(resolvedRepo)) {
@@ -147,15 +150,18 @@ export function getTemplateResourceDefinitions(): InternalResourceDef[] {
                             prNumber
                         )
                         if (pr) {
+                            rawPrState = pr.state
+                            rawPrMergedAt = pr.mergedAt
+                            rawPrDraft = pr.draft
                             prMetadata = {
-                                title: pr.title,
+                                title: fenceInline(pr.title),
                                 state: pr.state,
                                 draft: pr.draft,
                                 mergedAt: pr.mergedAt,
                                 closedAt: pr.closedAt,
-                                author: pr.author,
-                                headBranch: pr.headBranch,
-                                baseBranch: pr.baseBranch,
+                                author: fenceInline(pr.author),
+                                headBranch: fenceInline(pr.headBranch),
+                                baseBranch: fenceInline(pr.baseBranch),
                             }
                         }
                     }
@@ -166,10 +172,10 @@ export function getTemplateResourceDefinitions(): InternalResourceDef[] {
                 const { entries } = context.db.searchEntries('', { workspaceId: resourceWorkspace(context),  prNumber, limit: 100 })
 
                 let timelineNote: string
-                if (prMetadata) {
-                    const stateDesc = prMetadata.state.toLowerCase()
-                    const mergedNote = prMetadata.mergedAt ? ' (merged)' : ''
-                    const draftNote = prMetadata.draft ? ' [DRAFT]' : ''
+                if (prMetadata && rawPrState !== undefined) {
+                    const stateDesc = rawPrState.toLowerCase()
+                    const mergedNote = rawPrMergedAt ? ' (merged)' : ''
+                    const draftNote = rawPrDraft ? ' [DRAFT]' : ''
                     timelineNote = `PR #${String(prNumber)} is ${stateDesc}${mergedNote}${draftNote}`
                 } else {
                     timelineNote =
@@ -314,15 +320,22 @@ export function getTemplateResourceDefinitions(): InternalResourceDef[] {
                             if (ref.type !== 'issue') continue
                             issues[ref.number] ??= {
                                 number: ref.number,
-                                title: ref.title,
-                                state: ref.state,
-                                milestone: ref.milestone,
+                                ...(ref.title !== undefined ? { title: fenceInline(ref.title) } : {}),
+                                ...(ref.state !== undefined ? { state: fenceInline(ref.state) } : {}),
+                                ...(ref.milestone !== undefined
+                                    ? {
+                                          milestone: {
+                                              ...ref.milestone,
+                                              title: fenceInline(ref.milestone.title),
+                                          },
+                                      }
+                                    : {}),
                                 commits: [],
                             }
                             issues[ref.number]?.commits.push({
                                 hash: commit.hash,
-                                subject: commit.subject,
-                                authorName: commit.authorName,
+                                subject: fenceInline(commit.subject),
+                                authorName: fenceInline(commit.authorName),
                                 date: commit.date,
                             })
                         }
@@ -385,14 +398,14 @@ export function getTemplateResourceDefinitions(): InternalResourceDef[] {
                             if (ref.type !== 'pull_request') continue
                             prs[ref.number] ??= {
                                 number: ref.number,
-                                title: ref.title,
-                                state: ref.state,
+                                ...(ref.title !== undefined ? { title: fenceInline(ref.title) } : {}),
+                                ...(ref.state !== undefined ? { state: fenceInline(ref.state) } : {}),
                                 commits: [],
                             }
                             prs[ref.number]?.commits.push({
                                 hash: commit.hash,
-                                subject: commit.subject,
-                                authorName: commit.authorName,
+                                subject: fenceInline(commit.subject),
+                                authorName: fenceInline(commit.authorName),
                                 date: commit.date,
                             })
                         }

@@ -123,23 +123,37 @@ export const CrossTeamSearchOutputSchema = z
 // State
 // ============================================================================
 
-// Module-level cache for lazily initialized team DB adapters.
-// This is safe because MCP instances are singleton processes and additionalTeamDbs is static.
-const adapterCache = new Map<string, IDatabaseAdapter>()
+// Module-level cache for lazily initialized team DB adapters, keyed by label and verified by resolved path.
+const adapterCache = new Map<string, { path: string; adapter: IDatabaseAdapter }>()
 
-async function getOrCreateAdapter(label: string, path: string): Promise<IDatabaseAdapter> {
+async function getOrCreateAdapter(label: string, dbPath: string): Promise<IDatabaseAdapter> {
     const existing = adapterCache.get(label)
-    if (existing) {
-        return existing
+    if (existing !== undefined) {
+        if (existing.path === dbPath) {
+            return existing.adapter
+        }
+        try {
+            existing.adapter.close()
+        } catch {
+            // Best-effort close on path change
+        }
+        adapterCache.delete(label)
     }
-    const adapter = await DatabaseAdapterFactory.create(path)
+    const adapter = await DatabaseAdapterFactory.create(dbPath)
     await adapter.initialize()
     adapter.applyTeamSchema()
-    adapterCache.set(label, adapter)
+    adapterCache.set(label, { path: dbPath, adapter })
     return adapter
 }
 
 export function resetCrossTeamCacheForTests(): void {
+    for (const entry of adapterCache.values()) {
+        try {
+            entry.adapter.close()
+        } catch {
+            // Ignore cleanup errors during test resets
+        }
+    }
     adapterCache.clear()
 }
 

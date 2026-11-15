@@ -8,13 +8,41 @@ import { activeProjectRegistry } from '../../../utils/write-scope.js'
 import { createJournalApi } from '../../../codemode/api/journal-api.js'
 import type { SandboxResult } from '../../../codemode/types.js'
 
+import { isRecord } from '../../../codemode/normalizers/shared-utils.js'
 import { ExecuteCodeSchema, ExecuteCodeSchemaMcp } from './schemas.js'
 import { collectNonCodeModeTools, getSandboxPool, getSecurityManager } from './singleton-state.js'
 import { healCodeModeScript, healTemplateBackticksOnRuntimeError, isValidJsScript } from './code-healer.js'
 import { extractAndRecoverJsonCode, extractAndRecoverEntryCode } from './json-entry-recovery.js'
 import { extractAndRecoverSqlCode, extractAndRecoverPreparedStatementCode } from './sql-recovery.js'
-import { resolveExecutionPayload, buildSandboxUserContext } from './payload-synthesizer.js'
+import { CODE_ALIAS_KEYS, resolveExecutionPayload, buildSandboxUserContext, type ExecuteCodeInput } from './payload-synthesizer.js'
 import { createSecureDispatcher, resolveCodeModeSessionContext } from './secure-dispatcher.js'
+
+const EXTRA_TEXT_ALIAS_KEYS = ['learned_context', 'learnedContext', 'lesson', 'insight', 'knowledge'] as const
+const STRUCTURED_PAYLOAD_KEYS = ['payload', 'entry', 'input'] as const
+
+function validateRawPayloadSize(params: unknown, maxCodeLength: number): string | null {
+    const overLimit = (): string => `Security validation failed: Code exceeds maximum length of ${String(maxCodeLength)} bytes`
+    if (typeof params === 'string') {
+        return Buffer.byteLength(params, 'utf-8') > maxCodeLength ? overLimit() : null
+    }
+    if (!isRecord(params)) return null
+    for (const key of [...CODE_ALIAS_KEYS, ...EXTRA_TEXT_ALIAS_KEYS]) {
+        const val = params[key]
+        if (typeof val === 'string' && Buffer.byteLength(val, 'utf-8') > maxCodeLength) return overLimit()
+    }
+    for (const key of STRUCTURED_PAYLOAD_KEYS) {
+        const val = params[key]
+        if (val !== undefined && val !== null && typeof val !== 'string') {
+            try {
+                const serialized = JSON.stringify(val)
+                if (typeof serialized === 'string' && Buffer.byteLength(serialized, 'utf-8') > maxCodeLength) return overLimit()
+            } catch {
+                return 'Security validation failed: Invalid non-serializable payload object'
+            }
+        }
+    }
+    return null
+}
 
 export {
     healCodeModeScript,
@@ -71,6 +99,130 @@ function isRecoverableSyntaxError(errorMessage: string): boolean {
     )
 }
 
+interface RecoveryRunOptions {
+    pool: ReturnType<typeof getSandboxPool>
+    securityManager: ReturnType<typeof getSecurityManager>
+    executionCode: string
+    originalCode: string | undefined
+    apiBindings: ReturnType<ReturnType<typeof createJournalApi>['createSandboxBindings']>
+    schemas: ReturnType<ReturnType<typeof createJournalApi>['createSandboxSchemas']>
+    timeoutMs: number | undefined
+    userContext: Record<string, unknown>
+    isSandboxReadonly: boolean
+    requestedMaxResultSize: number | undefined
+    healingEnabled: boolean
+    getMutated: () => boolean
+    resetMutated: () => void
+}
+
+async function runSandboxWithAutonomousRecovery(opts: RecoveryRunOptions): Promise<SandboxResult | undefined> {
+    let execResult: SandboxResult | undefined
+    const authCtx = getAuthContext()
+    const reqCtx = getRequestContext()
+
+    const runSandbox = async (codeToRun: string): Promise<void> => {
+        opts.resetMutated()
+        const executePool = async (): Promise<void> => {
+            execResult = await opts.pool.execute(
+                codeToRun, opts.apiBindings, opts.schemas, opts.timeoutMs,
+                opts.userContext, opts.isSandboxReadonly, opts.requestedMaxResultSize
+            )
+        }
+        await (authCtx !== undefined ? runWithAuthContext(authCtx, executePool) : executePool())
+    }
+
+    await requestContextStorage.run(reqCtx ?? {}, async () => {
+        await runSandbox(opts.executionCode)
+        if (opts.getMutated() || !opts.healingEnabled || !execResult || execResult.success || typeof execResult.error !== 'string') return
+        if (!isRecoverableSyntaxError(execResult.error)) return
+        const originalInput = opts.originalCode ?? opts.executionCode
+        const recoveredCode = isValidJsScript(opts.executionCode)
+            ? healTemplateBackticksOnRuntimeError(opts.executionCode)
+            : extractAndRecoverSqlCode(originalInput) ??
+              extractAndRecoverEntryCode(originalInput) ??
+              extractAndRecoverJsonCode(originalInput) ??
+              healTemplateBackticksOnRuntimeError(opts.executionCode)
+        if (recoveredCode === null || recoveredCode === opts.executionCode) return
+        // [BOUNDARY] Recovered code is re-validated before it ever runs.
+        const retryValidation = opts.securityManager.validateCode(recoveredCode)
+        if (!retryValidation.valid) {
+            logger.warning('CODEMODE_RECOVERY_REJECTED', { errors: retryValidation.errors })
+            return
+        }
+        logger.info('CODEMODE_AUTONOMOUS_RECOVERY', { originalError: execResult.error, recoveredCode })
+        await runSandbox(recoveredCode)
+    })
+    return execResult
+}
+
+function buildSecurityErrorResult(error: string): Record<string, unknown> {
+    return { success: false, error, project_id: undefined, executionTimeMs: 0 }
+}
+
+async function executeCodeModeHandler(
+    context: ToolContext,
+    securityManager: ReturnType<typeof getSecurityManager>,
+    params: unknown
+): Promise<Record<string, unknown>> {
+    const start = performance.now()
+    try {
+        if (context.config?.codemodeEnabled !== true) {
+            throw new ConfigurationError('Code Mode is disabled in the server configuration.')
+        }
+        const clientId = getAuthContext()?.claims?.sub ?? context.auth?.sub ?? context.auth?.subject ?? 'default'
+        if (!securityManager.checkRateLimit(clientId)) {
+            return buildSecurityErrorResult('Rate limit exceeded: Maximum code executions per minute reached.')
+        }
+        const sizeErr = validateRawPayloadSize(params, securityManager.getConfig().maxCodeLength)
+        if (sizeErr !== null) return buildSecurityErrorResult(sizeErr)
+
+        const input: ExecuteCodeInput = ExecuteCodeSchema.parse(params)
+        const healingEnabled = context.config?.agentHealing !== false
+        const payloadRes = resolveExecutionPayload(input, params, healingEnabled, start)
+        if ('earlyReturn' in payloadRes) return payloadRes.earlyReturn
+        const executionCode = payloadRes.executionCode
+
+        const validation = securityManager.validateCode(executionCode)
+        if (!validation.valid) return buildSecurityErrorResult(`Security validation failed: ${validation.errors.join(', ')}`)
+
+        const sessionRes = await resolveCodeModeSessionContext(context, input)
+        if ('errorResponse' in sessionRes) return sessionRes.errorResponse
+        const { sessionContext, projectId, numericProjectId, workspaceId, explicitWorkspace } = sessionRes
+
+        const { tools, allEnabledTools, isSandboxReadonly } = filterToolsForSandbox(sessionContext, context, input.readonly)
+        let mutatedDuringRun = false
+        const secureDispatcher = createSecureDispatcher({
+            tools, sessionContext, projectId, workspaceId, explicitWorkspace,
+            autoVersion: input.auto_version, dryRun: input.dry_run,
+            onMutatingDispatch: () => { mutatedDuringRun = true },
+        })
+        const journalApi = createJournalApi(tools, secureDispatcher, () => activeProjectRegistry(context.config?.projectRegistry))
+        const schemas = (isSandboxReadonly ? createJournalApi(allEnabledTools) : journalApi).createSandboxSchemas()
+        const { userContext, requestedMaxResultSize } = buildSandboxUserContext(
+            input, sessionContext, projectId, numericProjectId, workspaceId, explicitWorkspace
+        )
+        const execResult = await runSandboxWithAutonomousRecovery({
+            pool: getSandboxPool(), securityManager, executionCode, originalCode: input.code,
+            apiBindings: journalApi.createSandboxBindings(sessionContext.progress), schemas,
+            timeoutMs: input.timeout ?? input.timeout_ms, userContext, isSandboxReadonly,
+            requestedMaxResultSize, healingEnabled,
+            getMutated: () => mutatedDuringRun, resetMutated: () => { mutatedDuringRun = false },
+        })
+        return {
+            success: Boolean(execResult?.success),
+            executionTimeMs: Math.round((performance.now() - start) * 100) / 100,
+            result: execResult?.result,
+            error: execResult?.error,
+            metrics: execResult?.metrics,
+            simulated: input.dry_run ? true : undefined,
+            project_id: projectId,
+        }
+    } catch (err) {
+        logger.error('CODEMODE_HANDLER_ERROR', { error: err })
+        return { ...formatHandlerError(err) }
+    }
+}
+
 export function getCodeModeTools(context: ToolContext): ToolDefinition[] {
     const securityManager = getSecurityManager()
     return [
@@ -88,181 +240,7 @@ export function getCodeModeTools(context: ToolContext): ToolDefinition[] {
                 idempotentHint: false,
                 openWorldHint: true,
             },
-            handler: async (params: unknown) => {
-                const start = performance.now()
-
-                try {
-                    if (context.config?.codemodeEnabled !== true) {
-                        throw new ConfigurationError('Code Mode is disabled in the server configuration.')
-                    }
-
-                    const clientId =
-                        getAuthContext()?.claims?.sub ??
-                        context.auth?.sub ??
-                        context.auth?.subject ??
-                        'default'
-                    if (!securityManager.checkRateLimit(clientId)) {
-                        return {
-                            success: false,
-                            error: 'Rate limit exceeded: Maximum code executions per minute reached.',
-                            project_id: undefined,
-                            executionTimeMs: 0,
-                        }
-                    }
-
-                    const input = ExecuteCodeSchema.parse(params)
-                    const healingEnabled = context.config?.agentHealing !== false
-
-                    const rawCodeCandidate = typeof input.code === 'string' ? input.code : typeof input.script === 'string' ? input.script : undefined
-                    if (rawCodeCandidate !== undefined && Buffer.byteLength(rawCodeCandidate, 'utf-8') > securityManager.getConfig().maxCodeLength) {
-                        return {
-                            success: false,
-                            error: `Security validation failed: Code exceeds maximum length of ${String(securityManager.getConfig().maxCodeLength)} bytes`,
-                            project_id: undefined,
-                            executionTimeMs: 0,
-                        }
-                    }
-
-                    const payloadRes = resolveExecutionPayload(input, params, healingEnabled, start)
-                    if ('earlyReturn' in payloadRes) {
-                        return payloadRes.earlyReturn
-                    }
-                    const executionCode = payloadRes.executionCode
-
-                    const validation = securityManager.validateCode(executionCode)
-                    if (!validation.valid) {
-                        return {
-                            success: false,
-                            error: `Security validation failed: ${validation.errors.join(', ')}`,
-                            project_id: undefined,
-                            executionTimeMs: 0,
-                        }
-                    }
-
-                    const sessionRes = await resolveCodeModeSessionContext(context, input)
-                    if ('errorResponse' in sessionRes) {
-                        return sessionRes.errorResponse
-                    }
-                    const { sessionContext, projectId, numericProjectId, workspaceId, explicitWorkspace } = sessionRes
-
-                    const { tools, allEnabledTools, isSandboxReadonly } = filterToolsForSandbox(
-                        sessionContext,
-                        context,
-                        input.readonly
-                    )
-
-                    let mutatedDuringRun = false
-                    const secureDispatcher = createSecureDispatcher({
-                        tools,
-                        sessionContext,
-                        projectId,
-                        workspaceId,
-                        explicitWorkspace,
-                        autoVersion: input.auto_version,
-                        dryRun: input.dry_run,
-                        onMutatingDispatch: () => {
-                            mutatedDuringRun = true
-                        },
-                    })
-
-                    const journalApi = createJournalApi(
-                        tools,
-                        secureDispatcher,
-                        () => activeProjectRegistry(context.config?.projectRegistry)
-                    )
-                    const apiBindings = journalApi.createSandboxBindings(sessionContext.progress)
-                    const schemaSourceApi = isSandboxReadonly
-                        ? createJournalApi(allEnabledTools)
-                        : journalApi
-                    const schemas = schemaSourceApi.createSandboxSchemas()
-
-                    const pool = getSandboxPool()
-                    const { userContext, requestedMaxResultSize } = buildSandboxUserContext(
-                        input,
-                        sessionContext,
-                        projectId,
-                        numericProjectId,
-                        workspaceId,
-                        explicitWorkspace
-                    )
-
-                    let execResult: SandboxResult | undefined
-                    const authCtx = getAuthContext()
-                    const reqCtx = getRequestContext()
-
-                    const runSandbox = async (codeToRun: string): Promise<void> => {
-                        mutatedDuringRun = false
-                        const executePool = async (): Promise<void> => {
-                            execResult = await pool.execute(
-                                codeToRun,
-                                apiBindings,
-                                schemas,
-                                input.timeout ?? input.timeout_ms,
-                                userContext,
-                                isSandboxReadonly,
-                                requestedMaxResultSize
-                            )
-                        }
-                        if (authCtx !== undefined) {
-                            await runWithAuthContext(authCtx, executePool)
-                        } else {
-                            await executePool()
-                        }
-                    }
-
-                    await requestContextStorage.run(reqCtx ?? {}, async () => {
-                        await runSandbox(executionCode)
-
-                        if (
-                            !mutatedDuringRun &&
-                            healingEnabled &&
-                            execResult !== undefined &&
-                            !execResult.success &&
-                            typeof execResult.error === 'string' &&
-                            isRecoverableSyntaxError(execResult.error)
-                        ) {
-                            const originalInput = typeof input.code === 'string' ? input.code : executionCode
-                            const wasValidJs = isValidJsScript(executionCode)
-                            const recoveredCode = wasValidJs
-                                ? healTemplateBackticksOnRuntimeError(executionCode)
-                                : extractAndRecoverSqlCode(originalInput) ??
-                                  extractAndRecoverEntryCode(originalInput) ??
-                                  extractAndRecoverJsonCode(originalInput) ??
-                                  healTemplateBackticksOnRuntimeError(executionCode)
-                            if (recoveredCode !== null && recoveredCode !== executionCode) {
-                                // [BOUNDARY] Recovered code is re-validated before it ever runs.
-                                const retryValidation = securityManager.validateCode(recoveredCode)
-                                if (!retryValidation.valid) {
-                                    logger.warning('CODEMODE_RECOVERY_REJECTED', {
-                                        errors: retryValidation.errors,
-                                    })
-                                    return
-                                }
-                                logger.info('CODEMODE_AUTONOMOUS_RECOVERY', {
-                                    originalError: execResult.error,
-                                    recoveredCode,
-                                })
-                                await runSandbox(recoveredCode)
-                            }
-                        }
-                    })
-
-                    const executionTime = performance.now() - start
-
-                    return {
-                        success: Boolean(execResult?.success),
-                        executionTimeMs: Math.round(executionTime * 100) / 100,
-                        result: execResult?.result,
-                        error: execResult?.error,
-                        metrics: execResult?.metrics,
-                        simulated: input.dry_run ? true : undefined,
-                        project_id: projectId,
-                    }
-                } catch (err) {
-                    logger.error('CODEMODE_HANDLER_ERROR', { error: err })
-                    return formatHandlerError(err)
-                }
-            },
+            handler: async (params: unknown) => executeCodeModeHandler(context, securityManager, params),
         },
     ]
 }

@@ -121,6 +121,7 @@ export const RebuildVectorIndexOutputSchema = z
         partial: z.boolean().optional(),
         entriesIndexed: z.number().optional(),
         failedEntries: z.number().optional(),
+        warning: z.string().optional(),
         error: z.string().optional(),
     })
     .extend(ErrorFieldsMixin.shape)

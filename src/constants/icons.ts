@@ -95,13 +95,6 @@ export const ICON_BRIEFING: McpIcon = {
     sizes: ['24x24'],
 }
 
-/** Network/share for graph resources */
-export const ICON_GRAPH: McpIcon = {
-    src: 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"%3E%3Ccircle cx="18" cy="5" r="3"/%3E%3Ccircle cx="6" cy="12" r="3"/%3E%3Ccircle cx="18" cy="19" r="3"/%3E%3Cline x1="8.59" y1="13.51" x2="15.42" y2="17.49"/%3E%3Cline x1="15.41" y1="6.51" x2="8.59" y2="10.49"/%3E%3C/svg%3E',
-    mimeType: 'image/svg+xml',
-    sizes: ['24x24'],
-}
-
 /** Clock for recent/timeline resources */
 export const ICON_CLOCK: McpIcon = {
     src: 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"%3E%3Ccircle cx="12" cy="12" r="10"/%3E%3Cpolyline points="12 6 12 12 16 14"/%3E%3C/svg%3E',
@@ -112,13 +105,6 @@ export const ICON_CLOCK: McpIcon = {
 /** Heartbeat for health status */
 export const ICON_HEALTH: McpIcon = {
     src: 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"%3E%3Cpath d="M22 12h-4l-3 9L9 3l-3 9H2"/%3E%3C/svg%3E',
-    mimeType: 'image/svg+xml',
-    sizes: ['24x24'],
-}
-
-/** Kanban board columns */
-export const ICON_KANBAN: McpIcon = {
-    src: 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"%3E%3Crect x="3" y="3" width="18" height="18" rx="2" ry="2"/%3E%3Cline x1="9" y1="3" x2="9" y2="21"/%3E%3Cline x1="15" y1="3" x2="15" y2="21"/%3E%3C/svg%3E',
     mimeType: 'image/svg+xml',
     sizes: ['24x24'],
 }

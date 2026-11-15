@@ -122,23 +122,55 @@ export class SubscriptionManager {
      * Notifies all subscribed clients that a resource has changed.
      */
     public async notifyResourceUpdated(uri: string): Promise<void> {
-        const sessions = this.subscriptions.get(uri)
-        if (!sessions || sessions.size === 0) {
+        const targets: [string, Set<string>][] = []
+        const directSessions = this.subscriptions.get(uri)
+        if (directSessions && directSessions.size > 0) {
+            targets.push([uri, directSessions])
+        }
+
+        if (uri === 'memory://briefing') {
+            for (const [subUri, subSessions] of this.subscriptions.entries()) {
+                if (subUri.startsWith('memory://briefing/') && subSessions.size > 0) {
+                    targets.push([subUri, subSessions])
+                }
+            }
+        } else if (uri.startsWith('memory://briefing/')) {
+            const rootSessions = this.subscriptions.get('memory://briefing')
+            if (rootSessions && rootSessions.size > 0) {
+                targets.push(['memory://briefing', rootSessions])
+            }
+        }
+
+        if (targets.length === 0) {
             return
         }
 
+        const sent = new Set<string>()
         const promises: Promise<void>[] = []
-        for (const sessionId of sessions) {
-            const server = this.servers.get(sessionId)
-            if (server) {
-                promises.push(
-                    server.server.sendResourceUpdated({ uri }).catch((error: unknown) => {
-                        logger.error(`Failed to notify session ${sessionId} for ${uri}`, {
-                            module: 'SubscriptionManager',
-                            error: error instanceof Error ? error : new Error(String(error)),
-                        })
-                    })
-                )
+        for (const [targetUri, sessions] of targets) {
+            for (const sessionId of sessions) {
+                const dedupKey = `${sessionId}\0${targetUri}`
+                if (sent.has(dedupKey)) continue
+                sent.add(dedupKey)
+                const server = this.servers.get(sessionId)
+                if (server) {
+                    promises.push(
+                        server.server
+                            .sendResourceUpdated({ uri: targetUri })
+                            .catch((error: unknown) => {
+                                logger.error(
+                                    `Failed to notify session ${sessionId} for ${targetUri}`,
+                                    {
+                                        module: 'SubscriptionManager',
+                                        error:
+                                            error instanceof Error
+                                                ? error
+                                                : new Error(String(error)),
+                                    }
+                                )
+                            })
+                    )
+                }
             }
         }
         await Promise.allSettled(promises)
@@ -164,14 +196,6 @@ export class SubscriptionManager {
             )
         }
         await Promise.allSettled(promises)
-    }
-
-    /**
-     * Check if there are any active subscribers for a specific URI.
-     */
-    public hasSubscribers(uri: string): boolean {
-        const sessions = this.subscriptions.get(uri)
-        return sessions ? sessions.size > 0 : false
     }
 }
 

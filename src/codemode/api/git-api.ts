@@ -11,8 +11,15 @@ export function applyGitInterceptions(methodName: string, args: unknown[]): { ar
         'analyze_commit_patterns', 'analyzeCommitPatterns'
     ];
     
-    if (gitMethods.includes(methodName) && args.length === 1 && typeof args[0] === 'object' && args[0] !== null) {
-        const obj = args[0] as Record<string, unknown>;
+    if (
+        gitMethods.includes(methodName) &&
+        args.length === 1 &&
+        typeof args[0] === 'object' &&
+        args[0] !== null &&
+        !Array.isArray(args[0])
+    ) {
+        const obj: Record<string, unknown> = { ...(args[0] as Record<string, unknown>) }
+        args[0] = obj
         
         // Hallucination mappings for Git
         for (const key of ['text', 'message', 'description', 'q', 'search']) {

@@ -144,6 +144,22 @@ export function setSecurityHeaders(res: Response, config: HttpTransportConfig): 
 // CORS
 // =============================================================================
 
+/** True when a hostname/bind host refers to a loopback interface. */
+export function isLoopbackHost(host: string): boolean {
+    const normalized = host.trim().toLowerCase()
+    return (
+        normalized === 'localhost' ||
+        normalized === '127.0.0.1' ||
+        normalized === '::1' ||
+        normalized === '[::1]'
+    )
+}
+
+/** Brackets bare IPv6 literals for safe URL interpolation. */
+export function formatHostForUrl(host: string): string {
+    return host.includes(':') && !host.startsWith('[') ? `[${host}]` : host
+}
+
 /**
  * Set CORS headers based on configuration.
  *
@@ -157,8 +173,7 @@ export function setSecurityHeaders(res: Response, config: HttpTransportConfig): 
  */
 export function setCorsHeaders(req: Request, res: Response, config: HttpTransportConfig): boolean {
     let corsOrigins = config.corsOrigins ?? []
-    const isLocalhost =
-        config.host === 'localhost' || config.host === '127.0.0.1' || config.host === '::1'
+    const isLocalhost = isLoopbackHost(config.host ?? '')
     const hasAuth = Boolean(config.authToken) || config.oauthEnabled === true
 
     // Hard-block wildcard CORS on localhost if no auth is configured to prevent local-browser CSRF
@@ -214,7 +229,7 @@ export function buildAllowedHostHeaders(
     host: string,
     publicOrigin: string | undefined
 ): string[] {
-    const normalizedHost = host.includes(':') && !host.startsWith('[') ? `[${host}]` : host
+    const normalizedHost = formatHostForUrl(host)
     const allowed = new Set<string>([normalizedHost, 'localhost', '127.0.0.1', '[::1]'])
     if (publicOrigin !== undefined && publicOrigin.trim() !== '') {
         try {

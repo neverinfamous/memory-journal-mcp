@@ -123,11 +123,14 @@ export function wrapWithMetrics(
         }
 
         if (isError) {
+            const errField = (result as Record<string, unknown>)['error']
+            const errorMessage =
+                typeof errField === 'string' ? errField : JSON.stringify(errField)
             logAgentIssue({
                 source: 'MCP',
                 action: toolName,
                 input: args,
-                error: (result as Record<string, unknown>)['error'] as string
+                error: errorMessage,
             })
         }
 

@@ -2,124 +2,135 @@
  * SQL and prepared statement recovery helpers for Code Mode execution payloads.
  */
 
-import { hasUnsupportedWherePredicate, scopeFromSqlLiterals } from '../../../codemode/sql-literal-scope.js'
-import { parseSqlStatement } from '../../../codemode/sql-positional-binder.js'
+import {
+    ENTRY_TABLE_NAMES,
+    extractTopLevelUpdateSetClause,
+    extractTopLevelWhereClause,
+    findTopLevelSqlKeyword,
+    hasUnsupportedWherePredicate,
+    scopeFromSqlLiterals,
+    splitSqlValueList,
+    splitTopLevelSqlAndClauses,
+    stripBalancedOuterParens,
+} from '../../../codemode/sql-literal-scope.js'
+import { cleanSqlText, parseSqlStatement } from '../../../codemode/sql-positional-binder.js'
 
-const ENTRY_TABLE_NAMES = new Set([
-    'memory_journal',
-    'entries',
-    'journal',
-    'journal_entries',
-    'memories',
+const SPECIAL_TABLES = new Set([
+    'tags',
+    'entry_tags',
+    'journal_tags',
+    'projects',
+    'project_registry',
+    'relationships',
+    'entry_relationships',
+    'links',
+    'team_members',
+    'members',
+    'author_aliases',
+    'aliases',
+    'audit_log',
+    'audit',
+    'audit_logs',
 ])
 
-/**
- * Auto-heals raw SQL queries passed as code or script in Code Mode,
- * translating them to corresponding type-safe mj.* Code Mode API calls.
- */
-export function extractAndRecoverSqlCode(code: string): string | null {
+const CLAUSE_ID_REGEX =
+    /^(?:[`"']?[a-zA-Z_][\w]*[`"']?\.)?[`"']?(?:id|entry_id)[`"']?\s*=\s*(\d+)$/i
+const CLAUSE_LIKE_REGEX =
+    /^(?:[`"']?[a-zA-Z_][\w]*[`"']?\.)?[`"']?(?:content|title|tags|body|text|summary|name)[`"']?\s+(?:LIKE|ILIKE|=)\s*('(?:\\.|''|[^'\\])*'|"(?:\\.|""|[^"\\])*")$/i
+
+function unquoteSqlString(raw: string): string | null {
+    const trimmed = raw.trim()
+    if (trimmed.length < 2) return null
+    const quote = trimmed[0]
+    if ((quote !== "'" && quote !== '"') || !trimmed.endsWith(quote)) return null
+    const inner = trimmed.slice(1, -1)
+    const doubled = quote === "'" ? inner.replace(/''/g, "'") : inner.replace(/""/g, '"')
+    return doubled.replace(/\\(['"\\])/g, '$1')
+}
+
+function parseCleanRecoverableSql(code: string): string | null {
     if (!code || typeof code !== 'string') return null
     const trimmed = code.trim()
-
     if (/\b(?:const|let|var|function|return|await|mj\.|import|export|\(\s*\)\s*=>)\b/.test(trimmed)) {
         return null
     }
-
-    const cleanSql = trimmed
-        .replace(/^--[^\n]*\n/gm, '')
-        .replace(/\/\*[\s\S]*?\*\//g, '')
-        .trim()
-
+    const cleanSql = cleanSqlText(trimmed)
     const isSql =
         /^(?:SELECT|INSERT|UPDATE|DELETE|PRAGMA|SHOW|DESCRIBE|EXPLAIN|WITH|SCHEMA|TABLES)\b/i.test(cleanSql) ||
         /^(?:\.schema|\.tables|\\d|\\dt)/i.test(cleanSql)
     if (!isSql) return null
-
     if (
         /^(?:PRAGMA|SHOW|DESCRIBE|EXPLAIN|SCHEMA|TABLES)\b/i.test(cleanSql) ||
         /^(?:\.schema|\.tables|\\d|\\dt)/i.test(cleanSql)
     ) {
         return null
     }
+    return cleanSql
+}
 
-    const fromMatch = /\bFROM\s+(?:[`"']?[a-zA-Z_][\w]*[`"']?\.)?[`"']?([a-zA-Z0-9_]+)[`"']?/i.exec(cleanSql)
-    const tableName = fromMatch?.[1]?.toLowerCase()
-    const updateTableMatch = /^UPDATE\s+(?:[`"']?[a-zA-Z_][\w]*[`"']?\.)?[`"']?([a-zA-Z0-9_]+)[`"']?/i.exec(cleanSql)
-    const updateTable = updateTableMatch?.[1]?.toLowerCase()
-
-    const limitMatch = /\bLIMIT\s+(\d+)/i.exec(cleanSql)
-    const limitVal = limitMatch?.[1] !== undefined ? parseInt(limitMatch[1], 10) : undefined
-
-    const whereClause = /\bWHERE\b[\s\S]*$/i.exec(cleanSql)?.[0] ?? ''
-    const idMatch =
-        /\b(?:WHERE|AND)\s+(?:[`"']?[a-zA-Z_][\w]*[`"']?\.)?[`"']?(?:id|entry_id)[`"']?\s*=\s*(\d+)/i.exec(
-            whereClause
-        )
-    const idVal = idMatch?.[1] !== undefined ? parseInt(idMatch[1], 10) : undefined
-
-    const likeMatch =
-        /\b(?:WHERE|AND)\s+(?:[`"']?[a-zA-Z_][\w]*[`"']?\.)?[`"']?(?:content|title|tags|body|text|summary|name)[`"']?\s+(?:LIKE|ILIKE|=)\s*['"]%?([^%'"]+)%?['"]/i.exec(
-            cleanSql
-        )
-    const searchQuery = likeMatch?.[1]
-
-    const isCount = /\bCOUNT\s*\(/i.test(cleanSql)
-
-    const scopeFields = scopeFromSqlLiterals(cleanSql)
-
-    if (hasUnsupportedWherePredicate(cleanSql)) {
-        return null
+function extractTopLevelWhereId(whereClause: string): number | undefined {
+    for (const rawClause of splitTopLevelSqlAndClauses(whereClause)) {
+        const match = CLAUSE_ID_REGEX.exec(stripBalancedOuterParens(rawClause))
+        if (match?.[1] !== undefined) return parseInt(match[1], 10)
     }
+    return undefined
+}
 
-    const specialWhereAllowedCols = (table: string): readonly string[] => {
-        if (table === 'relationships' || table === 'entry_relationships' || table === 'links') {
-            return ['workspace_id', 'project_number', 'project_id', 'id', 'entry_id']
-        }
-        return ['workspace_id', 'project_number', 'project_id']
+function extractTopLevelWhereLikeQuery(whereClause: string): string | undefined {
+    for (const rawClause of splitTopLevelSqlAndClauses(whereClause)) {
+        const match = CLAUSE_LIKE_REGEX.exec(stripBalancedOuterParens(rawClause))
+        if (match?.[1] === undefined) continue
+        const unquoted = unquoteSqlString(match[1])
+        if (unquoted === null) continue
+        const query = unquoted.replace(/^%+|%+$/g, '')
+        if (query !== '') return query
     }
+    return undefined
+}
 
-    const hasUnsupportedSpecialTableWhere = (sqlWhere: string, allowedCols: readonly string[]): boolean => {
-        const body = sqlWhere.replace(/^\s*WHERE\s+/i, '').trim()
-        if (body === '') return false
-        const stripped = body.replace(/'(?:''|[^'])*'|"(?:""|[^"])*"/g, "''")
-        const clauses = stripped.split(/\bAND\b/i)
-        const allowedSet = new Set(allowedCols.map((c) => c.toLowerCase()))
-        for (const rawClause of clauses) {
-            const clause = rawClause.trim().replace(/^\(+|\)+$/g, '').trim()
-            if (clause === '') return true
-            const match = /^(?:[`"']?[a-zA-Z_][\w]*[`"']?\.)?[`"']?([a-zA-Z_][\w]*)[`"']?\s*=\s*(?:''|\d+)$/i.exec(
+function extractTopLevelLimit(cleanSql: string): number | undefined {
+    const limitIdx = findTopLevelSqlKeyword(cleanSql, 'LIMIT')
+    if (limitIdx < 0) return undefined
+    const match = /^LIMIT\s+(\d+)\b/i.exec(cleanSql.slice(limitIdx))
+    return match?.[1] !== undefined ? parseInt(match[1], 10) : undefined
+}
+
+function specialWhereAllowedCols(table: string): readonly string[] {
+    if (table === 'relationships' || table === 'entry_relationships' || table === 'links') {
+        return ['workspace_id', 'project_number', 'project_id', 'id', 'entry_id']
+    }
+    return ['workspace_id', 'project_number', 'project_id']
+}
+
+function hasUnsupportedSpecialTableWhere(sqlWhere: string, allowedCols: readonly string[]): boolean {
+    const clauses = splitTopLevelSqlAndClauses(sqlWhere)
+    if (clauses.length === 0) return false
+    const allowedSet = new Set(allowedCols.map((c) => c.toLowerCase()))
+    for (const rawClause of clauses) {
+        const clause = stripBalancedOuterParens(rawClause)
+        if (clause === '') return true
+        const match =
+            /^(?:[`"']?[a-zA-Z_][\w]*[`"']?\.)?[`"']?([a-zA-Z_][\w]*)[`"']?\s*=\s*(?:'(?:\\.|''|[^'\\])*'|"(?:\\.|""|[^"\\])*"|\d+)$/i.exec(
                 clause
             )
-            if (match?.[1] === undefined || !allowedSet.has(match[1].toLowerCase())) {
-                return true
-            }
-        }
-        return false
-    }
-
-    if (
-        tableName === 'tags' ||
-        tableName === 'entry_tags' ||
-        tableName === 'journal_tags' ||
-        tableName === 'projects' ||
-        tableName === 'project_registry' ||
-        tableName === 'relationships' ||
-        tableName === 'entry_relationships' ||
-        tableName === 'links' ||
-        tableName === 'team_members' ||
-        tableName === 'members' ||
-        tableName === 'author_aliases' ||
-        tableName === 'aliases' ||
-        tableName === 'audit_log' ||
-        tableName === 'audit' ||
-        tableName === 'audit_logs'
-    ) {
-        if (!/^SELECT\b/i.test(cleanSql)) return null
-        if (hasUnsupportedSpecialTableWhere(whereClause, specialWhereAllowedCols(tableName))) {
-            return null
+        if (match?.[1] === undefined || !allowedSet.has(match[1].toLowerCase())) {
+            return true
         }
     }
+    return false
+}
 
+function recoverSpecialTableSelect(
+    cleanSql: string,
+    tableName: string,
+    whereClause: string,
+    idVal: number | undefined,
+    scopeFields: Record<string, unknown>
+): string | null {
+    if (!/^SELECT\b/i.test(cleanSql)) return null
+    if (hasUnsupportedSpecialTableWhere(whereClause, specialWhereAllowedCols(tableName))) {
+        return null
+    }
     if (tableName === 'tags' || tableName === 'entry_tags' || tableName === 'journal_tags') {
         return `return await mj.core.listTags(${JSON.stringify(scopeFields)});`
     }
@@ -127,10 +138,8 @@ export function extractAndRecoverSqlCode(code: string): string | null {
         return `return await mj.admin.listProjects(${JSON.stringify(scopeFields)});`
     }
     if (tableName === 'relationships' || tableName === 'entry_relationships' || tableName === 'links') {
-        if (idVal !== undefined) {
-            return `return await mj.relationships.visualizeRelationships(${JSON.stringify({ entry_id: idVal, ...scopeFields })});`
-        }
-        return `return await mj.relationships.visualizeRelationships(${JSON.stringify(scopeFields)});`
+        const relParams = idVal !== undefined ? { entry_id: idVal, ...scopeFields } : scopeFields
+        return `return await mj.relationships.visualizeRelationships(${JSON.stringify(relParams)});`
     }
     if (tableName === 'team_members' || tableName === 'members') {
         return `return await mj.team.teamListMembers(${JSON.stringify(scopeFields)});`
@@ -138,83 +147,123 @@ export function extractAndRecoverSqlCode(code: string): string | null {
     if (tableName === 'author_aliases' || tableName === 'aliases') {
         return `return await mj.team.teamListAuthorAliases(${JSON.stringify(scopeFields)});`
     }
-    if (tableName === 'audit_log' || tableName === 'audit' || tableName === 'audit_logs') {
-        return `return await mj.admin.searchAuditLog(${JSON.stringify(scopeFields)});`
-    }
+    return `return await mj.admin.searchAuditLog(${JSON.stringify(scopeFields)});`
+}
 
-    if (/^SELECT\b/i.test(cleanSql)) {
-        if (tableName === undefined || !ENTRY_TABLE_NAMES.has(tableName)) {
-            return null
+function recoverEntrySelect(
+    cleanSql: string,
+    tableName: string | undefined,
+    whereClause: string,
+    idVal: number | undefined,
+    limitVal: number | undefined,
+    scopeFields: Record<string, unknown>
+): string | null {
+    if (tableName === undefined || !ENTRY_TABLE_NAMES.has(tableName)) return null
+    const wherePos = findTopLevelSqlKeyword(cleanSql, 'WHERE')
+    const selectHead = (wherePos >= 0 ? cleanSql.slice(0, wherePos) : cleanSql).replace(
+        /'(?:\\.|''|[^'\\])*'|"(?:\\.|""|[^"\\])*"/g,
+        "''"
+    )
+    if (/\bCOUNT\s*\(/i.test(selectHead)) return null
+    if (idVal !== undefined) {
+        if (Object.keys(scopeFields).length === 0) {
+            return `return await mj.core.getEntryById({ entry_id: ${String(idVal)} });`
         }
-        if (isCount) {
-            return null
-        }
-        if (idVal !== undefined) {
-            if (Object.keys(scopeFields).length === 0) {
-                return `return await mj.core.getEntryById({ entry_id: ${String(idVal)} });`
-            }
-            return `return await mj.core.getEntryById(${JSON.stringify({ entry_id: idVal, ...scopeFields })});`
-        }
-        if (searchQuery !== undefined && searchQuery !== '') {
-            const searchParams: Record<string, unknown> = { query: searchQuery, ...scopeFields }
-            if (limitVal !== undefined) searchParams['limit'] = limitVal
-            return `return await mj.search.searchEntries(${JSON.stringify(searchParams)});`
-        }
+        return `return await mj.core.getEntryById(${JSON.stringify({ entry_id: idVal, ...scopeFields })});`
+    }
+    const searchQuery = extractTopLevelWhereLikeQuery(whereClause)
+    if (searchQuery !== undefined) {
+        const searchParams: Record<string, unknown> = { query: searchQuery, ...scopeFields }
+        if (limitVal !== undefined) searchParams['limit'] = limitVal
+        return `return await mj.search.searchEntries(${JSON.stringify(searchParams)});`
+    }
+    return null
+}
+
+function recoverEntryUpdate(
+    cleanSql: string,
+    updateTable: string | undefined,
+    idVal: number | undefined,
+    scopeFields: Record<string, unknown>
+): string | null {
+    if (updateTable === undefined || !ENTRY_TABLE_NAMES.has(updateTable) || idVal === undefined) {
         return null
     }
+    const setClause = extractTopLevelUpdateSetClause(cleanSql)
+    let setContent: string | undefined
+    let setWs: string | undefined
+    let setProj: number | undefined
+    for (const assignment of splitSqlValueList(setClause)) {
+        const eq = assignment.indexOf('=')
+        if (eq < 0) continue
+        const col = assignment.slice(0, eq).trim().replace(/[`"']/g, '').toLowerCase()
+        const rhs = assignment.slice(eq + 1).trim()
+        if (col === 'content') {
+            setContent = unquoteSqlString(rhs) ?? undefined
+        } else if (col === 'workspace_id') {
+            const ws = unquoteSqlString(rhs)?.trim()
+            if (ws !== undefined && ws !== '') setWs = ws
+        } else if (col === 'project_number' || col === 'project_id') {
+            const cleaned = (unquoteSqlString(rhs) ?? rhs).trim()
+            if (/^\d+$/.test(cleaned)) setProj = parseInt(cleaned, 10)
+        }
+    }
+    if (setContent === undefined) return null
+    const whereProj =
+        typeof scopeFields['project_number'] === 'number' ? scopeFields['project_number'] : undefined
+    if (setProj !== undefined && whereProj !== undefined && setProj !== whereProj) {
+        return null
+    }
+    const updatePayload: Record<string, unknown> = {
+        entry_id: idVal,
+        content: setContent,
+        ...scopeFields,
+        ...(setWs !== undefined ? { target_workspace_id: setWs } : {}),
+        ...(whereProj === undefined && setProj !== undefined ? { project_number: setProj } : {}),
+    }
+    return `return await mj.admin.updateEntry(${JSON.stringify(updatePayload)});`
+}
 
+/**
+ * Auto-heals raw SQL queries passed as code or script in Code Mode,
+ * translating them to corresponding type-safe mj.* Code Mode API calls.
+ */
+export function extractAndRecoverSqlCode(code: string): string | null {
+    const cleanSql = parseCleanRecoverableSql(code)
+    if (cleanSql === null) return null
+    if (hasUnsupportedWherePredicate(cleanSql)) return null
+
+    const fromMatch = /\bFROM\s+(?:[`"']?[a-zA-Z_][\w]*[`"']?\.)?[`"']?([a-zA-Z0-9_]+)[`"']?/i.exec(cleanSql)
+    const tableName = fromMatch?.[1]?.toLowerCase()
+    const updateTableMatch = /^UPDATE\s+(?:[`"']?[a-zA-Z_][\w]*[`"']?\.)?[`"']?([a-zA-Z0-9_]+)[`"']?/i.exec(cleanSql)
+    const updateTable = updateTableMatch?.[1]?.toLowerCase()
+    const limitVal = extractTopLevelLimit(cleanSql)
+    const whereClause = extractTopLevelWhereClause(cleanSql)
+    const idVal = extractTopLevelWhereId(whereClause)
+    const scopeFields = scopeFromSqlLiterals(cleanSql)
+
+    if (tableName !== undefined && SPECIAL_TABLES.has(tableName)) {
+        return recoverSpecialTableSelect(cleanSql, tableName, whereClause, idVal, scopeFields)
+    }
+    if (/^SELECT\b/i.test(cleanSql)) {
+        return recoverEntrySelect(cleanSql, tableName, whereClause, idVal, limitVal, scopeFields)
+    }
     if (/^INSERT\s+INTO\b/i.test(cleanSql)) {
         const parsedInsert = parseSqlStatement(cleanSql, [])
         if (parsedInsert.action === 'create') {
-            const insertPayload = { ...scopeFields, ...parsedInsert.params }
-            return `return await mj.core.createEntry(${JSON.stringify(insertPayload)});`
+            return `return await mj.core.createEntry(${JSON.stringify(parsedInsert.params)});`
         }
         return null
     }
-
     if (/^UPDATE\b/i.test(cleanSql)) {
-        if (updateTable === undefined || !ENTRY_TABLE_NAMES.has(updateTable)) {
-            return null
-        }
-        if (idVal !== undefined) {
-            const setClause = /\bSET\s+([\s\S]*?)(?:\bWHERE\b|$)/i.exec(cleanSql)?.[1] ?? ''
-            const setContentMatch = /\bcontent\s*=\s*(['"])([\s\S]*?)\1/i.exec(setClause)
-            if (setContentMatch?.[2] !== undefined) {
-                const setWsMatch = /[`"']?workspace_id[`"']?\s*=\s*(['"])([^'"]+)\1/i.exec(setClause)
-                const setProjMatch = /[`"']?(?:project_number|project_id)[`"']?\s*=\s*['"]?(\d+)['"]?/i.exec(setClause)
-                const setWs = setWsMatch?.[2]?.trim()
-                const setProj = setProjMatch?.[1] !== undefined ? parseInt(setProjMatch[1], 10) : undefined
-                const whereProj =
-                    typeof scopeFields['project_number'] === 'number'
-                        ? scopeFields['project_number']
-                        : undefined
-                if (setProj !== undefined && whereProj !== undefined && setProj !== whereProj) {
-                    return null
-                }
-                const updatePayload: Record<string, unknown> = {
-                    entry_id: idVal,
-                    content: setContentMatch[2],
-                    ...scopeFields,
-                    ...(setWs !== undefined && setWs !== '' ? { target_workspace_id: setWs } : {}),
-                    ...(whereProj === undefined && setProj !== undefined ? { project_number: setProj } : {}),
-                }
-                return `return await mj.admin.updateEntry(${JSON.stringify(updatePayload)});`
-            }
-            return null
-        }
-        return null
+        return recoverEntryUpdate(cleanSql, updateTable, idVal, scopeFields)
     }
-
     if (/^DELETE\b/i.test(cleanSql)) {
-        if (tableName === undefined || !ENTRY_TABLE_NAMES.has(tableName)) {
+        if (tableName === undefined || !ENTRY_TABLE_NAMES.has(tableName) || idVal === undefined) {
             return null
         }
-        if (idVal !== undefined) {
-            return `return await mj.admin.deleteEntry(${JSON.stringify({ entry_id: idVal, ...scopeFields })});`
-        }
-        return null
+        return `return await mj.admin.deleteEntry(${JSON.stringify({ entry_id: idVal, ...scopeFields })});`
     }
-
     return null
 }
 

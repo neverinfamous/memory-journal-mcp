@@ -1,6 +1,7 @@
 import { QueryError, ValidationError } from '../../types/errors.js'
 import { effectiveWorkspace } from '../workspace-scope.js'
 import { isMissingTableError } from './schema-errors.js'
+import { getSingleRow } from './row-helpers.js'
 import type { IDatabaseConnection, AuthorAlias } from '../core/interfaces.js'
 
 export class AliasManager {
@@ -8,22 +9,6 @@ export class AliasManager {
 
     constructor(db: IDatabaseConnection) {
         this.db = db
-    }
-
-    private getSingleRow(queryResult: { columns: string[]; values: unknown[][] }[]): Record<string, unknown> | null {
-        if (queryResult.length === 0 || (queryResult[0]?.values.length ?? 0) === 0 || (queryResult[0]?.columns.length ?? 0) === 0) {
-            return null
-        }
-        const row = queryResult[0]?.values[0]
-        if (!row) return null
-
-        const result: Record<string, unknown> = {}
-        const columns = queryResult[0]?.columns ?? []
-        for (let i = 0; i < columns.length; i++) {
-            const col = columns[i]
-            if (col) result[col] = row[i]
-        }
-        return result
     }
 
     private mapToAuthorAlias(row: Record<string, unknown>): AuthorAlias {
@@ -58,7 +43,7 @@ export class AliasManager {
                 `SELECT * FROM author_aliases WHERE alias = ? COLLATE NOCASE AND workspace_id = ?`,
                 [alias, storedWorkspace]
             )
-            const row = this.getSingleRow(results)
+            const row = getSingleRow(results)
             if (!row) {
                 throw new QueryError(`Failed to retrieve newly added alias: ${alias}`)
             }
@@ -83,7 +68,7 @@ export class AliasManager {
                 : `SELECT id FROM author_aliases WHERE alias = ? COLLATE NOCASE`
             const selectParams = scoped ? [alias, scopeId] : [alias]
             const results = this.db.exec(selectSql, selectParams)
-            const row = this.getSingleRow(results)
+            const row = getSingleRow(results)
             if (!row) return false
 
             const deleteSql = scoped
@@ -155,7 +140,7 @@ export class AliasManager {
                 : `SELECT canonical_author FROM author_aliases WHERE alias = ? COLLATE NOCASE ORDER BY workspace_id IS NULL ASC LIMIT 1`
             const params = scoped ? [rawAuthor, scopeId] : [rawAuthor]
             const results = this.db.exec(sql, params)
-            const row = this.getSingleRow(results)
+            const row = getSingleRow(results)
             if (row && typeof row['canonical_author'] === 'string') {
                 return row['canonical_author']
             }
@@ -248,7 +233,7 @@ export class AliasManager {
                 countParams
             )
 
-            const countRow = this.getSingleRow(countResults)
+            const countRow = getSingleRow(countResults)
             const count = typeof countRow?.['count'] === 'number' ? countRow['count'] : 0
 
             if (count > 0) {

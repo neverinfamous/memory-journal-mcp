@@ -40,8 +40,9 @@ export function getRelationshipTools(context: ToolContext): ToolDefinition[] {
                 openWorldHint: false,
             },
             handler: (params: unknown) => {
+                let input: ReturnType<typeof LinkEntriesSchema.parse> | undefined
                 try {
-                    const input = LinkEntriesSchema.parse(LinkEntriesSchemaMcp.parse(params))
+                    input = LinkEntriesSchema.parse(LinkEntriesSchemaMcp.parse(params))
                     // [INVARIANT] H4: '*' is a read-only wildcard; links are writes and must be scoped.
                     const wsId = resolveWriteWorkspaceId(
                         input.workspace_id,
@@ -110,12 +111,13 @@ export function getRelationshipTools(context: ToolContext): ToolDefinition[] {
                     // Check for existing duplicate relationship (exact direction only).
                     // Reverse direction (B→A when A→B exists) is intentionally allowed
                     // so agents can model bidirectional relationships explicitly.
-                    const existingRelationships = db.getRelationships(input.from_entry_id, wsId)
+                    const { from_entry_id, to_entry_id, relationship_type } = input
+                    const existingRelationships = db.getRelationships(from_entry_id, wsId)
                     const existing = existingRelationships.find(
                         (r) =>
-                            r.fromEntryId === input.from_entry_id &&
-                            r.toEntryId === input.to_entry_id &&
-                            r.relationshipType === input.relationship_type
+                            r.fromEntryId === from_entry_id &&
+                            r.toEntryId === to_entry_id &&
+                            r.relationshipType === relationship_type
                     )
 
                     if (existing) {
@@ -138,16 +140,7 @@ export function getRelationshipTools(context: ToolContext): ToolDefinition[] {
                     return { success: true, relationship }
                 } catch (error) {
                     // Domain errors from db.linkEntries (nonexistent entries)
-                    const input = (() => {
-                        try {
-                            return LinkEntriesSchema.parse(LinkEntriesSchemaMcp.parse(params))
-                        } catch {
-                            // If parse itself failed, use formatHandlerError
-                            return null
-                        }
-                    })()
-
-                    if (input) {
+                    if (input !== undefined) {
                         const errMsg = error instanceof Error ? error.message : 'Unknown error'
                         const isFkError = errMsg.includes('FOREIGN KEY constraint failed')
                         if (isFkError) {

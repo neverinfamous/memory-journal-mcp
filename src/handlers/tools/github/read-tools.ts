@@ -436,6 +436,11 @@ export function getGitHubReadTools(context: ToolContext): ToolDefinition[] {
                         issueCount: ctx.issues.length,
                         prCount: ctx.pullRequests.length,
                         ...(ctx.degraded !== undefined ? { degraded: ctx.degraded } : {}),
+                        ...(ctx.degraded !== undefined && ctx.degraded.length > 0
+                            ? {
+                                  warning: `Partial GitHub context: failed to fetch ${ctx.degraded.join(', ')}`,
+                              }
+                            : {}),
                     }
                 } catch (err) {
                     return formatHandlerError(err)

@@ -15,7 +15,9 @@ import {
     AUTH_ERROR_CODES,
 } from './errors.js'
 import { parseScopes } from './scopes.js'
+import { ConfigurationError } from '../types/errors.js'
 import { logger } from '../utils/logger.js'
+import { isPrivateOrLoopbackAddress } from '../utils/network-safety.js'
 
 // =============================================================================
 // Token Validator
@@ -70,6 +72,18 @@ export class TokenValidator {
         if (issuerUrl.origin !== jwksUrl.origin) {
             throw new Error(
                 `Security Violation: JWKS URI origin (${jwksUrl.origin}) does not match Issuer origin (${issuerUrl.origin})`
+            )
+        }
+
+        if (!isLoopback(issuerUrl.hostname) && isPrivateOrLoopbackAddress(issuerUrl.hostname)) {
+            throw new Error(
+                `Security Violation: SSRF Protection blocks private/loopback Issuer host (${issuerUrl.hostname})`
+            )
+        }
+
+        if (!isLoopback(jwksUrl.hostname) && isPrivateOrLoopbackAddress(jwksUrl.hostname)) {
+            throw new Error(
+                `Security Violation: SSRF Protection blocks private/loopback JWKS host (${jwksUrl.hostname})`
             )
         }
 
@@ -348,6 +362,28 @@ export class TokenValidator {
         })
 
         try {
+            const jwksParsed = new URL(this.jwksUri)
+            const jwksHostname = jwksParsed.hostname.toLowerCase()
+            const isExplicitLoopback =
+                jwksHostname === 'localhost' ||
+                jwksHostname === '127.0.0.1' ||
+                jwksHostname === '[::1]'
+            if (!isExplicitLoopback) {
+                try {
+                    const { promises: dns } = await import('node:dns')
+                    const { address } = await dns.lookup(jwksHostname)
+                    if (isPrivateOrLoopbackAddress(address)) {
+                        throw new ConfigurationError(
+                            `SSRF Protection: Requests to private/loopback network addresses are prohibited. Resolved IP: ${address}`
+                        )
+                    }
+                } catch (dnsErr) {
+                    if (dnsErr instanceof ConfigurationError) {
+                        throw dnsErr
+                    }
+                }
+            }
+
             const response = await fetch(this.jwksUri, {
                 method: 'GET',
                 signal: AbortSignal.timeout(10000),

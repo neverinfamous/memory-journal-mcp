@@ -139,17 +139,30 @@ export async function createServer(options: ServerOptions): Promise<void> {
         )
 
     const shutdownMetrics = startConfiguredMetricsServer(runtime, options)
+    const closeDatabases = (): void => {
+        closeServerResources([db, testDb, teamDb, testTeamDb])
+    }
 
-    await startSelectedTransport({
-        options,
-        getServerInstance,
-        scheduler,
-        runtime,
-        configManager,
-        shutdownMetrics,
-        activeMetricsPath,
-        closeDatabases: () => {
-            closeServerResources([db, testDb, teamDb, testTeamDb])
-        },
-    })
+    try {
+        await startSelectedTransport({
+            options,
+            getServerInstance,
+            scheduler,
+            runtime,
+            configManager,
+            shutdownMetrics,
+            activeMetricsPath,
+            closeDatabases,
+        })
+    } catch (startupError) {
+        scheduler?.stop()
+        runtime.stopBackgroundTasks?.()
+        configManager.close()
+        if (shutdownMetrics !== undefined) {
+            await shutdownMetrics().catch(() => undefined)
+        }
+        await runtime.auditLogger?.close().catch(() => undefined)
+        closeDatabases()
+        throw startupError
+    }
 }

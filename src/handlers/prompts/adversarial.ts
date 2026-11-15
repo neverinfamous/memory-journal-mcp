@@ -71,6 +71,8 @@ function getPlanReviewPromptDefinition(): InternalPromptDef {
                             type: 'text',
                             text: `# Adversarial Plan Review: "${topic}"
 
+${buildSharedAuditPreamble(topic, 'topic or module')}
+
 If the topic is '{topic}', determine it from the user's request. If the user hasn't specified a topic, ask them for it now.
 
 **Depth**: ${depth}

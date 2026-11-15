@@ -5,10 +5,9 @@ import {
     RegisterProjectSchemaMcp,
     UpdateProjectSchemaMcp,
     DeleteProjectSchemaMcp,
-    GetProjectSchemaMcp,
-    ListProjectsSchemaMcp,
-    ProjectOutputSchema
+    ProjectOutputSchema,
 } from './schemas.js'
+import { getProjectReadTools } from './project-read-tools.js'
 import fs from 'node:fs'
 import path from 'node:path'
 import os from 'node:os'
@@ -119,6 +118,10 @@ function saveConfig(config: Record<string, unknown>, context?: ToolContext, chan
         }
         const existingBriefing = mgrLike.getConfig?.()?.briefingConfig ?? {}
         const briefingConfig = { ...existingBriefing, projectRegistry: reg }
+        applyDefaultsChange(
+            briefingConfig as { defaultWorkspaceId?: string; defaultProjectNumber?: number },
+            change
+        )
         mgrLike.updateConfig({ briefingConfig })
     }
 }
@@ -325,155 +328,21 @@ export function getProjectTools(context: ToolContext): ToolDefinition[] {
                     const config = loadConfig()
                     config['projectRegistry'] ??= {}
                     const registry = config['projectRegistry'] as Record<string, { path: string, project_number?: number }>
-                    
+
                     if (!Object.hasOwn(registry, parsed.name) || !registry[parsed.name]) {
                         return Promise.resolve({ success: false, error: `🛠️ AUTONOMOUS HEALING: Project not found: '${parsed.name}'` })
                     }
-                    
+
                     const rest = Object.fromEntries(Object.entries(registry).filter(([key]) => key !== parsed.name))
                     config['projectRegistry'] = rest
                     saveConfig(config, context, { from: parsed.name })
-                    
+
                     return Promise.resolve({ success: true, message: `Project '${parsed.name}' deleted.` })
                 } catch (err) {
                     return Promise.resolve(formatHandlerError(err))
                 }
             }
         },
-        {
-            name: 'list_projects',
-            title: 'List Projects',
-            description: 'List all registered projects.',
-            group: 'admin',
-            inputSchema: ListProjectsSchemaMcp,
-            outputSchema: ProjectOutputSchema,
-            annotations: {
-                readOnlyHint: true,
-                destructiveHint: false,
-                idempotentHint: true,
-                openWorldHint: false,
-            },
-            handler: () => {
-                try {
-                    const config = loadConfig()
-                    config['projectRegistry'] ??= {}
-                    const registry = config['projectRegistry'] as Record<string, { path: string, project_number?: number }>
-                    
-                    const items = Object.entries(registry).map(([name, data]) => {
-                        const dataObj = data as Record<string, unknown>
-                        const desc = typeof dataObj['description'] === 'string' ? dataObj['description'] : ''
-                        const res: Record<string, unknown> = {
-                            ...data,
-                            name,
-                            description: desc,
-                            path: data.path,
-                        }
-                        if (typeof data.project_number === 'number') {
-                            res['project_number'] = data.project_number
-                            res['projectNumber'] = data.project_number
-                        }
-                        return res
-                    })
-                    
-                    return Promise.resolve({ success: true, projects: registry, items, data: items })
-                } catch (err) {
-                    return Promise.resolve(formatHandlerError(err))
-                }
-            }
-        },
-        {
-            name: 'get_project',
-            title: 'Get Project',
-            description: 'Get details of a specific registered project.',
-            group: 'admin',
-            inputSchema: GetProjectSchemaMcp,
-            outputSchema: ProjectOutputSchema,
-            annotations: {
-                readOnlyHint: true,
-                destructiveHint: false,
-                idempotentHint: true,
-                openWorldHint: false,
-            },
-            handler: (params: unknown) => {
-                try {
-                    const parsed = GetProjectSchemaMcp.parse(params)
-                    if (isForbiddenProjectKey(parsed.name)) {
-                        return Promise.resolve({ success: false, error: `Invalid project name: '${parsed.name}'` })
-                    }
-                    const config = loadConfig()
-                    config['projectRegistry'] ??= {}
-                    const registry = config['projectRegistry'] as Record<string, { path: string, project_number?: number, id?: number }>
-                    
-                    let foundName = parsed.name
-                    let projectInfo = Object.hasOwn(registry, foundName) ? registry[foundName] : undefined
-                    const rawProjNum = (parsed as Record<string, unknown>)['project_number']
-                    if (
-                        rawProjNum !== undefined &&
-                        typeof rawProjNum !== 'number' &&
-                        typeof rawProjNum !== 'string'
-                    ) {
-                        return Promise.resolve({
-                            success: false,
-                            error: `🛠️ AUTONOMOUS HEALING: Invalid project_number: '${JSON.stringify(rawProjNum) ?? typeof rawProjNum}'`,
-                        })
-                    }
-                    const parsedProjNum = coerceRegistryProjectNumber(rawProjNum)
-                    if (rawProjNum !== undefined && parsedProjNum === undefined) {
-                        return Promise.resolve({
-                            success: false,
-                            error: `🛠️ AUTONOMOUS HEALING: Invalid project_number: '${JSON.stringify(rawProjNum) ?? typeof rawProjNum}'`,
-                        })
-                    }
-                    const nameProjNum = coerceRegistryProjectNumber(parsed.name)
-                    if (
-                        projectInfo &&
-                        parsedProjNum !== undefined &&
-                        projectInfo.project_number !== parsedProjNum &&
-                        projectInfo.id !== parsedProjNum
-                    ) {
-                        return Promise.resolve({
-                            success: false,
-                            error: `🛠️ AUTONOMOUS HEALING: Project '${foundName}' uses project_number ${String(projectInfo.project_number ?? projectInfo.id)}, not ${String(parsedProjNum)}.`,
-                        })
-                    }
-                    if (!projectInfo && (nameProjNum !== undefined || parsedProjNum !== undefined)) {
-                        if (
-                            nameProjNum !== undefined &&
-                            parsedProjNum !== undefined &&
-                            nameProjNum !== parsedProjNum
-                        ) {
-                            return Promise.resolve({
-                                success: false,
-                                error: `🛠️ AUTONOMOUS HEALING: Conflicting project_number values '${parsed.name}' and ${String(parsedProjNum)}.`,
-                            })
-                        }
-                        const targetNum = parsedProjNum ?? nameProjNum
-                        for (const [pName, pData] of Object.entries(registry)) {
-                            if (pData.project_number === targetNum || pData.id === targetNum) {
-                                foundName = pName
-                                projectInfo = pData
-                                break
-                            }
-                        }
-                    }
-
-                    if (!projectInfo) {
-                        return Promise.resolve({ success: false, error: `🛠️ AUTONOMOUS HEALING: Project not found: '${parsed.name}'` })
-                    }
-                    
-                    return Promise.resolve({
-                        success: true,
-                        project: {
-                            name: foundName,
-                            id: projectInfo.project_number ?? projectInfo.id,
-                            project_number: projectInfo.project_number ?? projectInfo.id,
-                            ...projectInfo
-                        }
-                    })
-                } catch (err) {
-                    return Promise.resolve(formatHandlerError(err))
-                }
-            }
-        }
+        ...getProjectReadTools(context, { loadConfig, coerceRegistryProjectNumber }),
     ]
 }

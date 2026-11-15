@@ -109,7 +109,7 @@ export default tseslint.config(
     },
     // Test configuration (non-type-aware)
     {
-        files: ['tests/**/*.ts', 'test-server/**/*.ts'],
+        files: ['tests/**/*.ts', 'test-server/**/*.ts', 'scripts/**/*.ts', 'scripts/**/*.mjs'],
         extends: [js.configs.recommended, ...tseslint.configs.recommended],
         languageOptions: {
             ecmaVersion: 2022,

@@ -285,7 +285,7 @@ export async function handleViewFile(
 
         let outputContent = content
         if (startLine !== undefined || endLine !== undefined) {
-            const lines = content.split('\n')
+            const lines = content.split(/\r?\n/)
             const start = Math.max(1, startLine ?? 1) - 1
             const end = Math.min(lines.length, endLine ?? lines.length)
             outputContent = lines.slice(start, end).join('\n')

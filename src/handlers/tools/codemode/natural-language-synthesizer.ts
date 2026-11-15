@@ -3,11 +3,11 @@
  * Split out of `payload-synthesizer.ts` to keep each module cohesive and < 400 lines.
  */
 
-import * as vm from 'node:vm'
 import type { z } from 'zod'
 import { isRecord } from '../../../codemode/normalizers/shared-utils.js'
 import type { ExecuteCodeSchema } from './schemas.js'
 import { resolveRepoWorkspace } from './json-entry-structured.js'
+import { isValidJsScript } from './code-healer.js'
 
 export type ExecuteCodeInput = z.infer<typeof ExecuteCodeSchema>
 
@@ -39,12 +39,7 @@ function isParsableJsCode(trimmed: string): boolean {
     if (/^[A-Za-z_$][\w$]*$/.test(trimmed)) return false
     if (/^\s*(?:[*#-]\s|\d+\.\s)/.test(trimmed)) return false
     if (/^[A-Za-z0-9_-]+:\s+/.test(trimmed) && !/[(.=[\];]/.test(trimmed)) return false
-    try {
-        new vm.Script(`(async () => {\n${trimmed}\n})()`)
-        return true
-    } catch {
-        return false
-    }
+    return isValidJsScript(trimmed)
 }
 
 export function isNaturalLanguagePrompt(text: string): boolean {
@@ -260,5 +255,37 @@ export function synthesizeNaturalLanguageOrEntryPayload(executionCode: string, i
     if (Object.keys(extraContext).length > 0) payload['auto_context'] = extraContext
 
     const fnName = numericEntryId !== undefined ? 'mj.updateEntry' : 'mj.createEntry'
+    appendSharedEntryFlags(payload, entryObj, rawObj)
     return `return await ${fnName}(${JSON.stringify(payload)});`
+}
+
+/** Forward optional entry classification, scope flags, relationships, and anchors uniformly. */
+export function appendSharedEntryFlags(
+    payload: Record<string, unknown>,
+    entryObj: Record<string, unknown>,
+    secondaryObj: Record<string, unknown>
+): void {
+    const sigType = getNonEmptyString(entryObj, secondaryObj, ['significance_type', 'significanceType'])
+    if (sigType !== undefined) payload['significance_type'] = sigType
+    const isPersonal =
+        entryObj['is_personal'] ?? entryObj['isPersonal'] ?? secondaryObj['is_personal'] ?? secondaryObj['isPersonal']
+    if (typeof isPersonal === 'boolean') payload['is_personal'] = isPersonal
+    const shareTeam =
+        entryObj['share_with_team'] ??
+        entryObj['shareWithTeam'] ??
+        secondaryObj['share_with_team'] ??
+        secondaryObj['shareWithTeam']
+    if (typeof shareTeam === 'boolean') payload['share_with_team'] = shareTeam
+    const rels = Array.isArray(entryObj['relationships'])
+        ? entryObj['relationships']
+        : Array.isArray(secondaryObj['relationships'])
+          ? secondaryObj['relationships']
+          : undefined
+    if (rels !== undefined) payload['relationships'] = rels
+    const anchors = Array.isArray(entryObj['anchors'])
+        ? entryObj['anchors']
+        : Array.isArray(secondaryObj['anchors'])
+          ? secondaryObj['anchors']
+          : undefined
+    if (anchors !== undefined) payload['anchors'] = anchors
 }

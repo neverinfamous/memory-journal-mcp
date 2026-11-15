@@ -23,9 +23,12 @@ function getRecentEntriesByImportance(
     const { db, tagsMgr } = context
 
     let actualOffset = offset
-    if (cursor !== undefined) {
+    if (cursor !== undefined && cursor !== '') {
         const decoded = decodeCursor(cursor)
-        if (decoded !== null && 'offset' in decoded) actualOffset = decoded.offset
+        if (decoded === null) {
+            throw new ValidationError('Invalid cursor format')
+        }
+        if ('offset' in decoded) actualOffset = decoded.offset
     }
     const importanceExpr = buildImportanceSqlExpression()
     const cte = buildImportanceCte()
@@ -92,7 +95,7 @@ export function getRecentEntries(
     }
 
     let effectiveOffset = offset
-    if (cursor !== undefined) {
+    if (cursor !== undefined && cursor !== '') {
         const decoded = decodeCursor(cursor)
         if (decoded === null) {
             throw new ValidationError('Invalid cursor format')
@@ -281,16 +284,17 @@ function decodeDateRangeCursor(cursor: string | undefined): {
     let hasKeyset = false
     let keysetT = ''
     let keysetId = 0
-    if (cursor !== undefined) {
+    if (cursor !== undefined && cursor !== '') {
         const decoded = decodeCursor(cursor)
-        if (decoded !== null) {
-            if ('t' in decoded) {
-                hasKeyset = true
-                keysetT = decoded.t
-                keysetId = decoded.id
-            } else if ('offset' in decoded) {
-                offset = decoded.offset
-            }
+        if (decoded === null) {
+            throw new ValidationError('Invalid cursor format')
+        }
+        if ('t' in decoded) {
+            hasKeyset = true
+            keysetT = decoded.t
+            keysetId = decoded.id
+        } else if ('offset' in decoded) {
+            offset = decoded.offset
         }
     }
     return { offset, hasKeyset, keysetT, keysetId }

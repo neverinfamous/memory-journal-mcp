@@ -114,70 +114,77 @@ export function injectProjectNames(
     }
 }
 
+interface ToolGroupIconMetadata {
+    iconUrl: string
+    title: string
+    description: string
+}
+
+const TOOL_GROUP_ICON_METADATA: Record<string, ToolGroupIconMetadata> = {
+    core: {
+        iconUrl: 'https://cdn.jsdelivr.net/npm/@mdi/svg@7.4.47/svg/notebook.svg',
+        title: 'Journal Core',
+        description: 'Core journal operations',
+    },
+    search: {
+        iconUrl: 'https://cdn.jsdelivr.net/npm/@mdi/svg@7.4.47/svg/magnify.svg',
+        title: 'Search',
+        description: 'Entry search operations',
+    },
+    analytics: {
+        iconUrl: 'https://cdn.jsdelivr.net/npm/@mdi/svg@7.4.47/svg/chart-bar.svg',
+        title: 'Analytics',
+        description: 'Journal analytics',
+    },
+    relationships: {
+        iconUrl: 'https://cdn.jsdelivr.net/npm/@mdi/svg@7.4.47/svg/graph-outline.svg',
+        title: 'Relationships',
+        description: 'Entry relationship management',
+    },
+    io: {
+        iconUrl: 'https://cdn.jsdelivr.net/npm/@mdi/svg@7.4.47/svg/swap-horizontal.svg',
+        title: 'IO',
+        description: 'Import/export operations',
+    },
+    admin: {
+        iconUrl: 'https://cdn.jsdelivr.net/npm/@mdi/svg@7.4.47/svg/cog.svg',
+        title: 'Admin',
+        description: 'Administrative operations',
+    },
+    github: {
+        iconUrl: 'https://cdn.jsdelivr.net/npm/@mdi/svg@7.4.47/svg/github.svg',
+        title: 'GitHub',
+        description: 'GitHub integration',
+    },
+    backup: {
+        iconUrl: 'https://cdn.jsdelivr.net/npm/@mdi/svg@7.4.47/svg/backup-restore.svg',
+        title: 'Backup',
+        description: 'Backup and restore',
+    },
+    team: {
+        iconUrl: 'https://cdn.jsdelivr.net/npm/@mdi/svg@7.4.47/svg/account-group.svg',
+        title: 'Team',
+        description: 'Team collaboration',
+    },
+    codemode: {
+        iconUrl: 'https://cdn.jsdelivr.net/npm/@mdi/svg@7.4.47/svg/code-braces.svg',
+        title: 'Code Mode',
+        description: 'Sandboxed code execution',
+    },
+    git: {
+        iconUrl: 'https://cdn.jsdelivr.net/npm/@mdi/svg@7.4.47/svg/source-branch.svg',
+        title: 'Git History',
+        description: 'Git history operations',
+    },
+}
+
 /**
  * Map a tool group identifier to its Material Design icon metadata.
  */
-export function getToolIcon(
-    group: string
-): { iconUrl: string; title: string; description: string } | undefined {
-    const iconMap: Record<string, { iconUrl: string; title: string; description: string }> = {
-        core: {
-            iconUrl: 'https://cdn.jsdelivr.net/npm/@mdi/svg@7.4.47/svg/notebook.svg',
-            title: 'Journal Core',
-            description: 'Core journal operations',
-        },
-        search: {
-            iconUrl: 'https://cdn.jsdelivr.net/npm/@mdi/svg@7.4.47/svg/magnify.svg',
-            title: 'Search',
-            description: 'Entry search operations',
-        },
-        analytics: {
-            iconUrl: 'https://cdn.jsdelivr.net/npm/@mdi/svg@7.4.47/svg/chart-bar.svg',
-            title: 'Analytics',
-            description: 'Journal analytics',
-        },
-        relationships: {
-            iconUrl: 'https://cdn.jsdelivr.net/npm/@mdi/svg@7.4.47/svg/graph-outline.svg',
-            title: 'Relationships',
-            description: 'Entry relationship management',
-        },
-        io: {
-            iconUrl: 'https://cdn.jsdelivr.net/npm/@mdi/svg@7.4.47/svg/swap-horizontal.svg',
-            title: 'IO',
-            description: 'Import/export operations',
-        },
-        admin: {
-            iconUrl: 'https://cdn.jsdelivr.net/npm/@mdi/svg@7.4.47/svg/cog.svg',
-            title: 'Admin',
-            description: 'Administrative operations',
-        },
-        github: {
-            iconUrl: 'https://cdn.jsdelivr.net/npm/@mdi/svg@7.4.47/svg/github.svg',
-            title: 'GitHub',
-            description: 'GitHub integration',
-        },
-        backup: {
-            iconUrl: 'https://cdn.jsdelivr.net/npm/@mdi/svg@7.4.47/svg/backup-restore.svg',
-            title: 'Backup',
-            description: 'Backup and restore',
-        },
-        team: {
-            iconUrl: 'https://cdn.jsdelivr.net/npm/@mdi/svg@7.4.47/svg/account-group.svg',
-            title: 'Team',
-            description: 'Team collaboration',
-        },
-        codemode: {
-            iconUrl: 'https://cdn.jsdelivr.net/npm/@mdi/svg@7.4.47/svg/code-braces.svg',
-            title: 'Code Mode',
-            description: 'Sandboxed code execution',
-        },
-        git: {
-            iconUrl: 'https://cdn.jsdelivr.net/npm/@mdi/svg@7.4.47/svg/source-branch.svg',
-            title: 'Git History',
-            description: 'Git history operations',
-        },
-    }
-    return iconMap[group]
+export function getToolIcon(group: string): ToolGroupIconMetadata | undefined {
+    return Object.hasOwn(TOOL_GROUP_ICON_METADATA, group)
+        ? TOOL_GROUP_ICON_METADATA[group]
+        : undefined
 }
 
 /**

@@ -133,13 +133,17 @@ export class ConfigManager extends EventEmitter {
         }
     }
 
+    private isYamlConfigPath(): boolean {
+        return this.configFilePath !== undefined && /\.ya?ml$/i.test(this.configFilePath)
+    }
+
     private readRawConfigObject(): Record<string, unknown> | null {
         if (!this.configFilePath || !fs.existsSync(this.configFilePath)) return null
         try {
             const content = fs.readFileSync(this.configFilePath, 'utf-8')
-            const raw: unknown = this.configFilePath.endsWith('.json')
-                ? JSON.parse(content)
-                : (parseYaml as (text: string) => unknown)(content)
+            const raw: unknown = this.isYamlConfigPath()
+                ? (parseYaml as (text: string) => unknown)(content)
+                : JSON.parse(content)
             if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) {
                 return null
             }
@@ -207,12 +211,14 @@ export class ConfigManager extends EventEmitter {
         this.isWriting = true
         try {
             const content = fs.readFileSync(this.configFilePath, 'utf-8')
-            let parsed: Record<string, unknown> = {}
-            if (this.configFilePath.endsWith('.json')) {
-                parsed = JSON.parse(content) as Record<string, unknown>
-            } else {
-                parsed = (parseYaml as (text: string) => Record<string, unknown>)(content) ?? {}
+            const isYaml = this.isYamlConfigPath()
+            const rawParsed: unknown = isYaml
+                ? (parseYaml as (text: string) => unknown)(content)
+                : JSON.parse(content)
+            if (typeof rawParsed !== 'object' || rawParsed === null || Array.isArray(rawParsed)) {
+                throw new Error('Configuration file root must be a JSON/YAML object')
             }
+            const parsed = rawParsed as Record<string, unknown>
 
             // Update keys
 
@@ -245,7 +251,7 @@ export class ConfigManager extends EventEmitter {
             }
 
             let serialized: string
-            if (this.configFilePath.endsWith('.json')) {
+            if (!isYaml) {
                 serialized = JSON.stringify(parsed, null, 2)
             } else {
                 // To avoid destroying yaml comments, ideally we'd use a robust yaml editor.

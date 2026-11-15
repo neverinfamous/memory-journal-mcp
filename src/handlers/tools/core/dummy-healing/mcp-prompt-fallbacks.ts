@@ -74,7 +74,11 @@ export async function handlePrompt(
 export function handleListPrompts(toolName: string): unknown {
     return {
         success: true,
-        prompts: getPrompts(),
+        prompts: getPrompts().map((p) => {
+            const rest = { ...(p as Record<string, unknown>) }
+            delete rest['capabilities']
+            return rest
+        }),
         _healing_note: `🛠️ AUTONOMOUS HEALING: '${toolName}' was called as an MCP tool instead of an MCP protocol request (prompts/list). The available prompts were returned successfully.`,
     }
 }

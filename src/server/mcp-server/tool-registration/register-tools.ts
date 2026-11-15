@@ -193,6 +193,12 @@ function registerAllToolsOnServer(
                     )
                     customToolHandlerConfig.filterConfig = currentConfig.toolFilterConfig
                     customToolHandlerConfig.briefingConfig = nextBriefing
+                    if (currentConfig.codemodeInternalFullAccess !== undefined) {
+                        customToolHandlerConfig.codemodeInternalFullAccess =
+                            currentConfig.codemodeInternalFullAccess
+                    } else {
+                        delete customToolHandlerConfig.codemodeInternalFullAccess
+                    }
                     // [INVARIANT] Mirror config exactly (clearing removed fields) so a prior
                     // value never lingers on the shared handler config across calls (C1).
                     if (nextBriefing.defaultProjectNumber !== undefined) {

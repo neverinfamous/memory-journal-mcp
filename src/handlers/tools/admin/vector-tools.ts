@@ -100,18 +100,21 @@ export function getVectorTools(context: ToolContext): ToolDefinition[] {
                         ...(projectNumber !== undefined ? { projectNumber } : {}),
                     }
                     const { success, indexed, failed, firstError } =
-                        await vectorManager.rebuildIndex(
-                            progress,
-                            Object.keys(rebuildOpts).length > 0 ? rebuildOpts : undefined
-                        )
+                        await vectorManager.rebuildIndex(progress, rebuildOpts)
 
                     if (!success && firstError) {
                         logger.warning(`Vector index rebuild had errors: ${firstError}`)
                     }
 
+                    const isPartial = failed > 0 && indexed > 0
+                    const warningMsg = isPartial
+                        ? (firstError ?? `${String(failed)} entries failed to generate embeddings`)
+                        : undefined
+
                     return {
                         success,
                         entriesIndexed: indexed,
+                        ...(isPartial ? { partial: true, warning: warningMsg } : {}),
                         ...(failed > 0 ? { failedEntries: failed } : {}),
                         ...(!success
                             ? { error: firstError ?? 'All entries failed to generate embeddings' }

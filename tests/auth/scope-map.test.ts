@@ -78,6 +78,22 @@ describe('scope-map', () => {
                         expected = 'write'
                     } else if (
                         [
+                            'team_add_member',
+                            'team_remove_member',
+                            'team_update_member_role',
+                            'team_backup',
+                            'team_merge_tags',
+                            'team_rebuild_vector_index',
+                            'team_add_author_alias',
+                            'team_remove_author_alias',
+                            'team_list_author_aliases',
+                            'team_resolve_author',
+                            'team_consolidate_authors',
+                        ].includes(tool)
+                    ) {
+                        expected = 'admin'
+                    } else if (
+                        [
                             'list_projects',
                             'listProjects',
                             'get_projects',

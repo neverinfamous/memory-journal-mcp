@@ -7,6 +7,7 @@ import {
     DATE_FORMAT_MESSAGE,
     EntryOutputSchema,
     relaxedNumber,
+    StrictProjectNumberSchema,
 } from '../schemas.js'
 
 // ============================================================================
@@ -45,7 +46,7 @@ export const ExportEntriesSchema = z.preprocess(
         .optional()
         .default(100)
         .describe('Maximum entries to export (default: 100)'),
-    project_number: z.number().int().optional(),
+    project_number: StrictProjectNumberSchema.optional(),
     workspace_id: z.string().optional(),
     }).strict()
 )
@@ -132,7 +133,7 @@ export const ExportMarkdownSchema = z.preprocess(
     entry_types: z.array(z.enum(ENTRY_TYPES)).optional(),
     tags: z.array(z.string()).optional(),
     limit: z.number().int().min(1).max(500).optional().default(100),
-    project_number: z.number().int().optional(),
+    project_number: StrictProjectNumberSchema.optional(),
     workspace_id: z.string().optional(),
     }).strict()
 )
@@ -216,7 +217,7 @@ export const ImportMarkdownSchema = z.preprocess(
     source_dir: z.string().min(1),
     dry_run: z.boolean().optional().default(false),
     limit: z.number().int().min(1).max(500).optional().default(100),
-    project_number: z.number().int().optional(),
+    project_number: StrictProjectNumberSchema.optional(),
     workspace_id: z.string().optional(),
     }).strict()
 )
@@ -318,7 +319,7 @@ export const ImportExternalSchema = z.preprocess(
     dry_run: z.boolean().optional().default(false),
     limit: z.number().int().min(1).max(500).optional().default(100),
     default_entry_type: z.enum(ENTRY_TYPES).optional(),
-    project_number: z.number().int().optional(),
+    project_number: StrictProjectNumberSchema.optional(),
     workspace_id: z.string().optional(),
     }).strict()
 )

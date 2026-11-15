@@ -10,7 +10,7 @@ const isMain =
     resolve(process.argv[1]) === resolve(fileURLToPath(import.meta.url))
 
 export const IGNORE_DIR_REGEX =
-    /(?:^|[/\\])(vendor|node_modules|dist|third_party|coverage|build|\.next|out)(?:[/\\]|$)/
+    /(?:^|[/\\])(\.git|vendor|third_party|node_modules|dist|coverage|build|\.next|out|\.wrangler|\.turbo|\.output|\.svelte-kit|\.test-output)(?:[/\\]|$)/
 
 function isEnoent(error: unknown): boolean {
     return typeof error === 'object' && error !== null && 'code' in error && error.code === 'ENOENT'
@@ -25,6 +25,7 @@ function runCommand(command: string, args: string[]): boolean {
 function checkFileLengths(): boolean {
     const warnings: { path: string; lines: number }[] = []
     const violations: { path: string; lines: number }[] = []
+    let largeTestFiles = 0
 
     const walk = (dir: string): void => {
         let entries
@@ -35,6 +36,7 @@ function checkFileLengths(): boolean {
             throw error
         }
         for (const entry of entries) {
+            if (entry.isSymbolicLink()) continue
             const fullPath = join(dir, entry.name)
             if (IGNORE_DIR_REGEX.test(fullPath)) continue
             if (entry.isDirectory()) {
@@ -42,15 +44,19 @@ function checkFileLengths(): boolean {
             } else if (
                 entry.isFile() &&
                 /\.(ts|tsx|js|mjs|cjs)$/.test(entry.name) &&
-                !/\.(test|spec)\./.test(entry.name)
+                !entry.name.endsWith('.d.ts')
             ) {
                 const content = readFileSync(fullPath, 'utf-8')
                 const segments = content.split(/\r?\n/)
                 // [INVARIANT] A trailing newline does not start a new line (parity with editor/PowerShell counts).
                 const lines = segments.at(-1) === '' ? segments.length - 1 : segments.length
+                if (/\.(test|spec)\./.test(entry.name)) {
+                    if (lines > 500) largeTestFiles++
+                    continue
+                }
                 if (lines > 500) {
                     violations.push({ path: fullPath, lines })
-                } else if (lines >= 450) {
+                } else if (lines >= 451) {
                     warnings.push({ path: fullPath, lines })
                 }
                 if (
@@ -69,6 +75,13 @@ function checkFileLengths(): boolean {
 
     walk('src')
     walk('scripts')
+    walk('tests')
+
+    if (largeTestFiles > 0) {
+        console.log(
+            `ℹ️  Advisory: ${String(largeTestFiles)} legacy test file(s) exceed 500 lines (non-test helpers in tests/ remain capped at 500 lines).`
+        )
+    }
 
     for (const w of warnings.sort((a, b) => b.lines - a.lines)) {
         console.warn(`⚠️  File approaching 500-line ceiling (${String(w.lines)} lines): ${w.path}`)
@@ -109,7 +122,7 @@ function runChecksMain(): void {
 
     if (!target || target === 'lint') {
         console.log('Running lint...')
-        const passed = runCommand('pnpm', ['exec', 'eslint', 'src/', 'tests/'])
+        const passed = runCommand('pnpm', ['exec', 'eslint', 'src/', 'tests/', 'scripts/'])
         console.log('Checking file lengths (<= 500 lines)...')
         const lengthsPassed = checkFileLengths()
         lintOk = passed && lengthsPassed
@@ -118,7 +131,9 @@ function runChecksMain(): void {
 
     if (!target || target === 'typecheck') {
         console.log('Running typecheck...')
-        const passed = runCommand('pnpm', ['exec', 'tsc', '--noEmit'])
+        const passed =
+            runCommand('pnpm', ['exec', 'tsc', '--noEmit']) &&
+            runCommand('pnpm', ['exec', 'tsc', '-p', 'tsconfig.scripts.json', '--noEmit'])
         typecheckOk = passed
         if (!passed) success = false
     }

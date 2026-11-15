@@ -153,6 +153,7 @@ export const GitHubContextOutputSchema = z
         requiresUserInput: z.boolean().optional(),
         instruction: z.string().optional(),
         degraded: z.array(z.string()).optional(),
+        warning: z.string().optional(),
         error: z.string().optional(),
     })
     .extend(ErrorFieldsMixin.shape)

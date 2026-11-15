@@ -40,6 +40,7 @@ import {
     toValidationFailureResponse,
 } from './call-interceptor-helpers.js'
 import { isToolVisibleForFilter } from '../../../filtering/tool-filter.js'
+import { isAutonomousShimBlockedByFilter } from '../../../handlers/tools/dummy-filter-helpers.js'
 import type { PromptDefinition } from '../../registration.js'
 import { logAgentIssue } from '../../../utils/issue-logger.js'
 import { applyArgInterceptions } from '../../../codemode/param-normalizer.js'
@@ -120,6 +121,37 @@ async function tryPromptAndResourceFallbacks(
     return undefined
 }
 
+function syncLiveHandlerConfig(
+    target: ToolHandlerConfig,
+    liveConfig: ReturnType<ServerContext['configManager']['getConfig']>,
+    options: ServerOptions,
+    liveBriefing: ReturnType<typeof resolveActiveBriefingConfig>
+): void {
+    target.briefingConfig = liveBriefing
+    if (liveConfig.codemodeInternalFullAccess !== undefined) {
+        target.codemodeInternalFullAccess = liveConfig.codemodeInternalFullAccess
+    } else if (options.codemodeInternalFullAccess !== undefined) {
+        target.codemodeInternalFullAccess = options.codemodeInternalFullAccess
+    } else {
+        delete target.codemodeInternalFullAccess
+    }
+    if (liveBriefing.defaultProjectNumber !== undefined) {
+        target.defaultProjectNumber = liveBriefing.defaultProjectNumber
+    } else {
+        delete target.defaultProjectNumber
+    }
+    if (liveBriefing.defaultWorkspaceId !== undefined) {
+        target.defaultWorkspaceId = liveBriefing.defaultWorkspaceId
+    } else {
+        delete target.defaultWorkspaceId
+    }
+    if (liveBriefing.projectRegistry !== undefined) {
+        target.projectRegistry = liveBriefing.projectRegistry
+    } else {
+        delete target.projectRegistry
+    }
+}
+
 async function tryAutonomousUnknownToolFallback(
     requestedTool: string,
     toolArgs: Record<string, unknown>,
@@ -133,22 +165,45 @@ async function tryAutonomousUnknownToolFallback(
 ): Promise<unknown> {
     const { configManager, db, teamDb, vectorManager, teamVectorManager, github, runtime, allowedIoRoots } = context
     const currentConfig = configManager.getConfig()
+    if (currentConfig.toolFilterConfig !== null && currentConfig.toolFilterConfig !== undefined) {
+        if (
+            isAutonomousShimBlockedByFilter(
+                requestedTool,
+                matchingPrompt?.name,
+                currentConfig.toolFilterConfig
+            )
+        ) {
+            return formatTokenEstimatedError(
+                {
+                    success: false,
+                    error: `Tool '${requestedTool}' is disabled by the active --tool-filter configuration.`,
+                    code: 'TOOL_DISABLED',
+                    category: 'authorization',
+                    suggestion: 'Update the active tool filter or use an enabled tool.',
+                    recoverable: false,
+                },
+                true
+            )
+        }
+    }
+    const fallbackConfig: ToolHandlerConfig = {
+        ...customToolHandlerConfig,
+        filterConfig: currentConfig.toolFilterConfig,
+        runtime,
+    }
+    syncLiveHandlerConfig(
+        fallbackConfig,
+        currentConfig,
+        options,
+        resolveActiveBriefingConfig(currentConfig.briefingConfig, options, allowedIoRoots)
+    )
     const toolContext: ToolContext = {
         db,
         ...(teamDb !== undefined ? { teamDb } : {}),
         vectorManager,
         ...(teamVectorManager !== undefined ? { teamVectorManager } : {}),
         github,
-        config: {
-            ...customToolHandlerConfig,
-            filterConfig: currentConfig.toolFilterConfig,
-            briefingConfig: resolveActiveBriefingConfig(
-                currentConfig.briefingConfig,
-                options,
-                allowedIoRoots
-            ),
-            runtime,
-        },
+        config: fallbackConfig,
     }
 
     const promptOrResourceRes = await tryPromptAndResourceFallbacks(
@@ -326,25 +381,11 @@ export function attachCallToolInterceptor(
                 options,
                 context.allowedIoRoots
             )
+            const liveConfig = context.configManager.getConfig()
+            syncLiveHandlerConfig(customToolHandlerConfig, liveConfig, options, liveBriefing)
             const liveRegistry = liveBriefing.projectRegistry
             const liveDefaultProj = liveBriefing.defaultProjectNumber
             const liveDefaultWs = liveBriefing.defaultWorkspaceId
-            customToolHandlerConfig.briefingConfig = liveBriefing
-            if (liveDefaultProj !== undefined) {
-                customToolHandlerConfig.defaultProjectNumber = liveDefaultProj
-            } else {
-                delete customToolHandlerConfig.defaultProjectNumber
-            }
-            if (liveDefaultWs !== undefined) {
-                customToolHandlerConfig.defaultWorkspaceId = liveDefaultWs
-            } else {
-                delete customToolHandlerConfig.defaultWorkspaceId
-            }
-            if (liveRegistry !== undefined) {
-                customToolHandlerConfig.projectRegistry = liveRegistry
-            } else {
-                delete customToolHandlerConfig.projectRegistry
-            }
 
             if (req.params !== undefined && healingEnabled) {
                 req.params.arguments ??= {}

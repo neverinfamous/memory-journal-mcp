@@ -341,6 +341,11 @@ export function resolveScoresAndValidation(
         metadata['trust_score'] ??
         metadata['confidence']
     const trustScore = trustRaw !== undefined ? Number(trustRaw) : undefined
+    if (trustScore !== undefined && (!Number.isFinite(trustScore) || trustScore < 0 || trustScore > 1)) {
+        throw new ValidationError(
+            `Invalid trust/confidence score '${String(trustRaw)}'. Expected a number between 0 and 1.`
+        )
+    }
 
     const impactRaw =
         options.impactScore ??
@@ -349,6 +354,11 @@ export function resolveScoresAndValidation(
         metadata['impactScore'] ??
         metadata['impact_score']
     const impactScore = impactRaw !== undefined ? Number(impactRaw) : undefined
+    if (impactScore !== undefined && (!Number.isFinite(impactScore) || impactScore < 0 || impactScore > 1)) {
+        throw new ValidationError(
+            `Invalid impact score '${String(impactRaw)}'. Expected a number between 0 and 1.`
+        )
+    }
 
     const valStatusRaw =
         options.validationStatus ??

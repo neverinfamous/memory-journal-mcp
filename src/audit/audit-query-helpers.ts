@@ -14,7 +14,8 @@ export interface AuditScopeMetadata {
     projectNumber?: number | undefined
 }
 
-const SENSITIVE_AUDIT_URI_RE = /^memory:\/\/(?:team|audit)(?:\/|$|\?|#)/i
+const SENSITIVE_AUDIT_URI_RE =
+    /^memory:\/\/(?:team|audit|insights\/team-collaboration)(?:\/|$|\?|#)/i
 
 /** Parse one JSONL audit line; returns null for empty or unparseable lines. */
 export function parseAuditLine(line: string | undefined): AuditEntry | null {
@@ -60,7 +61,9 @@ export function isSensitiveAuditTarget(
 /** Derive the audit category for an audited resource or prompt operation. */
 export function resolveResourceAuditCategory(uriOrName: string): AuditCategory {
     if (/^memory:\/\/audit(?:\/|$|\?|#)/i.test(uriOrName)) return 'audit'
-    if (/^memory:\/\/team(?:\/|$|\?|#)/i.test(uriOrName)) return 'team'
+    if (/^memory:\/\/(?:team|insights\/team-collaboration)(?:\/|$|\?|#)/i.test(uriOrName)) {
+        return 'team'
+    }
     return 'read'
 }
 

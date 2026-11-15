@@ -320,9 +320,10 @@ export class GitHubIntegration {
 
         if (degraded.length > 0) {
             context.degraded = degraded
+        } else {
+            this.client.setCache(cacheKey, context)
         }
 
-        this.client.setCache(cacheKey, context)
         return context
     }
 

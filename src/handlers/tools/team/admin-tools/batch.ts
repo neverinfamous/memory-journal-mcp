@@ -78,11 +78,6 @@ export function getTeamAdminBatchTools(context: ToolContext): ToolDefinition[] {
                     const input = TeamBatchUpdateEntriesSchema.parse(params)
                     await sendProgress(context.progress, 0, 2, 'Updating team entries...')
                     const currentUser = resolveAuthenticatedAuthor()
-                    const codemodeBypass = context.config?.codemodeInternalFullAccess === true
-                    const callerRole =
-                        teamDb.isTeamRbacActive?.()
-                            ? teamDb.resolveTeamRole(currentUser, context.config?.teamDefaultRole ?? 'denied')
-                            : null
                     const updateIds = input.updates.map((u) => u.entry_id)
                     const preFetchedAuthors =
                         typeof teamDb.getAuthorsForEntries === 'function'
@@ -96,8 +91,6 @@ export function getTeamAdminBatchTools(context: ToolContext): ToolDefinition[] {
                         input.project_number,
                         context,
                         currentUser,
-                        callerRole,
-                        codemodeBypass,
                         preFetchedAuthors
                     )
                     if ('errorResponse' in validated) return validated.errorResponse

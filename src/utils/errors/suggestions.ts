@@ -118,15 +118,15 @@ export const ERROR_SUGGESTIONS: ErrorSuggestion[] = [
             'Dynamic import() and require() statements are not permitted in Code Mode sandbox scripts. All API methods are available pre-loaded under the top-level "mj" global object.',
         code: 'VALIDATION_ERROR',
     },
-    // Zod enum validation patterns — return valid values for self-correction
+    // Zod enum validation patterns — return valid values for self-correction (Zod v3 & v4)
     {
-        pattern: /invalid enum value.*significance/i,
+        pattern: /(?:invalid enum value|invalid option:?\s*expected one of|invalid_value).*significance/i,
         suggestion:
             'Valid significance_type values: milestone, breakthrough, decision, architecture, lesson_learned, blocker_resolved, release, security',
         code: 'VALIDATION_ERROR',
     },
     {
-        pattern: /invalid enum value.*entry.?type/i,
+        pattern: /(?:invalid enum value|invalid option:?\s*expected one of|invalid_value).*entry.?type/i,
         suggestion:
             'Valid entry_type values: retrospective, bug_fix, project_decision, feature_implementation, technical_note, code_review, planning, research, enhancement, milestone, adversarial_review, development_note, learning, standup, meeting_notes, technical_achievement, plan_draft, plan_refinement, plan_finalized, copilot_validation, other, personal_reflection',
         code: 'VALIDATION_ERROR',
