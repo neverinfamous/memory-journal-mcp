@@ -88,14 +88,21 @@ export function buildSandboxUserContext(
     }
     userContext['session_id'] ??= resolvedSessionId
     userContext['sessionId'] ??= resolvedSessionId
-    if (resolvedWorkspaceId !== undefined) {
-        userContext['workspace_id'] ??= resolvedWorkspaceId
-        userContext['workspaceId'] ??= resolvedWorkspaceId
-    }
-    if (explicitWorkspace === true && workspaceId !== undefined && workspaceId !== '*') {
-        userContext['__mj_workspace_id'] = workspaceId
+    const pinnedWs =
+        resolvedWorkspaceId !== undefined && resolvedWorkspaceId !== '' && resolvedWorkspaceId !== '*'
+            ? resolvedWorkspaceId
+            : undefined
+    if (pinnedWs !== undefined) {
+        userContext['workspace_id'] ??= pinnedWs
+        userContext['workspaceId'] ??= pinnedWs
+        userContext['__mj_workspace_id'] = pinnedWs
     } else {
         Reflect.deleteProperty(userContext, '__mj_workspace_id')
+    }
+    if (typeof resolvedProjectNumber === 'number' && Number.isInteger(resolvedProjectNumber) && resolvedProjectNumber > 0) {
+        userContext['__mj_project_number'] = resolvedProjectNumber
+    } else {
+        Reflect.deleteProperty(userContext, '__mj_project_number')
     }
     if (reg !== undefined) {
         userContext['__mj_project_registry'] = reg

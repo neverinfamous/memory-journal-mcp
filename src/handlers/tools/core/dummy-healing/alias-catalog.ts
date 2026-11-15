@@ -73,6 +73,7 @@ export const DUMMY_RESOURCE_TOOL_NAMES = [
     'memoryGetResource',
     'mj_get_resource',
     'mjGetResource',
+    'mjReadResource',
     'read_memory_resource',
 ]
 
@@ -204,6 +205,7 @@ export const DUMMY_SERVER_INFO_TOOL_NAMES = [
 ]
 
 export const DUMMY_PROJECT_TOOL_NAMES = [
+    'projects',
     'list_projects',
     'listProjects',
     'list-projects',

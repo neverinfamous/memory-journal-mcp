@@ -126,9 +126,7 @@ export class PullRequestsManager {
 
     private static isCopilotAuthor(login: string): boolean {
         const lower = login.toLowerCase()
-        return PullRequestsManager.COPILOT_BOT_PATTERNS.some(
-            (p) => lower === p || lower.includes('copilot')
-        )
+        return PullRequestsManager.COPILOT_BOT_PATTERNS.some((p) => lower === p)
     }
 
     async getReviews(owner: string, repo: string, prNumber: number): Promise<GitHubReview[]> {

@@ -252,6 +252,15 @@ function runLifecycleTx(
                 `
             const result = db.prepare(sql).run(deletedAt, ...queries.prune.params)
             prunedCount = result.changes
+            if (prunedCount > 0) {
+                try {
+                    db.prepare(
+                        'DELETE FROM vec_embeddings WHERE entry_id NOT IN (SELECT id FROM memory_journal WHERE deleted_at IS NULL)'
+                    ).run()
+                } catch (err) {
+                    if (!isMissingTableError(err)) throw err
+                }
+            }
         }
 
         if (options.archiveOlderThanDays > 0) {

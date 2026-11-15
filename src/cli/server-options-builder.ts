@@ -4,6 +4,7 @@ import { z } from 'zod'
 import type { AuditConfig } from '../audit/index.js'
 import type { ConfigResolver } from '../utils/config-resolver.js'
 import { defaultDbPath, defaultTeamDbPath } from './option-groups.js'
+import { activeProjectRegistry, pairStoredScope } from '../utils/write-scope.js'
 import type { ServerOptions } from '../server/mcp-server/types.js'
 import {
     assertAdditionalTeamDbIsNotSymlink,
@@ -26,12 +27,20 @@ function resolveDatabasePaths(
     resolver: ConfigResolver,
     catchConfig: CatchConfig
 ): { db: string | undefined; testDb: string | undefined; teamDb: string | undefined; testTeamDb: string | undefined } {
+    const cliDb = catchConfig(
+        () => (resolver.isCliProvided('db') ? resolver.resolve<string>('db') : undefined),
+        undefined
+    )
+    const cliDatabase = catchConfig(
+        () => (resolver.isCliProvided('database') ? resolver.resolve<string>('database') : undefined),
+        undefined
+    )
     const configDbPath = catchConfig(() => resolver.resolve<string>('dbPath'), undefined)
-    const cliDatabase = catchConfig(() => resolver.resolve<string>('database'), undefined)
+    const fallbackDatabase = catchConfig(() => resolver.resolve<string>('database'), undefined)
     const rawDb = catchConfig(() => resolver.resolve<string>('db', 'DB_PATH'), defaultDbPath)
-    let db = rawDb
-    if ((db === defaultDbPath || db === undefined) && cliDatabase) {
-        db = cliDatabase
+    let db = cliDb ?? cliDatabase ?? rawDb
+    if ((db === defaultDbPath || db === undefined) && fallbackDatabase) {
+        db = fallbackDatabase
     } else if ((db === defaultDbPath || db === undefined) && configDbPath) {
         db = configDbPath
     }
@@ -40,12 +49,20 @@ function resolveDatabasePaths(
     const rawTestDb = catchConfig(() => resolver.resolve<string>('testDb', 'TEST_DB_PATH'), undefined)
     const testDb = rawTestDb ?? configTestDbPath
 
+    const cliTeamDb = catchConfig(
+        () => (resolver.isCliProvided('teamDb') ? resolver.resolve<string>('teamDb') : undefined),
+        undefined
+    )
+    const cliTeamDatabase = catchConfig(
+        () => (resolver.isCliProvided('teamDatabase') ? resolver.resolve<string>('teamDatabase') : undefined),
+        undefined
+    )
     const configTeamDbPath = catchConfig(() => resolver.resolve<string>('teamDbPath'), undefined)
-    const cliTeamDatabase = catchConfig(() => resolver.resolve<string>('teamDatabase'), undefined)
+    const fallbackTeamDatabase = catchConfig(() => resolver.resolve<string>('teamDatabase'), undefined)
     const rawTeamDb = catchConfig(() => resolver.resolve<string>('teamDb', 'TEAM_DB_PATH'), defaultTeamDbPath)
-    let teamDb = rawTeamDb
-    if ((teamDb === defaultTeamDbPath || teamDb === undefined) && cliTeamDatabase) {
-        teamDb = cliTeamDatabase
+    let teamDb = cliTeamDb ?? cliTeamDatabase ?? rawTeamDb
+    if ((teamDb === defaultTeamDbPath || teamDb === undefined) && fallbackTeamDatabase) {
+        teamDb = fallbackTeamDatabase
     } else if ((teamDb === defaultTeamDbPath || teamDb === undefined) && configTeamDbPath) {
         teamDb = configTeamDbPath
     }
@@ -294,6 +311,23 @@ export function buildServerOptions(
     applyEnvironmentOverrides(resolver, catchConfig)
     const auditConfig = buildAuditConfigOption(resolver, catchConfig)
     const instructionLevel = resolveInstructionLevelOption(resolver, catchConfig)
+    const projectRegistry = catchConfig(
+        () => parseProjectRegistryOption(resolver.resolve<unknown>('projectRegistry', 'PROJECT_REGISTRY')),
+        undefined
+    )
+    let defaultProjectNumber = resolveDefaultProjectNumberOption(resolver, catchConfig)
+    let defaultWorkspaceId = resolveDefaultWorkspaceIdOption(resolver, catchConfig)
+    if (defaultWorkspaceId !== undefined && defaultProjectNumber !== undefined) {
+        const pairedDefaults = pairStoredScope(
+            defaultWorkspaceId,
+            defaultProjectNumber,
+            activeProjectRegistry(projectRegistry)
+        )
+        defaultWorkspaceId = pairedDefaults.workspaceId
+        if (typeof pairedDefaults.projectNumber === 'number') {
+            defaultProjectNumber = pairedDefaults.projectNumber
+        }
+    }
 
     const serverOptions: ServerOptions = {
         transport,
@@ -307,8 +341,8 @@ export function buildServerOptions(
         teamDefaultRole: resolveTeamDefaultRoleOption(resolver, catchConfig),
         teamAdmin: catchConfig(() => resolver.resolve<string>('teamAdmin', 'TEAM_ADMIN'), undefined),
         toolFilter: catchConfig(() => resolver.resolve<string>('toolFilter', 'MEMORY_JOURNAL_MCP_TOOL_FILTER'), undefined),
-        defaultProjectNumber: resolveDefaultProjectNumberOption(resolver, catchConfig),
-        defaultWorkspaceId: resolveDefaultWorkspaceIdOption(resolver, catchConfig),
+        defaultProjectNumber,
+        defaultWorkspaceId,
         autoRebuildIndex: catchConfig(() => resolver.resolveBool('autoRebuildIndex', 'AUTO_REBUILD_INDEX') ?? false, false),
         corsOrigins: catchConfig(() => resolver.resolveStringArray('corsOrigin', 'CORS_ORIGIN'), undefined),
         enableHSTS: catchConfig(() => resolver.resolveBool('enableHsts', 'MCP_ENABLE_HSTS') ?? false, false),
@@ -323,7 +357,7 @@ export function buildServerOptions(
         trustProxy: catchConfig(() => resolver.resolveBool('trustProxy', 'TRUST_PROXY') ?? false, false),
         publicOrigin: catchConfig(() => resolver.resolve<string>('publicOrigin', 'PUBLIC_ORIGIN'), undefined),
         codemodeInternalFullAccess: catchConfig(() => resolver.resolveBool('codemodeInternalFullAccess', 'CODEMODE_INTERNAL_FULL_ACCESS') ?? false, false),
-        projectRegistry: catchConfig(() => parseProjectRegistryOption(resolver.resolve<unknown>('projectRegistry', 'PROJECT_REGISTRY')), undefined),
+        projectRegistry,
         additionalTeamDbs: catchConfig(() => parseAdditionalTeamDbsOption(resolver.resolve<unknown>('additionalTeamDbs', 'ADDITIONAL_TEAM_DBS')), undefined),
         allowedIoRoots: catchConfig(() => parseAllowedIoRootsOption(resolver.resolve<unknown>('allowedIoRoots', 'ALLOWED_IO_ROOTS')), undefined),
         briefingConfig: buildBriefingConfigOptions(resolver, catchConfig),

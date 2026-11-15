@@ -282,3 +282,85 @@ export function isToolVisibleForFilter(
     if (READONLY_REGISTRATION_EXEMPT.has(name)) return true
     return readOnlyHint === true
 }
+
+const MUTATING_NON_EXEMPT_TOOLS = new Set<string>([
+    ...TOOL_GROUPS.admin.filter((t) => t !== 'update_configuration'),
+    'create_entry',
+    'create_entry_minimal',
+    'test_simple',
+    'mark_anchors_stale',
+    'link_entries',
+    'import_markdown',
+    'import_external',
+    'export_markdown',
+    'backup_journal',
+    'restore_backup',
+    'cleanup_backups',
+    'create_github_issue_with_entry',
+    'close_github_issue_with_entry',
+    'move_kanban_item',
+    'add_kanban_item',
+    'delete_kanban_item',
+    'create_github_milestone',
+    'update_github_milestone',
+    'delete_github_milestone',
+    'sync_kanban_board',
+    'sync_git_history',
+    'check_entry_staleness',
+    'team_create_entry',
+    'team_update_entry',
+    'team_delete_entry',
+    'team_restore_entry',
+    'team_merge_tags',
+    'team_batch_create_entries',
+    'team_batch_update_entries',
+    'team_batch_delete_entries',
+    'team_link_entries',
+    'team_import_markdown',
+    'team_import_external',
+    'team_export_markdown',
+    'team_backup',
+    'team_rebuild_vector_index',
+    'team_add_to_vector_index',
+    'team_add_member',
+    'team_remove_member',
+    'team_update_member_role',
+    'team_add_author_alias',
+    'team_remove_author_alias',
+    'team_consolidate_authors',
+])
+
+/**
+ * Returns true when a parsed `--tool-filter` configuration permits zero mutating operations,
+ * accounting for `readonly`, `-write`, and read-only groups even though `ALWAYS_ENABLED_TOOLS`
+ * automatically keeps `mj_execute_code` and `update_configuration` in `enabledTools`.
+ */
+export function isFilterEffectivelyReadOnly(filterConfig: ToolFilterConfig): boolean {
+    if (isReadonlyMetaActive(filterConfig.raw)) return true
+    const excludesWrite = filterConfig.rules.some(
+        (r) => r.type === 'exclude' && r.target === 'write'
+    )
+    const includesWrite = filterConfig.rules.some(
+        (r) => r.type === 'include' && r.target === 'write'
+    )
+    if (excludesWrite && !includesWrite) return true
+
+    const explicitCodemode =
+        filterConfig.rules.some(
+            (r) =>
+                r.type === 'include' &&
+                (r.target === 'codemode' ||
+                    r.target === 'mj_execute_code' ||
+                    r.target === 'starter' ||
+                    r.target === 'essential' ||
+                    r.target === 'full')
+        ) &&
+        !filterConfig.rules.some(
+            (r) =>
+                r.type === 'exclude' &&
+                (r.target === 'codemode' || r.target === 'mj_execute_code')
+        )
+    if (explicitCodemode) return false
+
+    return ![...filterConfig.enabledTools].some((t) => MUTATING_NON_EXEMPT_TOOLS.has(t))
+}

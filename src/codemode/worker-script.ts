@@ -19,7 +19,7 @@ import { createUpdateMemoryFn, createContextProxy } from './worker/namespace-shi
 import { createShimMjProxy } from './worker/mj-shim-proxy.js'
 import { buildSandboxGlobals } from './worker/sandbox-globals.js'
 import { serializeAndEnforceEgress } from './worker/result-compactor.js'
-import { validateSandboxCode } from './security.js'
+import { createSandboxExecutor, type RunIsolatedNestedFn } from './worker/nested-exec-scope.js'
 
 // [L4] Hardening failures are fatal: refuse to execute any user code in a half-hardened realm.
 const hardeningFailures = hardenOuterFunctionPrototypes()
@@ -92,159 +92,7 @@ function createScopedRpcCall(overrides?: { readonly?: boolean; dryRun?: boolean 
 
 const rpcCall = createScopedRpcCall()
 
-type RunIsolatedNestedFn = (wrapped: string, nestedReadonly: boolean, nestedDryRun: boolean) => Promise<unknown>
-
-interface SandboxExecutorOptions {
-    shimMj: Record<string, unknown>
-    vmContextRef: { current?: vm.Context }
-    timeoutMs: number
-    readonlyMode: boolean | undefined
-    dryRunMode: boolean | undefined
-    pinnedWorkspaceRaw: unknown
-    runIsolatedNestedCode: RunIsolatedNestedFn
-}
-
-function createSandboxExecutor(options: SandboxExecutorOptions): (arg: unknown) => Promise<unknown> {
-    const {
-        shimMj,
-        vmContextRef,
-        timeoutMs,
-        readonlyMode,
-        dryRunMode,
-        pinnedWorkspaceRaw,
-        runIsolatedNestedCode,
-    } = options
-    const pinnedWorkspace =
-        typeof pinnedWorkspaceRaw === 'string' &&
-        pinnedWorkspaceRaw.trim() !== '' &&
-        pinnedWorkspaceRaw.trim() !== '*'
-            ? pinnedWorkspaceRaw.trim()
-            : undefined
-
-    const invokeCreateEntry = (payload: unknown): unknown => {
-        const coreGroup = shimMj['core']
-        if ((typeof coreGroup === 'object' && coreGroup !== null) || typeof coreGroup === 'function') {
-            const fn = Reflect.get(coreGroup, 'createEntry') as unknown
-            if (typeof fn === 'function') return (fn as (a: unknown) => unknown)(payload)
-        }
-        return undefined
-    }
-
-    return async (arg: unknown): Promise<unknown> => {
-        const isPlainRec = (val: unknown): val is Record<string, unknown> =>
-            typeof val === 'object' && val !== null && !Array.isArray(val)
-        const argRec = isPlainRec(arg) ? arg : undefined
-        const argReadonly = argRec?.['readonly'] === true
-        const argDryRun = argRec?.['dry_run'] === true || argRec?.['dryRun'] === true
-        const rawArgWs = argRec?.['workspace_id'] ?? argRec?.['workspaceId']
-        const argWs =
-            typeof rawArgWs === 'string' && rawArgWs.trim() !== '' && rawArgWs.trim() !== '*'
-                ? rawArgWs.trim()
-                : undefined
-        if (
-            argWs !== undefined &&
-            pinnedWorkspace !== undefined &&
-            argWs.toLowerCase() !== pinnedWorkspace.toLowerCase()
-        ) {
-            return {
-                success: false,
-                error: `Workspace '${argWs}' conflicts with pinned session workspace '${pinnedWorkspace}'`,
-                code: 'VALIDATION_ERROR',
-            }
-        }
-        const effectiveReadonly = readonlyMode === true || argReadonly
-
-        const codeToExec = readExecutableCode(arg)
-        if (codeToExec === null) {
-            if (effectiveReadonly) {
-                return {
-                    success: false,
-                    error: 'Write operations are disabled in readonly mode',
-                    code: 'PERMISSION_DENIED',
-                }
-            }
-            if (argDryRun || dryRunMode === true) {
-                return {
-                    success: false,
-                    error: 'dry_run is not supported for synthesized entry writes inside nested execute_code',
-                    code: 'VALIDATION_ERROR',
-                }
-            }
-            return invokeCreateEntry(arg)
-        }
-        if (codeToExec === '') {
-            return { success: false, error: 'No code was executed', code: 'VALIDATION_ERROR' }
-        }
-        const natural = naturalLanguageEntry(codeToExec)
-        if (natural !== undefined) {
-            if (effectiveReadonly) {
-                return {
-                    success: false,
-                    error: 'Write operations are disabled in readonly mode',
-                    code: 'PERMISSION_DENIED',
-                }
-            }
-            if (argDryRun || dryRunMode === true) {
-                return {
-                    success: false,
-                    error: 'dry_run is not supported for synthesized entry writes inside nested execute_code',
-                    code: 'VALIDATION_ERROR',
-                }
-            }
-            return invokeCreateEntry(natural)
-        }
-        const validation = validateSandboxCode(codeToExec)
-        if (!validation.valid) {
-            return {
-                success: false,
-                error: validation.errors.join('; '),
-                code: 'SECURITY_VIOLATION',
-            }
-        }
-        if (vmContextRef.current !== undefined) {
-            const transformed = transformAutoReturn(codeToExec)
-            const wrapped = `(async () => {\n${transformed}\n})()`
-            const effectiveDryRun = dryRunMode === true || argDryRun
-            if ((effectiveReadonly && readonlyMode !== true) || (effectiveDryRun && dryRunMode !== true)) {
-                return runIsolatedNestedCode(wrapped, effectiveReadonly, effectiveDryRun)
-            }
-            return (await vm.runInContext(wrapped, vmContextRef.current, { timeout: timeoutMs })) as unknown
-        }
-        return { success: false, error: 'No code was executed', code: 'VALIDATION_ERROR' }
-    }
-}
-
-function readExecutableCode(arg: unknown): string | null {
-    if (typeof arg === 'string') return arg
-    if (typeof arg !== 'object' || arg === null || Array.isArray(arg)) return ''
-    const codeProp = Reflect.get(arg, 'code') as unknown
-    const scriptProp = Reflect.get(arg, 'script') as unknown
-    const codeToExec = typeof codeProp === 'string' ? codeProp : typeof scriptProp === 'string' ? scriptProp : ''
-    if (codeToExec !== '') return codeToExec
-    const hasEntryText =
-        typeof Reflect.get(arg, 'content') === 'string' ||
-        typeof Reflect.get(arg, 'text') === 'string' ||
-        typeof Reflect.get(arg, 'description') === 'string' ||
-        typeof Reflect.get(arg, 'title') === 'string'
-    return hasEntryText ? null : ''
-}
-
-function naturalLanguageEntry(codeToExec: string): { title: string; content: string; entry_type: string } | undefined {
-    const trimmed = codeToExec.trim()
-    const isNaturalPrompt =
-        /^(?:write|document|create|include|record|summary|log|add|added|note|task|fix|implement)\b/i.test(trimmed) &&
-        !/\b(const|let|var|function|return|await|import|export)\b/.test(trimmed)
-    const looksLikeCode = /[{}()=]/.test(trimmed)
-    if (looksLikeCode || !(isNaturalPrompt || /^(?:create|add|new|record|log)?\s*entry\b/i.test(trimmed))) {
-        return undefined
-    }
-    const firstLine = (trimmed.split('\n')[0] ?? '')
-        .replace(/^(?:create|add|new|record|log|insert)?\s*entry\s*(?:for|:)?\s*/i, '')
-        .replace(/[:.]+$/, '')
-        .trim()
-    const title = firstLine.length > 0 && firstLine.length < 80 ? firstLine : 'Journal Entry'
-    return { title, content: trimmed, entry_type: 'technical_note' }
-}
+/* createSandboxExecutor moved to ./worker/nested-exec-scope.ts */
 
 interface VmExecutionContextOptions {
     rpcFn: RpcCallFn
@@ -255,6 +103,8 @@ interface VmExecutionContextOptions {
     readonlyMode: boolean | undefined
     dryRunMode: boolean | undefined
     pinnedWorkspaceRaw: unknown
+    pinnedProjectRaw: unknown
+    projectRegistryRaw: unknown
     activeTimers: Set<NodeJS.Timeout>
 }
 
@@ -268,6 +118,8 @@ function createVmExecutionContext(options: VmExecutionContextOptions): vm.Contex
         readonlyMode,
         dryRunMode,
         pinnedWorkspaceRaw,
+        pinnedProjectRaw,
+        projectRegistryRaw,
         activeTimers,
     } = options
     const mjApi = buildApiProxy(rpcFn, methodList, schemaList, readonlyMode, contextObj)
@@ -311,6 +163,8 @@ function createVmExecutionContext(options: VmExecutionContextOptions): vm.Contex
             readonlyMode: nestedReadonly,
             dryRunMode: nestedDryRun,
             pinnedWorkspaceRaw,
+            pinnedProjectRaw,
+            projectRegistryRaw,
             activeTimers,
         })
         return (await vm.runInContext(wrapped, nestedContext, { timeout: timeoutMs })) as unknown
@@ -323,6 +177,8 @@ function createVmExecutionContext(options: VmExecutionContextOptions): vm.Contex
         readonlyMode,
         dryRunMode,
         pinnedWorkspaceRaw,
+        pinnedProjectRaw,
+        projectRegistryRaw,
         runIsolatedNestedCode,
     })
     executeCodeFnRef.current = executeCodeFn
@@ -363,9 +219,11 @@ async function executeCode(
 
     const registryPayload = contextObj?.['__mj_project_registry']
     const pinnedWorkspaceRaw = contextObj?.['__mj_workspace_id']
+    const pinnedProjectRaw = contextObj?.['__mj_project_number']
     if (contextObj !== undefined) {
         Reflect.deleteProperty(contextObj, '__mj_project_registry')
         Reflect.deleteProperty(contextObj, '__mj_workspace_id')
+        Reflect.deleteProperty(contextObj, '__mj_project_number')
     }
     setActiveProjectRegistry(readProjectRegistryPayload(registryPayload))
 
@@ -379,6 +237,8 @@ async function executeCode(
             readonlyMode,
             dryRunMode: undefined,
             pinnedWorkspaceRaw,
+            pinnedProjectRaw,
+            projectRegistryRaw: registryPayload,
             activeTimers,
         })
 

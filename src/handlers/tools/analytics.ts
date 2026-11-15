@@ -224,6 +224,20 @@ const CrossProjectInsightsInputSchema = z.object({
     project_number: z.unknown().optional(), // Allow injected project_number
 }).strict()
 
+/** Strip anti-hallucination hint fields before strict cross-project schema parsing. */
+export function omitNonStrictCrossProjectKeys(params: unknown): unknown {
+    if (typeof params !== 'object' || params === null || Array.isArray(params)) {
+        return params
+    }
+    const cleaned: Record<string, unknown> = {}
+    for (const [k, v] of Object.entries(params)) {
+        if (k !== 'query' && k !== 'limit') {
+            cleaned[k] = v
+        }
+    }
+    return cleaned
+}
+
 /** Relaxed schema — passed to SDK inputSchema so Zod errors reach the handler */
 const CrossProjectInsightsInputSchemaMcp = z.object({
     start_date: z.string().optional().describe('Start date (YYYY-MM-DD)'),
@@ -313,7 +327,9 @@ export function getAnalyticsTools(context: ToolContext): ToolDefinition[] {
             },
             handler: (params: unknown) => {
                 try {
-                    const input = CrossProjectInsightsInputSchema.parse(params)
+                    const input = CrossProjectInsightsInputSchema.parse(
+                        omitNonStrictCrossProjectKeys(params)
+                    )
                     const resolvedProjectNumber = coerceAnalyticsProjectNumber(input.project_number)
                     // [INTENT] M1: cross-project insights are inherently multi-project; only narrow
                     // the scope when the caller explicitly names a workspace.

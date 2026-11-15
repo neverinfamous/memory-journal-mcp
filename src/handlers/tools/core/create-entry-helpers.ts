@@ -132,13 +132,7 @@ export async function recordTeamShareOutcome(
             )
         }
     }
-    const sharedWithTeam = shared !== undefined
-    if (!sharedWithTeam && relationshipWarnings.every((w) => !w.startsWith('Team sharing failed'))) {
-        relationshipWarnings.push('Team sharing skipped: author identity could not be resolved.')
-    }
-    return shared !== undefined
-        ? { sharedWithTeam, author: shared.author }
-        : { sharedWithTeam }
+    return { sharedWithTeam: true, author: shared.author }
 }
 
 /**

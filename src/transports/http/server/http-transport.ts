@@ -16,6 +16,7 @@ import {
     setSecurityHeaders,
     setCorsHeaders,
     checkRateLimit,
+    buildAllowedHostHeaders,
 } from '../security.js'
 import {
     handleHealthCheck,
@@ -45,6 +46,8 @@ import { createPropagateContextMiddleware } from './context-middleware.js'
  * 1. Streamable HTTP (MCP 2025-03-26) via `/mcp` — preferred for modern clients
  * 2. Legacy SSE (MCP 2024-11-05) via `/sse` + `/messages` — backward compatibility
  */
+export { buildAllowedHostHeaders } from '../security.js'
+
 export class HttpTransport {
     private readonly app: Express
     private readonly config: HttpTransportConfig
@@ -87,15 +90,20 @@ export class HttpTransport {
             (msg) => logger.error(msg, { module: 'HTTP' })
         )
         const isLocalhost = host === 'localhost' || host === '127.0.0.1' || host === '::1'
+        const allowedHosts = buildAllowedHostHeaders(host, this.config.publicOrigin)
+        const hasCustomPublicOrigin =
+            this.config.publicOrigin !== undefined &&
+            this.config.publicOrigin.trim() !== '' &&
+            allowedHosts.length > 4
 
         this.app.use(
-            isLocalhost
+            isLocalhost && !hasCustomPublicOrigin
                 ? localhostHostValidation()
-                : hostHeaderValidation([host, 'localhost', '127.0.0.1', '[::1]'])
+                : hostHeaderValidation(allowedHosts)
         )
         logger.info('DNS rebinding protection enabled (host header validation)', {
             module: 'HTTP',
-            allowedHosts: isLocalhost ? ['localhost', '127.0.0.1', '[::1]'] : [host],
+            allowedHosts: isLocalhost && !hasCustomPublicOrigin ? ['localhost', '127.0.0.1', '[::1]'] : allowedHosts,
         })
 
         this.app.use((req: Request, res: Response, next: () => void) => {

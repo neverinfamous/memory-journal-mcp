@@ -10,12 +10,44 @@ import type { ServerOptions } from './types.js'
 import { initializeDependencies } from './initialization.js'
 import { createServerInstance } from './tool-registration.js'
 import { startMetricsServer } from '../../observability/metrics-server.js'
+import { logger } from '../../utils/logger.js'
+import type { ServerRuntime } from '../../utils/maintenance-lock.js'
 import { buildBaseToolConfig, closeServerResources } from './core-helpers.js'
 import { resolveActiveBriefingConfig } from './tool-registration/register-tools-helpers.js'
 import {
     registerConfigChangeListener,
     startSelectedTransport,
 } from './server-lifecycle-helpers.js'
+
+/**
+ * Starts the standalone Prometheus metrics server when allowed by auth/OAuth configuration.
+ * Skips unauthenticated standalone startup if OAuth 2.1 is enabled without a static token.
+ */
+export function startConfiguredMetricsServer(
+    runtime: ServerRuntime,
+    options: Pick<ServerOptions, 'metricsExport' | 'metricsPort' | 'authToken' | 'oauthEnabled'>
+): (() => Promise<void>) | undefined {
+    if (options.metricsExport !== 'prometheus') {
+        return undefined
+    }
+    const envToken = process.env['MCP_AUTH_TOKEN']?.trim()
+    const effectiveAuthToken =
+        options.authToken !== undefined && options.authToken !== ''
+            ? options.authToken
+            : envToken !== undefined && envToken !== ''
+              ? envToken
+              : undefined
+    if (options.oauthEnabled === true && effectiveAuthToken === undefined) {
+        logger.warning(
+            'Standalone metrics server (:9465) skipped because OAuth 2.1 is enabled without a static --auth-token / MCP_AUTH_TOKEN; scrape OAuth-protected /metrics on the HTTP transport instead.',
+            { module: 'MetricsServer' }
+        )
+        return undefined
+    }
+    return startMetricsServer(runtime, options.metricsPort, {
+        ...(effectiveAuthToken !== undefined ? { authToken: effectiveAuthToken } : {}),
+    })
+}
 
 export async function createServer(options: ServerOptions): Promise<void> {
     const context = await initializeDependencies(options)
@@ -73,7 +105,7 @@ export async function createServer(options: ServerOptions): Promise<void> {
 
     const allTools = getTools(
         db,
-        filterConfig,
+        null,
         vectorManager,
         github,
         customToolHandlerConfig,
@@ -106,12 +138,7 @@ export async function createServer(options: ServerOptions): Promise<void> {
             customToolHandlerConfig
         )
 
-    const shutdownMetrics =
-        options.metricsExport === 'prometheus'
-            ? startMetricsServer(runtime, options.metricsPort, {
-                  ...(options.authToken !== undefined ? { authToken: options.authToken } : {}),
-              })
-            : undefined
+    const shutdownMetrics = startConfiguredMetricsServer(runtime, options)
 
     await startSelectedTransport({
         options,

@@ -308,17 +308,25 @@ export function buildPriorAuditSection(
             workspaceId: priorWorkspace,
             ...(priorProjectNumber !== undefined ? { projectNumber: priorProjectNumber } : {}),
         }).entries
+    const explicitDefaultWs = workspaceId?.trim().toLowerCase() === 'default'
+    const isFallbackWorkspace =
+        !hasExplicitTarget &&
+        explicitProjectNumber === undefined &&
+        !(priorWorkspace === 'default' && explicitDefaultWs)
     const scopeNote =
         priorAudits.length === 0
             ? priorWorkspace === 'default'
                 ? `\nNo entries were found because the prior workspace is still \`default\`. Resolve the repository the user named and query the \`${tag}\` tag in that workspace. Do not ask the user to re-run the prompt.\n`
-                : `\nNo entries were found in workspace \`${priorWorkspace}\`. Continue the audit of the current tree.\n`
-            : ''
+                : isFallbackWorkspace
+                  ? `\nNo entries were found in fallback/session workspace \`${priorWorkspace}\`. If the user-named repository maps to a different registered \`workspace_id\` and \`project_number\`, query tag \`${tag}\` once in that workspace; otherwise continue the audit of the current tree.\n`
+                  : `\nNo entries were found in workspace \`${priorWorkspace}\`. Continue the audit of the current tree.\n`
+            : isFallbackWorkspace
+              ? `\nNote: Preloaded entries below came from fallback/session workspace \`${priorWorkspace}\` because no explicit \`target\`/\`workspace_id\` was passed to the prompt. If the user-named repository maps to a different registered \`workspace_id\` and \`project_number\`, ignore unrelated entries below and query tag \`${tag}\` once in that target workspace.\n`
+              : ''
     const projectNote =
         priorProjectNumber !== undefined
             ? ` (project \`#${String(priorProjectNumber)}\`)`
             : ''
-    const explicitDefaultWs = workspaceId?.trim().toLowerCase() === 'default'
     const loggingDirective =
         priorWorkspace === 'default' && explicitDefaultWs
             ? '\n**Journal Attribution Rule**: This audit explicitly targets personal workspace `default`. Log entries with `workspace_id: "default"` and omit any `project_number`.\n'

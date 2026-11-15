@@ -68,6 +68,7 @@ vi.mock('../../src/transports/http/security.js', () => ({
     setSecurityHeaders: vi.fn(),
     setCorsHeaders: vi.fn(),
     checkRateLimit: vi.fn().mockReturnValue({ allowed: true }),
+    buildAllowedHostHeaders: vi.fn().mockReturnValue(['localhost', '127.0.0.1']),
 }))
 
 vi.mock('@modelcontextprotocol/sdk/server/middleware/hostHeaderValidation.js', () => ({

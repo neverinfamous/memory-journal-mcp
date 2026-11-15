@@ -7,7 +7,11 @@ import * as fs from 'node:fs/promises'
 import { constants as fsConstants } from 'node:fs'
 import * as path from 'node:path'
 import type { ToolContext } from '../../../types/index.js'
+import { getAuthContext } from '../../../auth/auth-context.js'
+import { resolveAuthenticatedAuthor } from '../../../utils/security-utils.js'
 import { sendProgress } from '../../../utils/progress-utils.js'
+import { resolveTeamCreateAuthor } from './admin-tools/batch-create-helpers.js'
+import { isCallerTeamAdmin } from './rbac.js'
 import { resolveWorkspaceFromFilePath } from '../../../utils/workspace-resolver.js'
 import { activeProjectRegistry, uniqueWorkspaceForProject } from '../../../utils/write-scope.js'
 import { resolveWriteWorkspaceId } from '../write-workspace.js'
@@ -137,4 +141,66 @@ export async function readAndConvertExternalMarkdownFiles(
     }
 
     return { parsedFiles, errors }
+}
+
+export type TeamImportContextAuthor =
+    | {
+          author: string
+          enforceStrictTeamOwnership: boolean
+          allowAdminAuthorOverride: boolean
+      }
+    | { errorResponse: Record<string, unknown> }
+
+/**
+ * Resolves team import caller identity, enforcing non-viewer RBAC and OAuth authentication
+ * while preserving the unauthenticated non-RBAC legacy author flow.
+ */
+export function resolveTeamImportContextAuthor(context: ToolContext): TeamImportContextAuthor {
+    const teamDb = context.teamDb
+    if (!teamDb) {
+        return { errorResponse: TEAM_IO_NOT_CONFIGURED }
+    }
+    const rbacActive =
+        typeof teamDb.isTeamRbacActive === 'function' && teamDb.isTeamRbacActive()
+    const authCtx = getAuthContext()
+    if (!rbacActive && authCtx?.authenticated !== true) {
+        return {
+            author: resolveAuthenticatedAuthor(),
+            enforceStrictTeamOwnership: false,
+            allowAdminAuthorOverride: false,
+        }
+    }
+    const authorResult = resolveTeamCreateAuthor(undefined, teamDb, context.config)
+    if ('errorResponse' in authorResult) {
+        return authorResult
+    }
+    if (rbacActive) {
+        const defaultRole = context.config?.teamDefaultRole ?? 'denied'
+        let role =
+            typeof teamDb.resolveTeamRole === 'function'
+                ? teamDb.resolveTeamRole(authorResult.author, defaultRole)
+                : defaultRole
+        if ((role === 'denied' || role === null) && typeof teamDb.resolveAuthor === 'function') {
+            const canonicalAuthor = teamDb.resolveAuthor(authorResult.author)
+            if (canonicalAuthor !== authorResult.author) {
+                role = teamDb.resolveTeamRole(canonicalAuthor, defaultRole)
+            }
+        }
+        if (role === 'denied' || role === null || role === 'viewer') {
+            return {
+                errorResponse: {
+                    success: false,
+                    error: `Access denied: author '${authorResult.author}' (role '${role ?? 'denied'}') lacks permission to import team entries.`,
+                    code: 'PERMISSION_DENIED',
+                    category: 'auth',
+                    recoverable: false,
+                },
+            }
+        }
+    }
+    return {
+        author: authorResult.author,
+        enforceStrictTeamOwnership: true,
+        allowAdminAuthorOverride: isCallerTeamAdmin(teamDb, authorResult.author, context.config),
+    }
 }

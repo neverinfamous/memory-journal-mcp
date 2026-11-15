@@ -139,7 +139,7 @@ function workspacesReferToSameProject(
     return leftKey.toLowerCase() === rightKey.toLowerCase()
 }
 
-function resolveImportWriteScope(
+export function resolveImportWriteScope(
     options: { dir?: string; workspace?: string; defaultProject?: number },
     serverOptions: ToolHandlerConfig
 ): { workspaceId: string | undefined; projectNumber: number | undefined } {
@@ -181,8 +181,35 @@ function resolveImportWriteScope(
         return { workspaceId: resolved.workspaceId, projectNumber }
     }
 
-    if (dirMatch === undefined && options.defaultProject === undefined) {
+    const configuredDefaultWs = concreteImportWorkspace(serverOptions.defaultWorkspaceId)
+    if (
+        dirMatch === undefined &&
+        options.defaultProject === undefined &&
+        configuredDefaultWs === undefined
+    ) {
         return { workspaceId: undefined, projectNumber: undefined }
+    }
+
+    if (dirMatch === undefined && configuredDefaultWs !== undefined) {
+        const effectiveProj =
+            options.defaultProject ??
+            (configuredDefaultWs.toLowerCase() === 'default'
+                ? undefined
+                : serverOptions.defaultProjectNumber)
+        if (effectiveProj !== undefined) {
+            pairStoredScope(configuredDefaultWs, effectiveProj, registry)
+        }
+        const resolved = resolveProjectContext(
+            {
+                workspace_id: configuredDefaultWs,
+                ...(effectiveProj !== undefined ? { project_number: effectiveProj } : {}),
+            },
+            serverOptions
+        )
+        return {
+            workspaceId: resolved.workspaceId,
+            projectNumber: resolved.projectNumber ?? effectiveProj,
+        }
     }
 
     // [INVARIANT] The configured default project is a fallback only (via `serverOptions`), never

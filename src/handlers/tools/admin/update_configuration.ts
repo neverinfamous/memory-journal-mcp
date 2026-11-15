@@ -238,7 +238,7 @@ function applyScopeConfigurationUpdate(
         delete newBc.defaultProjectNumber
         delete config.defaultProjectNumber
     }
-    setActiveSessionProject(newBc.defaultWorkspaceId, newBc.defaultProjectNumber, config.runtime)
+    setActiveSessionProject(newBc.defaultWorkspaceId, newBc.defaultProjectNumber ?? null, config.runtime)
     return true
 }
 

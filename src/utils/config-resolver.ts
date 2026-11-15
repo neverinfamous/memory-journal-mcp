@@ -248,4 +248,18 @@ export class ConfigResolver {
 
         return [typeof val === 'string' || typeof val === 'number' || typeof val === 'boolean' ? String(val) : JSON.stringify(val)]
     }
+
+    /**
+     * Checks whether the given CLI key was explicitly passed on the command line (not default/env/config).
+     */
+    public isCliProvided(cliKey: string): boolean {
+        if (typeof this.command?.getOptionValueSource !== 'function') {
+            return false
+        }
+        try {
+            return this.command.getOptionValueSource(cliKey) === 'cli'
+        } catch {
+            return false
+        }
+    }
 }

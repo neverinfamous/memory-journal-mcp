@@ -52,6 +52,7 @@ export interface SecureDispatcherOptions {
     explicitWorkspace?: boolean
     autoVersion: boolean
     dryRun: boolean
+    onMutatingDispatch?: () => void
 }
 
 export function createSecureDispatcher(
@@ -100,6 +101,10 @@ export function createSecureDispatcher(
 
         if (isSimulation === true && tool.annotations?.readOnlyHint === false) {
             return { success: true, simulated: true, params: finalParams }
+        }
+
+        if (tool.annotations?.readOnlyHint !== true) {
+            options.onMutatingDispatch?.()
         }
 
         return invokeToolWithGuards(tool, finalParams, sessionContext)

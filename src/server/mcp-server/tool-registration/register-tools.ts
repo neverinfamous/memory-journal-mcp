@@ -359,6 +359,10 @@ function attachResourceAndSubscriptionHandlers(
 
         validateResourceSubscription(request.params.uri, runtime)
 
+        if (options.statelessHttp === true && (sessionId === undefined || sessionId === '')) {
+            return {}
+        }
+
         globalSubscriptionManager.registerServer(transportSessionId, server)
         globalSubscriptionManager.subscribe(request.params.uri, transportSessionId)
         return {}

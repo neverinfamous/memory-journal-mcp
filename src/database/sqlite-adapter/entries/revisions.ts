@@ -26,7 +26,7 @@ export function getEntryRevisions(
     const { db } = context
 
     const scopeId = effectiveWorkspace(workspaceId)
-    if (scopeId !== '*' && getEntryById(context, id, scopeId) === null) {
+    if (getEntryById(context, id, scopeId) === null) {
         return []
     }
 
@@ -36,6 +36,7 @@ export function getEntryRevisions(
                changed_by as changedBy
         FROM entry_revisions
         WHERE entry_id = ?
+          AND entry_id IN (SELECT id FROM memory_journal WHERE deleted_at IS NULL)
         ORDER BY revision_number DESC
     `)
 

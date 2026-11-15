@@ -128,7 +128,7 @@ function scopeForResourceUri(uri: string): StandardScope {
     return SCOPES.READ
 }
 
-const TEAM_PROMPT_NAMES = new Set([
+export const TEAM_PROMPT_NAMES = new Set([
     'team-session-summary',
     'create-team-entry',
     'update-team-entry',

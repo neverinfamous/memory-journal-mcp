@@ -14,6 +14,10 @@ import { ResourceNotFoundError } from '../../types/errors.js'
 import { wrapWithMetrics } from '../../observability/index.js'
 import { requestContextStorage, getRequestContext } from '../../utils/request-context.js'
 import { applyArgInterceptions as applyCodeModeArgInterceptions } from '../../codemode/param-normalizer.js'
+import {
+    getActiveProjectRegistry,
+    setActiveProjectRegistry,
+} from '../../codemode/normalizers/generic-field-aliases.js'
 
 function stripInternalNormalizerMarkers(val: unknown): unknown {
     if (typeof val !== 'object' || val === null) return val
@@ -205,16 +209,31 @@ export function wrapToolHandlerWithInterceptors(
                   interceptor.around(toolName, args, () => metricsWrapped(args))
             : metricsWrapped
 
-    return (args: Record<string, unknown>): Promise<unknown> => {
-        if (args['use_test_db'] === true) {
-            const cleanArgs = { ...args }
-            delete cleanArgs['use_test_db']
-            const existing = getRequestContext()
-            return requestContextStorage.run({ ...existing, useTestDb: true }, () =>
-                baseHandler(cleanArgs)
-            )
+    return async (args: Record<string, unknown>): Promise<unknown> => {
+        const prevRegistry = getActiveProjectRegistry()
+        const hasScopedRegistry = config?.projectRegistry !== undefined
+        if (hasScopedRegistry) {
+            setActiveProjectRegistry(config.projectRegistry)
         }
-        return baseHandler(args)
+        try {
+            if ('use_test_db' in args) {
+                const cleanArgs = { ...args }
+                const useTest = cleanArgs['use_test_db'] === true
+                delete cleanArgs['use_test_db']
+                if (useTest) {
+                    const existing = getRequestContext()
+                    return await requestContextStorage.run({ ...existing, useTestDb: true }, () =>
+                        baseHandler(cleanArgs)
+                    )
+                }
+                return await baseHandler(cleanArgs)
+            }
+            return await baseHandler(args)
+        } finally {
+            if (hasScopedRegistry) {
+                setActiveProjectRegistry(prevRegistry)
+            }
+        }
     }
 }
 
@@ -229,6 +248,8 @@ export function instrumentToolDefinitions(
         let schema = t.inputSchema
         if (schema instanceof z.ZodObject) {
             schema = schema.extend({ use_test_db: z.boolean().optional() })
+        } else if (schema instanceof z.ZodPipe && schema.out instanceof z.ZodObject) {
+            schema = z.pipe(schema.in, schema.out.extend({ use_test_db: z.boolean().optional() }))
         }
         const finalHandler = wrapToolHandlerWithInterceptors(t.name, t.handler, config)
         return {

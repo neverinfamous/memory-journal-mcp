@@ -264,6 +264,7 @@ export class DatabaseAdapter extends AdapterDelegates implements IDatabaseAdapte
             prStatus?: string
             workflowRunId?: number
             tags?: string[]
+            excludeTags?: string[]
             entryType?: EntryType
             startDate?: string
             endDate?: string

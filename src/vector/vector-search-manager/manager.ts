@@ -208,12 +208,19 @@ export class VectorSearchManager {
 
         try {
             const existingDimStr = this.dbAdapter.getVectorMetadata('dimensions')
+            const existingModel = this.dbAdapter.getVectorMetadata('model_name')
             if (existingDimStr) {
                 const existingDim = parseInt(existingDimStr, 10)
-                if (existingDim !== this.dimensions) {
+                if (
+                    existingDim !== this.dimensions ||
+                    (existingModel !== null &&
+                        existingModel !== undefined &&
+                        existingModel !== '' &&
+                        existingModel !== this.modelName)
+                ) {
                     needsRecreation = true
                     logger.info(`Vector model or dimensions changed, dropping old index`, {
-                        oldModel: this.dbAdapter.getVectorMetadata('model_name') || 'unknown',
+                        oldModel: existingModel || 'unknown',
                         newModel: this.modelName,
                         oldDimensions: existingDim,
                         newDimensions: this.dimensions

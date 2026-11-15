@@ -30,28 +30,63 @@ function parseMetricsPort(metricsPort: number | undefined): number {
     return parsed;
 }
 
-function isLoopbackHostHeader(hostHeader: string | string[] | undefined): boolean {
-    if (hostHeader === undefined) return true;
-    if (Array.isArray(hostHeader)) return false;
+function isLoopbackBindHost(host: string): boolean {
+    const h = host.trim().toLowerCase();
+    return h === '127.0.0.1' || h === 'localhost' || h === '::1' || h === '[::1]';
+}
+
+function isWildcardBindHost(host: string): boolean {
+    const h = host.trim().toLowerCase();
+    return h === '0.0.0.0' || h === '::' || h === '[::]';
+}
+
+function extractHostWithoutPort(hostHeader: string): string | null {
     const trimmed = hostHeader.trim().toLowerCase();
-    if (trimmed.length === 0) return false;
+    if (trimmed.length === 0) return null;
     if (trimmed.startsWith('[')) {
         const closeIdx = trimmed.indexOf(']');
-        if (closeIdx === -1) return false;
-        const hostPart = trimmed.slice(1, closeIdx);
+        if (closeIdx === -1) return null;
         const rest = trimmed.slice(closeIdx + 1);
-        if (rest !== '' && !/^:\d+$/.test(rest)) return false;
-        return hostPart === '::1';
+        if (rest !== '' && !/^:\d+$/.test(rest)) return null;
+        return trimmed.slice(1, closeIdx);
     }
-    if (trimmed === '::1') return true;
+    if (trimmed === '::1') return '::1';
     const colonIdx = trimmed.indexOf(':');
     if (colonIdx !== -1) {
         const hostPart = trimmed.slice(0, colonIdx);
         const portPart = trimmed.slice(colonIdx + 1);
-        if (!/^\d+$/.test(portPart)) return false;
-        return hostPart === 'localhost' || hostPart === '127.0.0.1';
+        if (!/^\d+$/.test(portPart) || hostPart.length === 0) return null;
+        return hostPart;
     }
-    return trimmed === 'localhost' || trimmed === '127.0.0.1';
+    return trimmed;
+}
+
+function isLoopbackHostHeader(
+    hostHeader: string | string[] | undefined,
+    allowMissingHost = true
+): boolean {
+    if (hostHeader === undefined) return allowMissingHost;
+    if (Array.isArray(hostHeader)) return false;
+    const hostPart = extractHostWithoutPort(hostHeader);
+    if (hostPart === null) return false;
+    return hostPart === 'localhost' || hostPart === '127.0.0.1' || hostPart === '::1';
+}
+
+function isMetricsHostHeaderAllowed(
+    hostHeader: string | string[] | undefined,
+    boundHost: string,
+    isLoopbackBind: boolean,
+    hasAuthToken: boolean
+): boolean {
+    const allowMissingHost = isLoopbackBind && !hasAuthToken;
+    if (isLoopbackHostHeader(hostHeader, allowMissingHost)) return true;
+    if (isLoopbackBind || !hasAuthToken) return false;
+    if (hostHeader === undefined || Array.isArray(hostHeader)) return false;
+    const parsed = extractHostWithoutPort(hostHeader);
+    if (parsed === null) return false;
+    if (isWildcardBindHost(boundHost)) return true;
+    const normalizedBound = boundHost.replace(/^\[|\]$/g, '').trim().toLowerCase();
+    return parsed === normalizedBound;
 }
 
 function isValidBearerToken(
@@ -78,9 +113,17 @@ export function startMetricsServer(
         typeof options?.authToken === 'string' && options.authToken.length > 0
             ? options.authToken
             : undefined;
+    const rawHost = process.env['MJ_METRICS_HOST']?.trim();
+    const host = rawHost !== undefined && rawHost !== '' ? rawHost : '127.0.0.1';
+    const isLoopbackBind = isLoopbackBindHost(host);
+    if (!isLoopbackBind && authToken === undefined) {
+        throw new Error(
+            `FATAL: Refusing to bind standalone metrics server to non-loopback interface '${host}' without an authentication token (--auth-token or MCP_AUTH_TOKEN).`
+        );
+    }
 
     const server = http.createServer((req, res) => {
-        if (!isLoopbackHostHeader(req.headers.host)) {
+        if (!isMetricsHostHeaderAllowed(req.headers.host, host, isLoopbackBind, authToken !== undefined)) {
             res.writeHead(403, { 'Content-Type': 'text/plain; charset=utf-8' });
             res.end('Forbidden');
             return;
@@ -121,8 +164,6 @@ export function startMetricsServer(
         }
     });
 
-    const rawHost = process.env['MJ_METRICS_HOST']?.trim();
-    const host = rawHost !== undefined && rawHost !== '' ? rawHost : '127.0.0.1';
     server.listen(port, host, () => {
         logger.info(`Standalone metrics server listening on ${host}:${port}`, { module: 'MetricsServer' });
     });

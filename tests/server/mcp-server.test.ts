@@ -1341,29 +1341,56 @@ describe('McpServer', function () {
 
     describe('createServer - env tool filter', function () {
         it('should use MEMORY_JOURNAL_MCP_TOOL_FILTER env var when no explicit filter', async function () {
-            process.env['MEMORY_JOURNAL_MCP_TOOL_FILTER'] = 'core'
+            const requestHandlers = new Map<string, (...args: unknown[]) => Promise<unknown>>()
+            const serverWithHandlers = mockServer as {
+                setRequestHandler: typeof mockServer.setRequestHandler
+                _requestHandlers?: typeof requestHandlers
+            }
+            const seedToolsList = (): void => {
+                requestHandlers.set('tools/list', () =>
+                    Promise.resolve({
+                        tools: mockRegisterTool.mock.calls.map((c: unknown[]) => ({
+                            name: String(c[0]),
+                        })),
+                    })
+                )
+            }
+            serverWithHandlers._requestHandlers = requestHandlers
+            try {
+                mockRegisterTool.mockClear()
+                seedToolsList()
+                process.env['MEMORY_JOURNAL_MCP_TOOL_FILTER'] = 'core'
 
-            await createServer({
-                transport: 'stdio',
-                dbPath: './.test-output/vitest/test-server.db',
-            })
+                await createServer({
+                    transport: 'stdio',
+                    dbPath: './.test-output/vitest/test-server.db',
+                })
 
-            // Tools should be filtered from env
-            expect(mockRegisterTool).toHaveBeenCalled()
-            const toolCount = mockRegisterTool.mock.calls.length
+                expect(mockRegisterTool).toHaveBeenCalled()
+                const envListHandler = requestHandlers.get('tools/list')
+                const envListed = (await envListHandler?.({}, {})) as { tools: { name: string }[] }
+                const toolCount = envListed.tools.length
 
-            delete process.env['MEMORY_JOURNAL_MCP_TOOL_FILTER']
+                delete process.env['MEMORY_JOURNAL_MCP_TOOL_FILTER']
+                mockRegisterTool.mockClear()
+                seedToolsList()
 
-            // Reset only the specific mock call counts we care about
-            mockRegisterTool.mockClear()
-            await createServer({
-                transport: 'stdio',
-                dbPath: './.test-output/vitest/test-server.db',
-            })
+                await createServer({
+                    transport: 'stdio',
+                    dbPath: './.test-output/vitest/test-server.db',
+                })
 
-            const unfilteredCount = mockRegisterTool.mock.calls.length
-            // Env-filtered should have fewer tools than unfiltered
-            expect(toolCount).toBeLessThan(unfilteredCount)
+                const unfilteredListHandler = requestHandlers.get('tools/list')
+                const unfilteredListed = (await unfilteredListHandler?.({}, {})) as {
+                    tools: { name: string }[]
+                }
+                const unfilteredCount = unfilteredListed.tools.length
+                expect(toolCount).toBeGreaterThan(0)
+                expect(toolCount).toBeLessThan(unfilteredCount)
+            } finally {
+                delete process.env['MEMORY_JOURNAL_MCP_TOOL_FILTER']
+                delete serverWithHandlers._requestHandlers
+            }
         })
     })
 

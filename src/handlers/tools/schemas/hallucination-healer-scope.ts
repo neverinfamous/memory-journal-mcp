@@ -9,6 +9,7 @@ import {
     resolveProjectContext,
 } from '../../../utils/workspace-resolver.js'
 import { uniqueWorkspaceForProject } from '../../../utils/write-scope.js'
+import { getActiveProjectRegistry } from '../../../codemode/normalizers/generic-field-aliases.js'
 import {
     PASSED_VALIDATION_ALIASES,
     FAILED_VALIDATION_ALIASES,
@@ -21,7 +22,7 @@ export function normalizeProjectFields(
     projectRegistry?: Record<string, ProjectRegistryEntry>
 ): boolean {
     let modified = false
-    const registry = projectRegistry ?? loadProjectRegistryFromConfig()
+    const registry = projectRegistry ?? getActiveProjectRegistry() ?? loadProjectRegistryFromConfig()
 
     if (obj['workspace_id'] === undefined && typeof obj['workspaceId'] === 'string') {
         obj['workspace_id'] = obj['workspaceId']
@@ -127,7 +128,7 @@ export function inferWorkspaceAndProject(
     projectRegistry?: Record<string, ProjectRegistryEntry>
 ): boolean {
     let modified = false
-    const registry = projectRegistry ?? loadProjectRegistryFromConfig()
+    const registry = projectRegistry ?? getActiveProjectRegistry() ?? loadProjectRegistryFromConfig()
     const rawWs = typeof obj['workspace_id'] === 'string' ? obj['workspace_id'].trim() : undefined
     const wsId = rawWs !== undefined && rawWs !== '' ? rawWs : undefined
     const isDefaultWs = wsId?.toLowerCase() === 'default'

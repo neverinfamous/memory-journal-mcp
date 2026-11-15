@@ -15,6 +15,7 @@ interface SearchFacetOptions {
     prStatus?: string
     workflowRunId?: number
     tags?: string[]
+    excludeTags?: string[]
     entryType?: EntryType
     startDate?: string
     endDate?: string
@@ -249,6 +250,14 @@ function appendFacetFilterConditions(
         const placeholders = options.tags.map(() => '?').join(',')
         conditions.push(`t.name IN (${placeholders})`)
         params.push(...options.tags)
+    }
+
+    if (options?.excludeTags !== undefined && options.excludeTags.length > 0) {
+        const placeholders = options.excludeTags.map(() => '?').join(',')
+        conditions.push(
+            `NOT EXISTS (SELECT 1 FROM entry_tags et_ex JOIN tags t_ex ON et_ex.tag_id = t_ex.id WHERE et_ex.entry_id = e.id AND t_ex.name IN (${placeholders}))`
+        )
+        params.push(...options.excludeTags)
     }
 
     if (options?.entryType !== undefined) {

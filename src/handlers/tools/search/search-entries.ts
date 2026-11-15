@@ -127,6 +127,9 @@ export function getSearchEntriesTool(context: ToolContext): ToolDefinition[] {
                             prStatus: input.pr_status,
                             workflowRunId: input.workflow_run_id,
                             tags: input.tags,
+                            ...(input.exclude_tags !== undefined
+                                ? { excludeTags: input.exclude_tags }
+                                : {}),
                             entryType: input.entry_type,
                             startDate: input.start_date,
                             endDate: input.end_date,

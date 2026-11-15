@@ -18,7 +18,11 @@ import { normalizeSignificanceValue } from '../handlers/tools/schemas/constants-
 import { linkImportedRelationships } from './import-relationships.js'
 import { parseFrontmatter } from './frontmatter.js'
 import { assertSafeDirectoryPath, assertSafeFilePath } from '../utils/security-utils.js'
-import { resolveImportedFileContext } from './importer-scope.js'
+import {
+    assertImportAuthorOwnership,
+    resolveCanonicalImportAuthor,
+    resolveImportedFileContext,
+} from './importer-scope.js'
 
 /** Maximum size (5 MB) permitted for a single markdown file during import. */
 const MAX_IMPORT_FILE_SIZE_BYTES = 5 * 1024 * 1024
@@ -41,6 +45,10 @@ export interface ImportOptions {
     workspaceId?: string
     /** Handler config (registry/session defaults) threaded into project resolution */
     config?: ToolHandlerConfig
+    /** Enforce strict team ownership rules (e.g., block non-admins from overwriting NULL-authored rows) */
+    enforceStrictTeamOwnership?: boolean
+    /** Allow authenticated team admins to override entry author ownership during import */
+    allowAdminAuthorOverride?: boolean
 }
 
 /** Result of an import operation */
@@ -249,23 +257,7 @@ export async function importMarkdownEntries(
     return result
 }
 
-function assertImportAuthorOwnership(
-    db: IDatabaseAdapter,
-    entryId: number,
-    author: string | undefined
-): void {
-    if (author === undefined || typeof db.getAuthorsForEntries !== 'function') return
-    const existingAuthor = db.getAuthorsForEntries([entryId]).get(entryId)
-    if (
-        existingAuthor !== undefined &&
-        existingAuthor !== null &&
-        existingAuthor.toLowerCase() !== author.toLowerCase()
-    ) {
-        throw new Error(
-            `Permission denied: cannot overwrite entry ${String(entryId)} owned by '${existingAuthor}' during import by '${author}'`
-        )
-    }
-}
+/* Author ownership helpers imported from ./importer-scope.ts */
 
 function validateImportedFileEntry(
     file: ParsedFile,
@@ -301,7 +293,7 @@ function validateImportedFileEntry(
                 `Entry ${String(metadata.mj_id)} belongs to project #${String(existing.projectNumber ?? 'none')}, not project #${String(effectiveProjNum)}.`
             )
         }
-        assertImportAuthorOwnership(db, metadata.mj_id, options.author)
+        assertImportAuthorOwnership(db, metadata.mj_id, options.author, effectiveWsId, options)
     }
     return { effectiveWsId, effectiveProjNum, rawEntryType, significanceType, existing }
 }
@@ -334,7 +326,8 @@ function upsertParsedFile(
         return { entryId: metadata.mj_id, workspaceId: updated.workspaceId ?? effectiveWsId, projectNumber: effectiveProjNum }
     }
 
-    const resolvedAuthor = author ?? metadata.author
+    const canonicalOptionAuthor = resolveCanonicalImportAuthor(db, author, effectiveWsId)
+    const resolvedAuthor = canonicalOptionAuthor ?? metadata.author
     const newEntry = db.createEntry({
         content: body,
         entryType: rawEntryType ?? 'personal_reflection',

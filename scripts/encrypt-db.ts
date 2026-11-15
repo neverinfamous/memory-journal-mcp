@@ -46,18 +46,24 @@ function applyKey(db: Database.Database, pragma: 'key' | 'rekey', secret: string
 try {
     // [INVARIANT] Fold pending WAL frames into the main file first; copying only the .db would silently drop them.
     const source = new Database(inPath, { fileMustExist: true })
-    source.pragma('wal_checkpoint(TRUNCATE)')
-    source.close()
+    try {
+        source.pragma('wal_checkpoint(TRUNCATE)')
+    } finally {
+        source.close()
+    }
 
     // SQLite3 Multiple Ciphers uses PRAGMA rekey for in-place encryption
     // So we copy the database, open the copy, and apply the rekey PRAGMA.
     fs.copyFileSync(inPath, outPath)
 
     const db = new Database(outPath)
-    // [INVARIANT] rekey is unsupported in WAL mode; switch the copy to rollback journaling.
-    db.pragma('journal_mode = DELETE')
-    applyKey(db, 'rekey', key)
-    db.close()
+    try {
+        // [INVARIANT] rekey is unsupported in WAL mode; switch the copy to rollback journaling.
+        db.pragma('journal_mode = DELETE')
+        applyKey(db, 'rekey', key)
+    } finally {
+        db.close()
+    }
 
     // Verify: the header must no longer be plaintext, and the key must open the database.
     const header = Buffer.alloc(16)

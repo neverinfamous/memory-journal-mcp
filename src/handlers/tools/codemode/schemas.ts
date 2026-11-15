@@ -120,7 +120,6 @@ export const ExecuteCodeSchemaMcp = z.object({
         .default(true)
         .describe('Automatically inject expected_version for optimistic concurrency on updates/deletes'),
     project_number: relaxedNumber().optional()
-        .optional()
         .describe(
             'Numeric project ID to bind to all tool calls in this sandbox. ' +
             'Repo name strings (e.g., "mysql-mcp") are auto-resolved via the project registry. ' +

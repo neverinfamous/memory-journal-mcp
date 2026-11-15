@@ -33,6 +33,31 @@ export function getCallerIdentity(): string {
 }
 
 /**
+ * Checks whether the resolved team author holds an active 'admin' role when Team RBAC is enabled.
+ */
+export function isCallerTeamAdmin(
+    teamDb: ToolContext['teamDb'],
+    author: string,
+    config: ToolContext['config']
+): boolean {
+    if (!teamDb || typeof teamDb.isTeamRbacActive !== 'function' || !teamDb.isTeamRbacActive()) {
+        return false
+    }
+    const defaultRole = config?.teamDefaultRole ?? 'denied'
+    const role = teamDb.resolveTeamRole?.(author, defaultRole)
+    if (role === 'admin') {
+        return true
+    }
+    if (typeof teamDb.resolveAuthor === 'function') {
+        const canonicalAuthor = teamDb.resolveAuthor(author)
+        if (canonicalAuthor !== author && teamDb.resolveTeamRole?.(canonicalAuthor, defaultRole) === 'admin') {
+            return true
+        }
+    }
+    return false
+}
+
+/**
  * Enforces role-based access control for team tools.
  * 
  * @throws {AuthorizationError} if the user does not have the required role or is denied.

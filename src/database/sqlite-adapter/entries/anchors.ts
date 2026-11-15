@@ -38,7 +38,7 @@ export function getAnchorsByEntryId(
             SELECT id, entry_id as entryId, anchor_path as anchorPath, anchor_type as anchorType, status, last_checked_at as lastCheckedAt
             FROM entry_anchors
             WHERE entry_id = ?
-              AND entry_id IN (SELECT id FROM memory_journal WHERE workspace_id = ?)
+              AND entry_id IN (SELECT id FROM memory_journal WHERE workspace_id = ? AND deleted_at IS NULL)
         `)
         return stmt.all(entryId, scopeId) as Anchor[]
     }
@@ -46,6 +46,7 @@ export function getAnchorsByEntryId(
         SELECT id, entry_id as entryId, anchor_path as anchorPath, anchor_type as anchorType, status, last_checked_at as lastCheckedAt
         FROM entry_anchors
         WHERE entry_id = ?
+          AND entry_id IN (SELECT id FROM memory_journal WHERE deleted_at IS NULL)
     `)
     return stmt.all(entryId) as Anchor[]
 }
@@ -70,7 +71,7 @@ export function updateAnchorStatus(
         UPDATE entry_anchors
         SET status = ?, last_checked_at = CURRENT_TIMESTAMP
         WHERE id = ?
-          AND entry_id IN (SELECT id FROM memory_journal WHERE workspace_id = ?)
+          AND entry_id IN (SELECT id FROM memory_journal WHERE workspace_id = ? AND deleted_at IS NULL)
     `
             )
             .run(status, id, scope)
@@ -80,6 +81,7 @@ export function updateAnchorStatus(
         UPDATE entry_anchors 
         SET status = ?, last_checked_at = CURRENT_TIMESTAMP
         WHERE id = ?
+          AND entry_id IN (SELECT id FROM memory_journal WHERE deleted_at IS NULL)
     `).run(status, id)
     return result.changes > 0
 }

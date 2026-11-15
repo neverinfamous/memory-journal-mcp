@@ -13,7 +13,6 @@ import { formatHandlerError } from '../../../utils/error-helpers.js'
 import { sendProgress } from '../../../utils/progress-utils.js'
 import { resolveWriteWorkspaceId } from '../write-workspace.js'
 import { AggregateMcpError } from '../../../types/errors.js'
-import { resolveAuthenticatedAuthor } from '../../../utils/security-utils.js'
 import { exportEntriesToMarkdown } from '../../../markdown/index.js'
 import { importMarkdownEntries, processImportBatch } from '../../../markdown/index.js'
 import type { ExportableEntry } from '../../../markdown/index.js'
@@ -24,6 +23,7 @@ import {
     missingTeamIoProjectNumberError,
     resolveTeamImportScope,
     readAndConvertExternalMarkdownFiles,
+    resolveTeamImportContextAuthor,
 } from './io-scope-helpers.js'
 import {
     DATE_FORMAT_REGEX,
@@ -147,6 +147,8 @@ const TeamImportExternalOutputSchema = TeamImportMarkdownOutputSchema
 // ============================================================================
 // Tool Definitions
 // ============================================================================
+
+/* resolveTeamImportContextAuthor moved to ./io-scope-helpers.ts */
 
 export function getTeamIoTools(context: ToolContext): ToolDefinition[] {
     const { teamDb, progress } = context
@@ -275,14 +277,19 @@ export function getTeamIoTools(context: ToolContext): ToolDefinition[] {
                     await sendProgress(progress, 0, 2, 'Reading markdown files...')
                     await sendProgress(progress, 1, 2, 'Importing team entries...')
 
-                    const author = resolveAuthenticatedAuthor()
+                    const authorCtx = resolveTeamImportContextAuthor(context)
+                    if ('errorResponse' in authorCtx) {
+                        return authorCtx.errorResponse
+                    }
                     const result = await importMarkdownEntries(
                         input.source_dir,
                         teamDb,
                         {
                             dry_run: input.dry_run,
                             limit: input.limit,
-                            author,
+                            author: authorCtx.author,
+                            enforceStrictTeamOwnership: authorCtx.enforceStrictTeamOwnership,
+                            allowAdminAuthorOverride: authorCtx.allowAdminAuthorOverride,
                             project_number: projectNumber,
                             ...(lockedWsId !== undefined ? { workspaceId: lockedWsId } : {}),
                             ...(context.config !== undefined ? { config: context.config } : {}),
@@ -355,14 +362,19 @@ export function getTeamIoTools(context: ToolContext): ToolDefinition[] {
                     )
 
                     await sendProgress(progress, 2, 3, 'Importing entries...')
-                    const author = resolveAuthenticatedAuthor()
+                    const authorCtx = resolveTeamImportContextAuthor(context)
+                    if ('errorResponse' in authorCtx) {
+                        return authorCtx.errorResponse
+                    }
                     const result = await processImportBatch(
                         parsedFiles,
                         teamDb,
                         {
                             dry_run: input.dry_run,
                             limit: input.limit,
-                            author,
+                            author: authorCtx.author,
+                            enforceStrictTeamOwnership: authorCtx.enforceStrictTeamOwnership,
+                            allowAdminAuthorOverride: authorCtx.allowAdminAuthorOverride,
                             project_number: projectNumber,
                             ...(lockedWsId !== undefined ? { workspaceId: lockedWsId } : {}),
                             ...(context.config !== undefined ? { config: context.config } : {}),

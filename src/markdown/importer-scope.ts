@@ -4,7 +4,8 @@
  * Isolates workspace/project validation and pairing rules for markdown imports.
  */
 
-import { ValidationError } from '../types/errors.js'
+import type { IDatabaseAdapter } from '../database/core/interfaces.js'
+import { PermissionError, ValidationError } from '../types/errors.js'
 import {
     findCanonicalRegistryKey,
     resolveProjectContext,
@@ -116,5 +117,45 @@ export function resolveImportedFileContext(
     return {
         effectiveWsId,
         effectiveProjNum: paired.projectNumber ?? undefined,
+    }
+}
+
+export function resolveCanonicalImportAuthor(
+    db: IDatabaseAdapter,
+    author: string | undefined,
+    workspaceId?: string
+): string | undefined {
+    if (author === undefined) return undefined
+    if (typeof db.resolveAuthor !== 'function') return author
+    return workspaceId !== undefined ? db.resolveAuthor(author, workspaceId) : db.resolveAuthor(author)
+}
+
+export function assertImportAuthorOwnership(
+    db: IDatabaseAdapter,
+    entryId: number,
+    author: string | undefined,
+    workspaceId?: string,
+    options?: Pick<ImportOptions, 'enforceStrictTeamOwnership' | 'allowAdminAuthorOverride'>
+): void {
+    if (author === undefined || typeof db.getAuthorsForEntries !== 'function') return
+    if (options?.allowAdminAuthorOverride === true) return
+    const effectiveAuthor = resolveCanonicalImportAuthor(db, author, workspaceId) ?? author
+    const existingAuthor = db.getAuthorsForEntries([entryId]).get(entryId)
+    if (existingAuthor === null) {
+        if (options?.enforceStrictTeamOwnership === true) {
+            throw new PermissionError(
+                `Permission denied: cannot overwrite entry ${String(entryId)} with no recorded author during non-admin team import by '${effectiveAuthor}'`
+            )
+        }
+        return
+    }
+    if (existingAuthor !== undefined) {
+        const canonicalExisting =
+            resolveCanonicalImportAuthor(db, existingAuthor, workspaceId) ?? existingAuthor
+        if (canonicalExisting.toLowerCase() !== effectiveAuthor.toLowerCase()) {
+            throw new PermissionError(
+                `Permission denied: cannot overwrite entry ${String(entryId)} owned by '${existingAuthor}' during import by '${effectiveAuthor}'`
+            )
+        }
     }
 }

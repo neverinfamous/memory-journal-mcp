@@ -1,15 +1,16 @@
 import { spawnSync } from 'node:child_process'
 import { writeFileSync, mkdirSync, readFileSync, readdirSync } from 'node:fs'
-import { join, sep } from 'node:path'
+import { join, resolve, sep } from 'node:path'
+import { fileURLToPath } from 'node:url'
 
 const testOutputDir = join(process.cwd(), '.test-output')
 const healthStatusFile = join(testOutputDir, 'health-status.json')
+const isMain =
+    process.argv[1] !== undefined &&
+    resolve(process.argv[1]) === resolve(fileURLToPath(import.meta.url))
 
-const target = process.argv[2] // 'lint', 'typecheck', or undefined for all
-if (target !== undefined && target !== 'lint' && target !== 'typecheck') {
-    console.error(`Unknown check target '${target}'. Expected lint or typecheck.`)
-    process.exit(1)
-}
+export const IGNORE_DIR_REGEX =
+    /(?:^|[/\\])(vendor|node_modules|dist|third_party|coverage|build|\.next|out)(?:[/\\]|$)/
 
 function isEnoent(error: unknown): boolean {
     return typeof error === 'object' && error !== null && 'code' in error && error.code === 'ENOENT'
@@ -35,7 +36,7 @@ function checkFileLengths(): boolean {
         }
         for (const entry of entries) {
             const fullPath = join(dir, entry.name)
-            if (/[/\\](vendor|node_modules|dist|third_party|coverage|build|\.next|out)[/\\]?/.test(fullPath)) continue
+            if (IGNORE_DIR_REGEX.test(fullPath)) continue
             if (entry.isDirectory()) {
                 walk(fullPath)
             } else if (
@@ -80,64 +81,80 @@ function checkFileLengths(): boolean {
     return violations.length === 0
 }
 
-let lintOk = true
-let typecheckOk = true
-
-// Load existing state if available
-try {
-    const existing = JSON.parse(readFileSync(healthStatusFile, 'utf-8')) as {
-        lintOk?: boolean
-        typecheckOk?: boolean
+function runChecksMain(): void {
+    const target = process.argv[2] // 'lint', 'typecheck', or undefined for all
+    if (target !== undefined && target !== 'lint' && target !== 'typecheck') {
+        console.error(`Unknown check target '${target}'. Expected lint or typecheck.`)
+        process.exit(1)
     }
-    lintOk = existing.lintOk ?? true
-    typecheckOk = existing.typecheckOk ?? true
-} catch {
-    // missing or unreadable health file
+
+    let lintOk = true
+    let typecheckOk = true
+
+    // Load existing state if available
+    try {
+        const existing = JSON.parse(readFileSync(healthStatusFile, 'utf-8')) as {
+            lintOk?: boolean
+            typecheckOk?: boolean
+        }
+        lintOk = existing.lintOk ?? true
+        typecheckOk = existing.typecheckOk ?? true
+    } catch {
+        // missing or unreadable health file
+    }
+
+    mkdirSync(testOutputDir, { recursive: true })
+
+    let success = true
+
+    if (!target || target === 'lint') {
+        console.log('Running lint...')
+        const passed = runCommand('pnpm', ['exec', 'eslint', 'src/', 'tests/'])
+        console.log('Checking file lengths (<= 500 lines)...')
+        const lengthsPassed = checkFileLengths()
+        lintOk = passed && lengthsPassed
+        if (!passed || !lengthsPassed) success = false
+    }
+
+    if (!target || target === 'typecheck') {
+        console.log('Running typecheck...')
+        const passed = runCommand('pnpm', ['exec', 'tsc', '--noEmit'])
+        typecheckOk = passed
+        if (!passed) success = false
+    }
+
+    if (!target) {
+        // Also run code-map if running all
+        console.log('Running code-map generation...')
+        const codeMapPassed = runCommand('pnpm', ['exec', 'tsx', 'scripts/update-code-map.ts'])
+        if (!codeMapPassed) success = false
+
+        // Run workspace isolation check
+        console.log('Running workspace isolation check...')
+        const unassignedPassed = runCommand('pnpm', [
+            'exec',
+            'tsx',
+            'scripts/check-unassigned-entries.ts',
+        ])
+        if (!unassignedPassed) success = false
+    }
+
+    console.log(success ? 'Checks passed!' : 'Checks failed!')
+    // [INVARIANT] `ok` reflects every tracked gate, so a partial run cannot mask a previously failed gate.
+    writeFileSync(
+        healthStatusFile,
+        JSON.stringify(
+            { ok: success && lintOk && typecheckOk, lintOk, typecheckOk, timestamp: Date.now() },
+            null,
+            2
+        )
+    )
+
+    if (!success) {
+        process.exit(1)
+    }
 }
 
-mkdirSync(testOutputDir, { recursive: true })
-
-let success = true
-
-if (!target || target === 'lint') {
-    console.log('Running lint...')
-    const passed = runCommand('pnpm', ['exec', 'eslint', 'src/', 'tests/'])
-    console.log('Checking file lengths (<= 500 lines)...')
-    const lengthsPassed = checkFileLengths()
-    lintOk = passed && lengthsPassed
-    if (!passed || !lengthsPassed) success = false
-}
-
-if (!target || target === 'typecheck') {
-    console.log('Running typecheck...')
-    const passed = runCommand('pnpm', ['exec', 'tsc', '--noEmit'])
-    typecheckOk = passed
-    if (!passed) success = false
-}
-
-if (!target) {
-    // Also run code-map if running all
-    console.log('Running code-map generation...')
-    const codeMapPassed = runCommand('pnpm', ['exec', 'tsx', 'scripts/update-code-map.ts'])
-    if (!codeMapPassed) success = false
-
-    // Run workspace isolation check
-    console.log('Running workspace isolation check...')
-    const unassignedPassed = runCommand('pnpm', [
-        'exec',
-        'tsx',
-        'scripts/check-unassigned-entries.ts',
-    ])
-    if (!unassignedPassed) success = false
-}
-
-console.log(success ? 'Checks passed!' : 'Checks failed!')
-// [INVARIANT] `ok` reflects every tracked gate, so a partial run cannot mask a previously failed gate.
-writeFileSync(
-    healthStatusFile,
-    JSON.stringify({ ok: success && lintOk && typecheckOk, lintOk, typecheckOk, timestamp: Date.now() }, null, 2)
-)
-
-if (!success) {
-    process.exit(1)
+if (isMain) {
+    runChecksMain()
 }

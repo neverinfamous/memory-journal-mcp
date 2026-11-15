@@ -233,9 +233,14 @@ export function synthesizeNaturalLanguageOrEntryPayload(executionCode: string, i
     const rawEntryId = entryObj['entry_id'] ?? rawObj['entry_id'] ?? entryObj['id'] ?? rawObj['id']
     const numericEntryId =
         typeof rawEntryId === 'number'
-            ? rawEntryId
-            : typeof rawEntryId === 'string' && !Number.isNaN(Number(rawEntryId))
-              ? Number(rawEntryId)
+            ? Number.isInteger(rawEntryId) && rawEntryId > 0
+                ? rawEntryId
+                : undefined
+            : typeof rawEntryId === 'string' && rawEntryId.trim() !== ''
+              ? (() => {
+                    const parsed = Number(rawEntryId.trim())
+                    return Number.isInteger(parsed) && parsed > 0 ? parsed : undefined
+                })()
               : undefined
 
     const extraContext: Record<string, unknown> = {}

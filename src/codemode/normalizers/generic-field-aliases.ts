@@ -16,6 +16,10 @@ export function setActiveProjectRegistry(registry: Record<string, ProjectRegistr
     activeProjectRegistry = registry
 }
 
+export function getActiveProjectRegistry(): Record<string, ProjectRegistryEntry> | undefined {
+    return activeProjectRegistry
+}
+
 export function readProjectRegistryPayload(value: unknown): Record<string, ProjectRegistryEntry> | undefined {
     if (typeof value !== 'object' || value === null || Array.isArray(value)) return undefined
     const registry: Record<string, ProjectRegistryEntry> = {}
@@ -358,35 +362,7 @@ export function resolveCreateEntryProjectContext(obj: Record<string, unknown>): 
     }
 }
 
-export function normalizeExecuteCodeAliases(obj: Record<string, unknown>): void {
-    if (obj['repo_name'] !== undefined && obj['repo'] === undefined) {
-        obj['repo'] = obj['repo_name']
-        delete obj['repo_name']
-    }
-    if (obj['code'] !== undefined) return
-
-    const codeAlias =
-        obj['script'] ?? obj['js'] ?? obj['javascript'] ?? obj['command'] ?? obj['content'] ??
-        obj['eval'] ?? obj['source'] ?? obj['body'] ?? obj['expression'] ?? obj['fn'] ?? obj['exec'] ??
-        obj['code_snippet'] ?? obj['raw_code'] ?? obj['statement'] ?? obj['statements'] ?? obj['codeBlock'] ??
-        obj['code_block'] ?? obj['script_content'] ?? obj['js_code'] ?? obj['code_string'] ?? obj['action'] ??
-        obj['task'] ?? obj['instruction'] ?? obj['instructions'] ?? obj['input'] ?? obj['payload'] ?? obj['text']
-
-    if (typeof codeAlias === 'string') obj['code'] = codeAlias
-    else if (isRecord(obj['payload'])) obj['code'] = JSON.stringify(obj['payload'])
-    else if (isRecord(obj['entry'])) obj['code'] = JSON.stringify(obj['entry'])
-    else if (isRecord(obj['input'])) obj['code'] = JSON.stringify(obj['input'])
-    else if (obj['action'] !== undefined || obj['task'] !== undefined || obj['notes'] !== undefined || obj['changes'] !== undefined) {
-        obj['code'] = JSON.stringify(obj)
-    } else {
-        for (const [k, v] of Object.entries(obj)) {
-            if (typeof v === 'string' && v.trim().length > 0 && !['repo', 'workspace_id', 'expected_version', 'auto_version', 'project_number', 'query'].includes(k)) {
-                obj['code'] = v
-                break
-            }
-        }
-    }
-}
+export { normalizeExecuteCodeAliases } from './execute-code-aliases.js'
 
 function canonicalizeEntryType(obj: Record<string, unknown>): void {
     if (obj['type'] !== undefined && obj['entry_type'] === undefined) {

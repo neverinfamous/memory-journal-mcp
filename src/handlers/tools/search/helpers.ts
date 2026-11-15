@@ -246,6 +246,7 @@ export async function collectTeamSearchEntries(
         })
     }
 
+    let teamVectorFailed = false
     if (teamVectorManager !== undefined && query.trim() !== '') {
         try {
             const hits = await teamVectorManager.search(
@@ -271,6 +272,7 @@ export async function collectTeamSearchEntries(
                 if (entry !== undefined) pushEntry(entry, Math.round(hit.score * 100) / 100)
             }
         } catch (err) {
+            teamVectorFailed = true
             // Team vector search is best-effort. Full-text results still apply.
             logger.debug('Team vector search failed; falling back to full-text results', {
                 module: 'Search',
@@ -279,7 +281,7 @@ export async function collectTeamSearchEntries(
         }
     }
 
-    if (options.similarityThreshold === undefined || teamVectorManager === undefined) {
+    if (options.similarityThreshold === undefined || teamVectorManager === undefined || teamVectorFailed) {
         const fts = teamDb.searchEntries(query, {
             limit,
             ...(options.projectNumber !== undefined ? { projectNumber: options.projectNumber } : {}),

@@ -205,3 +205,25 @@ export function setCorsHeaders(req: Request, res: Response, config: HttpTranspor
     }
     return true
 }
+
+/**
+ * Builds the allowlisted HTTP `Host` header entries for DNS rebinding protection,
+ * including `publicOrigin` hostname and host[:port] when configured.
+ */
+export function buildAllowedHostHeaders(
+    host: string,
+    publicOrigin: string | undefined
+): string[] {
+    const normalizedHost = host.includes(':') && !host.startsWith('[') ? `[${host}]` : host
+    const allowed = new Set<string>([normalizedHost, 'localhost', '127.0.0.1', '[::1]'])
+    if (publicOrigin !== undefined && publicOrigin.trim() !== '') {
+        try {
+            const parsed = new URL(publicOrigin.trim())
+            if (parsed.hostname !== '') allowed.add(parsed.hostname)
+            if (parsed.host !== '') allowed.add(parsed.host)
+        } catch {
+            // Ignore malformed publicOrigin when deriving host allowlist
+        }
+    }
+    return Array.from(allowed)
+}

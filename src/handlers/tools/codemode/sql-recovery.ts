@@ -67,6 +67,36 @@ export function extractAndRecoverSqlCode(code: string): string | null {
 
     const scopeFields = scopeFromSqlLiterals(cleanSql)
 
+    if (hasUnsupportedWherePredicate(cleanSql)) {
+        return null
+    }
+
+    const specialWhereAllowedCols = (table: string): readonly string[] => {
+        if (table === 'relationships' || table === 'entry_relationships' || table === 'links') {
+            return ['workspace_id', 'project_number', 'project_id', 'id', 'entry_id']
+        }
+        return ['workspace_id', 'project_number', 'project_id']
+    }
+
+    const hasUnsupportedSpecialTableWhere = (sqlWhere: string, allowedCols: readonly string[]): boolean => {
+        const body = sqlWhere.replace(/^\s*WHERE\s+/i, '').trim()
+        if (body === '') return false
+        const stripped = body.replace(/'(?:''|[^'])*'|"(?:""|[^"])*"/g, "''")
+        const clauses = stripped.split(/\bAND\b/i)
+        const allowedSet = new Set(allowedCols.map((c) => c.toLowerCase()))
+        for (const rawClause of clauses) {
+            const clause = rawClause.trim().replace(/^\(+|\)+$/g, '').trim()
+            if (clause === '') return true
+            const match = /^(?:[`"']?[a-zA-Z_][\w]*[`"']?\.)?[`"']?([a-zA-Z_][\w]*)[`"']?\s*=\s*(?:''|\d+)$/i.exec(
+                clause
+            )
+            if (match?.[1] === undefined || !allowedSet.has(match[1].toLowerCase())) {
+                return true
+            }
+        }
+        return false
+    }
+
     if (
         tableName === 'tags' ||
         tableName === 'entry_tags' ||
@@ -85,6 +115,9 @@ export function extractAndRecoverSqlCode(code: string): string | null {
         tableName === 'audit_logs'
     ) {
         if (!/^SELECT\b/i.test(cleanSql)) return null
+        if (hasUnsupportedSpecialTableWhere(whereClause, specialWhereAllowedCols(tableName))) {
+            return null
+        }
     }
 
     if (tableName === 'tags' || tableName === 'entry_tags' || tableName === 'journal_tags') {
@@ -107,10 +140,6 @@ export function extractAndRecoverSqlCode(code: string): string | null {
     }
     if (tableName === 'audit_log' || tableName === 'audit' || tableName === 'audit_logs') {
         return `return await mj.admin.searchAuditLog(${JSON.stringify(scopeFields)});`
-    }
-
-    if (hasUnsupportedWherePredicate(cleanSql)) {
-        return null
     }
 
     if (/^SELECT\b/i.test(cleanSql)) {

@@ -259,19 +259,26 @@ export class TagsManager {
     private detachSourceTag(
         sourceTagId: number,
         entryIds: number[],
-        _scopedWorkspace: string | undefined,
+        scopedWorkspace: string | undefined,
         scopedProject: number | undefined
     ): boolean {
         const db = this.db
         if (entryIds.length > 0) {
             const idPlaceholders = entryIds.map(() => '?').join(', ')
             const params: unknown[] = [sourceTagId, ...entryIds]
-            let projectClause = ''
+            const scopeConds: string[] = []
+            if (scopedWorkspace !== undefined && scopedWorkspace !== '*') {
+                scopeConds.push('workspace_id = ?')
+                params.push(scopedWorkspace)
+            }
             if (scopedProject !== undefined) {
-                projectClause =
-                    ' AND entry_id IN (SELECT id FROM memory_journal WHERE project_number = ?)'
+                scopeConds.push('project_number = ?')
                 params.push(scopedProject)
             }
+            const projectClause =
+                scopeConds.length > 0
+                    ? ` AND entry_id IN (SELECT id FROM memory_journal WHERE ${scopeConds.join(' AND ')})`
+                    : ''
             const delResult = db
                 .prepare(
                     `DELETE FROM entry_tags WHERE tag_id = ? AND entry_id IN (${idPlaceholders})${projectClause}`

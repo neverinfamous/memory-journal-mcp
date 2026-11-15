@@ -223,9 +223,13 @@ function queryGraphEntries(
             FROM memory_journal mj
             WHERE mj.deleted_at IS NULL${wsFilter}${projSql}
               AND mj.id IN (
-                  SELECT DISTINCT from_entry_id FROM relationships
+                  SELECT DISTINCT r.from_entry_id FROM relationships r
+                  JOIN memory_journal mj_to ON r.to_entry_id = mj_to.id
+                  WHERE mj_to.deleted_at IS NULL
                   UNION
-                  SELECT DISTINCT to_entry_id FROM relationships
+                  SELECT DISTINCT r.to_entry_id FROM relationships r
+                  JOIN memory_journal mj_from ON r.from_entry_id = mj_from.id
+                  WHERE mj_from.deleted_at IS NULL
               )
             ORDER BY mj.id DESC
             LIMIT ?

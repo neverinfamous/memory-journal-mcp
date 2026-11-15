@@ -23,7 +23,10 @@ import {
     projectAliasTarget,
 } from '../../../handlers/tools/core/dummy-healing.js'
 import { resolveActiveBriefingConfig } from './register-tools-helpers.js'
-import { runFallbackWithInterceptors } from './fallback-interceptors.js'
+import {
+    resolveKnownFallbackAuditName,
+    runFallbackWithInterceptors,
+} from './fallback-interceptors.js'
 import {
     ALL_KNOWN_GROUP_TOOLS,
     formatSuccessPayload,
@@ -245,24 +248,27 @@ async function handleUnknownTool(
     )
 
     if (healingEnabled) {
-        const fallbackResponse = await runFallbackWithInterceptors(
-            requestedTool,
-            toolArgs,
-            context.runtime,
-            () =>
-                tryAutonomousUnknownToolFallback(
-                    requestedTool,
-                    toolArgs,
-                    matchingPrompt,
-                    prompts,
-                    context,
-                    options,
-                    allTools,
-                    allToolNames,
-                    customToolHandlerConfig
-                )
-        )
-        if (fallbackResponse !== undefined) return fallbackResponse
+        const auditTargetName = resolveKnownFallbackAuditName(requestedTool, matchingPrompt)
+        if (auditTargetName !== undefined) {
+            const fallbackResponse = await runFallbackWithInterceptors(
+                auditTargetName,
+                toolArgs,
+                context.runtime,
+                () =>
+                    tryAutonomousUnknownToolFallback(
+                        requestedTool,
+                        toolArgs,
+                        matchingPrompt,
+                        prompts,
+                        context,
+                        options,
+                        allTools,
+                        allToolNames,
+                        customToolHandlerConfig
+                    )
+            )
+            if (fallbackResponse !== undefined) return fallbackResponse
+        }
     }
 
     let suggestion = `Tool '${requestedTool}' does not exist. Use tools/list to see available tools.`

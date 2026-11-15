@@ -16,8 +16,10 @@ import * as path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 import { VERSION } from '../../../../version.js'
-import { getAllToolNames } from '../../../../filtering/tool-filter.js'
-import { TOOL_GROUPS } from '../../../../filtering/tool-constants.js'
+import {
+    getAllToolNames,
+    isFilterEffectivelyReadOnly,
+} from '../../../../filtering/tool-filter.js'
 import type { ToolFilterConfig } from '../../../../filtering/tool-filter.js'
 import { getPrompts } from '../../../prompts/index.js'
 import { logger } from '../../../../utils/logger.js'
@@ -399,13 +401,7 @@ export function buildSystemContext(
         }
     }
 
-    // Check if readonly (admin tools disabled, and codemode disabled since codemode is root)
-    let isReadonly = false
-    if (filterConfig) {
-        const hasAdmin = TOOL_GROUPS.admin.some((t) => filterConfig.enabledTools.has(t))
-        const hasCodemode = filterConfig.enabledTools.has('mj_execute_code')
-        isReadonly = !hasAdmin && !hasCodemode
-    }
+    const isReadonly = filterConfig ? isFilterEffectivelyReadOnly(filterConfig) : false
 
     // IO roots count
     const ioRootCount = config?.allowedIoRoots?.length ?? 0

@@ -69,7 +69,11 @@ export function buildSandboxGlobals(
             registerTimer(setTimeout(cb, Math.min(Math.max(0, ms), 30_000), ...args)),
         setInterval: undefined,
         setImmediate: undefined,
-        getConfig: () => Promise.resolve({ dbPath: 'memory-journal.db' }),
+        getConfig:
+            typeof shimMj['getConfig'] === 'function'
+                ? (): Promise<unknown> =>
+                      Promise.resolve((shimMj['getConfig'] as () => unknown)())
+                : (): Promise<unknown> => Promise.resolve({ dbPath: 'memory://internal' }),
         process: createSandboxProcessObject(),
         require: undefined,
         __dirname: undefined,

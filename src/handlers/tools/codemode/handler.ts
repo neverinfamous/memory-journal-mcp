@@ -10,7 +10,7 @@ import type { SandboxResult } from '../../../codemode/types.js'
 
 import { ExecuteCodeSchema, ExecuteCodeSchemaMcp } from './schemas.js'
 import { collectNonCodeModeTools, getSandboxPool, getSecurityManager } from './singleton-state.js'
-import { healCodeModeScript, healTemplateBackticksOnRuntimeError } from './code-healer.js'
+import { healCodeModeScript, healTemplateBackticksOnRuntimeError, isValidJsScript } from './code-healer.js'
 import { extractAndRecoverJsonCode, extractAndRecoverEntryCode } from './json-entry-recovery.js'
 import { extractAndRecoverSqlCode, extractAndRecoverPreparedStatementCode } from './sql-recovery.js'
 import { resolveExecutionPayload, buildSandboxUserContext } from './payload-synthesizer.js'
@@ -151,6 +151,7 @@ export function getCodeModeTools(context: ToolContext): ToolDefinition[] {
                         input.readonly
                     )
 
+                    let mutatedDuringRun = false
                     const secureDispatcher = createSecureDispatcher({
                         tools,
                         sessionContext,
@@ -159,6 +160,9 @@ export function getCodeModeTools(context: ToolContext): ToolDefinition[] {
                         explicitWorkspace,
                         autoVersion: input.auto_version,
                         dryRun: input.dry_run,
+                        onMutatingDispatch: () => {
+                            mutatedDuringRun = true
+                        },
                     })
 
                     const journalApi = createJournalApi(
@@ -187,6 +191,7 @@ export function getCodeModeTools(context: ToolContext): ToolDefinition[] {
                     const reqCtx = getRequestContext()
 
                     const runSandbox = async (codeToRun: string): Promise<void> => {
+                        mutatedDuringRun = false
                         const executePool = async (): Promise<void> => {
                             execResult = await pool.execute(
                                 codeToRun,
@@ -209,6 +214,7 @@ export function getCodeModeTools(context: ToolContext): ToolDefinition[] {
                         await runSandbox(executionCode)
 
                         if (
+                            !mutatedDuringRun &&
                             healingEnabled &&
                             execResult !== undefined &&
                             !execResult.success &&
@@ -216,11 +222,13 @@ export function getCodeModeTools(context: ToolContext): ToolDefinition[] {
                             isRecoverableSyntaxError(execResult.error)
                         ) {
                             const originalInput = typeof input.code === 'string' ? input.code : executionCode
-                            const recoveredCode =
-                                extractAndRecoverSqlCode(originalInput) ??
-                                extractAndRecoverEntryCode(originalInput) ??
-                                extractAndRecoverJsonCode(originalInput) ??
-                                healTemplateBackticksOnRuntimeError(executionCode)
+                            const wasValidJs = isValidJsScript(executionCode)
+                            const recoveredCode = wasValidJs
+                                ? healTemplateBackticksOnRuntimeError(executionCode)
+                                : extractAndRecoverSqlCode(originalInput) ??
+                                  extractAndRecoverEntryCode(originalInput) ??
+                                  extractAndRecoverJsonCode(originalInput) ??
+                                  healTemplateBackticksOnRuntimeError(executionCode)
                             if (recoveredCode !== null && recoveredCode !== executionCode) {
                                 // [BOUNDARY] Recovered code is re-validated before it ever runs.
                                 const retryValidation = securityManager.validateCode(recoveredCode)

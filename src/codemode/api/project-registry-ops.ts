@@ -227,7 +227,7 @@ export function createListProjectsFn(provider?: ProjectRegistryProvider): () => 
     return (): Promise<unknown> => {
         if (provider !== undefined) {
             const live = resolveRegistry(provider)
-            if (live !== undefined && live.length > 0) return Promise.resolve(live)
+            if (live !== undefined) return Promise.resolve(live)
         }
 
         try {
