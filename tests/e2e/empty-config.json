@@ -11,5 +11,6 @@
   "briefingCopilot": false,
   "instructionLevel": "detailed",
   "codemodeInternalFullAccess": false,
-  "teamDefaultRole": "admin"
+  "teamDefaultRole": "admin",
+  "defaultProjectNumber": 1
 }
