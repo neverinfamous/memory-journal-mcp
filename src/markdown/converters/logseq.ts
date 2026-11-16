@@ -13,7 +13,7 @@
 import type { ConvertedFile } from './index.js'
 import type { FrontmatterData } from '../frontmatter.js'
 import { parseYamlFrontmatter } from './yaml-parser.js'
-import { extractTags, formatToISODate } from './utils.js'
+import { addBoundedTag, extractTags, formatToISODate, toBoundedTags } from './utils.js'
 
 function applyLogseqPropertyLine(
     line: string,
@@ -28,10 +28,13 @@ function applyLogseqPropertyLine(
     if (k === 'tags' && v !== undefined && v !== '') {
         for (const rawTag of v.split(/[, ]+/)) {
             const trimmed = rawTag.trim()
-            if (trimmed !== '') mergedTags.add(trimmed.replace(/^#/, ''))
+            if (trimmed !== '') addBoundedTag(mergedTags, trimmed.replace(/^#/, ''))
         }
     } else if (k === 'date' && v !== undefined && v !== '') {
-        mjMeta.timestamp = formatToISODate(v)
+        const formatted = formatToISODate(v)
+        if (formatted !== undefined) {
+            mjMeta.timestamp = formatted
+        }
     }
     return true
 }
@@ -57,7 +60,7 @@ function transformLogseqLine(
     }
 
     for (const match of line.matchAll(/(^|\s)#([a-zA-Z0-9_-]{1,128})\b/g)) {
-        if (match[2]) mergedTags.add(match[2].toLowerCase())
+        if (match[2]) addBoundedTag(mergedTags, match[2].toLowerCase())
     }
 
     line = line.replace(/\[\[([^\]]{1,500})\]\]/g, (_match: string, inner: string) => {
@@ -80,7 +83,10 @@ function inferLogseqEntryMetadata(
     if (journalMatch || filename.includes('journals')) {
         mjMeta.entry_type = 'standup'
         if (journalMatch?.[1] && !mjMeta.timestamp) {
-            mjMeta.timestamp = `${journalMatch[1].replace(/_/g, '-')}T12:00:00Z`
+            const formatted = formatToISODate(`${journalMatch[1].replace(/_/g, '-')}T12:00:00Z`)
+            if (formatted !== undefined) {
+                mjMeta.timestamp = formatted
+            }
         }
     } else if (hasDoneTasks && !hasTasks) {
         mjMeta.entry_type = 'feature_implementation'
@@ -114,7 +120,7 @@ export function convertLogseq(
     }
 
     if (mergedTags.size > 0) {
-        mjMeta.tags = Array.from(mergedTags)
+        mjMeta.tags = toBoundedTags(mergedTags)
     }
     inferLogseqEntryMetadata(filename, defaultEntryType, hasTasks, hasDoneTasks, mjMeta)
 

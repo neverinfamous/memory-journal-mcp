@@ -8,7 +8,11 @@ import {
     ioImportMarkdownOptionsSchema,
     ioImportExternalOptionsSchema 
 } from '../schemas.js'
-import { getCliCommandDb as getDb } from './db-helper.js'
+import {
+    assertSafeCliDir,
+    assertSafeCliOutputFile,
+    getCliCommandDb as getDb,
+} from './db-helper.js'
 import { exportEntriesToMarkdown, importMarkdownEntries, processImportBatch, convertFile, type ParsedFile } from '../../markdown/index.js'
 import { VectorSearchManager } from '../../vector/vector-search-manager/index.js'
 import {
@@ -22,7 +26,7 @@ import {
     pairStoredScope,
     uniqueWorkspaceForProject,
 } from '../../utils/write-scope.js'
-import { assertSafeDirectoryPath, assertSafeFilePath } from '../../utils/security-utils.js'
+import { assertSafeFilePath } from '../../utils/security-utils.js'
 import * as fs from 'node:fs/promises'
 import * as path from 'node:path'
 import { constants } from 'node:fs'
@@ -49,25 +53,10 @@ function fetchAllWorkspaceEntries(
     return entries
 }
 
-async function assertNonSymlinkCliDir(dirPath: string): Promise<void> {
-    try {
-        const stats = await fs.lstat(dirPath)
-        if (stats.isSymbolicLink()) {
-            throw new Error(`Symlinks are forbidden for CLI directory paths: ${dirPath}`)
-        }
-    } catch (err: unknown) {
-        if ((err as NodeJS.ErrnoException).code !== 'ENOENT') {
-            throw err
-        }
-    }
-}
-
 export async function exportJsonAction(options: z.infer<typeof exportJsonSchema>, command: Command): Promise<void> {
     const { db, serverOptions } = await getDb(options, command)
+    let exitCode = 0
     try {
-        if (options.dest?.includes('\0')) {
-            throw new Error('Invalid destination path: null bytes are not allowed')
-        }
         if (options.workspace?.trim() === '*') {
             throw new Error("Workspace '*' cannot be used for a single-file export.")
         }
@@ -80,12 +69,10 @@ export async function exportJsonAction(options: z.infer<typeof exportJsonSchema>
 
         const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19)
         const defaultName = `journal_export_${timestamp}.json`
-        const destPath = options.dest
-            ? path.resolve(options.dest)
-            : path.resolve(path.dirname(serverOptions.dbPath), 'backups', defaultName)
+        const rawDest =
+            options.dest ?? path.resolve(path.dirname(serverOptions.dbPath), 'backups', defaultName)
+        const destPath = await assertSafeCliOutputFile(rawDest, '--dest')
         const destDir = path.dirname(destPath)
-        await assertNonSymlinkCliDir(destDir)
-        assertSafeFilePath(destPath, [destDir])
         await fs.mkdir(destDir, { recursive: true })
         const jsonPayload = JSON.stringify({ exportedAt: new Date().toISOString(), count: entries.length, entries }, null, 2)
         await fs.writeFile(destPath, jsonPayload, 'utf-8')
@@ -97,24 +84,20 @@ export async function exportJsonAction(options: z.infer<typeof exportJsonSchema>
         )
     } catch (e) {
         process.stderr.write("JSON export failed: " + (e instanceof Error ? e.message : String(e)) + '\n')
-        process.exit(1)
+        exitCode = 1
     } finally {
         db.close()
+    }
+    if (exitCode !== 0) {
+        process.exit(exitCode)
     }
 }
 
 export async function exportMarkdownAction(options: z.infer<typeof exportMarkdownSchema>, command: Command): Promise<void> {
     const { db, serverOptions } = await getDb(options, command)
+    let exitCode = 0
     try {
-        if (!options.dir) {
-            throw new Error('--dir is required for markdown export')
-        }
-        if (options.dir.includes('\0')) {
-            throw new Error('Invalid directory path: null bytes are not allowed')
-        }
-        const resolvedDir = path.resolve(options.dir)
-        await assertNonSymlinkCliDir(resolvedDir)
-        assertSafeDirectoryPath(resolvedDir, [resolvedDir])
+        const resolvedDir = await assertSafeCliDir(options.dir, 'markdown export')
         if (options.workspace?.trim() === '*') {
             throw new Error("Workspace '*' cannot be used for a single-directory export.")
         }
@@ -143,9 +126,12 @@ export async function exportMarkdownAction(options: z.infer<typeof exportMarkdow
         }
     } catch (e) {
         process.stderr.write("Export markdown failed: " + (e instanceof Error ? e.message : String(e)) + '\n')
-        process.exit(1)
+        exitCode = 1
     } finally {
         db.close()
+    }
+    if (exitCode !== 0) {
+        process.exit(exitCode)
     }
 }
 
@@ -294,17 +280,9 @@ export function resolveImportWriteScope(
     }
 }
 
-async function assertSafeCliDir(dir: string | undefined, label: string): Promise<string> {
-    if (!dir) throw new Error(`--dir is required for ${label}`)
-    if (dir.includes('\0')) throw new Error('Invalid directory path: null bytes are not allowed')
-    const resolvedDir = path.resolve(dir)
-    await assertNonSymlinkCliDir(resolvedDir)
-    assertSafeDirectoryPath(resolvedDir, [resolvedDir])
-    return resolvedDir
-}
-
 export async function importMarkdownAction(options: z.infer<typeof importMarkdownSchema>, command: Command): Promise<void> {
     const { db, serverOptions } = await getDb(options, command)
+    let exitCode = 0
     try {
         const resolvedDir = await assertSafeCliDir(options.dir, 'markdown import')
         const { workspaceId, projectNumber } = resolveImportWriteScope(options, serverOptions)
@@ -329,9 +307,12 @@ export async function importMarkdownAction(options: z.infer<typeof importMarkdow
         }
     } catch (e) {
         process.stderr.write("Import markdown failed: " + (e instanceof Error ? e.message : String(e)) + '\n')
-        process.exit(1)
+        exitCode = 1
     } finally {
         db.close()
+    }
+    if (exitCode !== 0) {
+        process.exit(exitCode)
     }
 }
 
@@ -384,6 +365,7 @@ async function collectExternalMarkdownFiles(
 
 export async function importExternalAction(options: z.infer<typeof importExternalSchema>, command: Command): Promise<void> {
     const { db, serverOptions } = await getDb(options, command)
+    let exitCode = 0
     try {
         if (!options.format) throw new Error('--format is required for external import')
         const resolvedDir = await assertSafeCliDir(options.dir, 'external import')
@@ -411,8 +393,11 @@ export async function importExternalAction(options: z.infer<typeof importExterna
         }
     } catch (e) {
         process.stderr.write("Import external failed: " + (e instanceof Error ? e.message : String(e)) + '\n')
-        process.exit(1)
+        exitCode = 1
     } finally {
         db.close()
+    }
+    if (exitCode !== 0) {
+        process.exit(exitCode)
     }
 }

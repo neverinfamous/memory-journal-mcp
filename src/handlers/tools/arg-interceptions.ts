@@ -17,7 +17,11 @@ import { applyArgInterceptions as applyCodeModeArgInterceptions } from '../../co
 import {
     getActiveProjectRegistry,
     setActiveProjectRegistry,
+    setFallbackProjectRegistryLoader,
 } from '../../codemode/normalizers/generic-field-aliases.js'
+import { loadProjectRegistryFromConfig } from '../../utils/workspace-resolver.js'
+
+setFallbackProjectRegistryLoader(loadProjectRegistryFromConfig)
 
 function stripInternalNormalizerMarkers(val: unknown): unknown {
     if (typeof val !== 'object' || val === null) return val

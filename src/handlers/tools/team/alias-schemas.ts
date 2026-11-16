@@ -160,7 +160,7 @@ export const ListAuthorAliasesSchemaMcp = z.object({
 
 export const ListAuthorAliasesOutputSchema = z
     .object({
-        success: z.boolean().default(true),
+        success: z.boolean().optional(),
         aliases: z
             .array(
                 z.object({

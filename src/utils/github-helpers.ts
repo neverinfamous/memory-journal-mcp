@@ -2,6 +2,24 @@ import { getGitHubIntegration } from '../github/github-integration/index.js'
 import type { ToolContext } from '../types/index.js'
 import { activeProjectRegistry, uniqueWorkspaceForProject } from './write-scope.js'
 
+async function resolveIssueUrlFromRepoPath(
+    repoPath: string | undefined,
+    issueNumber: number
+): Promise<string | undefined> {
+    if (repoPath === undefined || repoPath.trim() === '') return undefined
+    const targetGithub = getGitHubIntegration(
+        repoPath,
+        undefined,
+        process.env['GITHUB_TOKEN']
+    )
+    const repoInfo = await targetGithub.getRepoInfo()
+    const host = process.env['GITHUB_HOST'] ?? 'github.com'
+    if (repoInfo.owner && repoInfo.repo) {
+        return `https://${host}/${repoInfo.owner}/${repoInfo.repo}/issues/${String(issueNumber)}`
+    }
+    return undefined
+}
+
 /**
  * Resolve a GitHub issue URL dynamically based on project context.
  *
@@ -29,42 +47,19 @@ export async function resolveIssueUrl(
     if (projectNumber !== undefined) {
         const resolvedWs = uniqueWorkspaceForProject(projectNumber, registry)
         const entry = resolvedWs !== undefined ? registry?.[resolvedWs] : undefined
-        if (entry?.path === undefined) return undefined
-        const targetGithub = getGitHubIntegration(
-            entry.path,
-            undefined,
-            process.env['GITHUB_TOKEN']
-        )
-        const repoInfo = await targetGithub.getRepoInfo()
-        const host = process.env['GITHUB_HOST'] ?? 'github.com'
-        if (repoInfo.owner && repoInfo.repo) {
-            return `https://${host}/${repoInfo.owner}/${repoInfo.repo}/issues/${String(issueNumber)}`
-        }
-        return undefined
+        return resolveIssueUrlFromRepoPath(entry?.path, issueNumber)
     }
 
     const trimmedWs = workspaceId?.trim()
     if (trimmedWs !== undefined && trimmedWs !== '') {
         const lowerWs = trimmedWs.toLowerCase()
         if (lowerWs === 'default' || trimmedWs === '*') return undefined
-        const matchedKey = registry !== undefined
-            ? Object.keys(registry).find((k) => k.toLowerCase() === lowerWs)
-            : undefined
+        const matchedKey =
+            registry !== undefined
+                ? Object.keys(registry).find((k) => k.toLowerCase() === lowerWs)
+                : undefined
         const entry = matchedKey !== undefined ? registry?.[matchedKey] : undefined
-        if (entry?.path !== undefined && entry.path !== '') {
-            const targetGithub = getGitHubIntegration(
-                entry.path,
-                undefined,
-                process.env['GITHUB_TOKEN']
-            )
-            const repoInfo = await targetGithub.getRepoInfo()
-            const host = process.env['GITHUB_HOST'] ?? 'github.com'
-            if (repoInfo.owner && repoInfo.repo) {
-                return `https://${host}/${repoInfo.owner}/${repoInfo.repo}/issues/${String(issueNumber)}`
-            }
-            return undefined
-        }
-        return undefined
+        return resolveIssueUrlFromRepoPath(entry?.path, issueNumber)
     }
 
     // 2. Omitted project number and workspace may use the process repo cache.

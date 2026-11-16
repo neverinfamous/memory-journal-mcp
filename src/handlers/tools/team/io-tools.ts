@@ -1,7 +1,7 @@
 /**
- * Team IO Tools — 2 tools
+ * Team IO Tools — 3 tools
  *
- * Tools: team_export_markdown, team_import_markdown
+ * Tools: team_export_markdown, team_import_markdown, team_import_external
  *
  * Team equivalents of export_markdown and import_markdown that operate
  * on the team database and preserve the author field.

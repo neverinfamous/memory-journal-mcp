@@ -11,27 +11,27 @@ import { BatchUpdateEntriesSchema } from './schemas.js'
 type BatchUpdateInput = z.infer<typeof BatchUpdateEntriesSchema>
 type BatchUpdateItem = BatchUpdateInput['updates'][number]
 
-export function mapBatchUpdateInputItem(
+function resolveBatchUpdateItemScope(
     u: BatchUpdateItem,
     input: BatchUpdateInput,
     context: ToolContext
-): Parameters<ToolContext['db']['updateEntries']>[0][number] {
+): { resolvedWs: string; projectNumberForUpdate: number | null | undefined; targetWorkspaceId: string | undefined } {
     const { db, config } = context
     const explicitWs = u.workspace_id ?? input.workspace_id
-    const explicitPn = u.project_number ?? input.project_number
+    const explicitPn = u.project_number !== undefined ? u.project_number : input.project_number
     const targetWorkspaceId = canonicalTargetWorkspace(u.target_workspace_id, config)
-    let resolvedWs: string
-    let projectNumberForUpdate: number | null | undefined
 
     if (targetWorkspaceId !== undefined) {
         const targetResolved = resolveProjectContext(
             {
                 workspace_id: targetWorkspaceId,
-                ...(u.project_number !== undefined ? { project_number: u.project_number } : {}),
+                ...(typeof u.project_number === 'number' ? { project_number: u.project_number } : {}),
             },
             config
         )
-        projectNumberForUpdate = targetResolved.projectNumber ?? null
+        const projectNumberForUpdate =
+            u.project_number === null ? null : (targetResolved.projectNumber ?? null)
+        let resolvedWs: string
         if (explicitWs === '*') {
             resolvedWs = '*'
         } else if (explicitWs !== undefined) {
@@ -39,24 +39,35 @@ export function mapBatchUpdateInputItem(
         } else {
             resolvedWs = db.getEntryById(u.entry_id, '*')?.workspaceId ?? targetWorkspaceId
         }
-    } else {
-        const resolvedUpdate = resolveProjectContext(
-            {
-                ...(explicitWs !== undefined && explicitWs !== '*' ? { workspace_id: explicitWs } : {}),
-                ...(explicitPn !== undefined ? { project_number: explicitPn } : {}),
-            },
-            config
-        )
-        projectNumberForUpdate = explicitPn === undefined ? undefined : resolvedUpdate.projectNumber
-        resolvedWs = explicitWs === '*' ? '*' : resolvedUpdate.workspaceId
-        if (explicitWs === undefined && explicitPn === undefined) {
-            const existingByPk =
-                typeof db.getEntryById === 'function' ? db.getEntryById(u.entry_id, '*') : undefined
-            if (existingByPk?.workspaceId !== undefined) {
-                resolvedWs = existingByPk.workspaceId
-            }
+        return { resolvedWs, projectNumberForUpdate, targetWorkspaceId }
+    }
+
+    const resolvedUpdate = resolveProjectContext(
+        {
+            ...(explicitWs !== undefined && explicitWs !== '*' ? { workspace_id: explicitWs } : {}),
+            ...(typeof explicitPn === 'number' ? { project_number: explicitPn } : {}),
+        },
+        config
+    )
+    const projectNumberForUpdate =
+        explicitPn === undefined ? undefined : explicitPn === null ? null : resolvedUpdate.projectNumber
+    let resolvedWs = explicitWs === '*' ? '*' : resolvedUpdate.workspaceId
+    if (explicitWs === undefined && (explicitPn === undefined || explicitPn === null)) {
+        const existingByPk =
+            typeof db.getEntryById === 'function' ? db.getEntryById(u.entry_id, '*') : undefined
+        if (existingByPk?.workspaceId !== undefined) {
+            resolvedWs = existingByPk.workspaceId
         }
     }
+    return { resolvedWs, projectNumberForUpdate, targetWorkspaceId }
+}
+
+export function mapBatchUpdateInputItem(
+    u: BatchUpdateItem,
+    input: BatchUpdateInput,
+    context: ToolContext
+): Parameters<ToolContext['db']['updateEntries']>[0][number] {
+    const { resolvedWs, projectNumberForUpdate, targetWorkspaceId } = resolveBatchUpdateItemScope(u, input, context)
 
     return {
         id: u.entry_id,

@@ -44,7 +44,7 @@ export function findWildcardProjectMismatches(
     updates: readonly {
         entry_id: number
         workspace_id?: string | undefined
-        project_number?: number | undefined
+        project_number?: number | null | undefined
         target_workspace_id?: string | undefined
     }[],
     rootWorkspaceId: string | undefined,
@@ -63,7 +63,7 @@ export function findWildcardProjectMismatches(
                 if (
                     sourceWs === '*' &&
                     rootProjectNumber === undefined &&
-                    u.project_number !== undefined
+                    typeof u.project_number === 'number'
                 ) {
                     const entry = db.getEntryById(u.entry_id, '*')
                     return entry?.projectNumber !== u.project_number
@@ -71,8 +71,8 @@ export function findWildcardProjectMismatches(
                 return false
             }
             const ws = u.workspace_id ?? rootWorkspaceId
-            const pn = u.project_number ?? rootProjectNumber
-            if (pn === undefined) return false
+            const pn = u.project_number !== undefined ? u.project_number : rootProjectNumber
+            if (pn === undefined || pn === null) return false
             const entry = db.getEntryById(u.entry_id, '*')
             if (entry === null || entry === undefined) return ws === '*'
             const existingWs = entry.workspaceId ?? ws

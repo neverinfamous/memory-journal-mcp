@@ -60,6 +60,19 @@ export interface ISearchFilters {
 // Helpers
 // ============================================================================
 
+/**
+ * Return true when an optional team database adapter is defined and initialized.
+ * Guards implicit personal+team search merges when `use_test_db=true` and `TEST_TEAM_DB_PATH` is unset.
+ */
+export function isTeamDbReady(teamDb: IDatabaseAdapter | undefined): teamDb is IDatabaseAdapter {
+    if (teamDb === undefined) return false
+    const candidate: {
+        getEntriesByIds: IDatabaseAdapter['getEntriesByIds']
+        isInitialized?: () => boolean
+    } = teamDb
+    return typeof candidate.isInitialized === 'function' ? candidate.isInitialized() : true
+}
+
 /** Return true if team boundary access passes without triggering denial audit logs. */
 export function canAccessTeamSilently(
     toolName = 'search_entries',
@@ -71,8 +84,11 @@ export function canAccessTeamSilently(
 ): boolean {
     try {
         enforceAccessBoundary(toolName, 'tool', { requiresTeamScope: true })
-        if (context?.teamDb?.isTeamRbacActive?.()) {
-            return canReadTeamEntriesRbac(context.teamDb, context.config, workspaceId)
+        if (context?.teamDb !== undefined) {
+            if (!isTeamDbReady(context.teamDb)) return false
+            if (context.teamDb.isTeamRbacActive?.()) {
+                return canReadTeamEntriesRbac(context.teamDb, context.config, workspaceId)
+            }
         }
         return true
     } catch {
@@ -124,6 +140,9 @@ export function resolveAuthorizedIncludeTeam(
     if (explicit) {
         enforceAccessBoundary(toolName, 'tool', { requiresTeamScope: true }, auditLogger)
     } else if (!canAccessTeamSilently(toolName)) {
+        return false
+    }
+    if (teamDb !== undefined && !isTeamDbReady(teamDb)) {
         return false
     }
     if (teamDb?.isTeamRbacActive?.() === true) {
@@ -181,7 +200,7 @@ export function mergeMultipleSources(
                           return simB - simA
                       }
                   }
-                  return b.timestamp.localeCompare(a.timestamp)
+                  return (b.timestamp ?? '').localeCompare(a.timestamp ?? '')
               })
 
     for (const entry of all) {
@@ -265,6 +284,12 @@ export function passMetadataFilters(
     return true
 }
 
+function readTeamHitScore(hit: { entryId: number; score?: number; similarity?: number }): number {
+    if (typeof hit.score === 'number') return hit.score
+    if (typeof hit.similarity === 'number') return hit.similarity
+    return 0
+}
+
 async function hydrateTeamVectorHits(
     query: string,
     teamDb: IDatabaseAdapter,
@@ -294,7 +319,9 @@ async function hydrateTeamVectorHits(
         }
         for (const hit of hits) {
             const entry = hydrated.get(hit.entryId)
-            if (entry !== undefined) pushEntry(entry, Math.round(hit.score * 100) / 100)
+            if (entry !== undefined) {
+                pushEntry(entry, Math.round(readTeamHitScore(hit) * 100) / 100)
+            }
         }
         return false
     } catch (err) {
@@ -345,6 +372,7 @@ export async function collectTeamSearchEntries(
     options: ISearchFilters & { limit: number }
 ): Promise<EntryWithSource[]> {
     if (
+        !isTeamDbReady(teamDb) ||
         !canAccessTeamSilently('search_entries') ||
         !canReadTeamEntriesRbac(teamDb, options.config, options.workspaceId)
     ) {

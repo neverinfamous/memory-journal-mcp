@@ -21,6 +21,8 @@ const JS_CODE_ALIAS_KEYS = [
     'expression',
     'fn',
     'exec',
+    'command',
+    'executionCode',
     'code_snippet',
     'raw_code',
     'statement',
@@ -223,8 +225,9 @@ function buildSynthesizedEntryPayload(
     const outerProj = parseProjectNumberField(rawObj, {})
     const wsDiffersFromOuter =
         entryWs !== undefined &&
-        (entryWs.trim().toLowerCase() === 'default' ||
-            (outerWs !== undefined && entryWs.trim().toLowerCase() !== outerWs.trim().toLowerCase()))
+        (outerWs !== undefined
+            ? entryWs.trim().toLowerCase() !== outerWs.trim().toLowerCase()
+            : entryWs.trim().toLowerCase() === 'default')
     const projVal = entryProj ?? (!wsDiffersFromOuter ? outerProj : undefined)
     const wsVal = entryWs ?? (entryProj === undefined ? outerWs : undefined)
     const sessVal = getNonEmptyString(entryObj, rawObj, ['session_id', 'sessionId'])
@@ -233,7 +236,7 @@ function buildSynthesizedEntryPayload(
         entryObj['trustScore'] ?? rawObj['trustScore'] ?? entryObj['confidence'] ?? rawObj['confidence']
     )
     const impactVal = normalizeUnitScore(
-        entryObj['impact'] ?? rawObj['impact'] ?? entryObj['impact_score'] ?? rawObj['impact_score'] ??
+        entryObj['impact'] ?? rawObj['impact'] ?? entryObj['impact_score'] ?? entryObj['impact_score'] ??
         entryObj['impactScore'] ?? rawObj['impactScore']
     )
     const validVal = normalizeValidation(getNonEmptyString(entryObj, rawObj, ['validation_status', 'validation', 'validationStatus']))
@@ -250,8 +253,8 @@ function buildSynthesizedEntryPayload(
     if (projVal !== undefined) payload['project_number'] = projVal
     if (wsVal !== undefined) payload['workspace_id'] = wsVal
     if (sessVal !== undefined) payload['session_id'] = sessVal
-    if (trustVal !== undefined) payload['trust'] = trustVal
-    if (impactVal !== undefined) payload['impact'] = impactVal
+    if (trustVal !== undefined) payload['trust_score'] = trustVal
+    if (impactVal !== undefined) payload['impact_score'] = impactVal
     if (validVal !== undefined) payload['validation_status'] = validVal
     if (Object.keys(extraContext).length > 0) payload['auto_context'] = extraContext
 

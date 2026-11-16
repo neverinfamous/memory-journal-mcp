@@ -1,12 +1,28 @@
 import * as dns from 'node:dns'
+import * as http from 'node:http'
+import * as https from 'node:https'
+import { isIP } from 'node:net'
 import type { DigestSnapshot } from '../database/sqlite-adapter/entries/digest.js'
 import { logger } from '../utils/logger.js'
 import { isPrivateOrLoopbackAddress } from '../utils/network-safety.js'
+
+const NATIVE_FETCH = globalThis.fetch
 
 export interface ReportDeliveryOptions {
     webhookUrl: string
     webhookAuth?: string
     contentType?: 'slack' | 'discord' | 'json'
+}
+
+interface ResolvedWebhookAddress {
+    address: string
+    family: 4 | 6
+}
+
+interface ValidatedWebhookTarget {
+    parsed: URL
+    hostname: string
+    resolvedAddresses: ResolvedWebhookAddress[]
 }
 
 function isBlockedWebhookIp(ip: string): boolean {
@@ -15,7 +31,7 @@ function isBlockedWebhookIp(ip: string): boolean {
     return normalized.startsWith('::ffff:') || isPrivateOrLoopbackAddress(normalized)
 }
 
-export async function validateWebhookUrl(webhookUrl: string): Promise<void> {
+async function resolveValidatedWebhookTarget(webhookUrl: string): Promise<ValidatedWebhookTarget> {
     let parsed: URL
     try {
         parsed = new URL(webhookUrl)
@@ -28,8 +44,9 @@ export async function validateWebhookUrl(webhookUrl: string): Promise<void> {
         throw new Error(`Disallowed webhook protocol: ${parsed.protocol} (https: required)`)
     }
 
-    const hostname = parsed.hostname.replace(/^\[|\]$/g, '').toLowerCase()
+    const hostname = parsed.hostname.replace(/^\[|\]$/g, '').replace(/\.+$/, '').toLowerCase()
     if (
+        hostname === '' ||
         hostname === 'localhost' ||
         hostname.endsWith('.localhost') ||
         hostname.endsWith('.local') ||
@@ -39,7 +56,16 @@ export async function validateWebhookUrl(webhookUrl: string): Promise<void> {
         throw new Error(`Webhook hostname resolves to restricted network address: ${hostname}`)
     }
 
-    if (!process.env['VITEST']) {
+    const normalizedUrl = new URL(parsed.href)
+    const literalFamily = isIP(hostname)
+    if (parsed.hostname.replace(/^\[|\]$/g, '').endsWith('.')) {
+        normalizedUrl.hostname = literalFamily === 6 ? `[${hostname}]` : hostname
+    }
+
+    const resolvedAddresses: ResolvedWebhookAddress[] = []
+    if (literalFamily === 4 || literalFamily === 6) {
+        resolvedAddresses.push({ address: hostname, family: literalFamily })
+    } else if (!process.env['VITEST']) {
         const records = await dns.promises.lookup(hostname, { all: true })
         if (records.length === 0) {
             throw new Error(`Webhook DNS lookup returned no addresses for hostname: ${hostname}`)
@@ -48,8 +74,16 @@ export async function validateWebhookUrl(webhookUrl: string): Promise<void> {
             if (isBlockedWebhookIp(rec.address)) {
                 throw new Error(`Webhook DNS resolved to private/loopback IP: ${rec.address}`)
             }
+            const family: 4 | 6 = rec.family === 6 || rec.address.includes(':') ? 6 : 4
+            resolvedAddresses.push({ address: rec.address, family })
         }
     }
+
+    return { parsed: normalizedUrl, hostname, resolvedAddresses }
+}
+
+export async function validateWebhookUrl(webhookUrl: string): Promise<void> {
+    await resolveValidatedWebhookTarget(webhookUrl)
 }
 
 /**
@@ -126,6 +160,115 @@ function buildWebhookPayloadAndHeaders(
     return { bodyPayload, headers, contentType }
 }
 
+function isMockedGlobalFetch(): boolean {
+    const currentFetch: unknown = globalThis.fetch
+    return (
+        currentFetch !== NATIVE_FETCH ||
+        (typeof currentFetch === 'function' && 'mock' in currentFetch)
+    )
+}
+
+interface HttpPostResponse {
+    ok: boolean
+    status: number
+    statusText: string
+}
+
+function sendPinnedWebhookPost(
+    target: ValidatedWebhookTarget,
+    headers: Record<string, string>,
+    bodyPayload: string,
+    signal: AbortSignal
+): Promise<HttpPostResponse> {
+    const primary = target.resolvedAddresses[0]
+    if (primary === undefined) {
+        return Promise.reject(new Error('No validated IP addresses available for webhook delivery'))
+    }
+    const transport = target.parsed.protocol === 'http:' ? http : https
+    return new Promise((resolve, reject) => {
+        let settled = false
+        let onAbort = (): void => undefined
+        const finishError = (err: unknown): void => {
+            if (settled) return
+            settled = true
+            signal.removeEventListener('abort', onAbort)
+            reject(err instanceof Error ? err : new Error(String(err)))
+        }
+        const req = transport.request(
+            target.parsed,
+            {
+                method: 'POST',
+                headers: {
+                    ...headers,
+                    'Content-Length': String(Buffer.byteLength(bodyPayload, 'utf8')),
+                },
+                lookup: (_lookupHost, opts, cb) => {
+                    const wantAll =
+                        typeof opts === 'object' &&
+                        opts !== null &&
+                        'all' in opts &&
+                        opts.all === true
+                    if (wantAll) {
+                        cb(null, [...target.resolvedAddresses])
+                        return
+                    }
+                    cb(null, primary.address, primary.family)
+                },
+            },
+            (res) => {
+                const status = res.statusCode ?? 0
+                const statusText = res.statusMessage ?? ''
+                if (status >= 300 && status < 400) {
+                    res.resume()
+                    finishError(new Error(`Redirect blocked for webhook (${String(status)})`))
+                    return
+                }
+                res.resume()
+                res.on('end', () => {
+                    if (settled) return
+                    settled = true
+                    signal.removeEventListener('abort', onAbort)
+                    resolve({ ok: status >= 200 && status < 300, status, statusText })
+                })
+                res.on('error', finishError)
+            }
+        )
+        onAbort = (): void => {
+            const abortErr = new Error('The operation was aborted')
+            abortErr.name = 'AbortError'
+            req.destroy()
+            finishError(abortErr)
+        }
+        if (signal.aborted) {
+            onAbort()
+            return
+        }
+        signal.addEventListener('abort', onAbort, { once: true })
+        req.on('error', finishError)
+        req.write(bodyPayload)
+        req.end()
+    })
+}
+
+async function dispatchWebhookPost(
+    target: ValidatedWebhookTarget,
+    webhookUrl: string,
+    headers: Record<string, string>,
+    bodyPayload: string,
+    signal: AbortSignal
+): Promise<HttpPostResponse> {
+    if (isMockedGlobalFetch() || target.resolvedAddresses.length === 0) {
+        return await fetch(webhookUrl, {
+            method: 'POST',
+            headers,
+            body: bodyPayload,
+            signal,
+            redirect: 'error',
+        })
+    }
+    return await sendPinnedWebhookPost(target, headers, bodyPayload, signal)
+}
+
 async function sendWebhookAttempt(
     webhookUrl: string,
     headers: Record<string, string>,
@@ -133,8 +276,9 @@ async function sendWebhookAttempt(
     contentType: string,
     attempt: number
 ): Promise<'delivered' | 'fatal' | 'retry'> {
+    let target: ValidatedWebhookTarget
     try {
-        await validateWebhookUrl(webhookUrl)
+        target = await resolveValidatedWebhookTarget(webhookUrl)
     } catch (err: unknown) {
         logger.error('Refusing to deliver digest report to unsafe webhook URL', {
             module: 'DigestReporter',
@@ -150,13 +294,9 @@ async function sendWebhookAttempt(
     }, WEBHOOK_TIMEOUT_MS)
     timeoutId.unref()
     try {
-        const response = await fetch(webhookUrl, {
-            method: 'POST',
-            headers,
-            body: bodyPayload,
-            signal: controller.signal,
-            redirect: 'error',
-        })
+        const response = await dispatchWebhookPost(
+            target, webhookUrl, headers, bodyPayload, controller.signal
+        )
 
         if (response.ok) {
             logger.info('Digest report delivered successfully', {

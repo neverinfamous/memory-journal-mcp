@@ -42,12 +42,6 @@ function resolveSessionProjectId(
     effectiveRegistry: ProjectRegistry
 ): number | string | undefined {
     let projectId: number | string | undefined = input.project_number
-    if (
-        (projectId === undefined || projectId === null) &&
-        input.workspace_id?.trim().toLowerCase() === 'default'
-    ) {
-        return lookupRegistryEntry(effectiveRegistry, input.workspace_id)?.project_number
-    }
     if ((projectId === undefined || projectId === null) && input.workspace_id !== undefined && input.workspace_id !== '') {
         const wsEntry = lookupRegistryEntry(effectiveRegistry, input.workspace_id)
         if (wsEntry?.project_number !== undefined) projectId = wsEntry.project_number

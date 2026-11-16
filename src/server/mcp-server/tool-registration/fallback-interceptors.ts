@@ -1,6 +1,7 @@
 import { wrapWithMetrics } from '../../../observability/index.js'
 import type { ServerRuntime } from '../../../utils/maintenance-lock.js'
 import { TEAM_PROMPT_NAMES } from '../../../auth/scope-map.js'
+import { AuthorizationError, PermissionError } from '../../../types/errors.js'
 import {
     DUMMY_HEALING_TOOL_NAMES,
     DUMMY_LIST_TOOL_NAMES,
@@ -31,6 +32,18 @@ import {
     resolveSingleProjectFromRegistry,
 } from './call-interceptor-helpers.js'
 
+export interface FallbackAccessTarget {
+    targetName: string
+    targetType: 'tool' | 'prompt' | 'resource'
+    capabilities?:
+        | {
+              requiresTeamScope?: boolean
+              requiresAdminScope?: boolean
+              requiresAuditScope?: boolean
+          }
+        | undefined
+}
+
 export function resolveKnownFallbackAuditName(
     requestedTool: string,
     matchingPrompt: PromptDefinition | undefined
@@ -47,29 +60,88 @@ export function resolveKnownFallbackAuditName(
     return undefined
 }
 
+function resolveDispatchFallbackAccessTarget(
+    requestedTool: string
+): FallbackAccessTarget | undefined {
+    if (matchesExactName(requestedTool, DUMMY_LIST_TOOL_NAMES)) {
+        return { targetName: 'list_tools', targetType: 'tool' }
+    }
+    if (DUMMY_SERVER_INFO_TOOL_NAMES.includes(requestedTool)) {
+        return { targetName: 'server_info', targetType: 'tool' }
+    }
+    if (matchesExactName(requestedTool, DUMMY_PROJECT_TOOL_NAMES) || requestedTool === 'projects') {
+        const target = requestedTool === 'projects' ? 'list_projects' : projectAliasTarget(requestedTool)
+        return target !== undefined ? { targetName: target, targetType: 'tool' } : undefined
+    }
+    if (matchesExactName(requestedTool, DUMMY_ADAPTER_TOOL_NAMES)) {
+        return { targetName: 'list_adapters', targetType: 'tool' }
+    }
+    if (matchesExactName(requestedTool, DUMMY_GREP_SEARCH_TOOL_NAMES)) {
+        return { targetName: 'grep_search', targetType: 'tool' }
+    }
+    if (DUMMY_FILE_VIEW_TOOL_NAMES.includes(requestedTool)) {
+        return { targetName: 'view_file', targetType: 'tool' }
+    }
+    if (DUMMY_DIR_LIST_TOOL_NAMES.includes(requestedTool)) {
+        return { targetName: 'list_dir', targetType: 'tool' }
+    }
+    return undefined
+}
+
+function enforceFallbackAccessTargets(
+    requestedTool: string,
+    runtime: ServerRuntime,
+    accessTargets?: readonly FallbackAccessTarget[]
+): void {
+    const resolvedTargets =
+        accessTargets ??
+        (() => {
+            const inferred = resolveDispatchFallbackAccessTarget(requestedTool)
+            return inferred !== undefined ? [inferred] : []
+        })()
+    for (const target of resolvedTargets) {
+        enforceAccessBoundary(
+            target.targetName,
+            target.targetType,
+            target.capabilities,
+            runtime.auditLogger
+        )
+    }
+}
+
 /**
  * [BOUNDARY] Runs autonomous unknown-tool healing fallbacks through the same guards as
- * registered tools: maintenance lock, audit interceptor, and metrics (H5). Failed payloads
- * are surfaced with `isError: true` instead of a silent success envelope.
+ * registered tools: access boundary check first (outside audit/metrics/issue wrappers so
+ * unauthorized calls do not double-log), then maintenance lock, audit interceptor, and
+ * metrics (H5/M12). Failed payloads surface with `isError: true`.
  */
-
-function structuredOf(formatted: unknown): Record<string, unknown> | undefined {
+function structuredContentObject(formatted: unknown): object | undefined {
     if (typeof formatted !== 'object' || formatted === null) return undefined
     if (!('structuredContent' in formatted)) return undefined
     const sc = formatted.structuredContent
-    return typeof sc === 'object' && sc !== null ? (sc as Record<string, unknown>) : undefined
+    return typeof sc === 'object' && sc !== null && !Array.isArray(sc) ? sc : undefined
 }
 
 export async function runFallbackWithInterceptors(
     requestedTool: string,
     toolArgs: Record<string, unknown>,
     runtime: ServerRuntime,
-    fallback: () => Promise<unknown>
+    fallback: () => Promise<unknown>,
+    accessTargets?: readonly FallbackAccessTarget[]
 ): Promise<unknown> {
+    try {
+        enforceFallbackAccessTargets(requestedTool, runtime, accessTargets)
+    } catch (error: unknown) {
+        if (error instanceof PermissionError || error instanceof AuthorizationError) {
+            return formatTokenEstimatedError({ ...error.toResponse() }, true)
+        }
+        return formatTokenEstimatedError(formatToolFailure(error, requestedTool, toolArgs), true)
+    }
+
     let formatted: unknown
     const inner = async (): Promise<unknown> => {
         formatted = await fallback()
-        return structuredOf(formatted) ?? formatted
+        return structuredContentObject(formatted) ?? formatted
     }
     const metricToolName = requestedTool.startsWith('memory://') ? 'read_resource' : requestedTool
     const metricsWrapped = wrapWithMetrics(metricToolName, inner, runtime.metrics)
@@ -82,13 +154,18 @@ export async function runFallbackWithInterceptors(
                 : metricsWrapped(toolArgs)
         )
     } catch (error: unknown) {
+        if (error instanceof PermissionError || error instanceof AuthorizationError) {
+            return formatTokenEstimatedError({ ...error.toResponse() }, true)
+        }
         return formatTokenEstimatedError(formatToolFailure(error, requestedTool, toolArgs), true)
     }
 
     if (formatted === undefined) return undefined
-    const sc = structuredOf(formatted)
+    const sc = structuredContentObject(formatted)
     if (
-        sc?.['success'] === false &&
+        sc !== undefined &&
+        'success' in sc &&
+        sc.success === false &&
         typeof formatted === 'object' &&
         formatted !== null &&
         !('isError' in formatted)
@@ -109,11 +186,9 @@ export async function dispatchKnownGroupFallbackTools(
     toolFilterConfig: ToolFilterConfig | null | undefined,
     fallbackConfig: ToolHandlerConfig,
     allTools: ToolRegistration[],
-    allToolNames: Set<string>,
-    runtime: ServerRuntime
+    allToolNames: Set<string>
 ): Promise<unknown> {
     if (matchesExactName(requestedTool, DUMMY_LIST_TOOL_NAMES)) {
-        enforceAccessBoundary('list_tools', 'tool', undefined, runtime.auditLogger)
         const enabledSet = toolFilterConfig?.enabledTools ?? allToolNames
         const raw = toolFilterConfig?.raw
         const toolsList = allTools
@@ -131,7 +206,6 @@ export async function dispatchKnownGroupFallbackTools(
     }
 
     if (DUMMY_SERVER_INFO_TOOL_NAMES.includes(requestedTool)) {
-        enforceAccessBoundary('server_info', 'tool', undefined, runtime.auditLogger)
         return formatSuccessPayload(await handleServerInfo(toolArgs, requestedTool, toolContext))
     }
 
@@ -141,7 +215,6 @@ export async function dispatchKnownGroupFallbackTools(
     ) {
         const target = requestedTool === 'projects' ? 'list_projects' : projectAliasTarget(requestedTool)
         if (target !== undefined) {
-            enforceAccessBoundary(target, 'tool', undefined, runtime.auditLogger)
             if (target === 'get_project') {
                 return formatSuccessPayload(
                     resolveSingleProjectFromRegistry(fallbackConfig.projectRegistry, toolArgs, requestedTool)
@@ -156,22 +229,18 @@ export async function dispatchKnownGroupFallbackTools(
     }
 
     if (matchesExactName(requestedTool, DUMMY_ADAPTER_TOOL_NAMES)) {
-        enforceAccessBoundary('list_adapters', 'tool', undefined, runtime.auditLogger)
         return formatSuccessPayload(handleListAdapters(requestedTool, toolContext))
     }
 
     if (matchesExactName(requestedTool, DUMMY_GREP_SEARCH_TOOL_NAMES)) {
-        enforceAccessBoundary('grep_search', 'tool', undefined, runtime.auditLogger)
         return formatSuccessPayload(await handleGrepSearch(toolArgs, requestedTool, toolContext))
     }
 
     if (DUMMY_FILE_VIEW_TOOL_NAMES.includes(requestedTool)) {
-        enforceAccessBoundary('view_file', 'tool', undefined, runtime.auditLogger)
         return formatSuccessPayload(await handleViewFile(toolArgs, requestedTool, toolContext))
     }
 
     if (DUMMY_DIR_LIST_TOOL_NAMES.includes(requestedTool)) {
-        enforceAccessBoundary('list_dir', 'tool', undefined, runtime.auditLogger)
         return formatSuccessPayload(await handleListDir(toolArgs, requestedTool, toolContext))
     }
 

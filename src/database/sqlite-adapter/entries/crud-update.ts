@@ -235,25 +235,26 @@ export function performUpdateEntry(
     const selectSql = scopedSelect
         ? 'SELECT id, content, version, workspace_id as workspaceId FROM memory_journal WHERE id = ? AND deleted_at IS NULL AND workspace_id = ? COLLATE NOCASE'
         : 'SELECT id, content, version, workspace_id as workspaceId FROM memory_journal WHERE id = ? AND deleted_at IS NULL'
-    const existing = (
-        scopedSelect
-            ? db.prepare(selectSql).get(id, callerWorkspace)
-            : db.prepare(selectSql).get(id)
-    ) as ExistingEntryRow | undefined
-    if (existing === undefined) return false
-
-    assertUpdateAllowed(id, existing, callerWorkspace, input)
-
-    const writeInput = resolveUpdateScope(id, existing, input, registry)
-
-    const { updates, values } = buildUpdateSets(id, existing, callerWorkspace, writeInput)
-
     const scopeUpdate = callerWorkspace !== '*'
-    const query = `UPDATE memory_journal SET ${updates.join(', ')} WHERE id = ? AND deleted_at IS NULL${scopeUpdate ? ' AND workspace_id = ? COLLATE NOCASE' : ''}`
 
     const txn = db.transaction(() => {
+        const existing = (
+            scopedSelect
+                ? db.prepare(selectSql).get(id, callerWorkspace)
+                : db.prepare(selectSql).get(id)
+        ) as ExistingEntryRow | undefined
+        if (existing === undefined) return false
+
+        assertUpdateAllowed(id, existing, callerWorkspace, input)
+
+        const writeInput = resolveUpdateScope(id, existing, input, registry)
+        const { updates, values } = buildUpdateSets(id, existing, callerWorkspace, writeInput)
+        const expectedVersion = input.expectedVersion ?? existing.version
+        const query = `UPDATE memory_journal SET ${updates.join(', ')} WHERE id = ? AND deleted_at IS NULL AND version = ?${scopeUpdate ? ' AND workspace_id = ? COLLATE NOCASE' : ''}`
         const stmt = db.prepare(query)
-        const result = scopeUpdate ? stmt.run(...values, id, callerWorkspace) : stmt.run(...values, id)
+        const result = scopeUpdate
+            ? stmt.run(...values, id, expectedVersion, callerWorkspace)
+            : stmt.run(...values, id, expectedVersion)
         if (result.changes === 0) {
             throw new NoRowsUpdatedError()
         }
@@ -272,7 +273,7 @@ export function performUpdateEntry(
     })
 
     try {
-        return txn()
+        return txn.immediate()
     } catch (err) {
         if (err instanceof NoRowsUpdatedError) return false
         throw err

@@ -107,7 +107,7 @@ export class DatabaseAdapter extends AdapterDelegates implements IDatabaseAdapte
             validationStatus?: 'passed' | 'failed' | 'none'
             workspaceId?: string
             targetWorkspaceId?: string
-            sessionId?: string
+            sessionId?: string | null
         }
     ): JournalEntry | null {
         return this.entriesMgr.updateEntry(id, updates)
@@ -191,7 +191,7 @@ export class DatabaseAdapter extends AdapterDelegates implements IDatabaseAdapte
             trustScore?: number
             impactScore?: number
             validationStatus?: 'passed' | 'failed' | 'none'
-            sessionId?: string
+            sessionId?: string | null
             targetWorkspaceId?: string
         }[]
     ): { updated: JournalEntry[]; notFound: number[]; errors: { id: number; error: Error }[] } {

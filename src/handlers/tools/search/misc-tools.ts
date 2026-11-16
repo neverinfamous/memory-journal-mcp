@@ -5,7 +5,7 @@ import { resolveWorkspaceId } from '../../../utils/workspace-resolver.js'
 import { activeProjectRegistry, alignedProjectFilter } from '../../../utils/write-scope.js'
 import { coerceNumber } from '../../../utils/query-helpers.js'
 import { VectorStatsOutputSchema } from './schemas.js'
-import { EntriesListOutputSchema, relaxedNumber } from '../schemas.js'
+import { EntriesListOutputSchema, MAX_QUERY_LIMIT, relaxedNumber } from '../schemas.js'
 
 export function getMiscSearchTools(context: ToolContext): ToolDefinition[] {
     const { db, vectorManager } = context;
@@ -66,14 +66,20 @@ export function getMiscSearchTools(context: ToolContext): ToolDefinition[] {
             },
             handler: (params: unknown) => {
                 try {
-                    const parsed = z.object({
-                        limit: z.preprocess(coerceNumber, z.number().int().min(1).optional().default(50)),
-                        offset: z.preprocess(coerceNumber, z.number().int().min(0).optional().default(0)),
-                        workspace_id: z.string().optional(),
-                        workspaceId: z.string().optional(),
-                        project_number: z.preprocess(coerceNumber, z.number().int().optional()),
-                        projectNumber: z.preprocess(coerceNumber, z.number().int().optional()),
-                    }).parse(params)
+                    const parsed = z
+                        .object({
+                            limit: z.preprocess(
+                                coerceNumber,
+                                z.number().int().min(1).max(MAX_QUERY_LIMIT).optional().default(50)
+                            ),
+                            offset: z.preprocess(coerceNumber, z.number().int().min(0).optional().default(0)),
+                            workspace_id: z.string().optional(),
+                            workspaceId: z.string().optional(),
+                            project_number: z.preprocess(coerceNumber, z.number().int().optional()),
+                            projectNumber: z.preprocess(coerceNumber, z.number().int().optional()),
+                        })
+                        .strict()
+                        .parse(params)
                     const rawWs = parsed.workspace_id ?? parsed.workspaceId
                     const rawProj = parsed.project_number ?? parsed.projectNumber
                     const wsId = rawWs === '*' ? '*' : resolveWorkspaceId(rawWs, rawProj, context.config)

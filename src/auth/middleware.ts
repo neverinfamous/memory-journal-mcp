@@ -67,8 +67,13 @@ export interface AuthMiddlewareConfig {
  * - Well-known paths are always public
  */
 function isPublicPath(path: string, publicPaths: string[]): boolean {
-    // Exact OAuth endpoints are public
-    if (path === '/.well-known/oauth-authorization-server' || path === '/.well-known/jwks.json') {
+    // Exact OAuth discovery & JWKS endpoints are public
+    if (
+        path === '/.well-known/oauth-authorization-server' ||
+        path === '/.well-known/oauth-protected-resource' ||
+        path.startsWith('/.well-known/oauth-protected-resource/') ||
+        path === '/.well-known/jwks.json'
+    ) {
         return true
     }
 

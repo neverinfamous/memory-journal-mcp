@@ -238,28 +238,38 @@ export function resolveAuthenticatedAuthor(): string {
     return resolveAuthor()
 }
 
+function sanitizeValidAuthor(raw: string | undefined): string | undefined {
+    if (raw === undefined || raw === '') return undefined
+    const sanitized = sanitizeAuthor(raw).trim()
+    if (sanitized === '' || sanitized.toLowerCase() === 'unknown') return undefined
+    return sanitized
+}
+
 /**
  * Resolve the author name for team-shared entries.
- * Priority: TEAM_AUTHOR env → req.auth.sub → 'unknown'.
- * Uses sanitizeAuthor() to strip control characters and cap length.
+ * Priority: TEAM_AUTHOR env → req.auth.sub → local OS username → 'unknown'.
+ * Uses sanitizeAuthor() to strip control characters and cap length, falling
+ * through to lower priorities if sanitization produces `""` or `'unknown'`.
  */
 export function resolveAuthor(): string {
-    const envAuthor = process.env['TEAM_AUTHOR']?.trim().replace(/"/g, '')
-    if (envAuthor) {
-        return sanitizeAuthor(envAuthor)
+    const envAuthor = sanitizeValidAuthor(process.env['TEAM_AUTHOR']?.trim().replace(/"/g, ''))
+    if (envAuthor !== undefined) {
+        return envAuthor
     }
 
     const authCtx = getAuthContext()
-    if (authCtx?.claims?.sub) {
-        return sanitizeAuthor(authCtx.claims.sub)
+    const claimSub = sanitizeValidAuthor(authCtx?.claims?.sub)
+    if (claimSub !== undefined) {
+        return claimSub
     }
     if (authCtx?.authenticated) {
         return 'unknown'
     }
 
     const localUser = process.env['USERNAME'] || process.env['USER']
-    if (localUser) {
-        return sanitizeAuthor(localUser.toLowerCase())
+    const sanitizedLocal = sanitizeValidAuthor(localUser?.toLowerCase())
+    if (sanitizedLocal !== undefined) {
+        return sanitizedLocal
     }
 
     return 'unknown'

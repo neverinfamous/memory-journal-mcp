@@ -193,3 +193,35 @@ export function resolveUnconflictedDefaultProject(
     const collidesOther = entries.some(([, entry]) => entry.project_number === defaultProjectNumber)
     return collidesOther ? undefined : defaultProjectNumber
 }
+
+/**
+ * Clear an inherited (non-CLI) workspace ID when a CLI `--default-project` override selects
+ * a project registered to another workspace or conflicting with a workspace's registered number.
+ */
+export function resolveUnconflictedDefaultWorkspace(
+    defaultWorkspaceId: string | undefined,
+    defaultProjectNumber: number | undefined,
+    projectRegistry: Record<string, ProjectRegistryEntry> | undefined,
+    workspaceFromCli: boolean,
+    projectFromCli: boolean
+): string | undefined {
+    if (
+        !projectFromCli ||
+        workspaceFromCli ||
+        defaultWorkspaceId === undefined ||
+        defaultProjectNumber === undefined
+    ) {
+        return defaultWorkspaceId
+    }
+    const lowerWs = defaultWorkspaceId.toLowerCase()
+    const entries = projectRegistry !== undefined ? Object.entries(projectRegistry) : []
+    const matched = entries.find(([key]) => key.toLowerCase() === lowerWs)
+    if (matched !== undefined) {
+        const regNum = matched[1].project_number
+        return regNum !== undefined && regNum !== null && regNum !== defaultProjectNumber
+            ? undefined
+            : defaultWorkspaceId
+    }
+    const collidesOther = entries.some(([, entry]) => entry.project_number === defaultProjectNumber)
+    return collidesOther ? undefined : defaultWorkspaceId
+}

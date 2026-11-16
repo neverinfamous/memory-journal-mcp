@@ -52,7 +52,14 @@ export function createGitHubContextTool(context: ToolContext): ToolDefinition {
 
                 let targetGithub: GitHubIntegration
                 let target: { owner: string; repo: string } | undefined
+                const configuredWs = context.config?.defaultWorkspaceId?.trim()
+                const hasConcreteDefaultWs =
+                    configuredWs !== undefined &&
+                    configuredWs !== '' &&
+                    configuredWs !== '*' &&
+                    configuredWs.toLowerCase() !== 'default'
                 const callerScoped =
+                    hasConcreteDefaultWs ||
                     input.owner !== undefined ||
                     input.repo !== undefined ||
                     input.workspace_id !== undefined ||

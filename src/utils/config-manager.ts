@@ -401,20 +401,21 @@ export class ConfigManager extends EventEmitter {
             this.applyReloadedToolFilter(parsed, updates)
             this.applyReloadedCodemode(parsed, updates)
 
-            const scopeFlags = syncBriefingProvenanceFromFile(
+            const bc = { ...this.config.briefingConfig }
+            const bcKeyChanged = reloadBriefingConfigKeys(parsed, bc, this.initialBriefingBaseline)
+            const scopeOutcome = applyReloadedBriefingScope(parsed, bc, this.cliEnvBaseline)
+            syncBriefingProvenanceFromFile(
                 parsed,
                 this.briefingKeysFromFile,
                 BRIEFING_CONFIG_KEY_MAP,
                 isValidBriefingConfigValue
             )
-            this.defaultWorkspaceIdFromFile = scopeFlags.defaultWorkspaceIdFromFile
-            this.defaultProjectNumberFromFile = scopeFlags.defaultProjectNumberFromFile
+            if (scopeOutcome.scopeAccepted) {
+                this.defaultWorkspaceIdFromFile = scopeOutcome.defaultWorkspaceIdFromFile
+                this.defaultProjectNumberFromFile = scopeOutcome.defaultProjectNumberFromFile
+            }
 
-            const bc = { ...this.config.briefingConfig }
-            let bcChanged = reloadBriefingConfigKeys(parsed, bc, this.initialBriefingBaseline)
-            bcChanged = applyReloadedBriefingScope(parsed, bc, this.cliEnvBaseline) || bcChanged
-
-            if (bcChanged) {
+            if (bcKeyChanged || scopeOutcome.changed) {
                 updates.briefingConfig = bc
             }
 

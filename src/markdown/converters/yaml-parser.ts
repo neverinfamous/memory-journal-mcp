@@ -77,7 +77,7 @@ function extractFrontmatterHeaderBounds(
 }
 
 function parseYamlFrontmatterLines(fmLines: string[]): FrontmatterData {
-    const metadata: FrontmatterData = {}
+    const metadata = Object.create(null) as FrontmatterData
     let currentArrayKey: string | null = null
     let currentArray: string[] = []
 
@@ -131,7 +131,7 @@ function parseYamlFrontmatterLines(fmLines: string[]): FrontmatterData {
 export function parseYamlFrontmatter(content: string): YamlParseResult {
     const extracted = extractFrontmatterHeaderBounds(content)
     if (extracted === null) {
-        return { metadata: {}, body: content }
+        return { metadata: Object.create(null) as FrontmatterData, body: content }
     }
     return {
         metadata: parseYamlFrontmatterLines(extracted.fmLines),

@@ -192,14 +192,136 @@ export function extractNestedTimeoutMs(
     return Math.min(outerTimeoutMs, num)
 }
 
+function isNestedPlainRecord(val: unknown): val is Record<string, unknown> {
+    return typeof val === 'object' && val !== null && !Array.isArray(val)
+}
+
+function parseNestedStringContext(raw: string): Record<string, unknown> {
+    const trimmed = raw.trim()
+    const looksJson =
+        (trimmed.startsWith('{') && trimmed.endsWith('}')) ||
+        (trimmed.startsWith('[') && trimmed.endsWith(']'))
+    if (!looksJson) return { content: raw, text: raw, raw }
+    try {
+        const parsed: unknown = JSON.parse(trimmed)
+        return isNestedPlainRecord(parsed) ? parsed : { value: parsed, raw, text: raw, content: raw }
+    } catch {
+        return { content: raw, text: raw, raw }
+    }
+}
+
 /**
- * Extracts a plain-object `context` payload from nested `executeCode` arguments when provided.
+ * Extracts and normalizes a `context` payload from nested `executeCode` arguments,
+ * wrapping strings and arrays safely to match top-level `buildSandboxUserContext`.
  */
 export function extractNestedContextRecord(
     argRec: Record<string, unknown> | undefined
 ): Record<string, unknown> | undefined {
     if (argRec === undefined) return undefined
     const rawCtx = argRec['context']
-    if (typeof rawCtx !== 'object' || rawCtx === null || Array.isArray(rawCtx)) return undefined
-    return rawCtx as Record<string, unknown>
+    if (rawCtx === undefined || rawCtx === null) return undefined
+    if (isNestedPlainRecord(rawCtx)) return { ...rawCtx }
+    if (typeof rawCtx === 'string') return parseNestedStringContext(rawCtx)
+    return { value: rawCtx, raw: rawCtx }
+}
+
+/** Extracts trimmed non-empty `session_id` / `sessionId` from nested `executeCode` arguments. */
+export function extractNestedSessionId(
+    argRec: Record<string, unknown> | undefined
+): string | undefined {
+    if (argRec === undefined) return undefined
+    const raw = argRec['session_id'] ?? argRec['sessionId']
+    if (typeof raw === 'string' && raw.trim() !== '') return raw.trim()
+    const ctx = argRec['context']
+    if (isNestedPlainRecord(ctx)) {
+        const ctxRaw = ctx['session_id'] ?? ctx['sessionId']
+        if (typeof ctxRaw === 'string' && ctxRaw.trim() !== '') return ctxRaw.trim()
+    }
+    return undefined
+}
+
+/** Extracts boolean `auto_version` / `autoVersion` from nested `executeCode` arguments when provided. */
+export function extractNestedAutoVersion(
+    argRec: Record<string, unknown> | undefined
+): boolean | undefined {
+    if (argRec === undefined) return undefined
+    if (typeof argRec['auto_version'] === 'boolean') return argRec['auto_version']
+    if (typeof argRec['autoVersion'] === 'boolean') return argRec['autoVersion']
+    return undefined
+}
+
+function parseNestedByteSize(val: unknown, defaultUnit: 'b' | 'kb'): number | undefined {
+    const mult = defaultUnit === 'kb' ? 1024 : 1
+    if (typeof val === 'number') return Number.isFinite(val) && val > 0 ? Math.round(val * mult) : undefined
+    if (typeof val === 'string') {
+        const trimmed = val.trim()
+        const match = /^(\d+(?:\.\d+)?)\s*(kb|mb|bytes|b)?$/i.exec(trimmed)
+        if (match?.[1] !== undefined) {
+            const num = parseFloat(match[1])
+            if (!Number.isFinite(num) || num <= 0) return undefined
+            const unit = (match[2] ?? defaultUnit).toLowerCase()
+            if (unit === 'mb') return Math.round(num * 1024 * 1024)
+            if (unit === 'kb') return Math.round(num * 1024)
+            return Math.round(num)
+        }
+    }
+    return undefined
+}
+
+/** Extracts nested `max_result_size*` (or `_kb`) bounds, monotonically clamped to outer limit when set. */
+export function extractNestedMaxResultSize(
+    argRec: Record<string, unknown> | undefined,
+    outerMaxResultSize?: number
+): number | undefined {
+    if (argRec === undefined) return undefined
+    const direct = parseNestedByteSize(
+        argRec['max_result_size'] ??
+            argRec['maxResultSize'] ??
+            argRec['max_result_size_bytes'] ??
+            argRec['maxResultSizeBytes'],
+        'b'
+    )
+    const kb = parseNestedByteSize(argRec['max_result_size_kb'] ?? argRec['maxResultSizeKb'], 'kb')
+    const requested = direct ?? kb
+    if (requested === undefined) return undefined
+    return outerMaxResultSize !== undefined && outerMaxResultSize > 0
+        ? Math.min(outerMaxResultSize, requested)
+        : requested
+}
+
+/**
+ * Merges narrowed `workspace_id`, `project_number`, `repo`, and `session_id` from nested `argRec`
+ * into synthesized entry payloads before calling `createEntry`.
+ */
+export function mergeNestedSynthesizedScope(
+    payload: unknown,
+    argRec: Record<string, unknown> | undefined,
+    narrowed: { workspaceId?: string; projectNumber?: number },
+    pinnedWorkspace: string | undefined,
+    pinnedProjectNumber: number | undefined
+): unknown {
+    if (!isNestedPlainRecord(payload)) return payload
+    const merged: Record<string, unknown> = { ...payload }
+    const effWs = narrowed.workspaceId ?? pinnedWorkspace
+    if (effWs !== undefined && merged['workspace_id'] === undefined && merged['workspaceId'] === undefined) {
+        merged['workspace_id'] = effWs
+    }
+    const effProj = narrowed.projectNumber ?? pinnedProjectNumber
+    if (effProj !== undefined && merged['project_number'] === undefined && merged['projectNumber'] === undefined) {
+        merged['project_number'] = effProj
+    }
+    const repoVal = argRec?.['repo'] ?? argRec?.['repo_name'] ?? argRec?.['repoName']
+    if (
+        typeof repoVal === 'string' &&
+        repoVal.trim() !== '' &&
+        merged['repo'] === undefined &&
+        merged['repo_name'] === undefined
+    ) {
+        merged['repo'] = repoVal.trim()
+    }
+    const sessId = extractNestedSessionId(argRec)
+    if (sessId !== undefined && merged['session_id'] === undefined && merged['sessionId'] === undefined) {
+        merged['session_id'] = sessId
+    }
+    return merged
 }

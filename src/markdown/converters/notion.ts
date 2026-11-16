@@ -13,6 +13,7 @@
 import type { ConvertedFile } from './index.js'
 import type { FrontmatterData } from '../frontmatter.js'
 import { basename, dirname, parse } from 'node:path'
+import { addBoundedTag, toBoundedTags } from './utils.js'
 
 export function convertNotion(
     content: string,
@@ -37,7 +38,7 @@ export function convertNotion(
             if (cleanName) {
                 // Convert to kebab-case
                 const tag = cleanName.toLowerCase().replace(/[^a-z0-9]+/g, '-')
-                if (tag && tag !== '-') mergedTags.add(tag)
+                if (tag && tag !== '-') addBoundedTag(mergedTags, tag)
             }
         }
     }
@@ -60,7 +61,7 @@ export function convertNotion(
         // It's already an H1, good.
     } else {
         // Fallback title from filename (removing the hash)
-        const base = basename(filename, '.md')
+        const base = basename(filename).replace(/\.md$/i, '')
         const cleanTitle = base.trim().replace(/[ \t]{1,64}[a-f0-9]{32}$/i, '').trim()
         if (cleanTitle && !processedBody.startsWith('# ')) {
             processedBody = `# ${cleanTitle}\n\n${processedBody}`
@@ -68,7 +69,7 @@ export function convertNotion(
     }
 
     if (mergedTags.size > 0) {
-        mjMeta.tags = Array.from(mergedTags)
+        mjMeta.tags = toBoundedTags(mergedTags)
     }
 
     // 3. Heuristic Entry Type Inference

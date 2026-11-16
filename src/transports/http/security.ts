@@ -277,13 +277,16 @@ export function buildAllowedHostHeaders(
     host: string,
     publicOrigin: string | undefined
 ): string[] {
-    const normalizedHost = formatHostForUrl(host)
-    const allowed = new Set<string>([normalizedHost, 'localhost', '127.0.0.1', '[::1]'])
+    const normalizedHost = formatHostForUrl(host.trim().toLowerCase())
+    const allowed = new Set<string>(['localhost', '127.0.0.1', '[::1]'])
+    if (normalizedHost !== '') {
+        allowed.add(normalizedHost)
+    }
     if (publicOrigin !== undefined && publicOrigin.trim() !== '') {
         try {
             const parsed = new URL(publicOrigin.trim())
-            if (parsed.hostname !== '') allowed.add(parsed.hostname)
-            if (parsed.host !== '') allowed.add(parsed.host)
+            if (parsed.hostname !== '') allowed.add(parsed.hostname.toLowerCase())
+            if (parsed.host !== '') allowed.add(parsed.host.toLowerCase())
         } catch {
             // Ignore malformed publicOrigin when deriving host allowlist
         }

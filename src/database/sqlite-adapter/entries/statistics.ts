@@ -52,7 +52,7 @@ function getTypeCounts(
     dateFilter: string,
     dateParams: unknown[]
 ): { totalEntries: number; entriesByType: Record<string, number> } {
-    const entriesByType: Record<string, number> = {}
+    const entriesByType = Object.create(null) as Record<string, number>
     let totalEntries: number
 
     if (dateParams.length > 0) {
@@ -180,15 +180,18 @@ function buildRelationshipBreakdown(relTypeRows: { relationship_type: string; co
     relationshipBreakdown: Record<string, number>
 } {
     const causalMetrics = { blocked_by: 0, resolved: 0, caused: 0 }
-    const relationshipBreakdown: Record<string, number> = {
-        evolves_from: 0,
-        references: 0,
-        implements: 0,
-        clarifies: 0,
-        response_to: 0,
-        blocked_by: 0,
-        resolved: 0,
-        caused: 0,
+    const relationshipBreakdown = Object.create(null) as Record<string, number>
+    for (const relType of [
+        'evolves_from',
+        'references',
+        'implements',
+        'clarifies',
+        'response_to',
+        'blocked_by',
+        'resolved',
+        'caused',
+    ]) {
+        relationshipBreakdown[relType] = 0
     }
     for (const row of relTypeRows) {
         const canonicalKey = row.relationship_type === 'resolves' ? 'resolved' : row.relationship_type

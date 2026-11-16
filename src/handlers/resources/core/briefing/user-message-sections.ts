@@ -14,6 +14,7 @@ export interface BriefingUserMessageOptions {
     ciStatus: string
     totalEntries: number
     latestPreviews: string[]
+    teamLatestPreviews?: string[]
     summaryPreviews?: string[] | null
     github: BriefingGitHub | null
     teamTotalEntries?: number
@@ -203,6 +204,11 @@ export function buildJournalParts(opts: BriefingUserMessageOptions): string[] {
             journalParts.push(
                 `Summary: ${escapeCell(cleaned)} (Use \`mj_execute_code\` or \`read_resource\` to view full entry)`,
             )
+        }
+    }
+    if (opts.teamLatestPreviews && opts.teamLatestPreviews.length > 0) {
+        for (const teamEntry of opts.teamLatestPreviews) {
+            journalParts.push(`Team: ${escapeCell(teamEntry)}`)
         }
     }
     return journalParts

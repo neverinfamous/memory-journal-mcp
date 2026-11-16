@@ -3,18 +3,14 @@ import * as path from 'node:path'
 import { z } from 'zod'
 import type { ToolDefinition, ToolContext } from '../../../../types/index.js'
 import { getSearchTools } from '../../search/index.js'
-import {
-    assertSafeDirectoryPath,
-    assertSafeFilePath,
-    PathTraversalError,
-} from '../../../../utils/security-utils.js'
+import { assertSafeDirectoryPath, assertSafeFilePath, PathTraversalError } from '../../../../utils/security-utils.js'
 import { ErrorFieldsMixin } from '../../error-fields-mixin.js'
 import {
     DUMMY_GREP_SEARCH_TOOL_NAMES,
     DUMMY_FILE_VIEW_TOOL_NAMES,
     DUMMY_DIR_LIST_TOOL_NAMES,
 } from './alias-catalog.js'
-import { handleReadResource } from './mcp-fallbacks.js'
+import { tryHandleResourceUriFallback } from './mcp-fallbacks.js'
 
 const FLEXIBLE_PASSTHROUGH_SCHEMA = z.looseObject({ ...ErrorFieldsMixin.shape })
 
@@ -331,7 +327,8 @@ export async function handleViewFile(
             recoverable: true,
         }
     }
-    if (targetPath.includes('://')) return handleReadResource(params, toolName, context)
+    const uriRoute = await tryHandleResourceUriFallback(targetPath, params, toolName, context)
+    if (uriRoute.handled) return uriRoute.result
 
     const resolved = path.resolve(targetPath.trim())
     const allowedRoots = context?.config?.allowedIoRoots ?? []
@@ -358,11 +355,17 @@ export async function handleListDir(
     const targetDir = pickFirstString(rawArgs, [
         'dir_path', 'dirPath', 'path', 'Path', 'directory', 'Directory', 'target', 'Target',
     ])
+    if (targetDir === undefined && Object.keys(rawArgs).length > 0) {
+        return {
+            success: false,
+            error: `🛠️ AUTONOMOUS HEALING: '${toolName}' requires a directory path parameter ('dir_path' or 'path') when arguments are provided.`,
+            code: 'VALIDATION_ERROR',
+            category: 'validation',
+            recoverable: true,
+        }
+    }
 
-    const dirToRead =
-        typeof targetDir === 'string' && targetDir.trim() !== ''
-            ? path.resolve(targetDir.trim())
-            : process.cwd()
+    const dirToRead = typeof targetDir === 'string' && targetDir.trim() !== '' ? path.resolve(targetDir.trim()) : process.cwd()
     const allowedRoots = context?.config?.allowedIoRoots ?? []
     try {
         assertSafeDirectoryPath(dirToRead, allowedRoots)
@@ -378,23 +381,8 @@ export async function handleListDir(
 
     try {
         await fs.promises.stat(dirToRead)
-    } catch {
-        return {
-            success: false,
-            error: `🛠️ AUTONOMOUS HEALING: Directory not found at '${dirToRead}'.`,
-            code: 'NOT_FOUND',
-            category: 'filesystem',
-            recoverable: true,
-        }
-    }
-
-    try {
         const dirents = await fs.promises.readdir(dirToRead, { withFileTypes: true })
-        const entries = dirents.map((d) => ({
-            name: d.name,
-            isDirectory: d.isDirectory(),
-            isFile: d.isFile(),
-        }))
+        const entries = dirents.map((d) => ({ name: d.name, isDirectory: d.isDirectory(), isFile: d.isFile() }))
         return {
             success: true,
             path: dirToRead,
@@ -402,10 +390,11 @@ export async function handleListDir(
             _healing_note: `🛠️ AUTONOMOUS HEALING: '${toolName}' is an agent-native tool, but was invoked directly as an MCP tool. Directory listed successfully from disk.`,
         }
     } catch (err) {
+        const notFound = typeof err === 'object' && err !== null && 'code' in err && err.code === 'ENOENT'
         return {
             success: false,
-            error: `Failed to list directory '${dirToRead}': ${err instanceof Error ? err.message : String(err)}`,
-            code: 'IO_ERROR',
+            error: notFound ? `🛠️ AUTONOMOUS HEALING: Directory not found at '${dirToRead}'.` : `Failed to list directory '${dirToRead}': ${err instanceof Error ? err.message : String(err)}`,
+            code: notFound ? 'NOT_FOUND' : 'IO_ERROR',
             category: 'filesystem',
             recoverable: true,
         }

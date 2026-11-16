@@ -40,11 +40,12 @@ export function getCopilotReviewTools(context: ToolContext): ToolDefinition[] {
                 try {
                     const input = z
                         .object({
-                            pr_number: z.number(),
+                            pr_number: z.number().int().positive(),
                             owner: z.string().optional(),
                             repo: z.string().optional(),
                             ...githubScopeParseFields,
                         })
+                        .strict()
                         .parse(params)
 
                     const resolved = await resolveOwnerRepo(context, input)

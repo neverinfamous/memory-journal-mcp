@@ -372,9 +372,10 @@ export function getBackupTools(context: ToolContext): ToolDefinition[] {
 
                     const result = db.deleteOldBackups(keepCountNum)
                     const hasFailed = result.failed !== undefined && result.failed.length > 0
+                    const allFailed = result.deleted.length === 0 && hasFailed
 
                     return {
-                        success: true,
+                        success: !allFailed,
                         deleted: result.deleted,
                         ...(hasFailed ? { failed: result.failed } : {}),
                         deletedCount: result.deleted.length,
@@ -384,10 +385,17 @@ export function getBackupTools(context: ToolContext): ToolDefinition[] {
                                   warning: `Failed to delete ${String(result.failed?.length ?? 0)} backup file(s).`,
                               }
                             : {}),
+                        ...(allFailed
+                            ? {
+                                  error: `Failed to delete ${String(result.failed?.length ?? 0)} old backup(s).`,
+                              }
+                            : {}),
                         message:
                             result.deleted.length > 0
                                 ? `Deleted ${String(result.deleted.length)} old backup(s), kept ${String(result.kept)}`
-                                : `No backups to delete. Currently have ${String(result.kept)} backup(s).`,
+                                : hasFailed
+                                  ? `Failed to delete ${String(result.failed?.length ?? 0)} backup(s); kept ${String(result.kept)}.`
+                                  : `No backups to delete. Currently have ${String(result.kept)} backup(s).`,
                     }
                 } catch (err) {
                     return formatHandlerError(err)

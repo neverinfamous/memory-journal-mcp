@@ -350,7 +350,7 @@ export function buildRelationshipGraph(
 
         const rels = batchRels ? (batchRels.get(eid) ?? []) : teamDb.getRelationships(eid, wsId)
         for (const r of rels) {
-            const edgeKey = `${String(r.fromEntryId)}-${String(r.toEntryId)}`
+            const edgeKey = `${String(r.fromEntryId)}-${String(r.toEntryId)}-${r.relationshipType}`
             if (!seenEdges.has(edgeKey) && entryIdSet.has(r.fromEntryId) && entryIdSet.has(r.toEntryId)) {
                 seenEdges.add(edgeKey)
                 edges.push({ from: r.fromEntryId, to: r.toEntryId, type: r.relationshipType })

@@ -76,6 +76,10 @@ function checkDefAcceptsKey(
         const opts = Array.isArray(def.options) ? def.options : Array.isArray(s.options) ? s.options : []
         return opts.some((opt) => checkSchemaAcceptsKey(opt, key, visited))
     }
+    if (typeName === 'ZodLazy' || typeName === 'lazy') {
+        const getter = (def as { getter?: () => unknown }).getter
+        return typeof getter === 'function' ? checkSchemaAcceptsKey(getter(), key, visited) : false
+    }
     if (typeName !== undefined && WRAPPER_DEF_TYPES.has(typeName)) {
         const innerCandidates = [
             def.schema,

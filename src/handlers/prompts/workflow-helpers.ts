@@ -100,7 +100,7 @@ export function buildExplicitAttributionArgs(
         if (isImplicitDefault) return ''
         const canonicalWs = exactRegistryKey(workspaceId, registry) ?? workspaceId
         const registryNumber = registry?.[canonicalWs]?.project_number
-        return `, workspace_id: "${canonicalWs}"${registryNumber !== undefined ? `, project_number: ${String(registryNumber)}` : ''}`
+        return `, workspace_id: ${JSON.stringify(canonicalWs)}${registryNumber !== undefined ? `, project_number: ${String(registryNumber)}` : ''}`
     }
     if (!Number.isFinite(explicitProjectNumber)) {
         throw new ValidationError(
@@ -118,7 +118,7 @@ export function buildExplicitAttributionArgs(
     const owner = owners[0]
     if (isImplicitDefault) {
         if (owner !== undefined) {
-            return `, workspace_id: "${owner}", project_number: ${String(explicitProjectNumber)}`
+            return `, workspace_id: ${JSON.stringify(owner)}, project_number: ${String(explicitProjectNumber)}`
         }
         return `, project_number: ${String(explicitProjectNumber)}`
     }
@@ -136,7 +136,7 @@ export function buildExplicitAttributionArgs(
             { workspaceId: canonicalWs, projectNumber: explicitProjectNumber }
         )
     }
-    return `, workspace_id: "${canonicalWs}", project_number: ${String(explicitProjectNumber)}`
+    return `, workspace_id: ${JSON.stringify(canonicalWs)}, project_number: ${String(explicitProjectNumber)}`
 }
 
 export function buildCliAttributionFlags(
@@ -152,11 +152,14 @@ export function buildCliAttributionFlags(
         explicitDefaultRequested
     )
     if (explicitArgs === '') return ''
-    const wsMatch = /workspace_id:\s*"([^"]+)"/.exec(explicitArgs)
+    const wsMatch = /workspace_id:\s*("(?:[^"\\]|\\.)*")/.exec(explicitArgs)
     const projMatch = /project_number:\s*(\d+)/.exec(explicitArgs)
     const parts: string[] = []
     if (wsMatch?.[1] !== undefined) {
-        parts.push(`--workspace ${JSON.stringify(wsMatch[1])}`)
+        const parsedWs: unknown = JSON.parse(wsMatch[1])
+        if (typeof parsedWs === 'string') {
+            parts.push(`--workspace ${JSON.stringify(parsedWs)}`)
+        }
     }
     if (projMatch?.[1] !== undefined) {
         parts.push(`--project-number ${projMatch[1]}`)
@@ -178,7 +181,7 @@ export function generateSummaryPrompt(
         if (!teamDb) {
             throw new ConfigurationError('Team database not configured')
         }
-        enforceWorkflowTeamPromptRbac(teamDb, 'viewer', workspaceId, briefingConfig, runtime)
+        enforceWorkflowTeamPromptRbac(teamDb, 'member', workspaceId, briefingConfig, runtime)
     }
 
     const targetDb = target === 'team' && teamDb ? teamDb : db

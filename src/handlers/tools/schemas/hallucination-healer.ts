@@ -249,6 +249,16 @@ export function healAgentHallucinations(val: unknown): unknown {
 
     for (const [badKey, goodKey] of Object.entries(KEY_ALIAS_MAP)) {
         if (badKey in obj) {
+            const isScopeAlias =
+                badKey === 'project_id' || badKey === 'projectId' || badKey === 'projectNumber'
+            if (
+                isScopeAlias &&
+                goodKey in obj &&
+                obj[goodKey] !== undefined &&
+                obj[goodKey] !== obj[badKey]
+            ) {
+                continue
+            }
             if (!(goodKey in obj) && obj[badKey] !== undefined) obj[goodKey] = obj[badKey]
             Reflect.deleteProperty(obj, badKey)
             modified = true

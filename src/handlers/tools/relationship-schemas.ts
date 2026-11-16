@@ -58,7 +58,7 @@ export const LinkEntriesSchemaMcp = z
         text: z.string().optional(),
     })
     .transform((data) => {
-        const rawRel = data.type ?? data.rel ?? data.relationship_type ?? 'references'
+        const rawRel = data.relationship_type ?? data.type ?? data.rel ?? 'references'
         const normalizedRel =
             rawRel === 'resolves'
                 ? 'resolved'
@@ -119,7 +119,6 @@ export const VisualizeInputSchemaMcp = z.object({
         .describe('Filter to show only this relationship type (e.g., blocked_by, implements)'),
     type: z.string().optional(),
     rel: z.string().optional(),
-    mode: z.string().optional(),
     depth: relaxedNumber().optional().default(2).describe('Relationship traversal depth'),
     path: relaxedNumber().optional(),
     limit: relaxedNumber()
@@ -144,7 +143,7 @@ export const VisualizeInputSchemaMcp = z.object({
     return {
         ...data,
         entry_id: coerceRelaxed(data.entry_id ?? data.id),
-        relationship_type: data.type ?? data.rel ?? data.mode ?? data.relationship_type,
+        relationship_type: data.relationship_type ?? data.type ?? data.rel,
         depth: coerceRelaxed(data.path ?? data.depth),
         project_number: coerceRelaxed(data.project_number),
         limit: clampedLimit,

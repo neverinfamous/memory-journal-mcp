@@ -9,7 +9,7 @@ import {
     RELATIONSHIP_TYPE_KEYS,
     pickRecordField,
     safeString,
-} from './constants-and-primitives.js'
+} from './entry-constants.js'
 
 /** Fold title/heading/subject/name aliases into the content as a markdown heading. */
 function healTitleField(obj: Record<string, unknown>): boolean {

@@ -1,7 +1,7 @@
 /**
- * GitHub Kanban Tools - 2 tools
+ * GitHub Kanban Tools - 4 tools
  *
- * Tools: get_kanban_board, move_kanban_item
+ * Tools: get_kanban_board, move_kanban_item, add_kanban_item, delete_kanban_item
  */
 
 import { z } from 'zod'

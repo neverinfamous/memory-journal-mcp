@@ -166,7 +166,7 @@ export interface IDatabaseAdapter extends IDatabaseVectorAndAdminAdapter {
             trustScore?: number
             impactScore?: number
             validationStatus?: 'passed' | 'failed' | 'none'
-            sessionId?: string
+            sessionId?: string | null
             targetWorkspaceId?: string
         }
     ): JournalEntry | null
@@ -228,7 +228,7 @@ export interface IDatabaseAdapter extends IDatabaseVectorAndAdminAdapter {
             trustScore?: number
             impactScore?: number
             validationStatus?: 'passed' | 'failed' | 'none'
-            sessionId?: string
+            sessionId?: string | null
             targetWorkspaceId?: string
         }[]
     ): { updated: JournalEntry[]; notFound: number[]; errors: { id: number; error: Error }[] }

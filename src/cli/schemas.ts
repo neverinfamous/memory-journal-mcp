@@ -282,7 +282,7 @@ export const ioImportExternalOptionsSchema = z.object({
 export const visualizeOptionsSchema = z.object({
     out: z.string().optional(),
     team: z.boolean().optional()
-}).extend(coreOptionsSchema.shape).extend(databaseOptionsSchema.shape).extend(workspaceOptionsSchema.shape)
+}).extend(coreOptionsSchema.shape).extend(databaseOptionsSchema.shape).extend(workspaceOptionsSchema.shape).extend(outputOptionsSchema.shape)
 
 export const analyticsOptionsSchema = z.object({
     team: z.boolean().optional()

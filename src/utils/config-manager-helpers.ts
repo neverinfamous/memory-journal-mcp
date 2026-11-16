@@ -179,16 +179,6 @@ export function buildInitialBaselines(
         hasFileCodemode &&
         initialFile['codemodeInternalFullAccess'] === initialConfig.codemodeInternalFullAccess
     const codemodeBaseline = codemodeFromFile ? undefined : initialConfig.codemodeInternalFullAccess
-    const defaultWorkspaceIdFromFile =
-        initialFile !== null &&
-        typeof initialFile['defaultWorkspaceId'] === 'string' &&
-        initialFile['defaultWorkspaceId'].trim() !== '' &&
-        initialFile['defaultWorkspaceId'].trim() !== '*'
-    const defaultProjectNumberFromFile =
-        initialFile !== null &&
-        typeof initialFile['defaultProjectNumber'] === 'number' &&
-        Number.isInteger(initialFile['defaultProjectNumber']) &&
-        initialFile['defaultProjectNumber'] > 0
 
     let cliEnvBaseline: ConfigCliEnvBaseline
     let toolFilterFromFile: boolean
@@ -206,13 +196,38 @@ export function buildInitialBaselines(
         toolFilterFromFile = false
     }
 
+    const fileWsId =
+        initialFile !== null &&
+        typeof initialFile['defaultWorkspaceId'] === 'string' &&
+        initialFile['defaultWorkspaceId'].trim() !== '' &&
+        initialFile['defaultWorkspaceId'].trim() !== '*'
+            ? initialFile['defaultWorkspaceId'].trim()
+            : undefined
+    const defaultWorkspaceIdFromFile =
+        fileWsId !== undefined &&
+        cliEnvBaseline.defaultWorkspaceId === undefined &&
+        initialConfig.briefingConfig.defaultWorkspaceId?.trim().toLowerCase() ===
+            fileWsId.toLowerCase()
+
+    const fileProjNum =
+        initialFile !== null &&
+        typeof initialFile['defaultProjectNumber'] === 'number' &&
+        Number.isInteger(initialFile['defaultProjectNumber']) &&
+        initialFile['defaultProjectNumber'] > 0
+            ? initialFile['defaultProjectNumber']
+            : undefined
+    const defaultProjectNumberFromFile =
+        fileProjNum !== undefined &&
+        cliEnvBaseline.defaultProjectNumber === undefined &&
+        initialConfig.briefingConfig.defaultProjectNumber === fileProjNum
+
     return {
         cliEnvBaseline,
         toolFilterFromFile,
         codemodeBaseline,
         initialBriefingBaseline,
         briefingKeysFromFile,
-        codemodeFromFile: hasFileCodemode,
+        codemodeFromFile,
         defaultWorkspaceIdFromFile,
         defaultProjectNumberFromFile,
     }
@@ -281,18 +296,19 @@ function parseReloadedProjectRegistry(
     return { nextRegistry: bc.projectRegistry, changed: false }
 }
 
-/**
- * Reload `defaultWorkspaceId`, `defaultProjectNumber`, and `projectRegistry` without
- * cross-workspace CLI/file bleed, validating against `pairStoredScope`.
- */
-export function applyReloadedBriefingScope(
-    parsed: Record<string, unknown>,
-    bc: BriefingConfig,
-    cliEnvBaseline: ConfigCliEnvBaseline
-): boolean {
-    const regOutcome = parseReloadedProjectRegistry(parsed, bc, cliEnvBaseline)
-    let changed = regOutcome.changed
+export interface ReloadedBriefingScopeResult {
+    changed: boolean
+    scopeAccepted: boolean
+    defaultWorkspaceIdFromFile: boolean
+    defaultProjectNumberFromFile: boolean
+}
 
+function extractFileScopeInputs(parsed: Record<string, unknown>): {
+    rawProjNum: unknown
+    hasFileProjNum: boolean
+    trimmedWs: string
+    hasFileWsId: boolean
+} {
     const rawProjNum = parsed['defaultProjectNumber']
     const hasFileProjNum =
         'defaultProjectNumber' in parsed &&
@@ -317,44 +333,64 @@ export function applyReloadedBriefingScope(
             hasFileWsId = true
         }
     }
+    return { rawProjNum, hasFileProjNum, trimmedWs, hasFileWsId }
+}
+
+/**
+ * Reload `defaultWorkspaceId`, `defaultProjectNumber`, and `projectRegistry` without
+ * cross-workspace CLI/file bleed, validating against `pairStoredScope`.
+ */
+export function applyReloadedBriefingScope(
+    parsed: Record<string, unknown>,
+    bc: BriefingConfig,
+    cliEnvBaseline: ConfigCliEnvBaseline
+): ReloadedBriefingScopeResult {
+    const regOutcome = parseReloadedProjectRegistry(parsed, bc, cliEnvBaseline)
+    let changed = regOutcome.changed
+    const { rawProjNum, hasFileProjNum, trimmedWs, hasFileWsId } = extractFileScopeInputs(parsed)
 
     const candidateWs = hasFileWsId
         ? trimmedWs
         : !hasFileProjNum || cliEnvBaseline.defaultProjectNumber === rawProjNum
           ? cliEnvBaseline.defaultWorkspaceId
           : undefined
-    const candidateProj = hasFileProjNum
-        ? rawProjNum
-        : !hasFileWsId || cliEnvBaseline.defaultWorkspaceId === trimmedWs
-          ? cliEnvBaseline.defaultProjectNumber
-          : undefined
+    const candidateProj =
+        hasFileProjNum && typeof rawProjNum === 'number'
+            ? rawProjNum
+            : !hasFileWsId || cliEnvBaseline.defaultWorkspaceId === trimmedWs
+              ? cliEnvBaseline.defaultProjectNumber
+              : undefined
 
     try {
         const paired = pairStoredScope(candidateWs, candidateProj, activeProjectRegistry(regOutcome.nextRegistry))
         const nextWsId = paired.workspaceId
         const nextProjNum = typeof paired.projectNumber === 'number' ? paired.projectNumber : undefined
         if (bc.defaultProjectNumber !== nextProjNum) {
-            if (nextProjNum !== undefined) {
-                bc.defaultProjectNumber = nextProjNum
-            } else {
-                delete bc.defaultProjectNumber
-            }
+            if (nextProjNum !== undefined) bc.defaultProjectNumber = nextProjNum
+            else delete bc.defaultProjectNumber
             changed = true
         }
         if (bc.defaultWorkspaceId !== nextWsId) {
-            if (nextWsId !== undefined) {
-                bc.defaultWorkspaceId = nextWsId
-            } else {
-                delete bc.defaultWorkspaceId
-            }
+            if (nextWsId !== undefined) bc.defaultWorkspaceId = nextWsId
+            else delete bc.defaultWorkspaceId
             changed = true
+        }
+        return {
+            changed,
+            scopeAccepted: true,
+            defaultWorkspaceIdFromFile: hasFileWsId,
+            defaultProjectNumberFromFile: hasFileProjNum,
         }
     } catch (err: unknown) {
         logger.warning('Ignoring conflicting workspace/project scope in reloaded config file', {
             module: 'ConfigManager',
             error: err instanceof Error ? err.message : String(err),
         })
+        return {
+            changed,
+            scopeAccepted: false,
+            defaultWorkspaceIdFromFile: false,
+            defaultProjectNumberFromFile: false,
+        }
     }
-
-    return changed
 }

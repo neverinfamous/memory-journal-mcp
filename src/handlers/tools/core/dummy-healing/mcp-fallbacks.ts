@@ -83,19 +83,54 @@ export function extractUriFromArgs(args: Record<string, unknown>): string | unde
     return uri
 }
 
+export async function tryHandleResourceUriFallback(
+    targetPath: string,
+    params: unknown,
+    toolName: string,
+    context?: ToolContext
+): Promise<{ handled: true; result: unknown } | { handled: false }> {
+    const trimmed = targetPath.trim()
+    if (!trimmed.includes('://')) return { handled: false }
+    if (!trimmed.startsWith('memory://')) {
+        return {
+            handled: true,
+            result: {
+                success: false,
+                error: `🛠️ AUTONOMOUS HEALING: Unsupported URI scheme in '${trimmed}'. Only 'memory://' resource URIs are supported.`,
+                code: 'VALIDATION_ERROR',
+                category: 'validation',
+                recoverable: true,
+            },
+        }
+    }
+    return { handled: true, result: await handleReadResource(params, toolName, context) }
+}
+
 export async function handleReadResource(
     params: unknown,
     toolName: string,
     context?: ToolContext
 ): Promise<unknown> {
     const args =
-        typeof params === 'object' && params !== null ? (params as Record<string, unknown>) : {}
+        typeof params === 'object' && params !== null && !Array.isArray(params)
+            ? (params as Record<string, unknown>)
+            : {}
     let uri = extractUriFromArgs(args)
     if ((uri === undefined || uri === '') && toolName.startsWith('memory://')) {
         uri = toolName
     }
-    if ((uri === undefined || uri === '') && context !== undefined) {
+    if ((uri === undefined || uri === '') && context !== undefined && Object.keys(args).length === 0) {
         uri = 'memory://briefing'
+    }
+
+    if (uri !== undefined && uri !== '' && uri.includes('://') && !uri.startsWith('memory://')) {
+        return {
+            success: false,
+            error: `🛠️ AUTONOMOUS HEALING: Unsupported URI scheme in '${uri}'. Only 'memory://' resource URIs are supported.`,
+            code: 'VALIDATION_ERROR',
+            category: 'validation',
+            recoverable: true,
+        }
     }
 
     if (context !== undefined && uri !== undefined && uri !== '') {
@@ -371,45 +406,13 @@ function buildFallbackTools(
 
 export function getMcpFallbackToolDefinitions(context?: ToolContext): ToolDefinition[] {
     return [
-        ...buildFallbackTools(
-            DUMMY_RESOURCE_TOOL_NAMES, 'Read Resource',
-            'when invoked as an MCP tool instead of a protocol resource read.',
-            (name) => (params: unknown) => handleReadResource(params, name, context)
-        ),
-        ...buildFallbackTools(
-            DUMMY_PROMPT_TOOL_NAMES, 'Prompt Fallback',
-            'when invoked as an MCP tool instead of an MCP prompt.',
-            (name) => (params: unknown) => handlePrompt(params, name, context)
-        ),
-        ...buildFallbackTools(
-            DUMMY_LIST_RESOURCE_TOOL_NAMES, 'List Resources Fallback',
-            'when called directly as an MCP tool.',
-            (name) => () => handleListResources(name)
-        ),
-        ...buildFallbackTools(
-            DUMMY_LIST_PROMPT_TOOL_NAMES, 'List Prompts Fallback',
-            'when called directly as an MCP tool.',
-            (name) => () => handleListPrompts(name)
-        ),
-        ...buildFallbackTools(
-            DUMMY_LIST_TOOL_NAMES, 'List Tools Fallback',
-            'when called directly as an MCP tool.',
-            (name) => () => handleListTools(name, context)
-        ),
-        ...buildFallbackTools(
-            DUMMY_GET_PROMPT_TOOL_NAMES, 'Get Prompt Fallback',
-            'when called directly as an MCP tool.',
-            (name) => async (params: unknown) => handleGetPrompt(params, name, context)
-        ),
-        ...buildFallbackTools(
-            DUMMY_SERVER_INFO_TOOL_NAMES, 'Server Info & Health Diagnostics Fallback',
-            'when called directly as an MCP tool. Returns server metadata, runtime status, and diagnostics.',
-            (name) => async (params: unknown) => handleServerInfo(params, name, context)
-        ),
-        ...buildFallbackTools(
-            DUMMY_ADAPTER_TOOL_NAMES, 'List Adapters Fallback',
-            'when called directly as an MCP tool. Returns available database and service adapters.',
-            (name) => () => handleListAdapters(name, context)
-        ),
+        ...buildFallbackTools(DUMMY_RESOURCE_TOOL_NAMES, 'Read Resource', 'when invoked as an MCP tool instead of a protocol resource read.', (n) => (p) => handleReadResource(p, n, context)),
+        ...buildFallbackTools(DUMMY_PROMPT_TOOL_NAMES, 'Prompt Fallback', 'when invoked as an MCP tool instead of an MCP prompt.', (n) => (p) => handlePrompt(p, n, context)),
+        ...buildFallbackTools(DUMMY_LIST_RESOURCE_TOOL_NAMES, 'List Resources Fallback', 'when called directly as an MCP tool.', (n) => () => handleListResources(n)),
+        ...buildFallbackTools(DUMMY_LIST_PROMPT_TOOL_NAMES, 'List Prompts Fallback', 'when called directly as an MCP tool.', (n) => () => handleListPrompts(n)),
+        ...buildFallbackTools(DUMMY_LIST_TOOL_NAMES, 'List Tools Fallback', 'when called directly as an MCP tool.', (n) => () => handleListTools(n, context)),
+        ...buildFallbackTools(DUMMY_GET_PROMPT_TOOL_NAMES, 'Get Prompt Fallback', 'when called directly as an MCP tool.', (n) => async (p) => handleGetPrompt(p, n, context)),
+        ...buildFallbackTools(DUMMY_SERVER_INFO_TOOL_NAMES, 'Server Info & Health Diagnostics Fallback', 'when called directly as an MCP tool. Returns server metadata, runtime status, and diagnostics.', (n) => async (p) => handleServerInfo(p, n, context)),
+        ...buildFallbackTools(DUMMY_ADAPTER_TOOL_NAMES, 'List Adapters Fallback', 'when called directly as an MCP tool. Returns available database and service adapters.', (n) => () => handleListAdapters(n, context)),
     ]
 }

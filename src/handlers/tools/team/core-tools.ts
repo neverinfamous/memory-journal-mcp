@@ -282,7 +282,12 @@ export function getTeamCoreTools(context: ToolContext): ToolDefinition[] {
                         author: authorMap.get(e.id) ?? null,
                     }))
 
-                    return { entries: enriched, count: enriched.length, next_cursor: result.nextCursor }
+                    return {
+                        success: true,
+                        entries: enriched,
+                        count: enriched.length,
+                        next_cursor: result.nextCursor,
+                    }
                 } catch (err) {
                     return formatHandlerError(err)
                 }

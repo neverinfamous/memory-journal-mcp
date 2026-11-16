@@ -272,6 +272,10 @@ export function getCreateGitHubIssueTool(context: ToolContext): ToolDefinition {
                 .string()
                 .optional()
                 .describe('Custom journal content (defaults to auto-generated summary)'),
+            journal_content: z
+                .string()
+                .optional()
+                .describe('Alias for entry_content (custom journal content)'),
             tags: z.array(z.string()).optional().describe('Journal entry tags'),
         }),
         outputSchema: CreateGitHubIssueWithEntryOutputSchema,

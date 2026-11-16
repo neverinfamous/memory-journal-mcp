@@ -81,7 +81,11 @@ export function createGitHubMilestoneResources(resourceMilestoneLimit: number): 
                 )
                 const targetRepo = match?.[1] ? safeDecodeUriSegment(match[1]) : undefined
                 const milestoneNumber = match?.[2] ? Number.parseInt(match[2], 10) : null
-                if (milestoneNumber === null || Number.isNaN(milestoneNumber)) {
+                if (
+                    milestoneNumber === null ||
+                    !Number.isSafeInteger(milestoneNumber) ||
+                    milestoneNumber <= 0
+                ) {
                     return {
                         data: { error: 'Invalid milestone number', code: -32002 },
                         annotations: { lastModified },

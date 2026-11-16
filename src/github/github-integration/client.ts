@@ -84,37 +84,44 @@ export class GitHubClient {
         return this.octokit !== null
     }
 
+    private normalizeCacheKey(key: string): string {
+        return key.toLowerCase()
+    }
+
     getCached(key: string): unknown {
-        const entry = this.apiCache.get(key)
+        const normalizedKey = this.normalizeCacheKey(key)
+        const entry = this.apiCache.get(normalizedKey)
         if (entry && Date.now() - entry.timestamp < CACHE_TTL_MS) {
             // Map iteration order is insertion order: delete and re-set to make it newest (LRU)
-            this.apiCache.delete(key)
-            this.apiCache.set(key, entry)
+            this.apiCache.delete(normalizedKey)
+            this.apiCache.set(normalizedKey, entry)
             return entry.data
         }
         if (entry) {
             this.totalCacheBytes -= entry.sizeBytes
-            this.apiCache.delete(key)
+            this.apiCache.delete(normalizedKey)
         }
         return undefined
     }
 
     getCachedWithTtl(key: string, ttlMs: number): unknown {
-        const entry = this.apiCache.get(key)
+        const normalizedKey = this.normalizeCacheKey(key)
+        const entry = this.apiCache.get(normalizedKey)
         if (entry && Date.now() - entry.timestamp < ttlMs) {
             // Map iteration order is insertion order: delete and re-set to make it newest (LRU)
-            this.apiCache.delete(key)
-            this.apiCache.set(key, entry)
+            this.apiCache.delete(normalizedKey)
+            this.apiCache.set(normalizedKey, entry)
             return entry.data
         }
         if (entry) {
             this.totalCacheBytes -= entry.sizeBytes
-            this.apiCache.delete(key)
+            this.apiCache.delete(normalizedKey)
         }
         return undefined
     }
 
     setCache(key: string, data: unknown): void {
+        const normalizedKey = this.normalizeCacheKey(key)
         let sizeBytes: number
         try {
             sizeBytes = Buffer.byteLength(JSON.stringify(data) || '', 'utf8')
@@ -126,13 +133,13 @@ export class GitHubClient {
             return // Skip caching items that are too large
         }
 
-        const existing = this.apiCache.get(key)
+        const existing = this.apiCache.get(normalizedKey)
         if (existing) {
             this.totalCacheBytes -= existing.sizeBytes
         }
 
-        this.apiCache.delete(key) // Ensure it is inserted at the end of iteration order
-        this.apiCache.set(key, { data, timestamp: Date.now(), sizeBytes })
+        this.apiCache.delete(normalizedKey) // Ensure it is inserted at the end of iteration order
+        this.apiCache.set(normalizedKey, { data, timestamp: Date.now(), sizeBytes })
         this.totalCacheBytes += sizeBytes
 
         // Prevent unbounded memory growth (Max 1000 items OR Max 50MB)
@@ -151,9 +158,12 @@ export class GitHubClient {
     }
 
     invalidateCache(prefix: string): void {
-        const boundaryPrefix = prefix.endsWith(':') ? prefix : `${prefix}:`
+        const normalizedPrefix = this.normalizeCacheKey(prefix)
+        const boundaryPrefix = normalizedPrefix.endsWith(':')
+            ? normalizedPrefix
+            : `${normalizedPrefix}:`
         for (const [key, entry] of this.apiCache.entries()) {
-            if (key === prefix || key.startsWith(boundaryPrefix)) {
+            if (key === normalizedPrefix || key.startsWith(boundaryPrefix)) {
                 this.totalCacheBytes -= entry.sizeBytes
                 this.apiCache.delete(key)
             }

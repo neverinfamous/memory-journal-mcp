@@ -9,8 +9,8 @@ import {
     normalizeGenericFieldAliases,
     normalizeSearchGrepAliases,
     resolveCreateEntryProjectContext,
-    synthesizeEntryMutationFields,
 } from './generic-field-aliases.js'
+import { synthesizeEntryMutationFields } from './entry-mutation-synthesis.js'
 import { DUMMY_SQL_EXECUTION_TOOL_NAMES } from '../../handlers/tools/core/dummy-healing/alias-catalog.js'
 
 const EXECUTE_METHODS = new Set([
@@ -143,6 +143,16 @@ function normalizePostGenericFields(methodName: string, obj: Record<string, unkn
     }
 
     if (EXECUTE_METHODS.has(methodName)) {
+        if (obj['query'] === undefined) {
+            const qAlias = obj['search'] ?? obj['q'] ?? obj['term'] ?? obj['keyword']
+            if (typeof qAlias === 'string') {
+                obj['query'] = qAlias
+                delete obj['search']
+                delete obj['q']
+                delete obj['term']
+                delete obj['keyword']
+            }
+        }
         normalizeExecuteCodeAliases(obj)
     } else if (GIT_METHODS.has(methodName)) {
         if (obj['repo_name'] !== undefined && obj['repo'] === undefined) {
@@ -179,6 +189,8 @@ function normalizePostGenericFields(methodName: string, obj: Record<string, unkn
     }
 }
 
+const GITHUB_METHOD_RE = /(?:github|kanban|copilot|repo_insights|repoInsights)/i
+
 export function applyGenericInterceptions(
     methodName: string,
     args: unknown[]
@@ -198,7 +210,10 @@ export function applyGenericInterceptions(
 
     cleanSdkMetadataKeys(obj)
     normalizeSearchGrepAliases(methodName, obj)
-    if (!EXECUTE_METHODS.has(methodName)) extractMetadataContextAliases(obj)
+    if (!EXECUTE_METHODS.has(methodName)) {
+        const allowWorkspaceHoist = !GIT_METHODS.has(methodName) && !GITHUB_METHOD_RE.test(methodName)
+        extractMetadataContextAliases(obj, allowWorkspaceHoist)
+    }
 
     const idError = coerceNumericStringIds(obj)
     if (idError !== undefined) return idError

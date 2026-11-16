@@ -139,8 +139,6 @@ export async function startSelectedTransport(params: {
     if (options.transport === 'stdio') {
         const stdioTransport = new StdioServerTransport()
         const server = getServerInstance()
-        await server.connect(stdioTransport)
-        logger.info('MCP server started on stdio', { module: 'McpServer' })
 
         let stdioShutdownStarted = false
         const handleStdioShutdown = (): void => {
@@ -162,6 +160,18 @@ export async function startSelectedTransport(params: {
                 process.exit(1)
             })
         }
+
+        // [INVARIANT] Bind `stdioTransport.onclose` BEFORE `server.connect(stdioTransport)` so
+        // Protocol.connect wraps and preserves graceful shutdown on stdin EOF (M6).
+        const previousOnClose = stdioTransport.onclose
+        stdioTransport.onclose = (): void => {
+            previousOnClose?.()
+            handleStdioShutdown()
+        }
+
+        await server.connect(stdioTransport)
+        logger.info('MCP server started on stdio', { module: 'McpServer' })
+
         process.on('SIGINT', handleStdioShutdown)
         process.on('SIGTERM', handleStdioShutdown)
         return

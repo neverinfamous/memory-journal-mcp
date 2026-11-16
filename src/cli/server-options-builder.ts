@@ -15,6 +15,7 @@ import {
     parseLogLevelOption,
     parseProjectRegistryOption,
     resolveUnconflictedDefaultProject,
+    resolveUnconflictedDefaultWorkspace,
 } from './server-options-parsers.js'
 
 import {
@@ -333,12 +334,20 @@ function resolveConfiguredDefaultScope(
     const wsFromCli =
         resolver.isCliProvided('defaultWorkspaceId') ||
         (allowWorkspaceAsDefault && resolver.isCliProvided('workspace'))
+    const projectFromCli = resolver.isCliProvided('defaultProject')
+    defaultWorkspaceId = resolveUnconflictedDefaultWorkspace(
+        defaultWorkspaceId,
+        defaultProjectNumber,
+        projectRegistry,
+        wsFromCli,
+        projectFromCli
+    )
     defaultProjectNumber = resolveUnconflictedDefaultProject(
         defaultWorkspaceId,
         defaultProjectNumber,
         projectRegistry,
         wsFromCli,
-        resolver.isCliProvided('defaultProject')
+        projectFromCli
     )
     if (defaultWorkspaceId !== undefined && defaultProjectNumber !== undefined) {
         catchConfig(() => {

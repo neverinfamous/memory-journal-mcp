@@ -14,7 +14,13 @@ import type { ConvertedFile } from './index.js'
 import type { FrontmatterData } from '../frontmatter.js'
 import { basename } from 'node:path'
 import { parseYamlFrontmatter } from './yaml-parser.js'
-import { extractTags, formatToISODate, getFirstString } from './utils.js'
+import {
+    addBoundedTag,
+    extractTags,
+    formatToISODate,
+    getFirstString,
+    toBoundedTags,
+} from './utils.js'
 
 export function convertObsidian(
     content: string,
@@ -37,12 +43,19 @@ export function convertObsidian(
     // Extract Timestamp (try common frontmatter keys, fallback to filename if daily note)
     const dateStr = getFirstString(yamlMeta, ['date', 'created', 'timestamp'])
     if (dateStr) {
-        mjMeta.timestamp = formatToISODate(dateStr)
-    } else {
+        const formatted = formatToISODate(dateStr)
+        if (formatted !== undefined) {
+            mjMeta.timestamp = formatted
+        }
+    }
+    if (mjMeta.timestamp === undefined) {
         // Check if filename looks like a daily note (YYYY-MM-DD)
         const dateMatch = /\b(\d{4}-\d{2}-\d{2})\b/.exec(baseFilename)
         if (dateMatch?.[1]) {
-            mjMeta.timestamp = `${dateMatch[1]}T12:00:00Z`
+            const formatted = formatToISODate(`${dateMatch[1]}T12:00:00Z`)
+            if (formatted !== undefined) {
+                mjMeta.timestamp = formatted
+            }
         }
     }
 
@@ -52,7 +65,7 @@ export function convertObsidian(
     // Extract inline tags (#tag format)
     const inlineTagMatches = processedBody.matchAll(/(^|\s)#([a-zA-Z0-9_-]{1,128})\b/g)
     for (const match of inlineTagMatches) {
-        if (match[2]) mergedTags.add(match[2].toLowerCase())
+        if (match[2]) addBoundedTag(mergedTags, match[2].toLowerCase())
     }
 
     // Convert bounded embeds: ![[My Image.png]] -> > _Embedded: My Image.png_
@@ -65,7 +78,7 @@ export function convertObsidian(
     })
 
     if (mergedTags.size > 0) {
-        mjMeta.tags = Array.from(mergedTags)
+        mjMeta.tags = toBoundedTags(mergedTags)
     }
 
     // 3. Heuristic Entry Type Inference

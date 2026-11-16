@@ -97,7 +97,7 @@ const CORE_MUTATING_LEADING_VERBS = [
 /** Leading verb of a dotted/underscored Code Mode method (e.g. `mj.core.setStatus` -> `set`). */
 function leadingMethodVerb(toolName: string): string {
     const method = toolName.replace(/^mj[._]core[._]/, '')
-    const match = /^[a-z]+/.exec(method.replace(/^_+/, ''))
+    const match = /^[A-Za-z][a-z]*/.exec(method.replace(/^_+/, ''))
     return match !== null ? match[0].toLowerCase() : ''
 }
 

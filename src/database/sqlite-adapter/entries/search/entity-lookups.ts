@@ -185,10 +185,11 @@ export function getSearchFacets(
         GROUP BY t.name ORDER BY cnt DESC LIMIT 20
     `
 
-    const entryTypesJoinTags =
-        options?.tags !== undefined && options.tags.length > 0
-            ? `JOIN entry_tags et ON e.id = et.entry_id JOIN tags t ON et.tag_id = t.id`
-            : ''
+    const hasTagFilter =
+        options?.tags !== undefined && expandTagFilterValues(options.tags).length > 0
+    const entryTypesJoinTags = hasTagFilter
+        ? `JOIN entry_tags et ON e.id = et.entry_id JOIN tags t ON et.tag_id = t.id`
+        : ''
     const entryTypesSql = `
         SELECT e.entry_type AS name, COUNT(DISTINCT e.id) AS cnt
         ${fromClause}

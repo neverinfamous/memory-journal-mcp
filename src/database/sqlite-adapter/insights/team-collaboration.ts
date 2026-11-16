@@ -63,19 +63,24 @@ export function getAuthorsForEntries(
     const authorMap = new Map<number, string | null>()
     if (entryIds.length === 0) return authorMap
 
-    const placeholders = entryIds.map(() => '?').join(',')
+    const uniqueIds = Array.from(new Set(entryIds))
+    const CHUNK_SIZE = 500
     const authorExpr = canonicalAuthorExpr('mj', '')
     try {
-        const authorResult = connection.exec(
-            `SELECT mj.id, ${authorExpr} as author
-             FROM memory_journal mj
-             WHERE mj.id IN (${placeholders})`,
-            entryIds
-        )
-        if (authorResult[0]) {
-            authorResult[0].values.forEach((row: unknown[]) => {
-                authorMap.set(row[0] as number, row[1] as string | null)
-            })
+        for (let i = 0; i < uniqueIds.length; i += CHUNK_SIZE) {
+            const chunk = uniqueIds.slice(i, i + CHUNK_SIZE)
+            const placeholders = chunk.map(() => '?').join(',')
+            const authorResult = connection.exec(
+                `SELECT mj.id, ${authorExpr} as author
+                 FROM memory_journal mj
+                 WHERE mj.id IN (${placeholders})`,
+                chunk
+            )
+            if (authorResult[0]) {
+                authorResult[0].values.forEach((row: unknown[]) => {
+                    authorMap.set(row[0] as number, row[1] as string | null)
+                })
+            }
         }
     } catch (error: unknown) {
         if (!isMissingSchemaError(error)) {
@@ -167,7 +172,7 @@ function queryCrossAuthorLinks(
         FROM relationships r
         JOIN memory_journal m1 ON r.from_entry_id = m1.id
         JOIN memory_journal m2 ON r.to_entry_id = m2.id
-        WHERE m1.deleted_at IS NULL AND m2.deleted_at IS NULL${c1.sql}${c2.sql}
+        WHERE m1.deleted_at IS NULL AND m2.deleted_at IS NULL AND m1.workspace_id = m2.workspace_id${c1.sql}${c2.sql}
             AND ${fromExpr} != ${toExpr}
         GROUP BY from_author, to_author
         ORDER BY link_count DESC

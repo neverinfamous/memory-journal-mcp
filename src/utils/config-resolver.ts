@@ -25,14 +25,12 @@ export class ConfigResolver {
             path.resolve(process.cwd(), '.env'),
             path.resolve(process.cwd(), 'secrets.env'),
             path.resolve(os.homedir(), '.gemini', 'config', 'secrets.env'),
-            path.resolve(os.homedir(), '.gemini', 'config', '.env')
+            path.resolve(os.homedir(), '.gemini', 'config', '.env'),
         ]
-        
-        const loadedKeys = new Set<string>()
 
         for (const filePath of envPaths) {
             if (!fs.existsSync(filePath)) continue
-            
+
             const content = fs.readFileSync(filePath, 'utf-8')
             for (const line of content.split('\n')) {
                 const trimmed = line.trim()
@@ -41,11 +39,10 @@ export class ConfigResolver {
                 if (idx <= 0) continue
                 const key = trimmed.slice(0, idx).trim()
                 const val = trimmed.slice(idx + 1).trim()
-                // Only set if not already in env OR if we loaded it ourselves from this run
-                if (!(key in process.env) || loadedKeys.has(key)) {
+                // Highest-priority source wins (OS env > repo .env > repo secrets.env > global ~/.gemini/config/*).
+                if (!(key in process.env)) {
                     // Strip surrounding quotes
                     process.env[key] = val.replace(/^["'](.*)["']$/, '$1')
-                    loadedKeys.add(key)
                 }
             }
         }

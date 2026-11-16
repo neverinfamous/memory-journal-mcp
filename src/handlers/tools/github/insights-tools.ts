@@ -15,15 +15,17 @@ const INSIGHT_SECTIONS = ['stars', 'traffic', 'referrers', 'paths', 'all'] as co
 type InsightSectionKey = 'stars' | 'traffic' | 'referrers' | 'paths'
 type RepoInsightsResult = z.infer<typeof RepoInsightsOutputSchema>
 
-const RepoInsightsInputSchema = z.object({
-    sections: z
-        .union([z.enum(INSIGHT_SECTIONS), z.array(z.enum(INSIGHT_SECTIONS))])
-        .optional()
-        .default('stars'),
-    owner: z.string().optional(),
-    repo: z.string().optional(),
-    ...githubScopeParseFields,
-})
+const RepoInsightsInputSchema = z
+    .object({
+        sections: z
+            .union([z.enum(INSIGHT_SECTIONS), z.array(z.enum(INSIGHT_SECTIONS))])
+            .optional()
+            .default('stars'),
+        owner: z.string().optional(),
+        repo: z.string().optional(),
+        ...githubScopeParseFields,
+    })
+    .strict()
 
 function buildInsightSectionFailure(
     owner: string,

@@ -17,6 +17,7 @@ import {
     collectTeamSearchEntries,
     mergeAndDedup,
     resolveAuthorizedIncludeTeam,
+    isTeamDbReady,
     type EntryWithSource,
 } from './helpers.js'
 import { SemanticSearchSchema } from './schemas.js'
@@ -206,7 +207,7 @@ async function resolveCombinedSemanticEntries(
     if (
         !includeTeam ||
         input.is_personal === true ||
-        teamDb === undefined ||
+        !isTeamDbReady(teamDb) ||
         effectiveQuery === undefined ||
         effectiveQuery === ''
     ) {

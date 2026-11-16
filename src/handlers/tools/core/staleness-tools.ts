@@ -3,7 +3,7 @@ import { execFileSync } from 'node:child_process'
 import type { ToolDefinition, ToolContext } from '../../../types/index.js'
 import { formatHandlerError } from '../../../utils/error-helpers.js'
 import { ErrorFieldsMixin } from '../error-fields-mixin.js'
-import { relaxedNumber, StrictProjectNumberSchema } from '../schemas.js'
+import { MAX_QUERY_LIMIT, relaxedNumber, StrictProjectNumberSchema } from '../schemas.js'
 import { coerceAnchorStatusAlias } from '../schemas/hallucination-healer-fields.js'
 import { mcpLogger } from '../../../utils/mcp-logger.js'
 import {
@@ -122,18 +122,21 @@ function preprocessMarkAnchorsStale(val: unknown): unknown {
 
 export const MarkAnchorsStaleSchema = z.preprocess(
     preprocessMarkAnchorsStale,
-    z.object({
-        updates: z
-            .array(
-                z.object({
-                    id: z.number(),
-                    status: z.enum(['pending', 'valid', 'stale', 'invalidated', 'unresolvable']),
-                })
-            )
-            .min(1),
-        workspace_id: z.string().optional(),
-        project_number: StrictProjectNumberSchema.optional(),
-    })
+    z
+        .object({
+            updates: z
+                .array(
+                    z.object({
+                        id: z.number(),
+                        status: z.enum(['pending', 'valid', 'stale', 'invalidated', 'unresolvable']),
+                    })
+                )
+                .min(1)
+                .max(MAX_QUERY_LIMIT),
+            workspace_id: z.string().optional(),
+            project_number: StrictProjectNumberSchema.optional(),
+        })
+        .strict()
 )
 
 export const MarkAnchorsStaleSchemaMcp = z.preprocess(

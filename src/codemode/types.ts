@@ -227,6 +227,10 @@ export interface RpcRequest {
     workspaceId?: string
     /** Narrowed project number propagated from nested sandbox execution */
     projectNumber?: number
+    /** Session identifier propagated from nested sandbox execution */
+    sessionId?: string
+    /** Auto-version flag propagated from nested sandbox execution */
+    autoVersion?: boolean
 }
 
 /**

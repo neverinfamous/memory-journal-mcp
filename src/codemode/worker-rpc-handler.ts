@@ -67,6 +67,14 @@ function buildRpcOverrides(req: RpcRequest): RpcExecutionOverrides | undefined {
         overrides.projectNumber = req.projectNumber
         hasOverride = true
     }
+    if (typeof req.sessionId === 'string' && req.sessionId.trim() !== '') {
+        overrides.sessionId = req.sessionId.trim()
+        hasOverride = true
+    }
+    if (typeof req.autoVersion === 'boolean') {
+        overrides.autoVersion = req.autoVersion
+        hasOverride = true
+    }
     return hasOverride ? overrides : undefined
 }
 

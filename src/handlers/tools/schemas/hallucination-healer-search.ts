@@ -109,9 +109,6 @@ const SEARCH_KEY_ALIAS_MAP: Record<string, string> = {
     project_id: 'project_number',
     projectId: 'project_number',
     projectNumber: 'project_number',
-    project: 'project_number',
-    workspaceId: 'workspace_id',
-    workspace: 'workspace_id',
     repo: 'workspace_id',
     repository: 'workspace_id',
     repo_name: 'workspace_id',
@@ -144,6 +141,15 @@ const SEARCH_KEY_ALIAS_MAP: Record<string, string> = {
     excluded_tags: 'exclude_tags',
 }
 
+const SCOPE_CONFLICT_PRESERVED_KEYS = new Set([
+    'project_id',
+    'projectId',
+    'projectNumber',
+    'repo',
+    'repository',
+    'repo_name',
+])
+
 function healSearchSortBy(obj: Record<string, unknown>): boolean {
     if ('sort_by' in obj && typeof obj['sort_by'] === 'string') {
         const cleaned = obj['sort_by'].trim().toLowerCase()
@@ -173,6 +179,12 @@ export function healSearchPayload(val: unknown): unknown {
 
     for (const [badKey, goodKey] of Object.entries(SEARCH_KEY_ALIAS_MAP)) {
         if (badKey in obj) {
+            const hasConflict =
+                SCOPE_CONFLICT_PRESERVED_KEYS.has(badKey) &&
+                goodKey in obj &&
+                obj[goodKey] !== undefined &&
+                obj[goodKey] !== obj[badKey]
+            if (hasConflict) continue
             if (!(goodKey in obj) && obj[badKey] !== undefined) obj[goodKey] = obj[badKey]
             Reflect.deleteProperty(obj, badKey)
             modified = true

@@ -75,6 +75,7 @@ export function registerProjectCommands(program: Command): void {
             .option('--number <number>', 'New GitHub Project number')
             .option('--rename <name>', 'Rename the project key (fails if the new key already exists)')
     })
+    addOutputOptions(projectUpdateCmd)
     addCoreOptions(projectUpdateCmd)
     projectUpdateCmd.action(projectUpdateAction)
 
@@ -82,6 +83,7 @@ export function registerProjectCommands(program: Command): void {
         .command('delete <name>')
         .alias('remove')
         .description('Remove a project from the global registry')
+    addOutputOptions(projectDeleteCmd)
     addCoreOptions(projectDeleteCmd)
     projectDeleteCmd.action(projectDeleteAction)
 }

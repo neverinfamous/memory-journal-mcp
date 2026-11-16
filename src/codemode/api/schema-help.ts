@@ -8,7 +8,7 @@
 import {
     ENTRY_TYPES,
     SIGNIFICANCE_TYPES,
-} from '../../handlers/tools/schemas/constants-and-primitives.js'
+} from '../../handlers/tools/schemas/entry-constants.js'
 
 export const JOURNAL_TABLES = [
     'memory_journal',

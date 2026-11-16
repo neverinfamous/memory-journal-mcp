@@ -90,73 +90,83 @@ interface VectorManagerInputs {
     testTeamDb: IDatabaseAdapter | undefined
 }
 
+async function initSecondaryRebuildManagers(
+    testVectorManager: VectorSearchManager | undefined,
+    primaryTeamVectorManager: VectorSearchManager | undefined,
+    testTeamVectorManager: VectorSearchManager | undefined
+): Promise<void> {
+    if (testVectorManager) {
+        try {
+            await testVectorManager.initialize()
+        } catch (err: unknown) {
+            logger.error('Background test vector init failed', { module: 'McpServer', error: err })
+        }
+    }
+
+    if (primaryTeamVectorManager) {
+        logger.info('Team vector search manager eager initialization started in background', {
+            module: 'McpServer',
+        })
+        try {
+            await primaryTeamVectorManager.initialize()
+        } catch (err: unknown) {
+            logger.error('Background team vector init failed', {
+                module: 'McpServer',
+                error: err,
+            })
+        }
+        if (testTeamVectorManager) {
+            try {
+                await testTeamVectorManager.initialize()
+            } catch (err: unknown) {
+                logger.error('Background test team vector init failed', {
+                    module: 'McpServer',
+                    error: err,
+                })
+            }
+        }
+    }
+}
+
 function scheduleAutoRebuildVectorInits(
     primaryVectorManager: VectorSearchManager,
     testVectorManager: VectorSearchManager | undefined,
     primaryTeamVectorManager: VectorSearchManager | undefined,
     testTeamVectorManager: VectorSearchManager | undefined
 ): Promise<void>[] {
-    const pendingInits: Promise<void>[] = []
     logger.info('Auto-rebuilding vector index in background...', { module: 'McpServer' })
-    pendingInits.push(
-        primaryVectorManager
-            .initialize()
-            .then(async () => {
-                const rebuilt = await primaryVectorManager.rebuildIndex()
-                const rebuildLog = {
-                    module: 'McpServer',
-                    entriesIndexed: rebuilt.indexed,
-                    success: rebuilt.success,
-                    failed: rebuilt.failed,
-                    firstError: rebuilt.firstError,
-                }
-                if (rebuilt.success) {
-                    logger.info('Vector index rebuilt in background', rebuildLog)
-                } else {
-                    logger.error('Vector index rebuild failed in background', rebuildLog)
-                }
-            })
-            .catch((err: unknown) => {
-                logger.error('Background vector init/rebuild failed', {
-                    module: 'McpServer',
-                    error: err,
-                })
-            })
-    )
-
-    if (testVectorManager) {
-        pendingInits.push(
-            testVectorManager.initialize().catch((err: unknown) => {
-                logger.error('Background test vector init failed', { module: 'McpServer', error: err })
-            })
-        )
-    }
-
-    if (primaryTeamVectorManager) {
-        pendingInits.push(
-            primaryTeamVectorManager.initialize().catch((err: unknown) => {
-                logger.error('Background team vector init failed', {
-                    module: 'McpServer',
-                    error: err,
-                })
-            })
-        )
-        if (testTeamVectorManager) {
-            pendingInits.push(
-                testTeamVectorManager.initialize().catch((err: unknown) => {
-                    logger.error('Background test team vector init failed', {
-                        module: 'McpServer',
-                        error: err,
-                    })
-                })
-            )
-        }
-        logger.info('Team vector search manager eager initialization started in background', {
-            module: 'McpServer',
+    const chain = primaryVectorManager
+        .initialize()
+        .then(async () => {
+            const rebuilt = await primaryVectorManager.rebuildIndex()
+            const rebuildLog = {
+                module: 'McpServer',
+                entriesIndexed: rebuilt.indexed,
+                success: rebuilt.success,
+                failed: rebuilt.failed,
+                firstError: rebuilt.firstError,
+            }
+            if (rebuilt.success) {
+                logger.info('Vector index rebuilt in background', rebuildLog)
+            } else {
+                logger.error('Vector index rebuild failed in background', rebuildLog)
+            }
         })
-    }
+        .catch((err: unknown) => {
+            logger.error('Background vector init/rebuild failed', {
+                module: 'McpServer',
+                error: err,
+            })
+        })
+        .then(() =>
+            initSecondaryRebuildManagers(
+                testVectorManager,
+                primaryTeamVectorManager,
+                testTeamVectorManager
+            )
+        )
 
-    return pendingInits
+    return [chain]
 }
 
 function scheduleEagerVectorInits(

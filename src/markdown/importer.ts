@@ -217,7 +217,7 @@ export async function importMarkdownEntries(
     const allMdFiles: string[] = []
     const dir = await opendir(sourceDir)
     for await (const dirent of dir) {
-        if (dirent.isFile() && dirent.name.endsWith('.md')) {
+        if (dirent.isFile() && /\.md$/i.test(dirent.name)) {
             allMdFiles.push(dirent.name)
         }
     }

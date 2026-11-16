@@ -6,6 +6,7 @@ import type { z } from 'zod'
 import type { ToolContext } from '../../../types/index.js'
 import { ftsSearch } from './fts.js'
 import { hybridSearch } from './hybrid.js'
+import { isTeamDbReady } from './helpers.js'
 import { cursorOffset, pageRows, rankByImportance, rankByBlendedScore } from './semantic-branch.js'
 import type { SearchEntriesSchema } from './schemas.js'
 
@@ -30,9 +31,10 @@ interface HybridBranchParams {
 export async function runHybridSearch(params: HybridBranchParams): Promise<Record<string, unknown>> {
     const { context, input, query, wsId, isAuto, searchOptions, facets } = params
     const { db, teamDb, vectorManager, teamVectorManager } = context
+    const readyTeamDb = isTeamDbReady(teamDb) ? teamDb : undefined
     if (!vectorManager) {
         // Fallback to FTS when vector search is unavailable
-        const result = ftsSearch(input.query, db, teamDb, searchOptions)
+        const result = ftsSearch(input.query, db, readyTeamDb, searchOptions)
         return {
             ...result,
             success: true,
@@ -45,23 +47,26 @@ export async function runHybridSearch(params: HybridBranchParams): Promise<Recor
         }
     }
     const hybridOffset = cursorOffset(input.cursor)
+    const needed = input.limit + hybridOffset + 1
+    const rerankByImportance = input.sort_by === 'blended' || input.sort_by === 'importance'
+    const candidateLimit = rerankByImportance ? Math.min(needed * 2, 500) : needed
     const { entries: hybridEntries, fusionScores, degraded } = await hybridSearch(query, db, vectorManager, {
         ...searchOptions,
         // [INVARIANT] Over-fetch one row past the page so pageRows can emit next_cursor.
-        limit: input.limit + hybridOffset + 1,
+        limit: candidateLimit,
         ftsWeight: input.fts_weight,
         semanticWeight: input.semantic_weight,
-        ...(teamDb !== undefined ? { teamDb } : {}),
-        ...(teamVectorManager !== undefined ? { teamVectorManager } : {}),
+        ...(readyTeamDb !== undefined ? { teamDb: readyTeamDb } : {}),
+        ...(readyTeamDb !== undefined && teamVectorManager !== undefined ? { teamVectorManager } : {}),
     })
     const hybridPage = pageRows(hybridEntries, input.cursor, input.limit)
 
     // Post-fetch importance or blended relevance × importance re-sort for vector results
-    if (input.sort_by === 'blended' || input.sort_by === 'importance') {
+    if (rerankByImportance) {
         const scored =
             input.sort_by === 'blended'
-                ? rankByBlendedScore(db, hybridEntries, wsId, fusionScores, teamDb)
-                : rankByImportance(db, hybridEntries, wsId, teamDb)
+                ? rankByBlendedScore(db, hybridEntries, wsId, fusionScores, readyTeamDb)
+                : rankByImportance(db, hybridEntries, wsId, readyTeamDb)
         const scoredPage = pageRows(scored, input.cursor, input.limit)
         return {
             success: true,
@@ -93,7 +98,8 @@ export function runFtsSearch(
     searchOptions: FtsSearchOptions,
     facets: Facets | undefined
 ): Record<string, unknown> {
-    const result = ftsSearch(input.query, context.db, context.teamDb, searchOptions)
+    const readyTeamDb = isTeamDbReady(context.teamDb) ? context.teamDb : undefined
+    const result = ftsSearch(input.query, context.db, readyTeamDb, searchOptions)
     return {
         ...result,
         success: true,

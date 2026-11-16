@@ -126,7 +126,8 @@ function applyBatchItemSessionDefaults(
         !itemCrossWsMove &&
         nextItem['project_number'] === undefined &&
         typeof projectId === 'number' &&
-        !isDefaultWorkspaceName(callerItemWs) &&
+        (!isDefaultWorkspaceName(callerItemWs) ||
+            (isDefaultWorkspaceName(workspaceId) && explicitWorkspace === true)) &&
         (callerItemWs === undefined ||
             (typeof workspaceId === 'string' &&
                 callerItemWs.toLowerCase() === workspaceId.toLowerCase()))
@@ -141,8 +142,10 @@ export function normalizeBatchDispatchItems(
     reg: NonNullable<ToolContext['config']>['projectRegistry'],
     ctx: BatchScopeHelpersContext
 ): { errorResult: Record<string, unknown> } | undefined {
+    const rawItems = paramsObj[batchArrayKey]
+    if (!Array.isArray(rawItems)) return undefined
     const nextItems: unknown[] = []
-    for (const item of paramsObj[batchArrayKey] as unknown[]) {
+    for (const item of rawItems) {
         if (!isRecord(item)) {
             nextItems.push(item)
             continue

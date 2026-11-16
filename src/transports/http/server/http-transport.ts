@@ -43,6 +43,47 @@ import { createPropagateContextMiddleware } from './context-middleware.js'
  */
 export { buildAllowedHostHeaders } from '../security.js'
 
+function isWildcardBindHost(host: string): boolean {
+    const h = host.trim().toLowerCase()
+    return h === '0.0.0.0' || h === '::' || h === '[::]'
+}
+
+function isValidWildcardHostHeader(rawHost: string | string[] | undefined): boolean {
+    if (typeof rawHost !== 'string') return false
+    const trimmed = rawHost.trim()
+    if (trimmed.length === 0 || /\s/.test(trimmed)) return false
+    try {
+        const parsed = new URL(`http://${trimmed}`)
+        return (
+            parsed.username === '' &&
+            parsed.password === '' &&
+            parsed.pathname === '/' &&
+            parsed.search === '' &&
+            parsed.hash === '' &&
+            parsed.hostname.length > 0
+        )
+    } catch {
+        return false
+    }
+}
+
+function createWildcardHostValidationMiddleware(): RequestHandler {
+    return (req: Request, res: Response, next: NextFunction): void => {
+        if (!isValidWildcardHostHeader(req.headers.host)) {
+            res.status(403).json({
+                jsonrpc: '2.0',
+                error: {
+                    code: -32000,
+                    message: 'Forbidden: Invalid or missing Host header',
+                },
+                id: null,
+            })
+            return
+        }
+        next()
+    }
+}
+
 export class HttpTransport {
     private readonly app: Express
     private readonly config: HttpTransportConfig
@@ -70,6 +111,34 @@ export class HttpTransport {
         }
     }
 
+    private installHostValidation(host: string, isLocalhost: boolean, hasAuth: boolean): void {
+        const baseAllowedHosts = buildAllowedHostHeaders(host, undefined)
+        const allowedHosts = buildAllowedHostHeaders(host, this.config.publicOrigin)
+        const hasCustomPublicOrigin =
+            this.config.publicOrigin !== undefined &&
+            this.config.publicOrigin.trim() !== '' &&
+            allowedHosts.length > baseAllowedHosts.length
+        const isAuthenticatedWildcard =
+            isWildcardBindHost(host) && hasAuth && !hasCustomPublicOrigin
+
+        this.app.use(
+            isLocalhost && !hasCustomPublicOrigin
+                ? localhostHostValidation()
+                : isAuthenticatedWildcard
+                  ? createWildcardHostValidationMiddleware()
+                  : hostHeaderValidation(allowedHosts)
+        )
+        logger.info('DNS rebinding protection enabled (host header validation)', {
+            module: 'HTTP',
+            allowedHosts:
+                isLocalhost && !hasCustomPublicOrigin
+                    ? ['localhost', '127.0.0.1', '[::1]']
+                    : isAuthenticatedWildcard
+                      ? ['* (authenticated wildcard bind)']
+                      : allowedHosts,
+        })
+    }
+
     async start(
         serverFactory: McpServerFactory,
         scheduler: Scheduler | null,
@@ -85,22 +154,8 @@ export class HttpTransport {
             (msg) => logger.error(msg, { module: 'HTTP' })
         )
         const isLocalhost = isLoopbackHost(host)
-        const baseAllowedHosts = buildAllowedHostHeaders(host, undefined)
-        const allowedHosts = buildAllowedHostHeaders(host, this.config.publicOrigin)
-        const hasCustomPublicOrigin =
-            this.config.publicOrigin !== undefined &&
-            this.config.publicOrigin.trim() !== '' &&
-            allowedHosts.length > baseAllowedHosts.length
-
-        this.app.use(
-            isLocalhost && !hasCustomPublicOrigin
-                ? localhostHostValidation()
-                : hostHeaderValidation(allowedHosts)
-        )
-        logger.info('DNS rebinding protection enabled (host header validation)', {
-            module: 'HTTP',
-            allowedHosts: isLocalhost && !hasCustomPublicOrigin ? ['localhost', '127.0.0.1', '[::1]'] : allowedHosts,
-        })
+        const hasAuth = Boolean(authToken) || this.config.oauthEnabled === true
+        this.installHostValidation(host, isLocalhost, hasAuth)
 
         this.app.use((req: Request, res: Response, next: () => void) => {
             setSecurityHeaders(res, this.config)

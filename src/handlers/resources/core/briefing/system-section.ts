@@ -140,21 +140,34 @@ function loadCachedGitHistory(
 ): GitHistorySummary | null {
     if (targetPath === null) return null
     const root = targetPath || resolveProjectRoot()
-    const cached = getCached(cachedGitHistory, root)
+    const cacheKey = `${root}::${String(commitCount)}`
+    const cached = getCached(cachedGitHistory, cacheKey)
     if (cached.hit) return cached.value
 
     try {
         if (process.env['VITEST']) {
-            return setCached(cachedGitHistory, root, null)
+            return setCached(cachedGitHistory, cacheKey, null)
         }
-        return setCached(cachedGitHistory, root, fetchGitHistoryFromRepo(root, commitCount))
+        return setCached(cachedGitHistory, cacheKey, fetchGitHistoryFromRepo(root, commitCount))
     } catch (err: unknown) {
         logger.debug('Failed to get git history via child_process (non-critical)', {
             module: 'BRIEFING',
             operation: 'git-history',
             error: err instanceof Error ? err.message : String(err),
         })
-        return setCached(cachedGitHistory, root, null)
+        return setCached(cachedGitHistory, cacheKey, null)
+    }
+}
+
+function readReadmeBadgeChunk(root: string): string {
+    const readmePath = path.join(root, 'README.md')
+    const fd = fs.openSync(readmePath, 'r')
+    try {
+        const buf = Buffer.alloc(2048)
+        const bytesRead = fs.readSync(fd, buf, 0, 2048, 0)
+        return buf.toString('utf-8', 0, bytesRead)
+    } finally {
+        fs.closeSync(fd)
     }
 }
 
@@ -176,13 +189,8 @@ function loadCachedTestHealth(targetPath?: string | null): TestHealth | null {
 
             let unitTests = 0
             let e2eTests = 0
-            const readmePath = path.join(root, 'README.md')
             try {
-                const fd = fs.openSync(readmePath, 'r')
-                const buf = Buffer.alloc(2048)
-                const bytesRead = fs.readSync(fd, buf, 0, 2048, 0)
-                fs.closeSync(fd)
-                const badgeContent = buf.toString('utf-8', 0, bytesRead)
+                const badgeContent = readReadmeBadgeChunk(root)
                 const unitMatch = /(?<!E2E[_ ]|E2E)Tests-(\d+)[_ %]*(passed|%20passed)/i.exec(
                     badgeContent
                 )
@@ -197,13 +205,7 @@ function loadCachedTestHealth(targetPath?: string | null): TestHealth | null {
             return setCached(cachedTestHealth, root, { unitTests, e2eTests, coverage })
         } else {
             // Fallback: parse everything from README badges (legacy path)
-            const readmePath = path.join(root, 'README.md')
-            const fd = fs.openSync(readmePath, 'r')
-            const buf = Buffer.alloc(2048)
-            const bytesRead = fs.readSync(fd, buf, 0, 2048, 0)
-            fs.closeSync(fd)
-            const content = buf.toString('utf-8', 0, bytesRead)
-            return setCached(cachedTestHealth, root, parseTestHealth(content))
+            return setCached(cachedTestHealth, root, parseTestHealth(readReadmeBadgeChunk(root)))
         }
     } catch {
         logger.debug('Test health data not found or unreadable (non-critical)', {

@@ -1,5 +1,5 @@
 /**
- * GitHub Tool Group - 16 tools
+ * GitHub Tool Group - 18 tools
  *
  * Tools: get_github_issues, get_github_prs, get_github_issue, get_github_pr,
  *        get_github_context, get_kanban_board, move_kanban_item,

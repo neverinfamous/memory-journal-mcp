@@ -10,13 +10,12 @@ import { ICON_PROMPT } from '../../constants/icons.js'
 import type { InternalPromptDef } from './index.js'
 import type { BriefingConfig } from '../resources/shared.js'
 import {
-    formatPositiveIntOrPlaceholder,
     getGitHubCommanderPromptDefinitions,
     requirePositiveIntOrPlaceholder,
     resolveFallbackProjectNumber,
 } from './github-commander.js'
 
-export { formatPositiveIntOrPlaceholder, requirePositiveIntOrPlaceholder }
+export { requirePositiveIntOrPlaceholder }
 
 /**
  * Get GitHub prompt definitions

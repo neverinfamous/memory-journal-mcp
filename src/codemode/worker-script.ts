@@ -74,6 +74,8 @@ interface ScopedRpcOverrides {
     useTestDb?: boolean
     workspaceId?: string
     projectNumber?: number
+    sessionId?: string
+    autoVersion?: boolean
 }
 
 function createScopedRpcCall(overrides?: ScopedRpcOverrides): RpcCallFn {
@@ -95,6 +97,8 @@ function createScopedRpcCall(overrides?: ScopedRpcOverrides): RpcCallFn {
                 ...(overrides?.useTestDb === true ? { useTestDb: true } : {}),
                 ...(overrides?.workspaceId !== undefined ? { workspaceId: overrides.workspaceId } : {}),
                 ...(overrides?.projectNumber !== undefined ? { projectNumber: overrides.projectNumber } : {}),
+                ...(overrides?.sessionId !== undefined ? { sessionId: overrides.sessionId } : {}),
+                ...(overrides?.autoVersion !== undefined ? { autoVersion: overrides.autoVersion } : {}),
             }
             rpcPort.postMessage(request)
         })
@@ -110,6 +114,7 @@ interface VmExecutionContextOptions {
     methodList: Record<string, string[]>
     schemaList: Record<string, Record<string, string>> | undefined
     timeoutMs: number
+    maxResultSize?: number | undefined
     contextObj: Record<string, unknown> | undefined
     readonlyMode?: boolean
     dryRunMode?: boolean
@@ -124,9 +129,15 @@ function mergeNestedExecutionContext(
     outerContext: Record<string, unknown> | undefined,
     nestedContext: Record<string, unknown> | undefined,
     workspaceId: string | undefined,
-    projectNumber: number | undefined
+    projectNumber: number | undefined,
+    sessionId: string | undefined
 ): Record<string, unknown> | undefined {
-    if (nestedContext === undefined && workspaceId === undefined && projectNumber === undefined) {
+    if (
+        nestedContext === undefined &&
+        workspaceId === undefined &&
+        projectNumber === undefined &&
+        sessionId === undefined
+    ) {
         return outerContext
     }
     const merged: Record<string, unknown> = { ...(outerContext ?? {}) }
@@ -148,12 +159,30 @@ function mergeNestedExecutionContext(
         merged['project_id'] = projectNumber
         merged['projectId'] = projectNumber
     }
+    if (sessionId !== undefined) {
+        merged['session_id'] = sessionId
+        merged['sessionId'] = sessionId
+    }
     return merged
+}
+
+function enforceNestedResultLimit(rawResult: unknown, maxResultSize: number | undefined): unknown {
+    if (maxResultSize === undefined || rawResult === undefined) return rawResult
+    const wrapper: SandboxResult = {
+        success: true,
+        result: rawResult,
+        metrics: { wallTimeMs: 0, cpuTimeMs: 0, memoryUsedMb: 0 },
+    }
+    serializeAndEnforceEgress(wrapper, maxResultSize)
+    if (!wrapper.success) {
+        throw new Error(wrapper.error ?? 'Nested execution output limit exceeded')
+    }
+    return wrapper.result
 }
 
 function createIsolatedNestedRunner(options: VmExecutionContextOptions): RunIsolatedNestedFn {
     const {
-        methodList, schemaList, timeoutMs, contextObj,
+        methodList, schemaList, timeoutMs, maxResultSize, contextObj,
         pinnedWorkspaceRaw, pinnedProjectRaw, projectRegistryRaw, activeTimers,
     } = options
     const outerWs =
@@ -176,19 +205,28 @@ function createIsolatedNestedRunner(options: VmExecutionContextOptions): RunIsol
         const nextProj = outerProj ?? overrides?.projectNumber
         const nextTimeout =
             overrides?.timeoutMs !== undefined ? Math.min(timeoutMs, overrides.timeoutMs) : timeoutMs
-        const mergedContext = mergeNestedExecutionContext(contextObj, overrides?.contextObj, nextWs, nextProj)
+        const nextMaxResult =
+            overrides?.maxResultSize !== undefined && maxResultSize !== undefined
+                ? Math.min(maxResultSize, overrides.maxResultSize)
+                : (overrides?.maxResultSize ?? maxResultSize)
+        const mergedContext = mergeNestedExecutionContext(
+            contextObj, overrides?.contextObj, nextWs, nextProj, overrides?.sessionId
+        )
         const rpcOverrides: ScopedRpcOverrides = {
             ...(nestedReadonly ? { readonly: true } : {}),
             ...(nestedDryRun ? { dryRun: true } : {}),
             ...(nestedUseTestDb ? { useTestDb: true } : {}),
             ...(nextWs !== undefined ? { workspaceId: nextWs } : {}),
             ...(nextProj !== undefined ? { projectNumber: nextProj } : {}),
+            ...(overrides?.sessionId !== undefined ? { sessionId: overrides.sessionId } : {}),
+            ...(overrides?.autoVersion !== undefined ? { autoVersion: overrides.autoVersion } : {}),
         }
         const nestedContext = createVmExecutionContext({
             rpcFn: createScopedRpcCall(rpcOverrides),
             methodList,
             schemaList,
             timeoutMs: nextTimeout,
+            maxResultSize: nextMaxResult,
             contextObj: mergedContext,
             readonlyMode: nestedReadonly,
             dryRunMode: nestedDryRun,
@@ -198,13 +236,14 @@ function createIsolatedNestedRunner(options: VmExecutionContextOptions): RunIsol
             projectRegistryRaw,
             activeTimers,
         })
-        return (await vm.runInContext(wrapped, nestedContext, { timeout: nextTimeout })) as unknown
+        const rawResult = (await vm.runInContext(wrapped, nestedContext, { timeout: nextTimeout })) as unknown
+        return enforceNestedResultLimit(rawResult, overrides?.maxResultSize)
     }
 }
 
 function createVmExecutionContext(options: VmExecutionContextOptions): vm.Context {
     const {
-        rpcFn, methodList, schemaList, timeoutMs, contextObj, readonlyMode, dryRunMode,
+        rpcFn, methodList, schemaList, timeoutMs, maxResultSize, contextObj, readonlyMode, dryRunMode,
         useTestDbMode, pinnedWorkspaceRaw, pinnedProjectRaw, projectRegistryRaw, activeTimers,
     } = options
     const mjApi = buildApiProxy(rpcFn, methodList, schemaList, readonlyMode, contextObj)
@@ -234,7 +273,7 @@ function createVmExecutionContext(options: VmExecutionContextOptions): vm.Contex
     const runIsolatedNestedCode = createIsolatedNestedRunner(options)
 
     const executeCodeFn = createSandboxExecutor({
-        shimMj, vmContextRef, timeoutMs, readonlyMode, dryRunMode, useTestDbMode,
+        shimMj, vmContextRef, timeoutMs, maxResultSize, readonlyMode, dryRunMode, useTestDbMode,
         pinnedWorkspaceRaw, pinnedProjectRaw, projectRegistryRaw, runIsolatedNestedCode,
     })
     executeCodeFnRef.current = executeCodeFn
@@ -304,7 +343,8 @@ async function executeCode(
     schemaList: Record<string, Record<string, string>> | undefined,
     timeoutMs: number,
     contextObj?: Record<string, unknown>,
-    readonlyMode?: boolean
+    readonlyMode?: boolean,
+    maxResultSize?: number
 ): Promise<SandboxResult> {
     const startCpu = process.cpuUsage()
     const startTime = performance.now()
@@ -321,6 +361,7 @@ async function executeCode(
             methodList,
             schemaList,
             timeoutMs,
+            ...(maxResultSize !== undefined ? { maxResultSize } : {}),
             contextObj,
             ...(readonlyMode !== undefined ? { readonlyMode } : {}),
             pinnedWorkspaceRaw,
@@ -381,7 +422,9 @@ parentPort?.on('message', (msg: unknown) => {
         })
 
         try {
-            const result = await executeCode(code, methodList, schemaList, timeoutMs ?? 30000, contextObj, readonlyMode)
+            const result = await executeCode(
+                code, methodList, schemaList, timeoutMs ?? 30000, contextObj, readonlyMode, maxResultSize
+            )
             serializeAndEnforceEgress(result, maxResultSize)
             if (!resultSent) {
                 resultSent = true

@@ -15,7 +15,7 @@ import { z } from 'zod'
 import * as p from '@clack/prompts'
 import * as yaml from 'yaml'
 import type { BaseEntryOptionsSchema } from '../schemas.js'
-import { getCliCommandDb } from './db-helper.js'
+import { CliExitError, getCliCommandDb } from './db-helper.js'
 import {
     applyCliEntryFlagAliases,
     parseRelationshipArray,
@@ -55,6 +55,36 @@ export async function getDb(
     return { db, config: serverOptions }
 }
 
+async function readPipedStdinWithTimeout(): Promise<string> {
+    let hasInput = false
+    let timeoutId: ReturnType<typeof setTimeout> | undefined
+    const readPromise = (async (): Promise<string> => {
+        let stdinStr = ''
+        for await (const chunk of process.stdin) {
+            hasInput = true
+            stdinStr += chunk
+        }
+        return stdinStr
+    })()
+    readPromise.catch(() => undefined)
+    const timeoutPromise = new Promise<never>((_resolve, reject) => {
+        timeoutId = setTimeout(() => {
+            if (!hasInput) {
+                process.stderr.write(
+                    'Error: Timed out waiting for stdin. You must provide --file or --content when running in a non-interactive shell.\n'
+                )
+                reject(new CliExitError(1))
+            }
+        }, STDIN_TIMEOUT_MS)
+        timeoutId.unref()
+    })
+    try {
+        return await Promise.race([readPromise, timeoutPromise])
+    } finally {
+        if (timeoutId !== undefined) clearTimeout(timeoutId)
+    }
+}
+
 export async function parseContent(options: HealedEntryOptions): Promise<string> {
     const normalizedOptions: HealedEntryOptions = { ...options }
     applyCliEntryFlagAliases(normalizedOptions)
@@ -69,26 +99,7 @@ export async function parseContent(options: HealedEntryOptions): Promise<string>
     }
 
     if (!process.stdin.isTTY) {
-        let stdinStr = ''
-
-        const timeout = setTimeout(() => {
-            if (stdinStr.length === 0) {
-                process.stderr.write(
-                    'Error: Timed out waiting for stdin. You must provide --file or --content when running in a non-interactive shell.\n'
-                )
-                process.exit(1)
-            }
-        }, STDIN_TIMEOUT_MS)
-        timeout.unref()
-
-        try {
-            for await (const chunk of process.stdin) {
-                stdinStr += chunk
-            }
-        } finally {
-            clearTimeout(timeout)
-        }
-
+        const stdinStr = await readPipedStdinWithTimeout()
         if (stdinStr.trim().length > 0) {
             return stdinStr
         }
@@ -102,7 +113,7 @@ export async function parseContent(options: HealedEntryOptions): Promise<string>
 
         if (p.isCancel(titlePrompt)) {
             p.cancel('Operation cancelled.')
-            process.exit(0)
+            throw new CliExitError(0)
         }
 
         const contentPrompt = await p.text({
@@ -116,7 +127,7 @@ export async function parseContent(options: HealedEntryOptions): Promise<string>
 
         if (p.isCancel(contentPrompt)) {
             p.cancel('Operation cancelled.')
-            process.exit(0)
+            throw new CliExitError(0)
         }
 
         if (titlePrompt) {
@@ -130,7 +141,7 @@ export async function parseContent(options: HealedEntryOptions): Promise<string>
     process.stderr.write(
         'Error: Must provide either --file, --content, pipe data to stdin, or run interactively\n'
     )
-    process.exit(1)
+    throw new CliExitError(1)
 }
 
 export function parseFrontmatter(rawContent: string): {
@@ -274,6 +285,33 @@ function resolvePayloadScope(
     }
 }
 
+function parseMetadataRelatedTo(raw: unknown): number[] {
+    if (!Array.isArray(raw)) {
+        throw new ValidationError(
+            'Invalid metadata related_to: expected an array of positive integers.'
+        )
+    }
+    return raw.map((item) => {
+        if (typeof item === 'number') {
+            if (Number.isSafeInteger(item) && item > 0) {
+                return item
+            }
+            throw new ValidationError(
+                `Invalid metadata related_to entry '${String(item)}': expected a positive integer.`
+            )
+        }
+        if (typeof item === 'string' && /^[1-9]\d*$/.test(item)) {
+            const parsed = Number(item)
+            if (Number.isSafeInteger(parsed) && parsed > 0) {
+                return parsed
+            }
+        }
+        throw new ValidationError(
+            `Invalid metadata related_to entry '${String(item)}': expected a positive integer.`
+        )
+    })
+}
+
 function resolvePayloadRelationships(
     options: HealedEntryOptions,
     metadata: Record<string, unknown>
@@ -289,8 +327,11 @@ function resolvePayloadRelationships(
             : parseRelationships(options.relationships, options.relFile)
 
     let relatedIds = parseRelatedTo(options.relatedTo)
-    if (relatedIds.length === 0 && Array.isArray(metadata['related_to'])) {
-        relatedIds = metadata['related_to'].map(Number).filter((n) => !isNaN(n))
+    if (metadata['related_to'] !== undefined && metadata['related_to'] !== null) {
+        const metaRelatedIds = parseMetadataRelatedTo(metadata['related_to'])
+        if (relatedIds.length === 0) {
+            relatedIds = metaRelatedIds
+        }
     }
     return { relationships, relatedIds }
 }

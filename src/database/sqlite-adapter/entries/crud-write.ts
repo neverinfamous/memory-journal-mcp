@@ -270,6 +270,56 @@ export function updateEntries(
     return { updated, notFound, errors }
 }
 
+const DELETE_BATCH_CHUNK_SIZE = 500
+
+function findExistingIdsForDelete(
+    db: EntriesSharedContext['db'],
+    uniqueIds: number[],
+    permanent: boolean,
+    scopeId: string
+): Set<number> {
+    const existingIds = new Set<number>()
+    const hasWorkspaceFilter = scopeId !== '*'
+    const deletedFilter = permanent ? '' : ' AND deleted_at IS NULL'
+    const wsClause = hasWorkspaceFilter ? ' AND workspace_id = ?' : ''
+    for (let i = 0; i < uniqueIds.length; i += DELETE_BATCH_CHUNK_SIZE) {
+        const chunk = uniqueIds.slice(i, i + DELETE_BATCH_CHUNK_SIZE)
+        const placeholders = chunk.map(() => '?').join(', ')
+        const rows = db
+            .prepare(
+                `SELECT id FROM memory_journal WHERE id IN (${placeholders})${deletedFilter}${wsClause}`
+            )
+            .all(...(hasWorkspaceFilter ? [...chunk, scopeId] : chunk)) as { id: number }[]
+        for (const row of rows) existingIds.add(row.id)
+    }
+    return existingIds
+}
+
+function executeChunkedDelete(
+    db: EntriesSharedContext['db'],
+    toDelete: number[],
+    permanent: boolean,
+    scopeId: string
+): void {
+    const hasWorkspaceFilter = scopeId !== '*'
+    const now = permanent ? '' : new Date().toISOString()
+    for (let i = 0; i < toDelete.length; i += DELETE_BATCH_CHUNK_SIZE) {
+        const chunk = toDelete.slice(i, i + DELETE_BATCH_CHUNK_SIZE)
+        const placeholders = chunk.map(() => '?').join(', ')
+        if (permanent) {
+            const sql = hasWorkspaceFilter
+                ? `DELETE FROM memory_journal WHERE id IN (${placeholders}) AND workspace_id = ?`
+                : `DELETE FROM memory_journal WHERE id IN (${placeholders})`
+            db.prepare(sql).run(...(hasWorkspaceFilter ? [...chunk, scopeId] : chunk))
+        } else {
+            const sql = hasWorkspaceFilter
+                ? `UPDATE memory_journal SET deleted_at = ? WHERE id IN (${placeholders}) AND deleted_at IS NULL AND workspace_id = ?`
+                : `UPDATE memory_journal SET deleted_at = ? WHERE id IN (${placeholders}) AND deleted_at IS NULL`
+            db.prepare(sql).run(...(hasWorkspaceFilter ? [now, ...chunk, scopeId] : [now, ...chunk]))
+        }
+    }
+}
+
 export function deleteEntries(
     context: EntriesSharedContext,
     ids: number[],
@@ -279,40 +329,19 @@ export function deleteEntries(
     const { db } = context
     if (ids.length === 0) return { deleted: [], notFound: [], errors: [] }
 
-    const placeholders = ids.map(() => '?').join(', ')
+    const uniqueIds = Array.from(new Set(ids))
     const scopeId = effectiveWorkspace(workspaceId)
-    const hasWorkspaceFilter = scopeId !== '*'
-    const existingRows = db
-        .prepare(
-            `SELECT id FROM memory_journal WHERE id IN (${placeholders}) ${permanent ? '' : 'AND deleted_at IS NULL'}${hasWorkspaceFilter ? ' AND workspace_id = ?' : ''}`
-        )
-        .all(...(hasWorkspaceFilter ? [...ids, scopeId] : ids)) as { id: number }[]
-    const existingIds = new Set(existingRows.map((r) => r.id))
-    const notFound = ids.filter((id) => !existingIds.has(id))
-    const toDelete = ids.filter((id) => existingIds.has(id))
+    let notFound: number[] = []
     const deleted: number[] = []
     const errors: { id: number; error: Error }[] = []
 
-    if (toDelete.length === 0) return { deleted: [], notFound, errors: [] }
-
     const txn = db.transaction(() => {
-        const delPlaceholders = toDelete.map(() => '?').join(', ')
-        if (permanent) {
-            const stmt = db.prepare(
-                hasWorkspaceFilter
-                    ? `DELETE FROM memory_journal WHERE id IN (${delPlaceholders}) AND workspace_id = ?`
-                    : `DELETE FROM memory_journal WHERE id IN (${delPlaceholders})`
-            )
-            stmt.run(...(hasWorkspaceFilter ? [...toDelete, scopeId] : toDelete))
-        } else {
-            const now = new Date().toISOString()
-            const stmt = db.prepare(
-                hasWorkspaceFilter
-                    ? `UPDATE memory_journal SET deleted_at = ? WHERE id IN (${delPlaceholders}) AND deleted_at IS NULL AND workspace_id = ?`
-                    : `UPDATE memory_journal SET deleted_at = ? WHERE id IN (${delPlaceholders}) AND deleted_at IS NULL`
-            )
-            stmt.run(...(hasWorkspaceFilter ? [now, ...toDelete, scopeId] : [now, ...toDelete]))
-        }
+        const existingIds = findExistingIdsForDelete(db, uniqueIds, permanent, scopeId)
+        notFound = uniqueIds.filter((id) => !existingIds.has(id))
+        const toDelete = uniqueIds.filter((id) => existingIds.has(id))
+        if (toDelete.length === 0) return
+
+        executeChunkedDelete(db, toDelete, permanent, scopeId)
         deleted.push(...toDelete)
     })
 

@@ -336,15 +336,22 @@ export function resourceWorkspace(context: {
     runtime?: ServerRuntime | object | null
 }): string {
     const cfg = context.briefingConfig
-    const id = cfg?.defaultWorkspaceId
-    if (id !== undefined && id.length > 0 && id.toLowerCase() !== 'default') {
-        return id
+    const registry = cfg?.projectRegistry ?? loadProjectRegistryFromConfig()
+    const canonicalize = (raw: string): string =>
+        findCanonicalRegistryKey(raw, registry) ?? raw
+    const rawCfgId = cfg?.defaultWorkspaceId?.trim()
+    const configuredDefault = rawCfgId?.toLowerCase() === 'default'
+    if (
+        rawCfgId !== undefined &&
+        rawCfgId.length > 0 &&
+        rawCfgId !== '*' &&
+        !configuredDefault
+    ) {
+        return canonicalize(rawCfgId)
     }
     // [INTENT] A configured `default` is never rewritten from the configured project or cwd,
     // but an active session still wins over it.
-    const configuredDefault = id?.toLowerCase() === 'default'
     const sessionCtx = getActiveSessionProject(context.runtime)
-    const registry = cfg?.projectRegistry ?? loadProjectRegistryFromConfig()
     const uniqueFor = (projNum: number | undefined): string | undefined =>
         projNum !== undefined && registry !== undefined
             ? uniqueWorkspaceForProject(projNum, registry)
@@ -352,8 +359,9 @@ export function resourceWorkspace(context: {
 
     const byConfiguredProject = configuredDefault ? undefined : uniqueFor(cfg?.defaultProjectNumber)
     if (byConfiguredProject !== undefined) return byConfiguredProject
-    if (sessionCtx.workspaceId !== undefined && sessionCtx.workspaceId.length > 0) {
-        return sessionCtx.workspaceId
+    const rawSessionWs = sessionCtx.workspaceId?.trim()
+    if (rawSessionWs !== undefined && rawSessionWs.length > 0 && rawSessionWs !== '*') {
+        return canonicalize(rawSessionWs)
     }
     const bySessionProject = uniqueFor(sessionCtx.projectNumber)
     if (bySessionProject !== undefined) return bySessionProject

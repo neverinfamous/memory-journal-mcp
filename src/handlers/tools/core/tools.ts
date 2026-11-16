@@ -12,7 +12,7 @@ import {
 import { resolveWorkspaceId, resolveProjectContext } from '../../../utils/workspace-resolver.js'
 import { activeProjectRegistry, alignedProjectFilter } from '../../../utils/write-scope.js'
 import { logger } from '../../../utils/logger.js'
-import { canAccessTeamSilently } from '../search/helpers.js'
+import { canAccessTeamSilently, isTeamDbReady } from '../search/helpers.js'
 import { canReadTeamEntriesRbac } from '../team/rbac.js'
 
 import {
@@ -204,7 +204,7 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
                     ) {
                         const canProbeTeam =
                             !entry &&
-                            context.teamDb !== undefined &&
+                            isTeamDbReady(context.teamDb) &&
                             canAccessTeamSilently('team_get_entry_by_id') &&
                             canReadTeamEntriesRbac(context.teamDb, context.config, wsId)
                         const teamCandidate = canProbeTeam

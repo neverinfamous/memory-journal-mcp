@@ -15,7 +15,9 @@ import {
     RELATIONSHIP_TARGET_KEYS,
     RELATIONSHIP_TYPE_KEYS,
     pickRecordField,
-} from '../../handlers/tools/schemas/constants-and-primitives.js'
+} from '../../handlers/tools/schemas/entry-constants.js'
+
+const FORBIDDEN_DYNAMIC_KEYS = new Set(['__proto__', 'constructor', 'prototype'])
 
 const STRING_ID_KEYS = new Set([
     'workspace_id',
@@ -182,17 +184,19 @@ function healSessionAndCommitMetadata(result: Record<string, unknown>): void {
 }
 
 function flattenFilterObject(result: Record<string, unknown>): void {
-    if (!('filter' in result) || !isRecord(result['filter'])) return
+    if (!Object.hasOwn(result, 'filter') || !isRecord(result['filter'])) return
     const filterObj = result['filter']
     for (const [k, v] of Object.entries(filterObj)) {
+        if (FORBIDDEN_DYNAMIC_KEYS.has(k)) continue
         let snakeK = k.replace(/[A-Z]/g, (letter) => `_${letter.toLowerCase()}`)
-        if (snakeK === 'id' && !('entry_id' in filterObj) && !('entryId' in filterObj)) {
+        if (snakeK === 'id' && !Object.hasOwn(filterObj, 'entry_id') && !Object.hasOwn(filterObj, 'entryId')) {
             snakeK = 'entry_id'
         }
         if (snakeK === 'project' || snakeK === 'project_id' || snakeK === 'proj') {
             snakeK = 'project_number'
         }
-        if (!(snakeK in result)) result[snakeK] = v
+        if (FORBIDDEN_DYNAMIC_KEYS.has(snakeK)) continue
+        if (!Object.hasOwn(result, snakeK)) result[snakeK] = v
     }
     delete result['filter']
 }

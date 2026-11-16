@@ -12,9 +12,19 @@ import { loadProjectRegistryFromConfig } from '../../utils/workspace-resolver.js
 import { exactRegistryKey } from '../../utils/write-scope.js'
 import { markUntrustedContent } from '../../utils/security-utils.js'
 import { z } from 'zod'
-import { coerceNumber } from '../../utils/query-helpers.js'
 import { ValidationError } from '../../types/errors.js'
 import { logger } from '../../utils/logger.js'
+
+function parseSupervisorLookbackHours(val: unknown): unknown {
+    if (val === undefined) return undefined
+    if (typeof val === 'number') return val
+    if (typeof val === 'string') {
+        const trimmed = val.trim()
+        if (trimmed === '') return undefined
+        if (/^-?\d+$/.test(trimmed)) return Number(trimmed)
+    }
+    return val
+}
 
 function parseSupervisorBoolean(val: unknown): unknown {
     if (val === undefined) return undefined
@@ -40,7 +50,7 @@ function parseSupervisorBoolean(val: unknown): unknown {
 
 const cmsSupervisorArgsSchema = z.object({
     lookbackHours: z.preprocess(
-        coerceNumber,
+        parseSupervisorLookbackHours,
         z.number().int().min(1).max(168).optional().default(24)
     ),
     autoRestore: z.preprocess(parseSupervisorBoolean, z.boolean().optional().default(true)),
@@ -181,7 +191,12 @@ function handleCmsSupervisorPrompt(
 ): { messages: PromptMessage[] } {
     const rawArgs = args ?? {}
     const lookbackRes = cmsSupervisorArgsSchema.shape.lookbackHours.safeParse(rawArgs['lookbackHours'])
-    const lookbackHours = lookbackRes.success ? lookbackRes.data : 24
+    if (!lookbackRes.success) {
+        throw new ValidationError(
+            `Invalid lookbackHours value '${String(rawArgs['lookbackHours'])}'. Expected an integer between 1 and 168.`
+        )
+    }
+    const lookbackHours = lookbackRes.data
     const restoreRes = cmsSupervisorArgsSchema.shape.autoRestore.safeParse(rawArgs['autoRestore'])
     if (!restoreRes.success) {
         throw new ValidationError(

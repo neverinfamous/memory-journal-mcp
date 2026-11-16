@@ -14,6 +14,7 @@ import { activeProjectRegistry, uniqueWorkspaceForProject } from '../../../utils
 import { getRpcExecutionOverrides } from '../../../codemode/rpc-context.js'
 import { getRequestContext, requestContextStorage } from '../../../utils/request-context.js'
 import { normalizeDispatchParams } from './dispatch-scope.js'
+import { resolveEffectiveRpcScope, validateRpcOverrideBounds } from './dispatch-rpc-bounds.js'
 
 export { resolveCodeModeSessionContext } from './session-context.js'
 export { checkSchemaAcceptsKey, deepCamelToSnake } from './dispatch-scope.js'
@@ -51,6 +52,7 @@ export interface SecureDispatcherOptions {
     projectId: number | string | undefined
     workspaceId: string | undefined
     explicitWorkspace?: boolean
+    sessionId?: string | undefined
     autoVersion: boolean
     dryRun: boolean
     onMutatingDispatch?: () => void
@@ -80,33 +82,26 @@ async function executeDispatcherCall(
     isSimulation: boolean | undefined,
     options: SecureDispatcherOptions
 ): Promise<unknown> {
-    const { sessionContext, projectId, workspaceId, explicitWorkspace, autoVersion, dryRun } = options
+    const { sessionContext, projectId, workspaceId, explicitWorkspace, sessionId, autoVersion, dryRun } = options
     const { cleanToolParams, callUseTestDb } = extractTestDbOverride(toolParams)
-
     const rpcOverrides = getRpcExecutionOverrides()
-    const outerCanNarrow = workspaceId === undefined || workspaceId === '*'
-    const overrideWs = rpcOverrides?.workspaceId?.trim()
-    const effectiveWorkspaceId =
-        outerCanNarrow && overrideWs !== undefined && overrideWs !== '' && overrideWs !== '*'
-            ? overrideWs
-            : workspaceId
-    const effectiveExplicitWorkspace =
-        effectiveWorkspaceId !== workspaceId ? true : explicitWorkspace
-    const effectiveProjectId =
-        outerCanNarrow && projectId === undefined && rpcOverrides?.projectNumber !== undefined
-            ? rpcOverrides.projectNumber
-            : projectId
+    const reg = activeProjectRegistry(sessionContext.config?.projectRegistry)
+    const scopeRes = resolveEffectiveRpcScope({ workspaceId, projectId, explicitWorkspace, sessionId }, rpcOverrides, reg)
+    if ('errorResult' in scopeRes) return scopeRes.errorResult
 
     const normalized = await normalizeDispatchParams(tool, cleanToolParams, {
         sessionContext,
-        projectId: effectiveProjectId,
-        workspaceId: effectiveWorkspaceId,
-        ...(effectiveExplicitWorkspace !== undefined
-            ? { explicitWorkspace: effectiveExplicitWorkspace }
+        projectId: scopeRes.effectiveProjectId,
+        workspaceId: scopeRes.effectiveWorkspaceId,
+        ...(scopeRes.effectiveExplicitWorkspace !== undefined
+            ? { explicitWorkspace: scopeRes.effectiveExplicitWorkspace }
             : {}),
+        ...(scopeRes.effectiveSessionId !== undefined ? { sessionId: scopeRes.effectiveSessionId } : {}),
     })
     if ('errorResult' in normalized) return normalized.errorResult
     const normalizedParams = normalized.params
+    const boundsErr = validateRpcOverrideBounds(tool, normalizedParams, rpcOverrides, reg)
+    if (boundsErr !== undefined) return boundsErr
 
     if (rpcOverrides?.readonly === true && tool.annotations?.readOnlyHint !== true) {
         return {
@@ -118,9 +113,9 @@ async function executeDispatcherCall(
         }
     }
 
+    const effectiveAutoVersion = rpcOverrides?.autoVersion === false ? false : autoVersion
     const executeWithScope = async (): Promise<unknown> => {
-        const finalParams = applyAutoVersion(tool, normalizedParams, autoVersion, sessionContext)
-
+        const finalParams = applyAutoVersion(tool, normalizedParams, effectiveAutoVersion, sessionContext)
         if (tool.annotations?.readOnlyHint !== true && (dryRun || rpcOverrides?.dryRun === true)) {
             return {
                 success: true,
@@ -129,24 +124,28 @@ async function executeDispatcherCall(
                 simulatedParams: finalParams,
             }
         }
-
         if (isSimulation === true && tool.annotations?.readOnlyHint !== true) {
             return { success: true, simulated: true, params: finalParams }
         }
-
-        if (tool.annotations?.readOnlyHint !== true) {
-            options.onMutatingDispatch?.()
-        }
-
+        if (tool.annotations?.readOnlyHint !== true) options.onMutatingDispatch?.()
         return invokeToolWithGuards(tool, finalParams, sessionContext)
     }
 
     const existingReqCtx = getRequestContext()
-    const effectiveUseTestDb =
-        callUseTestDb || rpcOverrides?.useTestDb === true || existingReqCtx?.useTestDb === true
-    if (effectiveUseTestDb && existingReqCtx?.useTestDb !== true) {
+    const effectiveUseTestDb = callUseTestDb || rpcOverrides?.useTestDb === true || existingReqCtx?.useTestDb === true
+    const needTestDbCtx = effectiveUseTestDb && existingReqCtx?.useTestDb !== true
+    const needSessCtx =
+        scopeRes.effectiveUseSessionIdInCtx !== undefined &&
+        existingReqCtx?.sessionId !== scopeRes.effectiveUseSessionIdInCtx
+    if (needTestDbCtx || needSessCtx) {
         return requestContextStorage.run(
-            { ...(existingReqCtx ?? {}), useTestDb: true },
+            {
+                ...(existingReqCtx ?? {}),
+                ...(effectiveUseTestDb ? { useTestDb: true } : {}),
+                ...(scopeRes.effectiveUseSessionIdInCtx !== undefined
+                    ? { sessionId: scopeRes.effectiveUseSessionIdInCtx }
+                    : {}),
+            },
             executeWithScope
         )
     }

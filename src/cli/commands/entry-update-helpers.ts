@@ -4,6 +4,7 @@ import { ValidationError } from '../../types/errors.js'
 import { activeProjectRegistry, pairStoredScope } from '../../utils/write-scope.js'
 import { resolveWorkspaceId } from '../../utils/workspace-resolver.js'
 import type { updateEntryOptionsSchema } from '../schemas.js'
+import { CliExitError } from './db-helper.js'
 import type { EntryPayload } from './entry-payload.js'
 
 export type UpdateEntryCliOptions = z.infer<typeof updateEntryOptionsSchema> & {
@@ -25,7 +26,7 @@ export function validateCliUpdateArgsAndTarget(
     const entryId = options.id
     if (entryId === undefined || !Number.isInteger(entryId) || entryId < 1) {
         process.stderr.write('Error: Must provide a valid --id (positive integer)\n')
-        process.exit(1)
+        throw new CliExitError(1)
     }
 
     const version = options.expectedVersion
@@ -33,7 +34,7 @@ export function validateCliUpdateArgsAndTarget(
         process.stderr.write(
             'Error: Must provide a valid --expected-version (expected positive integer version) to prevent concurrent overwrites\n'
         )
-        process.exit(1)
+        throw new CliExitError(1)
     }
 
     const rawWorkspaceOpt = options.workspaceId ?? options.workspace ?? options.workspace_id

@@ -4,8 +4,15 @@
  */
 
 import { isRecord } from '../../../codemode/normalizers/shared-utils.js'
-import { getActiveProjectRegistry } from '../../../codemode/normalizers/generic-field-aliases.js'
-import { findCanonicalRegistryKey, loadProjectRegistryFromConfig } from '../../../utils/workspace-resolver.js'
+import {
+    assignMissingScope,
+    readProjectNumber,
+    readWorkspaceId,
+    resolveCompatibleInheritedScope,
+    resolveRepoWorkspace,
+} from './json-entry-scope.js'
+
+export { resolveRepoWorkspace }
 
 interface PayloadSignals {
     hasContent: boolean
@@ -72,100 +79,6 @@ function recoverNamedToolCall(target: Record<string, unknown>, original: Record<
     assignMissingScope(toolParams, target, original)
     const cleanTool = toolName.replace(/^mj[._]/, '')
     return `return await (mj.${cleanTool} || mj.core.${cleanTool})(${JSON.stringify(toolParams)});`
-}
-
-function resolveCompatibleInheritedScope(
-    target: Record<string, unknown>,
-    original: Record<string, unknown>,
-    allowDefaultProjForward = false
-): { workspaceId?: string; projectNumber?: number | string } {
-    const targetWs = readWorkspaceId(target)
-    const origWs = original !== target ? readWorkspaceId(original) : undefined
-    const targetProj = readProjectNumber(target)
-    const origProj = original !== target ? readProjectNumber(original) : undefined
-
-    const workspaceId =
-        targetWs ?? (targetProj === undefined ? origWs : undefined)
-    const compatibleWs =
-        targetWs === undefined || targetWs.toLowerCase() === origWs?.toLowerCase()
-    const targetIsDefault = targetWs?.toLowerCase() === 'default'
-    const origIsDefaultWithoutTargetWs =
-        targetWs === undefined && origWs?.toLowerCase() === 'default'
-    const allowOrigProj =
-        targetProj === undefined &&
-        origProj !== undefined &&
-        compatibleWs &&
-        !targetIsDefault &&
-        (!origIsDefaultWithoutTargetWs || allowDefaultProjForward)
-
-    return {
-        ...(workspaceId !== undefined ? { workspaceId } : {}),
-        ...(targetProj !== undefined
-            ? { projectNumber: targetProj }
-            : allowOrigProj
-              ? { projectNumber: origProj }
-              : {}),
-    }
-}
-
-function assignMissingScope(
-    params: Record<string, unknown>,
-    target: Record<string, unknown>,
-    original: Record<string, unknown>
-): void {
-    const hasWsParam = params['workspace_id'] !== undefined || params['workspaceId'] !== undefined
-    const hasProjParam = params['project_number'] !== undefined || params['projectNumber'] !== undefined
-    const effectiveTarget = hasWsParam || hasProjParam
-        ? {
-              ...target,
-              ...(hasWsParam ? { workspace_id: params['workspace_id'] ?? params['workspaceId'] } : {}),
-              ...(hasProjParam ? { project_number: params['project_number'] ?? params['projectNumber'] } : {}),
-          }
-        : target
-    const scope = resolveCompatibleInheritedScope(effectiveTarget, original)
-    if (!hasWsParam && scope.workspaceId !== undefined) {
-        params['workspace_id'] = scope.workspaceId
-    }
-    if (!hasProjParam && scope.projectNumber !== undefined) {
-        params['project_number'] = scope.projectNumber
-    }
-}
-
-function readProjectNumber(target: Record<string, unknown>): number | string | undefined {
-    const raw =
-        target['project_number'] ??
-        target['projectNumber'] ??
-        target['project_id'] ??
-        target['projectId'] ??
-        target['project_name'] ??
-        target['projectName'] ??
-        target['project']
-    if (typeof raw === 'number' && !Number.isNaN(raw)) return raw
-    if (typeof raw === 'string' && raw.trim() !== '') {
-        const trimmed = raw.trim()
-        if (/^p-?\d+$/i.test(trimmed)) return Number(trimmed.replace(/^p-?/i, ''))
-        const num = Number(trimmed)
-        if (!Number.isNaN(num)) return num
-        return trimmed
-    }
-    return undefined
-}
-
-function readWorkspaceId(target: Record<string, unknown>): string | undefined {
-    const raw = target['workspace_id'] ?? target['workspaceId'] ?? target['workspace']
-    if (typeof raw === 'string' && raw.trim() !== '') return raw.trim()
-    return resolveRepoWorkspace(target['repo'] ?? target['repo_name'] ?? target['repoName'])
-}
-
-/** Maps a `repo` / `owner/repo` value onto a registered workspace key; never copies it verbatim. */
-export function resolveRepoWorkspace(repo: unknown): string | undefined {
-    if (typeof repo !== 'string' || repo.trim() === '') return undefined
-    const name = repo.trim().split(/[/\\]/).filter(Boolean).pop()?.trim() ?? ''
-    if (name === '') return undefined
-    const activeReg = getActiveProjectRegistry()
-    const registry = activeReg ?? loadProjectRegistryFromConfig()
-    if (registry === undefined) return undefined
-    return findCanonicalRegistryKey(name, registry)
 }
 
 function recoverSearchCall(target: Record<string, unknown>, original: Record<string, unknown>): string | null {

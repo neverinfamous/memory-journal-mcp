@@ -3,7 +3,7 @@ import type { IDatabaseAdapter } from '../../database/core/interfaces.js'
 import type { RelationshipType, CreateEntryInput, ToolHandlerConfig } from '../../types/index.js'
 import { z } from 'zod'
 import { AuthorizationError, ValidationError } from '../../types/errors.js'
-import { enforceCliTeamRbac } from './db-helper.js'
+import { CliExitError, enforceCliTeamRbac } from './db-helper.js'
 import { canonicalizeTeamAuthor } from '../../handlers/tools/team/rbac.js'
 import { resolveTeamCreateAuthor } from '../../handlers/tools/team/admin-tools/batch-create-helpers.js'
 import { checkSingleTeamOwnership } from '../../handlers/tools/team/admin-tools/batch-delete-helpers.js'
@@ -32,7 +32,10 @@ export const updateEntrySchema = updateEntryOptionsSchema
 
 export { getDb, parseContent, parseFrontmatter, buildEntryPayload, type EntryPayload }
 
-function handleCliEntryError(e: unknown, actionLabel: 'create' | 'update'): never {
+function handleCliEntryError(e: unknown, actionLabel: 'create' | 'update'): number {
+    if (e instanceof CliExitError) {
+        return e.exitCode
+    }
     if (e instanceof z.ZodError) {
         const issues = e.issues
         if (issues.length > 0) {
@@ -51,7 +54,7 @@ function handleCliEntryError(e: unknown, actionLabel: 'create' | 'update'): neve
             `Failed to ${actionLabel} entry: ${e instanceof Error ? e.message : String(e)}\n`
         )
     }
-    process.exit(1)
+    return 1
 }
 
 async function loadCliEntryContentAndPayload(
@@ -147,6 +150,21 @@ function writeCliEntryResult(
     }
 }
 
+const CLI_CREATE_SCOPE_SCHEMA = z.object({
+    workspace_id: z
+        .string()
+        .min(
+            1,
+            'workspace_id (repository name) is required. It could not be auto-resolved from project_number or current directory.'
+        ),
+    project_number: z
+        .number({
+            message: 'project_number is required. Entries must be assigned to a valid project.',
+        })
+        .int()
+        .positive('project_number must be a positive project id.'),
+})
+
 export async function createEntryAction(...args: unknown[]): Promise<void> {
     const command = args[args.length - 1] as Command
     const options = (args.length > 1 ? args[args.length - 2] : {}) as HealedEntryOptions
@@ -154,6 +172,7 @@ export async function createEntryAction(...args: unknown[]): Promise<void> {
     applyCliEntryFlagAliases(options, args.slice(0, args.length - 2))
 
     const { db, config } = await getDb(options, command)
+    let exitCode: number | undefined
 
     try {
         const { content, payload } = await loadCliEntryContentAndPayload(options, config)
@@ -170,20 +189,7 @@ export async function createEntryAction(...args: unknown[]): Promise<void> {
             resolvedWs = undefined
         }
 
-        z.object({
-            workspace_id: z
-                .string()
-                .min(
-                    1,
-                    'workspace_id (repository name) is required. It could not be auto-resolved from project_number or current directory.'
-                ),
-            project_number: z
-                .number({
-                    message: 'project_number is required. Entries must be assigned to a valid project.',
-                })
-                .int()
-                .positive('project_number must be a positive project id.'),
-        }).parse({ workspace_id: resolvedWs, project_number: payload.projectNumber })
+        CLI_CREATE_SCOPE_SCHEMA.parse({ workspace_id: resolvedWs, project_number: payload.projectNumber })
 
         let resolvedAuthor: string | undefined
         if (options.team === true) {
@@ -221,9 +227,12 @@ export async function createEntryAction(...args: unknown[]): Promise<void> {
         db.flushSave()
         writeCliEntryResult(newEntry, linkFailures, options.json, 'created')
     } catch (e) {
-        handleCliEntryError(e, 'create')
+        exitCode = handleCliEntryError(e, 'create')
     } finally {
         db.close()
+    }
+    if (exitCode !== undefined) {
+        process.exit(exitCode)
     }
 }
 
@@ -311,6 +320,7 @@ export async function updateEntryAction(...args: unknown[]): Promise<void> {
 
     applyCliEntryFlagAliases(options, args.slice(0, args.length - 2))
     const { db, config } = await getDb(options, command)
+    let exitCode: number | undefined
 
     try {
         const { entryId, version, rawWorkspaceOpt, trimmedTargetWs } =
@@ -354,7 +364,7 @@ export async function updateEntryAction(...args: unknown[]): Promise<void> {
         const result = db.updateEntry(entryId, updates)
         if (result === null) {
             process.stderr.write(`Error: Entry #${entryId} not found or version mismatch.\n`)
-            process.exit(1)
+            throw new CliExitError(1)
         }
 
         const linkFailures = linkCliEntryRelationships(
@@ -366,8 +376,11 @@ export async function updateEntryAction(...args: unknown[]): Promise<void> {
         db.flushSave()
         writeCliEntryResult(result, linkFailures, options.json, 'updated')
     } catch (e) {
-        handleCliEntryError(e, 'update')
+        exitCode = handleCliEntryError(e, 'update')
     } finally {
         db.close()
+    }
+    if (exitCode !== undefined) {
+        process.exit(exitCode)
     }
 }

@@ -3,7 +3,7 @@ import { PermissionError } from '../../../types/errors.js'
 import { resolveWorkspaceId } from '../../../utils/workspace-resolver.js'
 import { activeProjectRegistry, alignedProjectFilter } from '../../../utils/write-scope.js'
 import { formatHandlerError } from '../../../utils/error-helpers.js'
-import { calcPerDbLimit, mergeAndDedup, resolveAuthorizedIncludeTeam } from './helpers.js'
+import { calcPerDbLimit, isTeamDbReady, mergeAndDedup, resolveAuthorizedIncludeTeam } from './helpers.js'
 import { SearchByDateRangeSchema, SearchByDateRangeSchemaMcp } from './schemas.js'
 import { EntriesListOutputSchema } from '../schemas.js'
 
@@ -117,10 +117,11 @@ async function executeDateRangeSearch(
         }
     }
 
+    const hasReadyTeamDb = includeTeam && input.is_personal !== true && isTeamDbReady(teamDb)
     // [INVARIANT] A compound cursor with a missing side means that side is exhausted; never restart it at page 1.
     const { personalCursor, teamCursor, personalExhausted, teamExhausted } =
         await resolveDateRangeCursors(input.cursor, includeTeam, input.is_personal)
-    const perDbLimit = calcPerDbLimit(input.limit, !!teamDb && includeTeam && input.is_personal !== true)
+    const perDbLimit = calcPerDbLimit(input.limit, hasReadyTeamDb)
     const emptyPage: ReturnType<typeof db.searchByDateRange> = { entries: [] }
     const personalEntries = personalExhausted
         ? emptyPage
@@ -139,7 +140,7 @@ async function executeDateRangeSearch(
               workspaceId: wsId,
           })
 
-    if (teamDb && includeTeam && input.is_personal !== true) {
+    if (hasReadyTeamDb && isTeamDbReady(teamDb)) {
         return await queryTeamDateRangeAndMerge(
             teamDb,
             input,

@@ -210,14 +210,14 @@ export function resolveGitWorkingDir(input: GitWorkingDirInput, config?: ToolHan
     const pNum = parseGitProjectNumber(input.project_number)
     assertConsistentGitScope(registry, pNum, trimmedRawTarget, target)
     if (input.cwd !== undefined && input.cwd !== '') {
-        if (!fs.existsSync(input.cwd)) {
-            throw new Error(`Git working directory does not exist: ${input.cwd}`)
-        }
         const roots = buildAllowedGitRoots(config, registry)
         if (roots.length === 0) {
             throw new Error('Git working directory must be a registered repository path or an allowed I/O root')
         }
         assertSafeDirectoryPath(input.cwd, roots)
+        if (!fs.existsSync(input.cwd)) {
+            throw new Error(`Git working directory does not exist: ${input.cwd}`)
+        }
         if (registry && (pNum !== undefined || target !== undefined)) {
             const cwdMatch = findMatchedRegistryKey(registry, input.cwd)
             if (pNum !== undefined && cwdMatch !== undefined) {

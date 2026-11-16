@@ -236,6 +236,10 @@ export async function buildBriefingData(
     const insights = buildInsightsSection(context, activeWorkspaceId)
     const graphStats = buildGraphContext(context, journal.workspaceId)
     const latestPreviews = journal.latestEntries.map((e) => `#${e.id} (${e.type}): ${e.preview}`)
+    const teamLatestPreviews =
+        config.includeTeam && team?.teamLatestEntries && team.teamLatestEntries.length > 0
+            ? team.teamLatestEntries.map((e) => `#${e.id} (${e.type}): ${e.preview}`)
+            : undefined
     const summaryPreviews = journal.sessionSummaries
         ? journal.sessionSummaries.map((s) => `#${s.id} (${s.type}): ${s.preview}`)
         : null
@@ -263,6 +267,7 @@ export async function buildBriefingData(
         ciStatus: github?.ci ?? 'unknown',
         totalEntries: journal.totalEntries,
         latestPreviews,
+        ...(teamLatestPreviews !== undefined ? { teamLatestPreviews } : {}),
         summaryPreviews,
         github,
         teamTotalEntries: team?.teamInfo.totalEntries,

@@ -142,25 +142,50 @@ function hasValidJsSyntax(src: string): boolean {
  * into corresponding canonical mj.* API calls. Requires both `.prepare(` and `.run/.get/.all(`
  * outside string literals/comments so prose/literals inside valid `mj.*` calls are never rewritten.
  */
+const REAL_MJ_API_CALL_RE =
+    /\bmj\s*\.\s*(?:core|search|admin|team|analytics|relationships|io|git|backup|github|executeCode|help|readResource|getContext|createEntry|searchEntries|getRecentEntries|getEntryById|updateEntry|deleteEntry|listTags)\b/
+
 export function extractAndRecoverPreparedStatementCode(code: string): string | null {
     if (!code || typeof code !== 'string') return null
     const stripped = stripCommentsAndStrings(code)
     if (!stripped.includes('.prepare(')) return null
     if (!/\.(?:run|get|all)\s*\(/.test(stripped)) return null
-    if (hasValidJsSyntax(code) && /\bmj\s*\./.test(stripped) && !stripped.includes('.prepare(')) {
+    if (hasValidJsSyntax(code) && REAL_MJ_API_CALL_RE.test(stripped)) {
         return null
     }
 
-    const prepMatch = /\.prepare\s*\(\s*(['"`])([\s\S]*?)\1\s*\)/.exec(code)
-    if (prepMatch?.[2] === undefined) return null
-    const rawSql = prepMatch[2].trim()
-
-    const runMatch = /\.(?:run|get|all)\s*\(([\s\S]*?)\)(?:\s*;|\s*\n|$)/.exec(code)
-    if (runMatch === null) return null
+    const chainedMatch =
+        /\.prepare\s*\(\s*(['"`])([\s\S]*?)\1\s*\)\s*\.(?:run|get|all)\s*\(([\s\S]*?)\)(?:\s*;|\s*\n|$)/.exec(
+            code
+        )
+    let rawSql: string | undefined
+    let rawRunArgs: string | undefined
+    if (chainedMatch?.[2] !== undefined) {
+        rawSql = chainedMatch[2].trim()
+        rawRunArgs = chainedMatch[3]
+    } else {
+        const boundMatch =
+            /(?:(?:^|[;\n])\s*(?:const|let|var)\s+|(?:^|[;\n])\s*)([A-Za-z_$][\w$]*)\s*=[^;\n]*?\.prepare\s*\(\s*(['"`])([\s\S]*?)\2\s*\)/.exec(
+                code
+            )
+        const stmtVar = boundMatch?.[1]
+        if (stmtVar !== undefined && boundMatch?.[3] !== undefined) {
+            const afterPrep = code.slice(boundMatch.index + boundMatch[0].length)
+            const stmtCallRe = /\b([A-Za-z_$][\w$]*)\s*\.(?:run|get|all)\s*\(([\s\S]*?)\)(?:\s*;|\s*\n|$)/g
+            for (const m of afterPrep.matchAll(stmtCallRe)) {
+                if (m[1] === stmtVar) {
+                    rawSql = boundMatch[3].trim()
+                    rawRunArgs = m[2]
+                    break
+                }
+            }
+        }
+    }
+    if (rawSql === undefined) return null
 
     let parsedArgs: unknown[] = []
-    if (runMatch[1] !== undefined) {
-        const rawArgs = runMatch[1].trim()
+    if (rawRunArgs !== undefined) {
+        const rawArgs = rawRunArgs.trim()
         if (rawArgs.length > 0) {
             const recovered = parsePreparedStatementArgs(rawArgs)
             if (recovered === null) return null

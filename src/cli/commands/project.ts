@@ -1,9 +1,6 @@
 import { type Command } from 'commander'
 import * as path from 'node:path'
-import * as os from 'node:os'
 import * as fs from 'node:fs'
-
-const configPath = path.resolve(os.homedir(), '.gemini', 'config', 'memory-journal.config.json')
 
 import { DatabaseAdapterFactory } from '../../database/adapter-factory.js'
 import type { IDatabaseAdapter } from '../../database/core/interfaces.js'
@@ -22,56 +19,39 @@ import {
 import { validateProjectRegistryObject } from '../server-options-parsers.js'
 import { buildServerOptions } from '../server-options-builder.js'
 import { dumpConfigAndExit } from '../dump-config.js'
+import {
+    resolveProjectConfigPath,
+    syncCliTopLevelDefaults,
+    withIsolatedProjectConfigEnv,
+} from './project-config-helper.js'
 
 function handleProjectDumpConfig(options: Record<string, unknown>, command: Command): void {
     if (options['dumpConfig'] !== true) return
-    let resolver: ConfigResolver
-    const cliConfigPath = (options['config'] as string | undefined) ?? process.env['MEMORY_JOURNAL_CONFIG']
-    const configErrors: string[] = []
-    try {
-        resolver = new ConfigResolver(command, options, cliConfigPath)
-    } catch (err) {
-        configErrors.push(err instanceof Error ? err.message : String(err))
-        resolver = new ConfigResolver(command, {}, undefined)
-    }
-    const { serverOptions } = buildServerOptions(resolver, options, command, configErrors)
-    if (configErrors.length > 0) {
-        process.stderr.write('Startup Configuration Errors:\n')
-        configErrors.forEach((err) => process.stderr.write(` - ${err}\n`))
-        process.exit(1)
-    }
-    dumpConfigAndExit(serverOptions)
-}
-
-function getConfigPath(options?: Record<string, unknown>): string {
-    const custom = (options?.['config'] as string | undefined) ?? process.env['MEMORY_JOURNAL_CONFIG']
-    return custom ? path.resolve(custom) : configPath
+    withIsolatedProjectConfigEnv(options, (cliConfigPath) => {
+        let resolver: ConfigResolver
+        const configErrors: string[] = []
+        try {
+            resolver = new ConfigResolver(command, options, cliConfigPath)
+        } catch (err) {
+            configErrors.push(err instanceof Error ? err.message : String(err))
+            resolver = new ConfigResolver(command, {}, undefined)
+        }
+        const { serverOptions } = buildServerOptions(resolver, options, command, configErrors)
+        if (configErrors.length > 0) {
+            process.stderr.write('Startup Configuration Errors:\n')
+            configErrors.forEach((err) => process.stderr.write(` - ${err}\n`))
+            process.exit(1)
+        }
+        dumpConfigAndExit(serverOptions)
+    })
 }
 
 function loadConfig(options?: Record<string, unknown>): Record<string, unknown> {
-    return readProjectRegistryFile(getConfigPath(options)).config
+    return readProjectRegistryFile(resolveProjectConfigPath(options)).config
 }
 
 function saveConfig(config: Record<string, unknown>, options?: Record<string, unknown>): void {
-    writeProjectRegistryFile(getConfigPath(options), config)
-}
-
-function syncCliTopLevelDefaults(
-    config: Record<string, unknown>,
-    fromName: string,
-    toName: string | undefined,
-    nextProjNum?: number
-): void {
-    if (config['defaultWorkspaceId'] !== fromName) return
-    if (toName !== undefined) {
-        config['defaultWorkspaceId'] = toName
-        if (typeof nextProjNum === 'number') {
-            config['defaultProjectNumber'] = nextProjNum
-        }
-    } else {
-        delete config['defaultWorkspaceId']
-        delete config['defaultProjectNumber']
-    }
+    writeProjectRegistryFile(resolveProjectConfigPath(options), config)
 }
 
 function parsePositiveCliProjectNumber(raw: unknown): number {
@@ -108,35 +88,37 @@ function buildValidatedProjectServerOptions(
     options: Record<string, unknown>,
     command: Command
 ): ServerOptions | undefined {
-    const cliConfigPath =
-        (options['config'] as string | undefined) ?? process.env['MEMORY_JOURNAL_CONFIG']
-    const existingCliConfig =
-        cliConfigPath !== undefined && fs.existsSync(path.resolve(cliConfigPath))
-            ? cliConfigPath
-            : undefined
+    return withIsolatedProjectConfigEnv(options, (cliConfigPath) => {
+        const existingCliConfig =
+            cliConfigPath !== undefined && fs.existsSync(path.resolve(cliConfigPath))
+                ? cliConfigPath
+                : undefined
 
-    let resolver: ConfigResolver
-    try {
-        resolver = new ConfigResolver(command, options, existingCliConfig)
-    } catch (e) {
-        process.stderr.write(
-            `\nInvalid configuration, refusing to register project: ${e instanceof Error ? e.message : String(e)}\n`
-        )
-        process.stderr.write(`Fix the configuration and run 'memory-journal-mcp entry create' manually.\n`)
-        process.exitCode = 1
-        return undefined
-    }
+        let resolver: ConfigResolver
+        try {
+            resolver = new ConfigResolver(command, options, existingCliConfig)
+        } catch (e) {
+            process.stderr.write(
+                `\nInvalid configuration, refusing to register project: ${e instanceof Error ? e.message : String(e)}\n`
+            )
+            process.stderr.write(
+                `Fix the configuration and run 'memory-journal-mcp entry create' manually.\n`
+            )
+            process.exitCode = 1
+            return undefined
+        }
 
-    const configErrors: string[] = []
-    const { serverOptions } = buildServerOptions(resolver, options, command, configErrors)
-    if (configErrors.length > 0) {
-        // [INVARIANT] Never persist or initialize a database from a configuration that failed validation (H13/H16).
-        process.stderr.write('\nInvalid configuration, refusing to register project:\n')
-        configErrors.forEach((err) => process.stderr.write(` - ${err}\n`))
-        process.exitCode = 1
-        return undefined
-    }
-    return serverOptions
+        const configErrors: string[] = []
+        const { serverOptions } = buildServerOptions(resolver, options, command, configErrors)
+        if (configErrors.length > 0) {
+            // [INVARIANT] Never persist or initialize a database from a configuration that failed validation (H13/H16).
+            process.stderr.write('\nInvalid configuration, refusing to register project:\n')
+            configErrors.forEach((err) => process.stderr.write(` - ${err}\n`))
+            process.exitCode = 1
+            return undefined
+        }
+        return serverOptions
+    })
 }
 
 function validateAndRegisterProjectEntry(
@@ -320,7 +302,7 @@ function applyProjectUpdateFields(
     }
     if (targetName !== name) {
         // [INVARIANT] Renaming must never silently overwrite another registered project (H13/H16).
-        if (Object.prototype.hasOwnProperty.call(registry, targetName)) {
+        if (Object.hasOwn(registry, targetName)) {
             process.stderr.write(`Project '${targetName}' already exists; refusing to overwrite it.\n`)
             process.exit(1)
         }
@@ -360,22 +342,37 @@ export function projectUpdateAction(name: string, options: Record<string, unknow
     const config = loadConfig(options)
     const registry = (config['projectRegistry'] ?? {}) as Record<string, { path: string, project_number?: number }>
 
-    if (!Object.prototype.hasOwnProperty.call(registry, name)) {
+    if (!Object.hasOwn(registry, name)) {
         process.stderr.write(`🛠️ AUTONOMOUS HEALING: Project '${name}' not found.\n`)
         process.exit(1)
     }
 
-    const project = { ...(registry[name] ?? { path: '' }) }
+    const existing = registry[name] ?? { path: '' }
+    const prevProjNum = existing.project_number
+    const project = { ...existing }
     const { targetName, modified } = applyProjectUpdateFields(name, options, registry, project)
     if (!modified) {
-        process.stdout.write('No updates specified.\n')
+        if (options['json'] === true) {
+            process.stdout.write(
+                JSON.stringify({
+                    status: 'unchanged',
+                    name,
+                    path: project.path,
+                    ...(project.project_number !== undefined
+                        ? { project_number: project.project_number }
+                        : {}),
+                }) + '\n'
+            )
+        } else {
+            process.stdout.write('No updates specified.\n')
+        }
         return
     }
 
     const rest = Object.fromEntries(Object.entries(registry).filter(([key]) => key !== name))
     const newRegistry = { ...rest, [targetName]: project }
     config['projectRegistry'] = newRegistry
-    syncCliTopLevelDefaults(config, name, targetName, options['number'] != null ? project.project_number : undefined)
+    syncCliTopLevelDefaults(config, name, targetName, prevProjNum, project.project_number)
     try {
         validateProjectRegistryObject(config['projectRegistry'])
     } catch (e: unknown) {
@@ -386,7 +383,22 @@ export function projectUpdateAction(name: string, options: Record<string, unknow
     }
     saveConfig(config, options)
 
-    process.stdout.write(`Project '${targetName}' successfully updated.\n`)
+    if (options['json'] === true) {
+        process.stdout.write(
+            JSON.stringify({
+                status: 'success',
+                action: 'update',
+                name: targetName,
+                previousName: name,
+                path: project.path,
+                ...(project.project_number !== undefined
+                    ? { project_number: project.project_number }
+                    : {}),
+            }) + '\n'
+        )
+    } else {
+        process.stdout.write(`Project '${targetName}' successfully updated.\n`)
+    }
 }
 
 export function projectDeleteAction(name: string, options: Record<string, unknown>, command: Command): void {
@@ -399,16 +411,21 @@ export function projectDeleteAction(name: string, options: Record<string, unknow
     const config = loadConfig(options)
     const registry = (config['projectRegistry'] ?? {}) as Record<string, { path: string, project_number?: number }>
 
-    if (!Object.prototype.hasOwnProperty.call(registry, name)) {
+    if (!Object.hasOwn(registry, name)) {
         process.stderr.write(`🛠️ AUTONOMOUS HEALING: Project '${name}' not found.\n`)
         process.exit(1)
     }
 
+    const prevProjNum = registry[name]?.project_number
     const rest = Object.fromEntries(Object.entries(registry).filter(([key]) => key !== name))
     config['projectRegistry'] = rest
-    syncCliTopLevelDefaults(config, name, undefined)
+    syncCliTopLevelDefaults(config, name, undefined, prevProjNum)
     saveConfig(config, options)
 
-    process.stdout.write(`Project '${name}' successfully deleted.\n`)
+    if (options['json'] === true) {
+        process.stdout.write(JSON.stringify({ status: 'success', action: 'delete', name }) + '\n')
+    } else {
+        process.stdout.write(`Project '${name}' successfully deleted.\n`)
+    }
 }
 

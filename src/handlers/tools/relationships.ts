@@ -134,16 +134,19 @@ function buildRelationshipMermaid(
     for (const node of results.nodes) {
         const rawContent = node.metadata?.['content']
         const content = typeof rawContent === 'string' ? rawContent : ''
-        let contentPreview = content.slice(0, MERMAID_CONTENT_PREVIEW_LENGTH).replace(/\n/g, ' ')
+        let contentPreview = content
+            .slice(0, MERMAID_CONTENT_PREVIEW_LENGTH)
+            .replace(/[\r\n`]+/g, ' ')
         if (content.length > MERMAID_CONTENT_PREVIEW_LENGTH) contentPreview += '...'
         contentPreview = contentPreview.replace(/"/g, "'").replace(/\[/g, '(').replace(/\]/g, ')')
-        const entryTypeShort = (node.group || '').slice(0, 20)
+        const entryTypeShort = (node.group || '').slice(0, 20).replace(/[\r\n`"]+/g, ' ')
         mermaidLines.push(`    E${node.id}["#${node.id}: ${contentPreview}<br/>${entryTypeShort}"]`)
     }
     mermaidLines.push('')
     for (const edge of results.edges) {
         const arrow = MERMAID_REL_SYMBOLS[edge.type] ?? '-->'
-        mermaidLines.push(`    E${String(edge.from)} ${arrow}|${edge.type}| E${String(edge.to)}`)
+        const safeEdgeType = edge.type.replace(/[\r\n`|]+/g, '_')
+        mermaidLines.push(`    E${String(edge.from)} ${arrow}|${safeEdgeType}| E${String(edge.to)}`)
     }
     mermaidLines.push('')
     for (const node of results.nodes) {

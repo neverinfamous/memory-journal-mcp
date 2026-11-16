@@ -5,8 +5,12 @@ import { getRequestContext, requestContextStorage } from '../../../utils/request
 import { runWithAuthContext, getAuthContext } from '../../../auth/auth-context.js'
 import { ConfigurationError } from '../../../types/errors.js'
 import { activeProjectRegistry } from '../../../utils/write-scope.js'
+import { loadProjectRegistryFromConfig } from '../../../utils/workspace-resolver.js'
+import { setFallbackProjectRegistryLoader } from '../../../codemode/normalizers/generic-field-aliases.js'
 import { createJournalApi } from '../../../codemode/api/journal-api.js'
 import type { SandboxResult } from '../../../codemode/types.js'
+
+setFallbackProjectRegistryLoader(loadProjectRegistryFromConfig)
 
 import { isFilterEffectivelyReadOnly } from '../../../filtering/tool-filter.js'
 import { isRecord } from '../../../codemode/normalizers/shared-utils.js'
@@ -103,6 +107,7 @@ interface RecoveryRunOptions {
     userContext: Record<string, unknown>
     isSandboxReadonly: boolean
     useTestDb: boolean
+    sessionId?: string | undefined
     requestedMaxResultSize: number | undefined
     healingEnabled: boolean
     getMutated: () => boolean
@@ -117,6 +122,7 @@ async function runSandboxWithAutonomousRecovery(opts: RecoveryRunOptions): Promi
     const nextRequestContext = {
         ...(reqCtx ?? {}),
         ...(effectiveUseTestDb ? { useTestDb: true } : {}),
+        ...(opts.sessionId !== undefined && opts.sessionId !== '' ? { sessionId: opts.sessionId } : {}),
     }
 
     const runSandbox = async (codeToRun: string): Promise<void> => {
@@ -176,6 +182,8 @@ async function executeCodeModeHandler(
         if (sizeErr !== null) return buildSecurityErrorResult(sizeErr)
 
         const input: ExecuteCodeInput = ExecuteCodeSchema.parse(params)
+        const sessionId =
+            typeof input.session_id === 'string' && input.session_id.trim() !== '' ? input.session_id.trim() : undefined
         const healingEnabled = context.config?.agentHealing !== false
         const payloadRes = resolveExecutionPayload(input, params, healingEnabled, start)
         if ('earlyReturn' in payloadRes) return payloadRes.earlyReturn
@@ -188,13 +196,8 @@ async function executeCodeModeHandler(
         if ('errorResponse' in sessionRes) return sessionRes.errorResponse
         const { sessionContext, projectId, numericProjectId, workspaceId, explicitWorkspace } = sessionRes
 
-        const readonlyRequested =
-            input.readonly === true || input.read_only === true || input.readOnly === true
-        const { tools, allEnabledTools, isSandboxReadonly } = filterToolsForSandbox(
-            sessionContext,
-            context,
-            readonlyRequested
-        )
+        const readonlyRequested = input.readonly === true || input.read_only === true || input.readOnly === true
+        const { tools, allEnabledTools, isSandboxReadonly } = filterToolsForSandbox(sessionContext, context, readonlyRequested)
         const isDryRun = input.dry_run || input.dryRun === true
         let mutatedDuringRun = false
         const secureDispatcher = createSecureDispatcher({
@@ -203,11 +206,10 @@ async function executeCodeModeHandler(
             projectId,
             workspaceId,
             explicitWorkspace,
+            sessionId,
             autoVersion: input.autoVersion ?? input.auto_version,
             dryRun: isDryRun,
-            onMutatingDispatch: () => {
-                mutatedDuringRun = true
-            },
+            onMutatingDispatch: () => { mutatedDuringRun = true },
         })
         const journalApi = createJournalApi(tools, secureDispatcher, () => activeProjectRegistry(context.config?.projectRegistry))
         const schemas = (isSandboxReadonly ? createJournalApi(allEnabledTools) : journalApi).createSandboxSchemas()
@@ -219,6 +221,7 @@ async function executeCodeModeHandler(
             apiBindings: journalApi.createSandboxBindings(sessionContext.progress), schemas,
             timeoutMs: input.timeout ?? input.timeout_ms, userContext, isSandboxReadonly,
             useTestDb: input.use_test_db === true || input.useTestDb === true,
+            sessionId,
             requestedMaxResultSize, healingEnabled,
             getMutated: () => mutatedDuringRun, resetMutated: () => { mutatedDuringRun = false },
         })

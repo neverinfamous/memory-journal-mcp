@@ -1,8 +1,8 @@
 import type { ProjectRegistryEntry } from '../../types/index.js'
-import { loadProjectRegistryFromConfig, resolveProjectContext } from '../../utils/workspace-resolver.js'
-import { pairStoredScope } from '../../utils/write-scope.js'
+import { resolveProjectContextWithRegistry } from '../../utils/workspace-resolver-pure.js'
+import { pairStoredScope } from '../../utils/workspace-registry-match.js'
 import { hasMethodToken } from '../method-tokens.js'
-import { ENTRY_TYPE_ALIASES, isRecord, safeString } from './shared-utils.js'
+import { isRecord } from './shared-utils.js'
 
 const NUMERIC_ID_KEYS = [
     'entry_id', 'entryId', 'id', 'from_entry_id', 'fromEntryId', 'to_entry_id', 'toEntryId',
@@ -11,15 +11,18 @@ const NUMERIC_ID_KEYS = [
 ]
 
 let activeProjectRegistry: Record<string, ProjectRegistryEntry> | undefined
+let fallbackRegistryLoader: (() => Record<string, ProjectRegistryEntry> | undefined) | undefined
 
 export function setActiveProjectRegistry(registry: Record<string, ProjectRegistryEntry> | undefined): void {
     activeProjectRegistry = registry
 }
 
-export function resolveEffectiveProjectRegistry():
-    | Record<string, ProjectRegistryEntry>
-    | undefined {
-    return activeProjectRegistry ?? loadProjectRegistryFromConfig()
+export function setFallbackProjectRegistryLoader(loader: (() => Record<string, ProjectRegistryEntry> | undefined) | undefined): void {
+    fallbackRegistryLoader = loader
+}
+
+export function resolveEffectiveProjectRegistry(): Record<string, ProjectRegistryEntry> | undefined {
+    return activeProjectRegistry ?? fallbackRegistryLoader?.()
 }
 
 export function getActiveProjectRegistry(): Record<string, ProjectRegistryEntry> | undefined {
@@ -123,14 +126,23 @@ export function normalizeSearchGrepAliases(methodName: string, obj: Record<strin
     }
 }
 
-export function extractMetadataContextAliases(obj: Record<string, unknown>): void {
+export function extractMetadataContextAliases(
+    obj: Record<string, unknown>,
+    allowWorkspaceHoist = true
+): void {
     const metaObj = isRecord(obj['metadata']) ? obj['metadata'] : isRecord(obj['context']) ? obj['context'] : undefined
     if (!metaObj) return
     obj['project_number'] ??= metaObj['project_number'] ?? metaObj['projectNumber']
     obj['session_id'] ??= metaObj['session_id'] ?? metaObj['sessionId']
     obj['type'] ??= metaObj['type'] ?? metaObj['entry_type'] ?? metaObj['category']
     obj['tags'] ??= metaObj['tags']
-    obj['workspace_id'] ??= metaObj['workspace_id'] ?? metaObj['workspaceId']
+    if (allowWorkspaceHoist && obj['workspace_id'] === undefined) {
+        const hoistedWs = metaObj['workspace_id'] ?? metaObj['workspaceId']
+        if (hoistedWs !== undefined) {
+            obj['workspace_id'] = hoistedWs
+            obj['_alias_derived_workspace'] = true
+        }
+    }
 }
 
 export function coerceNumericStringIds(
@@ -353,12 +365,13 @@ export function resolveCreateEntryProjectContext(obj: Record<string, unknown>): 
     const workspaceIsConcrete = wsTrimmed !== undefined && wsTrimmed !== '' && wsTrimmed !== '*'
     if (!workspaceIsConcrete) return
     const effectiveRegistry = resolveEffectiveProjectRegistry()
-    const resolved = resolveProjectContext(
+    const resolved = resolveProjectContextWithRegistry(
         {
             workspace_id: wsTrimmed,
             ...(projNum !== undefined ? { project_number: projNum } : {}),
         },
-        effectiveRegistry !== undefined ? { projectRegistry: effectiveRegistry } : undefined
+        effectiveRegistry !== undefined ? { projectRegistry: effectiveRegistry } : undefined,
+        effectiveRegistry
     )
     if (projNum !== undefined) {
         pairStoredScope(wsTrimmed, projNum, effectiveRegistry)
@@ -372,70 +385,3 @@ export function resolveCreateEntryProjectContext(obj: Record<string, unknown>): 
 }
 
 export { normalizeExecuteCodeAliases } from './execute-code-aliases.js'
-
-function canonicalizeEntryType(obj: Record<string, unknown>): void {
-    if (obj['type'] !== undefined && obj['entry_type'] === undefined) {
-        obj['entry_type'] = obj['type']
-        delete obj['type']
-    }
-    if (typeof obj['entry_type'] !== 'string') return
-    const alias = ENTRY_TYPE_ALIASES[obj['entry_type'].toLowerCase().trim()]
-    if (alias !== undefined) obj['entry_type'] = alias
-}
-
-export function synthesizeEntryMutationFields(obj: Record<string, unknown>): void {
-    canonicalizeEntryType(obj)
-    const contentParts: string[] = []
-
-    const consumeGroup = (keys: string[], format: (val: unknown) => string): void => {
-        let found: unknown
-        for (const k of keys) {
-            if (found === undefined && obj[k] !== undefined) found = obj[k]
-            Reflect.deleteProperty(obj, k)
-        }
-        if (found !== undefined) {
-            const s = format(found)
-            if (s !== '') contentParts.push(s)
-        }
-    }
-
-    consumeGroup(['title', 'heading', 'subject', 'name'], (v) => {
-        const s = safeString(v)
-        return s !== '' ? `# ${s}` : ''
-    })
-    consumeGroup(['description', 'details', 'summary', 'notes', 'text', 'message'], safeString)
-    consumeGroup(['context'], (v) => {
-        const s = safeString(v)
-        return s !== '' ? `**Context:** ${s}` : ''
-    })
-    consumeGroup(['focus', 'goal', 'objective'], (v) => {
-        const s = safeString(v)
-        return s !== '' ? `**Focus:** ${s}` : ''
-    })
-    consumeGroup(['resolution', 'fix', 'solution', 'result'], (v) => {
-        const s = safeString(v)
-        return s !== '' ? `**Resolution:** ${s}` : ''
-    })
-    consumeGroup(['artifacts', 'files', 'changes', 'modified_files'], (v) => {
-        const s = Array.isArray(v) ? v.map(safeString).join(', ') : safeString(v)
-        return s !== '' ? `**Artifacts:** ${s}` : ''
-    })
-    consumeGroup(['findings', 'results', 'key_findings', 'discoveries'], (v) => {
-        const s = Array.isArray(v) ? v.map((f) => `- ${safeString(f)}`).join('\n') : safeString(v)
-        return s !== '' ? `**Findings:**\n${s}` : ''
-    })
-
-    if (obj['content'] !== undefined) {
-        const existing = safeString(obj['content'])
-        if (contentParts.length > 0) {
-            obj['content'] = existing !== '' ? `${existing}\n\n${contentParts.join('\n\n')}` : contentParts.join('\n\n')
-        }
-    } else if (contentParts.length > 0) {
-        obj['content'] = contentParts.join('\n\n')
-    }
-
-    if (typeof obj['content'] === 'string') {
-        // Agents frequently double-escape quotes (\" / \') in entry content; heal them.
-        obj['content'] = obj['content'].replace(/\\+'/g, "'").replace(/\\+"/g, '"')
-    }
-}

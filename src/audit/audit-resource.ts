@@ -42,7 +42,9 @@ async function fetchAuditEntries(auditLogger: AuditLogger, uri: string): Promise
         limit: 50,
     }
     if (typeof auditLogger.search === 'function') {
-        return auditLogger.search(searchFilter)
+        // `search()` reads backwards (newest-first); reverse to match `recent()` chronological order.
+        const matched = await auditLogger.search(searchFilter)
+        return [...matched].reverse()
     }
     return (await auditLogger.recent(50)).filter((entry) =>
         matchesAuditFilters(entry, searchFilter)

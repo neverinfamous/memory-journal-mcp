@@ -93,15 +93,20 @@ export const GitReleaseInfoOptionsSchema = z.object({
     project_number: StrictProjectNumberSchema.optional(), cwd: z.string().optional(),
 })
 
-export const GitReleaseInfoOptionsSchemaMcp = z.object({
-    ref: z.string().optional().describe('Git reference (branch, tag, commit). Default: HEAD'),
-    repo: z.string().optional().describe('Target repository or workspace name'),
-    repo_name: z.string().optional().describe('Alias for repo'),
-    workspace_id: z.string().optional().describe('Target workspace identifier'),
-    workspaceId: z.string().optional().describe('Alias for workspace_id'),
-    project_number: relaxedNumber().optional().describe('Target GitHub project number'),
-    cwd: z.string().optional().describe('Working directory path for git operations'),
-})
+export const GitReleaseInfoOptionsSchemaMcp = z
+    .object({
+        ref: z.string().optional().describe('Git reference (branch, tag, commit). Default: HEAD'),
+        repo: z.string().optional().describe('Target repository or workspace name'),
+        repo_name: z.string().optional().describe('Alias for repo'),
+        workspace_id: z.string().optional().describe('Target workspace identifier'),
+        workspaceId: z.string().optional().describe('Alias for workspace_id'),
+        project_number: relaxedNumber().optional().describe('Target GitHub project number'),
+        cwd: z.string().optional().describe('Working directory path for git operations'),
+    })
+    .transform((d) => ({
+        ...d,
+        project_number: coerceRelaxed(d.project_number),
+    }))
 
 export const GitUnreleasedOptionsSchema = z.object({
     repo: z.string().optional().describe('Target repository or workspace name'),

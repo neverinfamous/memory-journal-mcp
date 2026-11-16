@@ -15,10 +15,37 @@
  *   - latency percentiles (p50/p95/p99) via LatencyTracker
  */
 
-import { promises as fs } from 'node:fs'
+import { promises as fs, renameSync, rmSync } from 'node:fs'
+import { randomUUID } from 'node:crypto'
+import { z } from 'zod'
 import { LatencyTracker } from './latency-tracker.js'
 import type { LatencyPercentiles } from './latency-tracker.js'
 import { logger } from '../utils/logger.js'
+
+const FORBIDDEN_KEYS = new Set(['__proto__', 'constructor', 'prototype'])
+
+const ToolMetricsSchema = z.object({
+    callCount: z.number().nonnegative(),
+    errorCount: z.number().nonnegative(),
+    totalDurationMs: z.number().nonnegative(),
+    totalInputTokens: z.number().nonnegative(),
+    totalOutputTokens: z.number().nonnegative(),
+    lastCalledAt: z.string().nullable(),
+})
+
+const ResourceMetricsSchema = z.object({
+    readCount: z.number().nonnegative(),
+    errorCount: z.number().nonnegative(),
+    lastReadAt: z.string().nullable(),
+})
+
+const MetricsStateSchema = z
+    .object({
+        toolData: z.array(z.tuple([z.string(), ToolMetricsSchema])).optional(),
+        resourceData: z.array(z.tuple([z.string(), ResourceMetricsSchema])).optional(),
+        userCounts: z.array(z.tuple([z.string(), z.number().nonnegative()])).optional(),
+    })
+    .loose()
 
 // ============================================================================
 // Types
@@ -299,9 +326,10 @@ export class MetricsAccumulator {
 
     private mergeToolMetrics(entries: [string, ToolMetrics][]): void {
         for (const [key, val] of entries) {
+            if (FORBIDDEN_KEYS.has(key)) continue
             const existing = this.toolData.get(key)
             if (!existing) {
-                this.toolData.set(key, val)
+                this.toolData.set(key, { ...val })
                 continue
             }
             existing.callCount += val.callCount
@@ -320,9 +348,10 @@ export class MetricsAccumulator {
 
     private mergeResourceMetrics(entries: [string, ResourceMetrics][]): void {
         for (const [key, val] of entries) {
+            if (FORBIDDEN_KEYS.has(key)) continue
             const existing = this.resourceData.get(key)
             if (!existing) {
-                this.resourceData.set(key, val)
+                this.resourceData.set(key, { ...val })
                 continue
             }
             existing.readCount += val.readCount
@@ -341,15 +370,13 @@ export class MetricsAccumulator {
      */
     importState(jsonState: string): void {
         try {
-            const parsed = JSON.parse(jsonState) as {
-                toolData?: [string, ToolMetrics][]
-                resourceData?: [string, ResourceMetrics][]
-                userCounts?: [string, number][]
-            }
+            const rawParsed: unknown = JSON.parse(jsonState)
+            const parsed = MetricsStateSchema.parse(rawParsed)
             if (parsed.toolData) this.mergeToolMetrics(parsed.toolData)
             if (parsed.resourceData) this.mergeResourceMetrics(parsed.resourceData)
             if (parsed.userCounts) {
                 for (const [key, val] of parsed.userCounts) {
+                    if (FORBIDDEN_KEYS.has(key)) continue
                     this.userCounts.set(key, (this.userCounts.get(key) ?? 0) + val)
                 }
             }
@@ -359,14 +386,21 @@ export class MetricsAccumulator {
     }
 
     /**
-     * Save metrics to a file asynchronously.
+     * Save metrics to a file atomically via temp file + rename.
      */
     async saveToFile(path: string): Promise<void> {
+        const tmpPath = `${path}.${String(process.pid)}.${String(Date.now())}.${randomUUID().slice(0, 8)}.tmp`
         try {
             const state = this.exportState()
-            await fs.writeFile(path, state, 'utf8')
+            await fs.writeFile(tmpPath, state, 'utf8')
+            renameSync(tmpPath, path)
             logger.debug('Metrics saved to disk', { module: 'Metrics', path })
         } catch (error) {
+            try {
+                rmSync(tmpPath, { force: true })
+            } catch {
+                // Best-effort cleanup of temp file
+            }
             logger.error('Failed to save metrics to disk', { module: 'Metrics', error: String(error), path })
         }
     }
@@ -382,7 +416,7 @@ export class MetricsAccumulator {
         } catch (error: unknown) {
             const errorCode =
                 typeof error === 'object' && error !== null && 'code' in error
-                    ? (error as { code?: unknown }).code
+                    ? error.code
                     : undefined
             if (errorCode !== 'ENOENT') {
                 logger.error('Failed to load metrics from disk', {

@@ -32,6 +32,7 @@ export async function backupAction(options: z.infer<typeof backupSchema>, comman
     const { db } = await getDb(options, command)
     const trimmedDest = options.dest?.trim()
     const dest = trimmedDest !== undefined && trimmedDest !== '' ? trimmedDest : undefined
+    let exitCode = 0
     try {
         const result = await db.exportToFile(dest)
         if (options.json === true) {
@@ -41,14 +42,18 @@ export async function backupAction(options: z.infer<typeof backupSchema>, comman
         }
     } catch (e) {
         process.stderr.write("Backup failed: " + (e instanceof Error ? e.message : String(e)) + '\n')
-        process.exit(1)
+        exitCode = 1
     } finally {
         db.close()
+    }
+    if (exitCode !== 0) {
+        process.exit(exitCode)
     }
 }
 
 export async function restoreAction(file: string, options: z.infer<typeof restoreSchema>, command: Command): Promise<void> {
     const { db } = await getDb(options, command)
+    let exitCode = 0
     try {
         const result = await db.restoreFromFile(file)
         if (options.json === true) {
@@ -58,14 +63,18 @@ export async function restoreAction(file: string, options: z.infer<typeof restor
         }
     } catch (e) {
         process.stderr.write("Restore failed: " + (e instanceof Error ? e.message : String(e)) + '\n')
-        process.exit(1)
+        exitCode = 1
     } finally {
         db.close()
+    }
+    if (exitCode !== 0) {
+        process.exit(exitCode)
     }
 }
 
 export async function vacuumAction(options: z.infer<typeof vacuumSchema>, command: Command): Promise<void> {
     const { db } = await getDb(options, command)
+    let exitCode = 0
     try {
         db.pragma('optimize')
         db.flushSave()
@@ -76,9 +85,12 @@ export async function vacuumAction(options: z.infer<typeof vacuumSchema>, comman
         }
     } catch (e) {
         process.stderr.write("Vacuum failed: " + (e instanceof Error ? e.message : String(e)) + '\n')
-        process.exit(1)
+        exitCode = 1
     } finally {
         db.close()
+    }
+    if (exitCode !== 0) {
+        process.exit(exitCode)
     }
 }
 
@@ -172,6 +184,7 @@ function printCliPruneResult(
 
 export async function pruneAction(options: z.infer<typeof pruneSchema>, command: Command): Promise<void> {
     const { db, serverOptions } = await getDb(options, command)
+    let exitCode = 0
 
     try {
         const rawExcludeTags = options.excludeTags ?? options.pruneExcludeTags
@@ -188,13 +201,16 @@ export async function pruneAction(options: z.infer<typeof pruneSchema>, command:
         )
         printCliPruneResult(result, options.json)
         if (result.aborted === true) {
-            process.exit(1)
+            exitCode = 1
         }
     } catch (e) {
         process.stderr.write("Prune failed: " + (e instanceof Error ? e.message : String(e)) + '\n')
-        process.exit(1)
+        exitCode = 1
     } finally {
         db.close()
+    }
+    if (exitCode !== 0) {
+        process.exit(exitCode)
     }
 }
 
@@ -277,6 +293,7 @@ export async function auditAction(options: z.infer<typeof auditSchema>, command:
 
 export async function rebuildIndexAction(options: z.infer<typeof rebuildIndexSchema>, command: Command): Promise<void> {
     const { db, serverOptions } = await getDb(options, command)
+    let exitCode = 0
     try {
         const explicitWs = options.workspace?.trim()
         if (explicitWs === '*') {
@@ -320,15 +337,18 @@ export async function rebuildIndexAction(options: z.infer<typeof rebuildIndexSch
                 `Rebuild index failed: ${String(result.failed)} entries could not be indexed${result.firstError !== null ? ` (${result.firstError})` : ''}\n`
             )
             process.stdout.write(JSON.stringify({ status: 'failed', ...result, stats }, null, 2) + '\n')
-            process.exitCode = 1
+            exitCode = 1
             return
         }
 
         process.stdout.write(JSON.stringify({ status: 'success', stats }, null, 2) + '\n')
     } catch (e) {
         process.stderr.write("Rebuild index failed: " + (e instanceof Error ? e.message : String(e)) + '\n')
-        process.exit(1)
+        exitCode = 1
     } finally {
         db.close()
+    }
+    if (exitCode !== 0) {
+        process.exit(exitCode)
     }
 }

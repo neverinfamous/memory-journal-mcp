@@ -10,6 +10,7 @@ import { hasMethodToken, methodTokens } from '../method-tokens.js'
 import { coerceNumericValue, postProcessNormalizedKeys } from './key-normalizer-postprocess.js'
 
 const CONTENT_LIKE_KEYS = new Set(['message', 'msg', 'name', 'heading', 'subject', 'description', 'content', 'comment'])
+const FORBIDDEN_KEYS = new Set(['__proto__', 'constructor', 'prototype'])
 
 function healArchitectureAndDecisionType(
     rawObj: Record<string, unknown>,
@@ -64,10 +65,12 @@ export function convertKeysToSnakeCase(obj: Record<string, unknown>, methodName?
     const ctx: KeyContext = { obj, result: {}, methodName, methodLower, isLinkMethod, isGithubTool }
     const result = ctx.result
     for (const [key, value] of Object.entries(obj)) {
+        if (FORBIDDEN_KEYS.has(key)) continue
         let snakeKey = resolveBaseSnakeKey(key, ctx)
 
         snakeKey = resolveAliasedKey(snakeKey, value, ctx)
         snakeKey = resolveContentLikeKey(snakeKey, ctx)
+        if (FORBIDDEN_KEYS.has(snakeKey)) continue
 
         if (key !== snakeKey && Object.hasOwn(obj, snakeKey) && obj[snakeKey] !== undefined) {
             continue

@@ -174,6 +174,22 @@ export function getTeamMemberTools(context: ToolContext): ToolDefinition[] {
                     const input = TeamAddMemberSchema.parse(params)
                     const caller = getCallerIdentity()
 
+                    if (typeof teamDb.listAuthorAliases === 'function') {
+                        const aliases = teamDb.listAuthorAliases(undefined, '*')
+                        const conflictingAlias = aliases.find(
+                            (a) => a.alias.toLowerCase() === input.author.toLowerCase()
+                        )
+                        if (conflictingAlias !== undefined) {
+                            throw new ValidationError(
+                                `Cannot add team member '${input.author}' because it is already registered as an author alias for '${conflictingAlias.canonicalAuthor}'.`,
+                                {
+                                    author: input.author,
+                                    canonicalAuthor: conflictingAlias.canonicalAuthor,
+                                }
+                            )
+                        }
+                    }
+
                     // Notice: wrapWithRbac will ensure caller is 'admin' BEFORE we get here,
                     // UNLESS the table is empty, in which case RBAC is inactive and allows everyone.
                     // The MembersManager natively handles the bootstrap logic inside `addTeamMember`.

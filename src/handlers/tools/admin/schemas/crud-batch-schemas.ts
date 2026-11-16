@@ -75,7 +75,7 @@ export const UpdateEntrySchema = z.preprocess(
             is_personal: z.boolean().optional(),
             tags: z.array(z.string()).optional(),
             significance_type: z.enum(SIGNIFICANCE_TYPES).nullable().optional(),
-            project_number: z.number().int().optional(),
+            project_number: z.number().int().nullable().optional(),
             project_owner: z.string().nullable().optional(),
             issue_number: z.number().nullable().optional(),
             issue_url: z.string().nullable().optional(),
@@ -96,7 +96,7 @@ export const UpdateEntrySchema = z.preprocess(
             impact_score: z.number().min(0).max(1).optional(),
             trust_score: z.number().min(0).max(1).optional(),
             validation_status: z.enum(['passed', 'none', 'failed']).optional(),
-            session_id: z.string().optional(),
+            session_id: z.string().nullable().optional(),
         })
         .strict()
         .refine(
@@ -148,7 +148,7 @@ export const UpdateEntrySchemaMcp = z.preprocess(
             is_personal: z.boolean().optional(),
             tags: z.array(z.string()).optional(),
             significance_type: z.string().nullable().optional(),
-            project_number: relaxedNumber().optional(),
+            project_number: relaxedNumber().nullable().optional(),
             project_owner: z.string().nullable().optional(),
             issue_number: relaxedNumber().nullable().optional(),
             issue_url: z.string().nullable().optional(),
@@ -180,7 +180,7 @@ export const UpdateEntrySchemaMcp = z.preprocess(
                 .string()
                 .optional()
                 .describe('Current validation status of the entry (passed, none, failed).'),
-            session_id: z.string().optional().describe('Agent session ID for thread isolation.'),
+            session_id: z.string().nullable().optional().describe('Agent session ID for thread isolation.'),
         })
         .strict()
 )

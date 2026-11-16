@@ -36,7 +36,7 @@ const NON_CODE_PARAM_KEYS = new Set([
     'type', 'significance_type', 'significanceType', 'validation_status', 'validationStatus',
     'title', 'tags', 'author', 'is_personal', 'isPersonal', 'share_with_team', 'shareWithTeam',
     'learned_context', 'learnedContext', 'lesson', 'learning', 'insight', 'knowledge', 'rule',
-    'takeaway', 'finding', 'discovery',
+    'takeaway', 'finding', 'discovery', 'search', 'q', 'term', 'keyword',
 ])
 
 function extractInitialExecutionCode(
@@ -47,6 +47,10 @@ function extractInitialExecutionCode(
     for (const k of CODE_ALIAS_KEYS) {
         const val = input[k]
         if (typeof val === 'string' && val.length > 0) return { code: val, sourceKey: k }
+    }
+    for (const qk of ['search', 'q', 'term', 'keyword'] as const) {
+        const val = input[qk]
+        if (typeof val === 'string' && val.length > 0) return { code: val, sourceKey: 'query' }
     }
     return { code: undefined, sourceKey: undefined }
 }
@@ -112,8 +116,9 @@ function recoverCodeFromParamsRecord(params: Record<string, unknown>): string | 
         const outerProj = entryObj !== params ? parseProjectNumberField(params, {}) : undefined
         const wsDiffersFromOuter =
             entryWs !== undefined &&
-            (entryWs.trim().toLowerCase() === 'default' ||
-                (outerWs !== undefined && entryWs.trim().toLowerCase() !== outerWs.trim().toLowerCase()))
+            (outerWs !== undefined
+                ? entryWs.trim().toLowerCase() !== outerWs.trim().toLowerCase()
+                : entryWs.trim().toLowerCase() === 'default')
         const projVal = entryProj ?? (!wsDiffersFromOuter ? outerProj : undefined)
         if (projVal !== undefined) payload['project_number'] = projVal
         const wsVal = entryWs ?? (entryProj === undefined ? outerWs : undefined)

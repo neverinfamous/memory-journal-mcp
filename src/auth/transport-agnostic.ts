@@ -7,7 +7,7 @@
  */
 
 import type { TokenClaims } from './types.js'
-import type { TokenValidator } from './token-validator.js'
+import { TokenValidator } from './token-validator.js'
 import {
     OAuthError,
     TokenMissingError,
@@ -98,7 +98,7 @@ export async function validateAuth(
     const result = await tokenValidator.validate(token)
 
     if (!result.valid || !result.claims) {
-        throw new InvalidTokenError(result.error ?? 'Invalid token')
+        throw TokenValidator.toOAuthError(result)
     }
 
     const context: AuthenticatedContext = {

@@ -106,7 +106,7 @@ function executeSearchQuery(
     let nextCursor: string | undefined
     const limit = options?.limit ?? 10
     if (entries.length === limit && limit > 0) {
-        if (!useFts && !needsImportance && entries.length > 0) {
+        if (!useFts && !needsImportance && queryStr.length === 0 && entries.length > 0) {
             const last = entries[entries.length - 1]
             if (last !== undefined) {
                 nextCursor = encodeCursor({ t: last.timestamp, id: last.id })
@@ -203,8 +203,7 @@ export function searchEntries(
         try {
             const result = runQuery(true)
             if (result.entries.length > 0) {
-                const fuzzy = applyFuzzyFallback(context, db, queryStr, options, result)
-                return fuzzy ?? result
+                return result
             }
             const likeFallback = runQuery(false)
             if (likeFallback.entries.length > 0) {

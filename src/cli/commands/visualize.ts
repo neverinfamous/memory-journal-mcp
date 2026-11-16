@@ -1,10 +1,14 @@
+import * as fs from 'node:fs/promises'
+import * as path from 'node:path'
 import type { Command } from 'commander'
 import { type z } from 'zod'
 import type { IDatabaseAdapter } from '../../database/core/interfaces.js'
 import { visualizeOptionsSchema } from '../schemas.js'
-import { enforceCliTeamRbac, getCliCommandDb as getDb } from './db-helper.js'
-import { resolveCliQueryScope } from '../../utils/workspace-resolver.js'
-import * as fs from 'node:fs/promises'
+import {
+    assertSafeCliOutputFile,
+    getCliCommandDb as getDb,
+    resolveCliReadScope,
+} from './db-helper.js'
 
 export const visualizeSchema = visualizeOptionsSchema
 
@@ -69,15 +73,9 @@ function renderMermaid(graph: RelationshipGraph): string {
 
 export async function visualizeAction(options: z.infer<typeof visualizeSchema>, command: Command): Promise<void> {
     const { db, serverOptions } = await getDb(options, command)
+    let failed = false
     try {
-        const { workspaceId, projectNumber } = resolveCliQueryScope(
-            options.workspace,
-            options.defaultProject,
-            serverOptions
-        )
-        if (options.team === true) {
-            enforceCliTeamRbac(db, serverOptions, 'viewer', workspaceId)
-        }
+        const { workspaceId, projectNumber } = resolveCliReadScope(db, serverOptions, options)
         const graph = db.visualizeRelationships({
             depth: 3,
             limit: 200,
@@ -87,16 +85,52 @@ export async function visualizeAction(options: z.infer<typeof visualizeSchema>, 
 
         const mermaid = renderMermaid(graph)
 
-        if (options.out) {
-            await fs.writeFile(options.out, mermaid, 'utf8')
-            process.stderr.write(`Visualization written to ${options.out}\n`)
+        if (options.out !== undefined) {
+            const outPath = await assertSafeCliOutputFile(options.out, '--out')
+            await fs.mkdir(path.dirname(outPath), { recursive: true })
+            await fs.writeFile(outPath, mermaid, 'utf8')
+            if (options.json === true) {
+                process.stdout.write(
+                    JSON.stringify(
+                        {
+                            status: 'success',
+                            path: outPath,
+                            nodeCount: graph.nodes.length,
+                            edgeCount: graph.edges.length,
+                            mermaid,
+                        },
+                        null,
+                        2
+                    ) + '\n'
+                )
+            } else {
+                process.stderr.write(`Visualization written to ${outPath}\n`)
+            }
+        } else if (options.json === true) {
+            process.stdout.write(
+                JSON.stringify(
+                    {
+                        status: 'success',
+                        nodeCount: graph.nodes.length,
+                        edgeCount: graph.edges.length,
+                        nodes: graph.nodes,
+                        edges: graph.edges,
+                        mermaid,
+                    },
+                    null,
+                    2
+                ) + '\n'
+            )
         } else {
             process.stdout.write(mermaid + '\n')
         }
     } catch (e) {
+        failed = true
         process.stderr.write("Visualize failed: " + (e instanceof Error ? e.message : String(e)) + '\n')
-        process.exit(1)
     } finally {
         db.close()
+    }
+    if (failed) {
+        process.exit(1)
     }
 }

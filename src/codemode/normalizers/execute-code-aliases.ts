@@ -5,6 +5,7 @@ const EXPLICIT_CODE_ALIAS_KEYS = [
     'js',
     'javascript',
     'command',
+    'executionCode',
     'eval',
     'source',
     'code_snippet',
@@ -29,6 +30,10 @@ const NON_CODE_METADATA_KEYS = new Set([
     'project_number',
     'projectNumber',
     'query',
+    'search',
+    'q',
+    'term',
+    'keyword',
     'context',
     'session_id',
     'sessionId',
@@ -108,7 +113,7 @@ export function normalizeExecuteCodeAliases(obj: Record<string, unknown>): void 
     }
 
     const codeAlias =
-        obj['script'] ?? obj['js'] ?? obj['javascript'] ?? obj['command'] ?? obj['content'] ??
+        obj['script'] ?? obj['js'] ?? obj['javascript'] ?? obj['command'] ?? obj['executionCode'] ?? obj['content'] ??
         obj['eval'] ?? obj['source'] ?? obj['body'] ?? obj['expression'] ?? obj['fn'] ?? obj['exec'] ??
         obj['code_snippet'] ?? obj['raw_code'] ?? obj['statement'] ?? obj['statements'] ?? obj['codeBlock'] ??
         obj['code_block'] ?? obj['script_content'] ?? obj['js_code'] ?? obj['code_string'] ?? obj['action'] ??

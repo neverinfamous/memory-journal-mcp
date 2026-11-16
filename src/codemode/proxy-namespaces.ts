@@ -296,8 +296,28 @@ export function createContextNamespaceProxy(contextObj?: Record<string, unknown>
     }
 
     const getContextRpc = (keyOrObj?: unknown): Promise<unknown> => {
-        if (typeof keyOrObj === 'string' && keyOrObj in contextData) {
-            return wrapPromise(Promise.resolve(wrapResult(contextData[keyOrObj])), 'get_context')
+        if (typeof keyOrObj === 'string') {
+            if (Object.hasOwn(contextData, keyOrObj)) {
+                return wrapPromise(Promise.resolve(wrapResult(contextData[keyOrObj])), 'get_context')
+            }
+            const snakeKey = /[A-Z]/.test(keyOrObj)
+                ? keyOrObj.replace(/[A-Z]/g, (l) => `_${l.toLowerCase()}`)
+                : undefined
+            if (snakeKey !== undefined && Object.hasOwn(contextData, snakeKey)) {
+                return wrapPromise(Promise.resolve(wrapResult(contextData[snakeKey])), 'get_context')
+            }
+            return wrapPromise(
+                Promise.resolve(
+                    wrapResult({
+                        success: false,
+                        error: `Context key '${keyOrObj}' was not found`,
+                        code: 'RESOURCE_NOT_FOUND',
+                        category: 'resource',
+                        recoverable: true,
+                    })
+                ),
+                'get_context'
+            )
         }
         return wrapPromise(Promise.resolve(wrapResult(contextData)), 'get_context')
     }

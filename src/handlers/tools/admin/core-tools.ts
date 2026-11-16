@@ -101,6 +101,54 @@ function validateUpdateProjectScope(
 
 type UpdateEntryParsed = ReturnType<typeof UpdateEntrySchema.parse>
 
+function resolveMoveUpdateScope(
+    input: UpdateEntryParsed,
+    targetWorkspaceId: string,
+    db: ToolContext['db'],
+    config: ToolContext['config']
+): { wsId: string; projectNumberForUpdate: number | null | undefined } | { errorResponse: Record<string, unknown> } {
+    if (
+        input.workspace_id === '*' &&
+        typeof input.project_number === 'number' &&
+        typeof db.getEntryById === 'function'
+    ) {
+        const scoped = db.getEntryById(input.entry_id, '*')
+        if (scoped?.projectNumber !== input.project_number) {
+            return {
+                errorResponse: {
+                    success: false,
+                    error: `Entry ${String(input.entry_id)} not found`,
+                    code: 'RESOURCE_NOT_FOUND',
+                    category: 'resource',
+                    suggestion: 'Verify the entry ID and project number, and try again',
+                    recoverable: true,
+                },
+            }
+        }
+    }
+    const targetResolved = resolveProjectContext(
+        {
+            workspace_id: targetWorkspaceId,
+            ...(typeof input.project_number === 'number'
+                ? { project_number: input.project_number }
+                : {}),
+        },
+        config
+    )
+    let wsId: string
+    if (input.workspace_id === '*') {
+        wsId = '*'
+    } else if (input.workspace_id !== undefined) {
+        wsId = resolveWriteWorkspaceId(input.workspace_id, undefined, config)
+    } else {
+        const existingByPk = db.getEntryById(input.entry_id, '*')
+        wsId = existingByPk?.workspaceId ?? resolveWriteWorkspaceId(undefined, undefined, config)
+    }
+    const projectNumberForUpdate =
+        input.project_number === null ? null : (targetResolved.projectNumber ?? null)
+    return { wsId, projectNumberForUpdate }
+}
+
 function resolveUpdateScope(
     input: UpdateEntryParsed,
     targetWorkspaceId: string | undefined,
@@ -108,38 +156,35 @@ function resolveUpdateScope(
     config: ToolContext['config']
 ): { wsId: string; projectNumberForUpdate: number | null | undefined } | { errorResponse: Record<string, unknown> } {
     if (targetWorkspaceId !== undefined) {
-        const targetResolved = resolveProjectContext(
-            {
-                workspace_id: targetWorkspaceId,
-                ...(input.project_number !== undefined ? { project_number: input.project_number } : {}),
-            },
-            config
-        )
-        let wsId: string
-        if (input.workspace_id === '*') {
-            wsId = '*'
-        } else if (input.workspace_id !== undefined) {
-            wsId = resolveWriteWorkspaceId(input.workspace_id, undefined, config)
-        } else {
-            const existingByPk = db.getEntryById(input.entry_id, '*')
-            wsId = existingByPk?.workspaceId ?? resolveWriteWorkspaceId(undefined, undefined, config)
-        }
-        return { wsId, projectNumberForUpdate: targetResolved.projectNumber ?? null }
+        return resolveMoveUpdateScope(input, targetWorkspaceId, db, config)
     }
 
     const resolved = resolveProjectContext(
-        { workspace_id: input.workspace_id, project_number: input.project_number },
+        {
+            workspace_id: input.workspace_id,
+            ...(typeof input.project_number === 'number'
+                ? { project_number: input.project_number }
+                : {}),
+        },
         config
     )
-    let projectNumberForUpdate = input.project_number === undefined ? undefined : resolved.projectNumber
+    let projectNumberForUpdate =
+        input.project_number === undefined
+            ? undefined
+            : input.project_number === null
+              ? null
+              : resolved.projectNumber
     let wsId = input.workspace_id === '*' ? '*' : resolved.workspaceId
-    if (input.workspace_id === undefined && input.project_number === undefined) {
+    if (
+        input.workspace_id === undefined &&
+        (input.project_number === undefined || input.project_number === null)
+    ) {
         const existingByPk = db.getEntryById(input.entry_id, '*')
         if (existingByPk?.workspaceId !== undefined) {
             wsId = existingByPk.workspaceId
         }
     }
-    if (input.project_number !== undefined) {
+    if (typeof input.project_number === 'number') {
         const scopeCheck = validateUpdateProjectScope(
             db,
             input.entry_id,

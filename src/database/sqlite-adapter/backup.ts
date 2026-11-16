@@ -42,9 +42,16 @@ export class BackupManager {
         }
 
         const timestamp = new Date().toISOString().replace(/[:.]/g, '-')
-        const sanitizedName = backupName
-            ? backupName.replace(/[/\\:*?"<>|]/g, '_').slice(0, MAX_BACKUP_NAME_LENGTH)
-            : `backup_${timestamp}`
+        const rawSanitized = backupName
+            ? backupName
+                  .replace(/\0/g, '')
+                  .replace(/[/\\:*?"<>|]/g, '_')
+                  .replace(/\.{2,}/g, '')
+                  .replace(/\.+$/g, '')
+                  .slice(0, MAX_BACKUP_NAME_LENGTH)
+                  .replace(/\.+$/g, '')
+            : ''
+        const sanitizedName = rawSanitized.length > 0 ? rawSanitized : `backup_${timestamp}`
         const filename = `${sanitizedName}.db`
         const backupPath = path.join(backupsDir, filename)
 
@@ -72,7 +79,7 @@ export class BackupManager {
             []
 
         for (const filename of files) {
-            if (!filename.endsWith('.db')) continue
+            if (!/\.db$/i.test(filename)) continue
 
             const filePath = path.join(backupsDir, filename)
             try {

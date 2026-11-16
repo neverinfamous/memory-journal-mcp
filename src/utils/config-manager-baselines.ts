@@ -43,10 +43,11 @@ export function collectBriefingBaselines(
             initialFile !== null &&
             fileKey in initialFile &&
             isValidValue(initialFile[fileKey], kind)
-        if (hasFileVal) briefingKeysFromFile.add(target)
         const curVal = initialConfig.briefingConfig[target]
         const fromFile = hasFileVal && initialFile[fileKey] === curVal
-        if (!fromFile && curVal !== undefined) {
+        if (fromFile) {
+            briefingKeysFromFile.add(target)
+        } else if (curVal !== undefined) {
             initialBriefingBaseline[target] = curVal
         }
     }
@@ -70,9 +71,15 @@ export function buildFileCliEnvBaseline(
             ? initialFile['defaultProjectNumber']
             : undefined
     const fileWsId =
-        typeof initialFile['defaultWorkspaceId'] === 'string'
-            ? initialFile['defaultWorkspaceId']
+        typeof initialFile['defaultWorkspaceId'] === 'string' &&
+        initialFile['defaultWorkspaceId'].trim() !== '' &&
+        initialFile['defaultWorkspaceId'].trim() !== '*'
+            ? initialFile['defaultWorkspaceId'].trim()
             : undefined
+    const wsCameFromFile =
+        fileWsId !== undefined &&
+        initialConfig.briefingConfig.defaultWorkspaceId?.trim().toLowerCase() ===
+            fileWsId.toLowerCase()
     const fileRegistry =
         typeof initialFile['projectRegistry'] === 'object' &&
         initialFile['projectRegistry'] !== null &&
@@ -88,8 +95,7 @@ export function buildFileCliEnvBaseline(
             initialConfig.briefingConfig.defaultProjectNumber !== fileProjNum
                 ? { defaultProjectNumber: initialConfig.briefingConfig.defaultProjectNumber }
                 : {}),
-            ...(initialConfig.briefingConfig.defaultWorkspaceId !== undefined &&
-            initialConfig.briefingConfig.defaultWorkspaceId !== fileWsId
+            ...(initialConfig.briefingConfig.defaultWorkspaceId !== undefined && !wsCameFromFile
                 ? { defaultWorkspaceId: initialConfig.briefingConfig.defaultWorkspaceId }
                 : {}),
             ...(initialConfig.briefingConfig.projectRegistry !== undefined &&
@@ -120,28 +126,18 @@ export function buildFallbackCliEnvBaseline(initialConfig: DynamicConfig): Confi
     }
 }
 
-/** Update briefing/scope provenance flags from a freshly reloaded config object. */
+/** Update briefing provenance flags from a freshly reloaded config object. */
 export function syncBriefingProvenanceFromFile(
     parsed: Record<string, unknown>,
     briefingKeysFromFile: Set<BriefingConfigurableKey>,
     keyMap: BriefingKeyMapping,
     isValidValue: (value: unknown, kind: 'number' | 'boolean') => boolean
-): { defaultWorkspaceIdFromFile: boolean; defaultProjectNumberFromFile: boolean } {
+): void {
     for (const [fileKey, { target, kind }] of Object.entries(keyMap)) {
         if (fileKey in parsed && isValidValue(parsed[fileKey], kind)) {
             briefingKeysFromFile.add(target)
         } else {
             briefingKeysFromFile.delete(target)
         }
-    }
-    return {
-        defaultWorkspaceIdFromFile:
-            typeof parsed['defaultWorkspaceId'] === 'string' &&
-            parsed['defaultWorkspaceId'].trim() !== '' &&
-            parsed['defaultWorkspaceId'].trim() !== '*',
-        defaultProjectNumberFromFile:
-            typeof parsed['defaultProjectNumber'] === 'number' &&
-            Number.isInteger(parsed['defaultProjectNumber']) &&
-            parsed['defaultProjectNumber'] > 0,
     }
 }

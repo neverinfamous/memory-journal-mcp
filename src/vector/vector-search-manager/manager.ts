@@ -412,6 +412,13 @@ export class VectorSearchManager {
         }
     ): Promise<{ success: boolean; indexed: number; failed: number; firstError: string | null; warning?: string }> {
         await this.initialize()
+        if (
+            this.dimensions !== null &&
+            typeof this.dbAdapter.getVectorMetadata === 'function' &&
+            typeof this.dbAdapter.createVecTable === 'function'
+        ) {
+            this.verifyAndCreateVecTable()
+        }
         return rebuildIndex(this, this.dbAdapter, progress, options)
     }
 }

@@ -459,7 +459,7 @@ describe('Pass 26 Audit Regressions', () => {
         })
 
         it('resolves relative <repo>/<subpath> targets against registry without matching arbitrary relative paths', () => {
-            expect(AUDIT_PROMPT_REVISION).toBe('2026-11-16-audit-pass32')
+            expect(AUDIT_PROMPT_REVISION).toBe('2026-11-16-audit-pass33')
             expect(resolveRegistryMatchForTarget(REGISTRY, 'memory-journal-mcp/src/cli')).toBe('memory-journal-mcp')
             expect(resolveRegistryMatchForTarget(REGISTRY, 'memory-journal-mcp\\src\\utils')).toBe('memory-journal-mcp')
             expect(resolveRegistryMatchForTarget(REGISTRY, 'src/cli')).toBeUndefined()

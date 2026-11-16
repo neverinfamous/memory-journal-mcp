@@ -91,15 +91,27 @@ export async function handleGetPrompt(
     context?: ToolContext
 ): Promise<unknown> {
     const rawArgs =
-        typeof params === 'object' && params !== null ? (params as Record<string, unknown>) : {}
-    const targetPromptName =
-        typeof rawArgs['name'] === 'string'
+        typeof params === 'object' && params !== null && !Array.isArray(params)
+            ? (params as Record<string, unknown>)
+            : {}
+    const explicitPromptName =
+        typeof rawArgs['name'] === 'string' && rawArgs['name'].trim() !== ''
             ? rawArgs['name']
-            : typeof rawArgs['prompt'] === 'string'
+            : typeof rawArgs['prompt'] === 'string' && rawArgs['prompt'].trim() !== ''
               ? rawArgs['prompt']
-              : typeof rawArgs['prompt_name'] === 'string'
+              : typeof rawArgs['prompt_name'] === 'string' && rawArgs['prompt_name'].trim() !== ''
                 ? rawArgs['prompt_name']
-                : 'load-briefing'
+                : undefined
+    if (explicitPromptName === undefined && Object.keys(rawArgs).length > 0) {
+        return {
+            success: false,
+            error: `🛠️ AUTONOMOUS HEALING: '${toolName}' requires a prompt name ('name', 'prompt', or 'prompt_name') when called with arguments.`,
+            code: 'VALIDATION_ERROR',
+            category: 'validation',
+            recoverable: true,
+        }
+    }
+    const targetPromptName = explicitPromptName ?? 'load-briefing'
     const nestedArgs = (
         typeof rawArgs['arguments'] === 'object' && rawArgs['arguments'] !== null
             ? rawArgs['arguments']

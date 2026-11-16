@@ -93,7 +93,13 @@ export function parseRepoSlug(repo?: string): ParsedRepoSlug {
         if (parts.length === 2 && parts[0] && parts[1]) {
             return { owner: parts[0], repo: parts[1].replace(/\.git$/i, ''), rawInput: trimmed }
         }
+        const multiSegment = parts.length > 2
         const leaf = parts.pop()?.replace(/\.git$/i, '')
+        if (multiSegment) {
+            return leaf
+                ? { repo: leaf, isFilesystemPath: true, rawInput: trimmed }
+                : { isFilesystemPath: true, invalidPath: true, rawInput: trimmed }
+        }
         return leaf ? { repo: leaf, rawInput: trimmed } : { repo: trimmed, rawInput: trimmed }
     }
 

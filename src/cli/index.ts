@@ -151,6 +151,7 @@ withGroup(visualizeCmd, 'Command Options', (cmd: Command) => {
         .option('--out <path>', 'Output file path (optional, will print to stdout if omitted)')
         .option('--team', 'Visualize team database')
 })
+addOutputOptions(visualizeCmd)
 addCoreOptions(visualizeCmd)
 addDatabaseOptions(visualizeCmd)
 addWorkspaceScopeOptions(visualizeCmd)

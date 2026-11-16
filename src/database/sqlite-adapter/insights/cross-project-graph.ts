@@ -1,6 +1,7 @@
 import type { NativeConnectionManager } from '../native-connection.js'
 import type { QueryResult } from '../../core/interfaces.js'
 import { effectiveWorkspace } from '../../workspace-scope.js'
+import { expandTagFilterValues } from '../tags.js'
 
 interface GraphQueryOptions {
     entryId?: number
@@ -44,9 +45,12 @@ function buildGraphScopeFilters(
     const relTypeSql = hasRelType ? ' AND r.relationship_type = ?' : ''
     const relTypeParam = hasRelType ? [relType] : []
 
-    const tags = options.tags ?? []
-    const hasTags = tags.length > 0
-    const tagPlaceholders = hasTags ? tags.map(() => '?').join(',') : ''
+    const tagParams =
+        options.tags !== undefined && options.tags.length > 0
+            ? expandTagFilterValues(options.tags)
+            : []
+    const hasTags = tagParams.length > 0
+    const tagPlaceholders = hasTags ? tagParams.map(() => '?').join(',') : ''
     const tagSubquery = hasTags
         ? ` AND mj.id IN (
                   SELECT et.entry_id FROM entry_tags et
@@ -54,7 +58,6 @@ function buildGraphScopeFilters(
                   WHERE LOWER(t.name) IN (${tagPlaceholders})
               )`
         : ''
-    const tagParams = tags.map((t) => t.trim().toLowerCase())
     const toPeerScope = `${scopeId !== '*' ? ' AND mj_to.workspace_id = ?' : ''}${options.projectNumber !== undefined ? ' AND mj_to.project_number = ?' : ''}`
     const fromPeerScope = `${scopeId !== '*' ? ' AND mj_from.workspace_id = ?' : ''}${options.projectNumber !== undefined ? ' AND mj_from.project_number = ?' : ''}`
 

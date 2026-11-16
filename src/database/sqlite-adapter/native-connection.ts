@@ -38,6 +38,7 @@ export class NativeConnectionManager implements IDatabaseConnection {
     private db: Database | null = null
     private readonly dbPath: string
     private initialized = false
+    private initializingPromise: Promise<void> | null = null
     private teamSchemaApplied = false
     private ftsRebuildTimer: ReturnType<typeof setTimeout> | null = null
 
@@ -46,6 +47,21 @@ export class NativeConnectionManager implements IDatabaseConnection {
     }
 
     async initialize(): Promise<void> {
+        if (this.initialized) return
+        if (this.initializingPromise !== null) {
+            return this.initializingPromise
+        }
+
+        const promise = this.performInitialize().finally(() => {
+            if (this.initializingPromise === promise) {
+                this.initializingPromise = null
+            }
+        })
+        this.initializingPromise = promise
+        return promise
+    }
+
+    private async performInitialize(): Promise<void> {
         if (this.initialized) return
 
         const dir = path.dirname(this.dbPath)

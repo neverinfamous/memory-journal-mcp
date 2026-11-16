@@ -247,12 +247,14 @@ export const TeamMergeTagsSchemaMcp = z.object({
 
 export const TeamBatchCreateEntriesSchema = z.preprocess(
     preprocessBatchCreateEntries,
-    z.object({
-        entries: z.array(TeamCreateEntrySchema).min(1).max(MAX_BATCH_SIZE),
-        auto_index: z.boolean().optional().default(true),
-        project_number: StrictProjectNumberSchema.optional(),
-        workspace_id: z.string().optional(),
-    })
+    z
+        .object({
+            entries: z.array(TeamCreateEntrySchema).min(1).max(MAX_BATCH_SIZE),
+            auto_index: z.boolean().optional().default(true),
+            project_number: StrictProjectNumberSchema.optional(),
+            workspace_id: z.string().optional(),
+        })
+        .strict()
 )
 
 export const TeamBatchCreateEntriesSchemaMcp = z.preprocess(

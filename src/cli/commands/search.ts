@@ -1,10 +1,9 @@
 import type { Command } from 'commander'
 import { type z } from 'zod'
 import { searchOptionsSchema } from '../schemas.js'
-import { enforceCliTeamRbac, getCliCommandDb as getDb } from './db-helper.js'
+import { getCliCommandDb as getDb, resolveCliReadScope } from './db-helper.js'
 import { VectorSearchManager } from '../../vector/vector-search-manager/index.js'
 import { hybridSearch } from '../../handlers/tools/search/hybrid.js'
-import { resolveCliQueryScope } from '../../utils/workspace-resolver.js'
 
 export const searchSchema = searchOptionsSchema
 
@@ -16,19 +15,12 @@ export async function searchAction(query: string | undefined, options: z.infer<t
     }
 
     const { db, serverOptions } = await getDb(options, command)
+    let failed = false
 
     try {
         const mode = options.mode || 'auto'
         const limit = options.limit ?? 100
-        const requestedProject = options.defaultProject
-        const { workspaceId, projectNumber } = resolveCliQueryScope(
-            options.workspace,
-            requestedProject,
-            serverOptions
-        )
-        if (options.team === true) {
-            enforceCliTeamRbac(db, serverOptions, 'viewer', workspaceId)
-        }
+        const { workspaceId, projectNumber } = resolveCliReadScope(db, serverOptions, options)
         const workspaceFilter = workspaceId !== undefined ? { workspaceId } : {}
         const projectFilter = projectNumber !== undefined ? { projectNumber } : {}
         let result: unknown
@@ -51,9 +43,12 @@ export async function searchAction(query: string | undefined, options: z.infer<t
 
         process.stdout.write(JSON.stringify(result, null, 2) + '\n')
     } catch (e) {
+        failed = true
         process.stderr.write("Search failed: " + (e instanceof Error ? e.message : String(e)) + '\n')
-        process.exit(1)
     } finally {
         db.close()
+    }
+    if (failed) {
+        process.exit(1)
     }
 }

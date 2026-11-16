@@ -68,6 +68,7 @@ export function compactOversizedResult(
         const entry = entries[i]
         if (!entry) continue
         const [k, v] = entry
+        if (k === '__proto__' || k === 'constructor' || k === 'prototype') continue
         if (typeof v === 'string') {
             if (v.length > TRUNCATED_STRING_THRESHOLD_CHARS) {
                 compactedObj[k] =

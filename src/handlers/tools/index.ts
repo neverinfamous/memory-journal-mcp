@@ -159,14 +159,14 @@ function isCacheHit(
     return Boolean(
         cache &&
             refs?.db === db &&
-            (refs.github === github || safeIsAvailable(refs.github) === safeIsAvailable(github)) &&
-            (refs.vectorManager === vectorManager ||
-                safeIsInitialized(refs.vectorManager) === safeIsInitialized(vectorManager)) &&
+            refs.github === github &&
+            safeIsAvailable(refs.github) === safeIsAvailable(github) &&
+            refs.vectorManager === vectorManager &&
+            safeIsInitialized(refs.vectorManager) === safeIsInitialized(vectorManager) &&
             refs.config === config &&
             refs.teamDb === teamDb &&
-            (refs.teamVectorManager === teamVectorManager ||
-                safeIsInitialized(refs.teamVectorManager) ===
-                    safeIsInitialized(teamVectorManager))
+            refs.teamVectorManager === teamVectorManager &&
+            safeIsInitialized(refs.teamVectorManager) === safeIsInitialized(teamVectorManager)
     )
 }
 

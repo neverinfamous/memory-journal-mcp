@@ -68,6 +68,9 @@ export function triggerTeamNotifications(context: ToolContext): void {
             .notifyResourceUpdated('memory://team/recent')
             .catch(logErr)
         void context.config.subscriptionManager
+            .notifyResourceUpdated('memory://team/statistics')
+            .catch(logErr)
+        void context.config.subscriptionManager
             .notifyResourceUpdated('memory://briefing')
             .catch(logErr)
     }

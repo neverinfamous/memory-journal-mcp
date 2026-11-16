@@ -3,58 +3,139 @@ import {
     DUMMY_LIST_RESOURCE_TOOL_NAMES,
     DUMMY_LIST_PROMPT_TOOL_NAMES,
     DUMMY_GET_PROMPT_TOOL_NAMES,
+    extractUriFromArgs,
     handleReadResource,
     handlePrompt,
     handleListResources,
     handleListPrompts,
     handleGetPrompt,
 } from '../../../handlers/tools/core/dummy-healing.js'
+import { getBaseUri } from '../../../handlers/resources/shared.js'
 import { resolveActiveBriefingConfig, syncLiveHandlerConfig } from './register-tools-helpers.js'
 import {
     dispatchKnownGroupFallbackTools,
     resolveKnownFallbackAuditName,
     runFallbackWithInterceptors,
+    type FallbackAccessTarget,
 } from './fallback-interceptors.js'
 import {
     ALL_KNOWN_GROUP_TOOLS,
-    applyCreateWorkspaceScope,
     formatSuccessPayload,
     formatTokenEstimatedError,
     isSuccessObject,
     matchesExactName,
-    normalizeAndAliasToolCall,
     toThrownValidationResponse,
     toValidationFailureResponse,
+    type ToolCallParams,
 } from './call-interceptor-helpers.js'
+import {
+    applyCreateWorkspaceScope,
+    healIncomingToolCallParams,
+} from './call-arg-normalizer.js'
 import { isAutonomousShimBlockedByFilter } from '../../../handlers/tools/dummy-filter-helpers.js'
 import type { PromptDefinition } from '../../registration.js'
 import { logAgentIssue } from '../../../utils/issue-logger.js'
-import { applyArgInterceptions } from '../../../codemode/param-normalizer.js'
-import { setActiveProjectRegistry } from '../../../codemode/normalizers/generic-field-aliases.js'
-import { enforceAccessBoundary } from '../../../auth/validation.js'
+import { setFallbackProjectRegistryLoader } from '../../../codemode/normalizers/generic-field-aliases.js'
+import { loadProjectRegistryFromConfig } from '../../../utils/workspace-resolver.js'
 import type { ServerContext, ServerOptions } from '../types.js'
 import type { ToolRegistration, ToolHandlerConfig, ToolContext } from '../../../types/index.js'
 import type { RequestHandlerMap } from './list-interceptor.js'
+
+setFallbackProjectRegistryLoader(loadProjectRegistryFromConfig)
 
 function isFailureObject(res: unknown): res is Record<string, unknown> {
     return (
         typeof res === 'object' &&
         res !== null &&
         !Array.isArray(res) &&
-        (res as Record<string, unknown>)['success'] === false
+        'success' in res &&
+        res.success === false
     )
+}
+
+function resolveGetPromptTarget(
+    toolArgs: Record<string, unknown>,
+    prompts: PromptDefinition[]
+): { targetName: string; capabilities: PromptDefinition['capabilities'] } {
+    const rawPromptName =
+        typeof toolArgs['name'] === 'string'
+            ? toolArgs['name']
+            : typeof toolArgs['prompt_name'] === 'string'
+              ? toolArgs['prompt_name']
+              : typeof toolArgs['promptName'] === 'string'
+                ? toolArgs['promptName']
+                : typeof toolArgs['prompt'] === 'string'
+                  ? toolArgs['prompt']
+                  : undefined
+    const normalizedTarget = rawPromptName?.replace(/^mj_/, '').replace(/_/g, '-')
+    const targetPrompt =
+        rawPromptName !== undefined
+            ? prompts.find((p) => p.name === rawPromptName || p.name === normalizedTarget)
+            : undefined
+    return {
+        targetName: targetPrompt?.name ?? rawPromptName ?? 'get_prompt',
+        capabilities: targetPrompt?.capabilities,
+    }
+}
+
+function resolvePromptOrResourceAccessTargets(
+    requestedTool: string,
+    toolArgs: Record<string, unknown>,
+    matchingPrompt: PromptDefinition | undefined,
+    prompts: PromptDefinition[]
+): FallbackAccessTarget[] | undefined {
+    if (matchingPrompt !== undefined) {
+        return [
+            {
+                targetName: matchingPrompt.name,
+                targetType: 'prompt',
+                ...(matchingPrompt.capabilities !== undefined
+                    ? { capabilities: matchingPrompt.capabilities }
+                    : {}),
+            },
+        ]
+    }
+    if (
+        matchesExactName(requestedTool, DUMMY_RESOURCE_TOOL_NAMES) ||
+        requestedTool === 'mjReadResource' ||
+        requestedTool.startsWith('memory://')
+    ) {
+        const rawUri =
+            extractUriFromArgs(toolArgs) ??
+            (requestedTool.startsWith('memory://') ? requestedTool : 'memory://briefing')
+        return [
+            { targetName: 'read_resource', targetType: 'tool' },
+            { targetName: getBaseUri(rawUri), targetType: 'resource' },
+        ]
+    }
+    if (matchesExactName(requestedTool, DUMMY_LIST_RESOURCE_TOOL_NAMES)) {
+        return [{ targetName: 'list_resources', targetType: 'tool' }]
+    }
+    if (matchesExactName(requestedTool, DUMMY_LIST_PROMPT_TOOL_NAMES)) {
+        return [{ targetName: 'list_prompts', targetType: 'tool' }]
+    }
+    if (matchesExactName(requestedTool, DUMMY_GET_PROMPT_TOOL_NAMES)) {
+        const promptTarget = resolveGetPromptTarget(toolArgs, prompts)
+        return [
+            {
+                targetName: promptTarget.targetName,
+                targetType: 'prompt',
+                ...(promptTarget.capabilities !== undefined
+                    ? { capabilities: promptTarget.capabilities }
+                    : {}),
+            },
+        ]
+    }
+    return undefined
 }
 
 async function tryPromptAndResourceFallbacks(
     requestedTool: string,
     toolArgs: Record<string, unknown>,
     matchingPrompt: PromptDefinition | undefined,
-    prompts: PromptDefinition[],
-    toolContext: ToolContext,
-    runtime: ServerContext['runtime']
+    toolContext: ToolContext
 ): Promise<unknown> {
     if (matchingPrompt !== undefined) {
-        enforceAccessBoundary(matchingPrompt.name, 'prompt', matchingPrompt.capabilities, runtime.auditLogger)
         const res = await handlePrompt(toolArgs, requestedTool, toolContext)
         if (isSuccessObject(res)) return formatSuccessPayload(res)
         if (isFailureObject(res)) return formatTokenEstimatedError(res, true)
@@ -65,44 +146,20 @@ async function tryPromptAndResourceFallbacks(
         requestedTool === 'mjReadResource' ||
         requestedTool.startsWith('memory://')
     ) {
-        enforceAccessBoundary('read_resource', 'tool', undefined, runtime.auditLogger)
         const res = await handleReadResource(toolArgs, requestedTool, toolContext)
         if (isSuccessObject(res)) return formatSuccessPayload(res)
         if (isFailureObject(res)) return formatTokenEstimatedError(res, true)
     }
 
     if (matchesExactName(requestedTool, DUMMY_LIST_RESOURCE_TOOL_NAMES)) {
-        enforceAccessBoundary('list_resources', 'tool', undefined, runtime.auditLogger)
         return formatSuccessPayload(handleListResources(requestedTool))
     }
 
     if (matchesExactName(requestedTool, DUMMY_LIST_PROMPT_TOOL_NAMES)) {
-        enforceAccessBoundary('list_prompts', 'tool', undefined, runtime.auditLogger)
         return formatSuccessPayload(handleListPrompts(requestedTool))
     }
 
     if (matchesExactName(requestedTool, DUMMY_GET_PROMPT_TOOL_NAMES)) {
-        const rawPromptName =
-            typeof toolArgs['name'] === 'string'
-                ? toolArgs['name']
-                : typeof toolArgs['prompt_name'] === 'string'
-                  ? toolArgs['prompt_name']
-                  : typeof toolArgs['promptName'] === 'string'
-                    ? toolArgs['promptName']
-                    : typeof toolArgs['prompt'] === 'string'
-                      ? toolArgs['prompt']
-                      : undefined
-        const normalizedTarget = rawPromptName?.replace(/^mj_/, '').replace(/_/g, '-')
-        const targetPrompt =
-            rawPromptName !== undefined
-                ? prompts.find((p) => p.name === rawPromptName || p.name === normalizedTarget)
-                : undefined
-        enforceAccessBoundary(
-            targetPrompt?.name ?? rawPromptName ?? 'get_prompt',
-            'prompt',
-            targetPrompt?.capabilities,
-            runtime.auditLogger
-        )
         const res = await handleGetPrompt(toolArgs, requestedTool, toolContext)
         if (isSuccessObject(res)) return formatSuccessPayload(res)
         if (isFailureObject(res)) return formatTokenEstimatedError(res, true)
@@ -115,7 +172,6 @@ async function tryAutonomousUnknownToolFallback(
     requestedTool: string,
     toolArgs: Record<string, unknown>,
     matchingPrompt: PromptDefinition | undefined,
-    prompts: PromptDefinition[],
     context: ServerContext,
     options: ServerOptions,
     allTools: ToolRegistration[],
@@ -124,27 +180,6 @@ async function tryAutonomousUnknownToolFallback(
 ): Promise<unknown> {
     const { configManager, db, teamDb, vectorManager, teamVectorManager, github, runtime, allowedIoRoots } = context
     const currentConfig = configManager.getConfig()
-    if (
-        currentConfig.toolFilterConfig !== null &&
-        currentConfig.toolFilterConfig !== undefined &&
-        isAutonomousShimBlockedByFilter(
-            requestedTool,
-            matchingPrompt?.name,
-            currentConfig.toolFilterConfig
-        )
-    ) {
-        return formatTokenEstimatedError(
-            {
-                success: false,
-                error: `Tool '${requestedTool}' is disabled by the active --tool-filter configuration.`,
-                code: 'TOOL_DISABLED',
-                category: 'authorization',
-                suggestion: 'Update the active tool filter or use an enabled tool.',
-                recoverable: false,
-            },
-            true
-        )
-    }
     const fallbackConfig: ToolHandlerConfig = {
         ...customToolHandlerConfig,
         filterConfig: currentConfig.toolFilterConfig,
@@ -169,9 +204,7 @@ async function tryAutonomousUnknownToolFallback(
         requestedTool,
         toolArgs,
         matchingPrompt,
-        prompts,
-        toolContext,
-        runtime
+        toolContext
     )
     if (promptOrResourceRes !== undefined) return promptOrResourceRes
 
@@ -182,9 +215,33 @@ async function tryAutonomousUnknownToolFallback(
         currentConfig.toolFilterConfig,
         fallbackConfig,
         allTools,
-        allToolNames,
-        runtime
+        allToolNames
     )
+}
+
+function buildToolNotFoundErrorPayload(
+    requestedTool: string,
+    matchingPrompt: PromptDefinition | undefined
+): Record<string, unknown> {
+    let suggestion = `Tool '${requestedTool}' does not exist. Use tools/list to see available tools.`
+    const isFilteredTool = ALL_KNOWN_GROUP_TOOLS.has(requestedTool)
+
+    if (isFilteredTool) {
+        suggestion = `'${requestedTool}' is a valid tool but it is not currently exposed because of your active --tool-filter or codemode restrictions. If you are in Code Mode, invoke it via 'mj_execute_code' (e.g. 'await mj.core.${requestedTool}(...)').`
+    } else if (matchingPrompt !== undefined) {
+        suggestion = `'${requestedTool}' is an MCP Prompt, not an MCP Tool. Please use the 'get_prompt' tool (or your native MCP Prompts integration) to evaluate it, then use 'create_entry' to save the result.`
+    } else if (requestedTool.startsWith('mj_')) {
+        suggestion = `'${requestedTool}' is not a valid root tool. If you are trying to use Code Mode, you must invoke the 'mj_execute_code' tool and write javascript (e.g. 'await mj.core.searchEntries(...)').`
+    }
+
+    return {
+        success: false,
+        error: `MCP error -32602: Tool ${requestedTool} not found`,
+        code: 'TOOL_NOT_FOUND',
+        category: 'hallucination',
+        suggestion,
+        recoverable: false,
+    }
 }
 
 /** Healing fallbacks and a structured TOOL_NOT_FOUND response for tools that are not registered. */
@@ -210,6 +267,30 @@ async function handleUnknownTool(
     if (healingEnabled) {
         const auditTargetName = resolveKnownFallbackAuditName(requestedTool, matchingPrompt)
         if (auditTargetName !== undefined) {
+            const activeFilter = context.configManager.getConfig().toolFilterConfig
+            if (
+                activeFilter !== null &&
+                activeFilter !== undefined &&
+                isAutonomousShimBlockedByFilter(requestedTool, matchingPrompt?.name, activeFilter)
+            ) {
+                return formatTokenEstimatedError(
+                    {
+                        success: false,
+                        error: `Tool '${requestedTool}' is disabled by the active --tool-filter configuration.`,
+                        code: 'TOOL_DISABLED',
+                        category: 'authorization',
+                        suggestion: 'Update the active tool filter or use an enabled tool.',
+                        recoverable: false,
+                    },
+                    true
+                )
+            }
+            const accessTargets = resolvePromptOrResourceAccessTargets(
+                requestedTool,
+                toolArgs,
+                matchingPrompt,
+                prompts
+            )
             const fallbackResponse = await runFallbackWithInterceptors(
                 auditTargetName,
                 toolArgs,
@@ -219,125 +300,50 @@ async function handleUnknownTool(
                         requestedTool,
                         toolArgs,
                         matchingPrompt,
-                        prompts,
                         context,
                         options,
                         allTools,
                         allToolNames,
                         customToolHandlerConfig
-                    )
+                    ),
+                accessTargets
             )
             if (fallbackResponse !== undefined) return fallbackResponse
         }
     }
 
-    let suggestion = `Tool '${requestedTool}' does not exist. Use tools/list to see available tools.`
-    const isFilteredTool = ALL_KNOWN_GROUP_TOOLS.has(requestedTool)
-
-    if (isFilteredTool) {
-        suggestion = `'${requestedTool}' is a valid tool but it is not currently exposed because of your active --tool-filter or codemode restrictions. If you are in Code Mode, invoke it via 'mj_execute_code' (e.g. 'await mj.core.${requestedTool}(...)').`
-    } else if (matchingPrompt !== undefined) {
-        suggestion = `'${requestedTool}' is an MCP Prompt, not an MCP Tool. Please use the 'get_prompt' tool (or your native MCP Prompts integration) to evaluate it, then use 'create_entry' to save the result.`
-    } else if (requestedTool.startsWith('mj_')) {
-        suggestion = `'${requestedTool}' is not a valid root tool. If you are trying to use Code Mode, you must invoke the 'mj_execute_code' tool and write javascript (e.g. 'await mj.core.searchEntries(...)').`
-    }
-
-    const errorResult = {
-        success: false,
-        error: `MCP error -32602: Tool ${requestedTool} not found`,
-        code: 'TOOL_NOT_FOUND',
-        category: 'hallucination',
-        suggestion,
-        recoverable: false,
-    }
-
+    const errorResult = buildToolNotFoundErrorPayload(requestedTool, matchingPrompt)
     if (healingEnabled) {
         logAgentIssue({
             source: 'MCP',
             action: requestedTool,
             input: toolArgs,
-            error: errorResult.error,
+            error: String(errorResult['error']),
         })
     }
 
     return formatTokenEstimatedError(errorResult, true)
 }
 
-function runArgInterceptionForCall(
-    params: { name?: string; arguments?: Record<string, unknown> },
-    inputArg: unknown,
-    projectRegistry?: ServerOptions['projectRegistry']
-): ReturnType<typeof formatTokenEstimatedError> | undefined {
-    const toolName = params.name
-    if (toolName === undefined || toolName === '') return undefined
-
-    setActiveProjectRegistry(projectRegistry)
-    let intercept: ReturnType<typeof applyArgInterceptions>
-    try {
-        intercept = applyArgInterceptions(toolName, [inputArg])
-    } finally {
-        setActiveProjectRegistry(undefined)
+function hasToolCallRequestShape(request: unknown): request is { params?: ToolCallParams } {
+    if (typeof request !== 'object' || request === null || Array.isArray(request)) {
+        return false
     }
-
-    if ('error' in intercept) {
-        const errorResult = intercept.error
-        logAgentIssue({
-            source: 'MCP',
-            action: toolName,
-            input: inputArg,
-            error: (errorResult['error'] as string) ?? 'Validation Error',
-        })
-        return formatTokenEstimatedError(errorResult, true)
+    if (!('params' in request) || request.params === undefined) {
+        return true
     }
-
-    const normalizedArgs = intercept.args?.[0]
-    if (
-        normalizedArgs !== null &&
-        normalizedArgs !== undefined &&
-        typeof normalizedArgs === 'object' &&
-        !Array.isArray(normalizedArgs)
-    ) {
-        params.arguments = normalizedArgs as Record<string, unknown>
+    const params = request.params
+    if (typeof params !== 'object' || params === null || Array.isArray(params)) {
+        return false
     }
-    return undefined
-}
-
-function healIncomingToolCallParams(
-    params: { name?: string; arguments?: Record<string, unknown> },
-    options: ServerOptions,
-    liveBriefing: ReturnType<typeof resolveActiveBriefingConfig>
-): ReturnType<typeof formatTokenEstimatedError> | undefined {
-    const rawArgs: unknown = params.arguments
-    if (
-        rawArgs === undefined ||
-        rawArgs === null ||
-        (typeof rawArgs !== 'object' && !Array.isArray(rawArgs))
-    ) {
-        params.arguments = {}
-    }
-    const healerOptions: ServerOptions = { ...options }
-    if (liveBriefing.projectRegistry !== undefined) {
-        healerOptions.projectRegistry = liveBriefing.projectRegistry
-    } else {
-        delete healerOptions.projectRegistry
-    }
-    if (liveBriefing.defaultProjectNumber !== undefined) {
-        healerOptions.defaultProjectNumber = liveBriefing.defaultProjectNumber
-    } else {
-        delete healerOptions.defaultProjectNumber
-    }
-    if (liveBriefing.defaultWorkspaceId !== undefined) {
-        healerOptions.defaultWorkspaceId = liveBriefing.defaultWorkspaceId
-    } else {
-        delete healerOptions.defaultWorkspaceId
-    }
-
-    if (Array.isArray(params.arguments)) {
-        const errResp = runArgInterceptionForCall(params, params.arguments)
-        if (errResp !== undefined) return errResp
-    }
-    normalizeAndAliasToolCall(params, healerOptions)
-    return runArgInterceptionForCall(params, params.arguments, liveBriefing.projectRegistry)
+    const nameOk = !('name' in params) || params.name === undefined || typeof params.name === 'string'
+    const argsOk =
+        !('arguments' in params) ||
+        params.arguments === undefined ||
+        (typeof params.arguments === 'object' &&
+            params.arguments !== null &&
+            !Array.isArray(params.arguments))
+    return nameOk && argsOk
 }
 
 async function executeInterceptedToolCall(
@@ -352,7 +358,7 @@ async function executeInterceptedToolCall(
     customToolHandlerConfig: ToolHandlerConfig
 ): Promise<unknown> {
     try {
-        const req = request as { params?: { name?: string; arguments?: Record<string, unknown> } }
+        const params = hasToolCallRequestShape(request) ? request.params : undefined
         const healingEnabled =
             options.agentHealing !== false && customToolHandlerConfig.agentHealing !== false
 
@@ -363,21 +369,21 @@ async function executeInterceptedToolCall(
         )
         syncLiveHandlerConfig(customToolHandlerConfig, liveConfig, options, liveBriefing)
 
-        if (req.params !== undefined && healingEnabled) {
-            const healError = healIncomingToolCallParams(req.params, options, liveBriefing)
+        if (params !== undefined && healingEnabled) {
+            const healError = healIncomingToolCallParams(params, options, liveBriefing)
             if (healError !== undefined) return healError
         }
 
-        applyCreateWorkspaceScope(req.params, customToolHandlerConfig, liveBriefing, context.runtime)
+        applyCreateWorkspaceScope(params, customToolHandlerConfig, liveBriefing, context.runtime)
 
         if (
-            req.params?.name !== undefined &&
-            req.params.name !== '' &&
-            !allToolNames.has(req.params.name)
+            params?.name !== undefined &&
+            params.name !== '' &&
+            !allToolNames.has(params.name)
         ) {
             return await handleUnknownTool(
-                req.params.name,
-                req.params.arguments ?? {},
+                params.name,
+                params.arguments ?? {},
                 healingEnabled,
                 prompts,
                 context,
@@ -389,7 +395,7 @@ async function executeInterceptedToolCall(
         }
 
         const result = await originalHandler(request, extra)
-        const validationFailure = toValidationFailureResponse(result, req.params)
+        const validationFailure = toValidationFailureResponse(result, params)
         if (validationFailure !== undefined) return validationFailure
 
         return result

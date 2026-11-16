@@ -2,20 +2,9 @@ import type { ToolContext, ToolDefinition } from '../../../types/index.js'
 import { AuthorizationError } from '../../../types/errors.js'
 import type { TeamRole } from '../../../database/core/interfaces.js'
 import { resolveAuthenticatedAuthor } from '../../../utils/security-utils.js'
-import {
-    findCanonicalRegistryKey,
-    resolveWorkspaceFromFilePath,
-    resolveWorkspaceId,
-} from '../../../utils/workspace-resolver.js'
-
+import { resolveWorkspaceId } from '../../../utils/workspace-resolver.js'
 import { formatHandlerError } from '../../../utils/error-helpers.js'
-
-function roleRank(role: TeamRole | null): number {
-    if (role === 'admin') return 3
-    if (role === 'member') return 2
-    if (role === 'viewer') return 1
-    return 0
-}
+import { collectExtraTargetWorkspaces, extractTargetWorkspaceId } from './rbac-scope-target.js'
 
 /**
  * Resolves `author` via workspace-scoped alias mapping when a concrete workspace ID is available.
@@ -56,13 +45,18 @@ export function resolveScopedTeamRole(
         return defaultRole === 'denied' ? null : defaultRole
     }
     const directRole = normalizeResolvedRole(teamDb.resolveTeamRole(author, defaultRole))
-    if (directRole === 'admin') {
+    if (typeof teamDb.getTeamMember === 'function') {
+        const directMember = teamDb.getTeamMember(author)
+        if (directMember !== null && directMember !== undefined) {
+            return directRole
+        }
+    } else if (directRole === 'admin') {
         return 'admin'
     }
     const canonical = canonicalizeTeamAuthor(teamDb, author, workspaceId)
     if (canonical !== author) {
-        const canonicalRole = normalizeResolvedRole(teamDb.resolveTeamRole(canonical, defaultRole))
-        if (roleRank(canonicalRole) > roleRank(directRole)) {
+        const canonicalRole = normalizeResolvedRole(teamDb.resolveTeamRole(canonical, 'denied'))
+        if (canonicalRole !== null) {
             return canonicalRole
         }
     }
@@ -90,154 +84,6 @@ const GLOBAL_TEAM_TOOLS = new Set([
     'team_list_backups',
     'team_get_vector_index_stats',
 ])
-
-const WORKSPACE_SCOPE_KEYS = [
-    'workspace_id',
-    'workspaceId',
-    'workspace',
-    'repo',
-    'repo_name',
-    'repoName',
-    'repository',
-] as const
-
-const PROJECT_SCOPE_KEYS = [
-    'project_number',
-    'projectNumber',
-    'project_id',
-    'projectId',
-    'project',
-] as const
-
-const REPO_ALIAS_KEYS = new Set(['repo', 'repo_name', 'repoName', 'repository'])
-
-function isPlainRecord(val: unknown): val is Record<string, unknown> {
-    return typeof val === 'object' && val !== null && !Array.isArray(val)
-}
-
-function collectScopeContainers(params: unknown): Record<string, unknown>[] {
-    if (!isPlainRecord(params)) return []
-    const containers: Record<string, unknown>[] = [params]
-    for (const nestedKey of ['filters', 'filter', 'entry'] as const) {
-        const nested = params[nestedKey]
-        if (isPlainRecord(nested)) containers.push(nested)
-    }
-    return containers
-}
-
-function readFirstScopeProp(
-    containers: Record<string, unknown>[],
-    keys: readonly string[]
-): { key: string; value: unknown } | undefined {
-    for (const container of containers) {
-        for (const key of keys) {
-            const val = container[key]
-            if (val !== undefined && val !== null) return { key, value: val }
-        }
-    }
-    return undefined
-}
-
-function normalizeRepoOrWorkspaceRaw(
-    rawWs: string,
-    key: string,
-    config: ToolContext['config']
-): string {
-    const trimmed = rawWs.trim()
-    if (trimmed === '*' || !REPO_ALIAS_KEYS.has(key)) return trimmed
-    const registry = config?.projectRegistry
-    const directKey = findCanonicalRegistryKey(trimmed, registry)
-    if (directKey !== undefined) return directKey
-    if (trimmed.includes('/') || trimmed.includes('\\')) {
-        const leaf = trimmed.split(/[/\\]/).filter(Boolean).pop()?.trim()
-        if (leaf !== undefined && leaf !== '') {
-            return findCanonicalRegistryKey(leaf, registry) ?? leaf
-        }
-    }
-    return trimmed
-}
-
-function extractTargetWorkspaceId(
-    params: unknown,
-    config: ToolContext['config']
-): string | undefined {
-    const containers = collectScopeContainers(params)
-    if (containers.length === 0) {
-        return resolveWorkspaceId(undefined, undefined, config)
-    }
-    const wsHit = readFirstScopeProp(containers, WORKSPACE_SCOPE_KEYS)
-    const rawWs =
-        wsHit !== undefined && typeof wsHit.value === 'string'
-            ? normalizeRepoOrWorkspaceRaw(wsHit.value, wsHit.key, config)
-            : undefined
-    if (rawWs === '*') {
-        return '*'
-    }
-    const projHit = readFirstScopeProp(containers, PROJECT_SCOPE_KEYS)
-    const projProp = projHit?.value
-    const numProj =
-        typeof projProp === 'number' && Number.isInteger(projProp)
-            ? projProp
-            : typeof projProp === 'string' && /^\d+$/.test(projProp.trim())
-              ? Number.parseInt(projProp.trim(), 10)
-              : undefined
-    if ((rawWs === undefined || rawWs === '') && numProj === undefined) {
-        const pathHit = readFirstScopeProp(containers, [
-            'source_dir',
-            'sourceDir',
-            'output_dir',
-            'outputDir',
-        ])
-        if (pathHit !== undefined && typeof pathHit.value === 'string' && pathHit.value.trim() !== '') {
-            const pathCtx = resolveWorkspaceFromFilePath(pathHit.value.trim(), config)
-            if (pathCtx !== undefined && pathCtx.workspaceId !== '') {
-                return pathCtx.workspaceId
-            }
-        }
-    }
-    try {
-        return resolveWorkspaceId(rawWs !== '' ? rawWs : undefined, numProj, config)
-    } catch {
-        return rawWs !== undefined && rawWs !== '' ? rawWs : undefined
-    }
-}
-
-function collectExtraTargetWorkspaces(
-    params: unknown,
-    primaryWs: string | undefined,
-    config: ToolContext['config']
-): string[] {
-    if (!isPlainRecord(params)) return []
-    const extras: string[] = []
-    const seen = new Set<string>(primaryWs !== undefined ? [primaryWs.toLowerCase()] : [])
-    const addCandidate = (ws: string | undefined): void => {
-        if (ws === undefined || ws === '') return
-        const lower = ws.toLowerCase()
-        if (!seen.has(lower)) {
-            seen.add(lower)
-            extras.push(ws)
-        }
-    }
-    for (const container of collectScopeContainers(params)) {
-        const destRaw = container['target_workspace_id'] ?? container['targetWorkspaceId']
-        if (typeof destRaw === 'string' && destRaw.trim() !== '') {
-            addCandidate(destRaw.trim())
-        }
-    }
-    for (const listKey of ['updates', 'entries'] as const) {
-        const list = params[listKey]
-        if (!Array.isArray(list)) continue
-        for (const item of list) {
-            if (!isPlainRecord(item)) continue
-            addCandidate(extractTargetWorkspaceId(item, config))
-            const itemDest = item['target_workspace_id'] ?? item['targetWorkspaceId']
-            if (typeof itemDest === 'string' && itemDest.trim() !== '') {
-                addCandidate(itemDest.trim())
-            }
-        }
-    }
-    return extras
-}
 
 /**
  * Resolves the identity of the user calling the tool.

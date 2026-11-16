@@ -81,6 +81,19 @@ export function handleRootInfo(_req: Request, res: Response): void {
 // Bearer Token Auth Middleware
 // =============================================================================
 
+function isValidBearerTokenHeader(
+    authHeader: string | undefined,
+    expectedToken: string
+): boolean {
+    if (typeof authHeader !== 'string') return false
+    const spaceIdx = authHeader.indexOf(' ')
+    if (spaceIdx === -1) return false
+    if (authHeader.slice(0, spaceIdx).toLowerCase() !== 'bearer') return false
+    const provided = Buffer.from(authHeader.slice(spaceIdx + 1), 'utf8')
+    const expected = Buffer.from(expectedToken, 'utf8')
+    return expected.length === provided.length && timingSafeEqual(expected, provided)
+}
+
 /**
  * Create a bearer token authentication middleware.
  * Bypasses only /health. [INVARIANT] /metrics exposes per-tool/per-user telemetry and requires
@@ -97,10 +110,7 @@ export function createAuthMiddleware(
             return
         }
 
-        const header = req.headers.authorization
-        const expected = Buffer.from(`Bearer ${authToken}`)
-        const received = Buffer.from(header ?? '')
-        if (expected.length !== received.length || !timingSafeEqual(expected, received)) {
+        if (!isValidBearerTokenHeader(req.headers.authorization, authToken)) {
             res.status(401).json({ error: 'Unauthorized' })
             return
         }

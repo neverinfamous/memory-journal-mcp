@@ -170,13 +170,32 @@ export function assertSafeDirectoryPath(dirPath: string, providedRoots: string[]
     }
 }
 
+function assertNotSymbolicLink(candidatePath: string): void {
+    try {
+        const stats = fs.lstatSync(candidatePath)
+        if (stats.isSymbolicLink()) {
+            throw new PathTraversalError(
+                `Symlinks are strictly forbidden for file operations: ${candidatePath}`
+            )
+        }
+    } catch (err: unknown) {
+        if (err instanceof PathTraversalError) {
+            throw err
+        }
+        const code = typeof err === 'object' && err !== null && 'code' in err ? err.code : undefined
+        if (code === 'ENOENT') return
+        throw err
+    }
+}
+
 /**
- * Validates that a file path is strictly bounded and refuses symlinks to prevent
- * any file-level traversal tricks.
+ * Validates that a file path is strictly bounded and refuses symlinks (on both raw and
+ * percent-decoded paths) to prevent any file-level traversal tricks.
  */
 export function assertSafeFilePath(filePath: string, providedRoots: string[]): void {
-    // First ensure the logical path is within boundaries
-    assertSafeDirectoryPath(path.dirname(filePath), providedRoots)
+    // First ensure the logical directory path is within boundaries
+    const rawDir = path.dirname(filePath)
+    assertSafeDirectoryPath(rawDir, providedRoots)
 
     // [BOUNDARY] The directory check never sees the basename; reject URL-encoded separators/traversal hidden in it.
     const rawBase = path.basename(filePath)
@@ -195,20 +214,19 @@ export function assertSafeFilePath(filePath: string, providedRoots: string[]): v
         throw new PathTraversalError(`File name escapes allowed sandbox boundaries: ${decodedBase}`)
     }
 
-    // Second, if the file exists, ensure it is not a symlink that could trick the system
+    let decodedDir: string
     try {
-        const stats = fs.lstatSync(filePath)
-        if (stats.isSymbolicLink()) {
-            throw new PathTraversalError(
-                `Symlinks are strictly forbidden for file operations: ${filePath}`
-            )
-        }
-    } catch (err: unknown) {
-        if (err instanceof PathTraversalError) {
-            throw err
-        }
-        const code = typeof err === 'object' && err !== null && 'code' in err ? err.code : undefined
-        if (code === 'ENOENT') return
-        throw err
+        decodedDir = decodeURIComponent(rawDir)
+    } catch {
+        throw new PathTraversalError(`Malformed URL-encoding in directory path: ${rawDir}`)
+    }
+
+    const candidates = new Set([
+        filePath,
+        path.join(rawDir, decodedBase),
+        path.join(decodedDir, decodedBase),
+    ])
+    for (const candidate of candidates) {
+        assertNotSymbolicLink(candidate)
     }
 }

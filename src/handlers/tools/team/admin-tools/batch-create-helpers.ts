@@ -187,14 +187,54 @@ function resolveBatchItemProjectNumber(
     )
 }
 
+function validateRootBatchScope(
+    input: TeamBatchCreateInput,
+    config: ToolHandlerConfig | undefined
+): { errorResponse: Record<string, unknown> } | undefined {
+    if (input.workspace_id?.trim() === '*') {
+        return {
+            errorResponse: {
+                success: false,
+                error: "workspace_id '*' is a read-only wildcard and cannot be used to create team entries.",
+                code: 'VALIDATION_ERROR',
+                category: 'validation',
+                suggestion: 'Pass a concrete workspace_id or a project_number.',
+                recoverable: true,
+            },
+        }
+    }
+    if (input.workspace_id !== undefined && input.project_number !== undefined) {
+        const registry = activeProjectRegistry(config?.projectRegistry)
+        const explicitDefault = input.workspace_id.trim().toLowerCase() === 'default'
+        const resolved = resolveProjectContext(
+            { workspace_id: input.workspace_id, project_number: input.project_number },
+            config
+        )
+        const rootWs = resolveWriteWorkspaceId(
+            explicitDefault
+                ? 'default'
+                : resolved.workspaceId !== 'default'
+                  ? resolved.workspaceId
+                  : input.workspace_id,
+            input.project_number,
+            config
+        )
+        pairStoredScope(rootWs, input.project_number, registry)
+    }
+    return undefined
+}
+
 function validateTeamBatchCreateEntries(
     input: TeamBatchCreateInput,
     teamDb: TeamDbInstance,
     config: ToolHandlerConfig | undefined
 ): { errorResponse: Record<string, unknown> } | { resolvedEntries: ResolvedBatchCreateItem[] } {
+    const rootError = validateRootBatchScope(input, config)
+    if (rootError !== undefined) return rootError
+
     const resolvedEntries: ResolvedBatchCreateItem[] = []
     for (const e of input.entries) {
-        if (e.workspace_id?.trim() === '*' || input.workspace_id?.trim() === '*') {
+        if (e.workspace_id?.trim() === '*') {
             return {
                 errorResponse: {
                     success: false,

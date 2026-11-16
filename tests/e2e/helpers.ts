@@ -15,7 +15,7 @@ import { Client, StreamableHTTPClientTransport } from '@modelcontextprotocol/cli
 import type { TestInfo } from '@playwright/test'
 import { expect } from '@playwright/test'
 import { ChildProcess, spawn } from 'node:child_process'
-import { createWriteStream, type WriteStream } from 'node:fs'
+import { createWriteStream, mkdirSync, type WriteStream } from 'node:fs'
 import { setTimeout as delay } from 'node:timers/promises'
 import { join } from 'node:path'
 
@@ -245,6 +245,8 @@ export async function startServer(
     dbSuffix?: string,
     options?: { cwd?: string; env?: Record<string, string | undefined> }
 ): Promise<void> {
+    const e2eOutputDir = join(process.cwd(), '.test-output', 'e2e')
+    mkdirSync(e2eOutputDir, { recursive: true })
     const suffix = dbSuffix ? `${dbSuffix}-${port}` : String(port)
     const serverProcess = spawn(
         'node',

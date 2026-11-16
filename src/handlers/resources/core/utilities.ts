@@ -117,6 +117,7 @@ export const significantResource: InternalResourceDef = {
 interface CachedRuleEntry {
     content: string
     timestamp: number
+    mtimeMs: number
 }
 const cachedRulesMap = new Map<string, CachedRuleEntry>()
 const RULES_CACHE_TTL_MS = 5 * 60 * 1000 // 5 minutes
@@ -150,14 +151,14 @@ export const rulesResource: InternalResourceDef = {
         try {
             const cached = cachedRulesMap.get(rulesPath)
             if (cached && Date.now() - cached.timestamp < RULES_CACHE_TTL_MS) {
-                const stat = await fs.promises
-                    .stat(rulesPath)
-                    .catch(() => ({ mtimeMs: Date.now() }))
-                return {
-                    data: cached.content,
-                    annotations: {
-                        lastModified: new Date(stat.mtimeMs).toISOString(),
-                    },
+                const stat = await fs.promises.stat(rulesPath).catch(() => null)
+                if (stat === null || stat.mtimeMs === cached.mtimeMs) {
+                    return {
+                        data: cached.content,
+                        annotations: {
+                            lastModified: new Date(stat?.mtimeMs ?? cached.mtimeMs).toISOString(),
+                        },
+                    }
                 }
             }
 
@@ -168,10 +169,12 @@ export const rulesResource: InternalResourceDef = {
                     throw new Error('Rules file exceeds 1MB limit')
                 }
                 const content = await file.readFile('utf8')
+                const mtimeMs = typeof stat.mtimeMs === 'number' ? stat.mtimeMs : Date.now()
 
                 cachedRulesMap.set(rulesPath, {
                     content,
                     timestamp: Date.now(),
+                    mtimeMs,
                 })
 
                 // Bounded cache
@@ -188,7 +191,7 @@ export const rulesResource: InternalResourceDef = {
                 data: cachedData ? cachedData.content : '',
                 annotations: {
                     lastModified: new Date(
-                        cachedData ? cachedData.timestamp : Date.now()
+                        cachedData ? cachedData.mtimeMs : Date.now()
                     ).toISOString(),
                 },
             }

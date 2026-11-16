@@ -11,6 +11,7 @@ import { canReadTeamEntriesRbac } from '../team/rbac.js'
 import {
     calcPerDbLimit,
     canAccessTeamSilently,
+    isTeamDbReady,
     mergeAndDedup,
     type EntryWithSource,
 } from './helpers.js'
@@ -226,7 +227,7 @@ export function ftsSearch(
 ): FtsSearchResponse {
     const hasFilters = hasFtsSearchFilters(options)
     const canIncludeTeam =
-        teamDb !== undefined &&
+        isTeamDbReady(teamDb) &&
         options.includeTeam === true &&
         options.isPersonal !== true &&
         canAccessTeamSilently('search_entries') &&

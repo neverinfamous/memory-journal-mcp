@@ -110,7 +110,11 @@ function parseStalenessProjectNumber(uri: string): number | ResourceResult {
     if (!/^[1-9]\d*$/.test(matchedId)) {
         return { data: { error: 'Project number must be a valid integer', code: -32002 } }
     }
-    return parseInt(matchedId, 10)
+    const parsed = Number.parseInt(matchedId, 10)
+    if (!Number.isSafeInteger(parsed) || parsed <= 0) {
+        return { data: { error: 'Project number must be a valid integer', code: -32002 } }
+    }
+    return parsed
 }
 
 function countRecentWeekEntries(
@@ -181,9 +185,9 @@ function handleProjectStalenessResource(uri: string, context: ResourceContext): 
             projectNumber,
             workspaceId: resolvedWorkspace,
         })
-        const tagsBreakdown: Record<string, number> = {}
+        const tagsBreakdown = Object.create(null) as Record<string, number>
         for (const tag of facets.tags) tagsBreakdown[tag.name] = tag.count
-        const typeBreakdown: Record<string, number> = {}
+        const typeBreakdown = Object.create(null) as Record<string, number>
         for (const type of facets.entryTypes) typeBreakdown[type.name] = type.count
 
         const newEntriesLast7Days = countRecentWeekEntries(

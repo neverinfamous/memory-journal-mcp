@@ -7,7 +7,6 @@
 
 import type { McpServer } from '@modelcontextprotocol/server'
 import { ResourceTemplate } from '@modelcontextprotocol/server'
-import type { Variables } from '@modelcontextprotocol/server'
 import { z } from 'zod'
 
 import type { IDatabaseAdapter } from '../database/core/interfaces.js'
@@ -18,6 +17,10 @@ import { ConfigurationError } from '../types/errors.js'
 import { enforceAccessBoundary } from '../auth/validation.js'
 import type { BriefingConfig } from '../handlers/resources/shared.js'
 import type { GitHubIntegration } from '../github/github-integration/index.js'
+import {
+    attachResourceQueryHandler,
+    createAuditedResourceCallback,
+} from './resource-query-registration.js'
 
 // ============================================================================
 // Types
@@ -70,7 +73,8 @@ export type ResourceReadHandler = (
 /**
  * Register all resources with the MCP server.
  *
- * Handles both static URIs and template URIs (containing `{variable}` patterns).
+ * Handles both static URIs and template URIs (containing `{variable}` patterns),
+ * and wraps `resources/read` so `?query` parameters match base registrations cleanly.
  */
 export function registerResources(
     server: McpServer,
@@ -85,68 +89,22 @@ export function registerResources(
             mimeType,
             ...(resDef.icons ? { icons: resDef.icons } : {}),
         }
+        const readCallback = createAuditedResourceCallback(
+            resDef,
+            mimeType,
+            handleResourceRead,
+            runtime
+        )
 
-        // Check if this is a template URI (contains {variable} patterns)
-        const isTemplate = resDef.uri.includes('{')
-
-        if (isTemplate) {
+        if (resDef.uri.includes('{')) {
             const template = new ResourceTemplate(resDef.uri, { list: undefined })
-            server.registerResource(
-                resDef.name,
-                template,
-                meta,
-                async (uri: URL, _variables: Variables) => {
-                    if (!runtime) {
-                        throw new ConfigurationError(
-                            'ServerRuntime is logically required for secure resource execution.'
-                        )
-                    }
-                    const auditLog = runtime.auditLogger
-                    enforceAccessBoundary(uri.href, 'resource', resDef.capabilities, auditLog)
-                    const forceAudit =
-                        resDef.capabilities?.requiresTeamScope === true ||
-                        resDef.capabilities?.requiresAuditScope === true ||
-                        resDef.capabilities?.requiresAdminScope === true
-                    return auditOperation(
-                        auditLog,
-                        'resource',
-                        resDef.name,
-                        async () => {
-                            return runtime.maintenanceManager.withActiveJob(() =>
-                                handleResourceRead(uri, mimeType)
-                            )
-                        },
-                        { forceAudit, resourceUri: uri.href, capabilities: resDef.capabilities }
-                    )
-                }
-            )
+            server.registerResource(resDef.name, template, meta, readCallback)
         } else {
-            server.registerResource(resDef.name, resDef.uri, meta, async (uri: URL) => {
-                if (!runtime) {
-                    throw new ConfigurationError(
-                        'ServerRuntime is logically required for secure resource execution.'
-                    )
-                }
-                const auditLog = runtime.auditLogger
-                enforceAccessBoundary(uri.href, 'resource', resDef.capabilities, auditLog)
-                const forceAudit =
-                    resDef.capabilities?.requiresTeamScope === true ||
-                    resDef.capabilities?.requiresAuditScope === true ||
-                    resDef.capabilities?.requiresAdminScope === true
-                return auditOperation(
-                    auditLog,
-                    'resource',
-                    resDef.name,
-                    async () => {
-                        return runtime.maintenanceManager.withActiveJob(() =>
-                            handleResourceRead(uri, mimeType)
-                        )
-                    },
-                    { forceAudit, resourceUri: uri.href, capabilities: resDef.capabilities }
-                )
-            })
+            server.registerResource(resDef.name, resDef.uri, meta, readCallback)
         }
     }
+
+    attachResourceQueryHandler(server)
 }
 
 // ============================================================================

@@ -11,6 +11,8 @@ export interface RpcExecutionOverrides {
     useTestDb?: boolean
     workspaceId?: string
     projectNumber?: number
+    sessionId?: string
+    autoVersion?: boolean
 }
 
 const rpcOverridesStorage = new AsyncLocalStorage<RpcExecutionOverrides>()
@@ -33,6 +35,18 @@ export function runWithRpcExecutionOverrides<T>(
     }
     if (parent?.useTestDb === true || overrides.useTestDb === true) {
         merged.useTestDb = true
+    }
+    if (parent?.autoVersion === false || overrides.autoVersion === false) {
+        merged.autoVersion = false
+    } else if (overrides.autoVersion === true) {
+        merged.autoVersion = true
+    }
+    const parentSess = parent?.sessionId?.trim()
+    const nextSess = overrides.sessionId?.trim()
+    if (parentSess !== undefined && parentSess !== '') {
+        merged.sessionId = parentSess
+    } else if (nextSess !== undefined && nextSess !== '') {
+        merged.sessionId = nextSess
     }
     const parentWs = parent?.workspaceId?.trim()
     const nextWs = overrides.workspaceId?.trim()

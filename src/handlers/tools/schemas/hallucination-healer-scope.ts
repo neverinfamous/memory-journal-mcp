@@ -38,8 +38,13 @@ function resolveNamedProjectTarget(
 ): boolean {
     const num = Number(strVal)
     if (!Number.isNaN(num) && strVal !== '') {
-        if (typeof obj['project_number'] === 'number' && obj['project_number'] !== num) {
+        if (obj['project_number'] !== undefined && obj['project_number'] !== num) {
             return true
+        }
+        if (existingWs !== undefined) {
+            const wsKey = findCanonicalRegistryKey(existingWs, registry)
+            const wsProject = wsKey !== undefined ? registry?.[wsKey]?.project_number : undefined
+            if (wsProject !== undefined && wsProject !== num) return true
         }
         if (!('project_number' in obj) || obj['project_number'] === undefined) {
             obj['project_number'] = num
@@ -60,7 +65,7 @@ function resolveNamedProjectTarget(
         return true
     }
     if (
-        typeof obj['project_number'] === 'number' &&
+        obj['project_number'] !== undefined &&
         matchedProject !== undefined &&
         obj['project_number'] !== matchedProject
     ) {
@@ -76,28 +81,23 @@ function applyNamedProjectAlias(
     obj: Record<string, unknown>,
     registry: Record<string, ProjectRegistryEntry> | undefined
 ): boolean {
-    const existingWs =
-        typeof obj['workspace_id'] === 'string' && obj['workspace_id'].trim() !== ''
-            ? obj['workspace_id'].trim()
-            : undefined
-    const rawProjectProp =
-        typeof obj['project'] === 'string' || typeof obj['project'] === 'number'
-            ? obj['project']
-            : undefined
-    const rawProjName = obj['project_name'] ?? obj['projectName'] ?? rawProjectProp
-    if (rawProjName === undefined) return false
-
-    const strVal =
-        typeof rawProjName === 'string' || typeof rawProjName === 'number'
-            ? String(rawProjName).trim()
-            : ''
-    const conflicting = resolveNamedProjectTarget(obj, strVal, existingWs, registry)
-    if (conflicting) return false
-
-    delete obj['project_name']
-    delete obj['projectName']
-    if (rawProjectProp !== undefined) delete obj['project']
-    return true
+    let modified = false
+    for (const aliasKey of ['project_name', 'projectName', 'project'] as const) {
+        if (!(aliasKey in obj)) continue
+        const rawVal = obj[aliasKey]
+        if (typeof rawVal !== 'string' && typeof rawVal !== 'number') continue
+        const existingWs =
+            typeof obj['workspace_id'] === 'string' && obj['workspace_id'].trim() !== ''
+                ? obj['workspace_id'].trim()
+                : undefined
+        const strVal = String(rawVal).trim()
+        const conflicting = resolveNamedProjectTarget(obj, strVal, existingWs, registry)
+        if (!conflicting) {
+            Reflect.deleteProperty(obj, aliasKey)
+            modified = true
+        }
+    }
+    return modified
 }
 
 function normalizeStringProjectNumberField(
@@ -139,8 +139,8 @@ export function normalizeProjectFields(
 ): boolean {
     const registry = projectRegistry ?? getActiveProjectRegistry() ?? loadProjectRegistryFromConfig()
     let modified = normalizeWorkspaceAliasKeys(obj)
-    if (applyNamedProjectAlias(obj, registry)) modified = true
     if (normalizeStringProjectNumberField(obj, registry)) modified = true
+    if (applyNamedProjectAlias(obj, registry)) modified = true
     return modified
 }
 

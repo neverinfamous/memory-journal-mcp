@@ -56,11 +56,11 @@ export function deepCamelToSnake(
                 ? k.replace(/[A-Z]/g, (letter) => `_${letter.toLowerCase()}`)
                 : k
             if (FORBIDDEN_KEYS.has(snakeKey)) continue
-            if (snakeKey === 'id' && !('entry_id' in obj) && canAlias('id')) {
+            if (snakeKey === 'id' && !('entry_id' in obj) && !('entryId' in obj) && canAlias('id')) {
                 newObj['entry_id'] = deepCamelToSnake(v, depth + 1)
                 continue
             }
-            if (snakeKey === 'ids' && !('entry_ids' in obj) && canAlias('ids')) {
+            if (snakeKey === 'ids' && !('entry_ids' in obj) && !('entryIds' in obj) && canAlias('ids')) {
                 const vSnake = deepCamelToSnake(v, depth + 1)
                 newObj['entry_ids'] = Array.isArray(vSnake) ? vSnake : [vSnake]
                 continue
@@ -80,6 +80,7 @@ export interface DispatchParamContext {
     projectId: number | string | undefined
     workspaceId: string | undefined
     explicitWorkspace?: boolean
+    sessionId?: string | undefined
 }
 
 function normalizeFsPath(filePath: string): string {
@@ -122,7 +123,7 @@ function coerceProjectNumberField(
 
 function isSameOrSubdirectory(targetDir: string, rootDir: string): boolean {
     const rel = path.relative(normalizeFsPath(rootDir), normalizeFsPath(targetDir))
-    return rel === '' || (!rel.startsWith('..') && !path.isAbsolute(rel))
+    return rel === '' || (rel !== '..' && !rel.startsWith(`..${path.sep}`) && !path.isAbsolute(rel))
 }
 
 function isPathOutsideCwd(
@@ -347,7 +348,7 @@ function applyRootSessionInheritance(
     const callerWorkspaceId =
         typeof paramsObj['workspace_id'] === 'string' ? paramsObj['workspace_id'] : undefined
 
-    // [INVARIANT] Explicit `workspace_id: 'default'` never inherits the session projectId.
+    // [INVARIANT] Explicit `workspace_id: 'default'` inherits session projectId only when the session itself is explicit `'default'`.
     if (
         !flags.hasCrossWorkspaceTarget &&
         paramsObj['project_number'] === undefined &&
@@ -355,7 +356,8 @@ function applyRootSessionInheritance(
         (callerWorkspaceId === undefined ||
             (typeof workspaceId === 'string' &&
                 callerWorkspaceId.toLowerCase() === workspaceId.toLowerCase())) &&
-        !isDefaultWorkspaceName(callerWorkspaceId) &&
+        (!isDefaultWorkspaceName(callerWorkspaceId) ||
+            (isDefaultWorkspaceName(workspaceId) && explicitWorkspace === true)) &&
         checkSchemaAcceptsKey(tool.inputSchema, 'project_number')
     ) {
         paramsObj['project_number'] = projectId
@@ -371,6 +373,14 @@ function applyRootSessionInheritance(
         checkSchemaAcceptsKey(tool.inputSchema, 'workspace_id')
     ) {
         paramsObj['workspace_id'] = workspaceId
+    }
+    if (
+        ctx.sessionId !== undefined &&
+        ctx.sessionId !== '' &&
+        paramsObj['session_id'] === undefined &&
+        checkSchemaAcceptsKey(tool.inputSchema, 'session_id')
+    ) {
+        paramsObj['session_id'] = ctx.sessionId
     }
 }
 

@@ -42,15 +42,6 @@ function validateWorkflowType(
     )
 }
 
-export function formatPositiveIntOrPlaceholder(
-    raw: string | undefined,
-    placeholder: string
-): string {
-    if (!raw) return placeholder
-    const trimmed = raw.trim()
-    return /^[1-9]\d*$/.test(trimmed) ? trimmed : placeholder
-}
-
 export function requirePositiveIntOrPlaceholder(
     raw: string | undefined,
     placeholder: string,

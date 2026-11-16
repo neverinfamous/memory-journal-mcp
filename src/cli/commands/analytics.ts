@@ -1,22 +1,15 @@
 import type { Command } from 'commander'
 import { type z } from 'zod'
 import { analyticsOptionsSchema } from '../schemas.js'
-import { enforceCliTeamRbac, getCliCommandDb as getDb } from './db-helper.js'
-import { resolveCliQueryScope } from '../../utils/workspace-resolver.js'
+import { getCliCommandDb as getDb, resolveCliReadScope } from './db-helper.js'
 
 export const analyticsSchema = analyticsOptionsSchema
 
 export async function analyticsStatsAction(options: z.infer<typeof analyticsSchema>, command: Command): Promise<void> {
     const { db, serverOptions } = await getDb(options, command)
+    let failed = false
     try {
-        const { workspaceId, projectNumber } = resolveCliQueryScope(
-            options.workspace,
-            options.defaultProject,
-            serverOptions
-        )
-        if (options.team === true) {
-            enforceCliTeamRbac(db, serverOptions, 'viewer', workspaceId)
-        }
+        const { workspaceId, projectNumber } = resolveCliReadScope(db, serverOptions, options)
         const result = db.getStatistics(
             undefined,
             undefined,
@@ -27,24 +20,21 @@ export async function analyticsStatsAction(options: z.infer<typeof analyticsSche
         )
         process.stdout.write(JSON.stringify(result, null, 2) + '\n')
     } catch (e) {
+        failed = true
         process.stderr.write("Analytics stats failed: " + (e instanceof Error ? e.message : String(e)) + '\n')
-        process.exit(1)
     } finally {
         db.close()
+    }
+    if (failed) {
+        process.exit(1)
     }
 }
 
 export async function analyticsInsightsAction(options: z.infer<typeof analyticsSchema>, command: Command): Promise<void> {
     const { db, serverOptions } = await getDb(options, command)
+    let failed = false
     try {
-        const { workspaceId, projectNumber } = resolveCliQueryScope(
-            options.workspace,
-            options.defaultProject,
-            serverOptions
-        )
-        if (options.team === true) {
-            enforceCliTeamRbac(db, serverOptions, 'viewer', workspaceId)
-        }
+        const { workspaceId, projectNumber } = resolveCliReadScope(db, serverOptions, options)
         const result = db.getCrossProjectInsights({
             minEntries: 1,
             inactiveThresholdDays: 30,
@@ -53,9 +43,12 @@ export async function analyticsInsightsAction(options: z.infer<typeof analyticsS
         })
         process.stdout.write(JSON.stringify(result, null, 2) + '\n')
     } catch (e) {
+        failed = true
         process.stderr.write("Analytics insights failed: " + (e instanceof Error ? e.message : String(e)) + '\n')
-        process.exit(1)
     } finally {
         db.close()
+    }
+    if (failed) {
+        process.exit(1)
     }
 }

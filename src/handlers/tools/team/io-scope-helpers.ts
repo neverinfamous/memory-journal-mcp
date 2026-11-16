@@ -13,7 +13,7 @@ import { getAuthContext } from '../../../auth/auth-context.js'
 import { resolveAuthenticatedAuthor } from '../../../utils/security-utils.js'
 import { sendProgress } from '../../../utils/progress-utils.js'
 import { resolveTeamCreateAuthor } from './admin-tools/batch-create-helpers.js'
-import { isCallerTeamAdmin, resolveScopedTeamRole } from './rbac.js'
+import { enforceTeamRbac, getCallerIdentity, isCallerTeamAdmin, resolveScopedTeamRole } from './rbac.js'
 import { resolveWorkspaceFromFilePath } from '../../../utils/workspace-resolver.js'
 import { activeProjectRegistry, uniqueWorkspaceForProject } from '../../../utils/write-scope.js'
 import { resolveWriteWorkspaceId } from '../write-workspace.js'
@@ -89,11 +89,19 @@ export async function executeTeamExportMarkdown(
             recoverable: true,
         }
     }
-    const wsId = resolveWriteWorkspaceId(input.workspace_id, input.project_number, context.config)
+    const hasExplicitWs = input.workspace_id !== undefined && input.workspace_id.trim() !== ''
+    const dirMatch =
+        !hasExplicitWs && input.project_number === undefined
+            ? resolveWorkspaceFromFilePath(input.output_dir, context.config)
+            : undefined
+    const effectiveWsInput = hasExplicitWs ? input.workspace_id : dirMatch?.workspaceId
+    const effectivePnInput = input.project_number ?? dirMatch?.projectNumber
+    const wsId = resolveWriteWorkspaceId(effectiveWsInput, effectivePnInput, context.config)
+    enforceTeamRbac(context, getCallerIdentity(), 'member', wsId)
     const projectNumber =
-        resolveTeamProjectNumber(context, wsId, input.project_number, input.workspace_id) ?? undefined
+        resolveTeamProjectNumber(context, wsId, effectivePnInput, effectiveWsInput) ?? undefined
     if (projectNumber === undefined) {
-        return missingTeamIoProjectNumberError(input.workspace_id)
+        return missingTeamIoProjectNumberError(effectiveWsInput)
     }
     if (
         input.start_date !== undefined &&

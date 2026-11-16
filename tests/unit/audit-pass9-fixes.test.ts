@@ -10,7 +10,6 @@ import {
     extractAndRecoverSqlCode,
 } from '../../src/handlers/tools/codemode/sql-recovery.js'
 import { normalizeParams } from '../../src/codemode/api/param-normalizer.js'
-import { formatPositiveIntOrPlaceholder } from '../../src/handlers/prompts/github.js'
 
 describe('Pass 9 Audit Fixes — Workspace Routing & Normalizers', () => {
     const sampleRegistry = {
@@ -202,15 +201,6 @@ describe('Pass 9 Audit Fixes — Workspace Routing & Normalizers', () => {
             )
             expect(updated).toContain('"entry_id":44')
             expect(updated).not.toContain('"entry_id":9')
-        })
-    })
-
-    describe('formatPositiveIntOrPlaceholder', () => {
-        it('accepts strictly positive integer strings and rejects trailing garbage or negatives', () => {
-            expect(formatPositiveIntOrPlaceholder('42', '{pr_number}')).toBe('42')
-            expect(formatPositiveIntOrPlaceholder('12abc', '{pr_number}')).toBe('{pr_number}')
-            expect(formatPositiveIntOrPlaceholder('-5', '{pr_number}')).toBe('{pr_number}')
-            expect(formatPositiveIntOrPlaceholder('0', '{pr_number}')).toBe('{pr_number}')
         })
     })
 })

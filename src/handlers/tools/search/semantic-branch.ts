@@ -4,7 +4,13 @@
 
 import type { z } from 'zod'
 import type { ToolContext } from '../../../types/index.js'
-import { passMetadataFilters, collectTeamSearchEntries, mergeAndDedup, type EntryWithSource } from './helpers.js'
+import {
+    passMetadataFilters,
+    collectTeamSearchEntries,
+    mergeAndDedup,
+    isTeamDbReady,
+    type EntryWithSource,
+} from './helpers.js'
 import { decodeCursor, encodeCursor } from '../../../database/sqlite-adapter/entries/search/cursor.js'
 import type { SearchEntriesSchema } from './schemas.js'
 
@@ -110,6 +116,43 @@ export function rankByBlendedScore(
     return scored
 }
 
+function hydratePersonalSemanticEntries(
+    semanticResults: { entryId: number; score: number }[],
+    db: ToolContext['db'],
+    input: SearchInput,
+    wsId: string,
+    searchOptions: SearchOptions
+): { entries: EntryWithSource[]; relevanceMap: Map<string, number> } {
+    const entryIds = semanticResults.map((r) => r.entryId)
+    const relevanceMap = new Map<string, number>()
+    for (const result of semanticResults) {
+        relevanceMap.set(`personal:${String(result.entryId)}`, result.score)
+    }
+    const entriesMap = db.getEntriesByIds(entryIds, wsId)
+    if (
+        (input.tags !== undefined && input.tags.length > 0) ||
+        (input.exclude_tags !== undefined && input.exclude_tags.length > 0)
+    ) {
+        const tagsMap = db.getTagsForEntries(entryIds)
+        for (const entry of entriesMap.values()) {
+            entry.tags = tagsMap.get(entry.id) ?? []
+        }
+    }
+    const entries: EntryWithSource[] = []
+    for (const result of semanticResults) {
+        const entry = entriesMap.get(result.entryId)
+        if (entry === undefined || !passMetadataFilters(entry, searchOptions, db)) continue
+        entries.push({
+            ...entry,
+            content: entry.content,
+            timestamp: entry.timestamp,
+            similarity: Math.round(result.score * 100) / 100,
+            source: 'personal',
+        })
+    }
+    return { entries, relevanceMap }
+}
+
 /** Run the vector search, apply metadata filters, merge team results and page the output. */
 export async function runSemanticSearch(
     params: SemanticSearchParams
@@ -130,48 +173,32 @@ export async function runSemanticSearch(
         wsId,
         searchOptions.projectNumber
     )
-    const entryIds = semanticResults.map((r) => r.entryId)
-    const relevanceMap = new Map<string, number>()
-    for (const result of semanticResults) {
-        relevanceMap.set(`personal:${String(result.entryId)}`, result.score)
-    }
-    const entriesMap = db.getEntriesByIds(entryIds, wsId)
-
-    // Pre-hydrate tags to avoid N+1 queries during metadata filtering
-    if (
-        (input.tags !== undefined && input.tags.length > 0) ||
-        (input.exclude_tags !== undefined && input.exclude_tags.length > 0)
-    ) {
-        const tagsMap = db.getTagsForEntries(entryIds)
-        for (const entry of entriesMap.values()) {
-            entry.tags = tagsMap.get(entry.id) ?? []
-        }
-    }
-
-    const entries: EntryWithSource[] = []
-    for (const result of semanticResults) {
-        const entry = entriesMap.get(result.entryId)
-        if (entry === undefined) continue
-        if (!passMetadataFilters(entry, searchOptions, db)) continue
-        entries.push({
-            ...entry,
-            content: entry.content,
-            timestamp: entry.timestamp,
-            source: 'personal',
-        })
-    }
+    const { entries, relevanceMap } = hydratePersonalSemanticEntries(
+        semanticResults,
+        db,
+        input,
+        wsId,
+        searchOptions
+    )
     let ranked = entries
     let degraded = false
 
-    if (searchOptions.includeTeam && input.is_personal !== true && teamDb !== undefined) {
+    if (searchOptions.includeTeam && input.is_personal !== true && isTeamDbReady(teamDb)) {
         // [SIDE-EFFECT] Without a team vector index, team results come from FTS; report it as degraded.
         if (teamVectorManager === undefined) degraded = true
-        // [INVARIANT] Keep one row past the page so pageRows can emit next_cursor.
         const teamEntries = await collectTeamSearchEntries(query, teamDb, teamVectorManager, {
             ...searchOptions,
-            limit: needed + 1,
+            similarityThreshold: 0.25,
+            limit: Math.min(internalLimit, 500),
         })
-        ranked = mergeAndDedup(ranked, teamEntries, needed + 1, 'preserve')
+        for (const teamEntry of teamEntries) {
+            const id = teamEntry['id']
+            const sim = teamEntry['similarity']
+            if (typeof id === 'number' && typeof sim === 'number') {
+                relevanceMap.set(`team:${String(id)}`, sim)
+            }
+        }
+        ranked = mergeAndDedup(ranked, teamEntries, undefined, 'similarity')
     }
 
     // Post-fetch importance or blended relevance × importance re-sort for vector results
