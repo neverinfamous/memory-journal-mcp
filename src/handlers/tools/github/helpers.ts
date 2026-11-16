@@ -33,11 +33,17 @@ export const githubScopeParseFields = {
 
 function parseRepoSlug(repo?: string): { owner?: string; repo?: string } {
     if (!repo) return {}
+    if (/^[a-zA-Z]:[/\\]|^[/\\]/.test(repo) || repo.includes('\\')) {
+        const leaf = repo.split(/[/\\]/).filter(Boolean).pop()?.replace(/\.git$/i, '')
+        return leaf ? { repo: leaf } : { repo }
+    }
     if (repo.includes('/')) {
-        const parts = repo.split('/')
-        if (parts.length >= 2 && parts[0] && parts[1]) {
-            return { owner: parts[0], repo: parts[1] }
+        const parts = repo.split('/').filter(Boolean)
+        if (parts.length === 2 && parts[0] && parts[1]) {
+            return { owner: parts[0], repo: parts[1].replace(/\.git$/i, '') }
         }
+        const leaf = parts.pop()?.replace(/\.git$/i, '')
+        if (leaf) return { repo: leaf }
     }
     return { repo }
 }

@@ -341,6 +341,7 @@ export function packageManagerInterceptor(ctx: ExecutionContext): void {
     const targetScript = (subCmd === 'run' || subCmd === 'exec') ? nonFlagArgs[1] : subCmd;
     const underlyingScript = getUnderlyingPackageScript(cmdBasename, args, ctx.payload.cwd);
     const isKnownDeterministic = args.some(a => /(?:commit\.ts|get-git-history-json\.ts|backup-conversations\.ts)/i.test(a));
+    const isBackupConversations = args.some(a => /backup-conversations\.ts/i.test(a));
     const isPlaywright = !isPackageResolution && !isKnownDeterministic && Boolean(
       (targetScript && /(?:playwright|cypress|\be2e\b|test:e2e|test-e2e)/i.test(targetScript)) ||
       args.some(a => /(?:playwright|cypress|\be2e\b|test:e2e|test-e2e)/i.test(a)) ||
@@ -380,7 +381,7 @@ export function packageManagerInterceptor(ctx: ExecutionContext): void {
     } else if (isKnownDeterministic) {
       console.error(`\n   💡 AGENT INTERCEPT: Disabling stall interceptors and extending timeout for deterministic workflow script to prevent false positive aborts.`);
       ctx.payload.bypassInterceptors = true;
-      const detTimeout = ctx.payload.target === 'wsl2' ? 90000 : 240000;
+      const detTimeout = ctx.payload.target === 'wsl2' ? 90000 : (isBackupConversations ? 600000 : 240000);
       if (ctx.payload.timeoutMs === undefined || ctx.payload.timeoutMs < detTimeout) {
         ctx.payload.timeoutMs = detTimeout;
       }
@@ -500,6 +501,7 @@ export function packageManagerInterceptor(ctx: ExecutionContext): void {
         }
       }
       const isKnownDeterministic = args.some(a => /(?:commit\.ts|get-git-history-json\.ts|backup-conversations\.ts)/i.test(a));
+      const isBackupConversations = args.some(a => /backup-conversations\.ts/i.test(a));
       const isPlaywright = !isKnownDeterministic && args.some(a => /(?:playwright|cypress|\be2e\b|test:e2e|test-e2e)/i.test(a));
       const isCoverage = !isKnownDeterministic && args.some(a => /(?:coverage|--coverage|test:coverage)/i.test(a));
       const isRunnerQuality = isKnownDeterministic || args.some(a => /(?:vitest|jest|playwright|cypress|test|lint|typecheck|tsc)/i.test(a));
@@ -522,7 +524,7 @@ export function packageManagerInterceptor(ctx: ExecutionContext): void {
         const isFullSuite = isTestRunner && testFiles.length === 0 && !isTestDir;
         const runnerTimeout = ctx.payload.target === 'wsl2'
           ? (isCoverage || isLargeTestBatch ? 300000 : (isMultiTest || isTestDir || isFullSuite ? 180000 : 90000))
-          : (isCoverage || isLargeTestBatch ? 480000 : (isTestDir || isFullSuite ? 360000 : (isMultiTest ? 300000 : 240000)));
+          : (isBackupConversations ? 600000 : (isCoverage || isLargeTestBatch ? 480000 : (isTestDir || isFullSuite ? 360000 : (isMultiTest ? 300000 : 240000))));
         if (ctx.payload.timeoutMs === undefined || ctx.payload.timeoutMs < runnerTimeout) {
           ctx.payload.timeoutMs = runnerTimeout;
         }

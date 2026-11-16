@@ -12,6 +12,7 @@ import { Command } from 'commander'
 import { DatabaseAdapter } from '../../src/database/sqlite-adapter/index.js'
 import { ValidationError } from '../../src/types/errors.js'
 import { UpdateEntrySchema } from '../../src/handlers/tools/admin/schemas/crud-batch-schemas.js'
+import { CreateEntrySchema } from '../../src/handlers/tools/core/schemas.js'
 import { MAX_CONTENT_LENGTH } from '../../src/handlers/tools/schemas/constants-and-primitives.js'
 import { importMarkdownEntries } from '../../src/markdown/importer.js'
 import { isSafeUserRegex } from '../../src/handlers/tools/core/dummy-healing/directory-search.js'
@@ -261,5 +262,67 @@ describe('Pass 29 Handler, Schema, CLI, Resource & Prompt Regressions', () => {
         expect(text).toContain('Zero Critical/High findings is valid when backstops hold.')
         expect(text).toContain('never sliced inside `<untrusted_remote_content>` wrapper tags')
         expect(text).toContain('by tag `code-quality-audit` (not by a hybrid search) in `readonly: true` mode')
+    })
+
+    it('CMS-04: heals object-wrapped anchors ({ files: [...] }) and filesystem path repo slugs in GitHub tools', async () => {
+        const parsed = CreateEntrySchema.safeParse({
+            workspace_id: 'db-mcp',
+            project_number: 15,
+            entry_type: 'bug_fix',
+            content: 'Fixed validation bug',
+            anchors: {
+                files: ['src/adapters/sqlite/schemas/json/admin.ts', 'tests/api.test.ts#L10'],
+            },
+        })
+        expect(parsed.success).toBe(true)
+        if (parsed.success) {
+            expect(parsed.data.anchors).toEqual([
+                {
+                    anchor_path: 'src/adapters/sqlite/schemas/json/admin.ts',
+                    anchor_type: 'file',
+                    status: 'pending',
+                },
+                {
+                    anchor_path: 'tests/api.test.ts#L10',
+                    anchor_type: 'symbol',
+                    status: 'pending',
+                },
+            ])
+        }
+
+        const fakeGithub = {
+            isApiAvailable: vi.fn().mockReturnValue(true),
+            getRepoInfo: vi
+                .fn()
+                .mockResolvedValue({ owner: 'neverinfamous', repo: 'memory-journal-mcp' }),
+            getCachedRepoInfo: vi
+                .fn()
+                .mockReturnValue({ owner: 'neverinfamous', repo: 'memory-journal-mcp' }),
+        } as unknown as ToolContext['github']
+
+        const resolved = await resolveOwnerRepo(
+            {
+                db,
+                config: {
+                    projectRegistry: {
+                        'memory-journal-mcp': {
+                            path: '',
+                            project_number: 5,
+                        },
+                    },
+                },
+                ...(fakeGithub !== undefined ? { github: fakeGithub } : {}),
+            },
+            {
+                workspace_id: 'memory-journal-mcp',
+                project_number: 5,
+                repo: 'C:\\Users\\chris\\Desktop\\memory-journal-mcp',
+            }
+        )
+        expect('error' in resolved).toBe(false)
+        if (!('error' in resolved)) {
+            expect(resolved.repo).toBe('memory-journal-mcp')
+            expect(resolved.owner).toBe('neverinfamous')
+        }
     })
 })

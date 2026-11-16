@@ -61,6 +61,9 @@ export function systemInterceptor(ctx: ExecutionContext): void {
           } else if (((/(?:docker|docker-compose|podman)/i.test(a) && /build/i.test(a)) || /recreate-ecosystem/i.test(a))) {
             nestedTimeout = Math.max(nestedTimeout, 600000);
           }
+          if (/backup-conversations\.ts/i.test(a)) {
+            nestedTimeout = Math.max(nestedTimeout, 600000);
+          }
           if (/(?:playwright|cypress|\be2e\b)/i.test(a)) {
             nestedTimeout = Math.max(nestedTimeout, 600000);
           }
@@ -83,6 +86,9 @@ export function systemInterceptor(ctx: ExecutionContext): void {
               if (/(?:docker|docker-compose|podman)/i.test(fileContent) && /scout/i.test(fileContent)) {
                 nestedTimeout = Math.max(nestedTimeout, 1800000);
               } else if (((/(?:docker|docker-compose|podman)/i.test(fileContent) && /build/i.test(fileContent)) || /recreate-ecosystem/i.test(fileContent))) {
+                nestedTimeout = Math.max(nestedTimeout, 600000);
+              }
+              if (/backup-conversations\.ts/i.test(fileContent)) {
                 nestedTimeout = Math.max(nestedTimeout, 600000);
               }
               if (/(?:playwright|cypress|\be2e\b)/i.test(fileContent)) {
@@ -591,6 +597,7 @@ export function systemInterceptor(ctx: ExecutionContext): void {
       const codeOrScript = payload.type === 'eval' ? payload.code : (payload.scriptPath || '');
       const isInlineShellHallucination = payload.type === 'eval' && /^\s*(?:pwsh|powershell|cmd|bash|sh|wsl)(?:\.exe)?\b/i.test(codeOrScript);
       const isKnownDeterministic = !isInlineShellHallucination && Boolean(codeOrScript && /(?:commit\.ts|get-git-history-json\.ts|backup-conversations\.ts)/i.test(codeOrScript));
+      const isBackupConversations = !isInlineShellHallucination && Boolean(codeOrScript && /backup-conversations\.ts/i.test(codeOrScript));
       const isPlaywright = !isInlineShellHallucination && !isKnownDeterministic && Boolean(codeOrScript && /(?:playwright|cypress|\be2e\b|test:e2e)/i.test(codeOrScript));
       const isCoverage = !isInlineShellHallucination && !isKnownDeterministic && Boolean(codeOrScript && /(?:coverage|--coverage)/i.test(codeOrScript));
       const isDocker = !isInlineShellHallucination && Boolean(codeOrScript && (((/(?:docker|docker-compose|podman)/i.test(codeOrScript) && /(?:build|scout)/i.test(codeOrScript)) || /recreate-ecosystem/i.test(codeOrScript))));
@@ -615,7 +622,7 @@ export function systemInterceptor(ctx: ExecutionContext): void {
       } else if (hasQualityCheck || isKnownDeterministic) {
         const isFullLintOrCheck = Boolean(codeOrScript && /(?:lint|check)/i.test(codeOrScript) && !/\.(?:ts|js|tsx|jsx)\b/i.test(codeOrScript));
         const hasLargeFile = Boolean(codeOrScript && /(?:api\.ts|codemode|bundle|generated)/i.test(codeOrScript));
-        const qualityTimeout = (isFullLintOrCheck || hasLargeFile) ? 600000 : 240000;
+        const qualityTimeout = (isFullLintOrCheck || hasLargeFile || isBackupConversations) ? 600000 : 240000;
         payload.timeoutMs = Math.max(payload.timeoutMs || qualityTimeout, qualityTimeout);
         payload.bypassInterceptors = true;
         console.error(`\n   🛠️ AUTONOMOUS HEALING: Detected quality check or deterministic script in Windows eval payload. Auto-extending timeout to ${qualityTimeout / 1000}s... (Frictionless Recovery)`);
@@ -660,6 +667,7 @@ export function systemInterceptor(ctx: ExecutionContext): void {
         /recreate-ecosystem/i.test(underlyingScript);
       const isDocker = (/(?:docker|docker-compose|podman)/i.test(cmdBasename) && (args && args.some(a => /(?:build|scout)/i.test(a)))) || isInfraOrchestration;
       const isKnownDeterministic = /(?:commit\.ts|get-git-history-json\.ts|backup-conversations\.ts)/i.test(cmdBasename) || (args && args.some(a => /(?:commit\.ts|get-git-history-json\.ts|backup-conversations\.ts)/i.test(a)));
+      const isBackupConversations = /backup-conversations\.ts/i.test(cmdBasename) || Boolean(args && args.some(a => /backup-conversations\.ts/i.test(a)));
       const isPlaywright = !isKnownDeterministic && (
         /(?:playwright|cypress)/i.test(cmdBasename) ||
         (args && args.some(a => /(?:playwright|cypress|\be2e\b|test:e2e|test-e2e)/i.test(a))) ||
@@ -682,7 +690,8 @@ export function systemInterceptor(ctx: ExecutionContext): void {
         payload.timeoutMs = Math.max(payload.timeoutMs || 600000, 600000);
         payload.bypassInterceptors = true;
       } else if (isKnownDeterministic) {
-        payload.timeoutMs = Math.max(payload.timeoutMs || 240000, 240000);
+        const detTimeout = isBackupConversations ? 600000 : 240000;
+        payload.timeoutMs = Math.max(payload.timeoutMs || detTimeout, detTimeout);
         payload.bypassInterceptors = true;
       } else if (isQuality) {
         const testFiles = args ? args.filter(a => /\.(?:test|spec)\.[a-zA-Z0-9]+$/i.test(a)) : [];

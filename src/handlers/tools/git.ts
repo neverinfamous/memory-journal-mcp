@@ -383,7 +383,8 @@ export function getGitTools(context: ToolContext): ToolDefinition[] {
                             resolvedEntryId,
                             registry,
                             countCommitsSince: async (anchorPath, since, cwd) =>
-                                (await fetchCommits({ path: anchorPath, since }, cwd)).length,
+                                (await fetchCommits({ path: anchorPath, since, maxCount: 25 }, cwd))
+                                    .length,
                         })
                         if (outcome.skipped) skippedWorkspaces.push(wsId)
                         else results.push(...outcome.rows)

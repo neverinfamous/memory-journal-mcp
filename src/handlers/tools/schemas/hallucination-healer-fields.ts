@@ -337,6 +337,22 @@ export function healAnchorsField(obj: Record<string, unknown>): boolean {
         modified = true
     }
 
+    if (typeof obj['anchors'] === 'object' && !Array.isArray(obj['anchors'])) {
+        const anchorRecord = obj['anchors'] as Record<string, unknown>
+        const nestedArray =
+            anchorRecord['files'] ??
+            anchorRecord['paths'] ??
+            anchorRecord['items'] ??
+            anchorRecord['anchors']
+        if (Array.isArray(nestedArray)) {
+            obj['anchors'] = nestedArray
+            modified = true
+        } else {
+            obj['anchors'] = [anchorRecord]
+            modified = true
+        }
+    }
+
     if (!Array.isArray(obj['anchors'])) return modified
 
     const healedAnchors: unknown[] = []

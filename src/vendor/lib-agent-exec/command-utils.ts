@@ -360,16 +360,21 @@ export function findPatternExprIndex(cmd: string, args: string[]): number {
   // Otherwise the first positional is the pattern even if it looks like a Windows path
   // (e.g. grep -P 'C:\path\to\file\.txt\d+'), and it must be protected from path conversion.
   let patternFromFile = false;
+  let seenDoubleDash = false;
   for (let i = 0; i < args.length; i++) {
     const a = args[i];
-    if (toolFlags.includes(a)) {
+    if (!seenDoubleDash && a === '--') {
+      seenDoubleDash = true;
+      continue;
+    }
+    if (!seenDoubleDash && toolFlags.includes(a)) {
       if (a === '-f' || a === '--file' || a === '--from-file') {
         patternFromFile = true;
       }
       i++;
       continue;
     }
-    if (a.startsWith('-')) {
+    if (!seenDoubleDash && a.startsWith('-')) {
       continue;
     }
     if (patternFromFile && /^[a-zA-Z]:[/\\]/.test(a)) {
@@ -385,17 +390,34 @@ export function getPositionalArgs(cmd: string, args: string[]): string[] {
   const base = path.basename(cmd).toLowerCase().replace(/\.exe$/, '');
   const toolFlags = FLAGS_WITH_ARG_BY_TOOL[base];
   if (!toolFlags) {
-    return args.filter(a => !a.startsWith('-'));
+    const result: string[] = [];
+    let seenDoubleDash = false;
+    for (const a of args) {
+      if (!seenDoubleDash && a === '--') {
+        seenDoubleDash = true;
+        continue;
+      }
+      if (!seenDoubleDash && a.startsWith('-')) {
+        continue;
+      }
+      result.push(a);
+    }
+    return result;
   }
 
   const result: string[] = [];
+  let seenDoubleDash = false;
   for (let i = 0; i < args.length; i++) {
     const a = args[i];
-    if (toolFlags.includes(a)) {
+    if (!seenDoubleDash && a === '--') {
+      seenDoubleDash = true;
+      continue;
+    }
+    if (!seenDoubleDash && toolFlags.includes(a)) {
       i++;
       continue;
     }
-    if (a.startsWith('-')) {
+    if (!seenDoubleDash && a.startsWith('-')) {
       continue;
     }
     result.push(a);

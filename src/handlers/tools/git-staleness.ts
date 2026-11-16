@@ -233,18 +233,30 @@ export async function evaluateWorkspaceAnchors(options: {
     const targets = collectStalenessTargetsForWorkspace(db, wsId, rawWs, rawProj, resolvedEntryId)
     const rows: StalenessCheckRow[] = []
     for (const target of targets) {
-        for (const anchor of db.getAnchorsByEntryId(target.id, wsId)) {
-            rows.push(
-                await evaluateAnchorStaleness(
+        const commitCountCache = new Map<string, Promise<number>>()
+        const cachedCountCommits = (anchorPath: string, since: string): Promise<number> => {
+            const key = `${anchorPath}\0${since}`
+            let pending = commitCountCache.get(key)
+            if (pending === undefined) {
+                pending = countCommitsSince(anchorPath, since, registryPath)
+                commitCountCache.set(key, pending)
+            }
+            return pending
+        }
+        const anchors = db.getAnchorsByEntryId(target.id, wsId)
+        const entryRows = await Promise.all(
+            anchors.map((anchor) =>
+                evaluateAnchorStaleness(
                     db,
                     anchor,
                     target.timestamp,
                     registryPath,
-                    (anchorPath, since) => countCommitsSince(anchorPath, since, registryPath),
+                    cachedCountCommits,
                     wsId
                 )
             )
-        }
+        )
+        rows.push(...entryRows)
     }
     return { rows, skipped: false }
 }

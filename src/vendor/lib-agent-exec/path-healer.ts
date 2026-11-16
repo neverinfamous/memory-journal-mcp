@@ -750,12 +750,21 @@ export function healModulePath(
           break;
         }
       }
-      // 4. Neighbor file search
+      // 4. Neighbor file search (only when no directory exists at resolvedPath)
       if (!foundExt) {
         const neighbor = resolveBuildSrcSwap(targetPath, false) ?? findNeighborFilePath(targetPath);
         if (neighbor !== null) {
           targetPath = neighbor;
         }
+      }
+    }
+  } else if (fs.statSync(targetPath).isDirectory()) {
+    // Directory exists on disk without file extension (e.g., import './codemode' -> './codemode/index.ts')
+    for (const barrel of BARREL_CANDIDATES) {
+      const barrelPath = path.join(targetPath, barrel);
+      if (fs.existsSync(barrelPath) && !fs.statSync(barrelPath).isDirectory()) {
+        targetPath = barrelPath;
+        break;
       }
     }
   }

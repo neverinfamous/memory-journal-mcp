@@ -2,7 +2,7 @@
 import path from 'node:path';
 import fs from 'node:fs';
 import { ExecutionContext } from './types.js';
-import { convertToWslPath, getPositionalArgs, findPatternExprIndex, tokenizeArgs } from '../command-utils.js';
+import { convertToWslPath, getPositionalArgs, findPatternExprIndex, tokenizeArgs, healFragmentedQuotes } from '../command-utils.js';
 
 export const GREP_EXCLUDE_DIRS = [
   'node_modules',
@@ -435,7 +435,7 @@ export function handleRipgrepInterception(ctx: ExecutionContext, hasStdin: boole
   for (const a of ctx.args) {
     if (a.startsWith('-') && a.includes(' ')) {
       const tokens = tokenizeArgs(a);
-      if (tokens.length > 1 && tokens[0] !== undefined && tokens[0].startsWith('-')) {
+      if (tokens.length > 1 && tokens[0] !== undefined && (/^-[a-zA-Z0-9]+$/.test(tokens[0]) || /^--[a-zA-Z0-9-]+(?:=.*)?$/.test(tokens[0]))) {
         unpackedArgs.push(...tokens);
         unbundledFlags = true;
         continue;
@@ -446,6 +446,15 @@ export function handleRipgrepInterception(ctx: ExecutionContext, hasStdin: boole
   if (unbundledFlags) {
     console.error(`\n   🛠️ AUTONOMOUS HEALING: Detected bundled search flags and pattern in a single argument. Unpacking arguments... (Frictionless Recovery)\x1b[0m`);
     ctx.args = unpackedArgs;
+    if (ctx.payload.type === 'command') {
+      ctx.payload.args = ctx.args;
+    }
+  }
+
+  // Re-run quote fragmentation healing if unbundling exposed split backslash-escaped quotes
+  const reassembledArgs = healFragmentedQuotes(ctx.args);
+  if (reassembledArgs.length !== ctx.args.length || reassembledArgs.some((a, idx) => a !== ctx.args[idx])) {
+    ctx.args = reassembledArgs;
     if (ctx.payload.type === 'command') {
       ctx.payload.args = ctx.args;
     }
@@ -466,7 +475,7 @@ export function handleRipgrepInterception(ctx: ExecutionContext, hasStdin: boole
           strippedRecursive = true;
           return '';
         }
-      } else if (a.includes('R') || a.includes('r')) {
+      } else if (/^-[a-zA-Z0-9]+$/.test(a) && (a.includes('R') || a.includes('r'))) {
         const cleaned = a.replace(/[Rr]/g, '');
         strippedRecursive = true;
         return cleaned === '-' ? '' : cleaned;
@@ -617,10 +626,82 @@ export function handleRipgrepInterception(ctx: ExecutionContext, hasStdin: boole
       }).map(a => a === patternParts[0] ? combinedPattern : a);
     }
   }
+  if (!hasPatternFlag && !updatedHasFiles) {
+    // Also check if a leading or middle token of an unquoted multi-word pattern started with '-' (e.g. "-write\\|target", "===", "'write'|isReadonlyMetaActive", "src")
+    // and was excluded from positionalArgs by getPositionalArgs
+    const lastArg = ctx.args[ctx.args.length - 1];
+    if (lastArg !== undefined && !lastArg.startsWith('-') && isPathLike(lastArg)) {
+      const toolFlagsWithVal = new Set(['-A', '-B', '-C', '-m', '-M', '-e', '-f', '-g', '-t', '-T', '-r', '-j', '-E', '--after-context', '--before-context', '--context', '--max-count', '--max-columns', '--max-depth', '--regexp', '--file', '--glob', '--type', '--type-not', '--replace', '--threads', '--encoding', '--ignore-file', '--max-filesize']);
+      const candidateIdxs: number[] = [];
+      for (let i = 0; i < ctx.args.length - 1; i++) {
+        const a = ctx.args[i];
+        if (a === undefined) continue;
+        if (toolFlagsWithVal.has(a)) {
+          i++;
+          continue;
+        }
+        if (/^-[a-zA-Z0-9]+$/.test(a) || (a.startsWith('--') && /^--[a-zA-Z0-9-]+(?:=|$)/.test(a))) {
+          continue;
+        }
+        candidateIdxs.push(i);
+      }
+      if (candidateIdxs.length >= 2) {
+        const patternParts = candidateIdxs.map(idx => ctx.args[idx]);
+        const intermediateParts = patternParts.slice(1);
+        const hasPathInIntermediate = intermediateParts.some(a => a !== undefined && isPathLike(a));
+        if (!hasPathInIntermediate) {
+          const combinedPattern = patternParts.join(' ');
+          console.error(`\n   🛠️ AUTONOMOUS HEALING: Detected unquoted multi-word search pattern in 'rg'. Recombining into a single pattern... (Frictionless Recovery)\x1b[0m`);
+          const firstIdx = candidateIdxs[0];
+          const removeSet = new Set(candidateIdxs.slice(1));
+          ctx.args = ctx.args
+            .map((a, idx) => (idx === firstIdx ? combinedPattern : a))
+            .filter((_, idx) => !removeSet.has(idx));
+        }
+      }
+    }
+  }
 
   const hasHelpOrVersion = ctx.args.some(a =>
     ['-h', '--help', '-V', '--version', '-v', '--type-list', '--pcre2-version', '--files'].includes(a)
   );
+
+  // Auto-inject '--' before patterns that begin with '-' (or strip leading '\-' escape) so ripgrep does not reject them as unknown flags (exit code 2)
+  if (!hasHelpOrVersion && !hasPatternFlag && !ctx.args.includes('--')) {
+    const patternIdxForDash = findPatternExprIndex(cmdBasename, ctx.args);
+    let candidateIdx = patternIdxForDash;
+    if (candidateIdx === -1) {
+      // Check if an argument starting with '-' was skipped by getPositionalArgs because it looked like a flag, e.g. rg -n "\"--add\"" file.ts or rg -n "--add" file.ts
+      const toolFlags = ['-A', '-B', '-C', '-m', '-M', '-e', '-f', '-g', '-t', '-T', '-r', '-j', '-E', '--after-context', '--before-context', '--context', '--max-count', '--max-columns', '--max-depth', '--regexp', '--file', '--glob', '--type', '--type-not', '--replace', '--threads', '--encoding', '--ignore-file', '--max-filesize'];
+      for (let i = 0; i < ctx.args.length; i++) {
+        const arg = ctx.args[i];
+        if (arg === undefined) continue;
+        if (toolFlags.includes(arg)) {
+          i++;
+          continue;
+        }
+        const unquoted = arg.replace(/^(['"])(.*)\1$/, '$2');
+        const wasQuoted = unquoted !== arg;
+        if (wasQuoted && unquoted.startsWith('-')) {
+          candidateIdx = i;
+          break;
+        }
+      }
+    }
+    if (candidateIdx !== -1 && ctx.args[candidateIdx] !== undefined) {
+      const rawPat = ctx.args[candidateIdx];
+      const unquotedPat = rawPat.replace(/^(['"])(.*)\1$/, '$2');
+      if (unquotedPat.startsWith('\\-')) {
+        ctx.args[candidateIdx] = unquotedPat.slice(1);
+        ctx.args.splice(candidateIdx, 0, '--');
+        console.error(`\n   🛠️ AUTONOMOUS HEALING: Detected hyphen-prefixed search pattern in 'rg'. Injecting '--' separator to prevent flag parsing errors... (Frictionless Recovery)\x1b[0m`);
+      } else if (unquotedPat.startsWith('-')) {
+        ctx.args[candidateIdx] = unquotedPat;
+        ctx.args.splice(candidateIdx, 0, '--');
+        console.error(`\n   🛠️ AUTONOMOUS HEALING: Detected hyphen-prefixed search pattern in 'rg'. Injecting '--' separator to prevent flag parsing errors... (Frictionless Recovery)\x1b[0m`);
+      }
+    }
+  }
 
   if (!hasStdin && !hasHelpOrVersion && !ctx.args.includes('.')) {
     const updatedPositional = getPositionalArgs(cmdBasename, ctx.args);
@@ -653,7 +734,7 @@ export function handleGrepInterception(ctx: ExecutionContext, hasStdin: boolean)
   for (const a of ctx.args) {
     if (a.startsWith('-') && a.includes(' ')) {
       const tokens = tokenizeArgs(a);
-      if (tokens.length > 1 && tokens[0] !== undefined && tokens[0].startsWith('-')) {
+      if (tokens.length > 1 && tokens[0] !== undefined && (/^-[a-zA-Z0-9]+$/.test(tokens[0]) || /^--[a-zA-Z0-9-]+(?:=.*)?$/.test(tokens[0]))) {
         unpackedArgs.push(...tokens);
         unbundledFlags = true;
         continue;
