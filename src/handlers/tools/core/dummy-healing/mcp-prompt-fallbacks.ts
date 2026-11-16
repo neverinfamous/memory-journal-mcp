@@ -1,5 +1,6 @@
 import type { ToolContext } from '../../../../types/index.js'
-import { PermissionError, ValidationError } from '../../../../types/errors.js'
+import { AuthorizationError, PermissionError, ValidationError } from '../../../../types/errors.js'
+import { formatHandlerError } from '../../../../utils/error-helpers.js'
 import { getPrompt, getPrompts } from '../../../prompts/index.js'
 
 export async function handlePrompt(
@@ -51,7 +52,8 @@ export async function handlePrompt(
                 _healing_note: `🛠️ AUTONOMOUS HEALING: '${promptName}' is an MCP Prompt, but was invoked directly as an MCP tool. The prompt was evaluated and returned successfully.`,
             }
         } catch (err) {
-            if (err instanceof PermissionError || err instanceof ValidationError) throw err
+            if (err instanceof PermissionError || err instanceof AuthorizationError) throw err
+            if (err instanceof ValidationError) return formatHandlerError(err)
             return {
                 success: false,
                 error: `Failed to execute prompt '${promptName}': ${err instanceof Error ? err.message : String(err)}`,
@@ -128,7 +130,8 @@ export async function handleGetPrompt(
                 _healing_note: `🛠️ AUTONOMOUS HEALING: '${toolName}' was called as an MCP tool instead of an MCP protocol request (prompts/get). The prompt '${targetPromptName}' was evaluated successfully.`,
             }
         } catch (err) {
-            if (err instanceof PermissionError || err instanceof ValidationError) throw err
+            if (err instanceof PermissionError || err instanceof AuthorizationError) throw err
+            if (err instanceof ValidationError) return formatHandlerError(err)
             return {
                 success: false,
                 error: `Failed to execute prompt '${targetPromptName}': ${err instanceof Error ? err.message : String(err)}`,

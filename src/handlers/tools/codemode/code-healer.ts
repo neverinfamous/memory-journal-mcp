@@ -136,6 +136,9 @@ function unwrapNestedExecuteCode(src: string): string {
         )
     if (nestedMatch?.[2] !== undefined) {
         const inner = nestedMatch[2].trim()
+        if (isValidJsScript(inner) && !/^[A-Za-z_$][\w$]*$/.test(inner)) {
+            return inner
+        }
         const isNatural =
             /^(?:write|document|create|include|record|summary|log|add|added|note|task|fix|implement)\b/i.test(inner) &&
             !/\b(const|let|var|function|return|await|import|export|mj\.)\b/.test(inner)

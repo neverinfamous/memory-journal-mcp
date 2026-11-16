@@ -157,7 +157,8 @@ export function getWorkflowPromptDefinitions(): InternalPromptDef[] {
                     ws,
                     briefingConfig,
                     scope.projectNumber,
-                    scope.explicitDefaultRequested
+                    scope.explicitDefaultRequested,
+                    runtime
                 )
             },
         },
@@ -220,7 +221,8 @@ export function getWorkflowPromptDefinitions(): InternalPromptDef[] {
                     ws,
                     briefingConfig,
                     scope.projectNumber,
-                    scope.explicitDefaultRequested
+                    scope.explicitDefaultRequested,
+                    runtime
                 )
             },
         },
@@ -283,7 +285,8 @@ export function getWorkflowPromptDefinitions(): InternalPromptDef[] {
                     ws,
                     briefingConfig,
                     scope.projectNumber,
-                    scope.explicitDefaultRequested
+                    scope.explicitDefaultRequested,
+                    runtime
                 )
             },
         },

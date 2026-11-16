@@ -83,7 +83,7 @@ export function getGitHubMilestoneTools(context: ToolContext): ToolDefinition[] 
                     const resolved = await resolveOwnerRepo(
                         context,
                         input,
-                        'What GitHub repository should I list milestones for? Please provide the owner and repo name (e.g., owner/repo).'
+                        'should I list milestones for'
                     )
                     if ('error' in resolved) return resolved.response
 
@@ -147,7 +147,7 @@ export function getGitHubMilestoneTools(context: ToolContext): ToolDefinition[] 
                     const resolved = await resolveOwnerRepo(
                         context,
                         input,
-                        'What GitHub repository is this milestone from? Please provide the owner and repo name (e.g., owner/repo).'
+                        'is this milestone in'
                     )
                     if ('error' in resolved) return resolved.response
 
@@ -225,7 +225,7 @@ export function getGitHubMilestoneTools(context: ToolContext): ToolDefinition[] 
                     const resolved = await resolveOwnerRepo(
                         context,
                         input,
-                        'What GitHub repository should I create the milestone in?'
+                        'should I create this milestone in'
                     )
                     if ('error' in resolved) return resolved.response
 
@@ -307,7 +307,7 @@ export function getGitHubMilestoneTools(context: ToolContext): ToolDefinition[] 
                     const resolved = await resolveOwnerRepo(
                         context,
                         input,
-                        'What GitHub repository is this milestone in?'
+                        'should I update this milestone in'
                     )
                     if ('error' in resolved) return resolved.response
 
@@ -395,7 +395,7 @@ export function getGitHubMilestoneTools(context: ToolContext): ToolDefinition[] 
                     const resolved = await resolveOwnerRepo(
                         context,
                         input,
-                        'What GitHub repository is this milestone in?'
+                        'should I delete this milestone from'
                     )
                     if ('error' in resolved) return resolved.response
 

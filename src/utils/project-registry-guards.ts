@@ -90,7 +90,7 @@ export function isValidProjectPath(p: string, allowedRoots?: string[]): boolean 
         return false
     }
 
-    if (allowedRoots !== undefined && allowedRoots.length > 0) {
+    if (allowedRoots !== undefined) {
         try {
             assertSafeDirectoryPath(p, allowedRoots)
         } catch {

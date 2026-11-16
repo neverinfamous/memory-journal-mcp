@@ -198,6 +198,20 @@ function queryGraphEntries(
     const relTypeSql = hasRelType ? ' AND r.relationship_type = ?' : ''
     const relTypeParam = hasRelType ? [options.relationshipType] : []
 
+    const tags = options.tags ?? []
+    const hasTags = tags.length > 0
+    const tagPlaceholders = hasTags ? tags.map(() => '?').join(',') : ''
+    const tagSubquery = hasTags
+        ? ` AND mj.id IN (
+                  SELECT et.entry_id FROM entry_tags et
+                  JOIN tags t ON et.tag_id = t.id
+                  WHERE t.name IN (${tagPlaceholders})
+              )`
+        : ''
+    const tagParams = tags
+    const toPeerScope = `${scopeId !== '*' ? ' AND mj_to.workspace_id = ?' : ''}${options.projectNumber !== undefined ? ' AND mj_to.project_number = ?' : ''}`
+    const fromPeerScope = `${scopeId !== '*' ? ' AND mj_from.workspace_id = ?' : ''}${options.projectNumber !== undefined ? ' AND mj_from.project_number = ?' : ''}`
+
     if (options.entryId !== undefined) {
         return connection.exec(
             `
@@ -218,10 +232,12 @@ function queryGraphEntries(
                     END
                 WHERE ce.distance < ? AND nx.deleted_at IS NULL${nxWsFilter}${nxProjFilter}${relTypeSql}
             )
-            SELECT DISTINCT mj.id, mj.entry_type, mj.content, mj.is_personal
+            SELECT mj.id, mj.entry_type, mj.content, mj.is_personal
             FROM memory_journal mj
             JOIN connected_entries ce ON mj.id = ce.id
-            WHERE mj.deleted_at IS NULL${wsFilter}${projSql}
+            WHERE mj.deleted_at IS NULL${wsFilter}${projSql}${tagSubquery}
+            GROUP BY mj.id
+            ORDER BY MIN(ce.distance) ASC, mj.id DESC
             LIMIT ?
         `,
             [
@@ -234,29 +250,50 @@ function queryGraphEntries(
                 ...relTypeParam,
                 ...wsParam,
                 ...projParam,
+                ...tagParams,
                 options.limit,
             ]
         )
     }
-    if (options.tags !== undefined && options.tags.length > 0) {
-        const placeholders = options.tags.map(() => '?').join(',')
+    const relPeerFilter = hasRelType
+        ? `
+              AND mj.id IN (
+                  SELECT DISTINCT r.from_entry_id FROM relationships r
+                  JOIN memory_journal mj_to ON r.to_entry_id = mj_to.id
+                  WHERE mj_to.deleted_at IS NULL${toPeerScope}${relTypeSql}
+                  UNION
+                  SELECT DISTINCT r.to_entry_id FROM relationships r
+                  JOIN memory_journal mj_from ON r.from_entry_id = mj_from.id
+                  WHERE mj_from.deleted_at IS NULL${fromPeerScope}${relTypeSql}
+              )`
+        : ''
+    if (hasTags) {
         return connection.exec(
             `
             SELECT DISTINCT mj.id, mj.entry_type, mj.content, mj.is_personal
             FROM memory_journal mj
-            WHERE mj.deleted_at IS NULL${wsFilter}${projSql}
-              AND mj.id IN (
-                  SELECT et.entry_id FROM entry_tags et
-                  JOIN tags t ON et.tag_id = t.id
-                  WHERE t.name IN (${placeholders})
-              )
+            WHERE mj.deleted_at IS NULL${wsFilter}${projSql}${tagSubquery}${relPeerFilter}
+            ORDER BY mj.id DESC
             LIMIT ?
         `,
-            [...wsParam, ...projParam, ...options.tags, options.limit]
+            [
+                ...wsParam,
+                ...projParam,
+                ...tagParams,
+                ...(hasRelType
+                    ? [
+                          ...wsParam,
+                          ...projParam,
+                          ...relTypeParam,
+                          ...wsParam,
+                          ...projParam,
+                          ...relTypeParam,
+                      ]
+                    : []),
+                options.limit,
+            ]
         )
     }
-    const toPeerScope = `${scopeId !== '*' ? ' AND mj_to.workspace_id = ?' : ''}${options.projectNumber !== undefined ? ' AND mj_to.project_number = ?' : ''}`
-    const fromPeerScope = `${scopeId !== '*' ? ' AND mj_from.workspace_id = ?' : ''}${options.projectNumber !== undefined ? ' AND mj_from.project_number = ?' : ''}`
     return connection.exec(
         `
             SELECT DISTINCT mj.id, mj.entry_type, mj.content, mj.is_personal

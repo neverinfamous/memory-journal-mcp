@@ -259,12 +259,6 @@ export function requireAnyScope(scopes: string[]): RequestHandler {
 
         const grantedScopes = authReq.auth.scopes
 
-        // Full or admin scope grants all
-        if (grantedScopes.includes('full') || grantedScopes.includes('admin')) {
-            next()
-            return
-        }
-
         if (!hasAnyScope(grantedScopes, scopes)) {
             const error = new InsufficientScopeError(scopes, authReq.auth.scopes)
 

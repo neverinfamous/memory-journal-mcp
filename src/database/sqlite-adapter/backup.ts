@@ -307,12 +307,27 @@ export class BackupManager {
     private async swapDatabase(backupPath: string): Promise<void> {
         const oldDbBackupPath = `${this.ctx.getDbPath()}.old_tmp_${randomUUID()}`
         const tempDbPath = `${this.ctx.getDbPath()}.restore_tmp_${randomUUID()}`
-        await fs.promises.copyFile(backupPath, tempDbPath)
+        try {
+            await fs.promises.copyFile(backupPath, tempDbPath)
+            // [INVARIANT] Complete pre-swap snapshot before any swap step; if snapshot creation fails,
+            // the live DB is untouched so rollback must never copy a partial oldDbBackupPath over it.
+            await fs.promises.copyFile(this.ctx.getDbPath(), oldDbBackupPath)
+        } catch (prepErr) {
+            await unlinkBestEffort(oldDbBackupPath)
+            await unlinkBestEffort(tempDbPath)
+            try {
+                await this.ctx.initialize()
+            } catch (reinitErr) {
+                logger.error('Failed to re-initialize DB after pre-swap snapshot error', {
+                    module: 'SqliteAdapter',
+                    operation: 'restoreFromFile',
+                    error: reinitErr instanceof Error ? reinitErr.message : String(reinitErr),
+                })
+            }
+            throw prepErr
+        }
 
         try {
-            // Copy current DB out of the way for rollback (bypasses Windows EBUSY locks on rename)
-            await fs.promises.copyFile(this.ctx.getDbPath(), oldDbBackupPath)
-
             try {
                 // Attempt atomic swap of new DB into place
                 await fs.promises.rename(tempDbPath, this.ctx.getDbPath())
@@ -374,6 +389,14 @@ export class BackupManager {
             await unlinkBestEffort(tempDbPath)
 
             if (!rollbackSuccess) {
+                try {
+                    await this.ctx.initialize()
+                } catch (reinitErr) {
+                    logger.debug('DB re-init failed after failed rollback', {
+                        module: 'SqliteAdapter',
+                        error: reinitErr instanceof Error ? reinitErr.message : String(reinitErr),
+                    })
+                }
                 throw new Error(
                     `CRITICAL: Database restore failed AND rollback failed. The database may be in an inconsistent state. Your previous database is preserved at: ${oldDbBackupPath}. Original error: ${error instanceof Error ? error.message : String(error)}`,
                     { cause: error }

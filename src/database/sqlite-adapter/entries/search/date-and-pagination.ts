@@ -28,7 +28,13 @@ function getRecentEntriesByImportance(
         if (decoded === null) {
             throw new ValidationError('Invalid cursor format')
         }
-        if ('offset' in decoded) actualOffset = decoded.offset
+        if ('offset' in decoded) {
+            actualOffset = decoded.offset
+        } else {
+            throw new ValidationError(
+                'Timestamp keyset cursor cannot be used with importance sorting; omit cursor or re-run from page 1.'
+            )
+        }
     }
     const importanceExpr = buildImportanceSqlExpression()
     const cte = buildImportanceCte()
@@ -216,7 +222,7 @@ export function searchByDateRange(
         params.push(end)
     }
 
-    const useImportance = options?.sortBy === 'importance'
+    const useImportance = options?.sortBy === 'importance' || options?.sortBy === 'blended'
     const importanceCol = useImportance
         ? `, ${buildImportanceSqlExpression()} AS importanceScore`
         : ''
@@ -238,7 +244,12 @@ export function searchByDateRange(
 
     appendDateRangeFilters(conditions, params, options)
 
-    if (hasKeyset && !useImportance) {
+    if (hasKeyset) {
+        if (useImportance) {
+            throw new ValidationError(
+                'Timestamp keyset cursor cannot be used with importance sorting; omit cursor or re-run from page 1.'
+            )
+        }
         conditions.push(`(e.timestamp < ? OR (e.timestamp = ? AND e.id < ?))`)
         params.push(keysetT, keysetT, keysetId)
     }

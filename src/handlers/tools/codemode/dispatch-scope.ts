@@ -35,8 +35,11 @@ export function checkSchemaAcceptsKey(schema: unknown, key: string): boolean {
     if (s._def !== undefined && s._def !== null) {
         const typeName = s._def.typeName ?? s._def.type
         if ((typeName === 'ZodObject' || typeName === 'object') && isRecord(s.shape)) return key in s.shape
-        if (['ZodEffects', 'pipe', 'ZodOptional', 'optional', 'ZodNullable', 'nullable'].includes(typeName ?? '')) {
-            return checkSchemaAcceptsKey(s._def.schema ?? s._def.out ?? s._def.in ?? s.innerType?.(), key)
+        if (['ZodEffects', 'pipe', 'ZodPipeline', 'ZodOptional', 'optional', 'ZodNullable', 'nullable'].includes(typeName ?? '')) {
+            return (
+                checkSchemaAcceptsKey(s._def.schema ?? s._def.out ?? s.innerType?.(), key) ||
+                checkSchemaAcceptsKey(s._def.in, key)
+            )
         }
         if (typeName === 'ZodIntersection' || typeName === 'intersection') {
             return checkSchemaAcceptsKey(s._def.left, key) || checkSchemaAcceptsKey(s._def.right, key)
@@ -50,6 +53,18 @@ export function checkSchemaAcceptsKey(schema: unknown, key: string): boolean {
 }
 
 const FORBIDDEN_KEYS = new Set(['__proto__', 'constructor', 'prototype'])
+
+const CANONICAL_SNAKE_SCOPE_KEYS = new Set([
+    'workspaceId',
+    'projectNumber',
+    'projectId',
+    'targetWorkspaceId',
+    'repoName',
+    'entryId',
+    'entryIds',
+    'fromEntryId',
+    'toEntryId',
+])
 
 const UPPERCASE_RE = /[A-Z]/
 
@@ -71,6 +86,10 @@ export function deepCamelToSnake(
         const canAlias = (alias: string): boolean => depth === 0 && !(acceptsKey?.(alias) ?? false)
         for (const [k, v] of Object.entries(obj)) {
             if (FORBIDDEN_KEYS.has(k)) continue
+            if (depth === 0 && !CANONICAL_SNAKE_SCOPE_KEYS.has(k) && (acceptsKey?.(k) ?? false)) {
+                newObj[k] = deepCamelToSnake(v, depth + 1)
+                continue
+            }
             const snakeKey = UPPERCASE_RE.test(k)
                 ? k.replace(/[A-Z]/g, (letter) => `_${letter.toLowerCase()}`)
                 : k
@@ -201,6 +220,12 @@ async function autoPopulateGithubUrls(
 }
 
 function normalizeWorkspaceStringField(paramsObj: Record<string, unknown>): void {
+    if (paramsObj['workspaceId'] !== undefined) {
+        if (paramsObj['workspace_id'] === undefined) {
+            paramsObj['workspace_id'] = paramsObj['workspaceId']
+        }
+        delete paramsObj['workspaceId']
+    }
     if (paramsObj['workspace'] !== undefined && paramsObj['workspace_id'] === undefined) {
         paramsObj['workspace_id'] = paramsObj['workspace']
     }
@@ -221,6 +246,15 @@ interface RootScopeFlags {
     hasCrossWorkspaceTarget: boolean
 }
 
+const SESSION_INHERITANCE_EXCLUDED_TOOLS = new Set([
+    'get_project',
+    'register_project',
+    'update_project',
+    'delete_project',
+    'list_projects',
+    'update_configuration',
+])
+
 function resolveRootScopePairing(
     tool: ToolDefinition,
     paramsObj: Record<string, unknown>,
@@ -231,6 +265,13 @@ function resolveRootScopePairing(
     const { workspaceId, explicitWorkspace } = ctx
     const callerHasExplicitWs = paramsObj['workspace_id'] !== undefined && !aliasDerivedWs
     const callerPassedProjectOnly = paramsObj['project_number'] !== undefined && !callerHasExplicitWs
+
+    if (
+        SESSION_INHERITANCE_EXCLUDED_TOOLS.has(tool.name) &&
+        (!callerHasExplicitWs || paramsObj['project_number'] === undefined)
+    ) {
+        return { callerPassedProjectOnly: false, hasCrossWorkspaceTarget: false }
+    }
 
     if (
         aliasDerivedWs &&
@@ -306,6 +347,7 @@ function applyRootSessionInheritance(
     ctx: DispatchParamContext,
     flags: RootScopeFlags
 ): void {
+    if (SESSION_INHERITANCE_EXCLUDED_TOOLS.has(tool.name)) return
     const { projectId, workspaceId, explicitWorkspace } = ctx
     const callerWorkspaceId =
         typeof paramsObj['workspace_id'] === 'string' ? paramsObj['workspace_id'] : undefined

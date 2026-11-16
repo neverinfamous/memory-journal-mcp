@@ -66,6 +66,7 @@ export class VectorSearchManager {
     private pipeline: unknown = null
     private transformers: unknown = null
     private initializationPromise: Promise<void> | null = null
+    private ready = false
 
     constructor(dbAdapter: IDatabaseAdapter, options?: { modelName?: string }) {
         this.dbAdapter = dbAdapter
@@ -90,7 +91,7 @@ export class VectorSearchManager {
      * Check if the vector search manager is initialized
      */
     public isInitialized(): boolean {
-        return this.initializationPromise !== null && (this.pipeline !== null || this.dimensions !== null)
+        return this.ready
     }
 
     /**
@@ -161,7 +162,7 @@ export class VectorSearchManager {
                 lastError = pipelineErr
                 if (attempt < maxAttempts && isTransientFileLockError(pipelineErr)) {
                     transformersModule.env.allowRemoteModels = true
-                    await new Promise((r) => setTimeout(r, MODEL_LOAD_RETRY_DELAY_MS * attempt).unref())
+                    await new Promise((r) => setTimeout(r, MODEL_LOAD_RETRY_DELAY_MS * attempt))
                     continue
                 }
                 throw pipelineErr
@@ -185,8 +186,12 @@ export class VectorSearchManager {
                 await this.loadDefaultEmbeddingModel()
             }
             this.verifyAndCreateVecTable()
+            this.ready = true
             logger.info('Vector search initialized successfully')
         } catch (error) {
+            this.ready = false
+            this.pipeline = null
+            this.dimensions = null
             logger.error('Failed to initialize vector search', {
                 error: error instanceof Error ? error.message : String(error),
             })
@@ -252,6 +257,8 @@ export class VectorSearchManager {
                 logger.error('Failed to recreate vector table', { error: err })
                 throw err
             }
+        } else {
+            this.dbAdapter.createVecTable(dimensions)
         }
     }
 

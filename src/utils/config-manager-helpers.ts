@@ -53,6 +53,22 @@ export interface InitialBaselinesResult {
     toolFilterFromFile: boolean
     codemodeBaseline: boolean | undefined
     initialBriefingBaseline: BriefingBaselineMap
+    briefingKeysFromFile: Set<BriefingConfigurableKey>
+    codemodeFromFile: boolean
+    defaultWorkspaceIdFromFile: boolean
+    defaultProjectNumberFromFile: boolean
+}
+
+export interface MutatedConfigFields {
+    rawToolFilter?: boolean
+    codemodeInternalFullAccess?: boolean
+    defaultWorkspaceId?: boolean
+    defaultProjectNumber?: boolean
+    briefingKeys?: readonly BriefingConfigurableKey[]
+}
+
+export interface UpdateConfigOptions {
+    mutatedFields?: MutatedConfigFields
 }
 
 function buildDefaultBriefingBaseline(): BriefingBaselineMap {
@@ -77,25 +93,39 @@ export function buildInitialBaselines(
 ): InitialBaselinesResult {
     const defaults = buildDefaultBriefingBaseline()
     const initialBriefingBaseline: BriefingBaselineMap = { ...defaults }
+    const briefingKeysFromFile = new Set<BriefingConfigurableKey>()
 
     for (const [fileKey, { target, kind }] of Object.entries(BRIEFING_CONFIG_KEY_MAP)) {
-        const curVal = initialConfig.briefingConfig[target]
-        const fromFile =
+        const hasFileVal =
             initialFile !== null &&
             fileKey in initialFile &&
-            typeof initialFile[fileKey] === kind &&
-            initialFile[fileKey] === curVal
+            typeof initialFile[fileKey] === kind
+        if (hasFileVal) briefingKeysFromFile.add(target)
+        const curVal = initialConfig.briefingConfig[target]
+        const fromFile = hasFileVal && initialFile[fileKey] === curVal
         if (!fromFile && curVal !== undefined) {
             initialBriefingBaseline[target] = curVal
         }
     }
 
-    const codemodeFromFile =
+    const hasFileCodemode =
         initialFile !== null &&
         'codemodeInternalFullAccess' in initialFile &&
-        typeof initialFile['codemodeInternalFullAccess'] === 'boolean' &&
+        typeof initialFile['codemodeInternalFullAccess'] === 'boolean'
+    const codemodeFromFile =
+        hasFileCodemode &&
         initialFile['codemodeInternalFullAccess'] === initialConfig.codemodeInternalFullAccess
     const codemodeBaseline = codemodeFromFile ? undefined : initialConfig.codemodeInternalFullAccess
+    const defaultWorkspaceIdFromFile =
+        initialFile !== null &&
+        typeof initialFile['defaultWorkspaceId'] === 'string' &&
+        initialFile['defaultWorkspaceId'].trim() !== '' &&
+        initialFile['defaultWorkspaceId'].trim() !== '*'
+    const defaultProjectNumberFromFile =
+        initialFile !== null &&
+        typeof initialFile['defaultProjectNumber'] === 'number' &&
+        Number.isInteger(initialFile['defaultProjectNumber']) &&
+        initialFile['defaultProjectNumber'] > 0
 
     if (explicitCliEnvBaseline !== undefined) {
         return {
@@ -105,6 +135,10 @@ export function buildInitialBaselines(
                 initialConfig.rawToolFilter !== undefined,
             codemodeBaseline,
             initialBriefingBaseline,
+            briefingKeysFromFile,
+            codemodeFromFile: hasFileCodemode,
+            defaultWorkspaceIdFromFile,
+            defaultProjectNumberFromFile,
         }
     }
 
@@ -152,6 +186,10 @@ export function buildInitialBaselines(
             toolFilterFromFile,
             codemodeBaseline,
             initialBriefingBaseline,
+            briefingKeysFromFile,
+            codemodeFromFile: hasFileCodemode,
+            defaultWorkspaceIdFromFile,
+            defaultProjectNumberFromFile,
         }
     }
 
@@ -173,6 +211,10 @@ export function buildInitialBaselines(
         toolFilterFromFile: false,
         codemodeBaseline,
         initialBriefingBaseline,
+        briefingKeysFromFile,
+        codemodeFromFile: hasFileCodemode,
+        defaultWorkspaceIdFromFile,
+        defaultProjectNumberFromFile,
     }
 }
 
@@ -315,4 +357,50 @@ export function applyReloadedBriefingScope(
     }
 
     return changed
+}
+
+export interface PersistProvenanceFlags {
+    toolFilter: boolean
+    codemode: boolean
+    defaultWorkspaceId: boolean
+    defaultProjectNumber: boolean
+    briefingKeys: ReadonlySet<BriefingConfigurableKey>
+}
+
+export function applyPersistableConfigKeys(
+    parsed: Record<string, unknown>,
+    config: DynamicConfig,
+    provenance: PersistProvenanceFlags
+): void {
+    if (provenance.toolFilter) {
+        if (config.rawToolFilter !== undefined && config.rawToolFilter.trim() !== '') {
+            parsed['toolFilter'] = config.rawToolFilter
+        } else {
+            delete parsed['toolFilter']
+        }
+    }
+    if (provenance.codemode && config.codemodeInternalFullAccess !== undefined) {
+        parsed['codemodeInternalFullAccess'] = config.codemodeInternalFullAccess
+    }
+    for (const [fileKey, mapping] of Object.entries(BRIEFING_CONFIG_KEY_MAP)) {
+        if (!provenance.briefingKeys.has(mapping.target)) continue
+        const val = config.briefingConfig[mapping.target]
+        if (val !== undefined) {
+            parsed[fileKey] = val
+        }
+    }
+    if (provenance.defaultWorkspaceId) {
+        if (config.briefingConfig.defaultWorkspaceId !== undefined) {
+            parsed['defaultWorkspaceId'] = config.briefingConfig.defaultWorkspaceId
+        } else {
+            delete parsed['defaultWorkspaceId']
+        }
+    }
+    if (provenance.defaultProjectNumber) {
+        if (config.briefingConfig.defaultProjectNumber !== undefined) {
+            parsed['defaultProjectNumber'] = config.briefingConfig.defaultProjectNumber
+        } else {
+            delete parsed['defaultProjectNumber']
+        }
+    }
 }

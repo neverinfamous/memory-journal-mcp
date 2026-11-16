@@ -4,7 +4,16 @@
  * or any mutation runs.
  */
 
-const SENSITIVE_KEY_FRAGMENTS = ['token', 'secret', 'issuer', 'uri', 'password', 'key'] as const
+const SENSITIVE_KEY_FRAGMENTS = [
+    'token',
+    'secret',
+    'issuer',
+    'uri',
+    'password',
+    'key',
+    'auth',
+    'webhook',
+] as const
 
 function isRecord(value: unknown): value is Record<string, unknown> {
     return typeof value === 'object' && value !== null
@@ -14,7 +23,11 @@ function maskSensitive(obj: Record<string, unknown>): void {
     for (const key of Object.keys(obj)) {
         const lowerKey = key.toLowerCase()
         const value = obj[key]
-        if (typeof value === 'string' && SENSITIVE_KEY_FRAGMENTS.some((f) => lowerKey.includes(f))) {
+        if (
+            typeof value === 'string' &&
+            value.length > 0 &&
+            SENSITIVE_KEY_FRAGMENTS.some((f) => lowerKey.includes(f))
+        ) {
             obj[key] = '[REDACTED]'
         } else if (isRecord(value)) {
             maskSensitive(value)

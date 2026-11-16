@@ -65,10 +65,11 @@ export async function handleRpcRequest(
         if (typeof target === 'function') {
             const callFn = (): Promise<unknown> =>
                 (target as (...args: unknown[]) => Promise<unknown>)(...safeArgs)
-            if (req.readonly === true || req.dryRun === true) {
-                const overrides: { readonly?: boolean; dryRun?: boolean } = {}
+            if (req.readonly === true || req.dryRun === true || req.useTestDb === true) {
+                const overrides: { readonly?: boolean; dryRun?: boolean; useTestDb?: boolean } = {}
                 if (req.readonly === true) overrides.readonly = true
                 if (req.dryRun === true) overrides.dryRun = true
+                if (req.useTestDb === true) overrides.useTestDb = true
                 response.result = await runWithRpcExecutionOverrides(overrides, callFn)
             } else {
                 response.result = await callFn()

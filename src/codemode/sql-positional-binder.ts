@@ -9,11 +9,13 @@
 
 import {
     ENTRY_TABLE_NAMES,
+    extractFromTableName,
     extractParenGroup,
     extractTopLevelUpdateSetClause,
     extractTopLevelWhereClause,
     findTopLevelSqlKeyword,
     hasUnsupportedWherePredicate,
+    isSupportedWhereClause,
     scopeFromInsertLiterals,
     scopeFromSqlLiterals,
     splitSqlValueList,
@@ -240,6 +242,10 @@ function parseUpdate(cleanSql: string, args: unknown[]): ParsedSql {
     const tableName = tableMatch?.[1]?.toLowerCase()
     if (tableName === undefined || !ENTRY_TABLE_NAMES.has(tableName)) return UNMAPPED
     if (hasUnsupportedWherePredicate(cleanSql)) return UNMAPPED
+    const whereClause = extractTopLevelWhereClause(cleanSql)
+    if (whereClause === '' || !isSupportedWhereClause(whereClause, { allowPlaceholder: true })) {
+        return UNMAPPED
+    }
 
     const setFields: Record<string, unknown> = {}
     const where: Record<string, unknown> = {}
@@ -253,11 +259,16 @@ function parseUpdate(cleanSql: string, args: unknown[]): ParsedSql {
     if (!bound) return UNMAPPED
 
     const setClause = extractTopLevelUpdateSetClause(cleanSql)
-    for (const assignment of splitSqlValueList(setClause)) {
+    const setAssignments = splitSqlValueList(setClause)
+    if (setAssignments.length === 0) return UNMAPPED
+    for (const assignment of setAssignments) {
         const eq = assignment.indexOf('=')
-        if (eq < 0) continue
+        if (eq < 0) return UNMAPPED
         const rhs = assignment.slice(eq + 1).trim()
-        if (rhs === '?' || /^[@:$][A-Za-z_][\w]*$/.test(rhs)) continue
+        if (rhs === '?' || /^[@:$][A-Za-z_][\w]*$/.test(rhs)) {
+            if (!bindSetColumnNameCheck(normalizeColumn(assignment.slice(0, eq)))) return UNMAPPED
+            continue
+        }
         const literal = parseLiteral(rhs)
         if (
             literal === UNPARSEABLE ||
@@ -273,7 +284,6 @@ function parseUpdate(cleanSql: string, args: unknown[]): ParsedSql {
         Reflect.deleteProperty(payload, 'workspace_id')
     }
     if (!mergeRecordBinds(payload, args)) return UNMAPPED
-    const whereClause = extractTopLevelWhereClause(cleanSql)
     const whereLiteralScope = scopeFromSqlLiterals(whereClause)
     const whereProj =
         typeof where['project_number'] === 'number'
@@ -362,11 +372,31 @@ function parseInsert(cleanSql: string, args: unknown[]): ParsedSql {
     return { action: 'create', params: payload }
 }
 
+function bindSetColumnNameCheck(column: string): boolean {
+    return (
+        column === 'id' ||
+        column === 'entry_id' ||
+        column === 'project_number' ||
+        column === 'project_id' ||
+        column === 'workspace_id' ||
+        column === 'significance_type' ||
+        column === 'content' ||
+        column === 'title' ||
+        column === 'entry_type' ||
+        column === 'type' ||
+        column === 'tags' ||
+        column === 'is_personal'
+    )
+}
+
 function parseWhereOnly(cleanSql: string, args: unknown[], action: 'delete' | 'get_by_id'): ParsedSql {
-    const tableMatch = /\bFROM\s+(?:[`"']?[a-zA-Z_][\w]*[`"']?\.)?[`"']?([a-zA-Z0-9_]+)[`"']?/i.exec(cleanSql)
-    const tableName = tableMatch?.[1]?.toLowerCase()
+    const tableName = extractFromTableName(cleanSql)
     if (tableName === undefined || !ENTRY_TABLE_NAMES.has(tableName)) return UNMAPPED
     if (hasUnsupportedWherePredicate(cleanSql)) return UNMAPPED
+    const whereClause = extractTopLevelWhereClause(cleanSql)
+    if (whereClause === '' || !isSupportedWhereClause(whereClause, { allowPlaceholder: true })) {
+        return UNMAPPED
+    }
 
     const payload: Record<string, unknown> = {}
     const id = literalEntryId(cleanSql)

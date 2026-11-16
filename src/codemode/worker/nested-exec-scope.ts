@@ -265,6 +265,25 @@ export function readExecutableCode(arg: unknown): string | null {
     return hasEntryText ? null : ''
 }
 
+function isSyntacticallyValidJs(trimmed: string): boolean {
+    if (trimmed === '' || /^[A-Za-z_$][\w$]*$/.test(trimmed)) return false
+    if (/^[A-Za-z0-9_-]+:\s+/.test(trimmed) && !/[(.=[\];]/.test(trimmed)) return false
+    try {
+        new vm.Script(trimmed)
+        return true
+    } catch {
+        if (trimmed.startsWith('{') && trimmed.endsWith('}')) {
+            try {
+                new vm.Script(`(${trimmed})`)
+                return true
+            } catch {
+                return false
+            }
+        }
+        return false
+    }
+}
+
 /**
  * Converts a plain natural-language prompt passed into nested `executeCode` into a technical note payload.
  */
@@ -272,6 +291,7 @@ export function naturalLanguageEntry(
     codeToExec: string
 ): { title: string; content: string; entry_type: string } | undefined {
     const trimmed = codeToExec.trim()
+    if (isSyntacticallyValidJs(trimmed)) return undefined
     const isNaturalPrompt =
         /^(?:write|document|create|include|record|summary|log|add|added|note|task|fix|implement)\b/i.test(
             trimmed
@@ -294,7 +314,8 @@ export function naturalLanguageEntry(
 export type RunIsolatedNestedFn = (
     wrapped: string,
     nestedReadonly: boolean,
-    nestedDryRun: boolean
+    nestedDryRun: boolean,
+    nestedUseTestDb: boolean
 ) => Promise<unknown>
 
 export interface SandboxExecutorOptions {
@@ -303,15 +324,44 @@ export interface SandboxExecutorOptions {
     timeoutMs: number
     readonlyMode: boolean | undefined
     dryRunMode: boolean | undefined
+    useTestDbMode?: boolean | undefined
     pinnedWorkspaceRaw: unknown
     pinnedProjectRaw: unknown
     projectRegistryRaw: unknown
     runIsolatedNestedCode: RunIsolatedNestedFn
 }
 
+function dispatchSynthesizedNestedEntry(
+    payload: unknown,
+    effectiveReadonly: boolean,
+    effectiveDryRun: boolean,
+    effectiveUseTestDb: boolean,
+    invokeCreateEntry: (p: unknown) => unknown
+): unknown {
+    if (effectiveReadonly) {
+        return {
+            success: false,
+            error: 'Write operations are disabled in readonly mode',
+            code: 'PERMISSION_DENIED',
+        }
+    }
+    if (effectiveDryRun) {
+        return {
+            success: false,
+            error: 'dry_run is not supported for synthesized entry writes inside nested execute_code',
+            code: 'VALIDATION_ERROR',
+        }
+    }
+    const nextPayload =
+        effectiveUseTestDb && typeof payload === 'object' && payload !== null && !Array.isArray(payload)
+            ? { ...(payload as Record<string, unknown>), use_test_db: true }
+            : payload
+    return invokeCreateEntry(nextPayload)
+}
+
 /**
  * Builds the sandboxed nested `executeCode` dispatcher enforcing pinned scope,
- * readonly/dryRun invariants, and code-security checks before `vm.runInContext`.
+ * readonly/dryRun/useTestDb invariants, and code-security checks before `vm.runInContext`.
  */
 export function createSandboxExecutor(
     options: SandboxExecutorOptions
@@ -322,6 +372,7 @@ export function createSandboxExecutor(
         timeoutMs,
         readonlyMode,
         dryRunMode,
+        useTestDbMode,
         pinnedWorkspaceRaw,
         pinnedProjectRaw,
         projectRegistryRaw,
@@ -355,6 +406,7 @@ export function createSandboxExecutor(
         const argRec = isPlainRec(arg) ? arg : undefined
         const argReadonly = argRec?.['readonly'] === true
         const argDryRun = argRec?.['dry_run'] === true || argRec?.['dryRun'] === true
+        const argUseTestDb = argRec?.['use_test_db'] === true || argRec?.['useTestDb'] === true
         const scopeErr = validateNestedExecScope(
             argRec,
             pinnedWorkspace,
@@ -362,67 +414,53 @@ export function createSandboxExecutor(
             projectRegistryRaw
         )
         if (scopeErr !== null) {
-            return {
-                success: false,
-                error: scopeErr.error,
-                code: 'VALIDATION_ERROR',
-            }
+            return { success: false, error: scopeErr.error, code: 'VALIDATION_ERROR' }
         }
         const effectiveReadonly = readonlyMode === true || argReadonly
+        const effectiveDryRun = dryRunMode === true || argDryRun
+        const effectiveUseTestDb = useTestDbMode === true || argUseTestDb
 
         const codeToExec = readExecutableCode(arg)
         if (codeToExec === null) {
-            if (effectiveReadonly) {
-                return {
-                    success: false,
-                    error: 'Write operations are disabled in readonly mode',
-                    code: 'PERMISSION_DENIED',
-                }
-            }
-            if (argDryRun || dryRunMode === true) {
-                return {
-                    success: false,
-                    error: 'dry_run is not supported for synthesized entry writes inside nested execute_code',
-                    code: 'VALIDATION_ERROR',
-                }
-            }
-            return invokeCreateEntry(arg)
+            return dispatchSynthesizedNestedEntry(
+                arg,
+                effectiveReadonly,
+                effectiveDryRun,
+                effectiveUseTestDb,
+                invokeCreateEntry
+            )
         }
         if (codeToExec === '') {
             return { success: false, error: 'No code was executed', code: 'VALIDATION_ERROR' }
         }
         const natural = naturalLanguageEntry(codeToExec)
         if (natural !== undefined) {
-            if (effectiveReadonly) {
-                return {
-                    success: false,
-                    error: 'Write operations are disabled in readonly mode',
-                    code: 'PERMISSION_DENIED',
-                }
-            }
-            if (argDryRun || dryRunMode === true) {
-                return {
-                    success: false,
-                    error: 'dry_run is not supported for synthesized entry writes inside nested execute_code',
-                    code: 'VALIDATION_ERROR',
-                }
-            }
-            return invokeCreateEntry(natural)
+            return dispatchSynthesizedNestedEntry(
+                natural,
+                effectiveReadonly,
+                effectiveDryRun,
+                effectiveUseTestDb,
+                invokeCreateEntry
+            )
         }
         const validation = validateSandboxCode(codeToExec)
         if (!validation.valid) {
-            return {
-                success: false,
-                error: validation.errors.join('; '),
-                code: 'SECURITY_VIOLATION',
-            }
+            return { success: false, error: validation.errors.join('; '), code: 'SECURITY_VIOLATION' }
         }
         if (vmContextRef.current !== undefined) {
             const transformed = transformAutoReturn(codeToExec)
             const wrapped = `(async () => {\n${transformed}\n})()`
-            const effectiveDryRun = dryRunMode === true || argDryRun
-            if ((effectiveReadonly && readonlyMode !== true) || (effectiveDryRun && dryRunMode !== true)) {
-                return runIsolatedNestedCode(wrapped, effectiveReadonly, effectiveDryRun)
+            if (
+                (effectiveReadonly && readonlyMode !== true) ||
+                (effectiveDryRun && dryRunMode !== true) ||
+                (effectiveUseTestDb && useTestDbMode !== true)
+            ) {
+                return runIsolatedNestedCode(
+                    wrapped,
+                    effectiveReadonly,
+                    effectiveDryRun,
+                    effectiveUseTestDb
+                )
             }
             return (await vm.runInContext(wrapped, vmContextRef.current, { timeout: timeoutMs })) as unknown
         }

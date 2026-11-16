@@ -246,14 +246,12 @@ export function buildPlanReviewPriorContextSection(
 
     const { entries: priorPlans } = hasTopic
         ? db.searchEntries(topic, {
-              entryType: 'plan_finalized',
               tags: ['adversarial-planner'],
               limit: 5,
               workspaceId: priorWorkspace,
               ...(priorProjectNumber !== undefined ? { projectNumber: priorProjectNumber } : {}),
           })
         : db.searchByDateRange('1970-01-01', '2999-12-31', {
-              entryType: 'plan_finalized',
               tags: ['adversarial-planner'],
               limit: 5,
               workspaceId: priorWorkspace,

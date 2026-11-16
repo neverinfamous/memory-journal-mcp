@@ -7,6 +7,7 @@
 import { z } from 'zod'
 import type { ToolDefinition, ToolContext } from '../../../types/index.js'
 import { formatHandlerError } from '../../../utils/error-helpers.js'
+import { markUntrustedContentInline } from '../../../utils/security-utils.js'
 import { RepoInsightsOutputSchema } from './schemas.js'
 import { githubScopeInputFields, githubScopeParseFields, resolveOwnerRepo } from './helpers.js'
 
@@ -146,7 +147,10 @@ export function getGitHubInsightsTools(context: ToolContext): ToolDefinition[] {
                         if (referrers === null) {
                             return sectionFailure('referrers')
                         }
-                        result.referrers = referrers
+                        result.referrers = referrers.map((r) => ({
+                            ...r,
+                            referrer: markUntrustedContentInline(r.referrer),
+                        }))
                     }
 
                     if (hasSection('paths')) {
@@ -154,7 +158,11 @@ export function getGitHubInsightsTools(context: ToolContext): ToolDefinition[] {
                         if (paths === null) {
                             return sectionFailure('paths')
                         }
-                        result.paths = paths
+                        result.paths = paths.map((p) => ({
+                            ...p,
+                            path: markUntrustedContentInline(p.path),
+                            title: markUntrustedContentInline(p.title),
+                        }))
                     }
 
                     return result

@@ -259,7 +259,7 @@ export const TeamGetRecentSchema = z.preprocess(
             cursor: z.string().optional().describe('Cursor for pagination'),
             project_number: StrictProjectNumberSchema.optional(),
             workspace_id: z.string().optional(),
-            sort_by: z.enum(['timestamp', 'importance']).optional().default('timestamp').describe(SORT_BY_DESC),
+            sort_by: z.enum(['timestamp', 'importance', 'blended']).optional().default('timestamp').describe(SORT_BY_DESC),
             include_archived: z.boolean().optional().default(false),
         })
         .strict()
@@ -291,7 +291,7 @@ export const TeamSearchSchema = z.preprocess(
             project_number: StrictProjectNumberSchema.optional(),
             workspace_id: z.string().optional(),
             limit: z.number().int().min(1).max(500).optional().default(10),
-            sort_by: z.enum(['timestamp', 'importance']).optional().default('timestamp').describe(SORT_BY_DESC),
+            sort_by: z.enum(['timestamp', 'importance', 'blended']).optional().default('timestamp').describe(SORT_BY_DESC),
             include_archived: z.boolean().optional().default(false),
             fuzzy_match: z.boolean().optional().default(false),
             auto_correct: z.boolean().optional().default(false),
@@ -367,7 +367,7 @@ export const TeamSearchByDateRangeSchema = z.preprocess(
             project_number: StrictProjectNumberSchema.optional(),
             workspace_id: z.string().optional(),
             limit: z.number().int().min(1).max(500).optional().default(50),
-            sort_by: z.enum(['timestamp', 'importance']).optional().default('timestamp').describe(SORT_BY_DESC),
+            sort_by: z.enum(['timestamp', 'importance', 'blended']).optional().default('timestamp').describe(SORT_BY_DESC),
             include_archived: z.boolean().optional().default(false),
         })
         .strict()

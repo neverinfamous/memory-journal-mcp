@@ -13,15 +13,9 @@ export function extractAndRecoverJsonCode(code: string): string | null {
     return recoverStructuredJsonCode(code)
 }
 
-/**
- * Attempt fuzzy recovery of an entry creation or update call from broken/mangled code
- */
-export function extractAndRecoverEntryCode(code: string): string | null {
-    if (!code || typeof code !== 'string') return null
-
-    const jsonRecovered = extractAndRecoverJsonCode(code)
-    if (jsonRecovered !== null) return jsonRecovered
-
+function detectRecoverableEntryCall(
+    code: string
+): { isUpdate: boolean; isTeamCall: boolean } | null {
     // Reject multi-call scripts so scope/id fields from an earlier statement are never stolen.
     const strippedCode = stripCommentsAndStrings(code)
     const callMatches = strippedCode.match(
@@ -38,53 +32,108 @@ export function extractAndRecoverEntryCode(code: string): string | null {
     const isLegacyUpdateAlias = !isStrictUpdate && /\bupdateMemory\b/i.test(strippedCode)
     const isUpdate =
         isStrictUpdate || (isLegacyUpdateAlias && /\b(?:entry_id|id)\s*:\s*\d+/i.test(strippedCode))
-    const isTeamCall = /\b(?:teamCreateEntry|teamUpdateEntry|team_create_entry|team_update_entry)\b/i.test(strippedCode)
+    const isTeamCall =
+        /\b(?:teamCreateEntry|teamUpdateEntry|team_create_entry|team_update_entry)\b/i.test(
+            strippedCode
+        )
 
     if (!isCreate && !isStrictUpdate && !isLegacyUpdateAlias) return null
+    return { isUpdate, isTeamCall }
+}
 
+function unescapeQuotes(value: string): string {
+    return value.replace(/\\+'/g, "'").replace(/\\+"/g, '"').replace(/\\`/g, '`')
+}
+
+function extractRecoveredEntryContentAndTitle(
+    code: string
+): { content: string; title: string | undefined; scanCode: string } | null {
     const backtickMatch =
-        /\bcontent\s*:\s*`([\s\S]*?)`(?=\s*(?:,\s*[a-zA-Z_$][\w$]*\s*:|\s*,\s*\}|\s*\}|\s*\)))/i.exec(code)
+        /\bcontent\s*:\s*`([\s\S]*?)`(?=\s*(?:,\s*[a-zA-Z_$][\w$]*\s*:|\s*,\s*\}|\s*\}|\s*\)))/i.exec(
+            code
+        )
     const singleMatch =
-        /\bcontent\s*:\s*'([\s\S]*?)'(?=\s*(?:,\s*[a-zA-Z_$][\w$]*\s*:|\s*,\s*\}|\s*\}|\s*\)))/i.exec(code)
+        /\bcontent\s*:\s*'([\s\S]*?)'(?=\s*(?:,\s*[a-zA-Z_$][\w$]*\s*:|\s*,\s*\}|\s*\}|\s*\)))/i.exec(
+            code
+        )
     const doubleMatch =
-        /\bcontent\s*:\s*"([\s\S]*?)"(?=\s*(?:,\s*[a-zA-Z_$][\w$]*\s*:|\s*,\s*\}|\s*\}|\s*\)))/i.exec(code)
+        /\bcontent\s*:\s*"([\s\S]*?)"(?=\s*(?:,\s*[a-zA-Z_$][\w$]*\s*:|\s*,\s*\}|\s*\}|\s*\)))/i.exec(
+            code
+        )
+    // Require matching closing quote before `,`/`}`/`)`, or an explicit next-property / `}` boundary so unclosed parenthetical prose like `(see note)` is not truncated at `)`.
     const fallbackMatch =
-        /\bcontent\s*:\s*([`'"])([\s\S]*?)(?:\1\s*)?(?=,\s*[a-zA-Z_$][\w$]*\s*:|\s*,\s*\}|\s*\}|\s*\))/i.exec(
+        /\bcontent\s*:\s*([`'"])([\s\S]*?)(?:\1(?=\s*(?:,|\}|\)))|(?=\s*,\s*[a-zA-Z_$][\w$]*\s*:|\s*,\s*\}|\s*\}))/i.exec(
             code
         )
 
     let content: string | undefined =
         backtickMatch?.[1] ?? singleMatch?.[1] ?? doubleMatch?.[1] ?? fallbackMatch?.[2]
-
-    if (content === undefined) {
-        const altMatch = /\bcontent\s*:\s*`([\s\S]*?)`(?=,\s*[\w$]+\s*:|\s*\})/i.exec(code)
-        if (altMatch?.[1] !== undefined) content = altMatch[1]
-    }
-
-    if (content === undefined) {
-        const descMatch =
-            /\b(?:description|summary)\s*:\s*(['"`])([\s\S]*?)\1(?=\s*(?:,\s*[a-zA-Z_$][\w$]*\s*:|\s*,\s*\}|\s*\}|\s*\)))/i.exec(
-                code
-            )
-        if (descMatch?.[2] !== undefined) content = descMatch[2]
-    }
-
+    content ??= /\bcontent\s*:\s*`([\s\S]*?)`(?=,\s*[\w$]+\s*:|\s*\})/i.exec(code)?.[1]
+    content ??=
+        /\b(?:description|summary)\s*:\s*(['"`])([\s\S]*?)\1(?=\s*(?:,\s*[a-zA-Z_$][\w$]*\s*:|\s*,\s*\}|\s*\}|\s*\)))/i.exec(
+            code
+        )?.[2]
     if (content === undefined || content === '') return null
 
     // [C4] Field regexes scan the code with content and title literals removed, so `project: 5` or
     // `workspace_id: 'x'` text quoted inside content or title can never re-scope the write.
     const scanWithTitle = code.split(content).join('')
-    content = content.replace(/\\+'/g, "'").replace(/\\+"/g, '"').replace(/\\`/g, '`')
-
     const titleMatch =
-        /\btitle\s*:\s*(['"`])([\s\S]*?)\1(?=\s*(?:,\s*[a-zA-Z_$][\w$]*\s*:|\s*,\s*\}|\s*\}|\s*\)))/i.exec(scanWithTitle) ??
-        /\btitle\s*:\s*(['"])([^'"]+)\1/i.exec(scanWithTitle)
+        /\btitle\s*:\s*(['"`])([\s\S]*?)\1(?=\s*(?:,\s*[a-zA-Z_$][\w$]*\s*:|\s*,\s*\}|\s*\}|\s*\)))/i.exec(
+            scanWithTitle
+        ) ?? /\btitle\s*:\s*(['"])([^'"]+)\1/i.exec(scanWithTitle)
     const scanCode =
         titleMatch?.[0] !== undefined ? scanWithTitle.split(titleMatch[0]).join('') : scanWithTitle
 
-    const typeMatch = /\b(?:entry_type|type)\s*:\s*(['"])([^'"]+)\1/i.exec(scanCode)
+    return {
+        content: unescapeQuotes(content),
+        title: titleMatch?.[2] !== undefined ? unescapeQuotes(titleMatch[2]) : undefined,
+        scanCode,
+    }
+}
+
+function toUnknownArray(arr: readonly unknown[]): unknown[] {
+    const out: unknown[] = []
+    for (const item of arr) out.push(item)
+    return out
+}
+
+function parseRelaxedJsonArray(rawArr: string): unknown[] | undefined {
+    try {
+        const parsed: unknown = JSON.parse(rawArr)
+        if (Array.isArray(parsed)) return toUnknownArray(parsed)
+    } catch {
+        try {
+            const normalized = rawArr
+                .replace(/'([^']*)'/g, '"$1"')
+                .replace(/([{,]\s*)([a-zA-Z0-9_$]+)\s*:/g, '$1"$2":')
+            const parsed: unknown = JSON.parse(normalized)
+            if (Array.isArray(parsed)) return toUnknownArray(parsed)
+        } catch {
+            return undefined
+        }
+    }
+    return undefined
+}
+
+function parseRelaxedAutoContext(rawAutoContext: string): unknown {
+    try {
+        return JSON.parse(rawAutoContext)
+    } catch {
+        try {
+            const normalized = rawAutoContext.replace(/([{,]\s*)([a-zA-Z0-9_$]+)\s*:/g, '$1"$2":')
+            return JSON.parse(normalized)
+        } catch {
+            return undefined
+        }
+    }
+}
+
+function populateRecoveredEntryMetadata(payload: Record<string, unknown>, scanCode: string): void {
     const projectMatch =
-        /\b(?:project_number|projectNumber|project_id|projectId|project_name|projectName|project)\s*:\s*(?:(\d+)|(['"`])([^'"`]+)\2)/i.exec(scanCode)
+        /\b(?:project_number|projectNumber|project_id|projectId|project_name|projectName|project)\s*:\s*(?:(\d+)|(['"`])([^'"`]+)\2)/i.exec(
+            scanCode
+        )
     const workspaceMatch = /\b(?:workspace_id|workspaceId|workspace)\s*:\s*(['"`])([^'"`]+)\1/i.exec(scanCode)
     const sessionMatch = /\b(?:session_id|sessionId)\s*:\s*(['"`])([^'"`]+)\1/i.exec(scanCode)
     const impactMatch = /\b(?:impact_score|impactScore|impact)\s*:\s*([0-9.]+)/i.exec(scanCode)
@@ -93,20 +142,8 @@ export function extractAndRecoverEntryCode(code: string): string | null {
     const sigMatch = /\b(?:significance_type|significanceType)\s*:\s*(['"`])([^'"`]+)\1/i.exec(scanCode)
     const isPersonalMatch = /\b(?:is_personal|isPersonal)\s*:\s*(true|false)\b/i.exec(scanCode)
     const shareTeamMatch = /\b(?:share_with_team|shareWithTeam)\s*:\s*(true|false)\b/i.exec(scanCode)
-    const relationshipsMatch = /\brelationships\s*:\s*(\[[\s\S]*?\])/i.exec(scanCode)
-    const anchorsMatch = /\banchors\s*:\s*(\[[\s\S]*?\])/i.exec(scanCode)
-    const tagsMatch = /\btags\s*:\s*\[([\s\S]*?)\]/i.exec(scanCode)
-    const autoContextMatch = /\bauto_context\s*:\s*(\{[\s\S]*?\})(?=\s*,\s*\n|\s*\n\s*\})/i.exec(scanCode)
-
-    const payload: Record<string, unknown> = {
-        content,
-        entry_type: typeMatch?.[2] ?? 'technical_note',
-    }
-
-    const title = titleMatch?.[2]?.replace(/\\+'/g, "'").replace(/\\+"/g, '"').replace(/\\`/g, '`')
-    if (title !== undefined && title !== '') payload['title'] = title
-
     const entryIdMatch = /\b(?:entry_id|id)\s*:\s*(\d+)/i.exec(scanCode)
+
     if (entryIdMatch?.[1] !== undefined) payload['entry_id'] = parseInt(entryIdMatch[1], 10)
     if (projectMatch?.[1] !== undefined) {
         payload['project_number'] = parseInt(projectMatch[1], 10)
@@ -121,55 +158,52 @@ export function extractAndRecoverEntryCode(code: string): string | null {
     if (sigMatch?.[2] !== undefined) payload['significance_type'] = sigMatch[2]
     if (isPersonalMatch?.[1] !== undefined) payload['is_personal'] = isPersonalMatch[1].toLowerCase() === 'true'
     if (shareTeamMatch?.[1] !== undefined) payload['share_with_team'] = shareTeamMatch[1].toLowerCase() === 'true'
-    for (const [key, rawArr] of [
-        ['relationships', relationshipsMatch?.[1]],
-        ['anchors', anchorsMatch?.[1]],
-    ] as const) {
+
+    for (const key of ['relationships', 'anchors'] as const) {
+        const rawArr = new RegExp(`\\b${key}\\s*:\\s*(\\[[\\s\\S]*?\\])`, 'i').exec(scanCode)?.[1]
         if (rawArr === undefined) continue
-        try {
-            const parsedArr: unknown = JSON.parse(rawArr)
-            if (Array.isArray(parsedArr)) payload[key] = parsedArr
-        } catch {
-            try {
-                const normalizedArr = rawArr
-                    .replace(/'([^']*)'/g, '"$1"')
-                    .replace(/([{,]\s*)([a-zA-Z0-9_$]+)\s*:/g, '$1"$2":')
-                const parsedArr: unknown = JSON.parse(normalizedArr)
-                if (Array.isArray(parsedArr)) payload[key] = parsedArr
-            } catch {
-                // Ignore unparseable literal arrays
-            }
-        }
+        const parsed = parseRelaxedJsonArray(rawArr)
+        if (parsed !== undefined) payload[key] = parsed
     }
 
-    const rawTags = tagsMatch?.[1]
+    const rawTags = /\btags\s*:\s*\[([\s\S]*?)\]/i.exec(scanCode)?.[1]
     if (rawTags !== undefined) {
-        try {
-            payload['tags'] = rawTags
-                .split(',')
-                .map((s: string): string => s.trim().replace(/^['"]|['"]$/g, ''))
-                .filter(Boolean)
-        } catch {
-            // Ignore tag parse error
-        }
+        payload['tags'] = rawTags.split(',').map((s) => s.trim().replace(/^['"]|['"]$/g, '')).filter(Boolean)
     }
 
-    const rawAutoContext = autoContextMatch?.[1]
+    const rawAutoContext = /\bauto_context\s*:\s*(\{[\s\S]*?\})(?=\s*,\s*\n|\s*\n\s*\})/i.exec(scanCode)?.[1]
     if (rawAutoContext !== undefined) {
-        try {
-            payload['auto_context'] = JSON.parse(rawAutoContext)
-        } catch {
-            try {
-                const normalizedJson = rawAutoContext.replace(/([{,]\s*)([a-zA-Z0-9_$]+)\s*:/g, '$1"$2":')
-                payload['auto_context'] = JSON.parse(normalizedJson)
-            } catch {
-                // Ignore auto_context parse error
-            }
-        }
+        const parsedAutoContext = parseRelaxedAutoContext(rawAutoContext)
+        if (parsedAutoContext !== undefined) payload['auto_context'] = parsedAutoContext
     }
+}
 
-    const fnName = isUpdate
-        ? (isTeamCall ? 'mj.team.teamUpdateEntry' : 'mj.updateEntry')
-        : (isTeamCall ? 'mj.team.teamCreateEntry' : 'mj.createEntry')
+/**
+ * Attempt fuzzy recovery of an entry creation or update call from broken/mangled code
+ */
+export function extractAndRecoverEntryCode(code: string): string | null {
+    if (!code || typeof code !== 'string') return null
+
+    const jsonRecovered = extractAndRecoverJsonCode(code)
+    if (jsonRecovered !== null) return jsonRecovered
+
+    const detected = detectRecoverableEntryCall(code)
+    if (detected === null) return null
+
+    const extracted = extractRecoveredEntryContentAndTitle(code)
+    if (extracted === null) return null
+
+    const typeMatch = /\b(?:entry_type|type)\s*:\s*(['"])([^'"]+)\1/i.exec(extracted.scanCode)
+    const payload: Record<string, unknown> = {
+        content: extracted.content,
+        entry_type: typeMatch?.[2] ?? 'technical_note',
+    }
+    if (extracted.title !== undefined && extracted.title !== '') payload['title'] = extracted.title
+
+    populateRecoveredEntryMetadata(payload, extracted.scanCode)
+
+    const fnName = detected.isUpdate
+        ? detected.isTeamCall ? 'mj.team.teamUpdateEntry' : 'mj.updateEntry'
+        : detected.isTeamCall ? 'mj.team.teamCreateEntry' : 'mj.createEntry'
     return `return await ${fnName}(${JSON.stringify(payload)});`
 }

@@ -280,7 +280,13 @@ async function scanSkillsDir(
     for (const entry of entries) {
         if (!entry.isDirectory()) continue
         const skillMdPath = path.join(dir, entry.name, 'SKILL.md')
-        if (!fs.existsSync(skillMdPath)) continue
+        try {
+            assertSafeFilePath(skillMdPath, [dir])
+            const stats = await fs.promises.stat(skillMdPath)
+            if (!stats.isFile() || stats.size > 1024 * 1024) continue
+        } catch {
+            continue
+        }
 
         const content = await fs.promises.readFile(skillMdPath, 'utf8')
         // Extract first non-empty non-header line as excerpt (up to 160 chars)

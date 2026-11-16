@@ -40,6 +40,7 @@ export interface ExportResult {
     output_dir: string
     files: string[]
     skipped: number
+    errors?: { file: string; error: string }[]
 }
 
 // ============================================================================
@@ -126,7 +127,7 @@ async function writeExportFile(
     filename: string,
     fileContent: string,
     swapState: { swapped: boolean }
-): Promise<'written' | 'skipped'> {
+): Promise<'written' | { error: string }> {
     const filepath = join(resolvedOutputDir, filename)
     let handle: Awaited<ReturnType<typeof open>> | undefined
     try {
@@ -150,16 +151,22 @@ async function writeExportFile(
             throw err
         }
         const code = filesystemErrorCode(err)
+        const errMessage =
+            code === 'ELOOP' || code === 'EEXIST'
+                ? 'Refusing to overwrite symlink during export'
+                : err instanceof Error
+                  ? err.message
+                  : String(err)
         if (code === 'ELOOP' || code === 'EEXIST') {
             logger.warning('Refusing to overwrite symlink during export', { module: 'Exporter', filepath })
         } else {
             logger.error('Failed to write markdown file', {
                 module: 'Exporter',
                 filepath,
-                error: err instanceof Error ? err.message : String(err),
+                error: errMessage,
             })
         }
-        return 'skipped'
+        return { error: errMessage }
     } finally {
         if (handle !== undefined) {
             await handle.close()
@@ -240,16 +247,12 @@ export async function exportEntriesToMarkdown(
     await mkdir(resolvedOutputDir, { recursive: true })
 
     const files: string[] = []
+    const errors: { file: string; error: string }[] = []
     let skipped = 0
-    let writeFailures = 0
 
     const validEntries = entries.filter((e) => e.content.trim())
     skipped += entries.length - validEntries.length
 
-    // Batch fetch relationships
-    // We do not catch and swallow errors here. If relationship fetch fails, we must
-    // explicitly fail the export to prevent generating corrupt files that lack their
-    // associated relationship data, preserving interchange fidelity.
     const relationshipsMap = loadExportRelationships(db, validEntries)
 
     const CHUNK_SIZE = 50
@@ -274,7 +277,7 @@ export async function exportEntriesToMarkdown(
                     files.push(filename)
                 } else {
                     skipped++
-                    writeFailures++
+                    errors.push({ file: filename, error: outcome.error })
                 }
             })
         )
@@ -285,10 +288,11 @@ export async function exportEntriesToMarkdown(
     }
 
     return {
-        success: writeFailures === 0,
+        success: errors.length === 0,
         exported_count: files.length,
         output_dir: resolvedOutputDir,
         files,
         skipped,
+        ...(errors.length > 0 ? { errors } : {}),
     }
 }

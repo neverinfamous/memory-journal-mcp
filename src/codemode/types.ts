@@ -112,7 +112,7 @@ export const DEFAULT_SECURITY_CONFIG: SecurityConfig = {
     blockedPatterns: [
         /\brequire\s*\(/, // No require()
         /\bimport\s*\(/, // No dynamic import()
-        /\bimport\s+[\s\S]*?\bfrom\b/, // No static ES module import from
+        /\bimport\s+(?:type\s+)?[\w$*\s{},]{1,240}?\bfrom\s*['"`]/, // No static ES module import from
         /\bimport\s*[{*]/, // No static ES module import statement
         /\bprocess\s*\./, // No process access (including whitespace before dot)
         /\bglobal\s*\./, // No global access
@@ -221,6 +221,8 @@ export interface RpcRequest {
     readonly?: boolean
     /** Enforced dry-run constraint propagated from nested sandbox execution */
     dryRun?: boolean
+    /** Enforced test-database isolation propagated from nested sandbox execution */
+    useTestDb?: boolean
 }
 
 /**

@@ -266,12 +266,124 @@ export function scopeFromInsertLiterals(cleanSql: string): Record<string, unknow
     return scope
 }
 
+export function extractFromTableName(cleanSql: string): string | undefined {
+    let quote: string | null = null
+    let depth = 0
+    for (let i = 0; i < cleanSql.length; i++) {
+        const ch = cleanSql[i] ?? ''
+        if (quote !== null) {
+            const step = advanceQuotedChar(cleanSql, i, quote)
+            i = step.nextIndex
+            if (step.closed) quote = null
+            continue
+        }
+        if (ch === "'" || ch === '"' || ch === '`') {
+            quote = ch
+        } else if (ch === '(') {
+            depth++
+        } else if (ch === ')' && depth > 0) {
+            depth--
+        } else if (depth === 0) {
+            const prev = i > 0 ? (cleanSql[i - 1] ?? '') : ''
+            const next = cleanSql[i + 4] ?? ''
+            if (
+                (i === 0 || !/[A-Za-z0-9_$]/.test(prev)) &&
+                cleanSql.slice(i, i + 4).toUpperCase() === 'FROM' &&
+                /\s/.test(next)
+            ) {
+                const match =
+                    /^\s+(?:[`"']?[a-zA-Z_][\w]*[`"']?\.)?[`"']?([a-zA-Z0-9_]+)[`"']?/i.exec(
+                        cleanSql.slice(i + 4)
+                    )
+                if (match?.[1] !== undefined) {
+                    return match[1].toLowerCase()
+                }
+            }
+        }
+    }
+    return undefined
+}
+
+const SQL_CLAUSE_SELECT_FILTER_RE =
+    /^(?:[`"']?[a-zA-Z_][\w]*[`"']?\.)?[`"']?(?:content|title|tags|body|text|summary|name)[`"']?\s+(?:LIKE|ILIKE|=)\s*(?:'(?:\\.|''|[^'\\])*'|"(?:\\.|""|[^"\\])*")$/i
+const SQL_DELETED_AT_NULL_RE =
+    /^(?:[`"']?[a-zA-Z_][\w]*[`"']?\.)?[`"']?deleted_at[`"']?\s+IS\s+NULL$/i
+const SQL_EQ_PREDICATE_RE =
+    /^(?:[`"']?[a-zA-Z_][\w]*[`"']?\.)?[`"']?([a-zA-Z_][\w]*)[`"']?\s*=\s*(.+)$/i
+
+function isSqlBindPlaceholder(rhs: string): boolean {
+    return rhs === '?' || /^[@:$][A-Za-z_][\w]*$/.test(rhs)
+}
+
+export function isSupportedWhereClause(
+    whereClause: string,
+    options?: { allowPlaceholder?: boolean; allowSelectContentEquality?: boolean }
+): boolean {
+    const clauses = splitTopLevelSqlAndClauses(whereClause)
+    if (clauses.length === 0) return false
+    const allowPlaceholder = options?.allowPlaceholder === true
+    const allowSelect = options?.allowSelectContentEquality === true
+
+    for (const rawClause of clauses) {
+        const clause = stripBalancedOuterParens(rawClause)
+        if (clause === '') return false
+        if (SQL_DELETED_AT_NULL_RE.test(clause)) continue
+        if (allowSelect && SQL_CLAUSE_SELECT_FILTER_RE.test(clause)) continue
+
+        const eqMatch = SQL_EQ_PREDICATE_RE.exec(clause)
+        if (eqMatch?.[1] === undefined || eqMatch[2] === undefined) return false
+        const col = eqMatch[1].toLowerCase()
+        const rhs = eqMatch[2].trim()
+
+        if (col === 'id' || col === 'entry_id') {
+            if (allowPlaceholder && isSqlBindPlaceholder(rhs)) continue
+            if (!/^\d+$/.test(rhs)) return false
+            const n = Number(rhs)
+            if (!Number.isSafeInteger(n) || n <= 0) return false
+            continue
+        }
+        if (col === 'project_number' || col === 'project_id') {
+            if (allowPlaceholder && isSqlBindPlaceholder(rhs)) continue
+            const unquoted =
+                rhs.length >= 2 &&
+                ((rhs.startsWith("'") && rhs.endsWith("'")) ||
+                    (rhs.startsWith('"') && rhs.endsWith('"')))
+                    ? unquoteSqlLiteral(rhs).trim()
+                    : rhs
+            if (!/^\d+$/.test(unquoted)) return false
+            const n = Number(unquoted)
+            if (!Number.isSafeInteger(n) || n <= 0) return false
+            continue
+        }
+        if (col === 'workspace_id') {
+            if (allowPlaceholder && isSqlBindPlaceholder(rhs)) continue
+            if (
+                rhs.length >= 2 &&
+                ((rhs.startsWith("'") && rhs.endsWith("'")) ||
+                    (rhs.startsWith('"') && rhs.endsWith('"')))
+            ) {
+                if (unquoteSqlLiteral(rhs).trim() !== '') continue
+            }
+            return false
+        }
+        return false
+    }
+    return true
+}
+
 export function hasUnsupportedWherePredicate(cleanSql: string): boolean {
     const whereClause = extractTopLevelWhereClause(cleanSql)
     if (whereClause === '') return false
     const body = whereClause.replace(/^\s*WHERE\b/i, '')
-    const strippedWhere = body.replace(SQL_LITERAL_PATTERN, "''")
-    return /\b(?:OR|NOT|IS\s+(?:NOT\s+)?NULL|IN\s*\()\b|!=|<>|[<>]/i.test(strippedWhere)
+    const withoutSafeNull = body
+        .replace(SQL_LITERAL_PATTERN, "''")
+        .replace(
+            /\b(?:[`"']?[a-zA-Z_][\w]*[`"']?\.)?[`"']?deleted_at[`"']?\s+IS\s+NULL\b/gi,
+            'deleted_at_is_null'
+        )
+    return /\b(?:OR|NOT|IS\s+(?:NOT\s+)?NULL|IN\s*\(|BETWEEN)\b|!=|<>|[<>]/i.test(
+        withoutSafeNull
+    )
 }
 
 export function scopeFromSqlLiterals(cleanSql: string): Record<string, unknown> {

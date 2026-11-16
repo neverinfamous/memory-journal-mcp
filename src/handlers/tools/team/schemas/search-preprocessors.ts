@@ -81,20 +81,40 @@ export function normalizeTeamLinkRelationshipType(val: unknown): unknown {
     return val
 }
 
-/** Preprocessor for TeamLinkEntriesSchemaMcp: normalizes endpoint, relationship, and description aliases. */
+function coerceLinkEndpointId(val: unknown): unknown {
+    if (typeof val === 'string') {
+        const trimmed = val.trim()
+        if (/^\d+$/.test(trimmed)) return Number(trimmed)
+    }
+    return val
+}
+
+/** Preprocessor for TeamLinkEntriesSchema & TeamLinkEntriesSchemaMcp: normalizes aliases while preserving unknown keys for .strict(). */
 export function preprocessTeamLinkEntries(val: unknown): unknown {
     if (typeof val !== 'object' || val === null || Array.isArray(val)) return val
-    const raw: Record<string, unknown> = Object.fromEntries(Object.entries(val))
-    const rawRel = raw['type'] ?? raw['rel'] ?? raw['relationship_type'] ?? 'references'
-    const normalized: Record<string, unknown> = {}
-    const fromId = raw['from_entry_id'] ?? raw['from_id'] ?? raw['from'] ?? raw['source_id']
-    const toId = raw['to_entry_id'] ?? raw['to_id'] ?? raw['to'] ?? raw['target_id']
-    const description = raw['description'] ?? raw['message'] ?? raw['text']
-    if (fromId !== undefined) normalized['from_entry_id'] = fromId
-    if (toId !== undefined) normalized['to_entry_id'] = toId
-    normalized['relationship_type'] = normalizeTeamLinkRelationshipType(rawRel)
+    const normalized: Record<string, unknown> = { ...(val as Record<string, unknown>) }
+    const fromId =
+        normalized['from_entry_id'] ??
+        normalized['from_id'] ??
+        normalized['from'] ??
+        normalized['source_id']
+    const toId =
+        normalized['to_entry_id'] ??
+        normalized['to_id'] ??
+        normalized['to'] ??
+        normalized['target_id']
+    const rawRel =
+        normalized['relationship_type'] ?? normalized['type'] ?? normalized['rel']
+    const description = normalized['description'] ?? normalized['message'] ?? normalized['text']
+
+    for (const alias of ['from_id', 'from', 'source_id', 'to_id', 'to', 'target_id', 'type', 'rel', 'message', 'text']) {
+        Reflect.deleteProperty(normalized, alias)
+    }
+    if (fromId !== undefined) normalized['from_entry_id'] = coerceLinkEndpointId(fromId)
+    if (toId !== undefined) normalized['to_entry_id'] = coerceLinkEndpointId(toId)
+    if (rawRel !== undefined) {
+        normalized['relationship_type'] = normalizeTeamLinkRelationshipType(rawRel)
+    }
     if (description !== undefined) normalized['description'] = description
-    if (raw['project_number'] !== undefined) normalized['project_number'] = raw['project_number']
-    if (raw['workspace_id'] !== undefined) normalized['workspace_id'] = raw['workspace_id']
     return normalized
 }

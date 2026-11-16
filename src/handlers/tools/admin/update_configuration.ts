@@ -1,6 +1,10 @@
 import { z } from 'zod'
 import type { ToolHandlerConfig } from '../../../types/index.js'
-import type { ConfigManager } from '../../../utils/config-manager.js'
+import type {
+    BriefingConfigurableKey,
+    ConfigManager,
+    MutatedConfigFields,
+} from '../../../utils/config-manager.js'
 import {
     findCanonicalRegistryKey,
     loadProjectRegistryFromConfig,
@@ -255,29 +259,41 @@ export function handleUpdateConfiguration(
 
     const updates: Partial<Parameters<ConfigManager['updateConfig']>[0]> = {}
     const updatedKeys: string[] = []
+    const mutatedBriefingKeys: BriefingConfigurableKey[] = []
+    const mutatedFields: MutatedConfigFields = {}
 
     if (args.tool_filter !== undefined) {
         updates.rawToolFilter = args.tool_filter
         updatedKeys.push('tool_filter')
+        mutatedFields.rawToolFilter = true
     }
 
     const currentBriefingConfig = configManager.getConfig().briefingConfig
     let bcChanged = false
     const newBc = { ...currentBriefingConfig }
 
-    if (args.briefing_entries !== undefined) { newBc.entryCount = args.briefing_entries; bcChanged = true; updatedKeys.push('briefing_entries'); }
-    if (args.briefing_summaries !== undefined) { newBc.summaryCount = args.briefing_summaries; bcChanged = true; updatedKeys.push('briefing_summaries'); }
-    if (args.briefing_include_team !== undefined) { newBc.includeTeam = args.briefing_include_team; bcChanged = true; updatedKeys.push('briefing_include_team'); }
-    if (args.briefing_issues !== undefined) { newBc.issueCount = args.briefing_issues; bcChanged = true; updatedKeys.push('briefing_issues'); }
-    if (args.briefing_prs !== undefined) { newBc.prCount = args.briefing_prs; bcChanged = true; updatedKeys.push('briefing_prs'); }
-    if (args.briefing_pr_status !== undefined) { newBc.prStatusBreakdown = args.briefing_pr_status; bcChanged = true; updatedKeys.push('briefing_pr_status'); }
-    if (args.briefing_milestones !== undefined) { newBc.milestoneCount = args.briefing_milestones; bcChanged = true; updatedKeys.push('briefing_milestones'); }
-    if (args.briefing_workflows !== undefined) { newBc.workflowCount = args.briefing_workflows; bcChanged = true; updatedKeys.push('briefing_workflows'); }
-    if (args.briefing_workflow_status !== undefined) { newBc.workflowStatusBreakdown = args.briefing_workflow_status; bcChanged = true; updatedKeys.push('briefing_workflow_status'); }
-    if (args.briefing_copilot !== undefined) { newBc.copilotReviews = args.briefing_copilot; bcChanged = true; updatedKeys.push('briefing_copilot'); }
+    if (args.briefing_entries !== undefined) { newBc.entryCount = args.briefing_entries; bcChanged = true; updatedKeys.push('briefing_entries'); mutatedBriefingKeys.push('entryCount'); }
+    if (args.briefing_summaries !== undefined) { newBc.summaryCount = args.briefing_summaries; bcChanged = true; updatedKeys.push('briefing_summaries'); mutatedBriefingKeys.push('summaryCount'); }
+    if (args.briefing_include_team !== undefined) { newBc.includeTeam = args.briefing_include_team; bcChanged = true; updatedKeys.push('briefing_include_team'); mutatedBriefingKeys.push('includeTeam'); }
+    if (args.briefing_issues !== undefined) { newBc.issueCount = args.briefing_issues; bcChanged = true; updatedKeys.push('briefing_issues'); mutatedBriefingKeys.push('issueCount'); }
+    if (args.briefing_prs !== undefined) { newBc.prCount = args.briefing_prs; bcChanged = true; updatedKeys.push('briefing_prs'); mutatedBriefingKeys.push('prCount'); }
+    if (args.briefing_pr_status !== undefined) { newBc.prStatusBreakdown = args.briefing_pr_status; bcChanged = true; updatedKeys.push('briefing_pr_status'); mutatedBriefingKeys.push('prStatusBreakdown'); }
+    if (args.briefing_milestones !== undefined) { newBc.milestoneCount = args.briefing_milestones; bcChanged = true; updatedKeys.push('briefing_milestones'); mutatedBriefingKeys.push('milestoneCount'); }
+    if (args.briefing_workflows !== undefined) { newBc.workflowCount = args.briefing_workflows; bcChanged = true; updatedKeys.push('briefing_workflows'); mutatedBriefingKeys.push('workflowCount'); }
+    if (args.briefing_workflow_status !== undefined) { newBc.workflowStatusBreakdown = args.briefing_workflow_status; bcChanged = true; updatedKeys.push('briefing_workflow_status'); mutatedBriefingKeys.push('workflowStatusBreakdown'); }
+    if (args.briefing_copilot !== undefined) { newBc.copilotReviews = args.briefing_copilot; bcChanged = true; updatedKeys.push('briefing_copilot'); mutatedBriefingKeys.push('copilotReviews'); }
 
+    if (mutatedBriefingKeys.length > 0) {
+        mutatedFields.briefingKeys = mutatedBriefingKeys
+    }
     if (applyScopeConfigurationUpdate(args, newBc, config, updatedKeys)) {
         bcChanged = true
+        if (args.workspace_id !== undefined || newBc.defaultWorkspaceId !== undefined) {
+            mutatedFields.defaultWorkspaceId = true
+        }
+        if (args.project_number !== undefined || args.workspace_id !== undefined) {
+            mutatedFields.defaultProjectNumber = true
+        }
     }
 
     if (bcChanged) {
@@ -285,7 +301,9 @@ export function handleUpdateConfiguration(
     }
 
     const persistError =
-        Object.keys(updates).length > 0 ? configManager.updateConfig(updates, true) : undefined
+        Object.keys(updates).length > 0
+            ? configManager.updateConfig(updates, true, { mutatedFields })
+            : undefined
 
     return Promise.resolve({
         success: true,

@@ -3,13 +3,14 @@ import { execFileSync } from 'node:child_process'
 import type { ToolDefinition, ToolContext } from '../../../types/index.js'
 import { formatHandlerError } from '../../../utils/error-helpers.js'
 import { ErrorFieldsMixin } from '../error-fields-mixin.js'
-import { relaxedNumber } from '../schemas.js'
+import { relaxedNumber, StrictProjectNumberSchema } from '../schemas.js'
 import { coerceAnchorStatusAlias } from '../schemas/hallucination-healer-fields.js'
 import { mcpLogger } from '../../../utils/mcp-logger.js'
 import {
     findCanonicalRegistryKey,
     loadProjectRegistryFromConfig,
 } from '../../../utils/workspace-resolver.js'
+import { activeProjectRegistry, alignedProjectFilter } from '../../../utils/write-scope.js'
 import { resolveWriteWorkspaceId } from '../write-workspace.js'
 
 const MAX_AUTO_ANCHORS = 25
@@ -122,14 +123,16 @@ function preprocessMarkAnchorsStale(val: unknown): unknown {
 export const MarkAnchorsStaleSchema = z.preprocess(
     preprocessMarkAnchorsStale,
     z.object({
-        updates: z.array(
-            z.object({
-                id: z.number(),
-                status: z.enum(['pending', 'valid', 'stale', 'invalidated', 'unresolvable']),
-            })
-        ),
+        updates: z
+            .array(
+                z.object({
+                    id: z.number(),
+                    status: z.enum(['pending', 'valid', 'stale', 'invalidated', 'unresolvable']),
+                })
+            )
+            .min(1),
         workspace_id: z.string().optional(),
-        project_number: z.number().optional(),
+        project_number: StrictProjectNumberSchema.optional(),
     })
 )
 
@@ -181,12 +184,17 @@ export function getStalenessTools(context: ToolContext): ToolDefinition[] {
                         input.project_number,
                         context.config
                     )
+                    const scopedProject = alignedProjectFilter(
+                        wsId,
+                        input.project_number,
+                        activeProjectRegistry(context.config?.projectRegistry)
+                    )
 
                     let updatedCount = 0
                     const missingIds: number[] = []
                     db.executeInTransaction(() => {
                         for (const update of input.updates) {
-                            if (db.updateAnchorStatus(update.id, update.status, wsId)) {
+                            if (db.updateAnchorStatus(update.id, update.status, wsId, scopedProject)) {
                                 updatedCount++
                             } else {
                                 missingIds.push(update.id)

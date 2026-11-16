@@ -43,7 +43,7 @@ function enrichWithAuthor<T extends { id: number }>(
 /**
  * Enforce active Team RBAC on team resource reads.
  */
-function enforceTeamResourceRbac(context: ResourceContext, wsId: string): void {
+export function enforceTeamResourceRbac(context: ResourceContext, wsId: string): void {
     const teamDb = context.teamDb
     if (teamDb?.isTeamRbacActive?.() !== true) return
     enforceTeamRbac(

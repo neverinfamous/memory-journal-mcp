@@ -8,6 +8,13 @@ import { applySqlCipherKey } from './sqlcipher-key.js'
 import { ConnectionError } from '../../types/errors.js'
 import { MigrationManager } from '../migrations/migration-manager.js'
 import type { IDatabaseConnection, QueryResult } from '../core/interfaces.js'
+import {
+    applyNativePragmas,
+    installStatementCache,
+    loadVecExtensionOnDb,
+    runOptimizeAndCheckpointBeforeClose,
+    runPassiveCheckpoint,
+} from './connection-pragmas.js'
 
 
 /**
@@ -31,6 +38,7 @@ export class NativeConnectionManager implements IDatabaseConnection {
     private db: Database | null = null
     private readonly dbPath: string
     private initialized = false
+    private teamSchemaApplied = false
     private ftsRebuildTimer: ReturnType<typeof setTimeout> | null = null
 
     constructor(dbPath: string) {
@@ -52,17 +60,11 @@ export class NativeConnectionManager implements IDatabaseConnection {
             // Decrypt if key is provided (must be done before any other PRAGMAs or queries)
             applySqlCipherKey(db, true)
 
-            // Native-only PRAGMAs for performance and safety
-            db.pragma('journal_mode = WAL')
-            db.pragma('synchronous = NORMAL')
-            db.pragma('foreign_keys = ON')
-            db.pragma('temp_store = MEMORY')
-            db.pragma('busy_timeout = 5000')
-            db.pragma('cache_size = -64000')
-            this.installStatementCache(db)
+            applyNativePragmas(db)
+            installStatementCache(db)
 
             // Load sqlite-vec extension for vector search
-            const loaded = await this.loadVecExtension(db)
+            const loaded = await loadVecExtensionOnDb(db, () => this.db !== null)
             if (!loaded) return
 
             // Run schema migrations (creates memory_journal and other core tables versioned)
@@ -89,8 +91,11 @@ export class NativeConnectionManager implements IDatabaseConnection {
             if (this.db !== null) {
                 try {
                     this.db.close()
-                } catch {
-                    // Best-effort cleanup after partial initialization failure
+                } catch (closeErr: unknown) {
+                    logger.debug('Cleanup close after failed initialization logged error', {
+                        module: 'NativeConnectionManager',
+                        error: closeErr instanceof Error ? closeErr.message : String(closeErr),
+                    })
                 }
                 this.db = null
             }
@@ -102,69 +107,11 @@ export class NativeConnectionManager implements IDatabaseConnection {
         }
     }
 
-    private resolvePackageVecFallbackPath(): string {
-        let dir = import.meta.dirname
-        for (let depth = 0; depth < 5; depth++) {
-            if (fs.existsSync(path.join(dir, 'package.json'))) {
-                return path.resolve(dir, 'vec0')
-            }
-            const parent = path.dirname(dir)
-            if (parent === dir) break
-            dir = parent
-        }
-        return path.resolve(import.meta.dirname, '..', '..', '..', 'vec0')
-    }
-
-    /**
-     * Load the sqlite-vec extension (npm package first, compiled fallback second).
-     * Returns false when close() was called during the async load, so initialization must abort.
-     * Uses the local `db` ref to avoid a race with a concurrent close().
-     */
-    private async loadVecExtension(db: Database): Promise<boolean> {
-        try {
-            // Try the npm package first (for local development on macOS/Windows/glibc)
-            const sqliteVec = await import('sqlite-vec')
-
-            // Guard: if close() was called during the await, abort initialization
-            if (this.db === null) {
-                logger.info('Database closed during initialization, aborting', {
-                    module: 'NativeConnectionManager',
-                })
-                return false
-            }
-
-            sqliteVec.load(db)
-            logger.info('sqlite-vec extension loaded via npm package', {
-                module: 'NativeConnectionManager',
-            })
-        } catch (npmLoadError) {
-            logger.warning('sqlite-vec npm package failed to load; trying compiled fallback', {
-                module: 'NativeConnectionManager',
-                error: String(npmLoadError),
-            })
-            // [BOUNDARY] Resolve compiled fallback relative to the package root, never process.cwd().
-            const fallbackPath = this.resolvePackageVecFallbackPath()
-            try {
-                db.loadExtension(fallbackPath)
-            } catch (fallbackError) {
-                throw new Error(
-                    `sqlite-vec failed to load via npm (${String(npmLoadError)}) and via fallback ${fallbackPath} (${String(fallbackError)})`,
-                    { cause: fallbackError }
-                )
-            }
-            logger.info('sqlite-vec extension loaded via compiled fallback', {
-                module: 'NativeConnectionManager',
-                path: fallbackPath,
-            })
-        }
-        return true
-    }
-
     private migrateSchema(): void {
         const db = this.ensureDb()
 
-        // 1. Run versioned migrations
-        MigrationManager.runMigrations(db, false)
+        // 1. Run versioned migrations (re-applying team schema when this connection is team DB)
+        MigrationManager.runMigrations(db, this.teamSchemaApplied)
 
         // 2. Perform post-migration checks and updates
         db.transaction(() => {
@@ -247,6 +194,7 @@ export class NativeConnectionManager implements IDatabaseConnection {
     }
 
     applyTeamSchema(): void {
+        this.teamSchemaApplied = true
         const db = this.ensureDb()
         MigrationManager.applyTeamMigrations(db)
     }
@@ -327,11 +275,7 @@ export class NativeConnectionManager implements IDatabaseConnection {
         if (this.db === null) {
             return
         }
-        try {
-            this.db.pragma('wal_checkpoint(PASSIVE)')
-        } catch {
-            // A passive checkpoint can fail while readers hold the WAL. close() still truncates.
-        }
+        runPassiveCheckpoint(this.db)
     }
 
     close(): void {
@@ -340,13 +284,15 @@ export class NativeConnectionManager implements IDatabaseConnection {
             this.ftsRebuildTimer = null
         }
         if (this.db) {
-            // Ensure WAL checkpoint
+            runOptimizeAndCheckpointBeforeClose(this.db)
             try {
-                this.db.pragma('wal_checkpoint(TRUNCATE)')
-            } catch {
-                // ignore
+                this.db.close()
+            } catch (closeErr: unknown) {
+                logger.debug('Database close encountered error', {
+                    module: 'NativeConnectionManager',
+                    error: closeErr instanceof Error ? closeErr.message : String(closeErr),
+                })
             }
-            this.db.close()
             this.db = null
         }
         this.initialized = false
@@ -358,50 +304,6 @@ export class NativeConnectionManager implements IDatabaseConnection {
             throw new ConnectionError('Database not initialized. Call initialize() first.')
         }
         return this.db
-    }
-
-    /**
-     * Installs a bounded LRU prepared-statement cache on `db.prepare()` so all
-     * callers benefit from statement reuse without schema-invalidation leaks.
-     */
-    private installStatementCache(db: Database): void {
-        if (typeof db.prepare !== 'function') return
-        const rawPrepare = db.prepare.bind(db)
-        const stmtCache = new Map<string, ReturnType<Database['prepare']>>()
-        const MAX_CACHE_SIZE = 256
-        const DDL_RE = /\b(?:DROP|ALTER|CREATE)\b/i
-
-        db.prepare = ((source: string) => {
-            if (DDL_RE.test(source)) {
-                stmtCache.clear()
-                return rawPrepare(source)
-            }
-            const cached = stmtCache.get(source)
-            if (cached !== undefined) {
-                stmtCache.delete(source)
-                stmtCache.set(source, cached)
-                return cached
-            }
-            const stmt = rawPrepare(source)
-            if (stmtCache.size >= MAX_CACHE_SIZE) {
-                const oldestKey = stmtCache.keys().next().value
-                if (oldestKey !== undefined) {
-                    stmtCache.delete(oldestKey)
-                }
-            }
-            stmtCache.set(source, stmt)
-            return stmt
-        }) as Database['prepare']
-
-        if (typeof db.exec === 'function') {
-            const rawExec = db.exec.bind(db)
-            db.exec = (source: string) => {
-                if (DDL_RE.test(source)) {
-                    stmtCache.clear()
-                }
-                return rawExec(source)
-            }
-        }
     }
 
     pragma(command: string): void {
@@ -436,8 +338,10 @@ export class NativeConnectionManager implements IDatabaseConnection {
     setDbAndInitialized(db: unknown): void {
         const nativeDb = db as Database
         this.db = nativeDb
-        nativeDb.pragma('foreign_keys = ON')
-        this.installStatementCache(nativeDb)
+        if (typeof nativeDb.pragma === 'function') {
+            applyNativePragmas(nativeDb)
+        }
+        installStatementCache(nativeDb)
         this.initialized = true
     }
 

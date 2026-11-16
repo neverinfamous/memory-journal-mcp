@@ -2,7 +2,7 @@
  * Memory Journal MCP Server - Workflow Prompt Helpers
  */
 
-import type { IDatabaseAdapter } from '../../database/core/interfaces.js'
+import type { IDatabaseAdapter, TeamRole } from '../../database/core/interfaces.js'
 import type { PromptMessage } from './index.js'
 import { ConfigurationError, ValidationError } from '../../types/errors.js'
 import { markUntrustedContent } from '../../utils/security-utils.js'
@@ -11,6 +11,42 @@ import { loadProjectRegistryFromConfig } from '../../utils/workspace-resolver.js
 import { exactRegistryKey, workspacesForProject } from '../../utils/write-scope.js'
 import type { BriefingConfig } from '../resources/shared.js'
 import { RELATIONSHIP_TYPES } from '../../types/entities.js'
+import { enforceTeamRbac, getCallerIdentity } from '../tools/team/rbac.js'
+
+interface PromptTeamRuntime {
+    teamDefaultRole?: TeamRole | 'denied'
+}
+
+function enforceWorkflowTeamPromptRbac(
+    teamDb: IDatabaseAdapter | undefined,
+    requiredRole: TeamRole,
+    workspaceId: string,
+    briefingConfig?: Partial<BriefingConfig>,
+    runtime?: PromptTeamRuntime | null
+): void {
+    if (teamDb?.isTeamRbacActive?.() !== true) return
+    enforceTeamRbac(
+        {
+            db: teamDb,
+            teamDb,
+            config: {
+                ...(briefingConfig?.defaultWorkspaceId !== undefined
+                    ? { defaultWorkspaceId: briefingConfig.defaultWorkspaceId }
+                    : {}),
+                ...(briefingConfig?.defaultProjectNumber !== undefined
+                    ? { defaultProjectNumber: briefingConfig.defaultProjectNumber }
+                    : {}),
+                ...(briefingConfig?.projectRegistry !== undefined
+                    ? { projectRegistry: briefingConfig.projectRegistry }
+                    : {}),
+                teamDefaultRole: runtime?.teamDefaultRole ?? 'denied',
+            },
+        },
+        getCallerIdentity(),
+        requiredRole,
+        workspaceId
+    )
+}
 
 export const WORKFLOW_WORKSPACE_ARGUMENTS = [
     {
@@ -106,10 +142,14 @@ export function generateSummaryPrompt(
     workspaceId = 'default',
     briefingConfig?: Partial<BriefingConfig>,
     projectNumber?: number,
-    explicitDefaultRequested = false
+    explicitDefaultRequested = false,
+    runtime?: PromptTeamRuntime | null
 ): { messages: PromptMessage[] } {
-    if (target === 'team' && !teamDb) {
-        throw new ConfigurationError('Team database not configured')
+    if (target === 'team') {
+        if (!teamDb) {
+            throw new ConfigurationError('Team database not configured')
+        }
+        enforceWorkflowTeamPromptRbac(teamDb, 'viewer', workspaceId, briefingConfig, runtime)
     }
 
     const targetDb = target === 'team' && teamDb ? teamDb : db
@@ -213,10 +253,14 @@ export function generateEntryPrompt(
     workspaceId = 'default',
     briefingConfig?: Partial<BriefingConfig>,
     projectNumber?: number,
-    explicitDefaultRequested = false
+    explicitDefaultRequested = false,
+    runtime?: PromptTeamRuntime | null
 ): { messages: PromptMessage[] } {
-    if (target === 'team' && !teamDb) {
-        throw new ConfigurationError('Team database not configured')
+    if (target === 'team') {
+        if (!teamDb) {
+            throw new ConfigurationError('Team database not configured')
+        }
+        enforceWorkflowTeamPromptRbac(teamDb, 'member', workspaceId, briefingConfig, runtime)
     }
     const registryHint = getProjectRegistryHint(briefingConfig)
     const attributionArgs = buildExplicitAttributionArgs(
@@ -273,10 +317,14 @@ export function generateUpdateEntryPrompt(
     workspaceId = 'default',
     briefingConfig?: Partial<BriefingConfig>,
     projectNumber?: number,
-    explicitDefaultRequested = false
+    explicitDefaultRequested = false,
+    runtime?: PromptTeamRuntime | null
 ): { messages: PromptMessage[] } {
-    if (target === 'team' && !teamDb) {
-        throw new ConfigurationError('Team database not configured')
+    if (target === 'team') {
+        if (!teamDb) {
+            throw new ConfigurationError('Team database not configured')
+        }
+        enforceWorkflowTeamPromptRbac(teamDb, 'member', workspaceId, briefingConfig, runtime)
     }
     const targetDb = target === 'team' && teamDb ? teamDb : db
     let entryContext = ''

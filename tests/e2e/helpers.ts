@@ -15,7 +15,7 @@ import { Client, StreamableHTTPClientTransport } from '@modelcontextprotocol/cli
 import type { TestInfo } from '@playwright/test'
 import { expect } from '@playwright/test'
 import { ChildProcess, spawn } from 'node:child_process'
-import { createWriteStream } from 'node:fs'
+import { createWriteStream, type WriteStream } from 'node:fs'
 import { setTimeout as delay } from 'node:timers/promises'
 import { join } from 'node:path'
 
@@ -135,16 +135,21 @@ export async function callToolAndParse(
     if ('structuredContent' in response && response.structuredContent) {
         payload = response.structuredContent as Record<string, unknown>
     } else {
-        const first = content[0]!
-        expect(first.type).toBe('text')
+        const first = content[0]
+        if (first === undefined || first.type !== 'text') {
+            throw new Error(`Expected first content block to have type 'text', got: ${JSON.stringify(first)}`)
+        }
 
         // If the structed property was stripped by strict-schema SDK parsing, we cannot test the E2E JSON effectively from the test harness if it just says "[Structured output attached]".
         // But since the original code was JSON stringified, if we encounter the optimization string, we have a problem.
         if (first.text === '[Structured output attached]') {
             throw new Error('SDK stripped structuredContent and only optimization text remains.')
         }
+        if (typeof first.text !== 'string') {
+            throw new Error(`Expected text field on content block, got: ${JSON.stringify(first)}`)
+        }
 
-        payload = JSON.parse(first.text!) as Record<string, unknown>
+        payload = JSON.parse(first.text) as Record<string, unknown>
     }
 
     // Structured handler failures set isError and still return { success: false }.
@@ -219,6 +224,7 @@ export function expectHandlerError(
 interface ManagedServer {
     process: ChildProcess
     port: number
+    logStream?: WriteStream
 }
 
 const managedServers = new Map<number, ManagedServer>()
@@ -280,7 +286,7 @@ export async function startServer(
     serverProcess.stdout?.pipe(logStream)
     serverProcess.stderr?.pipe(logStream)
 
-    managedServers.set(port, { process: serverProcess, port })
+    managedServers.set(port, { process: serverProcess, port, logStream })
 
     const maxAttempts = 600
     for (let i = 0; i < maxAttempts; i++) {
@@ -296,6 +302,8 @@ export async function startServer(
     }
 
     serverProcess.kill()
+    logStream.end()
+    managedServers.delete(port)
     throw new Error(`Server on port ${port} did not start within timeout`)
 }
 
@@ -306,6 +314,7 @@ export function stopServer(port: number): void {
     const server = managedServers.get(port)
     if (server) {
         server.process.kill('SIGTERM')
+        server.logStream?.end()
         managedServers.delete(port)
     }
 }

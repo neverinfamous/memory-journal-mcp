@@ -33,7 +33,7 @@ export function getToolsCatalogResourceDefinitions(): InternalResourceDef[] {
                     null,
                     vectorManager,
                     github ?? undefined,
-                    undefined,
+                    context.runtime !== undefined ? { runtime: context.runtime } : undefined,
                     teamDb,
                     undefined
                 ).filter((t) => CANONICAL_TOOL_NAMES.has(t.name))

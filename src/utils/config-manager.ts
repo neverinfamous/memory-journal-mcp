@@ -5,15 +5,26 @@ import { logger } from './logger.js'
 import { parseToolFilter } from '../filtering/tool-filter.js'
 import { activeProjectRegistry, pairStoredScope } from './write-scope.js'
 import {
+    applyPersistableConfigKeys,
     applyReloadedBriefingScope,
+    BRIEFING_CONFIG_KEY_MAP,
     buildInitialBaselines,
     reloadBriefingConfigKeys,
     type BriefingBaselineMap,
+    type BriefingConfigurableKey,
     type ConfigCliEnvBaseline,
     type DynamicConfig,
+    type MutatedConfigFields,
+    type UpdateConfigOptions,
 } from './config-manager-helpers.js'
 
-export type { ConfigCliEnvBaseline, DynamicConfig }
+export type {
+    BriefingConfigurableKey,
+    ConfigCliEnvBaseline,
+    DynamicConfig,
+    MutatedConfigFields,
+    UpdateConfigOptions,
+}
 
 /** Delay before a config-file change is reloaded, so bursts of writes collapse into one reload. */
 const CONFIG_RELOAD_DEBOUNCE_MS = 500
@@ -29,8 +40,12 @@ export class ConfigManager extends EventEmitter {
     private debounceTimer?: ReturnType<typeof setTimeout>
     private isWriting = false
     private closed = false
-    /** True when the current rawToolFilter originated from the config file (not CLI/env). */
+    /** True when the current rawToolFilter originated from the config file or was explicitly mutated. */
     private toolFilterFromFile = false
+    private codemodeFromFile = false
+    private defaultWorkspaceIdFromFile = false
+    private defaultProjectNumberFromFile = false
+    private readonly briefingKeysFromFile: Set<BriefingConfigurableKey>
 
     constructor(
         initialConfig: DynamicConfig,
@@ -51,6 +66,10 @@ export class ConfigManager extends EventEmitter {
         this.toolFilterFromFile = baselines.toolFilterFromFile
         this.codemodeBaseline = baselines.codemodeBaseline
         this.initialBriefingBaseline = baselines.initialBriefingBaseline
+        this.briefingKeysFromFile = new Set(baselines.briefingKeysFromFile)
+        this.codemodeFromFile = baselines.codemodeFromFile
+        this.defaultWorkspaceIdFromFile = baselines.defaultWorkspaceIdFromFile
+        this.defaultProjectNumberFromFile = baselines.defaultProjectNumberFromFile
 
         if (this.configFilePath && fs.existsSync(this.configFilePath)) {
             this.watchFile()
@@ -117,7 +136,12 @@ export class ConfigManager extends EventEmitter {
      * Apply a config update. When `persist` is set and a config file is in use, the change is
      * also written to disk; the returned string is the write error, or undefined on success.
      */
-    public updateConfig(newConfig: Partial<DynamicConfig>, persist = false): string | undefined {
+    public updateConfig(
+        newConfig: Partial<DynamicConfig>,
+        persist = false,
+        options?: UpdateConfigOptions
+    ): string | undefined {
+        const prevConfig = this.config
         let nextConfig: DynamicConfig = { ...this.config, ...newConfig }
         if ('rawToolFilter' in newConfig) {
             nextConfig.toolFilterConfig = newConfig.rawToolFilter
@@ -144,12 +168,62 @@ export class ConfigManager extends EventEmitter {
             }
             nextConfig = { ...nextConfig, briefingConfig: nextBc }
         }
+        if (persist) {
+            this.recordPersistableMutations(prevConfig, newConfig, nextConfig, options)
+        }
         this.config = nextConfig
 
         const persistError = persist && this.configFilePath ? this.persistToFile() : undefined
 
         this.emit('changed', this.config)
         return persistError
+    }
+
+    private recordPersistableMutations(
+        prevConfig: DynamicConfig,
+        newConfig: Partial<DynamicConfig>,
+        nextConfig: DynamicConfig,
+        options?: UpdateConfigOptions
+    ): void {
+        const mutated = options?.mutatedFields
+        if (mutated !== undefined) {
+            if (mutated.rawToolFilter === true) this.toolFilterFromFile = true
+            if (mutated.codemodeInternalFullAccess === true) this.codemodeFromFile = true
+            if (mutated.defaultWorkspaceId === true) this.defaultWorkspaceIdFromFile = true
+            if (mutated.defaultProjectNumber === true) this.defaultProjectNumberFromFile = true
+            for (const key of mutated.briefingKeys ?? []) {
+                this.briefingKeysFromFile.add(key)
+            }
+            return
+        }
+        if ('rawToolFilter' in newConfig) {
+            this.toolFilterFromFile = true
+        }
+        if (
+            'codemodeInternalFullAccess' in newConfig &&
+            nextConfig.codemodeInternalFullAccess !== prevConfig.codemodeInternalFullAccess
+        ) {
+            this.codemodeFromFile = true
+        }
+        if ('briefingConfig' in newConfig) {
+            for (const { target } of Object.values(BRIEFING_CONFIG_KEY_MAP)) {
+                if (nextConfig.briefingConfig[target] !== prevConfig.briefingConfig[target]) {
+                    this.briefingKeysFromFile.add(target)
+                }
+            }
+            if (
+                nextConfig.briefingConfig.defaultWorkspaceId !==
+                prevConfig.briefingConfig.defaultWorkspaceId
+            ) {
+                this.defaultWorkspaceIdFromFile = true
+            }
+            if (
+                nextConfig.briefingConfig.defaultProjectNumber !==
+                prevConfig.briefingConfig.defaultProjectNumber
+            ) {
+                this.defaultProjectNumberFromFile = true
+            }
+        }
     }
 
     public close(): void {
@@ -176,38 +250,13 @@ export class ConfigManager extends EventEmitter {
             }
             const parsed = rawParsed as Record<string, unknown>
 
-            // Update keys
-
-            if (this.config.rawToolFilter !== undefined && this.config.rawToolFilter.trim() !== '') {
-                parsed['toolFilter'] = this.config.rawToolFilter
-                this.toolFilterFromFile = true
-            } else {
-                delete parsed['toolFilter']
-                this.toolFilterFromFile = false
-            }
-            if (this.config.codemodeInternalFullAccess !== undefined) {
-                parsed['codemodeInternalFullAccess'] = this.config.codemodeInternalFullAccess
-            }
-            if (this.config.briefingConfig.entryCount !== undefined) parsed['briefingEntries'] = this.config.briefingConfig.entryCount
-            if (this.config.briefingConfig.summaryCount !== undefined) parsed['briefingSummaries'] = this.config.briefingConfig.summaryCount
-            if (this.config.briefingConfig.includeTeam !== undefined) parsed['briefingIncludeTeam'] = this.config.briefingConfig.includeTeam
-            if (this.config.briefingConfig.issueCount !== undefined) parsed['briefingIssues'] = this.config.briefingConfig.issueCount
-            if (this.config.briefingConfig.prCount !== undefined) parsed['briefingPrs'] = this.config.briefingConfig.prCount
-            if (this.config.briefingConfig.prStatusBreakdown !== undefined) parsed['briefingPrStatus'] = this.config.briefingConfig.prStatusBreakdown
-            if (this.config.briefingConfig.milestoneCount !== undefined) parsed['briefingMilestones'] = this.config.briefingConfig.milestoneCount
-            if (this.config.briefingConfig.workflowCount !== undefined) parsed['briefingWorkflows'] = this.config.briefingConfig.workflowCount
-            if (this.config.briefingConfig.workflowStatusBreakdown !== undefined) parsed['briefingWorkflowStatus'] = this.config.briefingConfig.workflowStatusBreakdown
-            if (this.config.briefingConfig.copilotReviews !== undefined) parsed['briefingCopilot'] = this.config.briefingConfig.copilotReviews
-            if (this.config.briefingConfig.defaultWorkspaceId !== undefined) {
-                parsed['defaultWorkspaceId'] = this.config.briefingConfig.defaultWorkspaceId
-            } else {
-                delete parsed['defaultWorkspaceId']
-            }
-            if (this.config.briefingConfig.defaultProjectNumber !== undefined) {
-                parsed['defaultProjectNumber'] = this.config.briefingConfig.defaultProjectNumber
-            } else {
-                delete parsed['defaultProjectNumber']
-            }
+            applyPersistableConfigKeys(parsed, this.config, {
+                toolFilter: this.toolFilterFromFile,
+                codemode: this.codemodeFromFile,
+                defaultWorkspaceId: this.defaultWorkspaceIdFromFile,
+                defaultProjectNumber: this.defaultProjectNumberFromFile,
+                briefingKeys: this.briefingKeysFromFile,
+            })
 
             let serialized: string
             if (!isYaml) {
@@ -325,12 +374,32 @@ export class ConfigManager extends EventEmitter {
                     typeof parsed['codemodeInternalFullAccess'] === 'boolean'
                         ? parsed['codemodeInternalFullAccess']
                         : undefined
+                if (requested !== undefined) this.codemodeFromFile = true
                 if (requested === false || (requested === true && this.initialCodemodeFullAccess)) {
                     updates.codemodeInternalFullAccess = requested
                 }
-            } else if (this.config.codemodeInternalFullAccess !== this.codemodeBaseline) {
-                updates.codemodeInternalFullAccess = this.codemodeBaseline
+            } else {
+                this.codemodeFromFile = false
+                if (this.config.codemodeInternalFullAccess !== this.codemodeBaseline) {
+                    updates.codemodeInternalFullAccess = this.codemodeBaseline
+                }
             }
+
+            for (const [fileKey, { target, kind }] of Object.entries(BRIEFING_CONFIG_KEY_MAP)) {
+                if (fileKey in parsed && typeof parsed[fileKey] === kind) {
+                    this.briefingKeysFromFile.add(target)
+                } else {
+                    this.briefingKeysFromFile.delete(target)
+                }
+            }
+            this.defaultWorkspaceIdFromFile =
+                typeof parsed['defaultWorkspaceId'] === 'string' &&
+                parsed['defaultWorkspaceId'].trim() !== '' &&
+                parsed['defaultWorkspaceId'].trim() !== '*'
+            this.defaultProjectNumberFromFile =
+                typeof parsed['defaultProjectNumber'] === 'number' &&
+                Number.isInteger(parsed['defaultProjectNumber']) &&
+                parsed['defaultProjectNumber'] > 0
 
             const bc = { ...this.config.briefingConfig }
             let bcChanged = reloadBriefingConfigKeys(parsed, bc, this.initialBriefingBaseline)

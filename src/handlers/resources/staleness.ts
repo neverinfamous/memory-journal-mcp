@@ -5,7 +5,7 @@ import type {
     ResourceContext,
     ResourceResult,
 } from './shared.js'
-import { getBaseUri, safeDecodeUriSegment } from './shared.js'
+import { getBaseUri, safeDecodeUriSegment, sliceUntrustedInline } from './shared.js'
 import { formatHandlerError } from '../../utils/error-helpers.js'
 import { loadProjectRegistryFromConfig } from '../../utils/workspace-resolver.js'
 import { workspacesForProject } from '../../utils/write-scope.js'
@@ -236,7 +236,7 @@ export function getStalenessResourceDefinitions(): InternalResourceDef[] {
                             id: e.id,
                             timestamp: e.timestamp,
                             type: e.entryType,
-                            preview: e.content.length > 100 ? e.content.slice(0, 100) + '...' : e.content,
+                            preview: sliceUntrustedInline(e.content, 100, '...'),
                         })),
                         tag_breakdown: tagsBreakdown,
                         type_breakdown: typeBreakdown,

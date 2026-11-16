@@ -68,14 +68,26 @@ function applyE2eBadge(
   return { content, changed: false };
 }
 
-function updateBadges() {
+interface BadgeMetrics {
+  linesPct: number;
+  coverageColor: string;
+  hasCoverage: boolean;
+  e2ePassing: number;
+  e2eSkipped: number;
+  hasE2e: boolean;
+  covRegex: RegExp;
+  newCovBadge: string;
+  e2eRegex: RegExp;
+  newE2eBadge: string;
+}
+
+function loadBadgeMetrics(): BadgeMetrics {
   const summaryPath = path.join(ROOT_DIR, ".test-output/coverage/coverage-summary.json");
   const playwrightPath = path.join(ROOT_DIR, ".test-output/playwright-results.json");
 
   let linesPct = 0;
   let coverageColor = "red";
   let hasCoverage = false;
-
   if (fs.existsSync(summaryPath)) {
     const summary = JSON.parse(fs.readFileSync(summaryPath, "utf-8"));
     linesPct = summary.total.lines.pct;
@@ -88,7 +100,6 @@ function updateBadges() {
   let e2ePassing = 0;
   let e2eSkipped = 0;
   let hasE2e = false;
-
   if (fs.existsSync(playwrightPath)) {
     const pw = JSON.parse(fs.readFileSync(playwrightPath, "utf-8"));
     e2ePassing = pw.stats.expected || 0;
@@ -107,118 +118,118 @@ function updateBadges() {
     process.exit(1);
   }
 
-  const covRegex = /!\[Coverage\]\(https:\/\/img\.shields\.io\/badge\/Coverage-[0-9.]+.*?\.svg\)/g;
-  const newCovBadge = `![Coverage](https://img.shields.io/badge/Coverage-${linesPct}%25-${coverageColor}.svg)`;
+  return {
+    linesPct,
+    coverageColor,
+    hasCoverage,
+    e2ePassing,
+    e2eSkipped,
+    hasE2e,
+    covRegex: /!\[Coverage\]\(https:\/\/img\.shields\.io\/badge\/Coverage-[0-9.]+.*?\.svg\)/g,
+    newCovBadge: `![Coverage](https://img.shields.io/badge/Coverage-${linesPct}%25-${coverageColor}.svg)`,
+    e2eRegex: /!\[E2E\]\(https:\/\/img\.shields\.io\/badge\/E2E-[^)]+\)/g,
+    newE2eBadge: `![E2E](https://img.shields.io/badge/E2E-${e2ePassing}%20passing%20%C2%B7%20${e2eSkipped}%20skipped-blue.svg)`,
+  };
+}
 
-  const e2eRegex = /!\[E2E\]\(https:\/\/img\.shields\.io\/badge\/E2E-[^)]+\)/g;
-  const newE2eBadge = `![E2E](https://img.shields.io/badge/E2E-${e2ePassing}%20passing%20%C2%B7%20${e2eSkipped}%20skipped-blue.svg)`;
+function updateBadgeTargetFile(file: string, metrics: BadgeMetrics): boolean {
+  const filePath = path.join(ROOT_DIR, file);
+  try {
+    let content = fs.readFileSync(filePath, "utf-8");
+    const originalNormalized = content.replace(/\r\n/g, "\n");
+    let changed = false;
 
-  const filesToUpdate = ["README.md", "DOCKER_README.md"];
-  const updatedFiles: string[] = [];
+    if (metrics.hasCoverage) {
+      const covRes = applyCoverageBadge(content, file, metrics.covRegex, metrics.newCovBadge, metrics.linesPct);
+      content = covRes.content;
+      changed = changed || covRes.changed;
+    }
 
-  for (const file of filesToUpdate) {
-    const filePath = path.join(ROOT_DIR, file);
+    if (metrics.hasE2e) {
+      const e2eRes = applyE2eBadge(
+        content,
+        file,
+        metrics.e2eRegex,
+        metrics.newE2eBadge,
+        metrics.newCovBadge,
+        metrics.e2ePassing,
+        metrics.e2eSkipped,
+      );
+      content = e2eRes.content;
+      changed = changed || e2eRes.changed;
+    }
 
+    if (!changed) {
+      console.log(`No badges found to update in ${file}.`);
+      return false;
+    }
+
+    const finalContent = content.replace(/\r\n/g, "\n");
+    if (finalContent !== originalNormalized) {
+      fs.writeFileSync(filePath, finalContent, "utf-8");
+      return true;
+    }
+    console.log(`Badges in ${file} are already up-to-date.`);
+    return false;
+  } catch (err: unknown) {
+    const code = typeof err === "object" && err !== null && "code" in err ? err.code : undefined;
+    if (code === "ENOENT") {
+      console.warn(`Skipped updating ${file}: File not found.`);
+    } else {
+      console.error(`Failed updating ${file}: ${err instanceof Error ? err.message : String(err)}`);
+      process.exitCode = 1;
+    }
+    return false;
+  }
+}
+
+function autoCommitDirtyBadgeFiles(filesToUpdate: readonly string[], updatedFiles: readonly string[]): void {
+  if (process.env['GITHUB_ACTIONS']) return;
+  const commitScript = path.join(ROOT_DIR, ".agents", "scripts", "commit.ts");
+  const dirtyFiles = filesToUpdate.filter((file) => {
+    if (updatedFiles.includes(file)) return true;
     try {
-      let content = fs.readFileSync(filePath, "utf-8");
-      const originalNormalized = content.replace(/\r\n/g, "\n");
-      let changed = false;
-
-      if (hasCoverage) {
-        const covRes = applyCoverageBadge(content, file, covRegex, newCovBadge, linesPct);
-        content = covRes.content;
-        changed = changed || covRes.changed;
-      }
-
-      if (hasE2e) {
-        const e2eRes = applyE2eBadge(
-          content,
-          file,
-          e2eRegex,
-          newE2eBadge,
-          newCovBadge,
-          e2ePassing,
-          e2eSkipped,
-        );
-        content = e2eRes.content;
-        changed = changed || e2eRes.changed;
-      }
-
-      if (!changed) {
-        console.log(`No badges found to update in ${file}.`);
-        continue;
-      }
-
-      const finalContent = content.replace(/\r\n/g, "\n");
-      if (finalContent !== originalNormalized) {
-        fs.writeFileSync(filePath, finalContent, "utf-8");
-        updatedFiles.push(file);
-      } else {
-        console.log(`Badges in ${file} are already up-to-date.`);
-      }
-    } catch (err: unknown) {
-      const code =
-        typeof err === "object" && err !== null && "code" in err
-          ? (err as { code?: unknown }).code
-          : undefined;
-      if (code === "ENOENT") {
-        console.warn(`Skipped updating ${file}: File not found.`);
-      } else {
-        console.error(
-          `Failed updating ${file}: ${err instanceof Error ? err.message : String(err)}`
-        );
-        process.exitCode = 1;
-      }
+      const diff = execFileSync("git", ["ls-files", "-m", "--", file], {
+        cwd: ROOT_DIR,
+        encoding: "utf-8",
+      }).trim();
+      return diff.length > 0;
+    } catch (error) {
+      console.error(`git status failed for ${file}:`, error instanceof Error ? error.message : error);
+      return false;
     }
+  });
+
+  if (dirtyFiles.length === 0) return;
+  console.log(`\nAuto-committing badge updates for: ${dirtyFiles.join(", ")}`);
+  const args = [
+    commitScript,
+    "--msg",
+    "chore(docs): update test badges",
+    "--impact",
+    "0.1",
+    "--confidence",
+    "1.0",
+    "--validation",
+    "none",
+    "--no-history",
+    ...dirtyFiles.flatMap((f) => ["--add", f]),
+  ];
+
+  try {
+    execFileSync("bun", args, { stdio: "inherit", cwd: ROOT_DIR });
+    console.log("Successfully auto-committed badge updates.");
+  } catch (err: unknown) {
+    console.error("Failed to auto-commit badge updates:", err instanceof Error ? err.message : String(err));
+    process.exit(1);
   }
+}
 
-  if (!process.env['GITHUB_ACTIONS']) {
-    const commitScript = path.join(ROOT_DIR, ".agents", "scripts", "commit.ts");
-    const dirtyFiles = filesToUpdate.filter((file) => {
-      if (updatedFiles.includes(file)) return true;
-      try {
-        const diff = execFileSync("git", ["ls-files", "-m", "--", file], {
-          cwd: ROOT_DIR,
-          encoding: "utf-8",
-        }).trim();
-        return diff.length > 0;
-      } catch (error) {
-        console.error(
-          `git status failed for ${file}:`,
-          error instanceof Error ? error.message : error
-        );
-        return false;
-      }
-    });
-
-    if (dirtyFiles.length > 0) {
-      console.log(`\nAuto-committing badge updates for: ${dirtyFiles.join(", ")}`);
-      const args = [
-        commitScript,
-        "--msg",
-        "chore(docs): update test badges",
-        "--impact",
-        "0.1",
-        "--confidence",
-        "1.0",
-        "--validation",
-        "none",
-        "--no-history",
-        ...dirtyFiles.flatMap((f) => ["--add", f]),
-      ];
-
-      try {
-        execFileSync("bun", args, { stdio: "inherit", cwd: ROOT_DIR });
-        console.log("Successfully auto-committed badge updates.");
-      } catch (err: unknown) {
-        console.error(
-          "Failed to auto-commit badge updates:",
-          err instanceof Error ? err.message : String(err),
-        );
-        process.exit(1);
-      }
-    }
-  }
+function updateBadges(): void {
+  const metrics = loadBadgeMetrics();
+  const filesToUpdate = ["README.md", "DOCKER_README.md"];
+  const updatedFiles = filesToUpdate.filter((file) => updateBadgeTargetFile(file, metrics));
+  autoCommitDirtyBadgeFiles(filesToUpdate, updatedFiles);
 }
 
 updateBadges();

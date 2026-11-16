@@ -184,20 +184,20 @@ function injectProjectGithub(
     }
 }
 
-export async function resolveCodeModeSessionContext(
-    context: ToolContext,
-    input: ExecuteCodeInput
-): Promise<
-    | {
-          sessionContext: ToolContext
-          projectId: number | string | undefined
-          numericProjectId: number | undefined
-          workspaceId: string | undefined
-          explicitWorkspace: boolean
-      }
-    | { errorResponse: Record<string, unknown> }
-> {
-    const effectiveRegistry = context.config?.projectRegistry ?? loadProjectRegistryFromConfig()
+interface ValidatedSessionInput {
+    rawWsTrimmed: string | undefined
+    rawRepoTrimmed: string | undefined
+    hasExplicitRepo: boolean
+    hasExplicitConcreteWs: boolean
+    explicitWorkspace: boolean
+    repoLeaf: string | undefined
+    repoRegistryKey: string | undefined
+}
+
+function validateExplicitRepoAndWorkspaceInput(
+    input: ExecuteCodeInput,
+    effectiveRegistry: ProjectRegistry
+): ValidatedSessionInput | { errorResponse: Record<string, unknown> } {
     const rawWsTrimmed = input.workspace_id?.trim()
     const rawRepoTrimmed = (input.repo ?? input.repo_name)?.trim()
     const hasExplicitRepo = rawRepoTrimmed !== undefined && rawRepoTrimmed !== ''
@@ -216,6 +216,7 @@ export async function resolveCodeModeSessionContext(
                 ? findCanonicalRegistryKey(repoLeaf, effectiveRegistry)
                 : undefined) ?? findCanonicalRegistryKey(rawRepoTrimmed, effectiveRegistry)
     }
+
     if (hasExplicitConcreteWs && hasExplicitRepo) {
         if (repoRegistryKey !== undefined && effectiveRegistry !== undefined) {
             const wsKey = findCanonicalRegistryKey(rawWsTrimmed, effectiveRegistry)
@@ -238,6 +239,7 @@ export async function resolveCodeModeSessionContext(
             )
         }
     }
+
     if (
         hasExplicitRepo &&
         effectiveRegistry !== undefined &&
@@ -249,8 +251,27 @@ export async function resolveCodeModeSessionContext(
         )
     }
 
+    return {
+        rawWsTrimmed,
+        rawRepoTrimmed,
+        hasExplicitRepo,
+        hasExplicitConcreteWs,
+        explicitWorkspace,
+        repoLeaf,
+        repoRegistryKey,
+    }
+}
+
+function resolveSessionWorkspaceAndProjectPair(
+    context: ToolContext,
+    input: ExecuteCodeInput,
+    effectiveRegistry: ProjectRegistry,
+    validated: ValidatedSessionInput
+):
+    | { projectId: number | string | undefined; numericProjectId: number | undefined; workspaceId: string }
+    | { errorResponse: Record<string, unknown> } {
     const explicitDefaultWithoutProject =
-        rawWsTrimmed?.toLowerCase() === 'default' && input.project_number === undefined
+        validated.rawWsTrimmed?.toLowerCase() === 'default' && input.project_number === undefined
     let projectId = explicitDefaultWithoutProject
         ? undefined
         : resolveSessionProjectId(context, input, effectiveRegistry)
@@ -262,16 +283,16 @@ export async function resolveCodeModeSessionContext(
             `Invalid project_number '${String(input.project_number)}'. Expected a positive integer or registered project name.`
         )
     }
-    const isWildcardWorkspace = rawWsTrimmed === '*'
+
+    const isWildcardWorkspace = validated.rawWsTrimmed === '*'
     let numericProjectId = typeof projectId === 'number' ? projectId : undefined
     // [C3] Session scope is never guessed from keywords inside the submitted code.
     const fallbackRepoWs =
-        repoRegistryKey ?? (repoLeaf !== undefined && repoLeaf !== '' ? repoLeaf : undefined)
+        validated.repoRegistryKey ??
+        (validated.repoLeaf !== undefined && validated.repoLeaf !== '' ? validated.repoLeaf : undefined)
     const configuredDefaultWsRaw = context.config?.defaultWorkspaceId?.trim()
     const configuredDefaultWs =
-        configuredDefaultWsRaw !== undefined &&
-        configuredDefaultWsRaw !== '' &&
-        configuredDefaultWsRaw !== '*'
+        configuredDefaultWsRaw !== undefined && configuredDefaultWsRaw !== '' && configuredDefaultWsRaw !== '*'
             ? configuredDefaultWsRaw
             : undefined
     const sessionCtx = getActiveSessionProject(context.config?.runtime)
@@ -295,11 +316,12 @@ export async function resolveCodeModeSessionContext(
         sessionWs === undefined
             ? sessionCtx.projectNumber
             : undefined)
+
     const resolvedContext = resolveProjectContext(
         {
             workspace_id:
                 input.workspace_id ??
-                (!hasExplicitConcreteWs ? (fallbackRepoWs ?? fallbackConfiguredWs) : undefined),
+                (!validated.hasExplicitConcreteWs ? (fallbackRepoWs ?? fallbackConfiguredWs) : undefined),
             project_number: effectiveProjectInput,
         },
         context.config
@@ -307,14 +329,32 @@ export async function resolveCodeModeSessionContext(
     const workspaceId = isWildcardWorkspace ? '*' : resolvedContext.workspaceId
     if (numericProjectId !== undefined && workspaceId !== '*') {
         pairStoredScope(workspaceId, numericProjectId, activeProjectRegistry(effectiveRegistry))
-    } else if (
-        !isWildcardWorkspace &&
-        !explicitDefaultWithoutProject &&
-        resolvedContext.projectNumber !== undefined
-    ) {
+    } else if (!isWildcardWorkspace && !explicitDefaultWithoutProject && resolvedContext.projectNumber !== undefined) {
         numericProjectId = resolvedContext.projectNumber
         projectId = resolvedContext.projectNumber
     }
+    return { projectId, numericProjectId, workspaceId }
+}
+
+export async function resolveCodeModeSessionContext(
+    context: ToolContext,
+    input: ExecuteCodeInput
+): Promise<
+    | {
+          sessionContext: ToolContext
+          projectId: number | string | undefined
+          numericProjectId: number | undefined
+          workspaceId: string | undefined
+          explicitWorkspace: boolean
+      }
+    | { errorResponse: Record<string, unknown> }
+> {
+    const effectiveRegistry = context.config?.projectRegistry ?? loadProjectRegistryFromConfig()
+    const validated = validateExplicitRepoAndWorkspaceInput(input, effectiveRegistry)
+    if ('errorResponse' in validated) return validated
+
+    const scoped = resolveSessionWorkspaceAndProjectPair(context, input, effectiveRegistry, validated)
+    if ('errorResponse' in scoped) return scoped
 
     const repoContext = await injectRepoGithub(
         context,
@@ -322,15 +362,21 @@ export async function resolveCodeModeSessionContext(
         effectiveRegistry
     )
     if ('errorResponse' in repoContext) return repoContext
-    const sessionContext = hasExplicitRepo
+    const sessionContext = validated.hasExplicitRepo
         ? repoContext
         : injectProjectGithub(
               repoContext,
-              projectId,
+              scoped.projectId,
               effectiveRegistry,
               context.config?.codemodeInternalFullAccess === true,
-              workspaceId
+              scoped.workspaceId
           )
     if ('errorResponse' in sessionContext) return sessionContext
-    return { sessionContext, projectId, numericProjectId, workspaceId, explicitWorkspace }
+    return {
+        sessionContext,
+        projectId: scoped.projectId,
+        numericProjectId: scoped.numericProjectId,
+        workspaceId: scoped.workspaceId,
+        explicitWorkspace: validated.explicitWorkspace,
+    }
 }

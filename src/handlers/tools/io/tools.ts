@@ -1,4 +1,5 @@
 import type { ToolDefinition, ToolContext } from '../../../types/index.js'
+import { AggregateMcpError } from '../../../types/errors.js'
 import { formatHandlerError } from '../../../utils/error-helpers.js'
 import { sendProgress } from '../../../utils/progress-utils.js'
 import { logger } from '../../../utils/logger.js'
@@ -241,6 +242,14 @@ export function getIoTools(context: ToolContext): ToolDefinition[] {
                         db,
                         allowedRoots
                     )
+                    if (!result.success && result.errors !== undefined && result.errors.length > 0) {
+                        const total = result.exported_count + result.errors.length
+                        throw new AggregateMcpError(
+                            `Exporting ${String(total)} entries: ${String(result.exported_count)} succeeded, ${String(result.errors.length)} failed.`,
+                            result.errors.map((e) => ({ message: e.error, file: e.file })),
+                            { result }
+                        )
+                    }
 
                     await sendProgress(progress, 3, 3, 'Export complete')
                     return result

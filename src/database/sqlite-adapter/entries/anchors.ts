@@ -60,28 +60,30 @@ export function updateAnchorStatus(
     context: EntriesSharedContext,
     id: number,
     status: AnchorStatus,
-    workspaceId?: string
+    workspaceId?: string,
+    projectNumber?: number
 ): boolean {
     const { db } = context
     const scope = effectiveWorkspace(workspaceId)
+    const conditions = ['deleted_at IS NULL']
+    const params: unknown[] = [status, id]
     if (scope !== '*') {
-        const result = db
-            .prepare(
-                `
+        conditions.push('workspace_id = ?')
+        params.push(scope)
+    }
+    if (typeof projectNumber === 'number' && Number.isFinite(projectNumber)) {
+        conditions.push('project_number = ?')
+        params.push(projectNumber)
+    }
+    const result = db
+        .prepare(
+            `
         UPDATE entry_anchors
         SET status = ?, last_checked_at = CURRENT_TIMESTAMP
         WHERE id = ?
-          AND entry_id IN (SELECT id FROM memory_journal WHERE workspace_id = ? AND deleted_at IS NULL)
+          AND entry_id IN (SELECT id FROM memory_journal WHERE ${conditions.join(' AND ')})
     `
-            )
-            .run(status, id, scope)
-        return result.changes > 0
-    }
-    const result = db.prepare(`
-        UPDATE entry_anchors 
-        SET status = ?, last_checked_at = CURRENT_TIMESTAMP
-        WHERE id = ?
-          AND entry_id IN (SELECT id FROM memory_journal WHERE deleted_at IS NULL)
-    `).run(status, id)
+        )
+        .run(...params)
     return result.changes > 0
 }

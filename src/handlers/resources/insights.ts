@@ -9,8 +9,36 @@
 import { ICON_ANALYTICS } from '../../constants/icons.js'
 import { withPriority, ASSISTANT_FOCUSED } from '../../utils/resource-annotations.js'
 import type { InternalResourceDef, ResourceContext, ResourceResult } from './shared.js'
-import { resourceWorkspace } from './shared.js'
+import { resourceWorkspace, sliceUntrustedInline } from './shared.js'
+import { enforceTeamResourceRbac } from './team.js'
 import { ProtocolError, ProtocolErrorCode } from '@modelcontextprotocol/server'
+
+const DIGEST_PREVIEW_LIMIT = 200
+
+function sanitizeDigestSnapshot(snapshot: unknown): unknown {
+    if (
+        typeof snapshot !== 'object' ||
+        snapshot === null ||
+        Array.isArray(snapshot) ||
+        !('topImportanceEntries' in snapshot)
+    ) {
+        return snapshot
+    }
+    const rawTop: unknown = Reflect.get(snapshot, 'topImportanceEntries')
+    if (!Array.isArray(rawTop)) return snapshot
+    return {
+        ...snapshot,
+        topImportanceEntries: rawTop.map((item: unknown) => {
+            if (typeof item !== 'object' || item === null || Array.isArray(item)) return item
+            const preview: unknown = Reflect.get(item, 'preview')
+            if (typeof preview !== 'string') return item
+            return {
+                ...item,
+                preview: sliceUntrustedInline(preview, DIGEST_PREVIEW_LIMIT, '...'),
+            }
+        }),
+    }
+}
 
 // ============================================================================
 // memory://insights/digest
@@ -34,7 +62,7 @@ export const digestInsightsResource: InternalResourceDef = {
         // Try scheduler first, then persisted DB snapshot
         const schedulerDigest = context.scheduler?.getLatestDigest?.(wsId)
         if (schedulerDigest) {
-            const data = { success: true, snapshot: schedulerDigest }
+            const data = { success: true, snapshot: sanitizeDigestSnapshot(schedulerDigest) }
             const tokenEstimate = Math.ceil(JSON.stringify(data).length / 4)
             return {
                 data: { ...data, _meta: { tokenEstimate } },
@@ -48,7 +76,7 @@ export const digestInsightsResource: InternalResourceDef = {
             if (liveDigest !== undefined) {
                 const data = {
                     success: true,
-                    snapshot: liveDigest,
+                    snapshot: sanitizeDigestSnapshot(liveDigest),
                     source: 'computed',
                 }
                 const tokenEstimate = Math.ceil(JSON.stringify(data).length / 4)
@@ -65,7 +93,7 @@ export const digestInsightsResource: InternalResourceDef = {
         if (dbSnapshot) {
             const data = {
                 success: true,
-                snapshot: dbSnapshot.data,
+                snapshot: sanitizeDigestSnapshot(dbSnapshot.data),
                 computedAt: dbSnapshot.createdAt,
                 source: 'persisted',
             }
@@ -105,12 +133,15 @@ export const teamCollaborationResource: InternalResourceDef = {
             throw new ProtocolError(ProtocolErrorCode.InternalError,  'Team database not configured — set TEAM_DB_PATH to enable.')
         }
 
+        const wsId = resourceWorkspace(context)
+        enforceTeamResourceRbac(context, wsId)
+
         // Compute collaboration matrix live from team DB
         try {
             const matrix = context.teamDb.getTeamCollaborationMatrix({
                 period: 'month',
                 limit: 100,
-                workspaceId: resourceWorkspace(context),
+                workspaceId: wsId,
             })
             const data = { success: true, matrix }
             const tokenEstimate = Math.ceil(JSON.stringify(data).length / 4)
@@ -148,9 +179,13 @@ export const reportHistoryResource: InternalResourceDef = {
             const reports = snapshots.map(snapshot => {
                 const data = snapshot.data
                 const topEntries = data['topImportanceEntries'] as { preview?: string }[] | undefined
+                const rawPreview = (data['preview'] as string | undefined) ?? topEntries?.[0]?.preview
                 return {
                     computedAt: snapshot.createdAt,
-                    preview: (data['preview'] as string | undefined) ?? topEntries?.[0]?.preview?.substring(0, 200) ?? 'No preview available'
+                    preview:
+                        typeof rawPreview === 'string' && rawPreview.length > 0
+                            ? sliceUntrustedInline(rawPreview, DIGEST_PREVIEW_LIMIT, '...')
+                            : 'No preview available',
                 }
             })
 

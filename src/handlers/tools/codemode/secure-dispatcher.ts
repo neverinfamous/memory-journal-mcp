@@ -12,6 +12,7 @@ import { globalSubscriptionManager } from '../../../server/subscription-manager.
 import { logger } from '../../../utils/logger.js'
 import { activeProjectRegistry, uniqueWorkspaceForProject } from '../../../utils/write-scope.js'
 import { getRpcExecutionOverrides } from '../../../codemode/rpc-context.js'
+import { getRequestContext, requestContextStorage } from '../../../utils/request-context.js'
 import { normalizeDispatchParams } from './dispatch-scope.js'
 
 export { resolveCodeModeSessionContext } from './session-context.js'
@@ -68,14 +69,27 @@ export function createSecureDispatcher(
             )
         }
 
-        const normalized = await normalizeDispatchParams(tool, toolParams, {
+        let cleanToolParams = toolParams
+        let callUseTestDb = false
+        if (isRecord(toolParams)) {
+            callUseTestDb =
+                toolParams['use_test_db'] === true || toolParams['useTestDb'] === true
+            if ('use_test_db' in toolParams || 'useTestDb' in toolParams) {
+                const cloned = { ...toolParams }
+                delete cloned['use_test_db']
+                delete cloned['useTestDb']
+                cleanToolParams = cloned
+            }
+        }
+
+        const normalized = await normalizeDispatchParams(tool, cleanToolParams, {
             sessionContext,
             projectId,
             workspaceId,
             ...(explicitWorkspace !== undefined ? { explicitWorkspace } : {}),
         })
         if ('errorResult' in normalized) return normalized.errorResult
-        let finalParams = normalized.params
+        const normalizedParams = normalized.params
 
         const rpcOverrides = getRpcExecutionOverrides()
         if (rpcOverrides?.readonly === true && tool.annotations?.readOnlyHint !== true) {
@@ -88,26 +102,39 @@ export function createSecureDispatcher(
             }
         }
 
-        finalParams = applyAutoVersion(tool, finalParams, autoVersion, sessionContext)
+        const executeWithScope = async (): Promise<unknown> => {
+            const finalParams = applyAutoVersion(tool, normalizedParams, autoVersion, sessionContext)
 
-        if (tool.annotations?.readOnlyHint === false && (dryRun || rpcOverrides?.dryRun === true)) {
-            return {
-                success: true,
-                dry_run: true,
-                message: `Simulated successful execution of ${toolName}`,
-                simulatedParams: finalParams,
+            if (tool.annotations?.readOnlyHint !== true && (dryRun || rpcOverrides?.dryRun === true)) {
+                return {
+                    success: true,
+                    dry_run: true,
+                    message: `Simulated successful execution of ${toolName}`,
+                    simulatedParams: finalParams,
+                }
             }
+
+            if (isSimulation === true && tool.annotations?.readOnlyHint !== true) {
+                return { success: true, simulated: true, params: finalParams }
+            }
+
+            if (tool.annotations?.readOnlyHint !== true) {
+                options.onMutatingDispatch?.()
+            }
+
+            return invokeToolWithGuards(tool, finalParams, sessionContext)
         }
 
-        if (isSimulation === true && tool.annotations?.readOnlyHint === false) {
-            return { success: true, simulated: true, params: finalParams }
+        const existingReqCtx = getRequestContext()
+        const effectiveUseTestDb =
+            callUseTestDb || rpcOverrides?.useTestDb === true || existingReqCtx?.useTestDb === true
+        if (effectiveUseTestDb && existingReqCtx?.useTestDb !== true) {
+            return requestContextStorage.run(
+                { ...(existingReqCtx ?? {}), useTestDb: true },
+                executeWithScope
+            )
         }
-
-        if (tool.annotations?.readOnlyHint !== true) {
-            options.onMutatingDispatch?.()
-        }
-
-        return invokeToolWithGuards(tool, finalParams, sessionContext)
+        return executeWithScope()
     }
 }
 

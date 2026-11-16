@@ -307,7 +307,10 @@ function attachResourceAndSubscriptionHandlers(
 
         validateResourceSubscription(request.params.uri, context.runtime)
 
-        if (options.statelessHttp === true && (sessionId === undefined || sessionId === '')) {
+        if (
+            (options.transport === 'http' || options.statelessHttp === true) &&
+            (sessionId === undefined || sessionId === '')
+        ) {
             return {}
         }
 
@@ -318,6 +321,12 @@ function attachResourceAndSubscriptionHandlers(
 
     server.server.setRequestHandler('resources/unsubscribe', (request, extra) => {
         const sessionId = (extra as { sessionId?: string } | undefined)?.sessionId
+        if (
+            (options.transport === 'http' || options.statelessHttp === true) &&
+            (sessionId === undefined || sessionId === '')
+        ) {
+            return {}
+        }
         const transportSessionId =
             sessionId !== undefined && sessionId !== '' ? sessionId : 'stdio'
         globalSubscriptionManager.unsubscribe(request.params.uri, transportSessionId)

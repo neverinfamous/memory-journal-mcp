@@ -263,6 +263,10 @@ export function resolveExecutionPayload(
                 isNaturalLanguagePrompt(executionCode))
         ) {
             executionCode = buildQuerySearch(executionCode, input, params)
+        } else if (initial.sourceKey === 'query' && looksLikeSqlQuery && !hasExplicitContent) {
+            return validationFailure(
+                'Could not translate raw SQL in `query`. Use `mj.search.searchEntries({ query: "..." })` or a supported `mj.*` method.'
+            )
         } else {
             executionCode = healCodeModeScript(executionCode)
             const trimmedCode = executionCode.trim()

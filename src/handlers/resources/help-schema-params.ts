@@ -128,7 +128,7 @@ export function peelZodType(
             currentSchema = next.schema
             currentDef = next.def
         } else if (ZOD_TRANSPARENT_WRAPPERS.has(tn)) {
-            const next = unwrapDefChild(currentDef, ['in', 'schema', 'innerType'])
+            const next = unwrapDefChild(currentDef, ['in', 'out', 'schema', 'innerType'])
             if (!next?.def) break
             currentSchema = next.schema
             currentDef = next.def

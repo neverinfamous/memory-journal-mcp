@@ -102,8 +102,15 @@ function isLockStale(lockDir: string, lockFile: string, runtime: unknown): boole
         if (holdingPid === undefined || isNaN(holdingPid)) return false
         return isHoldingPidStale(holdingPid, lockTimestamp, lockDir, runtime)
     } catch (readErr: unknown) {
-        // If the directory exists but the lock file is missing, it's an orphaned lock
-        return hasErrorCode(readErr, 'ENOENT')
+        // Only treat a missing lock.json as orphaned after a creation grace window so a contender
+        // between mkdirSync(lockDir) and writeLockFile(lockFile) is never falsely reclaimed.
+        if (!hasErrorCode(readErr, 'ENOENT')) return false
+        try {
+            const stat = fs.statSync(lockDir)
+            return Date.now() - stat.mtimeMs > 2000
+        } catch {
+            return false
+        }
     }
 }
 
@@ -113,8 +120,14 @@ function clearStaleLock(lockDir: string): void {
         path: lockDir,
         module: 'SqliteAdapter',
     })
+    const staleDir = `${lockDir}.${randomUUID()}.stale`
     try {
-        fs.renameSync(lockDir, `${lockDir}.${randomUUID()}.stale`)
+        fs.renameSync(lockDir, staleDir)
+        try {
+            fs.rmSync(staleDir, { recursive: true, force: true, maxRetries: 3, retryDelay: 25 })
+        } catch {
+            // Best-effort cleanup of renamed stale directory
+        }
     } catch (renameErr) {
         // On Windows or concurrent environments, renaming a directory with files can throw EPERM/EBUSY.
         // Fall back to safely removing the stale lock directory.

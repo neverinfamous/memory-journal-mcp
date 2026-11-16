@@ -243,6 +243,14 @@ export function getTeamIoTools(context: ToolContext): ToolDefinition[] {
                         teamDb,
                         allowedRoots
                     )
+                    if (!result.success && result.errors !== undefined && result.errors.length > 0) {
+                        const total = result.exported_count + result.errors.length
+                        throw new AggregateMcpError(
+                            `Exporting ${String(total)} team entries: ${String(result.exported_count)} succeeded, ${String(result.errors.length)} failed.`,
+                            result.errors.map((e) => ({ message: e.error, file: e.file })),
+                            { result }
+                        )
+                    }
                     await sendProgress(progress, 3, 3, 'Team export complete')
                     return result
                 } catch (err) {
@@ -359,7 +367,7 @@ export function getTeamIoTools(context: ToolContext): ToolDefinition[] {
                     const allowedRoots = context.config?.allowedIoRoots ?? []
                     await sendProgress(progress, 0, 3, 'Reading files...')
 
-                    const { parsedFiles, errors } = await readAndConvertExternalMarkdownFiles(
+                    const { parsedFiles, errors, skipped: emptySkipped } = await readAndConvertExternalMarkdownFiles(
                         input.source_dir,
                         input.limit,
                         input.source_format,
@@ -388,6 +396,7 @@ export function getTeamIoTools(context: ToolContext): ToolDefinition[] {
                         },
                         context.teamVectorManager
                     )
+                    result.skipped += emptySkipped
 
                     if (errors.length > 0) {
                         result.success = false

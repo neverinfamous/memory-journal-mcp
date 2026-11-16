@@ -109,6 +109,7 @@ interface RecoveryRunOptions {
     timeoutMs: number | undefined
     userContext: Record<string, unknown>
     isSandboxReadonly: boolean
+    useTestDb: boolean
     requestedMaxResultSize: number | undefined
     healingEnabled: boolean
     getMutated: () => boolean
@@ -119,6 +120,11 @@ async function runSandboxWithAutonomousRecovery(opts: RecoveryRunOptions): Promi
     let execResult: SandboxResult | undefined
     const authCtx = getAuthContext()
     const reqCtx = getRequestContext()
+    const effectiveUseTestDb = opts.useTestDb || reqCtx?.useTestDb === true
+    const nextRequestContext = {
+        ...(reqCtx ?? {}),
+        ...(effectiveUseTestDb ? { useTestDb: true } : {}),
+    }
 
     const runSandbox = async (codeToRun: string): Promise<void> => {
         opts.resetMutated()
@@ -131,7 +137,7 @@ async function runSandboxWithAutonomousRecovery(opts: RecoveryRunOptions): Promi
         await (authCtx !== undefined ? runWithAuthContext(authCtx, executePool) : executePool())
     }
 
-    await requestContextStorage.run(reqCtx ?? {}, async () => {
+    await requestContextStorage.run(nextRequestContext, async () => {
         await runSandbox(opts.executionCode)
         if (opts.getMutated() || !opts.healingEnabled || !execResult || execResult.success || typeof execResult.error !== 'string') return
         if (!isRecoverableSyntaxError(execResult.error)) return
@@ -205,6 +211,7 @@ async function executeCodeModeHandler(
             pool: getSandboxPool(), securityManager, executionCode, originalCode: input.code,
             apiBindings: journalApi.createSandboxBindings(sessionContext.progress), schemas,
             timeoutMs: input.timeout ?? input.timeout_ms, userContext, isSandboxReadonly,
+            useTestDb: input.use_test_db === true || input.useTestDb === true,
             requestedMaxResultSize, healingEnabled,
             getMutated: () => mutatedDuringRun, resetMutated: () => { mutatedDuringRun = false },
         })

@@ -8,7 +8,6 @@ import { getRequestContext } from '../../../utils/request-context.js'
 import { activeProjectRegistry } from '../../../utils/write-scope.js'
 import type { ToolContext } from '../../../types/index.js'
 import { getNonEmptyString, type ExecuteCodeInput } from './natural-language-synthesizer.js'
-import { lookupRegistryEntry } from './session-context.js'
 
 function parseSizeInBytes(val: unknown, defaultUnit: 'b' | 'kb' = 'b'): number | undefined {
     const defaultMult = defaultUnit === 'kb' ? 1024 : 1
@@ -55,26 +54,13 @@ export function buildSandboxUserContext(
     projectId: number | string | undefined,
     numericProjectId: number | undefined,
     workspaceId: string | undefined,
-    explicitWorkspace?: boolean
+    _explicitWorkspace?: boolean
 ): { userContext: Record<string, unknown>; requestedMaxResultSize: number | undefined } {
     const userContext = parseUserContext(input.context)
     const reg = activeProjectRegistry(sessionContext.config?.projectRegistry)
 
-    const wsRegEntry =
-        workspaceId !== undefined && workspaceId !== '*' ? lookupRegistryEntry(reg, workspaceId) : undefined
-    const isDefaultOrUnnumberedExplicit =
-        explicitWorkspace === true &&
-        workspaceId !== undefined &&
-        (workspaceId.trim().toLowerCase() === 'default' ||
-            (wsRegEntry !== undefined && wsRegEntry.project_number === undefined))
-
     const resolvedProjectNumber =
-        numericProjectId ??
-        (typeof projectId === 'number'
-            ? projectId
-            : isDefaultOrUnnumberedExplicit
-              ? undefined
-              : sessionContext.config?.defaultProjectNumber)
+        numericProjectId ?? (typeof projectId === 'number' ? projectId : undefined)
     const sessionFromUser = getNonEmptyString(userContext, {}, ['session_id', 'sessionId'])
     const resolvedSessionId =
         typeof input.session_id === 'string' && input.session_id.length > 0

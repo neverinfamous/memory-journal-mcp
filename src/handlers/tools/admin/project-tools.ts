@@ -169,10 +169,11 @@ export function getProjectTools(context: ToolContext): ToolDefinition[] {
             handler: (params: unknown) => {
                 try {
                     const parsed = RegisterProjectSchemaMcp.parse(params)
+                    const cleanName = parsed.name.trim()
                     if (invalidProjectNumber(parsed.project_number)) {
                         return Promise.resolve({ success: false, error: 'project_number must be a positive integer' })
                     }
-                    if (isForbiddenProjectKey(parsed.name)) {
+                    if (cleanName === '' || isForbiddenProjectKey(cleanName)) {
                         return Promise.resolve({ success: false, error: `Invalid project name: '${parsed.name}'` })
                     }
                     if (!isValidProjectPath(parsed.absolute_path, allowedRoots)) {
@@ -182,17 +183,17 @@ export function getProjectTools(context: ToolContext): ToolDefinition[] {
                     config['projectRegistry'] ??= {}
                     const registry = config['projectRegistry'] as Record<string, { path: string, project_number?: number }>
 
-                    const keyConflict = findCaseInsensitiveKeyConflict(registry, parsed.name, parsed.name)
+                    const keyConflict = findCaseInsensitiveKeyConflict(registry, cleanName, cleanName)
                     if (keyConflict !== undefined) {
                         return Promise.resolve({
                             success: false,
-                            error: `Project '${keyConflict}' already exists (conflicts with '${parsed.name}').`,
+                            error: `Project '${keyConflict}' already exists (conflicts with '${cleanName}').`,
                         })
                     }
 
                     const coercedNum = coerceRegistryProjectNumber(parsed.project_number)
                     if (coercedNum !== undefined) {
-                        const numConflict = findProjectNumberConflict(registry, coercedNum, [parsed.name])
+                        const numConflict = findProjectNumberConflict(registry, coercedNum, [cleanName])
                         if (numConflict !== undefined) {
                             return Promise.resolve({
                                 success: false,
@@ -201,19 +202,19 @@ export function getProjectTools(context: ToolContext): ToolDefinition[] {
                         }
                     }
 
-                    const projectRef = Object.hasOwn(registry, parsed.name)
-                        ? { ...(registry[parsed.name] ?? { path: parsed.absolute_path }) }
+                    const projectRef = Object.hasOwn(registry, cleanName)
+                        ? { ...(registry[cleanName] ?? { path: parsed.absolute_path }) }
                         : { path: parsed.absolute_path }
                     projectRef.path = parsed.absolute_path
                     if (coercedNum !== undefined) {
                         projectRef.project_number = coercedNum
                     }
-                    registry[parsed.name] = projectRef
+                    registry[cleanName] = projectRef
 
                     saveConfig(config, context)
 
-                    const message = `Project '${parsed.name}' registered successfully.`
-                    return Promise.resolve({ success: true, message, project: { name: parsed.name, ...registry[parsed.name] } })
+                    const message = `Project '${cleanName}' registered successfully.`
+                    return Promise.resolve({ success: true, message, project: { name: cleanName, ...registry[cleanName] } })
                 } catch (err) {
                     return Promise.resolve(formatHandlerError(err))
                 }
@@ -241,7 +242,7 @@ export function getProjectTools(context: ToolContext): ToolDefinition[] {
                     if (isForbiddenProjectKey(parsed.name) || (parsed.new_name !== undefined && isForbiddenProjectKey(parsed.new_name))) {
                         return Promise.resolve({ success: false, error: `Invalid project name.` })
                     }
-                    if (parsed.absolute_path && !isValidProjectPath(parsed.absolute_path, allowedRoots)) {
+                    if (parsed.absolute_path !== undefined && !isValidProjectPath(parsed.absolute_path, allowedRoots)) {
                         return Promise.resolve({ success: false, error: `Invalid or unsafe project path: '${parsed.absolute_path}'` })
                     }
                     const config = loadConfig(context)
@@ -287,7 +288,7 @@ export function getProjectTools(context: ToolContext): ToolDefinition[] {
                     }
 
                     const project = { ...(registry[parsed.name] ?? { path: '' }) }
-                    if (parsed.absolute_path) project.path = parsed.absolute_path
+                    if (parsed.absolute_path !== undefined) project.path = parsed.absolute_path
                     if (coercedUpdateNum !== undefined) project.project_number = coercedUpdateNum
 
                     if (targetName !== parsed.name) {

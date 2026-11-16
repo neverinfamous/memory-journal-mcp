@@ -22,23 +22,23 @@ import { ErrorFieldsMixin } from './error-fields-mixin.js'
 const INACTIVE_THRESHOLD_DAYS = 7
 
 const PROJECT_NUMBER_ERROR =
-    'project_number must be a finite number or a decimal integer string'
+    'project_number must be a positive safe integer or positive integer string'
 
 /**
- * A numeric project_number selects a workspace. Decimal integer strings are coerced.
- * Any other present value is rejected so the handler does not silently use the default workspace.
+ * A positive integer project_number selects/filters a project. Decimal integer strings are coerced.
+ * Any other present value (0, negative, float, non-numeric) is rejected.
  */
 function coerceAnalyticsProjectNumber(projectNumber: unknown): number | undefined {
     if (projectNumber === undefined) return undefined
     if (typeof projectNumber === 'number') {
-        if (!Number.isFinite(projectNumber)) {
+        if (!Number.isSafeInteger(projectNumber) || projectNumber <= 0) {
             throw new ValidationError(PROJECT_NUMBER_ERROR)
         }
         return projectNumber
     }
-    if (typeof projectNumber === 'string' && /^-?\d+$/.test(projectNumber)) {
-        const parsed = Number(projectNumber)
-        if (!Number.isFinite(parsed)) {
+    if (typeof projectNumber === 'string' && /^\d+$/.test(projectNumber.trim())) {
+        const parsed = Number(projectNumber.trim())
+        if (!Number.isSafeInteger(parsed) || parsed <= 0) {
             throw new ValidationError(PROJECT_NUMBER_ERROR)
         }
         return parsed
@@ -291,7 +291,7 @@ const CrossProjectInsightsInputSchemaMcp = z.object({
         .default(3)
         .describe('Minimum entries to include project'),
     workspace_id: z.string().optional().describe('Optional workspace isolation identifier (e.g. "alpha"). Do not use numeric project IDs or "workspace" as the key.'),
-    project_number: z.unknown().optional().describe('Anti-Hallucination Hint: get_cross_project_insights analyzes ALL projects in the workspace and does not filter by project_number.'),
+    project_number: z.unknown().optional().describe('Optional GitHub project number to resolve workspace or narrow insights to a specific project.'),
     query: z.unknown().optional().describe('Anti-Hallucination Hint: get_cross_project_insights does not take a query. It analyzes all entries.'),
     limit: z.unknown().optional().describe('Anti-Hallucination Hint: get_cross_project_insights does not take a limit.'),
 })
@@ -374,22 +374,17 @@ export function getAnalyticsTools(context: ToolContext): ToolDefinition[] {
                         omitNonStrictCrossProjectKeys(params)
                     )
                     const resolvedProjectNumber = coerceAnalyticsProjectNumber(input.project_number)
-                    // [INTENT] M1: cross-project insights are inherently multi-project; only narrow
-                    // the scope when the caller explicitly names a workspace.
+                    // [INTENT] M1: cross-project insights span all projects unless workspace_id or
+                    // project_number is specified by the caller.
                     const wsId =
-                        input.workspace_id === undefined
+                        input.workspace_id === undefined && resolvedProjectNumber === undefined
                             ? '*'
                             : resolveWorkspaceId(input.workspace_id, resolvedProjectNumber, context.config)
-                    // Cross-project insights aggregate across projects when workspace is wildcard;
-                    // only filter to one project_number when an explicit concrete workspace was given.
-                    const effectiveProjectFilter =
-                        wsId === '*'
-                            ? undefined
-                            : alignedProjectFilter(
-                                  wsId,
-                                  resolvedProjectNumber,
-                                  activeProjectRegistry(context.config?.projectRegistry)
-                              )
+                    const effectiveProjectFilter = alignedProjectFilter(
+                        wsId,
+                        resolvedProjectNumber,
+                        activeProjectRegistry(context.config?.projectRegistry)
+                    )
 
                     const results = context.db.getCrossProjectInsights({
                         startDate: input.start_date,

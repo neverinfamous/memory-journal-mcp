@@ -42,31 +42,34 @@ export const TeamGetStatisticsSchemaMcp = z.object({
 })
 
 /** team_link_entries — strict */
-export const TeamLinkEntriesSchema = z
-    .object({
-        from_entry_id: z.number().int().positive(),
-        to_entry_id: z.number().int().positive(),
-        relationship_type: z.preprocess(
-            normalizeTeamLinkRelationshipType,
-            z
-                .enum([
-                    'evolves_from',
-                    'references',
-                    'implements',
-                    'clarifies',
-                    'response_to',
-                    'blocked_by',
-                    'resolved',
-                    'caused',
-                ])
-                .optional()
-                .default('references')
-        ),
-        description: z.string().optional(),
-        project_number: StrictProjectNumberSchema.optional(),
-        workspace_id: z.string().optional(),
-    })
-    .strict()
+export const TeamLinkEntriesSchema = z.preprocess(
+    preprocessTeamLinkEntries,
+    z
+        .object({
+            from_entry_id: z.number().int().positive(),
+            to_entry_id: z.number().int().positive(),
+            relationship_type: z.preprocess(
+                normalizeTeamLinkRelationshipType,
+                z
+                    .enum([
+                        'evolves_from',
+                        'references',
+                        'implements',
+                        'clarifies',
+                        'response_to',
+                        'blocked_by',
+                        'resolved',
+                        'caused',
+                    ])
+                    .optional()
+                    .default('references')
+            ),
+            description: z.string().optional(),
+            project_number: StrictProjectNumberSchema.optional(),
+            workspace_id: z.string().optional(),
+        })
+        .strict()
+)
 
 /** team_link_entries — relaxed */
 export const TeamLinkEntriesSchemaMcp = z.preprocess(
@@ -292,6 +295,7 @@ export const TeamRebuildVectorIndexOutputSchema = z
         partial: z.boolean().optional(),
         entriesIndexed: z.number().optional(),
         failedEntries: z.number().optional(),
+        warning: z.string().optional(),
         error: z.string().optional(),
     })
     .extend(ErrorFieldsMixin.shape)

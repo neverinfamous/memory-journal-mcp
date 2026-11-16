@@ -19,7 +19,7 @@ export function getAuthorStatistics(
     try {
         const scopeId = effectiveWorkspace(workspaceId)
         const wsFilter = scopeId !== '*' ? ' AND mj.workspace_id = ?' : ''
-        const hasProject = typeof projectNumber === 'number' && projectNumber > 0
+        const hasProject = typeof projectNumber === 'number' && Number.isFinite(projectNumber)
         const projFilter = hasProject ? ' AND mj.project_number = ?' : ''
         const params: unknown[] = [
             ...(scopeId !== '*' ? [scopeId] : []),

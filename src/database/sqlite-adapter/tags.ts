@@ -108,7 +108,9 @@ export class TagsManager {
     listTags(workspaceId?: string, projectNumber?: number): Tag[] {
         const wsId = effectiveWorkspace(workspaceId)
         const scopedProject =
-            typeof projectNumber === 'number' && projectNumber >= 0 ? projectNumber : undefined
+            typeof projectNumber === 'number' && Number.isFinite(projectNumber)
+                ? projectNumber
+                : undefined
         const hasDeletedAt =
             this.db
                 .prepare(
@@ -162,7 +164,9 @@ export class TagsManager {
             const scopeId = effectiveWorkspace(workspaceId)
             const scopedWorkspace = scopeId === '*' ? undefined : scopeId
             const scopedProject =
-                typeof projectNumber === 'number' && projectNumber > 0 ? projectNumber : undefined
+                typeof projectNumber === 'number' && Number.isFinite(projectNumber)
+                    ? projectNumber
+                    : undefined
             const conditions = ['et.tag_id = ?', 'mj.deleted_at IS NULL']
             const selectParams: unknown[] = [sourceTagId]
             if (scopedWorkspace !== undefined) {

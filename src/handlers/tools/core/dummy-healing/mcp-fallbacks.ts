@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import type { ToolDefinition, ToolContext } from '../../../../types/index.js'
-import { PermissionError, ValidationError } from '../../../../types/errors.js'
+import { AuthorizationError, PermissionError, ValidationError } from '../../../../types/errors.js'
+import { formatHandlerError } from '../../../../utils/error-helpers.js'
 import { VERSION } from '../../../../version.js'
 import { getAllToolNames, isToolVisibleForFilter } from '../../../../filtering/tool-filter.js'
 import { getCoreTools } from '../tools.js'
@@ -116,7 +117,8 @@ export async function handleReadResource(
                 _healing_note: `🛠️ AUTONOMOUS HEALING: '${toolName}' was called as an MCP tool instead of an MCP resource read. The resource '${uri}' was resolved successfully.`,
             }
         } catch (err) {
-            if (err instanceof PermissionError || err instanceof ValidationError) throw err
+            if (err instanceof PermissionError || err instanceof AuthorizationError) throw err
+            if (err instanceof ValidationError) return formatHandlerError(err)
             return {
                 success: false,
                 error: `Failed to read resource '${uri}': ${err instanceof Error ? err.message : String(err)}`,

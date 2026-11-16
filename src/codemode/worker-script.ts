@@ -68,7 +68,11 @@ function rejectPendingRpcRequests(message: string): void {
 
 type RpcCallFn = (group: string, method: string, args: unknown[]) => Promise<unknown>
 
-function createScopedRpcCall(overrides?: { readonly?: boolean; dryRun?: boolean }): RpcCallFn {
+function createScopedRpcCall(overrides?: {
+    readonly?: boolean
+    dryRun?: boolean
+    useTestDb?: boolean
+}): RpcCallFn {
     return (group: string, method: string, args: unknown[]): Promise<unknown> => {
         return new Promise((resolve, reject) => {
             if (!rpcPort) {
@@ -84,6 +88,7 @@ function createScopedRpcCall(overrides?: { readonly?: boolean; dryRun?: boolean 
                 args,
                 ...(overrides?.readonly === true ? { readonly: true } : {}),
                 ...(overrides?.dryRun === true ? { dryRun: true } : {}),
+                ...(overrides?.useTestDb === true ? { useTestDb: true } : {}),
             }
             rpcPort.postMessage(request)
         })
@@ -102,6 +107,7 @@ interface VmExecutionContextOptions {
     contextObj: Record<string, unknown> | undefined
     readonlyMode?: boolean
     dryRunMode?: boolean
+    useTestDbMode?: boolean
     pinnedWorkspaceRaw: unknown
     pinnedProjectRaw: unknown
     projectRegistryRaw: unknown
@@ -117,6 +123,7 @@ function createVmExecutionContext(options: VmExecutionContextOptions): vm.Contex
         contextObj,
         readonlyMode,
         dryRunMode,
+        useTestDbMode,
         pinnedWorkspaceRaw,
         pinnedProjectRaw,
         projectRegistryRaw,
@@ -149,11 +156,13 @@ function createVmExecutionContext(options: VmExecutionContextOptions): vm.Contex
     const runIsolatedNestedCode: RunIsolatedNestedFn = async (
         wrapped: string,
         nestedReadonly: boolean,
-        nestedDryRun: boolean
+        nestedDryRun: boolean,
+        nestedUseTestDb: boolean
     ): Promise<unknown> => {
-        const overrides: { readonly?: boolean; dryRun?: boolean } = {}
+        const overrides: { readonly?: boolean; dryRun?: boolean; useTestDb?: boolean } = {}
         if (nestedReadonly) overrides.readonly = true
         if (nestedDryRun) overrides.dryRun = true
+        if (nestedUseTestDb) overrides.useTestDb = true
         const nestedContext = createVmExecutionContext({
             rpcFn: createScopedRpcCall(overrides),
             methodList,
@@ -162,6 +171,7 @@ function createVmExecutionContext(options: VmExecutionContextOptions): vm.Contex
             contextObj,
             readonlyMode: nestedReadonly,
             dryRunMode: nestedDryRun,
+            useTestDbMode: nestedUseTestDb,
             pinnedWorkspaceRaw,
             pinnedProjectRaw,
             projectRegistryRaw,
@@ -176,6 +186,7 @@ function createVmExecutionContext(options: VmExecutionContextOptions): vm.Contex
         timeoutMs,
         readonlyMode,
         dryRunMode,
+        useTestDbMode,
         pinnedWorkspaceRaw,
         pinnedProjectRaw,
         projectRegistryRaw,

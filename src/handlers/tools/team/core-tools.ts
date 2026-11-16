@@ -187,7 +187,7 @@ export function getTeamCoreTools(context: ToolContext): ToolDefinition[] {
                     ]
 
                     return {
-                        success: indexStatus !== 'failed',
+                        success: true,
                         entry: { ...entry, author },
                         author,
                         vectorIndex: indexStatus,

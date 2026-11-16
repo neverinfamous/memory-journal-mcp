@@ -11,6 +11,7 @@ import { logger } from '../../../../utils/logger.js'
 import {
     markUntrustedContentInline,
 } from '../../../../utils/security-utils.js'
+import { canAccessTeamSilently } from '../../../tools/search/helpers.js'
 import type { JournalEntry } from '../../../../types/index.js'
 
 // ============================================================================
@@ -230,6 +231,26 @@ export function buildTeamContext(
 
     try {
         const teamWorkspace = activeWorkspaceId ?? config.defaultWorkspaceId ?? 'default'
+        const accessAllowed = canAccessTeamSilently(
+            'search_entries',
+            {
+                teamDb: context.teamDb,
+                config: {
+                    ...(config.defaultWorkspaceId !== undefined
+                        ? { defaultWorkspaceId: config.defaultWorkspaceId }
+                        : {}),
+                    ...(config.defaultProjectNumber !== undefined
+                        ? { defaultProjectNumber: config.defaultProjectNumber }
+                        : {}),
+                    ...(config.projectRegistry !== undefined
+                        ? { projectRegistry: config.projectRegistry }
+                        : {}),
+                    teamDefaultRole: context.runtime?.teamDefaultRole ?? 'denied',
+                },
+            },
+            teamWorkspace
+        )
+        if (!accessAllowed) return undefined
         const teamTotalEntries = context.teamDb.getActiveEntryCount(teamWorkspace)
         const teamRecent =
             typeof projectNumber === 'number'

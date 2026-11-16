@@ -254,7 +254,11 @@ export class AdapterDelegates {
         previousEntryCount: number
         newEntryCount: number
     }> {
-        return this.backupMgr.restoreFromFile(filename, runtime)
+        try {
+            return await this.backupMgr.restoreFromFile(filename, runtime)
+        } finally {
+            this.membersMgr.invalidateCache()
+        }
     }
 
     getHealthStatus(): ReturnType<IDatabaseAdapter['getHealthStatus']> {

@@ -127,19 +127,21 @@ export function getIoImportTools(context: ToolContext): ToolDefinition[] {
 
                     assertSafeDirectoryPath(input.source_dir, allowedRoots)
 
-                    const mdFiles: string[] = []
+                    const allMdFiles: string[] = []
                     const dir = await fs.opendir(input.source_dir)
                     for await (const dirent of dir) {
                         if (dirent.isFile() && dirent.name.endsWith('.md')) {
-                            mdFiles.push(dirent.name)
-                            if (mdFiles.length >= input.limit) break
+                            allMdFiles.push(dirent.name)
                         }
                     }
+                    allMdFiles.sort((a, b) => a.localeCompare(b))
+                    const mdFiles = allMdFiles.slice(0, input.limit)
 
                     await sendProgress(progress, 1, 3, 'Converting external formats...')
 
                     const parsedFiles: ParsedFile[] = []
                     const errors: { file: string; error: string }[] = []
+                    let emptySkipped = 0
 
                     for (const filename of mdFiles) {
                         let handle
@@ -157,7 +159,8 @@ export function getIoImportTools(context: ToolContext): ToolDefinition[] {
                             const converted = convertFile(content, filename, input.source_format, input.default_entry_type)
 
                             if (!converted.body.trim()) {
-                                continue // skipped
+                                emptySkipped++
+                                continue
                             }
 
                             parsedFiles.push({
@@ -189,6 +192,7 @@ export function getIoImportTools(context: ToolContext): ToolDefinition[] {
                         ...(effectiveProjectNum !== undefined ? { project_number: effectiveProjectNum } : {}),
                         ...(context.config !== undefined ? { config: context.config } : {}),
                     }, context.vectorManager)
+                    result.skipped += emptySkipped
 
                     // Merge conversion phase errors
                     if (errors.length > 0) {

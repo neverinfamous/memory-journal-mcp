@@ -307,7 +307,12 @@ function buildSearchQuery(
 
     appendFilterConditions(conditions, params, options)
 
-    if (hasKeyset && !useFts && !needsImportance) {
+    if (hasKeyset) {
+        if (useFts || needsImportance) {
+            throw new ValidationError(
+                'Timestamp keyset cursor cannot be used with FTS or importance-sorted queries; omit cursor or re-run from page 1.'
+            )
+        }
         conditions.push(`(e.timestamp < ? OR (e.timestamp = ? AND e.id < ?))`)
         params.push(keysetT, keysetT, keysetId)
     }

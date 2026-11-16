@@ -4,7 +4,7 @@ import { formatHandlerError } from '../../../utils/error-helpers.js'
 import { ValidationError } from '../../../types/errors.js'
 import { resolveWriteWorkspaceId } from '../write-workspace.js'
 import { activeProjectRegistry, alignedProjectFilter } from '../../../utils/write-scope.js'
-import { relaxedNumber } from '../schemas.js'
+import { relaxedNumber, StrictProjectNumberSchema } from '../schemas.js'
 import { healAgentHallucinations } from '../schemas/hallucination-healer.js'
 import {
     MergeTagsOutputSchema,
@@ -50,14 +50,14 @@ export const MergeTagsSchemaMcp = z.preprocess(
 export const MergeTagsSchema = z
     .object({
         source_tag: z.preprocess(
-            (v) => (v !== undefined ? String(v as string | number) : v),
+            (v) => (typeof v === 'number' && Number.isFinite(v) ? String(v) : v),
             z.string().min(1)
         ),
         target_tag: z.preprocess(
-            (v) => (v !== undefined ? String(v as string | number) : v),
+            (v) => (typeof v === 'number' && Number.isFinite(v) ? String(v) : v),
             z.string().min(1)
         ),
-        project_number: z.number().int().optional(),
+        project_number: StrictProjectNumberSchema.optional(),
         workspace_id: z.string().optional(),
     })
     .strict()

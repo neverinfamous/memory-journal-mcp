@@ -5,12 +5,19 @@
 import type { ToolContext } from '../../../types/index.js'
 import { getGitHubIntegration } from '../../../github/github-integration/index.js'
 import type { GitHubIntegration } from '../../../github/github-integration/index.js'
-import {
-    findCanonicalRegistryKey,
-    loadProjectRegistryFromConfig,
-} from '../../../utils/workspace-resolver.js'
+import { findCanonicalRegistryKey } from '../../../utils/workspace-resolver.js'
+import { markUntrustedContentInline } from '../../../utils/security-utils.js'
 import { z } from 'zod'
 import { relaxedNumber, StrictProjectNumberSchema } from '../schemas.js'
+import {
+    githubScopeValidationError,
+    parseRepoSlug,
+    resolveGitHubRegistryScope,
+    resolveProjectNumber,
+    type RegistryScopeResolution,
+} from './repo-scope-helpers.js'
+
+export { resolveProjectNumber }
 
 /**
  * [INTENT] Registry scope selectors shared by GitHub tools so `resolveOwnerRepo` can target the
@@ -29,203 +36,6 @@ export const githubScopeInputFields = {
 export const githubScopeParseFields = {
     workspace_id: z.string().optional(),
     project_number: StrictProjectNumberSchema.optional(),
-}
-
-function parseRepoSlug(repo?: string): { owner?: string; repo?: string } {
-    if (!repo) return {}
-    if (/^[a-zA-Z]:[/\\]|^[/\\]/.test(repo) || repo.includes('\\')) {
-        const leaf = repo.split(/[/\\]/).filter(Boolean).pop()?.replace(/\.git$/i, '')
-        return leaf ? { repo: leaf } : { repo }
-    }
-    if (repo.includes('/')) {
-        const parts = repo.split('/').filter(Boolean)
-        if (parts.length === 2 && parts[0] && parts[1]) {
-            return { owner: parts[0], repo: parts[1].replace(/\.git$/i, '') }
-        }
-        const leaf = parts.pop()?.replace(/\.git$/i, '')
-        if (leaf) return { repo: leaf }
-    }
-    return { repo }
-}
-
-/**
- * Resolve project number explicitly or via ProjectRegistry mapping
- */
-export function resolveProjectNumber(
-    context: ToolContext,
-    repo: string | undefined,
-    explicitProjectNumber?: number | null,
-    owner?: string,
-    detectedOwner?: string | null
-): number | undefined {
-    if (explicitProjectNumber != null) return explicitProjectNumber
-    const slug = repo !== undefined ? parseRepoSlug(repo) : undefined
-    const effectiveOwner = owner ?? slug?.owner
-    if (
-        effectiveOwner !== undefined &&
-        detectedOwner !== undefined &&
-        detectedOwner !== null &&
-        effectiveOwner.toLowerCase() !== detectedOwner.toLowerCase()
-    ) {
-        return undefined
-    }
-    const registry = context.config?.projectRegistry ?? loadProjectRegistryFromConfig()
-    if (!registry || !repo) return undefined
-    const repoName = slug?.repo ?? repo
-    const canonicalKey = findCanonicalRegistryKey(repoName, registry) ?? repoName
-    if (Object.prototype.hasOwnProperty.call(registry, canonicalKey)) {
-        const entry = registry[canonicalKey]
-        if (entry?.project_number != null) {
-            return entry.project_number
-        }
-    }
-    return undefined
-}
-
-type Registry = ReturnType<typeof loadProjectRegistryFromConfig>
-type RegistryEntry = NonNullable<Registry>[string]
-
-interface RegistryScopeResolution {
-    matchedRegistryKey: string | undefined
-    registryEntry: RegistryEntry | undefined
-    hasRegistry: boolean
-    registry: Registry | undefined
-    effectiveWorkspaceScope: string | undefined
-}
-
-function githubScopeValidationError(error: string): {
-    error: true
-    response: Record<string, unknown>
-} {
-    return {
-        error: true,
-        response: {
-            success: false,
-            error,
-            code: 'VALIDATION_ERROR',
-            category: 'validation',
-            recoverable: true,
-        },
-    }
-}
-
-function resolveGitHubRegistryScope(
-    context: ToolContext,
-    effectiveRepo: string | undefined,
-    inputWorkspaceId: string | undefined,
-    inputProjectNumber: number | undefined
-): RegistryScopeResolution | { error: true; response: Record<string, unknown> } {
-    const registry = context.config?.projectRegistry ?? loadProjectRegistryFromConfig()
-    const trimmedWs = inputWorkspaceId?.trim()
-    const namedDefault = trimmedWs?.toLowerCase() === 'default'
-    const concreteWs =
-        trimmedWs !== undefined && trimmedWs !== '' && trimmedWs !== '*' && !namedDefault
-            ? trimmedWs
-            : undefined
-    const defaultWsRaw = context.config?.defaultWorkspaceId?.trim()
-    const configuredDefaultWs =
-        defaultWsRaw !== undefined &&
-        defaultWsRaw !== '' &&
-        defaultWsRaw !== '*' &&
-        defaultWsRaw.toLowerCase() !== 'default'
-            ? defaultWsRaw
-            : undefined
-    const effectiveWorkspaceScope =
-        concreteWs ??
-        (!effectiveRepo &&
-        inputProjectNumber === undefined &&
-        trimmedWs !== '*' &&
-        !namedDefault
-            ? configuredDefaultWs
-            : undefined)
-
-    if (registry) {
-        const wsKey =
-            concreteWs !== undefined ? findCanonicalRegistryKey(concreteWs, registry) : undefined
-        const repoKey = effectiveRepo
-            ? findCanonicalRegistryKey(effectiveRepo, registry)
-            : undefined
-        if (
-            concreteWs !== undefined &&
-            effectiveRepo !== undefined &&
-            effectiveRepo !== '' &&
-            (wsKey ?? concreteWs).toLowerCase() !== (repoKey ?? effectiveRepo).toLowerCase()
-        ) {
-            return githubScopeValidationError(
-                `workspace_id "${concreteWs}" does not match repository "${effectiveRepo}".`
-            )
-        }
-        if (inputProjectNumber !== undefined) {
-            const matches = Object.entries(registry).filter(
-                ([, entry]) => entry.project_number === inputProjectNumber
-            )
-            if (matches.length > 1) {
-                return githubScopeValidationError(
-                    `project_number ${String(inputProjectNumber)} is registered to more than one workspace.`
-                )
-            }
-            const projectOwner = matches[0]?.[0]
-            if (projectOwner !== undefined) {
-                if (
-                    concreteWs !== undefined &&
-                    (wsKey ?? concreteWs).toLowerCase() !== projectOwner.toLowerCase()
-                ) {
-                    return githubScopeValidationError(
-                        `project_number ${String(inputProjectNumber)} belongs to workspace "${projectOwner}", not "${concreteWs}".`
-                    )
-                }
-                if (
-                    effectiveRepo !== undefined &&
-                    effectiveRepo !== '' &&
-                    (repoKey ?? effectiveRepo).toLowerCase() !== projectOwner.toLowerCase()
-                ) {
-                    return githubScopeValidationError(
-                        `project_number ${String(inputProjectNumber)} belongs to workspace "${projectOwner}", not repository "${effectiveRepo}".`
-                    )
-                }
-            }
-            const targetKey = repoKey ?? wsKey
-            const registeredProject =
-                targetKey !== undefined ? registry[targetKey]?.project_number : undefined
-            if (registeredProject !== undefined && registeredProject !== inputProjectNumber) {
-                return githubScopeValidationError(
-                    `project_number ${String(inputProjectNumber)} does not match registered project ${String(registeredProject)} for workspace "${targetKey ?? ''}".`
-                )
-            }
-        }
-    }
-
-    let matchedRegistryKey: string | undefined
-    if (!effectiveRepo && registry) {
-        const lookupWs = concreteWs ?? effectiveWorkspaceScope
-        if (lookupWs !== undefined) {
-            matchedRegistryKey =
-                findCanonicalRegistryKey(lookupWs, registry) ??
-                (Object.prototype.hasOwnProperty.call(registry, lookupWs) ? lookupWs : undefined)
-        }
-        if (matchedRegistryKey === undefined && inputProjectNumber !== undefined && !namedDefault) {
-            const matches = Object.entries(registry).filter(
-                ([, entry]) => entry.project_number === inputProjectNumber
-            )
-            const matched = matches[0]
-            if (matched !== undefined) matchedRegistryKey = matched[0]
-        }
-    }
-    const registryKey = effectiveRepo
-        ? (findCanonicalRegistryKey(effectiveRepo, registry) ??
-          (registry && Object.prototype.hasOwnProperty.call(registry, effectiveRepo)
-              ? effectiveRepo
-              : undefined))
-        : matchedRegistryKey
-    const registryEntry = registryKey && registry ? registry[registryKey] : undefined
-    const hasRegistry = registry !== undefined && Object.keys(registry).length > 0
-    return {
-        matchedRegistryKey,
-        registryEntry,
-        hasRegistry,
-        registry,
-        effectiveWorkspaceScope,
-    }
 }
 
 async function resolveToolGitHubInstance(
@@ -342,16 +152,21 @@ export async function resolveOwner(
     | { error: true; response: Record<string, unknown> }
 > {
     const slug = parseRepoSlug(inputRepo)
-    const effectiveRepo = slug.repo ?? inputRepo
+    const initialRepo = slug.repo ?? inputRepo
     const parsedOwner = inputOwner ?? slug.owner
 
     const scopeRes = resolveGitHubRegistryScope(
         context,
-        effectiveRepo,
+        initialRepo,
         inputWorkspaceId,
-        inputProjectNumber
+        inputProjectNumber,
+        slug
     )
     if ('error' in scopeRes) return scopeRes
+    const effectiveRepo =
+        slug.isFilesystemPath === true && scopeRes.matchedRegistryKey !== undefined
+            ? scopeRes.matchedRegistryKey
+            : initialRepo
 
     const ghRes = await resolveToolGitHubInstance(
         context,
@@ -412,16 +227,21 @@ export async function resolveOwnerRepo(
     | { error: true; response: Record<string, unknown> }
 > {
     const slug = parseRepoSlug(input.repo)
-    const effectiveRepo = slug.repo ?? input.repo
+    const initialRepo = slug.repo ?? input.repo
     const parsedOwner = input.owner ?? slug.owner
 
     const scopeRes = resolveGitHubRegistryScope(
         context,
-        effectiveRepo,
+        initialRepo,
         input.workspace_id,
-        input.project_number
+        input.project_number,
+        slug
     )
     if ('error' in scopeRes) return scopeRes
+    const effectiveRepo =
+        slug.isFilesystemPath === true && scopeRes.matchedRegistryKey !== undefined
+            ? scopeRes.matchedRegistryKey
+            : initialRepo
 
     const ghRes = await resolveToolGitHubInstance(
         context,
@@ -473,4 +293,23 @@ export async function resolveOwnerRepo(
     }
 
     return { owner, repo, detectedOwner, detectedRepo, github: toolGithub }
+}
+
+/**
+ * Shallow-clones a GitHub issue and fences `milestone.title` at MCP tool egress without
+ * mutating cached GitHub integration objects.
+ */
+export function fenceIssueMilestone<
+    T extends { milestone?: { number: number; title: string } | null | undefined },
+>(issue: T): T {
+    if (issue.milestone === undefined || issue.milestone === null) {
+        return { ...issue }
+    }
+    return {
+        ...issue,
+        milestone: {
+            ...issue.milestone,
+            title: markUntrustedContentInline(issue.milestone.title),
+        },
+    }
 }

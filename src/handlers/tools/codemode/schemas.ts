@@ -85,6 +85,8 @@ export const ExecuteCodeSchema = z.preprocess((val) => {
     timeout_ms: POSITIVE_TIMEOUT,
     timeout: POSITIVE_TIMEOUT,
     readonly: z.boolean().optional(),
+    use_test_db: z.boolean().optional(),
+    useTestDb: z.boolean().optional(),
     max_result_size: relaxedNumber().optional(),
     maxResultSize: relaxedNumber().optional(),
     max_result_size_kb: relaxedNumber().optional(),

@@ -112,7 +112,7 @@ export function getActiveEntryCount(
         query += ' AND workspace_id = ?'
         params.push(scopeId)
     }
-    if (typeof projectNumber === 'number' && projectNumber > 0) {
+    if (typeof projectNumber === 'number' && Number.isFinite(projectNumber)) {
         query += ' AND project_number = ?'
         params.push(projectNumber)
     }

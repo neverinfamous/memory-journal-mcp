@@ -16,7 +16,12 @@ import {
     GitHubPRResultOutputSchema,
     GitHubContextOutputSchema,
 } from './schemas.js'
-import { githubScopeInputFields, githubScopeParseFields, resolveOwnerRepo } from './helpers.js'
+import {
+    fenceIssueMilestone,
+    githubScopeInputFields,
+    githubScopeParseFields,
+    resolveOwnerRepo,
+} from './helpers.js'
 import type { GitHubIntegration } from '../../../github/github-integration/index.js'
 import { markUntrustedContent } from '../../../utils/security-utils.js'
 
@@ -81,7 +86,7 @@ export function getGitHubReadTools(context: ToolContext): ToolDefinition[] {
                         input.state,
                         input.limit
                     )
-                    const safeIssues = issues
+                    const safeIssues = issues.map(fenceIssueMilestone)
                     return {
                         owner: resolved.owner,
                         repo: resolved.repo,
@@ -231,7 +236,7 @@ export function getGitHubReadTools(context: ToolContext): ToolDefinition[] {
                     }
 
                     // Clone issue to avoid mutating cache
-                    const safeIssue = { ...issue }
+                    const safeIssue = fenceIssueMilestone(issue)
 
                     // Apply body truncation
                     const truncateBody = input.truncate_body
@@ -431,7 +436,7 @@ export function getGitHubReadTools(context: ToolContext): ToolDefinition[] {
                         branch: ctx.branch,
                         commit: ctx.commit,
                         remoteUrl: ctx.remoteUrl,
-                        issues: ctx.issues,
+                        issues: ctx.issues.map(fenceIssueMilestone),
                         pullRequests: ctx.pullRequests,
                         issueCount: ctx.issues.length,
                         prCount: ctx.pullRequests.length,

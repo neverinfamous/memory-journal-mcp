@@ -9,7 +9,10 @@ import { DatabaseAdapterFactory } from '../../database/adapter-factory.js'
 import type { IDatabaseAdapter } from '../../database/core/interfaces.js'
 import type { ServerOptions } from '../../server/mcp-server/types.js'
 import { ConfigResolver } from '../../utils/config-resolver.js'
-import { readProjectRegistryFile } from '../../utils/registry-config-file.js'
+import {
+    readProjectRegistryFile,
+    writeProjectRegistryFile,
+} from '../../utils/registry-config-file.js'
 import {
     findCaseInsensitiveKeyConflict,
     findProjectNumberConflict,
@@ -50,9 +53,25 @@ function loadConfig(options?: Record<string, unknown>): Record<string, unknown> 
 }
 
 function saveConfig(config: Record<string, unknown>, options?: Record<string, unknown>): void {
-    const targetPath = getConfigPath(options)
-    fs.mkdirSync(path.dirname(targetPath), { recursive: true })
-    fs.writeFileSync(targetPath, JSON.stringify(config, null, 4), 'utf-8')
+    writeProjectRegistryFile(getConfigPath(options), config)
+}
+
+function syncCliTopLevelDefaults(
+    config: Record<string, unknown>,
+    fromName: string,
+    toName: string | undefined,
+    nextProjNum?: number
+): void {
+    if (config['defaultWorkspaceId'] !== fromName) return
+    if (toName !== undefined) {
+        config['defaultWorkspaceId'] = toName
+        if (typeof nextProjNum === 'number') {
+            config['defaultProjectNumber'] = nextProjNum
+        }
+    } else {
+        delete config['defaultWorkspaceId']
+        delete config['defaultProjectNumber']
+    }
 }
 
 function parsePositiveCliProjectNumber(raw: unknown): number {
@@ -338,6 +357,7 @@ export function projectUpdateAction(name: string, options: Record<string, unknow
     const rest = Object.fromEntries(Object.entries(registry).filter(([key]) => key !== name))
     const newRegistry = { ...rest, [targetName]: project }
     config['projectRegistry'] = newRegistry
+    syncCliTopLevelDefaults(config, name, targetName, options['number'] != null ? project.project_number : undefined)
     try {
         validateProjectRegistryObject(config['projectRegistry'])
     } catch (e: unknown) {
@@ -368,6 +388,7 @@ export function projectDeleteAction(name: string, options: Record<string, unknow
 
     const rest = Object.fromEntries(Object.entries(registry).filter(([key]) => key !== name))
     config['projectRegistry'] = rest
+    syncCliTopLevelDefaults(config, name, undefined)
     saveConfig(config, options)
 
     process.stdout.write(`Project '${name}' successfully deleted.\n`)

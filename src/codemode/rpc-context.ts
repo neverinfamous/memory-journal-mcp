@@ -8,13 +8,14 @@ import { AsyncLocalStorage } from 'node:async_hooks'
 export interface RpcExecutionOverrides {
     readonly?: boolean
     dryRun?: boolean
+    useTestDb?: boolean
 }
 
 const rpcOverridesStorage = new AsyncLocalStorage<RpcExecutionOverrides>()
 
 /**
  * Execute an asynchronous callback with merged RPC execution overrides.
- * Nested calls tighten permissions monotonically (once readonly/dryRun is active, it stays active).
+ * Nested calls tighten permissions monotonically (once readonly/dryRun/useTestDb is active, it stays active).
  */
 export function runWithRpcExecutionOverrides<T>(
     overrides: RpcExecutionOverrides,
@@ -27,6 +28,9 @@ export function runWithRpcExecutionOverrides<T>(
     }
     if (parent?.dryRun === true || overrides.dryRun === true) {
         merged.dryRun = true
+    }
+    if (parent?.useTestDb === true || overrides.useTestDb === true) {
+        merged.useTestDb = true
     }
     return rpcOverridesStorage.run(merged, fn)
 }

@@ -80,7 +80,10 @@ export function resolveTeamImportScope(
         explicitPn ?? dirMatch?.projectNumber,
         context.config
     )
-    const lockedWsId = (hasExplicitWs ? trimmedWs : undefined) ?? dirMatch?.workspaceId ?? projectOwner
+    const rbacActive = context.teamDb?.isTeamRbacActive?.() === true
+    const resolvedExplicitOrDir =
+        (hasExplicitWs ? trimmedWs : undefined) ?? dirMatch?.workspaceId ?? projectOwner
+    const lockedWsId = rbacActive ? (resolvedExplicitOrDir ?? wsId) : resolvedExplicitOrDir
     const projectNumber =
         resolveTeamProjectNumber(context, wsId, explicitPn ?? dirMatch?.projectNumber, explicitWs) ??
         undefined
@@ -94,7 +97,7 @@ export async function readAndConvertExternalMarkdownFiles(
     defaultEntryType: EntryType | undefined,
     allowedRoots: string[],
     progress: ToolContext['progress']
-): Promise<{ parsedFiles: ParsedFile[]; errors: { file: string; error: string }[] }> {
+): Promise<{ parsedFiles: ParsedFile[]; errors: { file: string; error: string }[]; skipped: number }> {
     assertSafeDirectoryPath(sourceDir, allowedRoots)
     const allMdFiles: string[] = []
     const dir = await fs.opendir(sourceDir)
@@ -109,6 +112,7 @@ export async function readAndConvertExternalMarkdownFiles(
     await sendProgress(progress, 1, 3, 'Converting external formats...')
     const parsedFiles: ParsedFile[] = []
     const errors: { file: string; error: string }[] = []
+    let skipped = 0
 
     for (const filename of mdFiles) {
         let handle
@@ -130,6 +134,8 @@ export async function readAndConvertExternalMarkdownFiles(
                     body: converted.body,
                     metadata: converted.metadata,
                 })
+            } else {
+                skipped++
             }
         } catch (err) {
             errors.push({
@@ -141,7 +147,7 @@ export async function readAndConvertExternalMarkdownFiles(
         }
     }
 
-    return { parsedFiles, errors }
+    return { parsedFiles, errors, skipped }
 }
 
 export type TeamImportContextAuthor =

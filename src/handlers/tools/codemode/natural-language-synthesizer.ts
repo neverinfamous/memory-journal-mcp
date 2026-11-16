@@ -185,12 +185,19 @@ export function synthesizeNaturalLanguageOrEntryPayload(executionCode: string, i
         return typeof val === 'string' && val.trim().length > 0
     })
     const isExplicitJsCode = hasExplicitCode && !isNaturalLanguagePrompt(executionCode)
+    const looksLikeSqlQuery =
+        /^(?:SELECT|INSERT|UPDATE|DELETE|PRAGMA|SHOW|DESCRIBE|EXPLAIN|WITH|SCHEMA|TABLES)\b/i.test(
+            executionCode.trim()
+        )
+    const hasExplicitContent =
+        typeof rawObj['content'] === 'string' || typeof rawObj['body'] === 'string'
 
     const entryKeys = isFlatCall ? ENTRY_KEYS : [...ENTRY_KEYS, 'project_number', 'session_id']
     const hasEntryFields = entryKeys.some((k) => entryObj[k] !== undefined || (!isFlatCall && rawObj[k] !== undefined))
     const learnedVal = getNonEmptyString(entryObj, rawObj, ['learned_context', 'learnedContext', 'lesson', 'insight', 'knowledge', 'rule'])
     if (
         isExplicitJsCode ||
+        (looksLikeSqlQuery && !hasExplicitContent) ||
         (!hasEntryFields && learnedVal === undefined && !isNaturalLanguagePrompt(executionCode))
     ) {
         return executionCode

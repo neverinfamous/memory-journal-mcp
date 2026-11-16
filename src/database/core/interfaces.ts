@@ -172,7 +172,12 @@ export interface IDatabaseAdapter extends IDatabaseVectorAndAdminAdapter {
     ): JournalEntry | null
     deleteEntry(id: number, permanent?: boolean, workspaceId?: string): boolean
     getAnchorsByEntryId(entryId: number, workspaceId?: string): Anchor[]
-    updateAnchorStatus(id: number, status: AnchorStatus, workspaceId?: string): boolean
+    updateAnchorStatus(
+        id: number,
+        status: AnchorStatus,
+        workspaceId?: string,
+        projectNumber?: number
+    ): boolean
 
     // Team Membership (RBAC)
     addTeamMember(author: string, role: TeamRole, addedBy?: string, displayName?: string): TeamMember
@@ -224,6 +229,7 @@ export interface IDatabaseAdapter extends IDatabaseVectorAndAdminAdapter {
             impactScore?: number
             validationStatus?: 'passed' | 'failed' | 'none'
             sessionId?: string
+            targetWorkspaceId?: string
         }[]
     ): { updated: JournalEntry[]; notFound: number[]; errors: { id: number; error: Error }[] }
     deleteEntries(
@@ -287,7 +293,7 @@ export interface IDatabaseAdapter extends IDatabaseVectorAndAdminAdapter {
             prNumber?: number
             workflowRunId?: number
             limit?: number
-            sortBy?: 'timestamp' | 'importance'
+            sortBy?: 'timestamp' | 'importance' | 'blended'
             includeArchived?: boolean
             workspaceId?: string
         }

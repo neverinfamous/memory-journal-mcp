@@ -71,9 +71,7 @@ function getPlanReviewPromptDefinition(): InternalPromptDef {
                             type: 'text',
                             text: `# Adversarial Plan Review: "${topic}"
 
-${buildSharedAuditPreamble(topic, 'topic or module')}
-
-If the topic is '{topic}', determine it from the user's request. If the user hasn't specified a topic, ask them for it now.
+${buildSharedAuditPreamble(topic, 'topic or module', { label: 'Topic', placeholder: '{topic}', actionVerb: 'Review' })}
 
 **Depth**: ${depth}
 
@@ -153,7 +151,7 @@ ${buildSharedAuditPreamble(target, 'file or module')}
      1. **Pre-Validation Transform Audit**: Verify no input healer, AST/regex normalizer, or auto-recovery logic runs *before* rate-limiting, byte-length caps, authentication, or sandbox security validation.
      2. **Lexical Scanner vs. Regex Stripper Coherence Check**: Verify comment/string strippers cannot be desynchronized by regex literals, template literal interpolations (\`\${...}\`), or multi-step replacement reassembly.
      3. **Multi-Tenant Parameter Threading Audit**: Trace \`workspace_id\` from tool input -> \`resolveProjectContext\` -> SQLite \`WHERE\` clauses AND Vector Index metadata filters across all read, write, delete, restore, and search paths.
-     4. **Execution-Layer Filter Parity Check**: Verify \`--tool-filter\` and OAuth scopes are enforced identically across \`tools/list\`, direct \`tools/call\`, Code Mode \`mj.*\` dispatch, and dummy/hallucination-healing fallbacks.
+     4. **Execution-Layer Filter Parity Check**: Verify \`--tool-filter\`, OAuth scopes, and Team RBAC (\`enforceTeamRbac\` / team-scoped resources & prompts) are enforced identically across \`tools/list\`, direct \`tools/call\`, Code Mode \`mj.*\` dispatch, dummy/hallucination-healing fallbacks, MCP resources (including briefing sections), and MCP prompts.
      5. **Transitive Prompt-Injection Taint Trace**: Trace external strings (Git commits, GitHub issues/PRs/workflows/milestones, DB content) into MCP Resources and Prompts to ensure \`markUntrustedContent\` tags are applied, truncated *before* fencing rather than slicing inside \`<untrusted_remote_content>\` tags, and never stripped by downstream table formatters.
      6. **End-to-End Backstop Verification**: Before marking any scope, authz, Code Mode, or mutation finding Critical or High, trace ingress interceptors, Code Mode dispatch normalizers, RBAC/importer scope checks, and storage \`pairStoredScope\` and provide a concrete reproducer (classify upstream defense-in-depth cleanup as Moderate/Low when backstops hold).
 ${buildStandardAuditClosing(copilotInstruction, priorAuditSection)}`,

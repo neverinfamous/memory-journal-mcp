@@ -18,15 +18,29 @@ import {
     validateAdversarialPromptScope,
 } from './adversarial-helpers.js'
 
-export const AUDIT_PROMPT_REVISION = '2026-11-15-audit-pass29'
+export const AUDIT_PROMPT_REVISION = '2026-11-16-audit-pass30'
 
-export function buildSharedAuditPreamble(target: string, targetKind = 'file or module'): string {
+export interface SharedAuditPreambleOptions {
+    label?: 'Target' | 'Topic'
+    placeholder?: '{target}' | '{topic}'
+    actionVerb?: 'Audit' | 'Review'
+}
+
+export function buildSharedAuditPreamble(
+    target: string,
+    targetKind = 'file or module',
+    options?: SharedAuditPreambleOptions
+): string {
+    const label = options?.label ?? 'Target'
+    const labelLower = label.toLowerCase()
+    const placeholder = options?.placeholder ?? '{target}'
+    const actionVerb = options?.actionVerb ?? 'Audit'
     return `Prompt revision: ${AUDIT_PROMPT_REVISION}.
-Target: ${target}
+${label}: ${target}
 
-If the target is '{target}', determine it from the user's request. If the user hasn't specified a target ${targetKind}, ask them for it now.
+If the ${labelLower} is '${placeholder}', determine it from the user's request. If the user hasn't specified a ${targetKind}, ask them for it now.
 
-This prompt is shared by every project. Audit the repository the user named. Do not assume that repository is memory-journal-mcp, and do not copy this server's directory layout, commit script, or parameter-normalizer filenames onto a different codebase. Discover those in the target.
+This prompt is shared by every project. ${actionVerb} the repository the user named. Do not assume that repository is memory-journal-mcp, and do not copy this server's directory layout, commit script, or parameter-normalizer filenames onto a different codebase. Discover those in the ${labelLower}.
 
 If \`memory://briefing/{repo}\` cannot be read, continue the audit (and use \`memory://agent-context/{repo}\` rather than bare \`memory://agent-id\` for mid-task recovery in multi-project setups). Bind \`workspace_id\` and \`project_number\` only from the registry entry for the repository the user named. If that pair is missing, do not call \`create_entry\` or \`mj.core.createEntry\`. Record the resource failure.`
 }

@@ -2,7 +2,7 @@ import type { ToolContext, ToolDefinition } from '../../../types/index.js'
 import { AuthorizationError } from '../../../types/errors.js'
 import type { TeamRole } from '../../../database/core/interfaces.js'
 import { resolveAuthenticatedAuthor } from '../../../utils/security-utils.js'
-import { resolveWorkspaceId } from '../../../utils/workspace-resolver.js'
+import { findCanonicalRegistryKey, resolveWorkspaceId } from '../../../utils/workspace-resolver.js'
 
 import { formatHandlerError } from '../../../utils/error-helpers.js'
 
@@ -76,40 +76,149 @@ function resolveTargetWorkspace(
     return fallbackWs !== '*' ? fallbackWs : '*'
 }
 
+const GLOBAL_TEAM_TOOLS = new Set([
+    'team_add_member',
+    'team_remove_member',
+    'team_update_member_role',
+    'team_list_members',
+    'team_get_member',
+    'team_backup',
+    'team_list_backups',
+    'team_get_vector_index_stats',
+])
+
+const WORKSPACE_SCOPE_KEYS = [
+    'workspace_id',
+    'workspaceId',
+    'workspace',
+    'repo',
+    'repo_name',
+    'repoName',
+    'repository',
+] as const
+
+const PROJECT_SCOPE_KEYS = [
+    'project_number',
+    'projectNumber',
+    'project_id',
+    'projectId',
+    'project',
+] as const
+
+const REPO_ALIAS_KEYS = new Set(['repo', 'repo_name', 'repoName', 'repository'])
+
+function isPlainRecord(val: unknown): val is Record<string, unknown> {
+    return typeof val === 'object' && val !== null && !Array.isArray(val)
+}
+
+function collectScopeContainers(params: unknown): Record<string, unknown>[] {
+    if (!isPlainRecord(params)) return []
+    const containers: Record<string, unknown>[] = [params]
+    for (const nestedKey of ['filters', 'filter', 'entry'] as const) {
+        const nested = params[nestedKey]
+        if (isPlainRecord(nested)) containers.push(nested)
+    }
+    return containers
+}
+
+function readFirstScopeProp(
+    containers: Record<string, unknown>[],
+    keys: readonly string[]
+): { key: string; value: unknown } | undefined {
+    for (const container of containers) {
+        for (const key of keys) {
+            const val = container[key]
+            if (val !== undefined && val !== null) return { key, value: val }
+        }
+    }
+    return undefined
+}
+
+function normalizeRepoOrWorkspaceRaw(
+    rawWs: string,
+    key: string,
+    config: ToolContext['config']
+): string {
+    const trimmed = rawWs.trim()
+    if (trimmed === '*' || !REPO_ALIAS_KEYS.has(key)) return trimmed
+    const registry = config?.projectRegistry
+    const directKey = findCanonicalRegistryKey(trimmed, registry)
+    if (directKey !== undefined) return directKey
+    if (trimmed.includes('/') || trimmed.includes('\\')) {
+        const leaf = trimmed.split(/[/\\]/).filter(Boolean).pop()?.trim()
+        if (leaf !== undefined && leaf !== '') {
+            return findCanonicalRegistryKey(leaf, registry) ?? leaf
+        }
+    }
+    return trimmed
+}
+
 function extractTargetWorkspaceId(
     params: unknown,
     config: ToolContext['config']
 ): string | undefined {
-    if (typeof params !== 'object' || params === null || Array.isArray(params)) {
+    const containers = collectScopeContainers(params)
+    if (containers.length === 0) {
         return resolveWorkspaceId(undefined, undefined, config)
     }
-    const wsProp: unknown = Reflect.get(params, 'workspace_id') ?? Reflect.get(params, 'workspaceId')
-    const rawWs = typeof wsProp === 'string' ? wsProp : undefined
-    const projProp: unknown =
-        Reflect.get(params, 'project_number') ?? Reflect.get(params, 'projectNumber')
+    const wsHit = readFirstScopeProp(containers, WORKSPACE_SCOPE_KEYS)
+    const rawWs =
+        wsHit !== undefined && typeof wsHit.value === 'string'
+            ? normalizeRepoOrWorkspaceRaw(wsHit.value, wsHit.key, config)
+            : undefined
+    if (rawWs === '*') {
+        return '*'
+    }
+    const projHit = readFirstScopeProp(containers, PROJECT_SCOPE_KEYS)
+    const projProp = projHit?.value
     const numProj =
         typeof projProp === 'number' && Number.isInteger(projProp)
             ? projProp
             : typeof projProp === 'string' && /^\d+$/.test(projProp.trim())
               ? Number.parseInt(projProp.trim(), 10)
               : undefined
-    if (rawWs?.trim() === '*') {
-        if (numProj !== undefined) {
-            try {
-                const resolved = resolveWorkspaceId(undefined, numProj, config)
-                if (resolved !== '*' && resolved !== 'default') return resolved
-            } catch {
-                // Fall back to wildcard check when project mapping is unavailable
+    try {
+        return resolveWorkspaceId(rawWs !== '' ? rawWs : undefined, numProj, config)
+    } catch {
+        return rawWs !== undefined && rawWs !== '' ? rawWs : undefined
+    }
+}
+
+function collectExtraTargetWorkspaces(
+    params: unknown,
+    primaryWs: string | undefined,
+    config: ToolContext['config']
+): string[] {
+    if (!isPlainRecord(params)) return []
+    const extras: string[] = []
+    const seen = new Set<string>(primaryWs !== undefined ? [primaryWs.toLowerCase()] : [])
+    const addCandidate = (ws: string | undefined): void => {
+        if (ws === undefined || ws === '') return
+        const lower = ws.toLowerCase()
+        if (!seen.has(lower)) {
+            seen.add(lower)
+            extras.push(ws)
+        }
+    }
+    for (const container of collectScopeContainers(params)) {
+        const destRaw = container['target_workspace_id'] ?? container['targetWorkspaceId']
+        if (typeof destRaw === 'string' && destRaw.trim() !== '') {
+            addCandidate(destRaw.trim())
+        }
+    }
+    for (const listKey of ['updates', 'entries'] as const) {
+        const list = params[listKey]
+        if (!Array.isArray(list)) continue
+        for (const item of list) {
+            if (!isPlainRecord(item)) continue
+            addCandidate(extractTargetWorkspaceId(item, config))
+            const itemDest = item['target_workspace_id'] ?? item['targetWorkspaceId']
+            if (typeof itemDest === 'string' && itemDest.trim() !== '') {
+                addCandidate(itemDest.trim())
             }
         }
-        return '*'
     }
-    try {
-        return resolveWorkspaceId(rawWs, numProj, config)
-    } catch {
-        const trimmed = rawWs?.trim()
-        return trimmed !== undefined && trimmed !== '' ? trimmed : undefined
-    }
+    return extras
 }
 
 /**
@@ -259,10 +368,20 @@ export function wrapWithRbac(context: ToolContext, tools: ToolDefinition[], defa
             try {
                 // Determine caller identity
                 const author = getCallerIdentity()
-                const targetWs = extractTargetWorkspaceId(params, context.config)
+                const isGlobal = GLOBAL_TEAM_TOOLS.has(tool.name)
+                const targetWs = isGlobal ? '*' : extractTargetWorkspaceId(params, context.config)
 
                 // Enforce role requirement
                 enforceTeamRbac(context, author, requiredRole, targetWs)
+                if (!isGlobal) {
+                    for (const extraWs of collectExtraTargetWorkspaces(
+                        params,
+                        targetWs,
+                        context.config
+                    )) {
+                        enforceTeamRbac(context, author, requiredRole, extraWs)
+                    }
+                }
 
                 // Execute original handler
                 const result = await originalHandler(params)

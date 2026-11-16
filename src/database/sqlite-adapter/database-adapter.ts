@@ -133,8 +133,13 @@ export class DatabaseAdapter extends AdapterDelegates implements IDatabaseAdapte
         })
     }
 
-    updateAnchorStatus(id: number, status: AnchorStatus, workspaceId?: string): boolean {
-        return this.entriesMgr.updateAnchorStatus(id, status, workspaceId)
+    updateAnchorStatus(
+        id: number,
+        status: AnchorStatus,
+        workspaceId?: string,
+        projectNumber?: number
+    ): boolean {
+        return this.entriesMgr.updateAnchorStatus(id, status, workspaceId, projectNumber)
     }
 
     getAnchorsByEntryId(entryId: number, workspaceId?: string): Anchor[] {

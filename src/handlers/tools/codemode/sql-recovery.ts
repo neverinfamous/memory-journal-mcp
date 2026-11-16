@@ -4,10 +4,12 @@
 
 import {
     ENTRY_TABLE_NAMES,
+    extractFromTableName,
     extractTopLevelUpdateSetClause,
     extractTopLevelWhereClause,
     findTopLevelSqlKeyword,
     hasUnsupportedWherePredicate,
+    isSupportedWhereClause,
     scopeFromSqlLiterals,
     splitSqlValueList,
     splitTopLevelSqlAndClauses,
@@ -159,6 +161,15 @@ function recoverEntrySelect(
     scopeFields: Record<string, unknown>
 ): string | null {
     if (tableName === undefined || !ENTRY_TABLE_NAMES.has(tableName)) return null
+    if (
+        whereClause === '' ||
+        !isSupportedWhereClause(whereClause, {
+            allowPlaceholder: false,
+            allowSelectContentEquality: true,
+        })
+    ) {
+        return null
+    }
     const wherePos = findTopLevelSqlKeyword(cleanSql, 'WHERE')
     const selectHead = (wherePos >= 0 ? cleanSql.slice(0, wherePos) : cleanSql).replace(
         /'(?:\\.|''|[^'\\])*'|"(?:\\.|""|[^"\\])*"/g,
@@ -180,46 +191,90 @@ function recoverEntrySelect(
     return null
 }
 
+function assignSqlUpdateSetField(
+    setFields: Record<string, unknown>,
+    col: string,
+    rhs: string
+): boolean {
+    if (col === 'content' || col === 'title' || col === 'entry_type' || col === 'type') {
+        const val = unquoteSqlString(rhs)
+        if (val === null || val === '') return false
+        setFields[col === 'type' ? 'entry_type' : col] = val
+        return true
+    }
+    if (col === 'significance_type') {
+        if (/^null$/i.test(rhs)) {
+            setFields['significance_type'] = null
+            return true
+        }
+        const val = unquoteSqlString(rhs)
+        if (val === null) return false
+        setFields['significance_type'] = val
+        return true
+    }
+    if (col === 'workspace_id') {
+        const ws = unquoteSqlString(rhs)?.trim()
+        if (ws === undefined || ws === '') return false
+        setFields['target_workspace_id'] = ws
+        return true
+    }
+    if (col === 'project_number' || col === 'project_id') {
+        if (/^null$/i.test(rhs)) {
+            setFields['project_number'] = null
+            return true
+        }
+        const cleaned = (unquoteSqlString(rhs) ?? rhs).trim()
+        if (!/^\d+$/.test(cleaned)) return false
+        const n = Number(cleaned)
+        if (!Number.isSafeInteger(n) || n <= 0) return false
+        setFields['project_number'] = n
+        return true
+    }
+    return false
+}
+
 function recoverEntryUpdate(
     cleanSql: string,
     updateTable: string | undefined,
+    whereClause: string,
     idVal: number | undefined,
     scopeFields: Record<string, unknown>
 ): string | null {
     if (updateTable === undefined || !ENTRY_TABLE_NAMES.has(updateTable) || idVal === undefined) {
         return null
     }
-    const setClause = extractTopLevelUpdateSetClause(cleanSql)
-    let setContent: string | undefined
-    let setWs: string | undefined
-    let setProj: number | undefined
-    for (const assignment of splitSqlValueList(setClause)) {
-        const eq = assignment.indexOf('=')
-        if (eq < 0) continue
-        const col = assignment.slice(0, eq).trim().replace(/[`"']/g, '').toLowerCase()
-        const rhs = assignment.slice(eq + 1).trim()
-        if (col === 'content') {
-            setContent = unquoteSqlString(rhs) ?? undefined
-        } else if (col === 'workspace_id') {
-            const ws = unquoteSqlString(rhs)?.trim()
-            if (ws !== undefined && ws !== '') setWs = ws
-        } else if (col === 'project_number' || col === 'project_id') {
-            const cleaned = (unquoteSqlString(rhs) ?? rhs).trim()
-            if (/^\d+$/.test(cleaned)) setProj = parseInt(cleaned, 10)
-        }
+    if (whereClause === '' || !isSupportedWhereClause(whereClause, { allowPlaceholder: false })) {
+        return null
     }
-    if (setContent === undefined) return null
+    const setClause = extractTopLevelUpdateSetClause(cleanSql)
+    const assignments = splitSqlValueList(setClause)
+    if (assignments.length === 0) return null
+    const setFields: Record<string, unknown> = {}
+    for (const assignment of assignments) {
+        const eq = assignment.indexOf('=')
+        if (eq < 0) return null
+        const col = assignment
+            .slice(0, eq)
+            .trim()
+            .replace(/[`"']/g, '')
+            .replace(/^[a-zA-Z_][\w]*\./, '')
+            .toLowerCase()
+        const rhs = assignment.slice(eq + 1).trim()
+        if (!assignSqlUpdateSetField(setFields, col, rhs)) return null
+    }
+    if (Object.keys(setFields).length === 0) return null
     const whereProj =
         typeof scopeFields['project_number'] === 'number' ? scopeFields['project_number'] : undefined
+    const setProj =
+        typeof setFields['project_number'] === 'number' ? setFields['project_number'] : undefined
     if (setProj !== undefined && whereProj !== undefined && setProj !== whereProj) {
         return null
     }
     const updatePayload: Record<string, unknown> = {
         entry_id: idVal,
-        content: setContent,
+        ...setFields,
         ...scopeFields,
-        ...(setWs !== undefined ? { target_workspace_id: setWs } : {}),
-        ...(whereProj === undefined && setProj !== undefined ? { project_number: setProj } : {}),
+        ...(whereProj !== undefined ? { project_number: whereProj } : {}),
     }
     return `return await mj.admin.updateEntry(${JSON.stringify(updatePayload)});`
 }
@@ -233,8 +288,7 @@ export function extractAndRecoverSqlCode(code: string): string | null {
     if (cleanSql === null) return null
     if (hasUnsupportedWherePredicate(cleanSql)) return null
 
-    const fromMatch = /\bFROM\s+(?:[`"']?[a-zA-Z_][\w]*[`"']?\.)?[`"']?([a-zA-Z0-9_]+)[`"']?/i.exec(cleanSql)
-    const tableName = fromMatch?.[1]?.toLowerCase()
+    const tableName = extractFromTableName(cleanSql)
     const updateTableMatch = /^UPDATE\s+(?:[`"']?[a-zA-Z_][\w]*[`"']?\.)?[`"']?([a-zA-Z0-9_]+)[`"']?/i.exec(cleanSql)
     const updateTable = updateTableMatch?.[1]?.toLowerCase()
     const limitVal = extractTopLevelLimit(cleanSql)
@@ -242,7 +296,7 @@ export function extractAndRecoverSqlCode(code: string): string | null {
     const idVal = extractTopLevelWhereId(whereClause)
     const scopeFields = scopeFromSqlLiterals(cleanSql)
 
-    if (tableName !== undefined && SPECIAL_TABLES.has(tableName)) {
+    if (/^SELECT\b/i.test(cleanSql) && tableName !== undefined && SPECIAL_TABLES.has(tableName)) {
         return recoverSpecialTableSelect(cleanSql, tableName, whereClause, idVal, scopeFields)
     }
     if (/^SELECT\b/i.test(cleanSql)) {
@@ -256,10 +310,16 @@ export function extractAndRecoverSqlCode(code: string): string | null {
         return null
     }
     if (/^UPDATE\b/i.test(cleanSql)) {
-        return recoverEntryUpdate(cleanSql, updateTable, idVal, scopeFields)
+        return recoverEntryUpdate(cleanSql, updateTable, whereClause, idVal, scopeFields)
     }
     if (/^DELETE\b/i.test(cleanSql)) {
-        if (tableName === undefined || !ENTRY_TABLE_NAMES.has(tableName) || idVal === undefined) {
+        if (
+            tableName === undefined ||
+            !ENTRY_TABLE_NAMES.has(tableName) ||
+            idVal === undefined ||
+            whereClause === '' ||
+            !isSupportedWhereClause(whereClause, { allowPlaceholder: false })
+        ) {
             return null
         }
         return `return await mj.admin.deleteEntry(${JSON.stringify({ entry_id: idVal, ...scopeFields })});`

@@ -169,6 +169,10 @@ export class MembersManager {
         return isActive
     }
 
+    invalidateCache(): void {
+        this.rbacActiveCache = null
+    }
+
     resolveRole(author: string, defaultRole: TeamRole | 'denied' = 'denied'): TeamRole | null {
         // 1. If RBAC is not active (empty table), return 'admin' for legacy full access
         if (!this.isRbacActive()) {

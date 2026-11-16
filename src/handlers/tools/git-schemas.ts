@@ -93,14 +93,18 @@ export const GitUnreleasedOptionsSchema = z.object({
 })
 
 export const GitAnalyzePatternsOptionsSchema = z.object({
-    maxCount: relaxedNumber().optional().default(50).describe('Maximum number of commits to analyze. Default: 50'),
+    maxCount: relaxedNumber().optional().describe('Maximum number of commits to analyze. Default: 50'),
+    max_count: relaxedNumber().optional().describe('Alias for maxCount'),
     repo: z.string().optional().describe('Target repository or workspace name'),
     repo_name: z.string().optional().describe('Alias for repo'),
     workspace_id: z.string().optional().describe('Target workspace identifier'),
     workspaceId: z.string().optional().describe('Alias for workspace_id'),
     project_number: relaxedNumber().optional().describe('Target GitHub project number'),
     cwd: z.string().optional().describe('Working directory path for git operations'),
-})
+}).transform((d) => ({
+    ...d,
+    maxCount: d.maxCount ?? d.max_count ?? 50,
+}))
 
 export const GitOutputSchema = z.object({
     success: z.boolean(),

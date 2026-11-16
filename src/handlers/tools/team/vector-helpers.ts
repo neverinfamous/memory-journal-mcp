@@ -253,18 +253,22 @@ export async function executeTeamRebuildVectorIndex(
             parsed.project_number,
             activeProjectRegistry(context.config?.projectRegistry)
         )
-        const { success, indexed, failed, firstError } = await teamVectorManager.rebuildIndex(
-            progress,
-            { workspaceId: wsId, ...(projectNumber !== undefined ? { projectNumber } : {}) }
-        )
+        const { success, indexed, failed, firstError, warning } =
+            await teamVectorManager.rebuildIndex(progress, {
+                workspaceId: wsId,
+                ...(projectNumber !== undefined ? { projectNumber } : {}),
+            })
         if (!success && firstError !== undefined && firstError !== '') {
             logger.warning(`Team vector index rebuild had errors: ${firstError}`)
         }
+        const partial = failed > 0 && indexed > 0
 
         return {
             success,
+            ...(partial ? { partial: true } : {}),
             entriesIndexed: indexed,
             ...(failed > 0 ? { failedEntries: failed } : {}),
+            ...(warning !== undefined ? { warning } : {}),
             ...(!success
                 ? { error: firstError ?? 'All entries failed to generate embeddings' }
                 : {}),

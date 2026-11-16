@@ -107,7 +107,7 @@ Create relationships via `relationships: [{ targetId, relationType }]` (prefer c
 
 Only link truly related entries. Do NOT create bulk relationships between unrelated entries that happen to share tags.
 - **Opportunistic Superseding (Awake Contradiction Resolution)**: When creating a `project_decision`, `bug_fix`, or `technical_note` that invalidates or replaces an earlier entry surfaced in your briefing or search results, immediately link the new entry to the superseded entry via `evolves_from` or `resolved` so the knowledge graph reflects the superseding chain in real time.
-- **File & Symbol Anchors**: Attach `anchors: [{ file_path, symbol_name?, commit_sha? }]` when entries document specific files or symbols, and manage stale anchors with `mark_anchors_stale({ updates: [{ id, status }] })`.
+- **File & Symbol Anchors**: Attach `anchors: [{ anchor_path, anchor_type, status? }]` when entries document specific files or symbols, and manage stale anchors with `mark_anchors_stale({ updates: [{ id, status }] })`.
 
 ### Git Commit Standards
 

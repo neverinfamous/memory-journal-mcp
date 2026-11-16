@@ -4,7 +4,7 @@ import { enforceAccessBoundary } from '../../../auth/validation.js'
 import { resolveIssueUrl } from '../../../utils/github-helpers.js'
 import { resolveAuthenticatedAuthor } from '../../../utils/security-utils.js'
 import { resolveProjectContext } from '../../../utils/workspace-resolver.js'
-import { AuthorizationError, PermissionError, ValidationError } from '../../../types/errors.js'
+import { PermissionError, ValidationError } from '../../../types/errors.js'
 import { canonicalizeTeamAuthor, enforceTeamRbac } from '../team/rbac.js'
 import { logger } from '../../../utils/logger.js'
 import { resolveEntryAnchors } from '../core/staleness-tools.js'
@@ -159,11 +159,8 @@ export async function shareBatchEntriesWithTeam(
                 index: i,
                 error: err instanceof Error ? err.message : String(err),
             })
-            warnings.push(
-                err instanceof AuthorizationError
-                    ? `Entry at index ${String(i)} could not be shared with team: ${err.message}`
-                    : `Entry at index ${String(i)} could not be shared with team.`
-            )
+            const errMsg = err instanceof Error ? err.message : String(err)
+            warnings.push(`Entry at index ${String(i)} could not be shared with team: ${errMsg}`)
         }
     }
     if (sharedCount > 0) teamDb.flushSave()
