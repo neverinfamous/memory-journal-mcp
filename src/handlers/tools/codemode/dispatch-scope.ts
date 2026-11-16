@@ -65,6 +65,9 @@ export function deepCamelToSnake(
                 newObj['entry_ids'] = Array.isArray(vSnake) ? vSnake : [vSnake]
                 continue
             }
+            if (k !== snakeKey && Object.hasOwn(obj, snakeKey) && obj[snakeKey] !== undefined) {
+                continue
+            }
             newObj[snakeKey] = deepCamelToSnake(v, depth + 1)
         }
         return newObj
@@ -122,83 +125,79 @@ function isSameOrSubdirectory(targetDir: string, rootDir: string): boolean {
     return rel === '' || (!rel.startsWith('..') && !path.isAbsolute(rel))
 }
 
-async function autoPopulateGithubUrls(
+function isPathOutsideCwd(
+    reg: NonNullable<ToolContext['config']>['projectRegistry'],
+    key: string
+): boolean {
+    const entry = lookupRegistryEntry(reg, key)
+    return entry?.path !== undefined && entry.path !== '' && !isSameOrSubdirectory(process.cwd(), entry.path)
+}
+
+function resolveGithubUrlScope(
     paramsObj: Record<string, unknown>,
     sessionContext: ToolContext,
     sessionWorkspaceId: string | undefined,
     sessionProjectId: number | string | undefined
-): Promise<void> {
-    if (
-        !(
-            (paramsObj['issue_number'] !== undefined && paramsObj['issue_url'] === undefined) ||
-            (paramsObj['pr_number'] !== undefined && paramsObj['pr_url'] === undefined)
-        )
-    ) {
-        return
-    }
-    if (sessionContext.github === undefined) return
-    const targetWs =
-        typeof paramsObj['workspace_id'] === 'string' ? paramsObj['workspace_id'].trim() : undefined
-    if (targetWs === '*' || isDefaultWorkspaceName(targetWs)) return
+): { allowed: boolean; repoHint: string | undefined } {
+    const targetWs = typeof paramsObj['workspace_id'] === 'string' ? paramsObj['workspace_id'].trim() : undefined
+    if (targetWs === '*' || isDefaultWorkspaceName(targetWs)) return { allowed: false, repoHint: undefined }
     if (
         targetWs !== undefined &&
         sessionWorkspaceId !== undefined &&
         sessionWorkspaceId !== '*' &&
         targetWs.toLowerCase() !== sessionWorkspaceId.toLowerCase()
     ) {
-        return
+        return { allowed: false, repoHint: undefined }
     }
     if (
         typeof paramsObj['project_number'] === 'number' &&
         typeof sessionProjectId === 'number' &&
         paramsObj['project_number'] !== sessionProjectId
     ) {
-        return
+        return { allowed: false, repoHint: undefined }
     }
     const wsForLookup = targetWs ?? sessionWorkspaceId
-    if (wsForLookup === '*' || isDefaultWorkspaceName(wsForLookup)) return
+    if (wsForLookup === '*' || isDefaultWorkspaceName(wsForLookup)) return { allowed: false, repoHint: undefined }
     const reg = activeProjectRegistry(sessionContext.config?.projectRegistry)
-    if (wsForLookup !== undefined) {
-        const wsReg = lookupRegistryEntry(reg, wsForLookup)
-        if (
-            wsReg?.path !== undefined &&
-            wsReg.path !== '' &&
-            !isSameOrSubdirectory(process.cwd(), wsReg.path)
-        ) {
-            return
-        }
-    }
+    if (wsForLookup !== undefined && isPathOutsideCwd(reg, wsForLookup)) return { allowed: false, repoHint: undefined }
     const repoHint =
-        typeof paramsObj['repo'] === 'string' && paramsObj['repo'].trim() !== ''
-            ? paramsObj['repo'].trim()
-            : undefined
+        typeof paramsObj['repo'] === 'string' && paramsObj['repo'].trim() !== '' ? paramsObj['repo'].trim() : undefined
     if (repoHint !== undefined) {
         const repoSlug = repoHint.split(/[/\\]/).filter(Boolean).pop()?.trim() ?? repoHint
         const repoReg = lookupRegistryEntry(reg, repoHint) ?? lookupRegistryEntry(reg, repoSlug)
-        if (
-            repoReg?.path !== undefined &&
-            repoReg.path !== '' &&
-            !isSameOrSubdirectory(process.cwd(), repoReg.path)
-        ) {
-            return
+        if (repoReg?.path !== undefined && repoReg.path !== '' && !isSameOrSubdirectory(process.cwd(), repoReg.path)) {
+            return { allowed: false, repoHint: undefined }
         }
     }
+    return { allowed: true, repoHint }
+}
+
+async function autoPopulateGithubUrls(
+    paramsObj: Record<string, unknown>,
+    sessionContext: ToolContext,
+    sessionWorkspaceId: string | undefined,
+    sessionProjectId: number | string | undefined
+): Promise<void> {
+    const needsIssueUrl = paramsObj['issue_number'] !== undefined && paramsObj['issue_url'] === undefined
+    const needsPrUrl = paramsObj['pr_number'] !== undefined && paramsObj['pr_url'] === undefined
+    if ((!needsIssueUrl && !needsPrUrl) || sessionContext.github === undefined) return
+    const scope = resolveGithubUrlScope(paramsObj, sessionContext, sessionWorkspaceId, sessionProjectId)
+    if (!scope.allowed) return
     try {
         const repoInfo = await sessionContext.github.getRepoInfo()
-        if (repoInfo?.owner && repoInfo?.repo) {
-            if (repoHint !== undefined) {
-                const lowerHint = repoHint.toLowerCase()
-                const matchesRepo =
-                    lowerHint === repoInfo.repo.toLowerCase() ||
-                    lowerHint === `${repoInfo.owner}/${repoInfo.repo}`.toLowerCase()
-                if (!matchesRepo) return
-            }
-            if (paramsObj['issue_number'] !== undefined && paramsObj['issue_url'] === undefined) {
-                paramsObj['issue_url'] = `https://github.com/${repoInfo.owner}/${repoInfo.repo}/issues/${String(Number(paramsObj['issue_number']))}`
-            }
-            if (paramsObj['pr_number'] !== undefined && paramsObj['pr_url'] === undefined) {
-                paramsObj['pr_url'] = `https://github.com/${repoInfo.owner}/${repoInfo.repo}/pull/${String(Number(paramsObj['pr_number']))}`
-            }
+        if (!repoInfo?.owner || !repoInfo?.repo) return
+        if (scope.repoHint !== undefined) {
+            const lowerHint = scope.repoHint.toLowerCase()
+            const matchesRepo =
+                lowerHint === repoInfo.repo.toLowerCase() ||
+                lowerHint === `${repoInfo.owner}/${repoInfo.repo}`.toLowerCase()
+            if (!matchesRepo) return
+        }
+        if (needsIssueUrl) {
+            paramsObj['issue_url'] = `https://github.com/${repoInfo.owner}/${repoInfo.repo}/issues/${String(Number(paramsObj['issue_number']))}`
+        }
+        if (needsPrUrl) {
+            paramsObj['pr_url'] = `https://github.com/${repoInfo.owner}/${repoInfo.repo}/pull/${String(Number(paramsObj['pr_number']))}`
         }
     } catch (err) {
         logger.debug('Could not auto-populate GitHub URLs; proceeding without them', {
@@ -244,6 +243,37 @@ const SESSION_INHERITANCE_EXCLUDED_TOOLS = new Set([
     'update_configuration',
 ])
 
+function applyTargetWorkspaceScope(
+    tool: ToolDefinition,
+    paramsObj: Record<string, unknown>,
+    reg: NonNullable<ToolContext['config']>['projectRegistry'],
+    workspaceId: string | undefined,
+    supplied: number | undefined
+): boolean {
+    const callerTargetWs =
+        typeof paramsObj['target_workspace_id'] === 'string' && paramsObj['target_workspace_id'].trim() !== ''
+            ? paramsObj['target_workspace_id'].trim()
+            : undefined
+    const hasCrossWorkspaceTarget =
+        callerTargetWs !== undefined &&
+        (typeof workspaceId !== 'string' || callerTargetWs.toLowerCase() !== workspaceId.toLowerCase())
+
+    if (callerTargetWs !== undefined && callerTargetWs !== '*') {
+        if (supplied !== undefined) {
+            pairStoredScope(callerTargetWs, supplied, reg)
+        } else if (
+            !isDefaultWorkspaceName(callerTargetWs) &&
+            checkSchemaAcceptsKey(tool.inputSchema, 'project_number')
+        ) {
+            const targetReg = lookupRegistryEntry(reg, callerTargetWs)
+            if (targetReg?.project_number !== undefined) {
+                paramsObj['project_number'] = targetReg.project_number
+            }
+        }
+    }
+    return hasCrossWorkspaceTarget
+}
+
 function resolveRootScopePairing(
     tool: ToolDefinition,
     paramsObj: Record<string, unknown>,
@@ -275,28 +305,8 @@ function resolveRootScopePairing(
         )
     }
 
-    const callerTargetWs =
-        typeof paramsObj['target_workspace_id'] === 'string' && paramsObj['target_workspace_id'].trim() !== ''
-            ? paramsObj['target_workspace_id'].trim()
-            : undefined
-    const hasCrossWorkspaceTarget =
-        callerTargetWs !== undefined &&
-        (typeof workspaceId !== 'string' || callerTargetWs.toLowerCase() !== workspaceId.toLowerCase())
     const supplied = typeof paramsObj['project_number'] === 'number' ? paramsObj['project_number'] : undefined
-
-    if (callerTargetWs !== undefined && callerTargetWs !== '*') {
-        if (supplied !== undefined) {
-            pairStoredScope(callerTargetWs, supplied, reg)
-        } else if (
-            !isDefaultWorkspaceName(callerTargetWs) &&
-            checkSchemaAcceptsKey(tool.inputSchema, 'project_number')
-        ) {
-            const targetReg = lookupRegistryEntry(reg, callerTargetWs)
-            if (targetReg?.project_number !== undefined) {
-                paramsObj['project_number'] = targetReg.project_number
-            }
-        }
-    }
+    const hasCrossWorkspaceTarget = applyTargetWorkspaceScope(tool, paramsObj, reg, workspaceId, supplied)
 
     if (
         !callerHasExplicitWs &&
@@ -305,12 +315,8 @@ function resolveRootScopePairing(
         workspaceId !== undefined &&
         workspaceId !== '*'
     ) {
-        if (!hasCrossWorkspaceTarget && supplied !== undefined) {
-            pairStoredScope(workspaceId, supplied, reg)
-        }
-        if (checkSchemaAcceptsKey(tool.inputSchema, 'workspace_id')) {
-            paramsObj['workspace_id'] = workspaceId
-        }
+        if (!hasCrossWorkspaceTarget && supplied !== undefined) pairStoredScope(workspaceId, supplied, reg)
+        if (checkSchemaAcceptsKey(tool.inputSchema, 'workspace_id')) paramsObj['workspace_id'] = workspaceId
     }
 
     if (
@@ -397,6 +403,14 @@ export async function normalizeDispatchParams(
               : undefined
 
     if (batchArrayKey !== undefined) {
+        if (
+            (tool.name === 'batch_update_entries' || tool.name === 'team_batch_update_entries') &&
+            paramsObj['workspace_id'] === '*' &&
+            paramsObj['project_number'] === undefined &&
+            typeof projectId === 'number'
+        ) {
+            paramsObj['project_number'] = projectId
+        }
         const batchError = normalizeBatchDispatchItems(batchArrayKey, paramsObj, reg, {
             projectId,
             workspaceId,

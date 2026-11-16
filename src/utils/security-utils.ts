@@ -1,23 +1,16 @@
 import { getAuthContext } from '../auth/auth-context.js'
-import { MemoryJournalMcpError } from '../types/errors.js'
+import { SecurityError, PathTraversalError } from './path-safety.js'
+
+export {
+    SecurityError,
+    PathTraversalError,
+    assertSafeDirectoryPath,
+    assertSafeFilePath,
+} from './path-safety.js'
 
 // ============================================================================
 // Typed Security Errors
 // ============================================================================
-
-/**
- * Base class for security-related errors.
- * Extends MemoryJournalMcpError with VALIDATION category.
- */
-export class SecurityError extends MemoryJournalMcpError {
-    constructor(message: string, code: string) {
-        super(message, code, 'validation', {
-            suggestion: 'Check input for security violations',
-            recoverable: false,
-        })
-        this.name = 'SecurityError'
-    }
-}
 
 /**
  * Thrown when an invalid date format pattern is detected
@@ -26,16 +19,6 @@ export class InvalidDateFormatError extends SecurityError {
     constructor(value: string) {
         super(`Invalid date format pattern: '${value}'`, 'INVALID_DATE_FORMAT')
         this.name = 'InvalidDateFormatError'
-    }
-}
-
-/**
- * Thrown when path traversal is detected in input
- */
-export class PathTraversalError extends SecurityError {
-    constructor(path: string) {
-        super(`Path traversal detected: '${path}'`, 'PATH_TRAVERSAL')
-        this.name = 'PathTraversalError'
     }
 }
 
@@ -113,172 +96,6 @@ export function sanitizeSearchQuery(query: string): string {
 export function assertNoPathTraversal(filename: string): void {
     if (filename.includes('/') || filename.includes('\\') || filename.includes('..')) {
         throw new PathTraversalError(filename)
-    }
-}
-
-import fs from 'node:fs'
-import path from 'node:path'
-
-/**
- * Reject encoded separators/dots/nulls and `..` segments, returning the decoded directory path.
- * @throws PathTraversalError on any traversal indicator
- */
-function decodeSafeDirPath(dirPath: string): string {
-    // 1. Reject encoded path separators/dots/nulls and raw null bytes before decoding
-    if (/%2f|%5c|%2e|%00/i.test(dirPath) || dirPath.includes('\0')) {
-        throw new PathTraversalError(dirPath)
-    }
-    let decodedDir: string
-    try {
-        decodedDir = decodeURIComponent(dirPath)
-    } catch {
-        throw new PathTraversalError(dirPath)
-    }
-    if (decodedDir.includes('\0')) {
-        throw new PathTraversalError(decodedDir)
-    }
-    const normalized = decodedDir.replace(/\\/g, '/')
-    const segments = normalized.split('/')
-    if (segments.some((s) => s === '..')) {
-        throw new PathTraversalError(decodedDir)
-    }
-    return decodedDir
-}
-
-/**
- * Resolve the real path of the target, stepping up to the nearest existing ancestor so symlinked
- * parents cannot be used to escape when the final node does not exist yet.
- */
-function resolveRealTargetPath(decodedDir: string): string {
-    const resolved = path.resolve(decodedDir)
-
-    // 2. Resolve realpath iteratively by stepping up the tree until an existing directory is found.
-    // This prevents symlink traversal bypasses where the final node does not exist but a parent is a symlink pointing outside.
-    let currentDir = resolved
-    let existingRealPath = ''
-
-    while (currentDir !== path.parse(currentDir).root) {
-        if (fs.existsSync(currentDir)) {
-            existingRealPath = fs.realpathSync(currentDir)
-            break
-        }
-        currentDir = path.dirname(currentDir)
-    }
-
-    if (!existingRealPath) {
-        if (fs.existsSync(currentDir)) {
-            existingRealPath = fs.realpathSync(currentDir) // root resolution
-        } else {
-            existingRealPath = currentDir
-        }
-    }
-
-    // The target path is the successfully evaluated real path plus any non-existent trailing segments
-    const remainder = path.relative(currentDir, resolved)
-    return remainder ? path.join(existingRealPath, remainder) : existingRealPath
-}
-
-/** Resolve configured IO roots to real paths (falling back to the resolved path when missing). */
-function resolveAllowedRoots(rawRoots: string[]): string[] {
-    // 3. Define safe boundaries
-    if (rawRoots.length === 0) {
-        throw new PathTraversalError(
-            'No allowed input/output roots configured for sandbox boundary. Please configure ALLOWED_IO_ROOTS env variable or pass --allowed-io-roots with absolute paths (e.g. C:\\my\\path) to enable filesystem operations.'
-        )
-    }
-    const allowedRoots: string[] = []
-
-    for (const root of rawRoots) {
-        const resolvedRoot = path.resolve(root)
-        try {
-            allowedRoots.push(fs.realpathSync(resolvedRoot))
-        } catch (err) {
-            const code =
-                typeof err === 'object' && err !== null && 'code' in err
-                    ? (err as { code?: unknown }).code
-                    : undefined
-            if (code === 'ENOENT') {
-                allowedRoots.push(resolveRealTargetPath(resolvedRoot))
-                continue
-            }
-            // Skip inaccessible/broken-symlink roots so other valid roots still resolve; fail closed below if none remain.
-        }
-    }
-    if (allowedRoots.length === 0) {
-        throw new PathTraversalError(
-            'None of the configured allowed input/output roots could be resolved safely.'
-        )
-    }
-    return allowedRoots
-}
-
-/**
- * Validates that a directory path is strictly bounded within the active memory journal context.
- *
- * This enforces strict file-system isolation. The target path MUST reside within:
- * 1. The current working directory (where the server was started)
- * 2. OR any explicitly configured path inside the PROJECT_REGISTRY map.
- *
- * @param dirPath - The directory path to validate
- * @throws PathTraversalError if the path escapes the sandboxed boundaries
- */
-export function assertSafeDirectoryPath(dirPath: string, providedRoots: string[]): void {
-    const decodedDir = decodeSafeDirPath(dirPath)
-    const targetPath = resolveRealTargetPath(decodedDir)
-    const allowedRoots = resolveAllowedRoots(providedRoots)
-
-    // 4. Verify the targetPath is structurally inside at least one allowed root
-    const isWin32 = process.platform === 'win32'
-    const normalizedTarget = isWin32 ? targetPath.toLowerCase() : targetPath
-    const isAllowed = allowedRoots.some((root) => {
-        const normalizedRoot = isWin32 ? root.toLowerCase() : root
-        const rel = path.relative(normalizedRoot, normalizedTarget)
-        // If relative path is '..' or starts with '../' (or '..\'), it escapes the root
-        return rel !== '..' && !rel.startsWith('..' + path.sep) && !path.isAbsolute(rel)
-    })
-
-    if (!isAllowed) {
-        throw new PathTraversalError(
-            `Directory path escapes allowed sandbox boundaries: ${decodedDir}`
-        )
-    }
-}
-
-/**
- * Validates that a file path is strictly bounded and refuses symlinks to prevent
- * any file-level traversal tricks.
- */
-export function assertSafeFilePath(filePath: string, providedRoots: string[]): void {
-    // First ensure the logical path is within boundaries
-    assertSafeDirectoryPath(path.dirname(filePath), providedRoots)
-
-    // [BOUNDARY] The directory check never sees the basename; reject URL-encoded separators/traversal hidden in it.
-    const rawBase = path.basename(filePath)
-    let decodedBase: string
-    try {
-        decodedBase = decodeURIComponent(rawBase)
-    } catch {
-        throw new PathTraversalError(`Malformed URL-encoding in file name: ${rawBase}`)
-    }
-    if (/[\\/]/.test(decodedBase) || decodedBase === '..' || decodedBase === '.' || decodedBase.includes('\0')) {
-        throw new PathTraversalError(`File name escapes allowed sandbox boundaries: ${decodedBase}`)
-    }
-
-    // Second, if the file exists, ensure it is not a symlink that could trick the system
-    try {
-        const stats = fs.lstatSync(filePath)
-        if (stats.isSymbolicLink()) {
-            throw new PathTraversalError(
-                `Symlinks are strictly forbidden for file operations: ${filePath}`
-            )
-        }
-    } catch (err: unknown) {
-        if (err instanceof PathTraversalError) {
-            throw err
-        }
-        const code = typeof err === 'object' && err !== null && 'code' in err ? err.code : undefined
-        if (code === 'ENOENT') return
-        throw err
     }
 }
 

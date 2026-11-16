@@ -222,6 +222,33 @@ export class GitHubIntegration {
         return this.repositoryManager.getWorkflowRuns(owner, repo, limit, abortSignal)
     }
 
+    private async populateRepoContextCollections(
+        context: ProjectContext,
+        owner: string,
+        repo: string,
+        degraded: string[],
+        abortSignal?: AbortSignal
+    ): Promise<void> {
+        const [issuesResult, prsResult, runsResult, milestonesResult] = await Promise.allSettled([
+            this.issuesManager.getIssues(owner, repo, 'open', 10, abortSignal),
+            this.pullRequestsManager.getPullRequests(owner, repo, 'open', 10, abortSignal),
+            this.repositoryManager.getWorkflowRuns(owner, repo, 10, abortSignal),
+            this.milestonesManager.getMilestones(owner, repo, 'open', 10, abortSignal),
+        ])
+
+        context.issues = issuesResult.status === 'fulfilled' ? issuesResult.value : []
+        if (issuesResult.status === 'rejected') degraded.push('issues')
+
+        context.pullRequests = prsResult.status === 'fulfilled' ? prsResult.value : []
+        if (prsResult.status === 'rejected') degraded.push('pullRequests')
+
+        context.workflowRuns = runsResult.status === 'fulfilled' ? runsResult.value : []
+        if (runsResult.status === 'rejected') degraded.push('workflowRuns')
+
+        context.milestones = milestonesResult.status === 'fulfilled' ? milestonesResult.value : []
+        if (milestonesResult.status === 'rejected') degraded.push('milestones')
+    }
+
     async getRepoContext(
         abortSignal?: AbortSignal,
         target?: { owner: string; repo: string }
@@ -275,49 +302,13 @@ export class GitHubIntegration {
             }
         }
         if (repoInfo.owner && repoInfo.repo) {
-            const [issuesResult, prsResult, runsResult, milestonesResult] =
-                await Promise.allSettled([
-                    this.issuesManager.getIssues(
-                        repoInfo.owner,
-                        repoInfo.repo,
-                        'open',
-                        10,
-                        abortSignal
-                    ),
-                    this.pullRequestsManager.getPullRequests(
-                        repoInfo.owner,
-                        repoInfo.repo,
-                        'open',
-                        10,
-                        abortSignal
-                    ),
-                    this.repositoryManager.getWorkflowRuns(
-                        repoInfo.owner,
-                        repoInfo.repo,
-                        10,
-                        abortSignal
-                    ),
-                    this.milestonesManager.getMilestones(
-                        repoInfo.owner,
-                        repoInfo.repo,
-                        'open',
-                        10,
-                        abortSignal
-                    ),
-                ])
-
-            context.issues = issuesResult.status === 'fulfilled' ? issuesResult.value : []
-            if (issuesResult.status === 'rejected') degraded.push('issues')
-
-            context.pullRequests = prsResult.status === 'fulfilled' ? prsResult.value : []
-            if (prsResult.status === 'rejected') degraded.push('pullRequests')
-
-            context.workflowRuns = runsResult.status === 'fulfilled' ? runsResult.value : []
-            if (runsResult.status === 'rejected') degraded.push('workflowRuns')
-
-            context.milestones =
-                milestonesResult.status === 'fulfilled' ? milestonesResult.value : []
-            if (milestonesResult.status === 'rejected') degraded.push('milestones')
+            await this.populateRepoContextCollections(
+                context,
+                repoInfo.owner,
+                repoInfo.repo,
+                degraded,
+                abortSignal
+            )
         }
 
         if (degraded.length > 0) {

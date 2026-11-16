@@ -4,7 +4,7 @@
 
 import type { MessagePort } from 'node:worker_threads'
 import type { RpcRequest, RpcResponse } from './types.js'
-import { runWithRpcExecutionOverrides } from './rpc-context.js'
+import { runWithRpcExecutionOverrides, type RpcExecutionOverrides } from './rpc-context.js'
 
 function safePostRpcResponse(hostPort: MessagePort, response: RpcResponse): void {
     try {
@@ -20,6 +20,54 @@ function safePostRpcResponse(hostPort: MessagePort, response: RpcResponse): void
             // Host port already closed/terminated; swallow to avoid unhandled rejection on host thread.
         }
     }
+}
+
+function resolveRpcTarget(req: RpcRequest, apiBindings: Record<string, unknown>): unknown {
+    if (req.group === '_topLevel') {
+        return Object.hasOwn(apiBindings, req.method) ? apiBindings[req.method] : undefined
+    }
+    if (!Object.hasOwn(apiBindings, req.group)) return undefined
+    const groupApi = apiBindings[req.group]
+    if (groupApi === undefined || groupApi === null || typeof groupApi !== 'object') {
+        return undefined
+    }
+    return Object.hasOwn(groupApi, req.method)
+        ? (Reflect.get(groupApi, req.method) as unknown)
+        : undefined
+}
+
+function buildRpcOverrides(req: RpcRequest): RpcExecutionOverrides | undefined {
+    const overrides: RpcExecutionOverrides = {}
+    let hasOverride = false
+    if (req.readonly === true) {
+        overrides.readonly = true
+        hasOverride = true
+    }
+    if (req.dryRun === true) {
+        overrides.dryRun = true
+        hasOverride = true
+    }
+    if (req.useTestDb === true) {
+        overrides.useTestDb = true
+        hasOverride = true
+    }
+    if (
+        typeof req.workspaceId === 'string' &&
+        req.workspaceId.trim() !== '' &&
+        req.workspaceId.trim() !== '*'
+    ) {
+        overrides.workspaceId = req.workspaceId.trim()
+        hasOverride = true
+    }
+    if (
+        typeof req.projectNumber === 'number' &&
+        Number.isInteger(req.projectNumber) &&
+        req.projectNumber > 0
+    ) {
+        overrides.projectNumber = req.projectNumber
+        hasOverride = true
+    }
+    return hasOverride ? overrides : undefined
 }
 
 export async function handleRpcRequest(
@@ -50,30 +98,16 @@ export async function handleRpcRequest(
         }
 
         const safeArgs = Array.isArray(req.args) ? req.args : []
-        let target: unknown
-        if (req.group === '_topLevel') {
-            target = Object.hasOwn(apiBindings, req.method) ? apiBindings[req.method] : undefined
-        } else if (Object.hasOwn(apiBindings, req.group)) {
-            const groupApi = apiBindings[req.group]
-            if (groupApi !== undefined && groupApi !== null && typeof groupApi === 'object') {
-                target = Object.hasOwn(groupApi, req.method)
-                    ? (Reflect.get(groupApi, req.method) as unknown)
-                    : undefined
-            }
-        }
+        const target = resolveRpcTarget(req, apiBindings)
 
         if (typeof target === 'function') {
             const callFn = (): Promise<unknown> =>
                 (target as (...args: unknown[]) => Promise<unknown>)(...safeArgs)
-            if (req.readonly === true || req.dryRun === true || req.useTestDb === true) {
-                const overrides: { readonly?: boolean; dryRun?: boolean; useTestDb?: boolean } = {}
-                if (req.readonly === true) overrides.readonly = true
-                if (req.dryRun === true) overrides.dryRun = true
-                if (req.useTestDb === true) overrides.useTestDb = true
-                response.result = await runWithRpcExecutionOverrides(overrides, callFn)
-            } else {
-                response.result = await callFn()
-            }
+            const overrides = buildRpcOverrides(req)
+            response.result =
+                overrides !== undefined
+                    ? await runWithRpcExecutionOverrides(overrides, callFn)
+                    : await callFn()
         } else {
             response.error = `Unknown method: ${req.group}.${req.method}`
         }

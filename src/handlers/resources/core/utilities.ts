@@ -304,6 +304,104 @@ async function scanSkillsDir(
     return skills
 }
 
+function validateUserSkillsDir(userSkillsDir: string, allowedIoRoots: string[]): void {
+    try {
+        // Add explicitly configured skills directory to allowed roots for this check
+        const expandedRoots = [...allowedIoRoots, userSkillsDir]
+        assertSafeDirectoryPath(userSkillsDir, expandedRoots)
+        if (!fs.existsSync(userSkillsDir)) {
+            throw new Error(`Configured SKILLS_DIR_PATH does not exist: ${userSkillsDir}`)
+        }
+    } catch (err) {
+        throw new ProtocolError(
+            ProtocolErrorCode.InvalidParams,
+            err instanceof Error ? err.message : String(err)
+        )
+    }
+}
+
+function buildSkillsPayloadResult(
+    skills: { name: string; path: string; excerpt: string; source: string }[]
+): ResourceResult {
+    const payloadData = {
+        configured: true,
+        // Prevent path disclosure of host directories
+        skills: skills.map((s) => ({
+            name: s.name,
+            excerpt: s.excerpt,
+            source: s.source,
+        })),
+        count: skills.length,
+    }
+    const tokenEstimate = Math.ceil(JSON.stringify(payloadData).length / 4)
+    return {
+        data: {
+            ...payloadData,
+            _meta: { tokenEstimate },
+        },
+    }
+}
+
+async function handleSkillsResource(
+    _uri: string,
+    context: ResourceContext
+): Promise<ResourceResult> {
+    const userSkillsDir = context.briefingConfig?.skillsDirPath ?? process.env['SKILLS_DIR_PATH']
+    const shippedSkillsDir = getShippedSkillsDir()
+    const hasAnySource = !!userSkillsDir || !!shippedSkillsDir
+
+    if (userSkillsDir) {
+        validateUserSkillsDir(userSkillsDir, context.briefingConfig?.allowedIoRoots ?? [])
+    }
+
+    if (!hasAnySource) {
+        throw new ProtocolError(
+            ProtocolErrorCode.InvalidParams,
+            'No skills available. Set SKILLS_DIR_PATH to index user skills.'
+        )
+    }
+
+    try {
+        const currentDirs = `${userSkillsDir ?? ''}|${shippedSkillsDir ?? ''}`
+        const cached = cachedSkillsMap.get(currentDirs)
+        if (cached && Date.now() - cached.timestamp < SKILLS_CACHE_TTL_MS) {
+            return buildSkillsPayloadResult(cached.skills)
+        }
+
+        // Scan shipped skills first, then user skills.
+        // User skills override shipped skills with the same name.
+        const skillMap = new Map<
+            string,
+            { name: string; path: string; excerpt: string; source: string }
+        >()
+        if (shippedSkillsDir) {
+            for (const skill of await scanSkillsDir(shippedSkillsDir, 'shipped')) {
+                skillMap.set(skill.name, skill)
+            }
+        }
+        if (userSkillsDir) {
+            for (const skill of await scanSkillsDir(userSkillsDir, 'user')) {
+                skillMap.set(skill.name, skill)
+            }
+        }
+
+        const skills = [...skillMap.values()].sort((a, b) => a.name.localeCompare(b.name))
+        cachedSkillsMap.set(currentDirs, { skills, timestamp: Date.now() })
+        if (cachedSkillsMap.size > 100) {
+            const firstKey = cachedSkillsMap.keys().next().value
+            if (firstKey) cachedSkillsMap.delete(firstKey)
+        }
+
+        return buildSkillsPayloadResult(skills)
+    } catch (err) {
+        const message = err instanceof Error ? err.message : String(err)
+        throw new ProtocolError(
+            ProtocolErrorCode.InternalError,
+            `Could not scan skills directory: ${message}`
+        )
+    }
+}
+
 export const skillsResource: InternalResourceDef = {
     uri: 'memory://skills',
     name: 'Skills',
@@ -312,110 +410,5 @@ export const skillsResource: InternalResourceDef = {
     mimeType: 'application/json',
     icons: [ICON_BRIEFING],
     annotations: withPriority(0.6, ASSISTANT_FOCUSED),
-    handler: async (_uri: string, context: ResourceContext): Promise<ResourceResult> => {
-        const userSkillsDir =
-            context.briefingConfig?.skillsDirPath ?? process.env['SKILLS_DIR_PATH']
-        const shippedSkillsDir = getShippedSkillsDir()
-        const hasAnySource = !!userSkillsDir || !!shippedSkillsDir
-
-        if (userSkillsDir) {
-            try {
-                const allowedRoots = context.briefingConfig?.allowedIoRoots ?? []
-                // Add explicitly configured skills directory to allowed roots for this check
-                const expandedRoots = [...allowedRoots, userSkillsDir]
-                assertSafeDirectoryPath(userSkillsDir, expandedRoots)
-                if (!fs.existsSync(userSkillsDir)) {
-                    throw new Error(`Configured SKILLS_DIR_PATH does not exist: ${userSkillsDir}`)
-                }
-            } catch (err) {
-                throw new ProtocolError(ProtocolErrorCode.InvalidParams, 
-                    err instanceof Error ? err.message : String(err)
-                )
-            }
-        }
-
-        if (!hasAnySource) {
-            throw new ProtocolError(ProtocolErrorCode.InvalidParams, 
-                'No skills available. Set SKILLS_DIR_PATH to index user skills.'
-            )
-        }
-
-        try {
-            const currentDirs = `${userSkillsDir ?? ''}|${shippedSkillsDir ?? ''}`
-
-            const cached = cachedSkillsMap.get(currentDirs)
-            if (cached && Date.now() - cached.timestamp < SKILLS_CACHE_TTL_MS) {
-                const payloadData = {
-                    configured: true,
-                    // Prevent path disclosure of host directories
-                    skills: cached.skills.map((s) => ({
-                        name: s.name,
-                        excerpt: s.excerpt,
-                        source: s.source,
-                    })),
-                    count: cached.skills.length,
-                }
-                const tokenEstimate = Math.ceil(JSON.stringify(payloadData).length / 4)
-                return {
-                    data: {
-                        ...payloadData,
-                        _meta: { tokenEstimate }
-                    },
-                }
-            }
-
-            // Scan shipped skills first, then user skills.
-            // User skills override shipped skills with the same name.
-            const skillMap = new Map<
-                string,
-                { name: string; path: string; excerpt: string; source: string }
-            >()
-
-            if (shippedSkillsDir) {
-                for (const skill of await scanSkillsDir(shippedSkillsDir, 'shipped')) {
-                    skillMap.set(skill.name, skill)
-                }
-            }
-            if (userSkillsDir) {
-                for (const skill of await scanSkillsDir(userSkillsDir, 'user')) {
-                    skillMap.set(skill.name, skill) // user overrides shipped
-                }
-            }
-
-            const skills = [...skillMap.values()].sort((a, b) => a.name.localeCompare(b.name))
-
-            cachedSkillsMap.set(currentDirs, {
-                skills,
-                timestamp: Date.now(),
-            })
-
-            // Bounded cache
-            if (cachedSkillsMap.size > 100) {
-                const firstKey = cachedSkillsMap.keys().next().value
-                if (firstKey) cachedSkillsMap.delete(firstKey)
-            }
-
-            const payloadData = {
-                configured: true,
-                // Prevent path disclosure of host directories
-                skills: skills.map((s) => ({
-                    name: s.name,
-                    excerpt: s.excerpt,
-                    source: s.source,
-                })),
-                count: skills.length,
-            }
-            const tokenEstimate = Math.ceil(JSON.stringify(payloadData).length / 4)
-
-            return {
-                data: {
-                    ...payloadData,
-                    _meta: { tokenEstimate }
-                },
-            }
-        } catch (err) {
-            const message = err instanceof Error ? err.message : String(err)
-            throw new ProtocolError(ProtocolErrorCode.InternalError, `Could not scan skills directory: ${message}`)
-        }
-    },
+    handler: handleSkillsResource,
 }

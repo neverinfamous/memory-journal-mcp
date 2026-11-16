@@ -56,11 +56,107 @@ export interface SecureDispatcherOptions {
     onMutatingDispatch?: () => void
 }
 
+function extractTestDbOverride(toolParams: unknown): {
+    cleanToolParams: unknown
+    callUseTestDb: boolean
+} {
+    if (!isRecord(toolParams)) {
+        return { cleanToolParams: toolParams, callUseTestDb: false }
+    }
+    const callUseTestDb =
+        toolParams['use_test_db'] === true || toolParams['useTestDb'] === true
+    if ('use_test_db' in toolParams || 'useTestDb' in toolParams) {
+        const cloned = { ...toolParams }
+        delete cloned['use_test_db']
+        delete cloned['useTestDb']
+        return { cleanToolParams: cloned, callUseTestDb }
+    }
+    return { cleanToolParams: toolParams, callUseTestDb }
+}
+
+async function executeDispatcherCall(
+    tool: ToolDefinition,
+    toolParams: unknown,
+    isSimulation: boolean | undefined,
+    options: SecureDispatcherOptions
+): Promise<unknown> {
+    const { sessionContext, projectId, workspaceId, explicitWorkspace, autoVersion, dryRun } = options
+    const { cleanToolParams, callUseTestDb } = extractTestDbOverride(toolParams)
+
+    const rpcOverrides = getRpcExecutionOverrides()
+    const outerCanNarrow = workspaceId === undefined || workspaceId === '*'
+    const overrideWs = rpcOverrides?.workspaceId?.trim()
+    const effectiveWorkspaceId =
+        outerCanNarrow && overrideWs !== undefined && overrideWs !== '' && overrideWs !== '*'
+            ? overrideWs
+            : workspaceId
+    const effectiveExplicitWorkspace =
+        effectiveWorkspaceId !== workspaceId ? true : explicitWorkspace
+    const effectiveProjectId =
+        outerCanNarrow && projectId === undefined && rpcOverrides?.projectNumber !== undefined
+            ? rpcOverrides.projectNumber
+            : projectId
+
+    const normalized = await normalizeDispatchParams(tool, cleanToolParams, {
+        sessionContext,
+        projectId: effectiveProjectId,
+        workspaceId: effectiveWorkspaceId,
+        ...(effectiveExplicitWorkspace !== undefined
+            ? { explicitWorkspace: effectiveExplicitWorkspace }
+            : {}),
+    })
+    if ('errorResult' in normalized) return normalized.errorResult
+    const normalizedParams = normalized.params
+
+    if (rpcOverrides?.readonly === true && tool.annotations?.readOnlyHint !== true) {
+        return {
+            success: false,
+            error: `🛠️ AUTONOMOUS HEALING: Operation '${tool.name}' is blocked in readonly mode. Read operations only.`,
+            code: 'PERMISSION_DENIED',
+            category: 'auth',
+            recoverable: true,
+        }
+    }
+
+    const executeWithScope = async (): Promise<unknown> => {
+        const finalParams = applyAutoVersion(tool, normalizedParams, autoVersion, sessionContext)
+
+        if (tool.annotations?.readOnlyHint !== true && (dryRun || rpcOverrides?.dryRun === true)) {
+            return {
+                success: true,
+                dry_run: true,
+                message: `Simulated successful execution of ${tool.name}`,
+                simulatedParams: finalParams,
+            }
+        }
+
+        if (isSimulation === true && tool.annotations?.readOnlyHint !== true) {
+            return { success: true, simulated: true, params: finalParams }
+        }
+
+        if (tool.annotations?.readOnlyHint !== true) {
+            options.onMutatingDispatch?.()
+        }
+
+        return invokeToolWithGuards(tool, finalParams, sessionContext)
+    }
+
+    const existingReqCtx = getRequestContext()
+    const effectiveUseTestDb =
+        callUseTestDb || rpcOverrides?.useTestDb === true || existingReqCtx?.useTestDb === true
+    if (effectiveUseTestDb && existingReqCtx?.useTestDb !== true) {
+        return requestContextStorage.run(
+            { ...(existingReqCtx ?? {}), useTestDb: true },
+            executeWithScope
+        )
+    }
+    return executeWithScope()
+}
+
 export function createSecureDispatcher(
     options: SecureDispatcherOptions
 ): (toolName: string, toolParams: unknown, isSimulation?: boolean) => Promise<unknown> {
-    const { tools, sessionContext, projectId, workspaceId, explicitWorkspace, autoVersion, dryRun } = options
-
+    const { tools } = options
     return async (toolName: string, toolParams: unknown, isSimulation?: boolean): Promise<unknown> => {
         const tool = tools.find((t) => t.name === toolName)
         if (!tool) {
@@ -68,73 +164,7 @@ export function createSecureDispatcher(
                 `[Security] Tool "${toolName}" is not available or registered in the environment. If you were trying to read a resource, use the proper readResource API instead.`
             )
         }
-
-        let cleanToolParams = toolParams
-        let callUseTestDb = false
-        if (isRecord(toolParams)) {
-            callUseTestDb =
-                toolParams['use_test_db'] === true || toolParams['useTestDb'] === true
-            if ('use_test_db' in toolParams || 'useTestDb' in toolParams) {
-                const cloned = { ...toolParams }
-                delete cloned['use_test_db']
-                delete cloned['useTestDb']
-                cleanToolParams = cloned
-            }
-        }
-
-        const normalized = await normalizeDispatchParams(tool, cleanToolParams, {
-            sessionContext,
-            projectId,
-            workspaceId,
-            ...(explicitWorkspace !== undefined ? { explicitWorkspace } : {}),
-        })
-        if ('errorResult' in normalized) return normalized.errorResult
-        const normalizedParams = normalized.params
-
-        const rpcOverrides = getRpcExecutionOverrides()
-        if (rpcOverrides?.readonly === true && tool.annotations?.readOnlyHint !== true) {
-            return {
-                success: false,
-                error: `🛠️ AUTONOMOUS HEALING: Operation '${tool.name}' is blocked in readonly mode. Read operations only.`,
-                code: 'PERMISSION_DENIED',
-                category: 'auth',
-                recoverable: true,
-            }
-        }
-
-        const executeWithScope = async (): Promise<unknown> => {
-            const finalParams = applyAutoVersion(tool, normalizedParams, autoVersion, sessionContext)
-
-            if (tool.annotations?.readOnlyHint !== true && (dryRun || rpcOverrides?.dryRun === true)) {
-                return {
-                    success: true,
-                    dry_run: true,
-                    message: `Simulated successful execution of ${toolName}`,
-                    simulatedParams: finalParams,
-                }
-            }
-
-            if (isSimulation === true && tool.annotations?.readOnlyHint !== true) {
-                return { success: true, simulated: true, params: finalParams }
-            }
-
-            if (tool.annotations?.readOnlyHint !== true) {
-                options.onMutatingDispatch?.()
-            }
-
-            return invokeToolWithGuards(tool, finalParams, sessionContext)
-        }
-
-        const existingReqCtx = getRequestContext()
-        const effectiveUseTestDb =
-            callUseTestDb || rpcOverrides?.useTestDb === true || existingReqCtx?.useTestDb === true
-        if (effectiveUseTestDb && existingReqCtx?.useTestDb !== true) {
-            return requestContextStorage.run(
-                { ...(existingReqCtx ?? {}), useTestDb: true },
-                executeWithScope
-            )
-        }
-        return executeWithScope()
+        return executeDispatcherCall(tool, toolParams, isSimulation, options)
     }
 }
 

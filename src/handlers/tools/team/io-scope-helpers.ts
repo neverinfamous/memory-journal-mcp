@@ -6,7 +6,9 @@
 import * as fs from 'node:fs/promises'
 import { constants as fsConstants } from 'node:fs'
 import * as path from 'node:path'
-import type { ToolContext } from '../../../types/index.js'
+import { z } from 'zod'
+import type { EntryType, JournalEntry, ToolContext } from '../../../types/index.js'
+import { AggregateMcpError, ValidationError } from '../../../types/errors.js'
 import { getAuthContext } from '../../../auth/auth-context.js'
 import { resolveAuthenticatedAuthor } from '../../../utils/security-utils.js'
 import { sendProgress } from '../../../utils/progress-utils.js'
@@ -19,11 +21,122 @@ import {
     assertSafeDirectoryPath,
     assertSafeFilePath,
 } from '../../../utils/security-utils.js'
-import { convertFile } from '../../../markdown/index.js'
-import type { ParsedFile, SourceFormat } from '../../../markdown/index.js'
-import type { EntryType } from '../../../types/index.js'
+import { convertFile, exportEntriesToMarkdown } from '../../../markdown/index.js'
+import type { ExportableEntry, ParsedFile, SourceFormat } from '../../../markdown/index.js'
 import { MAX_IMPORT_FILE_BYTES } from '../io/tools.js'
-import { resolveTeamProjectNumber } from './helpers.js'
+import {
+    DATE_FORMAT_MESSAGE,
+    DATE_FORMAT_REGEX,
+    DATE_MAX_SENTINEL,
+    DATE_MIN_SENTINEL,
+    StrictProjectNumberSchema,
+} from '../schemas.js'
+import { batchFetchAuthors, resolveTeamProjectNumber } from './helpers.js'
+
+export const TeamExportMarkdownSchema = z
+    .object({
+        output_dir: z.string().min(1),
+        start_date: z.string().regex(DATE_FORMAT_REGEX, DATE_FORMAT_MESSAGE).optional(),
+        end_date: z.string().regex(DATE_FORMAT_REGEX, DATE_FORMAT_MESSAGE).optional(),
+        tags: z.array(z.string()).optional(),
+        project_number: StrictProjectNumberSchema.optional(),
+        limit: z.number().int().min(1).max(500).optional().default(100),
+        workspace_id: z.string().optional(),
+    })
+    .strict()
+
+type TeamExportMarkdownInput = z.infer<typeof TeamExportMarkdownSchema>
+
+function buildTeamExportableEntries(
+    teamDb: NonNullable<ToolContext['teamDb']>,
+    entries: JournalEntry[]
+): ExportableEntry[] {
+    const authorMap = batchFetchAuthors(
+        teamDb,
+        entries.map((e) => e.id)
+    )
+    return entries.map((e) => {
+        const author = authorMap.get(e.id)
+        return {
+            id: e.id,
+            content: e.content,
+            entryType: e.entryType,
+            timestamp: e.timestamp,
+            tags: e.tags,
+            ...(e.significanceType !== null ? { significance: e.significanceType } : {}),
+            ...(author !== undefined && author !== null ? { author } : {}),
+            ...(e.workspaceId !== undefined ? { workspaceId: e.workspaceId } : {}),
+            ...(e.projectNumber !== undefined && e.projectNumber !== null
+                ? { projectNumber: e.projectNumber }
+                : {}),
+        }
+    })
+}
+
+export async function executeTeamExportMarkdown(
+    context: ToolContext,
+    teamDb: NonNullable<ToolContext['teamDb']>,
+    input: TeamExportMarkdownInput
+): Promise<unknown> {
+    if (input.workspace_id?.trim() === '*') {
+        // [BOUNDARY] Per-file export cannot attribute a mixed-workspace batch to one output tree.
+        return {
+            success: false,
+            error: "workspace_id '*' is not supported by team_export_markdown. Export each workspace separately.",
+            code: 'VALIDATION_ERROR',
+            category: 'validation',
+            suggestion: 'Pass a concrete workspace_id or project_number.',
+            recoverable: true,
+        }
+    }
+    const wsId = resolveWriteWorkspaceId(input.workspace_id, input.project_number, context.config)
+    const projectNumber =
+        resolveTeamProjectNumber(context, wsId, input.project_number, input.workspace_id) ?? undefined
+    if (projectNumber === undefined) {
+        return missingTeamIoProjectNumberError(input.workspace_id)
+    }
+    if (
+        input.start_date !== undefined &&
+        input.end_date !== undefined &&
+        input.start_date > input.end_date
+    ) {
+        throw new ValidationError('start_date cannot be after end_date')
+    }
+
+    const { progress } = context
+    const allowedRoots = context.config?.allowedIoRoots ?? []
+    await sendProgress(progress, 0, 3, 'Fetching team entries...')
+
+    const entries =
+        input.start_date || input.end_date
+            ? teamDb.searchByDateRange(
+                  input.start_date ?? DATE_MIN_SENTINEL,
+                  input.end_date ?? DATE_MAX_SENTINEL,
+                  { tags: input.tags, limit: input.limit, projectNumber, workspaceId: wsId }
+              ).entries
+            : teamDb.searchEntries('', {
+                  tags: input.tags,
+                  limit: input.limit,
+                  projectNumber,
+                  workspaceId: wsId,
+              }).entries
+
+    await sendProgress(progress, 1, 3, `Exporting ${String(entries.length)} team entries...`)
+    const exportable = buildTeamExportableEntries(teamDb, entries)
+
+    await sendProgress(progress, 2, 3, 'Writing markdown files...')
+    const result = await exportEntriesToMarkdown(exportable, input.output_dir, teamDb, allowedRoots)
+    if (!result.success && result.errors !== undefined && result.errors.length > 0) {
+        const total = result.exported_count + result.errors.length
+        throw new AggregateMcpError(
+            `Exporting ${String(total)} team entries: ${String(result.exported_count)} succeeded, ${String(result.errors.length)} failed.`,
+            result.errors.map((e) => ({ message: e.error, file: e.file })),
+            { result }
+        )
+    }
+    await sendProgress(progress, 3, 3, 'Team export complete')
+    return result
+}
 
 export const TEAM_IO_NOT_CONFIGURED = {
     success: false,

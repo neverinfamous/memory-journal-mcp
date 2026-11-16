@@ -5,13 +5,20 @@
  */
 
 import type { IDatabaseAdapter } from '../database/core/interfaces.js'
+import type { VectorSearchManager } from '../vector/vector-search-manager/index.js'
 import { PermissionError, ValidationError } from '../types/errors.js'
 import {
     findCanonicalRegistryKey,
     resolveProjectContext,
 } from '../utils/workspace-resolver.js'
 import { activeProjectRegistry, pairStoredScope } from '../utils/write-scope.js'
-import type { ImportOptions, ParsedFile } from './importer.js'
+import type { ImportOptions, ImportResult, ParsedFile } from './importer.js'
+
+export interface ImportedVectorItem {
+    entryId: number
+    filename: string
+    workspaceId: string | undefined
+}
 
 /**
  * [INVARIANT] An explicit caller workspace — including the real `default` workspace — locks
@@ -32,6 +39,30 @@ function sameRegistryWorkspace(
     const leftKey = findCanonicalRegistryKey(left, registry) ?? left
     const rightKey = findCanonicalRegistryKey(right, registry) ?? right
     return leftKey.toLowerCase() === rightKey.toLowerCase()
+}
+
+function assertExplicitImportScopeMatchesRegistry(
+    explicitWs: string,
+    rawProjectNumber: number,
+    effectiveRegistry: NonNullable<ReturnType<typeof activeProjectRegistry>>
+): void {
+    const owner = Object.entries(effectiveRegistry).find(
+        ([, entry]) => entry.project_number === rawProjectNumber
+    )?.[0]
+    if (owner !== undefined && !sameRegistryWorkspace(explicitWs, owner, effectiveRegistry)) {
+        throw new ValidationError(
+            `project_number ${String(rawProjectNumber)} belongs to workspace '${owner}', not '${explicitWs}'.`
+        )
+    }
+    const canonicalExplicit = findCanonicalRegistryKey(explicitWs, effectiveRegistry)
+    const registeredProject =
+        canonicalExplicit !== undefined ? effectiveRegistry[canonicalExplicit]?.project_number : undefined
+    if (registeredProject !== undefined && registeredProject !== rawProjectNumber) {
+        throw new ValidationError(
+            `project_number ${String(rawProjectNumber)} does not match registered project ${String(registeredProject)} for workspace '${explicitWs}'.`
+        )
+    }
+    pairStoredScope(explicitWs, rawProjectNumber, effectiveRegistry)
 }
 
 export function resolveImportedFileContext(
@@ -77,25 +108,7 @@ export function resolveImportedFileContext(
     const explicitWs = lockedWorkspace ?? fileWorkspace
     const rawProjectNumber = options.project_number ?? fileProject
     if (explicitWs !== undefined && rawProjectNumber !== undefined && effectiveRegistry !== undefined) {
-        const owner = Object.entries(effectiveRegistry).find(
-            ([, entry]) => entry.project_number === rawProjectNumber
-        )?.[0]
-        if (owner !== undefined && !sameRegistryWorkspace(explicitWs, owner, effectiveRegistry)) {
-            throw new ValidationError(
-                `project_number ${String(rawProjectNumber)} belongs to workspace '${owner}', not '${explicitWs}'.`
-            )
-        }
-        const canonicalExplicit = findCanonicalRegistryKey(explicitWs, effectiveRegistry)
-        const registeredProject =
-            canonicalExplicit !== undefined
-                ? effectiveRegistry[canonicalExplicit]?.project_number
-                : undefined
-        if (registeredProject !== undefined && registeredProject !== rawProjectNumber) {
-            throw new ValidationError(
-                `project_number ${String(rawProjectNumber)} does not match registered project ${String(registeredProject)} for workspace '${explicitWs}'.`
-            )
-        }
-        pairStoredScope(explicitWs, rawProjectNumber, effectiveRegistry)
+        assertExplicitImportScopeMatchesRegistry(explicitWs, rawProjectNumber, effectiveRegistry)
     }
 
     const effectiveInputWs =
@@ -157,5 +170,33 @@ export function assertImportAuthorOwnership(
                 `Permission denied: cannot overwrite entry ${String(entryId)} owned by '${existingAuthor}' during import by '${effectiveAuthor}'`
             )
         }
+    }
+}
+
+/** Index imported entries in vectorManager, recording per-file errors without aborting the batch. */
+export async function indexImportedEntries(
+    db: IDatabaseAdapter,
+    vectorManager: VectorSearchManager,
+    vectorQueue: readonly ImportedVectorItem[],
+    result: Pick<ImportResult, 'vectorsIndexed' | 'errors' | 'success'>
+): Promise<void> {
+    let hasVectorErrors = false
+    for (const { entryId, filename, workspaceId: entryWsId } of vectorQueue) {
+        try {
+            const entry = db.getEntryById(entryId, entryWsId)
+            if (entry) {
+                await vectorManager.addEntry(entry)
+                result.vectorsIndexed++
+            }
+        } catch (err) {
+            hasVectorErrors = true
+            result.errors.push({
+                file: filename,
+                error: err instanceof Error ? err.message : String(err),
+            })
+        }
+    }
+    if (hasVectorErrors) {
+        result.success = false
     }
 }

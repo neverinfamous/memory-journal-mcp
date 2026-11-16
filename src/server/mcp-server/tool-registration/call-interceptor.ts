@@ -17,12 +17,12 @@ import {
 } from './fallback-interceptors.js'
 import {
     ALL_KNOWN_GROUP_TOOLS,
+    applyCreateWorkspaceScope,
     formatSuccessPayload,
     formatTokenEstimatedError,
     isSuccessObject,
     matchesExactName,
     normalizeAndAliasToolCall,
-    resolveMcpCreateWorkspaceScope,
     toThrownValidationResponse,
     toValidationFailureResponse,
 } from './call-interceptor-helpers.js'
@@ -340,6 +340,66 @@ function healIncomingToolCallParams(
     return runArgInterceptionForCall(params, params.arguments, liveBriefing.projectRegistry)
 }
 
+async function executeInterceptedToolCall(
+    request: unknown,
+    extra: unknown,
+    originalHandler: (request: unknown, extra: unknown) => Promise<unknown>,
+    context: ServerContext,
+    options: ServerOptions,
+    prompts: PromptDefinition[],
+    allTools: ToolRegistration[],
+    allToolNames: Set<string>,
+    customToolHandlerConfig: ToolHandlerConfig
+): Promise<unknown> {
+    try {
+        const req = request as { params?: { name?: string; arguments?: Record<string, unknown> } }
+        const healingEnabled =
+            options.agentHealing !== false && customToolHandlerConfig.agentHealing !== false
+
+        const liveConfig = context.configManager.getConfig()
+        const liveBriefing = resolveActiveBriefingConfig(
+            liveConfig.briefingConfig,
+            context.allowedIoRoots
+        )
+        syncLiveHandlerConfig(customToolHandlerConfig, liveConfig, options, liveBriefing)
+
+        if (req.params !== undefined && healingEnabled) {
+            const healError = healIncomingToolCallParams(req.params, options, liveBriefing)
+            if (healError !== undefined) return healError
+        }
+
+        applyCreateWorkspaceScope(req.params, customToolHandlerConfig, liveBriefing, context.runtime)
+
+        if (
+            req.params?.name !== undefined &&
+            req.params.name !== '' &&
+            !allToolNames.has(req.params.name)
+        ) {
+            return await handleUnknownTool(
+                req.params.name,
+                req.params.arguments ?? {},
+                healingEnabled,
+                prompts,
+                context,
+                options,
+                allTools,
+                allToolNames,
+                customToolHandlerConfig
+            )
+        }
+
+        const result = await originalHandler(request, extra)
+        const validationFailure = toValidationFailureResponse(result, req.params)
+        if (validationFailure !== undefined) return validationFailure
+
+        return result
+    } catch (error: unknown) {
+        const handled = toThrownValidationResponse(error, request)
+        if (handled !== undefined) return handled
+        throw error
+    }
+}
+
 export function attachCallToolInterceptor(
     requestHandlers: RequestHandlerMap | undefined,
     context: ServerContext,
@@ -352,73 +412,17 @@ export function attachCallToolInterceptor(
     const originalHandler = requestHandlers?.get('tools/call')
     if (originalHandler === undefined || requestHandlers === undefined) return
 
-    requestHandlers.set('tools/call', async (request: unknown, extra: unknown) => {
-        try {
-            const req = request as { params?: { name?: string; arguments?: Record<string, unknown> } }
-            const healingEnabled =
-                options.agentHealing !== false && customToolHandlerConfig.agentHealing !== false
-
-            const liveConfig = context.configManager.getConfig()
-            const liveBriefing = resolveActiveBriefingConfig(
-                liveConfig.briefingConfig,
-                context.allowedIoRoots
-            )
-            syncLiveHandlerConfig(customToolHandlerConfig, liveConfig, options, liveBriefing)
-
-            if (req.params !== undefined && healingEnabled) {
-                const healError = healIncomingToolCallParams(req.params, options, liveBriefing)
-                if (healError !== undefined) return healError
-            }
-
-            if (
-                req.params?.arguments !== undefined &&
-                typeof req.params.arguments === 'object' &&
-                req.params.arguments !== null &&
-                !Array.isArray(req.params.arguments)
-            ) {
-                resolveMcpCreateWorkspaceScope(req.params.name, req.params.arguments, {
-                    ...customToolHandlerConfig,
-                    briefingConfig: liveBriefing,
-                    runtime: context.runtime,
-                    ...(liveBriefing.projectRegistry !== undefined
-                        ? { projectRegistry: liveBriefing.projectRegistry }
-                        : {}),
-                    ...(liveBriefing.defaultProjectNumber !== undefined
-                        ? { defaultProjectNumber: liveBriefing.defaultProjectNumber }
-                        : {}),
-                    ...(liveBriefing.defaultWorkspaceId !== undefined
-                        ? { defaultWorkspaceId: liveBriefing.defaultWorkspaceId }
-                        : {}),
-                })
-            }
-
-            if (
-                req.params?.name !== undefined &&
-                req.params.name !== '' &&
-                !allToolNames.has(req.params.name)
-            ) {
-                return await handleUnknownTool(
-                    req.params.name,
-                    req.params.arguments ?? {},
-                    healingEnabled,
-                    prompts,
-                    context,
-                    options,
-                    allTools,
-                    allToolNames,
-                    customToolHandlerConfig
-                )
-            }
-
-            const result = await originalHandler(request, extra)
-            const validationFailure = toValidationFailureResponse(result, req.params)
-            if (validationFailure !== undefined) return validationFailure
-
-            return result
-        } catch (error: unknown) {
-            const handled = toThrownValidationResponse(error, request)
-            if (handled !== undefined) return handled
-            throw error
-        }
-    })
+    requestHandlers.set('tools/call', (request: unknown, extra: unknown) =>
+        executeInterceptedToolCall(
+            request,
+            extra,
+            originalHandler,
+            context,
+            options,
+            prompts,
+            allTools,
+            allToolNames,
+            customToolHandlerConfig
+        )
+    )
 }

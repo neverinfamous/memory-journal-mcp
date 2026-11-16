@@ -154,6 +154,77 @@ export function formatToolFailure(
     return errorResult
 }
 
+function resolveDefaultBriefingProject(params: {
+    briefingConfig: typeof DEFAULT_BRIEFING_CONFIG
+    canonicalWs: string | undefined
+    canonicalConfigWs: string | undefined
+    registryProject: number | undefined
+    applicableDefaultProj: number | undefined
+    resolvedRegistry: typeof DEFAULT_BRIEFING_CONFIG['projectRegistry']
+    sessionCtx: { workspaceId?: string; projectNumber?: number }
+}): number | undefined {
+    const {
+        briefingConfig,
+        canonicalWs,
+        canonicalConfigWs,
+        registryProject,
+        applicableDefaultProj,
+        resolvedRegistry,
+        sessionCtx,
+    } = params
+
+    if (canonicalConfigWs !== undefined && applicableDefaultProj !== undefined) {
+        return (
+            pairStoredScope(
+                canonicalConfigWs,
+                applicableDefaultProj,
+                activeProjectRegistry(resolvedRegistry)
+            ).projectNumber ?? undefined
+        )
+    }
+
+    const candidateProj = applicableDefaultProj ?? registryProject ?? sessionCtx.projectNumber
+    const projClaimedElsewhere =
+        canonicalConfigWs === undefined &&
+        candidateProj !== undefined &&
+        canonicalWs !== undefined &&
+        resolvedRegistry !== undefined &&
+        Object.entries(resolvedRegistry).some(
+            ([k, v]) =>
+                v.project_number === candidateProj && k.toLowerCase() !== canonicalWs.toLowerCase()
+        )
+    if (projClaimedElsewhere) return registryProject
+
+    if (
+        canonicalConfigWs !== undefined &&
+        registryProject === undefined &&
+        sessionCtx.projectNumber !== undefined &&
+        candidateProj === sessionCtx.projectNumber &&
+        resolvedRegistry !== undefined &&
+        Object.entries(resolvedRegistry).some(
+            ([k, v]) =>
+                v.project_number === candidateProj &&
+                canonicalWs !== undefined &&
+                k.toLowerCase() !== canonicalWs.toLowerCase()
+        )
+    ) {
+        return undefined
+    }
+
+    if (canonicalWs?.toLowerCase() === 'default' && registryProject === undefined) {
+        if (briefingConfig.defaultWorkspaceId?.toLowerCase() !== 'default') {
+            return undefined
+        }
+        if (applicableDefaultProj !== undefined) {
+            return applicableDefaultProj
+        }
+        return sessionCtx.workspaceId?.toLowerCase() === 'default'
+            ? sessionCtx.projectNumber
+            : undefined
+    }
+    return candidateProj
+}
+
 /**
  * Merge live briefing config with server-level defaults.
  * [INVARIANT] Sticky session context is only consulted when `sessionRuntime` is supplied
@@ -187,57 +258,15 @@ export function resolveActiveBriefingConfig(
     const applicableDefaultProj = briefingDefaultApplies
         ? briefingConfig.defaultProjectNumber
         : undefined
-    const resolvedDefaultProj = ((): number | undefined => {
-        if (canonicalConfigWs !== undefined && applicableDefaultProj !== undefined) {
-            return (
-                pairStoredScope(
-                    canonicalConfigWs,
-                    applicableDefaultProj,
-                    activeProjectRegistry(resolvedRegistry)
-                ).projectNumber ?? undefined
-            )
-        }
-        const candidateProj =
-            applicableDefaultProj ?? registryProject ?? sessionCtx.projectNumber
-        const projClaimedElsewhere =
-            canonicalConfigWs === undefined &&
-            candidateProj !== undefined &&
-            canonicalWs !== undefined &&
-            resolvedRegistry !== undefined &&
-            Object.entries(resolvedRegistry).some(
-                ([k, v]) =>
-                    v.project_number === candidateProj &&
-                    k.toLowerCase() !== canonicalWs.toLowerCase()
-            )
-        if (projClaimedElsewhere) return registryProject
-        if (
-            canonicalConfigWs !== undefined &&
-            registryProject === undefined &&
-            sessionCtx.projectNumber !== undefined &&
-            candidateProj === sessionCtx.projectNumber &&
-            resolvedRegistry !== undefined &&
-            Object.entries(resolvedRegistry).some(
-                ([k, v]) =>
-                    v.project_number === candidateProj &&
-                    canonicalWs !== undefined &&
-                    k.toLowerCase() !== canonicalWs.toLowerCase()
-            )
-        ) {
-            return undefined
-        }
-        if (canonicalWs?.toLowerCase() === 'default' && registryProject === undefined) {
-            if (briefingConfig.defaultWorkspaceId?.toLowerCase() !== 'default') {
-                return undefined
-            }
-            if (applicableDefaultProj !== undefined) {
-                return applicableDefaultProj
-            }
-            return sessionCtx.workspaceId?.toLowerCase() === 'default'
-                ? sessionCtx.projectNumber
-                : undefined
-        }
-        return candidateProj
-    })()
+    const resolvedDefaultProj = resolveDefaultBriefingProject({
+        briefingConfig,
+        canonicalWs,
+        canonicalConfigWs,
+        registryProject,
+        applicableDefaultProj,
+        resolvedRegistry,
+        sessionCtx,
+    })
     const nextConfig: typeof DEFAULT_BRIEFING_CONFIG = {
         ...briefingConfig,
         allowedIoRoots,

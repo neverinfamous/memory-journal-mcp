@@ -15,7 +15,7 @@
 
 import { performance } from 'node:perf_hooks'
 import type { AuditLogger } from './audit-logger.js'
-import type { AuditCategory } from './types.js'
+import type { AuditCategory, AuditEntry } from './types.js'
 import { getRequiredScope } from '../auth/scope-map.js'
 import { getAuthContext } from '../auth/auth-context.js'
 import { getRequestContext } from '../utils/request-context.js'
@@ -28,6 +28,7 @@ import {
     extractSensitiveTargetFromArgs,
     isSensitiveAuditTarget,
     resolveResourceAuditCategory,
+    type AuditScopeMetadata,
 } from './audit-query-helpers.js'
 
 // ============================================================================
@@ -88,6 +89,178 @@ function generateRequestId(): string {
     return `aud-${ts}-${rand}`
 }
 
+function inspectToolResult(result: unknown): {
+    success: boolean
+    error?: string
+    tokenEstimate?: number
+} {
+    let success = true
+    let error: string | undefined
+    let tokenEstimate: number | undefined
+
+    if (
+        typeof result === 'object' &&
+        result !== null &&
+        'success' in result &&
+        (result as Record<string, unknown>)['success'] === false
+    ) {
+        success = false
+        const errField = (result as Record<string, unknown>)['error']
+        if (typeof errField === 'string') {
+            error = sanitizeErrorForLogging(errField)
+        }
+    }
+
+    // Compute token estimate from result (uses WeakMap cache when metrics interceptor already computed it)
+    if (typeof result === 'object' && result !== null) {
+        tokenEstimate = estimatePayloadTokens(result)
+    } else if (typeof result === 'string') {
+        tokenEstimate = estimateTokens(result, 'prose')
+    }
+
+    return {
+        success,
+        ...(error !== undefined ? { error } : {}),
+        ...(tokenEstimate !== undefined ? { tokenEstimate } : {}),
+    }
+}
+
+function estimateErrorTokens(sanitizedError: string): number {
+    const errorResult = {
+        success: false,
+        error: sanitizedError,
+        code: 'INTERNAL_ERROR',
+        category: 'internal',
+        recoverable: false,
+    }
+    const enriched = JSON.stringify({
+        ...errorResult,
+        _meta: { tokenEstimate: 0 },
+    })
+    return estimateTokens(enriched, 'json')
+}
+
+function buildToolAuditEntry(params: {
+    requestId: string
+    toolName: string
+    scope: string
+    sensitiveTarget: string | undefined
+    user: string | null
+    scopes: string[]
+    sessionId: string | undefined
+    durationMs: number
+    success: boolean
+    error: string | undefined
+    tokenEstimate: number | undefined
+    redact: boolean
+    args: unknown
+    scopeMeta: AuditScopeMetadata
+}): AuditEntry {
+    const {
+        requestId,
+        toolName,
+        scope,
+        sensitiveTarget,
+        user,
+        scopes,
+        sessionId,
+        durationMs,
+        success,
+        error,
+        tokenEstimate,
+        redact,
+        args,
+        scopeMeta,
+    } = params
+    const isReadScope = scope === 'read'
+    const readCategory =
+        sensitiveTarget !== undefined ? resolveResourceAuditCategory(sensitiveTarget) : 'read'
+    const category = isReadScope ? readCategory : scopeToCategory(scope)
+    const effectiveScope =
+        isReadScope && (readCategory === 'audit' || readCategory === 'team') ? readCategory : scope
+
+    return {
+        timestamp: new Date().toISOString(),
+        requestId,
+        tool: toolName,
+        category,
+        scope: effectiveScope,
+        user,
+        scopes,
+        ...(sessionId !== undefined ? { sessionId } : {}),
+        durationMs,
+        success,
+        ...(error !== undefined ? { error } : {}),
+        ...(!isReadScope && !redact ? { args: args as Record<string, unknown> } : {}),
+        ...(tokenEstimate !== undefined ? { tokenEstimate } : {}),
+        ...(scopeMeta.workspaceId !== undefined ? { workspaceId: scopeMeta.workspaceId } : {}),
+        ...(scopeMeta.projectNumber !== undefined
+            ? { projectNumber: scopeMeta.projectNumber }
+            : {}),
+    }
+}
+
+async function executeAuditedTool<T>(
+    auditLogger: AuditLogger,
+    auditReads: boolean,
+    toolName: string,
+    args: unknown,
+    fn: () => Promise<T>
+): Promise<T> {
+    const scope = getRequiredScope(toolName)
+    const sensitiveTarget = extractSensitiveTargetFromArgs(toolName, args)
+
+    // Read-scoped tools are only audited when --audit-reads is enabled or targeting a sensitive URI/prompt
+    if (!ALWAYS_AUDITED_SCOPES.has(scope) && !auditReads && sensitiveTarget === undefined) {
+        return fn()
+    }
+
+    const authCtx = getAuthContext()
+    const reqCtx = getRequestContext()
+    const user = authCtx?.claims?.sub ?? null
+    const scopes = authCtx?.claims?.scopes ?? []
+    const sessionId = reqCtx?.sessionId
+    const scopeMeta = extractAuditScopeFromArgs(args, reqCtx)
+    const requestId = generateRequestId()
+    const start = performance.now()
+    let success = true
+    let error: string | undefined
+    let tokenEstimate: number | undefined
+
+    try {
+        const result = await fn()
+        const inspected = inspectToolResult(result)
+        success = inspected.success
+        error = inspected.error
+        tokenEstimate = inspected.tokenEstimate
+        return result
+    } catch (err) {
+        success = false
+        error = sanitizeErrorForLogging(err instanceof Error ? err.message : String(err))
+        tokenEstimate = estimateErrorTokens(error)
+        throw err
+    } finally {
+        auditLogger.log(
+            buildToolAuditEntry({
+                requestId,
+                toolName,
+                scope,
+                sensitiveTarget,
+                user,
+                scopes,
+                sessionId,
+                durationMs: Math.round(performance.now() - start),
+                success,
+                error,
+                tokenEstimate,
+                redact: auditLogger.config.redact,
+                args,
+                scopeMeta,
+            })
+        )
+    }
+}
+
 // ============================================================================
 // Factory
 // ============================================================================
@@ -101,129 +274,8 @@ export function createAuditInterceptor(auditLogger: AuditLogger): AuditIntercept
     const auditReads = auditLogger.config.auditReads
 
     return {
-        async around<T>(toolName: string, args: unknown, fn: () => Promise<T>): Promise<T> {
-            const scope = getRequiredScope(toolName)
-            const sensitiveTarget = extractSensitiveTargetFromArgs(toolName, args)
-
-            // Read-scoped tools are only audited when --audit-reads is enabled or targeting a sensitive URI/prompt
-            if (!ALWAYS_AUDITED_SCOPES.has(scope) && !auditReads && sensitiveTarget === undefined) {
-                return fn()
-            }
-
-            const isReadScope = scope === 'read'
-
-            const authCtx = getAuthContext()
-            const reqCtx = getRequestContext()
-            const user = authCtx?.claims?.sub ?? null
-            const scopes = authCtx?.claims?.scopes ?? []
-            const sessionId = reqCtx?.sessionId
-
-            const scopeMeta = extractAuditScopeFromArgs(args, reqCtx)
-
-            const requestId = generateRequestId()
-            const start = performance.now()
-            let success = true
-            let error: string | undefined
-            let tokenEstimate: number | undefined
-
-            try {
-                const result = await fn()
-
-                if (
-                    typeof result === 'object' &&
-                    result !== null &&
-                    'success' in result &&
-                    (result as Record<string, unknown>)['success'] === false
-                ) {
-                    success = false
-                    const errField = (result as Record<string, unknown>)['error']
-                    if (typeof errField === 'string') {
-                        error = sanitizeErrorForLogging(errField)
-                    }
-                }
-
-                // Compute token estimate from result (uses WeakMap cache when metrics interceptor already computed it)
-                if (typeof result === 'object' && result !== null) {
-                    tokenEstimate = estimatePayloadTokens(result)
-                } else if (typeof result === 'string') {
-                    tokenEstimate = estimateTokens(result, 'prose')
-                }
-
-                return result
-            } catch (err) {
-                success = false
-                error = sanitizeErrorForLogging(err instanceof Error ? err.message : String(err))
-
-                // Compute token estimate for the error response
-                const errorResult = {
-                    success: false,
-                    error,
-                    code: 'INTERNAL_ERROR',
-                    category: 'internal',
-                    recoverable: false,
-                }
-                const enriched = JSON.stringify({
-                    ...errorResult,
-                    _meta: { tokenEstimate: 0 },
-                })
-                tokenEstimate = estimateTokens(enriched, 'json')
-
-                throw err // Re-throw — don't swallow
-            } finally {
-                const durationMs = Math.round(performance.now() - start)
-                const scopeFields = {
-                    ...(scopeMeta.workspaceId !== undefined
-                        ? { workspaceId: scopeMeta.workspaceId }
-                        : {}),
-                    ...(scopeMeta.projectNumber !== undefined
-                        ? { projectNumber: scopeMeta.projectNumber }
-                        : {}),
-                }
-
-                if (isReadScope) {
-                    const readCategory =
-                        sensitiveTarget !== undefined
-                            ? resolveResourceAuditCategory(sensitiveTarget)
-                            : 'read'
-                    const effectiveReadScope =
-                        readCategory === 'audit' || readCategory === 'team' ? readCategory : scope
-                    // Log read entry metadata (omitting args; reads are recorded unless omitted by --audit-reads)
-                    auditLogger.log({
-                        timestamp: new Date().toISOString(),
-                        requestId,
-                        tool: toolName,
-                        category: readCategory,
-                        scope: effectiveReadScope,
-                        user,
-                        scopes,
-                        sessionId,
-                        durationMs,
-                        success,
-                        error,
-                        tokenEstimate,
-                        ...scopeFields,
-                    })
-                } else {
-                    auditLogger.log({
-                        timestamp: new Date().toISOString(),
-                        requestId,
-                        tool: toolName,
-                        category: scopeToCategory(scope),
-                        scope,
-                        user,
-                        scopes,
-                        sessionId,
-                        durationMs,
-                        success,
-                        error,
-                        args: auditLogger.config.redact
-                            ? undefined
-                            : (args as Record<string, unknown>),
-                        tokenEstimate,
-                        ...scopeFields,
-                    })
-                }
-            }
+        around<T>(toolName: string, args: unknown, fn: () => Promise<T>): Promise<T> {
+            return executeAuditedTool(auditLogger, auditReads, toolName, args, fn)
         },
     }
 }
@@ -240,6 +292,39 @@ export interface AuditOperationOptions {
               requiresAdminScope?: boolean
           }
         | undefined
+}
+
+function resolveAuditOperationCategory(
+    target: string,
+    capabilities?: AuditOperationOptions['capabilities']
+): AuditCategory {
+    if (capabilities?.requiresAdminScope === true) return 'admin'
+    if (capabilities?.requiresAuditScope === true) return 'audit'
+    if (capabilities?.requiresTeamScope === true) return 'team'
+    return resolveResourceAuditCategory(target)
+}
+
+function estimateOperationResultTokens(result: unknown, name: string): number | undefined {
+    if (typeof result === 'object' && result !== null) {
+        try {
+            return estimateTokens(JSON.stringify(result), 'json')
+        } catch (serializeError) {
+            // Serialization failure must not block execution
+            logger.debug('Token estimate skipped: result is not serializable', {
+                module: 'Audit',
+                tool: name,
+                error:
+                    serializeError instanceof Error
+                        ? serializeError.message
+                        : String(serializeError),
+            })
+            return undefined
+        }
+    }
+    if (typeof result === 'string') {
+        return estimateTokens(result, 'prose')
+    }
+    return undefined
 }
 
 /**
@@ -274,14 +359,7 @@ export async function auditOperation<T>(
     const uriScope = extractAuditScopeFromUri(target, reqCtx)
     const workspaceId = options?.workspaceId ?? uriScope.workspaceId
     const projectNumber = options?.projectNumber ?? uriScope.projectNumber
-    const category: AuditCategory =
-        options?.capabilities?.requiresAdminScope === true
-            ? 'admin'
-            : options?.capabilities?.requiresAuditScope === true
-              ? 'audit'
-              : options?.capabilities?.requiresTeamScope === true
-                ? 'team'
-                : resolveResourceAuditCategory(target)
+    const category = resolveAuditOperationCategory(target, options?.capabilities)
 
     const requestId = generateRequestId()
     const start = performance.now()
@@ -291,24 +369,7 @@ export async function auditOperation<T>(
 
     try {
         const result = await fn()
-        if (typeof result === 'object' && result !== null) {
-            try {
-                const json = JSON.stringify(result)
-                tokenEstimate = estimateTokens(json, 'json')
-            } catch (serializeError) {
-                // Serialization failure must not block execution
-                logger.debug('Token estimate skipped: result is not serializable', {
-                    module: 'Audit',
-                    tool: name,
-                    error:
-                        serializeError instanceof Error
-                            ? serializeError.message
-                            : String(serializeError),
-                })
-            }
-        } else if (typeof result === 'string') {
-            tokenEstimate = estimateTokens(result, 'prose')
-        }
+        tokenEstimate = estimateOperationResultTokens(result, name)
         return result
     } catch (err) {
         success = false
@@ -319,7 +380,7 @@ export async function auditOperation<T>(
         auditLogger.log({
             timestamp: new Date().toISOString(),
             requestId,
-            sessionId,
+            ...(sessionId !== undefined ? { sessionId } : {}),
             tool: `${operationType}:${name}`,
             category,
             scope:
@@ -330,8 +391,8 @@ export async function auditOperation<T>(
             scopes,
             durationMs,
             success,
-            error,
-            tokenEstimate,
+            ...(error !== undefined ? { error } : {}),
+            ...(tokenEstimate !== undefined ? { tokenEstimate } : {}),
             ...(workspaceId !== undefined ? { workspaceId } : {}),
             ...(projectNumber !== undefined ? { projectNumber } : {}),
         })

@@ -182,6 +182,113 @@ function resolveFilesystemRegistryKey(
     return { key: undefined }
 }
 
+function validateProjectNumberScopeConflicts(
+    registry: NonNullable<Registry>,
+    resolvedRepoName: string | undefined,
+    concreteWs: string | undefined,
+    wsKey: string | undefined,
+    repoKey: string | undefined,
+    inputProjectNumber: number
+): { error: true; response: Record<string, unknown> } | undefined {
+    const matches = Object.entries(registry).filter(
+        ([, entry]) => entry.project_number === inputProjectNumber
+    )
+    if (matches.length > 1) {
+        return githubScopeValidationError(
+            `project_number ${String(inputProjectNumber)} is registered to more than one workspace.`
+        )
+    }
+    const projectOwner = matches[0]?.[0]
+    if (projectOwner !== undefined) {
+        if (
+            concreteWs !== undefined &&
+            (wsKey ?? concreteWs).toLowerCase() !== projectOwner.toLowerCase()
+        ) {
+            return githubScopeValidationError(
+                `project_number ${String(inputProjectNumber)} belongs to workspace "${projectOwner}", not "${concreteWs}".`
+            )
+        }
+        if (
+            resolvedRepoName !== undefined &&
+            resolvedRepoName !== '' &&
+            (repoKey ?? resolvedRepoName).toLowerCase() !== projectOwner.toLowerCase()
+        ) {
+            return githubScopeValidationError(
+                `project_number ${String(inputProjectNumber)} belongs to workspace "${projectOwner}", not repository "${resolvedRepoName}".`
+            )
+        }
+    }
+    const targetKey = repoKey ?? wsKey
+    const registeredProject = targetKey !== undefined ? registry[targetKey]?.project_number : undefined
+    if (registeredProject !== undefined && registeredProject !== inputProjectNumber) {
+        return githubScopeValidationError(
+            `project_number ${String(inputProjectNumber)} does not match registered project ${String(registeredProject)} for workspace "${targetKey ?? ''}".`
+        )
+    }
+    return undefined
+}
+
+function validateRegistryScopeConflicts(
+    registry: Registry,
+    resolvedRepoName: string | undefined,
+    concreteWs: string | undefined,
+    inputProjectNumber: number | undefined
+): { error: true; response: Record<string, unknown> } | undefined {
+    if (!registry) return undefined
+    const wsKey =
+        concreteWs !== undefined ? findCanonicalRegistryKey(concreteWs, registry) : undefined
+    const repoKey = resolvedRepoName
+        ? findCanonicalRegistryKey(resolvedRepoName, registry)
+        : undefined
+    if (
+        concreteWs !== undefined &&
+        resolvedRepoName !== undefined &&
+        resolvedRepoName !== '' &&
+        (wsKey ?? concreteWs).toLowerCase() !== (repoKey ?? resolvedRepoName).toLowerCase()
+    ) {
+        return githubScopeValidationError(
+            `workspace_id "${concreteWs}" does not match repository "${resolvedRepoName}".`
+        )
+    }
+    if (inputProjectNumber !== undefined) {
+        return validateProjectNumberScopeConflicts(
+            registry,
+            resolvedRepoName,
+            concreteWs,
+            wsKey,
+            repoKey,
+            inputProjectNumber
+        )
+    }
+    return undefined
+}
+
+function lookupMatchedRegistryKey(
+    registry: Registry | undefined,
+    resolvedRepoName: string | undefined,
+    concreteWs: string | undefined,
+    effectiveWorkspaceScope: string | undefined,
+    inputProjectNumber: number | undefined,
+    namedDefault: boolean
+): string | undefined {
+    if (resolvedRepoName || !registry) return undefined
+    let matchedRegistryKey: string | undefined
+    const lookupWs = concreteWs ?? effectiveWorkspaceScope
+    if (lookupWs !== undefined) {
+        matchedRegistryKey =
+            findCanonicalRegistryKey(lookupWs, registry) ??
+            (Object.prototype.hasOwnProperty.call(registry, lookupWs) ? lookupWs : undefined)
+    }
+    if (matchedRegistryKey === undefined && inputProjectNumber !== undefined && !namedDefault) {
+        const matches = Object.entries(registry).filter(
+            ([, entry]) => entry.project_number === inputProjectNumber
+        )
+        const matched = matches[0]
+        if (matched !== undefined) matchedRegistryKey = matched[0]
+    }
+    return matchedRegistryKey
+}
+
 export function resolveGitHubRegistryScope(
     context: ToolContext,
     effectiveRepo: string | undefined,
@@ -221,79 +328,22 @@ export function resolveGitHubRegistryScope(
             : undefined)
 
     const resolvedRepoName = fsMatchedKey ?? effectiveRepo
+    const conflictError = validateRegistryScopeConflicts(
+        registry,
+        resolvedRepoName,
+        concreteWs,
+        inputProjectNumber
+    )
+    if (conflictError !== undefined) return conflictError
 
-    if (registry) {
-        const wsKey =
-            concreteWs !== undefined ? findCanonicalRegistryKey(concreteWs, registry) : undefined
-        const repoKey = resolvedRepoName
-            ? findCanonicalRegistryKey(resolvedRepoName, registry)
-            : undefined
-        if (
-            concreteWs !== undefined &&
-            resolvedRepoName !== undefined &&
-            resolvedRepoName !== '' &&
-            (wsKey ?? concreteWs).toLowerCase() !== (repoKey ?? resolvedRepoName).toLowerCase()
-        ) {
-            return githubScopeValidationError(
-                `workspace_id "${concreteWs}" does not match repository "${resolvedRepoName}".`
-            )
-        }
-        if (inputProjectNumber !== undefined) {
-            const matches = Object.entries(registry).filter(
-                ([, entry]) => entry.project_number === inputProjectNumber
-            )
-            if (matches.length > 1) {
-                return githubScopeValidationError(
-                    `project_number ${String(inputProjectNumber)} is registered to more than one workspace.`
-                )
-            }
-            const projectOwner = matches[0]?.[0]
-            if (projectOwner !== undefined) {
-                if (
-                    concreteWs !== undefined &&
-                    (wsKey ?? concreteWs).toLowerCase() !== projectOwner.toLowerCase()
-                ) {
-                    return githubScopeValidationError(
-                        `project_number ${String(inputProjectNumber)} belongs to workspace "${projectOwner}", not "${concreteWs}".`
-                    )
-                }
-                if (
-                    resolvedRepoName !== undefined &&
-                    resolvedRepoName !== '' &&
-                    (repoKey ?? resolvedRepoName).toLowerCase() !== projectOwner.toLowerCase()
-                ) {
-                    return githubScopeValidationError(
-                        `project_number ${String(inputProjectNumber)} belongs to workspace "${projectOwner}", not repository "${resolvedRepoName}".`
-                    )
-                }
-            }
-            const targetKey = repoKey ?? wsKey
-            const registeredProject =
-                targetKey !== undefined ? registry[targetKey]?.project_number : undefined
-            if (registeredProject !== undefined && registeredProject !== inputProjectNumber) {
-                return githubScopeValidationError(
-                    `project_number ${String(inputProjectNumber)} does not match registered project ${String(registeredProject)} for workspace "${targetKey ?? ''}".`
-                )
-            }
-        }
-    }
-
-    let matchedRegistryKey: string | undefined
-    if (!resolvedRepoName && registry) {
-        const lookupWs = concreteWs ?? effectiveWorkspaceScope
-        if (lookupWs !== undefined) {
-            matchedRegistryKey =
-                findCanonicalRegistryKey(lookupWs, registry) ??
-                (Object.prototype.hasOwnProperty.call(registry, lookupWs) ? lookupWs : undefined)
-        }
-        if (matchedRegistryKey === undefined && inputProjectNumber !== undefined && !namedDefault) {
-            const matches = Object.entries(registry).filter(
-                ([, entry]) => entry.project_number === inputProjectNumber
-            )
-            const matched = matches[0]
-            if (matched !== undefined) matchedRegistryKey = matched[0]
-        }
-    }
+    const matchedRegistryKey = lookupMatchedRegistryKey(
+        registry,
+        resolvedRepoName,
+        concreteWs,
+        effectiveWorkspaceScope,
+        inputProjectNumber,
+        namedDefault
+    )
     const registryKey =
         fsMatchedKey ??
         (resolvedRepoName

@@ -103,11 +103,19 @@ function isValidBearerToken(
     return provided.length === expected.length && timingSafeEqual(expected, provided);
 }
 
-export function startMetricsServer(
-    runtime: ServerRuntime,
-    metricsPort?: number,
-    options?: MetricsServerOptions
-): () => Promise<void> {
+interface ResolvedMetricsServerConfig {
+    port: number;
+    host: string;
+    isLoopbackBind: boolean;
+    authToken: string | undefined;
+}
+
+const DEFAULT_PLACEHOLDER_TOKEN = 'change_this_to_a_secure_token_for_production';
+
+function resolveMetricsServerConfig(
+    metricsPort: number | undefined,
+    options: MetricsServerOptions | undefined
+): ResolvedMetricsServerConfig {
     const port = parseMetricsPort(metricsPort);
     const authToken =
         typeof options?.authToken === 'string' && options.authToken.length > 0
@@ -121,69 +129,162 @@ export function startMetricsServer(
             `FATAL: Refusing to bind standalone metrics server to non-loopback interface '${host}' without an authentication token (--auth-token or MCP_AUTH_TOKEN).`
         );
     }
+    if (!isLoopbackBind && authToken === DEFAULT_PLACEHOLDER_TOKEN) {
+        throw new Error(
+            `FATAL: Default auth token detected for non-loopback standalone metrics server '${host}'. You MUST change MCP_AUTH_TOKEN to a secure, cryptographically random value for production.`
+        );
+    }
+    return { port, host, isLoopbackBind, authToken };
+}
 
-    const server = http.createServer((req, res) => {
-        if (!isMetricsHostHeaderAllowed(req.headers.host, host, isLoopbackBind, authToken !== undefined)) {
-            res.writeHead(403, { 'Content-Type': 'text/plain; charset=utf-8' });
-            res.end('Forbidden');
-            return;
+function servePrometheusMetrics(
+    req: http.IncomingMessage,
+    res: http.ServerResponse,
+    runtime: ServerRuntime,
+    authToken: string | undefined
+): void {
+    if (authToken !== undefined && !isValidBearerToken(req.headers.authorization, authToken)) {
+        res.writeHead(401, {
+            'Content-Type': 'text/plain; charset=utf-8',
+            'WWW-Authenticate': 'Bearer',
+        });
+        res.end('Unauthorized');
+        return;
+    }
+    try {
+        const metrics = formatPrometheusMetrics(runtime.metrics);
+        res.writeHead(200, { 'Content-Type': 'text/plain' });
+        res.end(metrics);
+    } catch (error) {
+        logger.error('Failed to generate metrics', {
+            error: error instanceof Error ? error.message : String(error),
+        });
+        res.writeHead(500, { 'Content-Type': 'text/plain' });
+        res.end('Internal Server Error');
+    }
+}
+
+function handleMetricsRequest(
+    req: http.IncomingMessage,
+    res: http.ServerResponse,
+    runtime: ServerRuntime,
+    config: ResolvedMetricsServerConfig
+): void {
+    const { host, isLoopbackBind, authToken } = config;
+    if (!isMetricsHostHeaderAllowed(req.headers.host, host, isLoopbackBind, authToken !== undefined)) {
+        res.writeHead(403, { 'Content-Type': 'text/plain; charset=utf-8' });
+        res.end('Forbidden');
+        return;
+    }
+    if (req.url === '/metrics' && req.method === 'GET') {
+        servePrometheusMetrics(req, res, runtime, authToken);
+        return;
+    }
+    if (req.url === '/health' && req.method === 'GET') {
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ status: 'ok' }));
+        return;
+    }
+    res.writeHead(404, { 'Content-Type': 'text/plain' });
+    res.end('Not Found');
+}
+
+function closeBoundMetricsServer(
+    server: http.Server,
+    resolve: () => void,
+    reject: (err: Error) => void
+): void {
+    if (!server.listening) {
+        resolve();
+        return;
+    }
+    server.closeAllConnections();
+    server.close((err) => {
+        if (err) {
+            logger.error('Failed to close metrics server', {
+                error: err.message,
+                module: 'MetricsServer',
+            });
+            reject(err);
+        } else {
+            logger.info('Metrics server closed', { module: 'MetricsServer' });
+            resolve();
         }
-        if (req.url === '/metrics' && req.method === 'GET') {
-            if (authToken !== undefined && !isValidBearerToken(req.headers.authorization, authToken)) {
-                res.writeHead(401, {
-                    'Content-Type': 'text/plain; charset=utf-8',
-                    'WWW-Authenticate': 'Bearer',
-                });
-                res.end('Unauthorized');
+    });
+}
+
+function createMetricsShutdown(
+    server: http.Server,
+    state: { closed: boolean; listenFailed: boolean }
+): () => Promise<void> {
+    let closePromise: Promise<void> | null = null;
+    return () => {
+        if (closePromise !== null) return closePromise;
+        state.closed = true;
+        closePromise = new Promise<void>((resolve, reject) => {
+            if (server.listening) {
+                closeBoundMetricsServer(server, resolve, reject);
                 return;
             }
-            try {
-                const metrics = formatPrometheusMetrics(runtime.metrics);
-                res.writeHead(200, { 'Content-Type': 'text/plain' });
-                res.end(metrics);
-            } catch (error) {
-                logger.error('Failed to generate metrics', { error: error instanceof Error ? error.message : String(error) });
-                res.writeHead(500, { 'Content-Type': 'text/plain' });
-                res.end('Internal Server Error');
+            if (state.listenFailed) {
+                resolve();
+                return;
             }
-        } else if (req.url === '/health' && req.method === 'GET') {
-            res.writeHead(200, { 'Content-Type': 'application/json' });
-            res.end(JSON.stringify({ status: 'ok' }));
-        } else {
-            res.writeHead(404, { 'Content-Type': 'text/plain' });
-            res.end('Not Found');
-        }
+            // [INVARIANT] Async hostname listen() may still be in-flight when shutdown starts;
+            // close as soon as it binds (or resolve if listen errors) to avoid leaking a TCP server (L6a).
+            const onListening = (): void => {
+                server.off('error', onListenError);
+                closeBoundMetricsServer(server, resolve, reject);
+            };
+            const onListenError = (): void => {
+                server.off('listening', onListening);
+                resolve();
+            };
+            server.once('listening', onListening);
+            server.once('error', onListenError);
+        });
+        return closePromise;
+    };
+}
+
+export function startMetricsServer(
+    runtime: ServerRuntime,
+    metricsPort?: number,
+    options?: MetricsServerOptions
+): () => Promise<void> {
+    const config = resolveMetricsServerConfig(metricsPort, options);
+    const { port, host } = config;
+    const state = { closed: false, listenFailed: false };
+
+    const server = http.createServer((req, res) => {
+        handleMetricsRequest(req, res, runtime, config);
     });
 
     server.on('error', (error: unknown) => {
+        if (!server.listening) {
+            state.listenFailed = true;
+        }
         const err = error as { code?: string } | null | undefined;
         if (typeof err === 'object' && err !== null && err.code === 'EADDRINUSE') {
-            logger.warning(`Metrics server port ${port} is already in use; standalone metrics server disabled for this instance`, { module: 'MetricsServer' });
+            logger.warning(
+                `Metrics server port ${port} is already in use; standalone metrics server disabled for this instance`,
+                { module: 'MetricsServer' }
+            );
         } else {
-            logger.error('Metrics server error', { error: error instanceof Error ? error.message : String(error), module: 'MetricsServer' });
+            logger.error('Metrics server error', {
+                error: error instanceof Error ? error.message : String(error),
+                module: 'MetricsServer',
+            });
         }
     });
 
     server.listen(port, host, () => {
-        logger.info(`Standalone metrics server listening on ${host}:${port}`, { module: 'MetricsServer' });
+        if (!state.closed) {
+            logger.info(`Standalone metrics server listening on ${host}:${port}`, {
+                module: 'MetricsServer',
+            });
+        }
     });
 
-    return () => {
-        return new Promise<void>((resolve, reject) => {
-            if (!server.listening) {
-                resolve();
-                return;
-            }
-            server.closeAllConnections();
-            server.close((err) => {
-                if (err) {
-                    logger.error('Failed to close metrics server', { error: err.message, module: 'MetricsServer' });
-                    reject(err);
-                } else {
-                    logger.info('Metrics server closed', { module: 'MetricsServer' });
-                    resolve();
-                }
-            });
-        });
-    };
+    return createMetricsShutdown(server, state);
 }

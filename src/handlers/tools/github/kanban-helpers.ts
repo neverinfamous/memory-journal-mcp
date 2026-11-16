@@ -3,7 +3,7 @@
  */
 
 import { z } from 'zod'
-import type { ToolContext } from '../../../types/index.js'
+import type { KanbanBoard, ToolContext } from '../../../types/index.js'
 import { formatHandlerError } from '../../../utils/error-helpers.js'
 import { fenceUntrustedInline } from '../../resources/shared.js'
 import {
@@ -63,6 +63,62 @@ const DeleteKanbanItemSchema = z
     })
     .strict()
 
+function kanbanBoardNotFoundResponse(projectNum: number, owner: string): Record<string, unknown> {
+    return {
+        success: false,
+        error: `Project #${String(projectNum)} not found or Status field not configured`,
+        projectNumber: projectNum,
+        owner,
+        hint: 'Projects can be at user, repository, or organization level.',
+        code: 'RESOURCE_NOT_FOUND',
+        category: 'resource',
+        suggestion: 'Verify the project number and owner. Use GitHub to check project settings.',
+        recoverable: true,
+    }
+}
+
+function formatKanbanBoardResponse(
+    board: KanbanBoard,
+    summaryOnly: boolean,
+    itemLimit: number
+): Record<string, unknown> {
+    const projectTitle = fenceUntrustedInline(board.projectTitle)
+    if (summaryOnly || itemLimit === 0) {
+        return {
+            ...board,
+            projectTitle,
+            columns: board.columns.map((col) => ({
+                status: col.status,
+                statusOptionId: col.statusOptionId,
+                items: [],
+                itemCount: col.items.length,
+            })),
+            summaryOnly: true,
+            itemDirectory: board.columns.flatMap((col) =>
+                col.items.map((item) => ({
+                    id: item.id,
+                    title: fenceUntrustedInline(item.title),
+                    status: item.status,
+                }))
+            ),
+        }
+    }
+
+    return {
+        ...board,
+        projectTitle,
+        columns: board.columns.map((col) => {
+            const sliced = col.items.slice(0, itemLimit).map((item) => ({
+                ...item,
+                title: fenceUntrustedInline(item.title),
+            }))
+            return col.items.length <= itemLimit
+                ? { ...col, items: sliced, itemCount: col.items.length }
+                : { ...col, items: sliced, itemCount: col.items.length, truncated: true }
+        }),
+    }
+}
+
 export async function handleGetKanbanBoard(
     context: ToolContext,
     params: unknown
@@ -79,7 +135,7 @@ export async function handleGetKanbanBoard(
         )
         if ('error' in resolved) return resolved.response
 
-        const effectiveRepo = input.repo ?? resolved.repo
+        const effectiveRepo = resolved.repo ?? input.repo
         const projectNum = resolveProjectNumber(
             context,
             effectiveRepo,
@@ -102,56 +158,10 @@ export async function handleGetKanbanBoard(
             effectiveRepo
         )
         if (!board) {
-            return {
-                success: false,
-                error: `Project #${String(projectNum)} not found or Status field not configured`,
-                projectNumber: projectNum,
-                owner: resolved.owner,
-                hint: 'Projects can be at user, repository, or organization level.',
-                code: 'RESOURCE_NOT_FOUND',
-                category: 'resource',
-                suggestion:
-                    'Verify the project number and owner. Use GitHub to check project settings.',
-                recoverable: true,
-            }
+            return kanbanBoardNotFoundResponse(projectNum, resolved.owner)
         }
 
-        const projectTitle = fenceUntrustedInline(board.projectTitle)
-        if (input.summary_only || input.item_limit === 0) {
-            return {
-                ...board,
-                projectTitle,
-                columns: board.columns.map((col) => ({
-                    status: col.status,
-                    statusOptionId: col.statusOptionId,
-                    items: [],
-                    itemCount: col.items.length,
-                })),
-                summaryOnly: true,
-                itemDirectory: board.columns.flatMap((col) =>
-                    col.items.map((item) => ({
-                        id: item.id,
-                        title: fenceUntrustedInline(item.title),
-                        status: item.status,
-                    }))
-                ),
-            }
-        }
-
-        const itemLimit = input.item_limit
-        return {
-            ...board,
-            projectTitle,
-            columns: board.columns.map((col) => {
-                const sliced = col.items.slice(0, itemLimit).map((item) => ({
-                    ...item,
-                    title: fenceUntrustedInline(item.title),
-                }))
-                return col.items.length <= itemLimit
-                    ? { ...col, items: sliced, itemCount: col.items.length }
-                    : { ...col, items: sliced, itemCount: col.items.length, truncated: true }
-            }),
-        }
+        return formatKanbanBoardResponse(board, input.summary_only, input.item_limit)
     } catch (err) {
         return formatHandlerError(err)
     }
@@ -173,7 +183,7 @@ export async function handleMoveKanbanItem(
         )
         if ('error' in resolved) return resolved.response
 
-        const effectiveRepo = input.repo ?? resolved.repo
+        const effectiveRepo = resolved.repo ?? input.repo
         const projectNum = resolveProjectNumber(
             context,
             effectiveRepo,
@@ -321,7 +331,7 @@ export async function handleDeleteKanbanItem(
         )
         if ('error' in resolved) return resolved.response
 
-        const effectiveRepo = input.repo ?? resolved.repo
+        const effectiveRepo = resolved.repo ?? input.repo
         const projectNum = resolveProjectNumber(
             context,
             effectiveRepo,

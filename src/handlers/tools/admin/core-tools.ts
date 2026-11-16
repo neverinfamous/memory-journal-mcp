@@ -99,8 +99,211 @@ function validateUpdateProjectScope(
         : {}
 }
 
+type UpdateEntryParsed = ReturnType<typeof UpdateEntrySchema.parse>
+
+function resolveUpdateScope(
+    input: UpdateEntryParsed,
+    targetWorkspaceId: string | undefined,
+    db: ToolContext['db'],
+    config: ToolContext['config']
+): { wsId: string; projectNumberForUpdate: number | null | undefined } | { errorResponse: Record<string, unknown> } {
+    if (targetWorkspaceId !== undefined) {
+        const targetResolved = resolveProjectContext(
+            {
+                workspace_id: targetWorkspaceId,
+                ...(input.project_number !== undefined ? { project_number: input.project_number } : {}),
+            },
+            config
+        )
+        let wsId: string
+        if (input.workspace_id === '*') {
+            wsId = '*'
+        } else if (input.workspace_id !== undefined) {
+            wsId = resolveWriteWorkspaceId(input.workspace_id, undefined, config)
+        } else {
+            const existingByPk = db.getEntryById(input.entry_id, '*')
+            wsId = existingByPk?.workspaceId ?? resolveWriteWorkspaceId(undefined, undefined, config)
+        }
+        return { wsId, projectNumberForUpdate: targetResolved.projectNumber ?? null }
+    }
+
+    const resolved = resolveProjectContext(
+        { workspace_id: input.workspace_id, project_number: input.project_number },
+        config
+    )
+    let projectNumberForUpdate = input.project_number === undefined ? undefined : resolved.projectNumber
+    let wsId = input.workspace_id === '*' ? '*' : resolved.workspaceId
+    if (input.workspace_id === undefined && input.project_number === undefined) {
+        const existingByPk = db.getEntryById(input.entry_id, '*')
+        if (existingByPk?.workspaceId !== undefined) {
+            wsId = existingByPk.workspaceId
+        }
+    }
+    if (input.project_number !== undefined) {
+        const scopeCheck = validateUpdateProjectScope(
+            db,
+            input.entry_id,
+            input.project_number,
+            input.workspace_id,
+            wsId,
+            config
+        )
+        if (scopeCheck.errorResponse !== undefined) {
+            return { errorResponse: scopeCheck.errorResponse }
+        }
+        if (scopeCheck.assignedWorkspace !== undefined) {
+            wsId = scopeCheck.assignedWorkspace
+        }
+        projectNumberForUpdate ??= input.project_number
+    }
+    return { wsId, projectNumberForUpdate }
+}
+
+async function executeUpdateEntry(
+    params: unknown,
+    context: ToolContext
+): Promise<Record<string, unknown>> {
+    const { db, vectorManager } = context
+    coerceSignificanceAlias(params)
+    const input = UpdateEntrySchema.parse(params)
+    const targetWorkspaceId = canonicalTargetWorkspace(input.target_workspace_id, context.config)
+    const scope = resolveUpdateScope(input, targetWorkspaceId, db, context.config)
+    if ('errorResponse' in scope) {
+        return scope.errorResponse
+    }
+
+    const entry = db.updateEntry(input.entry_id, {
+        content: input.content,
+        entryType: input.entry_type,
+        isPersonal: input.is_personal,
+        tags: input.tags,
+        significanceType: input.significance_type,
+        projectNumber: scope.projectNumberForUpdate,
+        projectOwner: input.project_owner,
+        issueNumber: input.issue_number,
+        issueUrl: input.issue_url,
+        prNumber: input.pr_number,
+        prUrl: input.pr_url,
+        prStatus: input.pr_status,
+        workflowRunId: input.workflow_run_id,
+        workflowName: input.workflow_name,
+        workflowStatus: input.workflow_status,
+        isArchived: input.is_archived,
+        expectedVersion: input.expected_version,
+        autoContext: input.auto_context,
+        workspaceId: scope.wsId,
+        targetWorkspaceId,
+        impactScore: input.impact_score,
+        trustScore: input.trust_score,
+        validationStatus: input.validation_status,
+        sessionId: input.session_id,
+    })
+    if (!entry) {
+        return {
+            success: false,
+            error: `Entry ${String(input.entry_id)} not found`,
+            code: 'RESOURCE_NOT_FOUND',
+            category: 'resource',
+            suggestion: 'Verify the entry ID and try again',
+            recoverable: true,
+        }
+    }
+
+    // Re-index if content, metadata, or workspace moved so vector search reflects new metadata
+    let indexStatus: string | undefined
+    let warning: string | undefined
+    if (
+        input.content !== undefined ||
+        targetWorkspaceId !== undefined ||
+        input.tags !== undefined ||
+        input.entry_type !== undefined
+    ) {
+        indexStatus = await autoIndexEntry(vectorManager, db, entry.id, entry.workspaceId ?? scope.wsId)
+        if (indexStatus === 'failed') {
+            warning = 'Entry updated, but vector re-indexing failed.'
+        }
+    }
+    return {
+        success: true,
+        entry,
+        ...(indexStatus ? { indexStatus } : {}),
+        ...(warning !== undefined ? { warning } : {}),
+    }
+}
+
+function executeDeleteEntry(params: unknown, context: ToolContext): Record<string, unknown> {
+    const { db, vectorManager } = context
+    const { entry_id, permanent, expected_version, workspace_id, project_number } =
+        DeleteEntrySchema.parse(params)
+    let wsId = resolveWorkspaceId(workspace_id, project_number, context.config)
+    if (workspace_id === undefined && project_number === undefined) {
+        const existingByPk = db.getEntryByIdIncludeDeleted(entry_id, '*')
+        if (existingByPk?.workspaceId !== undefined) wsId = existingByPk.workspaceId
+    }
+
+    if (expected_version !== undefined) {
+        const existing = db.getEntryByIdIncludeDeleted(entry_id, wsId)
+        if (existing && existing.version !== expected_version) {
+            return {
+                success: false,
+                error: `Concurrency conflict: Expected version ${expected_version} but found ${existing.version}. Please get the latest entry before deleting.`,
+                code: 'CONCURRENCY_ERROR',
+                category: 'validation',
+                suggestion: 'Get the latest entry and use its version',
+                recoverable: true,
+            }
+        }
+    }
+
+    if (project_number !== undefined) {
+        const scoped = db.getEntryByIdIncludeDeleted(entry_id, '*')
+        if (projectOwnershipMismatch(project_number, scoped?.projectNumber)) {
+            return {
+                success: false,
+                entryId: entry_id,
+                permanent,
+                error: `Entry ${String(entry_id)} not found`,
+                code: 'RESOURCE_NOT_FOUND',
+                category: 'resource',
+                suggestion: 'Verify the entry ID and project number, and try again',
+                recoverable: true,
+            }
+        }
+    }
+
+    const success = db.deleteEntry(entry_id, permanent, wsId)
+    if (!success) {
+        return {
+            success: false,
+            entryId: entry_id,
+            permanent,
+            error: `Entry ${String(entry_id)} not found`,
+            code: 'RESOURCE_NOT_FOUND',
+            category: 'resource',
+            suggestion: 'Verify the entry ID and try again',
+            recoverable: true,
+        }
+    }
+
+    // Remove from vector index (non-critical if fails)
+    let warning: string | undefined
+    if (vectorManager) {
+        try {
+            vectorManager.removeEntry(entry_id)
+        } catch (err) {
+            // Non-critical failure, entry already deleted from DB
+            warning = `Vector index cleanup failed: ${err instanceof Error ? err.message : String(err)}`
+        }
+    }
+    return {
+        success,
+        entryId: entry_id,
+        permanent,
+        ...(warning ? { warning } : {}),
+    }
+}
+
 export function getCoreTools(context: ToolContext): ToolDefinition[] {
-    const { db, vectorManager } = context;
     return [
         {
             name: 'update_entry',
@@ -122,135 +325,7 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
             },
             handler: async (params: unknown) => {
                 try {
-                    coerceSignificanceAlias(params)
-
-                    const input = UpdateEntrySchema.parse(params)
-                    const targetWorkspaceId = canonicalTargetWorkspace(
-                        input.target_workspace_id,
-                        context.config
-                    )
-                    let wsId: string
-                    let projectNumberForUpdate: number | null | undefined
-                    if (targetWorkspaceId !== undefined) {
-                        const targetResolved = resolveProjectContext(
-                            {
-                                workspace_id: targetWorkspaceId,
-                                ...(input.project_number !== undefined
-                                    ? { project_number: input.project_number }
-                                    : {}),
-                            },
-                            context.config
-                        )
-                        projectNumberForUpdate = targetResolved.projectNumber ?? null
-                        if (input.workspace_id === '*') {
-                            wsId = '*'
-                        } else if (input.workspace_id !== undefined) {
-                            wsId = resolveWriteWorkspaceId(
-                                input.workspace_id,
-                                undefined,
-                                context.config
-                            )
-                        } else {
-                            const existingByPk = db.getEntryById(input.entry_id, '*')
-                            wsId =
-                                existingByPk?.workspaceId ??
-                                resolveWriteWorkspaceId(undefined, undefined, context.config)
-                        }
-                    } else {
-                        const resolved = resolveProjectContext(
-                            {
-                                workspace_id: input.workspace_id,
-                                project_number: input.project_number,
-                            },
-                            context.config
-                        )
-                        projectNumberForUpdate =
-                            input.project_number === undefined
-                                ? undefined
-                                : resolved.projectNumber
-                        wsId = input.workspace_id === '*' ? '*' : resolved.workspaceId
-                        if (input.workspace_id === undefined && input.project_number === undefined) {
-                            const existingByPk = db.getEntryById(input.entry_id, '*')
-                            if (existingByPk?.workspaceId !== undefined) {
-                                wsId = existingByPk.workspaceId
-                            }
-                        }
-                        if (input.project_number !== undefined) {
-                            const scopeCheck = validateUpdateProjectScope(
-                                db,
-                                input.entry_id,
-                                input.project_number,
-                                input.workspace_id,
-                                wsId,
-                                context.config
-                            )
-                            if (scopeCheck.errorResponse !== undefined) {
-                                return scopeCheck.errorResponse
-                            }
-                            if (scopeCheck.assignedWorkspace !== undefined) {
-                                wsId = scopeCheck.assignedWorkspace
-                            }
-                            projectNumberForUpdate ??= input.project_number
-                        }
-                    }
-                    const entry = db.updateEntry(input.entry_id, {
-                        content: input.content,
-                        entryType: input.entry_type,
-                        isPersonal: input.is_personal,
-                        tags: input.tags,
-                        significanceType: input.significance_type,
-                        projectNumber: projectNumberForUpdate,
-                        projectOwner: input.project_owner,
-                        issueNumber: input.issue_number,
-                        issueUrl: input.issue_url,
-                        prNumber: input.pr_number,
-                        prUrl: input.pr_url,
-                        prStatus: input.pr_status,
-                        workflowRunId: input.workflow_run_id,
-                        workflowName: input.workflow_name,
-                        workflowStatus: input.workflow_status,
-                        isArchived: input.is_archived,
-                        expectedVersion: input.expected_version,
-                        autoContext: input.auto_context,
-                        workspaceId: wsId,
-                        targetWorkspaceId,
-                        impactScore: input.impact_score,
-                        trustScore: input.trust_score,
-                        validationStatus: input.validation_status,
-                        sessionId: input.session_id,
-                    })
-                    if (!entry) {
-                        return {
-                            success: false,
-                            error: `Entry ${String(input.entry_id)} not found`,
-                            code: 'RESOURCE_NOT_FOUND',
-                            category: 'resource',
-                            suggestion: 'Verify the entry ID and try again',
-                            recoverable: true,
-                        }
-                    }
-
-                    // Re-index if content, metadata, or workspace moved so vector search reflects new metadata
-                    let indexStatus: string | undefined
-                    let warning: string | undefined
-                    if (
-                        input.content !== undefined ||
-                        targetWorkspaceId !== undefined ||
-                        input.tags !== undefined ||
-                        input.entry_type !== undefined
-                    ) {
-                        indexStatus = await autoIndexEntry(vectorManager, db, entry.id, entry.workspaceId ?? wsId)
-                        if (indexStatus === 'failed') {
-                            warning = 'Entry updated, but vector re-indexing failed.'
-                        }
-                    }
-
-                    return {
-                        success: true,
-                        entry,
-                        ...(indexStatus ? { indexStatus } : {}),
-                        ...(warning !== undefined ? { warning } : {}),
-                    }
+                    return await executeUpdateEntry(params, context)
                 } catch (err) {
                     return formatHandlerError(err)
                 }
@@ -272,80 +347,7 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
             },
             handler: (params: unknown) => {
                 try {
-                    const { entry_id, permanent, expected_version, workspace_id, project_number } = DeleteEntrySchema.parse(params)
-                    let wsId = resolveWorkspaceId(workspace_id, project_number, context.config)
-                    if (
-                        workspace_id === undefined &&
-                        project_number === undefined
-                    ) {
-                        const existingByPk = db.getEntryByIdIncludeDeleted(entry_id, '*')
-                        if (existingByPk?.workspaceId !== undefined) {
-                            wsId = existingByPk.workspaceId
-                        }
-                    }
-
-                    if (expected_version !== undefined) {
-                        const existing = db.getEntryByIdIncludeDeleted(entry_id, wsId);
-                        if (existing && existing.version !== expected_version) {
-                            return {
-                                success: false,
-                                error: `Concurrency conflict: Expected version ${expected_version} but found ${existing.version}. Please get the latest entry before deleting.`,
-                                code: 'CONCURRENCY_ERROR',
-                                category: 'validation',
-                                suggestion: 'Get the latest entry and use its version',
-                                recoverable: true
-                            }
-                        }
-                    }
-
-                    if (project_number !== undefined) {
-                        const scoped = db.getEntryByIdIncludeDeleted(entry_id, '*')
-                        if (projectOwnershipMismatch(project_number, scoped?.projectNumber)) {
-                            return {
-                                success: false,
-                                entryId: entry_id,
-                                permanent,
-                                error: `Entry ${String(entry_id)} not found`,
-                                code: 'RESOURCE_NOT_FOUND',
-                                category: 'resource',
-                                suggestion: 'Verify the entry ID and project number, and try again',
-                                recoverable: true,
-                            }
-                        }
-                    }
-
-                    const success = db.deleteEntry(entry_id, permanent, wsId)
-
-                    if (!success) {
-                        return {
-                            success: false,
-                            entryId: entry_id,
-                            permanent,
-                            error: `Entry ${String(entry_id)} not found`,
-                            code: 'RESOURCE_NOT_FOUND',
-                            category: 'resource',
-                            suggestion: 'Verify the entry ID and try again',
-                            recoverable: true,
-                        }
-                    }
-
-                    // Remove from vector index (non-critical if fails)
-                    let warning: string | undefined
-                    if (vectorManager) {
-                        try {
-                            vectorManager.removeEntry(entry_id)
-                        } catch (err) {
-                            // Non-critical failure, entry already deleted from DB
-                            warning = `Vector index cleanup failed: ${err instanceof Error ? err.message : String(err)}`
-                        }
-                    }
-
-                    return {
-                        success,
-                        entryId: entry_id,
-                        permanent,
-                        ...(warning ? { warning } : {}),
-                    }
+                    return executeDeleteEntry(params, context)
                 } catch (err) {
                     return formatHandlerError(err)
                 }

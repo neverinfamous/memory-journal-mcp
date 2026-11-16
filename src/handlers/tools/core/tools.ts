@@ -35,8 +35,114 @@ import { linkRequestedRelationships } from '../relationship-linking.js'
 import { resolveEntryAnchors } from './staleness-tools.js'
 import { getDiagnosticTools } from './diagnostic-tools.js'
 
-export function getCoreTools(context: ToolContext): ToolDefinition[] {
+function resolveCreateEntryScope(
+    input: ReturnType<typeof CreateEntrySchema.parse>,
+    config: ToolContext['config']
+): { wsId: string; projectNumber: number } | { errorResponse: Record<string, unknown> } {
+    if (input.workspace_id?.trim() === '*') {
+        return {
+            errorResponse: {
+                success: false,
+                error: "workspace_id '*' is a read-only wildcard and cannot be used to create an entry. Pass a specific workspace_id or project_number.",
+                code: 'VALIDATION_ERROR',
+                category: 'validation',
+                suggestion: 'Pass the repository name, such as "memory-journal-mcp", or a project_number.',
+                recoverable: true,
+            },
+        }
+    }
+    const resolved = resolveProjectContext(
+        { workspace_id: input.workspace_id, project_number: input.project_number },
+        config
+    )
+    const projectNumber = resolved.projectNumber
+    if (projectNumber === undefined || projectNumber === null || projectNumber <= 0) {
+        return {
+            errorResponse: {
+                success: false,
+                error: 'Missing or unresolvable project_number. Entry creation blocked because no valid project could be determined for this entry.',
+                code: 'VALIDATION_ERROR',
+                category: 'validation',
+                suggestion: 'To find your project_number, call list_projects (or mj.core.listProjects()), read memory://agent-context/<repo-name> via read_resource (e.g. read_resource("memory-journal-mcp", "memory://agent-context/memory-journal-mcp")), or inspect memory://briefing/<project-name>. Avoid bare memory://agent-id in multi-project setups. Then pass project_number explicitly in your request.',
+                recoverable: true,
+            },
+        }
+    }
+    return { wsId: resolved.workspaceId, projectNumber }
+}
+
+async function executeCreateEntry(
+    params: unknown,
+    context: ToolContext
+): Promise<Record<string, unknown>> {
     const { db, progress } = context
+    coerceSignificanceAlias(params)
+    const input = CreateEntrySchema.parse(params)
+    const scope = resolveCreateEntryScope(input, context.config)
+    if ('errorResponse' in scope) {
+        return scope.errorResponse
+    }
+    const { wsId, projectNumber } = scope
+
+    await sendProgress(progress, 0, 2, 'Creating entry...')
+    const resolvedIssueUrl = await resolveIssueUrl(
+        context,
+        projectNumber,
+        input.issue_number,
+        input.issue_url,
+        wsId
+    )
+    const resolvedAnchors = resolveEntryAnchors(input.anchors, input.auto_context, wsId, context)
+    const entryInput = buildCreateEntryInput(input, {
+        projectNumber,
+        workspaceId: wsId,
+        issueUrl: resolvedIssueUrl,
+        anchors: resolvedAnchors,
+    })
+    const createdEntry = db.createEntry(entryInput)
+    const id = createdEntry.id
+
+    const relationshipWarnings = linkRequestedRelationships(
+        db,
+        id,
+        input.relationships,
+        wsId,
+        projectNumber
+    )
+    const vectorWarning = await indexCreatedEntry(context, progress, createdEntry)
+
+    if (context.config?.subscriptionManager) {
+        void context.config.subscriptionManager
+            .notifyResourceUpdated('memory://recent')
+            .catch((err: unknown) => {
+                logger.debug('Failed to notify resource updated', { error: err })
+            })
+    }
+
+    const teamShare = input.share_with_team
+        ? await recordTeamShareOutcome(context, entryInput, relationshipWarnings)
+        : { sharedWithTeam: false }
+    const allWarnings = [
+        ...(vectorWarning !== undefined ? [vectorWarning] : []),
+        ...relationshipWarnings,
+    ]
+    return {
+        success: true,
+        id,
+        entry: createdEntry,
+        ...(allWarnings.length > 0 ? { warning: allWarnings.join('; ') } : {}),
+        ...(teamShare.sharedWithTeam
+            ? {
+                  sharedWithTeam: true,
+                  ...(teamShare.author !== undefined ? { author: teamShare.author } : {}),
+              }
+            : {}),
+        ...(relationshipWarnings.length > 0 ? { relationshipWarnings } : {}),
+    }
+}
+
+export function getCoreTools(context: ToolContext): ToolDefinition[] {
+    const { db } = context
 
     return [
         {
@@ -62,105 +168,7 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
             },
             handler: async (params: unknown) => {
                 try {
-                    coerceSignificanceAlias(params)
-                    const input = CreateEntrySchema.parse(params)
-                    if (input.workspace_id?.trim() === '*') {
-                        return {
-                            success: false,
-                            error: "workspace_id '*' is a read-only wildcard and cannot be used to create an entry. Pass a specific workspace_id or project_number.",
-                            code: 'VALIDATION_ERROR',
-                            category: 'validation',
-                            suggestion: 'Pass the repository name, such as "memory-journal-mcp", or a project_number.',
-                            recoverable: true,
-                        }
-                    }
-
-                    const resolved = resolveProjectContext(
-                        {
-                            workspace_id: input.workspace_id,
-                            project_number: input.project_number,
-                        },
-                        context.config
-                    )
-                    const wsId = resolved.workspaceId
-                    const projectNumber = resolved.projectNumber
-
-                    if (projectNumber === undefined || projectNumber === null || projectNumber <= 0) {
-                        return {
-                            success: false,
-                            error: 'Missing or unresolvable project_number. Entry creation blocked because no valid project could be determined for this entry.',
-                            code: 'VALIDATION_ERROR',
-                            category: 'validation',
-                            suggestion: 'To find your project_number, call list_projects (or mj.core.listProjects()), read memory://agent-context/<repo-name> via read_resource (e.g. read_resource("memory-journal-mcp", "memory://agent-context/memory-journal-mcp")), or inspect memory://briefing/<project-name>. Avoid bare memory://agent-id in multi-project setups. Then pass project_number explicitly in your request.',
-                            recoverable: true,
-                        }
-                    }
-
-                    // Optional progress for long operations
-                    await sendProgress(progress, 0, 2, 'Creating entry...')
-
-                    const resolvedIssueUrl = await resolveIssueUrl(
-                        context,
-                        projectNumber,
-                        input.issue_number,
-                        input.issue_url,
-                        wsId
-                    )
-
-                    const resolvedAnchors = resolveEntryAnchors(
-                        input.anchors,
-                        input.auto_context,
-                        wsId,
-                        context
-                    )
-
-                    const entryInput = buildCreateEntryInput(input, {
-                        projectNumber,
-                        workspaceId: wsId,
-                        issueUrl: resolvedIssueUrl,
-                        anchors: resolvedAnchors,
-                    })
-                    const createdEntry = db.createEntry(entryInput)
-                    const id = createdEntry.id
-
-                    const relationshipWarnings = linkRequestedRelationships(
-                        db,
-                        id,
-                        input.relationships,
-                        wsId,
-                        projectNumber
-                    )
-
-                    const vectorWarning = await indexCreatedEntry(context, progress, createdEntry)
-
-                    if (context.config?.subscriptionManager) {
-                        void context.config.subscriptionManager
-                            .notifyResourceUpdated('memory://recent')
-                            .catch((err: unknown) => {
-                                logger.debug('Failed to notify resource updated', { error: err })
-                            })
-                    }
-                    const finalEntry = createdEntry
-
-                    const teamShare = input.share_with_team
-                        ? await recordTeamShareOutcome(context, entryInput, relationshipWarnings)
-                        : { sharedWithTeam: false }
-
-                    const allWarnings = [
-                        ...(vectorWarning !== undefined ? [vectorWarning] : []),
-                        ...relationshipWarnings,
-                    ]
-
-                    return {
-                        success: true,
-                        id,
-                        entry: finalEntry,
-                        ...(allWarnings.length > 0 ? { warning: allWarnings.join('; ') } : {}),
-                        ...(teamShare.sharedWithTeam
-                            ? { sharedWithTeam: true, ...(teamShare.author !== undefined ? { author: teamShare.author } : {}) }
-                            : {}),
-                        ...(relationshipWarnings.length > 0 ? { relationshipWarnings } : {}),
-                    }
+                    return await executeCreateEntry(params, context)
                 } catch (err) {
                     return formatHandlerError(err)
                 }

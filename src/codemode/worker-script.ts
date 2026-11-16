@@ -19,7 +19,7 @@ import { createUpdateMemoryFn, createContextProxy } from './worker/namespace-shi
 import { createShimMjProxy } from './worker/mj-shim-proxy.js'
 import { buildSandboxGlobals } from './worker/sandbox-globals.js'
 import { serializeAndEnforceEgress } from './worker/result-compactor.js'
-import { createSandboxExecutor, type RunIsolatedNestedFn } from './worker/nested-exec-scope.js'
+import { createSandboxExecutor, type NestedExecIsolationOverrides, type RunIsolatedNestedFn } from './worker/nested-exec-scope.js'
 
 // [L4] Hardening failures are fatal: refuse to execute any user code in a half-hardened realm.
 const hardeningFailures = hardenOuterFunctionPrototypes()
@@ -68,11 +68,15 @@ function rejectPendingRpcRequests(message: string): void {
 
 type RpcCallFn = (group: string, method: string, args: unknown[]) => Promise<unknown>
 
-function createScopedRpcCall(overrides?: {
+interface ScopedRpcOverrides {
     readonly?: boolean
     dryRun?: boolean
     useTestDb?: boolean
-}): RpcCallFn {
+    workspaceId?: string
+    projectNumber?: number
+}
+
+function createScopedRpcCall(overrides?: ScopedRpcOverrides): RpcCallFn {
     return (group: string, method: string, args: unknown[]): Promise<unknown> => {
         return new Promise((resolve, reject) => {
             if (!rpcPort) {
@@ -89,6 +93,8 @@ function createScopedRpcCall(overrides?: {
                 ...(overrides?.readonly === true ? { readonly: true } : {}),
                 ...(overrides?.dryRun === true ? { dryRun: true } : {}),
                 ...(overrides?.useTestDb === true ? { useTestDb: true } : {}),
+                ...(overrides?.workspaceId !== undefined ? { workspaceId: overrides.workspaceId } : {}),
+                ...(overrides?.projectNumber !== undefined ? { projectNumber: overrides.projectNumber } : {}),
             }
             rpcPort.postMessage(request)
         })
@@ -114,20 +120,92 @@ interface VmExecutionContextOptions {
     activeTimers: Set<NodeJS.Timeout>
 }
 
+function mergeNestedExecutionContext(
+    outerContext: Record<string, unknown> | undefined,
+    nestedContext: Record<string, unknown> | undefined,
+    workspaceId: string | undefined,
+    projectNumber: number | undefined
+): Record<string, unknown> | undefined {
+    if (nestedContext === undefined && workspaceId === undefined && projectNumber === undefined) {
+        return outerContext
+    }
+    const merged: Record<string, unknown> = { ...(outerContext ?? {}) }
+    if (nestedContext !== undefined) {
+        for (const [k, v] of Object.entries(nestedContext)) {
+            if (k.startsWith('__mj_') || k === '__proto__' || k === 'constructor' || k === 'prototype') {
+                continue
+            }
+            merged[k] = v
+        }
+    }
+    if (workspaceId !== undefined) {
+        merged['workspace_id'] = workspaceId
+        merged['workspaceId'] = workspaceId
+    }
+    if (projectNumber !== undefined) {
+        merged['project_number'] = projectNumber
+        merged['projectNumber'] = projectNumber
+        merged['project_id'] = projectNumber
+        merged['projectId'] = projectNumber
+    }
+    return merged
+}
+
+function createIsolatedNestedRunner(options: VmExecutionContextOptions): RunIsolatedNestedFn {
+    const {
+        methodList, schemaList, timeoutMs, contextObj,
+        pinnedWorkspaceRaw, pinnedProjectRaw, projectRegistryRaw, activeTimers,
+    } = options
+    const outerWs =
+        typeof pinnedWorkspaceRaw === 'string' && pinnedWorkspaceRaw.trim() !== '' && pinnedWorkspaceRaw.trim() !== '*'
+            ? pinnedWorkspaceRaw.trim()
+            : undefined
+    const outerProj =
+        typeof pinnedProjectRaw === 'number' && Number.isInteger(pinnedProjectRaw) && pinnedProjectRaw > 0
+            ? pinnedProjectRaw
+            : undefined
+
+    return async (
+        wrapped: string,
+        nestedReadonly: boolean,
+        nestedDryRun: boolean,
+        nestedUseTestDb: boolean,
+        overrides?: NestedExecIsolationOverrides
+    ): Promise<unknown> => {
+        const nextWs = outerWs ?? overrides?.workspaceId
+        const nextProj = outerProj ?? overrides?.projectNumber
+        const nextTimeout =
+            overrides?.timeoutMs !== undefined ? Math.min(timeoutMs, overrides.timeoutMs) : timeoutMs
+        const mergedContext = mergeNestedExecutionContext(contextObj, overrides?.contextObj, nextWs, nextProj)
+        const rpcOverrides: ScopedRpcOverrides = {
+            ...(nestedReadonly ? { readonly: true } : {}),
+            ...(nestedDryRun ? { dryRun: true } : {}),
+            ...(nestedUseTestDb ? { useTestDb: true } : {}),
+            ...(nextWs !== undefined ? { workspaceId: nextWs } : {}),
+            ...(nextProj !== undefined ? { projectNumber: nextProj } : {}),
+        }
+        const nestedContext = createVmExecutionContext({
+            rpcFn: createScopedRpcCall(rpcOverrides),
+            methodList,
+            schemaList,
+            timeoutMs: nextTimeout,
+            contextObj: mergedContext,
+            readonlyMode: nestedReadonly,
+            dryRunMode: nestedDryRun,
+            useTestDbMode: nestedUseTestDb,
+            pinnedWorkspaceRaw: nextWs ?? pinnedWorkspaceRaw,
+            pinnedProjectRaw: nextProj ?? pinnedProjectRaw,
+            projectRegistryRaw,
+            activeTimers,
+        })
+        return (await vm.runInContext(wrapped, nestedContext, { timeout: nextTimeout })) as unknown
+    }
+}
+
 function createVmExecutionContext(options: VmExecutionContextOptions): vm.Context {
     const {
-        rpcFn,
-        methodList,
-        schemaList,
-        timeoutMs,
-        contextObj,
-        readonlyMode,
-        dryRunMode,
-        useTestDbMode,
-        pinnedWorkspaceRaw,
-        pinnedProjectRaw,
-        projectRegistryRaw,
-        activeTimers,
+        rpcFn, methodList, schemaList, timeoutMs, contextObj, readonlyMode, dryRunMode,
+        useTestDbMode, pinnedWorkspaceRaw, pinnedProjectRaw, projectRegistryRaw, activeTimers,
     } = options
     const mjApi = buildApiProxy(rpcFn, methodList, schemaList, readonlyMode, contextObj)
 
@@ -153,55 +231,16 @@ function createVmExecutionContext(options: VmExecutionContextOptions): vm.Contex
 
     const frozenContext = createContextProxy(contextObj)
     const vmContextRef: { current?: vm.Context } = {}
-    const runIsolatedNestedCode: RunIsolatedNestedFn = async (
-        wrapped: string,
-        nestedReadonly: boolean,
-        nestedDryRun: boolean,
-        nestedUseTestDb: boolean
-    ): Promise<unknown> => {
-        const overrides: { readonly?: boolean; dryRun?: boolean; useTestDb?: boolean } = {}
-        if (nestedReadonly) overrides.readonly = true
-        if (nestedDryRun) overrides.dryRun = true
-        if (nestedUseTestDb) overrides.useTestDb = true
-        const nestedContext = createVmExecutionContext({
-            rpcFn: createScopedRpcCall(overrides),
-            methodList,
-            schemaList,
-            timeoutMs,
-            contextObj,
-            readonlyMode: nestedReadonly,
-            dryRunMode: nestedDryRun,
-            useTestDbMode: nestedUseTestDb,
-            pinnedWorkspaceRaw,
-            pinnedProjectRaw,
-            projectRegistryRaw,
-            activeTimers,
-        })
-        return (await vm.runInContext(wrapped, nestedContext, { timeout: timeoutMs })) as unknown
-    }
+    const runIsolatedNestedCode = createIsolatedNestedRunner(options)
 
     const executeCodeFn = createSandboxExecutor({
-        shimMj,
-        vmContextRef,
-        timeoutMs,
-        readonlyMode,
-        dryRunMode,
-        useTestDbMode,
-        pinnedWorkspaceRaw,
-        pinnedProjectRaw,
-        projectRegistryRaw,
-        runIsolatedNestedCode,
+        shimMj, vmContextRef, timeoutMs, readonlyMode, dryRunMode, useTestDbMode,
+        pinnedWorkspaceRaw, pinnedProjectRaw, projectRegistryRaw, runIsolatedNestedCode,
     })
     executeCodeFnRef.current = executeCodeFn
 
     const sandbox = buildSandboxGlobals({
-        mjApi,
-        shimMj,
-        safeFsShim,
-        frozenContext,
-        executeCodeFn,
-        updateMemoryFn,
-        activeTimers,
+        mjApi, shimMj, safeFsShim, frozenContext, executeCodeFn, updateMemoryFn, activeTimers,
     })
 
     const context = vm.createContext(sandbox, {
@@ -211,6 +250,52 @@ function createVmExecutionContext(options: VmExecutionContextOptions): vm.Contex
     vmContextRef.current = context
     freezeInnerVmContext(context)
     return context
+}
+
+function extractScopeContext(contextObj?: Record<string, unknown>): {
+    registryPayload: unknown
+    pinnedWorkspaceRaw: unknown
+    pinnedProjectRaw: unknown
+} {
+    const registryPayload = contextObj?.['__mj_project_registry']
+    const pinnedWorkspaceRaw = contextObj?.['__mj_workspace_id']
+    const pinnedProjectRaw = contextObj?.['__mj_project_number']
+    if (contextObj !== undefined) {
+        Reflect.deleteProperty(contextObj, '__mj_project_registry')
+        Reflect.deleteProperty(contextObj, '__mj_workspace_id')
+        Reflect.deleteProperty(contextObj, '__mj_project_number')
+    }
+    return { registryPayload, pinnedWorkspaceRaw, pinnedProjectRaw }
+}
+
+function formatVmErrorResult(
+    err: unknown,
+    startTime: number,
+    startCpu: NodeJS.CpuUsage
+): SandboxResult {
+    const endTime = performance.now()
+    const endCpu = process.cpuUsage(startCpu)
+    const error = err instanceof Error ? err : new Error(String(err))
+    const errString = String(err)
+    if (
+        errString.includes('missing ) after argument list') ||
+        errString.includes('is not a function') ||
+        errString.includes('Invalid or unexpected token') ||
+        errString.includes('Unexpected token') ||
+        errString.includes('Unexpected identifier') ||
+        errString.includes('Cannot use import statement')
+    ) {
+        error.message = `🛠️ AUTONOMOUS HEALING: Syntax error in Code Mode execution (${error.message}). Code Mode requires valid JavaScript code (e.g., 'return await mj.core.getRecentEntries({ limit: 10 })' or 'return await mj.core.createEntry(...)'), not raw SQL statements or unquoted text.\n\n💡 Tip: When querying the journal, use Code Mode methods like 'return await mj.core.getRecentEntries({ limit: 10 })' or 'return await mj.search.searchEntries({ query: "..." })'. When passing long multi-line strings or markdown with embedded quotes/backticks, pass them safely via the \`context\` parameter and reference them as \`context.myParam\`.`
+    }
+    return {
+        success: false,
+        error: error.message,
+        metrics: {
+            wallTimeMs: Math.round(endTime - startTime),
+            cpuTimeMs: Math.round((endCpu.user + endCpu.system) / 1000),
+            memoryUsedMb: 0,
+        },
+    }
 }
 
 async function executeCode(
@@ -227,15 +312,7 @@ async function executeCode(
         return { success: false, error: hardeningError, metrics: { wallTimeMs: 0, cpuTimeMs: 0, memoryUsedMb: 0 } }
     }
     const activeTimers = new Set<NodeJS.Timeout>()
-
-    const registryPayload = contextObj?.['__mj_project_registry']
-    const pinnedWorkspaceRaw = contextObj?.['__mj_workspace_id']
-    const pinnedProjectRaw = contextObj?.['__mj_project_number']
-    if (contextObj !== undefined) {
-        Reflect.deleteProperty(contextObj, '__mj_project_registry')
-        Reflect.deleteProperty(contextObj, '__mj_workspace_id')
-        Reflect.deleteProperty(contextObj, '__mj_project_number')
-    }
+    const { registryPayload, pinnedWorkspaceRaw, pinnedProjectRaw } = extractScopeContext(contextObj)
     setActiveProjectRegistry(readProjectRegistryPayload(registryPayload))
 
     try {
@@ -251,15 +328,12 @@ async function executeCode(
             projectRegistryRaw: registryPayload,
             activeTimers,
         })
-
         const transformed = transformAutoReturn(code)
         const script = new vm.Script(`(async () => {\n${transformed}\n})()`, {
             filename: 'codemode-execution.js',
         })
-
         const resultPromise = script.runInContext(context, { timeout: timeoutMs }) as Promise<unknown>
         const result = await resultPromise
-
         const endTime = performance.now()
         const endCpu = process.cpuUsage(startCpu)
         const metrics: ExecutionMetrics = {
@@ -267,38 +341,12 @@ async function executeCode(
             cpuTimeMs: Math.round((endCpu.user + endCpu.system) / 1000),
             memoryUsedMb: 0,
         }
-
         return { success: true, result, metrics }
     } catch (err) {
-        const endTime = performance.now()
-        const endCpu = process.cpuUsage(startCpu)
-        const error = err instanceof Error ? err : new Error(String(err))
-        const errString = String(err)
-        if (
-            errString.includes('missing ) after argument list') ||
-            errString.includes('is not a function') ||
-            errString.includes('Invalid or unexpected token') ||
-            errString.includes('Unexpected token') ||
-            errString.includes('Unexpected identifier') ||
-            errString.includes('Cannot use import statement')
-        ) {
-            error.message = `🛠️ AUTONOMOUS HEALING: Syntax error in Code Mode execution (${error.message}). Code Mode requires valid JavaScript code (e.g., 'return await mj.core.getRecentEntries({ limit: 10 })' or 'return await mj.core.createEntry(...)'), not raw SQL statements or unquoted text.\n\n💡 Tip: When querying the journal, use Code Mode methods like 'return await mj.core.getRecentEntries({ limit: 10 })' or 'return await mj.search.searchEntries({ query: "..." })'. When passing long multi-line strings or markdown with embedded quotes/backticks, pass them safely via the \`context\` parameter and reference them as \`context.myParam\`.`
-        }
-
-        return {
-            success: false,
-            error: error.message,
-            metrics: {
-                wallTimeMs: Math.round(endTime - startTime),
-                cpuTimeMs: Math.round((endCpu.user + endCpu.system) / 1000),
-                memoryUsedMb: 0,
-            },
-        }
+        return formatVmErrorResult(err, startTime, startCpu)
     } finally {
         setActiveProjectRegistry(undefined)
-        for (const handle of activeTimers) {
-            clearTimeout(handle)
-        }
+        for (const handle of activeTimers) clearTimeout(handle)
         activeTimers.clear()
     }
 }

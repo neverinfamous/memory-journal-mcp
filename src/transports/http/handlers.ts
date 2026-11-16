@@ -106,7 +106,13 @@ export function createAuthMiddleware(
         }
 
         const envScopes = process.env['MCP_AUTH_SCOPES']
-        let defaultScopes = envScopes ? envScopes.split(',').map((s) => s.trim()) : ['read']
+        const parsedScopes = envScopes
+            ? envScopes
+                  .split(/[\s,]+/)
+                  .map((s) => s.trim())
+                  .filter(Boolean)
+            : []
+        let defaultScopes = parsedScopes.length > 0 ? parsedScopes : ['read']
         const invalidScopes = defaultScopes.filter((s) => !isValidScope(s))
         if (invalidScopes.length > 0) {
             logger.warning(

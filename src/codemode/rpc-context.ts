@@ -9,13 +9,15 @@ export interface RpcExecutionOverrides {
     readonly?: boolean
     dryRun?: boolean
     useTestDb?: boolean
+    workspaceId?: string
+    projectNumber?: number
 }
 
 const rpcOverridesStorage = new AsyncLocalStorage<RpcExecutionOverrides>()
 
 /**
  * Execute an asynchronous callback with merged RPC execution overrides.
- * Nested calls tighten permissions monotonically (once readonly/dryRun/useTestDb is active, it stays active).
+ * Nested calls tighten permissions and scope monotonically (once readonly/dryRun/useTestDb or a concrete workspace/project is active, it cannot be widened).
  */
 export function runWithRpcExecutionOverrides<T>(
     overrides: RpcExecutionOverrides,
@@ -31,6 +33,24 @@ export function runWithRpcExecutionOverrides<T>(
     }
     if (parent?.useTestDb === true || overrides.useTestDb === true) {
         merged.useTestDb = true
+    }
+    const parentWs = parent?.workspaceId?.trim()
+    const nextWs = overrides.workspaceId?.trim()
+    if (parentWs !== undefined && parentWs !== '' && parentWs !== '*') {
+        merged.workspaceId = parentWs
+    } else if (nextWs !== undefined && nextWs !== '' && nextWs !== '*') {
+        merged.workspaceId = nextWs
+    } else if (parentWs === '*') {
+        merged.workspaceId = '*'
+    }
+    if (parent?.projectNumber !== undefined) {
+        merged.projectNumber = parent.projectNumber
+    } else if (
+        typeof overrides.projectNumber === 'number' &&
+        Number.isInteger(overrides.projectNumber) &&
+        overrides.projectNumber > 0
+    ) {
+        merged.projectNumber = overrides.projectNumber
     }
     return rpcOverridesStorage.run(merged, fn)
 }

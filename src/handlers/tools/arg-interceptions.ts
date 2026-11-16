@@ -257,6 +257,9 @@ export function instrumentToolDefinitions(
             schema = schema.extend({ use_test_db: z.boolean().optional() })
         } else if (schema instanceof z.ZodPipe && schema.out instanceof z.ZodObject) {
             schema = z.pipe(schema.in, schema.out.extend({ use_test_db: z.boolean().optional() }))
+        } else if (schema instanceof z.ZodPipe && schema.in instanceof z.ZodObject) {
+            const extendedIn: z.ZodType = schema.in.extend({ use_test_db: z.boolean().optional() })
+            schema = z.pipe(extendedIn, schema.out)
         }
         const finalHandler = wrapToolHandlerWithInterceptors(t.name, t.handler, config)
         return {

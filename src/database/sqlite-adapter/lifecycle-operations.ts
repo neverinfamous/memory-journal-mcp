@@ -208,6 +208,87 @@ function collectDryRun(
     return { archivedCount: 0, prunedCount: 0, hardDeletedCount: 0, candidates }
 }
 
+function deleteVecChunk(db: NativeDb, placeholders: string, chunk: number[]): void {
+    try {
+        db.prepare(`DELETE FROM vec_embeddings WHERE entry_id IN (${placeholders})`).run(...chunk)
+    } catch (err) {
+        if (!isMissingTableError(err)) throw err
+    }
+}
+
+function executeHardDeleteStep(db: NativeDb, query: CandidateQuery): number {
+    const rows = db.prepare(query.sql).all(...query.params) as { id: number | bigint }[]
+    const ids = rows.map((r) => toNumberId(r.id))
+    const CHUNK_SIZE = 500
+    let hardDeletedCount = 0
+    for (let i = 0; i < ids.length; i += CHUNK_SIZE) {
+        const chunk = ids.slice(i, i + CHUNK_SIZE)
+        const placeholders = chunk.map(() => '?').join(',')
+        const deleteSql = `DELETE FROM memory_journal WHERE id IN (${placeholders})`
+        hardDeletedCount += db.prepare(deleteSql).run(...chunk).changes
+        deleteVecChunk(db, placeholders, chunk)
+    }
+    return hardDeletedCount
+}
+
+function executePruneStep(
+    db: NativeDb,
+    query: CandidateQuery,
+    cte: string,
+    deletedAt: string
+): number {
+    const sql = `
+        WITH ${cte}
+        UPDATE memory_journal
+        SET deleted_at = ?
+        WHERE id IN (
+            SELECT id FROM (${query.sql})
+        )
+    `
+    const prunedCount = db.prepare(sql).run(deletedAt, ...query.params).changes
+    if (prunedCount > 0) {
+        try {
+            db.prepare(
+                'DELETE FROM vec_embeddings WHERE entry_id NOT IN (SELECT id FROM memory_journal WHERE deleted_at IS NULL)'
+            ).run()
+        } catch (err) {
+            if (!isMissingTableError(err)) throw err
+        }
+    }
+    return prunedCount
+}
+
+function executeArchiveStep(db: NativeDb, query: CandidateQuery, cte: string): number {
+    const sql = `
+        WITH ${cte}
+        UPDATE memory_journal
+        SET is_archived = 1
+        WHERE id IN (
+            SELECT id FROM (${query.sql})
+        )
+    `
+    return db.prepare(sql).run(...query.params).changes
+}
+
+function isFtsCorruptError(error: unknown): boolean {
+    return (
+        (error !== null &&
+            typeof error === 'object' &&
+            'code' in error &&
+            error.code === 'SQLITE_CORRUPT_VTAB') ||
+        (error instanceof Error && error.message.includes('malformed'))
+    )
+}
+
+function rebuildFtsContentIndex(db: NativeDb): void {
+    db.transaction(() => {
+        db.exec("INSERT INTO fts_content(fts_content) VALUES ('delete-all')")
+        db.exec(
+            'INSERT INTO fts_content(rowid, content) SELECT id, content FROM memory_journal WHERE deleted_at IS NULL'
+        )
+    })()
+}
+
 /** Run the hard-delete / prune / archive mutations in a transaction, retrying once after an FTS rebuild. */
 function runLifecycleTx(
     db: NativeDb,
@@ -216,99 +297,34 @@ function runLifecycleTx(
     cte: string
 ): LifecycleResult {
     const deletedAt = new Date().toISOString()
-    let archivedCount = 0
-    let prunedCount = 0
-    let hardDeletedCount = 0
 
-    const runTx = db.transaction(() => {
-        if (options.hardDeleteOlderThanDays > 0) {
-            const rows = db.prepare(queries.hardDelete.sql).all(...queries.hardDelete.params) as {
-                id: number | bigint
-            }[]
-            const ids = rows.map((r) => toNumberId(r.id))
-            const CHUNK_SIZE = 500
-            for (let i = 0; i < ids.length; i += CHUNK_SIZE) {
-                const chunk = ids.slice(i, i + CHUNK_SIZE)
-                const placeholders = chunk.map(() => '?').join(',')
-                const deleteSql = `DELETE FROM memory_journal WHERE id IN (${placeholders})`
-                const result = db.prepare(deleteSql).run(...chunk)
-                hardDeletedCount += result.changes
-
-                try {
-                    db.prepare(`DELETE FROM vec_embeddings WHERE entry_id IN (${placeholders})`).run(
-                        ...chunk
-                    )
-                } catch (err) {
-                    if (!isMissingTableError(err)) throw err
-                }
-            }
-        }
-
-        if (options.pruneOlderThanDays > 0) {
-            const sql = `
-                    WITH ${cte}
-                    UPDATE memory_journal
-                    SET deleted_at = ?
-                    WHERE id IN (
-                        SELECT id FROM (${queries.prune.sql})
-                    )
-                `
-            const result = db.prepare(sql).run(deletedAt, ...queries.prune.params)
-            prunedCount = result.changes
-            if (prunedCount > 0) {
-                try {
-                    db.prepare(
-                        'DELETE FROM vec_embeddings WHERE entry_id NOT IN (SELECT id FROM memory_journal WHERE deleted_at IS NULL)'
-                    ).run()
-                } catch (err) {
-                    if (!isMissingTableError(err)) throw err
-                }
-            }
-        }
-
-        if (options.archiveOlderThanDays > 0) {
-            const sql = `
-                    WITH ${cte}
-                    UPDATE memory_journal
-                    SET is_archived = 1
-                    WHERE id IN (
-                        SELECT id FROM (${queries.archive.sql})
-                    )
-                `
-            const result = db.prepare(sql).run(...queries.archive.params)
-            archivedCount = result.changes
-        }
+    const runTx = db.transaction((): LifecycleResult => {
+        const hardDeletedCount =
+            options.hardDeleteOlderThanDays > 0
+                ? executeHardDeleteStep(db, queries.hardDelete)
+                : 0
+        const prunedCount =
+            options.pruneOlderThanDays > 0
+                ? executePruneStep(db, queries.prune, cte, deletedAt)
+                : 0
+        const archivedCount =
+            options.archiveOlderThanDays > 0
+                ? executeArchiveStep(db, queries.archive, cte)
+                : 0
+        return { archivedCount, prunedCount, hardDeletedCount }
     })
 
     try {
-        runTx()
+        return runTx()
     } catch (error: unknown) {
-        const isCorrupt =
-            (error !== null &&
-                typeof error === 'object' &&
-                'code' in error &&
-                error.code === 'SQLITE_CORRUPT_VTAB') ||
-            (error instanceof Error && error.message.includes('malformed'))
-        if (isCorrupt) {
-            // FTS5 index is out of sync with external content table.
-            // Rebuild it synchronously (live entries only) and retry the transaction.
-            db.exec(
-                "INSERT INTO fts_content(fts_content) VALUES ('delete-all'); " +
-                    'INSERT INTO fts_content(rowid, content) SELECT id, content FROM memory_journal WHERE deleted_at IS NULL'
-            )
-
-            // Reset counters before retry
-            hardDeletedCount = 0
-            prunedCount = 0
-            archivedCount = 0
-
-            runTx()
-        } else {
+        if (!isFtsCorruptError(error)) {
             throw error
         }
+        // FTS5 index is out of sync with external content table.
+        // Rebuild it atomically (live entries only) and retry the transaction.
+        rebuildFtsContentIndex(db)
+        return runTx()
     }
-
-    return { archivedCount, prunedCount, hardDeletedCount }
 }
 
 export class LifecycleOperations {

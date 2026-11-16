@@ -71,7 +71,7 @@ function isStandardSchemaWithJson(value: unknown): value is StandardSchemaWithJS
     return (
         typeof value === 'object' &&
         value !== null &&
-        ('~standard' in value || 'partial' in value || 'passthrough' in value)
+        ('~standard' in value || 'partial' in value || 'loose' in value || 'passthrough' in value)
     )
 }
 
@@ -92,13 +92,58 @@ function relaxInputSchemaForMcp(schema: unknown, depth = 0): unknown {
     }
     if ('partial' in schema && typeof schema.partial === 'function') {
         const relaxed = (
-            schema as { partial: () => { passthrough?: () => StandardSchemaWithJSON } }
+            schema as {
+                partial: () => {
+                    loose?: () => StandardSchemaWithJSON
+                    passthrough?: () => StandardSchemaWithJSON
+                }
+            }
         ).partial()
+        if (typeof relaxed.loose === 'function') {
+            return relaxed.loose()
+        }
         if (typeof relaxed.passthrough === 'function') {
             return relaxed.passthrough()
         }
     }
     return schema
+}
+
+function tryRelaxOutputSchema(outSchema: unknown): StandardSchemaWithJSON | undefined {
+    if (outSchema instanceof z.ZodObject) {
+        const looseSchema: unknown = outSchema.loose()
+        return isStandardSchemaWithJson(looseSchema) ? looseSchema : undefined
+    }
+    if (typeof outSchema !== 'object' || outSchema === null) {
+        return undefined
+    }
+    if ('loose' in outSchema && typeof outSchema.loose === 'function') {
+        return (outSchema as { loose: () => StandardSchemaWithJSON }).loose()
+    }
+    if ('passthrough' in outSchema && typeof outSchema.passthrough === 'function') {
+        return (outSchema as { passthrough: () => StandardSchemaWithJSON }).passthrough()
+    }
+    return undefined
+}
+
+function relaxOutputSchemaForMcp(
+    outSchema: unknown,
+    toolName: string
+): StandardSchemaWithJSON | undefined {
+    const fallbackOutputSchema = isStandardSchemaWithJson(outSchema) ? outSchema : undefined
+    try {
+        const relaxed = tryRelaxOutputSchema(outSchema)
+        if (relaxed !== undefined) {
+            return relaxed
+        }
+    } catch (error) {
+        logger.warning('Failed to relax output schema; using fallback schema', {
+            module: 'McpServer',
+            tool: toolName,
+            error: error instanceof Error ? error.message : String(error),
+        })
+    }
+    return fallbackOutputSchema
 }
 
 function buildToolRegistrationOptions(tool: ToolRegistration): ModernToolConfig {
@@ -129,30 +174,9 @@ function buildToolRegistrationOptions(tool: ToolRegistration): ModernToolConfig 
     }
 
     if (tool.outputSchema !== undefined) {
-        const outSchema = tool.outputSchema
-        const fallbackOutputSchema = isStandardSchemaWithJson(outSchema) ? outSchema : undefined
-        if (
-            typeof outSchema === 'object' &&
-            outSchema !== null &&
-            'passthrough' in outSchema &&
-            typeof outSchema.passthrough === 'function'
-        ) {
-            try {
-                toolOptions.outputSchema = (
-                    outSchema as { passthrough: () => StandardSchemaWithJSON }
-                ).passthrough()
-            } catch (error) {
-                logger.warning('Failed to relax output schema; using fallback schema', {
-                    module: 'McpServer',
-                    tool: tool.name,
-                    error: error instanceof Error ? error.message : String(error),
-                })
-                if (fallbackOutputSchema !== undefined) {
-                    toolOptions.outputSchema = fallbackOutputSchema
-                }
-            }
-        } else if (fallbackOutputSchema !== undefined) {
-            toolOptions.outputSchema = fallbackOutputSchema
+        const relaxedOutput = relaxOutputSchemaForMcp(tool.outputSchema, tool.name)
+        if (relaxedOutput !== undefined) {
+            toolOptions.outputSchema = relaxedOutput
         }
     }
 

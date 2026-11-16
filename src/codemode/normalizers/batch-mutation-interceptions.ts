@@ -28,10 +28,10 @@ export function batchValidationError(
 }
 
 function parseNumericBatchId(val: unknown): number | undefined {
-    if (typeof val === 'number' && Number.isFinite(val)) return val
+    if (typeof val === 'number' && Number.isInteger(val) && val > 0) return val
     if (typeof val === 'string') {
-        const cleaned = val.trim().replace(/^#/, '')
-        if (/^\d+$/.test(cleaned)) return parseInt(cleaned, 10)
+        const trimmed = val.trim()
+        if (/^#?[1-9]\d*$/.test(trimmed)) return parseInt(trimmed.replace(/^#/, ''), 10)
     }
     return undefined
 }
@@ -86,12 +86,20 @@ function normalizeBatchDeleteArgs(
     }
     const multiCoerced = args.length > 1 ? args.map(parseNumericBatchId) : []
     if (args.length === 1 && typeof args[0] === 'string') {
-        args[0] = {
-            entry_ids: args[0]
-                .split(',')
-                .map((s) => parseInt(s.trim().replace(/^#/, ''), 10))
-                .filter((n) => !isNaN(n)),
+        const tokens = args[0]
+            .split(',')
+            .map((s) => s.trim())
+            .filter((s) => s.length > 0)
+        const validIds = tokens
+            .map(parseNumericBatchId)
+            .filter((n): n is number => n !== undefined)
+        if (tokens.length === 0 || validIds.length !== tokens.length) {
+            return batchValidationError(
+                `${methodName} expects positive integer entry IDs, but received invalid value ('${args[0]}').`,
+                'Provide comma-separated positive integer IDs (e.g., "1, 2, 3") or { entry_ids: [1, 2, 3] }.'
+            )
         }
+        args[0] = { entry_ids: validIds }
     } else if (args.length === 1 && Array.isArray(args[0])) {
         const coerced = args[0].map(parseNumericBatchId)
         const validIds = coerced.filter((n): n is number => n !== undefined)

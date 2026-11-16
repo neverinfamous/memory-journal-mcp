@@ -2,19 +2,36 @@ import type { NativeConnectionManager } from '../native-connection.js'
 import type { QueryResult } from '../../core/interfaces.js'
 import { effectiveWorkspace } from '../../workspace-scope.js'
 
-/** Select the entries to render in the relationship graph (by connected entry, tags, or all linked). */
-function queryGraphEntries(
-    connection: NativeConnectionManager,
-    options: {
-        entryId?: number
-        tags?: string[]
-        relationshipType?: string
-        depth: number
-        limit: number
-        projectNumber?: number
-    },
+interface GraphQueryOptions {
+    entryId?: number
+    tags?: string[]
+    relationshipType?: string
+    depth: number
+    limit: number
+    projectNumber?: number
+}
+
+interface GraphScopeFilters {
+    wsFilter: string
+    wsParam: string[]
+    nxWsFilter: string
+    projSql: string
+    nxProjFilter: string
+    projParam: number[]
+    hasRelType: boolean
+    relTypeSql: string
+    relTypeParam: string[]
+    hasTags: boolean
+    tagSubquery: string
+    tagParams: string[]
+    toPeerScope: string
+    fromPeerScope: string
+}
+
+function buildGraphScopeFilters(
+    options: GraphQueryOptions,
     scopeId: string
-): QueryResult[] {
+): GraphScopeFilters {
     const wsFilter = scopeId !== '*' ? ' AND mj.workspace_id = ?' : ''
     const wsParam = scopeId !== '*' ? [scopeId] : []
     // [INTENT] Traversal must not hop through soft-deleted, foreign-workspace, or cross-project entries.
@@ -22,9 +39,10 @@ function queryGraphEntries(
     const projSql = options.projectNumber !== undefined ? ' AND mj.project_number = ?' : ''
     const nxProjFilter = options.projectNumber !== undefined ? ' AND nx.project_number = ?' : ''
     const projParam = options.projectNumber !== undefined ? [options.projectNumber] : []
-    const hasRelType = options.relationshipType !== undefined && options.relationshipType.length > 0
+    const relType = options.relationshipType
+    const hasRelType = relType !== undefined && relType.length > 0
     const relTypeSql = hasRelType ? ' AND r.relationship_type = ?' : ''
-    const relTypeParam = hasRelType ? [options.relationshipType] : []
+    const relTypeParam = hasRelType ? [relType] : []
 
     const tags = options.tags ?? []
     const hasTags = tags.length > 0
@@ -40,117 +58,148 @@ function queryGraphEntries(
     const toPeerScope = `${scopeId !== '*' ? ' AND mj_to.workspace_id = ?' : ''}${options.projectNumber !== undefined ? ' AND mj_to.project_number = ?' : ''}`
     const fromPeerScope = `${scopeId !== '*' ? ' AND mj_from.workspace_id = ?' : ''}${options.projectNumber !== undefined ? ' AND mj_from.project_number = ?' : ''}`
 
-    if (options.entryId !== undefined) {
-        return connection.exec(
-            `
-            WITH RECURSIVE connected_entries(id, distance) AS (
-                SELECT id, 0 FROM memory_journal mj WHERE mj.id = ? AND mj.deleted_at IS NULL${wsFilter}${projSql}
-                UNION
-                SELECT DISTINCT
-                    CASE
-                        WHEN r.from_entry_id = ce.id THEN r.to_entry_id
-                        ELSE r.from_entry_id
-                    END,
-                    ce.distance + 1
-                FROM connected_entries ce
-                JOIN relationships r ON r.from_entry_id = ce.id OR r.to_entry_id = ce.id
-                JOIN memory_journal nx ON nx.id = CASE
-                        WHEN r.from_entry_id = ce.id THEN r.to_entry_id
-                        ELSE r.from_entry_id
-                    END
-                WHERE ce.distance < ? AND nx.deleted_at IS NULL${nxWsFilter}${nxProjFilter}${relTypeSql}
-            )
-            SELECT mj.id, mj.entry_type, mj.content, mj.is_personal
-            FROM memory_journal mj
-            JOIN connected_entries ce ON mj.id = ce.id
-            WHERE mj.deleted_at IS NULL${wsFilter}${projSql}${tagSubquery}
-            GROUP BY mj.id
-            ORDER BY MIN(ce.distance) ASC, mj.id DESC
-            LIMIT ?
-        `,
-            [
-                options.entryId,
-                ...wsParam,
-                ...projParam,
-                options.depth,
-                ...wsParam,
-                ...projParam,
-                ...relTypeParam,
-                ...wsParam,
-                ...projParam,
-                ...tagParams,
-                options.limit,
-            ]
-        )
+    return {
+        wsFilter,
+        wsParam,
+        nxWsFilter,
+        projSql,
+        nxProjFilter,
+        projParam,
+        hasRelType,
+        relTypeSql,
+        relTypeParam,
+        hasTags,
+        tagSubquery,
+        tagParams,
+        toPeerScope,
+        fromPeerScope,
     }
-    const relPeerFilter = hasRelType
-        ? `
-              AND mj.id IN (
-                  SELECT DISTINCT r.from_entry_id FROM relationships r
-                  JOIN memory_journal mj_to ON r.to_entry_id = mj_to.id
-                  WHERE mj_to.deleted_at IS NULL${toPeerScope}${relTypeSql}
-                  UNION
-                  SELECT DISTINCT r.to_entry_id FROM relationships r
-                  JOIN memory_journal mj_from ON r.from_entry_id = mj_from.id
-                  WHERE mj_from.deleted_at IS NULL${fromPeerScope}${relTypeSql}
-              )`
-        : ''
-    if (hasTags) {
-        return connection.exec(
-            `
-            SELECT DISTINCT mj.id, mj.entry_type, mj.content, mj.is_personal
-            FROM memory_journal mj
-            WHERE mj.deleted_at IS NULL${wsFilter}${projSql}${tagSubquery}${relPeerFilter}
-            ORDER BY mj.id DESC
-            LIMIT ?
-        `,
-            [
-                ...wsParam,
-                ...projParam,
-                ...tagParams,
-                ...(hasRelType
-                    ? [
-                          ...wsParam,
-                          ...projParam,
-                          ...relTypeParam,
-                          ...wsParam,
-                          ...projParam,
-                          ...relTypeParam,
-                      ]
-                    : []),
-                options.limit,
-            ]
-        )
-    }
+}
+
+function buildRelPeerSubquery(f: GraphScopeFilters): string {
+    return `
+        SELECT DISTINCT r.from_entry_id FROM relationships r
+        JOIN memory_journal mj_to ON r.to_entry_id = mj_to.id
+        WHERE mj_to.deleted_at IS NULL${f.toPeerScope}${f.relTypeSql}
+        UNION
+        SELECT DISTINCT r.to_entry_id FROM relationships r
+        JOIN memory_journal mj_from ON r.from_entry_id = mj_from.id
+        WHERE mj_from.deleted_at IS NULL${f.fromPeerScope}${f.relTypeSql}`
+}
+
+function queryConnectedGraphEntries(
+    connection: NativeConnectionManager,
+    entryId: number,
+    depth: number,
+    limit: number,
+    f: GraphScopeFilters
+): QueryResult[] {
     return connection.exec(
         `
-            SELECT DISTINCT mj.id, mj.entry_type, mj.content, mj.is_personal
-            FROM memory_journal mj
-            WHERE mj.deleted_at IS NULL${wsFilter}${projSql}
-              AND mj.id IN (
-                  SELECT DISTINCT r.from_entry_id FROM relationships r
-                  JOIN memory_journal mj_to ON r.to_entry_id = mj_to.id
-                  WHERE mj_to.deleted_at IS NULL${toPeerScope}${relTypeSql}
-                  UNION
-                  SELECT DISTINCT r.to_entry_id FROM relationships r
-                  JOIN memory_journal mj_from ON r.from_entry_id = mj_from.id
-                  WHERE mj_from.deleted_at IS NULL${fromPeerScope}${relTypeSql}
-              )
-            ORDER BY mj.id DESC
-            LIMIT ?
-        `,
+        WITH RECURSIVE connected_entries(id, distance) AS (
+            SELECT id, 0 FROM memory_journal mj WHERE mj.id = ? AND mj.deleted_at IS NULL${f.wsFilter}${f.projSql}
+            UNION
+            SELECT DISTINCT
+                CASE
+                    WHEN r.from_entry_id = ce.id THEN r.to_entry_id
+                    ELSE r.from_entry_id
+                END,
+                ce.distance + 1
+            FROM connected_entries ce
+            JOIN relationships r ON r.from_entry_id = ce.id OR r.to_entry_id = ce.id
+            JOIN memory_journal nx ON nx.id = CASE
+                    WHEN r.from_entry_id = ce.id THEN r.to_entry_id
+                    ELSE r.from_entry_id
+                END
+            WHERE ce.distance < ? AND nx.deleted_at IS NULL${f.nxWsFilter}${f.nxProjFilter}${f.relTypeSql}
+        )
+        SELECT mj.id, mj.entry_type, mj.content, mj.is_personal
+        FROM memory_journal mj
+        JOIN connected_entries ce ON mj.id = ce.id
+        WHERE mj.deleted_at IS NULL${f.wsFilter}${f.projSql}${f.tagSubquery}
+        GROUP BY mj.id
+        ORDER BY MIN(ce.distance) ASC, mj.id DESC
+        LIMIT ?
+    `,
         [
-            ...wsParam,
-            ...projParam,
-            ...wsParam,
-            ...projParam,
-            ...relTypeParam,
-            ...wsParam,
-            ...projParam,
-            ...relTypeParam,
-            options.limit,
+            entryId,
+            ...f.wsParam,
+            ...f.projParam,
+            depth,
+            ...f.wsParam,
+            ...f.projParam,
+            ...f.relTypeParam,
+            ...f.wsParam,
+            ...f.projParam,
+            ...f.tagParams,
+            limit,
         ]
     )
+}
+
+function queryTaggedGraphEntries(
+    connection: NativeConnectionManager,
+    limit: number,
+    f: GraphScopeFilters
+): QueryResult[] {
+    const relPeerFilter = f.hasRelType ? ` AND mj.id IN (${buildRelPeerSubquery(f)})` : ''
+    const relPeerParams = f.hasRelType
+        ? [...f.wsParam, ...f.projParam, ...f.relTypeParam, ...f.wsParam, ...f.projParam, ...f.relTypeParam]
+        : []
+    return connection.exec(
+        `
+        SELECT DISTINCT mj.id, mj.entry_type, mj.content, mj.is_personal
+        FROM memory_journal mj
+        WHERE mj.deleted_at IS NULL${f.wsFilter}${f.projSql}${f.tagSubquery}${relPeerFilter}
+        ORDER BY mj.id DESC
+        LIMIT ?
+    `,
+        [...f.wsParam, ...f.projParam, ...f.tagParams, ...relPeerParams, limit]
+    )
+}
+
+function queryAllLinkedGraphEntries(
+    connection: NativeConnectionManager,
+    limit: number,
+    f: GraphScopeFilters
+): QueryResult[] {
+    return connection.exec(
+        `
+        SELECT DISTINCT mj.id, mj.entry_type, mj.content, mj.is_personal
+        FROM memory_journal mj
+        WHERE mj.deleted_at IS NULL${f.wsFilter}${f.projSql}
+          AND mj.id IN (${buildRelPeerSubquery(f)})
+        ORDER BY mj.id DESC
+        LIMIT ?
+    `,
+        [
+            ...f.wsParam,
+            ...f.projParam,
+            ...f.wsParam,
+            ...f.projParam,
+            ...f.relTypeParam,
+            ...f.wsParam,
+            ...f.projParam,
+            ...f.relTypeParam,
+            limit,
+        ]
+    )
+}
+
+/** Select the entries to render in the relationship graph (by connected entry, tags, or all linked). */
+function queryGraphEntries(
+    connection: NativeConnectionManager,
+    options: GraphQueryOptions,
+    scopeId: string
+): QueryResult[] {
+    const f = buildGraphScopeFilters(options, scopeId)
+    if (options.entryId !== undefined) {
+        return queryConnectedGraphEntries(connection, options.entryId, options.depth, options.limit, f)
+    }
+    if (f.hasTags) {
+        return queryTaggedGraphEntries(connection, options.limit, f)
+    }
+    return queryAllLinkedGraphEntries(connection, options.limit, f)
 }
 
 export function visualizeRelationships(

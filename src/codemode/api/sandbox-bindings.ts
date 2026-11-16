@@ -109,11 +109,12 @@ export function createSchemaCallable(_analyticsApi: GroupApiRecord): unknown {
     })
 }
 
-export function buildSandboxBindingsMap(api: SandboxBindingsSource, progressCtx?: ProgressContext): Record<string, unknown> {
-    const handleReadResource = createHandleReadResource(api)
-    const schemaCallable = createSchemaCallable(api.analytics)
-
-    const bindings: Record<string, unknown> = {
+function buildCoreNamespaceAndMethodBindings(
+    api: SandboxBindingsSource,
+    handleReadResource: (uri?: string) => unknown,
+    schemaCallable: unknown
+): Record<string, unknown> {
+    return {
         core: api.core,
         search: api.search,
         analytics: api.analytics,
@@ -169,6 +170,15 @@ export function buildSandboxBindingsMap(api: SandboxBindingsSource, progressCtx?
         read_resource: handleReadResource,
         memory_read_resource: handleReadResource,
         memoryReadResource: handleReadResource,
+    }
+}
+
+export function buildSandboxBindingsMap(api: SandboxBindingsSource, progressCtx?: ProgressContext): Record<string, unknown> {
+    const handleReadResource = createHandleReadResource(api)
+    const schemaCallable = createSchemaCallable(api.analytics)
+
+    const bindings: Record<string, unknown> = {
+        ...buildCoreNamespaceAndMethodBindings(api, handleReadResource, schemaCallable),
 
         Agent: {
             system: {

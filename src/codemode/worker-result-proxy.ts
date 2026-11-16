@@ -144,10 +144,12 @@ function createArrayResultProxy(arr: unknown[]): unknown {
     })
 }
 
-function resolveArrayForwarding(
+type ArrayForwardMatch = { matched: true; value: unknown } | { matched: false }
+
+function resolveIteratorOrListAlias(
     targetRecord: Record<string, unknown>,
     prop: string | symbol
-): { matched: true; value: unknown } | { matched: false } {
+): ArrayForwardMatch {
     if (prop === Symbol.iterator) {
         const targetKey = findPrimaryArrayKey(targetRecord, ITERATOR_COLLECTION_KEYS)
         if (targetKey !== undefined && Array.isArray(targetRecord[targetKey])) {
@@ -182,7 +184,13 @@ function resolveArrayForwarding(
             return { matched: true, value: wrapResult([targetRecord['entry']]) }
         }
     }
+    return { matched: false }
+}
 
+function resolveLengthOrIndexAccess(
+    targetRecord: Record<string, unknown>,
+    prop: string | symbol
+): ArrayForwardMatch {
     if (prop === 'length') {
         const targetKey = findPrimaryArrayKey(targetRecord)
         if (targetKey !== undefined && Array.isArray(targetRecord[targetKey])) {
@@ -209,7 +217,13 @@ function resolveArrayForwarding(
         }
         if (isDictLike(targetRecord)) return { matched: true, value: dictToItems(targetRecord)[idx] }
     }
+    return { matched: false }
+}
 
+function resolveArrayMethodForwarding(
+    targetRecord: Record<string, unknown>,
+    prop: string | symbol
+): ArrayForwardMatch {
     if (typeof prop === 'string' && SUCCESS_ARRAY_METHODS.includes(prop)) {
         const targetKey = findPrimaryArrayKey(targetRecord)
         if (targetKey !== undefined && Array.isArray(targetRecord[targetKey])) {
@@ -239,8 +253,145 @@ function resolveArrayForwarding(
             `🛠️ AUTONOMOUS HEALING: [VALIDATION_ERROR] CodeMode Proxy Error: Array mutator method '${prop}' is not allowed on API results. Modifying local arrays does not update the server state. You MUST use the appropriate API tool (e.g., mj.core.updateEntry, mj.admin.batchUpdateEntries) to persist changes.`
         )
     }
-
     return { matched: false }
+}
+
+function resolveArrayForwarding(
+    targetRecord: Record<string, unknown>,
+    prop: string | symbol
+): ArrayForwardMatch {
+    const iterOrList = resolveIteratorOrListAlias(targetRecord, prop)
+    if (iterOrList.matched) return iterOrList
+    const lenOrIdx = resolveLengthOrIndexAccess(targetRecord, prop)
+    if (lenOrIdx.matched) return lenOrIdx
+    return resolveArrayMethodForwarding(targetRecord, prop)
+}
+
+function resolvePaginationAndStatsProp(
+    targetRecord: Record<string, unknown>,
+    prop: string | symbol,
+    receiver: unknown
+): ArrayForwardMatch {
+    if (prop === 'hasMore') {
+        if (
+            'next_cursor' in targetRecord &&
+            targetRecord['next_cursor'] !== null &&
+            targetRecord['next_cursor'] !== undefined &&
+            targetRecord['next_cursor'] !== ''
+        ) {
+            return { matched: true, value: true }
+        }
+        if ('entries' in targetRecord || 'results' in targetRecord || 'items' in targetRecord) {
+            return { matched: true, value: false }
+        }
+    }
+    if (
+        (prop === 'statistics' || prop === 'stats') &&
+        !('statistics' in targetRecord) &&
+        !('stats' in targetRecord) &&
+        ('totalEntries' in targetRecord || 'entriesByType' in targetRecord)
+    ) {
+        return { matched: true, value: receiver }
+    }
+    if (prop === 'total' || prop === 'totalCount' || prop === 'total_entries' || prop === 'totalEntries') {
+        if ('count' in targetRecord && typeof targetRecord['count'] === 'number') {
+            return { matched: true, value: targetRecord['count'] }
+        }
+        if ('totalEntries' in targetRecord && typeof targetRecord['totalEntries'] === 'number') {
+            return { matched: true, value: targetRecord['totalEntries'] }
+        }
+        if ('total' in targetRecord && typeof targetRecord['total'] === 'number') {
+            return { matched: true, value: targetRecord['total'] }
+        }
+        const targetKey = findPrimaryArrayKey(targetRecord, [
+            'entries', 'results', 'projects', 'items', 'rows', 'records',
+        ])
+        if (targetKey !== undefined && Array.isArray(targetRecord[targetKey])) {
+            return { matched: true, value: targetRecord[targetKey].length }
+        }
+    }
+    return { matched: false }
+}
+
+function resolveWrappedAliasProp(
+    targetRecord: Record<string, unknown>,
+    prop: string | symbol
+): ArrayForwardMatch {
+    const entryObj = targetRecord['entry']
+    if (isObject(entryObj)) {
+        if ((prop === 'id' || prop === 'entryId') && 'id' in entryObj) {
+            return { matched: true, value: entryObj['id'] }
+        }
+        if (prop === 'created_at' && 'timestamp' in entryObj) {
+            return { matched: true, value: entryObj['timestamp'] }
+        }
+        if (typeof prop === 'string' && prop in entryObj) {
+            const val = entryObj[prop]
+            return {
+                matched: true,
+                value: val !== null && typeof val === 'object' && !Array.isArray(val) ? wrapResult(val) : val,
+            }
+        }
+    }
+
+    const projObj = targetRecord['project']
+    if (isObject(projObj)) {
+        if (prop === 'project_number' && ('project_number' in projObj || 'id' in projObj)) {
+            return { matched: true, value: projObj['project_number'] ?? projObj['id'] }
+        }
+        if ((prop === 'name' || prop === 'project_name') && 'name' in projObj) {
+            return { matched: true, value: projObj['name'] }
+        }
+        if (typeof prop === 'string' && prop in projObj) {
+            return { matched: true, value: projObj[prop] }
+        }
+    }
+
+    if (prop === 'entryIds' && 'entries' in targetRecord && Array.isArray(targetRecord['entries'])) {
+        return { matched: true, value: targetRecord['entries'].filter(hasNumberId).map((e) => e.id) }
+    }
+    if (prop === 'entryIds' && 'updated' in targetRecord && Array.isArray(targetRecord['updated'])) {
+        return { matched: true, value: targetRecord['updated'].filter(hasNumberId).map((e) => e.id) }
+    }
+    if (prop === 'deletedIds' && 'deleted' in targetRecord && Array.isArray(targetRecord['deleted'])) {
+        return { matched: true, value: targetRecord['deleted'] }
+    }
+    if (prop === 'deletedCount' && 'count' in targetRecord && typeof targetRecord['count'] === 'number') {
+        return { matched: true, value: targetRecord['count'] }
+    }
+    if (prop === 'revisions' && 'history' in targetRecord && Array.isArray(targetRecord['history'])) {
+        const revisions = targetRecord['history'].filter(isObject).map(
+            (h) =>
+                new Proxy(h, {
+                    get(t: Record<string, unknown>, p: string | symbol): unknown {
+                        if (p === 'revisionNumber') return t['revisionId']
+                        if (p === 'contentSnapshot') return t['content']
+                        return typeof p === 'string' ? t[p] : undefined
+                    },
+                })
+        )
+        return { matched: true, value: revisions }
+    }
+    return { matched: false }
+}
+
+function resolveWrappedObjectProp(target: object, prop: string | symbol, receiver: unknown): unknown {
+    if (prop in target) {
+        const val: unknown = Reflect.get(target, prop)
+        return val !== null && typeof val === 'object' && !Array.isArray(val) ? wrapResult(val) : val
+    }
+    if (!isObject(target)) return undefined
+
+    const paginationOrStats = resolvePaginationAndStatsProp(target, prop, receiver)
+    if (paginationOrStats.matched) return paginationOrStats.value
+
+    const aliasProp = resolveWrappedAliasProp(target, prop)
+    if (aliasProp.matched) return aliasProp.value
+
+    if (prop === 'result') return receiver
+
+    const arrayForwarded = resolveArrayForwarding(target, prop)
+    return arrayForwarded.matched ? arrayForwarded.value : undefined
 }
 
 /**
@@ -262,107 +413,6 @@ export function wrapResult(result: unknown): unknown {
     return new Proxy(result, {
         ownKeys: (target) => Reflect.ownKeys(target),
         getOwnPropertyDescriptor: (target, prop) => Reflect.getOwnPropertyDescriptor(target, prop),
-        get(target, prop, receiver): unknown {
-            if (prop in target) {
-                const val: unknown = Reflect.get(target, prop)
-                return val !== null && typeof val === 'object' && !Array.isArray(val) ? wrapResult(val) : val
-            }
-
-            if (!isObject(target)) return undefined
-            const targetRecord = target
-
-            if (prop === 'hasMore') {
-                if (
-                    'next_cursor' in targetRecord &&
-                    targetRecord['next_cursor'] !== null &&
-                    targetRecord['next_cursor'] !== undefined &&
-                    targetRecord['next_cursor'] !== ''
-                ) {
-                    return true
-                }
-                if ('entries' in targetRecord || 'results' in targetRecord || 'items' in targetRecord) {
-                    return false
-                }
-            }
-
-            if (
-                (prop === 'statistics' || prop === 'stats') &&
-                !('statistics' in targetRecord) &&
-                !('stats' in targetRecord) &&
-                ('totalEntries' in targetRecord || 'entriesByType' in targetRecord)
-            ) {
-                return receiver as unknown
-            }
-
-            if (prop === 'total' || prop === 'totalCount' || prop === 'total_entries' || prop === 'totalEntries') {
-                if ('count' in targetRecord && typeof targetRecord['count'] === 'number') return targetRecord['count']
-                if ('totalEntries' in targetRecord && typeof targetRecord['totalEntries'] === 'number') {
-                    return targetRecord['totalEntries']
-                }
-                if ('total' in targetRecord && typeof targetRecord['total'] === 'number') return targetRecord['total']
-                const targetKey = findPrimaryArrayKey(targetRecord, [
-                    'entries', 'results', 'projects', 'items', 'rows', 'records',
-                ])
-                if (targetKey !== undefined && Array.isArray(targetRecord[targetKey])) {
-                    return targetRecord[targetKey].length
-                }
-            }
-
-            const entryObj = targetRecord['entry']
-            if (isObject(entryObj)) {
-                if (prop === 'id' || prop === 'entryId') {
-                    if ('id' in entryObj) return entryObj['id']
-                }
-                if (prop === 'created_at' && 'timestamp' in entryObj) {
-                    return entryObj['timestamp']
-                }
-                if (typeof prop === 'string' && prop in entryObj) {
-                    const val = entryObj[prop]
-                    return val !== null && typeof val === 'object' && !Array.isArray(val) ? wrapResult(val) : val
-                }
-            }
-
-            const projObj = targetRecord['project']
-            if (isObject(projObj)) {
-                if (prop === 'project_number' && ('project_number' in projObj || 'id' in projObj)) {
-                    return projObj['project_number'] ?? projObj['id']
-                }
-                if ((prop === 'name' || prop === 'project_name') && 'name' in projObj) return projObj['name']
-                if (typeof prop === 'string' && prop in projObj) return projObj[prop]
-            }
-
-            if (prop === 'entryIds' && 'entries' in targetRecord && Array.isArray(targetRecord['entries'])) {
-                return targetRecord['entries'].filter(hasNumberId).map((e) => e.id)
-            }
-            if (prop === 'entryIds' && 'updated' in targetRecord && Array.isArray(targetRecord['updated'])) {
-                return targetRecord['updated'].filter(hasNumberId).map((e) => e.id)
-            }
-            if (prop === 'deletedIds' && 'deleted' in targetRecord && Array.isArray(targetRecord['deleted'])) {
-                return targetRecord['deleted']
-            }
-            if (prop === 'deletedCount' && 'count' in targetRecord && typeof targetRecord['count'] === 'number') {
-                return targetRecord['count']
-            }
-
-            if (prop === 'revisions' && 'history' in targetRecord && Array.isArray(targetRecord['history'])) {
-                return targetRecord['history'].filter(isObject).map(
-                    (h) =>
-                        new Proxy(h, {
-                            get(t: Record<string, unknown>, p: string | symbol): unknown {
-                                if (p === 'revisionNumber') return t['revisionId']
-                                if (p === 'contentSnapshot') return t['content']
-                                return typeof p === 'string' ? t[p] : undefined
-                            },
-                        })
-                )
-            }
-
-            if (prop === 'result') return receiver as unknown
-
-            const arrayForwarded = resolveArrayForwarding(targetRecord, prop)
-            if (arrayForwarded.matched) return arrayForwarded.value
-
-            return undefined
-        },
+        get: (target, prop, receiver): unknown => resolveWrappedObjectProp(target, prop, receiver),
     })
 }

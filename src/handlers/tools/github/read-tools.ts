@@ -24,6 +24,92 @@ import {
 import { markUntrustedContent } from '../../../utils/security-utils.js'
 import { createGitHubContextTool } from './context-tool.js'
 
+const GetGitHubIssueInputSchema = z
+    .object({
+        issue_number: z.number().int().positive(),
+        owner: z.string().optional(),
+        repo: z.string().optional(),
+        ...githubScopeParseFields,
+        truncate_body: z.number().int().min(0).max(100000).optional().default(800),
+        include_comments: z.boolean().optional().default(false),
+    })
+    .strict()
+
+function truncateItemBody(
+    body: string | null,
+    truncateBody: number
+): { body: string | null; bodyTruncated: boolean; bodyFullLength?: number } {
+    if (truncateBody > 0 && body !== null && body !== '' && body.length > truncateBody) {
+        const bodyFullLength = body.length
+        const truncated =
+            body.slice(0, truncateBody) +
+            `\n\n[Truncated... remaining ${String(bodyFullLength - truncateBody)} chars]`
+        return { body: truncated, bodyTruncated: true, bodyFullLength }
+    }
+    return { body, bodyTruncated: false }
+}
+
+async function executeGetGitHubIssue(context: ToolContext, params: unknown): Promise<unknown> {
+    try {
+        const input = GetGitHubIssueInputSchema.parse(params)
+        const resolved = await resolveOwnerRepo(context, input, 'is this issue from')
+        if ('error' in resolved) return resolved.response
+
+        const issue = await resolved.github.getIssue(
+            resolved.owner,
+            resolved.repo,
+            input.issue_number
+        )
+        if (!issue) {
+            return {
+                success: false,
+                error: `Issue #${String(input.issue_number)} not found`,
+                code: 'RESOURCE_NOT_FOUND',
+                category: 'resource',
+                suggestion: 'Verify the issue number exists in this repository.',
+                recoverable: true,
+                owner: resolved.owner,
+                repo: resolved.repo,
+                detectedOwner: resolved.detectedOwner,
+                detectedRepo: resolved.detectedRepo,
+            }
+        }
+
+        // Clone issue to avoid mutating cache
+        const safeIssue = fenceIssueMilestone(issue)
+        const { body, bodyTruncated, bodyFullLength } = truncateItemBody(
+            safeIssue.body,
+            input.truncate_body
+        )
+        safeIssue.body = markUntrustedContent(body)
+
+        // Fetch comments if requested
+        let comments: { author: string; body: string; createdAt: string }[] | undefined
+        if (input.include_comments) {
+            comments = await resolved.github.getIssueComments(
+                resolved.owner,
+                resolved.repo,
+                input.issue_number
+            )
+        }
+
+        return {
+            issue: {
+                ...safeIssue,
+                bodyTruncated,
+                ...(bodyFullLength !== undefined ? { bodyFullLength } : {}),
+            },
+            ...(comments ? { comments, commentCount: comments.length } : {}),
+            owner: resolved.owner,
+            repo: resolved.repo,
+            detectedOwner: resolved.detectedOwner,
+            detectedRepo: resolved.detectedRepo,
+        }
+    } catch (err) {
+        return formatHandlerError(err)
+    }
+}
+
 // ============================================================================
 // Tool Definitions
 // ============================================================================
@@ -212,96 +298,7 @@ export function getGitHubReadTools(context: ToolContext): ToolDefinition[] {
                 idempotentHint: true,
                 openWorldHint: true,
             },
-            handler: async (params: unknown) => {
-                try {
-                    const input = z
-                        .object({
-                            issue_number: z.number().int().positive(),
-                            owner: z.string().optional(),
-                            repo: z.string().optional(),
-                            ...githubScopeParseFields,
-                            truncate_body: z
-                                .number()
-                                .int()
-                                .min(0)
-                                .max(100000)
-                                .optional()
-                                .default(800),
-                            include_comments: z.boolean().optional().default(false),
-                        })
-                        .strict()
-                        .parse(params)
-
-                    const resolved = await resolveOwnerRepo(context, input, 'is this issue from')
-                    if ('error' in resolved) return resolved.response
-
-                    const issue = await resolved.github.getIssue(
-                        resolved.owner,
-                        resolved.repo,
-                        input.issue_number
-                    )
-                    if (!issue) {
-                        return {
-                            success: false,
-                            error: `Issue #${String(input.issue_number)} not found`,
-                            code: 'RESOURCE_NOT_FOUND',
-                            category: 'resource',
-                            suggestion: 'Verify the issue number exists in this repository.',
-                            recoverable: true,
-                            owner: resolved.owner,
-                            repo: resolved.repo,
-                            detectedOwner: resolved.detectedOwner,
-                            detectedRepo: resolved.detectedRepo,
-                        }
-                    }
-
-                    // Clone issue to avoid mutating cache
-                    const safeIssue = fenceIssueMilestone(issue)
-
-                    // Apply body truncation
-                    const truncateBody = input.truncate_body
-                    let bodyTruncated = false
-                    let bodyFullLength: number | undefined
-                    if (
-                        truncateBody > 0 &&
-                        safeIssue.body &&
-                        safeIssue.body.length > truncateBody
-                    ) {
-                        bodyFullLength = safeIssue.body.length
-                        safeIssue.body =
-                            safeIssue.body.slice(0, truncateBody) +
-                            `\n\n[Truncated... remaining ${bodyFullLength - truncateBody} chars]`
-                        bodyTruncated = true
-                    }
-
-                    safeIssue.body = markUntrustedContent(safeIssue.body)
-
-                    // Fetch comments if requested
-                    let comments: { author: string; body: string; createdAt: string }[] | undefined
-                    if (input.include_comments) {
-                        comments = await resolved.github.getIssueComments(
-                            resolved.owner,
-                            resolved.repo,
-                            input.issue_number
-                        )
-                    }
-
-                    return {
-                        issue: {
-                            ...safeIssue,
-                            bodyTruncated,
-                            ...(bodyFullLength !== undefined ? { bodyFullLength } : {}),
-                        },
-                        ...(comments ? { comments, commentCount: comments.length } : {}),
-                        owner: resolved.owner,
-                        repo: resolved.repo,
-                        detectedOwner: resolved.detectedOwner,
-                        detectedRepo: resolved.detectedRepo,
-                    }
-                } catch (err) {
-                    return formatHandlerError(err)
-                }
-            },
+            handler: async (params: unknown) => executeGetGitHubIssue(context, params),
         },
         {
             name: 'get_github_pr',

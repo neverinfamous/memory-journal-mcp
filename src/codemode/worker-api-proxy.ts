@@ -7,7 +7,7 @@
  */
 
 import { wrapResult } from './worker-result-proxy.js'
-import { METHOD_ALIASES } from './api-constants.js'
+import { METHOD_ALIASES } from './constants/method-aliases.js'
 import { applyArgInterceptions } from './param-normalizer.js'
 import {
     wrapPromise,
@@ -71,8 +71,116 @@ function resolveFallbackSchema(
     return schemas['_topLevel']?.[key] ?? schemas['_topLevel']?.[resolvedKey] ?? schemas['_topLevel']?.[snakeKey]
 }
 
+function resolveCoreGroupRedirect(
+    key: string,
+    resolvedKey: string,
+    api: Record<string, unknown>
+): { matched: true; value: unknown } | { matched: false } {
+    if (resolvedKey === 'projects' || resolvedKey === 'project' || key === 'projects' || key === 'project') {
+        return { matched: true, value: api['projects'] }
+    }
+    // [M7] semantic_search / get_vector_index_stats / list_deleted_entries are `search`-group tools.
+    if (resolvedKey === 'semanticSearch' || key === 'semantic_search') {
+        return { matched: true, value: getPropOrSnake(api['search'], 'semantic_search', 'semanticSearch') }
+    }
+    if (resolvedKey === 'vectorStats' || key === 'vector_stats') {
+        return { matched: true, value: getPropOrSnake(api['search'], 'get_vector_index_stats', 'getVectorIndexStats') }
+    }
+    if (resolvedKey === 'searchAuditLog' || key === 'search_audit_log') {
+        return { matched: true, value: getPropOrSnake(api['admin'], 'search_audit_log', 'searchAuditLog') }
+    }
+    if (resolvedKey === 'listDeletedEntries' || key === 'list_deleted_entries') {
+        return { matched: true, value: getPropOrSnake(api['search'], 'list_deleted_entries', 'listDeletedEntries') }
+    }
+    return { matched: false }
+}
+
+function createUnknownGroupMethodFallback(
+    ctx: GroupProxyContext,
+    key: string,
+    resolvedKey: string
+): (...args: unknown[]) => Promise<unknown> {
+    const { group, methodNames, schemas, readonlyMode } = ctx
+    const available = methodNames.join(', ') || 'none'
+    const reason =
+        readonlyMode === true
+            ? `🛠️ AUTONOMOUS HEALING: Operation '${key}' is blocked in readonly mode. Read operations only.`
+            : methodNames.length === 0
+              ? `🛠️ AUTONOMOUS HEALING: Operation '${key}' is not available — this group has no methods (read-only mode?). Available: ${available}.`
+              : `🛠️ AUTONOMOUS HEALING: Operation '${key}' is not found in group '${group}'. Available: ${available}.`
+    const fallbackFn = (..._args: unknown[]): Promise<unknown> =>
+        wrapPromise(
+            Promise.resolve(
+                wrapResult({
+                    success: false,
+                    error: reason,
+                    code: 'VALIDATION_ERROR',
+                    category: 'validation',
+                    recoverable: true,
+                })
+            ),
+            key
+        )
+    attachMethodIntrospection(
+        fallbackFn,
+        group,
+        key,
+        () => resolveFallbackSchema(schemas, group, key, resolvedKey) ?? 'unknown',
+        reason
+    )
+    return fallbackFn
+}
+
+function resolveGroupNamespaceProperty(
+    ctx: GroupProxyContext,
+    target: object,
+    key: string
+): unknown {
+    const { group, methods, api, createMethodProxyFn } = ctx
+    if (key in target) return Reflect.get(target, key) as unknown
+
+    if (/[A-Z]/.test(key)) {
+        const snakeKey = key.replace(/[A-Z]/g, (letter) => `_${letter.toLowerCase()}`)
+        if (snakeKey in target) return Reflect.get(target, snakeKey) as unknown
+    }
+
+    const aliases = METHOD_ALIASES[group]
+    let resolvedKey = key
+    const aliasTarget = aliases?.[key]
+    if (aliasTarget !== undefined) {
+        const canonicalCamel = aliasTarget
+        const canonicalSnake = canonicalCamel.replace(/[A-Z]/g, (l) => `_${l.toLowerCase()}`)
+        if (canonicalSnake in target) return Reflect.get(target, canonicalSnake) as unknown
+        if (canonicalCamel in target) return Reflect.get(target, canonicalCamel) as unknown
+        resolvedKey = canonicalCamel
+    }
+
+    if (group === 'core') {
+        const redirected = resolveCoreGroupRedirect(key, resolvedKey, api)
+        if (redirected.matched) return redirected.value
+    }
+
+    if (resolvedKey === 'getConfig') return createGetConfigInterceptor()
+    if (resolvedKey === 'getBriefing') return createGetBriefingInterceptor()
+    if (resolvedKey === 'readResource') return createReadResourceInterceptor()
+    if (resolvedKey === 'then') return undefined
+
+    const snakeKey = /[A-Z]/.test(resolvedKey)
+        ? resolvedKey.replace(/[A-Z]/g, (letter) => `_${letter.toLowerCase()}`)
+        : resolvedKey
+    const teamSnakeKey = `team_${snakeKey}`
+    const teamGroup = Object.keys(methods).find((g) => methods[g]?.includes(teamSnakeKey))
+    if (teamGroup !== undefined && !Object.keys(methods).some((g) => methods[g]?.includes(snakeKey))) {
+        return createMethodProxyFn(teamGroup, teamSnakeKey)
+    }
+    const foundGroup = Object.keys(methods).find((g) => methods[g]?.includes(snakeKey))
+    if (foundGroup !== undefined) return createMethodProxyFn(foundGroup, snakeKey, resolvedKey)
+
+    return createUnknownGroupMethodFallback(ctx, key, resolvedKey)
+}
+
 function createGroupNamespaceProxy(ctx: GroupProxyContext): object {
-    const { group, methodNames, methods, schemas, api, readonlyMode, createMethodProxyFn } = ctx
+    const { group, methodNames, createMethodProxyFn } = ctx
     const groupProxy: Record<string, (...args: unknown[]) => Promise<unknown>> = {}
     for (const methodName of methodNames) {
         groupProxy[methodName] = createMethodProxyFn(group, methodName)
@@ -91,18 +199,8 @@ function createGroupNamespaceProxy(ctx: GroupProxyContext): object {
         /* callable namespace target */
     }
     Object.assign(groupCallable, groupProxy)
-    Object.defineProperty(groupCallable, 'help', {
-        value: helpFn,
-        enumerable: false,
-        configurable: true,
-        writable: true,
-    })
-    Object.defineProperty(groupCallable, 'describe', {
-        value: helpFn,
-        enumerable: false,
-        configurable: true,
-        writable: true,
-    })
+    Object.defineProperty(groupCallable, 'help', { value: helpFn, enumerable: false, configurable: true, writable: true })
+    Object.defineProperty(groupCallable, 'describe', { value: helpFn, enumerable: false, configurable: true, writable: true })
 
     return new Proxy(groupCallable, {
         apply(_target, _thisArg, _args: unknown[]): Promise<unknown> {
@@ -121,93 +219,7 @@ function createGroupNamespaceProxy(ctx: GroupProxyContext): object {
         },
         get(target: object, prop: string | symbol): unknown {
             if (typeof prop === 'symbol') return undefined
-            const key = prop
-            if (key in target) return Reflect.get(target, key) as unknown
-
-            if (/[A-Z]/.test(key)) {
-                const snakeKey = key.replace(/[A-Z]/g, (letter) => `_${letter.toLowerCase()}`)
-                if (snakeKey in target) return Reflect.get(target, snakeKey) as unknown
-            }
-
-            const aliases = METHOD_ALIASES[group]
-            let resolvedKey = key
-            if (aliases?.[key] !== undefined) {
-                const canonicalCamel = aliases[key]
-                const canonicalSnake = canonicalCamel.replace(/[A-Z]/g, (l) => `_${l.toLowerCase()}`)
-                if (canonicalSnake in target) return Reflect.get(target, canonicalSnake) as unknown
-                if (canonicalCamel in target) return Reflect.get(target, canonicalCamel) as unknown
-                resolvedKey = canonicalCamel
-            }
-
-            if (group === 'core') {
-                if (resolvedKey === 'projects' || resolvedKey === 'project' || key === 'projects' || key === 'project') {
-                    return api['projects']
-                }
-                // [M7] semantic_search / get_vector_index_stats / list_deleted_entries are `search`-group tools.
-                if (resolvedKey === 'semanticSearch' || key === 'semantic_search') {
-                    return getPropOrSnake(api['search'], 'semantic_search', 'semanticSearch')
-                }
-                if (resolvedKey === 'vectorStats' || key === 'vector_stats') {
-                    return getPropOrSnake(api['search'], 'get_vector_index_stats', 'getVectorIndexStats')
-                }
-                if (resolvedKey === 'searchAuditLog' || key === 'search_audit_log') {
-                    return getPropOrSnake(api['admin'], 'search_audit_log', 'searchAuditLog')
-                }
-                if (resolvedKey === 'listDeletedEntries' || key === 'list_deleted_entries') {
-                    return getPropOrSnake(api['search'], 'list_deleted_entries', 'listDeletedEntries')
-                }
-            }
-
-            if (resolvedKey === 'getConfig') return createGetConfigInterceptor()
-            if (resolvedKey === 'getBriefing') return createGetBriefingInterceptor()
-            if (resolvedKey === 'readResource') return createReadResourceInterceptor()
-            if (resolvedKey === 'then') return undefined
-
-            if (typeof resolvedKey === 'string') {
-                const snakeKey = /[A-Z]/.test(resolvedKey)
-                    ? resolvedKey.replace(/[A-Z]/g, (letter) => `_${letter.toLowerCase()}`)
-                    : resolvedKey
-
-                const teamSnakeKey = `team_${snakeKey}`
-                const teamGroup = Object.keys(methods).find((g) => methods[g]?.includes(teamSnakeKey))
-                if (teamGroup !== undefined && !Object.keys(methods).some((g) => methods[g]?.includes(snakeKey))) {
-                    return createMethodProxyFn(teamGroup, teamSnakeKey)
-                }
-
-                const foundGroup = Object.keys(methods).find((g) => methods[g]?.includes(snakeKey))
-                if (foundGroup !== undefined) {
-                    return createMethodProxyFn(foundGroup, snakeKey, resolvedKey)
-                }
-            }
-
-            const available = methodNames.join(', ') || 'none'
-            const reason =
-                readonlyMode === true
-                    ? `🛠️ AUTONOMOUS HEALING: Operation '${key}' is blocked in readonly mode. Read operations only.`
-                    : methodNames.length === 0
-                      ? `🛠️ AUTONOMOUS HEALING: Operation '${key}' is not available — this group has no methods (read-only mode?). Available: ${available}.`
-                      : `🛠️ AUTONOMOUS HEALING: Operation '${key}' is not found in group '${group}'. Available: ${available}.`
-            const fallbackFn = (..._args: unknown[]): Promise<unknown> =>
-                wrapPromise(
-                    Promise.resolve(
-                        wrapResult({
-                            success: false,
-                            error: reason,
-                            code: 'VALIDATION_ERROR',
-                            category: 'validation',
-                            recoverable: true,
-                        })
-                    ),
-                    key
-                )
-            attachMethodIntrospection(
-                fallbackFn,
-                group,
-                key,
-                () => resolveFallbackSchema(schemas, group, key, resolvedKey) ?? 'unknown',
-                reason
-            )
-            return fallbackFn
+            return resolveGroupNamespaceProperty(ctx, target, prop)
         },
         set: () => false,
         defineProperty: () => false,
@@ -216,73 +228,13 @@ function createGroupNamespaceProxy(ctx: GroupProxyContext): object {
     })
 }
 
-/**
- * Build the mj.* API proxy from method and schema lists.
- */
-export function buildApiProxy(
-    rpcCall: (group: string, method: string, args: unknown[]) => Promise<unknown>,
+function attachVirtualNamespaces(
+    api: Record<string, unknown>,
     methods: Record<string, string[]>,
-    schemas?: Record<string, Record<string, string>>,
-    readonlyMode?: boolean,
+    safeRpcCall: (group: string, method: string, args: unknown[]) => Promise<unknown>,
+    invokeRpc: (group: string, method: string, args: unknown[]) => Promise<unknown>,
     contextObj?: Record<string, unknown>
-): Record<string, unknown> {
-    const api: Record<string, unknown> = {}
-
-    const safeRpcCall = (group: string, method: string, args: unknown[]): Promise<unknown> =>
-        rpcCall(group, method, args).catch((err: unknown) => ({
-            success: false,
-            error: err instanceof Error ? err.message : String(err),
-            code: 'EXECUTION_ERROR',
-            category: 'execution',
-            recoverable: true,
-        }))
-
-    const invokeRpc = (g: string, m: string, args: unknown[]): Promise<unknown> => {
-        const intercept = applyArgInterceptions(m, args)
-        if ('error' in intercept) {
-            return wrapPromise(Promise.resolve(wrapResult(intercept.error)), m)
-        }
-        return wrapPromise(safeRpcCall(g, m, intercept.args).then(wrapResult), m)
-    }
-
-    const createMethodProxyFn = (
-        groupName: string,
-        methodName: string,
-        schemaFallbackKey?: string
-    ): ((...args: unknown[]) => Promise<unknown>) => {
-        const fn = (...args: unknown[]): Promise<unknown> => invokeRpc(groupName, methodName, args)
-        attachMethodIntrospection(
-            fn,
-            groupName,
-            methodName,
-            () =>
-                schemas?.[groupName]?.[methodName] ??
-                (schemaFallbackKey !== undefined ? schemas?.[groupName]?.[schemaFallbackKey] : undefined) ??
-                'unknown'
-        )
-        return fn
-    }
-
-    for (const [group, methodNames] of Object.entries(methods)) {
-        if (!Array.isArray(methodNames)) continue
-        if (group === '_topLevel') {
-            for (const methodName of methodNames) {
-                api[methodName] = createMethodProxyFn('_topLevel', methodName)
-            }
-            continue
-        }
-
-        api[group] = createGroupNamespaceProxy({
-            group,
-            methodNames,
-            methods,
-            schemas,
-            api,
-            readonlyMode,
-            createMethodProxyFn,
-        })
-    }
-
+): void {
     api['schema'] = createSchemaProxy(safeRpcCall)
     api['help'] = () => {
         const groups = Object.keys(methods).filter((g) => g !== '_topLevel' && g !== 'memory' && g !== 'entries')
@@ -318,15 +270,72 @@ export function buildApiProxy(
     api['get_db'] = () => api
     api['connectToDatabase'] = () => api
     api['openDatabase'] = () => api
+}
+
+/**
+ * Build the mj.* API proxy from method and schema lists.
+ */
+export function buildApiProxy(
+    rpcCall: (group: string, method: string, args: unknown[]) => Promise<unknown>,
+    methods: Record<string, string[]>,
+    schemas?: Record<string, Record<string, string>>,
+    readonlyMode?: boolean,
+    contextObj?: Record<string, unknown>
+): Record<string, unknown> {
+    const api: Record<string, unknown> = {}
+
+    const safeRpcCall = (group: string, method: string, args: unknown[]): Promise<unknown> =>
+        rpcCall(group, method, args).catch((err: unknown) => ({
+            success: false,
+            error: err instanceof Error ? err.message : String(err),
+            code: 'EXECUTION_ERROR',
+            category: 'execution',
+            recoverable: true,
+        }))
+
+    const invokeRpc = (g: string, m: string, args: unknown[]): Promise<unknown> => {
+        const canonicalMethod = METHOD_ALIASES[g]?.[m] ?? m
+        const intercept = applyArgInterceptions(canonicalMethod, args)
+        if ('error' in intercept) {
+            return wrapPromise(Promise.resolve(wrapResult(intercept.error)), m)
+        }
+        return wrapPromise(safeRpcCall(g, m, intercept.args).then(wrapResult), m)
+    }
+
+    const createMethodProxyFn = (
+        groupName: string,
+        methodName: string,
+        schemaFallbackKey?: string
+    ): ((...args: unknown[]) => Promise<unknown>) => {
+        const fn = (...args: unknown[]): Promise<unknown> => invokeRpc(groupName, methodName, args)
+        attachMethodIntrospection(
+            fn,
+            groupName,
+            methodName,
+            () =>
+                schemas?.[groupName]?.[methodName] ??
+                (schemaFallbackKey !== undefined ? schemas?.[groupName]?.[schemaFallbackKey] : undefined) ??
+                'unknown'
+        )
+        return fn
+    }
+
+    for (const [group, methodNames] of Object.entries(methods)) {
+        if (!Array.isArray(methodNames)) continue
+        if (group === '_topLevel') {
+            for (const methodName of methodNames) api[methodName] = createMethodProxyFn('_topLevel', methodName)
+            continue
+        }
+        api[group] = createGroupNamespaceProxy({
+            group, methodNames, methods, schemas, api, readonlyMode, createMethodProxyFn,
+        })
+    }
+
+    attachVirtualNamespaces(api, methods, safeRpcCall, invokeRpc, contextObj)
 
     return new Proxy(api, {
         get: createApiRootGetTrap({
-            api,
-            methods,
-            schemas,
-            readonlyMode,
-            createMethodProxyFn,
-            resolveFallbackSchema,
+            api, methods, schemas, readonlyMode, createMethodProxyFn, resolveFallbackSchema,
         }),
     })
 }

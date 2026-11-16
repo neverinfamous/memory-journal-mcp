@@ -17,20 +17,16 @@ import {
 } from './initialization-helpers.js'
 import type { ServerOptions } from './types.js'
 
-export async function initConfigAndStartupJobs(params: {
-    options: ServerOptions
-    db: IDatabaseAdapter
-    vectorManager: VectorSearchManager | null
-    runtime: ServerRuntime
-}): Promise<{ configManager: ConfigManager; scheduler: Scheduler | null }> {
-    const { options, db, vectorManager, runtime } = params
-    const filterConfig = resolveToolFilterConfig(options)
+function createServerConfigManager(
+    options: ServerOptions,
+    filterConfig: ReturnType<typeof resolveToolFilterConfig>
+): ConfigManager {
     const rawToolFilter =
         options.toolFilter ??
         process.env['MEMORY_JOURNAL_MCP_TOOL_FILTER'] ??
         process.env['TOOL_FILTER']
 
-    const configManager = new ConfigManager(
+    return new ConfigManager(
         {
             rawToolFilter,
             toolFilterConfig: filterConfig,
@@ -53,7 +49,40 @@ export async function initConfigAndStartupJobs(params: {
         },
         options.configFilePath
     )
+}
 
+function resolveEffectiveServerOptions(
+    options: ServerOptions,
+    loadedBriefing: ReturnType<ConfigManager['getConfig']>['briefingConfig']
+): ServerOptions {
+    const effectiveDefaultWorkspaceId =
+        options.defaultWorkspaceId ?? loadedBriefing.defaultWorkspaceId
+    const effectiveDefaultProjectNumber =
+        options.defaultProjectNumber ?? loadedBriefing.defaultProjectNumber
+    const effectiveProjectRegistry = options.projectRegistry ?? loadedBriefing.projectRegistry
+    return {
+        ...options,
+        ...(effectiveDefaultWorkspaceId !== undefined
+            ? { defaultWorkspaceId: effectiveDefaultWorkspaceId }
+            : {}),
+        ...(effectiveDefaultProjectNumber !== undefined
+            ? { defaultProjectNumber: effectiveDefaultProjectNumber }
+            : {}),
+        ...(effectiveProjectRegistry !== undefined
+            ? { projectRegistry: effectiveProjectRegistry }
+            : {}),
+    }
+}
+
+export async function initConfigAndStartupJobs(params: {
+    options: ServerOptions
+    db: IDatabaseAdapter
+    vectorManager: VectorSearchManager | null
+    runtime: ServerRuntime
+}): Promise<{ configManager: ConfigManager; scheduler: Scheduler | null }> {
+    const { options, db, vectorManager, runtime } = params
+    const filterConfig = resolveToolFilterConfig(options)
+    const configManager = createServerConfigManager(options, filterConfig)
     runtime.configManager = configManager
 
     // [INVARIANT] Auto-prune runs only after `--config` is loaded so it is scoped to the
@@ -71,24 +100,7 @@ export async function initConfigAndStartupJobs(params: {
             : {}),
     })
 
-    const effectiveDefaultWorkspaceId =
-        options.defaultWorkspaceId ?? loadedBriefing.defaultWorkspaceId
-    const effectiveDefaultProjectNumber =
-        options.defaultProjectNumber ?? loadedBriefing.defaultProjectNumber
-    const effectiveProjectRegistry = options.projectRegistry ?? loadedBriefing.projectRegistry
-    const effectiveOptions: ServerOptions = {
-        ...options,
-        ...(effectiveDefaultWorkspaceId !== undefined
-            ? { defaultWorkspaceId: effectiveDefaultWorkspaceId }
-            : {}),
-        ...(effectiveDefaultProjectNumber !== undefined
-            ? { defaultProjectNumber: effectiveDefaultProjectNumber }
-            : {}),
-        ...(effectiveProjectRegistry !== undefined
-            ? { projectRegistry: effectiveProjectRegistry }
-            : {}),
-    }
-
+    const effectiveOptions = resolveEffectiveServerOptions(options, loadedBriefing)
     const scheduler = createSchedulerIfConfigured(
         effectiveOptions,
         db,

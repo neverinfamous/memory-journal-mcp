@@ -7,8 +7,161 @@ import { calcPerDbLimit, mergeAndDedup, resolveAuthorizedIncludeTeam } from './h
 import { SearchByDateRangeSchema, SearchByDateRangeSchemaMcp } from './schemas.js'
 import { EntriesListOutputSchema } from '../schemas.js'
 
+type DateRangeInput = ReturnType<typeof SearchByDateRangeSchema.parse>
+
+async function resolveDateRangeCursors(
+    cursor: string | undefined,
+    includeTeam: boolean,
+    isPersonal: boolean | undefined
+): Promise<{
+    personalCursor: string | undefined
+    teamCursor: string | undefined
+    personalExhausted: boolean
+    teamExhausted: boolean
+}> {
+    if (cursor && includeTeam && isPersonal !== true) {
+        const { decodeCompoundCursor } = await import('./fts.js')
+        const compound = decodeCompoundCursor(cursor)
+        if (compound) {
+            return {
+                personalCursor: compound.p,
+                teamCursor: compound.t,
+                personalExhausted: compound.p === undefined,
+                teamExhausted: compound.t === undefined,
+            }
+        }
+    }
+    return {
+        personalCursor: cursor,
+        teamCursor: cursor,
+        personalExhausted: false,
+        teamExhausted: false,
+    }
+}
+
+async function queryTeamDateRangeAndMerge(
+    teamDb: NonNullable<ToolContext['teamDb']>,
+    input: DateRangeInput,
+    wsId: string,
+    projectNumber: number | undefined,
+    perDbLimit: number,
+    teamCursor: string | undefined,
+    teamExhausted: boolean,
+    personalEntries: ReturnType<ToolContext['db']['searchByDateRange']>
+): Promise<Record<string, unknown>> {
+    const emptyPage: ReturnType<ToolContext['db']['searchByDateRange']> = { entries: [] }
+    const teamEntries = teamExhausted
+        ? emptyPage
+        : teamDb.searchByDateRange(input.start_date, input.end_date, {
+              entryType: input.entry_type,
+              tags: input.tags,
+              projectNumber,
+              issueNumber: input.issue_number,
+              prNumber: input.pr_number,
+              workflowRunId: input.workflow_run_id,
+              limit: perDbLimit,
+              sortBy: input.sort_by,
+              cursor: teamCursor,
+              includeArchived: input.include_archived,
+              workspaceId: wsId,
+          })
+    const merged = mergeAndDedup(
+        personalEntries.entries.map((e) => ({ ...e, source: 'personal' as const })),
+        teamEntries.entries.map((e) => ({ ...e, source: 'team' as const })),
+        input.limit,
+        input.sort_by
+    )
+    let compoundNextCursor: string | undefined
+    if (personalEntries.nextCursor || teamEntries.nextCursor) {
+        const { encodeCompoundCursor } = await import('./fts.js')
+        compoundNextCursor = encodeCompoundCursor(personalEntries.nextCursor, teamEntries.nextCursor)
+    }
+    return {
+        success: true,
+        entries: merged,
+        count: merged.length,
+        degraded: false,
+        next_cursor: compoundNextCursor,
+    }
+}
+
+async function executeDateRangeSearch(
+    params: unknown,
+    context: ToolContext
+): Promise<Record<string, unknown>> {
+    const { db, teamDb } = context
+    const input = SearchByDateRangeSchema.parse(params)
+    const wsId = resolveWorkspaceId(input.workspace_id, input.project_number, context.config)
+    const projectNumber = alignedProjectFilter(
+        wsId,
+        input.project_number,
+        activeProjectRegistry(context.config?.projectRegistry)
+    )
+    const includeTeam = resolveAuthorizedIncludeTeam(
+        'search_by_date_range',
+        input.include_team,
+        params,
+        context.config?.runtime?.auditLogger,
+        teamDb,
+        context.config,
+        wsId
+    )
+    if (input.start_date > input.end_date) {
+        return {
+            success: false,
+            error: `Invalid date range: start_date (${input.start_date}) is after end_date (${input.end_date})`,
+            code: 'VALIDATION_ERROR',
+            category: 'validation',
+            suggestion: 'Ensure start_date is before or equal to end_date',
+            recoverable: true,
+        }
+    }
+
+    // [INVARIANT] A compound cursor with a missing side means that side is exhausted; never restart it at page 1.
+    const { personalCursor, teamCursor, personalExhausted, teamExhausted } =
+        await resolveDateRangeCursors(input.cursor, includeTeam, input.is_personal)
+    const perDbLimit = calcPerDbLimit(input.limit, !!teamDb && includeTeam && input.is_personal !== true)
+    const emptyPage: ReturnType<typeof db.searchByDateRange> = { entries: [] }
+    const personalEntries = personalExhausted
+        ? emptyPage
+        : db.searchByDateRange(input.start_date, input.end_date, {
+              entryType: input.entry_type,
+              tags: input.tags,
+              isPersonal: input.is_personal,
+              projectNumber,
+              issueNumber: input.issue_number,
+              prNumber: input.pr_number,
+              workflowRunId: input.workflow_run_id,
+              limit: perDbLimit,
+              sortBy: input.sort_by,
+              cursor: personalCursor,
+              includeArchived: input.include_archived,
+              workspaceId: wsId,
+          })
+
+    if (teamDb && includeTeam && input.is_personal !== true) {
+        return await queryTeamDateRangeAndMerge(
+            teamDb,
+            input,
+            wsId,
+            projectNumber,
+            perDbLimit,
+            teamCursor,
+            teamExhausted,
+            personalEntries
+        )
+    }
+
+    return {
+        success: true,
+        entries: personalEntries.entries.map((e) => ({ ...e, source: 'personal' as const })),
+        count: personalEntries.entries.length,
+        degraded: false,
+        next_cursor: personalEntries.nextCursor,
+    }
+}
+
 export function getDateRangeSearchTool(context: ToolContext): ToolDefinition[] {
-    const { db, teamDb } = context;
     return [
         {
             name: 'search_by_date_range',
@@ -25,126 +178,12 @@ export function getDateRangeSearchTool(context: ToolContext): ToolDefinition[] {
             },
             handler: async (params: unknown) => {
                 try {
-                    const input = SearchByDateRangeSchema.parse(params)
-                    const wsId = resolveWorkspaceId(input.workspace_id, input.project_number, context.config)
-                    const projectNumber = alignedProjectFilter(
-                        wsId,
-                        input.project_number,
-                        activeProjectRegistry(context.config?.projectRegistry)
-                    )
-                    const includeTeam = resolveAuthorizedIncludeTeam(
-                        'search_by_date_range',
-                        input.include_team,
-                        params,
-                        context.config?.runtime?.auditLogger,
-                        teamDb,
-                        context.config,
-                        wsId
-                    )
-
-                    // Validate date range order (YYYY-MM-DD sorts lexicographically)
-                    if (input.start_date > input.end_date) {
-                        return {
-                            success: false,
-                            error: `Invalid date range: start_date (${input.start_date}) is after end_date (${input.end_date})`,
-                            code: 'VALIDATION_ERROR',
-                            category: 'validation',
-                            suggestion: 'Ensure start_date is before or equal to end_date',
-                            recoverable: true,
-                        }
-                    }
-
-                    let personalCursor = input.cursor
-                    let teamCursor = input.cursor
-                    // [INVARIANT] A compound cursor with a missing side means that side is exhausted; never restart it at page 1.
-                    let personalExhausted = false
-                    let teamExhausted = false
-                    if (input.cursor && includeTeam && input.is_personal !== true) {
-                        const { decodeCompoundCursor } = await import('./fts.js')
-                        const compound = decodeCompoundCursor(input.cursor)
-                        if (compound) {
-                            personalCursor = compound.p
-                            teamCursor = compound.t
-                            personalExhausted = compound.p === undefined
-                            teamExhausted = compound.t === undefined
-                        }
-                    }
-
-                    const perDbLimit = calcPerDbLimit(
-                        input.limit,
-                        !!teamDb && includeTeam && input.is_personal !== true
-                    )
-                    const emptyPage: ReturnType<typeof db.searchByDateRange> = { entries: [] }
-                    const personalEntries = personalExhausted ? emptyPage : db.searchByDateRange(input.start_date, input.end_date, {
-                        entryType: input.entry_type,
-                        tags: input.tags,
-                        isPersonal: input.is_personal,
-                        projectNumber,
-                        issueNumber: input.issue_number,
-                        prNumber: input.pr_number,
-                        workflowRunId: input.workflow_run_id,
-                        limit: perDbLimit,
-                        sortBy: input.sort_by,
-                        cursor: personalCursor,
-                        includeArchived: input.include_archived,
-                        workspaceId: wsId,
-                    })
-
-                    // Cross-database merge when team DB is available
-                    // Skip team DB when is_personal is explicitly true (team entries are never personal)
-                    if (teamDb && includeTeam && input.is_personal !== true) {
-                        const teamEntries = teamExhausted ? emptyPage : teamDb.searchByDateRange(
-                            input.start_date,
-                            input.end_date,
-                            {
-                                entryType: input.entry_type,
-                                tags: input.tags,
-                                projectNumber,
-                                issueNumber: input.issue_number,
-                                prNumber: input.pr_number,
-                                workflowRunId: input.workflow_run_id,
-                                limit: perDbLimit,
-                                sortBy: input.sort_by,
-                                cursor: teamCursor,
-                                includeArchived: input.include_archived,
-                                workspaceId: wsId,
-                            }
-                        )
-                        const merged = mergeAndDedup(
-                            personalEntries.entries.map((e) => ({ ...e, source: 'personal' as const })),
-                            teamEntries.entries.map((e) => ({ ...e, source: 'team' as const })),
-                            input.limit,
-                            input.sort_by
-                        )
-                        let compoundNextCursor: string | undefined
-                        if (personalEntries.nextCursor || teamEntries.nextCursor) {
-                            const { encodeCompoundCursor } = await import('./fts.js')
-                            compoundNextCursor = encodeCompoundCursor(personalEntries.nextCursor, teamEntries.nextCursor)
-                        }
-                        return {
-                            success: true,
-                            entries: merged,
-                            count: merged.length,
-                            degraded: false,
-                            next_cursor: compoundNextCursor,
-                        }
-                    }
-
-                    return {
-                        success: true,
-                        entries: personalEntries.entries.map((e) => ({
-                            ...e,
-                            source: 'personal' as const,
-                        })),
-                        count: personalEntries.entries.length,
-                        degraded: false,
-                        next_cursor: personalEntries.nextCursor,
-                    }
+                    return await executeDateRangeSearch(params, context)
                 } catch (err) {
                     if (err instanceof PermissionError) throw err
                     return formatHandlerError(err)
                 }
             },
         },
-    ];
+    ]
 }

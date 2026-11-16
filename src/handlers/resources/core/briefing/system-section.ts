@@ -11,9 +11,7 @@
  */
 
 import * as fs from 'node:fs'
-import { execFileSync } from 'node:child_process'
 import * as path from 'node:path'
-import { fileURLToPath } from 'node:url'
 
 import { VERSION } from '../../../../version.js'
 import {
@@ -23,8 +21,13 @@ import {
 import type { ToolFilterConfig } from '../../../../filtering/tool-filter.js'
 import { getPrompts } from '../../../prompts/index.js'
 import { logger } from '../../../../utils/logger.js'
-import { markUntrustedContentInline } from '../../../../utils/security-utils.js'
 import type { BriefingConfig } from '../../shared.js'
+import {
+    fetchGitHistoryFromRepo,
+    formatBriefingLocalTime,
+    readRepoIndicators,
+    resolveProjectRoot,
+} from './system-section-helpers.js'
 
 
 // ============================================================================
@@ -79,39 +82,6 @@ export interface SystemContext {
     localCheck: boolean | null
     /** The active workspace ID if configured */
     workspaceId?: string
-}
-
-// ============================================================================
-// Startup-Cached Parsers
-// ============================================================================
-
-/** Walk upward from `startDir` looking for a directory containing `package.json`. */
-function findPackageJsonRoot(startDir: string): string | undefined {
-    let current = path.resolve(startDir)
-    while (current !== path.dirname(current)) {
-        if (fs.existsSync(path.join(current, 'package.json'))) {
-            return current
-        }
-        current = path.dirname(current)
-    }
-    return undefined
-}
-
-/**
- * Resolve project root via package.json location.
- *
- * [INVARIANT] H29: Inspect `startPath` / `process.cwd()` before falling back to
- * `import.meta.url` so cross-repo runs inspect the active workspace rather than
- * `memory-journal-mcp`'s own install directory.
- */
-function resolveProjectRoot(startPath?: string): string {
-    const cwdTarget =
-        startPath !== undefined && startPath !== '' ? startPath : process.cwd()
-    return (
-        findPackageJsonRoot(cwdTarget) ??
-        findPackageJsonRoot(path.dirname(fileURLToPath(import.meta.url))) ??
-        process.cwd()
-    )
 }
 
 // ============================================================================
@@ -177,69 +147,7 @@ function loadCachedGitHistory(
         if (process.env['VITEST']) {
             return setCached(cachedGitHistory, root, null)
         }
-
-        const fetchLimit = Math.max(1, commitCount)
-        const out = execFileSync(
-            'git',
-            ['log', '-n', String(fetchLimit), '--format=%h|%s|%cr'],
-            { cwd: root, encoding: 'utf-8', timeout: 3000, windowsHide: true }
-        )
-
-        const unpushedHashes = new Set<string>()
-        try {
-            const unpushedOut = execFileSync(
-                'git',
-                ['log', '@{u}..HEAD', '--format=%h'],
-                { cwd: root, encoding: 'utf-8', timeout: 3000, windowsHide: true }
-            )
-            unpushedOut
-                .split('\n')
-                .filter(Boolean)
-                .forEach((h) => unpushedHashes.add(h.trim()))
-        } catch {
-            // Ignore if no upstream tracking branch
-        }
-
-        const lines = out
-            .split('\n')
-            .map((l) => l.trim())
-            .filter(Boolean)
-
-        let highImpact = 0
-        let lowImpact = 0
-
-        const commits: GitHistorySummary['commits'] = lines.map((line) => {
-            const parts = line.split('|')
-            const hash = (parts[0] ?? '').trim()
-            const subject = (parts[1] ?? '').trim()
-            const typeMatch = /^([a-zA-Z]+)(?:\([^)]+\))?(!)?:/i.exec(subject)
-            const commitType = typeMatch?.[1]?.toLowerCase()
-            const isBreaking = Boolean(typeMatch?.[2])
-            if (commitType === 'feat' || commitType === 'fix' || isBreaking) {
-                highImpact++
-            } else {
-                lowImpact++
-            }
-            return {
-                hash,
-                ...(commitType !== undefined ? { type: commitType } : {}),
-                isBreaking,
-                message: markUntrustedContentInline(subject),
-                isPushed: !unpushedHashes.has(hash),
-            }
-        })
-
-        const stats = {
-            total: commits.length,
-            highImpact,
-            lowImpact,
-            avgConfidence: 1.0,
-        }
-
-        return setCached(cachedGitHistory, root, {
-            stats,
-            commits: commits.slice(0, Math.max(1, commitCount)),
-        })
+        return setCached(cachedGitHistory, root, fetchGitHistoryFromRepo(root, commitCount))
     } catch (err: unknown) {
         logger.debug('Failed to get git history via child_process (non-critical)', {
             module: 'BRIEFING',
@@ -362,26 +270,7 @@ export function buildSystemContext(
     resourceCount?: number,
     activeWorkspaceId?: string
 ): SystemContext {
-    const now = new Date()
-
-    // Format localTime compactly: "2026-05-25 06:12 EDT"
-    let localTime: string
-    try {
-        const formatter = new Intl.DateTimeFormat('en-US', {
-            year: 'numeric',
-            month: '2-digit',
-            day: '2-digit',
-            hour: '2-digit',
-            minute: '2-digit',
-            hour12: false,
-            timeZoneName: 'short',
-        })
-        const parts = formatter.formatToParts(now)
-        const get = (type: string): string => parts.find((p) => p.type === type)?.value ?? ''
-        localTime = `${get('year')}-${get('month')}-${get('day')} ${get('hour')}:${get('minute')} ${get('timeZoneName')}`
-    } catch {
-        localTime = now.toISOString().slice(0, 16).replace('T', ' ') + ' UTC'
-    }
+    const localTime = formatBriefingLocalTime()
 
     // Filter summary — only show when a filter is actually narrowing the tool set
     const totalTools = getAllToolNames().length
@@ -394,38 +283,9 @@ export function buildSystemContext(
     }
 
     const isReadonly = filterConfig ? isFilterEffectivelyReadOnly(filterConfig) : false
-
-    // IO roots count
     const ioRootCount = config?.allowedIoRoots?.length ?? 0
-
     const root = targetRepoPath === null ? null : (targetRepoPath || resolveProjectRoot())
-
-    // Check for code-map.md in project root
-    let hasCodeMap = false
-    if (root !== null) {
-        try {
-            hasCodeMap = fs.existsSync(path.join(root, 'test-server', 'code-map.md'))
-        } catch {
-            // Non-critical — code-map indicator is best-effort
-        }
-    }
-
-    // Check for local health status
-    let localCheck: boolean | null = null
-    if (root !== null) {
-        try {
-            const healthPath = path.join(root, '.test-output', 'health-status.json')
-            if (fs.existsSync(healthPath)) {
-                const content = fs.readFileSync(healthPath, 'utf-8')
-                const parsed = JSON.parse(content) as { ok?: boolean }
-                if (typeof parsed.ok === 'boolean') {
-                    localCheck = parsed.ok
-                }
-            }
-        } catch {
-            // Non-critical
-        }
-    }
+    const { hasCodeMap, localCheck } = readRepoIndicators(root)
 
     return {
         version: VERSION,

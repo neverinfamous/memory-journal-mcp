@@ -251,30 +251,14 @@ export function createSandboxProcessObject(): Record<string, unknown> {
     })
 }
 
-export function buildMemoryAndFactoryShims(
+function buildDbAndModuleAliasShims(
     shimMj: Record<string, unknown>,
     safeFsShim: SafeFsShim,
-    updateMemoryFn: (arg: unknown) => unknown
+    callableShim: () => object
 ): Record<string, unknown> {
-    const callableShim = (): object => createCallableShim(shimMj)
     const schemaShim = createSchemaShim(shimMj)
     const getSchemaShim = (): object => createSchemaShim(shimMj)
-    const processOpFn = createProcessOperationFn(shimMj)
-    const saveMemoryFn = (arg?: unknown): unknown =>
-        arg !== undefined && arg !== null
-            ? updateMemoryFn(arg)
-            : Promise.resolve({ success: false, code: 'VALIDATION_ERROR', error: 'saveMemory requires a payload' })
-    const updateConfigFn = (arg: unknown): unknown =>
-        (getGroupMethod(shimMj, 'admin', 'update_configuration') ??
-            getGroupMethod(shimMj, 'admin', 'updateConfiguration'))?.(arg)
-
-    const factoryShims: Record<string, unknown> = {}
-    for (const name of FACTORY_SHIM_NAMES) {
-        factoryShims[name] = () => shimMj
-    }
-
-    const aliases: Record<string, unknown> = {
-        ...factoryShims,
+    return {
         getJournal: () => Promise.resolve(shimMj),
         loadJournal: (): Promise<unknown> => Promise.resolve(shimMj),
         loadMemory: (): Promise<unknown> => Promise.resolve(shimMj),
@@ -334,6 +318,22 @@ export function buildMemoryAndFactoryShims(
         connectToDatabase: () => shimMj,
         openDatabase: () => shimMj,
         open_database: () => shimMj,
+    }
+}
+
+function buildMemoryActionAliasShims(
+    shimMj: Record<string, unknown>,
+    updateMemoryFn: (arg: unknown) => unknown
+): Record<string, unknown> {
+    const processOpFn = createProcessOperationFn(shimMj)
+    const saveMemoryFn = (arg?: unknown): unknown =>
+        arg !== undefined && arg !== null
+            ? updateMemoryFn(arg)
+            : Promise.resolve({ success: false, code: 'VALIDATION_ERROR', error: 'saveMemory requires a payload' })
+    const updateConfigFn = (arg: unknown): unknown =>
+        (getGroupMethod(shimMj, 'admin', 'update_configuration') ??
+            getGroupMethod(shimMj, 'admin', 'updateConfiguration'))?.(arg)
+    return {
         process_operation: processOpFn,
         processOperation: processOpFn,
         updateMemory: updateMemoryFn,
@@ -361,6 +361,24 @@ export function buildMemoryAndFactoryShims(
         save_memory: saveMemoryFn,
         update_configuration: updateConfigFn,
         updateConfiguration: updateConfigFn,
+    }
+}
+
+export function buildMemoryAndFactoryShims(
+    shimMj: Record<string, unknown>,
+    safeFsShim: SafeFsShim,
+    updateMemoryFn: (arg: unknown) => unknown
+): Record<string, unknown> {
+    const callableShim = (): object => createCallableShim(shimMj)
+    const factoryShims: Record<string, unknown> = {}
+    for (const name of FACTORY_SHIM_NAMES) {
+        factoryShims[name] = () => shimMj
+    }
+
+    const aliases: Record<string, unknown> = {
+        ...factoryShims,
+        ...buildDbAndModuleAliasShims(shimMj, safeFsShim, callableShim),
+        ...buildMemoryActionAliasShims(shimMj, updateMemoryFn),
     }
 
     for (const [mappingAliases, group, method] of DELEGATING_TOOL_MAPPINGS) {

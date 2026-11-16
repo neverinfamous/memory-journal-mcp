@@ -41,6 +41,62 @@ function isErrorResult(result: unknown): boolean {
     return obj['success'] === false && typeof obj['error'] === 'string'
 }
 
+function recordMetricsUser(accumulator: MetricsAccumulator): void {
+    try {
+        const sub = getAuthContext()?.claims?.sub
+        if (sub !== undefined && sub !== '') accumulator.recordUser(sub)
+    } catch (err) {
+        logger.debug('Failed to record metrics user', {
+            module: 'Metrics',
+            error: err instanceof Error ? err.message : String(err),
+        })
+    }
+}
+
+function recordInvocationMetrics(
+    accumulator: MetricsAccumulator,
+    toolName: string,
+    durationMs: number,
+    args: Record<string, unknown>,
+    outputTokens: number,
+    isError: boolean,
+    errorContext: 'error' | 'result'
+): void {
+    try {
+        accumulator.record({
+            toolName,
+            durationMs,
+            inputTokens: estimatePayloadTokens(args),
+            outputTokens,
+            isError,
+        })
+    } catch (err) {
+        const msg =
+            errorContext === 'error'
+                ? 'Accumulator failed to record metrics error'
+                : 'Accumulator failed to record metrics:'
+        logger.error(msg, {
+            module: 'Metrics',
+            error: err instanceof Error ? err.message : String(err),
+        })
+    }
+}
+
+function reportToolErrorIssue(
+    toolName: string,
+    args: Record<string, unknown>,
+    result: unknown
+): void {
+    const errField = (result as Record<string, unknown>)['error']
+    const errorMessage = typeof errField === 'string' ? errField : JSON.stringify(errField)
+    logAgentIssue({
+        source: 'MCP',
+        action: toolName,
+        input: args,
+        error: errorMessage,
+    })
+}
+
 // ============================================================================
 // Interceptor Factory
 // ============================================================================
@@ -60,80 +116,38 @@ export function wrapWithMetrics(
 ): ToolHandlerFn {
     return async (args: Record<string, unknown>): Promise<unknown> => {
         const start = performance.now()
+        recordMetricsUser(accumulator)
+
         let result: unknown
         let isError: boolean
-
-        try {
-            const sub = getAuthContext()?.claims?.sub
-            if (sub !== undefined && sub !== '') accumulator.recordUser(sub)
-        } catch (err) {
-            logger.debug('Failed to record metrics user', {
-                module: 'Metrics',
-                error: err instanceof Error ? err.message : String(err),
-            })
-        }
-
         try {
             result = await handler(args)
             isError = isErrorResult(result)
         } catch (err) {
-            // Re-throw so the caller still receives the original exception.
-            // Record the error metric before re-throwing.
             const durationMs = Math.round(performance.now() - start)
-            try {
-                accumulator.record({
-                    toolName,
-                    durationMs,
-                    inputTokens: estimatePayloadTokens(args),
-                    outputTokens: 0,
-                    isError: true,
-                })
-            } catch (err) {
-                logger.error(`Accumulator failed to record metrics error`, {
-                    module: 'Metrics',
-                    error: err instanceof Error ? err.message : String(err),
-                })
-            }
-            
+            recordInvocationMetrics(accumulator, toolName, durationMs, args, 0, true, 'error')
             logAgentIssue({
                 source: 'MCP',
                 action: toolName,
                 input: args,
-                error: err instanceof Error ? err.message : String(err)
+                error: err instanceof Error ? err.message : String(err),
             })
-            
             throw err
         }
 
         const durationMs = Math.round(performance.now() - start)
-
-        try {
-            accumulator.record({
-                toolName,
-                durationMs,
-                inputTokens: estimatePayloadTokens(args),
-                outputTokens: estimatePayloadTokens(result),
-                isError,
-            })
-        } catch (err) {
-            logger.error(`Accumulator failed to record metrics:`, {
-                module: 'Metrics',
-                error: err instanceof Error ? err.message : String(err),
-            })
-        }
-
+        recordInvocationMetrics(
+            accumulator,
+            toolName,
+            durationMs,
+            args,
+            estimatePayloadTokens(result),
+            isError,
+            'result'
+        )
         if (isError) {
-            const errField = (result as Record<string, unknown>)['error']
-            const errorMessage =
-                typeof errField === 'string' ? errField : JSON.stringify(errField)
-            logAgentIssue({
-                source: 'MCP',
-                action: toolName,
-                input: args,
-                error: errorMessage,
-            })
+            reportToolErrorIssue(toolName, args, result)
         }
-
         return result
     }
 }

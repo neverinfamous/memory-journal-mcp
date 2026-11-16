@@ -69,6 +69,10 @@ export function convertKeysToSnakeCase(obj: Record<string, unknown>, methodName?
         snakeKey = resolveAliasedKey(snakeKey, value, ctx)
         snakeKey = resolveContentLikeKey(snakeKey, ctx)
 
+        if (key !== snakeKey && Object.hasOwn(obj, snakeKey) && obj[snakeKey] !== undefined) {
+            continue
+        }
+
         const coerced = coerceNumericValue(snakeKey, value)
         if (coerced !== undefined) {
             result[snakeKey] = coerced.value

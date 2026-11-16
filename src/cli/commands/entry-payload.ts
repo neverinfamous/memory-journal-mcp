@@ -245,6 +245,56 @@ export function parseMetadata(metadataFile: unknown): Record<string, unknown> {
     throw new Error('Failed to parse --metadata JSON: expected a JSON object')
 }
 
+function resolvePayloadScope(
+    explicitWorkspaceId: string | undefined,
+    explicitProjectNum: number | undefined,
+    fallbackWorkspaceId: string | undefined,
+    content: string | undefined,
+    tags: string[] | undefined,
+    config?: ToolHandlerConfig
+): { projectNumber: number | undefined; workspaceId: string | undefined } {
+    const resolved = resolveProjectContext(
+        {
+            workspace_id: explicitWorkspaceId ?? fallbackWorkspaceId,
+            project_number: explicitProjectNum,
+            content,
+            tags,
+            preferCwdOverKeywords: true,
+        },
+        config
+    )
+    const paired = pairStoredScope(
+        resolved.workspaceId,
+        explicitProjectNum ?? resolved.projectNumber,
+        activeProjectRegistry(config?.projectRegistry)
+    )
+    return {
+        projectNumber: paired.projectNumber ?? explicitProjectNum,
+        workspaceId: paired.workspaceId ?? resolved.workspaceId,
+    }
+}
+
+function resolvePayloadRelationships(
+    options: HealedEntryOptions,
+    metadata: Record<string, unknown>
+): {
+    relationships: { target_id: number; relation_type: RelationshipType }[]
+    relatedIds: number[]
+} {
+    const relationships =
+        metadata['relationships'] !== undefined &&
+        metadata['relationships'] !== null &&
+        Array.isArray(metadata['relationships'])
+            ? relationshipsFromMetadata(metadata['relationships'])
+            : parseRelationships(options.relationships, options.relFile)
+
+    let relatedIds = parseRelatedTo(options.relatedTo)
+    if (relatedIds.length === 0 && Array.isArray(metadata['related_to'])) {
+        relatedIds = metadata['related_to'].map(Number).filter((n) => !isNaN(n))
+    }
+    return { relationships, relatedIds }
+}
+
 export function buildEntryPayload(
     options: HealedEntryOptions,
     metadata: Record<string, unknown>,
@@ -260,51 +310,23 @@ export function buildEntryPayload(
         metadata
     )
 
-    const resolved = resolveProjectContext(
-        {
-            workspace_id: explicitWorkspaceId ?? fallbackWorkspaceId,
-            project_number: explicitProjectNum,
-            content: content ?? normalizedOptions.content,
-            tags,
-            preferCwdOverKeywords: true,
-        },
+    const { projectNumber, workspaceId } = resolvePayloadScope(
+        explicitWorkspaceId,
+        explicitProjectNum,
+        fallbackWorkspaceId,
+        content ?? normalizedOptions.content,
+        tags,
         config
     )
-    const paired = pairStoredScope(
-        resolved.workspaceId,
-        explicitProjectNum ?? resolved.projectNumber,
-        activeProjectRegistry(config?.projectRegistry)
-    )
-    const projectNumber = paired.projectNumber ?? explicitProjectNum
-    const workspaceId = paired.workspaceId ?? resolved.workspaceId
 
     const { trustScore, impactScore, validationStatus, sessionId, significanceType } =
         resolveScoresAndValidation(normalizedOptions, metadata)
-
     const autoContextStr = resolveAutoContext(
         normalizedOptions.autoContext,
         normalizedOptions.autoContextFile,
         metadata
     )
-
-    let relationships: { target_id: number; relation_type: RelationshipType }[]
-    if (
-        metadata['relationships'] !== undefined &&
-        metadata['relationships'] !== null &&
-        Array.isArray(metadata['relationships'])
-    ) {
-        relationships = relationshipsFromMetadata(metadata['relationships'])
-    } else {
-        relationships = parseRelationships(
-            normalizedOptions.relationships,
-            normalizedOptions.relFile
-        )
-    }
-
-    let relatedIds = parseRelatedTo(normalizedOptions.relatedTo)
-    if (relatedIds.length === 0 && Array.isArray(metadata['related_to'])) {
-        relatedIds = metadata['related_to'].map(Number).filter((n) => !isNaN(n))
-    }
+    const { relationships, relatedIds } = resolvePayloadRelationships(normalizedOptions, metadata)
 
     return {
         entryType,

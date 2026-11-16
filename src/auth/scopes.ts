@@ -77,6 +77,8 @@ export const TOOL_SCOPE_OVERRIDES: Record<string, StandardScope> = {
     import_markdown: SCOPES.WRITE,
     import_external: SCOPES.WRITE,
     mark_anchors_stale: SCOPES.WRITE,
+    check_entry_staleness: SCOPES.WRITE,
+    search_audit_log: SCOPES.AUDIT,
     team_import_markdown: SCOPES.TEAM,
     team_add_member: SCOPES.ADMIN,
     team_remove_member: SCOPES.ADMIN,

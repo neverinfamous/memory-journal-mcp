@@ -36,6 +36,51 @@ function getDatabasePath(): string {
     return defaultProdPath
 }
 
+function resolveEncryptionKey(): string | undefined {
+    const envKey = process.env['MJ_DB_ENCRYPTION_KEY'] || process.env['DB_ENCRYPTION_KEY']
+    if (envKey) return envKey
+    try {
+        const configPath = path.resolve(os.homedir(), '.gemini', 'config', 'mcp_config.json')
+        if (fs.existsSync(configPath)) {
+            const mcpConfig = JSON.parse(fs.readFileSync(configPath, 'utf-8')) as {
+                mcpServers?: Record<string, { env?: { DB_ENCRYPTION_KEY?: string } }>
+            }
+            return mcpConfig.mcpServers?.['memory-journal-mcp']?.env?.DB_ENCRYPTION_KEY
+        }
+    } catch (err) {
+        console.warn(
+            'Warning: Failed to read mcp_config.json fallback:',
+            err instanceof Error ? err.message : String(err)
+        )
+    }
+    return undefined
+}
+
+function openReadonlyDatabase(dbPath: string, rawKey: string | undefined): Database.Database {
+    let db: Database.Database | undefined
+    try {
+        db = new Database(dbPath, { readonly: true })
+        if (rawKey) {
+            if (rawKey.startsWith("x'") || rawKey.startsWith("X'")) {
+                if (!/^x'(?:[0-9a-fA-F]{2})+'$/i.test(rawKey)) {
+                    throw new Error("Invalid hex encryption key: expected x'<even hex digits>'")
+                }
+                db.pragma(`key = ${rawKey}`)
+            } else {
+                db.pragma(`key = '${rawKey.replace(/'/g, "''")}'`)
+            }
+        }
+        return db
+    } catch (err) {
+        if (db?.open) {
+            db.close()
+        }
+        const msg = err instanceof Error ? err.message : String(err)
+        console.error(`❌ Could not open database at '${dbPath}': ${msg}`)
+        process.exit(1)
+    }
+}
+
 function checkUnassignedEntries(): void {
     const dbPath = getDatabasePath()
     const isStrict = process.argv.includes('--strict') || process.env['CI'] === 'true'
@@ -48,42 +93,8 @@ function checkUnassignedEntries(): void {
         console.log(`ℹ️ ${message}`)
         return
     }
-    let rawKey = process.env['MJ_DB_ENCRYPTION_KEY'] || process.env['DB_ENCRYPTION_KEY']
-    let db: Database.Database | undefined
-    try {
-        db = new Database(dbPath, { readonly: true })
-        
-        // Fallback to IDE MCP configuration if running directly
-        if (!rawKey) {
-            try {
-                const configPath = path.resolve(os.homedir(), '.gemini', 'config', 'mcp_config.json')
-                if (fs.existsSync(configPath)) {
-                    const mcpConfig = JSON.parse(fs.readFileSync(configPath, 'utf-8'))
-                    rawKey = mcpConfig.mcpServers?.['memory-journal-mcp']?.env?.DB_ENCRYPTION_KEY
-                }
-            } catch (err) {
-                console.warn('Warning: Failed to read mcp_config.json fallback:', err instanceof Error ? err.message : String(err))
-            }
-        }
-
-        if (rawKey) {
-            if (rawKey.startsWith("x'") || rawKey.startsWith("X'")) {
-                if (!/^x'(?:[0-9a-fA-F]{2})+'$/i.test(rawKey)) {
-                    throw new Error("Invalid hex encryption key: expected x'<even hex digits>'")
-                }
-                db.pragma(`key = ${rawKey}`)
-            } else {
-                db.pragma(`key = '${rawKey.replace(/'/g, "''")}'`)
-            }
-        }
-    } catch (err) {
-        if (db?.open) {
-            db.close()
-        }
-        const msg = err instanceof Error ? err.message : String(err)
-        console.error(`❌ Could not open database at '${dbPath}': ${msg}`)
-        process.exit(1)
-    }
+    const rawKey = resolveEncryptionKey()
+    const db = openReadonlyDatabase(dbPath, rawKey)
 
     try {
         const tableCheck = db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='memory_journal'").get()

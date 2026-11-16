@@ -139,42 +139,7 @@ function normalizeRelationshipItemRecord(rel: unknown): unknown {
     return healedRel
 }
 
-/** Apply post-conversion normalization for anchors, tags, relationships, commits, and filters. */
-export function postProcessNormalizedKeys(result: Record<string, unknown>, methodLower?: string): void {
-    healAnchorsField(result)
-    if (methodLower === undefined || !GIT_COMMIT_METHODS.has(methodLower)) {
-        healSortByField(result)
-    }
-    if ('tag' in result && !('tags' in result)) {
-        const tagVal = result['tag']
-        result['tags'] = Array.isArray(tagVal) ? tagVal : [tagVal]
-        delete result['tag']
-    }
-
-    if ('tags' in result && Array.isArray(result['tags'])) {
-        result['tags'] = result['tags'].map((tag: unknown) =>
-            typeof tag === 'string' ? (TAG_ALIASES[tag.trim().toLowerCase()] ?? tag) : tag
-        )
-    }
-    if ('exclude_tags' in result && Array.isArray(result['exclude_tags'])) {
-        result['exclude_tags'] = result['exclude_tags'].map((tag: unknown) =>
-            typeof tag === 'string' ? (TAG_ALIASES[tag.trim().toLowerCase()] ?? tag) : tag
-        )
-    }
-
-    if ('relationships' in result && Array.isArray(result['relationships'])) {
-        result['relationships'] = result['relationships'].map(normalizeRelationshipItemRecord)
-    }
-
-    if ('commits' in result && Array.isArray(result['commits'])) {
-        if (!('auto_context' in result) || typeof result['auto_context'] !== 'string') {
-            result['auto_context'] = JSON.stringify({ commits: result['commits'] })
-        }
-        delete result['commits']
-    }
-
-    propagateBatchProjectNumber(result)
-
+function healSessionAndCommitMetadata(result: Record<string, unknown>): void {
     if ('content' in result && typeof result['content'] === 'string') {
         const c = result['content']
         if (/#+\s+Accomplished/i.test(c) && /#+\s+Unfinished \/ Blocked/i.test(c)) {
@@ -214,19 +179,59 @@ export function postProcessNormalizedKeys(result: Record<string, unknown>, metho
     }
 
     healAutoContext(result)
+}
 
-    if ('filter' in result && isRecord(result['filter'])) {
-        const filterObj = result['filter']
-        for (const [k, v] of Object.entries(filterObj)) {
-            let snakeK = k.replace(/[A-Z]/g, (letter) => `_${letter.toLowerCase()}`)
-            if (snakeK === 'id' && !('entry_id' in filterObj) && !('entryId' in filterObj)) {
-                snakeK = 'entry_id'
-            }
-            if (snakeK === 'project' || snakeK === 'project_id' || snakeK === 'proj') {
-                snakeK = 'project_number'
-            }
-            if (!(snakeK in result)) result[snakeK] = v
+function flattenFilterObject(result: Record<string, unknown>): void {
+    if (!('filter' in result) || !isRecord(result['filter'])) return
+    const filterObj = result['filter']
+    for (const [k, v] of Object.entries(filterObj)) {
+        let snakeK = k.replace(/[A-Z]/g, (letter) => `_${letter.toLowerCase()}`)
+        if (snakeK === 'id' && !('entry_id' in filterObj) && !('entryId' in filterObj)) {
+            snakeK = 'entry_id'
         }
-        delete result['filter']
+        if (snakeK === 'project' || snakeK === 'project_id' || snakeK === 'proj') {
+            snakeK = 'project_number'
+        }
+        if (!(snakeK in result)) result[snakeK] = v
     }
+    delete result['filter']
+}
+
+/** Apply post-conversion normalization for anchors, tags, relationships, commits, and filters. */
+export function postProcessNormalizedKeys(result: Record<string, unknown>, methodLower?: string): void {
+    healAnchorsField(result)
+    if (methodLower === undefined || !GIT_COMMIT_METHODS.has(methodLower)) {
+        healSortByField(result)
+    }
+    if ('tag' in result && !('tags' in result)) {
+        const tagVal = result['tag']
+        result['tags'] = Array.isArray(tagVal) ? tagVal : [tagVal]
+        delete result['tag']
+    }
+
+    if ('tags' in result && Array.isArray(result['tags'])) {
+        result['tags'] = result['tags'].map((tag: unknown) =>
+            typeof tag === 'string' ? (TAG_ALIASES[tag.trim().toLowerCase()] ?? tag) : tag
+        )
+    }
+    if ('exclude_tags' in result && Array.isArray(result['exclude_tags'])) {
+        result['exclude_tags'] = result['exclude_tags'].map((tag: unknown) =>
+            typeof tag === 'string' ? (TAG_ALIASES[tag.trim().toLowerCase()] ?? tag) : tag
+        )
+    }
+
+    if ('relationships' in result && Array.isArray(result['relationships'])) {
+        result['relationships'] = result['relationships'].map(normalizeRelationshipItemRecord)
+    }
+
+    if ('commits' in result && Array.isArray(result['commits'])) {
+        if (!('auto_context' in result) || typeof result['auto_context'] !== 'string') {
+            result['auto_context'] = JSON.stringify({ commits: result['commits'] })
+        }
+        delete result['commits']
+    }
+
+    propagateBatchProjectNumber(result)
+    healSessionAndCommitMetadata(result)
+    flattenFilterObject(result)
 }

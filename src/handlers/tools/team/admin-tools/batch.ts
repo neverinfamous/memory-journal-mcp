@@ -4,6 +4,7 @@
  * Tools: team_batch_create_entries, team_batch_update_entries, team_batch_delete_entries
  */
 
+import type { z } from 'zod'
 import type { ToolDefinition, ToolContext } from '../../../../types/index.js'
 import { formatHandlerError } from '../../../../utils/error-helpers.js'
 import { resolveAuthenticatedAuthor } from '../../../../utils/security-utils.js'
@@ -12,6 +13,7 @@ import { executeTeamBatchCreate } from './batch-create-helpers.js'
 import {
     buildValidatedTeamBatchUpdates,
     executeTeamBatchDelete,
+    type TeamDbInstance,
 } from './batch-delete-helpers.js'
 import {
     TeamBatchCreateEntriesSchema,
@@ -26,6 +28,104 @@ import {
 } from '../schemas.js'
 import { sendProgress } from '../../../../utils/progress-utils.js'
 import { collectIndexWorkspaces, indexBatchEntries } from '../../batch-indexing.js'
+
+type TeamBatchUpdateInput = z.infer<typeof TeamBatchUpdateEntriesSchema>
+
+async function indexUpdatedTeamBatchEntries(
+    context: ToolContext,
+    teamDb: TeamDbInstance,
+    input: TeamBatchUpdateInput,
+    entries: { id: number; workspaceId?: string }[]
+): ReturnType<typeof indexBatchEntries> {
+    const vectorUpdatedIds = new Set(
+        input.updates
+            .filter(
+                (u) =>
+                    u.content !== undefined ||
+                    u.tags !== undefined ||
+                    u.entry_type !== undefined
+            )
+            .map((u) => u.entry_id)
+    )
+    return indexBatchEntries({
+        progress: context.progress,
+        vectorManager: context.teamVectorManager,
+        db: teamDb,
+        autoIndex: input.auto_index,
+        entryIds: entries.map((e) => e.id),
+        errorPrefix: 'Team entry',
+        doneMessage: 'Team batch update complete',
+        shouldIndex: (id) => vectorUpdatedIds.has(id),
+        workspaceByEntryId: collectIndexWorkspaces(entries),
+    })
+}
+
+async function executeTeamBatchUpdate(
+    context: ToolContext,
+    teamDb: TeamDbInstance,
+    input: TeamBatchUpdateInput
+): Promise<Record<string, unknown>> {
+    await sendProgress(context.progress, 0, 2, 'Updating team entries...')
+    const currentUser = resolveAuthenticatedAuthor()
+    const updateIds = input.updates.map((u) => u.entry_id)
+    const preFetchedAuthors =
+        typeof teamDb.getAuthorsForEntries === 'function'
+            ? batchFetchAuthors(teamDb, updateIds)
+            : null
+
+    const validated = buildValidatedTeamBatchUpdates(
+        teamDb,
+        input.updates,
+        input.workspace_id,
+        input.project_number,
+        context,
+        currentUser,
+        preFetchedAuthors
+    )
+    if ('errorResponse' in validated) return validated.errorResponse
+    const { updates, notFound } = validated
+
+    const { updated, notFound: updateNotFound, errors } = teamDb.updateEntries(updates)
+    const entries = updated.map((r) => ({
+        ...r,
+        author: preFetchedAuthors
+            ? (preFetchedAuthors.get(r.id) ?? null)
+            : fetchAuthor(teamDb, r.id),
+    }))
+    await sendProgress(context.progress, 1, 2, `Updated ${String(entries.length)} team entries...`)
+
+    const { indexStatuses, indexErrors } = await indexUpdatedTeamBatchEntries(
+        context,
+        teamDb,
+        input,
+        entries
+    )
+    const finalNotFound = [...notFound, ...updateNotFound]
+    const allErrors = [
+        ...finalNotFound.map((id) => new Error(`Team entry ${id} not found`)),
+        ...errors.map((e) => new Error(`Team entry ${e.id} failed to update: ${e.error.message}`)),
+        ...indexErrors,
+    ]
+    if (allErrors.length > 0) {
+        throw new AggregateError(
+            allErrors,
+            `Team batch update partially failed: ${allErrors.length} operations failed`
+        )
+    }
+
+    triggerTeamNotifications(context)
+    const failedUpdateVectors = indexStatuses.filter((s) => s === 'failed').length
+    return {
+        success: true,
+        count: entries.length,
+        updated: entries,
+        notFound: finalNotFound,
+        indexStatuses,
+        ...(failedUpdateVectors > 0
+            ? { warning: `Vector indexing failed for ${String(failedUpdateVectors)} team entry(ies).` }
+            : {}),
+    }
+}
 
 // ============================================================================
 // Tool Definitions
@@ -74,86 +174,8 @@ export function getTeamAdminBatchTools(context: ToolContext): ToolDefinition[] {
             handler: async (params: unknown) => {
                 try {
                     if (!teamDb) return { ...TEAM_DB_ERROR_RESPONSE }
-
                     const input = TeamBatchUpdateEntriesSchema.parse(params)
-                    await sendProgress(context.progress, 0, 2, 'Updating team entries...')
-                    const currentUser = resolveAuthenticatedAuthor()
-                    const updateIds = input.updates.map((u) => u.entry_id)
-                    const preFetchedAuthors =
-                        typeof teamDb.getAuthorsForEntries === 'function'
-                            ? batchFetchAuthors(teamDb, updateIds)
-                            : null
-
-                    const validated = buildValidatedTeamBatchUpdates(
-                        teamDb,
-                        input.updates,
-                        input.workspace_id,
-                        input.project_number,
-                        context,
-                        currentUser,
-                        preFetchedAuthors
-                    )
-                    if ('errorResponse' in validated) return validated.errorResponse
-                    const { updates, notFound } = validated
-
-                    const { updated, notFound: updateNotFound, errors } = teamDb.updateEntries(updates)
-                    
-                    const entries = updated.map((r) => ({
-                        ...r,
-                        author: preFetchedAuthors
-                            ? (preFetchedAuthors.get(r.id) ?? null)
-                            : fetchAuthor(teamDb, r.id),
-                    }))
-
-                    await sendProgress(context.progress, 1, 2, `Updated ${String(entries.length)} team entries...`)
-
-                    const vectorUpdatedIds = new Set(
-                        input.updates
-                            .filter(
-                                (u) =>
-                                    u.content !== undefined ||
-                                    u.tags !== undefined ||
-                                    u.entry_type !== undefined
-                            )
-                            .map((u) => u.entry_id)
-                    )
-                    const { indexStatuses, indexErrors } = await indexBatchEntries({
-                        progress: context.progress,
-                        vectorManager: context.teamVectorManager,
-                        db: teamDb,
-                        autoIndex: input.auto_index,
-                        entryIds: entries.map((e) => e.id),
-                        errorPrefix: 'Team entry',
-                        doneMessage: 'Team batch update complete',
-                        shouldIndex: (id) => vectorUpdatedIds.has(id),
-                        workspaceByEntryId: collectIndexWorkspaces(entries),
-                    })
-
-                    const finalNotFound = [...notFound, ...updateNotFound]
-
-                    const allErrors = [
-                        ...finalNotFound.map(id => new Error(`Team entry ${id} not found`)),
-                        ...errors.map(e => new Error(`Team entry ${e.id} failed to update: ${e.error.message}`)),
-                        ...indexErrors
-                    ]
-
-                    if (allErrors.length > 0) {
-                        throw new AggregateError(allErrors, `Team batch update partially failed: ${allErrors.length} operations failed`);
-                    }
-
-                    triggerTeamNotifications(context)
-
-                    const failedUpdateVectors = indexStatuses.filter((s) => s === 'failed').length
-                    return {
-                        success: true,
-                        count: entries.length,
-                        updated: entries,
-                        notFound: finalNotFound,
-                        indexStatuses,
-                        ...(failedUpdateVectors > 0
-                            ? { warning: `Vector indexing failed for ${String(failedUpdateVectors)} team entry(ies).` }
-                            : {}),
-                    }
+                    return await executeTeamBatchUpdate(context, teamDb, input)
                 } catch (err) {
                     return formatHandlerError(err)
                 }

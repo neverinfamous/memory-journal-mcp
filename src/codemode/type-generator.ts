@@ -5,7 +5,11 @@ function formatLiteralValue(val: unknown): string {
 }
 
 function isSchemaOptional(schema: unknown): boolean {
-    if (schema instanceof z.ZodOptional || schema instanceof z.ZodDefault) {
+    if (
+        schema instanceof z.ZodOptional ||
+        schema instanceof z.ZodDefault ||
+        schema instanceof z.ZodPrefault
+    ) {
         return true
     }
     if (
@@ -16,7 +20,7 @@ function isSchemaOptional(schema: unknown): boolean {
         return isSchemaOptional(schema.unwrap())
     }
     if (schema instanceof z.ZodPipe) {
-        return isSchemaOptional(schema.out instanceof z.ZodTransform ? schema.in : schema.out)
+        return isSchemaOptional(schema.in instanceof z.ZodTransform ? schema.out : schema.in)
     }
     return false
 }
@@ -25,7 +29,7 @@ function isSchemaOptional(schema: unknown): boolean {
  * Converts a single Zod schema type into a TypeScript string representation.
  */
 export function getZodTypeString(schema: unknown): string {
-    if (schema instanceof z.ZodString) return 'string'
+    if (schema instanceof z.ZodString || schema instanceof z.ZodStringFormat) return 'string'
     if (schema instanceof z.ZodNumber) return 'number'
     if (schema instanceof z.ZodBoolean) return 'boolean'
 
@@ -54,7 +58,13 @@ export function getZodTypeString(schema: unknown): string {
         return `${getZodTypeString(schema.def.left)} & ${getZodTypeString(schema.def.right)}`
     }
 
-    if (schema instanceof z.ZodOptional) {
+    if (
+        schema instanceof z.ZodOptional ||
+        schema instanceof z.ZodDefault ||
+        schema instanceof z.ZodPrefault ||
+        schema instanceof z.ZodReadonly ||
+        schema instanceof z.ZodCatch
+    ) {
         return getZodTypeString(schema.unwrap())
     }
 
@@ -62,22 +72,11 @@ export function getZodTypeString(schema: unknown): string {
         return `${getZodTypeString(schema.unwrap())} | null`
     }
 
-    if (schema instanceof z.ZodDefault) {
-        return getZodTypeString(schema.unwrap())
-    }
-
     if (schema instanceof z.ZodPipe) {
-        if (schema.out instanceof z.ZodTransform) {
-            return getZodTypeString(schema.in)
-        }
-        return getZodTypeString(schema.out)
+        return getZodTypeString(schema.in instanceof z.ZodTransform ? schema.out : schema.in)
     }
 
-    if (schema instanceof z.ZodReadonly || schema instanceof z.ZodCatch) {
-        return getZodTypeString(schema.unwrap())
-    }
-
-    if (schema instanceof z.ZodUnion) {
+    if (schema instanceof z.ZodDiscriminatedUnion || schema instanceof z.ZodUnion) {
         return schema.options.map((o: unknown) => getZodTypeString(o)).join(' | ')
     }
 

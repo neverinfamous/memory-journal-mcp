@@ -11,25 +11,20 @@ import { z } from 'zod'
 import type { ToolDefinition, ToolContext } from '../../../types/index.js'
 import { formatHandlerError } from '../../../utils/error-helpers.js'
 import { sendProgress } from '../../../utils/progress-utils.js'
-import { resolveWriteWorkspaceId } from '../write-workspace.js'
-import { AggregateMcpError, ValidationError } from '../../../types/errors.js'
-import { exportEntriesToMarkdown } from '../../../markdown/index.js'
+import { AggregateMcpError } from '../../../types/errors.js'
 import { importMarkdownEntries, processImportBatch } from '../../../markdown/index.js'
-import type { ExportableEntry } from '../../../markdown/index.js'
 import { ErrorFieldsMixin } from '../error-fields-mixin.js'
-import { batchFetchAuthors, triggerTeamNotifications, resolveTeamProjectNumber } from './helpers.js'
+import { triggerTeamNotifications } from './helpers.js'
 import {
     TEAM_IO_NOT_CONFIGURED,
+    TeamExportMarkdownSchema,
+    executeTeamExportMarkdown,
     missingTeamIoProjectNumberError,
     resolveTeamImportScope,
     readAndConvertExternalMarkdownFiles,
     resolveTeamImportContextAuthor,
 } from './io-scope-helpers.js'
 import {
-    DATE_FORMAT_REGEX,
-    DATE_FORMAT_MESSAGE,
-    DATE_MIN_SENTINEL,
-    DATE_MAX_SENTINEL,
     relaxedNumber,
     StrictProjectNumberSchema,
     ENTRY_TYPES,
@@ -39,18 +34,6 @@ import {
 // ============================================================================
 // Schemas
 // ============================================================================
-
-const TeamExportMarkdownSchema = z
-    .object({
-        output_dir: z.string().min(1),
-        start_date: z.string().regex(DATE_FORMAT_REGEX, DATE_FORMAT_MESSAGE).optional(),
-        end_date: z.string().regex(DATE_FORMAT_REGEX, DATE_FORMAT_MESSAGE).optional(),
-        tags: z.array(z.string()).optional(),
-        project_number: StrictProjectNumberSchema.optional(),
-        limit: z.number().int().min(1).max(500).optional().default(100),
-        workspace_id: z.string().optional(),
-    })
-    .strict()
 
 const TeamExportMarkdownSchemaMcp = z.object({
     output_dir: z.string().optional().describe('Target directory for .md files'),
@@ -155,7 +138,7 @@ const TeamImportExternalOutputSchema = TeamImportMarkdownOutputSchema
 // Tool Definitions
 // ============================================================================
 
-/* resolveTeamImportContextAuthor moved to ./io-scope-helpers.ts */
+/* resolveTeamImportContextAuthor and executeTeamExportMarkdown live in ./io-scope-helpers.ts */
 
 export function getTeamIoTools(context: ToolContext): ToolDefinition[] {
     const { teamDb, progress } = context
@@ -180,87 +163,7 @@ export function getTeamIoTools(context: ToolContext): ToolDefinition[] {
                 try {
                     if (!teamDb) return { ...TEAM_IO_NOT_CONFIGURED }
                     const input = TeamExportMarkdownSchema.parse(params)
-                    if (input.workspace_id?.trim() === '*') {
-                        // [BOUNDARY] Per-file export cannot attribute a mixed-workspace batch to one output tree.
-                        return {
-                            success: false,
-                            error: "workspace_id '*' is not supported by team_export_markdown. Export each workspace separately.",
-                            code: 'VALIDATION_ERROR',
-                            category: 'validation',
-                            suggestion: 'Pass a concrete workspace_id or project_number.',
-                            recoverable: true,
-                        }
-                    }
-                    const wsId = resolveWriteWorkspaceId(input.workspace_id, input.project_number, context.config)
-                    const projectNumber =
-                        resolveTeamProjectNumber(context, wsId, input.project_number, input.workspace_id) ?? undefined
-                    if (projectNumber === undefined) {
-                        return missingTeamIoProjectNumberError(input.workspace_id)
-                    }
-
-                    const allowedRoots = context.config?.allowedIoRoots ?? []
-                    await sendProgress(progress, 0, 3, 'Fetching team entries...')
-
-                    if (
-                        input.start_date !== undefined &&
-                        input.end_date !== undefined &&
-                        input.start_date > input.end_date
-                    ) {
-                        throw new ValidationError('start_date cannot be after end_date')
-                    }
-
-                    const limit = input.limit ?? 100
-                    const entries =
-                        input.start_date || input.end_date
-                            ? teamDb.searchByDateRange(
-                                  input.start_date ?? DATE_MIN_SENTINEL,
-                                  input.end_date ?? DATE_MAX_SENTINEL,
-                                  { tags: input.tags, limit, projectNumber, workspaceId: wsId }
-                              ).entries
-                            : teamDb.searchEntries('', {
-                                  tags: input.tags,
-                                  limit,
-                                  projectNumber,
-                                  workspaceId: wsId,
-                              }).entries
-
-                    await sendProgress(progress, 1, 3, `Exporting ${String(entries.length)} team entries...`)
-
-                    const authorMap = batchFetchAuthors(
-                        teamDb,
-                        entries.map((e) => e.id)
-                    )
-                    const exportable: ExportableEntry[] = entries.map((e) => ({
-                        id: e.id,
-                        content: e.content,
-                        entryType: e.entryType,
-                        timestamp: e.timestamp,
-                        tags: e.tags,
-                        significance: e.significanceType ?? undefined,
-                        author: authorMap.get(e.id) ?? undefined,
-                        ...(e.workspaceId !== undefined ? { workspaceId: e.workspaceId } : {}),
-                        ...(e.projectNumber !== undefined && e.projectNumber !== null
-                            ? { projectNumber: e.projectNumber }
-                            : {}),
-                    }))
-
-                    await sendProgress(progress, 2, 3, 'Writing markdown files...')
-                    const result = await exportEntriesToMarkdown(
-                        exportable,
-                        input.output_dir,
-                        teamDb,
-                        allowedRoots
-                    )
-                    if (!result.success && result.errors !== undefined && result.errors.length > 0) {
-                        const total = result.exported_count + result.errors.length
-                        throw new AggregateMcpError(
-                            `Exporting ${String(total)} team entries: ${String(result.exported_count)} succeeded, ${String(result.errors.length)} failed.`,
-                            result.errors.map((e) => ({ message: e.error, file: e.file })),
-                            { result }
-                        )
-                    }
-                    await sendProgress(progress, 3, 3, 'Team export complete')
-                    return result
+                    return await executeTeamExportMarkdown(context, teamDb, input)
                 } catch (err) {
                     return formatHandlerError(err)
                 }
@@ -311,6 +214,7 @@ export function getTeamIoTools(context: ToolContext): ToolDefinition[] {
                             dry_run: input.dry_run,
                             limit: input.limit,
                             author: authorCtx.author,
+                            isPersonal: false,
                             enforceStrictTeamOwnership: authorCtx.enforceStrictTeamOwnership,
                             allowAdminAuthorOverride: authorCtx.allowAdminAuthorOverride,
                             project_number: projectNumber,
@@ -396,6 +300,7 @@ export function getTeamIoTools(context: ToolContext): ToolDefinition[] {
                             dry_run: input.dry_run,
                             limit: input.limit,
                             author: authorCtx.author,
+                            isPersonal: false,
                             enforceStrictTeamOwnership: authorCtx.enforceStrictTeamOwnership,
                             allowAdminAuthorOverride: authorCtx.allowAdminAuthorOverride,
                             project_number: projectNumber,

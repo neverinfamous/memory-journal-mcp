@@ -51,6 +51,59 @@ const CreateIssueHandlerInputSchema = z.preprocess(
 
 type CreateIssueInput = z.infer<typeof CreateIssueHandlerInputSchema>
 
+type CreatedGitHubIssue = NonNullable<
+    Awaited<ReturnType<NonNullable<ToolContext['github']>['createIssue']>>
+>
+
+async function dispatchCreateIssueOnGitHub(
+    db: ToolContext['db'],
+    input: CreateIssueInput,
+    resolved: {
+        owner: string
+        repo: string
+        github: NonNullable<ToolContext['github']>
+    },
+    entryId: number,
+    entryContent: string,
+    workspaceId: string
+): Promise<{ issue: CreatedGitHubIssue } | { errorResponse: Record<string, unknown> }> {
+    let issue: Awaited<ReturnType<typeof resolved.github.createIssue>>
+    try {
+        issue = await resolved.github.createIssue(
+            resolved.owner,
+            resolved.repo,
+            input.title,
+            input.body,
+            input.labels,
+            input.assignees,
+            input.milestone_number
+        )
+    } catch (err) {
+        db.deleteEntry(entryId, false, workspaceId)
+        throw err
+    }
+
+    if (!issue) {
+        db.updateEntry(entryId, {
+            content:
+                entryContent +
+                '\n\n[FAILED] GitHub mutation failed: Could not create issue. Check GITHUB_TOKEN permissions.',
+            workspaceId,
+        })
+        return {
+            errorResponse: {
+                success: false,
+                error: 'Failed to create GitHub issue. Check GITHUB_TOKEN permissions.',
+                code: 'API_ERROR',
+                category: 'api',
+                suggestion: 'Verify GitHub token has write access to issues.',
+                recoverable: true,
+            },
+        }
+    }
+    return { issue }
+}
+
 async function executeCreateIssueOutbox(
     context: ToolContext,
     input: CreateIssueInput,
@@ -65,7 +118,7 @@ async function executeCreateIssueOutbox(
     | { errorResponse: Record<string, unknown> }
     | {
           entryId: number
-          issue: NonNullable<Awaited<ReturnType<NonNullable<ToolContext['github']>['createIssue']>>>
+          issue: CreatedGitHubIssue
           projectResult: IssueProjectResult | undefined
       }
 > {
@@ -89,54 +142,29 @@ async function executeCreateIssueOutbox(
         workspaceId,
     })
 
-    let issue: Awaited<ReturnType<typeof resolved.github.createIssue>>
-    try {
-        issue = await resolved.github.createIssue(
-            resolved.owner,
-            resolved.repo,
-            input.title,
-            input.body,
-            input.labels,
-            input.assignees,
-            input.milestone_number
-        )
-    } catch (err) {
-        db.deleteEntry(entry.id, false, workspaceId)
-        throw err
-    }
-
-    if (!issue) {
-        db.updateEntry(entry.id, {
-            content:
-                entryContent +
-                '\n\n[FAILED] GitHub mutation failed: Could not create issue. Check GITHUB_TOKEN permissions.',
-            workspaceId,
-        })
-        return {
-            errorResponse: {
-                success: false,
-                error: 'Failed to create GitHub issue. Check GITHUB_TOKEN permissions.',
-                code: 'API_ERROR',
-                category: 'api',
-                suggestion: 'Verify GitHub token has write access to issues.',
-                recoverable: true,
-            },
-        }
-    }
+    const issueRes = await dispatchCreateIssueOnGitHub(
+        db,
+        input,
+        resolved,
+        entry.id,
+        entryContent,
+        workspaceId
+    )
+    if ('errorResponse' in issueRes) return issueRes
 
     let projectResult: IssueProjectResult | undefined = undefined
-    if (projectNumber !== undefined && issue.nodeId) {
+    if (projectNumber !== undefined && issueRes.issue.nodeId) {
         projectResult = await addIssueToProject(
             resolved.github,
             resolved.owner,
             resolved.repo,
-            issue.nodeId,
+            issueRes.issue.nodeId,
             projectNumber,
             input.initial_status
         )
     }
 
-    return { entryId: entry.id, issue, projectResult }
+    return { entryId: entry.id, issue: issueRes.issue, projectResult }
 }
 
 async function finalizeIssueJournalEntry(

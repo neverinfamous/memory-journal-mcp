@@ -149,6 +149,30 @@ async function tryJournalSearchFallback(
     }
 }
 
+function validateGrepRegexQuery(query: string): Record<string, unknown> | undefined {
+    if (!isSafeUserRegex(query)) {
+        return {
+            success: false,
+            error: 'Regex query rejected: pattern exceeds length limit (256) or contains unsafe constructs (nested quantifiers / backreferences)',
+            code: 'VALIDATION_ERROR',
+            category: 'validation',
+            recoverable: true,
+        }
+    }
+    try {
+        new RegExp(query)
+        return undefined
+    } catch (err) {
+        return {
+            success: false,
+            error: `Invalid regex pattern '${query}': ${err instanceof Error ? err.message : String(err)}`,
+            code: 'VALIDATION_ERROR',
+            category: 'validation',
+            recoverable: true,
+        }
+    }
+}
+
 export async function handleGrepSearch(
     params: unknown,
     toolName: string,
@@ -170,26 +194,8 @@ export async function handleGrepSearch(
         rawArgs['is_regex'] === true || rawArgs['IsRegex'] === true || rawArgs['isRegex'] === true
 
     if (isRegex) {
-        if (!isSafeUserRegex(query)) {
-            return {
-                success: false,
-                error: 'Regex query rejected: pattern exceeds length limit (256) or contains unsafe constructs (nested quantifiers / backreferences)',
-                code: 'VALIDATION_ERROR',
-                category: 'validation',
-                recoverable: true,
-            }
-        }
-        try {
-            new RegExp(query)
-        } catch (err) {
-            return {
-                success: false,
-                error: `Invalid regex pattern '${query}': ${err instanceof Error ? err.message : String(err)}`,
-                code: 'VALIDATION_ERROR',
-                category: 'validation',
-                recoverable: true,
-            }
-        }
+        const regexError = validateGrepRegexQuery(query)
+        if (regexError !== undefined) return regexError
     }
 
     const allowedRoots = context?.config?.allowedIoRoots ?? []
@@ -230,6 +236,81 @@ export async function handleGrepSearch(
     }
 }
 
+function sliceViewedFileLines(content: string, rawArgs: Record<string, unknown>): string {
+    const startLine =
+        typeof rawArgs['start_line'] === 'number'
+            ? rawArgs['start_line']
+            : typeof rawArgs['StartLine'] === 'number'
+              ? rawArgs['StartLine']
+              : undefined
+    const endLine =
+        typeof rawArgs['end_line'] === 'number'
+            ? rawArgs['end_line']
+            : typeof rawArgs['EndLine'] === 'number'
+              ? rawArgs['EndLine']
+              : undefined
+    if (startLine === undefined && endLine === undefined) return content
+    const lines = content.split(/\r?\n/)
+    const start = Math.max(1, startLine ?? 1) - 1
+    const end = Math.min(lines.length, endLine ?? lines.length)
+    return lines.slice(start, end).join('\n')
+}
+
+async function openSafeReadHandle(resolved: string): Promise<fs.promises.FileHandle | undefined> {
+    try {
+        return await fs.promises.open(resolved, fs.constants.O_RDONLY | (fs.constants.O_NOFOLLOW ?? 0))
+    } catch {
+        return undefined
+    }
+}
+
+async function readSafeViewFile(
+    resolved: string,
+    targetPath: string,
+    toolName: string,
+    rawArgs: Record<string, unknown>
+): Promise<unknown> {
+    const handle = await openSafeReadHandle(resolved)
+    if (handle === undefined) {
+        return {
+            success: false,
+            error: `🛠️ AUTONOMOUS HEALING: File not found at '${targetPath}'.`,
+            code: 'NOT_FOUND',
+            category: 'filesystem',
+            recoverable: true,
+        }
+    }
+    try {
+        const stat = await handle.stat()
+        if (stat.size > 2 * 1024 * 1024) {
+            return {
+                success: false,
+                error: 'File exceeds maximum size limit of 2MB',
+                code: 'VALIDATION_ERROR',
+                category: 'validation',
+                recoverable: false,
+            }
+        }
+        const content = await handle.readFile('utf-8')
+        return {
+            success: true,
+            path: resolved,
+            content: sliceViewedFileLines(content, rawArgs),
+            _healing_note: `🛠️ AUTONOMOUS HEALING: '${toolName}' is an agent-native tool, but was invoked directly as an MCP tool. File read successfully from disk.`,
+        }
+    } catch (err) {
+        return {
+            success: false,
+            error: `Failed to read file '${targetPath}': ${err instanceof Error ? err.message : String(err)}`,
+            code: 'IO_ERROR',
+            category: 'filesystem',
+            recoverable: true,
+        }
+    } finally {
+        await handle.close()
+    }
+}
+
 export async function handleViewFile(
     params: unknown,
     toolName: string,
@@ -250,7 +331,6 @@ export async function handleViewFile(
             recoverable: true,
         }
     }
-
     if (targetPath.includes('://')) return handleReadResource(params, toolName, context)
 
     const resolved = path.resolve(targetPath.trim())
@@ -266,72 +346,7 @@ export async function handleViewFile(
             recoverable: false,
         }
     }
-
-    let handle: fs.promises.FileHandle | undefined
-    try {
-        try {
-            handle = await fs.promises.open(
-                resolved,
-                fs.constants.O_RDONLY | (fs.constants.O_NOFOLLOW ?? 0)
-            )
-        } catch {
-            return {
-                success: false,
-                error: `🛠️ AUTONOMOUS HEALING: File not found at '${targetPath}'.`,
-                code: 'NOT_FOUND',
-                category: 'filesystem',
-                recoverable: true,
-            }
-        }
-        const stat = await handle.stat()
-        if (stat.size > 2 * 1024 * 1024) {
-            return {
-                success: false,
-                error: 'File exceeds maximum size limit of 2MB',
-                code: 'VALIDATION_ERROR',
-                category: 'validation',
-                recoverable: false,
-            }
-        }
-        const content = await handle.readFile('utf-8')
-        const startLine =
-            typeof rawArgs['start_line'] === 'number'
-                ? rawArgs['start_line']
-                : typeof rawArgs['StartLine'] === 'number'
-                  ? rawArgs['StartLine']
-                  : undefined
-        const endLine =
-            typeof rawArgs['end_line'] === 'number'
-                ? rawArgs['end_line']
-                : typeof rawArgs['EndLine'] === 'number'
-                  ? rawArgs['EndLine']
-                  : undefined
-
-        let outputContent = content
-        if (startLine !== undefined || endLine !== undefined) {
-            const lines = content.split(/\r?\n/)
-            const start = Math.max(1, startLine ?? 1) - 1
-            const end = Math.min(lines.length, endLine ?? lines.length)
-            outputContent = lines.slice(start, end).join('\n')
-        }
-
-        return {
-            success: true,
-            path: resolved,
-            content: outputContent,
-            _healing_note: `🛠️ AUTONOMOUS HEALING: '${toolName}' is an agent-native tool, but was invoked directly as an MCP tool. File read successfully from disk.`,
-        }
-    } catch (err) {
-        return {
-            success: false,
-            error: `Failed to read file '${targetPath}': ${err instanceof Error ? err.message : String(err)}`,
-            code: 'IO_ERROR',
-            category: 'filesystem',
-            recoverable: true,
-        }
-    } finally {
-        await handle?.close()
-    }
+    return await readSafeViewFile(resolved, targetPath, toolName, rawArgs)
 }
 
 export async function handleListDir(

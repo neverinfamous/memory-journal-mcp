@@ -104,6 +104,41 @@ export function projectListAction(options: Record<string, unknown>, command: Com
     }
 }
 
+function buildValidatedProjectServerOptions(
+    options: Record<string, unknown>,
+    command: Command
+): ServerOptions | undefined {
+    const cliConfigPath =
+        (options['config'] as string | undefined) ?? process.env['MEMORY_JOURNAL_CONFIG']
+    const existingCliConfig =
+        cliConfigPath !== undefined && fs.existsSync(path.resolve(cliConfigPath))
+            ? cliConfigPath
+            : undefined
+
+    let resolver: ConfigResolver
+    try {
+        resolver = new ConfigResolver(command, options, existingCliConfig)
+    } catch (e) {
+        process.stderr.write(
+            `\nInvalid configuration, refusing to register project: ${e instanceof Error ? e.message : String(e)}\n`
+        )
+        process.stderr.write(`Fix the configuration and run 'memory-journal-mcp entry create' manually.\n`)
+        process.exitCode = 1
+        return undefined
+    }
+
+    const configErrors: string[] = []
+    const { serverOptions } = buildServerOptions(resolver, options, command, configErrors)
+    if (configErrors.length > 0) {
+        // [INVARIANT] Never persist or initialize a database from a configuration that failed validation (H13/H16).
+        process.stderr.write('\nInvalid configuration, refusing to register project:\n')
+        configErrors.forEach((err) => process.stderr.write(` - ${err}\n`))
+        process.exitCode = 1
+        return undefined
+    }
+    return serverOptions
+}
+
 function validateAndRegisterProjectEntry(
     name: string,
     options: Record<string, unknown>,
@@ -160,34 +195,8 @@ function validateAndRegisterProjectEntry(
         process.exit(1)
     }
 
-    const cliConfigPath =
-        (options['config'] as string | undefined) ?? process.env['MEMORY_JOURNAL_CONFIG']
-    const existingCliConfig =
-        cliConfigPath !== undefined && fs.existsSync(path.resolve(cliConfigPath))
-            ? cliConfigPath
-            : undefined
-
-    let resolver: ConfigResolver
-    try {
-        resolver = new ConfigResolver(command, options, existingCliConfig)
-    } catch (e) {
-        process.stderr.write(
-            `\nInvalid configuration, refusing to register project: ${e instanceof Error ? e.message : String(e)}\n`
-        )
-        process.stderr.write(`Fix the configuration and run 'memory-journal-mcp entry create' manually.\n`)
-        process.exitCode = 1
-        return undefined
-    }
-
-    const configErrors: string[] = []
-    const { serverOptions } = buildServerOptions(resolver, options, command, configErrors)
-    if (configErrors.length > 0) {
-        // [INVARIANT] Never persist or initialize a database from a configuration that failed validation (H13/H16).
-        process.stderr.write('\nInvalid configuration, refusing to register project:\n')
-        configErrors.forEach((err) => process.stderr.write(` - ${err}\n`))
-        process.exitCode = 1
-        return undefined
-    }
+    const serverOptions = buildValidatedProjectServerOptions(options, command)
+    if (serverOptions === undefined) return undefined
 
     saveConfig(config, options)
     return { absPath, serverOptions, effectiveProjNum: newEntry.project_number }
@@ -277,24 +286,13 @@ export async function projectCreateAction(
     await createProjectInitEntry(name, absPath, effectiveProjNum, serverOptions, isJson)
 }
 
-export function projectUpdateAction(name: string, options: Record<string, unknown>, command: Command): void {
-    handleProjectDumpConfig(options, command)
-    if (!name || name.trim() === '' || isForbiddenProjectKey(name)) {
-        process.stderr.write('Invalid project name.\n')
-        process.exit(1)
-    }
-
-    const config = loadConfig(options)
-    const registry = (config['projectRegistry'] ?? {}) as Record<string, { path: string, project_number?: number }>
-
-    if (!Object.prototype.hasOwnProperty.call(registry, name)) {
-        process.stderr.write(`🛠️ AUTONOMOUS HEALING: Project '${name}' not found.\n`)
-        process.exit(1)
-    }
-
-    const project = { ...(registry[name] ?? { path: '' }) }
+function applyProjectUpdateFields(
+    name: string,
+    options: Record<string, unknown>,
+    registry: Record<string, { path: string; project_number?: number }>,
+    project: { path: string; project_number?: number }
+): { targetName: string; modified: boolean } {
     let modified = false
-
     if (options['path'] != null) {
         const rawPath = options['path']
         if (typeof rawPath !== 'string' || rawPath.trim() === '') {
@@ -349,6 +347,26 @@ export function projectUpdateAction(name: string, options: Record<string, unknow
         modified = true
     }
 
+    return { targetName, modified }
+}
+
+export function projectUpdateAction(name: string, options: Record<string, unknown>, command: Command): void {
+    handleProjectDumpConfig(options, command)
+    if (!name || name.trim() === '' || isForbiddenProjectKey(name)) {
+        process.stderr.write('Invalid project name.\n')
+        process.exit(1)
+    }
+
+    const config = loadConfig(options)
+    const registry = (config['projectRegistry'] ?? {}) as Record<string, { path: string, project_number?: number }>
+
+    if (!Object.prototype.hasOwnProperty.call(registry, name)) {
+        process.stderr.write(`🛠️ AUTONOMOUS HEALING: Project '${name}' not found.\n`)
+        process.exit(1)
+    }
+
+    const project = { ...(registry[name] ?? { path: '' }) }
+    const { targetName, modified } = applyProjectUpdateFields(name, options, registry, project)
     if (!modified) {
         process.stdout.write('No updates specified.\n')
         return

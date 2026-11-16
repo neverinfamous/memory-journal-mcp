@@ -275,13 +275,13 @@ export function getGitTools(context: ToolContext): ToolDefinition[] {
 
                     const analysis = {
                         totalCommits: commits.length,
-                        byType: {} as Record<string, number>,
-                        byAuthor: {} as Record<string, number>,
+                        byType: Object.create(null) as Record<string, number>,
+                        byAuthor: Object.create(null) as Record<string, number>,
                         breakingCount: 0,
                         totalInsertions: 0,
                         totalDeletions: 0,
                         totalImpact: 0,
-                        byCategory: {} as Record<string, number>
+                        byCategory: Object.create(null) as Record<string, number>,
                     }
 
                     for (const c of commits) {

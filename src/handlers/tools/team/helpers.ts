@@ -4,10 +4,12 @@
  * Shared constants and utilities used across all team tool sub-modules.
  */
 
-import type { ToolContext } from '../../../types/index.js'
+import type { JournalEntry, ToolContext } from '../../../types/index.js'
 import { logger } from '../../../utils/logger.js'
+import { resolveWorkspaceId } from '../../../utils/workspace-resolver.js'
 import { findWorkspaceByProjectNumber } from '../../../utils/workspace-resolver-registry.js'
 import { activeProjectRegistry, pairStoredScope } from '../../../utils/write-scope.js'
+import { TeamGetEntryByIdSchema } from './schemas.js'
 
 // ============================================================================
 // Constants
@@ -122,4 +124,88 @@ export function resolveTeamProjectNumber(
             : undefined
     }
     return undefined
+}
+
+function filterScopedTeamRelationships(
+    teamDb: NonNullable<ToolContext['teamDb']>,
+    entryId: number,
+    entry: JournalEntry,
+    effectiveWsId: string
+): ReturnType<NonNullable<ToolContext['teamDb']>['getRelationships']> {
+    const rawRels = teamDb.getRelationships(entryId, effectiveWsId)
+    const peerIds = [
+        ...new Set(
+            rawRels.map((rel) => (rel.fromEntryId === entryId ? rel.toEntryId : rel.fromEntryId))
+        ),
+    ]
+    const peersMap =
+        peerIds.length > 0 && typeof teamDb.getEntriesByIds === 'function'
+            ? teamDb.getEntriesByIds(peerIds, effectiveWsId)
+            : new Map(
+                  peerIds
+                      .map((id) => [id, teamDb.getEntryById(id, effectiveWsId)] as const)
+                      .filter(
+                          (pair): pair is readonly [number, JournalEntry] =>
+                              pair[1] !== null && pair[1] !== undefined
+                      )
+              )
+    return rawRels.filter((rel) => {
+        const peerId = rel.fromEntryId === entryId ? rel.toEntryId : rel.fromEntryId
+        const peer = peersMap.get(peerId)
+        return (
+            peer !== undefined &&
+            peer.projectNumber === entry.projectNumber &&
+            (effectiveWsId === '*' || peer.workspaceId === effectiveWsId)
+        )
+    })
+}
+
+export function executeTeamGetEntryById(
+    context: ToolContext,
+    teamDb: NonNullable<ToolContext['teamDb']>,
+    params: unknown
+): Record<string, unknown> {
+    const { entry_id, include_relationships, project_number, workspace_id } =
+        TeamGetEntryByIdSchema.parse(params)
+    const wsId = resolveWorkspaceId(workspace_id, project_number, context.config)
+    const projectNumber = resolveTeamProjectNumber(context, wsId, project_number, workspace_id)
+    if (projectNumber === undefined || projectNumber === null) {
+        return missingTeamProjectNumberError()
+    }
+
+    const entry = teamDb.getEntryById(entry_id, wsId)
+    if (!entry) {
+        return {
+            success: false,
+            error: `Team entry ${String(entry_id)} not found`,
+            code: 'RESOURCE_NOT_FOUND',
+            category: 'resource',
+            suggestion: 'Verify the team entry ID and try again',
+            recoverable: true,
+        }
+    }
+
+    if (entry.projectNumber !== projectNumber) {
+        return {
+            success: false,
+            error: `Team entry ${String(entry_id)} does not belong to project ${String(projectNumber)}`,
+            code: 'RESOURCE_NOT_FOUND',
+            category: 'resource',
+            suggestion: 'Verify the team entry ID and project number, and try again',
+            recoverable: true,
+        }
+    }
+
+    const effectiveWsId = entry.workspaceId ?? wsId
+    const author = fetchAuthor(teamDb, entry_id)
+    const result: Record<string, unknown> = {
+        success: true,
+        entry: { ...entry, author },
+    }
+    if (include_relationships) {
+        result['relationships'] = filterScopedTeamRelationships(teamDb, entry_id, entry, effectiveWsId)
+    }
+    const importance = teamDb.calculateImportance(entry_id, effectiveWsId)
+    if (importance !== null) result['importance'] = importance
+    return result
 }

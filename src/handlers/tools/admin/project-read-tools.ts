@@ -12,7 +12,34 @@ export interface ProjectReadToolDeps {
     coerceRegistryProjectNumber: (raw: number | string | undefined) => number | undefined
 }
 
-function readRegistryObject(value: unknown): RawRegistry | undefined {
+export type RegistryMap = Record<string, ProjectRegistryEntry>
+
+export interface RegistryKeyChange {
+    from: string
+    to?: string
+    projectNumber?: number | null
+}
+
+/** Rewrites/clears session defaults that pointed at a renamed/deleted project. */
+export function applyDefaultsChange(
+    target: { defaultWorkspaceId?: string; defaultProjectNumber?: number },
+    change: RegistryKeyChange | undefined
+): void {
+    if (change === undefined || target.defaultWorkspaceId !== change.from) return
+    if (change.to !== undefined) {
+        target.defaultWorkspaceId = change.to
+        if (typeof change.projectNumber === 'number') {
+            target.defaultProjectNumber = change.projectNumber
+        } else if (change.projectNumber === null) {
+            delete target.defaultProjectNumber
+        }
+    } else {
+        delete target.defaultWorkspaceId
+        delete target.defaultProjectNumber
+    }
+}
+
+export function readRegistryObject(value: unknown): RawRegistry | undefined {
     if (value === null || typeof value !== 'object' || Array.isArray(value)) return undefined
     return value as RawRegistry
 }
@@ -34,6 +61,49 @@ function readManagerRegistry(manager: unknown): RawRegistry | undefined {
         return readRegistryObject(mgrLike.getConfig()?.briefingConfig?.projectRegistry)
     }
     return undefined
+}
+
+/** Read live in-memory projectRegistry from ConfigManager or ToolContext config. */
+export function readLiveProjectRegistry(context?: ToolContext): RegistryMap {
+    return (
+        readManagerRegistry(context?.config?.runtime?.configManager) ??
+        readRegistryObject(context?.config?.briefingConfig?.projectRegistry) ??
+        readRegistryObject(context?.config?.projectRegistry) ??
+        {}
+    )
+}
+
+/** Propagate an updated registry and default-workspace change to ConfigManager. */
+export function syncManagerRegistry(
+    manager: unknown,
+    reg: RegistryMap,
+    change: RegistryKeyChange | undefined
+): void {
+    if (manager instanceof ConfigManager) {
+        const briefingConfig = { ...manager.getConfig().briefingConfig, projectRegistry: reg }
+        applyDefaultsChange(briefingConfig, change)
+        manager.updateConfig({ briefingConfig })
+        return
+    }
+    if (
+        manager !== null &&
+        manager !== undefined &&
+        typeof manager === 'object' &&
+        'updateConfig' in manager &&
+        typeof (manager as { updateConfig?: unknown }).updateConfig === 'function'
+    ) {
+        const mgrLike = manager as {
+            getConfig?: () => { briefingConfig?: Record<string, unknown> }
+            updateConfig: (cfg: Record<string, unknown>) => unknown
+        }
+        const existingBriefing = mgrLike.getConfig?.()?.briefingConfig ?? {}
+        const briefingConfig = { ...existingBriefing, projectRegistry: reg }
+        applyDefaultsChange(
+            briefingConfig as { defaultWorkspaceId?: string; defaultProjectNumber?: number },
+            change
+        )
+        mgrLike.updateConfig({ briefingConfig })
+    }
 }
 
 /**
@@ -88,6 +158,92 @@ function lookupProjectByNumber(
     return undefined
 }
 
+function resolveProjectMatch(
+    parsed: ReturnType<typeof GetProjectSchemaMcp.parse>,
+    registry: RawRegistry,
+    coerceRegistryProjectNumber: ProjectReadToolDeps['coerceRegistryProjectNumber']
+): { foundName?: string; projectInfo?: RawRegistryEntry; error?: Record<string, unknown> } {
+    let foundName = parsed.name
+    let projectInfo = Object.hasOwn(registry, foundName) ? registry[foundName] : undefined
+    const rawProjNum = (parsed as Record<string, unknown>)['project_number']
+    if (rawProjNum !== undefined && typeof rawProjNum !== 'number' && typeof rawProjNum !== 'string') {
+        return {
+            error: {
+                success: false,
+                error: `🛠️ AUTONOMOUS HEALING: Invalid project_number: '${JSON.stringify(rawProjNum) ?? typeof rawProjNum}'`,
+            },
+        }
+    }
+    const parsedProjNum = coerceRegistryProjectNumber(rawProjNum)
+    if (rawProjNum !== undefined && parsedProjNum === undefined) {
+        return {
+            error: {
+                success: false,
+                error: `🛠️ AUTONOMOUS HEALING: Invalid project_number: '${JSON.stringify(rawProjNum) ?? typeof rawProjNum}'`,
+            },
+        }
+    }
+    const nameProjNum = coerceRegistryProjectNumber(parsed.name)
+    if (
+        projectInfo &&
+        parsedProjNum !== undefined &&
+        projectInfo.project_number !== parsedProjNum &&
+        projectInfo.id !== parsedProjNum
+    ) {
+        return {
+            error: {
+                success: false,
+                error: `🛠️ AUTONOMOUS HEALING: Project '${foundName}' uses project_number ${String(projectInfo.project_number ?? projectInfo.id)}, not ${String(parsedProjNum)}.`,
+            },
+        }
+    }
+    if (!projectInfo && (nameProjNum !== undefined || parsedProjNum !== undefined)) {
+        if (nameProjNum !== undefined && parsedProjNum !== undefined && nameProjNum !== parsedProjNum) {
+            return {
+                error: {
+                    success: false,
+                    error: `🛠️ AUTONOMOUS HEALING: Conflicting project_number values '${parsed.name}' and ${String(parsedProjNum)}.`,
+                },
+            }
+        }
+        const matched = lookupProjectByNumber(registry, parsedProjNum ?? nameProjNum)
+        if (matched !== undefined) {
+            foundName = matched.foundName
+            projectInfo = matched.projectInfo
+        }
+    }
+    if (!projectInfo) {
+        return { error: { success: false, error: `🛠️ AUTONOMOUS HEALING: Project not found: '${parsed.name}'` } }
+    }
+    return { foundName, projectInfo }
+}
+
+function executeGetProject(
+    params: unknown,
+    context: ToolContext,
+    deps: ProjectReadToolDeps
+): Record<string, unknown> {
+    const parsed = GetProjectSchemaMcp.parse(params)
+    if (isForbiddenProjectKey(parsed.name)) {
+        return { success: false, error: `Invalid project name: '${parsed.name}'` }
+    }
+    const registry = resolveLiveRegistry(context, deps.loadConfig)
+    const match = resolveProjectMatch(parsed, registry, deps.coerceRegistryProjectNumber)
+    if (match.error !== undefined || match.projectInfo === undefined || match.foundName === undefined) {
+        return match.error ?? { success: false, error: `🛠️ AUTONOMOUS HEALING: Project not found: '${parsed.name}'` }
+    }
+    const resolvedId = match.projectInfo.project_number ?? match.projectInfo.id
+    return {
+        success: true,
+        project: {
+            name: match.foundName,
+            id: resolvedId,
+            project_number: resolvedId,
+            ...match.projectInfo,
+        },
+    }
+}
+
 export function getProjectReadTools(
     context: ToolContext,
     deps: ProjectReadToolDeps
@@ -131,81 +287,7 @@ export function getProjectReadTools(
             },
             handler: (params: unknown): Promise<Record<string, unknown>> => {
                 try {
-                    const parsed = GetProjectSchemaMcp.parse(params)
-                    if (isForbiddenProjectKey(parsed.name)) {
-                        return Promise.resolve({
-                            success: false,
-                            error: `Invalid project name: '${parsed.name}'`,
-                        })
-                    }
-                    const registry = resolveLiveRegistry(context, deps.loadConfig)
-                    let foundName = parsed.name
-                    let projectInfo = Object.hasOwn(registry, foundName)
-                        ? registry[foundName]
-                        : undefined
-                    const rawProjNum = (parsed as Record<string, unknown>)['project_number']
-                    if (
-                        rawProjNum !== undefined &&
-                        typeof rawProjNum !== 'number' &&
-                        typeof rawProjNum !== 'string'
-                    ) {
-                        return Promise.resolve({
-                            success: false,
-                            error: `🛠️ AUTONOMOUS HEALING: Invalid project_number: '${JSON.stringify(rawProjNum) ?? typeof rawProjNum}'`,
-                        })
-                    }
-                    const parsedProjNum = deps.coerceRegistryProjectNumber(rawProjNum)
-                    if (rawProjNum !== undefined && parsedProjNum === undefined) {
-                        return Promise.resolve({
-                            success: false,
-                            error: `🛠️ AUTONOMOUS HEALING: Invalid project_number: '${JSON.stringify(rawProjNum) ?? typeof rawProjNum}'`,
-                        })
-                    }
-                    const nameProjNum = deps.coerceRegistryProjectNumber(parsed.name)
-                    if (
-                        projectInfo &&
-                        parsedProjNum !== undefined &&
-                        projectInfo.project_number !== parsedProjNum &&
-                        projectInfo.id !== parsedProjNum
-                    ) {
-                        return Promise.resolve({
-                            success: false,
-                            error: `🛠️ AUTONOMOUS HEALING: Project '${foundName}' uses project_number ${String(projectInfo.project_number ?? projectInfo.id)}, not ${String(parsedProjNum)}.`,
-                        })
-                    }
-                    if (!projectInfo && (nameProjNum !== undefined || parsedProjNum !== undefined)) {
-                        if (
-                            nameProjNum !== undefined &&
-                            parsedProjNum !== undefined &&
-                            nameProjNum !== parsedProjNum
-                        ) {
-                            return Promise.resolve({
-                                success: false,
-                                error: `🛠️ AUTONOMOUS HEALING: Conflicting project_number values '${parsed.name}' and ${String(parsedProjNum)}.`,
-                            })
-                        }
-                        const matched = lookupProjectByNumber(registry, parsedProjNum ?? nameProjNum)
-                        if (matched !== undefined) {
-                            foundName = matched.foundName
-                            projectInfo = matched.projectInfo
-                        }
-                    }
-                    if (!projectInfo) {
-                        return Promise.resolve({
-                            success: false,
-                            error: `🛠️ AUTONOMOUS HEALING: Project not found: '${parsed.name}'`,
-                        })
-                    }
-                    const resolvedId = projectInfo.project_number ?? projectInfo.id
-                    return Promise.resolve({
-                        success: true,
-                        project: {
-                            name: foundName,
-                            id: resolvedId,
-                            project_number: resolvedId,
-                            ...projectInfo,
-                        },
-                    })
+                    return Promise.resolve(executeGetProject(params, context, deps))
                 } catch (err) {
                     return Promise.resolve({ ...formatHandlerError(err) })
                 }

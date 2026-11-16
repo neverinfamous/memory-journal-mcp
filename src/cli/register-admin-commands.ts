@@ -86,14 +86,7 @@ export function registerProjectCommands(program: Command): void {
     projectDeleteCmd.action(projectDeleteAction)
 }
 
-export function registerAdminCommands(program: Command): void {
-    const adminCmd = program.command('admin').description('Database administration utilities')
-    addAgentInstructions(adminCmd,
-        `
-🤖 AI AGENT INSTRUCTIONS:
-- These are dangerous administrative utilities. ALWAYS verify the target database before executing.`
-    )
-
+function registerAdminStorageCommands(adminCmd: Command): void {
     const backupCmd = adminCmd
         .command('backup')
         .description('Export the database to a timestamped backup file')
@@ -130,7 +123,9 @@ export function registerAdminCommands(program: Command): void {
     addCoreOptions(vacuumCmd)
     addDatabaseOptions(vacuumCmd)
     vacuumCmd.action(withValidation(vacuumSchema, vacuumAction))
+}
 
+function registerAdminMaintenanceCommands(adminCmd: Command): void {
     const pruneCmd = adminCmd.command('prune').description('Run autonomous database pruning')
     withGroup(pruneCmd, 'Command Options', (cmd: Command) => {
         cmd
@@ -178,4 +173,15 @@ export function registerAdminCommands(program: Command): void {
     addDatabaseOptions(rebuildIndexCmd)
     addWorkspaceScopeOptions(rebuildIndexCmd)
     rebuildIndexCmd.action(withValidation(rebuildIndexSchema, rebuildIndexAction))
+}
+
+export function registerAdminCommands(program: Command): void {
+    const adminCmd = program.command('admin').description('Database administration utilities')
+    addAgentInstructions(adminCmd,
+        `
+🤖 AI AGENT INSTRUCTIONS:
+- These are dangerous administrative utilities. ALWAYS verify the target database before executing.`
+    )
+    registerAdminStorageCommands(adminCmd)
+    registerAdminMaintenanceCommands(adminCmd)
 }

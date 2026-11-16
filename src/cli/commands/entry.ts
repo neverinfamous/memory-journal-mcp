@@ -276,6 +276,35 @@ function buildUpdatedEntryPayload(
     return { content, payload, metaSourceWs }
 }
 
+function enforceCliUpdateTeamPermissions(
+    db: IDatabaseAdapter,
+    config: ToolHandlerConfig,
+    entryId: number,
+    existingEntry: ReturnType<IDatabaseAdapter['getEntryById']>,
+    trimmedTargetWs: string | undefined
+): void {
+    enforceCliTeamRbac(db, config, 'member', existingEntry?.workspaceId ?? trimmedTargetWs)
+    if (
+        trimmedTargetWs !== undefined &&
+        existingEntry?.workspaceId !== undefined &&
+        existingEntry.workspaceId.toLowerCase() !== trimmedTargetWs.toLowerCase()
+    ) {
+        enforceCliTeamRbac(db, config, 'member', trimmedTargetWs)
+    }
+    if (existingEntry !== null && existingEntry !== undefined) {
+        const denied = checkSingleTeamOwnership(
+            db,
+            { db, teamDb: db, config },
+            entryId,
+            'modify',
+            existingEntry.workspaceId
+        )
+        if (denied !== null) {
+            throw new AuthorizationError(String(denied['error']))
+        }
+    }
+}
+
 export async function updateEntryAction(...args: unknown[]): Promise<void> {
     const command = args[args.length - 1] as Command
     const options = (args.length > 1 ? args[args.length - 2] : {}) as UpdateEntryCliOptions
@@ -288,26 +317,7 @@ export async function updateEntryAction(...args: unknown[]): Promise<void> {
             validateCliUpdateArgsAndTarget(options)
         const existingEntry = db.getEntryById(entryId, '*')
         if (options.team === true) {
-            enforceCliTeamRbac(db, config, 'member', existingEntry?.workspaceId ?? trimmedTargetWs)
-            if (
-                trimmedTargetWs !== undefined &&
-                existingEntry?.workspaceId !== undefined &&
-                existingEntry.workspaceId.toLowerCase() !== trimmedTargetWs.toLowerCase()
-            ) {
-                enforceCliTeamRbac(db, config, 'member', trimmedTargetWs)
-            }
-            if (existingEntry !== null && existingEntry !== undefined) {
-                const denied = checkSingleTeamOwnership(
-                    db,
-                    { db, teamDb: db, config },
-                    entryId,
-                    'modify',
-                    existingEntry.workspaceId
-                )
-                if (denied !== null) {
-                    throw new AuthorizationError(String(denied['error']))
-                }
-            }
+            enforceCliUpdateTeamPermissions(db, config, entryId, existingEntry, trimmedTargetWs)
         }
         const rawContent =
             options.file === undefined &&

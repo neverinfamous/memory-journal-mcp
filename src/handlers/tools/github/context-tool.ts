@@ -58,7 +58,11 @@ export function createGitHubContextTool(context: ToolContext): ToolDefinition {
                     input.workspace_id !== undefined ||
                     input.project_number !== undefined
                 if ('error' in resolved) {
-                    if (callerScoped || context.github === undefined) {
+                    if (
+                        callerScoped ||
+                        context.github === undefined ||
+                        resolved.response['code'] === 'VALIDATION_ERROR'
+                    ) {
                         return resolved.response
                     }
                     targetGithub = context.github

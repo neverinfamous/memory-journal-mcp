@@ -223,6 +223,10 @@ export interface RpcRequest {
     dryRun?: boolean
     /** Enforced test-database isolation propagated from nested sandbox execution */
     useTestDb?: boolean
+    /** Narrowed workspace scope propagated from nested sandbox execution */
+    workspaceId?: string
+    /** Narrowed project number propagated from nested sandbox execution */
+    projectNumber?: number
 }
 
 /**

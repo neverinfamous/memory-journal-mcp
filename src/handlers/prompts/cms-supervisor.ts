@@ -6,7 +6,7 @@
 
 import type { IDatabaseAdapter } from '../../database/core/interfaces.js'
 import { ICON_PROMPT } from '../../constants/icons.js'
-import type { InternalPromptDef } from './index.js'
+import type { InternalPromptDef, PromptMessage } from './index.js'
 import type { BriefingConfig } from '../resources/shared.js'
 import { loadProjectRegistryFromConfig } from '../../utils/workspace-resolver.js'
 import { exactRegistryKey } from '../../utils/write-scope.js'
@@ -101,90 +101,29 @@ function fetchDeletedEntriesSnapshot(db: IDatabaseAdapter, lookbackHours: number
     }
 }
 
-export function getCmsSupervisorPromptDefinitions(): InternalPromptDef[] {
-    return [
-        {
-            name: 'cms-rem-supervisor',
-            description:
-                'REM Meta-Cognitive Supervisor & Self-Adaptation workflow (CMS-04). Audits recent NREM consolidation (CMS-02) mutations and soft-deletions, mines cross-run telemetry and unresolved blockers, and enforces the Dirty-Tree Conditional Single-Pass Validation Gate.',
-            icons: [ICON_PROMPT],
-            arguments: [
-                {
-                    name: 'lookbackHours',
-                    description: 'Hours to look back for CMS-02 maintenance entries and soft-deleted entries (default: 24)',
-                    required: false,
-                },
-                {
-                    name: 'autoRestore',
-                    description: 'Set to "true" to automatically restore any high-significance entry erroneously soft-deleted (default: true)',
-                    required: false,
-                },
-            ],
-            handler: (
-                args: Record<string, string> | undefined,
-                db: IDatabaseAdapter,
-                _teamDb?: IDatabaseAdapter,
-                _github?: unknown,
-                briefingConfig?: Partial<BriefingConfig>
-            ) => {
-                const rawArgs = args ?? {}
-                const lookbackRes = cmsSupervisorArgsSchema.shape.lookbackHours.safeParse(
-                    rawArgs['lookbackHours']
-                )
-                const lookbackHours = lookbackRes.success ? lookbackRes.data : 24
-                const restoreRes = cmsSupervisorArgsSchema.shape.autoRestore.safeParse(
-                    rawArgs['autoRestore']
-                )
-                if (!restoreRes.success) {
-                    throw new ValidationError(
-                        `Invalid autoRestore value '${String(rawArgs['autoRestore'])}'. Expected boolean (true/false, on/off, yes/no, 1/0, disabled).`
-                    )
-                }
-                const autoRestore = restoreRes.data
-                const registry = briefingConfig?.projectRegistry ?? loadProjectRegistryFromConfig()
-                const mjKey = exactRegistryKey('memory-journal-mcp', registry)
-                const mjProjectNumber =
-                    mjKey !== undefined ? registry?.[mjKey]?.project_number : undefined
-                const supervisorProjectLabel =
-                    mjProjectNumber !== undefined
-                        ? `project #${String(mjProjectNumber)}`
-                        : 'its resolved registry `project_number` (via `memory://agent-context/memory-journal-mcp` or `mj.admin.listProjects()`)'
-                const supervisorProjectField =
-                    mjProjectNumber !== undefined
-                        ? `\`project_number: ${String(mjProjectNumber)}\``
-                        : '`project_number: <resolved_project_number>`'
-                const latestNremSnippet = fetchLatestNremSnippet(db)
-                const deletedSnippet = fetchDeletedEntriesSnapshot(db, lookbackHours)
+interface CmsSupervisorPromptParams {
+    lookbackHours: number
+    autoRestore: boolean
+    totalEntries: number | string
+    orphanCount: number | string
+    latestNremSnippet: string
+    deletedSnippet: string
+    supervisorProjectLabel: string
+    supervisorProjectField: string
+}
 
-                let orphanCount: number | string = 'Unknown'
-                let totalEntries: number | string = 'Unknown'
-                try {
-                    totalEntries = db.getActiveEntryCount('*')
-                    orphanCount = db.getOrphanCount('*')
-                } catch (err) {
-                    logger.debug('Could not read entry/orphan counts for CMS supervisor prompt', {
-                        module: 'CmsSupervisor',
-                        error: err instanceof Error ? err.message : String(err),
-                    })
-                }
-
-                return {
-                    messages: [
-                        {
-                            role: 'user',
-                            content: {
-                                type: 'text',
-                                text: `# CMS-04: REM Meta-Cognitive Supervisor & Self-Adaptation Workflow
+function buildCmsSupervisorText(params: CmsSupervisorPromptParams): string {
+    return `# CMS-04: REM Meta-Cognitive Supervisor & Self-Adaptation Workflow
 
 You are executing the **REM Meta-Cognitive Supervisor (\`CMS-04\`)** workflow across the global memory journal ecosystem.
-**Lookback Window**: \`${String(lookbackHours)}h\` | **Auto-Restore High-Value Deletions**: \`${String(autoRestore)}\`
-**Active Global Entries**: \`${String(totalEntries)}\` | **Current Orphans**: \`${String(orphanCount)}\`
+**Lookback Window**: \`${String(params.lookbackHours)}h\` | **Auto-Restore High-Value Deletions**: \`${String(params.autoRestore)}\`
+**Active Global Entries**: \`${String(params.totalEntries)}\` | **Current Orphans**: \`${String(params.orphanCount)}\`
 
 ## Latest NREM Consolidation (\`CMS-02\`) Report Snapshot
-${markUntrustedContent(latestNremSnippet)}
+${markUntrustedContent(params.latestNremSnippet)}
 
 ## Recent Soft-Deleted Entries Audit
-${markUntrustedContent(deletedSnippet)}
+${markUntrustedContent(params.deletedSnippet)}
 
 ---
 
@@ -193,7 +132,7 @@ ${markUntrustedContent(deletedSnippet)}
 ### Phase A — Post-NREM Supervisor Audit & Safety Rollback
 1. **Verify \`CMS-02\` Pruning Safety**:
    - Inspect the recent soft-deleted entries above (or query \`await mj.search.listDeletedEntries({ limit: 50, workspace_id: '*' })\` and \`await mj.admin.searchAuditLog({ limit: 100, category: 'write' })\` via \`mj_execute_code\`).
-   - If any soft-deleted entry from the last \`${String(lookbackHours)}h\` has \`significanceType !== null\`, \`impactScore >= 0.5\`, or active relationships, ${autoRestore ? `**immediately restore it** via \`await mj.admin.restoreEntry({ entry_id, workspace_id: '*' })\` and record the false-positive pruning pattern.` : `**do NOT restore it automatically** (\`autoRestore\` is off): list it as a restore candidate with its id, workspace, and reason, and record the false-positive pruning pattern for user review.`}
+   - If any soft-deleted entry from the last \`${String(params.lookbackHours)}h\` has \`significanceType !== null\`, \`impactScore >= 0.5\`, or active relationships, ${params.autoRestore ? `**immediately restore it** via \`await mj.admin.restoreEntry({ entry_id, workspace_id: '*' })\` and record the false-positive pruning pattern.` : `**do NOT restore it automatically** (\`autoRestore\` is off): list it as a restore candidate with its id, workspace, and reason, and record the false-positive pruning pattern for user review.`}
 2. **Global Invariant Verification**:
    - Confirm \`0\` unassigned (\`workspaceId === 'default'\` or \`projectNumber <= 0\`) entries exist across \`workspace_id: '*'\`.
    - Check vector index parity via \`await mj.search.getVectorIndexStats({})\`; if vector count drifts from active entry count, run \`await mj.admin.rebuildVectorIndex({ workspace_id: '*' })\`.
@@ -225,19 +164,105 @@ ${markUntrustedContent(deletedSnippet)}
 
 ### Phase D — Telemetry Cleanup & Supervisor Journal Entry
 1. If \`logs/agent-issues.jsonl\` contained issues that were resolved and validated in Phase C, clear \`logs/agent-issues.jsonl\`.
-2. Log the completed supervisor run in \`memory-journal-mcp\` (${supervisorProjectLabel}) using \`mj.core.createEntry\` with:
-   - \`workspace_id: 'memory-journal-mcp'\`, ${supervisorProjectField}
+2. Log the completed supervisor run in \`memory-journal-mcp\` (${params.supervisorProjectLabel}) using \`mj.core.createEntry\` with:
+   - \`workspace_id: 'memory-journal-mcp'\`, ${params.supervisorProjectField}
    - \`entry_type: 'maintenance'\`
    - \`significance_type: 'milestone'\`
    - \`tags: ['cms', 'cms-04-rem-supervisor', 'meta-learning', 'maintenance']\`
    - \`trust_score: 1.0\`, \`impact_score: 0.6\`, \`validation_status: 'passed'\`
    - Link via \`relationships: [{ targetId: <prior_cms04_id>, relationType: 'evolves_from' }, { targetId: <latest_cms02_id>, relationType: 'references' }]\` (or top-level \`evolves_from\` and \`references\` fields).
-`,
-                            },
-                        },
-                    ],
-                }
+`
+}
+
+function handleCmsSupervisorPrompt(
+    args: Record<string, string> | undefined,
+    db: IDatabaseAdapter,
+    briefingConfig?: Partial<BriefingConfig>
+): { messages: PromptMessage[] } {
+    const rawArgs = args ?? {}
+    const lookbackRes = cmsSupervisorArgsSchema.shape.lookbackHours.safeParse(rawArgs['lookbackHours'])
+    const lookbackHours = lookbackRes.success ? lookbackRes.data : 24
+    const restoreRes = cmsSupervisorArgsSchema.shape.autoRestore.safeParse(rawArgs['autoRestore'])
+    if (!restoreRes.success) {
+        throw new ValidationError(
+            `Invalid autoRestore value '${String(rawArgs['autoRestore'])}'. Expected boolean (true/false, on/off, yes/no, 1/0, disabled).`
+        )
+    }
+    const autoRestore = restoreRes.data
+    const registry = briefingConfig?.projectRegistry ?? loadProjectRegistryFromConfig()
+    const mjKey = exactRegistryKey('memory-journal-mcp', registry)
+    const mjProjectNumber = mjKey !== undefined ? registry?.[mjKey]?.project_number : undefined
+    const supervisorProjectLabel =
+        mjProjectNumber !== undefined
+            ? `project #${String(mjProjectNumber)}`
+            : 'its resolved registry `project_number` (via `memory://agent-context/memory-journal-mcp` or `mj.admin.listProjects()`)'
+    const supervisorProjectField =
+        mjProjectNumber !== undefined
+            ? `\`project_number: ${String(mjProjectNumber)}\``
+            : '`project_number: <resolved_project_number>`'
+    const latestNremSnippet = fetchLatestNremSnippet(db)
+    const deletedSnippet = fetchDeletedEntriesSnapshot(db, lookbackHours)
+
+    let orphanCount: number | string = 'Unknown'
+    let totalEntries: number | string = 'Unknown'
+    try {
+        totalEntries = db.getActiveEntryCount('*')
+        orphanCount = db.getOrphanCount('*')
+    } catch (err) {
+        logger.debug('Could not read entry/orphan counts for CMS supervisor prompt', {
+            module: 'CmsSupervisor',
+            error: err instanceof Error ? err.message : String(err),
+        })
+    }
+
+    return {
+        messages: [
+            {
+                role: 'user' as const,
+                content: {
+                    type: 'text' as const,
+                    text: buildCmsSupervisorText({
+                        lookbackHours,
+                        autoRestore,
+                        totalEntries,
+                        orphanCount,
+                        latestNremSnippet,
+                        deletedSnippet,
+                        supervisorProjectLabel,
+                        supervisorProjectField,
+                    }),
+                },
             },
+        ],
+    }
+}
+
+export function getCmsSupervisorPromptDefinitions(): InternalPromptDef[] {
+    return [
+        {
+            name: 'cms-rem-supervisor',
+            description:
+                'REM Meta-Cognitive Supervisor & Self-Adaptation workflow (CMS-04). Audits recent NREM consolidation (CMS-02) mutations and soft-deletions, mines cross-run telemetry and unresolved blockers, and enforces the Dirty-Tree Conditional Single-Pass Validation Gate.',
+            icons: [ICON_PROMPT],
+            arguments: [
+                {
+                    name: 'lookbackHours',
+                    description: 'Hours to look back for CMS-02 maintenance entries and soft-deleted entries (default: 24)',
+                    required: false,
+                },
+                {
+                    name: 'autoRestore',
+                    description: 'Set to "true" to automatically restore any high-significance entry erroneously soft-deleted (default: true)',
+                    required: false,
+                },
+            ],
+            handler: (
+                args: Record<string, string> | undefined,
+                db: IDatabaseAdapter,
+                _teamDb?: IDatabaseAdapter,
+                _github?: unknown,
+                briefingConfig?: Partial<BriefingConfig>
+            ) => handleCmsSupervisorPrompt(args, db, briefingConfig),
         },
     ]
 }

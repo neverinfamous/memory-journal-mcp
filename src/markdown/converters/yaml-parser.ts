@@ -50,18 +50,13 @@ function assignFrontmatterKey(
     })
 }
 
-export function parseYamlFrontmatter(content: string): YamlParseResult {
-    if (content.length > MAX_FRONTMATTER_CONTENT_LENGTH) {
-        return { metadata: {}, body: content }
-    }
+function extractFrontmatterHeaderBounds(
+    content: string
+): { fmLines: string[]; body: string } | null {
+    if (content.length > MAX_FRONTMATTER_CONTENT_LENGTH) return null
     const lines = content.split(/\r?\n/)
+    if (lines[0]?.trim() !== '---') return null
 
-    // Must start with ---
-    if (lines[0]?.trim() !== '---') {
-        return { metadata: {}, body: content }
-    }
-
-    // Find closing --- within bounded frontmatter header lines
     let closingIndex = -1
     const maxScan = Math.min(lines.length, MAX_FRONTMATTER_LINES + 1)
     for (let i = 1; i < maxScan; i++) {
@@ -70,18 +65,18 @@ export function parseYamlFrontmatter(content: string): YamlParseResult {
             break
         }
     }
+    if (closingIndex === -1) return null
 
-    if (closingIndex === -1) {
-        // Unclosed or oversized frontmatter — treat whole file as body
-        return { metadata: {}, body: content }
+    return {
+        fmLines: lines.slice(1, closingIndex),
+        body: lines
+            .slice(closingIndex + 1)
+            .join('\n')
+            .replace(/^\n/, ''),
     }
+}
 
-    const fmLines = lines.slice(1, closingIndex)
-    const body = lines
-        .slice(closingIndex + 1)
-        .join('\n')
-        .replace(/^\n/, '')
-
+function parseYamlFrontmatterLines(fmLines: string[]): FrontmatterData {
     const metadata: FrontmatterData = {}
     let currentArrayKey: string | null = null
     let currentArray: string[] = []
@@ -89,60 +84,59 @@ export function parseYamlFrontmatter(content: string): YamlParseResult {
     for (const rawLine of fmLines) {
         const line = rawLine ?? ''
         const trimmed = line.trim()
+        if (!trimmed || trimmed.startsWith('#')) continue
 
-        if (!trimmed || trimmed.startsWith('#')) {
-            continue // Skip empty lines and comments
-        }
-
-        // Array item continuation
         if (trimmed.startsWith('-') && currentArrayKey) {
-            const val = trimmed.substring(1).trim()
-            currentArray.push(stripQuotes(val))
+            currentArray.push(stripQuotes(trimmed.substring(1).trim()))
             continue
         }
 
-        // New key-value pair
         const colonIdx = line.indexOf(':')
-        if (colonIdx > 0) {
-            // New key found, save previous array if active
-            if (currentArrayKey) {
-                assignFrontmatterKey(metadata, currentArrayKey, currentArray)
-                currentArrayKey = null
-                currentArray = []
-            }
+        if (colonIdx <= 0) continue
 
-            const key = line.substring(0, colonIdx).trim()
-            const val = line.substring(colonIdx + 1).trim()
-            if (FORBIDDEN_FRONTMATTER_KEYS.has(key)) continue
+        if (currentArrayKey) {
+            assignFrontmatterKey(metadata, currentArrayKey, currentArray)
+            currentArrayKey = null
+            currentArray = []
+        }
 
-            if (!val) {
-                // Potential start of a multi-line array
-                currentArrayKey = key
-                currentArray = []
-            } else if (val.startsWith('[') && val.endsWith(']')) {
-                // Inline array: [item1, item2]
-                const itemsStr = val.substring(1, val.length - 1)
-                assignFrontmatterKey(
-                    metadata,
-                    key,
-                    itemsStr
-                        .split(',')
-                        .map((s) => stripQuotes(s.trim()))
-                        .filter(Boolean)
-                )
-            } else {
-                // Scalar value
-                assignFrontmatterKey(metadata, key, stripQuotes(val))
-            }
+        const key = line.substring(0, colonIdx).trim()
+        const val = line.substring(colonIdx + 1).trim()
+        if (FORBIDDEN_FRONTMATTER_KEYS.has(key)) continue
+
+        if (!val) {
+            currentArrayKey = key
+            currentArray = []
+        } else if (val.startsWith('[') && val.endsWith(']')) {
+            const itemsStr = val.substring(1, val.length - 1)
+            assignFrontmatterKey(
+                metadata,
+                key,
+                itemsStr
+                    .split(',')
+                    .map((s) => stripQuotes(s.trim()))
+                    .filter(Boolean)
+            )
+        } else {
+            assignFrontmatterKey(metadata, key, stripQuotes(val))
         }
     }
 
-    // Handle trailing array
     if (currentArrayKey) {
         assignFrontmatterKey(metadata, currentArrayKey, currentArray)
     }
+    return metadata
+}
 
-    return { metadata, body }
+export function parseYamlFrontmatter(content: string): YamlParseResult {
+    const extracted = extractFrontmatterHeaderBounds(content)
+    if (extracted === null) {
+        return { metadata: {}, body: content }
+    }
+    return {
+        metadata: parseYamlFrontmatterLines(extracted.fmLines),
+        body: extracted.body,
+    }
 }
 
 function stripQuotes(str: string): string {

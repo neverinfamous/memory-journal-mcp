@@ -66,91 +66,67 @@ function mergePositionalStringAndOptions(methodName: string, args: unknown[]): u
     return [mergedObj]
 }
 
-export function applyGenericInterceptions(
-    methodName: string,
-    args: unknown[]
-): { args: unknown[] } | { error: Record<string, unknown> } {
-    if (EXECUTE_METHODS.has(methodName) && args.length === 1 && typeof args[0] === 'string') {
-        args = [{ code: args[0] }]
+function normalizeSingleBatchCreateItem(
+    rawItem: unknown,
+    topWs: unknown,
+    topProj: unknown
+): { item: unknown } | { error: Record<string, unknown> } {
+    if (!isRecord(rawItem)) return { item: rawItem }
+    const item: Record<string, unknown> = { ...rawItem }
+    extractMetadataContextAliases(item)
+    const itemError = coerceNumericStringIds(item)
+    if (itemError !== undefined) return itemError
+    const itemAliasError = normalizeGenericFieldAliases(item, 'create_entry')
+    if (itemAliasError !== undefined) return itemAliasError
+
+    const rawItemWs = item['workspace_id'] ?? item['workspaceId']
+    const itemWs = typeof rawItemWs === 'string' ? rawItemWs.trim() : undefined
+    const itemHasExplicitProj =
+        item['project_number'] !== undefined ||
+        item['projectNumber'] !== undefined ||
+        item['project_id'] !== undefined ||
+        item['projectId'] !== undefined
+    const itemIsDefaultWs = itemWs?.toLowerCase() === 'default'
+    const topIsDefaultWs = typeof topWs === 'string' && topWs.trim().toLowerCase() === 'default'
+    const itemNamesSameOrNoWs =
+        itemWs === undefined ||
+        itemWs === '' ||
+        (typeof topWs === 'string' && itemWs.toLowerCase() === topWs.trim().toLowerCase())
+    if ((itemWs === undefined || itemWs === '') && !itemHasExplicitProj && topWs !== undefined) {
+        item['workspace_id'] = topWs
     }
-    if (CREATE_ENTRY_METHODS.has(methodName) && args.length === 1 && typeof args[0] === 'string') {
-        args = [{ content: args[0] }]
+    if (
+        !itemHasExplicitProj &&
+        topProj !== undefined &&
+        !itemIsDefaultWs &&
+        !(topIsDefaultWs && (itemWs === undefined || itemWs === '')) &&
+        itemNamesSameOrNoWs
+    ) {
+        item['project_number'] = topProj
     }
+    resolveCreateEntryProjectContext(item)
+    synthesizeEntryMutationFields(item)
+    healAnchorsField(item)
+    return { item }
+}
 
-    args = mergePositionalStringAndOptions(methodName, args)
-
-    if (args.length !== 1 || !isRecord(args[0])) return { args }
-    const obj = { ...args[0] }
-    args[0] = obj
-
-    cleanSdkMetadataKeys(obj)
-    normalizeSearchGrepAliases(methodName, obj)
-    if (!EXECUTE_METHODS.has(methodName)) {
-        extractMetadataContextAliases(obj)
+function normalizeBatchCreateItems(
+    obj: Record<string, unknown>
+): { error: Record<string, unknown> } | undefined {
+    if (!Array.isArray(obj['entries'])) return undefined
+    const topWs = obj['workspace_id'] ?? obj['workspaceId']
+    const topProj = obj['project_number'] ?? obj['projectNumber']
+    const normalizedEntries: unknown[] = []
+    for (const rawItem of obj['entries']) {
+        const res = normalizeSingleBatchCreateItem(rawItem, topWs, topProj)
+        if ('error' in res) return res
+        normalizedEntries.push(res.item)
     }
-    const idError = coerceNumericStringIds(obj)
-    if (idError !== undefined) return idError
-    const aliasError = normalizeGenericFieldAliases(obj, methodName)
-    if (aliasError !== undefined) return aliasError
+    obj['entries'] = normalizedEntries
+    return undefined
+}
 
-    if (CREATE_ENTRY_METHODS.has(methodName)) {
-        resolveCreateEntryProjectContext(obj)
-        healAnchorsField(obj)
-    } else if (BATCH_CREATE_ENTRY_METHODS.has(methodName)) {
-        resolveCreateEntryProjectContext(obj)
-        if (Array.isArray(obj['entries'])) {
-            const topWs = obj['workspace_id'] ?? obj['workspaceId']
-            const topProj = obj['project_number'] ?? obj['projectNumber']
-            let batchError: { error: Record<string, unknown> } | undefined
-            obj['entries'] = obj['entries'].map((rawItem: unknown) => {
-                if (batchError !== undefined || !isRecord(rawItem)) return rawItem
-                const item: Record<string, unknown> = { ...rawItem }
-                extractMetadataContextAliases(item)
-                const itemError = coerceNumericStringIds(item)
-                if (itemError !== undefined) {
-                    batchError = itemError
-                    return rawItem
-                }
-                const itemAliasError = normalizeGenericFieldAliases(item, 'create_entry')
-                if (itemAliasError !== undefined) {
-                    batchError = itemAliasError
-                    return rawItem
-                }
-                const rawItemWs = item['workspace_id'] ?? item['workspaceId']
-                const itemWs = typeof rawItemWs === 'string' ? rawItemWs.trim() : undefined
-                const itemHasExplicitProj =
-                    item['project_number'] !== undefined ||
-                    item['projectNumber'] !== undefined ||
-                    item['project_id'] !== undefined ||
-                    item['projectId'] !== undefined
-                const itemIsDefaultWs = itemWs?.toLowerCase() === 'default'
-                const topIsDefaultWs = typeof topWs === 'string' && topWs.trim().toLowerCase() === 'default'
-                const itemNamesSameOrNoWs =
-                    itemWs === undefined ||
-                    itemWs === '' ||
-                    (typeof topWs === 'string' &&
-                        itemWs.toLowerCase() === topWs.trim().toLowerCase())
-                if ((itemWs === undefined || itemWs === '') && !itemHasExplicitProj && topWs !== undefined) {
-                    item['workspace_id'] = topWs
-                }
-                if (
-                    !itemHasExplicitProj &&
-                    topProj !== undefined &&
-                    !itemIsDefaultWs &&
-                    !(topIsDefaultWs && (itemWs === undefined || itemWs === '')) &&
-                    itemNamesSameOrNoWs
-                ) {
-                    item['project_number'] = topProj
-                }
-                resolveCreateEntryProjectContext(item)
-                synthesizeEntryMutationFields(item)
-                healAnchorsField(item)
-                return item
-            })
-            if (batchError !== undefined) return batchError
-        }
-    }
-
+function normalizePostGenericFields(methodName: string, obj: Record<string, unknown>): void {
     if (typeof obj['sort_by'] === 'string') {
         const lowerSort = obj['sort_by'].toLowerCase()
         if (lowerSort.endsWith('_asc')) {
@@ -189,7 +165,6 @@ export function applyGenericInterceptions(
     if (CREATE_ENTRY_METHODS.has(methodName) || methodName === 'update_entry' || methodName === 'updateEntry') {
         synthesizeEntryMutationFields(obj)
     }
-
     if (obj['search'] !== undefined && obj['query'] === undefined) {
         obj['query'] = obj['search']
         delete obj['search']
@@ -202,6 +177,43 @@ export function applyGenericInterceptions(
         obj['source_dir'] = obj['filename']
         delete obj['filename']
     }
+}
 
+export function applyGenericInterceptions(
+    methodName: string,
+    args: unknown[]
+): { args: unknown[] } | { error: Record<string, unknown> } {
+    if (EXECUTE_METHODS.has(methodName) && args.length === 1 && typeof args[0] === 'string') {
+        args = [{ code: args[0] }]
+    }
+    if (CREATE_ENTRY_METHODS.has(methodName) && args.length === 1 && typeof args[0] === 'string') {
+        args = [{ content: args[0] }]
+    }
+
+    args = mergePositionalStringAndOptions(methodName, args)
+
+    if (args.length !== 1 || !isRecord(args[0])) return { args }
+    const obj = { ...args[0] }
+    args[0] = obj
+
+    cleanSdkMetadataKeys(obj)
+    normalizeSearchGrepAliases(methodName, obj)
+    if (!EXECUTE_METHODS.has(methodName)) extractMetadataContextAliases(obj)
+
+    const idError = coerceNumericStringIds(obj)
+    if (idError !== undefined) return idError
+    const aliasError = normalizeGenericFieldAliases(obj, methodName)
+    if (aliasError !== undefined) return aliasError
+
+    if (CREATE_ENTRY_METHODS.has(methodName)) {
+        resolveCreateEntryProjectContext(obj)
+        healAnchorsField(obj)
+    } else if (BATCH_CREATE_ENTRY_METHODS.has(methodName)) {
+        resolveCreateEntryProjectContext(obj)
+        const batchError = normalizeBatchCreateItems(obj)
+        if (batchError !== undefined) return batchError
+    }
+
+    normalizePostGenericFields(methodName, obj)
     return { args }
 }

@@ -58,34 +58,27 @@ export function computeRRFScores(rankedLists: number[][], weights?: number[]): M
     return scores
 }
 
-/**
- * Perform hybrid search combining FTS5 and semantic results via RRF.
- *
- * 1. Run FTS5 search and semantic search in parallel
- * 2. Extract entry ID ranked lists from each
- * 3. Compute RRF scores
- * 4. Fetch full entries for top results
- * 5. Return sorted by fusion score
- */
-export async function hybridSearch(
+type HybridSearchOptions = ISearchFilters & {
+    limit: number
+    ftsWeight?: number
+    semanticWeight?: number
+    teamDb?: IDatabaseAdapter
+    teamVectorManager?: VectorSearchManager
+}
+
+async function runPersonalHybridQueries(
     query: string,
     db: IDatabaseAdapter,
     vectorManager: VectorSearchManager | undefined,
-    options: ISearchFilters & {
-        limit: number
-        ftsWeight?: number
-        semanticWeight?: number
-        teamDb?: IDatabaseAdapter
-        teamVectorManager?: VectorSearchManager
-    }
-): Promise<{ entries: EntryWithSource[]; fusionScores: Map<string, number>; degraded?: boolean }> {
-    const overfetchLimit = Math.min(Math.max(options.limit * OVERFETCH_MULTIPLIER, 50), 500)
-
+    options: HybridSearchOptions,
+    overfetchLimit: number
+): Promise<{
+    ftsResults: ReturnType<IDatabaseAdapter['searchEntries']>
+    semanticResults: Awaited<ReturnType<VectorSearchManager['search']>>
+    semanticDegraded: boolean
+}> {
     let semanticDegraded = false
-
-    // Run FTS5 and semantic search in parallel
     const [ftsResults, semanticResults] = await Promise.all([
-        // FTS5 search
         Promise.resolve(
             db.searchEntries(query, {
                 limit: overfetchLimit,
@@ -104,28 +97,67 @@ export async function hybridSearch(
                 workspaceId: options.workspaceId,
             })
         ),
-        // Semantic search (returns [] if vectorManager is unavailable)
         vectorManager
             ? vectorManager
                   .search(query, overfetchLimit, 0.15, options.workspaceId, options.projectNumber)
                   .catch((err: unknown) => {
-                  logger.warning(
-                      `Semantic search degraded: ${err instanceof Error ? err.message : String(err)}`,
-                      { module: 'HybridSearch' }
-                  )
-                  semanticDegraded = true
-                  return []
-              }) // Lower threshold for broader recall
+                      logger.warning(
+                          `Semantic search degraded: ${err instanceof Error ? err.message : String(err)}`,
+                          { module: 'HybridSearch' }
+                      )
+                      semanticDegraded = true
+                      return []
+                  })
             : Promise.resolve([]),
     ])
+    return { ftsResults, semanticResults, semanticDegraded }
+}
 
-    // Build ranked ID lists
-    const ftsRanked = ftsResults.entries.map((e) => e.id)
-    const semanticRanked = semanticResults.map((r) => r.entryId)
+function hydrateAndFilterFusionCandidates(
+    sortedIds: number[],
+    db: IDatabaseAdapter,
+    options: HybridSearchOptions
+): EntryWithSource[] {
+    const entriesMap = db.getEntriesByIds(sortedIds, options.workspaceId ?? 'default')
+    if (
+        (options.tags !== undefined && options.tags.length > 0) ||
+        (options.excludeTags !== undefined && options.excludeTags.length > 0)
+    ) {
+        const tagsMap = db.getTagsForEntries(sortedIds)
+        for (const entry of entriesMap.values()) {
+            entry.tags = tagsMap.get(entry.id) ?? []
+        }
+    }
+    const entries: EntryWithSource[] = []
+    for (const id of sortedIds) {
+        const entry = entriesMap.get(id)
+        if (!entry || !passMetadataFilters(entry, options, db)) continue
+        entries.push({ ...entry, source: 'personal' as const })
+        if (entries.length >= options.limit) break
+    }
+    return entries
+}
 
-    // Compute RRF scores with configured weights
+/**
+ * Perform hybrid search combining FTS5 and semantic results via RRF.
+ */
+export async function hybridSearch(
+    query: string,
+    db: IDatabaseAdapter,
+    vectorManager: VectorSearchManager | undefined,
+    options: HybridSearchOptions
+): Promise<{ entries: EntryWithSource[]; fusionScores: Map<string, number>; degraded?: boolean }> {
+    const overfetchLimit = Math.min(Math.max(options.limit * OVERFETCH_MULTIPLIER, 50), 500)
+    const { ftsResults, semanticResults, semanticDegraded } = await runPersonalHybridQueries(
+        query,
+        db,
+        vectorManager,
+        options,
+        overfetchLimit
+    )
+
     const fusionScores = computeRRFScores(
-        [ftsRanked, semanticRanked],
+        [ftsResults.entries.map((e) => e.id), semanticResults.map((r) => r.entryId)],
         [options.ftsWeight ?? 1.0, options.semanticWeight ?? 1.0]
     )
 
@@ -136,35 +168,16 @@ export async function hybridSearch(
         .slice(0, candidateCap)
         .map(([id]) => id)
 
-    // Batch fetch entries
-    const entriesMap = db.getEntriesByIds(sortedIds, options.workspaceId ?? 'default')
-
-    // Pre-hydrate tags to avoid N+1 queries during metadata filtering
-    if (
-        (options.tags !== undefined && options.tags.length > 0) ||
-        (options.excludeTags !== undefined && options.excludeTags.length > 0)
-    ) {
-        const tagsMap = db.getTagsForEntries(sortedIds)
-        for (const entry of entriesMap.values()) {
-            entry.tags = tagsMap.get(entry.id) ?? []
-        }
-    }
-
-    // Build output in fusion-score order and cap at requested limit after filtering
-    const entries: EntryWithSource[] = []
-    for (const id of sortedIds) {
-        const entry = entriesMap.get(id)
-        if (!entry) continue
-        // Apply memory-level metadata filters
-        if (!passMetadataFilters(entry, options, db)) continue
-        entries.push({ ...entry, source: 'personal' as const })
-        if (entries.length >= options.limit) break
-    }
-
+    const entries = hydrateAndFilterFusionCandidates(sortedIds, db, options)
     const isDegraded = ftsResults.degraded === true || semanticDegraded
     let output = entries
     if (options.includeTeam === true && options.isPersonal !== true && options.teamDb !== undefined) {
-        const teamEntries = await collectTeamSearchEntries(query, options.teamDb, options.teamVectorManager, options)
+        const teamEntries = await collectTeamSearchEntries(
+            query,
+            options.teamDb,
+            options.teamVectorManager,
+            options
+        )
         output = mergeAndDedup(entries, teamEntries, options.limit, 'preserve')
     }
 
@@ -172,6 +185,5 @@ export async function hybridSearch(
     for (const [id, score] of fusionScores) {
         qualifiedFusionScores.set(`personal:${String(id)}`, score)
     }
-
     return { entries: output, fusionScores: qualifiedFusionScores, degraded: isDegraded }
 }

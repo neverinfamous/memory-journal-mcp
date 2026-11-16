@@ -103,6 +103,54 @@ async function processBatch(
     }
 }
 
+function cleanupStaleVectorsSafely(dbAdapter: IDatabaseAdapter): string | undefined {
+    try {
+        dbAdapter.cleanupStaleVectors()
+        return undefined
+    } catch (err) {
+        const message = err instanceof Error ? err.message : String(err)
+        logger.warning('Failed to cleanup stale vectors after rebuild', { error: err })
+        return message
+    }
+}
+
+async function runRebuildLoop(
+    manager: VectorSearchManager,
+    dbAdapter: IDatabaseAdapter,
+    totalEntries: number,
+    pageSize: number,
+    batchSize: number,
+    force: boolean,
+    wsScope: string,
+    projectNumber: number | undefined,
+    progress: ProgressContext | undefined,
+    stats: RebuildStats
+): Promise<void> {
+    let offset = 0
+    while (offset < totalEntries) {
+        const result = dbAdapter.getEntriesPage(offset, pageSize, wsScope, projectNumber)
+        const entries = result.entries
+        if (entries.length === 0) break
+
+        // Process a page in smaller batches
+        for (let i = 0; i < entries.length; i += batchSize) {
+            const batch = entries.slice(i, i + batchSize)
+            await processBatch(manager, dbAdapter, batch, force, projectNumber, stats)
+
+            // Yield to event loop
+            await new Promise((resolve) => setTimeoutFn(resolve, 0))
+            await sendProgress(
+                progress,
+                offset + i + batch.length,
+                totalEntries,
+                `Indexing... (${stats.indexed} indexed, ${stats.skipped} skipped)`
+            )
+        }
+
+        offset += pageSize
+    }
+}
+
 /**
  * Rebuild the vector index incrementally to avoid blocking the event loop or database.
  * This function handles the orchestration, while relying on the manager instance for
@@ -137,13 +185,7 @@ export async function rebuildIndex(
     }
 
     if (totalEntries === 0) {
-        let cleanupError: string | undefined
-        try {
-            dbAdapter.cleanupStaleVectors()
-        } catch (err) {
-            cleanupError = err instanceof Error ? err.message : String(err)
-            logger.warning('Failed to cleanup stale vectors after rebuild', { error: err })
-        }
+        const cleanupError = cleanupStaleVectorsSafely(dbAdapter)
         return {
             success: cleanupError === undefined,
             indexed: 0,
@@ -154,40 +196,20 @@ export async function rebuildIndex(
     }
 
     await sendProgress(progress, 0, totalEntries, 'Starting vector index rebuild')
+    await runRebuildLoop(
+        manager,
+        dbAdapter,
+        totalEntries,
+        pageSize,
+        batchSize,
+        force,
+        wsScope,
+        options?.projectNumber,
+        progress,
+        stats
+    )
 
-    let offset = 0
-    while (offset < totalEntries) {
-        const result = dbAdapter.getEntriesPage(offset, pageSize, wsScope, options?.projectNumber)
-        const entries = result.entries
-        if (entries.length === 0) break
-
-        // Process a page in smaller batches
-        for (let i = 0; i < entries.length; i += batchSize) {
-            const batch = entries.slice(i, i + batchSize)
-            await processBatch(manager, dbAdapter, batch, force, options?.projectNumber, stats)
-
-            // Yield to event loop
-            await new Promise((resolve) => setTimeoutFn(resolve, 0))
-            await sendProgress(
-                progress,
-                offset + i + batch.length,
-                totalEntries,
-                `Indexing... (${stats.indexed} indexed, ${stats.skipped} skipped)`
-            )
-        }
-
-        offset += pageSize
-    }
-
-    let cleanupError: string | undefined
-    if (stats.errorsCount === 0) {
-        try {
-            dbAdapter.cleanupStaleVectors()
-        } catch (err) {
-            cleanupError = err instanceof Error ? err.message : String(err)
-            logger.warning('Failed to cleanup stale vectors after rebuild', { error: err })
-        }
-    }
+    const cleanupError = stats.errorsCount === 0 ? cleanupStaleVectorsSafely(dbAdapter) : undefined
 
     return {
         success: stats.errorsCount === 0 && cleanupError === undefined,

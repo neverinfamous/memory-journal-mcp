@@ -11,8 +11,12 @@ import {
     loadProjectRegistryFromConfig,
 } from '../../../utils/workspace-resolver.js'
 import type { ServerOptions } from '../types.js'
+import type { ToolHandlerConfig } from '../../../types/index.js'
+import type { ServerRuntime } from '../../../utils/maintenance-lock.js'
+import type { BriefingConfig } from '../../../handlers/resources/shared.js'
+import { resolveMcpCreateWorkspaceScope } from './create-scope-interceptor.js'
 
-export { resolveMcpCreateWorkspaceScope } from './create-scope-interceptor.js'
+export { resolveMcpCreateWorkspaceScope }
 
 /**
  * Pure helpers for the call-tool interceptor (payload formatting, key healing, name matching).
@@ -50,6 +54,115 @@ export interface ToolCallParams {
     arguments?: Record<string, unknown>
 }
 
+export function applyCreateWorkspaceScope(
+    reqParams: ToolCallParams | undefined,
+    customToolHandlerConfig: ToolHandlerConfig,
+    liveBriefing: BriefingConfig,
+    runtime: ServerRuntime
+): void {
+    if (
+        reqParams?.arguments === undefined ||
+        typeof reqParams.arguments !== 'object' ||
+        reqParams.arguments === null ||
+        Array.isArray(reqParams.arguments)
+    ) {
+        return
+    }
+    resolveMcpCreateWorkspaceScope(reqParams.name, reqParams.arguments, {
+        ...customToolHandlerConfig,
+        briefingConfig: liveBriefing,
+        runtime,
+        ...(liveBriefing.projectRegistry !== undefined
+            ? { projectRegistry: liveBriefing.projectRegistry }
+            : {}),
+        ...(liveBriefing.defaultProjectNumber !== undefined
+            ? { defaultProjectNumber: liveBriefing.defaultProjectNumber }
+            : {}),
+        ...(liveBriefing.defaultWorkspaceId !== undefined
+            ? { defaultWorkspaceId: liveBriefing.defaultWorkspaceId }
+            : {}),
+    })
+}
+
+function resolveProjectNumberFromHint(
+    toolArgs: Record<string, unknown>,
+    options: ServerOptions
+): void {
+    // [INVARIANT] A `repo`/`project` string is only a lookup hint: `project_number` is assigned
+    // solely after it resolves to a valid positive integer (H3). Unresolved hints never leak
+    // into `project_number` as raw strings.
+    let repoHint: string | undefined
+    if (toolArgs['project_number'] === undefined) {
+        const repoStr =
+            typeof toolArgs['repo'] === 'string'
+                ? toolArgs['repo']
+                : typeof toolArgs['project'] === 'string'
+                  ? toolArgs['project']
+                  : undefined
+        if (repoStr !== undefined && repoStr.trim() !== '') repoHint = repoStr
+    }
+    const rawProject = toolArgs['project_number']
+    const strVal = typeof rawProject === 'string' ? rawProject : repoHint
+    if (strVal === undefined) return
+
+    const parsed = Number(strVal)
+    if (!Number.isNaN(parsed) && strVal.trim() !== '') {
+        if (repoHint === undefined || (Number.isInteger(parsed) && parsed > 0)) {
+            toolArgs['project_number'] = parsed
+        }
+        return
+    }
+
+    const registry = options.projectRegistry ?? loadProjectRegistryFromConfig()
+    if (registry === undefined) return
+
+    const trimmedPath = strVal.replace(/[\\/]+$/, '')
+    const candidate =
+        trimmedPath.includes('/') || trimmedPath.includes('\\')
+            ? (trimmedPath.split(/[\\/]/).pop() ?? strVal)
+            : trimmedPath || strVal
+    const canonicalKey = findCanonicalRegistryKey(candidate, registry) ?? candidate
+    const entry = registry[canonicalKey] ?? registry[strVal]
+    const rawWorkspace = toolArgs['workspace_id']
+    const workspaceMissing =
+        rawWorkspace === undefined || (typeof rawWorkspace === 'string' && rawWorkspace.trim() === '')
+    const existingWorkspace =
+        typeof rawWorkspace === 'string' && !workspaceMissing
+            ? (findCanonicalRegistryKey(rawWorkspace, registry) ?? rawWorkspace.trim())
+            : undefined
+    const sameWorkspace = existingWorkspace?.toLowerCase() === canonicalKey.toLowerCase()
+    // A repo-name project_number may fill a missing workspace, not a different concrete one.
+    // Explicit workspace `default` stays on that workspace.
+    if (entry?.project_number !== undefined && (workspaceMissing || sameWorkspace)) {
+        toolArgs['project_number'] = entry.project_number
+    }
+    if (workspaceMissing && entry !== undefined) {
+        toolArgs['workspace_id'] = canonicalKey
+    }
+}
+
+function applyToolNameAlias(reqParams: ToolCallParams, toolArgs: Record<string, unknown>): void {
+    const currentName = reqParams.name
+    if (currentName === undefined || currentName === '') return
+
+    if (ALIASED_EXECUTE_CODE_NAMES.has(currentName)) {
+        reqParams.name = 'mj_execute_code'
+    } else if (currentName === 'create_entry_minimal') {
+        reqParams.name = 'create_entry'
+        if (toolArgs['entry_type'] === undefined) toolArgs['entry_type'] = 'personal_reflection'
+    } else if (ALIASED_LIST_PROJECTS_NAMES.has(currentName)) {
+        reqParams.name = 'list_projects'
+    } else if (ALIASED_GET_PROJECT_NAMES.has(currentName)) {
+        reqParams.name = 'get_project'
+    } else if (ALIASED_GREP_SEARCH_NAMES.has(currentName)) {
+        reqParams.name = 'grep_search'
+    } else if (ALIASED_VIEW_FILE_NAMES.has(currentName)) {
+        reqParams.name = 'view_file'
+    } else if (ALIASED_LIST_DIR_NAMES.has(currentName)) {
+        reqParams.name = 'list_dir'
+    }
+}
+
 export function normalizeAndAliasToolCall(
     reqParams: ToolCallParams,
     options: ServerOptions
@@ -66,81 +179,8 @@ export function normalizeAndAliasToolCall(
         return
     }
     reqParams.arguments = normalized as Record<string, unknown>
-    const toolArgs = reqParams.arguments
-
-    // [INVARIANT] A `repo`/`project` string is only a lookup hint: `project_number` is assigned
-    // solely after it resolves to a valid positive integer (H3). Unresolved hints never leak
-    // into `project_number` as raw strings.
-    let repoHint: string | undefined
-    if (toolArgs['project_number'] === undefined) {
-        const repoStr =
-            typeof toolArgs['repo'] === 'string'
-                ? toolArgs['repo']
-                : typeof toolArgs['project'] === 'string'
-                  ? toolArgs['project']
-                  : undefined
-        if (repoStr !== undefined && repoStr.trim() !== '') repoHint = repoStr
-    }
-    const rawProject = toolArgs['project_number']
-    const strVal = typeof rawProject === 'string' ? rawProject : repoHint
-
-    if (strVal !== undefined) {
-        const parsed = Number(strVal)
-        if (!Number.isNaN(parsed) && strVal.trim() !== '') {
-            if (repoHint === undefined || (Number.isInteger(parsed) && parsed > 0)) {
-                toolArgs['project_number'] = parsed
-            }
-        } else {
-            const registry = options.projectRegistry ?? loadProjectRegistryFromConfig()
-            if (registry !== undefined) {
-                const trimmedPath = strVal.replace(/[\\/]+$/, '')
-                const candidate =
-                    trimmedPath.includes('/') || trimmedPath.includes('\\')
-                        ? (trimmedPath.split(/[\\/]/).pop() ?? strVal)
-                        : trimmedPath || strVal
-                const canonicalKey = findCanonicalRegistryKey(candidate, registry) ?? candidate
-                const entry = registry[canonicalKey] ?? registry[strVal]
-                const rawWorkspace = toolArgs['workspace_id']
-                const workspaceMissing =
-                    rawWorkspace === undefined ||
-                    (typeof rawWorkspace === 'string' && rawWorkspace.trim() === '')
-                const existingWorkspace =
-                    typeof rawWorkspace === 'string' && !workspaceMissing
-                        ? (findCanonicalRegistryKey(rawWorkspace, registry) ?? rawWorkspace.trim())
-                        : undefined
-                const sameWorkspace =
-                    existingWorkspace?.toLowerCase() === canonicalKey.toLowerCase()
-                // A repo-name project_number may fill a missing workspace, not a different concrete one.
-                // Explicit workspace `default` stays on that workspace.
-                if (entry?.project_number !== undefined && (workspaceMissing || sameWorkspace)) {
-                    toolArgs['project_number'] = entry.project_number
-                }
-                if (workspaceMissing && entry !== undefined) {
-                    toolArgs['workspace_id'] = canonicalKey
-                }
-            }
-        }
-    }
-
-    const currentName = reqParams.name
-    if (currentName !== undefined && currentName !== '') {
-        if (ALIASED_EXECUTE_CODE_NAMES.has(currentName)) {
-            reqParams.name = 'mj_execute_code'
-        } else if (currentName === 'create_entry_minimal') {
-            reqParams.name = 'create_entry'
-            if (toolArgs['entry_type'] === undefined) toolArgs['entry_type'] = 'personal_reflection'
-        } else if (ALIASED_LIST_PROJECTS_NAMES.has(currentName)) {
-            reqParams.name = 'list_projects'
-        } else if (ALIASED_GET_PROJECT_NAMES.has(currentName)) {
-            reqParams.name = 'get_project'
-        } else if (ALIASED_GREP_SEARCH_NAMES.has(currentName)) {
-            reqParams.name = 'grep_search'
-        } else if (ALIASED_VIEW_FILE_NAMES.has(currentName)) {
-            reqParams.name = 'view_file'
-        } else if (ALIASED_LIST_DIR_NAMES.has(currentName)) {
-            reqParams.name = 'list_dir'
-        }
-    }
+    resolveProjectNumberFromHint(reqParams.arguments, options)
+    applyToolNameAlias(reqParams, reqParams.arguments)
 }
 
 export function toValidationFailureResponse(

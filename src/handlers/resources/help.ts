@@ -56,6 +56,167 @@ const GROUP_DESCRIPTIONS: Record<string, string> = {
 // Resource Definitions
 // ============================================================================
 
+function filterVisibleHelpTools(
+    rawTools: MinimalToolDef[],
+    context: ResourceContext
+): MinimalToolDef[] {
+    // Filter out tools disabled by --tool-filter, UNLESS codemode is enabled.
+    // Code Mode exposes the full API surface area via the sandbox,
+    // while readonly meta-filter always restricts mutating tools.
+    const hasCodeMode = context.filterConfig?.enabledTools.has('mj_execute_code') ?? false
+    const filterRaw = context.filterConfig?.raw
+    return rawTools.filter((t) => {
+        if (!isToolVisibleForFilter(t.name, t.annotations?.readOnlyHint, filterRaw)) {
+            return false
+        }
+        if (!context.filterConfig || hasCodeMode) return true
+        return context.filterConfig.enabledTools.has(t.name)
+    })
+}
+
+async function handleHelpRootResource(
+    _uri: string,
+    context: ResourceContext
+): Promise<ResourceResult> {
+    const tools = filterVisibleHelpTools(await getAllToolDefinitionsAsync(context), context)
+    const groups = new Map<string, { names: string[]; readOnly: boolean }>()
+    for (const tool of tools) {
+        const existing = groups.get(tool.group)
+        if (existing) {
+            existing.names.push(tool.name)
+            // A group is read-only only if ALL its tools are read-only
+            if (!tool.annotations?.readOnlyHint) existing.readOnly = false
+        } else {
+            groups.set(tool.group, {
+                names: [tool.name],
+                readOnly: tool.annotations?.readOnlyHint ?? false,
+            })
+        }
+    }
+
+    const groupList = Array.from(groups.entries())
+        .sort(([a], [b]) => a.localeCompare(b))
+        .map(([name, info]) => ({
+            name,
+            description: GROUP_DESCRIPTIONS[name] ?? name,
+            toolCount: info.names.length,
+            readOnly: info.readOnly,
+            tools: info.names.sort(),
+            helpUri: `memory://help/${name}`,
+        }))
+
+    const data = {
+        totalTools: tools.length,
+        totalGroups: groupList.length,
+        staticTopics: ['gotchas', 'templates'],
+        groups: groupList,
+        hint: 'Read memory://help/{group} for detailed parameter info on each tool, or memory://help/gotchas / memory://help/templates.',
+    }
+    const tokenEstimate = Math.ceil(JSON.stringify(data).length / 4)
+    return { data: { ...data, _meta: { tokenEstimate } } }
+}
+
+interface HelpToolDetail {
+    name: string
+    title: string
+    description: string
+    parameters: ParameterInfo[]
+    annotations: {
+        readOnly: boolean
+        destructive: boolean
+        idempotent: boolean
+        openWorld: boolean
+    }
+    hasOutputSchema: boolean
+}
+
+function formatGroupToolDetails(
+    groupTools: MinimalToolDef[],
+    context: ResourceContext
+): HelpToolDetail[] {
+    const filterRaw = context.filterConfig?.raw
+    const enabledSet = context.filterConfig?.enabledTools
+    const isCodemodeOnly =
+        filterRaw?.trim() === 'codemode' ||
+        (enabledSet !== undefined &&
+            enabledSet.has('mj_execute_code') &&
+            [...enabledSet].every((t) => t === 'mj_execute_code' || t === 'update_configuration'))
+
+    return groupTools.map((tool) => {
+        let displayName = tool.name
+        if (
+            isCodemodeOnly &&
+            tool.name !== 'mj_execute_code' &&
+            tool.name !== 'update_configuration'
+        ) {
+            const camelCase = tool.name.replace(/_([a-z])/g, (_: string, letter: string) =>
+                letter.toUpperCase()
+            )
+            displayName = `mj.${tool.group}.${camelCase}`
+        }
+        return {
+            name: displayName,
+            title: tool.title,
+            description: tool.description,
+            parameters: extractParameters(tool.inputSchema),
+            annotations: {
+                readOnly: tool.annotations?.readOnlyHint ?? false,
+                destructive: tool.annotations?.destructiveHint ?? false,
+                idempotent: tool.annotations?.idempotentHint ?? false,
+                openWorld: tool.annotations?.openWorldHint ?? false,
+            },
+            hasOutputSchema: tool.outputSchema !== undefined,
+        }
+    })
+}
+
+async function handleHelpGroupResource(
+    uri: string,
+    context: ResourceContext
+): Promise<ResourceResult> {
+    const match = /^memory:\/\/help\/([^/?#]+)$/.exec(getBaseUri(uri))
+    const rawGroupName = match?.[1] ? safeDecodeUriSegment(match[1]) : undefined
+    const groupName = rawGroupName === 'export' ? 'io' : rawGroupName
+
+    if (!groupName) {
+        throw new ProtocolError(
+            ProtocolErrorCode.InvalidParams,
+            'Invalid group name in URI. Read memory://help for a list of available groups.'
+        )
+    }
+
+    const tools = filterVisibleHelpTools(await getAllToolDefinitionsAsync(context), context)
+    const groupTools = tools.filter((t) => t.group === groupName)
+    const staticContent = HELP_CONTENT.get(groupName)
+
+    if (groupTools.length > 0) {
+        const toolDetails = formatGroupToolDetails(groupTools, context)
+        const result: Record<string, unknown> = {
+            group: groupName,
+            description: GROUP_DESCRIPTIONS[groupName] ?? groupName,
+            toolCount: toolDetails.length,
+            tools: toolDetails,
+        }
+        if (staticContent) {
+            result['helpContent'] = staticContent
+        }
+        const tokenEstimate = Math.ceil(JSON.stringify(result).length / 4)
+        result['_meta'] = { tokenEstimate }
+        return { data: result }
+    }
+
+    if (staticContent) {
+        return { data: staticContent }
+    }
+
+    const availableGroups = [...new Set(tools.map((t) => t.group))].sort()
+    const staticKeys = [...HELP_CONTENT.keys()]
+    throw new ProtocolError(
+        ProtocolErrorCode.InternalError,
+        `Group "${groupName}" not found. Available groups: ${availableGroups.join(', ')}. Static help: ${staticKeys.join(', ')}.`
+    )
+}
+
 /**
  * Get help resource definitions
  */
@@ -70,61 +231,7 @@ export function getHelpResourceDefinitions(): InternalResourceDef[] {
             mimeType: 'application/json',
             icons: [ICON_BRIEFING],
             annotations: ASSISTANT_FOCUSED,
-            handler: async (_uri: string, context: ResourceContext): Promise<ResourceResult> => {
-                const rawTools = await getAllToolDefinitionsAsync(context)
-
-                // Filter out tools disabled by --tool-filter, UNLESS codemode is enabled.
-                // Code Mode exposes the full API surface area via the sandbox,
-                // while readonly meta-filter always restricts mutating tools.
-                const hasCodeMode = context.filterConfig?.enabledTools.has('mj_execute_code') ?? false
-                const filterRaw = context.filterConfig?.raw
-                const tools = rawTools.filter((t) => {
-                    if (!isToolVisibleForFilter(t.name, t.annotations?.readOnlyHint, filterRaw)) {
-                        return false
-                    }
-                    if (!context.filterConfig || hasCodeMode) return true
-                    return context.filterConfig.enabledTools.has(t.name)
-                })
-
-                // Group tools by their group field
-                const groups = new Map<string, { names: string[]; readOnly: boolean }>()
-                for (const tool of tools) {
-                    const existing = groups.get(tool.group)
-                    if (existing) {
-                        existing.names.push(tool.name)
-                        // A group is read-only only if ALL its tools are read-only
-                        if (!tool.annotations?.readOnlyHint) existing.readOnly = false
-                    } else {
-                        groups.set(tool.group, {
-                            names: [tool.name],
-                            readOnly: tool.annotations?.readOnlyHint ?? false,
-                        })
-                    }
-                }
-
-                const groupList = Array.from(groups.entries())
-                    .sort(([a], [b]) => a.localeCompare(b))
-                    .map(([name, info]) => ({
-                        name,
-                        description: GROUP_DESCRIPTIONS[name] ?? name,
-                        toolCount: info.names.length,
-                        readOnly: info.readOnly,
-                        tools: info.names.sort(),
-                        helpUri: `memory://help/${name}`,
-                    }))
-
-                const data = {
-                    totalTools: tools.length,
-                    totalGroups: groupList.length,
-                    staticTopics: ['gotchas', 'templates'],
-                    groups: groupList,
-                    hint: 'Read memory://help/{group} for detailed parameter info on each tool, or memory://help/gotchas / memory://help/templates.',
-                }
-                const tokenEstimate = Math.ceil(JSON.stringify(data).length / 4)
-                return {
-                    data: { ...data, _meta: { tokenEstimate } }
-                }
-            },
+            handler: handleHelpRootResource,
         },
         {
             uri: 'memory://help/{group}',
@@ -135,101 +242,7 @@ export function getHelpResourceDefinitions(): InternalResourceDef[] {
             mimeType: 'application/json',
             icons: [ICON_BRIEFING],
             annotations: ASSISTANT_FOCUSED,
-            handler: async (uri: string, context: ResourceContext): Promise<ResourceResult> => {
-                const match = /^memory:\/\/help\/([^/?#]+)$/.exec(getBaseUri(uri))
-                const rawGroupName = match?.[1] ? safeDecodeUriSegment(match[1]) : undefined
-                const groupName = rawGroupName === 'export' ? 'io' : rawGroupName
-
-                if (!groupName) {
-                    throw new ProtocolError(ProtocolErrorCode.InvalidParams,  'Invalid group name in URI. Read memory://help for a list of available groups.')
-                }
-
-                // Resolve dynamic tool data for this group
-                const rawTools = await getAllToolDefinitionsAsync(context)
-                const hasCodeMode = context.filterConfig?.enabledTools.has('mj_execute_code') ?? false
-                const filterRaw = context.filterConfig?.raw
-                const tools = rawTools.filter((t) => {
-                    if (!isToolVisibleForFilter(t.name, t.annotations?.readOnlyHint, filterRaw)) {
-                        return false
-                    }
-                    if (!context.filterConfig || hasCodeMode) return true
-                    return context.filterConfig.enabledTools.has(t.name)
-                })
-                const groupTools = tools.filter((t) => t.group === groupName)
-
-                // Check for static help content (codemode, github, etc.)
-                const staticContent = HELP_CONTENT.get(groupName)
-
-                // If the group has dynamic tools, always return JSON (with optional helpContent)
-                if (groupTools.length > 0) {
-                    const enabledSet = context.filterConfig?.enabledTools
-                    const isCodemodeOnly =
-                        filterRaw?.trim() === 'codemode' ||
-                        (enabledSet !== undefined &&
-                            enabledSet.has('mj_execute_code') &&
-                            [...enabledSet].every(
-                                (t) => t === 'mj_execute_code' || t === 'update_configuration'
-                            ))
-
-                    const toolDetails = groupTools.map((tool) => {
-                        let displayName = tool.name
-                        if (
-                            isCodemodeOnly &&
-                            tool.name !== 'mj_execute_code' &&
-                            tool.name !== 'update_configuration'
-                        ) {
-                            const camelCase = tool.name.replace(
-                                /_([a-z])/g,
-                                (_: string, letter: string) => letter.toUpperCase()
-                            )
-                            displayName = `mj.${tool.group}.${camelCase}`
-                        }
-
-                        return {
-                            name: displayName,
-                            title: tool.title,
-                            description: tool.description,
-                            parameters: extractParameters(tool.inputSchema),
-                            annotations: {
-                                readOnly: tool.annotations?.readOnlyHint ?? false,
-                                destructive: tool.annotations?.destructiveHint ?? false,
-                                idempotent: tool.annotations?.idempotentHint ?? false,
-                                openWorld: tool.annotations?.openWorldHint ?? false,
-                            },
-                            hasOutputSchema: tool.outputSchema !== undefined,
-                        }
-                    })
-
-                    const result: Record<string, unknown> = {
-                        group: groupName,
-                        description: GROUP_DESCRIPTIONS[groupName] ?? groupName,
-                        toolCount: toolDetails.length,
-                        tools: toolDetails,
-                    }
-
-                    // Merge static help content alongside dynamic tool data
-                    if (staticContent) {
-                        result['helpContent'] = staticContent
-                    }
-
-                    const tokenEstimate = Math.ceil(JSON.stringify(result).length / 4)
-                    result['_meta'] = { tokenEstimate }
-
-                    return { data: result }
-                }
-
-                // Group has static content only (no dynamic tools) — return markdown
-                if (staticContent) {
-                    return { data: staticContent }
-                }
-
-                // Not found
-                const availableGroups = [...new Set(tools.map((t) => t.group))].sort()
-                const staticKeys = [...HELP_CONTENT.keys()]
-                throw new ProtocolError(ProtocolErrorCode.InternalError, 
-                    `Group "${groupName}" not found. Available groups: ${availableGroups.join(', ')}. Static help: ${staticKeys.join(', ')}.`
-                )
-            },
+            handler: handleHelpGroupResource,
         },
     ]
 }

@@ -91,6 +91,44 @@ export function scopeMismatchResponse(error: string): Record<string, unknown> {
     }
 }
 
+function resolveCandidateScope(
+    context: ToolContext,
+    canonicalRepo: string | undefined,
+    callerWorkspace: string | undefined,
+    inputProjectNumber: number | undefined,
+    entryProjectNumber: number | undefined,
+    isExplicitDefault: boolean,
+    effectiveRegistry: Registry
+): { candidateWs: string; candidateProj: number | undefined } {
+    if (isExplicitDefault) {
+        return { candidateWs: 'default', candidateProj: inputProjectNumber }
+    }
+    const pairCallerWorkspace = callerWorkspace !== undefined && inputProjectNumber === undefined
+    const resolvedCtx = resolveProjectContext(
+        {
+            workspace_id: callerWorkspace ?? canonicalRepo,
+            ...(pairCallerWorkspace || entryProjectNumber === undefined
+                ? {}
+                : { project_number: entryProjectNumber }),
+        },
+        context.config
+    )
+    const candidateWs =
+        resolvedCtx.workspaceId === 'default' && canonicalRepo && callerWorkspace === undefined
+            ? canonicalRepo
+            : resolvedCtx.workspaceId
+    const candidateWsRegistered =
+        candidateWs !== undefined &&
+        findCanonicalRegistryKey(candidateWs, effectiveRegistry) !== undefined
+    let candidateProj: number | undefined
+    if (pairCallerWorkspace) {
+        candidateProj = resolvedCtx.projectNumber
+    } else if (candidateWsRegistered || inputProjectNumber !== undefined) {
+        candidateProj = resolvedCtx.projectNumber ?? entryProjectNumber
+    }
+    return { candidateWs, candidateProj }
+}
+
 export function resolveIssueEntryScope(
     context: ToolContext,
     resolvedRepo: string | undefined,
@@ -111,25 +149,27 @@ export function resolveIssueEntryScope(
     }
     const callerWorkspace = concreteCallerWorkspace(inputWorkspaceId)
     const isExplicitDefault = callerWorkspace?.toLowerCase() === 'default'
+    const isForeignOwner =
+        owner !== undefined &&
+        detectedOwner !== undefined &&
+        detectedOwner !== null &&
+        owner.toLowerCase() !== detectedOwner.toLowerCase()
     const entryProjectNumber = isExplicitDefault
         ? inputProjectNumber
-        : resolveProjectNumber(
-              context,
-              resolvedRepo,
-              inputProjectNumber,
-              owner,
-              detectedOwner
-          )
+        : resolveProjectNumber(context, resolvedRepo, inputProjectNumber, owner, detectedOwner)
     if (entryProjectNumber !== undefined && entryProjectNumber <= 0) {
         return {
             errorResponse: scopeMismatchResponse('project_number must be a positive integer.'),
         }
     }
-    const pairCallerWorkspace = callerWorkspace !== undefined && inputProjectNumber === undefined
+
     const registry = context.config?.projectRegistry ?? loadProjectRegistryFromConfig()
-    const canonicalRepo = resolvedRepo
-        ? (findCanonicalRegistryKey(resolvedRepo, registry) ?? resolvedRepo)
-        : undefined
+    let canonicalRepo: string | undefined
+    if (isForeignOwner && callerWorkspace === undefined && owner !== undefined) {
+        canonicalRepo = resolvedRepo !== undefined ? `${owner}/${resolvedRepo}` : undefined
+    } else if (resolvedRepo !== undefined && resolvedRepo !== '') {
+        canonicalRepo = findCanonicalRegistryKey(resolvedRepo, registry) ?? resolvedRepo
+    }
     const mismatch = detectScopeMismatch(
         registry,
         canonicalRepo,
@@ -139,34 +179,15 @@ export function resolveIssueEntryScope(
     if (mismatch !== undefined) return { errorResponse: scopeMismatchResponse(mismatch) }
 
     const effectiveRegistry = activeProjectRegistry(context.config?.projectRegistry)
-    let candidateWs: string
-    let candidateProj: number | undefined
-    if (isExplicitDefault) {
-        candidateWs = 'default'
-        candidateProj = inputProjectNumber
-    } else {
-        const resolvedCtx = resolveProjectContext(
-            {
-                workspace_id: callerWorkspace ?? canonicalRepo,
-                ...(pairCallerWorkspace || entryProjectNumber === undefined
-                    ? {}
-                    : { project_number: entryProjectNumber }),
-            },
-            context.config
-        )
-        candidateWs =
-            resolvedCtx.workspaceId === 'default' && canonicalRepo && callerWorkspace === undefined
-                ? canonicalRepo
-                : resolvedCtx.workspaceId
-        const candidateWsRegistered =
-            candidateWs !== undefined &&
-            findCanonicalRegistryKey(candidateWs, effectiveRegistry) !== undefined
-        candidateProj = pairCallerWorkspace
-            ? resolvedCtx.projectNumber
-            : candidateWsRegistered || inputProjectNumber !== undefined
-              ? (resolvedCtx.projectNumber ?? entryProjectNumber)
-              : undefined
-    }
+    const { candidateWs, candidateProj } = resolveCandidateScope(
+        context,
+        canonicalRepo,
+        callerWorkspace,
+        inputProjectNumber,
+        entryProjectNumber,
+        isExplicitDefault,
+        effectiveRegistry
+    )
     const paired = pairStoredScope(candidateWs, candidateProj, effectiveRegistry)
     const finalWorkspaceId = paired.workspaceId ?? candidateWs
     const finalProjectNumber = paired.projectNumber ?? undefined

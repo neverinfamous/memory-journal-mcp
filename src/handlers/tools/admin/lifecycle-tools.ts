@@ -6,8 +6,79 @@ import { RunAutoPruneSchema, RunAutoPruneSchemaMcp, RunAutoPruneOutputSchema } f
 import { runAutoPrune } from '../../../server/auto-prune.js'
 
 
+function resolveLifecyclePruneScope(
+    parsed: ReturnType<typeof RunAutoPruneSchema.parse>,
+    config: ToolContext['config']
+): { workspaceId: string; projectNumber?: number } {
+    const explicitWs = parsed.workspace_id?.trim()
+    const explicitProj = parsed.project_number
+    if (explicitWs === '*') {
+        return {
+            workspaceId: '*',
+            ...(explicitProj !== undefined ? { projectNumber: explicitProj } : {}),
+        }
+    }
+    const targetWs =
+        explicitWs !== undefined && explicitWs !== ''
+            ? explicitWs
+            : explicitProj === undefined
+              ? config?.defaultWorkspaceId
+              : undefined
+    const targetProj =
+        explicitProj ?? (explicitWs === undefined ? config?.defaultProjectNumber : undefined)
+    return resolveAutoPruneScope(targetWs, targetProj, config?.projectRegistry, {
+        runtime: config?.runtime,
+    })
+}
+
+async function executeRunAutoPrune(
+    params: unknown,
+    context: ToolContext
+): Promise<Record<string, unknown>> {
+    const { db, config } = context
+    const parsed = RunAutoPruneSchema.parse(params)
+    const archiveDays = parsed.archive_older_than_days ?? config?.archiveOlderThanDays ?? 0
+    const pruneDays = parsed.prune_older_than_days ?? config?.pruneOlderThanDays ?? 0
+    const hardDeleteDays = parsed.hard_delete_older_than_days ?? config?.hardDeleteOlderThanDays ?? 0
+    const threshold = parsed.importance_threshold ?? config?.pruneImportanceThreshold ?? 0.15
+    const pruneScope = resolveLifecyclePruneScope(parsed, config)
+    const excludeTags = config?.pruneExcludeTags
+
+    const pruneResult = await runAutoPrune(db, {
+        archiveOlderThanDays: archiveDays,
+        pruneOlderThanDays: pruneDays,
+        hardDeleteOlderThanDays: hardDeleteDays,
+        importanceThreshold: threshold,
+        dryRun: parsed.dry_run,
+        ...(excludeTags !== undefined ? { excludeTags } : {}),
+        workspaceId: pruneScope.workspaceId,
+        ...(pruneScope.projectNumber !== undefined ? { projectNumber: pruneScope.projectNumber } : {}),
+    })
+
+    if (pruneResult.aborted === true) {
+        return {
+            success: false,
+            error: 'Safety backup failed and no rows were changed.',
+            code: 'INTERNAL_ERROR',
+            category: 'internal',
+            recoverable: true,
+            archivedCount: pruneResult.archivedCount,
+            prunedCount: pruneResult.prunedCount,
+            hardDeletedCount: pruneResult.hardDeletedCount,
+            dryRun: parsed.dry_run,
+        }
+    }
+    return {
+        success: true,
+        archivedCount: pruneResult.archivedCount,
+        prunedCount: pruneResult.prunedCount,
+        hardDeletedCount: pruneResult.hardDeletedCount,
+        backupFile: pruneResult.backupFile || undefined,
+        dryRun: parsed.dry_run,
+    }
+}
+
 export function getLifecycleTools(context: ToolContext): ToolDefinition[] {
-    const { db } = context
     return [
         {
             name: 'run_auto_prune',
@@ -24,87 +95,7 @@ export function getLifecycleTools(context: ToolContext): ToolDefinition[] {
             },
             handler: async (params: unknown) => {
                 try {
-                    const parsed = RunAutoPruneSchema.parse(params)
-
-                    const archiveDays =
-                        parsed.archive_older_than_days ??
-                        context.config?.archiveOlderThanDays ??
-                        0
-                    const pruneDays =
-                        parsed.prune_older_than_days ??
-                        context.config?.pruneOlderThanDays ??
-                        0
-                    const hardDeleteDays =
-                        parsed.hard_delete_older_than_days ??
-                        context.config?.hardDeleteOlderThanDays ??
-                        0
-                    const threshold =
-                        parsed.importance_threshold ??
-                        context.config?.pruneImportanceThreshold ??
-                        0.15
-
-                    const explicitWs = parsed.workspace_id?.trim()
-                    const explicitProj = parsed.project_number
-                    let pruneScope: { workspaceId: string; projectNumber?: number }
-                    if (explicitWs === '*') {
-                        pruneScope = {
-                            workspaceId: '*',
-                            ...(explicitProj !== undefined ? { projectNumber: explicitProj } : {}),
-                        }
-                    } else {
-                        const targetWs =
-                            explicitWs !== undefined && explicitWs !== ''
-                                ? explicitWs
-                                : explicitProj === undefined
-                                  ? context.config?.defaultWorkspaceId
-                                  : undefined
-                        const targetProj =
-                            explicitProj ??
-                            (explicitWs === undefined ? context.config?.defaultProjectNumber : undefined)
-                        pruneScope = resolveAutoPruneScope(
-                            targetWs,
-                            targetProj,
-                            context.config?.projectRegistry,
-                            { runtime: context.config?.runtime }
-                        )
-                    }
-
-                    const excludeTags = context.config?.pruneExcludeTags
-                    const pruneResult = await runAutoPrune(db, {
-                        archiveOlderThanDays: archiveDays,
-                        pruneOlderThanDays: pruneDays,
-                        hardDeleteOlderThanDays: hardDeleteDays,
-                        importanceThreshold: threshold,
-                        dryRun: parsed.dry_run,
-                        ...(excludeTags !== undefined ? { excludeTags } : {}),
-                        workspaceId: pruneScope.workspaceId,
-                        ...(pruneScope.projectNumber !== undefined
-                            ? { projectNumber: pruneScope.projectNumber }
-                            : {}),
-                    })
-
-                    if (pruneResult.aborted === true) {
-                        return {
-                            success: false,
-                            error: 'Safety backup failed and no rows were changed.',
-                            code: 'INTERNAL_ERROR',
-                            category: 'internal',
-                            recoverable: true,
-                            archivedCount: pruneResult.archivedCount,
-                            prunedCount: pruneResult.prunedCount,
-                            hardDeletedCount: pruneResult.hardDeletedCount,
-                            dryRun: parsed.dry_run,
-                        }
-                    }
-
-                    return {
-                        success: true,
-                        archivedCount: pruneResult.archivedCount,
-                        prunedCount: pruneResult.prunedCount,
-                        hardDeletedCount: pruneResult.hardDeletedCount,
-                        backupFile: pruneResult.backupFile || undefined,
-                        dryRun: parsed.dry_run,
-                    }
+                    return await executeRunAutoPrune(params, context)
                 } catch (err) {
                     return formatHandlerError(err)
                 }

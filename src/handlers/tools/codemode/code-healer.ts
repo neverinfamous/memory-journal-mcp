@@ -282,43 +282,20 @@ export function healTemplateBackticksOnRuntimeError(code: string): string | null
     return candidate !== code && isValidJsScript(candidate) ? candidate : null
 }
 
-/**
- * Auto-heals common syntax, template literal, and LLM formatting errors in Code Mode execution payloads.
- */
-export function healCodeModeScript(code: string): string {
-    if (Buffer.byteLength(code, 'utf-8') > 50 * 1024) {
-        return code
-    }
-    let executionCode = code
-
-    const healedSql = extractAndRecoverSqlCode(executionCode)
-    if (healedSql !== null) return healedSql
-
-    const healedPrepared = extractAndRecoverPreparedStatementCode(executionCode)
-    if (healedPrepared !== null) return healedPrepared
-
-    const healedJson = extractAndRecoverJsonCode(executionCode)
-    if (healedJson !== null) return healedJson
-
-    executionCode = executionCode.replace(/<CURRENT_PROJECT_NUMBER>/g, 'undefined')
-    executionCode = executionCode.replace(/<CURRENT_PROJECT_ID>/g, 'undefined')
-    executionCode = executionCode.replace(/<PROJECT_NUMBER>/g, 'undefined')
-    executionCode = executionCode.replace(/<PROJECT_ID>/g, 'undefined')
-
+function rewriteModuleImportsAndExports(src: string): string {
+    let executionCode = src
     executionCode = executionCode.replace(
         /export\s+default\s+async\s+function\s*[\w$]*\s*\(([^)]*)\)\s*\{([\s\S]*)\}/g,
         (_m: string, param: string, body: string): string => {
             const p = param.trim()
-            const pClause = p ? `${p} = mj` : ''
-            return `(async (${pClause}) => { ${body} })()`
+            return `(async (${p ? `${p} = mj` : ''}) => { ${body} })()`
         }
     )
     executionCode = executionCode.replace(
         /export\s+default\s+function\s*[\w$]*\s*\(([^)]*)\)\s*\{([\s\S]*)\}/g,
         (_m: string, param: string, body: string): string => {
             const p = param.trim()
-            const pClause = p ? `${p} = mj` : ''
-            return `(async (${pClause}) => { ${body} })()`
+            return `(async (${p ? `${p} = mj` : ''}) => { ${body} })()`
         }
     )
     executionCode = executionCode.replace(/export\s+default\s+/g, '')
@@ -336,7 +313,6 @@ export function healCodeModeScript(code: string): string {
         /(?:await\s+)?import\s*\(\s*['"](?:fs|node:fs|path|node:path|memory-journal(?:-mcp)?|sqlite-journal|mcp|@modelcontextprotocol\/[^'"]+)['"]\s*\);?/g,
         '/* auto-healed dynamic import */'
     )
-
     executionCode = executionCode.replace(
         /(?:const|let|var)\s+(\{[^}]*\}|[\w$]+)\s*=\s*require\s*\(\s*['"]([^'"]+)['"]\s*\);?/g,
         (_m: string, varName: string, modName: string): string =>
@@ -346,15 +322,15 @@ export function healCodeModeScript(code: string): string {
         /^\s*require\s*\(\s*['"](?:fs|node:fs|path|node:path|memory-journal(?:-mcp)?|sqlite-journal|mcp|@modelcontextprotocol\/[^'"]+)['"]\s*\);?/gm,
         '/* auto-healed require */'
     )
-
-    executionCode = executionCode.replace(
+    return executionCode.replace(
         /import\s+(\{[^}]*\}|\*\s+as\s+[\w$]+|[\w$]+)\s+from\s+['"]([^'"]+)['"]\s*;?/g,
         (_m: string, varName: string, modName: string): string =>
             mapModuleBindingReplacement(varName, modName, 'import')
     )
+}
 
-    executionCode = unwrapNestedExecuteCode(executionCode)
-
+function rewriteSandboxNodeAndContextCalls(src: string): string {
+    let executionCode = unwrapNestedExecuteCode(src)
     executionCode = executionCode.replace(
         /(?:fs|fs\.promises)\.readFileSync\s*\([^)]*\)/g,
         (match, offset: number, fullStr: string) =>
@@ -384,11 +360,9 @@ export function healCodeModeScript(code: string): string {
         (match, offset: number, fullStr: string) =>
             isInsideStringLiteral(fullStr, offset) ? match : '{}'
     )
-
     if (!isValidJsScript(executionCode) || hasAccidentalTaggedTemplateBackticks(executionCode)) {
         executionCode = applyTemplateAndQuoteDelimiterHealing(executionCode)
     }
-
     executionCode = executionCode.replace(
         /\bJSON\.parse\s*\(\s*context\s*\)/g,
         '(typeof context === "string" ? JSON.parse(context) : context)'
@@ -401,14 +375,33 @@ export function healCodeModeScript(code: string): string {
         /\bJSON\.parse\s*\(\s*context\s*\?\?\s*['"][^'"]*['"]\s*\)/g,
         '(typeof context === "string" ? JSON.parse(context) : context)'
     )
-    executionCode = executionCode.replace(
+    return executionCode.replace(
         /\bJSON\.parse\s*\(\s*(context\.[a-zA-Z0-9_$]+)\s*\)/g,
         '(typeof $1 === "string" ? JSON.parse($1) : $1)'
     )
+}
 
-    if (!executionCode.endsWith('\n')) {
-        executionCode += '\n'
-    }
+/**
+ * Auto-heals common syntax, template literal, and LLM formatting errors in Code Mode execution payloads.
+ */
+export function healCodeModeScript(code: string): string {
+    if (Buffer.byteLength(code, 'utf-8') > 50 * 1024) return code
+    let executionCode = code
 
-    return executionCode
+    const healedSql = extractAndRecoverSqlCode(executionCode)
+    if (healedSql !== null) return healedSql
+    const healedPrepared = extractAndRecoverPreparedStatementCode(executionCode)
+    if (healedPrepared !== null) return healedPrepared
+    const healedJson = extractAndRecoverJsonCode(executionCode)
+    if (healedJson !== null) return healedJson
+
+    executionCode = executionCode
+        .replace(/<CURRENT_PROJECT_NUMBER>/g, 'undefined')
+        .replace(/<CURRENT_PROJECT_ID>/g, 'undefined')
+        .replace(/<PROJECT_NUMBER>/g, 'undefined')
+        .replace(/<PROJECT_ID>/g, 'undefined')
+    executionCode = rewriteModuleImportsAndExports(executionCode)
+    executionCode = rewriteSandboxNodeAndContextCalls(executionCode)
+
+    return executionCode.endsWith('\n') ? executionCode : `${executionCode}\n`
 }

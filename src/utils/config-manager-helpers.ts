@@ -1,8 +1,13 @@
 import { validateProjectRegistryObject } from '../cli/server-options-parsers.js'
 import type { ToolFilterConfig } from '../filtering/tool-filter.js'
-import { DEFAULT_BRIEFING_CONFIG, type BriefingConfig } from '../handlers/resources/shared.js'
+import type { BriefingConfig } from '../handlers/resources/shared.js'
 import { logger } from './logger.js'
 import { activeProjectRegistry, pairStoredScope } from './write-scope.js'
+import {
+    buildFallbackCliEnvBaseline,
+    buildFileCliEnvBaseline,
+    collectBriefingBaselines,
+} from './config-manager-baselines.js'
 
 export interface DynamicConfig {
     rawToolFilter: string | undefined
@@ -69,21 +74,6 @@ export interface MutatedConfigFields {
 
 export interface UpdateConfigOptions {
     mutatedFields?: MutatedConfigFields
-}
-
-function buildDefaultBriefingBaseline(): BriefingBaselineMap {
-    return {
-        entryCount: DEFAULT_BRIEFING_CONFIG.entryCount ?? 3,
-        summaryCount: DEFAULT_BRIEFING_CONFIG.summaryCount ?? 1,
-        includeTeam: DEFAULT_BRIEFING_CONFIG.includeTeam ?? false,
-        issueCount: DEFAULT_BRIEFING_CONFIG.issueCount ?? 0,
-        prCount: DEFAULT_BRIEFING_CONFIG.prCount ?? 0,
-        prStatusBreakdown: DEFAULT_BRIEFING_CONFIG.prStatusBreakdown ?? false,
-        milestoneCount: DEFAULT_BRIEFING_CONFIG.milestoneCount ?? 3,
-        workflowCount: DEFAULT_BRIEFING_CONFIG.workflowCount ?? 0,
-        workflowStatusBreakdown: DEFAULT_BRIEFING_CONFIG.workflowStatusBreakdown ?? false,
-        copilotReviews: DEFAULT_BRIEFING_CONFIG.copilotReviews ?? false,
-    }
 }
 
 export function isValidBriefingConfigValue(
@@ -174,22 +164,12 @@ export function buildInitialBaselines(
     initialFile: Record<string, unknown> | null,
     explicitCliEnvBaseline?: ConfigCliEnvBaseline
 ): InitialBaselinesResult {
-    const defaults = buildDefaultBriefingBaseline()
-    const initialBriefingBaseline: BriefingBaselineMap = { ...defaults }
-    const briefingKeysFromFile = new Set<BriefingConfigurableKey>()
-
-    for (const [fileKey, { target, kind }] of Object.entries(BRIEFING_CONFIG_KEY_MAP)) {
-        const hasFileVal =
-            initialFile !== null &&
-            fileKey in initialFile &&
-            isValidBriefingConfigValue(initialFile[fileKey], kind)
-        if (hasFileVal) briefingKeysFromFile.add(target)
-        const curVal = initialConfig.briefingConfig[target]
-        const fromFile = hasFileVal && initialFile[fileKey] === curVal
-        if (!fromFile && curVal !== undefined) {
-            initialBriefingBaseline[target] = curVal
-        }
-    }
+    const { initialBriefingBaseline, briefingKeysFromFile } = collectBriefingBaselines(
+        initialConfig,
+        initialFile,
+        BRIEFING_CONFIG_KEY_MAP,
+        isValidBriefingConfigValue
+    )
 
     const hasFileCodemode =
         initialFile !== null &&
@@ -210,88 +190,25 @@ export function buildInitialBaselines(
         Number.isInteger(initialFile['defaultProjectNumber']) &&
         initialFile['defaultProjectNumber'] > 0
 
+    let cliEnvBaseline: ConfigCliEnvBaseline
+    let toolFilterFromFile: boolean
     if (explicitCliEnvBaseline !== undefined) {
-        return {
-            cliEnvBaseline: { ...explicitCliEnvBaseline },
-            toolFilterFromFile:
-                explicitCliEnvBaseline.rawToolFilter === undefined &&
-                initialConfig.rawToolFilter !== undefined,
-            codemodeBaseline,
-            initialBriefingBaseline,
-            briefingKeysFromFile,
-            codemodeFromFile: hasFileCodemode,
-            defaultWorkspaceIdFromFile,
-            defaultProjectNumberFromFile,
-        }
-    }
-
-    if (initialFile !== null) {
-        const fileToolFilter =
-            typeof initialFile['toolFilter'] === 'string' &&
-            initialFile['toolFilter'].trim() !== ''
-                ? initialFile['toolFilter']
-                : undefined
-        const toolFilterFromFile =
-            fileToolFilter !== undefined && initialConfig.rawToolFilter === fileToolFilter
-        const fileProjNum =
-            typeof initialFile['defaultProjectNumber'] === 'number'
-                ? initialFile['defaultProjectNumber']
-                : undefined
-        const fileWsId =
-            typeof initialFile['defaultWorkspaceId'] === 'string'
-                ? initialFile['defaultWorkspaceId']
-                : undefined
-        const fileRegistry =
-            typeof initialFile['projectRegistry'] === 'object' &&
-            initialFile['projectRegistry'] !== null &&
-            !Array.isArray(initialFile['projectRegistry'])
-                ? initialFile['projectRegistry']
-                : undefined
-        return {
-            cliEnvBaseline: {
-                ...(!toolFilterFromFile && initialConfig.rawToolFilter !== undefined
-                    ? { rawToolFilter: initialConfig.rawToolFilter }
-                    : {}),
-                ...(initialConfig.briefingConfig.defaultProjectNumber !== undefined &&
-                initialConfig.briefingConfig.defaultProjectNumber !== fileProjNum
-                    ? { defaultProjectNumber: initialConfig.briefingConfig.defaultProjectNumber }
-                    : {}),
-                ...(initialConfig.briefingConfig.defaultWorkspaceId !== undefined &&
-                initialConfig.briefingConfig.defaultWorkspaceId !== fileWsId
-                    ? { defaultWorkspaceId: initialConfig.briefingConfig.defaultWorkspaceId }
-                    : {}),
-                ...(initialConfig.briefingConfig.projectRegistry !== undefined &&
-                JSON.stringify(initialConfig.briefingConfig.projectRegistry) !==
-                    JSON.stringify(fileRegistry)
-                    ? { projectRegistry: initialConfig.briefingConfig.projectRegistry }
-                    : {}),
-            },
-            toolFilterFromFile,
-            codemodeBaseline,
-            initialBriefingBaseline,
-            briefingKeysFromFile,
-            codemodeFromFile: hasFileCodemode,
-            defaultWorkspaceIdFromFile,
-            defaultProjectNumberFromFile,
-        }
+        cliEnvBaseline = { ...explicitCliEnvBaseline }
+        toolFilterFromFile =
+            explicitCliEnvBaseline.rawToolFilter === undefined &&
+            initialConfig.rawToolFilter !== undefined
+    } else if (initialFile !== null) {
+        const fromFile = buildFileCliEnvBaseline(initialConfig, initialFile)
+        cliEnvBaseline = fromFile.cliEnvBaseline
+        toolFilterFromFile = fromFile.toolFilterFromFile
+    } else {
+        cliEnvBaseline = buildFallbackCliEnvBaseline(initialConfig)
+        toolFilterFromFile = false
     }
 
     return {
-        cliEnvBaseline: {
-            ...(initialConfig.rawToolFilter !== undefined
-                ? { rawToolFilter: initialConfig.rawToolFilter }
-                : {}),
-            ...(initialConfig.briefingConfig.defaultProjectNumber !== undefined
-                ? { defaultProjectNumber: initialConfig.briefingConfig.defaultProjectNumber }
-                : {}),
-            ...(initialConfig.briefingConfig.defaultWorkspaceId !== undefined
-                ? { defaultWorkspaceId: initialConfig.briefingConfig.defaultWorkspaceId }
-                : {}),
-            ...(initialConfig.briefingConfig.projectRegistry !== undefined
-                ? { projectRegistry: initialConfig.briefingConfig.projectRegistry }
-                : {}),
-        },
-        toolFilterFromFile: false,
+        cliEnvBaseline,
+        toolFilterFromFile,
         codemodeBaseline,
         initialBriefingBaseline,
         briefingKeysFromFile,

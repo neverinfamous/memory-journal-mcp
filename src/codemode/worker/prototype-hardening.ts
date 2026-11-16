@@ -5,6 +5,54 @@
 
 import * as vm from 'node:vm'
 
+const OUTER_BUILTIN_CTORS: readonly unknown[] = [
+    Object,
+    Function,
+    Array,
+    String,
+    Number,
+    Boolean,
+    RegExp,
+    Error,
+    TypeError,
+    RangeError,
+    ReferenceError,
+    SyntaxError,
+    URIError,
+    EvalError,
+    Map,
+    Set,
+    WeakMap,
+    WeakSet,
+    Promise,
+    Date,
+    ArrayBuffer,
+    DataView,
+    JSON,
+    Math,
+]
+
+function freezeOuterBuiltinCtors(failures: string[]): void {
+    for (const B of OUTER_BUILTIN_CTORS) {
+        const label = typeof B === 'function' && B.name !== '' ? B.name : 'builtin'
+        if (typeof B === 'function') {
+            const proto = Reflect.get(B, 'prototype') as unknown
+            try {
+                if ((typeof proto === 'object' && proto !== null) || typeof proto === 'function') {
+                    Object.freeze(proto)
+                }
+            } catch {
+                failures.push(`freeze-prototype:${label}`)
+            }
+        }
+        try {
+            Object.freeze(B)
+        } catch {
+            failures.push(`freeze:${label}`)
+        }
+    }
+}
+
 /**
  * Neuters `.constructor` on all outer function prototypes so untrusted scripts
  * inside `vm` cannot traverse `fn['con'+'structor']` to reach the outer realm's
@@ -30,67 +78,26 @@ export function hardenOuterFunctionPrototypes(): string[] {
 
     const protos = [Object.prototype, Function.prototype, AsyncFnProto, GenFnProto, AsyncGenFnProto]
     for (const [index, proto] of protos.entries()) {
-        if (proto !== null && proto !== undefined) {
-            try {
-                Object.defineProperty(proto, 'constructor', {
-                    value: noopConstructor,
-                    writable: false,
-                    configurable: false,
-                })
-            } catch {
-                failures.push(`neuter-constructor[${String(index)}]`)
-            }
+        if (proto === null || proto === undefined) continue
+        try {
+            Object.defineProperty(proto, 'constructor', {
+                value: noopConstructor,
+                writable: false,
+                configurable: false,
+            })
+        } catch {
+            failures.push(`neuter-constructor[${String(index)}]`)
         }
     }
 
-    const outerBuiltins: unknown[] = [
-        Object,
-        Function,
-        Array,
-        String,
-        Number,
-        Boolean,
-        RegExp,
-        Error,
-        TypeError,
-        RangeError,
-        ReferenceError,
-        SyntaxError,
-        URIError,
-        EvalError,
-        Map,
-        Set,
-        WeakMap,
-        WeakSet,
-        Promise,
-        Date,
-        ArrayBuffer,
-        DataView,
-        JSON,
-        Math,
-    ]
-    for (const B of outerBuiltins) {
-        const label = typeof B === 'function' && B.name !== '' ? B.name : 'builtin'
-        if (typeof B === 'function' && B.prototype !== undefined && B.prototype !== null) {
-            try {
-                Object.freeze(B.prototype)
-            } catch {
-                failures.push(`freeze-prototype:${label}`)
-            }
-        }
-        try {
-            Object.freeze(B)
-        } catch {
-            failures.push(`freeze:${label}`)
-        }
-    }
+    freezeOuterBuiltinCtors(failures)
+
     for (const [index, proto] of protos.entries()) {
-        if (proto !== null && proto !== undefined) {
-            try {
-                Object.freeze(proto)
-            } catch {
-                failures.push(`freeze-proto[${String(index)}]`)
-            }
+        if (proto === null || proto === undefined) continue
+        try {
+            Object.freeze(proto)
+        } catch {
+            failures.push(`freeze-proto[${String(index)}]`)
         }
     }
 

@@ -3,19 +3,23 @@ import { effectiveWorkspace } from '../../workspace-scope.js'
 
 export { visualizeRelationships, getRecentGraphRelationships } from './cross-project-graph.js'
 
-export function getCrossProjectInsights(
-    connection: NativeConnectionManager,
-    options: {
-        startDate?: string
-        endDate?: string
-        minEntries: number
-        inactiveThresholdDays: number
-        workspaceId?: string
-        projectNumber?: number
-    }
-): {
-    projects: Record<string, unknown>[]
-    inactiveProjects: { project_number: number; last_entry_date: string }[]
+interface InsightsOptions {
+    startDate?: string
+    endDate?: string
+    minEntries: number
+    inactiveThresholdDays: number
+    workspaceId?: string
+    projectNumber?: number
+}
+
+function buildInsightsFilterState(options: InsightsOptions): {
+    where: string
+    sqlParams: unknown[]
+    scopeId: string
+    wsFilter: string
+    wsParams: unknown[]
+    startBound: string | undefined
+    endBound: string | undefined
 } {
     let where = 'WHERE deleted_at IS NULL AND project_number IS NOT NULL'
     const sqlParams: unknown[] = []
@@ -49,6 +53,35 @@ export function getCrossProjectInsights(
         endBound = end
     }
 
+    return { where, sqlParams, scopeId, wsFilter, wsParams, startBound, endBound }
+}
+
+function mapInsightProjects(
+    projectsResult: ReturnType<NativeConnectionManager['exec']>
+): Record<string, unknown>[] {
+    const projects: Record<string, unknown>[] = []
+    if (!projectsResult[0] || projectsResult[0].values.length === 0) return projects
+    const columns = projectsResult[0].columns
+    for (const row of projectsResult[0].values) {
+        const obj: Record<string, unknown> = {}
+        columns.forEach((col: string, i: number) => {
+            obj[col] = row[i]
+        })
+        projects.push(obj)
+    }
+    return projects
+}
+
+export function getCrossProjectInsights(
+    connection: NativeConnectionManager,
+    options: InsightsOptions
+): {
+    projects: Record<string, unknown>[]
+    inactiveProjects: { project_number: number; last_entry_date: string }[]
+} {
+    const { where, sqlParams, scopeId, wsFilter, wsParams, startBound, endBound } =
+        buildInsightsFilterState(options)
+
     const projectsResult = connection.exec(
         `
         SELECT project_number, COUNT(*) as entry_count,
@@ -63,18 +96,7 @@ export function getCrossProjectInsights(
         [...sqlParams, options.minEntries]
     )
 
-    const projects: Record<string, unknown>[] = []
-    if (projectsResult[0] && projectsResult[0].values.length > 0) {
-        const columns = projectsResult[0].columns
-        for (const row of projectsResult[0].values) {
-            const obj: Record<string, unknown> = {}
-            columns.forEach((col: string, i: number) => {
-                obj[col] = row[i]
-            })
-            projects.push(obj)
-        }
-    }
-
+    const projects = mapInsightProjects(projectsResult)
     attachTopTags(connection, projects, scopeId, startBound, endBound)
 
     const inactiveProjects = queryInactiveProjects(

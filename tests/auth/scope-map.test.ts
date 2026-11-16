@@ -64,6 +64,8 @@ describe('scope-map', () => {
                         expected = 'write'
                     } else if (tool === 'team_import_markdown' || tool === 'cross_team_search') {
                         expected = 'team'
+                    } else if (tool === 'search_audit_log') {
+                        expected = 'audit'
                     } else if (
                         [
                             'create_entry',
@@ -72,7 +74,7 @@ describe('scope-map', () => {
                             'export_markdown',
                             'import_external',
                             'mark_anchors_stale',
-                            'verify_entry',
+                            'check_entry_staleness',
                         ].includes(tool)
                     ) {
                         expected = 'write'

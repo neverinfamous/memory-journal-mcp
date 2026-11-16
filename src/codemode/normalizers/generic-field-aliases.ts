@@ -19,9 +19,7 @@ export function setActiveProjectRegistry(registry: Record<string, ProjectRegistr
 export function resolveEffectiveProjectRegistry():
     | Record<string, ProjectRegistryEntry>
     | undefined {
-    return activeProjectRegistry !== undefined && Object.keys(activeProjectRegistry).length > 0
-        ? activeProjectRegistry
-        : loadProjectRegistryFromConfig()
+    return activeProjectRegistry ?? loadProjectRegistryFromConfig()
 }
 
 export function getActiveProjectRegistry(): Record<string, ProjectRegistryEntry> | undefined {
@@ -44,7 +42,7 @@ export function readProjectRegistryPayload(value: unknown): Record<string, Proje
         if (hasProject) record.project_number = projectNumber
         registry[key] = record
     }
-    return Object.keys(registry).length > 0 ? registry : undefined
+    return registry
 }
 
 function validationError(error: string): { error: Record<string, unknown> } {
@@ -294,16 +292,18 @@ function normalizeProjectAliases(obj: Record<string, unknown>): { error: Record<
     if (obj['workspace_id'] === undefined) {
         if (typeof obj['workspaceId'] === 'string') {
             obj['workspace_id'] = obj['workspaceId']
-            Reflect.deleteProperty(obj, 'workspaceId')
         } else if (typeof obj['workspace'] === 'string') {
             obj['workspace_id'] = obj['workspace']
-            Reflect.deleteProperty(obj, 'workspace')
         }
+    }
+    Reflect.deleteProperty(obj, 'workspaceId')
+    if (obj['workspace_id'] !== undefined) {
+        Reflect.deleteProperty(obj, 'workspace')
     }
     if (obj['project_number'] === undefined && obj['projectNumber'] !== undefined) {
         obj['project_number'] = obj['projectNumber']
-        Reflect.deleteProperty(obj, 'projectNumber')
     }
+    Reflect.deleteProperty(obj, 'projectNumber')
     for (const projAlias of ['project_name', 'projectName', 'project'] as const) {
         if (obj[projAlias] === undefined) continue
         const res = applyProjectNameAlias(obj[projAlias], obj)

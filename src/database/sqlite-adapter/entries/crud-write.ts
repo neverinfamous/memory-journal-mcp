@@ -1,32 +1,14 @@
 import type { JournalEntry } from '../../../types/index.js'
 import type { CreateEntryInput } from '../../core/interfaces.js'
 import type { EntriesSharedContext } from './shared.js'
-import { ValidationError } from '../../../types/errors.js'
 import { effectiveWorkspace } from '../../workspace-scope.js'
-import { resolveProjectContext } from '../../../utils/workspace-resolver.js'
-import { activeProjectRegistry, pairStoredScope } from '../../../utils/write-scope.js'
 import { insertAnchors } from './anchors.js'
 import { getEntryById, getEntriesByIds } from './crud-read.js'
 import { normalizeTag, performUpdateEntry } from './crud-update.js'
 import type { UpdateEntryInput } from './crud-update.js'
+import { buildEntryInsertPayload } from './crud-write-helpers.js'
 
 export type { UpdateEntryInput }
-
-const authorColumnCache = new WeakMap<object, boolean>()
-
-function hasAuthorColumn(db: EntriesSharedContext['db']): boolean {
-    const cached = authorColumnCache.get(db)
-    if (cached !== undefined) return cached
-    const rows = db.prepare('PRAGMA table_info(memory_journal)').all()
-    const hasCol =
-        Array.isArray(rows) &&
-        rows.some((row): boolean => {
-            if (typeof row !== 'object' || row === null || !('name' in row)) return false
-            return Object.getOwnPropertyDescriptor(row, 'name')?.value === 'author'
-        })
-    authorColumnCache.set(db, hasCol)
-    return hasCol
-}
 
 /** Identifies the failing item (array index or entry id) inside an all-or-nothing batch transaction. */
 class BatchTransactionError extends Error {
@@ -104,85 +86,7 @@ function insertEntryRow(context: EntriesSharedContext, input: CreateEntryInput):
     const { normalizedTimestamp: timestamp } = validateEntryInput(input)
 
     const txn = db.transaction((): number => {
-        const columns = [
-            'entry_type',
-            'content',
-            'timestamp',
-            'is_personal',
-            'significance_type',
-            'auto_context',
-            'project_number',
-            'project_owner',
-            'issue_number',
-            'issue_url',
-            'pr_number',
-            'pr_url',
-            'pr_status',
-            'workflow_run_id',
-            'workflow_name',
-            'workflow_status',
-            'is_archived',
-            'workspace_id',
-            'trust_score',
-            'validation_status',
-            'impact_score',
-            'session_id',
-        ]
-        const nonEmpty = (s: string | null | undefined): string | null =>
-            s !== undefined && s !== null && s !== '' ? s : null
-        const trimmedWorkspace = input.workspaceId?.trim()
-        const omittedWorkspace = trimmedWorkspace === undefined || trimmedWorkspace.length === 0
-        const resolved = resolveProjectContext(
-            {
-                ...(omittedWorkspace ? {} : { workspace_id: trimmedWorkspace }),
-                ...(input.projectNumber !== undefined
-                    ? { project_number: input.projectNumber }
-                    : {}),
-            },
-            context.config
-        )
-        const paired = pairStoredScope(
-            resolved.workspaceId,
-            input.projectNumber ?? resolved.projectNumber,
-            activeProjectRegistry(context.config?.projectRegistry)
-        )
-        const finalProjNum = paired.projectNumber ?? null
-        const finalWsId = effectiveWorkspace(paired.workspaceId)
-        if (finalWsId === '*') {
-            throw new ValidationError(
-                "Wildcard workspace_id '*' cannot be used when creating entries. Specify a concrete workspace_id."
-            )
-        }
-        const values = [
-            input.entryType ?? 'personal_reflection',
-            input.content,
-            timestamp,
-            (input.isPersonal ?? true) ? 1 : 0,
-            nonEmpty(input.significanceType),
-            input.autoContext ?? null,
-            finalProjNum,
-            nonEmpty(input.projectOwner),
-            input.issueNumber ?? null,
-            nonEmpty(input.issueUrl),
-            input.prNumber ?? null,
-            nonEmpty(input.prUrl),
-            input.prStatus ?? null,
-            input.workflowRunId ?? null,
-            nonEmpty(input.workflowName),
-            input.workflowStatus ?? null,
-            input.isArchived === true ? 1 : 0,
-            finalWsId,
-            input.trustScore ?? 0.5,
-            input.validationStatus ?? 'none',
-            input.impactScore ?? 0.0,
-            input.sessionId ?? null,
-        ]
-
-        if (input.author !== undefined && hasAuthorColumn(db)) {
-            columns.push('author')
-            values.push(input.author)
-        }
-
+        const { columns, values } = buildEntryInsertPayload(context, input, timestamp)
         const placeholders = columns.map(() => '?').join(', ')
         const stmt = db.prepare(
             `INSERT INTO memory_journal (${columns.join(', ')}) VALUES (${placeholders})`

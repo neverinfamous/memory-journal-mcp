@@ -6,6 +6,7 @@ import {
 } from '../shared.js'
 import { sanitizeFtsQuery } from './fts-sanitizer.js'
 import { effectiveWorkspace } from '../../../workspace-scope.js'
+import { expandTagFilterValues } from '../../tags.js'
 
 interface SearchFacetOptions {
     isPersonal?: boolean
@@ -208,6 +209,32 @@ export function getSearchFacets(
     }
 }
 
+function appendFacetTagFilters(
+    conditions: string[],
+    params: unknown[],
+    options: SearchFacetOptions | undefined
+): void {
+    if (options?.tags !== undefined && options.tags.length > 0) {
+        const expandedTags = expandTagFilterValues(options.tags)
+        if (expandedTags.length > 0) {
+            const placeholders = expandedTags.map(() => '?').join(',')
+            conditions.push(`LOWER(t.name) IN (${placeholders})`)
+            params.push(...expandedTags)
+        }
+    }
+
+    if (options?.excludeTags !== undefined && options.excludeTags.length > 0) {
+        const expandedExcluded = expandTagFilterValues(options.excludeTags)
+        if (expandedExcluded.length > 0) {
+            const placeholders = expandedExcluded.map(() => '?').join(',')
+            conditions.push(
+                `NOT EXISTS (SELECT 1 FROM entry_tags et_ex JOIN tags t_ex ON et_ex.tag_id = t_ex.id WHERE et_ex.entry_id = e.id AND LOWER(t_ex.name) IN (${placeholders}))`
+            )
+            params.push(...expandedExcluded)
+        }
+    }
+}
+
 /**
  * Appends the optional attribute/tag/date filter conditions for getSearchFacets.
  */
@@ -246,19 +273,7 @@ function appendFacetFilterConditions(
         params.push(options.workflowRunId)
     }
 
-    if (options?.tags !== undefined && options.tags.length > 0) {
-        const placeholders = options.tags.map(() => '?').join(',')
-        conditions.push(`t.name IN (${placeholders})`)
-        params.push(...options.tags)
-    }
-
-    if (options?.excludeTags !== undefined && options.excludeTags.length > 0) {
-        const placeholders = options.excludeTags.map(() => '?').join(',')
-        conditions.push(
-            `NOT EXISTS (SELECT 1 FROM entry_tags et_ex JOIN tags t_ex ON et_ex.tag_id = t_ex.id WHERE et_ex.entry_id = e.id AND t_ex.name IN (${placeholders}))`
-        )
-        params.push(...options.excludeTags)
-    }
+    appendFacetTagFilters(conditions, params, options)
 
     if (options?.entryType !== undefined) {
         conditions.push(`e.entry_type = ?`)

@@ -49,6 +49,48 @@ function getWorkerScriptPath(): string {
  * Worker-thread sandbox for secure code execution.
  * Maintains a persistent worker thread internally.
  */
+function buildAllowedMethodList(apiBindings: Record<string, unknown>): Record<string, string[]> {
+    const methodList: Record<string, string[]> = {}
+    const topLevel: string[] = []
+    for (const [key, value] of Object.entries(apiBindings)) {
+        if (typeof value === 'function') {
+            topLevel.push(key)
+        } else if (typeof value === 'object' && value !== null) {
+            const methods = Object.entries(value)
+                .filter(([, methodValue]) => typeof methodValue === 'function')
+                .map(([methodName]) => methodName)
+            if (methods.length > 0) methodList[key] = methods
+        }
+    }
+    if (topLevel.length > 0) methodList['_topLevel'] = topLevel
+    return methodList
+}
+
+function resolveEffectiveMaxResultSize(override?: number): number {
+    let maxResultSize = override
+    if (maxResultSize === undefined || Number.isNaN(maxResultSize) || maxResultSize <= 0) {
+        const envVal = process.env['CODE_MODE_MAX_RESULT_SIZE']
+        maxResultSize = envVal ? parseInt(envVal, 10) : 100 * 1024
+    }
+    if (Number.isNaN(maxResultSize) || maxResultSize <= 0) return 100 * 1024
+    return maxResultSize > 50 * 1024 * 1024 ? 50 * 1024 * 1024 : maxResultSize
+}
+
+interface WorkerDispatchParams {
+    code: string
+    methodList: Record<string, string[]>
+    schemas: Record<string, Record<string, string>> | undefined
+    effectiveTimeout: number
+    maxResultSize: number
+    workerPort: MessagePort
+    hostPort: MessagePort
+    timeoutHandle: NodeJS.Timeout
+    contextObj: Record<string, unknown> | undefined
+    readonlyMode: boolean | undefined
+    startTime: number
+    resolve: (result: SandboxResult) => void
+}
+
 export class WorkerSandbox {
     private readonly options: Required<SandboxOptions>
     private worker: Worker | null = null
@@ -203,6 +245,45 @@ export class WorkerSandbox {
         )
     }
 
+    private dispatchWorkerMessage(params: WorkerDispatchParams): void {
+        // [H7] A DataCloneError (non-cloneable context/bindings) must release ports, timer and isBusy.
+        try {
+            if (this.worker === null) throw new Error('Code mode worker is not available')
+            this.worker.postMessage(
+                {
+                    type: 'EXECUTE',
+                    id: this.executionId,
+                    code: params.code,
+                    methodList: params.methodList,
+                    schemaList: params.schemas,
+                    timeoutMs: params.effectiveTimeout,
+                    maxResultSize: params.maxResultSize,
+                    rpcPort: params.workerPort,
+                    contextObj: params.contextObj,
+                    readonlyMode: params.readonlyMode,
+                },
+                [params.workerPort]
+            )
+        } catch (err: unknown) {
+            clearTimeout(params.timeoutHandle)
+            params.hostPort.close()
+            params.workerPort.close()
+            this.worker?.unref()
+            this.currentExecution = null
+            this.isBusy = false
+            const detail = err instanceof Error ? err.message : String(err)
+            params.resolve({
+                success: false,
+                error: `Code Mode could not dispatch the execution (${detail}). Ensure \`context\` contains only JSON-serializable values.`,
+                metrics: {
+                    wallTimeMs: Math.round(performance.now() - params.startTime),
+                    cpuTimeMs: 0,
+                    memoryUsedMb: 0,
+                },
+            })
+        }
+    }
+
     /**
      * Execute code in the worker thread with RPC bridge.
      */
@@ -223,9 +304,7 @@ export class WorkerSandbox {
             }
         }
 
-        let effectiveTimeout = timeoutMs ?? this.options.timeoutMs
-        if (effectiveTimeout > 30000) effectiveTimeout = 30000
-
+        const effectiveTimeout = Math.min(timeoutMs ?? this.options.timeoutMs, 30000)
         if (!this.worker) this.initWorker()
 
         this.isBusy = true
@@ -234,26 +313,8 @@ export class WorkerSandbox {
         const startTime = performance.now()
         const startRss = process.memoryUsage.rss()
 
-        return new Promise<SandboxResult>((resolve) => {
-            const methodList: Record<string, string[]> = {}
-            const topLevel: string[] = []
-
-        for (const [key, value] of Object.entries(apiBindings)) {
-                if (typeof value === 'function') {
-                    topLevel.push(key)
-                } else if (typeof value === 'object' && value !== null) {
-                    const methods: string[] = []
-                    for (const [methodName, methodValue] of Object.entries(value)) {
-                        if (typeof methodValue === 'function') {
-                            methods.push(methodName)
-                        }
-                    }
-                    if (methods.length > 0) methodList[key] = methods
-                }
-            }
-
-            if (topLevel.length > 0) methodList['_topLevel'] = topLevel
-
+        return await new Promise<SandboxResult>((resolve) => {
+            const methodList = buildAllowedMethodList(apiBindings)
             const { port1: hostPort, port2: workerPort } = new MessageChannel()
             const timedOutId = this.executionId
             const timeoutHandle = setTimeout(() => {
@@ -261,13 +322,7 @@ export class WorkerSandbox {
             }, effectiveTimeout)
             timeoutHandle.unref()
 
-            this.currentExecution = {
-                resolve,
-                hostPort,
-                startTime,
-                startRss,
-                timeoutHandle,
-            }
+            this.currentExecution = { resolve, hostPort, startTime, startRss, timeoutHandle }
 
             hostPort.on('message', (msg: RpcRequest) => {
                 void handleRpcRequest(msg, apiBindings, hostPort, methodList).catch((err: unknown) => {
@@ -283,50 +338,20 @@ export class WorkerSandbox {
             })
             this.worker?.ref()
 
-            let maxResultSize = maxResultSizeOverride
-            if (maxResultSize === undefined || Number.isNaN(maxResultSize) || maxResultSize <= 0) {
-                const envVal = process.env['CODE_MODE_MAX_RESULT_SIZE']
-                maxResultSize = envVal ? parseInt(envVal, 10) : 100 * 1024
-            }
-
-            if (Number.isNaN(maxResultSize) || maxResultSize <= 0) {
-                maxResultSize = 100 * 1024
-            } else if (maxResultSize > 50 * 1024 * 1024) {
-                maxResultSize = 50 * 1024 * 1024 // Cap at 50MB
-            }
-
-            // [H7] A DataCloneError (non-cloneable context/bindings) must release ports, timer and isBusy.
-            try {
-                if (this.worker === null) throw new Error('Code mode worker is not available')
-                this.worker.postMessage(
-                    {
-                        type: 'EXECUTE',
-                        id: this.executionId,
-                        code,
-                        methodList,
-                        schemaList: schemas,
-                        timeoutMs: effectiveTimeout,
-                        maxResultSize,
-                        rpcPort: workerPort,
-                        contextObj,
-                        readonlyMode,
-                    },
-                    [workerPort]
-                )
-            } catch (err: unknown) {
-                clearTimeout(timeoutHandle)
-                hostPort.close()
-                workerPort.close()
-                this.worker?.unref()
-                this.currentExecution = null
-                this.isBusy = false
-                const detail = err instanceof Error ? err.message : String(err)
-                resolve({
-                    success: false,
-                    error: `Code Mode could not dispatch the execution (${detail}). Ensure \`context\` contains only JSON-serializable values.`,
-                    metrics: { wallTimeMs: Math.round(performance.now() - startTime), cpuTimeMs: 0, memoryUsedMb: 0 },
-                })
-            }
+            this.dispatchWorkerMessage({
+                code,
+                methodList,
+                schemas,
+                effectiveTimeout,
+                maxResultSize: resolveEffectiveMaxResultSize(maxResultSizeOverride),
+                workerPort,
+                hostPort,
+                timeoutHandle,
+                contextObj,
+                readonlyMode,
+                startTime,
+                resolve,
+            })
         })
     }
 }

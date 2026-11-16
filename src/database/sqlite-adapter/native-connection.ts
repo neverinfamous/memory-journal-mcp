@@ -173,12 +173,15 @@ export class NativeConnectionManager implements IDatabaseConnection {
         this.ftsRebuildTimer = setTimeout(() => {
             this.ftsRebuildTimer = null
             if (this.db === null) return
+            const db = this.db
             try {
                 // In-process rebuild on the existing (keyed, busy_timeout-configured) connection (live entries only)
-                this.db.exec(
-                    "INSERT INTO fts_content(fts_content) VALUES ('delete-all'); " +
+                db.transaction(() => {
+                    db.exec("INSERT INTO fts_content(fts_content) VALUES ('delete-all')")
+                    db.exec(
                         'INSERT INTO fts_content(rowid, content) SELECT id, content FROM memory_journal WHERE deleted_at IS NULL'
-                )
+                    )
+                })()
                 logger.info(`Deferred FTS5 rebuild completed (${rebuildReason})`, {
                     module: 'NativeConnectionManager',
                     dbPath: this.dbPath,

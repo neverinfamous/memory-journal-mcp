@@ -183,92 +183,79 @@ export function resetCrossTeamCacheForTests(): void {
 // Handler
 // ============================================================================
 
-export async function handleCrossTeamSearch(
-    args: z.infer<typeof CrossTeamSearchSchema>,
-    context: ToolContext
-): Promise<z.infer<typeof CrossTeamSearchOutputSchema>> {
-    const { config } = context
-    const wsId = resolveWorkspaceId(args.workspace_id, args.project_number, config)
-    const alignedProject = alignedProjectFilter(
-        wsId,
-        args.project_number,
-        activeProjectRegistry(config?.projectRegistry)
-    )
+type CrossTeamSearchArgs = z.infer<typeof CrossTeamSearchSchema>
 
-    // 1. Resolve configured additional team DBs
-    const additionalDbs: Record<string, string> = { ...(config?.additionalTeamDbs ?? {}) }
-    
-    // The list of all valid labels to search
+function resolveCrossTeamTargetLabels(
+    args: CrossTeamSearchArgs,
+    context: ToolContext,
+    additionalDbs: Record<string, string>
+): string[] {
     const configuredLabels = Object.keys(additionalDbs)
-    if (context.teamDb) {
-        configuredLabels.push('primary')
-    }
-
+    if (context.teamDb) configuredLabels.push('primary')
     if (configuredLabels.length === 0) {
         throw new ConfigurationError(
             'Cross-team search requires ADDITIONAL_TEAM_DBS environment variable to be configured.'
         )
     }
-
-    // 2. Filter DBs based on requested labels (if any)
-    const targetLabels = args.team_dbs && args.team_dbs.length > 0
-        ? args.team_dbs.filter(label => configuredLabels.includes(label))
-        : configuredLabels
-
+    const targetLabels =
+        args.team_dbs && args.team_dbs.length > 0
+            ? args.team_dbs.filter((label) => configuredLabels.includes(label))
+            : configuredLabels
     if (targetLabels.length === 0 && args.team_dbs && args.team_dbs.length > 0) {
-        // Requested specific DBs, but none exist in config
         throw new ValidationError('None of the requested team DBs are configured.', {
-            team_dbs: args.team_dbs
+            team_dbs: args.team_dbs,
         })
     }
+    return targetLabels
+}
 
-    // 3. Query DBs in parallel
-    // We request up to MAX limit from each DB to ensure we have enough post-merge candidates
-    const caller = getCallerIdentity()
-    if (targetLabels.includes('primary') && context.teamDb) {
-        enforceTeamRbac(context, caller, 'viewer', wsId)
-    }
-    const perDbLimit = Math.min(args.limit * 2, 500)
-
-    const searchPromises = targetLabels.map(async (label) => {
-        let adapter: IDatabaseAdapter
-        
-        if (label === 'primary') {
-            if (!context.teamDb) throw new Error('Primary team database not configured')
-            adapter = context.teamDb
-        } else {
-            const dbPath = additionalDbs[label]
-            if (!dbPath) throw new Error(`Missing configured path for ${label}`)
-            adapter = await getOrCreateAdapter(label, dbPath)
-            if (adapter.isTeamRbacActive?.()) {
-                enforceTeamRbac({ ...context, teamDb: adapter }, caller, 'viewer', wsId)
-            }
+async function querySingleTeamDb(
+    label: string,
+    args: CrossTeamSearchArgs,
+    context: ToolContext,
+    additionalDbs: Record<string, string>,
+    caller: ReturnType<typeof getCallerIdentity>,
+    wsId: string,
+    alignedProject: number | undefined,
+    perDbLimit: number
+): Promise<EntryWithSource[]> {
+    let adapter: IDatabaseAdapter
+    if (label === 'primary') {
+        if (!context.teamDb) throw new Error('Primary team database not configured')
+        adapter = context.teamDb
+    } else {
+        const dbPath = additionalDbs[label]
+        if (!dbPath) throw new Error(`Missing configured path for ${label}`)
+        adapter = await getOrCreateAdapter(label, dbPath)
+        if (adapter.isTeamRbacActive?.()) {
+            enforceTeamRbac({ ...context, teamDb: adapter }, caller, 'viewer', wsId)
         }
+    }
 
-        const results = adapter.searchEntries(args.query, {
-            limit: perDbLimit,
-            tags: args.tags,
-            entryType: args.entry_type,
-            startDate: args.start_date,
-            endDate: args.end_date,
-            sortBy: args.sort_by,
-            fuzzy_match: args.fuzzy_match,
-            includeArchived: args.include_archived,
-            workspaceId: wsId,
-            ...(alignedProject !== undefined ? { projectNumber: alignedProject } : {}),
-        })
-
-        // Tag entries with their source
-        return results.entries.map((entry) => ({
-            ...entry,
-            source: 'team' as const,
-            team_db: label,
-        }))
+    const results = adapter.searchEntries(args.query, {
+        limit: perDbLimit,
+        tags: args.tags,
+        entryType: args.entry_type,
+        startDate: args.start_date,
+        endDate: args.end_date,
+        sortBy: args.sort_by,
+        fuzzy_match: args.fuzzy_match,
+        includeArchived: args.include_archived,
+        workspaceId: wsId,
+        ...(alignedProject !== undefined ? { projectNumber: alignedProject } : {}),
     })
+    return results.entries.map((entry) => ({ ...entry, source: 'team' as const, team_db: label }))
+}
 
-    const settled = await Promise.allSettled(searchPromises)
-
-    // 4. Collect results and errors
+function collectSettledTeamResults(
+    settled: PromiseSettledResult<EntryWithSource[]>[],
+    targetLabels: string[]
+): {
+    sources: EntryWithSource[][]
+    errors: { team_db: string; error: string }[]
+    searched_dbs: string[]
+    degraded: boolean
+} {
     const sources: EntryWithSource[][] = []
     const errors: { team_db: string; error: string }[] = []
     const searched_dbs: string[] = []
@@ -279,7 +266,6 @@ export async function handleCrossTeamSearch(
         const label = targetLabels[i]
         const result = settled[i]
         if (!label || !result) continue
-
         if (result.status === 'fulfilled') {
             sources.push(result.value)
             searched_dbs.push(label)
@@ -299,14 +285,50 @@ export async function handleCrossTeamSearch(
     if (searched_dbs.length === 0 && errors.length > 0 && authFailure !== undefined) {
         throw authFailure
     }
+    return { sources, errors, searched_dbs, degraded }
+}
 
-    // 5. Merge, sort, and apply final limit
+export async function handleCrossTeamSearch(
+    args: CrossTeamSearchArgs,
+    context: ToolContext
+): Promise<z.infer<typeof CrossTeamSearchOutputSchema>> {
+    const { config } = context
+    const wsId = resolveWorkspaceId(args.workspace_id, args.project_number, config)
+    const alignedProject = alignedProjectFilter(
+        wsId,
+        args.project_number,
+        activeProjectRegistry(config?.projectRegistry)
+    )
+    const additionalDbs: Record<string, string> = { ...(config?.additionalTeamDbs ?? {}) }
+    const targetLabels = resolveCrossTeamTargetLabels(args, context, additionalDbs)
+
+    const caller = getCallerIdentity()
+    if (targetLabels.includes('primary') && context.teamDb) {
+        enforceTeamRbac(context, caller, 'viewer', wsId)
+    }
+    const perDbLimit = Math.min(args.limit * 2, 500)
+    const settled = await Promise.allSettled(
+        targetLabels.map((label) =>
+            querySingleTeamDb(
+                label,
+                args,
+                context,
+                additionalDbs,
+                caller,
+                wsId,
+                alignedProject,
+                perDbLimit
+            )
+        )
+    )
+
+    const { sources, errors, searched_dbs, degraded } = collectSettledTeamResults(
+        settled,
+        targetLabels
+    )
     const merged = mergeMultipleSources(sources, args.limit, args.sort_by)
-
-    // Ensure we enforce schema matching
     const finalEntries = merged.map((entry) => {
         const rest = Object.fromEntries(Object.entries(entry).filter(([key]) => key !== 'source'))
-        // Strip any specific things we don't want leaked in the schema
         return {
             ...rest,
             team_db: entry.team_db || '',
@@ -320,12 +342,7 @@ export async function handleCrossTeamSearch(
         count: finalEntries.length,
         searched_dbs,
         ...(degraded ? { degraded: true, errors } : { degraded: false }),
-        ...(everySearchFailed
-            ? {
-                  error: 'Every team database query failed',
-                  code: 'DATABASE_ERROR',
-              }
-            : {}),
+        ...(everySearchFailed ? { error: 'Every team database query failed', code: 'DATABASE_ERROR' } : {}),
     }
 }
 

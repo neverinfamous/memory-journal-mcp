@@ -192,6 +192,7 @@ export class DatabaseAdapter extends AdapterDelegates implements IDatabaseAdapte
             impactScore?: number
             validationStatus?: 'passed' | 'failed' | 'none'
             sessionId?: string
+            targetWorkspaceId?: string
         }[]
     ): { updated: JournalEntry[]; notFound: number[]; errors: { id: number; error: Error }[] } {
         return this.entriesMgr.updateEntries(updates)

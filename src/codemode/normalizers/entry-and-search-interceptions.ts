@@ -28,83 +28,125 @@ const SINGLE_ID_METHODS = new Set([
     'restore', 'team_restore', 'teamRestore',
 ])
 
+function applySearchQueryInterception(
+    methodName: string,
+    obj: Record<string, unknown>
+): { obj: Record<string, unknown> } | { error: Record<string, unknown> } {
+    healIncludeArchivedField(obj)
+
+    const isDateRange = ['search_by_date_range', 'searchByDateRange', 'team_search_by_date_range', 'teamSearchByDateRange'].includes(methodName)
+    if (isDateRange && ['q', 'query', 'text', 'message', 'description', 'keep', 'path'].some((k) => obj[k] !== undefined)) {
+        return validationError(
+            `${methodName} does not support search queries. It only searches by date.`,
+            'Use team_search (or search_entries) if you want to search by text, or remove the text/query parameters.'
+        )
+    }
+
+    for (const alias of ['q', 'text', 'message', 'description', 'path', 'keep']) {
+        if (obj[alias] !== undefined && obj['query'] === undefined) {
+            obj['query'] = obj[alias]
+            Reflect.deleteProperty(obj, alias)
+        }
+    }
+    if (obj['start'] !== undefined && obj['start_date'] === undefined) {
+        obj['start_date'] = obj['start']
+        delete obj['start']
+    }
+    if (obj['end'] !== undefined && obj['end_date'] === undefined) {
+        obj['end_date'] = obj['end']
+        delete obj['end']
+    }
+    if (typeof obj['limit'] === 'string') {
+        const parsed = parseInt(obj['limit'], 10)
+        if (!isNaN(parsed)) obj['limit'] = parsed
+    }
+    if (!['search_entries', 'searchEntries', 'team_search', 'teamSearch'].includes(methodName) && obj['mode'] !== undefined) {
+        return validationError(
+            `${methodName} does not support the 'mode' parameter.`,
+            'Remove the mode parameter or use search_entries instead.'
+        )
+    }
+    return { obj }
+}
+
+function applyExactMatchSearchInterception(
+    methodName: string,
+    obj: Record<string, unknown>
+): { obj: Record<string, unknown> } | { error: Record<string, unknown> } {
+    if ('exact_match' in obj) {
+        const isFuzzy = obj['exact_match'] === false
+        obj['fuzzy_match'] = isFuzzy
+        if (methodName !== 'cross_team_search' && methodName !== 'crossTeamSearch') obj['auto_correct'] = isFuzzy
+        delete obj['exact_match']
+    } else if (obj['fuzzy_match'] === true && !('auto_correct' in obj)) {
+        if (methodName !== 'cross_team_search' && methodName !== 'crossTeamSearch') obj['auto_correct'] = true
+    }
+
+    if (typeof obj['start_date'] === 'string' && (obj['end_date'] === undefined || obj['end_date'] === null || obj['end_date'] === '')) {
+        obj['end_date'] = new Date().toISOString().split('T')[0]
+    }
+
+    if (
+        (methodName === 'team_search' || methodName === 'teamSearch' || methodName === 'team_search_by_date_range' || methodName === 'teamSearchByDateRange') &&
+        obj['project_number'] == null
+    ) {
+        const tags = Array.isArray(obj['tags']) ? obj['tags'] : undefined
+        const entryType = typeof obj['entry_type'] === 'string' ? obj['entry_type'] : undefined
+        const isFlagSearch = Boolean(tags && tags.length > 0 && tags.every((t) => typeof t === 'string' && t.startsWith('flag:'))) || entryType === 'flag'
+        if (!isFlagSearch) {
+            const label =
+                methodName === 'team_search_by_date_range' || methodName === 'teamSearchByDateRange'
+                    ? 'Cross-project team date range searches'
+                    : 'Cross-project team searches'
+            return validationError(
+                `${label} are only permitted for flags. Provide a project_number or filter by entry_type="flag" or flag:* tags.`,
+                'Provide a project_number, or use tags starting with "flag:" or entry_type="flag"'
+            )
+        }
+    }
+    return { obj }
+}
+
+function normalizeTwoArgUpdateEntry(
+    methodName: string,
+    args: unknown[]
+): { args: unknown[] } | { error: Record<string, unknown> } {
+    if (
+        (methodName === 'update_entry' || methodName === 'updateEntry') &&
+        args.length === 2 &&
+        (typeof args[0] === 'number' || typeof args[0] === 'string') &&
+        isRecord(args[1])
+    ) {
+        if (typeof args[0] === 'string') {
+            const trimmed = args[0].trim()
+            if (!/^#?[1-9]\d*$/.test(trimmed)) {
+                return validationError(
+                    `${methodName} requires a numeric entry_id, but received a non-numeric string ('${args[0]}'). Journal entries use auto-incrementing integer IDs.`,
+                    'Provide a positive integer ID.'
+                )
+            }
+            const parsed = parseInt(trimmed.replace(/^#/, ''), 10)
+            return { args: [{ entry_id: parsed, ...args[1] }] }
+        }
+        if (!isNaN(args[0])) return { args: [{ entry_id: args[0], ...args[1] }] }
+    }
+    return { args }
+}
+
 export function applyEntryAndSearchInterceptions(
     methodName: string,
     args: unknown[]
 ): { args: unknown[] } | { error: Record<string, unknown> } {
     if (SEARCH_METHODS.has(methodName) && args.length === 1 && isRecord(args[0])) {
-        const obj = { ...args[0] }
-        args[0] = obj
-        healIncludeArchivedField(obj)
-
-        const isDateRange = ['search_by_date_range', 'searchByDateRange', 'team_search_by_date_range', 'teamSearchByDateRange'].includes(methodName)
-        if (isDateRange && ['q', 'query', 'text', 'message', 'description', 'keep', 'path'].some((k) => obj[k] !== undefined)) {
-            return validationError(
-                `${methodName} does not support search queries. It only searches by date.`,
-                'Use team_search (or search_entries) if you want to search by text, or remove the text/query parameters.'
-            )
-        }
-
-        for (const alias of ['q', 'text', 'message', 'description', 'path', 'keep']) {
-            if (obj[alias] !== undefined && obj['query'] === undefined) {
-                obj['query'] = obj[alias]
-                Reflect.deleteProperty(obj, alias)
-            }
-        }
-        if (obj['start'] !== undefined && obj['start_date'] === undefined) {
-            obj['start_date'] = obj['start']
-            delete obj['start']
-        }
-        if (obj['end'] !== undefined && obj['end_date'] === undefined) {
-            obj['end_date'] = obj['end']
-            delete obj['end']
-        }
-        if (typeof obj['limit'] === 'string') {
-            const parsed = parseInt(obj['limit'], 10)
-            if (!isNaN(parsed)) obj['limit'] = parsed
-        }
-        if (!['search_entries', 'searchEntries', 'team_search', 'teamSearch'].includes(methodName) && obj['mode'] !== undefined) {
-            return validationError(
-                `${methodName} does not support the 'mode' parameter.`,
-                'Remove the mode parameter or use search_entries instead.'
-            )
-        }
+        const searchRes = applySearchQueryInterception(methodName, { ...args[0] })
+        if ('error' in searchRes) return searchRes
+        args[0] = searchRes.obj
     }
 
     if (EXACT_MATCH_SEARCH_METHODS.has(methodName) && args.length === 1 && isRecord(args[0])) {
-        const obj = { ...args[0] }
-        args[0] = obj
-        if ('exact_match' in obj) {
-            const isFuzzy = obj['exact_match'] === false
-            obj['fuzzy_match'] = isFuzzy
-            if (methodName !== 'cross_team_search' && methodName !== 'crossTeamSearch') obj['auto_correct'] = isFuzzy
-            delete obj['exact_match']
-        } else if (obj['fuzzy_match'] === true && !('auto_correct' in obj)) {
-            if (methodName !== 'cross_team_search' && methodName !== 'crossTeamSearch') obj['auto_correct'] = true
-        }
-
-        if (typeof obj['start_date'] === 'string' && (obj['end_date'] === undefined || obj['end_date'] === null || obj['end_date'] === '')) {
-            obj['end_date'] = new Date().toISOString().split('T')[0]
-        }
-
-        if (
-            (methodName === 'team_search' || methodName === 'teamSearch' || methodName === 'team_search_by_date_range' || methodName === 'teamSearchByDateRange') &&
-            obj['project_number'] == null
-        ) {
-            const tags = Array.isArray(obj['tags']) ? obj['tags'] : undefined
-            const entryType = typeof obj['entry_type'] === 'string' ? obj['entry_type'] : undefined
-            const isFlagSearch = Boolean(tags && tags.length > 0 && tags.every((t) => typeof t === 'string' && t.startsWith('flag:'))) || entryType === 'flag'
-            if (!isFlagSearch) {
-                const label =
-                    methodName === 'team_search_by_date_range' || methodName === 'teamSearchByDateRange'
-                        ? 'Cross-project team date range searches'
-                        : 'Cross-project team searches'
-                return validationError(
-                    `${label} are only permitted for flags. Provide a project_number or filter by entry_type="flag" or flag:* tags.`,
-                    'Provide a project_number, or use tags starting with "flag:" or entry_type="flag"'
-                )
-            }
-        }
+        const exactRes = applyExactMatchSearchInterception(methodName, { ...args[0] })
+        if ('error' in exactRes) return exactRes
+        args[0] = exactRes.obj
     }
 
     if (SINGLE_ID_METHODS.has(methodName)) {
@@ -113,17 +155,10 @@ export function applyEntryAndSearchInterceptions(
         args = singleRes.args
     }
 
-    if (
-        (methodName === 'update_entry' || methodName === 'updateEntry') &&
-        args.length === 2 &&
-        (typeof args[0] === 'number' || typeof args[0] === 'string') &&
-        isRecord(args[1])
-    ) {
-        const asNum = typeof args[0] === 'string' ? parseInt(args[0], 10) : args[0]
-        if (!isNaN(asNum)) args = [{ entry_id: asNum, ...args[1] }]
-    }
+    const twoArgRes = normalizeTwoArgUpdateEntry(methodName, args)
+    if ('error' in twoArgRes) return twoArgRes
 
-    return applyBatchAndMutationInterceptions(methodName, args)
+    return applyBatchAndMutationInterceptions(methodName, twoArgRes.args)
 }
 
 function applySingleIdInterception(

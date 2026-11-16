@@ -2,7 +2,7 @@
 
 ### Team RBAC & Access Control
 
-Team tools require `TEAM_DB_PATH` (`--team-db`) plus caller identity via `TEAM_AUTHOR` (`--team-author`) or OAuth. The team database enforces Role-Based Access Control (RBAC):
+Team tools require `TEAM_DB_PATH` (`--team-db`) plus caller identity via `TEAM_AUTHOR` or OAuth. The team database enforces Role-Based Access Control (RBAC):
 - **Roles**: 
   - `viewer`: Read-only access to all team data.
   - `member`: Read all; Create/Edit/Delete *own* entries.

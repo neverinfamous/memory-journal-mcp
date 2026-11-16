@@ -294,11 +294,12 @@ export class AuditLogger {
 
                 let skippedLines = 0
                 const parsed = tail.reduce<AuditEntry[]>((acc, line) => {
-                    try {
-                        acc.push(JSON.parse(line) as AuditEntry)
-                    } catch {
-                        // Corrupted or partial log entries are skipped (counted below)
+                    const entry = parseAuditLine(line)
+                    if (entry === null) {
+                        // Corrupted, partial, or malformed log entries are skipped (counted below)
                         skippedLines++
+                    } else {
+                        acc.push(entry)
                     }
                     return acc
                 }, [])

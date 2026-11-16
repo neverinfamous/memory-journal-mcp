@@ -120,9 +120,10 @@ export class HttpTransport {
             next()
         })
 
-        this.installBodyParsing()
-        this.installRateLimiting()
         try {
+            // [INVARIANT] Rate limiting and authentication run before body parsing so
+            // rate-limited (429) and unauthenticated (401) requests never parse JSON bodies (M4).
+            this.installRateLimiting()
             const oauthInstalled = await installHttpAuthentication(
                 this.app,
                 this.config,
@@ -131,6 +132,7 @@ export class HttpTransport {
                 authToken,
                 isLocalhost
             )
+            this.installBodyParsing()
             this.installRoutes(serverFactory, runtime, oauthInstalled)
             await this.listen(port, host, scheduler)
         } catch (error) {

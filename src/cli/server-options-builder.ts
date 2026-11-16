@@ -315,27 +315,12 @@ function buildLifecycleOptionsGroup(resolver: ConfigResolver, catchConfig: Catch
     }
 }
 
-export function buildServerOptions(
+function resolveConfiguredDefaultScope(
     resolver: ConfigResolver,
-    options: Record<string, unknown> & { team?: boolean },
     command: Command,
-    configErrors: string[]
-): { serverOptions: ServerOptions; transport: string; db: string | undefined; teamDb?: string; host?: string } {
-    const catchConfig: CatchConfig = <T>(fn: () => T, fallback: T): T => {
-        try {
-            return fn()
-        } catch (e) {
-            configErrors.push(e instanceof Error ? e.message : String(e))
-            return fallback
-        }
-    }
-
-    const host = catchConfig(() => resolver.resolve<string>('serverHost', 'MCP_HOST') ?? process.env['HOST'] ?? undefined, undefined)
-    const transport = resolveTransportOption(resolver, catchConfig)
-    const { db, testDb, teamDb, testTeamDb } = resolveDatabasePaths(resolver, catchConfig)
-    applyEnvironmentOverrides(resolver, options, catchConfig)
-    const instructionLevel = resolveInstructionLevelOption(resolver, catchConfig)
-    const projectRegistry = catchConfig(() => parseProjectRegistryOption(resolver.resolve<unknown>('projectRegistry', 'PROJECT_REGISTRY')), undefined)
+    catchConfig: CatchConfig,
+    projectRegistry: ServerOptions['projectRegistry']
+): { defaultWorkspaceId: string | undefined; defaultProjectNumber: number | undefined } {
     const commandName = command.name()
     const allowWorkspaceAsDefault =
         commandName === 'serve' || commandName === 'memory-journal-mcp'
@@ -368,6 +353,36 @@ export function buildServerOptions(
             }
         }, undefined)
     }
+    return { defaultWorkspaceId, defaultProjectNumber }
+}
+
+export function buildServerOptions(
+    resolver: ConfigResolver,
+    options: Record<string, unknown> & { team?: boolean },
+    command: Command,
+    configErrors: string[]
+): { serverOptions: ServerOptions; transport: string; db: string | undefined; teamDb?: string; host?: string } {
+    const catchConfig: CatchConfig = <T>(fn: () => T, fallback: T): T => {
+        try {
+            return fn()
+        } catch (e) {
+            configErrors.push(e instanceof Error ? e.message : String(e))
+            return fallback
+        }
+    }
+
+    const host = catchConfig(() => resolver.resolve<string>('serverHost', 'MCP_HOST') ?? process.env['HOST'] ?? undefined, undefined)
+    const transport = resolveTransportOption(resolver, catchConfig)
+    const { db, testDb, teamDb, testTeamDb } = resolveDatabasePaths(resolver, catchConfig)
+    applyEnvironmentOverrides(resolver, options, catchConfig)
+    const instructionLevel = resolveInstructionLevelOption(resolver, catchConfig)
+    const projectRegistry = catchConfig(() => parseProjectRegistryOption(resolver.resolve<unknown>('projectRegistry', 'PROJECT_REGISTRY')), undefined)
+    const { defaultWorkspaceId, defaultProjectNumber } = resolveConfiguredDefaultScope(
+        resolver,
+        command,
+        catchConfig,
+        projectRegistry
+    )
 
     const serverOptions: ServerOptions = {
         transport,

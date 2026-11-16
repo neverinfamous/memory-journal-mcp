@@ -120,6 +120,58 @@ function scanTemplateLiteral(
     return { out, next: i, lastToken }
 }
 
+function canStartRegexLiteral(prev: string): boolean {
+    if (!prev) return true
+    if (/^[([{:;,=!?&|+-~*%^<>]$/.test(prev)) return true
+    return /^(?:return|typeof|instanceof|in|of|void|delete|throw|new|case|yield|await)$/.test(
+        prev
+    )
+}
+
+function skipLineOrBlockComment(
+    code: string,
+    start: number
+): { out: string; next: number } | null {
+    const ch = code[start] ?? ''
+    const next = start + 1 < code.length ? (code[start + 1] ?? '') : ''
+    if (ch === '/' && next === '/') {
+        let i = start + 2
+        while (i < code.length && code[i] !== '\n') i++
+        return { out: ' ', next: i }
+    }
+    if (ch === '/' && next === '*') {
+        let out = ' '
+        let i = start + 2
+        while (i < code.length && !(code[i] === '*' && code[i + 1] === '/')) {
+            if (code[i] === '\n') out += '\n'
+            i++
+        }
+        if (i < code.length) i += 2
+        return { out, next: i }
+    }
+    return null
+}
+
+function scanIdentifierWord(code: string, start: number): { word: string; next: number } {
+    let word = code[start] ?? ''
+    let j = start + 1
+    while (j < code.length) {
+        const nextCh = code[j]
+        if (nextCh === undefined || !/[A-Za-z0-9_$]/.test(nextCh)) break
+        word += nextCh
+        j++
+    }
+    return { word, next: j }
+}
+
+function updateTemplateBraceDepth(ch: string, stack: number[]): void {
+    if (stack.length === 0) return
+    const topIdx = stack.length - 1
+    const currentDepth = stack[topIdx] ?? 0
+    if (ch === '{') stack[topIdx] = currentDepth + 1
+    else if (ch === '}' && currentDepth > 0) stack[topIdx] = currentDepth - 1
+}
+
 /**
  * Single-pass lexical scanner that strips JS comments and string literal contents
  * in a single left-to-right pass while preserving `${...}` interpolations,
@@ -133,39 +185,18 @@ export function stripCommentsAndStrings(rawCode: string): string {
     let lastNonWsToken = ''
     const templateBraceDepthStack: number[] = []
 
-    const canStartRegex = (prev: string): boolean => {
-        if (!prev) return true
-        if (/^[([{:;,=!?&|+-~*%^<>]$/.test(prev)) return true
-        return /^(?:return|typeof|instanceof|in|of|void|delete|throw|new|case|yield|await)$/.test(
-            prev
-        )
-    }
-
     while (i < len) {
         const ch = code[i] ?? ''
         const next = i + 1 < len ? (code[i + 1] ?? '') : ''
 
-        if (ch === '/' && next === '/') {
-            out += ' '
-            i += 2
-            while (i < len && code[i] !== '\n') {
-                i++
-            }
+        const comment = skipLineOrBlockComment(code, i)
+        if (comment !== null) {
+            out += comment.out
+            i = comment.next
             continue
         }
 
-        if (ch === '/' && next === '*') {
-            out += ' '
-            i += 2
-            while (i < len && !(code[i] === '*' && code[i + 1] === '/')) {
-                if (code[i] === '\n') out += '\n'
-                i++
-            }
-            if (i < len) i += 2
-            continue
-        }
-
-        if (ch === '/' && next !== '/' && next !== '*' && canStartRegex(lastNonWsToken)) {
+        if (ch === '/' && next !== '/' && next !== '*' && canStartRegexLiteral(lastNonWsToken)) {
             out += '/ /'
             i = skipRegexLiteralBody(code, i + 1)
             lastNonWsToken = '/'
@@ -173,69 +204,37 @@ export function stripCommentsAndStrings(rawCode: string): string {
         }
 
         if (ch === '"' || ch === "'") {
-            const quote = ch
-            const scanned = scanQuotedLiteral(code, i + 1, quote)
-            const content = scanned.content
+            const scanned = scanQuotedLiteral(code, i + 1, ch)
             i = scanned.next
-            if (SENSITIVE_STRING_CONTENT.test(content.trim())) {
-                out += `${quote}${content.trim()}${quote}`
-            } else {
-                out += `${quote}${quote}`
-            }
-            lastNonWsToken = quote
+            const trimmed = scanned.content.trim()
+            out += SENSITIVE_STRING_CONTENT.test(trimmed) ? `${ch}${trimmed}${ch}` : `${ch}${ch}`
+            lastNonWsToken = ch
             continue
         }
 
-        if (
-            ch === '`' ||
-            (ch === '}' &&
-                templateBraceDepthStack.length > 0 &&
-                templateBraceDepthStack[templateBraceDepthStack.length - 1] === 0)
-        ) {
-            if (ch === '}') {
-                templateBraceDepthStack.pop()
-            }
-            const scanned = scanTemplateLiteral(
-                code,
-                i + 1,
-                ch === '}',
-                templateBraceDepthStack
-            )
+        const closingInterpolation =
+            ch === '}' &&
+            templateBraceDepthStack.length > 0 &&
+            templateBraceDepthStack[templateBraceDepthStack.length - 1] === 0
+        if (ch === '`' || closingInterpolation) {
+            if (ch === '}') templateBraceDepthStack.pop()
+            const scanned = scanTemplateLiteral(code, i + 1, ch === '}', templateBraceDepthStack)
             out += scanned.out
             i = scanned.next
-            if (scanned.lastToken !== undefined) {
-                lastNonWsToken = scanned.lastToken
-            }
+            if (scanned.lastToken !== undefined) lastNonWsToken = scanned.lastToken
             continue
         }
 
-        if (templateBraceDepthStack.length > 0) {
-            const topIdx = templateBraceDepthStack.length - 1
-            const currentDepth = templateBraceDepthStack[topIdx] ?? 0
-            if (ch === '{') {
-                templateBraceDepthStack[topIdx] = currentDepth + 1
-            } else if (ch === '}' && currentDepth > 0) {
-                templateBraceDepthStack[topIdx] = currentDepth - 1
-            }
-        }
+        updateTemplateBraceDepth(ch, templateBraceDepthStack)
 
         if (/[A-Za-z0-9_$]/.test(ch)) {
-            let word = ch
-            let j = i + 1
-            while (j < code.length) {
-                const nextCh = code[j]
-                if (nextCh === undefined || !/[A-Za-z0-9_$]/.test(nextCh)) break
-                word += nextCh
-                j++
-            }
-            lastNonWsToken = word
-            out += word
-            i = j
+            const ident = scanIdentifierWord(code, i)
+            lastNonWsToken = ident.word
+            out += ident.word
+            i = ident.next
             continue
         }
-        if (!/\s/.test(ch)) {
-            lastNonWsToken = ch
-        }
+        if (!/\s/.test(ch)) lastNonWsToken = ch
         out += ch
         i++
     }

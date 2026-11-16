@@ -166,6 +166,65 @@ function workspacesReferToSameProject(
     return leftKey.toLowerCase() === rightKey.toLowerCase()
 }
 
+function resolveNamedImportScope(
+    namedWorkspace: string,
+    defaultProject: number | undefined,
+    dirMatch: ReturnType<typeof resolveWorkspaceFromFilePath>,
+    serverOptions: ToolHandlerConfig,
+    registry: ReturnType<typeof activeProjectRegistry>
+): { workspaceId: string | undefined; projectNumber: number | undefined } {
+    if (defaultProject !== undefined) {
+        pairStoredScope(namedWorkspace, defaultProject, registry)
+    }
+    // [INVARIANT] A named workspace keeps its registry project. An explicit
+    // defaultProject applies only when that workspace has none. A directory
+    // from a different repo must not supply project_number.
+    const resolved = resolveProjectContext(
+        {
+            workspace_id: namedWorkspace,
+            ...(defaultProject !== undefined ? { project_number: defaultProject } : {}),
+        },
+        serverOptions
+    )
+    const sameDirectory =
+        dirMatch?.workspaceId !== undefined &&
+        workspacesReferToSameProject(
+            namedWorkspace,
+            dirMatch.workspaceId,
+            serverOptions.projectRegistry
+        )
+    const projectNumber =
+        resolved.projectNumber ?? (sameDirectory ? dirMatch?.projectNumber : undefined)
+    return { workspaceId: resolved.workspaceId, projectNumber }
+}
+
+function resolveDefaultImportScope(
+    configuredDefaultWs: string,
+    defaultProject: number | undefined,
+    serverOptions: ToolHandlerConfig,
+    registry: ReturnType<typeof activeProjectRegistry>
+): { workspaceId: string | undefined; projectNumber: number | undefined } {
+    const effectiveProj =
+        defaultProject ??
+        (configuredDefaultWs.toLowerCase() === 'default'
+            ? undefined
+            : serverOptions.defaultProjectNumber)
+    if (effectiveProj !== undefined) {
+        pairStoredScope(configuredDefaultWs, effectiveProj, registry)
+    }
+    const resolved = resolveProjectContext(
+        {
+            workspace_id: configuredDefaultWs,
+            ...(effectiveProj !== undefined ? { project_number: effectiveProj } : {}),
+        },
+        serverOptions
+    )
+    return {
+        workspaceId: resolved.workspaceId,
+        projectNumber: resolved.projectNumber ?? effectiveProj,
+    }
+}
+
 export function resolveImportWriteScope(
     options: { dir?: string; workspace?: string; defaultProject?: number },
     serverOptions: ToolHandlerConfig
@@ -181,31 +240,13 @@ export function resolveImportWriteScope(
     const namedWorkspace = concreteImportWorkspace(options.workspace)
     const registry = activeProjectRegistry(serverOptions.projectRegistry)
     if (namedWorkspace !== undefined) {
-        if (options.defaultProject !== undefined) {
-            pairStoredScope(namedWorkspace, options.defaultProject, registry)
-        }
-        // [INVARIANT] A named workspace keeps its registry project. An explicit
-        // defaultProject applies only when that workspace has none. A directory
-        // from a different repo must not supply project_number.
-        const resolved = resolveProjectContext(
-            {
-                workspace_id: namedWorkspace,
-                ...(options.defaultProject !== undefined
-                    ? { project_number: options.defaultProject }
-                    : {}),
-            },
-            serverOptions
+        return resolveNamedImportScope(
+            namedWorkspace,
+            options.defaultProject,
+            dirMatch,
+            serverOptions,
+            registry
         )
-        const sameDirectory =
-            dirMatch?.workspaceId !== undefined &&
-            workspacesReferToSameProject(
-                namedWorkspace,
-                dirMatch.workspaceId,
-                serverOptions.projectRegistry
-            )
-        const projectNumber =
-            resolved.projectNumber ?? (sameDirectory ? dirMatch?.projectNumber : undefined)
-        return { workspaceId: resolved.workspaceId, projectNumber }
     }
 
     const configuredDefaultWs = concreteImportWorkspace(serverOptions.defaultWorkspaceId)
@@ -218,25 +259,12 @@ export function resolveImportWriteScope(
     }
 
     if (dirMatch === undefined && configuredDefaultWs !== undefined) {
-        const effectiveProj =
-            options.defaultProject ??
-            (configuredDefaultWs.toLowerCase() === 'default'
-                ? undefined
-                : serverOptions.defaultProjectNumber)
-        if (effectiveProj !== undefined) {
-            pairStoredScope(configuredDefaultWs, effectiveProj, registry)
-        }
-        const resolved = resolveProjectContext(
-            {
-                workspace_id: configuredDefaultWs,
-                ...(effectiveProj !== undefined ? { project_number: effectiveProj } : {}),
-            },
-            serverOptions
+        return resolveDefaultImportScope(
+            configuredDefaultWs,
+            options.defaultProject,
+            serverOptions,
+            registry
         )
-        return {
-            workspaceId: resolved.workspaceId,
-            projectNumber: resolved.projectNumber ?? effectiveProj,
-        }
     }
 
     // [INVARIANT] The configured default project is a fallback only (via `serverOptions`), never
@@ -266,21 +294,20 @@ export function resolveImportWriteScope(
     }
 }
 
+async function assertSafeCliDir(dir: string | undefined, label: string): Promise<string> {
+    if (!dir) throw new Error(`--dir is required for ${label}`)
+    if (dir.includes('\0')) throw new Error('Invalid directory path: null bytes are not allowed')
+    const resolvedDir = path.resolve(dir)
+    await assertNonSymlinkCliDir(resolvedDir)
+    assertSafeDirectoryPath(resolvedDir, [resolvedDir])
+    return resolvedDir
+}
+
 export async function importMarkdownAction(options: z.infer<typeof importMarkdownSchema>, command: Command): Promise<void> {
     const { db, serverOptions } = await getDb(options, command)
     try {
-        if (!options.dir) {
-            throw new Error('--dir is required for markdown import')
-        }
-        if (options.dir.includes('\0')) {
-            throw new Error('Invalid directory path: null bytes are not allowed')
-        }
-        const resolvedDir = path.resolve(options.dir)
-        await assertNonSymlinkCliDir(resolvedDir)
-        assertSafeDirectoryPath(resolvedDir, [resolvedDir])
-
+        const resolvedDir = await assertSafeCliDir(options.dir, 'markdown import')
         const { workspaceId, projectNumber } = resolveImportWriteScope(options, serverOptions)
-
         const vectorManager = new VectorSearchManager(db, { modelName: serverOptions.embeddingModel })
 
         const result = await importMarkdownEntries(
@@ -295,7 +322,7 @@ export async function importMarkdownAction(options: z.infer<typeof importMarkdow
             vectorManager,
             [resolvedDir]
         )
-        
+
         process.stdout.write(JSON.stringify(result, null, 2) + '\n')
         if (!result.success) {
             process.exitCode = 1
@@ -308,73 +335,61 @@ export async function importMarkdownAction(options: z.infer<typeof importMarkdow
     }
 }
 
+async function collectExternalMarkdownFiles(
+    resolvedDir: string,
+    format: NonNullable<z.infer<typeof importExternalSchema>['format']>
+): Promise<{ parsedFiles: ParsedFile[]; errors: { file: string; error: string }[] }> {
+    const mdFiles: string[] = []
+    const dir = await fs.opendir(resolvedDir)
+    for await (const dirent of dir) {
+        if (dirent.isFile() && dirent.name.endsWith('.md')) {
+            mdFiles.push(dirent.name)
+        }
+    }
+    mdFiles.sort((a, b) => a.localeCompare(b))
+
+    const parsedFiles: ParsedFile[] = []
+    const errors: { file: string; error: string }[] = []
+    for (const filename of mdFiles) {
+        let handle
+        try {
+            const filepath = path.join(resolvedDir, filename)
+            assertSafeFilePath(filepath, [resolvedDir])
+            handle = await fs.open(filepath, constants.O_RDONLY | constants.O_NOFOLLOW)
+            const stats = await handle.stat()
+            if (stats.size > MAX_IMPORT_FILE_SIZE_BYTES) {
+                throw new Error(
+                    `File exceeds maximum allowed import size (${String(MAX_IMPORT_FILE_SIZE_BYTES)} bytes)`
+                )
+            }
+            const content = await handle.readFile('utf-8')
+            const converted = convertFile(content, filename, format)
+            if (!converted.body.trim()) continue
+            parsedFiles.push({
+                filename,
+                body: converted.body,
+                metadata: converted.metadata,
+            })
+        } catch (err) {
+            errors.push({
+                file: filename,
+                error: err instanceof Error ? err.message : String(err),
+            })
+        } finally {
+            if (handle) await handle.close()
+        }
+    }
+    return { parsedFiles, errors }
+}
+
 export async function importExternalAction(options: z.infer<typeof importExternalSchema>, command: Command): Promise<void> {
     const { db, serverOptions } = await getDb(options, command)
     try {
-        if (!options.dir) {
-            throw new Error('--dir is required for external import')
-        }
-        if (options.dir.includes('\0')) {
-            throw new Error('Invalid directory path: null bytes are not allowed')
-        }
-        if (!options.format) {
-            throw new Error('--format is required for external import')
-        }
-        const resolvedDir = path.resolve(options.dir)
-        await assertNonSymlinkCliDir(resolvedDir)
-        assertSafeDirectoryPath(resolvedDir, [resolvedDir])
-
+        if (!options.format) throw new Error('--format is required for external import')
+        const resolvedDir = await assertSafeCliDir(options.dir, 'external import')
         const { workspaceId, projectNumber } = resolveImportWriteScope(options, serverOptions)
-
         const vectorManager = new VectorSearchManager(db, { modelName: serverOptions.embeddingModel })
-
-        const mdFiles: string[] = []
-        const dir = await fs.opendir(resolvedDir)
-        for await (const dirent of dir) {
-            if (dirent.isFile() && dirent.name.endsWith('.md')) {
-                mdFiles.push(dirent.name)
-            }
-        }
-        mdFiles.sort((a, b) => a.localeCompare(b))
-
-        const parsedFiles: ParsedFile[] = []
-        const errors: { file: string; error: string }[] = []
-
-        for (const filename of mdFiles) {
-            let handle
-            try {
-                const filepath = path.join(resolvedDir, filename)
-                assertSafeFilePath(filepath, [resolvedDir])
-                handle = await fs.open(filepath, constants.O_RDONLY | constants.O_NOFOLLOW)
-                const stats = await handle.stat()
-                if (stats.size > MAX_IMPORT_FILE_SIZE_BYTES) {
-                    throw new Error(
-                        `File exceeds maximum allowed import size (${String(MAX_IMPORT_FILE_SIZE_BYTES)} bytes)`
-                    )
-                }
-                const content = await handle.readFile('utf-8')
-                const converted = convertFile(content, filename, options.format)
-
-                if (!converted.body.trim()) {
-                    continue
-                }
-
-                parsedFiles.push({
-                    filename,
-                    body: converted.body,
-                    metadata: converted.metadata,
-                })
-            } catch (err) {
-                errors.push({
-                    file: filename,
-                    error: err instanceof Error ? err.message : String(err),
-                })
-            } finally {
-                if (handle) {
-                    await handle.close()
-                }
-            }
-        }
+        const { parsedFiles, errors } = await collectExternalMarkdownFiles(resolvedDir, options.format)
 
         const result = await processImportBatch(
             parsedFiles,
@@ -386,12 +401,10 @@ export async function importExternalAction(options: z.infer<typeof importExterna
             },
             vectorManager
         )
-        
         if (errors.length > 0) {
             result.success = false
             result.errors.push(...errors)
         }
-
         process.stdout.write(JSON.stringify(result, null, 2) + '\n')
         if (!result.success) {
             process.exitCode = 1

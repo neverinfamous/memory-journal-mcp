@@ -52,9 +52,12 @@ export function isSyntacticallyValidJs(trimmed: string): boolean {
     }
 }
 
+const DANGEROUS_NESTED_QUERY_TOKEN_RE =
+    /\b(?:process|require|eval|Function|Reflect|Proxy|global|globalThis|__proto__)\b/
+
 /**
  * Extracts a nested `{ query: "..." }` search request when no explicit `code`/`script`
- * is present and the `query` text is not valid JS code.
+ * is present and the `query` text is not dangerous or an explicit `return` / `await mj.` snippet.
  */
 export function readNestedQuerySearch(
     arg: unknown
@@ -66,16 +69,22 @@ export function readNestedQuerySearch(
     if (typeof scriptProp === 'string' && scriptProp.trim() !== '') return undefined
     const queryProp = Reflect.get(arg, 'query') as unknown
     if (typeof queryProp !== 'string' || queryProp.trim() === '') return undefined
-    if (isSyntacticallyValidJs(queryProp.trim())) return undefined
+    const trimmedQuery = queryProp.trim()
+    if (
+        DANGEROUS_NESTED_QUERY_TOKEN_RE.test(trimmedQuery) ||
+        /^(?:return\s+|await\s+mj\.)/.test(trimmedQuery)
+    ) {
+        return undefined
+    }
 
     const searchPayload: { query: string; workspace_id?: string; project_number?: number; limit?: number } = {
         query: queryProp,
     }
-    const wsProp = Reflect.get(arg, 'workspace_id') as unknown
+    const wsProp = (Reflect.get(arg, 'workspace_id') ?? Reflect.get(arg, 'workspaceId')) as unknown
     if (typeof wsProp === 'string' && wsProp.trim() !== '') {
         searchPayload.workspace_id = wsProp.trim()
     }
-    const projProp = Reflect.get(arg, 'project_number') as unknown
+    const projProp = (Reflect.get(arg, 'project_number') ?? Reflect.get(arg, 'projectNumber')) as unknown
     if (typeof projProp === 'number' && Number.isInteger(projProp) && projProp > 0) {
         searchPayload.project_number = projProp
     }
@@ -114,4 +123,83 @@ export function naturalLanguageEntry(
         .trim()
     const title = firstLine.length > 0 && firstLine.length < 80 ? firstLine : 'Journal Entry'
     return { title, content: trimmed, entry_type: 'technical_note' }
+}
+
+/**
+ * Invokes a method on a shimmed `mj` namespace object when available.
+ */
+export function invokeShimGroupMethod(
+    shimMj: Record<string, unknown>,
+    group: string,
+    method: string,
+    payload: unknown
+): unknown {
+    const groupObj = shimMj[group]
+    if ((typeof groupObj === 'object' && groupObj !== null) || typeof groupObj === 'function') {
+        const fn = Reflect.get(groupObj, method) as unknown
+        if (typeof fn === 'function') return (fn as (a: unknown) => unknown)(payload)
+    }
+    return undefined
+}
+
+/**
+ * Dispatches a synthesized entry write inside nested `executeCode` after readonly/dry-run guards.
+ */
+export function dispatchSynthesizedNestedEntry(
+    payload: unknown,
+    effectiveReadonly: boolean,
+    effectiveDryRun: boolean,
+    effectiveUseTestDb: boolean,
+    invokeCreateEntry: (p: unknown) => unknown
+): unknown {
+    if (effectiveReadonly) {
+        return {
+            success: false,
+            error: 'Write operations are disabled in readonly mode',
+            code: 'PERMISSION_DENIED',
+        }
+    }
+    if (effectiveDryRun) {
+        return {
+            success: false,
+            error: 'dry_run is not supported for synthesized entry writes inside nested execute_code',
+            code: 'VALIDATION_ERROR',
+        }
+    }
+    const nextPayload =
+        effectiveUseTestDb && typeof payload === 'object' && payload !== null && !Array.isArray(payload)
+            ? { ...(payload as Record<string, unknown>), use_test_db: true }
+            : payload
+    return invokeCreateEntry(nextPayload)
+}
+
+/**
+ * Extracts and clamps nested `timeout` / `timeout_ms` / `timeoutMs` against the outer timeout budget.
+ */
+export function extractNestedTimeoutMs(
+    argRec: Record<string, unknown> | undefined,
+    outerTimeoutMs: number
+): number | undefined {
+    if (argRec === undefined) return undefined
+    const raw = argRec['timeout'] ?? argRec['timeout_ms'] ?? argRec['timeoutMs']
+    const num =
+        typeof raw === 'number'
+            ? raw
+            : typeof raw === 'string' && raw.trim() !== ''
+              ? Number(raw.trim())
+              : Number.NaN
+    if (!Number.isFinite(num) || num <= 0) return undefined
+    return Math.min(outerTimeoutMs, num)
+}
+
+/**
+ * Extracts a plain-object `context` payload from nested `executeCode` arguments when provided.
+ */
+export function extractNestedContextRecord(
+    argRec: Record<string, unknown> | undefined
+): Record<string, unknown> | undefined {
+    if (argRec === undefined) return undefined
+    const rawCtx = argRec['context']
+    if (typeof rawCtx !== 'object' || rawCtx === null || Array.isArray(rawCtx)) return undefined
+    return rawCtx as Record<string, unknown>
 }

@@ -82,8 +82,147 @@ const CleanupBackupsOutputSchema = z
 // Tool Definitions
 // ============================================================================
 
-export function getBackupTools(context: ToolContext): ToolDefinition[] {
+async function runLockedRestore(
+    db: ToolContext['db'],
+    config: ToolContext['config'],
+    filename: string
+): Promise<{
+    preRestoreBackup: Awaited<ReturnType<ToolContext['db']['exportToFile']>>
+    result: Awaited<ReturnType<ToolContext['db']['restoreFromFile']>>
+}> {
+    if (config?.runtime?.maintenanceManager) {
+        await config.runtime.maintenanceManager.acquireMaintenanceLock()
+    }
+    try {
+        // [INVARIANT] C10: Create an automatic pre-restore backup inside the
+        // maintenance lock before replacing database contents; abort if it fails.
+        const preRestoreBackup = await db.exportToFile(`pre_restore_${String(Date.now())}`)
+        const result = await db.restoreFromFile(filename, config?.runtime)
+        return { preRestoreBackup, result }
+    } finally {
+        if (config?.runtime?.maintenanceManager) {
+            config.runtime.maintenanceManager.releaseMaintenanceLock()
+        }
+    }
+}
+
+async function rebuildVectorAfterRestore(vectorManager: ToolContext['vectorManager']): Promise<string> {
+    if (vectorManager?.isInitialized() !== true) return ''
+    try {
+        const rebuildRes = await vectorManager.rebuildIndex()
+        if (!rebuildRes.success || rebuildRes.failed > 0) {
+            const detail =
+                rebuildRes.firstError ?? `${String(rebuildRes.failed)} entries failed embedding`
+            logger.warning('Vector index rebuild after restore was incomplete', {
+                module: 'TOOL',
+                operation: 'restore-backup',
+                failed: rebuildRes.failed,
+                error: detail,
+            })
+            return ` Vector index rebuild had errors (${detail}); run rebuild_vector_index manually.`
+        }
+        return ''
+    } catch (vectorErr: unknown) {
+        const msg = vectorErr instanceof Error ? vectorErr.message : String(vectorErr)
+        logger.warning('Failed to rebuild vector index after restore', {
+            module: 'TOOL',
+            operation: 'restore-backup',
+            error: msg,
+        })
+        return ` Vector index rebuild failed (${msg}); run rebuild_vector_index manually.`
+    }
+}
+
+async function notifyRestoreProgressComplete(
+    progressServer: NonNullable<ToolContext['progress']>['server'] | undefined,
+    progressTokenValue: NonNullable<ToolContext['progress']>['progressToken'] | undefined
+): Promise<void> {
+    if (progressServer === undefined || progressTokenValue === undefined) return
+    try {
+        await progressServer.notification({
+            method: 'notifications/progress' as const,
+            params: {
+                progressToken: progressTokenValue,
+                progress: 3,
+                total: 3,
+                message: 'Restore complete',
+            },
+        })
+    } catch (error) {
+        logger.debug('Failed to send restore progress notification', {
+            module: 'TOOL',
+            operation: 'restore-backup',
+            error,
+        })
+    }
+}
+
+async function executeRestoreBackup(
+    params: unknown,
+    context: ToolContext
+): Promise<Record<string, unknown>> {
     const { db, progress, config, vectorManager } = context
+    const input = z
+        .object({
+            filename: z.string().min(1, 'filename cannot be empty'),
+            confirm: z.boolean().optional(),
+        })
+        .strict()
+        .parse(params)
+
+    if (!input.confirm) {
+        return {
+            success: false,
+            error: 'Restore requires confirm: true. This operation replaces all current data.',
+            code: 'VALIDATION_ERROR',
+            category: 'validation',
+            suggestion: 'Set confirm: true to proceed with restore',
+            recoverable: true,
+        }
+    }
+    if (
+        input.filename.includes('..') ||
+        input.filename.includes('/') ||
+        input.filename.includes('\\') ||
+        input.filename.includes('\0')
+    ) {
+        throw new ValidationError('Invalid backup filename', { filename: input.filename })
+    }
+
+    // Capture progress context values BEFORE any async operations
+    const progressServer = progress?.server
+    const progressTokenValue = progress?.progressToken
+
+    await sendProgress(progress, 0, 3, 'Validating backup...')
+    await sendProgress(progress, 1, 3, 'Preparing restore...')
+    await sendProgress(progress, 2, 3, 'Restoring database from backup...')
+
+    const { preRestoreBackup, result } = await runLockedRestore(db, config, input.filename)
+    const vectorWarningSuffix = await rebuildVectorAfterRestore(vectorManager)
+    // Send directly using captured primitives (db.restoreFromFile reinitializes DB)
+    await notifyRestoreProgressComplete(progressServer, progressTokenValue)
+
+    const backupLabel = preRestoreBackup?.filename ?? 'pre-restore backup'
+    return {
+        success: true,
+        message: `Database restored from ${input.filename} (pre-restore backup: ${backupLabel})`,
+        restoredFrom: result.restoredFrom,
+        previousEntryCount: result.previousEntryCount,
+        newEntryCount: result.newEntryCount,
+        warning: `A pre-restore backup (${backupLabel}) was automatically created. Any changes made since this backup (including tag merges, new entries, and relationships) have been reverted.${vectorWarningSuffix}`,
+        revertedChanges: {
+            tagMerges:
+                'Any merge_tags operations since this backup are reverted. Previously merged tags will reappear as separate tags.',
+            entries:
+                result.previousEntryCount !== result.newEntryCount
+                    ? `Entry count changed from ${String(result.previousEntryCount)} to ${String(result.newEntryCount)}`
+                    : undefined,
+        },
+    }
+}
+
+export function getBackupTools(context: ToolContext): ToolDefinition[] {
+    const { db, progress } = context
     return [
         {
             name: 'backup_journal',
@@ -193,133 +332,11 @@ export function getBackupTools(context: ToolContext): ToolDefinition[] {
             },
             handler: async (params: unknown) => {
                 try {
-                    const input = z
-                        .object({
-                            filename: z.string().min(1, 'filename cannot be empty'),
-                            confirm: z.boolean().optional(),
-                        }).strict()
-                        .parse(params)
-
-                    if (!input.confirm) {
-                        return {
-                            success: false,
-                            error: 'Restore requires confirm: true. This operation replaces all current data.',
-                            code: 'VALIDATION_ERROR',
-                            category: 'validation',
-                            suggestion: 'Set confirm: true to proceed with restore',
-                            recoverable: true,
-                        }
-                    }
-
-                    if (
-                        input.filename.includes('..') ||
-                        input.filename.includes('/') ||
-                        input.filename.includes('\\') ||
-                        input.filename.includes('\0')
-                    ) {
-                        throw new ValidationError('Invalid backup filename', {
-                            filename: input.filename,
-                        })
-                    }
-
-                    // Capture progress context values BEFORE any async operations
-                    const progressServer = progress?.server
-                    const progressTokenValue = progress?.progressToken
-
-                    await sendProgress(progress, 0, 3, 'Validating backup...')
-                    await sendProgress(progress, 1, 3, 'Preparing restore...')
-                    await sendProgress(progress, 2, 3, 'Restoring database from backup...')
-
-                    if (config?.runtime?.maintenanceManager) {
-                        await config.runtime.maintenanceManager.acquireMaintenanceLock()
-                    }
-                    let preRestoreBackup
-                    let result
-                    try {
-                        // [INVARIANT] C10: Create an automatic pre-restore backup inside the
-                        // maintenance lock before replacing database contents; abort if it fails.
-                        preRestoreBackup = await db.exportToFile(
-                            `pre_restore_${String(Date.now())}`
-                        )
-                        result = await db.restoreFromFile(input.filename, config?.runtime)
-                    } finally {
-                        if (config?.runtime?.maintenanceManager) {
-                            config.runtime.maintenanceManager.releaseMaintenanceLock()
-                        }
-                    }
-
-                    let vectorWarningSuffix = ''
-                    if (vectorManager?.isInitialized() === true) {
-                        try {
-                            const rebuildRes = await vectorManager.rebuildIndex()
-                            if (!rebuildRes.success || rebuildRes.failed > 0) {
-                                const detail =
-                                    rebuildRes.firstError ??
-                                    `${String(rebuildRes.failed)} entries failed embedding`
-                                logger.warning('Vector index rebuild after restore was incomplete', {
-                                    module: 'TOOL',
-                                    operation: 'restore-backup',
-                                    failed: rebuildRes.failed,
-                                    error: detail,
-                                })
-                                vectorWarningSuffix = ` Vector index rebuild had errors (${detail}); run rebuild_vector_index manually.`
-                            }
-                        } catch (vectorErr: unknown) {
-                            const msg =
-                                vectorErr instanceof Error
-                                    ? vectorErr.message
-                                    : String(vectorErr)
-                            logger.warning('Failed to rebuild vector index after restore', {
-                                module: 'TOOL',
-                                operation: 'restore-backup',
-                                error: msg,
-                            })
-                            vectorWarningSuffix = ` Vector index rebuild failed (${msg}); run rebuild_vector_index manually.`
-                        }
-                    }
-
-                    // Send directly using captured primitives (db.restoreFromFile reinitializes DB)
-                    if (progressServer !== undefined && progressTokenValue !== undefined) {
-                        try {
-                            await progressServer.notification({
-                                method: 'notifications/progress' as const,
-                                params: {
-                                    progressToken: progressTokenValue,
-                                    progress: 3,
-                                    total: 3,
-                                    message: 'Restore complete',
-                                },
-                            })
-                        } catch (error) {
-                            logger.debug('Failed to send restore progress notification', {
-                                module: 'TOOL',
-                                operation: 'restore-backup',
-                                error,
-                            })
-                        }
-                    }
-
-                    const backupLabel = preRestoreBackup?.filename ?? 'pre-restore backup'
-
-                    return {
-                        success: true,
-                        message: `Database restored from ${input.filename} (pre-restore backup: ${backupLabel})`,
-                        restoredFrom: result.restoredFrom,
-                        previousEntryCount: result.previousEntryCount,
-                        newEntryCount: result.newEntryCount,
-                        warning:
-                            `A pre-restore backup (${backupLabel}) was automatically created. Any changes made since this backup (including tag merges, new entries, and relationships) have been reverted.${vectorWarningSuffix}`,
-                        revertedChanges: {
-                            tagMerges:
-                                'Any merge_tags operations since this backup are reverted. Previously merged tags will reappear as separate tags.',
-                            entries:
-                                result.previousEntryCount !== result.newEntryCount
-                                    ? `Entry count changed from ${String(result.previousEntryCount)} to ${String(result.newEntryCount)}`
-                                    : undefined,
-                        },
-                    }
+                    return await executeRestoreBackup(params, context)
                 } catch (err) {
-                    logger.error('CRITICAL RESTORE ERROR THROWN', { error: err instanceof Error ? err.stack : String(err) })
+                    logger.error('CRITICAL RESTORE ERROR THROWN', {
+                        error: err instanceof Error ? err.stack : String(err),
+                    })
                     return formatHandlerError(err)
                 }
             },

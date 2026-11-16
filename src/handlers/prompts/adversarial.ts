@@ -8,7 +8,7 @@
 
 import type { IDatabaseAdapter } from '../../database/core/interfaces.js'
 import { ICON_PROMPT } from '../../constants/icons.js'
-import type { InternalPromptDef } from './index.js'
+import type { InternalPromptDef, PromptMessage } from './index.js'
 import type { BriefingConfig } from '../resources/shared.js'
 import {
     planReviewArgsSchema,
@@ -29,48 +29,14 @@ import {
 } from './adversarial-audit-factory.js'
 import { getCodeQualityAuditPromptDefinition } from './adversarial-code-quality.js'
 
-function getPlanReviewPromptDefinition(): InternalPromptDef {
-    return {
-        name: 'adversarial-plan-review',
-        description:
-            'Bootstrap an adversarial planning workflow with structured review dimensions, scoring rubric, and prior plan context from the journal. Optional parameters: topic, depth, copilot, workspace_id, project_number.',
-        icons: [ICON_PROMPT],
-        arguments: PLAN_REVIEW_ARGUMENTS,
-        handler: (args: Record<string, string> | undefined, db: IDatabaseAdapter, _teamDb?: IDatabaseAdapter, _github?: unknown, briefingConfig?: BriefingConfig, runtime?: object | null) => {
-            const parsed = planReviewArgsSchema.parse(args ?? {})
-            const scope = validateAdversarialPromptScope(
-                parsed.workspace_id,
-                parsed.project_number,
-                briefingConfig,
-                parsed.topic
-            )
-            const topic = sanitizePromptTarget(parsed.topic ?? '{topic}')
-            const depth: ReviewDepth = parsed.depth ?? 'standard'
-            const useCopilot = parsed.copilot === 'true'
-
-            const priorContextSection = buildPlanReviewPriorContextSection(
-                db,
-                topic,
-                parsed.topic,
-                briefingConfig,
-                scope.effectiveWorkspaceId,
-                runtime,
-                scope.projectNumber
-            )
-
-            const dimensionsTable = buildDimensionsTable(depth)
-            const copilotInstruction = buildCopilotStep(
-                useCopilot,
-                `gh copilot -- -p "Review the plan for ${sanitizeCopilotTarget(topic)} at <scratch_dir>/plan.md for correctness and edge cases. Explore the codebase to verify assumptions. When viewing or reading files, always provide the 'path' parameter correctly. Never write plan files inside the repository. What did we miss?" --allow-all`
-            )
-
-            return {
-                messages: [
-                    {
-                        role: 'user',
-                        content: {
-                            type: 'text',
-                            text: `# Adversarial Plan Review: "${topic}"
+function buildPlanReviewPromptText(
+    topic: string,
+    depth: ReviewDepth,
+    dimensionsTable: string,
+    copilotInstruction: string,
+    priorContextSection: string
+): string {
+    return `# Adversarial Plan Review: "${topic}"
 
 ${buildSharedAuditPreamble(topic, 'topic or module', { label: 'Topic', placeholder: '{topic}', actionVerb: 'Review' })}
 
@@ -124,12 +90,76 @@ ${copilotInstruction}
 
 Present the refined plan for approval with the final score, all disposition decisions, and Copilot feedback (if enabled).
 
-${priorContextSection}`,
-                        },
-                    },
-                ],
-            }
-        },
+${priorContextSection}`
+}
+
+function handlePlanReviewPrompt(
+    args: Record<string, string> | undefined,
+    db: IDatabaseAdapter,
+    briefingConfig?: BriefingConfig,
+    runtime?: object | null
+): { messages: PromptMessage[] } {
+    const parsed = planReviewArgsSchema.parse(args ?? {})
+    const scope = validateAdversarialPromptScope(
+        parsed.workspace_id,
+        parsed.project_number,
+        briefingConfig,
+        parsed.topic
+    )
+    const topic = sanitizePromptTarget(parsed.topic ?? '{topic}')
+    const depth: ReviewDepth = parsed.depth ?? 'standard'
+    const useCopilot = parsed.copilot === 'true'
+
+    const priorContextSection = buildPlanReviewPriorContextSection(
+        db,
+        topic,
+        parsed.topic,
+        briefingConfig,
+        scope.effectiveWorkspaceId,
+        runtime,
+        scope.projectNumber
+    )
+
+    const dimensionsTable = buildDimensionsTable(depth)
+    const copilotInstruction = buildCopilotStep(
+        useCopilot,
+        `gh copilot -- -p "Review the plan for ${sanitizeCopilotTarget(topic)} at <scratch_dir>/plan.md for correctness and edge cases. Explore the codebase to verify assumptions. When viewing or reading files, always provide the 'path' parameter correctly. Never write plan files inside the repository. What did we miss?" --allow-all`
+    )
+
+    return {
+        messages: [
+            {
+                role: 'user' as const,
+                content: {
+                    type: 'text' as const,
+                    text: buildPlanReviewPromptText(
+                        topic,
+                        depth,
+                        dimensionsTable,
+                        copilotInstruction,
+                        priorContextSection
+                    ),
+                },
+            },
+        ],
+    }
+}
+
+function getPlanReviewPromptDefinition(): InternalPromptDef {
+    return {
+        name: 'adversarial-plan-review',
+        description:
+            'Bootstrap an adversarial planning workflow with structured review dimensions, scoring rubric, and prior plan context from the journal. Optional parameters: topic, depth, copilot, workspace_id, project_number.',
+        icons: [ICON_PROMPT],
+        arguments: PLAN_REVIEW_ARGUMENTS,
+        handler: (
+            args: Record<string, string> | undefined,
+            db: IDatabaseAdapter,
+            _teamDb?: IDatabaseAdapter,
+            _github?: unknown,
+            briefingConfig?: BriefingConfig,
+            runtime?: object | null
+        ) => handlePlanReviewPrompt(args, db, briefingConfig, runtime),
     }
 }
 

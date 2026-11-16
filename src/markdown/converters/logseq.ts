@@ -36,92 +36,91 @@ function applyLogseqPropertyLine(
     return true
 }
 
+function transformLogseqLine(
+    rawLine: string,
+    mjMeta: FrontmatterData,
+    mergedTags: Set<string>
+): { line: string | null; hasTask: boolean; hasDoneTask: boolean } {
+    let line = rawLine
+    if (applyLogseqPropertyLine(line, mjMeta, mergedTags)) {
+        return { line: null, hasTask: false, hasDoneTask: false }
+    }
+
+    let hasTask = false
+    let hasDoneTask = false
+    if (/^\s*-\s+(?:TODO|LATER)\b/.test(line)) {
+        line = line.replace(/^(\s*-\s+)(?:TODO|LATER)\s+/, '$1[ ] ')
+        hasTask = true
+    } else if (/^\s*-\s+(?:DONE|NOW)\b/.test(line)) {
+        line = line.replace(/^(\s*-\s+)(?:DONE|NOW)\s+/, '$1[x] ')
+        hasDoneTask = true
+    }
+
+    for (const match of line.matchAll(/(^|\s)#([a-zA-Z0-9_-]{1,128})\b/g)) {
+        if (match[2]) mergedTags.add(match[2].toLowerCase())
+    }
+
+    line = line.replace(/\[\[([^\]]{1,500})\]\]/g, (_match: string, inner: string) => {
+        const parts = inner.split('|')
+        return (parts.length > 1 ? parts[1] : parts[0]) ?? ''
+    })
+
+    return { line: line.trim() === '-' ? null : line, hasTask, hasDoneTask }
+}
+
+function inferLogseqEntryMetadata(
+    filename: string,
+    defaultEntryType: string | undefined,
+    hasTasks: boolean,
+    hasDoneTasks: boolean,
+    mjMeta: FrontmatterData
+): void {
+    if (defaultEntryType) return
+    const journalMatch = /\b(\d{4}_\d{2}_\d{2})\b/.exec(filename)
+    if (journalMatch || filename.includes('journals')) {
+        mjMeta.entry_type = 'standup'
+        if (journalMatch?.[1] && !mjMeta.timestamp) {
+            mjMeta.timestamp = `${journalMatch[1].replace(/_/g, '-')}T12:00:00Z`
+        }
+    } else if (hasDoneTasks && !hasTasks) {
+        mjMeta.entry_type = 'feature_implementation'
+    } else if (hasTasks) {
+        mjMeta.entry_type = 'planning'
+    }
+}
+
 export function convertLogseq(
     content: string,
     filename: string,
     defaultEntryType?: string
 ): ConvertedFile {
     const { metadata: yamlMeta, body } = parseYamlFrontmatter(content)
-    
     const mjMeta: FrontmatterData = {
         source: 'logseq',
         entry_type: defaultEntryType ?? 'other',
     }
-
     const mergedTags = new Set<string>()
-
-    // 1. Process Frontmatter Tags and Aliases
     extractTags(yamlMeta, mergedTags, 'alias')
 
-    // 2. Process Body Text
-    const lines = body.split('\n')
     const processedLines: string[] = []
-    
     let hasTasks = false
     let hasDoneTasks = false
 
-    for (const rawLine of lines) {
-        let line = rawLine ?? ''
-
-        if (applyLogseqPropertyLine(line, mjMeta, mergedTags)) continue
-
-        // Handle leading task markers without rewriting mid-line prose keywords
-        if (/^\s*-\s+(?:TODO|LATER)\b/.test(line)) {
-            line = line.replace(/^(\s*-\s+)(?:TODO|LATER)\s+/, '$1[ ] ')
-            hasTasks = true
-        } else if (/^\s*-\s+(?:DONE|NOW)\b/.test(line)) {
-            line = line.replace(/^(\s*-\s+)(?:DONE|NOW)\s+/, '$1[x] ')
-            hasDoneTasks = true
-        }
-
-        // Extract inline tags
-        const inlineTagMatches = line.matchAll(/(^|\s)#([a-zA-Z0-9_-]{1,128})\b/g)
-        for (const match of inlineTagMatches) {
-            if (match[2]) mergedTags.add(match[2].toLowerCase())
-        }
-
-        // Strip bounded wikilinks/page refs
-        line = line.replace(/\[\[([^\]]{1,500})\]\]/g, (_match: string, inner: string) => {
-            const parts = inner.split('|')
-            return (parts.length > 1 ? parts[1] : parts[0]) ?? ''
-        })
-
-        // Un-indent basic blocks slightly to make it read more like a document than an outline,
-        // but preserve nesting relative to the parent.
-        // If it starts with "- ", we can optionally turn it into a standard paragraph or keep as bullet.
-        // For logseq, leaving as bullets often looks best, but we'll trim empty block prefixes.
-        if (line.trim() === '-') {
-            continue
-        }
-
-        processedLines.push(line)
+    for (const rawLine of body.split('\n')) {
+        const outcome = transformLogseqLine(rawLine ?? '', mjMeta, mergedTags)
+        if (outcome.hasTask) hasTasks = true
+        if (outcome.hasDoneTask) hasDoneTasks = true
+        if (outcome.line !== null) processedLines.push(outcome.line)
     }
-
-    const processedBody = processedLines.join('\n')
 
     if (mergedTags.size > 0) {
         mjMeta.tags = Array.from(mergedTags)
     }
-
-    // 3. Heuristic Entry Type Inference
-    if (!defaultEntryType) {
-        // Logseq journal files are typically formatted as YYYY_MM_DD.md
-        const journalMatch = /\b(\d{4}_\d{2}_\d{2})\b/.exec(filename)
-        if (journalMatch || filename.includes('journals')) {
-            mjMeta.entry_type = 'standup'
-            if (journalMatch?.[1] && !mjMeta.timestamp) {
-                mjMeta.timestamp = `${journalMatch[1].replace(/_/g, '-')}T12:00:00Z`
-            }
-        } else if (hasDoneTasks && !hasTasks) {
-            mjMeta.entry_type = 'feature_implementation'
-        } else if (hasTasks) {
-            mjMeta.entry_type = 'planning'
-        }
-    }
+    inferLogseqEntryMetadata(filename, defaultEntryType, hasTasks, hasDoneTasks, mjMeta)
 
     return {
         filename,
         metadata: mjMeta,
-        body: processedBody.trim(),
+        body: processedLines.join('\n').trim(),
     }
 }

@@ -40,11 +40,19 @@ const AUDIT_URI_KEYS = [
     'server_name',
 ] as const
 
-/** Parse one JSONL audit line; returns null for empty or unparseable lines. */
+/** Parse one JSONL audit line; returns null for empty, unparseable, or malformed lines. */
 export function parseAuditLine(line: string | undefined): AuditEntry | null {
     if (!line || line.trim().length === 0) return null
     try {
-        return JSON.parse(line) as AuditEntry
+        const parsed: unknown = JSON.parse(line)
+        if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
+            return null
+        }
+        const record = parsed as Record<string, unknown>
+        if (typeof record['tool'] !== 'string') {
+            return null
+        }
+        return parsed as AuditEntry
     } catch {
         return null
     }

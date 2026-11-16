@@ -265,6 +265,75 @@ export function passMetadataFilters(
     return true
 }
 
+async function hydrateTeamVectorHits(
+    query: string,
+    teamDb: IDatabaseAdapter,
+    teamVectorManager: VectorSearchManager,
+    options: ISearchFilters & { limit: number },
+    limit: number,
+    pushEntry: (entry: JournalEntry, similarity?: number) => void
+): Promise<boolean> {
+    try {
+        const hits = await teamVectorManager.search(
+            query,
+            limit,
+            options.similarityThreshold ?? 0.15,
+            options.workspaceId,
+            options.projectNumber
+        )
+        const ids = hits.map((hit) => hit.entryId)
+        const hydrated = teamDb.getEntriesByIds(ids, options.workspaceId ?? 'default')
+        if (
+            (options.tags !== undefined && options.tags.length > 0) ||
+            (options.excludeTags !== undefined && options.excludeTags.length > 0)
+        ) {
+            const tagsMap = teamDb.getTagsForEntries(ids)
+            for (const entry of hydrated.values()) {
+                entry.tags = tagsMap.get(entry.id) ?? []
+            }
+        }
+        for (const hit of hits) {
+            const entry = hydrated.get(hit.entryId)
+            if (entry !== undefined) pushEntry(entry, Math.round(hit.score * 100) / 100)
+        }
+        return false
+    } catch (err) {
+        logger.debug('Team vector search failed; falling back to full-text results', {
+            module: 'Search',
+            error: err instanceof Error ? err.message : String(err),
+        })
+        return true
+    }
+}
+
+function appendTeamFtsFallback(
+    query: string,
+    teamDb: IDatabaseAdapter,
+    options: ISearchFilters & { limit: number },
+    limit: number,
+    pushEntry: (entry: JournalEntry, similarity?: number) => void
+): void {
+    const fts = teamDb.searchEntries(query, {
+        limit,
+        ...(options.projectNumber !== undefined ? { projectNumber: options.projectNumber } : {}),
+        ...(options.issueNumber !== undefined ? { issueNumber: options.issueNumber } : {}),
+        ...(options.prNumber !== undefined ? { prNumber: options.prNumber } : {}),
+        ...(options.prStatus !== undefined ? { prStatus: options.prStatus } : {}),
+        ...(options.workflowRunId !== undefined ? { workflowRunId: options.workflowRunId } : {}),
+        ...(options.tags !== undefined ? { tags: options.tags } : {}),
+        ...(options.excludeTags !== undefined ? { excludeTags: options.excludeTags } : {}),
+        ...(options.entryType !== undefined
+            ? { entryType: options.entryType as JournalEntry['entryType'] }
+            : {}),
+        ...(options.startDate !== undefined ? { startDate: options.startDate } : {}),
+        ...(options.endDate !== undefined ? { endDate: options.endDate } : {}),
+        ...(options.includeArchived !== undefined ? { includeArchived: options.includeArchived } : {}),
+        ...(options.workspaceId !== undefined ? { workspaceId: options.workspaceId } : {}),
+    })
+    const fallbackSimilarity = options.similarityThreshold !== undefined ? 0 : undefined
+    for (const entry of fts.entries) pushEntry(entry, fallbackSimilarity)
+}
+
 /**
  * Team hits for hybrid and semantic search. Vector hits come first. Full-text
  * hits fill the rest so include_team is not a no-op when the team index is absent.
@@ -286,8 +355,7 @@ export async function collectTeamSearchEntries(
     const limit = Math.min(Math.max(options.limit, 1), 500)
 
     const pushEntry = (entry: JournalEntry, similarity?: number): void => {
-        if (seen.has(entry.id)) return
-        if (!passMetadataFilters(entry, options, teamDb)) return
+        if (seen.has(entry.id) || !passMetadataFilters(entry, options, teamDb)) return
         seen.add(entry.id)
         ranked.push({
             ...entry,
@@ -298,59 +366,20 @@ export async function collectTeamSearchEntries(
         })
     }
 
-    let teamVectorFailed = false
-    if (teamVectorManager !== undefined && query.trim() !== '') {
-        try {
-            const hits = await teamVectorManager.search(
-                query,
-                limit,
-                options.similarityThreshold ?? 0.15,
-                options.workspaceId,
-                options.projectNumber
-            )
-            const ids = hits.map((hit) => hit.entryId)
-            const hydrated = teamDb.getEntriesByIds(ids, options.workspaceId ?? 'default')
-            if (
-                (options.tags !== undefined && options.tags.length > 0) ||
-                (options.excludeTags !== undefined && options.excludeTags.length > 0)
-            ) {
-                const tagsMap = teamDb.getTagsForEntries(ids)
-                for (const entry of hydrated.values()) {
-                    entry.tags = tagsMap.get(entry.id) ?? []
-                }
-            }
-            for (const hit of hits) {
-                const entry = hydrated.get(hit.entryId)
-                if (entry !== undefined) pushEntry(entry, Math.round(hit.score * 100) / 100)
-            }
-        } catch (err) {
-            teamVectorFailed = true
-            // Team vector search is best-effort. Full-text results still apply.
-            logger.debug('Team vector search failed; falling back to full-text results', {
-                module: 'Search',
-                error: err instanceof Error ? err.message : String(err),
-            })
-        }
-    }
+    const teamVectorFailed =
+        teamVectorManager !== undefined && query.trim() !== ''
+            ? await hydrateTeamVectorHits(
+                  query,
+                  teamDb,
+                  teamVectorManager,
+                  options,
+                  limit,
+                  pushEntry
+              )
+            : false
 
     if (options.similarityThreshold === undefined || teamVectorManager === undefined || teamVectorFailed) {
-        const fts = teamDb.searchEntries(query, {
-            limit,
-            ...(options.projectNumber !== undefined ? { projectNumber: options.projectNumber } : {}),
-            ...(options.issueNumber !== undefined ? { issueNumber: options.issueNumber } : {}),
-            ...(options.prNumber !== undefined ? { prNumber: options.prNumber } : {}),
-            ...(options.prStatus !== undefined ? { prStatus: options.prStatus } : {}),
-            ...(options.workflowRunId !== undefined ? { workflowRunId: options.workflowRunId } : {}),
-            ...(options.tags !== undefined ? { tags: options.tags } : {}),
-            ...(options.excludeTags !== undefined ? { excludeTags: options.excludeTags } : {}),
-            ...(options.entryType !== undefined ? { entryType: options.entryType as JournalEntry['entryType'] } : {}),
-            ...(options.startDate !== undefined ? { startDate: options.startDate } : {}),
-            ...(options.endDate !== undefined ? { endDate: options.endDate } : {}),
-            ...(options.includeArchived !== undefined ? { includeArchived: options.includeArchived } : {}),
-            ...(options.workspaceId !== undefined ? { workspaceId: options.workspaceId } : {}),
-        })
-        const fallbackSimilarity = options.similarityThreshold !== undefined ? 0 : undefined
-        for (const entry of fts.entries) pushEntry(entry, fallbackSimilarity)
+        appendTeamFtsFallback(query, teamDb, options, limit, pushEntry)
     }
     return ranked
 }

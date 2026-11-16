@@ -7,6 +7,8 @@
  * 2. formatHandlerError() — enriches raw Error responses
  */
 
+import { ENTRY_TYPES } from '../../types/entities.js'
+
 // =============================================================================
 // Types
 // =============================================================================
@@ -127,8 +129,7 @@ export const ERROR_SUGGESTIONS: ErrorSuggestion[] = [
     },
     {
         pattern: /(?:invalid enum value|invalid option:?\s*expected one of|invalid_value)[^\r\n]{0,200}entry.?type/i,
-        suggestion:
-            'Valid entry_type values: retrospective, bug_fix, project_decision, feature_implementation, technical_note, code_review, planning, research, enhancement, milestone, adversarial_review, development_note, learning, standup, meeting_notes, technical_achievement, plan_draft, plan_refinement, plan_finalized, copilot_validation, other, personal_reflection',
+        suggestion: `Valid entry_type values: ${ENTRY_TYPES.join(', ')}`,
         code: 'VALIDATION_ERROR',
     },
 ]

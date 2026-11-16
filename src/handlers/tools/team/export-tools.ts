@@ -4,7 +4,8 @@
  * Tools: team_export_entries
  */
 
-import type { ToolDefinition, ToolContext } from '../../../types/index.js'
+import type { z } from 'zod'
+import type { JournalEntry, ToolDefinition, ToolContext } from '../../../types/index.js'
 import { ValidationError } from '../../../types/errors.js'
 import { formatHandlerError } from '../../../utils/error-helpers.js'
 import { sendProgress } from '../../../utils/progress-utils.js'
@@ -22,9 +23,8 @@ import {
     TeamExportOutputSchema,
 } from './schemas.js'
 
-// ============================================================================
-// Tool Definitions
-// ============================================================================
+type TeamExportEntriesInput = z.infer<typeof TeamExportEntriesSchema>
+type TeamDbInstance = NonNullable<ToolContext['teamDb']>
 
 interface TeamExportableEntry {
     id: number
@@ -88,8 +88,105 @@ function formatTeamExportMarkdown(enriched: TeamExportableEntry[], wsId: string)
     return lines.join('\n')
 }
 
+function fetchTeamExportEntries(
+    teamDb: TeamDbInstance,
+    input: TeamExportEntriesInput,
+    wsId: string,
+    alignedProject: number
+): JournalEntry[] {
+    const { start_date, end_date, entry_type, tags, limit } = input
+    // When entry_type or tags filters are active, fetch a larger batch so post-filtering
+    // doesn't silently return too few results.
+    const hasTypeFilter = Boolean(entry_type)
+    const hasTagFilter = tags !== undefined && tags.length > 0
+    const fetchLimit =
+        hasTypeFilter || hasTagFilter ? Math.min(Math.max(limit * 5, 500), 5000) : limit
+    const projectFilter = { projectNumber: alignedProject }
+
+    let entries: JournalEntry[]
+    if (start_date !== undefined || end_date !== undefined) {
+        entries = teamDb.searchByDateRange(
+            start_date ?? DATE_MIN_SENTINEL,
+            end_date ?? DATE_MAX_SENTINEL,
+            { entryType: entry_type, tags, limit: fetchLimit, workspaceId: wsId, ...projectFilter }
+        ).entries
+    } else if (hasTypeFilter || hasTagFilter) {
+        // Use wide date range to scan the full database
+        entries = teamDb.searchByDateRange(DATE_MIN_SENTINEL, DATE_MAX_SENTINEL, {
+            entryType: entry_type,
+            tags,
+            limit: fetchLimit,
+            workspaceId: wsId,
+            ...projectFilter,
+        }).entries
+    } else {
+        entries = teamDb.getRecentEntries(
+            fetchLimit,
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            wsId,
+            alignedProject
+        ).entries
+    }
+
+    if (hasTypeFilter && entry_type !== undefined) {
+        entries = entries.filter((e) => e.entryType === entry_type)
+    }
+    return entries.length > limit ? entries.slice(0, limit) : entries
+}
+
+async function executeTeamExportEntries(
+    context: ToolContext,
+    teamDb: TeamDbInstance,
+    params: unknown
+): Promise<Record<string, unknown>> {
+    const input = TeamExportEntriesSchema.parse(params)
+    const { format, start_date, end_date, project_number, workspace_id } = input
+    const { progress } = context
+
+    await sendProgress(progress, 0, 3, 'Preparing team export...')
+    await sendProgress(progress, 1, 3, 'Fetching team entries...')
+
+    const wsId = resolveWorkspaceId(workspace_id, project_number, context.config)
+    const alignedProject =
+        resolveTeamProjectNumber(context, wsId, project_number, workspace_id) ?? undefined
+    if (alignedProject === undefined) {
+        return missingTeamProjectNumberError(
+            'Missing project_number. Cross-tenant exports without project_number are not allowed.'
+        )
+    }
+    if (start_date !== undefined && end_date !== undefined && start_date > end_date) {
+        throw new ValidationError('start_date cannot be after end_date')
+    }
+
+    const rawEntries = fetchTeamExportEntries(teamDb, input, wsId, alignedProject)
+    // Enforce < 5MB payload ceiling (approximate based on content + overhead)
+    const { boundedEntries, truncated } = capTeamExportEntries(rawEntries)
+
+    await sendProgress(progress, 2, 3, 'Formatting export data...')
+    const authorMap = batchFetchAuthors(
+        teamDb,
+        boundedEntries.map((e) => e.id)
+    )
+    const enriched = boundedEntries.map((e) => ({
+        ...e,
+        author: authorMap.get(e.id) ?? null,
+    }))
+    const data =
+        format === 'markdown' ? formatTeamExportMarkdown(enriched, wsId) : JSON.stringify(enriched)
+
+    await sendProgress(progress, 3, 3, 'Export complete')
+    return { success: true, format, data, count: enriched.length, truncated }
+}
+
+// ============================================================================
+// Tool Definitions
+// ============================================================================
+
 export function getTeamExportTools(context: ToolContext): ToolDefinition[] {
-    const { teamDb, progress } = context
+    const { teamDb } = context
 
     return [
         {
@@ -108,126 +205,8 @@ export function getTeamExportTools(context: ToolContext): ToolDefinition[] {
             },
             handler: async (params: unknown) => {
                 try {
-                    if (!teamDb) {
-                        return { ...TEAM_DB_ERROR_RESPONSE }
-                    }
-
-                    const {
-                        format,
-                        start_date,
-                        end_date,
-                        entry_type,
-                        tags,
-                        limit,
-                        project_number,
-                        workspace_id,
-                    } = TeamExportEntriesSchema.parse(params)
-
-                    await sendProgress(progress, 0, 3, 'Preparing team export...')
-                    await sendProgress(progress, 1, 3, 'Fetching team entries...')
-
-                    const wsId = resolveWorkspaceId(workspace_id, project_number, context.config)
-                    const alignedProject =
-                        resolveTeamProjectNumber(context, wsId, project_number, workspace_id) ??
-                        undefined
-                    if (alignedProject === undefined) {
-                        return missingTeamProjectNumberError(
-                            'Missing project_number. Cross-tenant exports without project_number are not allowed.'
-                        )
-                    }
-
-                    // When entry_type or tags filters are active, fetch a larger
-                    // batch so post-filtering doesn't silently return too few results.
-                    const hasTypeFilter = !!entry_type
-                    const hasTagFilter = tags && tags.length > 0
-                    const fetchLimit =
-                        hasTypeFilter || hasTagFilter ? Math.min(Math.max(limit * 5, 500), 5000) : limit
-
-                    const projectFilter =
-                        alignedProject !== undefined ? { projectNumber: alignedProject } : {}
-
-                    if (
-                        start_date !== undefined &&
-                        end_date !== undefined &&
-                        start_date > end_date
-                    ) {
-                        throw new ValidationError('start_date cannot be after end_date')
-                    }
-
-                    // Fetch entries with optional filters
-                    let entries
-                    if (start_date !== undefined || end_date !== undefined) {
-                        entries = teamDb.searchByDateRange(
-                            start_date ?? DATE_MIN_SENTINEL,
-                            end_date ?? DATE_MAX_SENTINEL,
-                            {
-                                entryType: entry_type,
-                                tags,
-                                limit: fetchLimit,
-                                workspaceId: wsId,
-                                ...projectFilter,
-                            }
-                        ).entries
-                    } else if (hasTypeFilter || hasTagFilter) {
-                        // Use wide date range to scan the full database
-                        entries = teamDb.searchByDateRange(DATE_MIN_SENTINEL, DATE_MAX_SENTINEL, {
-                            entryType: entry_type,
-                            tags,
-                            limit: fetchLimit,
-                            workspaceId: wsId,
-                            ...projectFilter,
-                        }).entries
-                    } else {
-                        entries = teamDb.getRecentEntries(
-                            fetchLimit,
-                            undefined,
-                            undefined,
-                            undefined,
-                            undefined,
-                            wsId,
-                            alignedProject
-                        ).entries
-                    }
-
-                    // Post-filter by entry_type if searchByDateRange
-                    // doesn't natively support it, then cap to requested limit
-                    if (hasTypeFilter && entry_type !== undefined) {
-                        entries = entries.filter((e) => e.entryType === entry_type)
-                    }
-                    if (entries.length > limit) {
-                        entries = entries.slice(0, limit)
-                    }
-
-                    // Enforce < 5MB payload ceiling (approximate based on content + overhead)
-                    const { boundedEntries, truncated } = capTeamExportEntries(entries)
-                    entries = boundedEntries
-
-                    await sendProgress(progress, 2, 3, 'Formatting export data...')
-
-                    // Enrich with authors
-                    const authorMap = batchFetchAuthors(
-                        teamDb,
-                        entries.map((e) => e.id)
-                    )
-                    const enriched = entries.map((e) => ({
-                        ...e,
-                        author: authorMap.get(e.id) ?? null,
-                    }))
-
-                    const data =
-                        format === 'markdown'
-                            ? formatTeamExportMarkdown(enriched, wsId)
-                            : JSON.stringify(enriched)
-
-                    await sendProgress(progress, 3, 3, 'Export complete')
-
-                    return {
-                        success: true,
-                        format,
-                        data,
-                        count: enriched.length,
-                        truncated,
-                    }
+                    if (!teamDb) return { ...TEAM_DB_ERROR_RESPONSE }
+                    return await executeTeamExportEntries(context, teamDb, params)
                 } catch (err) {
                     return formatHandlerError(err)
                 }

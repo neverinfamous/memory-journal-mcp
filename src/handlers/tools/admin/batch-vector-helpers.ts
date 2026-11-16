@@ -56,13 +56,17 @@ export function findWildcardProjectMismatches(
         .filter((u) => {
             if (u.target_workspace_id !== undefined) {
                 const sourceWs = u.workspace_id ?? rootWorkspaceId
-                if (
-                    sourceWs === '*' &&
-                    u.project_number === undefined &&
-                    rootProjectNumber !== undefined
-                ) {
+                if (sourceWs === '*' && rootProjectNumber !== undefined) {
                     const entry = db.getEntryById(u.entry_id, '*')
                     return entry?.projectNumber !== rootProjectNumber
+                }
+                if (
+                    sourceWs === '*' &&
+                    rootProjectNumber === undefined &&
+                    u.project_number !== undefined
+                ) {
+                    const entry = db.getEntryById(u.entry_id, '*')
+                    return entry?.projectNumber !== u.project_number
                 }
                 return false
             }

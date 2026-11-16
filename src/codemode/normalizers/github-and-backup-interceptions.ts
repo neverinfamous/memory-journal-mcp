@@ -185,6 +185,22 @@ function mapKanbanAndMilestoneKeepAliases(methodName: string, obj: Record<string
     }
 }
 
+function splitOwnerRepoSlug(obj: Record<string, unknown>): void {
+    if (typeof obj['repo'] !== 'string' || !obj['repo'].includes('/') || obj['repo'].includes('\\')) return
+    const parts = obj['repo'].trim().split('/')
+    const isSlug =
+        parts.length === 2 &&
+        Boolean(parts[0]) &&
+        Boolean(parts[1]) &&
+        parts[0] !== '.' &&
+        parts[0] !== '..' &&
+        !/^[a-zA-Z]:$/.test(parts[0] ?? '')
+    if (isSlug && parts[0] && parts[1]) {
+        if (obj['owner'] === undefined) obj['owner'] = parts[0]
+        obj['repo'] = parts[1].replace(/\.git$/i, '')
+    }
+}
+
 function applyGithubInterceptions(
     methodName: string,
     rawObj: Record<string, unknown>
@@ -196,24 +212,7 @@ function applyGithubInterceptions(
         delete obj['repo_name']
     }
 
-    if (typeof obj['repo'] === 'string' && obj['repo'].includes('/') && !obj['repo'].includes('\\')) {
-        const trimmedRepo = obj['repo'].trim()
-        const parts = trimmedRepo.split('/')
-        const isSlug =
-            parts.length === 2 &&
-            Boolean(parts[0]) &&
-            Boolean(parts[1]) &&
-            parts[0] !== '.' &&
-            parts[0] !== '..' &&
-            !/^[a-zA-Z]:$/.test(parts[0] ?? '')
-        if (isSlug && parts[0] && parts[1]) {
-            if (obj['owner'] === undefined) {
-                obj['owner'] = parts[0]
-            }
-            obj['repo'] = parts[1].replace(/\.git$/i, '')
-        }
-    }
-
+    splitOwnerRepoSlug(obj)
     mapGithubTextKeys(methodName, obj)
 
     const hasStateParam = leafEquals(methodName, [

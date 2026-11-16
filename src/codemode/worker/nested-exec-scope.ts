@@ -9,9 +9,13 @@ import { transformAutoReturn } from '../auto-return.js'
 import { readProjectRegistryPayload } from '../normalizers/generic-field-aliases.js'
 import { validateSandboxCode } from '../security.js'
 import {
+    dispatchSynthesizedNestedEntry,
+    extractNestedContextRecord,
+    extractNestedTimeoutMs,
+    invokeShimGroupMethod,
+    naturalLanguageEntry,
     readExecutableCode,
     readNestedQuerySearch,
-    naturalLanguageEntry,
 } from './nested-exec-payload.js'
 
 export { readExecutableCode, naturalLanguageEntry }
@@ -248,11 +252,19 @@ export function validateNestedExecScope(
     )
 }
 
+export interface NestedExecIsolationOverrides {
+    timeoutMs?: number
+    workspaceId?: string
+    projectNumber?: number
+    contextObj?: Record<string, unknown>
+}
+
 export type RunIsolatedNestedFn = (
     wrapped: string,
     nestedReadonly: boolean,
     nestedDryRun: boolean,
-    nestedUseTestDb: boolean
+    nestedUseTestDb: boolean,
+    overrides?: NestedExecIsolationOverrides
 ) => Promise<unknown>
 
 export interface SandboxExecutorOptions {
@@ -268,32 +280,89 @@ export interface SandboxExecutorOptions {
     runIsolatedNestedCode: RunIsolatedNestedFn
 }
 
-function dispatchSynthesizedNestedEntry(
-    payload: unknown,
-    effectiveReadonly: boolean,
-    effectiveDryRun: boolean,
-    effectiveUseTestDb: boolean,
-    invokeCreateEntry: (p: unknown) => unknown
-): unknown {
-    if (effectiveReadonly) {
-        return {
-            success: false,
-            error: 'Write operations are disabled in readonly mode',
-            code: 'PERMISSION_DENIED',
+function readNarrowedWorkspace(
+    sources: Record<string, unknown>[],
+    registry: Record<string, ProjectRegistryEntry> | undefined
+): string | undefined {
+    for (const src of sources) {
+        for (const key of ['workspace_id', 'workspaceId', 'workspace'] as const) {
+            const raw = src[key]
+            if (typeof raw === 'string' && raw.trim() !== '' && raw.trim() !== '*') {
+                return findRegistryKey(raw.trim(), registry) ?? raw.trim()
+            }
+        }
+        for (const key of ['repo', 'repo_name', 'repoName', 'repository'] as const) {
+            const raw = src[key]
+            if (typeof raw !== 'string' || raw.trim() === '') continue
+            const trimmed = raw.trim()
+            const slug = trimmed.split(/[/\\]/).filter(Boolean).pop() ?? trimmed
+            const matched = findRegistryKey(trimmed, registry) ?? findRegistryKey(slug, registry)
+            if (matched !== undefined) return matched
         }
     }
-    if (effectiveDryRun) {
-        return {
-            success: false,
-            error: 'dry_run is not supported for synthesized entry writes inside nested execute_code',
-            code: 'VALIDATION_ERROR',
+    return undefined
+}
+
+function resolveNestedNarrowedScope(
+    argRec: Record<string, unknown> | undefined,
+    pinnedWorkspace: string | undefined,
+    pinnedProjectNumber: number | undefined,
+    projectRegistryRaw: unknown
+): { workspaceId?: string; projectNumber?: number } {
+    if (argRec === undefined || pinnedWorkspace !== undefined) return {}
+    const registry = readProjectRegistryPayload(projectRegistryRaw)
+    const ctxRec = isPlainRecord(argRec['context']) ? argRec['context'] : undefined
+    const sources = ctxRec !== undefined ? [argRec, ctxRec] : [argRec]
+    const workspaceId = readNarrowedWorkspace(sources, registry)
+
+    let projectNumber: number | undefined
+    if (pinnedProjectNumber === undefined) {
+        for (const src of sources) {
+            for (const key of ['project_number', 'projectNumber', 'project_id', 'projectId', 'project'] as const) {
+                const rawProj = src[key]
+                if (rawProj === undefined || rawProj === null || rawProj === '') continue
+                if (key === 'project' && isProjectStringValue(rawProj)) continue
+                const parsed = parseProjectNumberCandidate(rawProj, registry)
+                if (parsed !== null) {
+                    projectNumber = parsed
+                    break
+                }
+            }
+            if (projectNumber !== undefined) break
+        }
+        if (projectNumber === undefined && workspaceId !== undefined && workspaceId.toLowerCase() !== 'default') {
+            const regProj = registry?.[workspaceId]?.project_number
+            if (typeof regProj === 'number' && Number.isInteger(regProj) && regProj > 0) {
+                projectNumber = regProj
+            }
         }
     }
-    const nextPayload =
-        effectiveUseTestDb && typeof payload === 'object' && payload !== null && !Array.isArray(payload)
-            ? { ...(payload as Record<string, unknown>), use_test_db: true }
-            : payload
-    return invokeCreateEntry(nextPayload)
+
+    return {
+        ...(workspaceId !== undefined ? { workspaceId } : {}),
+        ...(projectNumber !== undefined ? { projectNumber } : {}),
+    }
+}
+
+function buildIsolationOverrides(
+    nestedTimeout: number | undefined,
+    nestedContext: Record<string, unknown> | undefined,
+    narrowed: { workspaceId?: string; projectNumber?: number }
+): NestedExecIsolationOverrides | undefined {
+    if (
+        nestedTimeout === undefined &&
+        nestedContext === undefined &&
+        narrowed.workspaceId === undefined &&
+        narrowed.projectNumber === undefined
+    ) {
+        return undefined
+    }
+    return {
+        ...(nestedTimeout !== undefined ? { timeoutMs: nestedTimeout } : {}),
+        ...(narrowed.workspaceId !== undefined ? { workspaceId: narrowed.workspaceId } : {}),
+        ...(narrowed.projectNumber !== undefined ? { projectNumber: narrowed.projectNumber } : {}),
+        ...(nestedContext !== undefined ? { contextObj: nestedContext } : {}),
+    }
 }
 
 /**
@@ -304,120 +373,65 @@ export function createSandboxExecutor(
     options: SandboxExecutorOptions
 ): (arg: unknown) => Promise<unknown> {
     const {
-        shimMj,
-        vmContextRef,
-        timeoutMs,
-        readonlyMode,
-        dryRunMode,
-        useTestDbMode,
-        pinnedWorkspaceRaw,
-        pinnedProjectRaw,
-        projectRegistryRaw,
-        runIsolatedNestedCode,
+        shimMj, vmContextRef, timeoutMs, readonlyMode, dryRunMode, useTestDbMode,
+        pinnedWorkspaceRaw, pinnedProjectRaw, projectRegistryRaw, runIsolatedNestedCode,
     } = options
     const pinnedWorkspace =
-        typeof pinnedWorkspaceRaw === 'string' &&
-        pinnedWorkspaceRaw.trim() !== '' &&
-        pinnedWorkspaceRaw.trim() !== '*'
+        typeof pinnedWorkspaceRaw === 'string' && pinnedWorkspaceRaw.trim() !== '' && pinnedWorkspaceRaw.trim() !== '*'
             ? pinnedWorkspaceRaw.trim()
             : undefined
     const pinnedProjectNumber =
-        typeof pinnedProjectRaw === 'number' &&
-        Number.isInteger(pinnedProjectRaw) &&
-        pinnedProjectRaw > 0
+        typeof pinnedProjectRaw === 'number' && Number.isInteger(pinnedProjectRaw) && pinnedProjectRaw > 0
             ? pinnedProjectRaw
             : undefined
 
-    const invokeCreateEntry = (payload: unknown): unknown => {
-        const coreGroup = shimMj['core']
-        if ((typeof coreGroup === 'object' && coreGroup !== null) || typeof coreGroup === 'function') {
-            const fn = Reflect.get(coreGroup, 'createEntry') as unknown
-            if (typeof fn === 'function') return (fn as (a: unknown) => unknown)(payload)
-        }
-        return undefined
-    }
-
-    const invokeSearchEntries = (payload: unknown): unknown => {
-        const searchGroup = shimMj['search']
-        if ((typeof searchGroup === 'object' && searchGroup !== null) || typeof searchGroup === 'function') {
-            const fn = Reflect.get(searchGroup, 'searchEntries') as unknown
-            if (typeof fn === 'function') return (fn as (a: unknown) => unknown)(payload)
-        }
-        return undefined
-    }
+    const invokeCreate = (payload: unknown): unknown => invokeShimGroupMethod(shimMj, 'core', 'createEntry', payload)
+    const invokeSearch = (payload: unknown): unknown => invokeShimGroupMethod(shimMj, 'search', 'searchEntries', payload)
 
     return async (arg: unknown): Promise<unknown> => {
-        const isPlainRec = (val: unknown): val is Record<string, unknown> =>
-            typeof val === 'object' && val !== null && !Array.isArray(val)
-        const argRec = isPlainRec(arg) ? arg : undefined
-        const argReadonly = argRec?.['readonly'] === true || argRec?.['read_only'] === true || argRec?.['readOnly'] === true
-        const argDryRun = argRec?.['dry_run'] === true || argRec?.['dryRun'] === true
-        const argUseTestDb = argRec?.['use_test_db'] === true || argRec?.['useTestDb'] === true
-        const scopeErr = validateNestedExecScope(
-            argRec,
-            pinnedWorkspace,
-            pinnedProjectNumber,
-            projectRegistryRaw
-        )
-        if (scopeErr !== null) {
-            return { success: false, error: scopeErr.error, code: 'VALIDATION_ERROR' }
-        }
-        const effectiveReadonly = readonlyMode === true || argReadonly
-        const effectiveDryRun = dryRunMode === true || argDryRun
-        const effectiveUseTestDb = useTestDbMode === true || argUseTestDb
+        const argRec = isPlainRecord(arg) ? arg : undefined
+        const scopeErr = validateNestedExecScope(argRec, pinnedWorkspace, pinnedProjectNumber, projectRegistryRaw)
+        if (scopeErr !== null) return { success: false, error: scopeErr.error, code: 'VALIDATION_ERROR' }
+
+        const effectiveReadonly = readonlyMode === true || argRec?.['readonly'] === true || argRec?.['read_only'] === true || argRec?.['readOnly'] === true
+        const effectiveDryRun = dryRunMode === true || argRec?.['dry_run'] === true || argRec?.['dryRun'] === true
+        const effectiveUseTestDb = useTestDbMode === true || argRec?.['use_test_db'] === true || argRec?.['useTestDb'] === true
 
         const nestedQuerySearch = readNestedQuerySearch(arg)
         if (nestedQuerySearch !== undefined) {
-            const searchPayload = effectiveUseTestDb
-                ? { ...nestedQuerySearch, use_test_db: true }
-                : nestedQuerySearch
-            return await Promise.resolve(invokeSearchEntries(searchPayload))
+            const searchPayload = effectiveUseTestDb ? { ...nestedQuerySearch, use_test_db: true } : nestedQuerySearch
+            return await Promise.resolve(invokeSearch(searchPayload))
         }
 
         const codeToExec = readExecutableCode(arg)
         if (codeToExec === null) {
-            return dispatchSynthesizedNestedEntry(
-                arg,
-                effectiveReadonly,
-                effectiveDryRun,
-                effectiveUseTestDb,
-                invokeCreateEntry
-            )
+            return dispatchSynthesizedNestedEntry(arg, effectiveReadonly, effectiveDryRun, effectiveUseTestDb, invokeCreate)
         }
-        if (codeToExec === '') {
-            return { success: false, error: 'No code was executed', code: 'VALIDATION_ERROR' }
-        }
+        if (codeToExec === '') return { success: false, error: 'No code was executed', code: 'VALIDATION_ERROR' }
+
         const natural = naturalLanguageEntry(codeToExec)
         if (natural !== undefined) {
-            return dispatchSynthesizedNestedEntry(
-                natural,
-                effectiveReadonly,
-                effectiveDryRun,
-                effectiveUseTestDb,
-                invokeCreateEntry
-            )
+            return dispatchSynthesizedNestedEntry(natural, effectiveReadonly, effectiveDryRun, effectiveUseTestDb, invokeCreate)
         }
         const validation = validateSandboxCode(codeToExec)
-        if (!validation.valid) {
-            return { success: false, error: validation.errors.join('; '), code: 'SECURITY_VIOLATION' }
+        if (!validation.valid) return { success: false, error: validation.errors.join('; '), code: 'SECURITY_VIOLATION' }
+        if (vmContextRef.current === undefined) return { success: false, error: 'No code was executed', code: 'VALIDATION_ERROR' }
+
+        const wrapped = `(async () => {\n${transformAutoReturn(codeToExec)}\n})()`
+        const isolation = buildIsolationOverrides(
+            extractNestedTimeoutMs(argRec, timeoutMs),
+            extractNestedContextRecord(argRec),
+            resolveNestedNarrowedScope(argRec, pinnedWorkspace, pinnedProjectNumber, projectRegistryRaw)
+        )
+        const escalatesMode =
+            (effectiveReadonly && readonlyMode !== true) ||
+            (effectiveDryRun && dryRunMode !== true) ||
+            (effectiveUseTestDb && useTestDbMode !== true)
+        if (escalatesMode || isolation !== undefined) {
+            return isolation !== undefined
+                ? runIsolatedNestedCode(wrapped, effectiveReadonly, effectiveDryRun, effectiveUseTestDb, isolation)
+                : runIsolatedNestedCode(wrapped, effectiveReadonly, effectiveDryRun, effectiveUseTestDb)
         }
-        if (vmContextRef.current !== undefined) {
-            const transformed = transformAutoReturn(codeToExec)
-            const wrapped = `(async () => {\n${transformed}\n})()`
-            if (
-                (effectiveReadonly && readonlyMode !== true) ||
-                (effectiveDryRun && dryRunMode !== true) ||
-                (effectiveUseTestDb && useTestDbMode !== true)
-            ) {
-                return runIsolatedNestedCode(
-                    wrapped,
-                    effectiveReadonly,
-                    effectiveDryRun,
-                    effectiveUseTestDb
-                )
-            }
-            return (await vm.runInContext(wrapped, vmContextRef.current, { timeout: timeoutMs })) as unknown
-        }
-        return { success: false, error: 'No code was executed', code: 'VALIDATION_ERROR' }
+        return (await vm.runInContext(wrapped, vmContextRef.current, { timeout: timeoutMs })) as unknown
     }
 }

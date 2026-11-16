@@ -140,13 +140,7 @@ type StoredBriefingConfig = NonNullable<
     Parameters<ConfigManager['updateConfig']>[0]['briefingConfig']
 >
 
-/** Validate and apply workspace_id / project_number scope updates without deep nesting. */
-function applyScopeConfigurationUpdate(
-    args: UpdateConfigurationArgs,
-    newBc: StoredBriefingConfig,
-    config: ToolHandlerConfig,
-    updatedKeys: string[]
-): boolean {
+function validateScopeConfigurationInputs(args: UpdateConfigurationArgs): string | undefined {
     if (args.workspace_id?.trim() === '*') {
         throw new ValidationError(
             "workspace_id '*' is a read-only wildcard and cannot be configured as a write workspace."
@@ -161,25 +155,23 @@ function applyScopeConfigurationUpdate(
     ) {
         throw new ValidationError('project_number must be a positive integer.')
     }
-    if (args.workspace_id === undefined && args.project_number === undefined) {
-        return false
-    }
+    const trimmedInputWs = args.workspace_id?.trim()
+    if (trimmedInputWs === undefined) return undefined
+    return trimmedInputWs.toLowerCase() === 'default' ? 'default' : trimmedInputWs
+}
 
-    const registry = newBc.projectRegistry ?? config.projectRegistry ?? loadProjectRegistryFromConfig()
+function resolveScopeWorkspaceAndProject(
+    args: UpdateConfigurationArgs,
+    normalizedInputWs: string | undefined,
+    registry: ToolHandlerConfig['projectRegistry'],
+    newBc: StoredBriefingConfig,
+    updatedKeys: string[]
+): { nextWorkspaceId: string | undefined; nextProjectNumber: number | undefined } {
     let nextWorkspaceId = newBc.defaultWorkspaceId
     let nextProjectNumber = newBc.defaultProjectNumber
 
-    const trimmedInputWs = args.workspace_id?.trim()
-    const normalizedInputWs =
-        trimmedInputWs !== undefined
-            ? trimmedInputWs.toLowerCase() === 'default'
-                ? 'default'
-                : trimmedInputWs
-            : undefined
-
     if (normalizedInputWs !== undefined && args.project_number !== undefined) {
-        const canonical =
-            findCanonicalRegistryKey(normalizedInputWs, registry) ?? normalizedInputWs
+        const canonical = findCanonicalRegistryKey(normalizedInputWs, registry) ?? normalizedInputWs
         const exactKey = exactRegistryKey(canonical, activeProjectRegistry(registry)) ?? canonical
         const regProjNum = registry?.[exactKey]?.project_number
         if (regProjNum !== undefined && args.project_number !== regProjNum) {
@@ -200,10 +192,7 @@ function applyScopeConfigurationUpdate(
                     `project_number ${String(args.project_number)} is ambiguous across multiple workspaces.`
                 )
             }
-            const matched = matches[0]
-            if (matched !== undefined) {
-                nextWorkspaceId = matched[0]
-            }
+            if (matches[0] !== undefined) nextWorkspaceId = matches[0][0]
         }
         updatedKeys.push('project_number')
     }
@@ -217,15 +206,38 @@ function applyScopeConfigurationUpdate(
             normalizedInputWs === 'default'
                 ? 'default'
                 : (exactRegistryKey(canonical, activeProjectRegistry(registry)) ?? canonical)
-        const regProjNum = registry?.[exactKey]?.project_number
         nextWorkspaceId = exactKey
         if (args.project_number === undefined) {
             // [INVARIANT] H3: switching to an unnumbered workspace must clear the stale default
             // project so later writes are not paired with the previous project's number.
-            nextProjectNumber = regProjNum
+            nextProjectNumber = registry?.[exactKey]?.project_number
         }
         updatedKeys.push('workspace_id')
     }
+
+    return { nextWorkspaceId, nextProjectNumber }
+}
+
+/** Validate and apply workspace_id / project_number scope updates without deep nesting. */
+function applyScopeConfigurationUpdate(
+    args: UpdateConfigurationArgs,
+    newBc: StoredBriefingConfig,
+    config: ToolHandlerConfig,
+    updatedKeys: string[]
+): boolean {
+    const normalizedInputWs = validateScopeConfigurationInputs(args)
+    if (args.workspace_id === undefined && args.project_number === undefined) {
+        return false
+    }
+
+    const registry = newBc.projectRegistry ?? config.projectRegistry ?? loadProjectRegistryFromConfig()
+    const { nextWorkspaceId, nextProjectNumber } = resolveScopeWorkspaceAndProject(
+        args,
+        normalizedInputWs,
+        registry,
+        newBc,
+        updatedKeys
+    )
 
     const paired = pairStoredScope(nextWorkspaceId, nextProjectNumber, activeProjectRegistry(registry))
     if (paired.workspaceId !== undefined) {

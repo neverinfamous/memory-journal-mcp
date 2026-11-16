@@ -231,6 +231,97 @@ function ensureToolCache(
     }
 }
 
+function applyToolHealingArgs(
+    name: string,
+    args: Record<string, unknown>,
+    config?: ToolHandlerConfig
+): { args: Record<string, unknown> } | { error: Record<string, unknown> } {
+    if (config?.agentHealing === false) return { args }
+    setActiveProjectRegistry(config?.projectRegistry)
+    try {
+        const intercept = applyArgInterceptions(name, [args])
+        if ('error' in intercept) return intercept
+        return { args: (intercept.args[0] as Record<string, unknown>) ?? args }
+    } finally {
+        setActiveProjectRegistry(undefined)
+    }
+}
+
+function assertToolFilterAllowsCall(
+    name: string,
+    tool: ToolDefinition,
+    filterConfig: ToolFilterConfig,
+    agentHealing: boolean | undefined
+): Record<string, unknown> | undefined {
+    const isPrimaryEnabled = filterConfig.enabledTools.has(name)
+    const isDummyAllowed = isDummyToolAllowedByFilter(name, filterConfig, agentHealing !== false)
+    const isCodeModeShortcut =
+        agentHealing !== false &&
+        filterConfig.enabledTools.has('mj_execute_code') &&
+        DUMMY_HEALING_TOOL_NAMES.has(name) &&
+        isDummyAllowed
+    if (!isPrimaryEnabled && !isDummyAllowed && !isCodeModeShortcut) {
+        return {
+            success: false,
+            error: `Tool '${name}' is disabled by the active --tool-filter configuration.`,
+            code: 'TOOL_DISABLED',
+            category: 'authorization',
+            suggestion: 'Update the active tool filter or use an enabled tool.',
+            recoverable: false,
+        }
+    }
+    if (
+        isPrimaryEnabled &&
+        !isToolVisibleForFilter(name, tool.annotations.readOnlyHint, filterConfig.raw)
+    ) {
+        return {
+            success: false,
+            error: `Tool '${name}' is disabled by the active --tool-filter configuration.`,
+            code: 'TOOL_DISABLED',
+            category: 'authorization',
+            suggestion: 'Update the active tool filter or use an enabled tool.',
+            recoverable: false,
+        }
+    }
+    return undefined
+}
+
+async function executeToolWithProgressContext(
+    name: string,
+    args: Record<string, unknown>,
+    baseContext: Omit<ToolContext, 'auth' | 'progress'>,
+    progress: ProgressContext
+): Promise<unknown> {
+    const authCtx = getAuthContext()
+    const activeAuth: ToolContext['auth'] =
+        authCtx?.claims !== undefined
+            ? {
+                  ...(authCtx.claims.sub !== undefined ? { sub: authCtx.claims.sub } : {}),
+                  scopes: authCtx.claims.scopes,
+              }
+            : undefined
+    const context: ToolContext = {
+        ...baseContext,
+        progress,
+        ...(activeAuth !== undefined ? { auth: activeAuth } : {}),
+    }
+    const freshTool = getAllToolDefinitions(context).find((t) => t.name === name)
+    if (!freshTool) return undefined
+    const wrappedHandler = wrapToolHandlerWithInterceptors(
+        freshTool.name,
+        freshTool.handler,
+        baseContext.config
+    )
+    const maintenanceManager = baseContext.config?.runtime?.maintenanceManager
+    if (!maintenanceManager) return undefined
+    const freshResult = await maintenanceManager.withActiveJob(
+        () => wrappedHandler(args),
+        name === 'restore_backup'
+    )
+    injectProjectNames(freshResult, baseContext.config?.projectRegistry)
+    return injectTokenEstimate(freshResult)
+}
+
 /**
  * Call a tool by name
  */
@@ -246,20 +337,9 @@ export async function callTool(
     teamVectorManager?: VectorSearchManager
 ): Promise<unknown> {
     ensureToolCache(db, vectorManager, github, config, teamDb, teamVectorManager)
-
-    if (config?.agentHealing !== false) {
-        setActiveProjectRegistry(config?.projectRegistry)
-        try {
-            const intercept = applyArgInterceptions(name, [args])
-            if ('error' in intercept) {
-                return intercept.error
-            }
-            const cleanArgs = (intercept.args[0] as Record<string, unknown>) ?? args
-            args = cleanArgs
-        } finally {
-            setActiveProjectRegistry(undefined)
-        }
-    }
+    const healed = applyToolHealingArgs(name, args, config)
+    if ('error' in healed) return healed.error
+    args = healed.args
 
     const mapToUse = config?.runtime?.toolMapCache ?? toolMapCache ?? EMPTY_TOOL_MAP
     if (
@@ -273,94 +353,36 @@ export async function callTool(
         name = 'read_resource'
     }
     const tool = mapToUse.get(name)
-
-    if (!tool) {
-        throwToolNotFoundError(name)
-    }
+    if (!tool) throwToolNotFoundError(name)
 
     if (config?.filterConfig) {
-        const isPrimaryEnabled = config.filterConfig.enabledTools.has(name)
-        const isDummyAllowed = isDummyToolAllowedByFilter(
+        const disabled = assertToolFilterAllowsCall(
             name,
+            tool,
             config.filterConfig,
-            config.agentHealing !== false
+            config.agentHealing
         )
-        const isCodeModeShortcut =
-            config.agentHealing !== false &&
-            config.filterConfig.enabledTools.has('mj_execute_code') &&
-            DUMMY_HEALING_TOOL_NAMES.has(name) &&
-            isDummyAllowed
-        if (!isPrimaryEnabled && !isDummyAllowed && !isCodeModeShortcut) {
-            return {
-                success: false,
-                error: `Tool '${name}' is disabled by the active --tool-filter configuration.`,
-                code: 'TOOL_DISABLED',
-                category: 'authorization',
-                suggestion: 'Update the active tool filter or use an enabled tool.',
-                recoverable: false,
-            }
-        }
-        if (
-            isPrimaryEnabled &&
-            !isToolVisibleForFilter(name, tool.annotations.readOnlyHint, config.filterConfig.raw)
-        ) {
-            return {
-                success: false,
-                error: `Tool '${name}' is disabled by the active --tool-filter configuration.`,
-                code: 'TOOL_DISABLED',
-                category: 'authorization',
-                suggestion: 'Update the active tool filter or use an enabled tool.',
-                recoverable: false,
-            }
-        }
+        if (disabled !== undefined) return disabled
     }
-
     if (!config?.runtime?.maintenanceManager) {
         throw new ConfigurationError(
             'ServerRuntime is logically required for secure tool execution. Please initialize the server correctly.'
         )
     }
-
     try {
-        const auditLogger = config?.runtime?.auditLogger
-        enforceAccessBoundary(name, 'tool', tool.capabilities, auditLogger)
+        enforceAccessBoundary(name, 'tool', tool.capabilities, config.runtime.auditLogger)
     } catch (error) {
         return Promise.reject(error instanceof Error ? error : new Error(String(error)))
     }
 
     if (progress) {
-        const authCtx = getAuthContext()
-        const activeAuth: ToolContext['auth'] =
-            authCtx?.claims !== undefined
-                ? {
-                      ...(authCtx.claims.sub !== undefined ? { sub: authCtx.claims.sub } : {}),
-                      scopes: authCtx.claims.scopes,
-                  }
-                : undefined
-        const context: ToolContext = {
-            db,
-            teamDb,
-            vectorManager,
-            teamVectorManager,
-            github,
-            config,
-            progress,
-            ...(activeAuth !== undefined ? { auth: activeAuth } : {}),
-        }
-        const freshTool = getAllToolDefinitions(context).find((t) => t.name === name)
-        if (freshTool) {
-            const wrappedHandler = wrapToolHandlerWithInterceptors(
-                freshTool.name,
-                freshTool.handler,
-                config
-            )
-            const freshResult = await config.runtime.maintenanceManager.withActiveJob(
-                () => wrappedHandler(args),
-                name === 'restore_backup'
-            )
-            injectProjectNames(freshResult, config?.projectRegistry)
-            return injectTokenEstimate(freshResult)
-        }
+        const freshResult = await executeToolWithProgressContext(
+            name,
+            args,
+            { db, teamDb, vectorManager, teamVectorManager, github, config },
+            progress
+        )
+        if (freshResult !== undefined) return freshResult
     }
 
     const result = await config.runtime.maintenanceManager.withActiveJob(

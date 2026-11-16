@@ -22,7 +22,123 @@ import type {
 } from '../handlers/resources/shared.js'
 import { ASSISTANT_FOCUSED } from '../utils/resource-annotations.js'
 import type { AuditLogger } from './audit-logger.js'
+import type { AuditEntry } from './types.js'
 import { extractAuditScopeFromUri, matchesAuditFilters } from './audit-query-helpers.js'
+
+async function fetchAuditEntries(auditLogger: AuditLogger, uri: string): Promise<AuditEntry[]> {
+    const scopeFilter = extractAuditScopeFromUri(uri)
+    const hasScopeFilter =
+        scopeFilter.workspaceId !== undefined || scopeFilter.projectNumber !== undefined
+    if (!hasScopeFilter) {
+        return auditLogger.recent(50)
+    }
+    const searchFilter = {
+        ...(scopeFilter.workspaceId !== undefined
+            ? { workspace_id: scopeFilter.workspaceId }
+            : {}),
+        ...(scopeFilter.projectNumber !== undefined
+            ? { project_number: scopeFilter.projectNumber }
+            : {}),
+        limit: 50,
+    }
+    if (typeof auditLogger.search === 'function') {
+        return auditLogger.search(searchFilter)
+    }
+    return (await auditLogger.recent(50)).filter((entry) =>
+        matchesAuditFilters(entry, searchFilter)
+    )
+}
+
+function computeSessionSummary(entries: AuditEntry[]): {
+    totalTokens: number
+    errorCount: number
+    totalDuration: number
+} {
+    let totalTokens = 0
+    let errorCount = 0
+    let totalDuration = 0
+    for (const e of entries) {
+        totalTokens += e.tokenEstimate ?? 0
+        totalDuration += e.durationMs
+        if (!e.success) errorCount++
+    }
+    return { totalTokens, errorCount, totalDuration }
+}
+
+function formatAuditEntryYaml(e: AuditEntry): string {
+    const parts: string[] = [
+        `- timestamp: ${e.timestamp}`,
+        `  tool: ${JSON.stringify(e.tool)}`,
+        `  scope: ${e.scope}`,
+        `  category: ${e.category}`,
+        `  duration_ms: ${String(e.durationMs)}`,
+        `  success: ${String(e.success)}`,
+    ]
+    if (e.error) {
+        parts.push(`  error: ${JSON.stringify(e.error)}`)
+    }
+    if (e.workspaceId !== undefined) {
+        parts.push(`  workspace_id: ${JSON.stringify(e.workspaceId)}`)
+    }
+    if (e.projectNumber !== undefined) {
+        parts.push(`  project_number: ${String(e.projectNumber)}`)
+    }
+    if (e.tokenEstimate !== undefined) {
+        parts.push(`  token_estimate: ${String(e.tokenEstimate)}`)
+    }
+    if (e.args !== undefined) {
+        parts.push(`  args: ${JSON.stringify(e.args)}`)
+    }
+    return parts.join('\n')
+}
+
+async function handleAuditResourceRead(
+    uri: string,
+    getLogger: () => AuditLogger | null
+): Promise<ResourceResult> {
+    const lastModified = new Date().toISOString()
+    const auditLogger = getLogger()
+
+    if (!auditLogger) {
+        return {
+            data:
+                'audit: not configured\n' +
+                'hint: Set AUDIT_LOG_PATH env var or --audit-log CLI flag to enable audit logging.',
+            annotations: { lastModified },
+        }
+    }
+
+    const entries = await fetchAuditEntries(auditLogger, uri)
+    if (entries.length === 0) {
+        const note =
+            typeof auditLogger.isStderrOnly === 'function' && auditLogger.isStderrOnly()
+                ? 'note: AUDIT_LOG_PATH=stderr is write-only; historical telemetry events are emitted to stderr rather than buffered on disk.'
+                : 'note: No write/admin operations have been audited yet.'
+        return {
+            data: `audit_log: ${auditLogger.config.logPath}\nentries: 0\n${note}`,
+            annotations: { lastModified },
+        }
+    }
+
+    const { totalTokens, errorCount, totalDuration } = computeSessionSummary(entries)
+    const formattedEntries = entries.map(formatAuditEntryYaml).join('\n')
+    const text =
+        `audit_log: ${auditLogger.config.logPath}\n` +
+        `entries_shown: ${String(entries.length)}\n` +
+        `as_of: ${lastModified}\n` +
+        `session_summary:\n` +
+        `  total_tokens: ${String(totalTokens)}\n` +
+        `  total_duration_ms: ${String(totalDuration)}\n` +
+        `  error_count: ${String(errorCount)}\n` +
+        `  dropped_count: ${String(auditLogger.droppedCount)}\n` +
+        `  redact_mode: ${String(auditLogger.config.redact)}\n\n` +
+        formattedEntries
+
+    return {
+        data: text,
+        annotations: { lastModified },
+    }
+}
 
 // ============================================================================
 // Resource Factory
@@ -52,106 +168,7 @@ export function getAuditResourceDef(getLogger: () => AuditLogger | null): Intern
         capabilities: {
             requiresAuditScope: true,
         },
-        handler: async (uri: string, _context: ResourceContext): Promise<ResourceResult> => {
-            const lastModified = new Date().toISOString()
-            const auditLogger = getLogger()
-
-            if (!auditLogger) {
-                return {
-                    data:
-                        'audit: not configured\n' +
-                        'hint: Set AUDIT_LOG_PATH env var or --audit-log CLI flag to enable audit logging.',
-                    annotations: { lastModified },
-                }
-            }
-
-            const scopeFilter = extractAuditScopeFromUri(uri)
-            const hasScopeFilter =
-                scopeFilter.workspaceId !== undefined || scopeFilter.projectNumber !== undefined
-            const searchFilter = {
-                ...(scopeFilter.workspaceId !== undefined
-                    ? { workspace_id: scopeFilter.workspaceId }
-                    : {}),
-                ...(scopeFilter.projectNumber !== undefined
-                    ? { project_number: scopeFilter.projectNumber }
-                    : {}),
-                limit: 50,
-            }
-            const entries = hasScopeFilter
-                ? typeof auditLogger.search === 'function'
-                    ? await auditLogger.search(searchFilter)
-                    : (await auditLogger.recent(50)).filter((entry) =>
-                          matchesAuditFilters(entry, searchFilter)
-                      )
-                : await auditLogger.recent(50)
-
-            if (entries.length === 0) {
-                const note =
-                    typeof auditLogger.isStderrOnly === 'function' && auditLogger.isStderrOnly()
-                        ? 'note: AUDIT_LOG_PATH=stderr is write-only; historical telemetry events are emitted to stderr rather than buffered on disk.'
-                        : 'note: No write/admin operations have been audited yet.'
-                return {
-                    data: `audit_log: ${auditLogger.config.logPath}\nentries: 0\n${note}`,
-                    annotations: { lastModified },
-                }
-            }
-
-            // Compute session summary
-            let totalTokens = 0
-            let errorCount = 0
-            let totalDuration = 0
-            for (const e of entries) {
-                totalTokens += e.tokenEstimate ?? 0
-                totalDuration += e.durationMs
-                if (!e.success) errorCount++
-            }
-
-            // Format each entry as readable YAML-style text
-            const formattedEntries = entries
-                .map((e) => {
-                    const parts: string[] = [
-                        `- timestamp: ${e.timestamp}`,
-                        `  tool: ${JSON.stringify(e.tool)}`,
-                        `  scope: ${e.scope}`,
-                        `  category: ${e.category}`,
-                        `  duration_ms: ${String(e.durationMs)}`,
-                        `  success: ${String(e.success)}`,
-                    ]
-                    if (e.error) {
-                        parts.push(`  error: ${JSON.stringify(e.error)}`)
-                    }
-                    if (e.workspaceId !== undefined) {
-                        parts.push(`  workspace_id: ${JSON.stringify(e.workspaceId)}`)
-                    }
-                    if (e.projectNumber !== undefined) {
-                        parts.push(`  project_number: ${String(e.projectNumber)}`)
-                    }
-                    if (e.tokenEstimate !== undefined) {
-                        parts.push(`  token_estimate: ${String(e.tokenEstimate)}`)
-                    }
-                    if (e.args !== undefined) {
-                        parts.push(`  args: ${JSON.stringify(e.args)}`)
-                    }
-                    return parts.join('\n')
-                })
-                .join('\n')
-
-            const text =
-                `audit_log: ${auditLogger.config.logPath}\n` +
-                `entries_shown: ${String(entries.length)}\n` +
-                `as_of: ${lastModified}\n` +
-                `session_summary:\n` +
-                `  total_tokens: ${String(totalTokens)}\n` +
-                `  total_duration_ms: ${String(totalDuration)}\n` +
-                `  error_count: ${String(errorCount)}\n` +
-                `  dropped_count: ${String(auditLogger.droppedCount)}\n` +
-                `  redact_mode: ${String(auditLogger.config.redact)}\n\n` +
-                formattedEntries
-
-            return {
-                data: text,
-                annotations: { lastModified },
-            }
-        },
+        handler: (uri: string, _context: ResourceContext): Promise<ResourceResult> =>
+            handleAuditResourceRead(uri, getLogger),
     }
 }

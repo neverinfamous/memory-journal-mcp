@@ -175,7 +175,7 @@ function buildKanbanSummary(
     >
 ): Record<string, number> | null {
     if (kanbanResult.status === 'fulfilled' && kanbanResult.value) {
-        const summary: Record<string, number> = {}
+        const summary = Object.create(null) as Record<string, number>
         for (const col of kanbanResult.value.columns) {
             summary[col.status] = col.items.length
         }

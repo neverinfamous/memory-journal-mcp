@@ -60,48 +60,30 @@ export function validateCliUpdateArgsAndTarget(
     return { entryId, version, rawWorkspaceOpt, trimmedTargetWs }
 }
 
-export function assertCliUpdateWorkspaceOwnership(
-    entryId: number,
-    existingEntry: { workspaceId?: string } | null | undefined,
+function resolveExplicitSourceWorkspace(
     rawWorkspaceOpt: string | undefined,
     payload: EntryPayload,
     trimmedTargetWs: string | undefined,
-    config: ToolHandlerConfig,
     metaSourceWs?: string
+): string | undefined {
+    if (rawWorkspaceOpt !== undefined && rawWorkspaceOpt.trim() !== '') {
+        return rawWorkspaceOpt.trim()
+    }
+    if (metaSourceWs !== undefined && metaSourceWs !== '') {
+        return metaSourceWs
+    }
+    if (payload.hasExplicitWorkspace === true && trimmedTargetWs === undefined) {
+        return payload.workspaceId
+    }
+    return undefined
+}
+
+function assertImplicitUpdateWorkspaceMatch(
+    entryId: number,
+    existingEntry: { workspaceId?: string } | null | undefined,
+    trimmedTargetWs: string | undefined,
+    config: ToolHandlerConfig
 ): void {
-    if (payload.workspaceId?.trim() === '*') {
-        throw new ValidationError(
-            "workspace_id '*' cannot be used to update an entry. Pass a concrete workspace.",
-            { workspaceId: '*' }
-        )
-    }
-
-    const explicitSourceWs =
-        rawWorkspaceOpt !== undefined && rawWorkspaceOpt.trim() !== ''
-            ? rawWorkspaceOpt.trim()
-            : metaSourceWs !== undefined && metaSourceWs !== ''
-              ? metaSourceWs
-              : payload.hasExplicitWorkspace === true && trimmedTargetWs === undefined
-                ? payload.workspaceId
-                : undefined
-
-    if (explicitSourceWs !== undefined) {
-        if (
-            existingEntry?.workspaceId !== undefined &&
-            existingEntry.workspaceId.toLowerCase() !== explicitSourceWs.toLowerCase()
-        ) {
-            throw new ValidationError(
-                `Entry #${String(entryId)} belongs to workspace '${existingEntry.workspaceId}', not '${explicitSourceWs}'. Pass --workspace '${existingEntry.workspaceId}' --target-workspace '${trimmedTargetWs ?? explicitSourceWs}' explicitly to reassign it.`,
-                {
-                    entryId,
-                    entryWorkspaceId: existingEntry.workspaceId,
-                    requestedWorkspaceId: explicitSourceWs,
-                }
-            )
-        }
-        return
-    }
-
     const implicitWorkspace = resolveWorkspaceId(undefined, undefined, {
         runtime: null,
         ...(config.defaultWorkspaceId !== undefined
@@ -140,6 +122,48 @@ export function assertCliUpdateWorkspaceOwnership(
             }
         )
     }
+}
+
+export function assertCliUpdateWorkspaceOwnership(
+    entryId: number,
+    existingEntry: { workspaceId?: string } | null | undefined,
+    rawWorkspaceOpt: string | undefined,
+    payload: EntryPayload,
+    trimmedTargetWs: string | undefined,
+    config: ToolHandlerConfig,
+    metaSourceWs?: string
+): void {
+    if (payload.workspaceId?.trim() === '*') {
+        throw new ValidationError(
+            "workspace_id '*' cannot be used to update an entry. Pass a concrete workspace.",
+            { workspaceId: '*' }
+        )
+    }
+
+    const explicitSourceWs = resolveExplicitSourceWorkspace(
+        rawWorkspaceOpt,
+        payload,
+        trimmedTargetWs,
+        metaSourceWs
+    )
+    if (explicitSourceWs !== undefined) {
+        if (
+            existingEntry?.workspaceId !== undefined &&
+            existingEntry.workspaceId.toLowerCase() !== explicitSourceWs.toLowerCase()
+        ) {
+            throw new ValidationError(
+                `Entry #${String(entryId)} belongs to workspace '${existingEntry.workspaceId}', not '${explicitSourceWs}'. Pass --workspace '${existingEntry.workspaceId}' --target-workspace '${trimmedTargetWs ?? explicitSourceWs}' explicitly to reassign it.`,
+                {
+                    entryId,
+                    entryWorkspaceId: existingEntry.workspaceId,
+                    requestedWorkspaceId: explicitSourceWs,
+                }
+            )
+        }
+        return
+    }
+
+    assertImplicitUpdateWorkspaceMatch(entryId, existingEntry, trimmedTargetWs, config)
 }
 
 export type CliEntryUpdateInput = Omit<Partial<CreateEntryInput>, 'projectNumber'> & {

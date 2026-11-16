@@ -14,6 +14,113 @@ import {
     ImportExternalOutputSchema,
 } from './schemas.js'
 
+async function readAndConvertExternalFiles(
+    input: ReturnType<typeof ImportExternalSchema.parse>,
+    allowedRoots: string[]
+): Promise<{
+    parsedFiles: ParsedFile[]
+    errors: { file: string; error: string }[]
+    emptySkipped: number
+}> {
+    const fs = await import('node:fs/promises')
+    const path = await import('node:path')
+    const { constants } = await import('node:fs')
+    const { assertSafeDirectoryPath, assertSafeFilePath } = await import(
+        '../../../utils/security-utils.js'
+    )
+
+    assertSafeDirectoryPath(input.source_dir, allowedRoots)
+    const allMdFiles: string[] = []
+    const dir = await fs.opendir(input.source_dir)
+    for await (const dirent of dir) {
+        if (dirent.isFile() && dirent.name.endsWith('.md')) {
+            allMdFiles.push(dirent.name)
+        }
+    }
+    allMdFiles.sort((a, b) => a.localeCompare(b))
+    const mdFiles = allMdFiles.slice(0, input.limit)
+
+    const parsedFiles: ParsedFile[] = []
+    const errors: { file: string; error: string }[] = []
+    let emptySkipped = 0
+
+    for (const filename of mdFiles) {
+        let handle
+        try {
+            const filepath = path.join(input.source_dir, filename)
+            assertSafeFilePath(filepath, allowedRoots)
+            handle = await fs.open(filepath, constants.O_RDONLY | constants.O_NOFOLLOW)
+            const stats = await handle.stat()
+            if (stats.size > MAX_IMPORT_FILE_BYTES) {
+                throw new Error(
+                    `File exceeds maximum size limit of ${String(MAX_IMPORT_FILE_BYTES / (1024 * 1024))}MB (${stats.size} bytes)`
+                )
+            }
+            const content = await handle.readFile('utf-8')
+            const converted = convertFile(content, filename, input.source_format, input.default_entry_type)
+            if (!converted.body.trim()) {
+                emptySkipped++
+                continue
+            }
+            parsedFiles.push({ filename, body: converted.body, metadata: converted.metadata })
+        } catch (err) {
+            errors.push({ file: filename, error: err instanceof Error ? err.message : String(err) })
+        } finally {
+            if (handle) await handle.close()
+        }
+    }
+    return { parsedFiles, errors, emptySkipped }
+}
+
+async function executeImportExternal(
+    params: unknown,
+    context: ToolContext
+): Promise<Record<string, unknown>> {
+    const { db, progress } = context
+    const input = ImportExternalSchema.parse(params)
+    const rejectedExternal = wildcardWriteRejection(input.workspace_id)
+    if (rejectedExternal !== undefined) return rejectedExternal
+    const { wsId, effectiveProjectNum } = resolveImportScope(input, context.config)
+    const allowedRoots = context.config?.allowedIoRoots ?? []
+
+    await sendProgress(progress, 0, 3, 'Reading files...')
+    await sendProgress(progress, 1, 3, 'Converting external formats...')
+    const { parsedFiles, errors, emptySkipped } = await readAndConvertExternalFiles(input, allowedRoots)
+    if (effectiveProjectNum !== undefined && effectiveProjectNum <= 0) {
+        throw new ValidationError('project_number must be a positive integer')
+    }
+
+    await sendProgress(progress, 2, 3, 'Importing entries...')
+    const result = await processImportBatch(
+        parsedFiles,
+        db,
+        {
+            dry_run: input.dry_run,
+            ...(wsId !== undefined ? { workspaceId: wsId } : {}),
+            ...(effectiveProjectNum !== undefined ? { project_number: effectiveProjectNum } : {}),
+            ...(context.config !== undefined ? { config: context.config } : {}),
+        },
+        context.vectorManager
+    )
+    result.skipped += emptySkipped
+
+    if (errors.length > 0) {
+        result.success = false
+        result.errors.push(...errors)
+    }
+    if (!result.success && result.errors.length > 0) {
+        const successCount = result.created + result.updated + result.skipped
+        const total = successCount + result.errors.length
+        throw new AggregateMcpError(
+            `Importing ${total} entries: ${successCount} succeeded, ${result.errors.length} failed.`,
+            result.errors.map((e) => ({ message: e.error, file: e.file })),
+            { result }
+        )
+    }
+    await sendProgress(progress, 3, 3, 'Import complete')
+    return result as unknown as Record<string, unknown>
+}
+
 export function getIoImportTools(context: ToolContext): ToolDefinition[] {
     const { db, progress } = context
     return [
@@ -110,109 +217,7 @@ export function getIoImportTools(context: ToolContext): ToolDefinition[] {
             },
             handler: async (params: unknown) => {
                 try {
-                    const input = ImportExternalSchema.parse(params)
-                    const rejectedExternal = wildcardWriteRejection(input.workspace_id)
-                    if (rejectedExternal !== undefined) return rejectedExternal
-                    const { wsId, effectiveProjectNum } = resolveImportScope(input, context.config)
-
-                    // Determine allowed roots
-                    const allowedRoots = context.config?.allowedIoRoots ?? []
-
-                    await sendProgress(progress, 0, 3, 'Reading files...')
-
-                    const fs = await import('node:fs/promises')
-                    const path = await import('node:path')
-                    const { constants } = await import('node:fs')
-                    const { assertSafeDirectoryPath, assertSafeFilePath } = await import('../../../utils/security-utils.js')
-
-                    assertSafeDirectoryPath(input.source_dir, allowedRoots)
-
-                    const allMdFiles: string[] = []
-                    const dir = await fs.opendir(input.source_dir)
-                    for await (const dirent of dir) {
-                        if (dirent.isFile() && dirent.name.endsWith('.md')) {
-                            allMdFiles.push(dirent.name)
-                        }
-                    }
-                    allMdFiles.sort((a, b) => a.localeCompare(b))
-                    const mdFiles = allMdFiles.slice(0, input.limit)
-
-                    await sendProgress(progress, 1, 3, 'Converting external formats...')
-
-                    const parsedFiles: ParsedFile[] = []
-                    const errors: { file: string; error: string }[] = []
-                    let emptySkipped = 0
-
-                    for (const filename of mdFiles) {
-                        let handle
-                        try {
-                            const filepath = path.join(input.source_dir, filename)
-                            assertSafeFilePath(filepath, allowedRoots)
-
-                            handle = await fs.open(filepath, constants.O_RDONLY | constants.O_NOFOLLOW)
-                            const stats = await handle.stat()
-                            if (stats.size > MAX_IMPORT_FILE_BYTES) {
-                                throw new Error(`File exceeds maximum size limit of ${String(MAX_IMPORT_FILE_BYTES / (1024 * 1024))}MB (${stats.size} bytes)`)
-                            }
-
-                            const content = await handle.readFile('utf-8')
-                            const converted = convertFile(content, filename, input.source_format, input.default_entry_type)
-
-                            if (!converted.body.trim()) {
-                                emptySkipped++
-                                continue
-                            }
-
-                            parsedFiles.push({
-                                filename,
-                                body: converted.body,
-                                metadata: converted.metadata,
-                            })
-                        } catch (err) {
-                            errors.push({
-                                file: filename,
-                                error: err instanceof Error ? err.message : String(err),
-                            })
-                        } finally {
-                            if (handle) {
-                                await handle.close()
-                            }
-                        }
-                    }
-
-                    if (effectiveProjectNum !== undefined && effectiveProjectNum <= 0) {
-                        throw new ValidationError('project_number must be a positive integer')
-                    }
-
-                    await sendProgress(progress, 2, 3, 'Importing entries...')
-
-                    const result = await processImportBatch(parsedFiles, db, {
-                        dry_run: input.dry_run,
-                        ...(wsId !== undefined ? { workspaceId: wsId } : {}),
-                        ...(effectiveProjectNum !== undefined ? { project_number: effectiveProjectNum } : {}),
-                        ...(context.config !== undefined ? { config: context.config } : {}),
-                    }, context.vectorManager)
-                    result.skipped += emptySkipped
-
-                    // Merge conversion phase errors
-                    if (errors.length > 0) {
-                        result.success = false
-                        result.errors.push(...errors)
-                    }
-
-                    if (!result.success && result.errors.length > 0) {
-                        const successCount = result.created + result.updated + result.skipped
-                        const total = successCount + result.errors.length
-                        const message = `Importing ${total} entries: ${successCount} succeeded, ${result.errors.length} failed.`
-                        throw new AggregateMcpError(
-                            message,
-                            result.errors.map(e => ({ message: e.error, file: e.file })),
-                            { result }
-                        )
-                    }
-
-                    await sendProgress(progress, 3, 3, 'Import complete')
-                    return result
+                    return await executeImportExternal(params, context)
                 } catch (err) {
                     return formatHandlerError(err)
                 }

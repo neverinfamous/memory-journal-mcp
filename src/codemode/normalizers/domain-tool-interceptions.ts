@@ -247,20 +247,19 @@ function applyIoInterceptions(
     return { obj }
 }
 
-function applyMiscToolInterceptions(
+function applyEntryLinkRecentTagInterceptions(
     methodName: string,
     args: unknown[]
 ): { args: unknown[] } | { error: Record<string, unknown> } {
-    if (['link_entries', 'linkEntries', 'team_link_entries', 'teamLinkEntries'].includes(methodName) && args.length === 1 && isRecord(args[0])) {
+    if (args.length !== 1 || !isRecord(args[0])) return { args }
+    if (['link_entries', 'linkEntries', 'team_link_entries', 'teamLinkEntries'].includes(methodName)) {
         const obj = { ...args[0] }
         args[0] = obj
         remapKeys(obj, ['source', 'from', 'source_id', 'from_id'], 'from_entry_id')
         remapKeys(obj, ['target', 'to', 'target_id', 'to_id', 'dest'], 'to_entry_id')
         remapKeys(obj, ['type', 'rel'], 'relationship_type')
         remapKeys(obj, ['notes', 'message', 'text'], 'description')
-    }
-
-    if (['get_recent_entries', 'getRecentEntries', 'team_get_recent', 'teamGetRecent'].includes(methodName) && args.length === 1 && isRecord(args[0])) {
+    } else if (['get_recent_entries', 'getRecentEntries', 'team_get_recent', 'teamGetRecent'].includes(methodName)) {
         const obj = { ...args[0] }
         args[0] = obj
         healIncludeArchivedField(obj)
@@ -271,26 +270,29 @@ function applyMiscToolInterceptions(
             )
         }
         remapKeys(obj, ['keep'], 'limit')
-    }
-
-    if (['list_tags', 'listTags', 'team_list_tags', 'teamListTags'].includes(methodName) && args.length === 1 && isRecord(args[0])) {
+    } else if (['list_tags', 'listTags', 'team_list_tags', 'teamListTags'].includes(methodName)) {
         const obj = { ...args[0] }
         args[0] = obj
         if (hasAnyKey(obj, ['q', 'query', 'search', 'path', 'mode', 'keep'])) {
             return validationErr(`${methodName} does not support search queries, path, mode, or keep. It returns all tags.`, 'Remove these parameters.')
         }
     }
+    return { args }
+}
 
-    if (['test_simple', 'testSimple', 'test_error_handling', 'testErrorHandling'].includes(methodName) && args.length === 1 && isRecord(args[0])) {
+function applyAuditMergeTestGetByIdInterceptions(
+    methodName: string,
+    args: unknown[]
+): { args: unknown[] } | { error: Record<string, unknown> } {
+    if (args.length !== 1 || !isRecord(args[0])) return { args }
+    if (['test_simple', 'testSimple', 'test_error_handling', 'testErrorHandling'].includes(methodName)) {
         const obj = { ...args[0] }
         args[0] = obj
         remapKeys(obj, ['text', 'description'], 'message')
         if (methodName === 'test_error_handling' || methodName === 'testErrorHandling') {
             remapKeys(obj, ['type'], 'error_type')
         }
-    }
-
-    if (['merge_tags', 'mergeTags', 'team_merge_tags', 'teamMergeTags'].includes(methodName) && args.length === 1 && isRecord(args[0])) {
+    } else if (['merge_tags', 'mergeTags', 'team_merge_tags', 'teamMergeTags'].includes(methodName)) {
         const obj = { ...args[0] }
         args[0] = obj
         if (obj['source_tags'] !== undefined && obj['source_tag'] === undefined) {
@@ -305,9 +307,7 @@ function applyMiscToolInterceptions(
                 'Provide a single tag string for source_tag. To merge multiple tags, call this tool multiple times.'
             )
         }
-    }
-
-    if ((methodName === 'search_audit_log' || methodName === 'searchAuditLog') && args.length === 1 && isRecord(args[0])) {
+    } else if (methodName === 'search_audit_log' || methodName === 'searchAuditLog') {
         const obj = { ...args[0] }
         args[0] = obj
         remapKeys(obj, ['keep'], 'limit')
@@ -318,21 +318,10 @@ function applyMiscToolInterceptions(
             const parsed = parseInt(obj['limit'], 10)
             if (!isNaN(parsed)) obj['limit'] = parsed
         }
-    }
-
-    if (
-        ['get_entry_by_id', 'getEntryById', 'team_get_entry_by_id', 'teamGetEntryById'].includes(methodName) &&
-        args.length === 1 &&
-        isRecord(args[0])
-    ) {
+    } else if (['get_entry_by_id', 'getEntryById', 'team_get_entry_by_id', 'teamGetEntryById'].includes(methodName)) {
         const obj = { ...args[0] }
         args[0] = obj
-        if (
-            obj['entry_id'] === undefined &&
-            obj['entryId'] === undefined &&
-            obj['id'] === undefined &&
-            typeof obj['uri'] === 'string'
-        ) {
+        if (obj['entry_id'] === undefined && obj['entryId'] === undefined && obj['id'] === undefined && typeof obj['uri'] === 'string') {
             const match = /^memory:\/\/(?:entries|entry)\/(\d+)$/i.exec(obj['uri'].trim())
             if (match?.[1] !== undefined) {
                 obj['entry_id'] = Number(match[1])
@@ -340,29 +329,30 @@ function applyMiscToolInterceptions(
             }
         }
     }
+    return { args }
+}
 
+function applyTeamMemberAndAliasInterceptions(
+    methodName: string,
+    args: unknown[]
+): { args: unknown[] } {
+    if (args.length !== 1 || !isRecord(args[0])) return { args }
     if (
         [
             'team_add_member', 'teamAddMember', 'team_update_member_role', 'teamUpdateMemberRole',
             'team_remove_member', 'teamRemoveMember', 'team_get_member', 'teamGetMember',
-        ].includes(methodName) &&
-        args.length === 1 &&
-        isRecord(args[0])
+        ].includes(methodName)
     ) {
         const obj = { ...args[0] }
         args[0] = obj
         remapKeys(obj, ['path', 'target', 'user', 'name', 'account', 'username', 'member'], 'author')
         remapKeys(obj, ['keep', 'mode', 'type', 'level', 'permission'], 'role')
-    }
-
-    if (
+    } else if (
         [
             'team_add_author_alias', 'teamAddAuthorAlias', 'team_remove_author_alias', 'teamRemoveAuthorAlias',
             'team_list_author_aliases', 'teamListAuthorAliases', 'team_resolve_author', 'teamResolveAuthor',
             'team_consolidate_authors', 'teamConsolidateAuthors',
-        ].includes(methodName) &&
-        args.length === 1 &&
-        isRecord(args[0])
+        ].includes(methodName)
     ) {
         const obj = { ...args[0] }
         args[0] = obj
@@ -382,6 +372,16 @@ function applyMiscToolInterceptions(
             obj['canonical_author'] = obj['author']
         }
     }
-
     return { args }
+}
+
+function applyMiscToolInterceptions(
+    methodName: string,
+    args: unknown[]
+): { args: unknown[] } | { error: Record<string, unknown> } {
+    const firstRes = applyEntryLinkRecentTagInterceptions(methodName, args)
+    if ('error' in firstRes) return firstRes
+    const secondRes = applyAuditMergeTestGetByIdInterceptions(methodName, firstRes.args)
+    if ('error' in secondRes) return secondRes
+    return applyTeamMemberAndAliasInterceptions(methodName, secondRes.args)
 }

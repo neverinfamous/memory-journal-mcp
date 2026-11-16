@@ -200,42 +200,22 @@ function buildRelationshipBreakdown(relTypeRows: { relationship_type: string; co
     return { causalMetrics, relationshipBreakdown }
 }
 
-export function getStatistics(
-    context: EntriesSharedContext,
-    groupBy: 'day' | 'week' | 'month' | 'year' = 'week',
-    startDate?: string,
-    endDate?: string,
-    projectBreakdown?: boolean,
-    workspaceId = 'default',
-    projectNumber?: number
-): Record<string, unknown> {
-    const { db } = context
-    const scopeId = effectiveWorkspace(workspaceId)
-
-    const { dateFilter, dateParams } = buildDateFilter(scopeId, startDate, endDate, projectNumber)
-
-    const { totalEntries, entriesByType } = getTypeCounts(db, dateFilter, dateParams)
-
-    const dateFormat = validateDateFormatPattern(groupBy)
-    const periodRows = getPeriodRows(db, dateFormat, dateFilter, dateParams)
-
-    const entriesByPeriod = periodRows.map((r) => ({
-        period: r.period,
-        count: r.total_count,
-    }))
-
+function buildSummaryMetrics(
+    periodRows: PeriodRow[],
+    totalEntries: number,
+    totalRelationships: number,
+    linkedCount: number
+): {
+    entriesByPeriod: { period: string; count: number }[]
+    decisionDensity: { period: string; significantCount: number }[]
+    relationshipComplexity: { totalRelationships: number; avgPerEntry: number; density: number }
+    activityTrend: { currentPeriod: string; previousPeriod: string; growthPercent: number | null }
+} {
+    const entriesByPeriod = periodRows.map((r) => ({ period: r.period, count: r.total_count }))
     const decisionDensity = periodRows
         .filter((r) => r.significant_count > 0)
-        .map((r) => ({
-            period: r.period,
-            significantCount: r.significant_count,
-        }))
+        .map((r) => ({ period: r.period, significantCount: r.significant_count }))
 
-    const { totalRelationships, linkedCount, relTypeRows } = getRelationshipCounts(
-        db,
-        dateFilter,
-        dateParams
-    )
     const avgPerEntry = totalEntries > 0 ? totalRelationships / totalEntries : 0
     const density =
         totalEntries > 0 ? Math.round((linkedCount / totalEntries) * 10000) / 10000 : 0
@@ -249,11 +229,7 @@ export function getStatistics(
             ? Math.round(((currentCount - previousCount) / previousCount) * 100)
             : null
 
-    const { causalMetrics, relationshipBreakdown } = buildRelationshipBreakdown(relTypeRows)
-
-    const result: Record<string, unknown> = {
-        totalEntries,
-        entriesByType,
+    return {
         entriesByPeriod,
         decisionDensity,
         relationshipComplexity: {
@@ -261,11 +237,43 @@ export function getStatistics(
             avgPerEntry: Math.round(avgPerEntry * 100) / 100,
             density,
         },
-        activityTrend: {
-            currentPeriod,
-            previousPeriod,
-            growthPercent,
-        },
+        activityTrend: { currentPeriod, previousPeriod, growthPercent },
+    }
+}
+
+export function getStatistics(
+    context: EntriesSharedContext,
+    groupBy: 'day' | 'week' | 'month' | 'year' = 'week',
+    startDate?: string,
+    endDate?: string,
+    projectBreakdown?: boolean,
+    workspaceId = 'default',
+    projectNumber?: number
+): Record<string, unknown> {
+    const { db } = context
+    const scopeId = effectiveWorkspace(workspaceId)
+
+    const { dateFilter, dateParams } = buildDateFilter(scopeId, startDate, endDate, projectNumber)
+    const { totalEntries, entriesByType } = getTypeCounts(db, dateFilter, dateParams)
+
+    const dateFormat = validateDateFormatPattern(groupBy)
+    const periodRows = getPeriodRows(db, dateFormat, dateFilter, dateParams)
+    const { totalRelationships, linkedCount, relTypeRows } = getRelationshipCounts(
+        db,
+        dateFilter,
+        dateParams
+    )
+    const { entriesByPeriod, decisionDensity, relationshipComplexity, activityTrend } =
+        buildSummaryMetrics(periodRows, totalEntries, totalRelationships, linkedCount)
+    const { causalMetrics, relationshipBreakdown } = buildRelationshipBreakdown(relTypeRows)
+
+    const result: Record<string, unknown> = {
+        totalEntries,
+        entriesByType,
+        entriesByPeriod,
+        decisionDensity,
+        relationshipComplexity,
+        activityTrend,
         causalMetrics,
         relationshipBreakdown,
     }

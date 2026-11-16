@@ -4,14 +4,22 @@ import { markUntrustedContentInline } from '../../utils/security-utils.js'
 const INLINE_UNTRUSTED_RE = /^<untrusted_remote_content>([^<>]*)<\/untrusted_remote_content>$/
 
 export function safeDecodeUriSegment(raw: string): string {
+    let decoded: string
     try {
-        return decodeURIComponent(raw)
+        decoded = decodeURIComponent(raw)
     } catch {
         throw new ProtocolError(
             ProtocolErrorCode.InvalidParams,
             `Malformed percent-encoding in resource URI segment: ${raw}`
         )
     }
+    if (/\p{Cc}/u.test(decoded)) {
+        throw new ProtocolError(
+            ProtocolErrorCode.InvalidParams,
+            'Control characters are not allowed in resource URI segments'
+        )
+    }
+    return decoded
 }
 
 /** Wrap a string in `<untrusted_remote_content>` once without double-escaping existing wrappers. */

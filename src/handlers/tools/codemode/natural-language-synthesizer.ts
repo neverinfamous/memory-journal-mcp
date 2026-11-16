@@ -190,6 +190,76 @@ function collectTags(
     return tagsVal
 }
 
+function parsePositiveEntryId(entryObj: Record<string, unknown>, rawObj: Record<string, unknown>): number | undefined {
+    const rawEntryId = entryObj['entry_id'] ?? rawObj['entry_id'] ?? entryObj['id'] ?? rawObj['id']
+    if (typeof rawEntryId === 'number') {
+        return Number.isInteger(rawEntryId) && rawEntryId > 0 ? rawEntryId : undefined
+    }
+    if (typeof rawEntryId === 'string' && rawEntryId.trim() !== '') {
+        const parsed = Number(rawEntryId.trim())
+        return Number.isInteger(parsed) && parsed > 0 ? parsed : undefined
+    }
+    return undefined
+}
+
+function buildSynthesizedEntryPayload(
+    executionCode: string,
+    entryObj: Record<string, unknown>,
+    rawObj: Record<string, unknown>,
+    isFlatCall: boolean,
+    learnedVal: string | undefined
+): string {
+    const groupNameVal = getNonEmptyString(entryObj, rawObj, ['group_name', 'groupName'])
+    const rawContent = getNonEmptyString(entryObj, rawObj, ['content', 'body']) ?? learnedVal ?? executionCode
+    const titleVal = resolveTitle(entryObj, rawObj, executionCode, groupNameVal, learnedVal)
+    const typeVal =
+        getNonEmptyString(entryObj, rawObj, ['type', 'entry_type', 'category']) ??
+        (learnedVal !== undefined ? 'personal_reflection' : 'technical_note')
+    const tagsVal = collectTags(entryObj, rawObj, groupNameVal, learnedVal)
+
+    const entryWs = !isFlatCall ? readWorkspaceField(entryObj, {}) : undefined
+    const outerWs = readWorkspaceField(rawObj, {})
+    const entryProj = !isFlatCall ? parseProjectNumberField(entryObj, {}) : undefined
+    const outerProj = parseProjectNumberField(rawObj, {})
+    const wsDiffersFromOuter =
+        entryWs !== undefined &&
+        (entryWs.trim().toLowerCase() === 'default' ||
+            (outerWs !== undefined && entryWs.trim().toLowerCase() !== outerWs.trim().toLowerCase()))
+    const projVal = entryProj ?? (!wsDiffersFromOuter ? outerProj : undefined)
+    const wsVal = entryWs ?? (entryProj === undefined ? outerWs : undefined)
+    const sessVal = getNonEmptyString(entryObj, rawObj, ['session_id', 'sessionId'])
+    const trustVal = normalizeUnitScore(
+        entryObj['trust'] ?? rawObj['trust'] ?? entryObj['trust_score'] ?? rawObj['trust_score'] ??
+        entryObj['trustScore'] ?? rawObj['trustScore'] ?? entryObj['confidence'] ?? rawObj['confidence']
+    )
+    const impactVal = normalizeUnitScore(
+        entryObj['impact'] ?? rawObj['impact'] ?? entryObj['impact_score'] ?? rawObj['impact_score'] ??
+        entryObj['impactScore'] ?? rawObj['impactScore']
+    )
+    const validVal = normalizeValidation(getNonEmptyString(entryObj, rawObj, ['validation_status', 'validation', 'validationStatus']))
+    const numericEntryId = parsePositiveEntryId(entryObj, rawObj)
+
+    const extraContext: Record<string, unknown> = {}
+    for (const k of ['component', 'changes', 'pr_link', 'pr_url', 'issue_link', 'issue_url', 'details', 'notes', 'learned_context', 'group_name']) {
+        if (entryObj[k] !== undefined) extraContext[k] = entryObj[k]
+        else if (rawObj[k] !== undefined) extraContext[k] = rawObj[k]
+    }
+
+    const payload: Record<string, unknown> = { title: titleVal, content: rawContent, entry_type: typeVal, tags: tagsVal }
+    if (numericEntryId !== undefined) payload['entry_id'] = numericEntryId
+    if (projVal !== undefined) payload['project_number'] = projVal
+    if (wsVal !== undefined) payload['workspace_id'] = wsVal
+    if (sessVal !== undefined) payload['session_id'] = sessVal
+    if (trustVal !== undefined) payload['trust'] = trustVal
+    if (impactVal !== undefined) payload['impact'] = impactVal
+    if (validVal !== undefined) payload['validation_status'] = validVal
+    if (Object.keys(extraContext).length > 0) payload['auto_context'] = extraContext
+
+    const fnName = numericEntryId !== undefined ? 'mj.updateEntry' : 'mj.createEntry'
+    appendSharedEntryFlags(payload, entryObj, rawObj)
+    return `return await ${fnName}(${JSON.stringify(payload)});`
+}
+
 export function synthesizeNaturalLanguageOrEntryPayload(executionCode: string, input: ExecuteCodeInput, params: unknown): string {
     const rawObj = isRecord(params) ? params : {}
     const entryObj = isRecord(rawObj['entry'])
@@ -223,67 +293,7 @@ export function synthesizeNaturalLanguageOrEntryPayload(executionCode: string, i
         return executionCode
     }
 
-    const groupNameVal = getNonEmptyString(entryObj, rawObj, ['group_name', 'groupName'])
-    const rawContent = getNonEmptyString(entryObj, rawObj, ['content', 'body']) ?? learnedVal ?? executionCode
-    const titleVal = resolveTitle(entryObj, rawObj, executionCode, groupNameVal, learnedVal)
-    const typeVal =
-        getNonEmptyString(entryObj, rawObj, ['type', 'entry_type', 'category']) ??
-        (learnedVal !== undefined ? 'personal_reflection' : 'technical_note')
-    const tagsVal = collectTags(entryObj, rawObj, groupNameVal, learnedVal)
-
-    const entryWs = !isFlatCall ? readWorkspaceField(entryObj, {}) : undefined
-    const outerWs = readWorkspaceField(rawObj, {})
-    const entryProj = !isFlatCall ? parseProjectNumberField(entryObj, {}) : undefined
-    const outerProj = parseProjectNumberField(rawObj, {})
-    const wsDiffersFromOuter =
-        entryWs !== undefined &&
-        (entryWs.trim().toLowerCase() === 'default' ||
-            (outerWs !== undefined && entryWs.trim().toLowerCase() !== outerWs.trim().toLowerCase()))
-    const projVal = entryProj ?? (!wsDiffersFromOuter ? outerProj : undefined)
-    const wsVal = entryWs ?? (entryProj === undefined ? outerWs : undefined)
-    const sessVal = getNonEmptyString(entryObj, rawObj, ['session_id', 'sessionId'])
-    const trustVal = normalizeUnitScore(
-        entryObj['trust'] ?? rawObj['trust'] ?? entryObj['trust_score'] ?? rawObj['trust_score'] ??
-        entryObj['trustScore'] ?? rawObj['trustScore'] ?? entryObj['confidence'] ?? rawObj['confidence']
-    )
-    const impactVal = normalizeUnitScore(
-        entryObj['impact'] ?? rawObj['impact'] ?? entryObj['impact_score'] ?? rawObj['impact_score'] ??
-        entryObj['impactScore'] ?? rawObj['impactScore']
-    )
-    const validVal = normalizeValidation(getNonEmptyString(entryObj, rawObj, ['validation_status', 'validation', 'validationStatus']))
-
-    const rawEntryId = entryObj['entry_id'] ?? rawObj['entry_id'] ?? entryObj['id'] ?? rawObj['id']
-    const numericEntryId =
-        typeof rawEntryId === 'number'
-            ? Number.isInteger(rawEntryId) && rawEntryId > 0
-                ? rawEntryId
-                : undefined
-            : typeof rawEntryId === 'string' && rawEntryId.trim() !== ''
-              ? (() => {
-                    const parsed = Number(rawEntryId.trim())
-                    return Number.isInteger(parsed) && parsed > 0 ? parsed : undefined
-                })()
-              : undefined
-
-    const extraContext: Record<string, unknown> = {}
-    for (const k of ['component', 'changes', 'pr_link', 'pr_url', 'issue_link', 'issue_url', 'details', 'notes', 'learned_context', 'group_name']) {
-        if (entryObj[k] !== undefined) extraContext[k] = entryObj[k]
-        else if (rawObj[k] !== undefined) extraContext[k] = rawObj[k]
-    }
-
-    const payload: Record<string, unknown> = { title: titleVal, content: rawContent, entry_type: typeVal, tags: tagsVal }
-    if (numericEntryId !== undefined) payload['entry_id'] = numericEntryId
-    if (projVal !== undefined) payload['project_number'] = projVal
-    if (wsVal !== undefined) payload['workspace_id'] = wsVal
-    if (sessVal !== undefined) payload['session_id'] = sessVal
-    if (trustVal !== undefined) payload['trust'] = trustVal
-    if (impactVal !== undefined) payload['impact'] = impactVal
-    if (validVal !== undefined) payload['validation_status'] = validVal
-    if (Object.keys(extraContext).length > 0) payload['auto_context'] = extraContext
-
-    const fnName = numericEntryId !== undefined ? 'mj.updateEntry' : 'mj.createEntry'
-    appendSharedEntryFlags(payload, entryObj, rawObj)
-    return `return await ${fnName}(${JSON.stringify(payload)});`
+    return buildSynthesizedEntryPayload(executionCode, entryObj, rawObj, isFlatCall, learnedVal)
 }
 
 /** Forward optional entry classification, scope flags, relationships, and anchors uniformly. */

@@ -9,7 +9,7 @@ function hasValidNextToken(tokens: string[], startIndex: number): boolean {
         if (!rawNext) continue
 
         let nextToken = rawNext.replace(/[^a-zA-Z0-9_*-]/g, '')
-        nextToken = nextToken.replace(/\*/g, '')
+        nextToken = nextToken.replace(/\*/g, '').replace(/^-+$/, '')
         if (nextToken && !/^(?:AND|OR|NOT|NEAR(?:\d+)?)$/i.test(nextToken)) {
             return true
         }
@@ -144,6 +144,13 @@ export function sanitizeFtsQuery(query: string): string {
         }
 
         safeTokens.push(sanitizedToken)
+    }
+
+    while (safeTokens.length > 0 && /^(?:AND|OR|NOT)$/.test(safeTokens[safeTokens.length - 1] ?? '')) {
+        safeTokens.pop()
+    }
+    while (safeTokens.length > 0 && /^(?:AND|OR)$/.test(safeTokens[0] ?? '')) {
+        safeTokens.shift()
     }
 
     // Phase 4: Combine phrases + safe tokens

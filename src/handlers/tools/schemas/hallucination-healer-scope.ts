@@ -16,24 +16,66 @@ import {
     NONE_VALIDATION_ALIASES,
 } from './constants-and-primitives.js'
 
-/** Normalise `project_name` / string `project_number` aliases into numeric or workspace fields. */
-export function normalizeProjectFields(
-    obj: Record<string, unknown>,
-    projectRegistry?: Record<string, ProjectRegistryEntry>
-): boolean {
-    let modified = false
-    const registry = projectRegistry ?? getActiveProjectRegistry() ?? loadProjectRegistryFromConfig()
-
+function normalizeWorkspaceAliasKeys(obj: Record<string, unknown>): boolean {
     if (obj['workspace_id'] === undefined && typeof obj['workspaceId'] === 'string') {
         obj['workspace_id'] = obj['workspaceId']
         delete obj['workspaceId']
-        modified = true
-    } else if (obj['workspace_id'] === undefined && typeof obj['workspace'] === 'string') {
+        return true
+    }
+    if (obj['workspace_id'] === undefined && typeof obj['workspace'] === 'string') {
         obj['workspace_id'] = obj['workspace']
         delete obj['workspace']
-        modified = true
+        return true
     }
+    return false
+}
 
+function resolveNamedProjectTarget(
+    obj: Record<string, unknown>,
+    strVal: string,
+    existingWs: string | undefined,
+    registry: Record<string, ProjectRegistryEntry> | undefined
+): boolean {
+    const num = Number(strVal)
+    if (!Number.isNaN(num) && strVal !== '') {
+        if (typeof obj['project_number'] === 'number' && obj['project_number'] !== num) {
+            return true
+        }
+        if (!('project_number' in obj) || obj['project_number'] === undefined) {
+            obj['project_number'] = num
+        }
+        return false
+    }
+    if (strVal === '*') return true
+    if (strVal === '') return false
+
+    const canonicalKey = findCanonicalRegistryKey(strVal, registry)
+    const matchedWs =
+        canonicalKey ?? (strVal.toLowerCase() === 'default' ? 'default' : undefined)
+    if (matchedWs === undefined) return true
+
+    const matchedProject =
+        canonicalKey !== undefined ? registry?.[canonicalKey]?.project_number : undefined
+    if (existingWs !== undefined && existingWs.toLowerCase() !== matchedWs.toLowerCase()) {
+        return true
+    }
+    if (
+        typeof obj['project_number'] === 'number' &&
+        matchedProject !== undefined &&
+        obj['project_number'] !== matchedProject
+    ) {
+        return true
+    }
+    if (existingWs === undefined) {
+        obj['workspace_id'] = matchedWs
+    }
+    return false
+}
+
+function applyNamedProjectAlias(
+    obj: Record<string, unknown>,
+    registry: Record<string, ProjectRegistryEntry> | undefined
+): boolean {
     const existingWs =
         typeof obj['workspace_id'] === 'string' && obj['workspace_id'].trim() !== ''
             ? obj['workspace_id'].trim()
@@ -43,82 +85,62 @@ export function normalizeProjectFields(
             ? obj['project']
             : undefined
     const rawProjName = obj['project_name'] ?? obj['projectName'] ?? rawProjectProp
-    if (rawProjName !== undefined) {
-        const strVal =
-            typeof rawProjName === 'string' || typeof rawProjName === 'number'
-                ? String(rawProjName).trim()
-                : ''
-        const num = Number(strVal)
-        let conflicting = false
-        if (!Number.isNaN(num) && strVal !== '') {
-            if (typeof obj['project_number'] === 'number' && obj['project_number'] !== num) {
-                conflicting = true
-            } else if (!('project_number' in obj) || obj['project_number'] === undefined) {
-                obj['project_number'] = num
-            }
-        } else if (strVal === '*') {
-            conflicting = true
-        } else if (strVal !== '') {
-            const canonicalKey = findCanonicalRegistryKey(strVal, registry)
-            const matchedWs =
-                canonicalKey ?? (strVal.toLowerCase() === 'default' ? 'default' : undefined)
-            if (matchedWs === undefined) {
-                conflicting = true
-            } else {
-                const matchedProject =
-                    canonicalKey !== undefined
-                        ? registry?.[canonicalKey]?.project_number
-                        : undefined
-                if (
-                    existingWs !== undefined &&
-                    existingWs.toLowerCase() !== matchedWs.toLowerCase()
-                ) {
-                    conflicting = true
-                } else if (
-                    typeof obj['project_number'] === 'number' &&
-                    matchedProject !== undefined &&
-                    obj['project_number'] !== matchedProject
-                ) {
-                    conflicting = true
-                } else if (existingWs === undefined) {
-                    obj['workspace_id'] = matchedWs
-                }
-            }
-        }
-        if (!conflicting) {
-            delete obj['project_name']
-            delete obj['projectName']
-            if (rawProjectProp !== undefined) delete obj['project']
-            modified = true
-        }
-    }
+    if (rawProjName === undefined) return false
 
-    if ('project_number' in obj && typeof obj['project_number'] === 'string') {
-        const cleaned = obj['project_number'].trim()
-        let num = Number(cleaned)
-        if (Number.isNaN(num) && /^p-?\d+$/i.test(cleaned)) {
-            num = Number(cleaned.replace(/^p-?/i, ''))
-        }
-        if (!Number.isNaN(num) && cleaned !== '') {
-            obj['project_number'] = num
-            modified = true
-        } else if (cleaned !== '' && cleaned !== '*') {
-            const canonicalKey = findCanonicalRegistryKey(cleaned, registry)
-            const matchedWs =
-                canonicalKey ?? (cleaned.toLowerCase() === 'default' ? 'default' : undefined)
-            if (
-                matchedWs !== undefined &&
-                (obj['workspace_id'] === undefined ||
-                    obj['workspace_id'] === null ||
-                    obj['workspace_id'] === '')
-            ) {
-                obj['workspace_id'] = matchedWs
-                delete obj['project_number']
-                modified = true
-            }
-        }
-    }
+    const strVal =
+        typeof rawProjName === 'string' || typeof rawProjName === 'number'
+            ? String(rawProjName).trim()
+            : ''
+    const conflicting = resolveNamedProjectTarget(obj, strVal, existingWs, registry)
+    if (conflicting) return false
 
+    delete obj['project_name']
+    delete obj['projectName']
+    if (rawProjectProp !== undefined) delete obj['project']
+    return true
+}
+
+function normalizeStringProjectNumberField(
+    obj: Record<string, unknown>,
+    registry: Record<string, ProjectRegistryEntry> | undefined
+): boolean {
+    if (!('project_number' in obj) || typeof obj['project_number'] !== 'string') return false
+    const cleaned = obj['project_number'].trim()
+    let num = Number(cleaned)
+    if (Number.isNaN(num) && /^p-?\d+$/i.test(cleaned)) {
+        num = Number(cleaned.replace(/^p-?/i, ''))
+    }
+    if (!Number.isNaN(num) && cleaned !== '') {
+        obj['project_number'] = num
+        return true
+    }
+    if (cleaned === '' || cleaned === '*') return false
+
+    const canonicalKey = findCanonicalRegistryKey(cleaned, registry)
+    const matchedWs =
+        canonicalKey ?? (cleaned.toLowerCase() === 'default' ? 'default' : undefined)
+    if (
+        matchedWs !== undefined &&
+        (obj['workspace_id'] === undefined ||
+            obj['workspace_id'] === null ||
+            obj['workspace_id'] === '')
+    ) {
+        obj['workspace_id'] = matchedWs
+        delete obj['project_number']
+        return true
+    }
+    return false
+}
+
+/** Normalise `project_name` / string `project_number` aliases into numeric or workspace fields. */
+export function normalizeProjectFields(
+    obj: Record<string, unknown>,
+    projectRegistry?: Record<string, ProjectRegistryEntry>
+): boolean {
+    const registry = projectRegistry ?? getActiveProjectRegistry() ?? loadProjectRegistryFromConfig()
+    let modified = normalizeWorkspaceAliasKeys(obj)
+    if (applyNamedProjectAlias(obj, registry)) modified = true
+    if (normalizeStringProjectNumberField(obj, registry)) modified = true
     return modified
 }
 

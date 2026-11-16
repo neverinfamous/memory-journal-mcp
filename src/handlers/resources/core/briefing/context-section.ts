@@ -117,20 +117,21 @@ function fetchBriefingSummaries(
     )
 }
 
-export function buildJournalContext(
+function createImportanceFilter(
     context: ResourceContext,
-    config: BriefingConfig,
-    projectNumber?: number | null,
-    activeWorkspaceId?: string
-): JournalContext {
-    const targetWs = activeWorkspaceId || config.defaultWorkspaceId || 'default'
-    const threshold = config.briefingImportanceThreshold ?? 0.3
+    targetWs: string,
+    threshold: number
+): (entries: JournalEntry[]) => JournalEntry[] {
     const importanceScoreCache = new Map<number, number>()
-    const filterImportant = (entries: JournalEntry[]): JournalEntry[] => {
+    return (entries: JournalEntry[]): JournalEntry[] => {
         if (entries.length === 0) return []
         const missingIds: number[] = []
         for (const e of entries) {
-            if (!e.tags?.includes('session-summary') && e.importanceScore === undefined && !importanceScoreCache.has(e.id)) {
+            if (
+                !e.tags?.includes('session-summary') &&
+                e.importanceScore === undefined &&
+                !importanceScoreCache.has(e.id)
+            ) {
                 missingIds.push(e.id)
             }
         }
@@ -145,10 +146,40 @@ export function buildJournalContext(
             const score =
                 e.importanceScore ??
                 importanceScoreCache.get(e.id) ??
-                context.db.calculateImportance(e.id, targetWs)?.score ?? 0
+                context.db.calculateImportance(e.id, targetWs)?.score ??
+                0
             return score >= threshold
         })
     }
+}
+
+function formatSummaryEntries(
+    summaryEntries: JournalEntry[]
+): { id: number; timestamp: string; type: string; preview: string }[] {
+    return summaryEntries.map((entry: JournalEntry) => {
+        const titleLine =
+            entry.content.split(/\r?\n/)[0]?.replace(/^#+\s*(?:Session Summary:\s*)?/, '') ?? ''
+        return {
+            id: entry.id,
+            timestamp: entry.timestamp,
+            type: entry.entryType,
+            preview: markUntrustedContentInline(cleanPreview(titleLine, PREVIEW_LENGTH)),
+        }
+    })
+}
+
+export function buildJournalContext(
+    context: ResourceContext,
+    config: BriefingConfig,
+    projectNumber?: number | null,
+    activeWorkspaceId?: string
+): JournalContext {
+    const targetWs = activeWorkspaceId || config.defaultWorkspaceId || 'default'
+    const filterImportant = createImportanceFilter(
+        context,
+        targetWs,
+        config.briefingImportanceThreshold ?? 0.3
+    )
 
     const finalSummaryEntries = fetchBriefingSummaries(
         context,
@@ -157,34 +188,21 @@ export function buildJournalContext(
         projectNumber,
         filterImportant
     )
-
-    let latestSessionSummary
-    let sessionSummaries
-    if (finalSummaryEntries.length > 0) {
-        sessionSummaries = finalSummaryEntries.map((entry: JournalEntry) => {
-            const titleLine = entry.content.split(/\r?\n/)[0]?.replace(/^#+\s*(?:Session Summary:\s*)?/, '') ?? ''
-            return {
-                id: entry.id,
-                timestamp: entry.timestamp,
-                type: entry.entryType,
-                preview: markUntrustedContentInline(cleanPreview(titleLine, PREVIEW_LENGTH)),
-            }
-        })
-        
-        latestSessionSummary = sessionSummaries[0]
-    }
+    const sessionSummaries =
+        finalSummaryEntries.length > 0 ? formatSummaryEntries(finalSummaryEntries) : undefined
+    const latestSessionSummary = sessionSummaries?.[0]
 
     // Fetch a larger buffer to account for entries that might get deduplicated out or filtered by importance
     const fetchLimit = Math.max(100, config.entryCount * 10)
     const rawRecentEntries = extractEntries(
-        context.db.searchEntries('', { 
-            limit: fetchLimit, 
+        context.db.searchEntries('', {
+            limit: fetchLimit,
             workspaceId: targetWs,
             ...(typeof projectNumber === 'number' ? { projectNumber } : {}),
-            sortBy: 'timestamp'
+            sortBy: 'timestamp',
         })
     )
-            
+
     let recentEntries = filterImportant(rawRecentEntries)
     if (recentEntries.length === 0 && rawRecentEntries.length > 0) {
         recentEntries = rawRecentEntries
@@ -192,21 +210,28 @@ export function buildJournalContext(
 
     // Exclude entries already shown in the Summary slot to diversify briefing content
     const summaryIds = new Set(finalSummaryEntries.map((e: JournalEntry) => e.id))
-    const dedupedRecent = recentEntries.filter((e: JournalEntry) => !summaryIds.has(e.id)).slice(0, config.entryCount)
+    const dedupedRecent = recentEntries
+        .filter((e: JournalEntry) => !summaryIds.has(e.id))
+        .slice(0, config.entryCount)
 
-    const latestEntries = dedupedRecent.map((e: JournalEntry) => {
-        return {
-            id: e.id,
-            timestamp: e.timestamp,
-            type: e.entryType,
-            preview: markUntrustedContentInline(cleanPreview(e.content, PREVIEW_LENGTH)),
-        }
-    })
+    const latestEntries = dedupedRecent.map((e: JournalEntry) => ({
+        id: e.id,
+        timestamp: e.timestamp,
+        type: e.entryType,
+        preview: markUntrustedContentInline(cleanPreview(e.content, PREVIEW_LENGTH)),
+    }))
 
     const totalEntries = context.db.getActiveEntryCount(targetWs)
     const lastModified = recentEntries[0]?.timestamp ?? new Date().toISOString()
 
-    return { totalEntries, latestEntries, latestSessionSummary, sessionSummaries, lastModified, workspaceId: targetWs }
+    return {
+        totalEntries,
+        latestEntries,
+        latestSessionSummary,
+        sessionSummaries,
+        lastModified,
+        workspaceId: targetWs,
+    }
 }
 
 // ============================================================================

@@ -17,8 +17,105 @@ import {
     BatchDeleteEntriesOutputSchema,
 } from './schemas.js'
 
+async function linkBatchEntries(
+    context: ToolContext,
+    input: ReturnType<typeof BatchCreateEntriesSchema.parse>,
+    prepared: Awaited<ReturnType<typeof prepareBatchCreateInputs>>,
+    results: ReturnType<ToolContext['db']['createEntries']>['created'],
+    createdIndexes: number[]
+): Promise<string[]> {
+    const { db } = context
+    const relationshipWarnings = [
+        ...(await shareBatchEntriesWithTeam(context, prepared, createdIndexes)).warnings,
+    ]
+    for (let i = 0; i < results.length; i++) {
+        const createdEntry = results[i]
+        // [INVARIANT] H8: results are compacted (failed items omitted), so map back
+        // through createdIndexes to the originating input/prepared index.
+        const sourceIndex = createdIndexes[i]
+        if (createdEntry && sourceIndex !== undefined) {
+            relationshipWarnings.push(
+                ...linkRequestedRelationships(
+                    db,
+                    createdEntry.id,
+                    input.entries[sourceIndex]?.relationships,
+                    prepared[sourceIndex]?.input.workspaceId,
+                    prepared[sourceIndex]?.input.projectNumber
+                )
+            )
+        }
+    }
+    return relationshipWarnings
+}
+
+async function executeBatchCreateEntries(
+    params: unknown,
+    context: ToolContext
+): Promise<Record<string, unknown>> {
+    const { db, vectorManager, progress } = context
+    const input = BatchCreateEntriesSchema.parse(params)
+    await sendProgress(progress, 0, 2, 'Creating entries...')
+
+    const prepared = await prepareBatchCreateInputs(
+        input.entries,
+        input.project_number,
+        context,
+        input.workspace_id
+    )
+    const { created: results, errors } = db.createEntries(prepared.map((p) => p.input))
+
+    const failedIndexes = new Set(errors.map((e) => e.index))
+    const createdIndexes = input.entries.map((_, i) => i).filter((i) => !failedIndexes.has(i))
+    const relationshipWarnings = await linkBatchEntries(
+        context,
+        input,
+        prepared,
+        results,
+        createdIndexes
+    )
+
+    await sendProgress(progress, 1, 2, `Created ${String(results.length)} entries...`)
+
+    const { indexStatuses, indexErrors } = await indexBatchEntries({
+        progress,
+        vectorManager,
+        db,
+        autoIndex: input.auto_index,
+        entryIds: results.map((r) => r.id),
+        errorPrefix: 'Entry',
+        doneMessage: 'Batch create complete',
+        workspaceByEntryId: collectIndexWorkspaces(results),
+    })
+
+    const allErrors = [
+        ...errors.map((e) => new Error(`Item at index ${e.index} failed: ${e.error.message}`)),
+        ...indexErrors,
+    ]
+    if (allErrors.length > 0) {
+        throw new AggregateError(
+            allErrors,
+            `Batch create partially failed: ${allErrors.length} operations failed`
+        )
+    }
+
+    const failedVectorCount = indexStatuses.filter((s) => s === 'failed').length
+    const topWarnings = [
+        ...(failedVectorCount > 0
+            ? [`Vector indexing failed for ${String(failedVectorCount)} entry(ies).`]
+            : []),
+        ...relationshipWarnings,
+    ]
+    return {
+        success: true,
+        count: results.length,
+        entries: results,
+        indexStatuses,
+        ...(relationshipWarnings.length > 0 ? { relationshipWarnings } : {}),
+        ...(topWarnings.length > 0 ? { warning: topWarnings.join('; ') } : {}),
+    }
+}
+
 export function getBatchTools(context: ToolContext): ToolDefinition[] {
-    const { db, vectorManager, progress } = context;
     return [
 
         {
@@ -36,81 +133,7 @@ export function getBatchTools(context: ToolContext): ToolDefinition[] {
             },
             handler: async (params: unknown) => {
                 try {
-                    const input = BatchCreateEntriesSchema.parse(params)
-                    await sendProgress(progress, 0, 2, 'Creating entries...')
-
-
-                    const prepared = await prepareBatchCreateInputs(
-                        input.entries,
-                        input.project_number,
-                        context,
-                        input.workspace_id
-                    )
-                    const { created: results, errors } = db.createEntries(prepared.map((p) => p.input))
-
-                    const failedIndexes = new Set(errors.map((e) => e.index))
-                    const createdIndexes = input.entries
-                        .map((_, i) => i)
-                        .filter((i) => !failedIndexes.has(i))
-                    const relationshipWarnings: string[] = []
-                    relationshipWarnings.push(
-                        ...(await shareBatchEntriesWithTeam(context, prepared, createdIndexes)).warnings
-                    )
-                    for (let i = 0; i < results.length; i++) {
-                        const createdEntry = results[i]
-                        // [INVARIANT] H8: results are compacted (failed items omitted), so map back
-                        // through createdIndexes to the originating input/prepared index.
-                        const sourceIndex = createdIndexes[i]
-                        if (createdEntry && sourceIndex !== undefined) {
-                            relationshipWarnings.push(
-                                ...linkRequestedRelationships(
-                                    db,
-                                    createdEntry.id,
-                                    input.entries[sourceIndex]?.relationships,
-                                    prepared[sourceIndex]?.input.workspaceId,
-                                    prepared[sourceIndex]?.input.projectNumber
-                                )
-                            )
-                        }
-                    }
-                    
-                    await sendProgress(progress, 1, 2, `Created ${String(results.length)} entries...`)
-
-                    const { indexStatuses, indexErrors } = await indexBatchEntries({
-                        progress,
-                        vectorManager,
-                        db,
-                        autoIndex: input.auto_index,
-                        entryIds: results.map((r) => r.id),
-                        errorPrefix: 'Entry',
-                        doneMessage: 'Batch create complete',
-                        workspaceByEntryId: collectIndexWorkspaces(results),
-                    })
-
-                    const allErrors = [
-                        ...errors.map(e => new Error(`Item at index ${e.index} failed: ${e.error.message}`)),
-                        ...indexErrors
-                    ]
-
-                    if (allErrors.length > 0) {
-                        throw new AggregateError(allErrors, `Batch create partially failed: ${allErrors.length} operations failed`);
-                    }
-
-                    const failedVectorCount = indexStatuses.filter((s) => s === 'failed').length
-                    const topWarnings = [
-                        ...(failedVectorCount > 0
-                            ? [`Vector indexing failed for ${String(failedVectorCount)} entry(ies).`]
-                            : []),
-                        ...relationshipWarnings,
-                    ]
-                    return {
-                        success: true,
-                        count: results.length,
-                        entries: results,
-                        indexStatuses,
-                        ...(relationshipWarnings.length > 0 ? { relationshipWarnings } : {}),
-                        ...(topWarnings.length > 0 ? { warning: topWarnings.join('; ') } : {}),
-                    }
+                    return await executeBatchCreateEntries(params, context)
                 } catch (err) {
                     return formatHandlerError(err)
                 }

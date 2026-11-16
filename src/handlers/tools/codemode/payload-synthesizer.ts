@@ -10,7 +10,6 @@ import { extractAndRecoverJsonCode } from './json-entry-recovery.js'
 import {
     appendSharedEntryFlags,
     getNonEmptyString,
-    isNaturalLanguagePrompt,
     parseProjectNumberField,
     readWorkspaceField,
     synthesizeNaturalLanguageOrEntryPayload,
@@ -197,6 +196,49 @@ function buildQuerySearch(query: string, input: ExecuteCodeInput, params: unknow
     return `return await mj.search.searchEntries(${JSON.stringify(searchPayload)});`
 }
 
+const DANGEROUS_QUERY_TOKEN_RE =
+    /\b(?:process|require|eval|Function|Reflect|Proxy|global|globalThis|__proto__|constructor|prototype)\b/
+const RAW_SQL_QUERY_RE =
+    /^(?:SELECT|INSERT|UPDATE|DELETE|PRAGMA|SHOW|DESCRIBE|EXPLAIN|WITH|SCHEMA|TABLES)\b/i
+
+function transformInitialExecutionCode(
+    executionCode: string,
+    sourceKey: string | undefined,
+    input: ExecuteCodeInput,
+    params: unknown
+): { executionCode: string } | { earlyReturn: Record<string, unknown> } {
+    const trimmedInitial = executionCode.trim()
+    const hasExplicitContent =
+        typeof params === 'object' && params !== null && 'content' in params
+    const looksLikeSqlQuery = RAW_SQL_QUERY_RE.test(trimmedInitial)
+
+    if (sourceKey === 'query' && !hasExplicitContent) {
+        if (looksLikeSqlQuery) {
+            return validationFailure(
+                'Could not translate raw SQL in `query`. Use `mj.search.searchEntries({ query: "..." })` or a supported `mj.*` method.'
+            )
+        }
+        if (trimmedInitial === '' || DANGEROUS_QUERY_TOKEN_RE.test(trimmedInitial)) {
+            return { executionCode }
+        }
+        return { executionCode: buildQuerySearch(executionCode, input, params) }
+    }
+
+    let healed = healCodeModeScript(executionCode)
+    const trimmedCode = healed.trim()
+    let jsonRecovered = false
+    if (trimmedCode.startsWith('{') && trimmedCode.endsWith('}')) {
+        const recoveredJson = extractAndRecoverJsonCode(trimmedCode)
+        if (recoveredJson !== null) {
+            healed = recoveredJson
+            jsonRecovered = true
+        }
+    }
+    // [C4] Recovered JS is final; never re-synthesize it into an entry mutation.
+    if (!jsonRecovered) healed = synthesizeNaturalLanguageOrEntryPayload(healed, input, params)
+    return { executionCode: healed }
+}
+
 export function resolveExecutionPayload(
     input: ExecuteCodeInput,
     params: unknown,
@@ -233,54 +275,9 @@ export function resolveExecutionPayload(
     }
 
     if (healingEnabled && executionCode !== undefined && executionCode !== '' && !recoveredJs) {
-        const trimmedInitial = executionCode.trim()
-        const hasExplicitContent =
-            typeof params === 'object' && params !== null && 'content' in params
-        const looksLikeSqlQuery =
-            /^(?:SELECT|INSERT|UPDATE|DELETE|PRAGMA|SHOW|DESCRIBE|EXPLAIN|WITH|SCHEMA|TABLES)\b/i.test(
-                trimmedInitial
-            )
-        const hasJsExecSyntax =
-            /\b(?:await\s+mj\.|mj\.[a-zA-Z_$]|return\s+)\b/.test(trimmedInitial) ||
-            trimmedInitial.startsWith('{')
-        const hasJsBindingSyntax =
-            /\b(?:const|let|var|function|import|export|process|global|globalThis|require|eval|Function|Reflect|Proxy|constructor|__proto__|prototype)\b/.test(
-                trimmedInitial
-            )
-        const isPlainQuery =
-            initial.sourceKey === 'query' &&
-            trimmedInitial !== '' &&
-            !hasExplicitContent &&
-            !hasJsExecSyntax &&
-            !hasJsBindingSyntax &&
-            !looksLikeSqlQuery
-        if (
-            isPlainQuery ||
-            (initial.sourceKey === 'query' &&
-                !hasExplicitContent &&
-                !hasJsExecSyntax &&
-                !looksLikeSqlQuery &&
-                isNaturalLanguagePrompt(executionCode))
-        ) {
-            executionCode = buildQuerySearch(executionCode, input, params)
-        } else if (initial.sourceKey === 'query' && looksLikeSqlQuery && !hasExplicitContent) {
-            return validationFailure(
-                'Could not translate raw SQL in `query`. Use `mj.search.searchEntries({ query: "..." })` or a supported `mj.*` method.'
-            )
-        } else {
-            executionCode = healCodeModeScript(executionCode)
-            const trimmedCode = executionCode.trim()
-            let jsonRecovered = false
-            if (trimmedCode.startsWith('{') && trimmedCode.endsWith('}')) {
-                const recoveredJson = extractAndRecoverJsonCode(trimmedCode)
-                if (recoveredJson !== null) {
-                    executionCode = recoveredJson
-                    jsonRecovered = true
-                }
-            }
-            // [C4] Recovered JS is final; never re-synthesize it into an entry mutation.
-            if (!jsonRecovered) executionCode = synthesizeNaturalLanguageOrEntryPayload(executionCode, input, params)
-        }
+        const transformed = transformInitialExecutionCode(executionCode, initial.sourceKey, input, params)
+        if ('earlyReturn' in transformed) return transformed
+        executionCode = transformed.executionCode
     }
 
     if (executionCode === undefined || executionCode.trim() === '') {

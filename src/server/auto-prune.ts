@@ -137,6 +137,64 @@ function logDryRunCandidates(
     return { cArchived, cPruned, cHard }
 }
 
+function buildAutoPruneResult(
+    options: AutoPruneOptions,
+    counts: { archivedCount: number; prunedCount: number; hardDeletedCount: number },
+    backupFile: string | null,
+    aborted?: boolean
+): AutoPruneResult {
+    return {
+        archivedCount: counts.archivedCount,
+        prunedCount: counts.prunedCount,
+        hardDeletedCount: counts.hardDeletedCount,
+        backupFile,
+        archiveOlderThanDays: options.archiveOlderThanDays,
+        pruneOlderThanDays: options.pruneOlderThanDays,
+        hardDeleteOlderThanDays: options.hardDeleteOlderThanDays,
+        importanceThreshold: options.importanceThreshold,
+        ...(aborted === true ? { aborted: true } : {}),
+    }
+}
+
+function finalizeLivePrune(
+    db: IDatabaseAdapter,
+    options: AutoPruneOptions,
+    counts: { archivedCount: number; prunedCount: number; hardDeletedCount: number }
+): void {
+    const { archiveOlderThanDays, pruneOlderThanDays, hardDeleteOlderThanDays, importanceThreshold } =
+        options
+    const { archivedCount, prunedCount, hardDeletedCount } = counts
+    if (archivedCount === 0 && prunedCount === 0 && hardDeletedCount === 0) {
+        logger.info('Auto-prune: no candidates found', {
+            module: 'AutoPrune',
+            archiveOlderThanDays,
+            pruneOlderThanDays,
+            hardDeleteOlderThanDays,
+            importanceThreshold,
+        })
+        return
+    }
+    logger.info(
+        `Auto-prune: processed entries (Archived: ${String(archivedCount)}, Soft-deleted: ${String(prunedCount)}, Hard-deleted: ${String(hardDeletedCount)})`,
+        {
+            module: 'AutoPrune',
+            archiveOlderThanDays,
+            pruneOlderThanDays,
+            hardDeleteOlderThanDays,
+            importanceThreshold,
+        }
+    )
+    try {
+        db.cleanupStaleVectors()
+        logger.info('Auto-prune: cleaned up stale vector embeddings', { module: 'AutoPrune' })
+    } catch (cleanupError) {
+        logger.warning('Auto-prune: failed to clean stale vectors (non-critical)', {
+            module: 'AutoPrune',
+            error: cleanupError instanceof Error ? cleanupError.message : String(cleanupError),
+        })
+    }
+}
+
 /**
  * Run the auto-prune sweep against the database.
  *
@@ -165,17 +223,12 @@ export async function runAutoPrune(
     if (!dryRun) {
         const safety = await createPrePruneSafetyBackup(db)
         if (safety.aborted) {
-            return {
-                archivedCount: 0,
-                prunedCount: 0,
-                hardDeletedCount: 0,
-                backupFile: null,
-                archiveOlderThanDays,
-                pruneOlderThanDays,
-                hardDeleteOlderThanDays,
-                importanceThreshold,
-                aborted: true,
-            }
+            return buildAutoPruneResult(
+                options,
+                { archivedCount: 0, prunedCount: 0, hardDeletedCount: 0 },
+                null,
+                true
+            )
         }
         backupFile = safety.backupFile
     }
@@ -194,57 +247,13 @@ export async function runAutoPrune(
 
     if (dryRun) {
         const { cArchived, cPruned, cHard } = logDryRunCandidates(options, result.candidates)
-        return {
-            archivedCount: cArchived,
-            prunedCount: cPruned,
-            hardDeletedCount: cHard,
-            backupFile,
-            archiveOlderThanDays,
-            pruneOlderThanDays,
-            hardDeleteOlderThanDays,
-            importanceThreshold,
-        }
-    }
-
-    const { archivedCount, prunedCount, hardDeletedCount } = result
-    if (archivedCount === 0 && prunedCount === 0 && hardDeletedCount === 0) {
-        logger.info('Auto-prune: no candidates found', {
-            module: 'AutoPrune',
-            archiveOlderThanDays,
-            pruneOlderThanDays,
-            hardDeleteOlderThanDays,
-            importanceThreshold,
-        })
-    } else {
-        logger.info(
-            `Auto-prune: processed entries (Archived: ${String(archivedCount)}, Soft-deleted: ${String(prunedCount)}, Hard-deleted: ${String(hardDeletedCount)})`,
-            {
-                module: 'AutoPrune',
-                archiveOlderThanDays,
-                pruneOlderThanDays,
-                hardDeleteOlderThanDays,
-                importanceThreshold,
-            }
+        return buildAutoPruneResult(
+            options,
+            { archivedCount: cArchived, prunedCount: cPruned, hardDeletedCount: cHard },
+            backupFile
         )
-        try {
-            db.cleanupStaleVectors()
-            logger.info('Auto-prune: cleaned up stale vector embeddings', { module: 'AutoPrune' })
-        } catch (cleanupError) {
-            logger.warning('Auto-prune: failed to clean stale vectors (non-critical)', {
-                module: 'AutoPrune',
-                error: cleanupError instanceof Error ? cleanupError.message : String(cleanupError),
-            })
-        }
     }
 
-    return {
-        archivedCount,
-        prunedCount,
-        hardDeletedCount,
-        backupFile,
-        archiveOlderThanDays,
-        pruneOlderThanDays,
-        hardDeleteOlderThanDays,
-        importanceThreshold,
-    }
+    finalizeLivePrune(db, options, result)
+    return buildAutoPruneResult(options, result, backupFile)
 }

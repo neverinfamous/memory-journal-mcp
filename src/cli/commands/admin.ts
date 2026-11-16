@@ -82,9 +82,97 @@ export async function vacuumAction(options: z.infer<typeof vacuumSchema>, comman
     }
 }
 
+type CliAdminServerOptions = Awaited<ReturnType<typeof getDb>>['serverOptions']
+
+function resolveCliPruneScope(
+    options: z.infer<typeof pruneSchema>,
+    serverOptions: CliAdminServerOptions
+): { workspaceId: string; projectNumber?: number } {
+    const requestedWs = options.workspace?.trim()
+    const requestedProject = options.defaultProject
+    if (requestedWs === '*') {
+        if (options.allWorkspaces !== true) {
+            throw new Error(
+                "Refusing wildcard '--workspace *' in prune without explicit confirmation. Pass --all-workspaces alongside --workspace '*' to prune all workspaces."
+            )
+        }
+        return {
+            workspaceId: '*',
+            ...(requestedProject !== undefined ? { projectNumber: requestedProject } : {}),
+        }
+    }
+    const targetWs =
+        requestedWs !== undefined && requestedWs !== ''
+            ? requestedWs
+            : requestedProject === undefined
+              ? serverOptions.defaultWorkspaceId
+              : undefined
+    const targetProj =
+        requestedProject ?? (requestedWs === undefined ? serverOptions.defaultProjectNumber : undefined)
+    return resolveAutoPruneScope(targetWs, targetProj, serverOptions.projectRegistry)
+}
+
+function buildCliPruneConfig(
+    options: z.infer<typeof pruneSchema>,
+    serverOptions: CliAdminServerOptions,
+    command: Command,
+    parsedExcludeTags: string[],
+    pruneScope: { workspaceId: string; projectNumber?: number }
+): Parameters<typeof runAutoPrune>[1] {
+    const fromCli = (key: string): boolean => command.getOptionValueSource(key) === 'cli'
+    return {
+        archiveOlderThanDays:
+            (fromCli('archiveOlderThanDays') ? options.archiveOlderThanDays : undefined) ??
+            serverOptions.archiveOlderThanDays ??
+            0,
+        pruneOlderThanDays:
+            (fromCli('pruneOlderThanDays') ? options.pruneOlderThanDays : undefined) ??
+            serverOptions.pruneOlderThanDays ??
+            0,
+        hardDeleteOlderThanDays:
+            (fromCli('hardDeleteOlderThanDays') ? options.hardDeleteOlderThanDays : undefined) ??
+            serverOptions.hardDeleteOlderThanDays ??
+            0,
+        importanceThreshold:
+            options.importanceThreshold ??
+            (fromCli('pruneImportanceThreshold') ? options.pruneImportanceThreshold : undefined) ??
+            serverOptions.pruneImportanceThreshold ??
+            0.15,
+        dryRun:
+            options.dryRun === true ||
+            (fromCli('pruneDryRun') && options.pruneDryRun === true) ||
+            serverOptions.pruneDryRun === true,
+        excludeTags: parsedExcludeTags,
+        workspaceId: pruneScope.workspaceId,
+        ...(pruneScope.projectNumber !== undefined
+            ? { projectNumber: pruneScope.projectNumber }
+            : {}),
+    }
+}
+
+function printCliPruneResult(
+    result: Awaited<ReturnType<typeof runAutoPrune>>,
+    jsonOutput: boolean | undefined
+): void {
+    if (jsonOutput === true) {
+        process.stdout.write(JSON.stringify(result) + '\n')
+        return
+    }
+    process.stderr.write(`Prune result:\n`)
+    process.stderr.write(`  Archived:     ${result.archivedCount}\n`)
+    process.stderr.write(`  Soft Deleted: ${result.prunedCount}\n`)
+    process.stderr.write(`  Hard Deleted: ${result.hardDeletedCount}\n`)
+    if (result.backupFile) {
+        process.stderr.write(`  Safety backup created: ${result.backupFile}\n`)
+    }
+    if (result.aborted === true) {
+        process.stderr.write('  Safety backup failed. No rows were changed.\n')
+    }
+}
+
 export async function pruneAction(options: z.infer<typeof pruneSchema>, command: Command): Promise<void> {
     const { db, serverOptions } = await getDb(options, command)
-    
+
     try {
         const rawExcludeTags = options.excludeTags ?? options.pruneExcludeTags
         const parsedExcludeTags = rawExcludeTags
@@ -93,76 +181,12 @@ export async function pruneAction(options: z.infer<typeof pruneSchema>, command:
                   .map((tag) => tag.trim())
                   .filter((tag) => tag !== '')
             : (serverOptions.pruneExcludeTags ?? [])
-        const requestedWs = options.workspace?.trim()
-        const requestedProject = options.defaultProject
-        let pruneScope: { workspaceId: string; projectNumber?: number }
-        if (requestedWs === '*') {
-            if (options.allWorkspaces !== true) {
-                throw new Error(
-                    "Refusing wildcard '--workspace *' in prune without explicit confirmation. Pass --all-workspaces alongside --workspace '*' to prune all workspaces."
-                )
-            }
-            pruneScope = {
-                workspaceId: '*',
-                ...(requestedProject !== undefined ? { projectNumber: requestedProject } : {}),
-            }
-        } else {
-            const targetWs =
-                requestedWs !== undefined && requestedWs !== ''
-                    ? requestedWs
-                    : requestedProject === undefined
-                      ? serverOptions.defaultWorkspaceId
-                      : undefined
-            const targetProj =
-                requestedProject ??
-                (requestedWs === undefined ? serverOptions.defaultProjectNumber : undefined)
-            pruneScope = resolveAutoPruneScope(targetWs, targetProj, serverOptions.projectRegistry)
-        }
-        const fromCli = (key: string): boolean => command.getOptionValueSource(key) === 'cli'
-        const result = await runAutoPrune(db, {
-            archiveOlderThanDays:
-                (fromCli('archiveOlderThanDays') ? options.archiveOlderThanDays : undefined) ??
-                serverOptions.archiveOlderThanDays ??
-                0,
-            pruneOlderThanDays:
-                (fromCli('pruneOlderThanDays') ? options.pruneOlderThanDays : undefined) ??
-                serverOptions.pruneOlderThanDays ??
-                0,
-            hardDeleteOlderThanDays:
-                (fromCli('hardDeleteOlderThanDays') ? options.hardDeleteOlderThanDays : undefined) ??
-                serverOptions.hardDeleteOlderThanDays ??
-                0,
-            importanceThreshold:
-                options.importanceThreshold ??
-                (fromCli('pruneImportanceThreshold')
-                    ? options.pruneImportanceThreshold
-                    : undefined) ??
-                serverOptions.pruneImportanceThreshold ??
-                0.15,
-            dryRun:
-                options.dryRun === true ||
-                (fromCli('pruneDryRun') && options.pruneDryRun === true) ||
-                serverOptions.pruneDryRun === true,
-            excludeTags: parsedExcludeTags,
-            workspaceId: pruneScope.workspaceId,
-            ...(pruneScope.projectNumber !== undefined
-                ? { projectNumber: pruneScope.projectNumber }
-                : {}),
-        })
-        if (options.json === true) {
-            process.stdout.write(JSON.stringify(result) + '\n')
-        } else {
-            process.stderr.write(`Prune result:\n`)
-            process.stderr.write(`  Archived:     ${result.archivedCount}\n`)
-            process.stderr.write(`  Soft Deleted: ${result.prunedCount}\n`)
-            process.stderr.write(`  Hard Deleted: ${result.hardDeletedCount}\n`)
-            if (result.backupFile) {
-                process.stderr.write(`  Safety backup created: ${result.backupFile}\n`)
-            }
-            if (result.aborted === true) {
-                process.stderr.write('  Safety backup failed. No rows were changed.\n')
-            }
-        }
+        const pruneScope = resolveCliPruneScope(options, serverOptions)
+        const result = await runAutoPrune(
+            db,
+            buildCliPruneConfig(options, serverOptions, command, parsedExcludeTags, pruneScope)
+        )
+        printCliPruneResult(result, options.json)
         if (result.aborted === true) {
             process.exit(1)
         }

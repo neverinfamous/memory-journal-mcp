@@ -22,9 +22,8 @@ export interface ProjectAndTeamAliasDeps {
     copyFnSchema: (source: unknown, wrapper: (...args: unknown[]) => unknown) => void
 }
 
-/** Wires positional project management wrappers, project listing helpers, and team aliases. */
-export function wireProjectAndTeamAliasesHelper(deps: ProjectAndTeamAliasDeps): void {
-    const { core, search, admin, team, hasDispatcher, registryProvider, copyFnSchema } = deps
+function wireProjectMutationWrappers(deps: ProjectAndTeamAliasDeps): void {
+    const { core, admin, hasDispatcher, registryProvider, copyFnSchema } = deps
     const getConfigFn = createGetConfigFn(registryProvider)
     admin['getConfig'] = getConfigFn
     core['getConfig'] = getConfigFn
@@ -72,16 +71,17 @@ export function wireProjectAndTeamAliasesHelper(deps: ProjectAndTeamAliasDeps): 
         const fallbackDelete = hasDispatcher ? undefined : createDeleteProjectFn()
         const wrappedDelete = async (...args: unknown[]): Promise<unknown> => {
             if (isRecord(args[0])) return await existingDeleteProject(args[0])
-            if (typeof args[0] === 'string') {
-                return await existingDeleteProject({ name: args[0] })
-            }
+            if (typeof args[0] === 'string') return await existingDeleteProject({ name: args[0] })
             if (fallbackDelete === undefined) return await existingDeleteProject({})
             return await fallbackDelete(...args)
         }
         copyFnSchema(existingDeleteProject, wrappedDelete)
         admin['deleteProject'] = wrappedDelete
     }
+}
 
+function wireProjectQueryAndTeamAliases(deps: ProjectAndTeamAliasDeps): void {
+    const { core, search, admin, team, hasDispatcher, registryProvider, copyFnSchema } = deps
     const existingListProjects = admin['listProjects']
     const existingGetProject = admin['getProject']
     const fallbackListProjectsFn = createListProjectsFn(registryProvider)
@@ -132,6 +132,12 @@ export function wireProjectAndTeamAliasesHelper(deps: ProjectAndTeamAliasDeps): 
         team['createEntry'] = team['teamCreateEntry']
         team['create'] = team['teamCreateEntry']
     }
+}
+
+/** Wires positional project management wrappers, project listing helpers, and team aliases. */
+export function wireProjectAndTeamAliasesHelper(deps: ProjectAndTeamAliasDeps): void {
+    wireProjectMutationWrappers(deps)
+    wireProjectQueryAndTeamAliases(deps)
 }
 
 function collectGroupObjectSchemas(

@@ -6,7 +6,7 @@ import { getPrompts } from '../../handlers/prompts/index.js'
 import type { ToolHandlerConfig } from '../../types/index.js'
 import type { PromptDefinition, ResourceDefinition } from '../registration.js'
 
-import type { ServerOptions } from './types.js'
+import type { ServerContext, ServerOptions } from './types.js'
 import { initializeDependencies } from './initialization.js'
 import { createServerInstance } from './tool-registration.js'
 import { startMetricsServer } from '../../observability/metrics-server.js'
@@ -50,42 +50,48 @@ export function startConfiguredMetricsServer(
     })
 }
 
-export async function createServer(options: ServerOptions): Promise<void> {
-    const context = await initializeDependencies(options)
+function buildServerToolConfigs(
+    context: ServerContext,
+    options: ServerOptions
+): { baseConfig: ToolHandlerConfig; customToolHandlerConfig: ToolHandlerConfig } {
     const {
         db,
-        testDb,
         teamDb,
-        testTeamDb,
         runtime,
         vectorManager,
         teamVectorManager,
         github,
         configManager,
-        scheduler,
         allowedIoRoots,
-        activeMetricsPath,
     } = context
 
     const initialDynamicConfig = configManager.getConfig()
-    const filterConfig = initialDynamicConfig.toolFilterConfig
     const baseConfig: ToolHandlerConfig = buildBaseToolConfig(
         options,
         runtime,
         allowedIoRoots,
-        filterConfig
+        initialDynamicConfig.toolFilterConfig
     )
     baseConfig.briefingConfig = resolveActiveBriefingConfig(
         initialDynamicConfig.briefingConfig,
         allowedIoRoots
     )
-    if (baseConfig.defaultProjectNumber === undefined && baseConfig.briefingConfig.defaultProjectNumber !== undefined) {
+    if (
+        baseConfig.defaultProjectNumber === undefined &&
+        baseConfig.briefingConfig.defaultProjectNumber !== undefined
+    ) {
         baseConfig.defaultProjectNumber = baseConfig.briefingConfig.defaultProjectNumber
     }
-    if (baseConfig.defaultWorkspaceId === undefined && baseConfig.briefingConfig.defaultWorkspaceId !== undefined) {
+    if (
+        baseConfig.defaultWorkspaceId === undefined &&
+        baseConfig.briefingConfig.defaultWorkspaceId !== undefined
+    ) {
         baseConfig.defaultWorkspaceId = baseConfig.briefingConfig.defaultWorkspaceId
     }
-    if (baseConfig.projectRegistry === undefined && baseConfig.briefingConfig.projectRegistry !== undefined) {
+    if (
+        baseConfig.projectRegistry === undefined &&
+        baseConfig.briefingConfig.projectRegistry !== undefined
+    ) {
         baseConfig.projectRegistry = baseConfig.briefingConfig.projectRegistry
     }
 
@@ -102,7 +108,32 @@ export async function createServer(options: ServerOptions): Promise<void> {
             teamDb ?? undefined,
             teamVectorManager ?? undefined
         )
+    return { baseConfig, customToolHandlerConfig }
+}
 
+async function cleanupFailedStartup(params: {
+    scheduler: ServerContext['scheduler']
+    runtime: ServerRuntime
+    configManager: ServerContext['configManager']
+    shutdownMetrics: (() => Promise<void>) | undefined
+    closeDatabases: () => void
+}): Promise<void> {
+    const { scheduler, runtime, configManager, shutdownMetrics, closeDatabases } = params
+    scheduler?.stop()
+    runtime.stopBackgroundTasks?.()
+    configManager.close()
+    if (shutdownMetrics !== undefined) {
+        await shutdownMetrics().catch(() => undefined)
+    }
+    await runtime.auditLogger?.close().catch(() => undefined)
+    closeDatabases()
+}
+
+function loadAndValidateTools(
+    context: ServerContext,
+    customToolHandlerConfig: ToolHandlerConfig
+): { allTools: ReturnType<typeof getTools>; allToolNames: Set<string> } {
+    const { db, vectorManager, github, teamDb, teamVectorManager } = context
     const allTools = getTools(
         db,
         null,
@@ -114,6 +145,25 @@ export async function createServer(options: ServerOptions): Promise<void> {
     )
     const allToolNames = new Set(allTools.map((t) => t.name))
     for (const toolName of allToolNames) getRequiredScope(toolName)
+    return { allTools, allToolNames }
+}
+
+export async function createServer(options: ServerOptions): Promise<void> {
+    const context = await initializeDependencies(options)
+    const {
+        db,
+        testDb,
+        teamDb,
+        testTeamDb,
+        runtime,
+        configManager,
+        scheduler,
+        allowedIoRoots,
+        activeMetricsPath,
+    } = context
+
+    const { baseConfig, customToolHandlerConfig } = buildServerToolConfigs(context, options)
+    const { allTools, allToolNames } = loadAndValidateTools(context, customToolHandlerConfig)
 
     const resources = getResources()
     const prompts = getPrompts()
@@ -156,14 +206,13 @@ export async function createServer(options: ServerOptions): Promise<void> {
             closeDatabases,
         })
     } catch (startupError) {
-        scheduler?.stop()
-        runtime.stopBackgroundTasks?.()
-        configManager.close()
-        if (shutdownMetrics !== undefined) {
-            await shutdownMetrics().catch(() => undefined)
-        }
-        await runtime.auditLogger?.close().catch(() => undefined)
-        closeDatabases()
+        await cleanupFailedStartup({
+            scheduler,
+            runtime,
+            configManager,
+            shutdownMetrics,
+            closeDatabases,
+        })
         throw startupError
     }
 }

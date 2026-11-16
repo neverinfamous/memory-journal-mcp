@@ -63,6 +63,28 @@ function getRecentEntriesByImportance(
     return { entries }
 }
 
+function decodeRecentTimestampCursor(
+    cursor: string | undefined,
+    offset: number
+): { cursorCondition: string; cursorParams: unknown[]; effectiveOffset: number } {
+    let cursorCondition = ''
+    const cursorParams: unknown[] = []
+    let effectiveOffset = offset
+    if (cursor !== undefined && cursor !== '') {
+        const decoded = decodeCursor(cursor)
+        if (decoded === null) {
+            throw new ValidationError('Invalid cursor format')
+        }
+        if ('t' in decoded) {
+            cursorCondition = ' AND (timestamp < ? OR (timestamp = ? AND id < ?))'
+            cursorParams.push(decoded.t, decoded.t, decoded.id)
+        } else if ('offset' in decoded) {
+            effectiveOffset = decoded.offset
+        }
+    }
+    return { cursorCondition, cursorParams, effectiveOffset }
+}
+
 export function getRecentEntries(
     context: EntriesSharedContext,
     limit: number,
@@ -88,9 +110,7 @@ export function getRecentEntries(
         )
     }
 
-    let cursorCondition = ''
     const params: unknown[] = []
-
     if (scopeId !== '*') {
         params.push(scopeId)
     }
@@ -101,25 +121,13 @@ export function getRecentEntries(
         params.push(projectNumber)
     }
 
-    let effectiveOffset = offset
-    if (cursor !== undefined && cursor !== '') {
-        const decoded = decodeCursor(cursor)
-        if (decoded === null) {
-            throw new ValidationError('Invalid cursor format')
-        }
-        if ('t' in decoded) {
-            cursorCondition = ' AND (timestamp < ? OR (timestamp = ? AND id < ?))'
-            params.push(decoded.t, decoded.t, decoded.id)
-        } else if ('offset' in decoded) {
-            effectiveOffset = decoded.offset
-        }
-    }
+    const { cursorCondition, cursorParams, effectiveOffset } = decodeRecentTimestampCursor(
+        cursor,
+        offset
+    )
+    params.push(...cursorParams)
 
-    let offsetClause = ''
-    if (cursorCondition === '' && effectiveOffset > 0) {
-        offsetClause = ' OFFSET ?'
-    }
-
+    const offsetClause = cursorCondition === '' && effectiveOffset > 0 ? ' OFFSET ?' : ''
     const stmt = db.prepare(`
         SELECT ${ENTRY_COLUMNS} FROM memory_journal 
         WHERE deleted_at IS NULL ${!includeArchived ? 'AND is_archived = 0' : ''} ${scopeId !== '*' ? 'AND workspace_id = ?' : ''} ${projectCondition} ${cursorCondition}
@@ -179,27 +187,26 @@ export function getEntriesPage(
     return { entries }
 }
 
-export function searchByDateRange(
-    context: EntriesSharedContext,
+interface DateRangeQueryOptions {
+    entryType?: EntryType
+    tags?: string[]
+    cursor?: string
+    isPersonal?: boolean
+    projectNumber?: number
+    issueNumber?: number
+    prNumber?: number
+    workflowRunId?: number
+    limit?: number
+    sortBy?: SortBy
+    includeArchived?: boolean
+    workspaceId?: string
+}
+
+function buildDateRangeQuery(
     startDate: string,
     endDate: string,
-    options?: {
-        entryType?: EntryType
-        tags?: string[]
-        cursor?: string
-        isPersonal?: boolean
-        projectNumber?: number
-        issueNumber?: number
-        prNumber?: number
-        workflowRunId?: number
-        limit?: number
-        sortBy?: SortBy
-        includeArchived?: boolean
-        workspaceId?: string
-    }
-): { entries: JournalEntry[]; nextCursor?: string } {
-    const { db, tagsMgr } = context
-
+    options: DateRangeQueryOptions | undefined
+): { sql: string; params: unknown[]; useImportance: boolean; offset: number; limit: number } {
     let start = startDate
     if (!start.includes('T')) start += 'T00:00:00.000Z'
 
@@ -211,11 +218,9 @@ export function searchByDateRange(
         conditions.push('e.workspace_id = ?')
         params.push(targetWs)
     }
-
     if (options?.includeArchived !== true) {
         conditions.push('e.is_archived = 0')
     }
-
     if (endDate.length > 0) {
         conditions.push('e.timestamp <= ?')
         let end = endDate
@@ -227,14 +232,9 @@ export function searchByDateRange(
     const importanceCol = useImportance
         ? `, ${buildImportanceSqlExpression()} AS importanceScore`
         : ''
-
     const { offset, hasKeyset, keysetT, keysetId } = decodeDateRangeCursor(options?.cursor)
 
-    let query = ''
-    if (useImportance) {
-        query += `WITH ${buildImportanceCte()} `
-    }
-
+    let query = useImportance ? `WITH ${buildImportanceCte()} ` : ''
     query += `
         SELECT ${ALIASED_ENTRY_COLUMNS}${importanceCol} FROM memory_journal e
     `
@@ -255,22 +255,33 @@ export function searchByDateRange(
         params.push(keysetT, keysetT, keysetId)
     }
 
-    if (useImportance) {
-        query += ` WHERE ${conditions.join(' AND ')} ORDER BY importanceScore DESC, e.timestamp DESC, e.id DESC`
-    } else {
-        query += ` WHERE ${conditions.join(' AND ')} ORDER BY e.timestamp DESC, e.id DESC`
-    }
-
-    query += ` LIMIT ? OFFSET ?`
-    params.push(options?.limit ?? 500, offset)
-
-    const stmt = db.prepare(query)
-    const rows = stmt.all(params)
-
-    const entries = rowsToEntries(tagsMgr, rows)
+    const orderBy = useImportance
+        ? 'importanceScore DESC, e.timestamp DESC, e.id DESC'
+        : 'e.timestamp DESC, e.id DESC'
     const limit = options?.limit ?? 500
+    query += ` WHERE ${conditions.join(' AND ')} ORDER BY ${orderBy} LIMIT ? OFFSET ?`
+    params.push(limit, offset)
+
+    return { sql: query, params, useImportance, offset, limit }
+}
+
+export function searchByDateRange(
+    context: EntriesSharedContext,
+    startDate: string,
+    endDate: string,
+    options?: DateRangeQueryOptions
+): { entries: JournalEntry[]; nextCursor?: string } {
+    const { db, tagsMgr } = context
+    const { sql, params, useImportance, offset, limit } = buildDateRangeQuery(
+        startDate,
+        endDate,
+        options
+    )
+    const rows = db.prepare(sql).all(params)
+    const entries = rowsToEntries(tagsMgr, rows)
+
     if (entries.length === limit && limit > 0) {
-        if (!useImportance && entries.length > 0) {
+        if (!useImportance) {
             const last = entries[entries.length - 1]
             if (last !== undefined) {
                 return { entries, nextCursor: encodeCursor({ t: last.timestamp, id: last.id }) }

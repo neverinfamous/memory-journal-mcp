@@ -23,8 +23,10 @@ import { parseFrontmatter } from './frontmatter.js'
 import { assertSafeDirectoryPath, assertSafeFilePath } from '../utils/security-utils.js'
 import {
     assertImportAuthorOwnership,
+    indexImportedEntries,
     resolveCanonicalImportAuthor,
     resolveImportedFileContext,
+    type ImportedVectorItem,
 } from './importer-scope.js'
 
 /** Maximum size (5 MB) permitted for a single markdown file during import. */
@@ -42,6 +44,8 @@ export interface ImportOptions {
     limit?: number
     /** Author name for new entries (team journal) */
     author?: string
+    /** Whether newly created entries are marked personal (pass false for team imports) */
+    isPersonal?: boolean
     /** Associate imported entries with a specific GitHub project number */
     project_number?: number
     /** Workspace isolation identifier */
@@ -343,6 +347,7 @@ function upsertParsedFile(
         content: body,
         entryType: rawEntryType ?? 'personal_reflection',
         tags: metadata.tags,
+        ...(options.isPersonal !== undefined ? { isPersonal: options.isPersonal } : {}),
         ...(metadata.timestamp !== undefined && { timestamp: metadata.timestamp }),
         ...(significanceType !== undefined && { significanceType }),
         ...(resolvedAuthor !== undefined && { author: resolvedAuthor }),
@@ -377,7 +382,7 @@ export async function processImportBatch(
         dry_run,
     }
 
-    const vectorQueue: { entryId: number; filename: string; workspaceId: string | undefined }[] = []
+    const vectorQueue: ImportedVectorItem[] = []
 
     db.executeInTransaction(() => {
         const idRemap = new Map<number, number>()
@@ -419,25 +424,7 @@ export async function processImportBatch(
     })
 
     if (!dry_run && vectorManager) {
-        let hasVectorErrors = false
-        for (const { entryId, filename, workspaceId: entryWsId } of vectorQueue) {
-            try {
-                const entry = db.getEntryById(entryId, entryWsId)
-                if (entry) {
-                    await vectorManager.addEntry(entry)
-                    result.vectorsIndexed++
-                }
-            } catch (err) {
-                hasVectorErrors = true
-                result.errors.push({
-                    file: filename,
-                    error: err instanceof Error ? err.message : String(err),
-                })
-            }
-        }
-        if (hasVectorErrors) {
-            result.success = false
-        }
+        await indexImportedEntries(db, vectorManager, vectorQueue, result)
     }
 
     return result

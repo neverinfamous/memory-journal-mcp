@@ -163,10 +163,7 @@ export function resolveRepoWorkspace(repo: unknown): string | undefined {
     const name = repo.trim().split(/[/\\]/).filter(Boolean).pop()?.trim() ?? ''
     if (name === '') return undefined
     const activeReg = getActiveProjectRegistry()
-    const registry =
-        activeReg !== undefined && Object.keys(activeReg).length > 0
-            ? activeReg
-            : loadProjectRegistryFromConfig()
+    const registry = activeReg ?? loadProjectRegistryFromConfig()
     if (registry === undefined) return undefined
     return findCanonicalRegistryKey(name, registry)
 }

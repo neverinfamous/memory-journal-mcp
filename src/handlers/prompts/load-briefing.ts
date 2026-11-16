@@ -124,6 +124,147 @@ function resolveRequestedProjectUris(
     return { resolvedUris, notFound, ambiguous }
 }
 
+function resolveActiveBriefingLabel(
+    registry: Record<string, unknown>,
+    registryKeys: string[],
+    briefingConfig?: BriefingConfig,
+    runtime?: object | null
+): string {
+    const resolvedWs = resourceWorkspace({
+        briefingConfig: {
+            ...briefingConfig,
+            projectRegistry: registry as BriefingConfig['projectRegistry'],
+        },
+        ...(runtime !== undefined ? { runtime } : {}),
+    })
+    if (resolvedWs && resolvedWs !== 'default') {
+        const projNum = getProjectNumber(registry[resolvedWs])
+        return projNum !== undefined ? `${resolvedWs} (#${String(projNum)})` : resolvedWs
+    }
+    if (
+        briefingConfig?.defaultWorkspaceId?.trim().toLowerCase() !== 'default' &&
+        briefingConfig?.defaultProjectNumber !== undefined
+    ) {
+        const defaultProjNum = briefingConfig.defaultProjectNumber
+        const defaultWs = briefingConfig.defaultWorkspaceId
+        const matchingDefaultKey =
+            defaultWs !== undefined
+                ? registryKeys.find(
+                      (key) =>
+                          key.toLowerCase() === defaultWs.toLowerCase() &&
+                          getProjectNumber(registry[key]) === defaultProjNum
+                  )
+                : undefined
+        const activeKey =
+            matchingDefaultKey ??
+            registryKeys.find((key) => getProjectNumber(registry[key]) === defaultProjNum)
+        if (activeKey) {
+            return `${activeKey} (#${String(defaultProjNum)})`
+        }
+    }
+    return ''
+}
+
+function buildBriefingLoadErrorResponse(
+    registry: Record<string, unknown>,
+    registryKeys: string[],
+    notFound: string[],
+    ambiguous: string[]
+): { messages: PromptMessage[] } {
+    let errorMsg = `Error resolving requested projects:\n`
+    if (notFound.length > 0) {
+        errorMsg += `- Not found: ${notFound.join(', ')}\n`
+    }
+    if (ambiguous.length > 0) {
+        errorMsg += `- Ambiguous: ${ambiguous.join(', ')}\n`
+    }
+    const availableList = registryKeys
+        .map((k) => {
+            const projectNumber = getProjectNumber(registry[k])
+            return projectNumber !== undefined ? `${k} (#${String(projectNumber)})` : k
+        })
+        .join(', ')
+    errorMsg += `\nAvailable projects: ${availableList}\nPlease try again with specific names or project numbers.`
+
+    return {
+        messages: [
+            {
+                role: 'user',
+                content: {
+                    type: 'text',
+                    text: errorMsg,
+                },
+            },
+        ],
+    }
+}
+
+function handleLoadBriefingPrompt(
+    args: Record<string, string>,
+    briefingConfig?: BriefingConfig,
+    runtime?: object | null
+): { messages: PromptMessage[] } {
+    const projectsArg = args['projects']
+    const requestedProjects = projectsArg
+        ? projectsArg
+              .split(',')
+              .map((p) => p.trim())
+              .filter(Boolean)
+        : []
+
+    const registry: Record<string, unknown> =
+        briefingConfig?.projectRegistry ?? loadProjectRegistryFromConfig() ?? {}
+    const registryKeys = Object.keys(registry)
+    const activeWorkspace = resolveActiveBriefingLabel(registry, registryKeys, briefingConfig, runtime)
+
+    if (requestedProjects.length === 0) {
+        return buildInteractiveProjectListResponse(registry, registryKeys, activeWorkspace)
+    }
+
+    const { resolvedUris, notFound, ambiguous } = resolveRequestedProjectUris(
+        requestedProjects,
+        registry,
+        registryKeys
+    )
+    if (notFound.length > 0 || ambiguous.length > 0) {
+        return buildBriefingLoadErrorResponse(registry, registryKeys, notFound, ambiguous)
+    }
+
+    const firstResolvedUri = resolvedUris[0]
+    if (firstResolvedUri?.startsWith('memory://briefing/')) {
+        const primaryKey = firstResolvedUri.slice('memory://briefing/'.length)
+        if (primaryKey.length > 0) {
+            const primaryProjNum = getProjectNumber(registry[primaryKey])
+            // [INTENT] `null` clears a stale project number on unnumbered repos (H1).
+            setActiveSessionProject(primaryKey, primaryProjNum ?? null, runtime)
+        }
+    }
+
+    const uriList = resolvedUris
+        .map((uri, index) => {
+            // [INVARIANT] H28: Secondary multi-project briefings must not overwrite the
+            // primary active session project pin established for resolvedUris[0].
+            const displayUri =
+                index > 0 && uri.startsWith('memory://briefing/')
+                    ? `${uri}?pin_session=false`
+                    : uri
+            return `${String(index + 1)}. ${displayUri}`
+        })
+        .join('\n')
+
+    return {
+        messages: [
+            {
+                role: 'user',
+                content: {
+                    type: 'text',
+                    text: `## Session Briefing Load Instructions\n\nLoad the following project briefing(s) now by calling read_resource for each URI in order:\n\n${uriList}\n\nAfter reading all briefings, present a concise summary of:\n- Active work / recent commits per project\n- Open issues or blockers\n- Any cross-project dependencies\n\nDo NOT skip any of the URIs above.\n\n**Agent Directives:**\n- When planning something significant, complex, or architecture-impacting, search the memory journal database for historical context. Small or simple tasks do not require this.`,
+                },
+            },
+        ],
+    }
+}
+
 export function getLoadBriefingPromptDefinitions(): InternalPromptDef[] {
     return [
         {
@@ -146,136 +287,7 @@ export function getLoadBriefingPromptDefinitions(): InternalPromptDef[] {
                 _github?: unknown,
                 briefingConfig?: BriefingConfig,
                 runtime?: object | null
-            ) => {
-                const projectsArg = args['projects']
-                const requestedProjects = projectsArg
-                    ? projectsArg
-                          .split(',')
-                          .map((p) => p.trim())
-                          .filter(Boolean)
-                    : []
-
-                const registry: Record<string, unknown> =
-                    briefingConfig?.projectRegistry ?? loadProjectRegistryFromConfig() ?? {}
-                const registryKeys = Object.keys(registry)
-
-                let activeWorkspace = ''
-                const resolvedWs = resourceWorkspace({
-                    briefingConfig: {
-                        ...briefingConfig,
-                        projectRegistry: registry as BriefingConfig['projectRegistry'],
-                    },
-                    ...(runtime !== undefined ? { runtime } : {}),
-                })
-                if (resolvedWs && resolvedWs !== 'default') {
-                    const projNum = getProjectNumber(registry[resolvedWs])
-                    activeWorkspace =
-                        projNum !== undefined
-                            ? `${resolvedWs} (#${String(projNum)})`
-                            : resolvedWs
-                } else if (
-                    briefingConfig?.defaultWorkspaceId?.trim().toLowerCase() !== 'default' &&
-                    briefingConfig?.defaultProjectNumber !== undefined
-                ) {
-                    const defaultProjNum = briefingConfig.defaultProjectNumber
-                    const defaultWs = briefingConfig.defaultWorkspaceId
-                    const matchingDefaultKey =
-                        defaultWs !== undefined
-                            ? registryKeys.find(
-                                  (key) =>
-                                      key.toLowerCase() === defaultWs.toLowerCase() &&
-                                      getProjectNumber(registry[key]) === defaultProjNum
-                              )
-                            : undefined
-                    const activeKey =
-                        matchingDefaultKey ??
-                        registryKeys.find(
-                            (key) => getProjectNumber(registry[key]) === defaultProjNum
-                        )
-                    if (activeKey) {
-                        activeWorkspace = `${activeKey} (#${String(defaultProjNum)})`
-                    }
-                }
-
-                if (requestedProjects.length === 0) {
-                    return buildInteractiveProjectListResponse(
-                        registry,
-                        registryKeys,
-                        activeWorkspace
-                    )
-                }
-
-                const { resolvedUris, notFound, ambiguous } = resolveRequestedProjectUris(
-                    requestedProjects,
-                    registry,
-                    registryKeys
-                )
-
-                if (notFound.length > 0 || ambiguous.length > 0) {
-                    let errorMsg = `Error resolving requested projects:\n`
-                    if (notFound.length > 0) {
-                        errorMsg += `- Not found: ${notFound.join(', ')}\n`
-                    }
-                    if (ambiguous.length > 0) {
-                        errorMsg += `- Ambiguous: ${ambiguous.join(', ')}\n`
-                    }
-                    const availableList = registryKeys
-                        .map((k) => {
-                            const projectNumber = getProjectNumber(registry[k])
-                            return projectNumber !== undefined
-                                ? `${k} (#${String(projectNumber)})`
-                                : k
-                        })
-                        .join(', ')
-                    errorMsg += `\nAvailable projects: ${availableList}\nPlease try again with specific names or project numbers.`
-
-                    return {
-                        messages: [
-                            {
-                                role: 'user',
-                                content: {
-                                    type: 'text',
-                                    text: errorMsg,
-                                },
-                            },
-                        ],
-                    }
-                }
-
-                const firstResolvedUri = resolvedUris[0]
-                if (firstResolvedUri?.startsWith('memory://briefing/')) {
-                    const primaryKey = firstResolvedUri.slice('memory://briefing/'.length)
-                    if (primaryKey.length > 0) {
-                        const primaryProjNum = getProjectNumber(registry[primaryKey])
-                        // [INTENT] `null` clears a stale project number on unnumbered repos (H1).
-                        setActiveSessionProject(primaryKey, primaryProjNum ?? null, runtime)
-                    }
-                }
-
-                const uriList = resolvedUris
-                    .map((uri, index) => {
-                        // [INVARIANT] H28: Secondary multi-project briefings must not overwrite the
-                        // primary active session project pin established for resolvedUris[0].
-                        const displayUri =
-                            index > 0 && uri.startsWith('memory://briefing/')
-                                ? `${uri}?pin_session=false`
-                                : uri
-                        return `${String(index + 1)}. ${displayUri}`
-                    })
-                    .join('\n')
-
-                return {
-                    messages: [
-                        {
-                            role: 'user',
-                            content: {
-                                type: 'text',
-                                text: `## Session Briefing Load Instructions\n\nLoad the following project briefing(s) now by calling read_resource for each URI in order:\n\n${uriList}\n\nAfter reading all briefings, present a concise summary of:\n- Active work / recent commits per project\n- Open issues or blockers\n- Any cross-project dependencies\n\nDo NOT skip any of the URIs above.\n\n**Agent Directives:**\n- When planning something significant, complex, or architecture-impacting, search the memory journal database for historical context. Small or simple tasks do not require this.`,
-                            },
-                        },
-                    ],
-                }
-            },
+            ) => handleLoadBriefingPrompt(args, briefingConfig, runtime),
         },
     ]
 }

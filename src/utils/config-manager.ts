@@ -18,6 +18,7 @@ import {
     type MutatedConfigFields,
     type UpdateConfigOptions,
 } from './config-manager-helpers.js'
+import { syncBriefingProvenanceFromFile } from './config-manager-baselines.js'
 import { applyPersistableConfigKeys } from './config-manager-persist.js'
 
 export type {
@@ -340,6 +341,53 @@ export class ConfigManager extends EventEmitter {
         }
     }
 
+    private applyReloadedToolFilter(
+        parsed: Record<string, unknown>,
+        updates: Partial<DynamicConfig>
+    ): void {
+        if ('toolFilter' in parsed) {
+            const rawFilter = parsed['toolFilter']
+            const fileFilter =
+                typeof rawFilter === 'string' && rawFilter.trim() !== '' ? rawFilter : undefined
+            if (fileFilter !== undefined) {
+                updates.rawToolFilter = fileFilter
+                this.toolFilterFromFile = true
+            } else if (this.toolFilterFromFile) {
+                updates.rawToolFilter = this.cliEnvBaseline.rawToolFilter
+                this.toolFilterFromFile = false
+            }
+        } else if (this.toolFilterFromFile) {
+            // Key was removed from the file: revert to CLI/env baseline (never clobbering CLI/env).
+            updates.rawToolFilter = this.cliEnvBaseline.rawToolFilter
+            this.toolFilterFromFile = false
+        }
+    }
+
+    private applyReloadedCodemode(
+        parsed: Record<string, unknown>,
+        updates: Partial<DynamicConfig>
+    ): void {
+        if (
+            'codemodeInternalFullAccess' in parsed &&
+            parsed['codemodeInternalFullAccess'] !== null &&
+            parsed['codemodeInternalFullAccess'] !== undefined
+        ) {
+            const requested =
+                typeof parsed['codemodeInternalFullAccess'] === 'boolean'
+                    ? parsed['codemodeInternalFullAccess']
+                    : undefined
+            if (requested !== undefined) this.codemodeFromFile = true
+            if (requested === false || (requested === true && this.initialCodemodeFullAccess)) {
+                updates.codemodeInternalFullAccess = requested
+            }
+        } else {
+            this.codemodeFromFile = false
+            if (this.config.codemodeInternalFullAccess !== this.codemodeBaseline) {
+                updates.codemodeInternalFullAccess = this.codemodeBaseline
+            }
+        }
+    }
+
     private reloadFromFile(): void {
         if (!this.configFilePath || !fs.existsSync(this.configFilePath)) return
 
@@ -350,59 +398,17 @@ export class ConfigManager extends EventEmitter {
             }
 
             const updates: Partial<DynamicConfig> = {}
-            if ('toolFilter' in parsed) {
-                const rawFilter = parsed['toolFilter']
-                const fileFilter =
-                    typeof rawFilter === 'string' && rawFilter.trim() !== ''
-                        ? rawFilter
-                        : undefined
-                if (fileFilter !== undefined) {
-                    updates.rawToolFilter = fileFilter
-                    this.toolFilterFromFile = true
-                } else if (this.toolFilterFromFile) {
-                    updates.rawToolFilter = this.cliEnvBaseline.rawToolFilter
-                    this.toolFilterFromFile = false
-                }
-            } else if (this.toolFilterFromFile) {
-                // Key was removed from the file: revert to CLI/env baseline (never clobbering CLI/env).
-                updates.rawToolFilter = this.cliEnvBaseline.rawToolFilter
-                this.toolFilterFromFile = false
-            }
-            if (
-                'codemodeInternalFullAccess' in parsed &&
-                parsed['codemodeInternalFullAccess'] !== null &&
-                parsed['codemodeInternalFullAccess'] !== undefined
-            ) {
-                const requested =
-                    typeof parsed['codemodeInternalFullAccess'] === 'boolean'
-                        ? parsed['codemodeInternalFullAccess']
-                        : undefined
-                if (requested !== undefined) this.codemodeFromFile = true
-                if (requested === false || (requested === true && this.initialCodemodeFullAccess)) {
-                    updates.codemodeInternalFullAccess = requested
-                }
-            } else {
-                this.codemodeFromFile = false
-                if (this.config.codemodeInternalFullAccess !== this.codemodeBaseline) {
-                    updates.codemodeInternalFullAccess = this.codemodeBaseline
-                }
-            }
+            this.applyReloadedToolFilter(parsed, updates)
+            this.applyReloadedCodemode(parsed, updates)
 
-            for (const [fileKey, { target, kind }] of Object.entries(BRIEFING_CONFIG_KEY_MAP)) {
-                if (fileKey in parsed && isValidBriefingConfigValue(parsed[fileKey], kind)) {
-                    this.briefingKeysFromFile.add(target)
-                } else {
-                    this.briefingKeysFromFile.delete(target)
-                }
-            }
-            this.defaultWorkspaceIdFromFile =
-                typeof parsed['defaultWorkspaceId'] === 'string' &&
-                parsed['defaultWorkspaceId'].trim() !== '' &&
-                parsed['defaultWorkspaceId'].trim() !== '*'
-            this.defaultProjectNumberFromFile =
-                typeof parsed['defaultProjectNumber'] === 'number' &&
-                Number.isInteger(parsed['defaultProjectNumber']) &&
-                parsed['defaultProjectNumber'] > 0
+            const scopeFlags = syncBriefingProvenanceFromFile(
+                parsed,
+                this.briefingKeysFromFile,
+                BRIEFING_CONFIG_KEY_MAP,
+                isValidBriefingConfigValue
+            )
+            this.defaultWorkspaceIdFromFile = scopeFlags.defaultWorkspaceIdFromFile
+            this.defaultProjectNumberFromFile = scopeFlags.defaultProjectNumberFromFile
 
             const bc = { ...this.config.briefingConfig }
             let bcChanged = reloadBriefingConfigKeys(parsed, bc, this.initialBriefingBaseline)

@@ -185,70 +185,28 @@ export class TagsManager {
                 `Cannot merge tag '${sourceTag}' into itself ('${targetTag}').`
             )
         }
-        const db = this.db
+        const scopeId = effectiveWorkspace(workspaceId)
+        const scopedWorkspace = scopeId === '*' ? undefined : scopeId
+        const scopedProject =
+            typeof projectNumber === 'number' && Number.isFinite(projectNumber)
+                ? projectNumber
+                : undefined
 
-        const mergeOp = db.transaction(() => {
+        const mergeOp = this.db.transaction(() => {
             const { sourceTagId, targetTagId } = this.prepareMergeTags(sourceTag, targetTag)
-
-            // Select only valid entries (join ensures no orphans).
-            // A positive project number still applies when workspace is '*'.
-            const scopeId = effectiveWorkspace(workspaceId)
-            const scopedWorkspace = scopeId === '*' ? undefined : scopeId
-            const scopedProject =
-                typeof projectNumber === 'number' && Number.isFinite(projectNumber)
-                    ? projectNumber
-                    : undefined
-            const conditions = ['et.tag_id = ?', 'mj.deleted_at IS NULL']
-            const selectParams: unknown[] = [sourceTagId]
-            if (scopedWorkspace !== undefined) {
-                conditions.push('mj.workspace_id = ?')
-                selectParams.push(scopedWorkspace)
-            }
-            if (scopedProject !== undefined) {
-                conditions.push('mj.project_number = ?')
-                selectParams.push(scopedProject)
-            }
-            const entryRows = db
-                .prepare(
-                    `SELECT et.entry_id FROM entry_tags et
-                     JOIN memory_journal mj ON et.entry_id = mj.id
-                     WHERE ${conditions.join(' AND ')}`
-                )
-                .all(...selectParams) as { entry_id: number }[]
-            const entryIds = entryRows.map((r) => r.entry_id)
-
-            // Pre-fetch entries already linked to targetTag in one query (O(1) vs O(N))
-            const existingRows = db
-                .prepare('SELECT entry_id FROM entry_tags WHERE tag_id = ?')
-                .all(targetTagId) as { entry_id: number }[]
-            const existingEntryIds = new Set(existingRows.map((r) => r.entry_id))
-
-            // Filter to only entries that need linking
-            const newEntryIds = entryIds.filter((id) => !existingEntryIds.has(id))
-
-            if (newEntryIds.length > 0) {
-                const placeholders = newEntryIds.map(() => '(?, ?)').join(', ')
-                const params = newEntryIds.flatMap((entryId) => [entryId, targetTagId])
-                db.prepare(
-                    `INSERT OR IGNORE INTO entry_tags (entry_id, tag_id) VALUES ${placeholders}`
-                ).run(...params)
-            }
-
-            if (newEntryIds.length > 0) {
-                db.prepare('UPDATE tags SET usage_count = usage_count + ? WHERE id = ?').run(
-                    newEntryIds.length,
-                    targetTagId
-                )
-            }
-
+            const entryIds = this.selectSourceTagEntryIds(
+                sourceTagId,
+                scopedWorkspace,
+                scopedProject
+            )
+            const entriesUpdated = this.linkTargetTagToEntries(targetTagId, entryIds)
             const sourceDeleted = this.detachSourceTag(
                 sourceTagId,
                 entryIds,
                 scopedWorkspace,
                 scopedProject
             )
-
-            return { entriesUpdated: newEntryIds.length, sourceDeleted }
+            return { entriesUpdated, sourceDeleted }
         })
 
         const result = mergeOp()
@@ -261,6 +219,61 @@ export class TagsManager {
         })
 
         return result
+    }
+
+    /** Select non-deleted entry ids linked to `sourceTagId` within the optional scope. */
+    private selectSourceTagEntryIds(
+        sourceTagId: number,
+        scopedWorkspace: string | undefined,
+        scopedProject: number | undefined
+    ): number[] {
+        const conditions = ['et.tag_id = ?', 'mj.deleted_at IS NULL']
+        const selectParams: unknown[] = [sourceTagId]
+        if (scopedWorkspace !== undefined) {
+            conditions.push('mj.workspace_id = ?')
+            selectParams.push(scopedWorkspace)
+        }
+        if (scopedProject !== undefined) {
+            conditions.push('mj.project_number = ?')
+            selectParams.push(scopedProject)
+        }
+        const entryRows = this.db
+            .prepare(
+                `SELECT et.entry_id FROM entry_tags et
+                 JOIN memory_journal mj ON et.entry_id = mj.id
+                 WHERE ${conditions.join(' AND ')}`
+            )
+            .all(...selectParams) as { entry_id: number }[]
+        return entryRows.map((r) => r.entry_id)
+    }
+
+    /** Link entries not already linked to `targetTagId` in 500-row chunks and update usage count. */
+    private linkTargetTagToEntries(targetTagId: number, entryIds: number[]): number {
+        const db = this.db
+        const existingRows = db
+            .prepare('SELECT entry_id FROM entry_tags WHERE tag_id = ?')
+            .all(targetTagId) as { entry_id: number }[]
+        const existingEntryIds = new Set(existingRows.map((r) => r.entry_id))
+        const newEntryIds = entryIds.filter((id) => !existingEntryIds.has(id))
+        if (newEntryIds.length === 0) return 0
+
+        const CHUNK_SIZE = 500
+        let insertedCount = 0
+        for (let i = 0; i < newEntryIds.length; i += CHUNK_SIZE) {
+            const chunk = newEntryIds.slice(i, i + CHUNK_SIZE)
+            const placeholders = chunk.map(() => '(?, ?)').join(', ')
+            const params = chunk.flatMap((entryId) => [entryId, targetTagId])
+            insertedCount += db
+                .prepare(`INSERT OR IGNORE INTO entry_tags (entry_id, tag_id) VALUES ${placeholders}`)
+                .run(...params).changes
+        }
+        if (insertedCount > 0) {
+            db.prepare('UPDATE tags SET usage_count = usage_count + ? WHERE id = ?').run(
+                insertedCount,
+                targetTagId
+            )
+        }
+        return insertedCount
     }
 
     /** Resolve (creating the target if needed) tag ids and purge orphaned entry_tags links. */

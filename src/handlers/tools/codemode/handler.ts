@@ -195,6 +195,7 @@ async function executeCodeModeHandler(
             context,
             readonlyRequested
         )
+        const isDryRun = input.dry_run || input.dryRun === true
         let mutatedDuringRun = false
         const secureDispatcher = createSecureDispatcher({
             tools,
@@ -203,7 +204,7 @@ async function executeCodeModeHandler(
             workspaceId,
             explicitWorkspace,
             autoVersion: input.autoVersion ?? input.auto_version,
-            dryRun: input.dry_run || input.dryRun === true,
+            dryRun: isDryRun,
             onMutatingDispatch: () => {
                 mutatedDuringRun = true
             },
@@ -227,7 +228,7 @@ async function executeCodeModeHandler(
             result: execResult?.result,
             error: execResult?.error,
             metrics: execResult?.metrics,
-            simulated: input.dry_run ? true : undefined,
+            simulated: isDryRun ? true : undefined,
             project_id: projectId,
         }
     } catch (err) {

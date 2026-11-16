@@ -38,6 +38,50 @@ export const githubScopeParseFields = {
     project_number: StrictProjectNumberSchema.optional(),
 }
 
+function githubUnavailableResponse(): { error: true; response: Record<string, unknown> } {
+    return {
+        error: true,
+        response: {
+            success: false,
+            error: 'GitHub integration not available',
+            code: 'CONFIGURATION_ERROR',
+            category: 'configuration',
+            suggestion: 'Set GITHUB_TOKEN environment variable to enable GitHub integration.',
+            recoverable: true,
+            requiresUserInput: true,
+        },
+    }
+}
+
+async function validateCwdMatchesTargetScope(
+    contextGithub: GitHubIntegration,
+    targetScope: string,
+    matchedRegistryKey: string | undefined,
+    registry: RegistryScopeResolution['registry']
+): Promise<{ error: true; response: Record<string, unknown> } | undefined> {
+    const cachedRepo =
+        typeof contextGithub.getCachedRepoInfo === 'function'
+            ? contextGithub.getCachedRepoInfo()?.repo
+            : undefined
+    const detectedRepo =
+        cachedRepo ?? (await contextGithub.getRepoInfo().catch(() => ({ repo: null }))).repo
+    const detectedCanonical =
+        detectedRepo !== null && detectedRepo !== undefined && detectedRepo !== ''
+            ? (findCanonicalRegistryKey(detectedRepo, registry) ?? detectedRepo).toLowerCase()
+            : undefined
+    if (
+        detectedCanonical !== targetScope.toLowerCase() &&
+        detectedRepo?.toLowerCase() !== targetScope.toLowerCase()
+    ) {
+        return githubScopeValidationError(
+            matchedRegistryKey !== undefined
+                ? `workspace "${matchedRegistryKey}" is registered without a repository path and does not match the current repository (${detectedRepo ?? 'unknown'}).`
+                : `workspace_id "${targetScope}" is not registered and does not match the current repository.`
+        )
+    }
+    return undefined
+}
+
 async function resolveToolGitHubInstance(
     context: ToolContext,
     effectiveRepo: string | undefined,
@@ -49,7 +93,8 @@ async function resolveToolGitHubInstance(
     | { github: GitHubIntegration; usedRegistryGithub: boolean }
     | { error: true; response: Record<string, unknown> }
 > {
-    const { matchedRegistryKey, registryEntry, hasRegistry, registry, effectiveWorkspaceScope } = scopeRes
+    const { matchedRegistryKey, registryEntry, hasRegistry, registry, effectiveWorkspaceScope } =
+        scopeRes
     let toolGithub: GitHubIntegration | undefined
     let usedRegistryGithub = false
 
@@ -61,10 +106,7 @@ async function resolveToolGitHubInstance(
         return githubScopeValidationError(
             "workspace_id '*' cannot identify a GitHub repository. Provide repo (owner/repo), a concrete workspace_id, or a registered project_number."
         )
-    } else if (
-        !effectiveRepo &&
-        inputWorkspaceId?.trim().toLowerCase() === 'default'
-    ) {
+    } else if (!effectiveRepo && inputWorkspaceId?.trim().toLowerCase() === 'default') {
         return githubScopeValidationError(
             "workspace_id 'default' cannot identify a GitHub repository. Provide repo (owner/repo) or a registered workspace_id."
         )
@@ -77,28 +119,13 @@ async function resolveToolGitHubInstance(
             ? (matchedRegistryKey ?? effectiveWorkspaceScope)
             : undefined
         if (targetScope !== undefined) {
-            const cachedRepo =
-                typeof context.github.getCachedRepoInfo === 'function'
-                    ? context.github.getCachedRepoInfo()?.repo
-                    : undefined
-            const detectedRepo =
-                cachedRepo ??
-                (await context.github.getRepoInfo().catch(() => ({ repo: null }))).repo
-            const detectedCanonical =
-                detectedRepo !== null && detectedRepo !== undefined && detectedRepo !== ''
-                    ? (findCanonicalRegistryKey(detectedRepo, registry) ?? detectedRepo).toLowerCase()
-                    : undefined
-            if (
-                detectedCanonical !== targetScope.toLowerCase() &&
-                detectedRepo?.toLowerCase() !== targetScope.toLowerCase()
-            ) {
-                return githubScopeValidationError(
-                    matchedRegistryKey !== undefined
-                        ? `workspace "${matchedRegistryKey}" is registered without a repository path and does not match the current repository (${detectedRepo ?? 'unknown'}).`
-                        : `workspace_id "${targetScope}" is not registered and does not match the current repository.`
-                )
-            }
-            toolGithub = context.github
+            const mismatch = await validateCwdMatchesTargetScope(
+                context.github,
+                targetScope,
+                matchedRegistryKey,
+                registry
+            )
+            if (mismatch !== undefined) return mismatch
         } else if (
             !effectiveRepo &&
             matchedRegistryKey === undefined &&
@@ -109,45 +136,30 @@ async function resolveToolGitHubInstance(
             return githubScopeValidationError(
                 `project_number ${String(inputProjectNumber)} is not registered in projectRegistry. Provide repo (owner/repo) or a registered workspace_id.`
             )
-        } else {
-            toolGithub = context.github
         }
+        toolGithub = context.github
     }
 
     if (!toolGithub?.isApiAvailable()) {
-        return {
-            error: true,
-            response: {
-                success: false,
-                error: 'GitHub integration not available',
-                code: 'CONFIGURATION_ERROR',
-                category: 'configuration',
-                suggestion: 'Set GITHUB_TOKEN environment variable to enable GitHub integration.',
-                recoverable: true,
-                requiresUserInput: true,
-            },
-        }
+        return githubUnavailableResponse()
     }
 
     return { github: toolGithub, usedRegistryGithub }
 }
 
-/**
- * Resolve owner (owner-only, no repo required)
- */
-export async function resolveOwner(
+async function resolveScopeAndGithub(
     context: ToolContext,
-    inputOwner?: string,
-    inputRepo?: string,
-    entityLabel?: string,
-    inputProjectNumber?: number,
-    inputWorkspaceId?: string
+    inputOwner: string | undefined,
+    inputRepo: string | undefined,
+    inputWorkspaceId: string | undefined,
+    inputProjectNumber: number | undefined
 ): Promise<
     | {
-          owner: string
-          detectedOwner: string | null
-          repo: string | undefined
+          parsedOwner: string | undefined
+          effectiveRepo: string | undefined
+          scopeRes: RegistryScopeResolution
           github: GitHubIntegration
+          usedRegistryGithub: boolean
       }
     | { error: true; response: Record<string, unknown> }
 > {
@@ -177,7 +189,43 @@ export async function resolveOwner(
         parsedOwner
     )
     if ('error' in ghRes) return ghRes
-    const toolGithub = ghRes.github
+    return {
+        parsedOwner,
+        effectiveRepo,
+        scopeRes,
+        github: ghRes.github,
+        usedRegistryGithub: ghRes.usedRegistryGithub,
+    }
+}
+
+/**
+ * Resolve owner (owner-only, no repo required)
+ */
+export async function resolveOwner(
+    context: ToolContext,
+    inputOwner?: string,
+    inputRepo?: string,
+    entityLabel?: string,
+    inputProjectNumber?: number,
+    inputWorkspaceId?: string
+): Promise<
+    | {
+          owner: string
+          detectedOwner: string | null
+          repo: string | undefined
+          github: GitHubIntegration
+      }
+    | { error: true; response: Record<string, unknown> }
+> {
+    const resolvedScope = await resolveScopeAndGithub(
+        context,
+        inputOwner,
+        inputRepo,
+        inputWorkspaceId,
+        inputProjectNumber
+    )
+    if ('error' in resolvedScope) return resolvedScope
+    const { parsedOwner, effectiveRepo, scopeRes, github: toolGithub } = resolvedScope
 
     const repoInfo = await toolGithub.getRepoInfo()
     const detectedOwner = repoInfo.owner
@@ -186,7 +234,9 @@ export async function resolveOwner(
         detectedOwner !== null &&
         parsedOwner.toLowerCase() !== detectedOwner.toLowerCase()
     const owner = parsedOwner ?? detectedOwner ?? undefined
-    const repo = effectiveRepo ?? (isForeignOwner ? undefined : (repoInfo.repo ?? undefined))
+    const repo =
+        effectiveRepo ??
+        (isForeignOwner ? undefined : (scopeRes.matchedRegistryKey ?? repoInfo.repo ?? undefined))
 
     if (!owner) {
         return {
@@ -226,33 +276,21 @@ export async function resolveOwnerRepo(
       }
     | { error: true; response: Record<string, unknown> }
 > {
-    const slug = parseRepoSlug(input.repo)
-    const initialRepo = slug.repo ?? input.repo
-    const parsedOwner = input.owner ?? slug.owner
-
-    const scopeRes = resolveGitHubRegistryScope(
+    const resolvedScope = await resolveScopeAndGithub(
         context,
-        initialRepo,
+        input.owner,
+        input.repo,
         input.workspace_id,
-        input.project_number,
-        slug
+        input.project_number
     )
-    if ('error' in scopeRes) return scopeRes
-    const effectiveRepo =
-        slug.isFilesystemPath === true && scopeRes.matchedRegistryKey !== undefined
-            ? scopeRes.matchedRegistryKey
-            : initialRepo
-
-    const ghRes = await resolveToolGitHubInstance(
-        context,
+    if ('error' in resolvedScope) return resolvedScope
+    const {
+        parsedOwner,
         effectiveRepo,
-        input.workspace_id,
-        input.project_number,
         scopeRes,
-        parsedOwner
-    )
-    if ('error' in ghRes) return ghRes
-    const { github: toolGithub, usedRegistryGithub } = ghRes
+        github: toolGithub,
+        usedRegistryGithub,
+    } = resolvedScope
 
     const repoInfo = await toolGithub.getRepoInfo()
     const detectedOwner = repoInfo.owner

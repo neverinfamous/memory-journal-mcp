@@ -90,6 +90,107 @@ interface VectorManagerInputs {
     testTeamDb: IDatabaseAdapter | undefined
 }
 
+function scheduleAutoRebuildVectorInits(
+    primaryVectorManager: VectorSearchManager,
+    testVectorManager: VectorSearchManager | undefined,
+    primaryTeamVectorManager: VectorSearchManager | undefined,
+    testTeamVectorManager: VectorSearchManager | undefined
+): Promise<void>[] {
+    const pendingInits: Promise<void>[] = []
+    logger.info('Auto-rebuilding vector index in background...', { module: 'McpServer' })
+    pendingInits.push(
+        primaryVectorManager
+            .initialize()
+            .then(async () => {
+                const rebuilt = await primaryVectorManager.rebuildIndex()
+                const rebuildLog = {
+                    module: 'McpServer',
+                    entriesIndexed: rebuilt.indexed,
+                    success: rebuilt.success,
+                    failed: rebuilt.failed,
+                    firstError: rebuilt.firstError,
+                }
+                if (rebuilt.success) {
+                    logger.info('Vector index rebuilt in background', rebuildLog)
+                } else {
+                    logger.error('Vector index rebuild failed in background', rebuildLog)
+                }
+            })
+            .catch((err: unknown) => {
+                logger.error('Background vector init/rebuild failed', {
+                    module: 'McpServer',
+                    error: err,
+                })
+            })
+    )
+
+    if (testVectorManager) {
+        pendingInits.push(
+            testVectorManager.initialize().catch((err: unknown) => {
+                logger.error('Background test vector init failed', { module: 'McpServer', error: err })
+            })
+        )
+    }
+
+    if (primaryTeamVectorManager) {
+        pendingInits.push(
+            primaryTeamVectorManager.initialize().catch((err: unknown) => {
+                logger.error('Background team vector init failed', {
+                    module: 'McpServer',
+                    error: err,
+                })
+            })
+        )
+        if (testTeamVectorManager) {
+            pendingInits.push(
+                testTeamVectorManager.initialize().catch((err: unknown) => {
+                    logger.error('Background test team vector init failed', {
+                        module: 'McpServer',
+                        error: err,
+                    })
+                })
+            )
+        }
+        logger.info('Team vector search manager eager initialization started in background', {
+            module: 'McpServer',
+        })
+    }
+
+    return pendingInits
+}
+
+function scheduleEagerVectorInits(
+    primaryVectorManager: VectorSearchManager,
+    testVectorManager: VectorSearchManager | undefined,
+    primaryTeamVectorManager: VectorSearchManager | undefined,
+    testTeamVectorManager: VectorSearchManager | undefined
+): Promise<void>[] {
+    // Eager-load the model in the background so the first request isn't blocked
+    logger.info('Vector search manager eager initialization started in background', {
+        module: 'McpServer',
+    })
+    return [
+        primaryVectorManager
+            .initialize()
+            .then(async () => {
+                if (testVectorManager) await testVectorManager.initialize()
+
+                // Initialize team vector sequentially to avoid concurrent ONNX model loading crashes
+                if (primaryTeamVectorManager) {
+                    logger.info(
+                        'Team vector search manager eager initialization started in background',
+                        { module: 'McpServer' }
+                    )
+                    await primaryTeamVectorManager.initialize()
+                    if (testTeamVectorManager) await testTeamVectorManager.initialize()
+                }
+            })
+            .catch((err: unknown) => {
+                logger.error('Background vector init failed', { module: 'McpServer', error: err })
+            }),
+    ]
+}
+
 /**
  * Create the (lazy) vector search managers and kick off background initialization
  * (and optional index rebuild) without blocking startup.
@@ -99,10 +200,9 @@ export function createVectorManagers(inputs: VectorManagerInputs): VectorManager
 
     // Initialize vector search manager (lazy loading - model loads on first use)
     const primaryVectorManager = new VectorSearchManager(primaryDb, { modelName: options.embeddingModel })
-    let testVectorManager: VectorSearchManager | undefined
-    if (testDb) {
-        testVectorManager = new VectorSearchManager(testDb, { modelName: options.embeddingModel })
-    }
+    const testVectorManager = testDb
+        ? new VectorSearchManager(testDb, { modelName: options.embeddingModel })
+        : undefined
     const vectorManager = VectorSearchManagerProxy.create(primaryVectorManager, testVectorManager)
 
     // Initialize team vector search manager if team DB is configured
@@ -110,99 +210,34 @@ export function createVectorManagers(inputs: VectorManagerInputs): VectorManager
     let testTeamVectorManager: VectorSearchManager | undefined
     let teamVectorManager: VectorSearchManagerProxyResult | undefined
     if (primaryTeamDb) {
-        primaryTeamVectorManager = new VectorSearchManager(primaryTeamDb, { modelName: options.embeddingModel })
+        primaryTeamVectorManager = new VectorSearchManager(primaryTeamDb, {
+            modelName: options.embeddingModel,
+        })
         if (testTeamDb) {
-            testTeamVectorManager = new VectorSearchManager(testTeamDb, { modelName: options.embeddingModel })
+            testTeamVectorManager = new VectorSearchManager(testTeamDb, {
+                modelName: options.embeddingModel,
+            })
         }
-        teamVectorManager = VectorSearchManagerProxy.create(primaryTeamVectorManager, testTeamVectorManager)
+        teamVectorManager = VectorSearchManagerProxy.create(
+            primaryTeamVectorManager,
+            testTeamVectorManager
+        )
         logger.info('Team vector search manager created', { module: 'McpServer' })
     }
 
-    const pendingInits: Promise<void>[] = []
-
-    // Auto-rebuild vector index if enabled (non-blocking)
-    if (options.autoRebuildIndex) {
-        logger.info('Auto-rebuilding vector index in background...', { module: 'McpServer' })
-        pendingInits.push(
-            primaryVectorManager
-                .initialize()
-                .then(async () => {
-                    const rebuilt = await primaryVectorManager.rebuildIndex()
-                    const rebuildLog = {
-                        module: 'McpServer',
-                        entriesIndexed: rebuilt.indexed,
-                        success: rebuilt.success,
-                        failed: rebuilt.failed,
-                        firstError: rebuilt.firstError,
-                    }
-                    if (rebuilt.success) {
-                        logger.info('Vector index rebuilt in background', rebuildLog)
-                    } else {
-                        logger.error('Vector index rebuild failed in background', rebuildLog)
-                    }
-                })
-                .catch((err: unknown) => {
-                    logger.error('Background vector init/rebuild failed', {
-                        module: 'McpServer',
-                        error: err,
-                    })
-                })
-        )
-
-        if (testVectorManager) {
-            pendingInits.push(
-                testVectorManager.initialize().catch((err: unknown) => {
-                    logger.error('Background test vector init failed', { module: 'McpServer', error: err })
-                })
-            )
-        }
-
-        if (primaryTeamVectorManager) {
-            pendingInits.push(
-                primaryTeamVectorManager.initialize().catch((err: unknown) => {
-                    logger.error('Background team vector init failed', {
-                        module: 'McpServer',
-                        error: err,
-                    })
-                })
-            )
-            if (testTeamVectorManager) {
-                pendingInits.push(
-                    testTeamVectorManager.initialize().catch((err: unknown) => {
-                        logger.error('Background test team vector init failed', { module: 'McpServer', error: err })
-                    })
-                )
-            }
-            logger.info('Team vector search manager eager initialization started in background', {
-                module: 'McpServer',
-            })
-        }
-    } else {
-        // Otherwise, eager-load the model in the background so the first request isn't blocked
-        logger.info('Vector search manager eager initialization started in background', {
-            module: 'McpServer',
-        })
-        pendingInits.push(
-            primaryVectorManager
-                .initialize()
-                .then(async () => {
-                    if (testVectorManager) await testVectorManager.initialize()
-
-                    // Initialize team vector sequentially to avoid concurrent ONNX model loading crashes
-                    if (primaryTeamVectorManager) {
-                        logger.info(
-                            'Team vector search manager eager initialization started in background',
-                            { module: 'McpServer' }
-                        )
-                        await primaryTeamVectorManager.initialize()
-                        if (testTeamVectorManager) await testTeamVectorManager.initialize()
-                    }
-                })
-                .catch((err: unknown) => {
-                    logger.error('Background vector init failed', { module: 'McpServer', error: err })
-                })
-        )
-    }
+    const pendingInits = options.autoRebuildIndex
+        ? scheduleAutoRebuildVectorInits(
+              primaryVectorManager,
+              testVectorManager,
+              primaryTeamVectorManager,
+              testTeamVectorManager
+          )
+        : scheduleEagerVectorInits(
+              primaryVectorManager,
+              testVectorManager,
+              primaryTeamVectorManager,
+              testTeamVectorManager
+          )
 
     const pendingVectorInit = Promise.allSettled(pendingInits).then(() => undefined)
     return { vectorManager, teamVectorManager, pendingVectorInit }

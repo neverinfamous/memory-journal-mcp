@@ -100,104 +100,135 @@ export function formatDigestReport(snapshot: DigestSnapshot, serverVersion: stri
     return lines.join('\n')
 }
 
-/**
- * Deliver a Markdown report to a webhook via HTTP POST.
- */
-export async function deliverReport(report: string, snapshot: DigestSnapshot, options: ReportDeliveryOptions): Promise<boolean> {
-    const { webhookUrl, webhookAuth, contentType = 'slack' } = options
+const WEBHOOK_MAX_RETRIES = 1
+const WEBHOOK_RETRY_DELAY_MS = 3000
+const WEBHOOK_TIMEOUT_MS = 10000
 
-    let bodyPayload: string
-    if (contentType === 'discord') {
-        bodyPayload = JSON.stringify({ content: report })
-    } else if (contentType === 'json') {
-        bodyPayload = JSON.stringify(snapshot)
-    } else {
-        // slack default
-        bodyPayload = JSON.stringify({ text: report })
-    }
+function buildWebhookPayloadAndHeaders(
+    report: string,
+    snapshot: DigestSnapshot,
+    options: ReportDeliveryOptions
+): { bodyPayload: string; headers: Record<string, string>; contentType: string } {
+    const { webhookAuth, contentType = 'slack' } = options
+    const bodyPayload =
+        contentType === 'discord'
+            ? JSON.stringify({ content: report })
+            : contentType === 'json'
+              ? JSON.stringify(snapshot)
+              : JSON.stringify({ text: report })
 
     const headers: Record<string, string> = {
-        'Content-Type': 'application/json'
+        'Content-Type': 'application/json',
     }
-
     if (webhookAuth) {
         headers['Authorization'] = webhookAuth
     }
+    return { bodyPayload, headers, contentType }
+}
 
-    const MAX_RETRIES = 1
-    const RETRY_DELAY_MS = 3000
-    const TIMEOUT_MS = 10000
+async function sendWebhookAttempt(
+    webhookUrl: string,
+    headers: Record<string, string>,
+    bodyPayload: string,
+    contentType: string,
+    attempt: number
+): Promise<'delivered' | 'fatal' | 'retry'> {
+    try {
+        await validateWebhookUrl(webhookUrl)
+    } catch (err: unknown) {
+        logger.error('Refusing to deliver digest report to unsafe webhook URL', {
+            module: 'DigestReporter',
+            attempt,
+            error: err instanceof Error ? err.message : String(err),
+        })
+        return 'fatal'
+    }
 
-    for (let attempt = 1; attempt <= MAX_RETRIES + 1; attempt++) {
-        try {
-            await validateWebhookUrl(webhookUrl)
-        } catch (err: unknown) {
-            logger.error('Refusing to deliver digest report to unsafe webhook URL', {
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => {
+        controller.abort()
+    }, WEBHOOK_TIMEOUT_MS)
+    timeoutId.unref()
+    try {
+        const response = await fetch(webhookUrl, {
+            method: 'POST',
+            headers,
+            body: bodyPayload,
+            signal: controller.signal,
+            redirect: 'error',
+        })
+
+        if (response.ok) {
+            logger.info('Digest report delivered successfully', {
                 module: 'DigestReporter',
                 attempt,
-                error: err instanceof Error ? err.message : String(err),
+                contentType,
             })
-            return false
+            return 'delivered'
         }
 
-        const controller = new AbortController()
-        const timeoutId = setTimeout(() => { controller.abort() }, TIMEOUT_MS)
-        timeoutId.unref()
-        try {
-            const response = await fetch(webhookUrl, {
-                method: 'POST',
-                headers,
-                body: bodyPayload,
-                signal: controller.signal,
-                redirect: 'error',
+        // Client errors (4xx) shouldn't be retried
+        if (response.status >= 400 && response.status < 500) {
+            logger.error('Failed to deliver digest report (client error)', {
+                module: 'DigestReporter',
+                status: response.status,
+                statusText: response.statusText,
+                contentType,
             })
-
-            if (response.ok) {
-                logger.info('Digest report delivered successfully', { 
-                    module: 'DigestReporter',
-                    attempt,
-                    contentType 
-                })
-                return true
-            }
-
-            // Client errors (4xx) shouldn't be retried
-            if (response.status >= 400 && response.status < 500) {
-                logger.error('Failed to deliver digest report (client error)', {
-                    module: 'DigestReporter',
-                    status: response.status,
-                    statusText: response.statusText,
-                    contentType
-                })
-                return false
-            }
-
-            throw new Error(`HTTP ${String(response.status)}: ${response.statusText}`)
-
-        } catch (error: unknown) {
-            const errorMessage = error instanceof Error ? error.message : String(error)
-            const isAbortError = error instanceof Error && error.name === 'AbortError'
-            
-            if (attempt <= MAX_RETRIES) {
-                logger.warning('Failed to deliver digest report, retrying...', {
-                    module: 'DigestReporter',
-                    attempt,
-                    error: isAbortError ? 'Timeout' : errorMessage
-                })
-                await new Promise<void>((resolve) => {
-                    const retryTimer = setTimeout(resolve, RETRY_DELAY_MS)
-                    retryTimer.unref()
-                })
-            } else {
-                logger.error('Failed to deliver digest report after all attempts', {
-                    module: 'DigestReporter',
-                    error: isAbortError ? 'Timeout' : errorMessage
-                })
-                return false
-            }
-        } finally {
-            clearTimeout(timeoutId)
+            return 'fatal'
         }
+
+        throw new Error(`HTTP ${String(response.status)}: ${response.statusText}`)
+    } catch (error: unknown) {
+        const errorMessage = error instanceof Error ? error.message : String(error)
+        const isAbortError = error instanceof Error && error.name === 'AbortError'
+
+        if (attempt <= WEBHOOK_MAX_RETRIES) {
+            logger.warning('Failed to deliver digest report, retrying...', {
+                module: 'DigestReporter',
+                attempt,
+                error: isAbortError ? 'Timeout' : errorMessage,
+            })
+            await new Promise<void>((resolve) => {
+                const retryTimer = setTimeout(resolve, WEBHOOK_RETRY_DELAY_MS)
+                retryTimer.unref()
+            })
+            return 'retry'
+        }
+        logger.error('Failed to deliver digest report after all attempts', {
+            module: 'DigestReporter',
+            error: isAbortError ? 'Timeout' : errorMessage,
+        })
+        return 'fatal'
+    } finally {
+        clearTimeout(timeoutId)
+    }
+}
+
+/**
+ * Deliver a Markdown report to a webhook via HTTP POST.
+ */
+export async function deliverReport(
+    report: string,
+    snapshot: DigestSnapshot,
+    options: ReportDeliveryOptions
+): Promise<boolean> {
+    const { bodyPayload, headers, contentType } = buildWebhookPayloadAndHeaders(
+        report,
+        snapshot,
+        options
+    )
+
+    for (let attempt = 1; attempt <= WEBHOOK_MAX_RETRIES + 1; attempt++) {
+        const outcome = await sendWebhookAttempt(
+            options.webhookUrl,
+            headers,
+            bodyPayload,
+            contentType,
+            attempt
+        )
+        if (outcome === 'delivered') return true
+        if (outcome === 'fatal') return false
     }
 
     return false

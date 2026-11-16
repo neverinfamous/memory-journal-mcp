@@ -48,6 +48,83 @@ function unknownIdentityError(): Record<string, unknown> {
     }
 }
 
+function resolveBaseCreateAuthor(
+    sanitized: string | undefined
+): { baseAuthor: string } | { errorResponse: Record<string, unknown> } {
+    const authCtx = getAuthContext()
+    if (authCtx?.authenticated) {
+        const authId = resolveAuthenticatedAuthor()
+        if (authId === 'unknown') {
+            return { errorResponse: unknownIdentityError() }
+        }
+        if (sanitized !== undefined && sanitized !== authId) {
+            return {
+                errorResponse: {
+                    success: false,
+                    error: `Author mismatch: supplied author "${sanitized}" does not match authenticated principal "${authId}". Omit the author field to use your identity automatically.`,
+                    code: 'PERMISSION_DENIED',
+                    category: 'auth',
+                    suggestion: 'Omit the author field to use your authenticated identity automatically.',
+                    recoverable: false,
+                },
+            }
+        }
+        return { baseAuthor: authId }
+    }
+    const resolvedAuthor = sanitized ?? resolveAuthor()
+    if (resolvedAuthor === 'unknown') {
+        return { errorResponse: unknownIdentityError() }
+    }
+    return { baseAuthor: resolvedAuthor }
+}
+
+function authorizeRbacCreateAuthor(
+    teamDb: TeamDbInstance,
+    config: ToolHandlerConfig | undefined,
+    sanitized: string | undefined,
+    baseAuthor: string,
+    workspaceId: string | undefined
+): { author: string } | { errorResponse: Record<string, unknown> } {
+    const callerIdentity = getCallerIdentity()
+    const callerRole = resolveScopedTeamRole(
+        teamDb,
+        callerIdentity,
+        config?.teamDefaultRole ?? 'denied',
+        workspaceId
+    )
+    if (callerRole === null || callerRole === 'viewer') {
+        return {
+            errorResponse: {
+                success: false,
+                error: `Permission Denied: caller "${callerIdentity}" (role "${callerRole ?? 'denied'}") cannot create team entries in workspace "${workspaceId ?? 'default'}".`,
+                code: 'PERMISSION_DENIED',
+                category: 'auth',
+                suggestion: 'Request member or admin access for this workspace.',
+                recoverable: false,
+            },
+        }
+    }
+    const canonicalCaller = canonicalizeTeamAuthor(teamDb, callerIdentity, workspaceId)
+    if (
+        sanitized !== undefined &&
+        sanitized !== callerIdentity &&
+        sanitized !== canonicalCaller &&
+        callerRole !== 'admin'
+    ) {
+        return {
+            errorResponse: {
+                success: false,
+                error: `Author mismatch: caller "${callerIdentity}" (role "${callerRole}") cannot author team entries as "${sanitized}".`,
+                code: 'PERMISSION_DENIED',
+                category: 'auth',
+                suggestion: 'Omit the author field or authenticate as a team admin.',
+                recoverable: false,
+            },
+        }
+    }
+    return { author: canonicalizeTeamAuthor(teamDb, baseAuthor, workspaceId) }
+}
+
 /**
  * Resolve and authorize the author claim for team entry creation.
  * Enforces OAuth identity binding and non-OAuth RBAC non-admin impersonation checks (H8).
@@ -72,78 +149,22 @@ export function resolveTeamCreateAuthor(
         }
     }
 
-    const authCtx = getAuthContext()
-    let baseAuthor: string
-    if (authCtx?.authenticated) {
-        const authId = resolveAuthenticatedAuthor()
-        if (authId === 'unknown') {
-            return { errorResponse: unknownIdentityError() }
-        }
-        if (sanitized !== undefined && sanitized !== authId) {
-            return {
-                errorResponse: {
-                    success: false,
-                    error: `Author mismatch: supplied author "${sanitized}" does not match authenticated principal "${authId}". Omit the author field to use your identity automatically.`,
-                    code: 'PERMISSION_DENIED',
-                    category: 'auth',
-                    suggestion: 'Omit the author field to use your authenticated identity automatically.',
-                    recoverable: false,
-                },
-            }
-        }
-        baseAuthor = authId
-    } else {
-        const resolvedAuthor = sanitized ?? resolveAuthor()
-        if (resolvedAuthor === 'unknown') {
-            return { errorResponse: unknownIdentityError() }
-        }
-        baseAuthor = resolvedAuthor
-    }
+    const baseRes = resolveBaseCreateAuthor(sanitized)
+    if ('errorResponse' in baseRes) return baseRes
 
     const teamRbacActive =
         typeof teamDb.isTeamRbacActive === 'function' && teamDb.isTeamRbacActive()
     if (teamRbacActive) {
-        const callerIdentity = getCallerIdentity()
-        const callerRole = resolveScopedTeamRole(
+        return authorizeRbacCreateAuthor(
             teamDb,
-            callerIdentity,
-            config?.teamDefaultRole ?? 'denied',
+            config,
+            sanitized,
+            baseRes.baseAuthor,
             workspaceId
         )
-        if (callerRole === null || callerRole === 'viewer') {
-            return {
-                errorResponse: {
-                    success: false,
-                    error: `Permission Denied: caller "${callerIdentity}" (role "${callerRole ?? 'denied'}") cannot create team entries in workspace "${workspaceId ?? 'default'}".`,
-                    code: 'PERMISSION_DENIED',
-                    category: 'auth',
-                    suggestion: 'Request member or admin access for this workspace.',
-                    recoverable: false,
-                },
-            }
-        }
-        const canonicalCaller = canonicalizeTeamAuthor(teamDb, callerIdentity, workspaceId)
-        if (
-            sanitized !== undefined &&
-            sanitized !== callerIdentity &&
-            sanitized !== canonicalCaller &&
-            callerRole !== 'admin'
-        ) {
-            return {
-                errorResponse: {
-                    success: false,
-                    error: `Author mismatch: caller "${callerIdentity}" (role "${callerRole}") cannot author team entries as "${sanitized}".`,
-                    code: 'PERMISSION_DENIED',
-                    category: 'auth',
-                    suggestion: 'Omit the author field or authenticate as a team admin.',
-                    recoverable: false,
-                },
-            }
-        }
-        return { author: canonicalizeTeamAuthor(teamDb, baseAuthor, workspaceId) }
     }
 
-    return { author: baseAuthor }
+    return { author: baseRes.baseAuthor }
 }
 
 function resolveBatchItemProjectNumber(
