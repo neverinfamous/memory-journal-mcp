@@ -50,7 +50,7 @@ function checkFileLengths(): boolean {
                 const segments = content.split(/\r?\n/)
                 // [INVARIANT] A trailing newline does not start a new line (parity with editor/PowerShell counts).
                 const lines = segments.at(-1) === '' ? segments.length - 1 : segments.length
-                if (/\.(test|spec)\./.test(entry.name)) {
+                if (/\.(test|spec|bench)\./.test(entry.name)) {
                     if (lines > 500) largeTestFiles++
                     continue
                 }

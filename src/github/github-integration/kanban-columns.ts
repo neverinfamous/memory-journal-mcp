@@ -50,14 +50,15 @@ export function groupItemsIntoColumns(
 
     for (const item of items) {
         const statusValue = item.fieldValues.nodes.find((fv) => fv.field?.name === 'Status')
-        const status = statusValue?.name ?? 'No Status'
+        const rawStatus = statusValue?.name
+        const status = rawStatus ?? 'No Status'
         const content = item.content
         const projectItem: ProjectV2Item = {
             id: item.id,
             title: content?.title ?? 'Draft Issue',
             url: content?.url ?? '',
             type: item.type,
-            status,
+            status: rawStatus ?? 'No Status',
             number: content?.number,
             labels: content?.labels?.nodes.map((label) => label.name) ?? [],
             assignees: content?.assignees?.nodes.map((assignee) => assignee.login) ?? [],

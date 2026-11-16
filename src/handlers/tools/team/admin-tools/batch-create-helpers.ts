@@ -73,6 +73,7 @@ export function resolveTeamCreateAuthor(
     }
 
     const authCtx = getAuthContext()
+    let baseAuthor: string
     if (authCtx?.authenticated) {
         const authId = resolveAuthenticatedAuthor()
         if (authId === 'unknown') {
@@ -90,14 +91,18 @@ export function resolveTeamCreateAuthor(
                 },
             }
         }
-        return { author: authId }
+        baseAuthor = authId
+    } else {
+        const resolvedAuthor = sanitized ?? resolveAuthor()
+        if (resolvedAuthor === 'unknown') {
+            return { errorResponse: unknownIdentityError() }
+        }
+        baseAuthor = resolvedAuthor
     }
 
-    if (
-        sanitized !== undefined &&
-        typeof teamDb.isTeamRbacActive === 'function' &&
-        teamDb.isTeamRbacActive()
-    ) {
+    const teamRbacActive =
+        typeof teamDb.isTeamRbacActive === 'function' && teamDb.isTeamRbacActive()
+    if (teamRbacActive) {
         const callerIdentity = getCallerIdentity()
         const callerRole = resolveScopedTeamRole(
             teamDb,
@@ -105,12 +110,29 @@ export function resolveTeamCreateAuthor(
             config?.teamDefaultRole ?? 'denied',
             workspaceId
         )
-        const canonicalCaller = canonicalizeTeamAuthor(teamDb, callerIdentity, workspaceId)
-        if (sanitized !== callerIdentity && sanitized !== canonicalCaller && callerRole !== 'admin') {
+        if (callerRole === null || callerRole === 'viewer') {
             return {
                 errorResponse: {
                     success: false,
-                    error: `Author mismatch: caller "${callerIdentity}" (role "${callerRole ?? 'denied'}") cannot author team entries as "${sanitized}".`,
+                    error: `Permission Denied: caller "${callerIdentity}" (role "${callerRole ?? 'denied'}") cannot create team entries in workspace "${workspaceId ?? 'default'}".`,
+                    code: 'PERMISSION_DENIED',
+                    category: 'auth',
+                    suggestion: 'Request member or admin access for this workspace.',
+                    recoverable: false,
+                },
+            }
+        }
+        const canonicalCaller = canonicalizeTeamAuthor(teamDb, callerIdentity, workspaceId)
+        if (
+            sanitized !== undefined &&
+            sanitized !== callerIdentity &&
+            sanitized !== canonicalCaller &&
+            callerRole !== 'admin'
+        ) {
+            return {
+                errorResponse: {
+                    success: false,
+                    error: `Author mismatch: caller "${callerIdentity}" (role "${callerRole}") cannot author team entries as "${sanitized}".`,
                     code: 'PERMISSION_DENIED',
                     category: 'auth',
                     suggestion: 'Omit the author field or authenticate as a team admin.',
@@ -118,13 +140,10 @@ export function resolveTeamCreateAuthor(
                 },
             }
         }
+        return { author: canonicalizeTeamAuthor(teamDb, baseAuthor, workspaceId) }
     }
 
-    const resolvedAuthor = sanitized ?? resolveAuthor()
-    if (resolvedAuthor === 'unknown') {
-        return { errorResponse: unknownIdentityError() }
-    }
-    return { author: resolvedAuthor }
+    return { author: baseAuthor }
 }
 
 function resolveBatchItemProjectNumber(

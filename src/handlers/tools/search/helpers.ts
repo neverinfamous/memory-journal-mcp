@@ -17,6 +17,12 @@ import * as crypto from 'node:crypto'
 import { logger } from '../../../utils/logger.js'
 import { enforceAccessBoundary } from '../../../auth/validation.js'
 import type { AuditLogger } from '../../../audit/index.js'
+import type { ToolHandlerConfig } from '../../../types/index.js'
+import {
+    canReadTeamEntriesRbac,
+    enforceTeamRbac,
+    getCallerIdentity,
+} from '../team/rbac.js'
 
 // ============================================================================
 // Types
@@ -47,6 +53,7 @@ export interface ISearchFilters {
     includeArchived?: boolean
     workspaceId?: string
     similarityThreshold?: number
+    config?: ToolHandlerConfig | undefined
 }
 
 // ============================================================================
@@ -54,9 +61,19 @@ export interface ISearchFilters {
 // ============================================================================
 
 /** Return true if team boundary access passes without triggering denial audit logs. */
-export function canAccessTeamSilently(toolName = 'search_entries'): boolean {
+export function canAccessTeamSilently(
+    toolName = 'search_entries',
+    context?: {
+        teamDb?: IDatabaseAdapter | undefined
+        config?: ToolHandlerConfig | undefined
+    },
+    workspaceId?: string
+): boolean {
     try {
         enforceAccessBoundary(toolName, 'tool', { requiresTeamScope: true })
+        if (context?.teamDb?.isTeamRbacActive?.()) {
+            return canReadTeamEntriesRbac(context.teamDb, context.config, workspaceId)
+        }
         return true
     } catch {
         return false
@@ -90,21 +107,38 @@ export function hasExplicitIncludeTeam(rawParams: unknown): boolean {
 
 /**
  * Authorize team-DB merging on personal search tools:
- * - Explicit `include_team: true` enforces the fail-closed team boundary (throwing PermissionError).
+ * - Explicit `include_team: true` enforces OAuth team scope + Team RBAC (`AuthorizationError`/`PermissionError`).
  * - Defaulted `include_team` silently drops team results when unauthorized so personal searches still work.
  */
 export function resolveAuthorizedIncludeTeam(
     toolName: string,
     parsedIncludeTeam: boolean,
     rawParams: unknown,
-    auditLogger?: AuditLogger | null
+    auditLogger?: AuditLogger | null,
+    teamDb?: IDatabaseAdapter,
+    config?: ToolHandlerConfig,
+    workspaceId?: string
 ): boolean {
     if (!parsedIncludeTeam) return false
-    if (hasExplicitIncludeTeam(rawParams)) {
+    const explicit = hasExplicitIncludeTeam(rawParams)
+    if (explicit) {
         enforceAccessBoundary(toolName, 'tool', { requiresTeamScope: true }, auditLogger)
-        return true
+    } else if (!canAccessTeamSilently(toolName)) {
+        return false
     }
-    return canAccessTeamSilently(toolName)
+    if (teamDb?.isTeamRbacActive?.() === true) {
+        if (explicit) {
+            enforceTeamRbac(
+                { db: teamDb, teamDb, ...(config !== undefined ? { config } : {}) },
+                getCallerIdentity(),
+                'viewer',
+                workspaceId
+            )
+        } else if (!canReadTeamEntriesRbac(teamDb, config, workspaceId)) {
+            return false
+        }
+    }
+    return true
 }
 
 /**
@@ -241,7 +275,10 @@ export async function collectTeamSearchEntries(
     teamVectorManager: VectorSearchManager | undefined,
     options: ISearchFilters & { limit: number }
 ): Promise<EntryWithSource[]> {
-    if (!canAccessTeamSilently('search_entries')) {
+    if (
+        !canAccessTeamSilently('search_entries') ||
+        !canReadTeamEntriesRbac(teamDb, options.config, options.workspaceId)
+    ) {
         return []
     }
     const seen = new Set<number>()

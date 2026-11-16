@@ -85,16 +85,45 @@ export async function createClient(port?: number, authToken?: string): Promise<C
  * Call a tool and parse the JSON text response into a typed object.
  * Asserts the response has text content and returns the parsed payload.
  */
+const E2E_ENTRY_TOOLS = new Set([
+    'create_entry',
+    'update_entry',
+    'get_recent_entries',
+    'search_entries',
+    'search_by_date_range',
+    'semantic_search',
+    'link_entries',
+    'export_entries',
+    'team_create_entry',
+    'team_update_entry',
+    'batch_create_entries',
+    'team_get_recent_entries',
+    'team_search_entries',
+    'team_search_by_date_range',
+    'team_semantic_search',
+    'team_link_entries',
+    'team_export_entries',
+])
+
+function withDefaultE2EWorkspace(
+    toolName: string,
+    args: Record<string, unknown>
+): Record<string, unknown> {
+    if (E2E_ENTRY_TOOLS.has(toolName) && !('workspace_id' in args)) {
+        return { ...args, workspace_id: 'default' }
+    }
+    return args
+}
+
 export async function callToolAndParse(
     client: Client,
     toolName: string,
     args: Record<string, unknown>
 ): Promise<Record<string, unknown>> {
-    const entryTools = ['create_entry', 'update_entry', 'get_recent_entries', 'search_entries', 'search_by_date_range', 'semantic_search', 'link_entries', 'export_entries', 'team_create_entry', 'team_update_entry', 'batch_create_entries', 'team_get_recent_entries', 'team_search_entries', 'team_search_by_date_range', 'team_semantic_search', 'team_link_entries', 'team_export_entries'];
-    if (entryTools.includes(toolName) && !('workspace_id' in args)) {
-        args.workspace_id = 'default';
-    }
-    const response = await client.callTool({ name: toolName, arguments: args })
+    const response = await client.callTool({
+        name: toolName,
+        arguments: withDefaultE2EWorkspace(toolName, args),
+    })
 
     expect(Array.isArray(response.content)).toBe(true)
 
@@ -151,11 +180,10 @@ export async function callToolRaw(
     content: Array<{ type: string; text: string }>
     isError?: boolean
 }> {
-    const entryTools = ['create_entry', 'update_entry', 'get_recent_entries', 'search_entries', 'search_by_date_range', 'semantic_search', 'link_entries', 'export_entries', 'team_create_entry', 'team_update_entry', 'batch_create_entries', 'team_get_recent_entries', 'team_search_entries', 'team_search_by_date_range', 'team_semantic_search', 'team_link_entries', 'team_export_entries'];
-    if (entryTools.includes(toolName) && !('workspace_id' in args)) {
-        args.workspace_id = 'default';
-    }
-    const response = await client.callTool({ name: toolName, arguments: args })
+    const response = await client.callTool({
+        name: toolName,
+        arguments: withDefaultE2EWorkspace(toolName, args),
+    })
     return response as {
         content: Array<{ type: string; text: string }>
         isError?: boolean

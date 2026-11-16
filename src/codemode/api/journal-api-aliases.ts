@@ -82,8 +82,35 @@ export function wireProjectAndTeamAliasesHelper(deps: ProjectAndTeamAliasDeps): 
         admin['deleteProject'] = wrappedDelete
     }
 
-    const listProjectsFn = createListProjectsFn(registryProvider)
-    const getProjectFn = createGetProjectFn(listProjectsFn)
+    const existingListProjects = admin['listProjects']
+    const existingGetProject = admin['getProject']
+    const fallbackListProjectsFn = createListProjectsFn(registryProvider)
+
+    let listProjectsFn: (...args: unknown[]) => Promise<unknown>
+    if (hasDispatcher && typeof existingListProjects === 'function') {
+        const wrappedListProjects = async (...args: unknown[]): Promise<unknown> => {
+            if (isRecord(args[0])) return await existingListProjects(args[0])
+            return await existingListProjects({})
+        }
+        copyFnSchema(existingListProjects, wrappedListProjects)
+        listProjectsFn = wrappedListProjects
+    } else {
+        listProjectsFn = fallbackListProjectsFn
+    }
+
+    let getProjectFn: (...args: unknown[]) => Promise<unknown>
+    if (hasDispatcher && typeof existingGetProject === 'function') {
+        const wrappedGetProject = async (...args: unknown[]): Promise<unknown> => {
+            if (isRecord(args[0])) return await existingGetProject(args[0])
+            if (typeof args[0] === 'string') return await existingGetProject({ name: args[0] })
+            if (typeof args[0] === 'number') return await existingGetProject({ project_number: args[0] })
+            return await existingGetProject({})
+        }
+        copyFnSchema(existingGetProject, wrappedGetProject)
+        getProjectFn = wrappedGetProject
+    } else {
+        getProjectFn = createGetProjectFn(fallbackListProjectsFn)
+    }
 
     for (const grp of [core, search, admin]) {
         grp['listProjects'] = listProjectsFn

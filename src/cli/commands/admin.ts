@@ -246,30 +246,39 @@ export async function auditAction(options: z.infer<typeof auditSchema>, command:
 }
 
 export async function rebuildIndexAction(options: z.infer<typeof rebuildIndexSchema>, command: Command): Promise<void> {
-    const explicitWs = options.workspace?.trim()
-    if (explicitWs === '*') {
-        process.stderr.write(
-            "Refusing wildcard '--workspace *' in rebuild-index. Omit --workspace or pass a concrete workspace name.\n"
-        )
-        process.exit(1)
-    }
     const { db, serverOptions } = await getDb(options, command)
     try {
+        const explicitWs = options.workspace?.trim()
+        if (explicitWs === '*') {
+            throw new Error(
+                "Refusing wildcard '--workspace *' in rebuild-index. Omit --workspace or pass a concrete workspace name."
+            )
+        }
         const vectorManager = new VectorSearchManager(db, { modelName: serverOptions.embeddingModel })
+        const requestedProj = options.defaultProject
         const targetWs =
             explicitWs !== undefined && explicitWs !== ''
                 ? explicitWs
-                : serverOptions.defaultWorkspaceId
+                : requestedProj === undefined
+                  ? serverOptions.defaultWorkspaceId
+                  : undefined
         const targetProj =
-            options.defaultProject ??
+            requestedProj ??
             (explicitWs === undefined ? serverOptions.defaultProjectNumber : undefined)
+        const rebuildScope = resolveAutoPruneScope(
+            targetWs,
+            targetProj,
+            serverOptions.projectRegistry
+        )
 
         if (options.json !== true) {
             process.stderr.write('Rebuilding vector index...\n')
         }
         const result = await vectorManager.rebuildIndex(undefined, {
-            ...(targetWs !== undefined ? { workspaceId: targetWs } : {}),
-            ...(targetProj !== undefined ? { projectNumber: targetProj } : {}),
+            workspaceId: rebuildScope.workspaceId,
+            ...(rebuildScope.projectNumber !== undefined
+                ? { projectNumber: rebuildScope.projectNumber }
+                : {}),
         })
         const stats = vectorManager.getStats()
 

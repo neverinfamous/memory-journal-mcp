@@ -29,7 +29,12 @@ type CloseIssueInput = z.infer<typeof CloseIssueHandlerInputSchema>
 async function resolveKanbanMoveIfRequested(
     context: ToolContext,
     input: CloseIssueInput,
-    resolved: { owner: string; repo: string; github: ToolContext['github'] },
+    resolved: {
+        owner: string
+        repo: string
+        detectedOwner?: string | null
+        github: ToolContext['github']
+    },
     issueNodeId: string | undefined,
     resolvedProjectNumber?: number
 ): Promise<KanbanMoveResult | undefined> {
@@ -38,7 +43,14 @@ async function resolveKanbanMoveIfRequested(
         return { moved: false, error: 'Kanban move did not run.' }
     }
     const projectNum =
-        resolvedProjectNumber ?? resolveProjectNumber(context, resolved.repo, input.project_number)
+        resolvedProjectNumber ??
+        resolveProjectNumber(
+            context,
+            resolved.repo,
+            input.project_number,
+            resolved.owner,
+            resolved.detectedOwner
+        )
     if (projectNum === undefined) {
         return {
             moved: false,
@@ -57,7 +69,12 @@ async function resolveKanbanMoveIfRequested(
 async function executeCloseIssueMutation(
     context: ToolContext,
     input: CloseIssueInput,
-    resolved: { owner: string; repo: string; github: NonNullable<ToolContext['github']> },
+    resolved: {
+        owner: string
+        repo: string
+        detectedOwner?: string | null
+        github: NonNullable<ToolContext['github']>
+    },
     issueDetails: { title: string; url: string; nodeId?: string }
 ): Promise<Record<string, unknown>> {
     const { db } = context
@@ -71,7 +88,9 @@ async function executeCloseIssueMutation(
         resolved.repo,
         input.workspace_id,
         input.project_number,
-        'close issues and write journal entries'
+        'close issues and write journal entries',
+        resolved.owner,
+        resolved.detectedOwner
     )
     if ('errorResponse' in entryScope) return entryScope.errorResponse
     const { workspaceId, projectNumber } = entryScope

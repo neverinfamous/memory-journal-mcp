@@ -64,7 +64,10 @@ function buildSearchEntriesContext(
         'search_entries',
         input.include_team,
         params,
-        context.config?.runtime?.auditLogger
+        context.config?.runtime?.auditLogger,
+        context.teamDb,
+        context.config,
+        wsId
     )
     const query = input.query?.trim() ?? ''
     const hasFilters = hasSearchEntriesFilter(input)
@@ -98,6 +101,7 @@ function buildSearchEntriesContext(
         fuzzy_match: effectiveFuzzyMatch,
         auto_correct: effectiveAutoCorrect,
         workspaceId: wsId,
+        ...(context.config !== undefined ? { config: context.config } : {}),
     }
     const facets = input.include_facets
         ? context.db.getSearchFacets(query, {

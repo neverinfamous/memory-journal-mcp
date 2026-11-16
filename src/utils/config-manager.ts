@@ -1,40 +1,19 @@
 import * as fs from 'node:fs'
 import { EventEmitter } from 'node:events'
 import { parse as parseYaml, stringify as stringifyYaml } from 'yaml'
-import { validateProjectRegistryObject } from '../cli/server-options-parsers.js'
 import { logger } from './logger.js'
-import { parseToolFilter, type ToolFilterConfig } from '../filtering/tool-filter.js'
-import type { BriefingConfig } from '../handlers/resources/shared.js'
+import { parseToolFilter } from '../filtering/tool-filter.js'
+import { activeProjectRegistry, pairStoredScope } from './write-scope.js'
+import {
+    applyReloadedBriefingScope,
+    buildInitialBaselines,
+    reloadBriefingConfigKeys,
+    type BriefingBaselineMap,
+    type ConfigCliEnvBaseline,
+    type DynamicConfig,
+} from './config-manager-helpers.js'
 
-export interface DynamicConfig {
-    rawToolFilter: string | undefined
-    toolFilterConfig: ToolFilterConfig | null
-    briefingConfig: BriefingConfig
-    codemodeInternalFullAccess?: boolean | undefined
-}
-
-export interface ConfigCliEnvBaseline {
-    rawToolFilter?: string | undefined
-    defaultProjectNumber?: number | undefined
-    defaultWorkspaceId?: string | undefined
-    projectRegistry?: BriefingConfig['projectRegistry'] | undefined
-}
-
-/** Config-file keys that map onto `BriefingConfig` fields, with the expected value type. */
-const BRIEFING_CONFIG_KEY_MAP: Readonly<
-    Record<string, { target: string; kind: 'number' | 'boolean' }>
-> = {
-    briefingEntries: { target: 'entryCount', kind: 'number' },
-    briefingSummaries: { target: 'summaryCount', kind: 'number' },
-    briefingIncludeTeam: { target: 'includeTeam', kind: 'boolean' },
-    briefingIssues: { target: 'issueCount', kind: 'number' },
-    briefingPrs: { target: 'prCount', kind: 'number' },
-    briefingPrStatus: { target: 'prStatusBreakdown', kind: 'boolean' },
-    briefingMilestones: { target: 'milestoneCount', kind: 'number' },
-    briefingWorkflows: { target: 'workflowCount', kind: 'number' },
-    briefingWorkflowStatus: { target: 'workflowStatusBreakdown', kind: 'boolean' },
-    briefingCopilot: { target: 'copilotReviews', kind: 'boolean' },
-}
+export type { ConfigCliEnvBaseline, DynamicConfig }
 
 /** Delay before a config-file change is reloaded, so bursts of writes collapse into one reload. */
 const CONFIG_RELOAD_DEBOUNCE_MS = 500
@@ -42,11 +21,14 @@ const CONFIG_RELOAD_DEBOUNCE_MS = 500
 export class ConfigManager extends EventEmitter {
     private config: DynamicConfig
     private readonly initialCodemodeFullAccess: boolean
+    private readonly codemodeBaseline: boolean | undefined
     private readonly cliEnvBaseline: ConfigCliEnvBaseline
+    private readonly initialBriefingBaseline: BriefingBaselineMap
     private configFilePath?: string | undefined
     private watcher: fs.FSWatcher | undefined
     private debounceTimer?: ReturnType<typeof setTimeout>
     private isWriting = false
+    private closed = false
     /** True when the current rawToolFilter originated from the config file (not CLI/env). */
     private toolFilterFromFile = false
 
@@ -60,73 +42,15 @@ export class ConfigManager extends EventEmitter {
         this.initialCodemodeFullAccess = Boolean(initialConfig.codemodeInternalFullAccess)
         this.configFilePath = configFilePath
 
-        if (cliEnvBaseline !== undefined) {
-            this.cliEnvBaseline = { ...cliEnvBaseline }
-            this.toolFilterFromFile =
-                cliEnvBaseline.rawToolFilter === undefined &&
-                initialConfig.rawToolFilter !== undefined
-        } else {
-            const initialFile =
-                configFilePath !== undefined && fs.existsSync(configFilePath)
-                    ? this.readRawConfigObject()
-                    : null
-            if (initialFile !== null) {
-                const fileToolFilter =
-                    typeof initialFile['toolFilter'] === 'string' &&
-                    initialFile['toolFilter'].trim() !== ''
-                        ? initialFile['toolFilter']
-                        : undefined
-                this.toolFilterFromFile =
-                    fileToolFilter !== undefined && initialConfig.rawToolFilter === fileToolFilter
-                const fileProjNum =
-                    typeof initialFile['defaultProjectNumber'] === 'number'
-                        ? initialFile['defaultProjectNumber']
-                        : undefined
-                const fileWsId =
-                    typeof initialFile['defaultWorkspaceId'] === 'string'
-                        ? initialFile['defaultWorkspaceId']
-                        : undefined
-                const fileRegistry =
-                    typeof initialFile['projectRegistry'] === 'object' &&
-                    initialFile['projectRegistry'] !== null &&
-                    !Array.isArray(initialFile['projectRegistry'])
-                        ? initialFile['projectRegistry']
-                        : undefined
-                this.cliEnvBaseline = {
-                    ...(!this.toolFilterFromFile && initialConfig.rawToolFilter !== undefined
-                        ? { rawToolFilter: initialConfig.rawToolFilter }
-                        : {}),
-                    ...(initialConfig.briefingConfig.defaultProjectNumber !== undefined &&
-                    initialConfig.briefingConfig.defaultProjectNumber !== fileProjNum
-                        ? { defaultProjectNumber: initialConfig.briefingConfig.defaultProjectNumber }
-                        : {}),
-                    ...(initialConfig.briefingConfig.defaultWorkspaceId !== undefined &&
-                    initialConfig.briefingConfig.defaultWorkspaceId !== fileWsId
-                        ? { defaultWorkspaceId: initialConfig.briefingConfig.defaultWorkspaceId }
-                        : {}),
-                    ...(initialConfig.briefingConfig.projectRegistry !== undefined &&
-                    JSON.stringify(initialConfig.briefingConfig.projectRegistry) !==
-                        JSON.stringify(fileRegistry)
-                        ? { projectRegistry: initialConfig.briefingConfig.projectRegistry }
-                        : {}),
-                }
-            } else {
-                this.cliEnvBaseline = {
-                    ...(initialConfig.rawToolFilter !== undefined
-                        ? { rawToolFilter: initialConfig.rawToolFilter }
-                        : {}),
-                    ...(initialConfig.briefingConfig.defaultProjectNumber !== undefined
-                        ? { defaultProjectNumber: initialConfig.briefingConfig.defaultProjectNumber }
-                        : {}),
-                    ...(initialConfig.briefingConfig.defaultWorkspaceId !== undefined
-                        ? { defaultWorkspaceId: initialConfig.briefingConfig.defaultWorkspaceId }
-                        : {}),
-                    ...(initialConfig.briefingConfig.projectRegistry !== undefined
-                        ? { projectRegistry: initialConfig.briefingConfig.projectRegistry }
-                        : {}),
-                }
-            }
-        }
+        const initialFile =
+            configFilePath !== undefined && fs.existsSync(configFilePath)
+                ? this.readRawConfigObject()
+                : null
+        const baselines = buildInitialBaselines(initialConfig, initialFile, cliEnvBaseline)
+        this.cliEnvBaseline = baselines.cliEnvBaseline
+        this.toolFilterFromFile = baselines.toolFilterFromFile
+        this.codemodeBaseline = baselines.codemodeBaseline
+        this.initialBriefingBaseline = baselines.initialBriefingBaseline
 
         if (this.configFilePath && fs.existsSync(this.configFilePath)) {
             this.watchFile()
@@ -155,6 +79,10 @@ export class ConfigManager extends EventEmitter {
 
     public getConfig(): DynamicConfig {
         return this.config
+    }
+
+    public getConfigFilePath(): string | undefined {
+        return this.configFilePath
     }
 
     /**
@@ -190,10 +118,33 @@ export class ConfigManager extends EventEmitter {
      * also written to disk; the returned string is the write error, or undefined on success.
      */
     public updateConfig(newConfig: Partial<DynamicConfig>, persist = false): string | undefined {
-        this.config = { ...this.config, ...newConfig }
+        let nextConfig: DynamicConfig = { ...this.config, ...newConfig }
         if ('rawToolFilter' in newConfig) {
-            this.config.toolFilterConfig = newConfig.rawToolFilter ? parseToolFilter(newConfig.rawToolFilter) : null
+            nextConfig.toolFilterConfig = newConfig.rawToolFilter
+                ? parseToolFilter(newConfig.rawToolFilter)
+                : null
         }
+        if ('briefingConfig' in newConfig) {
+            const registry = activeProjectRegistry(nextConfig.briefingConfig.projectRegistry)
+            const paired = pairStoredScope(
+                nextConfig.briefingConfig.defaultWorkspaceId,
+                nextConfig.briefingConfig.defaultProjectNumber,
+                registry
+            )
+            const nextBc = { ...nextConfig.briefingConfig }
+            if (paired.workspaceId !== undefined) {
+                nextBc.defaultWorkspaceId = paired.workspaceId
+            } else {
+                delete nextBc.defaultWorkspaceId
+            }
+            if (typeof paired.projectNumber === 'number') {
+                nextBc.defaultProjectNumber = paired.projectNumber
+            } else {
+                delete nextBc.defaultProjectNumber
+            }
+            nextConfig = { ...nextConfig, briefingConfig: nextBc }
+        }
+        this.config = nextConfig
 
         const persistError = persist && this.configFilePath ? this.persistToFile() : undefined
 
@@ -202,8 +153,13 @@ export class ConfigManager extends EventEmitter {
     }
 
     public close(): void {
-        if (this.debounceTimer !== undefined) clearTimeout(this.debounceTimer)
+        this.closed = true
+        if (this.debounceTimer !== undefined) {
+            clearTimeout(this.debounceTimer)
+            this.debounceTimer = undefined
+        }
         this.watcher?.close()
+        this.watcher = undefined
     }
 
     private persistToFile(): string | undefined {
@@ -222,9 +178,12 @@ export class ConfigManager extends EventEmitter {
 
             // Update keys
 
-            if (this.config.rawToolFilter !== undefined) {
+            if (this.config.rawToolFilter !== undefined && this.config.rawToolFilter.trim() !== '') {
                 parsed['toolFilter'] = this.config.rawToolFilter
                 this.toolFilterFromFile = true
+            } else {
+                delete parsed['toolFilter']
+                this.toolFilterFromFile = false
             }
             if (this.config.codemodeInternalFullAccess !== undefined) {
                 parsed['codemodeInternalFullAccess'] = this.config.codemodeInternalFullAccess
@@ -273,7 +232,7 @@ export class ConfigManager extends EventEmitter {
                 throw writeErr
             }
             // [SIDE-EFFECT] rename replaces the inode, so re-arm the watcher on the new file.
-            if (this.watcher !== undefined) {
+            if (!this.closed && this.watcher !== undefined) {
                 this.watcher.close()
                 this.watcher = undefined
                 this.watchFile()
@@ -289,14 +248,25 @@ export class ConfigManager extends EventEmitter {
     }
 
     private watchFile(): void {
-        if (!this.configFilePath) return
+        if (this.closed || !this.configFilePath) return
 
         try {
             this.watcher = fs.watch(this.configFilePath, { persistent: false }, (eventType) => {
-                if (eventType === 'change' && !this.isWriting) {
+                if ((eventType === 'change' || eventType === 'rename') && !this.isWriting && !this.closed) {
                     if (this.debounceTimer !== undefined) clearTimeout(this.debounceTimer)
                     this.debounceTimer = setTimeout(() => {
+                        if (this.closed) return
                         try {
+                            if (
+                                eventType === 'rename' &&
+                                this.watcher !== undefined &&
+                                this.configFilePath !== undefined &&
+                                fs.existsSync(this.configFilePath)
+                            ) {
+                                this.watcher.close()
+                                this.watcher = undefined
+                                this.watchFile()
+                            }
                             this.reloadFromFile()
                         } catch (err: unknown) {
                             logger.error('Failed to reload config file', { module: 'ConfigManager', error: err instanceof Error ? err.message : String(err) })
@@ -346,7 +316,11 @@ export class ConfigManager extends EventEmitter {
                 updates.rawToolFilter = this.cliEnvBaseline.rawToolFilter
                 this.toolFilterFromFile = false
             }
-            if ('codemodeInternalFullAccess' in parsed) {
+            if (
+                'codemodeInternalFullAccess' in parsed &&
+                parsed['codemodeInternalFullAccess'] !== null &&
+                parsed['codemodeInternalFullAccess'] !== undefined
+            ) {
                 const requested =
                     typeof parsed['codemodeInternalFullAccess'] === 'boolean'
                         ? parsed['codemodeInternalFullAccess']
@@ -354,27 +328,13 @@ export class ConfigManager extends EventEmitter {
                 if (requested === false || (requested === true && this.initialCodemodeFullAccess)) {
                     updates.codemodeInternalFullAccess = requested
                 }
+            } else if (this.config.codemodeInternalFullAccess !== this.codemodeBaseline) {
+                updates.codemodeInternalFullAccess = this.codemodeBaseline
             }
 
-            // Update briefing config if present
             const bc = { ...this.config.briefingConfig }
-            let bcChanged = false
-            for (const [key, mapping] of Object.entries(BRIEFING_CONFIG_KEY_MAP)) {
-                if (!(key in parsed)) continue
-                const value = parsed[key]
-                if (typeof value !== mapping.kind) {
-                    logger.warning('Ignoring briefing config value with unexpected type', {
-                        module: 'ConfigManager',
-                        key,
-                        expected: mapping.kind,
-                    })
-                    continue
-                }
-                Object.assign(bc, { [mapping.target]: value })
-                bcChanged = true
-            }
-
-            bcChanged = this.reloadBriefingScope(parsed, bc) || bcChanged
+            let bcChanged = reloadBriefingConfigKeys(parsed, bc, this.initialBriefingBaseline)
+            bcChanged = applyReloadedBriefingScope(parsed, bc, this.cliEnvBaseline) || bcChanged
 
             if (bcChanged) {
                 updates.briefingConfig = bc
@@ -390,76 +350,5 @@ export class ConfigManager extends EventEmitter {
                 error: e instanceof Error ? e.message : String(e),
             })
         }
-    }
-
-    private reloadBriefingScope(parsed: Record<string, unknown>, bc: BriefingConfig): boolean {
-        let changed = false
-
-        const rawProjNum = parsed['defaultProjectNumber']
-        const nextProjNum =
-            'defaultProjectNumber' in parsed &&
-            typeof rawProjNum === 'number' &&
-            Number.isInteger(rawProjNum) &&
-            rawProjNum > 0
-                ? rawProjNum
-                : this.cliEnvBaseline.defaultProjectNumber
-        if ('defaultProjectNumber' in parsed && rawProjNum !== undefined && rawProjNum !== null && nextProjNum === this.cliEnvBaseline.defaultProjectNumber && !(typeof rawProjNum === 'number' && Number.isInteger(rawProjNum) && rawProjNum > 0)) {
-            logger.warning('Ignoring invalid defaultProjectNumber in reloaded config file', {
-                module: 'ConfigManager',
-            })
-        }
-        if (bc.defaultProjectNumber !== nextProjNum) {
-            if (nextProjNum !== undefined) {
-                bc.defaultProjectNumber = nextProjNum
-            } else {
-                delete bc.defaultProjectNumber
-            }
-            changed = true
-        }
-
-        const rawWsId = parsed['defaultWorkspaceId']
-        let nextWsId = this.cliEnvBaseline.defaultWorkspaceId
-        if ('defaultWorkspaceId' in parsed && rawWsId !== undefined && rawWsId !== null) {
-            const trimmedWs = typeof rawWsId === 'string' ? rawWsId.trim() : ''
-            if (trimmedWs === '*') {
-                logger.warning("Ignoring wildcard defaultWorkspaceId '*' in reloaded config file", {
-                    module: 'ConfigManager',
-                })
-            } else if (trimmedWs !== '') {
-                nextWsId = trimmedWs
-            }
-        }
-        if (bc.defaultWorkspaceId !== nextWsId) {
-            if (nextWsId !== undefined) {
-                bc.defaultWorkspaceId = nextWsId
-            } else {
-                delete bc.defaultWorkspaceId
-            }
-            changed = true
-        }
-
-        if ('projectRegistry' in parsed && parsed['projectRegistry'] !== undefined && parsed['projectRegistry'] !== null) {
-            try {
-                const validated = validateProjectRegistryObject(parsed['projectRegistry'])
-                if (validated !== undefined && JSON.stringify(bc.projectRegistry) !== JSON.stringify(validated)) {
-                    bc.projectRegistry = validated
-                    changed = true
-                }
-            } catch (err: unknown) {
-                logger.warning('Ignoring invalid projectRegistry in reloaded config file', {
-                    module: 'ConfigManager',
-                    error: err instanceof Error ? err.message : String(err),
-                })
-            }
-        } else if (JSON.stringify(bc.projectRegistry) !== JSON.stringify(this.cliEnvBaseline.projectRegistry)) {
-            if (this.cliEnvBaseline.projectRegistry !== undefined) {
-                bc.projectRegistry = this.cliEnvBaseline.projectRegistry
-            } else {
-                delete bc.projectRegistry
-            }
-            changed = true
-        }
-
-        return changed
     }
 }

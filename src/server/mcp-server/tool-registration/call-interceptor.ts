@@ -2,28 +2,16 @@ import {
     DUMMY_RESOURCE_TOOL_NAMES,
     DUMMY_LIST_RESOURCE_TOOL_NAMES,
     DUMMY_LIST_PROMPT_TOOL_NAMES,
-    DUMMY_LIST_TOOL_NAMES,
     DUMMY_GET_PROMPT_TOOL_NAMES,
-    DUMMY_SERVER_INFO_TOOL_NAMES,
-    DUMMY_PROJECT_TOOL_NAMES,
-    DUMMY_ADAPTER_TOOL_NAMES,
-    DUMMY_GREP_SEARCH_TOOL_NAMES,
-    DUMMY_FILE_VIEW_TOOL_NAMES,
-    DUMMY_DIR_LIST_TOOL_NAMES,
     handleReadResource,
     handlePrompt,
     handleListResources,
     handleListPrompts,
     handleGetPrompt,
-    handleServerInfo,
-    handleListAdapters,
-    handleGrepSearch,
-    handleViewFile,
-    handleListDir,
-    projectAliasTarget,
 } from '../../../handlers/tools/core/dummy-healing.js'
-import { resolveActiveBriefingConfig } from './register-tools-helpers.js'
+import { resolveActiveBriefingConfig, syncLiveHandlerConfig } from './register-tools-helpers.js'
 import {
+    dispatchKnownGroupFallbackTools,
     resolveKnownFallbackAuditName,
     runFallbackWithInterceptors,
 } from './fallback-interceptors.js'
@@ -35,11 +23,9 @@ import {
     matchesExactName,
     normalizeAndAliasToolCall,
     resolveMcpCreateWorkspaceScope,
-    resolveSingleProjectFromRegistry,
     toThrownValidationResponse,
     toValidationFailureResponse,
 } from './call-interceptor-helpers.js'
-import { isToolVisibleForFilter } from '../../../filtering/tool-filter.js'
 import { isAutonomousShimBlockedByFilter } from '../../../handlers/tools/dummy-filter-helpers.js'
 import type { PromptDefinition } from '../../registration.js'
 import { logAgentIssue } from '../../../utils/issue-logger.js'
@@ -121,37 +107,6 @@ async function tryPromptAndResourceFallbacks(
     return undefined
 }
 
-function syncLiveHandlerConfig(
-    target: ToolHandlerConfig,
-    liveConfig: ReturnType<ServerContext['configManager']['getConfig']>,
-    options: ServerOptions,
-    liveBriefing: ReturnType<typeof resolveActiveBriefingConfig>
-): void {
-    target.briefingConfig = liveBriefing
-    if (liveConfig.codemodeInternalFullAccess !== undefined) {
-        target.codemodeInternalFullAccess = liveConfig.codemodeInternalFullAccess
-    } else if (options.codemodeInternalFullAccess !== undefined) {
-        target.codemodeInternalFullAccess = options.codemodeInternalFullAccess
-    } else {
-        delete target.codemodeInternalFullAccess
-    }
-    if (liveBriefing.defaultProjectNumber !== undefined) {
-        target.defaultProjectNumber = liveBriefing.defaultProjectNumber
-    } else {
-        delete target.defaultProjectNumber
-    }
-    if (liveBriefing.defaultWorkspaceId !== undefined) {
-        target.defaultWorkspaceId = liveBriefing.defaultWorkspaceId
-    } else {
-        delete target.defaultWorkspaceId
-    }
-    if (liveBriefing.projectRegistry !== undefined) {
-        target.projectRegistry = liveBriefing.projectRegistry
-    } else {
-        delete target.projectRegistry
-    }
-}
-
 async function tryAutonomousUnknownToolFallback(
     requestedTool: string,
     toolArgs: Record<string, unknown>,
@@ -165,26 +120,26 @@ async function tryAutonomousUnknownToolFallback(
 ): Promise<unknown> {
     const { configManager, db, teamDb, vectorManager, teamVectorManager, github, runtime, allowedIoRoots } = context
     const currentConfig = configManager.getConfig()
-    if (currentConfig.toolFilterConfig !== null && currentConfig.toolFilterConfig !== undefined) {
-        if (
-            isAutonomousShimBlockedByFilter(
-                requestedTool,
-                matchingPrompt?.name,
-                currentConfig.toolFilterConfig
-            )
-        ) {
-            return formatTokenEstimatedError(
-                {
-                    success: false,
-                    error: `Tool '${requestedTool}' is disabled by the active --tool-filter configuration.`,
-                    code: 'TOOL_DISABLED',
-                    category: 'authorization',
-                    suggestion: 'Update the active tool filter or use an enabled tool.',
-                    recoverable: false,
-                },
-                true
-            )
-        }
+    if (
+        currentConfig.toolFilterConfig !== null &&
+        currentConfig.toolFilterConfig !== undefined &&
+        isAutonomousShimBlockedByFilter(
+            requestedTool,
+            matchingPrompt?.name,
+            currentConfig.toolFilterConfig
+        )
+    ) {
+        return formatTokenEstimatedError(
+            {
+                success: false,
+                error: `Tool '${requestedTool}' is disabled by the active --tool-filter configuration.`,
+                code: 'TOOL_DISABLED',
+                category: 'authorization',
+                suggestion: 'Update the active tool filter or use an enabled tool.',
+                recoverable: false,
+            },
+            true
+        )
     }
     const fallbackConfig: ToolHandlerConfig = {
         ...customToolHandlerConfig,
@@ -216,70 +171,16 @@ async function tryAutonomousUnknownToolFallback(
     )
     if (promptOrResourceRes !== undefined) return promptOrResourceRes
 
-    if (matchesExactName(requestedTool, DUMMY_LIST_TOOL_NAMES)) {
-        enforceAccessBoundary('list_tools', 'tool', undefined, runtime.auditLogger)
-        const enabledSet = currentConfig.toolFilterConfig?.enabledTools ?? allToolNames
-        const raw = currentConfig.toolFilterConfig?.raw
-        const toolsList = allTools
-            .filter(
-                (t) =>
-                    enabledSet.has(t.name) &&
-                    isToolVisibleForFilter(t.name, t.annotations?.readOnlyHint, raw)
-            )
-            .map((t) => ({ name: t.name, title: t.title, description: t.description, annotations: t.annotations }))
-        return formatSuccessPayload({
-            success: true,
-            tools: toolsList,
-            _healing_note: `🛠️ AUTONOMOUS HEALING: '${requestedTool}' was called as an MCP tool instead of an MCP protocol request (tools/list). The available tools were returned successfully.`,
-        })
-    }
-
-    if (DUMMY_SERVER_INFO_TOOL_NAMES.includes(requestedTool)) {
-        enforceAccessBoundary('server_info', 'tool', undefined, runtime.auditLogger)
-        return formatSuccessPayload(await handleServerInfo(toolArgs, requestedTool, toolContext))
-    }
-
-    if (
-        matchesExactName(requestedTool, DUMMY_PROJECT_TOOL_NAMES) ||
-        requestedTool === 'projects'
-    ) {
-        const target = requestedTool === 'projects' ? 'list_projects' : projectAliasTarget(requestedTool)
-        if (target !== undefined) {
-            enforceAccessBoundary(target, 'tool', undefined, runtime.auditLogger)
-            if (target === 'get_project') {
-                return formatSuccessPayload(
-                    resolveSingleProjectFromRegistry(customToolHandlerConfig.projectRegistry, toolArgs, requestedTool)
-                )
-            }
-            return formatSuccessPayload({
-                success: true,
-                projects: customToolHandlerConfig.projectRegistry ?? {},
-                _healing_note: `🛠️ AUTONOMOUS HEALING: '${requestedTool}' was called as an MCP tool. Returned registered projects from projectRegistry successfully.`,
-            })
-        }
-    }
-
-    if (matchesExactName(requestedTool, DUMMY_ADAPTER_TOOL_NAMES)) {
-        enforceAccessBoundary('list_adapters', 'tool', undefined, runtime.auditLogger)
-        return formatSuccessPayload(handleListAdapters(requestedTool, toolContext))
-    }
-
-    if (matchesExactName(requestedTool, DUMMY_GREP_SEARCH_TOOL_NAMES)) {
-        enforceAccessBoundary('grep_search', 'tool', undefined, runtime.auditLogger)
-        return formatSuccessPayload(await handleGrepSearch(toolArgs, requestedTool, toolContext))
-    }
-
-    if (DUMMY_FILE_VIEW_TOOL_NAMES.includes(requestedTool)) {
-        enforceAccessBoundary('view_file', 'tool', undefined, runtime.auditLogger)
-        return formatSuccessPayload(await handleViewFile(toolArgs, requestedTool, toolContext))
-    }
-
-    if (DUMMY_DIR_LIST_TOOL_NAMES.includes(requestedTool)) {
-        enforceAccessBoundary('list_dir', 'tool', undefined, runtime.auditLogger)
-        return formatSuccessPayload(await handleListDir(toolArgs, requestedTool, toolContext))
-    }
-
-    return undefined
+    return dispatchKnownGroupFallbackTools(
+        requestedTool,
+        toolArgs,
+        toolContext,
+        currentConfig.toolFilterConfig,
+        fallbackConfig,
+        allTools,
+        allToolNames,
+        runtime
+    )
 }
 
 /** Healing fallbacks and a structured TOOL_NOT_FOUND response for tools that are not registered. */
@@ -358,6 +259,76 @@ async function handleUnknownTool(
     return formatTokenEstimatedError(errorResult, true)
 }
 
+function runArgInterceptionForCall(
+    params: { name?: string; arguments?: Record<string, unknown> },
+    inputArg: unknown,
+    projectRegistry?: ServerOptions['projectRegistry']
+): ReturnType<typeof formatTokenEstimatedError> | undefined {
+    const toolName = params.name
+    if (toolName === undefined || toolName === '') return undefined
+
+    setActiveProjectRegistry(projectRegistry)
+    let intercept: ReturnType<typeof applyArgInterceptions>
+    try {
+        intercept = applyArgInterceptions(toolName, [inputArg])
+    } finally {
+        setActiveProjectRegistry(undefined)
+    }
+
+    if ('error' in intercept) {
+        const errorResult = intercept.error
+        logAgentIssue({
+            source: 'MCP',
+            action: toolName,
+            input: inputArg,
+            error: (errorResult['error'] as string) ?? 'Validation Error',
+        })
+        return formatTokenEstimatedError(errorResult, true)
+    }
+
+    const normalizedArgs = intercept.args?.[0]
+    if (
+        normalizedArgs !== null &&
+        normalizedArgs !== undefined &&
+        typeof normalizedArgs === 'object' &&
+        !Array.isArray(normalizedArgs)
+    ) {
+        params.arguments = normalizedArgs as Record<string, unknown>
+    }
+    return undefined
+}
+
+function healIncomingToolCallParams(
+    params: { name?: string; arguments?: Record<string, unknown> },
+    options: ServerOptions,
+    liveBriefing: ReturnType<typeof resolveActiveBriefingConfig>
+): ReturnType<typeof formatTokenEstimatedError> | undefined {
+    params.arguments ??= {}
+    const healerOptions: ServerOptions = { ...options }
+    if (liveBriefing.projectRegistry !== undefined) {
+        healerOptions.projectRegistry = liveBriefing.projectRegistry
+    } else {
+        delete healerOptions.projectRegistry
+    }
+    if (liveBriefing.defaultProjectNumber !== undefined) {
+        healerOptions.defaultProjectNumber = liveBriefing.defaultProjectNumber
+    } else {
+        delete healerOptions.defaultProjectNumber
+    }
+    if (liveBriefing.defaultWorkspaceId !== undefined) {
+        healerOptions.defaultWorkspaceId = liveBriefing.defaultWorkspaceId
+    } else {
+        delete healerOptions.defaultWorkspaceId
+    }
+
+    if (Array.isArray(params.arguments)) {
+        const errResp = runArgInterceptionForCall(params, params.arguments)
+        if (errResp !== undefined) return errResp
+    }
+    normalizeAndAliasToolCall(params, healerOptions)
+    return runArgInterceptionForCall(params, params.arguments, liveBriefing.projectRegistry)
+}
+
 export function attachCallToolInterceptor(
     requestHandlers: RequestHandlerMap | undefined,
     context: ServerContext,
@@ -376,84 +347,17 @@ export function attachCallToolInterceptor(
             const healingEnabled =
                 options.agentHealing !== false && customToolHandlerConfig.agentHealing !== false
 
+            const liveConfig = context.configManager.getConfig()
             const liveBriefing = resolveActiveBriefingConfig(
-                context.configManager.getConfig().briefingConfig,
+                liveConfig.briefingConfig,
                 options,
                 context.allowedIoRoots
             )
-            const liveConfig = context.configManager.getConfig()
             syncLiveHandlerConfig(customToolHandlerConfig, liveConfig, options, liveBriefing)
-            const liveRegistry = liveBriefing.projectRegistry
-            const liveDefaultProj = liveBriefing.defaultProjectNumber
-            const liveDefaultWs = liveBriefing.defaultWorkspaceId
 
             if (req.params !== undefined && healingEnabled) {
-                req.params.arguments ??= {}
-                const healerOptions: ServerOptions = { ...options }
-                if (liveRegistry !== undefined) healerOptions.projectRegistry = liveRegistry
-                else delete healerOptions.projectRegistry
-                if (liveDefaultProj !== undefined)
-                    healerOptions.defaultProjectNumber = liveDefaultProj
-                else delete healerOptions.defaultProjectNumber
-                if (liveDefaultWs !== undefined) healerOptions.defaultWorkspaceId = liveDefaultWs
-                else delete healerOptions.defaultWorkspaceId
-                if (
-                    Array.isArray(req.params.arguments) &&
-                    req.params.name !== undefined &&
-                    req.params.name !== ''
-                ) {
-                    const arrayIntercept = applyArgInterceptions(req.params.name, [req.params.arguments])
-                    if ('error' in arrayIntercept) {
-                        const errorResult = arrayIntercept.error
-                        logAgentIssue({
-                            source: 'MCP',
-                            action: req.params.name,
-                            input: req.params.arguments,
-                            error: (errorResult['error'] as string) ?? 'Validation Error',
-                        })
-                        return formatTokenEstimatedError(errorResult, true)
-                    }
-                    const unwrapped = arrayIntercept.args?.[0]
-                    if (
-                        unwrapped !== null &&
-                        unwrapped !== undefined &&
-                        typeof unwrapped === 'object' &&
-                        !Array.isArray(unwrapped)
-                    ) {
-                        req.params.arguments = unwrapped as Record<string, unknown>
-                    }
-                }
-                normalizeAndAliasToolCall(req.params, healerOptions)
-                const toolArgs = req.params.arguments
-
-                if (req.params.name !== undefined && req.params.name !== '') {
-                    setActiveProjectRegistry(liveRegistry)
-                    let intercept: ReturnType<typeof applyArgInterceptions>
-                    try {
-                        intercept = applyArgInterceptions(req.params.name, [toolArgs])
-                    } finally {
-                        setActiveProjectRegistry(undefined)
-                    }
-                    if ('error' in intercept) {
-                        const errorResult = intercept.error
-                        logAgentIssue({
-                            source: 'MCP',
-                            action: req.params.name,
-                            input: toolArgs,
-                            error: (errorResult['error'] as string) ?? 'Validation Error',
-                        })
-                        return formatTokenEstimatedError(errorResult, true)
-                    }
-                    const normalizedArgs = intercept.args?.[0]
-                    if (
-                        normalizedArgs !== null &&
-                        normalizedArgs !== undefined &&
-                        typeof normalizedArgs === 'object' &&
-                        !Array.isArray(normalizedArgs)
-                    ) {
-                        req.params.arguments = normalizedArgs as Record<string, unknown>
-                    }
-                }
+                const healError = healIncomingToolCallParams(req.params, options, liveBriefing)
+                if (healError !== undefined) return healError
             }
 
             if (req.params?.arguments !== undefined) {
@@ -461,9 +365,15 @@ export function attachCallToolInterceptor(
                     ...customToolHandlerConfig,
                     briefingConfig: liveBriefing,
                     runtime: context.runtime,
-                    ...(liveRegistry !== undefined ? { projectRegistry: liveRegistry } : {}),
-                    ...(liveDefaultProj !== undefined ? { defaultProjectNumber: liveDefaultProj } : {}),
-                    ...(liveDefaultWs !== undefined ? { defaultWorkspaceId: liveDefaultWs } : {}),
+                    ...(liveBriefing.projectRegistry !== undefined
+                        ? { projectRegistry: liveBriefing.projectRegistry }
+                        : {}),
+                    ...(liveBriefing.defaultProjectNumber !== undefined
+                        ? { defaultProjectNumber: liveBriefing.defaultProjectNumber }
+                        : {}),
+                    ...(liveBriefing.defaultWorkspaceId !== undefined
+                        ? { defaultWorkspaceId: liveBriefing.defaultWorkspaceId }
+                        : {}),
                 })
             }
 
@@ -486,7 +396,6 @@ export function attachCallToolInterceptor(
             }
 
             const result = await originalHandler(request, extra)
-
             const validationFailure = toValidationFailureResponse(result, req.params)
             if (validationFailure !== undefined) return validationFailure
 

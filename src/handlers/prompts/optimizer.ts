@@ -9,7 +9,7 @@ import { ICON_PROMPT } from '../../constants/icons.js'
 import type { InternalPromptDef } from './index.js'
 import type { BriefingConfig } from '../resources/shared.js'
 import { loadProjectRegistryFromConfig } from '../../utils/workspace-resolver.js'
-import { exactRegistryKey } from '../../utils/write-scope.js'
+import { exactRegistryKey, uniqueWorkspaceForProject } from '../../utils/write-scope.js'
 import { sanitizePromptTarget } from './adversarial-helpers.js'
 import { markUntrustedContent } from '../../utils/security-utils.js'
 import { z } from 'zod'
@@ -55,12 +55,11 @@ function resolveOptimizeTargetScope(
     }
     if (/^[1-9]\d*$/.test(targetProject)) {
         const parsedNum = Number(targetProject)
-        for (const [key, entry] of Object.entries(registry ?? {})) {
-            if (entry.project_number === parsedNum) {
-                return { workspaceId: key, projectNumber: parsedNum }
-            }
+        const uniqueWorkspace = uniqueWorkspaceForProject(parsedNum, registry)
+        return {
+            workspaceId: uniqueWorkspace ?? '*',
+            projectNumber: parsedNum,
         }
-        return { workspaceId: '*', projectNumber: parsedNum }
     }
     const matchedKey = exactRegistryKey(targetProject, registry)
     if (matchedKey !== undefined) {
@@ -166,7 +165,7 @@ for (const entry of (entries.entries || [])) {
     graph.push({
       id: entry.id,
       project: entry.projectName,
-      relationships: full.relationships.map(r => ({ toId: r.toEntryId, type: r.relationshipType }))
+      relationships: full.relationships.map(r => ({ fromId: r.fromEntryId, toId: r.toEntryId, type: r.relationshipType }))
     });
   }
 }
@@ -259,6 +258,123 @@ Include the reference table of configurable prompt parameters (\`mode\`, \`targe
 | \`autoRun\` | Boolean (\`true\` \\| \`false\`) | \`false\` | Enables unattended maximum-depth execution without stopping. |`
 }
 
+function parseOptimizePromptArgs(rawArgs: Record<string, string>): {
+    lookback: number
+    targetProject: string | undefined
+    autoRun: boolean
+    mode: string
+    targetDimension: string
+    isAutonomousFull: boolean
+    entryLimit: number
+} {
+    const lookbackRes = optimizeJournalArgsSchema.shape.lookback.safeParse(rawArgs['lookback'])
+    const lookback = lookbackRes.success ? lookbackRes.data : 10
+    const projectRes = optimizeJournalArgsSchema.shape.project.safeParse(rawArgs['project'])
+    const rawTargetProject = projectRes.success ? projectRes.data : undefined
+    const targetProject =
+        rawTargetProject !== undefined && rawTargetProject !== ''
+            ? sanitizePromptTarget(rawTargetProject)
+            : undefined
+    const autoRunRes = optimizeJournalArgsSchema.shape.autoRun.safeParse(rawArgs['autoRun'])
+    const autoRun = autoRunRes.success ? autoRunRes.data : false
+    const modeRes = optimizeJournalArgsSchema.shape.mode.safeParse(rawArgs['mode'])
+    const mode = modeRes.success ? modeRes.data : 'quick'
+    const dimRes = optimizeJournalArgsSchema.shape.targetDimension.safeParse(
+        rawArgs['targetDimension']
+    )
+    const targetDimension = dimRes.success ? dimRes.data : 'all'
+    const isAutonomousFull = autoRun || mode === 'full'
+    const limitRes = optimizeJournalArgsSchema.shape.limit.safeParse(rawArgs['limit'])
+    const entryLimit =
+        limitRes.success && limitRes.data !== undefined
+            ? limitRes.data
+            : isAutonomousFull
+              ? 0
+              : 500
+    return {
+        lookback,
+        targetProject,
+        autoRun,
+        mode,
+        targetDimension,
+        isAutonomousFull,
+        entryLimit,
+    }
+}
+
+function buildOptimizePromptResponse(params: {
+    mode: string
+    targetDimension: string
+    targetProject: string | undefined
+    entryLimit: number
+    autoRun: boolean
+    isAutonomousFull: boolean
+    statsSnippet: string
+    unverifiedSnippet: string
+    mjProjectNumber: number | undefined
+}): { messages: { role: 'user'; content: { type: 'text'; text: string } }[] } {
+    const targetProjectText =
+        params.targetProject !== undefined && params.targetProject !== ''
+            ? ` | **Target Project**: \`${params.targetProject}\``
+            : ''
+    const limitDisplay =
+        params.entryLimit === 0 ? '0 (Unlimited / All Time)' : String(params.entryLimit)
+    const limitText = ` | **Entry Limit**: \`${limitDisplay}\``
+    const autoRunText = params.autoRun ? ` | **Auto-Run**: \`true\`` : ''
+    const executionBanner = buildExecutionBanner(params.isAutonomousFull)
+    const optionCHeading = params.isAutonomousFull
+        ? '### Option C: Comprehensive Multi-Agent Domain Audit, Episodic Compaction & Noise Pruning (Executed Automatically in Full/AutoRun Mode)'
+        : '### Comprehensive Multi-Agent Domain Audit & Noise Pruning (Presented to User for Choice)'
+    const scanLoopCondition =
+        params.entryLimit === 0
+            ? 'for (let _page = 0; _page < 200; _page++)'
+            : `while (processed < ${String(params.entryLimit)})`
+
+    const standardsAndScripts = buildOptimizeStandardsAndScripts(
+        params.targetProject,
+        scanLoopCondition,
+        params.mjProjectNumber
+    )
+    const workflowOptions = buildOptimizeWorkflowOptionsSection(
+        params.targetDimension,
+        optionCHeading,
+        params.targetProject,
+        limitDisplay
+    )
+
+    return {
+        messages: [
+            {
+                role: 'user' as const,
+                content: {
+                    type: 'text' as const,
+                    text: `# Journal Optimizer & Verification Workflow
+
+You are executing the guided workflow for intelligently pruning, verifying, consolidating, and auditing the global memory journal database. Every operation uses soft-deletion or archival as a safe first pass.
+
+**Requested Mode**: \`${params.mode}\` | **Quality Dimension**: \`${params.targetDimension}\`${targetProjectText}${limitText}${autoRunText}
+
+${params.statsSnippet}
+
+## Unverified Recent Entries
+${markUntrustedContent(params.unverifiedSnippet)}
+
+${executionBanner}
+
+---
+
+${standardsAndScripts}
+
+---
+
+${workflowOptions}
+`,
+                },
+            },
+        ],
+    }
+}
+
 export function getOptimizerPromptDefinitions(): InternalPromptDef[] {
     return [
         {
@@ -307,40 +423,9 @@ export function getOptimizerPromptDefinitions(): InternalPromptDef[] {
             ) => {
                 // [INVARIANT] H27: Parse each field independently so one invalid numeric/enum
                 // option (e.g., lookback) never discards `project` scope or valid siblings.
-                const rawArgs = args ?? {}
-                const lookbackRes = optimizeJournalArgsSchema.shape.lookback.safeParse(
-                    rawArgs['lookback']
-                )
-                const lookback = lookbackRes.success ? lookbackRes.data : 10
-                const projectRes = optimizeJournalArgsSchema.shape.project.safeParse(
-                    rawArgs['project']
-                )
-                const rawTargetProject = projectRes.success ? projectRes.data : undefined
-                const targetProject =
-                    rawTargetProject !== undefined && rawTargetProject !== ''
-                        ? sanitizePromptTarget(rawTargetProject)
-                        : undefined
-                const autoRunRes = optimizeJournalArgsSchema.shape.autoRun.safeParse(
-                    rawArgs['autoRun']
-                )
-                const autoRun = autoRunRes.success ? autoRunRes.data : false
-                const modeRes = optimizeJournalArgsSchema.shape.mode.safeParse(rawArgs['mode'])
-                const mode = modeRes.success ? modeRes.data : 'quick'
-                const dimRes = optimizeJournalArgsSchema.shape.targetDimension.safeParse(
-                    rawArgs['targetDimension']
-                )
-                const targetDimension = dimRes.success ? dimRes.data : 'all'
-                const isAutonomousFull = autoRun || mode === 'full'
-                const limitRes = optimizeJournalArgsSchema.shape.limit.safeParse(rawArgs['limit'])
-                const entryLimit =
-                    limitRes.success && limitRes.data !== undefined
-                        ? limitRes.data
-                        : isAutonomousFull
-                          ? 0
-                          : 500
-
+                const parsed = parseOptimizePromptArgs(args ?? {})
                 const registry = briefingConfig?.projectRegistry ?? loadProjectRegistryFromConfig()
-                const targetScope = resolveOptimizeTargetScope(targetProject, registry)
+                const targetScope = resolveOptimizeTargetScope(parsed.targetProject, registry)
                 const statsSnippet = buildStatsSnippet(
                     db,
                     targetScope.workspaceId,
@@ -348,76 +433,22 @@ export function getOptimizerPromptDefinitions(): InternalPromptDef[] {
                 )
                 const unverifiedSnippet = buildUnverifiedSnippet(
                     db,
-                    lookback,
+                    parsed.lookback,
                     targetScope.workspaceId,
                     targetScope.projectNumber
                 )
-
-                const targetProjectText =
-                    targetProject !== undefined && targetProject !== ''
-                        ? ` | **Target Project**: \`${targetProject}\``
-                        : ''
-                const limitDisplay = entryLimit === 0 ? '0 (Unlimited / All Time)' : String(entryLimit)
-                const limitText = ` | **Entry Limit**: \`${limitDisplay}\``
-                const autoRunText = autoRun ? ` | **Auto-Run**: \`true\`` : ''
-                const executionBanner = buildExecutionBanner(isAutonomousFull)
-                const optionCHeading = isAutonomousFull
-                    ? '### Option C: Comprehensive Multi-Agent Domain Audit, Episodic Compaction & Noise Pruning (Executed Automatically in Full/AutoRun Mode)'
-                    : '### Comprehensive Multi-Agent Domain Audit & Noise Pruning (Presented to User for Choice)'
-                const scanLoopCondition =
-                    entryLimit === 0
-                        ? 'for (let _page = 0; _page < 200; _page++)'
-                        : `while (processed < ${String(entryLimit)})`
-
                 const mjRegistryKey = exactRegistryKey('memory-journal-mcp', registry)
                 const mjProjectNumber =
                     mjRegistryKey !== undefined
                         ? registry?.[mjRegistryKey]?.project_number
                         : undefined
 
-                const standardsAndScripts = buildOptimizeStandardsAndScripts(
-                    targetProject,
-                    scanLoopCondition,
-                    mjProjectNumber
-                )
-                const workflowOptions = buildOptimizeWorkflowOptionsSection(
-                    targetDimension,
-                    optionCHeading,
-                    targetProject,
-                    limitDisplay
-                )
-
-                return {
-                    messages: [
-                        {
-                            role: 'user',
-                            content: {
-                                type: 'text',
-                                text: `# Journal Optimizer & Verification Workflow
-
-You are executing the guided workflow for intelligently pruning, verifying, consolidating, and auditing the global memory journal database. Every operation uses soft-deletion or archival as a safe first pass.
-
-**Requested Mode**: \`${mode}\` | **Quality Dimension**: \`${targetDimension}\`${targetProjectText}${limitText}${autoRunText}
-
-${statsSnippet}
-
-## Unverified Recent Entries
-${markUntrustedContent(unverifiedSnippet)}
-
-${executionBanner}
-
----
-
-${standardsAndScripts}
-
----
-
-${workflowOptions}
-`,
-                            },
-                        },
-                    ],
-                }
+                return buildOptimizePromptResponse({
+                    ...parsed,
+                    statsSnippet,
+                    unverifiedSnippet,
+                    mjProjectNumber,
+                })
             },
         },
         ...getCmsSupervisorPromptDefinitions(),

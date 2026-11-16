@@ -7,6 +7,7 @@
  */
 
 import type { RequestContext } from '../utils/request-context.js'
+import { TEAM_PROMPT_NAMES } from '../auth/scope-map.js'
 import type { AuditCategory, AuditEntry, AuditSearchFilters } from './types.js'
 
 export interface AuditScopeMetadata {
@@ -16,6 +17,24 @@ export interface AuditScopeMetadata {
 
 const SENSITIVE_AUDIT_URI_RE =
     /^memory:\/\/(?:team|audit|insights\/team-collaboration)(?:\/|$|\?|#)/i
+const SCHEMELESS_SENSITIVE_PATH_RE =
+    /^(?:team|audit|insights\/team-collaboration)(?:\/|$|\?|#)/i
+
+const AUDIT_URI_KEYS = [
+    'uri',
+    'Uri',
+    '_uri',
+    'resourceUri',
+    'resource_uri',
+    'url',
+    'Url',
+    'resource',
+    'Resource',
+    'path',
+    'Path',
+    'target',
+    'Target',
+] as const
 
 /** Parse one JSONL audit line; returns null for empty or unparseable lines. */
 export function parseAuditLine(line: string | undefined): AuditEntry | null {
@@ -46,22 +65,69 @@ export function matchesAuditFilters(entry: AuditEntry, filters: AuditSearchFilte
     return true
 }
 
-/** Whether a resource URI or capability flags require unconditional audit logging. */
+/** Normalize resource URI targets (stripping fragments and adding `memory://` for scheme-less paths). */
+export function normalizeAuditResourceUri(raw: string): string {
+    const trimmed = raw.trim()
+    const withScheme =
+        !trimmed.includes('://') && SCHEMELESS_SENSITIVE_PATH_RE.test(trimmed)
+            ? `memory://${trimmed}`
+            : trimmed
+    return withScheme.replace(/#.*$/, '')
+}
+
+function isTeamPromptTarget(name: string): boolean {
+    const trimmed = name.trim()
+    if (TEAM_PROMPT_NAMES.has(trimmed)) return true
+    const normalized = trimmed.replace(/^mj_/, '').replace(/_/g, '-')
+    return TEAM_PROMPT_NAMES.has(normalized)
+}
+
+/** Extract a sensitive resource URI or team prompt target from tool arguments, if present. */
+export function extractSensitiveTargetFromArgs(toolName: string, args: unknown): string | undefined {
+    if (toolName.startsWith('memory://')) {
+        const normalizedToolUri = normalizeAuditResourceUri(toolName)
+        if (isSensitiveAuditTarget(normalizedToolUri)) return normalizedToolUri
+    }
+    if (typeof args !== 'object' || args === null) return undefined
+    const record = args as Record<string, unknown>
+
+    for (const key of AUDIT_URI_KEYS) {
+        const val = record[key]
+        if (typeof val !== 'string' || val.trim() === '') continue
+        const normalized = normalizeAuditResourceUri(val)
+        if (isSensitiveAuditTarget(normalized)) return normalized
+    }
+
+    const promptCandidate = record['name'] ?? record['Name'] ?? record['prompt']
+    if (typeof promptCandidate === 'string' && isTeamPromptTarget(promptCandidate)) {
+        return promptCandidate.trim()
+    }
+
+    return undefined
+}
+
+/** Whether a resource URI, team prompt, or capability flags require unconditional audit logging. */
 export function isSensitiveAuditTarget(
     uriOrName: string,
     capabilities?: { requiresTeamScope?: boolean; requiresAuditScope?: boolean }
 ): boolean {
+    const normalized = normalizeAuditResourceUri(uriOrName)
     return (
         capabilities?.requiresTeamScope === true ||
         capabilities?.requiresAuditScope === true ||
-        SENSITIVE_AUDIT_URI_RE.test(uriOrName)
+        SENSITIVE_AUDIT_URI_RE.test(normalized) ||
+        isTeamPromptTarget(uriOrName)
     )
 }
 
 /** Derive the audit category for an audited resource or prompt operation. */
 export function resolveResourceAuditCategory(uriOrName: string): AuditCategory {
-    if (/^memory:\/\/audit(?:\/|$|\?|#)/i.test(uriOrName)) return 'audit'
-    if (/^memory:\/\/(?:team|insights\/team-collaboration)(?:\/|$|\?|#)/i.test(uriOrName)) {
+    const normalized = normalizeAuditResourceUri(uriOrName)
+    if (/^memory:\/\/audit(?:\/|$|\?|#)/i.test(normalized)) return 'audit'
+    if (
+        /^memory:\/\/(?:team|insights\/team-collaboration)(?:\/|$|\?|#)/i.test(normalized) ||
+        isTeamPromptTarget(uriOrName)
+    ) {
         return 'team'
     }
     return 'read'
@@ -124,7 +190,7 @@ export function extractAuditScopeFromUri(
         }
         if (workspaceId === undefined && (parsed.hostname === 'briefing' || parsed.hostname === 'agent-context' || parsed.hostname === 'agent-id')) {
             const rawRepo = parsed.pathname.replace(/^\/+/, '').trim()
-            if (rawRepo.length > 0 && rawRepo !== 'default') {
+            if (rawRepo.length > 0) {
                 workspaceId = decodeURIComponent(rawRepo)
             }
         }

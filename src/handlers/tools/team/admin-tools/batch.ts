@@ -107,19 +107,25 @@ export function getTeamAdminBatchTools(context: ToolContext): ToolDefinition[] {
 
                     await sendProgress(context.progress, 1, 2, `Updated ${String(entries.length)} team entries...`)
 
-                    const contentUpdatedIds = new Set(
-                        input.updates.filter((u) => u.content !== undefined).map((u) => u.entry_id)
+                    const vectorUpdatedIds = new Set(
+                        input.updates
+                            .filter(
+                                (u) =>
+                                    u.content !== undefined ||
+                                    u.tags !== undefined ||
+                                    u.entry_type !== undefined
+                            )
+                            .map((u) => u.entry_id)
                     )
                     const { indexStatuses, indexErrors } = await indexBatchEntries({
                         progress: context.progress,
                         vectorManager: context.teamVectorManager,
                         db: teamDb,
-                        // [INVARIANT] Content edits always resync existing team vectors, matching team_update_entry.
-                        autoIndex: input.auto_index || contentUpdatedIds.size > 0,
+                        autoIndex: input.auto_index,
                         entryIds: entries.map((e) => e.id),
                         errorPrefix: 'Team entry',
                         doneMessage: 'Team batch update complete',
-                        shouldIndex: (id) => contentUpdatedIds.has(id),
+                        shouldIndex: (id) => vectorUpdatedIds.has(id),
                         workspaceByEntryId: collectIndexWorkspaces(entries),
                     })
 

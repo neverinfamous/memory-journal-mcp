@@ -58,13 +58,14 @@ function readSearchPosition(options?: { cursor?: string; offset?: number }): Sea
     let keysetT = ''
     let keysetId = 0
     let hasKeyset = false
-    if (options?.cursor !== undefined) {
+    if (options?.cursor !== undefined && options.cursor !== '') {
         const decoded = decodeCursor(options.cursor)
         if (decoded === null) {
             throw new ValidationError('Invalid pagination cursor. Re-run the search without a cursor.')
         }
         if ('t' in decoded) {
             hasKeyset = true
+            offset = 0
             keysetT = decoded.t
             keysetId = decoded.id
         } else {

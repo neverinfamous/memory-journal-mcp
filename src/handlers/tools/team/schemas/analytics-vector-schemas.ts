@@ -1,5 +1,4 @@
 import { z } from 'zod'
-import { healIncludeArchivedField } from '../../schemas/hallucination-healer-fields.js'
 import {
     ENTRY_TYPES,
     RelationshipOutputSchema,
@@ -10,23 +9,30 @@ import {
 } from '../../schemas.js'
 import { ErrorFieldsMixin } from '../../error-fields-mixin.js'
 import { TeamEntryOutputSchema } from './core-search-schemas.js'
+import {
+    preprocessSemanticSearchQuery,
+    normalizeTeamLinkRelationshipType,
+    preprocessTeamLinkEntries,
+} from './search-preprocessors.js'
 
 /** team_get_statistics — strict */
-export const TeamGetStatisticsSchema = z.object({
-    group_by: z.enum(['day', 'week', 'month']).optional().default('week'),
-    project_number: StrictProjectNumberSchema.optional(),
-    workspace_id: z
-        .string()
-        .optional()
-        .describe(
-            'Optional workspace isolation identifier (e.g. "alpha"). Do not use numeric project IDs or "workspace" as the key.'
-        ),
-})
+export const TeamGetStatisticsSchema = z
+    .object({
+        group_by: z.enum(['day', 'week', 'month']).optional().default('week'),
+        project_number: StrictProjectNumberSchema.optional(),
+        workspace_id: z
+            .string()
+            .optional()
+            .describe(
+                'Optional workspace isolation identifier (e.g. "alpha"). Do not use numeric project IDs or "workspace" as the key.'
+            ),
+    })
+    .strict()
 
 /** team_get_statistics — relaxed */
 export const TeamGetStatisticsSchemaMcp = z.object({
-    group_by: z.string().optional().default('week'),
-    project_number: relaxedNumber().optional(),
+    group_by: z.string().optional().default('week').describe('Time grouping interval: day, week, or month'),
+    project_number: relaxedNumber().optional().describe('Project number to scope statistics to'),
     workspace_id: z
         .string()
         .optional()
@@ -35,45 +41,39 @@ export const TeamGetStatisticsSchemaMcp = z.object({
         ),
 })
 
-const normalizeTeamLinkRelationshipType = (val: unknown): unknown =>
-    val === 'resolves'
-        ? 'resolved'
-        : val === 'relates_to'
-          ? 'references'
-          : val === 'depends_on'
-            ? 'blocked_by'
-            : val
-
 /** team_link_entries — strict */
-export const TeamLinkEntriesSchema = z.object({
-    from_entry_id: z.number(),
-    to_entry_id: z.number(),
-    relationship_type: z.preprocess(
-        normalizeTeamLinkRelationshipType,
-        z
-            .enum([
-                'evolves_from',
-                'references',
-                'implements',
-                'clarifies',
-                'response_to',
-                'blocked_by',
-                'resolved',
-                'caused',
-            ])
-            .optional()
-            .default('references')
-    ),
-    description: z.string().optional(),
-    project_number: StrictProjectNumberSchema.optional(),
-    workspace_id: z.string().optional(),
-})
+export const TeamLinkEntriesSchema = z
+    .object({
+        from_entry_id: z.number().int().positive(),
+        to_entry_id: z.number().int().positive(),
+        relationship_type: z.preprocess(
+            normalizeTeamLinkRelationshipType,
+            z
+                .enum([
+                    'evolves_from',
+                    'references',
+                    'implements',
+                    'clarifies',
+                    'response_to',
+                    'blocked_by',
+                    'resolved',
+                    'caused',
+                ])
+                .optional()
+                .default('references')
+        ),
+        description: z.string().optional(),
+        project_number: StrictProjectNumberSchema.optional(),
+        workspace_id: z.string().optional(),
+    })
+    .strict()
 
 /** team_link_entries — relaxed */
-export const TeamLinkEntriesSchemaMcp = z
-    .object({
-        from_entry_id: relaxedNumber().optional(),
-        to_entry_id: relaxedNumber().optional(),
+export const TeamLinkEntriesSchemaMcp = z.preprocess(
+    preprocessTeamLinkEntries,
+    z.object({
+        from_entry_id: relaxedNumber().optional().describe('Source entry ID'),
+        to_entry_id: relaxedNumber().optional().describe('Target entry ID'),
         from: relaxedNumber().optional(),
         to: relaxedNumber().optional(),
         from_id: relaxedNumber().optional(),
@@ -94,32 +94,23 @@ export const TeamLinkEntriesSchemaMcp = z
                 'Optional workspace isolation identifier (e.g. "alpha"). Do not use numeric project IDs or "workspace" as the key.'
             ),
     })
-    .transform((data) => {
-        const rawRel = data.type ?? data.rel ?? data.relationship_type ?? 'references'
-        const normalizedRel = normalizeTeamLinkRelationshipType(rawRel) as string
-        return {
-            from_entry_id: data.from_entry_id ?? data.from_id ?? data.from ?? data.source_id,
-            to_entry_id: data.to_entry_id ?? data.to_id ?? data.to ?? data.target_id,
-            relationship_type: normalizedRel,
-            description: data.description ?? data.message ?? data.text,
-            project_number: data.project_number,
-            workspace_id: data.workspace_id,
-        }
-    })
+)
 
 /** team_visualize_relationships — strict */
-export const TeamVisualizeRelationshipsSchema = z.object({
-    entry_id: z.number().optional(),
-    tag: z.string().optional(),
-    depth: z.number().min(1).max(5).optional().default(2),
-    project_number: StrictProjectNumberSchema.optional(),
-    workspace_id: z
-        .string()
-        .optional()
-        .describe(
-            'Optional workspace isolation identifier (e.g. "alpha"). Do not use numeric project IDs or "workspace" as the key.'
-        ),
-})
+export const TeamVisualizeRelationshipsSchema = z
+    .object({
+        entry_id: z.number().int().positive().optional(),
+        tag: z.string().optional(),
+        depth: z.number().int().min(1).max(5).optional().default(2),
+        project_number: StrictProjectNumberSchema.optional(),
+        workspace_id: z
+            .string()
+            .optional()
+            .describe(
+                'Optional workspace isolation identifier (e.g. "alpha"). Do not use numeric project IDs or "workspace" as the key.'
+            ),
+    })
+    .strict()
 
 /** team_visualize_relationships — relaxed */
 export const TeamVisualizeRelationshipsSchemaMcp = z.object({
@@ -183,70 +174,55 @@ export const TeamVisualizeOutputSchema = z
     })
     .extend(ErrorFieldsMixin.shape)
 
-function preprocessSemanticSearchQuery(val: unknown): unknown {
-    if (typeof val === 'object' && val !== null) {
-        const obj = { ...(val as Record<string, unknown>) }
-        let modified = healIncludeArchivedField(obj)
-        for (const key of ['q', 'text', 'message', 'description']) {
-            if (key in obj && !('query' in obj)) {
-                obj['query'] = obj[key]
-                Reflect.deleteProperty(obj, key)
-                modified = true
-                break
-            }
-        }
-        return modified ? obj : val
-    }
-    return val
-}
-
 /** team_semantic_search — strict */
 export const TeamSemanticSearchSchema = z.preprocess(
     preprocessSemanticSearchQuery,
-    z.object({
-        query: z.string().optional(),
-        entry_id: z.number().optional().describe('Find entries related to this entry ID'),
-        limit: z.number().max(500).optional().default(10),
-        similarity_threshold: z.number().optional().default(0.25),
-        tags: z.array(z.string()).optional(),
-        entry_type: z.enum(ENTRY_TYPES).optional(),
-        start_date: z.string().regex(DATE_FORMAT_REGEX, DATE_FORMAT_MESSAGE).optional(),
-        end_date: z.string().regex(DATE_FORMAT_REGEX, DATE_FORMAT_MESSAGE).optional(),
-        hint_on_empty: z
-            .boolean()
-            .optional()
-            .default(true)
-            .describe('Include hint when no results found (default: true)'),
-        project_number: StrictProjectNumberSchema.optional(),
-        workspace_id: z.string().optional(),
-        issue_number: z.number().optional().describe('Filter results by GitHub issue number'),
-        pr_number: z.number().optional().describe('Filter results by GitHub PR number'),
-        workflow_run_id: z
-            .number()
-            .optional()
-            .describe('Filter results by GitHub Actions workflow run ID'),
-        include_archived: z.boolean().optional().default(false),
-    })
+    z
+        .object({
+            query: z.string().optional(),
+            entry_id: z.number().int().positive().optional().describe('Find entries related to this entry ID'),
+            limit: z.number().int().min(1).max(500).optional().default(10),
+            similarity_threshold: z.number().optional().default(0.25),
+            tags: z.array(z.string()).optional(),
+            entry_type: z.enum(ENTRY_TYPES).optional(),
+            start_date: z.string().regex(DATE_FORMAT_REGEX, DATE_FORMAT_MESSAGE).optional(),
+            end_date: z.string().regex(DATE_FORMAT_REGEX, DATE_FORMAT_MESSAGE).optional(),
+            hint_on_empty: z
+                .boolean()
+                .optional()
+                .default(true)
+                .describe('Include hint when no results found (default: true)'),
+            project_number: StrictProjectNumberSchema.optional(),
+            workspace_id: z.string().optional(),
+            issue_number: z.number().optional().describe('Filter results by GitHub issue number'),
+            pr_number: z.number().optional().describe('Filter results by GitHub PR number'),
+            workflow_run_id: z
+                .number()
+                .optional()
+                .describe('Filter results by GitHub Actions workflow run ID'),
+            include_archived: z.boolean().optional().default(false),
+        })
+        .strict()
 )
 
 /** team_semantic_search — relaxed */
 export const TeamSemanticSearchSchemaMcp = z.preprocess(
     preprocessSemanticSearchQuery,
     z.object({
-        query: z.string().optional(),
+        query: z.string().optional().describe('Search text for semantic vector similarity'),
         entry_id: relaxedNumber().optional().describe('Find entries related to this entry ID'),
-        limit: relaxedNumber().optional().default(10),
-        similarity_threshold: relaxedNumber().optional().default(0.25),
-        tags: z.array(z.string()).optional(),
-        entry_type: z.string().optional(),
-        start_date: z.string().optional(),
-        end_date: z.string().optional(),
+        limit: relaxedNumber().optional().default(10).describe('Maximum entries to return (1-500, default: 10)'),
+        similarity_threshold: relaxedNumber().optional().default(0.25).describe('Minimum cosine similarity score (0.0-1.0)'),
+        tags: z.array(z.string()).optional().describe('Filter results by tags'),
+        entry_type: z.string().optional().describe('Filter results by entry type'),
+        start_date: z.string().optional().describe('Start date filter (YYYY-MM-DD)'),
+        end_date: z.string().optional().describe('End date filter (YYYY-MM-DD)'),
         hint_on_empty: z
             .boolean()
             .optional()
             .default(true)
             .describe('Include hint when no results found (default: true)'),
-        project_number: relaxedNumber().optional(),
+        project_number: relaxedNumber().optional().describe('REQUIRED: project number to scope the query to.'),
         workspace_id: z
             .string()
             .optional()
@@ -258,16 +234,18 @@ export const TeamSemanticSearchSchemaMcp = z.preprocess(
         workflow_run_id: relaxedNumber()
             .optional()
             .describe('Filter results by GitHub Actions workflow run ID'),
-        include_archived: z.boolean().optional().default(false),
+        include_archived: z.boolean().optional().default(false).describe('Include archived entries in results'),
     })
 )
 
 /** team_add_to_vector_index — strict */
-export const TeamAddToVectorIndexSchema = z.object({
-    entry_id: z.number(),
-    project_number: StrictProjectNumberSchema.optional(),
-    workspace_id: z.string().optional(),
-})
+export const TeamAddToVectorIndexSchema = z
+    .object({
+        entry_id: z.number().int().positive(),
+        project_number: StrictProjectNumberSchema.optional(),
+        workspace_id: z.string().optional(),
+    })
+    .strict()
 
 /** team_add_to_vector_index — relaxed */
 export const TeamAddToVectorIndexSchemaMcp = z.object({
@@ -327,27 +305,29 @@ export const TeamAddToVectorIndexOutputSchema = z
     .extend(ErrorFieldsMixin.shape)
 
 /** team_get_cross_project_insights — strict */
-export const TeamCrossProjectInsightsSchema = z.object({
-    start_date: z
-        .string()
-        .regex(DATE_FORMAT_REGEX, DATE_FORMAT_MESSAGE)
-        .optional()
-        .describe('Start date (YYYY-MM-DD)'),
-    end_date: z
-        .string()
-        .regex(DATE_FORMAT_REGEX, DATE_FORMAT_MESSAGE)
-        .optional()
-        .describe('End date (YYYY-MM-DD)'),
-    min_entries: z.number().optional().default(3).describe('Minimum entries to include project'),
-    limit: z.number().max(500).optional().default(100).describe('Max projects to return'),
-    project_number: StrictProjectNumberSchema.optional(),
-    workspace_id: z
-        .string()
-        .optional()
-        .describe(
-            'Optional workspace isolation identifier (e.g. "alpha"). Do not use numeric project IDs or "workspace" as the key.'
-        ),
-})
+export const TeamCrossProjectInsightsSchema = z
+    .object({
+        start_date: z
+            .string()
+            .regex(DATE_FORMAT_REGEX, DATE_FORMAT_MESSAGE)
+            .optional()
+            .describe('Start date (YYYY-MM-DD)'),
+        end_date: z
+            .string()
+            .regex(DATE_FORMAT_REGEX, DATE_FORMAT_MESSAGE)
+            .optional()
+            .describe('End date (YYYY-MM-DD)'),
+        min_entries: z.number().int().min(0).optional().default(3).describe('Minimum entries to include project'),
+        limit: z.number().int().min(1).max(500).optional().default(100).describe('Max projects to return'),
+        project_number: StrictProjectNumberSchema.optional(),
+        workspace_id: z
+            .string()
+            .optional()
+            .describe(
+                'Optional workspace isolation identifier (e.g. "alpha"). Do not use numeric project IDs or "workspace" as the key.'
+            ),
+    })
+    .strict()
 
 /** team_get_cross_project_insights — relaxed */
 export const TeamCrossProjectInsightsSchemaMcp = z.object({
@@ -355,7 +335,7 @@ export const TeamCrossProjectInsightsSchemaMcp = z.object({
     end_date: z.string().optional().describe('End date (YYYY-MM-DD)'),
     min_entries: relaxedNumber().optional().describe('Minimum entries to include project'),
     limit: relaxedNumber().optional().describe('Max projects to return'),
-    project_number: relaxedNumber().optional(),
+    project_number: relaxedNumber().optional().describe('Optional project number to scope insights to'),
     workspace_id: z
         .string()
         .optional()
@@ -404,27 +384,29 @@ export const TeamCrossProjectInsightsOutputSchema = z
     .extend(ErrorFieldsMixin.shape)
 
 /** team_get_collaboration_matrix — strict */
-export const TeamCollaborationMatrixSchema = z.object({
-    period: z
-        .enum(['week', 'month', 'quarter'])
-        .optional()
-        .default('month')
-        .describe('Time granularity for the activity heatmap'),
-    limit: z.number().max(100).optional().default(20).describe('Max authors to include'),
-    project_number: StrictProjectNumberSchema.optional(),
-    workspace_id: z
-        .string()
-        .optional()
-        .describe(
-            'Optional workspace isolation identifier (e.g. "alpha"). Do not use numeric project IDs or "workspace" as the key.'
-        ),
-})
+export const TeamCollaborationMatrixSchema = z
+    .object({
+        period: z
+            .enum(['week', 'month', 'quarter'])
+            .optional()
+            .default('month')
+            .describe('Time granularity for the activity heatmap'),
+        limit: z.number().int().min(1).max(100).optional().default(20).describe('Max authors to include'),
+        project_number: StrictProjectNumberSchema.optional(),
+        workspace_id: z
+            .string()
+            .optional()
+            .describe(
+                'Optional workspace isolation identifier (e.g. "alpha"). Do not use numeric project IDs or "workspace" as the key.'
+            ),
+    })
+    .strict()
 
 /** team_get_collaboration_matrix — relaxed */
 export const TeamCollaborationMatrixSchemaMcp = z.object({
-    period: z.string().optional().default('month'),
-    limit: relaxedNumber().optional().default(20),
-    project_number: relaxedNumber().optional(),
+    period: z.string().optional().default('month').describe('Time granularity: week, month, or quarter'),
+    limit: relaxedNumber().optional().default(20).describe('Max authors to include (1-100, default: 20)'),
+    project_number: relaxedNumber().optional().describe('Project number to scope matrix to'),
     workspace_id: z
         .string()
         .optional()

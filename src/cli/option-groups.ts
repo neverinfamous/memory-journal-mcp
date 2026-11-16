@@ -206,14 +206,16 @@ export function addSchedulerOptions(command: Command): Command {
     })
 }
 
-export function addPruningOptions(command: Command): Command {
+export function addPruningOptions(command: Command, includeInterval = true): Command {
     return withGroup(command, 'Pruning Options', (cmd) => {
-        cmd
-            .option(
+        if (includeInterval) {
+            cmd.option(
                 '--auto-prune-interval <minutes>',
                 'Interval to run autonomous pruning in background (env: AUTO_PRUNE_INTERVAL_MINUTES, 0 = disabled)',
                 '0'
             )
+        }
+        cmd
             .option(
                 '--archive-older-than-days <days>',
                 'Archive active entries older than N days with importance below threshold (env: ARCHIVE_OLDER_THAN_DAYS, 0 = disabled)',

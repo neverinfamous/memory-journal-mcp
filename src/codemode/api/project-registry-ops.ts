@@ -2,11 +2,10 @@
  * Project registry operations and configuration helpers for JournalApi.
  */
 
-import * as fs from 'node:fs'
 import * as os from 'node:os'
 import * as path from 'node:path'
 import { isRecord, safeString } from '../normalizers/shared-utils.js'
-import { readProjectRegistryFile } from '../../utils/registry-config-file.js'
+import { readProjectRegistryFile, writeProjectRegistryFile } from '../../utils/registry-config-file.js'
 import { mcpLogger } from '../../utils/mcp-logger.js'
 import { parseProjectRegistry, type GroupApiRecord, type ProjectRegistryProvider } from './types.js'
 
@@ -32,8 +31,7 @@ function registryError(err: unknown): string {
 }
 
 function saveRegistryConfig(configPath: string, config: Record<string, unknown>): void {
-    fs.mkdirSync(path.dirname(configPath), { recursive: true })
-    fs.writeFileSync(configPath, JSON.stringify(config, null, 4), 'utf-8')
+    writeProjectRegistryFile(configPath, config)
 }
 
 /** Live registry first (config provider), then the startup PROJECT_REGISTRY snapshot. */

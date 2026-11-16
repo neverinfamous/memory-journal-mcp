@@ -52,13 +52,14 @@ function resolveSessionProjectId(
         const wsEntry = lookupRegistryEntry(effectiveRegistry, input.workspace_id)
         if (wsEntry?.project_number !== undefined) projectId = wsEntry.project_number
     }
-    if ((projectId === undefined || projectId === null) && input.repo !== undefined && input.repo !== '') {
-        const repoEntry = lookupRegistryEntry(effectiveRegistry, input.repo)
+    const rawRepo = (input.repo ?? input.repo_name)?.trim()
+    if ((projectId === undefined || projectId === null) && rawRepo !== undefined && rawRepo !== '') {
+        const repoEntry = lookupRegistryEntry(effectiveRegistry, rawRepo)
         if (repoEntry?.project_number !== undefined) projectId = repoEntry.project_number
     }
     const callerExplicitWorkspaceOrRepo =
         (input.workspace_id !== undefined && input.workspace_id.trim() !== '') ||
-        (input.repo !== undefined && input.repo.trim() !== '')
+        (rawRepo !== undefined && rawRepo !== '')
     if (!callerExplicitWorkspaceOrRepo) {
         projectId ??= projectIdFromDefaults(context, effectiveRegistry)
     }
@@ -198,7 +199,7 @@ export async function resolveCodeModeSessionContext(
 > {
     const effectiveRegistry = context.config?.projectRegistry ?? loadProjectRegistryFromConfig()
     const rawWsTrimmed = input.workspace_id?.trim()
-    const rawRepoTrimmed = input.repo?.trim()
+    const rawRepoTrimmed = (input.repo ?? input.repo_name)?.trim()
     const hasExplicitRepo = rawRepoTrimmed !== undefined && rawRepoTrimmed !== ''
     const hasExplicitConcreteWs =
         rawWsTrimmed !== undefined && rawWsTrimmed !== '' && rawWsTrimmed !== '*'
@@ -315,7 +316,11 @@ export async function resolveCodeModeSessionContext(
         projectId = resolvedContext.projectNumber
     }
 
-    const repoContext = await injectRepoGithub(context, input.repo, effectiveRegistry)
+    const repoContext = await injectRepoGithub(
+        context,
+        input.repo ?? input.repo_name,
+        effectiveRegistry
+    )
     if ('errorResponse' in repoContext) return repoContext
     const sessionContext = hasExplicitRepo
         ? repoContext

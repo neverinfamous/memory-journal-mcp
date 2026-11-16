@@ -1,3 +1,4 @@
+import { readResource } from '../../../handlers/resources/index.js'
 import {
     getEnabledGroups,
     isReadonlyMetaActive,
@@ -8,7 +9,7 @@ import {
     generateCodeModeInstructions,
 } from '../../../constants/server-instructions.js'
 import { TOOL_GROUPS } from '../../../filtering/tool-constants.js'
-import type { ToolGroup } from '../../../types/index.js'
+import type { ToolGroup, ToolHandlerConfig } from '../../../types/index.js'
 import type { DEFAULT_BRIEFING_CONFIG } from '../../../handlers/resources/shared.js'
 import type { PromptDefinition } from '../../registration.js'
 import { globalSubscriptionManager } from '../../subscription-manager.js'
@@ -249,4 +250,104 @@ export function resolveActiveBriefingConfig(
     if (resolvedDefaultWs !== undefined) nextConfig.defaultWorkspaceId = resolvedDefaultWs
     else delete nextConfig.defaultWorkspaceId
     return nextConfig
+}
+
+/**
+ * Synchronize live runtime config & resolved briefing defaults onto a shared `ToolHandlerConfig`.
+ */
+export function syncLiveHandlerConfig(
+    target: ToolHandlerConfig,
+    liveConfig: ReturnType<ServerContext['configManager']['getConfig']>,
+    options: ServerOptions,
+    liveBriefing: ReturnType<typeof resolveActiveBriefingConfig>
+): void {
+    target.briefingConfig = liveBriefing
+    if (liveConfig.codemodeInternalFullAccess !== undefined) {
+        target.codemodeInternalFullAccess = liveConfig.codemodeInternalFullAccess
+    } else if (options.codemodeInternalFullAccess !== undefined) {
+        target.codemodeInternalFullAccess = options.codemodeInternalFullAccess
+    } else {
+        delete target.codemodeInternalFullAccess
+    }
+    if (liveBriefing.defaultProjectNumber !== undefined) {
+        target.defaultProjectNumber = liveBriefing.defaultProjectNumber
+    } else {
+        delete target.defaultProjectNumber
+    }
+    if (liveBriefing.defaultWorkspaceId !== undefined) {
+        target.defaultWorkspaceId = liveBriefing.defaultWorkspaceId
+    } else {
+        delete target.defaultWorkspaceId
+    }
+    if (liveBriefing.projectRegistry !== undefined) {
+        target.projectRegistry = liveBriefing.projectRegistry
+    } else {
+        delete target.projectRegistry
+    }
+}
+
+/**
+ * Create the MCP resource read callback bound to live config and runtime metrics.
+ */
+export function createResourceReadHandler(
+    context: ServerContext,
+    options: ServerOptions
+): (
+    uri: URL,
+    mimeType: string
+) => Promise<{
+    contents: {
+        uri: string
+        mimeType: string
+        text: string
+        annotations?: Record<string, unknown>
+    }[]
+}> {
+    const { configManager, db, teamDb, vectorManager, github, scheduler, allowedIoRoots, runtime } =
+        context
+    return async (uri: URL, mimeType: string) => {
+        const currentConfig = configManager.getConfig()
+        const activeBriefingConfig = resolveActiveBriefingConfig(
+            currentConfig.briefingConfig,
+            options,
+            allowedIoRoots,
+            runtime
+        )
+
+        try {
+            const result = await readResource(
+                uri.href,
+                db,
+                vectorManager,
+                currentConfig.toolFilterConfig,
+                github,
+                scheduler,
+                teamDb ?? undefined,
+                activeBriefingConfig,
+                runtime
+            )
+
+            runtime.metrics.recordResourceRead(uri.href, false)
+
+            const dataStr =
+                typeof result.data === 'string'
+                    ? result.data
+                    : JSON.stringify(result.data, null, 2)
+            return {
+                contents: [
+                    {
+                        uri: uri.href,
+                        mimeType,
+                        text: dataStr,
+                        ...(result.annotations !== undefined
+                            ? { annotations: result.annotations }
+                            : {}),
+                    },
+                ],
+            }
+        } catch (error) {
+            runtime.metrics.recordResourceRead(uri.href, true)
+            throw error
+        }
+    }
 }

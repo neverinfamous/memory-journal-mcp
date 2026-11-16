@@ -5,7 +5,7 @@ import type {
     ResourceContext,
     ResourceResult,
 } from './shared.js'
-import { getBaseUri } from './shared.js'
+import { getBaseUri, safeDecodeUriSegment } from './shared.js'
 import { formatHandlerError } from '../../utils/error-helpers.js'
 import { loadProjectRegistryFromConfig } from '../../utils/workspace-resolver.js'
 import { workspacesForProject } from '../../utils/write-scope.js'
@@ -141,14 +141,15 @@ export function getStalenessResourceDefinitions(): InternalResourceDef[] {
                         return { data: { error: 'Invalid project number in URI', code: -32002 } }
                     }
 
-                    const matchedId = match[1]
-                    if (matchedId === undefined) {
+                    const rawId = match[1]
+                    if (rawId === undefined) {
                         return { data: { error: 'Invalid project number in URI', code: -32002 } }
                     }
-                    const projectNumber = parseInt(matchedId, 10)
-                    if (isNaN(projectNumber)) {
+                    const matchedId = safeDecodeUriSegment(rawId).trim()
+                    if (!/^[1-9]\d*$/.test(matchedId)) {
                         return { data: { error: 'Project number must be a valid integer', code: -32002 } }
                     }
+                    const projectNumber = parseInt(matchedId, 10)
                     
                     const registry =
                         context.briefingConfig?.projectRegistry ??
@@ -203,11 +204,27 @@ export function getStalenessResourceDefinitions(): InternalResourceDef[] {
                     
                     const now = new Date()
                     const oneWeekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000)
-                    const recentSearch = context.db.searchByDateRange(
-                        oneWeekAgo.toISOString(),
-                        now.toISOString(),
-                        { projectNumber, workspaceId: resolvedWorkspace }
-                    )
+                    const oneWeekAgoIso = oneWeekAgo.toISOString()
+                    const nowIso = now.toISOString()
+                    let newEntriesLast7Days = 0
+                    let cursor: string | undefined
+                    for (let pageIndex = 0; pageIndex < 200; pageIndex++) {
+                        const page = context.db.searchByDateRange(oneWeekAgoIso, nowIso, {
+                            projectNumber,
+                            workspaceId: resolvedWorkspace,
+                            limit: 500,
+                            ...(cursor !== undefined ? { cursor } : {}),
+                        })
+                        newEntriesLast7Days += page.entries.length
+                        if (
+                            page.nextCursor === undefined ||
+                            page.nextCursor === '' ||
+                            page.nextCursor === cursor
+                        ) {
+                            break
+                        }
+                        cursor = page.nextCursor
+                    }
 
                     const latestEntry = searchResult.entries[0]
                     const status = calculateStaleness(latestEntry?.timestamp)
@@ -224,7 +241,7 @@ export function getStalenessResourceDefinitions(): InternalResourceDef[] {
                         tag_breakdown: tagsBreakdown,
                         type_breakdown: typeBreakdown,
                         weekly_trend: {
-                            new_entries_last_7_days: recentSearch.entries.length
+                            new_entries_last_7_days: newEntriesLast7Days
                         }
                     }
                     const tokenEstimate = Math.ceil(JSON.stringify(responseData).length / 4)

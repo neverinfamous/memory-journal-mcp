@@ -13,6 +13,7 @@ import {
     resolveScopedGitHubRepo,
     isResourceError,
     resourceWorkspace,
+    safeDecodeUriSegment,
 } from './shared.js'
 import { markUntrustedContentInline } from '../../utils/security-utils.js'
 import { ProtocolError, ProtocolErrorCode } from '@modelcontextprotocol/server'
@@ -31,8 +32,9 @@ export function getGraphResourceDefinitions(): InternalResourceDef[] {
             icons: [ICON_GITHUB],
             annotations: ASSISTANT_FOCUSED,
             handler: async (uri: string, context: ResourceContext): Promise<ResourceResult> => {
-                const match = /^memory:\/\/actions\/recent(?:\/(.*))?$/.exec(getBaseUri(uri))
-                const targetRepo = match?.[1] ? decodeURIComponent(match[1]) : undefined
+                const match = /^memory:\/\/actions\/recent(?:\/(.+))?$/.exec(getBaseUri(uri))
+                const targetRepo =
+                    match?.[1] !== undefined ? safeDecodeUriSegment(match[1]) : undefined
 
                 try {
                     const resolved = await resolveScopedGitHubRepo(context, targetRepo)

@@ -210,7 +210,7 @@ ${markUntrustedContent(deletedSnippet)}
 > **HITL CODE MODIFICATION GUARDRAIL**: Do NOT modify executable source code or global environment files without explicit user approval unless running in an explicitly approved autonomous maintenance session.
 
 1. Apply all approved code, schema, prompt, or documentation fixes in a single cohesive batch.
-2. Check working tree status via \`bun .\\.agents\\scripts\\get-git-history-json.ts --uncommitted --stats\`.
+2. Check working tree status via \`bun .agents/scripts/get-git-history-json.ts --uncommitted --stats\`.
 3. **If \`0\` files are modified/untracked in \`memory-journal-mcp\`**:
    - **SKIP** \`pnpm run lint\`, \`pnpm run typecheck\`, \`pnpm run build\`, \`pnpm exec vitest run\`, and \`pnpm exec playwright test\` completely! Proceed directly to Phase D.
 4. **If \`>= 1\` files are modified in \`memory-journal-mcp\`**:
@@ -221,7 +221,7 @@ ${markUntrustedContent(deletedSnippet)}
      3. \`pnpm run build\`
      4. \`pnpm exec vitest run\`
      5. \`pnpm exec playwright test\`
-   - Commit the verified changes via \`bun .\\.agents\\scripts\\commit.ts --msg "fix(cms): <summary>" --impact 0.5 --confidence 0.95 --validation passed --journal --add <changed_files>\`.
+   - Commit the verified changes via \`bun .agents/scripts/commit.ts --msg "fix(cms): <summary>" --impact 0.5 --confidence 0.95 --validation passed --journal --add <changed_files>\`.
 
 ### Phase D — Telemetry Cleanup & Supervisor Journal Entry
 1. If \`logs/agent-issues.jsonl\` contained issues that were resolved and validated in Phase C, clear \`logs/agent-issues.jsonl\`.

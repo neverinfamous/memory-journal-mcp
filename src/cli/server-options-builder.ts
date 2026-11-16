@@ -160,7 +160,23 @@ function buildBriefingConfigOptions(
         summaryCount: catchConfig(() => resolver.resolveInt('briefingSummaries', 'BRIEFING_SUMMARY_COUNT') ?? 1, 1),
         includeTeam: catchConfig(() => resolver.resolveBool('briefingIncludeTeam', 'BRIEFING_INCLUDE_TEAM') ?? false, false),
         issueCount: catchConfig(() => resolver.resolveInt('briefingIssues', 'BRIEFING_ISSUE_COUNT') ?? 0, 0),
-        prCount: catchConfig(() => resolver.resolveInt('briefingPrCount') ?? resolver.resolveInt('briefingPrs', 'BRIEFING_PR_COUNT') ?? 0, 0),
+        prCount: catchConfig(() => {
+            if (resolver.isCliProvided('briefingPrCount')) {
+                return resolver.resolveInt('briefingPrCount') ?? 0
+            }
+            if (resolver.isCliProvided('briefingPrs')) {
+                return resolver.resolveInt('briefingPrs') ?? 0
+            }
+            const envVal = process.env['BRIEFING_PR_COUNT']
+            if (envVal !== undefined && envVal.trim() !== '') {
+                return resolver.resolveInt('briefingPrCount', 'BRIEFING_PR_COUNT') ?? 0
+            }
+            return (
+                resolver.resolveInt('briefingPrCount') ??
+                resolver.resolveInt('briefingPrs', 'BRIEFING_PR_COUNT') ??
+                0
+            )
+        }, 0),
         prStatusBreakdown: catchConfig(() => resolver.resolveBool('briefingPrStatus', 'BRIEFING_PR_STATUS') ?? false, false),
         milestoneCount: catchConfig(() => resolver.resolveInt('briefingMilestones', 'BRIEFING_MILESTONE_COUNT') ?? 3, 3),
         rulesFilePath: catchConfig(() => {
@@ -289,6 +305,60 @@ function resolveMaxToolInputElementsOption(
     }, undefined)
 }
 
+function buildOAuthOptionsGroup(resolver: ConfigResolver, catchConfig: CatchConfig): {
+    corsOrigins: string[] | undefined
+    enableHSTS: boolean
+    authToken: string | undefined
+    oauthEnabled: boolean
+    oauthIssuer: string | undefined
+    oauthAudience: string | undefined
+    oauthJwksUri: string | undefined
+    oauthClockTolerance: number
+    allowPlaintextLoopbackOAuth: boolean
+    trustProxy: boolean
+    publicOrigin: string | undefined
+} {
+    return {
+        corsOrigins: catchConfig(() => resolver.resolveStringArray('corsOrigin', 'CORS_ORIGIN'), undefined),
+        enableHSTS: catchConfig(() => resolver.resolveBool('enableHsts', 'MCP_ENABLE_HSTS') ?? false, false),
+        authToken: catchConfig(() => resolver.resolve<string>('authToken', 'MCP_AUTH_TOKEN'), undefined),
+        oauthEnabled: catchConfig(() => resolver.resolveBool('oauthEnabled', 'OAUTH_ENABLED') ?? false, false),
+        oauthIssuer: catchConfig(() => resolver.resolve<string>('oauthIssuer', 'OAUTH_ISSUER'), undefined),
+        oauthAudience: catchConfig(() => resolver.resolve<string>('oauthAudience', 'OAUTH_AUDIENCE'), undefined),
+        oauthJwksUri: catchConfig(() => resolver.resolve<string>('oauthJwksUri', 'OAUTH_JWKS_URI'), undefined),
+        oauthClockTolerance: catchConfig(() => resolver.resolveInt('oauthClockTolerance', 'OAUTH_CLOCK_TOLERANCE', 0) ?? 60, 60),
+        allowPlaintextLoopbackOAuth: catchConfig(() => resolver.resolveBool('oauthAllowPlaintextLoopback', 'OAUTH_ALLOW_PLAINTEXT_LOOPBACK') ?? false, false),
+        trustProxy: catchConfig(() => resolver.resolveBool('trustProxy', 'TRUST_PROXY') ?? false, false),
+        publicOrigin: catchConfig(() => resolver.resolve<string>('publicOrigin', 'PUBLIC_ORIGIN'), undefined),
+    }
+}
+
+function buildLifecycleOptionsGroup(resolver: ConfigResolver, catchConfig: CatchConfig): {
+    archiveOlderThanDays: number
+    pruneOlderThanDays: number
+    hardDeleteOlderThanDays: number
+    pruneImportanceThreshold: number
+    pruneDryRun: boolean
+    pruneExcludeTags: string[] | undefined
+    metricsExport: ServerOptions['metricsExport']
+    persistMetrics: boolean
+    metricsPath: string | undefined
+    metricsPort: number | undefined
+} {
+    return {
+        archiveOlderThanDays: catchConfig(() => resolver.resolveNumber('archiveOlderThanDays', 'ARCHIVE_OLDER_THAN_DAYS', 0) ?? 0, 0),
+        pruneOlderThanDays: catchConfig(() => resolver.resolveNumber('pruneOlderThanDays', 'PRUNE_OLDER_THAN_DAYS', 0) ?? 0, 0),
+        hardDeleteOlderThanDays: catchConfig(() => resolver.resolveNumber('hardDeleteOlderThanDays', 'HARD_DELETE_OLDER_THAN_DAYS', 0) ?? 0, 0),
+        pruneImportanceThreshold: resolvePruneImportanceThresholdOption(resolver, catchConfig),
+        pruneDryRun: catchConfig(() => resolver.resolveBool('pruneDryRun', 'PRUNE_DRY_RUN') ?? false, false),
+        pruneExcludeTags: catchConfig(() => resolver.resolveStringArray('pruneExcludeTags', 'PRUNE_EXCLUDE_TAGS'), undefined),
+        metricsExport: resolveMetricsExportOption(resolver, catchConfig),
+        persistMetrics: catchConfig(() => resolver.resolveBool('persistMetrics', 'PERSIST_METRICS') ?? false, false),
+        metricsPath: catchConfig(() => resolver.resolve<string>('metricsPath', 'METRICS_PATH'), undefined),
+        metricsPort: catchConfig(() => resolver.resolveInt('metricsPort', 'MJ_METRICS_PORT', 0, 65535), undefined),
+    }
+}
+
 export function buildServerOptions(
     resolver: ConfigResolver,
     _options: Record<string, unknown> & { team?: boolean },
@@ -306,34 +376,23 @@ export function buildServerOptions(
 
     const host = catchConfig(() => resolver.resolve<string>('serverHost', 'MCP_HOST') ?? process.env['HOST'] ?? undefined, undefined)
     const transport = resolveTransportOption(resolver, catchConfig)
-    const stateless = catchConfig(() => resolver.resolveBool('stateless', 'STATELESS') ?? false, false)
     const { db, testDb, teamDb, testTeamDb } = resolveDatabasePaths(resolver, catchConfig)
     applyEnvironmentOverrides(resolver, catchConfig)
-    const auditConfig = buildAuditConfigOption(resolver, catchConfig)
     const instructionLevel = resolveInstructionLevelOption(resolver, catchConfig)
-    const projectRegistry = catchConfig(
-        () => parseProjectRegistryOption(resolver.resolve<unknown>('projectRegistry', 'PROJECT_REGISTRY')),
-        undefined
-    )
+    const projectRegistry = catchConfig(() => parseProjectRegistryOption(resolver.resolve<unknown>('projectRegistry', 'PROJECT_REGISTRY')), undefined)
     let defaultProjectNumber = resolveDefaultProjectNumberOption(resolver, catchConfig)
     let defaultWorkspaceId = resolveDefaultWorkspaceIdOption(resolver, catchConfig)
     if (defaultWorkspaceId !== undefined && defaultProjectNumber !== undefined) {
-        const pairedDefaults = pairStoredScope(
-            defaultWorkspaceId,
-            defaultProjectNumber,
-            activeProjectRegistry(projectRegistry)
-        )
-        defaultWorkspaceId = pairedDefaults.workspaceId
-        if (typeof pairedDefaults.projectNumber === 'number') {
-            defaultProjectNumber = pairedDefaults.projectNumber
-        }
+        const paired = pairStoredScope(defaultWorkspaceId, defaultProjectNumber, activeProjectRegistry(projectRegistry))
+        defaultWorkspaceId = paired.workspaceId
+        if (typeof paired.projectNumber === 'number') defaultProjectNumber = paired.projectNumber
     }
 
     const serverOptions: ServerOptions = {
         transport,
         port: catchConfig(() => resolver.resolveInt('port', 'PORT', 1, 65535) ?? 3000, 3000),
         host,
-        statelessHttp: stateless,
+        statelessHttp: catchConfig(() => resolver.resolveBool('stateless', 'STATELESS') ?? false, false),
         dbPath: db ?? defaultDbPath,
         testDbPath: testDb,
         teamDbPath: teamDb,
@@ -344,39 +403,20 @@ export function buildServerOptions(
         defaultProjectNumber,
         defaultWorkspaceId,
         autoRebuildIndex: catchConfig(() => resolver.resolveBool('autoRebuildIndex', 'AUTO_REBUILD_INDEX') ?? false, false),
-        corsOrigins: catchConfig(() => resolver.resolveStringArray('corsOrigin', 'CORS_ORIGIN'), undefined),
-        enableHSTS: catchConfig(() => resolver.resolveBool('enableHsts', 'MCP_ENABLE_HSTS') ?? false, false),
-        authToken: catchConfig(() => resolver.resolve<string>('authToken', 'MCP_AUTH_TOKEN'), undefined),
         scheduler: buildSchedulerOptions(resolver, catchConfig),
-        oauthEnabled: catchConfig(() => resolver.resolveBool('oauthEnabled', 'OAUTH_ENABLED') ?? false, false),
-        oauthIssuer: catchConfig(() => resolver.resolve<string>('oauthIssuer', 'OAUTH_ISSUER'), undefined),
-        oauthAudience: catchConfig(() => resolver.resolve<string>('oauthAudience', 'OAUTH_AUDIENCE'), undefined),
-        oauthJwksUri: catchConfig(() => resolver.resolve<string>('oauthJwksUri', 'OAUTH_JWKS_URI'), undefined),
-        oauthClockTolerance: catchConfig(() => resolver.resolveInt('oauthClockTolerance', 'OAUTH_CLOCK_TOLERANCE', 0) ?? 60, 60),
-        allowPlaintextLoopbackOAuth: catchConfig(() => resolver.resolveBool('oauthAllowPlaintextLoopback', 'OAUTH_ALLOW_PLAINTEXT_LOOPBACK') ?? false, false),
-        trustProxy: catchConfig(() => resolver.resolveBool('trustProxy', 'TRUST_PROXY') ?? false, false),
-        publicOrigin: catchConfig(() => resolver.resolve<string>('publicOrigin', 'PUBLIC_ORIGIN'), undefined),
         codemodeInternalFullAccess: catchConfig(() => resolver.resolveBool('codemodeInternalFullAccess', 'CODEMODE_INTERNAL_FULL_ACCESS') ?? false, false),
         projectRegistry,
         additionalTeamDbs: catchConfig(() => parseAdditionalTeamDbsOption(resolver.resolve<unknown>('additionalTeamDbs', 'ADDITIONAL_TEAM_DBS')), undefined),
         allowedIoRoots: catchConfig(() => parseAllowedIoRootsOption(resolver.resolve<unknown>('allowedIoRoots', 'ALLOWED_IO_ROOTS')), undefined),
         briefingConfig: buildBriefingConfigOptions(resolver, catchConfig),
-        auditConfig,
-        archiveOlderThanDays: catchConfig(() => resolver.resolveNumber('archiveOlderThanDays', 'ARCHIVE_OLDER_THAN_DAYS', 0) ?? 0, 0),
-        pruneOlderThanDays: catchConfig(() => resolver.resolveNumber('pruneOlderThanDays', 'PRUNE_OLDER_THAN_DAYS', 0) ?? 0, 0),
-        hardDeleteOlderThanDays: catchConfig(() => resolver.resolveNumber('hardDeleteOlderThanDays', 'HARD_DELETE_OLDER_THAN_DAYS', 0) ?? 0, 0),
-        pruneImportanceThreshold: resolvePruneImportanceThresholdOption(resolver, catchConfig),
-        pruneDryRun: catchConfig(() => resolver.resolveBool('pruneDryRun', 'PRUNE_DRY_RUN') ?? false, false),
-        pruneExcludeTags: catchConfig(() => resolver.resolveStringArray('pruneExcludeTags', 'PRUNE_EXCLUDE_TAGS'), undefined),
+        auditConfig: buildAuditConfigOption(resolver, catchConfig),
         embeddingModel: catchConfig(() => resolver.resolve<string>('embeddingModel', 'EMBEDDING_MODEL'), undefined),
         ...(instructionLevel !== undefined ? { instructionLevel } : {}),
-        metricsExport: resolveMetricsExportOption(resolver, catchConfig),
-        persistMetrics: catchConfig(() => resolver.resolveBool('persistMetrics', 'PERSIST_METRICS') ?? false, false),
-        metricsPath: catchConfig(() => resolver.resolve<string>('metricsPath', 'METRICS_PATH'), undefined),
-        metricsPort: catchConfig(() => resolver.resolveInt('metricsPort', 'MJ_METRICS_PORT', 0, 65535), undefined),
         configFilePath: catchConfig(() => resolver.loadedConfigPath, undefined),
         maxToolInputElements: resolveMaxToolInputElementsOption(resolver, catchConfig),
         agentHealing: catchConfig(() => resolver.resolveBool('agentHealing', 'MCP_AGENT_HEALING') ?? true, true),
+        ...buildOAuthOptionsGroup(resolver, catchConfig),
+        ...buildLifecycleOptionsGroup(resolver, catchConfig),
     }
 
     return { serverOptions, transport, db, teamDb, host }

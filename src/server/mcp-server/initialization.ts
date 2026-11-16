@@ -69,6 +69,10 @@ async function configureMetricsPersistence(
     dbPath: string
 ): Promise<string | undefined> {
     if (!options.persistMetrics) return undefined
+    const isInMemory = dbPath === ':memory:' || dbPath.startsWith('file::memory:')
+    if (options.metricsPath === undefined && isInMemory) {
+        return undefined
+    }
     const configuredPath = options.metricsPath ?? dbPath.replace(/\.db$/, '') + '_metrics.json'
     await runtime.metrics.loadFromFile(configuredPath)
     const metricsTimer = setInterval(() => {
@@ -279,6 +283,7 @@ async function setupCoreDatabasesAndAudit(options: ServerOptions, runtime: Serve
 
 export async function initializeDependencies(options: ServerOptions): Promise<ServerContext> {
     const runtime = new ServerRuntime()
+    runtime.teamDefaultRole = options.teamDefaultRole ?? 'denied'
     let primaryDb: IDatabaseAdapter | undefined
     let testDb: IDatabaseAdapter | undefined
     let primaryTeamDb: IDatabaseAdapter | undefined

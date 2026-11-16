@@ -66,7 +66,7 @@ describe('audit pass 20 — admin/relationship project isolation', () => {
     })
 
     it('update payloads never synthesize content from a bare title (H8)', () => {
-        const parsed = UpdateEntrySchema.parse({ entry_id: 3, title: 'New heading' })
+        const parsed = UpdateEntrySchema.parse({ entry_id: 3, title: 'New heading', is_archived: false })
         expect(parsed.content).toBeUndefined()
     })
 

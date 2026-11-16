@@ -34,6 +34,17 @@ export async function getCliCommandDb(
         dumpConfigAndExit(serverOptions)
     }
 
+    const explicitTeamDbSource =
+        (typeof options['teamDb'] === 'string' && options['teamDb'].trim() !== '') ||
+        (typeof options['teamDatabase'] === 'string' && options['teamDatabase'].trim() !== '') ||
+        (typeof options['testTeamDb'] === 'string' && options['testTeamDb'].trim() !== '')
+    if (explicitTeamDbSource && options.team !== true) {
+        process.stderr.write(
+            'Error: --team-db/--team-database/--test-team-db requires --team to target the team database.\n'
+        )
+        process.exit(1)
+    }
+
     if (options.team && !teamDb) {
         process.stderr.write(
             'Error: --team requires a configured team database (--team-db or TEAM_DB_PATH).\n'

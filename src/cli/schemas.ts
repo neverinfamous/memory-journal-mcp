@@ -248,7 +248,9 @@ export const createEntryOptionsSchema = baseEntryOptionsSchema
 
 export const updateEntryOptionsSchema = baseEntryOptionsSchema.extend({
     id: z.coerce.number(),
-    expectedVersion: z.coerce.number()
+    expectedVersion: z.coerce.number(),
+    targetWorkspace: z.string().optional(),
+    target_workspace: z.string().optional(),
 })
 
 export const searchOptionsSchema = z.object({
@@ -292,7 +294,7 @@ export const adminAuditSearchOptionsSchema = z.object({
     user: z.string().optional(),
     category: z.enum(['read', 'write', 'admin', 'team', 'audit']).optional(),
     status: z.enum(['success', 'error']).optional()
-}).extend(coreOptionsSchema.shape).extend(databaseOptionsSchema.shape).extend(auditOptionsSchema.shape).extend(outputOptionsSchema.shape)
+}).extend(coreOptionsSchema.shape).extend(auditOptionsSchema.shape).extend(outputOptionsSchema.shape)
 
 export const adminRebuildIndexOptionsSchema = z.object({
     team: z.boolean().optional()

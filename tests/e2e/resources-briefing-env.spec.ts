@@ -62,8 +62,9 @@ test.describe('Resources: Briefing Environment Configurations', () => {
             }
         )
 
-        serverProcess.stdout?.on('data', (data) => fs.appendFileSync('serverProcess.log', `[OUT] ${data.toString()}`));
-        serverProcess.stderr?.on('data', (data) => fs.appendFileSync('serverProcess.log', `[ERR] ${data.toString()}`));
+        fs.mkdirSync('.test-output/e2e', { recursive: true });
+        serverProcess.stdout?.on('data', (data) => fs.appendFileSync('.test-output/e2e/briefing-env-server.log', `[OUT] ${data.toString()}`));
+        serverProcess.stderr?.on('data', (data) => fs.appendFileSync('.test-output/e2e/briefing-env-server.log', `[ERR] ${data.toString()}`));
 
         const readyDeadline = Date.now() + 40_000
         let ready = false
@@ -99,11 +100,11 @@ test.describe('Resources: Briefing Environment Configurations', () => {
             await exitPromise
         }
         // Don't delete log if test failed
-        if (testInfo.status !== 'passed' && fs.existsSync('serverProcess.log')) {
-            console.error("SERVER LOG:\n" + fs.readFileSync('serverProcess.log', 'utf8'))
+        if (testInfo.status !== 'passed' && fs.existsSync('.test-output/e2e/briefing-env-server.log')) {
+            console.error("SERVER LOG:\n" + fs.readFileSync('.test-output/e2e/briefing-env-server.log', 'utf8'))
         }
-        if (fs.existsSync('serverProcess.log')) {
-            fs.unlinkSync('serverProcess.log')
+        if (fs.existsSync('.test-output/e2e/briefing-env-server.log')) {
+            fs.unlinkSync('.test-output/e2e/briefing-env-server.log')
         }
     })
 

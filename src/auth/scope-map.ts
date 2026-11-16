@@ -113,16 +113,21 @@ function scopeForCoreMethod(toolName: string): StandardScope {
 
 /** Resource URIs that require a non-READ scope. */
 function scopeForResourceUri(uri: string): StandardScope {
+    const baseUri = uri.replace(/#.*$/, '')
     if (
-        uri === 'memory://team' ||
-        uri.startsWith('memory://team/') ||
-        uri.startsWith('memory://team?') ||
-        uri === 'memory://insights/team-collaboration' ||
-        uri.startsWith('memory://insights/team-collaboration?')
+        baseUri === 'memory://team' ||
+        baseUri.startsWith('memory://team/') ||
+        baseUri.startsWith('memory://team?') ||
+        baseUri === 'memory://insights/team-collaboration' ||
+        baseUri.startsWith('memory://insights/team-collaboration?')
     ) {
         return SCOPES.TEAM
     }
-    if (uri === 'memory://audit' || uri.startsWith('memory://audit/') || uri.startsWith('memory://audit?')) {
+    if (
+        baseUri === 'memory://audit' ||
+        baseUri.startsWith('memory://audit/') ||
+        baseUri.startsWith('memory://audit?')
+    ) {
         return SCOPES.AUDIT
     }
     return SCOPES.READ
@@ -132,6 +137,7 @@ export const TEAM_PROMPT_NAMES = new Set([
     'team-session-summary',
     'create-team-entry',
     'update-team-entry',
+    'team_session_summary',
     'mj_team_session_summary',
     'mj_create_team_entry',
     'mj_update_team_entry',

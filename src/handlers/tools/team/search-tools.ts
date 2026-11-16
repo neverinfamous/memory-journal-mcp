@@ -7,7 +7,6 @@
 import type { ToolDefinition, ToolContext } from '../../../types/index.js'
 import { formatHandlerError } from '../../../utils/error-helpers.js'
 import { resolveWorkspaceId } from '../../../utils/workspace-resolver.js'
-import { MAX_QUERY_LIMIT } from '../schemas.js'
 import { TEAM_DB_ERROR_RESPONSE, batchFetchAuthors, resolveTeamProjectNumber } from './helpers.js'
 import {
     TeamSearchSchema,
@@ -47,8 +46,20 @@ export function getTeamSearchTools(context: ToolContext): ToolDefinition[] {
                         return { ...TEAM_DB_ERROR_RESPONSE }
                     }
 
-                    const { query, tags, limit, cursor, sort_by, project_number, include_archived, fuzzy_match, auto_correct, workspace_id } =
-                        TeamSearchSchema.parse(params)
+                    const {
+                        query,
+                        tags,
+                        exclude_tags,
+                        entry_type,
+                        limit,
+                        cursor,
+                        sort_by,
+                        project_number,
+                        include_archived,
+                        fuzzy_match,
+                        auto_correct,
+                        workspace_id,
+                    } = TeamSearchSchema.parse(params)
 
                     const wsId = resolveWorkspaceId(workspace_id, project_number, context.config)
                     const projectNumber = resolveTeamProjectNumber(
@@ -69,13 +80,8 @@ export function getTeamSearchTools(context: ToolContext): ToolDefinition[] {
                         }
                     }
 
-                    const searchLimit =
-                        tags && tags.length > 0
-                            ? Math.min(Math.max(limit * 5, 50), MAX_QUERY_LIMIT)
-                            : limit
-
                     const result = teamDb.searchEntries(query ?? '', {
-                        limit: searchLimit,
+                        limit,
                         cursor,
                         sortBy: sort_by,
                         projectNumber: projectNumber,
@@ -83,30 +89,13 @@ export function getTeamSearchTools(context: ToolContext): ToolDefinition[] {
                         fuzzy_match,
                         auto_correct,
                         workspaceId: wsId,
+                        ...(tags !== undefined && tags.length > 0 ? { tags } : {}),
+                        ...(exclude_tags !== undefined && exclude_tags.length > 0
+                            ? { excludeTags: exclude_tags }
+                            : {}),
+                        ...(entry_type !== undefined ? { entryType: entry_type } : {}),
                     })
-                    let entries = result.entries
-
-                    // Security: projectNumber is required for all searches now
-
-                    // Filter by tags if provided (batch query instead of N+1)
-                    if (tags && tags.length > 0) {
-                        const entryIds = entries.map((e) => e.id)
-                        if (entryIds.length > 0) {
-                            const entryTagMap = teamDb.getTagsForEntries(entryIds)
-                            entries = entries.filter((e) => {
-                                const entryTags = entryTagMap.get(e.id) ?? []
-                                return tags.some((t: string) => entryTags.includes(t))
-                            })
-                        }
-                    }
-
-                    // Apply final limit after filtering. The adapter's cursor points past the whole
-                    // over-fetched page, so it is only valid when no filtered rows were dropped here;
-                    // otherwise following it would silently skip the dropped matches.
-                    const hasTagFilter = tags !== undefined && tags.length > 0
-                    const droppedByLimit = entries.length > limit
-                    entries = entries.slice(0, limit)
-                    const nextCursor = hasTagFilter && droppedByLimit ? undefined : result.nextCursor
+                    const entries = result.entries
 
                     // Batch-fetch authors
                     const authorMap = batchFetchAuthors(
@@ -122,7 +111,7 @@ export function getTeamSearchTools(context: ToolContext): ToolDefinition[] {
                         entries: enriched,
                         count: enriched.length,
                         degraded: result.degraded ?? false,
-                        next_cursor: nextCursor,
+                        next_cursor: result.nextCursor,
                         suggestions: result.suggestions,
                         correctedQuery: result.correctedQuery,
                     }

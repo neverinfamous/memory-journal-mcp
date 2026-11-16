@@ -143,7 +143,7 @@ export function registerAdminCommands(program: Command): void {
     addCoreOptions(pruneCmd)
     addDatabaseOptions(pruneCmd)
     addWorkspaceScopeOptions(pruneCmd)
-    addPruningOptions(pruneCmd)
+    addPruningOptions(pruneCmd, false)
     addAgentInstructions(pruneCmd,
         `
 🤖 AI AGENT INSTRUCTIONS:
@@ -164,7 +164,6 @@ export function registerAdminCommands(program: Command): void {
     })
     addOutputOptions(auditCmd)
     addCoreOptions(auditCmd)
-    addDatabaseOptions(auditCmd)
     addAuditOptions(auditCmd)
     auditCmd.action(withValidation(auditSchema, auditAction))
 

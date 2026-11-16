@@ -6,6 +6,8 @@ import * as fs from 'node:fs'
 const configPath = path.resolve(os.homedir(), '.gemini', 'config', 'memory-journal.config.json')
 
 import { DatabaseAdapterFactory } from '../../database/adapter-factory.js'
+import type { IDatabaseAdapter } from '../../database/core/interfaces.js'
+import type { ServerOptions } from '../../server/mcp-server/types.js'
 import { ConfigResolver } from '../../utils/config-resolver.js'
 import { readProjectRegistryFile } from '../../utils/registry-config-file.js'
 import {
@@ -83,19 +85,22 @@ export function projectListAction(options: Record<string, unknown>, command: Com
     }
 }
 
-export async function projectCreateAction(name: string, options: Record<string, unknown>, command: Command): Promise<void> {
-    handleProjectDumpConfig(options, command)
+function validateAndRegisterProjectEntry(
+    name: string,
+    options: Record<string, unknown>,
+    command: Command
+): { absPath: string; serverOptions: ServerOptions; effectiveProjNum: number | undefined } | undefined {
     if (!name || name.trim() === '' || isForbiddenProjectKey(name)) {
         process.stderr.write('Invalid project name.\n')
         process.exit(1)
     }
-
-    if (options['path'] == null) {
+    const rawPath = options['path']
+    if (typeof rawPath !== 'string' || rawPath.trim() === '') {
         process.stderr.write('Project path is required (--path).\n')
         process.exit(1)
     }
 
-    const absPath = path.resolve(process.cwd(), options['path'] as string)
+    const absPath = path.resolve(process.cwd(), rawPath)
     if (!isValidProjectPath(absPath)) {
         process.stderr.write(`Invalid or unsafe project path: '${absPath}'.\n`)
         process.exit(1)
@@ -103,8 +108,10 @@ export async function projectCreateAction(name: string, options: Record<string, 
 
     const config = loadConfig(options)
     config['projectRegistry'] ??= {}
-
-    const registry = config['projectRegistry'] as Record<string, { path: string, project_number?: number }>
+    const registry = config['projectRegistry'] as Record<
+        string,
+        { path: string; project_number?: number }
+    >
     const keyConflict = findCaseInsensitiveKeyConflict(registry, name)
     if (keyConflict !== undefined) {
         process.stderr.write(`Project '${keyConflict}' already exists (conflicts with '${name}').\n`)
@@ -134,7 +141,8 @@ export async function projectCreateAction(name: string, options: Record<string, 
         process.exit(1)
     }
 
-    const cliConfigPath = (options['config'] as string | undefined) ?? process.env['MEMORY_JOURNAL_CONFIG']
+    const cliConfigPath =
+        (options['config'] as string | undefined) ?? process.env['MEMORY_JOURNAL_CONFIG']
     const existingCliConfig =
         cliConfigPath !== undefined && fs.existsSync(path.resolve(cliConfigPath))
             ? cliConfigPath
@@ -147,11 +155,9 @@ export async function projectCreateAction(name: string, options: Record<string, 
         process.stderr.write(
             `\nInvalid configuration, refusing to register project: ${e instanceof Error ? e.message : String(e)}\n`
         )
-        process.stderr.write(
-            `Fix the configuration and run 'memory-journal-mcp entry create' manually.\n`
-        )
+        process.stderr.write(`Fix the configuration and run 'memory-journal-mcp entry create' manually.\n`)
         process.exitCode = 1
-        return
+        return undefined
     }
 
     const configErrors: string[] = []
@@ -161,46 +167,23 @@ export async function projectCreateAction(name: string, options: Record<string, 
         process.stderr.write('\nInvalid configuration, refusing to register project:\n')
         configErrors.forEach((err) => process.stderr.write(` - ${err}\n`))
         process.exitCode = 1
-        return
+        return undefined
     }
 
     saveConfig(config, options)
+    return { absPath, serverOptions, effectiveProjNum: newEntry.project_number }
+}
 
-    const isJson = options['json'] === true
-    if (!isJson) {
-        process.stdout.write(`Project '${name}' successfully registered at ${absPath}.\n`)
-    }
-
-    if (options['skipInit'] === true) {
-        if (isJson) {
-            process.stdout.write(
-                JSON.stringify({ status: 'success', name, path: absPath, initialized: false }) +
-                    '\n'
-            )
-        } else {
-            process.stdout.write(`\nSkipping automated database initialization (--skip-init).\n`)
-        }
-        return
-    }
-
-    const effectiveProjNum = newEntry.project_number
-
-    if (effectiveProjNum === undefined) {
-        if (isJson) {
-            process.stdout.write(
-                JSON.stringify({ status: 'success', name, path: absPath, initialized: false }) +
-                    '\n'
-            )
-        } else {
-            process.stdout.write(
-                `\nSkipping automated database initialization because no project number was specified (use --number <n> to create an initialization entry).\n`
-            )
-        }
-        return
-    }
-
+async function createProjectInitEntry(
+    name: string,
+    absPath: string,
+    effectiveProjNum: number,
+    serverOptions: ServerOptions,
+    isJson: boolean
+): Promise<void> {
+    let db: IDatabaseAdapter | undefined
     try {
-        const db = await DatabaseAdapterFactory.create(serverOptions.dbPath, serverOptions)
+        db = await DatabaseAdapterFactory.create(serverOptions.dbPath, serverOptions)
         await db.initialize()
 
         const created = db.createEntry({
@@ -216,7 +199,6 @@ export async function projectCreateAction(name: string, options: Record<string, 
         })
 
         db.flushSave()
-        db.close()
         if (isJson) {
             process.stdout.write(
                 JSON.stringify({
@@ -232,10 +214,48 @@ export async function projectCreateAction(name: string, options: Record<string, 
             process.stdout.write(`Database initialization entry successfully created.\n`)
         }
     } catch (e) {
-        process.stderr.write(`\nFailed to automatically initialize database entry: ${e instanceof Error ? e.message : String(e)}\n`)
+        process.stderr.write(
+            `\nFailed to automatically initialize database entry: ${e instanceof Error ? e.message : String(e)}\n`
+        )
         process.stderr.write(`You may need to run 'memory-journal-mcp entry create' manually.\n`)
         process.exitCode = 1
+    } finally {
+        db?.close()
     }
+}
+
+export async function projectCreateAction(
+    name: string,
+    options: Record<string, unknown>,
+    command: Command
+): Promise<void> {
+    handleProjectDumpConfig(options, command)
+    const registered = validateAndRegisterProjectEntry(name, options, command)
+    if (!registered) return
+
+    const { absPath, serverOptions, effectiveProjNum } = registered
+    const isJson = options['json'] === true
+    if (!isJson) {
+        process.stdout.write(`Project '${name}' successfully registered at ${absPath}.\n`)
+    }
+
+    if (options['skipInit'] === true || effectiveProjNum === undefined) {
+        if (isJson) {
+            process.stdout.write(
+                JSON.stringify({ status: 'success', name, path: absPath, initialized: false }) +
+                    '\n'
+            )
+        } else {
+            process.stdout.write(
+                options['skipInit'] === true
+                    ? `\nSkipping automated database initialization (--skip-init).\n`
+                    : `\nSkipping automated database initialization because no project number was specified (use --number <n> to create an initialization entry).\n`
+            )
+        }
+        return
+    }
+
+    await createProjectInitEntry(name, absPath, effectiveProjNum, serverOptions, isJson)
 }
 
 export function projectUpdateAction(name: string, options: Record<string, unknown>, command: Command): void {
@@ -248,7 +268,7 @@ export function projectUpdateAction(name: string, options: Record<string, unknow
     const config = loadConfig(options)
     const registry = (config['projectRegistry'] ?? {}) as Record<string, { path: string, project_number?: number }>
 
-    if (!registry[name]) {
+    if (!Object.prototype.hasOwnProperty.call(registry, name)) {
         process.stderr.write(`🛠️ AUTONOMOUS HEALING: Project '${name}' not found.\n`)
         process.exit(1)
     }
@@ -257,7 +277,12 @@ export function projectUpdateAction(name: string, options: Record<string, unknow
     let modified = false
 
     if (options['path'] != null) {
-        const absPath = path.resolve(process.cwd(), options['path'] as string)
+        const rawPath = options['path']
+        if (typeof rawPath !== 'string' || rawPath.trim() === '') {
+            process.stderr.write('Invalid project path (--path must be a non-empty string).\n')
+            process.exit(1)
+        }
+        const absPath = path.resolve(process.cwd(), rawPath)
         if (!isValidProjectPath(absPath)) {
             process.stderr.write(`Invalid or unsafe project path: '${absPath}'.\n`)
             process.exit(1)
@@ -266,7 +291,12 @@ export function projectUpdateAction(name: string, options: Record<string, unknow
         modified = true
     }
 
-    const targetName = (options['rename'] as string | undefined)?.trim() ?? name
+    const targetName =
+        typeof options['rename'] === 'string'
+            ? options['rename'].trim()
+            : options['rename'] !== undefined
+              ? ''
+              : name
     if (targetName === '' || isForbiddenProjectKey(targetName)) {
         process.stderr.write('--rename requires a valid non-empty project name.\n')
         process.exit(1)
@@ -308,6 +338,14 @@ export function projectUpdateAction(name: string, options: Record<string, unknow
     const rest = Object.fromEntries(Object.entries(registry).filter(([key]) => key !== name))
     const newRegistry = { ...rest, [targetName]: project }
     config['projectRegistry'] = newRegistry
+    try {
+        validateProjectRegistryObject(config['projectRegistry'])
+    } catch (e: unknown) {
+        process.stderr.write(
+            `Invalid project registry entry: ${e instanceof Error ? e.message : String(e)}\n`
+        )
+        process.exit(1)
+    }
     saveConfig(config, options)
 
     process.stdout.write(`Project '${targetName}' successfully updated.\n`)
@@ -315,7 +353,7 @@ export function projectUpdateAction(name: string, options: Record<string, unknow
 
 export function projectDeleteAction(name: string, options: Record<string, unknown>, command: Command): void {
     handleProjectDumpConfig(options, command)
-    if (!name || name.trim() === '') {
+    if (!name || name.trim() === '' || isForbiddenProjectKey(name)) {
         process.stderr.write('Project name is required.\n')
         process.exit(1)
     }
@@ -323,7 +361,7 @@ export function projectDeleteAction(name: string, options: Record<string, unknow
     const config = loadConfig(options)
     const registry = (config['projectRegistry'] ?? {}) as Record<string, { path: string, project_number?: number }>
 
-    if (!registry[name]) {
+    if (!Object.prototype.hasOwnProperty.call(registry, name)) {
         process.stderr.write(`🛠️ AUTONOMOUS HEALING: Project '${name}' not found.\n`)
         process.exit(1)
     }

@@ -191,6 +191,7 @@ const KanbanColumnOutputSchema = z.object({
 
 export const KanbanBoardOutputSchema = z
     .object({
+        success: z.boolean().optional(),
         projectId: z.string().optional(),
         projectNumber: z.number().optional(),
         projectTitle: z.string().optional(),
@@ -198,6 +199,7 @@ export const KanbanBoardOutputSchema = z
         statusOptions: z.array(StatusOptionOutputSchema).optional(),
         columns: z.array(KanbanColumnOutputSchema).optional(),
         totalItems: z.number().optional(),
+        truncated: z.boolean().optional(),
         itemDirectory: z
             .array(
                 z.object({

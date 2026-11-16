@@ -1,4 +1,6 @@
 import * as fs from 'node:fs'
+import * as path from 'node:path'
+import { parse as parseYaml, stringify as stringifyYaml } from 'yaml'
 
 /**
  * Thrown when a project-registry file exists but cannot be trusted.
@@ -20,9 +22,51 @@ function readErrorCode(err: unknown): string | undefined {
     return typeof err.code === 'string' ? err.code : undefined
 }
 
+function isYamlPath(configPath: string): boolean {
+    return /\.ya?ml$/i.test(configPath)
+}
+
+/**
+ * Parse raw JSON or YAML content from a config file path.
+ * Throws `RegistryConfigError` on syntax errors.
+ */
+export function parseConfigObjectContent(configPath: string, raw: string): unknown {
+    const yamlMode = isYamlPath(configPath)
+    try {
+        return yamlMode ? (parseYaml as (text: string) => unknown)(raw) : JSON.parse(raw)
+    } catch (err) {
+        throw new RegistryConfigError(
+            `Refusing to load project registry from ${configPath}: invalid ${yamlMode ? 'YAML' : 'JSON'}`,
+            { cause: err }
+        )
+    }
+}
+
+/**
+ * Atomically persist a JSON or YAML registry config file via temp file + rename.
+ */
+export function writeProjectRegistryFile(configPath: string, config: Record<string, unknown>): void {
+    fs.mkdirSync(path.dirname(configPath), { recursive: true })
+    const serialized = isYamlPath(configPath)
+        ? (stringifyYaml as (value: unknown) => string)(config)
+        : JSON.stringify(config, null, 4)
+    const tmpPath = `${configPath}.${String(process.pid)}.${String(Date.now())}.tmp`
+    try {
+        fs.writeFileSync(tmpPath, serialized, 'utf-8')
+        fs.renameSync(tmpPath, configPath)
+    } catch (writeErr) {
+        try {
+            fs.rmSync(tmpPath, { force: true })
+        } catch {
+            // [SIDE-EFFECT] Best-effort temp cleanup; rethrow original write error below.
+        }
+        throw writeErr
+    }
+}
+
 /**
  * Read a project registry config.
- * A missing file is an empty registry. Invalid JSON, a non-object payload,
+ * A missing file is an empty registry. Invalid JSON/YAML, a non-object payload,
  * or a permission error throws so callers cannot write the fallback back.
  */
 export function readProjectRegistryFile(configPath: string): {
@@ -44,19 +88,11 @@ export function readProjectRegistryFile(configPath: string): {
         )
     }
 
-    let parsed: unknown
-    try {
-        parsed = JSON.parse(raw)
-    } catch (err) {
-        throw new RegistryConfigError(
-            `Refusing to load project registry from ${configPath}: invalid JSON`,
-            { cause: err }
-        )
-    }
+    const parsed = parseConfigObjectContent(configPath, raw)
 
     if (!isRecord(parsed)) {
         throw new RegistryConfigError(
-            `Refusing to load project registry from ${configPath}: JSON value must be an object`
+            `Refusing to load project registry from ${configPath}: config root must be an object`
         )
     }
 

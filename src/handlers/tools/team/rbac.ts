@@ -1,8 +1,7 @@
 import type { ToolContext, ToolDefinition } from '../../../types/index.js'
 import { AuthorizationError } from '../../../types/errors.js'
 import type { TeamRole } from '../../../database/core/interfaces.js'
-import { getAuthContext } from '../../../auth/auth-context.js'
-import { resolveAuthor, sanitizeAuthor, nonEmptyAuthClaim } from '../../../utils/security-utils.js'
+import { resolveAuthenticatedAuthor } from '../../../utils/security-utils.js'
 import { resolveWorkspaceId } from '../../../utils/workspace-resolver.js'
 
 import { formatHandlerError } from '../../../utils/error-helpers.js'
@@ -66,19 +65,26 @@ export function resolveScopedTeamRole(
     return directRole
 }
 
+function resolveTargetWorkspace(
+    workspaceId: string | undefined,
+    config: ToolContext['config']
+): string | undefined {
+    const trimmed = workspaceId?.trim()
+    if (trimmed === '*') return '*'
+    if (trimmed !== undefined && trimmed !== '') return trimmed
+    const fallbackWs = resolveWorkspaceId(undefined, undefined, config)
+    return fallbackWs !== '*' ? fallbackWs : '*'
+}
+
 function extractTargetWorkspaceId(
     params: unknown,
     config: ToolContext['config']
 ): string | undefined {
     if (typeof params !== 'object' || params === null || Array.isArray(params)) {
-        const fallback = resolveWorkspaceId(undefined, undefined, config)
-        return fallback !== '*' ? fallback : undefined
+        return resolveWorkspaceId(undefined, undefined, config)
     }
     const wsProp: unknown = Reflect.get(params, 'workspace_id') ?? Reflect.get(params, 'workspaceId')
     const rawWs = typeof wsProp === 'string' ? wsProp : undefined
-    if (rawWs?.trim() === '*') {
-        return undefined
-    }
     const projProp: unknown =
         Reflect.get(params, 'project_number') ?? Reflect.get(params, 'projectNumber')
     const numProj =
@@ -87,9 +93,19 @@ function extractTargetWorkspaceId(
             : typeof projProp === 'string' && /^\d+$/.test(projProp.trim())
               ? Number.parseInt(projProp.trim(), 10)
               : undefined
+    if (rawWs?.trim() === '*') {
+        if (numProj !== undefined) {
+            try {
+                const resolved = resolveWorkspaceId(undefined, numProj, config)
+                if (resolved !== '*' && resolved !== 'default') return resolved
+            } catch {
+                // Fall back to wildcard check when project mapping is unavailable
+            }
+        }
+        return '*'
+    }
     try {
-        const wsId = resolveWorkspaceId(rawWs, numProj, config)
-        return wsId !== '*' ? wsId : undefined
+        return resolveWorkspaceId(rawWs, numProj, config)
     } catch {
         const trimmed = rawWs?.trim()
         return trimmed !== undefined && trimmed !== '' ? trimmed : undefined
@@ -101,25 +117,7 @@ function extractTargetWorkspaceId(
  * When OAuth authenticated, resolves strictly from claims (never falling back to TEAM_AUTHOR).
  */
 export function getCallerIdentity(): string {
-    const authCtx = getAuthContext()
-    if (authCtx?.authenticated) {
-        const claims = authCtx.claims
-        const resolved =
-            nonEmptyAuthClaim(claims?.['email']) ??
-            nonEmptyAuthClaim(claims?.['preferred_username']) ??
-            nonEmptyAuthClaim(claims?.sub) ??
-            nonEmptyAuthClaim(claims?.['subject']) ??
-            nonEmptyAuthClaim(claims?.client_id)
-        if (resolved !== undefined) {
-            const sanitized = sanitizeAuthor(resolved)
-            if (sanitized.length > 0 && sanitized.toLowerCase() !== 'unknown') {
-                return sanitized
-            }
-        }
-        return 'unknown'
-    }
-    // For non-OAuth environments, fallback to the environment variable (TEAM_AUTHOR)
-    return resolveAuthor()
+    return resolveAuthenticatedAuthor()
 }
 
 /**
@@ -135,14 +133,26 @@ export function isCallerTeamAdmin(
         return false
     }
     const defaultRole = config?.teamDefaultRole ?? 'denied'
-    const fallbackWs = resolveWorkspaceId(undefined, undefined, config)
-    const targetWs =
-        workspaceId !== undefined && workspaceId.trim() !== ''
-            ? workspaceId.trim()
-            : fallbackWs !== '*'
-              ? fallbackWs
-              : undefined
+    const targetWs = resolveTargetWorkspace(workspaceId, config)
     return resolveScopedTeamRole(teamDb, author, defaultRole, targetWs) === 'admin'
+}
+
+/**
+ * Silent Team RBAC read check for mixed personal+team search tools and hints.
+ * Returns true when Team DB is absent/inactive or caller has >= 'viewer' role.
+ */
+export function canReadTeamEntriesRbac(
+    teamDb: ToolContext['teamDb'],
+    config: ToolContext['config'],
+    workspaceId?: string
+): boolean {
+    if (!teamDb || typeof teamDb.isTeamRbacActive !== 'function' || !teamDb.isTeamRbacActive()) {
+        return true
+    }
+    const caller = resolveAuthenticatedAuthor()
+    const targetWs = resolveTargetWorkspace(workspaceId, config)
+    const role = resolveScopedTeamRole(teamDb, caller, config?.teamDefaultRole ?? 'denied', targetWs)
+    return role !== null
 }
 
 /**
@@ -159,19 +169,13 @@ export function enforceTeamRbac(
     const { teamDb, config } = context
     if (!teamDb) return // Let the original handler return TEAM_DB_ERROR_RESPONSE
 
-    // If RBAC table is empty, default to legacy full access
-    if (teamDb.isTeamRbacActive !== undefined && !teamDb.isTeamRbacActive()) {
+    // If RBAC table is empty (or adapter mock omits isTeamRbacActive), default to legacy full access
+    if (typeof teamDb.isTeamRbacActive !== 'function' || !teamDb.isTeamRbacActive()) {
         return
     }
 
     const defaultRole = config?.teamDefaultRole ?? 'denied'
-    const fallbackWs = resolveWorkspaceId(undefined, undefined, config)
-    const targetWs =
-        workspaceId !== undefined && workspaceId.trim() !== ''
-            ? workspaceId.trim()
-            : fallbackWs !== '*'
-              ? fallbackWs
-              : undefined
+    const targetWs = resolveTargetWorkspace(workspaceId, config)
     const role = resolveScopedTeamRole(teamDb, author, defaultRole, targetWs)
 
     if (role === null) {
@@ -198,8 +202,14 @@ export function enforceOwnership(
     resourceAuthor: string,
     role: TeamRole | null,
     teamDb?: ToolContext['teamDb'],
-    workspaceId?: string
+    workspaceId?: string,
+    rbacActive = false
 ): void {
+    if (rbacActive && (role === null || role === 'viewer')) {
+        throw new AuthorizationError(
+            `Access denied: role '${role ?? 'denied'}' cannot modify team entries.`
+        )
+    }
     if (role === 'admin') return // Admins can bypass ownership checks
     const effectiveCaller = canonicalizeTeamAuthor(teamDb, author, workspaceId)
     const effectiveOwner = canonicalizeTeamAuthor(teamDb, resourceAuthor, workspaceId)
@@ -210,23 +220,23 @@ export function enforceOwnership(
 
 /**
  * Ownership check that also covers entries with no recorded author.
- * When team RBAC is active (`role` is not null), an entry without an author can only be
- * modified by a team admin. With RBAC inactive (`role` null) the legacy full-access mode applies.
+ * When team RBAC is active, an entry without an author can only be modified by a team admin.
  */
 export function enforceEntryOwnership(
     currentUser: string,
     entryAuthor: string | null | undefined,
     role: TeamRole | null,
     teamDb?: ToolContext['teamDb'],
-    workspaceId?: string
+    workspaceId?: string,
+    rbacActive = false
 ): void {
     if (entryAuthor === null || entryAuthor === undefined || entryAuthor.trim() === '') {
-        if (role === 'admin' || role === null) return
+        if (role === 'admin' || (!rbacActive && role === null)) return
         throw new AuthorizationError(
             'Access denied: this entry has no recorded author. Only a team admin can modify it.'
         )
     }
-    enforceOwnership(currentUser, entryAuthor, role, teamDb, workspaceId)
+    enforceOwnership(currentUser, entryAuthor, role, teamDb, workspaceId, rbacActive)
 }
 
 /**

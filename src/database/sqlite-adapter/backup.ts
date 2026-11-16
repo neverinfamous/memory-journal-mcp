@@ -56,6 +56,11 @@ export class BackupManager {
     async exportToFile(
         backupName?: string
     ): Promise<{ filename: string; path: string; sizeBytes: number }> {
+        if (this.ctx.getDbPath() === ':memory:') {
+            throw new Error(
+                "Backup failed: cannot export file backup from an in-memory (':memory:') database"
+            )
+        }
         const backupsDir = this.ctx.getBackupsDir()
 
         if (backupName) {
@@ -73,24 +78,62 @@ export class BackupManager {
         const filename = `${sanitizedName}.db`
         const backupPath = path.join(backupsDir, filename)
 
-        try {
-            this.ctx.pragma('wal_checkpoint(TRUNCATE)')
-        } catch (checkpointErr) {
-            const err =
-                checkpointErr instanceof Error ? checkpointErr.message : String(checkpointErr)
-            logger.error('WAL checkpoint failed, aborting backup', {
-                module: 'SqliteAdapter',
-                operation: 'exportToFile',
-                error: err,
-            })
-            throw new Error(
-                `WAL checkpoint failed, backup aborted to prevent stale data: ${err}`,
-                {
-                    cause: checkpointErr,
+        const rawEncryptionKey =
+            process.env['MJ_DB_ENCRYPTION_KEY'] ?? process.env['DB_ENCRYPTION_KEY']
+        const isEncrypted = rawEncryptionKey !== undefined && rawEncryptionKey !== ''
+        const nativeDb = !isEncrypted ? this.ctx.getNativeDb?.() : undefined
+
+        if (nativeDb !== undefined) {
+            try {
+                await nativeDb.backup(backupPath)
+                await assertIncomingBackupIntact(backupPath)
+            } catch (backupErr) {
+                await unlinkBestEffort(backupPath)
+                throw backupErr
+            }
+        } else {
+            try {
+                if (typeof this.ctx.getNativeDb === 'function') {
+                    const ckpt: unknown = this.ctx.getNativeDb().pragma('wal_checkpoint(TRUNCATE)')
+                    const firstRow: unknown = Array.isArray(ckpt) ? ckpt[0] : undefined
+                    const busy =
+                        typeof firstRow === 'object' &&
+                        firstRow !== null &&
+                        'busy' in firstRow &&
+                        typeof firstRow.busy === 'number'
+                            ? firstRow.busy
+                            : 0
+                    if (busy !== 0) {
+                        throw new Error(
+                            `WAL checkpoint incomplete (busy=${String(busy)}), backup aborted to prevent stale data`
+                        )
+                    }
+                } else {
+                    this.ctx.pragma('wal_checkpoint(TRUNCATE)')
                 }
-            )
+            } catch (checkpointErr) {
+                const err =
+                    checkpointErr instanceof Error ? checkpointErr.message : String(checkpointErr)
+                logger.error('WAL checkpoint failed, aborting backup', {
+                    module: 'SqliteAdapter',
+                    operation: 'exportToFile',
+                    error: err,
+                })
+                throw new Error(
+                    `WAL checkpoint failed, backup aborted to prevent stale data: ${err}`,
+                    {
+                        cause: checkpointErr,
+                    }
+                )
+            }
+            await fs.promises.copyFile(this.ctx.getDbPath(), backupPath)
+            try {
+                await assertIncomingBackupIntact(backupPath)
+            } catch (verifyErr) {
+                await unlinkBestEffort(backupPath)
+                throw verifyErr
+            }
         }
-        await fs.promises.copyFile(this.ctx.getDbPath(), backupPath)
 
         const stats = await fs.promises.stat(backupPath)
 

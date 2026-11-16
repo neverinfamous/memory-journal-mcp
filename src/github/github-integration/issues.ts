@@ -259,6 +259,9 @@ export class IssuesManager {
         } finally {
             this.client.invalidateCache(`issues:${owner}:${repo}`)
             this.client.invalidateCache(`issue:${owner}:${repo}:${String(issueNumber)}`)
+            this.client.invalidateCache(
+                `issue-comments:${owner}:${repo}:${String(issueNumber)}:`
+            )
             this.client.invalidateCache('context:')
         }
     }

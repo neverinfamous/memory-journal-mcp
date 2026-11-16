@@ -41,8 +41,12 @@ function checkUnassignedEntries(): void {
     const isStrict = process.argv.includes('--strict') || process.env['CI'] === 'true'
     if (!fs.existsSync(dbPath)) {
         const message = `Database file not found at '${dbPath}', skipping workspace isolation check.`
-        console.error(message)
-        process.exit(1)
+        if (isStrict || Boolean(process.env['MJ_DB_ENCRYPTION_KEY']) || Boolean(process.env['DB_ENCRYPTION_KEY'])) {
+            console.error(message)
+            process.exit(1)
+        }
+        console.log(`ℹ️ ${message}`)
+        return
     }
     let rawKey = process.env['MJ_DB_ENCRYPTION_KEY'] || process.env['DB_ENCRYPTION_KEY']
     let db: Database.Database
@@ -79,7 +83,6 @@ function checkUnassignedEntries(): void {
         const tableCheck = db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='memory_journal'").get()
         if (!tableCheck) {
             console.log("ℹ️ Table 'memory_journal' does not exist yet. Skipping check.")
-            db.close()
             return
         }
 
@@ -106,20 +109,23 @@ function checkUnassignedEntries(): void {
                 console.error(`- Entry #${row.id}: [Type: ${row.entry_type}, Workspace: '${row.workspace_id}', Project: #${row.project_number}] (${row.timestamp})`)
             }
             console.error(`\n💡 All journal entries must be explicitly bound to a valid workspace and project number. Read resource memory://agent-context/{repo} to retrieve your project number.`)
-            db.close()
-            process.exit(1)
+            process.exitCode = 1
+            return
         }
 
         console.log(`✅ Workspace Isolation Check Passed: 0 unassigned or 'default' workspace entries found.`)
-        db.close()
     } catch (err) {
-        db.close()
         const msg = err instanceof Error ? err.message : String(err)
         if (isStrict || Boolean(rawKey)) {
             console.error(`❌ Unassigned entry check failed on '${dbPath}': ${msg}`)
-            process.exit(1)
+            process.exitCode = 1
+            return
         }
         console.log(`ℹ️ Unassigned entry check skipped (database encrypted or table unreadable): ${msg}`)
+    } finally {
+        if (db.open) {
+            db.close()
+        }
     }
 }
 

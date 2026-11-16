@@ -2,6 +2,36 @@ import { logger } from '../../utils/logger.js'
 import type { GitHubClient } from './client.js'
 import type { GitHubMilestone } from '../../types/index.js'
 
+interface RawGitHubMilestone {
+    number: number
+    title: string
+    description?: string | null
+    state: string
+    html_url: string
+    due_on?: string | null
+    open_issues: number
+    closed_issues: number
+    created_at: string
+    updated_at: string
+    creator?: { login: string } | null
+}
+
+function mapGitHubMilestone(ms: RawGitHubMilestone): GitHubMilestone {
+    return {
+        number: ms.number,
+        title: ms.title,
+        description: ms.description ?? null,
+        state: ms.state === 'open' ? 'open' : 'closed',
+        url: ms.html_url,
+        dueOn: ms.due_on ?? null,
+        openIssues: ms.open_issues,
+        closedIssues: ms.closed_issues,
+        createdAt: ms.created_at,
+        updatedAt: ms.updated_at,
+        creator: ms.creator?.login ?? null,
+    }
+}
+
 export class MilestonesManager {
     constructor(private client: GitHubClient) {}
 
@@ -31,19 +61,7 @@ export class MilestonesManager {
                 request: { signal: abortSignal },
             })
 
-            const result = response.data.map((ms) => ({
-                number: ms.number,
-                title: ms.title,
-                description: ms.description ?? null,
-                state: ms.state === 'open' ? ('open' as const) : ('closed' as const),
-                url: ms.html_url,
-                dueOn: ms.due_on ?? null,
-                openIssues: ms.open_issues,
-                closedIssues: ms.closed_issues,
-                createdAt: ms.created_at,
-                updatedAt: ms.updated_at,
-                creator: ms.creator?.login ?? null,
-            }))
+            const result = response.data.map((ms) => mapGitHubMilestone(ms))
 
             this.client.setCache(cacheKey, result)
             return result
@@ -76,20 +94,7 @@ export class MilestonesManager {
                 milestone_number: milestoneNumber,
             })
 
-            const ms = response.data
-            const milestone: GitHubMilestone = {
-                number: ms.number,
-                title: ms.title,
-                description: ms.description ?? null,
-                state: ms.state === 'open' ? 'open' : 'closed',
-                url: ms.html_url,
-                dueOn: ms.due_on ?? null,
-                openIssues: ms.open_issues,
-                closedIssues: ms.closed_issues,
-                createdAt: ms.created_at,
-                updatedAt: ms.updated_at,
-                creator: ms.creator?.login ?? null,
-            }
+            const milestone = mapGitHubMilestone(response.data)
 
             this.client.setCache(cacheKey, milestone)
             return milestone
@@ -137,19 +142,7 @@ export class MilestonesManager {
                 context: { title, owner, repo },
             })
 
-            return {
-                number: ms.number,
-                title: ms.title,
-                description: ms.description ?? null,
-                state: ms.state === 'open' ? 'open' : 'closed',
-                url: ms.html_url,
-                dueOn: ms.due_on ?? null,
-                openIssues: ms.open_issues,
-                closedIssues: ms.closed_issues,
-                createdAt: ms.created_at,
-                updatedAt: ms.updated_at,
-                creator: ms.creator?.login ?? null,
-            }
+            return mapGitHubMilestone(ms)
         } catch (error) {
             logger.error('Failed to create milestone', {
                 module: 'GitHub',
@@ -202,19 +195,7 @@ export class MilestonesManager {
                 context: { owner, repo, updates: Object.keys(updates) },
             })
 
-            return {
-                number: ms.number,
-                title: ms.title,
-                description: ms.description ?? null,
-                state: ms.state === 'open' ? 'open' : 'closed',
-                url: ms.html_url,
-                dueOn: ms.due_on ?? null,
-                openIssues: ms.open_issues,
-                closedIssues: ms.closed_issues,
-                createdAt: ms.created_at,
-                updatedAt: ms.updated_at,
-                creator: ms.creator?.login ?? null,
-            }
+            return mapGitHubMilestone(ms)
         } catch (error) {
             logger.error('Failed to update milestone', {
                 module: 'GitHub',

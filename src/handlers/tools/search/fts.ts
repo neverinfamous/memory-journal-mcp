@@ -6,7 +6,8 @@
  */
 
 import type { IDatabaseAdapter } from '../../../database/core/interfaces.js'
-import type { EntryType } from '../../../types/index.js'
+import type { EntryType, ToolHandlerConfig } from '../../../types/index.js'
+import { canReadTeamEntriesRbac } from '../team/rbac.js'
 import {
     calcPerDbLimit,
     canAccessTeamSilently,
@@ -41,6 +42,7 @@ interface FtsSearchOptions {
     fuzzy_match?: boolean
     auto_correct?: boolean
     workspaceId?: string
+    config?: ToolHandlerConfig | undefined
 }
 
 export interface FtsSearchResponse {
@@ -227,7 +229,8 @@ export function ftsSearch(
         teamDb !== undefined &&
         options.includeTeam === true &&
         options.isPersonal !== true &&
-        canAccessTeamSilently('search_entries')
+        canAccessTeamSilently('search_entries') &&
+        canReadTeamEntriesRbac(teamDb, options.config, options.workspaceId)
     const cursors = resolveFtsCursors(options.cursor, canIncludeTeam)
     const perDbLimit = calcPerDbLimit(options.limit, canIncludeTeam)
 

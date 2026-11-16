@@ -47,6 +47,14 @@ export function applyGitInterceptions(methodName: string, args: unknown[]): { ar
             obj['maxCount'] = obj['max_count'];
             delete obj['max_count'];
         }
+        if (obj['tech_debt_audit'] !== undefined && obj['techDebtAudit'] === undefined) {
+            obj['techDebtAudit'] = obj['tech_debt_audit'];
+            delete obj['tech_debt_audit'];
+        }
+        if (obj['sort_by'] !== undefined && obj['sortBy'] === undefined) {
+            obj['sortBy'] = obj['sort_by'];
+            delete obj['sort_by'];
+        }
 
         if (obj['repo_name'] !== undefined && obj['repo'] === undefined) {
             obj['repo'] = obj['repo_name'];

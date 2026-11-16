@@ -13,6 +13,7 @@ import {
     DATE_FORMAT_MESSAGE,
     EntryOutputSchema,
     relaxedNumber,
+    StrictProjectNumberSchema,
 } from '../schemas.js'
 import { ErrorFieldsMixin } from '../error-fields-mixin.js'
 import { DatabaseAdapterFactory } from '../../../database/adapter-factory.js'
@@ -20,6 +21,7 @@ import type { IDatabaseAdapter } from '../../../database/core/interfaces.js'
 import type { ToolContext, ToolDefinition } from '../../../types/index.js'
 import { ConfigurationError, PermissionError, ValidationError } from '../../../types/errors.js'
 import { enforceAccessBoundary } from '../../../auth/validation.js'
+import { enforceTeamRbac, getCallerIdentity } from '../team/rbac.js'
 import { formatHandlerError } from '../../../utils/error-helpers.js'
 import { resolveWorkspaceId } from '../../../utils/workspace-resolver.js'
 import { activeProjectRegistry, alignedProjectFilter } from '../../../utils/write-scope.js'
@@ -45,12 +47,12 @@ export const CrossTeamSearchSchema = z.preprocess(
         .optional()
         .describe('Specific team DB labels to search. Omit to search all configured DBs.'),
     tags: z.array(z.string()).optional(),
-    project_number: z.number().int().optional(),
+    project_number: StrictProjectNumberSchema.optional(),
     workspace_id: z.string().optional().describe('Optional workspace isolation identifier (e.g. "alpha"). Do not use numeric project IDs or "workspace" as the key.'),
     entry_type: z.enum(ENTRY_TYPES).optional(),
     start_date: z.string().regex(DATE_FORMAT_REGEX, DATE_FORMAT_MESSAGE).optional(),
     end_date: z.string().regex(DATE_FORMAT_REGEX, DATE_FORMAT_MESSAGE).optional(),
-    limit: z.number().max(500).optional().default(20),
+    limit: z.number().int().min(1).max(500).optional().default(20),
     sort_by: z
         .enum(['timestamp', 'importance'])
         .optional()
@@ -202,6 +204,10 @@ export async function handleCrossTeamSearch(
 
     // 3. Query DBs in parallel
     // We request up to MAX limit from each DB to ensure we have enough post-merge candidates
+    const caller = getCallerIdentity()
+    if (targetLabels.includes('primary') && context.teamDb) {
+        enforceTeamRbac(context, caller, 'viewer', wsId)
+    }
     const perDbLimit = Math.min(args.limit * 2, 500)
 
     const searchPromises = targetLabels.map(async (label) => {
@@ -214,6 +220,9 @@ export async function handleCrossTeamSearch(
             const dbPath = additionalDbs[label]
             if (!dbPath) throw new Error(`Missing configured path for ${label}`)
             adapter = await getOrCreateAdapter(label, dbPath)
+            if (adapter.isTeamRbacActive?.()) {
+                enforceTeamRbac({ ...context, teamDb: adapter }, caller, 'viewer', wsId)
+            }
         }
 
         const results = adapter.searchEntries(args.query, {
@@ -244,6 +253,7 @@ export async function handleCrossTeamSearch(
     const errors: { team_db: string; error: string }[] = []
     const searched_dbs: string[] = []
     let degraded = false
+    let authFailure: Error | undefined
 
     for (let i = 0; i < settled.length; i++) {
         const label = targetLabels[i]
@@ -255,6 +265,9 @@ export async function handleCrossTeamSearch(
             searched_dbs.push(label)
         } else {
             degraded = true
+            if (authFailure === undefined && result.reason instanceof Error && result.reason.name === 'AuthorizationError') {
+                authFailure = result.reason
+            }
             const errorMessage = result.reason instanceof Error ? result.reason.message : String(result.reason)
             errors.push({ team_db: label, error: errorMessage })
             logger.error(`Cross-team search failed for DB: ${label}`, {
@@ -262,6 +275,9 @@ export async function handleCrossTeamSearch(
                 error: errorMessage,
             })
         }
+    }
+    if (searched_dbs.length === 0 && errors.length > 0 && authFailure !== undefined) {
+        throw authFailure
     }
 
     // 5. Merge, sort, and apply final limit

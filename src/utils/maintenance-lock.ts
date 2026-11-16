@@ -113,6 +113,7 @@ export class ServerRuntime {
     public githubClientPool: Map<string, GitHubIntegration> | null = null
     public configManager: unknown = null
     public stopBackgroundTasks: (() => void) | null = null
+    public teamDefaultRole: 'admin' | 'member' | 'viewer' | 'denied' = 'denied'
     public pendingVectorInit: Promise<void> | null = null
 }
 

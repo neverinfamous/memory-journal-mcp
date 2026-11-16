@@ -74,6 +74,57 @@ export function buildImportanceSqlExpression(): string {
   )`
 }
 
+function computeImportanceBreakdownAndScore(params: {
+    impactScore: number | null
+    significanceType: string | null
+    trustScore: number | null
+    validationStatus: string | null
+    timestamp: string
+    relCount: number
+    causalCount: number
+    worstStatusRank: number
+    nowMs: number
+}): ImportanceResult {
+    const round2 = (n: number): number => Math.round(n * 100) / 100
+    const significanceRaw = Math.max(
+        params.impactScore ?? 0.0,
+        params.significanceType ? SIGNIFICANCE_TYPE_BASELINE : 0.0
+    )
+    const relationshipsRaw = Math.min(params.relCount / MAX_RELATIONSHIP_SCORE_AT, 1.0)
+    const causalRaw = Math.min(params.causalCount / MAX_CAUSAL_SCORE_AT, 1.0)
+
+    const entryMs = new Date(params.timestamp).getTime()
+    const daysSince = Number.isFinite(entryMs)
+        ? Math.max(0, (params.nowMs - entryMs) / 86_400_000)
+        : RECENCY_WINDOW_DAYS
+    const recencyRaw = Math.min(1, Math.max(0, 1 - daysSince / RECENCY_WINDOW_DAYS))
+
+    const anchorMultiplier =
+        params.worstStatusRank === 1 ? 0.1 : params.worstStatusRank === 2 ? 0.8 : 1.0
+    const validationStatus = params.validationStatus ?? 'none'
+    const validationMultiplier =
+        validationStatus === 'passed' ? 0.5 : validationStatus === 'failed' ? -0.4 : 0.0
+    const trustMultiplier = 0.5 + (params.trustScore ?? 0.5) + validationMultiplier
+    const totalModifier = anchorMultiplier * trustMultiplier
+
+    const w = IMPORTANCE_WEIGHTS
+    const breakdown: ImportanceBreakdown = {
+        significance: round2(significanceRaw * w.significance),
+        relationships: round2(relationshipsRaw * w.relationships),
+        causal: round2(causalRaw * w.causal),
+        recency: round2(recencyRaw * w.recency),
+        trustModifier: round2(totalModifier),
+    }
+
+    const baseScore =
+        significanceRaw * w.significance +
+        relationshipsRaw * w.relationships +
+        causalRaw * w.causal +
+        recencyRaw * w.recency
+
+    return { score: round2(baseScore * totalModifier), breakdown }
+}
+
 export function calculateImportance(
     context: EntriesSharedContext,
     entryId: number,
@@ -82,7 +133,6 @@ export function calculateImportance(
     const { db } = context
     const scopeId = effectiveWorkspace(workspaceId)
     const scoped = scopeId !== '*'
-    const round2 = (n: number): number => Math.round(n * 100) / 100
 
     const stmt = db.prepare(`SELECT
         m.significance_type as significanceType,
@@ -112,48 +162,19 @@ export function calculateImportance(
 
     if (!row) return null
 
-    const significanceType = row['significanceType'] as string | null
-    const impactScore = (row['impactScore'] as number) ?? 0.0
-    const trustScore = (row['trustScore'] as number) ?? 0.5
-    const validationStatus = (row['validationStatus'] as string) ?? 'none'
-    const timestamp = row['timestamp'] as string
-    const relCount = (row['rel_count'] as number) ?? 0
-    const causalCount = (row['causal_count'] as number) ?? 0
-    const worstStatusRank = (row['worst_status_rank'] as number) ?? 3
-
-    const significanceRaw = Math.max(impactScore, significanceType ? SIGNIFICANCE_TYPE_BASELINE : 0.0)
-    const relationshipsRaw = Math.min(relCount / MAX_RELATIONSHIP_SCORE_AT, 1.0)
-    const causalRaw = Math.min(causalCount / MAX_CAUSAL_SCORE_AT, 1.0)
-
-    const entryMs = new Date(timestamp).getTime()
-    const daysSince = Number.isFinite(entryMs)
-        ? Math.max(0, (Date.now() - entryMs) / 86_400_000)
-        : RECENCY_WINDOW_DAYS
-    const recencyRaw = Math.min(1, Math.max(0, 1 - daysSince / RECENCY_WINDOW_DAYS))
-
-    const anchorMultiplier = worstStatusRank === 1 ? 0.1 : (worstStatusRank === 2 ? 0.8 : 1.0)
-    const validationMultiplier = validationStatus === 'passed' ? 0.5 : (validationStatus === 'failed' ? -0.4 : 0.0)
-    const trustMultiplier = 0.5 + trustScore + validationMultiplier
-    const totalModifier = anchorMultiplier * trustMultiplier
-
-    const w = IMPORTANCE_WEIGHTS
-
-    const breakdown: ImportanceBreakdown = {
-        significance: round2(significanceRaw * w.significance),
-        relationships: round2(relationshipsRaw * w.relationships),
-        causal: round2(causalRaw * w.causal),
-        recency: round2(recencyRaw * w.recency),
-        trustModifier: round2(totalModifier),
-    }
-
-    const baseScore = significanceRaw * w.significance +
-            relationshipsRaw * w.relationships +
-            causalRaw * w.causal +
-            recencyRaw * w.recency
-
-    const score = round2(baseScore * totalModifier)
-
-    return { score, breakdown }
+    return computeImportanceBreakdownAndScore({
+        impactScore: typeof row['impactScore'] === 'number' ? row['impactScore'] : 0.0,
+        significanceType:
+            typeof row['significanceType'] === 'string' ? row['significanceType'] : null,
+        trustScore: typeof row['trustScore'] === 'number' ? row['trustScore'] : 0.5,
+        validationStatus:
+            typeof row['validationStatus'] === 'string' ? row['validationStatus'] : 'none',
+        timestamp: typeof row['timestamp'] === 'string' ? row['timestamp'] : '',
+        relCount: typeof row['rel_count'] === 'number' ? row['rel_count'] : 0,
+        causalCount: typeof row['causal_count'] === 'number' ? row['causal_count'] : 0,
+        worstStatusRank: typeof row['worst_status_rank'] === 'number' ? row['worst_status_rank'] : 3,
+        nowMs: Date.now(),
+    })
 }
 
 /** Per-entry relationship/anchor statistics feeding the importance score. */
@@ -164,64 +185,69 @@ interface ImportanceStats {
 }
 
 /**
- * Load relationship counts and worst anchor status for a set of entries using 2 batched queries.
+ * Load relationship counts and worst anchor status for a set of entries using chunked batched queries.
  * Every id gets an entry (zero counts, rank 3 when no data).
  */
 function loadImportanceStats(
     db: EntriesSharedContext['db'],
     validIds: number[]
 ): Map<number, ImportanceStats> {
-    const marks = validIds.map(() => '?').join(', ')
-
-    const sql = `
-        SELECT entry_id,
-               COUNT(*) AS rel_count,
-               SUM(CASE WHEN relationship_type IN ('blocked_by', 'resolved', 'caused') THEN 1 ELSE 0 END) AS causal_count
-        FROM (
-            SELECT r.from_entry_id AS entry_id, r.relationship_type
-            FROM relationships r
-            JOIN memory_journal peer ON peer.id = r.to_entry_id AND peer.deleted_at IS NULL
-            WHERE r.from_entry_id IN (${marks})
-            UNION ALL
-            SELECT r.to_entry_id AS entry_id, r.relationship_type
-            FROM relationships r
-            JOIN memory_journal peer ON peer.id = r.from_entry_id AND peer.deleted_at IS NULL
-            WHERE r.to_entry_id IN (${marks})
-        )
-        GROUP BY entry_id
-    `
-    const rows = db.prepare(sql).all(...validIds, ...validIds) as {
-        entry_id: number
-        rel_count: number
-        causal_count: number
-    }[]
-
-    const anchorSql = `
-        SELECT entry_id,
-               MIN(CASE status WHEN 'invalidated' THEN 1 WHEN 'stale' THEN 2 ELSE 3 END) AS worst_status_rank
-        FROM entry_anchors WHERE entry_id IN (${marks})
-        GROUP BY entry_id
-    `
-    const anchorRows = db.prepare(anchorSql).all(...validIds) as {
-        entry_id: number
-        worst_status_rank: number
-    }[]
-
     const relData = new Map<number, ImportanceStats>()
     for (const id of validIds) {
         relData.set(id, { relCount: 0, causalCount: 0, worstStatusRank: 3 })
     }
-    for (const row of rows) {
-        const d = relData.get(row.entry_id)
-        if (d) {
-            d.relCount = row.rel_count
-            d.causalCount = row.causal_count
+
+    const CHUNK_SIZE = 450
+    for (let i = 0; i < validIds.length; i += CHUNK_SIZE) {
+        const chunk = validIds.slice(i, i + CHUNK_SIZE)
+        const marks = chunk.map(() => '?').join(', ')
+
+        const sql = `
+            SELECT entry_id,
+                   COUNT(*) AS rel_count,
+                   SUM(CASE WHEN relationship_type IN ('blocked_by', 'resolved', 'caused') THEN 1 ELSE 0 END) AS causal_count
+            FROM (
+                SELECT r.from_entry_id AS entry_id, r.relationship_type
+                FROM relationships r
+                JOIN memory_journal peer ON peer.id = r.to_entry_id AND peer.deleted_at IS NULL
+                WHERE r.from_entry_id IN (${marks})
+                UNION ALL
+                SELECT r.to_entry_id AS entry_id, r.relationship_type
+                FROM relationships r
+                JOIN memory_journal peer ON peer.id = r.from_entry_id AND peer.deleted_at IS NULL
+                WHERE r.to_entry_id IN (${marks})
+            )
+            GROUP BY entry_id
+        `
+        const rows = db.prepare(sql).all(...chunk, ...chunk) as {
+            entry_id: number
+            rel_count: number
+            causal_count: number
+        }[]
+
+        const anchorSql = `
+            SELECT entry_id,
+                   MIN(CASE status WHEN 'invalidated' THEN 1 WHEN 'stale' THEN 2 ELSE 3 END) AS worst_status_rank
+            FROM entry_anchors WHERE entry_id IN (${marks})
+            GROUP BY entry_id
+        `
+        const anchorRows = db.prepare(anchorSql).all(...chunk) as {
+            entry_id: number
+            worst_status_rank: number
+        }[]
+
+        for (const row of rows) {
+            const d = relData.get(row.entry_id)
+            if (d) {
+                d.relCount = row.rel_count
+                d.causalCount = row.causal_count
+            }
         }
-    }
-    for (const row of anchorRows) {
-        const d = relData.get(row.entry_id)
-        if (d) {
-            d.worstStatusRank = row.worst_status_rank
+        for (const row of anchorRows) {
+            const d = relData.get(row.entry_id)
+            if (d) {
+                d.worstStatusRank = row.worst_status_rank
+            }
         }
     }
     return relData
@@ -229,7 +255,7 @@ function loadImportanceStats(
 
 /**
  * Batch-attaches rounded importanceScore values directly onto an array of hydrated JournalEntry objects.
- * Uses only 2 batched SQL queries (relationships + entry_anchors) for all entries.
+ * Uses only 2 chunked batched SQL query sets (relationships + entry_anchors) for all entries.
  */
 export function attachImportanceScoresToEntries(
     context: EntriesSharedContext,
@@ -238,42 +264,23 @@ export function attachImportanceScoresToEntries(
     if (entries.length === 0) return
 
     const { db } = context
-    const round2 = (n: number): number => Math.round(n * 100) / 100
     const validIds = entries.map((e) => e.id)
     const relData = loadImportanceStats(db, validIds)
-
     const nowMs = Date.now()
-    const w = IMPORTANCE_WEIGHTS
 
     for (const entry of entries) {
         const stats = relData.get(entry.id) ?? { relCount: 0, causalCount: 0, worstStatusRank: 3 }
-
-        const significanceRaw = Math.max(
-            entry.impactScore ?? 0.0,
-            entry.significanceType ? SIGNIFICANCE_TYPE_BASELINE : 0.0
-        )
-        const relationshipsRaw = Math.min(stats.relCount / MAX_RELATIONSHIP_SCORE_AT, 1.0)
-        const causalRaw = Math.min(stats.causalCount / MAX_CAUSAL_SCORE_AT, 1.0)
-
-        const entryDateMs = new Date(entry.timestamp).getTime()
-        const daysSince = Math.max(0, (nowMs - entryDateMs) / 86_400_000)
-        const recencyRaw = Math.max(0, 1 - daysSince / RECENCY_WINDOW_DAYS)
-
-        const anchorMultiplier =
-            stats.worstStatusRank === 1 ? 0.1 : stats.worstStatusRank === 2 ? 0.8 : 1.0
-        const validationStatus = entry.validationStatus ?? 'none'
-        const validationMultiplier =
-            validationStatus === 'passed' ? 0.5 : validationStatus === 'failed' ? -0.4 : 0.0
-        const trustMultiplier = 0.5 + (entry.trustScore ?? 0.5) + validationMultiplier
-        const totalModifier = anchorMultiplier * trustMultiplier
-
-        const baseScore =
-            significanceRaw * w.significance +
-            relationshipsRaw * w.relationships +
-            causalRaw * w.causal +
-            recencyRaw * w.recency
-
-        entry.importanceScore = round2(baseScore * totalModifier)
+        entry.importanceScore = computeImportanceBreakdownAndScore({
+            impactScore: entry.impactScore ?? null,
+            significanceType: entry.significanceType ?? null,
+            trustScore: entry.trustScore ?? null,
+            validationStatus: entry.validationStatus ?? null,
+            timestamp: entry.timestamp,
+            relCount: stats.relCount,
+            causalCount: stats.causalCount,
+            worstStatusRank: stats.worstStatusRank,
+            nowMs,
+        }).score
     }
 }
 
@@ -289,50 +296,24 @@ export function getEntriesByIdsWithImportance(
     if (entriesMap.size === 0) return result
 
     const { db } = context
-    const round2 = (n: number): number => Math.round(n * 100) / 100
-
     const validIds = Array.from(entriesMap.keys())
     const relData = loadImportanceStats(db, validIds)
-
-    const now = new Date()
-    const w = IMPORTANCE_WEIGHTS
+    const nowMs = Date.now()
 
     for (const [id, entry] of entriesMap.entries()) {
         const stats = relData.get(id) ?? { relCount: 0, causalCount: 0, worstStatusRank: 3 }
-
-        const significanceRaw = Math.max(
-            entry.impactScore ?? 0.0,
-            entry.significanceType ? SIGNIFICANCE_TYPE_BASELINE : 0.0
-        )
-        const relationshipsRaw = Math.min(stats.relCount / MAX_RELATIONSHIP_SCORE_AT, 1.0)
-        const causalRaw = Math.min(stats.causalCount / MAX_CAUSAL_SCORE_AT, 1.0)
-
-        const entryDate = new Date(entry.timestamp)
-        const daysSince = Math.floor((now.getTime() - entryDate.getTime()) / (1000 * 60 * 60 * 24))
-        const recencyRaw = Math.max(0, 1 - daysSince / RECENCY_WINDOW_DAYS)
-
-        const anchorMultiplier = stats.worstStatusRank === 1 ? 0.1 : (stats.worstStatusRank === 2 ? 0.8 : 1.0)
-        const validationStatus = entry.validationStatus ?? 'none'
-        const validationMultiplier = validationStatus === 'passed' ? 0.5 : (validationStatus === 'failed' ? -0.4 : 0.0)
-        const trustMultiplier = 0.5 + (entry.trustScore ?? 0.5) + validationMultiplier
-        const totalModifier = anchorMultiplier * trustMultiplier
-
-        const breakdown: ImportanceBreakdown = {
-            significance: round2(significanceRaw * w.significance),
-            relationships: round2(relationshipsRaw * w.relationships),
-            causal: round2(causalRaw * w.causal),
-            recency: round2(recencyRaw * w.recency),
-            trustModifier: round2(totalModifier),
-        }
-
-        const baseScore = significanceRaw * w.significance +
-                relationshipsRaw * w.relationships +
-                causalRaw * w.causal +
-                recencyRaw * w.recency
-                
-        const score = round2(baseScore * totalModifier)
-
-        result.set(id, { entry, importance: { score, breakdown } })
+        const importance = computeImportanceBreakdownAndScore({
+            impactScore: entry.impactScore ?? null,
+            significanceType: entry.significanceType ?? null,
+            trustScore: entry.trustScore ?? null,
+            validationStatus: entry.validationStatus ?? null,
+            timestamp: entry.timestamp,
+            relCount: stats.relCount,
+            causalCount: stats.causalCount,
+            worstStatusRank: stats.worstStatusRank,
+            nowMs,
+        })
+        result.set(id, { entry, importance })
     }
 
     return result

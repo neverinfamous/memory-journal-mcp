@@ -163,9 +163,15 @@ export class WorkerSandbox {
     dispose(): void {
         this.isBusy = false
         if (this.currentExecution) {
-            clearTimeout(this.currentExecution.timeoutHandle)
-            this.currentExecution.hostPort.close()
+            const exec = this.currentExecution
             this.currentExecution = null
+            clearTimeout(exec.timeoutHandle)
+            exec.hostPort.close()
+            exec.resolve({
+                success: false,
+                error: 'Worker sandbox disposed',
+                metrics: { wallTimeMs: 0, cpuTimeMs: 0, memoryUsedMb: 0 },
+            })
         }
         if (this.worker) {
             const worker = this.worker

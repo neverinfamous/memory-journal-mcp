@@ -11,9 +11,8 @@ import {
     resolveStalenessTargetWorkspaces,
     type StalenessCheckRow,
 } from './git-staleness.js'
-import { coerceNumber } from '../../utils/query-helpers.js'
 import { ErrorFieldsMixin } from './error-fields-mixin.js'
-import { relaxedNumber } from './schemas.js'
+import { relaxedNumber, StrictProjectNumberSchema } from './schemas.js'
 import {
     GitAnalyzePatternsOptionsSchema,
     GitHistoryOptionsSchema,
@@ -351,12 +350,12 @@ export function getGitTools(context: ToolContext): ToolDefinition[] {
                     const { db } = context
                     const parsedParams = z
                         .object({
-                            entry_id: z.preprocess(coerceNumber, z.number().int().optional()),
-                            entryId: z.preprocess(coerceNumber, z.number().int().optional()),
+                            entry_id: z.number().int().positive().optional(),
+                            entryId: z.number().int().positive().optional(),
                             workspace_id: z.string().optional(),
                             workspaceId: z.string().optional(),
-                            project_number: z.preprocess(coerceNumber, z.number().int().optional()),
-                            projectNumber: z.preprocess(coerceNumber, z.number().int().optional()),
+                            project_number: StrictProjectNumberSchema.optional(),
+                            projectNumber: StrictProjectNumberSchema.optional(),
                         })
                         .parse(params)
                     const resolvedEntryId = parsedParams.entry_id ?? parsedParams.entryId

@@ -5,20 +5,9 @@
  */
 
 import { ICON_GITHUB, ICON_MILESTONE } from '../../constants/icons.js'
-import {
-    findCanonicalRegistryKey,
-    loadProjectRegistryFromConfig,
-} from '../../utils/workspace-resolver.js'
-import {
-    withPriority,
-    ASSISTANT_FOCUSED,
-    } from '../../utils/resource-annotations.js'
-import type {
-    GitHubIssue,
-    GitHubPullRequest,
-    GitHubWorkflowRun,
-    GitHubMilestone,
-} from '../../types/index.js'
+import { findCanonicalRegistryKey, loadProjectRegistryFromConfig } from '../../utils/workspace-resolver.js'
+import { withPriority, ASSISTANT_FOCUSED } from '../../utils/resource-annotations.js'
+import type { GitHubIssue, GitHubPullRequest, GitHubWorkflowRun, GitHubMilestone } from '../../types/index.js'
 import type { InternalResourceDef, ResourceContext, ResourceResult } from './shared.js'
 import {
     getBaseUri,
@@ -26,9 +15,27 @@ import {
     isResourceError,
     milestoneCompletionPct,
     resourceWorkspace,
+    safeDecodeUriSegment,
+    fenceUntrustedInline,
+    sliceUntrustedInline,
 } from './shared.js'
-import { markUntrustedContentInline } from '../../utils/security-utils.js'
+import { markUntrustedContent } from '../../utils/security-utils.js'
 import { logger } from '../../utils/logger.js'
+
+function fenceMilestoneResource<
+    T extends { title: string; description?: string | null; creator?: string | null },
+>(ms: T): T {
+    return {
+        ...ms,
+        title: fenceUntrustedInline(ms.title),
+        ...(ms.description !== undefined && ms.description !== null
+            ? { description: markUntrustedContent(ms.description) }
+            : {}),
+        ...(ms.creator !== undefined && ms.creator !== null
+            ? { creator: fenceUntrustedInline(ms.creator) }
+            : {}),
+    }
+}
 
 // ============================================================================
 // Resource API Limits
@@ -87,7 +94,10 @@ function summarizeCiWorkflows(workflowRuns: GitHubWorkflowRun[]): {
         const latest = workflowRuns[0]
 
         latestRun = {
-            name: latest?.name ?? 'Unknown',
+            name:
+                latest?.name !== undefined && latest.name !== ''
+                    ? fenceUntrustedInline(latest.name)
+                    : 'Unknown',
             conclusion: latest?.conclusion ?? null,
             headSha: latest?.headSha?.slice(0, 7) ?? '',
         }
@@ -114,22 +124,11 @@ function summarizeCiWorkflows(workflowRuns: GitHubWorkflowRun[]): {
     return { ciStatus, latestRun }
 }
 
-async function handleGitHubStatusResource(
-    uri: string,
-    context: ResourceContext
-): Promise<ResourceResult> {
-    const match = /^memory:\/\/github\/status(?:\/(.*))?$/.exec(getBaseUri(uri))
-    const targetRepo = match?.[1] ? decodeURIComponent(match[1]) : undefined
-    const resolved = await resolveScopedGitHubRepo(context, targetRepo)
-    if (isResourceError(resolved)) return resolved
-    const { owner, repo, branch, lastModified, github } = resolved
-
-    const registry = context.briefingConfig?.projectRegistry ?? loadProjectRegistryFromConfig()
-    const activeWs =
-        targetRepo !== undefined && targetRepo !== ''
-            ? targetRepo
-            : resourceWorkspace(context)
-    const canonicalRepo = findCanonicalRegistryKey(activeWs, registry) ?? activeWs
+function resolveStatusKanbanProject(
+    context: ResourceContext,
+    canonicalRepo: string,
+    registry: ReturnType<typeof loadProjectRegistryFromConfig>
+): number | undefined {
     const repoProject = registry?.[canonicalRepo]?.project_number
     const defaultProj = context.briefingConfig?.defaultProjectNumber
     const defaultWs = context.briefingConfig?.defaultWorkspaceId
@@ -146,7 +145,150 @@ async function handleGitHubStatusResource(
         !claimedElsewhere &&
         (defaultWs === undefined ||
             defaultWs.toLowerCase() === canonicalRepo.toLowerCase())
-    const kanbanProject = repoProject ?? (canUseDefaultProj ? defaultProj : undefined)
+    return repoProject ?? (canUseDefaultProj ? defaultProj : undefined)
+}
+
+interface StatusContextSnapshot {
+    commit: string | null
+    issues: GitHubIssue[]
+    prs: GitHubPullRequest[]
+    workflowRuns: GitHubWorkflowRun[]
+    milestonesContext: GitHubMilestone[]
+}
+
+function extractRepoContextSnapshot(
+    repoContextResult: PromiseSettledResult<
+        Awaited<ReturnType<GitHubStatusClient['getRepoContext']>>
+    >
+): StatusContextSnapshot {
+    if (repoContextResult.status === 'fulfilled') {
+        const val = repoContextResult.value
+        return {
+            commit: val.commit,
+            issues: (val.issues ?? []).slice(0, RESOURCE_ISSUE_LIMIT),
+            prs: (val.pullRequests ?? []).slice(0, RESOURCE_PR_LIMIT),
+            workflowRuns: (val.workflowRuns ?? []).slice(0, RESOURCE_WORKFLOW_LIMIT),
+            milestonesContext: (val.milestones ?? []).slice(0, RESOURCE_STATUS_MILESTONE_LIMIT),
+        }
+    }
+    logger.debug('Failed to fetch repo context', {
+        module: 'RESOURCE',
+        operation: 'github-status',
+        error: repoContextResult.reason,
+    })
+    return { commit: null, issues: [], prs: [], workflowRuns: [], milestonesContext: [] }
+}
+
+type GitHubStatusClient = Extract<
+    Awaited<ReturnType<typeof resolveScopedGitHubRepo>>,
+    { github: unknown }
+>['github']
+
+function buildKanbanSummary(
+    kanbanResult: PromiseSettledResult<
+        Awaited<ReturnType<GitHubStatusClient['getProjectKanban']>>
+    >
+): Record<string, number> | null {
+    if (kanbanResult.status === 'fulfilled' && kanbanResult.value) {
+        const summary: Record<string, number> = {}
+        for (const col of kanbanResult.value.columns) {
+            summary[col.status] = col.items.length
+        }
+        return summary
+    }
+    if (kanbanResult.status === 'rejected') {
+        logger.debug('Failed to fetch Kanban board', {
+            module: 'RESOURCE',
+            operation: 'github-status',
+            error: kanbanResult.reason,
+        })
+    }
+    return null
+}
+
+function buildStatusFetchOutcome(
+    repoContextResult: PromiseSettledResult<
+        Awaited<ReturnType<GitHubStatusClient['getRepoContext']>>
+    >,
+    kanbanResult: PromiseSettledResult<
+        Awaited<ReturnType<GitHubStatusClient['getProjectKanban']>>
+    >,
+    hasKanbanAttempt: boolean
+): { fetchStatus: 'ok' | 'degraded' | 'failed'; failures: string[] } {
+    const failures: string[] = []
+    if (repoContextResult.status === 'rejected') failures.push('context')
+    if (
+        repoContextResult.status === 'fulfilled' &&
+        Array.isArray(repoContextResult.value.degraded) &&
+        repoContextResult.value.degraded.length > 0
+    ) {
+        failures.push('context')
+    }
+    if (kanbanResult.status === 'rejected') failures.push('kanban')
+    if (failures.length === 0) {
+        return { fetchStatus: 'ok', failures }
+    }
+    const totalAttempts = hasKanbanAttempt ? 2 : 1
+    return {
+        fetchStatus: failures.length === totalAttempts ? 'failed' : 'degraded',
+        failures,
+    }
+}
+
+function buildMilestoneSummary(
+    repoContextResult: PromiseSettledResult<unknown>,
+    milestonesContext: {
+        number: number
+        title: string
+        state: string
+        openIssues: number
+        closedIssues: number
+        dueOn?: string | null
+    }[]
+): {
+    openCount: number
+    items: {
+        number: number
+        title: string
+        state: string
+        openIssues: number
+        closedIssues: number
+        completionPercentage: number
+        dueOn?: string | null
+    }[]
+} | null {
+    if (repoContextResult.status !== 'fulfilled') return null
+    return {
+        openCount: milestonesContext.length,
+        items: milestonesContext.map((ms) => ({
+            number: ms.number,
+            title: fenceUntrustedInline(ms.title),
+            state: ms.state,
+            openIssues: ms.openIssues,
+            closedIssues: ms.closedIssues,
+            completionPercentage: milestoneCompletionPct(ms.openIssues, ms.closedIssues),
+            dueOn: ms.dueOn,
+        })),
+    }
+}
+
+async function handleGitHubStatusResource(
+    uri: string,
+    context: ResourceContext
+): Promise<ResourceResult> {
+    const match = /^memory:\/\/github\/status(?:\/(.*))?$/.exec(getBaseUri(uri))
+    const targetRepo = match?.[1] ? safeDecodeUriSegment(match[1]) : undefined
+    const resolved = await resolveScopedGitHubRepo(context, targetRepo)
+    if (isResourceError(resolved)) return resolved
+    const { owner, repo, branch, lastModified, github } = resolved
+
+    const registry = context.briefingConfig?.projectRegistry ?? loadProjectRegistryFromConfig()
+    const activeWs =
+        targetRepo !== undefined && targetRepo !== ''
+            ? targetRepo
+            : resourceWorkspace(context)
+    const canonicalRepo = findCanonicalRegistryKey(activeWs, registry) ?? activeWs
+    const kanbanProject = resolveStatusKanbanProject(context, canonicalRepo, registry)
 
     const [repoContextResult, kanbanResult] = await Promise.allSettled([
         withGithubTimeout((s) => github.getRepoContext(s), 10000, 'getRepoContext'),
@@ -159,87 +301,16 @@ async function handleGitHubStatusResource(
             : Promise.resolve(null),
     ])
 
-    let commit: string | null = null
-    let issues: GitHubIssue[] = []
-    let prs: GitHubPullRequest[] = []
-    let workflowRuns: GitHubWorkflowRun[] = []
-    let milestonesContext: GitHubMilestone[] = []
-
-    if (repoContextResult.status === 'fulfilled') {
-        commit = repoContextResult.value.commit
-        issues = (repoContextResult.value.issues ?? []).slice(0, RESOURCE_ISSUE_LIMIT)
-        prs = (repoContextResult.value.pullRequests ?? []).slice(0, RESOURCE_PR_LIMIT)
-        workflowRuns = (repoContextResult.value.workflowRuns ?? []).slice(0, RESOURCE_WORKFLOW_LIMIT)
-        milestonesContext = (repoContextResult.value.milestones ?? []).slice(
-            0,
-            RESOURCE_STATUS_MILESTONE_LIMIT
-        )
-    } else {
-        logger.debug('Failed to fetch repo context', {
-            module: 'RESOURCE',
-            operation: 'github-status',
-            error: repoContextResult.reason,
-        })
-    }
-
-    const openIssues = issues.map((i) => ({
-        number: i.number,
-        title: markUntrustedContentInline(i.title.slice(0, 50)),
-    }))
-
-    const openPrs = prs.map((pr) => ({
-        number: pr.number,
-        title: markUntrustedContentInline(pr.title.slice(0, 50)),
-        state: pr.state,
-    }))
-
+    const { commit, issues, prs, workflowRuns, milestonesContext } =
+        extractRepoContextSnapshot(repoContextResult)
     const { ciStatus, latestRun } = summarizeCiWorkflows(workflowRuns)
-
-    let kanbanSummary: Record<string, number> | null = null
-    if (kanbanResult.status === 'fulfilled' && kanbanResult.value) {
-        kanbanSummary = {}
-        for (const col of kanbanResult.value.columns) {
-            kanbanSummary[col.status] = col.items.length
-        }
-    } else if (kanbanResult.status === 'rejected') {
-        logger.debug('Failed to fetch Kanban board', {
-            module: 'RESOURCE',
-            operation: 'github-status',
-            error: kanbanResult.reason,
-        })
-    }
-
-    const milestoneSummary =
-        repoContextResult.status === 'fulfilled'
-            ? {
-                  openCount: milestonesContext.length,
-                  items: milestonesContext.map((ms) => ({
-                      number: ms.number,
-                      title: markUntrustedContentInline(ms.title),
-                      state: ms.state,
-                      openIssues: ms.openIssues,
-                      closedIssues: ms.closedIssues,
-                      completionPercentage: milestoneCompletionPct(ms.openIssues, ms.closedIssues),
-                      dueOn: ms.dueOn,
-                  })),
-              }
-            : null
-
-    let fetchStatus: 'ok' | 'degraded' | 'failed' = 'ok'
-    const failures: string[] = []
-    if (repoContextResult.status === 'rejected') failures.push('context')
-    if (
-        repoContextResult.status === 'fulfilled' &&
-        Array.isArray(repoContextResult.value.degraded) &&
-        repoContextResult.value.degraded.length > 0
-    ) {
-        failures.push('context')
-    }
-    if (kanbanResult.status === 'rejected') failures.push('kanban')
-    if (failures.length > 0) {
-        const totalAttempts = kanbanProject !== undefined ? 2 : 1
-        fetchStatus = failures.length === totalAttempts ? 'failed' : 'degraded'
-    }
+    const kanbanSummary = buildKanbanSummary(kanbanResult)
+    const milestoneSummary = buildMilestoneSummary(repoContextResult, milestonesContext)
+    const { fetchStatus, failures } = buildStatusFetchOutcome(
+        repoContextResult,
+        kanbanResult,
+        kanbanProject !== undefined
+    )
 
     const responseData = {
         status: fetchStatus,
@@ -248,8 +319,21 @@ async function handleGitHubStatusResource(
         branch,
         commit: commit?.slice(0, 7) ?? null,
         ci: { status: ciStatus, latestRun },
-        issues: { openCount: issues.length, items: openIssues },
-        pullRequests: { openCount: prs.length, items: openPrs },
+        issues: {
+            openCount: issues.length,
+            items: issues.map((i) => ({
+                number: i.number,
+                title: sliceUntrustedInline(i.title, 50),
+            })),
+        },
+        pullRequests: {
+            openCount: prs.length,
+            items: prs.map((pr) => ({
+                number: pr.number,
+                title: sliceUntrustedInline(pr.title, 50),
+                state: pr.state,
+            })),
+        },
         kanbanSummary,
         milestones: milestoneSummary,
     }
@@ -290,7 +374,7 @@ export function getGitHubResourceDefinitions(): InternalResourceDef[] {
             annotations: withPriority(0.6, ASSISTANT_FOCUSED),
             handler: async (uri: string, context: ResourceContext): Promise<ResourceResult> => {
                 const match = /^memory:\/\/github\/milestones(?:\/(.*))?$/.exec(getBaseUri(uri))
-                const targetRepo = match?.[1] ? decodeURIComponent(match[1]) : undefined
+                const targetRepo = match?.[1] ? safeDecodeUriSegment(match[1]) : undefined
                 const resolved = await resolveScopedGitHubRepo(context, targetRepo)
                 if (isResourceError(resolved)) return resolved
                 const { owner, repo, lastModified, github } = resolved
@@ -301,18 +385,10 @@ export function getGitHubResourceDefinitions(): InternalResourceDef[] {
                     'open',
                     RESOURCE_MILESTONE_LIMIT
                 )
-                const milestonesWithProgress = milestones.map((ms) => {
-                    const completionPercentage = milestoneCompletionPct(
-                        ms.openIssues,
-                        ms.closedIssues
-                    )
-                    return {
-                        ...ms,
-                        title: markUntrustedContentInline(ms.title),
-                        completionPercentage,
-                    }
-                })
-
+                const milestonesWithProgress = milestones.map((ms) => ({
+                    ...fenceMilestoneResource(ms),
+                    completionPercentage: milestoneCompletionPct(ms.openIssues, ms.closedIssues),
+                }))
                 const responseData = {
                     repository: `${owner}/${repo}`,
                     milestones: milestonesWithProgress,
@@ -320,14 +396,7 @@ export function getGitHubResourceDefinitions(): InternalResourceDef[] {
                     hint: 'Use get_github_milestones tool for state filtering. Use memory://milestones/{number} for detail.',
                 }
                 const tokenEstimate = Math.ceil(JSON.stringify(responseData).length / 4)
-
-                return {
-                    data: {
-                        ...responseData,
-                        _meta: { tokenEstimate }
-                    },
-                    annotations: { lastModified },
-                }
+                return { data: { ...responseData, _meta: { tokenEstimate } }, annotations: { lastModified } }
             },
         },
         {
@@ -341,40 +410,29 @@ export function getGitHubResourceDefinitions(): InternalResourceDef[] {
             annotations: withPriority(0.6, ASSISTANT_FOCUSED),
             handler: async (uri: string, context: ResourceContext): Promise<ResourceResult> => {
                 const lastModified = new Date().toISOString()
-                const match = /^memory:\/\/milestones\/(?:(.*)\/)?(\d+)$/.exec(getBaseUri(uri))
-                const targetRepo = match?.[1] ? decodeURIComponent(match[1]) : undefined
+                const match = /^memory:\/\/milestones\/(?:(.+)\/)?([1-9]\d*)$/.exec(
+                    getBaseUri(uri)
+                )
+                const targetRepo = match?.[1] ? safeDecodeUriSegment(match[1]) : undefined
                 const milestoneNumber = match?.[2] ? parseInt(match[2], 10) : null
-
                 if (milestoneNumber === null || isNaN(milestoneNumber)) {
-                    return {
-                        data: { error: 'Invalid milestone number', code: -32002 },
-                        annotations: { lastModified },
-                    }
+                    return { data: { error: 'Invalid milestone number', code: -32002 }, annotations: { lastModified } }
                 }
-
                 const resolved = await resolveScopedGitHubRepo(context, targetRepo)
                 if (isResourceError(resolved)) return resolved
                 const { owner, repo, github } = resolved
-
                 const milestone = await github.getMilestone(owner, repo, milestoneNumber)
                 if (!milestone) {
-                    return {
-                        data: { error: `Milestone #${String(milestoneNumber)} not found`, code: -32002 },
-                        annotations: { lastModified },
-                    }
+                    return { data: { error: `Milestone #${String(milestoneNumber)} not found`, code: -32002 }, annotations: { lastModified } }
                 }
-
-                const completionPercentage = milestoneCompletionPct(
-                    milestone.openIssues,
-                    milestone.closedIssues
-                )
-
                 const responseData = {
                     repository: `${owner}/${repo}`,
                     milestone: {
-                        ...milestone,
-                        title: markUntrustedContentInline(milestone.title),
-                        completionPercentage,
+                        ...fenceMilestoneResource(milestone),
+                        completionPercentage: milestoneCompletionPct(
+                            milestone.openIssues,
+                            milestone.closedIssues
+                        ),
                     },
                     hint: 'Use get_github_issues tool to list issues associated with this milestone.',
                 }

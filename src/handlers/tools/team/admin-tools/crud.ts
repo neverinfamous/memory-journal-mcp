@@ -26,7 +26,6 @@ import {
     TeamRestoreOutputSchema,
     TeamMergeTagsOutputSchema,
 } from '../schemas.js'
-import { coerceSignificanceAlias } from '../../schemas.js'
 
 // ============================================================================
 // Tool Definitions
@@ -59,8 +58,6 @@ export function getTeamAdminCrudTools(context: ToolContext): ToolDefinition[] {
                     if (!teamDb) {
                         return { ...TEAM_DB_ERROR_RESPONSE }
                     }
-
-                    coerceSignificanceAlias(params)
 
                     const input = TeamUpdateEntrySchema.parse(params)
                     let wsId = resolveWriteWorkspaceId(
@@ -169,7 +166,11 @@ export function getTeamAdminCrudTools(context: ToolContext): ToolDefinition[] {
                     }
 
                     let indexError: string | undefined
-                    if (context.teamVectorManager !== undefined && input.content !== undefined) {
+                    const needsVectorReindex =
+                        input.content !== undefined ||
+                        input.tags !== undefined ||
+                        input.entry_type !== undefined
+                    if (context.teamVectorManager !== undefined && needsVectorReindex) {
                         try {
                             await context.teamVectorManager.addEntry(updated)
                         } catch (indexErr) {
@@ -182,7 +183,13 @@ export function getTeamAdminCrudTools(context: ToolContext): ToolDefinition[] {
                     return {
                         success: true,
                         entry: { ...updated, author },
-                        ...(indexError !== undefined ? { indexError } : {}),
+                        ...(indexError !== undefined
+                            ? {
+                                  indexError,
+                                  vectorIndex: 'failed',
+                                  warning: `Team vector re-indexing failed: ${indexError}`,
+                              }
+                            : {}),
                     }
                 } catch (err) {
                     return formatHandlerError(err)

@@ -1,8 +1,10 @@
 import type { z } from 'zod'
 import type { CreateEntryInput, JournalEntry, ToolContext } from '../../../types/index.js'
+import { AuthorizationError, PermissionError } from '../../../types/errors.js'
 import { enforceAccessBoundary } from '../../../auth/validation.js'
 import { sendProgress, type ProgressContext } from '../../../utils/progress-utils.js'
 import { resolveAuthenticatedAuthor } from '../../../utils/security-utils.js'
+import { canonicalizeTeamAuthor, enforceTeamRbac } from '../team/rbac.js'
 import type { CreateEntrySchema } from './schemas.js'
 
 type CreateEntryParams = z.infer<typeof CreateEntrySchema>
@@ -66,10 +68,12 @@ export function shareCreatedEntryWithTeam(
     )
     const author = resolveAuthenticatedAuthor()
     if (!author || author === 'unknown') return undefined
+    enforceTeamRbac(context, author, 'member', entryInput.workspaceId)
+    const canonicalAuthor = canonicalizeTeamAuthor(teamDb, author, entryInput.workspaceId)
 
-    const entry = teamDb.createEntry({ ...entryInput, isPersonal: false, author })
+    const entry = teamDb.createEntry({ ...entryInput, isPersonal: false, author: canonicalAuthor })
     teamDb.flushSave()
-    return { author, entry }
+    return { author: canonicalAuthor, entry }
 }
 
 /** Generate embeddings for a newly created entry, returning any soft-fail warning. */
@@ -172,6 +176,9 @@ export function tryResolveEntryResourceUri(
                 _healing_note: `🛠️ AUTONOMOUS HEALING: 'get_entry_by_id' was called with an MCP resource URI instead of an entry_id. The resource '${uri}' was resolved successfully.`,
             }
         } catch (err) {
+            if (err instanceof AuthorizationError || err instanceof PermissionError) {
+                throw err
+            }
             return {
                 success: false,
                 error: `Failed to read resource '${uri}': ${err instanceof Error ? err.message : String(err)}`,

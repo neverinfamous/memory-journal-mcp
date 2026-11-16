@@ -78,6 +78,8 @@ export const ExecuteCodeSchema = z.preprocess((val) => {
     project_number: relaxedNumber().optional(),
     workspace_id: z.string().optional(),
     repo: z.string().optional(),
+    repo_name: z.string().optional(),
+    session_id: z.string().optional(),
     dry_run: z.boolean().optional().default(false),
     context: z.unknown().optional(),
     timeout_ms: POSITIVE_TIMEOUT,
@@ -137,6 +139,14 @@ export const ExecuteCodeSchemaMcp = z.object({
         .describe(
             'Target repository name to set as default context for all github/kanban tools executed in this sandbox (e.g., "memory-journal-mcp").'
         ),
+    repo_name: z
+        .string()
+        .optional()
+        .describe('Compatibility alias for repo.'),
+    session_id: z
+        .string()
+        .optional()
+        .describe('Optional session identifier to associate with sandbox entries and telemetry.'),
     dry_run: z
         .boolean()
         .optional()
@@ -157,6 +167,9 @@ export const ExecuteCodeSchemaMcp = z.object({
         ),
     timeout: POSITIVE_TIMEOUT.describe(
         'Maximum execution time in milliseconds before the sandbox forcibly terminates the script (max: 30000ms).'
+    ),
+    timeout_ms: POSITIVE_TIMEOUT.describe(
+        'Alias for timeout (maximum execution time in milliseconds, max: 30000ms).'
     ),
     max_result_size: relaxedNumber()
         .optional()

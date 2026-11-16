@@ -20,7 +20,8 @@ const FLEXIBLE_PASSTHROUGH_SCHEMA = z.looseObject({ ...ErrorFieldsMixin.shape })
 
 export { searchDirectory, searchDirectoryAsync } from './directory-search.js'
 export type { GrepMatch, SearchDirectoryOptions } from './directory-search.js'
-import { searchDirectoryAsync } from './directory-search.js'
+import { isSafeUserRegex, searchDirectoryAsync } from './directory-search.js'
+import { ValidationError } from '../../../../types/errors.js'
 import { logger } from '../../../../utils/logger.js'
 
 function normalizeStrippedArgs(params: unknown): Record<string, unknown> {
@@ -89,12 +90,18 @@ async function runFilesystemGrepSearch(
             _healing_note: `🛠️ AUTONOMOUS HEALING: '${toolName}' is an agent-native tool, but was invoked directly as an MCP tool. The search was performed on the filesystem and results returned successfully.`,
         }
     } catch (err) {
+        const isValidation = err instanceof ValidationError || err instanceof PathTraversalError
         return {
             success: false,
             error: `Failed to execute grep search on '${searchPath}': ${err instanceof Error ? err.message : String(err)}`,
-            code: err instanceof PathTraversalError ? 'PATH_TRAVERSAL' : 'SEARCH_ERROR',
-            category: err instanceof PathTraversalError ? 'validation' : 'search',
-            recoverable: !(err instanceof PathTraversalError),
+            code:
+                err instanceof PathTraversalError
+                    ? 'PATH_TRAVERSAL'
+                    : err instanceof ValidationError
+                      ? 'VALIDATION_ERROR'
+                      : 'SEARCH_ERROR',
+            category: isValidation ? 'validation' : 'search',
+            recoverable: err instanceof ValidationError,
         }
     }
 }
@@ -156,6 +163,15 @@ export async function handleGrepSearch(
         rawArgs['is_regex'] === true || rawArgs['IsRegex'] === true || rawArgs['isRegex'] === true
 
     if (isRegex) {
+        if (!isSafeUserRegex(query)) {
+            return {
+                success: false,
+                error: 'Regex query rejected: pattern exceeds length limit (256) or contains unsafe constructs (nested quantifiers / backreferences)',
+                code: 'VALIDATION_ERROR',
+                category: 'validation',
+                recoverable: true,
+            }
+        }
         try {
             new RegExp(query)
         } catch (err) {
@@ -249,7 +265,10 @@ export async function handleViewFile(
     let handle: fs.promises.FileHandle | undefined
     try {
         try {
-            handle = await fs.promises.open(resolved, fs.constants.O_RDONLY)
+            handle = await fs.promises.open(
+                resolved,
+                fs.constants.O_RDONLY | (fs.constants.O_NOFOLLOW ?? 0)
+            )
         } catch {
             return {
                 success: false,

@@ -32,6 +32,7 @@ export type { RepoInfo, IssueDetails, PullRequestDetails }
  * and cross-project coupling, as identified in the Copilot Security Audit.
  */
 import { createHash } from 'node:crypto'
+import * as path from 'node:path'
 import type { ServerRuntime } from '../../utils/maintenance-lock.js'
 import { logger } from '../../utils/logger.js'
 
@@ -40,14 +41,15 @@ export function getGitHubIntegration(
     runtime?: ServerRuntime,
     token?: string
 ): GitHubIntegration {
-    const resolvedDir = workingDir === '.' ? process.cwd() : workingDir
+    const resolvedDir = path.resolve(workingDir === '.' ? process.cwd() : workingDir)
+    const normalizedDir = process.platform === 'win32' ? resolvedDir.toLowerCase() : resolvedDir
 
     // Support instance-scoped runtime pools for multi-tenant isolation
     if (runtime) {
         runtime.githubClientPool ??= new Map<string, GitHubIntegration>()
         const cacheKey = token
-            ? `${resolvedDir}:${createHash('sha256').update(token).digest('hex').substring(0, 12)}`
-            : resolvedDir
+            ? `${normalizedDir}:${createHash('sha256').update(token).digest('hex').substring(0, 12)}`
+            : normalizedDir
         let instance = runtime.githubClientPool.get(cacheKey)
         if (!instance) {
             instance = new GitHubIntegration(resolvedDir, token)

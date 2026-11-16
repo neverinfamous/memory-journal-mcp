@@ -5,6 +5,7 @@
  * scope parsing, and JWKS integration.
  */
 
+import dns from 'node:dns'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { TokenValidator, createTokenValidator } from '../../src/auth/token-validator.js'
 import type { TokenValidatorConfig } from '../../src/auth/types.js'
@@ -373,13 +374,18 @@ describe('TokenValidator', () => {
 
     describe('preload', () => {
         let originalFetch: typeof global.fetch
+        let lookupSpy: ReturnType<typeof vi.spyOn>
 
         beforeEach(() => {
             originalFetch = global.fetch
+            lookupSpy = vi
+                .spyOn(dns.promises, 'lookup')
+                .mockResolvedValue([{ address: '93.184.216.34', family: 4 }])
         })
 
         afterEach(() => {
             global.fetch = originalFetch
+            lookupSpy.mockRestore()
         })
 
         it('should fetch JWKS and complete successfully', async () => {

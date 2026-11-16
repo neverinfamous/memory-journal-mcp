@@ -355,9 +355,9 @@ export class AuditLogger {
                         return results
                     }
                 }
-            } catch (err) {
+            } catch (err: unknown) {
                 // Ignore if file doesn't exist (e.g. rotation hasn't happened yet)
-                if ((err as NodeJS.ErrnoException).code !== 'ENOENT') {
+                if (nodeErrorCode(err) !== 'ENOENT') {
                     throw err
                 }
             }

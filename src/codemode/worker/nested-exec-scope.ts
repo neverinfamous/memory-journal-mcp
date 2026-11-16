@@ -41,7 +41,7 @@ function isPlainRecord(val: unknown): val is Record<string, unknown> {
 
 function collectNestedScopeRecords(argRec: Record<string, unknown>): Record<string, unknown>[] {
     const records: Record<string, unknown>[] = [argRec]
-    for (const key of ['metadata', 'context', 'params'] as const) {
+    for (const key of ['metadata', 'context', 'params', 'entry', 'payload', 'input'] as const) {
         const nested = argRec[key]
         if (isPlainRecord(nested)) records.push(nested)
     }

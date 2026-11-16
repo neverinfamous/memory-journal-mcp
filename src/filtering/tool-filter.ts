@@ -89,11 +89,21 @@ function isMetaGroup(name: string): name is MetaGroup {
 }
 
 /**
- * Return a new set with a meta-group, group, or single tool added.
+ * Return a new set with a meta-group, group, write meta-set, or single tool added.
  * An unknown single-tool name is still added (so filters stay forward compatible)
  * but is reported, because a typo would otherwise enable nothing without any signal.
  */
 function applyInclude(enabledTools: Set<string>, name: string): Set<string> {
+    if (name === 'write') {
+        const allToolSet = new Set(getAllToolNames())
+        const expanded = new Set(enabledTools)
+        for (const tool of MUTATING_NON_EXEMPT_TOOLS) {
+            if (allToolSet.has(tool)) {
+                expanded.add(tool)
+            }
+        }
+        return expanded
+    }
     if (isMetaGroup(name)) {
         const expanded = new Set(enabledTools)
         for (const group of META_GROUPS[name]) {
@@ -113,8 +123,14 @@ function applyInclude(enabledTools: Set<string>, name: string): Set<string> {
     return new Set([...enabledTools, name])
 }
 
-/** Remove a meta-group, group, or single tool from the set in place. */
+/** Remove a meta-group, group, write meta-set, or single tool from the set in place. */
 function applyExclude(enabledTools: Set<string>, name: string): void {
+    if (name === 'write') {
+        for (const tool of MUTATING_NON_EXEMPT_TOOLS) {
+            enabledTools.delete(tool)
+        }
+        return
+    }
     if (isMetaGroup(name)) {
         for (const group of META_GROUPS[name]) {
             for (const tool of TOOL_GROUPS[group]) {
@@ -170,25 +186,25 @@ export function parseToolFilter(filterString: string): ToolFilterConfig {
             rules.push({
                 type: 'include',
                 target: name,
-                isGroup: isGroup(name) || isMetaGroup(name),
+                isGroup: isGroup(name) || isMetaGroup(name) || name === 'write',
             })
         } else if (isRemove) {
-            // Remove meta-group, group, or tool
+            // Remove meta-group, group, write meta-set, or tool
             applyExclude(enabledTools, name)
 
             rules.push({
                 type: 'exclude',
                 target: name,
-                isGroup: isGroup(name) || isMetaGroup(name),
+                isGroup: isGroup(name) || isMetaGroup(name) || name === 'write',
             })
         } else {
-            // Add group or tool (with or without + prefix)
+            // Add group, write meta-set, or tool (with or without + prefix)
             enabledTools = applyInclude(enabledTools, name)
 
             rules.push({
                 type: 'include',
                 target: name,
-                isGroup: isGroup(name) || isMetaGroup(name),
+                isGroup: isGroup(name) || isMetaGroup(name) || name === 'write',
             })
         }
     }
@@ -258,14 +274,24 @@ export function getFilterSummary(filterConfig: ToolFilterConfig): string {
 const READONLY_REGISTRATION_EXEMPT = new Set<string>(ALWAYS_ENABLED_TOOLS)
 
 /**
- * True when the active filter contains the readonly meta-group and does not exclude it.
+ * True when the active filter enforces read-only mode (via `readonly` or `-write`
+ * without a subsequent `-readonly`, `+write`, or `write` override).
  */
 export function isReadonlyMetaActive(raw: string | undefined): boolean {
     if (raw === undefined || raw === '') return false
-    const tokens = raw.split(',').map((part) => part.trim()).filter((part) => part.length > 0)
-    const hasReadonly = tokens.some((token) => token === 'readonly' || token === '+readonly')
-    const excludesReadonly = tokens.some((token) => token === '-readonly')
-    return hasReadonly && !excludesReadonly
+    const tokens = raw
+        .split(',')
+        .map((part) => part.trim())
+        .filter((part) => part.length > 0)
+    let active = false
+    for (const token of tokens) {
+        if (token === 'readonly' || token === '+readonly' || token === '-write') {
+            active = true
+        } else if (token === '-readonly' || token === 'write' || token === '+write') {
+            active = false
+        }
+    }
+    return active
 }
 
 /**
@@ -283,8 +309,15 @@ export function isToolVisibleForFilter(
     return readOnlyHint === true
 }
 
+const READONLY_ADMIN_TOOLS = new Set<string>([
+    'update_configuration',
+    'get_project',
+    'list_projects',
+    'search_audit_log',
+])
+
 const MUTATING_NON_EXEMPT_TOOLS = new Set<string>([
-    ...TOOL_GROUPS.admin.filter((t) => t !== 'update_configuration'),
+    ...TOOL_GROUPS.admin.filter((t) => !READONLY_ADMIN_TOOLS.has(t)),
     'create_entry',
     'create_entry_minimal',
     'test_simple',
@@ -304,8 +337,6 @@ const MUTATING_NON_EXEMPT_TOOLS = new Set<string>([
     'create_github_milestone',
     'update_github_milestone',
     'delete_github_milestone',
-    'sync_kanban_board',
-    'sync_git_history',
     'check_entry_staleness',
     'team_create_entry',
     'team_update_entry',

@@ -33,7 +33,7 @@ import {
     TeamEntryDetailOutputSchema,
     TeamTagsListOutputSchema,
 } from './schemas.js'
-import { coerceSignificanceAlias, relaxedNumber, StrictProjectNumberSchema } from '../schemas.js'
+import { relaxedNumber, StrictProjectNumberSchema } from '../schemas.js'
 import { linkRequestedRelationships } from '../relationship-linking.js'
 
 // ============================================================================
@@ -71,8 +71,6 @@ export function getTeamCoreTools(context: ToolContext): ToolDefinition[] {
                     if (!teamDb) {
                         return { ...TEAM_DB_ERROR_RESPONSE }
                     }
-
-                    coerceSignificanceAlias(params)
 
                     const input = TeamCreateEntrySchema.parse(params)
                     if (input.workspace_id === '*') {
@@ -372,8 +370,13 @@ export function getTeamCoreTools(context: ToolContext): ToolDefinition[] {
                 'List all tags used in the team database with usage counts. Requires TEAM_DB_PATH.',
             group: 'team',
             inputSchema: z.object({
-                project_number: relaxedNumber().optional(),
-                workspace_id: z.string().optional(),
+                project_number: relaxedNumber()
+                    .optional()
+                    .describe('Numeric project ID to filter tags by.'),
+                workspace_id: z
+                    .string()
+                    .optional()
+                    .describe('Optional workspace isolation identifier (e.g. "alpha").'),
             }),
             outputSchema: TeamTagsListOutputSchema,
             annotations: {

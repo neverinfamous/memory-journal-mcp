@@ -4,7 +4,8 @@ import { enforceAccessBoundary } from '../../../auth/validation.js'
 import { resolveIssueUrl } from '../../../utils/github-helpers.js'
 import { resolveAuthenticatedAuthor } from '../../../utils/security-utils.js'
 import { resolveProjectContext } from '../../../utils/workspace-resolver.js'
-import { ValidationError } from '../../../types/errors.js'
+import { AuthorizationError, PermissionError, ValidationError } from '../../../types/errors.js'
+import { canonicalizeTeamAuthor, enforceTeamRbac } from '../team/rbac.js'
 import { logger } from '../../../utils/logger.js'
 import { resolveEntryAnchors } from '../core/staleness-tools.js'
 import type { BatchCreateEntriesSchema } from './schemas.js'
@@ -122,12 +123,20 @@ export async function shareBatchEntriesWithTeam(
         return { sharedCount, warnings }
     }
 
-    enforceAccessBoundary(
-        'team_create_entry',
-        'tool',
-        { requiresTeamScope: true },
-        context.config?.runtime?.auditLogger
-    )
+    try {
+        enforceAccessBoundary(
+            'team_create_entry',
+            'tool',
+            { requiresTeamScope: true },
+            context.config?.runtime?.auditLogger
+        )
+    } catch (err) {
+        if (err instanceof PermissionError) {
+            warnings.push(`share_with_team skipped: ${err.message}`)
+            return { sharedCount, warnings }
+        }
+        throw err
+    }
     const author = resolveAuthenticatedAuthor()
     if (author === '' || author === 'unknown') {
         warnings.push('share_with_team was requested but the author could not be resolved; entries were not shared.')
@@ -139,7 +148,9 @@ export async function shareBatchEntriesWithTeam(
         const entry = prepared[i]
         if (!entry) continue
         try {
-            const teamEntry = teamDb.createEntry({ ...entry.input, isPersonal: false, author })
+            enforceTeamRbac(context, author, 'member', entry.input.workspaceId)
+            const canonicalAuthor = canonicalizeTeamAuthor(teamDb, author, entry.input.workspaceId)
+            const teamEntry = teamDb.createEntry({ ...entry.input, isPersonal: false, author: canonicalAuthor })
             sharedEntries.push(teamEntry)
             sharedCount++
         } catch (err) {
@@ -148,7 +159,11 @@ export async function shareBatchEntriesWithTeam(
                 index: i,
                 error: err instanceof Error ? err.message : String(err),
             })
-            warnings.push(`Entry at index ${String(i)} could not be shared with team.`)
+            warnings.push(
+                err instanceof AuthorizationError
+                    ? `Entry at index ${String(i)} could not be shared with team: ${err.message}`
+                    : `Entry at index ${String(i)} could not be shared with team.`
+            )
         }
     }
     if (sharedCount > 0) teamDb.flushSave()

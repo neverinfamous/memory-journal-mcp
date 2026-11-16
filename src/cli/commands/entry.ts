@@ -209,6 +209,54 @@ export async function createEntryAction(...args: unknown[]): Promise<void> {
     }
 }
 
+function buildUpdatedEntryPayload(
+    options: HealedEntryOptions,
+    config: ToolHandlerConfig,
+    rawContent: string,
+    trimmedTargetWs: string | undefined,
+    existingWorkspaceId: string | undefined
+): { content: string; payload: EntryPayload } {
+    const { frontmatter, body } = parseFrontmatter(rawContent)
+    let content = body
+    if (options.title && !content.startsWith('# ')) {
+        content = `# ${options.title}\n\n${content}`
+    }
+    const metadata = { ...frontmatter, ...parseMetadata(options.metadata) }
+    const metaWs =
+        typeof metadata['workspace_id'] === 'string'
+            ? metadata['workspace_id'].trim()
+            : typeof metadata['workspace'] === 'string'
+              ? metadata['workspace'].trim()
+              : undefined
+    if (metaWs === '*') {
+        throw new ValidationError(
+            "workspace_id '*' cannot be used to update an entry. Pass a concrete workspace.",
+            { workspaceId: '*' }
+        )
+    }
+    const effectiveOptions =
+        trimmedTargetWs !== undefined
+            ? {
+                  ...options,
+                  workspaceId: trimmedTargetWs,
+                  workspace: trimmedTargetWs,
+                  workspace_id: trimmedTargetWs,
+              }
+            : options
+    const effectiveMetadata =
+        trimmedTargetWs !== undefined
+            ? { ...metadata, workspace_id: trimmedTargetWs, workspace: trimmedTargetWs }
+            : metadata
+    const payload = buildEntryPayload(
+        effectiveOptions,
+        effectiveMetadata,
+        config,
+        content,
+        existingWorkspaceId
+    )
+    return { content, payload }
+}
+
 export async function updateEntryAction(...args: unknown[]): Promise<void> {
     const command = args[args.length - 1] as Command
     const options = (args.length > 1 ? args[args.length - 2] : {}) as z.infer<
@@ -241,39 +289,32 @@ export async function updateEntryAction(...args: unknown[]): Promise<void> {
                 { workspaceId: '*' }
             )
         }
-
-        const existingEntry = db.getEntryById(entryId, '*')
-        const implicitWorkspace =
-            rawWorkspaceOpt === undefined
-                ? resolveWorkspaceId(undefined, undefined, {
-                      runtime: null,
-                      ...(config.defaultWorkspaceId !== undefined
-                          ? { defaultWorkspaceId: config.defaultWorkspaceId }
-                          : {}),
-                      ...(config.projectRegistry !== undefined
-                          ? { projectRegistry: config.projectRegistry }
-                          : {}),
-                  })
-                : undefined
-        if (
-            existingEntry !== null &&
-            implicitWorkspace !== undefined &&
-            existingEntry.workspaceId !== undefined &&
-            existingEntry.workspaceId.toLowerCase() !== implicitWorkspace.toLowerCase()
-        ) {
+        const rawTargetWsOpt = options.targetWorkspace ?? options.target_workspace
+        const trimmedTargetWs = rawTargetWsOpt?.trim()
+        if (trimmedTargetWs === '*') {
             throw new ValidationError(
-                `Entry #${String(entryId)} belongs to workspace '${existingEntry.workspaceId}', not active workspace '${implicitWorkspace}'. Pass --workspace '${existingEntry.workspaceId}' explicitly to update it.`,
-                {
-                    entryId,
-                    entryWorkspaceId: existingEntry.workspaceId,
-                    activeWorkspaceId: implicitWorkspace,
-                }
+                "target_workspace '*' cannot be used to update an entry. Pass a concrete workspace.",
+                { targetWorkspace: '*' }
             )
         }
-        const { content, payload } = await loadCliEntryContentAndPayload(
+        if (rawTargetWsOpt !== undefined && (trimmedTargetWs === undefined || trimmedTargetWs === '')) {
+            throw new ValidationError('target_workspace cannot be blank.', {
+                targetWorkspace: rawTargetWsOpt,
+            })
+        }
+
+        const existingEntry = db.getEntryById(entryId, '*')
+        const rawContent =
+            options.file === undefined &&
+            options.content === undefined &&
+            existingEntry?.content !== undefined
+                ? existingEntry.content
+                : await parseContent(options)
+        const { content, payload } = buildUpdatedEntryPayload(
             options,
             config,
-            existingEntry?.content,
+            rawContent,
+            trimmedTargetWs,
             existingEntry?.workspaceId
         )
 
@@ -282,6 +323,53 @@ export async function updateEntryAction(...args: unknown[]): Promise<void> {
                 "workspace_id '*' cannot be used to update an entry. Pass a concrete workspace.",
                 { workspaceId: '*' }
             )
+        }
+
+        const explicitSourceWs =
+            rawWorkspaceOpt !== undefined && rawWorkspaceOpt.trim() !== ''
+                ? rawWorkspaceOpt.trim()
+                : payload.hasExplicitWorkspace === true && trimmedTargetWs === undefined
+                  ? payload.workspaceId
+                  : undefined
+        if (explicitSourceWs !== undefined) {
+            if (
+                existingEntry?.workspaceId !== undefined &&
+                existingEntry.workspaceId.toLowerCase() !== explicitSourceWs.toLowerCase()
+            ) {
+                throw new ValidationError(
+                    `Entry #${String(entryId)} belongs to workspace '${existingEntry.workspaceId}', not '${explicitSourceWs}'. Pass --workspace '${existingEntry.workspaceId}' --target-workspace '${trimmedTargetWs ?? explicitSourceWs}' explicitly to reassign it.`,
+                    {
+                        entryId,
+                        entryWorkspaceId: existingEntry.workspaceId,
+                        requestedWorkspaceId: explicitSourceWs,
+                    }
+                )
+            }
+        } else if (trimmedTargetWs === undefined) {
+            const implicitWorkspace = resolveWorkspaceId(undefined, undefined, {
+                runtime: null,
+                ...(config.defaultWorkspaceId !== undefined
+                    ? { defaultWorkspaceId: config.defaultWorkspaceId }
+                    : {}),
+                ...(config.projectRegistry !== undefined
+                    ? { projectRegistry: config.projectRegistry }
+                    : {}),
+            })
+            if (
+                existingEntry !== null &&
+                implicitWorkspace !== undefined &&
+                existingEntry.workspaceId !== undefined &&
+                existingEntry.workspaceId.toLowerCase() !== implicitWorkspace.toLowerCase()
+            ) {
+                throw new ValidationError(
+                    `Entry #${String(entryId)} belongs to workspace '${existingEntry.workspaceId}', not active workspace '${implicitWorkspace}'. Pass --workspace '${existingEntry.workspaceId}' explicitly to update it.`,
+                    {
+                        entryId,
+                        entryWorkspaceId: existingEntry.workspaceId,
+                        activeWorkspaceId: implicitWorkspace,
+                    }
+                )
+            }
         }
 
         const updates: Omit<Partial<CreateEntryInput>, 'projectNumber'> & {
@@ -303,23 +391,24 @@ export async function updateEntryAction(...args: unknown[]): Promise<void> {
             (payload.hasExplicitProject === true ||
                 (!existingIsDefault &&
                     (existingEntry?.projectNumber == null || existingEntry.projectNumber === 0) &&
+                    trimmedTargetWs === undefined &&
                     payload.workspaceId === existingEntry?.workspaceId))
         ) {
             updates.projectNumber = payload.projectNumber
         }
-        const canReassignWorkspace =
-            payload.workspaceId !== undefined &&
-            payload.workspaceId !== '*' &&
-            payload.hasExplicitWorkspace === true
-        if (canReassignWorkspace && payload.workspaceId !== undefined) {
-            if (existingEntry !== null && existingEntry.workspaceId !== payload.workspaceId) {
+        if (trimmedTargetWs !== undefined) {
+            const targetWorkspace = payload.workspaceId ?? trimmedTargetWs
+            if (
+                existingEntry?.workspaceId !== undefined &&
+                existingEntry.workspaceId.toLowerCase() !== targetWorkspace.toLowerCase()
+            ) {
                 updates.workspaceId = '*'
-                updates.targetWorkspaceId = payload.workspaceId
+                updates.targetWorkspaceId = targetWorkspace
                 if (payload.hasExplicitProject !== true) {
                     updates.projectNumber = payload.projectNumber ?? null
                 }
             } else {
-                updates.workspaceId = payload.workspaceId
+                updates.workspaceId = targetWorkspace
             }
         } else if (existingEntry?.workspaceId !== undefined) {
             if (payload.hasExplicitProject === true && payload.projectNumber !== undefined) {

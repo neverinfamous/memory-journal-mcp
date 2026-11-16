@@ -249,7 +249,7 @@ function preprocessSortByOnly(val: unknown): unknown {
 export const GetRecentEntriesSchema = z.preprocess(
     preprocessSortByOnly,
     z.object({
-        limit: z.number().min(1).max(MAX_SEARCH_LIMIT).optional().default(10),
+        limit: z.number().int().min(1).max(MAX_SEARCH_LIMIT).optional().default(10),
         project_number: StrictProjectNumberSchema.optional(),
         workspace_id: z.string().optional(),
         is_personal: z.boolean().optional(),

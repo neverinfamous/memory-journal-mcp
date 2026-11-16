@@ -8,6 +8,7 @@ export default defineConfig({
         'worker-script': 'src/codemode/worker-script.ts',
     },
     format: ['esm'],
+    platform: 'node',
     dts: false,
     clean: false,
     treeshake: true,
@@ -17,5 +18,5 @@ export default defineConfig({
     outDir: 'dist',
     target: 'es2022',
     tsconfig: 'tsconfig.build.json',
-    external: ['better-sqlite3', 'sqlite-vec', '@huggingface/transformers'],
+    external: ['better-sqlite3', 'sqlite-vec', '@huggingface/transformers', 'yaml'],
 })

@@ -8,7 +8,6 @@ import {
     ProjectOutputSchema,
 } from './schemas.js'
 import { getProjectReadTools } from './project-read-tools.js'
-import fs from 'node:fs'
 import path from 'node:path'
 import os from 'node:os'
 import {
@@ -17,19 +16,31 @@ import {
     isForbiddenProjectKey,
     isValidProjectPath,
 } from '../../../utils/project-registry-guards.js'
-import { readProjectRegistryFile } from '../../../utils/registry-config-file.js'
+import {
+    readProjectRegistryFile,
+    writeProjectRegistryFile,
+} from '../../../utils/registry-config-file.js'
 import {
     clearActiveSessionProject,
     getActiveSessionProject,
     setActiveSessionProject,
 } from '../../../utils/workspace-resolver-session.js'
 
-function getRegistryConfigPath(): string {
-    return process.env['MEMORY_JOURNAL_CONFIG'] ?? path.resolve(os.homedir(), '.gemini', 'config', 'memory-journal.config.json')
+function getRegistryConfigPath(context?: ToolContext): string {
+    const configManager = context?.config?.runtime?.configManager
+    const fromManager =
+        configManager instanceof ConfigManager ? configManager.getConfigFilePath() : undefined
+    if (fromManager !== undefined && fromManager !== '') {
+        return path.resolve(fromManager)
+    }
+    return (
+        process.env['MEMORY_JOURNAL_CONFIG'] ??
+        path.resolve(os.homedir(), '.gemini', 'config', 'memory-journal.config.json')
+    )
 }
 
-function loadConfig(): Record<string, unknown> {
-    return readProjectRegistryFile(getRegistryConfigPath()).config
+function loadConfig(context?: ToolContext): Record<string, unknown> {
+    return readProjectRegistryFile(getRegistryConfigPath(context)).config
 }
 
 /** Describes a rename (`to` set) or delete (`to` omitted) of a registry key, for active-default cleanup. */
@@ -76,9 +87,8 @@ function saveConfig(config: Record<string, unknown>, context?: ToolContext, chan
             delete config['defaultProjectNumber']
         }
     }
-    const configPath = getRegistryConfigPath()
-    fs.mkdirSync(path.dirname(configPath), { recursive: true })
-    fs.writeFileSync(configPath, JSON.stringify(config, null, 4), 'utf-8')
+    const configPath = getRegistryConfigPath(context)
+    writeProjectRegistryFile(configPath, config)
     const rawReg = config['projectRegistry']
     if (context?.config === undefined || typeof rawReg !== 'object' || rawReg === null) return
     const reg = rawReg as Record<string, ProjectRegistryEntry>
@@ -168,7 +178,7 @@ export function getProjectTools(context: ToolContext): ToolDefinition[] {
                     if (!isValidProjectPath(parsed.absolute_path, allowedRoots)) {
                         return Promise.resolve({ success: false, error: `Invalid or unsafe project path: '${parsed.absolute_path}'` })
                     }
-                    const config = loadConfig()
+                    const config = loadConfig(context)
                     config['projectRegistry'] ??= {}
                     const registry = config['projectRegistry'] as Record<string, { path: string, project_number?: number }>
 
@@ -234,7 +244,7 @@ export function getProjectTools(context: ToolContext): ToolDefinition[] {
                     if (parsed.absolute_path && !isValidProjectPath(parsed.absolute_path, allowedRoots)) {
                         return Promise.resolve({ success: false, error: `Invalid or unsafe project path: '${parsed.absolute_path}'` })
                     }
-                    const config = loadConfig()
+                    const config = loadConfig(context)
                     config['projectRegistry'] ??= {}
                     const registry = config['projectRegistry'] as Record<string, { path: string, project_number?: number }>
 
@@ -325,7 +335,7 @@ export function getProjectTools(context: ToolContext): ToolDefinition[] {
                     if (isForbiddenProjectKey(parsed.name)) {
                         return Promise.resolve({ success: false, error: `Invalid project name: '${parsed.name}'` })
                     }
-                    const config = loadConfig()
+                    const config = loadConfig(context)
                     config['projectRegistry'] ??= {}
                     const registry = config['projectRegistry'] as Record<string, { path: string, project_number?: number }>
 
@@ -343,6 +353,6 @@ export function getProjectTools(context: ToolContext): ToolDefinition[] {
                 }
             }
         },
-        ...getProjectReadTools(context, { loadConfig, coerceRegistryProjectNumber }),
+        ...getProjectReadTools(context, { loadConfig: () => loadConfig(context), coerceRegistryProjectNumber }),
     ]
 }

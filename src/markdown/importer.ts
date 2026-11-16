@@ -14,7 +14,7 @@ import type { VectorSearchManager } from '../vector/vector-search-manager/index.
 import type { EntryType, SignificanceType, ToolHandlerConfig } from '../types/index.js'
 import { ENTRY_TYPES, SIGNIFICANCE_TYPES } from '../types/index.js'
 import { ValidationError } from '../types/errors.js'
-import { normalizeSignificanceValue } from '../handlers/tools/schemas/constants-and-primitives.js'
+import { MAX_CONTENT_LENGTH, normalizeSignificanceValue } from '../handlers/tools/schemas/constants-and-primitives.js'
 import { linkImportedRelationships } from './import-relationships.js'
 import { parseFrontmatter } from './frontmatter.js'
 import { assertSafeDirectoryPath, assertSafeFilePath } from '../utils/security-utils.js'
@@ -271,6 +271,14 @@ function validateImportedFileEntry(
     existing: ReturnType<IDatabaseAdapter['getEntryById']>
 } {
     const { metadata } = file
+    if (file.body.trim().length === 0) {
+        throw new ValidationError('Imported markdown entry body cannot be empty')
+    }
+    if (file.body.length > MAX_CONTENT_LENGTH) {
+        throw new ValidationError(
+            `Imported markdown entry body exceeds maximum length of ${String(MAX_CONTENT_LENGTH)} characters`
+        )
+    }
     const { effectiveWsId, effectiveProjNum } = resolveImportedFileContext(file, options)
     if (effectiveWsId?.trim() === '*') {
         throw new ValidationError(

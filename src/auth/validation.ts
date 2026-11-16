@@ -27,26 +27,30 @@ export function enforceAccessBoundary(
 ): void {
     const auth = getAuthContext()
 
+    const normalizedTarget = targetType === 'resource' ? targetName.replace(/#.*$/, '') : targetName
+
     const isTeam =
         capabilities?.requiresTeamScope ??
         (targetType === 'resource'
-            ? targetName === 'memory://team' ||
-              targetName.startsWith('memory://team/') ||
-              targetName.startsWith('memory://team?') ||
-              targetName === 'memory://insights/team-collaboration' ||
-              targetName.startsWith('memory://insights/team-collaboration?')
+            ? normalizedTarget === 'memory://team' ||
+              normalizedTarget.startsWith('memory://team/') ||
+              normalizedTarget.startsWith('memory://team?') ||
+              normalizedTarget === 'memory://insights/team-collaboration' ||
+              normalizedTarget.startsWith('memory://insights/team-collaboration?')
             : getToolGroup(targetName) === 'team' ||
+              targetName === 'cross_team_search' ||
               targetName.startsWith('team_') ||
               targetName.startsWith('team-') ||
               targetName.endsWith('-team-entry') ||
+              targetName.endsWith('_team_entry') ||
               targetName === 'mj_team_session_summary')
 
     const isAudit =
         capabilities?.requiresAuditScope ??
         (targetType === 'resource'
-            ? targetName === 'memory://audit' ||
-              targetName.startsWith('memory://audit/') ||
-              targetName.startsWith('memory://audit?')
+            ? normalizedTarget === 'memory://audit' ||
+              normalizedTarget.startsWith('memory://audit/') ||
+              normalizedTarget.startsWith('memory://audit?')
             : false)
 
     const isAdmin = capabilities?.requiresAdminScope ?? false

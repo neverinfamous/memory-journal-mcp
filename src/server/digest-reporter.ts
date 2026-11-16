@@ -138,6 +138,7 @@ export async function deliverReport(report: string, snapshot: DigestSnapshot, op
     for (let attempt = 1; attempt <= MAX_RETRIES + 1; attempt++) {
         const controller = new AbortController()
         const timeoutId = setTimeout(() => { controller.abort() }, TIMEOUT_MS)
+        timeoutId.unref()
         try {
             const response = await fetch(webhookUrl, {
                 method: 'POST',
@@ -179,7 +180,10 @@ export async function deliverReport(report: string, snapshot: DigestSnapshot, op
                     attempt,
                     error: isAbortError ? 'Timeout' : errorMessage
                 })
-                await new Promise(resolve => setTimeout(resolve, RETRY_DELAY_MS))
+                await new Promise<void>((resolve) => {
+                    const retryTimer = setTimeout(resolve, RETRY_DELAY_MS)
+                    retryTimer.unref()
+                })
             } else {
                 logger.error('Failed to deliver digest report after all attempts', {
                     module: 'DigestReporter',

@@ -11,6 +11,7 @@ import type {
 import { resourceWorkspace } from './shared.js'
 import { logger } from '../../utils/logger.js'
 import { markUntrustedContent, sanitizeAuthor } from '../../utils/security-utils.js'
+import { enforceTeamRbac, getCallerIdentity } from '../tools/team/rbac.js'
 
 // ============================================================================
 // Helpers
@@ -40,6 +41,35 @@ function enrichWithAuthor<T extends { id: number }>(
 // ============================================================================
 
 /**
+ * Enforce active Team RBAC on team resource reads.
+ */
+function enforceTeamResourceRbac(context: ResourceContext, wsId: string): void {
+    const teamDb = context.teamDb
+    if (teamDb?.isTeamRbacActive?.() !== true) return
+    enforceTeamRbac(
+        {
+            db: teamDb,
+            teamDb,
+            config: {
+                ...(context.briefingConfig?.defaultWorkspaceId !== undefined
+                    ? { defaultWorkspaceId: context.briefingConfig.defaultWorkspaceId }
+                    : {}),
+                ...(context.briefingConfig?.defaultProjectNumber !== undefined
+                    ? { defaultProjectNumber: context.briefingConfig.defaultProjectNumber }
+                    : {}),
+                ...(context.briefingConfig?.projectRegistry !== undefined
+                    ? { projectRegistry: context.briefingConfig.projectRegistry }
+                    : {}),
+                teamDefaultRole: context.runtime?.teamDefaultRole ?? 'denied',
+            },
+        },
+        getCallerIdentity(),
+        'viewer',
+        wsId
+    )
+}
+
+/**
  * Get team resource definitions
  */
 export function getTeamResourceDefinitions(): InternalResourceDef[] {
@@ -65,7 +95,16 @@ export function getTeamResourceDefinitions(): InternalResourceDef[] {
                     }
                 }
 
-                const { entries } = context.teamDb.getRecentEntries(10, undefined, 'timestamp', undefined, false, resourceWorkspace(context))
+                const wsId = resourceWorkspace(context)
+                enforceTeamResourceRbac(context, wsId)
+                const { entries } = context.teamDb.getRecentEntries(
+                    10,
+                    undefined,
+                    'timestamp',
+                    undefined,
+                    false,
+                    wsId
+                )
                 const lastModified = entries[0]?.timestamp ?? new Date().toISOString()
                 const enriched = enrichWithAuthor(entries, context)
 
@@ -109,6 +148,7 @@ export function getTeamResourceDefinitions(): InternalResourceDef[] {
                 }
 
                 const wsId = resourceWorkspace(context)
+                enforceTeamResourceRbac(context, wsId)
                 const stats = context.teamDb.getStatistics('week', undefined, undefined, false, wsId)
 
                 // Author breakdown

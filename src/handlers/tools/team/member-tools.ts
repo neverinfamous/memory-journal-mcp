@@ -11,6 +11,16 @@ import { TEAM_DB_ERROR_RESPONSE, triggerTeamNotifications } from './helpers.js'
 import { getCallerIdentity } from './rbac.js'
 import { ErrorFieldsMixin } from '../error-fields-mixin.js'
 import { ValidationError } from '../../../types/errors.js'
+
+const TeamMemberOutputSchema = z.object({
+    id: z.number().int(),
+    author: z.string(),
+    role: z.enum(['admin', 'member', 'viewer']),
+    displayName: z.string().nullable(),
+    addedBy: z.string().nullable(),
+    createdAt: z.string(),
+    updatedAt: z.string(),
+})
 // Tool Schemas
 // ============================================================================
 
@@ -143,7 +153,7 @@ export function getTeamMemberTools(context: ToolContext): ToolDefinition[] {
             inputSchema: TeamAddMemberSchemaMcp,
             outputSchema: z.object({
                 success: z.boolean(),
-                member: z.unknown().optional(),
+                member: TeamMemberOutputSchema.optional(),
                 message: z.string().optional(),
                 error: z.string().optional(),
             }).extend(ErrorFieldsMixin.shape),
@@ -227,7 +237,7 @@ export function getTeamMemberTools(context: ToolContext): ToolDefinition[] {
             inputSchema: TeamUpdateMemberRoleSchemaMcp,
             outputSchema: z.object({
                 success: z.boolean(),
-                member: z.unknown().optional(),
+                member: TeamMemberOutputSchema.optional(),
                 error: z.string().optional(),
             }).extend(ErrorFieldsMixin.shape),
             annotations: {
@@ -277,7 +287,7 @@ export function getTeamMemberTools(context: ToolContext): ToolDefinition[] {
             inputSchema: z.object({}).strict(),
             outputSchema: z.object({
                 success: z.boolean(),
-                members: z.array(z.unknown()).optional(),
+                members: z.array(TeamMemberOutputSchema).optional(),
                 count: z.number().optional(),
                 error: z.string().optional(),
             }).extend(ErrorFieldsMixin.shape),
@@ -307,7 +317,7 @@ export function getTeamMemberTools(context: ToolContext): ToolDefinition[] {
             inputSchema: TeamGetMemberSchemaMcp,
             outputSchema: z.object({
                 success: z.boolean(),
-                member: z.unknown().optional(),
+                member: TeamMemberOutputSchema.optional(),
                 error: z.string().optional(),
             }).extend(ErrorFieldsMixin.shape),
             annotations: {

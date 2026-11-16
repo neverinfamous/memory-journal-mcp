@@ -259,11 +259,11 @@ describe('Pass 28 Quality & Hardening Regressions', () => {
         ).toEqual({ id: 1, alias: 'alice' })
     })
 
-    it('Step 3.2: bumps AUDIT_PROMPT_REVISION to Pass 28 and prepends shared preamble to adversarial-plan-review', async () => {
-        expect(AUDIT_PROMPT_REVISION).toBe('2026-11-15-audit-pass28')
+    it('Step 3.2: bumps AUDIT_PROMPT_REVISION to current pass and prepends shared preamble to adversarial-plan-review', async () => {
+        expect(AUDIT_PROMPT_REVISION).toBe('2026-11-15-audit-pass29')
         const res = await getPrompt('adversarial-plan-review', { topic: 'auth' }, db)
         const text = res.messages[0]?.content.text ?? ''
-        expect(text).toContain('Prompt revision: 2026-11-15-audit-pass28')
+        expect(text).toContain('Prompt revision: 2026-11-15-audit-pass29')
         expect(text).toContain('This prompt is shared by every project')
     })
 })

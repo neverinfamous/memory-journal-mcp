@@ -46,6 +46,50 @@ function coerceAnalyticsProjectNumber(projectNumber: unknown): number | undefine
     throw new ValidationError(PROJECT_NUMBER_ERROR)
 }
 
+function formatCrossProjectInsightsResponse(
+    results: ReturnType<ToolContext['db']['getCrossProjectInsights']>,
+    minEntries: number
+): Record<string, unknown> {
+    if (results.projects.length === 0) {
+        return {
+            success: true,
+            project_count: 0,
+            total_entries: 0,
+            projects: [],
+            inactive_projects: [],
+            inactiveThresholdDays: INACTIVE_THRESHOLD_DAYS,
+            time_distribution: [],
+            message: `No projects found with at least ${String(minEntries)} entries`,
+        }
+    }
+
+    const totalEntries = results.projects.reduce((sum: number, p: Record<string, unknown>) => {
+        const count = p['entry_count']
+        return sum + (typeof count === 'number' ? count : Number(count ?? 0))
+    }, 0)
+
+    const distribution = results.projects.slice(0, 5).map((p: Record<string, unknown>) => {
+        const rawProjNum = p['project_number']
+        const rawCount = p['entry_count']
+        const projNum = typeof rawProjNum === 'number' ? rawProjNum : Number(rawProjNum ?? 0)
+        const entryCount = typeof rawCount === 'number' ? rawCount : Number(rawCount ?? 0)
+        return {
+            project_number: projNum,
+            percentage: (totalEntries > 0 ? (entryCount / totalEntries) * 100 : 0).toFixed(1),
+        }
+    })
+
+    return {
+        success: true,
+        project_count: results.projects.length,
+        total_entries: totalEntries,
+        projects: results.projects,
+        inactive_projects: results.inactiveProjects,
+        inactiveThresholdDays: INACTIVE_THRESHOLD_DAYS,
+        time_distribution: distribution,
+    }
+}
+
 // ============================================================================
 // Output Schemas
 // ============================================================================
@@ -257,7 +301,6 @@ const CrossProjectInsightsInputSchemaMcp = z.object({
 // ============================================================================
 
 export function getAnalyticsTools(context: ToolContext): ToolDefinition[] {
-    const { db } = context
     return [
         {
             name: 'get_statistics',
@@ -297,7 +340,7 @@ export function getAnalyticsTools(context: ToolContext): ToolDefinition[] {
                         resolvedProjectNumber,
                         activeProjectRegistry(context.config?.projectRegistry)
                     )
-                    const stats = db.getStatistics(
+                    const stats = context.db.getStatistics(
                         group_by,
                         start_date,
                         end_date,
@@ -348,7 +391,7 @@ export function getAnalyticsTools(context: ToolContext): ToolDefinition[] {
                                   activeProjectRegistry(context.config?.projectRegistry)
                               )
 
-                    const results = db.getCrossProjectInsights({
+                    const results = context.db.getCrossProjectInsights({
                         startDate: input.start_date,
                         endDate: input.end_date,
                         minEntries: input.min_entries,
@@ -359,56 +402,7 @@ export function getAnalyticsTools(context: ToolContext): ToolDefinition[] {
                             : {}),
                     })
 
-                    if (results.projects.length === 0) {
-                        return {
-                            success: true,
-                            project_count: 0,
-                            total_entries: 0,
-                            projects: [],
-                            inactive_projects: [],
-                            inactiveThresholdDays: INACTIVE_THRESHOLD_DAYS,
-                            time_distribution: [],
-                            message: `No projects found with at least ${String(input.min_entries)} entries`,
-                        }
-                    }
-
-                    // Calculate time distribution
-                    const totalEntries = results.projects.reduce(
-                        (sum: number, p: Record<string, unknown>) => {
-                            const count = p['entry_count']
-                            return sum + (typeof count === 'number' ? count : Number(count ?? 0))
-                        },
-                        0
-                    )
-                    const distribution = results.projects
-                        .slice(0, 5)
-                        .map((p: Record<string, unknown>) => {
-                            const rawProjNum = p['project_number']
-                            const rawCount = p['entry_count']
-                            const projNum =
-                                typeof rawProjNum === 'number'
-                                    ? rawProjNum
-                                    : Number(rawProjNum ?? 0)
-                            const entryCount =
-                                typeof rawCount === 'number' ? rawCount : Number(rawCount ?? 0)
-                            return {
-                                project_number: projNum,
-                                percentage: (totalEntries > 0
-                                    ? (entryCount / totalEntries) * 100
-                                    : 0
-                                ).toFixed(1),
-                            }
-                        })
-
-                    return {
-                        success: true,
-                        project_count: results.projects.length,
-                        total_entries: totalEntries,
-                        projects: results.projects,
-                        inactive_projects: results.inactiveProjects,
-                        inactiveThresholdDays: INACTIVE_THRESHOLD_DAYS,
-                        time_distribution: distribution,
-                    }
+                    return formatCrossProjectInsightsResponse(results, input.min_entries)
                 } catch (err) {
                     return formatHandlerError(err)
                 }

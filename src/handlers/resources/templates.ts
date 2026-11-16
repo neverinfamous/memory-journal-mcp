@@ -9,8 +9,14 @@
 import { ICON_ISSUE, ICON_PR } from '../../constants/icons.js'
 import { ASSISTANT_FOCUSED, MEDIUM_PRIORITY } from '../../utils/resource-annotations.js'
 import type { InternalResourceDef, ResourceContext } from './shared.js'
-import { getBaseUri, resolveScopedGitHubRepo, isResourceError, resourceWorkspace } from './shared.js'
-import { fenceInline, getKanbanTemplateDefinitions } from './templates-kanban.js'
+import {
+    fenceUntrustedInline,
+    getBaseUri,
+    resolveScopedGitHubRepo,
+    isResourceError,
+    resourceWorkspace,
+} from './shared.js'
+import { getKanbanTemplateDefinitions } from './templates-kanban.js'
 import { parseSessionCommitContext } from '../../types/auto-context.js'
 import { enrichCommits } from '../../github/commit-references/index.js'
 import { ProtocolError, ProtocolErrorCode } from '@modelcontextprotocol/server'
@@ -18,13 +24,321 @@ import {
     resolveProjectScope,
     collectUniqueCommits,
     resolveCommitGithub,
+    fenceEnrichedCommits,
+    groupCommitsByIssue,
+    groupCommitsByPr,
 } from './template-helpers.js'
+
+function parsePositiveParam(uri: string, pattern: RegExp, errorMessage: string): number {
+    const match = pattern.exec(getBaseUri(uri))
+    const parsed = match?.[1] ? parseInt(match[1], 10) : null
+    if (parsed === null || Number.isNaN(parsed)) {
+        throw new ProtocolError(ProtocolErrorCode.InvalidParams, errorMessage)
+    }
+    return parsed
+}
+
+function withTokenMeta<T extends Record<string, unknown>>(data: T): T & { _meta: { tokenEstimate: number } } {
+    const tokenEstimate = Math.ceil(JSON.stringify(data).length / 4)
+    return { ...data, _meta: { tokenEstimate } }
+}
+
+function handleProjectTimelineResource(uri: string, context: ResourceContext): Record<string, unknown> {
+    const projectNumber = parsePositiveParam(
+        uri,
+        /^memory:\/\/projects\/(\d+)\/timeline$/,
+        'Invalid project number'
+    )
+    const scope = resolveProjectScope(context, projectNumber)
+    if (scope.hint !== undefined) {
+        return {
+            projectNumber,
+            status: 'unresolved',
+            error: scope.hint,
+            entries: [],
+            count: 0,
+            hint: scope.hint,
+        }
+    }
+    const { entries } = context.db.searchEntries('', {
+        workspaceId: scope.workspaceId,
+        projectNumber,
+        limit: 50,
+    })
+    return withTokenMeta({ projectNumber, entries, count: entries.length })
+}
+
+function handleIssueEntriesResource(uri: string, context: ResourceContext): Record<string, unknown> {
+    const issueNumber = parsePositiveParam(
+        uri,
+        /^memory:\/\/issues\/(\d+)\/entries$/,
+        'Invalid issue number'
+    )
+    const { entries } = context.db.searchEntries('', {
+        workspaceId: resourceWorkspace(context),
+        issueNumber,
+        limit: 100,
+    })
+    return withTokenMeta({ issueNumber, entries, count: entries.length })
+}
+
+function handlePrEntriesResource(uri: string, context: ResourceContext): Record<string, unknown> {
+    const prNumber = parsePositiveParam(
+        uri,
+        /^memory:\/\/prs\/(\d+)\/entries$/,
+        'Invalid PR number'
+    )
+    const { entries } = context.db.searchEntries('', {
+        workspaceId: resourceWorkspace(context),
+        prNumber,
+        limit: 100,
+    })
+    return withTokenMeta({
+        prNumber,
+        entries,
+        count: entries.length,
+        ...(entries.length === 0
+            ? {
+                  hint: 'No journal entries linked to this PR. Use create_entry with pr_number to link entries.',
+              }
+            : {}),
+    })
+}
+
+async function fetchPrMetadataForTimeline(
+    context: ResourceContext,
+    prNumber: number
+): Promise<{
+    prMetadata: {
+        title: string
+        state: string
+        draft: boolean
+        mergedAt: string | null
+        closedAt: string | null
+        author: string
+        headBranch: string
+        baseBranch: string
+    } | null
+    rawPrState: string | undefined
+    rawPrMergedAt: string | null | undefined
+    rawPrDraft: boolean
+}> {
+    let prMetadata: {
+        title: string
+        state: string
+        draft: boolean
+        mergedAt: string | null
+        closedAt: string | null
+        author: string
+        headBranch: string
+        baseBranch: string
+    } | null = null
+    let rawPrState: string | undefined
+    let rawPrMergedAt: string | null | undefined
+    let rawPrDraft = false
+
+    try {
+        const resolvedRepo = await resolveScopedGitHubRepo(context)
+        if (!isResourceError(resolvedRepo)) {
+            const pr = await resolvedRepo.github.getPullRequest(
+                resolvedRepo.owner,
+                resolvedRepo.repo,
+                prNumber
+            )
+            if (pr) {
+                rawPrState = pr.state
+                rawPrMergedAt = pr.mergedAt
+                rawPrDraft = pr.draft
+                prMetadata = {
+                    title: fenceUntrustedInline(pr.title),
+                    state: pr.state,
+                    draft: pr.draft,
+                    mergedAt: pr.mergedAt,
+                    closedAt: pr.closedAt,
+                    author: fenceUntrustedInline(pr.author),
+                    headBranch: fenceUntrustedInline(pr.headBranch),
+                    baseBranch: fenceUntrustedInline(pr.baseBranch),
+                }
+            }
+        }
+    } catch {
+        // GitHub not available, proceed without metadata
+    }
+
+    return { prMetadata, rawPrState, rawPrMergedAt, rawPrDraft }
+}
+
+async function handlePrTimelineResource(
+    uri: string,
+    context: ResourceContext
+): Promise<Record<string, unknown>> {
+    const prNumber = parsePositiveParam(
+        uri,
+        /^memory:\/\/prs\/(\d+)\/timeline$/,
+        'Invalid PR number'
+    )
+    const { prMetadata, rawPrState, rawPrMergedAt, rawPrDraft } = await fetchPrMetadataForTimeline(
+        context,
+        prNumber
+    )
+    const { entries } = context.db.searchEntries('', {
+        workspaceId: resourceWorkspace(context),
+        prNumber,
+        limit: 100,
+    })
+
+    let timelineNote: string
+    if (prMetadata && rawPrState !== undefined) {
+        const stateDesc = rawPrState.toLowerCase()
+        const mergedNote = rawPrMergedAt ? ' (merged)' : ''
+        const draftNote = rawPrDraft ? ' [DRAFT]' : ''
+        timelineNote = `PR #${String(prNumber)} is ${stateDesc}${mergedNote}${draftNote}`
+    } else {
+        timelineNote =
+            'GitHub integration unavailable for live PR status. Entry timestamps show journal activity.'
+    }
+
+    return withTokenMeta({
+        prNumber,
+        prMetadata,
+        entries,
+        count: entries.length,
+        timelineNote,
+        ...(entries.length === 0
+            ? {
+                  hint: 'No journal entries linked to this PR. Use create_entry with pr_number to link entries.',
+              }
+            : {}),
+    })
+}
+
+async function handleProjectCommitsResource(
+    uri: string,
+    context: ResourceContext
+): Promise<Record<string, unknown>> {
+    const projectNumber = parsePositiveParam(
+        uri,
+        /^memory:\/\/commits\/(\d+)$/,
+        'Invalid project number'
+    )
+    const scope = resolveProjectScope(context, projectNumber)
+    if (scope.hint !== undefined) {
+        return {
+            projectNumber,
+            status: 'unresolved',
+            error: scope.hint,
+            commits: [],
+            metadata: [],
+            enrichedCommits: [],
+            count: 0,
+            hint: scope.hint,
+        }
+    }
+
+    const { entries } = context.db.searchEntries('', {
+        workspaceId: scope.workspaceId,
+        projectNumber,
+        limit: 200,
+    })
+    const commits: string[] = []
+    const metadata: Record<string, unknown>[] = []
+
+    for (const entry of entries) {
+        if (!entry.tags.includes('session-summary') && !entry.tags.includes('commit-narrative')) {
+            continue
+        }
+        const ctx = parseSessionCommitContext(entry.autoContext)
+        if (ctx && ctx.commits.length > 0) {
+            commits.push(...ctx.commits)
+            metadata.push({
+                entryId: entry.id,
+                timestamp: entry.timestamp,
+                commits: ctx.commits,
+                branch: ctx.branch,
+                pr: ctx.pr,
+                repo: ctx.repo,
+            })
+        }
+    }
+
+    const uniqueCommits = Array.from(new Set(commits))
+    const enrichedCommits =
+        uniqueCommits.length > 0
+            ? fenceEnrichedCommits(
+                  await enrichCommits(scope.cwd, uniqueCommits, resolveCommitGithub(context, scope))
+              )
+            : []
+
+    return withTokenMeta({
+        projectNumber,
+        commits: uniqueCommits,
+        metadata,
+        enrichedCommits,
+        count: uniqueCommits.length,
+    })
+}
+
+async function handleCommitsByIssueResource(
+    uri: string,
+    context: ResourceContext
+): Promise<Record<string, unknown>> {
+    const projectNumber = parsePositiveParam(
+        uri,
+        /^memory:\/\/commits\/(\d+)\/by-issue$/,
+        'Invalid project number'
+    )
+    const scope = resolveProjectScope(context, projectNumber)
+    if (scope.hint !== undefined) {
+        return { projectNumber, status: 'unresolved', error: scope.hint, issues: [], hint: scope.hint }
+    }
+    const { entries } = context.db.searchEntries('', {
+        workspaceId: scope.workspaceId,
+        projectNumber,
+        limit: 200,
+    })
+    const uniqueCommits = collectUniqueCommits(entries)
+    const issues =
+        uniqueCommits.length > 0
+            ? groupCommitsByIssue(
+                  await enrichCommits(scope.cwd, uniqueCommits, resolveCommitGithub(context, scope))
+              )
+            : []
+    return withTokenMeta({ projectNumber, issues })
+}
+
+async function handleCommitsByPrResource(
+    uri: string,
+    context: ResourceContext
+): Promise<Record<string, unknown>> {
+    const projectNumber = parsePositiveParam(
+        uri,
+        /^memory:\/\/commits\/(\d+)\/by-pr$/,
+        'Invalid project number'
+    )
+    const scope = resolveProjectScope(context, projectNumber)
+    if (scope.hint !== undefined) {
+        return { projectNumber, status: 'unresolved', error: scope.hint, pullRequests: [], hint: scope.hint }
+    }
+    const { entries } = context.db.searchEntries('', {
+        workspaceId: scope.workspaceId,
+        projectNumber,
+        limit: 200,
+    })
+    const uniqueCommits = collectUniqueCommits(entries)
+    const pullRequests =
+        uniqueCommits.length > 0
+            ? groupCommitsByPr(
+                  await enrichCommits(scope.cwd, uniqueCommits, resolveCommitGithub(context, scope))
+              )
+            : []
+    return withTokenMeta({ projectNumber, pullRequests })
+}
 
 /**
  * Get template resource definitions
  */
 export function getTemplateResourceDefinitions(): InternalResourceDef[] {
-    const definitions: InternalResourceDef[] = [
+    return [
         {
             uri: 'memory://projects/{number}/timeline',
             name: 'Project Timeline',
@@ -32,30 +346,7 @@ export function getTemplateResourceDefinitions(): InternalResourceDef[] {
             description: 'Project activity timeline',
             mimeType: 'application/json',
             annotations: { ...MEDIUM_PRIORITY, audience: ['assistant'] },
-            handler: (uri: string, context: ResourceContext) => {
-                const match = /memory:\/\/projects\/(\d+)\/timeline/.exec(getBaseUri(uri))
-                const projectNumber = match?.[1] ? parseInt(match[1], 10) : null
-
-                if (projectNumber === null) {
-                    throw new ProtocolError(ProtocolErrorCode.InvalidParams,  'Invalid project number')
-                }
-
-                const scope = resolveProjectScope(context, projectNumber)
-                if (scope.hint !== undefined) {
-                    return {
-                        projectNumber,
-                        status: 'unresolved',
-                        error: scope.hint,
-                        entries: [],
-                        count: 0,
-                        hint: scope.hint,
-                    }
-                }
-                const { entries } = context.db.searchEntries('', { workspaceId: scope.workspaceId,  projectNumber, limit: 50 })
-                const data = { projectNumber, entries, count: entries.length }
-                const tokenEstimate = Math.ceil(JSON.stringify(data).length / 4)
-                return { ...data, _meta: { tokenEstimate } }
-            },
+            handler: handleProjectTimelineResource,
         },
         {
             uri: 'memory://issues/{issue_number}/entries',
@@ -65,19 +356,7 @@ export function getTemplateResourceDefinitions(): InternalResourceDef[] {
             mimeType: 'application/json',
             icons: [ICON_ISSUE],
             annotations: { ...MEDIUM_PRIORITY, audience: ['assistant'] },
-            handler: (uri: string, context: ResourceContext) => {
-                const match = /memory:\/\/issues\/(\d+)\/entries/.exec(getBaseUri(uri))
-                const issueNumber = match?.[1] ? parseInt(match[1], 10) : null
-
-                if (issueNumber === null) {
-                    throw new ProtocolError(ProtocolErrorCode.InvalidParams,  'Invalid issue number')
-                }
-
-                const { entries } = context.db.searchEntries('', { workspaceId: resourceWorkspace(context),  issueNumber, limit: 100 })
-                const data = { issueNumber, entries, count: entries.length }
-                const tokenEstimate = Math.ceil(JSON.stringify(data).length / 4)
-                return { ...data, _meta: { tokenEstimate } }
-            },
+            handler: handleIssueEntriesResource,
         },
         {
             uri: 'memory://prs/{pr_number}/entries',
@@ -87,28 +366,7 @@ export function getTemplateResourceDefinitions(): InternalResourceDef[] {
             mimeType: 'application/json',
             icons: [ICON_PR],
             annotations: { ...MEDIUM_PRIORITY, audience: ['assistant'] },
-            handler: (uri: string, context: ResourceContext) => {
-                const match = /memory:\/\/prs\/(\d+)\/entries/.exec(getBaseUri(uri))
-                const prNumber = match?.[1] ? parseInt(match[1], 10) : null
-
-                if (prNumber === null) {
-                    throw new ProtocolError(ProtocolErrorCode.InvalidParams,  'Invalid PR number')
-                }
-
-                const { entries } = context.db.searchEntries('', { workspaceId: resourceWorkspace(context),  prNumber, limit: 100 })
-                const data = {
-                    prNumber,
-                    entries,
-                    count: entries.length,
-                    ...(entries.length === 0
-                        ? {
-                              hint: 'No journal entries linked to this PR. Use create_entry with pr_number to link entries.',
-                          }
-                        : {}),
-                }
-                const tokenEstimate = Math.ceil(JSON.stringify(data).length / 4)
-                return { ...data, _meta: { tokenEstimate } }
-            },
+            handler: handlePrEntriesResource,
         },
         {
             uri: 'memory://prs/{pr_number}/timeline',
@@ -118,85 +376,7 @@ export function getTemplateResourceDefinitions(): InternalResourceDef[] {
             mimeType: 'application/json',
             icons: [ICON_PR],
             annotations: ASSISTANT_FOCUSED,
-            handler: async (uri: string, context: ResourceContext) => {
-                const match = /memory:\/\/prs\/(\d+)\/timeline/.exec(getBaseUri(uri))
-                const prNumber = match?.[1] ? parseInt(match[1], 10) : null
-
-                if (prNumber === null) {
-                    throw new ProtocolError(ProtocolErrorCode.InvalidParams,  'Invalid PR number')
-                }
-
-                // Fetch live PR metadata from GitHub if available
-                let prMetadata: {
-                    title: string
-                    state: string
-                    draft: boolean
-                    mergedAt: string | null
-                    closedAt: string | null
-                    author: string
-                    headBranch: string
-                    baseBranch: string
-                } | null = null
-
-                let rawPrState: string | undefined
-                let rawPrMergedAt: string | null | undefined
-                let rawPrDraft = false
-                try {
-                    const resolvedRepo = await resolveScopedGitHubRepo(context)
-                    if (!isResourceError(resolvedRepo)) {
-                        const pr = await resolvedRepo.github.getPullRequest(
-                            resolvedRepo.owner,
-                            resolvedRepo.repo,
-                            prNumber
-                        )
-                        if (pr) {
-                            rawPrState = pr.state
-                            rawPrMergedAt = pr.mergedAt
-                            rawPrDraft = pr.draft
-                            prMetadata = {
-                                title: fenceInline(pr.title),
-                                state: pr.state,
-                                draft: pr.draft,
-                                mergedAt: pr.mergedAt,
-                                closedAt: pr.closedAt,
-                                author: fenceInline(pr.author),
-                                headBranch: fenceInline(pr.headBranch),
-                                baseBranch: fenceInline(pr.baseBranch),
-                            }
-                        }
-                    }
-                } catch {
-                    // GitHub not available, proceed without metadata
-                }
-
-                const { entries } = context.db.searchEntries('', { workspaceId: resourceWorkspace(context),  prNumber, limit: 100 })
-
-                let timelineNote: string
-                if (prMetadata && rawPrState !== undefined) {
-                    const stateDesc = rawPrState.toLowerCase()
-                    const mergedNote = rawPrMergedAt ? ' (merged)' : ''
-                    const draftNote = rawPrDraft ? ' [DRAFT]' : ''
-                    timelineNote = `PR #${String(prNumber)} is ${stateDesc}${mergedNote}${draftNote}`
-                } else {
-                    timelineNote =
-                        'GitHub integration unavailable for live PR status. Entry timestamps show journal activity.'
-                }
-
-                const data = {
-                    prNumber,
-                    prMetadata,
-                    entries,
-                    count: entries.length,
-                    timelineNote,
-                    ...(entries.length === 0
-                        ? {
-                              hint: 'No journal entries linked to this PR. Use create_entry with pr_number to link entries.',
-                          }
-                        : {}),
-                }
-                const tokenEstimate = Math.ceil(JSON.stringify(data).length / 4)
-                return { ...data, _meta: { tokenEstimate } }
-            },
+            handler: handlePrTimelineResource,
         },
         {
             uri: 'memory://commits/{project_number}',
@@ -205,71 +385,7 @@ export function getTemplateResourceDefinitions(): InternalResourceDef[] {
             description: 'Aggregates all commit SHAs from session summary auto_context',
             mimeType: 'application/json',
             annotations: { ...MEDIUM_PRIORITY, audience: ['assistant'] },
-            handler: async (uri: string, context: ResourceContext) => {
-                const match = /memory:\/\/commits\/(\d+)$/.exec(getBaseUri(uri))
-                const projectNumber = match?.[1] ? parseInt(match[1], 10) : null
-
-                if (projectNumber === null) {
-                    throw new ProtocolError(ProtocolErrorCode.InvalidParams,  'Invalid project number')
-                }
-
-                const scope = resolveProjectScope(context, projectNumber)
-                if (scope.hint !== undefined) {
-                    return {
-                        projectNumber,
-                        status: 'unresolved',
-                        error: scope.hint,
-                        commits: [],
-                        metadata: [],
-                        enrichedCommits: [],
-                        count: 0,
-                        hint: scope.hint,
-                    }
-                }
-                const { entries } = context.db.searchEntries('', { workspaceId: scope.workspaceId,  projectNumber, limit: 200 })
-
-                const commits: string[] = []
-                const metadata: Record<string, unknown>[] = []
-
-                for (const entry of entries) {
-                    if (entry.tags.includes('session-summary') || entry.tags.includes('commit-narrative')) {
-                        const ctx = parseSessionCommitContext(entry.autoContext)
-                        if (ctx && ctx.commits.length > 0) {
-                            commits.push(...ctx.commits)
-                            metadata.push({
-                                entryId: entry.id,
-                                timestamp: entry.timestamp,
-                                commits: ctx.commits,
-                                branch: ctx.branch,
-                                pr: ctx.pr,
-                                repo: ctx.repo,
-                            })
-                        }
-                    }
-                }
-
-                const uniqueCommits = Array.from(new Set(commits))
-
-                let enrichedCommits: Awaited<ReturnType<typeof enrichCommits>> = []
-                const cwd = scope.cwd
-                if (uniqueCommits.length > 0) {
-                    enrichedCommits = await enrichCommits(
-                        cwd,
-                        uniqueCommits,
-                        resolveCommitGithub(context, scope)
-                    )
-                }
-
-                const data = {
-                    projectNumber,
-                    commits: uniqueCommits,
-                    metadata,
-                    enrichedCommits,
-                    count: uniqueCommits.length,
-                }
-                const tokenEstimate = Math.ceil(JSON.stringify(data).length / 4)
-                return { ...data, _meta: { tokenEstimate } }
-            },
+            handler: handleProjectCommitsResource,
         },
         {
             uri: 'memory://commits/{project_number}/by-issue',
@@ -278,77 +394,7 @@ export function getTemplateResourceDefinitions(): InternalResourceDef[] {
             description: 'Groups project commits by referenced GitHub issues',
             mimeType: 'application/json',
             annotations: { ...MEDIUM_PRIORITY, audience: ['assistant'] },
-            handler: async (uri: string, context: ResourceContext) => {
-                const match = /memory:\/\/commits\/(\d+)\/by-issue$/.exec(getBaseUri(uri))
-                const projectNumber = match?.[1] ? parseInt(match[1], 10) : null
-
-                if (projectNumber === null) {
-                    throw new ProtocolError(ProtocolErrorCode.InvalidParams,  'Invalid project number')
-                }
-
-                const scope = resolveProjectScope(context, projectNumber)
-                if (scope.hint !== undefined) {
-                    return {
-                        projectNumber,
-                        status: 'unresolved',
-                        error: scope.hint,
-                        issues: [],
-                        hint: scope.hint,
-                    }
-                }
-                const { entries } = context.db.searchEntries('', { workspaceId: scope.workspaceId,  projectNumber, limit: 200 })
-                const uniqueCommits = collectUniqueCommits(entries)
-                interface IssueGroup {
-                    number: number;
-                    title?: string;
-                    state?: string;
-                    milestone?: { number: number; title: string };
-                    commits: { hash: string; subject: string; authorName: string; date: string; }[];
-                }
-                const issues: Record<number, IssueGroup> = {}
-                const cwd = scope.cwd
-
-                if (uniqueCommits.length > 0) {
-                    const enrichedCommits = await enrichCommits(
-                        cwd,
-                        uniqueCommits,
-                        resolveCommitGithub(context, scope)
-                    )
-
-                    for (const commit of enrichedCommits) {
-                        for (const ref of commit.references) {
-                            if (ref.type !== 'issue') continue
-                            issues[ref.number] ??= {
-                                number: ref.number,
-                                ...(ref.title !== undefined ? { title: fenceInline(ref.title) } : {}),
-                                ...(ref.state !== undefined ? { state: fenceInline(ref.state) } : {}),
-                                ...(ref.milestone !== undefined
-                                    ? {
-                                          milestone: {
-                                              ...ref.milestone,
-                                              title: fenceInline(ref.milestone.title),
-                                          },
-                                      }
-                                    : {}),
-                                commits: [],
-                            }
-                            issues[ref.number]?.commits.push({
-                                hash: commit.hash,
-                                subject: fenceInline(commit.subject),
-                                authorName: fenceInline(commit.authorName),
-                                date: commit.date,
-                            })
-                        }
-                    }
-                }
-
-                const data = {
-                    projectNumber,
-                    issues: Object.values(issues),
-                }
-                const tokenEstimate = Math.ceil(JSON.stringify(data).length / 4)
-                return { ...data, _meta: { tokenEstimate } }
-            },
+            handler: handleCommitsByIssueResource,
         },
         {
             uri: 'memory://commits/{project_number}/by-pr',
@@ -357,72 +403,9 @@ export function getTemplateResourceDefinitions(): InternalResourceDef[] {
             description: 'Groups project commits by referenced GitHub pull requests',
             mimeType: 'application/json',
             annotations: { ...MEDIUM_PRIORITY, audience: ['assistant'] },
-            handler: async (uri: string, context: ResourceContext) => {
-                const match = /memory:\/\/commits\/(\d+)\/by-pr$/.exec(getBaseUri(uri))
-                const projectNumber = match?.[1] ? parseInt(match[1], 10) : null
-
-                if (projectNumber === null) {
-                    throw new ProtocolError(ProtocolErrorCode.InvalidParams,  'Invalid project number')
-                }
-
-                const scope = resolveProjectScope(context, projectNumber)
-                if (scope.hint !== undefined) {
-                    return {
-                        projectNumber,
-                        status: 'unresolved',
-                        error: scope.hint,
-                        pullRequests: [],
-                        hint: scope.hint,
-                    }
-                }
-                const { entries } = context.db.searchEntries('', { workspaceId: scope.workspaceId,  projectNumber, limit: 200 })
-                const uniqueCommits = collectUniqueCommits(entries)
-                interface PRGroup {
-                    number: number;
-                    title?: string;
-                    state?: string;
-                    commits: { hash: string; subject: string; authorName: string; date: string; }[];
-                }
-                const prs: Record<number, PRGroup> = {}
-                const cwd = scope.cwd
-
-                if (uniqueCommits.length > 0) {
-                    const enrichedCommits = await enrichCommits(
-                        cwd,
-                        uniqueCommits,
-                        resolveCommitGithub(context, scope)
-                    )
-
-                    for (const commit of enrichedCommits) {
-                        for (const ref of commit.references) {
-                            if (ref.type !== 'pull_request') continue
-                            prs[ref.number] ??= {
-                                number: ref.number,
-                                ...(ref.title !== undefined ? { title: fenceInline(ref.title) } : {}),
-                                ...(ref.state !== undefined ? { state: fenceInline(ref.state) } : {}),
-                                commits: [],
-                            }
-                            prs[ref.number]?.commits.push({
-                                hash: commit.hash,
-                                subject: fenceInline(commit.subject),
-                                authorName: fenceInline(commit.authorName),
-                                date: commit.date,
-                            })
-                        }
-                    }
-                }
-
-                const data = {
-                    projectNumber,
-                    pullRequests: Object.values(prs),
-                }
-                const tokenEstimate = Math.ceil(JSON.stringify(data).length / 4)
-                return { ...data, _meta: { tokenEstimate } }
-            },
+            handler: handleCommitsByPrResource,
         },
         // Kanban board resources (GitHub Projects v2) — extracted to templates-kanban.ts
         ...getKanbanTemplateDefinitions(),
     ]
-
-    return definitions
 }

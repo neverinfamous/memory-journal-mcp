@@ -25,6 +25,7 @@ import { logger } from '../utils/logger.js'
 import {
     extractAuditScopeFromArgs,
     extractAuditScopeFromUri,
+    extractSensitiveTargetFromArgs,
     isSensitiveAuditTarget,
     resolveResourceAuditCategory,
 } from './audit-query-helpers.js'
@@ -102,15 +103,10 @@ export function createAuditInterceptor(auditLogger: AuditLogger): AuditIntercept
     return {
         async around<T>(toolName: string, args: unknown, fn: () => Promise<T>): Promise<T> {
             const scope = getRequiredScope(toolName)
-            const rawUri =
-                typeof args === 'object' && args !== null
-                    ? (args as Record<string, unknown>)['uri']
-                    : undefined
-            const sensitiveUri =
-                typeof rawUri === 'string' && isSensitiveAuditTarget(rawUri) ? rawUri : undefined
+            const sensitiveTarget = extractSensitiveTargetFromArgs(toolName, args)
 
-            // Read-scoped tools are only audited when --audit-reads is enabled or targeting a sensitive URI
-            if (!ALWAYS_AUDITED_SCOPES.has(scope) && !auditReads && sensitiveUri === undefined) {
+            // Read-scoped tools are only audited when --audit-reads is enabled or targeting a sensitive URI/prompt
+            if (!ALWAYS_AUDITED_SCOPES.has(scope) && !auditReads && sensitiveTarget === undefined) {
                 return fn()
             }
 
@@ -186,8 +182,8 @@ export function createAuditInterceptor(auditLogger: AuditLogger): AuditIntercept
 
                 if (isReadScope) {
                     const readCategory =
-                        sensitiveUri !== undefined
-                            ? resolveResourceAuditCategory(sensitiveUri)
+                        sensitiveTarget !== undefined
+                            ? resolveResourceAuditCategory(sensitiveTarget)
                             : 'read'
                     const effectiveReadScope =
                         readCategory === 'audit' || readCategory === 'team' ? readCategory : scope

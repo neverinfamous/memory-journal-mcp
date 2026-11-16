@@ -12,6 +12,42 @@ import type { JournalEntry } from '../../types/index.js'
 import { markUntrustedContentInline } from '../../utils/security-utils.js'
 import { ValidationError } from '../../types/errors.js'
 import { resourceWorkspace, type BriefingConfig } from '../resources/shared.js'
+import { exactRegistryKey, uniqueWorkspaceForProject } from '../../utils/write-scope.js'
+
+const ISSUE_COMMANDER_WORKFLOWS = new Set(['triage', 'milestone'])
+const PR_COMMANDER_WORKFLOWS = new Set(['summary', 'review', 'dependencies'])
+
+function resolveFallbackProjectNumber(briefingConfig?: BriefingConfig): string {
+    const num = briefingConfig?.defaultProjectNumber
+    if (num === undefined) return '{project_number}'
+    const defaultWs = briefingConfig?.defaultWorkspaceId?.trim()
+    if (defaultWs === 'default' || defaultWs === '*') return '{project_number}'
+    const registry = briefingConfig?.projectRegistry
+    if (registry !== undefined && Object.keys(registry).length > 0) {
+        if (defaultWs !== undefined && defaultWs !== '') {
+            const entry = registry[exactRegistryKey(defaultWs, registry) ?? defaultWs]
+            if (entry?.project_number !== undefined && entry.project_number !== num) {
+                return '{project_number}'
+            }
+        } else if (uniqueWorkspaceForProject(num, registry) === undefined) {
+            return '{project_number}'
+        }
+    }
+    return String(num)
+}
+
+function validateWorkflowType(
+    raw: string | undefined,
+    fallback: string,
+    allowed: ReadonlySet<string>
+): string {
+    if (raw === undefined || raw.trim() === '') return fallback
+    const trimmed = raw.trim()
+    if (allowed.has(trimmed)) return trimmed
+    throw new ValidationError(
+        `Invalid workflow_type '${trimmed}': expected one of ${Array.from(allowed).join(', ')}`
+    )
+}
 
 export function formatPositiveIntOrPlaceholder(raw: string | undefined, placeholder: string): string {
     if (!raw) return placeholder
@@ -83,14 +119,17 @@ export function getGitHubPromptDefinitions(): InternalPromptDef[] {
                 briefingConfig?: BriefingConfig
             ) => {
                 const providedProject = args?.['project_number']?.trim()
-                const rawProject =
-                    providedProject !== undefined && providedProject !== ''
-                        ? providedProject
-                        : briefingConfig?.defaultProjectNumber !== undefined
-                          ? String(briefingConfig.defaultProjectNumber)
-                          : undefined
-                const type = args?.['workflow_type'] ?? 'triage'
-                const projectStr = formatPositiveIntOrPlaceholder(rawProject, '{project_number}')
+                const fallbackProject = resolveFallbackProjectNumber(briefingConfig)
+                const projectStr = requirePositiveIntOrPlaceholder(
+                    providedProject,
+                    fallbackProject,
+                    'project_number'
+                )
+                const type = validateWorkflowType(
+                    args?.['workflow_type'],
+                    'triage',
+                    ISSUE_COMMANDER_WORKFLOWS
+                )
 
                 return {
                     messages: [
@@ -144,9 +183,16 @@ If doing a milestone: Provide progress summary, upcoming milestones, timeline.`,
                 _db: IDatabaseAdapter,
                 _teamDb?: IDatabaseAdapter
             ) => {
-                const prNumber = args?.['pr_number']
-                const type = args?.['workflow_type'] ?? 'summary'
-                const prStr = formatPositiveIntOrPlaceholder(prNumber, '{pr_number}')
+                const prStr = requirePositiveIntOrPlaceholder(
+                    args?.['pr_number'],
+                    '{pr_number}',
+                    'pr_number'
+                )
+                const type = validateWorkflowType(
+                    args?.['workflow_type'],
+                    'summary',
+                    PR_COMMANDER_WORKFLOWS
+                )
 
                 return {
                     messages: [
@@ -238,13 +284,11 @@ ${JSON.stringify(formatPromptEntries(entries), null, 2)}`,
                 _github?: unknown,
                 briefingConfig?: BriefingConfig
             ) => {
-                const fallbackProject =
-                    briefingConfig?.defaultProjectNumber !== undefined
-                        ? String(briefingConfig.defaultProjectNumber)
-                        : '{project_number}'
-                const projectNumber = formatPositiveIntOrPlaceholder(
+                const fallbackProject = resolveFallbackProjectNumber(briefingConfig)
+                const projectNumber = requirePositiveIntOrPlaceholder(
                     args?.['project_number'],
-                    fallbackProject
+                    fallbackProject,
+                    'project_number'
                 )
                 return {
                     messages: [
@@ -287,13 +331,11 @@ Please provide:
                 _github?: unknown,
                 briefingConfig?: BriefingConfig
             ) => {
-                const fallbackProject =
-                    briefingConfig?.defaultProjectNumber !== undefined
-                        ? String(briefingConfig.defaultProjectNumber)
-                        : '{project_number}'
-                const projectNumber = formatPositiveIntOrPlaceholder(
+                const fallbackProject = resolveFallbackProjectNumber(briefingConfig)
+                const projectNumber = requirePositiveIntOrPlaceholder(
                     args?.['project_number'],
-                    fallbackProject
+                    fallbackProject,
+                    'project_number'
                 )
                 return {
                     messages: [

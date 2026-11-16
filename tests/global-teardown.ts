@@ -6,14 +6,14 @@ export async function teardown() {
         const backupsDir = path.resolve(process.cwd(), 'backups')
         if (fs.existsSync(backupsDir)) {
             // Only delete if it's the root backups dir (safety check)
-            if (backupsDir.endsWith('backups')) {
+            if (path.basename(backupsDir) === 'backups') {
                 fs.rmSync(backupsDir, { recursive: true, force: true })
             }
         }
 
         const edgeCasesDir = path.resolve(process.cwd(), 'test-backup-edge-cases')
         if (fs.existsSync(edgeCasesDir)) {
-            if (edgeCasesDir.endsWith('test-backup-edge-cases')) {
+            if (path.basename(edgeCasesDir) === 'test-backup-edge-cases') {
                 fs.rmSync(edgeCasesDir, { recursive: true, force: true })
             }
         }
@@ -30,7 +30,10 @@ export async function teardown() {
                 }
             }
         }
-    } catch {
-        // Silently ignore cleanup errors
+    } catch (err: unknown) {
+        console.warn(
+            'Global teardown cleanup warning:',
+            err instanceof Error ? err.message : String(err)
+        )
     }
 }

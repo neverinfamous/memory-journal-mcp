@@ -2,20 +2,28 @@ import Database from 'better-sqlite3'
 import { resolve } from 'node:path'
 
 function checkOrphans() {
-    const defaultDbPath = resolve(process.cwd(), 'data/memory_journal.db')
+    const defaultDbPath = resolve(process.cwd(), 'data', 'memory_journal.db')
     const dbPath = process.argv[2] ?? process.env['DB_PATH'] ?? defaultDbPath
 
     let db
     try {
         console.log(`Checking for orphaned entries in: ${dbPath}`)
         db = new Database(dbPath, { readonly: true, fileMustExist: true })
-        const rawKey = process.env['DB_ENCRYPTION_KEY']
+        const rawKey = process.env['MJ_DB_ENCRYPTION_KEY'] ?? process.env['DB_ENCRYPTION_KEY']
         if (rawKey !== undefined && rawKey !== '') {
             if (rawKey.startsWith("x'") && rawKey.endsWith("'")) {
                 db.pragma(`key = "${rawKey.replace(/"/g, '""')}"`)
             } else {
                 db.pragma(`key = '${rawKey.replace(/'/g, "''")}'`)
             }
+        }
+
+        const tableCheck = db
+            .prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='memory_journal'")
+            .get()
+        if (!tableCheck) {
+            console.log("ℹ️ Table 'memory_journal' does not exist yet. Skipping orphan check.")
+            return
         }
 
         const rows = db
@@ -33,6 +41,7 @@ function checkOrphans() {
             WHERE project_number IS NULL
                OR project_number <= 0
                OR workspace_id IS NULL
+               OR TRIM(workspace_id) = ''
                OR workspace_id = 'default'
         `
             )

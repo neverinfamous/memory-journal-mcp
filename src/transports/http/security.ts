@@ -222,6 +222,54 @@ export function setCorsHeaders(req: Request, res: Response, config: HttpTranspor
 }
 
 /**
+ * Validate OAuth transport settings (issuer, audience, plaintext loopback exception, publicOrigin).
+ * Throws an Error after invoking `logError` when configuration is unsafe or incomplete.
+ */
+export function validateOAuthTransportConfig(
+    config: HttpTransportConfig,
+    host: string,
+    isLocalhost: boolean,
+    logError: (msg: string, meta?: Record<string, unknown>) => void
+): { oauthIssuer: string; oauthAudience: string } | null {
+    if (config.oauthEnabled !== true) {
+        return null
+    }
+    if (config.oauthIssuer === undefined || config.oauthAudience === undefined) {
+        const errorMsg = `FATAL: OAuth is enabled but 'oauthIssuer' and/or 'oauthAudience' is missing. Refusing to start without a complete OAuth configuration, because the server would otherwise run without authentication.`
+        logError(errorMsg, { module: 'HTTP', operation: 'oauth-config' })
+        throw new Error(errorMsg)
+    }
+
+    if (config.oauthIssuer.startsWith('http://')) {
+        if (config.allowPlaintextLoopbackOAuth !== true) {
+            const errorMsg = `FATAL: OAuth issuer targets a plaintext protocol. You MUST deliberately set 'allowPlaintextLoopbackOAuth: true' in config to bypass strict discovery bound.`
+            logError(errorMsg, { module: 'HTTP', operation: 'oauth-config' })
+            throw new Error(errorMsg)
+        }
+        let validLoopback: boolean
+        try {
+            const url = new URL(config.oauthIssuer)
+            validLoopback = isLoopbackHost(url.hostname)
+        } catch {
+            validLoopback = false
+        }
+        if (!validLoopback) {
+            const errorMsg = `FATAL: Plaintext OAuth bypass is ONLY permitted for loopback hosts (localhost, 127.0.0.1, [::1]). The configured issuer is not allowed.`
+            logError(errorMsg, { module: 'HTTP', operation: 'oauth-config' })
+            throw new Error(errorMsg)
+        }
+    }
+
+    if (!isLocalhost && (config.publicOrigin === undefined || config.publicOrigin === '')) {
+        const errorMsg = `FATAL: OAuth is enabled on a non-loopback interface ('${host}'), but no 'publicOrigin' was provided. You MUST specify an explicit public origin (e.g. 'https://api.example.com') for secure OAuth token audience binding.`
+        logError(errorMsg, { module: 'HTTP' })
+        throw new Error(errorMsg)
+    }
+
+    return { oauthIssuer: config.oauthIssuer, oauthAudience: config.oauthAudience }
+}
+
+/**
  * Builds the allowlisted HTTP `Host` header entries for DNS rebinding protection,
  * including `publicOrigin` hostname and host[:port] when configured.
  */

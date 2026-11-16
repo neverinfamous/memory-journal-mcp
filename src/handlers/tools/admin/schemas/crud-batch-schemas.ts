@@ -5,6 +5,7 @@ import {
     EntryOutputSchema,
     relaxedNumber,
     MAX_BATCH_SIZE,
+    MAX_CONTENT_LENGTH,
     BatchResultOutputSchema,
     healAgentHallucinations,
 } from '../../schemas.js'
@@ -51,10 +52,12 @@ export const UpdateEntrySchema = z.preprocess(
             entry_id: z.number(),
             content: z
                 .string()
+                .min(1)
+                .max(MAX_CONTENT_LENGTH)
                 .optional()
                 .refine(
                     (val) => {
-                        if (!val) return true
+                        if (val === undefined) return true
                         const trimmed = val.trim()
                         const startsWithSection =
                             /^##\s+(Context for Next Session|Unfinished \/ Blocked|Accomplished)/i.test(
@@ -96,6 +99,34 @@ export const UpdateEntrySchema = z.preprocess(
             session_id: z.string().optional(),
         })
         .strict()
+        .refine(
+            (data) =>
+                data.content !== undefined ||
+                data.entry_type !== undefined ||
+                data.is_personal !== undefined ||
+                data.tags !== undefined ||
+                data.project_number !== undefined ||
+                data.significance_type !== undefined ||
+                data.project_owner !== undefined ||
+                data.issue_number !== undefined ||
+                data.issue_url !== undefined ||
+                data.pr_number !== undefined ||
+                data.pr_url !== undefined ||
+                data.pr_status !== undefined ||
+                data.workflow_run_id !== undefined ||
+                data.workflow_name !== undefined ||
+                data.workflow_status !== undefined ||
+                data.is_archived !== undefined ||
+                data.auto_context !== undefined ||
+                data.target_workspace_id !== undefined ||
+                data.impact_score !== undefined ||
+                data.trust_score !== undefined ||
+                data.validation_status !== undefined ||
+                data.session_id !== undefined,
+            {
+                message: 'At least one mutable field must be provided for update_entry',
+            }
+        )
 )
 
 /** Relaxed schema — passed to SDK inputSchema so Zod enum errors reach the handler */

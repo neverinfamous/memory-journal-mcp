@@ -234,16 +234,34 @@ export function resolveExecutionPayload(
 
     if (healingEnabled && executionCode !== undefined && executionCode !== '' && !recoveredJs) {
         const trimmedInitial = executionCode.trim()
+        const hasExplicitContent =
+            typeof params === 'object' && params !== null && 'content' in params
+        const looksLikeSqlQuery =
+            /^(?:SELECT|INSERT|UPDATE|DELETE|PRAGMA|SHOW|DESCRIBE|EXPLAIN|WITH|SCHEMA|TABLES)\b/i.test(
+                trimmedInitial
+            )
+        const hasJsExecSyntax =
+            /\b(?:await\s+mj\.|mj\.[a-zA-Z_$]|return\s+)\b/.test(trimmedInitial) ||
+            trimmedInitial.startsWith('{')
+        const hasJsBindingSyntax =
+            /\b(?:const|let|var|function|import|export|process|global|globalThis|require|eval|Function|Reflect|Proxy|constructor|__proto__|prototype)\b/.test(
+                trimmedInitial
+            )
         const isPlainQuery =
             initial.sourceKey === 'query' &&
             trimmedInitial !== '' &&
-            !trimmedInitial.startsWith('{') &&
-            !/[();={}[\]`]/.test(trimmedInitial) &&
-            !/\b(?:const|let|var|function|return|await|mj\.|import|export|process|global|globalThis|require|eval|Function|Reflect|Proxy|constructor|__proto__|prototype)\b/.test(
-                trimmedInitial
-            ) &&
-            !/^(?:SELECT|INSERT|UPDATE|DELETE|PRAGMA|SHOW|DESCRIBE|EXPLAIN|WITH|SCHEMA|TABLES)\b/i.test(trimmedInitial)
-        if (isPlainQuery || (initial.sourceKey === 'query' && isNaturalLanguagePrompt(executionCode))) {
+            !hasExplicitContent &&
+            !hasJsExecSyntax &&
+            !hasJsBindingSyntax &&
+            !looksLikeSqlQuery
+        if (
+            isPlainQuery ||
+            (initial.sourceKey === 'query' &&
+                !hasExplicitContent &&
+                !hasJsExecSyntax &&
+                !looksLikeSqlQuery &&
+                isNaturalLanguagePrompt(executionCode))
+        ) {
             executionCode = buildQuerySearch(executionCode, input, params)
         } else {
             executionCode = healCodeModeScript(executionCode)

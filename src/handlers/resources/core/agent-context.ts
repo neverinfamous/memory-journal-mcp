@@ -4,7 +4,13 @@ import {
     setActiveSessionProject,
 } from '../../../utils/workspace-resolver.js'
 import { exactRegistryKey, uniqueWorkspaceForProject } from '../../../utils/write-scope.js'
-import { getBaseUri, type InternalResourceDef, type ResourceContext, type ResourceResult } from '../shared.js'
+import {
+    getBaseUri,
+    safeDecodeUriSegment,
+    type InternalResourceDef,
+    type ResourceContext,
+    type ResourceResult,
+} from '../shared.js'
 import { withPriority, ASSISTANT_FOCUSED } from '../../../utils/resource-annotations.js'
 
 export function getAgentContextResource(): InternalResourceDef {
@@ -20,7 +26,8 @@ export function getAgentContextResource(): InternalResourceDef {
             const fallbackRegistry = config?.projectRegistry ?? loadProjectRegistryFromConfig()
 
             const match = /^memory:\/\/(?:agent-context|agent-id)(?:\/(.+))?$/.exec(getBaseUri(uri))
-            const rawRepo = match?.[1] !== undefined ? decodeURIComponent(match[1]) : undefined
+            const rawRepo =
+                match?.[1] !== undefined ? safeDecodeUriSegment(match[1]) : undefined
             if (rawRepo?.toLowerCase() === 'default') {
                 const defaultProjNum =
                     fallbackRegistry?.['default']?.project_number ??

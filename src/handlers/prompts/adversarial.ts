@@ -154,7 +154,8 @@ ${buildSharedAuditPreamble(target, 'file or module')}
      2. **Lexical Scanner vs. Regex Stripper Coherence Check**: Verify comment/string strippers cannot be desynchronized by regex literals, template literal interpolations (\`\${...}\`), or multi-step replacement reassembly.
      3. **Multi-Tenant Parameter Threading Audit**: Trace \`workspace_id\` from tool input -> \`resolveProjectContext\` -> SQLite \`WHERE\` clauses AND Vector Index metadata filters across all read, write, delete, restore, and search paths.
      4. **Execution-Layer Filter Parity Check**: Verify \`--tool-filter\` and OAuth scopes are enforced identically across \`tools/list\`, direct \`tools/call\`, Code Mode \`mj.*\` dispatch, and dummy/hallucination-healing fallbacks.
-     5. **Transitive Prompt-Injection Taint Trace**: Trace external strings (Git commits, GitHub issues/PRs/workflows/milestones, DB content) into MCP Resources and Prompts to ensure \`markUntrustedContent\` tags are applied and never stripped by downstream table formatters.
+     5. **Transitive Prompt-Injection Taint Trace**: Trace external strings (Git commits, GitHub issues/PRs/workflows/milestones, DB content) into MCP Resources and Prompts to ensure \`markUntrustedContent\` tags are applied, truncated *before* fencing rather than slicing inside \`<untrusted_remote_content>\` tags, and never stripped by downstream table formatters.
+     6. **End-to-End Backstop Verification**: Before marking any scope, authz, Code Mode, or mutation finding Critical or High, trace ingress interceptors, Code Mode dispatch normalizers, RBAC/importer scope checks, and storage \`pairStoredScope\` and provide a concrete reproducer (classify upstream defense-in-depth cleanup as Moderate/Low when backstops hold).
 ${buildStandardAuditClosing(copilotInstruction, priorAuditSection)}`,
 })
 

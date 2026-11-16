@@ -6,6 +6,7 @@
  * and route handler logic — without spinning up real HTTP servers.
  */
 
+import * as dns from 'node:dns'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
 // ============================================================================
@@ -733,6 +734,9 @@ describe('HttpTransport', () => {
                     )
                 )
 
+            const lookupSpy = vi
+                .spyOn(dns.promises, 'lookup')
+                .mockResolvedValue([{ address: '93.184.216.34', family: 4 }])
             try {
                 const config: HttpTransportConfig = {
                     port: 3000,
@@ -749,6 +753,7 @@ describe('HttpTransport', () => {
                 // Should register the well-known route
                 expect(mockRoutes['get']!['/.well-known/oauth-protected-resource']).toBeDefined()
             } finally {
+                lookupSpy.mockRestore()
                 discoverSpy.mockRestore()
                 global.fetch = originalFetch
             }

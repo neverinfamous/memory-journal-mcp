@@ -1,3 +1,4 @@
+import type { Database } from 'better-sqlite3'
 import type {
     JournalEntry,
     Tag,
@@ -104,6 +105,7 @@ export interface IDatabaseConnection {
      */
     closeDbBeforeRestore(): void
     setDbAndInitialized(db: unknown): void
+    getNativeDb?(): Database
 }
 
 /**

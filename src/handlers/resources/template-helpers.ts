@@ -10,8 +10,26 @@ import {
     type GitHubIntegration,
 } from '../../github/github-integration/index.js'
 import type { ResourceContext } from './shared.js'
-import { resourceWorkspace } from './shared.js'
+import { fenceUntrustedInline, resourceWorkspace } from './shared.js'
 import { ValidationError } from '../../types/errors.js'
+import type { enrichCommits } from '../../github/commit-references/index.js'
+
+export type EnrichedCommit = Awaited<ReturnType<typeof enrichCommits>>[number]
+
+export interface IssueGroup {
+    number: number
+    title?: string
+    state?: string
+    milestone?: { number: number; title: string }
+    commits: { hash: string; subject: string; authorName: string; date: string }[]
+}
+
+export interface PrGroup {
+    number: number
+    title?: string
+    state?: string
+    commits: { hash: string; subject: string; authorName: string; date: string }[]
+}
 
 /**
  * Resolve the workspace and working directory for a project-scoped resource.
@@ -81,4 +99,81 @@ export function resolveCommitGithub(
         return undefined
     }
     return context.github ?? undefined
+}
+
+function toCommitSummary(commit: EnrichedCommit): {
+    hash: string
+    subject: string
+    authorName: string
+    date: string
+} {
+    return {
+        hash: commit.hash,
+        subject: fenceUntrustedInline(commit.subject),
+        authorName: fenceUntrustedInline(commit.authorName),
+        date: commit.date,
+    }
+}
+
+export function fenceEnrichedCommits(commits: EnrichedCommit[]): EnrichedCommit[] {
+    return commits.map((commit) => ({
+        ...commit,
+        subject: fenceUntrustedInline(commit.subject),
+        authorName: fenceUntrustedInline(commit.authorName),
+        references: commit.references.map((ref) => ({
+            ...ref,
+            ...(ref.title !== undefined ? { title: fenceUntrustedInline(ref.title) } : {}),
+            ...(ref.state !== undefined ? { state: fenceUntrustedInline(ref.state) } : {}),
+            ...(ref.milestone !== undefined
+                ? {
+                      milestone: {
+                          ...ref.milestone,
+                          title: fenceUntrustedInline(ref.milestone.title),
+                      },
+                  }
+                : {}),
+        })),
+    }))
+}
+
+export function groupCommitsByIssue(enrichedCommits: EnrichedCommit[]): IssueGroup[] {
+    const issues: Record<number, IssueGroup> = {}
+    for (const commit of enrichedCommits) {
+        for (const ref of commit.references) {
+            if (ref.type !== 'issue') continue
+            issues[ref.number] ??= {
+                number: ref.number,
+                ...(ref.title !== undefined ? { title: fenceUntrustedInline(ref.title) } : {}),
+                ...(ref.state !== undefined ? { state: fenceUntrustedInline(ref.state) } : {}),
+                ...(ref.milestone !== undefined
+                    ? {
+                          milestone: {
+                              ...ref.milestone,
+                              title: fenceUntrustedInline(ref.milestone.title),
+                          },
+                      }
+                    : {}),
+                commits: [],
+            }
+            issues[ref.number]?.commits.push(toCommitSummary(commit))
+        }
+    }
+    return Object.values(issues)
+}
+
+export function groupCommitsByPr(enrichedCommits: EnrichedCommit[]): PrGroup[] {
+    const prs: Record<number, PrGroup> = {}
+    for (const commit of enrichedCommits) {
+        for (const ref of commit.references) {
+            if (ref.type !== 'pull_request') continue
+            prs[ref.number] ??= {
+                number: ref.number,
+                ...(ref.title !== undefined ? { title: fenceUntrustedInline(ref.title) } : {}),
+                ...(ref.state !== undefined ? { state: fenceUntrustedInline(ref.state) } : {}),
+                commits: [],
+            }
+            prs[ref.number]?.commits.push(toCommitSummary(commit))
+        }
+    }
+    return Object.values(prs)
 }

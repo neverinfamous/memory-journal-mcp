@@ -71,6 +71,32 @@ export const TeamUpdateEntrySchema = z.preprocess(
             session_id: z.string().optional(),
         })
         .strict()
+        .refine(
+            (data) =>
+                data.content !== undefined ||
+                data.entry_type !== undefined ||
+                data.tags !== undefined ||
+                data.significance_type !== undefined ||
+                data.project_owner !== undefined ||
+                data.issue_number !== undefined ||
+                data.issue_url !== undefined ||
+                data.pr_number !== undefined ||
+                data.pr_url !== undefined ||
+                data.pr_status !== undefined ||
+                data.workflow_run_id !== undefined ||
+                data.workflow_name !== undefined ||
+                data.workflow_status !== undefined ||
+                data.is_archived !== undefined ||
+                data.auto_context !== undefined ||
+                data.impact_score !== undefined ||
+                data.trust_score !== undefined ||
+                data.validation_status !== undefined ||
+                data.session_id !== undefined,
+            {
+                message:
+                    'At least one updatable field must be specified in team_update_entry (empty metadata-only updates are rejected).',
+            }
+        )
 )
 
 /** team_update_entry — relaxed */
@@ -197,12 +223,14 @@ export const TeamRestoreEntrySchemaMcp = z.preprocess(
 )
 
 /** team_merge_tags — strict */
-export const TeamMergeTagsSchema = z.object({
-    source_tag: z.string().min(1),
-    target_tag: z.string().min(1),
-    project_number: StrictProjectNumberSchema.optional(),
-    workspace_id: z.string().optional(),
-})
+export const TeamMergeTagsSchema = z
+    .object({
+        source_tag: z.string().min(1),
+        target_tag: z.string().min(1),
+        project_number: StrictProjectNumberSchema.optional(),
+        workspace_id: z.string().optional(),
+    })
+    .strict()
 
 /** team_merge_tags — relaxed */
 export const TeamMergeTagsSchemaMcp = z.object({

@@ -379,7 +379,7 @@ describe('GitHub Tool Handlers', () => {
             )) as { success: boolean; milestone: { title: string } }
 
             expect(result.success).toBe(true)
-            expect(result.milestone.title).toBe('v1.1')
+            expect(result.milestone.title).toBe('<untrusted_remote_content>v1.1</untrusted_remote_content>')
         })
     })
 

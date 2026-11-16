@@ -9,6 +9,7 @@ import type { ToolDefinition, ToolContext } from '../../../types/index.js'
 import { formatHandlerError } from '../../../utils/error-helpers.js'
 import { sendProgress } from '../../../utils/progress-utils.js'
 import { TEAM_DB_ERROR_RESPONSE } from './helpers.js'
+import { relaxedNumber } from '../schemas.js'
 import { TeamBackupSchema, TeamBackupOutputSchema, TeamBackupsListOutputSchema } from './schemas.js'
 import * as path from 'node:path'
 
@@ -81,7 +82,10 @@ export function getTeamBackupTools(context: ToolContext): ToolDefinition[] {
             description:
                 'List all available backup files for the team database. Requires TEAM_DB_PATH.',
             group: 'team',
-            inputSchema: z.object({}).strict(),
+            inputSchema: z.object({
+                project_number: relaxedNumber().optional(),
+                workspace_id: z.string().optional(),
+            }),
             outputSchema: TeamBackupsListOutputSchema,
             annotations: {
                 readOnlyHint: true,

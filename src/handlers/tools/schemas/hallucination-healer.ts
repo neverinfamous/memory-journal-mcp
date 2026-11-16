@@ -28,8 +28,10 @@ import {
 } from './constants-and-primitives.js'
 
 function appendHealedTag(obj: Record<string, unknown>, tag: string): void {
-    if (Array.isArray(obj['tags'])) {
-        if (!obj['tags'].includes(tag)) obj['tags'].push(tag)
+    const rawTags = obj['tags']
+    if (Array.isArray(rawTags)) {
+        const existingTags: unknown[] = rawTags
+        if (!existingTags.includes(tag)) obj['tags'] = [...existingTags, tag]
         return
     }
     // [INVARIANT] M7: never synthesize `tags: [...]` onto update payloads when `tags` was omitted,

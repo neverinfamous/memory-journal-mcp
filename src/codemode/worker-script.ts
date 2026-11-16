@@ -100,8 +100,8 @@ interface VmExecutionContextOptions {
     schemaList: Record<string, Record<string, string>> | undefined
     timeoutMs: number
     contextObj: Record<string, unknown> | undefined
-    readonlyMode: boolean | undefined
-    dryRunMode: boolean | undefined
+    readonlyMode?: boolean
+    dryRunMode?: boolean
     pinnedWorkspaceRaw: unknown
     pinnedProjectRaw: unknown
     projectRegistryRaw: unknown
@@ -234,8 +234,7 @@ async function executeCode(
             schemaList,
             timeoutMs,
             contextObj,
-            readonlyMode,
-            dryRunMode: undefined,
+            ...(readonlyMode !== undefined ? { readonlyMode } : {}),
             pinnedWorkspaceRaw,
             pinnedProjectRaw,
             projectRegistryRaw: registryPayload,

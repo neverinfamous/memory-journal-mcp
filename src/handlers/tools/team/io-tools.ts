@@ -40,22 +40,24 @@ import {
 // Schemas
 // ============================================================================
 
-const TeamExportMarkdownSchema = z.object({
-    output_dir: z.string().min(1),
-    start_date: z.string().regex(DATE_FORMAT_REGEX, DATE_FORMAT_MESSAGE).optional(),
-    end_date: z.string().regex(DATE_FORMAT_REGEX, DATE_FORMAT_MESSAGE).optional(),
-    tags: z.array(z.string()).optional(),
-    project_number: StrictProjectNumberSchema.optional(),
-    limit: z.number().max(500).optional().default(100),
-    workspace_id: z.string().optional(),
-})
+const TeamExportMarkdownSchema = z
+    .object({
+        output_dir: z.string().min(1),
+        start_date: z.string().regex(DATE_FORMAT_REGEX, DATE_FORMAT_MESSAGE).optional(),
+        end_date: z.string().regex(DATE_FORMAT_REGEX, DATE_FORMAT_MESSAGE).optional(),
+        tags: z.array(z.string()).optional(),
+        project_number: StrictProjectNumberSchema.optional(),
+        limit: z.number().int().min(1).max(500).optional().default(100),
+        workspace_id: z.string().optional(),
+    })
+    .strict()
 
 const TeamExportMarkdownSchemaMcp = z.object({
     output_dir: z.string().optional().describe('Target directory for .md files'),
     start_date: z.string().optional().describe('Start date filter (YYYY-MM-DD)'),
     end_date: z.string().optional().describe('End date filter (YYYY-MM-DD)'),
     tags: z.array(z.string()).optional().describe('Filter by tags'),
-    project_number: relaxedNumber().optional(),
+    project_number: relaxedNumber().optional().describe('Numeric project ID to filter entries by.'),
     limit: relaxedNumber()
         .optional()
         .default(100)
@@ -73,13 +75,15 @@ const TeamExportMarkdownOutputSchema = z
     })
     .extend(ErrorFieldsMixin.shape)
 
-const TeamImportMarkdownSchema = z.object({
-    source_dir: z.string().min(1),
-    dry_run: z.boolean().optional().default(false),
-    project_number: StrictProjectNumberSchema.optional(),
-    limit: z.number().max(500).optional().default(100),
-    workspace_id: z.string().optional(),
-})
+const TeamImportMarkdownSchema = z
+    .object({
+        source_dir: z.string().min(1),
+        dry_run: z.boolean().optional().default(false),
+        project_number: StrictProjectNumberSchema.optional(),
+        limit: z.number().int().min(1).max(500).optional().default(100),
+        workspace_id: z.string().optional(),
+    })
+    .strict()
 
 const TeamImportMarkdownSchemaMcp = z.object({
     source_dir: z.string().optional().describe('Directory containing .md files to import'),
@@ -88,7 +92,7 @@ const TeamImportMarkdownSchemaMcp = z.object({
         .optional()
         .default(false)
         .describe('Parse and validate without writing to database'),
-    project_number: relaxedNumber().optional(),
+    project_number: relaxedNumber().optional().describe('Numeric project ID for workspace resolution.'),
     limit: relaxedNumber()
         .optional()
         .default(100)
@@ -113,15 +117,17 @@ const TeamImportMarkdownOutputSchema = z
 // Team Import External Schemas
 // ============================================================================
 
-const TeamImportExternalSchema = z.object({
-    source_dir: z.string().min(1),
-    source_format: z.enum(SOURCE_FORMATS),
-    dry_run: z.boolean().optional().default(false),
-    project_number: StrictProjectNumberSchema.optional(),
-    limit: z.number().max(500).optional().default(100),
-    default_entry_type: z.enum(ENTRY_TYPES).optional(),
-    workspace_id: z.string().optional(),
-})
+const TeamImportExternalSchema = z
+    .object({
+        source_dir: z.string().min(1),
+        source_format: z.enum(SOURCE_FORMATS),
+        dry_run: z.boolean().optional().default(false),
+        project_number: StrictProjectNumberSchema.optional(),
+        limit: z.number().int().min(1).max(500).optional().default(100),
+        default_entry_type: z.enum(ENTRY_TYPES).optional(),
+        workspace_id: z.string().optional(),
+    })
+    .strict()
 
 const TeamImportExternalSchemaMcp = z.object({
     source_dir: z.string().optional().describe('Directory containing files to import'),
@@ -131,7 +137,7 @@ const TeamImportExternalSchemaMcp = z.object({
         .optional()
         .default(false)
         .describe('Parse and validate without writing to database'),
-    project_number: relaxedNumber().optional(),
+    project_number: relaxedNumber().optional().describe('Numeric project ID for workspace resolution.'),
     limit: relaxedNumber()
         .optional()
         .default(100)

@@ -216,47 +216,53 @@ export class AliasManager {
             const aliasScopeClause = scoped
                 ? ' AND (aa.workspace_id IS NULL OR aa.workspace_id = ?)'
                 : ''
+            const updateSql = `UPDATE memory_journal
+                 SET author = ?
+                 WHERE deleted_at IS NULL${journalFilter}
+                   AND (
+                       SELECT aa.canonical_author
+                       FROM author_aliases aa
+                       WHERE aa.alias = memory_journal.author COLLATE NOCASE
+                         AND (aa.workspace_id IS NULL OR aa.workspace_id = memory_journal.workspace_id)${aliasScopeClause}
+                       ORDER BY aa.workspace_id IS NULL ASC
+                       LIMIT 1
+                   ) = ? COLLATE NOCASE`
+            const updateParams: unknown[] = [
+                canonicalAuthor,
+                ...(scoped ? [scopeId] : []),
+                ...(projectScoped ? [projectNumber] : []),
+                ...(scoped ? [scopeId] : []),
+                canonicalAuthor,
+            ]
+            const nativeDb = this.db.getNativeDb?.()
+            if (nativeDb !== undefined) {
+                return nativeDb.transaction(() => nativeDb.prepare(updateSql).run(...updateParams).changes)()
+            }
+
             const countParams: unknown[] = [
                 ...(scoped ? [scopeId] : []),
                 ...(projectScoped ? [projectNumber] : []),
-                canonicalAuthor,
                 ...(scoped ? [scopeId] : []),
+                canonicalAuthor,
             ]
             const countResults = this.db.exec(
                 `SELECT COUNT(*) as count FROM memory_journal
-                 WHERE deleted_at IS NULL${journalFilter} AND EXISTS (
-                     SELECT 1 FROM author_aliases aa
-                     WHERE aa.canonical_author = ? COLLATE NOCASE
-                       AND aa.alias = memory_journal.author
-                       AND (aa.workspace_id IS NULL OR aa.workspace_id = memory_journal.workspace_id)${aliasScopeClause}
-                 )`,
+                 WHERE deleted_at IS NULL${journalFilter}
+                   AND (
+                       SELECT aa.canonical_author
+                       FROM author_aliases aa
+                       WHERE aa.alias = memory_journal.author COLLATE NOCASE
+                         AND (aa.workspace_id IS NULL OR aa.workspace_id = memory_journal.workspace_id)${aliasScopeClause}
+                       ORDER BY aa.workspace_id IS NULL ASC
+                       LIMIT 1
+                   ) = ? COLLATE NOCASE`,
                 countParams
             )
-
             const countRow = getSingleRow(countResults)
             const count = typeof countRow?.['count'] === 'number' ? countRow['count'] : 0
-
             if (count > 0) {
-                const updateParams: unknown[] = [
-                    canonicalAuthor,
-                    ...(scoped ? [scopeId] : []),
-                    ...(projectScoped ? [projectNumber] : []),
-                    canonicalAuthor,
-                    ...(scoped ? [scopeId] : []),
-                ]
-                this.db.run(
-                    `UPDATE memory_journal
-                     SET author = ?
-                     WHERE deleted_at IS NULL${journalFilter} AND EXISTS (
-                         SELECT 1 FROM author_aliases aa
-                         WHERE aa.canonical_author = ? COLLATE NOCASE
-                           AND aa.alias = memory_journal.author
-                           AND (aa.workspace_id IS NULL OR aa.workspace_id = memory_journal.workspace_id)${aliasScopeClause}
-                     )`,
-                    updateParams
-                )
+                this.db.run(updateSql, updateParams)
             }
-
             return count
         } catch (error) {
             if (isMissingTableError(error)) {

@@ -369,9 +369,9 @@ export function resolveScoresAndValidation(
         metadata['validation']
     const validationStatus = normalizeValidationStatus(valStatusRaw)
 
-    const sessionIdRaw =
+    const sessionIdRaw: unknown =
         options.sessionId ?? options.session_id ?? metadata['session_id'] ?? metadata['sessionId']
-    const sessionId = sessionIdRaw as string | undefined
+    const sessionId = typeof sessionIdRaw === 'string' ? sessionIdRaw : undefined
 
     return {
         trustScore,

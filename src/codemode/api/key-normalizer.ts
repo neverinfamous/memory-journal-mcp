@@ -272,9 +272,18 @@ function resolveContentLikeKey(startKey: string, ctx: KeyContext): string {
 }
 
 /** Coerces numeric-looking id strings and entry-type aliases; undefined means "no coercion applied". */
+const STRING_ID_KEYS = new Set([
+    'workspace_id',
+    'target_workspace_id',
+    'session_id',
+    'item_id',
+    'node_id',
+    'client_id',
+])
+
 function coerceNumericValue(snakeKey: string, value: unknown): { value: unknown } | undefined {
     if (
-        snakeKey !== 'workspace_id' &&
+        !STRING_ID_KEYS.has(snakeKey) &&
         (snakeKey.endsWith('_id') || snakeKey === 'id' || snakeKey === 'project_number') &&
         typeof value === 'string'
     ) {

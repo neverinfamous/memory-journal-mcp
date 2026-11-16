@@ -10,20 +10,22 @@ import type { ToolContext } from '../../../types/index.js'
 import { getNonEmptyString, type ExecuteCodeInput } from './natural-language-synthesizer.js'
 import { lookupRegistryEntry } from './session-context.js'
 
-function parseSizeInBytes(val: unknown): number | undefined {
-    if (typeof val === 'number') return !Number.isNaN(val) && val > 0 ? val : undefined
+function parseSizeInBytes(val: unknown, defaultUnit: 'b' | 'kb' = 'b'): number | undefined {
+    const defaultMult = defaultUnit === 'kb' ? 1024 : 1
+    if (typeof val === 'number') return !Number.isNaN(val) && val > 0 ? Math.round(val * defaultMult) : undefined
     if (typeof val === 'string') {
         const trimmed = val.trim()
         const match = /^(\d+(?:\.\d+)?)\s*(kb|mb|bytes|b)?$/i.exec(trimmed)
         if (match?.[1] !== undefined) {
             const num = parseFloat(match[1])
-            const unit = (match[2] ?? 'b').toLowerCase()
+            if (Number.isNaN(num) || num <= 0) return undefined
+            const unit = (match[2] ?? defaultUnit).toLowerCase()
             if (unit === 'mb') return Math.round(num * 1024 * 1024)
             if (unit === 'kb') return Math.round(num * 1024)
             return Math.round(num)
         }
         const parsed = parseInt(trimmed, 10)
-        return !Number.isNaN(parsed) && parsed > 0 ? parsed : undefined
+        return !Number.isNaN(parsed) && parsed > 0 ? Math.round(parsed * defaultMult) : undefined
     }
     return undefined
 }
@@ -75,8 +77,8 @@ export function buildSandboxUserContext(
               : sessionContext.config?.defaultProjectNumber)
     const sessionFromUser = getNonEmptyString(userContext, {}, ['session_id', 'sessionId'])
     const resolvedSessionId =
-        typeof input['session_id'] === 'string' && input['session_id'].length > 0
-            ? input['session_id']
+        typeof input.session_id === 'string' && input.session_id.length > 0
+            ? input.session_id
             : (sessionFromUser ?? getRequestContext()?.sessionId ?? 'session-default')
     const resolvedWorkspaceId = workspaceId ?? sessionContext.config?.defaultWorkspaceId
 
@@ -115,9 +117,10 @@ export function buildSandboxUserContext(
         userContext['max_result_size'] ?? userContext['maxResultSize'] ?? userContext['max_result_size_bytes'] ?? userContext['maxResultSizeBytes']
     )
     const kbSize = parseSizeInBytes(
-        input.max_result_size_kb ?? input.maxResultSizeKb ?? userContext['max_result_size_kb'] ?? userContext['maxResultSizeKb']
+        input.max_result_size_kb ?? input.maxResultSizeKb ?? userContext['max_result_size_kb'] ?? userContext['maxResultSizeKb'],
+        'kb'
     )
-    const requestedMaxResultSize = directSize ?? (kbSize !== undefined ? kbSize * 1024 : undefined)
+    const requestedMaxResultSize = directSize ?? kbSize
 
     return { userContext, requestedMaxResultSize }
 }

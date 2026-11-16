@@ -23,12 +23,15 @@ beforeAll(async () => {
 
 afterAll(() => {
     db.close()
-    try {
-        if (fs.existsSync(testDbPath)) {
-            fs.unlinkSync(testDbPath)
+    for (const suffix of ['', '-wal', '-shm']) {
+        try {
+            const p = `${testDbPath}${suffix}`
+            if (fs.existsSync(p)) {
+                fs.unlinkSync(p)
+            }
+        } catch {
+            // Ignore cleanup errors
         }
-    } catch {
-        // Ignore cleanup errors
     }
 })
 

@@ -19,7 +19,7 @@ import { addIssueToProject, type IssueProjectResult } from './create-issue-proje
 function concreteCallerWorkspace(workspaceId: string | undefined): string | undefined {
     if (workspaceId === undefined) return undefined
     const trimmed = workspaceId.trim()
-    if (trimmed === '' || trimmed === '*') return undefined
+    if (trimmed === '' || trimmed === '*' || trimmed.toLowerCase() === 'default') return undefined
     return trimmed
 }
 
@@ -102,7 +102,9 @@ export function resolveIssueEntryScope(
     resolvedRepo: string | undefined,
     inputWorkspaceId: string | undefined,
     inputProjectNumber: number | undefined,
-    wildcardAction: string
+    wildcardAction: string,
+    owner?: string,
+    detectedOwner?: string | null
 ):
     | { workspaceId: string; projectNumber: number | undefined }
     | { errorResponse: Record<string, unknown> } {
@@ -113,7 +115,13 @@ export function resolveIssueEntryScope(
             ),
         }
     }
-    const entryProjectNumber = resolveProjectNumber(context, resolvedRepo, inputProjectNumber)
+    const entryProjectNumber = resolveProjectNumber(
+        context,
+        resolvedRepo,
+        inputProjectNumber,
+        owner,
+        detectedOwner
+    )
     if (entryProjectNumber !== undefined && entryProjectNumber <= 0) {
         return {
             errorResponse: scopeMismatchResponse('project_number must be a positive integer.'),
@@ -193,8 +201,158 @@ const CreateIssueHandlerInputSchema = z.object({
     tags: z.array(z.string()).optional(),
 })
 
-export function getCreateGitHubIssueTool(context: ToolContext): ToolDefinition {
+type CreateIssueInput = z.infer<typeof CreateIssueHandlerInputSchema>
+
+async function executeCreateIssueOutbox(
+    context: ToolContext,
+    input: CreateIssueInput,
+    resolved: {
+        owner: string
+        repo: string
+        github: NonNullable<ToolContext['github']>
+    },
+    workspaceId: string,
+    projectNumber: number | undefined
+): Promise<
+    | { errorResponse: Record<string, unknown> }
+    | {
+          entryId: number
+          issue: NonNullable<Awaited<ReturnType<NonNullable<ToolContext['github']>['createIssue']>>>
+          projectResult: IssueProjectResult | undefined
+      }
+> {
     const { db } = context
+    const entryContent =
+        input.entry_content ??
+        `[PENDING] Creating GitHub issue: ${input.title}\n` +
+            (projectNumber !== undefined ? `Project: #${projectNumber}\n` : '') +
+            (input.body
+                ? `\nDescription: ${input.body.slice(0, 200)}${input.body.length > 200 ? '...' : ''}`
+                : '')
+
+    const entry = db.createEntry({
+        content: entryContent,
+        entryType: 'planning',
+        tags: input.tags ?? ['github', 'issue-created', 'pending'],
+        isPersonal: false,
+        significanceType: null,
+        projectNumber,
+        projectOwner: resolved.owner,
+        workspaceId,
+    })
+
+    let issue: Awaited<ReturnType<typeof resolved.github.createIssue>>
+    try {
+        issue = await resolved.github.createIssue(
+            resolved.owner,
+            resolved.repo,
+            input.title,
+            input.body,
+            input.labels,
+            input.assignees,
+            input.milestone_number
+        )
+    } catch (err) {
+        db.deleteEntry(entry.id, false, workspaceId)
+        throw err
+    }
+
+    if (!issue) {
+        db.updateEntry(entry.id, {
+            content:
+                entryContent +
+                '\n\n[FAILED] GitHub mutation failed: Could not create issue. Check GITHUB_TOKEN permissions.',
+            workspaceId,
+        })
+        return {
+            errorResponse: {
+                success: false,
+                error: 'Failed to create GitHub issue. Check GITHUB_TOKEN permissions.',
+                code: 'API_ERROR',
+                category: 'api',
+                suggestion: 'Verify GitHub token has write access to issues.',
+                recoverable: true,
+            },
+        }
+    }
+
+    let projectResult: IssueProjectResult | undefined = undefined
+    if (projectNumber !== undefined && issue.nodeId) {
+        projectResult = await addIssueToProject(
+            resolved.github,
+            resolved.owner,
+            resolved.repo,
+            issue.nodeId,
+            projectNumber,
+            input.initial_status
+        )
+    }
+
+    return { entryId: entry.id, issue, projectResult }
+}
+
+async function finalizeIssueJournalEntry(
+    context: ToolContext,
+    input: CreateIssueInput,
+    entryId: number,
+    issue: { number: number; title: string; url: string },
+    workspaceId: string,
+    projectNumber: number | undefined,
+    projectResult: IssueProjectResult | undefined
+): Promise<Record<string, unknown>> {
+    const { db } = context
+    const finalContent =
+        input.entry_content ??
+        `Created GitHub issue #${String(issue.number)}: ${issue.title}\n\n` +
+            `URL: ${issue.url}\n` +
+            (projectNumber !== undefined ? `Project: #${projectNumber}\n` : '') +
+            (input.body
+                ? `\nDescription: ${input.body.slice(0, 200)}${input.body.length > 200 ? '...' : ''}`
+                : '')
+
+    db.updateEntry(entryId, {
+        content: finalContent,
+        issueNumber: issue.number,
+        issueUrl: issue.url,
+        tags: input.tags ?? ['github', 'issue-created'],
+        workspaceId,
+    })
+
+    const indexStatus = await autoIndexEntry(context.vectorManager, db, entryId, workspaceId)
+    const vectorWarning =
+        indexStatus === 'failed'
+            ? 'Journal entry saved, but vector indexing failed.'
+            : undefined
+    const projectWarning =
+        projectResult !== undefined && !projectResult.added
+            ? (projectResult.error ?? 'Issue was created but it was not added to the project.')
+            : undefined
+    const statusError =
+        input.initial_status !== undefined && projectResult?.initialStatus?.set !== true
+            ? (projectResult?.initialStatus?.error ??
+              `Initial status "${input.initial_status}" could not be applied.`)
+            : undefined
+    const projectItemError = projectWarning ?? statusError
+    const combinedWarning =
+        projectItemError !== undefined && vectorWarning !== undefined
+            ? `${projectItemError}; ${vectorWarning}`
+            : (projectItemError ?? vectorWarning)
+
+    return {
+        success: projectItemError === undefined,
+        ...(combinedWarning !== undefined ? { warning: combinedWarning } : {}),
+        ...(projectItemError !== undefined ? { projectItemError } : {}),
+        issue: { number: issue.number, title: issue.title, url: issue.url },
+        project: projectResult,
+        journalEntry: { id: entryId, linkedToIssue: issue.number },
+        message:
+            `Created issue #${String(issue.number)}` +
+            (projectResult?.added ? ` (added to Project #${projectNumber})` : '') +
+            ` and journal entry #${String(entryId)}`,
+    }
+}
+
+export function getCreateGitHubIssueTool(context: ToolContext): ToolDefinition {
     return {
         name: 'create_github_issue_with_entry',
         title: 'Create GitHub Issue with Journal Entry',
@@ -262,141 +420,31 @@ export function getCreateGitHubIssueTool(context: ToolContext): ToolDefinition {
                     resolved.repo,
                     input.workspace_id,
                     input.project_number,
-                    'create issues and journal entries'
+                    'create issues and journal entries',
+                    resolved.owner,
+                    resolved.detectedOwner
                 )
                 if ('errorResponse' in entryScope) return entryScope.errorResponse
                 const { workspaceId, projectNumber } = entryScope
 
-                // 1. OUTBOX PATTERN: Create journal entry in pending state FIRST
-                const entryContent =
-                    input.entry_content ??
-                    `[PENDING] Creating GitHub issue: ${input.title}\n` +
-                        (projectNumber !== undefined ? `Project: #${projectNumber}\n` : '') +
-                        (input.body
-                            ? `\nDescription: ${input.body.slice(0, 200)}${input.body.length > 200 ? '...' : ''}`
-                            : '')
-
-                const entry = db.createEntry({
-                    content: entryContent,
-                    entryType: 'planning',
-                    tags: input.tags ?? ['github', 'issue-created', 'pending'],
-                    isPersonal: false,
-                    significanceType: null,
-                    projectNumber: projectNumber,
-                    projectOwner: resolved.owner,
+                const outbox = await executeCreateIssueOutbox(
+                    context,
+                    input,
+                    resolved,
                     workspaceId,
-                })
-
-                // 2. Perform external mutation; soft-delete orphaned [PENDING] entry if call throws
-                let issue: Awaited<ReturnType<typeof resolved.github.createIssue>>
-                try {
-                    issue = await resolved.github.createIssue(
-                        resolved.owner,
-                        resolved.repo,
-                        input.title,
-                        input.body,
-                        input.labels,
-                        input.assignees,
-                        input.milestone_number
-                    )
-                } catch (err) {
-                    db.deleteEntry(entry.id, false, workspaceId)
-                    throw err
-                }
-
-                if (!issue) {
-                    db.updateEntry(entry.id, {
-                        content:
-                            entryContent +
-                            '\n\n[FAILED] GitHub mutation failed: Could not create issue. Check GITHUB_TOKEN permissions.',
-                        workspaceId,
-                    })
-                    return {
-                        success: false,
-                        error: 'Failed to create GitHub issue. Check GITHUB_TOKEN permissions.',
-                        code: 'API_ERROR',
-                        category: 'api',
-                        suggestion: 'Verify GitHub token has write access to issues.',
-                        recoverable: true,
-                    }
-                }
-
-                // 3. Optional Kanban mutation
-                let projectResult: IssueProjectResult | undefined = undefined
-                if (projectNumber !== undefined && issue.nodeId) {
-                    projectResult = await addIssueToProject(
-                        resolved.github,
-                        resolved.owner,
-                        resolved.repo,
-                        issue.nodeId,
-                        projectNumber,
-                        input.initial_status
-                    )
-                }
-
-                // 4. Update journal entry with finalized state
-                const finalContent =
-                    input.entry_content ??
-                    `Created GitHub issue #${String(issue.number)}: ${issue.title}\n\n` +
-                        `URL: ${issue.url}\n` +
-                        (projectNumber !== undefined ? `Project: #${projectNumber}\n` : '') +
-                        (input.body
-                            ? `\nDescription: ${input.body.slice(0, 200)}${input.body.length > 200 ? '...' : ''}`
-                            : '')
-
-                db.updateEntry(entry.id, {
-                    content: finalContent,
-                    issueNumber: issue.number,
-                    issueUrl: issue.url,
-                    tags: input.tags ?? ['github', 'issue-created'],
-                    workspaceId,
-                })
-
-                const indexStatus = await autoIndexEntry(
-                    context.vectorManager,
-                    db,
-                    entry.id,
-                    workspaceId
+                    projectNumber
                 )
-                const vectorWarning =
-                    indexStatus === 'failed'
-                        ? 'Journal entry saved, but vector indexing failed.'
-                        : undefined
+                if ('errorResponse' in outbox) return outbox.errorResponse
 
-                const projectWarning =
-                    projectResult !== undefined && !projectResult.added
-                        ? (projectResult.error ??
-                          'Issue was created but it was not added to the project.')
-                        : undefined
-                const statusError =
-                    input.initial_status !== undefined && projectResult?.initialStatus?.set !== true
-                        ? (projectResult?.initialStatus?.error ??
-                          `Initial status "${input.initial_status}" could not be applied.`)
-                        : undefined
-                const projectItemError = projectWarning ?? statusError
-                const combinedWarning =
-                    projectItemError !== undefined && vectorWarning !== undefined
-                        ? `${projectItemError}; ${vectorWarning}`
-                        : (projectItemError ?? vectorWarning)
-                return {
-                    success: projectItemError === undefined,
-                    ...(combinedWarning !== undefined ? { warning: combinedWarning } : {}),
-                    ...(projectItemError !== undefined ? { projectItemError } : {}),
-                    issue: {
-                        number: issue.number,
-                        title: issue.title,
-                        url: issue.url,
-                    },
-                    project: projectResult,
-                    journalEntry: {
-                        id: entry.id,
-                        linkedToIssue: issue.number,
-                    },
-                    message:
-                        `Created issue #${String(issue.number)}` +
-                        (projectResult?.added ? ` (added to Project #${projectNumber})` : '') +
-                        ` and journal entry #${String(entry.id)}`,
-                }
+                return await finalizeIssueJournalEntry(
+                    context,
+                    input,
+                    outbox.entryId,
+                    outbox.issue,
+                    workspaceId,
+                    projectNumber,
+                    outbox.projectResult
+                )
             } catch (err) {
                 return formatHandlerError(err)
             }

@@ -1,5 +1,9 @@
 import { z } from 'zod'
-import { healSortByField, healIncludeArchivedField } from '../../schemas/hallucination-healer-fields.js'
+import {
+    preprocessTeamSortByOnly,
+    preprocessTeamSearchQuery,
+    preprocessDateRange,
+} from './search-preprocessors.js'
 import {
     ENTRY_TYPES,
     SIGNIFICANCE_TYPES,
@@ -246,160 +250,127 @@ export const TeamCreateEntrySchemaMcp = z.preprocess(
         .strict()
 )
 
-function preprocessTeamSortByOnly(val: unknown): unknown {
-    if (typeof val !== 'object' || val === null || Array.isArray(val)) return val
-    const obj = { ...(val as Record<string, unknown>) }
-    let modified = false
-    if (healSortByField(obj)) modified = true
-    if (healIncludeArchivedField(obj)) modified = true
-    return modified ? obj : val
-}
-
 /** team_get_recent — strict */
 export const TeamGetRecentSchema = z.preprocess(
     preprocessTeamSortByOnly,
-    z.object({
-        limit: z.number().min(1).max(500).optional().default(10),
-        cursor: z.string().optional().describe('Cursor for pagination'),
-        project_number: StrictProjectNumberSchema.optional(),
-        workspace_id: z.string().optional(),
-        sort_by: z.enum(['timestamp', 'importance']).optional().default('timestamp').describe(SORT_BY_DESC),
-        include_archived: z.boolean().optional().default(false),
-    })
+    z
+        .object({
+            limit: z.number().int().min(1).max(500).optional().default(10),
+            cursor: z.string().optional().describe('Cursor for pagination'),
+            project_number: StrictProjectNumberSchema.optional(),
+            workspace_id: z.string().optional(),
+            sort_by: z.enum(['timestamp', 'importance']).optional().default('timestamp').describe(SORT_BY_DESC),
+            include_archived: z.boolean().optional().default(false),
+        })
+        .strict()
 )
 
 /** team_get_recent — relaxed */
 export const TeamGetRecentSchemaMcp = z.preprocess(
     preprocessTeamSortByOnly,
     z.object({
-        limit: relaxedNumber().optional().default(10),
+        limit: relaxedNumber().optional().default(10).describe('Maximum entries to return (1-500, default: 10)'),
         cursor: z.string().optional().describe('Cursor for pagination'),
         project_number: relaxedNumber().optional().describe('REQUIRED: project number to scope the query to.'),
         workspace_id: z.string().optional().describe(WORKSPACE_DESC),
         sort_by: z.string().optional().default('timestamp').describe(SORT_BY_DESC),
-        include_archived: z.boolean().optional().default(false),
+        include_archived: z.boolean().optional().default(false).describe('Include archived entries in results'),
     })
 )
-
-function preprocessTeamSearchQuery(val: unknown): unknown {
-    const healed = healAgentHallucinations(val)
-    if (typeof healed === 'object' && healed !== null) {
-        const obj = { ...(healed as Record<string, unknown>) }
-        let modified = healIncludeArchivedField(obj)
-        for (const key of ['q', 'text', 'message', 'description', 'keep', 'path', 'mode', 'content']) {
-            if (key in obj && !('query' in obj)) {
-                obj['query'] = obj[key]
-                Reflect.deleteProperty(obj, key)
-                modified = true
-                break
-            }
-        }
-        return modified ? obj : healed
-    }
-    return healed
-}
 
 /** team_search — strict */
 export const TeamSearchSchema = z.preprocess(
     preprocessTeamSearchQuery,
-    z.object({
-        query: z.string().optional(),
-        cursor: z.string().optional().describe('Cursor for pagination'),
-        tags: z.array(z.string()).optional(),
-        project_number: StrictProjectNumberSchema.optional(),
-        workspace_id: z.string().optional(),
-        limit: z.number().max(500).optional().default(10),
-        sort_by: z.enum(['timestamp', 'importance']).optional().default('timestamp').describe(SORT_BY_DESC),
-        include_archived: z.boolean().optional().default(false),
-        fuzzy_match: z.boolean().optional().default(false),
-        auto_correct: z.boolean().optional().default(false),
-    })
+    z
+        .object({
+            query: z.string().optional(),
+            cursor: z.string().optional().describe('Cursor for pagination'),
+            tags: z.array(z.string()).optional(),
+            exclude_tags: z.array(z.string()).optional().describe('Exclude entries having any of these tags'),
+            entry_type: z.enum(ENTRY_TYPES).optional(),
+            project_number: StrictProjectNumberSchema.optional(),
+            workspace_id: z.string().optional(),
+            limit: z.number().int().min(1).max(500).optional().default(10),
+            sort_by: z.enum(['timestamp', 'importance']).optional().default('timestamp').describe(SORT_BY_DESC),
+            include_archived: z.boolean().optional().default(false),
+            fuzzy_match: z.boolean().optional().default(false),
+            auto_correct: z.boolean().optional().default(false),
+        })
+        .strict()
 )
 
 /** team_search — relaxed */
 export const TeamSearchSchemaMcp = z.preprocess(
     preprocessTeamSearchQuery,
     z.object({
-        query: z.string().optional(),
+        query: z.string().optional().describe('Search text query (use `query`, not `q`)'),
         cursor: z.string().optional().describe('Cursor for pagination'),
-        tags: z.array(z.string()).optional(),
-        project_number: relaxedNumber().optional(),
+        tags: z.array(z.string()).optional().describe('Filter entries having any of these tags'),
+        exclude_tags: z.array(z.string()).optional().describe('Exclude entries having any of these tags'),
+        entry_type: z.string().optional().describe('Filter results by entry type'),
+        project_number: relaxedNumber().optional().describe('REQUIRED: project number to scope the query to.'),
         workspace_id: z.string().optional().describe(WORKSPACE_DESC),
-        limit: relaxedNumber().optional().default(10),
+        limit: relaxedNumber().optional().default(10).describe('Maximum entries to return (1-500, default: 10)'),
         sort_by: z.string().optional().default('timestamp').describe(SORT_BY_DESC),
-        include_archived: z.boolean().optional().default(false),
-        fuzzy_match: z.boolean().optional().default(false),
-        auto_correct: z.boolean().optional().default(false),
+        include_archived: z.boolean().optional().default(false).describe('Include archived entries in results'),
+        fuzzy_match: z.boolean().optional().default(false).describe('Return typo-tolerant suggestions when no exact matches are found'),
+        auto_correct: z.boolean().optional().default(false).describe('Automatically re-run search with top suggestion when distance <= 1'),
     })
 )
 
 /** team_list_deleted_entries — strict */
-export const TeamListDeletedEntriesSchema = z.object({
-    limit: z.number().optional().default(50),
-    offset: z.number().optional().default(0),
-    project_number: StrictProjectNumberSchema.optional(),
-    workspace_id: z.string().optional(),
-})
+export const TeamListDeletedEntriesSchema = z
+    .object({
+        limit: z.number().int().min(1).optional().default(50),
+        offset: z.number().int().min(0).optional().default(0),
+        project_number: StrictProjectNumberSchema.optional(),
+        workspace_id: z.string().optional(),
+    })
+    .strict()
 
 /** team_list_deleted_entries — relaxed */
 export const TeamListDeletedEntriesSchemaMcp = z.object({
-    limit: relaxedNumber().optional().default(50),
-    offset: relaxedNumber().optional().default(0),
+    limit: relaxedNumber().optional().default(50).describe('Maximum deleted entries to return (min: 1, default: 50)'),
+    offset: relaxedNumber().optional().default(0).describe('Pagination offset (min: 0, default: 0)'),
     project_number: relaxedNumber().optional().describe('REQUIRED: project number to scope the query to.'),
     workspace_id: z.string().optional().describe(WORKSPACE_DESC),
 })
 
 /** team_get_entry_by_id — strict */
-export const TeamGetEntryByIdSchema = z.object({
-    entry_id: z.number().int(),
-    include_relationships: z.boolean().optional().default(true),
-    project_number: StrictProjectNumberSchema.optional(),
-    workspace_id: z.string().optional(),
-})
+export const TeamGetEntryByIdSchema = z
+    .object({
+        entry_id: z.number().int().positive(),
+        include_relationships: z.boolean().optional().default(true),
+        project_number: StrictProjectNumberSchema.optional(),
+        workspace_id: z.string().optional(),
+    })
+    .strict()
 
 /** team_get_entry_by_id — relaxed */
 export const TeamGetEntryByIdSchemaMcp = z.object({
-    entry_id: relaxedNumber().optional(),
-    include_relationships: z.boolean().optional().default(true),
-    project_number: relaxedNumber().optional(),
+    entry_id: relaxedNumber().optional().describe('Team entry ID to retrieve'),
+    include_relationships: z.boolean().optional().default(true).describe('Include linked relationships in response'),
+    project_number: relaxedNumber().optional().describe('REQUIRED: project number to scope the query to.'),
     workspace_id: z.string().optional().describe(WORKSPACE_DESC),
 })
-
-function preprocessDateRange(val: unknown): unknown {
-    const healed = healAgentHallucinations(val)
-    if (typeof healed === 'object' && healed !== null) {
-        const obj = { ...(healed as Record<string, unknown>) }
-        let modified = healIncludeArchivedField(obj)
-        if ('start' in obj && !('start_date' in obj)) {
-            obj['start_date'] = obj['start']
-            Reflect.deleteProperty(obj, 'start')
-            modified = true
-        }
-        if ('end' in obj && !('end_date' in obj)) {
-            obj['end_date'] = obj['end']
-            Reflect.deleteProperty(obj, 'end')
-            modified = true
-        }
-        return modified ? obj : healed
-    }
-    return healed
-}
 
 /** team_search_by_date_range — strict */
 export const TeamSearchByDateRangeSchema = z.preprocess(
     preprocessDateRange,
-    z.object({
-        start_date: z.string().regex(DATE_FORMAT_REGEX, DATE_FORMAT_MESSAGE),
-        end_date: z.string().regex(DATE_FORMAT_REGEX, DATE_FORMAT_MESSAGE),
-        cursor: z.string().optional().describe('Cursor for pagination'),
-        entry_type: z.enum(ENTRY_TYPES).optional(),
-        tags: z.array(z.string()).optional(),
-        project_number: StrictProjectNumberSchema.optional(),
-        workspace_id: z.string().optional(),
-        limit: z.number().max(500).optional().default(50),
-        sort_by: z.enum(['timestamp', 'importance']).optional().default('timestamp').describe(SORT_BY_DESC),
-        include_archived: z.boolean().optional().default(false),
-    })
+    z
+        .object({
+            start_date: z.string().regex(DATE_FORMAT_REGEX, DATE_FORMAT_MESSAGE),
+            end_date: z.string().regex(DATE_FORMAT_REGEX, DATE_FORMAT_MESSAGE),
+            cursor: z.string().optional().describe('Cursor for pagination'),
+            entry_type: z.enum(ENTRY_TYPES).optional(),
+            tags: z.array(z.string()).optional(),
+            project_number: StrictProjectNumberSchema.optional(),
+            workspace_id: z.string().optional(),
+            limit: z.number().int().min(1).max(500).optional().default(50),
+            sort_by: z.enum(['timestamp', 'importance']).optional().default('timestamp').describe(SORT_BY_DESC),
+            include_archived: z.boolean().optional().default(false),
+        })
+        .strict()
 )
 
 /** team_search_by_date_range — relaxed */
@@ -409,13 +380,13 @@ export const TeamSearchByDateRangeSchemaMcp = z.preprocess(
         start_date: z.string().optional().describe('Start date (YYYY-MM-DD)'),
         end_date: z.string().optional().describe('End date (YYYY-MM-DD)'),
         cursor: z.string().optional().describe('Cursor for pagination'),
-        entry_type: z.string().optional(),
-        tags: z.array(z.string()).optional(),
-        project_number: relaxedNumber().optional(),
+        entry_type: z.string().optional().describe('Filter results by entry type'),
+        tags: z.array(z.string()).optional().describe('Filter entries having any of these tags'),
+        project_number: relaxedNumber().optional().describe('REQUIRED: project number to scope the query to.'),
         workspace_id: z.string().optional().describe(WORKSPACE_DESC),
-        limit: relaxedNumber().optional().default(50),
+        limit: relaxedNumber().optional().default(50).describe('Maximum entries to return (1-500, default: 50)'),
         sort_by: z.string().optional().default('timestamp').describe(SORT_BY_DESC),
-        include_archived: z.boolean().optional().default(false),
+        include_archived: z.boolean().optional().default(false).describe('Include archived entries in results'),
     })
 )
 

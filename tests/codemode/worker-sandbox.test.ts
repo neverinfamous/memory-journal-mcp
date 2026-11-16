@@ -1,34 +1,35 @@
-import { describe, it, expect, beforeAll, afterAll } from 'vitest'
+import { describe, it, expect, beforeAll } from 'vitest'
 import * as esbuild from 'esbuild'
 import * as fs from 'node:fs'
 import * as path from 'node:path'
 import { WorkerSandbox, WorkerSandboxPool } from '../../src/codemode/index.js'
 
 const workerScriptSrc = path.join(__dirname, '../../src/codemode/worker-script.ts')
-const workerScriptJs = path.join(__dirname, '../../src/codemode/worker-script.js')
 const workerScriptDistJs = path.join(__dirname, '../../dist/worker-script.js')
 
 beforeAll(() => {
     // Compile worker-script.ts to .js specifically for test execution
     // worker_threads cannot run .ts files directly in this vitest setup
     // Uses esbuild's JS API directly (npx esbuild via execSync hangs on Windows)
+    fs.mkdirSync(path.dirname(workerScriptDistJs), { recursive: true })
+    const tmpDistJs = `${workerScriptDistJs}.${String(process.pid)}.tmp.js`
     esbuild.buildSync({
         entryPoints: [workerScriptSrc],
         bundle: true,
         platform: 'node',
         format: 'esm',
-        outfile: workerScriptJs,
+        packages: 'external',
+        outfile: tmpDistJs,
     })
-    fs.mkdirSync(path.dirname(workerScriptDistJs), { recursive: true })
-    fs.copyFileSync(workerScriptJs, workerScriptDistJs)
-}, 30_000)
-
-afterAll(() => {
-    // Cleanup generated JS files
-    if (fs.existsSync(workerScriptJs)) {
-        fs.unlinkSync(workerScriptJs)
+    try {
+        fs.renameSync(tmpDistJs, workerScriptDistJs)
+    } catch {
+        if (!fs.existsSync(workerScriptDistJs)) {
+            fs.copyFileSync(tmpDistJs, workerScriptDistJs)
+        }
+        fs.rmSync(tmpDistJs, { force: true })
     }
-})
+}, 30_000)
 
 describe('WorkerSandbox', () => {
     it('should execute basic code successfully', async () => {

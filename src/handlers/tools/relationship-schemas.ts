@@ -96,8 +96,8 @@ export const VisualizeInputSchema = z.object({
         ])
         .optional()
         .describe('Filter to show only this relationship type'),
-    depth: z.number().min(1).max(3).optional().default(2).describe('Relationship traversal depth'),
-    limit: z.number().max(500).optional().default(20).describe('Maximum entries to include'),
+    depth: z.number().int().min(1).max(3).optional().default(2).describe('Relationship traversal depth'),
+    limit: z.number().int().min(1).max(500).optional().default(20).describe('Maximum entries to include'),
     project_number: StrictProjectNumberSchema.optional(),
     workspace_id: z.string().optional(),
 })

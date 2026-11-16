@@ -225,15 +225,17 @@ function runLifecycleTx(
                 id: number | bigint
             }[]
             const ids = rows.map((r) => toNumberId(r.id))
-            if (ids.length > 0) {
-                const placeholders = ids.map(() => '?').join(',')
+            const CHUNK_SIZE = 500
+            for (let i = 0; i < ids.length; i += CHUNK_SIZE) {
+                const chunk = ids.slice(i, i + CHUNK_SIZE)
+                const placeholders = chunk.map(() => '?').join(',')
                 const deleteSql = `DELETE FROM memory_journal WHERE id IN (${placeholders})`
-                const result = db.prepare(deleteSql).run(...ids)
-                hardDeletedCount = result.changes
+                const result = db.prepare(deleteSql).run(...chunk)
+                hardDeletedCount += result.changes
 
                 try {
                     db.prepare(`DELETE FROM vec_embeddings WHERE entry_id IN (${placeholders})`).run(
-                        ...ids
+                        ...chunk
                     )
                 } catch (err) {
                     if (!isMissingTableError(err)) throw err

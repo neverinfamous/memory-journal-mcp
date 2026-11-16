@@ -344,6 +344,63 @@ export class TokenValidator {
         return new InvalidTokenError(result.error)
     }
 
+    private async assertSafeJwksDns(bareHost: string): Promise<void> {
+        try {
+            const { promises: dns } = await import('node:dns')
+            const records = await dns.lookup(bareHost, { all: true })
+            if (records.length === 0) {
+                throw new ConfigurationError(
+                    `SSRF Protection: JWKS hostname resolved to no addresses: ${bareHost}`
+                )
+            }
+            for (const record of records) {
+                if (isPrivateOrLoopbackAddress(record.address)) {
+                    throw new ConfigurationError(
+                        `SSRF Protection: Requests to private/loopback network addresses are prohibited. Resolved IP: ${record.address}`
+                    )
+                }
+            }
+        } catch (dnsErr) {
+            if (dnsErr instanceof ConfigurationError) {
+                throw dnsErr
+            }
+            const detail = dnsErr instanceof Error ? dnsErr.message : String(dnsErr)
+            throw new ConfigurationError(
+                `SSRF Protection: Failed to resolve JWKS hostname '${bareHost}': ${detail}`
+            )
+        }
+    }
+
+    private async assertSafeJwksUri(): Promise<void> {
+        const jwksParsed = new URL(this.jwksUri)
+        if (jwksParsed.protocol !== 'http:' && jwksParsed.protocol !== 'https:') {
+            throw new ConfigurationError(
+                `SSRF Protection: Disallowed JWKS URI protocol: ${jwksParsed.protocol}`
+            )
+        }
+        const jwksHostname = jwksParsed.hostname.toLowerCase()
+        const bareHost =
+            jwksHostname.startsWith('[') && jwksHostname.endsWith(']')
+                ? jwksHostname.slice(1, -1)
+                : jwksHostname
+        const isExplicitLoopback =
+            jwksHostname === 'localhost' ||
+            jwksHostname === '127.0.0.1' ||
+            jwksHostname === '[::1]'
+        if (isExplicitLoopback) return
+
+        const { isIP } = await import('node:net')
+        if (isIP(bareHost) !== 0) {
+            if (isPrivateOrLoopbackAddress(bareHost)) {
+                throw new ConfigurationError(
+                    `SSRF Protection: Requests to private/loopback network addresses are prohibited. Target IP: ${bareHost}`
+                )
+            }
+            return
+        }
+        await this.assertSafeJwksDns(bareHost)
+    }
+
     /**
      * Preload JWKS to validate availability at startup
      */
@@ -362,28 +419,7 @@ export class TokenValidator {
         })
 
         try {
-            const jwksParsed = new URL(this.jwksUri)
-            const jwksHostname = jwksParsed.hostname.toLowerCase()
-            const isExplicitLoopback =
-                jwksHostname === 'localhost' ||
-                jwksHostname === '127.0.0.1' ||
-                jwksHostname === '[::1]'
-            if (!isExplicitLoopback) {
-                try {
-                    const { promises: dns } = await import('node:dns')
-                    const { address } = await dns.lookup(jwksHostname)
-                    if (isPrivateOrLoopbackAddress(address)) {
-                        throw new ConfigurationError(
-                            `SSRF Protection: Requests to private/loopback network addresses are prohibited. Resolved IP: ${address}`
-                        )
-                    }
-                } catch (dnsErr) {
-                    if (dnsErr instanceof ConfigurationError) {
-                        throw dnsErr
-                    }
-                }
-            }
-
+            await this.assertSafeJwksUri()
             const response = await fetch(this.jwksUri, {
                 method: 'GET',
                 signal: AbortSignal.timeout(10000),

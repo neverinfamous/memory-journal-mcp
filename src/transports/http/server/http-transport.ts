@@ -19,6 +19,7 @@ import {
     buildAllowedHostHeaders,
     isLoopbackHost,
     formatHostForUrl,
+    validateOAuthTransportConfig,
 } from '../security.js'
 import {
     handleHealthCheck,
@@ -280,54 +281,24 @@ export class HttpTransport {
         authToken: string | undefined,
         isLocalhost: boolean
     ): Promise<void> {
-        if (
-            this.config.oauthEnabled === true &&
-            (this.config.oauthIssuer === undefined || this.config.oauthAudience === undefined)
-        ) {
-            const errorMsg = `FATAL: OAuth is enabled but 'oauthIssuer' and/or 'oauthAudience' is missing. Refusing to start without a complete OAuth configuration, because the server would otherwise run without authentication.`
-            logger.error(errorMsg, { module: 'HTTP', operation: 'oauth-config' })
-            throw new Error(errorMsg)
-        }
-
-        if (
-            this.config.oauthEnabled === true &&
-            this.config.oauthIssuer !== undefined &&
-            this.config.oauthAudience !== undefined
-        ) {
-            if (this.config.oauthIssuer.startsWith('http://')) {
-                if (this.config.allowPlaintextLoopbackOAuth !== true) {
-                    const errorMsg = `FATAL: OAuth issuer targets a plaintext protocol. You MUST deliberately set 'allowPlaintextLoopbackOAuth: true' in config to bypass strict discovery bound.`
-                    logger.error(errorMsg, { module: 'HTTP', operation: 'oauth-config' })
-                    throw new Error(errorMsg)
-                }
-                try {
-                    const url = new URL(this.config.oauthIssuer)
-                    if (!isLoopbackHost(url.hostname)) {
-                        throw new Error()
-                    }
-                } catch {
-                    const errorMsg = `FATAL: Plaintext OAuth bypass is ONLY permitted for loopback hosts (localhost, 127.0.0.1, [::1]). The configured issuer is not allowed.`
-                    logger.error(errorMsg, { module: 'HTTP', operation: 'oauth-config' })
-                    throw new Error(errorMsg)
-                }
+        const oauthConfig = validateOAuthTransportConfig(
+            this.config,
+            host,
+            isLocalhost,
+            (msg, meta) => {
+                logger.error(msg, meta)
             }
+        )
 
-            if (
-                !isLocalhost &&
-                (this.config.publicOrigin === undefined || this.config.publicOrigin === '')
-            ) {
-                const errorMsg = `FATAL: OAuth is enabled on a non-loopback interface ('${host}'), but no 'publicOrigin' was provided. You MUST specify an explicit public origin (e.g. 'https://api.example.com') for secure OAuth token audience binding.`
-                logger.error(errorMsg, { module: 'HTTP' })
-                throw new Error(errorMsg)
-            }
-
+        if (oauthConfig !== null) {
+            const { oauthIssuer, oauthAudience } = oauthConfig
             const jwksUri =
-                this.config.oauthJwksUri ?? (await this.discoverJwksUri(this.config.oauthIssuer))
+                this.config.oauthJwksUri ?? (await this.discoverJwksUri(oauthIssuer))
 
             const tokenValidator = createTokenValidator({
                 jwksUri,
-                issuer: this.config.oauthIssuer,
-                audience: this.config.oauthAudience,
+                issuer: oauthIssuer,
+                audience: oauthAudience,
                 clockTolerance: this.config.oauthClockTolerance ?? 60,
             })
 
@@ -336,7 +307,7 @@ export class HttpTransport {
             const resourceServer = createOAuthResourceServer({
                 resource:
                     this.config.publicOrigin ?? `http://${formatHostForUrl(host)}:${String(port)}`,
-                authorizationServers: [this.config.oauthIssuer],
+                authorizationServers: [oauthIssuer],
                 scopesSupported: [...SUPPORTED_SCOPES],
             })
 
@@ -355,12 +326,11 @@ export class HttpTransport {
             logger.info('OAuth 2.1 authentication enabled', {
                 module: 'HTTP',
                 resource: resourceServer.getResourceUri(),
-                audience: this.config.oauthAudience,
+                audience: oauthAudience,
             })
         } else if (authToken !== undefined && authToken !== '') {
             this.app.use(createAuthMiddleware(authToken))
         }
-
     }
 
     /** Register context propagation, health/metrics/root endpoints, MCP protocol routes and the 404 handler. */

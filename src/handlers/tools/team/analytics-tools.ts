@@ -7,7 +7,7 @@
 import type { ToolDefinition, ToolContext } from '../../../types/index.js'
 import { formatHandlerError } from '../../../utils/error-helpers.js'
 import { resolveWorkspaceId } from '../../../utils/workspace-resolver.js'
-import { alignedProjectFilter } from '../../../utils/write-scope.js'
+import { activeProjectRegistry, alignedProjectFilter } from '../../../utils/write-scope.js'
 import { logger } from '../../../utils/logger.js'
 import {
     TEAM_DB_ERROR_RESPONSE,
@@ -123,7 +123,7 @@ export function getTeamAnalyticsTools(context: ToolContext): ToolDefinition[] {
                     const alignedProject = alignedProjectFilter(
                         wsId,
                         input.project_number,
-                        context.config?.projectRegistry
+                        activeProjectRegistry(context.config?.projectRegistry)
                     )
 
                     const insights = teamDb.getCrossProjectInsights({

@@ -243,6 +243,20 @@ export function stripCommentsAndStrings(rawCode: string): string {
             }
         }
 
+        if (/[A-Za-z0-9_$]/.test(ch)) {
+            let word = ch
+            let j = i + 1
+            while (j < code.length) {
+                const nextCh = code[j]
+                if (nextCh === undefined || !/[A-Za-z0-9_$]/.test(nextCh)) break
+                word += nextCh
+                j++
+            }
+            lastNonWsToken = word
+            out += word
+            i = j
+            continue
+        }
         if (!/\s/.test(ch)) {
             lastNonWsToken = ch
         }

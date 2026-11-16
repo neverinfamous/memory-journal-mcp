@@ -274,11 +274,13 @@ export function getAccessibleToolGroups(scopes: string[]): ToolGroup[] {
     if (scopes.includes(SCOPES.FULL) || hasAdminScope(scopes)) {
         return [...ADMIN_SCOPE_GROUPS]
     }
-    if (hasWriteScope(scopes)) {
-        return [...WRITE_SCOPE_GROUPS]
+    const groups = hasWriteScope(scopes)
+        ? [...WRITE_SCOPE_GROUPS]
+        : hasReadScope(scopes)
+          ? [...READ_SCOPE_GROUPS]
+          : []
+    if (scopes.includes(SCOPES.TEAM) && !groups.includes('team')) {
+        groups.push('team')
     }
-    if (hasReadScope(scopes)) {
-        return [...READ_SCOPE_GROUPS]
-    }
-    return []
+    return groups
 }

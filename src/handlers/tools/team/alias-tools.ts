@@ -5,12 +5,12 @@ import {
 } from '../../../types/errors.js'
 import { ErrorFieldsMixin } from '../error-fields-mixin.js'
 import type { ToolDefinition, ToolContext } from '../../../types/index.js'
-import { TEAM_DB_ERROR_RESPONSE } from './helpers.js'
+import { TEAM_DB_ERROR_RESPONSE, triggerTeamNotifications } from './helpers.js'
 import { formatHandlerError } from '../../../utils/error-helpers.js'
 import { getCallerIdentity } from './rbac.js'
 import { resolveWorkspaceId } from '../../../utils/workspace-resolver.js'
 import { resolveWriteWorkspaceId } from '../write-workspace.js'
-import { relaxedNumber } from '../schemas.js'
+import { relaxedNumber, StrictProjectNumberSchema } from '../schemas.js'
 
 // ============================================================================
 // Schemas
@@ -67,9 +67,16 @@ const preprocessAlias = (val: unknown): unknown => {
 const AddAuthorAliasSchema = z.preprocess(preprocessAlias, z.object({
     alias: z.string().min(1).max(255).describe('The raw author name to map (e.g., "Alex" or "GitHub: octocat")'),
     canonical_author: z.string().min(1).max(255).describe('The canonical author identity to map the alias to (e.g., "alex-dev")'),
-    project_number: relaxedNumber().optional().describe('GitHub Project number'),
+    project_number: StrictProjectNumberSchema,
     workspace_id: z.string().optional().describe('Optional workspace isolation identifier (e.g. "alpha"). Do not use numeric project IDs or "workspace" as the key.'),
 }))
+
+const AddAuthorAliasSchemaMcp = z.object({
+    alias: z.string().min(1).max(255).describe('The raw author name to map (e.g., "Alex" or "GitHub: octocat")'),
+    canonical_author: z.string().min(1).max(255).describe('The canonical author identity to map the alias to (e.g., "alex-dev")'),
+    project_number: relaxedNumber().optional().describe('GitHub Project number'),
+    workspace_id: z.string().optional().describe('Optional workspace isolation identifier (e.g. "alpha"). Do not use numeric project IDs or "workspace" as the key.'),
+})
 
 const AddAuthorAliasOutputSchema = z.object({
     success: z.boolean(),
@@ -85,9 +92,15 @@ const AddAuthorAliasOutputSchema = z.object({
 
 const RemoveAuthorAliasSchema = z.preprocess(preprocessAlias, z.object({
     alias: z.string().min(1).max(255).describe('The alias mapping to remove'),
-    project_number: relaxedNumber().optional().describe('GitHub Project number'),
+    project_number: StrictProjectNumberSchema,
     workspace_id: z.string().optional().describe('Optional workspace isolation identifier (e.g. "alpha"). Do not use numeric project IDs or "workspace" as the key.'),
 }))
+
+const RemoveAuthorAliasSchemaMcp = z.object({
+    alias: z.string().min(1).max(255).describe('The alias mapping to remove'),
+    project_number: relaxedNumber().optional().describe('GitHub Project number'),
+    workspace_id: z.string().optional().describe('Optional workspace isolation identifier (e.g. "alpha"). Do not use numeric project IDs or "workspace" as the key.'),
+})
 
 const RemoveAuthorAliasOutputSchema = z.object({
     success: z.boolean().optional(),
@@ -96,9 +109,15 @@ const RemoveAuthorAliasOutputSchema = z.object({
 
 const ListAuthorAliasesSchema = z.preprocess(preprocessAlias, z.object({
     canonical_author: z.string().optional().describe('Optional canonical author to filter aliases by'),
-    project_number: relaxedNumber().optional().describe('GitHub Project number'),
+    project_number: StrictProjectNumberSchema,
     workspace_id: z.string().optional().describe('Optional workspace isolation identifier (e.g. "alpha"). Do not use numeric project IDs or "workspace" as the key.'),
 }))
+
+const ListAuthorAliasesSchemaMcp = z.object({
+    canonical_author: z.string().optional().describe('Optional canonical author to filter aliases by'),
+    project_number: relaxedNumber().optional().describe('GitHub Project number'),
+    workspace_id: z.string().optional().describe('Optional workspace isolation identifier (e.g. "alpha"). Do not use numeric project IDs or "workspace" as the key.'),
+})
 
 const ListAuthorAliasesOutputSchema = z.object({
     success: z.boolean().default(true),
@@ -114,9 +133,15 @@ const ListAuthorAliasesOutputSchema = z.object({
 
 const ResolveAuthorSchema = z.preprocess(preprocessAlias, z.object({
     author: z.string().min(1).describe('The raw author name to resolve'),
-    project_number: relaxedNumber().optional().describe('GitHub Project number'),
+    project_number: StrictProjectNumberSchema,
     workspace_id: z.string().optional().describe('Optional workspace isolation identifier (e.g. "alpha"). Do not use numeric project IDs or "workspace" as the key.'),
 }))
+
+const ResolveAuthorSchemaMcp = z.object({
+    author: z.string().min(1).describe('The raw author name to resolve'),
+    project_number: relaxedNumber().optional().describe('GitHub Project number'),
+    workspace_id: z.string().optional().describe('Optional workspace isolation identifier (e.g. "alpha"). Do not use numeric project IDs or "workspace" as the key.'),
+})
 
 const ResolveAuthorOutputSchema = z.object({
     original_author: z.string().optional(),
@@ -127,9 +152,15 @@ const ResolveAuthorOutputSchema = z.object({
 
 const ConsolidateAuthorsSchema = z.preprocess(preprocessAlias, z.object({
     canonical_author: z.string().min(1).max(255).describe('The canonical author name. All entries matching any of this author\'s aliases will be updated to use this canonical name.'),
-    project_number: relaxedNumber().optional().describe('GitHub Project number'),
+    project_number: StrictProjectNumberSchema,
     workspace_id: z.string().optional().describe('Optional workspace isolation identifier (e.g. "alpha"). Do not use numeric project IDs or "workspace" as the key.'),
 }))
+
+const ConsolidateAuthorsSchemaMcp = z.object({
+    canonical_author: z.string().min(1).max(255).describe('The canonical author name. All entries matching any of this author\'s aliases will be updated to use this canonical name.'),
+    project_number: relaxedNumber().optional().describe('GitHub Project number'),
+    workspace_id: z.string().optional().describe('Optional workspace isolation identifier (e.g. "alpha"). Do not use numeric project IDs or "workspace" as the key.'),
+})
 
 const ConsolidateAuthorsOutputSchema = z.object({
     success: z.boolean().optional(),
@@ -142,42 +173,20 @@ const ConsolidateAuthorsOutputSchema = z.object({
 // Handlers
 // ============================================================================
 
-function coerceAliasProjectNumber(projectNumber: number | string | undefined): number | undefined {
-    if (typeof projectNumber === 'number') return projectNumber
-    if (typeof projectNumber === 'string') {
-        const trimmed = projectNumber.trim()
-        if (trimmed === '') {
-            throw new ValidationError('Invalid project_number "". Expected an integer.')
-        }
-        const parsed = Number(trimmed)
-        if (!Number.isInteger(parsed)) {
-            throw new ValidationError(
-                `Invalid project_number "${projectNumber}". Expected an integer.`
-            )
-        }
-        return parsed
-    }
-    return undefined
-}
-
 function scopedWorkspace(
     workspaceId: string | undefined,
-    projectNumber: number | string | undefined,
+    projectNumber: number | undefined,
     context: ToolContext
 ): string {
-    return resolveWorkspaceId(workspaceId, coerceAliasProjectNumber(projectNumber), context.config)
+    return resolveWorkspaceId(workspaceId, projectNumber, context.config)
 }
 
 function scopedWriteWorkspace(
     workspaceId: string | undefined,
-    projectNumber: number | string | undefined,
+    projectNumber: number | undefined,
     context: ToolContext
 ): string {
-    return resolveWriteWorkspaceId(
-        workspaceId,
-        coerceAliasProjectNumber(projectNumber),
-        context.config
-    )
+    return resolveWriteWorkspaceId(workspaceId, projectNumber, context.config)
 }
 
 function handleAddAuthorAlias(context: ToolContext) {
@@ -290,12 +299,15 @@ function handleConsolidateAuthors(context: ToolContext) {
             }
             const { canonical_author, project_number, workspace_id } = ConsolidateAuthorsSchema.parse(params)
             const workspaceId = scopedWriteWorkspace(workspace_id, project_number, context)
-            const projectNum = coerceAliasProjectNumber(project_number)
 
             const updatedCount =
-                projectNum !== undefined
-                    ? teamDb.consolidateAuthors(canonical_author, workspaceId, projectNum)
+                project_number !== undefined
+                    ? teamDb.consolidateAuthors(canonical_author, workspaceId, project_number)
                     : teamDb.consolidateAuthors(canonical_author, workspaceId)
+
+            if (updatedCount > 0) {
+                triggerTeamNotifications(context)
+            }
 
             return {
                 success: true,
@@ -319,7 +331,7 @@ export function getTeamAliasTools(context: ToolContext): ToolDefinition[] {
             title: 'Add Author Alias',
             description: 'Map a raw author name to a canonical identity. Requires admin role. Used to consolidate attribution for team analytics when one person uses multiple usernames.',
             group: 'team',
-            inputSchema: AddAuthorAliasSchema,
+            inputSchema: AddAuthorAliasSchemaMcp,
             outputSchema: AddAuthorAliasOutputSchema,
             annotations: {
                 readOnlyHint: false,
@@ -335,7 +347,7 @@ export function getTeamAliasTools(context: ToolContext): ToolDefinition[] {
             title: 'Remove Author Alias',
             description: 'Remove an author alias mapping. Requires admin role.',
             group: 'team',
-            inputSchema: RemoveAuthorAliasSchema,
+            inputSchema: RemoveAuthorAliasSchemaMcp,
             outputSchema: RemoveAuthorAliasOutputSchema,
             annotations: {
                 readOnlyHint: false,
@@ -351,7 +363,7 @@ export function getTeamAliasTools(context: ToolContext): ToolDefinition[] {
             title: 'List Author Aliases',
             description: 'List all registered author aliases. Requires admin role.',
             group: 'team',
-            inputSchema: ListAuthorAliasesSchema,
+            inputSchema: ListAuthorAliasesSchemaMcp,
             outputSchema: ListAuthorAliasesOutputSchema,
             annotations: {
                 readOnlyHint: true,
@@ -367,7 +379,7 @@ export function getTeamAliasTools(context: ToolContext): ToolDefinition[] {
             title: 'Resolve Author',
             description: 'Resolve a raw author name to its canonical identity using registered aliases. Requires admin role.',
             group: 'team',
-            inputSchema: ResolveAuthorSchema,
+            inputSchema: ResolveAuthorSchemaMcp,
             outputSchema: ResolveAuthorOutputSchema,
             annotations: {
                 readOnlyHint: true,
@@ -383,7 +395,7 @@ export function getTeamAliasTools(context: ToolContext): ToolDefinition[] {
             title: 'Consolidate Authors',
             description: 'Retroactively rewrite all past entries matching an author\'s aliases to the canonical author name. Requires admin role. This operation modifies database entries.',
             group: 'team',
-            inputSchema: ConsolidateAuthorsSchema,
+            inputSchema: ConsolidateAuthorsSchemaMcp,
             outputSchema: ConsolidateAuthorsOutputSchema,
             annotations: {
                 readOnlyHint: false,

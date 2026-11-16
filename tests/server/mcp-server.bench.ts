@@ -25,12 +25,15 @@ beforeAll(async () => {
 
 afterAll(() => {
     db.close()
-    try {
-        if (fs.existsSync(testDbPath)) {
-            fs.unlinkSync(testDbPath)
+    for (const suffix of ['', '-wal', '-shm']) {
+        try {
+            const p = `${testDbPath}${suffix}`
+            if (fs.existsSync(p)) {
+                fs.unlinkSync(p)
+            }
+        } catch {
+            // Ignore cleanup errors
         }
-    } catch {
-        // Ignore signup errors
     }
 })
 
@@ -72,7 +75,6 @@ test('callTool create_entry', async ({ bench }) => {
         await callTool(
             'create_entry',
             {
-                project_number: 1,
                 workspace_id: 'default',
                 content: 'Bench creation entry text over a tool call',
                 entry_type: 'personal_reflection',

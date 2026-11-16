@@ -1,7 +1,7 @@
 import { parseArgs } from 'util';
 import { readFileSync, writeFileSync, cpSync, mkdirSync, existsSync, readdirSync } from 'fs';
 import { join, dirname, resolve } from 'path';
-import { execSync } from 'child_process';
+import { execFileSync } from 'child_process';
 import { builtinModules } from 'module';
 
 /**
@@ -71,7 +71,7 @@ const vendorData = JSON.parse(readFileSync(vendorJsonPath, 'utf8'));
 
 try {
   const upstreamRoot = resolveUpstreamRoot(cwd, args.values['upstream-root'] as string | undefined);
-  const headSha = execSync('git rev-parse HEAD', { cwd: upstreamRoot, encoding: 'utf8' }).trim();
+  const headSha = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: upstreamRoot, encoding: 'utf8' }).trim();
 
   let libsToSync = Object.keys(vendorData.libs);
   if (args.values.lib) {
@@ -197,7 +197,7 @@ try {
 
   if (args.values.test) {
     console.log('\nRunning tests...');
-    execSync('bun test src/vendor/ --pass-with-no-tests', { stdio: 'inherit' });
+    execFileSync('bun', ['test', 'src/vendor/', '--pass-with-no-tests'], { stdio: 'inherit' });
   }
 } catch (err: unknown) {
   console.error('\nSync failed:', err instanceof Error ? err.message : String(err));

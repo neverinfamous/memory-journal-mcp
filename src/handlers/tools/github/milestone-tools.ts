@@ -8,7 +8,23 @@
 import { z } from 'zod'
 import type { ToolDefinition, ToolContext } from '../../../types/index.js'
 import { formatHandlerError } from '../../../utils/error-helpers.js'
-import { milestoneCompletionPct } from '../../resources/shared.js'
+import { milestoneCompletionPct, fenceUntrustedInline } from '../../resources/shared.js'
+import { markUntrustedContent } from '../../../utils/security-utils.js'
+
+function fenceMilestone<
+    T extends { title: string; description?: string | null; creator?: string | null },
+>(ms: T): T {
+    return {
+        ...ms,
+        title: fenceUntrustedInline(ms.title),
+        ...(ms.description !== undefined && ms.description !== null
+            ? { description: markUntrustedContent(ms.description) }
+            : {}),
+        ...(ms.creator !== undefined && ms.creator !== null
+            ? { creator: fenceUntrustedInline(ms.creator) }
+            : {}),
+    }
+}
 import { relaxedNumber } from '../schemas.js'
 import {
     GitHubMilestonesListOutputSchema,
@@ -82,7 +98,7 @@ export function getGitHubMilestoneTools(context: ToolContext): ToolDefinition[] 
                             ms.openIssues,
                             ms.closedIssues
                         )
-                        return { ...ms, completionPercentage }
+                        return fenceMilestone({ ...ms, completionPercentage })
                     })
 
                     return {
@@ -161,7 +177,7 @@ export function getGitHubMilestoneTools(context: ToolContext): ToolDefinition[] 
                     )
 
                     return {
-                        milestone: { ...milestone, completionPercentage },
+                        milestone: fenceMilestone({ ...milestone, completionPercentage }),
                         owner: resolved.owner,
                         repo: resolved.repo,
                         detectedOwner: resolved.detectedOwner,
@@ -240,8 +256,8 @@ export function getGitHubMilestoneTools(context: ToolContext): ToolDefinition[] 
 
                     return {
                         success: true,
-                        milestone: { ...milestone, completionPercentage: 0 },
-                        message: `Created milestone #${String(milestone.number)}: ${milestone.title}`,
+                        milestone: fenceMilestone({ ...milestone, completionPercentage: 0 }),
+                        message: `Created milestone #${String(milestone.number)}: ${fenceUntrustedInline(milestone.title)}`,
                     }
                 } catch (err) {
                     return formatHandlerError(err)
@@ -334,8 +350,8 @@ export function getGitHubMilestoneTools(context: ToolContext): ToolDefinition[] 
 
                     return {
                         success: true,
-                        milestone: { ...milestone, completionPercentage },
-                        message: `Updated milestone #${String(milestone.number)}: ${milestone.title}`,
+                        milestone: fenceMilestone({ ...milestone, completionPercentage }),
+                        message: `Updated milestone #${String(milestone.number)}: ${fenceUntrustedInline(milestone.title)}`,
                     }
                 } catch (err) {
                     return formatHandlerError(err)

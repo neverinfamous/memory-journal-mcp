@@ -9,26 +9,28 @@ import {
 import { ErrorFieldsMixin } from '../../error-fields-mixin.js'
 
 /** team_export_entries — strict */
-export const TeamExportEntriesSchema = z.object({
-    format: z.enum(['json', 'markdown']).optional().default('json'),
-    start_date: z.string().regex(DATE_FORMAT_REGEX, DATE_FORMAT_MESSAGE).optional(),
-    end_date: z.string().regex(DATE_FORMAT_REGEX, DATE_FORMAT_MESSAGE).optional(),
-    entry_type: z.enum(ENTRY_TYPES).optional(),
-    tags: z.array(z.string()).optional(),
-    limit: z.number().max(5000).optional().default(100),
-    project_number: StrictProjectNumberSchema.optional(),
-    workspace_id: z.string().optional(),
-})
+export const TeamExportEntriesSchema = z
+    .object({
+        format: z.enum(['json', 'markdown']).optional().default('json'),
+        start_date: z.string().regex(DATE_FORMAT_REGEX, DATE_FORMAT_MESSAGE).optional(),
+        end_date: z.string().regex(DATE_FORMAT_REGEX, DATE_FORMAT_MESSAGE).optional(),
+        entry_type: z.enum(ENTRY_TYPES).optional(),
+        tags: z.array(z.string()).optional(),
+        limit: z.number().int().min(1).max(5000).optional().default(100),
+        project_number: StrictProjectNumberSchema.optional(),
+        workspace_id: z.string().optional(),
+    })
+    .strict()
 
 /** team_export_entries — relaxed */
 export const TeamExportEntriesSchemaMcp = z.object({
-    format: z.string().optional().default('json'),
-    start_date: z.string().optional(),
-    end_date: z.string().optional(),
-    entry_type: z.string().optional(),
-    tags: z.array(z.string()).optional(),
-    limit: relaxedNumber().optional().default(100),
-    project_number: relaxedNumber().optional(),
+    format: z.string().optional().default('json').describe('Export format ("json" or "markdown")'),
+    start_date: z.string().optional().describe('Start date filter (YYYY-MM-DD)'),
+    end_date: z.string().optional().describe('End date filter (YYYY-MM-DD)'),
+    entry_type: z.string().optional().describe('Filter by entry type'),
+    tags: z.array(z.string()).optional().describe('Filter by tags'),
+    limit: relaxedNumber().optional().default(100).describe('Maximum entries to export (1-5000)'),
+    project_number: relaxedNumber().optional().describe('Numeric project ID to filter entries by.'),
     workspace_id: z
         .string()
         .optional()
@@ -38,9 +40,13 @@ export const TeamExportEntriesSchemaMcp = z.object({
 })
 
 /** team_backup — strict */
-export const TeamBackupSchema = z.object({
-    name: z.string().optional(),
-})
+export const TeamBackupSchema = z
+    .object({
+        name: z.string().optional().describe('Optional custom backup filename stem'),
+        project_number: StrictProjectNumberSchema.optional(),
+        workspace_id: z.string().optional(),
+    })
+    .strict()
 
 export const TeamExportOutputSchema = z
     .object({

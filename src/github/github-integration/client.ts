@@ -48,7 +48,10 @@ export class GitHubClient {
         this.git = simpleGit(gitOptions)
 
         if (resolvedToken) {
-            this.octokit = new Octokit({ auth: resolvedToken })
+            this.octokit = new Octokit({
+                auth: resolvedToken,
+                request: { timeout: 15_000 },
+            })
             
             // Passively capture rate limit state from all REST API responses
             this.octokit.hook.after('request', (response) => {
@@ -67,6 +70,7 @@ export class GitHubClient {
 
             this.graphqlWithAuth = graphql.defaults({
                 headers: { authorization: `token ${resolvedToken}` },
+                request: { timeout: 15_000 },
             })
             logger.info('GitHub integration initialized with token', { module: 'GitHub' })
         } else {
@@ -147,8 +151,9 @@ export class GitHubClient {
     }
 
     invalidateCache(prefix: string): void {
+        const boundaryPrefix = prefix.endsWith(':') ? prefix : `${prefix}:`
         for (const [key, entry] of this.apiCache.entries()) {
-            if (key.startsWith(prefix)) {
+            if (key === prefix || key.startsWith(boundaryPrefix)) {
                 this.totalCacheBytes -= entry.sizeBytes
                 this.apiCache.delete(key)
             }

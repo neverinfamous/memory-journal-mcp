@@ -22,9 +22,12 @@ import {
     pairStoredScope,
     uniqueWorkspaceForProject,
 } from '../../utils/write-scope.js'
+import { assertSafeDirectoryPath, assertSafeFilePath } from '../../utils/security-utils.js'
 import * as fs from 'node:fs/promises'
 import * as path from 'node:path'
 import { constants } from 'node:fs'
+
+const MAX_IMPORT_FILE_SIZE_BYTES = 5 * 1024 * 1024
 
 export const exportJsonSchema = ioExportJsonOptionsSchema
 export const exportMarkdownSchema = ioExportMarkdownOptionsSchema
@@ -46,9 +49,25 @@ function fetchAllWorkspaceEntries(
     return entries
 }
 
+async function assertNonSymlinkCliDir(dirPath: string): Promise<void> {
+    try {
+        const stats = await fs.lstat(dirPath)
+        if (stats.isSymbolicLink()) {
+            throw new Error(`Symlinks are forbidden for CLI directory paths: ${dirPath}`)
+        }
+    } catch (err: unknown) {
+        if ((err as NodeJS.ErrnoException).code !== 'ENOENT') {
+            throw err
+        }
+    }
+}
+
 export async function exportJsonAction(options: z.infer<typeof exportJsonSchema>, command: Command): Promise<void> {
     const { db, serverOptions } = await getDb(options, command)
     try {
+        if (options.dest?.includes('\0')) {
+            throw new Error('Invalid destination path: null bytes are not allowed')
+        }
         if (options.workspace?.trim() === '*') {
             throw new Error("Workspace '*' cannot be used for a single-file export.")
         }
@@ -64,7 +83,10 @@ export async function exportJsonAction(options: z.infer<typeof exportJsonSchema>
         const destPath = options.dest
             ? path.resolve(options.dest)
             : path.resolve(path.dirname(serverOptions.dbPath), 'backups', defaultName)
-        await fs.mkdir(path.dirname(destPath), { recursive: true })
+        const destDir = path.dirname(destPath)
+        await assertNonSymlinkCliDir(destDir)
+        assertSafeFilePath(destPath, [destDir])
+        await fs.mkdir(destDir, { recursive: true })
         const jsonPayload = JSON.stringify({ exportedAt: new Date().toISOString(), count: entries.length, entries }, null, 2)
         await fs.writeFile(destPath, jsonPayload, 'utf-8')
         const filename = path.basename(destPath)
@@ -87,6 +109,12 @@ export async function exportMarkdownAction(options: z.infer<typeof exportMarkdow
         if (!options.dir) {
             throw new Error('--dir is required for markdown export')
         }
+        if (options.dir.includes('\0')) {
+            throw new Error('Invalid directory path: null bytes are not allowed')
+        }
+        const resolvedDir = path.resolve(options.dir)
+        await assertNonSymlinkCliDir(resolvedDir)
+        assertSafeDirectoryPath(resolvedDir, [resolvedDir])
         if (options.workspace?.trim() === '*') {
             throw new Error("Workspace '*' cannot be used for a single-directory export.")
         }
@@ -108,8 +136,7 @@ export async function exportMarkdownAction(options: z.infer<typeof exportMarkdow
             ...(e.projectNumber !== undefined && e.projectNumber !== null ? { projectNumber: e.projectNumber } : {}),
         }))
 
-        // We bypass allowedRoots check for CLI since it's run by a trusted human/agent directly
-        const result = await exportEntriesToMarkdown(exportable, options.dir, db, [path.resolve(options.dir)])
+        const result = await exportEntriesToMarkdown(exportable, resolvedDir, db, [resolvedDir])
         process.stdout.write(JSON.stringify(result, null, 2) + '\n')
         if (!result.success) {
             process.exitCode = 1
@@ -245,13 +272,19 @@ export async function importMarkdownAction(options: z.infer<typeof importMarkdow
         if (!options.dir) {
             throw new Error('--dir is required for markdown import')
         }
+        if (options.dir.includes('\0')) {
+            throw new Error('Invalid directory path: null bytes are not allowed')
+        }
+        const resolvedDir = path.resolve(options.dir)
+        await assertNonSymlinkCliDir(resolvedDir)
+        assertSafeDirectoryPath(resolvedDir, [resolvedDir])
 
         const { workspaceId, projectNumber } = resolveImportWriteScope(options, serverOptions)
 
         const vectorManager = new VectorSearchManager(db, { modelName: serverOptions.embeddingModel })
 
         const result = await importMarkdownEntries(
-            options.dir,
+            resolvedDir,
             db,
             {
                 limit: 100000,
@@ -260,7 +293,7 @@ export async function importMarkdownAction(options: z.infer<typeof importMarkdow
                 config: serverOptions,
             },
             vectorManager,
-            [path.resolve(options.dir)]
+            [resolvedDir]
         )
         
         process.stdout.write(JSON.stringify(result, null, 2) + '\n')
@@ -281,16 +314,22 @@ export async function importExternalAction(options: z.infer<typeof importExterna
         if (!options.dir) {
             throw new Error('--dir is required for external import')
         }
+        if (options.dir.includes('\0')) {
+            throw new Error('Invalid directory path: null bytes are not allowed')
+        }
         if (!options.format) {
             throw new Error('--format is required for external import')
         }
+        const resolvedDir = path.resolve(options.dir)
+        await assertNonSymlinkCliDir(resolvedDir)
+        assertSafeDirectoryPath(resolvedDir, [resolvedDir])
 
         const { workspaceId, projectNumber } = resolveImportWriteScope(options, serverOptions)
 
         const vectorManager = new VectorSearchManager(db, { modelName: serverOptions.embeddingModel })
 
         const mdFiles: string[] = []
-        const dir = await fs.opendir(options.dir)
+        const dir = await fs.opendir(resolvedDir)
         for await (const dirent of dir) {
             if (dirent.isFile() && dirent.name.endsWith('.md')) {
                 mdFiles.push(dirent.name)
@@ -304,8 +343,15 @@ export async function importExternalAction(options: z.infer<typeof importExterna
         for (const filename of mdFiles) {
             let handle
             try {
-                const filepath = path.join(options.dir, filename)
+                const filepath = path.join(resolvedDir, filename)
+                assertSafeFilePath(filepath, [resolvedDir])
                 handle = await fs.open(filepath, constants.O_RDONLY | constants.O_NOFOLLOW)
+                const stats = await handle.stat()
+                if (stats.size > MAX_IMPORT_FILE_SIZE_BYTES) {
+                    throw new Error(
+                        `File exceeds maximum allowed import size (${String(MAX_IMPORT_FILE_SIZE_BYTES)} bytes)`
+                    )
+                }
                 const content = await handle.readFile('utf-8')
                 const converted = convertFile(content, filename, options.format)
 

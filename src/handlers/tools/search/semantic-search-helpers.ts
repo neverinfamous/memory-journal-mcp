@@ -171,7 +171,8 @@ function buildSemanticFilterOptions(
     input: SemanticSearchInput,
     wsId: string,
     projectNumber: number | undefined,
-    includeTeam: boolean
+    includeTeam: boolean,
+    config?: ToolContext['config']
 ): Record<string, unknown> {
     return {
         isPersonal: input.is_personal,
@@ -186,6 +187,7 @@ function buildSemanticFilterOptions(
         includeTeam,
         includeArchived: input.include_archived,
         workspaceId: wsId,
+        ...(config !== undefined ? { config } : {}),
     }
 }
 
@@ -234,7 +236,10 @@ export async function executeSemanticSearch(
             'semantic_search',
             input.include_team,
             params,
-            context.config?.runtime?.auditLogger
+            context.config?.runtime?.auditLogger,
+            context.teamDb,
+            context.config,
+            wsId
         )
 
         const preconditionError = validateSemanticSearchPreconditions(input, vectorManager)
@@ -255,7 +260,13 @@ export async function executeSemanticSearch(
             return vectorOutcome.errorResponse
         }
 
-        const filterOptions = buildSemanticFilterOptions(input, wsId, projectNumber, includeTeam)
+        const filterOptions = buildSemanticFilterOptions(
+            input,
+            wsId,
+            projectNumber,
+            includeTeam,
+            context.config
+        )
         const personalEntries = hydratePersonalSemanticEntries(
             db,
             vectorOutcome.results,

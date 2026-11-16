@@ -36,7 +36,10 @@ export function getDateRangeSearchTool(context: ToolContext): ToolDefinition[] {
                         'search_by_date_range',
                         input.include_team,
                         params,
-                        context.config?.runtime?.auditLogger
+                        context.config?.runtime?.auditLogger,
+                        teamDb,
+                        context.config,
+                        wsId
                     )
 
                     // Validate date range order (YYYY-MM-DD sorts lexicographically)

@@ -6,7 +6,7 @@ import {
     type Icon,
 } from '@modelcontextprotocol/server'
 import { callTool } from '../../../handlers/tools/index.js'
-import { readResource, validateResourceSubscription } from '../../../handlers/resources/index.js'
+import { validateResourceSubscription } from '../../../handlers/resources/index.js'
 import type { BriefingConfig } from '../../../handlers/resources/shared.js'
 import type { ToolRegistration, ToolHandlerConfig } from '../../../types/index.js'
 import {
@@ -24,9 +24,11 @@ import { attachCallToolInterceptor } from './call-interceptor.js'
 import {
     MUTATING_TOOLS,
     buildServerInstructions,
+    createResourceReadHandler,
     formatToolFailure,
     notifyMutationSubscribers,
     resolveActiveBriefingConfig,
+    syncLiveHandlerConfig,
 } from './register-tools-helpers.js'
 
 /**
@@ -151,13 +153,59 @@ function getRequestHandlers(rawServer: object): RequestHandlerMap | undefined {
     return undefined
 }
 
-function registerAllToolsOnServer(
+function formatRegisteredToolResponse(
+    tool: ToolRegistration,
+    result: unknown,
+    hasOutputSchema: boolean
+): CallToolResult {
+    const isSuccess =
+        typeof result === 'object' &&
+        result !== null &&
+        (result as Record<string, unknown>)['success'] === true
+
+    if (isSuccess) {
+        // [INTENT] Any tool that declares `readOnlyHint: false` (merge, link,
+        // import, Code Mode, ...) notifies subscribers, not just a fixed list (L5).
+        const isMutation =
+            MUTATING_TOOLS.has(tool.name) ||
+            readOnlyHintOf(tool) === false ||
+            (tool.name.startsWith('team_') && readOnlyHintOf(tool) !== true)
+
+        if (isMutation) {
+            notifyMutationSubscribers(tool.name)
+        }
+    }
+
+    const textContent = typeof result === 'string' ? result : JSON.stringify(result, null, 2)
+    const failed =
+        typeof result === 'object' &&
+        result !== null &&
+        (result as Record<string, unknown>)['success'] === false
+
+    if (hasOutputSchema) {
+        return {
+            content: [{ type: 'text' as const, text: textContent }],
+            structuredContent: result,
+            ...(failed ? { isError: true as const } : {}),
+        }
+    }
+
+    return {
+        content: [{ type: 'text' as const, text: textContent }],
+        ...(failed ? { isError: true as const } : {}),
+    }
+}
+
+async function executeRegisteredTool(
     server: McpServer,
+    tool: ToolRegistration,
+    hasOutputSchema: boolean,
+    args: unknown,
+    extra: unknown,
     context: ServerContext,
     options: ServerOptions,
-    allTools: ToolRegistration[],
     customToolHandlerConfig: ToolHandlerConfig
-): void {
+): Promise<CallToolResult> {
     const {
         configManager,
         db,
@@ -167,6 +215,60 @@ function registerAllToolsOnServer(
         github,
         allowedIoRoots,
     } = context
+    try {
+        const extraMeta = extra as
+            | { mcpReq?: { _meta?: { progressToken?: string | number } } }
+            | undefined
+        const progressToken = extraMeta?.mcpReq?._meta?.progressToken
+        const progressContext =
+            progressToken !== undefined ? { server: server.server, progressToken } : undefined
+
+        const currentConfig = configManager.getConfig()
+        const nextBriefing = resolveActiveBriefingConfig(
+            currentConfig.briefingConfig,
+            options,
+            allowedIoRoots
+        )
+        customToolHandlerConfig.filterConfig = currentConfig.toolFilterConfig
+        syncLiveHandlerConfig(customToolHandlerConfig, currentConfig, options, nextBriefing)
+
+        const toolArgs =
+            typeof args === 'object' && args !== null ? (args as Record<string, unknown>) : {}
+
+        const result = await callTool(
+            tool.name,
+            toolArgs,
+            db,
+            vectorManager,
+            github,
+            customToolHandlerConfig,
+            progressContext,
+            teamDb ?? undefined,
+            teamVectorManager ?? undefined
+        )
+        return formatRegisteredToolResponse(tool, result, hasOutputSchema)
+    } catch (error) {
+        const errorResult = formatToolFailure(error, tool.name, args)
+        return {
+            content: [
+                {
+                    type: 'text' as const,
+                    text: JSON.stringify(errorResult, null, 2),
+                },
+            ],
+            ...(hasOutputSchema ? { structuredContent: errorResult } : {}),
+            isError: true,
+        }
+    }
+}
+
+function registerAllToolsOnServer(
+    server: McpServer,
+    context: ServerContext,
+    options: ServerOptions,
+    allTools: ToolRegistration[],
+    customToolHandlerConfig: ToolHandlerConfig
+): void {
     for (const tool of allTools) {
         const toolOptions = buildToolRegistrationOptions(tool)
         const hasOutputSchema = Boolean(tool.outputSchema)
@@ -174,120 +276,17 @@ function registerAllToolsOnServer(
         server.registerTool<StandardSchemaWithJSON, StandardSchemaWithJSON>(
             tool.name,
             toolOptions,
-            async (args: unknown, extra: unknown): Promise<CallToolResult> => {
-                try {
-                    const extraMeta = extra as
-                        | { mcpReq?: { _meta?: { progressToken?: string | number } } }
-                        | undefined
-                    const progressToken = extraMeta?.mcpReq?._meta?.progressToken
-                    const progressContext =
-                        progressToken !== undefined
-                            ? { server: server.server, progressToken }
-                            : undefined
-
-                    const currentConfig = configManager.getConfig()
-                    const nextBriefing = resolveActiveBriefingConfig(
-                        currentConfig.briefingConfig,
-                        options,
-                        allowedIoRoots
-                    )
-                    customToolHandlerConfig.filterConfig = currentConfig.toolFilterConfig
-                    customToolHandlerConfig.briefingConfig = nextBriefing
-                    if (currentConfig.codemodeInternalFullAccess !== undefined) {
-                        customToolHandlerConfig.codemodeInternalFullAccess =
-                            currentConfig.codemodeInternalFullAccess
-                    } else {
-                        delete customToolHandlerConfig.codemodeInternalFullAccess
-                    }
-                    // [INVARIANT] Mirror config exactly (clearing removed fields) so a prior
-                    // value never lingers on the shared handler config across calls (C1).
-                    if (nextBriefing.defaultProjectNumber !== undefined) {
-                        customToolHandlerConfig.defaultProjectNumber =
-                            nextBriefing.defaultProjectNumber
-                    } else {
-                        delete customToolHandlerConfig.defaultProjectNumber
-                    }
-                    if (nextBriefing.defaultWorkspaceId !== undefined) {
-                        customToolHandlerConfig.defaultWorkspaceId =
-                            nextBriefing.defaultWorkspaceId
-                    } else {
-                        delete customToolHandlerConfig.defaultWorkspaceId
-                    }
-                    if (nextBriefing.projectRegistry !== undefined) {
-                        customToolHandlerConfig.projectRegistry = nextBriefing.projectRegistry
-                    } else {
-                        delete customToolHandlerConfig.projectRegistry
-                    }
-
-                    const toolArgs =
-                        typeof args === 'object' && args !== null
-                            ? (args as Record<string, unknown>)
-                            : {}
-
-                    const result = await callTool(
-                        tool.name,
-                        toolArgs,
-                        db,
-                        vectorManager,
-                        github,
-                        customToolHandlerConfig,
-                        progressContext,
-                        teamDb ?? undefined,
-                        teamVectorManager ?? undefined
-                    )
-
-                    const isSuccess =
-                        typeof result === 'object' &&
-                        result !== null &&
-                        (result as Record<string, unknown>)['success'] === true
-
-                    if (isSuccess) {
-                        // [INTENT] Any tool that declares `readOnlyHint: false` (merge, link,
-                        // import, Code Mode, ...) notifies subscribers, not just a fixed list (L5).
-                        const isMutation =
-                            MUTATING_TOOLS.has(tool.name) ||
-                            readOnlyHintOf(tool) === false ||
-                            (tool.name.startsWith('team_') && readOnlyHintOf(tool) !== true)
-
-                        if (isMutation) {
-                            notifyMutationSubscribers(tool.name)
-                        }
-                    }
-
-                    const textContent =
-                        typeof result === 'string' ? result : JSON.stringify(result, null, 2)
-                    const failed =
-                        typeof result === 'object' &&
-                        result !== null &&
-                        (result as Record<string, unknown>)['success'] === false
-
-                    if (hasOutputSchema) {
-                        return {
-                            content: [{ type: 'text' as const, text: textContent }],
-                            structuredContent: result as Record<string, unknown>,
-                            ...(failed ? { isError: true as const } : {}),
-                        }
-                    }
-
-                    return {
-                        content: [{ type: 'text' as const, text: textContent }],
-                        ...(failed ? { isError: true as const } : {}),
-                    }
-                } catch (error) {
-                    const errorResult = formatToolFailure(error, tool.name, args)
-
-                    return {
-                        content: [
-                            {
-                                type: 'text' as const,
-                                text: JSON.stringify(errorResult, null, 2),
-                            },
-                        ],
-                        ...(hasOutputSchema ? { structuredContent: errorResult } : {}),
-                        isError: true,
-                    }
-                }
-            }
+            (args: unknown, extra: unknown) =>
+                executeRegisteredTool(
+                    server,
+                    tool,
+                    hasOutputSchema,
+                    args,
+                    extra,
+                    context,
+                    options,
+                    customToolHandlerConfig
+                )
         )
     }
 }
@@ -298,72 +297,15 @@ function attachResourceAndSubscriptionHandlers(
     options: ServerOptions,
     resources: ResourceDefinition[]
 ): void {
-    const { configManager, db, teamDb, vectorManager, github, scheduler, allowedIoRoots, runtime } =
-        context
-    const handleResourceRead = async (
-        uri: URL,
-        mimeType: string
-    ): Promise<{
-        contents: {
-            uri: string
-            mimeType: string
-            text: string
-            annotations?: Record<string, unknown>
-        }[]
-    }> => {
-        const currentConfig = configManager.getConfig()
-        const activeBriefingConfig = resolveActiveBriefingConfig(
-            currentConfig.briefingConfig,
-            options,
-            allowedIoRoots,
-            runtime
-        )
-
-        try {
-            const result = await readResource(
-                uri.href,
-                db,
-                vectorManager,
-                currentConfig.toolFilterConfig,
-                github,
-                scheduler,
-                teamDb ?? undefined,
-                activeBriefingConfig,
-                runtime
-            )
-
-            runtime.metrics.recordResourceRead(uri.href, false)
-
-            const dataStr =
-                typeof result.data === 'string'
-                    ? result.data
-                    : JSON.stringify(result.data, null, 2)
-            return {
-                contents: [
-                    {
-                        uri: uri.href,
-                        mimeType,
-                        text: dataStr,
-                        ...(result.annotations !== undefined
-                            ? { annotations: result.annotations }
-                            : {}),
-                    },
-                ],
-            }
-        } catch (error) {
-            runtime.metrics.recordResourceRead(uri.href, true)
-            throw error
-        }
-    }
-
-    registerResources(server, resources, handleResourceRead, runtime)
+    const handleResourceRead = createResourceReadHandler(context, options)
+    registerResources(server, resources, handleResourceRead, context.runtime)
 
     server.server.setRequestHandler('resources/subscribe', (request, extra) => {
         const sessionId = (extra as { sessionId?: string } | undefined)?.sessionId
         const transportSessionId =
             sessionId !== undefined && sessionId !== '' ? sessionId : 'stdio'
 
-        validateResourceSubscription(request.params.uri, runtime)
+        validateResourceSubscription(request.params.uri, context.runtime)
 
         if (options.statelessHttp === true && (sessionId === undefined || sessionId === '')) {
             return {}
@@ -381,6 +323,14 @@ function attachResourceAndSubscriptionHandlers(
         globalSubscriptionManager.unsubscribe(request.params.uri, transportSessionId)
         return {}
     })
+}
+
+function collectReadOnlyHints(allTools: ToolRegistration[]): Map<string, boolean | undefined> {
+    const hints = new Map<string, boolean | undefined>()
+    for (const tool of allTools) {
+        hints.set(tool.name, readOnlyHintOf(tool))
+    }
+    return hints
 }
 
 export function createServerInstance(
@@ -405,14 +355,7 @@ export function createServerInstance(
             : {}),
     })
 
-    const readOnlyHints = new Map<string, boolean | undefined>()
-    for (const tool of allTools) {
-        readOnlyHints.set(tool.name, readOnlyHintOf(tool))
-    }
-
-    const getInstructions = (): string =>
-        buildServerInstructions(context, options, prompts, allToolNames, readOnlyHints)
-
+    const readOnlyHints = collectReadOnlyHints(allTools)
     const server = new McpServer(
         { name: 'memory-journal-mcp', version: VERSION },
         {
@@ -423,7 +366,7 @@ export function createServerInstance(
                 resources: { subscribe: true, listChanged: true },
                 experimental: { progress: {} },
             },
-            instructions: getInstructions(),
+            instructions: buildServerInstructions(context, options, prompts, allToolNames, readOnlyHints),
             maxToolInputElements: resolveEffectiveMaxToolInputElements(options.maxToolInputElements),
         }
     )
@@ -442,28 +385,10 @@ export function createServerInstance(
             allowedIoRoots,
             runtime
         )
-    registerPrompts(
-        server,
-        prompts,
-        db,
-        teamDb ?? undefined,
-        runtime,
-        context.github,
-        resolveLiveBriefingConfig
-    )
+    registerPrompts(server, prompts, db, teamDb ?? undefined, runtime, context.github, resolveLiveBriefingConfig)
 
     const requestHandlers = getRequestHandlers(server.server)
-
     attachListToolsInterceptor(requestHandlers, configManager, allToolNames, readOnlyHints)
-    attachCallToolInterceptor(
-        requestHandlers,
-        context,
-        options,
-        prompts,
-        allTools,
-        allToolNames,
-        customToolHandlerConfig
-    )
-
+    attachCallToolInterceptor(requestHandlers, context, options, prompts, allTools, allToolNames, customToolHandlerConfig)
     return server
 }

@@ -200,17 +200,6 @@ export function resolveFallbackGitCwd(
 
 export function resolveGitWorkingDir(input: GitWorkingDirInput, config?: ToolHandlerConfig): string {
     const registry = config?.projectRegistry ?? loadProjectRegistryFromConfig()
-    if (input.cwd !== undefined && input.cwd !== '') {
-        if (!fs.existsSync(input.cwd)) {
-            throw new Error(`Git working directory does not exist: ${input.cwd}`)
-        }
-        const roots = buildAllowedGitRoots(config, registry)
-        if (roots.length === 0) {
-            throw new Error('Git working directory must be a registered repository path or an allowed I/O root')
-        }
-        assertSafeDirectoryPath(input.cwd, roots)
-        return input.cwd
-    }
     const rawTarget = input.repo ?? input.repo_name ?? input.workspace_id ?? input.workspaceId
     const trimmedRawTarget = rawTarget?.trim()
     // [INVARIANT] Sentinel workspaces ('default', '*') never name a repository; fall through to project_number.
@@ -220,6 +209,36 @@ export function resolveGitWorkingDir(input: GitWorkingDirInput, config?: ToolHan
             : trimmedRawTarget
     const pNum = parseGitProjectNumber(input.project_number)
     assertConsistentGitScope(registry, pNum, trimmedRawTarget, target)
+    if (input.cwd !== undefined && input.cwd !== '') {
+        if (!fs.existsSync(input.cwd)) {
+            throw new Error(`Git working directory does not exist: ${input.cwd}`)
+        }
+        const roots = buildAllowedGitRoots(config, registry)
+        if (roots.length === 0) {
+            throw new Error('Git working directory must be a registered repository path or an allowed I/O root')
+        }
+        assertSafeDirectoryPath(input.cwd, roots)
+        if (registry && (pNum !== undefined || target !== undefined)) {
+            const cwdMatch = findMatchedRegistryKey(registry, input.cwd)
+            if (pNum !== undefined && cwdMatch !== undefined) {
+                const regProj = registry[cwdMatch]?.project_number
+                if (regProj !== undefined && regProj !== pNum) {
+                    throw new ValidationError(
+                        `project_number ${String(pNum)} does not match registered project ${String(regProj)} for workspace '${cwdMatch}'.`
+                    )
+                }
+            }
+            if (target !== undefined && cwdMatch !== undefined) {
+                const targetMatch = findMatchedRegistryKey(registry, target) ?? target
+                if (targetMatch.toLowerCase() !== cwdMatch.toLowerCase()) {
+                    throw new ValidationError(
+                        `cwd '${input.cwd}' (workspace '${cwdMatch}') does not match target workspace '${target}'.`
+                    )
+                }
+            }
+        }
+        return input.cwd
+    }
     if (trimmedRawTarget !== undefined && (trimmedRawTarget === '*' || trimmedRawTarget.toLowerCase() === 'default') && pNum === undefined) {
         throw new ValidationError(
             `workspace_id '${trimmedRawTarget}' cannot identify a git repository without repo, project_number, or cwd. ${formatRegisteredReposHint(registry)}`

@@ -28,7 +28,10 @@ export interface BriefingInsights {
 // ============================================================================
 
 /** Cached live digest with expiry timestamp */
-let liveDigestCache: { snapshot: DigestSnapshot; workspaceId: string; expiresAt: number } | null = null
+const liveDigestCache = new WeakMap<
+    object,
+    { snapshot: DigestSnapshot; workspaceId: string; expiresAt: number }
+>()
 
 /** Cache TTL in milliseconds (60 seconds) */
 const LIVE_DIGEST_TTL_MS = 60_000
@@ -71,21 +74,26 @@ function resolveDigestSnapshot(
     // Live compute: real-time digest when no cached snapshot exists.
     // Covers stdio transport (no scheduler) and fresh databases.
     // TTL cache prevents redundant recomputation across rapid reads.
+    const dbObj: unknown = context.db
+    const dbCacheKey = typeof dbObj === 'object' && dbObj !== null ? dbObj : undefined
+    const cachedDigest = dbCacheKey !== undefined ? liveDigestCache.get(dbCacheKey) : undefined
     if (
-        liveDigestCache?.workspaceId === effectiveWorkspace &&
-        Date.now() < liveDigestCache.expiresAt
+        cachedDigest?.workspaceId === effectiveWorkspace &&
+        Date.now() < cachedDigest.expiresAt
     ) {
-        return liveDigestCache.snapshot
+        return cachedDigest.snapshot
     }
 
     try {
         const liveDigest = context.db?.computeDigest?.(effectiveWorkspace)
         if (liveDigest !== undefined) {
             const snapshot: DigestSnapshot = liveDigest
-            liveDigestCache = {
-                snapshot,
-                workspaceId: effectiveWorkspace,
-                expiresAt: Date.now() + LIVE_DIGEST_TTL_MS,
+            if (dbCacheKey !== undefined) {
+                liveDigestCache.set(dbCacheKey, {
+                    snapshot,
+                    workspaceId: effectiveWorkspace,
+                    expiresAt: Date.now() + LIVE_DIGEST_TTL_MS,
+                })
             }
             logger.debug('Live digest computed for briefing (no scheduler/persisted snapshot)', {
                 module: 'BRIEFING',

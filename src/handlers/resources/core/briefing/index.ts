@@ -19,7 +19,12 @@ import {
     setActiveSessionProject,
 } from '../../../../utils/workspace-resolver.js'
 import { exactRegistryKey, uniqueWorkspaceForProject } from '../../../../utils/write-scope.js'
-import { DEFAULT_BRIEFING_CONFIG, getBaseUri, resourceWorkspace } from '../../shared.js'
+import {
+    DEFAULT_BRIEFING_CONFIG,
+    getBaseUri,
+    resourceWorkspace,
+    safeDecodeUriSegment,
+} from '../../shared.js'
 import type { InternalResourceDef, ResourceContext, ResourceResult } from '../../shared.js'
 import { buildGitHubSection } from './github-section.js'
 import {
@@ -64,8 +69,8 @@ export const dynamicBriefingResource: InternalResourceDef = {
     annotations: withPriority(0.9, ASSISTANT_FOCUSED),
     handler: async (uri: string, context: ResourceContext) => {
         const pinSession = parsePinSessionOption(uri)
-        const match = /memory:\/\/briefing\/(.+)/.exec(getBaseUri(uri))
-        const repoName = match?.[1] ? decodeURIComponent(match[1]) : undefined
+        const match = /^memory:\/\/briefing\/(.+)$/.exec(getBaseUri(uri))
+        const repoName = match?.[1] ? safeDecodeUriSegment(match[1]) : undefined
         return buildBriefingData(context, repoName, { pinSession })
     },
 }
@@ -224,7 +229,8 @@ export async function buildBriefingData(
     const github = await buildGitHubSection(
         activeGithub,
         config,
-        activeRepoPath !== undefined ? activeWorkspaceId : undefined
+        activeRepoPath !== undefined ? activeWorkspaceId : undefined,
+        ...(activeGithub !== undefined && context.runtime !== undefined ? [context.runtime] : [])
     )
     const team = buildTeamContext(context, config, activeProjectNumber, activeWorkspaceId)
     const insights = buildInsightsSection(context, activeWorkspaceId)

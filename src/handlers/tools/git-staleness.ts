@@ -35,6 +35,7 @@ export function readLatestGitTag(cwd: string): string | null {
             cwd,
             encoding: 'utf-8',
             windowsHide: true,
+            timeout: 5000,
         }).trim()
         return described === '' ? null : described
     } catch (err: unknown) {

@@ -206,7 +206,7 @@ describe('CLI Entry & Exec Commands', () => {
             expect(fetched?.content).toContain('Updated content body')
             db.close()
 
-            // 4. Metadata-only update without --content/--file and workspace reassignment (H16 & M7)
+            // 4. Metadata-only update without --content/--file and explicit --target-workspace reassignment (H16 & M7)
             stdoutOutput = []
             await updateEntryAction(
                 {
@@ -215,7 +215,8 @@ describe('CLI Entry & Exec Commands', () => {
                     expectedVersion: 2,
                     tag: 'metadata-only-tag',
                     project: 9,
-                    workspace: 'mysql-mcp',
+                    workspace: 'memory-journal-mcp',
+                    targetWorkspace: 'mysql-mcp',
                     json: true,
                 },
                 dummyCmd

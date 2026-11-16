@@ -7,6 +7,7 @@
 
 import type { z } from 'zod'
 import type { ToolContext } from '../../../../types/index.js'
+import { AuthorizationError } from '../../../../types/errors.js'
 import type { TeamRole } from '../../../../database/core/interfaces.js'
 import { fetchAuthor, batchFetchAuthors, resolveTeamProjectNumber, triggerTeamNotifications } from '../helpers.js'
 import { enforceEntryOwnership, resolveScopedTeamRole } from '../rbac.js'
@@ -121,12 +122,16 @@ export function buildValidatedTeamBatchUpdates(
             ? (preFetchedAuthors.get(u.entry_id) ?? null)
             : fetchAuthor(teamDb, u.entry_id)
         try {
-            enforceEntryOwnership(currentUser, author, callerRole, teamDb, effectiveWs)
-        } catch {
+            enforceEntryOwnership(currentUser, author, callerRole, teamDb, effectiveWs, rbacActive)
+        } catch (err) {
+            if (!(err instanceof AuthorizationError)) throw err
             return {
                 errorResponse: {
                     success: false,
-                    error: `Permission Denied: Only the original author ("${author ?? 'none recorded'}") or a team admin can modify team entry ${String(u.entry_id)}.`,
+                    error:
+                        err instanceof Error
+                            ? err.message
+                            : `Permission Denied: Only the original author ("${author ?? 'none recorded'}") or a team admin can modify team entry ${String(u.entry_id)}.`,
                     code: 'PERMISSION_DENIED',
                     category: 'auth',
                     suggestion: 'You can only update entries that you authored.',
@@ -153,23 +158,27 @@ export function checkSingleTeamOwnership(
 ): Record<string, unknown> | null {
     const author = fetchAuthor(teamDb, entryId)
     const currentUser = resolveAuthenticatedAuthor()
-    const callerRole =
-        teamDb.isTeamRbacActive()
-            ? resolveScopedTeamRole(
-                  teamDb,
-                  currentUser,
-                  context.config?.teamDefaultRole ?? 'denied',
-                  workspaceId
-              )
-            : null
+    const rbacActive = teamDb.isTeamRbacActive?.() ?? false
+    const callerRole = rbacActive
+        ? resolveScopedTeamRole(
+              teamDb,
+              currentUser,
+              context.config?.teamDefaultRole ?? 'denied',
+              workspaceId
+          )
+        : null
     try {
-        enforceEntryOwnership(currentUser, author, callerRole, teamDb, workspaceId)
+        enforceEntryOwnership(currentUser, author, callerRole, teamDb, workspaceId, rbacActive)
         return null
-    } catch {
+    } catch (err) {
+        if (!(err instanceof AuthorizationError)) throw err
         const actionVerb = action === 'modify' ? 'update' : action
         return {
             success: false,
-            error: `Permission Denied: Only the original author ("${author ?? 'none recorded'}") or a team admin can ${action} this team entry.`,
+            error:
+                err instanceof Error
+                    ? err.message
+                    : `Permission Denied: Only the original author ("${author ?? 'none recorded'}") or a team admin can ${action} this team entry.`,
             code: 'PERMISSION_DENIED',
             category: 'auth',
             suggestion: `You can only ${actionVerb} entries that you authored.`,
@@ -189,10 +198,13 @@ export function missingProjectNumberResponse(): Record<string, unknown> {
     }
 }
 
-export function permanentDeleteDeniedResponse(currentUser: string, callerRole: string): Record<string, unknown> {
+export function permanentDeleteDeniedResponse(
+    currentUser: string,
+    callerRole: string | null
+): Record<string, unknown> {
     return {
         success: false,
-        error: `Permission Denied: Permanent deletion of team entries requires the 'admin' role (caller "${currentUser}" has role "${callerRole}").`,
+        error: `Permission Denied: Permanent deletion of team entries requires the 'admin' role (caller "${currentUser}" has role "${callerRole ?? 'denied'}").`,
         code: 'PERMISSION_DENIED',
         category: 'auth',
         suggestion: 'Omit permanent: true to soft-delete your entries, or ask a team admin to permanently delete them.',
@@ -220,6 +232,7 @@ export function filterDeletableIds(
     const { entryIds, wsId, projectNumber, currentUser, callerRole, permanent } = opts
     const validIds: number[] = []
     const notFound: number[] = []
+    const rbacActive = teamDb.isTeamRbacActive?.() ?? false
 
     const existingMap =
         !permanent && typeof teamDb.getEntriesByIds === 'function'
@@ -252,12 +265,16 @@ export function filterDeletableIds(
             ? (authorMap.get(id) ?? null)
             : fetchAuthor(teamDb, id)
         try {
-            enforceEntryOwnership(currentUser, author, callerRole, teamDb, wsId)
-        } catch {
+            enforceEntryOwnership(currentUser, author, callerRole, teamDb, wsId, rbacActive)
+        } catch (err) {
+            if (!(err instanceof AuthorizationError)) throw err
             return {
                 errorResponse: {
                     success: false,
-                    error: `Permission Denied: Only the original author ("${author ?? 'none recorded'}") or a team admin can delete team entry ${String(id)}.`,
+                    error:
+                        err instanceof Error
+                            ? err.message
+                            : `Permission Denied: Only the original author ("${author ?? 'none recorded'}") or a team admin can delete team entry ${String(id)}.`,
                     code: 'PERMISSION_DENIED',
                     category: 'auth',
                     suggestion: 'You can only delete entries that you authored.',
@@ -331,7 +348,8 @@ export async function executeTeamBatchDelete(
     }
     wsId = resolveWriteWorkspaceId(input.workspace_id ?? wsId, projectNumber, context.config)
 
-    const callerRole = teamDb.isTeamRbacActive?.()
+    const rbacActive = teamDb.isTeamRbacActive?.() ?? false
+    const callerRole = rbacActive
         ? resolveScopedTeamRole(
               teamDb,
               currentUser,
@@ -340,7 +358,7 @@ export async function executeTeamBatchDelete(
           )
         : null
 
-    if (input.permanent && callerRole !== null && callerRole !== 'admin') {
+    if (input.permanent && rbacActive && callerRole !== 'admin') {
         return permanentDeleteDeniedResponse(currentUser, callerRole)
     }
 

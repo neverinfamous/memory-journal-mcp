@@ -41,13 +41,19 @@ export function getEntriesByIds(
 
     const { db, tagsMgr } = context
     const scopeId = effectiveWorkspace(workspaceId)
-    const placeholders = ids.map(() => '?').join(', ')
-    const stmt = db.prepare(
-        scopeId === '*'
-            ? `SELECT ${ENTRY_COLUMNS} FROM memory_journal WHERE id IN (${placeholders}) AND deleted_at IS NULL`
-            : `SELECT ${ENTRY_COLUMNS} FROM memory_journal WHERE id IN (${placeholders}) AND deleted_at IS NULL AND workspace_id = ?`
-    )
-    const rows = scopeId === '*' ? stmt.all(ids) : stmt.all(...ids, scopeId)
+    const CHUNK_SIZE = 500
+    const rows: unknown[] = []
+    for (let i = 0; i < ids.length; i += CHUNK_SIZE) {
+        const chunk = ids.slice(i, i + CHUNK_SIZE)
+        const placeholders = chunk.map(() => '?').join(', ')
+        const stmt = db.prepare(
+            scopeId === '*'
+                ? `SELECT ${ENTRY_COLUMNS} FROM memory_journal WHERE id IN (${placeholders}) AND deleted_at IS NULL`
+                : `SELECT ${ENTRY_COLUMNS} FROM memory_journal WHERE id IN (${placeholders}) AND deleted_at IS NULL AND workspace_id = ?`
+        )
+        const chunkRows = scopeId === '*' ? stmt.all(...chunk) : stmt.all(...chunk, scopeId)
+        rows.push(...chunkRows)
+    }
 
     if (rows.length === 0) return result
 

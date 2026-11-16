@@ -86,6 +86,10 @@ export function registerEntryCommands(program: Command): void {
             .option('-c, --content <string>', 'Raw new markdown content string')
             .option('--body <string>', 'Alias for --content (Auto-healing agent hallucination)')
             .option('-d, --description <string>', 'Alias for --content (Auto-healing agent hallucination)')
+            .option(
+                '--target-workspace <id>',
+                'Explicit target workspace ID when reassigning an existing entry to a different workspace'
+            )
         addEntryFieldOptions(cmd)
     })
     finishEntryCommand(updateEntryCmd)

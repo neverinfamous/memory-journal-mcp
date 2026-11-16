@@ -14,9 +14,22 @@ import { HELP_CONTENT } from '../../constants/server-instructions.js'
 import { ASSISTANT_FOCUSED } from '../../utils/resource-annotations.js'
 import { logger } from '../../utils/logger.js'
 import { getAllToolNames, getToolGroup, isToolVisibleForFilter } from '../../filtering/tool-filter.js'
-import { getBaseUri, type InternalResourceDef, type ResourceContext, type ResourceResult } from './shared.js'
+import {
+    getBaseUri,
+    safeDecodeUriSegment,
+    type InternalResourceDef,
+    type ResourceContext,
+    type ResourceResult,
+} from './shared.js'
 import type { getTools } from '../../handlers/tools/index.js'
 import { ProtocolError, ProtocolErrorCode } from '@modelcontextprotocol/server'
+import {
+    extractParameters,
+    peelZodType,
+    type ParameterInfo,
+} from './help-schema-params.js'
+
+export { extractParameters, peelZodType, type ParameterInfo }
 
 // ============================================================================
 // Group Metadata
@@ -37,153 +50,6 @@ const GROUP_DESCRIPTIONS: Record<string, string> = {
     backup: 'Create and restore database backups',
     team: 'Team collaboration — shared entries, cross-project insights, team analytics',
     codemode: 'Sandboxed JavaScript execution with access to the journal API',
-}
-
-// ============================================================================
-// Schema Introspection
-// ============================================================================
-
-interface ParameterInfo {
-    name: string
-    type: string
-    required: boolean
-    description?: string
-}
-
-/** Friendly display names for Zod primitive type names */
-const ZOD_TYPE_DISPLAY: Record<string, string> = {
-    ZodString: 'string',
-    ZodNumber: 'number',
-    ZodBoolean: 'boolean',
-    ZodArray: 'array',
-    ZodObject: 'object',
-    ZodEnum: 'enum',
-    ZodNativeEnum: 'enum',
-    ZodLiteral: 'literal',
-    ZodUnion: 'union',
-    ZodIntersection: 'intersection',
-    ZodRecord: 'record',
-    ZodTuple: 'tuple',
-    ZodAny: 'any',
-    ZodUnknown: 'unknown',
-    ZodNull: 'null',
-    ZodUndefined: 'undefined',
-    ZodVoid: 'void',
-}
-
-/** Wrapper type names that make a field optional or supply a default */
-const ZOD_OPTIONAL_WRAPPERS = new Set([
-    'ZodOptional',
-    'ZodDefault',
-    'ZodNullable',
-    'optional',
-    'default',
-    'nullable',
-])
-
-/**
- * Recursively peel ZodOptional / ZodDefault / ZodNullable wrappers from a
- * Zod `_def` object to discover the innermost concrete type, whether the
- * field is optional to callers, and the description (first `_def` that has
- * one, scanning outer → inner). Supports both Zod 3 and Zod 4 shape.
- */
-export function peelZodType(def: Record<string, unknown>): {
-    typeName: string
-    isOptional: boolean
-    description: string | undefined
-} {
-    let isOptional = false
-    let description: string | undefined
-    let current = def
-
-    for (;;) {
-        if (description === undefined && typeof current['description'] === 'string') {
-            description = current['description']
-        }
-
-        // Zod 3 uses .typeName ('ZodString'), Zod 4 uses .type ('string')
-        const tn = (current['typeName'] ?? current['type']) as string | undefined
-        if (!tn) break
-
-        if (ZOD_OPTIONAL_WRAPPERS.has(tn)) {
-            isOptional = true
-            const inner = current['innerType'] as { _def?: Record<string, unknown> } | undefined
-            if (!inner?._def) break
-            current = inner._def
-        } else {
-            const normalized = tn.replace('Zod', '').toLowerCase()
-            const displayName = ZOD_TYPE_DISPLAY[tn] ?? normalized
-            return { typeName: displayName, isOptional, description }
-        }
-    }
-
-    return { typeName: 'unknown', isOptional, description }
-}
-
-/**
- * Extract parameter info from a Zod schema's shape.
- * Works with z.object() schemas that have a `.shape` property.
- */
-export function extractParameters(inputSchema: unknown): ParameterInfo[] {
-    if (inputSchema === undefined || inputSchema === null || typeof inputSchema !== 'object') {
-        return []
-    }
-
-    let schema = inputSchema as Record<string, unknown>
-
-    // Unwrap ZodEffects (.transform, .refine) or ZodPipe (Zod 4 .transform)
-    if (typeof schema['innerType'] === 'function') {
-        const innerTypeFn = schema['innerType'] as () => unknown
-        schema = innerTypeFn() as Record<string, unknown>
-    } else if (
-        schema['_def'] !== undefined &&
-        schema['_def'] !== null &&
-        typeof schema['_def'] === 'object' &&
-        'schema' in schema['_def']
-    ) {
-        schema = (schema['_def'] as Record<string, unknown>)['schema'] as Record<string, unknown>
-    } else if (
-        schema['out'] !== undefined &&
-        schema['out'] !== null &&
-        typeof schema['out'] === 'object' &&
-        'shape' in schema['out']
-    ) {
-        schema = schema['out']
-    } else if (
-        schema['in'] !== undefined &&
-        schema['in'] !== null &&
-        typeof schema['in'] === 'object'
-    ) {
-        schema = schema['in'] as Record<string, unknown>
-    }
-
-    const rawShape: unknown = schema['shape']
-    if (rawShape === undefined || rawShape === null || typeof rawShape !== 'object') {
-        return []
-    }
-
-    const shape = rawShape as Record<string, unknown>
-    const params: ParameterInfo[] = []
-
-    for (const [name, fieldSchema] of Object.entries(shape)) {
-        if (fieldSchema === undefined || fieldSchema === null || typeof fieldSchema !== 'object') {
-            continue
-        }
-        const field = fieldSchema as Record<string, unknown>
-        const rawDef = field['_def'] as Record<string, unknown> | undefined
-        if (!rawDef) continue
-
-        const { typeName, isOptional, description } = peelZodType(rawDef)
-
-        params.push({
-            name,
-            type: typeName,
-            required: !isOptional,
-            ...(description !== undefined ? { description } : {}),
-        })
-    }
-
-    return params
 }
 
 // ============================================================================
@@ -271,7 +137,7 @@ export function getHelpResourceDefinitions(): InternalResourceDef[] {
             annotations: ASSISTANT_FOCUSED,
             handler: async (uri: string, context: ResourceContext): Promise<ResourceResult> => {
                 const match = /^memory:\/\/help\/([^/?#]+)$/.exec(getBaseUri(uri))
-                const rawGroupName = match?.[1]
+                const rawGroupName = match?.[1] ? safeDecodeUriSegment(match[1]) : undefined
                 const groupName = rawGroupName === 'export' ? 'io' : rawGroupName
 
                 if (!groupName) {

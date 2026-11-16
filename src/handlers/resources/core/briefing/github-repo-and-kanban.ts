@@ -7,6 +7,7 @@ import type { BriefingConfig } from '../../shared.js'
 import { resolveGitHubRepo, isResourceError, milestoneCompletionPct } from '../../shared.js'
 import { logger } from '../../../../utils/logger.js'
 import { markUntrustedContentInline } from '../../../../utils/security-utils.js'
+import type { ServerRuntime } from '../../../../utils/maintenance-lock.js'
 import type { BriefingGitHub } from './github-section.js'
 
 export interface CiResult {
@@ -20,9 +21,10 @@ export interface CiResult {
 export async function resolveBriefingRepo(
     github: GitHubIntegration,
     config: BriefingConfig,
-    targetRepo?: string
+    targetRepo?: string,
+    runtime?: ServerRuntime
 ): Promise<{ owner: string; repo: string; branch: string | null; github: GitHubIntegration } | null> {
-    const resolved = await resolveGitHubRepo(github, config, targetRepo)
+    const resolved = await resolveGitHubRepo(github, config, targetRepo, runtime)
     if (isResourceError(resolved)) return null
     return {
         owner: resolved.owner,

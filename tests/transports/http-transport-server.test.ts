@@ -65,6 +65,7 @@ vi.mock('../../src/transports/http/handlers.js', () => ({
 }))
 
 vi.mock('../../src/transports/http/security.js', () => ({
+    validateOAuthTransportConfig: vi.fn().mockReturnValue(null),
     setSecurityHeaders: vi.fn(),
     setCorsHeaders: vi.fn(),
     checkRateLimit: vi.fn().mockReturnValue({ allowed: true }),

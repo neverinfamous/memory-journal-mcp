@@ -9,7 +9,12 @@ import { ProtocolError, ProtocolErrorCode } from '@modelcontextprotocol/server'
 import { MEDIUM_PRIORITY } from '../../utils/resource-annotations.js'
 import { markUntrustedContentInline } from '../../utils/security-utils.js'
 import type { InternalResourceDef, ResourceContext } from './shared.js'
-import { getBaseUri, isResourceError, resolveScopedGitHubRepo } from './shared.js'
+import {
+    getBaseUri,
+    isResourceError,
+    resolveScopedGitHubRepo,
+    safeDecodeUriSegment,
+} from './shared.js'
 import { resolveProjectScope } from './template-helpers.js'
 
 export function fenceInline(value: string): string {
@@ -33,8 +38,8 @@ export function getKanbanTemplateDefinitions(): InternalResourceDef[] {
             mimeType: 'application/json',
             annotations: { ...MEDIUM_PRIORITY, audience: ['assistant'] },
             handler: async (uri: string, context: ResourceContext) => {
-                const match = /memory:\/\/kanban\/(?:(.*)\/)?(\d+)$/.exec(getBaseUri(uri))
-                const targetRepo = match?.[1] ? decodeURIComponent(match[1]) : undefined
+                const match = /^memory:\/\/kanban\/(?:(.+)\/)?(\d+)$/.exec(getBaseUri(uri))
+                const targetRepo = match?.[1] ? safeDecodeUriSegment(match[1]) : undefined
                 const projectNumber = match?.[2] ? parseInt(match[2], 10) : null
 
                 if (projectNumber === null) {

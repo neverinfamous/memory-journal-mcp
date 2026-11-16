@@ -102,6 +102,19 @@ export class NativeConnectionManager implements IDatabaseConnection {
         }
     }
 
+    private resolvePackageVecFallbackPath(): string {
+        let dir = import.meta.dirname
+        for (let depth = 0; depth < 5; depth++) {
+            if (fs.existsSync(path.join(dir, 'package.json'))) {
+                return path.resolve(dir, 'vec0')
+            }
+            const parent = path.dirname(dir)
+            if (parent === dir) break
+            dir = parent
+        }
+        return path.resolve(import.meta.dirname, '..', '..', '..', 'vec0')
+    }
+
     /**
      * Load the sqlite-vec extension (npm package first, compiled fallback second).
      * Returns false when close() was called during the async load, so initialization must abort.
@@ -129,9 +142,8 @@ export class NativeConnectionManager implements IDatabaseConnection {
                 module: 'NativeConnectionManager',
                 error: String(npmLoadError),
             })
-            // Fallback: try loading the compiled .so directly (for Alpine Docker)
-            // In production, the .so is placed in /app/vec0.so, so we resolve relative to the process root or a known path.
-            const fallbackPath = path.resolve(process.cwd(), 'vec0')
+            // [BOUNDARY] Resolve compiled fallback relative to the package root, never process.cwd().
+            const fallbackPath = this.resolvePackageVecFallbackPath()
             try {
                 db.loadExtension(fallbackPath)
             } catch (fallbackError) {

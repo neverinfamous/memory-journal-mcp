@@ -4,6 +4,7 @@ import * as path from 'node:path'
 import * as fs from 'node:fs'
 import { ValidationError } from '../types/errors.js'
 import { logger } from './logger.js'
+import { parseConfigObjectContent } from './registry-config-file.js'
 
 /**
  * [BOUNDARY] Project registry loading, alias/keyword matching, and path-based lookups.
@@ -55,8 +56,8 @@ export function loadProjectRegistryFromConfig(): Record<string, ProjectRegistryE
         const configPath = getConfigPath()
         if (!fs.existsSync(configPath)) return undefined
         const content = fs.readFileSync(configPath, 'utf-8')
-        const config = JSON.parse(content) as ParsedConfig
-        return config.projectRegistry
+        const config = parseConfigObjectContent(configPath, content) as ParsedConfig | null
+        return typeof config === 'object' && config !== null ? config.projectRegistry : undefined
     } catch (error) {
         logger.debug('Failed to load project registry from config', {
             module: 'workspace-resolver',
@@ -274,7 +275,9 @@ export function resolveProjectNumberFromPath(
             const configPath = getConfigPath()
             if (!fs.existsSync(configPath)) return undefined
             const content = fs.readFileSync(configPath, 'utf-8')
-            projectRegistry = (JSON.parse(content) as ParsedConfig).projectRegistry
+            const config = parseConfigObjectContent(configPath, content) as ParsedConfig | null
+            projectRegistry =
+                typeof config === 'object' && config !== null ? config.projectRegistry : undefined
         }
         if (projectRegistry === undefined || projectRegistry === null) return undefined
         return findBestMatchingPathEntry(cwd, projectRegistry)?.projectNumber

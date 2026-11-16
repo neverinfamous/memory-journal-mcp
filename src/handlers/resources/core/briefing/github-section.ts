@@ -8,6 +8,7 @@
 import type { GitHubIntegration } from '../../../../github/github-integration/index.js'
 import type { BriefingConfig } from '../../shared.js'
 import { logger } from '../../../../utils/logger.js'
+import type { ServerRuntime } from '../../../../utils/maintenance-lock.js'
 import {
     resolveBriefingRepo,
     fetchCiStatus,
@@ -103,11 +104,12 @@ export async function buildGitHubSection(
     github: GitHubIntegration | null | undefined,
     config: BriefingConfig,
     targetRepo?: string,
+    runtime?: ServerRuntime,
 ): Promise<BriefingGitHub | null> {
     if (!github) return null
 
     try {
-        const resolved = await resolveBriefingRepo(github, config, targetRepo)
+        const resolved = await resolveBriefingRepo(github, config, targetRepo, runtime)
         if (!resolved) return null
         const { owner, repo, github: repoGithub } = resolved
         const [

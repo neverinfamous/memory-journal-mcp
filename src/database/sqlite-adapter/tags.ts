@@ -24,17 +24,21 @@ export class TagsManager {
             const uniqueTags = Array.from(new Set(tagNames.filter((t) => t.length > 0)))
             if (uniqueTags.length === 0) return
 
-            const insertPlaceholders = uniqueTags.map(() => '(?, 0)').join(', ')
-            db.prepare(
-                `INSERT OR IGNORE INTO tags (name, usage_count) VALUES ${insertPlaceholders}`
-            ).run(...uniqueTags)
+            const CHUNK_SIZE = 500
+            const tagIds: number[] = []
+            for (let i = 0; i < uniqueTags.length; i += CHUNK_SIZE) {
+                const tagChunk = uniqueTags.slice(i, i + CHUNK_SIZE)
+                const insertPlaceholders = tagChunk.map(() => '(?, 0)').join(', ')
+                db.prepare(
+                    `INSERT OR IGNORE INTO tags (name, usage_count) VALUES ${insertPlaceholders}`
+                ).run(...tagChunk)
 
-            const selectPlaceholders = uniqueTags.map(() => '?').join(', ')
-            const rows = db
-                .prepare(`SELECT id, name FROM tags WHERE name IN (${selectPlaceholders})`)
-                .all(...uniqueTags) as { id: number; name: string }[]
-
-            const tagIds = rows.map((r) => r.id)
+                const selectPlaceholders = tagChunk.map(() => '?').join(', ')
+                const rows = db
+                    .prepare(`SELECT id, name FROM tags WHERE name IN (${selectPlaceholders})`)
+                    .all(...tagChunk) as { id: number; name: string }[]
+                for (const row of rows) tagIds.push(row.id)
+            }
             if (tagIds.length === 0) return
 
             const insertLinkStmt = db.prepare(
@@ -48,11 +52,12 @@ export class TagsManager {
                 }
             }
 
-            if (newlyLinkedTagIds.length > 0) {
-                const updatePlaceholders = newlyLinkedTagIds.map(() => '?').join(', ')
+            for (let i = 0; i < newlyLinkedTagIds.length; i += CHUNK_SIZE) {
+                const idChunk = newlyLinkedTagIds.slice(i, i + CHUNK_SIZE)
+                const updatePlaceholders = idChunk.map(() => '?').join(', ')
                 db.prepare(
                     `UPDATE tags SET usage_count = COALESCE(usage_count, 0) + 1 WHERE id IN (${updatePlaceholders})`
-                ).run(...newlyLinkedTagIds)
+                ).run(...idChunk)
             }
         })
 
@@ -75,7 +80,7 @@ export class TagsManager {
         const tagMap = new Map<number, string[]>()
         if (ids.length === 0) return tagMap
 
-        const CHUNK_SIZE = 900
+        const CHUNK_SIZE = 500
         for (let i = 0; i < ids.length; i += CHUNK_SIZE) {
             const chunk = ids.slice(i, i + CHUNK_SIZE)
             const placeholders = chunk.map(() => '?').join(', ')
@@ -264,28 +269,35 @@ export class TagsManager {
     ): boolean {
         const db = this.db
         if (entryIds.length > 0) {
-            const idPlaceholders = entryIds.map(() => '?').join(', ')
-            const params: unknown[] = [sourceTagId, ...entryIds]
             const scopeConds: string[] = []
+            const scopeParams: unknown[] = []
             if (scopedWorkspace !== undefined && scopedWorkspace !== '*') {
                 scopeConds.push('workspace_id = ?')
-                params.push(scopedWorkspace)
+                scopeParams.push(scopedWorkspace)
             }
             if (scopedProject !== undefined) {
                 scopeConds.push('project_number = ?')
-                params.push(scopedProject)
+                scopeParams.push(scopedProject)
             }
             const projectClause =
                 scopeConds.length > 0
                     ? ` AND entry_id IN (SELECT id FROM memory_journal WHERE ${scopeConds.join(' AND ')})`
                     : ''
-            const delResult = db
-                .prepare(
-                    `DELETE FROM entry_tags WHERE tag_id = ? AND entry_id IN (${idPlaceholders})${projectClause}`
-                )
-                .run(...params)
+
+            const CHUNK_SIZE = 500
+            let totalDeleted = 0
+            for (let i = 0; i < entryIds.length; i += CHUNK_SIZE) {
+                const chunk = entryIds.slice(i, i + CHUNK_SIZE)
+                const idPlaceholders = chunk.map(() => '?').join(', ')
+                const delResult = db
+                    .prepare(
+                        `DELETE FROM entry_tags WHERE tag_id = ? AND entry_id IN (${idPlaceholders})${projectClause}`
+                    )
+                    .run(sourceTagId, ...chunk, ...scopeParams)
+                totalDeleted += delResult.changes
+            }
             db.prepare('UPDATE tags SET usage_count = MAX(0, usage_count - ?) WHERE id = ?').run(
-                delResult.changes,
+                totalDeleted,
                 sourceTagId
             )
         }
