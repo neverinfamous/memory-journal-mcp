@@ -21,39 +21,47 @@ export const MISSING_PROJECT_NUMBER_ERROR = {
     recoverable: true,
 }
 
-const GetKanbanBoardSchema = z.object({
-    project_number: githubScopeParseFields.project_number,
-    owner: z.string().optional(),
-    repo: z.string().optional(),
-    workspace_id: githubScopeParseFields.workspace_id,
-    summary_only: z.boolean().optional().default(false),
-    item_limit: z.number().int().min(0).max(100).optional().default(25),
-})
+const GetKanbanBoardSchema = z
+    .object({
+        project_number: githubScopeParseFields.project_number,
+        owner: z.string().optional(),
+        repo: z.string().optional(),
+        workspace_id: githubScopeParseFields.workspace_id,
+        summary_only: z.boolean().optional().default(false),
+        item_limit: z.number().int().min(0).max(100).optional().default(25),
+    })
+    .strict()
 
-const MoveKanbanItemSchema = z.object({
-    project_number: githubScopeParseFields.project_number,
-    item_id: z.string(),
-    target_status: z.string(),
-    owner: z.string().optional(),
-    repo: z.string().optional(),
-    workspace_id: githubScopeParseFields.workspace_id,
-})
+const MoveKanbanItemSchema = z
+    .object({
+        project_number: githubScopeParseFields.project_number,
+        item_id: z.string().min(1),
+        target_status: z.string().min(1),
+        owner: z.string().optional(),
+        repo: z.string().optional(),
+        workspace_id: githubScopeParseFields.workspace_id,
+    })
+    .strict()
 
-const AddKanbanItemSchema = z.object({
-    project_number: githubScopeParseFields.project_number,
-    issue_number: z.number(),
-    owner: z.string().optional(),
-    repo: z.string().optional(),
-    workspace_id: githubScopeParseFields.workspace_id,
-})
+const AddKanbanItemSchema = z
+    .object({
+        project_number: githubScopeParseFields.project_number,
+        issue_number: z.number().int().positive(),
+        owner: z.string().optional(),
+        repo: z.string().optional(),
+        workspace_id: githubScopeParseFields.workspace_id,
+    })
+    .strict()
 
-const DeleteKanbanItemSchema = z.object({
-    project_number: githubScopeParseFields.project_number,
-    item_id: z.string(),
-    owner: z.string().optional(),
-    repo: z.string().optional(),
-    workspace_id: githubScopeParseFields.workspace_id,
-})
+const DeleteKanbanItemSchema = z
+    .object({
+        project_number: githubScopeParseFields.project_number,
+        item_id: z.string().min(1),
+        owner: z.string().optional(),
+        repo: z.string().optional(),
+        workspace_id: githubScopeParseFields.workspace_id,
+    })
+    .strict()
 
 export async function handleGetKanbanBoard(
     context: ToolContext,

@@ -23,15 +23,15 @@ export function validateCliUpdateArgsAndTarget(
     options: UpdateEntryCliOptions
 ): ValidatedCliUpdateArgs {
     const entryId = options.id
-    if (entryId === undefined || isNaN(entryId)) {
-        process.stderr.write('Error: Must provide a valid --id\n')
+    if (entryId === undefined || !Number.isInteger(entryId) || entryId < 1) {
+        process.stderr.write('Error: Must provide a valid --id (positive integer)\n')
         process.exit(1)
     }
 
     const version = options.expectedVersion
-    if (version === undefined || isNaN(version)) {
+    if (version === undefined || !Number.isInteger(version) || version < 1) {
         process.stderr.write(
-            'Error: Must provide a valid --expected-version (expected version) to prevent concurrent overwrites\n'
+            'Error: Must provide a valid --expected-version (expected positive integer version) to prevent concurrent overwrites\n'
         )
         process.exit(1)
     }
@@ -66,7 +66,8 @@ export function assertCliUpdateWorkspaceOwnership(
     rawWorkspaceOpt: string | undefined,
     payload: EntryPayload,
     trimmedTargetWs: string | undefined,
-    config: ToolHandlerConfig
+    config: ToolHandlerConfig,
+    metaSourceWs?: string
 ): void {
     if (payload.workspaceId?.trim() === '*') {
         throw new ValidationError(
@@ -78,9 +79,11 @@ export function assertCliUpdateWorkspaceOwnership(
     const explicitSourceWs =
         rawWorkspaceOpt !== undefined && rawWorkspaceOpt.trim() !== ''
             ? rawWorkspaceOpt.trim()
-            : payload.hasExplicitWorkspace === true && trimmedTargetWs === undefined
-              ? payload.workspaceId
-              : undefined
+            : metaSourceWs !== undefined && metaSourceWs !== ''
+              ? metaSourceWs
+              : payload.hasExplicitWorkspace === true && trimmedTargetWs === undefined
+                ? payload.workspaceId
+                : undefined
 
     if (explicitSourceWs !== undefined) {
         if (
@@ -99,8 +102,6 @@ export function assertCliUpdateWorkspaceOwnership(
         return
     }
 
-    if (trimmedTargetWs !== undefined) return
-
     const implicitWorkspace = resolveWorkspaceId(undefined, undefined, {
         runtime: null,
         ...(config.defaultWorkspaceId !== undefined
@@ -111,10 +112,23 @@ export function assertCliUpdateWorkspaceOwnership(
             : {}),
     })
     if (
-        existingEntry !== null &&
-        existingEntry !== undefined &&
+        trimmedTargetWs !== undefined &&
+        existingEntry?.workspaceId !== undefined &&
+        existingEntry.workspaceId.toLowerCase() !== trimmedTargetWs.toLowerCase() &&
+        existingEntry.workspaceId.toLowerCase() !== implicitWorkspace?.toLowerCase()
+    ) {
+        throw new ValidationError(
+            `Entry #${String(entryId)} belongs to workspace '${existingEntry.workspaceId}'. Pass --workspace '${existingEntry.workspaceId}' --target-workspace '${trimmedTargetWs}' explicitly to reassign it.`,
+            {
+                entryId,
+                entryWorkspaceId: existingEntry.workspaceId,
+                targetWorkspaceId: trimmedTargetWs,
+            }
+        )
+    }
+    if (
+        existingEntry?.workspaceId !== undefined &&
         implicitWorkspace !== undefined &&
-        existingEntry.workspaceId !== undefined &&
         existingEntry.workspaceId.toLowerCase() !== implicitWorkspace.toLowerCase()
     ) {
         throw new ValidationError(

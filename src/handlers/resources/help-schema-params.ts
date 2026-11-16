@@ -20,6 +20,7 @@ const ZOD_TYPE_DISPLAY: Record<string, string> = {
     ZodNativeEnum: 'enum',
     ZodLiteral: 'literal',
     ZodUnion: 'union',
+    ZodDiscriminatedUnion: 'union',
     ZodIntersection: 'intersection',
     ZodRecord: 'record',
     ZodTuple: 'tuple',
@@ -34,15 +35,15 @@ const ZOD_TYPE_DISPLAY: Record<string, string> = {
 const ZOD_OPTIONAL_WRAPPERS = new Set([
     'ZodOptional',
     'ZodDefault',
-    'ZodNullable',
     'optional',
     'default',
-    'nullable',
     'prefault',
 ])
 
 /** Wrapper type names that transform/validate without altering the underlying type */
 const ZOD_TRANSPARENT_WRAPPERS = new Set([
+    'ZodNullable',
+    'nullable',
     'pipe',
     'ZodPipeline',
     'effects',
@@ -134,7 +135,29 @@ export function peelZodType(
             currentDef = next.def
         } else {
             const normalized = tn.replace('Zod', '').toLowerCase()
-            const displayName = ZOD_TYPE_DISPLAY[tn] ?? normalized
+            let displayName = ZOD_TYPE_DISPLAY[tn] ?? normalized
+            if (displayName === 'union' && Array.isArray(currentDef['options'])) {
+                const memberTypes = Array.from(
+                    new Set(
+                        currentDef['options']
+                            .filter(
+                                (opt): opt is Record<string, unknown> =>
+                                    typeof opt === 'object' && opt !== null
+                            )
+                            .map((opt) => {
+                                const optDef =
+                                    typeof opt['_def'] === 'object' && opt['_def'] !== null
+                                        ? (opt['_def'] as Record<string, unknown>)
+                                        : opt
+                                return peelZodType(optDef, opt).typeName
+                            })
+                            .filter((t) => t.length > 0 && t !== 'unknown')
+                    )
+                )
+                if (memberTypes.length > 0) {
+                    displayName = memberTypes.join(' | ')
+                }
+            }
             return { typeName: displayName, isOptional, description }
         }
     }

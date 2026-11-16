@@ -2,7 +2,11 @@ import type { ToolContext, ToolDefinition } from '../../../types/index.js'
 import { AuthorizationError } from '../../../types/errors.js'
 import type { TeamRole } from '../../../database/core/interfaces.js'
 import { resolveAuthenticatedAuthor } from '../../../utils/security-utils.js'
-import { findCanonicalRegistryKey, resolveWorkspaceId } from '../../../utils/workspace-resolver.js'
+import {
+    findCanonicalRegistryKey,
+    resolveWorkspaceFromFilePath,
+    resolveWorkspaceId,
+} from '../../../utils/workspace-resolver.js'
 
 import { formatHandlerError } from '../../../utils/error-helpers.js'
 
@@ -177,6 +181,20 @@ function extractTargetWorkspaceId(
             : typeof projProp === 'string' && /^\d+$/.test(projProp.trim())
               ? Number.parseInt(projProp.trim(), 10)
               : undefined
+    if ((rawWs === undefined || rawWs === '') && numProj === undefined) {
+        const pathHit = readFirstScopeProp(containers, [
+            'source_dir',
+            'sourceDir',
+            'output_dir',
+            'outputDir',
+        ])
+        if (pathHit !== undefined && typeof pathHit.value === 'string' && pathHit.value.trim() !== '') {
+            const pathCtx = resolveWorkspaceFromFilePath(pathHit.value.trim(), config)
+            if (pathCtx !== undefined && pathCtx.workspaceId !== '') {
+                return pathCtx.workspaceId
+            }
+        }
+    }
     try {
         return resolveWorkspaceId(rawWs !== '' ? rawWs : undefined, numProj, config)
     } catch {

@@ -73,7 +73,7 @@ export function getTeamCoreTools(context: ToolContext): ToolDefinition[] {
                     }
 
                     const input = TeamCreateEntrySchema.parse(params)
-                    if (input.workspace_id === '*') {
+                    if (input.workspace_id?.trim() === '*') {
                         return {
                             success: false,
                             error: "workspace_id '*' is a read-only wildcard and cannot be used to create a team entry. Pass a specific workspace_id or project_number.",

@@ -45,14 +45,27 @@ function isParsableJsCode(trimmed: string): boolean {
 export function isNaturalLanguagePrompt(text: string): boolean {
     const trimmed = text.trim()
     if (trimmed === '') return false
-    if (/\b(const|let|var|function|return|await|mj\.|import|export|\(\s*\)\s*=>)\b/.test(trimmed)) return false
+    if (
+        /\b(const|let|var|function|return|await|async|for|if|try|while|switch|throw|class|import|export)\b|\bmj\.|\(\s*\)\s*=>/.test(
+            trimmed
+        )
+    ) {
+        return false
+    }
     if (
         /^(?:SELECT|INSERT|UPDATE|DELETE|PRAGMA|SHOW|DESCRIBE|EXPLAIN|WITH|SCHEMA|TABLES)\b/i.test(trimmed) ||
         /^(?:\.schema|\.tables|\\d|\\dt)/i.test(trimmed)
     ) {
         return false
     }
-    if (isParsableJsCode(trimmed)) return false
+    if (isParsableJsCode(trimmed) || isValidJsScript(trimmed)) {
+        const isMarkdownOrLabel =
+            /^\s*(?:[*#-]\s|\d+\.\s)/.test(trimmed) ||
+            (/^[A-Za-z0-9_-]+:\s+/.test(trimmed) && !/[(.=[\];]/.test(trimmed))
+        if (!isMarkdownOrLabel && !/^[A-Za-z_$][\w$]*$/.test(trimmed)) {
+            return false
+        }
+    }
     if (NATURAL_VERB_PATTERN.test(trimmed)) return true
     if (/^\s*([*#-]\s*\*?|\d+\.\s|[A-Z][a-z0-9_-]+:)/m.test(trimmed)) return true
     return trimmed.split(/\s+/).length >= 3 && !/[;{}=]/.test(trimmed)
@@ -68,11 +81,18 @@ export function getNonEmptyString(primary: Record<string, unknown>, secondary: R
     return undefined
 }
 
-/** Explicit workspace_id, else a registry-resolved `repo` (never a verbatim `owner/repo`). */
+/** Explicit workspace_id, else a registry-resolved `repo`/`repo_name` (never a verbatim `owner/repo`). */
 export function readWorkspaceField(primary: Record<string, unknown>, secondary: Record<string, unknown>): string | undefined {
     return (
         getNonEmptyString(primary, secondary, ['workspace_id', 'workspaceId', 'workspace']) ??
-        resolveRepoWorkspace(primary['repo'] ?? secondary['repo'])
+        resolveRepoWorkspace(
+            primary['repo'] ??
+                primary['repo_name'] ??
+                primary['repoName'] ??
+                secondary['repo'] ??
+                secondary['repo_name'] ??
+                secondary['repoName']
+        )
     )
 }
 

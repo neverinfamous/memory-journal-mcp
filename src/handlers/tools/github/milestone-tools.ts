@@ -73,11 +73,12 @@ export function getGitHubMilestoneTools(context: ToolContext): ToolDefinition[] 
                     const input = z
                         .object({
                             state: z.enum(['open', 'closed', 'all']).optional().default('open'),
-                            limit: z.number().optional().default(20),
+                            limit: z.number().int().min(1).max(100).optional().default(20),
                             owner: z.string().optional(),
                             repo: z.string().optional(),
                             ...githubScopeParseFields,
                         })
+                        .strict()
                         .parse(params)
 
                     const resolved = await resolveOwnerRepo(
@@ -137,11 +138,12 @@ export function getGitHubMilestoneTools(context: ToolContext): ToolDefinition[] 
                 try {
                     const input = z
                         .object({
-                            milestone_number: z.number(),
+                            milestone_number: z.number().int().positive(),
                             owner: z.string().optional(),
                             repo: z.string().optional(),
                             ...githubScopeParseFields,
                         })
+                        .strict()
                         .parse(params)
 
                     const resolved = await resolveOwnerRepo(
@@ -220,6 +222,7 @@ export function getGitHubMilestoneTools(context: ToolContext): ToolDefinition[] 
                             repo: z.string().optional(),
                             ...githubScopeParseFields,
                         })
+                        .strict()
                         .parse(params)
 
                     const resolved = await resolveOwnerRepo(
@@ -293,7 +296,7 @@ export function getGitHubMilestoneTools(context: ToolContext): ToolDefinition[] 
                 try {
                     const input = z
                         .object({
-                            milestone_number: z.number(),
+                            milestone_number: z.number().int().positive(),
                             title: z.string().optional(),
                             description: z.string().optional(),
                             due_on: z.string().nullable().optional(),
@@ -302,6 +305,7 @@ export function getGitHubMilestoneTools(context: ToolContext): ToolDefinition[] 
                             repo: z.string().optional(),
                             ...githubScopeParseFields,
                         })
+                        .strict()
                         .parse(params)
 
                     const resolved = await resolveOwnerRepo(
@@ -384,12 +388,13 @@ export function getGitHubMilestoneTools(context: ToolContext): ToolDefinition[] 
                 try {
                     const input = z
                         .object({
-                            milestone_number: z.number(),
+                            milestone_number: z.number().int().positive(),
                             confirm: z.literal(true),
                             owner: z.string().optional(),
                             repo: z.string().optional(),
                             ...githubScopeParseFields,
                         })
+                        .strict()
                         .parse(params)
 
                     const resolved = await resolveOwnerRepo(

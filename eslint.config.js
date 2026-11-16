@@ -109,7 +109,7 @@ export default tseslint.config(
     },
     // Test configuration (non-type-aware)
     {
-        files: ['tests/**/*.ts', 'test-server/**/*.ts', 'scripts/**/*.ts', 'scripts/**/*.mjs'],
+        files: ['tests/**/*.ts', 'test-server/**/*.ts'],
         extends: [js.configs.recommended, ...tseslint.configs.recommended],
         languageOptions: {
             ecmaVersion: 2022,
@@ -131,6 +131,29 @@ export default tseslint.config(
             'no-console': 'off',
             // Allow generic Function types in mocks
             '@typescript-eslint/no-unsafe-function-type': 'off',
+        },
+    },
+    // Scripts configuration (strict unused/any rules while permitting CLI console output)
+    {
+        files: ['scripts/**/*.ts', 'scripts/**/*.mjs'],
+        extends: [js.configs.recommended, ...tseslint.configs.recommended],
+        languageOptions: {
+            ecmaVersion: 2022,
+            globals: {
+                ...globals.node,
+            },
+        },
+        rules: {
+            '@typescript-eslint/no-unused-vars': [
+                'error',
+                {
+                    argsIgnorePattern: '^_',
+                    varsIgnorePattern: '^_',
+                    caughtErrorsIgnorePattern: '^_',
+                },
+            ],
+            '@typescript-eslint/no-explicit-any': 'error',
+            'no-console': 'off',
         },
     }
 )

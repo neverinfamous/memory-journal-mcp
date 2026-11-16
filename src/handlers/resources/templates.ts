@@ -31,8 +31,12 @@ import {
 
 function parsePositiveParam(uri: string, pattern: RegExp, errorMessage: string): number {
     const match = pattern.exec(getBaseUri(uri))
-    const parsed = match?.[1] ? parseInt(match[1], 10) : null
-    if (parsed === null || Number.isNaN(parsed)) {
+    const raw = match?.[1]
+    if (raw === undefined || !/^[1-9]\d*$/.test(raw)) {
+        throw new ProtocolError(ProtocolErrorCode.InvalidParams, errorMessage)
+    }
+    const parsed = Number.parseInt(raw, 10)
+    if (!Number.isSafeInteger(parsed) || parsed <= 0) {
         throw new ProtocolError(ProtocolErrorCode.InvalidParams, errorMessage)
     }
     return parsed

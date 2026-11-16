@@ -240,7 +240,8 @@ export function assembleBriefingGitHub(input: {
     config: BriefingConfig
 }): BriefingGitHub {
     const { unpacked } = input
-    const { openPRs, openPrList } = unpacked.issuesAndPrs
+    const { openPRs, openPrList, allPrs } = unpacked.issuesAndPrs
+    const prSummarySource = allPrs ?? openPrList
     const degraded = unpacked.degradedReasons.length > 0
     return {
         repo: `${input.owner}/${input.repo}`,
@@ -256,8 +257,8 @@ export function assembleBriefingGitHub(input: {
         openIssueList: input.openIssueList,
         openPrList,
         ...(input.activePr !== undefined ? { activePr: input.activePr } : {}),
-        ...(input.config.prStatusBreakdown && openPrList !== undefined
-            ? { prStatusSummary: summarizePrStates(openPrList, openPRs) }
+        ...(input.config.prStatusBreakdown && prSummarySource !== undefined
+            ? { prStatusSummary: summarizePrStates(prSummarySource, openPRs) }
             : {}),
         ...(unpacked.ciStatus.workflowSummary !== undefined
             ? { workflowSummary: unpacked.ciStatus.workflowSummary }

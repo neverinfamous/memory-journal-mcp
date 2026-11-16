@@ -93,10 +93,22 @@ function updateCodeMap() {
         promptsMd += `| \`${p.name}\` | ${truncDesc} |\n`
     }
 
-    // Inject into markers
-    content = content.replace(/<!-- BEGIN: TOOL_MAPPING -->[\s\S]*?<!-- END: TOOL_MAPPING -->/, `<!-- BEGIN: TOOL_MAPPING -->\n${toolsMd}<!-- END: TOOL_MAPPING -->`)
-    content = content.replace(/<!-- BEGIN: RESOURCES -->[\s\S]*?<!-- END: RESOURCES -->/, `<!-- BEGIN: RESOURCES -->\n${resourcesMd}<!-- END: RESOURCES -->`)
-    content = content.replace(/<!-- BEGIN: PROMPTS -->[\s\S]*?<!-- END: PROMPTS -->/, `<!-- BEGIN: PROMPTS -->\n${promptsMd}<!-- END: PROMPTS -->`)
+    // Inject into markers (fail explicitly if any marker pair is missing so drift cannot pass silently)
+    const toolMarker = /<!-- BEGIN: TOOL_MAPPING -->[\s\S]*?<!-- END: TOOL_MAPPING -->/
+    const resourceMarker = /<!-- BEGIN: RESOURCES -->[\s\S]*?<!-- END: RESOURCES -->/
+    const promptMarker = /<!-- BEGIN: PROMPTS -->[\s\S]*?<!-- END: PROMPTS -->/
+    for (const [label, pattern] of [
+        ['TOOL_MAPPING', toolMarker],
+        ['RESOURCES', resourceMarker],
+        ['PROMPTS', promptMarker],
+    ] as const) {
+        if (!pattern.test(content)) {
+            throw new Error(`Missing code-map marker block for ${label} in ${codeMapPath}`)
+        }
+    }
+    content = content.replace(toolMarker, `<!-- BEGIN: TOOL_MAPPING -->\n${toolsMd}<!-- END: TOOL_MAPPING -->`)
+    content = content.replace(resourceMarker, `<!-- BEGIN: RESOURCES -->\n${resourcesMd}<!-- END: RESOURCES -->`)
+    content = content.replace(promptMarker, `<!-- BEGIN: PROMPTS -->\n${promptsMd}<!-- END: PROMPTS -->`)
 
     fs.writeFileSync(codeMapPath, content)
     console.log('code-map.md updated successfully.')

@@ -1,6 +1,7 @@
 import type { NativeConnectionManager } from './native-connection.js'
 import { buildImportanceCte, buildImportanceSqlExpression } from './entries/importance.js'
 import { isMissingTableError } from './schema-errors.js'
+import { expandTagFilterValues } from './tags.js'
 
 type NativeDb = ReturnType<NativeConnectionManager['getNativeDb']>
 
@@ -52,7 +53,7 @@ const tagExclusionSql = (idColumn: string, tags: string[]): string =>
         ? `AND ${idColumn} NOT IN (
                 SELECT entry_id FROM entry_tags
                 JOIN tags ON tags.id = entry_tags.tag_id
-                WHERE tags.name IN (${tags.map(() => '?').join(',')})
+                WHERE LOWER(tags.name) IN (${tags.map(() => '?').join(',')})
             )`
         : ''
 
@@ -144,7 +145,7 @@ function buildCandidateQueries(options: LifecycleOptions): CandidateQueries {
     const scopedWorkspace =
         rawWs !== undefined && rawWs !== '' && rawWs !== '*' ? rawWs : undefined
     const scope: CandidateScope = {
-        excludeTags: options.excludeTags ?? [],
+        excludeTags: expandTagFilterValues(options.excludeTags ?? []),
         scopedWorkspace,
         scopedProject: options.projectNumber,
     }

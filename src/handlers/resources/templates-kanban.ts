@@ -7,9 +7,9 @@
 
 import { ProtocolError, ProtocolErrorCode } from '@modelcontextprotocol/server'
 import { MEDIUM_PRIORITY } from '../../utils/resource-annotations.js'
-import { markUntrustedContentInline } from '../../utils/security-utils.js'
 import type { InternalResourceDef, ResourceContext } from './shared.js'
 import {
+    fenceUntrustedInline,
     getBaseUri,
     isResourceError,
     resolveScopedGitHubRepo,
@@ -17,15 +17,7 @@ import {
 } from './shared.js'
 import { resolveProjectScope } from './template-helpers.js'
 
-export function fenceInline(value: string): string {
-    if (
-        /^<untrusted_remote_content>[^<>]*<\/untrusted_remote_content>$/.test(value) &&
-        !/&lt;\/?untrusted_remote_content/i.test(value)
-    ) {
-        return value
-    }
-    return markUntrustedContentInline(value)
-}
+export const fenceInline = fenceUntrustedInline
 
 /** Build Kanban board resource definitions, including dynamic `{+repo}` variants. */
 export function getKanbanTemplateDefinitions(): InternalResourceDef[] {
@@ -38,11 +30,15 @@ export function getKanbanTemplateDefinitions(): InternalResourceDef[] {
             mimeType: 'application/json',
             annotations: { ...MEDIUM_PRIORITY, audience: ['assistant'] },
             handler: async (uri: string, context: ResourceContext) => {
-                const match = /^memory:\/\/kanban\/(?:(.+)\/)?(\d+)$/.exec(getBaseUri(uri))
+                const match = /^memory:\/\/kanban\/(?:(.+)\/)?([1-9]\d*)$/.exec(getBaseUri(uri))
                 const targetRepo = match?.[1] ? safeDecodeUriSegment(match[1]) : undefined
-                const projectNumber = match?.[2] ? parseInt(match[2], 10) : null
+                const projectNumber = match?.[2] ? Number.parseInt(match[2], 10) : null
 
-                if (projectNumber === null) {
+                if (
+                    projectNumber === null ||
+                    !Number.isSafeInteger(projectNumber) ||
+                    projectNumber <= 0
+                ) {
                     throw new ProtocolError(ProtocolErrorCode.InvalidParams, 'Invalid project number')
                 }
 

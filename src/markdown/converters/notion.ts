@@ -33,7 +33,7 @@ export function convertNotion(
         const parts = dir.split(/[\\/]/)
         for (const part of parts) {
             // Remove the Notion 32-char hex hash suffix from folder names if present
-            const cleanName = part.replace(/\s+[a-f0-9]{32}$/i, '').trim()
+            const cleanName = part.trim().replace(/[ \t]{1,64}[a-f0-9]{32}$/i, '').trim()
             if (cleanName) {
                 // Convert to kebab-case
                 const tag = cleanName.toLowerCase().replace(/[^a-z0-9]+/g, '-')
@@ -45,12 +45,11 @@ export function convertNotion(
     // 2. Process Body Text
     let processedBody = content
 
-    // Clean up internal links: [Page Title](Page%20Title%20hash.md) -> Page Title
-    processedBody = processedBody.replace(/\[([^\]]+)\]\([^)]+\.md\)/gi, '$1')
+    // Clean up bounded internal links: [Page Title](Page%20Title%20hash.md) -> Page Title
+    processedBody = processedBody.replace(/\[([^\]]{1,500})\]\([^)\n]{1,500}\.md\)/gi, '$1')
 
-    // Clean up image links with Notion hashes to avoid broken local refs in journal
-    // Just preserve the alt text as an indicator
-    processedBody = processedBody.replace(/!\[([^\]]*)\]\([^)]+\)/gi, '> _Image: $1_')
+    // Clean up bounded image links with Notion hashes to avoid broken local refs in journal
+    processedBody = processedBody.replace(/!\[([^\]]{0,500})\]\([^)\n]{1,500}\)/gi, '> _Image: $1_')
 
     // Check for a title in the first line
     const lines = processedBody.split('\n')
@@ -62,7 +61,7 @@ export function convertNotion(
     } else {
         // Fallback title from filename (removing the hash)
         const base = basename(filename, '.md')
-        const cleanTitle = base.replace(/\s+[a-f0-9]{32}$/i, '').trim()
+        const cleanTitle = base.trim().replace(/[ \t]{1,64}[a-f0-9]{32}$/i, '').trim()
         if (cleanTitle && !processedBody.startsWith('# ')) {
             processedBody = `# ${cleanTitle}\n\n${processedBody}`
         }

@@ -63,6 +63,9 @@ export interface SystemMetrics {
 // Accumulator
 // ============================================================================
 
+const MAX_METRIC_KEYS = 1000
+const MAX_DEPRECATION_WARNINGS = 500
+
 export class MetricsAccumulator {
     private readonly toolData = new Map<string, ToolMetrics>()
     private readonly resourceData = new Map<string, ResourceMetrics>()
@@ -79,6 +82,12 @@ export class MetricsAccumulator {
      * Record a deprecation warning to be surfaced in the briefing.
      */
     recordDeprecationWarning(warning: string): void {
+        if (
+            this.deprecationWarnings.size >= MAX_DEPRECATION_WARNINGS &&
+            !this.deprecationWarnings.has(warning)
+        ) {
+            return
+        }
         this.deprecationWarnings.add(warning)
     }
 
@@ -99,7 +108,11 @@ export class MetricsAccumulator {
         outputTokens: number
         isError: boolean
     }): void {
-        const existing = this.toolData.get(opts.toolName)
+        const metricKey =
+            !this.toolData.has(opts.toolName) && this.toolData.size >= MAX_METRIC_KEYS
+                ? 'other'
+                : opts.toolName
+        const existing = this.toolData.get(metricKey)
         const m: ToolMetrics = existing ?? {
             callCount: 0,
             errorCount: 0,
@@ -116,17 +129,21 @@ export class MetricsAccumulator {
         if (opts.isError) m.errorCount++
         m.lastCalledAt = new Date().toISOString()
 
-        this.toolData.set(opts.toolName, m)
+        this.toolData.set(metricKey, m)
 
         // Feed latency tracker for percentile computation
-        this.latencyTracker.record(opts.toolName, opts.durationMs)
+        this.latencyTracker.record(metricKey, opts.durationMs)
     }
 
     /**
      * Record a single resource read.
      */
     recordResourceRead(uri: string, isError = false): void {
-        const existing = this.resourceData.get(uri)
+        const metricUri =
+            !this.resourceData.has(uri) && this.resourceData.size >= MAX_METRIC_KEYS
+                ? 'other'
+                : uri
+        const existing = this.resourceData.get(metricUri)
         const m: ResourceMetrics = existing ?? {
             readCount: 0,
             errorCount: 0,
@@ -137,7 +154,7 @@ export class MetricsAccumulator {
         if (isError) m.errorCount++
         m.lastReadAt = new Date().toISOString()
 
-        this.resourceData.set(uri, m)
+        this.resourceData.set(metricUri, m)
     }
 
     /**
@@ -363,16 +380,15 @@ export class MetricsAccumulator {
             this.importState(data)
             logger.info('Metrics loaded from disk', { module: 'Metrics', path })
         } catch (error: unknown) {
-            if (
-                typeof error === 'object' &&
-                error !== null &&
-                'code' in error &&
-                error.code !== 'ENOENT'
-            ) {
-                logger.error('Failed to load metrics from disk', { 
-                    module: 'Metrics', 
-                    error: error instanceof Error ? error.message : JSON.stringify(error), 
-                    path 
+            const errorCode =
+                typeof error === 'object' && error !== null && 'code' in error
+                    ? (error as { code?: unknown }).code
+                    : undefined
+            if (errorCode !== 'ENOENT') {
+                logger.error('Failed to load metrics from disk', {
+                    module: 'Metrics',
+                    error: error instanceof Error ? error.message : JSON.stringify(error),
+                    path,
                 })
             }
         }

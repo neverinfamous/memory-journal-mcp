@@ -189,19 +189,25 @@ function resolveAllowedRoots(rawRoots: string[]): string[] {
     const allowedRoots: string[] = []
 
     for (const root of rawRoots) {
+        const resolvedRoot = path.resolve(root)
         try {
-            allowedRoots.push(fs.realpathSync(path.resolve(root)))
+            allowedRoots.push(fs.realpathSync(resolvedRoot))
         } catch (err) {
             const code =
                 typeof err === 'object' && err !== null && 'code' in err
                     ? (err as { code?: unknown }).code
                     : undefined
             if (code === 'ENOENT') {
-                allowedRoots.push(path.resolve(root))
+                allowedRoots.push(resolveRealTargetPath(resolvedRoot))
                 continue
             }
-            throw err
+            // Skip inaccessible/broken-symlink roots so other valid roots still resolve; fail closed below if none remain.
         }
+    }
+    if (allowedRoots.length === 0) {
+        throw new PathTraversalError(
+            'None of the configured allowed input/output roots could be resolved safely.'
+        )
     }
     return allowedRoots
 }

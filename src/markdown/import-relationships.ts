@@ -8,6 +8,20 @@ function isRelationshipType(value: string): value is RelationshipType {
     return VALID_RELATIONSHIP_TYPES.has(value)
 }
 
+export interface PendingRelationshipLink {
+    entryId: number
+    filename: string
+    relationships: { type: string; target_id: number }[] | undefined
+    workspaceId: string | undefined
+    projectNumber: number | undefined
+}
+
+export interface ImportedRelationshipBatchResult {
+    success: boolean
+    relationshipsLinked: number
+    errors: { file: string; error: string }[]
+}
+
 export function linkImportedRelationships(
     db: IDatabaseAdapter,
     entryId: number,
@@ -18,20 +32,24 @@ export function linkImportedRelationships(
 ): { linked: number; rejected: string[]; missingTargets: number[] } {
     if (relationships === undefined) return { linked: 0, rejected: [], missingTargets: [] }
     let linked = 0
-    const missingTargets: number[] = []
+    const missingTargetsSet = new Set<number>()
+    const rejectedSet = new Set<string>()
+    const seenPairs = new Set<string>()
     const existingRels =
         typeof db.getRelationships === 'function'
             ? db.getRelationships(entryId, workspaceId)
             : []
-    const rejected: string[] = []
     for (const rel of relationships) {
         const relType = rel.type
         if (!isRelationshipType(relType)) {
-            rejected.push(relType)
+            rejectedSet.add(relType)
             continue
         }
         const targetId = idRemap.get(rel.target_id) ?? rel.target_id
         if (targetId === entryId) continue
+        const pairKey = `${relType}:${String(targetId)}`
+        if (seenPairs.has(pairKey)) continue
+        seenPairs.add(pairKey)
         const alreadyExists = existingRels.some(
             (r) =>
                 r.fromEntryId === entryId &&
@@ -48,7 +66,7 @@ export function linkImportedRelationships(
                 targetExists.projectNumber !== undefined &&
                 targetExists.projectNumber !== projectNumber)
         ) {
-            missingTargets.push(targetId)
+            missingTargetsSet.add(targetId)
             continue
         }
         if (workspaceId !== undefined) {
@@ -66,5 +84,42 @@ export function linkImportedRelationships(
         })
         linked++
     }
-    return { linked, rejected, missingTargets }
+    return {
+        linked,
+        rejected: Array.from(rejectedSet),
+        missingTargets: Array.from(missingTargetsSet),
+    }
+}
+
+export function applyImportedRelationshipBatch(
+    db: IDatabaseAdapter,
+    pendingLinks: readonly PendingRelationshipLink[],
+    idRemap: ReadonlyMap<number, number>,
+    result: ImportedRelationshipBatchResult
+): void {
+    for (const pending of pendingLinks) {
+        const linked = linkImportedRelationships(
+            db,
+            pending.entryId,
+            pending.relationships,
+            pending.workspaceId,
+            idRemap,
+            pending.projectNumber
+        )
+        result.relationshipsLinked += linked.linked
+        for (const targetId of linked.missingTargets) {
+            result.errors.push({
+                file: pending.filename,
+                error: `Relationship target ${String(targetId)} does not exist and was not linked`,
+            })
+            result.success = false
+        }
+        for (const relType of linked.rejected) {
+            result.errors.push({
+                file: pending.filename,
+                error: `Unknown relationship type '${relType}' was not linked`,
+            })
+            result.success = false
+        }
+    }
 }

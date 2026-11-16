@@ -56,8 +56,12 @@ class Logger {
         delete extras['module']
         delete extras['operation']
 
-        // Sanitize error fields to prevent token leakage
-        if (extras['error'] != null && typeof extras['error'] === 'string') {
+        // Sanitize error fields to prevent token leakage and empty Error JSON serialization
+        if (extras['error'] instanceof Error) {
+            extras['error'] = sanitizeErrorForLogging(
+                `${extras['error'].name}: ${extras['error'].message}`
+            )
+        } else if (extras['error'] != null && typeof extras['error'] === 'string') {
             extras['error'] = sanitizeErrorForLogging(extras['error'])
         }
 

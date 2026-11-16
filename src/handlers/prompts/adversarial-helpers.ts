@@ -150,7 +150,9 @@ export function hasExplicitPromptTarget(
                 uniqueWorkspaceForProject(num, registry) !== undefined
             )
         }
-        return true
+        return registry === undefined || Object.keys(registry).length === 0
+            ? true
+            : exactRegistryKey(requested, registry) !== undefined
     }
     const cleanTarget = targetOrTopic?.trim()
     const isPlaceholder = cleanTarget === '{target}' || cleanTarget === '{topic}'
@@ -299,27 +301,35 @@ export function buildPriorAuditSection(
     const priorProjectNumber = explicitProjectNumber ?? registry?.[canonicalKey]?.project_number
     // [INTENT] Tag-only lookup: a text query restricted to the same tag/workspace can only
     // return a subset, so no secondary search is needed (L8).
-    const priorAudits: { id: number; entryType: string; content: string; timestamp: string }[] =
+    let priorAudits: { id: number; entryType: string; content: string; timestamp: string }[] =
         db.searchByDateRange('1970-01-01', '2999-12-31', {
             tags: [tag],
             limit: 5,
             workspaceId: priorWorkspace,
             ...(priorProjectNumber !== undefined ? { projectNumber: priorProjectNumber } : {}),
         }).entries
+    if (priorAudits.length === 0 && priorProjectNumber !== undefined && explicitProjectNumber === undefined) {
+        priorAudits = db.searchByDateRange('1970-01-01', '2999-12-31', {
+            tags: [tag],
+            limit: 5,
+            workspaceId: priorWorkspace,
+        }).entries
+    }
     const explicitDefaultWs = workspaceId?.trim().toLowerCase() === 'default'
     const isFallbackWorkspace =
         !hasExplicitTarget &&
         explicitProjectNumber === undefined &&
         !(priorWorkspace === 'default' && explicitDefaultWs)
+    const fallbackQueryHint = `\`mj.search.searchByDateRange({ start_date: '1970-01-01', end_date: '2999-12-31', tags: ['${tag}'], limit: 5, workspace_id, project_number })\` (\`readonly: true\`)`
     const scopeNote =
         priorAudits.length === 0
             ? priorWorkspace === 'default'
-                ? `\nNo entries were found because the prior workspace is still \`default\`. Resolve the repository the user named and query the \`${tag}\` tag in that workspace. Do not ask the user to re-run the prompt.\n`
+                ? `\nNo entries were found because the prior workspace is still \`default\`. Resolve the repository the user named and query via ${fallbackQueryHint}. Do not ask the user to re-run the prompt.\n`
                 : isFallbackWorkspace
-                  ? `\nNo entries were found in fallback/session workspace \`${priorWorkspace}\`. If the user-named repository maps to a different registered \`workspace_id\` and \`project_number\`, query tag \`${tag}\` once in that workspace; otherwise continue the audit of the current tree.\n`
+                  ? `\nNo entries were found in fallback/session workspace \`${priorWorkspace}\`. If the user-named repository maps to a different registered \`workspace_id\` and \`project_number\`, query once via ${fallbackQueryHint}; otherwise continue the audit of the current tree.\n`
                   : `\nNo entries were found in workspace \`${priorWorkspace}\`. Continue the audit of the current tree.\n`
             : isFallbackWorkspace
-              ? `\nNote: Preloaded entries below came from fallback/session workspace \`${priorWorkspace}\` because no explicit \`target\`/\`workspace_id\` was passed to the prompt. If the user-named repository maps to a different registered \`workspace_id\` and \`project_number\`, ignore unrelated entries below and query tag \`${tag}\` once in that target workspace.\n`
+              ? `\nNote: Preloaded entries below came from fallback/session workspace \`${priorWorkspace}\` because no explicit \`target\`/\`workspace_id\` was passed to the prompt. If the user-named repository maps to a different registered \`workspace_id\` and \`project_number\`, ignore unrelated entries below and query once via ${fallbackQueryHint}.\n`
               : ''
     const projectNote =
         priorProjectNumber !== undefined

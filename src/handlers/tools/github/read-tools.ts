@@ -14,7 +14,6 @@ import {
     GitHubIssueResultOutputSchema,
     GitHubPRsListOutputSchema,
     GitHubPRResultOutputSchema,
-    GitHubContextOutputSchema,
 } from './schemas.js'
 import {
     fenceIssueMilestone,
@@ -22,8 +21,8 @@ import {
     githubScopeParseFields,
     resolveOwnerRepo,
 } from './helpers.js'
-import type { GitHubIntegration } from '../../../github/github-integration/index.js'
 import { markUntrustedContent } from '../../../utils/security-utils.js'
+import { createGitHubContextTool } from './context-tool.js'
 
 // ============================================================================
 // Tool Definitions
@@ -69,8 +68,15 @@ export function getGitHubReadTools(context: ToolContext): ToolDefinition[] {
                             repo: z.string().optional(),
                             ...githubScopeParseFields,
                             state: z.enum(['open', 'closed', 'all']).optional().default('open'),
-                            limit: z.number().max(MAX_QUERY_LIMIT).optional().default(20),
+                            limit: z
+                                .number()
+                                .int()
+                                .min(1)
+                                .max(MAX_QUERY_LIMIT)
+                                .optional()
+                                .default(20),
                         })
+                        .strict()
                         .parse(params)
 
                     const resolved = await resolveOwnerRepo(
@@ -138,8 +144,15 @@ export function getGitHubReadTools(context: ToolContext): ToolDefinition[] {
                             repo: z.string().optional(),
                             ...githubScopeParseFields,
                             state: z.enum(['open', 'closed', 'all']).optional().default('open'),
-                            limit: z.number().max(MAX_QUERY_LIMIT).optional().default(20),
+                            limit: z
+                                .number()
+                                .int()
+                                .min(1)
+                                .max(MAX_QUERY_LIMIT)
+                                .optional()
+                                .default(20),
                         })
+                        .strict()
                         .parse(params)
 
                     const resolved = await resolveOwnerRepo(
@@ -203,13 +216,20 @@ export function getGitHubReadTools(context: ToolContext): ToolDefinition[] {
                 try {
                     const input = z
                         .object({
-                            issue_number: z.number(),
+                            issue_number: z.number().int().positive(),
                             owner: z.string().optional(),
                             repo: z.string().optional(),
                             ...githubScopeParseFields,
-                            truncate_body: z.number().optional().default(800),
+                            truncate_body: z
+                                .number()
+                                .int()
+                                .min(0)
+                                .max(100000)
+                                .optional()
+                                .default(800),
                             include_comments: z.boolean().optional().default(false),
                         })
+                        .strict()
                         .parse(params)
 
                     const resolved = await resolveOwnerRepo(context, input, 'is this issue from')
@@ -312,12 +332,13 @@ export function getGitHubReadTools(context: ToolContext): ToolDefinition[] {
                 try {
                     const input = z
                         .object({
-                            pr_number: z.number(),
+                            pr_number: z.number().int().positive(),
                             owner: z.string().optional(),
                             repo: z.string().optional(),
                             ...githubScopeParseFields,
-                            truncate_body: z.number().optional().default(800),
+                            truncate_body: z.number().int().min(0).max(100000).optional().default(800),
                         })
+                        .strict()
                         .parse(params)
 
                     const resolved = await resolveOwnerRepo(context, input, 'is this PR from')
@@ -376,81 +397,6 @@ export function getGitHubReadTools(context: ToolContext): ToolDefinition[] {
                 }
             },
         },
-        {
-            name: 'get_github_context',
-            title: 'Get GitHub Repository Context',
-            description:
-                'Get current repository context including branch, open issues, and open PRs. IMPORTANT: Leave owner/repo empty to auto-detect from git, OR specify the repository name if working in a multi-project registry.',
-            group: 'github',
-            inputSchema: z.object({
-                ...githubScopeInputFields,
-                owner: z.string().optional().describe('Repository owner'),
-                repo: z
-                    .string()
-                    .optional()
-                    .describe('Repository name (use this to switch projects dynamically)'),
-            }),
-            outputSchema: GitHubContextOutputSchema,
-            annotations: {
-                readOnlyHint: true,
-                destructiveHint: false,
-                idempotentHint: true,
-                openWorldHint: true,
-            },
-            handler: async (params: unknown) => {
-                try {
-                    const input = z
-                        .object({
-                            owner: z.string().optional(),
-                            repo: z.string().optional(),
-                            ...githubScopeParseFields,
-                        })
-                        .parse(params)
-
-                    const resolved = await resolveOwnerRepo(
-                        context,
-                        input,
-                        'would you like the context for'
-                    )
-
-                    let targetGithub: GitHubIntegration
-                    let target: { owner: string; repo: string } | undefined
-                    const callerScoped =
-                        input.owner !== undefined ||
-                        input.repo !== undefined ||
-                        input.workspace_id !== undefined ||
-                        input.project_number !== undefined
-                    if ('error' in resolved) {
-                        if (callerScoped || context.github === undefined) {
-                            return resolved.response
-                        }
-                        targetGithub = context.github
-                    } else {
-                        targetGithub = resolved.github
-                        target = { owner: resolved.owner, repo: resolved.repo }
-                    }
-
-                    const ctx = await targetGithub.getRepoContext(undefined, target)
-                    return {
-                        repoName: ctx.repoName,
-                        branch: ctx.branch,
-                        commit: ctx.commit,
-                        remoteUrl: ctx.remoteUrl,
-                        issues: ctx.issues.map(fenceIssueMilestone),
-                        pullRequests: ctx.pullRequests,
-                        issueCount: ctx.issues.length,
-                        prCount: ctx.pullRequests.length,
-                        ...(ctx.degraded !== undefined ? { degraded: ctx.degraded } : {}),
-                        ...(ctx.degraded !== undefined && ctx.degraded.length > 0
-                            ? {
-                                  warning: `Partial GitHub context: failed to fetch ${ctx.degraded.join(', ')}`,
-                              }
-                            : {}),
-                    }
-                } catch (err) {
-                    return formatHandlerError(err)
-                }
-            },
-        },
+        createGitHubContextTool(context),
     ]
 }

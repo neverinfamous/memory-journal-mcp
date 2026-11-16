@@ -135,6 +135,31 @@ export function buildExplicitAttributionArgs(
     return `, workspace_id: "${canonicalWs}", project_number: ${String(explicitProjectNumber)}`
 }
 
+export function buildCliAttributionFlags(
+    workspaceId: string,
+    briefingConfig?: Partial<BriefingConfig>,
+    explicitProjectNumber?: number,
+    explicitDefaultRequested = false
+): string {
+    const explicitArgs = buildExplicitAttributionArgs(
+        workspaceId,
+        briefingConfig,
+        explicitProjectNumber,
+        explicitDefaultRequested
+    )
+    if (explicitArgs === '') return ''
+    const wsMatch = /workspace_id:\s*"([^"]+)"/.exec(explicitArgs)
+    const projMatch = /project_number:\s*(\d+)/.exec(explicitArgs)
+    const parts: string[] = []
+    if (wsMatch?.[1] !== undefined) {
+        parts.push(`--workspace ${JSON.stringify(wsMatch[1])}`)
+    }
+    if (projMatch?.[1] !== undefined) {
+        parts.push(`--project-number ${projMatch[1]}`)
+    }
+    return parts.length > 0 ? `${parts.join(' ')} ` : ''
+}
+
 export function generateSummaryPrompt(
     db: IDatabaseAdapter,
     teamDb: IDatabaseAdapter | undefined,
@@ -175,6 +200,12 @@ export function generateSummaryPrompt(
 
     const registryHint = getProjectRegistryHint(briefingConfig)
     const attributionArgs = buildExplicitAttributionArgs(
+        workspaceId,
+        briefingConfig,
+        projectNumber,
+        explicitDefaultRequested
+    )
+    const cliFlags = buildCliAttributionFlags(
         workspaceId,
         briefingConfig,
         projectNumber,
@@ -239,7 +270,7 @@ ${markUntrustedContent(entrySummary)}
 
 **Execution:**
 - **Option 1 (Code Mode / MCP Tool - Recommended):** Execute directly via \`mj.core.createEntry({ content: "...", entry_type: "retrospective", tags: ["session-summary"], auto_context: { commits: ["<sha>"] }${attributionArgs}${target === 'team' ? ', share_with_team: true' : ''} })\`.
-- **Option 2 (CLI Scratch File):** Write markdown file (with YAML frontmatter) to your scratch directory (e.g. \`<appDataDir>\\brain\\<conversation-id>\\scratch\\\`) then execute: \`memory-journal-mcp entry create ${target === 'team' ? '--team ' : ''}--file <scratch_dir>/session.md\``,
+- **Option 2 (CLI Scratch File):** Write markdown file (with YAML frontmatter) to your scratch directory (e.g. \`<appDataDir>\\brain\\<conversation-id>\\scratch\\\`) then execute: \`memory-journal-mcp entry create ${target === 'team' ? '--team ' : ''}${cliFlags}--file <scratch_dir>/session.md\``,
                 },
             },
         ],
@@ -264,6 +295,12 @@ export function generateEntryPrompt(
     }
     const registryHint = getProjectRegistryHint(briefingConfig)
     const attributionArgs = buildExplicitAttributionArgs(
+        workspaceId,
+        briefingConfig,
+        projectNumber,
+        explicitDefaultRequested
+    )
+    const cliFlags = buildCliAttributionFlags(
         workspaceId,
         briefingConfig,
         projectNumber,
@@ -303,7 +340,7 @@ ${registryHint}- If you lose track of your project number, workspace, or agent I
 
 **Execution:**
 - **Option 1 (Code Mode / MCP Tool - Recommended):** Execute directly via \`mj.core.createEntry({ content: "...", entry_type: "project_decision", tags: ["tag1"]${attributionArgs}${target === 'team' ? ', share_with_team: true' : ''} })\`.
-- **Option 2 (CLI Scratch File):** Write markdown file (with YAML frontmatter) to your scratch directory (e.g. \`<appDataDir>\\brain\\<conversation-id>\\scratch\\\`) then execute: \`memory-journal-mcp entry create ${target === 'team' ? '--team ' : ''}--file <scratch_dir>/entry.md\``,
+- **Option 2 (CLI Scratch File):** Write markdown file (with YAML frontmatter) to your scratch directory (e.g. \`<appDataDir>\\brain\\<conversation-id>\\scratch\\\`) then execute: \`memory-journal-mcp entry create ${target === 'team' ? '--team ' : ''}${cliFlags}--file <scratch_dir>/entry.md\``,
                 },
             },
         ],
@@ -366,10 +403,12 @@ ${markUntrustedContent(String(recent['content']))}
         projectNumber,
         explicitDefaultRequested
     )
-    const cliWorkspaceFlag =
-        (workspaceId !== 'default' || explicitDefaultRequested) && workspaceId !== ''
-            ? `--workspace ${workspaceId} `
-            : ''
+    const cliFlags = buildCliAttributionFlags(
+        workspaceId,
+        briefingConfig,
+        projectNumber,
+        explicitDefaultRequested
+    )
     const updateApiCall = target === 'team' ? 'mj.team.teamUpdateEntry' : 'mj.admin.updateEntry'
 
     return {
@@ -400,7 +439,7 @@ ${registryHint}- If you lose track of your project number, workspace, or agent I
 
 **Execution:**
 - **Option 1 (Code Mode / MCP Tool):** Execute via \`${updateApiCall}({ entry_id: <ENTRY_ID>, expected_version: <VERSION>, content: "..."${attributionArgs} })\`.
-- **Option 2 (CLI Scratch File):** Write your updated markdown file to your scratch directory (e.g. \`<appDataDir>\\brain\\<conversation-id>\\scratch\\\`) to avoid shell quotes. Then execute: \`memory-journal-mcp entry update ${target === 'team' ? '--team ' : ''}${cliWorkspaceFlag}--id <ENTRY_ID> --expected-version <VERSION> --file <scratch_dir>/updated_entry.md\``,
+- **Option 2 (CLI Scratch File):** Write your updated markdown file to your scratch directory (e.g. \`<appDataDir>\\brain\\<conversation-id>\\scratch\\\`) to avoid shell quotes. Then execute: \`memory-journal-mcp entry update ${target === 'team' ? '--team ' : ''}${cliFlags}--id <ENTRY_ID> --expected-version <VERSION> --file <scratch_dir>/updated_entry.md\``,
                 },
             },
         ],

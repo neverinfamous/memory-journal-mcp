@@ -8,9 +8,6 @@ import {
     ENTRY_TYPES,
     SIGNIFICANCE_TYPES,
     MAX_CONTENT_LENGTH,
-    EntryOutputSchema,
-    RelationshipOutputSchema,
-    TagOutputSchema,
     relaxedNumber,
     DATE_FORMAT_REGEX,
     DATE_FORMAT_MESSAGE,
@@ -18,7 +15,21 @@ import {
     healAgentHallucinations,
     preprocessRelationshipItem,
 } from '../../schemas.js'
-import { ErrorFieldsMixin } from '../../error-fields-mixin.js'
+import {
+    TeamEntryOutputSchema,
+    TeamCreateOutputSchema,
+    TeamEntriesListOutputSchema,
+    TeamEntryDetailOutputSchema,
+    TeamTagsListOutputSchema,
+} from './core-search-output-schemas.js'
+
+export {
+    TeamEntryOutputSchema,
+    TeamCreateOutputSchema,
+    TeamEntriesListOutputSchema,
+    TeamEntryDetailOutputSchema,
+    TeamTagsListOutputSchema,
+}
 
 const WORKSPACE_DESC =
     'Optional workspace isolation identifier (e.g. "alpha"). Do not use numeric project IDs or "workspace" as the key.'
@@ -27,10 +38,6 @@ const TEAM_RELATION_TYPES = [
     'evolves_from', 'references', 'implements', 'clarifies', 'response_to',
     'blocked_by', 'resolved', 'caused', 'resolves', 'relates_to', 'depends_on',
 ] as const
-
-export const TeamEntryOutputSchema = EntryOutputSchema.extend({
-    author: z.string().nullable().optional(),
-})
 
 /** team_create_entry — strict */
 export const TeamCreateEntrySchema = z.preprocess(
@@ -376,82 +383,18 @@ export const TeamSearchByDateRangeSchema = z.preprocess(
 /** team_search_by_date_range — relaxed */
 export const TeamSearchByDateRangeSchemaMcp = z.preprocess(
     preprocessDateRange,
-    z.object({
-        start_date: z.string().optional().describe('Start date (YYYY-MM-DD)'),
-        end_date: z.string().optional().describe('End date (YYYY-MM-DD)'),
-        cursor: z.string().optional().describe('Cursor for pagination'),
-        entry_type: z.string().optional().describe('Filter results by entry type'),
-        tags: z.array(z.string()).optional().describe('Filter entries having any of these tags'),
-        project_number: relaxedNumber().optional().describe('REQUIRED: project number to scope the query to.'),
-        workspace_id: z.string().optional().describe(WORKSPACE_DESC),
-        limit: relaxedNumber().optional().default(50).describe('Maximum entries to return (1-500, default: 50)'),
-        sort_by: z.string().optional().default('timestamp').describe(SORT_BY_DESC),
-        include_archived: z.boolean().optional().default(false).describe('Include archived entries in results'),
-    })
+    z
+        .object({
+            start_date: z.string().optional().describe('Start date (YYYY-MM-DD)'),
+            end_date: z.string().optional().describe('End date (YYYY-MM-DD)'),
+            cursor: z.string().optional().describe('Cursor for pagination'),
+            entry_type: z.string().optional().describe('Filter results by entry type'),
+            tags: z.array(z.string()).optional().describe('Filter entries having any of these tags'),
+            project_number: relaxedNumber().optional().describe('REQUIRED: project number to scope the query to.'),
+            workspace_id: z.string().optional().describe(WORKSPACE_DESC),
+            limit: relaxedNumber().optional().default(50).describe('Maximum entries to return (1-500, default: 50)'),
+            sort_by: z.string().optional().default('timestamp').describe(SORT_BY_DESC),
+            include_archived: z.boolean().optional().default(false).describe('Include archived entries in results'),
+        })
+        .loose()
 )
-
-export const TeamCreateOutputSchema = z
-    .object({
-        success: z.boolean().optional(),
-        entry: TeamEntryOutputSchema.optional(),
-        author: z.string().optional(),
-        error: z.string().optional(),
-        relationshipWarnings: z.array(z.string()).optional(),
-        vectorIndex: z.string().optional(),
-        warning: z.string().optional(),
-        degraded: z.boolean().optional(),
-        relationshipsLinked: z.number().optional(),
-    })
-    .extend(ErrorFieldsMixin.shape)
-
-export const TeamEntriesListOutputSchema = z
-    .object({
-        entries: z.array(TeamEntryOutputSchema).optional(),
-        count: z.number().optional(),
-        next_cursor: z.string().optional().describe('Cursor for the next page of results'),
-        suggestions: z
-            .array(z.string())
-            .optional()
-            .describe('Fuzzy matches when fuzzy_match=true and no exact results were found'),
-        correctedQuery: z
-            .string()
-            .optional()
-            .describe('The corrected query when auto_correct=true and a confident match was found'),
-        success: z.boolean().optional(),
-        error: z.string().optional(),
-        degraded: z.boolean().optional(),
-        warning: z.string().optional(),
-    })
-    .extend(ErrorFieldsMixin.shape)
-
-export const TeamEntryDetailOutputSchema = z
-    .object({
-        success: z.boolean().optional(),
-        entry: TeamEntryOutputSchema.optional(),
-        relationships: z.array(RelationshipOutputSchema).optional(),
-        importance: z
-            .object({
-                score: z.number(),
-                breakdown: z
-                    .object({
-                        significance: z.number(),
-                        relationships: z.number(),
-                        causal: z.number(),
-                        recency: z.number(),
-                        trustModifier: z.number().optional(),
-                    })
-                    .optional(),
-            })
-            .optional(),
-        error: z.string().optional(),
-    })
-    .extend(ErrorFieldsMixin.shape)
-
-export const TeamTagsListOutputSchema = z
-    .object({
-        success: z.boolean().optional(),
-        tags: z.array(TagOutputSchema).optional(),
-        count: z.number().optional(),
-        error: z.string().optional(),
-    })
-    .extend(ErrorFieldsMixin.shape)

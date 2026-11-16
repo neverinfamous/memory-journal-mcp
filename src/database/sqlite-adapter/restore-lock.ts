@@ -76,7 +76,7 @@ function isHoldingPidStale(
             })
             return true
         }
-        return false
+        // Only fall through to process.kill(holdingPid, 0) for foreign PIDs when local maintenance is active
     }
     try {
         process.kill(holdingPid, 0)
@@ -94,23 +94,40 @@ function isHoldingPidStale(
     return false
 }
 
+function writeLockFileGuarded(lockDir: string, lockFile: string, nonce: string): void {
+    try {
+        writeLockFile(lockFile, nonce)
+    } catch (writeErr: unknown) {
+        try {
+            fs.rmSync(lockDir, { recursive: true, force: true })
+        } catch {
+            // Best-effort cleanup of empty lock directory
+        }
+        throw writeErr
+    }
+}
+
+function isOrphanedLockDir(lockDir: string): boolean {
+    try {
+        const stat = fs.statSync(lockDir)
+        return Date.now() - stat.mtimeMs > 2000
+    } catch {
+        return false
+    }
+}
+
 function isLockStale(lockDir: string, lockFile: string, runtime: unknown): boolean {
     try {
         const lockContent = fs.readFileSync(lockFile, 'utf-8').trim()
-        if (!lockContent) return false
+        if (!lockContent) return isOrphanedLockDir(lockDir)
         const { holdingPid, lockTimestamp } = parseLockContent(lockContent)
-        if (holdingPid === undefined || isNaN(holdingPid)) return false
+        if (holdingPid === undefined || isNaN(holdingPid)) return isOrphanedLockDir(lockDir)
         return isHoldingPidStale(holdingPid, lockTimestamp, lockDir, runtime)
     } catch (readErr: unknown) {
         // Only treat a missing lock.json as orphaned after a creation grace window so a contender
         // between mkdirSync(lockDir) and writeLockFile(lockFile) is never falsely reclaimed.
         if (!hasErrorCode(readErr, 'ENOENT')) return false
-        try {
-            const stat = fs.statSync(lockDir)
-            return Date.now() - stat.mtimeMs > 2000
-        } catch {
-            return false
-        }
+        return isOrphanedLockDir(lockDir)
     }
 }
 
@@ -154,7 +171,7 @@ export function acquireRestoreLock(lockDir: string, lockFile: string, runtime: u
     fs.mkdirSync(path.dirname(lockDir), { recursive: true })
     try {
         fs.mkdirSync(lockDir)
-        writeLockFile(lockFile, nonce)
+        writeLockFileGuarded(lockDir, lockFile, nonce)
     } catch (lockError: unknown) {
         if (!hasErrorCode(lockError, 'EEXIST')) {
             throw lockError
@@ -179,6 +196,6 @@ export function acquireRestoreLock(lockDir: string, lockFile: string, runtime: u
             }
             throw retryError
         }
-        writeLockFile(lockFile, nonce)
+        writeLockFileGuarded(lockDir, lockFile, nonce)
     }
 }

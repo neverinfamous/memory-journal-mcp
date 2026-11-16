@@ -46,7 +46,7 @@ export function parseAutoContext(
 
     try {
         const parsed = JSON.parse(autoContext) as unknown
-        if (typeof parsed !== 'object' || parsed === null) {
+        if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
             return null
         }
 

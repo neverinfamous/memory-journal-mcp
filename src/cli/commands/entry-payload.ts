@@ -1,6 +1,5 @@
 import { readFileSync } from 'node:fs'
 import type { Command } from 'commander'
-import { DatabaseAdapterFactory } from '../../database/adapter-factory.js'
 import type { IDatabaseAdapter } from '../../database/core/interfaces.js'
 import type {
     EntryType,
@@ -8,17 +7,15 @@ import type {
     SignificanceType,
     ToolHandlerConfig,
 } from '../../types/index.js'
-import { ConfigResolver } from '../../utils/config-resolver.js'
 import { resolveProjectContext } from '../../utils/workspace-resolver.js'
 import { activeProjectRegistry, pairStoredScope } from '../../utils/write-scope.js'
 import { ValidationError } from '../../types/errors.js'
 import { logger } from '../../utils/logger.js'
-import { buildServerOptions } from '../server-options-builder.js'
-import { dumpConfigAndExit } from '../dump-config.js'
 import { z } from 'zod'
 import * as p from '@clack/prompts'
 import * as yaml from 'yaml'
 import type { BaseEntryOptionsSchema } from '../schemas.js'
+import { getCliCommandDb } from './db-helper.js'
 import {
     applyCliEntryFlagAliases,
     parseRelationshipArray,
@@ -54,44 +51,7 @@ export async function getDb(
     options: BaseEntryOptionsSchema,
     command: Command
 ): Promise<{ db: IDatabaseAdapter; config: ToolHandlerConfig }> {
-    let resolver: ConfigResolver
-    const configPath = options.config ?? process.env['MEMORY_JOURNAL_CONFIG']
-    const configErrors: string[] = []
-
-    try {
-        resolver = new ConfigResolver(command, options, configPath)
-    } catch (err) {
-        configErrors.push(err instanceof Error ? err.message : String(err))
-        resolver = new ConfigResolver(command, {}, undefined)
-    }
-
-    const { serverOptions } = buildServerOptions(resolver, options, command, configErrors)
-
-    if (configErrors.length > 0) {
-        process.stderr.write('Startup Configuration Errors:\n')
-        configErrors.forEach((err) => process.stderr.write(` - ${err}\n`))
-        process.exit(1)
-    }
-
-    if (options.dumpConfig === true) {
-        dumpConfigAndExit(serverOptions)
-    }
-
-    const useTeamDb = options.team === true
-
-    if (useTeamDb && typeof serverOptions.teamDbPath !== 'string') {
-        process.stderr.write(
-            'Error: Cannot use --team flag because no team database is configured.\n'
-        )
-        process.exit(1)
-    }
-
-    const dbPath = useTeamDb ? String(serverOptions.teamDbPath) : serverOptions.dbPath
-    const db = await DatabaseAdapterFactory.create(dbPath, serverOptions)
-    await db.initialize()
-    if (useTeamDb) {
-        db.applyTeamSchema()
-    }
+    const { db, serverOptions } = await getCliCommandDb(options, command)
     return { db, config: serverOptions }
 }
 

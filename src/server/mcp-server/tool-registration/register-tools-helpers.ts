@@ -163,7 +163,6 @@ export function formatToolFailure(
  */
 export function resolveActiveBriefingConfig(
     briefingConfig: typeof DEFAULT_BRIEFING_CONFIG,
-    _options: ServerOptions,
     allowedIoRoots: string[],
     sessionRuntime?: object | null
 ): typeof DEFAULT_BRIEFING_CONFIG {
@@ -291,7 +290,7 @@ export function syncLiveHandlerConfig(
  */
 export function createResourceReadHandler(
     context: ServerContext,
-    options: ServerOptions
+    _options: ServerOptions
 ): (
     uri: URL,
     mimeType: string
@@ -309,7 +308,6 @@ export function createResourceReadHandler(
         const currentConfig = configManager.getConfig()
         const activeBriefingConfig = resolveActiveBriefingConfig(
             currentConfig.briefingConfig,
-            options,
             allowedIoRoots,
             runtime
         )

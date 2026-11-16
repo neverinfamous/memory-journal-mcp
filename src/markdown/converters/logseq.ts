@@ -65,23 +65,23 @@ export function convertLogseq(
 
         if (applyLogseqPropertyLine(line, mjMeta, mergedTags)) continue
 
-        // Handle task markers
-        if (/^\s*-\s+(TODO|LATER)\b/.exec(line)) {
-            line = line.replace(/\b(TODO|LATER)\s+/, '[ ] ')
+        // Handle leading task markers without rewriting mid-line prose keywords
+        if (/^\s*-\s+(?:TODO|LATER)\b/.test(line)) {
+            line = line.replace(/^(\s*-\s+)(?:TODO|LATER)\s+/, '$1[ ] ')
             hasTasks = true
-        } else if (/^\s*-\s+(DONE|NOW)\b/.exec(line)) {
-            line = line.replace(/\b(DONE|NOW)\s+/, '[x] ')
+        } else if (/^\s*-\s+(?:DONE|NOW)\b/.test(line)) {
+            line = line.replace(/^(\s*-\s+)(?:DONE|NOW)\s+/, '$1[x] ')
             hasDoneTasks = true
         }
 
         // Extract inline tags
-        const inlineTagMatches = line.matchAll(/(^|\s)#([a-zA-Z0-9_-]+)\b/g)
+        const inlineTagMatches = line.matchAll(/(^|\s)#([a-zA-Z0-9_-]{1,128})\b/g)
         for (const match of inlineTagMatches) {
             if (match[2]) mergedTags.add(match[2].toLowerCase())
         }
 
-        // Strip wikilinks/page refs
-        line = line.replace(/\[\[([^\]]+)\]\]/g, (_match: string, inner: string) => {
+        // Strip bounded wikilinks/page refs
+        line = line.replace(/\[\[([^\]]{1,500})\]\]/g, (_match: string, inner: string) => {
             const parts = inner.split('|')
             return (parts.length > 1 ? parts[1] : parts[0]) ?? ''
         })

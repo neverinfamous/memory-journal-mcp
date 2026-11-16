@@ -5,6 +5,7 @@
  */
 
 import type { ToolDefinition, ToolContext } from '../../../types/index.js'
+import { ValidationError } from '../../../types/errors.js'
 import { formatHandlerError } from '../../../utils/error-helpers.js'
 import { resolveWorkspaceId } from '../../../utils/workspace-resolver.js'
 import { activeProjectRegistry, alignedProjectFilter } from '../../../utils/write-scope.js'
@@ -119,12 +120,24 @@ export function getTeamAnalyticsTools(context: ToolContext): ToolDefinition[] {
                     }
 
                     const input = TeamCrossProjectInsightsSchema.parse(params)
+                    if (
+                        input.start_date !== undefined &&
+                        input.end_date !== undefined &&
+                        input.start_date > input.end_date
+                    ) {
+                        throw new ValidationError('start_date cannot be after end_date')
+                    }
                     const wsId = resolveWorkspaceId(input.workspace_id, input.project_number, context.config)
                     const alignedProject = alignedProjectFilter(
                         wsId,
                         input.project_number,
                         activeProjectRegistry(context.config?.projectRegistry)
                     )
+                    if (wsId === '*' && alignedProject === undefined) {
+                        return missingTeamProjectNumberError(
+                            'Missing project_number. Cross-tenant cross-project insights without project_number are not allowed.'
+                        )
+                    }
 
                     const insights = teamDb.getCrossProjectInsights({
                         startDate: input.start_date,

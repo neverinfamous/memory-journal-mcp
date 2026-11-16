@@ -2,7 +2,7 @@ import type { Command } from 'commander'
 import { type z } from 'zod'
 import type { IDatabaseAdapter } from '../../database/core/interfaces.js'
 import { visualizeOptionsSchema } from '../schemas.js'
-import { getCliCommandDb as getDb } from './db-helper.js'
+import { enforceCliTeamRbac, getCliCommandDb as getDb } from './db-helper.js'
 import { resolveCliQueryScope } from '../../utils/workspace-resolver.js'
 import * as fs from 'node:fs/promises'
 
@@ -75,6 +75,9 @@ export async function visualizeAction(options: z.infer<typeof visualizeSchema>, 
             options.defaultProject,
             serverOptions
         )
+        if (options.team === true) {
+            enforceCliTeamRbac(db, serverOptions, 'viewer', workspaceId)
+        }
         const graph = db.visualizeRelationships({
             depth: 3,
             limit: 200,

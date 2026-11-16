@@ -6,7 +6,7 @@
  */
 
 import { z } from 'zod'
-import { healIncludeArchivedField } from '../schemas/hallucination-healer-fields.js'
+import { healSearchPayload } from '../schemas/hallucination-healer.js'
 import {
     ENTRY_TYPES,
     DATE_FORMAT_REGEX,
@@ -32,14 +32,8 @@ import { logger } from '../../../utils/logger.js'
 // Schemas
 // ============================================================================
 
-function preprocessCrossTeamSearch(val: unknown): unknown {
-    if (typeof val !== 'object' || val === null || Array.isArray(val)) return val
-    const obj = { ...(val as Record<string, unknown>) }
-    return healIncludeArchivedField(obj) ? obj : val
-}
-
 export const CrossTeamSearchSchema = z.preprocess(
-    preprocessCrossTeamSearch,
+    healSearchPayload,
     z.object({
     query: z.string().min(1).max(250),
     team_dbs: z
@@ -64,7 +58,7 @@ export const CrossTeamSearchSchema = z.preprocess(
 )
 
 export const CrossTeamSearchSchemaMcp = z.preprocess(
-    preprocessCrossTeamSearch,
+    healSearchPayload,
     z
         .object({
             query: z.string().optional(),
@@ -127,6 +121,7 @@ export const CrossTeamSearchOutputSchema = z
 
 // Module-level cache for lazily initialized team DB adapters, keyed by label and verified by resolved path.
 const adapterCache = new Map<string, { path: string; adapter: IDatabaseAdapter }>()
+const initPromises = new Map<string, Promise<IDatabaseAdapter>>()
 
 async function getOrCreateAdapter(label: string, dbPath: string): Promise<IDatabaseAdapter> {
     const existing = adapterCache.get(label)
@@ -141,22 +136,47 @@ async function getOrCreateAdapter(label: string, dbPath: string): Promise<IDatab
         }
         adapterCache.delete(label)
     }
-    const adapter = await DatabaseAdapterFactory.create(dbPath)
-    await adapter.initialize()
-    adapter.applyTeamSchema()
-    adapterCache.set(label, { path: dbPath, adapter })
-    return adapter
+    const inflightKey = `${label}\0${dbPath}`
+    const inflight = initPromises.get(inflightKey)
+    if (inflight !== undefined) {
+        return inflight
+    }
+    const promise = (async () => {
+        const adapter = await DatabaseAdapterFactory.create(dbPath)
+        try {
+            await adapter.initialize()
+            adapter.applyTeamSchema()
+            adapterCache.set(label, { path: dbPath, adapter })
+            return adapter
+        } catch (err) {
+            try {
+                adapter.close()
+            } catch {
+                // Ignore cleanup errors on init failure
+            }
+            throw err
+        } finally {
+            initPromises.delete(inflightKey)
+        }
+    })()
+    initPromises.set(inflightKey, promise)
+    return promise
 }
 
-export function resetCrossTeamCacheForTests(): void {
+export function closeCrossTeamAdapters(): void {
     for (const entry of adapterCache.values()) {
         try {
             entry.adapter.close()
         } catch {
-            // Ignore cleanup errors during test resets
+            // Ignore cleanup errors during shutdown
         }
     }
     adapterCache.clear()
+    initPromises.clear()
+}
+
+export function resetCrossTeamCacheForTests(): void {
+    closeCrossTeamAdapters()
 }
 
 // ============================================================================

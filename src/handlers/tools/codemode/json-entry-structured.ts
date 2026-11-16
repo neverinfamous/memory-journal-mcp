@@ -4,6 +4,7 @@
  */
 
 import { isRecord } from '../../../codemode/normalizers/shared-utils.js'
+import { getActiveProjectRegistry } from '../../../codemode/normalizers/generic-field-aliases.js'
 import { findCanonicalRegistryKey, loadProjectRegistryFromConfig } from '../../../utils/workspace-resolver.js'
 
 interface PayloadSignals {
@@ -153,7 +154,7 @@ function readProjectNumber(target: Record<string, unknown>): number | string | u
 function readWorkspaceId(target: Record<string, unknown>): string | undefined {
     const raw = target['workspace_id'] ?? target['workspaceId'] ?? target['workspace']
     if (typeof raw === 'string' && raw.trim() !== '') return raw.trim()
-    return resolveRepoWorkspace(target['repo'])
+    return resolveRepoWorkspace(target['repo'] ?? target['repo_name'] ?? target['repoName'])
 }
 
 /** Maps a `repo` / `owner/repo` value onto a registered workspace key; never copies it verbatim. */
@@ -161,7 +162,11 @@ export function resolveRepoWorkspace(repo: unknown): string | undefined {
     if (typeof repo !== 'string' || repo.trim() === '') return undefined
     const name = repo.trim().split(/[/\\]/).filter(Boolean).pop()?.trim() ?? ''
     if (name === '') return undefined
-    const registry = loadProjectRegistryFromConfig()
+    const activeReg = getActiveProjectRegistry()
+    const registry =
+        activeReg !== undefined && Object.keys(activeReg).length > 0
+            ? activeReg
+            : loadProjectRegistryFromConfig()
     if (registry === undefined) return undefined
     return findCanonicalRegistryKey(name, registry)
 }
@@ -402,20 +407,14 @@ function collectTags(target: Record<string, unknown>): string[] {
     return tags
 }
 
+const AUTO_CONTEXT_FIELDS = [
+    'task', 'status', 'changes', 'notes', 'details',
+    'action', 'component', 'pr_link', 'issue_link', 'validation_status',
+] as const
+
 function collectAutoContext(target: Record<string, unknown>): Record<string, unknown> {
     const autoContext: Record<string, unknown> = {}
-    for (const key of [
-        'task',
-        'status',
-        'changes',
-        'notes',
-        'details',
-        'action',
-        'component',
-        'pr_link',
-        'issue_link',
-        'validation_status',
-    ]) {
+    for (const key of AUTO_CONTEXT_FIELDS) {
         if (target[key] !== undefined) autoContext[key] = target[key]
     }
     return autoContext

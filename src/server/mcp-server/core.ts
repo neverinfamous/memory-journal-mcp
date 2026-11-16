@@ -13,6 +13,7 @@ import { startMetricsServer } from '../../observability/metrics-server.js'
 import { logger } from '../../utils/logger.js'
 import type { ServerRuntime } from '../../utils/maintenance-lock.js'
 import { buildBaseToolConfig, closeServerResources } from './core-helpers.js'
+import { closeCrossTeamAdapters } from '../../handlers/tools/search/cross-team.js'
 import { resolveActiveBriefingConfig } from './tool-registration/register-tools-helpers.js'
 import {
     registerConfigChangeListener,
@@ -76,7 +77,6 @@ export async function createServer(options: ServerOptions): Promise<void> {
     )
     baseConfig.briefingConfig = resolveActiveBriefingConfig(
         initialDynamicConfig.briefingConfig,
-        options,
         allowedIoRoots
     )
     if (baseConfig.defaultProjectNumber === undefined && baseConfig.briefingConfig.defaultProjectNumber !== undefined) {
@@ -141,6 +141,7 @@ export async function createServer(options: ServerOptions): Promise<void> {
     const shutdownMetrics = startConfiguredMetricsServer(runtime, options)
     const closeDatabases = (): void => {
         closeServerResources([db, testDb, teamDb, testTeamDb])
+        closeCrossTeamAdapters()
     }
 
     try {

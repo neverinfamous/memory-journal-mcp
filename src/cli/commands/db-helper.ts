@@ -1,10 +1,21 @@
 import type { Command } from 'commander'
 import { DatabaseAdapterFactory } from '../../database/adapter-factory.js'
-import type { IDatabaseAdapter } from '../../database/core/interfaces.js'
+import type { IDatabaseAdapter, TeamRole } from '../../database/core/interfaces.js'
 import type { ServerOptions } from '../../server/mcp-server/types.js'
+import type { ToolHandlerConfig } from '../../types/index.js'
+import { enforceTeamRbac, getCallerIdentity } from '../../handlers/tools/team/rbac.js'
 import { ConfigResolver } from '../../utils/config-resolver.js'
 import { buildServerOptions } from '../server-options-builder.js'
 import { dumpConfigAndExit } from '../dump-config.js'
+
+export function enforceCliTeamRbac(
+    db: IDatabaseAdapter,
+    config: ToolHandlerConfig,
+    requiredRole: TeamRole,
+    workspaceId?: string
+): void {
+    enforceTeamRbac({ db, teamDb: db, config }, getCallerIdentity(), requiredRole, workspaceId)
+}
 
 export async function getCliCommandDb(
     options: Record<string, unknown> & { config?: string; team?: boolean },
@@ -55,7 +66,20 @@ export async function getCliCommandDb(
     const db = await DatabaseAdapterFactory.create(dbPath, serverOptions)
     await db.initialize()
     if (options.team === true) {
-        db.applyTeamSchema()
+        try {
+            db.applyTeamSchema()
+            if (
+                serverOptions.teamAdmin &&
+                db.getTeamMemberCount !== undefined &&
+                db.addTeamMember !== undefined &&
+                !db.isTeamRbacActive?.()
+            ) {
+                db.addTeamMember(serverOptions.teamAdmin, 'admin', 'system', 'Bootstrap Admin')
+            }
+        } catch (err) {
+            db.close()
+            throw err
+        }
     }
     return { db, serverOptions }
 }

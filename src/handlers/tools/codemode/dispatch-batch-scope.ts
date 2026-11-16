@@ -148,6 +148,16 @@ export function normalizeBatchDispatchItems(
             continue
         }
         const nextItem = { ...item }
+        if (typeof nextItem['workspace_id'] === 'string') {
+            const trimmedWs = nextItem['workspace_id'].trim()
+            if (trimmedWs === '') delete nextItem['workspace_id']
+            else nextItem['workspace_id'] = trimmedWs
+        }
+        if (typeof nextItem['target_workspace_id'] === 'string') {
+            const trimmedTarget = nextItem['target_workspace_id'].trim()
+            if (trimmedTarget === '') delete nextItem['target_workspace_id']
+            else nextItem['target_workspace_id'] = trimmedTarget
+        }
         const itemAliasDerivedWs = nextItem['_alias_derived_workspace'] === true
         delete nextItem['_alias_derived_workspace']
 

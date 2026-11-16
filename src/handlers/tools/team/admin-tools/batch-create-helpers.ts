@@ -152,7 +152,9 @@ function resolveBatchItemProjectNumber(
     config: ToolHandlerConfig | undefined
 ): number | undefined {
     const callerWorkspace =
-        namedWorkspace !== undefined && namedWorkspace !== '*' ? namedWorkspace : undefined
+        namedWorkspace !== undefined && namedWorkspace.trim() !== '*'
+            ? namedWorkspace
+            : undefined
     const callerRegistry = activeProjectRegistry(config?.projectRegistry)
     const canonicalCaller =
         callerWorkspace !== undefined
@@ -171,7 +173,7 @@ function validateTeamBatchCreateEntries(
 ): { errorResponse: Record<string, unknown> } | { resolvedEntries: ResolvedBatchCreateItem[] } {
     const resolvedEntries: ResolvedBatchCreateItem[] = []
     for (const e of input.entries) {
-        if (e.workspace_id === '*' || input.workspace_id === '*') {
+        if (e.workspace_id?.trim() === '*' || input.workspace_id?.trim() === '*') {
             return {
                 errorResponse: {
                     success: false,

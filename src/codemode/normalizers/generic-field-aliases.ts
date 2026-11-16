@@ -16,6 +16,14 @@ export function setActiveProjectRegistry(registry: Record<string, ProjectRegistr
     activeProjectRegistry = registry
 }
 
+export function resolveEffectiveProjectRegistry():
+    | Record<string, ProjectRegistryEntry>
+    | undefined {
+    return activeProjectRegistry !== undefined && Object.keys(activeProjectRegistry).length > 0
+        ? activeProjectRegistry
+        : loadProjectRegistryFromConfig()
+}
+
 export function getActiveProjectRegistry(): Record<string, ProjectRegistryEntry> | undefined {
     return activeProjectRegistry
 }
@@ -251,7 +259,7 @@ function applyProjectNameAlias(rawVal: unknown, obj: Record<string, unknown>): P
     }
     if (typeof rawVal !== 'string' || rawVal.trim() === '') return 'applied'
     const name = rawVal.trim()
-    const registry = activeProjectRegistry ?? loadProjectRegistryFromConfig()
+    const registry = resolveEffectiveProjectRegistry()
     const matchedKey =
         registry === undefined
             ? undefined
@@ -344,7 +352,7 @@ export function resolveCreateEntryProjectContext(obj: Record<string, unknown>): 
     const wsTrimmed = wsRaw?.trim()
     const workspaceIsConcrete = wsTrimmed !== undefined && wsTrimmed !== '' && wsTrimmed !== '*'
     if (!workspaceIsConcrete) return
-    const effectiveRegistry = activeProjectRegistry ?? loadProjectRegistryFromConfig()
+    const effectiveRegistry = resolveEffectiveProjectRegistry()
     const resolved = resolveProjectContext(
         {
             workspace_id: wsTrimmed,

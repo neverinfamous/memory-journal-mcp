@@ -5,7 +5,7 @@ import { type z } from 'zod'
 import { ConfigResolver } from '../../utils/config-resolver.js'
 import { buildServerOptions } from '../server-options-builder.js'
 import { dumpConfigAndExit } from '../dump-config.js'
-import { getCliCommandDb as getDb } from './db-helper.js'
+import { enforceCliTeamRbac, getCliCommandDb as getDb } from './db-helper.js'
 import { resolveAutoPruneScope } from '../../utils/workspace-resolver.js'
 import { 
     adminBackupOptionsSchema, 
@@ -30,7 +30,8 @@ export const rebuildIndexSchema = adminRebuildIndexOptionsSchema
 
 export async function backupAction(options: z.infer<typeof backupSchema>, command: Command): Promise<void> {
     const { db } = await getDb(options, command)
-    const dest = options.dest
+    const trimmedDest = options.dest?.trim()
+    const dest = trimmedDest !== undefined && trimmedDest !== '' ? trimmedDest : undefined
     try {
         const result = await db.exportToFile(dest)
         if (options.json === true) {
@@ -230,13 +231,18 @@ export async function auditAction(options: z.infer<typeof auditSchema>, command:
 
         const statusFilter = options.status === 'success' ? true : (options.status === 'error' ? false : undefined)
 
-        const result: AuditEntry[] = await logger.search({
-            limit: options.limit,
-            tool_name: options.tool,
-            user: options.user,
-            category: options.category,
-            status: statusFilter
-        })
+        let result: AuditEntry[]
+        try {
+            result = await logger.search({
+                limit: options.limit,
+                tool_name: options.tool,
+                user: options.user,
+                category: options.category,
+                status: statusFilter,
+            })
+        } finally {
+            await logger.close()
+        }
 
         process.stdout.write(JSON.stringify(result, null, 2) + '\n')
     } catch (e) {
@@ -254,7 +260,6 @@ export async function rebuildIndexAction(options: z.infer<typeof rebuildIndexSch
                 "Refusing wildcard '--workspace *' in rebuild-index. Omit --workspace or pass a concrete workspace name."
             )
         }
-        const vectorManager = new VectorSearchManager(db, { modelName: serverOptions.embeddingModel })
         const requestedProj = options.defaultProject
         const targetWs =
             explicitWs !== undefined && explicitWs !== ''
@@ -270,6 +275,10 @@ export async function rebuildIndexAction(options: z.infer<typeof rebuildIndexSch
             targetProj,
             serverOptions.projectRegistry
         )
+        if (options.team === true) {
+            enforceCliTeamRbac(db, serverOptions, 'admin', rebuildScope.workspaceId)
+        }
+        const vectorManager = new VectorSearchManager(db, { modelName: serverOptions.embeddingModel })
 
         if (options.json !== true) {
             process.stderr.write('Rebuilding vector index...\n')

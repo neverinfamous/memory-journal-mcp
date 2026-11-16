@@ -42,6 +42,8 @@ const NON_CODE_METADATA_KEYS = new Set([
     'max_result_size_kb',
     'maxResultSizeKb',
     'readonly',
+    'readOnly',
+    'read_only',
     'dry_run',
     'dryRun',
     'use_test_db',
@@ -86,6 +88,14 @@ export function normalizeExecuteCodeAliases(obj: Record<string, unknown>): void 
         obj['repo'] = obj['repo_name']
         delete obj['repo_name']
     }
+    if (obj['readonly'] === undefined) {
+        const readonlyAlias = obj['readOnly'] ?? obj['read_only']
+        if (readonlyAlias !== undefined) {
+            obj['readonly'] = readonlyAlias
+        }
+    }
+    delete obj['readOnly']
+    delete obj['read_only']
     if (obj['code'] !== undefined) return
 
     if (typeof obj['query'] === 'string' && obj['query'].trim().length > 0) {

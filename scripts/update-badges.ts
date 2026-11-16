@@ -125,7 +125,7 @@ function loadBadgeMetrics(): BadgeMetrics {
     e2ePassing,
     e2eSkipped,
     hasE2e,
-    covRegex: /!\[Coverage\]\(https:\/\/img\.shields\.io\/badge\/Coverage-[0-9.]+.*?\.svg\)/g,
+    covRegex: /!\[Coverage\]\(https:\/\/img\.shields\.io\/badge\/Coverage-[0-9.]+[^)]*\.svg\)/g,
     newCovBadge: `![Coverage](https://img.shields.io/badge/Coverage-${linesPct}%25-${coverageColor}.svg)`,
     e2eRegex: /!\[E2E\]\(https:\/\/img\.shields\.io\/badge\/E2E-[^)]+\)/g,
     newE2eBadge: `![E2E](https://img.shields.io/badge/E2E-${e2ePassing}%20passing%20%C2%B7%20${e2eSkipped}%20skipped-blue.svg)`,
@@ -186,6 +186,7 @@ function updateBadgeTargetFile(file: string, metrics: BadgeMetrics): boolean {
 function autoCommitDirtyBadgeFiles(filesToUpdate: readonly string[], updatedFiles: readonly string[]): void {
   if (process.env['GITHUB_ACTIONS']) return;
   const commitScript = path.join(ROOT_DIR, ".agents", "scripts", "commit.ts");
+  if (!fs.existsSync(commitScript)) return;
   const dirtyFiles = filesToUpdate.filter((file) => {
     if (updatedFiles.includes(file)) return true;
     try {

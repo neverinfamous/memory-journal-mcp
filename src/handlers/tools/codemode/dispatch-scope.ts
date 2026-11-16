@@ -10,47 +10,9 @@ import { logger } from '../../../utils/logger.js'
 import { activeProjectRegistry, pairStoredScope } from '../../../utils/write-scope.js'
 import { lookupRegistryEntry } from './session-context.js'
 import { normalizeBatchDispatchItems } from './dispatch-batch-scope.js'
+import { checkSchemaAcceptsKey } from './dispatch-schema-introspection.js'
 
-interface ZodLike {
-    shape?: Record<string, unknown>
-    _def?: {
-        typeName?: string
-        type?: string
-        schema?: ZodLike
-        in?: ZodLike
-        out?: ZodLike
-        left?: ZodLike
-        right?: ZodLike
-    }
-    innerType?: () => ZodLike
-}
-
-export function checkSchemaAcceptsKey(schema: unknown, key: string): boolean {
-    if (!isRecord(schema)) return false
-    if ('properties' in schema && isRecord(schema['properties']) && key in schema['properties']) return true
-
-    const s = schema as ZodLike
-    if (isRecord(s.shape) && key in s.shape) return true
-
-    if (s._def !== undefined && s._def !== null) {
-        const typeName = s._def.typeName ?? s._def.type
-        if ((typeName === 'ZodObject' || typeName === 'object') && isRecord(s.shape)) return key in s.shape
-        if (['ZodEffects', 'pipe', 'ZodPipeline', 'ZodOptional', 'optional', 'ZodNullable', 'nullable'].includes(typeName ?? '')) {
-            return (
-                checkSchemaAcceptsKey(s._def.schema ?? s._def.out ?? s.innerType?.(), key) ||
-                checkSchemaAcceptsKey(s._def.in, key)
-            )
-        }
-        if (typeName === 'ZodIntersection' || typeName === 'intersection') {
-            return checkSchemaAcceptsKey(s._def.left, key) || checkSchemaAcceptsKey(s._def.right, key)
-        }
-        if (typeName === 'ZodPipeline' || (s._def.out !== undefined && s._def.out !== null)) {
-            return checkSchemaAcceptsKey(s._def.out, key)
-        }
-        if (s._def.schema !== undefined) return checkSchemaAcceptsKey(s._def.schema, key)
-    }
-    return false
-}
+export { checkSchemaAcceptsKey }
 
 const FORBIDDEN_KEYS = new Set(['__proto__', 'constructor', 'prototype'])
 
@@ -155,6 +117,11 @@ function coerceProjectNumberField(
     return undefined
 }
 
+function isSameOrSubdirectory(targetDir: string, rootDir: string): boolean {
+    const rel = path.relative(normalizeFsPath(rootDir), normalizeFsPath(targetDir))
+    return rel === '' || (!rel.startsWith('..') && !path.isAbsolute(rel))
+}
+
 async function autoPopulateGithubUrls(
     paramsObj: Record<string, unknown>,
     sessionContext: ToolContext,
@@ -190,13 +157,28 @@ async function autoPopulateGithubUrls(
     }
     const wsForLookup = targetWs ?? sessionWorkspaceId
     if (wsForLookup === '*' || isDefaultWorkspaceName(wsForLookup)) return
+    const reg = activeProjectRegistry(sessionContext.config?.projectRegistry)
     if (wsForLookup !== undefined) {
-        const reg = activeProjectRegistry(sessionContext.config?.projectRegistry)
         const wsReg = lookupRegistryEntry(reg, wsForLookup)
         if (
             wsReg?.path !== undefined &&
             wsReg.path !== '' &&
-            normalizeFsPath(wsReg.path) !== normalizeFsPath(process.cwd())
+            !isSameOrSubdirectory(process.cwd(), wsReg.path)
+        ) {
+            return
+        }
+    }
+    const repoHint =
+        typeof paramsObj['repo'] === 'string' && paramsObj['repo'].trim() !== ''
+            ? paramsObj['repo'].trim()
+            : undefined
+    if (repoHint !== undefined) {
+        const repoSlug = repoHint.split(/[/\\]/).filter(Boolean).pop()?.trim() ?? repoHint
+        const repoReg = lookupRegistryEntry(reg, repoHint) ?? lookupRegistryEntry(reg, repoSlug)
+        if (
+            repoReg?.path !== undefined &&
+            repoReg.path !== '' &&
+            !isSameOrSubdirectory(process.cwd(), repoReg.path)
         ) {
             return
         }
@@ -204,6 +186,13 @@ async function autoPopulateGithubUrls(
     try {
         const repoInfo = await sessionContext.github.getRepoInfo()
         if (repoInfo?.owner && repoInfo?.repo) {
+            if (repoHint !== undefined) {
+                const lowerHint = repoHint.toLowerCase()
+                const matchesRepo =
+                    lowerHint === repoInfo.repo.toLowerCase() ||
+                    lowerHint === `${repoInfo.owner}/${repoInfo.repo}`.toLowerCase()
+                if (!matchesRepo) return
+            }
             if (paramsObj['issue_number'] !== undefined && paramsObj['issue_url'] === undefined) {
                 paramsObj['issue_url'] = `https://github.com/${repoInfo.owner}/${repoInfo.repo}/issues/${String(Number(paramsObj['issue_number']))}`
             }

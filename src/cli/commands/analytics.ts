@@ -1,7 +1,7 @@
 import type { Command } from 'commander'
 import { type z } from 'zod'
 import { analyticsOptionsSchema } from '../schemas.js'
-import { getCliCommandDb as getDb } from './db-helper.js'
+import { enforceCliTeamRbac, getCliCommandDb as getDb } from './db-helper.js'
 import { resolveCliQueryScope } from '../../utils/workspace-resolver.js'
 
 export const analyticsSchema = analyticsOptionsSchema
@@ -14,6 +14,9 @@ export async function analyticsStatsAction(options: z.infer<typeof analyticsSche
             options.defaultProject,
             serverOptions
         )
+        if (options.team === true) {
+            enforceCliTeamRbac(db, serverOptions, 'viewer', workspaceId)
+        }
         const result = db.getStatistics(
             undefined,
             undefined,
@@ -39,6 +42,9 @@ export async function analyticsInsightsAction(options: z.infer<typeof analyticsS
             options.defaultProject,
             serverOptions
         )
+        if (options.team === true) {
+            enforceCliTeamRbac(db, serverOptions, 'viewer', workspaceId)
+        }
         const result = db.getCrossProjectInsights({
             minEntries: 1,
             inactiveThresholdDays: 30,

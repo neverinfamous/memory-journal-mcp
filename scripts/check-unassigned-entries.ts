@@ -49,7 +49,7 @@ function checkUnassignedEntries(): void {
         return
     }
     let rawKey = process.env['MJ_DB_ENCRYPTION_KEY'] || process.env['DB_ENCRYPTION_KEY']
-    let db: Database.Database
+    let db: Database.Database | undefined
     try {
         db = new Database(dbPath, { readonly: true })
         
@@ -67,13 +67,19 @@ function checkUnassignedEntries(): void {
         }
 
         if (rawKey) {
-            if (rawKey.startsWith("x'") && rawKey.endsWith("'")) {
-                db.pragma(`key = "${rawKey.replace(/"/g, '""')}"`)
+            if (rawKey.startsWith("x'") || rawKey.startsWith("X'")) {
+                if (!/^x'(?:[0-9a-fA-F]{2})+'$/i.test(rawKey)) {
+                    throw new Error("Invalid hex encryption key: expected x'<even hex digits>'")
+                }
+                db.pragma(`key = ${rawKey}`)
             } else {
                 db.pragma(`key = '${rawKey.replace(/'/g, "''")}'`)
             }
         }
     } catch (err) {
+        if (db?.open) {
+            db.close()
+        }
         const msg = err instanceof Error ? err.message : String(err)
         console.error(`❌ Could not open database at '${dbPath}': ${msg}`)
         process.exit(1)

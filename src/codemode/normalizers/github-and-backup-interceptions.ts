@@ -109,6 +109,12 @@ function mapGithubTextKeys(methodName: string, obj: Record<string, unknown>): vo
     for (const key of ['text', 'message', 'description'] as const) {
         if (obj[key] === undefined) continue
         if (isCreateIssue) {
+            if (obj['journal_content'] !== undefined) {
+                if (obj['entry_content'] === undefined) {
+                    obj['entry_content'] = obj['journal_content']
+                }
+                Reflect.deleteProperty(obj, 'journal_content')
+            }
             if (obj['body'] === undefined) {
                 obj['body'] = obj[key]
                 Reflect.deleteProperty(obj, key)

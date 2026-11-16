@@ -46,7 +46,8 @@ export class MilestonesManager {
             throw new Error('GitHub API not available')
         }
 
-        const cacheKey = `milestones:${owner}:${repo}:${state}:${String(limit)}`
+        const cappedLimit = Math.min(Math.max(1, limit), 100)
+        const cacheKey = `milestones:${owner}:${repo}:${state}:${String(cappedLimit)}`
         const cached = this.client.getCached(cacheKey) as GitHubMilestone[] | undefined
         if (cached) return cached
 
@@ -55,7 +56,7 @@ export class MilestonesManager {
                 owner,
                 repo,
                 state,
-                per_page: limit,
+                per_page: cappedLimit,
                 sort: 'due_on',
                 direction: 'asc',
                 request: { signal: abortSignal },

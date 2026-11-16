@@ -165,8 +165,8 @@ export function getStalenessTools(context: ToolContext): ToolDefinition[] {
             inputSchema: MarkAnchorsStaleSchemaMcp,
             outputSchema: z
                 .object({
-                    success: z.boolean(),
-                    updated_count: z.number(),
+                    success: z.boolean().optional(),
+                    updated_count: z.number().optional(),
                     not_found_ids: z.array(z.number()).optional(),
                 })
                 .extend(ErrorFieldsMixin.shape),

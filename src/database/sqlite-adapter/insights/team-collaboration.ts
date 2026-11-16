@@ -190,7 +190,8 @@ function queryImpactFactor(
     scope: CollabScope,
     limit: number
 ): { author: string; inboundLinks: number }[] {
-    const clause = scopeClause('m2', scope)
+    const c1 = scopeClause('m1', scope)
+    const c2 = scopeClause('m2', scope)
     const authorExpr = canonicalAuthorExpr('m2')
     const impactResult = connection.exec(
         `SELECT
@@ -199,11 +200,11 @@ function queryImpactFactor(
         FROM relationships r
         JOIN memory_journal m1 ON r.from_entry_id = m1.id
         JOIN memory_journal m2 ON r.to_entry_id = m2.id
-        WHERE m1.deleted_at IS NULL AND m2.deleted_at IS NULL AND m1.workspace_id = m2.workspace_id${clause.sql}
+        WHERE m1.deleted_at IS NULL AND m2.deleted_at IS NULL AND m1.workspace_id = m2.workspace_id${c1.sql}${c2.sql}
         GROUP BY ${authorExpr}
         ORDER BY inbound_links DESC
         LIMIT ?`,
-        [...clause.params, limit]
+        [...c1.params, ...c2.params, limit]
     )
     const impactFactor =
         impactResult[0]?.values.map((row: unknown[]) => ({

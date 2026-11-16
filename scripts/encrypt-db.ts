@@ -35,10 +35,24 @@ console.log(`Encrypting ${inPath} -> ${outPath}...`)
 const SQLITE_PLAIN_HEADER = 'SQLite format 3\u0000'
 
 function applyKey(db: Database.Database, pragma: 'key' | 'rekey', secret: string): void {
-    if (secret.startsWith("x'") && secret.endsWith("'")) {
-        db.pragma(`${pragma} = "${secret.replace(/"/g, '""')}"`)
+    if (secret.startsWith("x'") || secret.startsWith("X'")) {
+        if (!/^x'(?:[0-9a-fA-F]{2})+'$/i.test(secret)) {
+            throw new Error("Invalid hex encryption key: expected x'<even hex digits>'")
+        }
+        db.pragma(`${pragma} = ${secret}`)
     } else {
         db.pragma(`${pragma} = '${secret.replace(/'/g, "''")}'`)
+    }
+}
+
+const tmpPath = `${outPath}.tmp-${String(process.pid)}`
+
+function removeIfExists(filePath: string): void {
+    if (!fs.existsSync(filePath)) return
+    try {
+        fs.unlinkSync(filePath)
+    } catch (e) {
+        console.warn(`Warning: Failed to clean up temporary file ${filePath}:`, e)
     }
 }
 
@@ -46,16 +60,25 @@ try {
     // [INVARIANT] Fold pending WAL frames into the main file first; copying only the .db would silently drop them.
     const source = new Database(inPath, { fileMustExist: true })
     try {
-        source.pragma('wal_checkpoint(TRUNCATE)')
+        source.pragma('busy_timeout = 5000')
+        const ckpt = source.pragma('wal_checkpoint(TRUNCATE)') as Array<{ busy?: number }>
+        if (Array.isArray(ckpt) && (ckpt[0]?.busy ?? 0) !== 0) {
+            throw new Error('Source database has active WAL locks (wal_checkpoint busy != 0); retry when idle.')
+        }
     } finally {
         source.close()
     }
 
     // SQLite3 Multiple Ciphers uses PRAGMA rekey for in-place encryption
-    // So we copy the database, open the copy, and apply the rekey PRAGMA.
-    fs.copyFileSync(inPath, outPath)
+    // Stage into a temp file with restricted permissions and swap atomically only after verification.
+    fs.copyFileSync(inPath, tmpPath)
+    try {
+        fs.chmodSync(tmpPath, 0o600)
+    } catch {
+        // chmod 0600 is best-effort on Windows filesystems
+    }
 
-    const db = new Database(outPath)
+    const db = new Database(tmpPath)
     try {
         // [INVARIANT] rekey is unsupported in WAL mode; switch the copy to rollback journaling.
         db.pragma('journal_mode = DELETE')
@@ -64,9 +87,9 @@ try {
         db.close()
     }
 
-    // Verify: the header must no longer be plaintext, and the key must open the database.
+    // Verify: the header must no longer be plaintext, and the key must open & pass integrity_check.
     const header = Buffer.alloc(16)
-    const fd = fs.openSync(outPath, 'r')
+    const fd = fs.openSync(tmpPath, 'r')
     try {
         fs.readSync(fd, header, 0, 16, 0)
     } finally {
@@ -75,12 +98,22 @@ try {
     if (header.toString('latin1') === SQLITE_PLAIN_HEADER) {
         throw new Error('PRAGMA rekey had no effect: output still has a plaintext SQLite header (is SQLite3 Multiple Ciphers loaded?).')
     }
-    const verify = new Database(outPath, { fileMustExist: true })
+    const verify = new Database(tmpPath, { fileMustExist: true })
     try {
         applyKey(verify, 'key', key)
-        verify.prepare('SELECT count(*) FROM sqlite_master').get()
+        const integrity = verify.pragma('integrity_check', { simple: true })
+        if (integrity !== 'ok') {
+            throw new Error(`Encrypted database integrity check failed: ${String(integrity)}`)
+        }
     } finally {
         verify.close()
+    }
+
+    fs.renameSync(tmpPath, outPath)
+    try {
+        fs.chmodSync(outPath, 0o600)
+    } catch {
+        // chmod 0600 is best-effort on Windows filesystems
     }
 
     console.log('✅ Database encrypted and verified successfully.')
@@ -88,13 +121,9 @@ try {
     console.log(`and point the database configuration to ${outPath}.`)
 } catch (error) {
     console.error('❌ Failed to encrypt database:', error)
-    if (fs.existsSync(outPath)) {
-        try {
-            fs.unlinkSync(outPath)
-            console.log(`Cleaned up partial output file: ${outPath}`)
-        } catch (e) {
-            console.warn(`Warning: Failed to clean up partial output file ${outPath}:`, e)
-        }
-    }
+    removeIfExists(tmpPath)
+    removeIfExists(`${tmpPath}-wal`)
+    removeIfExists(`${tmpPath}-shm`)
+    removeIfExists(outPath)
     process.exit(1)
 }

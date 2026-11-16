@@ -88,6 +88,36 @@ function scanContentLines(
     }
 }
 
+/** Search a single regular file without traversing any parent or sibling directory. */
+export async function searchSingleFileAsync(
+    filePath: string,
+    query: string,
+    options: SearchDirectoryOptions
+): Promise<GrepMatch[]> {
+    const results: GrepMatch[] = []
+    const maxResults = typeof options.maxResults === 'number' ? options.maxResults : 500
+    const matcher = buildMatcher(query, options)
+    const fileMatcher = compileFilePatternMatcher(options.filePattern)
+    if (fileMatcher !== null && !fileMatcher(path.basename(filePath))) {
+        return results
+    }
+    let handle: fs.promises.FileHandle | undefined
+    try {
+        handle = await fs.promises.open(
+            filePath,
+            fs.constants.O_RDONLY | (fs.constants.O_NOFOLLOW ?? 0)
+        )
+        const stat = await handle.stat()
+        if (stat.isFile() && stat.size <= 2 * 1024 * 1024) {
+            const content = await handle.readFile('utf-8')
+            scanContentLines(filePath, content, matcher, results, maxResults)
+        }
+    } finally {
+        await handle?.close()
+    }
+    return results
+}
+
 export async function searchDirectoryAsync(
     dir: string,
     query: string,

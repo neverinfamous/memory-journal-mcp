@@ -38,7 +38,9 @@ describe('Briefing Insights Section', () => {
         expect(result?.activityTrend).toBe('+100% vs. last period (10 entries)')
         expect(result?.significanceSpike).toBe('2 significant entries (2× avg)')
         expect(result?.staleProjects[0]?.projectNumber).toBe(42)
-        expect(result?.topImportance[0]?.preview).toBe('Top entry')
+        expect(result?.topImportance[0]?.preview).toBe(
+            '<untrusted_remote_content>Top entry</untrusted_remote_content>'
+        )
         expect(result?.relationshipDensity).toBe(0.1)
     })
 

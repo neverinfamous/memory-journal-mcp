@@ -95,7 +95,7 @@ describe('Pass 25 Option A Regressions', () => {
         it('renders hardened audit prompt with valid Method 2 JS syntax and zero banned strings', async () => {
             const def = getCodeQualityAuditPromptDefinition()
             const text = getPromptText(await def.handler({}, db))
-            expect(AUDIT_PROMPT_REVISION).toBe('2026-11-16-audit-pass30')
+            expect(AUDIT_PROMPT_REVISION).toBe('2026-11-16-audit-pass31')
             expect(text).toContain('memory://agent-context/')
             expect(text).toContain('mj.core.createEntry')
             expect(text).toContain('node <file>')
@@ -238,7 +238,6 @@ describe('Pass 25 Option A Regressions', () => {
             setActiveSessionProject('other-repo', 9, runtime)
             const active = resolveActiveBriefingConfig(
                 { ...DEFAULT_BRIEFING_CONFIG, defaultWorkspaceId: 'unregistered-ws', projectRegistry: REGISTRY },
-                { transport: 'stdio', dbPath: ':memory:' },
                 [],
                 runtime
             )

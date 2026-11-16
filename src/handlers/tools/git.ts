@@ -84,10 +84,17 @@ async function fetchCommits(input: FetchCommitsInput, cwd: string): Promise<Comm
         }
     } catch (err) {
         const msg = err instanceof Error ? err.message : String(err)
-        if (/not a git repository|code 128/i.test(msg)) {
+        if (/not a git repository/i.test(msg)) {
             throw new ValidationError(
                 `Git command failed because '${cwd}' is not a valid git repository. Pass a registered repo, project_number, or valid git cwd.`
             )
+        }
+        if (
+            /unknown revision|bad revision|ambiguous argument|does not have any commits yet/i.test(
+                msg
+            )
+        ) {
+            throw new ValidationError(msg)
         }
         throw err
     }
@@ -252,7 +259,7 @@ export function getGitTools(context: ToolContext): ToolDefinition[] {
             group: 'git',
             inputSchema: GitAnalyzePatternsOptionsSchema,
             outputSchema: z.object({
-                success: z.boolean(),
+                success: z.boolean().optional(),
                 analysis: z.unknown().optional(),
                 error: z.string().optional()
             }).extend(ErrorFieldsMixin.shape),
@@ -262,7 +269,7 @@ export function getGitTools(context: ToolContext): ToolDefinition[] {
                     const input = GitAnalyzePatternsOptionsSchema.parse(params ?? {})
                     const cwd = resolveGitWorkingDir(input, context.config)
                     await sendProgress(progress, 0, 2, 'Fetching commits for analysis...')
-                    const max = typeof input.maxCount === 'number' ? input.maxCount : Number(input.maxCount)
+                    const max = z.number().int().positive().max(10000).parse(input.maxCount)
                     const commits = await fetchCommits({ maxCount: Number.isNaN(max) ? 50 : max }, cwd)
                     await sendProgress(progress, 1, 2, 'Analyzing commits...')
 
@@ -326,7 +333,7 @@ export function getGitTools(context: ToolContext): ToolDefinition[] {
                 projectNumber: relaxedNumber().optional().describe('Numeric project identifier alias'),
             }),
             outputSchema: z.object({
-                success: z.boolean(),
+                success: z.boolean().optional(),
                 results: z.array(z.object({
                     anchorId: z.number(),
                     path: z.string(),
@@ -348,10 +355,14 @@ export function getGitTools(context: ToolContext): ToolDefinition[] {
             handler: async (params: unknown) => {
                 try {
                     const { db } = context
+                    const coercedPositiveInt = z.preprocess(
+                        (v) => (typeof v === 'string' && /^\d+$/.test(v.trim()) ? Number(v.trim()) : v),
+                        z.number().int().positive()
+                    )
                     const parsedParams = z
                         .object({
-                            entry_id: z.number().int().positive().optional(),
-                            entryId: z.number().int().positive().optional(),
+                            entry_id: coercedPositiveInt.optional(),
+                            entryId: coercedPositiveInt.optional(),
                             workspace_id: z.string().optional(),
                             workspaceId: z.string().optional(),
                             project_number: StrictProjectNumberSchema.optional(),

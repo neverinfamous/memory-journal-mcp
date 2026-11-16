@@ -1,4 +1,3 @@
-import { z } from 'zod'
 import type { ToolDefinition, ToolContext } from '../../../types/index.js'
 import { ValidationError } from '../../../types/errors.js'
 import { formatHandlerError } from '../../../utils/error-helpers.js'
@@ -13,21 +12,11 @@ import {
     DeleteEntrySchemaMcp,
     DeleteEntryOutputSchema,
 } from './schemas.js'
-import { ErrorFieldsMixin } from '../error-fields-mixin.js'
 import { activeProjectRegistry, pairStoredScope } from '../../../utils/write-scope.js'
 import { resolveWriteWorkspaceId } from '../write-workspace.js'
-import { relaxedNumber } from '../schemas.js'
+import { createRestoreEntryTool, projectOwnershipMismatch } from './restore-entry-tool.js'
 
-/**
- * [INVARIANT] When a caller supplies project_number, the target entry must belong to that
- * project regardless of workspace_id (H4). Missing entries are treated as mismatches.
- */
-export function projectOwnershipMismatch(
-    projectNumber: number | undefined,
-    entryProject: number | null | undefined
-): boolean {
-    return projectNumber !== undefined && entryProject !== projectNumber
-}
+export { projectOwnershipMismatch }
 
 /** [INVARIANT] target_workspace_id must be a concrete, canonical workspace (never '*'). */
 export function canonicalTargetWorkspace(
@@ -241,10 +230,15 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
                         }
                     }
 
-                    // Re-index if content changed or workspace moved so vector search reflects new metadata
+                    // Re-index if content, metadata, or workspace moved so vector search reflects new metadata
                     let indexStatus: string | undefined
                     let warning: string | undefined
-                    if (input.content !== undefined || targetWorkspaceId !== undefined) {
+                    if (
+                        input.content !== undefined ||
+                        targetWorkspaceId !== undefined ||
+                        input.tags !== undefined ||
+                        input.entry_type !== undefined
+                    ) {
                         indexStatus = await autoIndexEntry(vectorManager, db, entry.id, entry.workspaceId ?? wsId)
                         if (indexStatus === 'failed') {
                             warning = 'Entry updated, but vector re-indexing failed.'
@@ -357,101 +351,6 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
                 }
             },
         },
-        {
-            name: 'restore_entry',
-            title: 'Restore Entry',
-            description: 'Restore a soft-deleted journal entry.',
-            group: 'admin',
-            inputSchema: z.preprocess(
-                (val: unknown) => {
-                    if (typeof val === 'object' && val !== null) {
-                        const obj = val as Record<string, unknown>;
-                        if ('id' in obj && !('entry_id' in obj)) {
-                            return { ...obj, entry_id: obj['id'] };
-                        }
-                    }
-                    return val;
-                },
-                z.object({
-                    entry_id: relaxedNumber().optional(),
-                    project_number: relaxedNumber().optional(),
-                    workspace_id: z.string().optional(),
-                })
-            ),
-            outputSchema: z.object({ success: z.boolean().optional(), entryId: z.number().optional(), indexStatus: z.string().optional(), warning: z.string().optional(), error: z.string().optional() }).extend(ErrorFieldsMixin.shape),
-            annotations: {
-                readOnlyHint: false,
-                destructiveHint: false,
-                idempotentHint: false,
-                openWorldHint: false,
-            },
-            handler: async (params: unknown) => {
-                try {
-                    const { entry_id, project_number, workspace_id } = z.preprocess(
-                        (val: unknown) => {
-                            if (typeof val === 'object' && val !== null) {
-                                const obj = val as Record<string, unknown>;
-                                if ('id' in obj && !('entry_id' in obj)) {
-                                    return { ...obj, entry_id: obj['id'] };
-                                }
-                            }
-                            return val;
-                        },
-                        z.object({
-                            entry_id: z.number(),
-                            project_number: z.number().int().optional(),
-                            workspace_id: z.string().optional(),
-                        })
-                    ).parse(params)
-                    let wsId = resolveWorkspaceId(workspace_id, project_number, context.config)
-                    if (
-                        workspace_id === undefined &&
-                        project_number === undefined
-                    ) {
-                        const existingByPk = db.getEntryByIdIncludeDeleted(entry_id, '*')
-                        if (existingByPk?.workspaceId !== undefined) {
-                            wsId = existingByPk.workspaceId
-                        }
-                    }
-                    if (project_number !== undefined) {
-                        const scoped = db.getEntryByIdIncludeDeleted(entry_id, '*')
-                        if (projectOwnershipMismatch(project_number, scoped?.projectNumber)) {
-                            return {
-                                success: false,
-                                entryId: entry_id,
-                                error: `Entry ${String(entry_id)} not found or not deleted`,
-                                code: 'RESOURCE_NOT_FOUND',
-                                category: 'resource',
-                                suggestion: 'Verify the entry ID and project number',
-                                recoverable: true,
-                            }
-                        }
-                    }
-                    const success = db.restoreEntry(entry_id, wsId)
-                    if (!success) {
-                        return {
-                            success: false,
-                            entryId: entry_id,
-                            error: `Entry ${String(entry_id)} not found or not deleted`,
-                            code: 'RESOURCE_NOT_FOUND',
-                            category: 'resource',
-                            suggestion: 'Verify the entry ID',
-                            recoverable: true,
-                        }
-                    }
-                    // [SIDE-EFFECT] M4: soft-delete removed the vector; re-index on restore.
-                    const restored = db.getEntryById(entry_id, wsId)
-                    const indexStatus = await autoIndexEntry(
-                        vectorManager,
-                        db,
-                        entry_id,
-                        restored?.workspaceId ?? wsId
-                    )
-                    return { success, entryId: entry_id, indexStatus, ...(indexStatus === 'failed' ? { warning: 'Entry restored, but vector re-indexing failed.' } : {}) }
-                } catch (err) {
-                    return formatHandlerError(err)
-                }
-            },
-        },
-    ];
+        createRestoreEntryTool(context),
+    ]
 }

@@ -182,7 +182,7 @@ function populateRecoveredEntryMetadata(payload: Record<string, unknown>, scanCo
  * Attempt fuzzy recovery of an entry creation or update call from broken/mangled code
  */
 export function extractAndRecoverEntryCode(code: string): string | null {
-    if (!code || typeof code !== 'string') return null
+    if (!code || typeof code !== 'string' || code.length > 50_000) return null
 
     const jsonRecovered = extractAndRecoverJsonCode(code)
     if (jsonRecovered !== null) return jsonRecovered

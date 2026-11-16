@@ -3,103 +3,31 @@ import * as path from 'node:path'
 import { z } from 'zod'
 import type { AuditConfig } from '../audit/index.js'
 import type { ConfigResolver } from '../utils/config-resolver.js'
-import { defaultDbPath, defaultTeamDbPath } from './option-groups.js'
+import { defaultDbPath } from './option-groups.js'
 import { activeProjectRegistry, pairStoredScope } from '../utils/write-scope.js'
+import { logger } from '../utils/logger.js'
 import type { ServerOptions } from '../server/mcp-server/types.js'
 import {
     assertAdditionalTeamDbIsNotSymlink,
     parseAdditionalTeamDbsOption,
     parseAllowedIoRootsOption,
+    parseImportanceThresholdOption,
+    parseLogLevelOption,
     parseProjectRegistryOption,
+    resolveUnconflictedDefaultProject,
 } from './server-options-parsers.js'
+
+import {
+    buildSchedulerOptions,
+    resolveDatabasePaths,
+    type CatchConfig,
+} from './server-options-groups.js'
 
 export { assertAdditionalTeamDbIsNotSymlink }
 
 const transportSchema = z.enum(['stdio', 'http'])
 const teamDefaultRoleSchema = z.enum(['admin', 'member', 'viewer', 'denied'])
-const reportContentTypeSchema = z.enum(['slack', 'discord', 'json'])
 type TeamDefaultRole = z.infer<typeof teamDefaultRoleSchema>
-type ReportContentType = z.infer<typeof reportContentTypeSchema>
-
-type CatchConfig = <T>(fn: () => T, fallback: T) => T
-
-function resolveDatabasePaths(
-    resolver: ConfigResolver,
-    catchConfig: CatchConfig
-): { db: string | undefined; testDb: string | undefined; teamDb: string | undefined; testTeamDb: string | undefined } {
-    const cliDb = catchConfig(
-        () => (resolver.isCliProvided('db') ? resolver.resolve<string>('db') : undefined),
-        undefined
-    )
-    const cliDatabase = catchConfig(
-        () => (resolver.isCliProvided('database') ? resolver.resolve<string>('database') : undefined),
-        undefined
-    )
-    const configDbPath = catchConfig(() => resolver.resolve<string>('dbPath'), undefined)
-    const fallbackDatabase = catchConfig(() => resolver.resolve<string>('database'), undefined)
-    const rawDb = catchConfig(() => resolver.resolve<string>('db', 'DB_PATH'), defaultDbPath)
-    let db = cliDb ?? cliDatabase ?? rawDb
-    if ((db === defaultDbPath || db === undefined) && fallbackDatabase) {
-        db = fallbackDatabase
-    } else if ((db === defaultDbPath || db === undefined) && configDbPath) {
-        db = configDbPath
-    }
-
-    const configTestDbPath = catchConfig(() => resolver.resolve<string>('testDbPath'), undefined)
-    const rawTestDb = catchConfig(() => resolver.resolve<string>('testDb', 'TEST_DB_PATH'), undefined)
-    const testDb = rawTestDb ?? configTestDbPath
-
-    const cliTeamDb = catchConfig(
-        () => (resolver.isCliProvided('teamDb') ? resolver.resolve<string>('teamDb') : undefined),
-        undefined
-    )
-    const cliTeamDatabase = catchConfig(
-        () => (resolver.isCliProvided('teamDatabase') ? resolver.resolve<string>('teamDatabase') : undefined),
-        undefined
-    )
-    const configTeamDbPath = catchConfig(() => resolver.resolve<string>('teamDbPath'), undefined)
-    const fallbackTeamDatabase = catchConfig(() => resolver.resolve<string>('teamDatabase'), undefined)
-    const rawTeamDb = catchConfig(() => resolver.resolve<string>('teamDb', 'TEAM_DB_PATH'), defaultTeamDbPath)
-    let teamDb = cliTeamDb ?? cliTeamDatabase ?? rawTeamDb
-    if ((teamDb === defaultTeamDbPath || teamDb === undefined) && fallbackTeamDatabase) {
-        teamDb = fallbackTeamDatabase
-    } else if ((teamDb === defaultTeamDbPath || teamDb === undefined) && configTeamDbPath) {
-        teamDb = configTeamDbPath
-    }
-
-    const configTestTeamDbPath = catchConfig(() => resolver.resolve<string>('testTeamDbPath'), undefined)
-    const rawTestTeamDb = catchConfig(() => resolver.resolve<string>('testTeamDb', 'TEST_TEAM_DB_PATH'), undefined)
-    const testTeamDb = rawTestTeamDb ?? configTestTeamDbPath
-
-    return { db, testDb, teamDb, testTeamDb }
-}
-
-function buildSchedulerOptions(
-    resolver: ConfigResolver,
-    catchConfig: CatchConfig
-): NonNullable<ServerOptions['scheduler']> {
-    return {
-        backupIntervalMinutes: catchConfig(() => resolver.resolveInt('backupInterval', 'BACKUP_INTERVAL', 0) ?? 0, 0),
-        keepBackups: catchConfig(() => resolver.resolveInt('keepBackups', 'KEEP_BACKUPS', 1, 100) ?? 5, 5),
-        vacuumIntervalMinutes: catchConfig(() => resolver.resolveInt('vacuumInterval', 'VACUUM_INTERVAL', 0) ?? 0, 0),
-        rebuildIndexIntervalMinutes: catchConfig(() => resolver.resolveInt('rebuildIndexInterval', 'REBUILD_INDEX_INTERVAL', 0) ?? 0, 0),
-        digestIntervalMinutes: catchConfig(() => resolver.resolveInt('digestInterval', 'DIGEST_INTERVAL', 0) ?? 0, 0),
-        pruneIntervalMinutes: catchConfig(() => resolver.resolveInt('autoPruneInterval', 'AUTO_PRUNE_INTERVAL_MINUTES', 0) ?? 0, 0),
-        reportIntervalMinutes: catchConfig(() => resolver.resolveInt('reportInterval', 'REPORT_INTERVAL', 0) ?? 0, 0),
-        reportDeliveryOptions: {
-            webhookUrl: catchConfig(() => resolver.resolve<string>('reportWebhookUrl', 'REPORT_WEBHOOK_URL') ?? '', ''),
-            webhookAuth: catchConfig(() => resolver.resolve<string>('reportWebhookAuth', 'REPORT_WEBHOOK_AUTH'), undefined),
-            contentType: catchConfig((): ReportContentType => {
-                const raw = resolver.resolve<string>('reportContentType', 'REPORT_CONTENT_TYPE') ?? 'slack'
-                const parsed = reportContentTypeSchema.safeParse(raw)
-                if (!parsed.success) {
-                    throw new Error(`Invalid report content type '${raw}'. Use slack, discord, or json.`)
-                }
-                return parsed.data
-            }, 'slack'),
-        },
-    }
-}
 
 function resolveDefaultProjectNumberOption(
     resolver: ConfigResolver,
@@ -130,15 +58,18 @@ function resolveDefaultProjectNumberOption(
 
 function resolveDefaultWorkspaceIdOption(
     resolver: ConfigResolver,
-    catchConfig: CatchConfig
+    catchConfig: CatchConfig,
+    allowWorkspaceAsDefault: boolean
 ): string | undefined {
     return catchConfig(() => {
-        const ws = resolver.resolve<string>('workspace')
-        const trimmedWs = ws !== undefined ? ws.trim() : undefined
-        if (trimmedWs === '*') {
-            throw new Error("Invalid workspace '*': default workspace cannot be a wildcard.")
+        if (allowWorkspaceAsDefault) {
+            const ws = resolver.resolve<string>('workspace')
+            const trimmedWs = ws !== undefined ? ws.trim() : undefined
+            if (trimmedWs === '*') {
+                throw new Error("Invalid workspace '*': default workspace cannot be a wildcard.")
+            }
+            if (trimmedWs !== undefined && trimmedWs !== '') return trimmedWs
         }
-        if (trimmedWs !== undefined && trimmedWs !== '') return trimmedWs
         const defWs = resolver.resolve<string>('defaultWorkspaceId', 'DEFAULT_WORKSPACE_ID')
         const trimmedDefWs = defWs !== undefined ? defWs.trim() : undefined
         if (trimmedDefWs === '*') {
@@ -152,7 +83,9 @@ function resolveDefaultWorkspaceIdOption(
 
 function buildBriefingConfigOptions(
     resolver: ConfigResolver,
-    catchConfig: CatchConfig
+    catchConfig: CatchConfig,
+    defaultProjectNumber: number | undefined,
+    defaultWorkspaceId: string | undefined
 ): NonNullable<ServerOptions['briefingConfig']> {
     return {
         commitCount: catchConfig(() => resolver.resolveInt('briefingCommits', 'BRIEFING_COMMIT_COUNT') ?? 3, 3),
@@ -191,19 +124,29 @@ function buildBriefingConfigOptions(
         workflowStatusBreakdown: catchConfig(() => resolver.resolveBool('briefingWorkflowStatus', 'BRIEFING_WORKFLOW_STATUS') ?? false, false),
         copilotReviews: catchConfig(() => resolver.resolveBool('briefingCopilot', 'BRIEFING_COPILOT_REVIEWS') ?? false, false),
         workflowSummary: catchConfig(() => resolver.resolve<string>('workflowSummary', 'MEMORY_JOURNAL_WORKFLOW_SUMMARY'), undefined),
-        defaultProjectNumber: resolveDefaultProjectNumberOption(resolver, catchConfig),
-        defaultWorkspaceId: resolveDefaultWorkspaceIdOption(resolver, catchConfig),
+        defaultProjectNumber,
+        defaultWorkspaceId,
         projectRegistry: catchConfig(() => parseProjectRegistryOption(resolver.resolve<unknown>('projectRegistry', 'PROJECT_REGISTRY')), undefined),
-        briefingImportanceThreshold: catchConfig(() => {
-            const val = resolver.resolve<unknown>('briefingImportanceThreshold', 'BRIEFING_IMPORTANCE_THRESHOLD')
-            if (typeof val === 'number') return val
-            if (typeof val === 'string') return parseFloat(val)
-            return 0.3
-        }, 0.3),
+        briefingImportanceThreshold: catchConfig(
+            () =>
+                parseImportanceThresholdOption(
+                    resolver.resolve<unknown>(
+                        'briefingImportanceThreshold',
+                        'BRIEFING_IMPORTANCE_THRESHOLD'
+                    ),
+                    'briefingImportanceThreshold',
+                    0.3
+                ),
+            0.3
+        ),
     }
 }
 
-function applyEnvironmentOverrides(resolver: ConfigResolver, catchConfig: CatchConfig): void {
+function applyEnvironmentOverrides(
+    resolver: ConfigResolver,
+    options: Record<string, unknown>,
+    catchConfig: CatchConfig
+): void {
     const codemodeMaxResultSize = catchConfig(() => resolver.resolve<string>('codemodeMaxResultSize', 'CODE_MODE_MAX_RESULT_SIZE'), undefined)
     if (codemodeMaxResultSize) {
         process.env['CODE_MODE_MAX_RESULT_SIZE'] = codemodeMaxResultSize
@@ -217,6 +160,16 @@ function applyEnvironmentOverrides(resolver: ConfigResolver, catchConfig: CatchC
     const authScopes = catchConfig(() => resolver.resolve<string>('authScopes', 'MCP_AUTH_SCOPES'), undefined)
     if (authScopes !== undefined && authScopes.trim() !== '') {
         process.env['MCP_AUTH_SCOPES'] = authScopes.trim()
+    }
+
+    if (options['dumpConfig'] !== true) {
+        const logLevel = catchConfig(
+            () => parseLogLevelOption(resolver.resolve<string>('logLevel', 'LOG_LEVEL')),
+            undefined
+        )
+        if (logLevel !== undefined) {
+            logger.setLevel(logLevel)
+        }
     }
 }
 
@@ -269,12 +222,15 @@ function resolveTeamDefaultRoleOption(resolver: ConfigResolver, catchConfig: Cat
 }
 
 function resolvePruneImportanceThresholdOption(resolver: ConfigResolver, catchConfig: CatchConfig): number {
-    return catchConfig(() => {
-        const val = resolver.resolve<unknown>('pruneImportanceThreshold', 'PRUNE_IMPORTANCE_THRESHOLD')
-        if (typeof val === 'number') return val
-        if (typeof val === 'string') return parseFloat(val)
-        return 0.15
-    }, 0.15)
+    return catchConfig(
+        () =>
+            parseImportanceThresholdOption(
+                resolver.resolve<unknown>('pruneImportanceThreshold', 'PRUNE_IMPORTANCE_THRESHOLD'),
+                'pruneImportanceThreshold',
+                0.15
+            ),
+        0.15
+    )
 }
 
 function resolveMetricsExportOption(
@@ -361,8 +317,8 @@ function buildLifecycleOptionsGroup(resolver: ConfigResolver, catchConfig: Catch
 
 export function buildServerOptions(
     resolver: ConfigResolver,
-    _options: Record<string, unknown> & { team?: boolean },
-    _command: Command,
+    options: Record<string, unknown> & { team?: boolean },
+    command: Command,
     configErrors: string[]
 ): { serverOptions: ServerOptions; transport: string; db: string | undefined; teamDb?: string; host?: string } {
     const catchConfig: CatchConfig = <T>(fn: () => T, fallback: T): T => {
@@ -377,15 +333,40 @@ export function buildServerOptions(
     const host = catchConfig(() => resolver.resolve<string>('serverHost', 'MCP_HOST') ?? process.env['HOST'] ?? undefined, undefined)
     const transport = resolveTransportOption(resolver, catchConfig)
     const { db, testDb, teamDb, testTeamDb } = resolveDatabasePaths(resolver, catchConfig)
-    applyEnvironmentOverrides(resolver, catchConfig)
+    applyEnvironmentOverrides(resolver, options, catchConfig)
     const instructionLevel = resolveInstructionLevelOption(resolver, catchConfig)
     const projectRegistry = catchConfig(() => parseProjectRegistryOption(resolver.resolve<unknown>('projectRegistry', 'PROJECT_REGISTRY')), undefined)
+    const commandName = command.name()
+    const allowWorkspaceAsDefault =
+        commandName === 'serve' || commandName === 'memory-journal-mcp'
     let defaultProjectNumber = resolveDefaultProjectNumberOption(resolver, catchConfig)
-    let defaultWorkspaceId = resolveDefaultWorkspaceIdOption(resolver, catchConfig)
+    let defaultWorkspaceId = resolveDefaultWorkspaceIdOption(
+        resolver,
+        catchConfig,
+        allowWorkspaceAsDefault
+    )
+    const wsFromCli =
+        resolver.isCliProvided('defaultWorkspaceId') ||
+        (allowWorkspaceAsDefault && resolver.isCliProvided('workspace'))
+    defaultProjectNumber = resolveUnconflictedDefaultProject(
+        defaultWorkspaceId,
+        defaultProjectNumber,
+        projectRegistry,
+        wsFromCli,
+        resolver.isCliProvided('defaultProject')
+    )
     if (defaultWorkspaceId !== undefined && defaultProjectNumber !== undefined) {
-        const paired = pairStoredScope(defaultWorkspaceId, defaultProjectNumber, activeProjectRegistry(projectRegistry))
-        defaultWorkspaceId = paired.workspaceId
-        if (typeof paired.projectNumber === 'number') defaultProjectNumber = paired.projectNumber
+        catchConfig(() => {
+            const paired = pairStoredScope(
+                defaultWorkspaceId,
+                defaultProjectNumber,
+                activeProjectRegistry(projectRegistry)
+            )
+            defaultWorkspaceId = paired.workspaceId
+            if (typeof paired.projectNumber === 'number') {
+                defaultProjectNumber = paired.projectNumber
+            }
+        }, undefined)
     }
 
     const serverOptions: ServerOptions = {
@@ -408,7 +389,12 @@ export function buildServerOptions(
         projectRegistry,
         additionalTeamDbs: catchConfig(() => parseAdditionalTeamDbsOption(resolver.resolve<unknown>('additionalTeamDbs', 'ADDITIONAL_TEAM_DBS')), undefined),
         allowedIoRoots: catchConfig(() => parseAllowedIoRootsOption(resolver.resolve<unknown>('allowedIoRoots', 'ALLOWED_IO_ROOTS')), undefined),
-        briefingConfig: buildBriefingConfigOptions(resolver, catchConfig),
+        briefingConfig: buildBriefingConfigOptions(
+            resolver,
+            catchConfig,
+            defaultProjectNumber,
+            defaultWorkspaceId
+        ),
         auditConfig: buildAuditConfigOption(resolver, catchConfig),
         embeddingModel: catchConfig(() => resolver.resolve<string>('embeddingModel', 'EMBEDDING_MODEL'), undefined),
         ...(instructionLevel !== undefined ? { instructionLevel } : {}),

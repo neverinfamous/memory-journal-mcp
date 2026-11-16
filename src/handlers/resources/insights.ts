@@ -10,6 +10,7 @@ import { ICON_ANALYTICS } from '../../constants/icons.js'
 import { withPriority, ASSISTANT_FOCUSED } from '../../utils/resource-annotations.js'
 import type { InternalResourceDef, ResourceContext, ResourceResult } from './shared.js'
 import { resourceWorkspace, sliceUntrustedInline } from './shared.js'
+import { sanitizeAuthor } from '../../utils/security-utils.js'
 import { enforceTeamResourceRbac } from './team.js'
 import { ProtocolError, ProtocolErrorCode } from '@modelcontextprotocol/server'
 
@@ -143,7 +144,37 @@ export const teamCollaborationResource: InternalResourceDef = {
                 limit: 100,
                 workspaceId: wsId,
             })
-            const data = { success: true, matrix }
+            const sanitizedMatrix = {
+                ...matrix,
+                authorActivity: Array.isArray(matrix.authorActivity)
+                    ? matrix.authorActivity.map((a) => ({
+                          ...a,
+                          ...(typeof a.author === 'string'
+                              ? { author: sanitizeAuthor(a.author) }
+                              : {}),
+                      }))
+                    : [],
+                crossAuthorLinks: Array.isArray(matrix.crossAuthorLinks)
+                    ? matrix.crossAuthorLinks.map((l) => ({
+                          ...l,
+                          ...(typeof l.fromAuthor === 'string'
+                              ? { fromAuthor: sanitizeAuthor(l.fromAuthor) }
+                              : {}),
+                          ...(typeof l.toAuthor === 'string'
+                              ? { toAuthor: sanitizeAuthor(l.toAuthor) }
+                              : {}),
+                      }))
+                    : [],
+                impactFactor: Array.isArray(matrix.impactFactor)
+                    ? matrix.impactFactor.map((f) => ({
+                          ...f,
+                          ...(typeof f.author === 'string'
+                              ? { author: sanitizeAuthor(f.author) }
+                              : {}),
+                      }))
+                    : [],
+            }
+            const data = { success: true, matrix: sanitizedMatrix }
             const tokenEstimate = Math.ceil(JSON.stringify(data).length / 4)
             return {
                 data: { ...data, _meta: { tokenEstimate } },

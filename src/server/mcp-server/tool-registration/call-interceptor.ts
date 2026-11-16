@@ -85,9 +85,13 @@ async function tryPromptAndResourceFallbacks(
         const rawPromptName =
             typeof toolArgs['name'] === 'string'
                 ? toolArgs['name']
-                : typeof toolArgs['prompt'] === 'string'
-                  ? toolArgs['prompt']
-                  : undefined
+                : typeof toolArgs['prompt_name'] === 'string'
+                  ? toolArgs['prompt_name']
+                  : typeof toolArgs['promptName'] === 'string'
+                    ? toolArgs['promptName']
+                    : typeof toolArgs['prompt'] === 'string'
+                      ? toolArgs['prompt']
+                      : undefined
         const normalizedTarget = rawPromptName?.replace(/^mj_/, '').replace(/_/g, '-')
         const targetPrompt =
             rawPromptName !== undefined
@@ -150,7 +154,7 @@ async function tryAutonomousUnknownToolFallback(
         fallbackConfig,
         currentConfig,
         options,
-        resolveActiveBriefingConfig(currentConfig.briefingConfig, options, allowedIoRoots)
+        resolveActiveBriefingConfig(currentConfig.briefingConfig, allowedIoRoots)
     )
     const toolContext: ToolContext = {
         db,
@@ -303,7 +307,14 @@ function healIncomingToolCallParams(
     options: ServerOptions,
     liveBriefing: ReturnType<typeof resolveActiveBriefingConfig>
 ): ReturnType<typeof formatTokenEstimatedError> | undefined {
-    params.arguments ??= {}
+    const rawArgs: unknown = params.arguments
+    if (
+        rawArgs === undefined ||
+        rawArgs === null ||
+        (typeof rawArgs !== 'object' && !Array.isArray(rawArgs))
+    ) {
+        params.arguments = {}
+    }
     const healerOptions: ServerOptions = { ...options }
     if (liveBriefing.projectRegistry !== undefined) {
         healerOptions.projectRegistry = liveBriefing.projectRegistry
@@ -350,7 +361,6 @@ export function attachCallToolInterceptor(
             const liveConfig = context.configManager.getConfig()
             const liveBriefing = resolveActiveBriefingConfig(
                 liveConfig.briefingConfig,
-                options,
                 context.allowedIoRoots
             )
             syncLiveHandlerConfig(customToolHandlerConfig, liveConfig, options, liveBriefing)
@@ -360,7 +370,12 @@ export function attachCallToolInterceptor(
                 if (healError !== undefined) return healError
             }
 
-            if (req.params?.arguments !== undefined) {
+            if (
+                req.params?.arguments !== undefined &&
+                typeof req.params.arguments === 'object' &&
+                req.params.arguments !== null &&
+                !Array.isArray(req.params.arguments)
+            ) {
                 resolveMcpCreateWorkspaceScope(req.params.name, req.params.arguments, {
                     ...customToolHandlerConfig,
                     briefingConfig: liveBriefing,

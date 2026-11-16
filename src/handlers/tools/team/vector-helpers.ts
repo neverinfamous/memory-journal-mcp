@@ -4,6 +4,7 @@
 
 import { z } from 'zod'
 import type { ToolContext } from '../../../types/index.js'
+import { ValidationError } from '../../../types/errors.js'
 import { formatHandlerError } from '../../../utils/error-helpers.js'
 import { logger } from '../../../utils/logger.js'
 import { resolveWorkspaceId } from '../../../utils/workspace-resolver.js'
@@ -154,6 +155,13 @@ export async function executeTeamSemanticSearch(
         if (!teamDb) return { ...TEAM_DB_ERROR_RESPONSE }
 
         const input = TeamSemanticSearchSchema.parse(params)
+        if (
+            input.start_date !== undefined &&
+            input.end_date !== undefined &&
+            input.start_date > input.end_date
+        ) {
+            throw new ValidationError('start_date cannot be after end_date')
+        }
         const wsId = resolveWorkspaceId(input.workspace_id, input.project_number, context.config)
         const projectNumber =
             resolveTeamProjectNumber(context, wsId, input.project_number, input.workspace_id) ??

@@ -167,29 +167,35 @@ export class AliasManager {
         }
 
         try {
-            const placeholders = rawAuthors.map(() => '?').join(',')
             const scopeId = effectiveWorkspace(workspaceId)
             const scoped = scopeId !== '*'
-            const sql = scoped
-                ? `SELECT alias, canonical_author FROM author_aliases WHERE alias IN (${placeholders}) COLLATE NOCASE AND (workspace_id IS NULL OR workspace_id = ?) ORDER BY workspace_id IS NULL DESC`
-                : `SELECT alias, canonical_author FROM author_aliases WHERE alias IN (${placeholders}) COLLATE NOCASE ORDER BY workspace_id IS NULL DESC`
-            const params = scoped ? [...rawAuthors, scopeId] : rawAuthors
-            const results = this.db.exec(sql, params)
+            const resolvedByLower = new Map<string, string>()
+            const CHUNK_SIZE = 400
+            for (let i = 0; i < rawAuthors.length; i += CHUNK_SIZE) {
+                const chunk = rawAuthors.slice(i, i + CHUNK_SIZE)
+                const placeholders = chunk.map(() => '?').join(',')
+                const sql = scoped
+                    ? `SELECT alias, canonical_author FROM author_aliases WHERE alias IN (${placeholders}) COLLATE NOCASE AND (workspace_id IS NULL OR workspace_id = ?) ORDER BY workspace_id IS NULL DESC`
+                    : `SELECT alias, canonical_author FROM author_aliases WHERE alias IN (${placeholders}) COLLATE NOCASE ORDER BY workspace_id IS NULL DESC`
+                const params = scoped ? [...chunk, scopeId] : chunk
+                const results = this.db.exec(sql, params)
 
-            if (results[0]) {
-                const aliasIdx = results[0].columns.indexOf('alias')
-                const canonicalIdx = results[0].columns.indexOf('canonical_author')
+                if (results[0]) {
+                    const aliasIdx = results[0].columns.indexOf('alias')
+                    const canonicalIdx = results[0].columns.indexOf('canonical_author')
 
-                results[0].values.forEach((row: unknown[]) => {
-                    const alias = String(row[aliasIdx])
-                    const canonical = String(row[canonicalIdx])
-                    // We need to map back to the original casing that was passed in,
-                    // so we do a case-insensitive search in our input array
-                    const originalAuthor = rawAuthors.find(a => a.toLowerCase() === alias.toLowerCase())
-                    if (originalAuthor) {
-                        resultMap.set(originalAuthor, canonical)
+                    for (const row of results[0].values) {
+                        const alias = String(row[aliasIdx])
+                        const canonical = String(row[canonicalIdx])
+                        resolvedByLower.set(alias.toLowerCase(), canonical)
                     }
-                })
+                }
+            }
+            for (const author of rawAuthors) {
+                const mapped = resolvedByLower.get(author.toLowerCase())
+                if (mapped !== undefined) {
+                    resultMap.set(author, mapped)
+                }
             }
         } catch (error) {
             // Ignore missing table

@@ -304,7 +304,7 @@ export function requireToolScope(toolName: string): RequestHandler {
         const hasAccess = checkScope(authReq.auth.scopes, requiredScope)
 
         if (!hasAccess) {
-            const error = new InsufficientScopeError(`Tool access: ${toolName}`, authReq.auth.scopes)
+            const error = new InsufficientScopeError(requiredScope, authReq.auth.scopes)
 
             logger.warning(`Insufficient scope for tool: ${toolName}`, {
                 module: 'AUTH',

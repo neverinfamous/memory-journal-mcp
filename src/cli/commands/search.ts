@@ -1,7 +1,7 @@
 import type { Command } from 'commander'
 import { type z } from 'zod'
 import { searchOptionsSchema } from '../schemas.js'
-import { getCliCommandDb as getDb } from './db-helper.js'
+import { enforceCliTeamRbac, getCliCommandDb as getDb } from './db-helper.js'
 import { VectorSearchManager } from '../../vector/vector-search-manager/index.js'
 import { hybridSearch } from '../../handlers/tools/search/hybrid.js'
 import { resolveCliQueryScope } from '../../utils/workspace-resolver.js'
@@ -26,6 +26,9 @@ export async function searchAction(query: string | undefined, options: z.infer<t
             requestedProject,
             serverOptions
         )
+        if (options.team === true) {
+            enforceCliTeamRbac(db, serverOptions, 'viewer', workspaceId)
+        }
         const workspaceFilter = workspaceId !== undefined ? { workspaceId } : {}
         const projectFilter = projectNumber !== undefined ? { projectNumber } : {}
         let result: unknown

@@ -149,11 +149,19 @@ export class ConfigResolver {
     }
 
     private _parseNumeric(val: unknown, cliKey: string, min?: number, max?: number, isFloat = false): number {
-        const valStr = typeof val === 'string' || typeof val === 'number' || typeof val === 'boolean' ? String(val) : JSON.stringify(val)
-        const parsed = typeof val === 'number' ? val : (isFloat ? parseFloat(valStr) : parseInt(valStr, 10))
-        
-        if (Number.isNaN(parsed)) {
-            throw new ConfigurationError(`Invalid numeric configuration for ${cliKey}: ${valStr}`)
+        if (typeof val !== 'number' && typeof val !== 'string') {
+            throw new ConfigurationError(`Invalid numeric configuration for ${cliKey}: ${JSON.stringify(val)}`)
+        }
+        const rawStr = typeof val === 'number' ? String(val) : val.trim()
+        const numericPattern = isFloat
+            ? /^-?(?:\d+\.?\d*|\.\d+)(?:e[+-]?\d+)?$/i
+            : /^-?\d+$/
+        if (rawStr === '' || !numericPattern.test(rawStr)) {
+            throw new ConfigurationError(`Invalid numeric configuration for ${cliKey}: ${rawStr}`)
+        }
+        const parsed = typeof val === 'number' ? val : Number(rawStr)
+        if (!Number.isFinite(parsed) || (!isFloat && !Number.isInteger(parsed))) {
+            throw new ConfigurationError(`Invalid numeric configuration for ${cliKey}: ${rawStr}`)
         }
         if (min !== undefined && parsed < min) {
             throw new ConfigurationError(`Configuration ${cliKey} must be at least ${min}`)

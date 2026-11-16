@@ -192,11 +192,11 @@ export const adminPruneOptionsSchema = pruningOptionsSchema
     .extend(outputOptionsSchema.shape)
     .extend({
         // Specific overrides from prune command
-        archiveOlderThanDays: z.coerce.number().optional(),
-        pruneOlderThanDays: z.coerce.number().optional(),
-        hardDeleteOlderThanDays: z.coerce.number().optional(),
-        importanceThreshold: z.coerce.number().optional(),
-        pruneImportanceThreshold: z.coerce.number().optional(),
+        archiveOlderThanDays: z.coerce.number().min(0).optional(),
+        pruneOlderThanDays: z.coerce.number().min(0).optional(),
+        hardDeleteOlderThanDays: z.coerce.number().min(0).optional(),
+        importanceThreshold: z.coerce.number().min(0).max(1).optional(),
+        pruneImportanceThreshold: z.coerce.number().min(0).max(1).optional(),
         dryRun: z.boolean().optional(),
         excludeTags: z.string().optional(),
         allWorkspaces: z.boolean().optional(),
@@ -247,8 +247,8 @@ export type BaseEntryOptionsSchema = z.infer<typeof baseEntryOptionsSchema>
 export const createEntryOptionsSchema = baseEntryOptionsSchema
 
 export const updateEntryOptionsSchema = baseEntryOptionsSchema.extend({
-    id: z.coerce.number(),
-    expectedVersion: z.coerce.number(),
+    id: safeCoerceNumber,
+    expectedVersion: safeCoerceNumber,
     targetWorkspace: z.string().optional(),
     target_workspace: z.string().optional(),
 })
@@ -259,7 +259,7 @@ export const searchOptionsSchema = z.object({
     keyword: z.string().optional(),
     mode: z.enum(['auto', 'fts', 'semantic', 'hybrid']).optional(),
     team: z.boolean().optional(),
-    limit: z.coerce.number().optional()
+    limit: z.coerce.number().int().positive().optional()
 }).extend(coreOptionsSchema.shape).extend(databaseOptionsSchema.shape).extend(workspaceOptionsSchema.shape).extend(outputOptionsSchema.shape)
 
 export const ioExportJsonOptionsSchema = z.object({
@@ -289,7 +289,7 @@ export const analyticsOptionsSchema = z.object({
 }).extend(coreOptionsSchema.shape).extend(databaseOptionsSchema.shape).extend(workspaceOptionsSchema.shape).extend(outputOptionsSchema.shape)
 
 export const adminAuditSearchOptionsSchema = z.object({
-    limit: z.coerce.number().optional(),
+    limit: z.coerce.number().int().positive().optional(),
     tool: z.string().optional(),
     user: z.string().optional(),
     category: z.enum(['read', 'write', 'admin', 'team', 'audit']).optional(),

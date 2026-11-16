@@ -18,26 +18,15 @@ import {
     checkRateLimit,
     buildAllowedHostHeaders,
     isLoopbackHost,
-    formatHostForUrl,
-    validateOAuthTransportConfig,
 } from '../security.js'
 import {
     handleHealthCheck,
     handleRootInfo,
-    createAuthMiddleware,
     handlePrometheusMetrics,
 } from '../handlers.js'
-import {
-    createTokenValidator,
-    createOAuthResourceServer,
-    createAuthMiddleware as createOAuthMiddleware,
-    oauthErrorHandler,
-    SUPPORTED_SCOPES,
-} from '../../../auth/index.js'
+import { oauthErrorHandler } from '../../../auth/index.js'
 import { requireScope } from '../../../auth/middleware.js'
-import { AuthServerDiscoveryError } from '../../../auth/errors.js'
-import { ConfigurationError } from '../../../types/errors.js'
-import { AuthorizationServerDiscovery } from '../../../auth/authorization-server-discovery.js'
+import { installHttpAuthentication } from './http-oauth-setup.js'
 import { hostHeaderValidation, localhostHostValidation } from '@modelcontextprotocol/express'
 import type { ServerRuntime } from '../../../utils/maintenance-lock.js'
 import type { LegacySSEServerTransport } from './legacy-sse.js'
@@ -134,8 +123,15 @@ export class HttpTransport {
         this.installBodyParsing()
         this.installRateLimiting()
         try {
-            await this.installAuthentication(host, port, authToken, isLocalhost)
-            this.installRoutes(serverFactory, runtime)
+            const oauthInstalled = await installHttpAuthentication(
+                this.app,
+                this.config,
+                host,
+                port,
+                authToken,
+                isLocalhost
+            )
+            this.installRoutes(serverFactory, runtime, oauthInstalled)
             await this.listen(port, host, scheduler)
         } catch (error) {
             // [SIDE-EFFECT] Release timers so a failed start does not keep the process alive.
@@ -236,105 +232,12 @@ export class HttpTransport {
 
     }
 
-    /** Resolve jwks_uri via RFC 8414 discovery, falling back to the conventional path only on HTTP 404 (or explicit plaintext loopback). */
-    private async discoverJwksUri(issuer: string): Promise<string> {
-        const fallback = `${issuer.replace(/\/+$/, '')}/.well-known/jwks.json`
-        if (this.config.allowPlaintextLoopbackOAuth === true) {
-            try {
-                const parsed = new URL(issuer)
-                if (parsed.protocol === 'http:' && isLoopbackHost(parsed.hostname)) {
-                    return fallback
-                }
-            } catch {
-                // Fall through to discovery for normal error reporting
-            }
-        }
-        try {
-            const discovery = new AuthorizationServerDiscovery({ authServerUrl: issuer })
-            await discovery.discover()
-            return discovery.getJwksUri()
-        } catch (error) {
-            if (error instanceof ConfigurationError) {
-                throw error
-            }
-            const cause =
-                error instanceof AuthServerDiscoveryError
-                    ? error.details?.['cause']
-                    : undefined
-            const isNotFound = typeof cause === 'string' && /^HTTP 404(?::|\b)/.test(cause)
-            if (!isNotFound) {
-                throw error
-            }
-            logger.warning('Authorization server metadata endpoint returned 404; using default JWKS path', {
-                module: 'HTTP',
-                operation: 'oauth-discovery',
-                error: error instanceof Error ? error.message : String(error),
-            })
-            return fallback
-        }
-    }
-
-    /** Validate OAuth configuration and install OAuth or static bearer-token authentication. */
-    private async installAuthentication(
-        host: string,
-        port: number,
-        authToken: string | undefined,
-        isLocalhost: boolean
-    ): Promise<void> {
-        const oauthConfig = validateOAuthTransportConfig(
-            this.config,
-            host,
-            isLocalhost,
-            (msg, meta) => {
-                logger.error(msg, meta)
-            }
-        )
-
-        if (oauthConfig !== null) {
-            const { oauthIssuer, oauthAudience } = oauthConfig
-            const jwksUri =
-                this.config.oauthJwksUri ?? (await this.discoverJwksUri(oauthIssuer))
-
-            const tokenValidator = createTokenValidator({
-                jwksUri,
-                issuer: oauthIssuer,
-                audience: oauthAudience,
-                clockTolerance: this.config.oauthClockTolerance ?? 60,
-            })
-
-            await tokenValidator.preload()
-
-            const resourceServer = createOAuthResourceServer({
-                resource:
-                    this.config.publicOrigin ?? `http://${formatHostForUrl(host)}:${String(port)}`,
-                authorizationServers: [oauthIssuer],
-                scopesSupported: [...SUPPORTED_SCOPES],
-            })
-
-            this.app.get(resourceServer.getWellKnownPath(), resourceServer.getMetadataHandler())
-
-            this.app.use(
-                createOAuthMiddleware({
-                    tokenValidator,
-                    resourceServer,
-                    publicPaths: ['/health', '/', '/.well-known/*'],
-                })
-            )
-
-            this.app.use(oauthErrorHandler)
-
-            logger.info('OAuth 2.1 authentication enabled', {
-                module: 'HTTP',
-                resource: resourceServer.getResourceUri(),
-                audience: oauthAudience,
-            })
-        } else if (authToken !== undefined && authToken !== '') {
-            this.app.use(createAuthMiddleware(authToken))
-        }
-    }
-
-    /** Register context propagation, health/metrics/root endpoints, MCP protocol routes and the 404 handler. */
-    private installRoutes(serverFactory: McpServerFactory, runtime: ServerRuntime): void {
+    /** Register context propagation, health/metrics/root endpoints, MCP protocol routes, OAuth error handler and the 404 handler. */
+    private installRoutes(
+        serverFactory: McpServerFactory,
+        runtime: ServerRuntime,
+        oauthInstalled = false
+    ): void {
         /* codeql[js/missing-rate-limiting] */ this.app.use(createPropagateContextMiddleware())
 
         this.app.get('/health', handleHealthCheck)
@@ -358,6 +261,10 @@ export class HttpTransport {
             this.sseTransports
         )
 
+        if (oauthInstalled) {
+            this.app.use(oauthErrorHandler)
+        }
+
         this.app.use((req: Request, res: Response): void => {
             logger.debug('404 Not Found', {
                 method: req.method,
@@ -365,20 +272,12 @@ export class HttpTransport {
             })
             res.status(404).json({ error: 'Not found' })
         })
-
     }
 
     /** Bind the HTTP server; rejects on bind errors (e.g. EADDRINUSE) and starts the scheduler once listening. */
     private async listen(port: number, host: string, scheduler: Scheduler | null): Promise<void> {
         await new Promise<void>((resolve, reject) => {
             const server = this.app.listen(port, host, () => {
-                // The listen callback can run before `this.httpServer` is assigned below.
-                if (this.httpServer !== null) {
-                    this.httpServer.setTimeout(HTTP_REQUEST_TIMEOUT_MS)
-                    this.httpServer.keepAliveTimeout = HTTP_KEEP_ALIVE_TIMEOUT_MS
-                    this.httpServer.headersTimeout = HTTP_HEADERS_TIMEOUT_MS
-                }
-
                 logger.info(
                     `MCP server started on HTTP (${this.config.stateless ? 'stateless' : 'stateful'})`,
                     {
@@ -392,6 +291,11 @@ export class HttpTransport {
                 resolve()
             })
             this.httpServer = server
+            if (typeof server.setTimeout === 'function') {
+                server.setTimeout(HTTP_REQUEST_TIMEOUT_MS)
+            }
+            server.keepAliveTimeout = HTTP_KEEP_ALIVE_TIMEOUT_MS
+            server.headersTimeout = HTTP_HEADERS_TIMEOUT_MS
 
             server.on('error', (err: Error) => {
                 logger.error('HTTP server failed to bind', {

@@ -8,6 +8,7 @@ import { activeProjectRegistry } from '../../../utils/write-scope.js'
 import { createJournalApi } from '../../../codemode/api/journal-api.js'
 import type { SandboxResult } from '../../../codemode/types.js'
 
+import { isFilterEffectivelyReadOnly } from '../../../filtering/tool-filter.js'
 import { isRecord } from '../../../codemode/normalizers/shared-utils.js'
 import { ExecuteCodeSchema, ExecuteCodeSchemaMcp } from './schemas.js'
 import { collectNonCodeModeTools, getSandboxPool, getSecurityManager } from './singleton-state.js'
@@ -66,19 +67,11 @@ function filterToolsForSandbox(
         tools = tools.filter((t) => enabledSet.has(t.name))
     }
     const allEnabledTools = tools
-    let isGlobalReadonly = false
-    if (context.config?.filterConfig?.raw !== undefined && context.config.filterConfig.raw !== '') {
-        const rawTokens = context.config.filterConfig.raw
-            .split(',')
-            .map((s) => s.trim().toLowerCase())
-        for (const token of rawTokens) {
-            if (token === 'readonly' || token === '+readonly') {
-                isGlobalReadonly = true
-            } else if (token === '-readonly') {
-                isGlobalReadonly = false
-            }
-        }
-    }
+    const filterConfig = context.config?.filterConfig
+    const isGlobalReadonly =
+        filterConfig !== null && filterConfig !== undefined
+            ? isFilterEffectivelyReadOnly(filterConfig)
+            : false
     const isSandboxReadonly = Boolean(readonlyRequested) || isGlobalReadonly
     if (isSandboxReadonly) {
         tools = tools.filter((t) => t.annotations?.readOnlyHint === true)
@@ -195,12 +188,25 @@ async function executeCodeModeHandler(
         if ('errorResponse' in sessionRes) return sessionRes.errorResponse
         const { sessionContext, projectId, numericProjectId, workspaceId, explicitWorkspace } = sessionRes
 
-        const { tools, allEnabledTools, isSandboxReadonly } = filterToolsForSandbox(sessionContext, context, input.readonly)
+        const readonlyRequested =
+            input.readonly === true || input.read_only === true || input.readOnly === true
+        const { tools, allEnabledTools, isSandboxReadonly } = filterToolsForSandbox(
+            sessionContext,
+            context,
+            readonlyRequested
+        )
         let mutatedDuringRun = false
         const secureDispatcher = createSecureDispatcher({
-            tools, sessionContext, projectId, workspaceId, explicitWorkspace,
-            autoVersion: input.auto_version, dryRun: input.dry_run,
-            onMutatingDispatch: () => { mutatedDuringRun = true },
+            tools,
+            sessionContext,
+            projectId,
+            workspaceId,
+            explicitWorkspace,
+            autoVersion: input.autoVersion ?? input.auto_version,
+            dryRun: input.dry_run || input.dryRun === true,
+            onMutatingDispatch: () => {
+                mutatedDuringRun = true
+            },
         })
         const journalApi = createJournalApi(tools, secureDispatcher, () => activeProjectRegistry(context.config?.projectRegistry))
         const schemas = (isSandboxReadonly ? createJournalApi(allEnabledTools) : journalApi).createSandboxSchemas()

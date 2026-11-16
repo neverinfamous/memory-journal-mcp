@@ -8,6 +8,13 @@ import type { ProjectRegistryEntry } from '../../types/index.js'
 import { transformAutoReturn } from '../auto-return.js'
 import { readProjectRegistryPayload } from '../normalizers/generic-field-aliases.js'
 import { validateSandboxCode } from '../security.js'
+import {
+    readExecutableCode,
+    readNestedQuerySearch,
+    naturalLanguageEntry,
+} from './nested-exec-payload.js'
+
+export { readExecutableCode, naturalLanguageEntry }
 
 function findRegistryKey(
     name: string,
@@ -241,76 +248,6 @@ export function validateNestedExecScope(
     )
 }
 
-/**
- * Extracts executable JS code from nested `executeCode` arguments, returning `null`
- * only when explicit entry fields (`content`, `text`, `description`, `title`) indicate an entry payload.
- */
-export function readExecutableCode(arg: unknown): string | null {
-    if (typeof arg === 'string') return arg
-    if (typeof arg !== 'object' || arg === null || Array.isArray(arg)) return ''
-    const codeProp = Reflect.get(arg, 'code') as unknown
-    const scriptProp = Reflect.get(arg, 'script') as unknown
-    const codeToExec =
-        typeof codeProp === 'string'
-            ? codeProp
-            : typeof scriptProp === 'string'
-              ? scriptProp
-              : ''
-    if (codeToExec !== '') return codeToExec
-    const hasEntryText =
-        typeof Reflect.get(arg, 'content') === 'string' ||
-        typeof Reflect.get(arg, 'text') === 'string' ||
-        typeof Reflect.get(arg, 'description') === 'string' ||
-        typeof Reflect.get(arg, 'title') === 'string'
-    return hasEntryText ? null : ''
-}
-
-function isSyntacticallyValidJs(trimmed: string): boolean {
-    if (trimmed === '' || /^[A-Za-z_$][\w$]*$/.test(trimmed)) return false
-    if (/^[A-Za-z0-9_-]+:\s+/.test(trimmed) && !/[(.=[\];]/.test(trimmed)) return false
-    try {
-        new vm.Script(trimmed)
-        return true
-    } catch {
-        if (trimmed.startsWith('{') && trimmed.endsWith('}')) {
-            try {
-                new vm.Script(`(${trimmed})`)
-                return true
-            } catch {
-                return false
-            }
-        }
-        return false
-    }
-}
-
-/**
- * Converts a plain natural-language prompt passed into nested `executeCode` into a technical note payload.
- */
-export function naturalLanguageEntry(
-    codeToExec: string
-): { title: string; content: string; entry_type: string } | undefined {
-    const trimmed = codeToExec.trim()
-    if (isSyntacticallyValidJs(trimmed)) return undefined
-    const isNaturalPrompt =
-        /^(?:write|document|create|include|record|summary|log|add|added|note|task|fix|implement)\b/i.test(
-            trimmed
-        ) && !/\b(const|let|var|function|return|await|import|export)\b/.test(trimmed)
-    const looksLikeCode = /[{}()=]/.test(trimmed)
-    if (
-        looksLikeCode ||
-        !(isNaturalPrompt || /^(?:create|add|new|record|log)?\s*entry\b/i.test(trimmed))
-    ) {
-        return undefined
-    }
-    const firstLine = (trimmed.split('\n')[0] ?? '')
-        .replace(/^(?:create|add|new|record|log|insert)?\s*entry\s*(?:for|:)?\s*/i, '')
-        .replace(/[:.]+$/, '')
-        .trim()
-    const title = firstLine.length > 0 && firstLine.length < 80 ? firstLine : 'Journal Entry'
-    return { title, content: trimmed, entry_type: 'technical_note' }
-}
-
 export type RunIsolatedNestedFn = (
     wrapped: string,
     nestedReadonly: boolean,
@@ -400,11 +337,20 @@ export function createSandboxExecutor(
         return undefined
     }
 
+    const invokeSearchEntries = (payload: unknown): unknown => {
+        const searchGroup = shimMj['search']
+        if ((typeof searchGroup === 'object' && searchGroup !== null) || typeof searchGroup === 'function') {
+            const fn = Reflect.get(searchGroup, 'searchEntries') as unknown
+            if (typeof fn === 'function') return (fn as (a: unknown) => unknown)(payload)
+        }
+        return undefined
+    }
+
     return async (arg: unknown): Promise<unknown> => {
         const isPlainRec = (val: unknown): val is Record<string, unknown> =>
             typeof val === 'object' && val !== null && !Array.isArray(val)
         const argRec = isPlainRec(arg) ? arg : undefined
-        const argReadonly = argRec?.['readonly'] === true
+        const argReadonly = argRec?.['readonly'] === true || argRec?.['read_only'] === true || argRec?.['readOnly'] === true
         const argDryRun = argRec?.['dry_run'] === true || argRec?.['dryRun'] === true
         const argUseTestDb = argRec?.['use_test_db'] === true || argRec?.['useTestDb'] === true
         const scopeErr = validateNestedExecScope(
@@ -419,6 +365,14 @@ export function createSandboxExecutor(
         const effectiveReadonly = readonlyMode === true || argReadonly
         const effectiveDryRun = dryRunMode === true || argDryRun
         const effectiveUseTestDb = useTestDbMode === true || argUseTestDb
+
+        const nestedQuerySearch = readNestedQuerySearch(arg)
+        if (nestedQuerySearch !== undefined) {
+            const searchPayload = effectiveUseTestDb
+                ? { ...nestedQuerySearch, use_test_db: true }
+                : nestedQuerySearch
+            return await Promise.resolve(invokeSearchEntries(searchPayload))
+        }
 
         const codeToExec = readExecutableCode(arg)
         if (codeToExec === null) {

@@ -12,15 +12,20 @@ import type { VectorSearchManager } from '../vector/vector-search-manager/index.
 import { logger } from '../utils/logger.js'
 import { parseDigestSnapshot, type DigestSnapshot } from '../database/sqlite-adapter/entries/digest.js'
 import type { ServerRuntime } from '../utils/maintenance-lock.js'
-import { deliverReport, formatDigestReport, type ReportDeliveryOptions } from './digest-reporter.js'
-import { runAutoPrune } from './auto-prune.js'
+import { type ReportDeliveryOptions } from './digest-reporter.js'
 import {
     applySchedulerWorkspaceUpdates,
     resolveSchedulerDefaultWorkspace,
-    resolveSchedulerPruneScope,
     type SchedulerWorkspaceScope,
 } from './scheduler-scope.js'
-import { VERSION } from '../version.js'
+import {
+    runScheduledBackup,
+    runScheduledDigest,
+    runScheduledPrune,
+    runScheduledRebuildIndex,
+    runScheduledReport,
+    runScheduledVacuumOptimize,
+} from './scheduler-jobs.js'
 
 // ============================================================================
 // Types
@@ -321,88 +326,17 @@ export class Scheduler {
     // Private — Job implementations
     // ========================================================================
 
-    /**
-     * Backup job: export database to file, then cleanup old backups.
-     */
     private async runBackup(): Promise<void> {
-        const result = await this.db.exportToFile()
-        logger.info('Scheduled backup created', {
-            module: 'Scheduler',
-            operation: 'backup',
-            context: { filename: result.filename, sizeBytes: result.sizeBytes },
-        })
-
-        const cleanup = this.db.deleteOldBackups(this.options.keepBackups)
-        if (cleanup.deleted.length > 0) {
-            logger.info(
-                `Backup cleanup: deleted ${String(cleanup.deleted.length)}, kept ${String(cleanup.kept)}`,
-                {
-                    module: 'Scheduler',
-                    operation: 'backup-cleanup',
-                }
-            )
-        }
-
-        // The adapter may report per-file deletion failures (not part of the declared interface)
-        if ('failed' in cleanup) {
-            const failedFiles: unknown = cleanup.failed
-            const failedCount = Array.isArray(failedFiles)
-                ? failedFiles.length
-                : typeof failedFiles === 'number'
-                  ? failedFiles
-                  : 0
-            if (failedCount > 0) {
-                logger.error(`Backup cleanup failed to delete ${String(failedCount)} file(s)`, {
-                    module: 'Scheduler',
-                    operation: 'backup-cleanup',
-                    context: { failed: failedFiles },
-                })
-                throw new Error(`Backup cleanup failed to delete ${String(failedCount)} old backup(s)`)
-            }
-        }
+        await runScheduledBackup(this.db, this.options.keepBackups)
     }
 
-    /**
-     * Vacuum/optimize job: run PRAGMA optimize and flush to disk.
-     *
-     * PRAGMA optimize updates internal query planner statistics based on
-     * recent query patterns. For the native better-sqlite3 driver, disk
-     * writes happen automatically via WAL mode.
-     */
     private runVacuumOptimize(): void {
-        this.db.pragma('optimize')
-        this.db.flushSave()
-        logger.info('Scheduled database optimize completed', {
-            module: 'Scheduler',
-            operation: 'vacuum',
-        })
+        runScheduledVacuumOptimize(this.db)
     }
 
-    /**
-     * Rebuild index job: full vector index rebuild from database entries.
-     */
     private async runRebuildIndex(): Promise<void> {
-        if (!this.vectorManager) {
-            return
-        }
-
-        const result = await this.vectorManager.rebuildIndex()
-        if (!result.success) {
-            throw new Error(
-                `Vector index rebuild failed: ${String(result.failed)} entries could not be indexed${result.firstError !== null ? ` (${result.firstError})` : ''}`
-            )
-        }
-        const count = result.indexed
-        logger.info(`Scheduled vector index rebuild: ${String(count)} entries indexed`, {
-            module: 'Scheduler',
-            operation: 'rebuild-index',
-            context: { entriesIndexed: count },
-        })
+        await runScheduledRebuildIndex(this.vectorManager)
     }
-
-    // ========================================================================
-    // Private — Prune job
-    // ========================================================================
 
     private resolveDefaultWorkspace(): string {
         // [INVARIANT] Background jobs never inherit sticky per-session context (C3): no runtime.
@@ -414,65 +348,16 @@ export class Scheduler {
         applySchedulerWorkspaceUpdates(this.options, updates)
     }
 
-    /** Prune job: auto-prune low-importance old entries. */
     private async runPrune(): Promise<void> {
-        const pruneScope = resolveSchedulerPruneScope(this.options)
-        const pruneResult = await runAutoPrune(this.db, {
-            archiveOlderThanDays: this.options.archiveOlderThanDays ?? 0,
-            pruneOlderThanDays: this.options.pruneOlderThanDays ?? 0,
-            hardDeleteOlderThanDays: this.options.hardDeleteOlderThanDays ?? 0,
-            importanceThreshold: this.options.pruneImportanceThreshold ?? 0.15,
-            dryRun: this.options.pruneDryRun,
-            excludeTags: this.options.pruneExcludeTags,
-            workspaceId: pruneScope.workspaceId,
-            ...(pruneScope.projectNumber !== undefined
-                ? { projectNumber: pruneScope.projectNumber }
-                : {}),
-        })
-        if (pruneResult.aborted === true) {
-            throw new Error('Scheduled auto-prune aborted because the pre-prune backup failed')
-        }
-        logger.info('Scheduled auto-prune completed', {
-            module: 'Scheduler',
-            operation: 'prune',
-            archivedCount: pruneResult.archivedCount,
-            prunedCount: pruneResult.prunedCount,
-            hardDeletedCount: pruneResult.hardDeletedCount,
-        })
+        await runScheduledPrune(this.db, this.options)
     }
 
-    /** Digest job: compute analytics snapshot and persist to database. */
     private runDigest(): void {
-        const wsId = this.resolveDefaultWorkspace()
-        const snapshot = this.db.computeDigest(wsId)
-        this.db.saveAnalyticsSnapshot('digest', snapshot, wsId)
-        logger.info('Scheduled analytics digest computed', {
-            module: 'Scheduler',
-            operation: 'digest',
-            context: {
-                currentPeriodEntries: snapshot.currentPeriodEntries,
-                activityGrowthPercent: snapshot.activityGrowthPercent,
-                topImportanceCount: snapshot.topImportanceEntries.length,
-            },
-        })
+        runScheduledDigest(this.db, this.options)
     }
 
-    /** Report job: compute analytics snapshot, persist, and deliver via webhook. */
     private async runReport(): Promise<void> {
-        const wsId = this.resolveDefaultWorkspace()
-        const snapshot = this.db.computeDigest(wsId)
-        this.db.saveAnalyticsSnapshot('report', snapshot, wsId)
-        logger.info('Scheduled analytics report computed', {
-            module: 'Scheduler',
-            operation: 'report',
-            context: { currentPeriodEntries: snapshot.currentPeriodEntries },
-        })
-
-        if (this.options.reportDeliveryOptions?.webhookUrl) {
-            const report = formatDigestReport(snapshot, VERSION)
-            const delivered = await deliverReport(report, snapshot, this.options.reportDeliveryOptions)
-            if (!delivered) throw new Error('Scheduled analytics report delivery failed')
-        }
+        await runScheduledReport(this.db, this.options)
     }
 
     /** Get the latest digest snapshot from the database, or null if none exists. */

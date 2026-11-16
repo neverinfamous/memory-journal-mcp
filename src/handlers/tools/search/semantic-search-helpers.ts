@@ -80,7 +80,10 @@ async function fetchSemanticVectorResults(
     wsId: string,
     projectNumber: number | undefined,
     internalLimit: number
-): Promise<{ results: SemanticSearchResult[] } | { errorResponse: Record<string, unknown> }> {
+): Promise<
+    | { results: SemanticSearchResult[]; effectiveQuery: string | undefined }
+    | { errorResponse: Record<string, unknown> }
+> {
     const threshold = input.similarity_threshold ?? 0.25
     if (input.entry_id === undefined) {
         const results = await vectorManager.search(
@@ -90,7 +93,7 @@ async function fetchSemanticVectorResults(
             wsId,
             projectNumber
         )
-        return { results }
+        return { results, effectiveQuery: input.query }
     }
     const seed = db.getEntryById(input.entry_id, wsId)
     if (!seed || (projectNumber !== undefined && seed.projectNumber !== projectNumber)) {
@@ -112,7 +115,7 @@ async function fetchSemanticVectorResults(
         wsId,
         projectNumber
     )
-    return { results }
+    return { results, effectiveQuery: input.query ?? seed.content }
 }
 
 function hydratePersonalSemanticEntries(
@@ -194,6 +197,7 @@ function buildSemanticFilterOptions(
 async function resolveCombinedSemanticEntries(
     context: ToolContext,
     input: SemanticSearchInput,
+    effectiveQuery: string | undefined,
     personalEntries: EntryWithSource[],
     filterOptions: Record<string, unknown>,
     includeTeam: boolean
@@ -203,16 +207,21 @@ async function resolveCombinedSemanticEntries(
         !includeTeam ||
         input.is_personal === true ||
         teamDb === undefined ||
-        input.query === undefined ||
-        input.query === ''
+        effectiveQuery === undefined ||
+        effectiveQuery === ''
     ) {
         return personalEntries.slice(0, input.limit)
     }
-    const teamEntries = await collectTeamSearchEntries(input.query, teamDb, teamVectorManager, {
-        ...filterOptions,
-        limit: input.limit,
-        similarityThreshold: input.similarity_threshold ?? 0.25,
-    })
+    const teamEntries = await collectTeamSearchEntries(
+        effectiveQuery,
+        teamDb,
+        teamVectorManager,
+        {
+            ...filterOptions,
+            limit: input.limit,
+            similarityThreshold: input.similarity_threshold ?? 0.25,
+        }
+    )
     return mergeAndDedup(personalEntries, teamEntries, input.limit, 'similarity')
 }
 
@@ -277,6 +286,7 @@ export async function executeSemanticSearch(
         const entries = await resolveCombinedSemanticEntries(
             context,
             input,
+            vectorOutcome.effectiveQuery,
             personalEntries,
             filterOptions,
             includeTeam

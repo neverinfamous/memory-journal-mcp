@@ -18,7 +18,7 @@ export function safeDeleteVectors(
         try {
             if (typeof vectorManager?.removeEntry === 'function') {
                 vectorManager.removeEntry(id)
-            } else {
+            } else if (typeof db.deleteVector === 'function') {
                 db.deleteVector(id)
             }
         } catch (err) {
@@ -54,7 +54,18 @@ export function findWildcardProjectMismatches(
     const registry = activeProjectRegistry(config?.projectRegistry)
     return updates
         .filter((u) => {
-            if (u.target_workspace_id !== undefined) return false
+            if (u.target_workspace_id !== undefined) {
+                const sourceWs = u.workspace_id ?? rootWorkspaceId
+                if (
+                    sourceWs === '*' &&
+                    u.project_number === undefined &&
+                    rootProjectNumber !== undefined
+                ) {
+                    const entry = db.getEntryById(u.entry_id, '*')
+                    return entry?.projectNumber !== rootProjectNumber
+                }
+                return false
+            }
             const ws = u.workspace_id ?? rootWorkspaceId
             const pn = u.project_number ?? rootProjectNumber
             if (pn === undefined) return false
@@ -95,7 +106,8 @@ function buildBatchDeletePartialFailure(
     deleted: number[],
     notFound: number[],
     errors: { id: number; error: Error }[],
-    permanent: boolean
+    permanent: boolean,
+    vectorWarnings: string[] = []
 ): Record<string, unknown> {
     return {
         success: false,
@@ -107,6 +119,7 @@ function buildBatchDeletePartialFailure(
         deleted,
         notFound,
         permanent,
+        ...vectorWarningField(vectorWarnings),
         aggregated_errors: [
             ...notFound.map((id) => ({ message: `Entry ${String(id)} not found` })),
             ...errors.map((entry) => ({
@@ -173,19 +186,24 @@ async function runUnscopedBatchDelete(
                 deleted,
                 notFound,
                 permanent: input.permanent,
+                ...vectorWarningField(vectorWarnings),
             }
         }
         deleted.push(...groupResult.deleted)
         notFound.push(...groupResult.notFound)
         errors.push(...groupResult.errors)
-        if (vectorManager) {
-            vectorWarnings.push(...safeDeleteVectors(db, groupResult.deleted, vectorManager))
-        }
+        vectorWarnings.push(...safeDeleteVectors(db, groupResult.deleted, vectorManager))
     }
 
     await sendProgress(progress, 2, 2, 'Batch delete complete')
     if (errors.length > 0 || notFound.length > 0) {
-        return buildBatchDeletePartialFailure(deleted, notFound, errors, input.permanent)
+        return buildBatchDeletePartialFailure(
+            deleted,
+            notFound,
+            errors,
+            input.permanent,
+            vectorWarnings
+        )
     }
     return {
         success: true,
@@ -226,21 +244,32 @@ async function runScopedBatchDelete(
     await sendProgress(progress, 1, 2, `Deleted ${String(deleted.length)} entries...`)
 
     const vectorWarnings: string[] = []
-    if (vectorManager) {
+    if (deleted.length > 0) {
         const reporter = createBatchProgressReporter(progress, deleted.length, 10)
         for (let i = 0; i < deleted.length; i++) {
             const id = deleted[i]
             if (id !== undefined) {
                 vectorWarnings.push(...safeDeleteVectors(db, [id], vectorManager))
             }
-            await reporter(i + 1, `Updating index ${String(i + 1)}/${String(deleted.length)}...`)
+            if (vectorManager) {
+                await reporter(i + 1, `Updating index ${String(i + 1)}/${String(deleted.length)}...`)
+            }
+        }
+        if (!vectorManager) {
+            await sendProgress(progress, 2, 2, 'Batch delete complete')
         }
     } else {
         await sendProgress(progress, 2, 2, 'Batch delete complete')
     }
 
     if (errors.length > 0 || notFound.length > 0) {
-        return buildBatchDeletePartialFailure(deleted, notFound, errors, input.permanent)
+        return buildBatchDeletePartialFailure(
+            deleted,
+            notFound,
+            errors,
+            input.permanent,
+            vectorWarnings
+        )
     }
     return {
         success: true,

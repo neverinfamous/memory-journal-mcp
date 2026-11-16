@@ -55,7 +55,7 @@ export function getDiagnosticTools(context: ToolContext): ToolDefinition[] {
             group: 'core',
             inputSchema: z.object({}).strict(),
             outputSchema: z
-                .object({ success: z.boolean(), message: z.string() })
+                .object({ success: z.boolean().optional(), message: z.string().optional() })
                 .extend(ErrorFieldsMixin.shape),
             annotations: {
                 readOnlyHint: true,

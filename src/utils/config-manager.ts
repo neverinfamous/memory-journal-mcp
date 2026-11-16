@@ -5,10 +5,11 @@ import { logger } from './logger.js'
 import { parseToolFilter } from '../filtering/tool-filter.js'
 import { activeProjectRegistry, pairStoredScope } from './write-scope.js'
 import {
-    applyPersistableConfigKeys,
     applyReloadedBriefingScope,
     BRIEFING_CONFIG_KEY_MAP,
     buildInitialBaselines,
+    isValidBriefingConfigValue,
+    seedInitialBriefingScopeFromFile,
     reloadBriefingConfigKeys,
     type BriefingBaselineMap,
     type BriefingConfigurableKey,
@@ -17,6 +18,7 @@ import {
     type MutatedConfigFields,
     type UpdateConfigOptions,
 } from './config-manager-helpers.js'
+import { applyPersistableConfigKeys } from './config-manager-persist.js'
 
 export type {
     BriefingConfigurableKey,
@@ -53,7 +55,6 @@ export class ConfigManager extends EventEmitter {
         cliEnvBaseline?: ConfigCliEnvBaseline
     ) {
         super()
-        this.config = { ...initialConfig }
         this.initialCodemodeFullAccess = Boolean(initialConfig.codemodeInternalFullAccess)
         this.configFilePath = configFilePath
 
@@ -61,7 +62,9 @@ export class ConfigManager extends EventEmitter {
             configFilePath !== undefined && fs.existsSync(configFilePath)
                 ? this.readRawConfigObject()
                 : null
-        const baselines = buildInitialBaselines(initialConfig, initialFile, cliEnvBaseline)
+        const effectiveInitial = seedInitialBriefingScopeFromFile(initialConfig, initialFile)
+        this.config = { ...effectiveInitial }
+        const baselines = buildInitialBaselines(effectiveInitial, initialFile, cliEnvBaseline)
         this.cliEnvBaseline = baselines.cliEnvBaseline
         this.toolFilterFromFile = baselines.toolFilterFromFile
         this.codemodeBaseline = baselines.codemodeBaseline
@@ -386,7 +389,7 @@ export class ConfigManager extends EventEmitter {
             }
 
             for (const [fileKey, { target, kind }] of Object.entries(BRIEFING_CONFIG_KEY_MAP)) {
-                if (fileKey in parsed && typeof parsed[fileKey] === kind) {
+                if (fileKey in parsed && isValidBriefingConfigValue(parsed[fileKey], kind)) {
                     this.briefingKeysFromFile.add(target)
                 } else {
                     this.briefingKeysFromFile.delete(target)

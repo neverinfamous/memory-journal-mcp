@@ -31,7 +31,29 @@ export interface YamlParseResult {
  * @param content Full markdown content
  * @returns Parsed frontmatter and remaining body text
  */
+const FORBIDDEN_FRONTMATTER_KEYS = new Set(['__proto__', 'constructor', 'prototype'])
+const MAX_FRONTMATTER_LINES = 500
+const MAX_FRONTMATTER_CONTENT_LENGTH = 512 * 1024
+
+function assignFrontmatterKey(
+    metadata: FrontmatterData,
+    key: string,
+    value: string | string[]
+): void {
+    const cleanKey = key.trim()
+    if (cleanKey === '' || FORBIDDEN_FRONTMATTER_KEYS.has(cleanKey)) return
+    Object.defineProperty(metadata, cleanKey, {
+        value,
+        enumerable: true,
+        writable: true,
+        configurable: true,
+    })
+}
+
 export function parseYamlFrontmatter(content: string): YamlParseResult {
+    if (content.length > MAX_FRONTMATTER_CONTENT_LENGTH) {
+        return { metadata: {}, body: content }
+    }
     const lines = content.split(/\r?\n/)
 
     // Must start with ---
@@ -39,9 +61,10 @@ export function parseYamlFrontmatter(content: string): YamlParseResult {
         return { metadata: {}, body: content }
     }
 
-    // Find closing ---
+    // Find closing --- within bounded frontmatter header lines
     let closingIndex = -1
-    for (let i = 1; i < lines.length; i++) {
+    const maxScan = Math.min(lines.length, MAX_FRONTMATTER_LINES + 1)
+    for (let i = 1; i < maxScan; i++) {
         if (lines[i]?.trim() === '---') {
             closingIndex = i
             break
@@ -49,7 +72,7 @@ export function parseYamlFrontmatter(content: string): YamlParseResult {
     }
 
     if (closingIndex === -1) {
-        // Unclosed frontmatter — treat whole file as body
+        // Unclosed or oversized frontmatter — treat whole file as body
         return { metadata: {}, body: content }
     }
 
@@ -74,7 +97,6 @@ export function parseYamlFrontmatter(content: string): YamlParseResult {
         // Array item continuation
         if (trimmed.startsWith('-') && currentArrayKey) {
             const val = trimmed.substring(1).trim()
-            // Remove surrounding quotes if present
             currentArray.push(stripQuotes(val))
             continue
         }
@@ -84,13 +106,14 @@ export function parseYamlFrontmatter(content: string): YamlParseResult {
         if (colonIdx > 0) {
             // New key found, save previous array if active
             if (currentArrayKey) {
-                metadata[currentArrayKey] = currentArray
+                assignFrontmatterKey(metadata, currentArrayKey, currentArray)
                 currentArrayKey = null
                 currentArray = []
             }
 
             const key = line.substring(0, colonIdx).trim()
             const val = line.substring(colonIdx + 1).trim()
+            if (FORBIDDEN_FRONTMATTER_KEYS.has(key)) continue
 
             if (!val) {
                 // Potential start of a multi-line array
@@ -99,20 +122,24 @@ export function parseYamlFrontmatter(content: string): YamlParseResult {
             } else if (val.startsWith('[') && val.endsWith(']')) {
                 // Inline array: [item1, item2]
                 const itemsStr = val.substring(1, val.length - 1)
-                metadata[key] = itemsStr
-                    .split(',')
-                    .map((s) => stripQuotes(s.trim()))
-                    .filter(Boolean)
+                assignFrontmatterKey(
+                    metadata,
+                    key,
+                    itemsStr
+                        .split(',')
+                        .map((s) => stripQuotes(s.trim()))
+                        .filter(Boolean)
+                )
             } else {
                 // Scalar value
-                metadata[key] = stripQuotes(val)
+                assignFrontmatterKey(metadata, key, stripQuotes(val))
             }
         }
     }
 
     // Handle trailing array
     if (currentArrayKey) {
-        metadata[currentArrayKey] = currentArray
+        assignFrontmatterKey(metadata, currentArrayKey, currentArray)
     }
 
     return { metadata, body }

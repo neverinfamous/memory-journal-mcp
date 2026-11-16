@@ -38,7 +38,9 @@ function saveRegistryConfig(configPath: string, config: Record<string, unknown>)
 function resolveRegistry(provider?: ProjectRegistryProvider): unknown[] | undefined {
     if (provider !== undefined) {
         const live = provider()
-        return live !== undefined && live !== null ? parseProjectRegistry(live) : undefined
+        if (live !== undefined && live !== null) {
+            return parseProjectRegistry(live)
+        }
     }
     return parseProjectRegistry()
 }

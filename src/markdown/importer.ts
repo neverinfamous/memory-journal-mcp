@@ -15,7 +15,10 @@ import type { EntryType, SignificanceType, ToolHandlerConfig } from '../types/in
 import { ENTRY_TYPES, SIGNIFICANCE_TYPES } from '../types/index.js'
 import { ValidationError } from '../types/errors.js'
 import { MAX_CONTENT_LENGTH, normalizeSignificanceValue } from '../handlers/tools/schemas/constants-and-primitives.js'
-import { linkImportedRelationships } from './import-relationships.js'
+import {
+    applyImportedRelationshipBatch,
+    type PendingRelationshipLink,
+} from './import-relationships.js'
 import { parseFrontmatter } from './frontmatter.js'
 import { assertSafeDirectoryPath, assertSafeFilePath } from '../utils/security-utils.js'
 import {
@@ -378,13 +381,7 @@ export async function processImportBatch(
 
     db.executeInTransaction(() => {
         const idRemap = new Map<number, number>()
-        const pendingLinks: {
-            entryId: number
-            filename: string
-            relationships: { type: string; target_id: number }[] | undefined
-            workspaceId: string | undefined
-            projectNumber: number | undefined
-        }[] = []
+        const pendingLinks: PendingRelationshipLink[] = []
 
         for (const file of files) {
             const { filename, metadata } = file
@@ -418,31 +415,7 @@ export async function processImportBatch(
             vectorQueue.push({ entryId, filename, workspaceId: entryWsId })
         }
 
-        for (const pending of pendingLinks) {
-            const linked = linkImportedRelationships(
-                db,
-                pending.entryId,
-                pending.relationships,
-                pending.workspaceId,
-                idRemap,
-                pending.projectNumber
-            )
-            result.relationshipsLinked += linked.linked
-            for (const targetId of linked.missingTargets) {
-                result.errors.push({
-                    file: pending.filename,
-                    error: `Relationship target ${String(targetId)} does not exist and was not linked`,
-                })
-                result.success = false
-            }
-            for (const relType of linked.rejected) {
-                result.errors.push({
-                    file: pending.filename,
-                    error: `Unknown relationship type '${relType}' was not linked`,
-                })
-                result.success = false
-            }
-        }
+        applyImportedRelationshipBatch(db, pendingLinks, idRemap, result)
     })
 
     if (!dry_run && vectorManager) {

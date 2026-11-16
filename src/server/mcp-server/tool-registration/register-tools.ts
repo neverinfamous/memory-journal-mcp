@@ -1,3 +1,4 @@
+import { z } from 'zod'
 import {
     McpServer,
     type CallToolResult,
@@ -74,6 +75,32 @@ function isStandardSchemaWithJson(value: unknown): value is StandardSchemaWithJS
     )
 }
 
+function relaxInputSchemaForMcp(schema: unknown, depth = 0): unknown {
+    if (depth > 16 || typeof schema !== 'object' || schema === null) {
+        return schema
+    }
+    if (schema instanceof z.ZodObject) {
+        return schema.partial().loose()
+    }
+    if (schema instanceof z.ZodPipe) {
+        const relaxedIn = relaxInputSchemaForMcp(schema.in, depth + 1)
+        const relaxedOut = relaxInputSchemaForMcp(schema.out, depth + 1)
+        if (relaxedIn !== schema.in || relaxedOut !== schema.out) {
+            return z.pipe(relaxedIn as z.ZodType, relaxedOut as z.ZodType)
+        }
+        return schema
+    }
+    if ('partial' in schema && typeof schema.partial === 'function') {
+        const relaxed = (
+            schema as { partial: () => { passthrough?: () => StandardSchemaWithJSON } }
+        ).partial()
+        if (typeof relaxed.passthrough === 'function') {
+            return relaxed.passthrough()
+        }
+    }
+    return schema
+}
+
 function buildToolRegistrationOptions(tool: ToolRegistration): ModernToolConfig {
     const cached = toolRegistrationOptionsCache.get(tool)
     if (cached !== undefined) return cached
@@ -84,31 +111,20 @@ function buildToolRegistrationOptions(tool: ToolRegistration): ModernToolConfig 
     if (tool.inputSchema !== undefined) {
         const schema = tool.inputSchema
         const fallbackInputSchema = isStandardSchemaWithJson(schema) ? schema : undefined
-        if (
-            typeof schema === 'object' &&
-            schema !== null &&
-            'partial' in schema &&
-            typeof schema.partial === 'function'
-        ) {
-            try {
-                const relaxed = (
-                    schema as { partial: () => { passthrough?: () => StandardSchemaWithJSON } }
-                ).partial()
-                const candidate =
-                    typeof relaxed.passthrough === 'function'
-                        ? relaxed.passthrough()
-                        : fallbackInputSchema
-                if (candidate !== undefined) toolOptions.inputSchema = candidate
-            } catch (error) {
-                logger.warning('Failed to relax input schema; using fallback schema', {
-                    module: 'McpServer',
-                    tool: tool.name,
-                    error: error instanceof Error ? error.message : String(error),
-                })
-                if (fallbackInputSchema !== undefined) toolOptions.inputSchema = fallbackInputSchema
+        try {
+            const candidate = relaxInputSchemaForMcp(schema)
+            if (isStandardSchemaWithJson(candidate)) {
+                toolOptions.inputSchema = candidate
+            } else if (fallbackInputSchema !== undefined) {
+                toolOptions.inputSchema = fallbackInputSchema
             }
-        } else if (fallbackInputSchema !== undefined) {
-            toolOptions.inputSchema = fallbackInputSchema
+        } catch (error) {
+            logger.warning('Failed to relax input schema; using fallback schema', {
+                module: 'McpServer',
+                tool: tool.name,
+                error: error instanceof Error ? error.message : String(error),
+            })
+            if (fallbackInputSchema !== undefined) toolOptions.inputSchema = fallbackInputSchema
         }
     }
 
@@ -226,7 +242,6 @@ async function executeRegisteredTool(
         const currentConfig = configManager.getConfig()
         const nextBriefing = resolveActiveBriefingConfig(
             currentConfig.briefingConfig,
-            options,
             allowedIoRoots
         )
         customToolHandlerConfig.filterConfig = currentConfig.toolFilterConfig
@@ -372,7 +387,10 @@ export function createServerInstance(
                 logging: {},
                 prompts: { listChanged: true },
                 tools: { listChanged: true },
-                resources: { subscribe: true, listChanged: true },
+                resources: {
+                    subscribe: options.statelessHttp !== true,
+                    listChanged: options.statelessHttp !== true,
+                },
                 experimental: { progress: {} },
             },
             instructions: buildServerInstructions(context, options, prompts, allToolNames, readOnlyHints),
@@ -390,7 +408,6 @@ export function createServerInstance(
     const resolveLiveBriefingConfig = (): BriefingConfig =>
         resolveActiveBriefingConfig(
             configManager.getConfig().briefingConfig,
-            options,
             allowedIoRoots,
             runtime
         )

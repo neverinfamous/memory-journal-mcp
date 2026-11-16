@@ -1,5 +1,5 @@
 import type { ToolDefinition, ToolContext } from '../../../types/index.js'
-import { AggregateMcpError } from '../../../types/errors.js'
+import { AggregateMcpError, ValidationError } from '../../../types/errors.js'
 import { formatHandlerError } from '../../../utils/error-helpers.js'
 import { sendProgress } from '../../../utils/progress-utils.js'
 import { logger } from '../../../utils/logger.js'
@@ -58,6 +58,13 @@ export function getIoTools(context: ToolContext): ToolDefinition[] {
                     // Apply filters — use searchByDateRange when dates/tags/types present
                     let entries
                     if (input.start_date || input.end_date) {
+                        if (
+                            input.start_date !== undefined &&
+                            input.end_date !== undefined &&
+                            input.start_date > input.end_date
+                        ) {
+                            throw new ValidationError('start_date cannot be after end_date')
+                        }
                         const startDate = input.start_date ?? DATE_MIN_SENTINEL
                         const endDate = input.end_date ?? DATE_MAX_SENTINEL
                         entries = db.searchByDateRange(startDate, endDate, {
@@ -183,6 +190,13 @@ export function getIoTools(context: ToolContext): ToolDefinition[] {
                     const fetchLimit = hasTypeFilter ? Math.max(500, limit * 2) : limit
                     let entries
                     if (input.start_date || input.end_date) {
+                        if (
+                            input.start_date !== undefined &&
+                            input.end_date !== undefined &&
+                            input.start_date > input.end_date
+                        ) {
+                            throw new ValidationError('start_date cannot be after end_date')
+                        }
                         const startDate = input.start_date ?? DATE_MIN_SENTINEL
                         const endDate = input.end_date ?? DATE_MAX_SENTINEL
                         entries = db.searchByDateRange(startDate, endDate, {

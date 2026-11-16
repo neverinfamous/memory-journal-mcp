@@ -160,7 +160,23 @@ export function getLoadBriefingPromptDefinitions(): InternalPromptDef[] {
                 const registryKeys = Object.keys(registry)
 
                 let activeWorkspace = ''
-                if (briefingConfig?.defaultProjectNumber !== undefined) {
+                const resolvedWs = resourceWorkspace({
+                    briefingConfig: {
+                        ...briefingConfig,
+                        projectRegistry: registry as BriefingConfig['projectRegistry'],
+                    },
+                    ...(runtime !== undefined ? { runtime } : {}),
+                })
+                if (resolvedWs && resolvedWs !== 'default') {
+                    const projNum = getProjectNumber(registry[resolvedWs])
+                    activeWorkspace =
+                        projNum !== undefined
+                            ? `${resolvedWs} (#${String(projNum)})`
+                            : resolvedWs
+                } else if (
+                    briefingConfig?.defaultWorkspaceId?.trim().toLowerCase() !== 'default' &&
+                    briefingConfig?.defaultProjectNumber !== undefined
+                ) {
                     const defaultProjNum = briefingConfig.defaultProjectNumber
                     const defaultWs = briefingConfig.defaultWorkspaceId
                     const matchingDefaultKey =
@@ -178,22 +194,6 @@ export function getLoadBriefingPromptDefinitions(): InternalPromptDef[] {
                         )
                     if (activeKey) {
                         activeWorkspace = `${activeKey} (#${String(defaultProjNum)})`
-                    }
-                }
-                if (activeWorkspace === '') {
-                    const resolvedWs = resourceWorkspace({
-                        briefingConfig: {
-                            ...briefingConfig,
-                            projectRegistry: registry as BriefingConfig['projectRegistry'],
-                        },
-                        ...(runtime !== undefined ? { runtime } : {}),
-                    })
-                    if (resolvedWs && resolvedWs !== 'default') {
-                        const projNum = getProjectNumber(registry[resolvedWs])
-                        activeWorkspace =
-                            projNum !== undefined
-                                ? `${resolvedWs} (#${String(projNum)})`
-                                : resolvedWs
                     }
                 }
 

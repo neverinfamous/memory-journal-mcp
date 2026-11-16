@@ -54,7 +54,18 @@ export function normalizeAndAliasToolCall(
     reqParams: ToolCallParams,
     options: ServerOptions
 ): void {
-    reqParams.arguments = deepCamelToSnake(reqParams.arguments) as Record<string, unknown>
+    if (
+        typeof reqParams.arguments !== 'object' ||
+        reqParams.arguments === null ||
+        Array.isArray(reqParams.arguments)
+    ) {
+        return
+    }
+    const normalized = deepCamelToSnake(reqParams.arguments)
+    if (typeof normalized !== 'object' || normalized === null || Array.isArray(normalized)) {
+        return
+    }
+    reqParams.arguments = normalized as Record<string, unknown>
     const toolArgs = reqParams.arguments
 
     // [INVARIANT] A `repo`/`project` string is only a lookup hint: `project_number` is assigned

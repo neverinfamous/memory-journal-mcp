@@ -242,8 +242,15 @@ export function filterTools<T extends { name: string }>(
  * Get tool filter from environment variable
  */
 export function getToolFilterFromEnv(): ToolFilterConfig | null {
-    const filterString = process.env['MEMORY_JOURNAL_MCP_TOOL_FILTER']
-    if (!filterString) return null
+    const primary = process.env['MEMORY_JOURNAL_MCP_TOOL_FILTER']
+    const fallback = process.env['TOOL_FILTER']
+    const filterString =
+        primary !== undefined && primary !== ''
+            ? primary
+            : fallback !== undefined && fallback !== ''
+              ? fallback
+              : undefined
+    if (filterString === undefined) return null
     return parseToolFilter(filterString)
 }
 
@@ -295,9 +302,46 @@ export function isReadonlyMetaActive(raw: string | undefined): boolean {
 }
 
 /**
+ * Collect tool names explicitly re-included after the final `readonly`/`+readonly`/`-write`
+ * token, taking subsequent `-<target>` exclusions into account.
+ */
+export function getPostReadonlyIncludedTools(raw: string | undefined): Set<string> {
+    const postIncluded = new Set<string>()
+    if (raw === undefined || raw === '') return postIncluded
+    const tokens = raw
+        .split(',')
+        .map((part) => part.trim())
+        .filter((part) => part.length > 0)
+    let lastReadonlyIdx = -1
+    for (let i = 0; i < tokens.length; i++) {
+        const token = tokens[i]
+        if (token === 'readonly' || token === '+readonly' || token === '-write') {
+            lastReadonlyIdx = i
+        } else if (token === '-readonly' || token === 'write' || token === '+write') {
+            lastReadonlyIdx = -1
+        }
+    }
+    if (lastReadonlyIdx === -1) return postIncluded
+
+    let current = postIncluded
+    for (let i = lastReadonlyIdx + 1; i < tokens.length; i++) {
+        const token = tokens[i]
+        if (!token) continue
+        if (token.startsWith('-')) {
+            applyExclude(current, token.slice(1))
+        } else {
+            const name = token.startsWith('+') ? token.slice(1) : token
+            current = applyInclude(current, name)
+        }
+    }
+    return current
+}
+
+/**
  * Registration, tools/list, and tools/call share this gate.
  * update_configuration and mj_execute_code stay available. Code Mode still
- * limits mj.* dispatch to readOnlyHint on its own.
+ * limits mj.* dispatch to readOnlyHint on its own, while explicit inclusions after
+ * `readonly` or `-write` (such as `+create_entry` or `+core`) remain visible.
  */
 export function isToolVisibleForFilter(
     name: string,
@@ -306,7 +350,8 @@ export function isToolVisibleForFilter(
 ): boolean {
     if (!isReadonlyMetaActive(raw)) return true
     if (READONLY_REGISTRATION_EXEMPT.has(name)) return true
-    return readOnlyHint === true
+    if (readOnlyHint === true) return true
+    return getPostReadonlyIncludedTools(raw).has(name)
 }
 
 const READONLY_ADMIN_TOOLS = new Set<string>([
@@ -367,14 +412,12 @@ const MUTATING_NON_EXEMPT_TOOLS = new Set<string>([
  * automatically keeps `mj_execute_code` and `update_configuration` in `enabledTools`.
  */
 export function isFilterEffectivelyReadOnly(filterConfig: ToolFilterConfig): boolean {
-    if (isReadonlyMetaActive(filterConfig.raw)) return true
-    const excludesWrite = filterConfig.rules.some(
-        (r) => r.type === 'exclude' && r.target === 'write'
-    )
-    const includesWrite = filterConfig.rules.some(
-        (r) => r.type === 'include' && r.target === 'write'
-    )
-    if (excludesWrite && !includesWrite) return true
+    if (isReadonlyMetaActive(filterConfig.raw)) {
+        const postIncluded = getPostReadonlyIncludedTools(filterConfig.raw)
+        return ![...filterConfig.enabledTools].some(
+            (t) => MUTATING_NON_EXEMPT_TOOLS.has(t) && postIncluded.has(t)
+        )
+    }
 
     const explicitCodemode =
         filterConfig.rules.some(

@@ -146,7 +146,13 @@ function appendPullRequestTracking(github: BriefingGitHub, trackingParts: string
         if (s.open > 0) parts.push(`${String(s.open)} open`)
         if (s.merged > 0) parts.push(`${String(s.merged)} merged`)
         if (s.closed > 0) parts.push(`${String(s.closed)} closed`)
-        trackingParts.push(`PRs: ${parts.join(', ') || '0'}`)
+        const summaryText = parts.join(', ') || '0'
+        if (github.openPrList && github.openPrList.length > 0) {
+            const titles = github.openPrList.map((p) => `#${String(p.number)} ${p.title}`).join(' · ')
+            trackingParts.push(`PRs: ${summaryText}: ${escapeCell(titles)}`)
+        } else {
+            trackingParts.push(`PRs: ${summaryText}`)
+        }
         return
     }
     if (github.openPrList && github.openPrList.length > 0) {

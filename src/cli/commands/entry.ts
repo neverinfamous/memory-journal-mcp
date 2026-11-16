@@ -2,8 +2,11 @@ import type { Command } from 'commander'
 import type { IDatabaseAdapter } from '../../database/core/interfaces.js'
 import type { RelationshipType, CreateEntryInput, ToolHandlerConfig } from '../../types/index.js'
 import { z } from 'zod'
-import { ValidationError } from '../../types/errors.js'
-import { resolveAuthor } from '../../utils/security-utils.js'
+import { AuthorizationError, ValidationError } from '../../types/errors.js'
+import { enforceCliTeamRbac } from './db-helper.js'
+import { canonicalizeTeamAuthor } from '../../handlers/tools/team/rbac.js'
+import { resolveTeamCreateAuthor } from '../../handlers/tools/team/admin-tools/batch-create-helpers.js'
+import { checkSingleTeamOwnership } from '../../handlers/tools/team/admin-tools/batch-delete-helpers.js'
 import { createEntryOptionsSchema, updateEntryOptionsSchema } from '../schemas.js'
 import {
     assertCliUpdateWorkspaceOwnership,
@@ -182,6 +185,15 @@ export async function createEntryAction(...args: unknown[]): Promise<void> {
                 .positive('project_number must be a positive project id.'),
         }).parse({ workspace_id: resolvedWs, project_number: payload.projectNumber })
 
+        let resolvedAuthor: string | undefined
+        if (options.team === true) {
+            const authorResult = resolveTeamCreateAuthor(undefined, db, config, resolvedWs)
+            if ('errorResponse' in authorResult) {
+                throw new AuthorizationError(String(authorResult.errorResponse['error']))
+            }
+            resolvedAuthor = canonicalizeTeamAuthor(db, authorResult.author, resolvedWs)
+        }
+
         const entryInput: CreateEntryInput = {
             content,
             entryType: payload.entryType,
@@ -194,7 +206,9 @@ export async function createEntryAction(...args: unknown[]): Promise<void> {
             validationStatus: payload.validationStatus,
             sessionId: payload.sessionId,
             autoContext: payload.autoContextStr,
-            ...(options.team === true ? { isPersonal: false, author: resolveAuthor() } : {}),
+            ...(options.team === true && resolvedAuthor !== undefined
+                ? { isPersonal: false, author: resolvedAuthor }
+                : {}),
         }
 
         const newEntry = db.createEntry(entryInput)
@@ -219,7 +233,7 @@ function buildUpdatedEntryPayload(
     rawContent: string,
     trimmedTargetWs: string | undefined,
     existingWorkspaceId: string | undefined
-): { content: string; payload: EntryPayload } {
+): { content: string; payload: EntryPayload; metaSourceWs: string | undefined } {
     const { frontmatter, body } = parseFrontmatter(rawContent)
     let content = body
     if (options.title && !content.startsWith('# ')) {
@@ -238,6 +252,7 @@ function buildUpdatedEntryPayload(
             { workspaceId: '*' }
         )
     }
+    const metaSourceWs = metaWs !== undefined && metaWs !== '' ? metaWs : undefined
     const effectiveOptions =
         trimmedTargetWs !== undefined
             ? {
@@ -258,7 +273,7 @@ function buildUpdatedEntryPayload(
         content,
         existingWorkspaceId
     )
-    return { content, payload }
+    return { content, payload, metaSourceWs }
 }
 
 export async function updateEntryAction(...args: unknown[]): Promise<void> {
@@ -272,13 +287,35 @@ export async function updateEntryAction(...args: unknown[]): Promise<void> {
         const { entryId, version, rawWorkspaceOpt, trimmedTargetWs } =
             validateCliUpdateArgsAndTarget(options)
         const existingEntry = db.getEntryById(entryId, '*')
+        if (options.team === true) {
+            enforceCliTeamRbac(db, config, 'member', existingEntry?.workspaceId ?? trimmedTargetWs)
+            if (
+                trimmedTargetWs !== undefined &&
+                existingEntry?.workspaceId !== undefined &&
+                existingEntry.workspaceId.toLowerCase() !== trimmedTargetWs.toLowerCase()
+            ) {
+                enforceCliTeamRbac(db, config, 'member', trimmedTargetWs)
+            }
+            if (existingEntry !== null && existingEntry !== undefined) {
+                const denied = checkSingleTeamOwnership(
+                    db,
+                    { db, teamDb: db, config },
+                    entryId,
+                    'modify',
+                    existingEntry.workspaceId
+                )
+                if (denied !== null) {
+                    throw new AuthorizationError(String(denied['error']))
+                }
+            }
+        }
         const rawContent =
             options.file === undefined &&
             options.content === undefined &&
             existingEntry?.content !== undefined
                 ? existingEntry.content
                 : await parseContent(options)
-        const { content, payload } = buildUpdatedEntryPayload(
+        const { content, payload, metaSourceWs } = buildUpdatedEntryPayload(
             options,
             config,
             rawContent,
@@ -292,7 +329,8 @@ export async function updateEntryAction(...args: unknown[]): Promise<void> {
             rawWorkspaceOpt,
             payload,
             trimmedTargetWs,
-            config
+            config,
+            metaSourceWs
         )
 
         const updates = buildCliEntryUpdateObject(

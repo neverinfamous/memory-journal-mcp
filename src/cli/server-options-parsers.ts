@@ -121,3 +121,75 @@ export function parseAllowedIoRootsOption(raw: unknown): string[] | undefined {
         throw new Error(`Invalid ALLOWED_IO_ROOTS configuration: ${e instanceof Error ? e.message : String(e)}`, { cause: e })
     }
 }
+
+/** Validate a normalized [0, 1] importance threshold option. */
+export function parseImportanceThresholdOption(
+    val: unknown,
+    name: string,
+    fallback: number
+): number {
+    if (val === undefined || val === null || val === '') return fallback
+    const num =
+        typeof val === 'number'
+            ? val
+            : typeof val === 'string'
+              ? Number(val.trim())
+              : Number.NaN
+    if (!Number.isFinite(num) || num < 0 || num > 1) {
+        const display =
+            typeof val === 'string' || typeof val === 'number' || typeof val === 'boolean'
+                ? String(val)
+                : typeof val
+        throw new Error(
+            `Invalid ${name} '${display}'. Expected a finite number between 0 and 1.`
+        )
+    }
+    return num
+}
+
+/** Validate and normalize a CLI log level option. */
+export function parseLogLevelOption(
+    raw: unknown
+): 'debug' | 'info' | 'warning' | 'error' | undefined {
+    if (raw === undefined || raw === null) return undefined
+    if (typeof raw !== 'string') {
+        throw new Error(`Invalid log level type '${typeof raw}'. Use debug, info, warning, or error.`)
+    }
+    const str = raw.trim()
+    if (str === '') return undefined
+    if (str === 'debug' || str === 'info' || str === 'warning' || str === 'error') return str
+    throw new Error(`Invalid log level '${str}'. Use debug, info, warning, or error.`)
+}
+
+/**
+ * Clear an inherited (non-CLI) project number when a CLI workspace override selects `'default'`,
+ * a workspace mapped to another project number, or a workspace differing from another project's ID.
+ */
+export function resolveUnconflictedDefaultProject(
+    defaultWorkspaceId: string | undefined,
+    defaultProjectNumber: number | undefined,
+    projectRegistry: Record<string, ProjectRegistryEntry> | undefined,
+    workspaceFromCli: boolean,
+    projectFromCli: boolean
+): number | undefined {
+    if (
+        !workspaceFromCli ||
+        projectFromCli ||
+        defaultWorkspaceId === undefined ||
+        defaultProjectNumber === undefined
+    ) {
+        return defaultProjectNumber
+    }
+    const lowerWs = defaultWorkspaceId.toLowerCase()
+    if (lowerWs === 'default') return undefined
+    const entries = projectRegistry !== undefined ? Object.entries(projectRegistry) : []
+    const matched = entries.find(([key]) => key.toLowerCase() === lowerWs)
+    if (matched !== undefined) {
+        const regNum = matched[1].project_number
+        return regNum !== undefined && regNum !== null && regNum !== defaultProjectNumber
+            ? undefined
+            : defaultProjectNumber
+    }
+    const collidesOther = entries.some(([, entry]) => entry.project_number === defaultProjectNumber)
+    return collidesOther ? undefined : defaultProjectNumber
+}

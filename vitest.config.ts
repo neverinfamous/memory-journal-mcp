@@ -20,8 +20,6 @@ export default defineConfig({
             exclude: [
                 'src/index.ts',
                 'src/**/index.ts',
-                'src/cli.ts',
-                'src/codemode/worker-script.ts',
                 'src/handlers/tools/core/fields-mixin.ts',
                 'src/types/**',
                 'src/**/types.ts',

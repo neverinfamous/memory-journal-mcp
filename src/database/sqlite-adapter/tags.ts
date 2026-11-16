@@ -4,6 +4,37 @@ import { ResourceNotFoundError, QueryError, ValidationError } from '../../types/
 import type { Tag } from '../../types/index.js'
 import type { NativeConnectionManager } from './native-connection.js'
 import { effectiveWorkspace } from '../workspace-scope.js'
+import { TAG_ALIASES } from '../../codemode/normalizers/shared-utils.js'
+
+const REVERSE_TAG_ALIASES = new Map<string, string[]>()
+for (const [alias, canonical] of Object.entries(TAG_ALIASES)) {
+    const key = canonical.toLowerCase()
+    const list = REVERSE_TAG_ALIASES.get(key) ?? []
+    list.push(alias.toLowerCase())
+    REVERSE_TAG_ALIASES.set(key, list)
+}
+
+/** Expand tag filter inputs with lowercase equivalents and bidirectional TAG_ALIASES synonyms. */
+export function expandTagFilterValues(tags: readonly string[]): string[] {
+    const expanded = new Set<string>()
+    for (const raw of tags) {
+        const lower = raw.trim().toLowerCase()
+        if (lower === '') continue
+        expanded.add(lower)
+        const forward = TAG_ALIASES[lower]
+        if (forward !== undefined) {
+            const canonical = forward.toLowerCase()
+            expanded.add(canonical)
+            for (const sib of REVERSE_TAG_ALIASES.get(canonical) ?? []) {
+                expanded.add(sib)
+            }
+        }
+        for (const rev of REVERSE_TAG_ALIASES.get(lower) ?? []) {
+            expanded.add(rev)
+        }
+    }
+    return Array.from(expanded)
+}
 
 export class TagsManager {
     private ctx: NativeConnectionManager

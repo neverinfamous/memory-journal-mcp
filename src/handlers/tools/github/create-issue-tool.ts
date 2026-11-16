@@ -6,200 +6,48 @@ import { z } from 'zod'
 import type { ToolDefinition, ToolContext } from '../../../types/index.js'
 import { formatHandlerError } from '../../../utils/error-helpers.js'
 import { autoIndexEntry } from '../../../utils/vector-index-helpers.js'
-import {
-    findCanonicalRegistryKey,
-    loadProjectRegistryFromConfig,
-    resolveProjectContext,
-} from '../../../utils/workspace-resolver.js'
-import { activeProjectRegistry, pairStoredScope } from '../../../utils/write-scope.js'
+import { fenceUntrustedInline } from '../../resources/shared.js'
+import { relaxedNumber, StrictProjectNumberSchema } from '../schemas.js'
 import { CreateGitHubIssueWithEntryOutputSchema } from './schemas.js'
-import { resolveOwnerRepo, resolveProjectNumber } from './helpers.js'
+import { resolveOwnerRepo } from './helpers.js'
 import { addIssueToProject, type IssueProjectResult } from './create-issue-project.js'
+import {
+    detectScopeMismatch,
+    resolveIssueEntryScope,
+    scopeMismatchResponse,
+} from './issue-entry-scope.js'
 
-function concreteCallerWorkspace(workspaceId: string | undefined): string | undefined {
-    if (workspaceId === undefined) return undefined
-    const trimmed = workspaceId.trim()
-    if (trimmed === '' || trimmed === '*' || trimmed.toLowerCase() === 'default') return undefined
-    return trimmed
-}
+export { detectScopeMismatch, resolveIssueEntryScope, scopeMismatchResponse }
 
-type Registry = ReturnType<typeof loadProjectRegistryFromConfig>
-
-/**
- * Detect `(repo, workspace_id, project_number)` combinations that point at different registered projects.
- */
-export function detectScopeMismatch(
-    registry: Registry,
-    canonicalRepo: string | undefined,
-    callerWorkspace: string | undefined,
-    projectNumber: number | undefined
-): string | undefined {
-    if (registry === undefined || registry === null) return undefined
-    const wsKey =
-        callerWorkspace !== undefined
-            ? findCanonicalRegistryKey(callerWorkspace, registry)
-            : undefined
-    const repoKey =
-        canonicalRepo !== undefined
-            ? findCanonicalRegistryKey(canonicalRepo, registry)
-            : undefined
-    if (
-        callerWorkspace !== undefined &&
-        canonicalRepo !== undefined &&
-        (wsKey ?? callerWorkspace).toLowerCase() !== (repoKey ?? canonicalRepo).toLowerCase()
-    ) {
-        return `workspace_id "${callerWorkspace}" does not match repository "${canonicalRepo}".`
-    }
-    if (projectNumber !== undefined) {
-        const owners = Object.entries(registry)
-            .filter(([, entry]) => entry.project_number === projectNumber)
-            .map(([key]) => key)
-        if (owners.length > 1) {
-            return `project_number ${String(projectNumber)} is registered to more than one workspace.`
+const CreateIssueHandlerInputSchema = z.preprocess(
+    (val: unknown) => {
+        if (typeof val !== 'object' || val === null || Array.isArray(val)) return val
+        const obj = { ...(val as Record<string, unknown>) }
+        if ('journal_content' in obj) {
+            if (!('entry_content' in obj) && obj['journal_content'] !== undefined) {
+                obj['entry_content'] = obj['journal_content']
+            }
+            Reflect.deleteProperty(obj, 'journal_content')
         }
-        const projectOwner = owners[0]
-        if (
-            projectOwner !== undefined &&
-            callerWorkspace !== undefined &&
-            (wsKey ?? callerWorkspace).toLowerCase() !== projectOwner.toLowerCase()
-        ) {
-            return `project_number ${String(projectNumber)} belongs to workspace "${projectOwner}", not "${callerWorkspace}".`
-        }
-        if (
-            projectOwner !== undefined &&
-            canonicalRepo !== undefined &&
-            (repoKey ?? canonicalRepo).toLowerCase() !== projectOwner.toLowerCase()
-        ) {
-            return `project_number ${String(projectNumber)} belongs to workspace "${projectOwner}", not repository "${canonicalRepo}".`
-        }
-    }
-    const ownerKey = wsKey ?? repoKey
-    const registered = ownerKey !== undefined ? registry[ownerKey]?.project_number : undefined
-    if (
-        projectNumber !== undefined &&
-        registered !== undefined &&
-        registered !== null &&
-        registered !== projectNumber
-    ) {
-        return `project_number ${String(projectNumber)} does not belong to workspace "${ownerKey ?? ''}" (registered project ${String(registered)}).`
-    }
-    return undefined
-}
-
-export function scopeMismatchResponse(error: string): Record<string, unknown> {
-    return {
-        success: false,
-        error,
-        code: 'VALIDATION_ERROR',
-        category: 'validation',
-        suggestion: 'Provide a consistent repo, workspace_id, and project_number for a single registered project.',
-        recoverable: true,
-    }
-}
-
-export function resolveIssueEntryScope(
-    context: ToolContext,
-    resolvedRepo: string | undefined,
-    inputWorkspaceId: string | undefined,
-    inputProjectNumber: number | undefined,
-    wildcardAction: string,
-    owner?: string,
-    detectedOwner?: string | null
-):
-    | { workspaceId: string; projectNumber: number | undefined }
-    | { errorResponse: Record<string, unknown> } {
-    if (inputWorkspaceId?.trim() === '*') {
-        return {
-            errorResponse: scopeMismatchResponse(
-                `workspace_id '*' is a read-only wildcard and cannot be used to ${wildcardAction}.`
-            ),
-        }
-    }
-    const entryProjectNumber = resolveProjectNumber(
-        context,
-        resolvedRepo,
-        inputProjectNumber,
-        owner,
-        detectedOwner
-    )
-    if (entryProjectNumber !== undefined && entryProjectNumber <= 0) {
-        return {
-            errorResponse: scopeMismatchResponse('project_number must be a positive integer.'),
-        }
-    }
-    const callerWorkspace = concreteCallerWorkspace(inputWorkspaceId)
-    const pairCallerWorkspace = callerWorkspace !== undefined && inputProjectNumber === undefined
-    const registry = context.config?.projectRegistry ?? loadProjectRegistryFromConfig()
-    const canonicalRepo = resolvedRepo
-        ? (findCanonicalRegistryKey(resolvedRepo, registry) ?? resolvedRepo)
-        : undefined
-    const mismatch = detectScopeMismatch(
-        registry,
-        canonicalRepo,
-        callerWorkspace,
-        inputProjectNumber
-    )
-    if (mismatch !== undefined) return { errorResponse: scopeMismatchResponse(mismatch) }
-
-    const resolvedCtx = resolveProjectContext(
-        {
-            workspace_id: callerWorkspace ?? canonicalRepo,
-            ...(pairCallerWorkspace || entryProjectNumber === undefined
-                ? {}
-                : { project_number: entryProjectNumber }),
-        },
-        context.config
-    )
-    const candidateWs =
-        resolvedCtx.workspaceId === 'default' && canonicalRepo && callerWorkspace === undefined
-            ? canonicalRepo
-            : resolvedCtx.workspaceId
-    const effectiveRegistry = activeProjectRegistry(context.config?.projectRegistry)
-    const candidateWsRegistered =
-        candidateWs !== undefined &&
-        findCanonicalRegistryKey(candidateWs, effectiveRegistry) !== undefined
-    const candidateProj = pairCallerWorkspace
-        ? resolvedCtx.projectNumber
-        : candidateWsRegistered || inputProjectNumber !== undefined
-          ? (resolvedCtx.projectNumber ?? entryProjectNumber)
-          : undefined
-    const paired = pairStoredScope(
-        candidateWs,
-        candidateProj,
-        effectiveRegistry
-    )
-    const finalWorkspaceId = paired.workspaceId ?? candidateWs
-    const finalProjectNumber = paired.projectNumber ?? undefined
-    if (
-        finalWorkspaceId === 'default' &&
-        (finalProjectNumber === undefined || finalProjectNumber <= 0)
-    ) {
-        return {
-            errorResponse: scopeMismatchResponse(
-                "Cannot record issue journal entry in workspace 'default' without a valid project_number."
-            ),
-        }
-    }
-    return {
-        workspaceId: finalWorkspaceId,
-        projectNumber: finalProjectNumber,
-    }
-}
-
-const CreateIssueHandlerInputSchema = z.object({
-    title: z.string().min(1),
-    body: z.string().optional(),
-    labels: z.array(z.string()).optional(),
-    assignees: z.array(z.string()).optional(),
-    milestone_number: z.number().optional(),
-    project_number: z.number().optional(),
-    workspace_id: z.string().optional(),
-    initial_status: z.string().optional(),
-    owner: z.string().optional(),
-    repo: z.string().optional(),
-    entry_content: z.string().optional(),
-    tags: z.array(z.string()).optional(),
-})
+        return obj
+    },
+    z
+        .object({
+            title: z.string().min(1),
+            body: z.string().optional(),
+            labels: z.array(z.string()).optional(),
+            assignees: z.array(z.string()).optional(),
+            milestone_number: z.number().int().positive().optional(),
+            project_number: StrictProjectNumberSchema,
+            workspace_id: z.string().optional(),
+            initial_status: z.string().optional(),
+            owner: z.string().optional(),
+            repo: z.string().optional(),
+            entry_content: z.string().optional(),
+            tags: z.array(z.string()).optional(),
+        })
+        .strict()
+)
 
 type CreateIssueInput = z.infer<typeof CreateIssueHandlerInputSchema>
 
@@ -342,7 +190,11 @@ async function finalizeIssueJournalEntry(
         success: projectItemError === undefined,
         ...(combinedWarning !== undefined ? { warning: combinedWarning } : {}),
         ...(projectItemError !== undefined ? { projectItemError } : {}),
-        issue: { number: issue.number, title: issue.title, url: issue.url },
+        issue: {
+            number: issue.number,
+            title: fenceUntrustedInline(issue.title),
+            url: issue.url,
+        },
         project: projectResult,
         journalEntry: { id: entryId, linkedToIssue: issue.number },
         message:
@@ -364,12 +216,10 @@ export function getCreateGitHubIssueTool(context: ToolContext): ToolDefinition {
             body: z.string().optional().describe('Issue body/description'),
             labels: z.array(z.string()).optional().describe('Labels to apply'),
             assignees: z.array(z.string()).optional().describe('Users to assign'),
-            milestone_number: z
-                .number()
+            milestone_number: relaxedNumber()
                 .optional()
                 .describe('Milestone number to assign this issue to'),
-            project_number: z
-                .number()
+            project_number: relaxedNumber()
                 .optional()
                 .describe('GitHub Project number to add this issue to'),
             workspace_id: z

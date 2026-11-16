@@ -41,6 +41,9 @@ export async function validateWebhookUrl(webhookUrl: string): Promise<void> {
 
     if (!process.env['VITEST']) {
         const records = await dns.promises.lookup(hostname, { all: true })
+        if (records.length === 0) {
+            throw new Error(`Webhook DNS lookup returned no addresses for hostname: ${hostname}`)
+        }
         for (const rec of records) {
             if (isBlockedWebhookIp(rec.address)) {
                 throw new Error(`Webhook DNS resolved to private/loopback IP: ${rec.address}`)
@@ -103,16 +106,6 @@ export function formatDigestReport(snapshot: DigestSnapshot, serverVersion: stri
 export async function deliverReport(report: string, snapshot: DigestSnapshot, options: ReportDeliveryOptions): Promise<boolean> {
     const { webhookUrl, webhookAuth, contentType = 'slack' } = options
 
-    try {
-        await validateWebhookUrl(webhookUrl)
-    } catch (err: unknown) {
-        logger.error('Refusing to deliver digest report to unsafe webhook URL', {
-            module: 'DigestReporter',
-            error: err instanceof Error ? err.message : String(err),
-        })
-        return false
-    }
-
     let bodyPayload: string
     if (contentType === 'discord') {
         bodyPayload = JSON.stringify({ content: report })
@@ -136,6 +129,17 @@ export async function deliverReport(report: string, snapshot: DigestSnapshot, op
     const TIMEOUT_MS = 10000
 
     for (let attempt = 1; attempt <= MAX_RETRIES + 1; attempt++) {
+        try {
+            await validateWebhookUrl(webhookUrl)
+        } catch (err: unknown) {
+            logger.error('Refusing to deliver digest report to unsafe webhook URL', {
+                module: 'DigestReporter',
+                attempt,
+                error: err instanceof Error ? err.message : String(err),
+            })
+            return false
+        }
+
         const controller = new AbortController()
         const timeoutId = setTimeout(() => { controller.abort() }, TIMEOUT_MS)
         timeoutId.unref()

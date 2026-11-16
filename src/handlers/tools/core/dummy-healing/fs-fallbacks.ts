@@ -20,7 +20,7 @@ const FLEXIBLE_PASSTHROUGH_SCHEMA = z.looseObject({ ...ErrorFieldsMixin.shape })
 
 export { searchDirectory, searchDirectoryAsync } from './directory-search.js'
 export type { GrepMatch, SearchDirectoryOptions } from './directory-search.js'
-import { isSafeUserRegex, searchDirectoryAsync } from './directory-search.js'
+import { isSafeUserRegex, searchDirectoryAsync, searchSingleFileAsync } from './directory-search.js'
 import { ValidationError } from '../../../../types/errors.js'
 import { logger } from '../../../../utils/logger.js'
 
@@ -54,7 +54,7 @@ async function runFilesystemGrepSearch(
 ): Promise<unknown> {
     let stat: fs.Stats | null
     try {
-        stat = await fs.promises.stat(searchPath)
+        stat = await fs.promises.lstat(searchPath)
     } catch {
         stat = null
     }
@@ -73,20 +73,27 @@ async function runFilesystemGrepSearch(
         }
     }
     try {
-        const targetDir = stat.isDirectory() ? searchPath : path.dirname(searchPath)
-        if (stat.isFile()) assertSafeFilePath(searchPath, allowedRoots)
-        const targetPattern =
-            stat.isFile() && filePattern === undefined ? path.basename(searchPath) : filePattern
-        const matches = await searchDirectoryAsync(targetDir, query, {
-            filePattern: targetPattern,
-            caseInsensitive,
-            isRegex,
-        })
+        let matches
+        if (stat.isFile()) {
+            assertSafeFilePath(searchPath, allowedRoots)
+            matches = await searchSingleFileAsync(searchPath, query, {
+                filePattern,
+                caseInsensitive,
+                isRegex,
+            })
+        } else {
+            assertSafeDirectoryPath(searchPath, allowedRoots)
+            matches = await searchDirectoryAsync(searchPath, query, {
+                filePattern,
+                caseInsensitive,
+                isRegex,
+            })
+        }
         return {
             success: true,
             matches,
             totalMatches: matches.length,
-            searchPath: targetDir,
+            searchPath,
             _healing_note: `🛠️ AUTONOMOUS HEALING: '${toolName}' is an agent-native tool, but was invoked directly as an MCP tool. The search was performed on the filesystem and results returned successfully.`,
         }
     } catch (err) {
@@ -186,12 +193,10 @@ export async function handleGrepSearch(
     }
 
     const allowedRoots = context?.config?.allowedIoRoots ?? []
-    let searchPath = rawPath
-    if (typeof searchPath === 'string' && searchPath.trim() !== '') {
-        searchPath = path.resolve(searchPath.trim())
-    }
+    const trimmedRawPath = typeof rawPath === 'string' ? rawPath.trim() : ''
+    const searchPath = trimmedRawPath !== '' ? path.resolve(trimmedRawPath) : undefined
 
-    if (typeof searchPath === 'string') {
+    if (searchPath !== undefined) {
         try {
             assertSafeDirectoryPath(searchPath, allowedRoots)
         } catch (err) {

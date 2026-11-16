@@ -48,20 +48,25 @@ function isSystemOrRootDirectory(rawInput: string, resolvedPath: string): boolea
 
 function hasUnsafeExistingAncestor(resolvedPath: string): boolean {
     let current = resolvedPath
+    let checkedDeepestExisting = false
     while (true) {
         try {
             const stat = fs.lstatSync(current)
-            return stat.isSymbolicLink() || !stat.isDirectory()
+            if (stat.isSymbolicLink()) return true
+            if (!checkedDeepestExisting) {
+                checkedDeepestExisting = true
+                if (!stat.isDirectory()) return true
+            }
         } catch (err: unknown) {
             if (err instanceof Error && 'code' in err && err.code !== 'ENOENT') {
                 return true
             }
-            const parent = path.dirname(current)
-            if (parent === current) {
-                return false
-            }
-            current = parent
         }
+        const parent = path.dirname(current)
+        if (parent === current) {
+            return false
+        }
+        current = parent
     }
 }
 

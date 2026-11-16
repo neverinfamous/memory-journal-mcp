@@ -30,8 +30,8 @@ export function getAdminTools(context: ToolContext): ToolDefinition[] {
             inputSchema: updateConfigurationSchemaMcp,
             outputSchema: z
                 .object({
-                    success: z.boolean(),
-                    updated: z.array(z.string()),
+                    success: z.boolean().optional(),
+                    updated: z.array(z.string()).optional(),
                     // [INTENT] M5: surface non-fatal persistence warnings instead of stripping them.
                     warning: z.string().optional(),
                     persisted: z.boolean().optional(),

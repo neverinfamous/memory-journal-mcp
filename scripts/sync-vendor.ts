@@ -197,7 +197,10 @@ try {
 
   if (args.values.test) {
     console.log('\nRunning tests...');
-    execFileSync('bun', ['test', 'src/vendor/', '--pass-with-no-tests'], { stdio: 'inherit' });
+    execFileSync('pnpm', ['run', 'test:vendor'], {
+      stdio: 'inherit',
+      shell: process.platform === 'win32',
+    });
   }
 } catch (err: unknown) {
   console.error('\nSync failed:', err instanceof Error ? err.message : String(err));

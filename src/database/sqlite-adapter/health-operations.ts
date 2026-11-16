@@ -15,15 +15,23 @@ export class HealthOperations {
         const dbPath = this.connection.getDbPath()
 
         let sizeBytes = 0
-        try {
-            const stats = fs.statSync(dbPath)
-            sizeBytes = stats.size
-        } catch (error) {
-            // File may not exist on disk yet
-            logger.debug('Database file size unavailable', {
-                module: 'HealthOperations',
-                error: error instanceof Error ? error.message : String(error),
-            })
+        if (dbPath !== ':memory:') {
+            try {
+                const stats = fs.statSync(dbPath)
+                sizeBytes = stats.size
+                try {
+                    const walStats = fs.statSync(`${dbPath}-wal`)
+                    sizeBytes += walStats.size
+                } catch {
+                    // WAL file may not exist or may already be checkpointed
+                }
+            } catch (error) {
+                // File may not exist on disk yet
+                logger.debug('Database file size unavailable', {
+                    module: 'HealthOperations',
+                    error: error instanceof Error ? error.message : String(error),
+                })
+            }
         }
 
         // Combined health counts in a single query (batch instead of 4 serial queries)

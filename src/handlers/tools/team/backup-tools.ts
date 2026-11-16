@@ -9,7 +9,7 @@ import type { ToolDefinition, ToolContext } from '../../../types/index.js'
 import { formatHandlerError } from '../../../utils/error-helpers.js'
 import { sendProgress } from '../../../utils/progress-utils.js'
 import { TEAM_DB_ERROR_RESPONSE } from './helpers.js'
-import { relaxedNumber } from '../schemas.js'
+import { relaxedNumber, StrictProjectNumberSchema } from '../schemas.js'
 import { TeamBackupSchema, TeamBackupOutputSchema, TeamBackupsListOutputSchema } from './schemas.js'
 import * as path from 'node:path'
 
@@ -82,10 +82,12 @@ export function getTeamBackupTools(context: ToolContext): ToolDefinition[] {
             description:
                 'List all available backup files for the team database. Requires TEAM_DB_PATH.',
             group: 'team',
-            inputSchema: z.object({
-                project_number: relaxedNumber().optional(),
-                workspace_id: z.string().optional(),
-            }),
+            inputSchema: z
+                .object({
+                    project_number: relaxedNumber().optional(),
+                    workspace_id: z.string().optional(),
+                })
+                .loose(),
             outputSchema: TeamBackupsListOutputSchema,
             annotations: {
                 readOnlyHint: true,
@@ -93,11 +95,18 @@ export function getTeamBackupTools(context: ToolContext): ToolDefinition[] {
                 idempotentHint: true,
                 openWorldHint: false,
             },
-            handler: (_params: unknown) => {
+            handler: (params: unknown) => {
                 try {
                     if (!teamDb) {
                         return { ...TEAM_DB_ERROR_RESPONSE }
                     }
+
+                    z.object({
+                        project_number: StrictProjectNumberSchema.optional(),
+                        workspace_id: z.string().optional(),
+                    })
+                        .strict()
+                        .parse(params ?? {})
 
                     const backups = teamDb.listBackups()
                     const maskedBackups = backups.map((b) => ({

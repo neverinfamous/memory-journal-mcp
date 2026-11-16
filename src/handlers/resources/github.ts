@@ -4,7 +4,7 @@
  * Resources: github/status, github/insights, github/milestones, milestones/{number}
  */
 
-import { ICON_GITHUB, ICON_MILESTONE } from '../../constants/icons.js'
+import { ICON_GITHUB } from '../../constants/icons.js'
 import { findCanonicalRegistryKey, loadProjectRegistryFromConfig } from '../../utils/workspace-resolver.js'
 import { withPriority, ASSISTANT_FOCUSED } from '../../utils/resource-annotations.js'
 import type { GitHubIssue, GitHubPullRequest, GitHubWorkflowRun, GitHubMilestone } from '../../types/index.js'
@@ -19,23 +19,8 @@ import {
     fenceUntrustedInline,
     sliceUntrustedInline,
 } from './shared.js'
-import { markUntrustedContent } from '../../utils/security-utils.js'
+import { createGitHubMilestoneResources } from './github-milestones.js'
 import { logger } from '../../utils/logger.js'
-
-function fenceMilestoneResource<
-    T extends { title: string; description?: string | null; creator?: string | null },
->(ms: T): T {
-    return {
-        ...ms,
-        title: fenceUntrustedInline(ms.title),
-        ...(ms.description !== undefined && ms.description !== null
-            ? { description: markUntrustedContent(ms.description) }
-            : {}),
-        ...(ms.creator !== undefined && ms.creator !== null
-            ? { creator: fenceUntrustedInline(ms.creator) }
-            : {}),
-    }
-}
 
 // ============================================================================
 // Resource API Limits
@@ -361,93 +346,7 @@ export function getGitHubResourceDefinitions(): InternalResourceDef[] {
             annotations: withPriority(0.7, ASSISTANT_FOCUSED),
             handler: handleGitHubStatusResource,
         },
-
-        // Milestone resources
-        {
-            uri: 'memory://github/milestones',
-            name: 'GitHub Milestones',
-            title: 'GitHub Repository Milestones',
-            description:
-                'Open GitHub milestones with completion percentages, due dates, and issue counts',
-            mimeType: 'application/json',
-            icons: [ICON_MILESTONE],
-            annotations: withPriority(0.6, ASSISTANT_FOCUSED),
-            handler: async (uri: string, context: ResourceContext): Promise<ResourceResult> => {
-                const match = /^memory:\/\/github\/milestones(?:\/(.*))?$/.exec(getBaseUri(uri))
-                const targetRepo = match?.[1] ? safeDecodeUriSegment(match[1]) : undefined
-                const resolved = await resolveScopedGitHubRepo(context, targetRepo)
-                if (isResourceError(resolved)) return resolved
-                const { owner, repo, lastModified, github } = resolved
-
-                const milestones = await github.getMilestones(
-                    owner,
-                    repo,
-                    'open',
-                    RESOURCE_MILESTONE_LIMIT
-                )
-                const milestonesWithProgress = milestones.map((ms) => ({
-                    ...fenceMilestoneResource(ms),
-                    completionPercentage: milestoneCompletionPct(ms.openIssues, ms.closedIssues),
-                }))
-                const responseData = {
-                    repository: `${owner}/${repo}`,
-                    milestones: milestonesWithProgress,
-                    count: milestonesWithProgress.length,
-                    hint: 'Use get_github_milestones tool for state filtering. Use memory://milestones/{number} for detail.',
-                }
-                const tokenEstimate = Math.ceil(JSON.stringify(responseData).length / 4)
-                return { data: { ...responseData, _meta: { tokenEstimate } }, annotations: { lastModified } }
-            },
-        },
-        {
-            uri: 'memory://milestones/{number}',
-            name: 'Milestone Detail',
-            title: 'GitHub Milestone Detail',
-            description:
-                'Detailed view of a single GitHub milestone with completion progress and issue counts. Use get_github_issues with the milestone filter for individual issue details.',
-            mimeType: 'application/json',
-            icons: [ICON_MILESTONE],
-            annotations: withPriority(0.6, ASSISTANT_FOCUSED),
-            handler: async (uri: string, context: ResourceContext): Promise<ResourceResult> => {
-                const lastModified = new Date().toISOString()
-                const match = /^memory:\/\/milestones\/(?:(.+)\/)?([1-9]\d*)$/.exec(
-                    getBaseUri(uri)
-                )
-                const targetRepo = match?.[1] ? safeDecodeUriSegment(match[1]) : undefined
-                const milestoneNumber = match?.[2] ? parseInt(match[2], 10) : null
-                if (milestoneNumber === null || isNaN(milestoneNumber)) {
-                    return { data: { error: 'Invalid milestone number', code: -32002 }, annotations: { lastModified } }
-                }
-                const resolved = await resolveScopedGitHubRepo(context, targetRepo)
-                if (isResourceError(resolved)) return resolved
-                const { owner, repo, github } = resolved
-                const milestone = await github.getMilestone(owner, repo, milestoneNumber)
-                if (!milestone) {
-                    return { data: { error: `Milestone #${String(milestoneNumber)} not found`, code: -32002 }, annotations: { lastModified } }
-                }
-                const responseData = {
-                    repository: `${owner}/${repo}`,
-                    milestone: {
-                        ...fenceMilestoneResource(milestone),
-                        completionPercentage: milestoneCompletionPct(
-                            milestone.openIssues,
-                            milestone.closedIssues
-                        ),
-                    },
-                    hint: 'Use get_github_issues tool to list issues associated with this milestone.',
-                }
-                const tokenEstimate = Math.ceil(JSON.stringify(responseData).length / 4)
-
-                return {
-                    data: {
-                        ...responseData,
-                        _meta: { tokenEstimate }
-                    },
-                    annotations: { lastModified },
-                }
-            },
-        },
-
+        ...createGitHubMilestoneResources(RESOURCE_MILESTONE_LIMIT),
     ]
 
     // Generate dynamic `{repo}` variants for multi-project registry support

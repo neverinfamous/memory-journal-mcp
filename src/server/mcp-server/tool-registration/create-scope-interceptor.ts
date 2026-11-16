@@ -156,6 +156,9 @@ export function resolveMcpCreateWorkspaceScope(
     toolArgs: Record<string, unknown>,
     resolverConfig: ToolHandlerConfig
 ): void {
+    if (typeof toolArgs !== 'object' || toolArgs === null || Array.isArray(toolArgs)) {
+        return
+    }
     if (toolName === 'create_entry') {
         resolveSingleCreateScope(toolArgs, resolverConfig)
         return

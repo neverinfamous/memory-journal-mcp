@@ -16,6 +16,7 @@ import {
     type ReviewDepth,
     buildDimensionsTable,
     buildCopilotStep,
+    sanitizeCopilotTarget,
     sanitizePromptTarget,
     buildPlanReviewPriorContextSection,
     buildSubagentProtocolGuidance,
@@ -60,7 +61,7 @@ function getPlanReviewPromptDefinition(): InternalPromptDef {
             const dimensionsTable = buildDimensionsTable(depth)
             const copilotInstruction = buildCopilotStep(
                 useCopilot,
-                'gh copilot -- -p "Review the plan at <PATH> for correctness and edge cases. Explore the codebase to verify assumptions. When viewing or reading files, always provide the \'path\' parameter correctly. What did we miss?" --allow-all'
+                `gh copilot -- -p "Review the plan for ${sanitizeCopilotTarget(topic)} at <scratch_dir>/plan.md for correctness and edge cases. Explore the codebase to verify assumptions. When viewing or reading files, always provide the 'path' parameter correctly. Never write plan files inside the repository. What did we miss?" --allow-all`
             )
 
             return {

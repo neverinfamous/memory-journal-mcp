@@ -31,8 +31,10 @@ export function resolveRegistryMatchForTarget(
     }
     const exactMatch = exactRegistryKey(cleanTarget, registry)
     if (exactMatch !== undefined) return exactMatch
+    const isWinAbs = /^[a-zA-Z]:[\\/]/.test(cleanTarget)
+    const isAbsTarget = path.isAbsolute(cleanTarget) || isWinAbs
     const normalizedRel = cleanTarget.replace(/\\/g, '/')
-    if (!path.isAbsolute(cleanTarget) && !normalizedRel.startsWith('/') && normalizedRel.includes('/')) {
+    if (!isAbsTarget && !normalizedRel.startsWith('/') && normalizedRel.includes('/')) {
         const firstSeg = normalizedRel.split('/')[0]
         if (firstSeg !== undefined && firstSeg !== '') {
             const prefixMatch = exactRegistryKey(firstSeg, registry)
@@ -41,7 +43,7 @@ export function resolveRegistryMatchForTarget(
     }
     // [BOUNDARY] Only absolute targets are path-matched; a relative target would otherwise
     // resolve against the server's process.cwd(), not the caller's project.
-    if (path.isAbsolute(cleanTarget)) {
+    if (isAbsTarget) {
         const sortedEntries = Object.entries(registry).sort(
             ([, a], [, b]) => (b.path?.length ?? 0) - (a.path?.length ?? 0)
         )

@@ -21,7 +21,7 @@
     "cli": "tsx src/cli/index.ts",
     "dev": "tsc --watch",
     "lint": "tsx scripts/run-checks.ts lint",
-    "lint:fix": "eslint src/ tests/ --fix && tsx scripts/run-checks.ts lint",
+    "lint:fix": "eslint src/ tests/ scripts/ --fix && tsx scripts/run-checks.ts lint",
     "typecheck": "tsx scripts/run-checks.ts typecheck",
     "generate:code-map": "tsx scripts/update-code-map.ts",
     "generate:instructions": "tsx scripts/generate-instructions.ts",

@@ -8,6 +8,7 @@
 import type { z } from 'zod'
 import type { ToolContext } from '../../../../types/index.js'
 import { AuthorizationError } from '../../../../types/errors.js'
+import { enforceAccessBoundary } from '../../../../auth/validation.js'
 import type { TeamRole } from '../../../../database/core/interfaces.js'
 import { fetchAuthor, batchFetchAuthors, resolveTeamProjectNumber, triggerTeamNotifications } from '../helpers.js'
 import { enforceEntryOwnership, resolveScopedTeamRole } from '../rbac.js'
@@ -360,6 +361,14 @@ export async function executeTeamBatchDelete(
 
     if (input.permanent && rbacActive && callerRole !== 'admin') {
         return permanentDeleteDeniedResponse(currentUser, callerRole)
+    }
+    if (input.permanent) {
+        enforceAccessBoundary(
+            'team_batch_delete_entries',
+            'tool',
+            { requiresAdminScope: true },
+            context.config?.runtime?.auditLogger
+        )
     }
 
     const filtered = filterDeletableIds(teamDb, {

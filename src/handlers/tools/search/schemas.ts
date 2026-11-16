@@ -280,7 +280,7 @@ export const SemanticSearchOutputSchema = z
 
 export const VectorStatsOutputSchema = z
     .object({
-        available: z.boolean(),
+        available: z.boolean().optional(),
         error: z.string().optional(),
         itemCount: z.number().nullable().optional(),
         modelName: z.string().optional(),

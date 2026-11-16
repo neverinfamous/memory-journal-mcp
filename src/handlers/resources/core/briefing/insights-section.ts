@@ -11,7 +11,7 @@ import {
     type DigestSnapshot,
 } from '../../../../database/sqlite-adapter/entries/digest.js'
 import type { ResourceContext } from '../../shared.js'
-import { resourceWorkspace } from '../../shared.js'
+import { resourceWorkspace, sliceUntrustedInline } from '../../shared.js'
 import { logger } from '../../../../utils/logger.js'
 
 /** Compact insights payload for the briefing JSON */
@@ -150,7 +150,7 @@ function formatDigest(snapshot: DigestSnapshot): BriefingInsights {
         topImportance: snapshot.topImportanceEntries.map((e) => ({
             id: e.id,
             score: e.score,
-            preview: e.preview,
+            preview: sliceUntrustedInline(e.preview, 80, '...'),
         })),
         ...(snapshot.currentRelDensity > 0
             ? { relationshipDensity: snapshot.currentRelDensity }

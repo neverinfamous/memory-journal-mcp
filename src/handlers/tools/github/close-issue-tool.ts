@@ -7,22 +7,26 @@ import type { ToolDefinition, ToolContext } from '../../../types/index.js'
 import { ValidationError } from '../../../types/errors.js'
 import { formatHandlerError } from '../../../utils/error-helpers.js'
 import { autoIndexEntry } from '../../../utils/vector-index-helpers.js'
+import { fenceUntrustedInline } from '../../resources/shared.js'
+import { relaxedNumber, StrictProjectNumberSchema } from '../schemas.js'
 import { CloseGitHubIssueWithEntryOutputSchema } from './schemas.js'
 import { resolveOwnerRepo, resolveProjectNumber } from './helpers.js'
 import { moveIssueToDone, type KanbanMoveResult } from './close-issue-kanban.js'
 import { resolveIssueEntryScope } from './create-issue-tool.js'
 
-const CloseIssueHandlerInputSchema = z.object({
-    issue_number: z.number(),
-    resolution_notes: z.string().optional(),
-    comment: z.string().optional(),
-    move_to_done: z.boolean().optional().default(false),
-    project_number: z.number().optional(),
-    workspace_id: z.string().optional(),
-    owner: z.string().optional(),
-    repo: z.string().optional(),
-    tags: z.array(z.string()).optional(),
-})
+const CloseIssueHandlerInputSchema = z
+    .object({
+        issue_number: z.number().int().positive(),
+        resolution_notes: z.string().optional(),
+        comment: z.string().optional(),
+        move_to_done: z.boolean().optional().default(false),
+        project_number: StrictProjectNumberSchema,
+        workspace_id: z.string().optional(),
+        owner: z.string().optional(),
+        repo: z.string().optional(),
+        tags: z.array(z.string()).optional(),
+    })
+    .strict()
 
 type CloseIssueInput = z.infer<typeof CloseIssueHandlerInputSchema>
 
@@ -161,7 +165,7 @@ async function executeCloseIssueMutation(
     const kanbanFailed = input.move_to_done && kanbanResult?.moved !== true
     const closedIssue = {
         number: input.issue_number,
-        title: issueDetails.title,
+        title: fenceUntrustedInline(issueDetails.title),
         url: result.url,
         previousState: 'OPEN' as const,
         newState: 'CLOSED' as const,
@@ -202,7 +206,7 @@ export function getCloseGitHubIssueTool(context: ToolContext): ToolDefinition {
             'Close a GitHub issue AND create a journal entry documenting the resolution.',
         group: 'github',
         inputSchema: z.object({
-            issue_number: z.number().describe('Issue number to close'),
+            issue_number: relaxedNumber().optional().describe('Issue number to close'),
             resolution_notes: z
                 .string()
                 .optional()
@@ -216,8 +220,7 @@ export function getCloseGitHubIssueTool(context: ToolContext): ToolDefinition {
                 .optional()
                 .default(false)
                 .describe('Move the associated Kanban item to "Done" column'),
-            project_number: z
-                .number()
+            project_number: relaxedNumber()
                 .optional()
                 .describe(
                     'GitHub Project number (required if move_to_done is true, or uses DEFAULT_PROJECT_NUMBER)'

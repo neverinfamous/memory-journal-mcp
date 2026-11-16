@@ -86,7 +86,7 @@ export function registerConfigChangeListener(params: {
 }): void {
     const { configManager, options, allowedIoRoots, baseConfig, customToolHandlerConfig, scheduler } = params
     configManager.on('changed', (newConfig: DynamicConfig) => {
-        const nextBriefing = resolveActiveBriefingConfig(newConfig.briefingConfig, options, allowedIoRoots)
+        const nextBriefing = resolveActiveBriefingConfig(newConfig.briefingConfig, allowedIoRoots)
         baseConfig.filterConfig = newConfig.toolFilterConfig
         baseConfig.briefingConfig = nextBriefing
         customToolHandlerConfig.filterConfig = newConfig.toolFilterConfig

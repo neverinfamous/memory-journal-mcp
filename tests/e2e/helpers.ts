@@ -28,11 +28,13 @@ export const DEFAULT_PORT = 3105
  * Falls back to http://localhost:3105 if not set in project config.
  */
 export function getBaseURL(testInfo: TestInfo): string {
-    const customBaseURL = (testInfo.project.use as { baseURL?: string }).baseURL
-    if (customBaseURL) return customBaseURL
-
     const workerIndex = testInfo.parallelIndex ?? Number(process.env.TEST_PARALLEL_INDEX || 0)
-    return `http://localhost:${DEFAULT_PORT + workerIndex}`
+    const customBaseURL = (testInfo.project.use as { baseURL?: string }).baseURL
+    if (customBaseURL && customBaseURL !== `http://localhost:${String(DEFAULT_PORT)}`) {
+        return customBaseURL
+    }
+
+    return `http://localhost:${String(DEFAULT_PORT + workerIndex)}`
 }
 
 /**

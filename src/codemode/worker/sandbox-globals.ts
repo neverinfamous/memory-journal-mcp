@@ -36,6 +36,42 @@ export function buildSandboxGlobals(
     const servicesProxy = new Proxy({}, { get: (): unknown => shimMj })
     const kernelProxy = new Proxy({}, { get: (): unknown => shimMj })
 
+    const timerMap = new Map<number, NodeJS.Timeout>()
+    let nextTimerId = 1
+    const createSafeTimeout = (
+        cb: (...args: unknown[]) => void,
+        ms: number,
+        ...args: unknown[]
+    ): number => {
+        const id = nextTimerId++
+        const delay = Number.isFinite(ms) ? Math.min(Math.max(0, ms), 30_000) : 0
+        const handle = registerTimer(
+            setTimeout(
+                (...cbArgs: unknown[]) => {
+                    timerMap.delete(id)
+                    activeTimers?.delete(handle)
+                    cb(...cbArgs)
+                },
+                delay,
+                ...args
+            )
+        )
+        timerMap.set(id, handle)
+        return id
+    }
+    const clearSafeTimeout = (id: unknown): void => {
+        if (typeof id === 'number') {
+            const handle = timerMap.get(id)
+            if (handle !== undefined) {
+                clearTimeout(handle)
+                timerMap.delete(id)
+                activeTimers?.delete(handle)
+            }
+        }
+    }
+    const frozenPathShim = Object.freeze({ ...pathShim })
+    const frozenConsoleShim = Object.freeze({ ...consoleShim })
+
     const sandbox: Record<string, unknown> = {
         ...buildMemoryAndFactoryShims(shimMj, safeFsShim, updateMemoryFn),
         ...createChildProcessShims(),
@@ -54,19 +90,19 @@ export function buildSandboxGlobals(
         _journal: shimMj,
         services: servicesProxy,
         kernel: kernelProxy,
-        path: pathShim,
-        __path: pathShim,
+        path: frozenPathShim,
+        __path: frozenPathShim,
         prepare: (sql?: string) =>
             createPreparedStatementShim(typeof sql === 'string' ? sql : '', shimMj),
         context: frozenContext,
-        console: consoleShim,
+        console: frozenConsoleShim,
         fetch: createFetchShim(),
         sleep: (ms: number) =>
             new Promise((resolve) => {
-                registerTimer(setTimeout(resolve, Math.min(Math.max(0, ms), 30_000)))
+                createSafeTimeout(() => resolve(undefined), ms)
             }),
-        setTimeout: (cb: (...args: unknown[]) => void, ms: number, ...args: unknown[]) =>
-            registerTimer(setTimeout(cb, Math.min(Math.max(0, ms), 30_000), ...args)),
+        setTimeout: createSafeTimeout,
+        clearTimeout: clearSafeTimeout,
         setInterval: undefined,
         setImmediate: undefined,
         getConfig:

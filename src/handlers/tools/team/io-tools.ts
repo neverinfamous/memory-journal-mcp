@@ -12,7 +12,7 @@ import type { ToolDefinition, ToolContext } from '../../../types/index.js'
 import { formatHandlerError } from '../../../utils/error-helpers.js'
 import { sendProgress } from '../../../utils/progress-utils.js'
 import { resolveWriteWorkspaceId } from '../write-workspace.js'
-import { AggregateMcpError } from '../../../types/errors.js'
+import { AggregateMcpError, ValidationError } from '../../../types/errors.js'
 import { exportEntriesToMarkdown } from '../../../markdown/index.js'
 import { importMarkdownEntries, processImportBatch } from '../../../markdown/index.js'
 import type { ExportableEntry } from '../../../markdown/index.js'
@@ -200,6 +200,14 @@ export function getTeamIoTools(context: ToolContext): ToolDefinition[] {
 
                     const allowedRoots = context.config?.allowedIoRoots ?? []
                     await sendProgress(progress, 0, 3, 'Fetching team entries...')
+
+                    if (
+                        input.start_date !== undefined &&
+                        input.end_date !== undefined &&
+                        input.start_date > input.end_date
+                    ) {
+                        throw new ValidationError('start_date cannot be after end_date')
+                    }
 
                     const limit = input.limit ?? 100
                     const entries =

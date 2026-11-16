@@ -165,10 +165,14 @@ export function getTeamResourceDefinitions(): InternalResourceDef[] {
                     })
                 }
 
+                const sanitizedAuthors = authors.map((a) => ({
+                    ...a,
+                    author: sanitizeAuthor(a.author),
+                }))
                 const responseData = {
                     configured: true,
                     ...(stats as object),
-                    authors,
+                    authors: sanitizedAuthors,
                     source: 'team',
                     ...(authorStatsWarning !== undefined
                         ? { degraded: true, warning: authorStatsWarning }

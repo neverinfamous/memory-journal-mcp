@@ -71,7 +71,8 @@ export async function runFallbackWithInterceptors(
         formatted = await fallback()
         return structuredOf(formatted) ?? formatted
     }
-    const metricsWrapped = wrapWithMetrics(requestedTool, inner, runtime.metrics)
+    const metricToolName = requestedTool.startsWith('memory://') ? 'read_resource' : requestedTool
+    const metricsWrapped = wrapWithMetrics(metricToolName, inner, runtime.metrics)
     const interceptor = runtime.auditInterceptor
 
     try {

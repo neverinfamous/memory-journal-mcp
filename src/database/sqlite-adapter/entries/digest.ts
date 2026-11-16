@@ -9,6 +9,7 @@ import type { Database } from 'better-sqlite3'
 import { z } from 'zod'
 import { buildImportanceSqlExpression, buildImportanceCte } from './importance.js'
 import { queryRow, queryRows } from './shared.js'
+import { effectiveWorkspace } from '../../workspace-scope.js'
 
 // ============================================================================
 // Types
@@ -96,12 +97,13 @@ interface DigestScope {
 }
 
 function buildDigestScope(workspaceId: string): DigestScope {
-    const scoped = workspaceId !== '*'
+    const scopeId = effectiveWorkspace(workspaceId)
+    const scoped = scopeId !== '*'
     return {
         filter: scoped ? ' AND workspace_id = ?' : '',
         filterAlias: scoped ? ' AND m.workspace_id = ?' : '',
         filterE: scoped ? ' AND e.workspace_id = ?' : '',
-        params: scoped ? [workspaceId] : [],
+        params: scoped ? [scopeId] : [],
     }
 }
 
@@ -236,14 +238,16 @@ function computeTopImportance(db: Database, s: DigestScope): TopImportanceEntry[
         SELECT
             e.id,
             ${importanceExpr} AS importance_score,
-            SUBSTR(e.content, 1, ${String(PREVIEW_LENGTH)}) AS preview
+            SUBSTR(e.content, 1, ?) AS preview
         FROM memory_journal e
         LEFT JOIN rel_stats rs ON e.id = rs.entry_id
         LEFT JOIN anchor_stats ans ON e.id = ans.entry_id
         WHERE e.deleted_at IS NULL${s.filterE}
         ORDER BY importance_score DESC
-        LIMIT ${String(TOP_IMPORTANCE_COUNT)}`,
-        ...s.params
+        LIMIT ?`,
+        PREVIEW_LENGTH,
+        ...s.params,
+        TOP_IMPORTANCE_COUNT
     )
     return topRows.map((r) => ({
         id: r['id'] as number,

@@ -34,6 +34,10 @@ const AUDIT_URI_KEYS = [
     'Path',
     'target',
     'Target',
+    'name',
+    'Name',
+    'ServerName',
+    'server_name',
 ] as const
 
 /** Parse one JSONL audit line; returns null for empty or unparseable lines. */
@@ -94,11 +98,23 @@ export function extractSensitiveTargetFromArgs(toolName: string, args: unknown):
     for (const key of AUDIT_URI_KEYS) {
         const val = record[key]
         if (typeof val !== 'string' || val.trim() === '') continue
-        const normalized = normalizeAuditResourceUri(val)
+        const trimmed = val.trim()
+        if (
+            (key === 'ServerName' || key === 'server_name') &&
+            (trimmed === 'memory-journal-mcp' || trimmed === 'memory-journal')
+        ) {
+            continue
+        }
+        const normalized = normalizeAuditResourceUri(trimmed)
         if (isSensitiveAuditTarget(normalized)) return normalized
     }
 
-    const promptCandidate = record['name'] ?? record['Name'] ?? record['prompt']
+    const promptCandidate =
+        record['name'] ??
+        record['Name'] ??
+        record['prompt_name'] ??
+        record['promptName'] ??
+        record['prompt']
     if (typeof promptCandidate === 'string' && isTeamPromptTarget(promptCandidate)) {
         return promptCandidate.trim()
     }

@@ -122,14 +122,40 @@ function mapModuleBindingReplacement(varName: string, modName: string, commentTa
     return `const ${targetVar} = mj;`
 }
 
+function stripLeadingShimAssignments(src: string): string {
+    let rest = src.trimStart()
+    const lineShimRe =
+        /^(?:const|let|var)\s+(?:\{[^}\n]*\}|[\w$]+)\s*=\s*(?:mj(?:\.[\w$]+)?|__safeFs|path|\(?typeof\s+mj[^\n;]*|await\s+import\([^)\n]+\)|require\([^)\n]+\)|import\([^)\n]+\)|await\s+mcp|mcp);?[ \t]*(?:\r?\n|$)/i
+
+    while (rest.length > 0) {
+        if (rest.startsWith('/*')) {
+            const closeIdx = rest.indexOf('*/', 2)
+            if (closeIdx === -1) break
+            rest = rest.slice(closeIdx + 2).trimStart()
+            continue
+        }
+        if (rest.startsWith('//')) {
+            const nlIdx = rest.indexOf('\n')
+            if (nlIdx === -1) {
+                rest = ''
+                break
+            }
+            rest = rest.slice(nlIdx + 1).trimStart()
+            continue
+        }
+        const match = lineShimRe.exec(rest)
+        if (match !== null && match[0].length > 0) {
+            rest = rest.slice(match[0].length).trimStart()
+            continue
+        }
+        break
+    }
+    return rest
+}
+
 function unwrapNestedExecuteCode(src: string): string {
     const current = src.trim()
-    const stripped = current
-        .replace(
-            /^(?:\/\*[\s\S]*?\*\/|\/\/[^\n]*\n|\s*(?:const|let|var)\s+(?:\{[^}]*\}|[\w$]+)\s*=\s*(?:mj(?:\.[\w$]+)?|__safeFs|path|\(?typeof\s+mj[^\n;]*|await\s+import\([^)]+\)|require\([^)]+\)|import\([^)]+\)|await\s+mcp|mcp);?\s*)+/i,
-            ''
-        )
-        .trim()
+    const stripped = stripLeadingShimAssignments(current)
     const nestedMatch =
         /^(?:(?:const|let|var)\s+[\w$]+\s*=\s*)?(?:return\s+)?(?:await\s+)?(?:(?:__mcp|mcp|mj|tools)\.)*(?:mj_)?(?:execute_code|executeCode|execute)\s*\(\s*(?:\{\s*(?:code|script)\s*:\s*)?([`'"])([\s\S]*?)\1\s*\}?\s*\)\s*;?(?:\s*return\s+[\w$]+;?)?$/i.exec(
             stripped

@@ -167,7 +167,10 @@ export class AuditLogger {
      * Safe to call concurrently — serialises via `this.flushQueue` Promise chain.
      */
     async flush(): Promise<void> {
-        if (this.buffer.length === 0) return
+        if (this.buffer.length === 0) {
+            await this.flushQueue
+            return
+        }
 
         this.flushQueue = this.flushQueue
             .then(async () => {

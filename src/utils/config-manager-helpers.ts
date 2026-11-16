@@ -86,6 +86,89 @@ function buildDefaultBriefingBaseline(): BriefingBaselineMap {
     }
 }
 
+export function isValidBriefingConfigValue(
+    value: unknown,
+    kind: 'number' | 'boolean'
+): boolean {
+    if (kind === 'boolean') return typeof value === 'boolean'
+    return typeof value === 'number' && Number.isInteger(value) && value >= 0
+}
+
+/**
+ * Seed omitted scope fields (`defaultWorkspaceId`, `defaultProjectNumber`, `projectRegistry`)
+ * on `initialConfig.briefingConfig` from the startup config file when present and compatible.
+ */
+export function seedInitialBriefingScopeFromFile(
+    initialConfig: DynamicConfig,
+    initialFile: Record<string, unknown> | null
+): DynamicConfig {
+    if (initialFile === null) return initialConfig
+    const bc = { ...initialConfig.briefingConfig }
+    let changed = false
+
+    if (
+        bc.projectRegistry === undefined &&
+        'projectRegistry' in initialFile &&
+        initialFile['projectRegistry'] !== undefined &&
+        initialFile['projectRegistry'] !== null
+    ) {
+        try {
+            const validated = validateProjectRegistryObject(initialFile['projectRegistry'])
+            if (validated !== undefined) {
+                bc.projectRegistry = validated
+                changed = true
+            }
+        } catch (err: unknown) {
+            logger.warning('Ignoring invalid projectRegistry in startup config file', {
+                module: 'ConfigManager',
+                error: err instanceof Error ? err.message : String(err),
+            })
+        }
+    }
+
+    const registry = activeProjectRegistry(bc.projectRegistry)
+    const rawFileWs = initialFile['defaultWorkspaceId']
+    const fileWs =
+        typeof rawFileWs === 'string' && rawFileWs.trim() !== '' && rawFileWs.trim() !== '*'
+            ? rawFileWs.trim()
+            : undefined
+    const rawFileProj = initialFile['defaultProjectNumber']
+    const fileProj =
+        typeof rawFileProj === 'number' && Number.isInteger(rawFileProj) && rawFileProj > 0
+            ? rawFileProj
+            : undefined
+
+    if (bc.defaultWorkspaceId === undefined && fileWs !== undefined) {
+        try {
+            const paired = pairStoredScope(fileWs, bc.defaultProjectNumber, registry)
+            bc.defaultWorkspaceId = paired.workspaceId
+            if (bc.defaultProjectNumber === undefined && typeof paired.projectNumber === 'number') {
+                bc.defaultProjectNumber = paired.projectNumber
+            }
+            changed = true
+        } catch {
+            // Leave file defaultWorkspaceId unseeded when it conflicts with CLI project_number.
+        }
+    }
+
+    if (bc.defaultProjectNumber === undefined && fileProj !== undefined) {
+        try {
+            const paired = pairStoredScope(bc.defaultWorkspaceId, fileProj, registry)
+            if (typeof paired.projectNumber === 'number') {
+                bc.defaultProjectNumber = paired.projectNumber
+                if (bc.defaultWorkspaceId === undefined && paired.workspaceId !== undefined) {
+                    bc.defaultWorkspaceId = paired.workspaceId
+                }
+                changed = true
+            }
+        } catch {
+            // Leave file defaultProjectNumber unseeded when it conflicts with CLI workspace_id.
+        }
+    }
+
+    return changed ? { ...initialConfig, briefingConfig: bc } : initialConfig
+}
+
 export function buildInitialBaselines(
     initialConfig: DynamicConfig,
     initialFile: Record<string, unknown> | null,
@@ -99,7 +182,7 @@ export function buildInitialBaselines(
         const hasFileVal =
             initialFile !== null &&
             fileKey in initialFile &&
-            typeof initialFile[fileKey] === kind
+            isValidBriefingConfigValue(initialFile[fileKey], kind)
         if (hasFileVal) briefingKeysFromFile.add(target)
         const curVal = initialConfig.briefingConfig[target]
         const fromFile = hasFileVal && initialFile[fileKey] === curVal
@@ -234,11 +317,11 @@ export function reloadBriefingConfigKeys(
             continue
         }
         const value = parsed[key]
-        if (typeof value !== mapping.kind) {
-            logger.warning('Ignoring briefing config value with unexpected type', {
+        if (!isValidBriefingConfigValue(value, mapping.kind)) {
+            logger.warning('Ignoring briefing config value with unexpected type or range', {
                 module: 'ConfigManager',
                 key,
-                expected: mapping.kind,
+                expected: mapping.kind === 'number' ? 'non-negative integer' : mapping.kind,
             })
             continue
         }
@@ -357,50 +440,4 @@ export function applyReloadedBriefingScope(
     }
 
     return changed
-}
-
-export interface PersistProvenanceFlags {
-    toolFilter: boolean
-    codemode: boolean
-    defaultWorkspaceId: boolean
-    defaultProjectNumber: boolean
-    briefingKeys: ReadonlySet<BriefingConfigurableKey>
-}
-
-export function applyPersistableConfigKeys(
-    parsed: Record<string, unknown>,
-    config: DynamicConfig,
-    provenance: PersistProvenanceFlags
-): void {
-    if (provenance.toolFilter) {
-        if (config.rawToolFilter !== undefined && config.rawToolFilter.trim() !== '') {
-            parsed['toolFilter'] = config.rawToolFilter
-        } else {
-            delete parsed['toolFilter']
-        }
-    }
-    if (provenance.codemode && config.codemodeInternalFullAccess !== undefined) {
-        parsed['codemodeInternalFullAccess'] = config.codemodeInternalFullAccess
-    }
-    for (const [fileKey, mapping] of Object.entries(BRIEFING_CONFIG_KEY_MAP)) {
-        if (!provenance.briefingKeys.has(mapping.target)) continue
-        const val = config.briefingConfig[mapping.target]
-        if (val !== undefined) {
-            parsed[fileKey] = val
-        }
-    }
-    if (provenance.defaultWorkspaceId) {
-        if (config.briefingConfig.defaultWorkspaceId !== undefined) {
-            parsed['defaultWorkspaceId'] = config.briefingConfig.defaultWorkspaceId
-        } else {
-            delete parsed['defaultWorkspaceId']
-        }
-    }
-    if (provenance.defaultProjectNumber) {
-        if (config.briefingConfig.defaultProjectNumber !== undefined) {
-            parsed['defaultProjectNumber'] = config.briefingConfig.defaultProjectNumber
-        } else {
-            delete parsed['defaultProjectNumber']
-        }
-    }
 }

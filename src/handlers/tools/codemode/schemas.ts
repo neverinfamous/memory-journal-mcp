@@ -75,16 +75,20 @@ export const ExecuteCodeSchema = z.preprocess((val) => {
     knowledge: z.string().optional(),
     entry: z.unknown().optional(),
     auto_version: z.boolean().optional().default(true),
+    autoVersion: z.boolean().optional(),
     project_number: relaxedNumber().optional(),
     workspace_id: z.string().optional(),
     repo: z.string().optional(),
     repo_name: z.string().optional(),
     session_id: z.string().optional(),
     dry_run: z.boolean().optional().default(false),
+    dryRun: z.boolean().optional(),
     context: z.unknown().optional(),
     timeout_ms: POSITIVE_TIMEOUT,
     timeout: POSITIVE_TIMEOUT,
     readonly: z.boolean().optional(),
+    read_only: z.boolean().optional(),
+    readOnly: z.boolean().optional(),
     use_test_db: z.boolean().optional(),
     useTestDb: z.boolean().optional(),
     max_result_size: relaxedNumber().optional(),
@@ -167,6 +171,12 @@ export const ExecuteCodeSchemaMcp = z.object({
         .describe(
             'If true, execution is restricted to read-only operations. Write tools will be filtered out of the API bridge.'
         ),
+    readOnly: z.boolean().optional().describe('Compatibility alias for readonly.'),
+    read_only: z.boolean().optional().describe('Compatibility alias for readonly.'),
+    use_test_db: z
+        .boolean()
+        .optional()
+        .describe('Route Code Mode calls to the isolated test database when configured.'),
     timeout: POSITIVE_TIMEOUT.describe(
         'Maximum execution time in milliseconds before the sandbox forcibly terminates the script (max: 30000ms).'
     ),
@@ -181,4 +191,10 @@ export const ExecuteCodeSchemaMcp = z.object({
     maxResultSize: relaxedNumber()
         .optional()
         .describe('Alias for max_result_size.'),
+    max_result_size_kb: relaxedNumber()
+        .optional()
+        .describe('Alias for max_result_size specified in kilobytes (multiplied by 1024).'),
+    max_result_size_bytes: relaxedNumber()
+        .optional()
+        .describe('Alias for max_result_size specified in bytes.'),
 })

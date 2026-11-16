@@ -289,8 +289,9 @@ async function scanSkillsDir(
         }
 
         const content = await fs.promises.readFile(skillMdPath, 'utf8')
-        // Extract first non-empty non-header line as excerpt (up to 160 chars)
-        const lines = content.split('\n')
+        // Strip leading YAML frontmatter before selecting first readable body excerpt line
+        const bodyContent = content.replace(/^---\r?\n[\s\S]*?\r?\n---\r?\n?/, '')
+        const lines = bodyContent.split('\n')
         const excerptLine = lines.find(
             (l) => l.trim().length > 0 && !l.startsWith('#') && !l.startsWith('---')
         )

@@ -9,6 +9,7 @@ import {
 import { buildImportanceSqlExpression, buildImportanceCte } from '../importance.js'
 import { encodeCursor, decodeCursor, type SortBy } from './cursor.js'
 import { effectiveWorkspace } from '../../../workspace-scope.js'
+import { expandTagFilterValues } from '../../tags.js'
 
 /** Importance-ranked page of recent entries (offset-paginated). */
 function getRecentEntriesByImportance(
@@ -330,11 +331,14 @@ function appendDateRangeFilters(
         | undefined
 ): void {
     if (options?.tags !== undefined && options.tags.length > 0) {
-        const placeholders = options.tags.map(() => '?').join(',')
-        conditions.push(
-            `EXISTS (SELECT 1 FROM entry_tags et JOIN tags t ON et.tag_id = t.id WHERE et.entry_id = e.id AND t.name IN (${placeholders}))`
-        )
-        params.push(...options.tags)
+        const expandedTags = expandTagFilterValues(options.tags)
+        if (expandedTags.length > 0) {
+            const placeholders = expandedTags.map(() => '?').join(',')
+            conditions.push(
+                `EXISTS (SELECT 1 FROM entry_tags et JOIN tags t ON et.tag_id = t.id WHERE et.entry_id = e.id AND LOWER(t.name) IN (${placeholders}))`
+            )
+            params.push(...expandedTags)
+        }
     }
 
     if (options?.entryType !== undefined) {

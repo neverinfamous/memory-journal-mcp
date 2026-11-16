@@ -103,8 +103,8 @@ export function getKanbanTools(context: ToolContext): ToolDefinition[] {
                 project_number: relaxedNumber()
                     .optional()
                     .describe('GitHub Project number (optional if repo is registered)'),
-                issue_number: z
-                    .number()
+                issue_number: relaxedNumber()
+                    .optional()
                     .describe('The number of the issue or PR to add'),
                 owner: z
                     .string()

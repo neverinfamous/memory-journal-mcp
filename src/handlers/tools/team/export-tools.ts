@@ -5,6 +5,7 @@
  */
 
 import type { ToolDefinition, ToolContext } from '../../../types/index.js'
+import { ValidationError } from '../../../types/errors.js'
 import { formatHandlerError } from '../../../utils/error-helpers.js'
 import { sendProgress } from '../../../utils/progress-utils.js'
 import { resolveWorkspaceId } from '../../../utils/workspace-resolver.js'
@@ -144,6 +145,14 @@ export function getTeamExportTools(context: ToolContext): ToolDefinition[] {
 
                     const projectFilter =
                         alignedProject !== undefined ? { projectNumber: alignedProject } : {}
+
+                    if (
+                        start_date !== undefined &&
+                        end_date !== undefined &&
+                        start_date > end_date
+                    ) {
+                        throw new ValidationError('start_date cannot be after end_date')
+                    }
 
                     // Fetch entries with optional filters
                     let entries

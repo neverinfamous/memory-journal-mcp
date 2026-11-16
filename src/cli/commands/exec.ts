@@ -111,7 +111,6 @@ function buildExecToolConfig(
     const currentConfig = context.configManager.getConfig()
     const briefingConfig = resolveActiveBriefingConfig(
         currentConfig.briefingConfig,
-        serverOptions,
         context.allowedIoRoots
     )
     const effectiveRegistry = serverOptions.projectRegistry ?? briefingConfig.projectRegistry
@@ -171,16 +170,16 @@ export async function execAction(scriptPath: string, options: ExecOptions, comma
     )
     const scriptContent = readExecScriptOrExit(scriptPath)
     const context = await initializeDependencies(serverOptions)
-    const customToolHandlerConfig = buildExecToolConfig(
-        context,
-        serverOptions,
-        options,
-        execWorkspaceId,
-        explicitDefaultProject
-    )
 
     let exitCode = 0
     try {
+        const customToolHandlerConfig = buildExecToolConfig(
+            context,
+            serverOptions,
+            options,
+            execWorkspaceId,
+            explicitDefaultProject
+        )
         const result = await callTool(
             'mj_execute_code',
             {
@@ -204,12 +203,40 @@ export async function execAction(scriptPath: string, options: ExecOptions, comma
         process.stderr.write(`Execution failed: ${error instanceof Error ? error.message : String(error)}\n`)
         exitCode = 1
     } finally {
-        context.runtime.stopBackgroundTasks?.()
-        context.configManager.close()
-        if (context.runtime.auditLogger) await context.runtime.auditLogger.close()
-        if (context.activeMetricsPath) await context.runtime.metrics.saveToFile(context.activeMetricsPath)
-        context.db.close()
-        context.teamDb?.close()
+        try {
+            context.runtime.stopBackgroundTasks?.()
+        } catch {
+            // best-effort timer teardown
+        }
+        try {
+            context.configManager.close()
+        } catch {
+            // best-effort config watcher teardown
+        }
+        if (context.runtime.auditLogger) {
+            try {
+                await context.runtime.auditLogger.close()
+            } catch {
+                // best-effort audit logger teardown
+            }
+        }
+        if (context.activeMetricsPath) {
+            try {
+                await context.runtime.metrics.saveToFile(context.activeMetricsPath)
+            } catch {
+                // best-effort metrics flush
+            }
+        }
+        try {
+            context.db.close()
+        } catch {
+            // best-effort db close
+        }
+        try {
+            context.teamDb?.close()
+        } catch {
+            // best-effort teamDb close
+        }
     }
     process.exit(exitCode)
 }
