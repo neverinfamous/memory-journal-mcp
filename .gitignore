@@ -125,7 +125,14 @@ dmypy.json
 *~
 
 # Synced consumer skills (installed by npx neverinfamous-agent-skills)
-.agents/
+.agents/*
+!.agents/scripts/
+.agents/scripts/*
+!.agents/scripts/commit.ts
+!.agents/scripts/commit-journal.ts
+!.agents/workflows/
+.agents/workflows/*
+!.agents/workflows/heal-mcp-server.md
 
 # OS files
 .DS_Store
@@ -188,6 +195,3 @@ logs/
 
 # Dependencies
 node_modules/
-
-# Adamic Workflows Copies
-.agents/
