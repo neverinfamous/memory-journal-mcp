@@ -119,7 +119,7 @@ try {
         arguments: {
             content: longContent,
             entry_type: 'technical_note',
-            workspace_id: 'test-ws',
+            workspace_id: 'memory-journal-mcp',
             project_number: 5,
             impact_score: 0.2,
             trust_score: 0.8,
