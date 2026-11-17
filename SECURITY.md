@@ -13,6 +13,12 @@ The server uses the native **better-sqlite3** driver with **sqlite-vec** for vec
 - ✅ **WAL journal mode** — high concurrency with non-blocking reads (`PRAGMA journal_mode = WAL`)
 - ✅ **Synchronous Normal** — optimized durability and performance (`PRAGMA synchronous = NORMAL`)
 
+### **SQLCipher Encryption at Rest & Staged Backups**
+
+- ✅ **Environment-Only Encryption Keys** — Optional SQLCipher keys are read exclusively from `MJ_DB_ENCRYPTION_KEY` or `DB_ENCRYPTION_KEY` (`src/database/sqlite-adapter/sqlcipher-key.ts`); `scripts/encrypt-db.ts` omits any CLI `--key` flag so secrets never appear in OS process listings (`ps`).
+- ✅ **Key Validation & Error Redaction** — `applySqlCipherKey()` rejects NUL bytes, validates `x'...'` hex keys against `HEX_CIPHER_KEY_RE`, escapes single-quoted passphrases, and throws generic error messages without echoing key material.
+- ✅ **Staged Backups & Restore Locking** — Database backups write to staged `.tmp` files serialized under `restore-lock.ts` with pre-swap SQLite integrity verification.
+
 ### **File Permissions (Docker)**
 
 - ✅ **Data directory**: `700` (full access for owner only) in Docker
@@ -40,13 +46,13 @@ The server uses the native **better-sqlite3** driver with **sqlite-vec** for vec
 - ✅ **Parameterized queries** used throughout
 - ✅ **Input validation** via Zod schemas before database operations
 - ✅ **Warning system** for potentially dangerous content patterns
-- ✅ **FTS5 / LIKE pattern sanitization** (escapes `%`, `_`, `\` wildcards and handles FTS5 syntax errors gracefully)
+- ✅ **FTS5 / LIKE pattern sanitization** — `sanitizeFtsQuery` (`src/database/sqlite-adapter/entries/search/fts-sanitizer.ts`) escapes `%`, `_`, `\` wildcards and neutralizes FTS5 boolean, column, and prefix operators (`AND`, `OR`, `NOT*`, `NEAR*`).
 - ✅ **Date format whitelisting** (prevents strftime injection)
 
 ### **Path Traversal & Filesystem Boundaries**
 
 - ✅ **Explicit Filesystem Boundaries** — Filesystem access MUST be explicitly granted via `ALLOWED_IO_ROOTS`. The server operates in a **fail-closed** mode (`ALLOWED_IO_ROOTS=[]`) by default if not explicitly configured, preventing all filesystem interaction.
-- ✅ **URL-Encoded, Null-Byte & Symlink Rejection** — `assertSafeDirectoryPath` (`src/utils/security-utils.ts`) rejects URL-encoded traversal sequences (`%2e`, `%2f`, `%5c`, `%00`) and raw null bytes before decoding, resolves ancestor symlinks iteratively via `fs.realpathSync()`, and validates containment using `path.relative()`. `assertSafeFilePath` (`src/utils/security-utils.ts`) additionally rejects file-level symbolic links via `fs.lstatSync(filePath).isSymbolicLink()`.
+- ✅ **URL-Encoded, Null-Byte, Win32 & Symlink Rejection** — `assertSafeDirectoryPath` and `assertSafeFilePath` (`src/utils/path-safety.ts`) reject URL-encoded traversal sequences (`%2e`, `%2f`, `%5c`, `%00`), raw/decoded NUL bytes, Windows Alternate Data Streams (`:`), and Windows reserved DOS device names (`CON`, `PRN`, `AUX`, `NUL`, `COM1`–`COM9`, `LPT1`–`LPT9`); resolve ancestor symlinks iteratively via `fs.realpathSync.native()` and validate containment via `path.relative()` on **both raw and percent-decoded paths**; reject file-level symlinks via `fs.lstatSync(filePath).isSymbolicLink()`; and re-verify pre-chunk and post-chunk `assertSafeDirectoryPath(realpathSync.native(...))` during Markdown exports (`src/markdown/exporter.ts`) to prevent TOCTOU swaps.
 - ✅ **Implicit Authority Disabled** — The server no longer derives ambient filesystem authority from the location of database files.
 - ✅ **Backup & Restore Boundaries** — `backup_journal` and `restore_backup` enforce `path.relative()` containment against the backup directory and reject symlinks or traversal characters (`/`, `\`, `..`).
 - ✅ **Agent-Healing Filesystem Fallbacks** — When `--no-agent-healing` is not set, read-only fallback tools (`view_file`, `list_dir`, `grep_search`) enforce `ALLOWED_IO_ROOTS` (fail-closed `[]` when unconfigured; `list_dir` defaults its target directory argument to `process.cwd()`), reject symlink file targets (`view_file`, single-file `grep_search`), resolve directory realpaths (`list_dir`, directory `grep_search`), skip symbolic links during recursive `grep_search` traversal, cap file reads at 2MB, and require `admin` scope under OAuth 2.1.
@@ -54,13 +60,13 @@ The server uses the native **better-sqlite3** driver with **sqlite-vec** for vec
 
 ### **Multi-Tenant Workspace Isolation (`workspace_id`)**
 
-- ✅ **End-to-End Tenant Scoping** — All personal and team entry reads, updates, soft-deletes, restores, FTS5 searches, and vector semantic searches (`semantic_search`, `team_semantic_search`) enforce `workspace_id` isolation.
-- ✅ **Wildcard workspace writes** — `create_entry` ignores `workspace_id: "*"` and stores a resolved workspace. `update_entry` with `workspace_id: "*"` and `target_workspace_id` moves an entry. `delete_entry`, `restore_entry`, and batch deletes accept `*` and then match by id without a workspace predicate.
-- ✅ **`--tool-filter` allow-list** — `--tool-filter` is an allow-list on registration, `tools/list`, and `tools/call`. `readonly` drops tools whose `readOnlyHint` is not `true`, including `create_entry` and `link_entries`, and blocks mutating `mj.*` calls and mutating healing aliases. `update_configuration` and `mj_execute_code` stay registered. `--codemode-internal-full-access`, if granted at server startup, cannot be escalated via config file hot-reload.
+- ✅ **End-to-End Tenant Scoping** — All personal and team entry reads, updates, soft-deletes, restores, FTS5 searches, and vector semantic searches (`semantic_search`, `team_semantic_search`) enforce `workspace_id` and `project_number` isolation. Unregistered workspace updates enforce exact case-sensitive `workspace_id` ownership (`src/database/sqlite-adapter/entries/crud-update.ts`), writes require positive-integer `project_number` (while finite non-positive read filters fail closed with zero matches), and scoped `merge_tags` verifies source-tag existence in the target workspace before creating a target tag (`src/database/sqlite-adapter/tags.ts`).
+- ✅ **Wildcard workspace guards** — `create_entry` ignores `workspace_id: "*"` and stores a resolved workspace; `update_entry` accepts `workspace_id: "*"` with an explicit `target_workspace_id` move target but rejects `target_workspace_id: "*"`; and `delete_entry`, `restore_entry`, and batch deletes accept `workspace_id: "*"` for explicit ID-based matching.
+- ✅ **`--tool-filter` & Code Mode namespace isolation** — `--tool-filter` acts as an allow-list on registration, `tools/list`, `tools/call`, and Code Mode (`filterToolsForSandbox` / `disabledToolStub` across tool groups and `mj.team.*` namespace isolation in `worker-api-proxy.ts` and `api-proxy-trap.ts` so personal `mj.core.*` or unprefixed root `mj.*` calls never silently route to `team_*` tools). `readonly` drops non-read-only tools and blocks mutating `mj.*` calls/aliases. `update_configuration` and `mj_execute_code` stay registered; `--codemode-internal-full-access` cannot be enabled via config hot-reload.
 
 ### **Prompt-Injection Defense (`<untrusted_remote_content>`)**
 
-- ✅ **Untrusted Boundary Tagging** — External inputs surfaced in MCP Resources and Workflow Prompts (Git commit subjects, GitHub issue/PR/milestone titles, workflow run names, and journal entry content) are wrapped in `<untrusted_remote_content>` tags with `&`, `<`, and `>` entity-escaped to prevent tag-breakout and indirect prompt injection.
+- ✅ **Untrusted Boundary Tagging** — External inputs surfaced across MCP Tools, Resources, Resource Templates, Server Instructions, and Workflow Prompts (Git commit subjects/bodies/authors/unreleased tags via `git-commit-helpers.ts` and `git-staleness.ts`, GitHub issue/PR/milestone titles/bodies/branches/refs/labels/handles & Copilot review comments via `fencing-helpers.ts` and `copilot-tools.ts`, journal entry previews, and non-canonical audit log fields/arguments/errors via `sanitizeAuditEntryForEgress` in `src/audit/audit-resource.ts`) are truncated via `sliceUntrustedInline` before idempotent `<untrusted_remote_content>` wrapping (`&`, `<`, `>` entity-escaped), while keeping internal domain structs and Kanban status enums raw.
 
 ## 🌐 **HTTP Transport Security**
 
@@ -108,21 +114,21 @@ export CORS_ORIGIN="http://localhost:3000,https://my-app.com"
 
 ### **Request Size Limits & Metrics Isolation**
 
-- ✅ **1MB body limit** on JSON and chunked stream requests (prevents memory exhaustion DoS)
-- ✅ **Health & Metrics endpoint protection** — `/health` is unauthenticated; on the HTTP transport, `/metrics` is protected under OAuth 2.1 and unauthenticated under static Bearer auth, while the standalone Prometheus server (`METRICS_EXPORT=prometheus`) isolates `/metrics` on `MJ_METRICS_HOST` (default `127.0.0.1`) and `MJ_METRICS_PORT` (default `9465`)
+- ✅ **Pre-Body Auth & 1MB Limits** — Rate limiting and Bearer/OAuth authentication execute *before* JSON body parsing (`src/transports/http/server/http-transport.ts`), while JSON parsing and protocol route handlers (`src/transports/http/server/protocol-route-handlers.ts`) enforce `1MB` / `maxRequestBodySize` limits to prevent memory-exhaustion DoS.
+- ✅ **Health & Metrics Endpoint Protection** — Only `GET` and `HEAD` requests to `/health` (and `GET`/`HEAD` requests to OAuth `.well-known` discovery endpoints) bypass authentication (`src/auth/middleware.ts`, `src/transports/http/handlers.ts`); `/metrics` on the HTTP transport requires authentication under **both** OAuth 2.1 and static Bearer auth. The standalone Prometheus server (`src/observability/metrics-server.ts`, default `127.0.0.1:9465`) rejects whitespace-only `authToken` values on non-loopback binds and validates Bearer tokens via constant-time SHA-256 `crypto.timingSafeEqual`.
 - ✅ **Outbound Webhook SSRF Protection** — Scheduled digest webhooks (`--report-webhook-url` / `REPORT_WEBHOOK_URL`) require `https:` (unless `ALLOW_INSECURE_WEBHOOK_HTTP=true` is explicitly set for local testing), resolve DNS prior to dispatch, block loopback/private/link-local/cloud-metadata IP ranges, and disable HTTP redirects (`redirect: 'error'`)
 
 ## 🔐 **OAuth 2.1 Authentication**
 
 For production HTTP deployments, Memory Journal supports **OAuth 2.1 authentication** (opt-in):
 
-| Component                   | Status | Description                                      |
-| --------------------------- | ------ | ------------------------------------------------ |
-| Protected Resource Metadata | ✅     | RFC 9728 `/.well-known/oauth-protected-resource` |
-| Auth Server Discovery       | ✅     | RFC 8414 metadata discovery with caching         |
-| Token Validation            | ✅     | JWT validation with JWKS support (via `jose`)    |
-| Scope Enforcement           | ✅     | Granular `read`, `write`, `team`, `audit`, `admin`, `full` scopes |
-| HTTP Middleware             | ✅     | Bearer token extraction and validation           |
+| Component                   | Status | Description                                                                 |
+| --------------------------- | ------ | --------------------------------------------------------------------------- |
+| Protected Resource Metadata | ✅     | RFC 9728 `/.well-known/oauth-protected-resource` (`GET`/`HEAD` only)       |
+| Auth Server Discovery       | ✅     | RFC 8414 metadata discovery with SSRF guards and caching                    |
+| Token Validation            | ✅     | JWT validation with DNS-pinned JWKS fetching (`jose` + `createPinnedJwksFetch`) |
+| Scope Enforcement           | ✅     | Granular `read`, `write`, `team`, `audit`, `admin`, `full` scopes           |
+| HTTP Middleware             | ✅     | Constant-time Bearer validation (`GET`/`HEAD`-only public route bypass)     |
 
 ### **Supported Scopes**
 
@@ -153,29 +159,29 @@ export OAUTH_AUDIENCE=memory-journal-mcp
 export OAUTH_JWKS_URI=https://auth.example.com/realms/mcp/protocol/openid-connect/certs
 ```
 
-### **How It Works**
+### **How It Works & SSRF Guards**
 
-1. Client sends `Authorization: Bearer <token>` header
-2. Server validates JWT signature against JWKS endpoint
-3. Server checks issuer, audience, and expiration claims
-4. Server extracts scopes from token and enforces tool-level access
+1. Client sends `Authorization: Bearer <token>` header (`POST`/`DELETE` to public discovery/`/health` routes are denied)
+2. Server fetches JWKS via DNS-pinned `createPinnedJwksFetch()` (`src/auth/jwks-custom-fetch.ts` wired into `[jose.customFetch]` and `preload()`), enforcing case-normalized `https:` URLs (loopback HTTP allowed only via `--oauth-allow-plaintext-loopback`), `https.request` socket DNS pinning (`lookup`), `redirect: 'error'` / non-200 rejection, a `1MB` response cap, and full special-use IPv4/IPv6 CIDR blocking (`src/utils/network-safety.ts`: RFC 1918, `100.64.0.0/10`, `198.18.0.0/15`, `169.254.0.0/16`, NAT64 `64:ff9b::`, SIIT, 6to4 `2002::`, and dotted/hex IPv4-mapped addresses)
+3. Server validates JWT signature (`alg` allowlist), `iss`, `aud`, required `exp`, and non-empty `sub` claims
+4. Server extracts scopes from token and enforces tool/resource scopes (`resolveAuthenticatedAuthor()` in `src/utils/security-utils.ts` restricts OIDC email author fallbacks strictly to `email_verified === true`)
 5. Invalid/missing tokens receive `401` with `WWW-Authenticate` header
 
 ### **Fallback Behavior**
 
 When OAuth is **not enabled**, authentication falls back to:
 
-1. **Simple token auth** — if `MCP_AUTH_TOKEN` env var is set, requests must include `Authorization: Bearer <token>` matching the configured value, with granted scopes controlled by `MCP_AUTH_SCOPES` (default: `read`; set `export MCP_AUTH_SCOPES="full"` for unrestricted access)
+1. **Simple token auth** — if `MCP_AUTH_TOKEN` env var (or `--auth-token`) is set (rejecting empty, whitespace-only, and placeholder tokens), requests must include `Authorization: Bearer <token>`, verified via SHA-256 `crypto.timingSafeEqual`, with granted scopes controlled by `MCP_AUTH_SCOPES` (default: `read`; set `export MCP_AUTH_SCOPES="full"` for unrestricted access)
 2. **No auth (loopback only)** — if no auth mechanism is configured and the server is bound to localhost without wildcard CORS, requests are accepted for local development. Binding to non-localhost interfaces (e.g., `0.0.0.0`) or enabling wildcard CORS without authentication throws a fatal startup error.
 
 ## 🐙 **GitHub Token Security**
 
 ### **Token Handling**
 
-- ✅ **Environment variables only** - tokens never stored in config files
-- ✅ **Error message scrubbing** - Authorization headers stripped from error logs
-- ✅ **Optional integration** - server works fully offline without GitHub token
-- ✅ **Minimal scopes** - only requires `repo`, `project`, `read:org`
+- ✅ **Environment variables only** — tokens never stored in config files (`ConfigManager` tracks baseline provenance via `config-manager-baselines.ts` and `config-manager-persist.ts` so CLI/env secrets never persist to disk)
+- ✅ **Recursive secret scrubbing** — Authorization headers, tokens, secret CLI flags, and sensitive argument keys are redacted across logger output (`src/utils/logger.ts`), audit egress (`sanitizeAuditEntryForEgress`), and batched `logs/agent-issues.jsonl` (`sanitizeIssueInput` in `src/utils/issue-logger.ts`)
+- ✅ **Optional integration** — server works fully offline without GitHub token
+- ✅ **Minimal scopes** — only requires `repo`, `project`, `read:org`
 
 ### **Environment Variables**
 
@@ -262,24 +268,24 @@ Code Mode (`mj_execute_code`) executes user-provided JavaScript in a hardened `w
 
 - ✅ **V8 code generation disabled** — `codeGeneration: { strings: false, wasm: false }` prevents `eval()` and `Function()` construction from strings at the V8 engine level
 - ✅ **Separate V8 isolate** — each worker thread runs in its own V8 instance with enforced heap limits (`maxOldGenerationSizeMb`, `maxYoungGenerationSizeMb`)
-- ✅ **Frozen prototypes & cross-realm constructor lockdown** — all built-in prototypes (Object, Function, Array, Error, Map, Set, Promise, etc.) are frozen, and `.constructor` on `Object`, `Function`, `AsyncFunction`, `GeneratorFunction`, and `AsyncGeneratorFunction` prototypes is neutered in both the inner `vm` context and outer worker realm to prevent cross-realm dynamic constructor chain escapes
-- ✅ **Proxy constructor nullified** — `Proxy: undefined` in the sandbox context prevents meta-object protocol abuse
-- ✅ **Frozen API surfaces** — All injected API objects (mj.*, group namespaces, console shim, context, and neutralized `process` stub) are Object.freeze()'d to prevent prototype pollution on the API bridge
+- ✅ **Frozen prototypes & cross-realm constructor lockdown** — all built-in prototypes (`Object`, `Function`, `Array`, `Error`, `Map`, `Set`, `Promise`, `%GeneratorPrototype%`, `%AsyncGeneratorPrototype%`, `%IteratorPrototype%`, `%AsyncIteratorPrototype%`, `%TypedArray%`, and `Iterator` in `src/codemode/worker/prototype-hardening.ts`) are frozen, and `.constructor` on `Object`, `Function`, `AsyncFunction`, `GeneratorFunction`, and `AsyncGeneratorFunction` prototypes is neutered in both the inner `vm` context and outer worker realm to prevent cross-realm dynamic constructor chain escapes
+- ✅ **Proxy & Reflect isolation** — `Proxy: undefined` and `Reflect` / destructured prototype helpers (`src/codemode/worker/sandbox-globals.ts`) are blocked in the sandbox context to prevent meta-object protocol abuse
+- ✅ **Frozen API surfaces & worker tables** — injected API objects (`mj.*`, group namespaces, console shim, `context`, neutralized `process` stub), `path` shims (`node-shims.ts`), `ADAPTER_ITEMS` (`mj-shim-domains.ts`), and `JOURNAL_TABLES` (`schema-help.ts`) are `Object.freeze()`'d to prevent prototype pollution across the API bridge
 
 ### **Static Code Validation**
 
-- ✅ **Pre-validation ordering** — Code Mode enablement checks, client rate-limiting, and the 50KB byte-size cap execute *before* any code healer or SQL auto-recovery pass. SQL-shaped payloads are rewritten into `mj.*` calls with regular expressions before sandbox execution. That rewrite does not use `node:vm`.
-- ✅ **Single-pass lexical scanner** — `stripCommentsAndStrings` uses a single-pass character state machine that preserves `${...}` template literal interpolation expressions and `'constructor'`/`'__proto__'`/`'prototype'` strings so regex/comment interleaving cannot hide forbidden tokens
-- ✅ **Comprehensive blocked patterns** — regex rules blocking `require()`, `import()`, `process.*`, `global.*`, `eval()`, `Function()`, `__proto__`, `constructor.constructor`, `['constructor']`, `Object.getPrototypeOf`, `Object.setPrototypeOf`, `Object.defineProperty`, `Reflect.*`, `Symbol.*`, `new Proxy()`, `child_process`, `fs.*`, `net.*`, `http.*`, `https.*`
+- ✅ **Pre-validation ordering & input bounds** — Code Mode enablement checks, client rate-limiting, the 50KB code cap, non-`context` string/object field bounds (`dispatch-rpc-bounds.ts`, `src/handlers/tools/codemode/handler.ts`), and the `5MB` `context` cap execute *before* any code healer or SQL auto-recovery pass. SQL-shaped payloads are rewritten into `mj.*` calls with regular expressions before sandbox execution without using `node:vm`.
+- ✅ **Single-pass lexical & escape scanner** — `stripCommentsAndStrings` (`src/codemode/security-stripper.ts`) and `auto-return.ts` handle regex literals vs `/` or postfix `++`/`--`, Annex B HTML comments (`<!--`/`-->`), `${...}` template interpolations, and `\uXXXX` / `\u{...}` / `\xXX` escapes (`decodeUnicodeEscape`) while preserving quoted `'constructor'`/`'__proto__'`/`'prototype'` literals so obfuscation cannot hide forbidden tokens
+- ✅ **Comprehensive blocked patterns** — regex rules blocking `require()`, `import()`, `process.*`, `global.*`, `eval()`, `Function()`, `__proto__`, `constructor.constructor`, `['constructor']`, `Object.getPrototypeOf`, `Object.setPrototypeOf`, `Object.defineProperty`, `Reflect.*`, bare `Reflect`, `Symbol.*`, `new Proxy()`, `child_process`, `fs.*`, `net.*`, `http.*`, `https.*`
 - ✅ **50KB code size limit** — prevents payload-based resource exhaustion
 
 ### **Runtime Protection**
 
-- ✅ **Prototype-safe RPC allowlist** — host-side `Object.hasOwn()` validation and strict request-shape checks prevent workers from invoking unauthorized or prototype-chain API methods (`__proto__`, `constructor`)
+- ✅ **Prototype-safe RPC allowlist & namespace isolation** — host-side `Object.hasOwn()` validation, strict request-shape checks, `disabledToolStub` (`journal-api-aliases.ts`), and strict `mj.team.*` isolation (`worker-api-proxy.ts`, `api-proxy-trap.ts`) prevent workers from invoking unauthorized, filtered, or cross-namespace (`core` -> `team_*`) methods
 - ✅ **Host process isolation** — `process.exit()` calls inside the sandbox are safely neutralized in-place (`{ exited: true, exitCode }`) and can never terminate the worker or host MCP server
 - ✅ **Rate limiting** — 60 executions per minute per client
-- ✅ **Hard timeouts** — configurable execution limit (default 30s) with forced worker termination
-- ✅ **Egress boundary enforcement** — result serialization capped at configurable limit (default 100KB) with automatic collection compaction (`compactOversizedResult`) for large object/array payloads to prevent OOM via oversized payloads
+- ✅ **Hard timeouts & nested bounds** — configurable `Promise.race` wall-clock timeout guards with timer cleanup, forced worker termination, and nested `maxResultSize` clamping (`nested-exec-payload.ts`, `worker-script.ts`)
+- ✅ **Structured-clone egress boundary** — `result-compactor.ts` performs unconditional `JSON.parse(JSON.stringify(...))` unwrapping to strip nested userland `Proxy`, function, and symbol values before `parentPort.postMessage` (setting `resultSent = true` strictly after `postMessage` succeeds), paired with `compactOversizedResult` up to configurable size caps (default 100KB)
 - ✅ **Readonly Proxy traps** — when `readonly: true` is passed to `mj_execute_code`, calling a stripped mutation method resolves to a structured `{ success: false, error: "🛠️ AUTONOMOUS HEALING: Operation '<key>' is blocked in readonly mode. Read operations only.", code: "VALIDATION_ERROR" }` object rather than throwing an exception
 - ✅ **Schema Introspection Scope** — `.schema()` properties are strictly bound to the permitted methods in the RPC allowlist, preventing unintended internal structure leakage
 - ✅ **Audit logging** — all executions logged with code preview, metrics, and readonly mode
@@ -353,9 +359,12 @@ chmod 600 ./memory_journal.db  # or your configured DB_PATH
 # The host directory must be writable by UID 1001.
 ```
 
-### **Team Database Security**
+### **Team Database Security & RBAC**
 
-If using team collaboration, the `TEAM_DB_PATH` dictates where the shared database is located.
+If using team collaboration, the `TEAM_DB_PATH` dictates where the shared database is located, alongside optional `additionalTeamDbs` in config:
+
+- ✅ **3-Tier Team RBAC** — Team operations enforce `viewer`, `member`, and `admin` role checks identically across MCP tools (`src/handlers/tools/team/rbac.ts`), MCP resources (`enforceTeamResourceRbac`), Markdown/YAML importers, and CLI commands (`enforceCliTeamRbac`).
+- ✅ **Scoped Author Alias Canonicalization & Admin Deletes** — `canonicalizeTeamAuthor()` resolves author aliases strictly against a concrete target `workspace_id` (never wildcard `'*'` alias bleed), `permanent: true` team deletes require `SCOPES.ADMIN`, and cross-team search (`src/handlers/tools/search/cross-team.ts`) runs `Promise.allSettled` per-DB RBAC enforcement across `additionalTeamDbs` so an unavailable primary team DB never downgrades secondary DB checks.
 
 **Security Warning:** Because `TEAM_DB_PATH` is accessed by multiple users or processes, it must be placed on a secure shared volume with strict access controls to prevent unauthorized data access or modification.
 
@@ -387,7 +396,8 @@ chmod 700 /shared/team-data
 **Core local (`stdio`) operation requires no secrets:**
 
 - No API keys, passwords, or tokens required for local journaling
-- Optional features use `GITHUB_TOKEN` (GitHub API integration; or `gh auth`), `MCP_AUTH_TOKEN` (HTTP Bearer auth), and `MJ_DB_ENCRYPTION_KEY` / `DB_ENCRYPTION_KEY` (SQLCipher at-rest encryption)
+- Optional features use `GITHUB_TOKEN` (GitHub API integration; or `gh auth`), `MCP_AUTH_TOKEN` (HTTP Bearer auth), and `MJ_DB_ENCRYPTION_KEY` / `DB_ENCRYPTION_KEY` (SQLCipher at-rest encryption; read via env vars only, including in `scripts/encrypt-db.ts`)
+- CLI secret flags, auth headers, and sensitive keys are redacted across logger output (`src/utils/logger.ts`), audit egress (`scrubAuditArgs`, `sanitizeAuditEntryForEgress`), and batched `logs/agent-issues.jsonl` (`sanitizeIssueInput` in `src/utils/issue-logger.ts`), while `ConfigManager` baseline provenance (`config-manager-baselines.ts`, `config-manager-persist.ts`) prevents CLI/env secrets from persisting to config files
 
 ## 🔄 **CI/CD Security**
 
@@ -417,16 +427,18 @@ chmod 700 /shared/team-data
 ## 📋 **Security Checklist**
 
 - [x] Foreign key enforcement (`PRAGMA foreign_keys = ON`, initialized in `src/database/sqlite-adapter/native-connection.ts`)
+- [x] SQLCipher environment-only key loading & error redaction (`sqlcipher-key.ts`, `scripts/encrypt-db.ts`)
 - [x] Input validation and length limits (Zod schemas, centralized in `src/handlers/tools/schemas/constants-and-primitives.ts`)
-- [x] Parameterized SQL queries
+- [x] Parameterized SQL queries & scoped workspace/project isolation (`crud-update.ts`, `tags.ts`)
 - [x] SQL injection detection heuristics (defense-in-depth)
-- [x] Path traversal protection (`assertNoPathTraversal`)
+- [x] Path traversal, Win32 ADS/DOS & TOCTOU export protection (`assertSafeDirectoryPath`, `assertSafeFilePath` in `src/utils/path-safety.ts`; `src/markdown/exporter.ts`)
 - [x] Explicit Filesystem Boundaries (`ALLOWED_IO_ROOTS` enforcement)
-- [x] Strict Authentication Tokens (Placeholder rejection)
-- [x] FTS5 / LIKE pattern sanitization (`sanitizeSearchQuery`)
+- [x] Constant-time SHA-256 Bearer verification, whitespace/placeholder rejection, `GET`/`HEAD`-only `/health` & `.well-known` bypass, and OIDC `email_verified === true` check
+- [x] DNS-pinned JWKS & discovery SSRF protection (`jwks-ssrf-guard.ts`, `jwks-custom-fetch.ts`, `network-safety.ts`)
+- [x] FTS5 / LIKE pattern & operator sanitization (`sanitizeFtsQuery` in `src/database/sqlite-adapter/entries/search/fts-sanitizer.ts`)
 - [x] Date format whitelisting (`validateDateFormatPattern`)
-- [x] HTTP body size limit (1MB)
-- [x] Tool input element count limit (`MAX_TOOL_INPUT_ELEMENTS`, default 25,000)
+- [x] HTTP pre-body rate limit/auth ordering, 1MB body limit, and `maxRequestBodySize` enforcement
+- [x] Tool input element count limit (`MAX_TOOL_INPUT_ELEMENTS`, default 25,000) and Code Mode non-`context` / 5MB `context` payload caps
 - [x] Configurable CORS multi-origin with exact-match enforcement
 - [x] HTTP timeouts and built-in rate limiter (100 req/min)
 - [x] DNS rebinding protection and opt-in HSTS (`--enable-hsts` / `MCP_ENABLE_HSTS`)
@@ -435,16 +447,18 @@ chmod 700 /shared/team-data
 - [x] Non-root Docker user
 - [x] Multi-stage Docker build
 - [x] Local-first data architecture
-- [x] GitHub token error scrubbing
+- [x] Secret/token & CLI flag scrubbing across logs, audit egress, `agent-issues.jsonl`, and `ConfigManager` baselines
+- [x] Idempotent `<untrusted_remote_content>` egress fencing across Git, GitHub/Copilot, audit logs, templates, instructions, resources, and prompts
+- [x] 3-tier Team RBAC parity (`viewer`/`member`/`admin`) & `Promise.allSettled` cross-team DB isolation (`cross-team.ts`)
 - [x] Code Mode sandbox isolation (worker_threads V8 isolate + vm.createContext)
 - [x] Code Mode V8 codeGeneration restrictions (eval/Function disabled at engine level)
-- [x] Code Mode frozen built-in prototypes (constructor chain escape prevention)
-- [x] Code Mode blocked patterns (Multiple static regex rules)
-- [x] Code Mode Proxy constructor nullified in sandbox context
-- [x] Code Mode RPC allowlist validation (host-side method authorization)
-- [x] Code Mode readonly Proxy traps (structured errors for stripped methods)
+- [x] Code Mode frozen built-in prototypes & iterators (`%GeneratorPrototype%`, `%AsyncGeneratorPrototype%`, `%IteratorPrototype%`, `%TypedArray%`)
+- [x] Code Mode lexical/Annex-B/Unicode stripper & blocked patterns (including bare `Reflect` & destructured helpers)
+- [x] Code Mode `Proxy` constructor nullified & unconditional `JSON.parse` structured-clone egress unwrapping (`result-compactor.ts`)
+- [x] Code Mode `Promise.race` wall-clock timeouts & strict `mj.team.*` namespace isolation
+- [x] Code Mode RPC allowlist validation & readonly Proxy traps
 - [x] CI/CD security pipeline (CodeQL, Trivy, secret scanning)
-- [x] Code Mode frozen API surfaces (Object.freeze on mj.*, console, context)
+- [x] Code Mode frozen API surfaces (`Object.freeze` on `mj.*`, console, context, `path` shims, `ADAPTER_ITEMS`, `JOURNAL_TABLES`)
 - [x] Code Mode pre-warmed worker pool with lifecycle management
 - [x] Comprehensive security documentation
 
