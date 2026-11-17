@@ -37,7 +37,7 @@ import { fileURLToPath } from 'url'
 const projectDir = join(dirname(fileURLToPath(import.meta.url)), '..', '..')
 
 /** Expected total tool count returned by tools/list under --tool-filter full */
-const EXPECTED_TOOL_COUNT = 113
+const EXPECTED_TOOL_COUNT = 108
 
 /**
  * Exact allowlist of tools that legitimately need openWorldHint=true.
@@ -87,11 +87,14 @@ const OPEN_WORLD_ALLOWLIST = new Set([
 const DESTRUCTIVE_ALLOWLIST = new Set([
     'delete_entry', // Soft/hard delete journal entry
     'batch_delete_entries', // Bulk delete journal entries
+    'merge_tags', // Deletes the source tag after retagging entries
     'delete_github_milestone', // Permanently deletes GitHub milestone
     'run_auto_prune', // Archives, soft-deletes, and hard-deletes journal rows
     'delete_project', // Removes a project from the registry
     'restore_backup', // Replaces entire database with backup
+    'cleanup_backups', // Deletes old backup files
     'team_delete_entry', // Soft delete team entry
+    'team_merge_tags', // Deletes the source team tag after retagging entries
     'team_batch_delete_entries', // Bulk soft delete team entries
     'team_remove_member', // Remove a member from the team
     'team_remove_author_alias', // Remove an author alias
