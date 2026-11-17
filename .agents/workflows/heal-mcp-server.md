@@ -62,6 +62,12 @@ Prevent friction first; mitigate only as fallback. Address issues across the 6 a
    ```pwsh
    bun .\.agents\scripts\commit.ts --msg "fix(infra): heal MCP server guardrails, aliases, and error handlers" --impact 0.7 --confidence 0.95 --validation passed --journal --add <paths>
    ```
+6. **Automation Self-Improvement (`sidecar.json`)**:
+   - If you also noticed and applied improvements to the scheduled CMS automation prompts (`C:\Users\chris\.gemini\config\sidecars\heal-memory-journal-mcp\sidecar.json` or sibling sidecars), commit **only** those explicit `config/sidecars/<id>/sidecar.json` files in `C:\Users\chris\.gemini`:
+     ```pwsh
+     bun C:\Users\chris\Desktop\adamic\.agents\scripts\commit.ts --cwd C:\Users\chris\.gemini --msg "chore(cms): self-improve scheduled automation prompt" --history "- Summary of automation improvements" --impact 0.4 --confidence 0.95 --validation passed --add config/sidecars/heal-memory-journal-mcp/sidecar.json
+     ```
+     *(Never use `--add .` inside `C:\Users\chris\.gemini`).*
 
 ---
 

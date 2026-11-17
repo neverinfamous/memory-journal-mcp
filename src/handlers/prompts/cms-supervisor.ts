@@ -147,10 +147,10 @@ ${markUntrustedContent(params.deletedSnippet)}
    - Confirm \`0\` unassigned (\`workspaceId === 'default'\` or \`projectNumber <= 0\`) entries exist across \`workspace_id: '*'\`.
    - Check vector index parity via \`await mj.search.getVectorIndexStats({})\`; if vector count drifts from active entry count, run \`await mj.admin.rebuildVectorIndex({ workspace_id: '*' })\`.
 
-### Phase B — Cross-Run Experience & Telemetry Mining
+### Phase B — Cross-Run Experience, Telemetry Mining & Automation Self-Improvement
 1. Inspect \`logs/agent-issues.jsonl\` and \`logs/mcp-audit.jsonl\` for recurring tool validation failures, parameter hallucinations, or unhandled edge cases.
 2. Review the **Root-Cause Investigation** section of the latest \`CMS-02\` maintenance entry and recent \`session-summary\` \`## Unfinished / Blocked\` sections across projects.
-3. Formulate targeted, minimal code/schema/prompt adaptations for any recurring friction discovered (e.g., adding parameter alias coercions in \`src/handlers/tools/schemas/hallucination-healer.ts\`, refining prompt instructions in \`src/handlers/prompts/\`, or updating \`.agents/workflows/heal-mcp-server.md\`).
+3. Formulate targeted, minimal code/schema/prompt/automation adaptations for any recurring friction or improvement opportunities discovered (e.g., adding parameter alias coercions in \`src/handlers/tools/schemas/hallucination-healer.ts\`, refining prompt instructions in \`src/handlers/prompts/\`, updating \`.agents/workflows/heal-mcp-server.md\`, or refining the scheduled CMS automation sidecar definitions under \`~/.gemini/config/sidecars/*/sidecar.json\`).
 
 ### Phase C — Batched Adaptation & Dirty-Tree Conditional Single-Pass Validation Gate
 > [!IMPORTANT]
@@ -158,10 +158,10 @@ ${markUntrustedContent(params.deletedSnippet)}
 > Full-suite validation (\`lint\`, \`typecheck\`, \`build\`, \`vitest\`, \`playwright\`) is resource-intensive and MUST ONLY run when repository files have actually been modified.
 > **HITL CODE MODIFICATION GUARDRAIL**: Do NOT modify executable source code or global environment files without explicit user approval unless running in an explicitly approved autonomous maintenance session.
 
-1. Apply all approved code, schema, prompt, or documentation fixes in a single cohesive batch.
+1. Apply all approved code, schema, prompt, documentation, or automation (\`sidecar.json\`) fixes in a single cohesive batch.
 2. Check working tree status via \`bun .agents/scripts/get-git-history-json.ts --uncommitted --stats\`.
 3. **If \`0\` files are modified/untracked in \`memory-journal-mcp\`**:
-   - **SKIP** \`pnpm run lint\`, \`pnpm run typecheck\`, \`pnpm run build\`, \`pnpm exec vitest run\`, and \`pnpm exec playwright test\` completely! Proceed directly to Phase D.
+   - **SKIP** \`pnpm run lint\`, \`pnpm run typecheck\`, \`pnpm run build\`, \`pnpm exec vitest run\`, and \`pnpm exec playwright test\` completely! Proceed directly to step 5 / Phase D.
 4. **If \`>= 1\` files are modified in \`memory-journal-mcp\`**:
    - Terminate all subagents (\`manage_subagents\` \`Action: 'kill_all'\`) and verify no competing \`vitest\`, \`playwright\`, or \`tsc\` process is active.
    - Run the 5-stage validation gate **strictly sequentially once** (never concurrently):
@@ -171,6 +171,8 @@ ${markUntrustedContent(params.deletedSnippet)}
      4. \`pnpm exec vitest run\`
      5. \`pnpm exec playwright test\`
    - Commit the verified changes via \`bun .agents/scripts/commit.ts --msg "fix(cms): <summary>" --impact 0.5 --confidence 0.95 --validation passed --journal --add <changed_files>\`.
+5. **If any scheduled automation \`sidecar.json\` under \`~/.gemini/config/sidecars/\` was improved**:
+   - Commit **only** the modified \`config/sidecars/<id>/sidecar.json\` path(s) in \`~/.gemini\` via \`bun .agents/scripts/commit.ts --cwd ~/.gemini --msg "chore(cms): self-improve scheduled automation prompt" --impact 0.4 --confidence 0.95 --validation passed --add config/sidecars/<id>/sidecar.json\` (never use \`--add .\` in \`~/.gemini\`).
 
 ### Phase D — Telemetry Cleanup & Supervisor Journal Entry
 1. If \`logs/agent-issues.jsonl\` contained issues that were resolved and validated in Phase C, clear \`logs/agent-issues.jsonl\`.
