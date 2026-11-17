@@ -7,6 +7,7 @@ import {
     loadProjectRegistryFromConfig,
     resolveProjectContext,
 } from '../../../utils/workspace-resolver.js'
+import { parseCanonicalPositiveInt } from '../../../utils/safe-positive-int.js'
 import { activeProjectRegistry, pairStoredScope } from '../../../utils/write-scope.js'
 import type { ExecuteCodeInput } from './payload-synthesizer.js'
 
@@ -62,8 +63,8 @@ function resolveSessionProjectId(
         if (entry?.project_number !== undefined) projectId = entry.project_number
     }
     if (typeof projectId === 'string') {
-        const parsed = Number(projectId)
-        if (!Number.isNaN(parsed) && Number.isFinite(parsed)) projectId = parsed
+        const parsed = parseCanonicalPositiveInt(projectId)
+        if (parsed !== undefined) projectId = parsed
     }
     return projectId
 }
@@ -271,7 +272,7 @@ function resolveSessionWorkspaceAndProjectPair(
         : resolveSessionProjectId(context, input, effectiveRegistry)
     if (
         input.project_number !== undefined &&
-        (typeof projectId !== 'number' || !Number.isInteger(projectId) || projectId <= 0)
+        (typeof projectId !== 'number' || !Number.isSafeInteger(projectId) || projectId <= 0)
     ) {
         return githubInjectError(
             `Invalid project_number '${String(input.project_number)}'. Expected a positive integer or registered project name.`

@@ -95,6 +95,7 @@ export async function assertSafeJwksUri(jwksUri: string): Promise<void> {
     const isExplicitLoopback =
         jwksHostname === 'localhost' ||
         jwksHostname === '127.0.0.1' ||
+        jwksHostname === '::1' ||
         jwksHostname === '[::1]'
     if (isExplicitLoopback) return
 

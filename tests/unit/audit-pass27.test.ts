@@ -356,7 +356,7 @@ describe('Pass 27 Audit Regressions', () => {
             const firstAnchor = anchorsBefore[0]
             expect(firstAnchor).toBeDefined()
 
-            expect(db.deleteEntry(e1.id, false, 'ws-m5')).toBe(true)
+            expect(db.deleteEntry(e1.id, false, 'ws-m5').success).toBe(true)
             expect(db.getAnchorsByEntryId(e1.id, 'ws-m5')).toHaveLength(0)
             if (firstAnchor !== undefined) expect(db.updateAnchorStatus(firstAnchor.id, 'stale', 'ws-m5')).toBe(false)
             expect(db.getEntryHistory(e1.id, 'ws-m5')).toHaveLength(0)

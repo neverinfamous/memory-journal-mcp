@@ -173,7 +173,7 @@ export interface IDatabaseAdapter extends IDatabaseVectorAndAdminAdapter {
             targetWorkspaceId?: string
         }
     ): JournalEntry | null
-    deleteEntry(id: number, permanent?: boolean, workspaceId?: string): boolean
+    deleteEntry(id: number, permanent?: boolean, workspaceId?: string): { success: boolean; warning?: string }
     getAnchorsByEntryId(entryId: number, workspaceId?: string): Anchor[]
     updateAnchorStatus(
         id: number,
@@ -282,7 +282,7 @@ export interface IDatabaseAdapter extends IDatabaseVectorAndAdminAdapter {
             includeArchived?: boolean
             workspaceId?: string
         }
-    ): { tags: { name: string; count: number }[]; entryTypes: { name: string; count: number }[] }
+    ): { tags: { name: string; count: number }[]; entryTypes: { name: string; count: number }[]; degraded?: boolean }
     searchByDateRange(
         startDate: string,
         endDate: string,

@@ -229,7 +229,7 @@ export class EntriesManager {
             includeArchived?: boolean
             workspaceId?: string
         }
-    ): { tags: { name: string; count: number }[]; entryTypes: { name: string; count: number }[] } {
+    ): { tags: { name: string; count: number }[]; entryTypes: { name: string; count: number }[]; degraded?: boolean } {
         return getSearchFacets(this.sharedContext, queryStr, options)
     }
 

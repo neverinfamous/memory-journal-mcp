@@ -5,6 +5,7 @@
 
 import type { z } from 'zod'
 import { isRecord } from '../../../codemode/normalizers/shared-utils.js'
+import { parseCanonicalPositiveInt } from '../../../utils/safe-positive-int.js'
 import type { ExecuteCodeSchema } from './schemas.js'
 import { resolveRepoWorkspace } from './json-entry-structured.js'
 import { isValidJsScript } from './code-healer.js'
@@ -112,12 +113,15 @@ export function parseProjectNumberField(
         secondary['projectName'] ??
         primary['project'] ??
         secondary['project']
-    if (typeof raw === 'number' && !Number.isNaN(raw)) return raw
+    if (typeof raw === 'number') {
+        return Number.isSafeInteger(raw) && raw > 0 ? raw : undefined
+    }
     if (typeof raw === 'string' && raw.trim() !== '') {
         const trimmed = raw.trim()
-        if (/^p-?\d+$/i.test(trimmed)) return Number(trimmed.replace(/^p-?/i, ''))
-        const num = Number(trimmed)
-        if (!Number.isNaN(num)) return num
+        const parsed = /^p-?\d+$/i.test(trimmed)
+            ? parseCanonicalPositiveInt(trimmed.replace(/^p-?/i, ''))
+            : parseCanonicalPositiveInt(trimmed)
+        if (parsed !== undefined) return parsed
         return trimmed
     }
     return undefined

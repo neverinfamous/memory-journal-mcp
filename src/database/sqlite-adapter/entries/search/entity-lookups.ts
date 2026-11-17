@@ -144,7 +144,7 @@ export function getSearchFacets(
     context: EntriesSharedContext,
     queryStr: string,
     options?: SearchFacetOptions
-): { tags: { name: string; count: number }[]; entryTypes: { name: string; count: number }[] } {
+): { tags: { name: string; count: number }[]; entryTypes: { name: string; count: number }[]; degraded?: boolean } {
     const { db } = context
 
     const params: unknown[] = []
@@ -193,6 +193,28 @@ export function getSearchFacets(
     return executeFacetCountQueries(db, useFts, conditions, params, entryTypeConditions, entryTypeParams)
 }
 
+function dropFtsMatch(
+    conditions: string[],
+    params: unknown[]
+): { conditions: string[]; params: unknown[] } {
+    const nextConditions: string[] = []
+    const nextParams: unknown[] = []
+    let paramIndex = 0
+    for (const condition of conditions) {
+        const marks = condition.match(/\?/g)?.length ?? 0
+        if (condition.includes('fts_content MATCH')) {
+            paramIndex += marks
+            continue
+        }
+        nextConditions.push(condition)
+        for (let i = 0; i < marks; i++) {
+            nextParams.push(params[paramIndex])
+            paramIndex += 1
+        }
+    }
+    return { conditions: nextConditions, params: nextParams }
+}
+
 function executeFacetCountQueries(
     db: EntriesSharedContext['db'],
     useFts: boolean,
@@ -200,7 +222,7 @@ function executeFacetCountQueries(
     params: unknown[],
     entryTypeConditions: string[],
     entryTypeParams: unknown[]
-): { tags: { name: string; count: number }[]; entryTypes: { name: string; count: number }[] } {
+): { tags: { name: string; count: number }[]; entryTypes: { name: string; count: number }[]; degraded?: boolean } {
     const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : ''
     const entryTypesWhere =
         entryTypeConditions.length > 0 ? `WHERE ${entryTypeConditions.join(' AND ')}` : ''
@@ -234,7 +256,17 @@ function executeFacetCountQueries(
         }[]
     } catch (err) {
         if (useFts && err instanceof Error && /fts5: syntax error/i.test(err.message)) {
-            return { tags: [], entryTypes: [] }
+            const tags = dropFtsMatch(conditions, params)
+            const types = dropFtsMatch(entryTypeConditions, entryTypeParams)
+            const retried = executeFacetCountQueries(
+                db,
+                false,
+                tags.conditions,
+                tags.params,
+                types.conditions,
+                types.params
+            )
+            return { ...retried, degraded: true }
         }
         throw err
     }

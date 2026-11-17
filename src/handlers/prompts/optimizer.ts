@@ -10,9 +10,11 @@ import type { InternalPromptDef } from './index.js'
 import type { BriefingConfig } from '../resources/shared.js'
 import { loadProjectRegistryFromConfig } from '../../utils/workspace-resolver.js'
 import { exactRegistryKey, uniqueWorkspaceForProject } from '../../utils/write-scope.js'
+import { parseCanonicalPositiveInt } from '../../utils/safe-positive-int.js'
 import { sanitizePromptTarget } from './adversarial-helpers.js'
 import { markUntrustedContent } from '../../utils/security-utils.js'
 import { z } from 'zod'
+import { ValidationError } from '../../types/errors.js'
 import { coerceNumber } from '../../utils/query-helpers.js'
 import { getCmsSupervisorPromptDefinitions } from './cms-supervisor.js'
 import {
@@ -60,14 +62,22 @@ function resolveOptimizeTargetScope(
     }
     const numMatch = /^#?([1-9]\d*)$/.exec(targetProject)
     if (numMatch?.[1] !== undefined) {
-        const parsedNum = Number(numMatch[1])
-        if (Number.isSafeInteger(parsedNum) && parsedNum > 0) {
-            const uniqueWorkspace = uniqueWorkspaceForProject(parsedNum, registry)
-            return {
-                workspaceId: uniqueWorkspace ?? '*',
-                projectNumber: parsedNum,
-            }
+        const parsedNum = parseCanonicalPositiveInt(numMatch[1])
+        if (parsedNum === undefined) {
+            throw new ValidationError(
+                `Invalid project '${targetProject}'. Expected a canonical positive integer or a registered project name.`
+            )
         }
+        const uniqueWorkspace = uniqueWorkspaceForProject(parsedNum, registry)
+        if (registry !== undefined && uniqueWorkspace === undefined) {
+            throw new ValidationError(
+                `project_number ${String(parsedNum)} is not a unique registered project.`
+            )
+        }
+        if (uniqueWorkspace === undefined) {
+            return { workspaceId: '*', projectNumber: parsedNum }
+        }
+        return { workspaceId: uniqueWorkspace, projectNumber: parsedNum }
     }
     const matchedKey = exactRegistryKey(targetProject, registry)
     if (matchedKey !== undefined) {

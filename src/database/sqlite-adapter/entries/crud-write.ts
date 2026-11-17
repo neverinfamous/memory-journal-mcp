@@ -53,7 +53,7 @@ export function validateEntryInput(input: CreateEntryInput): { normalizedTimesta
     }
     if (
         input.projectNumber !== undefined &&
-        (!Number.isInteger(input.projectNumber) || input.projectNumber <= 0)
+        (!Number.isSafeInteger(input.projectNumber) || input.projectNumber <= 0)
     ) {
         throw new Error('project_number must be a positive integer.')
     }

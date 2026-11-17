@@ -8,3 +8,12 @@ export function parseCanonicalPositiveInt(value: string): number | undefined {
     if (!Number.isSafeInteger(parsed) || parsed <= 0 || String(parsed) !== trimmed) return undefined
     return parsed
 }
+
+/** Accept a number or canonical decimal string. Rejects hex, exponents, leading zeros, and unsafe integers. */
+export function parsePositiveProjectNumber(value: unknown): number | undefined {
+    if (typeof value === 'number') {
+        return Number.isSafeInteger(value) && value > 0 ? value : undefined
+    }
+    if (typeof value === 'string') return parseCanonicalPositiveInt(value)
+    return undefined
+}

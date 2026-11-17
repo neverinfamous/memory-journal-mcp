@@ -18,6 +18,7 @@ import {
     loadProjectRegistryFromConfig,
     setActiveSessionProject,
 } from '../../../../utils/workspace-resolver.js'
+import { parseCanonicalPositiveInt } from '../../../../utils/safe-positive-int.js'
 import { exactRegistryKey, uniqueWorkspaceForProject } from '../../../../utils/write-scope.js'
 import {
     DEFAULT_BRIEFING_CONFIG,
@@ -164,8 +165,9 @@ function resolveBriefingScope(
     }
 
     const numericTarget = /^#?(\d+)$/.exec(targetRepo)
+    const parsedTarget = numericTarget?.[1] !== undefined ? parseCanonicalPositiveInt(numericTarget[1]) : undefined
     const numericWorkspace =
-        numericTarget !== null ? uniqueWorkspaceForProject(Number(numericTarget[1]), registry) : undefined
+        parsedTarget !== undefined ? uniqueWorkspaceForProject(parsedTarget, registry) : undefined
     const resolvedRepo = exactRegistryKey(targetRepo, registry) ?? numericWorkspace
 
     if (resolvedRepo !== undefined) {

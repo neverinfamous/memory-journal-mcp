@@ -2,6 +2,7 @@ import * as fs from 'node:fs'
 import * as path from 'node:path'
 import type { ToolHandlerConfig } from '../../types/index.js'
 import { ValidationError } from '../../types/errors.js'
+import { parsePositiveProjectNumber } from '../../utils/safe-positive-int.js'
 import { assertSafeDirectoryPath } from '../../utils/security-utils.js'
 import {
     cwdMatchesRegistryPath,
@@ -51,24 +52,14 @@ function formatRegisteredReposHint(registry: ToolHandlerConfig['projectRegistry'
 
 export function parseGitProjectNumber(raw: number | string | undefined): number | undefined {
     if (raw === undefined) return undefined
-    let pNum: number
-    if (typeof raw === 'string') {
-        const trimmedPn = raw.trim()
-        if (trimmedPn === '' || !/^\d+$/.test(trimmedPn)) {
-            throw new ValidationError(
-                `Invalid project_number '${raw}': expected a positive integer.`
-            )
-        }
-        pNum = Number(trimmedPn)
-    } else {
-        pNum = raw
-    }
-    if (!Number.isInteger(pNum) || pNum <= 0) {
+    if (typeof raw === 'string' && raw.trim() === '') return undefined
+    const parsed = parsePositiveProjectNumber(raw)
+    if (parsed === undefined) {
         throw new ValidationError(
-            `Invalid project_number ${String(raw)}: expected a positive integer.`
+            `Invalid project_number '${String(raw)}': expected a positive integer.`
         )
     }
-    return pNum
+    return parsed
 }
 
 function findMatchedRegistryKey(

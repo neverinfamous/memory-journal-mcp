@@ -18,6 +18,7 @@ import {
 } from '../../utils/project-registry-guards.js'
 import { validateProjectRegistryObject } from '../server-options-parsers.js'
 import { buildServerOptions } from '../server-options-builder.js'
+import { parsePositiveProjectNumber } from '../../utils/safe-positive-int.js'
 import { dumpConfigAndExit } from '../dump-config.js'
 import {
     resolveProjectConfigPath,
@@ -55,13 +56,12 @@ function saveConfig(config: Record<string, unknown>, options?: Record<string, un
 }
 
 function parsePositiveCliProjectNumber(raw: unknown): number {
-    const trimmed = String(raw).trim()
-    const num = /^\d+$/.test(trimmed) ? Number(trimmed) : Number.NaN
-    if (!Number.isInteger(num) || num < 1) {
+    const parsed = parsePositiveProjectNumber(typeof raw === 'string' ? raw.trim() : raw)
+    if (parsed === undefined || (typeof raw === 'string' && !/^[1-9]\d*$/.test(raw.trim()))) {
         process.stderr.write('Invalid project number.\n')
         process.exit(1)
     }
-    return num
+    return parsed
 }
 
 export function projectListAction(options: Record<string, unknown>, command: Command): void {

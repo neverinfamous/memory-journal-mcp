@@ -7,7 +7,7 @@
  */
 
 import type { RequestContext } from '../utils/request-context.js'
-import { parseCanonicalPositiveInt } from '../utils/safe-positive-int.js'
+import { parseCanonicalPositiveInt, parsePositiveProjectNumber } from '../utils/safe-positive-int.js'
 import { TEAM_PROMPT_NAMES } from '../auth/scope-map.js'
 import type { AuditCategory, AuditEntry, AuditSearchFilters } from './types.js'
 
@@ -173,12 +173,8 @@ export function extractAuditScopeFromArgs(
             workspaceId = rawWs.trim()
         }
         const rawProj = record['project_number'] ?? record['projectNumber']
-        if (typeof rawProj === 'number' && Number.isInteger(rawProj) && rawProj > 0) {
-            projectNumber = rawProj
-        } else if (typeof rawProj === 'string' && /^\d+$/.test(rawProj.trim())) {
-            const parsed = Number(rawProj.trim())
-            if (Number.isInteger(parsed) && parsed > 0) projectNumber = parsed
-        }
+        const parsedProject = parsePositiveProjectNumber(rawProj)
+        if (parsedProject !== undefined) projectNumber = parsedProject
     }
 
     if (workspaceId === undefined && reqCtx?.ephemeralSessionProject?.workspaceId) {

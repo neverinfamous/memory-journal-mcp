@@ -101,10 +101,10 @@ describe('DatabaseAdapter Workspace Isolation', () => {
         const alpha = db.createEntry({ content: 'Scoped delete alpha', workspaceId: 'alpha' })
         const beta = db.createEntry({ content: 'Scoped delete beta', workspaceId: 'beta' })
 
-        expect(db.deleteEntry(alpha.id)).toBe(false)
+        expect(db.deleteEntry(alpha.id).success).toBe(false)
         expect(db.getEntryById(alpha.id, 'alpha')?.id).toBe(alpha.id)
 
-        expect(db.deleteEntry(alpha.id, false, 'alpha')).toBe(true)
+        expect(db.deleteEntry(alpha.id, false, 'alpha').success).toBe(true)
         expect(db.getDeletedEntries().entries.some((entry) => entry.id === alpha.id)).toBe(false)
         expect(db.getDeletedEntries({ workspaceId: 'alpha' }).entries.some((entry) => entry.id === alpha.id)).toBe(true)
 

@@ -16,6 +16,7 @@ import {
     stripBalancedOuterParens,
 } from '../../../codemode/sql-literal-scope.js'
 import { cleanSqlText, parseSqlStatement } from '../../../codemode/sql-positional-binder.js'
+import { parsePositiveProjectNumber } from '../../../utils/safe-positive-int.js'
 
 const SPECIAL_TABLES = new Set([
     'tags',
@@ -73,7 +74,7 @@ function parseCleanRecoverableSql(code: string): string | null {
 function extractTopLevelWhereId(whereClause: string): number | undefined {
     for (const rawClause of splitTopLevelSqlAndClauses(whereClause)) {
         const match = CLAUSE_ID_REGEX.exec(stripBalancedOuterParens(rawClause))
-        if (match?.[1] !== undefined) return parseInt(match[1], 10)
+        if (match?.[1] !== undefined) return parsePositiveProjectNumber(match[1])
     }
     return undefined
 }
@@ -224,9 +225,8 @@ function assignSqlUpdateSetField(
             return true
         }
         const cleaned = (unquoteSqlString(rhs) ?? rhs).trim()
-        if (!/^\d+$/.test(cleaned)) return false
-        const n = Number(cleaned)
-        if (!Number.isSafeInteger(n) || n <= 0) return false
+        const n = parsePositiveProjectNumber(cleaned)
+        if (n === undefined) return false
         setFields['project_number'] = n
         return true
     }

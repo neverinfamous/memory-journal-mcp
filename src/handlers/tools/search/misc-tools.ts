@@ -4,8 +4,15 @@ import { formatHandlerError } from '../../../utils/error-helpers.js'
 import { resolveWorkspaceId } from '../../../utils/workspace-resolver.js'
 import { activeProjectRegistry, alignedProjectFilter } from '../../../utils/write-scope.js'
 import { coerceNumber } from '../../../utils/query-helpers.js'
+import { parsePositiveProjectNumber } from '../../../utils/safe-positive-int.js'
 import { VectorStatsOutputSchema } from './schemas.js'
 import { EntriesListOutputSchema, MAX_QUERY_LIMIT, relaxedNumber } from '../schemas.js'
+
+function preprocessProjectNumber(val: unknown): unknown {
+    if (val === undefined || val === null || (typeof val === 'string' && val.trim() === '')) return undefined
+    const parsed = parsePositiveProjectNumber(val)
+    return parsed ?? Number.NaN
+}
 
 export function getMiscSearchTools(context: ToolContext): ToolDefinition[] {
     const { db, vectorManager } = context;
@@ -75,8 +82,8 @@ export function getMiscSearchTools(context: ToolContext): ToolDefinition[] {
                             offset: z.preprocess(coerceNumber, z.number().int().min(0).optional().default(0)),
                             workspace_id: z.string().optional(),
                             workspaceId: z.string().optional(),
-                            project_number: z.preprocess(coerceNumber, z.number().int().optional()),
-                            projectNumber: z.preprocess(coerceNumber, z.number().int().optional()),
+                            project_number: z.preprocess(preprocessProjectNumber, z.number().int().positive().optional()),
+                            projectNumber: z.preprocess(preprocessProjectNumber, z.number().int().positive().optional()),
                         })
                         .strict()
                         .parse(params)

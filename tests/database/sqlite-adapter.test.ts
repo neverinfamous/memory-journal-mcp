@@ -239,7 +239,7 @@ describe('DatabaseAdapter', () => {
             const entry = db.createEntry({ content: 'To soft delete' })
             const result = db.deleteEntry(entry.id)
 
-            expect(result).toBe(true)
+            expect(result.success).toBe(true)
             expect(db.getEntryById(entry.id)).toBeNull()
             expect(db.getEntryByIdIncludeDeleted(entry.id)).not.toBeNull()
         })
@@ -248,12 +248,12 @@ describe('DatabaseAdapter', () => {
             const entry = db.createEntry({ content: 'To permanently delete' })
             const result = db.deleteEntry(entry.id, true)
 
-            expect(result).toBe(true)
+            expect(result.success).toBe(true)
             expect(db.getEntryByIdIncludeDeleted(entry.id)).toBeNull()
         })
 
         it('should return false for nonexistent entry', () => {
-            expect(db.deleteEntry(99999)).toBe(false)
+            expect(db.deleteEntry(99999).success).toBe(false)
         })
 
         it('should permanently delete a soft-deleted entry', () => {
@@ -261,7 +261,7 @@ describe('DatabaseAdapter', () => {
             db.deleteEntry(entry.id) // soft delete
             const result = db.deleteEntry(entry.id, true) // permanent delete
 
-            expect(result).toBe(true)
+            expect(result.success).toBe(true)
             expect(db.getEntryByIdIncludeDeleted(entry.id)).toBeNull()
         })
     })

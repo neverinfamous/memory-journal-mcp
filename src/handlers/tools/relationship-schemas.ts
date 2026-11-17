@@ -5,11 +5,21 @@
 import { z } from 'zod'
 import { RelationshipOutputSchema, relaxedNumber, StrictProjectNumberSchema } from './schemas.js'
 import { ErrorFieldsMixin } from './error-fields-mixin.js'
+import { parsePositiveProjectNumber } from '../../utils/safe-positive-int.js'
 
 /** Coerce relaxedNumber string input to number; blank -> undefined, junk -> NaN (rejected downstream). */
 function coerceRelaxed(v: number | string | undefined): number | undefined {
     if (v === undefined || typeof v === 'number') return v
     return v.trim() === '' ? undefined : Number(v)
+}
+
+function coerceCanonicalId(v: number | string | undefined): number | undefined {
+    if (v === undefined || (typeof v === 'string' && v.trim() === '')) return undefined
+    const parsed = parsePositiveProjectNumber(v)
+    if (parsed === undefined) {
+        throw new Error(`Invalid id '${String(v)}'. Expected a canonical positive integer.`)
+    }
+    return parsed
 }
 
 // ============================================================================
@@ -68,11 +78,11 @@ export const LinkEntriesSchemaMcp = z
                     ? 'blocked_by'
                     : rawRel
         return {
-            from_entry_id: coerceRelaxed(data.from_entry_id ?? data.from_id ?? data.from ?? data.source_id),
-            to_entry_id: coerceRelaxed(data.to_entry_id ?? data.to_id ?? data.to ?? data.target_id),
+            from_entry_id: coerceCanonicalId(data.from_entry_id ?? data.from_id ?? data.from ?? data.source_id),
+            to_entry_id: coerceCanonicalId(data.to_entry_id ?? data.to_id ?? data.to ?? data.target_id),
             relationship_type: normalizedRel,
             description: data.description ?? data.message ?? data.text,
-            project_number: coerceRelaxed(data.project_number),
+            project_number: coerceCanonicalId(data.project_number),
             workspace_id: data.workspace_id,
         }
     })
@@ -142,10 +152,10 @@ export const VisualizeInputSchemaMcp = z.object({
     const clampedLimit = numLimit !== undefined && !Number.isNaN(numLimit) ? Math.min(Math.max(1, numLimit), 500) : 20
     return {
         ...data,
-        entry_id: coerceRelaxed(data.entry_id ?? data.id),
+        entry_id: coerceCanonicalId(data.entry_id ?? data.id),
         relationship_type: data.relationship_type ?? data.type ?? data.rel,
         depth: coerceRelaxed(data.path ?? data.depth),
-        project_number: coerceRelaxed(data.project_number),
+        project_number: coerceCanonicalId(data.project_number),
         limit: clampedLimit,
         tags: extractedTags,
     };

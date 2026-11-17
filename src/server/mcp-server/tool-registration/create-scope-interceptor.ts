@@ -1,20 +1,14 @@
 import type { ToolHandlerConfig } from '../../../types/index.js'
-import { parseCanonicalPositiveInt } from '../../../utils/safe-positive-int.js'
+import { parsePositiveProjectNumber } from '../../../utils/safe-positive-int.js'
 import { resolveProjectContext } from '../../../utils/workspace-resolver.js'
 import { activeProjectRegistry, pairStoredScope } from '../../../utils/write-scope.js'
+
+export { parsePositiveProjectNumber }
 
 /**
  * Resolve omitted `workspace_id` for direct MCP `create_entry` / `batch_create_entries` calls
  * using live server configuration before `inputSchema` (`CreateEntrySchemaMcp`) runs.
  */
-export function parsePositiveProjectNumber(value: unknown): number | undefined {
-    if (typeof value === 'number') {
-        return Number.isSafeInteger(value) && value > 0 ? value : undefined
-    }
-    if (typeof value === 'string') return parseCanonicalPositiveInt(value)
-    return undefined
-}
-
 function resolveSingleCreateScope(
     toolArgs: Record<string, unknown>,
     resolverConfig: ToolHandlerConfig

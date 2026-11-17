@@ -360,7 +360,7 @@ function executeDeleteEntry(params: unknown, context: ToolContext): Record<strin
     if (preconditionError !== undefined) return preconditionError
 
     const success = db.deleteEntry(entry_id, permanent, wsId)
-    if (!success) {
+    if (!success.success) {
         return {
             success: false,
             entryId: entry_id,
@@ -373,18 +373,17 @@ function executeDeleteEntry(params: unknown, context: ToolContext): Record<strin
         }
     }
 
-    // Remove from vector index (non-critical if fails)
-    let warning: string | undefined
+    let warning = success.warning
     if (vectorManager) {
         try {
             vectorManager.removeEntry(entry_id)
         } catch (err) {
-            // Non-critical failure, entry already deleted from DB
-            warning = `Vector index cleanup failed: ${err instanceof Error ? err.message : String(err)}`
+            const vectorWarning = `Vector index cleanup failed: ${err instanceof Error ? err.message : String(err)}`
+            warning = warning !== undefined ? `${warning}; ${vectorWarning}` : vectorWarning
         }
     }
     return {
-        success,
+        success: success.success,
         entryId: entry_id,
         permanent,
         ...(warning ? { warning } : {}),

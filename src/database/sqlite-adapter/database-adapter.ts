@@ -120,23 +120,22 @@ export class DatabaseAdapter extends AdapterDelegates implements IDatabaseAdapte
         return this.entriesMgr.updateEntry(id, updates)
     }
 
-    deleteEntry(id: number, permanent = false, workspaceId?: string): boolean {
+    deleteEntry(id: number, permanent = false, workspaceId?: string): { success: boolean; warning?: string } {
         return this.executeInTransaction(() => {
             const success = this.entriesMgr.deleteEntry(id, permanent, workspaceId)
-            if (success) {
-                // [INVARIANT] A vector-store failure must not roll back the entry delete;
-                // orphaned vectors are reaped by cleanupStaleVectors on the next rebuild.
-                try {
-                    this.deleteVector(id)
-                } catch (err) {
-                    logger.warning('Failed to delete vector for deleted entry', {
-                        module: 'SqliteAdapter',
-                        entryId: id,
-                        error: err instanceof Error ? err.message : String(err),
-                    })
-                }
+            if (!success) return { success: false }
+            try {
+                this.deleteVector(id)
+                return { success: true }
+            } catch (err) {
+                const message = err instanceof Error ? err.message : String(err)
+                logger.warning('Failed to delete vector for deleted entry', {
+                    module: 'SqliteAdapter',
+                    entryId: id,
+                    error: message,
+                })
+                return { success: true, warning: `Vector delete failed: ${message}` }
             }
-            return success
         })
     }
 
@@ -293,7 +292,7 @@ export class DatabaseAdapter extends AdapterDelegates implements IDatabaseAdapte
             includeArchived?: boolean
             workspaceId?: string
         }
-    ): { tags: { name: string; count: number }[]; entryTypes: { name: string; count: number }[] } {
+    ): { tags: { name: string; count: number }[]; entryTypes: { name: string; count: number }[]; degraded?: boolean } {
         return this.entriesMgr.getSearchFacets(query, options)
     }
 

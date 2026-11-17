@@ -12,6 +12,7 @@ import { ICON_PROMPT } from '../../constants/icons.js'
 import type { InternalPromptDef } from './index.js'
 import type { BriefingConfig } from '../resources/shared.js'
 import { ValidationError } from '../../types/errors.js'
+import { parseCanonicalPositiveInt } from '../../utils/safe-positive-int.js'
 import {
     findCanonicalRegistryKey,
     loadProjectRegistryFromConfig,
@@ -43,7 +44,7 @@ function resolveWorkflowPromptScope(
     let numericProject: number | undefined
     if (rawProject !== undefined && rawProject.length > 0) {
         const projMatch = /^#?(\d+)$/.exec(rawProject)
-        const parsedNum = projMatch !== null ? Number(projMatch[1]) : undefined
+        const parsedNum = projMatch?.[1] !== undefined ? parseCanonicalPositiveInt(projMatch[1]) : undefined
         if (parsedNum === undefined || !Number.isSafeInteger(parsedNum) || parsedNum <= 0) {
             throw new ValidationError(
                 `Invalid project_number "${rawProject}": must be a positive integer.`

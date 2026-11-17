@@ -144,7 +144,7 @@ vi.mock('../../src/database/sqlite-adapter/index.js', () => ({
             getRelationships: vi.fn().mockReturnValue([]),
             linkEntries: vi.fn().mockReturnValue({ id: 1, relationshipType: 'references' }),
             updateEntry: vi.fn().mockReturnValue(null),
-            deleteEntry: vi.fn().mockReturnValue(true),
+            deleteEntry: vi.fn().mockReturnValue({ success: true }),
             listTags: mockListTags,
             mergeTags: vi.fn().mockReturnValue({ sourceDeleted: true, entriesUpdated: 0 }),
             applyTeamSchema: vi.fn(),

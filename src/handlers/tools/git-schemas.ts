@@ -1,10 +1,20 @@
 import { z } from 'zod'
 import { ErrorFieldsMixin } from './error-fields-mixin.js'
 import { relaxedNumber, StrictProjectNumberSchema } from './schemas.js'
+import { parsePositiveProjectNumber } from '../../utils/safe-positive-int.js'
 
 function coerceRelaxed(v: number | string | undefined): number | undefined {
     if (v === undefined || typeof v === 'number') return v
     return v.trim() === '' ? undefined : Number(v)
+}
+
+function coerceCanonicalProject(v: number | string | undefined): number | undefined {
+    if (v === undefined || (typeof v === 'string' && v.trim() === '')) return undefined
+    const parsed = parsePositiveProjectNumber(v)
+    if (parsed === undefined) {
+        throw new Error(`Invalid project_number '${String(v)}'. Expected a canonical positive integer.`)
+    }
+    return parsed
 }
 
 export const GitHistoryOptionsSchema = z.object({
@@ -44,7 +54,7 @@ export const GitHistoryOptionsSchemaMcp = z.object({
 }).transform((d) => ({
     ...d,
     maxCount: coerceRelaxed(d.maxCount ?? d.max_count ?? d.limit),
-    project_number: coerceRelaxed(d.project_number),
+    project_number: coerceCanonicalProject(d.project_number),
     sortBy: d.sortBy ?? d.sort_by,
     techDebtAudit: d.techDebtAudit ?? d.tech_debt_audit,
 }))
@@ -82,7 +92,7 @@ export const GitSearchOptionsSchemaMcp = z.object({
 }).transform((d) => ({
     ...d,
     maxCount: coerceRelaxed(d.maxCount ?? d.max_count ?? d.limit),
-    project_number: coerceRelaxed(d.project_number),
+    project_number: coerceCanonicalProject(d.project_number),
     sortBy: d.sortBy ?? d.sort_by,
     techDebtAudit: d.techDebtAudit ?? d.tech_debt_audit,
 }))
@@ -105,7 +115,7 @@ export const GitReleaseInfoOptionsSchemaMcp = z
     })
     .transform((d) => ({
         ...d,
-        project_number: coerceRelaxed(d.project_number),
+        project_number: coerceCanonicalProject(d.project_number),
     }))
 
 export const GitUnreleasedOptionsSchema = z.object({
@@ -130,7 +140,7 @@ export const GitAnalyzePatternsOptionsSchema = z.object({
 }).transform((d) => ({
     ...d,
     maxCount: coerceRelaxed(d.maxCount ?? d.max_count ?? d.limit) ?? 50,
-    project_number: coerceRelaxed(d.project_number),
+    project_number: coerceCanonicalProject(d.project_number),
 }))
 
 export const GitOutputSchema = z.object({

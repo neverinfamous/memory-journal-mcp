@@ -22,6 +22,7 @@ import {
     KEY_ALIAS_MAP,
     CONTENT_ALIASES,
 } from './constants-and-primitives.js'
+import { parsePositiveProjectNumber } from '../../../utils/safe-positive-int.js'
 import {
     normalizeTagsField,
     mapKnownEntryTypeAlias,
@@ -212,10 +213,15 @@ function healNestedContainersAndEntryIds(obj: Record<string, unknown>): boolean 
                 !('title' in obj))
         ) {
             if (!('entry_id' in obj)) {
-                obj['entry_id'] = typeof entryVal === 'number' ? entryVal : Number(entryVal.trim())
-                modified = true
+                const parsed = parsePositiveProjectNumber(typeof entryVal === 'string' ? entryVal.trim() : entryVal)
+                if (parsed !== undefined) {
+                    obj['entry_id'] = parsed
+                    modified = true
+                    Reflect.deleteProperty(obj, 'entry')
+                }
+            } else {
+                Reflect.deleteProperty(obj, 'entry')
             }
-            Reflect.deleteProperty(obj, 'entry')
         }
     }
 
@@ -224,8 +230,8 @@ function healNestedContainersAndEntryIds(obj: Record<string, unknown>): boolean 
         const healedIds = obj['entry_ids'].map((id: unknown) => {
             if (typeof id === 'string') {
                 const cleaned = id.replace(/^[^0-9]+/, '')
-                const num = Number(cleaned)
-                return !Number.isNaN(num) && cleaned.trim() !== '' ? num : id
+                const parsed = parsePositiveProjectNumber(cleaned)
+                return parsed !== undefined && /^[1-9]\d*$/.test(cleaned) ? parsed : id
             }
             return id
         })

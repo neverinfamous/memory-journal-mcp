@@ -4,6 +4,7 @@
  */
 
 import { isRecord } from '../../../codemode/normalizers/shared-utils.js'
+import { parsePositiveProjectNumber } from '../../../utils/safe-positive-int.js'
 import {
     assignMissingScope,
     readProjectNumber,
@@ -106,12 +107,9 @@ function recoverSearchCall(target: Record<string, unknown>, original: Record<str
 }
 
 function readEntryId(target: Record<string, unknown>): number | undefined {
-    if (typeof target['entry_id'] === 'number') return target['entry_id']
-    if (typeof target['id'] === 'number') return target['id']
-    if (typeof target['entry_id'] === 'string' && !Number.isNaN(Number(target['entry_id']))) {
-        return Number(target['entry_id'])
-    }
-    return undefined
+    const fromEntry = parsePositiveProjectNumber(target['entry_id'])
+    if (fromEntry !== undefined) return fromEntry
+    return parsePositiveProjectNumber(target['id'])
 }
 
 function readOperation(target: Record<string, unknown>): string {

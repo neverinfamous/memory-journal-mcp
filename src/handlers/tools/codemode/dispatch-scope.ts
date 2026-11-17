@@ -6,6 +6,7 @@ import type { ToolDefinition, ToolContext } from '../../../types/index.js'
 import { ValidationError } from '../../../types/errors.js'
 import { isRecord } from '../../../codemode/normalizers/shared-utils.js'
 import { activeProjectRegistry, pairStoredScope } from '../../../utils/write-scope.js'
+import { parseCanonicalPositiveInt } from '../../../utils/safe-positive-int.js'
 import { lookupRegistryEntry } from './session-context.js'
 import { normalizeBatchDispatchItems } from './dispatch-batch-scope.js'
 import { checkSchemaAcceptsKey } from './dispatch-schema-introspection.js'
@@ -28,6 +29,7 @@ const CANONICAL_SNAKE_SCOPE_KEYS = new Set([
 ])
 
 const UPPERCASE_RE = /[A-Z]/
+const OPAQUE_VALUE_KEYS = new Set(['context', 'prompt', 'auto_context', 'autoContext'])
 
 /**
  * Recursively converts camelCase keys to snake_case.
@@ -47,6 +49,13 @@ export function deepCamelToSnake(
         const canAlias = (alias: string): boolean => depth === 0 && !(acceptsKey?.(alias) ?? false)
         for (const [k, v] of Object.entries(obj)) {
             if (FORBIDDEN_KEYS.has(k)) continue
+            if (OPAQUE_VALUE_KEYS.has(k)) {
+                const opaqueKey = UPPERCASE_RE.test(k)
+                    ? k.replace(/[A-Z]/g, (letter) => `_${letter.toLowerCase()}`)
+                    : k
+                if (!FORBIDDEN_KEYS.has(opaqueKey)) newObj[opaqueKey] = v
+                continue
+            }
             if (depth === 0 && !CANONICAL_SNAKE_SCOPE_KEYS.has(k) && (acceptsKey?.(k) ?? false)) {
                 newObj[k] = deepCamelToSnake(v, depth + 1)
                 continue
@@ -108,9 +117,11 @@ function coerceProjectNumberField(
             obj['project_number'] = regEntry.project_number
         } else {
             const trimmed = rawVal.trim()
-            const parsed = trimmed !== '' ? Number(trimmed) : Number.NaN
-            if (Number.isFinite(parsed) && (!requirePositiveInt || (Number.isInteger(parsed) && parsed > 0))) {
+            const parsed = parseCanonicalPositiveInt(trimmed)
+            if (parsed !== undefined && (!requirePositiveInt || parsed > 0)) {
                 obj['project_number'] = parsed
+            } else if (!requirePositiveInt && trimmed === '0') {
+                obj['project_number'] = 0
             } else {
                 return invalidProjectNumberResult(rawVal)
             }
@@ -118,6 +129,9 @@ function coerceProjectNumberField(
     }
     const val = obj['project_number']
     if (typeof val !== 'number' || !Number.isFinite(val)) {
+        return invalidProjectNumberResult(val)
+    }
+    if (val !== 0 && !Number.isSafeInteger(val)) {
         return invalidProjectNumberResult(val)
     }
     if (requirePositiveInt && (!Number.isInteger(val) || val <= 0)) {

@@ -10,6 +10,7 @@ import {
     pickRecordField,
 } from '../../handlers/tools/schemas/constants-and-primitives.js'
 import type { createEntryOptionsSchema } from '../schemas.js'
+import { parsePositiveProjectNumber } from '../../utils/safe-positive-int.js'
 
 export type HealedEntryOptions = z.infer<typeof createEntryOptionsSchema> & {
     tag?: string
@@ -240,30 +241,14 @@ export function resolveEntryTypeAndTags(
 
 function parseStrictPositiveProjectNumber(raw: unknown): number | undefined {
     if (raw === undefined || raw === null) return undefined
-    if (typeof raw === 'number') {
-        if (!Number.isInteger(raw) || raw < 1) {
-            throw new Error(
-                `Invalid project number '${String(raw)}'. Expected a positive integer.`
-            )
-        }
-        return raw
-    }
-    if (typeof raw !== 'string') {
+    if (typeof raw !== 'string' && typeof raw !== 'number') {
         throw new Error('Invalid project number. Expected a positive integer.')
     }
-    const trimmed = raw.trim()
-    if (trimmed === '') return undefined
-    const match = /^p?(\d+)$/i.exec(trimmed)
-    if (match === null) {
-        throw new Error(
-            `Invalid project number '${trimmed}'. Expected a positive integer.`
-        )
-    }
-    const parsed = Number.parseInt(match[1] ?? '', 10)
-    if (!Number.isInteger(parsed) || parsed < 1) {
-        throw new Error(
-            `Invalid project number '${trimmed}'. Expected a positive integer.`
-        )
+    if (typeof raw === 'string' && raw.trim() === '') return undefined
+    const canonicalSource = typeof raw === 'string' ? raw.trim().replace(/^p/i, '') : raw
+    const parsed = parsePositiveProjectNumber(canonicalSource)
+    if (parsed === undefined || (typeof raw === 'string' && !/^p?[1-9]\d*$/i.test(raw.trim()))) {
+        throw new Error(`Invalid project number '${String(raw)}'. Expected a positive integer.`)
     }
     return parsed
 }

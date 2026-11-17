@@ -9,6 +9,7 @@ import {
     resolveProjectContext,
 } from '../../../utils/workspace-resolver.js'
 import { uniqueWorkspaceForProject } from '../../../utils/write-scope.js'
+import { parseCanonicalPositiveInt } from '../../../utils/safe-positive-int.js'
 import { getActiveProjectRegistry } from '../../../codemode/normalizers/generic-field-aliases.js'
 import {
     PASSED_VALIDATION_ALIASES,
@@ -106,15 +107,14 @@ function normalizeStringProjectNumberField(
 ): boolean {
     if (!('project_number' in obj) || typeof obj['project_number'] !== 'string') return false
     const cleaned = obj['project_number'].trim()
-    let num = Number(cleaned)
-    if (Number.isNaN(num) && /^p-?\d+$/i.test(cleaned)) {
-        num = Number(cleaned.replace(/^p-?/i, ''))
-    }
-    if (!Number.isNaN(num) && cleaned !== '') {
-        obj['project_number'] = num
+    const parsed = /^p-?\d+$/i.test(cleaned)
+        ? parseCanonicalPositiveInt(cleaned.replace(/^p-?/i, ''))
+        : parseCanonicalPositiveInt(cleaned)
+    if (parsed !== undefined) {
+        obj['project_number'] = parsed
         return true
     }
-    if (cleaned === '' || cleaned === '*') return false
+    if (cleaned === '' || cleaned === '*' || /^[0-9]/.test(cleaned) || /^p-?\d/i.test(cleaned)) return false
 
     const canonicalKey = findCanonicalRegistryKey(cleaned, registry)
     const matchedWs =

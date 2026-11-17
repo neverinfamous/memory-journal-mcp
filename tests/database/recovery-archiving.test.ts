@@ -50,7 +50,7 @@ describe('DatabaseAdapter - Recovery, Archiving & Keyset Pagination', () => {
 
             // 2. Soft delete the entry
             const deleted = db.deleteEntry(entry.id)
-            expect(deleted).toBe(true)
+            expect(deleted.success).toBe(true)
 
             // Verify it is omitted from default retrieval
             expect(db.getEntryById(entry.id)).toBeNull()

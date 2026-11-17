@@ -190,7 +190,7 @@ function resolveUpdateScope(
     if (
         input.projectNumber !== undefined &&
         input.projectNumber !== null &&
-        (!Number.isInteger(input.projectNumber) || input.projectNumber <= 0)
+        (!Number.isSafeInteger(input.projectNumber) || input.projectNumber <= 0)
     ) {
         throw new ValidationError('project_number must be a positive integer.', { id })
     }

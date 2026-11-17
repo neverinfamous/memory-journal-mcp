@@ -58,7 +58,7 @@ export class TokenValidator {
         this.jwksHost = this.jwksUrl.hostname
 
         const isLoopback = (host: string): boolean =>
-            host === 'localhost' || host === '127.0.0.1' || host === '[::1]'
+            host === 'localhost' || host === '127.0.0.1' || host === '::1' || host === '[::1]'
 
         if (issuerUrl.protocol !== 'https:' && !isLoopback(issuerUrl.hostname)) {
             throw new Error(

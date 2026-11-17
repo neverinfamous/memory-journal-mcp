@@ -7,6 +7,7 @@ import {
     resolveEffectiveProjectRegistry,
 } from '../../../codemode/normalizers/generic-field-aliases.js'
 import { findCanonicalRegistryKey, loadProjectRegistryFromConfig } from '../../../utils/workspace-resolver.js'
+import { parseCanonicalPositiveInt } from '../../../utils/safe-positive-int.js'
 
 /** Resolves `project_number` / aliases from a JSON recovery payload record. */
 export function readProjectNumber(target: Record<string, unknown>): number | string | undefined {
@@ -18,12 +19,15 @@ export function readProjectNumber(target: Record<string, unknown>): number | str
         target['project_name'] ??
         target['projectName'] ??
         target['project']
-    if (typeof raw === 'number' && !Number.isNaN(raw)) return raw
+    if (typeof raw === 'number') {
+        return Number.isSafeInteger(raw) && raw > 0 ? raw : undefined
+    }
     if (typeof raw === 'string' && raw.trim() !== '') {
         const trimmed = raw.trim()
-        if (/^p-?\d+$/i.test(trimmed)) return Number(trimmed.replace(/^p-?/i, ''))
-        const num = Number(trimmed)
-        if (!Number.isNaN(num)) return num
+        const parsed = /^p-?\d+$/i.test(trimmed)
+            ? parseCanonicalPositiveInt(trimmed.replace(/^p-?/i, ''))
+            : parseCanonicalPositiveInt(trimmed)
+        if (parsed !== undefined) return parsed
         return trimmed
     }
     return undefined

@@ -232,7 +232,7 @@ function executeTeamDeleteEntry(
     if (denied !== null) return denied
 
     const deleted = teamDb.deleteEntry(entry_id, false, wsId)
-    if (!deleted) {
+    if (!deleted.success) {
         return {
             success: false,
             error: `Team entry ${String(entry_id)} not found`,
@@ -243,12 +243,15 @@ function executeTeamDeleteEntry(
         }
     }
     const deleteWarning = cleanupDeletedTeamVector(teamDb, entry_id)
+    const warning = [deleted.warning, deleteWarning]
+        .filter((item): item is string => item !== undefined)
+        .join('; ')
     triggerTeamNotifications(context)
 
     return {
         success: true,
         message: `Team entry ${String(entry_id)} soft-deleted`,
-        ...(deleteWarning !== undefined ? { warning: deleteWarning } : {}),
+        ...(warning !== '' ? { warning } : {}),
     }
 }
 

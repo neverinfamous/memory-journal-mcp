@@ -18,6 +18,7 @@ type FtsSearchOptions = Parameters<typeof ftsSearch>[3]
 interface Facets {
     tags: { name: string; count: number }[]
     entryTypes: { name: string; count: number }[]
+    degraded?: boolean
 }
 
 interface PreparedSearchEntries {

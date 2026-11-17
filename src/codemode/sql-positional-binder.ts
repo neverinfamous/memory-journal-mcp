@@ -22,6 +22,7 @@ import {
     splitTopLevelSqlAndClauses,
     stripBalancedOuterParens,
 } from './sql-literal-scope.js'
+import { parsePositiveProjectNumber } from '../utils/safe-positive-int.js'
 
 export interface ParsedSql {
     action: 'create' | 'update' | 'delete' | 'get_by_id' | 'unmapped' | 'other'
@@ -90,12 +91,7 @@ function listPlaceholders(cleanSql: string): Placeholder[] {
 }
 
 function toPositiveInt(val: unknown): number | undefined {
-    if (typeof val === 'number' && Number.isInteger(val) && val > 0) return val
-    if (typeof val === 'string' && /^\d+$/.test(val.trim())) {
-        const n = Number(val.trim())
-        return n > 0 ? n : undefined
-    }
-    return undefined
+    return parsePositiveProjectNumber(val)
 }
 
 function toTags(val: unknown): string[] | undefined {
@@ -232,7 +228,7 @@ function literalEntryId(cleanSql: string): number | undefined {
     if (whereClause === '') return undefined
     for (const rawClause of splitTopLevelSqlAndClauses(whereClause)) {
         const match = CLAUSE_ID_LITERAL.exec(stripBalancedOuterParens(rawClause))
-        if (match?.[1] !== undefined) return parseInt(match[1], 10)
+        if (match?.[1] !== undefined) return parsePositiveProjectNumber(match[1])
     }
     return undefined
 }

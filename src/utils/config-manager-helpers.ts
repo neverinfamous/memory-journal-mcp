@@ -124,7 +124,7 @@ export function seedInitialBriefingScopeFromFile(
             : undefined
     const rawFileProj = initialFile['defaultProjectNumber']
     const fileProj =
-        typeof rawFileProj === 'number' && Number.isInteger(rawFileProj) && rawFileProj > 0
+        typeof rawFileProj === 'number' && Number.isSafeInteger(rawFileProj) && rawFileProj > 0
             ? rawFileProj
             : undefined
 
@@ -313,7 +313,7 @@ function extractFileScopeInputs(parsed: Record<string, unknown>): {
     const hasFileProjNum =
         'defaultProjectNumber' in parsed &&
         typeof rawProjNum === 'number' &&
-        Number.isInteger(rawProjNum) &&
+        Number.isSafeInteger(rawProjNum) &&
         rawProjNum > 0
     if ('defaultProjectNumber' in parsed && rawProjNum !== undefined && rawProjNum !== null && !hasFileProjNum) {
         logger.warning('Ignoring invalid defaultProjectNumber in reloaded config file', {

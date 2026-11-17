@@ -79,9 +79,9 @@ export function resolveImportedFileContext(
     const fileProject = metadata.project_number
     if (
         (options.project_number !== undefined &&
-            (!Number.isInteger(options.project_number) || options.project_number <= 0)) ||
+            (!Number.isSafeInteger(options.project_number) || options.project_number <= 0)) ||
         (fileProject !== undefined &&
-            (typeof fileProject !== 'number' || !Number.isInteger(fileProject) || fileProject <= 0))
+            (typeof fileProject !== 'number' || !Number.isSafeInteger(fileProject) || fileProject <= 0))
     ) {
         throw new ValidationError('project_number must be a positive integer')
     }

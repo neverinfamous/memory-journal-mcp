@@ -1,6 +1,7 @@
 import type { IDatabaseAdapter } from '../../database/core/interfaces.js'
 import type { JournalEntry } from '../../types/index.js'
 import type { SemanticSearchResult } from './types.js'
+import { logger } from '../../utils/logger.js'
 
 export interface VectorCandidate {
     entryId: number
@@ -81,8 +82,10 @@ export async function runPipelineBatchEmbeddingsSettled(
                 startIndex = 1
             }
         } catch (reason) {
-            results.push({ status: 'rejected', reason })
-            startIndex = 1
+            logger.warning('Batch embedding failed; embedding each text separately', {
+                module: 'VectorSearchManager',
+                error: reason instanceof Error ? reason.message : String(reason),
+            })
         }
         for (let i = startIndex; i < texts.length; i++) {
             const text = texts[i]

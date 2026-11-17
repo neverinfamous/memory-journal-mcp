@@ -4,6 +4,7 @@
 
 import { healSortByField, healIncludeArchivedField } from './hallucination-healer-fields.js'
 import { normalizeProjectFields } from './hallucination-healer-scope.js'
+import { parsePositiveProjectNumber } from '../../../utils/safe-positive-int.js'
 import {
     SESSION_SUMMARY_TAG_ALIASES,
     TECHNICAL_NOTE_ALIASES,
@@ -98,10 +99,11 @@ export function unpackFilterContainers(obj: Record<string, unknown>): boolean {
 
 export function coerceEntryIdField(obj: Record<string, unknown>): boolean {
     if ('entry_id' in obj && typeof obj['entry_id'] === 'string') {
-        const cleaned = obj['entry_id'].replace(/^[^0-9]+/, '')
-        const num = Number(cleaned)
-        if (!Number.isNaN(num) && cleaned.trim() !== '') {
-            obj['entry_id'] = num
+        const raw = obj['entry_id'].trim()
+        const stripped = raw.replace(/^[^0-9]+/, '')
+        const parsed = parsePositiveProjectNumber(stripped)
+        if (parsed !== undefined && /^[1-9]\d*$/.test(stripped)) {
+            obj['entry_id'] = parsed
             return true
         }
     }

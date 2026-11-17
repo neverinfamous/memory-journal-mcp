@@ -179,12 +179,21 @@ export function coerceNumericStringIds(
                 }
             }
             if (/^-?\d+$/.test(strVal)) {
-                if (key === 'project_number' || key === 'projectNumber') continue
+                if (key === 'project_number' || key === 'projectNumber') {
+                    return validationError(
+                        `project_number '${strVal}' is not a canonical positive integer`,
+                    )
+                }
                 const parsed = parseInt(strVal, 10)
                 if (!isNaN(parsed)) obj[key] = parsed
             } else if ((key === 'project_number' || key === 'projectNumber') && /^p-?\d+$/i.test(strVal)) {
                 const parsed = parseCanonicalPositiveInt(strVal.replace(/^p-?/i, ''))
-                if (parsed !== undefined) obj[key] = parsed
+                if (parsed === undefined) {
+                    return validationError(
+                        `project_number '${strVal}' is not a canonical positive integer`,
+                    )
+                }
+                obj[key] = parsed
             } else if (key === 'project_number' || key === 'projectNumber') {
                 const preserved = obj[key]
                 Reflect.deleteProperty(obj, key)
@@ -277,13 +286,22 @@ function formatScalarOrJson(val: unknown): string {
         : (JSON.stringify(val) ?? typeof val)
 }
 
+function canonicalAliasProject(rawVal: unknown): number | undefined {
+    if (typeof rawVal === 'number') {
+        return Number.isSafeInteger(rawVal) && rawVal > 0 ? rawVal : undefined
+    }
+    if (typeof rawVal === 'string') return parseCanonicalPositiveInt(rawVal)
+    return undefined
+}
+
 function applyProjectNameAlias(rawVal: unknown, obj: Record<string, unknown>): ProjectNameAliasResult {
     const existingProj = obj['project_number'] ?? obj['projectNumber']
-    const num = Number(rawVal)
+    const num = canonicalAliasProject(rawVal)
     const strVal = typeof rawVal === 'string' || typeof rawVal === 'number' ? String(rawVal) : ''
-    if (!Number.isNaN(num) && strVal.trim() !== '') {
+    if (num !== undefined && strVal.trim() !== '') {
         if (existingProj !== undefined) {
-            if (Number(existingProj) !== num) {
+            const existingNum = canonicalAliasProject(existingProj)
+            if (existingNum !== num) {
                 return {
                     conflict: `Project alias '${strVal.trim()}' conflicts with project_number '${formatScalarOrJson(existingProj)}'`,
                 }
@@ -362,14 +380,18 @@ export function resolveCreateEntryProjectContext(obj: Record<string, unknown>): 
     if (obj['project_number'] === undefined && obj['projectNumber'] !== undefined) {
         obj['project_number'] = obj['projectNumber']
     }
-    let projNum = typeof obj['project_number'] === 'number' ? obj['project_number'] : undefined
+    let projNum =
+        typeof obj['project_number'] === 'number' &&
+        Number.isSafeInteger(obj['project_number']) &&
+        obj['project_number'] > 0
+            ? obj['project_number']
+            : undefined
     if (typeof obj['project_number'] === 'string') {
         const cleaned = obj['project_number'].trim()
-        let parsedNum = Number(cleaned)
-        if (Number.isNaN(parsedNum) && /^p-?\d+$/i.test(cleaned)) {
-            parsedNum = Number(cleaned.replace(/^p-?/i, ''))
-        }
-        if (!Number.isNaN(parsedNum) && cleaned !== '') {
+        const parsedNum = /^p-?\d+$/i.test(cleaned)
+            ? parseCanonicalPositiveInt(cleaned.replace(/^p-?/i, ''))
+            : parseCanonicalPositiveInt(cleaned)
+        if (parsedNum !== undefined) {
             projNum = parsedNum
             obj['project_number'] = parsedNum
         } else if (cleaned !== '') {

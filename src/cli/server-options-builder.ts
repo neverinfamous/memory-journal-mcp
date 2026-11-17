@@ -6,6 +6,7 @@ import type { ConfigResolver } from '../utils/config-resolver.js'
 import { defaultDbPath } from './option-groups.js'
 import { activeProjectRegistry, pairStoredScope } from '../utils/write-scope.js'
 import { logger } from '../utils/logger.js'
+import { parsePositiveProjectNumber } from '../utils/safe-positive-int.js'
 import type { ServerOptions } from '../server/mcp-server/types.js'
 import {
     assertAdditionalTeamDbIsNotSymlink,
@@ -41,14 +42,8 @@ function resolveDefaultProjectNumberOption(
         if (raw === undefined || raw === null) return undefined
         const str = String(raw).trim()
         if (str === '') return undefined
-        const match = /^p?(\d+)$/i.exec(str)
-        if (match === null) {
-            throw new Error(
-                `Invalid defaultProjectNumber '${str}'. Expected a positive integer.`
-            )
-        }
-        const parsed = Number.parseInt(match[1] ?? '', 10)
-        if (!Number.isInteger(parsed) || parsed < 1) {
+        const parsed = parsePositiveProjectNumber(str.replace(/^p/i, ''))
+        if (parsed === undefined || !/^p?[1-9]\d*$/i.test(str)) {
             throw new Error(
                 `Invalid defaultProjectNumber '${str}'. Expected a positive integer.`
             )
