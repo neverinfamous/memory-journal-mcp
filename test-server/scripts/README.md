@@ -5,29 +5,31 @@
 This directory contains standalone Node.js integration tests for `memory-journal-mcp` that verify behavior outside of standard MCP tool invocation boundaries (like transport layers, command-line arguments, tool annotations, or background jobs).
 
 > [!IMPORTANT]
-> The scripts execute `dist/cli.js` directly. Always ensure your code is built (`npm run build`) before executing these scripts.
+> Most scripts execute `dist/cli.js` directly. Build first with `pnpm run build`.
+> Writes in these scripts use workspace `memory-journal-mcp` and `project_number` 5, the pair registered for this repo.
+> `test-server-config.json` is data. Run `node test-server/scripts/test-server-config.mjs`. Node 26 cannot execute the JSON file.
 
 ## Scripts Index
 
 | Script                         | Tests                                                                                                                                     | Transport     | Duration |
 | ------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------- | ------------- | -------- |
-| `verify-schemas.mjs`           | `tools/list` validates that all tools (except `mj_execute_code`) contain a properly serialized `outputSchema` definition                  | stdio         | ~5s      |
-| `test-instruction-levels.mjs`  | `--instruction-level` essential/standard/full token ordering                                                                              | stdio         | ~10s     |
-| `test-filter-instructions.mjs` | Filter-aware sections — validates each `--tool-filter` config includes/excludes correct sections + reports token estimates per filter     | stdio         | ~90s     |
-| `test-tool-annotations.mjs`    | `tools/list` openWorldHint annotation counts (108 total)                                                                                  | stdio         | ~5s      |
-| `test-prompts.mjs`             | `prompts/list` + `prompts/get` for all 29 prompts (shape + errors)                                                                        | stdio         | ~10s     |
-| `test-scheduler.mjs`           | Scheduler job execution (backup, vacuum, rebuild-index)                                                                                   | HTTP stateful | ~130s    |
+| `verify-schemas.mjs`           | Every tool except `mj_execute_code` advertises `outputSchema` (107 of 108; Code Mode has no fixed schema)                                 | stdio         | ~25s     |
+| `test-tool-annotations.mjs`    | Full `tools/list` annotation audit for all 108 tools (hints, titles, destructive and read-only allowlists)                                | stdio         | ~25s     |
+| `test-prompts.mjs`             | `prompts/list` + `prompts/get` for all 32 prompts (shape + errors)                                                                        | stdio         | ~10s     |
+| `test-scheduler.mjs`           | Scheduler job execution (backup, vacuum, rebuild-index). Requires a separate HTTP server; see below.                                      | HTTP stateful | ~130s    |
 | `test-progress.mjs`            | Two-phase progress notification test: (1) native tool progress via `export_entries`, (2) Code Mode `mj.reportProgress()` sandbox binding. | stdio         | ~8s      |
-| `test-team-db-fallback.mjs`    | Verifies the MCP server gracefully handles a missing `TEAM_DB_PATH` environment variable by safely rejecting team-scoped requests.        | stdio         | ~1s      |
-| `test-50k-boundary.mjs`        | Validates that `create_entry` gracefully handles large string payloads (50,000 characters) via standard Node pipeline.                    | stdio         | ~1s      |
-| `test-team-zod.mjs`            | Validates that the Team Tool group properly intercepts SDK-level Zod validation errors and returns structured JSON-RPC responses.         | stdio         | ~2s      |
-| `test-sdk-boundaries.mjs`      | Validates MCP SDK protocol-layer validation boundaries (strict Zod type rejections instead of silent coercions) and environment dependencies. | stdio         | ~2s      |
-| `test-http.mjs`                | Tests large payloads (50k/100k chars) via HTTP/fetch to ensure they don't break the HTTP transport boundary.                              | HTTP          | ~1s      |
-| `test-long-mcp.mjs`            | Tests large payloads (50k/100k chars) via standard stdio client transport.                                                                | stdio         | ~1s      |
-| `test-subscribe.mjs`           | Validates MCP real-time resource subscriptions, ensuring that mutating tools emit `notifications/resources/updated` via transport.        | stdio         | ~2s      |
-| `test-config-reload.mjs`       | Tests hot-reloading and persistence of server configuration files (`json`/`yaml`) via the `update_configuration` tool.                    | stdio         | ~5s      |
-| `test-dump-config.mjs`         | Tests the `--dump-config` CLI option to ensure sensitive environment variables are properly redacted and config resolution succeeds.      | pipe          | ~1s      |
-| `test-metrics-persistence.mjs` | Integration test for the `MetricsAccumulator`, verifying `--persist-metrics` file persistence and reload logic.                           | internal      | ~1s      |
+| `test-team-db-fallback.mjs`    | A missing `TEAM_DB_PATH` rejects team-scoped requests instead of crashing the server.                                                     | stdio         | ~1s      |
+| `test-50k-boundary.mjs`        | `create_entry` accepts a 50,000-character string over stdio.                                                                              | stdio         | ~40s     |
+| `test-team-zod.mjs`            | Team tools return structured JSON-RPC results for invalid Zod input instead of a raw protocol crash.                                      | stdio         | ~25s     |
+| `test-sdk-boundaries.mjs`      | Invalid argument types return a tool result. The invalid team entry type is accepted; boolean and array `content` are rejected.           | stdio         | ~60s     |
+| `test-http.mjs`                | HTTP transport accepts 50,000 characters and rejects 100,001 characters.                                                                  | HTTP          | ~60s     |
+| `test-long-mcp.mjs`            | Stdio client transport accepts 50,000 characters and rejects 100,001 characters.                                                          | stdio         | ~45s     |
+| `test-subscribe.mjs`           | `resources/subscribe` on `memory://briefing` emits `notifications/resources/updated` after a mutation, and stays quiet after unsubscribe.  | stdio         | ~50s     |
+| `test-config-reload.mjs`       | Hot-reload and persistence of server configuration files (`json`/`yaml`) via `update_configuration`.                                      | stdio         | ~5s      |
+| `test-dump-config.mjs`         | `--dump-config` redacts sensitive environment variables and resolves config successfully.                                                 | pipe          | ~1s      |
+| `test-metrics-persistence.mjs` | `MetricsAccumulator` persists and reloads metrics when `--persist-metrics` is set.                                                        | internal      | ~1s      |
+| `test-server-config.mjs`       | `test-server-config.json` is valid and defines `testDbPath` and `testTeamDbPath`. Does not start the server.                              | none          | ~1s      |
+| `test-filter-instructions.mjs` | Each `--tool-filter` includes the expected instruction sections and reports token estimates. Uses `test-server-config.json` via `--config`. | stdio         | ~90s     |
 
 ## Scheduler Notes
 
@@ -40,3 +42,17 @@ node dist/cli.js --transport http --port 3099 --backup-interval 1 --keep-backups
 # Terminal 2: Test script
 node test-server/scripts/test-scheduler.mjs
 ```
+
+## Maintenance helpers
+
+These files do not start the MCP server. They check the test-suite map or rewrite prompt files.
+
+| File | Purpose |
+| ---- | ------- |
+| `test-server-config.json` | Shared config consumed by `MEMORY_JOURNAL_CONFIG` or `--config`. Not a Node program. |
+| `tool-map.json` | Maps each tool name to the test files that cover it. |
+| `prompt-template.md` | Template used when standardizing generated test prompts. |
+| `validate-tools.mjs` | Compares `test-server/tool-reference.md` with `tool-map.json`. Exits 1 when either side has a tool the other lacks. |
+| `check-counts.mjs` | Prints usability files that reference more than five tools. |
+| `check-coverage.mjs` | Compares an SSoT mapping file (`argv[2]` or `SSOT_MAPPING_PATH`) with `tool-map.json`, including usability coverage. Skips `mj_execute_code`. |
+| `standardize-prompts.mjs` | Rewrites test prompt files from `tool-map.json` and `prompt-template.md`. |
