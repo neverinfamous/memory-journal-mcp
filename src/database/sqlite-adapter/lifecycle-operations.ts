@@ -2,7 +2,7 @@ import type { NativeConnectionManager } from './native-connection.js'
 import { buildImportanceCte, buildImportanceSqlExpression } from './entries/importance.js'
 import { isMissingTableError } from './schema-errors.js'
 import { expandTagFilterValues } from './tags.js'
-import { bucketInParams } from './row-helpers.js'
+import { bucketInParams, IN_PARAM_BUCKETS } from './row-helpers.js'
 
 type NativeDb = ReturnType<NativeConnectionManager['getNativeDb']>
 
@@ -49,14 +49,25 @@ interface CandidateScope {
     scopedProject: number | undefined
 }
 
-const tagExclusionSql = (idColumn: string, tags: string[]): string =>
-    tags.length > 0
-        ? `AND ${idColumn} NOT IN (
+const tagExclusionSql = (
+    idColumn: string,
+    tags: string[]
+): { sql: string; params: string[] } => {
+    if (tags.length === 0) return { sql: '', params: [] }
+    const parts: string[] = []
+    const params: string[] = []
+    for (const chunk of bucketInParams(tags, IN_PARAM_BUCKETS)) {
+        parts.push(
+            `AND ${idColumn} NOT IN (
                 SELECT entry_id FROM entry_tags
                 JOIN tags ON tags.id = entry_tags.tag_id
-                WHERE LOWER(tags.name) IN (${tags.map(() => '?').join(',')})
+                WHERE LOWER(tags.name) IN (${chunk.placeholders})
             )`
-        : ''
+        )
+        params.push(...chunk.params)
+    }
+    return { sql: parts.join('\n'), params }
+}
 
 function ageRangeFilter(
     col: string,
@@ -78,18 +89,19 @@ function ageRangeFilter(
 function buildHardDeleteQuery(options: LifecycleOptions, scope: CandidateScope): CandidateQuery {
     const { excludeTags, scopedWorkspace, scopedProject } = scope
     const age = ageRangeFilter('deleted_at', options.hardDeleteOlderThanDays)
+    const tagExclusion = tagExclusionSql('id', excludeTags)
     const sql = `
             SELECT id, CAST((julianday('now') - julianday(deleted_at)) AS INTEGER) as age_days
             FROM memory_journal
             WHERE deleted_at IS NOT NULL
               ${age.sql}
-              ${tagExclusionSql('id', excludeTags)}
+              ${tagExclusion.sql}
               ${scopedWorkspace !== undefined ? 'AND workspace_id = ?' : ''}
               ${scopedProject !== undefined ? 'AND project_number = ?' : ''}
         `
     const params: unknown[] = [
         ...age.params,
-        ...excludeTags,
+        ...tagExclusion.params,
         ...(scopedWorkspace !== undefined ? [scopedWorkspace] : []),
         ...(scopedProject !== undefined ? [scopedProject] : []),
     ]
@@ -103,6 +115,7 @@ function buildPruneQuery(
 ): CandidateQuery {
     const { excludeTags, scopedWorkspace, scopedProject } = scope
     const age = ageRangeFilter('e.timestamp', options.pruneOlderThanDays)
+    const tagExclusion = tagExclusionSql('e.id', excludeTags)
     const sql = `
             SELECT e.id, ${importanceExpr} as importance_score
             FROM memory_journal e
@@ -114,14 +127,14 @@ function buildPruneQuery(
               AND e.significance_type IS NULL
               AND COALESCE(e.impact_score, 0.0) < 0.5
               AND COALESCE(rs.rel_count, 0) = 0
-              ${tagExclusionSql('e.id', excludeTags)}
+              ${tagExclusion.sql}
               ${scopedWorkspace !== undefined ? 'AND e.workspace_id = ?' : ''}
               ${scopedProject !== undefined ? 'AND e.project_number = ?' : ''}
         `
     const params: unknown[] = [
         ...age.params,
         options.importanceThreshold,
-        ...excludeTags,
+        ...tagExclusion.params,
         ...(scopedWorkspace !== undefined ? [scopedWorkspace] : []),
         ...(scopedProject !== undefined ? [scopedProject] : []),
     ]
@@ -135,6 +148,7 @@ function buildArchiveQuery(
 ): CandidateQuery {
     const { excludeTags, scopedWorkspace, scopedProject } = scope
     const age = ageRangeFilter('e.timestamp', options.archiveOlderThanDays)
+    const tagExclusion = tagExclusionSql('e.id', excludeTags)
     const sql = `
             SELECT e.id, ${importanceExpr} as importance_score
             FROM memory_journal e
@@ -143,14 +157,14 @@ function buildArchiveQuery(
             WHERE e.deleted_at IS NULL AND e.is_archived = 0
             ${age.sql}
             AND ${importanceExpr} < ?
-            ${tagExclusionSql('e.id', excludeTags)}
+            ${tagExclusion.sql}
             ${scopedWorkspace !== undefined ? 'AND e.workspace_id = ?' : ''}
             ${scopedProject !== undefined ? 'AND e.project_number = ?' : ''}
         `
     const params: unknown[] = [
         ...age.params,
         options.importanceThreshold,
-        ...excludeTags,
+        ...tagExclusion.params,
         ...(scopedWorkspace !== undefined ? [scopedWorkspace] : []),
         ...(scopedProject !== undefined ? [scopedProject] : []),
     ]

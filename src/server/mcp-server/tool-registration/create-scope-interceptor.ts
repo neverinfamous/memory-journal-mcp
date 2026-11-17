@@ -1,4 +1,5 @@
 import type { ToolHandlerConfig } from '../../../types/index.js'
+import { parseCanonicalPositiveInt } from '../../../utils/safe-positive-int.js'
 import { resolveProjectContext } from '../../../utils/workspace-resolver.js'
 import { activeProjectRegistry, pairStoredScope } from '../../../utils/write-scope.js'
 
@@ -7,16 +8,10 @@ import { activeProjectRegistry, pairStoredScope } from '../../../utils/write-sco
  * using live server configuration before `inputSchema` (`CreateEntrySchemaMcp`) runs.
  */
 export function parsePositiveProjectNumber(value: unknown): number | undefined {
-    if (typeof value === 'number' && Number.isInteger(value) && value > 0) {
-        return value
+    if (typeof value === 'number') {
+        return Number.isSafeInteger(value) && value > 0 ? value : undefined
     }
-    if (typeof value === 'string') {
-        const trimmed = value.trim().replace(/^#/, '')
-        if (/^[1-9]\d*$/.test(trimmed)) {
-            const parsed = Number.parseInt(trimmed, 10)
-            if (Number.isInteger(parsed) && parsed > 0) return parsed
-        }
-    }
+    if (typeof value === 'string') return parseCanonicalPositiveInt(value)
     return undefined
 }
 

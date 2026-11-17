@@ -102,6 +102,7 @@ export class McpLogger {
         }
         if (typeof value === 'object' && value !== null) {
             const sanitized: Record<string, unknown> = {}
+            Object.setPrototypeOf(sanitized, null)
             for (const [k, v] of Object.entries(value)) {
                 sanitized[k] = this.sanitizeValue(v)
             }

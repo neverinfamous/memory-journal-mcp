@@ -9,6 +9,7 @@ import {
 import { buildImportanceSqlExpression, buildImportanceCte } from '../importance.js'
 import { encodeCursor, decodeCursor, type SortBy } from './cursor.js'
 import { effectiveWorkspace } from '../../../workspace-scope.js'
+import { chunkedInPredicate } from '../../row-helpers.js'
 import { expandTagFilterValues } from '../../tags.js'
 
 /** Importance-ranked page of recent entries (offset-paginated). */
@@ -350,11 +351,14 @@ function appendDateRangeFilters(
     if (options?.tags !== undefined && options.tags.length > 0) {
         const expandedTags = expandTagFilterValues(options.tags)
         if (expandedTags.length > 0) {
-            const placeholders = expandedTags.map(() => '?').join(',')
-            conditions.push(
-                `EXISTS (SELECT 1 FROM entry_tags et JOIN tags t ON et.tag_id = t.id WHERE et.entry_id = e.id AND LOWER(t.name) IN (${placeholders}))`
+            const membership = chunkedInPredicate(
+                expandedTags,
+                (placeholders) =>
+                    `EXISTS (SELECT 1 FROM entry_tags et JOIN tags t ON et.tag_id = t.id WHERE et.entry_id = e.id AND LOWER(t.name) IN (${placeholders}))`,
+                'OR'
             )
-            params.push(...expandedTags)
+            conditions.push(membership.sql)
+            params.push(...membership.params)
         }
     }
 

@@ -4,6 +4,12 @@ const ALREADY_FENCED_RE =
     /^<untrusted_remote_content>(?:\n[\s\S]*\n|[^\n]*)<\/untrusted_remote_content>$/
 const SAFE_GH_HANDLE_RE = /^[A-Za-z0-9_.-]{1,64}(?:\[bot\])?$/
 
+/** Undo egress fencing when a cached title is written back into a journal entry. */
+export function unwrapFencedRemoteText(value: string): string {
+    const stripped = value.replace(/<\/?untrusted_remote_content[^>]*>/gi, '')
+    return stripped.replace(/&gt;/g, '>').replace(/&lt;/g, '<').replace(/&amp;/g, '&')
+}
+
 /** Idempotently fence a single-line remote GitHub string. */
 export function ensureInlineFenced(value: string): string {
     return ALREADY_FENCED_RE.test(value) ? value : markUntrustedContentInline(value)

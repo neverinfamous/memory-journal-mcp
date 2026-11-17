@@ -43,6 +43,12 @@ export async function assertIncomingBackupIntact(backupPath: string): Promise<vo
             if (integrityResult !== 'ok') {
                 throw new Error(`Integrity check failed: ${String(integrityResult)}`)
             }
+            const foreignKeyRows: unknown = tempDb.pragma('foreign_key_check')
+            if (Array.isArray(foreignKeyRows) && foreignKeyRows.length > 0) {
+                throw new Error(
+                    `Foreign key check failed: ${String(foreignKeyRows.length)} violation(s)`
+                )
+            }
         } finally {
             tempDb.close()
         }
@@ -54,8 +60,8 @@ export async function assertIncomingBackupIntact(backupPath: string): Promise<vo
     }
 }
 
-/** Truncate the WAL before copying an encrypted/non-native database file. */
-function checkpointWalForBackup(ctx: IDatabaseConnection): void {
+/** Truncate the WAL. Throws when readers keep the checkpoint busy so a later file copy cannot drop frames. */
+export function assertWalCheckpointComplete(ctx: IDatabaseConnection): void {
     try {
         if (typeof ctx.getNativeDb === 'function') {
             const ckpt: unknown = ctx.getNativeDb().pragma('wal_checkpoint(TRUNCATE)')
@@ -121,7 +127,7 @@ export async function writeVerifiedBackupFile(
         return
     }
 
-    checkpointWalForBackup(ctx)
+    assertWalCheckpointComplete(ctx)
     await stageAndVerifyBackup(tempBackupPath, backupPath, () =>
         fs.promises.copyFile(ctx.getDbPath(), tempBackupPath)
     )

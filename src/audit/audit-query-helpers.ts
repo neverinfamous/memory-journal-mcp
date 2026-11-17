@@ -7,6 +7,7 @@
  */
 
 import type { RequestContext } from '../utils/request-context.js'
+import { parseCanonicalPositiveInt } from '../utils/safe-positive-int.js'
 import { TEAM_PROMPT_NAMES } from '../auth/scope-map.js'
 import type { AuditCategory, AuditEntry, AuditSearchFilters } from './types.js'
 
@@ -208,9 +209,9 @@ export function extractAuditScopeFromUri(
             workspaceId = wsParam.trim()
         }
         const projParam = parsed.searchParams.get('project_number')
-        if (projParam !== null && /^\d+$/.test(projParam.trim())) {
-            const n = Number(projParam.trim())
-            if (Number.isInteger(n) && n > 0) projectNumber = n
+        if (projParam !== null) {
+            const n = parseCanonicalPositiveInt(projParam)
+            if (n !== undefined) projectNumber = n
         }
         if (workspaceId === undefined && (parsed.hostname === 'briefing' || parsed.hostname === 'agent-context' || parsed.hostname === 'agent-id')) {
             const rawRepo = parsed.pathname.replace(/^\/+/, '').trim()

@@ -2,7 +2,6 @@ import { logger } from '../../utils/logger.js'
 import type { GitHubClient } from './client.js'
 import type { GitHubIssue } from '../../types/index.js'
 import type { IssueDetails } from './types.js'
-import { markUntrustedContent, markUntrustedContentInline } from '../../utils/security-utils.js'
 
 export class IssuesManager {
     constructor(private client: GitHubClient) {}
@@ -38,7 +37,7 @@ export class IssuesManager {
                 .slice(0, limit)
                 .map((issue) => ({
                     number: issue.number,
-                    title: markUntrustedContentInline(issue.title),
+                    title: issue.title,
                     url: issue.html_url,
                     state: issue.state === 'open' ? ('OPEN' as const) : ('CLOSED' as const),
                     milestone: issue.milestone
@@ -84,7 +83,7 @@ export class IssuesManager {
 
             const details: IssueDetails = {
                 number: issue.number,
-                title: markUntrustedContentInline(issue.title),
+                title: issue.title,
                 url: issue.html_url,
                 state: issue.state === 'open' ? 'OPEN' : 'CLOSED',
                 nodeId: issue.node_id,
@@ -145,7 +144,7 @@ export class IssuesManager {
 
             const comments = response.data.slice(0, _limit).map((comment) => ({
                 author: comment.user?.login ?? 'unknown',
-                body: markUntrustedContent(comment.body),
+                body: comment.body ?? '',
                 createdAt: comment.created_at,
             }))
 

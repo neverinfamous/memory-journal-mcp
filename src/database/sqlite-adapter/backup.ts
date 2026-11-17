@@ -8,6 +8,7 @@ import type { IDatabaseConnection } from '../core/interfaces.js'
 import { acquireRestoreLock } from './restore-lock.js'
 import {
     applySwappedDatabase,
+    assertWalCheckpointComplete,
     countActiveEntries,
     prepareRestoreTempFiles,
     releaseRestoreLock,
@@ -166,6 +167,7 @@ export class BackupManager {
 
         try {
             const previousEntryCount = countActiveEntries(this.ctx)
+            assertWalCheckpointComplete(this.ctx)
             this.ctx.closeDbBeforeRestore()
             await this.swapDatabase(backupPath)
             const newEntryCount = countActiveEntries(this.ctx)

@@ -1,5 +1,5 @@
 import type { NativeConnectionManager } from '../native-connection.js'
-import { bucketInParams } from '../row-helpers.js'
+import { bucketInParams, chunkedInPredicate } from '../row-helpers.js'
 import { effectiveWorkspace } from '../../workspace-scope.js'
 import { expandTagFilterValues } from '../tags.js'
 
@@ -45,17 +45,22 @@ function buildGraphScopeFilters(
     const relTypeSql = hasRelType ? ' AND r.relationship_type = ?' : ''
     const relTypeParam = hasRelType ? [relType] : []
 
-    const tagParams =
+    const expandedTags =
         options.tags !== undefined && options.tags.length > 0
             ? expandTagFilterValues(options.tags)
             : []
-    const hasTags = tagParams.length > 0
-    const tagPlaceholders = hasTags ? tagParams.map(() => '?').join(',') : ''
+    const tagMembership = chunkedInPredicate(
+        expandedTags,
+        (placeholders) => `LOWER(t.name) IN (${placeholders})`,
+        'OR'
+    )
+    const hasTags = tagMembership.sql.length > 0
+    const tagParams = tagMembership.params
     const tagSubquery = hasTags
         ? ` AND mj.id IN (
                   SELECT et.entry_id FROM entry_tags et
                   JOIN tags t ON et.tag_id = t.id
-                  WHERE LOWER(t.name) IN (${tagPlaceholders})
+                  WHERE ${tagMembership.sql}
               )`
         : ''
     const toPeerScope = `${scopeId !== '*' ? ' AND mj_to.workspace_id = ?' : ''}${options.projectNumber !== undefined ? ' AND mj_to.project_number = ?' : ''}`

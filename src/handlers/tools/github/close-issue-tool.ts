@@ -10,6 +10,7 @@ import { autoIndexEntry } from '../../../utils/vector-index-helpers.js'
 import { fenceUntrustedInline } from '../../resources/shared.js'
 import { relaxedNumber, StrictProjectNumberSchema } from '../schemas.js'
 import { CloseGitHubIssueWithEntryOutputSchema } from './schemas.js'
+import { unwrapFencedRemoteText } from './fencing-helpers.js'
 import { resolveOwnerRepo, resolveProjectNumber } from './helpers.js'
 import { moveIssueToDone, type KanbanMoveResult } from './close-issue-kanban.js'
 import { resolveIssueEntryScope } from './create-issue-tool.js'
@@ -202,7 +203,7 @@ async function executeCloseIssueMutation(
     issueDetails: { title: string; url: string; nodeId?: string }
 ): Promise<Record<string, unknown>> {
     const { db } = context
-    const safeIssueTitle = issueDetails.title.replace(/<\/?untrusted_remote_content[^>]*>/gi, '')
+    const safeIssueTitle = unwrapFencedRemoteText(issueDetails.title)
     const entryContent =
         `[PENDING] Closing GitHub issue #${String(input.issue_number)}: ${safeIssueTitle}\n` +
         (input.resolution_notes ? `\nResolution: ${input.resolution_notes}` : '')

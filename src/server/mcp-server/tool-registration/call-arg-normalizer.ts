@@ -9,6 +9,7 @@ import { setActiveProjectRegistry } from '../../../codemode/normalizers/generic-
 import type { BriefingConfig } from '../../../handlers/resources/shared.js'
 import type { ToolHandlerConfig } from '../../../types/index.js'
 import { logAgentIssue } from '../../../utils/issue-logger.js'
+import { parseCanonicalPositiveInt } from '../../../utils/safe-positive-int.js'
 import type { ServerRuntime } from '../../../utils/maintenance-lock.js'
 import {
     findCanonicalRegistryKey,
@@ -179,17 +180,19 @@ function resolveProjectNumberFromHint(
         if (repoStr !== undefined && repoStr.trim() !== '') repoHint = repoStr
     }
     const rawProject = toolArgs['project_number']
-    const strVal = typeof rawProject === 'string' ? rawProject : repoHint
-    if (strVal === undefined) return
-
-    const parsed = Number(strVal)
-    if (!Number.isNaN(parsed) && strVal.trim() !== '') {
-        if (repoHint === undefined || (Number.isInteger(parsed) && parsed > 0)) {
-            toolArgs['project_number'] = parsed
-        }
+    if (typeof rawProject === 'string') {
+        const parsed = parseCanonicalPositiveInt(rawProject)
+        if (parsed !== undefined) toolArgs['project_number'] = parsed
+        return
+    }
+    if (repoHint === undefined) return
+    const parsedHint = parseCanonicalPositiveInt(repoHint)
+    if (parsedHint !== undefined) {
+        toolArgs['project_number'] = parsedHint
         return
     }
 
+    const strVal = repoHint
     const registry = options.projectRegistry ?? loadProjectRegistryFromConfig()
     if (registry === undefined) return
 

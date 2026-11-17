@@ -7,7 +7,6 @@ import type {
     CopilotReviewSummary,
 } from '../../types/index.js'
 import type { PullRequestDetails } from './types.js'
-import { markUntrustedContent, markUntrustedContentInline } from '../../utils/security-utils.js'
 
 export class PullRequestsManager {
     /** Known Copilot bot login patterns */
@@ -47,7 +46,7 @@ export class PullRequestsManager {
 
             const result = response.data.map((pr) => ({
                 number: pr.number,
-                title: markUntrustedContentInline(pr.title),
+                title: pr.title,
                 url: pr.html_url,
                 state: pr.merged_at
                     ? ('MERGED' as const)
@@ -93,7 +92,7 @@ export class PullRequestsManager {
             const details: PullRequestDetails = {
                 number: pr.number,
                 nodeId: pr.node_id,
-                title: markUntrustedContentInline(pr.title),
+                title: pr.title,
                 url: pr.html_url,
                 state: pr.merged_at ? 'MERGED' : pr.state === 'open' ? 'OPEN' : 'CLOSED',
                 body: pr.body || '',
@@ -149,7 +148,7 @@ export class PullRequestsManager {
                 id: r.id,
                 author: r.user?.login ?? 'unknown',
                 state: r.state as GitHubReview['state'],
-                body: markUntrustedContent(r.body),
+                body: r.body ?? '',
                 submittedAt: r.submitted_at ?? r.commit_id ?? new Date().toISOString(),
                 isCopilot: PullRequestsManager.isCopilotAuthor(r.user?.login ?? ''),
             }))
@@ -188,7 +187,7 @@ export class PullRequestsManager {
             const comments: GitHubReviewComment[] = response.data.map((c) => ({
                 id: c.id,
                 author: c.user?.login ?? 'unknown',
-                body: markUntrustedContent(c.body),
+                body: c.body ?? '',
                 path: c.path,
                 line: c.line ?? c.original_line ?? null,
                 side: c.side ?? 'RIGHT',

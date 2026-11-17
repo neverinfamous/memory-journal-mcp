@@ -6,6 +6,7 @@ import {
 } from '../shared.js'
 import { sanitizeFtsQuery } from './fts-sanitizer.js'
 import { effectiveWorkspace } from '../../../workspace-scope.js'
+import { chunkedInPredicate } from '../../row-helpers.js'
 import { expandTagFilterValues } from '../../tags.js'
 
 interface SearchFacetOptions {
@@ -252,20 +253,27 @@ function appendFacetTagFilters(
     if (options?.tags !== undefined && options.tags.length > 0) {
         const expandedTags = expandTagFilterValues(options.tags)
         if (expandedTags.length > 0) {
-            const placeholders = expandedTags.map(() => '?').join(',')
-            conditions.push(`LOWER(t.name) IN (${placeholders})`)
-            params.push(...expandedTags)
+            const membership = chunkedInPredicate(
+                expandedTags,
+                (placeholders) => `LOWER(t.name) IN (${placeholders})`,
+                'OR'
+            )
+            conditions.push(membership.sql)
+            params.push(...membership.params)
         }
     }
 
     if (options?.excludeTags !== undefined && options.excludeTags.length > 0) {
         const expandedExcluded = expandTagFilterValues(options.excludeTags)
         if (expandedExcluded.length > 0) {
-            const placeholders = expandedExcluded.map(() => '?').join(',')
-            conditions.push(
-                `NOT EXISTS (SELECT 1 FROM entry_tags et_ex JOIN tags t_ex ON et_ex.tag_id = t_ex.id WHERE et_ex.entry_id = e.id AND LOWER(t_ex.name) IN (${placeholders}))`
+            const membership = chunkedInPredicate(
+                expandedExcluded,
+                (placeholders) =>
+                    `NOT EXISTS (SELECT 1 FROM entry_tags et_ex JOIN tags t_ex ON et_ex.tag_id = t_ex.id WHERE et_ex.entry_id = e.id AND LOWER(t_ex.name) IN (${placeholders}))`,
+                'AND'
             )
-            params.push(...expandedExcluded)
+            conditions.push(membership.sql)
+            params.push(...membership.params)
         }
     }
 }

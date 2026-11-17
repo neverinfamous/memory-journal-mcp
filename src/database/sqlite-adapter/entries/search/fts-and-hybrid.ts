@@ -16,6 +16,7 @@ import { buildVocabulary, expandFuzzyQuery } from '../fuzzy-matcher.js'
 import { encodeCursor, decodeCursor, type SortBy } from './cursor.js'
 import { sanitizeFtsQuery } from './fts-sanitizer.js'
 import { effectiveWorkspace } from '../../../workspace-scope.js'
+import { chunkedInPredicate } from '../../row-helpers.js'
 import { expandTagFilterValues } from '../../tags.js'
 
 interface SearchQueryOptions {
@@ -357,6 +358,29 @@ function buildSearchQuery(
     return { sql: query, params }
 }
 
+function entryTagExistsSql(placeholders: string, negated: boolean): string {
+    const exists = `EXISTS (SELECT 1 FROM entry_tags et JOIN tags t ON et.tag_id = t.id WHERE et.entry_id = e.id AND LOWER(t.name) IN (${placeholders}))`
+    return negated ? `NOT ${exists}` : exists
+}
+
+function appendTagMembership(
+    conditions: string[],
+    params: unknown[],
+    tags: string[] | undefined,
+    negated: boolean
+): void {
+    if (tags === undefined || tags.length === 0) return
+    const expanded = expandTagFilterValues(tags)
+    if (expanded.length === 0) return
+    const membership = chunkedInPredicate(
+        expanded,
+        (placeholders) => entryTagExistsSql(placeholders, negated),
+        negated ? 'AND' : 'OR'
+    )
+    conditions.push(membership.sql)
+    params.push(...membership.params)
+}
+
 /**
  * Appends the optional attribute/tag/date filter conditions for searchEntries.
  */
@@ -395,27 +419,8 @@ function appendFilterConditions(
         params.push(options.workflowRunId)
     }
 
-    if (options?.tags !== undefined && options.tags.length > 0) {
-        const expandedTags = expandTagFilterValues(options.tags)
-        if (expandedTags.length > 0) {
-            const placeholders = expandedTags.map(() => '?').join(',')
-            conditions.push(
-                `EXISTS (SELECT 1 FROM entry_tags et JOIN tags t ON et.tag_id = t.id WHERE et.entry_id = e.id AND LOWER(t.name) IN (${placeholders}))`
-            )
-            params.push(...expandedTags)
-        }
-    }
-
-    if (options?.excludeTags !== undefined && options.excludeTags.length > 0) {
-        const expandedExcluded = expandTagFilterValues(options.excludeTags)
-        if (expandedExcluded.length > 0) {
-            const placeholders = expandedExcluded.map(() => '?').join(',')
-            conditions.push(
-                `NOT EXISTS (SELECT 1 FROM entry_tags et JOIN tags t ON et.tag_id = t.id WHERE et.entry_id = e.id AND LOWER(t.name) IN (${placeholders}))`
-            )
-            params.push(...expandedExcluded)
-        }
-    }
+    appendTagMembership(conditions, params, options?.tags, false)
+    appendTagMembership(conditions, params, options?.excludeTags, true)
 
     if (options?.entryType !== undefined) {
         conditions.push(`e.entry_type = ?`)

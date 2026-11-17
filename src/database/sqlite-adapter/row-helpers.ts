@@ -72,3 +72,19 @@ export function bucketInParams<T>(
     }
     return chunks
 }
+
+/** Join bucketed `IN` fragments. Positive membership uses OR; exclusion uses AND. */
+export function chunkedInPredicate(
+    values: readonly string[],
+    render: (placeholders: string) => string,
+    join: 'AND' | 'OR'
+): { sql: string; params: string[] } {
+    const parts: string[] = []
+    const params: string[] = []
+    for (const chunk of bucketInParams(values)) {
+        parts.push(render(chunk.placeholders))
+        params.push(...chunk.params)
+    }
+    if (parts.length <= 1) return { sql: parts[0] ?? '', params }
+    return { sql: `(${parts.join(` ${join} `)})`, params }
+}

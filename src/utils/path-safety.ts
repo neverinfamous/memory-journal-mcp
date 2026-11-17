@@ -130,16 +130,23 @@ function resolveAllowedRoots(rawRoots: string[]): string[] {
     return allowedRoots
 }
 
+const WIN_DRIVE_PATH_RE = /^[a-zA-Z]:[\\/]/
+
+function pathIsInsideRoot(root: string, targetPath: string): boolean {
+    const winSyntax = WIN_DRIVE_PATH_RE.test(root) || WIN_DRIVE_PATH_RE.test(targetPath)
+    const pathMod = winSyntax ? path.win32 : path
+    const caseFold = winSyntax || process.platform === 'win32'
+    const rawRoot = winSyntax ? root.replace(/\//g, '\\') : root
+    const rawTarget = winSyntax ? targetPath.replace(/\//g, '\\') : targetPath
+    const normalizedRoot = caseFold ? pathMod.resolve(rawRoot).toLowerCase() : pathMod.resolve(rawRoot)
+    const normalizedTarget = caseFold ? pathMod.resolve(rawTarget).toLowerCase() : pathMod.resolve(rawTarget)
+    const rel = pathMod.relative(normalizedRoot, normalizedTarget)
+    return rel !== '..' && !rel.startsWith(`..${pathMod.sep}`) && !pathMod.isAbsolute(rel)
+}
+
 /** Returns true when `targetPath` resolves structurally inside at least one root in `allowedRoots`. */
 function isWithinAllowedRoots(targetPath: string, allowedRoots: string[]): boolean {
-    const isWin32 = process.platform === 'win32'
-    const normalizedTarget = isWin32 ? targetPath.toLowerCase() : targetPath
-    return allowedRoots.some((root) => {
-        const normalizedRoot = isWin32 ? root.toLowerCase() : root
-        const rel = path.relative(normalizedRoot, normalizedTarget)
-        // If relative path is '..' or starts with '../' (or '..\'), it escapes the root
-        return rel !== '..' && !rel.startsWith('..' + path.sep) && !path.isAbsolute(rel)
-    })
+    return allowedRoots.some((root) => pathIsInsideRoot(root, targetPath))
 }
 
 const WIN_RESERVED_DEVICE_RE = /^(?:CON|PRN|AUX|NUL|COM[1-9]|LPT[1-9])(?:\..*)?$/i

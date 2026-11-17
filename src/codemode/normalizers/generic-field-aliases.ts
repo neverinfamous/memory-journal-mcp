@@ -2,6 +2,7 @@ import type { ProjectRegistryEntry } from '../../types/index.js'
 import { resolveProjectContextWithRegistry } from '../../utils/workspace-resolver-pure.js'
 import { pairStoredScope } from '../../utils/workspace-registry-match.js'
 import { hasMethodToken } from '../method-tokens.js'
+import { parseCanonicalPositiveInt } from '../../utils/safe-positive-int.js'
 import { isRecord } from './shared-utils.js'
 
 const NUMERIC_ID_KEYS = [
@@ -126,18 +127,35 @@ export function normalizeSearchGrepAliases(methodName: string, obj: Record<strin
     }
 }
 
+function firstDefined(record: Record<string, unknown> | undefined, keys: readonly string[]): unknown {
+    if (record === undefined) return undefined
+    for (const key of keys) {
+        if (record[key] !== undefined) return record[key]
+    }
+    return undefined
+}
+
 export function extractMetadataContextAliases(
     obj: Record<string, unknown>,
     allowWorkspaceHoist = true
 ): void {
-    const metaObj = isRecord(obj['metadata']) ? obj['metadata'] : isRecord(obj['context']) ? obj['context'] : undefined
-    if (!metaObj) return
-    obj['project_number'] ??= metaObj['project_number'] ?? metaObj['projectNumber']
-    obj['session_id'] ??= metaObj['session_id'] ?? metaObj['sessionId']
-    obj['type'] ??= metaObj['type'] ?? metaObj['entry_type'] ?? metaObj['category']
-    obj['tags'] ??= metaObj['tags']
+    const metadata = isRecord(obj['metadata']) ? obj['metadata'] : undefined
+    const context = isRecord(obj['context']) ? obj['context'] : undefined
+    if (metadata === undefined && context === undefined) return
+    obj['project_number'] ??=
+        firstDefined(metadata, ['project_number', 'projectNumber']) ??
+        firstDefined(context, ['project_number', 'projectNumber'])
+    obj['session_id'] ??=
+        firstDefined(metadata, ['session_id', 'sessionId']) ??
+        firstDefined(context, ['session_id', 'sessionId'])
+    obj['type'] ??=
+        firstDefined(metadata, ['type', 'entry_type', 'category']) ??
+        firstDefined(context, ['type', 'entry_type', 'category'])
+    obj['tags'] ??= firstDefined(metadata, ['tags']) ?? firstDefined(context, ['tags'])
     if (allowWorkspaceHoist && obj['workspace_id'] === undefined) {
-        const hoistedWs = metaObj['workspace_id'] ?? metaObj['workspaceId']
+        const hoistedWs =
+            firstDefined(metadata, ['workspace_id', 'workspaceId']) ??
+            firstDefined(context, ['workspace_id', 'workspaceId'])
         if (hoistedWs !== undefined) {
             obj['workspace_id'] = hoistedWs
             obj['_alias_derived_workspace'] = true
@@ -153,12 +171,20 @@ export function coerceNumericStringIds(
         if (typeof val === 'string') {
             const strVal = val.trim()
             if (strVal === '') continue
+            if (key === 'project_number' || key === 'projectNumber') {
+                const canonical = parseCanonicalPositiveInt(strVal)
+                if (canonical !== undefined) {
+                    obj[key] = canonical
+                    continue
+                }
+            }
             if (/^-?\d+$/.test(strVal)) {
+                if (key === 'project_number' || key === 'projectNumber') continue
                 const parsed = parseInt(strVal, 10)
                 if (!isNaN(parsed)) obj[key] = parsed
             } else if ((key === 'project_number' || key === 'projectNumber') && /^p-?\d+$/i.test(strVal)) {
-                const parsed = parseInt(strVal.replace(/^p-?/i, ''), 10)
-                if (!isNaN(parsed)) obj[key] = parsed
+                const parsed = parseCanonicalPositiveInt(strVal.replace(/^p-?/i, ''))
+                if (parsed !== undefined) obj[key] = parsed
             } else if (key === 'project_number' || key === 'projectNumber') {
                 const preserved = obj[key]
                 Reflect.deleteProperty(obj, key)

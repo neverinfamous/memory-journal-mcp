@@ -53,19 +53,19 @@ function validateKanbanTargetScope(
     }
 }
 
-function sanitizeKanbanBoard(board: KanbanBoard): KanbanBoard {
+export function sanitizeKanbanBoard(board: KanbanBoard): KanbanBoard {
     // [INVARIANT] M10: Return cloned columns/items so cached board data is never mutated.
     return {
         ...board,
         projectTitle: fenceInline(board.projectTitle),
         columns: board.columns.map((column) => ({
             ...column,
-            status: fenceInline(column.status),
+            status: column.status,
             items: column.items.map((item) => {
                 const cloned = {
                     ...item,
                     title: fenceInline(item.title),
-                    ...(item.status !== null ? { status: fenceInline(item.status) } : {}),
+                    ...(item.status !== null ? { status: item.status } : {}),
                     ...(item.labels !== undefined
                         ? { labels: item.labels.map((label) => fenceInline(label)) }
                         : {}),

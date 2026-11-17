@@ -13,6 +13,7 @@ import {
     assertSafeCliOutputFile,
     getCliCommandDb as getDb,
 } from './db-helper.js'
+import { writeCliResult } from './cli-output.js'
 import { exportEntriesToMarkdown, importMarkdownEntries, processImportBatch, convertFile, type ParsedFile } from '../../markdown/index.js'
 import { VectorSearchManager } from '../../vector/vector-search-manager/index.js'
 import {
@@ -79,8 +80,10 @@ export async function exportJsonAction(options: z.infer<typeof exportJsonSchema>
         const filename = path.basename(destPath)
         const sizeBytes = Buffer.byteLength(jsonPayload, 'utf-8')
 
-        process.stdout.write(
-            JSON.stringify({ filename, path: destPath, sizeBytes, count: entries.length, entries }, null, 2) + '\n'
+        writeCliResult(
+            { filename, path: destPath, sizeBytes, count: entries.length, entries },
+            options.json,
+            `Exported ${String(entries.length)} entries to ${destPath}.`
         )
     } catch (e) {
         process.stderr.write("JSON export failed: " + (e instanceof Error ? e.message : String(e)) + '\n')
@@ -120,7 +123,7 @@ export async function exportMarkdownAction(options: z.infer<typeof exportMarkdow
         }))
 
         const result = await exportEntriesToMarkdown(exportable, resolvedDir, db, [resolvedDir])
-        process.stdout.write(JSON.stringify(result, null, 2) + '\n')
+        writeCliResult(result, options.json, 'Markdown export finished.')
         if (!result.success) {
             process.exitCode = 1
         }
@@ -301,7 +304,7 @@ export async function importMarkdownAction(options: z.infer<typeof importMarkdow
             [resolvedDir]
         )
 
-        process.stdout.write(JSON.stringify(result, null, 2) + '\n')
+        writeCliResult(result, options.json, 'Markdown import finished.')
         if (!result.success) {
             process.exitCode = 1
         }
@@ -410,7 +413,7 @@ export async function importExternalAction(options: z.infer<typeof importExterna
             result.success = false
             result.errors.push(...errors)
         }
-        process.stdout.write(JSON.stringify(result, null, 2) + '\n')
+        writeCliResult(result, options.json, 'External import finished.')
         if (!result.success) {
             process.exitCode = 1
         }

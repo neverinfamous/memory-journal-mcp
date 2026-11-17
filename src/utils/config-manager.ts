@@ -2,6 +2,7 @@ import * as fs from 'node:fs'
 import { EventEmitter } from 'node:events'
 import { parse as parseYaml, stringify as stringifyYaml } from 'yaml'
 import { logger } from './logger.js'
+import { RegistryConfigError } from './registry-config-file.js'
 import { parseToolFilter } from '../filtering/tool-filter.js'
 import { activeProjectRegistry, pairStoredScope } from './write-scope.js'
 import {
@@ -95,8 +96,14 @@ export class ConfigManager extends EventEmitter {
                 return null
             }
             return raw as Record<string, unknown>
-        } catch {
-            return null
+        } catch (err: unknown) {
+            const message = err instanceof Error ? err.message : String(err)
+            logger.error('Configuration file could not be parsed', {
+                module: 'ConfigManager',
+                path: this.configFilePath,
+                error: message,
+            })
+            throw new RegistryConfigError(`Configuration file could not be parsed: ${message}`)
         }
     }
 

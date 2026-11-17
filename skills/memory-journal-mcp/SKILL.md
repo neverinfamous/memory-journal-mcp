@@ -71,7 +71,7 @@ Every manual journal entry (`mj.core.createEntry`) **MUST** populate:
 
 ## 4. Commit Narratives, CLI & Session Summary Guardrails
 
-- **CLI Attribution (`entry create`):** `memory-journal-mcp entry create` resolves project context from explicit `-p`/`--project`/`--workspace-id` or `--metadata` first, then a registered `process.cwd()` path match in `projectRegistry`, before falling back to content/tag keywords (supports `--significance <type>` and `--related-to`).
+- **CLI Attribution (`entry create`):** `memory-journal-mcp entry create` resolves project context from explicit `-p`/`--project`/`--workspace-id` or `--metadata` first, then a registered `process.cwd()` path match in `projectRegistry` (supports `--significance <type>` and `--related-to`). Content and tag keywords do not select the project.
 - **Commit Narratives:** Any entry tagged `"commit-narrative"` **MUST** include `auto_context` with a non-empty `commits` array (`{ commits: ["<sha>"] }`).
 - **Session Summaries (Feeds Nightly `CMS-04` REM Supervisor):**
   - Entries tagged `"session-summary"` (`entry_type: "retrospective"`) **MUST** contain **only** these 4 exact H2 headers (no extra or duplicate H2 headers):

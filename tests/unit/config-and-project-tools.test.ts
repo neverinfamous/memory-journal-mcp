@@ -7,6 +7,7 @@ import * as fs from 'node:fs'
 import * as path from 'node:path'
 import * as os from 'node:os'
 import { ConfigManager } from '../../src/utils/config-manager.js'
+import { RegistryConfigError } from '../../src/utils/registry-config-file.js'
 import { DEFAULT_BRIEFING_CONFIG } from '../../src/handlers/resources/shared.js'
 import {
     handleUpdateConfiguration,
@@ -189,18 +190,34 @@ describe('ConfigManager & Configuration Tools', () => {
 
             const badJsonPath = path.join(tmpDir, 'bad.json')
             fs.writeFileSync(badJsonPath, '{ invalid json ', 'utf-8')
+            expect(
+                () =>
+                    new ConfigManager(
+                        {
+                            rawToolFilter: 'core',
+                            toolFilterConfig: null,
+                            briefingConfig: { ...DEFAULT_BRIEFING_CONFIG },
+                        },
+                        badJsonPath
+                    )
+            ).toThrow(RegistryConfigError)
+
+            const goodPath = path.join(tmpDir, 'good.json')
+            fs.writeFileSync(goodPath, '{}\n', 'utf-8')
             const mgr2 = new ConfigManager(
                 {
                     rawToolFilter: 'core',
                     toolFilterConfig: null,
                     briefingConfig: { ...DEFAULT_BRIEFING_CONFIG },
                 },
-                badJsonPath
+                goodPath
             )
-            mgr2.close()
+            fs.writeFileSync(goodPath, '{ invalid json ', 'utf-8')
             expect(() =>
                 (mgr2 as unknown as { reloadFromFile: () => void }).reloadFromFile()
             ).not.toThrow()
+            expect(mgr2.getConfig().rawToolFilter).toBe('core')
+            mgr2.close()
         })
     })
 

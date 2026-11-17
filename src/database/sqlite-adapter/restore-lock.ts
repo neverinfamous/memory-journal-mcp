@@ -34,21 +34,12 @@ function parseLockContent(lockContent: string): {
 /** Decide staleness for a lock held by a known PID. */
 function isHoldingPidStale(
     holdingPid: number,
-    lockTimestamp: number | undefined,
     lockDir: string,
     runtime: unknown
 ): boolean {
-    // Check timestamp first: if older than 30 seconds, consider it stale due to crash
-    if (lockTimestamp !== undefined && Date.now() - lockTimestamp > 30 * 1000) {
-        logger.warning('Found stale database restore lock (expired timestamp)', {
-            path: lockDir,
-            holdingPid,
-            ageMs: Date.now() - lockTimestamp,
-            module: 'SqliteAdapter',
-        })
-        return true
-    }
-    // [INVARIANT] Restore turns maintenance on before taking this directory, and the
+    // [INVARIANT] A live holder keeps the lock even when the timestamp is old.
+    // Age alone is not a crash signal; only ESRCH means the holder is gone.
+    // Restore turns maintenance on before taking this directory, and the
     // maintenance lock is exclusive. A lock file still owned by this process is leftover.
     if (holdingPid === process.pid) {
         logger.warning('Found stale database restore lock (current process)', {
@@ -120,9 +111,9 @@ function isLockStale(lockDir: string, lockFile: string, runtime: unknown): boole
     try {
         const lockContent = fs.readFileSync(lockFile, 'utf-8').trim()
         if (!lockContent) return isOrphanedLockDir(lockDir)
-        const { holdingPid, lockTimestamp } = parseLockContent(lockContent)
+        const { holdingPid } = parseLockContent(lockContent)
         if (holdingPid === undefined || isNaN(holdingPid)) return isOrphanedLockDir(lockDir)
-        return isHoldingPidStale(holdingPid, lockTimestamp, lockDir, runtime)
+        return isHoldingPidStale(holdingPid, lockDir, runtime)
     } catch (readErr: unknown) {
         // Only treat a missing lock.json as orphaned after a creation grace window so a contender
         // between mkdirSync(lockDir) and writeLockFile(lockFile) is never falsely reclaimed.

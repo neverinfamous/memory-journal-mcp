@@ -100,6 +100,7 @@ function sanitizeAuditArgNode(value: unknown, depth: number, seen: WeakSet<objec
         return value.map((item) => sanitizeAuditArgNode(item, depth + 1, seen))
     }
     const out: Record<string, unknown> = {}
+    Object.setPrototypeOf(out, null)
     for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
         out[k] = AUDIT_ARG_SECRET_KEY_RE.test(k)
             ? '[REDACTED]'

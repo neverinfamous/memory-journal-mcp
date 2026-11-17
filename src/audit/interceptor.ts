@@ -154,6 +154,7 @@ function scrubAuditArgValue(val: unknown, depth: number, seen: WeakSet<object>):
         return val.map((item) => scrubAuditArgValue(item, depth + 1, seen))
     }
     const out: Record<string, unknown> = {}
+    Object.setPrototypeOf(out, null)
     for (const [k, v] of Object.entries(val as Record<string, unknown>)) {
         out[k] = AUDIT_SENSITIVE_KEY_RE.test(k)
             ? '[REDACTED]'
@@ -398,6 +399,9 @@ export async function auditOperation<T>(
 
     try {
         const result = await fn()
+        const inspected = inspectToolResult(result)
+        success = inspected.success
+        if (inspected.error !== undefined) error = inspected.error
         tokenEstimate = estimateOperationResultTokens(result, name)
         return result
     } catch (err) {

@@ -231,7 +231,7 @@ function buildSynthesizedEntryPayload(
         entryObj['trustScore'] ?? rawObj['trustScore'] ?? entryObj['confidence'] ?? rawObj['confidence']
     )
     const impactVal = normalizeUnitScore(
-        entryObj['impact'] ?? rawObj['impact'] ?? entryObj['impact_score'] ?? entryObj['impact_score'] ??
+        entryObj['impact'] ?? rawObj['impact'] ?? entryObj['impact_score'] ?? rawObj['impact_score'] ??
         entryObj['impactScore'] ?? rawObj['impactScore']
     )
     const validVal = normalizeValidation(getNonEmptyString(entryObj, rawObj, ['validation_status', 'validation', 'validationStatus']))
