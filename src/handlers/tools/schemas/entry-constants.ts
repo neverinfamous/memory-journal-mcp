@@ -248,6 +248,21 @@ export const CONTENT_ALIASES = [
     'journalEntry',
     'entry_text',
     'entryText',
+    'note',
+    'comment',
+    'reason',
+    'findings',
+    'observation',
+    'observations',
+    'analysis',
+    'problem',
+    'issue',
+    'fix',
+    'solution',
+    'result',
+    'outcome',
+    'action_taken',
+    'actionTaken',
 ]
 
 export const PASSED_VALIDATION_ALIASES = new Set([

@@ -376,6 +376,20 @@ function resolveWrappedAliasProp(
         )
         return { matched: true, value: revisions }
     }
+    if (prop === 'relationships' && 'edges' in targetRecord && Array.isArray(targetRecord['edges'])) {
+        const relationships = targetRecord['edges'].filter(isObject).map((edge) => ({
+            fromEntryId: edge['from'],
+            toEntryId: edge['to'],
+            sourceId: edge['from'],
+            targetId: edge['to'],
+            relationshipType: edge['type'],
+            relationType: edge['type'],
+            from: edge['from'],
+            to: edge['to'],
+            type: edge['type'],
+        }))
+        return { matched: true, value: relationships }
+    }
     return { matched: false }
 }
 

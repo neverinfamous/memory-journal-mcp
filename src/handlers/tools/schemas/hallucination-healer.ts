@@ -238,6 +238,38 @@ function healNestedContainersAndEntryIds(obj: Record<string, unknown>): boolean 
     return modified
 }
 
+function synthesizeFallbackAnchorContent(obj: Record<string, unknown>): boolean {
+    if (isUpdatePayload(obj) || 'query' in obj) return false
+    const currentContent = toStr(obj['content']).trim()
+    if (currentContent !== '') return false
+    if (!Array.isArray(obj['anchors']) || obj['anchors'].length === 0) return false
+
+    const paths = obj['anchors']
+        .map((a) => {
+            if (typeof a === 'string') return a.trim()
+            if (typeof a === 'object' && a !== null && 'anchor_path' in a) {
+                const p = (a as Record<string, unknown>)['anchor_path']
+                return typeof p === 'string' ? p.trim() : ''
+            }
+            return ''
+        })
+        .filter((p) => p !== '')
+    if (paths.length === 0) return false
+
+    const entryType =
+        typeof obj['entry_type'] === 'string' && obj['entry_type'].trim() !== ''
+            ? obj['entry_type'].trim()
+            : 'technical_note'
+    const tagList = Array.isArray(obj['tags'])
+        ? obj['tags'].filter((t): t is string => typeof t === 'string' && t.trim() !== '')
+        : []
+    const heading =
+        tagList.length > 0 ? `# ${entryType} (${tagList.join(', ')})` : `# ${entryType}`
+    const bullets = paths.map((p) => `- \`${p}\``).join('\n')
+    obj['content'] = `${heading}\n\n## Anchored Files\n${bullets}`
+    return true
+}
+
 /**
  * Shared preprocessor to heal common LLM hallucinations in payloads before Zod validation.
  */
@@ -286,6 +318,7 @@ export function healAgentHallucinations(val: unknown): unknown {
     if (healSortByField(obj)) modified = true
     if (healMetadataAndContextFields(obj)) modified = true
     if (healTagsAndEntryType(obj)) modified = true
+    if (synthesizeFallbackAnchorContent(obj)) modified = true
     if (healSessionSummaryPayload(obj)) modified = true
     if (healWorkspaceAndProjectContext(obj)) modified = true
 

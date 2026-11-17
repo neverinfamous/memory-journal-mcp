@@ -96,7 +96,9 @@ function resolveBatchItemAliasAndTarget(
 function applyBatchItemSessionDefaults(
     nextItem: Record<string, unknown>,
     ctx: BatchScopeHelpersContext,
-    itemAliasDerivedWs: boolean
+    itemAliasDerivedWs: boolean,
+    parentWorkspaceId: unknown,
+    batchArrayKey: 'entries' | 'updates'
 ): void {
     const { projectId, workspaceId, explicitWorkspace, isDefaultWorkspaceName } = ctx
     const callerItemWs =
@@ -112,10 +114,16 @@ function applyBatchItemSessionDefaults(
     const itemCrossWsMove =
         itemTargetWs !== undefined &&
         (typeof workspaceId !== 'string' || itemTargetWs.toLowerCase() !== workspaceId.toLowerCase())
+    const parentIsWildcardUpdate =
+        batchArrayKey === 'updates' &&
+        typeof parentWorkspaceId === 'string' &&
+        parentWorkspaceId.trim() === '*' &&
+        workspaceId !== '*'
 
     if (
         !hasItemWs &&
         !hasItemProj &&
+        !parentIsWildcardUpdate &&
         workspaceId !== undefined &&
         workspaceId !== '*' &&
         (!isDefaultWorkspaceName(workspaceId) || explicitWorkspace === true)
@@ -124,6 +132,7 @@ function applyBatchItemSessionDefaults(
     }
     if (
         !itemCrossWsMove &&
+        !parentIsWildcardUpdate &&
         nextItem['project_number'] === undefined &&
         typeof projectId === 'number' &&
         (!isDefaultWorkspaceName(callerItemWs) ||
@@ -144,6 +153,7 @@ export function normalizeBatchDispatchItems(
 ): { errorResult: Record<string, unknown> } | undefined {
     const rawItems = paramsObj[batchArrayKey]
     if (!Array.isArray(rawItems)) return undefined
+    const parentWorkspaceId = paramsObj['workspace_id']
     const nextItems: unknown[] = []
     for (const item of rawItems) {
         if (!isRecord(item)) {
@@ -168,7 +178,13 @@ export function normalizeBatchDispatchItems(
         if (itemProjErr !== undefined) return itemProjErr
 
         resolveBatchItemAliasAndTarget(nextItem, batchArrayKey, reg, ctx, itemAliasDerivedWs)
-        applyBatchItemSessionDefaults(nextItem, ctx, itemAliasDerivedWs)
+        applyBatchItemSessionDefaults(
+            nextItem,
+            ctx,
+            itemAliasDerivedWs,
+            parentWorkspaceId,
+            batchArrayKey
+        )
         nextItems.push(nextItem)
     }
     paramsObj[batchArrayKey] = nextItems

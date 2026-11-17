@@ -226,7 +226,18 @@ function normalizeCreateAndSummaryArgs(
         args[0] = obj
         const tags = Array.isArray(obj['tags']) ? obj['tags'] : undefined
         const entryType = typeof obj['entry_type'] === 'string' ? obj['entry_type'] : undefined
-        if (typeof obj['content'] === 'string' && (tags?.includes('session-summary') || entryType === 'retrospective')) {
+        const isSemanticCompaction =
+            tags?.includes('semantic-summary') === true ||
+            tags?.includes('cms-02-nrem-consolidation') === true
+        if (tags?.includes('session-summary') && isSemanticCompaction) {
+            obj['tags'] = tags.filter((t) => t !== 'session-summary')
+        }
+        const effectiveTags = Array.isArray(obj['tags']) ? obj['tags'] : undefined
+        if (
+            typeof obj['content'] === 'string' &&
+            !isSemanticCompaction &&
+            (effectiveTags?.includes('session-summary') || entryType === 'retrospective')
+        ) {
             obj['content'] = healSessionSummaryContent(obj['content'], { normalizeSynonyms: true, usePeriodOnNone: false })
         }
     }

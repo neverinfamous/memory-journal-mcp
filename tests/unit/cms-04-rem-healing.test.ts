@@ -336,4 +336,163 @@ describe('CMS-04 REM Self-Healing Regressions (agent-issues.jsonl & audit teleme
         >
         expect(await unknownGroup['someMethod']?.schema()).toBe('unknown')
     })
+
+    it('synthesizes fallback content from anchors when content is omitted and strips session-summary when semantic-summary is present', () => {
+        const anchorOnly = CreateEntrySchema.parse({
+            workspace_id: 'db-mcp',
+            project_number: 15,
+            session_id: '293870e8-469c-4d61-9d2c-be616f637da7',
+            entry_type: 'bug_fix',
+            impact_score: 0.4,
+            trust_score: 0.95,
+            validation_status: 'passed',
+            tags: ['testing', 'db-mcp', 'tool-groups'],
+            anchors: [
+                { anchor_path: 'src/adapters/sqlite/tools/vector/helpers.ts', anchor_type: 'file', status: 'pending' },
+                { anchor_path: 'tests/adapters/sqlite/tools/vector-part5-schema.test.ts', anchor_type: 'file', status: 'pending' },
+            ],
+        })
+        expect(anchorOnly.content).toContain('# bug_fix (testing, db-mcp, tool-groups)')
+        expect(anchorOnly.content).toContain('`src/adapters/sqlite/tools/vector/helpers.ts`')
+
+        const semanticMcp = CreateEntrySchema.parse({
+            workspace_id: 'db-mcp',
+            project_number: 15,
+            entry_type: 'retrospective',
+            content: '# Semantic Consolidation\n\n## Consolidated Episodic Scope\nSynthesized 15 entries.',
+            tags: ['session-summary', 'db-mcp', 'cms-02-nrem-consolidation', 'semantic-summary'],
+        })
+        expect(semanticMcp.tags).not.toContain('session-summary')
+        expect(semanticMcp.content).not.toContain('## Accomplished')
+
+        const semanticCm = applyArgInterceptions('createEntry', [
+            {
+                workspace_id: 'mysql-mcp',
+                project_number: 9,
+                entry_type: 'retrospective',
+                content: '# Semantic Consolidation\n\n## Consolidated Episodic Scope\nSynthesized 31 entries.',
+                tags: ['session-summary', 'mysql-mcp', 'semantic-summary'],
+            },
+        ])
+        expect('args' in semanticCm).toBe(true)
+        if ('args' in semanticCm) {
+            const first = semanticCm.args[0] as Record<string, unknown>
+            expect(first['tags']).not.toContain('session-summary')
+            expect(String(first['content'])).not.toContain('## Accomplished')
+        }
+    })
+
+    it('aliases mj.relationships.getEntryRelationships to visualizeRelationships and exposes .relationships on graph results', async () => {
+        const e1 = db.createEntry({
+            content: 'Source entry',
+            workspaceId: 'memory-journal-mcp',
+            projectNumber: 5,
+        })
+        const e2 = db.createEntry({
+            content: 'Target entry',
+            workspaceId: 'memory-journal-mcp',
+            projectNumber: 5,
+        })
+        db.linkEntries(e1.id, e2.id, 'implements', undefined, 'memory-journal-mcp')
+
+        const api = createJournalApi(collectNonCodeModeTools({ db, config }))
+        const getRelsFn = api.relationships['getEntryRelationships']
+        expect(typeof getRelsFn).toBe('function')
+
+        const proxy = buildApiProxy(
+            (_g, _m, args) => Promise.resolve(getRelsFn?.(...args)),
+            { relationships: ['link_entries', 'visualize_relationships'] }
+        )
+        const relGroup = proxy['relationships'] as Record<
+            string,
+            (arg: unknown) => Promise<Record<string, unknown>>
+        >
+        const res = await relGroup['getEntryRelationships']!({
+            entry_id: e1.id,
+            workspace_id: 'memory-journal-mcp',
+        })
+        const relList = res?.['relationships'] as Array<{
+            fromEntryId: number
+            toEntryId: number
+            relationshipType: string
+        }>
+        expect(Array.isArray(relList)).toBe(true)
+        expect(relList).toHaveLength(1)
+        expect(relList[0]).toMatchObject({
+            fromEntryId: e1.id,
+            toEntryId: e2.id,
+            relationshipType: 'implements',
+        })
+    })
+
+    it('allows cross-project batchUpdateEntries with explicit workspace_id: "*" and foreign repo git calls in Code Mode dispatch', async () => {
+        const { normalizeDispatchParams } = await import('../../src/handlers/tools/codemode/dispatch-scope.js')
+        const { getGitTools } = await import('../../src/handlers/tools/git.js')
+        const { getBatchTools } = await import('../../src/handlers/tools/admin/batch-tools.js')
+
+        const multiConfig: ToolHandlerConfig = {
+            defaultWorkspaceId: 'memory-journal-mcp',
+            projectRegistry: {
+                'memory-journal-mcp': { path: process.cwd(), project_number: 5 },
+                'db-mcp': { path: process.cwd(), project_number: 15 },
+                adamic: { path: process.cwd(), project_number: 16 },
+            },
+            runtime: new ServerRuntime(),
+        }
+        const sessionCtx = { db, config: multiConfig }
+
+        // 1. Foreign repo git call inside a project #5 Code Mode session
+        const gitTool = getGitTools(sessionCtx).find((t) => t.name === 'get_commit_history')!
+        const gitNorm = await normalizeDispatchParams(
+            gitTool,
+            { repo: 'db-mcp', max_count: 5, tech_debt_audit: true },
+            {
+                sessionContext: sessionCtx,
+                projectId: 5,
+                workspaceId: 'memory-journal-mcp',
+                explicitWorkspace: true,
+            }
+        )
+        expect('params' in gitNorm).toBe(true)
+        if ('params' in gitNorm) {
+            const p = gitNorm.params as Record<string, unknown>
+            expect(p['project_number']).toBe(15)
+            expect(p['workspace_id']).toBeUndefined()
+        }
+
+        // 2. Cross-project batch_update_entries with explicit workspace_id: '*' inside a project #5 session
+        const e5 = db.createEntry({ content: 'Entry in MJ', workspaceId: 'memory-journal-mcp', projectNumber: 5 })
+        const e15 = db.createEntry({ content: 'Entry in DB', workspaceId: 'db-mcp', projectNumber: 15 })
+        const e16 = db.createEntry({ content: 'Entry in Adamic', workspaceId: 'adamic', projectNumber: 16 })
+
+        const batchUpdateTool = getBatchTools(sessionCtx).find((t) => t.name === 'batch_update_entries')!
+        const batchNorm = await normalizeDispatchParams(
+            batchUpdateTool,
+            {
+                workspace_id: '*',
+                entries: [
+                    { id: e5.id, significance_type: 'architecture' },
+                    { id: e15.id, significance_type: 'blocker_resolved' },
+                    { id: e16.id, significance_type: 'milestone' },
+                ],
+            },
+            {
+                sessionContext: sessionCtx,
+                projectId: 5,
+                workspaceId: 'memory-journal-mcp',
+                explicitWorkspace: true,
+            }
+        )
+        expect('params' in batchNorm).toBe(true)
+        if ('params' in batchNorm) {
+            const p = batchNorm.params as Record<string, unknown>
+            expect(p['project_number']).toBeUndefined()
+            const updates = p['entries'] as Array<Record<string, unknown>>
+            expect(updates.every((u) => u['project_number'] === undefined)).toBe(true)
+
+            const execRes = (await batchUpdateTool.handler(p)) as { success: boolean; count: number }
+            expect(execRes.success).toBe(true)
+            expect(execRes.count).toBe(3)
+        }
+    })
 })

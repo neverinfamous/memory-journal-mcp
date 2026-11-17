@@ -68,7 +68,7 @@ export function systemInterceptor(ctx: ExecutionContext): void {
             nestedTimeout = Math.max(nestedTimeout, 600000);
           }
           if (/(?:coverage|--coverage)/i.test(a)) {
-            nestedTimeout = Math.max(nestedTimeout, 480000);
+            nestedTimeout = Math.max(nestedTimeout, 600000);
           }
           if (/(?:typecheck|tsc|lint|check|build|test|vitest|jest)/i.test(a)) {
             nestedTimeout = Math.max(nestedTimeout, 600000);
@@ -95,7 +95,7 @@ export function systemInterceptor(ctx: ExecutionContext): void {
                 nestedTimeout = Math.max(nestedTimeout, 600000);
               }
               if (/(?:coverage|--coverage)/i.test(fileContent)) {
-                nestedTimeout = Math.max(nestedTimeout, 480000);
+                nestedTimeout = Math.max(nestedTimeout, 600000);
               }
               if (/(?:typecheck|tsc|lint|check|build|test|vitest|jest)/i.test(fileContent)) {
                 nestedTimeout = Math.max(nestedTimeout, 600000);
@@ -612,9 +612,9 @@ export function systemInterceptor(ctx: ExecutionContext): void {
         payload.bypassInterceptors = true;
         console.error(`\n   🛠️ AUTONOMOUS HEALING: Detected Docker build/scout or ecosystem orchestration in Windows eval payload. Auto-extending timeout to 600s... (Frictionless Recovery)`);
       } else if (isCoverage) {
-        payload.timeoutMs = Math.max(payload.timeoutMs || 480000, 480000);
+        payload.timeoutMs = Math.max(payload.timeoutMs || 600000, 600000);
         payload.bypassInterceptors = true;
-        console.error(`\n   🛠️ AUTONOMOUS HEALING: Detected test coverage in Windows eval payload. Auto-extending timeout to 480s... (Frictionless Recovery)`);
+        console.error(`\n   🛠️ AUTONOMOUS HEALING: Detected test coverage in Windows eval payload. Auto-extending timeout to 600s... (Frictionless Recovery)`);
       } else if (isChainedQuality) {
         payload.timeoutMs = Math.max(payload.timeoutMs || 600000, 600000);
         payload.bypassInterceptors = true;
@@ -715,7 +715,7 @@ export function systemInterceptor(ctx: ExecutionContext): void {
           (args && args.includes('--isolate')) ||
           /--isolate\b/.test(underlyingScript)
         );
-        const winTimeout = isFullLintOrCheck || hasLargeFile || isIsolatedFullSuite ? 600000 : (isCoverage || isLargeTestBatch ? 480000 : (isTestDir || isFullSuite ? 360000 : (isMultiTest || isMultiFileLint ? 300000 : 240000)));
+        const winTimeout = isFullLintOrCheck || hasLargeFile || isIsolatedFullSuite || isCoverage || isFullSuite ? 600000 : (isLargeTestBatch ? 480000 : (isTestDir ? 360000 : (isMultiTest || isMultiFileLint ? 300000 : 240000)));
         payload.timeoutMs = Math.max(payload.timeoutMs || winTimeout, winTimeout);
         payload.bypassInterceptors = true;
       }

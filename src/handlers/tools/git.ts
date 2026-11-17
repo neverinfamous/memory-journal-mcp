@@ -384,19 +384,37 @@ export function getGitTools(context: ToolContext): ToolDefinition[] {
 
                     const results: StalenessCheckRow[] = []
                     const skippedWorkspaces: string[] = []
+                    const maxRecentEntries = targetWorkspaces.length > 1 ? 8 : 20
+                    const maxCommitsPerAnchor = targetWorkspaces.length > 1 ? 5 : 25
 
-                    for (const wsId of targetWorkspaces) {
-                        const outcome = await evaluateWorkspaceAnchors({
-                            db,
-                            wsId,
-                            rawWs,
-                            rawProj,
-                            resolvedEntryId,
-                            registry,
-                            countCommitsSince: async (anchorPath, since, cwd) =>
-                                (await fetchCommits({ path: anchorPath, since, maxCount: 25 }, cwd))
-                                    .length,
-                        })
+                    const outcomes = await Promise.all(
+                        targetWorkspaces.map((wsId) =>
+                            evaluateWorkspaceAnchors({
+                                db,
+                                wsId,
+                                rawWs,
+                                rawProj,
+                                resolvedEntryId,
+                                registry,
+                                maxRecentEntries,
+                                countCommitsSince: async (anchorPath, since, cwd) =>
+                                    (
+                                        await fetchCommits(
+                                            {
+                                                path: anchorPath,
+                                                since,
+                                                maxCount: maxCommitsPerAnchor,
+                                            },
+                                            cwd
+                                        )
+                                    ).length,
+                            })
+                        )
+                    )
+                    for (let i = 0; i < targetWorkspaces.length; i++) {
+                        const wsId = targetWorkspaces[i]
+                        const outcome = outcomes[i]
+                        if (wsId === undefined || outcome === undefined) continue
                         if (outcome.skipped) skippedWorkspaces.push(wsId)
                         else results.push(...outcome.rows)
                     }

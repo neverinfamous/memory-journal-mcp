@@ -108,6 +108,13 @@ export function healSessionSummaryPayload(obj: Record<string, unknown>): boolean
     if ('query' in obj || !Array.isArray(obj['tags']) || !obj['tags'].includes('session-summary')) {
         return false
     }
+    if (
+        obj['tags'].includes('semantic-summary') ||
+        obj['tags'].includes('cms-02-nrem-consolidation')
+    ) {
+        obj['tags'] = obj['tags'].filter((t: unknown) => t !== 'session-summary')
+        return true
+    }
     let modified = false
     const isUpdate = isUpdatePayload(obj)
     if (!isUpdate && obj['entry_type'] === undefined) {

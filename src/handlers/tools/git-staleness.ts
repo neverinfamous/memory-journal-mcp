@@ -193,7 +193,8 @@ function collectStalenessTargetsForWorkspace(
     wsId: string,
     rawWs: string | undefined,
     rawProj: number | undefined,
-    resolvedEntryId: number | undefined
+    resolvedEntryId: number | undefined,
+    maxRecentEntries = 20
 ): { id: number; timestamp: string }[] {
     if (resolvedEntryId !== undefined) {
         const entry = db.getEntryByIdIncludeDeleted(resolvedEntryId, rawWs === '*' ? '*' : wsId)
@@ -204,7 +205,15 @@ function collectStalenessTargetsForWorkspace(
         return [{ id: entry.id, timestamp: entry.timestamp }]
     }
     const projectNumber = typeof rawProj === 'number' ? rawProj : undefined
-    const { entries: recent } = db.getRecentEntries(20, undefined, undefined, undefined, false, wsId, projectNumber)
+    const { entries: recent } = db.getRecentEntries(
+        maxRecentEntries,
+        undefined,
+        undefined,
+        undefined,
+        false,
+        wsId,
+        projectNumber
+    )
     return recent.map((r) => ({ id: r.id, timestamp: r.timestamp }))
 }
 
@@ -216,9 +225,10 @@ export async function evaluateWorkspaceAnchors(options: {
     rawProj: number | undefined
     resolvedEntryId: number | undefined
     registry: ToolHandlerConfig['projectRegistry'] | undefined
+    maxRecentEntries?: number | undefined
     countCommitsSince: (anchorPath: string, since: string, cwd: string) => Promise<number>
 }): Promise<{ rows: StalenessCheckRow[]; skipped: boolean }> {
-    const { db, wsId, rawWs, rawProj, resolvedEntryId, registry, countCommitsSince } = options
+    const { db, wsId, rawWs, rawProj, resolvedEntryId, registry, maxRecentEntries, countCommitsSince } = options
     const canonicalWs = findCanonicalRegistryKey(wsId, registry) ?? wsId
     const registryPath = registry?.[canonicalWs]?.path
     if (registryPath === undefined || registryPath.length === 0 || !fs.existsSync(registryPath)) {
@@ -230,7 +240,14 @@ export async function evaluateWorkspaceAnchors(options: {
         )
     }
 
-    const targets = collectStalenessTargetsForWorkspace(db, wsId, rawWs, rawProj, resolvedEntryId)
+    const targets = collectStalenessTargetsForWorkspace(
+        db,
+        wsId,
+        rawWs,
+        rawProj,
+        resolvedEntryId,
+        maxRecentEntries ?? 20
+    )
     const anchorsByEntry =
         targets.length > 0 && typeof db.getAnchorsByEntryIds === 'function'
             ? db.getAnchorsByEntryIds(

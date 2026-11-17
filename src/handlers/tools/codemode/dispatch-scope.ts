@@ -341,16 +341,42 @@ function applyRootSessionInheritance(
     tool: ToolDefinition,
     paramsObj: Record<string, unknown>,
     ctx: DispatchParamContext,
-    flags: RootScopeFlags
+    flags: RootScopeFlags,
+    reg: NonNullable<ToolContext['config']>['projectRegistry']
 ): void {
     if (SESSION_INHERITANCE_EXCLUDED_TOOLS.has(tool.name)) return
     const { projectId, workspaceId, explicitWorkspace } = ctx
     const callerWorkspaceId =
         typeof paramsObj['workspace_id'] === 'string' ? paramsObj['workspace_id'] : undefined
+    const callerRepoHint =
+        typeof paramsObj['repo'] === 'string' && paramsObj['repo'].trim() !== ''
+            ? paramsObj['repo'].trim()
+            : typeof paramsObj['repo_name'] === 'string' && paramsObj['repo_name'].trim() !== ''
+              ? paramsObj['repo_name'].trim()
+              : undefined
+    const repoReg = callerRepoHint !== undefined ? lookupRegistryEntry(reg, callerRepoHint) : undefined
+    const repoTargetsForeignProject =
+        callerRepoHint !== undefined &&
+        ((repoReg?.project_number !== undefined &&
+            typeof projectId === 'number' &&
+            repoReg.project_number !== projectId) ||
+            (typeof workspaceId === 'string' &&
+                workspaceId !== '*' &&
+                callerRepoHint.split(/[/\\]/).filter(Boolean).pop()?.toLowerCase() !==
+                    workspaceId.toLowerCase()))
+    if (
+        repoTargetsForeignProject &&
+        paramsObj['project_number'] === undefined &&
+        repoReg?.project_number !== undefined &&
+        checkSchemaAcceptsKey(tool.inputSchema, 'project_number')
+    ) {
+        paramsObj['project_number'] = repoReg.project_number
+    }
 
     // [INVARIANT] Explicit `workspace_id: 'default'` inherits session projectId only when the session itself is explicit `'default'`.
     if (
         !flags.hasCrossWorkspaceTarget &&
+        !repoTargetsForeignProject &&
         paramsObj['project_number'] === undefined &&
         projectId !== undefined &&
         (callerWorkspaceId === undefined ||
@@ -366,6 +392,7 @@ function applyRootSessionInheritance(
     const canInheritSessionWorkspace = workspaceId !== '*' || tool.annotations?.readOnlyHint === true
     if (
         !flags.callerPassedProjectOnly &&
+        !repoTargetsForeignProject &&
         paramsObj['workspace_id'] === undefined &&
         workspaceId !== undefined &&
         canInheritSessionWorkspace &&
@@ -417,9 +444,15 @@ export async function normalizeDispatchParams(
             (tool.name === 'batch_update_entries' || tool.name === 'team_batch_update_entries') &&
             paramsObj['workspace_id'] === '*' &&
             paramsObj['project_number'] === undefined &&
-            typeof projectId === 'number'
+            typeof projectId === 'number' &&
+            explicitWorkspace !== false
         ) {
-            paramsObj['project_number'] = projectId
+            // Only stamp session projectId onto wildcard batch updates when the caller did not
+            // explicitly pass `workspace_id: '*'` on the batch_update_entries call itself
+            // (i.e., when `workspaceId === '*'` came from the outer session).
+            if (workspaceId === '*') {
+                paramsObj['project_number'] = projectId
+            }
         }
         const batchError = normalizeBatchDispatchItems(batchArrayKey, paramsObj, reg, {
             projectId,
@@ -430,7 +463,7 @@ export async function normalizeDispatchParams(
         })
         if (batchError !== undefined) return batchError
     } else {
-        applyRootSessionInheritance(tool, paramsObj, ctx, flags)
+        applyRootSessionInheritance(tool, paramsObj, ctx, flags, reg)
     }
 
     await autoPopulateGithubUrls(paramsObj, sessionContext, workspaceId, projectId)

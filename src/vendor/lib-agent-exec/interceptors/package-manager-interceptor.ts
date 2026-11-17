@@ -413,7 +413,7 @@ export function packageManagerInterceptor(ctx: ExecutionContext): void {
       );
       const targetTimeout = ctx.payload.target === 'wsl2'
         ? (isFullLintOrCheck || hasLargeFile || isIsolatedFullSuite ? 360000 : (isCoverage || isLargeTestBatch ? 300000 : (isMultiTest || isTestDir || isFullSuite ? 180000 : 90000)))
-        : (isFullLintOrCheck || hasLargeFile || isIsolatedFullSuite ? 600000 : (isCoverage || isLargeTestBatch ? 480000 : (isTestDir || isFullSuite ? 360000 : (isMultiTest || isMultiFileLint ? 300000 : 240000))));
+        : (isFullLintOrCheck || hasLargeFile || isIsolatedFullSuite || isCoverage || isFullSuite ? 600000 : (isLargeTestBatch ? 480000 : (isTestDir ? 360000 : (isMultiTest || isMultiFileLint ? 300000 : 240000))));
       if (ctx.payload.timeoutMs === undefined || ctx.payload.timeoutMs < targetTimeout) {
         ctx.payload.timeoutMs = targetTimeout;
       }
@@ -524,7 +524,7 @@ export function packageManagerInterceptor(ctx: ExecutionContext): void {
         const isFullSuite = isTestRunner && testFiles.length === 0 && !isTestDir;
         const runnerTimeout = ctx.payload.target === 'wsl2'
           ? (isCoverage || isLargeTestBatch ? 300000 : (isMultiTest || isTestDir || isFullSuite ? 180000 : 90000))
-          : (isBackupConversations ? 600000 : (isCoverage || isLargeTestBatch ? 480000 : (isTestDir || isFullSuite ? 360000 : (isMultiTest ? 300000 : 240000))));
+          : (isBackupConversations || isCoverage || isFullSuite ? 600000 : (isLargeTestBatch ? 480000 : (isTestDir ? 360000 : (isMultiTest ? 300000 : 240000))));
         if (ctx.payload.timeoutMs === undefined || ctx.payload.timeoutMs < runnerTimeout) {
           ctx.payload.timeoutMs = runnerTimeout;
         }

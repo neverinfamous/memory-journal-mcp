@@ -670,19 +670,59 @@ export function handleRipgrepInterception(ctx: ExecutionContext, hasStdin: boole
   if (!hasHelpOrVersion && !hasPatternFlag && !ctx.args.includes('--')) {
     const patternIdxForDash = findPatternExprIndex(cmdBasename, ctx.args);
     let candidateIdx = patternIdxForDash;
-    if (candidateIdx === -1) {
-      // Check if an argument starting with '-' was skipped by getPositionalArgs because it looked like a flag, e.g. rg -n "\"--add\"" file.ts or rg -n "--add" file.ts
-      const toolFlags = ['-A', '-B', '-C', '-m', '-M', '-e', '-f', '-g', '-t', '-T', '-r', '-j', '-E', '--after-context', '--before-context', '--context', '--max-count', '--max-columns', '--max-depth', '--regexp', '--file', '--glob', '--type', '--type-not', '--replace', '--threads', '--encoding', '--ignore-file', '--max-filesize'];
+    const toolFlagsWithVal = new Set(['-A', '-B', '-C', '-m', '-M', '-e', '-f', '-g', '-t', '-T', '-r', '-j', '-E', '--after-context', '--before-context', '--context', '--max-count', '--max-columns', '--max-depth', '--regexp', '--file', '--glob', '--type', '--type-not', '--replace', '--threads', '--encoding', '--ignore-file', '--max-filesize']);
+    const knownRgLongFlags = new Set([
+      '--auto-hybrid-regex', '--binary', '--block-buffered', '--byte-offset', '--case-sensitive',
+      '--color', '--colors', '--column', '--context-separator', '--count', '--count-matches',
+      '--crlf', '--debug', '--dfa-size-limit', '--engine', '--field-context-separator',
+      '--field-match-separator', '--files', '--files-with-matches', '--files-without-match',
+      '--fixed-strings', '--follow', '--generate', '--heading', '--hidden', '--hostname-bin',
+      '--hyperlink-format', '--iglob', '--ignore-case', '--ignore-file-case-insensitive',
+      '--include-zero', '--invert-match', '--json', '--line-buffered', '--line-number',
+      '--line-regexp', '--max-columns-preview', '--mmap', '--multiline', '--multiline-dotall',
+      '--no-auto-hybrid-regex', '--no-binary', '--no-block-buffered', '--no-byte-offset',
+      '--no-column', '--no-config', '--no-context-separator', '--no-crlf',
+      '--no-encoding', '--no-filename', '--no-fixed-strings', '--no-follow', '--no-heading',
+      '--no-hidden', '--no-ignore', '--no-ignore-dot', '--no-ignore-exclude',
+      '--no-ignore-files', '--no-ignore-global', '--no-ignore-messages', '--no-ignore-parent',
+      '--no-ignore-vcs', '--no-line-buffered', '--no-line-number', '--no-max-columns-preview',
+      '--no-messages', '--no-mmap', '--no-multiline', '--no-multiline-dotall', '--no-pcre2',
+      '--no-pcre2-unicode', '--no-pre', '--no-require-git', '--no-search-zip', '--no-smart-case',
+      '--no-sort-files', '--no-stats', '--no-text', '--no-trim', '--no-unicode', '--null',
+      '--null-data', '--one-file-system', '--only-matching', '--passthru', '--path-separator',
+      '--pcre2', '--pcre2-unicode', '--pcre2-version', '--pre', '--pre-glob', '--pretty',
+      '--quiet', '--regex-size-limit', '--require-git', '--search-zip', '--smart-case',
+      '--sort', '--sort-files', '--sortr', '--stats', '--stop-on-nonmatch', '--text',
+      '--trace', '--trim', '--type-add', '--type-clear', '--type-list', '--unrestricted',
+      '--vimgrep', '--with-filename', '--word-regexp',
+    ]);
+    const nonFlagArgs = ctx.args.filter((x, idx) => {
+      if (x === undefined || x.startsWith('-')) return false;
+      const prev = idx > 0 ? ctx.args[idx - 1] : undefined;
+      return prev === undefined || !toolFlagsWithVal.has(prev);
+    });
+    const allNonFlagArePaths = nonFlagArgs.length > 0 && nonFlagArgs.every(x => isPathLike(x));
+    const currentCandidate = candidateIdx !== -1 ? ctx.args[candidateIdx] : undefined;
+    const currentUnquoted = currentCandidate !== undefined ? currentCandidate.replace(/^(['"])(.*)\1$/, '$2') : '';
+    if (candidateIdx === -1 || !currentUnquoted.startsWith('-')) {
+      // Check if an argument starting with '-' was skipped by getPositionalArgs/findPatternExprIndex because it looked like a flag, e.g. rg -n "\"--add\"" file.ts, rg -n "--add" file.ts, or rg -n --workspace tests/
       for (let i = 0; i < ctx.args.length; i++) {
         const arg = ctx.args[i];
         if (arg === undefined) continue;
-        if (toolFlags.includes(arg)) {
+        if (toolFlagsWithVal.has(arg)) {
           i++;
           continue;
         }
         const unquoted = arg.replace(/^(['"])(.*)\1$/, '$2');
         const wasQuoted = unquoted !== arg;
         if (wasQuoted && unquoted.startsWith('-')) {
+          candidateIdx = i;
+          break;
+        }
+        const baseFlag = unquoted.split('=')[0]?.toLowerCase() ?? '';
+        const isUnknownLongFlag = unquoted.startsWith('--') && unquoted.length > 2 && !toolFlagsWithVal.has(baseFlag) && !knownRgLongFlags.has(baseFlag);
+        const isEscapedHyphen = unquoted.startsWith('\\-');
+        if (isEscapedHyphen || (isUnknownLongFlag && (allNonFlagArePaths || nonFlagArgs.length === 0))) {
           candidateIdx = i;
           break;
         }

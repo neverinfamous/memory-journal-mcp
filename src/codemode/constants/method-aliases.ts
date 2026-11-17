@@ -144,6 +144,18 @@ export const METHOD_ALIASES: Record<string, Record<string, string>> = {
         graph: 'visualizeRelationships',
         link_entries: 'linkEntries',
         visualize_relationships: 'visualizeRelationships',
+        ...mapToTarget(
+            [
+                'getEntryRelationships',
+                'get_entry_relationships',
+                'getRelationships',
+                'get_relationships',
+                'listRelationships',
+                'list_relationships',
+                'relationships',
+            ],
+            'visualizeRelationships'
+        ),
     },
     io: {
         dump: 'exportEntries',
