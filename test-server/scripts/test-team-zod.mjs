@@ -112,7 +112,7 @@ const cases = [
     {
         label: 'team_create_entry content number',
         name: 'team_create_entry',
-        arguments: { project_number: 5, workspace_id: 'test-ws', content: 123 },
+        arguments: { project_number: 5, workspace_id: 'memory-journal-mcp', content: 123 },
     },
     {
         label: 'team_search query number',
