@@ -35,13 +35,13 @@ describe('Pass 34 Performance Audit Fixes & Prompt Revision', () => {
         else delete process.env['DB_ENCRYPTION_KEY']
     })
 
-    it('bumps AUDIT_PROMPT_REVISION to pass34 and renders AP1-AP6 guidance cleanly', async () => {
-        expect(AUDIT_PROMPT_REVISION).toBe('2026-11-16-audit-pass34')
+    it('bumps AUDIT_PROMPT_REVISION to pass35 and renders AP1-AP6 guidance cleanly', async () => {
+        expect(AUDIT_PROMPT_REVISION).toBe('2026-11-17-audit-pass35')
         const def = getPerformanceAuditPromptDefinition()
         const rendered = await Promise.resolve(def.handler({ target: 'memory-journal-mcp' }, db))
         const text = rendered.messages.map((m) => m.content.text).join('\n')
 
-        expect(text).toContain('Prompt revision: 2026-11-16-audit-pass34')
+        expect(text).toContain('Prompt revision: 2026-11-17-audit-pass35')
         expect(text).toContain('BigInt')
         expect(text).toContain('CROSS JOIN')
         expect(text).toContain('<= 500')
@@ -154,7 +154,7 @@ describe('Pass 34 Performance Audit Fixes & Prompt Revision', () => {
         vmSpy.mockRestore()
     })
 
-    it('skips redundant JSON.parse in serializeAndEnforceEgress unless replacer mutates values', () => {
+    it('round-trips JSON.parse in serializeAndEnforceEgress to strip Proxy/symbol traps before postMessage', () => {
         const original = { items: [1, 2, 3], nested: { label: 'ok' } }
         const plainRes: { success: boolean; result?: unknown; error?: string } = {
             success: true,
@@ -162,8 +162,15 @@ describe('Pass 34 Performance Audit Fixes & Prompt Revision', () => {
         }
         serializeAndEnforceEgress(plainRes)
         expect(plainRes.success).toBe(true)
-        // Reference equality proves JSON.parse was skipped when no circular/bigint mutation occurred
-        expect(plainRes.result).toBe(original)
+        expect(plainRes.result).toStrictEqual(original)
+
+        const withProxy: { success: boolean; result?: unknown; error?: string } = {
+            success: true,
+            result: { items: [new Proxy({ id: 1 }, {})] },
+        }
+        serializeAndEnforceEgress(withProxy)
+        expect(withProxy.success).toBe(true)
+        expect(withProxy.result).toStrictEqual({ items: [{ id: 1 }] })
 
         const withBigInt: { success: boolean; result?: unknown; error?: string } = {
             success: true,

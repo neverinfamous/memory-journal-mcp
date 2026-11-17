@@ -9,6 +9,10 @@ import {
     githubScopeParseFields,
     resolveOwnerRepo,
 } from './helpers.js'
+import {
+    ensureInlineFenced,
+    fenceGitHubPullRequestSummary,
+} from './fencing-helpers.js'
 
 /** Build the `get_github_context` tool (extracted from `github/read-tools.ts`, Appendix A). */
 export function createGitHubContextTool(context: ToolContext): ToolDefinition {
@@ -80,12 +84,26 @@ export function createGitHubContextTool(context: ToolContext): ToolDefinition {
 
                 const ctx = await targetGithub.getRepoContext(undefined, target)
                 return {
-                    repoName: ctx.repoName,
-                    branch: ctx.branch,
+                    repoName:
+                        ctx.repoName !== undefined &&
+                        ctx.repoName !== null &&
+                        /[<>\r\n]|\s/.test(ctx.repoName)
+                            ? ensureInlineFenced(ctx.repoName)
+                            : ctx.repoName,
+                    branch:
+                        ctx.branch !== undefined && ctx.branch !== null
+                            ? ensureInlineFenced(ctx.branch)
+                            : ctx.branch,
                     commit: ctx.commit,
-                    remoteUrl: ctx.remoteUrl,
-                    issues: ctx.issues.map(fenceIssueMilestone),
-                    pullRequests: ctx.pullRequests,
+                    remoteUrl:
+                        ctx.remoteUrl !== undefined && ctx.remoteUrl !== null
+                            ? ensureInlineFenced(ctx.remoteUrl)
+                            : ctx.remoteUrl,
+                    issues: ctx.issues.map((i) => ({
+                        ...fenceIssueMilestone(i),
+                        title: ensureInlineFenced(i.title),
+                    })),
+                    pullRequests: ctx.pullRequests.map(fenceGitHubPullRequestSummary),
                     issueCount: ctx.issues.length,
                     prCount: ctx.pullRequests.length,
                     ...(ctx.degraded !== undefined ? { degraded: ctx.degraded } : {}),

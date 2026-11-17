@@ -3,7 +3,6 @@
  * the serialized egress byte boundary to prevent OOM and hard payload failures.
  */
 
-import { types } from 'node:util'
 import type { SandboxResult } from '../types.js'
 
 const MAX_COMPACTION_DEPTH = 6
@@ -129,16 +128,11 @@ export function serializeAndEnforceEgress(
 
     try {
         let bytes = 0
-        let mutatedByReplacer = false
         const cache = new Set()
 
         const resultJson = JSON.stringify(result.result, (_key: string, value: unknown) => {
             if (typeof value === 'object' && value !== null) {
-                if (types.isProxy(value)) {
-                    mutatedByReplacer = true
-                }
                 if (cache.has(value)) {
-                    mutatedByReplacer = true
                     return '[Circular]'
                 }
                 cache.add(value)
@@ -151,12 +145,8 @@ export function serializeAndEnforceEgress(
             } else if (typeof value === 'bigint') {
                 const str = value.toString()
                 bytes += str.length + 2
-                mutatedByReplacer = true
                 return str
             } else {
-                if (typeof value === 'function' || typeof value === 'symbol') {
-                    mutatedByReplacer = true
-                }
                 bytes += 5 // brackets/keys/null overhead
             }
 
@@ -171,10 +161,10 @@ export function serializeAndEnforceEgress(
             if (byteLength > egressLimit) {
                 throw new Error(`EgressLimitExceeded:${byteLength}`)
             }
-            // Skip redundant full-payload JSON.parse when no replacer substitutions occurred.
-            if (mutatedByReplacer) {
-                result.result = JSON.parse(resultJson) as unknown
-            }
+            // [SECURITY H5] Always round-trip through JSON.parse so VM objects with custom
+            // toJSON(), stateful getters, or ArrayBuffer/Map values cannot smuggle unmeasured
+            // multi-MB payloads over parentPort.postMessage structured clone.
+            result.result = JSON.parse(resultJson) as unknown
         } else {
             result.result = undefined
         }

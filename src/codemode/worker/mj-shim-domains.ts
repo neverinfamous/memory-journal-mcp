@@ -15,12 +15,14 @@ function getGroupProp(target: Record<string, unknown>, group: string, prop: stri
         : undefined
 }
 
-const ADAPTER_ITEMS = [
-    { name: 'sqlite', type: 'database', driver: 'better-sqlite3', status: 'connected', primary: true, description: 'Primary SQLite storage engine for journal entries, tags, and relationships' },
-    { name: 'sqlite-vec', type: 'vector', driver: 'sqlite-vec', status: 'connected', description: 'Native vector embeddings and semantic search engine' },
-    { name: 'team', type: 'database', driver: 'better-sqlite3', status: 'connected', description: 'Collaborative team journal database adapter' },
-    { name: 'github', type: 'integration', driver: 'octokit / gh', status: 'connected', description: 'GitHub synchronization and issue tracking adapter' },
-]
+const ADAPTER_ITEMS = Object.freeze(
+    [
+        { name: 'sqlite', type: 'database', driver: 'better-sqlite3', status: 'connected', primary: true, description: 'Primary SQLite storage engine for journal entries, tags, and relationships' },
+        { name: 'sqlite-vec', type: 'vector', driver: 'sqlite-vec', status: 'connected', description: 'Native vector embeddings and semantic search engine' },
+        { name: 'team', type: 'database', driver: 'better-sqlite3', status: 'connected', description: 'Collaborative team journal database adapter' },
+        { name: 'github', type: 'integration', driver: 'octokit / gh', status: 'connected', description: 'GitHub synchronization and issue tracking adapter' },
+    ].map((item) => Object.freeze(item))
+)
 
 export function createAdaptersShim(prop: string): object {
     const returnAdapters = (): Promise<unknown> =>

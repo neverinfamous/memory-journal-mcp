@@ -5,7 +5,7 @@ import { logger } from '../../utils/logger.js'
 import { assertNoPathTraversal } from '../../utils/security-utils.js'
 import { ResourceNotFoundError, ValidationError } from '../../types/errors.js'
 import type { IDatabaseConnection } from '../core/interfaces.js'
-import { applySqlCipherKey } from './sqlcipher-key.js'
+import { applySqlCipherKey, hasSqlCipherKey } from './sqlcipher-key.js'
 
 function hasErrorCode(err: unknown, code: string): boolean {
     return typeof err === 'object' && err !== null && 'code' in err && err.code === code
@@ -111,9 +111,7 @@ export async function writeVerifiedBackupFile(
     backupPath: string
 ): Promise<void> {
     const tempBackupPath = `${backupPath}.${String(process.pid)}.${String(Date.now())}.${randomUUID().slice(0, 8)}.tmp`
-    const rawEncryptionKey =
-        process.env['MJ_DB_ENCRYPTION_KEY'] ?? process.env['DB_ENCRYPTION_KEY']
-    const isEncrypted = rawEncryptionKey !== undefined && rawEncryptionKey !== ''
+    const isEncrypted = hasSqlCipherKey()
     const nativeDb = !isEncrypted ? ctx.getNativeDb?.() : undefined
 
     if (nativeDb !== undefined) {

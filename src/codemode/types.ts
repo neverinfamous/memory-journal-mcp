@@ -123,7 +123,8 @@ export const DEFAULT_SECURITY_CONFIG: SecurityConfig = {
         /\bconstructor\s*\.\s*constructor/, // No constructor chaining
         /\[\s*['"`]constructor['"`]\s*\]/i, // No bracket-notation constructor access
         /\bObject\s*\.\s*(?:getPrototypeOf|setPrototypeOf|defineProperty|defineProperties)\b/, // No prototype/descriptor manipulation
-        /\bReflect\s*\./i, // No Reflect API access (getPrototypeOf, ownKeys, construct, etc.)
+        /\b(?:getPrototypeOf|setPrototypeOf|defineProperty|defineProperties|__defineGetter__|__defineSetter__|__lookupGetter__|__lookupSetter__)\b/, // No destructured prototype helpers
+        /\bReflect\b/, // No Reflect API access or destructuring
         /\bSymbol\s*\./i, // No Symbol access (hasInstance, toPrimitive, etc.)
         /\bnew\s+Proxy\s*\(/i, // No Proxy construction
         /\bchild_process\b/, // No child processes

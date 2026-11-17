@@ -2,6 +2,60 @@ import * as fs from 'fs'
 import * as fsPromises from 'fs/promises'
 import * as path from 'path'
 import { fileURLToPath } from 'url'
+import { sanitizeErrorForLogging } from './security-utils.js'
+
+const SENSITIVE_KEY_RE =
+    /(?:token|secret|password|passphrase|authorization|webhook_?auth|webhook_?url|encryption_?key|api_?key|private_?key|^key$)/i
+const SENSITIVE_CLI_FLAG_RE =
+    /^--(?:auth-token|report-webhook-auth|report-webhook-url|github-token|oauth-.*secret|key|password|secret|token)(?:=(.*))?$/i
+
+function sanitizeCliArgList(args: unknown[], depth = 0): unknown[] {
+    const out: unknown[] = []
+    let redactNext = false
+    for (const item of args) {
+        if (redactNext) {
+            out.push('[REDACTED]')
+            redactNext = false
+            continue
+        }
+        if (typeof item === 'string') {
+            const flagMatch = SENSITIVE_CLI_FLAG_RE.exec(item)
+            if (flagMatch !== null) {
+                const eqIdx = item.indexOf('=')
+                if (eqIdx !== -1) {
+                    out.push(`${item.slice(0, eqIdx + 1)}[REDACTED]`)
+                } else {
+                    out.push(item)
+                    redactNext = true
+                }
+                continue
+            }
+            out.push(sanitizeErrorForLogging(item))
+            continue
+        }
+        out.push(sanitizeIssueInput(item, depth + 1))
+    }
+    return out
+}
+
+export function sanitizeIssueInput(value: unknown, depth = 0): unknown {
+    if (depth > 8 || value === null || value === undefined) return value
+    if (typeof value === 'string') return sanitizeErrorForLogging(value)
+    if (typeof value !== 'object') return value
+    if (Array.isArray(value)) {
+        return sanitizeCliArgList(value, depth)
+    }
+    const clean: Record<string, unknown> = {}
+    for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
+        if (k === '__proto__' || k === 'constructor' || k === 'prototype') continue
+        if (SENSITIVE_KEY_RE.test(k)) {
+            clean[k] = '[REDACTED]'
+        } else {
+            clean[k] = sanitizeIssueInput(v, depth + 1)
+        }
+    }
+    return clean
+}
 
 export interface AgentIssue {
     timestamp: string
@@ -87,6 +141,8 @@ export function logAgentIssue(
         timestamp: new Date().toISOString(),
         level: 'error',
         ...issue,
+        input: sanitizeIssueInput(issue.input),
+        error: sanitizeErrorForLogging(issue.error),
     }
 
     if (pendingLines.length >= MAX_PENDING_ISSUE_LINES) {

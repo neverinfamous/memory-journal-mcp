@@ -10,6 +10,7 @@ import { formatHandlerError } from '../../../utils/error-helpers.js'
 import { CopilotReviewsOutputSchema } from './schemas.js'
 import { relaxedNumber } from '../schemas.js'
 import { githubScopeInputFields, githubScopeParseFields, resolveOwnerRepo } from './helpers.js'
+import { ensureBlockFenced, ensureInlineFenced } from './fencing-helpers.js'
 
 // ============================================================================
 // Tool Definitions
@@ -83,8 +84,8 @@ export function getCopilotReviewTools(context: ToolContext): ToolDefinition[] {
                         state: summary.state,
                         commentCount: summary.commentCount,
                         comments: summary.comments.map((c) => ({
-                            body: c.body,
-                            path: c.path,
+                            body: ensureBlockFenced(c.body),
+                            path: ensureInlineFenced(c.path),
                             line: c.line,
                         })),
                         owner: resolved.owner,

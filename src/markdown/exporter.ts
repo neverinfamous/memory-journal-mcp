@@ -246,13 +246,14 @@ export async function exportEntriesToMarkdown(
     for (let i = 0; i < validEntries.length; i += CHUNK_SIZE) {
         const chunk = validEntries.slice(i, i + CHUNK_SIZE)
         const preChunkRealpath = realpathSync.native(resolvedOutputDir)
+        assertSafeDirectoryPath(preChunkRealpath, allowedRoots)
 
         await Promise.all(
             chunk.map(async (entry) => {
                 const relationships = relationshipsMap.get(entry.id) ?? []
                 const fileContent = buildExportFileContent(entry, relationships)
                 const filename = generateFilename(entry.id, entry.content)
-                const outcome = await writeExportFile(resolvedOutputDir, filename, fileContent)
+                const outcome = await writeExportFile(preChunkRealpath, filename, fileContent)
                 if (outcome === 'written') {
                     files.push(filename)
                 } else {
@@ -268,7 +269,7 @@ export async function exportEntriesToMarkdown(
                 'Directory swapped during export operation! Aborting to prevent path traversal.'
             )
         }
-        assertSafeDirectoryPath(preChunkRealpath, allowedRoots)
+        assertSafeDirectoryPath(postChunkRealpath, allowedRoots)
     }
 
     return {

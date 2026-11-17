@@ -15,6 +15,7 @@ import { AUTH_ERROR_CODES } from '../../src/auth/errors.js'
 vi.mock('jose', () => ({
     createRemoteJWKSet: vi.fn(() => vi.fn()),
     jwtVerify: vi.fn(),
+    customFetch: Symbol('jose.customFetch'),
     errors: {
         JWTExpired: class JWTExpired extends Error {
             constructor() {

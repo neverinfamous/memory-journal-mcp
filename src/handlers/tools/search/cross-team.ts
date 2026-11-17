@@ -223,6 +223,9 @@ async function querySingleTeamDb(
     if (label === 'primary') {
         if (!context.teamDb) throw new Error('Primary team database not configured')
         adapter = context.teamDb
+        if (adapter.isTeamRbacActive?.()) {
+            enforceTeamRbac(context, caller, 'viewer', wsId)
+        }
     } else {
         const dbPath = additionalDbs[label]
         if (!dbPath) throw new Error(`Missing configured path for ${label}`)
@@ -303,9 +306,6 @@ export async function handleCrossTeamSearch(
     const targetLabels = resolveCrossTeamTargetLabels(args, context, additionalDbs)
 
     const caller = getCallerIdentity()
-    if (targetLabels.includes('primary') && context.teamDb) {
-        enforceTeamRbac(context, caller, 'viewer', wsId)
-    }
     const perDbLimit = Math.min(args.limit * 2, 500)
     const settled = await Promise.allSettled(
         targetLabels.map((label) =>

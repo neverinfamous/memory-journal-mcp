@@ -21,6 +21,10 @@ import type {
     ResourceResult,
 } from '../handlers/resources/shared.js'
 import { ASSISTANT_FOCUSED } from '../utils/resource-annotations.js'
+import {
+    markUntrustedContentInline,
+    sanitizeErrorForLogging,
+} from '../utils/security-utils.js'
 import type { AuditLogger } from './audit-logger.js'
 import type { AuditEntry } from './types.js'
 import { extractAuditScopeFromUri, matchesAuditFilters } from './audit-query-helpers.js'
@@ -67,29 +71,87 @@ function computeSessionSummary(entries: AuditEntry[]): {
     return { totalTokens, errorCount, totalDuration }
 }
 
+const CANONICAL_AUDIT_ID_RE =
+    /^(?:resource:|prompt:)?(?:memory:\/\/[A-Za-z0-9_./-]+|[A-Za-z0-9_.:@-]{1,128})$/
+const AUDIT_ARG_SECRET_KEY_RE =
+    /(?:token|secret|password|passwd|authorization|auth_header|api_key|apikey|encryption_key|webhook|private_key|client_secret)/i
+const ALREADY_FENCED_RE =
+    /^<untrusted_remote_content>(?:\n[\s\S]*\n|[^\n]*)<\/untrusted_remote_content>$/
+
+function fenceInlineIdempotent(value: string): string {
+    return ALREADY_FENCED_RE.test(value) ? value : markUntrustedContentInline(value)
+}
+
+function fenceNonCanonicalAuditId(value: unknown): string {
+    if (typeof value !== 'string') return ''
+    const clean = sanitizeErrorForLogging(value)
+    return CANONICAL_AUDIT_ID_RE.test(clean) ? clean : fenceInlineIdempotent(clean)
+}
+
+function sanitizeAuditArgNode(value: unknown, depth: number, seen: WeakSet<object>): unknown {
+    if (typeof value === 'string') {
+        return fenceInlineIdempotent(sanitizeErrorForLogging(value))
+    }
+    if (value === null || typeof value !== 'object') return value
+    if (depth >= 6 || seen.has(value)) return value
+    seen.add(value)
+
+    if (Array.isArray(value)) {
+        return value.map((item) => sanitizeAuditArgNode(item, depth + 1, seen))
+    }
+    const out: Record<string, unknown> = {}
+    for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
+        out[k] = AUDIT_ARG_SECRET_KEY_RE.test(k)
+            ? '[REDACTED]'
+            : sanitizeAuditArgNode(v, depth + 1, seen)
+    }
+    return out
+}
+
+/** Fence untrusted non-canonical audit fields and scrub secret tokens before MCP egress. */
+export function sanitizeAuditEntryForEgress(e: AuditEntry): AuditEntry {
+    const cleanArgs =
+        e.args !== undefined
+            ? (sanitizeAuditArgNode(e.args, 0, new WeakSet()) as Record<string, unknown>)
+            : undefined
+    return {
+        ...e,
+        tool: typeof e.tool === 'string' ? fenceNonCanonicalAuditId(e.tool) : '',
+        user: typeof e.user === 'string' ? fenceNonCanonicalAuditId(e.user) : null,
+        ...(typeof e.workspaceId === 'string'
+            ? { workspaceId: fenceNonCanonicalAuditId(e.workspaceId) }
+            : {}),
+        ...(typeof e.error === 'string'
+            ? { error: fenceInlineIdempotent(sanitizeErrorForLogging(e.error)) }
+            : {}),
+        ...(cleanArgs !== undefined ? { args: cleanArgs } : {}),
+    }
+}
+
 function formatAuditEntryYaml(e: AuditEntry): string {
+    const safe = sanitizeAuditEntryForEgress(e)
     const parts: string[] = [
-        `- timestamp: ${e.timestamp}`,
-        `  tool: ${JSON.stringify(e.tool)}`,
-        `  scope: ${e.scope}`,
-        `  category: ${e.category}`,
-        `  duration_ms: ${String(e.durationMs)}`,
-        `  success: ${String(e.success)}`,
+        `- timestamp: ${safe.timestamp}`,
+        `  tool: ${JSON.stringify(safe.tool)}`,
+        `  scope: ${safe.scope}`,
+        `  category: ${safe.category}`,
+        `  duration_ms: ${String(safe.durationMs)}`,
+        `  success: ${String(safe.success)}`,
     ]
-    if (e.error) {
-        parts.push(`  error: ${JSON.stringify(e.error)}`)
+    if (safe.error) {
+        parts.push(`  error: ${JSON.stringify(safe.error)}`)
     }
-    if (e.workspaceId !== undefined) {
-        parts.push(`  workspace_id: ${JSON.stringify(e.workspaceId)}`)
+    if (safe.workspaceId !== undefined) {
+        parts.push(`  workspace_id: ${JSON.stringify(safe.workspaceId)}`)
     }
-    if (e.projectNumber !== undefined) {
-        parts.push(`  project_number: ${String(e.projectNumber)}`)
+    if (safe.projectNumber !== undefined) {
+        parts.push(`  project_number: ${String(safe.projectNumber)}`)
     }
-    if (e.tokenEstimate !== undefined) {
-        parts.push(`  token_estimate: ${String(e.tokenEstimate)}`)
+    if (safe.tokenEstimate !== undefined) {
+        parts.push(`  token_estimate: ${String(safe.tokenEstimate)}`)
     }
-    if (e.args !== undefined) {
-        parts.push(`  args: ${JSON.stringify(e.args)}`)
+    if (safe.args !== undefined) {
+        parts.push(`  args: ${JSON.stringify(safe.args)}`)
     }
     return parts.join('\n')
 }

@@ -10,7 +10,7 @@ import {
     SIGNIFICANCE_TYPES,
 } from '../../handlers/tools/schemas/entry-constants.js'
 
-export const JOURNAL_TABLES = [
+export const JOURNAL_TABLES: readonly string[] = Object.freeze([
     'memory_journal',
     'tags',
     'entry_tags',
@@ -19,7 +19,7 @@ export const JOURNAL_TABLES = [
     'entry_revisions',
     'vec_embeddings',
     'team_flags',
-]
+])
 
 export interface SchemaHelpPayload {
     group: 'schema'
@@ -36,7 +36,7 @@ export function buildSchemaHelpPayload(usage?: string): SchemaHelpPayload {
         group: 'schema',
         description:
             'Memory Journal Schema: Embedded SQLite database storing journal entries, tags, relationships, code anchors, revisions, vector embeddings, and team flags.',
-        tables: JOURNAL_TABLES,
+        tables: [...JOURNAL_TABLES],
         entrySchema: {
             id: 'number (auto-increment primary key)',
             content: 'string (required, markdown body)',
@@ -69,5 +69,5 @@ export function getSchemaHelp(usage?: string): Promise<SchemaHelpPayload> {
 
 /** Return resolved table list for `mj.schema.listTables()`. */
 export function listJournalTables(): Promise<{ success: boolean; tables: string[] }> {
-    return Promise.resolve({ success: true, tables: JOURNAL_TABLES })
+    return Promise.resolve({ success: true, tables: [...JOURNAL_TABLES] })
 }

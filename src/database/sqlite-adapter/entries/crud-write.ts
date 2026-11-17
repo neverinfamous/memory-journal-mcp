@@ -51,6 +51,12 @@ export function validateEntryInput(input: CreateEntryInput): { normalizedTimesta
             "workspace_id '*' is a read-only cross-workspace selector and cannot be used to create an entry. Pass a specific workspace_id."
         )
     }
+    if (
+        input.projectNumber !== undefined &&
+        (!Number.isInteger(input.projectNumber) || input.projectNumber <= 0)
+    ) {
+        throw new Error('project_number must be a positive integer.')
+    }
     const rawTimestamp = input.timestamp ?? new Date().toISOString()
 
     // Reject calendar rollovers (e.g. 2026-02-31) and normalize broad ISO-8601 inputs to UTC ISO.

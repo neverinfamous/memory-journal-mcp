@@ -6,7 +6,7 @@ import type { McpServerFactory } from '../../../server/mcp-server/index.js'
 import { logger } from '../../../utils/logger.js'
 import { getRequestContext, requestContextStorage } from '../../../utils/request-context.js'
 import type { HttpTransportConfig } from '../types.js'
-import { SESSION_TIMEOUT_MS, SESSION_SWEEP_INTERVAL_MS } from '../types.js'
+import { DEFAULT_MAX_BODY_BYTES, SESSION_TIMEOUT_MS, SESSION_SWEEP_INTERVAL_MS } from '../types.js'
 import { LegacySSEServerTransport } from './legacy-sse.js'
 import {
     closeTransportQuietly,
@@ -63,7 +63,12 @@ export function assertHttpBindIsSafe(
         normalizedHost === '::1' ||
         normalizedHost === '[::1]'
     const hasCorsOpen = corsOrigins?.includes('*') ?? false
-    const hasAuth = Boolean(authToken) || oauthEnabled === true
+    if (authToken !== undefined && authToken !== '' && authToken.trim() === '') {
+        const errorMsg = 'FATAL: Authentication token cannot be whitespace-only.'
+        logError(errorMsg)
+        throw new Error(errorMsg)
+    }
+    const hasAuth = Boolean(authToken?.trim()) || oauthEnabled === true
 
     if (!hasAuth && hasCorsOpen) {
         const errorMsg = `FATAL: Refusing to bind HTTP with open wildcard CORS ('*') without explicit authentication. You MUST specify --auth-token (or OAuth) or restrict --cors-origin to specific trusted origins.`
@@ -115,7 +120,8 @@ export function createStatelessHandler(
                 return server
             },
             { legacy: 'reject' }
-        )
+        ),
+        { maxRequestBodySize: state.config.maxBodySize ?? DEFAULT_MAX_BODY_BYTES }
     )
 }
 

@@ -61,23 +61,50 @@ function freezeOuterBuiltinCtors(failures: string[]): void {
  * Returns the labels of hardening steps that failed (empty when all succeeded).
  * A single warning is written to stderr because the worker has no logger.
  */
-export function hardenOuterFunctionPrototypes(): string[] {
-    const failures: string[] = []
-    const noopConstructor = Object.freeze(function ForbiddenConstructor(): never {
-        throw new Error('Dynamic code generation is disabled in sandbox')
-    })
+function collectGeneratorAndIteratorPrototypes(): (object | null)[] {
     const AsyncFnProto = Object.getPrototypeOf(async function () {
         /* noop */
     }) as object | null
     const GenFnProto = Object.getPrototypeOf(function* () {
         /* noop */
-    }) as object | null
+    }) as { prototype?: object | null } | null
     const AsyncGenFnProto = Object.getPrototypeOf(async function* () {
         /* noop */
-    }) as object | null
+    }) as { prototype?: object | null } | null
+    const GenProto = GenFnProto?.prototype ?? null
+    const AsyncGenProto = AsyncGenFnProto?.prototype ?? null
+    const IterProto = Object.getPrototypeOf(Object.getPrototypeOf([][Symbol.iterator]())) as object | null
+    const AsyncIterProto =
+        AsyncGenProto !== null ? (Object.getPrototypeOf(AsyncGenProto) as object | null) : null
+    const TypedArrayCtor = Object.getPrototypeOf(Uint8Array) as { prototype?: object | null } | null
+    const TypedArrayProto = TypedArrayCtor?.prototype ?? null
+    const GlobalIter = (globalThis as { Iterator?: { prototype?: object | null } }).Iterator
+    return [
+        Object.prototype,
+        Function.prototype,
+        AsyncFnProto,
+        GenFnProto,
+        AsyncGenFnProto,
+        GenProto,
+        AsyncGenProto,
+        IterProto,
+        AsyncIterProto,
+        TypedArrayCtor ?? null,
+        TypedArrayProto,
+        GlobalIter ?? null,
+        GlobalIter?.prototype ?? null,
+    ]
+}
 
-    const protos = [Object.prototype, Function.prototype, AsyncFnProto, GenFnProto, AsyncGenFnProto]
-    for (const [index, proto] of protos.entries()) {
+export function hardenOuterFunctionPrototypes(): string[] {
+    const failures: string[] = []
+    const noopConstructor = Object.freeze(function ForbiddenConstructor(): never {
+        throw new Error('Dynamic code generation is disabled in sandbox')
+    })
+    const protos = collectGeneratorAndIteratorPrototypes()
+    const [objProto, fnProto, asyncFnProto, genFnProto, asyncGenFnProto, genProto, asyncGenProto] = protos
+
+    for (const [index, proto] of [objProto, fnProto, asyncFnProto, genFnProto, asyncGenFnProto, genProto, asyncGenProto].entries()) {
         if (proto === null || proto === undefined) continue
         try {
             Object.defineProperty(proto, 'constructor', {
@@ -117,7 +144,14 @@ const FREEZE_INNER_CONTEXT_SCRIPT = new vm.Script(`(function() {
     const AsyncFnProto = Object.getPrototypeOf(async function() {});
     const GenFnProto = Object.getPrototypeOf(function*() {});
     const AsyncGenFnProto = Object.getPrototypeOf(async function*() {});
-    for (const proto of [Function.prototype, AsyncFnProto, GenFnProto, AsyncGenFnProto]) {
+    const GenProto = GenFnProto && GenFnProto.prototype;
+    const AsyncGenProto = AsyncGenFnProto && AsyncGenFnProto.prototype;
+    const IterProto = Object.getPrototypeOf(Object.getPrototypeOf([][Symbol.iterator]()));
+    const AsyncIterProto = AsyncGenProto ? Object.getPrototypeOf(AsyncGenProto) : null;
+    const TypedArrayCtor = Object.getPrototypeOf(Uint8Array);
+    const TypedArrayProto = TypedArrayCtor && TypedArrayCtor.prototype;
+    const GlobalIter = typeof Iterator !== "undefined" ? Iterator : null;
+    for (const proto of [Function.prototype, AsyncFnProto, GenFnProto, AsyncGenFnProto, GenProto, AsyncGenProto]) {
         if (proto) {
             try {
                 Object.defineProperty(proto, "constructor", {
@@ -138,13 +172,18 @@ const FREEZE_INNER_CONTEXT_SCRIPT = new vm.Script(`(function() {
         Float32Array, Float64Array, BigInt64Array, BigUint64Array,
         JSON, Math,
     ];
+    if (TypedArrayCtor) builtins.push(TypedArrayCtor);
+    if (GlobalIter) builtins.push(GlobalIter);
     for (const B of builtins) {
         if (B && typeof B === "function" && B.prototype) {
             try { Object.freeze(B.prototype); } catch(e) { /* already frozen or non-extensible */ }
         }
         try { Object.freeze(B); } catch(e) { /* already frozen or non-extensible */ }
     }
-    for (const proto of [Object.prototype, Function.prototype, AsyncFnProto, GenFnProto, AsyncGenFnProto]) {
+    for (const proto of [
+        Object.prototype, Function.prototype, AsyncFnProto, GenFnProto,
+        AsyncGenFnProto, GenProto, AsyncGenProto, IterProto, AsyncIterProto, TypedArrayProto,
+    ]) {
         if (proto) {
             try { Object.freeze(proto); } catch(e) { /* already frozen or non-extensible */ }
         }

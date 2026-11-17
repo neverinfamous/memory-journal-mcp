@@ -1,0 +1,53 @@
+/**
+ * Memory Journal MCP Server - `adversarial-audit-security` prompt definition.
+ * [INTENT] Extracted from `adversarial.ts` so the security audit workflow and
+ * Pass 35+ deep-security gates stay cleanly modular under the 500-line ceiling.
+ */
+
+import type { InternalPromptDef } from './index.js'
+import {
+    AUDIT_PROMPT_REVISION,
+    buildAuditPromptDefinition,
+    buildSharedAuditPreamble,
+    buildStandardAuditClosing,
+} from './adversarial-audit-factory.js'
+import { buildSubagentProtocolGuidance } from './adversarial-helpers.js'
+
+export const SECURITY_PROMPT_REVISION = AUDIT_PROMPT_REVISION
+
+function buildSecurityAuditBody(
+    target: string,
+    copilotInstruction: string,
+    priorAuditSection: string
+): string {
+    return `# Adversarial Security Audit
+${buildSharedAuditPreamble(target, 'file or module')}
+
+1. Perform a multi-pass security audit. For large targets or full-repository audits, run parent-owned baseline line/AST scans (\`SCAN_OK\`, \`COMPLEXITY_OK\` in a temporary scratch script with \`try/finally\` cleanup), a worker chunk-graph builtin-only probe (\`node:module\` \`builtinModules\`, zero CJS \`__require\` shims), and a deterministic auth-surface probe (\`TOOL_GROUP_SCOPES\`, \`tool-filter.ts\`, \`openWorldHint\`) before spawning parallel read-only subagents partitioned by trust boundary. In Cursor use the Task tool with subagent type \`explore\` or \`generalPurpose\`; on any other host use that host's read-only subagent tool. Treat all external inputs as untrusted until verified.
+   ${buildSubagentProtocolGuidance()}
+   - **General Code**: Injection vectors, auth/authz gaps, secret redaction (CLI flags, logs, SQLCipher errors), and data boundary validation.
+   - **Agent Skills / MCP Tools**: Privilege escalation (excessive agency), indirect prompt injection via tool/resource outputs, tool poisoning / supply chain risks, and cross-plugin attacks.
+   - **External Integrations**: SSRF/DNS rebinding paths, redirect smuggling, and excessive API permission scopes.
+   - **Mandatory Deep-Security Gates (Always Run)**:
+     1. **Pre-Validation Transform & DoS Ordering Audit**: Verify no input healer, AST/regex normalizer, JSON/SQL/NL synthesizer, ReDoS-prone regex, or unbounded element/byte allocation runs *before* HTTP pre-body rate-limiting, byte-length caps, \`maxToolInputElements\`, bearer/OAuth authentication (constant-time SHA-256 \`timingSafeEqual\`, \`GET\`/\`HEAD\`-only public route bypass), or sandbox security validation.
+     2. **Lexical Scanner, Prototype Escape & Structured-Clone Egress Audit**: Verify comment/string strippers handle regex literals, Annex B HTML comments (\`<!--\`/\`-->\`), prefix/postfix \`++\`/\`--\`, template interpolations (\`\${...}\`), and Unicode/hex escapes (\`\\\\uXXXX\`/\`\\\\u{...}\`/\`\\\\xXX\`); verify \`%GeneratorPrototype%\`, \`%AsyncGeneratorPrototype%\`, \`%IteratorPrototype%\`, \`%TypedArray%\`, \`Function\`, \`Reflect\`, and destructured prototype helpers are neutered/blocked; verify \`JSON.parse(JSON.stringify(...))\` unwraps all nested userland \`Proxy\`/function/symbol values before \`postMessage\` structured-clone egress; and verify async \`vm.runInContext\` execution uses \`Promise.race\` wall-clock timeout guards with timer cleanup.
+     3. **Multi-Tenant Parameter Threading, Scoped State & Path Safety Audit**: Trace \`workspace_id\` and \`project_number\` end-to-end across SQLite \`WHERE\` clauses (\`pairStoredScope\`, exact case-sensitive ownership on unregistered workspaces, positive-integer writes vs finite zero-hit read filters) and vector metadata filters; verify scoped tag merges fail closed before creating target tags; and verify chunked file exports validate \`assertSafeDirectoryPath(realpathSync.native(...))\` *before* writes alongside Win32 ADS \`:\` and reserved DOS device name rejections.
+     4. **Execution-Layer Filter, Namespace & RBAC Parity Check**: Verify \`--tool-filter\` (and hot-reload), OAuth scopes, \`readonly\`/\`dry_run\` flags, \`mj.team.*\` namespace isolation (never falling back to personal \`db\` or disabling personal filter stubs), and \`enforceTeamRbac\` (\`Promise.allSettled\` primary DB parity in cross-team search) hold identically across \`tools/list\`, direct \`tools/call\`, Code Mode \`mj.*\` & nested \`executeCode\` dispatch, healing fallbacks, resources, prompts, importers, and CLI paths.
+     5. **SSRF, JWKS Fetch & Transitive Prompt-Injection Taint Trace**: Verify remote JWKS/OAuth fetches use DNS-pinned custom transports blocking redirects, response size limits, case-normalized \`https://\` checks, full special-use IPv4/IPv6 ranges (\`198.18.0.0/15\`, NAT64 \`64:ff9b::\`, 6to4 \`2002::\`, SIIT, hex IPv4-mapped), and verified OIDC claims (\`email_verified === true\`); and trace external strings (Git commits, GitHub refs/labels/Copilot paths, resource templates, instructions, non-canonical audit fields) to verify truncation *before* idempotent \`<untrusted_remote_content>\` fencing without breaking internal caches/enums.
+     6. **End-to-End Backstop Verification & Prompt Evolution**: Trace ingress interceptors, dispatch normalizers, RBAC/importer scope checks, and storage scope pairing with concrete reproducers before classifying Critical/High; include a **Prompt Self-Improvement Proposals (\`AP1\`–\`APn\`)** table for blind spots found.
+${buildStandardAuditClosing(copilotInstruction, priorAuditSection)}`
+}
+
+export function getSecurityAuditPromptDefinition(): InternalPromptDef {
+    return buildAuditPromptDefinition({
+        name: 'adversarial-audit-security',
+        description:
+            'Multi-pass adversarial security audit (threat modeling, attack surfaces) Optional parameters: target, copilot, workspace_id, project_number',
+        tag: 'security-audit',
+        heading: 'Prior security audits',
+        copilotCommand: (t) =>
+            `gh copilot -- -p "Perform a security audit on ${t} looking for injection vectors, auth/authz gaps, data boundaries, and agent-specific risks like prompt injection, excessive agency, or tool poisoning." --allow-all`,
+        body: ({ target, copilotInstruction, priorAuditSection }) =>
+            buildSecurityAuditBody(target, copilotInstruction, priorAuditSection),
+    })
+}

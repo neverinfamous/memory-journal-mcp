@@ -258,71 +258,143 @@ export const METHOD_ALIASES: Record<string, Record<string, string>> = {
     },
     team: {
         ...mapToTarget(
-            ['create', 'createEntry', 'create_entry', 'addEntry', 'sessionSummary', 'teamSessionSummary'],
+            [
+                'create', 'createEntry', 'create_entry', 'addEntry', 'sessionSummary',
+                'teamSessionSummary', 'team_create_entry',
+            ],
             'teamCreateEntry'
         ),
         ...mapToTarget(
-            ['recent', 'listEntries', 'teamListEntries', 'list', 'entries', 'teamList'],
+            [
+                'recent', 'getRecent', 'getRecentEntries', 'get_recent_entries', 'listEntries',
+                'teamListEntries', 'list', 'entries', 'teamList', 'team_get_recent',
+            ],
             'teamGetRecent'
         ),
         ...mapToTarget(
-            ['batchCreate', 'batchCreateEntries', 'bulkCreate', 'createEntries', 'batchCreateEntry'],
+            ['get', 'read', 'getEntryById', 'get_entry_by_id', 'team_get_entry_by_id'],
+            'teamGetEntryById'
+        ),
+        ...mapToTarget(['tags', 'listTags', 'list_tags', 'team_list_tags'], 'teamListTags'),
+        ...mapToTarget(
+            ['find', 'search', 'searchEntries', 'search_entries', 'team_search'],
+            'teamSearch'
+        ),
+        ...mapToTarget(
+            ['byDate', 'searchByDateRange', 'search_by_date_range', 'team_search_by_date_range'],
+            'teamSearchByDateRange'
+        ),
+        ...mapToTarget(
+            ['update', 'edit', 'updateEntry', 'update_entry', 'team_update_entry'],
+            'teamUpdateEntry'
+        ),
+        ...mapToTarget(
+            ['delete', 'remove', 'deleteEntry', 'delete_entry', 'team_delete_entry'],
+            'teamDeleteEntry'
+        ),
+        ...mapToTarget(
+            ['restore', 'teamRestore', 'restoreEntry', 'restore_entry', 'team_restore_entry'],
+            'teamRestoreEntry'
+        ),
+        ...mapToTarget(
+            ['trash', 'deleted', 'listDeletedEntries', 'list_deleted_entries', 'team_list_deleted_entries'],
+            'teamListDeletedEntries'
+        ),
+        ...mapToTarget(['mergeTags', 'merge_tags', 'team_merge_tags'], 'teamMergeTags'),
+        ...mapToTarget(
+            [
+                'batchCreate', 'batchCreateEntries', 'batch_create_entries', 'bulkCreate',
+                'createEntries', 'batchCreateEntry', 'team_batch_create_entries',
+            ],
             'teamBatchCreateEntries'
         ),
-        ...mapToTarget(['batchUpdate', 'batchUpdateEntries', 'bulkUpdate', 'updateEntries'], 'teamBatchUpdateEntries'),
-        ...mapToTarget(['batchDelete', 'batchDeleteEntries', 'bulkDelete', 'deleteEntries'], 'teamBatchDeleteEntries'),
         ...mapToTarget(
-            ['insights', 'searchProjects', 'listProjects', 'getProjects'],
+            [
+                'batchUpdate', 'batchUpdateEntries', 'batch_update_entries', 'bulkUpdate',
+                'updateEntries', 'team_batch_update_entries',
+            ],
+            'teamBatchUpdateEntries'
+        ),
+        ...mapToTarget(
+            [
+                'batchDelete', 'batchDeleteEntries', 'batch_delete_entries', 'bulkDelete',
+                'deleteEntries', 'team_batch_delete_entries',
+            ],
+            'teamBatchDeleteEntries'
+        ),
+        ...mapToTarget(['stats', 'getStatistics', 'get_statistics', 'team_get_statistics'], 'teamGetStatistics'),
+        ...mapToTarget(['link', 'linkEntries', 'link_entries', 'team_link_entries'], 'teamLinkEntries'),
+        ...mapToTarget(
+            ['graph', 'visualizeRelationships', 'visualize_relationships', 'team_visualize_relationships'],
+            'teamVisualizeRelationships'
+        ),
+        ...mapToTarget(
+            ['export', 'exportEntries', 'export_entries', 'team_export_entries'],
+            'teamExportEntries'
+        ),
+        ...mapToTarget(
+            ['exportMarkdown', 'export_markdown', 'md', 'team_export_markdown'],
+            'teamExportMarkdown'
+        ),
+        ...mapToTarget(
+            ['importMarkdown', 'importMd', 'import_markdown', 'team_import_markdown'],
+            'teamImportMarkdown'
+        ),
+        ...mapToTarget(
+            ['importNotion', 'importObsidian', 'importExternal', 'import_external', 'team_import_external'],
+            'teamImportExternal'
+        ),
+        ...mapToTarget(['backup', 'backupJournal', 'backup_journal', 'team_backup'], 'teamBackup'),
+        ...mapToTarget(['listBackups', 'list_backups', 'team_list_backups'], 'teamListBackups'),
+        ...mapToTarget(['semanticSearch', 'semantic_search', 'team_semantic_search'], 'teamSemanticSearch'),
+        ...mapToTarget(
+            ['vectorStats', 'getVectorIndexStats', 'get_vector_index_stats', 'team_get_vector_index_stats'],
+            'teamGetVectorIndexStats'
+        ),
+        ...mapToTarget(
+            ['rebuildIndex', 'rebuildVectorIndex', 'rebuild_vector_index', 'team_rebuild_vector_index'],
+            'teamRebuildVectorIndex'
+        ),
+        ...mapToTarget(
+            ['addToIndex', 'addToVectorIndex', 'add_to_vector_index', 'team_add_to_vector_index'],
+            'teamAddToVectorIndex'
+        ),
+        ...mapToTarget(
+            [
+                'insights', 'searchProjects', 'listProjects', 'getProjects',
+                'getCrossProjectInsights', 'get_cross_project_insights', 'team_get_cross_project_insights',
+            ],
             'teamGetCrossProjectInsights'
         ),
-        ...mapToTarget(['updateRole', 'changeRole', 'setRole'], 'teamUpdateMemberRole'),
-        find: 'teamSearch',
-        search: 'teamSearch',
-        get: 'teamGetEntryById',
-        read: 'teamGetEntryById',
-        tags: 'teamListTags',
-        byDate: 'teamSearchByDateRange',
-        update: 'teamUpdateEntry',
-        edit: 'teamUpdateEntry',
-        delete: 'teamDeleteEntry',
-        restore: 'teamRestoreEntry',
-        teamRestore: 'teamRestoreEntry',
-        mergeTags: 'teamMergeTags',
-        stats: 'teamGetStatistics',
-        link: 'teamLinkEntries',
-        linkEntries: 'teamLinkEntries',
-        graph: 'teamVisualizeRelationships',
-        visualizeRelationships: 'teamVisualizeRelationships',
-        export: 'teamExportEntries',
-        exportEntries: 'teamExportEntries',
-        exportMarkdown: 'teamExportMarkdown',
-        md: 'teamExportMarkdown',
-        importMarkdown: 'teamImportMarkdown',
-        importMd: 'teamImportMarkdown',
-        importNotion: 'teamImportExternal',
-        importObsidian: 'teamImportExternal',
-        importExternal: 'teamImportExternal',
-        trash: 'teamListDeletedEntries',
-        deleted: 'teamListDeletedEntries',
-        backup: 'teamBackup',
-        listBackups: 'teamListBackups',
-        semanticSearch: 'teamSemanticSearch',
-        vectorStats: 'teamGetVectorIndexStats',
-        rebuildIndex: 'teamRebuildVectorIndex',
-        addToIndex: 'teamAddToVectorIndex',
-        collaborationMatrix: 'teamGetCollaborationMatrix',
-        addMember: 'teamAddMember',
-        removeMember: 'teamRemoveMember',
-        members: 'teamListMembers',
-        listMembers: 'teamListMembers',
-        getMember: 'teamGetMember',
-        addAlias: 'teamAddAuthorAlias',
-        removeAlias: 'teamRemoveAuthorAlias',
-        aliases: 'teamListAuthorAliases',
-        listAliases: 'teamListAuthorAliases',
-        resolveAuthor: 'teamResolveAuthor',
-        consolidate: 'teamConsolidateAuthors',
-        consolidateAuthors: 'teamConsolidateAuthors',
+        ...mapToTarget(
+            ['collaborationMatrix', 'getCollaborationMatrix', 'get_collaboration_matrix', 'team_get_collaboration_matrix'],
+            'teamGetCollaborationMatrix'
+        ),
+        ...mapToTarget(['addMember', 'add_member', 'team_add_member'], 'teamAddMember'),
+        ...mapToTarget(['removeMember', 'remove_member', 'team_remove_member'], 'teamRemoveMember'),
+        ...mapToTarget(
+            ['updateRole', 'changeRole', 'setRole', 'updateMemberRole', 'update_member_role', 'team_update_member_role'],
+            'teamUpdateMemberRole'
+        ),
+        ...mapToTarget(['members', 'listMembers', 'list_members', 'team_list_members'], 'teamListMembers'),
+        ...mapToTarget(['getMember', 'get_member', 'team_get_member'], 'teamGetMember'),
+        ...mapToTarget(
+            ['addAlias', 'addAuthorAlias', 'add_author_alias', 'team_add_author_alias'],
+            'teamAddAuthorAlias'
+        ),
+        ...mapToTarget(
+            ['removeAlias', 'removeAuthorAlias', 'remove_author_alias', 'team_remove_author_alias'],
+            'teamRemoveAuthorAlias'
+        ),
+        ...mapToTarget(
+            ['aliases', 'listAliases', 'listAuthorAliases', 'list_author_aliases', 'team_list_author_aliases'],
+            'teamListAuthorAliases'
+        ),
+        ...mapToTarget(['resolveAuthor', 'resolve_author', 'team_resolve_author'], 'teamResolveAuthor'),
+        ...mapToTarget(
+            ['consolidate', 'consolidateAuthors', 'consolidate_authors', 'team_consolidate_authors'],
+            'teamConsolidateAuthors'
+        ),
     },
     git: {
         history: 'getCommitHistory',

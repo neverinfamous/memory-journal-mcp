@@ -133,6 +133,7 @@ export function buildSandboxGlobals(
         global: undefined,
         globalThis: shimMj,
         Proxy: undefined,
+        Reflect: undefined,
     }
 
     exposeApiMethodsOnSandbox(sandbox, mjApi)

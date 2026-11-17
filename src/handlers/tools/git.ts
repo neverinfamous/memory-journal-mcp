@@ -1,18 +1,10 @@
 import { z } from 'zod'
 import type { ToolDefinition, ToolContext } from '../../types/index.js'
-import { ValidationError } from '../../types/errors.js'
 import { formatHandlerError } from '../../utils/error-helpers.js'
 import { sendProgress } from '../../utils/progress-utils.js'
-import { loadProjectRegistryFromConfig } from '../../utils/workspace-resolver.js'
-import {
-    evaluateWorkspaceAnchors,
-    readLatestGitTag,
-    resolveGitWorkingDir,
-    resolveStalenessTargetWorkspaces,
-    type StalenessCheckRow,
-} from './git-staleness.js'
+import { resolveGitWorkingDir, runCheckEntryStaleness } from './git-staleness.js'
 import { ErrorFieldsMixin } from './error-fields-mixin.js'
-import { relaxedNumber, StrictProjectNumberSchema } from './schemas.js'
+import { relaxedNumber } from './schemas.js'
 import {
     GitAnalyzePatternsOptionsSchema,
     GitHistoryOptionsSchema,
@@ -24,6 +16,12 @@ import {
     GitSearchOptionsSchemaMcp,
     GitUnreleasedOptionsSchema,
 } from './git-schemas.js'
+import {
+    fetchCommits,
+    fenceCommitEntries,
+    fenceUnreleasedTag,
+    getUnreleasedChangelog,
+} from './git-commit-helpers.js'
 
 export {
     GitAnalyzePatternsOptionsSchema,
@@ -36,119 +34,6 @@ export {
     GitSearchOptionsSchemaMcp,
     GitUnreleasedOptionsSchema,
 } from './git-schemas.js'
-import {
-    RECORD_SEPARATOR,
-    FIELD_SEPARATOR,
-    buildGitBaseArgs,
-    streamGitRecords,
-} from '../../vendor/lib-git-history/git-runner.js'
-import { parseGitRecord, processBatch } from '../../vendor/lib-git-history/parser.js'
-import type { CliArgs } from '../../vendor/lib-git-history/cli.js'
-import type { CommitEntry } from '../../vendor/lib-git-history/schema.js'
-
-interface FetchCommitsInput {
-    maxCount?: number
-    path?: string
-    since?: string
-    query?: string
-    ref?: string
-    sortBy?: 'date' | 'impact'
-    scope?: string
-    techDebtAudit?: boolean
-}
-
-async function fetchCommits(input: FetchCommitsInput, cwd: string): Promise<CommitEntry[]> {
-    const needsPostProcessing = input.sortBy === 'impact' || input.techDebtAudit === true || input.scope !== undefined
-    const fetchLimit = needsPostProcessing ? 500 : (input.maxCount ?? 50)
-
-    const cliArgs: CliArgs = {
-        limit: fetchLimit,
-        path: input.path,
-        since: input.since,
-        grep: input.query,
-    }
-    const gitArgs = ['log', ...buildGitBaseArgs(cliArgs, input.ref || 'HEAD')]
-
-    gitArgs.push(
-        '--name-status',
-        '-z',
-        `--format=${RECORD_SEPARATOR}%H${FIELD_SEPARATOR}%D${FIELD_SEPARATOR}%aN${FIELD_SEPARATOR}%aE${FIELD_SEPARATOR}%aI${FIELD_SEPARATOR}%cN${FIELD_SEPARATOR}%cE${FIELD_SEPARATOR}%cI${FIELD_SEPARATOR}%s${FIELD_SEPARATOR}%b${FIELD_SEPARATOR}%(trailers:unfold,only)${FIELD_SEPARATOR}%(trailers:unfold)${FIELD_SEPARATOR}%P`
-    )
-
-    const records = streamGitRecords(gitArgs, cwd)
-    const batch = []
-    try {
-        for await (const record of records) {
-            const parsed = parseGitRecord(record, cliArgs)
-            if (parsed) batch.push(parsed)
-        }
-    } catch (err) {
-        const msg = err instanceof Error ? err.message : String(err)
-        if (/not a git repository/i.test(msg)) {
-            throw new ValidationError(
-                `Git command failed because '${cwd}' is not a valid git repository. Pass a registered repo, project_number, or valid git cwd.`
-            )
-        }
-        if (
-            /unknown revision|bad revision|ambiguous argument|does not have any commits yet/i.test(
-                msg
-            )
-        ) {
-            throw new ValidationError(msg)
-        }
-        throw err
-    }
-    const commits = await processBatch(batch, cliArgs, [], cwd)
-
-    let processedCommits = commits
-
-    if (input.scope !== undefined) {
-        processedCommits = processedCommits.filter(c => c.scope === input.scope)
-    }
-
-    if (input.techDebtAudit === true) {
-        processedCommits = processedCommits.filter(c => {
-            const meta = c.metadata
-            const impact = typeof meta?.impact === 'number' ? meta.impact : parseFloat(meta?.impact ?? '0')
-            const trust = typeof meta?.trust === 'number' ? meta.trust : parseFloat(meta?.trust ?? '1')
-            return impact >= 0.5 && (trust < 0.8 || meta?.validation === 'none')
-        })
-    }
-
-    if (input.sortBy === 'impact') {
-        processedCommits.sort((a, b) => {
-            const impactA = typeof a.metadata?.impact === 'number' ? a.metadata.impact : parseFloat(a.metadata?.impact ?? '0')
-            const impactB = typeof b.metadata?.impact === 'number' ? b.metadata.impact : parseFloat(b.metadata?.impact ?? '0')
-            return impactB - impactA
-        })
-    }
-
-    if (needsPostProcessing) {
-        processedCommits = processedCommits.slice(0, input.maxCount ?? 50)
-    }
-
-    return processedCommits
-}
-
-/** Upper bound on commits returned by get_unreleased_commits. */
-const UNRELEASED_MAX_COMMITS = 5000
-/** Cap for the no-tag fallback, where "unreleased" is the whole history. */
-const NO_TAG_FALLBACK_MAX_COMMITS = 100
-
-async function getUnreleasedChangelog(
-    cwd: string
-): Promise<{ latestTag: string | null; commits: CommitEntry[]; truncated: boolean }> {
-    const latestTag = readLatestGitTag(cwd)
-    if (latestTag === null) {
-        const commits = await fetchCommits({ maxCount: NO_TAG_FALLBACK_MAX_COMMITS }, cwd)
-        return { latestTag: null, commits, truncated: commits.length >= NO_TAG_FALLBACK_MAX_COMMITS }
-    }
-    const commits = await fetchCommits(
-        { ref: `${latestTag}..HEAD`, maxCount: UNRELEASED_MAX_COMMITS },
-        cwd
-    )
-    return { latestTag, commits, truncated: commits.length >= UNRELEASED_MAX_COMMITS }
-}
 
 export function getGitTools(context: ToolContext): ToolDefinition[] {
     const { progress } = context
@@ -174,7 +59,7 @@ export function getGitTools(context: ToolContext): ToolDefinition[] {
                     const input = GitHistoryOptionsSchema.parse(parsedMcp)
                     await sendProgress(progress, 0, 1, 'Fetching commit history...')
                     const commits = await fetchCommits(input, cwd)
-                    return { success: true, commits }
+                    return { success: true, commits: fenceCommitEntries(commits) }
                 } catch (err) {
                     return formatHandlerError(err)
                 }
@@ -200,7 +85,7 @@ export function getGitTools(context: ToolContext): ToolDefinition[] {
                     const input = GitSearchOptionsSchema.parse(parsedMcp)
                     await sendProgress(progress, 0, 1, `Searching commits for "${input.query}"...`)
                     const commits = await fetchCommits(input, cwd)
-                    return { success: true, commits }
+                    return { success: true, commits: fenceCommitEntries(commits) }
                 } catch (err) {
                     return formatHandlerError(err)
                 }
@@ -226,7 +111,7 @@ export function getGitTools(context: ToolContext): ToolDefinition[] {
                     const input = GitReleaseInfoOptionsSchema.parse(parsedMcp)
                     await sendProgress(progress, 0, 1, 'Fetching release info...')
                     const commits = await fetchCommits({ ref: input.ref, maxCount: 10 }, cwd)
-                    return { success: true, commits }
+                    return { success: true, commits: fenceCommitEntries(commits) }
                 } catch (err) {
                     return formatHandlerError(err)
                 }
@@ -245,8 +130,15 @@ export function getGitTools(context: ToolContext): ToolDefinition[] {
                     const input = GitUnreleasedOptionsSchema.parse(params ?? {})
                     const cwd = resolveGitWorkingDir(input, context.config)
                     await sendProgress(progress, 0, 1, 'Fetching unreleased commits...')
-                    const changelog = await getUnreleasedChangelog(cwd)
-                    return { success: true, changelog }
+                    const rawChangelog = await getUnreleasedChangelog(cwd)
+                    return {
+                        success: true,
+                        changelog: {
+                            ...rawChangelog,
+                            latestTag: fenceUnreleasedTag(rawChangelog.latestTag),
+                            commits: fenceCommitEntries(rawChangelog.commits),
+                        },
+                    }
                 } catch (err) {
                     return formatHandlerError(err)
                 }
@@ -352,102 +244,10 @@ export function getGitTools(context: ToolContext): ToolDefinition[] {
                 idempotentHint: true,
                 openWorldHint: false,
             },
-            handler: async (params: unknown) => {
-                try {
-                    const { db } = context
-                    const coercedPositiveInt = z.preprocess(
-                        (v) => (typeof v === 'string' && /^\d+$/.test(v.trim()) ? Number(v.trim()) : v),
-                        z.number().int().positive()
-                    )
-                    const parsedParams = z
-                        .object({
-                            entry_id: coercedPositiveInt.optional(),
-                            entryId: coercedPositiveInt.optional(),
-                            workspace_id: z.string().optional(),
-                            workspaceId: z.string().optional(),
-                            project_number: StrictProjectNumberSchema.optional(),
-                            projectNumber: StrictProjectNumberSchema.optional(),
-                        })
-                        .parse(params)
-                    const resolvedEntryId = parsedParams.entry_id ?? parsedParams.entryId
-                    const rawWs = parsedParams.workspace_id ?? parsedParams.workspaceId
-                    const rawProj = parsedParams.project_number ?? parsedParams.projectNumber
-                    const registry = context.config?.projectRegistry ?? loadProjectRegistryFromConfig()
-                    const targetWorkspaces = resolveStalenessTargetWorkspaces(
-                        db,
-                        rawWs,
-                        rawProj,
-                        resolvedEntryId,
-                        registry,
-                        context.config
-                    )
-
-                    const results: StalenessCheckRow[] = []
-                    const skippedWorkspaces: string[] = []
-                    const maxRecentEntries = targetWorkspaces.length > 1 ? 8 : 20
-                    const maxCommitsPerAnchor = targetWorkspaces.length > 1 ? 5 : 25
-
-                    const outcomes = await Promise.all(
-                        targetWorkspaces.map((wsId) =>
-                            evaluateWorkspaceAnchors({
-                                db,
-                                wsId,
-                                rawWs,
-                                rawProj,
-                                resolvedEntryId,
-                                registry,
-                                maxRecentEntries,
-                                countCommitsSince: async (anchorPath, since, cwd) =>
-                                    (
-                                        await fetchCommits(
-                                            {
-                                                path: anchorPath,
-                                                since,
-                                                maxCount: maxCommitsPerAnchor,
-                                            },
-                                            cwd
-                                        )
-                                    ).length,
-                            })
-                        )
-                    )
-                    for (let i = 0; i < targetWorkspaces.length; i++) {
-                        const wsId = targetWorkspaces[i]
-                        const outcome = outcomes[i]
-                        if (wsId === undefined || outcome === undefined) continue
-                        if (outcome.skipped) skippedWorkspaces.push(wsId)
-                        else results.push(...outcome.rows)
-                    }
-
-                    const failureMessages: string[] = []
-                    for (const row of results) {
-                        if (row.error !== undefined) {
-                            failureMessages.push(`${row.path}: ${row.error}`)
-                        }
-                    }
-                    const skipped =
-                        skippedWorkspaces.length > 0 ? { skippedWorkspaces } : {}
-                    if (failureMessages.length > 0) {
-                        return {
-                            success: false,
-                            results,
-                            error: failureMessages.join('; '),
-                            ...skipped,
-                        }
-                    }
-                    if (results.length === 0 && skippedWorkspaces.length > 0 && skippedWorkspaces.length === targetWorkspaces.length) {
-                        return {
-                            success: false,
-                            results,
-                            error: 'No anchor check ran because no workspace had a registered repository path.',
-                            skippedWorkspaces,
-                        }
-                    }
-                    return { success: true, results, ...skipped }
-                } catch (err) {
-                    return formatHandlerError(err)
-                }
-            }
+            handler: (params: unknown) =>
+                runCheckEntryStaleness(params, context, async (anchorPath, since, cwd, maxCount) =>
+                    (await fetchCommits({ path: anchorPath, since, maxCount }, cwd)).length
+                ),
         }
     ]
 }

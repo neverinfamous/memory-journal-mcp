@@ -38,9 +38,30 @@ function checkRecordAgainstRpcBounds(
             const rawWs = rec[wsKey]
             if (typeof rawWs === 'string') {
                 const trimmed = rawWs.trim()
-                if (trimmed !== '' && trimmed !== '*' && workspacesConflict(trimmed, pinnedWs, registry)) {
+                if (trimmed === '*') {
+                    return validationErrResult(
+                        `${wsKey} '*' is not allowed inside nested executeCode scope '${pinnedWs}'.`
+                    )
+                }
+                if (trimmed !== '' && workspacesConflict(trimmed, pinnedWs, registry)) {
                     return validationErrResult(
                         `${wsKey} '${trimmed}' conflicts with nested executeCode scope '${pinnedWs}'.`
+                    )
+                }
+            }
+        }
+        for (const repoKey of ['repo', 'repo_name'] as const) {
+            const rawRepo = rec[repoKey]
+            if (typeof rawRepo === 'string' && rawRepo.trim() !== '') {
+                const trimmedRepo = rawRepo.trim()
+                const repoSlug = trimmedRepo.split(/[/\\]/).filter(Boolean).pop() ?? trimmedRepo
+                const resolvedRepo =
+                    findCanonicalRegistryKey(trimmedRepo, registry) ??
+                    findCanonicalRegistryKey(repoSlug, registry) ??
+                    repoSlug
+                if (workspacesConflict(resolvedRepo, pinnedWs, registry)) {
+                    return validationErrResult(
+                        `${repoKey} '${trimmedRepo}' conflicts with nested executeCode scope '${pinnedWs}'.`
                     )
                 }
             }
@@ -51,6 +72,15 @@ function checkRecordAgainstRpcBounds(
         if (typeof rawProj === 'number' && Number.isFinite(rawProj) && rawProj !== pinnedProj) {
             return validationErrResult(
                 `project_number ${String(rawProj)} conflicts with nested executeCode project_number ${String(pinnedProj)}.`
+            )
+        }
+        if (
+            typeof rec['workspace_id'] === 'string' &&
+            rec['workspace_id'].trim() === '*' &&
+            rawProj !== pinnedProj
+        ) {
+            return validationErrResult(
+                `workspace_id '*' requires project_number ${String(pinnedProj)} inside nested executeCode.`
             )
         }
     }

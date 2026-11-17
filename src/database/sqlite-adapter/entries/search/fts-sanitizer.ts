@@ -66,84 +66,50 @@ function sanitizeCompoundSegments(token: string): string[] {
         .filter((seg: string) => seg.length > 0 && !/^NEAR\d*$/i.test(seg))
 }
 
+function normalizeSingleFtsToken(
+    token: string,
+    tokens: string[],
+    index: number,
+    safeTokens: string[]
+): string | null {
+    if (/[./:@]/.test(token) && !token.endsWith('*')) {
+        const segments = sanitizeCompoundSegments(token)
+        if (segments.length >= 2) return `"${segments.join(' ')}"`
+        if (segments.length === 0) return null
+        const single = segments[0]
+        if (single !== undefined && !/^(AND|OR|NOT)$/i.test(single)) return single
+    }
+
+    let sanitized = token.replace(/[^a-zA-Z0-9_*-]/g, '').replace(/\*/g, '')
+    if (!sanitized) return null
+    if (token.endsWith('*')) sanitized += '*'
+    if (/^NEAR\d*\*?$/i.test(sanitized)) return null
+    if (/^(?:AND|OR|NOT)\*$/i.test(sanitized)) return sanitized.toLowerCase()
+
+    if (!/^(AND|OR|NOT)$/i.test(sanitized)) return sanitized
+
+    sanitized = sanitized.toUpperCase()
+    if (safeTokens.length === 0) return null
+    const prevToken = safeTokens[safeTokens.length - 1]
+    if (prevToken !== undefined && /^(AND|OR|NOT)$/.test(prevToken)) return null
+    return hasValidNextToken(tokens, index + 1) ? sanitized : null
+}
+
 /**
  * Rigorous FTS5 Query Sanitization
- *
- * Prevents FTS5 catastrophic backtracking (ReDoS) and application-level syntax crashes
- * by aggressively stripping FTS control syntax and forcing queries into safe,
- * implicit AND-token sequences.
- *
- * Threat Vectors Mitigated:
- * - Unbalanced quotes & parentheses causing SQLITE_ERROR syntax crashes
- * - Deeply nested or hallucinated \`NEAR/xxx\` proximity operators causing FTS planner ReDoS
- * - Column filters (\`col:val\`) leaking unintended field traversals
- * - Naked booleans (\`word AND OR NOT word\`) confusing the FTS AST parser
  */
 export function sanitizeFtsQuery(query: string): string {
     if (!query) return ''
 
-    // Phase 1: Extract balanced quoted phrases and protect them
     const { phrases, remaining: withoutPhrases } = extractQuotedPhrases(query)
-
-    // Phase 2-3: Strip NEAR/quotes and tokenize while protecting compound tokens for phrase matching
     const tokens = expandSearchTokens(withoutPhrases)
     const safeTokens: string[] = []
 
     for (let i = 0; i < tokens.length; i++) {
         const token = tokens[i]
         if (!token) continue
-
-        if (/[./:@]/.test(token) && !token.endsWith('*')) {
-            const segments = sanitizeCompoundSegments(token)
-            if (segments.length >= 2) {
-                safeTokens.push(`"${segments.join(' ')}"`)
-                continue
-            }
-            if (segments.length === 0) continue
-            const single = segments[0]
-            if (single !== undefined && !/^(AND|OR|NOT)$/i.test(single)) {
-                safeTokens.push(single)
-                continue
-            }
-        }
-
-        // Strip out non-alphanumeric characters, except hyphen, underscore, and asterisk
-        let sanitizedToken = token.replace(/[^a-zA-Z0-9_*-]/g, '')
-        if (!sanitizedToken) continue
-
-        // Ensure asterisk is only at the end of the token for prefix matching,
-        // preventing standalone asterisks or inner asterisks which cause syntax errors.
-        const hasAsterisk = token.endsWith('*')
-        sanitizedToken = sanitizedToken.replace(/\*/g, '')
-        if (hasAsterisk && sanitizedToken.length > 0) {
-            sanitizedToken += '*'
-        }
-
-        if (!sanitizedToken || sanitizedToken === '*') continue
-
-        // Drop NEAR as it causes ReDoS
-        if (/^NEAR\d*$/i.test(sanitizedToken)) continue
-
-        const isOperator = /^(AND|OR|NOT)$/i.test(sanitizedToken)
-        if (isOperator) {
-            // Must be uppercase for FTS5
-            sanitizedToken = sanitizedToken.toUpperCase()
-
-            // Operators cannot be the first token
-            if (safeTokens.length === 0) continue
-
-            // Operators cannot be preceded by another operator
-            const prevToken = safeTokens[safeTokens.length - 1]
-            if (prevToken && /^(AND|OR|NOT)$/.test(prevToken)) {
-                // If there are adjacent operators, skip the current one
-                continue
-            }
-
-            // Operators must have a valid subsequent non-operator token
-            if (!hasValidNextToken(tokens, i + 1)) continue
-        }
-
-        safeTokens.push(sanitizedToken)
+        const normalized = normalizeSingleFtsToken(token, tokens, i, safeTokens)
+        if (normalized !== null) safeTokens.push(normalized)
     }
 
     while (safeTokens.length > 0 && /^(?:AND|OR|NOT)$/.test(safeTokens[safeTokens.length - 1] ?? '')) {
@@ -153,7 +119,5 @@ export function sanitizeFtsQuery(query: string): string {
         safeTokens.shift()
     }
 
-    // Phase 4: Combine phrases + safe tokens
-    // Phrases go first (they're the user's strongest intent signal)
     return [...phrases, ...safeTokens].join(' ')
 }

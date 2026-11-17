@@ -110,9 +110,13 @@ describe('Worker API Proxy (buildApiProxy)', () => {
         )
         expect(rrRes['error']).toContain('mj.core.getRecentEntries()')
 
-        // Team prefix routing & cross-group routing from core
+        // Team prefix routing & cross-group routing from core (blocked across namespaces)
         const teamRouted = core['customOnly'] as () => Promise<Record<string, unknown>>
-        expect((await teamRouted())['method']).toBe('team_custom_only')
+        expect((await teamRouted())['success']).toBe(false)
+        const explicitTeam = (
+            mj['team'] as Record<string, () => Promise<Record<string, unknown>>>
+        )['customOnly']!
+        expect((await explicitTeam())['method']).toBe('team_custom_only')
 
         const crossRouted = core['searchEntries'] as (p: unknown) => Promise<Record<string, unknown>>
         expect((await crossRouted({ query: 'hi' }))['method']).toBe('search_entries')
@@ -218,10 +222,16 @@ describe('Worker API Proxy (buildApiProxy)', () => {
         expect(new getClient()['core'] === mj['core']).toBe(true)
         expect(getClient['core'] === mj['core']).toBe(true)
 
-        // Top-level alias, team routing, and cross-group routing
+        // Top-level alias, explicit team routing isolation, and cross-group routing
         expect(((await (mj['recent'] as () => Promise<Record<string, unknown>>)?.()) ?? {})).toBeDefined()
         const topTeam = mj['onlyFunc'] as () => Promise<Record<string, unknown>>
-        expect((await topTeam())['method']).toBe('team_only_func')
+        expect((await topTeam())['success']).toBe(false)
+        const topTeamPrefixed = mj['team_only_func'] as () => Promise<Record<string, unknown>>
+        expect((await topTeamPrefixed())['method']).toBe('team_only_func')
+        const namespacedTeamFn = (
+            mj['team'] as Record<string, () => Promise<Record<string, unknown>>>
+        )['onlyFunc']!
+        expect((await namespacedTeamFn())['method']).toBe('team_only_func')
         const topCross = mj['updateConfiguration'] as (p: unknown) => Promise<Record<string, unknown>>
         expect((await topCross({ tool_filter: 'core' }))['method']).toBe('update_configuration')
 

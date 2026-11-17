@@ -140,6 +140,33 @@ function estimateErrorTokens(sanitizedError: string): number {
     return estimateTokens(enriched, 'json')
 }
 
+const AUDIT_SENSITIVE_KEY_RE =
+    /(?:token|secret|password|passwd|authorization|auth_header|api_key|apikey|encryption_key|webhook|private_key|client_secret)/i
+const MAX_SCRUB_DEPTH = 6
+
+function scrubAuditArgValue(val: unknown, depth: number, seen: WeakSet<object>): unknown {
+    if (typeof val === 'string') return sanitizeErrorForLogging(val)
+    if (val === null || typeof val !== 'object') return val
+    if (depth >= MAX_SCRUB_DEPTH || seen.has(val)) return val
+    seen.add(val)
+
+    if (Array.isArray(val)) {
+        return val.map((item) => scrubAuditArgValue(item, depth + 1, seen))
+    }
+    const out: Record<string, unknown> = {}
+    for (const [k, v] of Object.entries(val as Record<string, unknown>)) {
+        out[k] = AUDIT_SENSITIVE_KEY_RE.test(k)
+            ? '[REDACTED]'
+            : scrubAuditArgValue(v, depth + 1, seen)
+    }
+    return out
+}
+
+function scrubAuditArgs(args: unknown): Record<string, unknown> | undefined {
+    if (typeof args !== 'object' || args === null || Array.isArray(args)) return undefined
+    return scrubAuditArgValue(args, 0, new WeakSet()) as Record<string, unknown>
+}
+
 function buildToolAuditEntry(params: {
     requestId: string
     toolName: string
@@ -178,6 +205,8 @@ function buildToolAuditEntry(params: {
     const category = isReadScope ? readCategory : scopeToCategory(scope)
     const effectiveScope =
         isReadScope && (readCategory === 'audit' || readCategory === 'team') ? readCategory : scope
+    const sanitizedError = error !== undefined ? sanitizeErrorForLogging(error) : undefined
+    const scrubbedArgs = !isReadScope && !redact ? scrubAuditArgs(args) : undefined
 
     return {
         timestamp: new Date().toISOString(),
@@ -190,8 +219,8 @@ function buildToolAuditEntry(params: {
         ...(sessionId !== undefined ? { sessionId } : {}),
         durationMs,
         success,
-        ...(error !== undefined ? { error } : {}),
-        ...(!isReadScope && !redact ? { args: args as Record<string, unknown> } : {}),
+        ...(sanitizedError !== undefined ? { error: sanitizedError } : {}),
+        ...(scrubbedArgs !== undefined ? { args: scrubbedArgs } : {}),
         ...(tokenEstimate !== undefined ? { tokenEstimate } : {}),
         ...(scopeMeta.workspaceId !== undefined ? { workspaceId: scopeMeta.workspaceId } : {}),
         ...(scopeMeta.projectNumber !== undefined

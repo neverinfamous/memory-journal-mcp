@@ -86,17 +86,18 @@ function isValidBearerTokenHeader(
     expectedToken: string
 ): boolean {
     if (typeof authHeader !== 'string') return false
+    if (expectedToken.trim() === '') return false
     const spaceIdx = authHeader.indexOf(' ')
     if (spaceIdx === -1) return false
     if (authHeader.slice(0, spaceIdx).toLowerCase() !== 'bearer') return false
-    const provided = Buffer.from(authHeader.slice(spaceIdx + 1), 'utf8')
-    const expected = Buffer.from(expectedToken, 'utf8')
-    return expected.length === provided.length && timingSafeEqual(expected, provided)
+    const providedDigest = createHash('sha256').update(authHeader.slice(spaceIdx + 1), 'utf8').digest()
+    const expectedDigest = createHash('sha256').update(expectedToken, 'utf8').digest()
+    return timingSafeEqual(expectedDigest, providedDigest)
 }
 
 /**
  * Create a bearer token authentication middleware.
- * Bypasses only /health. [INVARIANT] /metrics exposes per-tool/per-user telemetry and requires
+ * Bypasses only GET/HEAD /health. [INVARIANT] /metrics exposes per-tool/per-user telemetry and requires
  * the bearer token like every other route (M6).
  */
 export function createAuthMiddleware(
@@ -105,7 +106,7 @@ export function createAuthMiddleware(
     logger.info('Bearer token authentication enabled', { module: 'HTTP' })
 
     return (req: Request, res: Response, next: () => void): void => {
-        if (req.path === '/health') {
+        if ((req.method === 'GET' || req.method === 'HEAD') && req.path === '/health') {
             next()
             return
         }

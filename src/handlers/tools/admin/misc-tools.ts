@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import type { ToolDefinition, ToolContext } from '../../../types/index.js'
 import { formatHandlerError } from '../../../utils/error-helpers.js'
+import { sanitizeAuditEntryForEgress } from '../../../audit/audit-resource.js'
 import { ValidationError } from '../../../types/errors.js'
 import { resolveWriteWorkspaceId } from '../write-workspace.js'
 import { activeProjectRegistry, alignedProjectFilter } from '../../../utils/write-scope.js'
@@ -177,7 +178,9 @@ export function getMiscTools(context: ToolContext): ToolDefinition[] {
                     }
 
                     // Map to the internal type AuditSearchFilters
-                    const results = await context.config.runtime.auditLogger.search(input)
+                    const results = (await context.config.runtime.auditLogger.search(input)).map(
+                        sanitizeAuditEntryForEgress
+                    )
                     return {
                         success: true,
                         count: results.length,

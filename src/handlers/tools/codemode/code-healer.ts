@@ -302,14 +302,14 @@ export function healTemplateBackticksOnRuntimeError(code: string): string | null
 function rewriteModuleImportsAndExports(src: string): string {
     let executionCode = src
     executionCode = executionCode.replace(
-        /export\s+default\s+async\s+function\s*[\w$]*\s*\(([^)]*)\)\s*\{([\s\S]*)\}/g,
+        /export\s+default\s+async\s+function(?:\s+[\w$]+)?\s*\(([^)]*)\)\s*\{([\s\S]*)\}/g,
         (_m: string, param: string, body: string): string => {
             const p = param.trim()
             return `(async (${p ? `${p} = mj` : ''}) => { ${body} })()`
         }
     )
     executionCode = executionCode.replace(
-        /export\s+default\s+function\s*[\w$]*\s*\(([^)]*)\)\s*\{([\s\S]*)\}/g,
+        /export\s+default\s+function(?:\s+[\w$]+)?\s*\(([^)]*)\)\s*\{([\s\S]*)\}/g,
         (_m: string, param: string, body: string): string => {
             const p = param.trim()
             return `(async (${p ? `${p} = mj` : ''}) => { ${body} })()`

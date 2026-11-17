@@ -17,7 +17,7 @@ import {
 import { parseScopes } from './scopes.js'
 import { logger } from '../utils/logger.js'
 import { isPrivateOrLoopbackAddress } from '../utils/network-safety.js'
-import { assertSafeJwksUri } from './jwks-ssrf-guard.js'
+import { createPinnedJwksFetch } from './jwks-custom-fetch.js'
 
 // =============================================================================
 // Token Validator
@@ -151,11 +151,12 @@ export class TokenValidator {
         })
 
         try {
-            // Create JWKS remote key set
+            // Create JWKS remote key set with SSRF-pinned custom fetch
             this.jwks = jose.createRemoteJWKSet(this.jwksUrl, {
                 cooldownDuration: 30000, // 30 seconds between retries
                 cacheMaxAge: this.jwksCacheTtl * 1000,
                 timeoutDuration: 5000, // Explicit 5s timeout to prevent socket hangs
+                [jose.customFetch]: createPinnedJwksFetch(),
             })
 
             this.jwksExpiry = Date.now() + this.jwksCacheTtl * 1000
@@ -357,15 +358,12 @@ export class TokenValidator {
         })
 
         try {
-            await assertSafeJwksUri(this.jwksUri)
-            const response = await fetch(this.jwksUri, {
+            const jwksFetch = createPinnedJwksFetch()
+            await jwksFetch(this.jwksUri, {
                 method: 'GET',
                 signal: AbortSignal.timeout(10000),
                 redirect: 'error',
             })
-            if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`)
-            }
         } catch (error) {
             const cause = error instanceof Error ? error : new Error(String(error))
             logger.error('Failed to pre-fetch JWKS at startup', {

@@ -15,8 +15,34 @@ export interface BatchScopeHelpersContext {
     isDefaultWorkspaceName: (value: unknown) => boolean
     coerceProjectNumberField: (
         obj: Record<string, unknown>,
-        registry: NonNullable<ToolContext['config']>['projectRegistry']
+        registry: NonNullable<ToolContext['config']>['projectRegistry'],
+        requirePositiveInt?: boolean
     ) => { errorResult: Record<string, unknown> } | undefined
+}
+
+function trimmedStringField(obj: Record<string, unknown>, key: string): string | undefined {
+    const raw = obj[key]
+    return typeof raw === 'string' && raw.trim() !== '' ? raw.trim() : undefined
+}
+
+function applyBatchAliasWorkspaceOverride(
+    nextItem: Record<string, unknown>,
+    itemProjNum: number | undefined,
+    reg: NonNullable<ToolContext['config']>['projectRegistry'],
+    ctx: BatchScopeHelpersContext
+): void {
+    const { workspaceId, explicitWorkspace } = ctx
+    if (explicitWorkspace !== true || typeof workspaceId !== 'string' || workspaceId === '*') {
+        return
+    }
+    const rawItemWs = trimmedStringField(nextItem, 'workspace_id')
+    if (rawItemWs !== undefined && rawItemWs.toLowerCase() !== workspaceId.toLowerCase()) {
+        throw new ValidationError(
+            `Project alias resolved workspace '${rawItemWs}' does not match session workspace '${workspaceId}'.`
+        )
+    }
+    if (itemProjNum !== undefined) pairStoredScope(workspaceId, itemProjNum, reg)
+    nextItem['workspace_id'] = workspaceId
 }
 
 function resolveBatchItemAliasAndTarget(
@@ -25,41 +51,30 @@ function resolveBatchItemAliasAndTarget(
     reg: NonNullable<ToolContext['config']>['projectRegistry'],
     ctx: BatchScopeHelpersContext,
     itemAliasDerivedWs: boolean
-): void {
+): { errorResult: Record<string, unknown> } | undefined {
     const { workspaceId, explicitWorkspace, isDefaultWorkspaceName } = ctx
-    const rawItemWs =
-        typeof nextItem['workspace_id'] === 'string' && nextItem['workspace_id'].trim() !== ''
-            ? nextItem['workspace_id'].trim()
-            : undefined
     const itemProjNum =
         typeof nextItem['project_number'] === 'number' && Number.isFinite(nextItem['project_number'])
             ? nextItem['project_number']
             : undefined
-
-    if (
-        itemAliasDerivedWs &&
-        explicitWorkspace === true &&
-        typeof workspaceId === 'string' &&
-        workspaceId !== '*'
-    ) {
-        if (rawItemWs !== undefined && rawItemWs.toLowerCase() !== workspaceId.toLowerCase()) {
-            throw new ValidationError(
-                `Project alias resolved workspace '${rawItemWs}' does not match session workspace '${workspaceId}'.`
-            )
-        }
-        if (itemProjNum !== undefined) pairStoredScope(workspaceId, itemProjNum, reg)
-        nextItem['workspace_id'] = workspaceId
+    if (itemAliasDerivedWs) {
+        applyBatchAliasWorkspaceOverride(nextItem, itemProjNum, reg, ctx)
     }
 
-    const callerItemWs =
-        typeof nextItem['workspace_id'] === 'string' && nextItem['workspace_id'].trim() !== ''
-            ? nextItem['workspace_id'].trim()
-            : undefined
+    const callerItemWs = trimmedStringField(nextItem, 'workspace_id')
     const hasItemWs = callerItemWs !== undefined && !itemAliasDerivedWs
-    const itemTargetWs =
-        typeof nextItem['target_workspace_id'] === 'string' && nextItem['target_workspace_id'].trim() !== ''
-            ? nextItem['target_workspace_id'].trim()
-            : undefined
+    const itemTargetWs = trimmedStringField(nextItem, 'target_workspace_id')
+    if (itemTargetWs === '*') {
+        return {
+            errorResult: {
+                success: false,
+                error: "target_workspace_id cannot be '*'. Provide a concrete destination workspace.",
+                code: 'VALIDATION_ERROR',
+                category: 'validation',
+                recoverable: true,
+            },
+        }
+    }
     const itemCrossWsMove =
         itemTargetWs !== undefined &&
         (typeof workspaceId !== 'string' || itemTargetWs.toLowerCase() !== workspaceId.toLowerCase())
@@ -91,6 +106,7 @@ function resolveBatchItemAliasAndTarget(
         pairStoredScope(workspaceId, itemProjNum, reg)
         nextItem['workspace_id'] = workspaceId
     }
+    return undefined
 }
 
 function applyBatchItemSessionDefaults(
@@ -174,10 +190,11 @@ export function normalizeBatchDispatchItems(
         const itemAliasDerivedWs = nextItem['_alias_derived_workspace'] === true
         delete nextItem['_alias_derived_workspace']
 
-        const itemProjErr = ctx.coerceProjectNumberField(nextItem, reg)
+        const itemProjErr = ctx.coerceProjectNumberField(nextItem, reg, true)
         if (itemProjErr !== undefined) return itemProjErr
 
-        resolveBatchItemAliasAndTarget(nextItem, batchArrayKey, reg, ctx, itemAliasDerivedWs)
+        const aliasErr = resolveBatchItemAliasAndTarget(nextItem, batchArrayKey, reg, ctx, itemAliasDerivedWs)
+        if (aliasErr !== undefined) return aliasErr
         applyBatchItemSessionDefaults(
             nextItem,
             ctx,

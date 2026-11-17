@@ -379,9 +379,13 @@ export function pairStoredScope(
 
     const pairedProject = supplied ?? registryProject
     const trimmedWs = workspaceId !== undefined ? workspaceId.trim() : undefined
+    const finiteFallback =
+        typeof projectNumber === 'number' && Number.isFinite(projectNumber)
+            ? projectNumber
+            : undefined
     return {
         workspaceId: key ?? trimmedWs,
-        projectNumber: pairedProject ?? projectNumber,
+        projectNumber: pairedProject ?? finiteFallback,
     }
 }
 

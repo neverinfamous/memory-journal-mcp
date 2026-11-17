@@ -65,11 +65,13 @@ function resolveStaticRootAlias(target: Record<string, unknown>, prop: string): 
 }
 
 function resolveDynamicMethodAlias(ctx: ApiRootTrapContext, prop: string): unknown {
+    const isExplicitTeamProp = prop.startsWith('team_') || /^team[A-Z]/.test(prop)
     const snakeKey = /[A-Z]/.test(prop)
         ? prop.replace(/[A-Z]/g, (letter) => `_${letter.toLowerCase()}`)
         : prop
 
     for (const [g, groupAliases] of Object.entries(METHOD_ALIASES)) {
+        if (g === 'team' && !isExplicitTeamProp) continue
         if (groupAliases?.[prop] !== undefined) {
             const canonicalCamel = groupAliases[prop]
             const canonicalSnake = canonicalCamel.replace(/[A-Z]/g, (l) => `_${l.toLowerCase()}`)
@@ -79,13 +81,9 @@ function resolveDynamicMethodAlias(ctx: ApiRootTrapContext, prop: string): unkno
         }
     }
 
-    const teamSnakeKey = `team_${snakeKey}`
-    const teamGroup = Object.keys(ctx.methods).find((g) => ctx.methods[g]?.includes(teamSnakeKey))
-    if (teamGroup !== undefined && !Object.keys(ctx.methods).some((g) => ctx.methods[g]?.includes(snakeKey))) {
-        return ctx.createMethodProxyFn(teamGroup, teamSnakeKey)
-    }
-
-    const foundGroup = Object.keys(ctx.methods).find((g) => ctx.methods[g]?.includes(snakeKey))
+    const foundGroup = Object.keys(ctx.methods).find(
+        (g) => (g !== 'team' || isExplicitTeamProp) && ctx.methods[g]?.includes(snakeKey)
+    )
     return foundGroup !== undefined ? ctx.createMethodProxyFn(foundGroup, snakeKey) : undefined
 }
 

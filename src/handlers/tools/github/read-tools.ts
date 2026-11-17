@@ -21,7 +21,14 @@ import {
     githubScopeParseFields,
     resolveOwnerRepo,
 } from './helpers.js'
-import { markUntrustedContent } from '../../../utils/security-utils.js'
+import {
+    ensureBlockFenced,
+    ensureInlineFenced,
+    fenceGitHubIssueDetailsFields,
+    fenceGitHubPullRequestDetails,
+    fenceGitHubPullRequestSummary,
+    fenceUntrustedHandle,
+} from './fencing-helpers.js'
 import { createGitHubContextTool } from './context-tool.js'
 
 const GetGitHubIssueInputSchema = z
@@ -76,21 +83,26 @@ async function executeGetGitHubIssue(context: ToolContext, params: unknown): Pro
         }
 
         // Clone issue to avoid mutating cache
-        const safeIssue = fenceIssueMilestone(issue)
+        const safeIssue = fenceGitHubIssueDetailsFields(issue)
         const { body, bodyTruncated, bodyFullLength } = truncateItemBody(
             safeIssue.body,
             input.truncate_body
         )
-        safeIssue.body = markUntrustedContent(body)
+        safeIssue.body = ensureBlockFenced(body)
 
         // Fetch comments if requested
         let comments: { author: string; body: string; createdAt: string }[] | undefined
         if (input.include_comments) {
-            comments = await resolved.github.getIssueComments(
+            const rawComments = await resolved.github.getIssueComments(
                 resolved.owner,
                 resolved.repo,
                 input.issue_number
             )
+            comments = rawComments.map((c) => ({
+                ...c,
+                author: fenceUntrustedHandle(c.author),
+                body: ensureBlockFenced(c.body),
+            }))
         }
 
         return {
@@ -184,7 +196,10 @@ export function getGitHubReadTools(context: ToolContext): ToolDefinition[] {
                         input.state,
                         input.limit
                     )
-                    const safeIssues = issues.map(fenceIssueMilestone)
+                    const safeIssues = issues.map((issue) => ({
+                        ...fenceIssueMilestone(issue),
+                        title: ensureInlineFenced(issue.title),
+                    }))
                     return {
                         owner: resolved.owner,
                         repo: resolved.repo,
@@ -229,7 +244,7 @@ export function getGitHubReadTools(context: ToolContext): ToolDefinition[] {
                         input.state,
                         input.limit
                     )
-                    const safePrs = pullRequests
+                    const safePrs = pullRequests.map(fenceGitHubPullRequestSummary)
                     return {
                         owner: resolved.owner,
                         repo: resolved.repo,
@@ -300,22 +315,13 @@ export function getGitHubReadTools(context: ToolContext): ToolDefinition[] {
                         }
                     }
 
-                    // Clone PR to avoid mutating cache
-                    const safePr = { ...pullRequest }
-
-                    // Apply body truncation
-                    const truncateBody = input.truncate_body
-                    let bodyTruncated = false
-                    let bodyFullLength: number | undefined
-                    if (truncateBody > 0 && safePr.body && safePr.body.length > truncateBody) {
-                        bodyFullLength = safePr.body.length
-                        safePr.body =
-                            safePr.body.slice(0, truncateBody) +
-                            `\n\n[Truncated... remaining ${bodyFullLength - truncateBody} chars]`
-                        bodyTruncated = true
-                    }
-
-                    safePr.body = markUntrustedContent(safePr.body)
+                    // Clone PR and truncate BEFORE fencing to avoid slicing inside wrapper tags
+                    const safePr = fenceGitHubPullRequestDetails(pullRequest)
+                    const { body, bodyTruncated, bodyFullLength } = truncateItemBody(
+                        safePr.body,
+                        input.truncate_body
+                    )
+                    safePr.body = ensureBlockFenced(body)
 
                     return {
                         pullRequest: {

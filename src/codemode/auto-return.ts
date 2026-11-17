@@ -26,6 +26,30 @@ const NON_RETURNABLE =
  *   `return 42`                       → `return 42`          (no change)
  *   `for (const x of xs) { ... }`    → unchanged             (control flow)
  */
+function trySkipRegexLiteral(trimmed: string, slashIdx: number): number | null {
+    const next = trimmed[slashIdx + 1]
+    if (next === '/' || next === '*') return null
+    let prevIdx = slashIdx - 1
+    while (prevIdx >= 0 && /\s/.test(trimmed[prevIdx] ?? '')) prevIdx--
+    const prevCh = prevIdx >= 0 ? (trimmed[prevIdx] ?? '') : ''
+    if (prevCh !== '' && !/[([{:;,=!?&|+\-~*%^<>]/.test(prevCh)) return null
+
+    let i = slashIdx + 1
+    let inClass = false
+    while (i < trimmed.length) {
+        const rc = trimmed[i]
+        if (rc === '\\') {
+            i += 2
+            continue
+        }
+        if (rc === '[') inClass = true
+        else if (rc === ']') inClass = false
+        else if ((rc === '/' && !inClass) || rc === '\n') break
+        i++
+    }
+    return i
+}
+
 export function transformAutoReturn(code: string): string {
     let trimmed = code.trimEnd()
     if (!trimmed) return code
@@ -43,54 +67,44 @@ export function transformAutoReturn(code: string): string {
     // Forward pass to safely find statement boundaries
     for (let i = 0; i < trimmed.length; i++) {
         const ch = trimmed[i]
-        
         if (inString) {
-            if (ch === '\\') {
-                isEscaped = !isEscaped
-            } else {
-                if (ch === inString && !isEscaped) {
-                    inString = null
-                }
+            if (ch === '\\') isEscaped = !isEscaped
+            else {
+                if (ch === inString && !isEscaped) inString = null
                 isEscaped = false
             }
-        } else {
-            // [M11] Skip comments so apostrophes/quotes inside them never open a fake string.
-            if (ch === '/' && trimmed[i + 1] === '/') {
-                const nl = trimmed.indexOf('\n', i)
-                if (nl === -1) break
-                i = nl - 1
-                continue
-            }
-            if (ch === '/' && trimmed[i + 1] === '*') {
-                const end = trimmed.indexOf('*/', i + 2)
-                if (end === -1) break
-                i = end + 1
-                continue
-            }
-            if (ch === "'" || ch === '"' || ch === '`') {
-                inString = ch
-            } else if (ch === '{' || ch === '[' || ch === '(') {
-                depth++
-            } else if (ch === '}' || ch === ']' || ch === ')') {
-                depth--
-            } else if (depth === 0 && (ch === ';' || ch === '\n')) {
-                lastBoundary = i
-            }
+            continue
+        }
+        if (ch === '/' && trimmed[i + 1] === '/') {
+            const nl = trimmed.indexOf('\n', i)
+            if (nl === -1) break
+            i = nl - 1
+            continue
+        }
+        if (ch === '/' && trimmed[i + 1] === '*') {
+            const end = trimmed.indexOf('*/', i + 2)
+            if (end === -1) break
+            i = end + 1
+            continue
+        }
+        if (ch === "'" || ch === '"' || ch === '`') {
+            inString = ch
+        } else if (ch === '/') {
+            const regexEnd = trySkipRegexLiteral(trimmed, i)
+            if (regexEnd !== null) i = regexEnd
+        } else if (ch === '{' || ch === '[' || ch === '(') {
+            depth++
+        } else if (ch === '}' || ch === ']' || ch === ')') {
+            depth--
+        } else if (depth === 0 && (ch === ';' || ch === '\n')) {
+            lastBoundary = i
         }
     }
 
-    // Extract the last statement
     const lastStmt = (lastBoundary >= 0 ? trimmed.slice(lastBoundary + 1) : trimmed).trim()
+    if (!lastStmt || NON_RETURNABLE.test(lastStmt)) return code
 
-    if (!lastStmt) return code
-    if (NON_RETURNABLE.test(lastStmt)) return code
-
-    // Insert `return` before the last statement
-    if (lastBoundary >= 0) {
-        const before = trimmed.slice(0, lastBoundary + 1)
-        return `${before}\nreturn ${lastStmt}`
-    }
-
-    // Single statement — just prepend return
-    return `return ${trimmed}`
+    return lastBoundary >= 0
+        ? `${trimmed.slice(0, lastBoundary + 1)}\nreturn ${lastStmt}`
+        : `return ${trimmed}`
 }

@@ -5,6 +5,47 @@
 
 const SENSITIVE_STRING_CONTENT = /^(?:constructor|__proto__|prototype)$/i
 
+function decodeUnicodeEscape(
+    code: string,
+    slashIdx: number
+): { ch: string; next: number } | null {
+    const len = code.length
+    if (code[slashIdx + 2] === '{') {
+        let end = slashIdx + 3
+        while (end < len && end - (slashIdx + 3) < 8 && code[end] !== '}') end++
+        if (end >= len || code[end] !== '}') return null
+        const hex = code.slice(slashIdx + 3, end)
+        if (!/^[0-9a-fA-F]+$/.test(hex)) return null
+        const cp = Number.parseInt(hex, 16)
+        return cp <= 0x10ffff ? { ch: String.fromCodePoint(cp), next: end + 1 } : null
+    }
+    if (slashIdx + 6 > len) return null
+    const hex = code.slice(slashIdx + 2, slashIdx + 6)
+    return /^[0-9a-fA-F]{4}$/.test(hex)
+        ? { ch: String.fromCharCode(Number.parseInt(hex, 16)), next: slashIdx + 6 }
+        : null
+}
+
+function decodeEscapeAt(
+    code: string,
+    slashIdx: number,
+    allowHexEscape: boolean
+): { ch: string; next: number } {
+    const len = code.length
+    if (slashIdx + 1 >= len) return { ch: '', next: slashIdx + 1 }
+    const esc = code[slashIdx + 1] ?? ''
+    if (esc === 'u') {
+        const decoded = decodeUnicodeEscape(code, slashIdx)
+        if (decoded !== null) return decoded
+    } else if (allowHexEscape && esc === 'x' && slashIdx + 4 <= len) {
+        const hex = code.slice(slashIdx + 2, slashIdx + 4)
+        if (/^[0-9a-fA-F]{2}$/.test(hex)) {
+            return { ch: String.fromCharCode(Number.parseInt(hex, 16)), next: slashIdx + 4 }
+        }
+    }
+    return { ch: esc, next: slashIdx + 2 }
+}
+
 /**
  * Skips a regex literal body starting just after the opening `/`.
  * Returns the index after the closing `/` and its flags (or at the line end if unterminated).
@@ -52,12 +93,9 @@ function scanQuotedLiteral(
     while (i < len) {
         const c = code[i] ?? ''
         if (c === '\\') {
-            if (i + 1 < len) {
-                content += code[i + 1] ?? ''
-                i += 2
-            } else {
-                i++
-            }
+            const dec = decodeEscapeAt(code, i, true)
+            content += dec.ch
+            i = dec.next
             continue
         }
         if (c === quote) {
@@ -89,12 +127,9 @@ function scanTemplateLiteral(
     while (i < len) {
         const c = code[i] ?? ''
         if (c === '\\') {
-            if (i + 1 < len) {
-                content += code[i + 1] ?? ''
-                i += 2
-            } else {
-                i++
-            }
+            const dec = decodeEscapeAt(code, i, true)
+            content += dec.ch
+            i = dec.next
             continue
         }
         if (c === '$' && code[i + 1] === '{') {
@@ -122,8 +157,8 @@ function scanTemplateLiteral(
 
 function canStartRegexLiteral(prev: string): boolean {
     if (!prev) return true
-    if (/^[([{:;,=!?&|+-~*%^<>]$/.test(prev)) return true
-    return /^(?:return|typeof|instanceof|in|of|void|delete|throw|new|case|yield|await)$/.test(
+    if (/^[([{:;,=!?&|+\-~*%^<>]$/.test(prev)) return true
+    return /^(?:return|typeof|instanceof|in|of|void|delete|throw|new|case|yield|await|else|do)$/.test(
         prev
     )
 }
@@ -139,6 +174,20 @@ function skipLineOrBlockComment(
         while (i < code.length && code[i] !== '\n') i++
         return { out: ' ', next: i }
     }
+    if (ch === '<' && code.slice(start, start + 4) === '<!--') {
+        let i = start + 4
+        while (i < code.length && code[i] !== '\n') i++
+        return { out: ' ', next: i }
+    }
+    if (ch === '-' && code.slice(start, start + 3) === '-->') {
+        let pos = start - 1
+        while (pos >= 0 && (code[pos] === ' ' || code[pos] === '\t')) pos--
+        if (pos < 0 || code[pos] === '\n' || code[pos] === '\r') {
+            let i = start + 3
+            while (i < code.length && code[i] !== '\n') i++
+            return { out: ' ', next: i }
+        }
+    }
     if (ch === '/' && next === '*') {
         let out = ' '
         let i = start + 2
@@ -153,10 +202,16 @@ function skipLineOrBlockComment(
 }
 
 function scanIdentifierWord(code: string, start: number): { word: string; next: number } {
-    let word = code[start] ?? ''
-    let j = start + 1
+    let word = ''
+    let j = start
     while (j < code.length) {
         const nextCh = code[j]
+        if (nextCh === '\\' && code[j + 1] === 'u') {
+            const dec = decodeEscapeAt(code, j, false)
+            word += dec.ch
+            j = dec.next
+            continue
+        }
         if (nextCh === undefined || !/[A-Za-z0-9_$]/.test(nextCh)) break
         word += nextCh
         j++
@@ -225,9 +280,16 @@ export function stripCommentsAndStrings(rawCode: string): string {
             continue
         }
 
+        if ((ch === '+' && next === '+') || (ch === '-' && next === '-')) {
+            lastNonWsToken = ch + next
+            out += ch + next
+            i += 2
+            continue
+        }
+
         updateTemplateBraceDepth(ch, templateBraceDepthStack)
 
-        if (/[A-Za-z0-9_$]/.test(ch)) {
+        if (/[A-Za-z0-9_$]/.test(ch) || (ch === '\\' && next === 'u')) {
             const ident = scanIdentifierWord(code, i)
             lastNonWsToken = ident.word
             out += ident.word

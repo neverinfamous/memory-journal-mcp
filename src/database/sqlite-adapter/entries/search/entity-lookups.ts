@@ -223,11 +223,20 @@ function executeFacetCountQueries(
         GROUP BY e.entry_type ORDER BY cnt DESC
     `
 
-    const tagsRows = db.prepare(tagsSql).all(params) as { name: string; cnt: number }[]
-    const entryTypesRows = db.prepare(entryTypesSql).all(entryTypeParams) as {
-        name: string
-        cnt: number
-    }[]
+    let tagsRows: { name: string; cnt: number }[]
+    let entryTypesRows: { name: string; cnt: number }[]
+    try {
+        tagsRows = db.prepare(tagsSql).all(params) as { name: string; cnt: number }[]
+        entryTypesRows = db.prepare(entryTypesSql).all(entryTypeParams) as {
+            name: string
+            cnt: number
+        }[]
+    } catch (err) {
+        if (useFts && err instanceof Error && /fts5: syntax error/i.test(err.message)) {
+            return { tags: [], entryTypes: [] }
+        }
+        throw err
+    }
 
     return {
         tags: tagsRows.map((r) => ({ name: r.name, count: r.cnt })),

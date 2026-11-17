@@ -1,11 +1,18 @@
 import { execFileSync } from 'node:child_process'
 import * as fs from 'node:fs'
 import * as path from 'node:path'
-import type { AnchorStatus, ToolHandlerConfig } from '../../types/index.js'
+import { z } from 'zod'
+import type { AnchorStatus, ToolContext, ToolHandlerConfig } from '../../types/index.js'
 import type { IDatabaseAdapter } from '../../database/core/interfaces.js'
 import { mcpLogger } from '../../utils/mcp-logger.js'
+import { formatHandlerError } from '../../utils/error-helpers.js'
 import { ValidationError, ResourceNotFoundError } from '../../types/errors.js'
-import { findCanonicalRegistryKey, resolveWorkspaceId } from '../../utils/workspace-resolver.js'
+import {
+    findCanonicalRegistryKey,
+    loadProjectRegistryFromConfig,
+    resolveWorkspaceId,
+} from '../../utils/workspace-resolver.js'
+import { StrictProjectNumberSchema } from './schemas.js'
 
 export { resolveGitWorkingDir, type GitWorkingDirInput } from './git-workdir.js'
 
@@ -285,4 +292,98 @@ export async function evaluateWorkspaceAnchors(options: {
         rows.push(...entryRows)
     }
     return { rows, skipped: false }
+}
+
+const coercedPositiveInt = z.preprocess(
+    (v) => (typeof v === 'string' && /^\d+$/.test(v.trim()) ? Number(v.trim()) : v),
+    z.number().int().positive()
+)
+
+const CheckEntryStalenessParseSchema = z.object({
+    entry_id: coercedPositiveInt.optional(),
+    entryId: coercedPositiveInt.optional(),
+    workspace_id: z.string().optional(),
+    workspaceId: z.string().optional(),
+    project_number: StrictProjectNumberSchema.optional(),
+    projectNumber: StrictProjectNumberSchema.optional(),
+})
+
+function formatStalenessResponse(
+    targetWorkspaces: string[],
+    outcomes: { rows: StalenessCheckRow[]; skipped: boolean }[]
+): Record<string, unknown> {
+    const results: StalenessCheckRow[] = []
+    const skippedWorkspaces: string[] = []
+    for (let i = 0; i < targetWorkspaces.length; i++) {
+        const wsId = targetWorkspaces[i]
+        const outcome = outcomes[i]
+        if (wsId === undefined || outcome === undefined) continue
+        if (outcome.skipped) skippedWorkspaces.push(wsId)
+        else results.push(...outcome.rows)
+    }
+
+    const failureMessages = results
+        .filter((row) => row.error !== undefined)
+        .map((row) => `${row.path}: ${row.error ?? ''}`)
+    const skipped = skippedWorkspaces.length > 0 ? { skippedWorkspaces } : {}
+    if (failureMessages.length > 0) {
+        return { success: false, results, error: failureMessages.join('; '), ...skipped }
+    }
+    if (
+        results.length === 0 &&
+        skippedWorkspaces.length > 0 &&
+        skippedWorkspaces.length === targetWorkspaces.length
+    ) {
+        return {
+            success: false,
+            results,
+            error: 'No anchor check ran because no workspace had a registered repository path.',
+            skippedWorkspaces,
+        }
+    }
+    return { success: true, results, ...skipped }
+}
+
+/** Execute `check_entry_staleness` across target workspaces and format the aggregate result. */
+export async function runCheckEntryStaleness(
+    params: unknown,
+    context: ToolContext,
+    countCommits: (anchorPath: string, since: string, cwd: string, maxCount: number) => Promise<number>
+): Promise<unknown> {
+    try {
+        const parsed = CheckEntryStalenessParseSchema.parse(params)
+        const resolvedEntryId = parsed.entry_id ?? parsed.entryId
+        const rawWs = parsed.workspace_id ?? parsed.workspaceId
+        const rawProj = parsed.project_number ?? parsed.projectNumber
+        const registry = context.config?.projectRegistry ?? loadProjectRegistryFromConfig()
+        const targetWorkspaces = resolveStalenessTargetWorkspaces(
+            context.db,
+            rawWs,
+            rawProj,
+            resolvedEntryId,
+            registry,
+            context.config
+        )
+
+        const maxRecentEntries = targetWorkspaces.length > 1 ? 8 : 20
+        const maxCommitsPerAnchor = targetWorkspaces.length > 1 ? 5 : 25
+        const outcomes = await Promise.all(
+            targetWorkspaces.map((wsId) =>
+                evaluateWorkspaceAnchors({
+                    db: context.db,
+                    wsId,
+                    rawWs,
+                    rawProj,
+                    resolvedEntryId,
+                    registry,
+                    maxRecentEntries,
+                    countCommitsSince: (anchorPath, since, cwd) =>
+                        countCommits(anchorPath, since, cwd, maxCommitsPerAnchor),
+                })
+            )
+        )
+        return formatStalenessResponse(targetWorkspaces, outcomes)
+    } catch (err) {
+        return formatHandlerError(err)
+    }
 }

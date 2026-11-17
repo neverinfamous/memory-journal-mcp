@@ -133,7 +133,7 @@ const stringParts = (parts: unknown[]): string[] =>
  * [BOUNDARY] Backed by `node:path` posix semantics over `/`-normalized input so Windows
  * separators are handled; `resolve` never consults the host `process.cwd()`.
  */
-export const pathShim = {
+export const pathShim = Object.freeze({
     join: (...parts: unknown[]): string => {
         const valid = stringParts(parts)
         return valid.length === 0 ? '.' : nodePath.posix.join(...valid)
@@ -158,7 +158,7 @@ export const pathShim = {
         nodePath.win32.isAbsolute(toStr(p)) || nodePath.posix.isAbsolute(toPosix(p)),
     sep: '/',
     delimiter: ':',
-}
+})
 
 export const consoleShim = Object.freeze({
     log: (...args: unknown[]) => args,

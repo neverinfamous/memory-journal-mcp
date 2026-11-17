@@ -140,10 +140,10 @@ const LEVEL_UNFINISHED_RE = /^(?:#|#{3,})\s+Unfinished \/ Blocked\s*$/gim
 const LEVEL_CONTEXT_RE = /^(?:#|#{3,})\s+Context for Next Session\s*$/gim
 const LEVEL_COMMITS_RE = /^(?:#|#{3,})\s+Commits\s*$/gim
 
-const COLLAPSE_ACCOMPLISHED_RE = /(?:^#+\s+Accomplished\s*\n-\s*(?:None\.?|)\s*){2,}/gim
-const COLLAPSE_UNFINISHED_RE = /(?:^#+\s+Unfinished \/ Blocked\s*\n-\s*(?:None\.?|)\s*){2,}/gim
-const COLLAPSE_CONTEXT_RE = /(?:^#+\s+Context for Next Session\s*\n-\s*(?:None\.?|)\s*){2,}/gim
-const COLLAPSE_COMMITS_RE = /(?:^#+\s+Commits\s*\n-\s*(?:None\.?|)\s*){2,}/gim
+const COLLAPSE_ACCOMPLISHED_RE = /(?:^#+[ \t]+Accomplished[ \t]*\r?\n-[ \t]*(?:None\.?[ \t]*)?(?:\r?\n|$)){2,}/gim
+const COLLAPSE_UNFINISHED_RE = /(?:^#+[ \t]+Unfinished \/ Blocked[ \t]*\r?\n-[ \t]*(?:None\.?[ \t]*)?(?:\r?\n|$)){2,}/gim
+const COLLAPSE_CONTEXT_RE = /(?:^#+[ \t]+Context for Next Session[ \t]*\r?\n-[ \t]*(?:None\.?[ \t]*)?(?:\r?\n|$)){2,}/gim
+const COLLAPSE_COMMITS_RE = /(?:^#+[ \t]+Commits[ \t]*\r?\n-[ \t]*(?:None\.?[ \t]*)?(?:\r?\n|$)){2,}/gim
 
 const REQUIRED_PERIOD_HEADERS: readonly { header: string; testRe: RegExp }[] = [
     { header: '## Accomplished', testRe: /#+\s+Accomplished/i },

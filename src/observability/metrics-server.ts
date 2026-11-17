@@ -1,4 +1,4 @@
-import { timingSafeEqual } from 'node:crypto';
+import { createHash, timingSafeEqual } from 'node:crypto';
 import * as http from 'node:http';
 import { logger } from '../utils/logger.js';
 import type { ServerRuntime } from '../utils/maintenance-lock.js';
@@ -94,13 +94,14 @@ function isValidBearerToken(
     expectedToken: string
 ): boolean {
     if (typeof authHeader !== 'string') return false;
+    if (expectedToken.trim() === '') return false;
     const spaceIdx = authHeader.indexOf(' ');
     if (spaceIdx === -1) return false;
     const scheme = authHeader.slice(0, spaceIdx).toLowerCase();
     if (scheme !== 'bearer') return false;
-    const provided = Buffer.from(authHeader.slice(spaceIdx + 1), 'utf8');
-    const expected = Buffer.from(expectedToken, 'utf8');
-    return provided.length === expected.length && timingSafeEqual(expected, provided);
+    const providedDigest = createHash('sha256').update(authHeader.slice(spaceIdx + 1), 'utf8').digest();
+    const expectedDigest = createHash('sha256').update(expectedToken, 'utf8').digest();
+    return timingSafeEqual(expectedDigest, providedDigest);
 }
 
 interface ResolvedMetricsServerConfig {
@@ -117,8 +118,11 @@ function resolveMetricsServerConfig(
     options: MetricsServerOptions | undefined
 ): ResolvedMetricsServerConfig {
     const port = parseMetricsPort(metricsPort);
+    if (options?.authToken !== undefined && options.authToken !== '' && options.authToken.trim() === '') {
+        throw new Error('FATAL: Authentication token cannot be whitespace-only.');
+    }
     const authToken =
-        typeof options?.authToken === 'string' && options.authToken.length > 0
+        typeof options?.authToken === 'string' && options.authToken.trim().length > 0
             ? options.authToken
             : undefined;
     const rawHost = process.env['MJ_METRICS_HOST']?.trim();

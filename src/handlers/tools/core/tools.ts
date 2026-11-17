@@ -221,7 +221,7 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
                             code: 'RESOURCE_NOT_FOUND',
                             category: 'resource',
                             suggestion: matchingTeamEntry
-                                ? `No personal entry #${String(input.entry_id)} was found in workspace '${wsId}', but team entry #${String(input.entry_id)} exists in the team database. Call team_get_entry_by_id (or mj.team.getEntryById) instead.`
+                                ? `No personal entry #${String(input.entry_id)} was found in workspace '${wsId}', but team entry #${String(input.entry_id)} exists in the team database. Call team_get_entry_by_id (or mj.team.teamGetEntryById / mj.team.getEntryById) instead.`
                                 : 'Verify the entry ID exists and you have access to it',
                             recoverable: true,
                         }

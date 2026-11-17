@@ -66,7 +66,7 @@ function resolveRealTargetPath(targetInput: string): string {
 
     while (currentDir !== path.parse(currentDir).root) {
         if (fs.existsSync(currentDir)) {
-            existingRealPath = fs.realpathSync(currentDir)
+            existingRealPath = fs.realpathSync.native(currentDir)
             break
         }
         currentDir = path.dirname(currentDir)
@@ -74,7 +74,7 @@ function resolveRealTargetPath(targetInput: string): string {
 
     if (!existingRealPath) {
         if (fs.existsSync(currentDir)) {
-            existingRealPath = fs.realpathSync(currentDir) // root resolution
+            existingRealPath = fs.realpathSync.native(currentDir) // root resolution
         } else {
             existingRealPath = currentDir
         }
@@ -108,7 +108,7 @@ function resolveAllowedRoots(rawRoots: string[]): string[] {
     for (const root of rawRoots) {
         const resolvedRoot = path.resolve(root)
         try {
-            allowedRoots.push(fs.realpathSync(resolvedRoot))
+            allowedRoots.push(fs.realpathSync.native(resolvedRoot))
         } catch (err: unknown) {
             const code = typeof err === 'object' && err !== null && 'code' in err ? err.code : undefined
             if (code === 'ENOENT') {
@@ -142,6 +142,12 @@ function isWithinAllowedRoots(targetPath: string, allowedRoots: string[]): boole
     })
 }
 
+const WIN_RESERVED_DEVICE_RE = /^(?:CON|PRN|AUX|NUL|COM[1-9]|LPT[1-9])(?:\..*)?$/i
+
+function hasUnsafeAdsColon(dirPath: string): boolean {
+    return dirPath.replace(/^[A-Za-z]:(?=[\\/]|$)/, '').includes(':')
+}
+
 /**
  * Validates that a directory path is strictly bounded within the active memory journal context.
  *
@@ -155,6 +161,7 @@ function isWithinAllowedRoots(targetPath: string, allowedRoots: string[]): boole
 export function assertSafeDirectoryPath(dirPath: string, providedRoots: string[]): void {
     if (
         dirPath.includes('\0') ||
+        hasUnsafeAdsColon(dirPath) ||
         dirPath
             .replace(/\\/g, '/')
             .split('/')
@@ -163,6 +170,9 @@ export function assertSafeDirectoryPath(dirPath: string, providedRoots: string[]
         throw new PathTraversalError(dirPath)
     }
     const decodedDir = decodeSafeDirPath(dirPath)
+    if (hasUnsafeAdsColon(decodedDir)) {
+        throw new PathTraversalError(decodedDir)
+    }
     const allowedRoots = resolveAllowedRoots(providedRoots)
 
     // 4. Verify BOTH raw and decoded paths are structurally inside at least one allowed root
@@ -220,10 +230,13 @@ export function assertSafeFilePath(filePath: string, providedRoots: string[]): v
         throw new PathTraversalError(`Malformed URL-encoding in file name: ${rawBase}`)
     }
     if (
-        /[\\/]/.test(decodedBase) ||
+        /[\\/:]/.test(rawBase) ||
+        /[\\/:]/.test(decodedBase) ||
         decodedBase === '..' ||
         decodedBase === '.' ||
-        decodedBase.includes('\0')
+        decodedBase.includes('\0') ||
+        WIN_RESERVED_DEVICE_RE.test(rawBase) ||
+        WIN_RESERVED_DEVICE_RE.test(decodedBase)
     ) {
         throw new PathTraversalError(`File name escapes allowed sandbox boundaries: ${decodedBase}`)
     }

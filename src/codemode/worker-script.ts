@@ -20,6 +20,7 @@ import { createShimMjProxy } from './worker/mj-shim-proxy.js'
 import { buildSandboxGlobals } from './worker/sandbox-globals.js'
 import { serializeAndEnforceEgress } from './worker/result-compactor.js'
 import { createSandboxExecutor, type NestedExecIsolationOverrides, type RunIsolatedNestedFn } from './worker/nested-exec-scope.js'
+import { raceWithSandboxTimeout } from './worker/nested-exec-payload.js'
 
 // [L4] Hardening failures are fatal: refuse to execute any user code in a half-hardened realm.
 const hardeningFailures = hardenOuterFunctionPrototypes()
@@ -236,8 +237,12 @@ function createIsolatedNestedRunner(options: VmExecutionContextOptions): RunIsol
             projectRegistryRaw,
             activeTimers,
         })
-        const rawResult = (await vm.runInContext(wrapped, nestedContext, { timeout: nextTimeout })) as unknown
-        return enforceNestedResultLimit(rawResult, overrides?.maxResultSize)
+        const rawResult: unknown = await raceWithSandboxTimeout<unknown>(
+            Promise.resolve(vm.runInContext(wrapped, nestedContext, { timeout: nextTimeout })),
+            nextTimeout,
+            activeTimers
+        )
+        return enforceNestedResultLimit(rawResult, nextMaxResult)
     }
 }
 
@@ -274,7 +279,7 @@ function createVmExecutionContext(options: VmExecutionContextOptions): vm.Contex
 
     const executeCodeFn = createSandboxExecutor({
         shimMj, vmContextRef, timeoutMs, maxResultSize, readonlyMode, dryRunMode, useTestDbMode,
-        pinnedWorkspaceRaw, pinnedProjectRaw, projectRegistryRaw, runIsolatedNestedCode,
+        pinnedWorkspaceRaw, pinnedProjectRaw, projectRegistryRaw, runIsolatedNestedCode, activeTimers,
     })
     executeCodeFnRef.current = executeCodeFn
 

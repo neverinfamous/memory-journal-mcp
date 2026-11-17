@@ -365,7 +365,6 @@ const MUTATING_NON_EXEMPT_TOOLS = new Set<string>([
     ...TOOL_GROUPS.admin.filter((t) => !READONLY_ADMIN_TOOLS.has(t)),
     'create_entry',
     'create_entry_minimal',
-    'test_simple',
     'mark_anchors_stale',
     'link_entries',
     'import_markdown',

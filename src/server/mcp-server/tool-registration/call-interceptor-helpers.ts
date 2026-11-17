@@ -232,3 +232,68 @@ export function resolveSingleProjectFromRegistry(
         error: `🛠️ AUTONOMOUS HEALING: Project not found: '${nameArg ?? String(numericTarget ?? '')}'`,
     }
 }
+
+/** Counts input elements iteratively (cycle-safe) and aborts as soon as `maxElements` is exceeded. */
+export function exceedsMaxToolInputElements(value: unknown, maxElements: number): boolean {
+    if (!Number.isFinite(maxElements) || maxElements < 0) return false
+    const stack: unknown[] = [value]
+    const seen = new WeakSet()
+    let count = 0
+
+    while (stack.length > 0) {
+        const cur = stack.pop()
+        if (cur === null || typeof cur !== 'object') {
+            count++
+            if (count > maxElements) return true
+            continue
+        }
+        if (seen.has(cur)) continue
+        seen.add(cur)
+
+        if (Array.isArray(cur)) {
+            count++
+            if (count > maxElements) return true
+            for (const item of cur) {
+                stack.push(item)
+            }
+            continue
+        }
+
+        const keys = Object.keys(cur)
+        count += 1 + keys.length
+        if (count > maxElements) return true
+        const rec = cur as Record<string, unknown>
+        for (const key of keys) {
+            stack.push(rec[key])
+        }
+    }
+    return false
+}
+
+const TOOL_TO_GROUP = new Map<string, string>(
+    Object.entries(TOOL_GROUPS).flatMap(([group, names]) =>
+        names.map((name): [string, string] => [name, group])
+    )
+)
+
+/** Converts an MCP snake_case tool name to its `mj.<group>.<camelCase>` Code Mode call hint. */
+export function resolveCodeModeCallHint(toolName: string): string {
+    const group = TOOL_TO_GROUP.get(toolName) ?? 'core'
+    const camel = toolName.replace(/_([a-z])/g, (_, ch: string) => ch.toUpperCase())
+    return `mj.${group}.${camel}`
+}
+
+/** Validates basic JSON-RPC `tools/call` params shape before accessing `name` and `arguments`. */
+export function hasToolCallRequestShape(request: unknown): request is { params?: ToolCallParams } {
+    if (!isPlainRecord(request)) return false
+    if (!('params' in request) || request['params'] === undefined) return true
+    const params = request['params']
+    if (!isPlainRecord(params)) return false
+    const nameOk =
+        !('name' in params) || params['name'] === undefined || typeof params['name'] === 'string'
+    const argsOk =
+        !('arguments' in params) ||
+        params['arguments'] === undefined ||
+        isPlainRecord(params['arguments'])
+    return nameOk && argsOk
+}

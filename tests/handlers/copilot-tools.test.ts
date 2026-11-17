@@ -97,7 +97,9 @@ describe('getCopilotReviewTools', () => {
         expect(result['state']).toBe('approved')
         expect(result['commentCount']).toBe(3)
         expect(result['comments']).toHaveLength(3)
-        expect((result['comments'] as Record<string, unknown>[])[0]!['body']).toBe('Use const here')
+        expect((result['comments'] as Record<string, unknown>[])[0]!['body']).toBe(
+            '<untrusted_remote_content>\nUse const here\n</untrusted_remote_content>'
+        )
         expect(result['owner']).toBe('neverinfamous')
     })
 

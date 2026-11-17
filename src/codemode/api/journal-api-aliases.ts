@@ -86,36 +86,57 @@ function wireProjectQueryAndTeamAliases(deps: ProjectAndTeamAliasDeps): void {
     const existingGetProject = admin['getProject']
     const fallbackListProjectsFn = createListProjectsFn(registryProvider)
 
+    const disabledToolStub = (toolName: string): (() => Promise<unknown>) => {
+        return (): Promise<unknown> =>
+            Promise.resolve({
+                success: false,
+                error: `Tool '${toolName}' is disabled by the active --tool-filter configuration.`,
+                code: 'TOOL_DISABLED',
+                category: 'authorization',
+                recoverable: false,
+            })
+    }
+
     let listProjectsFn: (...args: unknown[]) => Promise<unknown>
-    if (hasDispatcher && typeof existingListProjects === 'function') {
-        const wrappedListProjects = async (...args: unknown[]): Promise<unknown> => {
-            if (isRecord(args[0])) return await existingListProjects(args[0])
-            return await existingListProjects({})
+    if (hasDispatcher) {
+        if (typeof existingListProjects === 'function') {
+            const wrappedListProjects = async (...args: unknown[]): Promise<unknown> => {
+                if (isRecord(args[0])) return await existingListProjects(args[0])
+                return await existingListProjects({})
+            }
+            copyFnSchema(existingListProjects, wrappedListProjects)
+            listProjectsFn = wrappedListProjects
+        } else {
+            listProjectsFn = disabledToolStub('list_projects')
         }
-        copyFnSchema(existingListProjects, wrappedListProjects)
-        listProjectsFn = wrappedListProjects
     } else {
         listProjectsFn = fallbackListProjectsFn
     }
 
     let getProjectFn: (...args: unknown[]) => Promise<unknown>
-    if (hasDispatcher && typeof existingGetProject === 'function') {
-        const wrappedGetProject = async (...args: unknown[]): Promise<unknown> => {
-            if (isRecord(args[0])) return await existingGetProject(args[0])
-            if (typeof args[0] === 'string') return await existingGetProject({ name: args[0] })
-            if (typeof args[0] === 'number') return await existingGetProject({ project_number: args[0] })
-            return await existingGetProject({})
+    if (hasDispatcher) {
+        if (typeof existingGetProject === 'function') {
+            const wrappedGetProject = async (...args: unknown[]): Promise<unknown> => {
+                if (isRecord(args[0])) return await existingGetProject(args[0])
+                if (typeof args[0] === 'string') return await existingGetProject({ name: args[0] })
+                if (typeof args[0] === 'number') return await existingGetProject({ project_number: args[0] })
+                return await existingGetProject({})
+            }
+            copyFnSchema(existingGetProject, wrappedGetProject)
+            getProjectFn = wrappedGetProject
+        } else {
+            getProjectFn = disabledToolStub('get_project')
         }
-        copyFnSchema(existingGetProject, wrappedGetProject)
-        getProjectFn = wrappedGetProject
     } else {
         getProjectFn = createGetProjectFn(fallbackListProjectsFn)
     }
 
     for (const grp of [core, search, admin]) {
         grp['listProjects'] = listProjectsFn
+        grp['list_projects'] = listProjectsFn
         grp['getProjects'] = listProjectsFn
         grp['getProject'] = getProjectFn
+        grp['get_project'] = getProjectFn
     }
     core['searchProjects'] = listProjectsFn
     search['searchProjects'] = listProjectsFn

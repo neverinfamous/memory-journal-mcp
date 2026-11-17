@@ -12,6 +12,7 @@ import {
     resolveOwnerRepo,
     resolveProjectNumber,
 } from './helpers.js'
+import { ensureInlineFenced, fenceUntrustedHandle } from './fencing-helpers.js'
 
 export const MISSING_PROJECT_NUMBER_ERROR = {
     success: false,
@@ -111,6 +112,12 @@ function formatKanbanBoardResponse(
             const sliced = col.items.slice(0, itemLimit).map((item) => ({
                 ...item,
                 title: fenceUntrustedInline(item.title),
+                ...(item.labels !== undefined
+                    ? { labels: item.labels.map(ensureInlineFenced) }
+                    : {}),
+                ...(item.assignees !== undefined
+                    ? { assignees: item.assignees.map(fenceUntrustedHandle) }
+                    : {}),
             }))
             return col.items.length <= itemLimit
                 ? { ...col, items: sliced, itemCount: col.items.length }

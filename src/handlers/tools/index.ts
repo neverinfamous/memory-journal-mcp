@@ -348,6 +348,7 @@ export async function callTool(
         args['entry_id'] === undefined &&
         typeof args['uri'] === 'string' &&
         args['uri'].startsWith('memory://') &&
+        !/^memory:\/\/(?:entries|entry)\/\d+(?:[?#].*)?$/i.test(args['uri']) &&
         mapToUse.has('read_resource')
     ) {
         name = 'read_resource'

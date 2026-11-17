@@ -297,27 +297,27 @@ export function throwToolNotFoundError(name: string): never {
             `${name}. Code Mode cannot directly call read_resource as an MCP tool. Use mj_execute_code or query tools directly.`
         )
     }
-    if (
-        [
-            'create_entry',
-            'createEntry',
-            'insert_entry',
-            'insertEntry',
-            'add_entry',
-            'addEntry',
-            'search_entries',
-            'searchEntries',
-            'get_recent_entries',
-            'getRecentEntries',
-            'list_projects',
-            'listProjects',
-            'get_project',
-            'getProject',
-        ].includes(name)
-    ) {
+    const CORE_CODEMODE_HINTS: Record<string, string> = {
+        create_entry: 'mj.core.createEntry',
+        createEntry: 'mj.core.createEntry',
+        insert_entry: 'mj.core.createEntry',
+        insertEntry: 'mj.core.createEntry',
+        add_entry: 'mj.core.createEntry',
+        addEntry: 'mj.core.createEntry',
+        search_entries: 'mj.search.searchEntries',
+        searchEntries: 'mj.search.searchEntries',
+        get_recent_entries: 'mj.core.getRecentEntries',
+        getRecentEntries: 'mj.core.getRecentEntries',
+        list_projects: 'mj.admin.listProjects',
+        listProjects: 'mj.admin.listProjects',
+        get_project: 'mj.admin.getProject',
+        getProject: 'mj.admin.getProject',
+    }
+    const hintMethod = CORE_CODEMODE_HINTS[name]
+    if (hintMethod !== undefined) {
         throw new ResourceNotFoundError(
             'Tool',
-            `${name}. memory-journal-mcp uses Code Mode: use 'mj_execute_code' with JavaScript (e.g. return await mj.core.${name}(...)).`
+            `${name}. memory-journal-mcp uses Code Mode: use 'mj_execute_code' with JavaScript (e.g. return await ${hintMethod}(...)).`
         )
     }
     if (

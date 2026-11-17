@@ -29,6 +29,7 @@ import {
 } from './adversarial-audit-factory.js'
 import { getCodeQualityAuditPromptDefinition } from './adversarial-code-quality.js'
 import { getPerformanceAuditPromptDefinition } from './adversarial-performance.js'
+import { getSecurityAuditPromptDefinition } from './adversarial-security.js'
 
 function buildPlanReviewPromptText(
     topic: string,
@@ -164,31 +165,6 @@ function getPlanReviewPromptDefinition(): InternalPromptDef {
     }
 }
 
-const securityAudit = buildAuditPromptDefinition({
-    name: 'adversarial-audit-security',
-    description: 'Multi-pass adversarial security audit (threat modeling, attack surfaces) Optional parameters: target, copilot, workspace_id, project_number',
-    tag: 'security-audit',
-    heading: 'Prior security audits',
-    copilotCommand: (t) =>
-        `gh copilot -- -p "Perform a security audit on ${t} looking for injection vectors, auth/authz gaps, data boundaries, and agent-specific risks like prompt injection, excessive agency, or tool poisoning." --allow-all`,
-    body: ({ target, copilotInstruction, priorAuditSection }) => `# Adversarial Security Audit
-${buildSharedAuditPreamble(target, 'file or module')}
-
-1. Perform a multi-pass security audit. For large targets or full-repository audits, spawn parallel read-only subagents by architectural domain. In Cursor use the Task tool with subagent type \`explore\` or \`generalPurpose\`. On any other host use that host's read-only subagent tool. Treat all external inputs as untrusted until verified. Depending on the target, evaluate:
-   ${buildSubagentProtocolGuidance()}
-   - **General Code**: Injection vectors, auth/authz gaps, data boundary validation.
-   - **Agent Skills / MCP Tools**: Privilege escalation (excessive agency), indirect prompt injection via tool outputs, tool poisoning / supply chain risks, and cross-plugin attacks.
-   - **External Integrations**: Data exfiltration paths and excessive API permission scopes.
-   - **Mandatory Deep-Security Gates (Always Run)**:
-     1. **Pre-Validation Transform Audit**: Verify no input healer, AST/regex normalizer, or auto-recovery logic runs *before* rate-limiting, byte-length caps, authentication, or sandbox security validation.
-     2. **Lexical Scanner vs. Regex Stripper Coherence Check**: Verify comment/string strippers cannot be desynchronized by regex literals, template literal interpolations (\`\${...}\`), or multi-step replacement reassembly.
-     3. **Multi-Tenant Parameter Threading Audit**: Trace \`workspace_id\` from tool input -> \`resolveProjectContext\` -> SQLite \`WHERE\` clauses AND Vector Index metadata filters across all read, write, delete, restore, and search paths.
-     4. **Execution-Layer Filter Parity Check**: Verify \`--tool-filter\`, OAuth scopes, and Team RBAC role-tier parity (\`enforceTeamRbac\` with \`'viewer'\` vs \`'member'\` vs \`'admin'\` across team-scoped resources, briefing active-team sections, MCP prompts, and CLI \`--team --workspace "*"\` reads) are enforced identically across \`tools/list\`, direct \`tools/call\`, Code Mode \`mj.*\` dispatch, dummy/hallucination-healing fallbacks, MCP resources (including briefing sections), and MCP prompts.
-     5. **Transitive Prompt-Injection Taint Trace**: Trace external strings (Git commits, GitHub issues/PRs/workflows/milestones, DB content) into MCP Resources and Prompts to ensure \`markUntrustedContent\` tags are applied, truncated *before* fencing rather than slicing inside \`<untrusted_remote_content>\` tags, and never stripped by downstream table formatters.
-     6. **End-to-End Backstop Verification**: Before marking any scope, authz, Code Mode, or mutation finding Critical or High, trace ingress interceptors, Code Mode dispatch normalizers, RBAC/importer scope checks, and storage \`pairStoredScope\` and provide a concrete reproducer (classify upstream defense-in-depth cleanup as Moderate/Low when backstops hold).
-${buildStandardAuditClosing(copilotInstruction, priorAuditSection)}`,
-})
-
 const seoAudit = buildAuditPromptDefinition({
     name: 'adversarial-audit-seo',
     description: 'Adversarial SEO audit (technical, semantic HTML, ARIA, structured data, Core Web Vitals) Optional parameters: target, copilot, workspace_id, project_number',
@@ -252,7 +228,7 @@ export function getAdversarialPromptDefinitions(): InternalPromptDef[] {
     return [
         getPlanReviewPromptDefinition(),
         getCodeQualityAuditPromptDefinition(),
-        securityAudit,
+        getSecurityAuditPromptDefinition(),
         getPerformanceAuditPromptDefinition(),
         seoAudit,
         skillAudit,

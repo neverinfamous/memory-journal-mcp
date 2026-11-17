@@ -185,13 +185,20 @@ function computeGroupNamespaceProperty(
     const snakeKey = /[A-Z]/.test(resolvedKey)
         ? resolvedKey.replace(/[A-Z]/g, (letter) => `_${letter.toLowerCase()}`)
         : resolvedKey
-    const teamSnakeKey = `team_${snakeKey}`
-    const directGroup = methodToGroup.get(snakeKey)
-    const teamGroup = methodToGroup.get(teamSnakeKey)
-    if (teamGroup !== undefined && directGroup === undefined) {
-        return createMethodProxyFn(teamGroup, teamSnakeKey)
+    if (group === 'team') {
+        const teamMethods = methods['team'] ?? []
+        const teamSnakeKey = snakeKey.startsWith('team_') ? snakeKey : `team_${snakeKey}`
+        if (teamMethods.includes(teamSnakeKey)) {
+            return createMethodProxyFn('team', teamSnakeKey, resolvedKey)
+        }
+        if (teamMethods.includes(snakeKey)) {
+            return createMethodProxyFn('team', snakeKey, resolvedKey)
+        }
+        return createUnknownGroupMethodFallback(ctx, key, resolvedKey)
     }
-    if (directGroup !== undefined) {
+
+    const directGroup = methodToGroup.get(snakeKey)
+    if (directGroup !== undefined && directGroup !== 'team') {
         return createMethodProxyFn(directGroup, snakeKey, resolvedKey)
     }
     if (methods['_topLevel']?.includes(snakeKey)) {

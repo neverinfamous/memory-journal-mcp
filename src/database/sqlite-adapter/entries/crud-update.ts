@@ -60,16 +60,21 @@ interface ExistingEntryRow {
     workspaceId: string
 }
 
+function workspacesEqual(a: string, b: string, isRegistered: boolean): boolean {
+    return isRegistered ? a.toLowerCase() === b.toLowerCase() : a === b
+}
+
 /** Enforce workspace ownership and optimistic-locking preconditions for an update. */
 function assertUpdateAllowed(
     id: number,
     existing: ExistingEntryRow,
     callerWorkspace: string,
+    isRegisteredCaller: boolean,
     input: UpdateEntryInput
 ): void {
     if (
         callerWorkspace !== '*' &&
-        existing.workspaceId.toLowerCase() !== callerWorkspace.toLowerCase()
+        !workspacesEqual(existing.workspaceId, callerWorkspace, isRegisteredCaller)
     ) {
         throw new ConflictError(
             `Entry ${String(id)} belongs to workspace '${existing.workspaceId}', cannot be updated from '${callerWorkspace}'. Moving to another workspace requires explicit overrides (e.g. workspaceId = '*').`,
@@ -108,7 +113,8 @@ function buildUpdateSets(
     id: number,
     existing: ExistingEntryRow,
     callerWorkspace: string,
-    input: UpdateEntryInput
+    input: UpdateEntryInput,
+    registry: ProjectRegistry | undefined
 ): { updates: string[]; values: unknown[] } {
     const updates: string[] = ['version = version + 1']
     const values: unknown[] = []
@@ -142,8 +148,14 @@ function buildUpdateSets(
     }
 
     if (input.targetWorkspaceId !== undefined) {
-        const sameWorkspace =
-            input.targetWorkspaceId.toLowerCase() === existing.workspaceId.toLowerCase()
+        const isRegTarget =
+            exactRegistryKey(input.targetWorkspaceId, registry) !== undefined ||
+            exactRegistryKey(existing.workspaceId, registry) !== undefined
+        const sameWorkspace = workspacesEqual(
+            input.targetWorkspaceId,
+            existing.workspaceId,
+            isRegTarget
+        )
         if (callerWorkspace !== '*' && !sameWorkspace) {
             throw new ConflictError(
                 `Cannot move entry ${String(id)} to workspace '${input.targetWorkspaceId}' from '${callerWorkspace}'. Moving an entry to another workspace requires workspaceId = '*'.`,
@@ -175,22 +187,32 @@ function resolveUpdateScope(
     input: UpdateEntryInput,
     registry: ProjectRegistry | undefined
 ): UpdateEntryInput {
+    if (
+        input.projectNumber !== undefined &&
+        input.projectNumber !== null &&
+        (!Number.isInteger(input.projectNumber) || input.projectNumber <= 0)
+    ) {
+        throw new ValidationError('project_number must be a positive integer.', { id })
+    }
     let target: string | undefined
     if (input.targetWorkspaceId !== undefined) {
-        target = input.targetWorkspaceId.trim()
-        if (target === '') {
+        const trimmedTarget = input.targetWorkspaceId.trim()
+        if (trimmedTarget === '') {
             throw new ValidationError('targetWorkspaceId cannot be blank.', { id })
         }
-        if (target === '*') {
+        if (trimmedTarget === '*') {
             throw new ConflictError(
                 "targetWorkspaceId cannot be '*'. Provide the concrete destination workspace.",
                 { id, version: existing.version, workspaceId: existing.workspaceId }
             )
         }
+        target = exactRegistryKey(trimmedTarget, registry) ?? trimmedTarget
     }
+    const isRegMove =
+        (target !== undefined && exactRegistryKey(target, registry) !== undefined) ||
+        exactRegistryKey(existing.workspaceId, registry) !== undefined
     const moving =
-        target !== undefined &&
-        target.toLowerCase() !== existing.workspaceId.toLowerCase()
+        target !== undefined && !workspacesEqual(target, existing.workspaceId, isRegMove)
     const destination = moving && target !== undefined ? target : existing.workspaceId
     const paired = pairStoredScope(
         destination,
@@ -233,9 +255,11 @@ export function performUpdateEntry(
     const registry = activeProjectRegistry(context.config?.projectRegistry)
     const canonicalCaller = rawCaller !== '*' ? exactRegistryKey(rawCaller, registry) : undefined
     const callerWorkspace = canonicalCaller ?? rawCaller
+    const isRegisteredCaller = canonicalCaller !== undefined
     const scopedSelect = callerWorkspace !== '*'
+    const collateSql = isRegisteredCaller ? ' COLLATE NOCASE' : ''
     const selectSql = scopedSelect
-        ? 'SELECT id, content, version, workspace_id as workspaceId FROM memory_journal WHERE id = ? AND deleted_at IS NULL AND workspace_id = ? COLLATE NOCASE'
+        ? `SELECT id, content, version, workspace_id as workspaceId FROM memory_journal WHERE id = ? AND deleted_at IS NULL AND workspace_id = ?${collateSql}`
         : 'SELECT id, content, version, workspace_id as workspaceId FROM memory_journal WHERE id = ? AND deleted_at IS NULL'
     const scopeUpdate = callerWorkspace !== '*'
 
@@ -247,12 +271,18 @@ export function performUpdateEntry(
         ) as ExistingEntryRow | undefined
         if (existing === undefined) return false
 
-        assertUpdateAllowed(id, existing, callerWorkspace, input)
+        assertUpdateAllowed(id, existing, callerWorkspace, isRegisteredCaller, input)
 
         const writeInput = resolveUpdateScope(id, existing, input, registry)
-        const { updates, values } = buildUpdateSets(id, existing, callerWorkspace, writeInput)
+        const { updates, values } = buildUpdateSets(
+            id,
+            existing,
+            callerWorkspace,
+            writeInput,
+            registry
+        )
         const expectedVersion = input.expectedVersion ?? existing.version
-        const query = `UPDATE memory_journal SET ${updates.join(', ')} WHERE id = ? AND deleted_at IS NULL AND version = ?${scopeUpdate ? ' AND workspace_id = ? COLLATE NOCASE' : ''}`
+        const query = `UPDATE memory_journal SET ${updates.join(', ')} WHERE id = ? AND deleted_at IS NULL AND version = ?${scopeUpdate ? ` AND workspace_id = ?${collateSql}` : ''}`
         const stmt = db.prepare(query)
         const result = scopeUpdate
             ? stmt.run(...values, id, expectedVersion, callerWorkspace)

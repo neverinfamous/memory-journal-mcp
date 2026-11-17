@@ -220,11 +220,12 @@ export function resolveAuthenticatedAuthor(): string {
     const authCtx = getAuthContext()
     if (authCtx?.authenticated) {
         const claims = authCtx.claims
+        const verifiedEmail =
+            claims?.['email_verified'] === true ? nonEmptyAuthClaim(claims['email']) : undefined
         const claimAuthor =
-            nonEmptyAuthClaim(claims?.['email']) ??
-            nonEmptyAuthClaim(claims?.['preferred_username']) ??
             nonEmptyAuthClaim(claims?.sub) ??
             nonEmptyAuthClaim(claims?.['subject']) ??
+            verifiedEmail ??
             nonEmptyAuthClaim(claims?.client_id)
         if (claimAuthor !== undefined) {
             const sanitized = sanitizeAuthor(claimAuthor)

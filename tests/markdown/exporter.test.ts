@@ -183,7 +183,7 @@ describe('exportEntriesToMarkdown', () => {
     it('should abort if directory is swapped for a symlink during export (TOCTOU)', async () => {
         const { realpathSync } = await import('node:fs')
         vi.mocked(realpathSync.native)
-            .mockReturnValueOnce('/mock/safe/path') // preRealpath
+            .mockReturnValueOnce(join(process.cwd(), 'export')) // preRealpath
             .mockReturnValueOnce('/mock/unsafe/swapped/path') // postRealpath
 
         const entries = [

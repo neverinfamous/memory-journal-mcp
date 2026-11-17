@@ -12,18 +12,29 @@ import type { SandboxResult } from '../../../codemode/types.js'
 
 setFallbackProjectRegistryLoader(loadProjectRegistryFromConfig)
 
-import { isFilterEffectivelyReadOnly } from '../../../filtering/tool-filter.js'
+import { isFilterEffectivelyReadOnly, isToolVisibleForFilter } from '../../../filtering/tool-filter.js'
 import { isRecord } from '../../../codemode/normalizers/shared-utils.js'
 import { ExecuteCodeSchema, ExecuteCodeSchemaMcp } from './schemas.js'
 import { collectNonCodeModeTools, getSandboxPool, getSecurityManager } from './singleton-state.js'
 import { healCodeModeScript, healTemplateBackticksOnRuntimeError, isValidJsScript } from './code-healer.js'
 import { extractAndRecoverJsonCode, extractAndRecoverEntryCode } from './json-entry-recovery.js'
 import { extractAndRecoverSqlCode, extractAndRecoverPreparedStatementCode } from './sql-recovery.js'
-import { CODE_ALIAS_KEYS, resolveExecutionPayload, buildSandboxUserContext, type ExecuteCodeInput } from './payload-synthesizer.js'
+import { resolveExecutionPayload, buildSandboxUserContext, type ExecuteCodeInput } from './payload-synthesizer.js'
 import { createSecureDispatcher, resolveCodeModeSessionContext } from './secure-dispatcher.js'
 
-const EXTRA_TEXT_ALIAS_KEYS = ['learned_context', 'learnedContext', 'lesson', 'insight', 'knowledge'] as const
-const STRUCTURED_PAYLOAD_KEYS = ['payload', 'entry', 'input'] as const
+const MAX_CONTEXT_BYTES = 5 * 1024 * 1024
+
+function checkSerializedByteLimit(val: unknown, limitBytes: number, errorMsg: string): string | null {
+    try {
+        const serialized = typeof val === 'string' ? val : JSON.stringify(val)
+        if (typeof serialized === 'string' && Buffer.byteLength(serialized, 'utf-8') > limitBytes) {
+            return errorMsg
+        }
+        return null
+    } catch {
+        return 'Security validation failed: Invalid non-serializable payload object'
+    }
+}
 
 function validateRawPayloadSize(params: unknown, maxCodeLength: number): string | null {
     const overLimit = (): string => `Security validation failed: Code exceeds maximum length of ${String(maxCodeLength)} bytes`
@@ -31,19 +42,22 @@ function validateRawPayloadSize(params: unknown, maxCodeLength: number): string 
         return Buffer.byteLength(params, 'utf-8') > maxCodeLength ? overLimit() : null
     }
     if (!isRecord(params)) return null
-    for (const key of [...CODE_ALIAS_KEYS, ...EXTRA_TEXT_ALIAS_KEYS]) {
-        const val = params[key]
-        if (typeof val === 'string' && Buffer.byteLength(val, 'utf-8') > maxCodeLength) return overLimit()
-    }
-    for (const key of STRUCTURED_PAYLOAD_KEYS) {
-        const val = params[key]
-        if (val !== undefined && val !== null && typeof val !== 'string') {
-            try {
-                const serialized = JSON.stringify(val)
-                if (typeof serialized === 'string' && Buffer.byteLength(serialized, 'utf-8') > maxCodeLength) return overLimit()
-            } catch {
-                return 'Security validation failed: Invalid non-serializable payload object'
-            }
+    for (const [key, val] of Object.entries(params)) {
+        if (val === undefined || val === null) continue
+        if (key === 'context') {
+            const ctxErr = checkSerializedByteLimit(
+                val,
+                MAX_CONTEXT_BYTES,
+                `Security validation failed: Context exceeds maximum length of ${String(MAX_CONTEXT_BYTES)} bytes`
+            )
+            if (ctxErr !== null) return ctxErr
+            continue
+        }
+        if (typeof val === 'string') {
+            if (Buffer.byteLength(val, 'utf-8') > maxCodeLength) return overLimit()
+        } else if (typeof val === 'object') {
+            const objErr = checkSerializedByteLimit(val, maxCodeLength, overLimit())
+            if (objErr !== null) return objErr
         }
     }
     return null
@@ -68,7 +82,12 @@ function filterToolsForSandbox(
         context.config?.filterConfig?.enabledTools !== undefined
     ) {
         const enabledSet = context.config.filterConfig.enabledTools
-        tools = tools.filter((t) => enabledSet.has(t.name))
+        const rawFilter = context.config.filterConfig.raw
+        tools = tools.filter(
+            (t) =>
+                enabledSet.has(t.name) &&
+                isToolVisibleForFilter(t.name, t.annotations?.readOnlyHint, rawFilter)
+        )
     }
     const allEnabledTools = tools
     const filterConfig = context.config?.filterConfig

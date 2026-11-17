@@ -2,7 +2,7 @@ import * as fs from 'node:fs'
 import * as path from 'node:path'
 import { randomUUID } from 'node:crypto'
 import { logger } from '../../utils/logger.js'
-import { assertNoPathTraversal } from '../../utils/security-utils.js'
+import { assertNoPathTraversal, PathTraversalError } from '../../utils/security-utils.js'
 import { ValidationError } from '../../types/errors.js'
 import type { IDatabaseConnection } from '../core/interfaces.js'
 import { acquireRestoreLock } from './restore-lock.js'
@@ -19,6 +19,7 @@ import {
 
 /** Maximum length for user-supplied backup names after sanitization */
 const MAX_BACKUP_NAME_LENGTH = 50
+const WIN_RESERVED_BACKUP_RE = /^(?:CON|PRN|AUX|NUL|COM[1-9]|LPT[1-9])(?:\..*)?$/i
 
 export class BackupManager {
     constructor(private ctx: IDatabaseConnection) {}
@@ -35,6 +36,9 @@ export class BackupManager {
 
         if (backupName) {
             assertNoPathTraversal(backupName)
+            if (backupName.includes(':') || WIN_RESERVED_BACKUP_RE.test(backupName.trim())) {
+                throw new PathTraversalError(backupName)
+            }
         }
 
         if (!fs.existsSync(backupsDir)) {
@@ -51,6 +55,9 @@ export class BackupManager {
                   .slice(0, MAX_BACKUP_NAME_LENGTH)
                   .replace(/\.+$/g, '')
             : ''
+        if (rawSanitized.length > 0 && WIN_RESERVED_BACKUP_RE.test(rawSanitized)) {
+            throw new PathTraversalError(backupName ?? rawSanitized)
+        }
         const sanitizedName = rawSanitized.length > 0 ? rawSanitized : `backup_${timestamp}`
         const filename = `${sanitizedName}.db`
         const backupPath = path.join(backupsDir, filename)

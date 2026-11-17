@@ -221,6 +221,39 @@ export function setCorsHeaders(req: Request, res: Response, config: HttpTranspor
     return true
 }
 
+function validateOAuthEndpointUrl(
+    rawUrl: string,
+    label: string,
+    allowPlaintextLoopback: boolean,
+    logError: (msg: string, meta?: Record<string, unknown>) => void
+): void {
+    let parsed: URL
+    try {
+        parsed = new URL(rawUrl)
+    } catch {
+        const errorMsg = `FATAL: OAuth ${label} is not a valid URL.`
+        logError(errorMsg, { module: 'HTTP', operation: 'oauth-config' })
+        throw new Error(errorMsg)
+    }
+    if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') {
+        const errorMsg = `FATAL: OAuth ${label} uses unsupported protocol '${parsed.protocol}'.`
+        logError(errorMsg, { module: 'HTTP', operation: 'oauth-config' })
+        throw new Error(errorMsg)
+    }
+    if (parsed.protocol === 'http:') {
+        if (!allowPlaintextLoopback) {
+            const errorMsg = `FATAL: OAuth ${label} targets a plaintext protocol. You MUST deliberately set 'allowPlaintextLoopbackOAuth: true' in config to bypass strict discovery bound.`
+            logError(errorMsg, { module: 'HTTP', operation: 'oauth-config' })
+            throw new Error(errorMsg)
+        }
+        if (!isLoopbackHost(parsed.hostname)) {
+            const errorMsg = `FATAL: Plaintext OAuth bypass is ONLY permitted for loopback hosts (localhost, 127.0.0.1, [::1]). The configured ${label} is not allowed.`
+            logError(errorMsg, { module: 'HTTP', operation: 'oauth-config' })
+            throw new Error(errorMsg)
+        }
+    }
+}
+
 /**
  * Validate OAuth transport settings (issuer, audience, plaintext loopback exception, publicOrigin).
  * Throws an Error after invoking `logError` when configuration is unsafe or incomplete.
@@ -240,24 +273,10 @@ export function validateOAuthTransportConfig(
         throw new Error(errorMsg)
     }
 
-    if (config.oauthIssuer.startsWith('http://')) {
-        if (config.allowPlaintextLoopbackOAuth !== true) {
-            const errorMsg = `FATAL: OAuth issuer targets a plaintext protocol. You MUST deliberately set 'allowPlaintextLoopbackOAuth: true' in config to bypass strict discovery bound.`
-            logError(errorMsg, { module: 'HTTP', operation: 'oauth-config' })
-            throw new Error(errorMsg)
-        }
-        let validLoopback: boolean
-        try {
-            const url = new URL(config.oauthIssuer)
-            validLoopback = isLoopbackHost(url.hostname)
-        } catch {
-            validLoopback = false
-        }
-        if (!validLoopback) {
-            const errorMsg = `FATAL: Plaintext OAuth bypass is ONLY permitted for loopback hosts (localhost, 127.0.0.1, [::1]). The configured issuer is not allowed.`
-            logError(errorMsg, { module: 'HTTP', operation: 'oauth-config' })
-            throw new Error(errorMsg)
-        }
+    const allowPlaintext = config.allowPlaintextLoopbackOAuth === true
+    validateOAuthEndpointUrl(config.oauthIssuer, 'issuer', allowPlaintext, logError)
+    if (config.oauthJwksUri !== undefined && config.oauthJwksUri !== '') {
+        validateOAuthEndpointUrl(config.oauthJwksUri, 'jwksUri', allowPlaintext, logError)
     }
 
     if (!isLocalhost && (config.publicOrigin === undefined || config.publicOrigin === '')) {

@@ -325,3 +325,27 @@ export function mergeNestedSynthesizedScope(
     }
     return merged
 }
+
+/** Races an async sandbox promise against a tracked `timeoutMs` timer. */
+export async function raceWithSandboxTimeout<T>(
+    promise: Promise<T>,
+    timeoutMs: number,
+    activeTimers?: Set<NodeJS.Timeout>
+): Promise<T> {
+    let handle: NodeJS.Timeout | undefined
+    const timeoutPromise = new Promise<never>((_resolve, reject) => {
+        handle = setTimeout(() => {
+            if (handle !== undefined) activeTimers?.delete(handle)
+            reject(new Error(`Script execution timed out after ${String(timeoutMs)}ms`))
+        }, timeoutMs)
+        activeTimers?.add(handle)
+    })
+    try {
+        return await Promise.race([promise, timeoutPromise])
+    } finally {
+        if (handle !== undefined) {
+            clearTimeout(handle)
+            activeTimers?.delete(handle)
+        }
+    }
+}

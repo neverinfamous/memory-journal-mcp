@@ -6,17 +6,20 @@ const { values } = parseArgs({
     options: {
         in: { type: 'string' },
         out: { type: 'string' },
-        key: { type: 'string' },
     },
 })
 
 const inPath = values.in
 const outPath = values.out
-const key = values.key || process.env['DB_ENCRYPTION_KEY']
+const key = process.env['MJ_DB_ENCRYPTION_KEY'] || process.env['DB_ENCRYPTION_KEY']
 
 if (!inPath || !outPath || !key) {
-    console.error('Usage: npm run encrypt-db -- --in <plaintext.db> --out <encrypted.db> [--key <secret>]')
-    console.error('If --key is omitted, DB_ENCRYPTION_KEY environment variable will be used.')
+    console.error('Usage: DB_ENCRYPTION_KEY=<secret> npm run encrypt-db -- --in <plaintext.db> --out <encrypted.db>')
+    console.error('Set MJ_DB_ENCRYPTION_KEY or DB_ENCRYPTION_KEY in the environment (CLI --key flag disabled to prevent process-table exposure).')
+    process.exit(1)
+}
+if (key.includes('\0')) {
+    console.error('Invalid encryption key: NUL bytes are not allowed.')
     process.exit(1)
 }
 

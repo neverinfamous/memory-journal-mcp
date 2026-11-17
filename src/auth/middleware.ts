@@ -157,7 +157,7 @@ async function handleAuthRequest(
     const authReq: AuthRequest = req
     authReq.requestId = crypto.randomUUID()
 
-    if (isPublicPath(req.path, publicPaths)) {
+    if ((req.method === 'GET' || req.method === 'HEAD') && isPublicPath(req.path, publicPaths)) {
         logger.info(`Public path accessed: ${req.path}`, {
             module: 'AUTH',
             operation: 'public-path',

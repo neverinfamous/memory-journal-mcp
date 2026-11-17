@@ -18,6 +18,7 @@ import {
     invokeShimGroupMethod,
     mergeNestedSynthesizedScope,
     naturalLanguageEntry,
+    raceWithSandboxTimeout,
     readExecutableCode,
     readNestedQuerySearch,
 } from './nested-exec-payload.js'
@@ -111,24 +112,24 @@ function validateWorkspaceAliases(
             const raw = rec[key]
             if (typeof raw !== 'string') continue
             const trimmed = raw.trim()
-            if (trimmed === '' || trimmed === '*') continue
+            if (trimmed === '') continue
+            if (trimmed === '*') {
+                return { error: `Workspace '*' conflicts with pinned session workspace '${pinnedWorkspace}'` }
+            }
             const canonArg = findRegistryKey(trimmed, registry) ?? trimmed
             if (canonArg.toLowerCase() !== canonPinned.toLowerCase()) {
-                return {
-                    error: `Workspace '${trimmed}' conflicts with pinned session workspace '${pinnedWorkspace}'`,
-                }
+                return { error: `Workspace '${trimmed}' conflicts with pinned session workspace '${pinnedWorkspace}'` }
             }
         }
         const rawProject = rec['project']
         if (isProjectStringValue(rawProject)) {
             const trimmed = rawProject.trim()
-            if (trimmed !== '*') {
-                const canonArg = findRegistryKey(trimmed, registry) ?? trimmed
-                if (canonArg.toLowerCase() !== canonPinned.toLowerCase()) {
-                    return {
-                        error: `Workspace '${trimmed}' conflicts with pinned session workspace '${pinnedWorkspace}'`,
-                    }
-                }
+            if (trimmed === '*') {
+                return { error: `Workspace '*' conflicts with pinned session workspace '${pinnedWorkspace}'` }
+            }
+            const canonArg = findRegistryKey(trimmed, registry) ?? trimmed
+            if (canonArg.toLowerCase() !== canonPinned.toLowerCase()) {
+                return { error: `Workspace '${trimmed}' conflicts with pinned session workspace '${pinnedWorkspace}'` }
             }
         }
     }
@@ -286,6 +287,7 @@ export interface SandboxExecutorOptions {
     pinnedProjectRaw: unknown
     projectRegistryRaw: unknown
     runIsolatedNestedCode: RunIsolatedNestedFn
+    activeTimers?: Set<NodeJS.Timeout>
 }
 
 function readNarrowedWorkspace(
@@ -363,18 +365,7 @@ function buildIsolationOverrides(
     const sessionId = extractNestedSessionId(argRec)
     const autoVersion = extractNestedAutoVersion(argRec)
     const maxResultSize = extractNestedMaxResultSize(argRec, outerMaxResultSize)
-    if (
-        nestedTimeout === undefined &&
-        nestedContext === undefined &&
-        sessionId === undefined &&
-        autoVersion === undefined &&
-        maxResultSize === undefined &&
-        narrowed.workspaceId === undefined &&
-        narrowed.projectNumber === undefined
-    ) {
-        return undefined
-    }
-    return {
+    const res: NestedExecIsolationOverrides = {
         ...(nestedTimeout !== undefined ? { timeoutMs: nestedTimeout } : {}),
         ...(narrowed.workspaceId !== undefined ? { workspaceId: narrowed.workspaceId } : {}),
         ...(narrowed.projectNumber !== undefined ? { projectNumber: narrowed.projectNumber } : {}),
@@ -383,6 +374,7 @@ function buildIsolationOverrides(
         ...(autoVersion !== undefined ? { autoVersion } : {}),
         ...(maxResultSize !== undefined ? { maxResultSize } : {}),
     }
+    return Object.keys(res).length > 0 ? res : undefined
 }
 
 /**
@@ -392,7 +384,7 @@ function buildIsolationOverrides(
 export function createSandboxExecutor(options: SandboxExecutorOptions): (arg: unknown) => Promise<unknown> {
     const {
         shimMj, vmContextRef, timeoutMs, maxResultSize, readonlyMode, dryRunMode, useTestDbMode,
-        pinnedWorkspaceRaw, pinnedProjectRaw, projectRegistryRaw, runIsolatedNestedCode,
+        pinnedWorkspaceRaw, pinnedProjectRaw, projectRegistryRaw, runIsolatedNestedCode, activeTimers,
     } = options
     const pinnedWorkspace =
         typeof pinnedWorkspaceRaw === 'string' && pinnedWorkspaceRaw.trim() !== '' && pinnedWorkspaceRaw.trim() !== '*'
@@ -444,6 +436,10 @@ export function createSandboxExecutor(options: SandboxExecutorOptions): (arg: un
         if (escalates || isolation !== undefined) {
             return runIsolatedNestedCode(wrapped, effectiveReadonly, effectiveDryRun, effectiveUseTestDb, isolation)
         }
-        return (await vm.runInContext(wrapped, vmContextRef.current, { timeout: timeoutMs })) as unknown
+        return await raceWithSandboxTimeout(
+            Promise.resolve(vm.runInContext(wrapped, vmContextRef.current, { timeout: timeoutMs })),
+            timeoutMs,
+            activeTimers
+        )
     }
 }

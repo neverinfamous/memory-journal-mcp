@@ -258,9 +258,9 @@ async function handleProjectCommitsResource(
                 entryId: entry.id,
                 timestamp: entry.timestamp,
                 commits: ctx.commits,
-                branch: ctx.branch,
+                branch: ctx.branch ? fenceUntrustedInline(ctx.branch) : ctx.branch,
                 pr: ctx.pr,
-                repo: ctx.repo,
+                repo: ctx.repo ? fenceUntrustedInline(ctx.repo) : ctx.repo,
             })
         }
     }

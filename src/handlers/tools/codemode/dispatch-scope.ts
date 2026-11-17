@@ -2,15 +2,14 @@
  * Pre-dispatch parameter scope resolution, alias coercion, and GitHub URL auto-enrichment for Code Mode.
  */
 
-import * as path from 'node:path'
 import type { ToolDefinition, ToolContext } from '../../../types/index.js'
 import { ValidationError } from '../../../types/errors.js'
 import { isRecord } from '../../../codemode/normalizers/shared-utils.js'
-import { logger } from '../../../utils/logger.js'
 import { activeProjectRegistry, pairStoredScope } from '../../../utils/write-scope.js'
 import { lookupRegistryEntry } from './session-context.js'
 import { normalizeBatchDispatchItems } from './dispatch-batch-scope.js'
 import { checkSchemaAcceptsKey } from './dispatch-schema-introspection.js'
+import { autoPopulateGithubUrls } from './dispatch-github-urls.js'
 
 export { checkSchemaAcceptsKey }
 
@@ -83,11 +82,6 @@ export interface DispatchParamContext {
     sessionId?: string | undefined
 }
 
-function normalizeFsPath(filePath: string): string {
-    const resolved = path.resolve(filePath)
-    return process.platform === 'win32' ? resolved.toLowerCase() : resolved
-}
-
 export function isDefaultWorkspaceName(value: unknown): boolean {
     return typeof value === 'string' && value.trim().toLowerCase() === 'default'
 }
@@ -103,109 +97,33 @@ function invalidProjectNumberResult(raw: unknown): { errorResult: Record<string,
 
 function coerceProjectNumberField(
     obj: Record<string, unknown>,
-    registry: NonNullable<ToolContext['config']>['projectRegistry']
+    registry: NonNullable<ToolContext['config']>['projectRegistry'],
+    requirePositiveInt = false
 ): { errorResult: Record<string, unknown> } | undefined {
-    if (typeof obj['project_number'] === 'string') {
-        const regEntry = lookupRegistryEntry(registry, obj['project_number'])
-        if (regEntry?.project_number !== undefined) obj['project_number'] = regEntry.project_number
-    }
-    if (typeof obj['project_number'] === 'string') {
-        const trimmed = obj['project_number'].trim()
-        const parsed = trimmed !== '' ? Number(trimmed) : Number.NaN
-        if (!Number.isNaN(parsed) && Number.isFinite(parsed)) {
-            obj['project_number'] = parsed
+    const rawVal = obj['project_number']
+    if (rawVal === undefined || rawVal === null) return undefined
+    if (typeof rawVal === 'string') {
+        const regEntry = lookupRegistryEntry(registry, rawVal)
+        if (regEntry?.project_number !== undefined) {
+            obj['project_number'] = regEntry.project_number
         } else {
-            return invalidProjectNumberResult(obj['project_number'])
+            const trimmed = rawVal.trim()
+            const parsed = trimmed !== '' ? Number(trimmed) : Number.NaN
+            if (Number.isFinite(parsed) && (!requirePositiveInt || (Number.isInteger(parsed) && parsed > 0))) {
+                obj['project_number'] = parsed
+            } else {
+                return invalidProjectNumberResult(rawVal)
+            }
         }
+    }
+    const val = obj['project_number']
+    if (typeof val !== 'number' || !Number.isFinite(val)) {
+        return invalidProjectNumberResult(val)
+    }
+    if (requirePositiveInt && (!Number.isInteger(val) || val <= 0)) {
+        return invalidProjectNumberResult(val)
     }
     return undefined
-}
-
-function isSameOrSubdirectory(targetDir: string, rootDir: string): boolean {
-    const rel = path.relative(normalizeFsPath(rootDir), normalizeFsPath(targetDir))
-    return rel === '' || (rel !== '..' && !rel.startsWith(`..${path.sep}`) && !path.isAbsolute(rel))
-}
-
-function isPathOutsideCwd(
-    reg: NonNullable<ToolContext['config']>['projectRegistry'],
-    key: string
-): boolean {
-    const entry = lookupRegistryEntry(reg, key)
-    return entry?.path !== undefined && entry.path !== '' && !isSameOrSubdirectory(process.cwd(), entry.path)
-}
-
-function resolveGithubUrlScope(
-    paramsObj: Record<string, unknown>,
-    sessionContext: ToolContext,
-    sessionWorkspaceId: string | undefined,
-    sessionProjectId: number | string | undefined
-): { allowed: boolean; repoHint: string | undefined } {
-    const targetWs = typeof paramsObj['workspace_id'] === 'string' ? paramsObj['workspace_id'].trim() : undefined
-    if (targetWs === '*' || isDefaultWorkspaceName(targetWs)) return { allowed: false, repoHint: undefined }
-    if (
-        targetWs !== undefined &&
-        sessionWorkspaceId !== undefined &&
-        sessionWorkspaceId !== '*' &&
-        targetWs.toLowerCase() !== sessionWorkspaceId.toLowerCase()
-    ) {
-        return { allowed: false, repoHint: undefined }
-    }
-    if (
-        typeof paramsObj['project_number'] === 'number' &&
-        typeof sessionProjectId === 'number' &&
-        paramsObj['project_number'] !== sessionProjectId
-    ) {
-        return { allowed: false, repoHint: undefined }
-    }
-    const wsForLookup = targetWs ?? sessionWorkspaceId
-    if (wsForLookup === '*' || isDefaultWorkspaceName(wsForLookup)) return { allowed: false, repoHint: undefined }
-    const reg = activeProjectRegistry(sessionContext.config?.projectRegistry)
-    if (wsForLookup !== undefined && isPathOutsideCwd(reg, wsForLookup)) return { allowed: false, repoHint: undefined }
-    const repoHint =
-        typeof paramsObj['repo'] === 'string' && paramsObj['repo'].trim() !== '' ? paramsObj['repo'].trim() : undefined
-    if (repoHint !== undefined) {
-        const repoSlug = repoHint.split(/[/\\]/).filter(Boolean).pop()?.trim() ?? repoHint
-        const repoReg = lookupRegistryEntry(reg, repoHint) ?? lookupRegistryEntry(reg, repoSlug)
-        if (repoReg?.path !== undefined && repoReg.path !== '' && !isSameOrSubdirectory(process.cwd(), repoReg.path)) {
-            return { allowed: false, repoHint: undefined }
-        }
-    }
-    return { allowed: true, repoHint }
-}
-
-async function autoPopulateGithubUrls(
-    paramsObj: Record<string, unknown>,
-    sessionContext: ToolContext,
-    sessionWorkspaceId: string | undefined,
-    sessionProjectId: number | string | undefined
-): Promise<void> {
-    const needsIssueUrl = paramsObj['issue_number'] !== undefined && paramsObj['issue_url'] === undefined
-    const needsPrUrl = paramsObj['pr_number'] !== undefined && paramsObj['pr_url'] === undefined
-    if ((!needsIssueUrl && !needsPrUrl) || sessionContext.github === undefined) return
-    const scope = resolveGithubUrlScope(paramsObj, sessionContext, sessionWorkspaceId, sessionProjectId)
-    if (!scope.allowed) return
-    try {
-        const repoInfo = await sessionContext.github.getRepoInfo()
-        if (!repoInfo?.owner || !repoInfo?.repo) return
-        if (scope.repoHint !== undefined) {
-            const lowerHint = scope.repoHint.toLowerCase()
-            const matchesRepo =
-                lowerHint === repoInfo.repo.toLowerCase() ||
-                lowerHint === `${repoInfo.owner}/${repoInfo.repo}`.toLowerCase()
-            if (!matchesRepo) return
-        }
-        if (needsIssueUrl) {
-            paramsObj['issue_url'] = `https://github.com/${repoInfo.owner}/${repoInfo.repo}/issues/${String(Number(paramsObj['issue_number']))}`
-        }
-        if (needsPrUrl) {
-            paramsObj['pr_url'] = `https://github.com/${repoInfo.owner}/${repoInfo.repo}/pull/${String(Number(paramsObj['pr_number']))}`
-        }
-    } catch (err) {
-        logger.debug('Could not auto-populate GitHub URLs; proceeding without them', {
-            module: 'CodeMode',
-            error: err instanceof Error ? err.message : String(err),
-        })
-    }
 }
 
 function normalizeWorkspaceStringField(paramsObj: Record<string, unknown>): void {
@@ -250,16 +168,27 @@ function applyTargetWorkspaceScope(
     reg: NonNullable<ToolContext['config']>['projectRegistry'],
     workspaceId: string | undefined,
     supplied: number | undefined
-): boolean {
+): { hasCrossWorkspaceTarget: boolean } | { errorResult: Record<string, unknown> } {
     const callerTargetWs =
         typeof paramsObj['target_workspace_id'] === 'string' && paramsObj['target_workspace_id'].trim() !== ''
             ? paramsObj['target_workspace_id'].trim()
             : undefined
+    if (callerTargetWs === '*') {
+        return {
+            errorResult: {
+                success: false,
+                error: "target_workspace_id cannot be '*'. Provide a concrete destination workspace.",
+                code: 'VALIDATION_ERROR',
+                category: 'validation',
+                recoverable: true,
+            },
+        }
+    }
     const hasCrossWorkspaceTarget =
         callerTargetWs !== undefined &&
         (typeof workspaceId !== 'string' || callerTargetWs.toLowerCase() !== workspaceId.toLowerCase())
 
-    if (callerTargetWs !== undefined && callerTargetWs !== '*') {
+    if (callerTargetWs !== undefined) {
         if (supplied !== undefined) {
             pairStoredScope(callerTargetWs, supplied, reg)
         } else if (
@@ -272,7 +201,7 @@ function applyTargetWorkspaceScope(
             }
         }
     }
-    return hasCrossWorkspaceTarget
+    return { hasCrossWorkspaceTarget }
 }
 
 function resolveRootScopePairing(
@@ -307,7 +236,14 @@ function resolveRootScopePairing(
     }
 
     const supplied = typeof paramsObj['project_number'] === 'number' ? paramsObj['project_number'] : undefined
-    const hasCrossWorkspaceTarget = applyTargetWorkspaceScope(tool, paramsObj, reg, workspaceId, supplied)
+    const targetScopeRes = applyTargetWorkspaceScope(tool, paramsObj, reg, workspaceId, supplied)
+    if ('errorResult' in targetScopeRes) {
+        const rawErr = targetScopeRes.errorResult['error']
+        throw new ValidationError(
+            typeof rawErr === 'string' && rawErr.length > 0 ? rawErr : 'Invalid target_workspace_id'
+        )
+    }
+    const { hasCrossWorkspaceTarget } = targetScopeRes
 
     if (
         !callerHasExplicitWs &&
@@ -426,8 +362,20 @@ export async function normalizeDispatchParams(
     delete paramsObj['_alias_derived_workspace']
 
     normalizeWorkspaceStringField(paramsObj)
-    const topProjError = coerceProjectNumberField(paramsObj, reg)
+    const requirePositiveInt = tool.annotations?.readOnlyHint !== true
+    const topProjError = coerceProjectNumberField(paramsObj, reg, requirePositiveInt)
     if (topProjError !== undefined) return topProjError
+    if (typeof paramsObj['target_workspace_id'] === 'string' && paramsObj['target_workspace_id'].trim() === '*') {
+        return {
+            errorResult: {
+                success: false,
+                error: "target_workspace_id cannot be '*'. Provide a concrete destination workspace.",
+                code: 'VALIDATION_ERROR',
+                category: 'validation',
+                recoverable: true,
+            },
+        }
+    }
 
     const flags = resolveRootScopePairing(tool, paramsObj, reg, ctx, aliasDerivedWs)
     const batchArrayKey =

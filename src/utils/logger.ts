@@ -42,7 +42,7 @@ class Logger {
 
         // Sanitize all user-controlled inputs to prevent log injection (CodeQL js/log-injection).
         // Each .replace() must be applied inline — CodeQL cannot track sanitization through method calls.
-        const safeMessage = message.replace(/\n|\r/g, '')
+        const safeMessage = sanitizeErrorForLogging(message).replace(/\n|\r/g, '')
         const timestamp = new Date().toISOString()
         const levelUpper = level.toUpperCase().padEnd(8)
 
@@ -56,13 +56,13 @@ class Logger {
         delete extras['module']
         delete extras['operation']
 
-        // Sanitize error fields to prevent token leakage and empty Error JSON serialization
-        if (extras['error'] instanceof Error) {
-            extras['error'] = sanitizeErrorForLogging(
-                `${extras['error'].name}: ${extras['error'].message}`
-            )
-        } else if (extras['error'] != null && typeof extras['error'] === 'string') {
-            extras['error'] = sanitizeErrorForLogging(extras['error'])
+        // Sanitize error and string fields to prevent token leakage and empty Error JSON serialization
+        for (const [k, v] of Object.entries(extras)) {
+            if (v instanceof Error) {
+                extras[k] = sanitizeErrorForLogging(`${v.name}: ${v.message}`)
+            } else if (typeof v === 'string') {
+                extras[k] = sanitizeErrorForLogging(v)
+            }
         }
 
         if (Object.keys(extras).length > 0) {

@@ -196,16 +196,16 @@ describe('Pass 33 Quality, Schema, Search, Storage & Prompt Regressions (M1-M12,
             resourceServer: { getResourceUri: () => 'https://mcp.example.com', getWWWAuthenticateHeader: () => 'Bearer' } as never,
         })
         const next = vi.fn()
-        await middleware({ path: '/.well-known/oauth-protected-resource', headers: {} } as never, { status: vi.fn().mockReturnThis(), json: vi.fn(), setHeader: vi.fn() } as never, next)
+        await middleware({ method: 'GET', path: '/.well-known/oauth-protected-resource', headers: {} } as never, { status: vi.fn().mockReturnThis(), json: vi.fn(), setHeader: vi.fn() } as never, next)
         expect(next).toHaveBeenCalled()
 
         expect(getRequiredScope('get_recent_entries', 'tool')).toBe(SCOPES.READ)
-        expect(AUDIT_PROMPT_REVISION).toBe('2026-11-16-audit-pass34')
+        expect(AUDIT_PROMPT_REVISION).toBe('2026-11-17-audit-pass35')
 
         const qualityPrompt = getCodeQualityAuditPromptDefinition()
         const renderedQuality = await qualityPrompt.handler({ target: 'memory-journal-mcp' }, db)
         const qText = renderedQuality.messages.map((m) => m.content.text).join('\n')
-        expect(qText).toContain('2026-11-16-audit-pass34')
+        expect(qText).toContain('2026-11-17-audit-pass35')
         expect(qText).toContain("'skills'")
         expect(qText).toContain('path.win32')
         expect(qText).toContain('finally { Remove-Item')

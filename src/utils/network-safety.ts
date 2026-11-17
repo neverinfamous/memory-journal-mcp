@@ -4,9 +4,15 @@
 
 const PRIVATE_172_RE = /^172\.(1[6-9]|2[0-9]|3[0-1])\./
 const CGNAT_100_RE = /^100\.(6[4-9]|[7-9][0-9]|1[01][0-9]|12[0-7])\./
+const BENCHMARK_198_RE = /^198\.1[89]\./
 const UNIQUE_LOCAL_V6_RE = /^f[cd][0-9a-f]{0,2}:/
 const LINK_LOCAL_V6_RE = /^fe[89ab][0-9a-f]?:/
+const MULTICAST_V6_RE = /^ff[0-9a-f]{2}:/
 const MAPPED_HEX_RE = /^(?:0{0,4}:){0,5}(?::|0{0,4}:)?ffff:([0-9a-f]{1,4}):([0-9a-f]{1,4})$/
+const SIIT_HEX_RE = /^(?:0{0,4}:){0,4}ffff:0{1,4}:([0-9a-f]{1,4}):([0-9a-f]{1,4})$/
+const COMPAT_HEX_RE = /^::([0-9a-f]{1,4}):([0-9a-f]{1,4})$/
+const NAT64_HEX_RE = /^64:ff9b:(?:1:[0-9a-f]{0,4}:)?(?:0{0,4}:){0,3}([0-9a-f]{1,4}):([0-9a-f]{1,4})$/
+const SIXTOFOUR_HEX_RE = /^2002:([0-9a-f]{1,4}):([0-9a-f]{1,4})(?::|$)/
 const MAPPED_DOTTED_RE = /^(?:0{0,4}:){0,5}(?::|0{0,4}:)?ffff:(\d{1,3}(?:\.\d{1,3}){3})$/
 const COMPAT_DOTTED_RE = /^::(\d{1,3}(?:\.\d{1,3}){3})$/
 
@@ -18,7 +24,7 @@ function hexPairToIpv4(high: string, low: string): string {
 
 /**
  * [INTENT] Normalize a host/IP literal: strip brackets, zone IDs, trailing dots, and unwrap
- * IPv4-mapped/compatible IPv6 (both dotted and hex forms) to dotted IPv4.
+ * IPv4-mapped/compatible/SIIT/NAT64/6to4 IPv6 forms to dotted IPv4 when embedded.
  */
 function normalizeAddress(address: string): string {
     let normalized = address.trim().toLowerCase()
@@ -28,8 +34,18 @@ function normalizeAddress(address: string): string {
     while (normalized.endsWith('.')) normalized = normalized.slice(0, -1)
     const dotted = MAPPED_DOTTED_RE.exec(normalized) ?? COMPAT_DOTTED_RE.exec(normalized)
     if (dotted?.[1] !== undefined) return dotted[1]
-    const hex = MAPPED_HEX_RE.exec(normalized)
+    const hex =
+        MAPPED_HEX_RE.exec(normalized) ??
+        SIIT_HEX_RE.exec(normalized) ??
+        NAT64_HEX_RE.exec(normalized) ??
+        SIXTOFOUR_HEX_RE.exec(normalized)
     if (hex?.[1] !== undefined && hex[2] !== undefined) return hexPairToIpv4(hex[1], hex[2])
+    const compatHex = COMPAT_HEX_RE.exec(normalized)
+    if (compatHex?.[1] !== undefined && compatHex[2] !== undefined) {
+        const hi = parseInt(compatHex[1], 16)
+        const lo = parseInt(compatHex[2], 16)
+        if (hi !== 0 || lo > 1) return hexPairToIpv4(compatHex[1], compatHex[2])
+    }
     return normalized
 }
 
@@ -49,8 +65,8 @@ function isUnspecifiedOrLoopbackV6(normalized: string): boolean {
 
 /**
  * True when an IP literal (or the textual host form of one) points at a loopback,
- * unspecified, private (RFC 1918), CGNAT, link-local, or unique-local address.
- * IPv4-mapped IPv6 (dotted or hex) and bracketed literals are normalized first.
+ * unspecified, private (RFC 1918), CGNAT, link-local, unique-local, multicast, or
+ * embedded IPv4 translation address (mapped/compatible/SIIT/NAT64/6to4).
  */
 export function isPrivateOrLoopbackAddress(address: string): boolean {
     const normalized = normalizeAddress(address)
@@ -65,8 +81,11 @@ export function isPrivateOrLoopbackAddress(address: string): boolean {
         normalized.startsWith('192.168.') ||
         PRIVATE_172_RE.test(normalized) ||
         CGNAT_100_RE.test(normalized) ||
+        BENCHMARK_198_RE.test(normalized) ||
         normalized.startsWith('169.254.') ||
+        normalized.startsWith('64:ff9b:') ||
         LINK_LOCAL_V6_RE.test(normalized) ||
-        UNIQUE_LOCAL_V6_RE.test(normalized)
+        UNIQUE_LOCAL_V6_RE.test(normalized) ||
+        MULTICAST_V6_RE.test(normalized)
     )
 }

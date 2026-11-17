@@ -20,14 +20,17 @@ import {
 } from './fallback-interceptors.js'
 import {
     ALL_KNOWN_GROUP_TOOLS,
+    exceedsMaxToolInputElements,
     formatSuccessPayload,
     formatTokenEstimatedError,
+    hasToolCallRequestShape,
     isSuccessObject,
     matchesExactName,
+    resolveCodeModeCallHint,
     toThrownValidationResponse,
     toValidationFailureResponse,
-    type ToolCallParams,
 } from './call-interceptor-helpers.js'
+import { resolveEffectiveMaxToolInputElements } from './register-tools.js'
 import {
     applyCreateWorkspaceScope,
     healIncomingToolCallParams,
@@ -227,7 +230,8 @@ function buildToolNotFoundErrorPayload(
     const isFilteredTool = ALL_KNOWN_GROUP_TOOLS.has(requestedTool)
 
     if (isFilteredTool) {
-        suggestion = `'${requestedTool}' is a valid tool but it is not currently exposed because of your active --tool-filter or codemode restrictions. If you are in Code Mode, invoke it via 'mj_execute_code' (e.g. 'await mj.core.${requestedTool}(...)').`
+        const hint = resolveCodeModeCallHint(requestedTool)
+        suggestion = `'${requestedTool}' is a valid tool but it is not currently exposed because of your active --tool-filter or codemode restrictions. If you are in Code Mode, invoke it via 'mj_execute_code' (e.g. 'await ${hint}(...)').`
     } else if (matchingPrompt !== undefined) {
         suggestion = `'${requestedTool}' is an MCP Prompt, not an MCP Tool. Please use the 'get_prompt' tool (or your native MCP Prompts integration) to evaluate it, then use 'create_entry' to save the result.`
     } else if (requestedTool.startsWith('mj_')) {
@@ -325,27 +329,6 @@ async function handleUnknownTool(
     return formatTokenEstimatedError(errorResult, true)
 }
 
-function hasToolCallRequestShape(request: unknown): request is { params?: ToolCallParams } {
-    if (typeof request !== 'object' || request === null || Array.isArray(request)) {
-        return false
-    }
-    if (!('params' in request) || request.params === undefined) {
-        return true
-    }
-    const params = request.params
-    if (typeof params !== 'object' || params === null || Array.isArray(params)) {
-        return false
-    }
-    const nameOk = !('name' in params) || params.name === undefined || typeof params.name === 'string'
-    const argsOk =
-        !('arguments' in params) ||
-        params.arguments === undefined ||
-        (typeof params.arguments === 'object' &&
-            params.arguments !== null &&
-            !Array.isArray(params.arguments))
-    return nameOk && argsOk
-}
-
 async function executeInterceptedToolCall(
     request: unknown,
     extra: unknown,
@@ -368,6 +351,24 @@ async function executeInterceptedToolCall(
             context.allowedIoRoots
         )
         syncLiveHandlerConfig(customToolHandlerConfig, liveConfig, options, liveBriefing)
+
+        const maxElements = resolveEffectiveMaxToolInputElements(options.maxToolInputElements)
+        if (
+            params?.arguments !== undefined &&
+            exceedsMaxToolInputElements(params.arguments, maxElements)
+        ) {
+            return formatTokenEstimatedError(
+                {
+                    success: false,
+                    error: `Tool input exceeds maximum allowed element count (${String(maxElements)}).`,
+                    code: 'VALIDATION_ERROR',
+                    category: 'validation',
+                    suggestion: 'Reduce input payload size or batch items into smaller requests.',
+                    recoverable: false,
+                },
+                true
+            )
+        }
 
         if (params !== undefined && healingEnabled) {
             const healError = healIncomingToolCallParams(params, options, liveBriefing)

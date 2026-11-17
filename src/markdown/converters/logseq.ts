@@ -20,7 +20,7 @@ function applyLogseqPropertyLine(
     mjMeta: FrontmatterData,
     mergedTags: Set<string>
 ): boolean {
-    const propMatch = /^(\s*)([a-zA-Z0-9_-]+)::\s*(.+)$/.exec(line)
+    const propMatch = /^([ \t]*)([a-zA-Z0-9_-]+)::[ \t]*([^\s\r\n][^\r\n]*)$/.exec(line)
     if (propMatch === null) return false
     const [, , key, val] = propMatch
     const k = key?.toLowerCase()
@@ -112,7 +112,8 @@ export function convertLogseq(
     let hasTasks = false
     let hasDoneTasks = false
 
-    for (const rawLine of body.split('\n')) {
+    const normalizedBody = body.replace(/\r\n?/g, '\n')
+    for (const rawLine of normalizedBody.split('\n')) {
         const outcome = transformLogseqLine(rawLine ?? '', mjMeta, mergedTags)
         if (outcome.hasTask) hasTasks = true
         if (outcome.hasDoneTask) hasDoneTasks = true

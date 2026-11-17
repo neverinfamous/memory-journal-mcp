@@ -199,12 +199,19 @@ export class TagsManager {
                 : undefined
 
         const mergeOp = this.db.transaction(() => {
-            const { sourceTagId, targetTagId } = this.prepareMergeTags(sourceTag, targetTag)
+            const sourceTagId = this.resolveSourceTagId(sourceTag)
             const entryIds = this.selectSourceTagEntryIds(
                 sourceTagId,
                 scopedWorkspace,
                 scopedProject
             )
+            if (
+                (scopedWorkspace !== undefined || scopedProject !== undefined) &&
+                entryIds.length === 0
+            ) {
+                throw new ResourceNotFoundError('Tag', sourceTag)
+            }
+            const targetTagId = this.ensureTargetTagId(sourceTagId, targetTag)
             const entriesUpdated = this.linkTargetTagToEntries(targetTagId, entryIds)
             const sourceDeleted = this.detachSourceTag(
                 sourceTagId,
@@ -282,18 +289,23 @@ export class TagsManager {
         return insertedCount
     }
 
-    /** Resolve (creating the target if needed) tag ids and purge orphaned entry_tags links. */
-    private prepareMergeTags(
-        sourceTag: string,
-        targetTag: string
-    ): { sourceTagId: number; targetTagId: number } {
+    /** Resolve an existing source tag id and purge orphaned `entry_tags` links. */
+    private resolveSourceTagId(sourceTag: string): number {
         const db = this.db
         const sourceRow = db.prepare('SELECT id FROM tags WHERE name = ?').get(sourceTag) as
             | { id: number }
             | undefined
         if (!sourceRow) throw new ResourceNotFoundError('Tag', sourceTag)
         const sourceTagId = sourceRow.id
+        db.prepare(
+            `DELETE FROM entry_tags WHERE tag_id = ? AND entry_id NOT IN (SELECT id FROM memory_journal)`
+        ).run(sourceTagId)
+        return sourceTagId
+    }
 
+    /** Ensure target tag exists after scope checks succeed and purge orphaned `entry_tags` links. */
+    private ensureTargetTagId(sourceTagId: number, targetTag: string): number {
+        const db = this.db
         db.prepare('INSERT OR IGNORE INTO tags (name, usage_count) VALUES (?, 0)').run(targetTag)
         const targetRow = db.prepare('SELECT id FROM tags WHERE name = ?').get(targetTag) as
             | { id: number }
@@ -307,7 +319,7 @@ export class TagsManager {
                 `DELETE FROM entry_tags WHERE tag_id = ? AND entry_id NOT IN (SELECT id FROM memory_journal)`
             ).run(tagId)
         }
-        return { sourceTagId, targetTagId }
+        return targetTagId
     }
 
     /**
