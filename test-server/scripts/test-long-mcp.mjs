@@ -84,7 +84,7 @@ function argumentsFor(length) {
     return {
         content: 'A'.repeat(length),
         entry_type: 'technical_note',
-        workspace_id: 'test-ws',
+        workspace_id: 'memory-journal-mcp',
         project_number: 5,
         impact_score: 0.2,
         trust_score: 0.8,
