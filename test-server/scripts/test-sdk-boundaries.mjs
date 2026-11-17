@@ -87,7 +87,7 @@ const cases = [
         name: 'team_create_entry',
         arguments: {
             project_number: 5,
-            workspace_id: 'test-ws',
+            workspace_id: 'memory-journal-mcp',
             entry_type: 'invalid',
             content: 'test',
         },
@@ -98,7 +98,7 @@ const cases = [
     {
         label: 'team_update_entry missing id',
         name: 'team_update_entry',
-        arguments: { project_number: 5, workspace_id: 'test-ws', entry_id: 999999 },
+        arguments: { project_number: 5, workspace_id: 'memory-journal-mcp', entry_id: 999999 },
         accept(payload) {
             return payload.success !== true
         },
@@ -106,7 +106,7 @@ const cases = [
     {
         label: 'create_entry boolean content',
         name: 'create_entry',
-        arguments: { project_number: 5, workspace_id: 'test-ws', content: true },
+        arguments: { project_number: 5, workspace_id: 'memory-journal-mcp', content: true },
         accept(payload) {
             return payload.success !== true
         },
@@ -114,7 +114,7 @@ const cases = [
     {
         label: 'create_entry array content',
         name: 'create_entry',
-        arguments: { project_number: 5, workspace_id: 'test-ws', content: ['array'] },
+        arguments: { project_number: 5, workspace_id: 'memory-journal-mcp', content: ['array'] },
         accept(payload) {
             return payload.success !== true
         },
