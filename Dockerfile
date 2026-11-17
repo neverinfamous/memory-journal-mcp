@@ -2,10 +2,10 @@
 # Multi-stage build for optimized production image
 #
 # Security Notes:
-# - Last Docker Scout scan: 2026-11-04 on node:26.2.0-alpine (Alpine 3.23), 0 critical / 1 high / 2 medium.
-#   All three are Alpine OS packages with NO upstream fix available yet (accepted until fixed;
+# - Last Docker Scout scan: 2026-11-17 on node:26.13.1-alpine3.23, 0 critical / 1 high / 2 medium.
+#   All three are Alpine OS packages with no fixed package yet (accepted until fixed;
 #   re-check with `docker scout cves` on each base image or Alpine package update):
-#     - git 2.52.0-r0      HIGH   CVE-2025-66413  (runtime image; only matters when git runs against untrusted repos)
+#     - git 2.52.1-r0      HIGH   CVE-2025-66413  (Git for Windows NTLM; Alpine marks it unfixed. The November 2026 Git CVEs are fixed in 2.52.1.)
 #     - busybox 1.37.0-r30 MEDIUM CVE-2025-60876
 #     - nghttp2 1.69.0-r0  MEDIUM CVE-2026-58055
 #   CI gates already ignore unfixed findings (Scout `only-fixed: true`, Trivy `ignore-unfixed: true`).
@@ -15,14 +15,16 @@
 #   builder stage (pinned to pnpm@11.9.0 to match pnpm-lock.yaml / pnpm-workspace.yaml).
 # - Dependency pins live in pnpm-workspace.yaml `overrides` (mirrored in package.json) and .pnpmfile.cjs;
 #   .pnpmfile.cjs MUST be copied into every install stage or `--frozen-lockfile` fails the pnpmfile checksum.
-# - pnpm audit is clean as of this scan; there are no `npm pack` patched packages in this Dockerfile.
-FROM node:26.2.0-alpine AS builder
+# - Production `pnpm install --prod` has no npm advisory findings. The dev tree still has
+#   picomatch 4.0.7 (GHSA-fc5q-39xc-vjpf); no patched release exists, and it is not in the runtime image.
+#   There are no `npm pack` patched packages in this Dockerfile.
+FROM node:26.13.1-alpine3.23 AS builder
 
 WORKDIR /app
 
 # Install build dependencies and upgrade packages for security
 # Use Alpine edge for latest security patches (curl CVE-2025-14524, zlib CVE-2026-27171, libcrypto3 CVE-2026-45447, expat 2.10.0-r0 for CVE-2026-115506/118370/117610/113351)
-RUN apk add --no-cache python3 make g++ gettext git sqlite-dev && \
+RUN apk add --no-cache python3 make g++ gettext 'git>=2.52.1-r0' sqlite-dev && \
     apk add --no-cache --repository=https://dl-cdn.alpinelinux.org/alpine/edge/main 'expat>=2.10.0-r0' 'libexpat>=2.10.0-r0' curl zlib libcrypto3 libssl3 nghttp2-libs && \
     apk upgrade --no-cache
 
@@ -76,7 +78,7 @@ RUN rm -rf /app/prod_modules/node_modules/onnxruntime-web \
            /app/prod_modules/node_modules/onnxruntime-node/bin/napi-v3/win32
 
 # Production stage
-FROM node:26.2.0-alpine
+FROM node:26.13.1-alpine3.23
 
 WORKDIR /app
 
@@ -85,7 +87,7 @@ WORKDIR /app
 # Explicit expat/libexpat >=2.10.0-r0 upgrade for CVE-2026-24515, CVE-2026-25210, CVE-2026-115506, CVE-2026-118370, CVE-2026-117610, CVE-2026-113351
 # Explicit zlib upgrade for CVE-2026-27171 (MEDIUM)
 # Explicit libcrypto3/libssl3 upgrade for CVE-2026-45447 (HIGH)
-RUN apk add --no-cache git ca-certificates && \
+RUN apk add --no-cache 'git>=2.52.1-r0' ca-certificates && \
     apk add --no-cache --repository=https://dl-cdn.alpinelinux.org/alpine/edge/main 'expat>=2.10.0-r0' 'libexpat>=2.10.0-r0' curl zlib libcrypto3 libssl3 nghttp2-libs && \
     apk upgrade --no-cache && \
     rm -rf /usr/local/lib/node_modules/npm /usr/local/bin/npm /usr/local/bin/npx

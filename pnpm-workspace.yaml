@@ -12,7 +12,7 @@ trustLockfile: true
 
 overrides:
   adm-zip: "^0.6.0"
-  "@hono/node-server": "^2.0.5"
+  "@hono/node-server": "2.1.9"
   axios: "^1.13.6"
   diff: "9.0.0"
   glob: "^11.1.0"
@@ -24,3 +24,6 @@ overrides:
   ip-address: "10.3.1"
   esbuild: "0.28.2"
   minimatch: ">=11.0.1"
+
+minimumReleaseAgeExclude:
+  - '@hono/node-server@2.1.9'
