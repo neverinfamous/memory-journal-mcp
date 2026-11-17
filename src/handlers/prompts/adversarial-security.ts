@@ -9,7 +9,6 @@ import {
     AUDIT_PROMPT_REVISION,
     buildAuditPromptDefinition,
     buildSharedAuditPreamble,
-    buildStandardAuditClosing,
 } from './adversarial-audit-factory.js'
 import { buildSubagentProtocolGuidance } from './adversarial-helpers.js'
 
@@ -28,6 +27,7 @@ ${buildSharedAuditPreamble(target, 'file or module')}
    - **General Code**: Injection vectors, auth/authz gaps, secret redaction (CLI flags, logs, SQLCipher errors), and data boundary validation.
    - **Agent Skills / MCP Tools**: Privilege escalation (excessive agency), indirect prompt injection via tool/resource outputs, tool poisoning / supply chain risks, and cross-plugin attacks.
    - **External Integrations**: SSRF/DNS rebinding paths, redirect smuggling, and excessive API permission scopes.
+   - **Security Documentation (\`SECURITY.md\`)**: Check whether the target project has a \`SECURITY.md\` file; verify documented controls and symbol/module references match the codebase, and include any needed \`SECURITY.md\` updates in the remediation plan.
    - **Mandatory Deep-Security Gates (Always Run)**:
      1. **Pre-Validation Transform & DoS Ordering Audit**: Verify no input healer, AST/regex normalizer, JSON/SQL/NL synthesizer, ReDoS-prone regex, or unbounded element/byte allocation runs *before* HTTP pre-body rate-limiting, byte-length caps, \`maxToolInputElements\`, bearer/OAuth authentication (constant-time SHA-256 \`timingSafeEqual\`, \`GET\`/\`HEAD\`-only public route bypass), or sandbox security validation.
      2. **Lexical Scanner, Prototype Escape & Structured-Clone Egress Audit**: Verify comment/string strippers handle regex literals, Annex B HTML comments (\`<!--\`/\`-->\`), prefix/postfix \`++\`/\`--\`, template interpolations (\`\${...}\`), and Unicode/hex escapes (\`\\\\uXXXX\`/\`\\\\u{...}\`/\`\\\\xXX\`); verify \`%GeneratorPrototype%\`, \`%AsyncGeneratorPrototype%\`, \`%IteratorPrototype%\`, \`%TypedArray%\`, \`Function\`, \`Reflect\`, and destructured prototype helpers are neutered/blocked; verify \`JSON.parse(JSON.stringify(...))\` unwraps all nested userland \`Proxy\`/function/symbol values before \`postMessage\` structured-clone egress; and verify async \`vm.runInContext\` execution uses \`Promise.race\` wall-clock timeout guards with timer cleanup.
@@ -35,7 +35,14 @@ ${buildSharedAuditPreamble(target, 'file or module')}
      4. **Execution-Layer Filter, Namespace & RBAC Parity Check**: Verify \`--tool-filter\` (and hot-reload), OAuth scopes, \`readonly\`/\`dry_run\` flags, \`mj.team.*\` namespace isolation (never falling back to personal \`db\` or disabling personal filter stubs), and \`enforceTeamRbac\` (\`Promise.allSettled\` primary DB parity in cross-team search) hold identically across \`tools/list\`, direct \`tools/call\`, Code Mode \`mj.*\` & nested \`executeCode\` dispatch, healing fallbacks, resources, prompts, importers, and CLI paths.
      5. **SSRF, JWKS Fetch & Transitive Prompt-Injection Taint Trace**: Verify remote JWKS/OAuth fetches use DNS-pinned custom transports blocking redirects, response size limits, case-normalized \`https://\` checks, full special-use IPv4/IPv6 ranges (\`198.18.0.0/15\`, NAT64 \`64:ff9b::\`, 6to4 \`2002::\`, SIIT, hex IPv4-mapped), and verified OIDC claims (\`email_verified === true\`); and trace external strings (Git commits, GitHub refs/labels/Copilot paths, resource templates, instructions, non-canonical audit fields) to verify truncation *before* idempotent \`<untrusted_remote_content>\` fencing without breaking internal caches/enums.
      6. **End-to-End Backstop Verification & Prompt Evolution**: Trace ingress interceptors, dispatch normalizers, RBAC/importer scope checks, and storage scope pairing with concrete reproducers before classifying Critical/High; include a **Prompt Self-Improvement Proposals (\`AP1\`–\`APn\`)** table for blind spots found.
-${buildStandardAuditClosing(copilotInstruction, priorAuditSection)}`
+2. **External Validation (Copilot — Opt-In)**: ${copilotInstruction}
+3. Present findings table (incorporating Copilot findings if applicable) and the **Prompt Self-Improvement Proposals (\`AP1\`–\`APn\`)** table.
+4. Await approval before applying fixes. Diagnostic scans are part of the audit. Do not edit project files until the user approves the plan.
+5. After approval, apply fixes, run the target's lint, typecheck, and security regression tests, and if the project has a \`SECURITY.md\` file, update it when audit findings or implemented changes affect documented security controls, threat boundaries, or references.
+6. Commit with the target repository's own commit helper when one exists. Discover that helper. Do not invent a script path. Do not add an audit plan file to the repository.
+**Rule**: If you don't make changes, do not commit.
+
+${priorAuditSection}`
 }
 
 export function getSecurityAuditPromptDefinition(): InternalPromptDef {

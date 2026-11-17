@@ -319,5 +319,6 @@ describe('Pass 35 Security Audit — Transport, SSRF, Storage, RBAC & Fencing', 
         expect(promptText).toContain('198.18.0.0/15')
         expect(promptText).toContain('mj.team.*')
         expect(promptText).toContain('%GeneratorPrototype%')
+        expect(promptText).toContain('SECURITY.md')
     })
 })
