@@ -1,5 +1,7 @@
 /**
  * Confirms every registered tool except mj_execute_code advertises outputSchema.
+ * The full inventory is 108 tools. Code Mode is the 108th and sets
+ * outputSchema to undefined because the sandbox can return any JSON value.
  *
  * Usage:
  *   node test-server/scripts/verify-schemas.mjs
@@ -62,7 +64,7 @@ try {
 
     if (missing.length === 0) {
         console.log(
-            `SUCCESS: All ${checked.length} standard tools have outputSchema defined on the protocol level.`
+            `SUCCESS: All ${checked.length} standard tools have outputSchema. mj_execute_code is excluded (${tools.length} tools total) because its sandbox result has no fixed schema.`
         )
     } else {
         console.error('FAILED: The following tools are missing outputSchema:', missing)
