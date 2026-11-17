@@ -357,14 +357,15 @@ export function getProjectTools(context: ToolContext): ToolDefinition[] {
         {
             name: 'delete_project',
             title: 'Delete Project',
-            description: 'Remove a project from the global registry.',
+            description:
+                'Remove a project from the global registry. Returns success: false when the project is already absent.',
             group: 'admin',
             inputSchema: DeleteProjectSchemaMcp,
             outputSchema: ProjectOutputSchema,
             annotations: {
                 readOnlyHint: false,
                 destructiveHint: true,
-                idempotentHint: true,
+                idempotentHint: false,
                 openWorldHint: false,
             },
             handler: (params: unknown) => {
