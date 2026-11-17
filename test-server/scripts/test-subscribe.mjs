@@ -83,7 +83,7 @@ function rpc(method, params = {}) {
         const timer = setTimeout(() => {
             pending.delete(id)
             reject(new Error(`Timeout: ${method}`))
-        }, 10_000)
+        }, method === 'tools/call' ? 90_000 : 10_000)
         pending.set(id, (msg) => {
             clearTimeout(timer)
             resolve(msg)
@@ -118,7 +118,12 @@ async function main() {
     console.log('\n--- Phase 2: Triggering mutation ---')
     const seedResponse = await rpc('tools/call', {
         name: 'create_entry',
-        arguments: { project_number: 5, content: 'Entry that should trigger briefing update', entry_type: 'technical_note' },
+        arguments: {
+            project_number: 5,
+            workspace_id: 'memory-journal-mcp',
+            content: 'Entry that should trigger briefing update',
+            entry_type: 'technical_note',
+        },
     })
 
     if (seedResponse.error) {
@@ -145,7 +150,12 @@ async function main() {
 
     await rpc('tools/call', {
         name: 'update_entry',
-        arguments: { project_number: 5, entry_id: 1, content: 'Updated content' },
+        arguments: {
+            project_number: 5,
+            workspace_id: 'memory-journal-mcp',
+            entry_id: 1,
+            content: 'Updated content',
+        },
     })
 
     await delay(500)
