@@ -285,15 +285,20 @@ async function scanSkillsDir(
     for (const entry of entries) {
         if (!entry.isDirectory()) continue
         const skillMdPath = path.join(dir, entry.name, 'SKILL.md')
+        let content: string
         try {
             assertSafeFilePath(skillMdPath, [dir])
-            const stats = await fs.promises.stat(skillMdPath)
-            if (!stats.isFile() || stats.size > 1024 * 1024) continue
+            const handle = await fs.promises.open(skillMdPath, 'r')
+            try {
+                const stats = await handle.stat()
+                if (!stats.isFile() || stats.size > 1024 * 1024) continue
+                content = await handle.readFile({ encoding: 'utf8' })
+            } finally {
+                await handle.close()
+            }
         } catch {
             continue
         }
-
-        const content = await fs.promises.readFile(skillMdPath, 'utf8')
         // Strip leading YAML frontmatter before selecting first readable body excerpt line
         const bodyContent = content.replace(/^---\r?\n[\s\S]*?\r?\n---\r?\n?/, '')
         const lines = bodyContent.split('\n')

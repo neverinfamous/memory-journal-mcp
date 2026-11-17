@@ -13,6 +13,7 @@
  * tool handlers are audited without per-handler changes.
  */
 
+import { randomBytes } from 'node:crypto'
 import { performance } from 'node:perf_hooks'
 import type { AuditLogger } from './audit-logger.js'
 import type { AuditCategory, AuditEntry } from './types.js'
@@ -81,11 +82,12 @@ function scopeToCategory(scope: string): AuditCategory {
 
 /**
  * Generate a short request ID for audit correlation.
- * Format: "aud-<timestamp-hex>-<random>"
+ * Format: "aud-<timestamp-hex>-<random>". The suffix is cryptographic so
+ * audit ids are not predictable from Math.random().
  */
 function generateRequestId(): string {
     const ts = Date.now().toString(36)
-    const rand = Math.random().toString(36).slice(2, 8)
+    const rand = randomBytes(4).toString('hex')
     return `aud-${ts}-${rand}`
 }
 
@@ -253,7 +255,7 @@ async function executeAuditedTool<T>(
     const scopeMeta = extractAuditScopeFromArgs(args, reqCtx)
     const requestId = generateRequestId()
     const start = performance.now()
-    let success = true
+    let success = false
     let error: string | undefined
     let tokenEstimate: number | undefined
 
@@ -265,7 +267,6 @@ async function executeAuditedTool<T>(
         tokenEstimate = inspected.tokenEstimate
         return result
     } catch (err) {
-        success = false
         error = sanitizeErrorForLogging(err instanceof Error ? err.message : String(err))
         tokenEstimate = estimateErrorTokens(error)
         throw err
@@ -393,7 +394,7 @@ export async function auditOperation<T>(
 
     const requestId = generateRequestId()
     const start = performance.now()
-    let success = true
+    let success = false
     let error: string | undefined
     let tokenEstimate: number | undefined
 
@@ -405,7 +406,6 @@ export async function auditOperation<T>(
         tokenEstimate = estimateOperationResultTokens(result, name)
         return result
     } catch (err) {
-        success = false
         error = sanitizeErrorForLogging(err instanceof Error ? err.message : String(err))
         throw err
     } finally {

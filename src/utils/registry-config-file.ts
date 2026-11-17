@@ -1,3 +1,4 @@
+import { randomBytes } from 'node:crypto'
 import * as fs from 'node:fs'
 import * as path from 'node:path'
 import { parse as parseYaml, stringify as stringifyYaml } from 'yaml'
@@ -56,9 +57,9 @@ export function parseConfigObjectContent(configPath: string, raw: string): unkno
  */
 export function readCachedConfigObject(configPath: string): Record<string, unknown> | undefined {
     const resolved = path.resolve(configPath)
-    let stat: fs.Stats
+    let fd: number
     try {
-        stat = fs.statSync(resolved)
+        fd = fs.openSync(resolved, 'r')
     } catch (err) {
         if (readErrorCode(err) === 'ENOENT') {
             registryFileCache.delete(resolved)
@@ -67,12 +68,18 @@ export function readCachedConfigObject(configPath: string): Record<string, unkno
         throw err
     }
 
-    const cached = registryFileCache.get(resolved)
-    if (cached?.mtimeMs === stat.mtimeMs && cached.size === stat.size) {
-        return cached.parsed
+    let stat: fs.Stats
+    let raw: string
+    try {
+        stat = fs.fstatSync(fd)
+        const cached = registryFileCache.get(resolved)
+        if (cached?.mtimeMs === stat.mtimeMs && cached.size === stat.size) {
+            return cached.parsed
+        }
+        raw = fs.readFileSync(fd, 'utf-8')
+    } finally {
+        fs.closeSync(fd)
     }
-
-    const raw = fs.readFileSync(resolved, 'utf-8')
     const parsed = parseConfigObjectContent(resolved, raw)
     if (!isRecord(parsed)) {
         throw new RegistryConfigError(
@@ -96,9 +103,9 @@ export function writeProjectRegistryFile(configPath: string, config: Record<stri
     const serialized = isYamlPath(resolved)
         ? (stringifyYaml as (value: unknown) => string)(config)
         : JSON.stringify(config, null, 4)
-    const tmpPath = `${resolved}.${String(process.pid)}.${String(Date.now())}.tmp`
+    const tmpPath = `${resolved}.${String(process.pid)}.${randomBytes(8).toString('hex')}.tmp`
     try {
-        fs.writeFileSync(tmpPath, serialized, 'utf-8')
+        fs.writeFileSync(tmpPath, serialized, { encoding: 'utf-8', flag: 'wx' })
         fs.renameSync(tmpPath, resolved)
         try {
             const stat = fs.statSync(resolved)

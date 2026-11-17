@@ -52,7 +52,7 @@ const preprocessMember = (val: unknown): unknown => {
             throw new ValidationError(
                 'workspace_id is not accepted. Team membership is global and has no workspace column.',
                 { field: 'workspace_id' }
-            )
+            );
         }
         return modified ? obj : val;
     }

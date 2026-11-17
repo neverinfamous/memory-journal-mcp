@@ -154,7 +154,7 @@ export function getVectorTools(context: ToolContext): ToolDefinition[] {
                             recoverable: false,
                         }
                     }
-                    let wsId = resolveWorkspaceId(workspace_id, project_number, context.config)
+                    const wsId = resolveWorkspaceId(workspace_id, project_number, context.config)
                     let entry = db.getEntryById(entry_id, wsId)
                     if (
                         !entry &&
@@ -162,11 +162,6 @@ export function getVectorTools(context: ToolContext): ToolDefinition[] {
                         project_number === undefined
                     ) {
                         entry = db.getEntryById(entry_id, '*')
-                        if (entry?.workspaceId !== undefined) {
-                            wsId = entry.workspaceId
-                        }
-                    } else if (entry?.workspaceId !== undefined && wsId === '*') {
-                        wsId = entry.workspaceId
                     }
                     if (!entry || (project_number !== undefined && entry.projectNumber !== project_number)) {
                         return {

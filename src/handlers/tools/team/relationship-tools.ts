@@ -304,7 +304,7 @@ function collectNeighborhood(
             }
         }
         let nextFrontier = candidateIds
-        if (projectNumber !== undefined && candidateIds.length > 0) {
+        if (typeof projectNumber === 'number' && candidateIds.length > 0) {
             const batchEntries =
                 typeof teamDb.getEntriesByIds === 'function'
                     ? teamDb.getEntriesByIds(candidateIds, workspaceId)
