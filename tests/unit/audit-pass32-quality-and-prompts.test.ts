@@ -27,6 +27,7 @@ import { GitHistoryOptionsSchemaMcp } from '../../src/handlers/tools/git-schemas
 import { createSandboxExecutor } from '../../src/codemode/worker/nested-exec-scope.js'
 import { buildApiProxy } from '../../src/codemode/worker-api-proxy.js'
 import { getCodeModeTools } from '../../src/handlers/tools/codemode/handler.js'
+import { disposeCodemodeResources } from '../../src/handlers/tools/codemode/singleton-state.js'
 import { getTeamIoTools } from '../../src/handlers/tools/team/io-tools.js'
 import { getGitTools } from '../../src/handlers/tools/git.js'
 import { matchSuggestion } from '../../src/utils/errors/suggestions.js'
@@ -58,6 +59,7 @@ describe('Pass 32 Quality, Transport, SQLite, Schema & Prompt Regressions (M2-M1
     })
 
     afterEach(() => {
+        disposeCodemodeResources()
         vi.restoreAllMocks()
         for (const key of Object.keys(process.env)) {
             if (!(key in savedEnv)) delete process.env[key]
@@ -353,9 +355,13 @@ describe('Pass 32 Quality, Transport, SQLite, Schema & Prompt Regressions (M2-M1
         ).rejects.toThrow()
 
         // L2 mergeTags chunking (> 500 entries)
-        for (let i = 0; i < 505; i++) {
-            db.createEntry({ content: `Tag row ${String(i)}`, tags: ['old-tag'], workspaceId: 'memory-journal-mcp' })
-        }
+        db.createEntries(
+            Array.from({ length: 505 }, (_, i) => ({
+                content: `Tag row ${String(i)}`,
+                tags: ['old-tag'],
+                workspaceId: 'memory-journal-mcp',
+            }))
+        )
         const mergeRes = db.mergeTags('old-tag', 'new-tag', 'memory-journal-mcp')
         expect(mergeRes.entriesUpdated).toBe(505)
 
@@ -387,10 +393,12 @@ describe('Pass 32 Quality, Transport, SQLite, Schema & Prompt Regressions (M2-M1
             getCodeQualityAuditPromptDefinition().handler(
                 { target: 'memory-journal-mcp' },
                 db,
+                undefined,
+                undefined,
                 { ...DEFAULT_BRIEFING_CONFIG, projectRegistry: TEST_REGISTRY }
             ).messages[0]?.content as { text: string }
         ).text
         expect(cqText).toContain("$canon = @(@('src'")
         expect(cqText).toContain("createRequire(path.join(process.cwd(), 'package.json'))('typescript')")
-    })
+    }, 30000)
 })

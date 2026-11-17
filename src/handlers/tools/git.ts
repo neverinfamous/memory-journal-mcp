@@ -98,7 +98,7 @@ async function fetchCommits(input: FetchCommitsInput, cwd: string): Promise<Comm
         }
         throw err
     }
-    const commits = await processBatch(batch, cliArgs, [])
+    const commits = await processBatch(batch, cliArgs, [], cwd)
 
     let processedCommits = commits
 
