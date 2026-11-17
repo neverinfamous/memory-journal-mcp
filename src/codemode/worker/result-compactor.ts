@@ -3,6 +3,7 @@
  * the serialized egress byte boundary to prevent OOM and hard payload failures.
  */
 
+import { types } from 'node:util'
 import type { SandboxResult } from '../types.js'
 
 const MAX_COMPACTION_DEPTH = 6
@@ -128,11 +129,18 @@ export function serializeAndEnforceEgress(
 
     try {
         let bytes = 0
+        let mutatedByReplacer = false
         const cache = new Set()
 
         const resultJson = JSON.stringify(result.result, (_key: string, value: unknown) => {
             if (typeof value === 'object' && value !== null) {
-                if (cache.has(value)) return '[Circular]'
+                if (types.isProxy(value)) {
+                    mutatedByReplacer = true
+                }
+                if (cache.has(value)) {
+                    mutatedByReplacer = true
+                    return '[Circular]'
+                }
                 cache.add(value)
                 bytes += 5
             } else if (typeof value === 'string') {
@@ -143,8 +151,12 @@ export function serializeAndEnforceEgress(
             } else if (typeof value === 'bigint') {
                 const str = value.toString()
                 bytes += str.length + 2
+                mutatedByReplacer = true
                 return str
             } else {
+                if (typeof value === 'function' || typeof value === 'symbol') {
+                    mutatedByReplacer = true
+                }
                 bytes += 5 // brackets/keys/null overhead
             }
 
@@ -159,7 +171,10 @@ export function serializeAndEnforceEgress(
             if (byteLength > egressLimit) {
                 throw new Error(`EgressLimitExceeded:${byteLength}`)
             }
-            result.result = JSON.parse(resultJson) as unknown
+            // Skip redundant full-payload JSON.parse when no replacer substitutions occurred.
+            if (mutatedByReplacer) {
+                result.result = JSON.parse(resultJson) as unknown
+            }
         } else {
             result.result = undefined
         }

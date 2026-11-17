@@ -31,6 +31,8 @@ import { assertSafeJwksUri } from './jwks-ssrf-guard.js'
 export class TokenValidator {
     /** Resolved configuration with all defaults applied */
     private readonly jwksUri: string
+    private readonly jwksUrl: URL
+    private readonly jwksHost: string
     private readonly issuer: string
     private readonly audience: string
     private readonly clockTolerance: number
@@ -52,7 +54,8 @@ export class TokenValidator {
                 : ['RS256', 'RS384', 'RS512', 'ES256', 'ES384', 'ES512', 'EdDSA']
 
         const issuerUrl = new URL(this.issuer)
-        const jwksUrl = new URL(this.jwksUri)
+        this.jwksUrl = new URL(this.jwksUri)
+        this.jwksHost = this.jwksUrl.hostname
 
         const isLoopback = (host: string): boolean =>
             host === 'localhost' || host === '127.0.0.1' || host === '[::1]'
@@ -63,15 +66,15 @@ export class TokenValidator {
             )
         }
 
-        if (jwksUrl.protocol !== 'https:' && !isLoopback(jwksUrl.hostname)) {
+        if (this.jwksUrl.protocol !== 'https:' && !isLoopback(this.jwksUrl.hostname)) {
             throw new Error(
                 `Security Violation: JWKS URI must use HTTPS protocol (got ${this.jwksUri})`
             )
         }
 
-        if (issuerUrl.origin !== jwksUrl.origin) {
+        if (issuerUrl.origin !== this.jwksUrl.origin) {
             throw new Error(
-                `Security Violation: JWKS URI origin (${jwksUrl.origin}) does not match Issuer origin (${issuerUrl.origin})`
+                `Security Violation: JWKS URI origin (${this.jwksUrl.origin}) does not match Issuer origin (${issuerUrl.origin})`
             )
         }
 
@@ -81,14 +84,13 @@ export class TokenValidator {
             )
         }
 
-        if (!isLoopback(jwksUrl.hostname) && isPrivateOrLoopbackAddress(jwksUrl.hostname)) {
+        if (!isLoopback(this.jwksUrl.hostname) && isPrivateOrLoopbackAddress(this.jwksUrl.hostname)) {
             throw new Error(
-                `Security Violation: SSRF Protection blocks private/loopback JWKS host (${jwksUrl.hostname})`
+                `Security Violation: SSRF Protection blocks private/loopback JWKS host (${this.jwksUrl.hostname})`
             )
         }
 
-        const issuerHost = new URL(this.issuer).hostname
-        logger.info(`Token Validator initialized for issuer: ${issuerHost}`, {
+        logger.info(`Token Validator initialized for issuer: ${issuerUrl.hostname}`, {
             module: 'AUTH',
             operation: 'init',
         })
@@ -143,21 +145,14 @@ export class TokenValidator {
             return this.jwks
         }
 
-        const jwksHost = (() => {
-            try {
-                return new URL(this.jwksUri).hostname
-            } catch {
-                return '[configured]'
-            }
-        })()
-        logger.info(`Fetching JWKS from: ${jwksHost}`, {
+        logger.info(`Fetching JWKS from: ${this.jwksHost || '[configured]'}`, {
             module: 'AUTH',
             operation: 'jwks-fetch',
         })
 
         try {
             // Create JWKS remote key set
-            this.jwks = jose.createRemoteJWKSet(new URL(this.jwksUri), {
+            this.jwks = jose.createRemoteJWKSet(this.jwksUrl, {
                 cooldownDuration: 30000, // 30 seconds between retries
                 cacheMaxAge: this.jwksCacheTtl * 1000,
                 timeoutDuration: 5000, // Explicit 5s timeout to prevent socket hangs

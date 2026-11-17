@@ -13,6 +13,15 @@ export class RegistryConfigError extends Error {
     }
 }
 
+interface CachedRegistryFile {
+    mtimeMs: number
+    size: number
+    parsed: Record<string, unknown>
+}
+
+const REGISTRY_FILE_CACHE_MAX = 32
+const registryFileCache = new Map<string, CachedRegistryFile>()
+
 function isRecord(value: unknown): value is Record<string, unknown> {
     return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
@@ -43,17 +52,63 @@ export function parseConfigObjectContent(configPath: string, raw: string): unkno
 }
 
 /**
+ * Read and parse a config file object with `(mtimeMs, size)` caching; returns `undefined` on `ENOENT`.
+ */
+export function readCachedConfigObject(configPath: string): Record<string, unknown> | undefined {
+    const resolved = path.resolve(configPath)
+    let stat: fs.Stats
+    try {
+        stat = fs.statSync(resolved)
+    } catch (err) {
+        if (readErrorCode(err) === 'ENOENT') {
+            registryFileCache.delete(resolved)
+            return undefined
+        }
+        throw err
+    }
+
+    const cached = registryFileCache.get(resolved)
+    if (cached?.mtimeMs === stat.mtimeMs && cached.size === stat.size) {
+        return cached.parsed
+    }
+
+    const raw = fs.readFileSync(resolved, 'utf-8')
+    const parsed = parseConfigObjectContent(resolved, raw)
+    if (!isRecord(parsed)) {
+        throw new RegistryConfigError(
+            `Refusing to load project registry from ${resolved}: config root must be an object`
+        )
+    }
+    if (registryFileCache.size >= REGISTRY_FILE_CACHE_MAX) {
+        registryFileCache.clear()
+    }
+    registryFileCache.set(resolved, { mtimeMs: stat.mtimeMs, size: stat.size, parsed })
+    return parsed
+}
+
+/**
  * Atomically persist a JSON or YAML registry config file via temp file + rename.
  */
 export function writeProjectRegistryFile(configPath: string, config: Record<string, unknown>): void {
-    fs.mkdirSync(path.dirname(configPath), { recursive: true })
-    const serialized = isYamlPath(configPath)
+    const resolved = path.resolve(configPath)
+    registryFileCache.delete(resolved)
+    fs.mkdirSync(path.dirname(resolved), { recursive: true })
+    const serialized = isYamlPath(resolved)
         ? (stringifyYaml as (value: unknown) => string)(config)
         : JSON.stringify(config, null, 4)
-    const tmpPath = `${configPath}.${String(process.pid)}.${String(Date.now())}.tmp`
+    const tmpPath = `${resolved}.${String(process.pid)}.${String(Date.now())}.tmp`
     try {
         fs.writeFileSync(tmpPath, serialized, 'utf-8')
-        fs.renameSync(tmpPath, configPath)
+        fs.renameSync(tmpPath, resolved)
+        try {
+            const stat = fs.statSync(resolved)
+            if (registryFileCache.size >= REGISTRY_FILE_CACHE_MAX) {
+                registryFileCache.clear()
+            }
+            registryFileCache.set(resolved, { mtimeMs: stat.mtimeMs, size: stat.size, parsed: config })
+        } catch {
+            // Cache remains cleared if post-rename stat fails.
+        }
     } catch (writeErr) {
         try {
             fs.rmSync(tmpPath, { force: true })
@@ -73,39 +128,35 @@ export function readProjectRegistryFile(configPath: string): {
     config: Record<string, unknown>
     registry: Record<string, unknown>
 } {
-    let raw: string
+    let parsed: Record<string, unknown> | undefined
     try {
-        raw = fs.readFileSync(configPath, 'utf-8')
+        parsed = readCachedConfigObject(configPath)
     } catch (err) {
-        if (readErrorCode(err) === 'ENOENT') {
-            const registry: Record<string, unknown> = {}
-            return { config: { projectRegistry: registry }, registry }
-        }
+        if (err instanceof RegistryConfigError) throw err
         const detail = err instanceof Error ? err.message : String(err)
         throw new RegistryConfigError(
             `Refusing to load project registry from ${configPath}: ${detail}`,
             { cause: err }
         )
     }
-
-    const parsed = parseConfigObjectContent(configPath, raw)
-
-    if (!isRecord(parsed)) {
-        throw new RegistryConfigError(
-            `Refusing to load project registry from ${configPath}: config root must be an object`
-        )
+    if (parsed === undefined) {
+        const registry: Record<string, unknown> = {}
+        return { config: { projectRegistry: registry }, registry }
     }
 
-    const existing = parsed['projectRegistry']
+    const cloned: Record<string, unknown> = { ...parsed }
+    const existing = cloned['projectRegistry']
     if (existing === undefined) {
         const registry: Record<string, unknown> = {}
-        parsed['projectRegistry'] = registry
-        return { config: parsed, registry }
+        cloned['projectRegistry'] = registry
+        return { config: cloned, registry }
     }
     if (!isRecord(existing)) {
         throw new RegistryConfigError(
             `Refusing to load project registry from ${configPath}: projectRegistry must be an object`
         )
     }
-    return { config: parsed, registry: existing }
+    const registryClone: Record<string, unknown> = { ...existing }
+    cloned['projectRegistry'] = registryClone
+    return { config: cloned, registry: registryClone }
 }

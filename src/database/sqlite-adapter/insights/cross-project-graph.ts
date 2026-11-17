@@ -1,5 +1,5 @@
 import type { NativeConnectionManager } from '../native-connection.js'
-import type { QueryResult } from '../../core/interfaces.js'
+import { bucketInParams } from '../row-helpers.js'
 import { effectiveWorkspace } from '../../workspace-scope.js'
 import { expandTagFilterValues } from '../tags.js'
 
@@ -96,9 +96,8 @@ function queryConnectedGraphEntries(
     depth: number,
     limit: number,
     f: GraphScopeFilters
-): QueryResult[] {
-    return connection.exec(
-        `
+): GraphEntryRow[] {
+    const sql = `
         WITH RECURSIVE connected_entries(id, distance) AS (
             SELECT id, 0 FROM memory_journal mj WHERE mj.id = ? AND mj.deleted_at IS NULL${f.wsFilter}${f.projSql}
             UNION
@@ -115,16 +114,23 @@ function queryConnectedGraphEntries(
                     ELSE r.from_entry_id
                 END
             WHERE ce.distance < ? AND nx.deleted_at IS NULL${f.nxWsFilter}${f.nxProjFilter}${f.relTypeSql}
+        ),
+        deduped_ce AS (
+            SELECT id, MIN(distance) AS distance
+            FROM connected_entries
+            GROUP BY id
         )
         SELECT mj.id, mj.entry_type, mj.content, mj.is_personal
-        FROM memory_journal mj
-        JOIN connected_entries ce ON mj.id = ce.id
+        FROM deduped_ce ce
+        CROSS JOIN memory_journal mj ON mj.id = ce.id
         WHERE mj.deleted_at IS NULL${f.wsFilter}${f.projSql}${f.tagSubquery}
-        GROUP BY mj.id
-        ORDER BY MIN(ce.distance) ASC, mj.id DESC
+        ORDER BY ce.distance ASC, mj.id DESC
         LIMIT ?
-    `,
-        [
+    `
+    return connection
+        .getNativeDb()
+        .prepare(sql)
+        .all(
             entryId,
             ...f.wsParam,
             ...f.projParam,
@@ -135,47 +141,58 @@ function queryConnectedGraphEntries(
             ...f.wsParam,
             ...f.projParam,
             ...f.tagParams,
-            limit,
-        ]
-    )
+            limit
+        ) as GraphEntryRow[]
+}
+
+interface GraphEntryRow {
+    id: number
+    entry_type: string
+    content: string
+    is_personal: number
 }
 
 function queryTaggedGraphEntries(
     connection: NativeConnectionManager,
     limit: number,
     f: GraphScopeFilters
-): QueryResult[] {
+): GraphEntryRow[] {
     const relPeerFilter = f.hasRelType ? ` AND mj.id IN (${buildRelPeerSubquery(f)})` : ''
     const relPeerParams = f.hasRelType
         ? [...f.wsParam, ...f.projParam, ...f.relTypeParam, ...f.wsParam, ...f.projParam, ...f.relTypeParam]
         : []
-    return connection.exec(
-        `
+    return connection
+        .getNativeDb()
+        .prepare(
+            `
         SELECT DISTINCT mj.id, mj.entry_type, mj.content, mj.is_personal
         FROM memory_journal mj
         WHERE mj.deleted_at IS NULL${f.wsFilter}${f.projSql}${f.tagSubquery}${relPeerFilter}
         ORDER BY mj.id DESC
         LIMIT ?
-    `,
-        [...f.wsParam, ...f.projParam, ...f.tagParams, ...relPeerParams, limit]
-    )
+    `
+        )
+        .all(...f.wsParam, ...f.projParam, ...f.tagParams, ...relPeerParams, limit) as GraphEntryRow[]
 }
 
 function queryAllLinkedGraphEntries(
     connection: NativeConnectionManager,
     limit: number,
     f: GraphScopeFilters
-): QueryResult[] {
-    return connection.exec(
-        `
+): GraphEntryRow[] {
+    return connection
+        .getNativeDb()
+        .prepare(
+            `
         SELECT DISTINCT mj.id, mj.entry_type, mj.content, mj.is_personal
         FROM memory_journal mj
         WHERE mj.deleted_at IS NULL${f.wsFilter}${f.projSql}
           AND mj.id IN (${buildRelPeerSubquery(f)})
         ORDER BY mj.id DESC
         LIMIT ?
-    `,
-        [
+    `
+        )
+        .all(
             ...f.wsParam,
             ...f.projParam,
             ...f.wsParam,
@@ -184,9 +201,8 @@ function queryAllLinkedGraphEntries(
             ...f.wsParam,
             ...f.projParam,
             ...f.relTypeParam,
-            limit,
-        ]
-    )
+            limit
+        ) as GraphEntryRow[]
 }
 
 /** Select the entries to render in the relationship graph (by connected entry, tags, or all linked). */
@@ -194,7 +210,7 @@ function queryGraphEntries(
     connection: NativeConnectionManager,
     options: GraphQueryOptions,
     scopeId: string
-): QueryResult[] {
+): GraphEntryRow[] {
     const f = buildGraphScopeFilters(options, scopeId)
     if (options.entryId !== undefined) {
         return queryConnectedGraphEntries(connection, options.entryId, options.depth, options.limit, f)
@@ -226,28 +242,22 @@ export function visualizeRelationships(
     edges: { from: string | number; to: string | number; label: string; type: string }[]
 } {
     const scopeId = effectiveWorkspace(options.workspaceId)
-    const entriesResult = queryGraphEntries(connection, options, scopeId)
+    const entryRows = queryGraphEntries(connection, options, scopeId)
 
     const nodes: {
         id: string | number
         label: string
         group: string
         metadata: { is_personal: boolean; content: string }
-    }[] = []
-    if (entriesResult[0] && entriesResult[0].values.length > 0) {
-        const cols = entriesResult[0].columns
-        for (const row of entriesResult[0].values) {
-            nodes.push({
-                id: row[cols.indexOf('id')] as number,
-                group: row[cols.indexOf('entry_type')] as string,
-                label: `Node ${String(row[cols.indexOf('id')])}`,
-                metadata: {
-                    content: row[cols.indexOf('content')] as string,
-                    is_personal: Boolean(row[cols.indexOf('is_personal')]),
-                },
-            })
-        }
-    }
+    }[] = entryRows.map((row) => ({
+        id: row.id,
+        group: row.entry_type,
+        label: `Node ${String(row.id)}`,
+        metadata: {
+            content: row.content,
+            is_personal: Boolean(row.is_personal),
+        },
+    }))
 
     const edges = nodes.length > 0 ? queryGraphEdges(connection, nodes, options.relationshipType) : []
 
@@ -260,32 +270,57 @@ function queryGraphEdges(
     nodes: { id: string | number }[],
     relationshipType: string | undefined
 ): { from: string | number; to: string | number; label: string; type: string }[] {
-    const edges: { from: string | number; to: string | number; label: string; type: string }[] = []
+    const db = connection.getNativeDb()
     const entryIds = nodes.map((n) => n.id as number)
-    const placeholders = entryIds.map(() => '?').join(',')
+    const hasRelType = relationshipType !== undefined && relationshipType.length > 0
+    const relTypeSql = hasRelType ? ' AND relationship_type = ?' : ''
+    const relTypeParams = hasRelType ? [relationshipType] : []
 
-    let relsQuery = `
-            SELECT from_entry_id, to_entry_id, relationship_type
-            FROM relationships
-            WHERE from_entry_id IN (${placeholders})
-              AND to_entry_id IN (${placeholders})
-        `
-    const relsParams: unknown[] = [...entryIds, ...entryIds]
-
-    if (relationshipType !== undefined && relationshipType.length > 0) {
-        relsQuery += ' AND relationship_type = ?'
-        relsParams.push(relationshipType)
+    if (entryIds.length <= 240) {
+        const placeholders = entryIds.map(() => '?').join(',')
+        const rows = db
+            .prepare(
+                `SELECT from_entry_id, to_entry_id, relationship_type
+                 FROM relationships
+                 WHERE from_entry_id IN (${placeholders})
+                   AND to_entry_id IN (${placeholders})${relTypeSql}`
+            )
+            .all(...entryIds, ...entryIds, ...relTypeParams) as {
+            from_entry_id: number
+            to_entry_id: number
+            relationship_type: string
+        }[]
+        return rows.map((row) => ({
+            from: row.from_entry_id,
+            to: row.to_entry_id,
+            label: row.relationship_type,
+            type: row.relationship_type,
+        }))
     }
 
-    const relsResult = connection.exec(relsQuery, relsParams)
-    if (relsResult[0]) {
-        for (const row of relsResult[0].values) {
-            edges.push({
-                from: row[0] as number,
-                to: row[1] as number,
-                label: row[2] as string,
-                type: row[2] as string,
-            })
+    const idSet = new Set(entryIds)
+    const edges: { from: string | number; to: string | number; label: string; type: string }[] = []
+    for (const { placeholders, params } of bucketInParams(entryIds)) {
+        const rows = db
+            .prepare(
+                `SELECT from_entry_id, to_entry_id, relationship_type
+                 FROM relationships
+                 WHERE from_entry_id IN (${placeholders})${relTypeSql}`
+            )
+            .all(...params, ...relTypeParams) as {
+            from_entry_id: number
+            to_entry_id: number
+            relationship_type: string
+        }[]
+        for (const row of rows) {
+            if (idSet.has(row.to_entry_id)) {
+                edges.push({
+                    from: row.from_entry_id,
+                    to: row.to_entry_id,
+                    label: row.relationship_type,
+                    type: row.relationship_type,
+                })
+            }
         }
     }
     return edges
@@ -305,8 +340,10 @@ export function getRecentGraphRelationships(
     const scopeId = effectiveWorkspace(workspaceId)
     const wsFilter = scopeId !== '*' ? ' AND e1.workspace_id = ? AND e2.workspace_id = ?' : ''
     const params: unknown[] = scopeId !== '*' ? [scopeId, scopeId, limit] : [limit]
-    const rows = connection.exec(
-        `
+    return connection
+        .getNativeDb()
+        .prepare(
+            `
         SELECT
             r.from_entry_id, r.to_entry_id, r.relationship_type,
             e1.content as from_content,
@@ -317,18 +354,13 @@ export function getRecentGraphRelationships(
         WHERE e1.deleted_at IS NULL AND e2.deleted_at IS NULL${wsFilter}
         ORDER BY r.created_at DESC
         LIMIT ?
-    `,
-        params
-    )
-
-    if (!rows[0] || rows[0].values.length === 0) return []
-
-    const cols = rows[0].columns
-    return rows[0].values.map((row) => ({
-        from_entry_id: row[cols.indexOf('from_entry_id')] as number,
-        to_entry_id: row[cols.indexOf('to_entry_id')] as number,
-        relationship_type: row[cols.indexOf('relationship_type')] as string,
-        from_content: row[cols.indexOf('from_content')] as string,
-        to_content: row[cols.indexOf('to_content')] as string,
-    }))
+    `
+        )
+        .all(...params) as {
+        from_entry_id: number
+        to_entry_id: number
+        relationship_type: string
+        from_content: string
+        to_content: string
+    }[]
 }

@@ -8,26 +8,15 @@ import {
     addWorkspaceScopeOptions,
     addOutputOptions,
 } from './option-groups.js'
+import { lazyAction } from './lazy-action.js'
 import {
-    backupAction,
-    restoreAction,
-    vacuumAction,
-    pruneAction,
-    auditAction,
-    rebuildIndexAction,
-    backupSchema,
-    restoreSchema,
-    vacuumSchema,
-    pruneSchema,
-    auditSchema,
-    rebuildIndexSchema,
-} from './commands/admin.js'
-import {
-    projectCreateAction,
-    projectListAction,
-    projectUpdateAction,
-    projectDeleteAction,
-} from './commands/project.js'
+    adminBackupOptionsSchema,
+    adminRestoreOptionsSchema,
+    adminVacuumOptionsSchema,
+    adminPruneOptionsSchema,
+    adminAuditSearchOptionsSchema,
+    adminRebuildIndexOptionsSchema,
+} from './schemas.js'
 
 /**
  * [BOUNDARY] Registration for the `project` and `admin` command groups (split from
@@ -44,7 +33,9 @@ export function registerProjectCommands(program: Command): void {
         .description('List all registered projects')
         .option('--json', 'Output as JSON')
     addCoreOptions(projectListCmd)
-    projectListCmd.action(projectListAction)
+    projectListCmd.action(
+        lazyAction(async () => (await import('./commands/project.js')).projectListAction)
+    )
 
     const projectCreateCmd = projectCmd
         .command('create <name>')
@@ -64,7 +55,9 @@ export function registerProjectCommands(program: Command): void {
 - Run this command first when initializing a new codebase.
 - The command will AUTOMATICALLY initialize the project in the database. You no longer need to run a secondary 'entry create' command.`
     )
-    projectCreateCmd.action(projectCreateAction)
+    projectCreateCmd.action(
+        lazyAction(async () => (await import('./commands/project.js')).projectCreateAction)
+    )
 
     const projectUpdateCmd = projectCmd
         .command('update <name>')
@@ -77,7 +70,9 @@ export function registerProjectCommands(program: Command): void {
     })
     addOutputOptions(projectUpdateCmd)
     addCoreOptions(projectUpdateCmd)
-    projectUpdateCmd.action(projectUpdateAction)
+    projectUpdateCmd.action(
+        lazyAction(async () => (await import('./commands/project.js')).projectUpdateAction)
+    )
 
     const projectDeleteCmd = projectCmd
         .command('delete <name>')
@@ -85,7 +80,9 @@ export function registerProjectCommands(program: Command): void {
         .description('Remove a project from the global registry')
     addOutputOptions(projectDeleteCmd)
     addCoreOptions(projectDeleteCmd)
-    projectDeleteCmd.action(projectDeleteAction)
+    projectDeleteCmd.action(
+        lazyAction(async () => (await import('./commands/project.js')).projectDeleteAction)
+    )
 }
 
 function registerAdminStorageCommands(adminCmd: Command): void {
@@ -103,7 +100,12 @@ function registerAdminStorageCommands(adminCmd: Command): void {
 🤖 AI AGENT INSTRUCTIONS:
 - If \`--dest\` is omitted, a timestamped backup will be created in the backups directory.`
     )
-    backupCmd.action(withValidation(backupSchema, backupAction))
+    backupCmd.action(
+        withValidation(
+            adminBackupOptionsSchema,
+            lazyAction(async () => (await import('./commands/admin.js')).backupAction)
+        )
+    )
 
     const restoreCmd = adminCmd
         .command('restore <file>')
@@ -116,7 +118,12 @@ function registerAdminStorageCommands(adminCmd: Command): void {
 🤖 AI AGENT INSTRUCTIONS:
 - This will overwrite the CURRENT database. ALWAYS take a backup before running restore.`
     )
-    restoreCmd.action(withValidation(restoreSchema, restoreAction))
+    restoreCmd.action(
+        withValidation(
+            adminRestoreOptionsSchema,
+            lazyAction(async () => (await import('./commands/admin.js')).restoreAction)
+        )
+    )
 
     const vacuumCmd = adminCmd
         .command('vacuum')
@@ -124,7 +131,12 @@ function registerAdminStorageCommands(adminCmd: Command): void {
     addOutputOptions(vacuumCmd)
     addCoreOptions(vacuumCmd)
     addDatabaseOptions(vacuumCmd)
-    vacuumCmd.action(withValidation(vacuumSchema, vacuumAction))
+    vacuumCmd.action(
+        withValidation(
+            adminVacuumOptionsSchema,
+            lazyAction(async () => (await import('./commands/admin.js')).vacuumAction)
+        )
+    )
 }
 
 function registerAdminMaintenanceCommands(adminCmd: Command): void {
@@ -146,7 +158,12 @@ function registerAdminMaintenanceCommands(adminCmd: Command): void {
 🤖 AI AGENT INSTRUCTIONS:
 - ALWAYS run with \`--dry-run\` first to verify what will be pruned.`
     )
-    pruneCmd.action(withValidation(pruneSchema, pruneAction))
+    pruneCmd.action(
+        withValidation(
+            adminPruneOptionsSchema,
+            lazyAction(async () => (await import('./commands/admin.js')).pruneAction)
+        )
+    )
 
     const auditCmd = adminCmd
         .command('audit')
@@ -162,7 +179,12 @@ function registerAdminMaintenanceCommands(adminCmd: Command): void {
     addOutputOptions(auditCmd)
     addCoreOptions(auditCmd)
     addAuditOptions(auditCmd)
-    auditCmd.action(withValidation(auditSchema, auditAction))
+    auditCmd.action(
+        withValidation(
+            adminAuditSearchOptionsSchema,
+            lazyAction(async () => (await import('./commands/admin.js')).auditAction)
+        )
+    )
 
     const rebuildIndexCmd = adminCmd
         .command('rebuild-index')
@@ -174,7 +196,12 @@ function registerAdminMaintenanceCommands(adminCmd: Command): void {
     addCoreOptions(rebuildIndexCmd)
     addDatabaseOptions(rebuildIndexCmd)
     addWorkspaceScopeOptions(rebuildIndexCmd)
-    rebuildIndexCmd.action(withValidation(rebuildIndexSchema, rebuildIndexAction))
+    rebuildIndexCmd.action(
+        withValidation(
+            adminRebuildIndexOptionsSchema,
+            lazyAction(async () => (await import('./commands/admin.js')).rebuildIndexAction)
+        )
+    )
 }
 
 export function registerAdminCommands(program: Command): void {

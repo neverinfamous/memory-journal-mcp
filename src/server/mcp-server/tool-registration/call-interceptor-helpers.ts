@@ -98,7 +98,7 @@ export function formatSuccessPayload(payload: unknown): {
     content: { type: 'text'; text: string }[]
     structuredContent: Record<string, unknown>
 } {
-    const enriched = JSON.stringify(payload, null, 2)
+    const enriched = JSON.stringify(payload)
     return {
         content: [{ type: 'text', text: enriched }],
         structuredContent: isPlainRecord(payload) ? payload : {},

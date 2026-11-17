@@ -28,6 +28,7 @@ import {
     buildStandardAuditClosing,
 } from './adversarial-audit-factory.js'
 import { getCodeQualityAuditPromptDefinition } from './adversarial-code-quality.js'
+import { getPerformanceAuditPromptDefinition } from './adversarial-performance.js'
 
 function buildPlanReviewPromptText(
     topic: string,
@@ -188,35 +189,6 @@ ${buildSharedAuditPreamble(target, 'file or module')}
 ${buildStandardAuditClosing(copilotInstruction, priorAuditSection)}`,
 })
 
-const performanceAudit = buildAuditPromptDefinition({
-    name: 'adversarial-audit-performance',
-    description: 'Multi-pass adversarial performance audit (profiling, stress-testing) Optional parameters: target, copilot, workspace_id, project_number',
-    tag: 'performance-audit',
-    heading: 'Prior performance audits',
-    copilotCommand: (t) =>
-        `gh copilot -- -p "Perform a performance audit on ${t} looking for N+1 queries, unnecessary allocations, and hot-path bottlenecks." --allow-all`,
-    body: ({ target, copilotInstruction, priorAuditSection }) => `# Adversarial Performance Audit
-${buildSharedAuditPreamble(target, 'file or module')}
-
-1. Perform a multi-pass performance audit looking for N+1 queries, unnecessary allocations, and hot-path bottlenecks. For large targets or full-repository audits, spawn parallel read-only subagents by architectural domain (for example Database and Query Plans, Vector and Sandbox Execution, Server Dispatch and Observability). In Cursor use the Task tool with subagent type \`explore\` or \`generalPurpose\`. On any other host use that host's read-only subagent tool.
-   ${buildSubagentProtocolGuidance()}
-   - **Mandatory Deep-Performance Gates (Always Run)**:
-     1. **SQLite Query Plan & Virtual Table Join Order Audit**: Inspect SQLite queries (especially FTS5 \`fts_content\` and \`sqlite-vec\` \`vec0\` joins) using \`EXPLAIN QUERY PLAN\`. Verify virtual tables are driven as the outer loop (\`CROSS JOIN\` when necessary to prevent planner inversion), check for \`USE TEMP B-TREE FOR DISTINCT\` or \`ORDER BY\`, verify SARGable \`WHERE\` clauses (no \`DATE(col)\` wrappers on indexed columns), and confirm prepared statement caching or reuse on hot paths.
-     2. **N+1 Query & Post-Limit Hydration Audit**: Scan for database or vector lookups inside loops (e.g., per-row \`getEntryById\`, \`calculateImportance\`, \`getRelationships\`, \`getAuthorsForEntries\`, or tag hydration). Ensure expensive aggregations (like importance CTEs) are deferred to post-\`LIMIT\` batch hydration (\`WHERE id IN (...)\`) unless explicitly sorting by that computed column.
-     3. **Serialization, Token Estimation & Interceptor Redundancy Audit**: Trace tool and resource payloads through handler -> metrics interceptor -> audit interceptor -> token estimator -> MCP transport response. Flag duplicate \`JSON.stringify\`, \`JSON.parse\`, or \`Buffer.byteLength\` calls on the same payload across layers.
-     4. **Sandbox, Schema & RegExp Compilation Audit**: Scan for per-request \`new vm.Script\`, \`new RegExp\`, \`z.object().extend()\` / \`.partial().loose()\`, or schema-to-TypeScript string generation on hot paths that can be hoisted to module scope or memoized via \`WeakMap\`.
-     5. **Async Waterfall & I/O Batching Audit**: Scan for sequential \`await\` calls in loops or independent network/git/filesystem operations (e.g., GitHub API fetches, \`realpathSync.native\` in chunked file writes) that can be parallelized with \`Promise.all\` / \`Promise.allSettled\` or cached with TTL.
-     6. **Benchmark Suite Realism & Contamination Audit**: Inspect \`tests/**/*.bench.ts\` to verify benchmarks do not silently benchmark validation errors (e.g., missing required parameters under \`VITEST=true\`), do not contaminate read/search benchmarks with thousands of prior write-benchmark rows or orphan vectors, and do not pay cold-start model loading costs when embeddings are mocked.
-2. **External Validation (Copilot — Opt-In)**: ${copilotInstruction}
-3. Present findings table (incorporating Copilot findings if applicable) grouped by subsystem and severity (Critical, High, Moderate, Low) with quantified latency/allocation impact.
-4. Await approval before applying fixes. Diagnostic scans are part of the audit. Do not edit project files until the user approves the plan.
-5. After approval, apply fixes in phased stages, run the target's lint and typecheck, the tests that cover the change, and the benchmark command the target defines. Compare before and after telemetry.
-6. Commit with the target repository's own commit helper when one exists. Discover that helper. Do not invent a script path. Do not add an audit plan file to the repository.
-**Rule**: If you don't make changes, do not commit.
-
-${priorAuditSection}`,
-})
-
 const seoAudit = buildAuditPromptDefinition({
     name: 'adversarial-audit-seo',
     description: 'Adversarial SEO audit (technical, semantic HTML, ARIA, structured data, Core Web Vitals) Optional parameters: target, copilot, workspace_id, project_number',
@@ -281,7 +253,7 @@ export function getAdversarialPromptDefinitions(): InternalPromptDef[] {
         getPlanReviewPromptDefinition(),
         getCodeQualityAuditPromptDefinition(),
         securityAudit,
-        performanceAudit,
+        getPerformanceAuditPromptDefinition(),
         seoAudit,
         skillAudit,
         workflowAudit,

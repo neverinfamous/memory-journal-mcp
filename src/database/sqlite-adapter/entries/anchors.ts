@@ -1,6 +1,39 @@
 import type { Anchor, AnchorStatus } from '../../../types/index.js'
 import type { EntriesSharedContext } from './shared.js'
 import { effectiveWorkspace } from '../../workspace-scope.js'
+import { bucketInParams } from '../row-helpers.js'
+
+export function getAnchorsByEntryIds(
+    context: EntriesSharedContext,
+    entryIds: number[],
+    workspaceId?: string
+): Map<number, Anchor[]> {
+    const result = new Map<number, Anchor[]>()
+    if (entryIds.length === 0) return result
+
+    const { db } = context
+    const scopeId = effectiveWorkspace(workspaceId)
+    const wsClause = scopeId === '*' ? '' : ' AND mj.workspace_id = ?'
+    for (const { placeholders, params } of bucketInParams(entryIds)) {
+        const stmt = db.prepare(
+            `SELECT ea.id, ea.entry_id as entryId, ea.anchor_path as anchorPath,
+                    ea.anchor_type as anchorType, ea.status, ea.last_checked_at as lastCheckedAt
+             FROM entry_anchors ea
+             INNER JOIN memory_journal mj ON mj.id = ea.entry_id
+             WHERE ea.entry_id IN (${placeholders}) AND mj.deleted_at IS NULL${wsClause}`
+        )
+        const rows = (scopeId === '*' ? stmt.all(...params) : stmt.all(...params, scopeId)) as Anchor[]
+        for (const row of rows) {
+            let list = result.get(row.entryId)
+            if (list === undefined) {
+                list = []
+                result.set(row.entryId, list)
+            }
+            list.push(row)
+        }
+    }
+    return result
+}
 
 export function insertAnchors(
     context: EntriesSharedContext,
@@ -15,15 +48,17 @@ export function insertAnchors(
         VALUES (?, ?, ?, ?, NULL)
     `)
 
-    const insertMany = db.transaction(
-        (anchorsList: { anchorPath: string; anchorType: string; status?: string | undefined }[]) => {
-            for (const a of anchorsList) {
-                stmt.run(entryId, a.anchorPath, a.anchorType, a.status ?? 'pending')
-            }
+    const runInserts = (): void => {
+        for (const a of anchors) {
+            stmt.run(entryId, a.anchorPath, a.anchorType, a.status ?? 'pending')
         }
-    )
+    }
 
-    insertMany(anchors)
+    if (db.inTransaction) {
+        runInserts()
+    } else {
+        db.transaction(runInserts)()
+    }
 }
 
 export function getAnchorsByEntryId(
@@ -35,18 +70,18 @@ export function getAnchorsByEntryId(
     const scopeId = effectiveWorkspace(workspaceId)
     if (scopeId !== '*') {
         const stmt = db.prepare(`
-            SELECT id, entry_id as entryId, anchor_path as anchorPath, anchor_type as anchorType, status, last_checked_at as lastCheckedAt
-            FROM entry_anchors
-            WHERE entry_id = ?
-              AND entry_id IN (SELECT id FROM memory_journal WHERE workspace_id = ? AND deleted_at IS NULL)
+            SELECT ea.id, ea.entry_id as entryId, ea.anchor_path as anchorPath, ea.anchor_type as anchorType, ea.status, ea.last_checked_at as lastCheckedAt
+            FROM entry_anchors ea
+            INNER JOIN memory_journal mj ON mj.id = ea.entry_id
+            WHERE ea.entry_id = ? AND mj.workspace_id = ? AND mj.deleted_at IS NULL
         `)
         return stmt.all(entryId, scopeId) as Anchor[]
     }
     const stmt = db.prepare(`
-        SELECT id, entry_id as entryId, anchor_path as anchorPath, anchor_type as anchorType, status, last_checked_at as lastCheckedAt
-        FROM entry_anchors
-        WHERE entry_id = ?
-          AND entry_id IN (SELECT id FROM memory_journal WHERE deleted_at IS NULL)
+        SELECT ea.id, ea.entry_id as entryId, ea.anchor_path as anchorPath, ea.anchor_type as anchorType, ea.status, ea.last_checked_at as lastCheckedAt
+        FROM entry_anchors ea
+        INNER JOIN memory_journal mj ON mj.id = ea.entry_id
+        WHERE ea.entry_id = ? AND mj.deleted_at IS NULL
     `)
     return stmt.all(entryId) as Anchor[]
 }
@@ -81,7 +116,10 @@ export function updateAnchorStatus(
         UPDATE entry_anchors
         SET status = ?, last_checked_at = CURRENT_TIMESTAMP
         WHERE id = ?
-          AND entry_id IN (SELECT id FROM memory_journal WHERE ${conditions.join(' AND ')})
+          AND EXISTS (
+              SELECT 1 FROM memory_journal mj
+              WHERE mj.id = entry_anchors.entry_id AND ${conditions.join(' AND ')}
+          )
     `
         )
         .run(...params)

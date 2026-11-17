@@ -9,6 +9,7 @@ import {
     getEntryById,
     getEntriesByIds,
     getEntryByIdIncludeDeleted,
+    getEntriesByIdsIncludeDeleted,
     getActiveEntryCount,
     updateEntry,
     deleteEntry,
@@ -33,9 +34,9 @@ import {
     type SortBy,
 } from './search/index.js'
 export { levenshteinDistance, buildVocabulary, findFuzzyMatches, expandFuzzyQuery } from './fuzzy-matcher.js'
-import { calculateImportance, getEntriesByIdsWithImportance } from './importance.js'
+import { calculateImportance, getEntriesByIdsWithImportance, getImportanceScoresByIds } from './importance.js'
 import { getStatistics } from './statistics.js'
-import { updateAnchorStatus, getAnchorsByEntryId } from './anchors.js'
+import { updateAnchorStatus, getAnchorsByEntryId, getAnchorsByEntryIds } from './anchors.js'
 
 export class EntriesManager {
     private sharedContext: EntriesSharedContext
@@ -70,8 +71,19 @@ export class EntriesManager {
         return getEntriesByIdsWithImportance(this.sharedContext, ids, workspaceId)
     }
 
+    getImportanceScoresByIds(
+        entryIds: number[],
+        workspaceId?: string
+    ): Map<number, ImportanceResult> {
+        return getImportanceScoresByIds(this.sharedContext, entryIds, workspaceId)
+    }
+
     getEntryByIdIncludeDeleted(id: number, workspaceId?: string): JournalEntry | null {
         return getEntryByIdIncludeDeleted(this.sharedContext, id, workspaceId)
+    }
+
+    getEntriesByIdsIncludeDeleted(ids: number[], workspaceId?: string): Map<number, JournalEntry> {
+        return getEntriesByIdsIncludeDeleted(this.sharedContext, ids, workspaceId)
     }
 
     getActiveEntryCount(workspaceId?: string, projectNumber?: number): number {
@@ -288,6 +300,10 @@ export class EntriesManager {
 
     getAnchorsByEntryId(entryId: number, workspaceId?: string): Anchor[] {
         return getAnchorsByEntryId(this.sharedContext, entryId, workspaceId)
+    }
+
+    getAnchorsByEntryIds(entryIds: number[], workspaceId?: string): Map<number, Anchor[]> {
+        return getAnchorsByEntryIds(this.sharedContext, entryIds, workspaceId)
     }
 
     getEntriesByProject(projectNumber: number, limit = 50, workspaceId?: string): JournalEntry[] {

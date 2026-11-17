@@ -427,8 +427,8 @@ parentPort?.on('message', (msg: unknown) => {
             )
             serializeAndEnforceEgress(result, maxResultSize)
             if (!resultSent) {
-                resultSent = true
                 parentPort?.postMessage({ type: 'RESULT', id, result })
+                resultSent = true
             }
         } catch (err: unknown) {
             postExecutionFailure(err)

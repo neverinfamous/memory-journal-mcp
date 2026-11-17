@@ -1,6 +1,6 @@
 import type { z } from 'zod'
-import type { ToolContext } from '../../../types/index.js'
-import { createBatchProgressReporter, sendProgress } from '../../../utils/progress-utils.js'
+import type { JournalEntry, ToolContext } from '../../../types/index.js'
+import { sendProgress } from '../../../utils/progress-utils.js'
 import { activeProjectRegistry, pairStoredScope } from '../../../utils/write-scope.js'
 import { resolveWriteWorkspaceId } from '../write-workspace.js'
 import type { BatchDeleteEntriesSchema } from './schemas.js'
@@ -13,7 +13,19 @@ export function safeDeleteVectors(
     ids: number[],
     vectorManager?: ToolContext['vectorManager']
 ): string[] {
+    if (ids.length === 0) return []
     const warnings: string[] = []
+    if (typeof vectorManager?.removeEntry !== 'function' && typeof db.deleteVectors === 'function') {
+        try {
+            db.deleteVectors(ids)
+            return warnings
+        } catch (err) {
+            warnings.push(
+                `Vector cleanup failed for ${String(ids.length)} entries: ${err instanceof Error ? err.message : String(err)}`
+            )
+            return warnings
+        }
+    }
     for (const id of ids) {
         try {
             if (typeof vectorManager?.removeEntry === 'function') {
@@ -49,31 +61,41 @@ export function findWildcardProjectMismatches(
     }[],
     rootWorkspaceId: string | undefined,
     rootProjectNumber: number | undefined,
-    config?: ToolContext['config']
+    config?: ToolContext['config'],
+    prefetchedById?: ReadonlyMap<number, JournalEntry>
 ): number[] {
     const registry = activeProjectRegistry(config?.projectRegistry)
+    const entriesById =
+        prefetchedById ??
+        (typeof db.getEntriesByIds === 'function'
+            ? db.getEntriesByIds(
+                  updates.map((u) => u.entry_id),
+                  '*'
+              )
+            : undefined)
+    const resolveEntry = (entryId: number): JournalEntry | null | undefined =>
+        entriesById !== undefined ? entriesById.get(entryId) : db.getEntryById(entryId, '*')
+
     return updates
         .filter((u) => {
             if (u.target_workspace_id !== undefined) {
                 const sourceWs = u.workspace_id ?? rootWorkspaceId
                 if (sourceWs === '*' && rootProjectNumber !== undefined) {
-                    const entry = db.getEntryById(u.entry_id, '*')
-                    return entry?.projectNumber !== rootProjectNumber
+                    return resolveEntry(u.entry_id)?.projectNumber !== rootProjectNumber
                 }
                 if (
                     sourceWs === '*' &&
                     rootProjectNumber === undefined &&
                     typeof u.project_number === 'number'
                 ) {
-                    const entry = db.getEntryById(u.entry_id, '*')
-                    return entry?.projectNumber !== u.project_number
+                    return resolveEntry(u.entry_id)?.projectNumber !== u.project_number
                 }
                 return false
             }
             const ws = u.workspace_id ?? rootWorkspaceId
             const pn = u.project_number !== undefined ? u.project_number : rootProjectNumber
             if (pn === undefined || pn === null) return false
-            const entry = db.getEntryById(u.entry_id, '*')
+            const entry = resolveEntry(u.entry_id)
             if (entry === null || entry === undefined) return ws === '*'
             const existingWs = entry.workspaceId ?? ws
             if (entry.projectNumber !== undefined && entry.projectNumber !== null) {
@@ -139,8 +161,13 @@ function groupUnscopedBatchDeleteIds(
 ): { missing: number[]; groups: Map<string, number[]> } {
     const missing: number[] = []
     const groups = new Map<string, number[]>()
+    const prefetched =
+        typeof db.getEntriesByIdsIncludeDeleted === 'function'
+            ? db.getEntriesByIdsIncludeDeleted(entryIds, '*')
+            : undefined
     for (const id of entryIds) {
-        const existing = db.getEntryByIdIncludeDeleted(id, '*')
+        const existing =
+            prefetched !== undefined ? prefetched.get(id) : db.getEntryByIdIncludeDeleted(id, '*')
         const entryWorkspace = existing?.workspaceId
         if (
             existing === null ||
@@ -228,9 +255,14 @@ async function runScopedBatchDelete(
         input.workspace_id === '*'
             ? '*'
             : resolveWriteWorkspaceId(input.workspace_id, input.project_number, context.config)
+    const prefetched =
+        typeof db.getEntriesByIdsIncludeDeleted === 'function'
+            ? db.getEntriesByIdsIncludeDeleted(input.entry_ids, wsId)
+            : undefined
     const missingBeforeDelete: number[] = []
     for (const id of input.entry_ids) {
-        const existing = db.getEntryByIdIncludeDeleted(id, wsId)
+        const existing =
+            prefetched !== undefined ? prefetched.get(id) : db.getEntryByIdIncludeDeleted(id, wsId)
         if (
             existing === null ||
             existing === undefined ||
@@ -247,24 +279,8 @@ async function runScopedBatchDelete(
     const { deleted, notFound, errors } = db.deleteEntries(input.entry_ids, input.permanent, wsId)
     await sendProgress(progress, 1, 2, `Deleted ${String(deleted.length)} entries...`)
 
-    const vectorWarnings: string[] = []
-    if (deleted.length > 0) {
-        const reporter = createBatchProgressReporter(progress, deleted.length, 10)
-        for (let i = 0; i < deleted.length; i++) {
-            const id = deleted[i]
-            if (id !== undefined) {
-                vectorWarnings.push(...safeDeleteVectors(db, [id], vectorManager))
-            }
-            if (vectorManager) {
-                await reporter(i + 1, `Updating index ${String(i + 1)}/${String(deleted.length)}...`)
-            }
-        }
-        if (!vectorManager) {
-            await sendProgress(progress, 2, 2, 'Batch delete complete')
-        }
-    } else {
-        await sendProgress(progress, 2, 2, 'Batch delete complete')
-    }
+    const vectorWarnings = deleted.length > 0 ? safeDeleteVectors(db, deleted, vectorManager) : []
+    await sendProgress(progress, 2, 2, 'Batch delete complete')
 
     if (errors.length > 0 || notFound.length > 0) {
         return buildBatchDeletePartialFailure(

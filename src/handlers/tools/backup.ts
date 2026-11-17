@@ -157,18 +157,31 @@ async function notifyRestoreProgressComplete(
     }
 }
 
+const RestoreBackupSchema = z.object({
+    filename: z.string().min(1, 'filename cannot be empty'),
+    confirm: z.boolean().optional(),
+}).strict()
+const BackupJournalSchemaMcp = z.object({
+    name: z.string().optional().describe('Custom backup name (optional, defaults to timestamp). Anti-Hallucination Hint: You can use positional args like mj.backup.backupJournal("my_name").'),
+    compress: z.boolean().optional().describe('Anti-Hallucination Hint: Compression is natively handled by the database engine. This parameter is safely ignored.'),
+}).strict()
+const BackupJournalSchema = z.object({ name: z.string().optional(), compress: z.boolean().optional() }).strict()
+const ListBackupsSchemaMcp = z.object({}).strict()
+const RestoreBackupSchemaMcp = z.object({
+    filename: z.string().optional().describe('Backup filename to restore from (e.g., backup_2025-01-01.db). Anti-Hallucination Hint: Property is strictly `filename`, not `file`. You can pass positional args: mj.backup.restoreBackup("filename.db", true).'),
+    confirm: z.boolean().optional().describe('Must be set to true to confirm the restore operation'),
+}).strict()
+const CleanupBackupsSchemaMcp = z.object({
+    keep_count: relaxedNumber().default(5).describe('Number of most recent backups to keep (default: 5). Anti-Hallucination Hint: You can pass a string or number, or use positional args: mj.backup.cleanupBackups(5).'),
+}).strict()
+const CleanupBackupsSchema = z.object({ keep_count: relaxedNumber().default(5) }).strict()
+
 async function executeRestoreBackup(
     params: unknown,
     context: ToolContext
 ): Promise<Record<string, unknown>> {
     const { db, progress, config, vectorManager } = context
-    const input = z
-        .object({
-            filename: z.string().min(1, 'filename cannot be empty'),
-            confirm: z.boolean().optional(),
-        })
-        .strict()
-        .parse(params)
+    const input = RestoreBackupSchema.parse(params)
 
     if (!input.confirm) {
         return {
@@ -230,16 +243,7 @@ export function getBackupTools(context: ToolContext): ToolDefinition[] {
             description:
                 'Create a timestamped backup of the journal database. Backups are stored in the backups/ directory.',
             group: 'backup',
-            inputSchema: z.object({
-                name: z
-                    .string()
-                    .optional()
-                    .describe('Custom backup name (optional, defaults to timestamp). Anti-Hallucination Hint: You can use positional args like mj.backup.backupJournal("my_name").'),
-                compress: z
-                    .boolean()
-                    .optional()
-                    .describe('Anti-Hallucination Hint: Compression is natively handled by the database engine. This parameter is safely ignored.'),
-            }).strict(),
+            inputSchema: BackupJournalSchemaMcp,
             outputSchema: BackupResultOutputSchema,
             annotations: {
                 readOnlyHint: false,
@@ -249,12 +253,7 @@ export function getBackupTools(context: ToolContext): ToolDefinition[] {
             },
             handler: async (params: unknown) => {
                 try {
-                    const input = z
-                        .object({
-                            name: z.string().optional(),
-                            compress: z.boolean().optional(),
-                        }).strict()
-                        .parse(params)
+                    const input = BackupJournalSchema.parse(params)
                     await sendProgress(progress, 0, 2, 'Creating backup...')
                     const result = await db.exportToFile(input.name)
                     await sendProgress(progress, 2, 2, 'Backup complete')
@@ -278,7 +277,7 @@ export function getBackupTools(context: ToolContext): ToolDefinition[] {
             title: 'List Journal Backups',
             description: 'List all available backup files with their sizes and creation dates',
             group: 'backup',
-            inputSchema: z.object({}).strict(),
+            inputSchema: ListBackupsSchemaMcp,
             outputSchema: BackupsListOutputSchema,
             annotations: {
                 readOnlyHint: true,
@@ -313,16 +312,7 @@ export function getBackupTools(context: ToolContext): ToolDefinition[] {
             description:
                 'Restore the journal database from a backup file. WARNING: This replaces all current data. Enforce single-writer / single-instance only for restore-capable deployments. An automatic backup is created before restore.',
             group: 'backup',
-            inputSchema: z.object({
-                filename: z
-                    .string()
-                    .optional()
-                    .describe('Backup filename to restore from (e.g., backup_2025-01-01.db). Anti-Hallucination Hint: Property is strictly `filename`, not `file`. You can pass positional args: mj.backup.restoreBackup("filename.db", true).'),
-                confirm: z
-                    .boolean()
-                    .optional()
-                    .describe('Must be set to true to confirm the restore operation'),
-            }).strict(),
+            inputSchema: RestoreBackupSchemaMcp,
             outputSchema: RestoreResultOutputSchema,
             annotations: {
                 readOnlyHint: false,
@@ -347,11 +337,7 @@ export function getBackupTools(context: ToolContext): ToolDefinition[] {
             description:
                 'Delete old backup files, keeping only the most recent N backups. Use list_backups to preview before cleanup.',
             group: 'backup',
-            inputSchema: z.object({
-                keep_count: relaxedNumber()
-                    .default(5)
-                    .describe('Number of most recent backups to keep (default: 5). Anti-Hallucination Hint: You can pass a string or number, or use positional args: mj.backup.cleanupBackups(5).'),
-            }).strict(),
+            inputSchema: CleanupBackupsSchemaMcp,
             outputSchema: CleanupBackupsOutputSchema,
             annotations: {
                 readOnlyHint: false,
@@ -361,9 +347,7 @@ export function getBackupTools(context: ToolContext): ToolDefinition[] {
             },
             handler: (params: unknown) => {
                 try {
-                    const { keep_count } = z
-                        .object({ keep_count: relaxedNumber().default(5) }).strict()
-                        .parse(params)
+                    const { keep_count } = CleanupBackupsSchema.parse(params)
 
                     const keepCountNum = typeof keep_count === 'string' && keep_count.trim() !== '' ? Number(keep_count) : keep_count
                     if (typeof keepCountNum !== 'number' || !Number.isInteger(keepCountNum) || keepCountNum < 1) {

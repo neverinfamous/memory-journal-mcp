@@ -5,7 +5,9 @@ import { sendProgress } from '../../utils/progress-utils.js'
 import { logger } from '../../utils/logger.js'
 import { REBUILD_BATCH_SIZE, REBUILD_PAGE_SIZE } from './types.js'
 import type { VectorSearchManager } from './manager.js'
+import { formatEntryForEmbedding } from './candidate-search.js'
 import { effectiveWorkspace } from '../../database/workspace-scope.js'
+import { isMissingTableError } from '../../database/sqlite-adapter/schema-errors.js'
 
 // Allow mocking in tests
 export const setTimeoutFn = globalThis.setTimeout
@@ -17,19 +19,80 @@ interface RebuildStats {
     firstError: string | null
 }
 
+/**
+ * Verify `vec_journal_entries` exists and matches model dimensions; recreate on mismatch.
+ */
+export function verifyVecTableSchema(
+    dbAdapter: IDatabaseAdapter,
+    modelName: string,
+    dimensions: number
+): void {
+    let needsRecreation = false
+    try {
+        const existingDimStr = dbAdapter.getVectorMetadata('dimensions')
+        const existingModel = dbAdapter.getVectorMetadata('model_name')
+        if (existingDimStr) {
+            const existingDim = parseInt(existingDimStr, 10)
+            if (
+                existingDim !== dimensions ||
+                (existingModel !== null &&
+                    existingModel !== undefined &&
+                    existingModel !== '' &&
+                    existingModel !== modelName)
+            ) {
+                needsRecreation = true
+                logger.info('Vector model or dimensions changed, dropping old index', {
+                    oldModel: existingModel || 'unknown',
+                    newModel: modelName,
+                    oldDimensions: existingDim,
+                    newDimensions: dimensions,
+                })
+            }
+        } else {
+            needsRecreation = true
+        }
+    } catch (err) {
+        if (isMissingTableError(err)) {
+            needsRecreation = true
+            logger.warning('Vector metadata table not found, recreating vector index', { error: err })
+        } else {
+            logger.error('Failed to verify vector table dimensions due to database error', { error: err })
+            throw err
+        }
+    }
+
+    if (needsRecreation) {
+        try {
+            dbAdapter.executeInTransaction(() => {
+                dbAdapter.dropVecTable()
+                dbAdapter.createVecTable(dimensions)
+                dbAdapter.setVectorMetadata('model_name', modelName)
+                dbAdapter.setVectorMetadata('dimensions', dimensions.toString())
+            })
+            logger.info(`Created new vec_journal_entries table with ${dimensions} dimensions`)
+        } catch (err) {
+            logger.error('Failed to recreate vector table', { error: err })
+            throw err
+        }
+    } else {
+        dbAdapter.createVecTable(dimensions)
+    }
+}
+
 /** Returns true when the entry should be skipped (filtered out or already indexed). */
 function shouldSkipEntry(
     dbAdapter: IDatabaseAdapter,
     entry: JournalEntry,
     force: boolean,
+    skipExistenceCheck: boolean,
     projectNumber: number | undefined
 ): boolean {
     if (projectNumber !== undefined && entry.projectNumber !== projectNumber) {
         return true
     }
-    if (force) return false
+    if (force || skipExistenceCheck) return false
 
-    // Check if already indexed unless forced
+    // Check if already indexed unless forced or vector table is known empty
     try {
         return Boolean(dbAdapter.getVector(entry.id))
     } catch (err) {
@@ -42,6 +105,15 @@ function shouldSkipEntry(
     }
 }
 
+function recordEmbedError(entryId: number, err: unknown, stats: RebuildStats): void {
+    stats.errorsCount++
+    const errorMessage = err instanceof Error ? err.message : String(err)
+    stats.firstError ??= errorMessage
+    logger.error(`Failed to generate embedding for entry ${entryId}`, {
+        error: errorMessage,
+    })
+}
+
 /** Embed one entry; returns null (and records the error) on failure. */
 async function embedEntry(
     manager: VectorSearchManager,
@@ -49,20 +121,10 @@ async function embedEntry(
     stats: RebuildStats
 ): Promise<{ entryId: number; embedding: Float32Array } | null> {
     try {
-        const tagsText =
-            entry.tags !== undefined && entry.tags !== null && entry.tags.length > 0
-                ? ` [Tags: ${entry.tags.join(', ')}]`
-                : ''
-        const text = `[${entry.entryType}]${tagsText} ${entry.content}`
-        const embedding = await manager.generateEmbedding(text)
+        const embedding = await manager.generateEmbedding(formatEntryForEmbedding(entry))
         return { entryId: entry.id, embedding }
     } catch (err) {
-        stats.errorsCount++
-        const errorMessage = err instanceof Error ? err.message : String(err)
-        stats.firstError ??= errorMessage
-        logger.error(`Failed to generate embedding for entry ${entry.id}`, {
-            error: errorMessage,
-        })
+        recordEmbedError(entry.id, err, stats)
         return null
     }
 }
@@ -73,18 +135,44 @@ async function processBatch(
     dbAdapter: IDatabaseAdapter,
     batch: JournalEntry[],
     force: boolean,
+    skipExistenceCheck: boolean,
     projectNumber: number | undefined,
     stats: RebuildStats
 ): Promise<void> {
-    const vectorsToUpsert: { entryId: number; embedding: Float32Array }[] = []
-
+    const toEmbed: JournalEntry[] = []
     for (const entry of batch) {
-        if (shouldSkipEntry(dbAdapter, entry, force, projectNumber)) {
+        if (shouldSkipEntry(dbAdapter, entry, force, skipExistenceCheck, projectNumber)) {
             stats.skipped++
             continue
         }
-        const vector = await embedEntry(manager, entry, stats)
-        if (vector !== null) vectorsToUpsert.push(vector)
+        toEmbed.push(entry)
+    }
+    if (toEmbed.length === 0) return
+
+    const vectorsToUpsert: { entryId: number; embedding: Float32Array }[] = []
+    const canBatchPipeline =
+        toEmbed.length > 1 &&
+        typeof manager.generateEmbeddingsSettled === 'function' &&
+        typeof manager.hasCustomEmbeddingGenerator === 'function' &&
+        !manager.hasCustomEmbeddingGenerator()
+
+    if (canBatchPipeline) {
+        const settled = await manager.generateEmbeddingsSettled(toEmbed.map(formatEntryForEmbedding))
+        for (let idx = 0; idx < toEmbed.length; idx++) {
+            const entry = toEmbed[idx]
+            const outcome = settled[idx]
+            if (!entry || !outcome) continue
+            if (outcome.status === 'fulfilled') {
+                vectorsToUpsert.push({ entryId: entry.id, embedding: outcome.value })
+            } else {
+                recordEmbedError(entry.id, outcome.reason, stats)
+            }
+        }
+    } else {
+        for (const entry of toEmbed) {
+            const vector = await embedEntry(manager, entry, stats)
+            if (vector !== null) vectorsToUpsert.push(vector)
+        }
     }
 
     // Upsert the batch into the database
@@ -121,6 +209,7 @@ async function runRebuildLoop(
     pageSize: number,
     batchSize: number,
     force: boolean,
+    skipExistenceCheck: boolean,
     wsScope: string,
     projectNumber: number | undefined,
     progress: ProgressContext | undefined,
@@ -135,7 +224,15 @@ async function runRebuildLoop(
         // Process a page in smaller batches
         for (let i = 0; i < entries.length; i += batchSize) {
             const batch = entries.slice(i, i + batchSize)
-            await processBatch(manager, dbAdapter, batch, force, projectNumber, stats)
+            await processBatch(
+                manager,
+                dbAdapter,
+                batch,
+                force,
+                skipExistenceCheck,
+                projectNumber,
+                stats
+            )
 
             // Yield to event loop
             await new Promise((resolve) => setTimeoutFn(resolve, 0))
@@ -195,6 +292,9 @@ export async function rebuildIndex(
         }
     }
 
+    const skipExistenceCheck =
+        !force && typeof dbAdapter.hasVectors === 'function' && !dbAdapter.hasVectors()
+
     await sendProgress(progress, 0, totalEntries, 'Starting vector index rebuild')
     await runRebuildLoop(
         manager,
@@ -203,6 +303,7 @@ export async function rebuildIndex(
         pageSize,
         batchSize,
         force,
+        skipExistenceCheck,
         wsScope,
         options?.projectNumber,
         progress,

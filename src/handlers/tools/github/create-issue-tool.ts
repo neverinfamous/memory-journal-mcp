@@ -186,7 +186,7 @@ async function finalizeIssueJournalEntry(
                 ? `\nDescription: ${input.body.slice(0, 200)}${input.body.length > 200 ? '...' : ''}`
                 : '')
 
-    db.updateEntry(entryId, {
+    const updatedEntry = db.updateEntry(entryId, {
         content: finalContent,
         issueNumber: issue.number,
         issueUrl: issue.url,
@@ -194,7 +194,12 @@ async function finalizeIssueJournalEntry(
         workspaceId,
     })
 
-    const indexStatus = await autoIndexEntry(context.vectorManager, db, entryId, workspaceId)
+    const indexStatus = await autoIndexEntry(
+        context.vectorManager,
+        db,
+        updatedEntry ?? entryId,
+        workspaceId
+    )
     const vectorWarning =
         indexStatus === 'failed'
             ? 'Journal entry saved, but vector indexing failed.'
@@ -232,6 +237,46 @@ async function finalizeIssueJournalEntry(
     }
 }
 
+const CreateGitHubIssueSchemaMcp = z.object({
+    title: z.string().min(1).describe('Issue title'),
+    body: z.string().optional().describe('Issue body/description'),
+    labels: z.array(z.string()).optional().describe('Labels to apply'),
+    assignees: z.array(z.string()).optional().describe('Users to assign'),
+    milestone_number: relaxedNumber()
+        .optional()
+        .describe('Milestone number to assign this issue to'),
+    project_number: relaxedNumber()
+        .optional()
+        .describe('GitHub Project number to add this issue to'),
+    workspace_id: z
+        .string()
+        .optional()
+        .describe('Workspace identifier (defaults to current project)'),
+    initial_status: z
+        .string()
+        .optional()
+        .describe(
+            'Initial status column (e.g., "Backlog", "Ready"). Defaults to "Backlog" when adding to a project.'
+        ),
+    owner: z
+        .string()
+        .optional()
+        .describe('Repository owner - LEAVE EMPTY to auto-detect'),
+    repo: z
+        .string()
+        .optional()
+        .describe('Repository name - LEAVE EMPTY to auto-detect'),
+    entry_content: z
+        .string()
+        .optional()
+        .describe('Custom journal content (defaults to auto-generated summary)'),
+    journal_content: z
+        .string()
+        .optional()
+        .describe('Alias for entry_content (custom journal content)'),
+    tags: z.array(z.string()).optional().describe('Journal entry tags'),
+})
+
 export function getCreateGitHubIssueTool(context: ToolContext): ToolDefinition {
     return {
         name: 'create_github_issue_with_entry',
@@ -239,45 +284,7 @@ export function getCreateGitHubIssueTool(context: ToolContext): ToolDefinition {
         description:
             'Create a GitHub issue AND automatically create a linked journal entry documenting the issue creation.',
         group: 'github',
-        inputSchema: z.object({
-            title: z.string().min(1).describe('Issue title'),
-            body: z.string().optional().describe('Issue body/description'),
-            labels: z.array(z.string()).optional().describe('Labels to apply'),
-            assignees: z.array(z.string()).optional().describe('Users to assign'),
-            milestone_number: relaxedNumber()
-                .optional()
-                .describe('Milestone number to assign this issue to'),
-            project_number: relaxedNumber()
-                .optional()
-                .describe('GitHub Project number to add this issue to'),
-            workspace_id: z
-                .string()
-                .optional()
-                .describe('Workspace identifier (defaults to current project)'),
-            initial_status: z
-                .string()
-                .optional()
-                .describe(
-                    'Initial status column (e.g., "Backlog", "Ready"). Defaults to "Backlog" when adding to a project.'
-                ),
-            owner: z
-                .string()
-                .optional()
-                .describe('Repository owner - LEAVE EMPTY to auto-detect'),
-            repo: z
-                .string()
-                .optional()
-                .describe('Repository name - LEAVE EMPTY to auto-detect'),
-            entry_content: z
-                .string()
-                .optional()
-                .describe('Custom journal content (defaults to auto-generated summary)'),
-            journal_content: z
-                .string()
-                .optional()
-                .describe('Alias for entry_content (custom journal content)'),
-            tags: z.array(z.string()).optional().describe('Journal entry tags'),
-        }),
+        inputSchema: CreateGitHubIssueSchemaMcp,
         outputSchema: CreateGitHubIssueWithEntryOutputSchema,
         annotations: {
             readOnlyHint: false,

@@ -1,12 +1,8 @@
 import type { Command } from 'commander'
 import { addAgentInstructions, withGroup, withValidation } from './program.js'
 import { addCoreOptions, addDatabaseOptions, addOutputOptions } from './option-groups.js'
-import {
-    createEntryAction,
-    updateEntryAction,
-    createEntrySchema,
-    updateEntrySchema,
-} from './commands/entry.js'
+import { lazyAction } from './lazy-action.js'
+import { createEntryOptionsSchema, updateEntryOptionsSchema } from './schemas.js'
 import { ENTRY_TYPES } from '../types/entities.js'
 
 /**
@@ -72,7 +68,12 @@ export function registerEntryCommands(program: Command): void {
         addEntryFieldOptions(cmd)
     })
     finishEntryCommand(createEntryCmd)
-    createEntryCmd.action(withValidation(createEntrySchema, createEntryAction))
+    createEntryCmd.action(
+        withValidation(
+            createEntryOptionsSchema,
+            lazyAction(async () => (await import('./commands/entry.js')).createEntryAction)
+        )
+    )
 
     const updateEntryCmd = entryCmd
         .command('update [content]')
@@ -93,7 +94,12 @@ export function registerEntryCommands(program: Command): void {
         addEntryFieldOptions(cmd)
     })
     finishEntryCommand(updateEntryCmd)
-    updateEntryCmd.action(withValidation(updateEntrySchema, updateEntryAction))
+    updateEntryCmd.action(
+        withValidation(
+            updateEntryOptionsSchema,
+            lazyAction(async () => (await import('./commands/entry.js')).updateEntryAction)
+        )
+    )
 
     // Agent healing for the 'delete' hallucination
     entryCmd

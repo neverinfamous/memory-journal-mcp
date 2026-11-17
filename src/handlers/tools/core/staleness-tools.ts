@@ -155,6 +155,14 @@ export const MarkAnchorsStaleSchemaMcp = z.preprocess(
     })
 )
 
+const MarkAnchorsStaleOutputSchema = z
+    .object({
+        success: z.boolean().optional(),
+        updated_count: z.number().optional(),
+        not_found_ids: z.array(z.number()).optional(),
+    })
+    .extend(ErrorFieldsMixin.shape)
+
 export function getStalenessTools(context: ToolContext): ToolDefinition[] {
     const { db } = context
 
@@ -166,13 +174,7 @@ export function getStalenessTools(context: ToolContext): ToolDefinition[] {
                 'Update the status of multiple anchors (e.g. to stale or invalidated) based on validation rules or git history checks.',
             group: 'core',
             inputSchema: MarkAnchorsStaleSchemaMcp,
-            outputSchema: z
-                .object({
-                    success: z.boolean().optional(),
-                    updated_count: z.number().optional(),
-                    not_found_ids: z.array(z.number()).optional(),
-                })
-                .extend(ErrorFieldsMixin.shape),
+            outputSchema: MarkAnchorsStaleOutputSchema,
             annotations: {
                 readOnlyHint: false,
                 destructiveHint: false,

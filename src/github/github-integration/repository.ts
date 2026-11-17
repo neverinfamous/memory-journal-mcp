@@ -27,10 +27,15 @@ export class RepositoryManager {
         if (cached) return cached
 
         try {
-            const branchResult = await this.client.git.branch()
+            const [branchSettled, remotesSettled] = await Promise.allSettled([
+                this.client.git.branch(),
+                this.client.git.getRemotes(true),
+            ])
+            if (branchSettled.status === 'rejected') throw branchSettled.reason
+            if (remotesSettled.status === 'rejected') throw remotesSettled.reason
+            const branchResult = branchSettled.value
+            const remotes = remotesSettled.value
             const branch = branchResult.current || null
-
-            const remotes = await this.client.git.getRemotes(true)
             const origin = remotes.find((r) => r.name === 'origin')
             const remoteUrl = origin?.refs?.fetch || null
 

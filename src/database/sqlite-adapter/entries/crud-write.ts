@@ -2,6 +2,7 @@ import type { JournalEntry } from '../../../types/index.js'
 import type { CreateEntryInput } from '../../core/interfaces.js'
 import type { EntriesSharedContext } from './shared.js'
 import { effectiveWorkspace } from '../../workspace-scope.js'
+import { bucketInParams } from '../row-helpers.js'
 import { insertAnchors } from './anchors.js'
 import { getEntryById, getEntriesByIds } from './crud-read.js'
 import { normalizeTag, performUpdateEntry } from './crud-update.js'
@@ -270,8 +271,6 @@ export function updateEntries(
     return { updated, notFound, errors }
 }
 
-const DELETE_BATCH_CHUNK_SIZE = 500
-
 function findExistingIdsForDelete(
     db: EntriesSharedContext['db'],
     uniqueIds: number[],
@@ -282,14 +281,12 @@ function findExistingIdsForDelete(
     const hasWorkspaceFilter = scopeId !== '*'
     const deletedFilter = permanent ? '' : ' AND deleted_at IS NULL'
     const wsClause = hasWorkspaceFilter ? ' AND workspace_id = ?' : ''
-    for (let i = 0; i < uniqueIds.length; i += DELETE_BATCH_CHUNK_SIZE) {
-        const chunk = uniqueIds.slice(i, i + DELETE_BATCH_CHUNK_SIZE)
-        const placeholders = chunk.map(() => '?').join(', ')
+    for (const { placeholders, params } of bucketInParams(uniqueIds)) {
         const rows = db
             .prepare(
                 `SELECT id FROM memory_journal WHERE id IN (${placeholders})${deletedFilter}${wsClause}`
             )
-            .all(...(hasWorkspaceFilter ? [...chunk, scopeId] : chunk)) as { id: number }[]
+            .all(...(hasWorkspaceFilter ? [...params, scopeId] : params)) as { id: number }[]
         for (const row of rows) existingIds.add(row.id)
     }
     return existingIds
@@ -303,19 +300,17 @@ function executeChunkedDelete(
 ): void {
     const hasWorkspaceFilter = scopeId !== '*'
     const now = permanent ? '' : new Date().toISOString()
-    for (let i = 0; i < toDelete.length; i += DELETE_BATCH_CHUNK_SIZE) {
-        const chunk = toDelete.slice(i, i + DELETE_BATCH_CHUNK_SIZE)
-        const placeholders = chunk.map(() => '?').join(', ')
+    for (const { placeholders, params } of bucketInParams(toDelete)) {
         if (permanent) {
             const sql = hasWorkspaceFilter
                 ? `DELETE FROM memory_journal WHERE id IN (${placeholders}) AND workspace_id = ?`
                 : `DELETE FROM memory_journal WHERE id IN (${placeholders})`
-            db.prepare(sql).run(...(hasWorkspaceFilter ? [...chunk, scopeId] : chunk))
+            db.prepare(sql).run(...(hasWorkspaceFilter ? [...params, scopeId] : params))
         } else {
             const sql = hasWorkspaceFilter
                 ? `UPDATE memory_journal SET deleted_at = ? WHERE id IN (${placeholders}) AND deleted_at IS NULL AND workspace_id = ?`
                 : `UPDATE memory_journal SET deleted_at = ? WHERE id IN (${placeholders}) AND deleted_at IS NULL`
-            db.prepare(sql).run(...(hasWorkspaceFilter ? [now, ...chunk, scopeId] : [now, ...chunk]))
+            db.prepare(sql).run(...(hasWorkspaceFilter ? [now, ...params, scopeId] : [now, ...params]))
         }
     }
 }

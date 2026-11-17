@@ -155,9 +155,9 @@ async function executeDispatcherCall(
 export function createSecureDispatcher(
     options: SecureDispatcherOptions
 ): (toolName: string, toolParams: unknown, isSimulation?: boolean) => Promise<unknown> {
-    const { tools } = options
+    const toolByName = new Map(options.tools.map((t) => [t.name, t]))
     return async (toolName: string, toolParams: unknown, isSimulation?: boolean): Promise<unknown> => {
-        const tool = tools.find((t) => t.name === toolName)
+        const tool = toolByName.get(toolName)
         if (!tool) {
             throw new Error(
                 `[Security] Tool "${toolName}" is not available or registered in the environment. If you were trying to read a resource, use the proper readResource API instead.`

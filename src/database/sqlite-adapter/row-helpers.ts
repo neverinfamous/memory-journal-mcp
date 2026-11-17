@@ -33,3 +33,42 @@ export function getSingleRow(queryResult: SqliteQueryResult[]): Record<string, u
     }
     return result
 }
+
+export const IN_PARAM_BUCKETS = [1, 2, 4, 8, 16, 32, 64, 128, 256, 500] as const
+export const DUAL_IN_PARAM_BUCKETS = [1, 2, 4, 8, 16, 32, 64, 128, 240] as const
+
+const BUCKET_PLACEHOLDERS = new Map<number, string>(
+    [...IN_PARAM_BUCKETS, 240].map((size) => [size, Array<string>(size).fill('?').join(',')])
+)
+
+export interface BucketedInChunk<T> {
+    readonly placeholders: string
+    readonly params: T[]
+}
+
+/**
+ * [INTENT] Splits `ids` into chunks <= max bucket and pads each chunk to a power-of-2 bucket
+ * by repeating its last element so SQLite prepared statements reuse at most 10 SQL shapes.
+ */
+export function bucketInParams<T>(
+    ids: readonly T[],
+    buckets: readonly number[] = IN_PARAM_BUCKETS
+): BucketedInChunk<T>[] {
+    if (ids.length === 0) return []
+    const chunks: BucketedInChunk<T>[] = []
+    const maxChunk = buckets[buckets.length - 1] ?? 500
+    for (let offset = 0; offset < ids.length; offset += maxChunk) {
+        const slice = ids.slice(offset, offset + maxChunk)
+        const padValue = slice[slice.length - 1]
+        if (padValue === undefined) continue
+        const targetLen = buckets.find((b) => b >= slice.length) ?? maxChunk
+        const params = slice.slice()
+        while (params.length < targetLen) {
+            params.push(padValue)
+        }
+        const placeholders =
+            BUCKET_PLACEHOLDERS.get(targetLen) ?? Array<string>(targetLen).fill('?').join(',')
+        chunks.push({ placeholders, params })
+    }
+    return chunks
+}

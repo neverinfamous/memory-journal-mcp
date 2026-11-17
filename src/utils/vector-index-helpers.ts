@@ -7,26 +7,33 @@
 
 import type { VectorSearchManager } from '../vector/vector-search-manager/index.js'
 import type { IDatabaseAdapter } from '../database/core/interfaces.js'
+import type { JournalEntry } from '../types/index.js'
 import { logger } from './logger.js'
 
 /**
- * Auto-index an entry to the vector store for semantic search.
+ * Auto-index an entry (by hydrated object or ID) to the vector store for semantic search.
  * Catch errors so as not to revert the database commit, but surface the state.
  */
 export async function autoIndexEntry(
     vectorManager: VectorSearchManager | undefined,
     db: IDatabaseAdapter,
-    entryId: number,
+    entryOrId: JournalEntry | number,
     workspaceId?: string
 ): Promise<'success' | 'failed' | 'disabled'> {
     if (vectorManager === undefined) return 'disabled'
-    if (workspaceId === undefined || workspaceId.length === 0 || workspaceId === '*') {
+    const resolvedWs =
+        typeof entryOrId === 'number'
+            ? workspaceId
+            : (workspaceId ?? entryOrId.workspaceId)
+    if (resolvedWs === undefined || resolvedWs.length === 0 || resolvedWs === '*') {
         return 'failed'
     }
+    const entryId = typeof entryOrId === 'number' ? entryOrId : entryOrId.id
     try {
-        const entry = db.getEntryById(entryId, workspaceId)
+        const entry =
+            typeof entryOrId === 'number' ? db.getEntryById(entryOrId, resolvedWs) : entryOrId
         if (!entry) return 'failed'
-        
+
         await vectorManager.addEntry(entry)
         return 'success'
     } catch (error) {

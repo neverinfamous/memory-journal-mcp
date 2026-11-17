@@ -145,6 +145,27 @@ async function executeGetRepoInsights(context: ToolContext, params: unknown): Pr
     }
 }
 
+const RepoInsightsSchemaMcp = z.object({
+    ...githubScopeInputFields,
+    sections: z
+        .union([
+            z.enum(INSIGHT_SECTIONS),
+            z.array(z.enum(INSIGHT_SECTIONS)),
+        ])
+        .optional()
+        .describe(
+            'Data section to return (default: stars). Use "all" for full payload.'
+        ),
+    owner: z
+        .string()
+        .optional()
+        .describe('Repository owner - LEAVE EMPTY to auto-detect'),
+    repo: z
+        .string()
+        .optional()
+        .describe('Repository name - LEAVE EMPTY to auto-detect'),
+})
+
 // ============================================================================
 // Tool Definitions
 // ============================================================================
@@ -157,26 +178,7 @@ export function getGitHubInsightsTools(context: ToolContext): ToolDefinition[] {
             description:
                 'Get repository insights: stars, forks, traffic (clones/views), referrers, and popular paths. Use "sections" to control token usage: stars (~50 tokens), traffic (~100), referrers (~100), paths (~100), or all (~350).',
             group: 'github',
-            inputSchema: z.object({
-                ...githubScopeInputFields,
-                sections: z
-                    .union([
-                        z.enum(INSIGHT_SECTIONS),
-                        z.array(z.enum(INSIGHT_SECTIONS)),
-                    ])
-                    .optional()
-                    .describe(
-                        'Data section to return (default: stars). Use "all" for full payload.'
-                    ),
-                owner: z
-                    .string()
-                    .optional()
-                    .describe('Repository owner - LEAVE EMPTY to auto-detect'),
-                repo: z
-                    .string()
-                    .optional()
-                    .describe('Repository name - LEAVE EMPTY to auto-detect'),
-            }),
+            inputSchema: RepoInsightsSchemaMcp,
             outputSchema: RepoInsightsOutputSchema,
             annotations: {
                 readOnlyHint: true,

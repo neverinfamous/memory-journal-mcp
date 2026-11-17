@@ -20,17 +20,22 @@ export function healTagListField(obj: Record<string, unknown>, fieldKey: string)
         modified = true
     }
     if (fieldKey in obj && Array.isArray(obj[fieldKey])) {
+        let arrayChanged = false
         const healedTags = obj[fieldKey].map((t: unknown) => {
             if (typeof t === 'string') {
                 const lower = t.toLowerCase().trim()
-                if (SESSION_SUMMARY_TAG_ALIASES.has(lower)) return 'session-summary'
+                if (SESSION_SUMMARY_TAG_ALIASES.has(lower)) {
+                    if (t !== 'session-summary') arrayChanged = true
+                    return 'session-summary'
+                }
                 if (lower === 'commit narrative' || lower === 'commit_narrative') {
+                    arrayChanged = true
                     return 'commit-narrative'
                 }
             }
             return t
         })
-        if (JSON.stringify(obj[fieldKey]) !== JSON.stringify(healedTags)) {
+        if (arrayChanged) {
             obj[fieldKey] = healedTags
             modified = true
         }

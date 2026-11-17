@@ -104,6 +104,12 @@ export class AliasManager {
             }
             query += ` ORDER BY canonical_author ASC, alias ASC`
 
+            const nativeDb = this.db.getNativeDb?.()
+            if (nativeDb !== undefined) {
+                const rows = nativeDb.prepare(query).all(...params) as Record<string, unknown>[]
+                return rows.map((row) => this.mapToAuthorAlias(row))
+            }
+
             const results = this.db.exec(query, params)
             if (results.length === 0 || (results[0]?.values.length ?? 0) === 0 || (results[0]?.columns.length ?? 0) === 0) {
                 return []
@@ -139,6 +145,13 @@ export class AliasManager {
                 ? `SELECT canonical_author FROM author_aliases WHERE alias = ? COLLATE NOCASE AND (workspace_id IS NULL OR workspace_id = ?) ORDER BY workspace_id IS NULL ASC LIMIT 1`
                 : `SELECT canonical_author FROM author_aliases WHERE alias = ? COLLATE NOCASE ORDER BY workspace_id IS NULL ASC LIMIT 1`
             const params = scoped ? [rawAuthor, scopeId] : [rawAuthor]
+            const nativeDb = this.db.getNativeDb?.()
+            if (nativeDb !== undefined) {
+                const row = nativeDb.prepare(sql).get(...params) as
+                    | { canonical_author?: unknown }
+                    | undefined
+                return typeof row?.canonical_author === 'string' ? row.canonical_author : rawAuthor
+            }
             const results = this.db.exec(sql, params)
             const row = getSingleRow(results)
             if (row && typeof row['canonical_author'] === 'string') {
@@ -170,6 +183,7 @@ export class AliasManager {
             const scopeId = effectiveWorkspace(workspaceId)
             const scoped = scopeId !== '*'
             const resolvedByLower = new Map<string, string>()
+            const nativeDb = this.db.getNativeDb?.()
             const CHUNK_SIZE = 400
             for (let i = 0; i < rawAuthors.length; i += CHUNK_SIZE) {
                 const chunk = rawAuthors.slice(i, i + CHUNK_SIZE)
@@ -178,6 +192,16 @@ export class AliasManager {
                     ? `SELECT alias, canonical_author FROM author_aliases WHERE alias IN (${placeholders}) COLLATE NOCASE AND (workspace_id IS NULL OR workspace_id = ?) ORDER BY workspace_id IS NULL DESC`
                     : `SELECT alias, canonical_author FROM author_aliases WHERE alias IN (${placeholders}) COLLATE NOCASE ORDER BY workspace_id IS NULL DESC`
                 const params = scoped ? [...chunk, scopeId] : chunk
+                if (nativeDb !== undefined) {
+                    const rows = nativeDb.prepare(sql).all(...params) as {
+                        alias: unknown
+                        canonical_author: unknown
+                    }[]
+                    for (const row of rows) {
+                        resolvedByLower.set(String(row.alias).toLowerCase(), String(row.canonical_author))
+                    }
+                    continue
+                }
                 const results = this.db.exec(sql, params)
 
                 if (results[0]) {

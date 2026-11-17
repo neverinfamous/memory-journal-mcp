@@ -268,9 +268,11 @@ export function filterDeletableIds(
     const rbacActive = teamDb.isTeamRbacActive?.() ?? false
 
     const existingMap =
-        !permanent && typeof teamDb.getEntriesByIds === 'function'
-            ? teamDb.getEntriesByIds(entryIds, wsId)
-            : null
+        permanent && typeof teamDb.getEntriesByIdsIncludeDeleted === 'function'
+            ? teamDb.getEntriesByIdsIncludeDeleted(entryIds, wsId)
+            : !permanent && typeof teamDb.getEntriesByIds === 'function'
+              ? teamDb.getEntriesByIds(entryIds, wsId)
+              : null
     const authorMap =
         typeof teamDb.getAuthorsForEntries === 'function'
             ? batchFetchAuthors(teamDb, entryIds)
@@ -314,6 +316,17 @@ export async function cleanupDeletedVectors(
 ): Promise<string[]> {
     const warnings: string[] = []
     if (deleted.length === 0) {
+        await sendProgress(context.progress, 2, 2, 'Team batch delete complete')
+        return warnings
+    }
+    if (typeof teamDb.deleteVectors === 'function') {
+        try {
+            teamDb.deleteVectors(deleted)
+        } catch (vecErr) {
+            const msg = vecErr instanceof Error ? vecErr.message : String(vecErr)
+            logger.warning('Team batch delete vector cleanup failed', { count: deleted.length, error: msg })
+            warnings.push(`Vector cleanup failed for team entries (${deleted.join(', ')}): ${msg}`)
+        }
         await sendProgress(context.progress, 2, 2, 'Team batch delete complete')
         return warnings
     }

@@ -14,6 +14,7 @@ import { Migration013AddSessionId } from './013-add-session-id.js'
 import { Migration014AddAliasWorkspace } from './014-add-alias-workspace.js'
 import { Migration015AliasWorkspaceUnique } from './015-alias-workspace-unique.js'
 import { Migration016FtsSoftDeleteTriggers } from './016-fts-soft-delete-triggers.js'
+import { Migration017AddPerformanceIndexes } from './017-add-performance-indexes.js'
 import type { Migration } from './migration.js'
 
 export const MIGRATIONS: Migration[] = [
@@ -33,4 +34,5 @@ export const MIGRATIONS: Migration[] = [
     Migration014AddAliasWorkspace,
     Migration015AliasWorkspaceUnique,
     Migration016FtsSoftDeleteTriggers,
+    Migration017AddPerformanceIndexes,
 ]

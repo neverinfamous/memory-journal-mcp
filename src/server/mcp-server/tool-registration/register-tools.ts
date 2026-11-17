@@ -216,7 +216,7 @@ function formatRegisteredToolResponse(
         }
     }
 
-    const textContent = typeof result === 'string' ? result : JSON.stringify(result, null, 2)
+    const textContent = typeof result === 'string' ? result : JSON.stringify(result)
     const failed =
         typeof result === 'object' &&
         result !== null &&
@@ -292,7 +292,7 @@ async function executeRegisteredTool(
             content: [
                 {
                     type: 'text' as const,
-                    text: JSON.stringify(errorResult, null, 2),
+                    text: JSON.stringify(errorResult),
                 },
             ],
             ...(hasOutputSchema ? { structuredContent: errorResult } : {}),

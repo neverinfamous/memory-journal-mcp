@@ -112,7 +112,28 @@ export function findCanonicalRegistryKey(
     return undefined
 }
 
-function collectAliasesForKey(key: string): string[] {
+const REGEX_ESCAPE_RE = /[.*+?^${}()|[\]\\]/g
+const KEY_ALIASES_CACHE_MAX = 256
+const ALIAS_REGEX_CACHE_MAX = 512
+const keyAliasesCache = new Map<string, readonly string[]>()
+const aliasRegexCache = new Map<string, RegExp>()
+
+function getCompiledAliasRegex(alias: string): RegExp {
+    const cached = aliasRegexCache.get(alias)
+    if (cached) return cached
+    const escapedAlias = alias.replace(REGEX_ESCAPE_RE, '\\$&')
+    const postBoundary = alias.includes('_') ? '(?:$|[^a-zA-Z0-9_-])' : '(?:$|[^a-zA-Z0-9-])'
+    const preBoundary = alias.includes('_') ? '(?:^|[^a-zA-Z0-9_-])' : '(?:^|[^a-zA-Z0-9-])'
+    const regex = new RegExp(`${preBoundary}${escapedAlias}${postBoundary}`, 'i')
+    if (aliasRegexCache.size >= ALIAS_REGEX_CACHE_MAX) aliasRegexCache.clear()
+    aliasRegexCache.set(alias, regex)
+    return regex
+}
+
+function collectAliasesForKey(key: string): readonly string[] {
+    const cached = keyAliasesCache.get(key)
+    if (cached) return cached
+
     const keyLower = key.toLowerCase()
     const derived = [keyLower, keyLower.replace(/_/g, '-'), keyLower.replace(/-/g, '_')]
     for (const suffix of ['-worker', '_worker']) {
@@ -131,18 +152,17 @@ function collectAliasesForKey(key: string): string[] {
             for (const alias of aliases) matchedAliases.add(alias.toLowerCase())
         }
     }
-    return Array.from(matchedAliases).sort((a, b) => b.length - a.length)
+    const sorted = Array.from(matchedAliases).sort((a, b) => b.length - a.length)
+    if (keyAliasesCache.size >= KEY_ALIASES_CACHE_MAX) keyAliasesCache.clear()
+    keyAliasesCache.set(key, sorted)
+    return sorted
 }
 
 function contentMatchesAnyAlias(contentLower: string, sortedAliases: readonly string[]): boolean {
     if (contentLower.length === 0) return false
     for (const alias of sortedAliases) {
         if (alias.length < 2) continue
-        const escapedAlias = alias.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-        const postBoundary = alias.includes('_') ? '(?:$|[^a-zA-Z0-9_-])' : '(?:$|[^a-zA-Z0-9-])'
-        const preBoundary = alias.includes('_') ? '(?:^|[^a-zA-Z0-9_-])' : '(?:^|[^a-zA-Z0-9-])'
-        const regex = new RegExp(`${preBoundary}${escapedAlias}${postBoundary}`, 'i')
-        if (regex.test(contentLower)) return true
+        if (getCompiledAliasRegex(alias).test(contentLower)) return true
     }
     return false
 }

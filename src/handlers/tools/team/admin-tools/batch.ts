@@ -5,7 +5,7 @@
  */
 
 import type { z } from 'zod'
-import type { ToolDefinition, ToolContext } from '../../../../types/index.js'
+import type { JournalEntry, ToolDefinition, ToolContext } from '../../../../types/index.js'
 import { formatHandlerError } from '../../../../utils/error-helpers.js'
 import { resolveAuthenticatedAuthor } from '../../../../utils/security-utils.js'
 import { TEAM_DB_ERROR_RESPONSE, fetchAuthor, batchFetchAuthors, triggerTeamNotifications } from '../helpers.js'
@@ -35,7 +35,7 @@ async function indexUpdatedTeamBatchEntries(
     context: ToolContext,
     teamDb: TeamDbInstance,
     input: TeamBatchUpdateInput,
-    entries: { id: number; workspaceId?: string }[]
+    entries: JournalEntry[]
 ): ReturnType<typeof indexBatchEntries> {
     const vectorUpdatedIds = new Set(
         input.updates
@@ -53,6 +53,7 @@ async function indexUpdatedTeamBatchEntries(
         db: teamDb,
         autoIndex: input.auto_index,
         entryIds: entries.map((e) => e.id),
+        entries,
         errorPrefix: 'Team entry',
         doneMessage: 'Team batch update complete',
         shouldIndex: (id) => vectorUpdatedIds.has(id),

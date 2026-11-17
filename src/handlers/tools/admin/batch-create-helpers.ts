@@ -165,15 +165,31 @@ export async function shareBatchEntriesWithTeam(
     }
     if (sharedCount > 0) teamDb.flushSave()
     if (teamVectorManager !== undefined && sharedEntries.length > 0) {
-        for (const teamEntry of sharedEntries) {
-            try {
-                await teamVectorManager.addEntry(teamEntry)
-            } catch (vecErr) {
-                warnings.push(
-                    `Team vector indexing failed for shared entry ${String(teamEntry.id)}: ${vecErr instanceof Error ? vecErr.message : String(vecErr)}`
-                )
-            }
-        }
+        await indexSharedTeamVectors(teamVectorManager, sharedEntries, warnings)
     }
     return { sharedCount, warnings }
+}
+
+async function indexSharedTeamVectors(
+    teamVectorManager: NonNullable<ToolContext['teamVectorManager']>,
+    sharedEntries: ReturnType<NonNullable<ToolContext['teamDb']>['createEntry']>[],
+    warnings: string[]
+): Promise<void> {
+    if (sharedEntries.length > 1 && typeof teamVectorManager.addEntries === 'function') {
+        try {
+            await teamVectorManager.addEntries(sharedEntries)
+            return
+        } catch {
+            // Fall back per entry below for exact per-entry warning isolation.
+        }
+    }
+    for (const teamEntry of sharedEntries) {
+        try {
+            await teamVectorManager.addEntry(teamEntry)
+        } catch (vecErr) {
+            warnings.push(
+                `Team vector indexing failed for shared entry ${String(teamEntry.id)}: ${vecErr instanceof Error ? vecErr.message : String(vecErr)}`
+            )
+        }
+    }
 }

@@ -102,10 +102,12 @@ function checkDefAcceptsKey(
     )
 }
 
-export function checkSchemaAcceptsKey(
+const SCHEMA_KEY_CACHE = new WeakMap<object, Map<string, boolean>>()
+
+function computeSchemaAcceptsKey(
     schema: unknown,
     key: string,
-    visited = new Set<unknown>()
+    visited: Set<unknown>
 ): boolean {
     if (!isRecord(schema) || visited.has(schema)) return false
     visited.add(schema)
@@ -114,7 +116,7 @@ export function checkSchemaAcceptsKey(
     }
     for (const comboKey of ['anyOf', 'oneOf', 'allOf'] as const) {
         const branches = schema[comboKey]
-        if (Array.isArray(branches) && branches.some((b) => checkSchemaAcceptsKey(b, key, visited))) {
+        if (Array.isArray(branches) && branches.some((b) => computeSchemaAcceptsKey(b, key, visited))) {
             return true
         }
     }
@@ -126,8 +128,32 @@ export function checkSchemaAcceptsKey(
     if (def !== undefined && def !== null && checkDefAcceptsKey(s, def, key, visited)) {
         return true
     }
-    if (Array.isArray(s.options) && s.options.some((opt) => checkSchemaAcceptsKey(opt, key, visited))) {
+    if (Array.isArray(s.options) && s.options.some((opt) => computeSchemaAcceptsKey(opt, key, visited))) {
         return true
     }
-    return checkSchemaAcceptsKey(s.out, key, visited) || checkSchemaAcceptsKey(s.in, key, visited)
+    return (
+        computeSchemaAcceptsKey(s.out, key, visited) ||
+        computeSchemaAcceptsKey(s.in, key, visited)
+    )
+}
+
+export function checkSchemaAcceptsKey(
+    schema: unknown,
+    key: string,
+    visited?: Set<unknown>
+): boolean {
+    if (visited !== undefined) {
+        return computeSchemaAcceptsKey(schema, key, visited)
+    }
+    if (!isRecord(schema)) return false
+    let cache = SCHEMA_KEY_CACHE.get(schema)
+    if (cache === undefined) {
+        cache = new Map<string, boolean>()
+        SCHEMA_KEY_CACHE.set(schema, cache)
+    }
+    const cached = cache.get(key)
+    if (cached !== undefined) return cached
+    const accepted = computeSchemaAcceptsKey(schema, key, new Set<unknown>())
+    cache.set(key, accepted)
+    return accepted
 }

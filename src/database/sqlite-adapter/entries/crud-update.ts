@@ -90,6 +90,19 @@ function assertUpdateAllowed(
     }
 }
 
+const OPTIONAL_SNAKE_FIELDS = [
+    ['project_number', 'projectNumber'],
+    ['project_owner', 'projectOwner'],
+    ['issue_number', 'issueNumber'],
+    ['issue_url', 'issueUrl'],
+    ['pr_number', 'prNumber'],
+    ['pr_url', 'prUrl'],
+    ['pr_status', 'prStatus'],
+    ['workflow_run_id', 'workflowRunId'],
+    ['workflow_name', 'workflowName'],
+    ['workflow_status', 'workflowStatus'],
+] as const
+
 /** Build the SET clauses (and bound values) for the columns present in `input`. */
 function buildUpdateSets(
     id: number,
@@ -120,22 +133,11 @@ function buildUpdateSets(
         }
     }
 
-    for (const key of [
-        'projectNumber',
-        'projectOwner',
-        'issueNumber',
-        'issueUrl',
-        'prNumber',
-        'prUrl',
-        'prStatus',
-        'workflowRunId',
-        'workflowName',
-        'workflowStatus',
-    ] as const) {
-        if (input[key] !== undefined) {
-            const snakeKey = key.replace(/[A-Z]/g, (letter) => `_${letter.toLowerCase()}`)
+    for (const [snakeKey, camelKey] of OPTIONAL_SNAKE_FIELDS) {
+        const val = input[camelKey]
+        if (val !== undefined) {
             updates.push(`${snakeKey} = ?`)
-            values.push(input[key] ?? null)
+            values.push(val ?? null)
         }
     }
 

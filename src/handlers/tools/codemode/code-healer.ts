@@ -42,13 +42,30 @@ export function isInsideStringLiteral(code: string, offset: number): boolean {
     return inString !== null
 }
 
+const VALID_JS_CACHE_MAX = 256
+const VALID_JS_MAX_LEN = 16 * 1024
+const VALID_JS_CACHE = new Map<string, boolean>()
+
 export function isValidJsScript(src: string): boolean {
+    if (src.length <= VALID_JS_MAX_LEN) {
+        const cached = VALID_JS_CACHE.get(src)
+        if (cached !== undefined) return cached
+    }
+    let valid: boolean
     try {
         new vm.Script(`(async () => {\n${src}\n})()`)
-        return true
+        valid = true
     } catch {
-        return false
+        valid = false
     }
+    if (src.length <= VALID_JS_MAX_LEN) {
+        if (VALID_JS_CACHE.size >= VALID_JS_CACHE_MAX) {
+            const firstKey = VALID_JS_CACHE.keys().next().value
+            if (firstKey !== undefined) VALID_JS_CACHE.delete(firstKey)
+        }
+        VALID_JS_CACHE.set(src, valid)
+    }
+    return valid
 }
 
 export function escapeDelimiterChar(content: string, delimiter: string): string {

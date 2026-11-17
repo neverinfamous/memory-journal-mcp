@@ -126,12 +126,15 @@ export function wrapWithMetrics(
         } catch (err) {
             const durationMs = Math.round(performance.now() - start)
             recordInvocationMetrics(accumulator, toolName, durationMs, args, 0, true, 'error')
-            logAgentIssue({
-                source: 'MCP',
-                action: toolName,
-                input: args,
-                error: err instanceof Error ? err.message : String(err),
-            })
+            logAgentIssue(
+                {
+                    source: 'MCP',
+                    action: toolName,
+                    input: args,
+                    error: err instanceof Error ? err.message : String(err),
+                },
+                err
+            )
             throw err
         }
 

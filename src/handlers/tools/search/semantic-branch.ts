@@ -47,7 +47,7 @@ interface SemanticSearchParams {
     searchOptions: SearchOptions & { includeTeam?: boolean | undefined }
 }
 
-/** Hydrate `importanceScore` onto ranked entries via a single batch lookup per DB. */
+/** Hydrate `importanceScore` onto ranked entries via a single lightweight score lookup per DB. */
 function attachImportance(
     db: ToolContext['db'],
     ranked: EntryWithSource[],
@@ -63,16 +63,28 @@ function attachImportance(
             else personalIds.push(id)
         }
     }
-    const personalMap =
-        personalIds.length > 0 ? db.getEntriesByIdsWithImportance(personalIds, wsId) : undefined
-    const teamMap =
-        teamDb !== undefined && teamIds.length > 0
-            ? teamDb.getEntriesByIdsWithImportance(teamIds, wsId)
-            : undefined
+    const fetchScores = (
+        store: ToolContext['db'],
+        ids: number[]
+    ): Map<number, number> | undefined => {
+        if (ids.length === 0) return undefined
+        if (typeof store.getImportanceScoresByIds === 'function') {
+            const raw = store.getImportanceScoresByIds(ids, wsId)
+            const scores = new Map<number, number>()
+            for (const [id, imp] of raw) scores.set(id, imp.score)
+            return scores
+        }
+        const full = store.getEntriesByIdsWithImportance(ids, wsId)
+        const scores = new Map<number, number>()
+        for (const [id, item] of full) scores.set(id, item.importance.score)
+        return scores
+    }
+    const personalScores = fetchScores(db, personalIds)
+    const teamScores = teamDb !== undefined ? fetchScores(teamDb, teamIds) : undefined
     return ranked.map((entry) => {
         const id = entry['id']
-        const map = entry.source === 'team' ? teamMap : personalMap
-        const score = typeof id === 'number' ? (map?.get(id)?.importance.score ?? 0) : 0
+        const map = entry.source === 'team' ? teamScores : personalScores
+        const score = typeof id === 'number' ? (map?.get(id) ?? 0) : 0
         return { ...entry, importanceScore: Math.round(score * 100) / 100 }
     })
 }
@@ -129,13 +141,18 @@ function hydratePersonalSemanticEntries(
         relevanceMap.set(`personal:${String(result.entryId)}`, result.score)
     }
     const entriesMap = db.getEntriesByIds(entryIds, wsId)
+    const missingTagIds = Array.from(entriesMap.values())
+        .filter((entry) => !Array.isArray(entry.tags))
+        .map((entry) => entry.id)
     if (
-        (input.tags !== undefined && input.tags.length > 0) ||
-        (input.exclude_tags !== undefined && input.exclude_tags.length > 0)
+        missingTagIds.length > 0 &&
+        ((input.tags !== undefined && input.tags.length > 0) ||
+            (input.exclude_tags !== undefined && input.exclude_tags.length > 0))
     ) {
-        const tagsMap = db.getTagsForEntries(entryIds)
-        for (const entry of entriesMap.values()) {
-            entry.tags = tagsMap.get(entry.id) ?? []
+        const tagsMap = db.getTagsForEntries(missingTagIds)
+        for (const id of missingTagIds) {
+            const entry = entriesMap.get(id)
+            if (entry) entry.tags = tagsMap.get(entry.id) ?? []
         }
     }
     const entries: EntryWithSource[] = []

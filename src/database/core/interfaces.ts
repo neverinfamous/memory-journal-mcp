@@ -122,6 +122,9 @@ export interface IDatabaseAdapter extends IDatabaseVectorAndAdminAdapter {
     createEntry(input: CreateEntryInput): JournalEntry
     getEntryById(id: number, workspaceId?: string): JournalEntry | null
     getEntryByIdIncludeDeleted(id: number, workspaceId?: string): JournalEntry | null
+    getEntriesByIdsIncludeDeleted?(ids: number[], workspaceId?: string): Map<number, JournalEntry>
+    getAnchorsByEntryIds?(entryIds: number[], workspaceId?: string): Map<number, Anchor[]>
+    getImportanceScoresByIds?(entryIds: number[], workspaceId?: string): Map<number, ImportanceResult>
     getEntryHistory(id: number, workspaceId?: string): EntryRevision[]
     getEntriesByIds(ids: number[], workspaceId?: string): Map<number, JournalEntry>
     getEntriesByIdsWithImportance(

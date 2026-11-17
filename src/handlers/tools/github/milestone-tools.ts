@@ -35,6 +35,83 @@ import {
 } from './schemas.js'
 import { githubScopeInputFields, githubScopeParseFields, resolveOwnerRepo } from './helpers.js'
 
+const MilestonesListSchemaMcp = z.object({
+    ...githubScopeInputFields,
+    state: z.string().optional().default('open').describe('Filter by state (default: open)'),
+    limit: relaxedNumber().optional().default(20).describe('Max milestones to return (default: 20)'),
+    owner: z.string().optional().describe('LEAVE EMPTY to auto-detect from git'),
+    repo: z.string().optional().describe('LEAVE EMPTY to auto-detect from git'),
+})
+const MilestonesListSchema = z.object({
+    state: z.enum(['open', 'closed', 'all']).optional().default('open'),
+    limit: z.number().int().min(1).max(100).optional().default(20),
+    owner: z.string().optional(),
+    repo: z.string().optional(),
+    ...githubScopeParseFields,
+}).strict()
+const MilestoneGetSchemaMcp = z.object({
+    ...githubScopeInputFields,
+    milestone_number: relaxedNumber().optional().describe('Milestone number'),
+    owner: z.string().optional().describe('LEAVE EMPTY to auto-detect from git'),
+    repo: z.string().optional().describe('LEAVE EMPTY to auto-detect from git'),
+})
+const MilestoneGetSchema = z.object({
+    milestone_number: z.number().int().positive(),
+    owner: z.string().optional(),
+    repo: z.string().optional(),
+    ...githubScopeParseFields,
+}).strict()
+const MilestoneCreateSchemaMcp = z.object({
+    ...githubScopeInputFields,
+    title: z.string().optional().describe('Milestone title'),
+    description: z.string().optional().describe('Milestone description'),
+    due_on: z.string().optional().describe('Due date in YYYY-MM-DD format (optional)'),
+    owner: z.string().optional().describe('LEAVE EMPTY to auto-detect'),
+    repo: z.string().optional().describe('LEAVE EMPTY to auto-detect'),
+})
+const MilestoneCreateSchema = z.object({
+    title: z.string().min(1),
+    description: z.string().optional(),
+    due_on: z.string().nullable().optional(),
+    owner: z.string().optional(),
+    repo: z.string().optional(),
+    ...githubScopeParseFields,
+}).strict()
+const MilestoneUpdateSchemaMcp = z.object({
+    ...githubScopeInputFields,
+    milestone_number: relaxedNumber().optional().describe('Milestone number to update'),
+    title: z.string().optional().describe('New title'),
+    description: z.string().optional().describe('New description'),
+    due_on: z.string().nullable().optional().describe('New due date in YYYY-MM-DD format (or null to clear)'),
+    state: z.string().optional().describe('Set to "closed" to close the milestone'),
+    owner: z.string().optional().describe('LEAVE EMPTY to auto-detect'),
+    repo: z.string().optional().describe('LEAVE EMPTY to auto-detect'),
+})
+const MilestoneUpdateSchema = z.object({
+    milestone_number: z.number().int().positive(),
+    title: z.string().optional(),
+    description: z.string().optional(),
+    due_on: z.string().nullable().optional(),
+    state: z.enum(['open', 'closed']).optional(),
+    owner: z.string().optional(),
+    repo: z.string().optional(),
+    ...githubScopeParseFields,
+}).strict()
+const MilestoneDeleteSchemaMcp = z.object({
+    ...githubScopeInputFields,
+    milestone_number: relaxedNumber().optional().describe('Milestone number to delete'),
+    confirm: z.boolean().optional().describe('Must be set to true to confirm deletion'),
+    owner: z.string().optional().describe('LEAVE EMPTY to auto-detect'),
+    repo: z.string().optional().describe('LEAVE EMPTY to auto-detect'),
+})
+const MilestoneDeleteSchema = z.object({
+    milestone_number: z.number().int().positive(),
+    confirm: z.literal(true),
+    owner: z.string().optional(),
+    repo: z.string().optional(),
+    ...githubScopeParseFields,
+}).strict()
+
 // ============================================================================
 // Tool Definitions
 // ============================================================================
@@ -47,20 +124,7 @@ export function getGitHubMilestoneTools(context: ToolContext): ToolDefinition[] 
             description:
                 'List GitHub milestones for the repository with completion percentages and due dates.',
             group: 'github',
-            inputSchema: z.object({
-                ...githubScopeInputFields,
-                state: z
-                    .string()
-                    .optional()
-                    .default('open')
-                    .describe('Filter by state (default: open)'),
-                limit: relaxedNumber()
-                    .optional()
-                    .default(20)
-                    .describe('Max milestones to return (default: 20)'),
-                owner: z.string().optional().describe('LEAVE EMPTY to auto-detect from git'),
-                repo: z.string().optional().describe('LEAVE EMPTY to auto-detect from git'),
-            }),
+            inputSchema: MilestonesListSchemaMcp,
             outputSchema: GitHubMilestonesListOutputSchema,
             annotations: {
                 readOnlyHint: true,
@@ -70,16 +134,7 @@ export function getGitHubMilestoneTools(context: ToolContext): ToolDefinition[] 
             },
             handler: async (params: unknown) => {
                 try {
-                    const input = z
-                        .object({
-                            state: z.enum(['open', 'closed', 'all']).optional().default('open'),
-                            limit: z.number().int().min(1).max(100).optional().default(20),
-                            owner: z.string().optional(),
-                            repo: z.string().optional(),
-                            ...githubScopeParseFields,
-                        })
-                        .strict()
-                        .parse(params)
+                    const input = MilestonesListSchema.parse(params)
 
                     const resolved = await resolveOwnerRepo(
                         context,
@@ -121,12 +176,7 @@ export function getGitHubMilestoneTools(context: ToolContext): ToolDefinition[] 
             description:
                 'Get detailed information about a specific GitHub milestone including progress and linked issue counts.',
             group: 'github',
-            inputSchema: z.object({
-                ...githubScopeInputFields,
-                milestone_number: relaxedNumber().optional().describe('Milestone number'),
-                owner: z.string().optional().describe('LEAVE EMPTY to auto-detect from git'),
-                repo: z.string().optional().describe('LEAVE EMPTY to auto-detect from git'),
-            }),
+            inputSchema: MilestoneGetSchemaMcp,
             outputSchema: GitHubMilestoneResultOutputSchema,
             annotations: {
                 readOnlyHint: true,
@@ -136,15 +186,7 @@ export function getGitHubMilestoneTools(context: ToolContext): ToolDefinition[] 
             },
             handler: async (params: unknown) => {
                 try {
-                    const input = z
-                        .object({
-                            milestone_number: z.number().int().positive(),
-                            owner: z.string().optional(),
-                            repo: z.string().optional(),
-                            ...githubScopeParseFields,
-                        })
-                        .strict()
-                        .parse(params)
+                    const input = MilestoneGetSchema.parse(params)
 
                     const resolved = await resolveOwnerRepo(
                         context,
@@ -196,14 +238,7 @@ export function getGitHubMilestoneTools(context: ToolContext): ToolDefinition[] 
             description:
                 'Create a new GitHub milestone for tracking progress toward a project goal.',
             group: 'github',
-            inputSchema: z.object({
-                ...githubScopeInputFields,
-                title: z.string().optional().describe('Milestone title'),
-                description: z.string().optional().describe('Milestone description'),
-                due_on: z.string().optional().describe('Due date in YYYY-MM-DD format (optional)'),
-                owner: z.string().optional().describe('LEAVE EMPTY to auto-detect'),
-                repo: z.string().optional().describe('LEAVE EMPTY to auto-detect'),
-            }),
+            inputSchema: MilestoneCreateSchemaMcp,
             outputSchema: CreateMilestoneOutputSchema,
             annotations: {
                 readOnlyHint: false,
@@ -213,17 +248,7 @@ export function getGitHubMilestoneTools(context: ToolContext): ToolDefinition[] 
             },
             handler: async (params: unknown) => {
                 try {
-                    const input = z
-                        .object({
-                            title: z.string().min(1),
-                            description: z.string().optional(),
-                            due_on: z.string().nullable().optional(),
-                            owner: z.string().optional(),
-                            repo: z.string().optional(),
-                            ...githubScopeParseFields,
-                        })
-                        .strict()
-                        .parse(params)
+                    const input = MilestoneCreateSchema.parse(params)
 
                     const resolved = await resolveOwnerRepo(
                         context,
@@ -273,18 +298,7 @@ export function getGitHubMilestoneTools(context: ToolContext): ToolDefinition[] 
             description:
                 'Update a GitHub milestone (title, description, due date, or state). Use state "closed" to close a completed milestone.',
             group: 'github',
-            inputSchema: z.object({
-                ...githubScopeInputFields,
-                milestone_number: relaxedNumber()
-                    .optional()
-                    .describe('Milestone number to update'),
-                title: z.string().optional().describe('New title'),
-                description: z.string().optional().describe('New description'),
-                due_on: z.string().nullable().optional().describe('New due date in YYYY-MM-DD format (or null to clear)'),
-                state: z.string().optional().describe('Set to "closed" to close the milestone'),
-                owner: z.string().optional().describe('LEAVE EMPTY to auto-detect'),
-                repo: z.string().optional().describe('LEAVE EMPTY to auto-detect'),
-            }),
+            inputSchema: MilestoneUpdateSchemaMcp,
             outputSchema: UpdateMilestoneOutputSchema,
             annotations: {
                 readOnlyHint: false,
@@ -294,19 +308,7 @@ export function getGitHubMilestoneTools(context: ToolContext): ToolDefinition[] 
             },
             handler: async (params: unknown) => {
                 try {
-                    const input = z
-                        .object({
-                            milestone_number: z.number().int().positive(),
-                            title: z.string().optional(),
-                            description: z.string().optional(),
-                            due_on: z.string().nullable().optional(),
-                            state: z.enum(['open', 'closed']).optional(),
-                            owner: z.string().optional(),
-                            repo: z.string().optional(),
-                            ...githubScopeParseFields,
-                        })
-                        .strict()
-                        .parse(params)
+                    const input = MilestoneUpdateSchema.parse(params)
 
                     const resolved = await resolveOwnerRepo(
                         context,
@@ -368,15 +370,7 @@ export function getGitHubMilestoneTools(context: ToolContext): ToolDefinition[] 
             description:
                 'Permanently delete a GitHub milestone. Issues assigned to the milestone will be un-assigned but not deleted.',
             group: 'github',
-            inputSchema: z.object({
-                ...githubScopeInputFields,
-                milestone_number: relaxedNumber()
-                    .optional()
-                    .describe('Milestone number to delete'),
-                confirm: z.boolean().optional().describe('Must be set to true to confirm deletion'),
-                owner: z.string().optional().describe('LEAVE EMPTY to auto-detect'),
-                repo: z.string().optional().describe('LEAVE EMPTY to auto-detect'),
-            }),
+            inputSchema: MilestoneDeleteSchemaMcp,
             outputSchema: DeleteMilestoneOutputSchema,
             annotations: {
                 readOnlyHint: false,
@@ -386,16 +380,7 @@ export function getGitHubMilestoneTools(context: ToolContext): ToolDefinition[] 
             },
             handler: async (params: unknown) => {
                 try {
-                    const input = z
-                        .object({
-                            milestone_number: z.number().int().positive(),
-                            confirm: z.literal(true),
-                            owner: z.string().optional(),
-                            repo: z.string().optional(),
-                            ...githubScopeParseFields,
-                        })
-                        .strict()
-                        .parse(params)
+                    const input = MilestoneDeleteSchema.parse(params)
 
                     const resolved = await resolveOwnerRepo(
                         context,

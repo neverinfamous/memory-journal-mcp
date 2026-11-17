@@ -335,6 +335,32 @@ export const TagsListOutputSchema = z
     })
     .extend(ErrorFieldsMixin.shape)
 
+export const GetRecentEntriesOutputSchema = z
+    .object({
+        success: z.boolean().optional(),
+        entries: z.array(EntryOutputSchema).optional(),
+        count: z.number().optional(),
+        next_cursor: z.string().optional(),
+        hasMore: z.boolean().optional(),
+    })
+    .extend(ErrorFieldsMixin.shape)
+
+export const ListTagsSchema = z.object({
+    project_number: z.preprocess(
+        (v: unknown) => (v === null || v === '' ? undefined : v),
+        z.coerce.number().int().positive().optional()
+    ),
+    workspace_id: z.string().optional(),
+})
+
+export const ListTagsSchemaMcp = z.object({
+    project_number: z.preprocess(
+        (v: unknown) => (v === null || v === '' ? undefined : v),
+        z.coerce.number().int().positive().optional()
+    ),
+    workspace_id: z.string().optional(),
+})
+
 export const TestSimpleSchema = z.object({
     message: z.string().optional().default('Hello'),
 })

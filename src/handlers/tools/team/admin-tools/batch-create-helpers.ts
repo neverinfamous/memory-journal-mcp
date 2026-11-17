@@ -389,6 +389,7 @@ export async function executeTeamBatchCreate(
         db: teamDb,
         autoIndex: input.auto_index,
         entryIds: entries.map((e) => e.id),
+        entries,
         errorPrefix: 'Team entry',
         doneMessage: 'Team batch create complete',
         workspaceByEntryId: collectIndexWorkspaces(entries),

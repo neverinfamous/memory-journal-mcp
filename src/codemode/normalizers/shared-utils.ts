@@ -125,9 +125,37 @@ export const TAG_ALIASES: Record<string, string> = {
     'feature_implementation': 'feature',
 }
 
-function deduplicateSectionHeader(str: string, headerRegexStr: string): string {
+const DEDUP_ACCOMPLISHED_RE = /^#+\s+Accomplished/gim
+const DEDUP_UNFINISHED_RE = /^#+\s+Unfinished \/ Blocked/gim
+const DEDUP_CONTEXT_RE = /^#+\s+Context for Next Session/gim
+const DEDUP_COMMITS_RE = /^#+\s+Commits/gim
+
+const SYNONYM_ACCOMPLISHED_RE =
+    /^#+\s+(?:Accomplishments|Completed|Done|What I did|What we did)\s*$/gim
+const SYNONYM_UNFINISHED_RE = /^#+\s+(?:Blockers|Unfinished|Unfinished\/?Blocked|Blocked)\s*$/gim
+const SYNONYM_CONTEXT_RE = /^#+\s+(?:Next Session|Context|Next steps)\s*$/gim
+const SYNONYM_COMMITS_RE = /^#+\s+(?:Commit History|Git Commits)\s*$/gim
+const LEVEL_ACCOMPLISHED_RE = /^(?:#|#{3,})\s+Accomplished\s*$/gim
+const LEVEL_UNFINISHED_RE = /^(?:#|#{3,})\s+Unfinished \/ Blocked\s*$/gim
+const LEVEL_CONTEXT_RE = /^(?:#|#{3,})\s+Context for Next Session\s*$/gim
+const LEVEL_COMMITS_RE = /^(?:#|#{3,})\s+Commits\s*$/gim
+
+const COLLAPSE_ACCOMPLISHED_RE = /(?:^#+\s+Accomplished\s*\n-\s*(?:None\.?|)\s*){2,}/gim
+const COLLAPSE_UNFINISHED_RE = /(?:^#+\s+Unfinished \/ Blocked\s*\n-\s*(?:None\.?|)\s*){2,}/gim
+const COLLAPSE_CONTEXT_RE = /(?:^#+\s+Context for Next Session\s*\n-\s*(?:None\.?|)\s*){2,}/gim
+const COLLAPSE_COMMITS_RE = /(?:^#+\s+Commits\s*\n-\s*(?:None\.?|)\s*){2,}/gim
+
+const REQUIRED_PERIOD_HEADERS: readonly { header: string; testRe: RegExp }[] = [
+    { header: '## Accomplished', testRe: /#+\s+Accomplished/i },
+    { header: '## Unfinished / Blocked', testRe: /#+\s+Unfinished\s*\/\s*Blocked/i },
+    { header: '## Context for Next Session', testRe: /#+\s+Context\s*for\s*Next\s*Session/i },
+    { header: '## Commits', testRe: /#+\s+Commits/i },
+]
+
+function deduplicateSectionHeader(str: string, headerRe: RegExp): string {
     let count = 0
-    return str.replace(new RegExp(headerRegexStr, 'gim'), (match) => {
+    headerRe.lastIndex = 0
+    return str.replace(headerRe, (match) => {
         count++
         return count === 1 ? match : ''
     })
@@ -143,37 +171,29 @@ export function healSessionSummaryContent(
     let healed = content
 
     if (options?.normalizeSynonyms !== false) {
-        healed = healed.replace(/^#+\s+(?:Accomplishments|Completed|Done|What I did|What we did)\s*$/gim, '## Accomplished')
-        healed = healed.replace(/^#+\s+(?:Blockers|Unfinished|Unfinished\/?Blocked|Blocked)\s*$/gim, '## Unfinished / Blocked')
-        healed = healed.replace(/^#+\s+(?:Next Session|Context|Next steps)\s*$/gim, '## Context for Next Session')
-        healed = healed.replace(/^#+\s+(?:Commit History|Git Commits)\s*$/gim, '## Commits')
-        healed = healed.replace(/^(?:#|#{3,})\s+Accomplished\s*$/gim, '## Accomplished')
-        healed = healed.replace(/^(?:#|#{3,})\s+Unfinished \/ Blocked\s*$/gim, '## Unfinished / Blocked')
-        healed = healed.replace(/^(?:#|#{3,})\s+Context for Next Session\s*$/gim, '## Context for Next Session')
-        healed = healed.replace(/^(?:#|#{3,})\s+Commits\s*$/gim, '## Commits')
+        healed = healed.replace(SYNONYM_ACCOMPLISHED_RE, '## Accomplished')
+        healed = healed.replace(SYNONYM_UNFINISHED_RE, '## Unfinished / Blocked')
+        healed = healed.replace(SYNONYM_CONTEXT_RE, '## Context for Next Session')
+        healed = healed.replace(SYNONYM_COMMITS_RE, '## Commits')
+        healed = healed.replace(LEVEL_ACCOMPLISHED_RE, '## Accomplished')
+        healed = healed.replace(LEVEL_UNFINISHED_RE, '## Unfinished / Blocked')
+        healed = healed.replace(LEVEL_CONTEXT_RE, '## Context for Next Session')
+        healed = healed.replace(LEVEL_COMMITS_RE, '## Commits')
     }
 
-    healed = healed.replace(/(?:^#+\s+Accomplished\s*\n-\s*(?:None\.?|)\s*){2,}/gim, '## Accomplished\n- None.\n')
-    healed = healed.replace(/(?:^#+\s+Unfinished \/ Blocked\s*\n-\s*(?:None\.?|)\s*){2,}/gim, '## Unfinished / Blocked\n- None.\n')
-    healed = healed.replace(/(?:^#+\s+Context for Next Session\s*\n-\s*(?:None\.?|)\s*){2,}/gim, '## Context for Next Session\n- None.\n')
-    healed = healed.replace(/(?:^#+\s+Commits\s*\n-\s*(?:None\.?|)\s*){2,}/gim, '## Commits\n- None.\n')
+    healed = healed.replace(COLLAPSE_ACCOMPLISHED_RE, '## Accomplished\n- None.\n')
+    healed = healed.replace(COLLAPSE_UNFINISHED_RE, '## Unfinished / Blocked\n- None.\n')
+    healed = healed.replace(COLLAPSE_CONTEXT_RE, '## Context for Next Session\n- None.\n')
+    healed = healed.replace(COLLAPSE_COMMITS_RE, '## Commits\n- None.\n')
 
-    healed = deduplicateSectionHeader(healed, '^#+\\s+Accomplished')
-    healed = deduplicateSectionHeader(healed, '^#+\\s+Unfinished \\/ Blocked')
-    healed = deduplicateSectionHeader(healed, '^#+\\s+Context for Next Session')
-    healed = deduplicateSectionHeader(healed, '^#+\\s+Commits')
+    healed = deduplicateSectionHeader(healed, DEDUP_ACCOMPLISHED_RE)
+    healed = deduplicateSectionHeader(healed, DEDUP_UNFINISHED_RE)
+    healed = deduplicateSectionHeader(healed, DEDUP_CONTEXT_RE)
+    healed = deduplicateSectionHeader(healed, DEDUP_COMMITS_RE)
 
     if (options?.usePeriodOnNone === true) {
-        const requiredHeaders = [
-            '## Accomplished',
-            '## Unfinished / Blocked',
-            '## Context for Next Session',
-            '## Commits',
-        ]
-        for (const header of requiredHeaders) {
-            const cleanHeader = header.replace(/^#+\s+/, '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/ /g, '\\s*')
-            const regex = new RegExp(`#+\\s+${cleanHeader}`, 'i')
-            if (!regex.test(healed)) {
+        for (const { header, testRe } of REQUIRED_PERIOD_HEADERS) {
+            if (!testRe.test(healed)) {
                 healed += `\n\n${header}\n- None.`
             }
         }

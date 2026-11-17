@@ -14,12 +14,22 @@ type BatchUpdateItem = BatchUpdateInput['updates'][number]
 function resolveBatchUpdateItemScope(
     u: BatchUpdateItem,
     input: BatchUpdateInput,
-    context: ToolContext
+    context: ToolContext,
+    prefetchedById?: ReadonlyMap<number, { workspaceId?: string }>
 ): { resolvedWs: string; projectNumberForUpdate: number | null | undefined; targetWorkspaceId: string | undefined } {
     const { db, config } = context
     const explicitWs = u.workspace_id ?? input.workspace_id
     const explicitPn = u.project_number !== undefined ? u.project_number : input.project_number
     const targetWorkspaceId = canonicalTargetWorkspace(u.target_workspace_id, config)
+
+    const lookupEntryWorkspace = (): string | undefined => {
+        if (prefetchedById !== undefined) {
+            return prefetchedById.get(u.entry_id)?.workspaceId
+        }
+        return typeof db.getEntryById === 'function'
+            ? db.getEntryById(u.entry_id, '*')?.workspaceId
+            : undefined
+    }
 
     if (targetWorkspaceId !== undefined) {
         const targetResolved = resolveProjectContext(
@@ -37,7 +47,7 @@ function resolveBatchUpdateItemScope(
         } else if (explicitWs !== undefined) {
             resolvedWs = resolveWriteWorkspaceId(explicitWs, undefined, config)
         } else {
-            resolvedWs = db.getEntryById(u.entry_id, '*')?.workspaceId ?? targetWorkspaceId
+            resolvedWs = lookupEntryWorkspace() ?? targetWorkspaceId
         }
         return { resolvedWs, projectNumberForUpdate, targetWorkspaceId }
     }
@@ -53,10 +63,9 @@ function resolveBatchUpdateItemScope(
         explicitPn === undefined ? undefined : explicitPn === null ? null : resolvedUpdate.projectNumber
     let resolvedWs = explicitWs === '*' ? '*' : resolvedUpdate.workspaceId
     if (explicitWs === undefined && (explicitPn === undefined || explicitPn === null)) {
-        const existingByPk =
-            typeof db.getEntryById === 'function' ? db.getEntryById(u.entry_id, '*') : undefined
-        if (existingByPk?.workspaceId !== undefined) {
-            resolvedWs = existingByPk.workspaceId
+        const existingWs = lookupEntryWorkspace()
+        if (existingWs !== undefined) {
+            resolvedWs = existingWs
         }
     }
     return { resolvedWs, projectNumberForUpdate, targetWorkspaceId }
@@ -65,9 +74,15 @@ function resolveBatchUpdateItemScope(
 export function mapBatchUpdateInputItem(
     u: BatchUpdateItem,
     input: BatchUpdateInput,
-    context: ToolContext
+    context: ToolContext,
+    prefetchedById?: ReadonlyMap<number, { workspaceId?: string }>
 ): Parameters<ToolContext['db']['updateEntries']>[0][number] {
-    const { resolvedWs, projectNumberForUpdate, targetWorkspaceId } = resolveBatchUpdateItemScope(u, input, context)
+    const { resolvedWs, projectNumberForUpdate, targetWorkspaceId } = resolveBatchUpdateItemScope(
+        u,
+        input,
+        context,
+        prefetchedById
+    )
 
     return {
         id: u.entry_id,
@@ -98,55 +113,77 @@ export function mapBatchUpdateInputItem(
     }
 }
 
+function buildWildcardMismatchError(wildcardMismatches: number[]): Record<string, unknown> {
+    return {
+        success: false,
+        error: `Batch update aborted because entries were not found in the requested project: ${wildcardMismatches.join(', ')}. No rows were updated.`,
+        code: 'RESOURCE_NOT_FOUND',
+        category: 'resource',
+        recoverable: true,
+        suggestion: 'Verify the entry identifiers and project number',
+        count: 0,
+        notFound: wildcardMismatches,
+    }
+}
+
+function collectBatchReindexIds(
+    updates: readonly z.infer<typeof BatchUpdateEntriesSchema>['updates'][number][]
+): Set<number> {
+    const ids = new Set<number>()
+    for (const u of updates) {
+        if (
+            u.content !== undefined ||
+            u.target_workspace_id !== undefined ||
+            u.tags !== undefined ||
+            u.entry_type !== undefined
+        ) {
+            ids.add(u.entry_id)
+        }
+    }
+    return ids
+}
+
 export async function executeBatchUpdateEntries(
     params: unknown,
     context: ToolContext
 ): Promise<Record<string, unknown>> {
     const { db, vectorManager, progress } = context
     const input = BatchUpdateEntriesSchema.parse(params)
+    const prefetchedById =
+        typeof db.getEntriesByIds === 'function'
+            ? db.getEntriesByIds(
+                  input.updates.map((u) => u.entry_id),
+                  '*'
+              )
+            : undefined
     const wildcardMismatches = findWildcardProjectMismatches(
         db,
         input.updates,
         input.workspace_id,
         input.project_number,
-        context.config
+        context.config,
+        prefetchedById
     )
     if (wildcardMismatches.length > 0) {
-        return {
-            success: false,
-            error: `Batch update aborted because entries were not found in the requested project: ${wildcardMismatches.join(', ')}. No rows were updated.`,
-            code: 'RESOURCE_NOT_FOUND',
-            category: 'resource',
-            recoverable: true,
-            suggestion: 'Verify the entry identifiers and project number',
-            count: 0,
-            notFound: wildcardMismatches,
-        }
+        return buildWildcardMismatchError(wildcardMismatches)
     }
 
     await sendProgress(progress, 0, 2, 'Updating entries...')
-    const updates = input.updates.map((u) => mapBatchUpdateInputItem(u, input, context))
+    const updates = input.updates.map((u) =>
+        mapBatchUpdateInputItem(u, input, context, prefetchedById)
+    )
     const { updated, notFound, errors } = db.updateEntries(updates)
     await sendProgress(progress, 1, 2, `Updated ${String(updated.length)} entries...`)
 
     // Re-index if content, workspace, tags, or entry_type changed so vector search reflects current metadata
-    const reindexIds = new Set(
-        input.updates
-            .filter(
-                (u) =>
-                    u.content !== undefined ||
-                    u.target_workspace_id !== undefined ||
-                    u.tags !== undefined ||
-                    u.entry_type !== undefined
-            )
-            .map((u) => u.entry_id)
-    )
+    const reindexIds = collectBatchReindexIds(input.updates)
     const { indexStatuses, indexErrors } = await indexBatchEntries({
         progress,
         vectorManager,
         db,
         autoIndex: input.auto_index,
         entryIds: updated.map((r) => r.id),
+        entries: updated,
         errorPrefix: 'Entry',
         doneMessage: 'Batch update complete',
         shouldIndex: (id) => reindexIds.has(id),

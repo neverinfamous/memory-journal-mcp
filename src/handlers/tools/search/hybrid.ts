@@ -129,41 +129,86 @@ async function queryStoreHybrid(
             })
         ),
         vecMgr
-            ? vecMgr
-                  .search(query, overfetchLimit, 0.15, options.workspaceId, options.projectNumber)
-                  .catch((err: unknown) => {
-                      logger.warning(
-                          `Semantic search degraded: ${err instanceof Error ? err.message : String(err)}`,
-                          { module: 'HybridSearch' }
-                      )
-                      semanticDegraded = true
-                      return []
-                  })
+            ? (typeof vecMgr.searchCandidates === 'function'
+                  ? vecMgr.searchCandidates(
+                        query,
+                        overfetchLimit,
+                        0.15,
+                        options.workspaceId,
+                        options.projectNumber
+                    )
+                  : vecMgr.search(
+                        query,
+                        overfetchLimit,
+                        0.15,
+                        options.workspaceId,
+                        options.projectNumber
+                    )
+              ).catch((err: unknown) => {
+                  logger.warning(
+                      `Semantic search degraded: ${err instanceof Error ? err.message : String(err)}`,
+                      { module: 'HybridSearch' }
+                  )
+                  semanticDegraded = true
+                  return []
+              })
             : Promise.resolve([]),
     ])
     return { ftsResults, semanticResults, semanticDegraded }
+}
+
+function hasHydratedEntryMetadata(entry: JournalEntry): boolean {
+    return (
+        typeof entry.content === 'string' &&
+        typeof entry.timestamp === 'string' &&
+        typeof entry.entryType === 'string' &&
+        typeof entry.isPersonal === 'boolean'
+    )
 }
 
 function hydrateQualifiedStoreCandidates(
     ids: number[],
     source: 'personal' | 'team',
     store: IDatabaseAdapter,
-    options: HybridSearchOptions
+    options: HybridSearchOptions,
+    ftsSeedById: ReadonlyMap<number, JournalEntry>
 ): EntryWithSource[] {
     if (ids.length === 0) return []
-    const entriesMap = store.getEntriesByIds(ids, options.workspaceId ?? 'default')
-    if (
+    const missingIds = ids.filter((id) => {
+        const seeded = ftsSeedById.get(id)
+        return seeded === undefined || !hasHydratedEntryMetadata(seeded)
+    })
+    const fetchedMap =
+        missingIds.length > 0
+            ? store.getEntriesByIds(missingIds, options.workspaceId ?? 'default')
+            : new Map<number, JournalEntry>()
+
+    const hydratedById = new Map<number, JournalEntry>()
+    for (const id of ids) {
+        const chosen = fetchedMap.get(id) ?? ftsSeedById.get(id)
+        if (chosen) hydratedById.set(id, chosen)
+    }
+
+    const needTags =
         (options.tags !== undefined && options.tags.length > 0) ||
         (options.excludeTags !== undefined && options.excludeTags.length > 0)
-    ) {
-        const tagsMap = store.getTagsForEntries(ids)
-        for (const entry of entriesMap.values()) {
-            entry.tags = tagsMap.get(entry.id) ?? []
+    if (needTags) {
+        const missingTagIds = ids.filter((id) => {
+            const entry = hydratedById.get(id)
+            return entry !== undefined && !Array.isArray(entry.tags)
+        })
+        if (missingTagIds.length > 0) {
+            const tagsMap = store.getTagsForEntries(missingTagIds)
+            for (const id of missingTagIds) {
+                const entry = hydratedById.get(id)
+                if (entry) entry.tags = tagsMap.get(entry.id) ?? []
+            }
         }
     }
+
     const candidates: EntryWithSource[] = []
     for (const id of ids) {
-        const entry = entriesMap.get(id)
+        const entry = hydratedById.get(id)
         if (!entry || !passMetadataFilters(entry, options, store)) continue
         candidates.push({ ...entry, source })
     }
@@ -192,7 +237,9 @@ function assembleHybridCandidates(
     db: IDatabaseAdapter,
     teamDb: IDatabaseAdapter | undefined,
     canQueryTeam: boolean,
-    options: HybridSearchOptions
+    options: HybridSearchOptions,
+    personalFtsById: ReadonlyMap<number, JournalEntry>,
+    teamFtsById: ReadonlyMap<number, JournalEntry>
 ): EntryWithSource[] {
     const personalIds: number[] = []
     const teamIds: number[] = []
@@ -203,10 +250,16 @@ function assembleHybridCandidates(
             teamIds.push(Number(key.slice('team:'.length)))
         }
     }
-    const hydratedPersonal = hydrateQualifiedStoreCandidates(personalIds, 'personal', db, options)
+    const hydratedPersonal = hydrateQualifiedStoreCandidates(
+        personalIds,
+        'personal',
+        db,
+        options,
+        personalFtsById
+    )
     const hydratedTeam =
         teamDb !== undefined && canQueryTeam
-            ? hydrateQualifiedStoreCandidates(teamIds, 'team', teamDb, options)
+            ? hydrateQualifiedStoreCandidates(teamIds, 'team', teamDb, options, teamFtsById)
             : []
     return [...hydratedPersonal, ...hydratedTeam]
         .sort((a, b) => {
@@ -222,6 +275,57 @@ function assembleHybridCandidates(
             return (b.timestamp ?? '').localeCompare(a.timestamp ?? '')
         })
         .slice(0, options.limit)
+}
+
+function fuseHybridStoreResults(
+    personalStoreRes: Awaited<ReturnType<typeof queryStoreHybrid>>,
+    teamStoreRes: Awaited<ReturnType<typeof queryStoreHybrid>> | undefined,
+    options: HybridSearchOptions
+): {
+    qualifiedFusionScores: Map<string, number>
+    sortedKeys: string[]
+    personalFtsById: Map<number, JournalEntry>
+    teamFtsById: Map<number, JournalEntry>
+} {
+    const ftsWeight = options.ftsWeight ?? 1.0
+    const semanticWeight = options.semanticWeight ?? 1.0
+    const personalFtsKeys = personalStoreRes.ftsResults.entries.map((e) => `personal:${String(e.id)}`)
+    const personalSemanticRanked = personalStoreRes.semanticResults.map((r) => ({
+        key: `personal:${String(r.entryId)}`,
+        score: readHitScore(r),
+    }))
+    const teamLists =
+        teamStoreRes !== undefined
+            ? buildTeamHybridLists(teamStoreRes.ftsResults.entries, teamStoreRes.semanticResults)
+            : { teamFtsKeys: [], teamSemanticRanked: [] }
+
+    const unifiedSemanticKeys = [...personalSemanticRanked, ...teamLists.teamSemanticRanked]
+        .sort((a, b) => b.score - a.score)
+        .map((item) => item.key)
+
+    const rankedLists =
+        teamLists.teamFtsKeys.length > 0
+            ? [personalFtsKeys, teamLists.teamFtsKeys, unifiedSemanticKeys]
+            : [personalFtsKeys, unifiedSemanticKeys]
+    const weights =
+        teamLists.teamFtsKeys.length > 0
+            ? [ftsWeight, ftsWeight, semanticWeight]
+            : [ftsWeight, semanticWeight]
+    const qualifiedFusionScores = computeQualifiedRRFScores(rankedLists, weights)
+
+    // Hydrate candidate pool before slicing so post-fusion metadata filters cannot under-fill `limit`
+    const candidateCap = Math.min(Math.max(options.limit * 10, 200), 1000)
+    const sortedKeys = [...qualifiedFusionScores.entries()]
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, candidateCap)
+        .map(([key]) => key)
+
+    return {
+        qualifiedFusionScores,
+        sortedKeys,
+        personalFtsById: new Map(personalStoreRes.ftsResults.entries.map((e) => [e.id, e])),
+        teamFtsById: new Map((teamStoreRes?.ftsResults.entries ?? []).map((e) => [e.id, e])),
+    }
 }
 
 /**
@@ -256,48 +360,17 @@ export async function hybridSearch(
             : Promise.resolve(undefined),
     ])
 
-    const ftsWeight = options.ftsWeight ?? 1.0
-    const semanticWeight = options.semanticWeight ?? 1.0
-    const personalFtsKeys = personalStoreRes.ftsResults.entries.map(
-        (e) => `personal:${String(e.id)}`
-    )
-    const personalSemanticRanked = personalStoreRes.semanticResults.map((r) => ({
-        key: `personal:${String(r.entryId)}`,
-        score: readHitScore(r),
-    }))
-    const teamLists =
-        teamStoreRes !== undefined
-            ? buildTeamHybridLists(teamStoreRes.ftsResults.entries, teamStoreRes.semanticResults)
-            : { teamFtsKeys: [], teamSemanticRanked: [] }
-
-    const unifiedSemanticKeys = [...personalSemanticRanked, ...teamLists.teamSemanticRanked]
-        .sort((a, b) => b.score - a.score)
-        .map((item) => item.key)
-
-    const rankedLists =
-        teamLists.teamFtsKeys.length > 0
-            ? [personalFtsKeys, teamLists.teamFtsKeys, unifiedSemanticKeys]
-            : [personalFtsKeys, unifiedSemanticKeys]
-    const weights =
-        teamLists.teamFtsKeys.length > 0
-            ? [ftsWeight, ftsWeight, semanticWeight]
-            : [ftsWeight, semanticWeight]
-    const qualifiedFusionScores = computeQualifiedRRFScores(rankedLists, weights)
-
-    // Hydrate candidate pool before slicing so post-fusion metadata filters cannot under-fill `limit`
-    const candidateCap = Math.min(Math.max(options.limit * 10, 200), 1000)
-    const sortedKeys = [...qualifiedFusionScores.entries()]
-        .sort((a, b) => b[1] - a[1])
-        .slice(0, candidateCap)
-        .map(([key]) => key)
-
+    const { qualifiedFusionScores, sortedKeys, personalFtsById, teamFtsById } =
+        fuseHybridStoreResults(personalStoreRes, teamStoreRes, options)
     const combined = assembleHybridCandidates(
         sortedKeys,
         qualifiedFusionScores,
         db,
         teamDb,
         canQueryTeam,
-        options
+        options,
+        personalFtsById,
+        teamFtsById
     )
     const isDegraded =
         personalStoreRes.ftsResults.degraded === true ||

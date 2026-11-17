@@ -331,11 +331,16 @@ async function collectExternalMarkdownFiles(
 
     const parsedFiles: ParsedFile[] = []
     const errors: { file: string; error: string }[] = []
-    for (const filename of mdFiles) {
+    const READ_CONCURRENCY = 16
+    const allowedRoots = [resolvedDir]
+
+    const readSingleExternalFile = async (
+        filename: string
+    ): Promise<{ ok: true; file: ParsedFile | null } | { ok: false; error: string }> => {
         let handle
         try {
             const filepath = path.join(resolvedDir, filename)
-            assertSafeFilePath(filepath, [resolvedDir])
+            assertSafeFilePath(filepath, allowedRoots)
             handle = await fs.open(filepath, constants.O_RDONLY | constants.O_NOFOLLOW)
             const stats = await handle.stat()
             if (stats.size > MAX_IMPORT_FILE_SIZE_BYTES) {
@@ -345,19 +350,37 @@ async function collectExternalMarkdownFiles(
             }
             const content = await handle.readFile('utf-8')
             const converted = convertFile(content, filename, format)
-            if (!converted.body.trim()) continue
-            parsedFiles.push({
-                filename,
-                body: converted.body,
-                metadata: converted.metadata,
-            })
+            if (!converted.body.trim()) return { ok: true, file: null }
+            return {
+                ok: true,
+                file: {
+                    filename,
+                    body: converted.body,
+                    metadata: converted.metadata,
+                },
+            }
         } catch (err) {
-            errors.push({
-                file: filename,
+            return {
+                ok: false,
                 error: err instanceof Error ? err.message : String(err),
-            })
+            }
         } finally {
             if (handle) await handle.close()
+        }
+    }
+
+    for (let i = 0; i < mdFiles.length; i += READ_CONCURRENCY) {
+        const batch = mdFiles.slice(i, i + READ_CONCURRENCY)
+        const settled = await Promise.all(batch.map((filename) => readSingleExternalFile(filename)))
+        for (let j = 0; j < settled.length; j++) {
+            const outcome = settled[j]
+            const filename = batch[j]
+            if (outcome === undefined || filename === undefined) continue
+            if (!outcome.ok) {
+                errors.push({ file: filename, error: outcome.error })
+            } else if (outcome.file !== null) {
+                parsedFiles.push(outcome.file)
+            }
         }
     }
     return { parsedFiles, errors }

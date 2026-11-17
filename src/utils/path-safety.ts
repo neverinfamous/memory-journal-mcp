@@ -85,7 +85,11 @@ function resolveRealTargetPath(targetInput: string): string {
     return remainder ? path.join(existingRealPath, remainder) : existingRealPath
 }
 
-/** Resolve configured IO roots to real paths (falling back to the resolved path when missing). */
+const ALLOWED_ROOTS_CACHE_TTL_MS = 2_000
+const ALLOWED_ROOTS_CACHE_MAX = 128
+const allowedRootsCache = new Map<string, { expiresAt: number; roots: string[] }>()
+
+/** Resolve configured IO roots to real paths (cached 2s per rawRoots tuple; falls back on missing). */
 function resolveAllowedRoots(rawRoots: string[]): string[] {
     // 3. Define safe boundaries
     if (rawRoots.length === 0) {
@@ -93,8 +97,14 @@ function resolveAllowedRoots(rawRoots: string[]): string[] {
             'No allowed input/output roots configured for sandbox boundary. Please configure ALLOWED_IO_ROOTS env variable or pass --allowed-io-roots with absolute paths (e.g. C:\\my\\path) to enable filesystem operations.'
         )
     }
-    const allowedRoots: string[] = []
+    const cacheKey = rawRoots.join('\0')
+    const now = Date.now()
+    const cached = allowedRootsCache.get(cacheKey)
+    if (cached && cached.expiresAt > now) {
+        return cached.roots
+    }
 
+    const allowedRoots: string[] = []
     for (const root of rawRoots) {
         const resolvedRoot = path.resolve(root)
         try {
@@ -113,6 +123,10 @@ function resolveAllowedRoots(rawRoots: string[]): string[] {
             'None of the configured allowed input/output roots could be resolved safely.'
         )
     }
+    if (allowedRootsCache.size >= ALLOWED_ROOTS_CACHE_MAX) {
+        allowedRootsCache.clear()
+    }
+    allowedRootsCache.set(cacheKey, { expiresAt: now + ALLOWED_ROOTS_CACHE_TTL_MS, roots: allowedRoots })
     return allowedRoots
 }
 

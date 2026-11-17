@@ -308,6 +308,14 @@ export class AdapterDelegates {
         return this.vectorOps.deleteVector(entryId)
     }
 
+    deleteVectors(entryIds: number[]): number {
+        return this.vectorOps.deleteVectors(entryIds)
+    }
+
+    hasVectors(): boolean {
+        return this.vectorOps.hasVectors()
+    }
+
     clearVectors(): void {
         this.vectorOps.clearVectors()
     }

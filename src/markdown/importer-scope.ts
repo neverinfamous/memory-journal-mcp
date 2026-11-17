@@ -11,6 +11,7 @@ import {
     findCanonicalRegistryKey,
     resolveProjectContext,
 } from '../utils/workspace-resolver.js'
+import { effectiveWorkspace } from '../database/workspace-scope.js'
 import { activeProjectRegistry, pairStoredScope } from '../utils/write-scope.js'
 import type { ImportOptions, ImportResult, ParsedFile } from './importer.js'
 
@@ -173,17 +174,108 @@ export function assertImportAuthorOwnership(
     }
 }
 
-/** Index imported entries in vectorManager, recording per-file errors without aborting the batch. */
+/** Fetch all referenced entries by ID once and apply workspace visibility matching crud-read. */
+export function prefetchImportedEntriesById(
+    db: IDatabaseAdapter,
+    parsedFiles: readonly ParsedFile[]
+): ReadonlyMap<number, NonNullable<ReturnType<IDatabaseAdapter['getEntryById']>>> | undefined {
+    if (typeof db.getEntriesByIds !== 'function') return undefined
+    const ids = parsedFiles.flatMap((f) =>
+        f.metadata.mj_id !== undefined ? [f.metadata.mj_id] : []
+    )
+    return ids.length > 0 ? db.getEntriesByIds(ids, '*') : new Map()
+}
+
+/** Read and parse markdown files with bounded 16-way concurrency, preserving sorted file order. */
+export async function readMarkdownFilesParallel<T>(
+    filenames: readonly string[],
+    reader: (filename: string) => Promise<{ parsed?: T; skipped?: boolean }>
+): Promise<{
+    parsedFiles: T[]
+    skipped: number
+    errors: { file: string; error: string }[]
+}> {
+    const parsedFiles: T[] = []
+    let skipped = 0
+    const errors: { file: string; error: string }[] = []
+    const CONCURRENCY = 16
+    for (let i = 0; i < filenames.length; i += CONCURRENCY) {
+        const chunk = filenames.slice(i, i + CONCURRENCY)
+        const outcomes = await Promise.all(
+            chunk.map(async (filename) => {
+                try {
+                    return { filename, outcome: await reader(filename) }
+                } catch (err) {
+                    return {
+                        filename,
+                        error: err instanceof Error ? err.message : String(err),
+                    }
+                }
+            })
+        )
+        for (const item of outcomes) {
+            if ('error' in item && item.error !== undefined) {
+                errors.push({ file: item.filename, error: item.error })
+            } else if (item.outcome?.skipped) {
+                skipped++
+            } else if (item.outcome?.parsed !== undefined) {
+                parsedFiles.push(item.outcome.parsed)
+            }
+        }
+    }
+    return { parsedFiles, skipped, errors }
+}
+
+/** Resolve an entry either from an ID-prefetched map (enforcing workspace scope) or via single DB lookup. */
+export function resolvePrefetchedEntry(
+    entryId: number,
+    workspaceId: string | undefined,
+    db: IDatabaseAdapter,
+    prefetchedById?: ReturnType<typeof prefetchImportedEntriesById>
+): ReturnType<IDatabaseAdapter['getEntryById']> {
+    if (prefetchedById === undefined) {
+        return db.getEntryById(entryId, workspaceId)
+    }
+    const hit = prefetchedById.get(entryId)
+    if (!hit) return null
+    const scopeId = effectiveWorkspace(workspaceId)
+    return scopeId === '*' || hit.workspaceId === scopeId ? hit : null
+}
+
+/** Index imported entries in vectorManager, batching via `addEntries` with per-file error fallback. */
 export async function indexImportedEntries(
     db: IDatabaseAdapter,
     vectorManager: VectorSearchManager,
     vectorQueue: readonly ImportedVectorItem[],
     result: Pick<ImportResult, 'vectorsIndexed' | 'errors' | 'success'>
 ): Promise<void> {
-    let hasVectorErrors = false
-    for (const { entryId, filename, workspaceId: entryWsId } of vectorQueue) {
+    if (vectorQueue.length === 0) return
+    const prefetched =
+        typeof db.getEntriesByIds === 'function'
+            ? db.getEntriesByIds(
+                  vectorQueue.map((v) => v.entryId),
+                  '*'
+              )
+            : undefined
+    const resolvedEntries = vectorQueue.map((item) => ({
+        item,
+        entry: resolvePrefetchedEntry(item.entryId, item.workspaceId, db, prefetched),
+    }))
+
+    const indexable = resolvedEntries.flatMap((r) => (r.entry ? [r.entry] : []))
+    if (indexable.length > 1 && typeof vectorManager.addEntries === 'function') {
         try {
-            const entry = db.getEntryById(entryId, entryWsId)
+            await vectorManager.addEntries(indexable)
+            result.vectorsIndexed += indexable.length
+            return
+        } catch {
+            // Fall back per entry so per-file error attribution remains exact.
+        }
+    }
+
+    let hasVectorErrors = false
+    for (const { item, entry } of resolvedEntries) {
+        try {
             if (entry) {
                 await vectorManager.addEntry(entry)
                 result.vectorsIndexed++
@@ -191,7 +283,7 @@ export async function indexImportedEntries(
         } catch (err) {
             hasVectorErrors = true
             result.errors.push({
-                file: filename,
+                file: item.filename,
                 error: err instanceof Error ? err.message : String(err),
             })
         }

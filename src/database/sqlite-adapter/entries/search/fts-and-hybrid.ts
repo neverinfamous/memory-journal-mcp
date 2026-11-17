@@ -8,6 +8,7 @@ import {
 import {
     buildImportanceSqlExpression,
     buildImportanceCte,
+    buildScopedFtsImportanceCte,
     attachImportanceScoresToEntries,
 } from '../importance.js'
 import { sanitizeSearchQuery } from '../../../../utils/security-utils.js'
@@ -98,11 +99,10 @@ function executeSearchQuery(
     )
     const rows = db.prepare(sql).all(params)
     const entries = rowsToEntries(tagsMgr, rows)
-    if (options?.sortBy !== 'importance' && entries.length > 0) {
+    const needsImportance = options?.sortBy === 'importance' || options?.sortBy === 'blended'
+    if (!needsImportance && entries.length > 0) {
         attachImportanceScoresToEntries(context, entries)
     }
-
-    const needsImportance = options?.sortBy === 'importance' || options?.sortBy === 'blended'
     let nextCursor: string | undefined
     const limit = options?.limit ?? 10
     if (entries.length === limit && limit > 0) {
@@ -234,13 +234,24 @@ export function searchEntries(
 /**
  * Builds the SELECT ... FROM prefix (with optional importance CTE/joins and snippet column).
  */
-function buildBaseSelect(options: SearchQueryOptions | undefined, useFts: boolean): string {
+function buildBaseSelect(
+    options: SearchQueryOptions | undefined,
+    useFts: boolean,
+    targetWs: string,
+    hasQuery: boolean
+): string {
     const needsImportance = options?.sortBy === 'importance' || options?.sortBy === 'blended'
     const importanceCol = needsImportance
         ? `, ${buildImportanceSqlExpression()} AS importanceScore`
         : ''
 
-    const ctePrefix = needsImportance ? `WITH ${buildImportanceCte()}` : ''
+    let ctePrefix = ''
+    if (needsImportance) {
+        ctePrefix =
+            useFts && hasQuery
+                ? `WITH ${buildScopedFtsImportanceCte()}`
+                : `WITH ${buildImportanceCte(targetWs !== '*')}`
+    }
     const joinClause = needsImportance
         ? `LEFT JOIN rel_stats rs ON e.id = rs.entry_id LEFT JOIN anchor_stats ans ON e.id = ans.entry_id`
         : ''
@@ -280,12 +291,21 @@ function buildSearchQuery(
     keysetId: number
 ): { sql: string; params: unknown[] } {
     const needsImportance = options?.sortBy === 'importance' || options?.sortBy === 'blended'
-    let query = buildBaseSelect(options, useFts)
+    const targetWs = effectiveWorkspace(options?.workspaceId)
+    const hasQuery = queryStr.length > 0
+    const sanitizedFts = useFts && hasQuery ? sanitizeFtsQuery(queryStr) : ''
+    let query = buildBaseSelect(options, useFts, targetWs, hasQuery)
 
     const params: unknown[] = []
+    if (needsImportance) {
+        if (useFts && hasQuery) {
+            params.push(sanitizedFts)
+        } else if (targetWs !== '*') {
+            params.push(targetWs)
+        }
+    }
     const conditions: string[] = ['e.deleted_at IS NULL']
 
-    const targetWs = effectiveWorkspace(options?.workspaceId)
     if (targetWs !== '*') {
         conditions.push('e.workspace_id = ?')
         params.push(targetWs)
@@ -295,10 +315,10 @@ function buildSearchQuery(
         conditions.push('e.is_archived = 0')
     }
 
-    if (queryStr.length > 0) {
+    if (hasQuery) {
         if (useFts) {
             conditions.push(`fts_content MATCH ?`)
-            params.push(sanitizeFtsQuery(queryStr))
+            params.push(sanitizedFts)
         } else {
             conditions.push(`e.content LIKE '%' || ? || '%' ESCAPE '\\'`)
             params.push(sanitizeSearchQuery(queryStr))

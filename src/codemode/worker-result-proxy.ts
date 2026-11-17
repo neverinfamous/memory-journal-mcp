@@ -6,43 +6,49 @@
  * - Pagination cursor detection injects `hasMore` convenience boolean
  */
 
-const RESULT_COLLECTION_KEYS: readonly string[] = [
+const RESULT_COLLECTION_KEYS: ReadonlySet<string> = new Set([
     'entries', 'results', 'projects', 'items', 'rows', 'tables',
     'flags', 'groups', 'users', 'capabilities', 'metrics', 'events', 'records',
     'logs', 'aliases', 'tags', 'issues', 'pullRequests', 'milestones', 'columns',
     'comments', 'files', 'errors', 'backups', 'deleted', 'updated', 'notFound',
     'history', 'relationships', 'members', 'data', 'nodes', 'edges',
-]
+])
 
-const ITERATOR_COLLECTION_KEYS: readonly string[] = [
+const ITERATOR_COLLECTION_KEYS: ReadonlySet<string> = new Set([
     'entries', 'results', 'projects', 'items', 'issues', 'pullRequests',
     'milestones', 'columns', 'comments', 'files', 'errors', 'backups',
     'deleted', 'updated', 'notFound', 'history', 'relationships', 'members',
     'nodes', 'edges',
-]
+])
 
-const FAILED_ARRAY_METHODS: readonly string[] = [
+const FAILED_ARRAY_METHODS: ReadonlySet<string> = new Set([
     'find', 'map', 'filter', 'reduce', 'reduceRight', 'forEach', 'some', 'every',
     'flatMap', 'includes', 'indexOf', 'findIndex', 'findLast', 'findLastIndex', 'join',
     'at', 'concat', 'flat', 'with', 'slice',
-]
+])
 
-const SUCCESS_ARRAY_METHODS: readonly string[] = [
+const SUCCESS_ARRAY_METHODS: ReadonlySet<string> = new Set([
     ...FAILED_ARRAY_METHODS, 'keys', 'values', 'entries',
-]
+])
 
-const MUTATOR_ARRAY_METHODS: readonly string[] = [
+const MUTATOR_ARRAY_METHODS: ReadonlySet<string> = new Set([
     'push', 'pop', 'shift', 'unshift', 'splice', 'sort', 'reverse', 'copyWithin', 'fill',
-]
+])
 
-const ARRAY_SELF_ALIASES: readonly string[] = [
+const ARRAY_SELF_ALIASES: ReadonlySet<string> = new Set([
     'projects', 'entries', 'results', 'items', 'data', 'rows',
     'relationships', 'members', 'tags', 'history', 'records',
-]
+])
 
-const RESULT_LIST_ALIASES: readonly string[] = [
+const RESULT_LIST_ALIASES: ReadonlySet<string> = new Set([
     'data', 'items', 'entries', 'results', 'rows', 'dataArray', 'projects', 'list', 'records',
-]
+])
+
+const TOTAL_COLLECTION_KEYS: ReadonlySet<string> = new Set([
+    'entries', 'results', 'projects', 'items', 'rows', 'records',
+])
+
+const DIGITS_RE = /^\d+$/
 
 const isObject = (val: unknown): val is Record<string, unknown> =>
     typeof val === 'object' && val !== null && !Array.isArray(val)
@@ -75,10 +81,10 @@ const dictToItems = (obj: Record<string, unknown>): unknown[] =>
 
 function findPrimaryArrayKey(
     targetRecord: Record<string, unknown>,
-    keysToCheck: readonly string[] = RESULT_COLLECTION_KEYS
+    keysToCheck: ReadonlySet<string> = RESULT_COLLECTION_KEYS
 ): string | undefined {
     const arrayKeys = Object.keys(targetRecord).filter((k) => Array.isArray(targetRecord[k]))
-    const matched = arrayKeys.find((k) => keysToCheck.includes(k))
+    const matched = arrayKeys.find((k) => keysToCheck.has(k))
     if (matched !== undefined) return matched
     return arrayKeys.length === 1 ? arrayKeys[0] : undefined
 }
@@ -86,7 +92,7 @@ function findPrimaryArrayKey(
 function bindArrayMethod(arr: unknown[], prop: string): ((...args: unknown[]) => unknown) | undefined {
     const method: unknown = Reflect.get(arr, prop)
     if (typeof method === 'function') {
-        return (...args: unknown[]) => (method as (...a: unknown[]) => unknown).apply(arr, args)
+        return (method as (...a: unknown[]) => unknown).bind(arr)
     }
     return undefined
 }
@@ -111,13 +117,13 @@ function createFailedResultProxy(result: object): unknown {
             if (
                 prop === Symbol.iterator ||
                 prop === 'length' ||
-                (typeof prop === 'string' && RESULT_COLLECTION_KEYS.includes(prop))
+                (typeof prop === 'string' && RESULT_COLLECTION_KEYS.has(prop))
             ) {
                 throw new Error(failedResultMessage(target))
             }
             if (prop in target) return Reflect.get(target, prop) as unknown
-            if (typeof prop === 'string' && /^\d+$/.test(prop)) return undefined
-            if (typeof prop === 'string' && FAILED_ARRAY_METHODS.includes(prop)) {
+            if (typeof prop === 'string' && DIGITS_RE.test(prop)) return undefined
+            if (typeof prop === 'string' && FAILED_ARRAY_METHODS.has(prop)) {
                 const message = failedResultMessage(target)
                 return () => {
                     throw new Error(message)
@@ -138,7 +144,7 @@ function createArrayResultProxy(arr: unknown[]): unknown {
                 return typeof val === 'function' ? (val as (...args: unknown[]) => unknown).bind(target) : val
             }
             if (prop === 'success') return true
-            if (typeof prop === 'string' && ARRAY_SELF_ALIASES.includes(prop)) return receiver as unknown
+            if (typeof prop === 'string' && ARRAY_SELF_ALIASES.has(prop)) return receiver as unknown
             return undefined
         },
     })
@@ -170,7 +176,7 @@ function resolveIteratorOrListAlias(
         }
     }
 
-    if (typeof prop === 'string' && RESULT_LIST_ALIASES.includes(prop)) {
+    if (typeof prop === 'string' && RESULT_LIST_ALIASES.has(prop)) {
         const targetKey = findPrimaryArrayKey(targetRecord)
         if (targetKey !== undefined) return { matched: true, value: targetRecord[targetKey] }
         if ('projects' in targetRecord && isObject(targetRecord['projects'])) {
@@ -203,7 +209,7 @@ function resolveLengthOrIndexAccess(
         if (isDictLike(targetRecord)) return { matched: true, value: Object.keys(targetRecord).length }
     }
 
-    if (typeof prop === 'string' && /^\d+$/.test(prop)) {
+    if (typeof prop === 'string' && DIGITS_RE.test(prop)) {
         const idx = parseInt(prop, 10)
         if ('project' in targetRecord && isObject(targetRecord['project']) && idx === 0) {
             return { matched: true, value: targetRecord['project'] }
@@ -224,7 +230,7 @@ function resolveArrayMethodForwarding(
     targetRecord: Record<string, unknown>,
     prop: string | symbol
 ): ArrayForwardMatch {
-    if (typeof prop === 'string' && SUCCESS_ARRAY_METHODS.includes(prop)) {
+    if (typeof prop === 'string' && SUCCESS_ARRAY_METHODS.has(prop)) {
         const targetKey = findPrimaryArrayKey(targetRecord)
         if (targetKey !== undefined && Array.isArray(targetRecord[targetKey])) {
             const bound = bindArrayMethod(targetRecord[targetKey], prop)
@@ -248,7 +254,7 @@ function resolveArrayMethodForwarding(
         )
     }
 
-    if (typeof prop === 'string' && MUTATOR_ARRAY_METHODS.includes(prop)) {
+    if (typeof prop === 'string' && MUTATOR_ARRAY_METHODS.has(prop)) {
         throw new Error(
             `🛠️ AUTONOMOUS HEALING: [VALIDATION_ERROR] CodeMode Proxy Error: Array mutator method '${prop}' is not allowed on API results. Modifying local arrays does not update the server state. You MUST use the appropriate API tool (e.g., mj.core.updateEntry, mj.admin.batchUpdateEntries) to persist changes.`
         )
@@ -303,9 +309,7 @@ function resolvePaginationAndStatsProp(
         if ('total' in targetRecord && typeof targetRecord['total'] === 'number') {
             return { matched: true, value: targetRecord['total'] }
         }
-        const targetKey = findPrimaryArrayKey(targetRecord, [
-            'entries', 'results', 'projects', 'items', 'rows', 'records',
-        ])
+        const targetKey = findPrimaryArrayKey(targetRecord, TOTAL_COLLECTION_KEYS)
         if (targetKey !== undefined && Array.isArray(targetRecord[targetKey])) {
             return { matched: true, value: targetRecord[targetKey].length }
         }

@@ -36,6 +36,7 @@ interface GroupProxyContext {
     group: string
     methodNames: string[]
     methods: Record<string, string[]>
+    methodToGroup: ReadonlyMap<string, string>
     schemas: Record<string, Record<string, string>> | undefined
     api: Record<string, unknown>
     readonlyMode: boolean | undefined
@@ -134,9 +135,25 @@ function createUnknownGroupMethodFallback(
 function resolveGroupNamespaceProperty(
     ctx: GroupProxyContext,
     target: object,
+    key: string,
+    resolvedCache: Map<string, unknown>
+): unknown {
+    const cached = resolvedCache.get(key)
+    if (cached !== undefined || resolvedCache.has(key)) return cached
+
+    const resolved = computeGroupNamespaceProperty(ctx, target, key)
+    if (resolved !== undefined) {
+        resolvedCache.set(key, resolved)
+    }
+    return resolved
+}
+
+function computeGroupNamespaceProperty(
+    ctx: GroupProxyContext,
+    target: object,
     key: string
 ): unknown {
-    const { group, methods, api, createMethodProxyFn } = ctx
+    const { group, methods, methodToGroup, api, createMethodProxyFn } = ctx
     if (key in target) return Reflect.get(target, key) as unknown
 
     if (/[A-Z]/.test(key)) {
@@ -169,12 +186,17 @@ function resolveGroupNamespaceProperty(
         ? resolvedKey.replace(/[A-Z]/g, (letter) => `_${letter.toLowerCase()}`)
         : resolvedKey
     const teamSnakeKey = `team_${snakeKey}`
-    const teamGroup = Object.keys(methods).find((g) => methods[g]?.includes(teamSnakeKey))
-    if (teamGroup !== undefined && !Object.keys(methods).some((g) => methods[g]?.includes(snakeKey))) {
+    const directGroup = methodToGroup.get(snakeKey)
+    const teamGroup = methodToGroup.get(teamSnakeKey)
+    if (teamGroup !== undefined && directGroup === undefined) {
         return createMethodProxyFn(teamGroup, teamSnakeKey)
     }
-    const foundGroup = Object.keys(methods).find((g) => methods[g]?.includes(snakeKey))
-    if (foundGroup !== undefined) return createMethodProxyFn(foundGroup, snakeKey, resolvedKey)
+    if (directGroup !== undefined) {
+        return createMethodProxyFn(directGroup, snakeKey, resolvedKey)
+    }
+    if (methods['_topLevel']?.includes(snakeKey)) {
+        return createMethodProxyFn('_topLevel', snakeKey, resolvedKey)
+    }
 
     return createUnknownGroupMethodFallback(ctx, key, resolvedKey)
 }
@@ -185,6 +207,7 @@ function createGroupNamespaceProxy(ctx: GroupProxyContext): object {
     for (const methodName of methodNames) {
         groupProxy[methodName] = createMethodProxyFn(group, methodName)
     }
+    const resolvedCache = new Map<string, unknown>()
 
     const helpFn = (): Promise<unknown> => Promise.resolve({ group, methods: methodNames })
     attachMethodIntrospection(
@@ -219,7 +242,7 @@ function createGroupNamespaceProxy(ctx: GroupProxyContext): object {
         },
         get(target: object, prop: string | symbol): unknown {
             if (typeof prop === 'symbol') return undefined
-            return resolveGroupNamespaceProperty(ctx, target, prop)
+            return resolveGroupNamespaceProperty(ctx, target, prop, resolvedCache)
         },
         set: () => false,
         defineProperty: () => false,
@@ -283,6 +306,13 @@ export function buildApiProxy(
     contextObj?: Record<string, unknown>
 ): Record<string, unknown> {
     const api: Record<string, unknown> = {}
+    const methodToGroup = new Map<string, string>()
+    for (const [gName, mList] of Object.entries(methods)) {
+        if (!Array.isArray(mList)) continue
+        for (const mName of mList) {
+            if (!methodToGroup.has(mName)) methodToGroup.set(mName, gName)
+        }
+    }
 
     const safeRpcCall = (group: string, method: string, args: unknown[]): Promise<unknown> =>
         rpcCall(group, method, args).catch((err: unknown) => ({
@@ -327,7 +357,7 @@ export function buildApiProxy(
             continue
         }
         api[group] = createGroupNamespaceProxy({
-            group, methodNames, methods, schemas, api, readonlyMode, createMethodProxyFn,
+            group, methodNames, methods, methodToGroup, schemas, api, readonlyMode, createMethodProxyFn,
         })
     }
 

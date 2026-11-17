@@ -1,62 +1,26 @@
-import * as fs from 'node:fs'
-import * as path from 'node:path'
 import { logger } from '../../utils/logger.js'
 import type { IDatabaseAdapter } from '../../database/core/interfaces.js'
 import type { JournalEntry } from '../../types/index.js'
 import type { ProgressContext } from '../../utils/progress-utils.js'
 
 import { DEFAULT_MODEL, type SemanticSearchResult } from './types.js'
-import { rebuildIndex } from './rebuild.js'
+import { rebuildIndex, verifyVecTableSchema } from './rebuild.js'
 import { effectiveWorkspace } from '../../database/workspace-scope.js'
-import { isMissingTableError } from '../../database/sqlite-adapter/schema-errors.js'
+import {
+    dbPathFromAdapter,
+    isModelCachedOnDisk,
+    isTransientFileLockError,
+    MODEL_LOAD_RETRY_DELAY_MS,
+    resolveEmbeddingCacheDir,
+} from './model-cache.js'
 import {
     collectCandidates,
+    formatEntryForEmbedding,
     resolveCandidates,
+    runPipelineBatchEmbeddingsSettled,
     searchSimilarEntriesById,
+    type VectorCandidate,
 } from './candidate-search.js'
-
-function dbPathFromAdapter(adapter: { getDbPath?: () => string }): string | undefined {
-    if (typeof adapter.getDbPath !== 'function') {
-        return undefined
-    }
-    return adapter.getDbPath()
-}
-
-function resolveEmbeddingCacheDir(dbPath: string | undefined): string {
-    const override = process.env['EMBEDDING_CACHE_DIR']
-    if (override !== undefined && override !== '') {
-        return override
-    }
-    if (dbPath !== undefined && dbPath !== '') {
-        return path.join(path.dirname(dbPath), '.cache', 'huggingface')
-    }
-    return path.join('.cache', 'huggingface')
-}
-
-function isModelCachedOnDisk(cacheDir: string, modelName: string): boolean {
-    try {
-        const modelParts = modelName.split('/')
-        const onnxPath = path.join(cacheDir, ...modelParts, 'onnx', 'model.onnx')
-        const configPath = path.join(cacheDir, ...modelParts, 'config.json')
-        return fs.existsSync(onnxPath) && fs.existsSync(configPath)
-    } catch (err) {
-        logger.debug('Failed to check whether embedding model is cached on disk', {
-            module: 'VectorSearch',
-            cacheDir,
-            modelName,
-            error: err instanceof Error ? err.message : String(err),
-        })
-        return false
-    }
-}
-
-function isTransientFileLockError(err: unknown): boolean {
-    const msg = err instanceof Error ? err.message : String(err)
-    return msg.includes('EPERM') || msg.includes('EBUSY') || msg.includes('EACCES')
-}
-
-/** Base backoff (ms) between embedding-model load retries; multiplied by the attempt number. */
-const MODEL_LOAD_RETRY_DELAY_MS = 250
 
 export class VectorSearchManager {
     private dbAdapter: IDatabaseAdapter
@@ -208,63 +172,18 @@ export class VectorSearchManager {
         if (dimensions === null) {
             throw new Error('Dimensions not detected. Cannot create vector table.')
         }
-
-        let needsRecreation = false
-
-        try {
-            const existingDimStr = this.dbAdapter.getVectorMetadata('dimensions')
-            const existingModel = this.dbAdapter.getVectorMetadata('model_name')
-            if (existingDimStr) {
-                const existingDim = parseInt(existingDimStr, 10)
-                if (
-                    existingDim !== this.dimensions ||
-                    (existingModel !== null &&
-                        existingModel !== undefined &&
-                        existingModel !== '' &&
-                        existingModel !== this.modelName)
-                ) {
-                    needsRecreation = true
-                    logger.info(`Vector model or dimensions changed, dropping old index`, {
-                        oldModel: existingModel || 'unknown',
-                        newModel: this.modelName,
-                        oldDimensions: existingDim,
-                        newDimensions: this.dimensions
-                    })
-                }
-            } else {
-                needsRecreation = true
-            }
-        } catch (err) {
-            if (isMissingTableError(err)) {
-                needsRecreation = true
-                logger.warning('Vector metadata table not found, recreating vector index', { error: err })
-            } else {
-                logger.error('Failed to verify vector table dimensions due to database error', { error: err })
-                throw err
-            }
-        }
-
-        if (needsRecreation) {
-            try {
-                this.dbAdapter.executeInTransaction(() => {
-                    this.dbAdapter.dropVecTable()
-                    this.dbAdapter.createVecTable(dimensions)
-                    this.dbAdapter.setVectorMetadata('model_name', this.modelName)
-                    this.dbAdapter.setVectorMetadata('dimensions', dimensions.toString())
-                })
-                logger.info(`Created new vec_journal_entries table with ${this.dimensions} dimensions`)
-            } catch (err) {
-                logger.error('Failed to recreate vector table', { error: err })
-                throw err
-            }
-        } else {
-            this.dbAdapter.createVecTable(dimensions)
-        }
+        verifyVecTableSchema(this.dbAdapter, this.modelName, dimensions)
     }
 
-    /**
-     * Generate an embedding for text
-     */
+    /** True when subclass/instance overrides `generateEmbedding` or lacks a pipeline function. */
+    public hasCustomEmbeddingGenerator(): boolean {
+        return (
+            this.generateEmbedding !== VectorSearchManager.prototype.generateEmbedding ||
+            typeof this.pipeline !== 'function'
+        )
+    }
+
+    /** Generate an embedding for text. */
     public async generateEmbedding(text: string): Promise<Float32Array> {
         await this.initialize()
 
@@ -277,16 +196,47 @@ export class VectorSearchManager {
         return new Float32Array(result.data)
     }
 
+    /** Generate settled per-item embeddings for a batch of texts, using tensor batching on the HF pipeline. */
+    public async generateEmbeddingsSettled(
+        texts: readonly string[]
+    ): Promise<PromiseSettledResult<Float32Array>[]> {
+        if (texts.length === 0) return []
+        await this.initialize()
+
+        const dims = this.getDimensions()
+        if (dims === null) {
+            throw new Error('Vector search not initialized properly. Cannot rebuild index.')
+        }
+        if (this.hasCustomEmbeddingGenerator()) {
+            const settled: PromiseSettledResult<Float32Array>[] = []
+            for (const text of texts) {
+                try {
+                    settled.push({ status: 'fulfilled', value: await this.generateEmbedding(text) })
+                } catch (reason) {
+                    settled.push({ status: 'rejected', reason })
+                }
+            }
+            return settled
+        }
+        return runPipelineBatchEmbeddingsSettled(this.pipeline, texts, dims, (text) =>
+            this.generateEmbedding(text)
+        )
+    }
+
+    /** Generate embeddings for a batch of texts, using tensor batching on the HF pipeline. */
+    public async generateEmbeddings(texts: readonly string[]): Promise<Float32Array[]> {
+        const settled = await this.generateEmbeddingsSettled(texts)
+        return settled.map((item) => {
+            if (item.status === 'rejected') throw item.reason
+            return item.value
+        })
+    }
+
     public async addEntry(entry: JournalEntry): Promise<void> {
         await this.initialize()
 
         try {
-            // Text to embed - include entry type and tags for better semantic matching
-            const tagsText = entry.tags !== undefined && entry.tags !== null && entry.tags.length > 0 ? ` [Tags: ${entry.tags.join(', ')}]` : ''
-            const text = `[${entry.entryType}]${tagsText} ${entry.content}`
-
-            const embedding = await this.generateEmbedding(text)
-
+            const embedding = await this.generateEmbedding(formatEntryForEmbedding(entry))
             this.dbAdapter.upsertVector(entry.id, embedding)
         } catch (error) {
             logger.error(`Failed to add entry ${entry.id} to vector index`, {
@@ -296,25 +246,72 @@ export class VectorSearchManager {
         }
     }
 
-    /**
-     * Remove an entry from the vector index
-     */
+    /** Batch-embed and upsert multiple entries in one database transaction. */
+    public async addEntries(entries: readonly JournalEntry[]): Promise<void> {
+        if (entries.length === 0) return
+        if (entries.length === 1 && entries[0] !== undefined) {
+            await this.addEntry(entries[0])
+            return
+        }
+        await this.initialize()
+
+        const embeddings = await this.generateEmbeddings(entries.map(formatEntryForEmbedding))
+        const items: { entryId: number; embedding: Float32Array }[] = []
+        for (let i = 0; i < entries.length; i++) {
+            const entry = entries[i]
+            const embedding = embeddings[i]
+            if (entry && embedding) items.push({ entryId: entry.id, embedding })
+        }
+        if (items.length === 0) return
+        if (typeof this.dbAdapter.upsertVectors === 'function') {
+            this.dbAdapter.upsertVectors(items)
+        } else {
+            for (const item of items) this.dbAdapter.upsertVector(item.entryId, item.embedding)
+        }
+    }
+
+    /** Remove an entry from the vector index. */
     public removeEntry(entryId: number): boolean {
-        // Defensive runtime guard, see initialize().
         if ((this.dbAdapter as unknown) == null) return false
 
         try {
             return this.dbAdapter.deleteVector(entryId)
         } catch (error) {
             logger.warning(`Failed to remove entry ${entryId} from vector index`, { error })
-            // Non-fatal
             return false
         }
     }
 
-    /**
-     * Search for similar entries by text query
-     */
+    /** Return raw vector candidates above `threshold` without hydrating full entries from SQLite. */
+    public async searchCandidates(
+        query: string,
+        limit = 10,
+        threshold = 0.0,
+        workspaceId?: string,
+        projectNumber?: number
+    ): Promise<VectorCandidate[]> {
+        await this.initialize()
+
+        try {
+            const queryEmbedding = await this.generateEmbedding(query)
+            const targetWs = effectiveWorkspace(workspaceId)
+            const results = this.dbAdapter.searchVectors(
+                queryEmbedding,
+                limit,
+                targetWs,
+                projectNumber
+            )
+            return collectCandidates(results, threshold)
+        } catch (error) {
+            logger.error('Semantic candidate search failed', {
+                error: error instanceof Error ? error.message : String(error),
+                query
+            })
+            throw error
+        }
+    }
+
+    /** Search for similar entries by text query. */
     public async search(
         query: string,
         limit = 10,
@@ -327,17 +324,13 @@ export class VectorSearchManager {
         try {
             const queryEmbedding = await this.generateEmbedding(query)
             const targetWs = effectiveWorkspace(workspaceId)
-            // [INTENT] Pass projectNumber through so SQLite vector JOIN & k-widening filter inside DB too.
-            const fetchLimit = projectNumber !== undefined ? Math.max(limit * 10, 100) : limit
             const results = this.dbAdapter.searchVectors(
                 queryEmbedding,
-                fetchLimit,
+                limit,
                 targetWs,
                 projectNumber
             )
-
             const candidates = collectCandidates(results, threshold)
-
             return resolveCandidates(this.dbAdapter, candidates, limit, targetWs, projectNumber)
         } catch (error) {
             logger.error('Semantic search failed', {

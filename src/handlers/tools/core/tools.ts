@@ -1,4 +1,3 @@
-import { z } from 'zod'
 import type { ToolDefinition, ToolContext } from '../../../types/index.js'
 import { formatHandlerError } from '../../../utils/error-helpers.js'
 import { sendProgress } from '../../../utils/progress-utils.js'
@@ -28,9 +27,11 @@ import {
     GetEntryHistorySchemaMcp,
     GetEntryHistoryOutputSchema,
     TagsListOutputSchema,
+    GetRecentEntriesOutputSchema,
+    ListTagsSchema,
+    ListTagsSchemaMcp,
 } from './schemas.js'
-import { EntryOutputSchema, coerceSignificanceAlias } from '../schemas.js'
-import { ErrorFieldsMixin } from '../error-fields-mixin.js'
+import { coerceSignificanceAlias } from '../schemas.js'
 import { linkRequestedRelationships } from '../relationship-linking.js'
 import { resolveEntryAnchors } from './staleness-tools.js'
 import { getDiagnosticTools } from './diagnostic-tools.js'
@@ -251,7 +252,7 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
             description: 'Get the most recent journal entries',
             group: 'core',
             inputSchema: GetRecentEntriesSchemaMcp,
-            outputSchema: z.object({ success: z.boolean().optional(), entries: z.array(EntryOutputSchema).optional(), count: z.number().optional(), next_cursor: z.string().optional(), hasMore: z.boolean().optional() }).extend(ErrorFieldsMixin.shape), // Output schema inline for array wrap
+            outputSchema: GetRecentEntriesOutputSchema,
             annotations: {
                 readOnlyHint: true,
                 destructiveHint: false,
@@ -339,13 +340,7 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
             title: 'List Tags',
             description: 'List all unique tags used across all entries',
             group: 'core',
-            inputSchema: z.object({
-                project_number: z.preprocess(
-                                (v: unknown) => (v === null || v === '' ? undefined : v),
-                                z.coerce.number().int().positive().optional()
-                            ),
-                workspace_id: z.string().optional(),
-            }),
+            inputSchema: ListTagsSchemaMcp,
             outputSchema: TagsListOutputSchema,
             annotations: {
                 readOnlyHint: true,
@@ -355,15 +350,7 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
             },
             handler: (params: unknown) => {
                 try {
-                    const input = z
-                        .object({
-                            project_number: z.preprocess(
-                                (v: unknown) => (v === null || v === '' ? undefined : v),
-                                z.coerce.number().int().positive().optional()
-                            ),
-                            workspace_id: z.string().optional(),
-                        })
-                        .parse(params ?? {})
+                    const input = ListTagsSchema.parse(params ?? {})
                     const wsId = resolveWorkspaceId(
                         input.workspace_id,
                         input.project_number,

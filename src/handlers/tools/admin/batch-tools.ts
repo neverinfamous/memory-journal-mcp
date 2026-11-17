@@ -82,6 +82,7 @@ async function executeBatchCreateEntries(
         db,
         autoIndex: input.auto_index,
         entryIds: results.map((r) => r.id),
+        entries: results,
         errorPrefix: 'Entry',
         doneMessage: 'Batch create complete',
         workspaceByEntryId: collectIndexWorkspaces(results),

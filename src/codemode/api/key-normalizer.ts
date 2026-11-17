@@ -11,6 +11,7 @@ import { coerceNumericValue, postProcessNormalizedKeys } from './key-normalizer-
 
 const CONTENT_LIKE_KEYS = new Set(['message', 'msg', 'name', 'heading', 'subject', 'description', 'content', 'comment'])
 const FORBIDDEN_KEYS = new Set(['__proto__', 'constructor', 'prototype'])
+const GITHUB_METHOD_TOKENS = new Set(['github', 'issue', 'issues', 'pr', 'prs', 'milestone', 'milestones'])
 
 function healArchitectureAndDecisionType(
     rawObj: Record<string, unknown>,
@@ -58,9 +59,8 @@ export function convertKeysToSnakeCase(obj: Record<string, unknown>, methodName?
 
     const methodLower = methodName?.toLowerCase()
     const isLinkMethod = methodName !== undefined && hasMethodToken(methodName, 'link')
-    const githubTokens = new Set(['github', 'issue', 'issues', 'pr', 'prs', 'milestone', 'milestones'])
     const isGithubTool =
-        methodName !== undefined && methodTokens(methodName).some((token) => githubTokens.has(token))
+        methodName !== undefined && methodTokens(methodName).some((token) => GITHUB_METHOD_TOKENS.has(token))
 
     const ctx: KeyContext = { obj, result: {}, methodName, methodLower, isLinkMethod, isGithubTool }
     const result = ctx.result

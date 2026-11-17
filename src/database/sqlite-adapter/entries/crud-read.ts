@@ -3,10 +3,11 @@ import {
     ENTRY_COLUMNS,
     type EntriesSharedContext,
     rowToEntry,
-    rowToObject,
     rowsToEntries,
+    rowToObject,
 } from './shared.js'
 import { effectiveWorkspace } from '../../workspace-scope.js'
+import { bucketInParams } from '../row-helpers.js'
 
 export function getEntryById(
     context: EntriesSharedContext,
@@ -31,27 +32,26 @@ export function getEntryById(
     return entry
 }
 
-export function getEntriesByIds(
+function fetchEntriesByIds(
     context: EntriesSharedContext,
     ids: number[],
-    workspaceId?: string
+    workspaceId: string | undefined,
+    includeDeleted: boolean
 ): Map<number, JournalEntry> {
     const result = new Map<number, JournalEntry>()
     if (ids.length === 0) return result
 
     const { db, tagsMgr } = context
     const scopeId = effectiveWorkspace(workspaceId)
-    const CHUNK_SIZE = 500
+    const deletedClause = includeDeleted ? '' : ' AND deleted_at IS NULL'
+    const wsClause = scopeId === '*' ? '' : ' AND workspace_id = ?'
     const rows: unknown[] = []
-    for (let i = 0; i < ids.length; i += CHUNK_SIZE) {
-        const chunk = ids.slice(i, i + CHUNK_SIZE)
-        const placeholders = chunk.map(() => '?').join(', ')
+
+    for (const { placeholders, params } of bucketInParams(ids)) {
         const stmt = db.prepare(
-            scopeId === '*'
-                ? `SELECT ${ENTRY_COLUMNS} FROM memory_journal WHERE id IN (${placeholders}) AND deleted_at IS NULL`
-                : `SELECT ${ENTRY_COLUMNS} FROM memory_journal WHERE id IN (${placeholders}) AND deleted_at IS NULL AND workspace_id = ?`
+            `SELECT ${ENTRY_COLUMNS} FROM memory_journal WHERE id IN (${placeholders})${deletedClause}${wsClause}`
         )
-        const chunkRows = scopeId === '*' ? stmt.all(...chunk) : stmt.all(...chunk, scopeId)
+        const chunkRows = scopeId === '*' ? stmt.all(...params) : stmt.all(...params, scopeId)
         rows.push(...chunkRows)
     }
 
@@ -76,6 +76,22 @@ export function getEntriesByIds(
     }
 
     return result
+}
+
+export function getEntriesByIds(
+    context: EntriesSharedContext,
+    ids: number[],
+    workspaceId?: string
+): Map<number, JournalEntry> {
+    return fetchEntriesByIds(context, ids, workspaceId, false)
+}
+
+export function getEntriesByIdsIncludeDeleted(
+    context: EntriesSharedContext,
+    ids: number[],
+    workspaceId?: string
+): Map<number, JournalEntry> {
+    return fetchEntriesByIds(context, ids, workspaceId, true)
 }
 
 export function getEntryByIdIncludeDeleted(

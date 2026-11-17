@@ -191,6 +191,8 @@ export interface IDatabaseVectorAndAdminAdapter {
     ): VectorSearchRow[]
     getVector(entryId: number): Float32Array | null
     deleteVector(entryId: number): boolean
+    deleteVectors?(entryIds: number[]): number
+    hasVectors?(): boolean
     clearVectors(): void
     getVectorCount(): number
     cleanupStaleVectors(): void

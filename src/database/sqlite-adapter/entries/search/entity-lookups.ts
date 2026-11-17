@@ -169,15 +169,46 @@ export function getSearchFacets(
         params.push(sanitizedQuery)
     }
 
-    appendFacetFilterConditions(conditions, params, options)
+    const expandedFilterTags =
+        options?.tags !== undefined && options.tags.length > 0
+            ? expandTagFilterValues(options.tags)
+            : []
+    const entryTypeConditions = [...conditions]
+    const entryTypeParams = [...params]
+    if (expandedFilterTags.length > 0) {
+        const placeholders = expandedFilterTags.map(() => '?').join(',')
+        entryTypeConditions.push(
+            `EXISTS (SELECT 1 FROM entry_tags et_f JOIN tags t_f ON et_f.tag_id = t_f.id WHERE et_f.entry_id = e.id AND LOWER(t_f.name) IN (${placeholders}))`
+        )
+        entryTypeParams.push(...expandedFilterTags)
+    }
 
+    appendFacetFilterConditions(conditions, params, options)
+    appendFacetFilterConditions(entryTypeConditions, entryTypeParams, {
+        ...options,
+        tags: undefined,
+    })
+
+    return executeFacetCountQueries(db, useFts, conditions, params, entryTypeConditions, entryTypeParams)
+}
+
+function executeFacetCountQueries(
+    db: EntriesSharedContext['db'],
+    useFts: boolean,
+    conditions: string[],
+    params: unknown[],
+    entryTypeConditions: string[],
+    entryTypeParams: unknown[]
+): { tags: { name: string; count: number }[]; entryTypes: { name: string; count: number }[] } {
     const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : ''
+    const entryTypesWhere =
+        entryTypeConditions.length > 0 ? `WHERE ${entryTypeConditions.join(' AND ')}` : ''
     const fromClause = useFts
         ? `FROM fts_content fts CROSS JOIN memory_journal e ON e.id = fts.rowid`
         : `FROM memory_journal e`
 
     const tagsSql = `
-        SELECT t.name, COUNT(DISTINCT e.id) AS cnt
+        SELECT t.name, COUNT(*) AS cnt
         ${fromClause}
         JOIN entry_tags et ON e.id = et.entry_id
         JOIN tags t ON et.tag_id = t.id
@@ -185,24 +216,18 @@ export function getSearchFacets(
         GROUP BY t.name ORDER BY cnt DESC LIMIT 20
     `
 
-    const hasTagFilter =
-        options?.tags !== undefined && expandTagFilterValues(options.tags).length > 0
-    const entryTypesJoinTags = hasTagFilter
-        ? `JOIN entry_tags et ON e.id = et.entry_id JOIN tags t ON et.tag_id = t.id`
-        : ''
     const entryTypesSql = `
-        SELECT e.entry_type AS name, COUNT(DISTINCT e.id) AS cnt
+        SELECT e.entry_type AS name, COUNT(*) AS cnt
         ${fromClause}
-        ${entryTypesJoinTags}
-        ${whereClause}
+        ${entryTypesWhere}
         GROUP BY e.entry_type ORDER BY cnt DESC
     `
 
-    const tagsStmt = db.prepare(tagsSql)
-    const entryTypesStmt = db.prepare(entryTypesSql)
-
-    const tagsRows = tagsStmt.all(params) as { name: string; cnt: number }[]
-    const entryTypesRows = entryTypesStmt.all(params) as { name: string; cnt: number }[]
+    const tagsRows = db.prepare(tagsSql).all(params) as { name: string; cnt: number }[]
+    const entryTypesRows = db.prepare(entryTypesSql).all(entryTypeParams) as {
+        name: string
+        cnt: number
+    }[]
 
     return {
         tags: tagsRows.map((r) => ({ name: r.name, count: r.cnt })),

@@ -24,8 +24,11 @@ import { assertSafeDirectoryPath, assertSafeFilePath } from '../utils/security-u
 import {
     assertImportAuthorOwnership,
     indexImportedEntries,
+    prefetchImportedEntriesById,
+    readMarkdownFilesParallel,
     resolveCanonicalImportAuthor,
     resolveImportedFileContext,
+    resolvePrefetchedEntry,
     type ImportedVectorItem,
 } from './importer-scope.js'
 
@@ -235,22 +238,17 @@ export async function importMarkdownEntries(
         dry_run,
     }
 
-    const parsedFiles: ParsedFile[] = []
-    for (const filename of mdFiles) {
-        try {
-            const outcome = await readAndParseMarkdownFile(sourceDir, filename, allowedRoots)
-            if (outcome.skipped) {
-                result.skipped++
-            } else if (outcome.parsed) {
-                parsedFiles.push(outcome.parsed)
-            }
-        } catch (err) {
-            result.errors.push({
-                file: filename,
-                error: err instanceof Error ? err.message : String(err),
-            })
-            result.success = false
-        }
+    const {
+        parsedFiles,
+        skipped: readSkipped,
+        errors: readErrors,
+    } = await readMarkdownFilesParallel(mdFiles, (filename) =>
+        readAndParseMarkdownFile(sourceDir, filename, allowedRoots)
+    )
+    result.skipped += readSkipped
+    if (readErrors.length > 0) {
+        result.errors.push(...readErrors)
+        result.success = false
     }
 
     const batchResult = await processImportBatch(parsedFiles, db, options, vectorManager)
@@ -264,12 +262,13 @@ export async function importMarkdownEntries(
     return result
 }
 
-/* Author ownership helpers imported from ./importer-scope.ts */
+/* Author ownership and prefetched lookup helpers imported from ./importer-scope.ts */
 
 function validateImportedFileEntry(
     file: ParsedFile,
     db: IDatabaseAdapter,
-    options: ImportOptions
+    options: ImportOptions,
+    prefetchedById?: ReturnType<typeof prefetchImportedEntriesById>
 ): {
     effectiveWsId: string | undefined
     effectiveProjNum: number | undefined
@@ -297,7 +296,12 @@ function validateImportedFileEntry(
     validateImportTimestamp(metadata.timestamp)
     const existing =
         metadata.mj_id !== undefined
-            ? db.getEntryById(metadata.mj_id, effectiveWsId ?? options.workspaceId)
+            ? resolvePrefetchedEntry(
+                  metadata.mj_id,
+                  effectiveWsId ?? options.workspaceId,
+                  db,
+                  prefetchedById
+              )
             : null
     if (existing && metadata.mj_id !== undefined) {
         if (
@@ -317,12 +321,13 @@ function upsertParsedFile(
     file: ParsedFile,
     db: IDatabaseAdapter,
     options: ImportOptions,
-    result: ImportResult
+    result: ImportResult,
+    prefetchedById?: ReturnType<typeof prefetchImportedEntriesById>
 ): { entryId: number; workspaceId: string | undefined; projectNumber: number | undefined } {
     const { body, metadata } = file
     const { author } = options
     const { effectiveWsId, effectiveProjNum, rawEntryType, significanceType, existing } =
-        validateImportedFileEntry(file, db, options)
+        validateImportedFileEntry(file, db, options, prefetchedById)
 
     if (existing && metadata.mj_id !== undefined) {
         const updated = db.updateEntry(metadata.mj_id, {
@@ -383,6 +388,7 @@ export async function processImportBatch(
     }
 
     const vectorQueue: ImportedVectorItem[] = []
+    const prefetchedById = prefetchImportedEntriesById(db, files)
 
     db.executeInTransaction(() => {
         const idRemap = new Map<number, number>()
@@ -392,7 +398,7 @@ export async function processImportBatch(
             const { filename, metadata } = file
 
             if (dry_run) {
-                const { existing } = validateImportedFileEntry(file, db, options)
+                const { existing } = validateImportedFileEntry(file, db, options, prefetchedById)
                 if (existing) {
                     result.updated++
                 } else {
@@ -405,7 +411,8 @@ export async function processImportBatch(
                 file,
                 db,
                 options,
-                result
+                result,
+                prefetchedById
             )
             if (metadata.mj_id !== undefined) {
                 idRemap.set(metadata.mj_id, entryId)

@@ -110,6 +110,43 @@ async function executeGetGitHubIssue(context: ToolContext, params: unknown): Pro
     }
 }
 
+const GetGitHubIssuesSchemaMcp = z.object({
+    ...githubScopeInputFields,
+    owner: z.string().optional().describe('Repository owner - LEAVE EMPTY to auto-detect from git. Only specify if user explicitly provides.'),
+    repo: z.string().optional().describe('Repository name - LEAVE EMPTY to auto-detect from git. Accepts repository name or full "owner/repo" slug.'),
+    state: z.string().optional().default('open'),
+    limit: relaxedNumber().optional().default(20),
+})
+const GetGitHubListInputSchema = z.object({
+    owner: z.string().optional(),
+    repo: z.string().optional(),
+    ...githubScopeParseFields,
+    state: z.enum(['open', 'closed', 'all']).optional().default('open'),
+    limit: z.number().int().min(1).max(MAX_QUERY_LIMIT).optional().default(20),
+}).strict()
+const GetGitHubIssueSchemaMcp = z.object({
+    ...githubScopeInputFields,
+    issue_number: relaxedNumber().optional(),
+    owner: z.string().optional().describe('LEAVE EMPTY to auto-detect from git'),
+    repo: z.string().optional().describe('LEAVE EMPTY to auto-detect from git'),
+    truncate_body: relaxedNumber().optional().default(800).describe('Max characters for body text (0 = full body, default 800). Reduces token usage.'),
+    include_comments: z.boolean().optional().default(false).describe('Include issue comments (default false). Each comment adds tokens.'),
+})
+const GetGitHubPrSchemaMcp = z.object({
+    ...githubScopeInputFields,
+    pr_number: relaxedNumber().optional(),
+    owner: z.string().optional().describe('LEAVE EMPTY to auto-detect from git'),
+    repo: z.string().optional().describe('LEAVE EMPTY to auto-detect from git'),
+    truncate_body: relaxedNumber().optional().default(800).describe('Max characters for body text (0 = full body, default 800). Reduces token usage.'),
+})
+const GetGitHubPrInputSchema = z.object({
+    pr_number: z.number().int().positive(),
+    owner: z.string().optional(),
+    repo: z.string().optional(),
+    ...githubScopeParseFields,
+    truncate_body: z.number().int().min(0).max(100000).optional().default(800),
+}).strict()
+
 // ============================================================================
 // Tool Definitions
 // ============================================================================
@@ -122,23 +159,7 @@ export function getGitHubReadTools(context: ToolContext): ToolDefinition[] {
             description:
                 'List issues from a GitHub repository. IMPORTANT: Do NOT guess owner/repo values - leave them empty to auto-detect from the current git repository.',
             group: 'github',
-            inputSchema: z.object({
-                ...githubScopeInputFields,
-                owner: z
-                    .string()
-                    .optional()
-                    .describe(
-                        'Repository owner - LEAVE EMPTY to auto-detect from git. Only specify if user explicitly provides.'
-                    ),
-                repo: z
-                    .string()
-                    .optional()
-                    .describe(
-                        'Repository name - LEAVE EMPTY to auto-detect from git. Accepts repository name or full "owner/repo" slug.'
-                    ),
-                state: z.string().optional().default('open'),
-                limit: relaxedNumber().optional().default(20),
-            }),
+            inputSchema: GetGitHubIssuesSchemaMcp,
             outputSchema: GitHubIssuesListOutputSchema,
             annotations: {
                 readOnlyHint: true,
@@ -148,22 +169,7 @@ export function getGitHubReadTools(context: ToolContext): ToolDefinition[] {
             },
             handler: async (params: unknown) => {
                 try {
-                    const input = z
-                        .object({
-                            owner: z.string().optional(),
-                            repo: z.string().optional(),
-                            ...githubScopeParseFields,
-                            state: z.enum(['open', 'closed', 'all']).optional().default('open'),
-                            limit: z
-                                .number()
-                                .int()
-                                .min(1)
-                                .max(MAX_QUERY_LIMIT)
-                                .optional()
-                                .default(20),
-                        })
-                        .strict()
-                        .parse(params)
+                    const input = GetGitHubListInputSchema.parse(params)
 
                     const resolved = await resolveOwnerRepo(
                         context,
@@ -198,23 +204,7 @@ export function getGitHubReadTools(context: ToolContext): ToolDefinition[] {
             description:
                 'List pull requests from a GitHub repository. IMPORTANT: Do NOT guess owner/repo values - leave them empty to auto-detect from the current git repository.',
             group: 'github',
-            inputSchema: z.object({
-                ...githubScopeInputFields,
-                owner: z
-                    .string()
-                    .optional()
-                    .describe(
-                        'Repository owner - LEAVE EMPTY to auto-detect from git. Only specify if user explicitly provides.'
-                    ),
-                repo: z
-                    .string()
-                    .optional()
-                    .describe(
-                        'Repository name - LEAVE EMPTY to auto-detect from git. Accepts repository name or full "owner/repo" slug.'
-                    ),
-                state: z.string().optional().default('open'),
-                limit: relaxedNumber().optional().default(20),
-            }),
+            inputSchema: GetGitHubIssuesSchemaMcp,
             outputSchema: GitHubPRsListOutputSchema,
             annotations: {
                 readOnlyHint: true,
@@ -224,22 +214,7 @@ export function getGitHubReadTools(context: ToolContext): ToolDefinition[] {
             },
             handler: async (params: unknown) => {
                 try {
-                    const input = z
-                        .object({
-                            owner: z.string().optional(),
-                            repo: z.string().optional(),
-                            ...githubScopeParseFields,
-                            state: z.enum(['open', 'closed', 'all']).optional().default('open'),
-                            limit: z
-                                .number()
-                                .int()
-                                .min(1)
-                                .max(MAX_QUERY_LIMIT)
-                                .optional()
-                                .default(20),
-                        })
-                        .strict()
-                        .parse(params)
+                    const input = GetGitHubListInputSchema.parse(params)
 
                     const resolved = await resolveOwnerRepo(
                         context,
@@ -274,23 +249,7 @@ export function getGitHubReadTools(context: ToolContext): ToolDefinition[] {
             description:
                 'Get detailed information about a specific GitHub issue. IMPORTANT: Do NOT guess owner/repo values - leave them empty to auto-detect from the current git repository.',
             group: 'github',
-            inputSchema: z.object({
-                ...githubScopeInputFields,
-                issue_number: relaxedNumber().optional(),
-                owner: z.string().optional().describe('LEAVE EMPTY to auto-detect from git'),
-                repo: z.string().optional().describe('LEAVE EMPTY to auto-detect from git'),
-                truncate_body: relaxedNumber()
-                    .optional()
-                    .default(800)
-                    .describe(
-                        'Max characters for body text (0 = full body, default 800). Reduces token usage.'
-                    ),
-                include_comments: z
-                    .boolean()
-                    .optional()
-                    .default(false)
-                    .describe('Include issue comments (default false). Each comment adds tokens.'),
-            }),
+            inputSchema: GetGitHubIssueSchemaMcp,
             outputSchema: GitHubIssueResultOutputSchema,
             annotations: {
                 readOnlyHint: true,
@@ -306,18 +265,7 @@ export function getGitHubReadTools(context: ToolContext): ToolDefinition[] {
             description:
                 'Get detailed information about a specific GitHub pull request, including live prStatus. IMPORTANT: Do NOT guess owner/repo values - leave them empty to auto-detect from the current git repository.',
             group: 'github',
-            inputSchema: z.object({
-                ...githubScopeInputFields,
-                pr_number: relaxedNumber().optional(),
-                owner: z.string().optional().describe('LEAVE EMPTY to auto-detect from git'),
-                repo: z.string().optional().describe('LEAVE EMPTY to auto-detect from git'),
-                truncate_body: relaxedNumber()
-                    .optional()
-                    .default(800)
-                    .describe(
-                        'Max characters for body text (0 = full body, default 800). Reduces token usage.'
-                    ),
-            }),
+            inputSchema: GetGitHubPrSchemaMcp,
             outputSchema: GitHubPRResultOutputSchema,
             annotations: {
                 readOnlyHint: true,
@@ -327,16 +275,7 @@ export function getGitHubReadTools(context: ToolContext): ToolDefinition[] {
             },
             handler: async (params: unknown) => {
                 try {
-                    const input = z
-                        .object({
-                            pr_number: z.number().int().positive(),
-                            owner: z.string().optional(),
-                            repo: z.string().optional(),
-                            ...githubScopeParseFields,
-                            truncate_body: z.number().int().min(0).max(100000).optional().default(800),
-                        })
-                        .strict()
-                        .parse(params)
+                    const input = GetGitHubPrInputSchema.parse(params)
 
                     const resolved = await resolveOwnerRepo(context, input, 'is this PR from')
                     if ('error' in resolved) return resolved.response

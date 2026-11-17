@@ -231,19 +231,28 @@ export async function evaluateWorkspaceAnchors(options: {
     }
 
     const targets = collectStalenessTargetsForWorkspace(db, wsId, rawWs, rawProj, resolvedEntryId)
+    const anchorsByEntry =
+        targets.length > 0 && typeof db.getAnchorsByEntryIds === 'function'
+            ? db.getAnchorsByEntryIds(
+                  targets.map((t) => t.id),
+                  wsId
+              )
+            : undefined
+    const commitCountCache = new Map<string, Promise<number>>()
+    const cachedCountCommits = (anchorPath: string, since: string): Promise<number> => {
+        const key = `${anchorPath}\0${since}`
+        let pending = commitCountCache.get(key)
+        if (pending === undefined) {
+            pending = countCommitsSince(anchorPath, since, registryPath)
+            commitCountCache.set(key, pending)
+        }
+        return pending
+    }
     const rows: StalenessCheckRow[] = []
     for (const target of targets) {
-        const commitCountCache = new Map<string, Promise<number>>()
-        const cachedCountCommits = (anchorPath: string, since: string): Promise<number> => {
-            const key = `${anchorPath}\0${since}`
-            let pending = commitCountCache.get(key)
-            if (pending === undefined) {
-                pending = countCommitsSince(anchorPath, since, registryPath)
-                commitCountCache.set(key, pending)
-            }
-            return pending
-        }
-        const anchors = db.getAnchorsByEntryId(target.id, wsId)
+        const anchors = anchorsByEntry !== undefined
+            ? (anchorsByEntry.get(target.id) ?? [])
+            : db.getAnchorsByEntryId(target.id, wsId)
         const entryRows = await Promise.all(
             anchors.map((anchor) =>
                 evaluateAnchorStaleness(

@@ -2,6 +2,7 @@ import type { ImportanceBreakdown, ImportanceResult, JournalEntry } from '../../
 import { effectiveWorkspace } from '../../workspace-scope.js'
 import { type EntriesSharedContext, rowToObject } from './shared.js'
 import { getEntriesByIds } from './crud.js'
+import { DUAL_IN_PARAM_BUCKETS, bucketInParams } from '../row-helpers.js'
 
 export const IMPORTANCE_WEIGHTS = {
     significance: 0.3,
@@ -19,12 +20,10 @@ export const RECENCY_WINDOW_DAYS = 90
 /** Baseline significance value when significance_type is set without a higher impact_score */
 export const SIGNIFICANCE_TYPE_BASELINE = 0.5
 
-/**
- * Build a Common Table Expression (CTE) which aggregates a relationship
- * count (rel_count) and a causal_count for every entry_id present in the relationships table.
- * Used with buildImportanceSqlExpression.
- */
-export function buildImportanceCte(): string {
+function buildStatsCteBody(seedCte?: { name: string; col: string }): string {
+    const seedRelFrom = seedCte ? `FROM ${seedCte.name} s JOIN relationships r ON r.from_entry_id = s.${seedCte.col}` : 'FROM relationships r'
+    const seedRelTo = seedCte ? `FROM ${seedCte.name} s JOIN relationships r ON r.to_entry_id = s.${seedCte.col}` : 'FROM relationships r'
+    const anchorFrom = seedCte ? `FROM ${seedCte.name} s JOIN entry_anchors ea ON ea.entry_id = s.${seedCte.col}` : 'FROM entry_anchors ea'
     return `
         rel_stats AS (
             SELECT entry_id,
@@ -32,27 +31,56 @@ export function buildImportanceCte(): string {
                    SUM(CASE WHEN relationship_type IN ('blocked_by', 'resolved', 'caused') THEN 1 ELSE 0 END) AS causal_count
             FROM (
                 SELECT r.from_entry_id AS entry_id, r.relationship_type
-                FROM relationships r
+                ${seedRelFrom}
                 JOIN memory_journal peer ON peer.id = r.to_entry_id AND peer.deleted_at IS NULL
                 UNION ALL
                 SELECT r.to_entry_id AS entry_id, r.relationship_type
-                FROM relationships r
+                ${seedRelTo}
                 JOIN memory_journal peer ON peer.id = r.from_entry_id AND peer.deleted_at IS NULL
             )
             GROUP BY entry_id
         ),
         anchor_stats AS (
-            SELECT entry_id,
+            SELECT ea.entry_id,
                    MIN(
-                       CASE status
+                       CASE ea.status
                            WHEN 'invalidated' THEN 1
                            WHEN 'stale' THEN 2
                            ELSE 3
                        END
                    ) as worst_status_rank
-            FROM entry_anchors
-            GROUP BY entry_id
-        )
+            ${anchorFrom}
+            GROUP BY ea.entry_id
+        )`
+}
+
+/**
+ * Build a Common Table Expression (CTE) which aggregates a relationship
+ * count (rel_count) and a causal_count for entries present in relationships/entry_anchors.
+ * When `scopedToWorkspace` is true, prepends a positional `?` filter (`ws_entries`)
+ * to avoid full-table scans across all workspaces (callers must bind workspaceId first).
+ * Used with buildImportanceSqlExpression.
+ */
+export function buildImportanceCte(scopedToWorkspace = false): string {
+    if (scopedToWorkspace) {
+        return `
+        ws_entries AS (
+            SELECT id FROM memory_journal WHERE deleted_at IS NULL AND workspace_id = ?
+        ),${buildStatsCteBody({ name: 'ws_entries', col: 'id' })}
+    `
+    }
+    return buildStatsCteBody()
+}
+
+/**
+ * Build an FTS-scoped importance CTE so `rel_stats` and `anchor_stats` only scan
+ * rows matching the FTS5 query (`fts_content MATCH ?`) instead of the full database.
+ */
+export function buildScopedFtsImportanceCte(): string {
+    return `
+        fts_hits AS (
+            SELECT rowid AS entry_id FROM fts_content WHERE fts_content MATCH ?
+        ),${buildStatsCteBody({ name: 'fts_hits', col: 'entry_id' })}
     `
 }
 
@@ -184,8 +212,69 @@ interface ImportanceStats {
     worstStatusRank: number
 }
 
+function loadRelStatsChunk(
+    db: EntriesSharedContext['db'],
+    bucket: number[],
+    relData: Map<number, ImportanceStats>
+): void {
+    const marks = bucket.map(() => '?').join(', ')
+    const sql = `
+        SELECT entry_id,
+               COUNT(*) AS rel_count,
+               SUM(CASE WHEN relationship_type IN ('blocked_by', 'resolved', 'caused') THEN 1 ELSE 0 END) AS causal_count
+        FROM (
+            SELECT r.from_entry_id AS entry_id, r.relationship_type
+            FROM relationships r
+            JOIN memory_journal peer ON peer.id = r.to_entry_id AND peer.deleted_at IS NULL
+            WHERE r.from_entry_id IN (${marks})
+            UNION ALL
+            SELECT r.to_entry_id AS entry_id, r.relationship_type
+            FROM relationships r
+            JOIN memory_journal peer ON peer.id = r.from_entry_id AND peer.deleted_at IS NULL
+            WHERE r.to_entry_id IN (${marks})
+        )
+        GROUP BY entry_id
+    `
+    const rows = db.prepare(sql).all(...bucket, ...bucket) as {
+        entry_id: number
+        rel_count: number
+        causal_count: number
+    }[]
+    for (const row of rows) {
+        const d = relData.get(row.entry_id)
+        if (d) {
+            d.relCount = row.rel_count
+            d.causalCount = row.causal_count
+        }
+    }
+}
+
+function loadAnchorStatsChunk(
+    db: EntriesSharedContext['db'],
+    bucket: number[],
+    relData: Map<number, ImportanceStats>
+): void {
+    const marks = bucket.map(() => '?').join(', ')
+    const anchorSql = `
+        SELECT entry_id,
+               MIN(CASE status WHEN 'invalidated' THEN 1 WHEN 'stale' THEN 2 ELSE 3 END) AS worst_status_rank
+        FROM entry_anchors WHERE entry_id IN (${marks})
+        GROUP BY entry_id
+    `
+    const anchorRows = db.prepare(anchorSql).all(...bucket) as {
+        entry_id: number
+        worst_status_rank: number
+    }[]
+    for (const row of anchorRows) {
+        const d = relData.get(row.entry_id)
+        if (d) {
+            d.worstStatusRank = row.worst_status_rank
+        }
+    }
+}
+
 /**
- * Load relationship counts and worst anchor status for a set of entries using chunked batched queries.
+ * Load relationship counts and worst anchor status for a set of entries using bucketed batched queries.
  * Every id gets an entry (zero counts, rank 3 when no data).
  */
 function loadImportanceStats(
@@ -196,66 +285,42 @@ function loadImportanceStats(
     for (const id of validIds) {
         relData.set(id, { relCount: 0, causalCount: 0, worstStatusRank: 3 })
     }
-
-    const CHUNK_SIZE = 450
-    for (let i = 0; i < validIds.length; i += CHUNK_SIZE) {
-        const chunk = validIds.slice(i, i + CHUNK_SIZE)
-        const marks = chunk.map(() => '?').join(', ')
-
-        const sql = `
-            SELECT entry_id,
-                   COUNT(*) AS rel_count,
-                   SUM(CASE WHEN relationship_type IN ('blocked_by', 'resolved', 'caused') THEN 1 ELSE 0 END) AS causal_count
-            FROM (
-                SELECT r.from_entry_id AS entry_id, r.relationship_type
-                FROM relationships r
-                JOIN memory_journal peer ON peer.id = r.to_entry_id AND peer.deleted_at IS NULL
-                WHERE r.from_entry_id IN (${marks})
-                UNION ALL
-                SELECT r.to_entry_id AS entry_id, r.relationship_type
-                FROM relationships r
-                JOIN memory_journal peer ON peer.id = r.from_entry_id AND peer.deleted_at IS NULL
-                WHERE r.to_entry_id IN (${marks})
-            )
-            GROUP BY entry_id
-        `
-        const rows = db.prepare(sql).all(...chunk, ...chunk) as {
-            entry_id: number
-            rel_count: number
-            causal_count: number
-        }[]
-
-        const anchorSql = `
-            SELECT entry_id,
-                   MIN(CASE status WHEN 'invalidated' THEN 1 WHEN 'stale' THEN 2 ELSE 3 END) AS worst_status_rank
-            FROM entry_anchors WHERE entry_id IN (${marks})
-            GROUP BY entry_id
-        `
-        const anchorRows = db.prepare(anchorSql).all(...chunk) as {
-            entry_id: number
-            worst_status_rank: number
-        }[]
-
-        for (const row of rows) {
-            const d = relData.get(row.entry_id)
-            if (d) {
-                d.relCount = row.rel_count
-                d.causalCount = row.causal_count
-            }
-        }
-        for (const row of anchorRows) {
-            const d = relData.get(row.entry_id)
-            if (d) {
-                d.worstStatusRank = row.worst_status_rank
-            }
-        }
+    for (const { params } of bucketInParams(validIds, DUAL_IN_PARAM_BUCKETS)) {
+        loadRelStatsChunk(db, params, relData)
+    }
+    for (const { params } of bucketInParams(validIds)) {
+        loadAnchorStatsChunk(db, params, relData)
     }
     return relData
 }
 
+function scoreWithStats(
+    entry: {
+        impactScore?: number | null
+        significanceType?: string | null
+        trustScore?: number | null
+        validationStatus?: string | null
+        timestamp: string
+    },
+    stats: ImportanceStats,
+    nowMs: number
+): ImportanceResult {
+    return computeImportanceBreakdownAndScore({
+        impactScore: entry.impactScore ?? null,
+        significanceType: entry.significanceType ?? null,
+        trustScore: entry.trustScore ?? null,
+        validationStatus: entry.validationStatus ?? null,
+        timestamp: entry.timestamp,
+        relCount: stats.relCount,
+        causalCount: stats.causalCount,
+        worstStatusRank: stats.worstStatusRank,
+        nowMs,
+    })
+}
+
 /**
  * Batch-attaches rounded importanceScore values directly onto an array of hydrated JournalEntry objects.
- * Uses only 2 chunked batched SQL query sets (relationships + entry_anchors) for all entries.
+ * Uses only 2 bucketed SQL query sets (relationships + entry_anchors) for all entries.
  */
 export function attachImportanceScoresToEntries(
     context: EntriesSharedContext,
@@ -267,21 +332,60 @@ export function attachImportanceScoresToEntries(
     const validIds = entries.map((e) => e.id)
     const relData = loadImportanceStats(db, validIds)
     const nowMs = Date.now()
+    const defaultStats: ImportanceStats = { relCount: 0, causalCount: 0, worstStatusRank: 3 }
 
     for (const entry of entries) {
-        const stats = relData.get(entry.id) ?? { relCount: 0, causalCount: 0, worstStatusRank: 3 }
-        entry.importanceScore = computeImportanceBreakdownAndScore({
-            impactScore: entry.impactScore ?? null,
-            significanceType: entry.significanceType ?? null,
-            trustScore: entry.trustScore ?? null,
-            validationStatus: entry.validationStatus ?? null,
-            timestamp: entry.timestamp,
-            relCount: stats.relCount,
-            causalCount: stats.causalCount,
-            worstStatusRank: stats.worstStatusRank,
-            nowMs,
-        }).score
+        const stats = relData.get(entry.id) ?? defaultStats
+        entry.importanceScore = scoreWithStats(entry, stats, nowMs).score
     }
+}
+
+/**
+ * Lightweight batch importance calculation fetching only scalar importance columns (no content/tags).
+ */
+export function getImportanceScoresByIds(
+    context: EntriesSharedContext,
+    entryIds: number[],
+    workspaceId?: string
+): Map<number, ImportanceResult> {
+    const result = new Map<number, ImportanceResult>()
+    if (entryIds.length === 0) return result
+
+    const { db } = context
+    const scopeId = effectiveWorkspace(workspaceId)
+    const wsClause = scopeId !== '*' ? ' AND workspace_id = ?' : ''
+    const wsParams = scopeId !== '*' ? [scopeId] : []
+    const scalarRows: {
+        id: number
+        significanceType: string | null
+        impactScore: number | null
+        trustScore: number | null
+        validationStatus: string | null
+        timestamp: string
+    }[] = []
+
+    for (const { placeholders, params } of bucketInParams(entryIds)) {
+        const rows = db
+            .prepare(
+                `SELECT id, significance_type as significanceType, impact_score as impactScore, trust_score as trustScore, validation_status as validationStatus, timestamp
+                 FROM memory_journal
+                 WHERE deleted_at IS NULL${wsClause} AND id IN (${placeholders})`
+            )
+            .all(...wsParams, ...params) as typeof scalarRows
+        for (const r of rows) scalarRows.push(r)
+    }
+    if (scalarRows.length === 0) return result
+
+    const relData = loadImportanceStats(
+        db,
+        scalarRows.map((r) => r.id)
+    )
+    const nowMs = Date.now()
+    const defaultStats: ImportanceStats = { relCount: 0, causalCount: 0, worstStatusRank: 3 }
+    for (const row of scalarRows) {
+        result.set(row.id, scoreWithStats(row, relData.get(row.id) ?? defaultStats, nowMs))
+    }
+    return result
 }
 
 export function getEntriesByIdsWithImportance(
@@ -299,21 +403,11 @@ export function getEntriesByIdsWithImportance(
     const validIds = Array.from(entriesMap.keys())
     const relData = loadImportanceStats(db, validIds)
     const nowMs = Date.now()
+    const defaultStats: ImportanceStats = { relCount: 0, causalCount: 0, worstStatusRank: 3 }
 
     for (const [id, entry] of entriesMap.entries()) {
-        const stats = relData.get(id) ?? { relCount: 0, causalCount: 0, worstStatusRank: 3 }
-        const importance = computeImportanceBreakdownAndScore({
-            impactScore: entry.impactScore ?? null,
-            significanceType: entry.significanceType ?? null,
-            trustScore: entry.trustScore ?? null,
-            validationStatus: entry.validationStatus ?? null,
-            timestamp: entry.timestamp,
-            relCount: stats.relCount,
-            causalCount: stats.causalCount,
-            worstStatusRank: stats.worstStatusRank,
-            nowMs,
-        })
-        result.set(id, { entry, importance })
+        const stats = relData.get(id) ?? defaultStats
+        result.set(id, { entry, importance: scoreWithStats(entry, stats, nowMs) })
     }
 
     return result

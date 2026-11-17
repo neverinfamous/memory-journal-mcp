@@ -38,10 +38,12 @@ function getRecentEntriesByImportance(
         }
     }
     const importanceExpr = buildImportanceSqlExpression()
-    const cte = buildImportanceCte()
+    const scoped = workspaceId !== '*'
+    const cte = buildImportanceCte(scoped)
 
     const params: unknown[] = []
-    if (workspaceId !== '*') params.push(workspaceId)
+    if (scoped) params.push(workspaceId)
+    if (scoped) params.push(workspaceId)
     if (projectNumber !== undefined) params.push(projectNumber)
     params.push(limit, actualOffset)
 
@@ -234,7 +236,11 @@ function buildDateRangeQuery(
         : ''
     const { offset, hasKeyset, keysetT, keysetId } = decodeDateRangeCursor(options?.cursor)
 
-    let query = useImportance ? `WITH ${buildImportanceCte()} ` : ''
+    const scopedCte = targetWs !== '*'
+    if (useImportance && scopedCte) {
+        params.unshift(targetWs)
+    }
+    let query = useImportance ? `WITH ${buildImportanceCte(scopedCte)} ` : ''
     query += `
         SELECT ${ALIASED_ENTRY_COLUMNS}${importanceCol} FROM memory_journal e
     `

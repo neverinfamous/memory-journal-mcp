@@ -94,79 +94,90 @@ interface DigestScope {
     filterAlias: string
     filterE: string
     params: unknown[]
+    isScoped: boolean
 }
 
 function buildDigestScope(workspaceId: string): DigestScope {
     const scopeId = effectiveWorkspace(workspaceId)
-    const scoped = scopeId !== '*'
+    const isScoped = scopeId !== '*'
     return {
-        filter: scoped ? ' AND workspace_id = ?' : '',
-        filterAlias: scoped ? ' AND m.workspace_id = ?' : '',
-        filterE: scoped ? ' AND e.workspace_id = ?' : '',
-        params: scoped ? [scopeId] : [],
+        filter: isScoped ? ' AND workspace_id = ?' : '',
+        filterAlias: isScoped ? ' AND m.workspace_id = ?' : '',
+        filterE: isScoped ? ' AND e.workspace_id = ?' : '',
+        params: isScoped ? [scopeId] : [],
+        isScoped,
     }
 }
 
-/** Activity trend (current vs previous month). */
-function computeActivityTrend(
+interface UtcMonthWindow {
+    curYm: string
+    prevYm: string
+    prevStartIso: string
+    nextStartIso: string
+}
+
+function getUtcMonthWindow(now = new Date()): UtcMonthWindow {
+    const y = now.getUTCFullYear()
+    const m = now.getUTCMonth()
+    const fmtYm = (dt: Date): string =>
+        `${String(dt.getUTCFullYear())}-${String(dt.getUTCMonth() + 1).padStart(2, '0')}`
+    const curYm = `${String(y)}-${String(m + 1).padStart(2, '0')}`
+    const prevYm = fmtYm(new Date(Date.UTC(y, m - 1, 1)))
+    const nextYm = fmtYm(new Date(Date.UTC(y, m + 1, 1)))
+    return { curYm, prevYm, prevStartIso: `${prevYm}-01`, nextStartIso: `${nextYm}-01` }
+}
+
+/** Activity trend & significance spike in a single memory_journal scan (non-strftime SUBSTR). */
+function computeActivityAndSignificance(
     db: Database,
-    s: DigestScope
+    s: DigestScope,
+    win: UtcMonthWindow
 ): {
     currentPeriodEntries: number
     previousPeriodEntries: number
     activityGrowthPercent: number | null
-} {
-    const activityRow = queryRow(
-        db,
-        `SELECT
-            COALESCE(SUM(CASE WHEN strftime('%Y-%m', timestamp) = strftime('%Y-%m', 'now') THEN 1 ELSE 0 END), 0) AS current_count,
-            COALESCE(SUM(CASE WHEN strftime('%Y-%m', timestamp) = strftime('%Y-%m', 'now', '-1 month') THEN 1 ELSE 0 END), 0) AS previous_count
-        FROM memory_journal
-        WHERE deleted_at IS NULL${s.filter}`,
-        ...s.params
-    )
-    const currentPeriodEntries = (activityRow?.['current_count'] as number) ?? 0
-    const previousPeriodEntries = (activityRow?.['previous_count'] as number) ?? 0
-    const activityGrowthPercent =
-        previousPeriodEntries > 0
-            ? Math.round(
-                  ((currentPeriodEntries - previousPeriodEntries) / previousPeriodEntries) * 100
-              )
-            : null
-    return { currentPeriodEntries, previousPeriodEntries, activityGrowthPercent }
-}
-
-/** Significance spike relative to the historical monthly average. */
-function computeSignificanceSpike(
-    db: Database,
-    s: DigestScope
-): {
     currentPeriodSignificant: number
     historicalAvgSignificant: number
     significanceMultiplier: number | null
 } {
-    const sigRow = queryRow(
+    const row = queryRow(
         db,
         `SELECT
-            COALESCE(SUM(CASE
-                WHEN significance_type IS NOT NULL AND strftime('%Y-%m', timestamp) = strftime('%Y-%m', 'now')
-                THEN 1 ELSE 0 END), 0) AS current_significant,
-            COUNT(DISTINCT strftime('%Y-%m', timestamp)) AS total_periods,
+            COALESCE(SUM(CASE WHEN SUBSTR(timestamp, 1, 7) = ? THEN 1 ELSE 0 END), 0) AS current_count,
+            COALESCE(SUM(CASE WHEN SUBSTR(timestamp, 1, 7) = ? THEN 1 ELSE 0 END), 0) AS previous_count,
+            COALESCE(SUM(CASE WHEN significance_type IS NOT NULL AND SUBSTR(timestamp, 1, 7) = ? THEN 1 ELSE 0 END), 0) AS current_significant,
+            COUNT(DISTINCT SUBSTR(timestamp, 1, 7)) AS total_periods,
             COALESCE(SUM(CASE WHEN significance_type IS NOT NULL THEN 1 ELSE 0 END), 0) AS total_significant
         FROM memory_journal
         WHERE deleted_at IS NULL${s.filter}`,
+        win.curYm,
+        win.prevYm,
+        win.curYm,
         ...s.params
     )
-    const currentPeriodSignificant = (sigRow?.['current_significant'] as number) ?? 0
-    const totalPeriods = (sigRow?.['total_periods'] as number) ?? 1
-    const totalSignificant = (sigRow?.['total_significant'] as number) ?? 0
+    const currentPeriodEntries = (row?.['current_count'] as number) ?? 0
+    const previousPeriodEntries = (row?.['previous_count'] as number) ?? 0
+    const activityGrowthPercent =
+        previousPeriodEntries > 0
+            ? Math.round(((currentPeriodEntries - previousPeriodEntries) / previousPeriodEntries) * 100)
+            : null
+    const currentPeriodSignificant = (row?.['current_significant'] as number) ?? 0
+    const totalPeriods = (row?.['total_periods'] as number) ?? 1
+    const totalSignificant = (row?.['total_significant'] as number) ?? 0
     const historicalAvgSignificant =
         totalPeriods > 0 ? Math.round((totalSignificant / totalPeriods) * 10) / 10 : 0
     const significanceMultiplier =
         historicalAvgSignificant > 0
             ? Math.round((currentPeriodSignificant / historicalAvgSignificant) * 10) / 10
             : null
-    return { currentPeriodSignificant, historicalAvgSignificant, significanceMultiplier }
+    return {
+        currentPeriodEntries,
+        previousPeriodEntries,
+        activityGrowthPercent,
+        currentPeriodSignificant,
+        historicalAvgSignificant,
+        significanceMultiplier,
+    }
 }
 
 /** Projects with no entries in the last N days. */
@@ -191,47 +202,44 @@ function computeStaleProjects(db: Database, s: DigestScope): StaleProject[] {
     }))
 }
 
-/** Relationship density (current vs previous month), normalised by entry counts. */
+/** Relationship density (current vs previous month) in a single date-bounded join scan. */
 function computeRelationshipDensity(
     db: Database,
     s: DigestScope,
+    win: UtcMonthWindow,
     currentPeriodEntries: number,
     previousPeriodEntries: number
 ): { currentRelDensity: number; previousRelDensity: number } {
     const relDensityRow = queryRow(
         db,
         `SELECT
-            COALESCE((SELECT COUNT(*) FROM relationships r
-                JOIN memory_journal m ON r.from_entry_id = m.id
-                JOIN memory_journal p ON r.to_entry_id = p.id
-                WHERE m.deleted_at IS NULL AND p.deleted_at IS NULL AND m.workspace_id = p.workspace_id AND strftime('%Y-%m', m.timestamp) = strftime('%Y-%m', 'now')${s.filterAlias}
-            ), 0) AS current_rels,
-            COALESCE((SELECT COUNT(*) FROM relationships r
-                JOIN memory_journal m ON r.from_entry_id = m.id
-                JOIN memory_journal p ON r.to_entry_id = p.id
-                WHERE m.deleted_at IS NULL AND p.deleted_at IS NULL AND m.workspace_id = p.workspace_id AND strftime('%Y-%m', m.timestamp) = strftime('%Y-%m', 'now', '-1 month')${s.filterAlias}
-            ), 0) AS previous_rels`,
-        ...s.params,
+            COALESCE(SUM(CASE WHEN SUBSTR(m.timestamp, 1, 7) = ? THEN 1 ELSE 0 END), 0) AS current_rels,
+            COALESCE(SUM(CASE WHEN SUBSTR(m.timestamp, 1, 7) = ? THEN 1 ELSE 0 END), 0) AS previous_rels
+        FROM relationships r
+        JOIN memory_journal m ON r.from_entry_id = m.id
+        JOIN memory_journal p ON r.to_entry_id = p.id
+        WHERE m.deleted_at IS NULL AND p.deleted_at IS NULL AND m.workspace_id = p.workspace_id
+          AND m.timestamp >= ? AND m.timestamp < ?${s.filterAlias}`,
+        win.curYm,
+        win.prevYm,
+        win.prevStartIso,
+        win.nextStartIso,
         ...s.params
     )
     const currentRels = (relDensityRow?.['current_rels'] as number) ?? 0
     const previousRels = (relDensityRow?.['previous_rels'] as number) ?? 0
     return {
         currentRelDensity:
-            currentPeriodEntries > 0
-                ? Math.round((currentRels / currentPeriodEntries) * 100) / 100
-                : 0,
+            currentPeriodEntries > 0 ? Math.round((currentRels / currentPeriodEntries) * 100) / 100 : 0,
         previousRelDensity:
-            previousPeriodEntries > 0
-                ? Math.round((previousRels / previousPeriodEntries) * 100) / 100
-                : 0,
+            previousPeriodEntries > 0 ? Math.round((previousRels / previousPeriodEntries) * 100) / 100 : 0,
     }
 }
 
-/** Highest-importance entries. */
+/** Highest-importance entries (uses workspace-scoped CTE when scoped). */
 function computeTopImportance(db: Database, s: DigestScope): TopImportanceEntry[] {
     const importanceExpr = buildImportanceSqlExpression()
-    const importanceCte = buildImportanceCte()
+    const importanceCte = buildImportanceCte(s.isScoped)
     const topRows = queryRows(
         db,
         `WITH ${importanceCte}
@@ -245,6 +253,7 @@ function computeTopImportance(db: Database, s: DigestScope): TopImportanceEntry[
         WHERE e.deleted_at IS NULL${s.filterE}
         ORDER BY importance_score DESC
         LIMIT ?`,
+        ...s.params,
         PREVIEW_LENGTH,
         ...s.params,
         TOP_IMPORTANCE_COUNT
@@ -261,17 +270,24 @@ function computeTopImportance(db: Database, s: DigestScope): TopImportanceEntry[
  * All queries are synchronous (better-sqlite3) and individually lightweight.
  */
 export function computeDigest(db: Database, workspaceId = 'default'): DigestSnapshot {
-    const now = new Date().toISOString()
+    const nowDate = new Date()
+    const now = nowDate.toISOString()
+    const win = getUtcMonthWindow(nowDate)
     const scope = buildDigestScope(workspaceId)
 
-    const { currentPeriodEntries, previousPeriodEntries, activityGrowthPercent } =
-        computeActivityTrend(db, scope)
-    const { currentPeriodSignificant, historicalAvgSignificant, significanceMultiplier } =
-        computeSignificanceSpike(db, scope)
+    const {
+        currentPeriodEntries,
+        previousPeriodEntries,
+        activityGrowthPercent,
+        currentPeriodSignificant,
+        historicalAvgSignificant,
+        significanceMultiplier,
+    } = computeActivityAndSignificance(db, scope, win)
     const staleProjects = computeStaleProjects(db, scope)
     const { currentRelDensity, previousRelDensity } = computeRelationshipDensity(
         db,
         scope,
+        win,
         currentPeriodEntries,
         previousPeriodEntries
     )

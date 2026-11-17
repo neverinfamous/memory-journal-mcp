@@ -122,8 +122,7 @@ export class McpLogger {
     /**
      * Format message for stderr fallback
      */
-    private formatForStderr(level: McpLogLevel, loggerName: string, data: LogData): string {
-        const sanitized = this.sanitizeData(data)
+    private formatSanitizedForStderr(level: McpLogLevel, loggerName: string, sanitized: LogData): string {
         const timestamp = new Date().toISOString()
         const levelUpper = level.toUpperCase().padEnd(9)
         const module = loggerName ? `[${loggerName}]` : ''
@@ -168,7 +167,7 @@ export class McpLogger {
         }
 
         // Always also log to stderr for local debugging
-        console.error(this.formatForStderr(level, loggerName, sanitized))
+        console.error(this.formatSanitizedForStderr(level, loggerName, sanitized))
     }
 
     // Convenience methods

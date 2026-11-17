@@ -145,12 +145,15 @@ export function formatToolFailure(
         }
     }
 
-    logAgentIssue({
-        source: 'MCP',
-        action: toolName,
-        input: args,
-        error: (errorResult['error'] as string) ?? 'Unknown error',
-    })
+    logAgentIssue(
+        {
+            source: 'MCP',
+            action: toolName,
+            input: args,
+            error: (errorResult['error'] as string) ?? 'Unknown error',
+        },
+        error
+    )
     return errorResult
 }
 

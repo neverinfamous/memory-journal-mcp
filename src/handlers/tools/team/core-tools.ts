@@ -35,6 +35,23 @@ import {
 import { relaxedNumber, StrictProjectNumberSchema } from '../schemas.js'
 import { linkRequestedRelationships } from '../relationship-linking.js'
 
+const TeamListTagsSchemaMcp = z.object({
+    project_number: relaxedNumber()
+        .optional()
+        .describe('Numeric project ID to filter tags by.'),
+    workspace_id: z
+        .string()
+        .optional()
+        .describe('Optional workspace isolation identifier (e.g. "alpha").'),
+})
+
+const TeamListTagsSchema = z
+    .object({
+        project_number: StrictProjectNumberSchema.optional(),
+        workspace_id: z.string().optional(),
+    })
+    .strict()
+
 type TeamDbInstance = NonNullable<ToolContext['teamDb']>
 type TeamCreateInput = z.infer<typeof TeamCreateEntrySchema>
 
@@ -144,7 +161,7 @@ async function executeTeamCreateEntry(
         projectNumber
     )
     teamDb.flushSave()
-    const indexStatus = await autoIndexEntry(context.teamVectorManager, teamDb, entry.id, wsId)
+    const indexStatus = await autoIndexEntry(context.teamVectorManager, teamDb, entry, wsId)
     triggerTeamNotifications(context)
 
     const warnings: string[] = [
@@ -299,15 +316,7 @@ export function getTeamCoreTools(context: ToolContext): ToolDefinition[] {
             description:
                 'List all tags used in the team database with usage counts. Requires TEAM_DB_PATH.',
             group: 'team',
-            inputSchema: z.object({
-                project_number: relaxedNumber()
-                    .optional()
-                    .describe('Numeric project ID to filter tags by.'),
-                workspace_id: z
-                    .string()
-                    .optional()
-                    .describe('Optional workspace isolation identifier (e.g. "alpha").'),
-            }),
+            inputSchema: TeamListTagsSchemaMcp,
             outputSchema: TeamTagsListOutputSchema,
             annotations: {
                 readOnlyHint: true,
@@ -321,13 +330,7 @@ export function getTeamCoreTools(context: ToolContext): ToolDefinition[] {
                         return { ...TEAM_DB_ERROR_RESPONSE }
                     }
 
-                    const input = z
-                        .object({
-                            project_number: StrictProjectNumberSchema.optional(),
-                            workspace_id: z.string().optional(),
-                        })
-                        .strict()
-                        .parse(params ?? {})
+                    const input = TeamListTagsSchema.parse(params ?? {})
                     const wsId = resolveWorkspaceId(
                         input.workspace_id,
                         input.project_number,

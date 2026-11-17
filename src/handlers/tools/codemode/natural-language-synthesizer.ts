@@ -60,13 +60,8 @@ export function isNaturalLanguagePrompt(text: string): boolean {
     ) {
         return false
     }
-    if (isParsableJsCode(trimmed) || isValidJsScript(trimmed)) {
-        const isMarkdownOrLabel =
-            /^\s*(?:[*#-]\s|\d+\.\s)/.test(trimmed) ||
-            (/^[A-Za-z0-9_-]+:\s+/.test(trimmed) && !/[(.=[\];]/.test(trimmed))
-        if (!isMarkdownOrLabel && !/^[A-Za-z_$][\w$]*$/.test(trimmed)) {
-            return false
-        }
+    if (isParsableJsCode(trimmed)) {
+        return false
     }
     if (NATURAL_VERB_PATTERN.test(trimmed)) return true
     if (/^\s*([*#-]\s*\*?|\d+\.\s|[A-Z][a-z0-9_-]+:)/m.test(trimmed)) return true
@@ -263,6 +258,8 @@ function buildSynthesizedEntryPayload(
     return `return await ${fnName}(${JSON.stringify(payload)});`
 }
 
+const NESTED_ENTRY_KEYS: readonly string[] = [...ENTRY_KEYS, 'project_number', 'session_id']
+
 export function synthesizeNaturalLanguageOrEntryPayload(executionCode: string, input: ExecuteCodeInput, params: unknown): string {
     const rawObj = isRecord(params) ? params : {}
     const entryObj = isRecord(rawObj['entry'])
@@ -285,7 +282,7 @@ export function synthesizeNaturalLanguageOrEntryPayload(executionCode: string, i
     const hasExplicitContent =
         typeof rawObj['content'] === 'string' || typeof rawObj['body'] === 'string'
 
-    const entryKeys = isFlatCall ? ENTRY_KEYS : [...ENTRY_KEYS, 'project_number', 'session_id']
+    const entryKeys = isFlatCall ? ENTRY_KEYS : NESTED_ENTRY_KEYS
     const hasEntryFields = entryKeys.some((k) => entryObj[k] !== undefined || (!isFlatCall && rawObj[k] !== undefined))
     const learnedVal = getNonEmptyString(entryObj, rawObj, ['learned_context', 'learnedContext', 'lesson', 'insight', 'knowledge', 'rule'])
     if (

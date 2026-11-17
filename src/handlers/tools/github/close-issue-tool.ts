@@ -143,14 +143,19 @@ async function finalizeClosedIssueEntry(
         `URL: ${issueDetails.url}\n` +
         (input.resolution_notes ? `\nResolution: ${input.resolution_notes}` : '')
 
-    db.updateEntry(entryId, {
+    const updatedEntry = db.updateEntry(entryId, {
         content: finalContent,
         issueUrl: issueDetails.url,
         tags: input.tags ?? ['github', 'issue-closed', 'resolution'],
         workspaceId,
     })
 
-    const indexStatus = await autoIndexEntry(context.vectorManager, db, entryId, workspaceId)
+    const indexStatus = await autoIndexEntry(
+        context.vectorManager,
+        db,
+        updatedEntry ?? entryId,
+        workspaceId
+    )
     const vectorWarning =
         indexStatus === 'failed' ? 'Journal entry saved, but vector indexing failed.' : undefined
 
@@ -249,6 +254,18 @@ async function executeCloseIssueMutation(
     )
 }
 
+const CloseGitHubIssueSchemaMcp = z.object({
+    issue_number: relaxedNumber().optional().describe('Issue number to close'),
+    resolution_notes: z.string().optional().describe('Notes about how the issue was resolved'),
+    comment: z.string().optional().describe('Comment to add to the issue before closing'),
+    move_to_done: z.boolean().optional().default(false).describe('Move the associated Kanban item to "Done" column'),
+    project_number: relaxedNumber().optional().describe('GitHub Project number (required if move_to_done is true, or uses DEFAULT_PROJECT_NUMBER)'),
+    workspace_id: z.string().optional().describe('Workspace identifier (defaults to current project)'),
+    owner: z.string().optional().describe('Repository owner - LEAVE EMPTY to auto-detect'),
+    repo: z.string().optional().describe('Repository name - LEAVE EMPTY to auto-detect'),
+    tags: z.array(z.string()).optional().describe('Journal entry tags'),
+})
+
 export function getCloseGitHubIssueTool(context: ToolContext): ToolDefinition {
     return {
         name: 'close_github_issue_with_entry',
@@ -256,40 +273,7 @@ export function getCloseGitHubIssueTool(context: ToolContext): ToolDefinition {
         description:
             'Close a GitHub issue AND create a journal entry documenting the resolution.',
         group: 'github',
-        inputSchema: z.object({
-            issue_number: relaxedNumber().optional().describe('Issue number to close'),
-            resolution_notes: z
-                .string()
-                .optional()
-                .describe('Notes about how the issue was resolved'),
-            comment: z
-                .string()
-                .optional()
-                .describe('Comment to add to the issue before closing'),
-            move_to_done: z
-                .boolean()
-                .optional()
-                .default(false)
-                .describe('Move the associated Kanban item to "Done" column'),
-            project_number: relaxedNumber()
-                .optional()
-                .describe(
-                    'GitHub Project number (required if move_to_done is true, or uses DEFAULT_PROJECT_NUMBER)'
-                ),
-            workspace_id: z
-                .string()
-                .optional()
-                .describe('Workspace identifier (defaults to current project)'),
-            owner: z
-                .string()
-                .optional()
-                .describe('Repository owner - LEAVE EMPTY to auto-detect'),
-            repo: z
-                .string()
-                .optional()
-                .describe('Repository name - LEAVE EMPTY to auto-detect'),
-            tags: z.array(z.string()).optional().describe('Journal entry tags'),
-        }),
+        inputSchema: CloseGitHubIssueSchemaMcp,
         outputSchema: CloseGitHubIssueWithEntryOutputSchema,
         annotations: {
             readOnlyHint: false,

@@ -42,6 +42,13 @@ export class DatabaseAdapter extends AdapterDelegates implements IDatabaseAdapte
         return this.entriesMgr.getEntriesByIdsWithImportance(ids, workspaceId)
     }
 
+    getImportanceScoresByIds(
+        entryIds: number[],
+        workspaceId?: string
+    ): Map<number, ImportanceResult> {
+        return this.entriesMgr.getImportanceScoresByIds(entryIds, workspaceId)
+    }
+
     calculateImportance(entryId: number, workspaceId?: string): ImportanceResult | null {
         return this.entriesMgr.calculateImportance(entryId, workspaceId)
     }
@@ -146,6 +153,14 @@ export class DatabaseAdapter extends AdapterDelegates implements IDatabaseAdapte
         return this.entriesMgr.getAnchorsByEntryId(entryId, workspaceId)
     }
 
+    getAnchorsByEntryIds(entryIds: number[], workspaceId?: string): Map<number, Anchor[]> {
+        return this.entriesMgr.getAnchorsByEntryIds(entryIds, workspaceId)
+    }
+
+    getEntriesByIdsIncludeDeleted(ids: number[], workspaceId?: string): Map<number, JournalEntry> {
+        return this.entriesMgr.getEntriesByIdsIncludeDeleted(ids, workspaceId)
+    }
+
     restoreEntry(id: number, workspaceId?: string): boolean {
         return this.entriesMgr.restoreEntry(id, workspaceId)
     }
@@ -206,16 +221,17 @@ export class DatabaseAdapter extends AdapterDelegates implements IDatabaseAdapte
         return this.executeInTransaction(() => {
             const result = this.entriesMgr.deleteEntries(ids, permanent, workspaceId)
             const vectorFailures: string[] = []
-            for (const id of result.deleted) {
+            if (result.deleted.length > 0) {
                 try {
-                    this.deleteVector(id)
+                    this.deleteVectors(result.deleted)
                 } catch (error: unknown) {
                     const message = error instanceof Error ? error.message : String(error)
-                    // A vector failure must not fail the entry deletion, but leaves an orphan to reconcile
-                    logger.warning(`Vector delete failed for entry ${String(id)}: ${message}`, {
+                    // A vector failure must not fail the entry deletion, but leaves orphans to reconcile
+                    logger.warning(`Vector batch delete failed: ${message}`, {
                         module: 'DatabaseAdapter',
+                        count: result.deleted.length,
                     })
-                    vectorFailures.push(`entry ${String(id)}: ${message}`)
+                    vectorFailures.push(message)
                 }
             }
             if (vectorFailures.length === 0) return result

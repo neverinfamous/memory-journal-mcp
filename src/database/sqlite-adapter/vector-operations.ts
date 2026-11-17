@@ -1,6 +1,7 @@
 import type { NativeConnectionManager } from './native-connection.js'
 import { effectiveWorkspace } from '../workspace-scope.js'
 import { isMissingTableError } from './schema-errors.js'
+import { bucketInParams } from './row-helpers.js'
 
 /** Initial KNN over-fetch factor applied before the workspace filter. */
 const VECTOR_KNN_OVERFETCH = 4
@@ -62,16 +63,39 @@ export class VectorOperations {
         projectNumber?: number
     ): { entry_id: number; distance: number }[] {
         const db = this.connection.getNativeDb()
+        const totalVectors = this.getVectorCount()
+        if (totalVectors === 0) return []
+
         const scopeId = effectiveWorkspace(workspaceId)
         const wsScoped = scopeId !== '*'
         const pnScoped = projectNumber !== undefined
         const scoped = wsScoped || pnScoped
+
+        let scopedCount = totalVectors
+        if (scoped) {
+            const countClauses = ['deleted_at IS NULL']
+            const countParams: unknown[] = []
+            if (wsScoped) {
+                countClauses.push('workspace_id = ?')
+                countParams.push(scopeId)
+            }
+            if (pnScoped) {
+                countClauses.push('project_number = ?')
+                countParams.push(projectNumber)
+            }
+            const row = db
+                .prepare(`SELECT COUNT(*) as count FROM memory_journal WHERE ${countClauses.join(' AND ')}`)
+                .get(...countParams) as { count: number } | undefined
+            scopedCount = row?.count ?? 0
+            if (scopedCount === 0) return []
+        }
+
         const clauses = ['v.embedding MATCH ?', 'v.k = ?', 'mj.deleted_at IS NULL']
         if (wsScoped) clauses.push('mj.workspace_id = ?')
         if (pnScoped) clauses.push('mj.project_number = ?')
         const sql = `SELECT v.entry_id, v.distance
              FROM vec_embeddings v
-             INNER JOIN memory_journal mj ON v.entry_id = mj.id
+             CROSS JOIN memory_journal mj ON v.entry_id = mj.id
              WHERE ${clauses.join(' AND ')}
              LIMIT ?`
         const params = (k: number): unknown[] => [
@@ -84,14 +108,49 @@ export class VectorOperations {
         const stmt = db.prepare(sql)
 
         // The vec0 KNN runs globally before the workspace/project JOIN filter, so a scoped slice
-        // holding a small share of the vectors can be under-filled. Widen k until `limit` rows are found.
-        let k = Math.min(limit * VECTOR_KNN_OVERFETCH, VECTOR_KNN_MAX_K)
+        // holding a small share of the vectors can be under-filled. Widen k only up to indexed/scoped bounds.
+        const effectiveMaxK = Math.min(VECTOR_KNN_MAX_K, totalVectors)
+        const targetRows = Math.min(limit, scopedCount)
+        let k = Math.min(Math.max(1, limit * VECTOR_KNN_OVERFETCH), effectiveMaxK)
         let rows = stmt.all(...params(k)) as { entry_id: number; distance: number }[]
-        while (scoped && rows.length < limit && k < VECTOR_KNN_MAX_K) {
-            k = Math.min(k * 2, VECTOR_KNN_MAX_K)
+        while (scoped && rows.length < targetRows && k < effectiveMaxK) {
+            k = Math.min(k * 2, effectiveMaxK)
             rows = stmt.all(...params(k)) as { entry_id: number; distance: number }[]
         }
         return rows
+    }
+
+    hasVectors(): boolean {
+        try {
+            const row = this.connection.getNativeDb().prepare('SELECT 1 FROM vec_embeddings LIMIT 1').get()
+            return row !== undefined
+        } catch (error) {
+            if (isMissingTableError(error)) {
+                return false
+            }
+            throw error
+        }
+    }
+
+    deleteVectors(entryIds: number[]): number {
+        if (entryIds.length === 0) return 0
+        const db = this.connection.getNativeDb()
+        let deleted = 0
+        try {
+            for (const { placeholders, params } of bucketInParams(entryIds)) {
+                const bigIds = params.map((id) => BigInt(Math.trunc(id)))
+                const result = db
+                    .prepare(`DELETE FROM vec_embeddings WHERE entry_id IN (${placeholders})`)
+                    .run(...bigIds)
+                deleted += result.changes
+            }
+            return deleted
+        } catch (error) {
+            if (isMissingTableError(error)) {
+                return 0
+            }
+            throw error
+        }
     }
 
     getVector(entryId: number): Float32Array | null {

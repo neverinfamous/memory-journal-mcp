@@ -2,9 +2,11 @@ import type { NativeConnectionManager } from '../native-connection.js'
 import { logger } from '../../../utils/logger.js'
 import { effectiveWorkspace } from '../../workspace-scope.js'
 import { isMissingColumnError, isMissingTableError } from '../schema-errors.js'
+import { bucketInParams } from '../row-helpers.js'
 
 function canonicalAuthorExpr(tableAlias: string, fallback = "'unknown'"): string {
-    const sub = `(SELECT aa.canonical_author FROM author_aliases aa WHERE LOWER(aa.alias) = LOWER(${tableAlias}.author) AND (aa.workspace_id IS NULL OR aa.workspace_id = ${tableAlias}.workspace_id) ORDER BY aa.workspace_id IS NULL ASC LIMIT 1)`
+    // Use `COLLATE NOCASE` matching `idx_author_aliases_alias` so SQLite uses an index lookup.
+    const sub = `(SELECT aa.canonical_author FROM author_aliases aa WHERE aa.alias = ${tableAlias}.author COLLATE NOCASE AND (aa.workspace_id IS NULL OR aa.workspace_id = ${tableAlias}.workspace_id) ORDER BY aa.workspace_id IS NULL ASC LIMIT 1)`
     return fallback !== ''
         ? `COALESCE(${sub}, ${tableAlias}.author, ${fallback})`
         : `COALESCE(${sub}, ${tableAlias}.author)`
@@ -63,23 +65,19 @@ export function getAuthorsForEntries(
     const authorMap = new Map<number, string | null>()
     if (entryIds.length === 0) return authorMap
 
-    const uniqueIds = Array.from(new Set(entryIds))
-    const CHUNK_SIZE = 500
+    const db = connection.getNativeDb()
     const authorExpr = canonicalAuthorExpr('mj', '')
     try {
-        for (let i = 0; i < uniqueIds.length; i += CHUNK_SIZE) {
-            const chunk = uniqueIds.slice(i, i + CHUNK_SIZE)
-            const placeholders = chunk.map(() => '?').join(',')
-            const authorResult = connection.exec(
-                `SELECT mj.id, ${authorExpr} as author
-                 FROM memory_journal mj
-                 WHERE mj.id IN (${placeholders})`,
-                chunk
-            )
-            if (authorResult[0]) {
-                authorResult[0].values.forEach((row: unknown[]) => {
-                    authorMap.set(row[0] as number, row[1] as string | null)
-                })
+        for (const { placeholders, params } of bucketInParams(entryIds)) {
+            const rows = db
+                .prepare(
+                    `SELECT mj.id as id, ${authorExpr} as author
+                     FROM memory_journal mj
+                     WHERE mj.id IN (${placeholders})`
+                )
+                .all(...params) as { id: number; author: string | null }[]
+            for (const row of rows) {
+                authorMap.set(row.id, row.author)
             }
         }
     } catch (error: unknown) {

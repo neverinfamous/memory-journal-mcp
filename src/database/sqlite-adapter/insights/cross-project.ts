@@ -56,22 +56,6 @@ function buildInsightsFilterState(options: InsightsOptions): {
     return { where, sqlParams, scopeId, wsFilter, wsParams, startBound, endBound }
 }
 
-function mapInsightProjects(
-    projectsResult: ReturnType<NativeConnectionManager['exec']>
-): Record<string, unknown>[] {
-    const projects: Record<string, unknown>[] = []
-    if (!projectsResult[0] || projectsResult[0].values.length === 0) return projects
-    const columns = projectsResult[0].columns
-    for (const row of projectsResult[0].values) {
-        const obj: Record<string, unknown> = {}
-        columns.forEach((col: string, i: number) => {
-            obj[col] = row[i]
-        })
-        projects.push(obj)
-    }
-    return projects
-}
-
 export function getCrossProjectInsights(
     connection: NativeConnectionManager,
     options: InsightsOptions
@@ -82,21 +66,22 @@ export function getCrossProjectInsights(
     const { where, sqlParams, scopeId, wsFilter, wsParams, startBound, endBound } =
         buildInsightsFilterState(options)
 
-    const projectsResult = connection.exec(
-        `
+    const db = connection.getNativeDb()
+    const projects = db
+        .prepare(
+            `
         SELECT project_number, COUNT(*) as entry_count,
-               MIN(DATE(timestamp)) as first_entry,
-               MAX(DATE(timestamp)) as last_entry,
-               COUNT(DISTINCT DATE(timestamp)) as active_days
+               MIN(SUBSTR(timestamp, 1, 10)) as first_entry,
+               MAX(SUBSTR(timestamp, 1, 10)) as last_entry,
+               COUNT(DISTINCT SUBSTR(timestamp, 1, 10)) as active_days
         FROM memory_journal ${where}
         GROUP BY project_number
         HAVING entry_count >= ?
         ORDER BY entry_count DESC
-        `,
-        [...sqlParams, options.minEntries]
-    )
+        `
+        )
+        .all(...sqlParams, options.minEntries) as Record<string, unknown>[]
 
-    const projects = mapInsightProjects(projectsResult)
     attachTopTags(connection, projects, scopeId, startBound, endBound)
 
     const inactiveProjects = queryInactiveProjects(
@@ -135,26 +120,29 @@ function attachTopTags(
             dateParams.push(endDate)
         }
         const dateFilter = dateClauses.length > 0 ? ` ${dateClauses.join(' ')}` : ''
-        const tagsResult = connection.exec(
-            `
-            SELECT mj.project_number, t.name, COUNT(*) as count
+        const tagRows = connection
+            .getNativeDb()
+            .prepare(
+                `
+            SELECT mj.project_number as project_number, t.name as name, COUNT(*) as count
             FROM memory_journal mj
             JOIN entry_tags et ON mj.id = et.entry_id
             JOIN tags t ON et.tag_id = t.id
             WHERE mj.deleted_at IS NULL AND mj.project_number IN (${placeholders})${mjWsFilter}${dateFilter}
             GROUP BY mj.project_number, t.name
             ORDER BY count DESC
-            `,
-            [...projectNumbers, ...wsOnly, ...dateParams]
-        )
+            `
+            )
+            .all(...projectNumbers, ...wsOnly, ...dateParams) as {
+            project_number: number
+            name: string
+            count: number
+        }[]
         const tagMap = new Map<number, { name: string; count: number }[]>()
-        if (tagsResult[0]) {
-            for (const row of tagsResult[0].values) {
-                const pNum = row[0] as number
-                const list = tagMap.get(pNum) ?? []
-                list.push({ name: row[1] as string, count: row[2] as number })
-                tagMap.set(pNum, list)
-            }
+        for (const row of tagRows) {
+            const list = tagMap.get(row.project_number) ?? []
+            list.push({ name: row.name, count: row.count })
+            tagMap.set(row.project_number, list)
         }
         for (const p of projects) {
             p['top_tags'] = (tagMap.get(p['project_number'] as number) ?? []).slice(0, 5)
@@ -174,25 +162,16 @@ function queryInactiveProjects(
         .toISOString()
         .split('T')[0]
 
-    const inactiveResult = connection.exec(
-        `
-        SELECT project_number, MAX(DATE(timestamp)) as last_entry_date
+    return connection
+        .getNativeDb()
+        .prepare(
+            `
+        SELECT project_number, MAX(SUBSTR(timestamp, 1, 10)) as last_entry_date
         FROM memory_journal
         WHERE deleted_at IS NULL AND project_number IS NOT NULL${wsFilter}
         GROUP BY project_number
         HAVING last_entry_date < ?
-        `,
-        [...wsParams, cutoffDate]
-    )
-
-    const inactiveProjects: { project_number: number; last_entry_date: string }[] = []
-    if (inactiveResult[0]) {
-        for (const row of inactiveResult[0].values) {
-            inactiveProjects.push({
-                project_number: row[0] as number,
-                last_entry_date: row[1] as string,
-            })
-        }
-    }
-    return inactiveProjects
+        `
+        )
+        .all(...wsParams, cutoffDate) as { project_number: number; last_entry_date: string }[]
 }

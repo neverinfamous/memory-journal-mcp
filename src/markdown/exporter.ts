@@ -123,10 +123,8 @@ function filesystemErrorCode(err: unknown): string | undefined {
 
 async function writeExportFile(
     resolvedOutputDir: string,
-    preChunkRealpath: string,
     filename: string,
-    fileContent: string,
-    swapState: { swapped: boolean }
+    fileContent: string
 ): Promise<'written' | { error: string }> {
     const filepath = join(resolvedOutputDir, filename)
     let handle: Awaited<ReturnType<typeof open>> | undefined
@@ -136,20 +134,9 @@ async function writeExportFile(
             constants.O_WRONLY | constants.O_CREAT | constants.O_TRUNC | constants.O_NOFOLLOW,
             0o600
         )
-        const postRealpath = realpathSync.native(resolvedOutputDir)
-        if (preChunkRealpath !== postRealpath) {
-            swapState.swapped = true
-            throw new Error('Directory swapped during export operation! Aborting to prevent path traversal.')
-        }
         await handle.writeFile(fileContent, 'utf-8')
         return 'written'
     } catch (err: unknown) {
-        if (
-            err instanceof Error &&
-            (err.message.includes('became a symlink') || err.message.includes('Directory swapped'))
-        ) {
-            throw err
-        }
         const code = filesystemErrorCode(err)
         const errMessage =
             code === 'ELOOP' || code === 'EEXIST'
@@ -259,20 +246,13 @@ export async function exportEntriesToMarkdown(
     for (let i = 0; i < validEntries.length; i += CHUNK_SIZE) {
         const chunk = validEntries.slice(i, i + CHUNK_SIZE)
         const preChunkRealpath = realpathSync.native(resolvedOutputDir)
-        const swapState = { swapped: false }
 
         await Promise.all(
             chunk.map(async (entry) => {
                 const relationships = relationshipsMap.get(entry.id) ?? []
                 const fileContent = buildExportFileContent(entry, relationships)
                 const filename = generateFilename(entry.id, entry.content)
-                const outcome = await writeExportFile(
-                    resolvedOutputDir,
-                    preChunkRealpath,
-                    filename,
-                    fileContent,
-                    swapState
-                )
+                const outcome = await writeExportFile(resolvedOutputDir, filename, fileContent)
                 if (outcome === 'written') {
                     files.push(filename)
                 } else {
@@ -282,9 +262,13 @@ export async function exportEntriesToMarkdown(
             })
         )
 
-        if (!swapState.swapped) {
-            assertSafeDirectoryPath(preChunkRealpath, allowedRoots)
+        const postChunkRealpath = realpathSync.native(resolvedOutputDir)
+        if (preChunkRealpath !== postChunkRealpath) {
+            throw new Error(
+                'Directory swapped during export operation! Aborting to prevent path traversal.'
+            )
         }
+        assertSafeDirectoryPath(preChunkRealpath, allowedRoots)
     }
 
     return {

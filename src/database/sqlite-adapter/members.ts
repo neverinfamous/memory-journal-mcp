@@ -96,10 +96,13 @@ export class MembersManager {
 
     getMember(author: string): TeamMember | null {
         try {
-            const results = this.db.exec(
-                `SELECT * FROM team_members WHERE author = ? COLLATE NOCASE`,
-                [author]
-            )
+            const sql = `SELECT * FROM team_members WHERE author = ? COLLATE NOCASE`
+            const nativeDb = this.db.getNativeDb?.()
+            if (nativeDb !== undefined) {
+                const row = nativeDb.prepare(sql).get(author) as Record<string, unknown> | undefined
+                return row ? this.mapToTeamMember(row) : null
+            }
+            const results = this.db.exec(sql, [author])
             const row = getSingleRow(results)
             if (!row) return null
             return this.mapToTeamMember(row)
@@ -117,7 +120,13 @@ export class MembersManager {
 
     listMembers(): TeamMember[] {
         try {
-            const results = this.db.exec(`SELECT * FROM team_members ORDER BY author ASC`)
+            const sql = `SELECT * FROM team_members ORDER BY author ASC`
+            const nativeDb = this.db.getNativeDb?.()
+            if (nativeDb !== undefined) {
+                const rows = nativeDb.prepare(sql).all() as Record<string, unknown>[]
+                return rows.map((row) => this.mapToTeamMember(row))
+            }
+            const results = this.db.exec(sql)
             if (results.length === 0 || (results[0]?.values.length ?? 0) === 0 || (results[0]?.columns.length ?? 0) === 0) {
                 return []
             }

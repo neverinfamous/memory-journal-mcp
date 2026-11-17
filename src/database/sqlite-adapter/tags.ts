@@ -5,6 +5,9 @@ import type { Tag } from '../../types/index.js'
 import type { NativeConnectionManager } from './native-connection.js'
 import { effectiveWorkspace } from '../workspace-scope.js'
 import { TAG_ALIASES } from '../../codemode/normalizers/shared-utils.js'
+import { bucketInParams } from './row-helpers.js'
+
+const hasDeletedAtCache = new WeakMap<Database, boolean>()
 
 const REVERSE_TAG_ALIASES = new Map<string, string[]>()
 for (const [alias, canonical] of Object.entries(TAG_ALIASES)) {
@@ -50,7 +53,7 @@ export class TagsManager {
     linkTagsToEntry(entryId: number, tagNames: string[]): void {
         if (tagNames.length === 0) return
 
-        const linkOp = this.db.transaction(() => {
+        const runLink = (): void => {
             const db = this.db
             const uniqueTags = Array.from(new Set(tagNames.filter((t) => t.length > 0)))
             if (uniqueTags.length === 0) return
@@ -63,11 +66,11 @@ export class TagsManager {
                 db.prepare(
                     `INSERT OR IGNORE INTO tags (name, usage_count) VALUES ${insertPlaceholders}`
                 ).run(...tagChunk)
-
-                const selectPlaceholders = tagChunk.map(() => '?').join(', ')
+            }
+            for (const { placeholders, params } of bucketInParams(uniqueTags)) {
                 const rows = db
-                    .prepare(`SELECT id, name FROM tags WHERE name IN (${selectPlaceholders})`)
-                    .all(...tagChunk) as { id: number; name: string }[]
+                    .prepare(`SELECT id FROM tags WHERE name IN (${placeholders})`)
+                    .all(...params) as { id: number }[]
                 for (const row of rows) tagIds.push(row.id)
             }
             if (tagIds.length === 0) return
@@ -83,16 +86,18 @@ export class TagsManager {
                 }
             }
 
-            for (let i = 0; i < newlyLinkedTagIds.length; i += CHUNK_SIZE) {
-                const idChunk = newlyLinkedTagIds.slice(i, i + CHUNK_SIZE)
-                const updatePlaceholders = idChunk.map(() => '?').join(', ')
+            for (const { placeholders, params } of bucketInParams(newlyLinkedTagIds)) {
                 db.prepare(
-                    `UPDATE tags SET usage_count = COALESCE(usage_count, 0) + 1 WHERE id IN (${updatePlaceholders})`
-                ).run(...idChunk)
+                    `UPDATE tags SET usage_count = COALESCE(usage_count, 0) + 1 WHERE id IN (${placeholders})`
+                ).run(...params)
             }
-        })
+        }
 
-        linkOp()
+        if (this.db.inTransaction) {
+            runLink()
+        } else {
+            this.db.transaction(runLink)()
+        }
     }
 
     getTagsForEntry(entryId: number): string[] {
@@ -111,10 +116,7 @@ export class TagsManager {
         const tagMap = new Map<number, string[]>()
         if (ids.length === 0) return tagMap
 
-        const CHUNK_SIZE = 500
-        for (let i = 0; i < ids.length; i += CHUNK_SIZE) {
-            const chunk = ids.slice(i, i + CHUNK_SIZE)
-            const placeholders = chunk.map(() => '?').join(', ')
+        for (const { placeholders, params } of bucketInParams(ids)) {
             const rows = this.db
                 .prepare(
                     `SELECT et.entry_id, t.name
@@ -122,7 +124,7 @@ export class TagsManager {
                      JOIN tags t ON et.tag_id = t.id
                      WHERE et.entry_id IN (${placeholders})`
                 )
-                .all(...chunk) as { entry_id: number; name: string }[]
+                .all(...params) as { entry_id: number; name: string }[]
 
             for (const row of rows) {
                 const existing = tagMap.get(row.entry_id)
@@ -142,12 +144,16 @@ export class TagsManager {
             typeof projectNumber === 'number' && Number.isFinite(projectNumber)
                 ? projectNumber
                 : undefined
-        const hasDeletedAt =
-            this.db
-                .prepare(
-                    "SELECT 1 FROM pragma_table_info('memory_journal') WHERE name = 'deleted_at'"
-                )
-                .get() !== undefined
+        let hasDeletedAt = hasDeletedAtCache.get(this.db)
+        if (hasDeletedAt === undefined) {
+            hasDeletedAt =
+                this.db
+                    .prepare(
+                        "SELECT 1 FROM pragma_table_info('memory_journal') WHERE name = 'deleted_at'"
+                    )
+                    .get() !== undefined
+            hasDeletedAtCache.set(this.db, hasDeletedAt)
+        }
         const filters = [hasDeletedAt ? 'mj.deleted_at IS NULL' : '1 = 1']
         const params: unknown[] = []
         if (wsId !== '*') {

@@ -2,6 +2,7 @@ import type { NativeConnectionManager } from './native-connection.js'
 import { buildImportanceCte, buildImportanceSqlExpression } from './entries/importance.js'
 import { isMissingTableError } from './schema-errors.js'
 import { expandTagFilterValues } from './tags.js'
+import { bucketInParams } from './row-helpers.js'
 
 type NativeDb = ReturnType<NativeConnectionManager['getNativeDb']>
 
@@ -57,19 +58,37 @@ const tagExclusionSql = (idColumn: string, tags: string[]): string =>
             )`
         : ''
 
+function ageRangeFilter(
+    col: string,
+    days: number
+): { sql: string; params: unknown[] } {
+    if (days > 1) {
+        const upperIso = new Date(Date.now() - (days - 1) * 86_400_000).toISOString()
+        return {
+            sql: `AND ${col} < ? AND julianday('now') - julianday(${col}) > ?`,
+            params: [upperIso, days],
+        }
+    }
+    return {
+        sql: `AND julianday('now') - julianday(${col}) > ?`,
+        params: [days],
+    }
+}
+
 function buildHardDeleteQuery(options: LifecycleOptions, scope: CandidateScope): CandidateQuery {
     const { excludeTags, scopedWorkspace, scopedProject } = scope
+    const age = ageRangeFilter('deleted_at', options.hardDeleteOlderThanDays)
     const sql = `
             SELECT id, CAST((julianday('now') - julianday(deleted_at)) AS INTEGER) as age_days
             FROM memory_journal
             WHERE deleted_at IS NOT NULL
-              AND julianday('now') - julianday(deleted_at) > ?
+              ${age.sql}
               ${tagExclusionSql('id', excludeTags)}
               ${scopedWorkspace !== undefined ? 'AND workspace_id = ?' : ''}
               ${scopedProject !== undefined ? 'AND project_number = ?' : ''}
         `
     const params: unknown[] = [
-        options.hardDeleteOlderThanDays,
+        ...age.params,
         ...excludeTags,
         ...(scopedWorkspace !== undefined ? [scopedWorkspace] : []),
         ...(scopedProject !== undefined ? [scopedProject] : []),
@@ -83,13 +102,14 @@ function buildPruneQuery(
     importanceExpr: string
 ): CandidateQuery {
     const { excludeTags, scopedWorkspace, scopedProject } = scope
+    const age = ageRangeFilter('e.timestamp', options.pruneOlderThanDays)
     const sql = `
             SELECT e.id, ${importanceExpr} as importance_score
             FROM memory_journal e
             LEFT JOIN rel_stats rs ON e.id = rs.entry_id
             LEFT JOIN anchor_stats ans ON e.id = ans.entry_id
             WHERE e.deleted_at IS NULL
-              AND julianday('now') - julianday(e.timestamp) > ?
+              ${age.sql}
               AND ${importanceExpr} < ?
               AND e.significance_type IS NULL
               AND COALESCE(e.impact_score, 0.0) < 0.5
@@ -99,7 +119,7 @@ function buildPruneQuery(
               ${scopedProject !== undefined ? 'AND e.project_number = ?' : ''}
         `
     const params: unknown[] = [
-        options.pruneOlderThanDays,
+        ...age.params,
         options.importanceThreshold,
         ...excludeTags,
         ...(scopedWorkspace !== undefined ? [scopedWorkspace] : []),
@@ -114,20 +134,21 @@ function buildArchiveQuery(
     importanceExpr: string
 ): CandidateQuery {
     const { excludeTags, scopedWorkspace, scopedProject } = scope
+    const age = ageRangeFilter('e.timestamp', options.archiveOlderThanDays)
     const sql = `
             SELECT e.id, ${importanceExpr} as importance_score
             FROM memory_journal e
             LEFT JOIN rel_stats rs ON e.id = rs.entry_id
             LEFT JOIN anchor_stats ans ON e.id = ans.entry_id
             WHERE e.deleted_at IS NULL AND e.is_archived = 0
-            AND julianday('now') - julianday(e.timestamp) > ?
+            ${age.sql}
             AND ${importanceExpr} < ?
             ${tagExclusionSql('e.id', excludeTags)}
             ${scopedWorkspace !== undefined ? 'AND e.workspace_id = ?' : ''}
             ${scopedProject !== undefined ? 'AND e.project_number = ?' : ''}
         `
     const params: unknown[] = [
-        options.archiveOlderThanDays,
+        ...age.params,
         options.importanceThreshold,
         ...excludeTags,
         ...(scopedWorkspace !== undefined ? [scopedWorkspace] : []),
@@ -137,7 +158,9 @@ function buildArchiveQuery(
 }
 
 /** Build the hard-delete, prune and archive candidate SELECT statements with their params. */
-function buildCandidateQueries(options: LifecycleOptions): CandidateQueries {
+function buildCandidateQueries(
+    options: LifecycleOptions
+): CandidateQueries & { cteParams: unknown[] } {
     const importanceExpr = buildImportanceSqlExpression()
     // Intentional: an omitted workspaceId (or '*') leaves lifecycle operations database-wide;
     // only an explicit workspace id scopes the candidates to that workspace.
@@ -154,6 +177,7 @@ function buildCandidateQueries(options: LifecycleOptions): CandidateQueries {
         hardDelete: buildHardDeleteQuery(options, scope),
         prune: buildPruneQuery(options, scope, importanceExpr),
         archive: buildArchiveQuery(options, scope, importanceExpr),
+        cteParams: scopedWorkspace !== undefined ? [scopedWorkspace] : [],
     }
 }
 
@@ -161,7 +185,7 @@ function buildCandidateQueries(options: LifecycleOptions): CandidateQueries {
 function collectDryRun(
     db: NativeDb,
     options: LifecycleOptions,
-    queries: CandidateQueries,
+    queries: CandidateQueries & { cteParams: unknown[] },
     cte: string
 ): LifecycleResult {
     const candidates = {
@@ -182,7 +206,9 @@ function collectDryRun(
     }
     if (options.pruneOlderThanDays > 0) {
         const sql = `WITH ${cte} ${queries.prune.sql}`
-        const rows = db.prepare(sql).all(...queries.prune.params) as {
+        const rows = db
+            .prepare(sql)
+            .all(...queries.cteParams, ...queries.prune.params) as {
             id: number | bigint
             importance_score: number
         }[]
@@ -193,7 +219,9 @@ function collectDryRun(
     }
     if (options.archiveOlderThanDays > 0) {
         const sql = `WITH ${cte} ${queries.archive.sql}`
-        const rows = db.prepare(sql).all(...queries.archive.params) as {
+        const rows = db
+            .prepare(sql)
+            .all(...queries.cteParams, ...queries.archive.params) as {
             id: number | bigint
             importance_score: number
         }[]
@@ -210,7 +238,8 @@ function collectDryRun(
 
 function deleteVecChunk(db: NativeDb, placeholders: string, chunk: number[]): void {
     try {
-        db.prepare(`DELETE FROM vec_embeddings WHERE entry_id IN (${placeholders})`).run(...chunk)
+        const bigIds = chunk.map((id) => BigInt(Math.trunc(id)))
+        db.prepare(`DELETE FROM vec_embeddings WHERE entry_id IN (${placeholders})`).run(...bigIds)
     } catch (err) {
         if (!isMissingTableError(err)) throw err
     }
@@ -219,14 +248,11 @@ function deleteVecChunk(db: NativeDb, placeholders: string, chunk: number[]): vo
 function executeHardDeleteStep(db: NativeDb, query: CandidateQuery): number {
     const rows = db.prepare(query.sql).all(...query.params) as { id: number | bigint }[]
     const ids = rows.map((r) => toNumberId(r.id))
-    const CHUNK_SIZE = 500
     let hardDeletedCount = 0
-    for (let i = 0; i < ids.length; i += CHUNK_SIZE) {
-        const chunk = ids.slice(i, i + CHUNK_SIZE)
-        const placeholders = chunk.map(() => '?').join(',')
+    for (const { placeholders, params } of bucketInParams(ids)) {
         const deleteSql = `DELETE FROM memory_journal WHERE id IN (${placeholders})`
-        hardDeletedCount += db.prepare(deleteSql).run(...chunk).changes
-        deleteVecChunk(db, placeholders, chunk)
+        hardDeletedCount += db.prepare(deleteSql).run(...params).changes
+        deleteVecChunk(db, placeholders, params)
     }
     return hardDeletedCount
 }
@@ -235,6 +261,7 @@ function executePruneStep(
     db: NativeDb,
     query: CandidateQuery,
     cte: string,
+    cteParams: unknown[],
     deletedAt: string
 ): number {
     const sql = `
@@ -245,7 +272,7 @@ function executePruneStep(
             SELECT id FROM (${query.sql})
         )
     `
-    const prunedCount = db.prepare(sql).run(deletedAt, ...query.params).changes
+    const prunedCount = db.prepare(sql).run(...cteParams, deletedAt, ...query.params).changes
     if (prunedCount > 0) {
         try {
             db.prepare(
@@ -258,7 +285,12 @@ function executePruneStep(
     return prunedCount
 }
 
-function executeArchiveStep(db: NativeDb, query: CandidateQuery, cte: string): number {
+function executeArchiveStep(
+    db: NativeDb,
+    query: CandidateQuery,
+    cte: string,
+    cteParams: unknown[]
+): number {
     const sql = `
         WITH ${cte}
         UPDATE memory_journal
@@ -267,7 +299,7 @@ function executeArchiveStep(db: NativeDb, query: CandidateQuery, cte: string): n
             SELECT id FROM (${query.sql})
         )
     `
-    return db.prepare(sql).run(...query.params).changes
+    return db.prepare(sql).run(...cteParams, ...query.params).changes
 }
 
 function isFtsCorruptError(error: unknown): boolean {
@@ -293,7 +325,7 @@ function rebuildFtsContentIndex(db: NativeDb): void {
 function runLifecycleTx(
     db: NativeDb,
     options: LifecycleOptions,
-    queries: CandidateQueries,
+    queries: CandidateQueries & { cteParams: unknown[] },
     cte: string
 ): LifecycleResult {
     const deletedAt = new Date().toISOString()
@@ -305,11 +337,11 @@ function runLifecycleTx(
                 : 0
         const prunedCount =
             options.pruneOlderThanDays > 0
-                ? executePruneStep(db, queries.prune, cte, deletedAt)
+                ? executePruneStep(db, queries.prune, cte, queries.cteParams, deletedAt)
                 : 0
         const archivedCount =
             options.archiveOlderThanDays > 0
-                ? executeArchiveStep(db, queries.archive, cte)
+                ? executeArchiveStep(db, queries.archive, cte, queries.cteParams)
                 : 0
         return { archivedCount, prunedCount, hardDeletedCount }
     })
@@ -350,8 +382,8 @@ export class LifecycleOperations {
         }
     } {
         const db = this.connection.getNativeDb()
-        const cte = buildImportanceCte()
         const queries = buildCandidateQueries(options)
+        const cte = buildImportanceCte(queries.cteParams.length > 0)
 
         if (options.dryRun) {
             return collectDryRun(db, options, queries, cte)

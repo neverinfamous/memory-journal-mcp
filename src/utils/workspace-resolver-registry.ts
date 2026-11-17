@@ -1,9 +1,8 @@
 import type { ProjectRegistryEntry, ToolHandlerConfig } from '../types/index.js'
 import * as os from 'node:os'
 import * as path from 'node:path'
-import * as fs from 'node:fs'
 import { logger } from './logger.js'
-import { parseConfigObjectContent } from './registry-config-file.js'
+import { readCachedConfigObject } from './registry-config-file.js'
 import {
     PROJECT_KEYWORD_ALIASES,
     findCanonicalRegistryKey,
@@ -48,11 +47,8 @@ export function loadProjectRegistryFromConfig(): Record<string, ProjectRegistryE
         return undefined
     }
     try {
-        const configPath = getConfigPath()
-        if (!fs.existsSync(configPath)) return undefined
-        const content = fs.readFileSync(configPath, 'utf-8')
-        const config = parseConfigObjectContent(configPath, content) as ParsedConfig | null
-        return typeof config === 'object' && config !== null ? config.projectRegistry : undefined
+        const config = readCachedConfigObject(getConfigPath()) as ParsedConfig | undefined
+        return config?.projectRegistry
     } catch (error) {
         logger.debug('Failed to load project registry from config', {
             module: 'workspace-resolver',
@@ -77,12 +73,8 @@ export function resolveProjectNumberFromPath(
     try {
         let projectRegistry = registryOverride
         if (projectRegistry === undefined) {
-            const configPath = getConfigPath()
-            if (!fs.existsSync(configPath)) return undefined
-            const content = fs.readFileSync(configPath, 'utf-8')
-            const config = parseConfigObjectContent(configPath, content) as ParsedConfig | null
-            projectRegistry =
-                typeof config === 'object' && config !== null ? config.projectRegistry : undefined
+            const config = readCachedConfigObject(getConfigPath()) as ParsedConfig | undefined
+            projectRegistry = config?.projectRegistry
         }
         if (projectRegistry === undefined || projectRegistry === null) return undefined
         return findBestMatchingPathEntry(cwd, projectRegistry)?.projectNumber

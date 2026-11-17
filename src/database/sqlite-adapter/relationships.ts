@@ -3,6 +3,7 @@ import type { Relationship, RelationshipType } from '../../types/index.js'
 import { ResourceNotFoundError } from '../../types/errors.js'
 import type { NativeConnectionManager } from './native-connection.js'
 import { effectiveWorkspace } from '../workspace-scope.js'
+import { bucketInParams, DUAL_IN_PARAM_BUCKETS } from './row-helpers.js'
 
 export class RelationshipsManager {
     private ctx: NativeConnectionManager
@@ -72,18 +73,27 @@ export class RelationshipsManager {
     getRelationships(entryId: number, workspaceId?: string): Relationship[] {
         const scopeId = effectiveWorkspace(workspaceId)
         const scoped = scopeId !== '*'
-        const peerFilter = scoped ? 'deleted_at IS NULL AND workspace_id = ?' : 'deleted_at IS NULL'
-        const wsParams = scoped ? [scopeId, scopeId] : []
+        const peerFilter = scoped
+            ? 'mf.deleted_at IS NULL AND mt.deleted_at IS NULL AND mf.workspace_id = ? AND mt.workspace_id = ?'
+            : 'mf.deleted_at IS NULL AND mt.deleted_at IS NULL'
+        const buildParams = (first: unknown[]): unknown[] => (scoped ? [...first, scopeId, scopeId] : first)
         const rows = this.db
             .prepare(
-                `SELECT id, from_entry_id as fromEntryId, to_entry_id as toEntryId,
-                        relationship_type as relationshipType, description, created_at as createdAt
-                 FROM relationships
-                 WHERE (from_entry_id = ? OR to_entry_id = ?)
-                   AND from_entry_id IN (SELECT id FROM memory_journal WHERE ${peerFilter})
-                   AND to_entry_id IN (SELECT id FROM memory_journal WHERE ${peerFilter})`
+                `SELECT r.id, r.from_entry_id as fromEntryId, r.to_entry_id as toEntryId,
+                        r.relationship_type as relationshipType, r.description, r.created_at as createdAt
+                 FROM relationships r
+                 INNER JOIN memory_journal mf ON mf.id = r.from_entry_id
+                 INNER JOIN memory_journal mt ON mt.id = r.to_entry_id
+                 WHERE r.from_entry_id = ? AND ${peerFilter}
+                 UNION ALL
+                 SELECT r.id, r.from_entry_id as fromEntryId, r.to_entry_id as toEntryId,
+                        r.relationship_type as relationshipType, r.description, r.created_at as createdAt
+                 FROM relationships r
+                 INNER JOIN memory_journal mf ON mf.id = r.from_entry_id
+                 INNER JOIN memory_journal mt ON mt.id = r.to_entry_id
+                 WHERE r.to_entry_id = ? AND r.from_entry_id != ? AND ${peerFilter}`
             )
-            .all(entryId, entryId, ...wsParams) as {
+            .all(...buildParams([entryId]), ...buildParams([entryId, entryId])) as {
             id: number
             fromEntryId: number
             toEntryId: number
@@ -103,27 +113,24 @@ export class RelationshipsManager {
         if (entryIds.length === 0) return result
         const scopeId = effectiveWorkspace(workspaceId)
         const scoped = scopeId !== '*'
-        const peerFilter = scoped ? 'deleted_at IS NULL AND workspace_id = ?' : 'deleted_at IS NULL'
-        const wsClause = ` AND from_entry_id IN (SELECT id FROM memory_journal WHERE ${peerFilter}) AND to_entry_id IN (SELECT id FROM memory_journal WHERE ${peerFilter})`
-        const wsParams: unknown[] = scoped ? [scopeId, scopeId] : []
+        const wsFilter = scoped ? ' AND mf.workspace_id = ? AND mt.workspace_id = ?' : ''
 
         for (const id of entryIds) {
             result.set(id, [])
         }
 
         const seenRelIds = new Set<number>()
-        const chunkSize = 100
-        for (let i = 0; i < entryIds.length; i += chunkSize) {
-            const chunk = entryIds.slice(i, i + chunkSize)
-            const marks = chunk.map(() => '?').join(', ')
+        for (const { placeholders, params } of bucketInParams(entryIds, DUAL_IN_PARAM_BUCKETS)) {
+            const sql = `SELECT r.id, r.from_entry_id as fromEntryId, r.to_entry_id as toEntryId,
+                                r.relationship_type as relationshipType, r.description, r.created_at as createdAt
+                         FROM relationships r
+                         INNER JOIN memory_journal mf ON mf.id = r.from_entry_id
+                         INNER JOIN memory_journal mt ON mt.id = r.to_entry_id
+                         WHERE (r.from_entry_id IN (${placeholders}) OR r.to_entry_id IN (${placeholders}))
+                           AND mf.deleted_at IS NULL AND mt.deleted_at IS NULL${wsFilter}`
             const rows = this.db
-                .prepare(
-                    `SELECT id, from_entry_id as fromEntryId, to_entry_id as toEntryId,
-                            relationship_type as relationshipType, description, created_at as createdAt
-                     FROM relationships
-                     WHERE (from_entry_id IN (${marks}) OR to_entry_id IN (${marks}))${wsClause}`
-                )
-                .all(...chunk, ...chunk, ...wsParams) as {
+                .prepare(sql)
+                .all(...params, ...params, ...(scoped ? [scopeId, scopeId] : [])) as {
                 id: number
                 fromEntryId: number
                 toEntryId: number

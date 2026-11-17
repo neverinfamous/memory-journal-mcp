@@ -47,6 +47,8 @@ export const recentResource: InternalResourceDef = {
     },
 }
 
+const CAUSAL_REL_TYPES = new Set(['blocked_by', 'resolved', 'caused'])
+
 export const significantResource: InternalResourceDef = {
     uri: 'memory://significant',
     name: 'Significant Entries',
@@ -75,7 +77,7 @@ export const significantResource: InternalResourceDef = {
             const relationships = relationshipsMap.get(entry.id) ?? []
             const relCount = relationships.length
             const causalCount = relationships.filter((r) =>
-                ['blocked_by', 'resolved', 'caused'].includes(r.relationshipType)
+                CAUSAL_REL_TYPES.has(r.relationshipType)
             ).length
 
             const timestampMs = new Date(entry.timestamp).getTime()

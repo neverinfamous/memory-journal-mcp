@@ -26,7 +26,15 @@ export function getEntryRevisions(
     const { db } = context
 
     const scopeId = effectiveWorkspace(workspaceId)
-    if (getEntryById(context, id, scopeId) === null) {
+    const existsSql =
+        scopeId !== '*'
+            ? `SELECT 1 FROM memory_journal WHERE id = ? AND deleted_at IS NULL AND workspace_id = ? LIMIT 1`
+            : `SELECT 1 FROM memory_journal WHERE id = ? AND deleted_at IS NULL LIMIT 1`
+    const exists =
+        scopeId !== '*'
+            ? db.prepare(existsSql).get(id, scopeId)
+            : db.prepare(existsSql).get(id)
+    if (exists === undefined) {
         return []
     }
 
@@ -36,7 +44,6 @@ export function getEntryRevisions(
                changed_by as changedBy
         FROM entry_revisions
         WHERE entry_id = ?
-          AND entry_id IN (SELECT id FROM memory_journal WHERE deleted_at IS NULL)
         ORDER BY revision_number DESC
     `)
 

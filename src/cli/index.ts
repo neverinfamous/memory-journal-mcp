@@ -9,12 +9,18 @@ import {
     addWorkspaceScopeOptions, addVectorOptions,
     addOutputOptions
 } from './option-groups.js'
-import { serveAction, serveSchema } from './commands/serve.js'
-import { execAction, execSchema } from './commands/exec.js'
-import { searchAction, searchSchema } from './commands/search.js'
-import { visualizeAction, visualizeSchema } from './commands/visualize.js'
-import { analyticsStatsAction, analyticsInsightsAction, analyticsSchema } from './commands/analytics.js'
-import { exportJsonAction, exportMarkdownAction, importMarkdownAction, importExternalAction, exportJsonSchema, exportMarkdownSchema, importMarkdownSchema, importExternalSchema } from './commands/io.js'
+import { lazyAction } from './lazy-action.js'
+import {
+    serverOptionsSchema,
+    execOptionsSchema,
+    searchOptionsSchema,
+    visualizeOptionsSchema,
+    analyticsOptionsSchema,
+    ioExportJsonOptionsSchema,
+    ioExportMarkdownOptionsSchema,
+    ioImportMarkdownOptionsSchema,
+    ioImportExternalOptionsSchema,
+} from './schemas.js'
 import { registerAdminCommands, registerProjectCommands } from './register-admin-commands.js'
 import { registerEntryCommands } from './register-entry-commands.js'
 const program = createProgram()
@@ -28,11 +34,12 @@ const serveCmd = program
     .description('Start the Memory Journal MCP Server')
 
 addServerOptions(serveCmd)
-serveCmd.action(withValidation(serveSchema, async (argsArray: string[], options: z.infer<typeof serveSchema>, cmd: Command) => {
+serveCmd.action(withValidation(serverOptionsSchema, async (argsArray: string[], options: z.infer<typeof serverOptionsSchema>, cmd: Command) => {
     if (Array.isArray(argsArray) && argsArray.length > 0 && typeof argsArray[0] === 'string') {
         process.stderr.write(`🛠️ AUTONOMOUS HEALING: The 'serve' command does not take arguments. You passed: ${argsArray.join(' ')}. If you are trying to search or run prompts, use the MCP client or the 'search' CLI command.\n`);
         process.exit(1);
     }
+    const { serveAction } = await import('./commands/serve.js');
     await serveAction(options, cmd);
 }))
 
@@ -66,7 +73,7 @@ addAgentInstructions(execCmd,
 - ALWAYS provide the path to a valid script file. Scripts execute within the same execution environment as Code Mode tools.
 - Do NOT use this command to start the server. Use \`serve\` instead.`
 )
-execCmd.action(withValidation(execSchema, execAction))
+execCmd.action(withValidation(execOptionsSchema, lazyAction(async () => (await import('./commands/exec.js')).execAction)))
 
 registerAdminCommands(program)
 registerEntryCommands(program)
@@ -93,7 +100,7 @@ addAgentInstructions(searchCmd,
 🤖 AI AGENT INSTRUCTIONS:
 - Search output defaults to a JSON representation since it is optimized for agents. No need to parse a table.`
 )
-searchCmd.action(withValidation(searchSchema, searchAction))
+searchCmd.action(withValidation(searchOptionsSchema, lazyAction(async () => (await import('./commands/search.js')).searchAction)))
 
 // Setup 'io' command group
 const ioCmd = program
@@ -108,7 +115,7 @@ addCoreOptions(exportJsonCmd)
 addDatabaseOptions(exportJsonCmd)
 addWorkspaceScopeOptions(exportJsonCmd)
 addOutputOptions(exportJsonCmd)
-exportJsonCmd.action(withValidation(exportJsonSchema, exportJsonAction))
+exportJsonCmd.action(withValidation(ioExportJsonOptionsSchema, lazyAction(async () => (await import('./commands/io.js')).exportJsonAction)))
 
 const exportMarkdownCmd = ioCmd.command('export-markdown').description('Export entries to a directory of markdown files')
 withGroup(exportMarkdownCmd, 'Command Options', (cmd: Command) => {
@@ -118,7 +125,7 @@ addCoreOptions(exportMarkdownCmd)
 addDatabaseOptions(exportMarkdownCmd)
 addWorkspaceScopeOptions(exportMarkdownCmd)
 addOutputOptions(exportMarkdownCmd)
-exportMarkdownCmd.action(withValidation(exportMarkdownSchema, exportMarkdownAction))
+exportMarkdownCmd.action(withValidation(ioExportMarkdownOptionsSchema, lazyAction(async () => (await import('./commands/io.js')).exportMarkdownAction)))
 
 const importMarkdownCmd = ioCmd.command('import-markdown').description('Import entries from a directory of markdown files')
 withGroup(importMarkdownCmd, 'Command Options', (cmd: Command) => {
@@ -128,7 +135,7 @@ addCoreOptions(importMarkdownCmd)
 addDatabaseOptions(importMarkdownCmd)
 addWorkspaceScopeOptions(importMarkdownCmd)
 addOutputOptions(importMarkdownCmd)
-importMarkdownCmd.action(withValidation(importMarkdownSchema, importMarkdownAction))
+importMarkdownCmd.action(withValidation(ioImportMarkdownOptionsSchema, lazyAction(async () => (await import('./commands/io.js')).importMarkdownAction)))
 
 const importExternalCmd = ioCmd.command('import-external').description('Import entries from external knowledge bases')
 withGroup(importExternalCmd, 'Command Options', (cmd: Command) => {
@@ -140,7 +147,7 @@ addCoreOptions(importExternalCmd)
 addDatabaseOptions(importExternalCmd)
 addWorkspaceScopeOptions(importExternalCmd)
 addOutputOptions(importExternalCmd)
-importExternalCmd.action(withValidation(importExternalSchema, importExternalAction))
+importExternalCmd.action(withValidation(ioImportExternalOptionsSchema, lazyAction(async () => (await import('./commands/io.js')).importExternalAction)))
 
 // Setup 'visualize' command
 const visualizeCmd = program
@@ -160,7 +167,7 @@ addAgentInstructions(visualizeCmd,
 🤖 AI AGENT INSTRUCTIONS:
 - ALWAYS use \`--out\` to write massive Mermaid diagrams to a file instead of raw stdout.`
 )
-visualizeCmd.action(withValidation(visualizeSchema, visualizeAction))
+visualizeCmd.action(withValidation(visualizeOptionsSchema, lazyAction(async () => (await import('./commands/visualize.js')).visualizeAction)))
 
 // Setup 'analytics' command group
 const analyticsCmd = program
@@ -180,7 +187,7 @@ addOutputOptions(analyticsStatsCmd)
 addCoreOptions(analyticsStatsCmd)
 addDatabaseOptions(analyticsStatsCmd)
 addWorkspaceScopeOptions(analyticsStatsCmd)
-analyticsStatsCmd.action(withValidation(analyticsSchema, analyticsStatsAction))
+analyticsStatsCmd.action(withValidation(analyticsOptionsSchema, lazyAction(async () => (await import('./commands/analytics.js')).analyticsStatsAction)))
 
 const analyticsInsightsCmd = analyticsCmd.command('insights').description('Get cross-project insights')
 withGroup(analyticsInsightsCmd, 'Command Options', (cmd: Command) => {
@@ -190,7 +197,7 @@ addOutputOptions(analyticsInsightsCmd)
 addCoreOptions(analyticsInsightsCmd)
 addDatabaseOptions(analyticsInsightsCmd)
 addWorkspaceScopeOptions(analyticsInsightsCmd)
-analyticsInsightsCmd.action(withValidation(analyticsSchema, analyticsInsightsAction))
+analyticsInsightsCmd.action(withValidation(analyticsOptionsSchema, lazyAction(async () => (await import('./commands/analytics.js')).analyticsInsightsAction)))
 
 // Setup alias for 'session' to 'search'
 const sessionCmd = program
@@ -214,11 +221,12 @@ addAgentInstructions(sessionCmd,
 🤖 AI AGENT INSTRUCTIONS:
 - This is a convenience alias. It behaves exactly like the 'search' command, but prepends 'session ' to your query if arguments are provided, or defaults to 'session summary'.`
 )
-sessionCmd.action(withValidation(searchSchema, async (args: string[], options: ReturnType<typeof searchSchema.parse>, command: Command) => {
+sessionCmd.action(withValidation(searchOptionsSchema, async (args: string[], options: ReturnType<typeof searchOptionsSchema.parse>, command: Command) => {
     const { query: optQuery, term, keyword, ...rest } = options;
     const extra = optQuery ?? term ?? keyword;
     const terms = [...args, ...(extra !== undefined && extra !== '' ? [extra] : [])];
     const query = terms.length > 0 ? "session " + terms.join(" ") : "session summary";
+    const { searchAction } = await import('./commands/search.js');
     await searchAction(query, rest, command);
 }))
 
