@@ -95,15 +95,16 @@ describe('Pass 30 Quality, Prompts & Appendix B Regressions', () => {
     })
 
     it('M6 & L3: tracks VectorSearchManager ready flag cleanly on failure and unref-free startup', async () => {
-        const badAdapter = {
-            ...db,
-            getDbPath: () => ':memory:',
-            createVecTable: vi.fn().mockRejectedValue(new Error('vec failed')),
-        } as unknown as DatabaseAdapter
-        const manager = new VectorSearchManager(badAdapter)
+        vi.spyOn(db, 'createVecTable').mockImplementation(() => {
+            throw new Error('vec failed')
+        })
+        const manager = new VectorSearchManager(db)
+        manager.generateEmbedding = (): Promise<Float32Array> =>
+            Promise.resolve(new Float32Array([0.1, 0.2, 0.3, 0.4]))
         expect(manager.isInitialized()).toBe(false)
-        await expect(manager.initialize()).rejects.toThrow()
+        await expect(manager.initialize()).rejects.toThrow('vec failed')
         expect(manager.isInitialized()).toBe(false)
+        expect(manager.getDimensions()).toBeNull()
     })
 
     it('M9 & M10: marks team_merge_tags destructive and blocks unsafe markdown export traversal', async () => {
