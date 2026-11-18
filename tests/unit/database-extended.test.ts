@@ -172,8 +172,12 @@ describe('SQLite Database Extended Operations', () => {
             expect(anchors.length).toBe(1)
             expect(anchors[0]?.anchorPath).toBe('src/index.ts')
 
-            // Calculate importance with pending anchor
-            const impPending = db.calculateImportance(e1.id, 'my-registered-project')
+            // Cross-workspace peers do not inflate scoped single-entry importance (H4)
+            const impScoped = db.calculateImportance(e1.id, 'my-registered-project')
+            expect(impScoped?.breakdown.relationships).toBe(0)
+
+            // Calculate importance with pending anchor across global scope '*'
+            const impPending = db.calculateImportance(e1.id, '*')
             expect(impPending.score).toBeGreaterThan(0)
             expect(impPending.breakdown.significance).toBeGreaterThan(0)
             expect(impPending.breakdown.relationships).toBeGreaterThan(0)
@@ -182,11 +186,11 @@ describe('SQLite Database Extended Operations', () => {
             // Update anchor status to stale (rank 2 -> 0.8x) and invalidated (rank 1 -> 0.1x)
             if (anchors[0]) {
                 db.updateAnchorStatus(anchors[0].id, 'stale', 'my-registered-project')
-                const impStale = db.calculateImportance(e1.id, 'my-registered-project')
+                const impStale = db.calculateImportance(e1.id, '*')
                 expect(impStale.score).toBeLessThan(impPending.score)
 
                 db.updateAnchorStatus(anchors[0].id, 'invalidated', 'my-registered-project')
-                const impInvalid = db.calculateImportance(e1.id, 'my-registered-project')
+                const impInvalid = db.calculateImportance(e1.id, '*')
                 expect(impInvalid.score).toBeLessThan(impStale.score)
             }
 

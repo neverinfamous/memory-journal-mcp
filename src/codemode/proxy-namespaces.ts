@@ -5,7 +5,7 @@
 
 import { wrapResult } from './worker-result-proxy.js'
 import { wrapPromise } from './proxy-helpers.js'
-import { VERSION } from '../version.js'
+import { PACKAGE_VERSION } from './package-version.js'
 import { JOURNAL_TABLES, getSchemaHelp, listJournalTables } from './api/schema-help.js'
 
 export type InvokeRpcFn = (group: string, method: string, args: unknown[]) => Promise<unknown>
@@ -16,8 +16,12 @@ function unavailableTool(tool: string): Promise<unknown> {
         Promise.resolve(
             wrapResult({
                 success: false,
-                error: `${tool} is not available`,
-                code: 'CONFIGURATION_ERROR',
+                error: `Tool '${tool}' is not available in this sandbox.`,
+                code: 'TOOL_DISABLED',
+                projects: {},
+                items: [],
+                data: [],
+                _healing_note: `🛠️ AUTONOMOUS HEALING: 'mj.projects' requires '${tool}' to be enabled in the active tool filter.`,
             })
         ),
         tool
@@ -106,9 +110,7 @@ export function createProjectsProxy(
 ): object {
     const adminListProjects = methods['admin']?.includes('list_projects')
         ? (...args: unknown[]): Promise<unknown> => invokeRpc('admin', 'list_projects', args)
-        : methods['analytics']?.includes('get_cross_project_insights')
-          ? (...args: unknown[]): Promise<unknown> => invokeRpc('analytics', 'get_cross_project_insights', args)
-          : (): Promise<unknown> => unavailableTool('list_projects')
+        : (): Promise<unknown> => unavailableTool('list_projects')
 
     const adminGetProject = methods['admin']?.includes('get_project')
         ? (nameOrParams: unknown): Promise<unknown> => {
@@ -257,7 +259,7 @@ export function createSystemProxy(
     const systemObj: Record<string, unknown> = {
         ping: (): Promise<unknown> => wrapPromise(Promise.resolve(wrapResult({ success: true, status: 'pong' })), 'ping'),
         version: (): Promise<unknown> =>
-            wrapPromise(Promise.resolve(wrapResult({ success: true, version: VERSION, name: 'memory-journal-mcp' })), 'version'),
+            wrapPromise(Promise.resolve(wrapResult({ success: true, version: PACKAGE_VERSION, name: 'memory-journal-mcp' })), 'version'),
     }
     for (const k of statsKeys) systemObj[k] = getStats
     Object.assign(systemCallable, systemObj)

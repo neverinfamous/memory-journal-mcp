@@ -1,6 +1,5 @@
 import type { ToolHandlerConfig } from '../types/index.js'
 import { ValidationError } from '../types/errors.js'
-import { getActiveSessionProject } from './workspace-resolver-session.js'
 import {
     findCanonicalRegistryKey,
     findWorkspaceByProjectNumber,
@@ -13,16 +12,31 @@ import {
 
 /**
  * [BOUNDARY] Pure in-memory `resolveProjectContextWithRegistry` implementation.
- * Must remain free of `fs`, `yaml`, and `registry-config-file` imports so
- * Code Mode worker modules (`dist/worker-script.js`) bundle zero external packages.
+ * Must remain free of `fs`, `yaml`, `request-context`, and `registry-config-file` imports so
+ * Code Mode worker modules (`dist/worker-script.js`) bundle zero external packages or ALS bindings.
  */
 
 export type WorkspaceResolverPureConfig = Omit<ToolHandlerConfig, 'runtime'> & {
     runtime?: ToolHandlerConfig['runtime'] | null
 }
 
+export interface SessionScope {
+    workspaceId?: string
+    projectNumber?: number
+}
+
+export type ActiveSessionReader = (
+    runtime?: WorkspaceResolverPureConfig['runtime']
+) => SessionScope
+
+let activeSessionReader: ActiveSessionReader = () => ({})
+
+/** Register the host session-project reader (`workspace-resolver-session.ts`). */
+export function registerActiveSessionReader(reader: ActiveSessionReader): void {
+    activeSessionReader = reader
+}
+
 type RegistryMap = Record<string, RegistryEntry> | undefined
-type SessionScope = ReturnType<typeof getActiveSessionProject>
 
 function assertNotForeignProject(
     wsId: string,
@@ -88,7 +102,7 @@ function resolveExplicitWorkspaceOrProject(
         if (wsId !== undefined) {
             return { workspaceId: wsId, projectNumber: input.project_number }
         }
-        const sessionCtx = getActiveSessionProject(config?.runtime)
+        const sessionCtx = activeSessionReader(config?.runtime)
         const rawCandidateWs =
             registeredCwd?.workspaceId ?? config?.defaultWorkspaceId ?? sessionCtx.workspaceId ?? 'default'
         const candidateWs = findCanonicalRegistryKey(rawCandidateWs, registry) ?? rawCandidateWs
@@ -278,7 +292,7 @@ export function resolveProjectContextWithRegistry(
         return { workspaceId: registeredCwd.workspaceId, projectNumber: cwdProject }
     }
 
-    const sessionCtx = getActiveSessionProject(config?.runtime)
+    const sessionCtx = activeSessionReader(config?.runtime)
     const configuredDefaultWs = parseConfiguredDefaultWs(config)
     return (
         resolveSessionScope(sessionCtx, configuredDefaultWs, config, registry) ??

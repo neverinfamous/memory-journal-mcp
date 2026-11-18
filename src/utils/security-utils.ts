@@ -155,16 +155,25 @@ export function sanitizeErrorForLogging(message: string): string {
  *
  * Will not insert nested tags if the content is already marked.
  */
+function unescapeFenceEntities(value: string): string {
+    return value.replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&')
+}
+
 export function markUntrustedContent(content: string | undefined | null): string {
     if (!content) return ''
     let trimmed = content.trim()
     if (!trimmed) return ''
+    if (isAlreadyFencedUntrustedContent(trimmed)) return trimmed
 
-    // Strip any existing literal or entity-encoded tags to prevent breakout/nesting
-    trimmed = trimmed.replace(
-        /&lt;\/?untrusted_remote_content[^&]*&gt;|<\/?untrusted_remote_content[^>]*>/gi,
-        ''
-    )
+    // Strip any existing literal or entity-encoded tags to prevent breakout/nesting, then normalize
+    // entities so repeated calls stay idempotent without growing `&amp;lt;`.
+    trimmed = unescapeFenceEntities(
+        trimmed.replace(
+            /&lt;\/?untrusted_remote_content[^&]*&gt;|<\/?untrusted_remote_content[^>]*>/gi,
+            ''
+        )
+    ).trim()
+    if (!trimmed) return ''
     // Escape HTML entities to prevent prompt injection (& first so &lt; cannot be unescaped)
     trimmed = trimmed.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
 
@@ -203,12 +212,15 @@ export function fenceNonCanonicalRefOrKey(value: string, allowSpaces = false): s
  */
 export function markUntrustedContentInline(content: string | undefined | null): string {
     if (!content) return ''
-    let cleaned = content
+    let cleaned = content.replace(/[\r\n]+/g, ' ')
+    if (isAlreadyInlineFencedUntrustedContent(cleaned)) return cleaned
 
     // Strip existing literal or entity-encoded wrappers to normalize for inline layout
-    cleaned = cleaned.replace(
-        /&lt;\/?untrusted_remote_content[^&]*&gt;|<\/?untrusted_remote_content[^>]*>/gi,
-        ''
+    cleaned = unescapeFenceEntities(
+        cleaned.replace(
+            /&lt;\/?untrusted_remote_content[^&]*&gt;|<\/?untrusted_remote_content[^>]*>/gi,
+            ''
+        )
     )
     // Escape HTML entities to prevent prompt injection (& first so &lt; cannot be unescaped)
     cleaned = cleaned.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')

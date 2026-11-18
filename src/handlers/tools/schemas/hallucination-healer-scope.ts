@@ -114,7 +114,15 @@ function normalizeStringProjectNumberField(
         obj['project_number'] = parsed
         return true
     }
-    if (cleaned === '' || cleaned === '*' || /^[0-9]/.test(cleaned) || /^p-?\d/i.test(cleaned)) return false
+    if (
+        cleaned === '' ||
+        cleaned === '*' ||
+        /^[0-9]/.test(cleaned) ||
+        cleaned.startsWith('-') ||
+        /^p-?\d/i.test(cleaned)
+    ) {
+        return false
+    }
 
     const canonicalKey = findCanonicalRegistryKey(cleaned, registry)
     const matchedWs =
@@ -200,10 +208,13 @@ export function healValidationAndScoreFields(obj: Record<string, unknown>): bool
 
     for (const numField of ['trust_score', 'impact_score'] as const) {
         if (numField in obj && typeof obj[numField] === 'string') {
-            const n = Number(obj[numField])
-            if (!Number.isNaN(n)) {
-                obj[numField] = n
-                modified = true
+            const trimmed = obj[numField].trim()
+            if (trimmed !== '' && /^-?(?:0|[1-9]\d*)(?:\.\d+)?$/.test(trimmed)) {
+                const n = Number(trimmed)
+                if (Number.isFinite(n)) {
+                    obj[numField] = n
+                    modified = true
+                }
             }
         }
     }

@@ -149,18 +149,6 @@ function buildExecToolConfig(
         runtime: context.runtime,
         subscriptionManager: globalSubscriptionManager,
     }
-    customToolHandlerConfig.dispatch = (name: string, args: Record<string, unknown>): Promise<unknown> =>
-        callTool(
-            name,
-            args,
-            context.db,
-            context.vectorManager,
-            context.github,
-            customToolHandlerConfig,
-            undefined,
-            context.teamDb ?? undefined,
-            context.teamVectorManager ?? undefined
-        )
     return customToolHandlerConfig
 }
 

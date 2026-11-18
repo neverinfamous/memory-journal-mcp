@@ -356,7 +356,7 @@ describe('Pass 40 Adversarial Code-Quality Audit — Handlers, I/O, Prompts & Te
                 ).toThrow()
             }
 
-            expect(AUDIT_PROMPT_REVISION).toBe('2026-11-18-audit-pass40')
+            expect(AUDIT_PROMPT_REVISION).toBe('2026-11-18-audit-pass41')
             const codeQualityPrompt = getCodeQualityAuditPromptDefinition()
             const promptRes = await codeQualityPrompt.handler(
                 {
@@ -367,7 +367,7 @@ describe('Pass 40 Adversarial Code-Quality Audit — Handlers, I/O, Prompts & Te
                 db
             )
             const promptText = promptRes.messages[0]?.content.text ?? ''
-            expect(promptText).toContain('Prompt revision: 2026-11-18-audit-pass40')
+            expect(promptText).toContain('Prompt revision: 2026-11-18-audit-pass41')
             expect(promptText).toContain('SCAN_OK scanned=')
             expect(promptText).toContain('Present the plan as markdown in the chat.')
         } finally {

@@ -42,17 +42,49 @@ function getConfigPath(): string {
     return path.resolve(os.homedir(), '.gemini', 'config', 'memory-journal.config.json')
 }
 
+function isValidLoadedRegistryEntry(
+    key: string,
+    val: unknown
+): val is ProjectRegistryEntry {
+    if (key.trim() === '' || key === '*' || key === '__proto__' || key === 'constructor' || key === 'prototype') {
+        return false
+    }
+    if (typeof val !== 'object' || val === null || Array.isArray(val)) return false
+    const entry = val as Record<string, unknown>
+    if (entry['path'] !== undefined && typeof entry['path'] !== 'string') return false
+    if (
+        entry['project_number'] !== undefined &&
+        (typeof entry['project_number'] !== 'number' ||
+            !Number.isSafeInteger(entry['project_number']) ||
+            entry['project_number'] <= 0)
+    ) {
+        return false
+    }
+    return true
+}
+
+function sanitizeLoadedProjectRegistry(
+    raw: unknown
+): Record<string, ProjectRegistryEntry> | undefined {
+    if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) {
+        return undefined
+    }
+    const clean = Object.create(null) as Record<string, ProjectRegistryEntry>
+    for (const [k, v] of Object.entries(raw)) {
+        if (isValidLoadedRegistryEntry(k, v)) {
+            clean[k] = v
+        }
+    }
+    return clean
+}
+
 export function loadProjectRegistryFromConfig(): Record<string, ProjectRegistryEntry> | undefined {
     if (isTestRunner()) {
         return undefined
     }
     try {
         const config = readCachedConfigObject(getConfigPath()) as ParsedConfig | undefined
-        const raw = config?.projectRegistry
-        if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) {
-            return undefined
-        }
-        return raw
+        return sanitizeLoadedProjectRegistry(config?.projectRegistry)
     } catch (error) {
         logger.debug('Failed to load project registry from config', {
             module: 'workspace-resolver',
@@ -78,7 +110,7 @@ export function resolveProjectNumberFromPath(
         let projectRegistry = registryOverride
         if (projectRegistry === undefined) {
             const config = readCachedConfigObject(getConfigPath()) as ParsedConfig | undefined
-            projectRegistry = config?.projectRegistry
+            projectRegistry = sanitizeLoadedProjectRegistry(config?.projectRegistry)
         }
         if (projectRegistry === undefined || projectRegistry === null) return undefined
         return findBestMatchingPathEntry(cwd, projectRegistry)?.projectNumber

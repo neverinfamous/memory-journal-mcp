@@ -232,7 +232,8 @@ export async function collectTeamSearchEntries(
     query: string,
     teamDb: IDatabaseAdapter,
     teamVectorManager: VectorSearchManager | undefined,
-    options: ISearchFilters & { limit: number }
+    options: ISearchFilters & { limit: number },
+    diagnostics?: { teamVectorFailed?: boolean }
 ): Promise<EntryWithSource[]> {
     if (
         !isTeamDbReady(teamDb) ||
@@ -268,6 +269,9 @@ export async function collectTeamSearchEntries(
                   pushEntry
               )
             : false
+    if (teamVectorFailed && diagnostics !== undefined) {
+        diagnostics.teamVectorFailed = true
+    }
 
     if (
         options.enforceSimilarityThreshold !== true &&

@@ -198,10 +198,12 @@ export const TeamSemanticSearchSchema = z.preprocess(
                 .describe('Include hint when no results found (default: true)'),
             project_number: StrictProjectNumberSchema.optional(),
             workspace_id: z.string().optional(),
-            issue_number: z.number().optional().describe('Filter results by GitHub issue number'),
-            pr_number: z.number().optional().describe('Filter results by GitHub PR number'),
+            issue_number: z.number().int().positive().optional().describe('Filter results by GitHub issue number'),
+            pr_number: z.number().int().positive().optional().describe('Filter results by GitHub PR number'),
             workflow_run_id: z
                 .number()
+                .int()
+                .positive()
                 .optional()
                 .describe('Filter results by GitHub Actions workflow run ID'),
             include_archived: z.boolean().optional().default(false),

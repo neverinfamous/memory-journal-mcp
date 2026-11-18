@@ -1,4 +1,5 @@
 import * as fs from 'node:fs'
+import { randomBytes } from 'node:crypto'
 import { EventEmitter } from 'node:events'
 import { parse as parseYaml, stringify as stringifyYaml } from 'yaml'
 import { logger } from './logger.js'
@@ -247,6 +248,20 @@ export class ConfigManager extends EventEmitter {
         this.watcher = undefined
     }
 
+    private writeTempAndRenameConfig(tmpPath: string, serialized: string, targetPath: string): void {
+        try {
+            fs.writeFileSync(tmpPath, serialized, { encoding: 'utf-8', flag: 'wx' })
+            fs.renameSync(tmpPath, targetPath)
+        } catch (writeErr: unknown) {
+            try {
+                fs.rmSync(tmpPath, { force: true })
+            } catch {
+                // [SIDE-EFFECT] Best-effort temp cleanup; the original error is reported below.
+            }
+            throw writeErr
+        }
+    }
+
     private persistToFile(): string | undefined {
         if (!this.configFilePath) return undefined
         this.isWriting = true
@@ -279,18 +294,8 @@ export class ConfigManager extends EventEmitter {
                 serialized = (stringifyYaml as (value: unknown) => string)(parsed)
             }
             // [INVARIANT] Atomic temp+rename so a crash or concurrent reader never sees a truncated config.
-            const tmpPath = `${this.configFilePath}.${String(process.pid)}.${String(Date.now())}.tmp`
-            try {
-                fs.writeFileSync(tmpPath, serialized, 'utf-8')
-                fs.renameSync(tmpPath, this.configFilePath)
-            } catch (writeErr: unknown) {
-                try {
-                    fs.rmSync(tmpPath, { force: true })
-                } catch {
-                    // [SIDE-EFFECT] Best-effort temp cleanup; the original error is reported below.
-                }
-                throw writeErr
-            }
+            const tmpPath = `${this.configFilePath}.${String(process.pid)}.${randomBytes(8).toString('hex')}.tmp`
+            this.writeTempAndRenameConfig(tmpPath, serialized, this.configFilePath)
             // [SIDE-EFFECT] rename replaces the inode, so re-arm the watcher on the new file.
             if (!this.closed && this.watcher !== undefined) {
                 this.watcher.close()

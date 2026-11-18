@@ -172,12 +172,16 @@ export class CodeModeSecurityManager {
                 actualBytes = v8.serialize(result).length
             } catch {
                 // Fallback to safe JSON serialization if v8 encounters uncloneable data or cyclic references
-                const cache = new Set()
+                const ancestors: object[] = []
                 actualBytes = Buffer.byteLength(
-                    JSON.stringify(result, (_key: string, value: unknown): unknown => {
+                    JSON.stringify(result, function (this: unknown, _key: string, value: unknown): unknown {
                         if (typeof value === 'object' && value !== null) {
-                            if (cache.has(value)) return '[Circular]'
-                            cache.add(value)
+                            const holderIdx =
+                                typeof this === 'object' && this !== null ? ancestors.lastIndexOf(this) : -1
+                            if (holderIdx !== -1) ancestors.length = holderIdx + 1
+                            else if (ancestors.length > 0) ancestors.length = 0
+                            if (ancestors.includes(value)) return '[Circular]'
+                            ancestors.push(value)
                         }
                         return value
                     }) || '',

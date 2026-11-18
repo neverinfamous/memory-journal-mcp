@@ -9,8 +9,9 @@ import type { JournalEntry, ToolDefinition, ToolContext } from '../../../../type
 import { formatHandlerError } from '../../../../utils/error-helpers.js'
 import { logger } from '../../../../utils/logger.js'
 import { resolveWriteWorkspaceId } from '../../write-workspace.js'
-import { TEAM_DB_ERROR_RESPONSE, fetchAuthor, triggerTeamNotifications, resolveTeamProjectNumber } from '../helpers.js'
+import { TEAM_DB_ERROR_RESPONSE, fetchAuthor, triggerTeamNotifications } from '../helpers.js'
 import { checkSingleTeamOwnership, missingProjectNumberResponse, type TeamDbInstance } from './batch-delete-helpers.js'
+import { resolveTeamMutationProjectNumber } from './team-pk-scope-helpers.js'
 import { createTeamMergeTagsTool } from './merge-tags-tool.js'
 import {
     TeamUpdateEntrySchema,
@@ -70,11 +71,12 @@ function resolveTeamUpdateScope(
         input.project_number,
         context.config
     )
-    const projectNumber = resolveTeamProjectNumber(
+    const projectNumber = resolveTeamMutationProjectNumber(
         context,
         wsId,
-        input.project_number ?? existing.projectNumber,
-        input.workspace_id
+        input.project_number,
+        input.workspace_id,
+        existing.projectNumber
     )
     if (projectNumber === undefined || projectNumber === null) {
         return { errorResponse: missingProjectNumberResponse() }
@@ -193,10 +195,13 @@ function executeTeamDeleteEntry(
 
     let wsId = resolveWriteWorkspaceId(workspace_id, project_number, context.config)
     const existing = teamDb.getEntryByIdIncludeDeleted(entry_id, wsId)
-    const projectNumber =
-        project_number ??
-        existing?.projectNumber ??
-        resolveTeamProjectNumber(context, wsId, project_number, workspace_id)
+    const projectNumber = resolveTeamMutationProjectNumber(
+        context,
+        wsId,
+        project_number,
+        workspace_id,
+        existing?.projectNumber
+    )
     if (projectNumber === undefined || projectNumber === null) {
         return missingProjectNumberResponse()
     }
@@ -334,10 +339,13 @@ export function getTeamAdminCrudTools(context: ToolContext): ToolDefinition[] {
 
                     let wsId = resolveWriteWorkspaceId(workspace_id, project_number, context.config)
                     const existing = teamDb.getEntryByIdIncludeDeleted(entry_id, wsId)
-                    const projectNumber =
-                        project_number ??
-                        existing?.projectNumber ??
-                        resolveTeamProjectNumber(context, wsId, project_number, workspace_id)
+                    const projectNumber = resolveTeamMutationProjectNumber(
+                        context,
+                        wsId,
+                        project_number,
+                        workspace_id,
+                        existing?.projectNumber
+                    )
                     if (projectNumber === undefined || projectNumber === null) {
                         return missingProjectNumberResponse()
                     }

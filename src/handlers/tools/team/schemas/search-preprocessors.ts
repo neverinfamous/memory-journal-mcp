@@ -6,6 +6,7 @@
 
 import { healSortByField, healIncludeArchivedField } from '../../schemas/hallucination-healer-fields.js'
 import { healSearchPayload } from '../../schemas.js'
+import { parseCanonicalPositiveInt } from '../../../../utils/safe-positive-int.js'
 
 const TEAM_SEARCH_QUERY_ALIASES = ['q', 'text', 'message', 'description', 'content'] as const
 const TEAM_SEMANTIC_QUERY_ALIASES = ['q', 'text', 'message', 'description'] as const
@@ -95,7 +96,7 @@ export function normalizeTeamLinkRelationshipType(val: unknown): unknown {
 function coerceLinkEndpointId(val: unknown): unknown {
     if (typeof val === 'string') {
         const trimmed = val.trim()
-        if (/^\d+$/.test(trimmed)) return Number(trimmed)
+        return parseCanonicalPositiveInt(trimmed) ?? val
     }
     return val
 }

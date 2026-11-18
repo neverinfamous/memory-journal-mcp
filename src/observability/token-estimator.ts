@@ -104,7 +104,7 @@ export function estimatePayloadTokens(payload: unknown): number {
         }
     }
     try {
-        const serialized = JSON.stringify(payload)
+        const serialized = JSON.stringify(payload, bigintReplacer)
         if (typeof serialized !== 'string') return 0
         const est = estimateTokens(serialized, 'json')
         if (typeof payload === 'object') {
@@ -121,6 +121,10 @@ export function estimatePayloadTokens(payload: unknown): number {
     }
 }
 
+export function bigintReplacer(_key: string, value: unknown): unknown {
+    return typeof value === 'bigint' ? value.toString() : value
+}
+
 /** Invalidate cached serialized JSON when a post-handler transform mutates `payload`. */
 export function invalidateSerializedPayload(payload: unknown): void {
     if (typeof payload === 'object' && payload !== null) {
@@ -135,13 +139,13 @@ export function getSerializedPayloadJson(payload: unknown): string {
     if (typeof payload === 'object' && payload !== null) {
         const cached = serializedPayloadCache.get(payload)
         if (cached !== undefined) return cached
-        const json = JSON.stringify(payload)
+        const json = JSON.stringify(payload, bigintReplacer)
         if (typeof json === 'string') {
             serializedPayloadCache.set(payload, json)
             return json
         }
     }
-    return JSON.stringify(payload) ?? 'null'
+    return JSON.stringify(payload, bigintReplacer) ?? 'null'
 }
 
 // ============================================================================
@@ -191,7 +195,7 @@ export function injectTokenEstimate(payload: unknown): unknown {
 
         const placeholder = { ...obj, _meta: { tokenEstimate: TOKEN_ESTIMATE_SENTINEL } }
         try {
-            const placeholderJson = JSON.stringify(placeholder)
+            const placeholderJson = JSON.stringify(placeholder, bigintReplacer)
             if (placeholderJson.endsWith(TOKEN_SENTINEL_META_SUFFIX)) {
                 const rawBytes =
                     Buffer.byteLength(placeholderJson, 'utf8') - TOKEN_SENTINEL_OVERHEAD_BYTES

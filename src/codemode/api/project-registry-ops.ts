@@ -152,7 +152,8 @@ async function recordProjectInitEntry(
 }
 
 export function createRegisterProjectFn(
-    coreApi: GroupApiRecord
+    coreApi: GroupApiRecord,
+    allowedIoRoots?: string[]
 ): (...args: unknown[]) => Promise<{ success: boolean; message?: string; warning?: string; error?: string }> {
     return async (...args: unknown[]): Promise<{ success: boolean; message?: string; warning?: string; error?: string }> => {
         const name = safeString(args[0] ?? '').trim()
@@ -169,7 +170,7 @@ export function createRegisterProjectFn(
         if (isForbiddenProjectKey(name)) {
             return { success: false, error: `Invalid project name: '${name}'` }
         }
-        if (!isValidProjectPath(absolutePath)) {
+        if (!isValidProjectPath(absolutePath, allowedIoRoots)) {
             return { success: false, error: `Invalid project path: '${absolutePath}'. Must be a local absolute path.` }
         }
 
@@ -203,7 +204,7 @@ export function createRegisterProjectFn(
     }
 }
 
-export function createUpdateProjectFn(): (...args: unknown[]) => Promise<{
+export function createUpdateProjectFn(allowedIoRoots?: string[]): (...args: unknown[]) => Promise<{
     success: boolean
     message?: string
     error?: string
@@ -225,7 +226,7 @@ export function createUpdateProjectFn(): (...args: unknown[]) => Promise<{
         if (isForbiddenProjectKey(name) || (newName !== undefined && isForbiddenProjectKey(newName))) {
             return Promise.resolve({ success: false, error: 'Invalid project name.' })
         }
-        if (absolutePath !== undefined && !isValidProjectPath(absolutePath)) {
+        if (absolutePath !== undefined && !isValidProjectPath(absolutePath, allowedIoRoots)) {
             return Promise.resolve({ success: false, error: `Invalid project path: '${absolutePath}'.` })
         }
 

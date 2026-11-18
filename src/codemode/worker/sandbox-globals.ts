@@ -60,6 +60,10 @@ function createSafeTimerHelpers(activeTimers?: Set<NodeJS.Timeout>): {
     return { createSafeTimeout, clearSafeTimeout }
 }
 
+function isAllowedTeamGlobal(name: string): boolean {
+    return name.startsWith('team_') || /^team[A-Z]/.test(name)
+}
+
 function exposeApiMethodsOnSandbox(
     sandbox: Record<string, unknown>,
     mjApi: Record<string, unknown>
@@ -67,10 +71,12 @@ function exposeApiMethodsOnSandbox(
     for (const key of Object.keys(mjApi)) {
         const val = mjApi[key]
         if ((val === null || typeof val !== 'object') && typeof val !== 'function') continue
+        const isTeamGroup = key === 'team'
         const lazyNames = Reflect.get(val, LAZY_GROUP_METHOD_NAMES) as unknown
         if (Array.isArray(lazyNames)) {
             for (const groupMethod of lazyNames) {
                 if (typeof groupMethod !== 'string' || groupMethod in sandbox) continue
+                if (isTeamGroup && !isAllowedTeamGlobal(groupMethod)) continue
                 let resolved: unknown
                 let hasResolved = false
                 Object.defineProperty(sandbox, groupMethod, {
@@ -88,6 +94,7 @@ function exposeApiMethodsOnSandbox(
         } else {
             for (const groupMethod of Object.keys(val)) {
                 if (groupMethod in sandbox) continue
+                if (isTeamGroup && !isAllowedTeamGlobal(groupMethod)) continue
                 const fn = Reflect.get(val, groupMethod) as unknown
                 if (typeof fn === 'function') sandbox[groupMethod] = fn
             }

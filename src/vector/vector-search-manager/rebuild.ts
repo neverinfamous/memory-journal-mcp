@@ -8,6 +8,7 @@ import type { VectorSearchManager } from './manager.js'
 import { formatEntryForEmbedding } from './candidate-search.js'
 import { effectiveWorkspace } from '../../database/workspace-scope.js'
 import { isMissingTableError } from '../../database/sqlite-adapter/schema-errors.js'
+import { parseCanonicalPositiveInt } from '../../utils/safe-positive-int.js'
 
 // Allow mocking in tests
 export const setTimeoutFn = globalThis.setTimeout
@@ -32,7 +33,7 @@ export function verifyVecTableSchema(
         const existingDimStr = dbAdapter.getVectorMetadata('dimensions')
         const existingModel = dbAdapter.getVectorMetadata('model_name')
         if (existingDimStr) {
-            const existingDim = parseInt(existingDimStr, 10)
+            const existingDim = parseCanonicalPositiveInt(existingDimStr)
             if (
                 existingDim !== dimensions ||
                 (existingModel !== null &&
@@ -316,8 +317,16 @@ export async function rebuildIndex(
     }
 ): Promise<{ success: boolean; indexed: number; failed: number; firstError: string | null; warning?: string }> {
     const force = options?.force ?? false
-    const batchSize = options?.batchSize ?? REBUILD_BATCH_SIZE
-    const pageSize = options?.pageSize ?? REBUILD_PAGE_SIZE
+    const rawBatch = options?.batchSize
+    const batchSize =
+        typeof rawBatch === 'number' && Number.isFinite(rawBatch) && rawBatch >= 1
+            ? Math.floor(rawBatch)
+            : REBUILD_BATCH_SIZE
+    const rawPage = options?.pageSize
+    const pageSize =
+        typeof rawPage === 'number' && Number.isFinite(rawPage) && rawPage >= 1
+            ? Math.floor(rawPage)
+            : REBUILD_PAGE_SIZE
     const wsScope = options?.workspaceId !== undefined ? effectiveWorkspace(options.workspaceId) : '*'
 
     const stats: RebuildStats = { indexed: 0, skipped: 0, errorsCount: 0, firstError: null }

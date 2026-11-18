@@ -4,6 +4,10 @@
 
 import { recoverStructuredJsonCode, recoverStructuredRecord } from './json-entry-structured.js'
 import { stripCommentsAndStrings } from '../../../codemode/security.js'
+import {
+    parseCanonicalPositiveInt,
+    parsePositiveProjectNumber,
+} from '../../../utils/safe-positive-int.js'
 
 const ARRAY_FIELD_RES: readonly (readonly ['relationships' | 'anchors', RegExp])[] = [
     ['relationships', /\brelationships\s*:\s*(\[[\s\S]*?\])/i],
@@ -154,16 +158,24 @@ function populateRecoveredEntryMetadata(payload: Record<string, unknown>, scanCo
     const shareTeamMatch = /\b(?:share_with_team|shareWithTeam)\s*:\s*(true|false)\b/i.exec(scanCode)
     const entryIdMatch = /\b(?:entry_id|id)\s*:\s*(\d+)/i.exec(scanCode)
 
-    if (entryIdMatch?.[1] !== undefined) payload['entry_id'] = parseInt(entryIdMatch[1], 10)
+    const eid = entryIdMatch?.[1] !== undefined ? parseCanonicalPositiveInt(entryIdMatch[1]) : undefined
+    if (eid !== undefined) payload['entry_id'] = eid
     if (projectMatch?.[1] !== undefined) {
-        payload['project_number'] = parseInt(projectMatch[1], 10)
+        const parsedProj = parsePositiveProjectNumber(projectMatch[1])
+        payload['project_number'] = parsedProj ?? projectMatch[1]
     } else if (projectMatch?.[3] !== undefined && projectMatch[3].trim() !== '') {
         payload['project_number'] = projectMatch[3].trim()
     }
     if (workspaceMatch?.[2] !== undefined) payload['workspace_id'] = workspaceMatch[2]
     if (sessionMatch?.[2] !== undefined) payload['session_id'] = sessionMatch[2]
-    if (impactMatch?.[1] !== undefined) payload['impact_score'] = parseFloat(impactMatch[1])
-    if (trustMatch?.[1] !== undefined) payload['trust_score'] = parseFloat(trustMatch[1])
+    if (impactMatch?.[1] !== undefined) {
+        const parsedImpact = Number(impactMatch[1])
+        if (Number.isFinite(parsedImpact)) payload['impact_score'] = parsedImpact
+    }
+    if (trustMatch?.[1] !== undefined) {
+        const parsedTrust = Number(trustMatch[1])
+        if (Number.isFinite(parsedTrust)) payload['trust_score'] = parsedTrust
+    }
     if (validationMatch?.[2] !== undefined) payload['validation_status'] = validationMatch[2]
     if (sigMatch?.[2] !== undefined) payload['significance_type'] = sigMatch[2]
     if (isPersonalMatch?.[1] !== undefined) payload['is_personal'] = isPersonalMatch[1].toLowerCase() === 'true'

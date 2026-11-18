@@ -10,6 +10,7 @@ import { resolveTeamCreateAuthor } from '../../handlers/tools/team/admin-tools/b
 import { checkSingleTeamOwnership } from '../../handlers/tools/team/admin-tools/batch-delete-helpers.js'
 import { createEntryOptionsSchema, updateEntryOptionsSchema } from '../schemas.js'
 import {
+    applyCliUpdateAnchors,
     assertCliUpdateWorkspaceOwnership,
     buildCliEntryUpdateObject,
     validateCliUpdateArgsAndTarget,
@@ -368,6 +369,13 @@ export async function updateEntryAction(...args: unknown[]): Promise<void> {
             payload,
             existingEntry,
             trimmedTargetWs,
+            config
+        )
+        await applyCliUpdateAnchors(
+            updates,
+            payload,
+            updates.workspaceId ?? existingEntry?.workspaceId ?? 'default',
+            db,
             config
         )
         const result = db.updateEntry(entryId, updates)

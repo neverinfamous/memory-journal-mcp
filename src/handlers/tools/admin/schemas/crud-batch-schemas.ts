@@ -7,6 +7,7 @@ import {
     MAX_BATCH_SIZE,
     MAX_CONTENT_LENGTH,
     BatchResultOutputSchema,
+    StrictProjectNumberSchema,
     healAgentHallucinations,
 } from '../../schemas.js'
 import { ErrorFieldsMixin } from '../../error-fields-mixin.js'
@@ -254,7 +255,7 @@ export const BatchCreateEntriesSchema = z.preprocess(
         .object({
             entries: z.array(CreateEntrySchema).min(1).max(MAX_BATCH_SIZE),
             auto_index: z.boolean().optional().default(true),
-            project_number: z.number().int().optional(),
+            project_number: StrictProjectNumberSchema.optional(),
             workspace_id: z.string().optional(),
         })
         .strict()
@@ -280,7 +281,7 @@ export const BatchUpdateEntriesSchema = z.preprocess(
         .object({
             updates: z.array(UpdateEntrySchema).min(1).max(MAX_BATCH_SIZE),
             auto_index: z.boolean().optional().default(true),
-            project_number: z.number().int().optional(),
+            project_number: StrictProjectNumberSchema.optional(),
             workspace_id: z.string().optional(),
         })
         .strict()

@@ -52,12 +52,6 @@ export const DUMMY_PROMPT_TOOL_NAMES = [
     'prepare_retro',
     'weekly-digest',
     'weekly_digest',
-    'git-impact-search',
-    'git_impact_search',
-    'git-velocity-report',
-    'git_velocity_report',
-    'git-audit-trust',
-    'git_audit_trust',
 ]
 
 export const DUMMY_RESOURCE_TOOL_NAMES = [

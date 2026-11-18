@@ -46,7 +46,7 @@ function executeSearchQuery(
     const entries = rowsToEntries(tagsMgr, rows)
     const needsImportance = options?.sortBy === 'importance' || options?.sortBy === 'blended'
     if (!needsImportance && entries.length > 0) {
-        attachImportanceScoresToEntries(context, entries)
+        attachImportanceScoresToEntries(context, entries, options?.workspaceId)
     }
     let nextCursor: string | undefined
     const limit = options?.limit ?? 10

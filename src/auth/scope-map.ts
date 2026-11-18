@@ -119,6 +119,7 @@ function scopeForResourceUri(uri: string): StandardScope {
         baseUri.startsWith('memory://team/') ||
         baseUri.startsWith('memory://team?') ||
         baseUri === 'memory://insights/team-collaboration' ||
+        baseUri.startsWith('memory://insights/team-collaboration/') ||
         baseUri.startsWith('memory://insights/team-collaboration?')
     ) {
         return SCOPES.TEAM
@@ -126,7 +127,10 @@ function scopeForResourceUri(uri: string): StandardScope {
     if (
         baseUri === 'memory://audit' ||
         baseUri.startsWith('memory://audit/') ||
-        baseUri.startsWith('memory://audit?')
+        baseUri.startsWith('memory://audit?') ||
+        baseUri === 'memory://metrics/users' ||
+        baseUri.startsWith('memory://metrics/users/') ||
+        baseUri.startsWith('memory://metrics/users?')
     ) {
         return SCOPES.AUDIT
     }

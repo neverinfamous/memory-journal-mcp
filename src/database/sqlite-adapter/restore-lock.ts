@@ -45,7 +45,7 @@ function parseLockContent(lockContent: string): {
 function isHoldingPidStale(
     holdingPid: number,
     lockDir: string,
-    runtime: unknown
+    _runtime: unknown
 ): boolean {
     // [INVARIANT] A live holder keeps the lock even when the timestamp is old.
     // Age alone is not a crash signal; only ESRCH means the holder is gone.
@@ -57,27 +57,6 @@ function isHoldingPidStale(
             module: 'SqliteAdapter',
         })
         return true
-    }
-    if (
-        runtime !== undefined &&
-        runtime !== null &&
-        typeof runtime === 'object' &&
-        'maintenanceManager' in runtime
-    ) {
-        // Delegate to ServerRuntime MaintenanceManager logic
-        const mm = (
-            runtime as {
-                maintenanceManager?: { isMaintenanceModeActive(): boolean }
-            }
-        ).maintenanceManager
-        if (mm !== undefined && !mm.isMaintenanceModeActive()) {
-            logger.warning('Found stale database restore lock (maintenance mode inactive)', {
-                path: lockDir,
-                module: 'SqliteAdapter',
-            })
-            return true
-        }
-        // Only fall through to process.kill(holdingPid, 0) for foreign PIDs when local maintenance is active
     }
     try {
         process.kill(holdingPid, 0)
@@ -175,6 +154,36 @@ function clearStaleLock(lockDir: string): void {
     }
 }
 
+function reclaimAndRetryLockDir(
+    lockDir: string,
+    lockFile: string,
+    nonce: string,
+    runtime: unknown,
+    lockError: unknown
+): void {
+    if (!isLockStale(lockDir, lockFile, runtime)) {
+        throw new Error(
+            `Another process is currently holding the database lock at ${lockDir}. Backup restore cannot safely proceed.`,
+            { cause: lockError }
+        )
+    }
+    clearStaleLock(lockDir)
+    // [INVARIANT] Retry with a non-recursive mkdir so a concurrent reclaimer loses with EEXIST
+    // instead of both processes believing they own the lock.
+    try {
+        fs.mkdirSync(lockDir)
+    } catch (retryError: unknown) {
+        if (hasErrorCode(retryError, 'EEXIST')) {
+            throw new Error(
+                `Another process is currently holding the database lock at ${lockDir}. Backup restore cannot safely proceed.`,
+                { cause: retryError }
+            )
+        }
+        throw retryError
+    }
+    writeLockFileGuarded(lockDir, lockFile, nonce)
+}
+
 /** Acquire the OS lock directory for restore, reclaiming it if the existing lock is stale. */
 export function acquireRestoreLock(lockDir: string, lockFile: string, runtime: unknown): void {
     const nonce = randomUUID()
@@ -186,26 +195,6 @@ export function acquireRestoreLock(lockDir: string, lockFile: string, runtime: u
         if (!hasErrorCode(lockError, 'EEXIST')) {
             throw lockError
         }
-        if (!isLockStale(lockDir, lockFile, runtime)) {
-            throw new Error(
-                `Another process is currently holding the database lock at ${lockDir}. Backup restore cannot safely proceed.`,
-                { cause: lockError }
-            )
-        }
-        clearStaleLock(lockDir)
-        // [INVARIANT] Retry with a non-recursive mkdir so a concurrent reclaimer loses with EEXIST
-        // instead of both processes believing they own the lock.
-        try {
-            fs.mkdirSync(lockDir)
-        } catch (retryError: unknown) {
-            if (hasErrorCode(retryError, 'EEXIST')) {
-                throw new Error(
-                    `Another process is currently holding the database lock at ${lockDir}. Backup restore cannot safely proceed.`,
-                    { cause: retryError }
-                )
-            }
-            throw retryError
-        }
-        writeLockFileGuarded(lockDir, lockFile, nonce)
+        reclaimAndRetryLockDir(lockDir, lockFile, nonce, runtime, lockError)
     }
 }

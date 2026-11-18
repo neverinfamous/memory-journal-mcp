@@ -197,18 +197,27 @@ export async function runSemanticSearch(
         : Math.min(needed * 2, 1000)
     const canQueryTeam =
         searchOptions.includeTeam === true && input.is_personal !== true && isTeamDbReady(teamDb)
-    const degraded = canQueryTeam && teamVectorManager === undefined
+    const teamDiagnostics: { teamVectorFailed?: boolean } = {}
 
     const [semanticResults, teamEntries] = await Promise.all([
         vectorManager.search(query, internalLimit, 0.25, wsId, searchOptions.projectNumber),
         canQueryTeam && teamDb !== undefined
-            ? collectTeamSearchEntries(query, teamDb, teamVectorManager, {
-                  ...searchOptions,
-                  similarityThreshold: 0.25,
-                  limit: Math.min(internalLimit, 500),
-              })
+            ? collectTeamSearchEntries(
+                  query,
+                  teamDb,
+                  teamVectorManager,
+                  {
+                      ...searchOptions,
+                      similarityThreshold: 0.25,
+                      limit: Math.min(internalLimit, 500),
+                  },
+                  teamDiagnostics
+              )
             : Promise.resolve<EntryWithSource[]>([]),
     ])
+    const degraded =
+        (canQueryTeam && teamVectorManager === undefined) ||
+        teamDiagnostics.teamVectorFailed === true
 
     const { entries, relevanceMap } = hydratePersonalSemanticEntries(
         semanticResults,

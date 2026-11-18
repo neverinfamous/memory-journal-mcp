@@ -78,16 +78,33 @@ function checkDefAcceptsKey(
     }
     if (typeName === 'ZodLazy' || typeName === 'lazy') {
         const getter = (def as { getter?: () => unknown }).getter
-        return typeof getter === 'function' ? checkSchemaAcceptsKey(getter(), key, visited) : false
+        const next =
+            typeof getter === 'function'
+                ? getter()
+                : typeof s.unwrap === 'function'
+                  ? s.unwrap()
+                  : undefined
+        return next !== undefined ? checkSchemaAcceptsKey(next, key, visited) : false
+    }
+    if (typeName === 'ZodPipe' || typeName === 'pipe' || typeName === 'ZodPipeline') {
+        const inSchema = def.in ?? s.in
+        const inDef = isRecord(inSchema)
+            ? ((inSchema as ZodLike)._zod?.def ?? (inSchema as ZodLike).def ?? (inSchema as ZodLike)._def)
+            : undefined
+        const inType = inDef?.typeName ?? inDef?.type
+        if (inType !== 'ZodTransform' && inType !== 'transform') {
+            if (checkSchemaAcceptsKey(inSchema, key, visited)) return true
+        }
+        return checkSchemaAcceptsKey(def.out ?? s.out, key, visited)
     }
     if (typeName !== undefined && WRAPPER_DEF_TYPES.has(typeName)) {
         const innerCandidates = [
+            def.in,
+            s.in,
             def.schema,
             def.innerType,
             def.out,
-            def.in,
             s.out,
-            s.in,
             typeof s.innerType === 'function' ? s.innerType() : undefined,
             typeof s.unwrap === 'function' ? s.unwrap() : undefined,
         ]
@@ -96,8 +113,8 @@ function checkDefAcceptsKey(
         }
     }
     return (
-        checkSchemaAcceptsKey(def.out, key, visited) ||
         checkSchemaAcceptsKey(def.in, key, visited) ||
+        checkSchemaAcceptsKey(def.out, key, visited) ||
         checkSchemaAcceptsKey(def.schema, key, visited)
     )
 }
@@ -111,30 +128,34 @@ function computeSchemaAcceptsKey(
 ): boolean {
     if (!isRecord(schema) || visited.has(schema)) return false
     visited.add(schema)
-    if ('properties' in schema && isRecord(schema['properties']) && key in schema['properties']) {
-        return true
-    }
-    for (const comboKey of ['anyOf', 'oneOf', 'allOf'] as const) {
-        const branches = schema[comboKey]
-        if (Array.isArray(branches) && branches.some((b) => computeSchemaAcceptsKey(b, key, visited))) {
+    try {
+        if ('properties' in schema && isRecord(schema['properties']) && key in schema['properties']) {
             return true
         }
-    }
+        for (const comboKey of ['anyOf', 'oneOf', 'allOf'] as const) {
+            const branches = schema[comboKey]
+            if (Array.isArray(branches) && branches.some((b) => computeSchemaAcceptsKey(b, key, visited))) {
+                return true
+            }
+        }
 
-    const s = schema as ZodLike
-    if (isRecord(s.shape) && key in s.shape) return true
+        const s = schema as ZodLike
+        if (isRecord(s.shape) && key in s.shape) return true
 
-    const def = s._zod?.def ?? s.def ?? s._def
-    if (def !== undefined && def !== null && checkDefAcceptsKey(s, def, key, visited)) {
-        return true
+        const def = s._zod?.def ?? s.def ?? s._def
+        if (def !== undefined && def !== null && checkDefAcceptsKey(s, def, key, visited)) {
+            return true
+        }
+        if (Array.isArray(s.options) && s.options.some((opt) => computeSchemaAcceptsKey(opt, key, visited))) {
+            return true
+        }
+        return (
+            computeSchemaAcceptsKey(s.in, key, visited) ||
+            computeSchemaAcceptsKey(s.out, key, visited)
+        )
+    } finally {
+        visited.delete(schema)
     }
-    if (Array.isArray(s.options) && s.options.some((opt) => computeSchemaAcceptsKey(opt, key, visited))) {
-        return true
-    }
-    return (
-        computeSchemaAcceptsKey(s.out, key, visited) ||
-        computeSchemaAcceptsKey(s.in, key, visited)
-    )
 }
 
 export function checkSchemaAcceptsKey(

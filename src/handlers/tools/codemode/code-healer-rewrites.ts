@@ -5,40 +5,69 @@
 
 import * as vm from 'node:vm'
 
-export function isInsideStringLiteral(code: string, offset: number): boolean {
+function scanCodeOffsetState(code: string, offset: number): 'code' | 'string' | 'comment' {
     let inString: string | null = null
     let isEscaped = false
+    const templateBraceDepthStack: number[] = []
     for (let i = 0; i < offset; i++) {
         const ch = code[i]
         if (inString !== null) {
             if (ch === '\\') {
                 isEscaped = !isEscaped
-            } else {
-                if (ch === inString && !isEscaped) {
-                    inString = null
-                }
+                continue
+            }
+            if (inString === '`' && !isEscaped && ch === '$' && code[i + 1] === '{' && i + 1 < offset) {
+                templateBraceDepthStack.push(0)
+                inString = null
                 isEscaped = false
-            }
-        } else {
-            // [M11] Comments are skipped so quotes inside them never open a fake string literal.
-            if (ch === '/' && code[i + 1] === '/') {
-                const nl = code.indexOf('\n', i)
-                if (nl === -1 || nl >= offset) return false
-                i = nl
+                i++
                 continue
             }
-            if (ch === '/' && code[i + 1] === '*') {
-                const end = code.indexOf('*/', i + 2)
-                if (end === -1 || end + 1 >= offset) return false
-                i = end + 1
-                continue
+            if (ch === inString && !isEscaped) {
+                inString = null
             }
-            if (ch === "'" || ch === '"' || ch === '`') {
-                inString = ch
+            isEscaped = false
+            continue
+        }
+        if (ch === '/' && code[i + 1] === '/') {
+            const nl = code.indexOf('\n', i)
+            if (nl === -1 || nl > offset) return 'comment'
+            i = nl
+            continue
+        }
+        if (ch === '/' && code[i + 1] === '*') {
+            const end = code.indexOf('*/', i + 2)
+            if (end === -1 || end + 2 > offset) return 'comment'
+            i = end + 1
+            continue
+        }
+        if (ch === "'" || ch === '"' || ch === '`') {
+            inString = ch
+        } else if (ch === '{' && templateBraceDepthStack.length > 0) {
+            const topIdx = templateBraceDepthStack.length - 1
+            const top = templateBraceDepthStack[topIdx]
+            if (top !== undefined) templateBraceDepthStack[topIdx] = top + 1
+        } else if (ch === '}' && templateBraceDepthStack.length > 0) {
+            const topIdx = templateBraceDepthStack.length - 1
+            const top = templateBraceDepthStack[topIdx]
+            if (top === 0) {
+                templateBraceDepthStack.pop()
+                inString = '`'
+                isEscaped = false
+            } else if (top !== undefined) {
+                templateBraceDepthStack[topIdx] = top - 1
             }
         }
     }
-    return inString !== null
+    return inString !== null ? 'string' : 'code'
+}
+
+export function isInsideStringLiteral(code: string, offset: number): boolean {
+    return scanCodeOffsetState(code, offset) === 'string'
+}
+
+export function isInsideStringOrComment(code: string, offset: number): boolean {
+    return scanCodeOffsetState(code, offset) !== 'code'
 }
 
 const VALID_JS_CACHE_MAX = 256
@@ -126,13 +155,13 @@ function mapModuleBindingReplacement(varName: string, modName: string, commentTa
     return `const ${targetVar} = mj;`
 }
 
-/** Rewrite top-level ESM/CommonJS module statements outside string literals into `mj` bindings. */
+/** Rewrite top-level ESM/CommonJS module statements outside string literals and comments into `mj` bindings. */
 export function rewriteModuleImportsAndExports(src: string): string {
     let executionCode = src
     executionCode = executionCode.replace(
         /export\s+default\s+async\s+function(?:\s+[\w$]+)?\s*\(([^)]*)\)\s*\{([\s\S]*)\}/g,
         (match: string, param: string, body: string, offset: number, fullStr: string): string => {
-            if (isInsideStringLiteral(fullStr, offset)) return match
+            if (isInsideStringOrComment(fullStr, offset)) return match
             const p = param.trim()
             return `(async (${p ? `${p} = mj` : ''}) => { ${body} })()`
         }
@@ -140,7 +169,7 @@ export function rewriteModuleImportsAndExports(src: string): string {
     executionCode = executionCode.replace(
         /export\s+default\s+function(?:\s+[\w$]+)?\s*\(([^)]*)\)\s*\{([\s\S]*)\}/g,
         (match: string, param: string, body: string, offset: number, fullStr: string): string => {
-            if (isInsideStringLiteral(fullStr, offset)) return match
+            if (isInsideStringOrComment(fullStr, offset)) return match
             const p = param.trim()
             return `(async (${p ? `${p} = mj` : ''}) => { ${body} })()`
         }
@@ -148,74 +177,74 @@ export function rewriteModuleImportsAndExports(src: string): string {
     executionCode = executionCode.replace(
         /export\s+default\s+/g,
         (match: string, offset: number, fullStr: string): string =>
-            isInsideStringLiteral(fullStr, offset) ? match : ''
+            isInsideStringOrComment(fullStr, offset) ? match : ''
     )
     executionCode = executionCode.replace(
         /\btools\./g,
         (match: string, offset: number, fullStr: string): string =>
-            isInsideStringLiteral(fullStr, offset) ? match : 'mj.'
+            isInsideStringOrComment(fullStr, offset) ? match : 'mj.'
     )
     executionCode = executionCode.replace(
         /(?:const|let|var)\s+(\{[^}]*\}|[\w$]+)\s*=\s*(?:await\s+)?import\s*\(\s*['"]([^'"]+)['"]\s*\);?/g,
         (match: string, varName: string, modName: string, offset: number, fullStr: string): string =>
-            isInsideStringLiteral(fullStr, offset)
+            isInsideStringOrComment(fullStr, offset)
                 ? match
                 : mapModuleBindingReplacement(varName, modName, 'dynamic import')
     )
     executionCode = executionCode.replace(
         /(?:await\s+)?import\s*\(\s*['"](?:fs|node:fs|path|node:path|memory-journal(?:-mcp)?|sqlite-journal|mcp|@modelcontextprotocol\/[^'"]+)['"]\s*\);?/g,
         (match: string, offset: number, fullStr: string): string =>
-            isInsideStringLiteral(fullStr, offset) ? match : '/* auto-healed dynamic import */'
+            isInsideStringOrComment(fullStr, offset) ? match : '/* auto-healed dynamic import */'
     )
     executionCode = executionCode.replace(
         /(?:const|let|var)\s+(\{[^}]*\}|[\w$]+)\s*=\s*require\s*\(\s*['"]([^'"]+)['"]\s*\);?/g,
         (match: string, varName: string, modName: string, offset: number, fullStr: string): string =>
-            isInsideStringLiteral(fullStr, offset)
+            isInsideStringOrComment(fullStr, offset)
                 ? match
                 : mapModuleBindingReplacement(varName, modName, 'require')
     )
     executionCode = executionCode.replace(
         /^\s*require\s*\(\s*['"](?:fs|node:fs|path|node:path|memory-journal(?:-mcp)?|sqlite-journal|mcp|@modelcontextprotocol\/[^'"]+)['"]\s*\);?/gm,
         (match: string, offset: number, fullStr: string): string =>
-            isInsideStringLiteral(fullStr, offset) ? match : '/* auto-healed require */'
+            isInsideStringOrComment(fullStr, offset) ? match : '/* auto-healed require */'
     )
     return executionCode.replace(
         /import\s+(\{[^}]*\}|\*\s+as\s+[\w$]+|[\w$]+)\s+from\s+['"]([^'"]+)['"]\s*;?/g,
         (match: string, varName: string, modName: string, offset: number, fullStr: string): string =>
-            isInsideStringLiteral(fullStr, offset)
+            isInsideStringOrComment(fullStr, offset)
                 ? match
                 : mapModuleBindingReplacement(varName, modName, 'import')
     )
 }
 
-/** Guard `JSON.parse(context...)` calls outside string/template literals. */
+/** Guard `JSON.parse(context...)` calls outside string/template literals and comments. */
 export function rewriteContextJsonParseCalls(src: string): string {
     let executionCode = src
     executionCode = executionCode.replace(
         /\bJSON\.parse\s*\(\s*context\s*\)/g,
         (match: string, offset: number, fullStr: string): string =>
-            isInsideStringLiteral(fullStr, offset)
+            isInsideStringOrComment(fullStr, offset)
                 ? match
                 : '(typeof context === "string" ? JSON.parse(context) : context)'
     )
     executionCode = executionCode.replace(
         /\bJSON\.parse\s*\(\s*context\s*\|\|\s*['"][^'"]*['"]\s*\)/g,
         (match: string, offset: number, fullStr: string): string =>
-            isInsideStringLiteral(fullStr, offset)
+            isInsideStringOrComment(fullStr, offset)
                 ? match
                 : '(typeof context === "string" ? JSON.parse(context) : context)'
     )
     executionCode = executionCode.replace(
         /\bJSON\.parse\s*\(\s*context\s*\?\?\s*['"][^'"]*['"]\s*\)/g,
         (match: string, offset: number, fullStr: string): string =>
-            isInsideStringLiteral(fullStr, offset)
+            isInsideStringOrComment(fullStr, offset)
                 ? match
                 : '(typeof context === "string" ? JSON.parse(context) : context)'
     )
     return executionCode.replace(
         /\bJSON\.parse\s*\(\s*(context\.[a-zA-Z0-9_$]+)\s*\)/g,
         (match: string, prop: string, offset: number, fullStr: string): string =>
-            isInsideStringLiteral(fullStr, offset)
+            isInsideStringOrComment(fullStr, offset)
                 ? match
                 : `(typeof ${prop} === "string" ? JSON.parse(${prop}) : ${prop})`
     )

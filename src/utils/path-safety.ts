@@ -52,24 +52,30 @@ function decodeSafeDirPath(dirPath: string): string {
     return decodedDir
 }
 
+function selectPathModule(targetInput: string): typeof path {
+    return WIN_DRIVE_PATH_RE.test(targetInput) ? path.win32 : path
+}
+
 /**
  * Resolve the real path of the target, stepping up to the nearest existing ancestor so symlinked
  * parents cannot be used to escape when the final node does not exist yet.
  */
 function resolveRealTargetPath(targetInput: string): string {
-    const resolved = path.resolve(targetInput)
+    const pathMod = selectPathModule(targetInput)
+    const normalizedInput = pathMod === path.win32 ? targetInput.replace(/\//g, '\\') : targetInput
+    const resolved = pathMod.resolve(normalizedInput)
 
     // 2. Resolve realpath iteratively by stepping up the tree until an existing directory is found.
     // This prevents symlink traversal bypasses where the final node does not exist but a parent is a symlink pointing outside.
     let currentDir = resolved
     let existingRealPath = ''
 
-    while (currentDir !== path.parse(currentDir).root) {
+    while (currentDir !== pathMod.parse(currentDir).root) {
         if (fs.existsSync(currentDir)) {
             existingRealPath = fs.realpathSync.native(currentDir)
             break
         }
-        currentDir = path.dirname(currentDir)
+        currentDir = pathMod.dirname(currentDir)
     }
 
     if (!existingRealPath) {
@@ -81,8 +87,8 @@ function resolveRealTargetPath(targetInput: string): string {
     }
 
     // The target path is the successfully evaluated real path plus any non-existent trailing segments
-    const remainder = path.relative(currentDir, resolved)
-    return remainder ? path.join(existingRealPath, remainder) : existingRealPath
+    const remainder = pathMod.relative(currentDir, resolved)
+    return remainder ? pathMod.join(existingRealPath, remainder) : existingRealPath
 }
 
 const ALLOWED_ROOTS_CACHE_TTL_MS = 2_000
@@ -106,7 +112,9 @@ function resolveAllowedRoots(rawRoots: string[]): string[] {
 
     const allowedRoots: string[] = []
     for (const root of rawRoots) {
-        const resolvedRoot = path.resolve(root)
+        const pathMod = selectPathModule(root)
+        const normalizedRoot = pathMod === path.win32 ? root.replace(/\//g, '\\') : root
+        const resolvedRoot = pathMod.resolve(normalizedRoot)
         try {
             allowedRoots.push(fs.realpathSync.native(resolvedRoot))
         } catch (err: unknown) {
@@ -152,8 +160,43 @@ function isWithinAllowedRoots(targetPath: string, allowedRoots: string[]): boole
 const WIN_RESERVED_DEVICE_RE =
     /^(?:CON|PRN|AUX|NUL|COM[1-9\u00b9\u00b2\u00b3]|LPT[1-9\u00b9\u00b2\u00b3])(?:\s*\..*)?\s*$/i
 
-function hasUnsafeAdsColon(dirPath: string): boolean {
+export function hasUnsafeAdsColon(dirPath: string): boolean {
     return dirPath.replace(/^[A-Za-z]:(?=[\\/]|$)/, '').includes(':')
+}
+
+export function hasTrailingDotOrSpaceSegment(targetPath: string): boolean {
+    const segments = targetPath.split(/[\\/]/)
+    for (let i = 0; i < segments.length; i++) {
+        const seg = segments[i]
+        if (seg === undefined || seg === '' || seg === '.' || seg === '..') continue
+        if (i === 0 && /^[A-Za-z]:$/.test(seg)) continue
+        if (/[. ]$/.test(seg)) return true
+    }
+    return false
+}
+
+function hasTrailingSpaceSegment(targetPath: string): boolean {
+    const segments = targetPath.split(/[\\/]/)
+    for (let i = 0; i < segments.length; i++) {
+        const seg = segments[i]
+        if (seg === undefined || seg === '' || seg === '.' || seg === '..') continue
+        if (i === 0 && /^[A-Za-z]:$/.test(seg)) continue
+        if (/\s$/.test(seg)) return true
+    }
+    return false
+}
+
+function stripWinTrailingDotsAndSpaces(targetPath: string): string {
+    return targetPath
+        .split(/([\\/])/)
+        .map((part, idx) => {
+            if (part === '' || part === '/' || part === '\\' || part === '.' || part === '..') {
+                return part
+            }
+            if (idx === 0 && /^[A-Za-z]:$/.test(part)) return part
+            return part.replace(/[. ]+$/, '')
+        })
+        .join('')
 }
 
 /**
@@ -164,7 +207,7 @@ export function hasWinReservedDeviceSegment(targetPath: string): boolean {
     const segments = targetPath.split(/[\\/]/)
     for (let i = 0; i < segments.length; i++) {
         const seg = segments[i]
-        if (seg === undefined || seg === '') continue
+        if (seg === undefined || seg === '' || seg === '.' || seg === '..') continue
         if (i === 0 && /^[A-Za-z]:$/.test(seg)) continue
         if (WIN_RESERVED_DEVICE_RE.test(seg)) return true
     }
@@ -186,6 +229,7 @@ export function assertSafeDirectoryPath(dirPath: string, providedRoots: string[]
         dirPath.includes('\0') ||
         hasUnsafeAdsColon(dirPath) ||
         hasWinReservedDeviceSegment(dirPath) ||
+        hasTrailingSpaceSegment(dirPath) ||
         dirPath
             .replace(/\\/g, '/')
             .split('/')
@@ -194,7 +238,11 @@ export function assertSafeDirectoryPath(dirPath: string, providedRoots: string[]
         throw new PathTraversalError(dirPath)
     }
     const decodedDir = decodeSafeDirPath(dirPath)
-    if (hasUnsafeAdsColon(decodedDir) || hasWinReservedDeviceSegment(decodedDir)) {
+    if (
+        hasUnsafeAdsColon(decodedDir) ||
+        hasWinReservedDeviceSegment(decodedDir) ||
+        hasTrailingSpaceSegment(decodedDir)
+    ) {
         throw new PathTraversalError(decodedDir)
     }
     const allowedRoots = resolveAllowedRoots(providedRoots)
@@ -215,6 +263,16 @@ export function assertSafeDirectoryPath(dirPath: string, providedRoots: string[]
                 `Directory path escapes allowed sandbox boundaries: ${decodedDir}`
             )
         }
+    }
+
+    const winTrimmed = stripWinTrailingDotsAndSpaces(decodedDir)
+    if (
+        winTrimmed !== decodedDir &&
+        !isWithinAllowedRoots(resolveRealTargetPath(winTrimmed), allowedRoots)
+    ) {
+        throw new PathTraversalError(
+            `Directory path escapes allowed sandbox boundaries: ${winTrimmed}`
+        )
     }
 }
 

@@ -12,6 +12,7 @@ import { ValidationError } from '../../../types/errors.js'
 import { resolveWorkspaceId } from '../../../utils/workspace-resolver.js'
 import { resolveWriteWorkspaceId } from '../write-workspace.js'
 import { TEAM_DB_ERROR_RESPONSE, triggerTeamNotifications, resolveTeamProjectNumber, missingTeamProjectNumberError } from './helpers.js'
+import { resolveTeamMutationProjectNumber } from './admin-tools/team-pk-scope-helpers.js'
 import { DATE_MIN_SENTINEL, DATE_MAX_SENTINEL } from '../schemas.js'
 import {
     TeamLinkEntriesSchema,
@@ -78,11 +79,13 @@ function resolveValidatedTeamLinkTargets(
     }
 
     const fromEntry = teamDb.getEntryById(from_entry_id, wsId)
-    const explicitOrResolvedPn = resolveTeamProjectNumber(context, wsId, project_number, workspace_id)
-    const resolvedPn =
-        explicitOrResolvedPn ??
-        (fromEntry?.projectNumber !== null ? fromEntry?.projectNumber : undefined)
-    const projectNumber = resolvedPn !== null ? resolvedPn : undefined
+    const projectNumber = resolveTeamMutationProjectNumber(
+        context,
+        wsId,
+        project_number,
+        workspace_id,
+        fromEntry?.projectNumber
+    )
     if (projectNumber === undefined) {
         return { errorResponse: missingTeamProjectNumberError() }
     }

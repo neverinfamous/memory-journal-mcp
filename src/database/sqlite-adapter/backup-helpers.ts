@@ -133,20 +133,35 @@ export async function writeVerifiedBackupFile(
     )
 }
 
+const WIN_RESERVED_RESTORE_RE =
+    /^(?:CON|PRN|AUX|NUL|COM[1-9\u00b9\u00b2\u00b3]|LPT[1-9\u00b9\u00b2\u00b3])(?:\s*\..*)?\s*$/i
+
+function hasUnsafeRestoreSegment(name: string): boolean {
+    return (
+        name.includes('\0') ||
+        name.includes(':') ||
+        /[. ]$/.test(name) ||
+        /%(?:2f|5c|2e|00)/i.test(name) ||
+        WIN_RESERVED_RESTORE_RE.test(path.win32.basename(name))
+    )
+}
+
 /** Validate `filename` against traversal and symlinks inside `backupsDir`, and verify SQLite integrity. */
 export async function resolveValidatedRestorePath(
     backupsDir: string,
     filename: string
 ): Promise<string> {
-    if (
-        filename.includes('\0') ||
-        filename.includes(':') ||
-        /%(?:2f|5c|2e|00)/i.test(filename) ||
-        /^(?:con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\.|$)/i.test(path.win32.basename(filename))
-    ) {
+    let decodedFilename: string
+    try {
+        decodedFilename = decodeURIComponent(filename)
+    } catch {
+        throw new ValidationError('Invalid or unsafe backup filename during restore resolution.')
+    }
+    if (hasUnsafeRestoreSegment(filename) || hasUnsafeRestoreSegment(decodedFilename)) {
         throw new ValidationError('Invalid or unsafe backup filename during restore resolution.')
     }
     assertNoPathTraversal(filename)
+    assertNoPathTraversal(decodedFilename)
 
     const fold = (p: string): string => (process.platform === 'win32' ? p.toLowerCase() : p)
     const resolvedBackupsDir = path.resolve(backupsDir)

@@ -74,7 +74,7 @@ function normalizeSingleBatchCreateItem(
     if (!isRecord(rawItem)) return { item: rawItem }
     const item: Record<string, unknown> = { ...rawItem }
     extractMetadataContextAliases(item)
-    const itemError = coerceNumericStringIds(item)
+    const itemError = coerceNumericStringIds(item, 'create_entry')
     if (itemError !== undefined) return itemError
     const itemAliasError = normalizeGenericFieldAliases(item, 'create_entry')
     if (itemAliasError !== undefined) return itemAliasError
@@ -215,7 +215,7 @@ export function applyGenericInterceptions(
         extractMetadataContextAliases(obj, allowWorkspaceHoist)
     }
 
-    const idError = coerceNumericStringIds(obj)
+    const idError = coerceNumericStringIds(obj, methodName)
     if (idError !== undefined) return idError
     const aliasError = normalizeGenericFieldAliases(obj, methodName)
     if (aliasError !== undefined) return aliasError

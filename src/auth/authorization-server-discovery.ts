@@ -60,14 +60,14 @@ function parseDiscoveryUrl(metadataUrl: string): URL {
 function readMetadataResponseBody(
     req: ReturnType<typeof https.request>,
     res: IncomingMessage,
-    resolve: (value: AuthorizationServerMetadata) => void,
-    reject: (reason: unknown) => void
+    safeResolve: (value: AuthorizationServerMetadata) => void,
+    safeReject: (reason: unknown) => void
 ): void {
     if (res.statusCode === undefined || res.statusCode < 200 || res.statusCode >= 300) {
         if ('resume' in res && typeof res.resume === 'function') {
             res.resume()
         }
-        reject(
+        safeReject(
             new ConfigurationError(
                 `HTTP ${String(res.statusCode ?? 'unknown')}: ${res.statusMessage || ''}`
             )
@@ -77,11 +77,12 @@ function readMetadataResponseBody(
     const chunks: Buffer[] = []
     let totalBytes = 0
     const maxBytes = 1024 * 1024
+    res.on('error', safeReject)
     res.on('data', (d: Buffer) => {
         totalBytes += d.length
         if (totalBytes > maxBytes) {
             req.destroy()
-            reject(
+            safeReject(
                 new ConfigurationError('Authorization server metadata response exceeded 1MB limit')
             )
             return
@@ -93,15 +94,15 @@ function readMetadataResponseBody(
         try {
             rawJson = JSON.parse(Buffer.concat(chunks).toString())
         } catch {
-            reject(new ConfigurationError('Invalid JSON response'))
+            safeReject(new ConfigurationError('Invalid JSON response'))
             return
         }
         const parsed = AuthorizationServerMetadataSchema.safeParse(rawJson)
         if (!parsed.success) {
-            reject(new ConfigurationError('Invalid authorization server metadata'))
+            safeReject(new ConfigurationError('Invalid authorization server metadata'))
             return
         }
-        resolve(parsed.data)
+        safeResolve(parsed.data)
     })
 }
 
@@ -118,6 +119,18 @@ function fetchDiscoveryMetadata(
         )
     }
     return new Promise<AuthorizationServerMetadata>((resolve, reject) => {
+        let settled = false
+        const safeResolve = (value: AuthorizationServerMetadata): void => {
+            if (settled) return
+            settled = true
+            resolve(value)
+        }
+        const safeReject = (reason: unknown): void => {
+            if (settled) return
+            settled = true
+            reject(reason instanceof Error ? reason : new Error(String(reason)))
+        }
+
         const req = https.request(
             metadataUrl,
             {
@@ -142,13 +155,13 @@ function fetchDiscoveryMetadata(
                 timeout: timeoutMs,
             },
             (res) => {
-                readMetadataResponseBody(req, res, resolve, reject)
+                readMetadataResponseBody(req, res, safeResolve, safeReject)
             }
         )
-        req.on('error', reject)
+        req.on('error', safeReject)
         req.on('timeout', () => {
             req.destroy()
-            reject(new Error('Request timeout'))
+            safeReject(new Error('Request timeout'))
         })
         req.end()
     })

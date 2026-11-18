@@ -1,11 +1,23 @@
 import { z } from 'zod'
 import { ErrorFieldsMixin } from './error-fields-mixin.js'
 import { relaxedNumber, StrictProjectNumberSchema } from './schemas.js'
-import { parsePositiveProjectNumber } from '../../utils/safe-positive-int.js'
+import { parseCanonicalPositiveInt, parsePositiveProjectNumber } from '../../utils/safe-positive-int.js'
 
 function coerceRelaxed(v: number | string | undefined): number | undefined {
-    if (v === undefined || typeof v === 'number') return v
-    return v.trim() === '' ? undefined : Number(v)
+    if (v === undefined) return undefined
+    if (typeof v === 'number') {
+        if (!Number.isSafeInteger(v) || v <= 0) {
+            throw new Error(`Invalid numeric parameter '${String(v)}'. Expected a positive integer.`)
+        }
+        return v
+    }
+    const trimmed = v.trim()
+    if (trimmed === '') return undefined
+    const parsed = parseCanonicalPositiveInt(trimmed)
+    if (parsed === undefined) {
+        throw new Error(`Invalid numeric parameter '${v}'. Expected a canonical positive integer.`)
+    }
+    return parsed
 }
 
 function coerceCanonicalProject(v: number | string | undefined): number | undefined {

@@ -30,6 +30,12 @@ import {
     coerceEntryIdField,
     healSearchPayload,
 } from './hallucination-healer-search.js'
+import { logger } from '../../../utils/logger.js'
+import { setNormalizerDebugLogger } from '../../../codemode/normalizers/shared-utils.js'
+
+setNormalizerDebugLogger((message, context) => {
+    logger.debug(message, context)
+})
 
 export { healSearchPayload }
 

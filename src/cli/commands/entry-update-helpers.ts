@@ -1,6 +1,8 @@
 import type { z } from 'zod'
+import type { IDatabaseAdapter } from '../../database/core/interfaces.js'
 import type { CreateEntryInput, ToolHandlerConfig } from '../../types/index.js'
 import { ValidationError } from '../../types/errors.js'
+import { resolveEntryAnchors } from '../../handlers/tools/core/staleness-tools.js'
 import { activeProjectRegistry, pairStoredScope } from '../../utils/write-scope.js'
 import { resolveWorkspaceId } from '../../utils/workspace-resolver.js'
 import type { updateEntryOptionsSchema } from '../schemas.js'
@@ -232,5 +234,29 @@ export function buildCliEntryUpdateObject(
     if (payload.significanceType !== undefined) updates.significanceType = payload.significanceType
     if (payload.sessionId !== undefined) updates.sessionId = payload.sessionId
     if (payload.autoContextStr !== undefined) updates.autoContext = payload.autoContextStr
+    if (payload.anchors !== undefined && payload.anchors.length > 0) {
+        updates.anchors = payload.anchors.map((a) => ({
+            anchorPath: a.anchor_path,
+            anchorType: a.anchor_type,
+        }))
+    }
     return updates
+}
+
+export async function applyCliUpdateAnchors(
+    updates: CliEntryUpdateInput,
+    payload: EntryPayload,
+    workspaceId: string,
+    db: IDatabaseAdapter,
+    config: ToolHandlerConfig
+): Promise<void> {
+    const resolved = await resolveEntryAnchors(
+        payload.anchors,
+        payload.autoContextStr,
+        workspaceId,
+        { db, config }
+    )
+    if (resolved !== undefined) {
+        updates.anchors = resolved
+    }
 }

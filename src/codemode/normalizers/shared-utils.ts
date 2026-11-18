@@ -2,7 +2,20 @@
  * Shared parameter normalization utilities, alias maps, and content healers.
  */
 
-import { logger } from '../../utils/logger.js'
+type NormalizerDebugLogger = (message: string, context?: Record<string, unknown>) => void
+let normalizerDebugLogger: NormalizerDebugLogger | undefined
+
+/**
+ * Register a host-side debug logger for normalizer parse warnings.
+ * [BOUNDARY] Avoids pulling `logger.ts` / `security-utils.ts` into Code Mode worker bundles.
+ */
+export function setNormalizerDebugLogger(fn: NormalizerDebugLogger | undefined): void {
+    normalizerDebugLogger = fn
+}
+
+export function logNormalizerDebug(message: string, context?: Record<string, unknown>): void {
+    normalizerDebugLogger?.(message, context)
+}
 
 export function isRecord(val: unknown): val is Record<string, unknown> {
     return typeof val === 'object' && val !== null && !Array.isArray(val)
@@ -241,7 +254,7 @@ export function healAutoContext(result: Record<string, unknown>): void {
                 result['auto_context'] = JSON.stringify(parsed)
             }
         } catch (error) {
-            logger.debug('Failed to parse auto_context JSON during normalization', {
+            logNormalizerDebug('Failed to parse auto_context JSON during normalization', {
                 module: 'CodeMode',
                 error: error instanceof Error ? error.message : String(error),
             })

@@ -113,6 +113,9 @@ export async function loadVecExtensionOnDb(
             error: String(npmLoadError),
         })
         // [BOUNDARY] Resolve compiled fallback relative to the package root, never process.cwd().
+        if (!isStillOpen()) {
+            return false
+        }
         const fallbackPath = resolvePackageVecFallbackPath()
         try {
             db.loadExtension(fallbackPath)

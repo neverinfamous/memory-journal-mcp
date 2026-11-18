@@ -19,8 +19,12 @@ import { createUpdateMemoryFn, createContextProxy } from './worker/namespace-shi
 import { createShimMjProxy } from './worker/mj-shim-proxy.js'
 import { buildSandboxGlobals } from './worker/sandbox-globals.js'
 import { serializeAndEnforceEgress } from './worker/result-compactor.js'
-import { createSandboxExecutor, type NestedExecIsolationOverrides, type RunIsolatedNestedFn } from './worker/nested-exec-scope.js'
-import { raceWithSandboxTimeout } from './worker/nested-exec-payload.js'
+import {
+    createIsolatedNestedRunner,
+    createScopedRpcCall,
+    type VmExecutionContextOptions,
+} from './worker/nested-exec-runner.js'
+import { createSandboxExecutor } from './worker/nested-exec-scope.js'
 import {
     formatVmErrorResult,
     getOrCompileVmScript,
@@ -73,184 +77,19 @@ function rejectPendingRpcRequests(message: string): void {
     pendingRpcRequests.clear()
 }
 
-type RpcCallFn = (group: string, method: string, args: unknown[]) => Promise<unknown>
-
-interface ScopedRpcOverrides {
-    readonly?: boolean
-    dryRun?: boolean
-    useTestDb?: boolean
-    workspaceId?: string
-    projectNumber?: number
-    sessionId?: string
-    autoVersion?: boolean
-}
-
-function createScopedRpcCall(overrides?: ScopedRpcOverrides): RpcCallFn {
-    return (group: string, method: string, args: unknown[]): Promise<unknown> => {
-        return new Promise((resolve, reject) => {
-            if (!rpcPort) {
-                reject(new Error('RPC port not initialized'))
-                return
-            }
-            const id = ++rpcIdCounter
-            pendingRpcRequests.set(id, { resolve, reject })
-            const request: RpcRequest = {
-                id,
-                group,
-                method,
-                args,
-                ...(overrides?.readonly === true ? { readonly: true } : {}),
-                ...(overrides?.dryRun === true ? { dryRun: true } : {}),
-                ...(overrides?.useTestDb === true ? { useTestDb: true } : {}),
-                ...(overrides?.workspaceId !== undefined ? { workspaceId: overrides.workspaceId } : {}),
-                ...(overrides?.projectNumber !== undefined ? { projectNumber: overrides.projectNumber } : {}),
-                ...(overrides?.sessionId !== undefined ? { sessionId: overrides.sessionId } : {}),
-                ...(overrides?.autoVersion !== undefined ? { autoVersion: overrides.autoVersion } : {}),
-            }
-            rpcPort.postMessage(request)
-        })
-    }
-}
-
-const rpcCall = createScopedRpcCall()
-
-/* createSandboxExecutor moved to ./worker/nested-exec-scope.ts */
-
-interface VmExecutionContextOptions {
-    rpcFn: RpcCallFn
-    methodList: Record<string, string[]>
-    schemaList: Record<string, Record<string, string>> | undefined
-    timeoutMs: number
-    maxResultSize?: number | undefined
-    contextObj: Record<string, unknown> | undefined
-    readonlyMode?: boolean
-    dryRunMode?: boolean
-    useTestDbMode?: boolean
-    pinnedWorkspaceRaw: unknown
-    pinnedProjectRaw: unknown
-    projectRegistryRaw: unknown
-    activeTimers: Set<NodeJS.Timeout>
-}
-
-function mergeNestedExecutionContext(
-    outerContext: Record<string, unknown> | undefined,
-    nestedContext: Record<string, unknown> | undefined,
-    workspaceId: string | undefined,
-    projectNumber: number | undefined,
-    sessionId: string | undefined
-): Record<string, unknown> | undefined {
-    if (
-        nestedContext === undefined &&
-        workspaceId === undefined &&
-        projectNumber === undefined &&
-        sessionId === undefined
-    ) {
-        return outerContext
-    }
-    const merged: Record<string, unknown> = { ...(outerContext ?? {}) }
-    if (nestedContext !== undefined) {
-        for (const [k, v] of Object.entries(nestedContext)) {
-            if (k.startsWith('__mj_') || k === '__proto__' || k === 'constructor' || k === 'prototype') {
-                continue
-            }
-            merged[k] = v
+function sendRpcRequest(payload: Omit<RpcRequest, 'id'>): Promise<unknown> {
+    return new Promise((resolve, reject) => {
+        if (!rpcPort) {
+            reject(new Error('RPC port not initialized'))
+            return
         }
-    }
-    if (workspaceId !== undefined) {
-        merged['workspace_id'] = workspaceId
-        merged['workspaceId'] = workspaceId
-    }
-    if (projectNumber !== undefined) {
-        merged['project_number'] = projectNumber
-        merged['projectNumber'] = projectNumber
-        merged['project_id'] = projectNumber
-        merged['projectId'] = projectNumber
-    }
-    if (sessionId !== undefined) {
-        merged['session_id'] = sessionId
-        merged['sessionId'] = sessionId
-    }
-    return merged
+        const id = ++rpcIdCounter
+        pendingRpcRequests.set(id, { resolve, reject })
+        rpcPort.postMessage({ id, ...payload })
+    })
 }
 
-function enforceNestedResultLimit(rawResult: unknown, maxResultSize: number | undefined): unknown {
-    if (maxResultSize === undefined || rawResult === undefined) return rawResult
-    const wrapper: SandboxResult = {
-        success: true,
-        result: rawResult,
-        metrics: { wallTimeMs: 0, cpuTimeMs: 0, memoryUsedMb: 0 },
-    }
-    serializeAndEnforceEgress(wrapper, maxResultSize)
-    if (!wrapper.success) {
-        throw new Error(wrapper.error ?? 'Nested execution output limit exceeded')
-    }
-    return wrapper.result
-}
-
-function createIsolatedNestedRunner(options: VmExecutionContextOptions): RunIsolatedNestedFn {
-    const {
-        methodList, schemaList, timeoutMs, maxResultSize, contextObj,
-        pinnedWorkspaceRaw, pinnedProjectRaw, projectRegistryRaw, activeTimers,
-    } = options
-    const outerWs =
-        typeof pinnedWorkspaceRaw === 'string' && pinnedWorkspaceRaw.trim() !== '' && pinnedWorkspaceRaw.trim() !== '*'
-            ? pinnedWorkspaceRaw.trim()
-            : undefined
-    const outerProj =
-        typeof pinnedProjectRaw === 'number' && Number.isInteger(pinnedProjectRaw) && pinnedProjectRaw > 0
-            ? pinnedProjectRaw
-            : undefined
-
-    return async (
-        wrapped: string,
-        nestedReadonly: boolean,
-        nestedDryRun: boolean,
-        nestedUseTestDb: boolean,
-        overrides?: NestedExecIsolationOverrides
-    ): Promise<unknown> => {
-        const nextWs = outerWs ?? overrides?.workspaceId
-        const nextProj = outerProj ?? overrides?.projectNumber
-        const nextTimeout =
-            overrides?.timeoutMs !== undefined ? Math.min(timeoutMs, overrides.timeoutMs) : timeoutMs
-        const nextMaxResult =
-            overrides?.maxResultSize !== undefined && maxResultSize !== undefined
-                ? Math.min(maxResultSize, overrides.maxResultSize)
-                : (overrides?.maxResultSize ?? maxResultSize)
-        const mergedContext = mergeNestedExecutionContext(
-            contextObj, overrides?.contextObj, nextWs, nextProj, overrides?.sessionId
-        )
-        const rpcOverrides: ScopedRpcOverrides = {
-            ...(nestedReadonly ? { readonly: true } : {}),
-            ...(nestedDryRun ? { dryRun: true } : {}),
-            ...(nestedUseTestDb ? { useTestDb: true } : {}),
-            ...(nextWs !== undefined ? { workspaceId: nextWs } : {}),
-            ...(nextProj !== undefined ? { projectNumber: nextProj } : {}),
-            ...(overrides?.sessionId !== undefined ? { sessionId: overrides.sessionId } : {}),
-            ...(overrides?.autoVersion !== undefined ? { autoVersion: overrides.autoVersion } : {}),
-        }
-        const nestedContext = createVmExecutionContext({
-            rpcFn: createScopedRpcCall(rpcOverrides),
-            methodList,
-            schemaList,
-            timeoutMs: nextTimeout,
-            maxResultSize: nextMaxResult,
-            contextObj: mergedContext,
-            readonlyMode: nestedReadonly,
-            dryRunMode: nestedDryRun,
-            useTestDbMode: nestedUseTestDb,
-            pinnedWorkspaceRaw: nextWs ?? pinnedWorkspaceRaw,
-            pinnedProjectRaw: nextProj ?? pinnedProjectRaw,
-            projectRegistryRaw,
-            activeTimers,
-        })
-        const rawResult: unknown = await raceWithSandboxTimeout<unknown>(
-            Promise.resolve(getOrCompileVmScript(wrapped).runInContext(nestedContext, { timeout: nextTimeout })),
-            nextTimeout,
-            activeTimers
-        )
-        return enforceNestedResultLimit(rawResult, nextMaxResult)
-    }
-}
+const rpcCall = createScopedRpcCall(sendRpcRequest)
 
 function createVmExecutionContext(options: VmExecutionContextOptions): vm.Context {
     const {
@@ -276,7 +115,11 @@ function createVmExecutionContext(options: VmExecutionContextOptions): vm.Contex
 
     const frozenContext = createContextProxy(contextObj)
     const vmContextRef: { current?: vm.Context } = {}
-    const runIsolatedNestedCode = createIsolatedNestedRunner(options)
+    const runIsolatedNestedCode = createIsolatedNestedRunner(
+        options,
+        sendRpcRequest,
+        createVmExecutionContext
+    )
 
     const executeCodeFn = createSandboxExecutor({
         shimMj, vmContextRef, timeoutMs, maxResultSize, readonlyMode, dryRunMode, useTestDbMode,

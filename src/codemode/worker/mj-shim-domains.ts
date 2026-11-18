@@ -4,83 +4,20 @@
  * used by `createShimMjProxy`.
  */
 
-import { VERSION } from '../../version.js'
 import { parsePositiveProjectNumber } from '../../utils/safe-positive-int.js'
-import { createPreparedStatementShim } from './node-shims.js'
-import { createCallableShim, createSchemaShim } from './namespace-shims.js'
+import { createCallableShim } from './namespace-shims.js'
+export {
+    createAdaptersShim,
+    createShimReadResourceHandler,
+    createDbDomainProxy,
+    createSystemDatabaseDomainProxy,
+} from './mj-shim-db-domains.js'
 
 function getGroupProp(target: Record<string, unknown>, group: string, prop: string): unknown {
     const g = target[group]
     return (typeof g === 'object' && g !== null) || typeof g === 'function'
         ? (Reflect.get(g, prop) as unknown)
         : undefined
-}
-
-const ADAPTER_ITEMS = Object.freeze(
-    [
-        { name: 'sqlite', type: 'database', driver: 'better-sqlite3', status: 'connected', primary: true, description: 'Primary SQLite storage engine for journal entries, tags, and relationships' },
-        { name: 'sqlite-vec', type: 'vector', driver: 'sqlite-vec', status: 'connected', description: 'Native vector embeddings and semantic search engine' },
-        { name: 'team', type: 'database', driver: 'better-sqlite3', status: 'connected', description: 'Collaborative team journal database adapter' },
-        { name: 'github', type: 'integration', driver: 'octokit / gh', status: 'connected', description: 'GitHub synchronization and issue tracking adapter' },
-    ].map((item) => Object.freeze(item))
-)
-
-export function createAdaptersShim(prop: string): object {
-    const returnAdapters = (): Promise<unknown> =>
-        Promise.resolve({
-            success: true,
-            adapters: ADAPTER_ITEMS,
-            default_adapter: 'sqlite',
-            _healing_note: `🛠️ AUTONOMOUS HEALING: '${prop}' was called. Returned registered database and service adapters successfully.`,
-        })
-    const callable = (): Promise<unknown> => returnAdapters()
-    Object.assign(callable, {
-        list: returnAdapters,
-        listAdapters: returnAdapters,
-        list_adapters: returnAdapters,
-        get: returnAdapters,
-    })
-    return new Proxy(callable, {
-        apply: () => returnAdapters(),
-        get(t, p): unknown {
-            if (typeof p === 'symbol' || p === 'then') return undefined
-            if (p in t) return Reflect.get(t, p) as unknown
-            return returnAdapters
-        },
-    })
-}
-
-const RESOURCE_SUGGESTIONS: Record<string, string> = {
-    'memory://agent-context': 'mj.core.getStatistics() or mj.core.listProjects()',
-    'memory://agent-id': 'mj.core.getStatistics() or mj.core.listProjects() (prefer memory://agent-context/<repo>)',
-    'memory://recent': 'mj.core.getRecentEntries()',
-    'memory://statistics': 'mj.analytics.getStatistics()',
-    'memory://tags': 'mj.core.listTags()',
-    'memory://significant': 'mj.search.searchEntries({ sort_by: "importance" })',
-    'memory://insights': 'mj.analytics.getCrossProjectInsights()',
-}
-
-export function createShimReadResourceHandler(): (uri?: string) => Promise<unknown> {
-    return (uri?: string) => {
-        let hint = ''
-        if (typeof uri === 'string') {
-            const match = Object.entries(RESOURCE_SUGGESTIONS).find(
-                ([k]) =>
-                    uri === k ||
-                    uri.startsWith(k + '/') ||
-                    uri.startsWith(k + '?') ||
-                    uri.startsWith(k + '#')
-            )
-            if (match !== undefined) hint = ` Try: ${match[1]}`
-        }
-        return Promise.resolve({
-            success: false,
-            error: `Code Mode cannot directly read MCP resources (e.g., memory://briefing) using readResource().${hint} Use the appropriate mj.* tools to query data, or read the resource via standard MCP client requests outside of Code Mode.`,
-            code: 'VALIDATION_ERROR',
-            category: 'validation',
-            recoverable: true,
-        })
-    }
 }
 
 const ENTRY_SEARCH_ALIASES = new Set([
@@ -166,6 +103,12 @@ export function createEntriesDomainProxy(target: Record<string, unknown>): unkno
             }
             return Reflect.get(targetFn, p, receiver) as unknown
         },
+        isExtensible: () => true,
+        preventExtensions: () => false,
+        set: () => false,
+        defineProperty: () => false,
+        deleteProperty: () => false,
+        setPrototypeOf: () => false,
     })
 }
 
@@ -204,38 +147,91 @@ export function createGetReadFindInterceptor(
     }
 }
 
-export function createShimProjectsDomain(
+const disabledProjectTool = (tool: string) => (): Promise<unknown> =>
+    Promise.resolve({
+        success: false,
+        error: `Tool '${tool}' is not available in this sandbox.`,
+        code: 'TOOL_DISABLED',
+        projects: {},
+        items: [],
+        data: [],
+        _healing_note: `🛠️ AUTONOMOUS HEALING: 'mj.projects.${tool}()' requires '${tool}' to be enabled in the active tool filter.`,
+    })
+
+const PROJECT_LIST_PROPS = new Set([
+    'list', 'listProjects', 'list_projects', 'getAll', 'all', 'getProjects', 'get_projects',
+])
+
+const DISABLED_PROJECT_PROP_MAP: Record<string, string> = {
+    get: 'get_project',
+    getProject: 'get_project',
+    get_project: 'get_project',
+    find: 'get_project',
+    register: 'register_project',
+    registerProject: 'register_project',
+    register_project: 'register_project',
+    update: 'update_project',
+    updateProject: 'update_project',
+    update_project: 'update_project',
+    delete: 'delete_project',
+    deleteProject: 'delete_project',
+    delete_project: 'delete_project',
+    remove: 'delete_project',
+}
+
+function resolveProjectDomainProp(
+    p: string | symbol,
     target: Record<string, unknown>,
-    shimMj: Record<string, unknown>
-): object {
-    const baseProjectsProxy = target['projects']
+    shimMj: Record<string, unknown>,
+    projectsFn: () => unknown
+): unknown {
+    if (typeof p === 'symbol' || p === 'then') return undefined
+    const createFn =
+        getGroupProp(target, 'core', 'create_entry') ?? getGroupProp(target, 'core', 'createEntry')
+    if (p === 'entries') return { create: createFn, add: createFn }
     const listProjectsFn =
         getGroupProp(target, 'admin', 'listProjects') ??
         getGroupProp(target, 'admin', 'list_projects') ??
         getGroupProp(target, 'core', 'listProjects') ??
         getGroupProp(target, 'core', 'list_projects')
-    const createFn = getGroupProp(target, 'core', 'create_entry') ?? getGroupProp(target, 'core', 'createEntry')
+    if (PROJECT_LIST_PROPS.has(p)) {
+        return typeof listProjectsFn === 'function' ? listProjectsFn : projectsFn
+    }
     const insightsFn =
         getGroupProp(target, 'analytics', 'get_cross_project_insights') ??
         getGroupProp(target, 'analytics', 'getCrossProjectInsights')
+    if (p === 'insights' && typeof insightsFn === 'function') {
+        return (...args: unknown[]): unknown => (insightsFn as (...a: unknown[]) => unknown)(...args)
+    }
+    const baseProjectsProxy = target['projects']
+    if (
+        typeof baseProjectsProxy === 'function' ||
+        (typeof baseProjectsProxy === 'object' && baseProjectsProxy !== null)
+    ) {
+        return Reflect.get(baseProjectsProxy, p) as unknown
+    }
+    const disabledName = DISABLED_PROJECT_PROP_MAP[p]
+    return disabledName !== undefined ? disabledProjectTool(disabledName) : createCallableShim(shimMj)
+}
 
+export function createShimProjectsDomain(
+    target: Record<string, unknown>,
+    shimMj: Record<string, unknown>
+): object {
     const projectsFn = function (this: unknown, ...args: unknown[]): unknown {
+        const baseProjectsProxy = target['projects']
         if (typeof baseProjectsProxy === 'function') {
             return (baseProjectsProxy as (...a: unknown[]) => unknown).apply(this, args)
         }
+        const listProjectsFn =
+            getGroupProp(target, 'admin', 'listProjects') ??
+            getGroupProp(target, 'admin', 'list_projects') ??
+            getGroupProp(target, 'core', 'listProjects') ??
+            getGroupProp(target, 'core', 'list_projects')
         if (typeof listProjectsFn === 'function') {
             return (listProjectsFn as (...a: unknown[]) => unknown).apply(this, args)
         }
-        return Promise.resolve({
-            success: false,
-            error: "Tool 'list_projects' is not available in this sandbox.",
-            code: 'TOOL_DISABLED',
-            projects: {},
-            items: [],
-            data: [],
-            _healing_note:
-                "🛠️ AUTONOMOUS HEALING: 'mj.projects()' requires 'list_projects' to be enabled in the active tool filter.",
-        })
+        return disabledProjectTool('list_projects')()
     }
 
     return new Proxy(projectsFn, {
@@ -243,115 +239,14 @@ export function createShimProjectsDomain(
             return projectsFn.apply(thisArg, args)
         },
         get(_t, p): unknown {
-            if (typeof p === 'symbol' || p === 'then') return undefined
-            if (p === 'entries') return { create: createFn, add: createFn }
-            if ((p === 'list' || p === 'listProjects' || p === 'list_projects' || p === 'getAll') && typeof listProjectsFn === 'function') {
-                return listProjectsFn
-            }
-            if (p === 'insights' && typeof insightsFn === 'function') {
-                return (...args: unknown[]): unknown => (insightsFn as (...a: unknown[]) => unknown)(...args)
-            }
-            if (typeof baseProjectsProxy === 'function' || (typeof baseProjectsProxy === 'object' && baseProjectsProxy !== null)) {
-                return Reflect.get(baseProjectsProxy, p) as unknown
-            }
-            return createCallableShim(shimMj)
+            return resolveProjectDomainProp(p, target, shimMj, projectsFn)
         },
-    })
-}
-
-const STATS_METHOD_KEYS = new Set([
-    'getStatistics', 'getStats', 'stats', 'info', 'getInfo', 'getDatabaseInfo', 'databaseInfo',
-    'getHealth', 'health', 'status', 'getStatus', 'serverInfo', 'server_info', 'serverHealth',
-    'server_health', 'serverStatus', 'server_status', 'healthCheck', 'health_check',
-    'diagnostics', 'getDiagnostics', 'systemInfo', 'system_info', 'adapters', 'listAdapters',
-    'list_adapters', 'getAdapters', 'get_adapters',
-])
-
-export function createDbDomainProxy(
-    target: Record<string, unknown>,
-    shimMj: Record<string, unknown>
-): object {
-    const getStatsFn = getGroupProp(target, 'analytics', 'getStatistics') ?? getGroupProp(target, 'analytics', 'get_statistics')
-
-    return new Proxy({}, {
-        get(_t, dbProp): unknown {
-            if (typeof dbProp === 'symbol' || dbProp === 'then') return undefined
-            if (dbProp === 'schema') return createSchemaShim(shimMj)
-            if (dbProp === 'help' || dbProp === 'describe') {
-                const helpFn = target['help']
-                return () => (typeof helpFn === 'function' ? (helpFn as () => unknown)() : undefined)
-            }
-            if (dbProp === 'prepare' || dbProp === 'stmt' || dbProp === 'statement') {
-                return (sql?: string) => createPreparedStatementShim(typeof sql === 'string' ? sql : '', shimMj)
-            }
-            if (dbProp === 'exec') {
-                return (sql?: string) => {
-                    const stmt = createPreparedStatementShim(typeof sql === 'string' ? sql : '', shimMj)
-                    const runFn = stmt['run']
-                    return typeof runFn === 'function' ? (runFn as () => unknown)() : undefined
-                }
-            }
-            if (dbProp === 'query' || dbProp === 'raw') {
-                return (sql?: string) => {
-                    const stmt = createPreparedStatementShim(typeof sql === 'string' ? sql : '', shimMj)
-                    const allFn = stmt['all']
-                    return typeof allFn === 'function' ? (allFn as () => unknown)() : undefined
-                }
-            }
-            if (dbProp === 'close' || dbProp === 'dispose' || dbProp === 'disconnect') {
-                return () => ({
-                    success: false,
-                    code: 'VALIDATION_ERROR',
-                    error: `${dbProp} is not executed in the sandbox`,
-                })
-            }
-            if (dbProp === 'getDatabase' || dbProp === 'getDb' || dbProp === 'get_database' || dbProp === 'get_db') {
-                return () => shimMj
-            }
-            if (dbProp === 'ping') return () => Promise.resolve({ success: true, status: 'pong' })
-            if (dbProp === 'version') {
-                return () => Promise.resolve({ success: true, version: VERSION, name: 'memory-journal-mcp' })
-            }
-            if (STATS_METHOD_KEYS.has(dbProp) && typeof getStatsFn === 'function') return getStatsFn
-            return (..._args: unknown[]) =>
-                Promise.resolve({
-                    success: false,
-                    error: `Direct SQLite database access 'mj.db.${dbProp}()' is not available in Code Mode sandbox. Use high-level API methods instead: mj.core.createEntry({ ... }), mj.core.getRecentEntries({ ... }), or mj.search.searchEntries({ ... }).`,
-                    code: 'VALIDATION_ERROR',
-                    category: 'validation',
-                    suggestion: 'Use mj.core or mj.search methods.',
-                    recoverable: true,
-                })
-        },
-    })
-}
-
-export function createSystemDatabaseDomainProxy(
-    target: Record<string, unknown>,
-    _shimMj: Record<string, unknown>
-): object {
-    if (typeof target['system'] === 'function' || (typeof target['system'] === 'object' && target['system'] !== null)) {
-        return target['system']
-    }
-    const getStatsFn = getGroupProp(target, 'analytics', 'getStatistics') ?? getGroupProp(target, 'analytics', 'get_statistics')
-    const dbShim: Record<string, unknown> = {
-        ping: () => Promise.resolve({ success: true, status: 'pong' }),
-        version: () => Promise.resolve({ success: true, version: VERSION, name: 'memory-journal-mcp' }),
-    }
-    for (const k of STATS_METHOD_KEYS) dbShim[k] = getStatsFn
-    return new Proxy(dbShim, {
-        get(t, p): unknown {
-            if (typeof p === 'symbol' || p === 'then') return undefined
-            if (typeof p === 'string' && p in t) return t[p]
-            return (..._args: unknown[]) =>
-                Promise.resolve({
-                    success: false,
-                    code: 'VALIDATION_ERROR',
-                    category: 'validation',
-                    error: `Unknown database/system operation '${p}'`,
-                    recoverable: true,
-                })
-        },
+        isExtensible: () => true,
+        preventExtensions: () => false,
+        set: () => false,
+        defineProperty: () => false,
+        deleteProperty: () => false,
+        setPrototypeOf: () => false,
     })
 }
 
@@ -397,6 +292,10 @@ export function createSearchDomainProxy(target: Record<string, unknown>): unknow
             },
             isExtensible: () => true,
             preventExtensions: () => false,
+            set: () => false,
+            defineProperty: () => false,
+            deleteProperty: () => false,
+            setPrototypeOf: () => false,
         })
     }
     return searchGroup

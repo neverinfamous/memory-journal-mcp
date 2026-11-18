@@ -11,6 +11,7 @@ import { AuthorizationError } from '../../../../types/errors.js'
 import { enforceAccessBoundary } from '../../../../auth/validation.js'
 import type { TeamRole } from '../../../../database/core/interfaces.js'
 import { fetchAuthor, batchFetchAuthors, resolveTeamProjectNumber, triggerTeamNotifications } from '../helpers.js'
+import { resolveTeamMutationProjectNumber } from './team-pk-scope-helpers.js'
 import { enforceEntryOwnership, resolveScopedTeamRole } from '../rbac.js'
 import { resolveWriteWorkspaceId } from '../../write-workspace.js'
 import type { TeamBatchDeleteEntriesSchema, TeamBatchUpdateEntriesSchema } from '../schemas.js'
@@ -110,11 +111,12 @@ function validateSingleTeamBatchUpdate(
     if (existing !== null && existing !== undefined && explicitPn !== undefined && existing.projectNumber !== explicitPn) {
         return { status: 'not_found', entryId: u.entry_id }
     }
-    const projectNumber = resolveTeamProjectNumber(
+    const projectNumber = resolveTeamMutationProjectNumber(
         context,
         wsId,
-        u.project_number ?? rootProjectNumber ?? existing?.projectNumber,
-        explicitWs
+        u.project_number ?? rootProjectNumber,
+        explicitWs,
+        existing?.projectNumber
     )
     if (projectNumber === undefined || projectNumber === null) {
         return {

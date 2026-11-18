@@ -7,12 +7,17 @@ import { extractAndRecoverSqlCode, extractAndRecoverPreparedStatementCode } from
 import {
     escapeDelimiterChar,
     isInsideStringLiteral,
+    isInsideStringOrComment,
     isValidJsScript,
     rewriteContextJsonParseCalls,
     rewriteModuleImportsAndExports,
 } from './code-healer-rewrites.js'
 
-export { escapeDelimiterChar, isInsideStringLiteral, isValidJsScript }
+export { escapeDelimiterChar, isInsideStringLiteral, isInsideStringOrComment, isValidJsScript }
+
+function escapeTemplateInterpolation(content: string): string {
+    return escapeDelimiterChar(content, '`').replace(/(?<!\\)\$\{/g, '\\${')
+}
 
 function stripLeadingShimAssignments(src: string): string {
     let rest = src.trimStart()
@@ -95,7 +100,7 @@ function applyTemplateAndQuoteDelimiterHealing(src: string): string {
         /(\b(?:content|title|text|description|message|instructions|body|notes|details|resolution_notes|query|script|comment|summary|heading)\s*:\s*)`([\s\S]*?)`(?=\s*(?:,\s*[a-zA-Z_$][\w$]*\s*:|\s*,\s*\}|\s*\}|\s*\)))/g,
         (match: string, prefix: string, content: string, offset: number): string => {
             if (
-                isInsideStringLiteral(executionCode, offset) ||
+                isInsideStringOrComment(executionCode, offset) ||
                 shouldLeaveValidSnippetUntouched(`{ ${match} }`, true)
             ) {
                 return match
@@ -107,8 +112,8 @@ function applyTemplateAndQuoteDelimiterHealing(src: string): string {
     executionCode = executionCode.replace(
         /(\b(?:content|title|text|description|message|instructions|body|notes|details|resolution_notes|query|script|comment|summary|heading)\s*:\s*)'([\s\S]*?)'(?=\s*(?:,\s*[a-zA-Z_$][\w$]*\s*:|\s*,\s*\}|\s*\}|\s*\)))/g,
         (match: string, prefix: string, content: string, offset: number): string => {
-            if (isInsideStringLiteral(executionCode, offset)) return match
-            if (content.includes('\n')) return `${prefix}\`${escapeDelimiterChar(content, '`')}\``
+            if (isInsideStringOrComment(executionCode, offset)) return match
+            if (content.includes('\n')) return `${prefix}\`${escapeTemplateInterpolation(content)}\``
             return `${prefix}'${escapeDelimiterChar(content, "'")}'`
         }
     )
@@ -116,8 +121,8 @@ function applyTemplateAndQuoteDelimiterHealing(src: string): string {
     executionCode = executionCode.replace(
         /(\b(?:content|title|text|description|message|instructions|body|notes|details|resolution_notes|query|script|comment|summary|heading)\s*:\s*)"([\s\S]*?)"(?=\s*(?:,\s*[a-zA-Z_$][\w$]*\s*:|\s*,\s*\}|\s*\}|\s*\)))/g,
         (match: string, prefix: string, content: string, offset: number): string => {
-            if (isInsideStringLiteral(executionCode, offset)) return match
-            if (content.includes('\n')) return `${prefix}\`${escapeDelimiterChar(content, '`')}\``
+            if (isInsideStringOrComment(executionCode, offset)) return match
+            if (content.includes('\n')) return `${prefix}\`${escapeTemplateInterpolation(content)}\``
             return `${prefix}"${escapeDelimiterChar(content, '"')}"`
         }
     )
@@ -125,7 +130,7 @@ function applyTemplateAndQuoteDelimiterHealing(src: string): string {
     executionCode = executionCode.replace(
         /(\b(?:mj\.)?(?:core\.|team\.|admin\.|search\.|io\.|github\.|git\.|backup\.)?(?:createEntry|teamCreateEntry|appendEntry|updateEntry|teamUpdateEntry|searchEntries|teamSearch|mj_create_entry|mjCreateEntry|mj_update_entry|mjUpdateEntry|mj_search_entries|mjSearchEntries)\s*\(\s*)`([\s\S]*?)`(?=\s*(?:,\s*|\)))/g,
         (match: string, prefix: string, content: string, offset: number): string => {
-            if (isInsideStringLiteral(executionCode, offset) || statementKeywordsOrBraces.test(content))
+            if (isInsideStringOrComment(executionCode, offset) || statementKeywordsOrBraces.test(content))
                 return match
             return `${prefix}\`${escapeDelimiterChar(content, '`')}\``
         }
@@ -134,18 +139,18 @@ function applyTemplateAndQuoteDelimiterHealing(src: string): string {
     executionCode = executionCode.replace(
         /(\b(?:mj\.)?(?:core\.|team\.|admin\.|search\.|io\.|github\.|git\.|backup\.)?(?:createEntry|teamCreateEntry|appendEntry|updateEntry|teamUpdateEntry|searchEntries|teamSearch)\s*\(\s*)'([\s\S]*?)'(?=\s*(?:,\s*|\)))/g,
         (match: string, prefix: string, content: string, offset: number): string => {
-            if (isInsideStringLiteral(executionCode, offset) || statementKeywordsOrBraces.test(content))
+            if (isInsideStringOrComment(executionCode, offset) || statementKeywordsOrBraces.test(content))
                 return match
-            if (content.includes('\n')) return `${prefix}\`${escapeDelimiterChar(content, '`')}\``
+            if (content.includes('\n')) return `${prefix}\`${escapeTemplateInterpolation(content)}\``
             return `${prefix}'${escapeDelimiterChar(content, "'")}'`
         }
     )
     executionCode = executionCode.replace(
         /(\b(?:mj\.)?(?:core\.|team\.|admin\.|search\.|io\.|github\.|git\.|backup\.)?(?:createEntry|teamCreateEntry|appendEntry|updateEntry|teamUpdateEntry|searchEntries|teamSearch)\s*\(\s*)"([\s\S]*?)"(?=\s*(?:,\s*|\)))/g,
         (match: string, prefix: string, content: string, offset: number): string => {
-            if (isInsideStringLiteral(executionCode, offset) || statementKeywordsOrBraces.test(content))
+            if (isInsideStringOrComment(executionCode, offset) || statementKeywordsOrBraces.test(content))
                 return match
-            if (content.includes('\n')) return `${prefix}\`${escapeDelimiterChar(content, '`')}\``
+            if (content.includes('\n')) return `${prefix}\`${escapeTemplateInterpolation(content)}\``
             return `${prefix}"${escapeDelimiterChar(content, '"')}"`
         }
     )
@@ -154,7 +159,7 @@ function applyTemplateAndQuoteDelimiterHealing(src: string): string {
         /(\b(?:const|let|var)\s+[\w$]+\s*=\s*)`([\s\S]*?)`(?=\s*(?:;|\n\s*(?:const|let|var|return|await|mj\.|function|\/\*|\/\/)))/g,
         (match: string, prefix: string, content: string, offset: number): string => {
             if (
-                isInsideStringLiteral(executionCode, offset) ||
+                isInsideStringOrComment(executionCode, offset) ||
                 shouldLeaveValidSnippetUntouched(match, false)
             ) {
                 return match
@@ -179,31 +184,31 @@ function rewriteSandboxNodeAndContextCalls(src: string): string {
     executionCode = executionCode.replace(
         /(?:fs|fs\.promises)\.readFileSync\s*\([^)]*\)/g,
         (match, offset: number, fullStr: string) =>
-            isInsideStringLiteral(fullStr, offset)
+            isInsideStringOrComment(fullStr, offset)
                 ? match
                 : '(typeof context !== "undefined" && context.content ? context.content : "")'
     )
     executionCode = executionCode.replace(
         /(?:fs|fs\.promises)\.readFile\s*\([^)]*\)/g,
         (match, offset: number, fullStr: string) =>
-            isInsideStringLiteral(fullStr, offset)
+            isInsideStringOrComment(fullStr, offset)
                 ? match
                 : 'Promise.resolve(typeof context !== "undefined" && context.content ? context.content : "")'
     )
     executionCode = executionCode.replace(
         /\bfs\.(existsSync|statSync|stat|lstatSync)\s*\(/g,
         (match, method: string, offset: number, fullStr: string) =>
-            isInsideStringLiteral(fullStr, offset) ? match : `__safeFs.${method}(`
+            isInsideStringOrComment(fullStr, offset) ? match : `__safeFs.${method}(`
     )
     executionCode = executionCode.replace(
         /process\.env\.([a-zA-Z0-9_]+)/g,
         (match, _key: string, offset: number, fullStr: string) =>
-            isInsideStringLiteral(fullStr, offset) ? match : 'undefined'
+            isInsideStringOrComment(fullStr, offset) ? match : 'undefined'
     )
     executionCode = executionCode.replace(
         /process\.env\b/g,
         (match, offset: number, fullStr: string) =>
-            isInsideStringLiteral(fullStr, offset) ? match : '{}'
+            isInsideStringOrComment(fullStr, offset) ? match : '{}'
     )
     if (!isValidJsScript(executionCode) || hasAccidentalTaggedTemplateBackticks(executionCode)) {
         executionCode = applyTemplateAndQuoteDelimiterHealing(executionCode)
@@ -228,7 +233,7 @@ export function healCodeModeScript(code: string): string {
     executionCode = executionCode.replace(
         /<(?:CURRENT_PROJECT_NUMBER|CURRENT_PROJECT_ID|PROJECT_NUMBER|PROJECT_ID)>/g,
         (match: string, offset: number, fullStr: string): string =>
-            isInsideStringLiteral(fullStr, offset) ? match : 'undefined'
+            isInsideStringOrComment(fullStr, offset) ? match : 'undefined'
     )
     executionCode = rewriteModuleImportsAndExports(executionCode)
     executionCode = rewriteSandboxNodeAndContextCalls(executionCode)

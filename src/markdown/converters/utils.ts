@@ -78,3 +78,50 @@ export function getFirstString(yamlMeta: Record<string, unknown>, keys: string[]
     }
     return undefined
 }
+
+const FENCE_OPEN_RE = /^[ ]{0,3}(`{3,}|~{3,})/
+
+/**
+ * Transform only prose segments outside fenced code blocks (` ``` ` / `~~~`),
+ * leaving fenced code snippets byte-for-byte untouched.
+ */
+export function transformOutsideCodeFences(
+    markdown: string,
+    transform: (segment: string) => string
+): string {
+    const lines = markdown.split('\n')
+    const out: string[] = []
+    let proseLines: string[] = []
+    let activeFenceChar: string | null = null
+    let activeFenceLen = 0
+
+    for (const line of lines) {
+        const trimmed = line.replace(/\r$/, '')
+        if (activeFenceChar === null) {
+            const openMatch = FENCE_OPEN_RE.exec(trimmed)
+            if (openMatch?.[1] !== undefined) {
+                if (proseLines.length > 0) {
+                    out.push(transform(proseLines.join('\n')))
+                    proseLines = []
+                }
+                activeFenceChar = openMatch[1][0] ?? '`'
+                activeFenceLen = openMatch[1].length
+                out.push(line)
+                continue
+            }
+            proseLines.push(line)
+        } else {
+            out.push(line)
+            const closeRe = new RegExp(`^[ ]{0,3}\\${activeFenceChar}{${String(activeFenceLen)},}\\s*$`)
+            if (closeRe.test(trimmed)) {
+                activeFenceChar = null
+                activeFenceLen = 0
+            }
+        }
+    }
+
+    if (proseLines.length > 0) {
+        out.push(transform(proseLines.join('\n')))
+    }
+    return out.join('\n')
+}

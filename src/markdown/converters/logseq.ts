@@ -12,6 +12,7 @@
 
 import type { ConvertedFile } from './index.js'
 import type { FrontmatterData } from '../frontmatter.js'
+import { posix } from 'node:path'
 import { parseYamlFrontmatter } from './yaml-parser.js'
 import { addBoundedTag, extractTags, formatToISODate, toBoundedTags } from './utils.js'
 
@@ -79,8 +80,10 @@ function inferLogseqEntryMetadata(
     mjMeta: FrontmatterData
 ): void {
     if (defaultEntryType) return
-    const journalMatch = /\b(\d{4}_\d{2}_\d{2})\b/.exec(filename)
-    if (journalMatch || filename.includes('journals')) {
+    const posixFile = filename.replace(/\\/g, '/')
+    const baseFilename = posix.basename(posixFile)
+    const journalMatch = /\b(\d{4}_\d{2}_\d{2})\b/.exec(baseFilename)
+    if (journalMatch || /(?:^|\/)journals\//i.test(posixFile)) {
         mjMeta.entry_type = 'standup'
         if (journalMatch?.[1] && !mjMeta.timestamp) {
             const formatted = formatToISODate(`${journalMatch[1].replace(/_/g, '-')}T12:00:00Z`)

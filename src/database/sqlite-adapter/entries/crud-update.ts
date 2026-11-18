@@ -117,7 +117,9 @@ const EMPTY_STRING_NULL_KEYS = new Set<string>([
     'projectOwner',
     'issueUrl',
     'prUrl',
+    'prStatus',
     'workflowName',
+    'workflowStatus',
 ])
 
 /** Build the SET clauses (and bound values) for the columns present in `input`. */
@@ -136,12 +138,12 @@ function buildUpdateSets(
         ['content', input.content],
         ['is_personal', input.isPersonal !== undefined ? (input.isPersonal ? 1 : 0) : undefined],
         ['significance_type', nonEmptyNullable(input.significanceType)],
-        ['auto_context', input.autoContext !== undefined ? (input.autoContext ?? null) : undefined],
+        ['auto_context', nonEmptyNullable(input.autoContext)],
         ['is_archived', input.isArchived !== undefined ? (input.isArchived ? 1 : 0) : undefined],
         ['trust_score', input.trustScore],
         ['validation_status', input.validationStatus],
         ['impact_score', input.impactScore],
-        ['session_id', input.sessionId],
+        ['session_id', nonEmptyNullable(input.sessionId)],
     ] as const
 
     for (const [col, val] of scalarFields) {

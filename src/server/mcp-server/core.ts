@@ -1,5 +1,5 @@
 import { type McpServer } from '@modelcontextprotocol/server'
-import { getTools, callTool } from '../../handlers/tools/index.js'
+import { getTools } from '../../handlers/tools/index.js'
 import { getRequiredScope } from '../../auth/scope-map.js'
 import { getResources } from '../../handlers/resources/index.js'
 import { getPrompts } from '../../handlers/prompts/index.js'
@@ -56,12 +56,7 @@ function buildServerToolConfigs(
     options: ServerOptions
 ): { baseConfig: ToolHandlerConfig; customToolHandlerConfig: ToolHandlerConfig } {
     const {
-        db,
-        teamDb,
         runtime,
-        vectorManager,
-        teamVectorManager,
-        github,
         configManager,
         allowedIoRoots,
     } = context
@@ -97,18 +92,6 @@ function buildServerToolConfigs(
     }
 
     const customToolHandlerConfig: ToolHandlerConfig = { ...baseConfig }
-    customToolHandlerConfig.dispatch = (name: string, args: Record<string, unknown>): Promise<unknown> =>
-        callTool(
-            name,
-            args,
-            db,
-            vectorManager,
-            github,
-            customToolHandlerConfig,
-            undefined,
-            teamDb ?? undefined,
-            teamVectorManager ?? undefined
-        )
     return { baseConfig, customToolHandlerConfig }
 }
 

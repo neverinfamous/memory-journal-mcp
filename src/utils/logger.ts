@@ -26,6 +26,29 @@ const LOG_LEVELS: Record<LogLevel, number> = {
     critical: 2,
 }
 
+function sanitizeLogValue(value: unknown, seen = new WeakSet(), depth = 0): unknown {
+    if (value instanceof Error) return sanitizeErrorForLogging(`${value.name}: ${value.message}`)
+    if (typeof value === 'string') return sanitizeErrorForLogging(value)
+    if (typeof value === 'bigint') return value.toString()
+    if (typeof value !== 'object' || value === null) return value
+    if (depth > 6) return '[Truncated]'
+    if (seen.has(value)) return '[Circular]'
+    seen.add(value)
+    try {
+        if (Array.isArray(value)) {
+            return value.map((item) => sanitizeLogValue(item, seen, depth + 1))
+        }
+        const out: Record<string, unknown> = {}
+        for (const [k, v] of Object.entries(value)) {
+            if (k === '__proto__' || k === 'constructor' || k === 'prototype') continue
+            out[k] = sanitizeLogValue(v, seen, depth + 1)
+        }
+        return out
+    } finally {
+        seen.delete(value)
+    }
+}
+
 class Logger {
     private minLevel: number
 
@@ -56,21 +79,17 @@ class Logger {
         delete extras['module']
         delete extras['operation']
 
-        // Sanitize error and string fields to prevent token leakage and empty Error JSON serialization
+        // Sanitize error and string fields recursively to prevent token/secret leakage in nested log contexts
+        const sanitizedExtras: Record<string, unknown> = {}
         for (const [k, v] of Object.entries(extras)) {
-            if (v instanceof Error) {
-                extras[k] = sanitizeErrorForLogging(`${v.name}: ${v.message}`)
-            } else if (typeof v === 'string') {
-                extras[k] = sanitizeErrorForLogging(v)
-            } else if (typeof v === 'bigint') {
-                extras[k] = v.toString()
-            }
+            if (k === '__proto__' || k === 'constructor' || k === 'prototype') continue
+            sanitizedExtras[sanitizeErrorForLogging(k)] = sanitizeLogValue(v)
         }
 
-        if (Object.keys(extras).length > 0) {
+        if (Object.keys(sanitizedExtras).length > 0) {
             try {
                 const seen = new WeakSet()
-                const serialized = JSON.stringify(extras, (_k: string, val: unknown) => {
+                const serialized = JSON.stringify(sanitizedExtras, (_k: string, val: unknown) => {
                     if (typeof val === 'bigint') return val.toString()
                     if (typeof val === 'object' && val !== null) {
                         if (seen.has(val)) return '[Circular]'
@@ -116,9 +135,19 @@ class Logger {
     setLevel(level: LogLevel): void {
         const normalized = typeof level === 'string' ? level.trim().toLowerCase() : ''
         if (Object.hasOwn(LOG_LEVELS, normalized)) {
-            this.minLevel = LOG_LEVELS[normalized as LogLevel]
+            const validLevel = normalized as LogLevel
+            this.minLevel = LOG_LEVELS[validLevel]
+            for (const listener of logLevelListeners) listener(validLevel)
         }
     }
+}
+
+type LogLevelListener = (level: LogLevel) => void
+const logLevelListeners: LogLevelListener[] = []
+
+/** Register a listener notified whenever `logger.setLevel` changes the active level. */
+export function onLogLevelChange(listener: LogLevelListener): void {
+    logLevelListeners.push(listener)
 }
 
 // Get log level from environment (validated against known levels)

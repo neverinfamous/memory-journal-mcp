@@ -20,6 +20,7 @@ import {
     formatToISODate,
     getFirstString,
     toBoundedTags,
+    transformOutsideCodeFences,
 } from './utils.js'
 
 export function convertObsidian(
@@ -59,22 +60,18 @@ export function convertObsidian(
         }
     }
 
-    // 2. Process Body Text
-    let processedBody = body
-
-    // Extract inline tags (#tag format)
-    const inlineTagMatches = processedBody.matchAll(/(^|\s)#([a-zA-Z0-9_-]{1,128})\b/g)
-    for (const match of inlineTagMatches) {
-        if (match[2]) addBoundedTag(mergedTags, match[2].toLowerCase())
-    }
-
-    // Convert bounded embeds: ![[My Image.png]] -> > _Embedded: My Image.png_
-    processedBody = processedBody.replace(/!\[\[([^\]]{1,500})\]\]/g, '> _Embedded: $1_')
-
-    // Strip bounded wikilinks: [[Link target|Display text]] -> Display text
-    processedBody = processedBody.replace(/\[\[([^\]]{1,500})\]\]/g, (_match: string, inner: string) => {
-        const parts = inner.split('|')
-        return (parts.length > 1 ? parts[1] : parts[0]) ?? ''
+    // 2. Process Body Text (ignoring fenced code blocks so snippets/hashes are preserved)
+    const processedBody = transformOutsideCodeFences(body, (segment) => {
+        const inlineTagMatches = segment.matchAll(/(^|\s)#([a-zA-Z0-9_-]{1,128})\b/g)
+        for (const match of inlineTagMatches) {
+            if (match[2]) addBoundedTag(mergedTags, match[2].toLowerCase())
+        }
+        return segment
+            .replace(/!\[\[([^\]]{1,500})\]\]/g, '> _Embedded: $1_')
+            .replace(/\[\[([^\]]{1,500})\]\]/g, (_match: string, inner: string) => {
+                const parts = inner.split('|')
+                return (parts.length > 1 ? parts[1] : parts[0]) ?? ''
+            })
     })
 
     if (mergedTags.size > 0) {

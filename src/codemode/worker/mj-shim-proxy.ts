@@ -286,10 +286,14 @@ function resolveDomainAndDbMappingProp(
             getGroupProp(target, 'admin', 'listProjects') ??
             getGroupProp(target, 'admin', 'list_projects') ??
             getGroupProp(target, 'core', 'listProjects') ??
-            getGroupProp(target, 'core', 'list_projects') ??
-            getGroupProp(target, 'analytics', 'get_cross_project_insights') ??
-            getGroupProp(target, 'analytics', 'getCrossProjectInsights')
+            getGroupProp(target, 'core', 'list_projects')
         if (listProjects !== undefined) return listProjects
+        return () =>
+            Promise.resolve({
+                success: false,
+                error: "Tool 'list_projects' is not available in this sandbox.",
+                code: 'TOOL_DISABLED',
+            })
     }
     if (prop === 'search' && 'search' in target) {
         if (searchDomainCache.has(target)) return searchDomainCache.get(target)

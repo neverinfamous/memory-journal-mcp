@@ -8,6 +8,7 @@
 
 import { type McpServer } from '@modelcontextprotocol/server'
 import { sanitizeErrorForLogging } from './security-utils.js'
+import { onLogLevelChange } from './logger.js'
 
 /**
  * Narrow interface for MCP protocol log notification dispatch.
@@ -53,6 +54,23 @@ interface LogData {
     [key: string]: unknown
 }
 
+const VALID_MCP_LOG_LEVELS: readonly McpLogLevel[] = [
+    'emergency',
+    'alert',
+    'critical',
+    'error',
+    'warning',
+    'notice',
+    'info',
+    'debug',
+]
+
+function resolveInitialMcpLogLevel(): McpLogLevel {
+    const raw = process.env['LOG_LEVEL']?.trim().toLowerCase()
+    if (raw === 'warn') return 'warning'
+    return VALID_MCP_LOG_LEVELS.find((lvl) => lvl === raw) ?? 'info'
+}
+
 /**
  * MCP Protocol Logger
  *
@@ -61,7 +79,7 @@ interface LogData {
  */
 export class McpLogger {
     private server: McpLoggingReceiver | null = null
-    private minLevel: McpLogLevel = 'info'
+    private minLevel: McpLogLevel = resolveInitialMcpLogLevel()
 
     /**
      * Connect to MCP server for protocol logging
@@ -227,3 +245,6 @@ export class McpLogger {
 
 // Singleton instance
 export const mcpLogger = new McpLogger()
+onLogLevelChange((level) => {
+    mcpLogger.setLevel(level)
+})

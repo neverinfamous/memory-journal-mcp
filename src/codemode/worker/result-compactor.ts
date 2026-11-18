@@ -98,6 +98,24 @@ export function compactOversizedResult(
     seen.add(val)
 
     try {
+        const toJsonFn = Reflect.get(val, 'toJSON') as unknown
+        if (typeof toJsonFn === 'function') {
+            const converted = (toJsonFn as () => unknown).call(val)
+            if (converted !== val) {
+                return compactOversizedResult(converted, limitBytes, depth + 1, seen)
+            }
+        }
+        if (val instanceof Error) {
+            const errObj: Record<string, unknown> = {
+                name: val.name,
+                message: val.message,
+            }
+            for (const k of Object.keys(val)) {
+                if (k === '__proto__' || k === 'constructor' || k === 'prototype') continue
+                errObj[k] = Reflect.get(val, k)
+            }
+            return compactOversizedObject(errObj, limitBytes, depth, seen)
+        }
         return Array.isArray(val)
             ? compactOversizedArray(val, limitBytes, depth, seen)
             : compactOversizedObject(val, limitBytes, depth, seen)

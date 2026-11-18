@@ -16,7 +16,10 @@ import {
     stripBalancedOuterParens,
 } from '../../../codemode/sql-literal-scope.js'
 import { cleanSqlText, parseSqlStatement } from '../../../codemode/sql-positional-binder.js'
-import { parsePositiveProjectNumber } from '../../../utils/safe-positive-int.js'
+import {
+    parseCanonicalPositiveInt,
+    parsePositiveProjectNumber,
+} from '../../../utils/safe-positive-int.js'
 
 const SPECIAL_TABLES = new Set([
     'tags',
@@ -95,7 +98,7 @@ function extractTopLevelLimit(cleanSql: string): number | undefined {
     const limitIdx = findTopLevelSqlKeyword(cleanSql, 'LIMIT')
     if (limitIdx < 0) return undefined
     const match = /^LIMIT\s+(\d+)\b/i.exec(cleanSql.slice(limitIdx))
-    return match?.[1] !== undefined ? parseInt(match[1], 10) : undefined
+    return match?.[1] !== undefined ? parseCanonicalPositiveInt(match[1]) : undefined
 }
 
 function specialWhereAllowedCols(table: string): readonly string[] {

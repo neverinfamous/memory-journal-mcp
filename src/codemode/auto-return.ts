@@ -50,29 +50,30 @@ function trySkipRegexLiteral(trimmed: string, slashIdx: number): number | null {
     return i
 }
 
-export function transformAutoReturn(code: string): string {
-    let trimmed = code.trimEnd()
-    if (!trimmed) return code
-
-    // Strip trailing semicolons so the final statement isn't empty
-    while (trimmed.endsWith(';')) {
-        trimmed = trimmed.slice(0, -1).trimEnd()
-    }
-
+function findLastStatementBoundary(trimmed: string): number {
     let inString: string | null = null
     let isEscaped = false
     let lastBoundary = -1
     let depth = 0
+    const templateBraces: number[] = []
 
     // Forward pass to safely find statement boundaries
     for (let i = 0; i < trimmed.length; i++) {
         const ch = trimmed[i]
         if (inString) {
-            if (ch === '\\') isEscaped = !isEscaped
-            else {
-                if (ch === inString && !isEscaped) inString = null
-                isEscaped = false
+            if (ch === '\\') {
+                isEscaped = !isEscaped
+                continue
             }
+            if (inString === '`' && !isEscaped && ch === '$' && trimmed[i + 1] === '{') {
+                templateBraces.push(0)
+                inString = null
+                isEscaped = false
+                i++
+                continue
+            }
+            if (ch === inString && !isEscaped) inString = null
+            isEscaped = false
             continue
         }
         if (ch === '/' && trimmed[i + 1] === '/') {
@@ -92,15 +93,49 @@ export function transformAutoReturn(code: string): string {
         } else if (ch === '/') {
             const regexEnd = trySkipRegexLiteral(trimmed, i)
             if (regexEnd !== null) i = regexEnd
-        } else if (ch === '{' || ch === '[' || ch === '(') {
+        } else if (ch === '{') {
+            if (templateBraces.length > 0) {
+                const topIdx = templateBraces.length - 1
+                const top = templateBraces[topIdx]
+                if (top !== undefined) templateBraces[topIdx] = top + 1
+            } else {
+                depth++
+            }
+        } else if (ch === '}') {
+            if (templateBraces.length > 0) {
+                const topIdx = templateBraces.length - 1
+                const top = templateBraces[topIdx]
+                if (top === 0) {
+                    templateBraces.pop()
+                    inString = '`'
+                    isEscaped = false
+                } else if (top !== undefined) {
+                    templateBraces[topIdx] = top - 1
+                }
+            } else {
+                depth--
+            }
+        } else if (ch === '[' || ch === '(') {
             depth++
-        } else if (ch === '}' || ch === ']' || ch === ')') {
+        } else if (ch === ']' || ch === ')') {
             depth--
-        } else if (depth === 0 && (ch === ';' || ch === '\n')) {
+        } else if (depth === 0 && templateBraces.length === 0 && (ch === ';' || ch === '\n')) {
             lastBoundary = i
         }
     }
+    return lastBoundary
+}
 
+export function transformAutoReturn(code: string): string {
+    let trimmed = code.trimEnd()
+    if (!trimmed) return code
+
+    // Strip trailing semicolons so the final statement isn't empty
+    while (trimmed.endsWith(';')) {
+        trimmed = trimmed.slice(0, -1).trimEnd()
+    }
+
+    const lastBoundary = findLastStatementBoundary(trimmed)
     const lastStmt = (lastBoundary >= 0 ? trimmed.slice(lastBoundary + 1) : trimmed).trim()
     if (!lastStmt || NON_RETURNABLE.test(lastStmt)) return code
 

@@ -10,6 +10,7 @@ import { formatHandlerError } from '../../../utils/error-helpers.js'
 import { resolveWorkspaceId } from '../../../utils/workspace-resolver.js'
 import { activeProjectRegistry, alignedProjectFilter } from '../../../utils/write-scope.js'
 import { logger } from '../../../utils/logger.js'
+import { sanitizeAuthor } from '../../../utils/security-utils.js'
 import {
     TEAM_DB_ERROR_RESPONSE,
     missingTeamProjectNumberError,
@@ -80,7 +81,9 @@ export function getTeamAnalyticsTools(context: ToolContext): ToolDefinition[] {
                     let authors: { author: string; count: number }[] = []
                     let authorStatsError: string | undefined
                     try {
-                        authors = teamDb.getAuthorStatistics(wsId, alignedProject)
+                        authors = teamDb
+                            .getAuthorStatistics(wsId, alignedProject)
+                            .map((item) => ({ ...item, author: sanitizeAuthor(item.author) }))
                     } catch (err) {
                         authorStatsError = err instanceof Error ? err.message : String(err)
                         logger.debug('Failed to fetch team author statistics', { error: err })
@@ -224,12 +227,29 @@ export function getTeamAnalyticsTools(context: ToolContext): ToolDefinition[] {
                             'Missing project_number. Cross-tenant collaboration matrices without project_number are not allowed.'
                         )
                     }
-                    const matrix = teamDb.getTeamCollaborationMatrix({
+                    const rawMatrix = teamDb.getTeamCollaborationMatrix({
                         period,
                         limit,
                         workspaceId,
                         ...(projectNumber !== undefined ? { projectNumber } : {}),
                     })
+
+                    const matrix = {
+                        ...rawMatrix,
+                        authorActivity: rawMatrix.authorActivity.map((item) => ({
+                            ...item,
+                            author: sanitizeAuthor(item.author),
+                        })),
+                        crossAuthorLinks: rawMatrix.crossAuthorLinks.map((item) => ({
+                            ...item,
+                            fromAuthor: sanitizeAuthor(item.fromAuthor),
+                            toAuthor: sanitizeAuthor(item.toAuthor),
+                        })),
+                        impactFactor: rawMatrix.impactFactor.map((item) => ({
+                            ...item,
+                            author: sanitizeAuthor(item.author),
+                        })),
+                    }
 
                     return {
                         success: true,

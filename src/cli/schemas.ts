@@ -14,6 +14,33 @@ export const safeCoerceNumber = z.preprocess((val) => {
     return val
 }, z.number().optional())
 
+const safeCoerceCanonicalDecimal = (val: unknown): unknown => {
+    if (val === undefined || val === null || val === '') return undefined
+    if (typeof val === 'number') return val
+    if (typeof val === 'string') {
+        const trimmed = val.trim()
+        if (!/^-?(?:0|[1-9]\d*)(?:\.\d+)?$/.test(trimmed)) return val
+        const parsed = Number(trimmed)
+        if (!Number.isFinite(parsed)) return val
+        if (!trimmed.includes('.') && !Number.isSafeInteger(parsed)) return val
+        return parsed
+    }
+    return val
+}
+
+export const safeCoercePositiveInt = z.preprocess(
+    safeCoerceCanonicalDecimal,
+    z.number().int().positive().optional()
+)
+export const safeCoerceNonNegativeNumber = z.preprocess(
+    safeCoerceCanonicalDecimal,
+    z.number().min(0).optional()
+)
+export const safeCoerceUnitInterval = z.preprocess(
+    safeCoerceCanonicalDecimal,
+    z.number().min(0).max(1).optional()
+)
+
 export const safeCoerceValidationStatus = z.preprocess((val) => {
     if (val === undefined || val === null || val === '') return undefined
     if (typeof val === 'boolean') {
@@ -200,11 +227,11 @@ export const adminPruneOptionsSchema = pruningOptionsSchema
     .extend(outputOptionsSchema.shape)
     .extend({
         // Specific overrides from prune command
-        archiveOlderThanDays: z.coerce.number().min(0).optional(),
-        pruneOlderThanDays: z.coerce.number().min(0).optional(),
-        hardDeleteOlderThanDays: z.coerce.number().min(0).optional(),
-        importanceThreshold: z.coerce.number().min(0).max(1).optional(),
-        pruneImportanceThreshold: z.coerce.number().min(0).max(1).optional(),
+        archiveOlderThanDays: safeCoerceNonNegativeNumber,
+        pruneOlderThanDays: safeCoerceNonNegativeNumber,
+        hardDeleteOlderThanDays: safeCoerceNonNegativeNumber,
+        importanceThreshold: safeCoerceUnitInterval,
+        pruneImportanceThreshold: safeCoerceUnitInterval,
         dryRun: z.boolean().optional(),
         excludeTags: z.string().optional(),
         allWorkspaces: z.boolean().optional(),
@@ -267,7 +294,7 @@ export const searchOptionsSchema = z.object({
     keyword: z.string().optional(),
     mode: z.enum(['auto', 'fts', 'semantic', 'hybrid']).optional(),
     team: z.boolean().optional(),
-    limit: z.coerce.number().int().positive().optional()
+    limit: safeCoercePositiveInt
 }).extend(coreOptionsSchema.shape).extend(databaseOptionsSchema.shape).extend(workspaceOptionsSchema.shape).extend(outputOptionsSchema.shape)
 
 export const ioExportJsonOptionsSchema = z.object({
@@ -297,7 +324,7 @@ export const analyticsOptionsSchema = z.object({
 }).extend(coreOptionsSchema.shape).extend(databaseOptionsSchema.shape).extend(workspaceOptionsSchema.shape).extend(outputOptionsSchema.shape)
 
 export const adminAuditSearchOptionsSchema = z.object({
-    limit: z.coerce.number().int().positive().optional(),
+    limit: safeCoercePositiveInt,
     tool: z.string().optional(),
     user: z.string().optional(),
     category: z.enum(['read', 'write', 'admin', 'team', 'audit']).optional(),

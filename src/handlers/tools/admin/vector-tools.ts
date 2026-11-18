@@ -5,7 +5,7 @@ import {
     RebuildVectorIndexOutputSchema,
     AddToVectorIndexOutputSchema,
 } from './schemas.js'
-import { relaxedNumber } from '../schemas.js'
+import { relaxedNumber, StrictProjectNumberSchema } from '../schemas.js'
 import { logger } from '../../../utils/logger.js'
 import { resolveWorkspaceId } from '../../../utils/workspace-resolver.js'
 import { activeProjectRegistry, alignedProjectFilter } from '../../../utils/write-scope.js'
@@ -69,7 +69,7 @@ export function getVectorTools(context: ToolContext): ToolDefinition[] {
                 try {
                     const parsed = z
                         .object({
-                            project_number: z.number().int().min(0).optional(),
+                            project_number: StrictProjectNumberSchema.optional(),
                             workspace_id: z.string().optional(),
                         })
                         .strict()

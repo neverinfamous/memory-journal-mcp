@@ -20,6 +20,7 @@ function isTeamResourceUri(normalizedTarget: string): boolean {
         normalizedTarget.startsWith('memory://team/') ||
         normalizedTarget.startsWith('memory://team?') ||
         normalizedTarget === 'memory://insights/team-collaboration' ||
+        normalizedTarget.startsWith('memory://insights/team-collaboration/') ||
         normalizedTarget.startsWith('memory://insights/team-collaboration?')
     )
 }
@@ -40,7 +41,10 @@ function isAuditResourceUri(normalizedTarget: string): boolean {
     return (
         normalizedTarget === 'memory://audit' ||
         normalizedTarget.startsWith('memory://audit/') ||
-        normalizedTarget.startsWith('memory://audit?')
+        normalizedTarget.startsWith('memory://audit?') ||
+        normalizedTarget === 'memory://metrics/users' ||
+        normalizedTarget.startsWith('memory://metrics/users/') ||
+        normalizedTarget.startsWith('memory://metrics/users?')
     )
 }
 

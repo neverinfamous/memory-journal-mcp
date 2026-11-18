@@ -25,22 +25,23 @@ function isExplicitLoopbackHost(hostname: string): boolean {
 function readHttpsJwksBody(
     req: ReturnType<typeof https.request>,
     res: IncomingMessage,
-    resolve: (res: Response) => void,
-    reject: (err: unknown) => void
+    safeResolve: (res: Response) => void,
+    safeReject: (err: unknown) => void
 ): void {
     const status = res.statusCode ?? 0
     if (status !== 200) {
         if ('resume' in res && typeof res.resume === 'function') res.resume()
-        reject(new Error(`JWKS HTTP error! status: ${String(status)}`))
+        safeReject(new Error(`JWKS HTTP error! status: ${String(status)}`))
         return
     }
     const chunks: Buffer[] = []
     let totalBytes = 0
+    res.on('error', safeReject)
     res.on('data', (chunk: Buffer) => {
         totalBytes += chunk.length
         if (totalBytes > MAX_JWKS_RESPONSE_BYTES) {
             req.destroy()
-            reject(new Error('JWKS response exceeded 1MB limit'))
+            safeReject(new Error('JWKS response exceeded 1MB limit'))
             return
         }
         chunks.push(chunk)
@@ -50,7 +51,7 @@ function readHttpsJwksBody(
             typeof res.headers['content-type'] === 'string'
                 ? res.headers['content-type']
                 : 'application/json'
-        resolve(
+        safeResolve(
             new Response(Buffer.concat(chunks), {
                 status: 200,
                 headers: { 'content-type': contentType },
@@ -90,6 +91,18 @@ function fetchPinnedHttpsJwks(
         return Promise.reject(new Error('No validated DNS addresses available for JWKS'))
     }
     return new Promise<Response>((resolve, reject) => {
+        let settled = false
+        const safeResolve = (value: Response): void => {
+            if (settled) return
+            settled = true
+            resolve(value)
+        }
+        const safeReject = (err: unknown): void => {
+            if (settled) return
+            settled = true
+            reject(err instanceof Error ? err : new Error(String(err)))
+        }
+
         const req = https.request(
             urlStr,
             {
@@ -117,23 +130,23 @@ function fetchPinnedHttpsJwks(
                 timeout: JWKS_TIMEOUT_MS,
             },
             (res) => {
-                readHttpsJwksBody(req, res, resolve, reject)
+                readHttpsJwksBody(req, res, safeResolve, safeReject)
             }
         )
-        req.on('error', reject)
+        req.on('error', safeReject)
         req.on('timeout', () => {
             req.destroy()
-            reject(new Error('JWKS request timeout'))
+            safeReject(new Error('JWKS request timeout'))
         })
         if (init?.signal !== undefined && init.signal !== null) {
             if (init.signal.aborted) {
                 req.destroy()
-                reject(new Error('JWKS request aborted'))
+                safeReject(new Error('JWKS request aborted'))
                 return
             }
             const onAbort = (): void => {
                 req.destroy()
-                reject(new Error('JWKS request aborted'))
+                safeReject(new Error('JWKS request aborted'))
             }
             init.signal.addEventListener('abort', onAbort, { once: true })
             req.on('close', () => {

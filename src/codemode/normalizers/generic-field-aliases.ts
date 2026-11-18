@@ -140,8 +140,50 @@ function coerceNonProjectNumericField(
     }
 }
 
+const READ_ONLY_PROJECT_FILTER_METHODS = new Set([
+    'get_recent_entries',
+    'getRecentEntries',
+    'search_entries',
+    'searchEntries',
+    'search_by_date_range',
+    'searchByDateRange',
+    'semantic_search',
+    'semanticSearch',
+    'hybrid_search',
+    'hybridSearch',
+    'get_statistics',
+    'getStatistics',
+    'list_deleted_entries',
+    'listDeletedEntries',
+    'get_audit_log',
+    'getAuditLog',
+    'search_audit_log',
+    'searchAuditLog',
+    'get_cross_project_insights',
+    'getCrossProjectInsights',
+    'team_get_recent',
+    'teamGetRecent',
+    'team_search',
+    'teamSearch',
+    'team_search_by_date_range',
+    'teamSearchByDateRange',
+    'team_semantic_search',
+    'teamSemanticSearch',
+    'team_list_deleted_entries',
+    'teamListDeletedEntries',
+    'cross_team_search',
+    'crossTeamSearch',
+    'team_get_statistics',
+    'teamGetStatistics',
+    'team_get_cross_project_insights',
+    'teamGetCrossProjectInsights',
+    'team_get_collaboration_matrix',
+    'teamGetCollaborationMatrix',
+])
+
 export function coerceNumericStringIds(
     obj: Record<string, unknown>,
+    methodName?: string
 ): { error: Record<string, unknown> } | undefined {
     for (const key of NUMERIC_ID_KEYS) {
         const val = obj[key]
@@ -149,6 +191,14 @@ export function coerceNumericStringIds(
         const strVal = val.trim()
         if (strVal === '') continue
         if (key === 'project_number' || key === 'projectNumber') {
+            if (
+                strVal === '0' &&
+                methodName !== undefined &&
+                READ_ONLY_PROJECT_FILTER_METHODS.has(methodName)
+            ) {
+                obj[key] = 0
+                continue
+            }
             const canonical = parseCanonicalPositiveInt(strVal)
             if (canonical !== undefined) {
                 obj[key] = canonical
@@ -233,7 +283,11 @@ function renameScoreAliases(obj: Record<string, unknown>): void {
     ] as const) {
         if (obj[aliasKey] !== undefined) {
             if (obj[targetKey] === undefined) {
-                obj[targetKey] = typeof obj[aliasKey] === 'string' ? Number(obj[aliasKey]) : obj[aliasKey]
+                const rawScore = obj[aliasKey]
+                obj[targetKey] =
+                    typeof rawScore === 'string' && rawScore.trim() !== ''
+                        ? Number(rawScore)
+                        : rawScore
             }
             Reflect.deleteProperty(obj, aliasKey)
         }

@@ -226,7 +226,8 @@ function loadExportAnchors(
             const serializedAnchors: FrontmatterAnchor[] = anchors.map((a) => {
                 if (
                     a.anchorType === 'file' &&
-                    (a.status === undefined || a.status === 'pending' || a.status === 'valid')
+                    !a.anchorPath.includes('#') &&
+                    (a.status === undefined || a.status === 'pending')
                 ) {
                     return a.anchorPath
                 }

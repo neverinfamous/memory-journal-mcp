@@ -2,8 +2,11 @@
  * Title and auto_context healers used by the shared hallucination healer.
  */
 
-import { logger } from '../../../utils/logger.js'
-import { healAutoContext, healSessionSummaryContent } from '../../../codemode/normalizers/shared-utils.js'
+import {
+    healAutoContext,
+    healSessionSummaryContent,
+    logNormalizerDebug,
+} from '../../../codemode/normalizers/shared-utils.js'
 import {
     RELATIONSHIP_TARGET_KEYS,
     RELATIONSHIP_TYPE_KEYS,
@@ -54,7 +57,7 @@ function repairSingleQuotedJson(raw: string): string | undefined {
         const parsed = JSON.parse(fixed) as Record<string, unknown>
         return JSON.stringify(parsed)
     } catch (err) {
-        logger.debug('Could not repair single-quoted auto_context JSON', {
+        logNormalizerDebug('Could not repair single-quoted auto_context JSON', {
             module: 'HallucinationHealer',
             error: err instanceof Error ? err.message : String(err),
         })
@@ -74,7 +77,7 @@ function healAutoContextField(obj: Record<string, unknown>): boolean {
             obj['auto_context'] = JSON.stringify(obj['auto_context'])
             modified = true
         } catch (err) {
-            logger.debug('Could not stringify auto_context object', {
+            logNormalizerDebug('Could not stringify auto_context object', {
                 module: 'HallucinationHealer',
                 error: err instanceof Error ? err.message : String(err),
             })

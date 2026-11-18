@@ -45,14 +45,13 @@ export function isSyntacticallyValidJs(trimmed: string): boolean {
         new vm.Script(trimmed)
         return true
     } catch {
-        if (trimmed.startsWith('{') && trimmed.endsWith('}')) {
-            try {
-                new vm.Script(`(${trimmed})`)
-                return true
-            } catch {
-                return false
-            }
-        }
+        // Retry wrapped object literal syntax below
+    }
+    if (!trimmed.startsWith('{') || !trimmed.endsWith('}')) return false
+    try {
+        new vm.Script(`(${trimmed})`)
+        return true
+    } catch {
         return false
     }
 }
@@ -281,9 +280,36 @@ export function extractNestedMaxResultSize(
         : requested
 }
 
+const EXECUTE_CODE_CONTROL_KEYS = new Set([
+    'repo',
+    'repo_name',
+    'repoName',
+    'repository',
+    'timeout',
+    'timeout_ms',
+    'timeoutMs',
+    'max_result_size',
+    'maxResultSize',
+    'max_result_size_bytes',
+    'maxResultSizeBytes',
+    'max_result_size_kb',
+    'maxResultSizeKb',
+    'max_bytes',
+    'maxBytes',
+    'auto_version',
+    'autoVersion',
+    'readonly',
+    'read_only',
+    'readOnly',
+    'dry_run',
+    'dryRun',
+    'use_test_db',
+    'useTestDb',
+])
+
 /**
- * Merges narrowed `workspace_id`, `project_number`, `repo`, and `session_id` from nested `argRec`
- * into synthesized entry payloads before calling `createEntry`.
+ * Merges narrowed `workspace_id`, `project_number`, and `session_id` from nested `argRec`
+ * into synthesized entry payloads while stripping `executeCode`-only control keys (`repo`, timers, limits).
  */
 export function mergeNestedSynthesizedScope(
     payload: unknown,
@@ -294,6 +320,9 @@ export function mergeNestedSynthesizedScope(
 ): unknown {
     if (!isNestedPlainRecord(payload)) return payload
     const merged: Record<string, unknown> = { ...payload }
+    for (const key of EXECUTE_CODE_CONTROL_KEYS) {
+        if (key in merged) Reflect.deleteProperty(merged, key)
+    }
     const effWs = narrowed.workspaceId ?? pinnedWorkspace
     if (effWs !== undefined && merged['workspace_id'] === undefined && merged['workspaceId'] === undefined) {
         merged['workspace_id'] = effWs
@@ -301,15 +330,6 @@ export function mergeNestedSynthesizedScope(
     const effProj = narrowed.projectNumber ?? pinnedProjectNumber
     if (effProj !== undefined && merged['project_number'] === undefined && merged['projectNumber'] === undefined) {
         merged['project_number'] = effProj
-    }
-    const repoVal = argRec?.['repo'] ?? argRec?.['repo_name'] ?? argRec?.['repoName']
-    if (
-        typeof repoVal === 'string' &&
-        repoVal.trim() !== '' &&
-        merged['repo'] === undefined &&
-        merged['repo_name'] === undefined
-    ) {
-        merged['repo'] = repoVal.trim()
     }
     const sessId = extractNestedSessionId(argRec)
     if (sessId !== undefined && merged['session_id'] === undefined && merged['sessionId'] === undefined) {

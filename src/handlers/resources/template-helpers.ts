@@ -11,6 +11,7 @@ import {
 } from '../../github/github-integration/index.js'
 import type { ResourceContext } from './shared.js'
 import { fenceUntrustedInline, resourceWorkspace } from './shared.js'
+import { markUntrustedContent } from '../../utils/security-utils.js'
 import { ValidationError } from '../../types/errors.js'
 import type { enrichCommits } from '../../github/commit-references/index.js'
 
@@ -120,6 +121,9 @@ export function fenceEnrichedCommits(commits: EnrichedCommit[]): EnrichedCommit[
         ...commit,
         subject: fenceUntrustedInline(commit.subject),
         authorName: fenceUntrustedInline(commit.authorName),
+        ...(typeof commit.body === 'string' && commit.body.trim() !== ''
+            ? { body: markUntrustedContent(commit.body) }
+            : {}),
         references: commit.references.map((ref) => ({
             ...ref,
             ...(ref.title !== undefined ? { title: fenceUntrustedInline(ref.title) } : {}),

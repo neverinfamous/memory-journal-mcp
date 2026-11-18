@@ -234,10 +234,11 @@ function runDryRunImportValidation(
         } else {
             result.created++
         }
+        const storedProj = effectiveProjNum ?? existing?.projectNumber ?? undefined
         if (file.metadata.mj_id !== undefined) {
             inBatchScopes.set(file.metadata.mj_id, {
                 workspaceId: effectiveWsId ?? 'default',
-                ...(effectiveProjNum !== undefined ? { projectNumber: effectiveProjNum } : {}),
+                ...(storedProj !== undefined ? { projectNumber: storedProj } : {}),
             })
         }
         if (file.metadata.relationships !== undefined && file.metadata.relationships.length > 0) {
@@ -246,7 +247,7 @@ function runDryRunImportValidation(
                 filename: file.filename,
                 relationships: file.metadata.relationships,
                 workspaceId: effectiveWsId,
-                projectNumber: effectiveProjNum,
+                projectNumber: storedProj,
             })
         }
     }
@@ -297,7 +298,7 @@ function upsertParsedFile(
             entry: updated,
             entryId: metadata.mj_id,
             workspaceId: updated.workspaceId ?? effectiveWsId,
-            projectNumber: effectiveProjNum,
+            projectNumber: updated.projectNumber ?? effectiveProjNum ?? existing.projectNumber ?? undefined,
         }
     }
 

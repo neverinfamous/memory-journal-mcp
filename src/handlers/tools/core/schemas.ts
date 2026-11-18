@@ -32,14 +32,14 @@ export const CreateEntrySchema = z.preprocess(
         is_personal: z.boolean().optional().default(true),
         significance_type: z.enum(SIGNIFICANCE_TYPES).optional(),
         workspace_id: z.string().min(1, 'workspace_id (repository name) is required').optional(),
-        project_number: z.number().int().optional(),
+        project_number: StrictProjectNumberSchema.optional(),
         project_owner: z.string().optional(),
-        issue_number: z.number().optional(),
+        issue_number: z.number().int().positive().optional(),
         issue_url: z.string().optional(),
-        pr_number: z.number().optional(),
+        pr_number: z.number().int().positive().optional(),
         pr_url: z.string().optional(),
         pr_status: z.enum(['draft', 'open', 'merged', 'closed']).optional(),
-        workflow_run_id: z.number().optional(),
+        workflow_run_id: z.number().int().positive().optional(),
         workflow_name: z.string().optional(),
         workflow_status: z.enum(['queued', 'in_progress', 'completed']).optional(),
         impact_score: z.number().min(0).max(1).optional(),
@@ -57,7 +57,7 @@ export const CreateEntrySchema = z.preprocess(
             z.preprocess(
                 preprocessRelationshipItem,
                 z.object({
-                    targetId: z.number(),
+                    targetId: z.number().int().positive(),
                     relationType: z
                         .enum([
                             'evolves_from',

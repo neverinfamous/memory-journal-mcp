@@ -26,12 +26,50 @@ import {
     markUntrustedContentInline,
     sanitizeErrorForLogging,
 } from '../utils/security-utils.js'
+import { ValidationError } from '../types/errors.js'
+import { parseCanonicalPositiveInt } from '../utils/safe-positive-int.js'
 import type { AuditLogger } from './audit-logger.js'
 import type { AuditEntry } from './types.js'
 import { extractAuditScopeFromUri, matchesAuditFilters } from './audit-query-helpers.js'
 
-async function fetchAuditEntries(auditLogger: AuditLogger, uri: string): Promise<AuditEntry[]> {
+function parseAuditResourceQueryScope(uri: string): {
+    workspaceId?: string
+    projectNumber?: number
+} {
     const scopeFilter = extractAuditScopeFromUri(uri)
+    let explicitZeroProject = false
+    try {
+        const parsed = new URL(uri)
+        const rawWs = parsed.searchParams.get('workspace_id')
+        if (rawWs !== null && rawWs.trim().length === 0) {
+            throw new ValidationError('Invalid workspace_id query parameter: must be non-empty.')
+        }
+        const rawProj = parsed.searchParams.get('project_number')
+        if (rawProj !== null) {
+            const trimmed = rawProj.trim()
+            if (trimmed === '0') {
+                explicitZeroProject = true
+            } else if (parseCanonicalPositiveInt(trimmed) === undefined) {
+                throw new ValidationError(
+                    `Invalid project_number query parameter '${rawProj}': expected canonical non-negative integer.`
+                )
+            }
+        }
+    } catch (err) {
+        if (err instanceof ValidationError) throw err
+    }
+    return {
+        ...(scopeFilter.workspaceId !== undefined ? { workspaceId: scopeFilter.workspaceId } : {}),
+        ...(explicitZeroProject
+            ? { projectNumber: 0 }
+            : scopeFilter.projectNumber !== undefined
+              ? { projectNumber: scopeFilter.projectNumber }
+              : {}),
+    }
+}
+
+async function fetchAuditEntries(auditLogger: AuditLogger, uri: string): Promise<AuditEntry[]> {
+    const scopeFilter = parseAuditResourceQueryScope(uri)
     const hasScopeFilter =
         scopeFilter.workspaceId !== undefined || scopeFilter.projectNumber !== undefined
     if (!hasScopeFilter) {

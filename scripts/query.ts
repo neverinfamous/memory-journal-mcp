@@ -1,10 +1,13 @@
 import path from 'node:path'
 import Database from 'better-sqlite3'
 
-const dbPath = process.env['DB_PATH'] ?? path.resolve(process.cwd(), 'data/memory_journal.db')
+const dbPath =
+    process.env['MEMORY_JOURNAL_DB_PATH'] ??
+    process.env['DB_PATH'] ??
+    path.resolve(process.cwd(), 'data/memory_journal.db')
 const db = new Database(dbPath, { readonly: true, fileMustExist: true })
 try {
-    const rawKey = process.env['DB_ENCRYPTION_KEY']
+    const rawKey = process.env['MJ_DB_ENCRYPTION_KEY'] ?? process.env['DB_ENCRYPTION_KEY']
     if (rawKey !== undefined && rawKey !== '') {
         if (rawKey.startsWith("x'") || rawKey.startsWith("X'")) {
             if (!/^x'(?:[0-9a-fA-F]{2})+'$/i.test(rawKey)) {

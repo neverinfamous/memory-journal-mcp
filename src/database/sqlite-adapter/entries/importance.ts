@@ -2,7 +2,12 @@ import type { ImportanceBreakdown, ImportanceResult, JournalEntry } from '../../
 import { effectiveWorkspace } from '../../workspace-scope.js'
 import { type EntriesSharedContext, rowToObject } from './shared.js'
 import { getEntriesByIds } from './crud.js'
-import { DUAL_IN_PARAM_BUCKETS, SCOPED_IN_PARAM_BUCKETS, bucketInParams } from '../row-helpers.js'
+import { SCOPED_IN_PARAM_BUCKETS, bucketInParams } from '../row-helpers.js'
+import {
+    type ImportanceStats,
+    computeBreakdownScore,
+    loadImportanceStats,
+} from './importance-stats-helpers.js'
 
 export const IMPORTANCE_WEIGHTS = {
     significance: 0.3,
@@ -20,7 +25,10 @@ export const RECENCY_WINDOW_DAYS = 90
 /** Baseline significance value when significance_type is set without a higher impact_score */
 export const SIGNIFICANCE_TYPE_BASELINE = 0.5
 
-function buildStatsCteBody(seedCte?: { name: string; col: string }): string {
+function buildStatsCteBody(
+    seedCte?: { name: string; col: string },
+    scopedPeerWorkspace = false
+): string {
     const seedRelFrom = seedCte
         ? `FROM ${seedCte.name} s CROSS JOIN relationships r ON r.from_entry_id = s.${seedCte.col}`
         : 'FROM relationships r'
@@ -30,6 +38,8 @@ function buildStatsCteBody(seedCte?: { name: string; col: string }): string {
     const anchorFrom = seedCte
         ? `FROM ${seedCte.name} s CROSS JOIN entry_anchors ea ON ea.entry_id = s.${seedCte.col}`
         : 'FROM entry_anchors ea'
+    const peerWsClause =
+        seedCte !== undefined && scopedPeerWorkspace ? ' AND peer.workspace_id = s.workspace_id' : ''
     return `
         rel_stats AS (
             SELECT entry_id,
@@ -38,11 +48,11 @@ function buildStatsCteBody(seedCte?: { name: string; col: string }): string {
             FROM (
                 SELECT r.from_entry_id AS entry_id, r.relationship_type
                 ${seedRelFrom}
-                JOIN memory_journal peer ON peer.id = r.to_entry_id AND peer.deleted_at IS NULL AND r.from_entry_id != r.to_entry_id
+                JOIN memory_journal peer ON peer.id = r.to_entry_id AND peer.deleted_at IS NULL AND r.from_entry_id != r.to_entry_id${peerWsClause}
                 UNION ALL
                 SELECT r.to_entry_id AS entry_id, r.relationship_type
                 ${seedRelTo}
-                JOIN memory_journal peer ON peer.id = r.from_entry_id AND peer.deleted_at IS NULL AND r.from_entry_id != r.to_entry_id
+                JOIN memory_journal peer ON peer.id = r.from_entry_id AND peer.deleted_at IS NULL AND r.from_entry_id != r.to_entry_id${peerWsClause}
             )
             GROUP BY entry_id
         ),
@@ -71,8 +81,8 @@ export function buildImportanceCte(scopedToWorkspace = false): string {
     if (scopedToWorkspace) {
         return `
         ws_entries AS (
-            SELECT id FROM memory_journal WHERE deleted_at IS NULL AND workspace_id = ?
-        ),${buildStatsCteBody({ name: 'ws_entries', col: 'id' })}
+            SELECT id, workspace_id FROM memory_journal WHERE deleted_at IS NULL AND workspace_id = ?
+        ),${buildStatsCteBody({ name: 'ws_entries', col: 'id' }, true)}
     `
     }
     return buildStatsCteBody()
@@ -86,11 +96,11 @@ export function buildScopedFtsImportanceCte(scopedWorkspace = false): string {
     const wsFilter = scopedWorkspace ? ' AND mj.workspace_id = ?' : ''
     return `
         fts_hits AS MATERIALIZED (
-            SELECT fts.rowid AS entry_id, fts.rank AS fts_rank
+            SELECT fts.rowid AS entry_id, fts.rank AS fts_rank, mj.workspace_id AS workspace_id
             FROM fts_content fts
             CROSS JOIN memory_journal mj ON mj.id = fts.rowid
             WHERE fts_content MATCH ? AND mj.deleted_at IS NULL${wsFilter}
-        ),${buildStatsCteBody({ name: 'fts_hits', col: 'entry_id' })}
+        ),${buildStatsCteBody({ name: 'fts_hits', col: 'entry_id' }, scopedWorkspace)}
     `
 }
 
@@ -171,6 +181,7 @@ export function calculateImportance(
     const { db } = context
     const scopeId = effectiveWorkspace(workspaceId)
     const scoped = scopeId !== '*'
+    const peerWsClause = scoped ? ' AND p.workspace_id = ?' : ''
 
     const stmt = db.prepare(`SELECT
         m.significance_type as significanceType,
@@ -195,19 +206,21 @@ export function calculateImportance(
         FROM (
             SELECT r.relationship_type
             FROM relationships r
-            JOIN memory_journal p ON p.id = r.to_entry_id AND p.deleted_at IS NULL AND r.from_entry_id != r.to_entry_id
+            JOIN memory_journal p ON p.id = r.to_entry_id AND p.deleted_at IS NULL AND r.from_entry_id != r.to_entry_id${peerWsClause}
             WHERE r.from_entry_id = ?
             UNION ALL
             SELECT r.relationship_type
             FROM relationships r
-            JOIN memory_journal p ON p.id = r.from_entry_id AND p.deleted_at IS NULL
+            JOIN memory_journal p ON p.id = r.from_entry_id AND p.deleted_at IS NULL${peerWsClause}
             WHERE r.to_entry_id = ? AND r.from_entry_id != ?
         )
     ) rel ON 1 = 1
     WHERE m.id = ? AND m.deleted_at IS NULL${scoped ? ' AND m.workspace_id = ?' : ''}`)
 
-    const baseParams = [entryId, entryId, entryId, entryId, entryId]
-    const row = rowToObject(stmt.get(...(scoped ? [...baseParams, scopeId] : baseParams)))
+    const params = scoped
+        ? [entryId, scopeId, entryId, scopeId, entryId, entryId, entryId, scopeId]
+        : [entryId, entryId, entryId, entryId, entryId]
+    const row = rowToObject(stmt.get(...params))
 
     if (!row) return null
 
@@ -226,138 +239,32 @@ export function calculateImportance(
     })
 }
 
-/** Per-entry relationship/anchor statistics feeding the importance score. */
-interface ImportanceStats {
-    relCount: number
-    causalCount: number
-    worstStatusRank: number
-}
-
-function loadRelStatsChunk(
-    db: EntriesSharedContext['db'],
-    bucket: number[],
-    relData: Map<number, ImportanceStats>
-): void {
-    const marks = bucket.map(() => '?').join(', ')
-    const sql = `
-        SELECT entry_id,
-               COUNT(*) AS rel_count,
-               SUM(CASE WHEN relationship_type IN ('blocked_by', 'resolved', 'caused') THEN 1 ELSE 0 END) AS causal_count
-        FROM (
-            SELECT r.from_entry_id AS entry_id, r.relationship_type
-            FROM relationships r
-            JOIN memory_journal peer ON peer.id = r.to_entry_id AND peer.deleted_at IS NULL AND r.from_entry_id != r.to_entry_id
-            WHERE r.from_entry_id IN (${marks})
-            UNION ALL
-            SELECT r.to_entry_id AS entry_id, r.relationship_type
-            FROM relationships r
-            JOIN memory_journal peer ON peer.id = r.from_entry_id AND peer.deleted_at IS NULL AND r.from_entry_id != r.to_entry_id
-            WHERE r.to_entry_id IN (${marks})
-        )
-        GROUP BY entry_id
-    `
-    const rows = db.prepare(sql).all(...bucket, ...bucket) as {
-        entry_id: number
-        rel_count: number
-        causal_count: number
-    }[]
-    for (const row of rows) {
-        const d = relData.get(row.entry_id)
-        if (d) {
-            d.relCount = row.rel_count
-            d.causalCount = row.causal_count
-        }
-    }
-}
-
-function loadAnchorStatsChunk(
-    db: EntriesSharedContext['db'],
-    bucket: number[],
-    relData: Map<number, ImportanceStats>
-): void {
-    const marks = bucket.map(() => '?').join(', ')
-    const anchorSql = `
-        SELECT entry_id,
-               MIN(CASE status WHEN 'invalidated' THEN 1 WHEN 'stale' THEN 2 ELSE 3 END) AS worst_status_rank
-        FROM entry_anchors WHERE entry_id IN (${marks})
-        GROUP BY entry_id
-    `
-    const anchorRows = db.prepare(anchorSql).all(...bucket) as {
-        entry_id: number
-        worst_status_rank: number
-    }[]
-    for (const row of anchorRows) {
-        const d = relData.get(row.entry_id)
-        if (d) {
-            d.worstStatusRank = row.worst_status_rank
-        }
-    }
-}
-
-/**
- * Load relationship counts and worst anchor status for a set of entries using bucketed batched queries.
- * Every id gets an entry (zero counts, rank 3 when no data).
- */
-function loadImportanceStats(
-    db: EntriesSharedContext['db'],
-    validIds: number[]
-): Map<number, ImportanceStats> {
-    const relData = new Map<number, ImportanceStats>()
-    for (const id of validIds) {
-        relData.set(id, { relCount: 0, causalCount: 0, worstStatusRank: 3 })
-    }
-    for (const { params } of bucketInParams(validIds, DUAL_IN_PARAM_BUCKETS)) {
-        loadRelStatsChunk(db, params, relData)
-    }
-    for (const { params } of bucketInParams(validIds)) {
-        loadAnchorStatsChunk(db, params, relData)
-    }
-    return relData
-}
-
-function scoreWithStats(
-    entry: {
-        impactScore?: number | null
-        significanceType?: string | null
-        trustScore?: number | null
-        validationStatus?: string | null
-        timestamp: string
-    },
-    stats: ImportanceStats,
-    nowMs: number
-): ImportanceResult {
-    return computeImportanceBreakdownAndScore({
-        impactScore: entry.impactScore ?? null,
-        significanceType: entry.significanceType ?? null,
-        trustScore: entry.trustScore ?? null,
-        validationStatus: entry.validationStatus ?? null,
-        timestamp: entry.timestamp,
-        relCount: stats.relCount,
-        causalCount: stats.causalCount,
-        worstStatusRank: stats.worstStatusRank,
-        nowMs,
-    })
-}
-
 /**
  * Batch-attaches rounded importanceScore values directly onto an array of hydrated JournalEntry objects.
  * Uses only 2 bucketed SQL query sets (relationships + entry_anchors) for all entries.
  */
 export function attachImportanceScoresToEntries(
     context: EntriesSharedContext,
-    entries: JournalEntry[]
+    entries: JournalEntry[],
+    workspaceId?: string
 ): void {
     if (entries.length === 0) return
 
     const { db } = context
+    const scopeId = workspaceId !== undefined ? effectiveWorkspace(workspaceId) : 'scoped'
     const validIds = entries.map((e) => e.id)
-    const relData = loadImportanceStats(db, validIds)
+    const relData = loadImportanceStats(db, validIds, scopeId !== '*')
     const nowMs = Date.now()
     const defaultStats: ImportanceStats = { relCount: 0, causalCount: 0, worstStatusRank: 3 }
 
     for (const entry of entries) {
         const stats = relData.get(entry.id) ?? defaultStats
-        entry.importanceScore = scoreWithStats(entry, stats, nowMs).score
+        entry.importanceScore = computeBreakdownScore(
+            entry,
+            stats,
+            nowMs,
+            computeImportanceBreakdownAndScore
+        ).score
     }
 }
 
@@ -399,12 +306,21 @@ export function getImportanceScoresByIds(
 
     const relData = loadImportanceStats(
         db,
-        scalarRows.map((r) => r.id)
+        scalarRows.map((r) => r.id),
+        scopeId !== '*'
     )
     const nowMs = Date.now()
     const defaultStats: ImportanceStats = { relCount: 0, causalCount: 0, worstStatusRank: 3 }
     for (const row of scalarRows) {
-        result.set(row.id, scoreWithStats(row, relData.get(row.id) ?? defaultStats, nowMs))
+        result.set(
+            row.id,
+            computeBreakdownScore(
+                row,
+                relData.get(row.id) ?? defaultStats,
+                nowMs,
+                computeImportanceBreakdownAndScore
+            )
+        )
     }
     return result
 }
@@ -421,14 +337,23 @@ export function getEntriesByIdsWithImportance(
     if (entriesMap.size === 0) return result
 
     const { db } = context
+    const scopeId = effectiveWorkspace(workspaceId)
     const validIds = Array.from(entriesMap.keys())
-    const relData = loadImportanceStats(db, validIds)
+    const relData = loadImportanceStats(db, validIds, scopeId !== '*')
     const nowMs = Date.now()
     const defaultStats: ImportanceStats = { relCount: 0, causalCount: 0, worstStatusRank: 3 }
 
     for (const [id, entry] of entriesMap.entries()) {
         const stats = relData.get(id) ?? defaultStats
-        result.set(id, { entry, importance: scoreWithStats(entry, stats, nowMs) })
+        result.set(id, {
+            entry,
+            importance: computeBreakdownScore(
+                entry,
+                stats,
+                nowMs,
+                computeImportanceBreakdownAndScore
+            ),
+        })
     }
 
     return result

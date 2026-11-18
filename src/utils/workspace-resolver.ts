@@ -7,16 +7,20 @@ import {
     type ResolvedContext,
 } from './workspace-resolver-registry.js'
 import {
+    clearActiveSessionProject,
+    getActiveSessionProject,
+    setActiveSessionProject,
+} from './workspace-resolver-session.js'
+import {
+    registerActiveSessionReader,
     resolveProjectContextWithRegistry,
     unclaimedByOtherWorkspace,
     type WorkspaceResolverPureConfig,
 } from './workspace-resolver-pure.js'
 
-export {
-    setActiveSessionProject,
-    getActiveSessionProject,
-    clearActiveSessionProject,
-} from './workspace-resolver-session.js'
+registerActiveSessionReader(getActiveSessionProject)
+
+export { setActiveSessionProject, getActiveSessionProject, clearActiveSessionProject }
 export {
     loadProjectRegistryFromConfig,
     PROJECT_KEYWORD_ALIASES,

@@ -90,6 +90,9 @@ describe('WorkerSandbox', () => {
     it('should support mj.projects() as callable function and mj.getJournal("proj")', async () => {
         const sandbox = new WorkerSandbox()
         const bindings = {
+            admin: {
+                list_projects: async () => ({ success: true, projects: {} }),
+            },
             analytics: {
                 get_cross_project_insights: async () => ({ success: true, insights: [] }),
             },

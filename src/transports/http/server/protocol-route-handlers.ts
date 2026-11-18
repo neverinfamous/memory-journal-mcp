@@ -117,6 +117,11 @@ export function createStatelessHandler(
                     activeServers.delete(server)
                     return originalClose()
                 }
+                const prevOnClose = server.server.onclose
+                server.server.onclose = () => {
+                    activeServers.delete(server)
+                    prevOnClose?.()
+                }
                 return server
             },
             { legacy: 'reject' }

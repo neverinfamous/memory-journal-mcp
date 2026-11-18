@@ -119,12 +119,12 @@ export class BackupManager {
         for (const dirent of dirents) {
             const filename = dirent.name
             if (!/\.db$/i.test(filename)) continue
-            if (!dirent.isFile() && !dirent.isSymbolicLink()) continue
+            if (!dirent.isFile()) continue
 
             const filePath = path.join(backupsDir, filename)
             try {
-                const stats = fs.statSync(filePath)
-                if (stats.isFile()) {
+                const stats = fs.lstatSync(filePath)
+                if (stats.isFile() && !stats.isSymbolicLink()) {
                     backups.push({
                         filename,
                         path: filePath,
@@ -196,6 +196,11 @@ export class BackupManager {
         previousEntryCount: number
         newEntryCount: number
     }> {
+        if (this.ctx.getDbPath() === ':memory:') {
+            throw new ValidationError(
+                "Restore failed: cannot restore file backup into an in-memory (':memory:') database"
+            )
+        }
         const backupsDir = this.ctx.getBackupsDir()
         const backupPath = await resolveValidatedRestorePath(backupsDir, filename)
 

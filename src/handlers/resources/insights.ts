@@ -9,7 +9,7 @@
 import { ICON_ANALYTICS } from '../../constants/icons.js'
 import { withPriority, ASSISTANT_FOCUSED } from '../../utils/resource-annotations.js'
 import type { InternalResourceDef, ResourceContext, ResourceResult } from './shared.js'
-import { resourceWorkspace, sliceUntrustedInline } from './shared.js'
+import { resourceProjectNumber, resourceWorkspace, sliceUntrustedInline } from './shared.js'
 import { sanitizeAuthor } from '../../utils/security-utils.js'
 import { enforceTeamResourceRbac } from './team.js'
 import { ProtocolError, ProtocolErrorCode } from '@modelcontextprotocol/server'
@@ -135,6 +135,7 @@ export const teamCollaborationResource: InternalResourceDef = {
         }
 
         const wsId = resourceWorkspace(context)
+        const projectNumber = resourceProjectNumber(context, wsId)
         enforceTeamResourceRbac(context, wsId)
 
         // Compute collaboration matrix live from team DB
@@ -143,6 +144,7 @@ export const teamCollaborationResource: InternalResourceDef = {
                 period: 'month',
                 limit: 100,
                 workspaceId: wsId,
+                ...(projectNumber !== undefined ? { projectNumber } : {}),
             })
             const sanitizedMatrix = {
                 ...matrix,

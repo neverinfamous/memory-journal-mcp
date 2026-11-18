@@ -52,12 +52,12 @@ export const TeamCreateEntrySchema = z.preprocess(
             project_number: StrictProjectNumberSchema.optional(),
             workspace_id: z.string().min(1, 'workspace_id (repository name) is required').optional(),
             project_owner: z.string().optional(),
-            issue_number: z.number().optional(),
+            issue_number: z.number().int().positive().optional(),
             issue_url: z.string().optional(),
-            pr_number: z.number().optional(),
+            pr_number: z.number().int().positive().optional(),
             pr_url: z.string().optional(),
             pr_status: z.enum(['draft', 'open', 'merged', 'closed']).optional(),
-            workflow_run_id: z.number().optional(),
+            workflow_run_id: z.number().int().positive().optional(),
             workflow_name: z.string().optional(),
             workflow_status: z.enum(['queued', 'in_progress', 'completed']).optional(),
             author: z.string().optional(),
@@ -83,7 +83,7 @@ export const TeamCreateEntrySchema = z.preprocess(
                     z.preprocess(
                         preprocessRelationshipItem,
                         z.object({
-                            targetId: z.number(),
+                            targetId: z.number().int().positive(),
                             relationType: z
                                 .enum(TEAM_RELATION_TYPES)
                                 .optional()

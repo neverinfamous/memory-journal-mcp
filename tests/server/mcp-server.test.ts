@@ -669,7 +669,11 @@ describe('McpServer', function () {
             ])
 
             const spyCall = vi.spyOn(toolsModule, 'callTool').mockResolvedValueOnce({
-                invalidField: 10n,
+                invalidField: {
+                    toJSON(): never {
+                        throw new TypeError('Unserializable payload')
+                    },
+                },
             })
             await createServer({ transport: 'stdio', dbPath: './.test-output/vitest/test-server.db' })
 
@@ -692,7 +696,7 @@ describe('McpServer', function () {
                 error: string
             }
             expect(parsed.success).toBe(false)
-            expect(parsed.error).toContain('BigInt')
+            expect(parsed.error).toContain('Unserializable payload')
 
             spyTools.mockRestore()
             spyCall.mockRestore()

@@ -22,6 +22,7 @@ import {
     missingTeamProjectNumberError,
     resolveTeamProjectNumber,
 } from './helpers.js'
+import { resolveTeamMutationProjectNumber } from './admin-tools/team-pk-scope-helpers.js'
 import { TeamAddToVectorIndexSchema, TeamSemanticSearchSchema } from './schemas.js'
 
 const QUALITY_FLOOR = 0.5
@@ -332,9 +333,14 @@ export async function executeTeamAddToVectorIndex(
         }
 
         const wsId = resolveWriteWorkspaceId(workspace_id, project_number, context.config)
-        const resolvedProj = resolveTeamProjectNumber(context, wsId, project_number, workspace_id)
         const entry = teamDb.getEntryById(entry_id, wsId)
-        const projectNumber = resolvedProj ?? entry?.projectNumber
+        const projectNumber = resolveTeamMutationProjectNumber(
+            context,
+            wsId,
+            project_number,
+            workspace_id,
+            entry?.projectNumber
+        )
         if (projectNumber === undefined || projectNumber === null) {
             return {
                 success: false,

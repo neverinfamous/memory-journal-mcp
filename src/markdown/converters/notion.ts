@@ -13,7 +13,7 @@
 import type { ConvertedFile } from './index.js'
 import type { FrontmatterData } from '../frontmatter.js'
 import { posix } from 'node:path'
-import { addBoundedTag, toBoundedTags } from './utils.js'
+import { addBoundedTag, toBoundedTags, transformOutsideCodeFences } from './utils.js'
 
 function extractNotionDirectoryTags(posixFile: string, mergedTags: Set<string>): void {
     // Notion nested exports look like: "Engineering a8f9.../Architecture f7e.../My Doc.md"
@@ -49,14 +49,12 @@ export function convertNotion(
     const mergedTags = new Set<string>()
     extractNotionDirectoryTags(posixFile, mergedTags)
 
-    // 2. Process Body Text
-    let processedBody = content
-
-    // Clean up bounded internal links: [Page Title](Page%20Title%20hash.md) -> Page Title
-    processedBody = processedBody.replace(/\[([^\]]{1,500})\]\([^)\n]{1,500}\.md\)/gi, '$1')
-
-    // Clean up bounded image links with Notion hashes to avoid broken local refs in journal
-    processedBody = processedBody.replace(/!\[([^\]]{0,500})\]\([^)\n]{1,500}\)/gi, '> _Image: $1_')
+    // 2. Process Body Text (preserve links and images inside fenced code blocks)
+    let processedBody = transformOutsideCodeFences(content, (segment) =>
+        segment
+            .replace(/\[([^\]]{1,500})\]\([^)\n]{1,500}\.md\)/gi, '$1')
+            .replace(/!\[([^\]]{0,500})\]\([^)\n]{1,500}\)/gi, '> _Image: $1_')
+    )
 
     // Check for a title in the first line
     const lines = processedBody.split('\n')

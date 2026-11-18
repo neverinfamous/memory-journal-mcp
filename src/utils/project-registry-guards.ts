@@ -1,6 +1,10 @@
 import fs from 'node:fs'
 import path from 'node:path'
-import { hasWinReservedDeviceSegment } from './path-safety.js'
+import {
+    hasTrailingDotOrSpaceSegment,
+    hasUnsafeAdsColon,
+    hasWinReservedDeviceSegment,
+} from './path-safety.js'
 import { assertSafeDirectoryPath } from './security-utils.js'
 
 const FORBIDDEN_PROJECT_KEYS = new Set(['__proto__', 'constructor', 'prototype'])
@@ -49,11 +53,17 @@ function isSystemOrRootDirectory(
     const driveStripped = forwardResolved.replace(/^[a-z]:/, '')
 
     for (const candidate of [forwardResolved, forwardRaw, driveStripped]) {
-        if (candidate === '' || SYSTEM_DIR_EXACT.has(candidate)) {
-            return true
-        }
-        if (SYSTEM_DIR_PREFIXES.some((prefix) => candidate.startsWith(prefix))) {
-            return true
+        const trimmedSegs = candidate
+            .split('/')
+            .map((s, i) => (i === 0 && /^[a-z]:$/.test(s) ? s : s.replace(/[. ]+$/, '')))
+            .join('/')
+        for (const variant of trimmedSegs !== candidate ? [candidate, trimmedSegs] : [candidate]) {
+            if (variant === '' || SYSTEM_DIR_EXACT.has(variant)) {
+                return true
+            }
+            if (SYSTEM_DIR_PREFIXES.some((prefix) => variant.startsWith(prefix))) {
+                return true
+            }
         }
     }
     return false
@@ -94,7 +104,12 @@ export function isValidProjectPath(p: string, allowedRoots?: string[]): boolean 
     if (p === '' || p.includes('\0') || p.startsWith('\\\\') || p.startsWith('//')) {
         return false
     }
-    if (ENCODED_TRAVERSAL_RE.test(p) || p.replace(/^[A-Za-z]:/, '').includes(':') || hasWinReservedDeviceSegment(p)) {
+    if (
+        ENCODED_TRAVERSAL_RE.test(p) ||
+        hasUnsafeAdsColon(p) ||
+        hasWinReservedDeviceSegment(p) ||
+        hasTrailingDotOrSpaceSegment(p)
+    ) {
         return false
     }
     const pathMod = selectPathModule(p)
@@ -112,17 +127,26 @@ export function isValidProjectPath(p: string, allowedRoots?: string[]): boolean 
         return false
     }
 
-    let decoded = p
+    let decoded: string
     try {
         decoded = decodeURIComponent(p)
     } catch {
-        // Leave non-URI percent sequences as raw path characters
+        return false
     }
     if (decoded !== p) {
-        if (hasWinReservedDeviceSegment(decoded)) {
+        if (
+            decoded.includes('\0') ||
+            hasUnsafeAdsColon(decoded) ||
+            hasWinReservedDeviceSegment(decoded) ||
+            hasTrailingDotOrSpaceSegment(decoded) ||
+            decoded.replace(/\\/g, '/').split('/').includes('..')
+        ) {
             return false
         }
         const decodedPathMod = selectPathModule(decoded)
+        if (decodedPathMod.normalize(decoded).split(decodedPathMod.sep).includes('..')) {
+            return false
+        }
         const decodedResolved = decodedPathMod.resolve(decoded)
         if (
             isSystemOrRootDirectory(decoded, decodedResolved, decodedPathMod) ||

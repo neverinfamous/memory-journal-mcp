@@ -24,7 +24,10 @@ import {
     loadProjectRegistryFromConfig,
     resolveProjectNumberFromPath,
 } from '../../utils/workspace-resolver.js'
-import { uniqueWorkspaceForProject } from '../../utils/write-scope.js'
+import {
+    uniqueWorkspaceForProject,
+    workspaceForProject,
+} from '../../utils/write-scope.js'
 import {
     resolveFallbackRegistryRepo,
     resolveTargetRepoGithub,
@@ -309,6 +312,56 @@ export function resourceWorkspace(context: {
         if (byCwd !== undefined) return byCwd
     }
     return 'default'
+}
+
+/**
+ * Resolve the positive `project_number` active for `wsId` so team and analytics
+ * resources sharing a workspace key stay isolated by project.
+ */
+export function resourceProjectNumber(
+    context: {
+        briefingConfig?: Partial<BriefingConfig>
+        runtime?: ServerRuntime | object | null
+    },
+    wsId: string
+): number | undefined {
+    const cfg = context.briefingConfig
+    const registry = cfg?.projectRegistry ?? loadProjectRegistryFromConfig()
+    const canonical =
+        registry !== undefined ? (findCanonicalRegistryKey(wsId, registry) ?? wsId) : wsId
+    const registryProject = registry?.[canonical]?.project_number
+    if (registryProject !== undefined) return registryProject
+
+    const sessionCtx = getActiveSessionProject(context.runtime)
+    const sessionWs = sessionCtx.workspaceId?.trim()
+    const canonicalSessionWs =
+        sessionWs !== undefined && sessionWs !== '' && sessionWs !== '*'
+            ? registry !== undefined
+                ? (findCanonicalRegistryKey(sessionWs, registry) ?? sessionWs)
+                : sessionWs
+            : undefined
+
+    const matchesOwner = (projNum: number): boolean => {
+        try {
+            const owner = workspaceForProject(projNum, registry)
+            return owner === undefined || owner.toLowerCase() === canonical.toLowerCase()
+        } catch {
+            return false
+        }
+    }
+
+    if (
+        sessionCtx.projectNumber !== undefined &&
+        (canonicalSessionWs === undefined ||
+            canonicalSessionWs.toLowerCase() === canonical.toLowerCase()) &&
+        matchesOwner(sessionCtx.projectNumber)
+    ) {
+        return sessionCtx.projectNumber
+    }
+    if (cfg?.defaultProjectNumber !== undefined && matchesOwner(cfg.defaultProjectNumber)) {
+        return cfg.defaultProjectNumber
+    }
+    return undefined
 }
 
 export interface ResourceContext {

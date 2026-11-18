@@ -270,7 +270,7 @@ describe('Pass 31 Quality, Config, Prompt & Tooling Regressions (M1-M12, L1-L8, 
     })
 
     it('AP1-AP6: enforces canonical roots, multi-statement Detector 3 rules, fallback query hints, Copilot sanitization, and Win32 targets', async () => {
-        expect(AUDIT_PROMPT_REVISION).toBe('2026-11-18-audit-pass40')
+        expect(AUDIT_PROMPT_REVISION).toBe('2026-11-18-audit-pass41')
 
         const def = getCodeQualityAuditPromptDefinition()
         const promptResult = def.handler({ target: 'src' }, db, {

@@ -8,7 +8,7 @@ import type {
     ResourceContext,
     ResourceResult,
 } from './shared.js'
-import { resourceWorkspace } from './shared.js'
+import { resourceProjectNumber, resourceWorkspace } from './shared.js'
 import { logger } from '../../utils/logger.js'
 import { markUntrustedContent, sanitizeAuthor } from '../../utils/security-utils.js'
 import { enforceTeamRbac, getCallerIdentity } from '../tools/team/rbac.js'
@@ -96,6 +96,7 @@ export function getTeamResourceDefinitions(): InternalResourceDef[] {
                 }
 
                 const wsId = resourceWorkspace(context)
+                const projectNumber = resourceProjectNumber(context, wsId)
                 enforceTeamResourceRbac(context, wsId)
                 const { entries } = context.teamDb.getRecentEntries(
                     10,
@@ -103,7 +104,8 @@ export function getTeamResourceDefinitions(): InternalResourceDef[] {
                     'timestamp',
                     undefined,
                     false,
-                    wsId
+                    wsId,
+                    projectNumber
                 )
                 const lastModified = entries[0]?.timestamp ?? new Date().toISOString()
                 const enriched = enrichWithAuthor(entries, context)
@@ -148,14 +150,22 @@ export function getTeamResourceDefinitions(): InternalResourceDef[] {
                 }
 
                 const wsId = resourceWorkspace(context)
+                const projectNumber = resourceProjectNumber(context, wsId)
                 enforceTeamResourceRbac(context, wsId)
-                const stats = context.teamDb.getStatistics('week', undefined, undefined, false, wsId)
+                const stats = context.teamDb.getStatistics(
+                    'week',
+                    undefined,
+                    undefined,
+                    false,
+                    wsId,
+                    projectNumber
+                )
 
                 // Author breakdown
                 let authors: { author: string; count: number }[] = []
                 let authorStatsWarning: string | undefined
                 try {
-                    authors = context.teamDb.getAuthorStatistics(wsId)
+                    authors = context.teamDb.getAuthorStatistics(wsId, projectNumber)
                 } catch (error: unknown) {
                     authorStatsWarning =
                         error instanceof Error ? error.message : 'Failed to get team author statistics'

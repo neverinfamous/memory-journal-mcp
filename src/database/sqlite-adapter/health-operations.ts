@@ -17,8 +17,17 @@ export class HealthOperations {
             sizeBytes = fs.statSync(dbPath).size
             try {
                 sizeBytes += fs.statSync(`${dbPath}-wal`).size
-            } catch {
-                // WAL file may not exist or may already be checkpointed
+            } catch (walError: unknown) {
+                const code =
+                    typeof walError === 'object' && walError !== null && 'code' in walError
+                        ? walError.code
+                        : undefined
+                if (code !== 'ENOENT') {
+                    logger.debug('Database WAL file size unavailable', {
+                        module: 'HealthOperations',
+                        error: walError instanceof Error ? walError.message : String(walError),
+                    })
+                }
             }
         } catch (error) {
             // File may not exist on disk yet

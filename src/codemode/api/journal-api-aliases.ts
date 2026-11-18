@@ -40,7 +40,7 @@ function wireProjectMutationWrappers(deps: ProjectAndTeamAliasDeps): void {
                 return await existingRegisterProject({
                     name: args[0],
                     absolute_path: typeof args[1] === 'string' ? args[1] : '',
-                    ...(typeof args[2] === 'number' ? { project_number: args[2] } : {}),
+                    ...(args[2] !== undefined && args[2] !== null ? { project_number: args[2] } : {}),
                 })
             }
             if (fallbackRegister === undefined) return await existingRegisterProject({})
@@ -58,7 +58,7 @@ function wireProjectMutationWrappers(deps: ProjectAndTeamAliasDeps): void {
                     name: args[0],
                     ...(typeof args[1] === 'string' && args[1] !== '' ? { new_name: args[1] } : {}),
                     ...(typeof args[2] === 'string' && args[2] !== '' ? { absolute_path: args[2] } : {}),
-                    ...(typeof args[3] === 'number' ? { project_number: args[3] } : {}),
+                    ...(args[3] !== undefined && args[3] !== null ? { project_number: args[3] } : {}),
                 })
             }
             if (fallbackUpdate === undefined) return await existingUpdateProject({})

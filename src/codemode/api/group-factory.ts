@@ -116,7 +116,7 @@ export function createGroupApi(
         return Promise.resolve({
             group: groupName,
             methods,
-            examples: GROUP_EXAMPLES[groupName] ?? [],
+            examples: [...(GROUP_EXAMPLES[groupName] ?? [])],
         })
     }
 

@@ -219,6 +219,7 @@ function computeRelationshipDensity(
         JOIN memory_journal m ON r.from_entry_id = m.id
         JOIN memory_journal p ON r.to_entry_id = p.id
         WHERE m.deleted_at IS NULL AND p.deleted_at IS NULL AND m.workspace_id = p.workspace_id
+          AND r.from_entry_id != r.to_entry_id
           AND m.timestamp >= ? AND m.timestamp < ?${s.filterAlias}`,
         win.curYm,
         win.prevYm,

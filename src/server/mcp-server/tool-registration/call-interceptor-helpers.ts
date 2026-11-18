@@ -11,7 +11,11 @@ import {
     handleGetPrompt,
 } from '../../../handlers/tools/core/dummy-healing.js'
 import { getBaseUri } from '../../../handlers/resources/shared.js'
-import { getSerializedPayloadJson, injectTokenEstimate } from '../../../observability/token-estimator.js'
+import {
+    bigintReplacer,
+    getSerializedPayloadJson,
+    injectTokenEstimate,
+} from '../../../observability/token-estimator.js'
 import type { ToolContext } from '../../../types/index.js'
 import type { PromptDefinition } from '../../registration.js'
 import type { FallbackAccessTarget } from './fallback-interceptors.js'
@@ -120,7 +124,7 @@ export function formatSuccessPayload(payload: unknown): {
     content: { type: 'text'; text: string }[]
     structuredContent: Record<string, unknown>
 } {
-    const enriched = JSON.stringify(payload)
+    const enriched = JSON.stringify(payload, bigintReplacer)
     return {
         content: [{ type: 'text', text: enriched }],
         structuredContent: isPlainRecord(payload) ? payload : {},
@@ -356,6 +360,14 @@ function resolveGetPromptTarget(
     }
 }
 
+function isResourceFallbackTool(requestedTool: string): boolean {
+    return (
+        matchesExactName(requestedTool, DUMMY_RESOURCE_TOOL_NAMES) ||
+        requestedTool === 'mjReadResource' ||
+        requestedTool.startsWith('memory://')
+    )
+}
+
 export function resolvePromptOrResourceAccessTargets(
     requestedTool: string,
     toolArgs: Record<string, unknown>,
@@ -373,11 +385,7 @@ export function resolvePromptOrResourceAccessTargets(
             },
         ]
     }
-    if (
-        matchesExactName(requestedTool, DUMMY_RESOURCE_TOOL_NAMES) ||
-        requestedTool === 'mjReadResource' ||
-        requestedTool.startsWith('memory://')
-    ) {
+    if (isResourceFallbackTool(requestedTool)) {
         const rawUri =
             extractUriFromArgs(toolArgs) ??
             (requestedTool.startsWith('memory://') ? requestedTool : 'memory://briefing')
@@ -407,6 +415,12 @@ export function resolvePromptOrResourceAccessTargets(
     return undefined
 }
 
+function wrapFallbackResult(res: unknown): unknown {
+    if (isSuccessObject(res)) return formatSuccessPayload(res)
+    if (isFailureObject(res)) return formatTokenEstimatedError(res, true)
+    return undefined
+}
+
 export async function tryPromptAndResourceFallbacks(
     requestedTool: string,
     toolArgs: Record<string, unknown>,
@@ -414,34 +428,21 @@ export async function tryPromptAndResourceFallbacks(
     toolContext: ToolContext
 ): Promise<unknown> {
     if (matchingPrompt !== undefined) {
-        const res = await handlePrompt(toolArgs, requestedTool, toolContext)
-        if (isSuccessObject(res)) return formatSuccessPayload(res)
-        if (isFailureObject(res)) return formatTokenEstimatedError(res, true)
+        const out = wrapFallbackResult(await handlePrompt(toolArgs, requestedTool, toolContext))
+        if (out !== undefined) return out
     }
-
-    if (
-        matchesExactName(requestedTool, DUMMY_RESOURCE_TOOL_NAMES) ||
-        requestedTool === 'mjReadResource' ||
-        requestedTool.startsWith('memory://')
-    ) {
-        const res = await handleReadResource(toolArgs, requestedTool, toolContext)
-        if (isSuccessObject(res)) return formatSuccessPayload(res)
-        if (isFailureObject(res)) return formatTokenEstimatedError(res, true)
+    if (isResourceFallbackTool(requestedTool)) {
+        const out = wrapFallbackResult(await handleReadResource(toolArgs, requestedTool, toolContext))
+        if (out !== undefined) return out
     }
-
     if (matchesExactName(requestedTool, DUMMY_LIST_RESOURCE_TOOL_NAMES)) {
         return formatSuccessPayload(handleListResources(requestedTool))
     }
-
     if (matchesExactName(requestedTool, DUMMY_LIST_PROMPT_TOOL_NAMES)) {
         return formatSuccessPayload(handleListPrompts(requestedTool))
     }
-
     if (matchesExactName(requestedTool, DUMMY_GET_PROMPT_TOOL_NAMES)) {
-        const res = await handleGetPrompt(toolArgs, requestedTool, toolContext)
-        if (isSuccessObject(res)) return formatSuccessPayload(res)
-        if (isFailureObject(res)) return formatTokenEstimatedError(res, true)
+        return wrapFallbackResult(await handleGetPrompt(toolArgs, requestedTool, toolContext))
     }
-
     return undefined
 }

@@ -94,12 +94,12 @@ function buildRelExistsClause(f: GraphScopeFilters): string {
         EXISTS (
             SELECT 1 FROM relationships r
             JOIN memory_journal mj_to ON r.to_entry_id = mj_to.id
-            WHERE r.from_entry_id = mj.id AND mj_to.deleted_at IS NULL${f.toPeerScope}${f.relTypeSql}
+            WHERE r.from_entry_id = mj.id AND r.from_entry_id != r.to_entry_id AND mj_to.deleted_at IS NULL${f.toPeerScope}${f.relTypeSql}
         )
         OR EXISTS (
             SELECT 1 FROM relationships r
             JOIN memory_journal mj_from ON r.from_entry_id = mj_from.id
-            WHERE r.to_entry_id = mj.id AND mj_from.deleted_at IS NULL${f.fromPeerScope}${f.relTypeSql}
+            WHERE r.to_entry_id = mj.id AND r.from_entry_id != r.to_entry_id AND mj_from.deleted_at IS NULL${f.fromPeerScope}${f.relTypeSql}
         )
     )`
 }
@@ -372,7 +372,7 @@ export function getRecentGraphRelationships(
         FROM relationships r
         CROSS JOIN memory_journal e1 ON r.from_entry_id = e1.id
         CROSS JOIN memory_journal e2 ON r.to_entry_id = e2.id
-        WHERE e1.deleted_at IS NULL AND e2.deleted_at IS NULL${wsFilter}
+        WHERE e1.deleted_at IS NULL AND e2.deleted_at IS NULL AND r.from_entry_id != r.to_entry_id${wsFilter}
         ORDER BY r.created_at DESC
         LIMIT ?
     `

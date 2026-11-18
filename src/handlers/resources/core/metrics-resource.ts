@@ -18,6 +18,7 @@ import {
     withPriority,
     ASSISTANT_FOCUSED,
 } from '../../../utils/resource-annotations.js'
+import { fenceNonCanonicalRefOrKey } from '../../../utils/security-utils.js'
 import type { InternalResourceDef, ResourceContext, ResourceResult } from '../shared.js'
 
 // ============================================================================
@@ -204,6 +205,7 @@ export const metricsUsersResource: InternalResourceDef = {
         'via OAuth or request metadata. Returns empty breakdown when no user tracking configured.',
     mimeType: 'text/plain',
     annotations: withPriority(0.4, ASSISTANT_FOCUSED),
+    capabilities: { requiresAuditScope: true },
     handler: (_uri: string, ctx: ResourceContext): ResourceResult => {
         const lastModified = nowIso()
         const userBreakdown = ctx.runtime?.metrics.getUserBreakdown() ?? {}
@@ -222,7 +224,10 @@ export const metricsUsersResource: InternalResourceDef = {
 
         const sorted = users.sort(([, a], [, b]) => b - a)
         const rows = sorted
-            .map(([user, count]) => `  - user: ${user}\n    calls: ${count}`)
+            .map(([user, count]) => {
+                const safeUser = fenceNonCanonicalRefOrKey(user)
+                return `  - user: ${safeUser}\n    calls: ${count}`
+            })
             .join('\n')
 
         const text = `user_metrics:\n  as_of: ${lastModified}\n${rows}\n`

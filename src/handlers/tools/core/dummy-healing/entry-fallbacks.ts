@@ -239,10 +239,9 @@ export function getEntryAndCodemodeFallbackToolDefinitions(
                             ? (params as Record<string, unknown>)
                             : {}
                     if (context !== undefined) {
-                        const buildGroup =
-                            name === 'update_entry' || name === 'delete_entry'
-                                ? getAdminTools
-                                : getCoreTools
+                        const isAdminMutation = name === 'update_entry' || name === 'delete_entry'
+                        const targetNs = isAdminMutation ? 'admin' : 'core'
+                        const buildGroup = isAdminMutation ? getAdminTools : getCoreTools
                         const tool = findCachedOrFallbackTool(context, name, buildGroup)
                         if (tool !== undefined) {
                             const res = await Promise.resolve(tool.handler(args))
@@ -252,14 +251,15 @@ export function getEntryAndCodemodeFallbackToolDefinitions(
                                 ...resRecord,
                                 _healing_note:
                                     resRecord['success'] !== false
-                                        ? `🛠️ AUTONOMOUS HEALING: '${name}' was invoked directly while in Code Mode and succeeded. In Code Mode, prefer using 'mj_execute_code' with 'mj.core.${camelMethod}({ ... })'.`
-                                        : `🛠️ AUTONOMOUS HEALING: '${name}' was invoked directly while in Code Mode, but the operation did not succeed. In Code Mode, prefer using 'mj_execute_code' with 'mj.core.${camelMethod}({ ... })'.`,
+                                        ? `🛠️ AUTONOMOUS HEALING: '${name}' was invoked directly while in Code Mode and succeeded. In Code Mode, prefer using 'mj_execute_code' with 'mj.${targetNs}.${camelMethod}({ ... })'.`
+                                        : `🛠️ AUTONOMOUS HEALING: '${name}' was invoked directly while in Code Mode, but the operation did not succeed. In Code Mode, prefer using 'mj_execute_code' with 'mj.${targetNs}.${camelMethod}({ ... })'.`,
                             }
                         }
                     }
+                    const targetNs = name === 'update_entry' || name === 'delete_entry' ? 'admin' : 'core'
                     return {
                         success: false,
-                        error: `🛠️ AUTONOMOUS HEALING: \`${name}\` is not directly active in Code Mode. Use \`mj_execute_code\` with \`mj.core.${camelMethod}({ ... })\`.`,
+                        error: `🛠️ AUTONOMOUS HEALING: \`${name}\` is not directly active in Code Mode. Use \`mj_execute_code\` with \`mj.${targetNs}.${camelMethod}({ ... })\`.`,
                         code: 'VALIDATION_ERROR',
                         category: 'validation',
                         recoverable: true,

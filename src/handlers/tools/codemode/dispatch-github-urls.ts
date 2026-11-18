@@ -43,7 +43,12 @@ function resolveGithubUrlScope(
     sessionWorkspaceId: string | undefined,
     sessionProjectId: number | string | undefined
 ): { allowed: boolean; repoHint: string | undefined; unregisteredWs: string | undefined } {
-    const targetWs = typeof paramsObj['workspace_id'] === 'string' ? paramsObj['workspace_id'].trim() : undefined
+    const rawTargetWs =
+        typeof paramsObj['target_workspace_id'] === 'string' &&
+        paramsObj['target_workspace_id'].trim() !== ''
+            ? paramsObj['target_workspace_id']
+            : paramsObj['workspace_id']
+    const targetWs = typeof rawTargetWs === 'string' ? rawTargetWs.trim() : undefined
     if (targetWs === '*' || isDefaultWs(targetWs)) {
         return { allowed: false, repoHint: undefined, unregisteredWs: undefined }
     }

@@ -4,12 +4,17 @@ import { activeProjectRegistry, uniqueWorkspaceForProject } from './write-scope.
 
 async function resolveIssueUrlFromRepoPath(
     repoPath: string | undefined,
-    issueNumber: number
+    issueNumber: number,
+    runtime?: ToolContext['config'] extends infer C
+        ? C extends { runtime?: infer R }
+            ? R
+            : never
+        : never
 ): Promise<string | undefined> {
     if (repoPath === undefined || repoPath.trim() === '') return undefined
     const targetGithub = getGitHubIntegration(
         repoPath,
-        undefined,
+        runtime,
         process.env['GITHUB_TOKEN']
     )
     const repoInfo = await targetGithub.getRepoInfo()
@@ -47,7 +52,7 @@ export async function resolveIssueUrl(
     if (projectNumber !== undefined) {
         const resolvedWs = uniqueWorkspaceForProject(projectNumber, registry)
         const entry = resolvedWs !== undefined ? registry?.[resolvedWs] : undefined
-        return resolveIssueUrlFromRepoPath(entry?.path, issueNumber)
+        return resolveIssueUrlFromRepoPath(entry?.path, issueNumber, context.config?.runtime)
     }
 
     const trimmedWs = workspaceId?.trim()
@@ -59,7 +64,7 @@ export async function resolveIssueUrl(
                 ? Object.keys(registry).find((k) => k.toLowerCase() === lowerWs)
                 : undefined
         const entry = matchedKey !== undefined ? registry?.[matchedKey] : undefined
-        return resolveIssueUrlFromRepoPath(entry?.path, issueNumber)
+        return resolveIssueUrlFromRepoPath(entry?.path, issueNumber, context.config?.runtime)
     }
 
     // 2. Omitted project number and workspace may use the process repo cache.
