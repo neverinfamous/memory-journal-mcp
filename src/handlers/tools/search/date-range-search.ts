@@ -55,6 +55,7 @@ async function queryTeamDateRangeAndMerge(
         : teamDb.searchByDateRange(input.start_date, input.end_date, {
               entryType: input.entry_type,
               tags: input.tags,
+              excludeTags: input.exclude_tags,
               projectNumber,
               issueNumber: input.issue_number,
               prNumber: input.pr_number,
@@ -128,6 +129,7 @@ async function executeDateRangeSearch(
         : db.searchByDateRange(input.start_date, input.end_date, {
               entryType: input.entry_type,
               tags: input.tags,
+              excludeTags: input.exclude_tags,
               isPersonal: input.is_personal,
               projectNumber,
               issueNumber: input.issue_number,

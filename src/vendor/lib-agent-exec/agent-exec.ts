@@ -1,7 +1,7 @@
 // @ts-nocheck
 import fs from 'node:fs';
 import path from 'node:path';
-import os from 'node:os';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { parseArgs } from 'node:util';
 import { match, P } from 'ts-pattern';
 import { executeCommand } from './execution-engine.js';
@@ -92,12 +92,13 @@ try {
 }
 
 try {
+  const scriptDir = path.dirname(fileURLToPath(import.meta.url));
   for (const interceptorsPath of interceptorsPaths) {
     const resolvedPath = path.resolve(interceptorsPath);
-    if (!resolvedPath.startsWith(process.cwd()) && !resolvedPath.startsWith(__dirname)) {
+    if (!resolvedPath.startsWith(process.cwd()) && !resolvedPath.startsWith(scriptDir)) {
       fatalError(`Interceptor plugin must be loaded from within the workspace: ${resolvedPath}`);
     }
-    const plugin = await import(resolvedPath);
+    const plugin = await import(pathToFileURL(resolvedPath).href);
     if (plugin.default && Array.isArray(plugin.default)) {
       customInterceptors.push(...plugin.default);
     } else if (plugin.default && typeof plugin.default === 'function') {
@@ -112,7 +113,6 @@ try {
     if (payloadPath.startsWith('base64:')) {
       payloadStr = Buffer.from(payloadPath.slice(7), 'base64').toString('utf8');
     } else if (payloadPath.trim().startsWith('{')) {
-      console.error(`\n   💡 AGENT HINT: You passed a JSON payload directly as an argument to agent-exec.ts.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Treating argument as JSON payload... (Frictionless Recovery)\x1b[0m`);
       payloadStr = payloadPath;
     } else {
       if (!positionals[0]) {
@@ -163,7 +163,6 @@ try {
   if (payload.keepPayload !== true) {
     try { fs.unlinkSync(payloadPath); } catch { /* ignore */ }
   }
-  fs.appendFileSync(path.join(os.tmpdir(), 'agent-exec-payload.log'), JSON.stringify(payload) + '\n');
   if (payload.cwd !== undefined && typeof payload.cwd === 'string') {
     const unquotedCwd = payload.cwd.trim().replace(/^['"]|['"]$/g, '');
     if (/^\/?mnt\/[a-zA-Z](?:\/.*)?$/i.test(unquotedCwd)) {

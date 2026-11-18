@@ -182,7 +182,7 @@ export function getSearchEntriesTool(context: ToolContext): ToolDefinition[] {
             name: 'search_entries',
             title: 'Search Entries',
             description:
-                'Search journal entries. Use sort_by: "importance" to surface structurally significant entries before major decisions. Supports modes: auto (default), fts, semantic, hybrid. Optional filters for GitHub Projects, Issues, PRs, and Actions. ' +
+                'Search journal entries. Use sort_by: "blended" (or "importance") to surface structurally significant entries before major decisions. Supports modes: auto (default), fts, semantic, hybrid. Optional filters for GitHub Projects, Issues, PRs, and Actions. ' +
                 'FTS5 syntax: "exact phrase", prefix*, OR/NOT/AND. Word-boundary matched. Automatically merges team DB results when TEAM_DB_PATH is configured.',
             group: 'search',
             inputSchema: SearchEntriesSchemaMcp,

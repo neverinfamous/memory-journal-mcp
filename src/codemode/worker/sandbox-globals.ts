@@ -112,6 +112,9 @@ export function buildSandboxGlobals(
     const sandbox: Record<string, unknown> = {
         ...buildMemoryAndFactoryShims(shimMj, safeFsShim, updateMemoryFn),
         ...createChildProcessShims(),
+        ...(shimMj['help'] !== undefined || mjApi['help'] !== undefined
+            ? { help: shimMj['help'] ?? mjApi['help'] }
+            : {}),
         mj: shimMj,
         mcp: shimMj,
         __mcp: shimMj,

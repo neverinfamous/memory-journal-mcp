@@ -69,7 +69,7 @@ All errors must extend `MemoryJournalMcpError` (`ValidationError`, `ResourceNotF
 
 The server supports strict data isolation using `workspace_id`.
 - All CRUD, Search, and Analytics tools accept a `workspace_id`. 
-- If omitted, the server auto-resolves `workspace_id` from `project_number` (via `PROJECT_REGISTRY`), content/tag keyword aliases, or `process.cwd()` before falling back to `DEFAULT_WORKSPACE_ID` (default: `default`).
+- If omitted, the server auto-resolves `workspace_id` from `project_number` (via `PROJECT_REGISTRY`) or `process.cwd()` before falling back to `DEFAULT_WORKSPACE_ID` (default: `default`).
 - The `workspace_id` is assigned upon creation and cannot be overwritten directly on standard updates; cross-workspace entry migration uses `update_entry` with `workspace_id: '*'` and `target_workspace_id`.
 - Read, search, and visualization tools accept `workspace_id: "*"` to query across all workspaces (`resolveWorkspaceId('*')` preserves wildcard sentinel `'*'`); `create_entry` uses `resolveProjectContext`, which treats `workspace_id: '*'` as omitted so `'*'` is never stored (and supports cross-workspace `relationships` at creation time). `update_entry`, `delete_entry`, `restore_entry`, `batch_update_entries`, `batch_delete_entries`, and `team_link_entries` keep `'*'` as a cross-workspace caller scope, whereas `link_entries` requires a concrete `workspace_id` or `project_number` and links entries within that workspace. A stored workspace changes only when `target_workspace_id` is set and is not `'*'`.
 

@@ -70,8 +70,16 @@ const vendorJsonPath = join(cwd, 'src', 'vendor', 'VENDOR.json');
 const vendorData = JSON.parse(readFileSync(vendorJsonPath, 'utf8'));
 
 try {
-  const upstreamRoot = resolveUpstreamRoot(cwd, args.values['upstream-root'] as string | undefined);
-  const headSha = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: upstreamRoot, encoding: 'utf8' }).trim();
+  let upstreamRoot: string | undefined;
+  let headSha: string | undefined;
+  try {
+    upstreamRoot = resolveUpstreamRoot(cwd, args.values['upstream-root'] as string | undefined);
+    headSha = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: upstreamRoot, encoding: 'utf8' }).trim();
+  } catch (err: unknown) {
+    if (!args.values.check) {
+      throw err;
+    }
+  }
 
   let libsToSync = Object.keys(vendorData.libs);
   if (args.values.lib) {
@@ -83,6 +91,9 @@ try {
   }
 
   for (const lib of args.values.check ? [] : libsToSync) {
+    if (upstreamRoot === undefined || headSha === undefined) {
+      throw new Error('Upstream repository resolution is required when syncing vendor files.');
+    }
     const libConfig = vendorData.libs[lib];
     console.log(`\nSyncing ${lib}...`);
     
@@ -137,16 +148,18 @@ try {
     }
   }
   let upstreamDeps: Record<string, string> = {};
-  try {
-    const upstreamPkg = JSON.parse(readFileSync(join(upstreamRoot, 'package.json'), 'utf8')) as Record<string, unknown>;
-    for (const field of ['dependencies', 'devDependencies']) {
-      const section = upstreamPkg[field];
-      if (typeof section === 'object' && section !== null) {
-        upstreamDeps = { ...upstreamDeps, ...(section as Record<string, string>) };
+  if (upstreamRoot !== undefined) {
+    try {
+      const upstreamPkg = JSON.parse(readFileSync(join(upstreamRoot, 'package.json'), 'utf8')) as Record<string, unknown>;
+      for (const field of ['dependencies', 'devDependencies']) {
+        const section = upstreamPkg[field];
+        if (typeof section === 'object' && section !== null) {
+          upstreamDeps = { ...upstreamDeps, ...(section as Record<string, string>) };
+        }
       }
+    } catch {
+      // Upstream package.json is only used to suggest version ranges
     }
-  } catch {
-    // Upstream package.json is only used to suggest version ranges
   }
 
   const missing = new Map<string, Set<string>>();

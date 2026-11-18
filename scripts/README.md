@@ -19,7 +19,7 @@
 | `test-import.ts` | Lightweight diagnostic script to verify that tool, resource, and prompt handlers load correctly without server startup. | `pnpm exec tsx scripts/test-import.ts` |
 | `encrypt-db.ts` | Utility to encrypt an existing plaintext SQLite database into a new SQLCipher-encrypted copy via `PRAGMA rekey` (uses `MJ_DB_ENCRYPTION_KEY` or `DB_ENCRYPTION_KEY` from the environment). | `pnpm run encrypt-db -- --in <src.db> --out <enc.db>` |
 | `check-orphans.mjs` | Diagnostic script to identify entries missing a strict `project_number`. Falls back to default `data/memory_journal.db` if no arg provided. | `node scripts/check-orphans.mjs [path]` |
-| `sync-vendor.ts` | Synchronizes and updates vendor libraries from the upstream tooling repository into `src/vendor/` and verifies dependency declarations (supports `--check`, `--lib <name>`, `--upstream-root <path>`, and `--test`; executed via `bun`). | `pnpm run sync:vendor` / `pnpm run check:vendor-deps` / `bun scripts/sync-vendor.ts` |
+| `sync-vendor.ts` | Synchronizes and updates vendor libraries from the upstream tooling repository into `src/vendor/` and verifies dependency declarations (supports `--check`, `--lib <name>`, `--upstream-root <path>`, and `--test`; executed via `tsx`). | `pnpm run sync:vendor` / `pnpm run check:vendor-deps` / `pnpm exec tsx scripts/sync-vendor.ts` |
 | `print-summary.ts` | Utility to test the `session-summary` prompt generation output using the current repository context. | `pnpm exec tsx scripts/print-summary.ts` |
 
 ## Best Practices

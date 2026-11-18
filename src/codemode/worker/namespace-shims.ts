@@ -313,6 +313,9 @@ export function createContextProxy(contextObj?: Record<string, unknown>): Record
                 }
                 return undefined
             }
+            if (Object.prototype.hasOwnProperty.call(target, prop)) {
+                return Reflect.get(target, prop)
+            }
             if (prop === 'toString') {
                 return () => {
                     try {

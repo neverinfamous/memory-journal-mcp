@@ -154,6 +154,7 @@ ${pc.bold('Integration Options:')}
   --mailmap <file>         Use a specific mailmap file for author normalization
   --slack-map <file>       Path to JSON map translating authors to Slack IDs
   --package-version        Include the package.json version in the output metadata
+  --cwd <path>             Target repository working directory
   --stream-to-file <file>  Stream JSON output directly to a file instead of stdout
   --cache                  Enable local SQLite caching of processed commits
   -h, --help               Show this help message

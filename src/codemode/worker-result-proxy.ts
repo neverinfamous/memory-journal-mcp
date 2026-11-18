@@ -97,7 +97,16 @@ function bindArrayMethod(arr: unknown[], prop: string): ((...args: unknown[]) =>
 
 function failedResultMessage(target: object): string {
     const errVal: unknown = Reflect.get(target, 'error')
-    return typeof errVal === 'string' ? errVal : 'Operation failed'
+    const baseMsg = typeof errVal === 'string' ? errVal : 'Operation failed'
+    const suggestionVal: unknown = Reflect.get(target, 'suggestion')
+    if (
+        typeof suggestionVal === 'string' &&
+        suggestionVal.trim().length > 0 &&
+        !baseMsg.includes(suggestionVal)
+    ) {
+        return `${baseMsg} (${suggestionVal})`
+    }
+    return baseMsg
 }
 
 function createFailedResultProxy(result: object): unknown {
@@ -327,17 +336,23 @@ export function wrapResult(result: unknown): unknown {
         return cached
     }
 
-    if ('success' in result && Reflect.get(result, 'success') === false) {
-        return cacheProxyPair(result, createFailedResultProxy(result) as object)
+    const targetObj: object = Object.isFrozen(result)
+        ? Array.isArray(result)
+            ? [...(result as unknown[])]
+            : { ...(result as Record<string, unknown>) }
+        : result
+
+    if ('success' in targetObj && Reflect.get(targetObj, 'success') === false) {
+        return cacheProxyPair(result, createFailedResultProxy(targetObj) as object)
     }
 
-    if (Array.isArray(result)) {
-        return cacheProxyPair(result, createArrayResultProxy(result) as object)
+    if (Array.isArray(targetObj)) {
+        return cacheProxyPair(result, createArrayResultProxy(targetObj) as object)
     }
 
     return cacheProxyPair(
         result,
-        new Proxy(result, {
+        new Proxy(targetObj, {
             ownKeys: (target) => Reflect.ownKeys(target),
             getOwnPropertyDescriptor: (target, prop) => Reflect.getOwnPropertyDescriptor(target, prop),
             get: (target, prop, receiver): unknown => resolveWrappedObjectProp(target, prop, receiver),

@@ -362,12 +362,32 @@ export function createSearchDomainProxy(target: Record<string, unknown>): unknow
         const callableSearch = function (this: unknown, ...args: unknown[]): unknown {
             return (searchFunc as (...a: unknown[]) => unknown).apply(this, args)
         }
-        Object.assign(callableSearch, searchGroup, {
-            search: searchFunc, query: searchFunc, queryEntries: searchFunc, query_entries: searchFunc,
-            searchEntries: searchFunc, search_entries: searchFunc, find: searchFunc,
-            findEntries: searchFunc, find_entries: searchFunc,
+        Object.assign(callableSearch, {
+            search: searchFunc,
+            query: searchFunc,
+            queryEntries: searchFunc,
+            query_entries: searchFunc,
+            searchEntries: searchFunc,
+            search_entries: searchFunc,
+            find: searchFunc,
+            findEntries: searchFunc,
+            find_entries: searchFunc,
         })
         return new Proxy(callableSearch, {
+            has: (targetFn, p): boolean => p in targetFn || p in searchGroup,
+            ownKeys: (targetFn) =>
+                Array.from(
+                    new Set<string | symbol>([
+                        ...Reflect.ownKeys(targetFn),
+                        ...Reflect.ownKeys(searchGroup),
+                    ])
+                ),
+            getOwnPropertyDescriptor(targetFn, p): PropertyDescriptor | undefined {
+                const ownDesc = Reflect.getOwnPropertyDescriptor(targetFn, p)
+                if (ownDesc !== undefined) return ownDesc
+                const groupDesc = Reflect.getOwnPropertyDescriptor(searchGroup, p)
+                return groupDesc !== undefined ? { ...groupDesc, configurable: true } : undefined
+            },
             get(targetFn, p, receiver): unknown {
                 if (p in targetFn) return Reflect.get(targetFn, p, receiver) as unknown
                 return Reflect.get(searchGroup, p, receiver) as unknown

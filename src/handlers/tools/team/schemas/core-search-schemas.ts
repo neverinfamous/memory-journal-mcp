@@ -264,6 +264,7 @@ export const TeamGetRecentSchema = z.preprocess(
         .object({
             limit: z.number().int().min(1).max(500).optional().default(10),
             cursor: z.string().optional().describe('Cursor for pagination'),
+            offset: z.number().int().min(0).optional().default(0),
             project_number: StrictProjectNumberSchema.optional(),
             workspace_id: z.string().optional(),
             sort_by: z.enum(['timestamp', 'importance', 'blended']).optional().default('timestamp').describe(SORT_BY_DESC),
@@ -278,6 +279,7 @@ export const TeamGetRecentSchemaMcp = z.preprocess(
     z.object({
         limit: relaxedNumber().optional().default(10).describe('Maximum entries to return (1-500, default: 10)'),
         cursor: z.string().optional().describe('Cursor for pagination'),
+        offset: relaxedNumber().optional().default(0).describe('Zero-based offset for pagination (used when cursor is not provided)'),
         project_number: relaxedNumber().optional().describe('REQUIRED: project number to scope the query to.'),
         workspace_id: z.string().optional().describe(WORKSPACE_DESC),
         sort_by: z.string().optional().default('timestamp').describe(SORT_BY_DESC),
@@ -371,6 +373,7 @@ export const TeamSearchByDateRangeSchema = z.preprocess(
             cursor: z.string().optional().describe('Cursor for pagination'),
             entry_type: z.enum(ENTRY_TYPES).optional(),
             tags: z.array(z.string()).optional(),
+            exclude_tags: z.array(z.string()).optional().describe('Exclude entries having any of these tags'),
             project_number: StrictProjectNumberSchema.optional(),
             workspace_id: z.string().optional(),
             limit: z.number().int().min(1).max(500).optional().default(50),
@@ -390,6 +393,7 @@ export const TeamSearchByDateRangeSchemaMcp = z.preprocess(
             cursor: z.string().optional().describe('Cursor for pagination'),
             entry_type: z.string().optional().describe('Filter results by entry type'),
             tags: z.array(z.string()).optional().describe('Filter entries having any of these tags'),
+            exclude_tags: z.array(z.string()).optional().describe('Exclude entries having any of these tags'),
             project_number: relaxedNumber().optional().describe('REQUIRED: project number to scope the query to.'),
             workspace_id: z.string().optional().describe(WORKSPACE_DESC),
             limit: relaxedNumber().optional().default(50).describe('Maximum entries to return (1-500, default: 50)'),

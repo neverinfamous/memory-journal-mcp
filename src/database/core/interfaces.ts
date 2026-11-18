@@ -289,6 +289,7 @@ export interface IDatabaseAdapter extends IDatabaseVectorAndAdminAdapter {
         options?: {
             entryType?: EntryType
             tags?: string[]
+            excludeTags?: string[]
             cursor?: string
             isPersonal?: boolean
             projectNumber?: number

@@ -701,9 +701,9 @@ catch (error) {
 
 The MCP SDK validates tool inputs **before** our handler code runs. If a required field in our `inputSchema` receives `undefined` or an empty string, the SDK throws a generic `-32602 InvalidParams` error that bypasses our internal error throwing logic entirely. The user sees an ugly generic error instead of our carefully written error messages.
 
-### The Solution: Dual-Schema Pattern with McpError
+### The Solution: Dual-Schema Pattern with Structured Error Formatting
 
-Every tool has **two** schemas — one relaxed (SDK-facing) and one strict (handler-internal). Inside the handler, we throw `McpError` exceptions with exact JSON-RPC codes (e.g. `-32602` for InvalidParams, `-32002` for ResourceNotFound).
+Every tool has **two** schemas — one relaxed (SDK-facing) and one strict (handler-internal). Inside the handler, errors are caught and returned via `formatHandlerError(err)` as structured `{ success: false, error, code, category, suggestion, recoverable }` payloads (`PermissionError` is re-thrown where required for OAuth/RBAC propagation).
 
 ```typescript
 {
@@ -722,11 +722,7 @@ Every tool has **two** schemas — one relaxed (SDK-facing) and one strict (hand
             }).parse(params)
             // ... tool logic ...
         } catch (err) {
-            // Handlers throw standard McpError exceptions with JSON-RPC codes
-            if (err instanceof z.ZodError) {
-                throw new McpError(ErrorCode.InvalidParams, err.message);
-            }
-            throw new McpError(ErrorCode.InternalError, "An internal error occurred");
+            return formatHandlerError(err)
         }
     },
 }

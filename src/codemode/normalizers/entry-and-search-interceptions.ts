@@ -60,6 +60,12 @@ function applySearchQueryInterception(
         const parsed = parseInt(obj['limit'], 10)
         if (!isNaN(parsed)) obj['limit'] = parsed
     }
+    if (
+        (methodName === 'team_search' || methodName === 'teamSearch') &&
+        (obj['mode'] === 'fts' || obj['mode'] === 'auto')
+    ) {
+        delete obj['mode']
+    }
     if (!['search_entries', 'searchEntries', 'team_search', 'teamSearch'].includes(methodName) && obj['mode'] !== undefined) {
         return validationError(
             `${methodName} does not support the 'mode' parameter.`,

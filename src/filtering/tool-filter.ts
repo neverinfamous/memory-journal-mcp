@@ -242,15 +242,10 @@ export function filterTools<T extends { name: string }>(
  * Get tool filter from environment variable
  */
 export function getToolFilterFromEnv(): ToolFilterConfig | null {
-    const primary = process.env['MEMORY_JOURNAL_MCP_TOOL_FILTER']
-    const fallback = process.env['TOOL_FILTER']
-    const filterString =
-        primary !== undefined && primary !== ''
-            ? primary
-            : fallback !== undefined && fallback !== ''
-              ? fallback
-              : undefined
-    if (filterString === undefined) return null
+    const filterString = process.env['MEMORY_JOURNAL_MCP_TOOL_FILTER']
+    if (filterString === undefined || filterString === '') {
+        return null
+    }
     return parseToolFilter(filterString)
 }
 

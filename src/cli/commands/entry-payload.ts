@@ -45,6 +45,7 @@ export interface EntryPayload {
     autoContextStr: string | undefined
     relationships: { target_id: number; relation_type: RelationshipType }[]
     relatedIds: number[]
+    anchors?: { anchor_path: string; anchor_type: string }[]
 }
 
 export async function getDb(
@@ -318,6 +319,7 @@ function resolvePayloadRelationships(
 ): {
     relationships: { target_id: number; relation_type: RelationshipType }[]
     relatedIds: number[]
+    anchors?: { anchor_path: string; anchor_type: string }[]
 } {
     const relationships =
         metadata['relationships'] !== undefined &&
@@ -334,6 +336,35 @@ function resolvePayloadRelationships(
         }
     }
     return { relationships, relatedIds }
+}
+
+function parseMetadataAnchors(
+    raw: unknown
+): { anchor_path: string; anchor_type: string }[] | undefined {
+    if (!Array.isArray(raw) || raw.length === 0) return undefined
+    const parsed: { anchor_path: string; anchor_type: string }[] = []
+    for (const item of raw) {
+        if (typeof item === 'string') {
+            const trimmed = item.trim()
+            if (trimmed.length > 0) {
+                parsed.push({ anchor_path: trimmed, anchor_type: 'file' })
+            }
+        } else if (typeof item === 'object' && item !== null && !Array.isArray(item)) {
+            const rec = item as Record<string, unknown>
+            const pathRaw = rec['anchor_path'] ?? rec['anchorPath'] ?? rec['path']
+            const typeRaw = rec['anchor_type'] ?? rec['anchorType'] ?? rec['type']
+            if (typeof pathRaw === 'string' && pathRaw.trim().length > 0) {
+                parsed.push({
+                    anchor_path: pathRaw.trim(),
+                    anchor_type:
+                        typeof typeRaw === 'string' && typeRaw.trim().length > 0
+                            ? typeRaw.trim()
+                            : 'file',
+                })
+            }
+        }
+    }
+    return parsed.length > 0 ? parsed : undefined
 }
 
 export function buildEntryPayload(
@@ -368,6 +399,7 @@ export function buildEntryPayload(
         metadata
     )
     const { relationships, relatedIds } = resolvePayloadRelationships(normalizedOptions, metadata)
+    const anchors = parseMetadataAnchors(metadata['anchors'])
 
     return {
         entryType,
@@ -387,5 +419,6 @@ export function buildEntryPayload(
         autoContextStr,
         relationships,
         relatedIds,
+        ...(anchors !== undefined ? { anchors } : {}),
     }
 }

@@ -263,6 +263,10 @@ function applyEntryLinkRecentTagInterceptions(
         const obj = { ...args[0] }
         args[0] = obj
         healIncludeArchivedField(obj)
+        if (typeof obj['cursor'] === 'string' && /^\d+$/.test(obj['cursor'].trim())) {
+            if (obj['offset'] === undefined) obj['offset'] = Number(obj['cursor'].trim())
+            delete obj['cursor']
+        }
         if (hasAnyKey(obj, ['q', 'query', 'search'])) {
             return validationErr(
                 `${methodName} does not support search queries. It only returns the most recent entries.`,

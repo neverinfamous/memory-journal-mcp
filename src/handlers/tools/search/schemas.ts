@@ -124,6 +124,10 @@ export const SearchByDateRangeSchema = z.preprocess(
     cursor: z.string().optional().describe('Cursor for pagination'),
     entry_type: z.enum(ENTRY_TYPES).optional(),
     tags: z.array(z.string()).optional(),
+    exclude_tags: z
+        .array(z.string())
+        .optional()
+        .describe('Exclude entries having any of these tags'),
     workspace_id: z.string().optional(),
     is_personal: z.boolean().optional(),
     project_number: z.number().optional(),
@@ -159,6 +163,10 @@ export const SearchByDateRangeSchemaMcp = z.preprocess(
     cursor: z.string().optional().describe('Cursor for pagination'),
     entry_type: z.string().optional(),
     tags: z.array(z.string()).optional(),
+    exclude_tags: z
+        .array(z.string())
+        .optional()
+        .describe('Exclude entries having any of these tags'),
     workspace_id: z.string().optional().describe('Optional workspace isolation identifier (e.g. "alpha"). Do not use numeric project IDs or "workspace" as the key.'),
     is_personal: z.boolean().optional(),
     project_number: relaxedNumber().optional(),
@@ -199,6 +207,10 @@ export const SemanticSearchSchema = z.preprocess(
     pr_number: z.number().optional().describe('Filter results by GitHub PR number'),
     workflow_run_id: z.number().optional().describe('Filter results by GitHub Actions workflow run ID'),
     tags: z.array(z.string()).optional().describe('Filter results by tags'),
+    exclude_tags: z
+        .array(z.string())
+        .optional()
+        .describe('Exclude entries having any of these tags'),
     entry_type: z.enum(ENTRY_TYPES).optional().describe('Filter results by entry type'),
     start_date: z
         .string()
@@ -242,6 +254,10 @@ export const SemanticSearchSchemaMcp = z.preprocess(
     pr_number: relaxedNumber().optional().describe('Filter results by GitHub PR number'),
     workflow_run_id: relaxedNumber().optional().describe('Filter results by GitHub Actions workflow run ID'),
     tags: z.array(z.string()).optional().describe('Filter results by tags'),
+    exclude_tags: z
+        .array(z.string())
+        .optional()
+        .describe('Exclude entries having any of these tags'),
     entry_type: z.string().optional().describe('Filter results by entry type'),
     start_date: z.string().optional().describe('Filter results from this date (YYYY-MM-DD)'),
     end_date: z.string().optional().describe('Filter results until this date (YYYY-MM-DD)'),

@@ -81,6 +81,8 @@ const DB_CONSTRUCTOR_PROPS = new Set<string>([
     'Database', 'Sqlite3', 'BetterSqlite3', 'better_sqlite3', 'betterSqlite3',
 ])
 
+const searchDomainCache = new WeakMap<object, unknown>()
+
 function getGroupProp(target: Record<string, unknown>, group: string, prop: string): unknown {
     const g = target[group]
     return (typeof g === 'object' && g !== null) || typeof g === 'function'
@@ -293,8 +295,12 @@ function resolveDomainAndDbMappingProp(
         if (listProjects !== undefined) return listProjects
     }
     if (prop === 'search' && 'search' in target) {
+        if (searchDomainCache.has(target)) return searchDomainCache.get(target)
         const searchDomain = createSearchDomainProxy(target)
-        if (searchDomain !== undefined) return searchDomain
+        if (searchDomain !== undefined) {
+            searchDomainCache.set(target, searchDomain)
+            return searchDomain
+        }
     }
     if (prop === 'append' && 'core' in target) {
         const appendFn = createAppendInterceptor(target)

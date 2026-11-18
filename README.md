@@ -75,7 +75,7 @@ Memory Journal builds your project's long-term memory. It acts as a **Project Co
 
 Memory Journal supports multi-tenancy out of the box via the `workspace_id` construct, acting as a strict isolation barrier for multiple journals sharing the same SQLite database file.
 
-- **Auto-Resolution:** When `workspace_id` is omitted, the server automatically resolves the target workspace. It matches `project_number` against `PROJECT_REGISTRY`, checks content/tag keyword aliases, or inspects `process.cwd()` before falling back to `DEFAULT_WORKSPACE_ID` (default: `default`).
+- **Auto-Resolution:** When `workspace_id` is omitted, the server automatically resolves the target workspace. It matches `project_number` against `PROJECT_REGISTRY` or inspects `process.cwd()` before falling back to `DEFAULT_WORKSPACE_ID` (default: `default`).
 - **Data Partitioning & Cross-Workspace Queries:** Core CRUD, Soft-Delete/Restore, FTS5 Search, Vector Semantic Search (`semantic_search`), and Analytics tools enforce `workspace_id` isolation end-to-end. Read and search tools accept `workspace_id: "*"` to query across all workspaces. `create_entry` ignores `workspace_id: "*"` and stores a resolved workspace. `update_entry` with `workspace_id: "*"` and `target_workspace_id` moves an entry. `delete_entry`, `restore_entry`, and batch deletes accept `*` and then match by id without a workspace predicate.
 - **Immutability & Controlled Migration:** Entries receive a `workspace_id` upon creation that standard updates cannot overwrite directly. To migrate an entry across workspaces, call `update_entry` with `workspace_id: "*"` and `target_workspace_id`.
 - **Server Config:** Set `--default-workspace-id` (or the `DEFAULT_WORKSPACE_ID` environment variable) to configure the default fallback workspace for the server instance. This lets you run multiple isolated journal interfaces on a single physical database.
@@ -540,7 +540,7 @@ For production deployments, enable OAuth 2.1 authentication on the HTTP transpor
 | Scope   | Tool Groups                                                                                                                                                    |
 | ------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `read`  | `core (read-only), search, analytics, relationships (visualize_relationships), io (export_entries), git`                                                       |
-| `write` | `github (+ all read groups and create_entry / create_entry_minimal / link_entries / mark_anchors_stale / import_external / import_markdown / export_markdown)` |
+| `write` | `github (+ all read groups and create_entry / link_entries / mark_anchors_stale / import_external / import_markdown / export_markdown)` |
 | `team`  | `team (dedicated team collaboration scope; combine with read/write for personal journal access)`                                                               |
 | `audit` | `memory://audit resource access (included in admin/full; search_audit_log requires admin or full)`                                                             |
 | `admin` | `admin, backup, codemode (+ all read/write/team/audit groups)`                                                                                                 |

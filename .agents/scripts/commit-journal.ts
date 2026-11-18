@@ -175,7 +175,12 @@ export function parseCategory(history: string, type: string): { category: string
   return { category, entry: cleanHistory.trim() };
 }
 
-export function generateHistoryEntry(args: CommitJournalArgs, type: string, historyContent: string): string {
+export function generateHistoryEntry(
+  args: CommitJournalArgs,
+  type: string,
+  historyContent: string,
+  cwd?: string
+): string {
   const parsedCategory = parseCategory(historyContent, type);
   const category = args.category ?? parsedCategory.category;
 
@@ -204,12 +209,35 @@ export function generateHistoryEntry(args: CommitJournalArgs, type: string, hist
   body += `\nHistory-Validation: ${args.validation}`;
   if (args.journal) {
     body += `\nHistory-Journal: true`;
-    if (args['journal-project'] !== undefined) {
-      body += `\nHistory-Journal-Project: ${args['journal-project']}`;
+    const journalProject =
+      args['journal-project'] ??
+      (cwd !== undefined ? resolveJournalTarget(cwd).projectNumber : undefined);
+    if (journalProject !== undefined) {
+      body += `\nHistory-Journal-Project: ${journalProject}`;
     }
   }
 
   return body;
+}
+
+export function extractCommittedFiles(sha: string, cwd: string, limit = 25): string[] {
+  if (!/^[0-9a-f]{7,40}$/i.test(sha) || !fs.existsSync(cwd)) {
+    return [];
+  }
+  try {
+    const out = execFileSync(
+      'git',
+      ['diff-tree', '--no-commit-id', '--name-only', '-r', sha],
+      { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }
+    );
+    return out
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .filter((line) => line.length > 0)
+      .slice(0, limit);
+  } catch {
+    return [];
+  }
 }
 
 export function buildCommitJournalContent(
@@ -222,6 +250,7 @@ export function buildCommitJournalContent(
 ): string {
   const resolved = resolveJournalTarget(cwd, args['journal-project'], configPath);
   const mergedTags = Array.from(new Set(['commit-narrative', ...(args.tags ?? [])]));
+  const changedFiles = extractCommittedFiles(sha, cwd);
   const frontmatterLines = [
     '---',
     'type: "technical_note"',
@@ -242,6 +271,9 @@ export function buildCommitJournalContent(
   }
   if (args.relate !== undefined && args.relate.length > 0) {
     frontmatterLines.push(`relationships: ${JSON.stringify(args.relate)}`);
+  }
+  if (changedFiles.length > 0) {
+    frontmatterLines.push(`anchors: ${JSON.stringify(changedFiles)}`);
   }
 
   frontmatterLines.push(`impact: ${args.impact}`);

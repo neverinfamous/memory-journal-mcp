@@ -316,7 +316,7 @@ describe('Pass 29 Handler, Schema, CLI, Resource & Prompt Regressions', () => {
             {
                 workspace_id: 'memory-journal-mcp',
                 project_number: 5,
-                repo: 'C:\\Users\\chris\\Desktop\\memory-journal-mcp',
+                repo: '/repos/memory-journal-mcp',
             }
         )
         expect('error' in resolved).toBe(false)

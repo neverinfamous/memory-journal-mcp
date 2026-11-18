@@ -139,7 +139,7 @@ function buildOptimizeWorkflowOptionsSection(
    - \`relationships\`: Audit only orphan entries lacking graph anchors.
    - \`scores\`: Audit only entries with \`trust_score < 0.9\` or unrated \`impact_score\`.
    - \`tags\`: Audit entries with generic or empty tag arrays.
-3. Process entries in batches of 30–50, updating metadata via Code Mode (\`mj.admin.batchUpdateEntries\`).
+3. Process entries in sequential single-batch calls of **\`<= 25–30\`** entries per \`mj_execute_code\` invocation (1 batch per call — avoid multi-batch loops inside a single worker run to stay well within sandbox memory/timeout budgets), updating metadata via \`mj.admin.batchUpdateEntries\`.
 
 ${optionCHeading}
 1. **Domain-Based Subagent Partitioning**: Partition entries by **Project Workspace Domain** (or focus exclusively on \`${targetProject !== undefined && targetProject !== '' ? targetProject : 'all projects'}\` capped at \`${limitDisplay}\` entries). Domain partitioning preserves contextual coherence across commit narratives, retrospectives, and technical subsystem tags.

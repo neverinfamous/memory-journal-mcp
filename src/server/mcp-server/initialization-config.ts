@@ -22,9 +22,7 @@ function createServerConfigManager(
     filterConfig: ReturnType<typeof resolveToolFilterConfig>
 ): ConfigManager {
     const rawToolFilter =
-        options.toolFilter ??
-        process.env['MEMORY_JOURNAL_MCP_TOOL_FILTER'] ??
-        process.env['TOOL_FILTER']
+        options.toolFilter ?? process.env['MEMORY_JOURNAL_MCP_TOOL_FILTER']
 
     return new ConfigManager(
         {

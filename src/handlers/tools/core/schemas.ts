@@ -243,6 +243,11 @@ function preprocessSortByOnly(val: unknown): unknown {
     let modified = false
     if (healSortByField(obj)) modified = true
     if (healIncludeArchivedField(obj)) modified = true
+    if (typeof obj['cursor'] === 'string' && /^\d+$/.test(obj['cursor'].trim())) {
+        if (obj['offset'] === undefined) obj['offset'] = Number(obj['cursor'].trim())
+        delete obj['cursor']
+        modified = true
+    }
     return modified ? obj : val
 }
 

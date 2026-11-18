@@ -121,6 +121,35 @@ export function hasExplicitIncludeTeam(rawParams: unknown): boolean {
     return false
 }
 
+/** Probe whether a missing personal entry exists in the team database (respecting scope & RBAC). */
+export function probeMatchingTeamEntry(
+    context: {
+        teamDb?: IDatabaseAdapter | undefined
+        config?: ToolHandlerConfig | undefined
+    },
+    entryId: number,
+    wsId: string,
+    projectNumber?: number,
+    toolName = 'team_get_entry_by_id'
+): boolean {
+    const teamDb = context.teamDb
+    if (
+        !isTeamDbReady(teamDb) ||
+        !canAccessTeamSilently(toolName) ||
+        !canReadTeamEntriesRbac(teamDb, context.config, wsId)
+    ) {
+        return false
+    }
+    const teamCandidate = teamDb.getEntryById(entryId, wsId)
+    if (
+        teamCandidate === null ||
+        (teamCandidate.deletedAt !== undefined && teamCandidate.deletedAt !== null)
+    ) {
+        return false
+    }
+    return projectNumber === undefined || teamCandidate.projectNumber === projectNumber
+}
+
 /**
  * Authorize team-DB merging on personal search tools:
  * - Explicit `include_team: true` enforces OAuth team scope + Team RBAC (`AuthorizationError`/`PermissionError`).

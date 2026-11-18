@@ -302,6 +302,7 @@ export class DatabaseAdapter extends AdapterDelegates implements IDatabaseAdapte
         options?: {
             entryType?: EntryType
             tags?: string[]
+            excludeTags?: string[]
             isPersonal?: boolean
             projectNumber?: number
             issueNumber?: number

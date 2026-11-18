@@ -388,9 +388,10 @@ Options:
   --category <string>    Explicit category override (e.g. 'Added', 'Fixed').
   --add <path>           Explicitly stage these files before committing. Can be used multiple times (or provide as additional positional arguments).
   --cwd <path>           Explicit working directory for the git command.
-  --journal              Automatically create a memory journal entry for this commit.
+  --journal              Automatically create a memory journal entry for this commit (auto-populates file anchors).
   --journal-project <id> Specify the project ID for the journal entry (auto-resolved from projectRegistry if omitted).
   --session-id <id>      Conversation/session ID to attach to the automated journal entry.
+  --tags <tag>           Add tag(s) to the automated journal entry (repeatable or comma-separated).
   --relate <id[:type]>   Link commit journal entry to an existing entry (e.g. '14653:evolves_from'; repeatable/comma-separated).
   --help                 Show this help message.
   
@@ -539,8 +540,8 @@ function executeCommit(header: string, body: string, cwd?: string, onlyFiles?: s
       cleanupTempFile(msgFile);
   }
 
-  const sha = execSync('git log -1 --format=%h', { encoding: 'utf-8', cwd }).trim();
-  console.log(`\n✅ Successfully committed ${sha}`);
+  const sha = execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf-8', cwd }).trim();
+  console.log(`\n✅ Successfully committed ${sha.slice(0, 7)} (${sha})`);
   console.log(`__COMMIT_SHA__:${sha}`);
   
   return sha;
@@ -598,7 +599,7 @@ function main(): void {
       args['no-history'] = true;
     }
 
-    const body = generateHistoryEntry(args, type, historyContent);
+    const body = generateHistoryEntry(args, type, historyContent, cwd);
     const sha = executeCommit(args.msg, body, cwd, args.add);
     createJournalEntry(
       sha,

@@ -114,16 +114,31 @@ export function analyzeExitCode1(payload: ExecPayload, code: number, stdout: str
             isGrepNoMatch = true;
         } else if (['git', 'git.exe'].includes(origCmd)) {
             const origArgs = payload.args || [];
-            const diffIndex = origArgs.indexOf('diff');
-            const grepIndex = origArgs.indexOf('grep');
-            const configIndex = origArgs.indexOf('config');
-            if (diffIndex === 0 || (diffIndex === 1 && origArgs[0].startsWith('-'))) {
+            let subIdx = -1;
+            for (let i = 0; i < origArgs.length; i++) {
+                const tok = origArgs[i];
+                if (tok === '-C' || tok === '-c' || tok === '--git-dir' || tok === '--work-tree' || tok === '--namespace') {
+                    i++;
+                    continue;
+                }
+                if (tok.startsWith('-')) continue;
+                subIdx = i;
+                break;
+            }
+            const gitSub = subIdx !== -1 ? origArgs[subIdx].toLowerCase() : '';
+            const subArgs = subIdx !== -1 ? origArgs.slice(subIdx + 1) : [];
+            if (gitSub === 'diff') {
                 isDiffFound = true;
-            } else if (grepIndex === 0 || (grepIndex === 1 && origArgs[0].startsWith('-'))) {
+            } else if (gitSub === 'grep') {
                 isGrepNoMatch = true;
             } else if (
-                (configIndex === 0 || (configIndex > 0 && origArgs.slice(0, configIndex).every(a => a.startsWith('-')))) &&
-                origArgs.slice(configIndex + 1).some(a => ['--get', '--get-all', '--get-regexp', '--get-urlmatch', 'get'].includes(a)) &&
+                gitSub === 'config' &&
+                subArgs.some(a => ['--get', '--get-all', '--get-regexp', '--get-urlmatch', 'get'].includes(a)) &&
+                stderr.trim().length === 0
+            ) {
+                isGrepNoMatch = true;
+            } else if (
+                (gitSub === 'check-ignore' || (gitSub === 'merge-base' && subArgs.includes('--is-ancestor'))) &&
                 stderr.trim().length === 0
             ) {
                 isGrepNoMatch = true;

@@ -70,7 +70,7 @@ describe('CMS-04 REM Self-Healing Regressions (agent-issues.jsonl & audit teleme
             workspace_id: 'memory-journal-mcp',
             project_number: 5,
             anchors: [
-                '.agents/scripts/lib-agent-exec/inline-script-healer.ts',
+                'src/utils/inline-script-healer.ts',
                 'src/codemode/api/journal-api.ts#JournalApi',
                 { anchor_path: 'src/handlers/tools/git-staleness.ts', anchor_type: 'file', status: 'active' },
             ],
@@ -78,7 +78,7 @@ describe('CMS-04 REM Self-Healing Regressions (agent-issues.jsonl & audit teleme
 
         expect(parsed.anchors).toEqual([
             {
-                anchor_path: '.agents/scripts/lib-agent-exec/inline-script-healer.ts',
+                anchor_path: 'src/utils/inline-script-healer.ts',
                 anchor_type: 'file',
                 status: 'pending',
             },
@@ -435,7 +435,7 @@ describe('CMS-04 REM Self-Healing Regressions (agent-issues.jsonl & audit teleme
             projectRegistry: {
                 'memory-journal-mcp': { path: process.cwd(), project_number: 5 },
                 'db-mcp': { path: process.cwd(), project_number: 15 },
-                adamic: { path: process.cwd(), project_number: 16 },
+                'workspace-gamma': { path: process.cwd(), project_number: 16 },
             },
             runtime: new ServerRuntime(),
         }
@@ -463,7 +463,7 @@ describe('CMS-04 REM Self-Healing Regressions (agent-issues.jsonl & audit teleme
         // 2. Cross-project batch_update_entries with explicit workspace_id: '*' inside a project #5 session
         const e5 = db.createEntry({ content: 'Entry in MJ', workspaceId: 'memory-journal-mcp', projectNumber: 5 })
         const e15 = db.createEntry({ content: 'Entry in DB', workspaceId: 'db-mcp', projectNumber: 15 })
-        const e16 = db.createEntry({ content: 'Entry in Adamic', workspaceId: 'adamic', projectNumber: 16 })
+        const e16 = db.createEntry({ content: 'Entry in Gamma', workspaceId: 'workspace-gamma', projectNumber: 16 })
 
         const batchUpdateTool = getBatchTools(sessionCtx).find((t) => t.name === 'batch_update_entries')!
         const batchNorm = await normalizeDispatchParams(

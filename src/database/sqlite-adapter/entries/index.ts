@@ -239,6 +239,7 @@ export class EntriesManager {
         options?: {
             entryType?: EntryType
             tags?: string[]
+            excludeTags?: string[]
             isPersonal?: boolean
             projectNumber?: number
             issueNumber?: number

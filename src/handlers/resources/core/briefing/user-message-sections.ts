@@ -202,13 +202,15 @@ export function buildJournalParts(opts: BriefingUserMessageOptions): string[] {
         for (const s of summaryPreviews) {
             const cleaned = s.replace(/#+\s/g, '').replace(/\*\*/g, '').replace(/[-*]\s/g, '• ')
             journalParts.push(
-                `Summary: ${escapeCell(cleaned)} (Use \`mj_execute_code\` or \`read_resource\` to view full entry)`,
+                `Summary: ${escapeCell(cleaned)} (Use \`mj.core.getEntryById\` via \`mj_execute_code\` to view full entry)`,
             )
         }
     }
     if (opts.teamLatestPreviews && opts.teamLatestPreviews.length > 0) {
         for (const teamEntry of opts.teamLatestPreviews) {
-            journalParts.push(`Team: ${escapeCell(teamEntry)}`)
+            journalParts.push(
+                `Team: ${escapeCell(teamEntry)} (Use \`mj.team.teamGetEntryById\` to view full team entry)`,
+            )
         }
     }
     return journalParts

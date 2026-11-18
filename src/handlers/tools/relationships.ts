@@ -10,6 +10,7 @@ import { ResourceNotFoundError, ValidationError } from '../../types/errors.js'
 import { resolveWorkspaceId } from '../../utils/workspace-resolver.js'
 import { activeProjectRegistry, alignedProjectFilter } from '../../utils/write-scope.js'
 import { resolveWriteWorkspaceId } from './write-workspace.js'
+import { probeMatchingTeamEntry } from './search/helpers.js'
 import {
     LinkEntriesSchema,
     LinkEntriesSchemaMcp,
@@ -171,7 +172,26 @@ function executeVisualizeRelationships(params: unknown, context: ToolContext): R
         const foreignProject =
             input.project_number !== undefined && entry?.projectNumber !== input.project_number
         if (!entry || entry.deletedAt || foreignProject) {
-            return { ...formatHandlerError(new ResourceNotFoundError('Entry', String(input.entry_id))), success: false }
+            const baseErr = {
+                ...formatHandlerError(new ResourceNotFoundError('Entry', String(input.entry_id))),
+                success: false,
+            }
+            if (
+                !entry &&
+                probeMatchingTeamEntry(
+                    context,
+                    input.entry_id,
+                    wsId,
+                    input.project_number,
+                    'team_visualize_relationships'
+                )
+            ) {
+                return {
+                    ...baseErr,
+                    suggestion: `No personal entry #${String(input.entry_id)} was found in workspace '${wsId}', but team entry #${String(input.entry_id)} exists in the team database. Call team_visualize_relationships (or mj.team.teamVisualizeRelationships) instead.`,
+                }
+            }
+            return baseErr
         }
     }
 

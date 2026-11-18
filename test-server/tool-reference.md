@@ -21,7 +21,7 @@ Code executes in a **sandboxed VM context** with:
 - **Hard timeouts** — configurable execution limit (default 30s)
 - **Full API access** — all tool groups available via `mj.*`
 
-**API Groups:** `mj.core.*` (also aliased as `journal.*`), `mj.search.*`, `mj.analytics.*`, `mj.relationships.*`, `mj.io.*`, `mj.admin.*`, `mj.github.*`, `mj.backup.*`, `mj.team.*`
+**API Groups:** `mj.core.*` (also aliased as `journal.*`), `mj.search.*`, `mj.analytics.*`, `mj.relationships.*`, `mj.io.*`, `mj.admin.*`, `mj.github.*`, `mj.git.*`, `mj.backup.*`, `mj.team.*`
 
 ---
 
@@ -49,7 +49,7 @@ Entry lifecycle — create, retrieve, tags, and test.
 | `test_error_handling`  | Test tool for validating error handler responses.                                  |
 | `trigger_progress`     | Test tool to trigger an MCP progress notification sequence.                        |
 | `list_tags`            | List all available tags.                                                           |
-| `mark_anchors_stale`   | Mark explicit relationships between entries as stale or out-of-date.               |
+| `mark_anchors_stale`   | Update anchor staleness status on entry file/symbol anchors.                       |
 
 ---
 

@@ -9,6 +9,7 @@ const createWebServerConfig = (workerIndex: number) => {
         command: `node dist/cli.js --transport http --port ${port} --db ./.test-output/e2e/test-e2e-worker-${workerIndex}.db --backup-interval 1 --keep-backups 3 --vacuum-interval 2 --rebuild-index-interval 2`,
         env: {
             ...process.env,
+            DISABLE_ISSUE_LOGGING: 'true',
             MCP_RATE_LIMIT_MAX: '1000',
             TEAM_DB_PATH: `./.test-output/e2e/test-e2e-team-worker-${workerIndex}.db`,
             TEAM_AUTHOR: 'Alice',

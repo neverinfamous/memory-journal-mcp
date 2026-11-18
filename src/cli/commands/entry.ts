@@ -5,6 +5,7 @@ import { z } from 'zod'
 import { AuthorizationError, ValidationError } from '../../types/errors.js'
 import { CliExitError, enforceCliTeamRbac } from './db-helper.js'
 import { canonicalizeTeamAuthor } from '../../handlers/tools/team/rbac.js'
+import { resolveEntryAnchors } from '../../handlers/tools/core/staleness-tools.js'
 import { resolveTeamCreateAuthor } from '../../handlers/tools/team/admin-tools/batch-create-helpers.js'
 import { checkSingleTeamOwnership } from '../../handlers/tools/team/admin-tools/batch-delete-helpers.js'
 import { createEntryOptionsSchema, updateEntryOptionsSchema } from '../schemas.js'
@@ -200,6 +201,13 @@ export async function createEntryAction(...args: unknown[]): Promise<void> {
             resolvedAuthor = canonicalizeTeamAuthor(db, authorResult.author, resolvedWs)
         }
 
+        const resolvedAnchors = await resolveEntryAnchors(
+            payload.anchors,
+            payload.autoContextStr,
+            resolvedWs ?? 'default',
+            { db, config }
+        )
+
         const entryInput: CreateEntryInput = {
             content,
             entryType: payload.entryType,
@@ -212,6 +220,7 @@ export async function createEntryAction(...args: unknown[]): Promise<void> {
             validationStatus: payload.validationStatus,
             sessionId: payload.sessionId,
             autoContext: payload.autoContextStr,
+            ...(resolvedAnchors !== undefined ? { anchors: resolvedAnchors } : {}),
             ...(options.team === true && resolvedAuthor !== undefined
                 ? { isPersonal: false, author: resolvedAuthor }
                 : {}),

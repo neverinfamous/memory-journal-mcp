@@ -20,15 +20,15 @@ Static operational anchor for `memory-journal-mcp` Code Mode (`mj_execute_code`)
 
 ## 2. Code Mode (`mj_execute_code`) Contract & Graph-First Hybrid Recall
 
-- **Code Mode First:** Prioritize `mj_execute_code` (`mj.*` namespaces) for searches, multi-step queries, and entry creation (`mj.core.createEntry` indexes HNSW vector embeddings and file/symbol `anchors` immediately).
+- **Code Mode First:** Prioritize `mj_execute_code` (`mj.*` namespaces) for searches, multi-step queries, and entry creation (`mj.core.createEntry` indexes HNSW vector embeddings and file/symbol `anchors` immediately; `mj.admin.updateEntry` enables `auto_version: true` by default).
 - **Top-Level Call Contract:**
   `mj_execute_code({ code, workspace_id, project_number, repo, context, readonly, dry_run, max_result_size, timeout })`
   - **[ALWAYS]** pass explicit **`workspace_id`** (exact repo name) AND **`project_number`** (plus **`repo`** for `mj.git.*` / `mj.github.*` calls) **both** at the top level of `mj_execute_code` **and** on inner `mj.*` mutations — **NEVER** rely on `workspace_id` auto-resolution.
   - **Safe Markdown Passing (`context.content`):** Pass multi-line Markdown bodies via `context: { content: "..." }` and reference `context.content` inside `code` to avoid template-literal and backtick escaping errors.
   - **Execution Guards & Introspection:** Pass `readonly: true` for read-only audits, `dry_run: true` to preview mutations, `max_result_size` to bound large outputs, and `await mj.<group>.<method>.schema()` to inspect unfamiliar parameter schemas at runtime.
-- **Unbiased Pre-Planning Hybrid & Graph Recall:** Omit `sort_by: 'importance'` (or use `sort_by: 'blended'`) and exclude commit noise so architectural decisions rank by relevance before expanding the graph:
+- **Unbiased Pre-Planning Hybrid & Graph Recall:** Omit `sort_by: 'importance'` (or use `sort_by: 'blended'`) and exclude commit noise so architectural decisions rank by relevance before expanding the graph. Check `top.source === 'team'` (shared `TEAM_DB_PATH` entries cannot be fetched via personal `mj.core.getEntryById`):
   ```javascript
-  // Quote hyphenated tokens in FTS queries (e.g., '"memory-journal-mcp"') so '-' is not split as separate words
+  // Tokens with ., /, :, @ auto-quote; wrap bare hyphenated tokens in double quotes (e.g., '"memory-journal-mcp"')
   const hits = await mj.search.searchEntries({
     query: 'search sanitizer regression',
     mode: 'hybrid',
@@ -41,8 +41,16 @@ Static operational anchor for `memory-journal-mcp` Code Mode (`mj_execute_code`)
     workspace_id: 'my-repo',
   });
   const top = hits.entries[0] ?? decisions.entries[0];
-  const full = top ? await mj.core.getEntryById({ entry_id: top.id, workspace_id: 'my-repo' }) : null;
-  const graph = top ? await mj.relationships.visualizeRelationships({ entry_id: top.id, depth: 2, workspace_id: 'my-repo' }) : null;
+  const full = !top
+    ? null
+    : top.source === 'team'
+      ? await mj.team.teamGetEntryById({ entry_id: top.id, workspace_id: 'my-repo' })
+      : await mj.core.getEntryById({ entry_id: top.id, workspace_id: 'my-repo' });
+  const graph = !top
+    ? null
+    : top.source === 'team'
+      ? await mj.team.teamVisualizeRelationships({ entry_id: top.id, depth: 2, workspace_id: 'my-repo' })
+      : await mj.relationships.visualizeRelationships({ entry_id: top.id, depth: 2, workspace_id: 'my-repo' });
   return { hits, decisions, full, graph };
   ```
   - Search tag `"copilot-finding"` before opening PRs to prevent recurring review regressions.
@@ -58,7 +66,7 @@ Every manual journal entry (`mj.core.createEntry`) **MUST** populate:
 1. **`workspace_id`**: Exact repository name (e.g., `"my-repo"`).
 2. **`project_number`**: Numeric project ID from `memory://briefing/{+repo}` or `memory://agent-context/{+repo}`.
 3. **`session_id`**: Active conversation UUID (when running inside an agent harness).
-4. **`entry_type`**: Canonical enum value — `'technical_note'`, `'project_decision'`, `'bug_fix'`, `'feature_implementation'`, `'planning'`, `'retrospective'`, or `'maintenance'` (pair architectural decisions with `significance_type: 'architecture'`).
+4. **`entry_type`**: Canonical enum value — `'technical_note'`, `'project_decision'`, `'bug_fix'`, `'feature_implementation'`, `'planning'`, `'retrospective'`, or `'maintenance'` (pair architectural decisions with `significance_type: 'architecture' | 'decision'`).
 5. **`impact_score`** (`0.0–1.0`) & **`trust_score`** (`0.0–1.0`).
 6. **`validation_status`**: `'passed'`, `'none'`, or `'failed'`.
 7. **Graph `relationships`**: Pass **`relationships: [{ targetId: <number>, relationType: <canonical_type> }]`** using **only** canonical types:
@@ -71,7 +79,7 @@ Every manual journal entry (`mj.core.createEntry`) **MUST** populate:
 
 ## 4. Commit Narratives, CLI & Session Summary Guardrails
 
-- **CLI Attribution (`entry create`):** `memory-journal-mcp entry create` resolves project context from explicit `-p`/`--project`/`--workspace-id` or `--metadata` first, then a registered `process.cwd()` path match in `projectRegistry` (supports `--significance <type>` and `--related-to`). Content and tag keywords do not select the project.
+- **CLI Attribution (`entry create`):** `memory-journal-mcp entry create` resolves project context from explicit `-p`/`--project`/`--workspace-id` or `--metadata` first, then a registered `process.cwd()` path match in `projectRegistry` (supports `--significance <type>`, `--related-to`, and `anchors` frontmatter/metadata or `--auto-context` extraction). Content and tag keywords do not select the project.
 - **Commit Narratives:** Any entry tagged `"commit-narrative"` **MUST** include `auto_context` with a non-empty `commits` array (`{ commits: ["<sha>"] }`).
 - **Session Summaries (Feeds Nightly `CMS-04` REM Supervisor):**
   - Entries tagged `"session-summary"` (`entry_type: "retrospective"`) **MUST** contain **only** these 4 exact H2 headers (no extra or duplicate H2 headers):

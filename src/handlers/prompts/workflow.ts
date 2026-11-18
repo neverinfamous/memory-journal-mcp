@@ -102,7 +102,7 @@ You MUST modify the underlying infrastructure (codebase, environment profiles, w
 
 ## 1. Workflow Initialization
 
-1. Identify the target MCP server workspace (e.g., \`C:\\Users\\chris\\Desktop\\memory-journal-mcp\` or \`C:\\Users\\chris\\Desktop\\mysql-mcp\`) and reference workflow (\`.agents/workflows/heal-mcp-server.md\`).
+1. Identify the target MCP server workspace (e.g., \`<repo_root>\`).
 2. Read and review the error log file at \`<repo_root>/logs/agent-issues.jsonl\` (and \`logs/mcp-audit.jsonl\` if present).
 3. Categorize each error by source (\`MCP\`, \`CLI\`, \`CodeMode\`, \`Protocol\`, \`Transports\`) and formulate a concrete healing plan using the strict hierarchy below.
 
@@ -150,10 +150,10 @@ When an agent hallucinates CLI flags or usage patterns for standalone scripts or
 Agents often run into environment-level interceptors (like global PowerShell profiles, \`.bashrc\`, or global Git hooks) or scheduled automation prompts that throw hallucinatory errors or break command execution.
 
 * **Native Tool Priority:** Always use declared native tools (\`read_file\`, \`edit_file\`, \`write_file\`, \`search_web\`) before shell commands; use \`rg\` or \`Get-ChildItem\` for file search and directory listings.
-* **Safe Config & Profile Edits:** Update large/protected JSON configs via deterministic \`node -e\` / \`bun -e\` scripts without echoing secret values, or use surgical \`edit_file\` calls on single contiguous blocks.
+* **Safe Config & Profile Edits:** Update large/protected JSON configs via deterministic scripts without echoing secret values, or use surgical \`edit_file\` calls on single contiguous blocks.
 * **Transient IDE Errors:** If shifting lines via code edits triggers IDE typing errors, ALWAYS verify with \`pnpm run typecheck\` before attempting complex type refactoring, as it may just be a stale ESLint/TSServer cache.
-* **Command Verification Trap:** In environments utilizing PowerShell proxy functions (like \`lib-agent-exec\`), native tools (e.g., \`pnpm\`, \`bun\`, \`git\`) exist as Aliases or Functions rather than traditional executables. DO NOT use \`Get-Command <tool> -CommandType Application\` to verify existence, as this explicitly filters out aliases and will falsely report the tool as missing. Use \`Get-Command <tool>\` without the \`-CommandType\` filter.
-* **Self-Improving Automations & Canonical Docs:** If you notice improvement opportunities in the scheduled CMS automations (\`~/.gemini/config/sidecars/*/sidecar.json\`) or the canonical CMS documentation (\`docs/cognitive-management-system.md\` in \`adamic\` and \`Automations.md\` in \`memory-journal-mcp.wiki\`), apply and commit those improvements alongside your code fixes.
+* **Command Verification Trap:** In environments utilizing shell proxy functions, native tools (e.g., \`pnpm\`, \`git\`) may exist as aliases or functions rather than traditional executables. DO NOT use \`Get-Command <tool> -CommandType Application\` to verify existence, as this explicitly filters out aliases and will falsely report the tool as missing. Use \`Get-Command <tool>\` without the \`-CommandType\` filter.
+* **Self-Improving Automations & Canonical Docs:** If you notice improvement opportunities in scheduled automation prompts or canonical CMS docs (\`Automations.md\`), apply and commit those improvements alongside your code fixes.
 
 ## 3. Phase 2: Implementation & Dirty-Tree Conditional Single-Pass Validation Gate
 
@@ -162,9 +162,9 @@ Agents often run into environment-level interceptors (like global PowerShell pro
 
 1. Implement necessary source code fixes, schema updates, aliases, normalizers, and regression tests (e.g., \`tests/unit/cms-04-rem-healing.test.ts\`).
 2. **Dirty-Tree Conditional Single-Pass Validation Gate:**
-   - Check working tree state via \`bun .agents/scripts/get-git-history-json.ts --uncommitted --stats\` (or \`git status --porcelain\`).
-   - **If \`0\` files are modified in \`memory-journal-mcp\`**: Skip \`lint\`, \`typecheck\`, \`build\`, \`vitest\`, and \`playwright\` completely.
-   - **If \`>= 1\` files are modified in \`memory-journal-mcp\`**: Terminate any active subagents (\`manage_subagents\` \`Action: 'kill_all'\`) and execute the 5-stage validation matrix **strictly sequentially once** (never concurrently, never \`pnpm run check\`):
+   - Check working tree state via \`git status --porcelain\`.
+   - **If \`0\` files are modified in the repository**: Skip \`lint\`, \`typecheck\`, \`build\`, \`vitest\`, and \`playwright\` completely.
+   - **If \`>= 1\` files are modified in the repository**: Terminate any stalled audit subagents (\`manage_subagents\` \`Action: 'kill'\` with explicit IDs) and execute the 5-stage validation matrix **strictly sequentially once** (never concurrently, never \`pnpm run check\`):
      \`\`\`pwsh
      pnpm run lint
      pnpm run typecheck
@@ -172,11 +172,11 @@ Agents often run into environment-level interceptors (like global PowerShell pro
      pnpm exec vitest run
      pnpm exec playwright test
      \`\`\`
-3. Commit your changes locally using \`commit.ts\`:
+3. Commit your changes locally:
    \`\`\`pwsh
-   bun .\\.agents\\scripts\\commit.ts --msg "fix(cms): heal MCP server guardrails, aliases, and error handlers" --impact 0.5 --confidence 0.95 --validation passed --journal --add <paths>
+   git add <paths>; git commit -m "fix(cms): heal MCP server guardrails, aliases, and error handlers"
    \`\`\`
-4. If you also improved any scheduled automation \`sidecar.json\` under \`~/.gemini/config/sidecars/\` or CMS documentation (\`adamic/docs/cognitive-management-system.md\` or \`memory-journal-mcp.wiki/Automations.md\`), commit those explicit files in their respective repositories (never use \`--add .\` in \`~/.gemini\`).
+4. If you also improved any scheduled automation templates or CMS documentation (\`Automations.md\`), commit those explicit files in their respective repositories.
 
 ## 4. Phase 3: Log Clearance
 

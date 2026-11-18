@@ -9,6 +9,7 @@ export default defineConfig({
             TEAM_AUTHOR: 'test-author',
             DB_PATH: ':memory:',
             TEAM_DB_PATH: ':memory:',
+            DISABLE_ISSUE_LOGGING: 'true',
         },
         globalSetup: ['./tests/global-teardown.ts'],
         include: ['tests/**/*.test.ts'],

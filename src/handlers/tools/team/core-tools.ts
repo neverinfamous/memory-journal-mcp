@@ -11,6 +11,7 @@ import { sendProgress } from '../../../utils/progress-utils.js'
 import { resolveTeamCreateAuthor } from './admin-tools/batch-create-helpers.js'
 import { resolveIssueUrl } from '../../../utils/github-helpers.js'
 import { autoIndexEntry } from '../../../utils/vector-index-helpers.js'
+import { encodeCursor } from '../../../database/sqlite-adapter/entries/search/cursor.js'
 import { resolveWorkspaceId, resolveProjectContext } from '../../../utils/workspace-resolver.js'
 import { activeProjectRegistry, alignedProjectFilter, pairStoredScope } from '../../../utils/write-scope.js'
 import {
@@ -261,8 +262,15 @@ export function getTeamCoreTools(context: ToolContext): ToolDefinition[] {
                         return { ...TEAM_DB_ERROR_RESPONSE }
                     }
 
-                    const { limit, cursor, sort_by, project_number, workspace_id, include_archived } =
-                        TeamGetRecentSchema.parse(params)
+                    const {
+                        limit,
+                        cursor,
+                        offset,
+                        sort_by,
+                        project_number,
+                        workspace_id,
+                        include_archived,
+                    } = TeamGetRecentSchema.parse(params)
                     const wsId = resolveWorkspaceId(workspace_id, project_number, context.config)
                     const projectNumber = resolveTeamProjectNumber(
                         context,
@@ -280,9 +288,11 @@ export function getTeamCoreTools(context: ToolContext): ToolDefinition[] {
                             recoverable: true,
                         }
                     }
+                    const effectiveCursor =
+                        cursor ?? (offset > 0 ? encodeCursor({ offset }) : undefined)
                     const result = teamDb.searchEntries('', {
                         limit,
-                        cursor,
+                        cursor: effectiveCursor,
                         sortBy: sort_by,
                         projectNumber: projectNumber,
                         workspaceId: wsId,

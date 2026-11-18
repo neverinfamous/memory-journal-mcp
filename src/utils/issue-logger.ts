@@ -38,9 +38,16 @@ function sanitizeCliArgList(args: unknown[], depth = 0): unknown[] {
     return out
 }
 
+const MAX_ISSUE_STRING_LENGTH = 500
+
+function truncateIssueString(val: string): string {
+    if (val.length <= MAX_ISSUE_STRING_LENGTH) return val
+    return `${val.slice(0, MAX_ISSUE_STRING_LENGTH)}...[truncated]`
+}
+
 export function sanitizeIssueInput(value: unknown, depth = 0): unknown {
     if (depth > 8 || value === null || value === undefined) return value
-    if (typeof value === 'string') return sanitizeErrorForLogging(value)
+    if (typeof value === 'string') return truncateIssueString(sanitizeErrorForLogging(value))
     if (typeof value !== 'object') return value
     if (Array.isArray(value)) {
         return sanitizeCliArgList(value, depth)

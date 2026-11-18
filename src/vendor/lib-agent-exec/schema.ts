@@ -303,6 +303,7 @@ export const agentExecCliArgsSchema = z.object({
   version: z.boolean().optional(),
   json: z.boolean().optional(),
   payload: z.string().optional(),
+  base64: z.string().optional(),
   payloadPath: z.string().max(1024).optional(),
   target: z.string().max(1024).optional(),
   cwd: z.string().max(1024).optional(),

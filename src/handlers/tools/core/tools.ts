@@ -11,8 +11,7 @@ import {
 import { resolveWorkspaceId, resolveProjectContext } from '../../../utils/workspace-resolver.js'
 import { activeProjectRegistry, alignedProjectFilter } from '../../../utils/write-scope.js'
 import { logger } from '../../../utils/logger.js'
-import { canAccessTeamSilently, isTeamDbReady } from '../search/helpers.js'
-import { canReadTeamEntriesRbac } from '../team/rbac.js'
+import { probeMatchingTeamEntry } from '../search/helpers.js'
 
 import {
     CreateEntrySchema,
@@ -208,18 +207,15 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
                         (input.project_number !== undefined &&
                             entry.projectNumber !== input.project_number)
                     ) {
-                        const canProbeTeam =
-                            !entry &&
-                            isTeamDbReady(context.teamDb) &&
-                            canAccessTeamSilently('team_get_entry_by_id') &&
-                            canReadTeamEntriesRbac(context.teamDb, context.config, wsId)
-                        const teamCandidate = canProbeTeam
-                            ? context.teamDb?.getEntryById(input.entry_id, wsId) ?? null
-                            : null
                         const matchingTeamEntry =
-                            teamCandidate !== null &&
-                            (input.project_number === undefined ||
-                                teamCandidate.projectNumber === input.project_number)
+                            !entry &&
+                            probeMatchingTeamEntry(
+                                context,
+                                input.entry_id,
+                                wsId,
+                                input.project_number,
+                                'team_get_entry_by_id'
+                            )
                         return {
                             success: false,
                             error: `Entry ${String(input.entry_id)} not found`,
@@ -312,11 +308,25 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
                         (input.project_number !== undefined &&
                             current.projectNumber !== input.project_number)
                     ) {
+                        const matchingTeamEntry =
+                            !current &&
+                            probeMatchingTeamEntry(
+                                context,
+                                input.entry_id,
+                                wsId,
+                                input.project_number,
+                                'team_get_entry_by_id'
+                            )
                         return {
                             success: false,
                             error: `Entry ${String(input.entry_id)} not found`,
                             code: 'RESOURCE_NOT_FOUND',
                             category: 'resource',
+                            ...(matchingTeamEntry
+                                ? {
+                                      suggestion: `No personal entry #${String(input.entry_id)} was found in workspace '${wsId}', but team entry #${String(input.entry_id)} exists in the team database. Call team_get_entry_by_id (or mj.team.teamGetEntryById / mj.team.getEntryById) instead.`,
+                                  }
+                                : {}),
                             recoverable: true,
                         }
                     }

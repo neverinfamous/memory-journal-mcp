@@ -117,6 +117,7 @@ function executeTeamSearchByDateRange(
     const result = teamDb.searchByDateRange(input.start_date, input.end_date, {
         entryType: input.entry_type,
         tags: input.tags,
+        excludeTags: input.exclude_tags,
         limit: input.limit,
         cursor: input.cursor,
         sortBy: input.sort_by,

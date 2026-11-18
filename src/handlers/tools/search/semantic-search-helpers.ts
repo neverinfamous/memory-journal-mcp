@@ -64,6 +64,7 @@ function computeSemanticInternalLimit(input: SemanticSearchInput): number {
     const hasFilters =
         input.is_personal !== undefined ||
         input.tags !== undefined ||
+        input.exclude_tags !== undefined ||
         input.entry_type !== undefined ||
         input.start_date !== undefined ||
         input.end_date !== undefined ||
@@ -251,6 +252,7 @@ function buildSemanticFilterOptions(
         prNumber: input.pr_number,
         workflowRunId: input.workflow_run_id,
         tags: input.tags,
+        excludeTags: input.exclude_tags,
         entryType: input.entry_type,
         startDate: input.start_date,
         endDate: input.end_date,

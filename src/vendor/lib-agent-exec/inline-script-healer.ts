@@ -186,7 +186,7 @@ export function configureCwdModuleResolution(
   const baseNodePath = envOverrides['NODE_PATH'] ?? payloadEnv?.['NODE_PATH'] ?? process.env['NODE_PATH'];
   envOverrides['NODE_PATH'] = buildCwdNodeModulePaths(cwd, baseNodePath);
 
-  if (interpreterName.toLowerCase() === 'node' && fs.existsSync(RESOLVER_MODULE_PATH)) {
+  if (['node', 'tsx', 'ts-node'].includes(interpreterName.toLowerCase()) && fs.existsSync(RESOLVER_MODULE_PATH)) {
     envOverrides['AGENT_EXEC_INLINE_CWD'] = path.resolve(cwd);
     const resolverUrl = pathToFileURL(RESOLVER_MODULE_PATH).href;
     const importFlag = `--import=${resolverUrl}`;
@@ -278,7 +278,7 @@ export function rewriteInlineScriptToTempFile(params: {
   }
 
   const { flagIdx, isPrint, scriptContent, inputType, stripIndices } = details;
-  console.error(`\n   🛠️ AUTONOMOUS HEALING: Transparently rewriting inline ${interpreterName} script to a temporary file execution to avoid quoting bugs... (Frictionless Recovery)\x1b[0m`);
+  console.error(`\n   💡 AGENT INTERCEPT: Transparently rewriting inline ${interpreterName} script to a temporary file execution to avoid quoting bugs... (Frictionless Recovery)`);
 
   const ext = interpreterName.startsWith('python')
     ? 'py'

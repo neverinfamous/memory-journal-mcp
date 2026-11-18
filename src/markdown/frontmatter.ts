@@ -43,6 +43,7 @@ export interface FrontmatterData {
     workspace_id?: string
     project_number?: number
     relationships?: { type: string; target_id: number }[]
+    anchors?: string[]
     source?: string
 }
 
@@ -77,6 +78,7 @@ const FrontmatterSchema = z.object({
         )
         .max(100)
         .optional(),
+    anchors: z.array(z.string().max(500)).max(100).optional(),
     source: z.string().optional(),
 })
 
@@ -103,6 +105,7 @@ export function serializeFrontmatter(data: FrontmatterData | null | undefined): 
     if (data.project_number !== undefined) cleanData.project_number = data.project_number
     if (data.relationships && data.relationships.length > 0)
         cleanData.relationships = data.relationships
+    if (data.anchors && data.anchors.length > 0) cleanData.anchors = data.anchors
     if (data.source !== undefined) cleanData.source = data.source
 
     if (Object.keys(cleanData).length === 0) return ''

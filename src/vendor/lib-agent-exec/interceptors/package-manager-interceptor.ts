@@ -5,7 +5,7 @@ import { AUTONOMOUS_HEALING_MSG } from '../utils.js';
 import { ExecutionContext, AGENT_NATIVE_TOOLS, ECOSYSTEM_MCP_TOOLS } from './types.js';
 import { handleRipgrepInterception } from './search-interceptor.js';
 import { getUnderlyingPackageScript } from '../command-utils.js';
-import { rewriteInlineScriptToTempFile } from '../inline-script-healer.js';
+import { configureCwdModuleResolution, rewriteInlineScriptToTempFile } from '../inline-script-healer.js';
 
 export function packageManagerInterceptor(ctx: ExecutionContext): void {
   let { cmdBasename } = ctx;
@@ -343,6 +343,8 @@ export function packageManagerInterceptor(ctx: ExecutionContext): void {
         });
         if (rewritten !== null && 'command' in ctx.payload) {
           ctx.payload.args = ctx.args;
+        } else if (rewritten === null && args.some((a) => /[\\/]\.gemini[\\/][^\\/]+[\\/]brain[\\/]/i.test(a))) {
+          configureCwdModuleResolution(envOverrides, projectDir, tsxBin, ctx.payload.target, ctx.payload.env);
         }
       }
     }
@@ -392,7 +394,7 @@ export function packageManagerInterceptor(ctx: ExecutionContext): void {
     } else if (isKnownDeterministic) {
       console.error(`\n   💡 AGENT INTERCEPT: Disabling stall interceptors and extending timeout for deterministic workflow script to prevent false positive aborts.`);
       ctx.payload.bypassInterceptors = true;
-      const detTimeout = ctx.payload.target === 'wsl2' ? 90000 : (isBackupConversations ? 600000 : 240000);
+      const detTimeout = ctx.payload.target === 'wsl2' ? 90000 : (isBackupConversations ? 1500000 : 240000);
       if (ctx.payload.timeoutMs === undefined || ctx.payload.timeoutMs < detTimeout) {
         ctx.payload.timeoutMs = detTimeout;
       }
@@ -482,6 +484,8 @@ export function packageManagerInterceptor(ctx: ExecutionContext): void {
       });
       if (rewritten !== null && 'command' in ctx.payload) {
         ctx.payload.args = ctx.args;
+      } else if (rewritten === null && args.some((a) => /[\\/]\.gemini[\\/][^\\/]+[\\/]brain[\\/]/i.test(a))) {
+        configureCwdModuleResolution(envOverrides, projectDir, 'tsx', ctx.payload.target, ctx.payload.env);
       }
     } else {
       envOverrides['CI'] = '1';
@@ -535,7 +539,7 @@ export function packageManagerInterceptor(ctx: ExecutionContext): void {
         const isFullSuite = isTestRunner && testFiles.length === 0 && !isTestDir;
         const runnerTimeout = ctx.payload.target === 'wsl2'
           ? (isCoverage || isLargeTestBatch ? 300000 : (isMultiTest || isTestDir || isFullSuite ? 180000 : 90000))
-          : (isBackupConversations || isCoverage || isFullSuite ? 600000 : (isLargeTestBatch ? 480000 : (isTestDir ? 360000 : (isMultiTest ? 300000 : 240000))));
+          : (isBackupConversations ? 1500000 : (isCoverage || isFullSuite ? 600000 : (isLargeTestBatch ? 480000 : (isTestDir ? 360000 : (isMultiTest ? 300000 : 240000)))));
         if (ctx.payload.timeoutMs === undefined || ctx.payload.timeoutMs < runnerTimeout) {
           ctx.payload.timeoutMs = runnerTimeout;
         }

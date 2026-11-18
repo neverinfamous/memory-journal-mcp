@@ -193,6 +193,7 @@ export function getEntriesPage(
 interface DateRangeQueryOptions {
     entryType?: EntryType
     tags?: string[]
+    excludeTags?: string[]
     cursor?: string
     isPersonal?: boolean
     projectNumber?: number
@@ -340,6 +341,7 @@ function appendDateRangeFilters(
         | {
               entryType?: EntryType
               tags?: string[]
+              excludeTags?: string[]
               isPersonal?: boolean
               projectNumber?: number
               issueNumber?: number
@@ -356,6 +358,20 @@ function appendDateRangeFilters(
                 (placeholders) =>
                     `EXISTS (SELECT 1 FROM entry_tags et JOIN tags t ON et.tag_id = t.id WHERE et.entry_id = e.id AND LOWER(t.name) IN (${placeholders}))`,
                 'OR'
+            )
+            conditions.push(membership.sql)
+            params.push(...membership.params)
+        }
+    }
+
+    if (options?.excludeTags !== undefined && options.excludeTags.length > 0) {
+        const expandedExcluded = expandTagFilterValues(options.excludeTags)
+        if (expandedExcluded.length > 0) {
+            const membership = chunkedInPredicate(
+                expandedExcluded,
+                (placeholders) =>
+                    `NOT EXISTS (SELECT 1 FROM entry_tags et_ex JOIN tags t_ex ON et_ex.tag_id = t_ex.id WHERE et_ex.entry_id = e.id AND LOWER(t_ex.name) IN (${placeholders}))`,
+                'AND'
             )
             conditions.push(membership.sql)
             params.push(...membership.params)

@@ -212,7 +212,8 @@ export const LAZY_GROUP_METHOD_NAMES = Symbol('lazyGroupMethodNames')
 
 function createGroupNamespaceProxy(ctx: GroupProxyContext): object {
     const { group, methodNames, createMethodProxyFn } = ctx
-    const methodSet = new Set(methodNames)
+    const domainMethods = methodNames.filter((m) => m !== 'help' && m !== 'describe')
+    const methodSet = new Set(domainMethods)
     const resolvedCache = new Map<string, unknown>()
 
     const helpFn = (): Promise<unknown> => Promise.resolve({ group, methods: methodNames })
@@ -235,7 +236,7 @@ function createGroupNamespaceProxy(ctx: GroupProxyContext): object {
         configurable: false,
     })
 
-    const ownKeyList = Array.from(new Set<string | symbol>([...Reflect.ownKeys(groupCallable), ...methodNames]))
+    const ownKeyList = Array.from(new Set<string | symbol>([...Reflect.ownKeys(groupCallable), ...domainMethods]))
 
     return new Proxy(groupCallable, {
         ownKeys: () => ownKeyList,
