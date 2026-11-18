@@ -6,7 +6,7 @@
 
 import { isRecord } from '../../../codemode/normalizers/shared-utils.js'
 import { healCodeModeScript } from './code-healer.js'
-import { extractAndRecoverJsonCode } from './json-entry-recovery.js'
+import { extractAndRecoverJsonCode, extractAndRecoverRecordCode } from './json-entry-recovery.js'
 import {
     appendSharedEntryFlags,
     getNonEmptyString,
@@ -256,7 +256,7 @@ export function resolveExecutionPayload(
 
     const candidate = healingEnabled ? readCandidateRecord(input, params) : undefined
     if (healingEnabled && (executionCode === undefined || executionCode === '') && candidate !== undefined) {
-        const recovered = extractAndRecoverJsonCode(JSON.stringify(candidate))
+        const recovered = extractAndRecoverRecordCode(candidate)
         if (recovered !== null) {
             executionCode = recovered
             recoveredJs = true

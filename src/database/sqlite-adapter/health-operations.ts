@@ -10,45 +10,65 @@ export class HealthOperations {
         private backupMgr: BackupManager
     ) {}
 
-    getHealthStatus(): ReturnType<IDatabaseAdapter['getHealthStatus']> {
-        // Safe query execution through the connection interface
-        const dbPath = this.connection.getDbPath()
-
+    private readDbFileSizeBytes(dbPath: string): number {
+        if (dbPath === ':memory:') return 0
         let sizeBytes = 0
-        if (dbPath !== ':memory:') {
+        try {
+            sizeBytes = fs.statSync(dbPath).size
             try {
-                const stats = fs.statSync(dbPath)
-                sizeBytes = stats.size
-                try {
-                    const walStats = fs.statSync(`${dbPath}-wal`)
-                    sizeBytes += walStats.size
-                } catch {
-                    // WAL file may not exist or may already be checkpointed
-                }
-            } catch (error) {
-                // File may not exist on disk yet
-                logger.debug('Database file size unavailable', {
-                    module: 'HealthOperations',
-                    error: error instanceof Error ? error.message : String(error),
-                })
+                sizeBytes += fs.statSync(`${dbPath}-wal`).size
+            } catch {
+                // WAL file may not exist or may already be checkpointed
             }
+        } catch (error) {
+            // File may not exist on disk yet
+            logger.debug('Database file size unavailable', {
+                module: 'HealthOperations',
+                error: error instanceof Error ? error.message : String(error),
+            })
         }
+        return sizeBytes
+    }
 
+    private readHealthCounts(): {
+        entryCount: number
+        deletedEntryCount: number
+        relationshipCount: number
+        tagCount: number
+    } {
         // Combined health counts in a single query (batch instead of 4 serial queries)
-        const countsResult = this.connection.exec(`
+        const countSql = `
             SELECT
                 (SELECT COUNT(*) FROM memory_journal WHERE deleted_at IS NULL) AS entry_count,
                 (SELECT COUNT(*) FROM memory_journal WHERE deleted_at IS NOT NULL) AS deleted_count,
                 (SELECT COUNT(*) FROM relationships) AS rel_count,
                 (SELECT COUNT(*) FROM tags) AS tag_count
-        `)
+        `
+        const nativeDb = this.connection.getNativeDb?.()
+        if (nativeDb !== undefined) {
+            const row = nativeDb.prepare(countSql).get() as
+                | { entry_count?: number; deleted_count?: number; rel_count?: number; tag_count?: number }
+                | undefined
+            return {
+                entryCount: row?.entry_count ?? 0,
+                deletedEntryCount: row?.deleted_count ?? 0,
+                relationshipCount: row?.rel_count ?? 0,
+                tagCount: row?.tag_count ?? 0,
+            }
+        }
+        const row = this.connection.exec(countSql)[0]?.values[0]
+        return {
+            entryCount: (row?.[0] as number) ?? 0,
+            deletedEntryCount: (row?.[1] as number) ?? 0,
+            relationshipCount: (row?.[2] as number) ?? 0,
+            tagCount: (row?.[3] as number) ?? 0,
+        }
+    }
 
-        const row = countsResult[0]?.values[0]
-        const entryCount = (row?.[0] as number) ?? 0
-        const deletedEntryCount = (row?.[1] as number) ?? 0
-        const relationshipCount = (row?.[2] as number) ?? 0
-        const tagCount = (row?.[3] as number) ?? 0
-
+    getHealthStatus(): ReturnType<IDatabaseAdapter['getHealthStatus']> {
+        const dbPath = this.connection.getDbPath()
+        const sizeBytes = this.readDbFileSizeBytes(dbPath)
+        const { entryCount, deletedEntryCount, relationshipCount, tagCount } = this.readHealthCounts()
         const backups = this.backupMgr.listBackups()
         const lastBackup = backups[0] ?? null
 

@@ -369,7 +369,8 @@ export function buildMemoryAndFactoryShims(
     safeFsShim: SafeFsShim,
     updateMemoryFn: (arg: unknown) => unknown
 ): Record<string, unknown> {
-    const callableShim = (): object => createCallableShim(shimMj)
+    const sharedCallableShim = createCallableShim(shimMj)
+    const callableShim = (): object => sharedCallableShim
     const factoryShims: Record<string, unknown> = {}
     for (const name of FACTORY_SHIM_NAMES) {
         factoryShims[name] = () => shimMj

@@ -177,11 +177,14 @@ export function getSearchFacets(
     const entryTypeConditions = [...conditions]
     const entryTypeParams = [...params]
     if (expandedFilterTags.length > 0) {
-        const placeholders = expandedFilterTags.map(() => '?').join(',')
-        entryTypeConditions.push(
-            `EXISTS (SELECT 1 FROM entry_tags et_f JOIN tags t_f ON et_f.tag_id = t_f.id WHERE et_f.entry_id = e.id AND LOWER(t_f.name) IN (${placeholders}))`
+        const membership = chunkedInPredicate(
+            expandedFilterTags,
+            (placeholders) =>
+                `EXISTS (SELECT 1 FROM entry_tags et_f JOIN tags t_f ON et_f.tag_id = t_f.id WHERE et_f.entry_id = e.id AND LOWER(t_f.name) IN (${placeholders}))`,
+            'OR'
         )
-        entryTypeParams.push(...expandedFilterTags)
+        entryTypeConditions.push(membership.sql)
+        entryTypeParams.push(...membership.params)
     }
 
     appendFacetFilterConditions(conditions, params, options)

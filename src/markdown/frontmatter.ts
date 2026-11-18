@@ -125,29 +125,41 @@ export function serializeFrontmatter(data: FrontmatterData | null | undefined): 
  * @throws Error if frontmatter is malformed or fails validation
  */
 export function parseFrontmatter(content: string): ParseResult {
-    const normalized = content.replace(/\r\n/g, '\n').replace(/\r/g, '\n')
-    const lines = normalized.split('\n')
+    const normalized = content.includes('\r')
+        ? content.replace(/\r\n/g, '\n').replace(/\r/g, '\n')
+        : content
+    const firstNl = normalized.indexOf('\n')
+    const firstLine = (firstNl === -1 ? normalized : normalized.slice(0, firstNl)).trim()
 
     // Must start with ---
-    if (lines[0]?.trim() !== '---') {
+    if (firstLine !== '---') {
         return { metadata: {}, body: normalized }
     }
-
-    // Find closing ---
-    let closingIndex = -1
-    for (let i = 1; i < lines.length; i++) {
-        if (lines[i]?.trim() === '---') {
-            closingIndex = i
-            break
-        }
-    }
-
-    if (closingIndex === -1) {
+    if (firstNl === -1) {
         throw new Error('Invalid frontmatter: Found opening --- fence but no closing --- fence')
     }
 
-    // Try robust JSON parsing first
-    const fmText = lines.slice(1, closingIndex).join('\n').trim()
+    // Scan lines in header only via indexOf to avoid splitting/rejoining multi-MB bodies
+    let pos = firstNl + 1
+    let closingLineStart = -1
+    let closingLineEnd = -1
+    while (pos <= normalized.length) {
+        const nextNl = normalized.indexOf('\n', pos)
+        const lineEnd = nextNl === -1 ? normalized.length : nextNl
+        if (normalized.slice(pos, lineEnd).trim() === '---') {
+            closingLineStart = pos
+            closingLineEnd = nextNl === -1 ? normalized.length : nextNl + 1
+            break
+        }
+        if (nextNl === -1) break
+        pos = nextNl + 1
+    }
+
+    if (closingLineStart === -1) {
+        throw new Error('Invalid frontmatter: Found opening --- fence but no closing --- fence')
+    }
+
+    const fmText = normalized.slice(firstNl + 1, closingLineStart).trim()
     let raw: Record<string, unknown>
 
     if (fmText.startsWith('{') && fmText.endsWith('}')) {
@@ -173,10 +185,8 @@ export function parseFrontmatter(content: string): ParseResult {
     }
 
     // Body is everything after the closing ---
-    const body = lines
-        .slice(closingIndex + 1)
-        .join('\n')
-        .replace(/^\n/, '')
+    const rawBody = normalized.slice(closingLineEnd)
+    const body = rawBody.startsWith('\n') ? rawBody.slice(1) : rawBody
 
     return { metadata: parseResult.data, body }
 }

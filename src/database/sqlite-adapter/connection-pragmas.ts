@@ -2,6 +2,9 @@ import type { Database } from 'better-sqlite3'
 import * as fs from 'node:fs'
 import * as path from 'node:path'
 import { logger } from '../../utils/logger.js'
+import { hasSqlCipherKey } from './sqlcipher-key.js'
+
+const DDL_RE = /\b(?:DROP|ALTER|CREATE)\b/i
 
 /** Apply standard SQLite safety and performance PRAGMAs to a native connection. */
 export function applyNativePragmas(db: Database): void {
@@ -11,6 +14,21 @@ export function applyNativePragmas(db: Database): void {
     db.pragma('temp_store = MEMORY')
     db.pragma('busy_timeout = 5000')
     db.pragma('cache_size = -64000')
+    if (!hasSqlCipherKey()) {
+        db.pragma('mmap_size = 268435456')
+    }
+}
+
+/** Populate SQLite planner statistics after schema migrations on connection open. */
+export function runOptimizeAfterMigrations(db: Database): void {
+    try {
+        db.pragma('optimize = 0x10002')
+    } catch (err: unknown) {
+        logger.debug('Post-migration PRAGMA optimize skipped', {
+            module: 'NativeConnectionManager',
+            error: err instanceof Error ? err.message : String(err),
+        })
+    }
 }
 
 /**
@@ -22,18 +40,17 @@ export function installStatementCache(db: Database): void {
     const rawPrepare = db.prepare.bind(db)
     const stmtCache = new Map<string, ReturnType<Database['prepare']>>()
     const MAX_CACHE_SIZE = 256
-    const DDL_RE = /\b(?:DROP|ALTER|CREATE)\b/i
 
     db.prepare = ((source: string) => {
-        if (DDL_RE.test(source)) {
-            stmtCache.clear()
-            return rawPrepare(source)
-        }
         const cached = stmtCache.get(source)
         if (cached !== undefined) {
             stmtCache.delete(source)
             stmtCache.set(source, cached)
             return cached
+        }
+        if (DDL_RE.test(source)) {
+            stmtCache.clear()
+            return rawPrepare(source)
         }
         const stmt = rawPrepare(source)
         if (stmtCache.size >= MAX_CACHE_SIZE) {

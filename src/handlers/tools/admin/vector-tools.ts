@@ -45,7 +45,7 @@ export const AddToVectorIndexSchema = z.preprocess(
 )
 
 export function getVectorTools(context: ToolContext): ToolDefinition[] {
-    const { db, vectorManager, progress } = context;
+    const { db, vectorManager } = context;
     return [
         {
             name: 'rebuild_vector_index',
@@ -100,7 +100,7 @@ export function getVectorTools(context: ToolContext): ToolDefinition[] {
                         ...(projectNumber !== undefined ? { projectNumber } : {}),
                     }
                     const { success, indexed, failed, firstError } =
-                        await vectorManager.rebuildIndex(progress, rebuildOpts)
+                        await vectorManager.rebuildIndex(context.progress, rebuildOpts)
 
                     if (!success && firstError) {
                         logger.warning(`Vector index rebuild had errors: ${firstError}`)

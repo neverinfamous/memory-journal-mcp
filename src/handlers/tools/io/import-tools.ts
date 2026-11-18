@@ -1,3 +1,5 @@
+import type * as FsPromises from 'node:fs/promises'
+import type * as PathModule from 'node:path'
 import type { ToolDefinition, ToolContext } from '../../../types/index.js'
 import { formatHandlerError } from '../../../utils/error-helpers.js'
 import { AggregateMcpError, ValidationError } from '../../../types/errors.js'
@@ -13,6 +15,42 @@ import {
     ImportExternalSchemaMcp,
     ImportExternalOutputSchema,
 } from './schemas.js'
+
+type ExternalFileOutcome =
+    | { filename: string; skipped: true }
+    | { filename: string; error: string }
+    | { filename: string; parsed: ParsedFile }
+
+async function readSingleExternalFile(
+    fs: typeof FsPromises,
+    path: typeof PathModule,
+    openFlags: number,
+    assertSafeFilePath: (filepath: string, allowedRoots: string[]) => void,
+    input: ReturnType<typeof ImportExternalSchema.parse>,
+    allowedRoots: string[],
+    filename: string
+): Promise<ExternalFileOutcome> {
+    let handle
+    try {
+        const filepath = path.join(input.source_dir, filename)
+        assertSafeFilePath(filepath, allowedRoots)
+        handle = await fs.open(filepath, openFlags)
+        const stats = await handle.stat()
+        if (stats.size > MAX_IMPORT_FILE_BYTES) {
+            throw new Error(
+                `File exceeds maximum size limit of ${String(MAX_IMPORT_FILE_BYTES / (1024 * 1024))}MB (${stats.size} bytes)`
+            )
+        }
+        const content = await handle.readFile('utf-8')
+        const converted = convertFile(content, filename, input.source_format, input.default_entry_type)
+        if (!converted.body.trim()) return { filename, skipped: true }
+        return { filename, parsed: { filename, body: converted.body, metadata: converted.metadata } }
+    } catch (err) {
+        return { filename, error: err instanceof Error ? err.message : String(err) }
+    } finally {
+        if (handle) await handle.close()
+    }
+}
 
 async function readAndConvertExternalFiles(
     input: ReturnType<typeof ImportExternalSchema.parse>,
@@ -43,30 +81,28 @@ async function readAndConvertExternalFiles(
     const parsedFiles: ParsedFile[] = []
     const errors: { file: string; error: string }[] = []
     let emptySkipped = 0
+    const READ_CONCURRENCY = 16
+    const openFlags = constants.O_RDONLY | constants.O_NOFOLLOW
 
-    for (const filename of mdFiles) {
-        let handle
-        try {
-            const filepath = path.join(input.source_dir, filename)
-            assertSafeFilePath(filepath, allowedRoots)
-            handle = await fs.open(filepath, constants.O_RDONLY | constants.O_NOFOLLOW)
-            const stats = await handle.stat()
-            if (stats.size > MAX_IMPORT_FILE_BYTES) {
-                throw new Error(
-                    `File exceeds maximum size limit of ${String(MAX_IMPORT_FILE_BYTES / (1024 * 1024))}MB (${stats.size} bytes)`
+    for (let i = 0; i < mdFiles.length; i += READ_CONCURRENCY) {
+        const chunk = mdFiles.slice(i, i + READ_CONCURRENCY)
+        const outcomes = await Promise.all(
+            chunk.map((filename) =>
+                readSingleExternalFile(
+                    fs,
+                    path,
+                    openFlags,
+                    assertSafeFilePath,
+                    input,
+                    allowedRoots,
+                    filename
                 )
-            }
-            const content = await handle.readFile('utf-8')
-            const converted = convertFile(content, filename, input.source_format, input.default_entry_type)
-            if (!converted.body.trim()) {
-                emptySkipped++
-                continue
-            }
-            parsedFiles.push({ filename, body: converted.body, metadata: converted.metadata })
-        } catch (err) {
-            errors.push({ file: filename, error: err instanceof Error ? err.message : String(err) })
-        } finally {
-            if (handle) await handle.close()
+            )
+        )
+        for (const item of outcomes) {
+            if ('error' in item) errors.push({ file: item.filename, error: item.error })
+            else if ('skipped' in item) emptySkipped++
+            else parsedFiles.push(item.parsed)
         }
     }
     return { parsedFiles, errors, emptySkipped }
@@ -122,7 +158,7 @@ async function executeImportExternal(
 }
 
 export function getIoImportTools(context: ToolContext): ToolDefinition[] {
-    const { db, progress } = context
+    const { db } = context
     return [
         // ==================================================================
         // import_markdown
@@ -158,9 +194,9 @@ export function getIoImportTools(context: ToolContext): ToolDefinition[] {
                     // Security fix: Use explicitly configured roots, without CWD fallback
                     const allowedRoots = context.config?.allowedIoRoots ?? []
 
-                    await sendProgress(progress, 0, 2, 'Reading markdown files...')
+                    await sendProgress(context.progress, 0, 2, 'Reading markdown files...')
 
-                    await sendProgress(progress, 1, 2, 'Importing entries...')
+                    await sendProgress(context.progress, 1, 2, 'Importing entries...')
 
                     const result = await importMarkdownEntries(
                         input.source_dir,
@@ -188,7 +224,7 @@ export function getIoImportTools(context: ToolContext): ToolDefinition[] {
                         )
                     }
 
-                    await sendProgress(progress, 2, 2, 'Import complete')
+                    await sendProgress(context.progress, 2, 2, 'Import complete')
                     return result
                 } catch (err) {
                     return formatHandlerError(err)

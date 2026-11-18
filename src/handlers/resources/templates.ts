@@ -19,6 +19,7 @@ import {
 import { getKanbanTemplateDefinitions } from './templates-kanban.js'
 import { parseSessionCommitContext } from '../../types/auto-context.js'
 import { enrichCommits } from '../../github/commit-references/index.js'
+import { estimatePayloadTokens } from '../../observability/token-estimator.js'
 import { ProtocolError, ProtocolErrorCode } from '@modelcontextprotocol/server'
 import {
     resolveProjectScope,
@@ -43,8 +44,7 @@ function parsePositiveParam(uri: string, pattern: RegExp, errorMessage: string):
 }
 
 function withTokenMeta<T extends Record<string, unknown>>(data: T): T & { _meta: { tokenEstimate: number } } {
-    const tokenEstimate = Math.ceil(JSON.stringify(data).length / 4)
-    return { ...data, _meta: { tokenEstimate } }
+    return { ...data, _meta: { tokenEstimate: estimatePayloadTokens(data) } }
 }
 
 function handleProjectTimelineResource(uri: string, context: ResourceContext): Record<string, unknown> {

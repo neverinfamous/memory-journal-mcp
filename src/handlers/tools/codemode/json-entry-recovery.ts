@@ -2,8 +2,13 @@
  * JSON and Entry payload recovery helpers for Code Mode execution payloads.
  */
 
-import { recoverStructuredJsonCode } from './json-entry-structured.js'
+import { recoverStructuredJsonCode, recoverStructuredRecord } from './json-entry-structured.js'
 import { stripCommentsAndStrings } from '../../../codemode/security.js'
+
+const ARRAY_FIELD_RES: readonly (readonly ['relationships' | 'anchors', RegExp])[] = [
+    ['relationships', /\brelationships\s*:\s*(\[[\s\S]*?\])/i],
+    ['anchors', /\banchors\s*:\s*(\[[\s\S]*?\])/i],
+]
 
 /**
  * Auto-heals raw JSON objects or stringified JSON passed as Code Mode execution payloads,
@@ -11,6 +16,11 @@ import { stripCommentsAndStrings } from '../../../codemode/security.js'
  */
 export function extractAndRecoverJsonCode(code: string): string | null {
     return recoverStructuredJsonCode(code)
+}
+
+/** Auto-heals an already-parsed candidate record without JSON stringify/parse round-trip. */
+export function extractAndRecoverRecordCode(record: Record<string, unknown>): string | null {
+    return recoverStructuredRecord(record)
 }
 
 function detectRecoverableEntryCall(
@@ -159,8 +169,8 @@ function populateRecoveredEntryMetadata(payload: Record<string, unknown>, scanCo
     if (isPersonalMatch?.[1] !== undefined) payload['is_personal'] = isPersonalMatch[1].toLowerCase() === 'true'
     if (shareTeamMatch?.[1] !== undefined) payload['share_with_team'] = shareTeamMatch[1].toLowerCase() === 'true'
 
-    for (const key of ['relationships', 'anchors'] as const) {
-        const rawArr = new RegExp(`\\b${key}\\s*:\\s*(\\[[\\s\\S]*?\\])`, 'i').exec(scanCode)?.[1]
+    for (const [key, pattern] of ARRAY_FIELD_RES) {
+        const rawArr = pattern.exec(scanCode)?.[1]
         if (rawArr === undefined) continue
         const parsed = parseRelaxedJsonArray(rawArr)
         if (parsed !== undefined) payload[key] = parsed

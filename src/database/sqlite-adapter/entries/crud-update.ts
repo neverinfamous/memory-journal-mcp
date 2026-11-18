@@ -263,7 +263,7 @@ export function performUpdateEntry(
         : 'SELECT id, content, version, workspace_id as workspaceId FROM memory_journal WHERE id = ? AND deleted_at IS NULL'
     const scopeUpdate = callerWorkspace !== '*'
 
-    const txn = db.transaction(() => {
+    const doUpdate = (): boolean => {
         const existing = (
             scopedSelect
                 ? db.prepare(selectSql).get(id, callerWorkspace)
@@ -302,10 +302,10 @@ export function performUpdateEntry(
         }
 
         return true
-    })
+    }
 
     try {
-        return txn.immediate()
+        return db.inTransaction ? doUpdate() : db.transaction(doUpdate).immediate()
     } catch (err) {
         if (err instanceof NoRowsUpdatedError) return false
         throw err

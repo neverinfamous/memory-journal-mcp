@@ -12,6 +12,7 @@ import {
     applyNativePragmas,
     installStatementCache,
     loadVecExtensionOnDb,
+    runOptimizeAfterMigrations,
     runOptimizeAndCheckpointBeforeClose,
     runPassiveCheckpoint,
 } from './connection-pragmas.js'
@@ -93,6 +94,8 @@ export class NativeConnectionManager implements IDatabaseConnection {
                     value TEXT NOT NULL
                 )
             `)
+
+            runOptimizeAfterMigrations(db)
 
             this.initialized = true
             logger.info('Native database opened', {

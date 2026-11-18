@@ -19,7 +19,7 @@ describe('Database Migration Framework', () => {
             name: string
         }[]
 
-        expect(applied.length).toBe(16) // 1 to 6, plus 8 through 17 (7 is team-only)
+        expect(applied.length).toBe(17) // 1 to 6, plus 8 through 18 (7 is team-only)
         expect(applied[0].version).toBe(1)
         expect(applied[0].name).toBe('001-init')
         expect(applied[12].version).toBe(14)
@@ -28,6 +28,7 @@ describe('Database Migration Framework', () => {
         expect(applied[13].name).toBe('015-alias-workspace-unique')
         expect(applied[14].name).toBe('016-fts-soft-delete-triggers')
         expect(applied[15].name).toBe('017-add-performance-indexes')
+        expect(applied[16].name).toBe('018-add-project-and-prune-duplicate-indexes')
 
         // Verify tables exist
         const tables = db
@@ -70,7 +71,7 @@ describe('Database Migration Framework', () => {
             name: string
         }[]
 
-        expect(applied.length).toBe(17)
+        expect(applied.length).toBe(18)
         expect(applied[6].version).toBe(7)
         expect(applied[6].name).toBe('007-add-team-author')
 
@@ -163,7 +164,7 @@ describe('Database Migration Framework', () => {
             name: string
         }[]
 
-        expect(applied.length).toBe(16)
+        expect(applied.length).toBe(17)
         expect(applied[0].version).toBe(1)
         expect(applied[1].version).toBe(2)
         expect(applied[2].version).toBe(3) // applied in run
@@ -202,8 +203,8 @@ describe('Database Migration Framework', () => {
             c: number
         }).c
 
-        expect(count1).toBe(16)
-        expect(count2).toBe(16)
+        expect(count1).toBe(17)
+        expect(count2).toBe(17)
 
         db.close()
     })

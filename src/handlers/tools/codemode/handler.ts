@@ -7,7 +7,7 @@ import { ConfigurationError } from '../../../types/errors.js'
 import { activeProjectRegistry } from '../../../utils/write-scope.js'
 import { loadProjectRegistryFromConfig } from '../../../utils/workspace-resolver.js'
 import { setFallbackProjectRegistryLoader } from '../../../codemode/normalizers/generic-field-aliases.js'
-import { createJournalApi } from '../../../codemode/api/journal-api.js'
+import { createJournalApi, getCachedSandboxSchemas } from '../../../codemode/api/journal-api.js'
 import type { SandboxResult } from '../../../codemode/types.js'
 
 setFallbackProjectRegistryLoader(loadProjectRegistryFromConfig)
@@ -24,9 +24,81 @@ import { createSecureDispatcher, resolveCodeModeSessionContext } from './secure-
 
 const MAX_CONTEXT_BYTES = 5 * 1024 * 1024
 
+function estimateSerializedByteBounds(
+    val: unknown,
+    limitBytes: number,
+    seen: Set<unknown>
+): { lowerBytes: number; exactBytes: number | null; circular?: boolean } {
+    if (val === null || val === undefined) return { lowerBytes: 4, exactBytes: 4 }
+    if (typeof val === 'string') {
+        const rawBytes = Buffer.byteLength(val, 'utf-8')
+        return { lowerBytes: rawBytes + 2, exactBytes: rawBytes > limitBytes ? null : rawBytes * 2 + 2 }
+    }
+    if (typeof val === 'number' || typeof val === 'boolean') return { lowerBytes: 1, exactBytes: 24 }
+    if (typeof val === 'bigint') return { lowerBytes: 0, exactBytes: null }
+    if (typeof val !== 'object') return { lowerBytes: 0, exactBytes: 0 }
+    if (seen.has(val)) return { lowerBytes: 0, exactBytes: null, circular: true }
+    seen.add(val)
+
+    const record = val as { toJSON?: unknown }
+    if (typeof record.toJSON === 'function') {
+        seen.delete(val)
+        return { lowerBytes: 0, exactBytes: null }
+    }
+
+    let lowerBytes = 2
+    let exactUpper: number | null = 2
+    if (Array.isArray(val)) {
+        for (let i = 0; i < val.length; i++) {
+            const sub = estimateSerializedByteBounds(val[i], limitBytes, seen)
+            if (sub.circular === true) return sub
+            lowerBytes += sub.lowerBytes + (i > 0 ? 1 : 0)
+            if (lowerBytes > limitBytes) {
+                seen.delete(val)
+                return { lowerBytes, exactBytes: null }
+            }
+            exactUpper =
+                exactUpper !== null && sub.exactBytes !== null ? exactUpper + sub.exactBytes + 1 : null
+        }
+    } else {
+        let first = true
+        for (const [k, v] of Object.entries(val)) {
+            if (v === undefined) continue
+            const keyBytes = Buffer.byteLength(k, 'utf-8') + 3
+            const sub = estimateSerializedByteBounds(v, limitBytes, seen)
+            if (sub.circular === true) return sub
+            lowerBytes += keyBytes + sub.lowerBytes + (first ? 0 : 1)
+            first = false
+            if (lowerBytes > limitBytes) {
+                seen.delete(val)
+                return { lowerBytes, exactBytes: null }
+            }
+            exactUpper =
+                exactUpper !== null && sub.exactBytes !== null
+                    ? exactUpper + keyBytes * 2 + sub.exactBytes + 1
+                    : null
+        }
+    }
+    seen.delete(val)
+    return { lowerBytes, exactBytes: exactUpper }
+}
+
 function checkSerializedByteLimit(val: unknown, limitBytes: number, errorMsg: string): string | null {
     try {
-        const serialized = typeof val === 'string' ? val : JSON.stringify(val)
+        if (typeof val === 'string') {
+            return Buffer.byteLength(val, 'utf-8') > limitBytes ? errorMsg : null
+        }
+        const bounds = estimateSerializedByteBounds(val, limitBytes, new Set())
+        if (bounds.circular === true) {
+            return 'Security validation failed: Invalid non-serializable payload object'
+        }
+        if (bounds.lowerBytes > limitBytes) {
+            return errorMsg
+        }
+        if (bounds.exactBytes !== null && bounds.exactBytes <= limitBytes) {
+            return null
+        }
+        const serialized = JSON.stringify(val)
         if (typeof serialized === 'string' && Buffer.byteLength(serialized, 'utf-8') > limitBytes) {
             return errorMsg
         }
@@ -231,7 +303,7 @@ async function executeCodeModeHandler(
             onMutatingDispatch: () => { mutatedDuringRun = true },
         })
         const journalApi = createJournalApi(tools, secureDispatcher, () => activeProjectRegistry(context.config?.projectRegistry))
-        const schemas = (isSandboxReadonly ? createJournalApi(allEnabledTools) : journalApi).createSandboxSchemas()
+        const schemas = isSandboxReadonly ? getCachedSandboxSchemas(allEnabledTools) : journalApi.createSandboxSchemas()
         const { userContext, requestedMaxResultSize } = buildSandboxUserContext(
             input, sessionContext, projectId, numericProjectId, workspaceId, explicitWorkspace
         )

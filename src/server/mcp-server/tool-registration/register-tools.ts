@@ -16,6 +16,7 @@ import {
     type ResourceDefinition,
     type PromptDefinition,
 } from '../../registration.js'
+import { getSerializedPayloadJson } from '../../../observability/token-estimator.js'
 import { VERSION } from '../../../version.js'
 import { globalSubscriptionManager } from '../../subscription-manager.js'
 import { logger } from '../../../utils/logger.js'
@@ -27,6 +28,7 @@ import {
     buildServerInstructions,
     createResourceReadHandler,
     formatToolFailure,
+    getCachedReadOnlyHints,
     notifyMutationSubscribers,
     resolveActiveBriefingConfig,
     syncLiveHandlerConfig,
@@ -216,7 +218,7 @@ function formatRegisteredToolResponse(
         }
     }
 
-    const textContent = typeof result === 'string' ? result : JSON.stringify(result)
+    const textContent = typeof result === 'string' ? result : getSerializedPayloadJson(result)
     const failed =
         typeof result === 'object' &&
         result !== null &&
@@ -373,14 +375,6 @@ function attachResourceAndSubscriptionHandlers(
     })
 }
 
-function collectReadOnlyHints(allTools: ToolRegistration[]): Map<string, boolean | undefined> {
-    const hints = new Map<string, boolean | undefined>()
-    for (const tool of allTools) {
-        hints.set(tool.name, readOnlyHintOf(tool))
-    }
-    return hints
-}
-
 export function createServerInstance(
     context: ServerContext,
     options: ServerOptions,
@@ -403,7 +397,7 @@ export function createServerInstance(
             : {}),
     })
 
-    const readOnlyHints = collectReadOnlyHints(allTools)
+    const readOnlyHints = getCachedReadOnlyHints(allTools)
     const server = new McpServer(
         { name: 'memory-journal-mcp', version: VERSION },
         {

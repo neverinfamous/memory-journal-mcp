@@ -6,7 +6,10 @@
  * and applying scope filters during audit searches.
  */
 
+import { open } from 'node:fs/promises'
 import type { RequestContext } from '../utils/request-context.js'
+import { estimateTokens } from '../observability/token-estimator.js'
+import { logger } from '../utils/logger.js'
 import { parseCanonicalPositiveInt, parsePositiveProjectNumber } from '../utils/safe-positive-int.js'
 import { TEAM_PROMPT_NAMES } from '../auth/scope-map.js'
 import type { AuditCategory, AuditEntry, AuditSearchFilters } from './types.js'
@@ -230,4 +233,129 @@ export function extractAuditScopeFromUri(
         ...(workspaceId !== undefined ? { workspaceId } : {}),
         ...(projectNumber !== undefined ? { projectNumber } : {}),
     }
+}
+
+const AUDIT_SEARCH_CHUNK_BYTES = 65_536
+
+/**
+ * Scan one JSONL audit log file backwards in 64 KB chunks without loading the whole file.
+ */
+export async function searchAuditFileBackward(
+    filePath: string,
+    filters: AuditSearchFilters,
+    remainingLimit: number,
+    results: AuditEntry[]
+): Promise<{ skippedLines: number; limitReached: boolean }> {
+    let fh: Awaited<ReturnType<typeof open>>
+    try {
+        fh = await open(filePath, 'r')
+    } catch (err: unknown) {
+        const code =
+            typeof err === 'object' && err !== null && 'code' in err ? err.code : undefined
+        if (code === 'ENOENT') return { skippedLines: 0, limitReached: false }
+        throw err
+    }
+
+    let skippedLines = 0
+    try {
+        const info = await fh.stat()
+        if (info.size === 0 || info.isDirectory()) return { skippedLines: 0, limitReached: false }
+
+        const buf = Buffer.alloc(Math.min(AUDIT_SEARCH_CHUNK_BYTES, info.size))
+        let pos = info.size
+        let trailingPartial = ''
+
+        while (pos > 0) {
+            const readLen = Math.min(AUDIT_SEARCH_CHUNK_BYTES, pos)
+            const startOffset = pos - readLen
+            await fh.read(buf, 0, readLen, startOffset)
+            const chunkText = buf.subarray(0, readLen).toString('utf-8') + trailingPartial
+            const lines = chunkText.split('\n')
+            const firstCompleteIdx = startOffset > 0 ? 1 : 0
+            trailingPartial = startOffset > 0 ? (lines[0] ?? '') : ''
+
+            for (let i = lines.length - 1; i >= firstCompleteIdx; i--) {
+                const rawLine = lines[i]
+                if (rawLine === undefined || rawLine.length === 0) continue
+                const entry = parseAuditLine(rawLine)
+                if (entry === null) {
+                    skippedLines++
+                    continue
+                }
+                if (!matchesAuditFilters(entry, filters)) continue
+                results.push(entry)
+                if (results.length >= remainingLimit) {
+                    return { skippedLines, limitReached: true }
+                }
+            }
+            pos = startOffset
+        }
+        return { skippedLines, limitReached: false }
+    } finally {
+        await fh.close()
+    }
+}
+
+function estimateEnvelopeTextTokens(result: unknown): number | undefined {
+    if (typeof result !== 'object' || result === null) return undefined
+    const rec = result as Record<string, unknown>
+    if (Array.isArray(rec['contents'])) {
+        let total = 0
+        for (const item of rec['contents']) {
+            if (
+                typeof item === 'object' &&
+                item !== null &&
+                typeof (item as { text?: unknown }).text === 'string'
+            ) {
+                total += estimateTokens((item as { text: string }).text, 'json')
+            } else {
+                return undefined
+            }
+        }
+        return total
+    }
+    if (Array.isArray(rec['messages'])) {
+        let total = 0
+        for (const msg of rec['messages']) {
+            const content =
+                typeof msg === 'object' && msg !== null ? (msg as { content?: unknown }).content : undefined
+            if (
+                typeof content === 'object' &&
+                content !== null &&
+                typeof (content as { text?: unknown }).text === 'string'
+            ) {
+                total += estimateTokens((content as { text: string }).text, 'prose')
+            } else {
+                return undefined
+            }
+        }
+        return total
+    }
+    return undefined
+}
+
+/** Estimate token count for resource/prompt operation audit records, avoiding full JSON stringification on envelopes. */
+export function estimateOperationResultTokens(result: unknown, name: string): number | undefined {
+    if (typeof result === 'object' && result !== null) {
+        const fastTokens = estimateEnvelopeTextTokens(result)
+        if (fastTokens !== undefined) return fastTokens
+        try {
+            return estimateTokens(JSON.stringify(result), 'json')
+        } catch (serializeError) {
+            // Serialization failure must not block execution
+            logger.debug('Token estimate skipped: result is not serializable', {
+                module: 'Audit',
+                tool: name,
+                error:
+                    serializeError instanceof Error
+                        ? serializeError.message
+                        : String(serializeError),
+            })
+            return undefined
+        }
+    }
+    if (typeof result === 'string') {
+        return estimateTokens(result, 'prose')
+    }
+    return undefined
 }

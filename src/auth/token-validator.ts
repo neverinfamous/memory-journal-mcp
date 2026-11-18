@@ -121,7 +121,7 @@ export class TokenValidator {
             // Extract and normalize claims
             const claims = this.extractClaims(payload)
 
-            logger.info(`Token validated for subject: ${claims.sub}`, {
+            logger.debug(`Token validated for subject: ${claims.sub}`, {
                 module: 'AUTH',
                 operation: 'validate',
                 entityId: claims.sub,
@@ -364,6 +364,7 @@ export class TokenValidator {
                 signal: AbortSignal.timeout(10000),
                 redirect: 'error',
             })
+            this.getJwks()
         } catch (error) {
             const cause = error instanceof Error ? error : new Error(String(error))
             logger.error('Failed to pre-fetch JWKS at startup', {

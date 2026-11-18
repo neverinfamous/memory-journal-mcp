@@ -36,8 +36,6 @@ export {
 } from './git-schemas.js'
 
 export function getGitTools(context: ToolContext): ToolDefinition[] {
-    const { progress } = context
-
     return [
         {
             name: 'get_commit_history',
@@ -57,7 +55,7 @@ export function getGitTools(context: ToolContext): ToolDefinition[] {
                     const parsedMcp = GitHistoryOptionsSchemaMcp.parse(params)
                     const cwd = resolveGitWorkingDir(parsedMcp, context.config)
                     const input = GitHistoryOptionsSchema.parse(parsedMcp)
-                    await sendProgress(progress, 0, 1, 'Fetching commit history...')
+                    await sendProgress(context.progress, 0, 1, 'Fetching commit history...')
                     const commits = await fetchCommits(input, cwd)
                     return { success: true, commits: fenceCommitEntries(commits) }
                 } catch (err) {
@@ -83,7 +81,7 @@ export function getGitTools(context: ToolContext): ToolDefinition[] {
                     const parsedMcp = GitSearchOptionsSchemaMcp.parse(params)
                     const cwd = resolveGitWorkingDir(parsedMcp, context.config)
                     const input = GitSearchOptionsSchema.parse(parsedMcp)
-                    await sendProgress(progress, 0, 1, `Searching commits for "${input.query}"...`)
+                    await sendProgress(context.progress, 0, 1, `Searching commits for "${input.query}"...`)
                     const commits = await fetchCommits(input, cwd)
                     return { success: true, commits: fenceCommitEntries(commits) }
                 } catch (err) {
@@ -109,7 +107,7 @@ export function getGitTools(context: ToolContext): ToolDefinition[] {
                     const parsedMcp = GitReleaseInfoOptionsSchemaMcp.parse(params)
                     const cwd = resolveGitWorkingDir(parsedMcp, context.config)
                     const input = GitReleaseInfoOptionsSchema.parse(parsedMcp)
-                    await sendProgress(progress, 0, 1, 'Fetching release info...')
+                    await sendProgress(context.progress, 0, 1, 'Fetching release info...')
                     const commits = await fetchCommits({ ref: input.ref, maxCount: 10 }, cwd)
                     return { success: true, commits: fenceCommitEntries(commits) }
                 } catch (err) {
@@ -129,7 +127,7 @@ export function getGitTools(context: ToolContext): ToolDefinition[] {
                 try {
                     const input = GitUnreleasedOptionsSchema.parse(params ?? {})
                     const cwd = resolveGitWorkingDir(input, context.config)
-                    await sendProgress(progress, 0, 1, 'Fetching unreleased commits...')
+                    await sendProgress(context.progress, 0, 1, 'Fetching unreleased commits...')
                     const rawChangelog = await getUnreleasedChangelog(cwd)
                     return {
                         success: true,
@@ -160,6 +158,7 @@ export function getGitTools(context: ToolContext): ToolDefinition[] {
                 try {
                     const input = GitAnalyzePatternsOptionsSchema.parse(params ?? {})
                     const cwd = resolveGitWorkingDir(input, context.config)
+                    const progress = context.progress
                     await sendProgress(progress, 0, 2, 'Fetching commits for analysis...')
                     const max = z.number().int().positive().max(10000).parse(input.maxCount)
                     const commits = await fetchCommits({ maxCount: Number.isNaN(max) ? 50 : max }, cwd)
@@ -245,8 +244,8 @@ export function getGitTools(context: ToolContext): ToolDefinition[] {
                 openWorldHint: false,
             },
             handler: (params: unknown) =>
-                runCheckEntryStaleness(params, context, async (anchorPath, since, cwd, maxCount) =>
-                    (await fetchCommits({ path: anchorPath, since, maxCount }, cwd)).length
+                runCheckEntryStaleness(params, context, (anchorPath, since, cwd, maxCount) =>
+                    fetchCommits({ path: anchorPath, since, maxCount }, cwd).then((c) => c.length)
                 ),
         }
     ]

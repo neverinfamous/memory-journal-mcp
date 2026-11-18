@@ -70,6 +70,37 @@ export type ResourceReadHandler = (
 // Resource Registration
 // ============================================================================
 
+const resourceTemplateCache = new Map<string, ResourceTemplate>()
+const promptArgsSchemaCache = new WeakMap<PromptDefinition, z.ZodObject<Record<string, z.ZodType>>>()
+
+function getCachedResourceTemplate(uri: string): ResourceTemplate {
+    let template = resourceTemplateCache.get(uri)
+    if (template === undefined) {
+        template = new ResourceTemplate(uri, { list: undefined })
+        resourceTemplateCache.set(uri, template)
+    }
+    return template
+}
+
+function getCachedPromptArgsSchema(
+    promptDef: PromptDefinition
+): z.ZodObject<Record<string, z.ZodType>> | undefined {
+    if (promptDef.arguments === undefined || promptDef.arguments.length === 0) {
+        return undefined
+    }
+    let cached = promptArgsSchemaCache.get(promptDef)
+    if (cached === undefined) {
+        const shape: Record<string, z.ZodType> = {}
+        for (const arg of promptDef.arguments) {
+            const described = z.string().describe(arg.description)
+            shape[arg.name] = arg.required === true ? described : described.optional()
+        }
+        cached = z.object(shape)
+        promptArgsSchemaCache.set(promptDef, cached)
+    }
+    return cached
+}
+
 /**
  * Register all resources with the MCP server.
  *
@@ -97,8 +128,12 @@ export function registerResources(
         )
 
         if (resDef.uri.includes('{')) {
-            const template = new ResourceTemplate(resDef.uri, { list: undefined })
-            server.registerResource(resDef.name, template, meta, readCallback)
+            server.registerResource(
+                resDef.name,
+                getCachedResourceTemplate(resDef.uri),
+                meta,
+                readCallback
+            )
         } else {
             server.registerResource(resDef.name, resDef.uri, meta, readCallback)
         }
@@ -130,20 +165,13 @@ export function registerPrompts(
     briefingConfig?: BriefingConfig | (() => BriefingConfig)
 ): void {
     for (const promptDef of prompts) {
-        let argsSchema: Record<string, z.ZodType> | undefined
-        if (promptDef.arguments !== undefined && promptDef.arguments.length > 0) {
-            argsSchema = {}
-            for (const arg of promptDef.arguments) {
-                const described = z.string().describe(arg.description)
-                argsSchema[arg.name] = arg.required === true ? described : described.optional()
-            }
-        }
+        const argsZodSchema = getCachedPromptArgsSchema(promptDef)
 
         server.registerPrompt(
             promptDef.name,
             {
                 description: promptDef.description ?? '',
-                ...(argsSchema ? { argsSchema: z.object(argsSchema) } : {}),
+                ...(argsZodSchema !== undefined ? { argsSchema: argsZodSchema } : {}),
                 ...(promptDef.icons ? { icons: promptDef.icons } : {}),
             },
             (providedArgs) => {

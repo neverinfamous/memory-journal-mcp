@@ -75,10 +75,20 @@ async function fetchRepoInsightSections(
     result: RepoInsightsResult
 ): Promise<Record<string, unknown> | undefined> {
     const hasSection = (s: InsightSectionKey): boolean => sectionSet.has('all') || sectionSet.has(s)
+    const wantStars = hasSection('stars')
+    const wantTraffic = hasSection('traffic')
+    const wantReferrers = hasSection('referrers')
+    const wantPaths = hasSection('paths')
 
-    if (hasSection('stars')) {
-        const stats = await github.getRepoStats(owner, repo)
-        if (stats === null) return buildInsightSectionFailure(owner, repo, 'stats')
+    const [stats, traffic, referrers, paths] = await Promise.all([
+        wantStars ? github.getRepoStats(owner, repo) : Promise.resolve(undefined),
+        wantTraffic ? github.getTrafficData(owner, repo) : Promise.resolve(undefined),
+        wantReferrers ? github.getTopReferrers(owner, repo, 5) : Promise.resolve(undefined),
+        wantPaths ? github.getPopularPaths(owner, repo, 5) : Promise.resolve(undefined),
+    ])
+
+    if (wantStars) {
+        if (stats === null || stats === undefined) return buildInsightSectionFailure(owner, repo, 'stats')
         result.stars = stats.stars
         result.forks = stats.forks
         result.watchers = stats.watchers
@@ -89,24 +99,25 @@ async function fetchRepoInsightSections(
         }
     }
 
-    if (hasSection('traffic')) {
-        const traffic = await github.getTrafficData(owner, repo)
-        if (traffic === null) return buildInsightSectionFailure(owner, repo, 'traffic')
+    if (wantTraffic) {
+        if (traffic === null || traffic === undefined) {
+            return buildInsightSectionFailure(owner, repo, 'traffic')
+        }
         result.traffic = traffic
     }
 
-    if (hasSection('referrers')) {
-        const referrers = await github.getTopReferrers(owner, repo, 5)
-        if (referrers === null) return buildInsightSectionFailure(owner, repo, 'referrers')
+    if (wantReferrers) {
+        if (referrers === null || referrers === undefined) {
+            return buildInsightSectionFailure(owner, repo, 'referrers')
+        }
         result.referrers = referrers.map((r) => ({
             ...r,
             referrer: markUntrustedContentInline(r.referrer),
         }))
     }
 
-    if (hasSection('paths')) {
-        const paths = await github.getPopularPaths(owner, repo, 5)
-        if (paths === null) return buildInsightSectionFailure(owner, repo, 'paths')
+    if (wantPaths) {
+        if (paths === null || paths === undefined) return buildInsightSectionFailure(owner, repo, 'paths')
         result.paths = paths.map((p) => ({
             ...p,
             path: markUntrustedContentInline(p.path),

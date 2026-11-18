@@ -1,3 +1,19 @@
+import {
+    DUMMY_RESOURCE_TOOL_NAMES,
+    DUMMY_LIST_RESOURCE_TOOL_NAMES,
+    DUMMY_LIST_PROMPT_TOOL_NAMES,
+    DUMMY_GET_PROMPT_TOOL_NAMES,
+    extractUriFromArgs,
+    handleReadResource,
+    handlePrompt,
+    handleListResources,
+    handleListPrompts,
+    handleGetPrompt,
+} from '../../../handlers/tools/core/dummy-healing.js'
+import { getBaseUri } from '../../../handlers/resources/shared.js'
+import type { ToolContext } from '../../../types/index.js'
+import type { PromptDefinition } from '../../registration.js'
+import type { FallbackAccessTarget } from './fallback-interceptors.js'
 import { TOOL_GROUPS } from '../../../filtering/tool-constants.js'
 import { logAgentIssue } from '../../../utils/issue-logger.js'
 import { logger } from '../../../utils/logger.js'
@@ -296,4 +312,129 @@ export function hasToolCallRequestShape(request: unknown): request is { params?:
         params['arguments'] === undefined ||
         isPlainRecord(params['arguments'])
     return nameOk && argsOk
+}
+
+export function isFailureObject(res: unknown): res is Record<string, unknown> {
+    return (
+        typeof res === 'object' &&
+        res !== null &&
+        !Array.isArray(res) &&
+        'success' in res &&
+        res.success === false
+    )
+}
+
+function resolveGetPromptTarget(
+    toolArgs: Record<string, unknown>,
+    prompts: PromptDefinition[]
+): { targetName: string; capabilities: PromptDefinition['capabilities'] } {
+    const rawPromptName =
+        typeof toolArgs['name'] === 'string'
+            ? toolArgs['name']
+            : typeof toolArgs['prompt_name'] === 'string'
+              ? toolArgs['prompt_name']
+              : typeof toolArgs['promptName'] === 'string'
+                ? toolArgs['promptName']
+                : typeof toolArgs['prompt'] === 'string'
+                  ? toolArgs['prompt']
+                  : undefined
+    const normalizedTarget = rawPromptName?.replace(/^mj_/, '').replace(/_/g, '-')
+    const targetPrompt =
+        rawPromptName !== undefined
+            ? prompts.find((p) => p.name === rawPromptName || p.name === normalizedTarget)
+            : undefined
+    return {
+        targetName: targetPrompt?.name ?? rawPromptName ?? 'get_prompt',
+        capabilities: targetPrompt?.capabilities,
+    }
+}
+
+export function resolvePromptOrResourceAccessTargets(
+    requestedTool: string,
+    toolArgs: Record<string, unknown>,
+    matchingPrompt: PromptDefinition | undefined,
+    prompts: PromptDefinition[]
+): FallbackAccessTarget[] | undefined {
+    if (matchingPrompt !== undefined) {
+        return [
+            {
+                targetName: matchingPrompt.name,
+                targetType: 'prompt',
+                ...(matchingPrompt.capabilities !== undefined
+                    ? { capabilities: matchingPrompt.capabilities }
+                    : {}),
+            },
+        ]
+    }
+    if (
+        matchesExactName(requestedTool, DUMMY_RESOURCE_TOOL_NAMES) ||
+        requestedTool === 'mjReadResource' ||
+        requestedTool.startsWith('memory://')
+    ) {
+        const rawUri =
+            extractUriFromArgs(toolArgs) ??
+            (requestedTool.startsWith('memory://') ? requestedTool : 'memory://briefing')
+        return [
+            { targetName: 'read_resource', targetType: 'tool' },
+            { targetName: getBaseUri(rawUri), targetType: 'resource' },
+        ]
+    }
+    if (matchesExactName(requestedTool, DUMMY_LIST_RESOURCE_TOOL_NAMES)) {
+        return [{ targetName: 'list_resources', targetType: 'tool' }]
+    }
+    if (matchesExactName(requestedTool, DUMMY_LIST_PROMPT_TOOL_NAMES)) {
+        return [{ targetName: 'list_prompts', targetType: 'tool' }]
+    }
+    if (matchesExactName(requestedTool, DUMMY_GET_PROMPT_TOOL_NAMES)) {
+        const promptTarget = resolveGetPromptTarget(toolArgs, prompts)
+        return [
+            {
+                targetName: promptTarget.targetName,
+                targetType: 'prompt',
+                ...(promptTarget.capabilities !== undefined
+                    ? { capabilities: promptTarget.capabilities }
+                    : {}),
+            },
+        ]
+    }
+    return undefined
+}
+
+export async function tryPromptAndResourceFallbacks(
+    requestedTool: string,
+    toolArgs: Record<string, unknown>,
+    matchingPrompt: PromptDefinition | undefined,
+    toolContext: ToolContext
+): Promise<unknown> {
+    if (matchingPrompt !== undefined) {
+        const res = await handlePrompt(toolArgs, requestedTool, toolContext)
+        if (isSuccessObject(res)) return formatSuccessPayload(res)
+        if (isFailureObject(res)) return formatTokenEstimatedError(res, true)
+    }
+
+    if (
+        matchesExactName(requestedTool, DUMMY_RESOURCE_TOOL_NAMES) ||
+        requestedTool === 'mjReadResource' ||
+        requestedTool.startsWith('memory://')
+    ) {
+        const res = await handleReadResource(toolArgs, requestedTool, toolContext)
+        if (isSuccessObject(res)) return formatSuccessPayload(res)
+        if (isFailureObject(res)) return formatTokenEstimatedError(res, true)
+    }
+
+    if (matchesExactName(requestedTool, DUMMY_LIST_RESOURCE_TOOL_NAMES)) {
+        return formatSuccessPayload(handleListResources(requestedTool))
+    }
+
+    if (matchesExactName(requestedTool, DUMMY_LIST_PROMPT_TOOL_NAMES)) {
+        return formatSuccessPayload(handleListPrompts(requestedTool))
+    }
+
+    if (matchesExactName(requestedTool, DUMMY_GET_PROMPT_TOOL_NAMES)) {
+        const res = await handleGetPrompt(toolArgs, requestedTool, toolContext)
+        if (isSuccessObject(res)) return formatSuccessPayload(res)
+        if (isFailureObject(res)) return formatTokenEstimatedError(res, true)
+    }
+
+    return undefined
 }

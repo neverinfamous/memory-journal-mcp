@@ -126,11 +126,20 @@ export class RelationshipsManager {
                          FROM relationships r
                          INNER JOIN memory_journal mf ON mf.id = r.from_entry_id
                          INNER JOIN memory_journal mt ON mt.id = r.to_entry_id
-                         WHERE (r.from_entry_id IN (${placeholders}) OR r.to_entry_id IN (${placeholders}))
+                         WHERE r.from_entry_id IN (${placeholders})
+                           AND mf.deleted_at IS NULL AND mt.deleted_at IS NULL${wsFilter}
+                         UNION ALL
+                         SELECT r.id, r.from_entry_id as fromEntryId, r.to_entry_id as toEntryId,
+                                r.relationship_type as relationshipType, r.description, r.created_at as createdAt
+                         FROM relationships r
+                         INNER JOIN memory_journal mf ON mf.id = r.from_entry_id
+                         INNER JOIN memory_journal mt ON mt.id = r.to_entry_id
+                         WHERE r.to_entry_id IN (${placeholders})
                            AND mf.deleted_at IS NULL AND mt.deleted_at IS NULL${wsFilter}`
+            const wsParams = scoped ? [scopeId, scopeId] : []
             const rows = this.db
                 .prepare(sql)
-                .all(...params, ...params, ...(scoped ? [scopeId, scopeId] : [])) as {
+                .all(...params, ...wsParams, ...params, ...wsParams) as {
                 id: number
                 fromEntryId: number
                 toEntryId: number
@@ -227,27 +236,24 @@ export class RelationshipsManager {
         const scopeId = effectiveWorkspace(workspaceId)
         const scoped = scopeId !== '*'
         const filter = scoped ? ' AND e.workspace_id = ?' : ''
-        const peerFilter = scoped
-            ? 'p1.deleted_at IS NULL AND p2.deleted_at IS NULL AND p1.workspace_id = ? AND p2.workspace_id = ?'
-            : 'p1.deleted_at IS NULL AND p2.deleted_at IS NULL'
-        const linkSet = `SELECT r.from_entry_id FROM relationships r
-               JOIN memory_journal p1 ON p1.id = r.from_entry_id
-               JOIN memory_journal p2 ON p2.id = r.to_entry_id
-               WHERE ${peerFilter}
-               UNION
-               SELECT r.to_entry_id FROM relationships r
-               JOIN memory_journal p1 ON p1.id = r.from_entry_id
-               JOIN memory_journal p2 ON p2.id = r.to_entry_id
-               WHERE ${peerFilter}`
-        const params: unknown[] = scoped ? [scopeId, scopeId, scopeId, scopeId, scopeId] : []
+        const peerFilter = scoped ? ' AND p.workspace_id = ?' : ''
+        const params: unknown[] = scoped ? [scopeId, scopeId, scopeId] : []
 
         const row = this.db
             .prepare(
                 `SELECT COUNT(*) as orphan_count
                  FROM memory_journal e
-                 WHERE e.deleted_at IS NULL${filter} AND e.id NOT IN (
-                     ${linkSet}
-                 )`
+                 WHERE e.deleted_at IS NULL${filter}
+                   AND NOT EXISTS (
+                       SELECT 1 FROM relationships r
+                       JOIN memory_journal p ON p.id = r.to_entry_id
+                       WHERE r.from_entry_id = e.id AND p.deleted_at IS NULL${peerFilter}
+                   )
+                   AND NOT EXISTS (
+                       SELECT 1 FROM relationships r
+                       JOIN memory_journal p ON p.id = r.from_entry_id
+                       WHERE r.to_entry_id = e.id AND p.deleted_at IS NULL${peerFilter}
+                   )`
             )
             .get(...params) as { orphan_count: unknown } | undefined
 

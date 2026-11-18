@@ -20,6 +20,25 @@ import { buildSandboxBindingsMap } from './sandbox-bindings.js'
 import { wireCrossGroupAliasesHelper } from './cross-group-aliases.js'
 
 const TOOL_SCHEMA_STRING_CACHE = new WeakMap<ToolDefinition, string>()
+const TOOL_INSTANCE_IDS = new WeakMap<ToolDefinition, number>()
+const SANDBOX_SCHEMAS_CACHE = new Map<string, Record<string, Record<string, string>>>()
+const MAX_SANDBOX_SCHEMAS_CACHE = 16
+let nextToolInstanceId = 1
+
+function computeToolsCacheKey(tools: readonly ToolDefinition[]): string {
+    const ids = new Array<number>(tools.length)
+    for (let i = 0; i < tools.length; i++) {
+        const tool = tools[i]
+        if (tool === undefined) continue
+        let id = TOOL_INSTANCE_IDS.get(tool)
+        if (id === undefined) {
+            id = nextToolInstanceId++
+            TOOL_INSTANCE_IDS.set(tool, id)
+        }
+        ids[i] = id
+    }
+    return ids.join(',')
+}
 
 /**
  * Main API class exposing all Memory Journal tool groups.
@@ -39,6 +58,7 @@ export class JournalApi {
     readonly memory: GroupApiRecord
 
     private readonly toolsByGroup: Map<string, ToolDefinition[]>
+    private readonly toolsKey: string
     private readonly groupApiMap: Record<string, GroupApiRecord>
 
     private readonly registryProvider: ProjectRegistryProvider | undefined
@@ -48,6 +68,7 @@ export class JournalApi {
     constructor(tools: ToolDefinition[], dispatcher?: ToolDispatcher, registryProvider?: ProjectRegistryProvider) {
         this.registryProvider = registryProvider
         this.hasDispatcher = dispatcher !== undefined
+        this.toolsKey = computeToolsCacheKey(tools)
         this.toolsByGroup = new Map()
         for (const tool of tools) {
             if (tool.group === 'codemode') continue
@@ -180,13 +201,31 @@ export class JournalApi {
     }
 
     createSandboxSchemas(): Record<string, Record<string, string>> {
-        return buildSandboxSchemasMap({
+        const cached = SANDBOX_SCHEMAS_CACHE.get(this.toolsKey)
+        if (cached !== undefined) return cached
+
+        const built = buildSandboxSchemasMap({
             toolsByGroup: this.toolsByGroup,
             bindings: this.createSandboxBindings(),
             fnSchemas: this.fnSchemas,
             getToolSchemaString: (tool) => this.getToolSchemaString(tool),
         })
+        if (SANDBOX_SCHEMAS_CACHE.size >= MAX_SANDBOX_SCHEMAS_CACHE) {
+            const oldestKey = SANDBOX_SCHEMAS_CACHE.keys().next().value
+            if (oldestKey !== undefined) SANDBOX_SCHEMAS_CACHE.delete(oldestKey)
+        }
+        SANDBOX_SCHEMAS_CACHE.set(this.toolsKey, built)
+        return built
     }
+}
+
+export function getCachedSandboxSchemas(
+    tools: ToolDefinition[]
+): Record<string, Record<string, string>> {
+    const key = computeToolsCacheKey(tools)
+    const cached = SANDBOX_SCHEMAS_CACHE.get(key)
+    if (cached !== undefined) return cached
+    return new JournalApi(tools).createSandboxSchemas()
 }
 
 export function createJournalApi(

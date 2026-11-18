@@ -35,7 +35,7 @@ import {
 } from './context-section.js'
 import { formatUserMessage } from './user-message.js'
 import { buildInsightsSection } from './insights-section.js'
-import { buildSystemContext } from './system-section.js'
+import { buildBriefingSystemSummary } from './system-section.js'
 
 function parsePinSessionOption(uri: string): boolean {
     const queryIdx = uri.indexOf('?')
@@ -228,24 +228,6 @@ export async function buildBriefingData(
         resolveBriefingScope(context, config, targetRepo, options)
 
     const journal = buildJournalContext(context, config, activeProjectNumber, activeWorkspaceId)
-    const github = await buildGitHubSection(
-        activeGithub,
-        config,
-        activeRepoPath !== undefined ? activeWorkspaceId : undefined,
-        ...(activeGithub !== undefined && context.runtime !== undefined ? [context.runtime] : [])
-    )
-    const team = buildTeamContext(context, config, activeProjectNumber, activeWorkspaceId)
-    const insights = buildInsightsSection(context, activeWorkspaceId)
-    const graphStats = buildGraphContext(context, journal.workspaceId)
-    const latestPreviews = journal.latestEntries.map((e) => `#${e.id} (${e.type}): ${e.preview}`)
-    const teamLatestPreviews =
-        config.includeTeam && team?.teamLatestEntries && team.teamLatestEntries.length > 0
-            ? team.teamLatestEntries.map((e) => `#${e.id} (${e.type}): ${e.preview}`)
-            : undefined
-    const summaryPreviews = journal.sessionSummaries
-        ? journal.sessionSummaries.map((s) => `#${s.id} (${s.type}): ${s.preview}`)
-        : null
-
     const suppressSystemCwd =
         targetRepo !== undefined ||
         (activeWorkspaceId !== undefined &&
@@ -255,13 +237,33 @@ export async function buildBriefingData(
                 hasRegistry ||
                 config.defaultWorkspaceId?.toLowerCase() === 'default'))
     const systemRepoPath = activeRepoPath ?? (suppressSystemCwd ? null : undefined)
-    const system = buildSystemContext(
-        config,
-        context.filterConfig,
-        systemRepoPath,
-        context.resourceCount,
-        journal.workspaceId
-    )
+
+    const [github, system] = await Promise.all([
+        buildGitHubSection(
+            activeGithub,
+            config,
+            activeRepoPath !== undefined ? activeWorkspaceId : undefined,
+            ...(activeGithub !== undefined && context.runtime !== undefined ? [context.runtime] : [])
+        ),
+        buildBriefingSystemSummary(
+            config,
+            context.filterConfig,
+            systemRepoPath,
+            context.resourceCount,
+            journal.workspaceId
+        ),
+    ])
+    const team = buildTeamContext(context, config, activeProjectNumber, activeWorkspaceId)
+    const insights = buildInsightsSection(context, activeWorkspaceId)
+    const graphStats = buildGraphContext(context, journal.workspaceId, journal.totalEntries)
+    const latestPreviews = journal.latestEntries.map((e) => `#${e.id} (${e.type}): ${e.preview}`)
+    const teamLatestPreviews =
+        config.includeTeam && team?.teamLatestEntries && team.teamLatestEntries.length > 0
+            ? team.teamLatestEntries.map((e) => `#${e.id} (${e.type}): ${e.preview}`)
+            : undefined
+    const summaryPreviews = journal.sessionSummaries
+        ? journal.sessionSummaries.map((s) => `#${s.id} (${s.type}): ${s.preview}`)
+        : null
 
     const userMessage = formatUserMessage({
         repoName: github?.repo ?? 'local',

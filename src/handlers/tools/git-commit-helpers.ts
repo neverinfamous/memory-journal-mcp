@@ -127,7 +127,7 @@ const NO_TAG_FALLBACK_MAX_COMMITS = 100
 export async function getUnreleasedChangelog(
     cwd: string
 ): Promise<{ latestTag: string | null; commits: CommitEntry[]; truncated: boolean }> {
-    const latestTag = readLatestGitTag(cwd)
+    const latestTag = await readLatestGitTag(cwd)
     if (latestTag === null) {
         const commits = await fetchCommits({ maxCount: NO_TAG_FALLBACK_MAX_COMMITS }, cwd)
         return {

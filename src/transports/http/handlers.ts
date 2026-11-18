@@ -81,17 +81,43 @@ export function handleRootInfo(_req: Request, res: Response): void {
 // Bearer Token Auth Middleware
 // =============================================================================
 
-function isValidBearerTokenHeader(
+let cachedScopeEnv: string | undefined
+let cachedParsedScopes: string[] | undefined
+
+function resolveBearerDefaultScopes(): string[] {
+    const envScopes = process.env['MCP_AUTH_SCOPES']
+    if (cachedParsedScopes !== undefined && cachedScopeEnv === envScopes) {
+        return cachedParsedScopes
+    }
+    const parsedScopes = envScopes
+        ? envScopes
+              .split(/[\s,]+/)
+              .map((s) => s.trim())
+              .filter(Boolean)
+        : []
+    let defaultScopes = parsedScopes.length > 0 ? parsedScopes : ['read']
+    const invalidScopes = defaultScopes.filter((s) => !isValidScope(s))
+    if (invalidScopes.length > 0) {
+        logger.warning(
+            `Invalid MCP_AUTH_SCOPES detected: ${invalidScopes.join(', ')}. Falling back to safe defaults.`,
+            { module: 'HTTP' }
+        )
+        defaultScopes = ['read']
+    }
+    cachedScopeEnv = envScopes
+    cachedParsedScopes = defaultScopes
+    return defaultScopes
+}
+
+function isValidBearerTokenDigest(
     authHeader: string | undefined,
-    expectedToken: string
+    expectedDigest: Buffer | null
 ): boolean {
-    if (typeof authHeader !== 'string') return false
-    if (expectedToken.trim() === '') return false
+    if (typeof authHeader !== 'string' || expectedDigest === null) return false
     const spaceIdx = authHeader.indexOf(' ')
     if (spaceIdx === -1) return false
     if (authHeader.slice(0, spaceIdx).toLowerCase() !== 'bearer') return false
     const providedDigest = createHash('sha256').update(authHeader.slice(spaceIdx + 1), 'utf8').digest()
-    const expectedDigest = createHash('sha256').update(expectedToken, 'utf8').digest()
     return timingSafeEqual(expectedDigest, providedDigest)
 }
 
@@ -104,6 +130,8 @@ export function createAuthMiddleware(
     authToken: string
 ): (req: Request, res: Response, next: () => void) => void {
     logger.info('Bearer token authentication enabled', { module: 'HTTP' })
+    const expectedDigest =
+        authToken.trim() !== '' ? createHash('sha256').update(authToken, 'utf8').digest() : null
 
     return (req: Request, res: Response, next: () => void): void => {
         if ((req.method === 'GET' || req.method === 'HEAD') && req.path === '/health') {
@@ -111,27 +139,12 @@ export function createAuthMiddleware(
             return
         }
 
-        if (!isValidBearerTokenHeader(req.headers.authorization, authToken)) {
+        if (!isValidBearerTokenDigest(req.headers.authorization, expectedDigest)) {
             res.status(401).json({ error: 'Unauthorized' })
             return
         }
 
-        const envScopes = process.env['MCP_AUTH_SCOPES']
-        const parsedScopes = envScopes
-            ? envScopes
-                  .split(/[\s,]+/)
-                  .map((s) => s.trim())
-                  .filter(Boolean)
-            : []
-        let defaultScopes = parsedScopes.length > 0 ? parsedScopes : ['read']
-        const invalidScopes = defaultScopes.filter((s) => !isValidScope(s))
-        if (invalidScopes.length > 0) {
-            logger.warning(
-                `Invalid MCP_AUTH_SCOPES detected: ${invalidScopes.join(', ')}. Falling back to safe defaults.`,
-                { module: 'HTTP' }
-            )
-            defaultScopes = ['read']
-        }
+        const defaultScopes = resolveBearerDefaultScopes()
 
         // Bind an explicit identity for shared bearer mode so that stateful sessions
         // can enforce tenant isolation even without OAuth.

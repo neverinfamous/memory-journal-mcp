@@ -231,9 +231,8 @@ function buildTeamHybridLists(
     }
 }
 
-function assembleHybridCandidates(
-    sortedKeys: string[],
-    qualifiedFusionScores: Map<string, number>,
+function hydrateHybridChunk(
+    keysChunk: readonly string[],
     db: IDatabaseAdapter,
     teamDb: IDatabaseAdapter | undefined,
     canQueryTeam: boolean,
@@ -243,7 +242,7 @@ function assembleHybridCandidates(
 ): EntryWithSource[] {
     const personalIds: number[] = []
     const teamIds: number[] = []
-    for (const key of sortedKeys) {
+    for (const key of keysChunk) {
         if (key.startsWith('personal:')) {
             personalIds.push(Number(key.slice('personal:'.length)))
         } else if (key.startsWith('team:')) {
@@ -262,18 +261,70 @@ function assembleHybridCandidates(
             ? hydrateQualifiedStoreCandidates(teamIds, 'team', teamDb, options, teamFtsById)
             : []
     return [...hydratedPersonal, ...hydratedTeam]
-        .sort((a, b) => {
-            const rawA = a['id']
-            const rawB = b['id']
-            const aIdStr = typeof rawA === 'number' || typeof rawA === 'string' ? String(rawA) : '-1'
-            const bIdStr = typeof rawB === 'number' || typeof rawB === 'string' ? String(rawB) : '-1'
-            const aKey = `${a.source}:${aIdStr}`
-            const bKey = `${b.source}:${bIdStr}`
-            const scoreDiff =
-                (qualifiedFusionScores.get(bKey) ?? 0) - (qualifiedFusionScores.get(aKey) ?? 0)
-            if (scoreDiff !== 0) return scoreDiff
-            return (b.timestamp ?? '').localeCompare(a.timestamp ?? '')
-        })
+}
+
+function compareHybridCandidates(
+    a: EntryWithSource,
+    b: EntryWithSource,
+    qualifiedFusionScores: ReadonlyMap<string, number>
+): number {
+    const rawA = a['id']
+    const rawB = b['id']
+    const aIdStr = typeof rawA === 'number' || typeof rawA === 'string' ? String(rawA) : '-1'
+    const bIdStr = typeof rawB === 'number' || typeof rawB === 'string' ? String(rawB) : '-1'
+    const aKey = `${a.source}:${aIdStr}`
+    const bKey = `${b.source}:${bIdStr}`
+    const scoreDiff =
+        (qualifiedFusionScores.get(bKey) ?? 0) - (qualifiedFusionScores.get(aKey) ?? 0)
+    if (scoreDiff !== 0) return scoreDiff
+    return (b.timestamp ?? '').localeCompare(a.timestamp ?? '')
+}
+
+function assembleHybridCandidates(
+    sortedKeys: string[],
+    qualifiedFusionScores: Map<string, number>,
+    db: IDatabaseAdapter,
+    teamDb: IDatabaseAdapter | undefined,
+    canQueryTeam: boolean,
+    options: HybridSearchOptions,
+    personalFtsById: ReadonlyMap<number, JournalEntry>,
+    teamFtsById: ReadonlyMap<number, JournalEntry>
+): EntryWithSource[] {
+    const accumulated: EntryWithSource[] = []
+    let cursor = 0
+    let chunkSize = Math.max(options.limit * 2, 24)
+
+    // Hydrate top-ranked RRF chunks lazily and extend across equal-score ties for exact ranking.
+    while (cursor < sortedKeys.length) {
+        let end = Math.min(cursor + chunkSize, sortedKeys.length)
+        const boundaryKey = sortedKeys[end - 1]
+        const boundaryScore =
+            boundaryKey !== undefined ? (qualifiedFusionScores.get(boundaryKey) ?? 0) : 0
+        while (end < sortedKeys.length) {
+            const nextKey = sortedKeys[end]
+            const nextScore = nextKey !== undefined ? (qualifiedFusionScores.get(nextKey) ?? 0) : 0
+            if (nextScore !== boundaryScore) break
+            end++
+        }
+        const chunk = sortedKeys.slice(cursor, end)
+        accumulated.push(
+            ...hydrateHybridChunk(
+                chunk,
+                db,
+                teamDb,
+                canQueryTeam,
+                options,
+                personalFtsById,
+                teamFtsById
+            )
+        )
+        cursor = end
+        if (accumulated.length >= options.limit) break
+        chunkSize = Math.max(chunkSize * 2, 64)
+    }
+
+    return accumulated
+        .sort((a, b) => compareHybridCandidates(a, b, qualifiedFusionScores))
         .slice(0, options.limit)
 }
 

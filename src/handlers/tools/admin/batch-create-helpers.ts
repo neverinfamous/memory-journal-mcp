@@ -7,26 +7,29 @@ import { resolveProjectContext } from '../../../utils/workspace-resolver.js'
 import { PermissionError, ValidationError } from '../../../types/errors.js'
 import { canonicalizeTeamAuthor, enforceTeamRbac } from '../team/rbac.js'
 import { logger } from '../../../utils/logger.js'
-import { resolveEntryAnchors } from '../core/staleness-tools.js'
+import { prefetchBatchCommitFiles, resolveEntryAnchors } from '../core/staleness-tools.js'
 import type { BatchCreateEntriesSchema } from './schemas.js'
 
 type BatchEntryInput = z.infer<typeof BatchCreateEntriesSchema>['entries'][number]
+const BATCH_ENTRY_CONCURRENCY = 8
 
 export interface PreparedBatchEntry {
     input: CreateEntryInput
     shareWithTeam: boolean
 }
 
-/**
- * Resolve workspace, project number, issue URL and anchors for one batch entry.
- * Mirrors the resolution performed by the single `create_entry` tool.
- */
-async function prepareBatchEntry(
+interface ResolvedBatchScope {
+    e: BatchEntryInput
+    wsId: string
+    pNumber: number
+}
+
+function resolveBatchEntryScope(
     e: BatchEntryInput,
     rootProjectNumber: number | undefined,
     context: ToolContext,
     rootWorkspaceId?: string
-): Promise<PreparedBatchEntry> {
+): ResolvedBatchScope {
     if (e.workspace_id?.trim() === '*') {
         throw new ValidationError(
             "workspace_id '*' is a read-only wildcard and cannot be used for write operations. Specify a concrete workspace_id or project_number."
@@ -57,9 +60,27 @@ async function prepareBatchEntry(
             `project_number is required. Batch entry must be assigned to a valid project (failed to resolve project_number for workspace '${wsId}'). To find your project_number, read memory://agent-context/<repo> via read_resource, call mj.core.listProjects(), or check memory://briefing/<project-name>.`
         )
     }
+    return { e, wsId, pNumber }
+}
 
+/**
+ * Resolve issue URL and anchors for one validated batch entry scope.
+ * Mirrors the resolution performed by the single `create_entry` tool.
+ */
+async function hydratePreparedBatchEntry(
+    scoped: ResolvedBatchScope,
+    context: ToolContext,
+    prefetchedCommitFiles?: ReadonlyMap<string, string[]>
+): Promise<PreparedBatchEntry> {
+    const { e, wsId, pNumber } = scoped
     const issueUrl = await resolveIssueUrl(context, pNumber, e.issue_number, e.issue_url, wsId)
-    const resolvedAnchors = resolveEntryAnchors(e.anchors, e.auto_context, wsId, context)
+    const resolvedAnchors = await resolveEntryAnchors(
+        e.anchors,
+        e.auto_context,
+        wsId,
+        context,
+        prefetchedCommitFiles
+    )
 
     return {
         shareWithTeam: e.share_with_team,
@@ -96,9 +117,30 @@ export async function prepareBatchCreateInputs(
     context: ToolContext,
     rootWorkspaceId?: string
 ): Promise<PreparedBatchEntry[]> {
+    if (entries.length === 0) return []
+    const scopedEntries = entries.map((e) =>
+        resolveBatchEntryScope(e, rootProjectNumber, context, rootWorkspaceId)
+    )
+    const prefetchedCommitFiles = await prefetchBatchCommitFiles(
+        scopedEntries.map((item) => ({
+            autoContext: item.e.auto_context,
+            workspaceId: item.wsId,
+        })),
+        context
+    )
+
     const prepared: PreparedBatchEntry[] = []
-    for (const e of entries) {
-        prepared.push(await prepareBatchEntry(e, rootProjectNumber, context, rootWorkspaceId))
+    for (let i = 0; i < scopedEntries.length; i += BATCH_ENTRY_CONCURRENCY) {
+        const chunk = scopedEntries.slice(i, i + BATCH_ENTRY_CONCURRENCY)
+        const outcomes = await Promise.allSettled(
+            chunk.map((item) => hydratePreparedBatchEntry(item, context, prefetchedCommitFiles))
+        )
+        for (const outcome of outcomes) {
+            if (outcome.status === 'rejected') {
+                throw outcome.reason
+            }
+            prepared.push(outcome.value)
+        }
     }
     return prepared
 }
@@ -144,30 +186,82 @@ export async function shareBatchEntriesWithTeam(
     }
 
     const sharedEntries: ReturnType<typeof teamDb.createEntry>[] = []
-    for (const i of wanted) {
-        const entry = prepared[i]
-        if (!entry) continue
-        try {
-            enforceTeamRbac(context, author, 'member', entry.input.workspaceId)
-            const canonicalAuthor = canonicalizeTeamAuthor(teamDb, author, entry.input.workspaceId)
-            const teamEntry = teamDb.createEntry({ ...entry.input, isPersonal: false, author: canonicalAuthor })
-            sharedEntries.push(teamEntry)
-            sharedCount++
-        } catch (err) {
-            logger.warning('Batch share_with_team failed for entry', {
-                module: 'BatchTools',
-                index: i,
-                error: err instanceof Error ? err.message : String(err),
-            })
-            const errMsg = err instanceof Error ? err.message : String(err)
-            warnings.push(`Entry at index ${String(i)} could not be shared with team: ${errMsg}`)
+    const rbacVerifiedWs = new Set<string>()
+    const canonicalAuthorByWs = new Map<string, string>()
+
+    const insertShared = (): void => {
+        for (const i of wanted) {
+            const entry = prepared[i]
+            if (!entry) continue
+            if (
+                tryInsertBatchSharedEntry(
+                    context,
+                    teamDb,
+                    author,
+                    entry,
+                    i,
+                    rbacVerifiedWs,
+                    canonicalAuthorByWs,
+                    sharedEntries,
+                    warnings
+                )
+            ) {
+                sharedCount++
+            }
         }
+    }
+
+    if (typeof teamDb.executeInTransaction === 'function') {
+        teamDb.executeInTransaction(insertShared)
+    } else {
+        insertShared()
     }
     if (sharedCount > 0) teamDb.flushSave()
     if (teamVectorManager !== undefined && sharedEntries.length > 0) {
         await indexSharedTeamVectors(teamVectorManager, sharedEntries, warnings)
     }
     return { sharedCount, warnings }
+}
+
+function tryInsertBatchSharedEntry(
+    context: ToolContext,
+    teamDb: NonNullable<ToolContext['teamDb']>,
+    author: string,
+    entry: PreparedBatchEntry,
+    index: number,
+    rbacVerifiedWs: Set<string>,
+    canonicalAuthorByWs: Map<string, string>,
+    sharedEntries: ReturnType<NonNullable<ToolContext['teamDb']>['createEntry']>[],
+    warnings: string[]
+): boolean {
+    try {
+        const wsKey = entry.input.workspaceId ?? 'default'
+        if (!rbacVerifiedWs.has(wsKey)) {
+            enforceTeamRbac(context, author, 'member', entry.input.workspaceId)
+            rbacVerifiedWs.add(wsKey)
+        }
+        let canonicalAuthor = canonicalAuthorByWs.get(wsKey)
+        if (canonicalAuthor === undefined) {
+            canonicalAuthor = canonicalizeTeamAuthor(teamDb, author, entry.input.workspaceId)
+            canonicalAuthorByWs.set(wsKey, canonicalAuthor)
+        }
+        const teamEntry = teamDb.createEntry({
+            ...entry.input,
+            isPersonal: false,
+            author: canonicalAuthor,
+        })
+        sharedEntries.push(teamEntry)
+        return true
+    } catch (err) {
+        logger.warning('Batch share_with_team failed for entry', {
+            module: 'BatchTools',
+            index,
+            error: err instanceof Error ? err.message : String(err),
+        })
+        const errMsg = err instanceof Error ? err.message : String(err)
+        warnings.push(`Entry at index ${String(index)} could not be shared with team: ${errMsg}`)
+        return false
+    }
 }
 
 async function indexSharedTeamVectors(

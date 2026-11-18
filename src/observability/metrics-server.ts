@@ -91,16 +91,14 @@ function isMetricsHostHeaderAllowed(
 
 function isValidBearerToken(
     authHeader: string | string[] | undefined,
-    expectedToken: string
+    expectedDigest: Buffer | undefined
 ): boolean {
-    if (typeof authHeader !== 'string') return false;
-    if (expectedToken.trim() === '') return false;
+    if (typeof authHeader !== 'string' || expectedDigest === undefined) return false;
     const spaceIdx = authHeader.indexOf(' ');
     if (spaceIdx === -1) return false;
     const scheme = authHeader.slice(0, spaceIdx).toLowerCase();
     if (scheme !== 'bearer') return false;
     const providedDigest = createHash('sha256').update(authHeader.slice(spaceIdx + 1), 'utf8').digest();
-    const expectedDigest = createHash('sha256').update(expectedToken, 'utf8').digest();
     return timingSafeEqual(expectedDigest, providedDigest);
 }
 
@@ -109,6 +107,7 @@ interface ResolvedMetricsServerConfig {
     host: string;
     isLoopbackBind: boolean;
     authToken: string | undefined;
+    expectedTokenDigest: Buffer | undefined;
 }
 
 const DEFAULT_PLACEHOLDER_TOKEN = 'change_this_to_a_secure_token_for_production';
@@ -138,16 +137,21 @@ function resolveMetricsServerConfig(
             `FATAL: Default auth token detected for non-loopback standalone metrics server '${host}'. You MUST change MCP_AUTH_TOKEN to a secure, cryptographically random value for production.`
         );
     }
-    return { port, host, isLoopbackBind, authToken };
+    const expectedTokenDigest =
+        authToken !== undefined ? createHash('sha256').update(authToken, 'utf8').digest() : undefined;
+    return { port, host, isLoopbackBind, authToken, expectedTokenDigest };
 }
 
 function servePrometheusMetrics(
     req: http.IncomingMessage,
     res: http.ServerResponse,
     runtime: ServerRuntime,
-    authToken: string | undefined
+    expectedTokenDigest: Buffer | undefined
 ): void {
-    if (authToken !== undefined && !isValidBearerToken(req.headers.authorization, authToken)) {
+    if (
+        expectedTokenDigest !== undefined &&
+        !isValidBearerToken(req.headers.authorization, expectedTokenDigest)
+    ) {
         res.writeHead(401, {
             'Content-Type': 'text/plain; charset=utf-8',
             'WWW-Authenticate': 'Bearer',
@@ -174,14 +178,14 @@ function handleMetricsRequest(
     runtime: ServerRuntime,
     config: ResolvedMetricsServerConfig
 ): void {
-    const { host, isLoopbackBind, authToken } = config;
+    const { host, isLoopbackBind, authToken, expectedTokenDigest } = config;
     if (!isMetricsHostHeaderAllowed(req.headers.host, host, isLoopbackBind, authToken !== undefined)) {
         res.writeHead(403, { 'Content-Type': 'text/plain; charset=utf-8' });
         res.end('Forbidden');
         return;
     }
     if (req.url === '/metrics' && req.method === 'GET') {
-        servePrometheusMetrics(req, res, runtime, authToken);
+        servePrometheusMetrics(req, res, runtime, expectedTokenDigest);
         return;
     }
     if (req.url === '/health' && req.method === 'GET') {

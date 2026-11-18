@@ -208,12 +208,11 @@ function computeGroupNamespaceProperty(
     return createUnknownGroupMethodFallback(ctx, key, resolvedKey)
 }
 
+export const LAZY_GROUP_METHOD_NAMES = Symbol('lazyGroupMethodNames')
+
 function createGroupNamespaceProxy(ctx: GroupProxyContext): object {
     const { group, methodNames, createMethodProxyFn } = ctx
-    const groupProxy: Record<string, (...args: unknown[]) => Promise<unknown>> = {}
-    for (const methodName of methodNames) {
-        groupProxy[methodName] = createMethodProxyFn(group, methodName)
-    }
+    const methodSet = new Set(methodNames)
     const resolvedCache = new Map<string, unknown>()
 
     const helpFn = (): Promise<unknown> => Promise.resolve({ group, methods: methodNames })
@@ -228,11 +227,35 @@ function createGroupNamespaceProxy(ctx: GroupProxyContext): object {
     const groupCallable = function (): void {
         /* callable namespace target */
     }
-    Object.assign(groupCallable, groupProxy)
     Object.defineProperty(groupCallable, 'help', { value: helpFn, enumerable: false, configurable: true, writable: true })
     Object.defineProperty(groupCallable, 'describe', { value: helpFn, enumerable: false, configurable: true, writable: true })
+    Object.defineProperty(groupCallable, LAZY_GROUP_METHOD_NAMES, {
+        value: methodNames,
+        enumerable: false,
+        configurable: false,
+    })
+
+    const ownKeyList = Array.from(new Set<string | symbol>([...Reflect.ownKeys(groupCallable), ...methodNames]))
 
     return new Proxy(groupCallable, {
+        ownKeys: () => ownKeyList,
+        has: (target, prop): boolean =>
+            typeof prop === 'string' && (methodSet.has(prop) || prop in target),
+        getOwnPropertyDescriptor(target, prop): PropertyDescriptor | undefined {
+            const targetDesc = Reflect.getOwnPropertyDescriptor(target, prop)
+            if (targetDesc !== undefined && !targetDesc.configurable) {
+                return targetDesc
+            }
+            if (typeof prop === 'string' && methodSet.has(prop)) {
+                return {
+                    enumerable: true,
+                    configurable: true,
+                    writable: false,
+                    value: resolveGroupNamespaceProperty(ctx, target, prop, resolvedCache),
+                }
+            }
+            return targetDesc
+        },
         apply(_target, _thisArg, _args: unknown[]): Promise<unknown> {
             return wrapPromise(
                 Promise.resolve(
@@ -248,7 +271,15 @@ function createGroupNamespaceProxy(ctx: GroupProxyContext): object {
             )
         },
         get(target: object, prop: string | symbol): unknown {
+            if (prop === LAZY_GROUP_METHOD_NAMES) return methodNames
             if (typeof prop === 'symbol') return undefined
+            const cached = resolvedCache.get(prop)
+            if (cached !== undefined || resolvedCache.has(prop)) return cached
+            if (methodSet.has(prop)) {
+                const fn = createMethodProxyFn(group, prop)
+                resolvedCache.set(prop, fn)
+                return fn
+            }
             return resolveGroupNamespaceProperty(ctx, target, prop, resolvedCache)
         },
         set: () => false,

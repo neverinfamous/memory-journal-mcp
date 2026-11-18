@@ -304,6 +304,10 @@ export class AdapterDelegates {
         return this.vectorOps.getVector(entryId)
     }
 
+    getExistingVectorIds(entryIds: number[]): Set<number> {
+        return this.vectorOps.getExistingVectorIds(entryIds)
+    }
+
     deleteVector(entryId: number): boolean {
         return this.vectorOps.deleteVector(entryId)
     }

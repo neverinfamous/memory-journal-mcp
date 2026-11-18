@@ -15,7 +15,7 @@ export function safeDeleteVectors(
 ): string[] {
     if (ids.length === 0) return []
     const warnings: string[] = []
-    if (typeof vectorManager?.removeEntry !== 'function' && typeof db.deleteVectors === 'function') {
+    if (typeof db.deleteVectors === 'function') {
         try {
             db.deleteVectors(ids)
             return warnings

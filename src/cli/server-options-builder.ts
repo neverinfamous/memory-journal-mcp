@@ -81,7 +81,8 @@ function buildBriefingConfigOptions(
     resolver: ConfigResolver,
     catchConfig: CatchConfig,
     defaultProjectNumber: number | undefined,
-    defaultWorkspaceId: string | undefined
+    defaultWorkspaceId: string | undefined,
+    projectRegistry: ServerOptions['projectRegistry']
 ): NonNullable<ServerOptions['briefingConfig']> {
     return {
         commitCount: catchConfig(() => resolver.resolveInt('briefingCommits', 'BRIEFING_COMMIT_COUNT') ?? 3, 3),
@@ -122,7 +123,7 @@ function buildBriefingConfigOptions(
         workflowSummary: catchConfig(() => resolver.resolve<string>('workflowSummary', 'MEMORY_JOURNAL_WORKFLOW_SUMMARY'), undefined),
         defaultProjectNumber,
         defaultWorkspaceId,
-        projectRegistry: catchConfig(() => parseProjectRegistryOption(resolver.resolve<unknown>('projectRegistry', 'PROJECT_REGISTRY')), undefined),
+        projectRegistry,
         briefingImportanceThreshold: catchConfig(
             () =>
                 parseImportanceThresholdOption(
@@ -412,7 +413,8 @@ export function buildServerOptions(
             resolver,
             catchConfig,
             defaultProjectNumber,
-            defaultWorkspaceId
+            defaultWorkspaceId,
+            projectRegistry
         ),
         auditConfig: buildAuditConfigOption(resolver, catchConfig),
         embeddingModel: catchConfig(() => resolver.resolve<string>('embeddingModel', 'EMBEDDING_MODEL'), undefined),

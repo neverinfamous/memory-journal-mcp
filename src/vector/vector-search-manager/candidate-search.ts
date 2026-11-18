@@ -34,8 +34,13 @@ function sliceBatchTensor(
         return undefined
     }
     const vectors: Float32Array[] = []
+    const isFloat32 = data instanceof Float32Array
     for (let i = 0; i < count; i++) {
         const start = i * dimensions
+        if (isFloat32) {
+            vectors.push(data.slice(start, start + dimensions))
+            continue
+        }
         const slice = new Float32Array(dimensions)
         for (let j = 0; j < dimensions; j++) {
             slice[j] = data[start + j] ?? 0
@@ -197,9 +202,13 @@ export async function searchSimilarEntriesById(
     limit: number,
     threshold: number,
     targetWs: string,
-    projectNumber?: number
+    projectNumber?: number,
+    prefetchedEntry?: JournalEntry
 ): Promise<SemanticSearchResult[]> {
-    const sourceEntry = dbAdapter.getEntryById(entryId, targetWs)
+    const sourceEntry =
+        prefetchedEntry?.id === entryId
+            ? prefetchedEntry
+            : dbAdapter.getEntryById(entryId, targetWs)
     if (!sourceEntry) {
         throw new Error(`Entry ${entryId} not found`)
     }
@@ -209,12 +218,7 @@ export async function searchSimilarEntriesById(
 
     let queryEmbedding = dbAdapter.getVector(entryId)
     if (!queryEmbedding) {
-        const tagsText =
-            sourceEntry.tags !== undefined && sourceEntry.tags !== null && sourceEntry.tags.length > 0
-                ? ` [Tags: ${sourceEntry.tags.join(', ')}]`
-                : ''
-        const text = `[${sourceEntry.entryType}]${tagsText} ${sourceEntry.content}`
-        queryEmbedding = await generateEmbedding(text)
+        queryEmbedding = await generateEmbedding(formatEntryForEmbedding(sourceEntry))
         dbAdapter.upsertVector(entryId, queryEmbedding)
     }
 

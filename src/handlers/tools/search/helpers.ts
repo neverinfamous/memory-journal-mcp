@@ -260,13 +260,11 @@ export function passMetadataFilters(
     if (options.workflowRunId !== undefined && entry.workflowRunId !== options.workflowRunId)
         return false
     if (options.entryType && entry.entryType !== options.entryType) return false
-    if (options.startDate) {
-        const entryDate = entry.timestamp.split('T')[0] ?? ''
-        if (entryDate < options.startDate) return false
-    }
-    if (options.endDate) {
-        const entryDate = entry.timestamp.split('T')[0] ?? ''
-        if (entryDate > options.endDate) return false
+    if (options.startDate || options.endDate) {
+        const tIdx = entry.timestamp.indexOf('T')
+        const entryDate = tIdx === -1 ? entry.timestamp : entry.timestamp.slice(0, tIdx)
+        if (options.startDate && entryDate < options.startDate) return false
+        if (options.endDate && entryDate > options.endDate) return false
     }
     if (options.tags && options.tags.length > 0) {
         const entryTags: string[] = Array.isArray(entry.tags)
@@ -290,6 +288,29 @@ function readTeamHitScore(hit: { entryId: number; score?: number; similarity?: n
     return 0
 }
 
+function hydrateMissingTeamTags(
+    teamDb: IDatabaseAdapter,
+    resolvedEntries: JournalEntry[],
+    options: ISearchFilters
+): void {
+    const hasTagFilters =
+        (options.tags !== undefined && options.tags.length > 0) ||
+        (options.excludeTags !== undefined && options.excludeTags.length > 0)
+    if (!hasTagFilters) return
+
+    const untaggedIds = resolvedEntries
+        .filter((entry) => !Array.isArray(entry.tags))
+        .map((entry) => entry.id)
+    if (untaggedIds.length === 0) return
+
+    const tagsMap = teamDb.getTagsForEntries(untaggedIds)
+    for (const entry of resolvedEntries) {
+        if (!Array.isArray(entry.tags)) {
+            entry.tags = tagsMap.get(entry.id) ?? []
+        }
+    }
+}
+
 async function hydrateTeamVectorHits(
     query: string,
     teamDb: IDatabaseAdapter,
@@ -306,19 +327,19 @@ async function hydrateTeamVectorHits(
             options.workspaceId,
             options.projectNumber
         )
-        const ids = hits.map((hit) => hit.entryId)
-        const hydrated = teamDb.getEntriesByIds(ids, options.workspaceId ?? 'default')
-        if (
-            (options.tags !== undefined && options.tags.length > 0) ||
-            (options.excludeTags !== undefined && options.excludeTags.length > 0)
-        ) {
-            const tagsMap = teamDb.getTagsForEntries(ids)
-            for (const entry of hydrated.values()) {
-                entry.tags = tagsMap.get(entry.id) ?? []
-            }
-        }
+        const missingIds = hits.filter((hit) => hit.entry === undefined).map((hit) => hit.entryId)
+        const hydrated =
+            missingIds.length > 0
+                ? teamDb.getEntriesByIds(missingIds, options.workspaceId ?? 'default')
+                : new Map<number, JournalEntry>()
+        const resolvedEntries: JournalEntry[] = []
         for (const hit of hits) {
-            const entry = hydrated.get(hit.entryId)
+            const entry = hit.entry ?? hydrated.get(hit.entryId)
+            if (entry !== undefined) resolvedEntries.push(entry)
+        }
+        hydrateMissingTeamTags(teamDb, resolvedEntries, options)
+        for (const hit of hits) {
+            const entry = hit.entry ?? hydrated.get(hit.entryId)
             if (entry !== undefined) {
                 pushEntry(entry, Math.round(readTeamHitScore(hit) * 100) / 100)
             }

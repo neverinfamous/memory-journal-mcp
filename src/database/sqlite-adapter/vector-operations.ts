@@ -177,6 +177,29 @@ export class VectorOperations {
         }
     }
 
+    getExistingVectorIds(entryIds: number[]): Set<number> {
+        const existing = new Set<number>()
+        if (entryIds.length === 0) return existing
+        try {
+            const db = this.connection.getNativeDb()
+            for (const { placeholders, params } of bucketInParams(entryIds)) {
+                const bigIds = params.map((id) => BigInt(Math.trunc(id)))
+                const rows = db
+                    .prepare(`SELECT entry_id FROM vec_embeddings WHERE entry_id IN (${placeholders})`)
+                    .all(...bigIds) as { entry_id: number | bigint }[]
+                for (const row of rows) {
+                    existing.add(typeof row.entry_id === 'bigint' ? Number(row.entry_id) : row.entry_id)
+                }
+            }
+            return existing
+        } catch (error: unknown) {
+            if (isMissingTableError(error)) {
+                return existing
+            }
+            throw error
+        }
+    }
+
     deleteVector(entryId: number): boolean {
         try {
             const result = this.connection

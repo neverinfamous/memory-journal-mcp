@@ -4,6 +4,7 @@
  */
 
 import { type SafeFsShim, pathShim, consoleShim, createPreparedStatementShim } from './node-shims.js'
+import { LAZY_GROUP_METHOD_NAMES } from '../worker-api-proxy.js'
 import {
     buildMemoryAndFactoryShims,
     createChildProcessShims,
@@ -66,10 +67,30 @@ function exposeApiMethodsOnSandbox(
     for (const key of Object.keys(mjApi)) {
         const val = mjApi[key]
         if ((val === null || typeof val !== 'object') && typeof val !== 'function') continue
-        for (const groupMethod of Object.keys(val)) {
-            if (groupMethod in sandbox) continue
-            const fn = Reflect.get(val, groupMethod) as unknown
-            if (typeof fn === 'function') sandbox[groupMethod] = fn
+        const lazyNames = Reflect.get(val, LAZY_GROUP_METHOD_NAMES) as unknown
+        if (Array.isArray(lazyNames)) {
+            for (const groupMethod of lazyNames) {
+                if (typeof groupMethod !== 'string' || groupMethod in sandbox) continue
+                let resolved: unknown
+                let hasResolved = false
+                Object.defineProperty(sandbox, groupMethod, {
+                    enumerable: true,
+                    configurable: true,
+                    get(): unknown {
+                        if (!hasResolved) {
+                            resolved = Reflect.get(val, groupMethod)
+                            hasResolved = true
+                        }
+                        return resolved
+                    },
+                })
+            }
+        } else {
+            for (const groupMethod of Object.keys(val)) {
+                if (groupMethod in sandbox) continue
+                const fn = Reflect.get(val, groupMethod) as unknown
+                if (typeof fn === 'function') sandbox[groupMethod] = fn
+            }
         }
         if (typeof val === 'function' && !(key in sandbox)) sandbox[key] = val
     }

@@ -92,7 +92,7 @@ function insertEntryRow(context: EntriesSharedContext, input: CreateEntryInput):
     const { db, tagsMgr } = context
     const { normalizedTimestamp: timestamp } = validateEntryInput(input)
 
-    const txn = db.transaction((): number => {
+    const doInsert = (): number => {
         const { columns, values } = buildEntryInsertPayload(context, input, timestamp)
         const placeholders = columns.map(() => '?').join(', ')
         const stmt = db.prepare(
@@ -109,9 +109,9 @@ function insertEntryRow(context: EntriesSharedContext, input: CreateEntryInput):
             insertAnchors(context, insertId, input.anchors)
         }
         return insertId
-    })
+    }
 
-    return txn()
+    return db.inTransaction ? doInsert() : db.transaction(doInsert)()
 }
 
 export function createEntry(context: EntriesSharedContext, input: CreateEntryInput): JournalEntry {

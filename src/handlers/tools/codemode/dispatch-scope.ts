@@ -428,6 +428,11 @@ export async function normalizeDispatchParams(
         applyRootSessionInheritance(tool, paramsObj, ctx, flags, reg)
     }
 
-    await autoPopulateGithubUrls(paramsObj, sessionContext, workspaceId, projectId)
+    if (
+        checkSchemaAcceptsKey(tool.inputSchema, 'issue_url') ||
+        checkSchemaAcceptsKey(tool.inputSchema, 'pr_url')
+    ) {
+        await autoPopulateGithubUrls(paramsObj, sessionContext, workspaceId, projectId)
+    }
     return { params: paramsObj }
 }

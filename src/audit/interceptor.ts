@@ -22,8 +22,8 @@ import { getAuthContext } from '../auth/auth-context.js'
 import { getRequestContext } from '../utils/request-context.js'
 import { sanitizeErrorForLogging } from '../utils/security-utils.js'
 import { estimateTokens, estimatePayloadTokens } from '../observability/token-estimator.js'
-import { logger } from '../utils/logger.js'
 import {
+    estimateOperationResultTokens,
     extractAuditScopeFromArgs,
     extractAuditScopeFromUri,
     extractSensitiveTargetFromArgs,
@@ -333,29 +333,6 @@ function resolveAuditOperationCategory(
     if (capabilities?.requiresAuditScope === true) return 'audit'
     if (capabilities?.requiresTeamScope === true) return 'team'
     return resolveResourceAuditCategory(target)
-}
-
-function estimateOperationResultTokens(result: unknown, name: string): number | undefined {
-    if (typeof result === 'object' && result !== null) {
-        try {
-            return estimateTokens(JSON.stringify(result), 'json')
-        } catch (serializeError) {
-            // Serialization failure must not block execution
-            logger.debug('Token estimate skipped: result is not serializable', {
-                module: 'Audit',
-                tool: name,
-                error:
-                    serializeError instanceof Error
-                        ? serializeError.message
-                        : String(serializeError),
-            })
-            return undefined
-        }
-    }
-    if (typeof result === 'string') {
-        return estimateTokens(result, 'prose')
-    }
-    return undefined
 }
 
 /**

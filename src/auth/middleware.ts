@@ -158,7 +158,7 @@ async function handleAuthRequest(
     authReq.requestId = crypto.randomUUID()
 
     if ((req.method === 'GET' || req.method === 'HEAD') && isPublicPath(req.path, publicPaths)) {
-        logger.info(`Public path accessed: ${req.path}`, {
+        logger.debug(`Public path accessed: ${req.path}`, {
             module: 'AUTH',
             operation: 'public-path',
         })
@@ -185,7 +185,7 @@ async function handleAuthRequest(
     }
 
     attachValidatedClaims(authReq, token, claims)
-    logger.info(`Request authenticated: ${claims.sub}`, {
+    logger.debug(`Request authenticated: ${claims.sub}`, {
         module: 'AUTH',
         operation: 'authenticate',
         entityId: claims.sub,

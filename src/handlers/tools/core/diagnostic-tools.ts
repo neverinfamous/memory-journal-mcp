@@ -18,8 +18,6 @@ function sleep(ms: number): Promise<void> {
  * `test_error_handling`) split from `core/tools.ts` to keep modules well below 500 lines.
  */
 export function getDiagnosticTools(context: ToolContext): ToolDefinition[] {
-    const { progress } = context
-
     return [
         {
             name: 'test_simple',
@@ -65,6 +63,7 @@ export function getDiagnosticTools(context: ToolContext): ToolDefinition[] {
             },
             handler: async () => {
                 try {
+                    const progress = context.progress
                     await sendProgress(progress, 0, 3, 'Starting operation...')
                     await sleep(PROGRESS_DEMO_STEP_DELAY_MS)
                     await sendProgress(progress, 1, 3, 'Processing step 1...')

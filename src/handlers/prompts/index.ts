@@ -59,17 +59,22 @@ export interface InternalPromptDef {
     ) => { messages: PromptMessage[] } | Promise<{ messages: PromptMessage[] }>
 }
 
+let cachedAllPromptDefs: readonly InternalPromptDef[] | null = null
+let cachedPromptMap: ReadonlyMap<string, InternalPromptDef> | null = null
+let cachedPublicPrompts: readonly object[] | null = null
+
 /**
  * Get all prompt definitions for MCP list
  */
 export function getPrompts(): object[] {
-    return getAllPromptDefinitions().map((def) => ({
+    cachedPublicPrompts ??= getAllPromptDefinitions().map((def) => ({
         name: def.name,
         description: def.description,
         ...(def.arguments !== undefined ? { arguments: def.arguments } : {}),
         ...(def.icons !== undefined ? { icons: def.icons } : {}),
         ...(def.capabilities !== undefined ? { capabilities: def.capabilities } : {}),
     }))
+    return [...cachedPublicPrompts]
 }
 
 /**
@@ -84,8 +89,8 @@ export function getPrompt(
     briefingConfig?: BriefingConfig,
     runtime?: object | null
 ): Promise<{ messages: PromptMessage[] }> {
-    const prompts = getAllPromptDefinitions()
-    const prompt = prompts.find((p) => p.name === name)
+    getAllPromptDefinitions()
+    const prompt = cachedPromptMap?.get(name)
 
     if (!prompt) {
         throw new ResourceNotFoundError('Prompt', name)
@@ -109,13 +114,17 @@ export function getPrompt(
  * Get all prompt definitions by composing sub-module definitions
  */
 export function getAllPromptDefinitions(): InternalPromptDef[] {
-    return [
-        ...getWorkflowPromptDefinitions(),
-        ...getAnalyticsPromptDefinitions(),
-        ...getGitHubPromptDefinitions(),
-        ...getGitPromptDefinitions(),
-        ...getAdversarialPromptDefinitions(),
-        ...getOptimizerPromptDefinitions(),
-        ...getLoadBriefingPromptDefinitions(),
-    ]
+    if (cachedAllPromptDefs === null) {
+        cachedAllPromptDefs = [
+            ...getWorkflowPromptDefinitions(),
+            ...getAnalyticsPromptDefinitions(),
+            ...getGitHubPromptDefinitions(),
+            ...getGitPromptDefinitions(),
+            ...getAdversarialPromptDefinitions(),
+            ...getOptimizerPromptDefinitions(),
+            ...getLoadBriefingPromptDefinitions(),
+        ]
+        cachedPromptMap = new Map(cachedAllPromptDefs.map((p) => [p.name, p]))
+    }
+    return [...cachedAllPromptDefs]
 }

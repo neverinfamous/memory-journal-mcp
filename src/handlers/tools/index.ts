@@ -50,11 +50,12 @@ import {
     applyArgInterceptions,
     injectProjectNames,
     getToolIcon,
-    wrapToolHandlerWithInterceptors,
     instrumentToolDefinitions,
     throwToolNotFoundError,
 } from './arg-interceptions.js'
+import { ALREADY_HEALED_ARGS } from '../../server/mcp-server/tool-registration/healed-args-marker.js'
 import { getAuthContext } from '../../auth/auth-context.js'
+import { getRequestContext, requestContextStorage } from '../../utils/request-context.js'
 
 // Re-export for backward compatibility
 export type { ToolHandlerConfig }
@@ -210,7 +211,25 @@ function ensureToolCache(
         return
     }
 
-    const context: ToolContext = { db, teamDb, vectorManager, teamVectorManager, github, config }
+    const context: ToolContext = {
+        db,
+        teamDb,
+        vectorManager,
+        teamVectorManager,
+        github,
+        config,
+        get progress(): ProgressContext | undefined {
+            return getRequestContext()?.progress
+        },
+        get auth(): ToolContext['auth'] {
+            const authCtx = getAuthContext()
+            if (authCtx?.claims === undefined) return undefined
+            return {
+                ...(authCtx.claims.sub !== undefined ? { sub: authCtx.claims.sub } : {}),
+                scopes: authCtx.claims.scopes,
+            }
+        },
+    }
     const instrumentedDefs = instrumentToolDefinitions(getAllToolDefinitions(context), config)
 
     if (config?.runtime) {
@@ -236,7 +255,7 @@ function applyToolHealingArgs(
     args: Record<string, unknown>,
     config?: ToolHandlerConfig
 ): { args: Record<string, unknown> } | { error: Record<string, unknown> } {
-    if (config?.agentHealing === false) return { args }
+    if (config?.agentHealing === false || ALREADY_HEALED_ARGS.has(args)) return { args }
     setActiveProjectRegistry(config?.projectRegistry)
     try {
         const intercept = applyArgInterceptions(name, [args])
@@ -284,42 +303,6 @@ function assertToolFilterAllowsCall(
         }
     }
     return undefined
-}
-
-async function executeToolWithProgressContext(
-    name: string,
-    args: Record<string, unknown>,
-    baseContext: Omit<ToolContext, 'auth' | 'progress'>,
-    progress: ProgressContext
-): Promise<unknown> {
-    const authCtx = getAuthContext()
-    const activeAuth: ToolContext['auth'] =
-        authCtx?.claims !== undefined
-            ? {
-                  ...(authCtx.claims.sub !== undefined ? { sub: authCtx.claims.sub } : {}),
-                  scopes: authCtx.claims.scopes,
-              }
-            : undefined
-    const context: ToolContext = {
-        ...baseContext,
-        progress,
-        ...(activeAuth !== undefined ? { auth: activeAuth } : {}),
-    }
-    const freshTool = getAllToolDefinitions(context).find((t) => t.name === name)
-    if (!freshTool) return undefined
-    const wrappedHandler = wrapToolHandlerWithInterceptors(
-        freshTool.name,
-        freshTool.handler,
-        baseContext.config
-    )
-    const maintenanceManager = baseContext.config?.runtime?.maintenanceManager
-    if (!maintenanceManager) return undefined
-    const freshResult = await maintenanceManager.withActiveJob(
-        () => wrappedHandler(args),
-        name === 'restore_backup'
-    )
-    injectProjectNames(freshResult, baseContext.config?.projectRegistry)
-    return injectTokenEstimate(freshResult)
 }
 
 /**
@@ -376,20 +359,16 @@ export async function callTool(
         return Promise.reject(error instanceof Error ? error : new Error(String(error)))
     }
 
-    if (progress) {
-        const freshResult = await executeToolWithProgressContext(
-            name,
-            args,
-            { db, teamDb, vectorManager, teamVectorManager, github, config },
-            progress
+    const maintenanceManager = config.runtime.maintenanceManager
+    const runTool = (): Promise<unknown> =>
+        maintenanceManager.withActiveJob(
+            () => Promise.resolve(tool.handler(args)),
+            name === 'restore_backup'
         )
-        if (freshResult !== undefined) return freshResult
-    }
+    const result = progress
+        ? await requestContextStorage.run({ ...(getRequestContext() ?? {}), progress }, runTool)
+        : await runTool()
 
-    const result = await config.runtime.maintenanceManager.withActiveJob(
-        () => Promise.resolve(tool.handler(args)),
-        name === 'restore_backup'
-    )
     injectProjectNames(result, config?.projectRegistry)
     return injectTokenEstimate(result)
 }

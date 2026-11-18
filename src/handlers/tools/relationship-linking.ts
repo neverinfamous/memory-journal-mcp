@@ -14,6 +14,10 @@ interface RequestedRelationship {
 /** Minimal adapter surface needed to create a relationship. */
 interface RelationshipLinker {
     getEntryById?(id: number, workspaceId?: string): { projectNumber?: number | null } | null
+    getEntriesByIds?(
+        ids: number[],
+        workspaceId?: string
+    ): Map<number, { projectNumber?: number | null }>
     linkEntries(
         fromId: number,
         toId: number,
@@ -49,10 +53,27 @@ export function linkRequestedRelationships(
     projectNumber?: number
 ): string[] {
     const warnings: string[] = []
-    for (const rel of relationships ?? []) {
+    if (relationships === undefined || relationships.length === 0) return warnings
+
+    const prefetchedTargets =
+        projectNumber !== undefined &&
+        relationships.length > 1 &&
+        typeof db.getEntriesByIds === 'function'
+            ? db.getEntriesByIds(
+                  Array.from(new Set(relationships.map((rel) => rel.targetId))),
+                  workspaceId
+              )
+            : undefined
+
+    for (const rel of relationships) {
         try {
-            if (projectNumber !== undefined && typeof db.getEntryById === 'function') {
-                const target = db.getEntryById(rel.targetId, workspaceId)
+            if (projectNumber !== undefined) {
+                const target =
+                    prefetchedTargets !== undefined
+                        ? prefetchedTargets.get(rel.targetId)
+                        : typeof db.getEntryById === 'function'
+                          ? db.getEntryById(rel.targetId, workspaceId)
+                          : undefined
                 const targetProject = target?.projectNumber
                 if (
                     targetProject !== null &&

@@ -135,10 +135,17 @@ function createImportanceFilter(
                 missingIds.push(e.id)
             }
         }
-        if (missingIds.length > 0 && typeof context.db.getEntriesByIdsWithImportance === 'function') {
-            const hydratedMap = context.db.getEntriesByIdsWithImportance(missingIds, targetWs)
-            for (const [id, hydrated] of hydratedMap) {
-                importanceScoreCache.set(id, hydrated.importance.score)
+        if (missingIds.length > 0) {
+            if (typeof context.db.getImportanceScoresByIds === 'function') {
+                const scoreMap = context.db.getImportanceScoresByIds(missingIds, targetWs)
+                for (const [id, imp] of scoreMap) {
+                    importanceScoreCache.set(id, imp.score)
+                }
+            } else if (typeof context.db.getEntriesByIdsWithImportance === 'function') {
+                const hydratedMap = context.db.getEntriesByIdsWithImportance(missingIds, targetWs)
+                for (const [id, hydrated] of hydratedMap) {
+                    importanceScoreCache.set(id, hydrated.importance.score)
+                }
             }
         }
         return entries.filter((e) => {
@@ -346,7 +353,11 @@ export interface GraphSummary {
     degraded?: boolean
 }
 
-export function buildGraphContext(context: ResourceContext, workspaceId?: string): GraphSummary | undefined {
+export function buildGraphContext(
+    context: ResourceContext,
+    workspaceId?: string,
+    precomputedActiveCount?: number
+): GraphSummary | undefined {
     try {
         const targetWs = workspaceId ?? 'default'
         const stats = context.db.getStatistics('week', undefined, undefined, false, targetWs)
@@ -358,7 +369,8 @@ export function buildGraphContext(context: ResourceContext, workspaceId?: string
         if (!comp || !causal) return undefined
 
 
-        const totalActiveEntries = context.db.getActiveEntryCount(targetWs)
+        const totalActiveEntries =
+            precomputedActiveCount ?? context.db.getActiveEntryCount(targetWs)
 
         // Fetch top hubs and orphan ratio via purpose-built safe methods
         let topHubs: { id: number; preview: string; count: number }[] = []

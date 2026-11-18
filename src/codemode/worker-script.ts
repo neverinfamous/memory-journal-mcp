@@ -21,6 +21,12 @@ import { buildSandboxGlobals } from './worker/sandbox-globals.js'
 import { serializeAndEnforceEgress } from './worker/result-compactor.js'
 import { createSandboxExecutor, type NestedExecIsolationOverrides, type RunIsolatedNestedFn } from './worker/nested-exec-scope.js'
 import { raceWithSandboxTimeout } from './worker/nested-exec-payload.js'
+import {
+    formatVmErrorResult,
+    getOrCompileVmScript,
+    isExecuteMessage,
+    resolveWorkerMetadata,
+} from './worker/script-and-metadata-cache.js'
 
 // [L4] Hardening failures are fatal: refuse to execute any user code in a half-hardened realm.
 const hardeningFailures = hardenOuterFunctionPrototypes()
@@ -238,7 +244,7 @@ function createIsolatedNestedRunner(options: VmExecutionContextOptions): RunIsol
             activeTimers,
         })
         const rawResult: unknown = await raceWithSandboxTimeout<unknown>(
-            Promise.resolve(vm.runInContext(wrapped, nestedContext, { timeout: nextTimeout })),
+            Promise.resolve(getOrCompileVmScript(wrapped).runInContext(nestedContext, { timeout: nextTimeout })),
             nextTimeout,
             activeTimers
         )
@@ -312,36 +318,6 @@ function extractScopeContext(contextObj?: Record<string, unknown>): {
     return { registryPayload, pinnedWorkspaceRaw, pinnedProjectRaw }
 }
 
-function formatVmErrorResult(
-    err: unknown,
-    startTime: number,
-    startCpu: NodeJS.CpuUsage
-): SandboxResult {
-    const endTime = performance.now()
-    const endCpu = process.cpuUsage(startCpu)
-    const error = err instanceof Error ? err : new Error(String(err))
-    const errString = String(err)
-    if (
-        errString.includes('missing ) after argument list') ||
-        errString.includes('is not a function') ||
-        errString.includes('Invalid or unexpected token') ||
-        errString.includes('Unexpected token') ||
-        errString.includes('Unexpected identifier') ||
-        errString.includes('Cannot use import statement')
-    ) {
-        error.message = `🛠️ AUTONOMOUS HEALING: Syntax error in Code Mode execution (${error.message}). Code Mode requires valid JavaScript code (e.g., 'return await mj.core.getRecentEntries({ limit: 10 })' or 'return await mj.core.createEntry(...)'), not raw SQL statements or unquoted text.\n\n💡 Tip: When querying the journal, use Code Mode methods like 'return await mj.core.getRecentEntries({ limit: 10 })' or 'return await mj.search.searchEntries({ query: "..." })'. When passing long multi-line strings or markdown with embedded quotes/backticks, pass them safely via the \`context\` parameter and reference them as \`context.myParam\`.`
-    }
-    return {
-        success: false,
-        error: error.message,
-        metrics: {
-            wallTimeMs: Math.round(endTime - startTime),
-            cpuTimeMs: Math.round((endCpu.user + endCpu.system) / 1000),
-            memoryUsedMb: 0,
-        },
-    }
-}
-
 async function executeCode(
     code: string,
     methodList: Record<string, string[]>,
@@ -375,9 +351,7 @@ async function executeCode(
             activeTimers,
         })
         const transformed = transformAutoReturn(code)
-        const script = new vm.Script(`(async () => {\n${transformed}\n})()`, {
-            filename: 'codemode-execution.js',
-        })
+        const script = getOrCompileVmScript(`(async () => {\n${transformed}\n})()`)
         const resultPromise = script.runInContext(context, { timeout: timeoutMs }) as Promise<unknown>
         const result = await resultPromise
         const endTime = performance.now()
@@ -397,20 +371,11 @@ async function executeCode(
     }
 }
 
-interface ExecuteWorkerMessage {
-    type: 'EXECUTE'; id: number; code: string; methodList: Record<string, string[]>;
-    schemaList?: Record<string, Record<string, string>>; timeoutMs?: number; maxResultSize?: number;
-    rpcPort: MessagePort; contextObj?: Record<string, unknown>; readonlyMode?: boolean;
-}
-
-function isExecuteMessage(msg: unknown): msg is ExecuteWorkerMessage {
-    return msg !== null && msg !== undefined && typeof msg === 'object' && 'type' in msg && Reflect.get(msg, 'type') === 'EXECUTE'
-}
-
 parentPort?.on('message', (msg: unknown) => {
     void (async () => {
         if (!isExecuteMessage(msg)) return
-        const { id, code, methodList, schemaList, timeoutMs, maxResultSize, rpcPort: newRpcPort, contextObj, readonlyMode } = msg
+        const { id, code, timeoutMs, maxResultSize, rpcPort: newRpcPort, contextObj, readonlyMode } = msg
+        const { methodList, schemaList } = resolveWorkerMetadata(msg)
         rpcPort = newRpcPort
         rpcIdCounter = 0
         rejectPendingRpcRequests('Sandbox execution ended before the call completed')

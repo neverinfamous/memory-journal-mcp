@@ -16,6 +16,11 @@ export class SubscriptionManager {
     // Map of URI string -> Set of Session IDs
     private subscriptions = new Map<string, Set<string>>()
 
+    // Microtask-coalesced pending resource notifications
+    private pendingNotificationUris = new Set<string>()
+    private pendingNotificationWaiters: { resolve: () => void; reject: (err: unknown) => void }[] = []
+    private flushScheduled = false
+
     /**
      * Register a server instance for a session to allow sending notifications.
      */
@@ -119,15 +124,27 @@ export class SubscriptionManager {
     }
 
     /**
-     * Notifies all subscribed clients that a resource has changed.
+     * Notifies all subscribed clients that a resource has changed (coalesced per microtask).
      */
-    public async notifyResourceUpdated(uri: string): Promise<void> {
+    public notifyResourceUpdated(uri: string): Promise<void> {
+        this.pendingNotificationUris.add(uri)
+        return new Promise<void>((resolve, reject) => {
+            this.pendingNotificationWaiters.push({ resolve, reject })
+            if (!this.flushScheduled) {
+                this.flushScheduled = true
+                queueMicrotask(() => {
+                    void this.flushPendingNotifications()
+                })
+            }
+        })
+    }
+
+    private collectTargetsForUri(uri: string): [string, Set<string>][] {
         const targets: [string, Set<string>][] = []
         const directSessions = this.subscriptions.get(uri)
         if (directSessions && directSessions.size > 0) {
             targets.push([uri, directSessions])
         }
-
         if (uri === 'memory://briefing') {
             for (const [subUri, subSessions] of this.subscriptions.entries()) {
                 if (subUri.startsWith('memory://briefing/') && subSessions.size > 0) {
@@ -140,40 +157,54 @@ export class SubscriptionManager {
                 targets.push(['memory://briefing', rootSessions])
             }
         }
+        return targets
+    }
 
-        if (targets.length === 0) {
-            return
+    private enqueueTargetNotifications(
+        targetUri: string,
+        sessions: Set<string>,
+        sent: Set<string>,
+        promises: Promise<void>[]
+    ): void {
+        for (const sessionId of sessions) {
+            const dedupKey = `${sessionId}\0${targetUri}`
+            if (sent.has(dedupKey)) continue
+            sent.add(dedupKey)
+            const server = this.servers.get(sessionId)
+            if (server === undefined) continue
+            promises.push(
+                server.server.sendResourceUpdated({ uri: targetUri }).catch((error: unknown) => {
+                    logger.error(`Failed to notify session ${sessionId} for ${targetUri}`, {
+                        module: 'SubscriptionManager',
+                        error: error instanceof Error ? error : new Error(String(error)),
+                    })
+                })
+            )
         }
+    }
 
-        const sent = new Set<string>()
-        const promises: Promise<void>[] = []
-        for (const [targetUri, sessions] of targets) {
-            for (const sessionId of sessions) {
-                const dedupKey = `${sessionId}\0${targetUri}`
-                if (sent.has(dedupKey)) continue
-                sent.add(dedupKey)
-                const server = this.servers.get(sessionId)
-                if (server) {
-                    promises.push(
-                        server.server
-                            .sendResourceUpdated({ uri: targetUri })
-                            .catch((error: unknown) => {
-                                logger.error(
-                                    `Failed to notify session ${sessionId} for ${targetUri}`,
-                                    {
-                                        module: 'SubscriptionManager',
-                                        error:
-                                            error instanceof Error
-                                                ? error
-                                                : new Error(String(error)),
-                                    }
-                                )
-                            })
-                    )
+    private async flushPendingNotifications(): Promise<void> {
+        this.flushScheduled = false
+        const uris = Array.from(this.pendingNotificationUris)
+        this.pendingNotificationUris.clear()
+        const waiters = this.pendingNotificationWaiters
+        this.pendingNotificationWaiters = []
+
+        try {
+            const promises: Promise<void>[] = []
+            const sent = new Set<string>()
+            for (const uri of uris) {
+                for (const [targetUri, sessions] of this.collectTargetsForUri(uri)) {
+                    this.enqueueTargetNotifications(targetUri, sessions, sent, promises)
                 }
             }
+            if (promises.length > 0) {
+                await Promise.allSettled(promises)
+            }
+            for (const w of waiters) w.resolve()
+        } catch (err) {
+            for (const w of waiters) w.reject(err)
         }
-        await Promise.allSettled(promises)
     }
 
     /**

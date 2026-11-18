@@ -235,7 +235,7 @@ async function executeRestoreBackup(
 }
 
 export function getBackupTools(context: ToolContext): ToolDefinition[] {
-    const { db, progress } = context
+    const { db } = context
     return [
         {
             name: 'backup_journal',
@@ -254,6 +254,7 @@ export function getBackupTools(context: ToolContext): ToolDefinition[] {
             handler: async (params: unknown) => {
                 try {
                     const input = BackupJournalSchema.parse(params)
+                    const progress = context.progress
                     await sendProgress(progress, 0, 2, 'Creating backup...')
                     const result = await db.exportToFile(input.name)
                     await sendProgress(progress, 2, 2, 'Backup complete')

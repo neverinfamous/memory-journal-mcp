@@ -85,12 +85,16 @@ function shouldSkipEntry(
     entry: JournalEntry,
     force: boolean,
     skipExistenceCheck: boolean,
-    projectNumber: number | undefined
+    projectNumber: number | undefined,
+    existingVectorIds?: ReadonlySet<number>
 ): boolean {
     if (projectNumber !== undefined && entry.projectNumber !== projectNumber) {
         return true
     }
     if (force || skipExistenceCheck) return false
+    if (existingVectorIds !== undefined) {
+        return existingVectorIds.has(entry.id)
+    }
 
     // Check if already indexed unless forced or vector table is known empty
     try {
@@ -129,6 +133,36 @@ async function embedEntry(
     }
 }
 
+function lookupExistingBatchVectorIds(
+    dbAdapter: IDatabaseAdapter,
+    batch: JournalEntry[],
+    force: boolean,
+    skipExistenceCheck: boolean,
+    projectNumber: number | undefined
+): ReadonlySet<number> | undefined {
+    if (force || skipExistenceCheck) return undefined
+    const adapterWithBatch = dbAdapter as IDatabaseAdapter & {
+        getExistingVectorIds?: (entryIds: number[]) => Set<number>
+    }
+    if (typeof adapterWithBatch.getExistingVectorIds !== 'function') return undefined
+
+    const candidateIds: number[] = []
+    for (const entry of batch) {
+        if (projectNumber === undefined || entry.projectNumber === projectNumber) {
+            candidateIds.push(entry.id)
+        }
+    }
+    if (candidateIds.length === 0) return undefined
+    try {
+        return adapterWithBatch.getExistingVectorIds(candidateIds)
+    } catch (err) {
+        logger.debug('Batch vector existence check failed; falling back to per-entry lookup', {
+            error: err instanceof Error ? err.message : String(err),
+        })
+        return undefined
+    }
+}
+
 /** Embed and upsert one batch of entries, updating `stats`. */
 async function processBatch(
     manager: VectorSearchManager,
@@ -139,9 +173,25 @@ async function processBatch(
     projectNumber: number | undefined,
     stats: RebuildStats
 ): Promise<void> {
+    const existingVectorIds = lookupExistingBatchVectorIds(
+        dbAdapter,
+        batch,
+        force,
+        skipExistenceCheck,
+        projectNumber
+    )
     const toEmbed: JournalEntry[] = []
     for (const entry of batch) {
-        if (shouldSkipEntry(dbAdapter, entry, force, skipExistenceCheck, projectNumber)) {
+        if (
+            shouldSkipEntry(
+                dbAdapter,
+                entry,
+                force,
+                skipExistenceCheck,
+                projectNumber,
+                existingVectorIds
+            )
+        ) {
             stats.skipped++
             continue
         }

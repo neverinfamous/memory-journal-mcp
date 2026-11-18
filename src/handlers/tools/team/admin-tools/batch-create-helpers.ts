@@ -22,6 +22,7 @@ import { triggerTeamNotifications } from '../helpers.js'
 import { canonicalizeTeamAuthor, getCallerIdentity, resolveScopedTeamRole } from '../rbac.js'
 import type { TeamBatchCreateEntriesSchema } from '../schemas.js'
 import type { TeamDbInstance } from './batch-delete-helpers.js'
+import { runTeamBatchTx } from './batch-prefetch-helpers.js'
 
 type TeamBatchCreateInput = z.infer<typeof TeamBatchCreateEntriesSchema>
 type TeamBatchCreateItem = TeamBatchCreateInput['entries'][number]
@@ -232,6 +233,8 @@ function validateTeamBatchCreateEntries(
     const rootError = validateRootBatchScope(input, config)
     if (rootError !== undefined) return rootError
 
+    const registry = activeProjectRegistry(config?.projectRegistry)
+    const authorCache = new Map<string, ReturnType<typeof resolveTeamCreateAuthor>>()
     const resolvedEntries: ResolvedBatchCreateItem[] = []
     for (const e of input.entries) {
         if (e.workspace_id?.trim() === '*') {
@@ -276,9 +279,14 @@ function validateTeamBatchCreateEntries(
             projectNumber,
             config
         )
-        const paired = pairStoredScope(workspaceId, projectNumber, activeProjectRegistry(config?.projectRegistry))
+        const paired = pairStoredScope(workspaceId, projectNumber, registry)
         const targetWorkspaceId = paired.workspaceId ?? workspaceId
-        const authorResult = resolveTeamCreateAuthor(e.author, teamDb, config, targetWorkspaceId)
+        const authorCacheKey = `${e.author ?? ''}\0${targetWorkspaceId}`
+        let authorResult = authorCache.get(authorCacheKey)
+        if (authorResult === undefined) {
+            authorResult = resolveTeamCreateAuthor(e.author, teamDb, config, targetWorkspaceId)
+            authorCache.set(authorCacheKey, authorResult)
+        }
         if ('errorResponse' in authorResult) return authorResult
 
         resolvedEntries.push({
@@ -370,12 +378,14 @@ export async function executeTeamBatchCreate(
     const failedIndices = new Set(errors.map((err) => err.index))
     const createdSourceIndices = inputs.flatMap((_, idx) => (failedIndices.has(idx) ? [] : [idx]))
 
-    const relationshipWarnings = linkBatchCreatedRelationships(
-        teamDb,
-        results,
-        createdSourceIndices,
-        input.entries,
-        inputs
+    const relationshipWarnings = runTeamBatchTx(teamDb, () =>
+        linkBatchCreatedRelationships(
+            teamDb,
+            results,
+            createdSourceIndices,
+            input.entries,
+            inputs
+        )
     )
     const entries = results.map((r, i) => ({
         ...r,

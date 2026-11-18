@@ -1,22 +1,15 @@
 import { readResource } from '../../../handlers/resources/index.js'
-import {
-    getEnabledGroups,
-    isReadonlyMetaActive,
-    isToolVisibleForFilter,
-} from '../../../filtering/tool-filter.js'
-import {
-    generateStandardInstructions,
-    generateCodeModeInstructions,
-} from '../../../constants/server-instructions.js'
-import { TOOL_GROUPS } from '../../../filtering/tool-constants.js'
-import type { ToolGroup, ToolHandlerConfig } from '../../../types/index.js'
+import type { ToolHandlerConfig } from '../../../types/index.js'
 import type { DEFAULT_BRIEFING_CONFIG } from '../../../handlers/resources/shared.js'
-import type { PromptDefinition } from '../../registration.js'
 import { globalSubscriptionManager } from '../../subscription-manager.js'
 import { logAgentIssue } from '../../../utils/issue-logger.js'
 import { findCanonicalRegistryKey, getActiveSessionProject } from '../../../utils/workspace-resolver.js'
 import { activeProjectRegistry, pairStoredScope } from '../../../utils/write-scope.js'
 import type { ServerContext, ServerOptions } from '../types.js'
+export {
+    buildServerInstructions,
+    getCachedReadOnlyHints,
+} from './server-instructions-cache.js'
 
 /**
  * Helpers extracted from `createServerInstance` (instruction generation, mutation
@@ -35,79 +28,6 @@ export const MUTATING_TOOLS = new Set([
     'team_update_member_role',
     'team_remove_member',
 ])
-
-/** Build the server instructions for the currently enabled tools/groups. */
-export function buildServerInstructions(
-    context: ServerContext,
-    options: ServerOptions,
-    prompts: PromptDefinition[],
-    allToolNames: Set<string>,
-    readOnlyHints?: ReadonlyMap<string, boolean | undefined>
-): string {
-    const currentConfig = context.configManager.getConfig()
-    const filterRaw = currentConfig.toolFilterConfig?.raw
-    let enabledSet = currentConfig.toolFilterConfig?.enabledTools ?? allToolNames
-    if (isReadonlyMetaActive(filterRaw) && readOnlyHints !== undefined) {
-        enabledSet = new Set(
-            [...enabledSet].filter((name) =>
-                isToolVisibleForFilter(name, readOnlyHints.get(name), filterRaw)
-            )
-        )
-    }
-    const groups = currentConfig.toolFilterConfig ? getEnabledGroups(enabledSet) : undefined
-
-    const isCodeModeOnly =
-        filterRaw?.trim() === 'codemode' ||
-        (enabledSet.has('mj_execute_code') &&
-            [...enabledSet].every(
-                (t) => t === 'mj_execute_code' || t === 'update_configuration'
-            ))
-    const mappedPrompts = prompts.map((p) => {
-        const prompt = p as { name: string; description?: string }
-        return {
-            name: prompt.name,
-            ...(prompt.description !== undefined ? { description: prompt.description } : {}),
-        }
-    })
-
-    const instructionConfig = {
-        ...(currentConfig.briefingConfig ?? {}),
-        ...(options.instructionLevel !== undefined
-            ? { instructionLevel: options.instructionLevel }
-            : {}),
-    }
-
-    if (isCodeModeOnly) {
-        // [INTENT] Keep `enabledSet` scoped to registered MCP tools for `## Active Tools`;
-        // expand only `finalGroups` when `codemodeInternalFullAccess` unlocks sandbox namespaces.
-        const sandboxVisibleTools =
-            isReadonlyMetaActive(filterRaw) && readOnlyHints !== undefined
-                ? new Set(
-                      [...allToolNames].filter((name) =>
-                          isToolVisibleForFilter(name, readOnlyHints.get(name), filterRaw)
-                      )
-                  )
-                : allToolNames
-        const finalGroups =
-            currentConfig.codemodeInternalFullAccess === true
-                ? isReadonlyMetaActive(filterRaw)
-                    ? getEnabledGroups(sandboxVisibleTools)
-                    : new Set<ToolGroup>(
-                          Object.keys(TOOL_GROUPS).filter((k): k is ToolGroup => k in TOOL_GROUPS)
-                      )
-                : groups
-
-        return generateCodeModeInstructions(
-            enabledSet,
-            mappedPrompts,
-            undefined,
-            finalGroups,
-            instructionConfig
-        )
-    }
-
-    return generateStandardInstructions(enabledSet, mappedPrompts, undefined, groups, instructionConfig)
-}
 
 /** Notify resource subscribers after a successful state-mutating tool call. */
 export function notifyMutationSubscribers(toolName: string): void {

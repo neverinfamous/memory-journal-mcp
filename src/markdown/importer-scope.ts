@@ -6,7 +6,13 @@
 
 import type { IDatabaseAdapter } from '../database/core/interfaces.js'
 import type { VectorSearchManager } from '../vector/vector-search-manager/index.js'
+import type { EntryType, JournalEntry, SignificanceType } from '../types/index.js'
+import { ENTRY_TYPES, SIGNIFICANCE_TYPES } from '../types/index.js'
 import { PermissionError, ValidationError } from '../types/errors.js'
+import {
+    MAX_CONTENT_LENGTH,
+    normalizeSignificanceValue,
+} from '../handlers/tools/schemas/constants-and-primitives.js'
 import {
     findCanonicalRegistryKey,
     resolveProjectContext,
@@ -19,6 +25,7 @@ export interface ImportedVectorItem {
     entryId: number
     filename: string
     workspaceId: string | undefined
+    entry?: JournalEntry
 }
 
 /**
@@ -252,16 +259,19 @@ export async function indexImportedEntries(
     result: Pick<ImportResult, 'vectorsIndexed' | 'errors' | 'success'>
 ): Promise<void> {
     if (vectorQueue.length === 0) return
+    const missingIds: number[] = []
+    for (const item of vectorQueue) {
+        if (item.entry === undefined) {
+            missingIds.push(item.entryId)
+        }
+    }
     const prefetched =
-        typeof db.getEntriesByIds === 'function'
-            ? db.getEntriesByIds(
-                  vectorQueue.map((v) => v.entryId),
-                  '*'
-              )
+        missingIds.length > 0 && typeof db.getEntriesByIds === 'function'
+            ? db.getEntriesByIds(missingIds, '*')
             : undefined
     const resolvedEntries = vectorQueue.map((item) => ({
         item,
-        entry: resolvePrefetchedEntry(item.entryId, item.workspaceId, db, prefetched),
+        entry: item.entry ?? resolvePrefetchedEntry(item.entryId, item.workspaceId, db, prefetched),
     }))
 
     const indexable = resolvedEntries.flatMap((r) => (r.entry ? [r.entry] : []))
@@ -293,4 +303,93 @@ export async function indexImportedEntries(
     if (hasVectorErrors) {
         result.success = false
     }
+}
+
+const VALID_ENTRY_TYPES = new Set<string>(ENTRY_TYPES)
+const VALID_SIGNIFICANCE_TYPES = new Set<string>(SIGNIFICANCE_TYPES)
+
+function toEntryType(value: string | undefined): EntryType | undefined {
+    if (value === undefined) return undefined
+    if (!VALID_ENTRY_TYPES.has(value)) {
+        throw new ValidationError(
+            `Invalid entry type: ${value}. Must be one of: ${Array.from(VALID_ENTRY_TYPES).join(', ')}`
+        )
+    }
+    return value as EntryType
+}
+
+function toSignificanceType(value: string | undefined): SignificanceType | undefined {
+    if (value === undefined) return undefined
+    const normalized = normalizeSignificanceValue(value)
+    if (normalized === undefined) return undefined
+    if (!VALID_SIGNIFICANCE_TYPES.has(normalized)) {
+        throw new ValidationError(
+            `Invalid significance type: ${value}. Must be one of: ${Array.from(VALID_SIGNIFICANCE_TYPES).join(', ')}`
+        )
+    }
+    return normalized as SignificanceType
+}
+
+function validateImportTimestamp(timestamp: string | undefined): void {
+    if (timestamp === undefined) return
+    const ymdMatch = /^(\d{4})-(\d{2})-(\d{2})(?:$|T)/.exec(timestamp)
+    if (ymdMatch !== null) {
+        const y = Number(ymdMatch[1])
+        const m = Number(ymdMatch[2])
+        const d = Number(ymdMatch[3])
+        const probe = new Date(Date.UTC(y, m - 1, d))
+        if (probe.getUTCFullYear() !== y || probe.getUTCMonth() !== m - 1 || probe.getUTCDate() !== d) {
+            throw new ValidationError(`Invalid timestamp format: ${timestamp}. Expected a valid ISO 8601 date or timestamp.`)
+        }
+    }
+    const candidate = timestamp.includes('T') ? timestamp : `${timestamp}T00:00:00.000Z`
+    if (Number.isNaN(new Date(candidate).getTime())) {
+        throw new ValidationError(`Invalid timestamp format: ${timestamp}. Expected an ISO 8601 date or timestamp.`)
+    }
+}
+
+/** Validate body, scope, types, timestamp, and author ownership for an imported markdown file. */
+export function validateImportedFileEntry(
+    file: ParsedFile,
+    db: IDatabaseAdapter,
+    options: ImportOptions,
+    prefetchedById?: ReturnType<typeof prefetchImportedEntriesById>
+): {
+    effectiveWsId: string | undefined
+    effectiveProjNum: number | undefined
+    rawEntryType: EntryType | undefined
+    significanceType: SignificanceType | undefined
+    existing: ReturnType<IDatabaseAdapter['getEntryById']>
+} {
+    const { metadata } = file
+    if (file.body.trim().length === 0) {
+        throw new ValidationError('Imported markdown entry body cannot be empty')
+    }
+    if (file.body.length > MAX_CONTENT_LENGTH) {
+        throw new ValidationError(
+            `Imported markdown entry body exceeds maximum length of ${String(MAX_CONTENT_LENGTH)} characters`
+        )
+    }
+    const { effectiveWsId, effectiveProjNum } = resolveImportedFileContext(file, options)
+    if (effectiveWsId?.trim() === '*') {
+        throw new ValidationError(
+            "Wildcard workspace_id '*' cannot be used when importing entries. Specify a concrete workspace_id."
+        )
+    }
+    const rawEntryType = toEntryType(metadata.entry_type)
+    const significanceType = toSignificanceType(metadata.significance)
+    validateImportTimestamp(metadata.timestamp)
+    const existing =
+        metadata.mj_id !== undefined
+            ? resolvePrefetchedEntry(metadata.mj_id, effectiveWsId ?? options.workspaceId, db, prefetchedById)
+            : null
+    if (existing && metadata.mj_id !== undefined) {
+        if (effectiveProjNum !== undefined && (existing.projectNumber ?? null) !== effectiveProjNum) {
+            throw new ValidationError(
+                `Entry ${String(metadata.mj_id)} belongs to project #${String(existing.projectNumber ?? 'none')}, not project #${String(effectiveProjNum)}.`
+            )
+        }
+        assertImportAuthorOwnership(db, metadata.mj_id, options.author, effectiveWsId, options)
+    }
+    return { effectiveWsId, effectiveProjNum, rawEntryType, significanceType, existing }
 }

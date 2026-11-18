@@ -4,6 +4,7 @@ import { getCoreTools } from '../tools.js'
 import { getSearchTools } from '../../search/index.js'
 import { getAdminTools } from '../../admin/index.js'
 import { getCodeModeTools } from '../../codemode/handler.js'
+import { findCachedOrFallbackTool } from './cached-tool-lookup.js'
 import { ErrorFieldsMixin } from '../../error-fields-mixin.js'
 import { healAgentHallucinations } from '../../schemas.js'
 import { methodTokens } from '../../../../codemode/method-tokens.js'
@@ -50,8 +51,7 @@ export async function handleCreateEntry(
             : preArgs
 
     if (context !== undefined) {
-        const coreTools = getCoreTools(context)
-        const createTool = coreTools.find((t: ToolDefinition) => t.name === 'create_entry')
+        const createTool = findCachedOrFallbackTool(context, 'create_entry', getCoreTools)
         if (createTool !== undefined) {
             const result = await Promise.resolve(createTool.handler(args))
             if (typeof result === 'object' && result !== null) {
@@ -84,13 +84,13 @@ async function routeNamedTargetTool(
     context?: ToolContext
 ): Promise<unknown> {
     if (context === undefined) return undefined
-    const tools =
+    const buildGroup =
         group === 'core'
-            ? getCoreTools(context)
+            ? getCoreTools
             : group === 'search'
-              ? getSearchTools(context)
-              : getAdminTools(context)
-    const tool = tools.find((t) => t.name === targetToolName)
+              ? getSearchTools
+              : getAdminTools
+    const tool = findCachedOrFallbackTool(context, targetToolName, buildGroup)
     if (tool === undefined) return undefined
     const res = await Promise.resolve(tool.handler(args))
     if (typeof res !== 'object' || res === null) return res
@@ -188,8 +188,10 @@ export function getEntryAndCodemodeFallbackToolDefinitions(
                         ? (params as Record<string, unknown>)
                         : {}
                 if (context !== undefined) {
-                    const searchTool = getSearchTools(context).find(
-                        (t: ToolDefinition) => t.name === 'search_entries'
+                    const searchTool = findCachedOrFallbackTool(
+                        context,
+                        'search_entries',
+                        getSearchTools
                     )
                     if (searchTool !== undefined) {
                         const result = await Promise.resolve(searchTool.handler(args))
@@ -237,13 +239,11 @@ export function getEntryAndCodemodeFallbackToolDefinitions(
                             ? (params as Record<string, unknown>)
                             : {}
                     if (context !== undefined) {
-                        const sourceTools =
+                        const buildGroup =
                             name === 'update_entry' || name === 'delete_entry'
-                                ? getAdminTools(context)
-                                : getCoreTools(context)
-                        const tool = sourceTools.find(
-                            (t: ToolDefinition) => t.name === name
-                        )
+                                ? getAdminTools
+                                : getCoreTools
+                        const tool = findCachedOrFallbackTool(context, name, buildGroup)
                         if (tool !== undefined) {
                             const res = await Promise.resolve(tool.handler(args))
                             if (typeof res !== 'object' || res === null) return res
@@ -351,9 +351,10 @@ export function getEntryAndCodemodeFallbackToolDefinitions(
                 annotations: { readOnlyHint: false, openWorldHint: false },
                 handler: async (params: unknown) => {
                     if (context !== undefined) {
-                        const codemodeTools = getCodeModeTools(context)
-                        const codemodeTool = codemodeTools.find(
-                            (t: ToolDefinition) => t.name === 'mj_execute_code'
+                        const codemodeTool = findCachedOrFallbackTool(
+                            context,
+                            'mj_execute_code',
+                            getCodeModeTools
                         )
                         if (codemodeTool !== undefined) {
                             const forwardedParams =
@@ -418,7 +419,7 @@ export function getEntryAndCodemodeFallbackToolDefinitions(
                     }
 
                     if (context !== undefined) {
-                        const tool = getAdminTools(context).find((t) => t.name === targetTool)
+                        const tool = findCachedOrFallbackTool(context, targetTool, getAdminTools)
                         if (tool !== undefined) {
                             const res = await Promise.resolve(tool.handler(args))
                             if (typeof res !== 'object' || res === null) return res

@@ -4,12 +4,17 @@ import { effectiveWorkspace } from '../../workspace-scope.js'
 import { isMissingColumnError, isMissingTableError } from '../schema-errors.js'
 import { bucketInParams } from '../row-helpers.js'
 
-function canonicalAuthorExpr(tableAlias: string, fallback = "'unknown'"): string {
-    // Use `COLLATE NOCASE` matching `idx_author_aliases_alias` so SQLite uses an index lookup.
-    const sub = `(SELECT aa.canonical_author FROM author_aliases aa WHERE aa.alias = ${tableAlias}.author COLLATE NOCASE AND (aa.workspace_id IS NULL OR aa.workspace_id = ${tableAlias}.workspace_id) ORDER BY aa.workspace_id IS NULL ASC LIMIT 1)`
+function canonicalAuthorExpr(authorCol: string, wsCol: string, fallback = "'unknown'"): string {
+    // [INTENT] `ORDER BY aa.workspace_id DESC` places matching non-null workspace rows before NULL
+    // shared rows using `sqlite_autoindex_author_aliases_1(alias, workspace_id)` with zero temp B-tree.
+    const sub = `(SELECT aa.canonical_author FROM author_aliases aa WHERE aa.alias = ${authorCol} COLLATE NOCASE AND (aa.workspace_id IS NULL OR aa.workspace_id = ${wsCol}) ORDER BY aa.workspace_id DESC LIMIT 1)`
     return fallback !== ''
-        ? `COALESCE(${sub}, ${tableAlias}.author, ${fallback})`
-        : `COALESCE(${sub}, ${tableAlias}.author)`
+        ? `COALESCE(${sub}, ${authorCol}, ${fallback})`
+        : `COALESCE(${sub}, ${authorCol})`
+}
+
+function isMissingSchemaError(error: unknown): boolean {
+    return isMissingTableError(error) || isMissingColumnError(error)
 }
 
 export function getAuthorStatistics(
@@ -17,7 +22,6 @@ export function getAuthorStatistics(
     workspaceId?: string,
     projectNumber?: number
 ): { author: string; count: number }[] {
-    let authors: { author: string; count: number }[] = []
     try {
         const scopeId = effectiveWorkspace(workspaceId)
         const wsFilter = scopeId !== '*' ? ' AND mj.workspace_id = ?' : ''
@@ -27,21 +31,23 @@ export function getAuthorStatistics(
             ...(scopeId !== '*' ? [scopeId] : []),
             ...(hasProject ? [projectNumber] : []),
         ]
-        const authorExpr = canonicalAuthorExpr('mj')
-        const authorResult = connection.exec(
-            `SELECT ${authorExpr} as author, COUNT(*) as count
-             FROM memory_journal mj
-             WHERE mj.deleted_at IS NULL${wsFilter}${projFilter}
-             GROUP BY ${authorExpr}
-             ORDER BY count DESC`,
-            params
-        )
-        if (authorResult[0]) {
-            authors = authorResult[0].values.map((row: unknown[]) => ({
-                author: row[0] as string,
-                count: row[1] as number,
-            }))
-        }
+        const authorExpr = canonicalAuthorExpr('raw.author', 'raw.workspace_id')
+        const sql = `SELECT resolved.author, SUM(resolved.cnt) as count
+             FROM (
+                 SELECT ${authorExpr} as author, raw.cnt
+                 FROM (
+                     SELECT mj.author, mj.workspace_id, COUNT(*) as cnt
+                     FROM memory_journal mj
+                     WHERE mj.deleted_at IS NULL${wsFilter}${projFilter}
+                     GROUP BY mj.author, mj.workspace_id
+                 ) raw
+             ) resolved
+             GROUP BY resolved.author
+             ORDER BY count DESC`
+        return connection.getNativeDb().prepare(sql).all(...params) as {
+            author: string
+            count: number
+        }[]
     } catch (error: unknown) {
         if (!isMissingSchemaError(error)) {
             throw error
@@ -50,12 +56,8 @@ export function getAuthorStatistics(
             module: 'team-collaboration',
             error: String(error),
         })
+        return []
     }
-    return authors
-}
-
-function isMissingSchemaError(error: unknown): boolean {
-    return isMissingTableError(error) || isMissingColumnError(error)
 }
 
 export function getAuthorsForEntries(
@@ -66,7 +68,7 @@ export function getAuthorsForEntries(
     if (entryIds.length === 0) return authorMap
 
     const db = connection.getNativeDb()
-    const authorExpr = canonicalAuthorExpr('mj', '')
+    const authorExpr = canonicalAuthorExpr('mj.author', 'mj.workspace_id', '')
     try {
         for (const { placeholders, params } of bucketInParams(entryIds)) {
             const rows = db
@@ -121,35 +123,37 @@ function queryAuthorActivity(
     period: string
 ): { author: string; period: string; entryCount: number }[] {
     const clause = scopeClause('mj', scope)
-    const authorExpr = canonicalAuthorExpr('mj')
+    const authorExpr = canonicalAuthorExpr('raw.author', 'raw.workspace_id')
 
     const dateExpression =
         period === 'week'
-            ? `strftime('%Y-W%W', timestamp)`
+            ? `strftime('%Y-W%W', mj.timestamp)`
             : period === 'quarter'
-              ? `strftime('%Y-Q', timestamp) || CAST(((CAST(strftime('%m', timestamp) AS INTEGER) + 2) / 3) AS INTEGER)`
-              : `strftime('%Y-%m', timestamp)`
+              ? `strftime('%Y-Q', mj.timestamp) || CAST(((CAST(strftime('%m', mj.timestamp) AS INTEGER) + 2) / 3) AS INTEGER)`
+              : `strftime('%Y-%m', mj.timestamp)`
 
-    const activityResult = connection.exec(
-        `SELECT
-            ${authorExpr} AS author,
-            ${dateExpression} AS period,
-            COUNT(*) AS entry_count
-        FROM memory_journal mj
-        WHERE mj.deleted_at IS NULL${clause.sql}
-        GROUP BY ${authorExpr}, period
-        ORDER BY period DESC, entry_count DESC
-        LIMIT ?`,
-        [...clause.params, limit * 10]
-    )
-    const authorActivity =
-        activityResult[0]?.values.map((row: unknown[]) => ({
-            author: row[0] as string,
-            period: row[1] as string,
-            entryCount: row[2] as number,
-        })) ?? []
+    const sql = `SELECT resolved.author, resolved.period, SUM(resolved.cnt) AS entryCount
+        FROM (
+            SELECT ${authorExpr} AS author, raw.period, raw.cnt
+            FROM (
+                SELECT mj.author, mj.workspace_id, ${dateExpression} AS period, COUNT(*) AS cnt
+                FROM memory_journal mj
+                WHERE mj.deleted_at IS NULL${clause.sql}
+                GROUP BY mj.author, mj.workspace_id, period
+            ) raw
+        ) resolved
+        GROUP BY resolved.author, resolved.period
+        ORDER BY resolved.period DESC, entryCount DESC
+        LIMIT ?`
 
-    return authorActivity
+    return connection
+        .getNativeDb()
+        .prepare(sql)
+        .all(...clause.params, limit * 10) as {
+        author: string
+        period: string
+        entryCount: number
+    }[]
 }
 
 /** Links between entries written by different (alias-resolved) authors. */
@@ -160,31 +164,39 @@ function queryCrossAuthorLinks(
 ): { fromAuthor: string; toAuthor: string; linkCount: number }[] {
     const c1 = scopeClause('m1', scope)
     const c2 = scopeClause('m2', scope)
-    const fromExpr = canonicalAuthorExpr('m1')
-    const toExpr = canonicalAuthorExpr('m2')
-    const crossLinkResult = connection.exec(
-        `SELECT
-            ${fromExpr} AS from_author,
-            ${toExpr} AS to_author,
-            COUNT(*) AS link_count
-        FROM relationships r
-        JOIN memory_journal m1 ON r.from_entry_id = m1.id
-        JOIN memory_journal m2 ON r.to_entry_id = m2.id
-        WHERE m1.deleted_at IS NULL AND m2.deleted_at IS NULL AND m1.workspace_id = m2.workspace_id${c1.sql}${c2.sql}
-            AND ${fromExpr} != ${toExpr}
+    const fromExpr = canonicalAuthorExpr('raw.from_author_raw', 'raw.from_ws')
+    const toExpr = canonicalAuthorExpr('raw.to_author_raw', 'raw.to_ws')
+    const sql = `SELECT from_author AS fromAuthor, to_author AS toAuthor, SUM(edge_count) AS linkCount
+        FROM (
+            SELECT
+                ${fromExpr} AS from_author,
+                ${toExpr} AS to_author,
+                raw.edge_count
+            FROM (
+                SELECT
+                    m1.author AS from_author_raw, m1.workspace_id AS from_ws,
+                    m2.author AS to_author_raw, m2.workspace_id AS to_ws,
+                    COUNT(*) AS edge_count
+                FROM relationships r
+                JOIN memory_journal m1 ON r.from_entry_id = m1.id
+                JOIN memory_journal m2 ON r.to_entry_id = m2.id
+                WHERE m1.deleted_at IS NULL AND m2.deleted_at IS NULL AND m1.workspace_id = m2.workspace_id${c1.sql}${c2.sql}
+                GROUP BY m1.author, m1.workspace_id, m2.author, m2.workspace_id
+            ) raw
+        ) resolved
+        WHERE from_author != to_author
         GROUP BY from_author, to_author
-        ORDER BY link_count DESC
-        LIMIT ?`,
-        [...c1.params, ...c2.params, limit]
-    )
-    const crossAuthorLinks =
-        crossLinkResult[0]?.values.map((row: unknown[]) => ({
-            fromAuthor: row[0] as string,
-            toAuthor: row[1] as string,
-            linkCount: row[2] as number,
-        })) ?? []
+        ORDER BY linkCount DESC
+        LIMIT ?`
 
-    return crossAuthorLinks
+    return connection
+        .getNativeDb()
+        .prepare(sql)
+        .all(...c1.params, ...c2.params, limit) as {
+        fromAuthor: string
+        toAuthor: string
+        linkCount: number
+    }[]
 }
 
 /** Authors ranked by inbound links. */
@@ -195,27 +207,30 @@ function queryImpactFactor(
 ): { author: string; inboundLinks: number }[] {
     const c1 = scopeClause('m1', scope)
     const c2 = scopeClause('m2', scope)
-    const authorExpr = canonicalAuthorExpr('m2')
-    const impactResult = connection.exec(
-        `SELECT
-            ${authorExpr} AS author,
-            COUNT(*) AS inbound_links
-        FROM relationships r
-        JOIN memory_journal m1 ON r.from_entry_id = m1.id
-        JOIN memory_journal m2 ON r.to_entry_id = m2.id
-        WHERE m1.deleted_at IS NULL AND m2.deleted_at IS NULL AND m1.workspace_id = m2.workspace_id${c1.sql}${c2.sql}
-        GROUP BY ${authorExpr}
-        ORDER BY inbound_links DESC
-        LIMIT ?`,
-        [...c1.params, ...c2.params, limit]
-    )
-    const impactFactor =
-        impactResult[0]?.values.map((row: unknown[]) => ({
-            author: row[0] as string,
-            inboundLinks: row[1] as number,
-        })) ?? []
+    const authorExpr = canonicalAuthorExpr('raw.author', 'raw.workspace_id')
+    const sql = `SELECT resolved.author, SUM(resolved.cnt) AS inboundLinks
+        FROM (
+            SELECT ${authorExpr} AS author, raw.cnt
+            FROM (
+                SELECT m2.author, m2.workspace_id, COUNT(*) AS cnt
+                FROM relationships r
+                JOIN memory_journal m1 ON r.from_entry_id = m1.id
+                JOIN memory_journal m2 ON r.to_entry_id = m2.id
+                WHERE m1.deleted_at IS NULL AND m2.deleted_at IS NULL AND m1.workspace_id = m2.workspace_id${c1.sql}${c2.sql}
+                GROUP BY m2.author, m2.workspace_id
+            ) raw
+        ) resolved
+        GROUP BY resolved.author
+        ORDER BY inboundLinks DESC
+        LIMIT ?`
 
-    return impactFactor
+    return connection
+        .getNativeDb()
+        .prepare(sql)
+        .all(...c1.params, ...c2.params, limit) as {
+        author: string
+        inboundLinks: number
+    }[]
 }
 
 /** Distinct author and entry totals. */
@@ -224,18 +239,27 @@ function queryCollaborationTotals(
     scope: CollabScope
 ): { totalAuthors: number; totalEntries: number } {
     const clause = scopeClause('mj', scope)
-    const authorExpr = canonicalAuthorExpr('mj')
-    const totalsResult = connection.exec(
-        `SELECT
-            COUNT(DISTINCT ${authorExpr}) AS total_authors,
-            COUNT(*) AS total_entries
-        FROM memory_journal mj
-        WHERE mj.deleted_at IS NULL${clause.sql}`,
-        clause.params
-    )
-    const totalAuthors = (totalsResult[0]?.values[0]?.[0] as number | undefined) ?? 0
-    const totalEntries = (totalsResult[0]?.values[0]?.[1] as number | undefined) ?? 0
-    return { totalAuthors, totalEntries }
+    const authorExpr = canonicalAuthorExpr('raw.author', 'raw.workspace_id')
+    const sql = `SELECT
+            COUNT(DISTINCT resolved.author) AS totalAuthors,
+            COALESCE(SUM(resolved.cnt), 0) AS totalEntries
+        FROM (
+            SELECT ${authorExpr} AS author, raw.cnt
+            FROM (
+                SELECT mj.author, mj.workspace_id, COUNT(*) AS cnt
+                FROM memory_journal mj
+                WHERE mj.deleted_at IS NULL${clause.sql}
+                GROUP BY mj.author, mj.workspace_id
+            ) raw
+        ) resolved`
+
+    const row = connection.getNativeDb().prepare(sql).get(...clause.params) as
+        | { totalAuthors?: number; totalEntries?: number }
+        | undefined
+    return {
+        totalAuthors: row?.totalAuthors ?? 0,
+        totalEntries: row?.totalEntries ?? 0,
+    }
 }
 
 export function getTeamCollaborationMetrics(

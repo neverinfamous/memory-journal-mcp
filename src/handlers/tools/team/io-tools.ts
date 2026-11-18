@@ -141,7 +141,7 @@ const TeamImportExternalOutputSchema = TeamImportMarkdownOutputSchema
 /* resolveTeamImportContextAuthor and executeTeamExportMarkdown live in ./io-scope-helpers.ts */
 
 export function getTeamIoTools(context: ToolContext): ToolDefinition[] {
-    const { teamDb, progress } = context
+    const { teamDb } = context
 
     return [
         {
@@ -200,8 +200,8 @@ export function getTeamIoTools(context: ToolContext): ToolDefinition[] {
                     }
 
                     const allowedRoots = context.config?.allowedIoRoots ?? []
-                    await sendProgress(progress, 0, 2, 'Reading markdown files...')
-                    await sendProgress(progress, 1, 2, 'Importing team entries...')
+                    await sendProgress(context.progress, 0, 2, 'Reading markdown files...')
+                    await sendProgress(context.progress, 1, 2, 'Importing team entries...')
 
                     const authorCtx = resolveTeamImportContextAuthor(context, wsId)
                     if ('errorResponse' in authorCtx) {
@@ -239,7 +239,7 @@ export function getTeamIoTools(context: ToolContext): ToolDefinition[] {
                     if (!input.dry_run && (result.created > 0 || result.updated > 0)) {
                         triggerTeamNotifications(context)
                     }
-                    await sendProgress(progress, 2, 2, 'Team import complete')
+                    await sendProgress(context.progress, 2, 2, 'Team import complete')
                     return result
                 } catch (err) {
                     return formatHandlerError(err)
@@ -277,6 +277,7 @@ export function getTeamIoTools(context: ToolContext): ToolDefinition[] {
                     }
 
                     const allowedRoots = context.config?.allowedIoRoots ?? []
+                    const progress = context.progress
                     await sendProgress(progress, 0, 3, 'Reading files...')
 
                     const { parsedFiles, errors, skipped: emptySkipped } = await readAndConvertExternalMarkdownFiles(

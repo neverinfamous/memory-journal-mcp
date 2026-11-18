@@ -59,8 +59,6 @@ export async function runHybridSearch(params: HybridBranchParams): Promise<Recor
         ...(readyTeamDb !== undefined ? { teamDb: readyTeamDb } : {}),
         ...(readyTeamDb !== undefined && teamVectorManager !== undefined ? { teamVectorManager } : {}),
     })
-    const hybridPage = pageRows(hybridEntries, input.cursor, input.limit)
-
     // Post-fetch importance or blended relevance × importance re-sort for vector results
     if (rerankByImportance) {
         const scored =
@@ -79,6 +77,7 @@ export async function runHybridSearch(params: HybridBranchParams): Promise<Recor
         }
     }
 
+    const hybridPage = pageRows(hybridEntries, input.cursor, input.limit)
     return {
         success: true,
         entries: hybridPage.page,

@@ -1,34 +1,19 @@
-import {
-    DUMMY_RESOURCE_TOOL_NAMES,
-    DUMMY_LIST_RESOURCE_TOOL_NAMES,
-    DUMMY_LIST_PROMPT_TOOL_NAMES,
-    DUMMY_GET_PROMPT_TOOL_NAMES,
-    extractUriFromArgs,
-    handleReadResource,
-    handlePrompt,
-    handleListResources,
-    handleListPrompts,
-    handleGetPrompt,
-} from '../../../handlers/tools/core/dummy-healing.js'
-import { getBaseUri } from '../../../handlers/resources/shared.js'
 import { resolveActiveBriefingConfig, syncLiveHandlerConfig } from './register-tools-helpers.js'
 import {
     dispatchKnownGroupFallbackTools,
     resolveKnownFallbackAuditName,
     runFallbackWithInterceptors,
-    type FallbackAccessTarget,
 } from './fallback-interceptors.js'
 import {
     ALL_KNOWN_GROUP_TOOLS,
     exceedsMaxToolInputElements,
-    formatSuccessPayload,
     formatTokenEstimatedError,
     hasToolCallRequestShape,
-    isSuccessObject,
-    matchesExactName,
     resolveCodeModeCallHint,
+    resolvePromptOrResourceAccessTargets,
     toThrownValidationResponse,
     toValidationFailureResponse,
+    tryPromptAndResourceFallbacks,
 } from './call-interceptor-helpers.js'
 import { resolveEffectiveMaxToolInputElements } from './register-tools.js'
 import {
@@ -45,131 +30,6 @@ import type { ToolRegistration, ToolHandlerConfig, ToolContext } from '../../../
 import type { RequestHandlerMap } from './list-interceptor.js'
 
 setFallbackProjectRegistryLoader(loadProjectRegistryFromConfig)
-
-function isFailureObject(res: unknown): res is Record<string, unknown> {
-    return (
-        typeof res === 'object' &&
-        res !== null &&
-        !Array.isArray(res) &&
-        'success' in res &&
-        res.success === false
-    )
-}
-
-function resolveGetPromptTarget(
-    toolArgs: Record<string, unknown>,
-    prompts: PromptDefinition[]
-): { targetName: string; capabilities: PromptDefinition['capabilities'] } {
-    const rawPromptName =
-        typeof toolArgs['name'] === 'string'
-            ? toolArgs['name']
-            : typeof toolArgs['prompt_name'] === 'string'
-              ? toolArgs['prompt_name']
-              : typeof toolArgs['promptName'] === 'string'
-                ? toolArgs['promptName']
-                : typeof toolArgs['prompt'] === 'string'
-                  ? toolArgs['prompt']
-                  : undefined
-    const normalizedTarget = rawPromptName?.replace(/^mj_/, '').replace(/_/g, '-')
-    const targetPrompt =
-        rawPromptName !== undefined
-            ? prompts.find((p) => p.name === rawPromptName || p.name === normalizedTarget)
-            : undefined
-    return {
-        targetName: targetPrompt?.name ?? rawPromptName ?? 'get_prompt',
-        capabilities: targetPrompt?.capabilities,
-    }
-}
-
-function resolvePromptOrResourceAccessTargets(
-    requestedTool: string,
-    toolArgs: Record<string, unknown>,
-    matchingPrompt: PromptDefinition | undefined,
-    prompts: PromptDefinition[]
-): FallbackAccessTarget[] | undefined {
-    if (matchingPrompt !== undefined) {
-        return [
-            {
-                targetName: matchingPrompt.name,
-                targetType: 'prompt',
-                ...(matchingPrompt.capabilities !== undefined
-                    ? { capabilities: matchingPrompt.capabilities }
-                    : {}),
-            },
-        ]
-    }
-    if (
-        matchesExactName(requestedTool, DUMMY_RESOURCE_TOOL_NAMES) ||
-        requestedTool === 'mjReadResource' ||
-        requestedTool.startsWith('memory://')
-    ) {
-        const rawUri =
-            extractUriFromArgs(toolArgs) ??
-            (requestedTool.startsWith('memory://') ? requestedTool : 'memory://briefing')
-        return [
-            { targetName: 'read_resource', targetType: 'tool' },
-            { targetName: getBaseUri(rawUri), targetType: 'resource' },
-        ]
-    }
-    if (matchesExactName(requestedTool, DUMMY_LIST_RESOURCE_TOOL_NAMES)) {
-        return [{ targetName: 'list_resources', targetType: 'tool' }]
-    }
-    if (matchesExactName(requestedTool, DUMMY_LIST_PROMPT_TOOL_NAMES)) {
-        return [{ targetName: 'list_prompts', targetType: 'tool' }]
-    }
-    if (matchesExactName(requestedTool, DUMMY_GET_PROMPT_TOOL_NAMES)) {
-        const promptTarget = resolveGetPromptTarget(toolArgs, prompts)
-        return [
-            {
-                targetName: promptTarget.targetName,
-                targetType: 'prompt',
-                ...(promptTarget.capabilities !== undefined
-                    ? { capabilities: promptTarget.capabilities }
-                    : {}),
-            },
-        ]
-    }
-    return undefined
-}
-
-async function tryPromptAndResourceFallbacks(
-    requestedTool: string,
-    toolArgs: Record<string, unknown>,
-    matchingPrompt: PromptDefinition | undefined,
-    toolContext: ToolContext
-): Promise<unknown> {
-    if (matchingPrompt !== undefined) {
-        const res = await handlePrompt(toolArgs, requestedTool, toolContext)
-        if (isSuccessObject(res)) return formatSuccessPayload(res)
-        if (isFailureObject(res)) return formatTokenEstimatedError(res, true)
-    }
-
-    if (
-        matchesExactName(requestedTool, DUMMY_RESOURCE_TOOL_NAMES) ||
-        requestedTool === 'mjReadResource' ||
-        requestedTool.startsWith('memory://')
-    ) {
-        const res = await handleReadResource(toolArgs, requestedTool, toolContext)
-        if (isSuccessObject(res)) return formatSuccessPayload(res)
-        if (isFailureObject(res)) return formatTokenEstimatedError(res, true)
-    }
-
-    if (matchesExactName(requestedTool, DUMMY_LIST_RESOURCE_TOOL_NAMES)) {
-        return formatSuccessPayload(handleListResources(requestedTool))
-    }
-
-    if (matchesExactName(requestedTool, DUMMY_LIST_PROMPT_TOOL_NAMES)) {
-        return formatSuccessPayload(handleListPrompts(requestedTool))
-    }
-
-    if (matchesExactName(requestedTool, DUMMY_GET_PROMPT_TOOL_NAMES)) {
-        const res = await handleGetPrompt(toolArgs, requestedTool, toolContext)
-        if (isSuccessObject(res)) return formatSuccessPayload(res)
-        if (isFailureObject(res)) return formatTokenEstimatedError(res, true)
-    }
-
-    return undefined
-}
 
 async function tryAutonomousUnknownToolFallback(
     requestedTool: string,
@@ -329,6 +189,35 @@ async function handleUnknownTool(
     return formatTokenEstimatedError(errorResult, true)
 }
 
+interface SyncedCallConfigState {
+    rawConfig: ReturnType<ServerContext['configManager']['getConfig']>
+    liveBriefing: ReturnType<typeof resolveActiveBriefingConfig>
+}
+
+function resolveAndSyncLiveBriefing(
+    context: ServerContext,
+    options: ServerOptions,
+    customToolHandlerConfig: ToolHandlerConfig,
+    syncedState?: SyncedCallConfigState
+): ReturnType<typeof resolveActiveBriefingConfig> {
+    const liveConfig = context.configManager.getConfig()
+    const canReuseSynced =
+        syncedState?.rawConfig === liveConfig &&
+        liveConfig.briefingConfig.projectRegistry !== undefined &&
+        customToolHandlerConfig.briefingConfig === syncedState.liveBriefing
+    const liveBriefing = canReuseSynced
+        ? syncedState.liveBriefing
+        : resolveActiveBriefingConfig(liveConfig.briefingConfig, context.allowedIoRoots)
+    if (!canReuseSynced) {
+        syncLiveHandlerConfig(customToolHandlerConfig, liveConfig, options, liveBriefing)
+        if (syncedState !== undefined) {
+            syncedState.rawConfig = liveConfig
+            syncedState.liveBriefing = liveBriefing
+        }
+    }
+    return liveBriefing
+}
+
 async function executeInterceptedToolCall(
     request: unknown,
     extra: unknown,
@@ -338,19 +227,19 @@ async function executeInterceptedToolCall(
     prompts: PromptDefinition[],
     allTools: ToolRegistration[],
     allToolNames: Set<string>,
-    customToolHandlerConfig: ToolHandlerConfig
+    customToolHandlerConfig: ToolHandlerConfig,
+    syncedState?: SyncedCallConfigState
 ): Promise<unknown> {
     try {
         const params = hasToolCallRequestShape(request) ? request.params : undefined
         const healingEnabled =
             options.agentHealing !== false && customToolHandlerConfig.agentHealing !== false
-
-        const liveConfig = context.configManager.getConfig()
-        const liveBriefing = resolveActiveBriefingConfig(
-            liveConfig.briefingConfig,
-            context.allowedIoRoots
+        const liveBriefing = resolveAndSyncLiveBriefing(
+            context,
+            options,
+            customToolHandlerConfig,
+            syncedState
         )
-        syncLiveHandlerConfig(customToolHandlerConfig, liveConfig, options, liveBriefing)
 
         const maxElements = resolveEffectiveMaxToolInputElements(options.maxToolInputElements)
         if (
@@ -418,6 +307,14 @@ export function attachCallToolInterceptor(
 ): void {
     const originalHandler = requestHandlers?.get('tools/call')
     if (originalHandler === undefined || requestHandlers === undefined) return
+    const initialConfig = context.configManager.getConfig()
+    const syncedState: SyncedCallConfigState = {
+        rawConfig: initialConfig,
+        liveBriefing: resolveActiveBriefingConfig(
+            initialConfig.briefingConfig,
+            context.allowedIoRoots
+        ),
+    }
 
     requestHandlers.set('tools/call', (request: unknown, extra: unknown) =>
         executeInterceptedToolCall(
@@ -429,7 +326,8 @@ export function attachCallToolInterceptor(
             prompts,
             allTools,
             allToolNames,
-            customToolHandlerConfig
+            customToolHandlerConfig,
+            syncedState
         )
     )
 }

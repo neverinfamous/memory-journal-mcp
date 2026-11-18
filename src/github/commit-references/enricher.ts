@@ -13,6 +13,45 @@ export interface EnrichedCommit {
     references: ResolvedReference[]
 }
 
+const ENRICH_CONCURRENCY = 8
+
+async function enrichSingleCommit(
+    hash: string,
+    git: ReturnType<typeof simpleGit>,
+    github: GitHubIntegration | undefined,
+    defaultOwner: string | null,
+    defaultRepo: string | null
+): Promise<EnrichedCommit | null> {
+    try {
+        const log = await git.log(['-1', hash, '--'])
+        const commit = log.latest
+        if (!commit) return null
+
+        const fullMessage = `${commit.message}\n\n${commit.body}`
+        const rawRefs = parseCommitReferences(fullMessage)
+        const resolvedRefs: ResolvedReference[] =
+            github && defaultOwner && defaultRepo && rawRefs.length > 0
+                ? await resolveReferences(rawRefs, github, defaultOwner, defaultRepo)
+                : rawRefs.map((r) => ({ ...r, type: 'unknown' }))
+
+        return {
+            hash: commit.hash,
+            subject: commit.message,
+            body: commit.body,
+            authorName: commit.author_name,
+            date: commit.date,
+            references: resolvedRefs,
+        }
+    } catch (err) {
+        logger.warning('Skipping commit enrichment for a single commit', {
+            module: 'CommitEnricher',
+            hash,
+            error: String(err),
+        })
+        return null
+    }
+}
+
 export async function enrichCommits(
     workingDir: string,
     commitHashes: string[],
@@ -41,36 +80,14 @@ export async function enrichCommits(
         }
     }
 
-    for (const hash of commitHashes) {
-        if (!/^[0-9a-fA-F]{7,40}$/.test(hash)) continue
-        try {
-            const log = await git.log(['-1', hash, '--'])
-            const commit = log.latest
-            if (!commit) continue
-
-            const fullMessage = `${commit.message}\n\n${commit.body}`
-            const rawRefs = parseCommitReferences(fullMessage)
-
-            let resolvedRefs: ResolvedReference[] = rawRefs.map((r) => ({ ...r, type: 'unknown' }))
-
-            if (github && defaultOwner && defaultRepo && rawRefs.length > 0) {
-                resolvedRefs = await resolveReferences(rawRefs, github, defaultOwner, defaultRepo)
-            }
-
-            enriched.push({
-                hash: commit.hash,
-                subject: commit.message,
-                body: commit.body,
-                authorName: commit.author_name,
-                date: commit.date,
-                references: resolvedRefs,
-            })
-        } catch (err) {
-            logger.warning('Skipping commit enrichment for a single commit', {
-                module: 'CommitEnricher',
-                hash,
-                error: String(err),
-            })
+    const validHashes = commitHashes.filter((hash) => /^[0-9a-fA-F]{7,40}$/.test(hash))
+    for (let i = 0; i < validHashes.length; i += ENRICH_CONCURRENCY) {
+        const chunk = validHashes.slice(i, i + ENRICH_CONCURRENCY)
+        const outcomes = await Promise.all(
+            chunk.map((hash) => enrichSingleCommit(hash, git, github, defaultOwner, defaultRepo))
+        )
+        for (const item of outcomes) {
+            if (item !== null) enriched.push(item)
         }
     }
 

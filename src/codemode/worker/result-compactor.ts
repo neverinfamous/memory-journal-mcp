@@ -4,6 +4,7 @@
  */
 
 import type { SandboxResult } from '../types.js'
+import { unwrapResultProxy } from '../worker-result-proxy.js'
 
 const MAX_COMPACTION_DEPTH = 6
 const COMPACTED_ARRAY_MAX_ITEMS = 20
@@ -21,11 +22,12 @@ const TRUNCATED_STRING_PREVIEW_CHARS = 300
  * string contract tests reject properly with structured aggregation guidance.
  */
 export function compactOversizedResult(
-    val: unknown,
+    rawVal: unknown,
     limitBytes: number,
     depth = 0,
     seen = new WeakSet()
 ): unknown {
+    const val = unwrapResultProxy(rawVal)
     if (val === null || val === undefined || typeof val !== 'object') {
         return val
     }
@@ -125,12 +127,14 @@ export function serializeAndEnforceEgress(
     if (!result.success) return
 
     const egressLimit = maxResultSize ?? 100 * 1024
+    const rootValue = unwrapResultProxy(result.result)
 
     try {
         let bytes = 0
         const cache = new Set()
 
-        const resultJson = JSON.stringify(result.result, (_key: string, value: unknown) => {
+        const resultJson = JSON.stringify(rootValue, (_key: string, rawValue: unknown) => {
+            const value = unwrapResultProxy(rawValue)
             if (typeof value === 'object' && value !== null) {
                 if (cache.has(value)) {
                     return '[Circular]'

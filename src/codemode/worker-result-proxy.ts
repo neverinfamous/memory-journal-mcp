@@ -6,6 +6,11 @@
  * - Pagination cursor detection injects `hasMore` convenience boolean
  */
 
+import {
+    resolvePaginationAndStatsProp,
+    resolveWrappedAliasProp,
+} from './worker/result-proxy-aliases.js'
+
 const RESULT_COLLECTION_KEYS: ReadonlySet<string> = new Set([
     'entries', 'results', 'projects', 'items', 'rows', 'tables',
     'flags', 'groups', 'users', 'capabilities', 'metrics', 'events', 'records',
@@ -44,17 +49,10 @@ const RESULT_LIST_ALIASES: ReadonlySet<string> = new Set([
     'data', 'items', 'entries', 'results', 'rows', 'dataArray', 'projects', 'list', 'records',
 ])
 
-const TOTAL_COLLECTION_KEYS: ReadonlySet<string> = new Set([
-    'entries', 'results', 'projects', 'items', 'rows', 'records',
-])
-
 const DIGITS_RE = /^\d+$/
 
 const isObject = (val: unknown): val is Record<string, unknown> =>
     typeof val === 'object' && val !== null && !Array.isArray(val)
-
-const hasNumberId = (val: unknown): val is { id: number } =>
-    isObject(val) && typeof val['id'] === 'number'
 
 const isDictLike = (obj: Record<string, unknown>): boolean => {
     const keys = Object.keys(obj).filter((k) => typeof k === 'string' && !k.startsWith('_'))
@@ -273,126 +271,6 @@ function resolveArrayForwarding(
     return resolveArrayMethodForwarding(targetRecord, prop)
 }
 
-function resolvePaginationAndStatsProp(
-    targetRecord: Record<string, unknown>,
-    prop: string | symbol,
-    receiver: unknown
-): ArrayForwardMatch {
-    if (prop === 'hasMore') {
-        if (
-            'next_cursor' in targetRecord &&
-            targetRecord['next_cursor'] !== null &&
-            targetRecord['next_cursor'] !== undefined &&
-            targetRecord['next_cursor'] !== ''
-        ) {
-            return { matched: true, value: true }
-        }
-        if ('entries' in targetRecord || 'results' in targetRecord || 'items' in targetRecord) {
-            return { matched: true, value: false }
-        }
-    }
-    if (
-        (prop === 'statistics' || prop === 'stats') &&
-        !('statistics' in targetRecord) &&
-        !('stats' in targetRecord) &&
-        ('totalEntries' in targetRecord || 'entriesByType' in targetRecord)
-    ) {
-        return { matched: true, value: receiver }
-    }
-    if (prop === 'total' || prop === 'totalCount' || prop === 'total_entries' || prop === 'totalEntries') {
-        if ('count' in targetRecord && typeof targetRecord['count'] === 'number') {
-            return { matched: true, value: targetRecord['count'] }
-        }
-        if ('totalEntries' in targetRecord && typeof targetRecord['totalEntries'] === 'number') {
-            return { matched: true, value: targetRecord['totalEntries'] }
-        }
-        if ('total' in targetRecord && typeof targetRecord['total'] === 'number') {
-            return { matched: true, value: targetRecord['total'] }
-        }
-        const targetKey = findPrimaryArrayKey(targetRecord, TOTAL_COLLECTION_KEYS)
-        if (targetKey !== undefined && Array.isArray(targetRecord[targetKey])) {
-            return { matched: true, value: targetRecord[targetKey].length }
-        }
-    }
-    return { matched: false }
-}
-
-function resolveWrappedAliasProp(
-    targetRecord: Record<string, unknown>,
-    prop: string | symbol
-): ArrayForwardMatch {
-    const entryObj = targetRecord['entry']
-    if (isObject(entryObj)) {
-        if ((prop === 'id' || prop === 'entryId') && 'id' in entryObj) {
-            return { matched: true, value: entryObj['id'] }
-        }
-        if (prop === 'created_at' && 'timestamp' in entryObj) {
-            return { matched: true, value: entryObj['timestamp'] }
-        }
-        if (typeof prop === 'string' && prop in entryObj) {
-            const val = entryObj[prop]
-            return {
-                matched: true,
-                value: val !== null && typeof val === 'object' && !Array.isArray(val) ? wrapResult(val) : val,
-            }
-        }
-    }
-
-    const projObj = targetRecord['project']
-    if (isObject(projObj)) {
-        if (prop === 'project_number' && ('project_number' in projObj || 'id' in projObj)) {
-            return { matched: true, value: projObj['project_number'] ?? projObj['id'] }
-        }
-        if ((prop === 'name' || prop === 'project_name') && 'name' in projObj) {
-            return { matched: true, value: projObj['name'] }
-        }
-        if (typeof prop === 'string' && prop in projObj) {
-            return { matched: true, value: projObj[prop] }
-        }
-    }
-
-    if (prop === 'entryIds' && 'entries' in targetRecord && Array.isArray(targetRecord['entries'])) {
-        return { matched: true, value: targetRecord['entries'].filter(hasNumberId).map((e) => e.id) }
-    }
-    if (prop === 'entryIds' && 'updated' in targetRecord && Array.isArray(targetRecord['updated'])) {
-        return { matched: true, value: targetRecord['updated'].filter(hasNumberId).map((e) => e.id) }
-    }
-    if (prop === 'deletedIds' && 'deleted' in targetRecord && Array.isArray(targetRecord['deleted'])) {
-        return { matched: true, value: targetRecord['deleted'] }
-    }
-    if (prop === 'deletedCount' && 'count' in targetRecord && typeof targetRecord['count'] === 'number') {
-        return { matched: true, value: targetRecord['count'] }
-    }
-    if (prop === 'revisions' && 'history' in targetRecord && Array.isArray(targetRecord['history'])) {
-        const revisions = targetRecord['history'].filter(isObject).map(
-            (h) =>
-                new Proxy(h, {
-                    get(t: Record<string, unknown>, p: string | symbol): unknown {
-                        if (p === 'revisionNumber') return t['revisionId']
-                        if (p === 'contentSnapshot') return t['content']
-                        return typeof p === 'string' ? t[p] : undefined
-                    },
-                })
-        )
-        return { matched: true, value: revisions }
-    }
-    if (prop === 'relationships' && 'edges' in targetRecord && Array.isArray(targetRecord['edges'])) {
-        const relationships = targetRecord['edges'].filter(isObject).map((edge) => ({
-            fromEntryId: edge['from'],
-            toEntryId: edge['to'],
-            sourceId: edge['from'],
-            targetId: edge['to'],
-            relationshipType: edge['type'],
-            relationType: edge['type'],
-            from: edge['from'],
-            to: edge['to'],
-            type: edge['type'],
-        }))
-        return { matched: true, value: relationships }
-    }
-    return { matched: false }
-}
-
 function resolveWrappedObjectProp(target: object, prop: string | symbol, receiver: unknown): unknown {
     if (prop in target) {
         const val: unknown = Reflect.get(target, prop)
@@ -400,16 +278,38 @@ function resolveWrappedObjectProp(target: object, prop: string | symbol, receive
     }
     if (!isObject(target)) return undefined
 
-    const paginationOrStats = resolvePaginationAndStatsProp(target, prop, receiver)
+    const paginationOrStats = resolvePaginationAndStatsProp(
+        target,
+        prop,
+        receiver,
+        findPrimaryArrayKey
+    )
     if (paginationOrStats.matched) return paginationOrStats.value
 
-    const aliasProp = resolveWrappedAliasProp(target, prop)
+    const aliasProp = resolveWrappedAliasProp(target, prop, wrapResult)
     if (aliasProp.matched) return aliasProp.value
 
     if (prop === 'result') return receiver
 
     const arrayForwarded = resolveArrayForwarding(target, prop)
     return arrayForwarded.matched ? arrayForwarded.value : undefined
+}
+
+const WRAPPED_RESULT_CACHE = new WeakMap<object, unknown>()
+const RAW_TARGET_BY_PROXY = new WeakMap<object, object>()
+
+function cacheProxyPair(target: object, proxy: object): object {
+    WRAPPED_RESULT_CACHE.set(target, proxy)
+    RAW_TARGET_BY_PROXY.set(proxy, target)
+    return proxy
+}
+
+/** Unwrap a result Proxy created by `wrapResult` back to its plain target object. */
+export function unwrapResultProxy(val: unknown): unknown {
+    if (typeof val === 'object' && val !== null) {
+        return RAW_TARGET_BY_PROXY.get(val) ?? val
+    }
+    return val
 }
 
 /**
@@ -419,18 +319,28 @@ export function wrapResult(result: unknown): unknown {
     if (result === null || result === undefined || typeof result !== 'object') {
         return result
     }
+    if (RAW_TARGET_BY_PROXY.has(result)) {
+        return result
+    }
+    const cached = WRAPPED_RESULT_CACHE.get(result)
+    if (cached !== undefined) {
+        return cached
+    }
 
     if ('success' in result && Reflect.get(result, 'success') === false) {
-        return createFailedResultProxy(result)
+        return cacheProxyPair(result, createFailedResultProxy(result) as object)
     }
 
     if (Array.isArray(result)) {
-        return createArrayResultProxy(result)
+        return cacheProxyPair(result, createArrayResultProxy(result) as object)
     }
 
-    return new Proxy(result, {
-        ownKeys: (target) => Reflect.ownKeys(target),
-        getOwnPropertyDescriptor: (target, prop) => Reflect.getOwnPropertyDescriptor(target, prop),
-        get: (target, prop, receiver): unknown => resolveWrappedObjectProp(target, prop, receiver),
-    })
+    return cacheProxyPair(
+        result,
+        new Proxy(result, {
+            ownKeys: (target) => Reflect.ownKeys(target),
+            getOwnPropertyDescriptor: (target, prop) => Reflect.getOwnPropertyDescriptor(target, prop),
+            get: (target, prop, receiver): unknown => resolveWrappedObjectProp(target, prop, receiver),
+        })
+    )
 }

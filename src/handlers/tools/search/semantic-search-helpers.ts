@@ -74,27 +74,39 @@ function computeSemanticInternalLimit(input: SemanticSearchInput): number {
     return hasFilters ? Math.min(Math.max(input.limit * 10, 100), 1000) : input.limit * 2
 }
 
-async function fetchSemanticVectorResults(
+type VectorManagerWithPrefetch = VectorManager & {
+    searchByEntryId: (
+        entryId: number,
+        limit?: number,
+        threshold?: number,
+        workspaceId?: string,
+        projectNumber?: number,
+        prefetchedEntry?: JournalEntry
+    ) => Promise<SemanticSearchResult[]>
+}
+
+function buildPersonalSemanticSearch(
     db: IDatabaseAdapter,
     vectorManager: VectorManager,
     input: SemanticSearchInput,
     wsId: string,
     projectNumber: number | undefined,
-    internalLimit: number
-): Promise<
-    | { results: SemanticSearchResult[]; effectiveQuery: string | undefined }
-    | { errorResponse: Record<string, unknown> }
-> {
-    const threshold = input.similarity_threshold ?? 0.25
+    internalLimit: number,
+    threshold: number
+):
+    | { personalPromise: Promise<SemanticSearchResult[]>; effectiveQuery: string | undefined }
+    | { errorResponse: Record<string, unknown> } {
     if (input.entry_id === undefined) {
-        const results = await vectorManager.search(
-            input.query ?? '',
-            internalLimit,
-            threshold,
-            wsId,
-            projectNumber
-        )
-        return { results, effectiveQuery: input.query }
+        return {
+            effectiveQuery: input.query,
+            personalPromise: vectorManager.search(
+                input.query ?? '',
+                internalLimit,
+                threshold,
+                wsId,
+                projectNumber
+            ),
+        }
     }
     const seed = db.getEntryById(input.entry_id, wsId)
     if (!seed || (projectNumber !== undefined && seed.projectNumber !== projectNumber)) {
@@ -109,14 +121,69 @@ async function fetchSemanticVectorResults(
             },
         }
     }
-    const results = await vectorManager.searchByEntryId(
-        input.entry_id,
-        internalLimit,
-        threshold,
+    const managerWithPrefetch = vectorManager as VectorManagerWithPrefetch
+    return {
+        effectiveQuery: input.query ?? seed.content,
+        personalPromise: managerWithPrefetch.searchByEntryId(
+            input.entry_id,
+            internalLimit,
+            threshold,
+            wsId,
+            projectNumber,
+            seed
+        ),
+    }
+}
+
+async function runSemanticSearchQueries(
+    context: ToolContext,
+    vectorManager: VectorManager,
+    input: SemanticSearchInput,
+    wsId: string,
+    projectNumber: number | undefined,
+    internalLimit: number,
+    filterOptions: Record<string, unknown>,
+    includeTeam: boolean
+): Promise<
+    | {
+          results: SemanticSearchResult[]
+          effectiveQuery: string | undefined
+          teamEntries: EntryWithSource[]
+      }
+    | { errorResponse: Record<string, unknown> }
+> {
+    const { db, teamDb, teamVectorManager } = context
+    const threshold = input.similarity_threshold ?? 0.25
+    const canQueryTeam = includeTeam && input.is_personal !== true && isTeamDbReady(teamDb)
+
+    const personal = buildPersonalSemanticSearch(
+        db,
+        vectorManager,
+        input,
         wsId,
-        projectNumber
+        projectNumber,
+        internalLimit,
+        threshold
     )
-    return { results, effectiveQuery: input.query ?? seed.content }
+    if ('errorResponse' in personal) {
+        return { errorResponse: personal.errorResponse }
+    }
+
+    const { effectiveQuery, personalPromise } = personal
+    const teamPromise =
+        canQueryTeam &&
+        teamDb !== undefined &&
+        effectiveQuery !== undefined &&
+        effectiveQuery !== ''
+            ? collectTeamSearchEntries(effectiveQuery, teamDb, teamVectorManager, {
+                  ...filterOptions,
+                  limit: input.limit,
+                  similarityThreshold: threshold,
+              })
+            : Promise.resolve<EntryWithSource[]>([])
+
+    const [results, teamEntries] = await Promise.all([personalPromise, teamPromise])
+    return { results, effectiveQuery, teamEntries }
 }
 
 function hydratePersonalSemanticEntries(
@@ -154,15 +221,14 @@ function buildSemanticSearchHint(
     entries: EntryWithSource[],
     input: SemanticSearchInput
 ): string | undefined {
-    const isIndexEmpty = vectorManager.getStats().itemCount === 0
     const includeHint = input.hint_on_empty ?? true
     const topSimilarity = entries[0]?.['similarity']
     const bestSimilarity = typeof topSimilarity === 'number' ? topSimilarity : 0
 
-    if (isIndexEmpty && includeHint) {
-        return 'No entries in vector index. Use rebuild_vector_index to index existing entries.'
-    }
     if (entries.length === 0 && includeHint) {
+        if (vectorManager.getStats().itemCount === 0) {
+            return 'No entries in vector index. Use rebuild_vector_index to index existing entries.'
+        }
         return `No entries matched your query above the similarity threshold (${String(input.similarity_threshold ?? 0.25)}). Try lowering similarity_threshold (e.g., 0.15) for broader matches.`
     }
     if (entries.length > 0 && bestSimilarity < QUALITY_FLOOR) {
@@ -193,37 +259,6 @@ function buildSemanticFilterOptions(
         workspaceId: wsId,
         ...(config !== undefined ? { config } : {}),
     }
-}
-
-async function resolveCombinedSemanticEntries(
-    context: ToolContext,
-    input: SemanticSearchInput,
-    effectiveQuery: string | undefined,
-    personalEntries: EntryWithSource[],
-    filterOptions: Record<string, unknown>,
-    includeTeam: boolean
-): Promise<EntryWithSource[]> {
-    const { teamDb, teamVectorManager } = context
-    if (
-        !includeTeam ||
-        input.is_personal === true ||
-        !isTeamDbReady(teamDb) ||
-        effectiveQuery === undefined ||
-        effectiveQuery === ''
-    ) {
-        return personalEntries.slice(0, input.limit)
-    }
-    const teamEntries = await collectTeamSearchEntries(
-        effectiveQuery,
-        teamDb,
-        teamVectorManager,
-        {
-            ...filterOptions,
-            limit: input.limit,
-            similarityThreshold: input.similarity_threshold ?? 0.25,
-        }
-    )
-    return mergeAndDedup(personalEntries, teamEntries, input.limit, 'similarity')
 }
 
 /**
@@ -258,18 +293,6 @@ export async function executeSemanticSearch(
         }
 
         const internalLimit = computeSemanticInternalLimit(input)
-        const vectorOutcome = await fetchSemanticVectorResults(
-            db,
-            vectorManager,
-            input,
-            wsId,
-            projectNumber,
-            internalLimit
-        )
-        if ('errorResponse' in vectorOutcome) {
-            return vectorOutcome.errorResponse
-        }
-
         const filterOptions = buildSemanticFilterOptions(
             input,
             wsId,
@@ -277,21 +300,31 @@ export async function executeSemanticSearch(
             includeTeam,
             context.config
         )
+        const queryOutcome = await runSemanticSearchQueries(
+            context,
+            vectorManager,
+            input,
+            wsId,
+            projectNumber,
+            internalLimit,
+            filterOptions,
+            includeTeam
+        )
+        if ('errorResponse' in queryOutcome) {
+            return queryOutcome.errorResponse
+        }
+
         const personalEntries = hydratePersonalSemanticEntries(
             db,
-            vectorOutcome.results,
+            queryOutcome.results,
             input,
             filterOptions,
             wsId
         )
-        const entries = await resolveCombinedSemanticEntries(
-            context,
-            input,
-            vectorOutcome.effectiveQuery,
-            personalEntries,
-            filterOptions,
-            includeTeam
-        )
+        const entries =
+            queryOutcome.teamEntries.length > 0
+                ? mergeAndDedup(personalEntries, queryOutcome.teamEntries, input.limit, 'similarity')
+                : personalEntries.slice(0, input.limit)
         const hint = buildSemanticSearchHint(vectorManager, entries, input)
         return {
             success: true,

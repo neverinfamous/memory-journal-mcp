@@ -3,7 +3,8 @@
  */
 
 import type { z } from 'zod'
-import type { ToolContext } from '../../../types/index.js'
+import type { JournalEntry, ToolContext } from '../../../types/index.js'
+import type { SemanticSearchResult } from '../../../vector/vector-search-manager/index.js'
 import {
     passMetadataFilters,
     collectTeamSearchEntries,
@@ -129,19 +130,30 @@ export function rankByBlendedScore(
 }
 
 function hydratePersonalSemanticEntries(
-    semanticResults: { entryId: number; score: number }[],
+    semanticResults: SemanticSearchResult[],
     db: ToolContext['db'],
     input: SearchInput,
     wsId: string,
     searchOptions: SearchOptions
 ): { entries: EntryWithSource[]; relevanceMap: Map<string, number> } {
-    const entryIds = semanticResults.map((r) => r.entryId)
     const relevanceMap = new Map<string, number>()
+    const missingIds: number[] = []
     for (const result of semanticResults) {
         relevanceMap.set(`personal:${String(result.entryId)}`, result.score)
+        if (result.entry === undefined) {
+            missingIds.push(result.entryId)
+        }
     }
-    const entriesMap = db.getEntriesByIds(entryIds, wsId)
-    const missingTagIds = Array.from(entriesMap.values())
+    const entriesMap =
+        missingIds.length > 0 ? db.getEntriesByIds(missingIds, wsId) : new Map<number, JournalEntry>()
+    const resolvedById = new Map<number, Parameters<typeof passMetadataFilters>[0]>()
+    for (const result of semanticResults) {
+        const hydrated = result.entry ?? entriesMap.get(result.entryId)
+        if (hydrated !== undefined) {
+            resolvedById.set(result.entryId, hydrated)
+        }
+    }
+    const missingTagIds = Array.from(resolvedById.values())
         .filter((entry) => !Array.isArray(entry.tags))
         .map((entry) => entry.id)
     if (
@@ -151,13 +163,13 @@ function hydratePersonalSemanticEntries(
     ) {
         const tagsMap = db.getTagsForEntries(missingTagIds)
         for (const id of missingTagIds) {
-            const entry = entriesMap.get(id)
+            const entry = resolvedById.get(id)
             if (entry) entry.tags = tagsMap.get(entry.id) ?? []
         }
     }
     const entries: EntryWithSource[] = []
     for (const result of semanticResults) {
-        const entry = entriesMap.get(result.entryId)
+        const entry = resolvedById.get(result.entryId)
         if (entry === undefined || !passMetadataFilters(entry, searchOptions, db)) continue
         entries.push({
             ...entry,
@@ -183,13 +195,21 @@ export async function runSemanticSearch(
     const internalLimit = hasFilters
         ? Math.min(Math.max(needed * 10, 100), 1000)
         : Math.min(needed * 2, 1000)
-    const semanticResults = await vectorManager.search(
-        query,
-        internalLimit,
-        0.25,
-        wsId,
-        searchOptions.projectNumber
-    )
+    const canQueryTeam =
+        searchOptions.includeTeam === true && input.is_personal !== true && isTeamDbReady(teamDb)
+    const degraded = canQueryTeam && teamVectorManager === undefined
+
+    const [semanticResults, teamEntries] = await Promise.all([
+        vectorManager.search(query, internalLimit, 0.25, wsId, searchOptions.projectNumber),
+        canQueryTeam && teamDb !== undefined
+            ? collectTeamSearchEntries(query, teamDb, teamVectorManager, {
+                  ...searchOptions,
+                  similarityThreshold: 0.25,
+                  limit: Math.min(internalLimit, 500),
+              })
+            : Promise.resolve<EntryWithSource[]>([]),
+    ])
+
     const { entries, relevanceMap } = hydratePersonalSemanticEntries(
         semanticResults,
         db,
@@ -198,16 +218,8 @@ export async function runSemanticSearch(
         searchOptions
     )
     let ranked = entries
-    let degraded = false
 
-    if (searchOptions.includeTeam && input.is_personal !== true && isTeamDbReady(teamDb)) {
-        // [SIDE-EFFECT] Without a team vector index, team results come from FTS; report it as degraded.
-        if (teamVectorManager === undefined) degraded = true
-        const teamEntries = await collectTeamSearchEntries(query, teamDb, teamVectorManager, {
-            ...searchOptions,
-            similarityThreshold: 0.25,
-            limit: Math.min(internalLimit, 500),
-        })
+    if (canQueryTeam) {
         for (const teamEntry of teamEntries) {
             const id = teamEntry['id']
             const sim = teamEntry['similarity']

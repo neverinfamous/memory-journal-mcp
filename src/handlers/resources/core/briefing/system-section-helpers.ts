@@ -6,9 +6,13 @@
  */
 
 import * as fs from 'node:fs'
-import { execFileSync } from 'node:child_process'
+import * as fsPromises from 'node:fs/promises'
+import { execFile, execFileSync } from 'node:child_process'
 import * as path from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { promisify } from 'node:util'
+
+const execFileAsync = promisify(execFile)
 
 import { markUntrustedContentInline } from '../../../../utils/security-utils.js'
 import type { GitHistorySummary } from './system-section.js'
@@ -161,5 +165,58 @@ export function readRepoIndicators(root: string | null): {
         // Non-critical
     }
 
+    return { hasCodeMap, localCheck }
+}
+
+/** Async parallel git log + unpushed hash fetch for briefing system summary. */
+export async function fetchGitHistoryFromRepoAsync(
+    root: string,
+    commitCount: number
+): Promise<GitHistorySummary> {
+    const fetchLimit = Math.max(1, commitCount)
+    const [logSettled, unpushedSettled] = await Promise.allSettled([
+        execFileAsync('git', ['log', '-n', String(fetchLimit), '--format=%h|%s|%cr'], {
+            cwd: root,
+            encoding: 'utf-8',
+            timeout: 3000,
+            windowsHide: true,
+        }),
+        execFileAsync('git', ['log', '@{u}..HEAD', '--format=%h'], {
+            cwd: root,
+            encoding: 'utf-8',
+            timeout: 3000,
+            windowsHide: true,
+        }),
+    ])
+    if (logSettled.status === 'rejected') {
+        throw logSettled.reason
+    }
+    const unpushedHashes = new Set<string>()
+    if (unpushedSettled.status === 'fulfilled') {
+        unpushedSettled.value.stdout
+            .split('\n')
+            .filter(Boolean)
+            .forEach((h) => unpushedHashes.add(h.trim()))
+    }
+    return parseGitCommitLines(logSettled.value.stdout, unpushedHashes, commitCount)
+}
+
+/** Async non-blocking repository indicator probe for briefing system summary. */
+export async function readRepoIndicatorsAsync(root: string | null): Promise<{
+    hasCodeMap: boolean
+    localCheck: boolean | null
+}> {
+    if (root === null) return { hasCodeMap: false, localCheck: null }
+    const codeMapPromise = fsPromises
+        .access(path.join(root, 'test-server', 'code-map.md'))
+        .then(() => true, () => false)
+    const healthPromise = fsPromises
+        .readFile(path.join(root, '.test-output', 'health-status.json'), 'utf-8')
+        .then((content) => {
+            const parsed = JSON.parse(content) as { ok?: boolean }
+            return typeof parsed.ok === 'boolean' ? parsed.ok : null
+        })
+        .catch(() => null)
+    const [hasCodeMap, localCheck] = await Promise.all([codeMapPromise, healthPromise])
     return { hasCodeMap, localCheck }
 }

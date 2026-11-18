@@ -81,7 +81,7 @@ export async function exportJsonAction(options: z.infer<typeof exportJsonSchema>
         const sizeBytes = Buffer.byteLength(jsonPayload, 'utf-8')
 
         writeCliResult(
-            { filename, path: destPath, sizeBytes, count: entries.length, entries },
+            { filename, path: destPath, sizeBytes, count: entries.length },
             options.json,
             `Exported ${String(entries.length)} entries to ${destPath}.`
         )

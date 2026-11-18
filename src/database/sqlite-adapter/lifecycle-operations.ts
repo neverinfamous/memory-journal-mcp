@@ -278,23 +278,21 @@ function executePruneStep(
     cteParams: unknown[],
     deletedAt: string
 ): number {
-    const sql = `
-        WITH ${cte}
-        UPDATE memory_journal
-        SET deleted_at = ?
-        WHERE id IN (
-            SELECT id FROM (${query.sql})
-        )
-    `
-    const prunedCount = db.prepare(sql).run(...cteParams, deletedAt, ...query.params).changes
-    if (prunedCount > 0) {
-        try {
-            db.prepare(
-                'DELETE FROM vec_embeddings WHERE entry_id NOT IN (SELECT id FROM memory_journal WHERE deleted_at IS NULL)'
-            ).run()
-        } catch (err) {
-            if (!isMissingTableError(err)) throw err
-        }
+    const selectSql = `WITH ${cte} ${query.sql}`
+    const rows = db.prepare(selectSql).all(...cteParams, ...query.params) as {
+        id: number | bigint
+    }[]
+    const ids = rows.map((r) => toNumberId(r.id))
+    if (ids.length === 0) return 0
+
+    let prunedCount = 0
+    for (const { placeholders, params } of bucketInParams(ids)) {
+        prunedCount += db
+            .prepare(
+                `UPDATE memory_journal SET deleted_at = ? WHERE id IN (${placeholders}) AND deleted_at IS NULL`
+            )
+            .run(deletedAt, ...params).changes
+        deleteVecChunk(db, placeholders, params)
     }
     return prunedCount
 }

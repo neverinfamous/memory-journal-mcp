@@ -2,6 +2,8 @@
  * memory-journal-mcp — SSRF & DNS Lookup Guards for OAuth / JWKS Endpoints
  */
 
+import { isIP } from 'node:net'
+import { promises as dns } from 'node:dns'
 import { ConfigurationError } from '../types/errors.js'
 import { isPrivateOrLoopbackAddress } from '../utils/network-safety.js'
 
@@ -22,7 +24,6 @@ export async function resolveSafePublicDnsAddresses(
     const bareHost =
         trimmed.startsWith('[') && trimmed.endsWith(']') ? trimmed.slice(1, -1) : trimmed
 
-    const { isIP } = await import('node:net')
     const ipFamily = isIP(bareHost)
     if (ipFamily === 4 || ipFamily === 6) {
         if (isPrivateOrLoopbackAddress(bareHost)) {
@@ -34,7 +35,6 @@ export async function resolveSafePublicDnsAddresses(
     }
 
     try {
-        const { promises: dns } = await import('node:dns')
         const rawLookup: unknown = await dns.lookup(bareHost, { all: true })
         const records = Array.isArray(rawLookup)
             ? rawLookup
@@ -84,7 +84,9 @@ export async function resolveSafePublicDnsAddresses(
  * Validate a JWKS URI against protocol allowlist, explicit loopback exceptions,
  * private IP literals, and DNS-rebinding private/loopback answers.
  */
-export async function assertSafeJwksUri(jwksUri: string): Promise<void> {
+export async function assertSafeJwksUri(
+    jwksUri: string
+): Promise<ResolvedPublicAddress[] | undefined> {
     const jwksParsed = new URL(jwksUri)
     if (jwksParsed.protocol !== 'http:' && jwksParsed.protocol !== 'https:') {
         throw new ConfigurationError(
@@ -97,7 +99,7 @@ export async function assertSafeJwksUri(jwksUri: string): Promise<void> {
         jwksHostname === '127.0.0.1' ||
         jwksHostname === '::1' ||
         jwksHostname === '[::1]'
-    if (isExplicitLoopback) return
+    if (isExplicitLoopback) return undefined
 
-    await resolveSafePublicDnsAddresses(jwksHostname, 'JWKS')
+    return resolveSafePublicDnsAddresses(jwksHostname, 'JWKS')
 }

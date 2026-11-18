@@ -11,6 +11,7 @@
  */
 
 import * as fs from 'node:fs'
+import * as fsPromises from 'node:fs/promises'
 import * as path from 'node:path'
 
 import { VERSION } from '../../../../version.js'
@@ -24,8 +25,10 @@ import { logger } from '../../../../utils/logger.js'
 import type { BriefingConfig } from '../../shared.js'
 import {
     fetchGitHistoryFromRepo,
+    fetchGitHistoryFromRepoAsync,
     formatBriefingLocalTime,
     readRepoIndicators,
+    readRepoIndicatorsAsync,
     resolveProjectRoot,
 } from './system-section-helpers.js'
 
@@ -256,6 +259,138 @@ function loadCachedLastReleaseDaysAgo(targetPath?: string | null): number | null
 // ============================================================================
 // Public API
 // ============================================================================
+
+async function loadCachedGitHistoryAsync(
+    commitCount: number,
+    targetPath?: string | null
+): Promise<GitHistorySummary | null> {
+    if (targetPath === null) return null
+    const root = targetPath || resolveProjectRoot()
+    const cacheKey = `${root}::${String(commitCount)}`
+    const cached = getCached(cachedGitHistory, cacheKey)
+    if (cached.hit) return cached.value
+    try {
+        if (process.env['VITEST']) return setCached(cachedGitHistory, cacheKey, null)
+        return setCached(
+            cachedGitHistory,
+            cacheKey,
+            await fetchGitHistoryFromRepoAsync(root, commitCount)
+        )
+    } catch (err: unknown) {
+        logger.debug('Failed to get git history via child_process (non-critical)', {
+            module: 'BRIEFING',
+            operation: 'git-history',
+            error: err instanceof Error ? err.message : String(err),
+        })
+        return setCached(cachedGitHistory, cacheKey, null)
+    }
+}
+
+async function readReadmeBadgeChunkAsync(root: string): Promise<string> {
+    const handle = await fsPromises.open(path.join(root, 'README.md'), 'r')
+    try {
+        const buf = Buffer.alloc(2048)
+        const { bytesRead } = await handle.read(buf, 0, 2048, 0)
+        return buf.toString('utf-8', 0, bytesRead)
+    } finally {
+        await handle.close()
+    }
+}
+
+async function loadCachedTestHealthAsync(targetPath?: string | null): Promise<TestHealth | null> {
+    if (targetPath === null) return null
+    const root = targetPath || resolveProjectRoot()
+    const cached = getCached(cachedTestHealth, root)
+    if (cached.hit) return cached.value
+    try {
+        const raw = await fsPromises
+            .readFile(path.join(root, '.test-output', 'coverage', 'coverage-summary.json'), 'utf-8')
+            .catch(() => null)
+        if (raw !== null) {
+            const summary = JSON.parse(raw) as { total?: { lines?: { pct?: number } } }
+            const coverage = summary.total?.lines?.pct ?? 0
+            let unitTests = 0
+            let e2eTests = 0
+            try {
+                const badge = await readReadmeBadgeChunkAsync(root)
+                const unitMatch = /(?<!E2E[_ ]|E2E)Tests-(\d+)[_ %]*(passed|%20passed)/i.exec(badge)
+                const e2eMatch = /E2E(?:[_ ]|%20)*Tests-(\d+)[_ %]*(passed|%20passed)/i.exec(badge)
+                unitTests = unitMatch?.[1] ? parseInt(unitMatch[1], 10) : 0
+                e2eTests = e2eMatch?.[1] ? parseInt(e2eMatch[1], 10) : 0
+            } catch {
+                // Ignore error if README.md is missing
+            }
+            return setCached(cachedTestHealth, root, { unitTests, e2eTests, coverage })
+        }
+        return setCached(cachedTestHealth, root, parseTestHealth(await readReadmeBadgeChunkAsync(root)))
+    } catch {
+        return setCached(cachedTestHealth, root, null)
+    }
+}
+
+async function loadCachedLastReleaseDaysAgoAsync(
+    targetPath?: string | null
+): Promise<number | null> {
+    if (targetPath === null) return null
+    const root = targetPath || resolveProjectRoot()
+    const cached = getCached(cachedLastReleaseDaysAgo, root)
+    if (cached.hit) return cached.value
+    try {
+        const content = await fsPromises
+            .readFile(path.join(root, 'CHANGELOG.md'), 'utf-8')
+            .catch(() => null)
+        const age = content !== null ? parseLastReleaseAge(content) : null
+        return setCached(cachedLastReleaseDaysAgo, root, age)
+    } catch {
+        return setCached(cachedLastReleaseDaysAgo, root, null)
+    }
+}
+
+/**
+ * Parallel non-blocking counterpart to `buildSystemContext` used by async briefing reads.
+ */
+export async function buildBriefingSystemSummary(
+    config?: BriefingConfig,
+    filterConfig?: ToolFilterConfig | null,
+    targetRepoPath?: string | null,
+    resourceCount?: number,
+    activeWorkspaceId?: string
+): Promise<SystemContext> {
+    const localTime = formatBriefingLocalTime()
+    const totalTools = getAllToolNames().length
+    let filterSummary: string | null = null
+    if (filterConfig) {
+        const enabled = filterConfig.enabledTools.size
+        if (enabled < totalTools) {
+            filterSummary = `${filterConfig.raw} (${String(enabled)}/${String(totalTools)})`
+        }
+    }
+    const isReadonly = filterConfig ? isFilterEffectivelyReadOnly(filterConfig) : false
+    const ioRootCount = config?.allowedIoRoots?.length ?? 0
+    const root = targetRepoPath === null ? null : (targetRepoPath || resolveProjectRoot())
+    const [indicators, gitHistory, testHealth, lastReleaseDaysAgo] = await Promise.all([
+        readRepoIndicatorsAsync(root),
+        loadCachedGitHistoryAsync(config?.commitCount ?? 3, targetRepoPath),
+        loadCachedTestHealthAsync(targetRepoPath),
+        loadCachedLastReleaseDaysAgoAsync(targetRepoPath),
+    ])
+    return {
+        version: VERSION,
+        toolCount: totalTools,
+        resourceCount: resourceCount ?? 0,
+        promptCount: getPrompts().length,
+        localTime,
+        gitHistory,
+        testHealth,
+        filterSummary,
+        isReadonly,
+        ioRootCount,
+        hasCodeMap: indicators.hasCodeMap,
+        lastReleaseDaysAgo,
+        localCheck: indicators.localCheck,
+        workspaceId: activeWorkspaceId ?? config?.defaultWorkspaceId,
+    }
+}
 
 /**
  * Build system-level context for the briefing.

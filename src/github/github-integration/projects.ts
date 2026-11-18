@@ -121,8 +121,61 @@ const ORG_PROJECT_QUERY = `
     }
 `
 
+type ProjectSourceKind = 'user' | 'repository' | 'organization'
+const MAX_PROJECT_SOURCE_CACHE = 128
+
 export class ProjectsManager {
+    private readonly projectSourceCache = new Map<string, ProjectSourceKind>()
+
     constructor(private client: GitHubClient) {}
+
+    private rememberProjectSource(cacheKey: string, source: ProjectSourceKind): void {
+        if (this.projectSourceCache.has(cacheKey)) {
+            this.projectSourceCache.delete(cacheKey)
+        } else if (this.projectSourceCache.size >= MAX_PROJECT_SOURCE_CACHE) {
+            const oldestKey = this.projectSourceCache.keys().next().value
+            if (oldestKey !== undefined) this.projectSourceCache.delete(oldestKey)
+        }
+        this.projectSourceCache.set(cacheKey, source)
+    }
+
+    private async probeProjectSource(
+        source: ProjectSourceKind,
+        owner: string,
+        projectNumber: number,
+        repo?: string,
+        abortSignal?: AbortSignal
+    ): Promise<ProjectV2Data | null> {
+        const graphql = this.client.graphqlWithAuth
+        if (!graphql) return null
+        if (source === 'user') {
+            const response = await graphql<UserProjectResponse>(USER_PROJECT_QUERY, {
+                owner,
+                number: projectNumber,
+                itemLimit: 100,
+                request: { signal: abortSignal },
+            })
+            return response.user?.projectV2 ?? null
+        }
+        if (source === 'repository') {
+            if (!repo) return null
+            const response = await graphql<RepoProjectResponse>(REPO_PROJECT_QUERY, {
+                owner,
+                repo,
+                number: projectNumber,
+                itemLimit: 100,
+                request: { signal: abortSignal },
+            })
+            return response.repository?.projectV2 ?? null
+        }
+        const response = await graphql<OrgProjectResponse>(ORG_PROJECT_QUERY, {
+            owner,
+            number: projectNumber,
+            itemLimit: 100,
+            request: { signal: abortSignal },
+        })
+        return response.organization?.projectV2 ?? null
+    }
 
     private async fetchProjectV2FromSources(
         owner: string,
@@ -130,57 +183,37 @@ export class ProjectsManager {
         repo?: string,
         abortSignal?: AbortSignal
     ): Promise<{ project: ProjectV2Data | null; source: string }> {
-        const graphql = this.client.graphqlWithAuth
-        if (!graphql) return { project: null, source: '' }
+        if (!this.client.graphqlWithAuth) return { project: null, source: '' }
 
-        try {
-            const response = await graphql<UserProjectResponse>(USER_PROJECT_QUERY, {
-                owner,
-                number: projectNumber,
-                itemLimit: 100,
-                request: { signal: abortSignal },
-            })
-            if (response.user?.projectV2) {
-                return { project: response.user.projectV2, source: 'user' }
-            }
-        } catch (error) {
-            if (!projectLookupMiss(error)) throw error
-            logger.debug('User project not found, trying repository...', { module: 'GitHub' })
-        }
+        const cacheKey = `${owner}:${String(projectNumber)}:${repo ?? ''}`
+        const defaultOrder: ProjectSourceKind[] = repo
+            ? ['user', 'repository', 'organization']
+            : ['user', 'organization']
+        const cachedSource = this.projectSourceCache.get(cacheKey)
+        const probeOrder: ProjectSourceKind[] =
+            cachedSource !== undefined && defaultOrder.includes(cachedSource)
+                ? [cachedSource, ...defaultOrder.filter((s) => s !== cachedSource)]
+                : defaultOrder
 
-        if (repo) {
+        for (const source of probeOrder) {
             try {
-                const response = await graphql<RepoProjectResponse>(REPO_PROJECT_QUERY, {
+                const project = await this.probeProjectSource(
+                    source,
                     owner,
+                    projectNumber,
                     repo,
-                    number: projectNumber,
-                    itemLimit: 100,
-                    request: { signal: abortSignal },
-                })
-                if (response.repository?.projectV2) {
-                    return { project: response.repository.projectV2, source: 'repository' }
+                    abortSignal
+                )
+                if (project) {
+                    this.rememberProjectSource(cacheKey, source)
+                    return { project, source }
                 }
             } catch (error) {
                 if (!projectLookupMiss(error)) throw error
-                logger.debug('Repository project not found, trying organization...', {
+                logger.debug(`${source} project not found, trying next source...`, {
                     module: 'GitHub',
                 })
             }
-        }
-
-        try {
-            const response = await graphql<OrgProjectResponse>(ORG_PROJECT_QUERY, {
-                owner,
-                number: projectNumber,
-                itemLimit: 100,
-                request: { signal: abortSignal },
-            })
-            if (response.organization?.projectV2) {
-                return { project: response.organization.projectV2, source: 'organization' }
-            }
-        } catch (error) {
-            if (!projectLookupMiss(error)) throw error
-            logger.debug('Organization project not found', { module: 'GitHub' })
         }
 
         return { project: null, source: '' }
@@ -388,41 +421,20 @@ export class ProjectsManager {
         }
 
         try {
-            const mutation = `
-                mutation($projectId: ID!, $itemId: ID!) {
-                    deleteProjectV2Item(input: { projectId: $projectId, itemId: $itemId }) {
-                        deletedItemId
-                    }
-                }
-            `
-
+            const mutation =
+                'mutation($projectId: ID!, $itemId: ID!) { deleteProjectV2Item(input: { projectId: $projectId, itemId: $itemId }) { deletedItemId } }'
             if (typeof this.client.invalidateCache === 'function') {
                 this.client.invalidateCache('kanban:')
             }
-
-            await this.client.graphqlWithAuth(mutation, {
-                projectId,
-                itemId,
-            })
-
-            logger.info('Deleted project item', {
-                module: 'GitHub',
-                context: { projectId, itemId },
-            })
-
+            await this.client.graphqlWithAuth(mutation, { projectId, itemId })
+            logger.info('Deleted project item', { module: 'GitHub', context: { projectId, itemId } })
             return { success: true }
         } catch (error) {
             const errorMessage = error instanceof Error ? error.message : String(error)
-            logger.error('Failed to delete item from project', {
-                module: 'GitHub',
-                context: { projectId, itemId },
-                error: errorMessage,
-            })
+            logger.error('Failed to delete item from project', { module: 'GitHub', context: { projectId, itemId }, error: errorMessage })
             return { success: false, error: errorMessage }
         } finally {
-            if (typeof this.client.invalidateCache === 'function') {
-                this.client.invalidateCache('kanban:')
-            }
+            if (typeof this.client.invalidateCache === 'function') this.client.invalidateCache('kanban:')
         }
     }
 }

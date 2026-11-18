@@ -3,6 +3,7 @@ import * as path from 'node:path'
 import { z } from 'zod'
 import type { ToolDefinition, ToolContext } from '../../../../types/index.js'
 import { getSearchTools } from '../../search/index.js'
+import { findCachedOrFallbackTool } from './cached-tool-lookup.js'
 import { assertSafeDirectoryPath, assertSafeFilePath, PathTraversalError } from '../../../../utils/security-utils.js'
 import { ErrorFieldsMixin } from '../../error-fields-mixin.js'
 import {
@@ -116,7 +117,7 @@ async function tryJournalSearchFallback(
     query: string
 ): Promise<unknown> {
     if (context === undefined || query.trim() === '') return undefined
-    const searchTool = getSearchTools(context).find((t: ToolDefinition) => t.name === 'search_entries')
+    const searchTool = findCachedOrFallbackTool(context, 'search_entries', getSearchTools)
     if (searchTool === undefined) return undefined
     try {
         const wsArg = pickFirstString(rawArgs, ['workspace_id', 'workspaceId'])

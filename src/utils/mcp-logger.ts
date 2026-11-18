@@ -173,26 +173,32 @@ export class McpLogger {
 
     // Convenience methods
     debug(loggerName: string, message: string, context?: Record<string, unknown>): void {
+        if (!this.shouldLog('debug')) return
         this.log('debug', loggerName, { message, ...context })
     }
 
     info(loggerName: string, message: string, context?: Record<string, unknown>): void {
+        if (!this.shouldLog('info')) return
         this.log('info', loggerName, { message, ...context })
     }
 
     notice(loggerName: string, message: string, context?: Record<string, unknown>): void {
+        if (!this.shouldLog('notice')) return
         this.log('notice', loggerName, { message, ...context })
     }
 
     warning(loggerName: string, message: string, context?: Record<string, unknown>): void {
+        if (!this.shouldLog('warning')) return
         this.log('warning', loggerName, { message, ...context })
     }
 
     error(loggerName: string, message: string, context?: Record<string, unknown>): void {
+        if (!this.shouldLog('error')) return
         this.log('error', loggerName, { message, ...context })
     }
 
     critical(loggerName: string, message: string, context?: Record<string, unknown>): void {
+        if (!this.shouldLog('critical')) return
         this.log('critical', loggerName, { message, ...context })
     }
 }

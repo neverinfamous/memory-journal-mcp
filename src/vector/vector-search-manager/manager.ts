@@ -21,6 +21,10 @@ import {
     searchSimilarEntriesById,
     type VectorCandidate,
 } from './candidate-search.js'
+import {
+    getOrComputeCachedEmbedding,
+    QUERY_EMBEDDING_CACHE_MAX_CHARS,
+} from './embedding-cache.js'
 
 export class VectorSearchManager {
     private dbAdapter: IDatabaseAdapter
@@ -191,9 +195,16 @@ export class VectorSearchManager {
             throw new Error('Vector search not initialized properly. Cannot rebuild index.')
         }
 
+        const canCache =
+            !this.hasCustomEmbeddingGenerator() &&
+            this.transformers !== null &&
+            text.length <= QUERY_EMBEDDING_CACHE_MAX_CHARS
         const pipelineFunc = this.pipeline as (text: string, options: unknown) => Promise<{ data: number[] }>
-        const result = await pipelineFunc(text, { pooling: 'mean', normalize: true })
-        return new Float32Array(result.data)
+
+        return getOrComputeCachedEmbedding(this.modelName, text, canCache, async () => {
+            const result = await pipelineFunc(text, { pooling: 'mean', normalize: true })
+            return new Float32Array(result.data)
+        })
     }
 
     /** Generate settled per-item embeddings for a batch of texts, using tensor batching on the HF pipeline. */
@@ -349,7 +360,8 @@ export class VectorSearchManager {
         limit = 10,
         threshold = 0.0,
         workspaceId?: string,
-        projectNumber?: number
+        projectNumber?: number,
+        prefetchedEntry?: JournalEntry
     ): Promise<SemanticSearchResult[]> {
         await this.initialize()
 
@@ -362,7 +374,8 @@ export class VectorSearchManager {
                 limit,
                 threshold,
                 targetWs,
-                projectNumber
+                projectNumber,
+                prefetchedEntry
             )
         } catch (error) {
             logger.error(`Semantic search by entry ID ${entryId} failed`, {

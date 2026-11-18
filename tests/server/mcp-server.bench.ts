@@ -29,6 +29,11 @@ const writeDbPath = path.join(os.tmpdir(), `mj-bench-server-write-${benchId}.db`
 
 let savedEncKey: string | undefined
 let savedDbEncKey: string | undefined
+let savedLogLevel: string | undefined
+const mockProgressContext = {
+    server: { notification: async () => {} } as never,
+    progressToken: 'bench-tok',
+}
 
 function removeDbFiles(dbPath: string): void {
     for (const suffix of ['', '-wal', '-shm']) {
@@ -44,23 +49,30 @@ function removeDbFiles(dbPath: string): void {
 beforeAll(async () => {
     savedEncKey = process.env['MJ_DB_ENCRYPTION_KEY']
     savedDbEncKey = process.env['DB_ENCRYPTION_KEY']
+    savedLogLevel = process.env['LOG_LEVEL']
     delete process.env['MJ_DB_ENCRYPTION_KEY']
     delete process.env['DB_ENCRYPTION_KEY']
+    process.env['LOG_LEVEL'] = 'error'
 
     readDb = new DatabaseAdapter(readDbPath)
     writeDb = new DatabaseAdapter(writeDbPath)
     await readDb.initialize()
     await writeDb.initialize()
 
-    // Setup initial read dataset isolated from write benchmark mutations
-    for (let i = 0; i < 1000; i++) {
-        readDb.createEntry({
-            workspaceId: 'bench-ws',
-            projectNumber: 1,
-            content: `Server benchmark tool entry ${i} ${Math.random().toString(36)}`,
-            entryType: 'decision',
+    const seedBenchDb = (db: DatabaseAdapter): void => {
+        db.executeInTransaction(() => {
+            for (let i = 0; i < 1000; i++) {
+                db.createEntry({
+                    workspaceId: 'bench-ws',
+                    projectNumber: 1,
+                    content: `Server benchmark tool entry ${i} ${Math.random().toString(36)}`,
+                    entryType: 'decision',
+                })
+            }
         })
     }
+    seedBenchDb(readDb)
+    seedBenchDb(writeDb)
 
     const probeRecent = (await callTool(
         'get_recent_entries',
@@ -114,6 +126,8 @@ afterAll(() => {
     removeDbFiles(writeDbPath)
     if (savedEncKey !== undefined) process.env['MJ_DB_ENCRYPTION_KEY'] = savedEncKey
     if (savedDbEncKey !== undefined) process.env['DB_ENCRYPTION_KEY'] = savedDbEncKey
+    if (savedLogLevel !== undefined) process.env['LOG_LEVEL'] = savedLogLevel
+    else delete process.env['LOG_LEVEL']
 })
 
 test('getTools', async ({ bench }) => {
@@ -132,6 +146,20 @@ test('callTool get_recent_entries', async ({ bench }) => {
             undefined,
             undefined,
             readConfig
+        )
+    }).run()
+})
+
+test('callTool get_recent_entries (with progressToken)', async ({ bench }) => {
+    await bench('callTool get_recent_entries (with progressToken)', async () => {
+        await callTool(
+            'get_recent_entries',
+            { workspace_id: 'bench-ws', limit: 50 },
+            readDb,
+            undefined,
+            undefined,
+            readConfig,
+            mockProgressContext
         )
     }).run()
 })

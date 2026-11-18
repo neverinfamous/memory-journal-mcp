@@ -30,6 +30,7 @@ vi.mock('@huggingface/transformers', () => ({
 
 // Import AFTER mocks are set up
 import { VectorSearchManager } from '../../src/vector/vector-search-manager/index.js'
+import { clearSharedEmbeddingCache } from '../../src/vector/vector-search-manager/embedding-cache.js'
 import type { IDatabaseAdapter } from '../../src/database/core/interfaces.js'
 import type { DatabaseAdapter } from '../../src/database/sqlite-adapter/index.js'
 
@@ -132,6 +133,7 @@ describe('VectorSearchManager', () => {
 
     beforeEach(() => {
         vi.clearAllMocks()
+        clearSharedEmbeddingCache()
         const mocks = createMockDbAdapter()
         adapter = mocks.adapter
         vm = new VectorSearchManager(adapter)

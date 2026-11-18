@@ -93,7 +93,12 @@ async function executeCreateEntry(
         input.issue_url,
         wsId
     )
-    const resolvedAnchors = resolveEntryAnchors(input.anchors, input.auto_context, wsId, context)
+    const resolvedAnchors = await resolveEntryAnchors(
+        input.anchors,
+        input.auto_context,
+        wsId,
+        context
+    )
     const entryInput = buildCreateEntryInput(input, {
         projectNumber,
         workspaceId: wsId,

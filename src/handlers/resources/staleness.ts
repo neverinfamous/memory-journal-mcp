@@ -125,6 +125,19 @@ function countRecentWeekEntries(
     const now = new Date()
     const oneWeekAgoIso = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString()
     const nowIso = now.toISOString()
+    if (typeof db.getStatistics === 'function') {
+        const stats = db.getStatistics(
+            'week',
+            oneWeekAgoIso,
+            nowIso,
+            false,
+            workspaceId,
+            projectNumber
+        )
+        if (typeof stats['totalEntries'] === 'number') {
+            return stats['totalEntries']
+        }
+    }
     let total = 0
     let cursor: string | undefined
     for (let pageIndex = 0; pageIndex < 200; pageIndex++) {

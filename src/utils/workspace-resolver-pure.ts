@@ -182,6 +182,32 @@ function resolveFallbackContext(
     }
 }
 
+const CWD_REGISTRY_MATCH_CACHE = new WeakMap<
+    Record<string, RegistryEntry>,
+    Map<string, ReturnType<typeof findBestMatchingPathEntry> | null>
+>()
+
+function getCachedCwdMatch(
+    cwd: string,
+    registry: Record<string, RegistryEntry> | undefined
+): ReturnType<typeof findBestMatchingPathEntry> {
+    if (registry === undefined) return undefined
+    let byCwd = CWD_REGISTRY_MATCH_CACHE.get(registry)
+    if (byCwd === undefined) {
+        byCwd = new Map()
+        CWD_REGISTRY_MATCH_CACHE.set(registry, byCwd)
+    }
+    const cached = byCwd.get(cwd)
+    if (cached !== undefined) {
+        return cached ?? undefined
+    }
+    const computed = findBestMatchingPathEntry(cwd, registry)
+    if (byCwd.size < 32) {
+        byCwd.set(cwd, computed ?? null)
+    }
+    return computed
+}
+
 /**
  * Pure in-memory workspace/project context resolver taking an optional fallback registry
  * so worker threads do not pull host config-file readers or `yaml` dependencies.
@@ -198,20 +224,47 @@ export function resolveProjectContextWithRegistry(
         trimmedWorkspaceId === undefined || trimmedWorkspaceId === '' || trimmedWorkspaceId === '*'
             ? undefined
             : trimmedWorkspaceId
-    const cwdMatch =
-        registry !== undefined ? findBestMatchingPathEntry(process.cwd(), registry) : undefined
-    const registeredCwd =
-        cwdMatch !== undefined && cwdMatch.workspaceId.toLowerCase() !== 'test' ? cwdMatch : undefined
 
-    const explicit = resolveExplicitWorkspaceOrProject(
-        sanitizedWorkspaceId,
-        input,
-        registeredCwd,
-        config,
-        registry
-    )
-    if (explicit !== undefined) return explicit
+    let resolvedCwdComputed = false
+    let resolvedCwdCache: ResolvedContext | undefined
+    const getRegisteredCwd = (): ResolvedContext | undefined => {
+        if (!resolvedCwdComputed) {
+            resolvedCwdComputed = true
+            const cwdMatch = getCachedCwdMatch(process.cwd(), registry)
+            resolvedCwdCache =
+                cwdMatch !== undefined && cwdMatch.workspaceId.toLowerCase() !== 'test'
+                    ? cwdMatch
+                    : undefined
+        }
+        return resolvedCwdCache
+    }
 
+    if (sanitizedWorkspaceId !== undefined) {
+        return (
+            resolveExplicitWorkspaceOrProject(
+                sanitizedWorkspaceId,
+                input,
+                undefined,
+                config,
+                registry
+            ) ?? { workspaceId: sanitizedWorkspaceId, projectNumber: undefined }
+        )
+    }
+
+    if (input.project_number !== undefined && input.project_number !== null) {
+        const mappedWs =
+            registry !== undefined ? undefined : getRegisteredCwd()?.workspaceId
+        const explicitProj = resolveExplicitWorkspaceOrProject(
+            undefined,
+            input,
+            mappedWs !== undefined ? { workspaceId: mappedWs, projectNumber: undefined } : getRegisteredCwd(),
+            config,
+            registry
+        )
+        if (explicitProj !== undefined) return explicitProj
+    }
+
+    const registeredCwd = getRegisteredCwd()
     if (registeredCwd !== undefined) {
         const cwdProject =
             registeredCwd.projectNumber ??

@@ -1,5 +1,9 @@
 import type { NativeConnectionManager } from '../native-connection.js'
-import { bucketInParams, chunkedInPredicate } from '../row-helpers.js'
+import {
+    bucketInParams,
+    chunkedInPredicate,
+    DUAL_IN_PARAM_BUCKETS,
+} from '../row-helpers.js'
 import { effectiveWorkspace } from '../../workspace-scope.js'
 import { expandTagFilterValues } from '../tags.js'
 
@@ -84,15 +88,19 @@ function buildGraphScopeFilters(
     }
 }
 
-function buildRelPeerSubquery(f: GraphScopeFilters): string {
-    return `
-        SELECT DISTINCT r.from_entry_id FROM relationships r
-        JOIN memory_journal mj_to ON r.to_entry_id = mj_to.id
-        WHERE mj_to.deleted_at IS NULL${f.toPeerScope}${f.relTypeSql}
-        UNION
-        SELECT DISTINCT r.to_entry_id FROM relationships r
-        JOIN memory_journal mj_from ON r.from_entry_id = mj_from.id
-        WHERE mj_from.deleted_at IS NULL${f.fromPeerScope}${f.relTypeSql}`
+function buildRelExistsClause(f: GraphScopeFilters): string {
+    return `(
+        EXISTS (
+            SELECT 1 FROM relationships r
+            JOIN memory_journal mj_to ON r.to_entry_id = mj_to.id
+            WHERE r.from_entry_id = mj.id AND mj_to.deleted_at IS NULL${f.toPeerScope}${f.relTypeSql}
+        )
+        OR EXISTS (
+            SELECT 1 FROM relationships r
+            JOIN memory_journal mj_from ON r.from_entry_id = mj_from.id
+            WHERE r.to_entry_id = mj.id AND mj_from.deleted_at IS NULL${f.fromPeerScope}${f.relTypeSql}
+        )
+    )`
 }
 
 function queryConnectedGraphEntries(
@@ -162,7 +170,7 @@ function queryTaggedGraphEntries(
     limit: number,
     f: GraphScopeFilters
 ): GraphEntryRow[] {
-    const relPeerFilter = f.hasRelType ? ` AND mj.id IN (${buildRelPeerSubquery(f)})` : ''
+    const relPeerFilter = f.hasRelType ? ` AND ${buildRelExistsClause(f)}` : ''
     const relPeerParams = f.hasRelType
         ? [...f.wsParam, ...f.projParam, ...f.relTypeParam, ...f.wsParam, ...f.projParam, ...f.relTypeParam]
         : []
@@ -170,7 +178,7 @@ function queryTaggedGraphEntries(
         .getNativeDb()
         .prepare(
             `
-        SELECT DISTINCT mj.id, mj.entry_type, mj.content, mj.is_personal
+        SELECT mj.id, mj.entry_type, mj.content, mj.is_personal
         FROM memory_journal mj
         WHERE mj.deleted_at IS NULL${f.wsFilter}${f.projSql}${f.tagSubquery}${relPeerFilter}
         ORDER BY mj.id DESC
@@ -189,10 +197,10 @@ function queryAllLinkedGraphEntries(
         .getNativeDb()
         .prepare(
             `
-        SELECT DISTINCT mj.id, mj.entry_type, mj.content, mj.is_personal
+        SELECT mj.id, mj.entry_type, mj.content, mj.is_personal
         FROM memory_journal mj
         WHERE mj.deleted_at IS NULL${f.wsFilter}${f.projSql}
-          AND mj.id IN (${buildRelPeerSubquery(f)})
+          AND ${buildRelExistsClause(f)}
         ORDER BY mj.id DESC
         LIMIT ?
     `
@@ -282,15 +290,16 @@ function queryGraphEdges(
     const relTypeParams = hasRelType ? [relationshipType] : []
 
     if (entryIds.length <= 240) {
-        const placeholders = entryIds.map(() => '?').join(',')
+        const chunk = bucketInParams(entryIds, DUAL_IN_PARAM_BUCKETS)[0]
+        if (!chunk) return []
         const rows = db
             .prepare(
                 `SELECT from_entry_id, to_entry_id, relationship_type
                  FROM relationships
-                 WHERE from_entry_id IN (${placeholders})
-                   AND to_entry_id IN (${placeholders})${relTypeSql}`
+                 WHERE from_entry_id IN (${chunk.placeholders})
+                   AND to_entry_id IN (${chunk.placeholders})${relTypeSql}`
             )
-            .all(...entryIds, ...entryIds, ...relTypeParams) as {
+            .all(...chunk.params, ...chunk.params, ...relTypeParams) as {
             from_entry_id: number
             to_entry_id: number
             relationship_type: string
@@ -342,11 +351,17 @@ export function getRecentGraphRelationships(
     from_content: string
     to_content: string
 }[] {
+    const db = connection.getNativeDb()
     const scopeId = effectiveWorkspace(workspaceId)
+    if (scopeId !== '*') {
+        const hasRow = db
+            .prepare('SELECT 1 FROM memory_journal WHERE deleted_at IS NULL AND workspace_id = ? LIMIT 1')
+            .get(scopeId)
+        if (hasRow === undefined) return []
+    }
     const wsFilter = scopeId !== '*' ? ' AND e1.workspace_id = ? AND e2.workspace_id = ?' : ''
     const params: unknown[] = scopeId !== '*' ? [scopeId, scopeId, limit] : [limit]
-    return connection
-        .getNativeDb()
+    return db
         .prepare(
             `
         SELECT
@@ -354,8 +369,8 @@ export function getRecentGraphRelationships(
             e1.content as from_content,
             e2.content as to_content
         FROM relationships r
-        JOIN memory_journal e1 ON r.from_entry_id = e1.id
-        JOIN memory_journal e2 ON r.to_entry_id = e2.id
+        CROSS JOIN memory_journal e1 ON r.from_entry_id = e1.id
+        CROSS JOIN memory_journal e2 ON r.to_entry_id = e2.id
         WHERE e1.deleted_at IS NULL AND e2.deleted_at IS NULL${wsFilter}
         ORDER BY r.created_at DESC
         LIMIT ?

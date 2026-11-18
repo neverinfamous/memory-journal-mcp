@@ -14,6 +14,38 @@ function preprocessProjectNumber(val: unknown): unknown {
     return parsed ?? Number.NaN
 }
 
+const EmptyStrictSchema = z.object({}).strict()
+
+const ListDeletedEntriesMcpSchema = z.object({
+    limit: relaxedNumber().optional().default(50),
+    offset: relaxedNumber().optional().default(0),
+    workspace_id: z.string().optional().describe('Filter by workspace ID, or "*" for all workspaces'),
+    workspaceId: z.string().optional().describe('Workspace identifier alias'),
+    project_number: relaxedNumber().optional().describe('Filter by numeric project ID'),
+    projectNumber: relaxedNumber().optional().describe('Project number alias'),
+})
+
+const ListDeletedEntriesStrictSchema = z
+    .object({
+        limit: z.preprocess(
+            coerceNumber,
+            z.number().int().min(1).max(MAX_QUERY_LIMIT).optional().default(50)
+        ),
+        offset: z.preprocess(coerceNumber, z.number().int().min(0).optional().default(0)),
+        workspace_id: z.string().optional(),
+        workspaceId: z.string().optional(),
+        project_number: z.preprocess(preprocessProjectNumber, z.number().int().positive().optional()),
+        projectNumber: z.preprocess(preprocessProjectNumber, z.number().int().positive().optional()),
+    })
+    .strict()
+
+const READ_ONLY_ANNOTATIONS = {
+    readOnlyHint: true,
+    destructiveHint: false,
+    idempotentHint: true,
+    openWorldHint: false,
+} as const
+
 export function getMiscSearchTools(context: ToolContext): ToolDefinition[] {
     const { db, vectorManager } = context;
     return [
@@ -22,14 +54,9 @@ export function getMiscSearchTools(context: ToolContext): ToolDefinition[] {
             title: 'Get Vector Index Stats',
             description: 'Get statistics about the semantic search vector index',
             group: 'search',
-            inputSchema: z.object({}).strict(),
+            inputSchema: EmptyStrictSchema,
             outputSchema: VectorStatsOutputSchema,
-            annotations: {
-                readOnlyHint: true,
-                destructiveHint: false,
-                idempotentHint: true,
-                openWorldHint: false,
-            },
+            annotations: READ_ONLY_ANNOTATIONS,
             handler: (_params: unknown) => {
                 try {
                     if (!vectorManager) {
@@ -56,37 +83,12 @@ export function getMiscSearchTools(context: ToolContext): ToolDefinition[] {
             title: 'List Deleted Entries',
             description: 'List recently soft-deleted entries that can be restored',
             group: 'search',
-            inputSchema: z.object({
-                limit: relaxedNumber().optional().default(50),
-                offset: relaxedNumber().optional().default(0),
-                workspace_id: z.string().optional().describe('Filter by workspace ID, or "*" for all workspaces'),
-                workspaceId: z.string().optional().describe('Workspace identifier alias'),
-                project_number: relaxedNumber().optional().describe('Filter by numeric project ID'),
-                projectNumber: relaxedNumber().optional().describe('Project number alias'),
-            }),
+            inputSchema: ListDeletedEntriesMcpSchema,
             outputSchema: EntriesListOutputSchema,
-            annotations: {
-                readOnlyHint: true,
-                destructiveHint: false,
-                idempotentHint: true,
-                openWorldHint: false,
-            },
+            annotations: READ_ONLY_ANNOTATIONS,
             handler: (params: unknown) => {
                 try {
-                    const parsed = z
-                        .object({
-                            limit: z.preprocess(
-                                coerceNumber,
-                                z.number().int().min(1).max(MAX_QUERY_LIMIT).optional().default(50)
-                            ),
-                            offset: z.preprocess(coerceNumber, z.number().int().min(0).optional().default(0)),
-                            workspace_id: z.string().optional(),
-                            workspaceId: z.string().optional(),
-                            project_number: z.preprocess(preprocessProjectNumber, z.number().int().positive().optional()),
-                            projectNumber: z.preprocess(preprocessProjectNumber, z.number().int().positive().optional()),
-                        })
-                        .strict()
-                        .parse(params)
+                    const parsed = ListDeletedEntriesStrictSchema.parse(params)
                     const rawWs = parsed.workspace_id ?? parsed.workspaceId
                     const rawProj = parsed.project_number ?? parsed.projectNumber
                     const wsId = rawWs === '*' ? '*' : resolveWorkspaceId(rawWs, rawProj, context.config)

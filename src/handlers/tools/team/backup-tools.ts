@@ -18,7 +18,7 @@ import * as path from 'node:path'
 // ============================================================================
 
 export function getTeamBackupTools(context: ToolContext): ToolDefinition[] {
-    const { teamDb, progress } = context
+    const { teamDb } = context
 
     return [
         {
@@ -44,6 +44,7 @@ export function getTeamBackupTools(context: ToolContext): ToolDefinition[] {
                     }
 
                     const input = TeamBackupSchema.parse(params)
+                    const progress = context.progress
 
                     await sendProgress(progress, 0, 2, 'Creating team backup...')
 

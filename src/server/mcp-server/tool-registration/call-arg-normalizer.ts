@@ -19,6 +19,9 @@ import type { ServerOptions } from '../types.js'
 import { formatTokenEstimatedError, type ToolCallParams } from './call-interceptor-helpers.js'
 import { resolveMcpCreateWorkspaceScope } from './create-scope-interceptor.js'
 import type { resolveActiveBriefingConfig } from './register-tools-helpers.js'
+import { ALREADY_HEALED_ARGS } from './healed-args-marker.js'
+
+export { ALREADY_HEALED_ARGS }
 
 const FORBIDDEN_KEYS = new Set(['__proto__', 'constructor', 'prototype'])
 const UPPERCASE_RE = /[A-Z]/
@@ -91,6 +94,26 @@ function resolveOpaqueTopLevelKeys(toolName: string | undefined): ReadonlySet<st
     return undefined
 }
 
+function needsSnakeCaseNormalization(
+    value: unknown,
+    depth: number,
+    opaqueTopLevelKeys?: ReadonlySet<string>
+): boolean {
+    if (depth > 12) return false
+    if (Array.isArray(value)) {
+        return value.some((item) => needsSnakeCaseNormalization(item, depth + 1))
+    }
+    if (!isPlainRecord(value)) return false
+    for (const [k, v] of Object.entries(value)) {
+        if (FORBIDDEN_KEYS.has(k)) return true
+        const snakeKey = toSnakeKey(k)
+        if (snakeKey !== k) return true
+        if (depth === 0 && opaqueTopLevelKeys?.has(snakeKey) === true) continue
+        if (needsSnakeCaseNormalization(v, depth + 1)) return true
+    }
+    return false
+}
+
 /**
  * Recursively normalize camelCase/PascalCase object keys to snake_case while honoring
  * explicit `snake_case` precedence, undefined collisions, and opaque bag fields.
@@ -101,8 +124,12 @@ export function deepCamelToSnake(
     opaqueTopLevelKeys?: ReadonlySet<string>
 ): unknown {
     if (depth > 12) return obj
-    if (Array.isArray(obj)) return obj.map((item) => deepCamelToSnake(item, depth + 1))
+    if (Array.isArray(obj)) {
+        if (depth === 0 && !needsSnakeCaseNormalization(obj, 0, opaqueTopLevelKeys)) return obj
+        return obj.map((item) => deepCamelToSnake(item, depth + 1))
+    }
     if (!isPlainRecord(obj)) return obj
+    if (depth === 0 && !needsSnakeCaseNormalization(obj, 0, opaqueTopLevelKeys)) return obj
 
     const newObj: Record<string, unknown> = {}
     for (const [k, v] of Object.entries(obj)) {
@@ -353,5 +380,10 @@ export function healIncomingToolCallParams(
         if (errResp !== undefined) return errResp
     }
     normalizeAndAliasToolCall(params, healerOptions)
-    return runArgInterceptionForCall(params, params.arguments, liveBriefing.projectRegistry)
+    const errResp = runArgInterceptionForCall(params, params.arguments, liveBriefing.projectRegistry)
+    if (errResp !== undefined) return errResp
+    if (isPlainRecord(params.arguments)) {
+        ALREADY_HEALED_ARGS.add(params.arguments)
+    }
+    return undefined
 }

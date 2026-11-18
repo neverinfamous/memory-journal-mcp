@@ -25,6 +25,11 @@ const BYTES_PER_TOKEN_JSON = 2.8
 const BYTES_PER_TOKEN_CODE = 3.2
 
 const payloadTokenCache = new WeakMap<object, number>()
+const serializedPayloadCache = new WeakMap<object, string>()
+const TOKEN_ESTIMATE_SENTINEL = '__MJ_TOKEN_EST__'
+const TOKEN_SENTINEL_META_SUFFIX = `,"_meta":{"tokenEstimate":"${TOKEN_ESTIMATE_SENTINEL}"}}`
+const TOKEN_SENTINEL_OVERHEAD_BYTES = Buffer.byteLength(TOKEN_SENTINEL_META_SUFFIX, 'utf8') - 1
+const TOKEN_SENTINEL_TAIL = `"${TOKEN_ESTIMATE_SENTINEL}"}}`
 
 // ============================================================================
 // Core Estimator
@@ -99,9 +104,12 @@ export function estimatePayloadTokens(payload: unknown): number {
         }
     }
     try {
-        const est = estimateTokens(JSON.stringify(payload), 'json')
+        const serialized = JSON.stringify(payload)
+        if (typeof serialized !== 'string') return 0
+        const est = estimateTokens(serialized, 'json')
         if (typeof payload === 'object') {
             payloadTokenCache.set(payload, est)
+            serializedPayloadCache.set(payload, serialized)
         }
         return est
     } catch (error) {
@@ -111,6 +119,28 @@ export function estimatePayloadTokens(payload: unknown): number {
         })
         return 0
     }
+}
+
+/** Invalidate cached serialized JSON when a post-handler transform mutates `payload`. */
+export function invalidateSerializedPayload(payload: unknown): void {
+    if (typeof payload === 'object' && payload !== null) {
+        serializedPayloadCache.delete(payload)
+    }
+}
+
+/** Return the JSON string for `payload`, reusing cached serialization from token estimation/injection. */
+export function getSerializedPayloadJson(payload: unknown): string {
+    if (typeof payload === 'string') return payload
+    if (typeof payload === 'object' && payload !== null) {
+        const cached = serializedPayloadCache.get(payload)
+        if (cached !== undefined) return cached
+        const json = JSON.stringify(payload)
+        if (typeof json === 'string') {
+            serializedPayloadCache.set(payload, json)
+            return json
+        }
+    }
+    return JSON.stringify(payload) ?? 'null'
 }
 
 // ============================================================================
@@ -133,16 +163,52 @@ export function injectTokenEstimate(payload: unknown): unknown {
     }
 
     const obj = payload as Record<string, unknown>
-    const existingMeta =
-        typeof obj['_meta'] === 'object' && obj['_meta'] !== null
-            ? (obj['_meta'] as Record<string, unknown>)
-            : {}
+    const rawMeta = obj['_meta']
+    const hasMeta = typeof rawMeta === 'object' && rawMeta !== null
+    const existingMeta = hasMeta ? (rawMeta as Record<string, unknown>) : {}
 
-    const tokenEstimate =
-        typeof existingMeta['tokenEstimate'] === 'number'
-            ? existingMeta['tokenEstimate']
-            : estimatePayloadTokens(payload)
+    if (typeof existingMeta['tokenEstimate'] === 'number') {
+        const est = existingMeta['tokenEstimate']
+        const enriched = { ...obj, _meta: { ...existingMeta, tokenEstimate: est } }
+        payloadTokenCache.set(enriched, est)
+        return enriched
+    }
 
+    if (!('_meta' in obj) || rawMeta === undefined) {
+        const cachedRawJson = serializedPayloadCache.get(payload)
+        if (cachedRawJson !== undefined && cachedRawJson.startsWith('{') && cachedRawJson.endsWith('}')) {
+            const cachedEst = payloadTokenCache.get(payload) ?? estimateTokens(cachedRawJson, 'json')
+            const enriched = { ...obj, _meta: { tokenEstimate: cachedEst } }
+            const finalJson = `${cachedRawJson.slice(0, -1)},"_meta":{"tokenEstimate":${String(cachedEst)}}}`
+            payloadTokenCache.set(enriched, cachedEst)
+            serializedPayloadCache.set(enriched, finalJson)
+            return enriched
+        }
+
+        const placeholder = { ...obj, _meta: { tokenEstimate: TOKEN_ESTIMATE_SENTINEL } }
+        try {
+            const placeholderJson = JSON.stringify(placeholder)
+            if (placeholderJson.endsWith(TOKEN_SENTINEL_META_SUFFIX)) {
+                const rawBytes =
+                    Buffer.byteLength(placeholderJson, 'utf8') - TOKEN_SENTINEL_OVERHEAD_BYTES
+                const tokenEstimate =
+                    rawBytes <= 0 ? 0 : Math.ceil(rawBytes / BYTES_PER_TOKEN_JSON)
+                const finalJson =
+                    placeholderJson.slice(
+                        0,
+                        placeholderJson.length - TOKEN_SENTINEL_TAIL.length
+                    ) + `${String(tokenEstimate)}}}`
+                const enriched = { ...obj, _meta: { tokenEstimate } }
+                payloadTokenCache.set(enriched, tokenEstimate)
+                serializedPayloadCache.set(enriched, finalJson)
+                return enriched
+            }
+        } catch {
+            // Fall through to standard estimatePayloadTokens error handling below.
+        }
+    }
+
+    const tokenEstimate = estimatePayloadTokens(payload)
     const enriched = {
         ...obj,
         _meta: {

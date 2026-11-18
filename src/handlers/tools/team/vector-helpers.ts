@@ -77,6 +77,34 @@ async function runTeamVectorQuery(
     return teamVectorManager.search(input.query ?? '', internalLimit, threshold, wsId, projectNumber)
 }
 
+function resolveTeamSemanticEntries(
+    teamDb: TeamDbInstance,
+    results: SemanticSearchResult[],
+    wsId: string
+): Map<number, NonNullable<SemanticSearchResult['entry']>> {
+    const missingIds = results.filter((r) => r.entry === undefined).map((r) => r.entryId)
+    const entriesMap =
+        missingIds.length > 0
+            ? teamDb.getEntriesByIds(missingIds, wsId)
+            : new Map<number, NonNullable<SemanticSearchResult['entry']>>()
+    const resolvedEntries = new Map<number, NonNullable<SemanticSearchResult['entry']>>()
+    for (const r of results) {
+        const entry = r.entry ?? entriesMap.get(r.entryId)
+        if (entry !== undefined) resolvedEntries.set(r.entryId, entry)
+    }
+    const missingTagIds = Array.from(resolvedEntries.values())
+        .filter((entry) => !Array.isArray(entry.tags))
+        .map((entry) => entry.id)
+    if (missingTagIds.length > 0) {
+        const tagsMap = teamDb.getTagsForEntries(missingTagIds)
+        for (const id of missingTagIds) {
+            const entry = resolvedEntries.get(id)
+            if (entry) entry.tags = tagsMap.get(entry.id) ?? []
+        }
+    }
+    return resolvedEntries
+}
+
 function hydrateAndFilterTeamSemanticHits(
     teamDb: TeamDbInstance,
     teamVectorManager: TeamVectorInstance,
@@ -85,56 +113,49 @@ function hydrateAndFilterTeamSemanticHits(
     wsId: string,
     projectNumber: number | undefined
 ): Record<string, unknown> {
-    const entryIds = results.map((r) => r.entryId)
-    const entriesMap = teamDb.getEntriesByIds(entryIds, wsId)
-    const authorMap = batchFetchAuthors(teamDb, entryIds)
-    const tagsMap = teamDb.getTagsForEntries(entryIds)
-    for (const entry of entriesMap.values()) {
-        entry.tags = tagsMap.get(entry.id) ?? []
+    const resolvedEntries = resolveTeamSemanticEntries(teamDb, results, wsId)
+
+    const filterOpts = {
+        tags: input.tags,
+        entryType: input.entry_type,
+        startDate: input.start_date,
+        endDate: input.end_date,
+        issueNumber: input.issue_number,
+        prNumber: input.pr_number,
+        workflowRunId: input.workflow_run_id,
+        includeArchived: input.include_archived,
+    }
+    const filtered: { entry: NonNullable<SemanticSearchResult['entry']>; similarity: number }[] = []
+    for (const r of results) {
+        const entry = resolvedEntries.get(r.entryId)
+        if (!entry) continue
+        if (input.entry_id !== undefined && entry.id === input.entry_id) continue
+        if (projectNumber !== undefined && entry.projectNumber !== projectNumber) continue
+        if (wsId !== '*' && entry.workspaceId !== wsId) continue
+        if (!passMetadataFilters(entry, filterOpts, teamDb)) continue
+        filtered.push({ entry, similarity: Math.round(r.score * 100) / 100 })
+        if (filtered.length >= input.limit) break
     }
 
-    const entries = results
-        .map((r) => {
-            const entry = entriesMap.get(r.entryId)
-            if (!entry) return null
-            if (input.entry_id !== undefined && entry.id === input.entry_id) return null
-            if (projectNumber !== undefined && entry.projectNumber !== projectNumber) return null
-            if (wsId !== '*' && entry.workspaceId !== wsId) return null
-            const matches = passMetadataFilters(
-                entry,
-                {
-                    tags: input.tags,
-                    entryType: input.entry_type,
-                    startDate: input.start_date,
-                    endDate: input.end_date,
-                    issueNumber: input.issue_number,
-                    prNumber: input.pr_number,
-                    workflowRunId: input.workflow_run_id,
-                    includeArchived: input.include_archived,
-                },
-                teamDb
-            )
-            if (!matches) return null
-            return {
-                ...entry,
-                author: authorMap.get(r.entryId) ?? null,
-                similarity: Math.round(r.score * 100) / 100,
-            }
-        })
-        .filter((e): e is NonNullable<typeof e> => e !== null)
-        .slice(0, input.limit)
+    const filteredIds = filtered.map((item) => item.entry.id)
+    const authorMap =
+        filteredIds.length > 0 ? batchFetchAuthors(teamDb, filteredIds) : new Map<number, string | null>()
+    const entries = filtered.map(({ entry, similarity }) => ({
+        ...entry,
+        author: authorMap.get(entry.id) ?? null,
+        similarity,
+    }))
 
-    const isIndexEmpty = teamVectorManager.getStats().itemCount === 0
     const includeHint = input.hint_on_empty ?? true
     const bestSimilarity = entries[0]?.similarity ?? 0
     const hint =
-        isIndexEmpty && includeHint
-            ? 'No entries in team vector index. Use team_rebuild_vector_index to index existing entries.'
-            : entries.length === 0 && includeHint
-              ? `No entries matched your query above the similarity threshold (${String(input.similarity_threshold ?? 0.25)}). Try lowering similarity_threshold (e.g., 0.15) for broader matches.`
-              : entries.length > 0 && bestSimilarity < QUALITY_FLOOR
-                ? `Results may be noise — best similarity (${String(bestSimilarity)}) is below quality floor (${String(QUALITY_FLOOR)}). Try a more specific query or raise similarity_threshold to filter weak matches.`
-                : undefined
+        entries.length === 0 && includeHint
+            ? teamVectorManager.getStats().itemCount === 0
+                ? 'No entries in team vector index. Use team_rebuild_vector_index to index existing entries.'
+                : `No entries matched your query above the similarity threshold (${String(input.similarity_threshold ?? 0.25)}). Try lowering similarity_threshold (e.g., 0.15) for broader matches.`
+            : entries.length > 0 && bestSimilarity < QUALITY_FLOOR
+              ? `Results may be noise — best similarity (${String(bestSimilarity)}) is below quality floor (${String(QUALITY_FLOOR)}). Try a more specific query or raise similarity_threshold to filter weak matches.`
+              : undefined
 
     return {
         success: true,

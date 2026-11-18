@@ -17,12 +17,12 @@
  * propagate to tool callers.
  */
 
-import { appendFile, mkdir, open, rename, stat, readFile } from 'node:fs/promises'
+import { appendFile, mkdir, open, rename, stat } from 'node:fs/promises'
 import { dirname } from 'node:path'
 import type { AuditConfig, AuditEntry, AuditSearchFilters } from './types.js'
 import { logger } from '../utils/logger.js'
 import { getRequestContext } from '../utils/request-context.js'
-import { parseAuditLine, matchesAuditFilters } from './audit-query-helpers.js'
+import { parseAuditLine, searchAuditFileBackward } from './audit-query-helpers.js'
 
 // ============================================================================
 // Constants
@@ -70,6 +70,7 @@ export class AuditLogger {
     private flushError: Error | null = null
     private dirEnsured = false
     private readonly stderrMode: boolean
+    private approxSizeBytes: number | null = null
 
     private _droppedCount = 0
 
@@ -184,13 +185,17 @@ export class AuditLogger {
                 this.buffer = []
 
                 try {
+                    const payload = lines.join('\n') + '\n'
                     if (this.stderrMode) {
                         // Stderr mode: write directly, no buffering to disk
-                        process.stderr.write(lines.join('\n') + '\n')
+                        process.stderr.write(payload)
                     } else {
                         await this.ensureDirectory()
                         // One appendFile call with all buffered lines — each terminated by \n
-                        await appendFile(this.config.logPath, lines.join('\n') + '\n', 'utf-8')
+                        await appendFile(this.config.logPath, payload, 'utf-8')
+                        if (this.approxSizeBytes !== null) {
+                            this.approxSizeBytes += Buffer.byteLength(payload, 'utf-8')
+                        }
                     }
                     // A successful write supersedes any earlier (retried) failure
                     this.flushError = null
@@ -341,30 +346,9 @@ export class AuditLogger {
         }
 
         for (const file of files) {
-            try {
-                const content = await readFile(file, 'utf-8')
-                const lines = content.split('\n').filter(Boolean)
-                // Read backwards to get newest first
-                for (let i = lines.length - 1; i >= 0; i--) {
-                    const entry = parseAuditLine(lines[i])
-                    if (entry === null) {
-                        skippedLines++
-                        continue
-                    }
-                    if (!matchesAuditFilters(entry, filters)) continue
-
-                    results.push(entry)
-
-                    if (results.length >= limit) {
-                        return results
-                    }
-                }
-            } catch (err: unknown) {
-                // Ignore if file doesn't exist (e.g. rotation hasn't happened yet)
-                if (nodeErrorCode(err) !== 'ENOENT') {
-                    throw err
-                }
-            }
+            const res = await searchAuditFileBackward(file, filters, limit, results)
+            skippedLines += res.skippedLines
+            if (res.limitReached) return results
         }
 
         if (skippedLines > 0) {
@@ -406,6 +390,9 @@ export class AuditLogger {
      */
     private async rotateIfNeeded(): Promise<void> {
         if (this.stderrMode || !this.config.maxSizeBytes) return
+        if (this.approxSizeBytes !== null && this.approxSizeBytes < this.config.maxSizeBytes) {
+            return
+        }
         try {
             const info = await stat(this.config.logPath).catch((err: unknown) => {
                 if (nodeErrorCode(err) !== 'ENOENT') {
@@ -416,6 +403,7 @@ export class AuditLogger {
                 }
                 return null
             })
+            this.approxSizeBytes = info?.size ?? 0
             if (!info || info.size < this.config.maxSizeBytes) return
 
             // Cascade rename from .4 to .5, .3 to .4, etc. to keep 5 backups
@@ -433,6 +421,7 @@ export class AuditLogger {
             // Rename current directly to .1 to avoid a crash window where data is left in a .tmp file
             const rotatedPath = `${this.config.logPath}.1`
             await rename(this.config.logPath, rotatedPath)
+            this.approxSizeBytes = 0
         } catch (err) {
             // Rotation failure must not block logging
             const message = err instanceof Error ? err.message : String(err)

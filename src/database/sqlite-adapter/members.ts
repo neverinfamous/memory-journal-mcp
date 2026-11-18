@@ -38,11 +38,21 @@ export class MembersManager {
                 throw new QueryError(`Failed to add team member: Member already exists (${author})`)
             }
 
-            this.db.run(
-                `INSERT INTO team_members (author, role, added_by, display_name)
-                 VALUES (?, ?, ?, ?)`,
-                [author, role, addedBy ?? null, displayName ?? null]
-            )
+            const nativeDb = this.db.getNativeDb?.()
+            if (nativeDb !== undefined) {
+                nativeDb
+                    .prepare(
+                        `INSERT INTO team_members (author, role, added_by, display_name)
+                         VALUES (?, ?, ?, ?)`
+                    )
+                    .run(author, role, addedBy ?? null, displayName ?? null)
+            } else {
+                this.db.run(
+                    `INSERT INTO team_members (author, role, added_by, display_name)
+                     VALUES (?, ?, ?, ?)`,
+                    [author, role, addedBy ?? null, displayName ?? null]
+                )
+            }
 
             this.rbacActiveCache = true
 
@@ -61,6 +71,15 @@ export class MembersManager {
 
     removeMember(author: string): boolean {
         try {
+            const nativeDb = this.db.getNativeDb?.()
+            if (nativeDb !== undefined) {
+                const info = nativeDb
+                    .prepare(`DELETE FROM team_members WHERE author = ? COLLATE NOCASE`)
+                    .run(author)
+                if (info.changes === 0) return false
+                this.rbacActiveCache = null
+                return true
+            }
             const existing = this.getMember(author)
             if (existing === null) {
                 return false
@@ -79,12 +98,15 @@ export class MembersManager {
 
     updateRole(author: string, newRole: TeamRole): TeamMember | null {
         try {
-            this.db.run(
-                `UPDATE team_members 
+            const sql = `UPDATE team_members 
                  SET role = ?, updated_at = datetime('now') 
-                 WHERE author = ? COLLATE NOCASE`,
-                [newRole, author]
-            )
+                 WHERE author = ? COLLATE NOCASE`
+            const nativeDb = this.db.getNativeDb?.()
+            if (nativeDb !== undefined) {
+                nativeDb.prepare(sql).run(newRole, author)
+            } else {
+                this.db.run(sql, [newRole, author])
+            }
             return this.getMember(author)
         } catch (error) {
             if (error instanceof Error) {
@@ -155,7 +177,13 @@ export class MembersManager {
 
     getMemberCount(): number {
         try {
-            const results = this.db.exec(`SELECT COUNT(*) as count FROM team_members`)
+            const sql = `SELECT COUNT(*) as count FROM team_members`
+            const nativeDb = this.db.getNativeDb?.()
+            if (nativeDb !== undefined) {
+                const row = nativeDb.prepare(sql).get() as { count?: unknown } | undefined
+                return typeof row?.count === 'number' ? row.count : 0
+            }
+            const results = this.db.exec(sql)
             const row = getSingleRow(results)
             return typeof row?.['count'] === 'number' ? row['count'] : 0
         } catch (error) {

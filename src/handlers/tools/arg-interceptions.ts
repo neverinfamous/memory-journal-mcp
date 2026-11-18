@@ -11,7 +11,7 @@ import type {
     ProjectRegistryEntry,
 } from '../../types/index.js'
 import { ResourceNotFoundError } from '../../types/errors.js'
-import { wrapWithMetrics } from '../../observability/index.js'
+import { invalidateSerializedPayload, wrapWithMetrics } from '../../observability/index.js'
 import { requestContextStorage, getRequestContext } from '../../utils/request-context.js'
 import { applyArgInterceptions as applyCodeModeArgInterceptions } from '../../codemode/param-normalizer.js'
 import {
@@ -54,10 +54,9 @@ const projectNumberToNameCache = new WeakMap<
     Map<number, string>
 >()
 
-function getProjectNameByNumber(
-    registry: Record<string, ProjectRegistryEntry>,
-    projectNumber: number
-): string | undefined {
+function getReverseProjectMap(
+    registry: Record<string, ProjectRegistryEntry>
+): Map<number, string> {
     let reverseMap = projectNumberToNameCache.get(registry)
     if (reverseMap === undefined) {
         reverseMap = new Map<number, string>()
@@ -68,33 +67,33 @@ function getProjectNameByNumber(
         }
         projectNumberToNameCache.set(registry, reverseMap)
     }
-    return reverseMap.get(projectNumber)
+    return reverseMap
 }
 
-/**
- * Inject resolved project names from the project registry into tool responses.
- */
-export function injectProjectNames(
+const projectNamesInjected = new WeakSet()
+
+function injectProjectNamesRecursive(
     obj: unknown,
-    registry?: Record<string, ProjectRegistryEntry>,
-    depth = 0,
-    seen = new WeakSet()
-): void {
-    if (
-        depth > 10 ||
-        obj === undefined ||
-        obj === null ||
-        typeof obj !== 'object' ||
-        registry === undefined
-    ) {
-        return
+    reverseMap: ReadonlyMap<number, string>,
+    depth: number,
+    seen: WeakSet<object>
+): boolean {
+    if (depth > 10 || obj === undefined || obj === null || typeof obj !== 'object') {
+        return false
     }
-    if (seen.has(obj)) return
+    if (seen.has(obj)) return false
     seen.add(obj)
 
+    let mutated = false
     if (Array.isArray(obj)) {
-        obj.forEach((item) => injectProjectNames(item, registry, depth + 1, seen))
-        return
+        for (const item of obj as unknown[]) {
+            if (typeof item === 'object' && item !== null) {
+                if (injectProjectNamesRecursive(item, reverseMap, depth + 1, seen)) {
+                    mutated = true
+                }
+            }
+        }
+        return mutated
     }
 
     const record = obj as Record<string, unknown>
@@ -106,15 +105,47 @@ export function injectProjectNames(
               : undefined
 
     if (pNum !== undefined && typeof record['projectName'] === 'undefined') {
-        const projectName = getProjectNameByNumber(registry, pNum)
+        const projectName = reverseMap.get(pNum)
         if (projectName !== undefined) {
             record['projectName'] = projectName
+            mutated = true
         }
     }
     for (const key of Object.keys(record)) {
-        if (typeof record[key] === 'object' && record[key] !== null) {
-            injectProjectNames(record[key], registry, depth + 1, seen)
+        const child = record[key]
+        if (typeof child === 'object' && child !== null) {
+            if (injectProjectNamesRecursive(child, reverseMap, depth + 1, seen)) {
+                mutated = true
+            }
         }
+    }
+    return mutated
+}
+
+/**
+ * Inject resolved project names from the project registry into tool responses.
+ */
+export function injectProjectNames(
+    obj: unknown,
+    registry?: Record<string, ProjectRegistryEntry>,
+    depth = 0,
+    seen = new WeakSet()
+): void {
+    if (registry === undefined || obj === undefined || obj === null || typeof obj !== 'object') {
+        return
+    }
+    if (depth === 0 && projectNamesInjected.has(obj)) {
+        return
+    }
+    const reverseMap = getReverseProjectMap(registry)
+    if (reverseMap.size > 0) {
+        const mutated = injectProjectNamesRecursive(obj, reverseMap, depth, seen)
+        if (mutated) {
+            invalidateSerializedPayload(obj)
+        }
+    }
+    if (depth === 0) {
+        projectNamesInjected.add(obj)
     }
 }
 
@@ -199,15 +230,16 @@ export function wrapToolHandlerWithInterceptors(
     handler: (params: unknown) => unknown,
     config?: ToolHandlerConfig
 ): (args: Record<string, unknown>) => Promise<unknown> {
+    const innerHandler = (args: Record<string, unknown>): Promise<unknown> =>
+        Promise.resolve(handler(args)).then((res) => {
+            injectProjectNames(res, config?.projectRegistry)
+            return res
+        })
     const metricsInstance = config?.runtime?.metrics
     const metricsWrapped =
         metricsInstance !== undefined
-            ? wrapWithMetrics(
-                  toolName,
-                  (args: Record<string, unknown>) => Promise.resolve(handler(args)),
-                  metricsInstance
-              )
-            : (args: Record<string, unknown>) => Promise.resolve(handler(args))
+            ? wrapWithMetrics(toolName, innerHandler, metricsInstance)
+            : innerHandler
 
     const interceptor =
         config?.runtime !== undefined && config.runtime !== null

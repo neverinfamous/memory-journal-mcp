@@ -179,6 +179,15 @@ export async function resolveValidatedRestorePath(
 
 /** Query the number of active (non-deleted) journal entries. */
 export function countActiveEntries(ctx: IDatabaseConnection): number {
+    const nativeDb = ctx.getNativeDb?.()
+    if (nativeDb !== undefined) {
+        const row = nativeDb
+            .prepare('SELECT COUNT(*) as c FROM memory_journal WHERE deleted_at IS NULL')
+            .get() as { c?: unknown } | undefined
+        const raw = row?.c
+        if (typeof raw === 'number') return raw
+        return typeof raw === 'bigint' ? Number(raw) : 0
+    }
     const result = ctx.exec('SELECT COUNT(*) FROM memory_journal WHERE deleted_at IS NULL')
     const raw = result[0]?.values[0]?.[0]
     if (typeof raw === 'number') return raw
@@ -250,6 +259,18 @@ export async function applySwappedDatabase(
 
     await ctx.initialize()
 
+    const nativeDb = ctx.getNativeDb?.()
+    if (nativeDb !== undefined) {
+        const integrityRow = nativeDb.prepare('PRAGMA integrity_check').get() as
+            | Record<string, unknown>
+            | undefined
+        const integrityVal =
+            integrityRow !== undefined ? Object.values(integrityRow)[0] : undefined
+        if (integrityVal !== 'ok') {
+            throw new Error(`Integrity check failed: ${String(integrityVal)}`)
+        }
+        return
+    }
     const integrityResult = ctx.exec('PRAGMA integrity_check')
     if (integrityResult[0]?.values[0]?.[0] !== 'ok') {
         throw new Error(

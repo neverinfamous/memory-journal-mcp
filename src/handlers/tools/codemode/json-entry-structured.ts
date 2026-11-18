@@ -30,6 +30,16 @@ interface PayloadSignals {
     hasOp: boolean
 }
 
+/** Recover executable JS directly from an already-parsed structured record. */
+export function recoverStructuredRecord(parsed: Record<string, unknown>): string | null {
+    const target = unwrapPayloadTarget(parsed)
+    const toolCall = recoverNamedToolCall(target, parsed)
+    if (toolCall !== null) return toolCall
+    const searchCall = recoverSearchCall(target, parsed)
+    if (searchCall !== null) return searchCall
+    return recoverEntryMutation(parsed, target)
+}
+
 export function recoverStructuredJsonCode(code: string): string | null {
     if (!code || typeof code !== 'string') return null
     const trimmed = code.trim()
@@ -43,12 +53,7 @@ export function recoverStructuredJsonCode(code: string): string | null {
     }
     if (!isRecord(parsed)) return null
 
-    const target = unwrapPayloadTarget(parsed)
-    const toolCall = recoverNamedToolCall(target, parsed)
-    if (toolCall !== null) return toolCall
-    const searchCall = recoverSearchCall(target, parsed)
-    if (searchCall !== null) return searchCall
-    return recoverEntryMutation(parsed, target)
+    return recoverStructuredRecord(parsed)
 }
 
 function unwrapPayloadTarget(parsed: Record<string, unknown>): Record<string, unknown> {

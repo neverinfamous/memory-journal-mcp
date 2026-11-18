@@ -6,7 +6,7 @@
  */
 
 import type { z } from 'zod'
-import type { ToolContext } from '../../../../types/index.js'
+import type { JournalEntry, ToolContext } from '../../../../types/index.js'
 import { AuthorizationError } from '../../../../types/errors.js'
 import { enforceAccessBoundary } from '../../../../auth/validation.js'
 import type { TeamRole } from '../../../../database/core/interfaces.js'
@@ -17,6 +17,12 @@ import type { TeamBatchDeleteEntriesSchema, TeamBatchUpdateEntriesSchema } from 
 import { createBatchProgressReporter, sendProgress } from '../../../../utils/progress-utils.js'
 import { logger } from '../../../../utils/logger.js'
 import { resolveAuthenticatedAuthor } from '../../../../utils/security-utils.js'
+import {
+    buildTeamPermissionDeniedError,
+    createScopedTeamRoleLookup,
+    prefetchTeamEntriesMap,
+    validateTeamEntryWorkspaceScope,
+} from './batch-prefetch-helpers.js'
 
 export type TeamDbInstance = NonNullable<ToolContext['teamDb']>
 type TeamBatchUpdateInput = z.infer<typeof TeamBatchUpdateEntriesSchema>['updates'][number]
@@ -59,26 +65,6 @@ function buildSingleTeamUpdateItem(
     }
 }
 
-function buildTeamPermissionDeniedError(
-    err: unknown,
-    author: string | null,
-    action: string,
-    targetLabel: string,
-    suggestionVerb: string
-): Record<string, unknown> {
-    return {
-        success: false,
-        error:
-            err instanceof Error
-                ? err.message
-                : `Permission Denied: Only the original author ("${author ?? 'none recorded'}") or a team admin can ${action} ${targetLabel}.`,
-        code: 'PERMISSION_DENIED',
-        category: 'auth',
-        suggestion: `You can only ${suggestionVerb} entries that you authored.`,
-        recoverable: false,
-    }
-}
-
 interface BatchUpdateSharedCtx {
     teamDb: TeamDbInstance
     rootWorkspaceId: string | undefined
@@ -86,8 +72,9 @@ interface BatchUpdateSharedCtx {
     context: ToolContext
     currentUser: string
     preFetchedAuthors: Map<number, string | null> | null
+    prefetchedEntries: Map<number, JournalEntry> | null
+    resolveRole: (workspaceId: string | undefined) => TeamRole | null
     rbacActive: boolean
-    defaultRole: 'admin' | 'member' | 'viewer' | 'denied'
 }
 
 function validateSingleTeamBatchUpdate(
@@ -104,14 +91,22 @@ function validateSingleTeamBatchUpdate(
         context,
         currentUser,
         preFetchedAuthors,
+        prefetchedEntries,
+        resolveRole,
         rbacActive,
-        defaultRole,
     } = shared
     const explicitWs = u.workspace_id ?? rootWorkspaceId
     const explicitPn = u.project_number ?? rootProjectNumber
     // [INVARIANT] Never infer an existing entry's workspace from content/tags; explicit 'default' is preserved and '*' rejected.
     const wsId = resolveWriteWorkspaceId(explicitWs, explicitPn, context.config)
-    const existing = teamDb.getEntryById(u.entry_id, wsId)
+    const rawExisting =
+        prefetchedEntries !== null
+            ? (prefetchedEntries.get(u.entry_id) ?? null)
+            : teamDb.getEntryById(u.entry_id, wsId)
+    const existing =
+        prefetchedEntries !== null
+            ? validateTeamEntryWorkspaceScope(rawExisting, wsId)
+            : rawExisting
     if (existing !== null && existing !== undefined && explicitPn !== undefined && existing.projectNumber !== explicitPn) {
         return { status: 'not_found', entryId: u.entry_id }
     }
@@ -132,9 +127,7 @@ function validateSingleTeamBatchUpdate(
     if (!existing) return { status: 'not_found', entryId: u.entry_id }
 
     const effectiveWs = existing.workspaceId ?? wsId
-    const callerRole: TeamRole | null = rbacActive
-        ? resolveScopedTeamRole(teamDb, currentUser, defaultRole, effectiveWs)
-        : null
+    const callerRole = resolveRole(effectiveWs)
     const author = preFetchedAuthors
         ? (preFetchedAuthors.get(u.entry_id) ?? null)
         : fetchAuthor(teamDb, u.entry_id)
@@ -169,6 +162,8 @@ export function buildValidatedTeamBatchUpdates(
     if (rootWorkspaceId !== undefined) {
         resolveWriteWorkspaceId(rootWorkspaceId, rootProjectNumber, context.config)
     }
+    const rbacActive = typeof teamDb.isTeamRbacActive === 'function' && teamDb.isTeamRbacActive()
+    const defaultRole = context.config?.teamDefaultRole ?? 'denied'
     const shared: BatchUpdateSharedCtx = {
         teamDb,
         rootWorkspaceId,
@@ -176,8 +171,13 @@ export function buildValidatedTeamBatchUpdates(
         context,
         currentUser,
         preFetchedAuthors,
-        rbacActive: typeof teamDb.isTeamRbacActive === 'function' && teamDb.isTeamRbacActive(),
-        defaultRole: context.config?.teamDefaultRole ?? 'denied',
+        prefetchedEntries: prefetchTeamEntriesMap(
+            teamDb,
+            rawUpdates.map((u) => u.entry_id),
+            '*'
+        ),
+        resolveRole: createScopedTeamRoleLookup(teamDb, currentUser, defaultRole, rbacActive),
+        rbacActive,
     }
 
     for (const u of rawUpdates) {

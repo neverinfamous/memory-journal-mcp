@@ -1,7 +1,10 @@
-import { execFileSync } from 'node:child_process'
+import { execFile } from 'node:child_process'
 import * as fs from 'node:fs'
 import * as path from 'node:path'
+import { promisify } from 'node:util'
 import { z } from 'zod'
+
+const execFileAsync = promisify(execFile)
 import type { AnchorStatus, ToolContext, ToolHandlerConfig } from '../../types/index.js'
 import type { IDatabaseAdapter } from '../../database/core/interfaces.js'
 import { mcpLogger } from '../../utils/mcp-logger.js'
@@ -36,19 +39,29 @@ function stderrText(err: unknown): string {
 }
 
 /** `git describe` with no tags. Other describe failures must propagate. */
-export function readLatestGitTag(cwd: string): string | null {
+export async function readLatestGitTag(cwd: string): Promise<string | null> {
     try {
-        const described = execFileSync('git', ['describe', '--tags', '--abbrev=0'], {
+        const { stdout } = await execFileAsync('git', ['describe', '--tags', '--abbrev=0'], {
             cwd,
             encoding: 'utf-8',
             windowsHide: true,
             timeout: 5000,
-        }).trim()
+        })
+        const described = stdout.trim()
         return described === '' ? null : described
     } catch (err: unknown) {
         const message = err instanceof Error ? err.message : String(err)
         if (`${message}\n${stderrText(err)}`.includes('No names found')) return null
         throw err
+    }
+}
+
+async function pathExistsAsync(targetPath: string): Promise<boolean> {
+    try {
+        await fs.promises.access(targetPath)
+        return true
+    } catch {
+        return false
     }
 }
 
@@ -87,7 +100,7 @@ export async function evaluateAnchorStaleness(
             throw new Error(`Path traversal detected: ${anchor.anchorPath}`)
         }
 
-        const isDeleted = !fs.existsSync(fullPath)
+        const isDeleted = !(await pathExistsAsync(fullPath))
         let commitsSince = 0
         let newStatus: AnchorStatus = anchor.status
 
@@ -238,7 +251,7 @@ export async function evaluateWorkspaceAnchors(options: {
     const { db, wsId, rawWs, rawProj, resolvedEntryId, registry, maxRecentEntries, countCommitsSince } = options
     const canonicalWs = findCanonicalRegistryKey(wsId, registry) ?? wsId
     const registryPath = registry?.[canonicalWs]?.path
-    if (registryPath === undefined || registryPath.length === 0 || !fs.existsSync(registryPath)) {
+    if (registryPath === undefined || registryPath.length === 0 || !(await pathExistsAsync(registryPath))) {
         if (rawWs === '*') return { rows: [], skipped: true }
         throw new ValidationError(
             registryPath !== undefined && registryPath.length > 0
@@ -272,24 +285,36 @@ export async function evaluateWorkspaceAnchors(options: {
         }
         return pending
     }
-    const rows: StalenessCheckRow[] = []
+    const anchorJobs: {
+        anchor: { id?: number; anchorPath: string; status: AnchorStatus }
+        entryTimestamp: string
+    }[] = []
     for (const target of targets) {
-        const anchors = anchorsByEntry !== undefined
-            ? (anchorsByEntry.get(target.id) ?? [])
-            : db.getAnchorsByEntryId(target.id, wsId)
-        const entryRows = await Promise.all(
-            anchors.map((anchor) =>
+        const anchors =
+            anchorsByEntry !== undefined
+                ? (anchorsByEntry.get(target.id) ?? [])
+                : db.getAnchorsByEntryId(target.id, wsId)
+        for (const anchor of anchors) {
+            anchorJobs.push({ anchor, entryTimestamp: target.timestamp })
+        }
+    }
+    const rows: StalenessCheckRow[] = []
+    const STALENESS_CONCURRENCY = 8
+    for (let i = 0; i < anchorJobs.length; i += STALENESS_CONCURRENCY) {
+        const chunk = anchorJobs.slice(i, i + STALENESS_CONCURRENCY)
+        const chunkRows = await Promise.all(
+            chunk.map(({ anchor, entryTimestamp }) =>
                 evaluateAnchorStaleness(
                     db,
                     anchor,
-                    target.timestamp,
+                    entryTimestamp,
                     registryPath,
                     cachedCountCommits,
                     wsId
                 )
             )
         )
-        rows.push(...entryRows)
+        rows.push(...chunkRows)
     }
     return { rows, skipped: false }
 }

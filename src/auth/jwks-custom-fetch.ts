@@ -156,7 +156,7 @@ export function createPinnedJwksFetch(): typeof fetch {
                 : input instanceof URL
                   ? input.href
                   : input.url
-        await assertSafeJwksUri(urlStr)
+        const preResolved = await assertSafeJwksUri(urlStr)
 
         // Preserve mocked `globalThis.fetch` in unit tests without bypassing assertSafeJwksUri.
         if (globalThis.fetch !== NATIVE_FETCH) {
@@ -179,10 +179,8 @@ export function createPinnedJwksFetch(): typeof fetch {
         if (parsedUrl.protocol !== 'https:') {
             throw new Error(`JWKS URI must use HTTPS for non-loopback hosts: ${urlStr}`)
         }
-        const resolvedRecords = await resolveSafePublicDnsAddresses(
-            parsedUrl.hostname.toLowerCase(),
-            'JWKS'
-        )
+        const resolvedRecords =
+            preResolved ?? (await resolveSafePublicDnsAddresses(parsedUrl.hostname.toLowerCase(), 'JWKS'))
         return fetchPinnedHttpsJwks(urlStr, parsedUrl, resolvedRecords, init)
     }
 }

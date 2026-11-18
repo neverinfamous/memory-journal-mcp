@@ -7,6 +7,7 @@
 
 import type { ToolGroup, MetaGroup, ToolFilterRule, ToolFilterConfig } from '../types/index.js'
 import { TOOL_GROUPS, META_GROUPS } from './tool-constants.js'
+import { getCachedReadonlyFilterState } from './readonly-filter-cache.js'
 import { logger } from '../utils/logger.js'
 
 // Re-export ToolFilterConfig from types
@@ -20,27 +21,26 @@ export { TOOL_GROUPS, META_GROUPS }
  */
 export const ALWAYS_ENABLED_TOOLS = ['update_configuration', 'mj_execute_code'] as const
 
+const ALL_TOOL_NAMES: readonly string[] = Object.values(TOOL_GROUPS).flat()
+const TOOL_TO_GROUP = new Map<string, ToolGroup>()
+for (const [group, tools] of Object.entries(TOOL_GROUPS) as [ToolGroup, string[]][]) {
+    for (const t of tools) {
+        TOOL_TO_GROUP.set(t, group)
+    }
+}
+
 /**
  * Get all tool names across all groups
  */
 export function getAllToolNames(): string[] {
-    const allTools: string[] = []
-    for (const tools of Object.values(TOOL_GROUPS)) {
-        allTools.push(...tools)
-    }
-    return allTools
+    return ALL_TOOL_NAMES.slice()
 }
 
 /**
  * Get the group for a specific tool
  */
 export function getToolGroup(toolName: string): ToolGroup | undefined {
-    for (const [group, tools] of Object.entries(TOOL_GROUPS)) {
-        if (tools.includes(toolName)) {
-            return group as ToolGroup
-        }
-    }
-    return undefined
+    return TOOL_TO_GROUP.get(toolName)
 }
 
 /**
@@ -279,26 +279,14 @@ export function getFilterSummary(filterConfig: ToolFilterConfig): string {
 }
 
 const READONLY_REGISTRATION_EXEMPT = new Set<string>(ALWAYS_ENABLED_TOOLS)
+const READONLY_FILTER_OPS = { applyInclude, applyExclude }
 
 /**
  * True when the active filter enforces read-only mode (via `readonly` or `-write`
  * without a subsequent `-readonly`, `+write`, or `write` override).
  */
 export function isReadonlyMetaActive(raw: string | undefined): boolean {
-    if (raw === undefined || raw === '') return false
-    const tokens = raw
-        .split(',')
-        .map((part) => part.trim())
-        .filter((part) => part.length > 0)
-    let active = false
-    for (const token of tokens) {
-        if (token === 'readonly' || token === '+readonly' || token === '-write') {
-            active = true
-        } else if (token === '-readonly' || token === 'write' || token === '+write') {
-            active = false
-        }
-    }
-    return active
+    return getCachedReadonlyFilterState(raw, READONLY_FILTER_OPS).active
 }
 
 /**
@@ -306,35 +294,7 @@ export function isReadonlyMetaActive(raw: string | undefined): boolean {
  * token, taking subsequent `-<target>` exclusions into account.
  */
 export function getPostReadonlyIncludedTools(raw: string | undefined): Set<string> {
-    const postIncluded = new Set<string>()
-    if (raw === undefined || raw === '') return postIncluded
-    const tokens = raw
-        .split(',')
-        .map((part) => part.trim())
-        .filter((part) => part.length > 0)
-    let lastReadonlyIdx = -1
-    for (let i = 0; i < tokens.length; i++) {
-        const token = tokens[i]
-        if (token === 'readonly' || token === '+readonly' || token === '-write') {
-            lastReadonlyIdx = i
-        } else if (token === '-readonly' || token === 'write' || token === '+write') {
-            lastReadonlyIdx = -1
-        }
-    }
-    if (lastReadonlyIdx === -1) return postIncluded
-
-    let current = postIncluded
-    for (let i = lastReadonlyIdx + 1; i < tokens.length; i++) {
-        const token = tokens[i]
-        if (!token) continue
-        if (token.startsWith('-')) {
-            applyExclude(current, token.slice(1))
-        } else {
-            const name = token.startsWith('+') ? token.slice(1) : token
-            current = applyInclude(current, name)
-        }
-    }
-    return current
+    return new Set(getCachedReadonlyFilterState(raw, READONLY_FILTER_OPS).postIncluded)
 }
 
 /**
@@ -348,10 +308,11 @@ export function isToolVisibleForFilter(
     readOnlyHint: boolean | undefined,
     raw: string | undefined
 ): boolean {
-    if (!isReadonlyMetaActive(raw)) return true
+    const state = getCachedReadonlyFilterState(raw, READONLY_FILTER_OPS)
+    if (!state.active) return true
     if (READONLY_REGISTRATION_EXEMPT.has(name)) return true
     if (readOnlyHint === true) return true
-    return getPostReadonlyIncludedTools(raw).has(name)
+    return state.postIncluded.has(name)
 }
 
 const READONLY_ADMIN_TOOLS = new Set<string>([

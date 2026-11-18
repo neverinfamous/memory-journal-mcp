@@ -22,8 +22,24 @@ import {
 const MAX_BACKUP_NAME_LENGTH = 50
 const WIN_RESERVED_BACKUP_RE = /^(?:CON|PRN|AUX|NUL|COM[1-9]|LPT[1-9])(?:\..*)?$/i
 
+interface BackupEntry {
+    filename: string
+    path: string
+    sizeBytes: number
+    createdAt: string
+}
+
 export class BackupManager {
+    private cachedBackupsDir: string | null = null
+    private cachedBackupsDirMtimeNs = -1n
+    private cachedBackups: BackupEntry[] | null = null
+
     constructor(private ctx: IDatabaseConnection) {}
+
+    private invalidateBackupsCache(): void {
+        this.cachedBackups = null
+        this.cachedBackupsDirMtimeNs = -1n
+    }
 
     async exportToFile(
         backupName?: string
@@ -64,6 +80,7 @@ export class BackupManager {
         const backupPath = path.join(backupsDir, filename)
 
         await writeVerifiedBackupFile(this.ctx, backupPath)
+        this.invalidateBackupsCache()
         const stats = await fs.promises.stat(backupPath)
 
         logger.info('Backup created', {
@@ -75,19 +92,29 @@ export class BackupManager {
         return { filename, path: backupPath, sizeBytes: stats.size }
     }
 
-    listBackups(): { filename: string; path: string; sizeBytes: number; createdAt: string }[] {
+    listBackups(): BackupEntry[] {
         const backupsDir = this.ctx.getBackupsDir()
-
-        if (!fs.existsSync(backupsDir)) {
+        const dirStats = fs.statSync(backupsDir, { bigint: true, throwIfNoEntry: false })
+        if (dirStats === undefined) {
+            this.invalidateBackupsCache()
             return []
         }
 
-        const files = fs.readdirSync(backupsDir)
-        const backups: { filename: string; path: string; sizeBytes: number; createdAt: string }[] =
-            []
+        if (
+            this.cachedBackups !== null &&
+            this.cachedBackupsDir === backupsDir &&
+            this.cachedBackupsDirMtimeNs === dirStats.mtimeNs
+        ) {
+            return this.cachedBackups.slice()
+        }
 
-        for (const filename of files) {
+        const dirents = fs.readdirSync(backupsDir, { withFileTypes: true })
+        const backups: BackupEntry[] = []
+
+        for (const dirent of dirents) {
+            const filename = dirent.name
             if (!/\.db$/i.test(filename)) continue
+            if (!dirent.isFile() && !dirent.isSymbolicLink()) continue
 
             const filePath = path.join(backupsDir, filename)
             try {
@@ -111,7 +138,10 @@ export class BackupManager {
         }
 
         backups.sort((a, b) => (b.createdAt > a.createdAt ? 1 : b.createdAt < a.createdAt ? -1 : 0))
-        return backups
+        this.cachedBackupsDir = backupsDir
+        this.cachedBackupsDirMtimeNs = dirStats.mtimeNs
+        this.cachedBackups = backups
+        return backups.slice()
     }
 
     deleteOldBackups(keepCount: number): { deleted: string[]; failed: string[]; kept: number } {
@@ -139,6 +169,9 @@ export class BackupManager {
                 })
                 failed.push(backup.filename)
             }
+        }
+        if (deleted.length > 0) {
+            this.invalidateBackupsCache()
         }
 
         logger.info('Old backups cleaned up', {
@@ -170,6 +203,7 @@ export class BackupManager {
             assertWalCheckpointComplete(this.ctx)
             this.ctx.closeDbBeforeRestore()
             await this.swapDatabase(backupPath)
+            this.invalidateBackupsCache()
             const newEntryCount = countActiveEntries(this.ctx)
 
             logger.info('Database restored from backup', {

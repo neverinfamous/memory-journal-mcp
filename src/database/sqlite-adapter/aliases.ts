@@ -1,7 +1,7 @@
 import { QueryError, ValidationError } from '../../types/errors.js'
 import { effectiveWorkspace } from '../workspace-scope.js'
 import { isMissingTableError } from './schema-errors.js'
-import { getSingleRow } from './row-helpers.js'
+import { bucketInParams, getSingleRow } from './row-helpers.js'
 import type { IDatabaseConnection, AuthorAlias } from '../core/interfaces.js'
 
 export class AliasManager {
@@ -33,6 +33,25 @@ export class AliasManager {
             }
 
             const storedWorkspace = effectiveWorkspace(workspaceId)
+            const nativeDb = this.db.getNativeDb?.()
+            if (nativeDb !== undefined) {
+                nativeDb
+                    .prepare(
+                        `INSERT INTO author_aliases (alias, canonical_author, created_by, workspace_id)
+                         VALUES (?, ?, ?, ?)`
+                    )
+                    .run(alias, canonicalAuthor, createdBy ?? null, storedWorkspace)
+                const row = nativeDb
+                    .prepare(
+                        `SELECT * FROM author_aliases WHERE alias = ? COLLATE NOCASE AND workspace_id = ?`
+                    )
+                    .get(alias, storedWorkspace) as Record<string, unknown> | undefined
+                if (!row) {
+                    throw new QueryError(`Failed to retrieve newly added alias: ${alias}`)
+                }
+                return this.mapToAuthorAlias(row)
+            }
+
             this.db.run(
                 `INSERT INTO author_aliases (alias, canonical_author, created_by, workspace_id)
                  VALUES (?, ?, ?, ?)`,
@@ -63,18 +82,23 @@ export class AliasManager {
         try {
             const scopeId = effectiveWorkspace(workspaceId)
             const scoped = scopeId !== '*'
-            const selectSql = scoped
-                ? `SELECT id FROM author_aliases WHERE alias = ? COLLATE NOCASE AND workspace_id = ?`
-                : `SELECT id FROM author_aliases WHERE alias = ? COLLATE NOCASE`
-            const selectParams = scoped ? [alias, scopeId] : [alias]
-            const results = this.db.exec(selectSql, selectParams)
-            const row = getSingleRow(results)
-            if (!row) return false
-
             const deleteSql = scoped
                 ? `DELETE FROM author_aliases WHERE alias = ? COLLATE NOCASE AND workspace_id = ?`
                 : `DELETE FROM author_aliases WHERE alias = ? COLLATE NOCASE`
-            this.db.run(deleteSql, selectParams)
+            const deleteParams = scoped ? [alias, scopeId] : [alias]
+            const nativeDb = this.db.getNativeDb?.()
+            if (nativeDb !== undefined) {
+                return nativeDb.prepare(deleteSql).run(...deleteParams).changes > 0
+            }
+
+            const selectSql = scoped
+                ? `SELECT id FROM author_aliases WHERE alias = ? COLLATE NOCASE AND workspace_id = ?`
+                : `SELECT id FROM author_aliases WHERE alias = ? COLLATE NOCASE`
+            const results = this.db.exec(selectSql, deleteParams)
+            const row = getSingleRow(results)
+            if (!row) return false
+
+            this.db.run(deleteSql, deleteParams)
             return true
         } catch (error) {
             if (error instanceof Error) {
@@ -142,8 +166,8 @@ export class AliasManager {
             const scopeId = effectiveWorkspace(workspaceId)
             const scoped = scopeId !== '*'
             const sql = scoped
-                ? `SELECT canonical_author FROM author_aliases WHERE alias = ? COLLATE NOCASE AND (workspace_id IS NULL OR workspace_id = ?) ORDER BY workspace_id IS NULL ASC LIMIT 1`
-                : `SELECT canonical_author FROM author_aliases WHERE alias = ? COLLATE NOCASE ORDER BY workspace_id IS NULL ASC LIMIT 1`
+                ? `SELECT canonical_author FROM author_aliases WHERE alias = ? COLLATE NOCASE AND (workspace_id IS NULL OR workspace_id = ?) ORDER BY workspace_id DESC LIMIT 1`
+                : `SELECT canonical_author FROM author_aliases WHERE alias = ? COLLATE NOCASE ORDER BY workspace_id DESC LIMIT 1`
             const params = scoped ? [rawAuthor, scopeId] : [rawAuthor]
             const nativeDb = this.db.getNativeDb?.()
             if (nativeDb !== undefined) {
@@ -184,13 +208,11 @@ export class AliasManager {
             const scoped = scopeId !== '*'
             const resolvedByLower = new Map<string, string>()
             const nativeDb = this.db.getNativeDb?.()
-            const CHUNK_SIZE = 400
-            for (let i = 0; i < rawAuthors.length; i += CHUNK_SIZE) {
-                const chunk = rawAuthors.slice(i, i + CHUNK_SIZE)
-                const placeholders = chunk.map(() => '?').join(',')
+            for (const { placeholders, params: chunk } of bucketInParams(rawAuthors)) {
+                // NULL sorts first in ASC so concrete workspace rows overwrite global aliases in the loop below.
                 const sql = scoped
-                    ? `SELECT alias, canonical_author FROM author_aliases WHERE alias IN (${placeholders}) COLLATE NOCASE AND (workspace_id IS NULL OR workspace_id = ?) ORDER BY workspace_id IS NULL DESC`
-                    : `SELECT alias, canonical_author FROM author_aliases WHERE alias IN (${placeholders}) COLLATE NOCASE ORDER BY workspace_id IS NULL DESC`
+                    ? `SELECT alias, canonical_author FROM author_aliases WHERE alias IN (${placeholders}) COLLATE NOCASE AND (workspace_id IS NULL OR workspace_id = ?) ORDER BY workspace_id ASC`
+                    : `SELECT alias, canonical_author FROM author_aliases WHERE alias IN (${placeholders}) COLLATE NOCASE ORDER BY workspace_id ASC`
                 const params = scoped ? [...chunk, scopeId] : chunk
                 if (nativeDb !== undefined) {
                     const rows = nativeDb.prepare(sql).all(...params) as {
@@ -254,7 +276,7 @@ export class AliasManager {
                        FROM author_aliases aa
                        WHERE aa.alias = memory_journal.author COLLATE NOCASE
                          AND (aa.workspace_id IS NULL OR aa.workspace_id = memory_journal.workspace_id)${aliasScopeClause}
-                       ORDER BY aa.workspace_id IS NULL ASC
+                       ORDER BY aa.workspace_id DESC
                        LIMIT 1
                    ) = ? COLLATE NOCASE`
             const updateParams: unknown[] = [
@@ -283,7 +305,7 @@ export class AliasManager {
                        FROM author_aliases aa
                        WHERE aa.alias = memory_journal.author COLLATE NOCASE
                          AND (aa.workspace_id IS NULL OR aa.workspace_id = memory_journal.workspace_id)${aliasScopeClause}
-                       ORDER BY aa.workspace_id IS NULL ASC
+                       ORDER BY aa.workspace_id DESC
                        LIMIT 1
                    ) = ? COLLATE NOCASE`,
                 countParams

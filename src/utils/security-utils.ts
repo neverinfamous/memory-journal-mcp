@@ -124,6 +124,9 @@ const TOKEN_PATTERNS = [
     /Basic\s+["']?[A-Za-z0-9._~+/#=-]+["']?/gi,
 ] as const
 
+const POTENTIAL_SECRET_RE =
+    /(?:gh[pousr]_|github_pat_|eyJ|xox[baprs]-|AKIA|ABIA|ACCA|ASIA|Authorization:|Bearer\s|Basic\s)/i
+
 /**
  * Sanitizes an error message by replacing any detected tokens with '[REDACTED]'.
  * This is a defense-in-depth measure for error logging paths.
@@ -132,6 +135,7 @@ const TOKEN_PATTERNS = [
  * @returns The sanitized message with tokens replaced
  */
 export function sanitizeErrorForLogging(message: string): string {
+    if (!POTENTIAL_SECRET_RE.test(message)) return message
     let sanitized = message
     for (const pattern of TOKEN_PATTERNS) {
         // Reset lastIndex for global regex patterns

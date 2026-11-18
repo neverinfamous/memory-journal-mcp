@@ -135,8 +135,12 @@ function resolveBatchCreateScope(
         }
     }
 
+    const effectiveConfig =
+        registry !== undefined && resolverConfig.projectRegistry === undefined
+            ? { ...resolverConfig, projectRegistry: registry }
+            : resolverConfig
     for (const entry of entries) {
-        resolveBatchCreateItemScope(entry, rawRootWs, rootProj, registry, resolverConfig)
+        resolveBatchCreateItemScope(entry, rawRootWs, rootProj, registry, effectiveConfig)
     }
 }
 

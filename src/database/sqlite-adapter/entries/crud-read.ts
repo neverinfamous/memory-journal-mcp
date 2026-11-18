@@ -25,11 +25,10 @@ export function getEntryById(
         return null
     }
 
-    const entry = rowToEntry(tagsMgr, row)
-    if (scopeId !== '*' && entry.workspaceId !== scopeId) {
+    if (scopeId !== '*' && row['workspaceId'] !== scopeId) {
         return null
     }
-    return entry
+    return rowToEntry(tagsMgr, row)
 }
 
 function fetchEntriesByIds(
@@ -108,11 +107,10 @@ export function getEntryByIdIncludeDeleted(
         return null
     }
 
-    const entry = rowToEntry(tagsMgr, row)
-    if (scopeId !== '*' && entry.workspaceId !== scopeId) {
+    if (scopeId !== '*' && row['workspaceId'] !== scopeId) {
         return null
     }
-    return entry
+    return rowToEntry(tagsMgr, row)
 }
 
 export function getActiveEntryCount(

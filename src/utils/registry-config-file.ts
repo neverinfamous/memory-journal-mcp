@@ -57,6 +57,16 @@ export function parseConfigObjectContent(configPath: string, raw: string): unkno
  */
 export function readCachedConfigObject(configPath: string): Record<string, unknown> | undefined {
     const resolved = path.resolve(configPath)
+    const preStat = fs.statSync(resolved, { throwIfNoEntry: false })
+    if (preStat === undefined) {
+        registryFileCache.delete(resolved)
+        return undefined
+    }
+    const preCached = registryFileCache.get(resolved)
+    if (preCached?.mtimeMs === preStat.mtimeMs && preCached.size === preStat.size) {
+        return preCached.parsed
+    }
+
     let fd: number
     try {
         fd = fs.openSync(resolved, 'r')

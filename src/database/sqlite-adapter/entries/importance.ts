@@ -21,9 +21,15 @@ export const RECENCY_WINDOW_DAYS = 90
 export const SIGNIFICANCE_TYPE_BASELINE = 0.5
 
 function buildStatsCteBody(seedCte?: { name: string; col: string }): string {
-    const seedRelFrom = seedCte ? `FROM ${seedCte.name} s JOIN relationships r ON r.from_entry_id = s.${seedCte.col}` : 'FROM relationships r'
-    const seedRelTo = seedCte ? `FROM ${seedCte.name} s JOIN relationships r ON r.to_entry_id = s.${seedCte.col}` : 'FROM relationships r'
-    const anchorFrom = seedCte ? `FROM ${seedCte.name} s JOIN entry_anchors ea ON ea.entry_id = s.${seedCte.col}` : 'FROM entry_anchors ea'
+    const seedRelFrom = seedCte
+        ? `FROM ${seedCte.name} s CROSS JOIN relationships r ON r.from_entry_id = s.${seedCte.col}`
+        : 'FROM relationships r'
+    const seedRelTo = seedCte
+        ? `FROM ${seedCte.name} s CROSS JOIN relationships r ON r.to_entry_id = s.${seedCte.col}`
+        : 'FROM relationships r'
+    const anchorFrom = seedCte
+        ? `FROM ${seedCte.name} s CROSS JOIN entry_anchors ea ON ea.entry_id = s.${seedCte.col}`
+        : 'FROM entry_anchors ea'
     return `
         rel_stats AS (
             SELECT entry_id,
@@ -73,13 +79,17 @@ export function buildImportanceCte(scopedToWorkspace = false): string {
 }
 
 /**
- * Build an FTS-scoped importance CTE so `rel_stats` and `anchor_stats` only scan
- * rows matching the FTS5 query (`fts_content MATCH ?`) instead of the full database.
+ * Build a materialized FTS-scoped importance CTE so `fts_content MATCH ?` runs once
+ * and `rel_stats`/`anchor_stats` only probe workspace-scoped matching entries.
  */
-export function buildScopedFtsImportanceCte(): string {
+export function buildScopedFtsImportanceCte(scopedWorkspace = false): string {
+    const wsFilter = scopedWorkspace ? ' AND mj.workspace_id = ?' : ''
     return `
-        fts_hits AS (
-            SELECT rowid AS entry_id FROM fts_content WHERE fts_content MATCH ?
+        fts_hits AS MATERIALIZED (
+            SELECT fts.rowid AS entry_id, fts.rank AS fts_rank
+            FROM fts_content fts
+            CROSS JOIN memory_journal mj ON mj.id = fts.rowid
+            WHERE fts_content MATCH ? AND mj.deleted_at IS NULL${wsFilter}
         ),${buildStatsCteBody({ name: 'fts_hits', col: 'entry_id' })}
     `
 }
@@ -168,13 +178,8 @@ export function calculateImportance(
         m.trust_score as trustScore,
         m.validation_status as validationStatus,
         m.timestamp,
-        (SELECT COUNT(*) FROM relationships r
-         WHERE (r.from_entry_id = ? AND EXISTS (SELECT 1 FROM memory_journal p WHERE p.id = r.to_entry_id AND p.deleted_at IS NULL))
-            OR (r.to_entry_id = ? AND EXISTS (SELECT 1 FROM memory_journal p WHERE p.id = r.from_entry_id AND p.deleted_at IS NULL))) AS rel_count,
-        (SELECT COUNT(*) FROM relationships r
-         WHERE ((r.from_entry_id = ? AND EXISTS (SELECT 1 FROM memory_journal p WHERE p.id = r.to_entry_id AND p.deleted_at IS NULL))
-            OR (r.to_entry_id = ? AND EXISTS (SELECT 1 FROM memory_journal p WHERE p.id = r.from_entry_id AND p.deleted_at IS NULL)))
-         AND r.relationship_type IN ('blocked_by', 'resolved', 'caused')) AS causal_count,
+        COALESCE(rel.rel_count, 0) AS rel_count,
+        COALESCE(rel.causal_count, 0) AS causal_count,
         (SELECT MIN(
             CASE status
                 WHEN 'invalidated' THEN 1
@@ -183,9 +188,25 @@ export function calculateImportance(
             END
          ) FROM entry_anchors WHERE entry_id = ?) AS worst_status_rank
     FROM memory_journal m
+    LEFT JOIN (
+        SELECT
+            COUNT(*) AS rel_count,
+            SUM(CASE WHEN relationship_type IN ('blocked_by', 'resolved', 'caused') THEN 1 ELSE 0 END) AS causal_count
+        FROM (
+            SELECT r.relationship_type
+            FROM relationships r
+            JOIN memory_journal p ON p.id = r.to_entry_id AND p.deleted_at IS NULL
+            WHERE r.from_entry_id = ?
+            UNION ALL
+            SELECT r.relationship_type
+            FROM relationships r
+            JOIN memory_journal p ON p.id = r.from_entry_id AND p.deleted_at IS NULL
+            WHERE r.to_entry_id = ? AND r.from_entry_id != ?
+        )
+    ) rel ON 1 = 1
     WHERE m.id = ? AND m.deleted_at IS NULL${scoped ? ' AND m.workspace_id = ?' : ''}`)
 
-    const baseParams = [entryId, entryId, entryId, entryId, entryId, entryId]
+    const baseParams = [entryId, entryId, entryId, entryId, entryId]
     const row = rowToObject(stmt.get(...(scoped ? [...baseParams, scopeId] : baseParams)))
 
     if (!row) return null

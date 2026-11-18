@@ -79,6 +79,7 @@ function resolveEffectiveMaxResultSize(override?: number): number {
 interface WorkerDispatchParams {
     code: string
     methodList: Record<string, string[]>
+    methodListKey: string
     schemas: Record<string, Record<string, string>> | undefined
     effectiveTimeout: number
     maxResultSize: number
@@ -105,6 +106,15 @@ export class WorkerSandbox {
         startRss: number
     } | null = null
     private executionId = 0
+    private lastSentMethodListKey: string | null = null
+    private lastSentSchemas: Record<string, Record<string, string>> | undefined
+    private hasSentSchemas = false
+
+    private resetSentMetadata(): void {
+        this.lastSentMethodListKey = null
+        this.lastSentSchemas = undefined
+        this.hasSentSchemas = false
+    }
 
     public get isDisposed(): boolean {
         return this.worker === null && !this.isBusy
@@ -116,6 +126,7 @@ export class WorkerSandbox {
     }
 
     private initWorker(): void {
+        this.resetSentMetadata()
         const resourceLimits: ResourceLimits = {
             maxOldGenerationSizeMb: this.options.memoryLimitMb,
             maxYoungGenerationSizeMb: Math.max(8, Math.floor(this.options.memoryLimitMb / 8)),
@@ -197,10 +208,12 @@ export class WorkerSandbox {
             })
         }
         this.worker = null
+        this.resetSentMetadata()
     }
 
     dispose(): void {
         this.isBusy = false
+        this.resetSentMetadata()
         if (this.currentExecution) {
             const exec = this.currentExecution
             this.currentExecution = null
@@ -249,21 +262,42 @@ export class WorkerSandbox {
         // [H7] A DataCloneError (non-cloneable context/bindings) must release ports, timer and isBusy.
         try {
             if (this.worker === null) throw new Error('Code mode worker is not available')
-            this.worker.postMessage(
-                {
-                    type: 'EXECUTE',
-                    id: this.executionId,
-                    code: params.code,
-                    methodList: params.methodList,
-                    schemaList: params.schemas,
-                    timeoutMs: params.effectiveTimeout,
-                    maxResultSize: params.maxResultSize,
-                    rpcPort: params.workerPort,
-                    contextObj: params.contextObj,
-                    readonlyMode: params.readonlyMode,
-                },
-                [params.workerPort]
-            )
+            const sendMethodList = params.methodListKey !== this.lastSentMethodListKey
+            const sendSchemas = !this.hasSentSchemas || params.schemas !== this.lastSentSchemas
+            const payload: {
+                type: 'EXECUTE'
+                id: number
+                code: string
+                timeoutMs: number
+                maxResultSize: number
+                rpcPort: MessagePort
+                contextObj: Record<string, unknown> | undefined
+                readonlyMode: boolean | undefined
+                methodList?: Record<string, string[]>
+                schemaList?: Record<string, Record<string, string>>
+            } = {
+                type: 'EXECUTE',
+                id: this.executionId,
+                code: params.code,
+                timeoutMs: params.effectiveTimeout,
+                maxResultSize: params.maxResultSize,
+                rpcPort: params.workerPort,
+                contextObj: params.contextObj,
+                readonlyMode: params.readonlyMode,
+                ...(sendMethodList ? { methodList: params.methodList } : {}),
+                ...(sendSchemas && params.schemas !== undefined
+                    ? { schemaList: params.schemas }
+                    : {}),
+            }
+            if (sendSchemas && params.schemas === undefined && this.lastSentSchemas !== undefined) {
+                payload.schemaList = undefined
+            }
+            this.worker.postMessage(payload, [params.workerPort])
+            if (sendMethodList) this.lastSentMethodListKey = params.methodListKey
+            if (sendSchemas) {
+                this.lastSentSchemas = params.schemas
+                this.hasSentSchemas = true
+            }
         } catch (err: unknown) {
             clearTimeout(params.timeoutHandle)
             params.hostPort.close()
@@ -315,6 +349,7 @@ export class WorkerSandbox {
 
         return await new Promise<SandboxResult>((resolve) => {
             const methodList = buildAllowedMethodList(apiBindings)
+            const methodListKey = JSON.stringify(methodList)
             const { port1: hostPort, port2: workerPort } = new MessageChannel()
             const timedOutId = this.executionId
             const timeoutHandle = setTimeout(() => {
@@ -341,6 +376,7 @@ export class WorkerSandbox {
             this.dispatchWorkerMessage({
                 code,
                 methodList,
+                methodListKey,
                 schemas,
                 effectiveTimeout,
                 maxResultSize: resolveEffectiveMaxResultSize(maxResultSizeOverride),
