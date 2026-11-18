@@ -8,7 +8,7 @@
 import { describe, it, expect, vi } from 'vitest'
 import {
     parseTestHealth,
-    buildSystemContext,
+    buildBriefingSystemSummary,
 } from '../../src/handlers/resources/core/briefing/system-section.js'
 
 
@@ -79,12 +79,12 @@ No badges here.
 })
 
 // ============================================================================
-// buildSystemContext
+// buildBriefingSystemSummary
 // ============================================================================
 
-describe('buildSystemContext', () => {
+describe('buildBriefingSystemSummary', () => {
     it('should return a complete SystemContext object', async () => {
-        const result = await buildSystemContext(undefined, undefined, undefined, 42)
+        const result = await buildBriefingSystemSummary(undefined, undefined, undefined, 42)
 
         expect(result).toHaveProperty('version')
         expect(typeof result.version).toBe('string')
@@ -108,7 +108,7 @@ describe('buildSystemContext', () => {
     })
 
     it('should include git history summary', async () => {
-        const result = await buildSystemContext(undefined, undefined, undefined, 42)
+        const result = await buildBriefingSystemSummary(undefined, undefined, undefined, 42)
 
         if (result.gitHistory !== null) {
             expect(result.gitHistory).toHaveProperty('commits')
@@ -117,7 +117,7 @@ describe('buildSystemContext', () => {
     })
 
     it('should format localTime as YYYY-MM-DD HH:MM TZ', async () => {
-        const result = await buildSystemContext(undefined, undefined, undefined, 42)
+        const result = await buildBriefingSystemSummary(undefined, undefined, undefined, 42)
 
         // Should match pattern like "2026-05-25 06:12 EDT" or "2026-05-25 06:12 UTC"
         expect(result.localTime).toMatch(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2} \w+/)

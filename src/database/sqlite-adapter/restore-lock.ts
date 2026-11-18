@@ -112,7 +112,12 @@ function isOrphanedLockDir(lockDir: string): boolean {
     try {
         const stat = fs.statSync(lockDir)
         return Date.now() - stat.mtimeMs > 2000
-    } catch {
+    } catch (err: unknown) {
+        logger.debug('Failed to stat restore lock directory while checking staleness', {
+            module: 'RestoreLock',
+            lockDir,
+            error: err instanceof Error ? err.message : String(err),
+        })
         return false
     }
 }
@@ -122,7 +127,7 @@ function isLockStale(lockDir: string, lockFile: string, runtime: unknown): boole
         const lockContent = fs.readFileSync(lockFile, 'utf-8').trim()
         if (!lockContent) return isOrphanedLockDir(lockDir)
         const { holdingPid } = parseLockContent(lockContent)
-        if (holdingPid === undefined || isNaN(holdingPid)) return isOrphanedLockDir(lockDir)
+        if (holdingPid === undefined || Number.isNaN(holdingPid)) return false
         return isHoldingPidStale(holdingPid, lockDir, runtime)
     } catch (readErr: unknown) {
         // Only treat a missing lock.json as orphaned after a creation grace window so a contender
@@ -143,8 +148,12 @@ function clearStaleLock(lockDir: string): void {
         fs.renameSync(lockDir, staleDir)
         try {
             fs.rmSync(staleDir, { recursive: true, force: true, maxRetries: 3, retryDelay: 25 })
-        } catch {
-            // Best-effort cleanup of renamed stale directory
+        } catch (err: unknown) {
+            logger.debug('Failed best-effort removal of stale restore lock directory', {
+                module: 'RestoreLock',
+                staleDir,
+                error: err instanceof Error ? err.message : String(err),
+            })
         }
     } catch (renameErr) {
         // On Windows or concurrent environments, renaming a directory with files can throw EPERM/EBUSY.

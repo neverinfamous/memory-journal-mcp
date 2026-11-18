@@ -126,7 +126,7 @@ function getRelationshipCounts(
         ? ' AND p.project_number = m.project_number'
         : ''
     const peerScopeClause = `${peerWsClause}${peerProjClause}`
-    const activePeerFilter = `EXISTS (SELECT 1 FROM memory_journal p WHERE p.id = r.to_entry_id AND p.deleted_at IS NULL${peerScopeClause})`
+    const activePeerFilter = `EXISTS (SELECT 1 FROM memory_journal p WHERE p.id = r.to_entry_id AND r.to_entry_id != r.from_entry_id AND p.deleted_at IS NULL${peerScopeClause})`
     const relCountRow = db
         .prepare(
             `SELECT COUNT(*) as count FROM relationships r JOIN memory_journal m ON r.from_entry_id = m.id WHERE m.deleted_at IS NULL${dateFilter} AND ${activePeerFilter}`
@@ -157,12 +157,12 @@ function getRelationshipCounts(
                    EXISTS (
                        SELECT 1 FROM relationships r
                        JOIN memory_journal p ON p.id = r.to_entry_id
-                       WHERE r.from_entry_id = m.id AND p.deleted_at IS NULL${peerScopeClause}
+                       WHERE r.from_entry_id = m.id AND r.from_entry_id != r.to_entry_id AND p.deleted_at IS NULL${peerScopeClause}
                    )
                    OR EXISTS (
                        SELECT 1 FROM relationships r
                        JOIN memory_journal p ON p.id = r.from_entry_id
-                       WHERE r.to_entry_id = m.id AND p.deleted_at IS NULL${peerScopeClause}
+                       WHERE r.to_entry_id = m.id AND r.from_entry_id != r.to_entry_id AND p.deleted_at IS NULL${peerScopeClause}
                    )
                )`
         )

@@ -86,19 +86,18 @@ export class VectorSearchManager {
     private async loadDefaultEmbeddingModel(): Promise<void> {
         const cacheDir = resolveEmbeddingCacheDir(dbPathFromAdapter(this.dbAdapter))
         if (this.transformers === null) {
-            const transformersModule = await import('@huggingface/transformers')
-            this.transformers = transformersModule
-            const cachedLocally = isModelCachedOnDisk(cacheDir, this.modelName)
-            transformersModule.env.allowRemoteModels = !cachedLocally
-            transformersModule.env.cacheDir = cacheDir
-            transformersModule.env.localModelPath = cacheDir
+            this.transformers = await import('@huggingface/transformers')
         }
-
-        logger.info(`Loading embedding model: ${this.modelName}`)
         const transformersModule = this.transformers as {
             pipeline: (task: string, model: string, options: unknown) => Promise<unknown>
             env: { allowRemoteModels: boolean; cacheDir: string; localModelPath: string }
         }
+        const cachedLocally = isModelCachedOnDisk(cacheDir, this.modelName)
+        transformersModule.env.allowRemoteModels = !cachedLocally
+        transformersModule.env.cacheDir = cacheDir
+        transformersModule.env.localModelPath = cacheDir
+
+        logger.info(`Loading embedding model: ${this.modelName}`)
         this.pipeline = await this.loadPipelineWithRetry(transformersModule, cacheDir)
         logger.info('Embedding model loaded')
 
@@ -394,7 +393,7 @@ export class VectorSearchManager {
 
         try {
             itemCount = this.dbAdapter.getVectorCount()
-            isReady = this.pipeline !== null
+            isReady = this.ready
         } catch (error) {
             logger.warning('Failed to get vector search stats', { error })
         }

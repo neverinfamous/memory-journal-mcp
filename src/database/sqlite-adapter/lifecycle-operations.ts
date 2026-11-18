@@ -2,7 +2,7 @@ import type { NativeConnectionManager } from './native-connection.js'
 import { buildImportanceCte, buildImportanceSqlExpression } from './entries/importance.js'
 import { isMissingTableError } from './schema-errors.js'
 import { expandTagFilterValues } from './tags.js'
-import { bucketInParams, IN_PARAM_BUCKETS } from './row-helpers.js'
+import { bucketInParams, SCOPED_IN_PARAM_BUCKETS } from './row-helpers.js'
 
 type NativeDb = ReturnType<NativeConnectionManager['getNativeDb']>
 
@@ -54,9 +54,19 @@ const tagExclusionSql = (
     tags: string[]
 ): { sql: string; params: string[] } => {
     if (tags.length === 0) return { sql: '', params: [] }
+    if (tags.length > 240) {
+        return {
+            sql: `AND ${idColumn} NOT IN (
+                SELECT entry_id FROM entry_tags
+                JOIN tags ON tags.id = entry_tags.tag_id
+                WHERE LOWER(tags.name) IN (SELECT value FROM json_each(?))
+            )`,
+            params: [JSON.stringify(tags)],
+        }
+    }
     const parts: string[] = []
     const params: string[] = []
-    for (const chunk of bucketInParams(tags, IN_PARAM_BUCKETS)) {
+    for (const chunk of bucketInParams(tags, SCOPED_IN_PARAM_BUCKETS)) {
         parts.push(
             `AND ${idColumn} NOT IN (
                 SELECT entry_id FROM entry_tags
@@ -263,7 +273,7 @@ function executeHardDeleteStep(db: NativeDb, query: CandidateQuery): number {
     const rows = db.prepare(query.sql).all(...query.params) as { id: number | bigint }[]
     const ids = rows.map((r) => toNumberId(r.id))
     let hardDeletedCount = 0
-    for (const { placeholders, params } of bucketInParams(ids)) {
+    for (const { placeholders, params } of bucketInParams(ids, SCOPED_IN_PARAM_BUCKETS)) {
         const deleteSql = `DELETE FROM memory_journal WHERE id IN (${placeholders})`
         hardDeletedCount += db.prepare(deleteSql).run(...params).changes
         deleteVecChunk(db, placeholders, params)
@@ -286,7 +296,7 @@ function executePruneStep(
     if (ids.length === 0) return 0
 
     let prunedCount = 0
-    for (const { placeholders, params } of bucketInParams(ids)) {
+    for (const { placeholders, params } of bucketInParams(ids, SCOPED_IN_PARAM_BUCKETS)) {
         prunedCount += db
             .prepare(
                 `UPDATE memory_journal SET deleted_at = ? WHERE id IN (${placeholders}) AND deleted_at IS NULL`

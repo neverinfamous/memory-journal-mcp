@@ -41,6 +41,21 @@ function toCanonicalRelationType(relationType: RequestedRelationship['relationTy
     }
 }
 
+function lookupTargetProjectNumber(
+    db: RelationshipLinker,
+    targetId: number,
+    workspaceId: string | undefined,
+    prefetchedTargets: Map<number, { projectNumber?: number | null }> | undefined
+): number | null | undefined {
+    const target =
+        prefetchedTargets !== undefined
+            ? prefetchedTargets.get(targetId)
+            : typeof db.getEntryById === 'function'
+              ? db.getEntryById(targetId, workspaceId)
+              : undefined
+    return target?.projectNumber
+}
+
 /**
  * Link `entryId` to each requested target and return a warning per link that failed,
  * so the caller can report dropped relationships instead of claiming a clean success.
@@ -67,28 +82,24 @@ export function linkRequestedRelationships(
 
     for (const rel of relationships) {
         try {
-            if (projectNumber !== undefined) {
-                const target =
-                    prefetchedTargets !== undefined
-                        ? prefetchedTargets.get(rel.targetId)
-                        : typeof db.getEntryById === 'function'
-                          ? db.getEntryById(rel.targetId, workspaceId)
-                          : undefined
-                const targetProject = target?.projectNumber
-                if (
-                    targetProject !== null &&
-                    targetProject !== undefined &&
-                    targetProject !== projectNumber
-                ) {
-                    const reason = `Target entry #${String(rel.targetId)} belongs to project #${String(targetProject)}, not project #${String(projectNumber)}`
-                    logger.warning(`Relationship link skipped: ${reason}`, {
-                        module: 'RelationshipLinking',
-                    })
-                    warnings.push(
-                        `Relationship ${rel.relationType} #${String(entryId)} -> #${String(rel.targetId)} was not created: ${reason}`
-                    )
-                    continue
-                }
+            const targetProject =
+                projectNumber !== undefined
+                    ? lookupTargetProjectNumber(db, rel.targetId, workspaceId, prefetchedTargets)
+                    : undefined
+            if (
+                projectNumber !== undefined &&
+                targetProject !== null &&
+                targetProject !== undefined &&
+                targetProject !== projectNumber
+            ) {
+                const reason = `Target entry #${String(rel.targetId)} belongs to project #${String(targetProject)}, not project #${String(projectNumber)}`
+                logger.warning(`Relationship link skipped: ${reason}`, {
+                    module: 'RelationshipLinking',
+                })
+                warnings.push(
+                    `Relationship ${rel.relationType} #${String(entryId)} -> #${String(rel.targetId)} was not created: ${reason}`
+                )
+                continue
             }
             const type = toCanonicalRelationType(rel.relationType)
             if (workspaceId !== undefined) {

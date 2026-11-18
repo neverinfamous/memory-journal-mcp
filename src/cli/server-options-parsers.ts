@@ -2,6 +2,13 @@ import * as path from 'node:path'
 import * as fs from 'node:fs'
 import { z } from 'zod'
 import type { ProjectRegistryEntry } from '../types/index.js'
+import {
+    findCaseInsensitiveKeyConflict,
+    findProjectNumberConflict,
+    isForbiddenProjectKey,
+    isValidProjectPath,
+} from '../utils/project-registry-guards.js'
+import { parsePositiveProjectNumber } from '../utils/safe-positive-int.js'
 
 /**
  * Pure parsers/validators for structured server options (project registry, additional team DBs,
@@ -40,14 +47,34 @@ export function validateProjectRegistryObject(
     if (raw === undefined || raw === null || raw === '') return undefined
     if (typeof raw === 'string' && raw.length > 51200) throw new Error('PROJECT_REGISTRY environment variable exceeds size limit (50KB)')
     try {
-        const registrySchema = z.record(z.string(), z.object({ path: z.string().min(1), project_number: z.number().nullable().optional() }).strict())
+        const registrySchema = z.record(z.string(), z.object({ path: z.string().min(1), project_number: z.number().optional() }).strict())
         const parsed = typeof raw === 'string' ? (JSON.parse(raw) as unknown) : raw
         const safeParsed = JSON.parse(JSON.stringify(parsed)) as unknown // Deep clean
         const validated = registrySchema.parse(safeParsed) as Record<string, ProjectRegistryEntry>
         for (const key of Object.keys(validated)) {
+            if (isForbiddenProjectKey(key)) {
+                throw new Error(`Invalid project registry key: '${key}'`)
+            }
+            const keyConflict = findCaseInsensitiveKeyConflict(validated, key, key)
+            if (keyConflict !== undefined) {
+                throw new Error(`Duplicate project registry key '${key}' conflicts with '${keyConflict}'`)
+            }
             const entry = validated[key]
-            if (!entry?.path) continue
+            if (entry === undefined) continue
+            if (entry.project_number !== undefined) {
+                if (parsePositiveProjectNumber(entry.project_number) === undefined) {
+                    throw new Error(`Invalid project_number for project '${key}': expected a positive safe integer`)
+                }
+                const numConflict = findProjectNumberConflict(validated, entry.project_number, [key])
+                if (numConflict !== undefined) {
+                    throw new Error(`Duplicate project_number ${String(entry.project_number)} in project '${key}' conflicts with '${numConflict}'`)
+                }
+            }
+            if (!entry.path) continue
             if (!path.isAbsolute(entry.path)) throw new Error(`Project registry path must be an absolute path: ${entry.path}`)
+            if (!isValidProjectPath(entry.path)) {
+                throw new Error(`Invalid or unsafe project registry path for '${key}': ${entry.path}`)
+            }
             const resolvedPath = path.resolve(entry.path)
             try {
                 const stat = fs.lstatSync(resolvedPath)

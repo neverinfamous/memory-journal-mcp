@@ -13,7 +13,7 @@ export type ProjectArrayItem = ProjectInfo & { name: string; projectNumber?: num
  * When provided, sandbox tool calls are routed through callTool() instead
  * of calling raw tool handlers, ensuring scope/maintenance/audit apply.
  */
-export type ToolDispatcher = (name: string, args: Record<string, unknown>) => Promise<unknown>
+export type ToolDispatcher = (name: string, args: unknown) => Promise<unknown>
 
 /** Type alias for group API record */
 export type GroupApiRecord = Record<string, (...args: unknown[]) => Promise<unknown>>

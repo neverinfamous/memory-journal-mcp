@@ -1,7 +1,7 @@
 import type { Anchor, AnchorStatus } from '../../../types/index.js'
 import type { EntriesSharedContext } from './shared.js'
 import { effectiveWorkspace } from '../../workspace-scope.js'
-import { bucketInParams } from '../row-helpers.js'
+import { bucketInParams, SCOPED_IN_PARAM_BUCKETS } from '../row-helpers.js'
 
 export function getAnchorsByEntryIds(
     context: EntriesSharedContext,
@@ -14,7 +14,7 @@ export function getAnchorsByEntryIds(
     const { db } = context
     const scopeId = effectiveWorkspace(workspaceId)
     const wsClause = scopeId === '*' ? '' : ' AND mj.workspace_id = ?'
-    for (const { placeholders, params } of bucketInParams(entryIds)) {
+    for (const { placeholders, params } of bucketInParams(entryIds, SCOPED_IN_PARAM_BUCKETS)) {
         const stmt = db.prepare(
             `SELECT ea.id, ea.entry_id as entryId, ea.anchor_path as anchorPath,
                     ea.anchor_type as anchorType, ea.status, ea.last_checked_at as lastCheckedAt

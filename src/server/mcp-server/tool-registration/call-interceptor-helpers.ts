@@ -11,6 +11,7 @@ import {
     handleGetPrompt,
 } from '../../../handlers/tools/core/dummy-healing.js'
 import { getBaseUri } from '../../../handlers/resources/shared.js'
+import { getSerializedPayloadJson, injectTokenEstimate } from '../../../observability/token-estimator.js'
 import type { ToolContext } from '../../../types/index.js'
 import type { PromptDefinition } from '../../registration.js'
 import type { FallbackAccessTarget } from './fallback-interceptors.js'
@@ -134,9 +135,8 @@ export function formatTokenEstimatedError(
     structuredContent: Record<string, unknown>
     isError?: boolean
 } {
-    const enriched = JSON.stringify({ ...errorResult, _meta: { tokenEstimate: 0 } })
-    const tokenEstimate = Math.ceil(Buffer.byteLength(enriched, 'utf8') / 4)
-    const finalText = enriched.replace('"tokenEstimate":0', `"tokenEstimate":${tokenEstimate}`)
+    const enriched = injectTokenEstimate({ ...errorResult })
+    const finalText = getSerializedPayloadJson(enriched)
     return {
         content: [{ type: 'text', text: finalText }],
         structuredContent: errorResult,

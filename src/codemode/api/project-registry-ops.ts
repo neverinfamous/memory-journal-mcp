@@ -14,6 +14,7 @@ import {
     isValidProjectPath,
 } from '../../utils/project-registry-guards.js'
 import { parsePositiveProjectNumber } from '../../utils/safe-positive-int.js'
+import { findCanonicalRegistryKey } from '../../utils/workspace-registry-match.js'
 import { parseProjectRegistry, type GroupApiRecord, type ProjectRegistryProvider } from './types.js'
 
 function getConfigPath(): string {
@@ -64,10 +65,10 @@ export function createGetConfigFn(
 
 function toGuardRegistry(
     registry: Record<string, unknown>
-): Record<string, { path?: string; project_number?: number } | undefined> {
+): Record<string, { path?: string; project_number?: number }> {
     const out = Object.create(null) as Record<
         string,
-        { path?: string; project_number?: number } | undefined
+        { path?: string; project_number?: number }
     >
     for (const [k, v] of Object.entries(registry)) {
         if (isRecord(v)) {
@@ -154,8 +155,8 @@ export function createRegisterProjectFn(
     coreApi: GroupApiRecord
 ): (...args: unknown[]) => Promise<{ success: boolean; message?: string; warning?: string; error?: string }> {
     return async (...args: unknown[]): Promise<{ success: boolean; message?: string; warning?: string; error?: string }> => {
-        const name = safeString(args[0] ?? '')
-        const absolutePath = safeString(args[1] ?? '')
+        const name = safeString(args[0] ?? '').trim()
+        const absolutePath = safeString(args[1] ?? '').trim()
         const rawProjectNumber = args[2]
         const projectNumber =
             rawProjectNumber !== undefined && rawProjectNumber !== null
@@ -192,7 +193,11 @@ export function createRegisterProjectFn(
             entry['project_number'] = projectNumber
         }
         registry[name] = entry
-        saveRegistryConfig(configPath, config)
+        try {
+            saveRegistryConfig(configPath, config)
+        } catch (err) {
+            return { success: false, error: registryError(err) }
+        }
 
         return recordProjectInitEntry(coreApi, name, projectNumber)
     }
@@ -204,9 +209,10 @@ export function createUpdateProjectFn(): (...args: unknown[]) => Promise<{
     error?: string
 }> {
     return (...args: unknown[]): Promise<{ success: boolean; message?: string; error?: string }> => {
-        const name = safeString(args[0] ?? '')
-        const newName = typeof args[1] === 'string' && args[1] !== '' ? args[1] : undefined
-        const absolutePath = typeof args[2] === 'string' && args[2] !== '' ? args[2] : undefined
+        const name = safeString(args[0] ?? '').trim()
+        const newName = typeof args[1] === 'string' && args[1].trim() !== '' ? args[1].trim() : undefined
+        const absolutePath =
+            typeof args[2] === 'string' && args[2].trim() !== '' ? args[2].trim() : undefined
         const rawProjectNumber = args[3]
         const projectNumber =
             rawProjectNumber !== undefined && rawProjectNumber !== null
@@ -234,22 +240,31 @@ export function createUpdateProjectFn(): (...args: unknown[]) => Promise<{
         } catch (err) {
             return Promise.resolve({ success: false, error: registryError(err) })
         }
-        const project = Object.hasOwn(registry, name) ? registry[name] : undefined
-        if (!isRecord(project)) {
+        const guardReg = toGuardRegistry(registry)
+        const existingKey = Object.hasOwn(registry, name)
+            ? name
+            : findCanonicalRegistryKey(name, guardReg)
+        const rawProject = existingKey !== undefined ? registry[existingKey] : undefined
+        if (existingKey === undefined || !isRecord(rawProject)) {
             return Promise.resolve({ success: false, error: `🛠️ AUTONOMOUS HEALING: Project not found: '${name}'` })
         }
-        const targetName = newName ?? name
-        const conflict = checkRegistryConflicts(registry, targetName, projectNumber, name)
+        const targetName = newName ?? existingKey
+        const conflict = checkRegistryConflicts(registry, targetName, projectNumber, existingKey)
         if (conflict !== undefined) {
             return Promise.resolve({ success: false, error: conflict })
         }
 
-        if (absolutePath !== undefined) project['path'] = resolveCanonicalDirPath(absolutePath)
-        if (projectNumber !== undefined) project['project_number'] = projectNumber
+        const updatedProject: Record<string, unknown> = { ...rawProject }
+        if (absolutePath !== undefined) updatedProject['path'] = resolveCanonicalDirPath(absolutePath)
+        if (projectNumber !== undefined) updatedProject['project_number'] = projectNumber
 
-        const rest = Object.fromEntries(Object.entries(registry).filter(([key]) => key !== name))
-        config['projectRegistry'] = { ...rest, [targetName]: project }
-        saveRegistryConfig(configPath, config)
+        const rest = Object.fromEntries(Object.entries(registry).filter(([key]) => key !== existingKey))
+        config['projectRegistry'] = { ...rest, [targetName]: updatedProject }
+        try {
+            saveRegistryConfig(configPath, config)
+        } catch (err) {
+            return Promise.resolve({ success: false, error: registryError(err) })
+        }
 
         return Promise.resolve({ success: true, message: `Project '${targetName}' updated.` })
     }
@@ -261,7 +276,7 @@ export function createDeleteProjectFn(): (...args: unknown[]) => Promise<{
     error?: string
 }> {
     return (...args: unknown[]): Promise<{ success: boolean; message?: string; error?: string }> => {
-        const name = safeString(args[0] ?? '')
+        const name = safeString(args[0] ?? '').trim()
         if (isForbiddenProjectKey(name)) {
             return Promise.resolve({ success: false, error: `Invalid project name: '${name}'` })
         }
@@ -277,14 +292,23 @@ export function createDeleteProjectFn(): (...args: unknown[]) => Promise<{
             return Promise.resolve({ success: false, error: registryError(err) })
         }
 
-        if (!Object.hasOwn(registry, name) || !isRecord(registry[name])) {
+        const existingKey = Object.hasOwn(registry, name)
+            ? name
+            : findCanonicalRegistryKey(name, toGuardRegistry(registry))
+        if (existingKey === undefined || !isRecord(registry[existingKey])) {
             return Promise.resolve({ success: false, error: `🛠️ AUTONOMOUS HEALING: Project not found: '${name}'` })
         }
 
-        config['projectRegistry'] = Object.fromEntries(Object.entries(registry).filter(([key]) => key !== name))
-        saveRegistryConfig(configPath, config)
+        config['projectRegistry'] = Object.fromEntries(
+            Object.entries(registry).filter(([key]) => key !== existingKey)
+        )
+        try {
+            saveRegistryConfig(configPath, config)
+        } catch (err) {
+            return Promise.resolve({ success: false, error: registryError(err) })
+        }
 
-        return Promise.resolve({ success: true, message: `Project '${name}' deleted.` })
+        return Promise.resolve({ success: true, message: `Project '${existingKey}' deleted.` })
     }
 }
 

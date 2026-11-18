@@ -62,11 +62,26 @@ class Logger {
                 extras[k] = sanitizeErrorForLogging(`${v.name}: ${v.message}`)
             } else if (typeof v === 'string') {
                 extras[k] = sanitizeErrorForLogging(v)
+            } else if (typeof v === 'bigint') {
+                extras[k] = v.toString()
             }
         }
 
         if (Object.keys(extras).length > 0) {
-            line += ` ${JSON.stringify(extras).replace(/\n|\r/g, '')}`
+            try {
+                const seen = new WeakSet()
+                const serialized = JSON.stringify(extras, (_k: string, val: unknown) => {
+                    if (typeof val === 'bigint') return val.toString()
+                    if (typeof val === 'object' && val !== null) {
+                        if (seen.has(val)) return '[Circular]'
+                        seen.add(val)
+                    }
+                    return val
+                })
+                line += ` ${serialized.replace(/\n|\r/g, '')}`
+            } catch {
+                line += ' {"_serializationError":"unserializable log context"}'
+            }
         }
 
         // Always write to stderr (stdout is reserved for MCP protocol)
@@ -99,14 +114,15 @@ class Logger {
     }
 
     setLevel(level: LogLevel): void {
-        if (level in LOG_LEVELS) {
-            this.minLevel = LOG_LEVELS[level]
+        const normalized = typeof level === 'string' ? level.trim().toLowerCase() : ''
+        if (Object.hasOwn(LOG_LEVELS, normalized)) {
+            this.minLevel = LOG_LEVELS[normalized as LogLevel]
         }
     }
 }
 
 // Get log level from environment (validated against known levels)
-const rawLevel = process.env['LOG_LEVEL'] ?? 'info'
-const envLevel: LogLevel = rawLevel in LOG_LEVELS ? (rawLevel as LogLevel) : 'info'
+const rawLevel = (process.env['LOG_LEVEL'] ?? 'info').trim().toLowerCase()
+const envLevel: LogLevel = Object.hasOwn(LOG_LEVELS, rawLevel) ? (rawLevel as LogLevel) : 'info'
 
 export const logger = new Logger(envLevel)

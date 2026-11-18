@@ -191,13 +191,13 @@ export function parseRelatedTo(relatedToStr: unknown): number[] {
         .map((s) => s.trim())
         .filter(Boolean)
         .map((token) => {
-            if (!/^\d+$/.test(token)) {
+            if (!/^[1-9]\d*$/.test(token)) {
                 throw new ValidationError(
                     `Invalid --related-to entry ID '${token}'. Expected positive integers separated by commas.`
                 )
             }
-            const parsed = Number.parseInt(token, 10)
-            if (!Number.isSafeInteger(parsed) || parsed < 1) {
+            const parsed = Number(token)
+            if (!Number.isSafeInteger(parsed) || parsed < 1 || String(parsed) !== token) {
                 throw new ValidationError(
                     `Invalid --related-to entry ID '${token}'. Expected a positive integer.`
                 )

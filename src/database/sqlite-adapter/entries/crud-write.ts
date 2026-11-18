@@ -2,7 +2,7 @@ import type { JournalEntry } from '../../../types/index.js'
 import type { CreateEntryInput } from '../../core/interfaces.js'
 import type { EntriesSharedContext } from './shared.js'
 import { effectiveWorkspace } from '../../workspace-scope.js'
-import { bucketInParams } from '../row-helpers.js'
+import { bucketInParams, SCOPED_IN_PARAM_BUCKETS } from '../row-helpers.js'
 import { insertAnchors } from './anchors.js'
 import { getEntryById, getEntriesByIds } from './crud-read.js'
 import { normalizeTag, performUpdateEntry } from './crud-update.js'
@@ -287,7 +287,7 @@ function findExistingIdsForDelete(
     const hasWorkspaceFilter = scopeId !== '*'
     const deletedFilter = permanent ? '' : ' AND deleted_at IS NULL'
     const wsClause = hasWorkspaceFilter ? ' AND workspace_id = ?' : ''
-    for (const { placeholders, params } of bucketInParams(uniqueIds)) {
+    for (const { placeholders, params } of bucketInParams(uniqueIds, SCOPED_IN_PARAM_BUCKETS)) {
         const rows = db
             .prepare(
                 `SELECT id FROM memory_journal WHERE id IN (${placeholders})${deletedFilter}${wsClause}`
@@ -306,7 +306,7 @@ function executeChunkedDelete(
 ): void {
     const hasWorkspaceFilter = scopeId !== '*'
     const now = permanent ? '' : new Date().toISOString()
-    for (const { placeholders, params } of bucketInParams(toDelete)) {
+    for (const { placeholders, params } of bucketInParams(toDelete, SCOPED_IN_PARAM_BUCKETS)) {
         if (permanent) {
             const sql = hasWorkspaceFilter
                 ? `DELETE FROM memory_journal WHERE id IN (${placeholders}) AND workspace_id = ?`

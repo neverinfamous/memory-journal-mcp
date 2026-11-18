@@ -112,12 +112,12 @@ export class EntriesManager {
             isArchived?: boolean
             expectedVersion?: number
             workspaceId?: string
+            anchors?: { anchorPath: string; anchorType: string; status?: string | undefined }[]
             trustScore?: number
             impactScore?: number
             validationStatus?: 'passed' | 'failed' | 'none'
             sessionId?: string | null
             targetWorkspaceId?: string
-            anchors?: { anchorPath: string; anchorType: string; status?: string | undefined }[]
         }
     ): JournalEntry | null {
         return updateEntry(this.sharedContext, id, input)
@@ -153,6 +153,7 @@ export class EntriesManager {
             isArchived?: boolean
             expectedVersion?: number
             workspaceId?: string
+            anchors?: { anchorPath: string; anchorType: string; status?: string | undefined }[]
             trustScore?: number
             impactScore?: number
             validationStatus?: 'passed' | 'failed' | 'none'

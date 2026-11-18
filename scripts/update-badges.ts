@@ -2,6 +2,7 @@ import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
 import { execFileSync } from "child_process";
+import { z } from "zod";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -81,6 +82,21 @@ interface BadgeMetrics {
   newE2eBadge: string;
 }
 
+const CoverageSummarySchema = z.object({
+  total: z.object({
+    lines: z.object({
+      pct: z.number(),
+    }),
+  }),
+});
+
+const PlaywrightResultsSchema = z.object({
+  stats: z.object({
+    expected: z.number().optional().default(0),
+    skipped: z.number().optional().default(0),
+  }),
+});
+
 function loadBadgeMetrics(): BadgeMetrics {
   const summaryPath = path.join(ROOT_DIR, ".test-output/coverage/coverage-summary.json");
   const playwrightPath = path.join(ROOT_DIR, ".test-output/playwright-results.json");
@@ -89,7 +105,9 @@ function loadBadgeMetrics(): BadgeMetrics {
   let coverageColor = "red";
   let hasCoverage = false;
   if (fs.existsSync(summaryPath)) {
-    const summary = JSON.parse(fs.readFileSync(summaryPath, "utf-8"));
+    const summary = CoverageSummarySchema.parse(
+      JSON.parse(fs.readFileSync(summaryPath, "utf-8"))
+    );
     linesPct = summary.total.lines.pct;
     coverageColor = getBadgeColor(linesPct);
     hasCoverage = true;
@@ -101,9 +119,11 @@ function loadBadgeMetrics(): BadgeMetrics {
   let e2eSkipped = 0;
   let hasE2e = false;
   if (fs.existsSync(playwrightPath)) {
-    const pw = JSON.parse(fs.readFileSync(playwrightPath, "utf-8"));
-    e2ePassing = pw.stats.expected || 0;
-    e2eSkipped = pw.stats.skipped || 0;
+    const pw = PlaywrightResultsSchema.parse(
+      JSON.parse(fs.readFileSync(playwrightPath, "utf-8"))
+    );
+    e2ePassing = pw.stats.expected;
+    e2eSkipped = pw.stats.skipped;
     hasE2e = true;
   } else {
     console.warn(`Playwright results not found at ${playwrightPath}`);

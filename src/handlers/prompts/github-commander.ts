@@ -2,9 +2,8 @@ import type { IDatabaseAdapter } from '../../database/core/interfaces.js'
 import { ICON_PROMPT } from '../../constants/icons.js'
 import type { InternalPromptDef } from './index.js'
 import type { JournalEntry } from '../../types/index.js'
-import { markUntrustedContentInline } from '../../utils/security-utils.js'
 import { ValidationError } from '../../types/errors.js'
-import { resourceWorkspace, type BriefingConfig } from '../resources/shared.js'
+import { resourceWorkspace, sliceUntrustedInline, type BriefingConfig } from '../resources/shared.js'
 import { exactRegistryKey, uniqueWorkspaceForProject } from '../../utils/write-scope.js'
 import { parseCanonicalPositiveInt } from '../../utils/safe-positive-int.js'
 
@@ -71,9 +70,7 @@ function formatPromptEntries(
                 id: e.id,
                 type: e.entryType,
                 timestamp: e.timestamp,
-                content: markUntrustedContentInline(
-                    e.content.length > 250 ? e.content.slice(0, 250) + '...' : e.content
-                ),
+                content: sliceUntrustedInline(e.content, 250, '...'),
             })
         )
 }

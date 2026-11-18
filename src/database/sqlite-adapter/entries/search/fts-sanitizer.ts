@@ -80,7 +80,10 @@ function normalizeSingleFtsToken(
         if (single !== undefined && !/^(AND|OR|NOT)$/i.test(single)) return single
     }
 
-    let sanitized = token.replace(/[^a-zA-Z0-9_*-]/g, '').replace(/\*/g, '')
+    let sanitized = token
+        .replace(/[^a-zA-Z0-9_*-]/g, '')
+        .replace(/\*/g, '')
+        .replace(/^-+|-+$/g, '')
     if (!sanitized) return null
     if (token.endsWith('*')) sanitized += '*'
     if (/^NEAR\d*\*?$/i.test(sanitized)) return null

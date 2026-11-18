@@ -67,7 +67,7 @@ const GROUP_ALIASES: Record<string, ToolGroup> = { export: 'io' }
  * Resolve a group name, applying legacy aliases.
  */
 function resolveGroupAlias(name: string): string {
-    return GROUP_ALIASES[name] ?? name
+    return Object.hasOwn(GROUP_ALIASES, name) ? (GROUP_ALIASES[name] ?? name) : name
 }
 
 /**
@@ -320,7 +320,6 @@ const READONLY_ADMIN_TOOLS = new Set<string>([
 const MUTATING_NON_EXEMPT_TOOLS = new Set<string>([
     ...TOOL_GROUPS.admin.filter((t) => !READONLY_ADMIN_TOOLS.has(t)),
     'create_entry',
-    'create_entry_minimal',
     'mark_anchors_stale',
     'link_entries',
     'import_markdown',

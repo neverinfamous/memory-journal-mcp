@@ -20,8 +20,9 @@ export function decodeCursor(cursor: string): { t: string; id: number } | { offs
         if (
             'offset' in parsed &&
             typeof parsed.offset === 'number' &&
-            Number.isInteger(parsed.offset) &&
-            parsed.offset >= 0
+            Number.isSafeInteger(parsed.offset) &&
+            parsed.offset >= 0 &&
+            parsed.offset <= Number.MAX_SAFE_INTEGER - 10000
         ) {
             return { offset: parsed.offset }
         }
@@ -31,7 +32,7 @@ export function decodeCursor(cursor: string): { t: string; id: number } | { offs
             typeof parsed.t === 'string' &&
             parsed.t.trim() !== '' &&
             typeof parsed.id === 'number' &&
-            Number.isInteger(parsed.id) &&
+            Number.isSafeInteger(parsed.id) &&
             parsed.id > 0
         ) {
             return { t: parsed.t, id: parsed.id }

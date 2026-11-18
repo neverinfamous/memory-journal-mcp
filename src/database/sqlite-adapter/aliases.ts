@@ -1,7 +1,7 @@
 import { QueryError, ValidationError } from '../../types/errors.js'
 import { effectiveWorkspace } from '../workspace-scope.js'
 import { isMissingTableError } from './schema-errors.js'
-import { bucketInParams, getSingleRow } from './row-helpers.js'
+import { bucketInParams, getSingleRow, SCOPED_IN_PARAM_BUCKETS } from './row-helpers.js'
 import type { IDatabaseConnection, AuthorAlias } from '../core/interfaces.js'
 
 export class AliasManager {
@@ -208,7 +208,7 @@ export class AliasManager {
             const scoped = scopeId !== '*'
             const resolvedByLower = new Map<string, string>()
             const nativeDb = this.db.getNativeDb?.()
-            for (const { placeholders, params: chunk } of bucketInParams(rawAuthors)) {
+            for (const { placeholders, params: chunk } of bucketInParams(rawAuthors, SCOPED_IN_PARAM_BUCKETS)) {
                 // NULL sorts first in ASC so concrete workspace rows overwrite global aliases in the loop below.
                 const sql = scoped
                     ? `SELECT alias, canonical_author FROM author_aliases WHERE alias IN (${placeholders}) COLLATE NOCASE AND (workspace_id IS NULL OR workspace_id = ?) ORDER BY workspace_id ASC`

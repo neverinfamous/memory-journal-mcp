@@ -159,7 +159,10 @@ export function createPinnedJwksFetch(): typeof fetch {
         const preResolved = await assertSafeJwksUri(urlStr)
 
         // Preserve mocked `globalThis.fetch` in unit tests without bypassing assertSafeJwksUri.
-        if (globalThis.fetch !== NATIVE_FETCH) {
+        if (
+            (process.env['NODE_ENV'] === 'test' || Boolean(process.env['VITEST'])) &&
+            globalThis.fetch !== NATIVE_FETCH
+        ) {
             const response = await globalThis.fetch(urlStr, {
                 method: init?.method ?? 'GET',
                 ...(init?.headers !== undefined ? { headers: init.headers } : {}),

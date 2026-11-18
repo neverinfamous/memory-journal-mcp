@@ -258,9 +258,16 @@ function preprocessMarkAnchorsStale(val: unknown): unknown {
             // journal entry IDs and are left unmapped so the schema rejects them (missing `id`).
             const rawId = item['id'] ?? item['anchor_id'] ?? item['anchorId']
             if (rawId !== undefined) {
-                const numId = typeof rawId === 'string' ? Number(rawId.trim()) : rawId
-                if (typeof numId === 'number' && !Number.isNaN(numId)) {
-                    item['id'] = numId
+                if (typeof rawId === 'string') {
+                    const trimmedId = rawId.trim()
+                    if (/^[1-9]\d*$/.test(trimmedId)) {
+                        const parsed = Number(trimmedId)
+                        if (Number.isSafeInteger(parsed) && String(parsed) === trimmedId) {
+                            item['id'] = parsed
+                        }
+                    }
+                } else if (typeof rawId === 'number' && !Number.isNaN(rawId)) {
+                    item['id'] = rawId
                 }
             }
             delete item['anchor_id']

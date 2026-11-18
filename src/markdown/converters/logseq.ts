@@ -20,7 +20,7 @@ function applyLogseqPropertyLine(
     mjMeta: FrontmatterData,
     mergedTags: Set<string>
 ): boolean {
-    const propMatch = /^([ \t]*)([a-zA-Z0-9_-]+)::[ \t]*([^\s\r\n][^\r\n]*)$/.exec(line)
+    const propMatch = /^([ \t]*)([a-zA-Z0-9_-]+)::[ \t]+([^\s\r\n][^\r\n]*)$/.exec(line)
     if (propMatch === null) return false
     const [, , key, val] = propMatch
     const k = key?.toLowerCase()
@@ -113,8 +113,25 @@ export function convertLogseq(
     let hasDoneTasks = false
 
     const normalizedBody = body.replace(/\r\n?/g, '\n')
+    let openFence: { marker: string; minLen: number } | undefined
     for (const rawLine of normalizedBody.split('\n')) {
-        const outcome = transformLogseqLine(rawLine ?? '', mjMeta, mergedTags)
+        const line = rawLine ?? ''
+        const fenceMatch = /^(`{3,}|~{3,})/.exec(line.trimStart())
+        if (fenceMatch?.[1] !== undefined) {
+            const marker = fenceMatch[1]
+            if (openFence === undefined) {
+                openFence = { marker: marker[0] ?? '`', minLen: marker.length }
+            } else if (marker.startsWith(openFence.marker) && marker.length >= openFence.minLen) {
+                openFence = undefined
+            }
+            processedLines.push(line)
+            continue
+        }
+        if (openFence !== undefined) {
+            processedLines.push(line)
+            continue
+        }
+        const outcome = transformLogseqLine(line, mjMeta, mergedTags)
         if (outcome.hasTask) hasTasks = true
         if (outcome.hasDoneTask) hasDoneTasks = true
         if (outcome.line !== null) processedLines.push(outcome.line)

@@ -2,142 +2,17 @@
  * Script syntax healing and AST/regex normalization for Code Mode execution payloads.
  */
 
-import * as vm from 'node:vm'
 import { extractAndRecoverJsonCode } from './json-entry-recovery.js'
 import { extractAndRecoverSqlCode, extractAndRecoverPreparedStatementCode } from './sql-recovery.js'
+import {
+    escapeDelimiterChar,
+    isInsideStringLiteral,
+    isValidJsScript,
+    rewriteContextJsonParseCalls,
+    rewriteModuleImportsAndExports,
+} from './code-healer-rewrites.js'
 
-export function isInsideStringLiteral(code: string, offset: number): boolean {
-    let inString: string | null = null
-    let isEscaped = false
-    for (let i = 0; i < offset; i++) {
-        const ch = code[i]
-        if (inString !== null) {
-            if (ch === '\\') {
-                isEscaped = !isEscaped
-            } else {
-                if (ch === inString && !isEscaped) {
-                    inString = null
-                }
-                isEscaped = false
-            }
-        } else {
-            // [M11] Comments are skipped so quotes inside them never open a fake string literal.
-            if (ch === '/' && code[i + 1] === '/') {
-                const nl = code.indexOf('\n', i)
-                if (nl === -1 || nl >= offset) return false
-                i = nl
-                continue
-            }
-            if (ch === '/' && code[i + 1] === '*') {
-                const end = code.indexOf('*/', i + 2)
-                if (end === -1 || end + 1 >= offset) return false
-                i = end + 1
-                continue
-            }
-            if (ch === "'" || ch === '"' || ch === '`') {
-                inString = ch
-            }
-        }
-    }
-    return inString !== null
-}
-
-const VALID_JS_CACHE_MAX = 256
-const VALID_JS_MAX_LEN = 16 * 1024
-const VALID_JS_CACHE = new Map<string, boolean>()
-
-export function isValidJsScript(src: string): boolean {
-    if (src.length <= VALID_JS_MAX_LEN) {
-        const cached = VALID_JS_CACHE.get(src)
-        if (cached !== undefined) return cached
-    }
-    let valid: boolean
-    try {
-        new vm.Script(`(async () => {\n${src}\n})()`)
-        valid = true
-    } catch {
-        valid = false
-    }
-    if (src.length <= VALID_JS_MAX_LEN) {
-        if (VALID_JS_CACHE.size >= VALID_JS_CACHE_MAX) {
-            const firstKey = VALID_JS_CACHE.keys().next().value
-            if (firstKey !== undefined) VALID_JS_CACHE.delete(firstKey)
-        }
-        VALID_JS_CACHE.set(src, valid)
-    }
-    return valid
-}
-
-export function escapeDelimiterChar(content: string, delimiter: string): string {
-    let result = ''
-    let i = 0
-    while (i < content.length) {
-        if (content[i] === '\\') {
-            let bsCount = 0
-            while (i < content.length && content[i] === '\\') {
-                bsCount++
-                i++
-            }
-            if (i < content.length && content[i] === delimiter) {
-                result += `\\${delimiter}`
-                i++
-            } else {
-                result += '\\'.repeat(bsCount)
-            }
-        } else if (content[i] === delimiter) {
-            result += `\\${delimiter}`
-            i++
-        } else {
-            result += content[i]
-            i++
-        }
-    }
-    return result
-}
-
-function mapModuleBindingReplacement(varName: string, modName: string, commentTag: string): string {
-    const v = varName.trim()
-    const mod = modName.toLowerCase().replace(/^node:/, '')
-    if (v === 'mj') return `/* auto-healed ${commentTag} */`
-    let targetVar = v
-    if (v.startsWith('* as ')) {
-        targetVar = v.replace(/^\*\s+as\s+/, '')
-    }
-    if (mod === 'fs' || targetVar === 'fs' || targetVar === '__safeFs') {
-        const fsVal = `(typeof mj !== 'undefined' ? (mj.fs || mj) : undefined)`
-        return targetVar === '__safeFs'
-            ? `var __safeFs = ${fsVal};`
-            : `const ${targetVar} = ${fsVal}; var __safeFs = ${fsVal};`
-    }
-    if (mod === 'path' || targetVar === 'path') {
-        const pathVal = `(typeof mj !== 'undefined' ? (mj.path || mj) : undefined)`
-        return `const ${targetVar} = ${pathVal};`
-    }
-    if (
-        mod.includes('sqlite') ||
-        mod.includes('database') ||
-        targetVar.toLowerCase().includes('sqlite') ||
-        targetVar.toLowerCase() === 'database'
-    ) {
-        return `const ${targetVar} = mj.sqlite3;`
-    }
-    if (targetVar === 'child_process' || mod.includes('child_process')) {
-        return `const ${targetVar === 'child_process' ? 'cp' : targetVar} = mj;`
-    }
-    if (mod.includes('memory') || mod.includes('journal')) {
-        return `const ${targetVar} = mj;`
-    }
-    if (
-        mod === 'mcp' ||
-        mod.includes('mcp') ||
-        targetVar.toLowerCase() === 'mcp' ||
-        targetVar === '__mcp' ||
-        mod.includes('modelcontextprotocol')
-    ) {
-        return `const ${targetVar} = mj;`
-    }
-    return `const ${targetVar} = mj;`
-}
+export { escapeDelimiterChar, isInsideStringLiteral, isValidJsScript }
 
 function stripLeadingShimAssignments(src: string): string {
     let rest = src.trimStart()
@@ -299,53 +174,6 @@ export function healTemplateBackticksOnRuntimeError(code: string): string | null
     return candidate !== code && isValidJsScript(candidate) ? candidate : null
 }
 
-function rewriteModuleImportsAndExports(src: string): string {
-    let executionCode = src
-    executionCode = executionCode.replace(
-        /export\s+default\s+async\s+function(?:\s+[\w$]+)?\s*\(([^)]*)\)\s*\{([\s\S]*)\}/g,
-        (_m: string, param: string, body: string): string => {
-            const p = param.trim()
-            return `(async (${p ? `${p} = mj` : ''}) => { ${body} })()`
-        }
-    )
-    executionCode = executionCode.replace(
-        /export\s+default\s+function(?:\s+[\w$]+)?\s*\(([^)]*)\)\s*\{([\s\S]*)\}/g,
-        (_m: string, param: string, body: string): string => {
-            const p = param.trim()
-            return `(async (${p ? `${p} = mj` : ''}) => { ${body} })()`
-        }
-    )
-    executionCode = executionCode.replace(/export\s+default\s+/g, '')
-    executionCode = executionCode.replace(/\btools\./g, (match, offset: number, fullStr: string) =>
-        isInsideStringLiteral(fullStr, offset) ? match : 'mj.'
-    )
-
-    // Auto-heal dynamic import(), require(), and static import statements
-    executionCode = executionCode.replace(
-        /(?:const|let|var)\s+(\{[^}]*\}|[\w$]+)\s*=\s*(?:await\s+)?import\s*\(\s*['"]([^'"]+)['"]\s*\);?/g,
-        (_m: string, varName: string, modName: string): string =>
-            mapModuleBindingReplacement(varName, modName, 'dynamic import')
-    )
-    executionCode = executionCode.replace(
-        /(?:await\s+)?import\s*\(\s*['"](?:fs|node:fs|path|node:path|memory-journal(?:-mcp)?|sqlite-journal|mcp|@modelcontextprotocol\/[^'"]+)['"]\s*\);?/g,
-        '/* auto-healed dynamic import */'
-    )
-    executionCode = executionCode.replace(
-        /(?:const|let|var)\s+(\{[^}]*\}|[\w$]+)\s*=\s*require\s*\(\s*['"]([^'"]+)['"]\s*\);?/g,
-        (_m: string, varName: string, modName: string): string =>
-            mapModuleBindingReplacement(varName, modName, 'require')
-    )
-    executionCode = executionCode.replace(
-        /^\s*require\s*\(\s*['"](?:fs|node:fs|path|node:path|memory-journal(?:-mcp)?|sqlite-journal|mcp|@modelcontextprotocol\/[^'"]+)['"]\s*\);?/gm,
-        '/* auto-healed require */'
-    )
-    return executionCode.replace(
-        /import\s+(\{[^}]*\}|\*\s+as\s+[\w$]+|[\w$]+)\s+from\s+['"]([^'"]+)['"]\s*;?/g,
-        (_m: string, varName: string, modName: string): string =>
-            mapModuleBindingReplacement(varName, modName, 'import')
-    )
-}
-
 function rewriteSandboxNodeAndContextCalls(src: string): string {
     let executionCode = unwrapNestedExecuteCode(src)
     executionCode = executionCode.replace(
@@ -380,22 +208,7 @@ function rewriteSandboxNodeAndContextCalls(src: string): string {
     if (!isValidJsScript(executionCode) || hasAccidentalTaggedTemplateBackticks(executionCode)) {
         executionCode = applyTemplateAndQuoteDelimiterHealing(executionCode)
     }
-    executionCode = executionCode.replace(
-        /\bJSON\.parse\s*\(\s*context\s*\)/g,
-        '(typeof context === "string" ? JSON.parse(context) : context)'
-    )
-    executionCode = executionCode.replace(
-        /\bJSON\.parse\s*\(\s*context\s*\|\|\s*['"][^'"]*['"]\s*\)/g,
-        '(typeof context === "string" ? JSON.parse(context) : context)'
-    )
-    executionCode = executionCode.replace(
-        /\bJSON\.parse\s*\(\s*context\s*\?\?\s*['"][^'"]*['"]\s*\)/g,
-        '(typeof context === "string" ? JSON.parse(context) : context)'
-    )
-    return executionCode.replace(
-        /\bJSON\.parse\s*\(\s*(context\.[a-zA-Z0-9_$]+)\s*\)/g,
-        '(typeof $1 === "string" ? JSON.parse($1) : $1)'
-    )
+    return rewriteContextJsonParseCalls(executionCode)
 }
 
 /**
@@ -412,11 +225,11 @@ export function healCodeModeScript(code: string): string {
     const healedJson = extractAndRecoverJsonCode(executionCode)
     if (healedJson !== null) return healedJson
 
-    executionCode = executionCode
-        .replace(/<CURRENT_PROJECT_NUMBER>/g, 'undefined')
-        .replace(/<CURRENT_PROJECT_ID>/g, 'undefined')
-        .replace(/<PROJECT_NUMBER>/g, 'undefined')
-        .replace(/<PROJECT_ID>/g, 'undefined')
+    executionCode = executionCode.replace(
+        /<(?:CURRENT_PROJECT_NUMBER|CURRENT_PROJECT_ID|PROJECT_NUMBER|PROJECT_ID)>/g,
+        (match: string, offset: number, fullStr: string): string =>
+            isInsideStringLiteral(fullStr, offset) ? match : 'undefined'
+    )
     executionCode = rewriteModuleImportsAndExports(executionCode)
     executionCode = rewriteSandboxNodeAndContextCalls(executionCode)
 

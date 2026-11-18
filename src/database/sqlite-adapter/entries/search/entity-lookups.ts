@@ -6,6 +6,7 @@ import {
 } from '../shared.js'
 import { sanitizeFtsQuery } from './fts-sanitizer.js'
 import { effectiveWorkspace } from '../../../workspace-scope.js'
+import { sanitizeSearchQuery } from '../../../../utils/security-utils.js'
 import { chunkedInPredicate } from '../../row-helpers.js'
 import { expandTagFilterValues } from '../../tags.js'
 
@@ -162,12 +163,15 @@ export function getSearchFacets(
 
     const useFts = queryStr.length > 0
     const sanitizedQuery = useFts ? sanitizeFtsQuery(queryStr) : ''
-    // [BOUNDARY] An all-punctuation query sanitizes to '' and `MATCH ''` throws in FTS5.
-    if (useFts && sanitizedQuery === '') return { tags: [], entryTypes: [] }
+    const escapedLikeQuery = useFts ? sanitizeSearchQuery(queryStr) : ''
+    const fallbackToLike = useFts && sanitizedQuery === ''
 
-    if (useFts) {
+    if (useFts && !fallbackToLike) {
         conditions.push(`fts_content MATCH ?`)
         params.push(sanitizedQuery)
+    } else if (fallbackToLike) {
+        conditions.push(`e.content LIKE '%' || ? || '%' ESCAPE '\\'`)
+        params.push(escapedLikeQuery)
     }
 
     const expandedFilterTags =
@@ -193,12 +197,22 @@ export function getSearchFacets(
         tags: undefined,
     })
 
-    return executeFacetCountQueries(db, useFts, conditions, params, entryTypeConditions, entryTypeParams)
+    const result = executeFacetCountQueries(
+        db,
+        useFts && !fallbackToLike,
+        conditions,
+        params,
+        entryTypeConditions,
+        entryTypeParams,
+        escapedLikeQuery
+    )
+    return fallbackToLike ? { ...result, degraded: true } : result
 }
 
-function dropFtsMatch(
+function replaceFtsMatchWithLike(
     conditions: string[],
-    params: unknown[]
+    params: unknown[],
+    likeQuery: string
 ): { conditions: string[]; params: unknown[] } {
     const nextConditions: string[] = []
     const nextParams: unknown[] = []
@@ -206,6 +220,8 @@ function dropFtsMatch(
     for (const condition of conditions) {
         const marks = condition.match(/\?/g)?.length ?? 0
         if (condition.includes('fts_content MATCH')) {
+            nextConditions.push(`e.content LIKE '%' || ? || '%' ESCAPE '\\'`)
+            nextParams.push(likeQuery)
             paramIndex += marks
             continue
         }
@@ -224,7 +240,8 @@ function executeFacetCountQueries(
     conditions: string[],
     params: unknown[],
     entryTypeConditions: string[],
-    entryTypeParams: unknown[]
+    entryTypeParams: unknown[],
+    likeFallbackQuery?: string
 ): { tags: { name: string; count: number }[]; entryTypes: { name: string; count: number }[]; degraded?: boolean } {
     const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : ''
     const entryTypesWhere =
@@ -259,8 +276,12 @@ function executeFacetCountQueries(
         }[]
     } catch (err) {
         if (useFts && err instanceof Error && /fts5: syntax error/i.test(err.message)) {
-            const tags = dropFtsMatch(conditions, params)
-            const types = dropFtsMatch(entryTypeConditions, entryTypeParams)
+            const tags = replaceFtsMatchWithLike(conditions, params, likeFallbackQuery ?? '')
+            const types = replaceFtsMatchWithLike(
+                entryTypeConditions,
+                entryTypeParams,
+                likeFallbackQuery ?? ''
+            )
             const retried = executeFacetCountQueries(
                 db,
                 false,

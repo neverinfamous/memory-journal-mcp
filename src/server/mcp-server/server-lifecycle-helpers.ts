@@ -8,6 +8,7 @@ import { HttpTransport } from '../../transports/http/index.js'
 import type { ToolHandlerConfig } from '../../types/index.js'
 import type { DynamicConfig } from '../../utils/config-manager.js'
 import { logger } from '../../utils/logger.js'
+import { flushAgentIssues } from '../../utils/issue-logger.js'
 import type { ServerRuntime } from '../../utils/maintenance-lock.js'
 import { globalSubscriptionManager } from '../subscription-manager.js'
 import type { Scheduler } from '../scheduler.js'
@@ -68,6 +69,7 @@ export async function executeGracefulShutdown(params: GracefulShutdownParams): P
         logShutdownError(label, error)
     } finally {
         params.detachSignals?.()
+        await flushAgentIssues().catch(() => undefined)
         await awaitPendingVectorInit(runtime)
         closeDatabases()
         // [INTENT] Preserve any non-zero exit code set earlier instead of forcing 0 (L6).

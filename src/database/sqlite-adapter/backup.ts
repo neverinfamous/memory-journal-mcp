@@ -20,7 +20,9 @@ import {
 
 /** Maximum length for user-supplied backup names after sanitization */
 const MAX_BACKUP_NAME_LENGTH = 50
-const WIN_RESERVED_BACKUP_RE = /^(?:CON|PRN|AUX|NUL|COM[1-9]|LPT[1-9])(?:\..*)?$/i
+const WIN_RESERVED_BACKUP_RE =
+    /^(?:CON|PRN|AUX|NUL|COM[1-9\u00b9\u00b2\u00b3]|LPT[1-9\u00b9\u00b2\u00b3])(?:\s*\..*)?\s*$/i
+const ENCODED_TRAVERSAL_RE = /%(?:2f|5c|2e|00)/i
 
 interface BackupEntry {
     filename: string
@@ -52,6 +54,9 @@ export class BackupManager {
         const backupsDir = this.ctx.getBackupsDir()
 
         if (backupName) {
+            if (backupName.includes('\0') || ENCODED_TRAVERSAL_RE.test(backupName)) {
+                throw new ValidationError('Invalid or unsafe backup filename.')
+            }
             assertNoPathTraversal(backupName)
             if (backupName.includes(':') || WIN_RESERVED_BACKUP_RE.test(backupName.trim())) {
                 throw new PathTraversalError(backupName)

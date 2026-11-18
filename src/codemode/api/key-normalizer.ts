@@ -75,6 +75,9 @@ export function convertKeysToSnakeCase(obj: Record<string, unknown>, methodName?
         if (key !== snakeKey && Object.hasOwn(obj, snakeKey) && obj[snakeKey] !== undefined) {
             continue
         }
+        if (value === undefined && Object.hasOwn(result, snakeKey) && result[snakeKey] !== undefined) {
+            continue
+        }
 
         const coerced = coerceNumericValue(snakeKey, value)
         if (coerced !== undefined) {
@@ -99,18 +102,22 @@ interface KeyContext {
     isGithubTool: boolean
 }
 
+function hasDefinedKey(record: Record<string, unknown>, key: string): boolean {
+    return Object.hasOwn(record, key) && record[key] !== undefined
+}
+
 /** camelCase → snake_case plus context-aware renames (id, link params, type, filename, target_user). */
 function resolveBaseSnakeKey(key: string, ctx: KeyContext): string {
     const { obj, result, methodLower, isLinkMethod } = ctx
     let snakeKey = key.replace(/[A-Z]/g, (letter) => `_${letter.toLowerCase()}`)
 
-    if (snakeKey === 'id' && !('entry_id' in obj) && !('entryId' in obj)) {
+    if (snakeKey === 'id' && !hasDefinedKey(obj, 'entry_id') && !hasDefinedKey(obj, 'entryId')) {
         snakeKey = 'entry_id'
     } else if (isLinkMethod) {
         if (
             (snakeKey === 'source' || snakeKey === 'source_id' || snakeKey === 'from_id') &&
-            !('from_entry_id' in obj) &&
-            !('from_entry_id' in result)
+            !hasDefinedKey(obj, 'from_entry_id') &&
+            !hasDefinedKey(result, 'from_entry_id')
         ) {
             snakeKey = 'from_entry_id'
         } else if (
@@ -118,20 +125,20 @@ function resolveBaseSnakeKey(key: string, ctx: KeyContext): string {
                 snakeKey === 'target_id' ||
                 snakeKey === 'to_id' ||
                 snakeKey === 'dest') &&
-            !('to_entry_id' in obj) &&
-            !('to_entry_id' in result)
+            !hasDefinedKey(obj, 'to_entry_id') &&
+            !hasDefinedKey(result, 'to_entry_id')
         ) {
             snakeKey = 'to_entry_id'
         } else if (
             (snakeKey === 'type' || snakeKey === 'rel') &&
-            !('relationship_type' in obj) &&
-            !('relationship_type' in result)
+            !hasDefinedKey(obj, 'relationship_type') &&
+            !hasDefinedKey(result, 'relationship_type')
         ) {
             snakeKey = 'relationship_type'
         } else if (
             (snakeKey === 'notes' || snakeKey === 'message' || snakeKey === 'text') &&
-            !('description' in obj) &&
-            !('description' in result)
+            !hasDefinedKey(obj, 'description') &&
+            !hasDefinedKey(result, 'description')
         ) {
             snakeKey = 'description'
         }
@@ -145,13 +152,28 @@ function resolveBaseSnakeKey(key: string, ctx: KeyContext): string {
                 methodLower === 'teamexportentries')
         ) {
             snakeKey = 'format'
-        } else if (!('entry_type' in obj) && !('flag_type' in obj) && !('entry_type' in result) && !('flag_type' in result)) {
+        } else if (
+            !hasDefinedKey(obj, 'entry_type') &&
+            !hasDefinedKey(obj, 'flag_type') &&
+            !hasDefinedKey(result, 'entry_type') &&
+            !hasDefinedKey(result, 'flag_type')
+        ) {
             snakeKey = 'entry_type'
         }
-    } else if (snakeKey === 'filename' && !('source_dir' in obj) && !('source_dir' in result)) {
-        if ('project_number' in obj || 'tags' in obj || 'dry_run' in obj) snakeKey = 'source_dir'
-    } else if (snakeKey === 'target_user' && !('author' in obj) && !('author' in result)) {
-        if ('role' in obj || 'role' in result) snakeKey = 'author'
+    } else if (
+        snakeKey === 'filename' &&
+        !hasDefinedKey(obj, 'source_dir') &&
+        !hasDefinedKey(result, 'source_dir')
+    ) {
+        if (hasDefinedKey(obj, 'project_number') || hasDefinedKey(obj, 'tags') || hasDefinedKey(obj, 'dry_run')) {
+            snakeKey = 'source_dir'
+        }
+    } else if (
+        snakeKey === 'target_user' &&
+        !hasDefinedKey(obj, 'author') &&
+        !hasDefinedKey(result, 'author')
+    ) {
+        if (hasDefinedKey(obj, 'role') || hasDefinedKey(result, 'role')) snakeKey = 'author'
     }
     return snakeKey
 }
@@ -193,7 +215,7 @@ function pathAliasReplacement(methodLower: string | undefined): string | undefin
 function resolveAliasedKey(startKey: string, value: unknown, ctx: KeyContext): string {
     const { obj, result, methodName, methodLower, isGithubTool } = ctx
     const alias = PARAM_ALIASES[startKey]
-    if (alias === undefined || alias in obj || alias in result) return startKey
+    if (alias === undefined || hasDefinedKey(obj, alias) || hasDefinedKey(result, alias)) return startKey
 
     if (startKey === 'entry') {
         if (isRecord(value)) return startKey

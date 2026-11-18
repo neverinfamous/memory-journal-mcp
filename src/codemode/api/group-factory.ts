@@ -66,7 +66,7 @@ export function createGroupApi(
                 // SEC-1.1: Route through dispatcher (callTool gate) when available.
                 // Dispatcher enforces scope checks, maintenance mode, and audit.
                 if (dispatcher) {
-                    return await dispatcher(tool.name, normalizedParams as Record<string, unknown>)
+                    return await dispatcher(tool.name, normalizedParams)
                 }
                 const cleanDirectParams = isRecord(normalizedParams)
                     ? ((): Record<string, unknown> => {

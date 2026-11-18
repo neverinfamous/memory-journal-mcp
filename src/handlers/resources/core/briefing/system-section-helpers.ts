@@ -7,7 +7,7 @@
 
 import * as fs from 'node:fs'
 import * as fsPromises from 'node:fs/promises'
-import { execFile, execFileSync } from 'node:child_process'
+import { execFile } from 'node:child_process'
 import * as path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { promisify } from 'node:util'
@@ -91,32 +91,6 @@ function parseGitCommitLines(
     }
 }
 
-export function fetchGitHistoryFromRepo(root: string, commitCount: number): GitHistorySummary {
-    const fetchLimit = Math.max(1, commitCount)
-    const out = execFileSync(
-        'git',
-        ['log', '-n', String(fetchLimit), '--format=%h|%s|%cr'],
-        { cwd: root, encoding: 'utf-8', timeout: 3000, windowsHide: true }
-    )
-
-    const unpushedHashes = new Set<string>()
-    try {
-        const unpushedOut = execFileSync(
-            'git',
-            ['log', '@{u}..HEAD', '--format=%h'],
-            { cwd: root, encoding: 'utf-8', timeout: 3000, windowsHide: true }
-        )
-        unpushedOut
-            .split('\n')
-            .filter(Boolean)
-            .forEach((h) => unpushedHashes.add(h.trim()))
-    } catch {
-        // Ignore if no upstream tracking branch
-    }
-
-    return parseGitCommitLines(out, unpushedHashes, commitCount)
-}
-
 export function formatBriefingLocalTime(now = new Date()): string {
     try {
         const formatter = new Intl.DateTimeFormat('en-US', {
@@ -134,38 +108,6 @@ export function formatBriefingLocalTime(now = new Date()): string {
     } catch {
         return now.toISOString().slice(0, 16).replace('T', ' ') + ' UTC'
     }
-}
-
-export function readRepoIndicators(root: string | null): {
-    hasCodeMap: boolean
-    localCheck: boolean | null
-} {
-    if (root === null) {
-        return { hasCodeMap: false, localCheck: null }
-    }
-
-    let hasCodeMap = false
-    try {
-        hasCodeMap = fs.existsSync(path.join(root, 'test-server', 'code-map.md'))
-    } catch {
-        // Non-critical — code-map indicator is best-effort
-    }
-
-    let localCheck: boolean | null = null
-    try {
-        const healthPath = path.join(root, '.test-output', 'health-status.json')
-        if (fs.existsSync(healthPath)) {
-            const content = fs.readFileSync(healthPath, 'utf-8')
-            const parsed = JSON.parse(content) as { ok?: boolean }
-            if (typeof parsed.ok === 'boolean') {
-                localCheck = parsed.ok
-            }
-        }
-    } catch {
-        // Non-critical
-    }
-
-    return { hasCodeMap, localCheck }
 }
 
 /** Async parallel git log + unpushed hash fetch for briefing system summary. */

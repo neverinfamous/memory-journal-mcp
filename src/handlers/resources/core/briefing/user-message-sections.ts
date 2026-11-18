@@ -7,6 +7,7 @@ import type { BriefingGitHub } from './github-section.js'
 import type { GraphSummary } from './context-section.js'
 import type { BriefingInsights } from './insights-section.js'
 import type { GitHistorySummary } from './system-section.js'
+import { fenceNonCanonicalRefOrKey } from '../../../../utils/security-utils.js'
 
 export interface BriefingUserMessageOptions {
     repoName: string
@@ -96,7 +97,7 @@ function formatWorkflowCounts(
 export function buildGithubParts(opts: BriefingUserMessageOptions, ciDisplay: string): string[] {
     const githubParts = [
         `**${escapeCell(opts.repoName)}**`,
-        escapeCell(opts.branchName),
+        escapeCell(fenceNonCanonicalRefOrKey(opts.branchName)),
         escapeCell(ciDisplay),
     ]
     const local = opts.github?.localGitStatus

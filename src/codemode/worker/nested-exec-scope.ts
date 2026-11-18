@@ -158,6 +158,75 @@ function buildIsolationOverrides(
     return Object.keys(res).length > 0 ? res : undefined
 }
 
+interface ShortcutDispatchInput {
+    arg: unknown
+    argRec: Record<string, unknown> | undefined
+    narrowed: { workspaceId?: string; projectNumber?: number }
+    pinnedWorkspace: string | undefined
+    pinnedProjectNumber: number | undefined
+    effectiveReadonly: boolean
+    effectiveDryRun: boolean
+    effectiveUseTestDb: boolean
+    shimMj: Record<string, unknown>
+}
+
+async function tryDispatchNestedShortcut(
+    input: ShortcutDispatchInput
+): Promise<{ handled: true; value: unknown } | { handled: false; codeToExec: string; isQueryOnlyArg: boolean }> {
+    const {
+        arg, argRec, narrowed, pinnedWorkspace, pinnedProjectNumber,
+        effectiveReadonly, effectiveDryRun, effectiveUseTestDb, shimMj,
+    } = input
+    const nestedQuerySearch = readNestedQuerySearch(arg)
+    if (nestedQuerySearch !== undefined) {
+        const effWs = narrowed.workspaceId ?? pinnedWorkspace
+        const effProj = narrowed.projectNumber ?? pinnedProjectNumber
+        const scopedSearch = {
+            ...nestedQuerySearch,
+            ...(nestedQuerySearch.workspace_id === undefined && effWs !== undefined
+                ? { workspace_id: effWs }
+                : {}),
+            ...(nestedQuerySearch.project_number === undefined && effProj !== undefined
+                ? { project_number: effProj }
+                : {}),
+            ...(effectiveUseTestDb ? { use_test_db: true } : {}),
+        }
+        return {
+            handled: true,
+            value: await Promise.resolve(invokeShimGroupMethod(shimMj, 'search', 'searchEntries', scopedSearch)),
+        }
+    }
+    const isQueryOnlyArg =
+        argRec !== undefined &&
+        typeof argRec['code'] !== 'string' &&
+        typeof argRec['script'] !== 'string' &&
+        typeof argRec['query'] === 'string' &&
+        argRec['query'].trim() !== ''
+    const codeToExec = readExecutableCode(arg)
+    const invokeCreate = (payload: unknown): unknown => invokeShimGroupMethod(shimMj, 'core', 'createEntry', payload)
+    if (codeToExec === null) {
+        const scoped = mergeNestedSynthesizedScope(arg, argRec, narrowed, pinnedWorkspace, pinnedProjectNumber)
+        return {
+            handled: true,
+            value: dispatchSynthesizedNestedEntry(scoped, effectiveReadonly, effectiveDryRun, effectiveUseTestDb, invokeCreate),
+        }
+    }
+    if (codeToExec === '') {
+        return { handled: true, value: { success: false, error: 'No code was executed', code: 'VALIDATION_ERROR' } }
+    }
+    if (!isQueryOnlyArg) {
+        const natural = naturalLanguageEntry(codeToExec)
+        if (natural !== undefined) {
+            const scoped = mergeNestedSynthesizedScope(natural, argRec, narrowed, pinnedWorkspace, pinnedProjectNumber)
+            return {
+                handled: true,
+                value: dispatchSynthesizedNestedEntry(scoped, effectiveReadonly, effectiveDryRun, effectiveUseTestDb, invokeCreate),
+            }
+        }
+    }
+    return { handled: false, codeToExec, isQueryOnlyArg }
+}
+
 /**
  * Builds the sandboxed nested `executeCode` dispatcher enforcing pinned scope,
  * readonly/dryRun/useTestDb invariants, and code-security checks before `vm.runInContext`.
@@ -175,8 +244,6 @@ export function createSandboxExecutor(options: SandboxExecutorOptions): (arg: un
         typeof pinnedProjectRaw === 'number' && Number.isSafeInteger(pinnedProjectRaw) && pinnedProjectRaw > 0
             ? pinnedProjectRaw
             : undefined
-    const invokeCreate = (payload: unknown): unknown => invokeShimGroupMethod(shimMj, 'core', 'createEntry', payload)
-    const invokeSearch = (payload: unknown): unknown => invokeShimGroupMethod(shimMj, 'search', 'searchEntries', payload)
 
     return async (arg: unknown): Promise<unknown> => {
         const argRec = isPlainRecord(arg) ? arg : undefined
@@ -186,40 +253,18 @@ export function createSandboxExecutor(options: SandboxExecutorOptions): (arg: un
         const effectiveReadonly = readonlyMode === true || argRec?.['readonly'] === true || argRec?.['read_only'] === true || argRec?.['readOnly'] === true
         const effectiveDryRun = dryRunMode === true || argRec?.['dry_run'] === true || argRec?.['dryRun'] === true
         const effectiveUseTestDb = useTestDbMode === true || argRec?.['use_test_db'] === true || argRec?.['useTestDb'] === true
-        const nestedQuerySearch = readNestedQuerySearch(arg)
-        if (nestedQuerySearch !== undefined) {
-            return await Promise.resolve(invokeSearch(effectiveUseTestDb ? { ...nestedQuerySearch, use_test_db: true } : nestedQuerySearch))
-        }
-
         const narrowed = resolveNestedNarrowedScope(argRec, pinnedWorkspace, pinnedProjectNumber, projectRegistryRaw)
-        const isQueryOnlyArg =
-            argRec !== undefined &&
-            typeof argRec['code'] !== 'string' &&
-            typeof argRec['script'] !== 'string' &&
-            typeof argRec['query'] === 'string' &&
-            argRec['query'].trim() !== ''
-        const codeToExec = readExecutableCode(arg)
-        if (codeToExec === null) {
-            const scoped = mergeNestedSynthesizedScope(arg, argRec, narrowed, pinnedWorkspace, pinnedProjectNumber)
-            return dispatchSynthesizedNestedEntry(scoped, effectiveReadonly, effectiveDryRun, effectiveUseTestDb, invokeCreate)
-        }
-        if (codeToExec === '') return { success: false, error: 'No code was executed', code: 'VALIDATION_ERROR' }
+        const shortcut = await tryDispatchNestedShortcut({
+            arg, argRec, narrowed, pinnedWorkspace, pinnedProjectNumber,
+            effectiveReadonly, effectiveDryRun, effectiveUseTestDb, shimMj,
+        })
+        if (shortcut.handled) return shortcut.value
 
-        if (!isQueryOnlyArg) {
-            const natural = naturalLanguageEntry(codeToExec)
-            if (natural !== undefined) {
-                const scoped = mergeNestedSynthesizedScope(natural, argRec, narrowed, pinnedWorkspace, pinnedProjectNumber)
-                return dispatchSynthesizedNestedEntry(scoped, effectiveReadonly, effectiveDryRun, effectiveUseTestDb, invokeCreate)
-            }
-        }
+        const { codeToExec, isQueryOnlyArg } = shortcut
         const validation = validateSandboxCode(codeToExec)
         if (!validation.valid) return { success: false, error: validation.errors.join('; '), code: 'SECURITY_VIOLATION' }
         if (isQueryOnlyArg && !/^(?:return\s+|await\s+mj\.)/.test(codeToExec.trim())) {
-            return {
-                success: false,
-                error: 'Nested executeCode query could not be executed as a read-only search.',
-                code: 'VALIDATION_ERROR',
-            }
+            return { success: false, error: 'Nested executeCode query could not be executed as a read-only search.', code: 'VALIDATION_ERROR' }
         }
         if (vmContextRef.current === undefined) return { success: false, error: 'No code was executed', code: 'VALIDATION_ERROR' }
 

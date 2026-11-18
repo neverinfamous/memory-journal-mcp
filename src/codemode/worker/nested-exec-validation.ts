@@ -207,6 +207,58 @@ function validateProjectNumberAliases(
     return null
 }
 
+function validateUnpinnedScopeAliases(
+    records: Record<string, unknown>[],
+    registry: Record<string, ProjectRegistryEntry> | undefined
+): { error?: string; inferredWorkspace?: string } {
+    const wsKeys = [
+        'workspace_id',
+        'workspaceId',
+        'workspace',
+        'target_workspace_id',
+        'targetWorkspaceId',
+        'project_name',
+        'projectName',
+    ] as const
+    const repoKeys = ['repo', 'repo_name', 'repoName', 'repository'] as const
+    let resolvedWs: string | undefined
+    for (const rec of records) {
+        const candidates: string[] = []
+        for (const key of wsKeys) {
+            const raw = rec[key]
+            if (typeof raw === 'string' && raw.trim() !== '' && raw.trim() !== '*') {
+                candidates.push(raw.trim())
+            }
+        }
+        if (isProjectStringValue(rec['project']) && rec['project'].trim() !== '*') {
+            candidates.push(rec['project'].trim())
+        }
+        for (const candidate of candidates) {
+            const canon = findRegistryKey(candidate, registry) ?? candidate
+            if (resolvedWs !== undefined && canon.toLowerCase() !== resolvedWs.toLowerCase()) {
+                return { error: `Workspace '${candidate}' conflicts with nested workspace '${resolvedWs}'` }
+            }
+            resolvedWs = canon
+        }
+        for (const key of repoKeys) {
+            const rawRepo = rec[key]
+            if (typeof rawRepo !== 'string' || rawRepo.trim() === '') continue
+            const trimmedRepo = rawRepo.trim()
+            const repoSlug = trimmedRepo.split(/[/\\]/).filter(Boolean).pop() ?? trimmedRepo
+            const matchedRepoKey =
+                findRegistryKey(trimmedRepo, registry) ?? findRegistryKey(repoSlug, registry)
+            if (matchedRepoKey === undefined) {
+                return { error: `Repository '${trimmedRepo}' is not registered in projectRegistry` }
+            }
+            if (resolvedWs !== undefined && matchedRepoKey.toLowerCase() !== resolvedWs.toLowerCase()) {
+                return { error: `Repository '${trimmedRepo}' conflicts with workspace '${resolvedWs}'` }
+            }
+            resolvedWs = matchedRepoKey
+        }
+    }
+    return resolvedWs !== undefined ? { inferredWorkspace: resolvedWs } : {}
+}
+
 /**
  * Validates that nested `mj.executeCode` / `executeCode` arguments do not drift outside the
  * outer session's pinned `workspace_id` or `project_number`.
@@ -225,18 +277,27 @@ export function validateNestedExecScope(
             ? findRegistryKey(pinnedWorkspace, registry) ?? pinnedWorkspace
             : undefined
 
+    let effectiveWs = pinnedWorkspace
+    let effectiveCanon = canonPinned
     if (pinnedWorkspace !== undefined && canonPinned !== undefined) {
         const wsErr = validateWorkspaceAliases(records, pinnedWorkspace, canonPinned, registry)
         if (wsErr !== null) return wsErr
         const repoErr = validateRepoAliases(records, pinnedWorkspace, canonPinned, registry)
         if (repoErr !== null) return repoErr
+    } else {
+        const unpinned = validateUnpinnedScopeAliases(records, registry)
+        if (unpinned.error !== undefined) return { error: unpinned.error }
+        if (unpinned.inferredWorkspace !== undefined) {
+            effectiveWs = unpinned.inferredWorkspace
+            effectiveCanon = findRegistryKey(unpinned.inferredWorkspace, registry) ?? unpinned.inferredWorkspace
+        }
     }
 
     return validateProjectNumberAliases(
         records,
-        pinnedWorkspace,
+        effectiveWs,
         pinnedProjectNumber,
-        canonPinned,
+        effectiveCanon,
         registry
     )
 }

@@ -93,22 +93,40 @@ export class McpLogger {
         return LOG_LEVEL_PRIORITY[level] <= LOG_LEVEL_PRIORITY[this.minLevel]
     }
 
-    private sanitizeValue(value: unknown): unknown {
+    private sanitizeValue(
+        value: unknown,
+        depth = 0,
+        seen = new WeakSet()
+    ): unknown {
         if (typeof value === 'string') {
             return sanitizeErrorForLogging(value).replace(/[\r\n]+/g, ' ')
         }
-        if (Array.isArray(value)) {
-            return value.map((item) => this.sanitizeValue(item))
+        if (typeof value === 'bigint') {
+            return value.toString()
         }
-        if (typeof value === 'object' && value !== null) {
+        if (value === null || typeof value !== 'object') {
+            return value
+        }
+        if (seen.has(value)) {
+            return '[Circular]'
+        }
+        if (depth >= 6) {
+            return '[Truncated]'
+        }
+        seen.add(value)
+        try {
+            if (Array.isArray(value)) {
+                return value.map((item) => this.sanitizeValue(item, depth + 1, seen))
+            }
             const sanitized: Record<string, unknown> = {}
             Object.setPrototypeOf(sanitized, null)
             for (const [k, v] of Object.entries(value)) {
-                sanitized[k] = this.sanitizeValue(v)
+                sanitized[k] = this.sanitizeValue(v, depth + 1, seen)
             }
             return sanitized
+        } finally {
+            seen.delete(value)
         }
-        return value
     }
 
     private sanitizeData(data: LogData): LogData {
@@ -136,7 +154,11 @@ export class McpLogger {
         )
 
         if (Object.keys(extras).length > 0) {
-            formatted += ` ${JSON.stringify(extras)}`
+            try {
+                formatted += ` ${JSON.stringify(extras)}`
+            } catch {
+                formatted += ' {"_serializationError":"unserializable log context"}'
+            }
         }
 
         return formatted

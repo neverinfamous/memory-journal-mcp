@@ -11,83 +11,9 @@ import { lookupRegistryEntry } from './session-context.js'
 import { normalizeBatchDispatchItems } from './dispatch-batch-scope.js'
 import { checkSchemaAcceptsKey } from './dispatch-schema-introspection.js'
 import { autoPopulateGithubUrls } from './dispatch-github-urls.js'
+import { deepCamelToSnake } from './dispatch-key-normalizer.js'
 
-export { checkSchemaAcceptsKey }
-
-const FORBIDDEN_KEYS = new Set(['__proto__', 'constructor', 'prototype'])
-
-const CANONICAL_SNAKE_SCOPE_KEYS = new Set([
-    'workspaceId',
-    'projectNumber',
-    'projectId',
-    'targetWorkspaceId',
-    'repoName',
-    'entryId',
-    'entryIds',
-    'fromEntryId',
-    'toEntryId',
-])
-
-const UPPERCASE_RE = /[A-Z]/
-const OPAQUE_VALUE_KEYS = new Set(['context', 'prompt', 'auto_context', 'autoContext'])
-
-/**
- * Recursively converts camelCase keys to snake_case.
- * [INVARIANT] `id -> entry_id` / `ids -> entry_ids` aliasing applies only to top-level keys
- * and never when the target schema itself accepts `id`/`ids`, so nested
- * payloads (anchors, relationships, auto_context) keep their own `id` fields intact.
- */
-export function deepCamelToSnake(
-    obj: unknown,
-    depth = 0,
-    acceptsKey?: (key: string) => boolean
-): unknown {
-    if (depth > 12) return obj
-    if (Array.isArray(obj)) return obj.map((item) => deepCamelToSnake(item, depth + 1))
-    if (isRecord(obj)) {
-        const newObj: Record<string, unknown> = {}
-        const canAlias = (alias: string): boolean => depth === 0 && !(acceptsKey?.(alias) ?? false)
-        for (const [k, v] of Object.entries(obj)) {
-            if (FORBIDDEN_KEYS.has(k)) continue
-            if (OPAQUE_VALUE_KEYS.has(k)) {
-                const opaqueKey = UPPERCASE_RE.test(k)
-                    ? k.replace(/[A-Z]/g, (letter) => `_${letter.toLowerCase()}`)
-                    : k
-                const shouldWrite =
-                    k === opaqueKey
-                        ? v !== undefined || !Object.hasOwn(newObj, opaqueKey)
-                        : !Object.hasOwn(obj, opaqueKey) || obj[opaqueKey] === undefined
-                if (!FORBIDDEN_KEYS.has(opaqueKey) && shouldWrite) {
-                    newObj[opaqueKey] = v
-                }
-                continue
-            }
-            if (depth === 0 && !CANONICAL_SNAKE_SCOPE_KEYS.has(k) && (acceptsKey?.(k) ?? false)) {
-                newObj[k] = deepCamelToSnake(v, depth + 1)
-                continue
-            }
-            const snakeKey = UPPERCASE_RE.test(k)
-                ? k.replace(/[A-Z]/g, (letter) => `_${letter.toLowerCase()}`)
-                : k
-            if (FORBIDDEN_KEYS.has(snakeKey)) continue
-            if (snakeKey === 'id' && !('entry_id' in obj) && !('entryId' in obj) && canAlias('id')) {
-                newObj['entry_id'] = deepCamelToSnake(v, depth + 1)
-                continue
-            }
-            if (snakeKey === 'ids' && !('entry_ids' in obj) && !('entryIds' in obj) && canAlias('ids')) {
-                const vSnake = deepCamelToSnake(v, depth + 1)
-                newObj['entry_ids'] = Array.isArray(vSnake) ? vSnake : [vSnake]
-                continue
-            }
-            if (k !== snakeKey && Object.hasOwn(obj, snakeKey) && obj[snakeKey] !== undefined) {
-                continue
-            }
-            newObj[snakeKey] = deepCamelToSnake(v, depth + 1)
-        }
-        return newObj
-    }
-    return obj
-}
+export { checkSchemaAcceptsKey, deepCamelToSnake }
 
 export interface DispatchParamContext {
     sessionContext: ToolContext

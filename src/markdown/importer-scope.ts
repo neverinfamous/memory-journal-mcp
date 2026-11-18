@@ -9,6 +9,7 @@ import type { VectorSearchManager } from '../vector/vector-search-manager/index.
 import type { EntryType, JournalEntry, SignificanceType } from '../types/index.js'
 import { ENTRY_TYPES, SIGNIFICANCE_TYPES } from '../types/index.js'
 import { PermissionError, ValidationError } from '../types/errors.js'
+import { logger } from '../utils/logger.js'
 import {
     MAX_CONTENT_LENGTH,
     normalizeSignificanceValue,
@@ -248,7 +249,7 @@ export function resolvePrefetchedEntry(
     const hit = prefetchedById.get(entryId)
     if (!hit) return null
     const scopeId = effectiveWorkspace(workspaceId)
-    return scopeId === '*' || hit.workspaceId === scopeId ? hit : null
+    return scopeId === '*' || (hit.workspaceId ?? 'default') === scopeId ? hit : null
 }
 
 /** Index imported entries in vectorManager, batching via `addEntries` with per-file error fallback. */
@@ -280,8 +281,11 @@ export async function indexImportedEntries(
             await vectorManager.addEntries(indexable)
             result.vectorsIndexed += indexable.length
             return
-        } catch {
-            // Fall back per entry so per-file error attribution remains exact.
+        } catch (err) {
+            logger.debug('Batch vector indexing failed during import; falling back per entry', {
+                module: 'MarkdownImporter',
+                error: err instanceof Error ? err.message : String(err),
+            })
         }
     }
 

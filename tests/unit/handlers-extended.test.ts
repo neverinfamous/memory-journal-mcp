@@ -187,7 +187,7 @@ describe('Extended Tool Handlers (Team, IO, Admin, Core)', () => {
             expect(resAuthor.is_aliased).toBe(true)
 
             // Consolidate authors
-            teamDb.createEntry({ content: 'Team entry by alias', author: 'alex-dev' })
+            teamDb.createEntry({ content: 'Team entry by alias', author: 'alex-dev', projectNumber: 5 })
             const consRes = (await findTool(tools, 'team_consolidate_authors').handler({
                 target: 'alex-main',
             })) as { success: boolean; updated_count: number }

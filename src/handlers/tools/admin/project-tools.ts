@@ -25,6 +25,7 @@ import {
     isValidProjectPath,
 } from '../../../utils/project-registry-guards.js'
 import { parsePositiveProjectNumber } from '../../../utils/safe-positive-int.js'
+import { findCanonicalRegistryKey } from '../../../utils/workspace-resolver.js'
 import {
     readProjectRegistryFile,
     writeProjectRegistryFile,
@@ -170,7 +171,7 @@ function validateUpdateProjectInputs(
     parsed: ReturnType<typeof UpdateProjectSchemaMcp.parse>,
     mergedRegistry: RegistryMap,
     allowedRoots?: string[]
-): { error?: Record<string, unknown>; targetName?: string; coercedUpdateNum?: number } {
+): { error?: Record<string, unknown>; targetName?: string; resolvedName?: string; coercedUpdateNum?: number } {
     if (invalidProjectNumber(parsed.project_number)) {
         return { error: { success: false, error: 'project_number must be a positive integer' } }
     }
@@ -185,14 +186,17 @@ function validateUpdateProjectInputs(
             error: { success: false, error: `Invalid or unsafe project path: '${parsed.absolute_path}'` },
         }
     }
-    if (!Object.hasOwn(mergedRegistry, parsed.name) || !mergedRegistry[parsed.name]) {
+    const resolvedName = Object.hasOwn(mergedRegistry, parsed.name)
+        ? parsed.name
+        : findCanonicalRegistryKey(parsed.name, mergedRegistry)
+    if (resolvedName === undefined || !mergedRegistry[resolvedName]) {
         return { error: { success: false, error: `🛠️ AUTONOMOUS HEALING: Project not found: '${parsed.name}'` } }
     }
-    const targetName = parsed.new_name !== undefined ? parsed.new_name.trim() : parsed.name
+    const targetName = parsed.new_name !== undefined ? parsed.new_name.trim() : resolvedName
     if (isForbiddenProjectKey(targetName)) {
         return { error: { success: false, error: 'Invalid target project name.' } }
     }
-    if (targetName !== parsed.name) {
+    if (targetName !== resolvedName) {
         if (Object.hasOwn(mergedRegistry, targetName)) {
             return {
                 error: {
@@ -201,7 +205,7 @@ function validateUpdateProjectInputs(
                 },
             }
         }
-        const renameConflict = findCaseInsensitiveKeyConflict(mergedRegistry, targetName, parsed.name)
+        const renameConflict = findCaseInsensitiveKeyConflict(mergedRegistry, targetName, resolvedName)
         if (renameConflict !== undefined) {
             return {
                 error: {
@@ -214,7 +218,7 @@ function validateUpdateProjectInputs(
     const coercedUpdateNum = coerceRegistryProjectNumber(parsed.project_number)
     if (coercedUpdateNum !== undefined) {
         const numConflict = findProjectNumberConflict(mergedRegistry, coercedUpdateNum, [
-            parsed.name,
+            resolvedName,
             targetName,
         ])
         if (numConflict !== undefined) {
@@ -226,7 +230,9 @@ function validateUpdateProjectInputs(
             }
         }
     }
-    return coercedUpdateNum !== undefined ? { targetName, coercedUpdateNum } : { targetName }
+    return coercedUpdateNum !== undefined
+        ? { targetName, resolvedName, coercedUpdateNum }
+        : { targetName, resolvedName }
 }
 
 function handleUpdateProject(
@@ -242,28 +248,32 @@ function handleUpdateProject(
     const mergedRegistry: RegistryMap = { ...liveRegistry, ...diskRegistry }
 
     const validation = validateUpdateProjectInputs(parsed, mergedRegistry, allowedRoots)
-    if (validation.error !== undefined || validation.targetName === undefined) {
+    if (
+        validation.error !== undefined ||
+        validation.targetName === undefined ||
+        validation.resolvedName === undefined
+    ) {
         return validation.error ?? { success: false, error: 'Invalid update project input' }
     }
 
-    const { targetName, coercedUpdateNum } = validation
+    const { targetName, resolvedName, coercedUpdateNum } = validation
     const project: ProjectRegistryEntry = {
-        ...(mergedRegistry[parsed.name] ?? { path: '' }),
+        ...(mergedRegistry[resolvedName] ?? { path: '' }),
         ...(parsed.absolute_path !== undefined ? { path: parsed.absolute_path } : {}),
         ...(coercedUpdateNum !== undefined ? { project_number: coercedUpdateNum } : {}),
     }
 
     const nextDiskRegistry =
-        targetName !== parsed.name ? omitRegistryKey(diskRegistry, parsed.name) : { ...diskRegistry }
+        targetName !== resolvedName ? omitRegistryKey(diskRegistry, resolvedName) : { ...diskRegistry }
     nextDiskRegistry[targetName] = project
     diskConfig['projectRegistry'] = nextDiskRegistry
 
     const nextLiveRegistry =
-        targetName !== parsed.name ? omitRegistryKey(liveRegistry, parsed.name) : liveRegistry
+        targetName !== resolvedName ? omitRegistryKey(liveRegistry, resolvedName) : liveRegistry
     const keyChange: RegistryKeyChange | undefined =
-        targetName !== parsed.name || coercedUpdateNum !== undefined
+        targetName !== resolvedName || coercedUpdateNum !== undefined
             ? {
-                  from: parsed.name,
+                  from: resolvedName,
                   to: targetName,
                   ...(coercedUpdateNum !== undefined ? { projectNumber: coercedUpdateNum } : {}),
               }
@@ -288,20 +298,23 @@ function handleDeleteProject(params: unknown, context: ToolContext): Record<stri
     const liveRegistry = readLiveProjectRegistry(context)
     const mergedRegistry: RegistryMap = { ...liveRegistry, ...diskRegistry }
 
-    if (!Object.hasOwn(mergedRegistry, parsed.name) || !mergedRegistry[parsed.name]) {
+    const resolvedName = Object.hasOwn(mergedRegistry, parsed.name)
+        ? parsed.name
+        : findCanonicalRegistryKey(parsed.name, mergedRegistry)
+    if (resolvedName === undefined || !mergedRegistry[resolvedName]) {
         return { success: false, error: `🛠️ AUTONOMOUS HEALING: Project not found: '${parsed.name}'` }
     }
 
-    const nextDiskRegistry = omitRegistryKey(diskRegistry, parsed.name)
+    const nextDiskRegistry = omitRegistryKey(diskRegistry, resolvedName)
     diskConfig['projectRegistry'] = nextDiskRegistry
-    const nextLiveRegistry = omitRegistryKey(liveRegistry, parsed.name)
+    const nextLiveRegistry = omitRegistryKey(liveRegistry, resolvedName)
     saveConfig(
         diskConfig,
         context,
-        { from: parsed.name },
+        { from: resolvedName },
         { ...nextLiveRegistry, ...nextDiskRegistry }
     )
-    return { success: true, message: `Project '${parsed.name}' deleted.` }
+    return { success: true, message: `Project '${resolvedName}' deleted.` }
 }
 
 export function getProjectTools(context: ToolContext): ToolDefinition[] {

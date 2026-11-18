@@ -101,6 +101,12 @@ function unwrapDefChild(
             continue
         }
         const childDef = getZodDef(rec)
+        if (key === 'in' && 'out' in def && def['out'] !== undefined) {
+            const inType = readDefTypeName(childDef ?? rec)
+            if (inType === 'unknown' || inType === 'ZodUnknown' || inType === 'any' || inType === 'ZodAny') {
+                continue
+            }
+        }
         if (childDef !== undefined) {
             return { schema: rec, def: childDef }
         }
@@ -111,7 +117,10 @@ function unwrapDefChild(
     return null
 }
 
-function resolveUnionDisplayName(currentDef: Record<string, unknown>): string | undefined {
+function resolveUnionDisplayName(
+    currentDef: Record<string, unknown>,
+    visitedLazy: WeakSet<object>
+): string | undefined {
     if (!Array.isArray(currentDef['options'])) return undefined
     const memberTypes = Array.from(
         new Set(
@@ -121,7 +130,7 @@ function resolveUnionDisplayName(currentDef: Record<string, unknown>): string | 
                 )
                 .map((opt) => {
                     const optDef = getZodDef(opt) ?? opt
-                    return peelZodType(optDef, opt).typeName
+                    return peelZodType(optDef, opt, visitedLazy).typeName
                 })
                 .filter((t) => t.length > 0 && t !== 'unknown')
         )
@@ -149,7 +158,8 @@ function unwrapLazyDef(
  */
 export function peelZodType(
     def: Record<string, unknown>,
-    outerSchema?: Record<string, unknown>
+    outerSchema?: Record<string, unknown>,
+    visitedLazy = new WeakSet()
 ): {
     typeName: string
     isOptional: boolean
@@ -159,47 +169,58 @@ export function peelZodType(
     let description: string | undefined
     let currentDef = def
     let currentSchema = outerSchema
+    const addedLazyKeys: object[] = []
 
-    for (let depth = 0; depth < 32; depth++) {
-        if (description === undefined && typeof currentSchema?.['description'] === 'string') {
-            description = currentSchema['description']
-        }
-        if (description === undefined && typeof currentDef['description'] === 'string') {
-            description = currentDef['description']
-        }
-
-        const tn = readDefTypeName(currentDef)
-        if (tn === undefined) break
-
-        if (tn === 'nonoptional' || tn === 'ZodNonOptional') {
-            optionalDecided ??= false
-            const next = unwrapDefChild(currentDef, ['innerType'])
-            if (!next?.def) break
-            currentSchema = next.schema
-            currentDef = next.def
-        } else if (ZOD_OPTIONAL_WRAPPERS.has(tn)) {
-            optionalDecided ??= true
-            const next = unwrapDefChild(currentDef, ['innerType'])
-            if (!next?.def) break
-            currentSchema = next.schema
-            currentDef = next.def
-        } else if (tn === 'lazy' || tn === 'ZodLazy') {
-            const next = unwrapLazyDef(currentDef)
-            if (next === null) break
-            currentSchema = next.schema
-            currentDef = next.def
-        } else if (ZOD_TRANSPARENT_WRAPPERS.has(tn)) {
-            const next = unwrapDefChild(currentDef, ['in', 'out', 'schema', 'innerType'])
-            if (!next?.def) break
-            currentSchema = next.schema
-            currentDef = next.def
-        } else {
-            const normalized = tn.replace('Zod', '').toLowerCase()
-            let displayName = ZOD_TYPE_DISPLAY[tn] ?? normalized
-            if (displayName === 'union') {
-                displayName = resolveUnionDisplayName(currentDef) ?? displayName
+    try {
+        for (let depth = 0; depth < 32; depth++) {
+            if (description === undefined && typeof currentSchema?.['description'] === 'string') {
+                description = currentSchema['description']
             }
-            return { typeName: displayName, isOptional: optionalDecided ?? false, description }
+            if (description === undefined && typeof currentDef['description'] === 'string') {
+                description = currentDef['description']
+            }
+
+            const tn = readDefTypeName(currentDef)
+            if (tn === undefined) break
+
+            if (tn === 'nonoptional' || tn === 'ZodNonOptional') {
+                optionalDecided ??= false
+                const next = unwrapDefChild(currentDef, ['innerType'])
+                if (!next?.def) break
+                currentSchema = next.schema
+                currentDef = next.def
+            } else if (ZOD_OPTIONAL_WRAPPERS.has(tn)) {
+                optionalDecided ??= true
+                const next = unwrapDefChild(currentDef, ['innerType'])
+                if (!next?.def) break
+                currentSchema = next.schema
+                currentDef = next.def
+            } else if (tn === 'lazy' || tn === 'ZodLazy') {
+                const lazyKey: object = currentSchema ?? currentDef
+                if (visitedLazy.has(lazyKey)) break
+                const next = unwrapLazyDef(currentDef)
+                if (next === null) break
+                visitedLazy.add(lazyKey)
+                addedLazyKeys.push(lazyKey)
+                currentSchema = next.schema
+                currentDef = next.def
+            } else if (ZOD_TRANSPARENT_WRAPPERS.has(tn)) {
+                const next = unwrapDefChild(currentDef, ['in', 'out', 'schema', 'innerType'])
+                if (!next?.def) break
+                currentSchema = next.schema
+                currentDef = next.def
+            } else {
+                const normalized = tn.replace('Zod', '').toLowerCase()
+                let displayName = ZOD_TYPE_DISPLAY[tn] ?? normalized
+                if (displayName === 'union') {
+                    displayName = resolveUnionDisplayName(currentDef, visitedLazy) ?? displayName
+                }
+                return { typeName: displayName, isOptional: optionalDecided ?? false, description }
+            }
+        }
+    } finally {
+        for (const lazyKey of addedLazyKeys) {
+            visitedLazy.delete(lazyKey)
         }
     }
 

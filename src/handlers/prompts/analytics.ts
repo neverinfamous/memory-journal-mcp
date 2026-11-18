@@ -1,8 +1,7 @@
 import type { IDatabaseAdapter } from '../../database/core/interfaces.js'
 import { ICON_PROMPT } from '../../constants/icons.js'
 import type { InternalPromptDef } from './index.js'
-import { markUntrustedContentInline } from '../../utils/security-utils.js'
-import { resourceWorkspace, type BriefingConfig } from '../resources/shared.js'
+import { resourceWorkspace, sliceUntrustedInline, type BriefingConfig } from '../resources/shared.js'
 
 /**
  * Build a concise analytics signal string for injection into standup/retro prompts.
@@ -179,9 +178,7 @@ export function getAnalyticsPromptDefinitions(): InternalPromptDef[] {
                     id: e.id,
                     type: e.entryType,
                     timestamp: e.timestamp,
-                    content: markUntrustedContentInline(
-                        e.content.length > 250 ? e.content.slice(0, 250) + '...' : e.content
-                    ),
+                    content: sliceUntrustedInline(e.content, 250, '...'),
                 }))
 
                 return {

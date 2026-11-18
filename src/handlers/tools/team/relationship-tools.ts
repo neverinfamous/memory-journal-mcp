@@ -248,7 +248,8 @@ function executeTeamVisualizeRelationships(
         mermaid += `  e${String(id)}["#${String(id)}: ${label}"]\n`
     }
     for (const edge of edges) {
-        mermaid += `  e${String(edge.from)} -->|${edge.type}| e${String(edge.to)}\n`
+        const safeType = edge.type.replace(/[\r\n`|]+/g, ' ')
+        mermaid += `  e${String(edge.from)} -->|${safeType}| e${String(edge.to)}\n`
     }
     return {
         success: true,
@@ -342,7 +343,7 @@ export function buildRelationshipGraph(
         const rawEntry = batchEntries ? (batchEntries.get(eid) ?? null) : teamDb.getEntryById(eid, wsId)
         const entry = rawEntry && isInScopedGraphPartition(rawEntry, wsId, projectNumber) ? rawEntry : null
         if (entry) {
-            let label = entry.content.substring(0, 40).replace(/\n/g, ' ')
+            let label = entry.content.substring(0, 40).replace(/[\r\n`]+/g, ' ')
             if (entry.content.length > 40) label += '...'
             label = label.replace(/"/g, "'").replace(/\[/g, '(').replace(/\]/g, ')')
             nodes.set(eid, label)

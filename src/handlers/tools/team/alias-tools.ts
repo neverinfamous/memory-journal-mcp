@@ -1,10 +1,11 @@
 import { ValidationError, ResourceNotFoundError } from '../../../types/errors.js'
 import type { ToolDefinition, ToolContext } from '../../../types/index.js'
-import { TEAM_DB_ERROR_RESPONSE, triggerTeamNotifications } from './helpers.js'
+import { TEAM_DB_ERROR_RESPONSE, triggerTeamNotifications, resolveTeamProjectNumber } from './helpers.js'
 import { formatHandlerError } from '../../../utils/error-helpers.js'
 import { getCallerIdentity } from './rbac.js'
 import { resolveWorkspaceId } from '../../../utils/workspace-resolver.js'
 import { resolveWriteWorkspaceId } from '../write-workspace.js'
+import { activeProjectRegistry, alignedProjectFilter } from '../../../utils/write-scope.js'
 import {
     AddAuthorAliasSchema,
     AddAuthorAliasSchemaMcp,
@@ -156,11 +157,27 @@ function handleConsolidateAuthors(context: ToolContext) {
                 return { ...TEAM_DB_ERROR_RESPONSE }
             }
             const { canonical_author, project_number, workspace_id } = ConsolidateAuthorsSchema.parse(params)
+            if (workspace_id?.trim() === '*') {
+                throw new ValidationError(
+                    "Wildcard workspace_id '*' is not supported for team_consolidate_authors. Specify a concrete workspace_id."
+                )
+            }
             const workspaceId = scopedWriteWorkspace(workspace_id, project_number, context)
+            const scopedProject = resolveTeamProjectNumber(
+                context,
+                workspaceId,
+                project_number,
+                workspace_id
+            )
+            const effectiveProject = alignedProjectFilter(
+                workspaceId,
+                scopedProject ?? undefined,
+                activeProjectRegistry(context.config?.projectRegistry)
+            )
 
             const updatedCount =
-                project_number !== undefined
-                    ? teamDb.consolidateAuthors(canonical_author, workspaceId, project_number)
+                effectiveProject !== undefined
+                    ? teamDb.consolidateAuthors(canonical_author, workspaceId, effectiveProject)
                     : teamDb.consolidateAuthors(canonical_author, workspaceId)
 
             if (updatedCount > 0) {

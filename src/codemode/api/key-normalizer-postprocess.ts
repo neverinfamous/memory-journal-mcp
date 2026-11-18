@@ -124,17 +124,23 @@ function propagateBatchProjectNumber(result: Record<string, unknown>): void {
     }
 }
 
+function parseCanonicalIdString(val: unknown): number | undefined {
+    if (typeof val !== 'string') return undefined
+    const trimmed = val.trim()
+    if (!/^[1-9]\d*$/.test(trimmed)) return undefined
+    const parsed = Number(trimmed)
+    return Number.isSafeInteger(parsed) && String(parsed) === trimmed ? parsed : undefined
+}
+
 function normalizeRelationshipItemRecord(rel: unknown): unknown {
     if (!isRecord(rel)) return rel
     const healedRel: Record<string, unknown> = { ...rel }
     const rawTarget = pickRecordField(rel, RELATIONSHIP_TARGET_KEYS)
     if (rawTarget !== undefined && healedRel['targetId'] === undefined) {
-        healedRel['targetId'] =
-            typeof rawTarget === 'string' && /^\d+$/.test(rawTarget.trim())
-                ? Number(rawTarget.trim())
-                : rawTarget
-    } else if (typeof healedRel['targetId'] === 'string' && /^\d+$/.test(healedRel['targetId'].trim())) {
-        healedRel['targetId'] = Number(healedRel['targetId'].trim())
+        healedRel['targetId'] = parseCanonicalIdString(rawTarget) ?? rawTarget
+    } else if (typeof healedRel['targetId'] === 'string') {
+        const parsed = parseCanonicalIdString(healedRel['targetId'])
+        if (parsed !== undefined) healedRel['targetId'] = parsed
     }
     for (const k of RELATIONSHIP_TARGET_KEYS) {
         if (k !== 'targetId' && k in healedRel) Reflect.deleteProperty(healedRel, k)

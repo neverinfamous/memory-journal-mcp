@@ -10,9 +10,9 @@ import { MEDIUM_PRIORITY } from '../../utils/resource-annotations.js'
 import { ValidationError } from '../../types/errors.js'
 import {
     activeProjectRegistry,
-    exactRegistryKey,
     pairStoredScope,
 } from '../../utils/write-scope.js'
+import { findCanonicalRegistryKey } from '../../utils/workspace-resolver.js'
 import type { KanbanBoard } from '../../types/index.js'
 import type { InternalResourceDef, ResourceContext } from './shared.js'
 import {
@@ -32,12 +32,13 @@ function validateKanbanTargetScope(
     context: ResourceContext
 ): void {
     const registry = activeProjectRegistry(context.briefingConfig?.projectRegistry)
-    let scopeWorkspace = targetRepo
-    if (registry !== undefined && exactRegistryKey(targetRepo, registry) === undefined) {
+    const directKey = registry !== undefined ? findCanonicalRegistryKey(targetRepo, registry) : undefined
+    let scopeWorkspace = directKey ?? targetRepo
+    if (registry !== undefined && directKey === undefined) {
         const slashParts = targetRepo.split('/')
         const repoPart = slashParts[1]
         if (slashParts.length === 2 && repoPart !== undefined && repoPart !== '') {
-            const matchedRepo = exactRegistryKey(repoPart, registry)
+            const matchedRepo = findCanonicalRegistryKey(repoPart, registry)
             if (matchedRepo !== undefined) {
                 scopeWorkspace = matchedRepo
             }

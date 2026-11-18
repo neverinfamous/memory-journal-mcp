@@ -37,8 +37,8 @@ function resolveNamedProjectTarget(
     existingWs: string | undefined,
     registry: Record<string, ProjectRegistryEntry> | undefined
 ): boolean {
-    const num = Number(strVal)
-    if (!Number.isNaN(num) && strVal !== '') {
+    const num = parseCanonicalPositiveInt(strVal)
+    if (num !== undefined) {
         if (obj['project_number'] !== undefined && obj['project_number'] !== num) {
             return true
         }

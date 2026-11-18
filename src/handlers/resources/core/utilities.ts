@@ -10,7 +10,7 @@ import {
     ASSISTANT_FOCUSED,
 } from '../../../utils/resource-annotations.js'
 import type { InternalResourceDef, ResourceContext, ResourceResult } from '../shared.js'
-import { resourceWorkspace } from '../shared.js'
+import { resourceWorkspace, sliceUntrustedInline } from '../shared.js'
 // removed transformEntryRow
 import * as fs from 'node:fs'
 import * as path from 'node:path'
@@ -21,7 +21,6 @@ import { ProtocolError, ProtocolErrorCode } from '@modelcontextprotocol/server'
 import {
     assertSafeFilePath,
     assertSafeDirectoryPath,
-    markUntrustedContentInline,
 } from '../../../utils/security-utils.js'
 
 export const recentResource: InternalResourceDef = {
@@ -306,7 +305,7 @@ async function scanSkillsDir(
             (l) => l.trim().length > 0 && !l.startsWith('#') && !l.startsWith('---')
         )
         const excerpt = excerptLine
-            ? markUntrustedContentInline(excerptLine.trim().slice(0, 160))
+            ? sliceUntrustedInline(excerptLine.trim(), 160)
             : ''
 
         skills.push({ name: entry.name, path: skillMdPath, excerpt, source })

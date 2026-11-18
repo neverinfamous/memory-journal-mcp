@@ -258,11 +258,6 @@ function createVmExecutionContext(options: VmExecutionContextOptions): vm.Contex
         useTestDbMode, pinnedWorkspaceRaw, pinnedProjectRaw, projectRegistryRaw, activeTimers,
     } = options
     const mjApi = buildApiProxy(rpcFn, methodList, schemaList, readonlyMode, contextObj)
-
-    for (const key of Object.keys(mjApi)) {
-        const val = mjApi[key]
-        if (typeof val === 'object' && val !== null) Object.freeze(val)
-    }
     Object.freeze(mjApi)
 
     const safeFsShim = createSafeFsShim(contextObj)
@@ -325,7 +320,9 @@ async function executeCode(
     timeoutMs: number,
     contextObj?: Record<string, unknown>,
     readonlyMode?: boolean,
-    maxResultSize?: number
+    maxResultSize?: number,
+    dryRunMode?: boolean,
+    useTestDbMode?: boolean
 ): Promise<SandboxResult> {
     const startCpu = process.cpuUsage()
     const startTime = performance.now()
@@ -345,6 +342,8 @@ async function executeCode(
             ...(maxResultSize !== undefined ? { maxResultSize } : {}),
             contextObj,
             ...(readonlyMode !== undefined ? { readonlyMode } : {}),
+            ...(dryRunMode !== undefined ? { dryRunMode } : {}),
+            ...(useTestDbMode !== undefined ? { useTestDbMode } : {}),
             pinnedWorkspaceRaw,
             pinnedProjectRaw,
             projectRegistryRaw: registryPayload,
@@ -374,7 +373,17 @@ async function executeCode(
 parentPort?.on('message', (msg: unknown) => {
     void (async () => {
         if (!isExecuteMessage(msg)) return
-        const { id, code, timeoutMs, maxResultSize, rpcPort: newRpcPort, contextObj, readonlyMode } = msg
+        const {
+            id,
+            code,
+            timeoutMs,
+            maxResultSize,
+            rpcPort: newRpcPort,
+            contextObj,
+            readonlyMode,
+            dryRunMode,
+            useTestDbMode,
+        } = msg
         const { methodList, schemaList } = resolveWorkerMetadata(msg)
         rpcPort = newRpcPort
         rpcIdCounter = 0
@@ -393,7 +402,15 @@ parentPort?.on('message', (msg: unknown) => {
 
         try {
             const result = await executeCode(
-                code, methodList, schemaList, timeoutMs ?? 30000, contextObj, readonlyMode, maxResultSize
+                code,
+                methodList,
+                schemaList,
+                timeoutMs ?? 30000,
+                contextObj,
+                readonlyMode,
+                maxResultSize,
+                dryRunMode,
+                useTestDbMode
             )
             serializeAndEnforceEgress(result, maxResultSize)
             if (!resultSent) {

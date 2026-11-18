@@ -194,11 +194,14 @@ function collectTags(
 function parsePositiveEntryId(entryObj: Record<string, unknown>, rawObj: Record<string, unknown>): number | undefined {
     const rawEntryId = entryObj['entry_id'] ?? rawObj['entry_id'] ?? entryObj['id'] ?? rawObj['id']
     if (typeof rawEntryId === 'number') {
-        return Number.isInteger(rawEntryId) && rawEntryId > 0 ? rawEntryId : undefined
+        return Number.isSafeInteger(rawEntryId) && rawEntryId > 0 ? rawEntryId : undefined
     }
-    if (typeof rawEntryId === 'string' && rawEntryId.trim() !== '') {
-        const parsed = Number(rawEntryId.trim())
-        return Number.isInteger(parsed) && parsed > 0 ? parsed : undefined
+    if (typeof rawEntryId === 'string') {
+        const trimmed = rawEntryId.trim()
+        if (/^[1-9]\d*$/.test(trimmed)) {
+            const parsed = Number(trimmed)
+            return Number.isSafeInteger(parsed) && String(parsed) === trimmed ? parsed : undefined
+        }
     }
     return undefined
 }

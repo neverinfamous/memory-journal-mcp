@@ -15,6 +15,26 @@ import type { FrontmatterData } from '../frontmatter.js'
 import { posix } from 'node:path'
 import { addBoundedTag, toBoundedTags } from './utils.js'
 
+function extractNotionDirectoryTags(posixFile: string, mergedTags: Set<string>): void {
+    // Notion nested exports look like: "Engineering a8f9.../Architecture f7e.../My Doc.md"
+    const dir = posix.dirname(posixFile)
+    if (!dir || dir === '.' || dir === posix.parse(dir).root) return
+    for (const part of dir.split('/')) {
+        // Remove the Notion 32-char hex hash suffix and Windows drive prefix if present
+        const cleanName = part
+            .trim()
+            .replace(/^[a-zA-Z]:/, '')
+            .replace(/[ \t]{1,64}[a-f0-9]{32}$/i, '')
+            .trim()
+        if (!cleanName) continue
+        const tag = cleanName
+            .toLowerCase()
+            .replace(/[^a-z0-9]+/g, '-')
+            .replace(/^-+|-+$/g, '')
+        if (tag) addBoundedTag(mergedTags, tag)
+    }
+}
+
 export function convertNotion(
     content: string,
     filename: string,
@@ -27,22 +47,7 @@ export function convertNotion(
     }
 
     const mergedTags = new Set<string>()
-
-    // 1. Tag derivation from directory structure
-    // Notion nested exports look like: "Engineering a8f9.../Architecture f7e.../My Doc.md"
-    const dir = posix.dirname(posixFile)
-    if (dir && dir !== '.' && dir !== posix.parse(dir).root) {
-        const parts = dir.split('/')
-        for (const part of parts) {
-            // Remove the Notion 32-char hex hash suffix from folder names if present
-            const cleanName = part.trim().replace(/[ \t]{1,64}[a-f0-9]{32}$/i, '').trim()
-            if (cleanName) {
-                // Convert to kebab-case
-                const tag = cleanName.toLowerCase().replace(/[^a-z0-9]+/g, '-')
-                if (tag && tag !== '-') addBoundedTag(mergedTags, tag)
-            }
-        }
-    }
+    extractNotionDirectoryTags(posixFile, mergedTags)
 
     // 2. Process Body Text
     let processedBody = content

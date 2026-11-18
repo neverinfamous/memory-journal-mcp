@@ -247,6 +247,16 @@ function applyIoInterceptions(
     return { obj }
 }
 
+function coerceRecentCursorToOffset(obj: Record<string, unknown>): void {
+    if (typeof obj['cursor'] !== 'string') return
+    const trimmed = obj['cursor'].trim()
+    if (!/^(?:0|[1-9]\d*)$/.test(trimmed)) return
+    const parsed = Number(trimmed)
+    if (!Number.isSafeInteger(parsed) || String(parsed) !== trimmed) return
+    if (obj['offset'] === undefined) obj['offset'] = parsed
+    delete obj['cursor']
+}
+
 function applyEntryLinkRecentTagInterceptions(
     methodName: string,
     args: unknown[]
@@ -263,10 +273,7 @@ function applyEntryLinkRecentTagInterceptions(
         const obj = { ...args[0] }
         args[0] = obj
         healIncludeArchivedField(obj)
-        if (typeof obj['cursor'] === 'string' && /^\d+$/.test(obj['cursor'].trim())) {
-            if (obj['offset'] === undefined) obj['offset'] = Number(obj['cursor'].trim())
-            delete obj['cursor']
-        }
+        coerceRecentCursorToOffset(obj)
         if (hasAnyKey(obj, ['q', 'query', 'search'])) {
             return validationErr(
                 `${methodName} does not support search queries. It only returns the most recent entries.`,
@@ -319,17 +326,23 @@ function applyAuditMergeTestGetByIdInterceptions(
         remapKeys(obj, ['success'], 'status')
         remapKeys(obj, ['target_user'], 'user')
         if (typeof obj['limit'] === 'string') {
-            const parsed = parseInt(obj['limit'], 10)
-            if (!isNaN(parsed)) obj['limit'] = parsed
+            const trimmed = obj['limit'].trim()
+            if (/^[1-9]\d*$/.test(trimmed)) {
+                const parsed = Number(trimmed)
+                if (Number.isSafeInteger(parsed) && String(parsed) === trimmed) obj['limit'] = parsed
+            }
         }
     } else if (['get_entry_by_id', 'getEntryById', 'team_get_entry_by_id', 'teamGetEntryById'].includes(methodName)) {
         const obj = { ...args[0] }
         args[0] = obj
         if (obj['entry_id'] === undefined && obj['entryId'] === undefined && obj['id'] === undefined && typeof obj['uri'] === 'string') {
-            const match = /^memory:\/\/(?:entries|entry)\/(\d+)$/i.exec(obj['uri'].trim())
+            const match = /^memory:\/\/(?:entries|entry)\/([1-9]\d*)$/i.exec(obj['uri'].trim())
             if (match?.[1] !== undefined) {
-                obj['entry_id'] = Number(match[1])
-                delete obj['uri']
+                const parsed = Number(match[1])
+                if (Number.isSafeInteger(parsed) && String(parsed) === match[1]) {
+                    obj['entry_id'] = parsed
+                    delete obj['uri']
+                }
             }
         }
     }

@@ -148,22 +148,27 @@ const MAX_SCRUB_DEPTH = 6
 
 function scrubAuditArgValue(val: unknown, depth: number, seen: WeakSet<object>): unknown {
     if (typeof val === 'string') return sanitizeErrorForLogging(val)
+    if (typeof val === 'bigint') return val.toString()
     if (val === null || typeof val !== 'object') return val
     if (seen.has(val)) return '[Circular]'
     if (depth >= MAX_SCRUB_DEPTH) return '[Truncated]'
     seen.add(val)
 
-    if (Array.isArray(val)) {
-        return val.map((item) => scrubAuditArgValue(item, depth + 1, seen))
+    try {
+        if (Array.isArray(val)) {
+            return val.map((item) => scrubAuditArgValue(item, depth + 1, seen))
+        }
+        const out: Record<string, unknown> = {}
+        Object.setPrototypeOf(out, null)
+        for (const [k, v] of Object.entries(val as Record<string, unknown>)) {
+            out[k] = AUDIT_SENSITIVE_KEY_RE.test(k)
+                ? '[REDACTED]'
+                : scrubAuditArgValue(v, depth + 1, seen)
+        }
+        return out
+    } finally {
+        seen.delete(val)
     }
-    const out: Record<string, unknown> = {}
-    Object.setPrototypeOf(out, null)
-    for (const [k, v] of Object.entries(val as Record<string, unknown>)) {
-        out[k] = AUDIT_SENSITIVE_KEY_RE.test(k)
-            ? '[REDACTED]'
-            : scrubAuditArgValue(v, depth + 1, seen)
-    }
-    return out
 }
 
 function scrubAuditArgs(args: unknown): Record<string, unknown> | undefined {

@@ -146,6 +146,9 @@ export function deepCamelToSnake(
         if (k !== snakeKey && Object.hasOwn(obj, snakeKey) && obj[snakeKey] !== undefined) {
             continue
         }
+        if (v === undefined && Object.hasOwn(newObj, snakeKey) && newObj[snakeKey] !== undefined) {
+            continue
+        }
         if (
             k !== snakeKey &&
             v === undefined &&

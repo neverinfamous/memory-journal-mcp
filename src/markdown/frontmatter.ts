@@ -32,6 +32,21 @@ function preprocessFrontmatterRelationship(item: unknown): unknown {
 // Types
 // ============================================================================
 
+export type FrontmatterAnchorStatus =
+    | 'pending'
+    | 'valid'
+    | 'stale'
+    | 'invalidated'
+    | 'unresolvable'
+
+export type FrontmatterAnchor =
+    | string
+    | {
+          anchor_path: string
+          anchor_type?: string
+          status?: FrontmatterAnchorStatus
+      }
+
 /** Parsed frontmatter data structure */
 export interface FrontmatterData {
     mj_id?: number
@@ -43,7 +58,7 @@ export interface FrontmatterData {
     workspace_id?: string
     project_number?: number
     relationships?: { type: string; target_id: number }[]
-    anchors?: string[]
+    anchors?: FrontmatterAnchor[]
     source?: string
 }
 
@@ -56,6 +71,17 @@ export interface ParseResult {
 // ============================================================================
 // Validation Schema
 // ============================================================================
+
+const FrontmatterAnchorSchema = z.union([
+    z.string().max(500),
+    z
+        .object({
+            anchor_path: z.string().min(1).max(500),
+            anchor_type: z.string().min(1).max(50).optional(),
+            status: z.enum(['pending', 'valid', 'stale', 'invalidated', 'unresolvable']).optional(),
+        })
+        .strict(),
+])
 
 const FrontmatterSchema = z.object({
     mj_id: z.number().int().positive().optional(),
@@ -78,7 +104,7 @@ const FrontmatterSchema = z.object({
         )
         .max(100)
         .optional(),
-    anchors: z.array(z.string().max(500)).max(100).optional(),
+    anchors: z.array(FrontmatterAnchorSchema).max(100).optional(),
     source: z.string().optional(),
 })
 

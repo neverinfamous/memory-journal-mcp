@@ -30,6 +30,7 @@ const SELF_REFERENTIAL_PROPS = new Set<string>([
     'm', 'env', 'agent', 'mcp', 'mcpx', 'mc', 'memoryJournal', 'MemoryJournal',
     'mjJournal', 'mjClient', 'mj_client', 'app', 'tools', 'tool', 'api',
     'client', 'sdk', 'service', 'services', 'kernel', 'node', 'default',
+    'codemode', 'codeMode',
 ])
 
 const EXECUTE_CODE_PROPS = new Set<string>([
@@ -210,10 +211,6 @@ function resolveCoreAndMetaShimProp(
             matched: true,
             value: (arg: unknown) => {
                 if (executeCodeFnRef.current !== undefined) return executeCodeFnRef.current(arg)
-                if ('codemode' in target) {
-                    const fn = getGroupProp(target, 'codemode', 'mjExecuteCode') ?? getGroupProp(target, 'codemode', 'executeCode')
-                    if (typeof fn === 'function') return (fn as (...a: unknown[]) => unknown)(arg)
-                }
                 return Promise.resolve({
                     success: false,
                     error: 'Code execution is not available in this sandbox',

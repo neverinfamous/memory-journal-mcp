@@ -192,6 +192,7 @@ export function createStatefulGetHandler(
             if (transport instanceof LegacySSEServerTransport) {
                 transport.handleSseRequest(req, res)
             } else {
+                res.setTimeout(0)
                 transport.handleRequest(req, res).catch((err: unknown) => {
                     next(err)
                 })

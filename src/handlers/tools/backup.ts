@@ -350,8 +350,17 @@ export function getBackupTools(context: ToolContext): ToolDefinition[] {
                 try {
                     const { keep_count } = CleanupBackupsSchema.parse(params)
 
-                    const keepCountNum = typeof keep_count === 'string' && keep_count.trim() !== '' ? Number(keep_count) : keep_count
-                    if (typeof keepCountNum !== 'number' || !Number.isInteger(keepCountNum) || keepCountNum < 1) {
+                    const trimmedKeep = typeof keep_count === 'string' ? keep_count.trim() : keep_count
+                    const keepCountNum =
+                        typeof trimmedKeep === 'string' && /^[1-9]\d*$/.test(trimmedKeep)
+                            ? Number(trimmedKeep)
+                            : trimmedKeep
+                    if (
+                        typeof keepCountNum !== 'number' ||
+                        !Number.isSafeInteger(keepCountNum) ||
+                        keepCountNum < 1 ||
+                        (typeof trimmedKeep === 'string' && String(keepCountNum) !== trimmedKeep)
+                    ) {
                         throw new ValidationError('keep_count must be a positive integer')
                     }
 

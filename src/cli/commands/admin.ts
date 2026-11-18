@@ -7,6 +7,7 @@ import { buildServerOptions } from '../server-options-builder.js'
 import { dumpConfigAndExit } from '../dump-config.js'
 import { enforceCliTeamRbac, getCliCommandDb as getDb } from './db-helper.js'
 import { resolveAutoPruneScope } from '../../utils/workspace-resolver.js'
+import { parseCanonicalPositiveInt } from '../../utils/safe-positive-int.js'
 import { 
     adminBackupOptionsSchema, 
     adminRestoreOptionsSchema, 
@@ -215,6 +216,52 @@ export async function pruneAction(options: z.infer<typeof pruneSchema>, command:
     }
 }
 
+function createCliAuditLogger(
+    options: z.infer<typeof auditSchema>,
+    command: Command,
+    serverOptions: ReturnType<typeof buildServerOptions>['serverOptions'],
+    configPath: string | undefined
+): AuditLogger {
+    const auditDefaults = serverOptions.auditConfig
+    const allowConfigLogPath =
+        configPath !== undefined ||
+        (process.env['NODE_ENV'] !== 'test' && process.env['VITEST'] !== 'true')
+    const auditLogPath =
+        options.auditLog ??
+        process.env['AUDIT_LOG_PATH'] ??
+        process.env['MEMORY_JOURNAL_AUDIT_LOG'] ??
+        (allowConfigLogPath ? auditDefaults?.logPath : undefined)
+    if (!auditLogPath) {
+        throw new Error('Audit log path not configured (--audit-log or AUDIT_LOG_PATH)')
+    }
+    let maxSizeBytes = auditDefaults?.maxSizeBytes ?? DEFAULT_AUDIT_LOG_MAX_SIZE_BYTES
+    if (command.getOptionValueSource('auditLogMaxSize') === 'cli' && options.auditLogMaxSize !== undefined) {
+        const parsedMaxSize = parseCanonicalPositiveInt(options.auditLogMaxSize)
+        if (parsedMaxSize === undefined) {
+            process.stderr.write(`Error: Invalid --audit-log-max-size '${options.auditLogMaxSize}'. Expected a positive safe integer.\n`)
+            process.exit(1)
+        }
+        maxSizeBytes = parsedMaxSize
+    }
+    return new AuditLogger({
+        logPath: auditLogPath,
+        enabled: true,
+        redact:
+            (command.getOptionValueSource('auditRedact') === 'cli'
+                ? options.auditRedact
+                : undefined) ??
+            auditDefaults?.redact ??
+            true,
+        auditReads:
+            (command.getOptionValueSource('auditReads') === 'cli'
+                ? options.auditReads
+                : undefined) ??
+            auditDefaults?.auditReads ??
+            false,
+        maxSizeBytes,
+    })
+}
+
 export async function auditAction(options: z.infer<typeof auditSchema>, command: Command): Promise<void> {
     try {
         let resolver: ConfigResolver
@@ -235,41 +282,8 @@ export async function auditAction(options: z.infer<typeof auditSchema>, command:
         if (options.dumpConfig === true) {
             dumpConfigAndExit(serverOptions)
         }
-        const auditDefaults = serverOptions.auditConfig
-        const allowConfigLogPath =
-            configPath !== undefined ||
-            (process.env['NODE_ENV'] !== 'test' && process.env['VITEST'] !== 'true')
 
-        const auditLogPath =
-            options.auditLog ??
-            process.env['AUDIT_LOG_PATH'] ??
-            process.env['MEMORY_JOURNAL_AUDIT_LOG'] ??
-            (allowConfigLogPath ? auditDefaults?.logPath : undefined)
-        if (!auditLogPath) {
-            throw new Error('Audit log path not configured (--audit-log or AUDIT_LOG_PATH)')
-        }
-        
-        const logger = new AuditLogger({
-            logPath: auditLogPath,
-            enabled: true,
-            redact:
-                (command.getOptionValueSource('auditRedact') === 'cli'
-                    ? options.auditRedact
-                    : undefined) ??
-                auditDefaults?.redact ??
-                true,
-            auditReads:
-                (command.getOptionValueSource('auditReads') === 'cli'
-                    ? options.auditReads
-                    : undefined) ??
-                auditDefaults?.auditReads ??
-                false,
-            maxSizeBytes:
-                command.getOptionValueSource('auditLogMaxSize') === 'cli' && options.auditLogMaxSize
-                    ? parseInt(options.auditLogMaxSize, 10)
-                    : (auditDefaults?.maxSizeBytes ?? DEFAULT_AUDIT_LOG_MAX_SIZE_BYTES),
-        })
-
+        const logger = createCliAuditLogger(options, command, serverOptions, configPath)
         const statusFilter = options.status === 'success' ? true : (options.status === 'error' ? false : undefined)
 
         let result: AuditEntry[]

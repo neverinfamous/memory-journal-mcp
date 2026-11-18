@@ -24,13 +24,13 @@ export function validateCliUpdateArgsAndTarget(
     options: UpdateEntryCliOptions
 ): ValidatedCliUpdateArgs {
     const entryId = options.id
-    if (entryId === undefined || !Number.isInteger(entryId) || entryId < 1) {
+    if (entryId === undefined || !Number.isSafeInteger(entryId) || entryId < 1) {
         process.stderr.write('Error: Must provide a valid --id (positive integer)\n')
         throw new CliExitError(1)
     }
 
     const version = options.expectedVersion
-    if (version === undefined || !Number.isInteger(version) || version < 1) {
+    if (version === undefined || !Number.isSafeInteger(version) || version < 1) {
         process.stderr.write(
             'Error: Must provide a valid --expected-version (expected positive integer version) to prevent concurrent overwrites\n'
         )

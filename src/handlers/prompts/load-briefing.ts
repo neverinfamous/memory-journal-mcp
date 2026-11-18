@@ -88,9 +88,9 @@ function resolveRequestedProjectUris(
             continue
         }
 
-        if (/^\d{1,10}$/.test(requested)) {
+        if (/^[1-9]\d{0,9}$/.test(requested)) {
             const requestedNumber = Number(requested)
-            if (!Number.isSafeInteger(requestedNumber) || requestedNumber <= 0) {
+            if (!Number.isSafeInteger(requestedNumber) || requestedNumber <= 0 || String(requestedNumber) !== requested) {
                 notFound.push(requested)
                 continue
             }

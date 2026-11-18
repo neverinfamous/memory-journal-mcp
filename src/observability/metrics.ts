@@ -15,7 +15,7 @@
  *   - latency percentiles (p50/p95/p99) via LatencyTracker
  */
 
-import { promises as fs, renameSync, rmSync } from 'node:fs'
+import { promises as fs } from 'node:fs'
 import { randomUUID } from 'node:crypto'
 import { z } from 'zod'
 import { LatencyTracker } from './latency-tracker.js'
@@ -393,11 +393,11 @@ export class MetricsAccumulator {
         try {
             const state = this.exportState()
             await fs.writeFile(tmpPath, state, 'utf8')
-            renameSync(tmpPath, path)
+            await fs.rename(tmpPath, path)
             logger.debug('Metrics saved to disk', { module: 'Metrics', path })
         } catch (error) {
             try {
-                rmSync(tmpPath, { force: true })
+                await fs.rm(tmpPath, { force: true })
             } catch {
                 // Best-effort cleanup of temp file
             }

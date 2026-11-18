@@ -1,17 +1,27 @@
 import { DEFAULT_BRIEFING_CONFIG } from '../handlers/resources/shared.js'
-import type {
-    BriefingBaselineMap,
-    BriefingConfigurableKey,
-    ConfigCliEnvBaseline,
-    DynamicConfig,
+import {
+    readBriefingConfigEntry,
+    type BriefingBaselineMap,
+    type BriefingConfigurableKey,
+    type BriefingValueKind,
+    type ConfigCliEnvBaseline,
+    type DynamicConfig,
 } from './config-manager-helpers.js'
 
 export type BriefingKeyMapping = Readonly<
-    Record<string, { target: BriefingConfigurableKey; kind: 'number' | 'boolean' }>
+    Record<
+        string,
+        {
+            target: BriefingConfigurableKey
+            kind: BriefingValueKind
+            aliases?: readonly string[]
+        }
+    >
 >
 
 function buildDefaultBriefingBaseline(): BriefingBaselineMap {
     return {
+        commitCount: DEFAULT_BRIEFING_CONFIG.commitCount ?? 3,
         entryCount: DEFAULT_BRIEFING_CONFIG.entryCount ?? 3,
         summaryCount: DEFAULT_BRIEFING_CONFIG.summaryCount ?? 1,
         includeTeam: DEFAULT_BRIEFING_CONFIG.includeTeam ?? false,
@@ -22,6 +32,7 @@ function buildDefaultBriefingBaseline(): BriefingBaselineMap {
         workflowCount: DEFAULT_BRIEFING_CONFIG.workflowCount ?? 0,
         workflowStatusBreakdown: DEFAULT_BRIEFING_CONFIG.workflowStatusBreakdown ?? false,
         copilotReviews: DEFAULT_BRIEFING_CONFIG.copilotReviews ?? false,
+        briefingImportanceThreshold: DEFAULT_BRIEFING_CONFIG.briefingImportanceThreshold ?? 0.3,
     }
 }
 
@@ -30,7 +41,7 @@ export function collectBriefingBaselines(
     initialConfig: DynamicConfig,
     initialFile: Record<string, unknown> | null,
     keyMap: BriefingKeyMapping,
-    isValidValue: (value: unknown, kind: 'number' | 'boolean') => boolean
+    isValidValue: (value: unknown, kind: BriefingValueKind) => boolean
 ): {
     initialBriefingBaseline: BriefingBaselineMap
     briefingKeysFromFile: Set<BriefingConfigurableKey>
@@ -38,13 +49,14 @@ export function collectBriefingBaselines(
     const initialBriefingBaseline: BriefingBaselineMap = { ...buildDefaultBriefingBaseline() }
     const briefingKeysFromFile = new Set<BriefingConfigurableKey>()
 
-    for (const [fileKey, { target, kind }] of Object.entries(keyMap)) {
-        const hasFileVal =
-            initialFile !== null &&
-            fileKey in initialFile &&
-            isValidValue(initialFile[fileKey], kind)
+    for (const [fileKey, { target, kind, aliases }] of Object.entries(keyMap)) {
+        const match =
+            initialFile !== null
+                ? readBriefingConfigEntry(initialFile, fileKey, aliases)
+                : undefined
+        const hasFileVal = match !== undefined && isValidValue(match.value, kind)
         const curVal = initialConfig.briefingConfig[target]
-        const fromFile = hasFileVal && initialFile[fileKey] === curVal
+        const fromFile = hasFileVal && match.value === curVal
         if (fromFile) {
             briefingKeysFromFile.add(target)
         } else if (curVal !== undefined) {
@@ -131,10 +143,11 @@ export function syncBriefingProvenanceFromFile(
     parsed: Record<string, unknown>,
     briefingKeysFromFile: Set<BriefingConfigurableKey>,
     keyMap: BriefingKeyMapping,
-    isValidValue: (value: unknown, kind: 'number' | 'boolean') => boolean
+    isValidValue: (value: unknown, kind: BriefingValueKind) => boolean
 ): void {
-    for (const [fileKey, { target, kind }] of Object.entries(keyMap)) {
-        if (fileKey in parsed && isValidValue(parsed[fileKey], kind)) {
+    for (const [fileKey, { target, kind, aliases }] of Object.entries(keyMap)) {
+        const match = readBriefingConfigEntry(parsed, fileKey, aliases)
+        if (match !== undefined && isValidValue(match.value, kind)) {
             briefingKeysFromFile.add(target)
         } else {
             briefingKeysFromFile.delete(target)

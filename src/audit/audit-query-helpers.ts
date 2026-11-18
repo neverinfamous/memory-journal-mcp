@@ -6,7 +6,7 @@
  * and applying scope filters during audit searches.
  */
 
-import { open } from 'node:fs/promises'
+import { open, rename, stat } from 'node:fs/promises'
 import type { RequestContext } from '../utils/request-context.js'
 import { estimateTokens } from '../observability/token-estimator.js'
 import { logger } from '../utils/logger.js'
@@ -358,4 +358,53 @@ export function estimateOperationResultTokens(result: unknown, name: string): nu
         return estimateTokens(result, 'prose')
     }
     return undefined
+}
+
+/** Extract `err.code` when `err` is an error-like object with a string `code`. */
+export function nodeErrorCode(err: unknown): string | undefined {
+    if (typeof err !== 'object' || err === null || !('code' in err)) return undefined
+    const code = err.code
+    return typeof code === 'string' ? code : undefined
+}
+
+/**
+ * Rotate the audit log file if its size meets or exceeds `maxSizeBytes`,
+ * returning the updated approximate size in bytes or `null` on failure.
+ */
+export async function rotateAuditLogFiles(
+    logPath: string,
+    maxSizeBytes: number,
+    maxArchives: number
+): Promise<number | null> {
+    try {
+        const info = await stat(logPath).catch((err: unknown) => {
+            if (nodeErrorCode(err) !== 'ENOENT') {
+                const message = err instanceof Error ? err.message : String(err)
+                logger.debug(`Audit log stat failed before rotation: ${message}`, {
+                    module: 'Audit',
+                })
+            }
+            return null
+        })
+        const currentSize = info?.size ?? 0
+        if (!info || info.size < maxSizeBytes) return currentSize
+
+        for (let i = maxArchives - 1; i >= 1; i--) {
+            const oldFile = `${logPath}.${String(i)}`
+            const newFile = `${logPath}.${String(i + 1)}`
+            await rename(oldFile, newFile).catch((err: unknown) => {
+                if (nodeErrorCode(err) === 'ENOENT') return
+                const message = err instanceof Error ? err.message : String(err)
+                logger.error(`Audit log rotation failed: ${message}`, { module: 'Audit' })
+                throw err
+            })
+        }
+
+        await rename(logPath, `${logPath}.1`)
+        return 0
+    } catch (err) {
+        const message = err instanceof Error ? err.message : String(err)
+        logger.error(`Rotate failed: ${message}`, { module: 'Audit' })
+        return null
+    }
 }

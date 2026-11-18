@@ -20,13 +20,15 @@ export function resolveDatabasePaths(
         () => (resolver.isCliProvided('database') ? resolver.resolve<string>('database') : undefined),
         undefined
     )
+    const envDb = process.env['DB_PATH'] !== undefined && process.env['DB_PATH'] !== '' ? process.env['DB_PATH'] : undefined
+    const hasExplicitDb = cliDb !== undefined || cliDatabase !== undefined || envDb !== undefined
     const configDbPath = catchConfig(() => resolver.resolve<string>('dbPath'), undefined)
     const fallbackDatabase = catchConfig(() => resolver.resolve<string>('database'), undefined)
     const rawDb = catchConfig(() => resolver.resolve<string>('db', 'DB_PATH'), defaultDbPath)
     let db = cliDb ?? cliDatabase ?? rawDb
-    if ((db === defaultDbPath || db === undefined) && fallbackDatabase) {
+    if (!hasExplicitDb && (db === defaultDbPath || db === undefined) && fallbackDatabase) {
         db = fallbackDatabase
-    } else if ((db === defaultDbPath || db === undefined) && configDbPath) {
+    } else if (!hasExplicitDb && (db === defaultDbPath || db === undefined) && configDbPath) {
         db = configDbPath
     }
 
@@ -42,13 +44,19 @@ export function resolveDatabasePaths(
         () => (resolver.isCliProvided('teamDatabase') ? resolver.resolve<string>('teamDatabase') : undefined),
         undefined
     )
+    const envTeamDb =
+        process.env['TEAM_DB_PATH'] !== undefined && process.env['TEAM_DB_PATH'] !== ''
+            ? process.env['TEAM_DB_PATH']
+            : undefined
+    const hasExplicitTeamDb =
+        cliTeamDb !== undefined || cliTeamDatabase !== undefined || envTeamDb !== undefined
     const configTeamDbPath = catchConfig(() => resolver.resolve<string>('teamDbPath'), undefined)
     const fallbackTeamDatabase = catchConfig(() => resolver.resolve<string>('teamDatabase'), undefined)
     const rawTeamDb = catchConfig(() => resolver.resolve<string>('teamDb', 'TEAM_DB_PATH'), defaultTeamDbPath)
     let teamDb = cliTeamDb ?? cliTeamDatabase ?? rawTeamDb
-    if ((teamDb === defaultTeamDbPath || teamDb === undefined) && fallbackTeamDatabase) {
+    if (!hasExplicitTeamDb && (teamDb === defaultTeamDbPath || teamDb === undefined) && fallbackTeamDatabase) {
         teamDb = fallbackTeamDatabase
-    } else if ((teamDb === defaultTeamDbPath || teamDb === undefined) && configTeamDbPath) {
+    } else if (!hasExplicitTeamDb && (teamDb === defaultTeamDbPath || teamDb === undefined) && configTeamDbPath) {
         teamDb = configTeamDbPath
     }
 

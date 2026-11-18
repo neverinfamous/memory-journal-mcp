@@ -33,11 +33,11 @@ export const SearchEntriesSchema = z.preprocess(
     limit: z.number().int().min(1).max(MAX_QUERY_LIMIT).optional().default(10),
     workspace_id: z.string().optional(),
     is_personal: z.boolean().optional(),
-    project_number: z.number().optional(),
-    issue_number: z.number().optional(),
-    pr_number: z.number().optional(),
+    project_number: z.number().int().min(0).optional(),
+    issue_number: z.number().int().positive().optional(),
+    pr_number: z.number().int().positive().optional(),
     pr_status: z.enum(['draft', 'open', 'merged', 'closed']).optional(),
-    workflow_run_id: z.number().optional(),
+    workflow_run_id: z.number().int().positive().optional(),
     tags: z.array(z.string()).optional(),
     exclude_tags: z
         .array(z.string())
@@ -130,10 +130,10 @@ export const SearchByDateRangeSchema = z.preprocess(
         .describe('Exclude entries having any of these tags'),
     workspace_id: z.string().optional(),
     is_personal: z.boolean().optional(),
-    project_number: z.number().optional(),
-    issue_number: z.number().optional(),
-    pr_number: z.number().optional(),
-    workflow_run_id: z.number().optional(),
+    project_number: z.number().int().min(0).optional(),
+    issue_number: z.number().int().positive().optional(),
+    pr_number: z.number().int().positive().optional(),
+    workflow_run_id: z.number().int().positive().optional(),
     limit: z.number().int().min(1).max(MAX_QUERY_LIMIT).optional().default(500),
     sort_by: z
         .enum(['timestamp', 'importance'])
@@ -194,6 +194,8 @@ export const SemanticSearchSchema = z.preprocess(
     query: z.string().max(250).optional().describe('The search query string (use `query`, not `q`)'),
     entry_id: z
         .number()
+        .int()
+        .positive()
         .optional()
         .describe(
             'Find entries related to this entry ID (uses existing embedding, skips re-embedding)'
@@ -202,10 +204,10 @@ export const SemanticSearchSchema = z.preprocess(
     similarity_threshold: z.number().optional().default(0.25),
     workspace_id: z.string().optional(),
     is_personal: z.boolean().optional(),
-    project_number: z.number().optional().describe('Filter results by project number'),
-    issue_number: z.number().optional().describe('Filter results by GitHub issue number'),
-    pr_number: z.number().optional().describe('Filter results by GitHub PR number'),
-    workflow_run_id: z.number().optional().describe('Filter results by GitHub Actions workflow run ID'),
+    project_number: z.number().int().min(0).optional().describe('Filter results by project number'),
+    issue_number: z.number().int().positive().optional().describe('Filter results by GitHub issue number'),
+    pr_number: z.number().int().positive().optional().describe('Filter results by GitHub PR number'),
+    workflow_run_id: z.number().int().positive().optional().describe('Filter results by GitHub Actions workflow run ID'),
     tags: z.array(z.string()).optional().describe('Filter results by tags'),
     exclude_tags: z
         .array(z.string())

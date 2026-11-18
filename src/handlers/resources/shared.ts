@@ -15,9 +15,9 @@ import type { VectorSearchManager } from '../../vector/vector-search-manager/ind
 import type { ToolFilterConfig } from '../../filtering/tool-filter.js'
 import type { McpIcon, ProjectRegistryEntry } from '../../types/index.js'
 import type { GitHubIntegration } from '../../github/github-integration/index.js'
-import { getGitHubIntegration } from '../../github/github-integration/index.js'
 import type { Scheduler } from '../../server/scheduler.js'
 import type { ServerRuntime } from '../../utils/maintenance-lock.js'
+import { fenceNonCanonicalRefOrKey } from '../../utils/security-utils.js'
 import {
     findCanonicalRegistryKey,
     getActiveSessionProject,
@@ -25,6 +25,10 @@ import {
     resolveProjectNumberFromPath,
 } from '../../utils/workspace-resolver.js'
 import { uniqueWorkspaceForProject } from '../../utils/write-scope.js'
+import {
+    resolveFallbackRegistryRepo,
+    resolveTargetRepoGithub,
+} from './github-repo-resolver.js'
 
 // ============================================================================
 // GitHub Resource Guard
@@ -38,94 +42,6 @@ export interface GitHubRepoResolved {
     lastModified: string
     /** Narrowed non-null reference — safe to use without `!` after guard */
     github: GitHubIntegration
-}
-
-/** Resolve the GitHub integration for an explicit `targetRepo`, or a ResourceResult error. */
-function resolveTargetRepoGithub(
-    config: BriefingConfig | undefined,
-    targetRepo: string,
-    runtime: ServerRuntime | undefined,
-    lastModified: string
-): GitHubIntegration | ResourceResult {
-    if (!/^[a-zA-Z0-9_.-]+(\/[a-zA-Z0-9_.-]+)?$/.test(targetRepo)) {
-        return {
-            data: { error: 'Invalid repository name format' },
-            annotations: { lastModified },
-        }
-    }
-    const registry = config?.projectRegistry ?? loadProjectRegistryFromConfig()
-
-    // Attempt to find exact match, then fallback to just the repo name if owner/repo format was used
-    let registryKey: string = targetRepo
-    if (registry && !Object.prototype.hasOwnProperty.call(registry, targetRepo)) {
-        const parts = targetRepo.split('/')
-        const repoPart = parts[1]
-        if (parts.length === 2 && repoPart && Object.prototype.hasOwnProperty.call(registry, repoPart)) {
-            registryKey = repoPart
-        }
-    }
-
-    if (registry && Object.prototype.hasOwnProperty.call(registry, registryKey)) {
-        const entry = registry[registryKey]
-        if (entry && typeof entry.path === 'string' && entry.path.trim() !== '') {
-            return getGitHubIntegration(entry.path, runtime)
-        }
-        return {
-            data: {
-                error: 'GitHub integration not available',
-                hint: `Workspace '${registryKey}' has no local repository path configured.`,
-            },
-            annotations: { lastModified },
-        }
-    }
-    if (targetRepo.trim().toLowerCase() === 'default') {
-        return {
-            data: { error: 'GitHub integration not available' },
-            annotations: { lastModified },
-        }
-    }
-    return {
-        data: { error: `Repository not found in registry: ${targetRepo}` },
-        annotations: { lastModified },
-    }
-}
-
-/** Fall back to the first registered project that is a valid git repo (default project first). */
-async function resolveFallbackRegistryRepo(
-    config: BriefingConfig | undefined,
-    runtime: ServerRuntime | undefined,
-    lastModified: string
-): Promise<GitHubRepoResolved | undefined> {
-    const registry = config?.projectRegistry ?? loadProjectRegistryFromConfig()
-    if (!registry) return undefined
-    let fallbackKeys = Object.keys(registry)
-
-    if (config?.defaultProjectNumber !== undefined) {
-        const defaultKey = fallbackKeys.find(
-            (key) => registry[key]?.project_number === config.defaultProjectNumber
-        )
-        if (defaultKey) {
-            fallbackKeys = [defaultKey, ...fallbackKeys.filter((k) => k !== defaultKey)]
-        }
-    }
-
-    for (const key of fallbackKeys) {
-        const project = registry[key]
-        if (project && typeof project.path === 'string' && project.path.trim() !== '') {
-            const fallbackGithub = getGitHubIntegration(project.path, runtime)
-            const fallbackRepoInfo = await fallbackGithub.getRepoInfo()
-            if (fallbackRepoInfo.owner && fallbackRepoInfo.repo) {
-                return {
-                    owner: fallbackRepoInfo.owner,
-                    repo: fallbackRepoInfo.repo,
-                    branch: fallbackRepoInfo.branch ?? null,
-                    lastModified,
-                    github: fallbackGithub,
-                }
-            }
-        }
-    }
-    return undefined
 }
 
 /**
@@ -148,10 +64,12 @@ export async function resolveGitHubRepo(
     const lastModified = new Date().toISOString()
 
     let activeGithub = github
+    let expectedOwner: string | undefined
     if (targetRepo) {
         const target = resolveTargetRepoGithub(config, targetRepo, runtime, lastModified)
         if ('data' in target) return target
-        activeGithub = target
+        activeGithub = target.github
+        expectedOwner = target.expectedOwner
     }
 
     if (!activeGithub) {
@@ -173,6 +91,20 @@ export async function resolveGitHubRepo(
     const owner = repoInfo.owner
     const repo = repoInfo.repo
 
+    if (
+        expectedOwner !== undefined &&
+        owner !== null &&
+        owner !== '' &&
+        owner.toLowerCase() !== expectedOwner.toLowerCase()
+    ) {
+        return {
+            data: {
+                error: `Repository owner mismatch: expected '${expectedOwner}', got '${owner}'`,
+            },
+            annotations: { lastModified },
+        }
+    }
+
     if (!owner || !repo) {
         const registry = config?.projectRegistry
         const hasRegistry = registry && Object.keys(registry).length > 0
@@ -189,7 +121,9 @@ export async function resolveGitHubRepo(
                 hint: hasRegistry
                     ? 'Use a repository-specific URI suffix (e.g., memory://github/status/{repo}) for multi-project setups, or ensure the fallback project is a valid git repository.'
                     : 'Run the MCP server from a valid git repository or configure PROJECT_REGISTRY.',
-                ...(repoInfo.branch ? { branch: repoInfo.branch } : {}),
+                ...(repoInfo.branch
+                    ? { branch: fenceNonCanonicalRefOrKey(repoInfo.branch) }
+                    : {}),
             },
             annotations: { lastModified },
         }

@@ -48,7 +48,11 @@ export function loadProjectRegistryFromConfig(): Record<string, ProjectRegistryE
     }
     try {
         const config = readCachedConfigObject(getConfigPath()) as ParsedConfig | undefined
-        return config?.projectRegistry
+        const raw = config?.projectRegistry
+        if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) {
+            return undefined
+        }
+        return raw
     } catch (error) {
         logger.debug('Failed to load project registry from config', {
             module: 'workspace-resolver',

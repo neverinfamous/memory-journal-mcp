@@ -81,20 +81,25 @@ export const AddAuthorAliasSchema = z.preprocess(
         .strict()
 )
 
-export const AddAuthorAliasSchemaMcp = z.object({
-    alias: z
-        .string()
-        .min(1)
-        .max(255)
-        .describe('The raw author name to map (e.g., "Alex" or "GitHub: octocat")'),
-    canonical_author: z
-        .string()
-        .min(1)
-        .max(255)
-        .describe('The canonical author identity to map the alias to (e.g., "alex-dev")'),
-    project_number: relaxedNumber().optional().describe('GitHub Project number'),
-    workspace_id: z.string().optional().describe(WORKSPACE_FIELD_DESC),
-})
+export const AddAuthorAliasSchemaMcp = z.preprocess(
+    createAliasPreprocessor('add'),
+    z.object({
+        alias: z
+            .string()
+            .min(1)
+            .max(255)
+            .optional()
+            .describe('The raw author name to map (e.g., "Alex" or "GitHub: octocat")'),
+        canonical_author: z
+            .string()
+            .min(1)
+            .max(255)
+            .optional()
+            .describe('The canonical author identity to map the alias to (e.g., "alex-dev")'),
+        project_number: relaxedNumber().optional().describe('GitHub Project number'),
+        workspace_id: z.string().optional().describe(WORKSPACE_FIELD_DESC),
+    })
+)
 
 export const AddAuthorAliasOutputSchema = z
     .object({
@@ -123,11 +128,14 @@ export const RemoveAuthorAliasSchema = z.preprocess(
         .strict()
 )
 
-export const RemoveAuthorAliasSchemaMcp = z.object({
-    alias: z.string().min(1).max(255).describe('The alias mapping to remove'),
-    project_number: relaxedNumber().optional().describe('GitHub Project number'),
-    workspace_id: z.string().optional().describe(WORKSPACE_FIELD_DESC),
-})
+export const RemoveAuthorAliasSchemaMcp = z.preprocess(
+    createAliasPreprocessor('remove'),
+    z.object({
+        alias: z.string().min(1).max(255).optional().describe('The alias mapping to remove'),
+        project_number: relaxedNumber().optional().describe('GitHub Project number'),
+        workspace_id: z.string().optional().describe(WORKSPACE_FIELD_DESC),
+    })
+)
 
 export const RemoveAuthorAliasOutputSchema = z
     .object({
@@ -152,11 +160,14 @@ export const ListAuthorAliasesSchema = z.preprocess(
         .strict()
 )
 
-export const ListAuthorAliasesSchemaMcp = z.object({
-    canonical_author: z.string().optional().describe('Optional canonical author to filter aliases by'),
-    project_number: relaxedNumber().optional().describe('GitHub Project number'),
-    workspace_id: z.string().optional().describe(WORKSPACE_FIELD_DESC),
-})
+export const ListAuthorAliasesSchemaMcp = z.preprocess(
+    createAliasPreprocessor('list'),
+    z.object({
+        canonical_author: z.string().optional().describe('Optional canonical author to filter aliases by'),
+        project_number: relaxedNumber().optional().describe('GitHub Project number'),
+        workspace_id: z.string().optional().describe(WORKSPACE_FIELD_DESC),
+    })
+)
 
 export const ListAuthorAliasesOutputSchema = z
     .object({
@@ -187,11 +198,14 @@ export const ResolveAuthorSchema = z.preprocess(
         .strict()
 )
 
-export const ResolveAuthorSchemaMcp = z.object({
-    author: z.string().min(1).describe('The raw author name to resolve'),
-    project_number: relaxedNumber().optional().describe('GitHub Project number'),
-    workspace_id: z.string().optional().describe(WORKSPACE_FIELD_DESC),
-})
+export const ResolveAuthorSchemaMcp = z.preprocess(
+    createAliasPreprocessor('resolve'),
+    z.object({
+        author: z.string().min(1).optional().describe('The raw author name to resolve'),
+        project_number: relaxedNumber().optional().describe('GitHub Project number'),
+        workspace_id: z.string().optional().describe(WORKSPACE_FIELD_DESC),
+    })
+)
 
 export const ResolveAuthorOutputSchema = z
     .object({
@@ -221,17 +235,21 @@ export const ConsolidateAuthorsSchema = z.preprocess(
         .strict()
 )
 
-export const ConsolidateAuthorsSchemaMcp = z.object({
-    canonical_author: z
-        .string()
-        .min(1)
-        .max(255)
-        .describe(
-            "The canonical author name. All entries matching any of this author's aliases will be updated to use this canonical name."
-        ),
-    project_number: relaxedNumber().optional().describe('GitHub Project number'),
-    workspace_id: z.string().optional().describe(WORKSPACE_FIELD_DESC),
-})
+export const ConsolidateAuthorsSchemaMcp = z.preprocess(
+    createAliasPreprocessor('consolidate'),
+    z.object({
+        canonical_author: z
+            .string()
+            .min(1)
+            .max(255)
+            .optional()
+            .describe(
+                "The canonical author name. All entries matching any of this author's aliases will be updated to use this canonical name."
+            ),
+        project_number: relaxedNumber().optional().describe('GitHub Project number'),
+        workspace_id: z.string().optional().describe(WORKSPACE_FIELD_DESC),
+    })
+)
 
 export const ConsolidateAuthorsOutputSchema = z
     .object({

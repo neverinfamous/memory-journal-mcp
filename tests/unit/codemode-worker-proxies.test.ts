@@ -64,6 +64,7 @@ describe('Code Mode Worker Proxies & Globals', () => {
                 updateEntry: updateEntryMock,
                 deleteEntry: deleteEntryMock,
                 updateConfiguration: updateConfigMock,
+                listProjects: vi.fn().mockResolvedValue({ success: true, projects: {} }),
             },
             search: {
                 searchEntries: searchEntriesMock,
@@ -234,6 +235,11 @@ describe('Code Mode Worker Proxies & Globals', () => {
         await expect(projDomain()).resolves.toMatchObject({ success: true })
         await (projDomain['insights'] as () => Promise<unknown>)()
         expect(getInsightsMock).toHaveBeenCalled()
+        const disabledProjDomain = createShimProjectsDomain({}, shimMj) as () => Promise<unknown>
+        await expect(disabledProjDomain()).resolves.toMatchObject({
+            success: false,
+            code: 'TOOL_DISABLED',
+        })
 
         const dbDomain = createDbDomainProxy(mjApi, shimMj) as Record<string, unknown>
         await expect((dbDomain['ping'] as () => Promise<unknown>)()).resolves.toEqual({

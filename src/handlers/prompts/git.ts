@@ -6,7 +6,10 @@
 
 import type { IDatabaseAdapter } from '../../database/core/interfaces.js'
 import { ICON_PROMPT } from '../../constants/icons.js'
+import { ValidationError } from '../../types/errors.js'
 import type { InternalPromptDef } from './index.js'
+
+const VALID_COMMIT_VALIDATIONS = new Set(['lint', 'none', 'full'])
 
 export function getGitPromptDefinitions(): InternalPromptDef[] {
     return [
@@ -22,7 +25,13 @@ export function getGitPromptDefinitions(): InternalPromptDef[] {
                 },
             ],
             handler: (args: Record<string, string> | undefined, _db: IDatabaseAdapter) => {
-                const validation = args?.['validation']?.toLowerCase() || 'lint'
+                const rawValidation = args?.['validation']?.trim().toLowerCase()
+                const validation = rawValidation !== undefined && rawValidation !== '' ? rawValidation : 'lint'
+                if (!VALID_COMMIT_VALIDATIONS.has(validation)) {
+                    throw new ValidationError(
+                        `Invalid validation level '${args?.['validation'] ?? ''}'. Expected one of: lint, none, full.`
+                    )
+                }
 
                 let validationText: string
                 if (validation === 'none') {

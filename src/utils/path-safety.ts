@@ -149,10 +149,26 @@ function isWithinAllowedRoots(targetPath: string, allowedRoots: string[]): boole
     return allowedRoots.some((root) => pathIsInsideRoot(root, targetPath))
 }
 
-const WIN_RESERVED_DEVICE_RE = /^(?:CON|PRN|AUX|NUL|COM[1-9]|LPT[1-9])(?:\..*)?$/i
+const WIN_RESERVED_DEVICE_RE =
+    /^(?:CON|PRN|AUX|NUL|COM[1-9\u00b9\u00b2\u00b3]|LPT[1-9\u00b9\u00b2\u00b3])(?:\s*\..*)?\s*$/i
 
 function hasUnsafeAdsColon(dirPath: string): boolean {
     return dirPath.replace(/^[A-Za-z]:(?=[\\/]|$)/, '').includes(':')
+}
+
+/**
+ * Returns true if any non-drive path segment matches a Win32 reserved device name
+ * (`CON`, `PRN`, `AUX`, `NUL`, `COM1`–`COM9`, `LPT1`–`LPT9`, including trailing dots/spaces).
+ */
+export function hasWinReservedDeviceSegment(targetPath: string): boolean {
+    const segments = targetPath.split(/[\\/]/)
+    for (let i = 0; i < segments.length; i++) {
+        const seg = segments[i]
+        if (seg === undefined || seg === '') continue
+        if (i === 0 && /^[A-Za-z]:$/.test(seg)) continue
+        if (WIN_RESERVED_DEVICE_RE.test(seg)) return true
+    }
+    return false
 }
 
 /**
@@ -169,6 +185,7 @@ export function assertSafeDirectoryPath(dirPath: string, providedRoots: string[]
     if (
         dirPath.includes('\0') ||
         hasUnsafeAdsColon(dirPath) ||
+        hasWinReservedDeviceSegment(dirPath) ||
         dirPath
             .replace(/\\/g, '/')
             .split('/')
@@ -177,7 +194,7 @@ export function assertSafeDirectoryPath(dirPath: string, providedRoots: string[]
         throw new PathTraversalError(dirPath)
     }
     const decodedDir = decodeSafeDirPath(dirPath)
-    if (hasUnsafeAdsColon(decodedDir)) {
+    if (hasUnsafeAdsColon(decodedDir) || hasWinReservedDeviceSegment(decodedDir)) {
         throw new PathTraversalError(decodedDir)
     }
     const allowedRoots = resolveAllowedRoots(providedRoots)
@@ -224,12 +241,13 @@ function assertNotSymbolicLink(candidatePath: string): void {
  * percent-decoded paths) to prevent any file-level traversal tricks.
  */
 export function assertSafeFilePath(filePath: string, providedRoots: string[]): void {
+    const pathMod: typeof path = WIN_DRIVE_PATH_RE.test(filePath) ? path.win32 : path
     // First ensure the logical directory path is within boundaries
-    const rawDir = path.dirname(filePath)
+    const rawDir = pathMod.dirname(filePath)
     assertSafeDirectoryPath(rawDir, providedRoots)
 
     // [BOUNDARY] The directory check never sees the basename; reject URL-encoded separators/traversal hidden in it.
-    const rawBase = path.basename(filePath)
+    const rawBase = pathMod.basename(filePath)
     let decodedBase: string
     try {
         decodedBase = decodeURIComponent(rawBase)
@@ -242,6 +260,8 @@ export function assertSafeFilePath(filePath: string, providedRoots: string[]): v
         decodedBase === '..' ||
         decodedBase === '.' ||
         decodedBase.includes('\0') ||
+        /[. ]$/.test(rawBase) ||
+        /[. ]$/.test(decodedBase) ||
         WIN_RESERVED_DEVICE_RE.test(rawBase) ||
         WIN_RESERVED_DEVICE_RE.test(decodedBase)
     ) {
@@ -257,8 +277,8 @@ export function assertSafeFilePath(filePath: string, providedRoots: string[]): v
 
     const candidates = new Set([
         filePath,
-        path.join(rawDir, decodedBase),
-        path.join(decodedDir, decodedBase),
+        pathMod.join(rawDir, decodedBase),
+        pathMod.join(decodedDir, decodedBase),
     ])
     for (const candidate of candidates) {
         assertNotSymbolicLink(candidate)

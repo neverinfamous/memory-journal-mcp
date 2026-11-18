@@ -247,12 +247,12 @@ export class RelationshipsManager {
                    AND NOT EXISTS (
                        SELECT 1 FROM relationships r
                        JOIN memory_journal p ON p.id = r.to_entry_id
-                       WHERE r.from_entry_id = e.id AND p.deleted_at IS NULL${peerFilter}
+                       WHERE r.from_entry_id = e.id AND r.to_entry_id != r.from_entry_id AND p.deleted_at IS NULL${peerFilter}
                    )
                    AND NOT EXISTS (
                        SELECT 1 FROM relationships r
                        JOIN memory_journal p ON p.id = r.from_entry_id
-                       WHERE r.to_entry_id = e.id AND p.deleted_at IS NULL${peerFilter}
+                       WHERE r.to_entry_id = e.id AND r.from_entry_id != r.to_entry_id AND p.deleted_at IS NULL${peerFilter}
                    )`
             )
             .get(...params) as { orphan_count: unknown } | undefined

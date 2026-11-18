@@ -5,6 +5,7 @@
  */
 
 import { VERSION } from '../../version.js'
+import { parsePositiveProjectNumber } from '../../utils/safe-positive-int.js'
 import { createPreparedStatementShim } from './node-shims.js'
 import { createCallableShim, createSchemaShim } from './namespace-shims.js'
 
@@ -177,8 +178,8 @@ export function createGetReadFindInterceptor(
     return (arg?: unknown): unknown => {
         if (arg === undefined) return Promise.resolve(shimMj)
         if (typeof arg === 'number' || typeof arg === 'string') {
-            const parsedId = Number(arg)
-            if (!Number.isNaN(parsedId)) {
+            const parsedId = parsePositiveProjectNumber(arg)
+            if (parsedId !== undefined) {
                 return typeof getFn === 'function' ? (getFn as (a: unknown) => unknown)({ entry_id: parsedId }) : undefined
             }
             if (typeof arg === 'string') {
@@ -226,12 +227,14 @@ export function createShimProjectsDomain(
             return (listProjectsFn as (...a: unknown[]) => unknown).apply(this, args)
         }
         return Promise.resolve({
-            success: true,
+            success: false,
+            error: "Tool 'list_projects' is not available in this sandbox.",
+            code: 'TOOL_DISABLED',
             projects: {},
             items: [],
             data: [],
             _healing_note:
-                "🛠️ AUTONOMOUS HEALING: 'mj.projects()' was called without 'list_projects' bound in the current tool filter; returned empty project collection.",
+                "🛠️ AUTONOMOUS HEALING: 'mj.projects()' requires 'list_projects' to be enabled in the active tool filter.",
         })
     }
 

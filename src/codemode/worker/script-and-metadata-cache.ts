@@ -20,6 +20,8 @@ export interface ExecuteWorkerMessage {
     rpcPort: MessagePort
     contextObj?: Record<string, unknown>
     readonlyMode?: boolean
+    dryRunMode?: boolean
+    useTestDbMode?: boolean
 }
 
 export function isExecuteMessage(msg: unknown): msg is ExecuteWorkerMessage {

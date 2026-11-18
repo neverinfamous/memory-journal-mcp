@@ -181,7 +181,8 @@ export function getGitTools(context: ToolContext): ToolDefinition[] {
 
                     for (const c of commits) {
                         if (c.type) {
-                            analysis.byType[c.type] = (analysis.byType[c.type] ?? 0) + 1
+                            const typeKey = fenceNonCanonicalRefOrKey(c.type, true)
+                            analysis.byType[typeKey] = (analysis.byType[typeKey] ?? 0) + 1
                         }
                         if (c.author) {
                             const authorKey = fenceNonCanonicalRefOrKey(c.author, true)

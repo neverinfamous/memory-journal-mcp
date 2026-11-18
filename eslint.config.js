@@ -155,5 +155,28 @@ export default tseslint.config(
             '@typescript-eslint/no-explicit-any': 'error',
             'no-console': 'off',
         },
+    },
+    // Skills configuration (strict unused/any rules for executable skill helpers)
+    {
+        files: ['skills/**/*.ts', 'skills/**/*.mjs'],
+        extends: [js.configs.recommended, ...tseslint.configs.recommended],
+        languageOptions: {
+            ecmaVersion: 2022,
+            globals: {
+                ...globals.node,
+            },
+        },
+        rules: {
+            '@typescript-eslint/no-unused-vars': [
+                'error',
+                {
+                    argsIgnorePattern: '^_',
+                    varsIgnorePattern: '^_',
+                    caughtErrorsIgnorePattern: '^_',
+                },
+            ],
+            '@typescript-eslint/no-explicit-any': 'error',
+            'no-console': 'off',
+        },
     }
 )

@@ -198,11 +198,14 @@ function preprocessGetEntryById(val: unknown): unknown {
     if (typeof val !== 'object' || val === null || Array.isArray(val)) return val
     const obj = { ...(val as Record<string, unknown>) }
     if (obj['entry_id'] === undefined && typeof obj['uri'] === 'string') {
-        const match = /^memory:\/\/(?:entries|entry)\/(\d+)$/i.exec(obj['uri'].trim())
+        const match = /^memory:\/\/(?:entries|entry)\/([1-9]\d*)$/i.exec(obj['uri'].trim())
         if (match?.[1] !== undefined) {
-            obj['entry_id'] = Number(match[1])
-            delete obj['uri']
-            return obj
+            const parsed = Number(match[1])
+            if (Number.isSafeInteger(parsed) && String(parsed) === match[1]) {
+                obj['entry_id'] = parsed
+                delete obj['uri']
+                return obj
+            }
         }
     }
     return val
@@ -243,10 +246,16 @@ function preprocessSortByOnly(val: unknown): unknown {
     let modified = false
     if (healSortByField(obj)) modified = true
     if (healIncludeArchivedField(obj)) modified = true
-    if (typeof obj['cursor'] === 'string' && /^\d+$/.test(obj['cursor'].trim())) {
-        if (obj['offset'] === undefined) obj['offset'] = Number(obj['cursor'].trim())
-        delete obj['cursor']
-        modified = true
+    if (typeof obj['cursor'] === 'string') {
+        const trimmed = obj['cursor'].trim()
+        if (/^(?:0|[1-9]\d*)$/.test(trimmed)) {
+            const parsed = Number(trimmed)
+            if (Number.isSafeInteger(parsed) && String(parsed) === trimmed) {
+                if (obj['offset'] === undefined) obj['offset'] = parsed
+                delete obj['cursor']
+                modified = true
+            }
+        }
     }
     return modified ? obj : val
 }

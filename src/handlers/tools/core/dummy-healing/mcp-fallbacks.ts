@@ -41,8 +41,9 @@ const URI_CANDIDATE_KEYS = [
 ] as const
 
 const MEMORY_ROOT_PREFIXES = [
-    'briefing', 'recent', 'agent-', 'statistics', 'insights',
-    'help', 'health', 'team', 'git', 'tools',
+    'briefing', 'recent', 'agent-context', 'agent-id', 'entries', 'projects',
+    'github', 'kanban', 'graph', 'statistics', 'insights', 'metrics',
+    'instructions', 'audit', 'workflows', 'help', 'health', 'team', 'git', 'tools',
 ] as const
 
 export function extractUriFromArgs(args: Record<string, unknown>): string | undefined {

@@ -11,6 +11,7 @@ import { initializeDependencies } from './initialization.js'
 import { createServerInstance } from './tool-registration.js'
 import { startMetricsServer } from '../../observability/metrics-server.js'
 import { logger } from '../../utils/logger.js'
+import { flushAgentIssues } from '../../utils/issue-logger.js'
 import type { ServerRuntime } from '../../utils/maintenance-lock.js'
 import { buildBaseToolConfig, closeServerResources } from './core-helpers.js'
 import { closeCrossTeamAdapters } from '../../handlers/tools/search/cross-team.js'
@@ -126,6 +127,7 @@ async function cleanupFailedStartup(params: {
         await shutdownMetrics().catch(() => undefined)
     }
     await runtime.auditLogger?.close().catch(() => undefined)
+    await flushAgentIssues().catch(() => undefined)
     closeDatabases()
 }
 

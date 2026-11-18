@@ -148,8 +148,11 @@ export function preprocessBatchUpdates(val: unknown, propagateRootProject = true
 function parseBatchIdItem(item: unknown): unknown {
     if (typeof item === 'string') {
         const cleaned = item.trim().replace(/^#/, '')
-        if (/^\d+$/.test(cleaned)) {
-            return parseInt(cleaned, 10)
+        if (/^[1-9]\d*$/.test(cleaned)) {
+            const parsed = Number(cleaned)
+            if (Number.isSafeInteger(parsed) && String(parsed) === cleaned) {
+                return parsed
+            }
         }
     }
     return item

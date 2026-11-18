@@ -46,9 +46,8 @@ export function getKanbanTools(context: ToolContext): ToolDefinition[] {
                     .describe(
                         'Return column summaries only (name + itemCount), omitting individual items. Saves ~80% tokens.'
                     ),
-                item_limit: z.number().int().min(0).max(100)
+                item_limit: relaxedNumber()
                     .optional()
-                    .default(25)
                     .describe(
                         'Maximum items per column (default 25, max 100). Set to 0 for summary_only behavior.'
                     ),

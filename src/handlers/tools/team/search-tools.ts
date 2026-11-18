@@ -34,7 +34,7 @@ function missingSearchProjectError(): Record<string, unknown> {
 function enrichSearchResultsWithAuthors(
     teamDb: TeamDbInstance,
     entries: JournalEntry[]
-): (JournalEntry & { author: string | null })[] {
+): (JournalEntry & { author: string | null; source: 'team' })[] {
     const authorMap = batchFetchAuthors(
         teamDb,
         entries.map((e) => e.id)
@@ -42,6 +42,7 @@ function enrichSearchResultsWithAuthors(
     return entries.map((e) => ({
         ...e,
         author: authorMap.get(e.id) ?? null,
+        source: 'team' as const,
     }))
 }
 
@@ -229,11 +230,7 @@ export function getTeamSearchTools(context: ToolContext): ToolDefinition[] {
                         workspaceId: wsId,
                         projectNumber,
                     })
-                    const authorMap = batchFetchAuthors(teamDb, result.entries.map((e) => e.id))
-                    const enriched = result.entries.map((e) => ({
-                        ...e,
-                        author: authorMap.get(e.id) ?? null,
-                    }))
+                    const enriched = enrichSearchResultsWithAuthors(teamDb, result.entries)
                     return { success: true, entries: enriched, count: result.count }
                 } catch (err) {
                     return formatHandlerError(err)

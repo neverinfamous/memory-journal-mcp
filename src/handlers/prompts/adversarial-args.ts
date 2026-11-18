@@ -156,6 +156,48 @@ export const AUDIT_ARGUMENTS = [
     },
 ]
 
+function parseOptionalNumericWorkspace(
+    effectiveWs: string,
+    registry: NonNullable<BriefingConfig['projectRegistry']>
+): number | undefined {
+    const trimmed = effectiveWs.trim()
+    if (!/^#?(?:0|[1-9]\d*)$/.test(trimmed)) return undefined
+    const parsed = parseCanonicalPositiveInt(trimmed)
+    if (parsed !== undefined) return parsed
+    // Reject non-canonical numeric tokens like #0 or #005 when registry has entries
+    if (Object.keys(registry).length > 0) {
+        throw new ValidationError(`Invalid numeric workspace_id '${effectiveWs}'.`)
+    }
+    return undefined
+}
+
+function assertTargetWorkspaceCompatibility(
+    targetMatch: string,
+    cleanTarget: string,
+    effectiveWs: string | undefined,
+    projectNumber: number | undefined,
+    registry: NonNullable<BriefingConfig['projectRegistry']>
+): void {
+    if (effectiveWs !== undefined) {
+        const numericWs = parseOptionalNumericWorkspace(effectiveWs, registry)
+        const conflicts =
+            numericWs !== undefined
+                ? uniqueWorkspaceForProject(numericWs, registry)?.toLowerCase() !==
+                  targetMatch.toLowerCase()
+                : effectiveWs.toLowerCase() === 'default' ||
+                  (exactRegistryKey(effectiveWs, registry) ?? effectiveWs).toLowerCase() !==
+                      targetMatch.toLowerCase()
+        if (conflicts) {
+            throw new ValidationError(
+                `workspace_id '${effectiveWs}' conflicts with target '${cleanTarget}' (registered workspace '${targetMatch}').`
+            )
+        }
+    }
+    if (projectNumber !== undefined) {
+        pairStoredScope(targetMatch, projectNumber, activeProjectRegistry(registry))
+    }
+}
+
 /**
  * Pair-validate `(workspace_id, project_number)` for adversarial prompts without rejecting
  * unmatched `workspace_id` values when `project_number` is omitted (preserving C13 fallback tests).
@@ -183,31 +225,14 @@ export function validateAdversarialPromptScope(
             : undefined
 
     const effectiveWs = trimmedWs !== undefined && trimmedWs !== '' ? trimmedWs : undefined
-    if (targetMatch !== undefined && registry !== undefined) {
-        if (effectiveWs !== undefined) {
-            if (/^#?\d{1,10}$/.test(effectiveWs)) {
-                const numMatch = uniqueWorkspaceForProject(
-                    Number(effectiveWs.replace(/^#/, '')),
-                    registry
-                )
-                if (numMatch?.toLowerCase() !== targetMatch.toLowerCase()) {
-                    throw new ValidationError(
-                        `workspace_id '${effectiveWs}' conflicts with target '${cleanTarget}' (registered workspace '${targetMatch}').`
-                    )
-                }
-            } else if (
-                effectiveWs.toLowerCase() === 'default' ||
-                (exactRegistryKey(effectiveWs, registry) ?? effectiveWs).toLowerCase() !==
-                    targetMatch.toLowerCase()
-            ) {
-                throw new ValidationError(
-                    `workspace_id '${effectiveWs}' conflicts with target '${cleanTarget}' (registered workspace '${targetMatch}').`
-                )
-            }
-        }
-        if (projectNumber !== undefined) {
-            pairStoredScope(targetMatch, projectNumber, activeProjectRegistry(registry))
-        }
+    if (targetMatch !== undefined && registry !== undefined && cleanTarget !== undefined) {
+        assertTargetWorkspaceCompatibility(
+            targetMatch,
+            cleanTarget,
+            effectiveWs,
+            projectNumber,
+            registry
+        )
     }
 
     if (projectNumber === undefined) {
@@ -221,8 +246,10 @@ export function validateAdversarialPromptScope(
         }
     }
 
-    if (effectiveWs === undefined || /^#?\d{1,10}$/.test(effectiveWs)) {
-        if (effectiveWs !== undefined && Number(effectiveWs.replace(/^#/, '')) !== projectNumber) {
+    const numericWs =
+        effectiveWs !== undefined ? parseOptionalNumericWorkspace(effectiveWs, registry) : undefined
+    if (effectiveWs === undefined || numericWs !== undefined) {
+        if (numericWs !== undefined && numericWs !== projectNumber) {
             throw new ValidationError(
                 `Conflicting numeric workspace_id '${effectiveWs}' and project_number ${String(projectNumber)}.`
             )

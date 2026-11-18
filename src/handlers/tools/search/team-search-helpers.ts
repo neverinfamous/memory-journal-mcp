@@ -37,6 +37,7 @@ export interface ISearchFilters {
     includeArchived?: boolean
     workspaceId?: string
     similarityThreshold?: number
+    enforceSimilarityThreshold?: boolean
     config?: ToolHandlerConfig | undefined
 }
 
@@ -268,7 +269,12 @@ export async function collectTeamSearchEntries(
               )
             : false
 
-    if (options.similarityThreshold === undefined || teamVectorManager === undefined || teamVectorFailed) {
+    if (
+        options.enforceSimilarityThreshold !== true &&
+        (options.similarityThreshold === undefined ||
+            teamVectorManager === undefined ||
+            teamVectorFailed)
+    ) {
         appendTeamFtsFallback(query, teamDb, options, limit, pushEntry)
     }
     return ranked

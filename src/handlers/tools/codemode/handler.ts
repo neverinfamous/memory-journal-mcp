@@ -197,6 +197,7 @@ interface RecoveryRunOptions {
     timeoutMs: number | undefined
     userContext: Record<string, unknown>
     isSandboxReadonly: boolean
+    isDryRun: boolean
     useTestDb: boolean
     sessionId?: string | undefined
     requestedMaxResultSize: number | undefined
@@ -221,7 +222,8 @@ async function runSandboxWithAutonomousRecovery(opts: RecoveryRunOptions): Promi
         const executePool = async (): Promise<void> => {
             execResult = await opts.pool.execute(
                 codeToRun, opts.apiBindings, opts.schemas, opts.timeoutMs,
-                opts.userContext, opts.isSandboxReadonly, opts.requestedMaxResultSize
+                opts.userContext, opts.isSandboxReadonly, opts.requestedMaxResultSize,
+                { dryRunMode: opts.isDryRun, useTestDbMode: effectiveUseTestDb }
             )
         }
         await (authCtx !== undefined ? runWithAuthContext(authCtx, executePool) : executePool())
@@ -326,6 +328,7 @@ async function executeCodeModeHandler(
             pool: getSandboxPool(), securityManager, executionCode, originalCode: input.code,
             apiBindings: journalApi.createSandboxBindings(sessionContext.progress), schemas,
             timeoutMs, userContext, isSandboxReadonly,
+            isDryRun,
             useTestDb,
             sessionId,
             requestedMaxResultSize, healingEnabled,

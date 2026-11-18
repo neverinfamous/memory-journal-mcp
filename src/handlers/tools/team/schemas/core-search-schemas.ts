@@ -8,6 +8,7 @@ import {
     ENTRY_TYPES,
     SIGNIFICANCE_TYPES,
     MAX_CONTENT_LENGTH,
+    MAX_QUERY_LIMIT,
     relaxedNumber,
     DATE_FORMAT_REGEX,
     DATE_FORMAT_MESSAGE,
@@ -330,7 +331,7 @@ export const TeamSearchSchemaMcp = z.preprocess(
 /** team_list_deleted_entries — strict */
 export const TeamListDeletedEntriesSchema = z
     .object({
-        limit: z.number().int().min(1).optional().default(50),
+        limit: z.number().int().min(1).max(MAX_QUERY_LIMIT).optional().default(50),
         offset: z.number().int().min(0).optional().default(0),
         project_number: StrictProjectNumberSchema.optional(),
         workspace_id: z.string().optional(),

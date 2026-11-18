@@ -11,7 +11,7 @@ import { isAbsolute, join, relative, resolve, sep } from 'node:path'
 import { constants, realpathSync } from 'node:fs'
 import type { IDatabaseAdapter } from '../database/core/interfaces.js'
 import { serializeFrontmatter } from './frontmatter.js'
-import type { FrontmatterData } from './frontmatter.js'
+import type { FrontmatterAnchor, FrontmatterData } from './frontmatter.js'
 import { logger } from '../utils/logger.js'
 
 import { assertSafeDirectoryPath } from '../utils/security-utils.js'
@@ -87,7 +87,7 @@ interface ExportRelationshipRef {
 function buildExportFileContent(
     entry: ExportableEntry,
     relationships: readonly ExportRelationshipRef[],
-    anchors?: readonly string[]
+    anchors?: readonly FrontmatterAnchor[]
 ): string {
     const fmData: FrontmatterData = {
         mj_id: entry.id,
@@ -208,8 +208,8 @@ function loadExportRelationships(
 function loadExportAnchors(
     db: IDatabaseAdapter,
     entries: ExportableEntry[]
-): Map<number, string[]> {
-    const result = new Map<number, string[]>()
+): Map<number, FrontmatterAnchor[]> {
+    const result = new Map<number, FrontmatterAnchor[]>()
     if (entries.length === 0 || typeof db.getAnchorsByEntryIds !== 'function') return result
 
     const idsByWorkspace = new Map<string, number[]>()
@@ -223,14 +223,76 @@ function loadExportAnchors(
     for (const [workspaceId, ids] of idsByWorkspace) {
         const part = db.getAnchorsByEntryIds(ids, workspaceId)
         for (const [entryId, anchors] of part) {
-            const paths = anchors.map((a) => a.anchorPath)
-            if (paths.length === 0) continue
+            const serializedAnchors: FrontmatterAnchor[] = anchors.map((a) => {
+                if (
+                    a.anchorType === 'file' &&
+                    (a.status === undefined || a.status === 'pending' || a.status === 'valid')
+                ) {
+                    return a.anchorPath
+                }
+                return {
+                    anchor_path: a.anchorPath,
+                    anchor_type: a.anchorType,
+                    ...(a.status !== undefined ? { status: a.status } : {}),
+                }
+            })
+            if (serializedAnchors.length === 0) continue
             const existing = result.get(entryId)
-            if (existing === undefined) result.set(entryId, paths)
-            else existing.push(...paths)
+            if (existing === undefined) result.set(entryId, serializedAnchors)
+            else existing.push(...serializedAnchors)
         }
     }
     return result
+}
+
+async function prepareSafeExportDir(outputDir: string, allowedRoots: string[]): Promise<string> {
+    assertSafeDirectoryPath(outputDir, allowedRoots)
+
+    const resolvedOutputDir = resolve(outputDir)
+    const resolvedTmpDir = resolve(tmpdir())
+    let realTmpDir = resolvedTmpDir
+    try {
+        realTmpDir = realpathSync.native(resolvedTmpDir)
+    } catch {
+        // Use resolvedTmpDir when realpath lookup fails
+    }
+    const isWin32 = process.platform === 'win32'
+    const isInsideTmp = (candidate: string): boolean => {
+        for (const tmpRoot of [resolvedTmpDir, realTmpDir]) {
+            const relToTmp = relative(
+                isWin32 ? tmpRoot.toLowerCase() : tmpRoot,
+                isWin32 ? candidate.toLowerCase() : candidate
+            )
+            if (
+                relToTmp === '' ||
+                (relToTmp !== '..' && !relToTmp.startsWith('..' + sep) && !isAbsolute(relToTmp))
+            ) {
+                return true
+            }
+        }
+        return false
+    }
+    const resolveNearestExistingRealPath = (target: string): string => {
+        let cur = target
+        while (true) {
+            try {
+                return realpathSync.native(cur)
+            } catch {
+                const parent = resolve(cur, '..')
+                if (parent === cur) return cur
+                cur = parent
+            }
+        }
+    }
+    if (isInsideTmp(resolvedOutputDir) || isInsideTmp(resolveNearestExistingRealPath(resolvedOutputDir))) {
+        throw new Error('Refusing to export markdown files into the OS temporary directory')
+    }
+
+    await mkdir(resolvedOutputDir, { recursive: true })
+    if (isInsideTmp(realpathSync.native(resolvedOutputDir))) {
+        throw new Error('Refusing to export markdown files into the OS temporary directory')
+    }
+    return resolvedOutputDir
 }
 
 /**
@@ -252,25 +314,7 @@ export async function exportEntriesToMarkdown(
     db: IDatabaseAdapter,
     allowedRoots: string[]
 ): Promise<ExportResult> {
-    // Dynamically enforce bounded root
-    assertSafeDirectoryPath(outputDir, allowedRoots)
-
-    // Guard: refuse to export into the OS temporary directory (CodeQL js/insecure-temporary-file)
-    const resolvedOutputDir = resolve(outputDir)
-    const resolvedTmpDir = resolve(tmpdir())
-    const isWin32 = process.platform === 'win32'
-    const relToTmp = relative(
-        isWin32 ? resolvedTmpDir.toLowerCase() : resolvedTmpDir,
-        isWin32 ? resolvedOutputDir.toLowerCase() : resolvedOutputDir
-    )
-    if (
-        relToTmp === '' ||
-        (relToTmp !== '..' && !relToTmp.startsWith('..' + sep) && !isAbsolute(relToTmp))
-    ) {
-        throw new Error('Refusing to export markdown files into the OS temporary directory')
-    }
-
-    await mkdir(resolvedOutputDir, { recursive: true })
+    const resolvedOutputDir = await prepareSafeExportDir(outputDir, allowedRoots)
 
     const files: string[] = []
     const errors: { file: string; error: string }[] = []

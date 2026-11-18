@@ -1,5 +1,6 @@
 import fs from 'node:fs'
 import path from 'node:path'
+import { hasWinReservedDeviceSegment } from './path-safety.js'
 import { assertSafeDirectoryPath } from './security-utils.js'
 
 const FORBIDDEN_PROJECT_KEYS = new Set(['__proto__', 'constructor', 'prototype'])
@@ -93,7 +94,7 @@ export function isValidProjectPath(p: string, allowedRoots?: string[]): boolean 
     if (p === '' || p.includes('\0') || p.startsWith('\\\\') || p.startsWith('//')) {
         return false
     }
-    if (ENCODED_TRAVERSAL_RE.test(p) || p.replace(/^[A-Za-z]:/, '').includes(':')) {
+    if (ENCODED_TRAVERSAL_RE.test(p) || p.replace(/^[A-Za-z]:/, '').includes(':') || hasWinReservedDeviceSegment(p)) {
         return false
     }
     const pathMod = selectPathModule(p)
@@ -118,6 +119,9 @@ export function isValidProjectPath(p: string, allowedRoots?: string[]): boolean 
         // Leave non-URI percent sequences as raw path characters
     }
     if (decoded !== p) {
+        if (hasWinReservedDeviceSegment(decoded)) {
+            return false
+        }
         const decodedPathMod = selectPathModule(decoded)
         const decodedResolved = decodedPathMod.resolve(decoded)
         if (

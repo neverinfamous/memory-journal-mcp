@@ -57,8 +57,11 @@ function applySearchQueryInterception(
         delete obj['end']
     }
     if (typeof obj['limit'] === 'string') {
-        const parsed = parseInt(obj['limit'], 10)
-        if (!isNaN(parsed)) obj['limit'] = parsed
+        const trimmed = obj['limit'].trim()
+        if (/^[1-9]\d*$/.test(trimmed)) {
+            const parsed = Number(trimmed)
+            if (Number.isSafeInteger(parsed) && String(parsed) === trimmed) obj['limit'] = parsed
+        }
     }
     if (
         (methodName === 'team_search' || methodName === 'teamSearch') &&
@@ -125,16 +128,27 @@ function normalizeTwoArgUpdateEntry(
     ) {
         if (typeof args[0] === 'string') {
             const trimmed = args[0].trim()
-            if (!/^#?[1-9]\d*$/.test(trimmed)) {
+            const digits = trimmed.startsWith('#') ? trimmed.slice(1) : trimmed
+            if (!/^[1-9]\d*$/.test(digits)) {
                 return validationError(
                     `${methodName} requires a numeric entry_id, but received a non-numeric string ('${args[0]}'). Journal entries use auto-incrementing integer IDs.`,
                     'Provide a positive integer ID.'
                 )
             }
-            const parsed = parseInt(trimmed.replace(/^#/, ''), 10)
+            const parsed = Number(digits)
+            if (!Number.isSafeInteger(parsed) || String(parsed) !== digits) {
+                return validationError(
+                    `${methodName} received an out-of-range entry_id ('${args[0]}').`,
+                    'Provide a safe positive integer ID.'
+                )
+            }
             return { args: [{ entry_id: parsed, ...args[1] }] }
         }
-        if (!isNaN(args[0])) return { args: [{ entry_id: args[0], ...args[1] }] }
+        if (Number.isSafeInteger(args[0])) return { args: [{ entry_id: args[0], ...args[1] }] }
+        return validationError(
+            `${methodName} requires a finite safe integer entry_id.`,
+            'Provide a positive integer ID.'
+        )
     }
     return { args }
 }
@@ -167,6 +181,79 @@ export function applyEntryAndSearchInterceptions(
     return applyBatchAndMutationInterceptions(methodName, twoArgRes.args)
 }
 
+function interceptRecordSingleId(
+    methodName: string,
+    obj: Record<string, unknown>
+): { error: Record<string, unknown> } | undefined {
+    if (['ids', 'entry_ids', 'entry_id', 'id'].some((k) => Array.isArray(obj[k]))) {
+        return validationError(
+            `${methodName} only accepts a single entry_id. To process multiple entries, use the batch equivalent.`,
+            'Use a batch method (e.g. batch_delete_entries) or pass { entry_id: number }'
+        )
+    }
+    const idVal = obj['entry_id'] ?? obj['entryId'] ?? obj['id'] ?? obj['path'] ?? obj['keep']
+    if (idVal === undefined) {
+        if (
+            (methodName === 'get_entry_by_id' || methodName === 'getEntryById') &&
+            typeof obj['uri'] === 'string' &&
+            obj['uri'].trim().startsWith('memory://')
+        ) {
+            return undefined
+        }
+        return validationError(`${methodName} requires an 'entry_id' parameter.`, 'Provide { entry_id: number, ... } as the argument')
+    }
+    for (const k of ['path', 'keep']) {
+        if (obj[k] !== undefined && obj['entry_id'] === undefined) {
+            obj['entry_id'] = obj[k]
+            Reflect.deleteProperty(obj, k)
+        }
+    }
+    if (
+        ['q', 'query', 'mode', 'search'].some((k) => obj[k] !== undefined) &&
+        !['update_entry', 'updateEntry', 'team_update_entry', 'teamUpdateEntry'].includes(methodName)
+    ) {
+        return validationError(
+            `${methodName} does not support q, query, search, or mode parameters. It operates on a single entry by entry_id.`,
+            'Remove these parameters. Provide only the entry_id.'
+        )
+    }
+    if (typeof idVal === 'string') {
+        const trimmedId = idVal.trim()
+        const parsedId = /^[1-9]\d*$/.test(trimmedId) ? Number(trimmedId) : Number.NaN
+        if (!Number.isSafeInteger(parsedId) || String(parsedId) !== trimmedId) {
+            return validationError(
+                `${methodName} requires a numeric entry_id, but received a non-numeric or unsafe ID ('${idVal}'). Journal entries use auto-incrementing integer IDs.`,
+                'Provide a canonical positive integer ID.'
+            )
+        }
+    }
+    return undefined
+}
+
+function interceptPrimitiveSingleId(
+    methodName: string,
+    raw: number | string
+): { entry_id: number } | { error: Record<string, unknown> } {
+    const strArg = typeof raw === 'string' ? raw.trim() : undefined
+    const parsedArg =
+        typeof raw === 'number'
+            ? raw
+            : strArg !== undefined && /^[1-9]\d*$/.test(strArg)
+              ? Number(strArg)
+              : Number.NaN
+    if (
+        Number.isSafeInteger(parsedArg) &&
+        parsedArg > 0 &&
+        (strArg === undefined || String(parsedArg) === strArg)
+    ) {
+        return { entry_id: parsedArg }
+    }
+    return validationError(
+        `${methodName} requires a numeric entry_id, but received an invalid ID ('${String(raw)}'). Journal entries use auto-incrementing integer IDs.`,
+        'Provide a canonical positive integer ID.'
+    )
+}
+
 function applySingleIdInterception(
     methodName: string,
     args: unknown[]
@@ -185,60 +272,12 @@ function applySingleIdInterception(
     if (isRecord(args[0])) {
         const obj = { ...args[0] }
         args[0] = obj
-        if (['ids', 'entry_ids', 'entry_id', 'id'].some((k) => Array.isArray(obj[k]))) {
-            return validationError(
-                `${methodName} only accepts a single entry_id. To process multiple entries, use the batch equivalent.`,
-                'Use a batch method (e.g. batch_delete_entries) or pass { entry_id: number }'
-            )
-        }
-        const idVal = obj['entry_id'] ?? obj['entryId'] ?? obj['id'] ?? obj['path'] ?? obj['keep']
-        if (idVal === undefined) {
-            if (
-                (methodName === 'get_entry_by_id' || methodName === 'getEntryById') &&
-                typeof obj['uri'] === 'string' &&
-                obj['uri'].trim().startsWith('memory://')
-            ) {
-                return { args }
-            }
-            return validationError(`${methodName} requires an 'entry_id' parameter.`, 'Provide { entry_id: number, ... } as the argument')
-        }
-        for (const k of ['path', 'keep']) {
-            if (obj[k] !== undefined && obj['entry_id'] === undefined) {
-                obj['entry_id'] = obj[k]
-                Reflect.deleteProperty(obj, k)
-            }
-        }
-        if (
-            ['q', 'query', 'mode', 'search'].some((k) => obj[k] !== undefined) &&
-            !['update_entry', 'updateEntry', 'team_update_entry', 'teamUpdateEntry'].includes(methodName)
-        ) {
-            return validationError(
-                `${methodName} does not support q, query, search, or mode parameters. It operates on a single entry by entry_id.`,
-                'Remove these parameters. Provide only the entry_id.'
-            )
-        }
-        if (typeof idVal === 'string' && !/^\d+$/.test(idVal.trim())) {
-            return validationError(
-                `${methodName} requires a numeric entry_id, but received a non-numeric string ('${idVal}'). Journal entries use auto-incrementing integer IDs.`,
-                'Provide a numeric ID.'
-            )
-        }
+        const recordErr = interceptRecordSingleId(methodName, obj)
+        if (recordErr !== undefined) return recordErr
     } else if (typeof args[0] === 'number' || typeof args[0] === 'string') {
-        const strArg = typeof args[0] === 'string' ? args[0].trim() : undefined
-        const asNum =
-            typeof args[0] === 'number'
-                ? args[0]
-                : strArg !== undefined && /^\d+$/.test(strArg)
-                  ? Number(strArg)
-                  : NaN
-        if (!isNaN(asNum)) {
-            args[0] = { entry_id: asNum }
-        } else {
-            return validationError(
-                `${methodName} requires a numeric entry_id, but received a non-numeric string ('${args[0]}'). Journal entries use auto-incrementing integer IDs.`,
-                'Provide a numeric ID.'
-            )
-        }
+        const coerced = interceptPrimitiveSingleId(methodName, args[0])
+        if ('error' in coerced) return coerced
+        args[0] = coerced
     }
     return { args }
 }

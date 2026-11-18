@@ -5,6 +5,7 @@ import {
     generateFilename,
 } from '../../src/markdown/exporter.js'
 import * as fs from 'node:fs/promises'
+import { realpathSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 
@@ -71,6 +72,7 @@ describe('exportEntriesToMarkdown', () => {
 
     beforeEach(() => {
         vi.clearAllMocks()
+        vi.mocked(realpathSync.native).mockImplementation((p) => String(p))
         mockHandle.writeFile.mockResolvedValue(undefined)
         mockHandle.close.mockResolvedValue(undefined)
         vi.mocked(fs.open).mockResolvedValue(mockHandle as any)
@@ -181,10 +183,13 @@ describe('exportEntriesToMarkdown', () => {
     })
 
     it('should abort if directory is swapped for a symlink during export (TOCTOU)', async () => {
-        const { realpathSync } = await import('node:fs')
-        vi.mocked(realpathSync.native)
-            .mockReturnValueOnce(join(process.cwd(), 'export')) // preRealpath
-            .mockReturnValueOnce('/mock/unsafe/swapped/path') // postRealpath
+        let swapped = false
+        mockHandle.writeFile.mockImplementationOnce(async () => {
+            swapped = true
+        })
+        vi.mocked(realpathSync.native).mockImplementation((p) =>
+            swapped && String(p) === resolve('./export') ? '/mock/unsafe/swapped/path' : String(p)
+        )
 
         const entries = [
             {

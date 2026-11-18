@@ -7,7 +7,7 @@ import {
     rowToObject,
 } from './shared.js'
 import { effectiveWorkspace } from '../../workspace-scope.js'
-import { bucketInParams } from '../row-helpers.js'
+import { bucketInParams, SCOPED_IN_PARAM_BUCKETS } from '../row-helpers.js'
 
 export function getEntryById(
     context: EntriesSharedContext,
@@ -46,7 +46,7 @@ function fetchEntriesByIds(
     const wsClause = scopeId === '*' ? '' : ' AND workspace_id = ?'
     const rows: unknown[] = []
 
-    for (const { placeholders, params } of bucketInParams(ids)) {
+    for (const { placeholders, params } of bucketInParams(ids, SCOPED_IN_PARAM_BUCKETS)) {
         const stmt = db.prepare(
             `SELECT ${ENTRY_COLUMNS} FROM memory_journal WHERE id IN (${placeholders})${deletedClause}${wsClause}`
         )

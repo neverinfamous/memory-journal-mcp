@@ -198,18 +198,95 @@ export function applyImportedRelationshipBatch(
     }
 }
 
+function collectExistingDryRunPairs(
+    db: IDatabaseAdapter,
+    pending: PendingRelationshipLink
+): Set<string> {
+    const seenPairs = new Set<string>()
+    if (pending.entryId > 0 && typeof db.getRelationships === 'function') {
+        for (const existing of db.getRelationships(pending.entryId, pending.workspaceId)) {
+            if (existing.fromEntryId === pending.entryId) {
+                seenPairs.add(`${existing.relationshipType}:${String(existing.toEntryId)}`)
+            }
+        }
+    }
+    return seenPairs
+}
+
+function isDryRunProjectMismatch(
+    pendingProject: number | undefined,
+    targetProject: number | null | undefined
+): boolean {
+    return (
+        pendingProject !== undefined &&
+        targetProject !== null &&
+        targetProject !== undefined &&
+        targetProject !== pendingProject
+    )
+}
+
+function evaluateDryRunPendingItem(
+    db: IDatabaseAdapter,
+    pending: PendingRelationshipLink,
+    inBatchScopes: ReadonlyMap<number, { workspaceId: string; projectNumber?: number | null }>,
+    targetsMap: ReadonlyMap<number, JournalEntry> | undefined,
+    result: ImportedRelationshipBatchResult
+): void {
+    if (pending.relationships === undefined || pending.relationships.length === 0) return
+    const rejectedSet = new Set<string>()
+    const missingTargetsSet = new Set<number>()
+    const seenPairs = collectExistingDryRunPairs(db, pending)
+    for (const rel of pending.relationships) {
+        if (!isRelationshipType(rel.type)) {
+            rejectedSet.add(rel.type)
+            continue
+        }
+        if (rel.target_id === pending.entryId) continue
+        const pairKey = `${rel.type}:${String(rel.target_id)}`
+        if (seenPairs.has(pairKey)) continue
+        seenPairs.add(pairKey)
+        const batchTarget = inBatchScopes.get(rel.target_id)
+        if (batchTarget !== undefined) {
+            const wrongWs = batchTarget.workspaceId !== (pending.workspaceId ?? 'default')
+            if (wrongWs || isDryRunProjectMismatch(pending.projectNumber, batchTarget.projectNumber)) {
+                missingTargetsSet.add(rel.target_id)
+            } else {
+                result.relationshipsLinked++
+            }
+            continue
+        }
+        const target = targetsMap ? targetsMap.get(rel.target_id) : db.getEntryById(rel.target_id, pending.workspaceId)
+        if (target === null || target === undefined || isDryRunProjectMismatch(pending.projectNumber, target.projectNumber)) {
+            missingTargetsSet.add(rel.target_id)
+        } else {
+            result.relationshipsLinked++
+        }
+    }
+    for (const targetId of missingTargetsSet) {
+        result.errors.push({ file: pending.filename, error: `Relationship target ${String(targetId)} does not exist and was not linked` })
+        result.success = false
+    }
+    for (const relType of rejectedSet) {
+        result.errors.push({ file: pending.filename, error: `Unknown relationship type '${relType}' was not linked` })
+        result.success = false
+    }
+}
+
 /** Validate relationship types and target existence during `dry_run` without mutating DB rows. */
 export function validateDryRunRelationships(
     db: IDatabaseAdapter,
     pendingLinks: readonly PendingRelationshipLink[],
-    inBatchMjIds: ReadonlySet<number>,
+    inBatchScopes: ReadonlyMap<number, { workspaceId: string; projectNumber?: number | null }>,
     result: ImportedRelationshipBatchResult
 ): void {
     const externalPending: PendingRelationshipLink[] = []
     for (const pending of pendingLinks) {
         if (pending.relationships === undefined || pending.relationships.length === 0) continue
         const filtered = pending.relationships.filter(
-            (rel) => isRelationshipType(rel.type) && !inBatchMjIds.has(rel.target_id)
+            (rel) =>
+                isRelationshipType(rel.type) &&
+                rel.target_id !== pending.entryId &&
+                !inBatchScopes.has(rel.target_id)
         )
         if (filtered.length > 0) {
             externalPending.push({ ...pending, relationships: filtered })
@@ -222,40 +299,7 @@ export function validateDryRunRelationships(
     )
 
     for (const pending of pendingLinks) {
-        if (pending.relationships === undefined || pending.relationships.length === 0) continue
         const wsKey = pending.workspaceId ?? '*'
-        const targetsMap = prefetchedTargetsByWs.get(wsKey)
-        const rejectedSet = new Set<string>()
-        const missingTargetsSet = new Set<number>()
-        for (const rel of pending.relationships) {
-            if (!isRelationshipType(rel.type)) {
-                rejectedSet.add(rel.type)
-                continue
-            }
-            if (rel.target_id === pending.entryId || inBatchMjIds.has(rel.target_id)) continue
-            const target = targetsMap ? targetsMap.get(rel.target_id) : db.getEntryById(rel.target_id, pending.workspaceId)
-            const wrongProject =
-                pending.projectNumber !== undefined &&
-                target?.projectNumber !== null &&
-                target?.projectNumber !== undefined &&
-                target.projectNumber !== pending.projectNumber
-            if (target === null || target === undefined || wrongProject) {
-                missingTargetsSet.add(rel.target_id)
-            }
-        }
-        for (const targetId of missingTargetsSet) {
-            result.errors.push({
-                file: pending.filename,
-                error: `Relationship target ${String(targetId)} does not exist and was not linked`,
-            })
-            result.success = false
-        }
-        for (const relType of rejectedSet) {
-            result.errors.push({
-                file: pending.filename,
-                error: `Unknown relationship type '${relType}' was not linked`,
-            })
-            result.success = false
-        }
+        evaluateDryRunPendingItem(db, pending, inBatchScopes, prefetchedTargetsByWs.get(wsKey), result)
     }
 }

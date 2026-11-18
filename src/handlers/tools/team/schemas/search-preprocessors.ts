@@ -17,10 +17,16 @@ export function preprocessTeamSortByOnly(val: unknown): unknown {
     let modified = false
     if (healSortByField(obj)) modified = true
     if (healIncludeArchivedField(obj)) modified = true
-    if (typeof obj['cursor'] === 'string' && /^\d+$/.test(obj['cursor'].trim())) {
-        if (obj['offset'] === undefined) obj['offset'] = Number(obj['cursor'].trim())
-        delete obj['cursor']
-        modified = true
+    if (typeof obj['cursor'] === 'string') {
+        const trimmed = obj['cursor'].trim()
+        if (/^(?:0|[1-9]\d*)$/.test(trimmed)) {
+            const parsed = Number(trimmed)
+            if (Number.isSafeInteger(parsed) && String(parsed) === trimmed) {
+                if (obj['offset'] === undefined) obj['offset'] = parsed
+                delete obj['cursor']
+                modified = true
+            }
+        }
     }
     return modified ? obj : val
 }

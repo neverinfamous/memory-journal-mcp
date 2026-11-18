@@ -93,22 +93,27 @@ function sanitizeAuditArgNode(value: unknown, depth: number, seen: WeakSet<objec
     if (typeof value === 'string') {
         return fenceInlineIdempotent(sanitizeErrorForLogging(value))
     }
+    if (typeof value === 'bigint') return value.toString()
     if (value === null || typeof value !== 'object') return value
     if (seen.has(value)) return '[Circular]'
     if (depth >= 6) return '[Truncated]'
     seen.add(value)
 
-    if (Array.isArray(value)) {
-        return value.map((item) => sanitizeAuditArgNode(item, depth + 1, seen))
+    try {
+        if (Array.isArray(value)) {
+            return value.map((item) => sanitizeAuditArgNode(item, depth + 1, seen))
+        }
+        const out: Record<string, unknown> = {}
+        Object.setPrototypeOf(out, null)
+        for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
+            out[k] = AUDIT_ARG_SECRET_KEY_RE.test(k)
+                ? '[REDACTED]'
+                : sanitizeAuditArgNode(v, depth + 1, seen)
+        }
+        return out
+    } finally {
+        seen.delete(value)
     }
-    const out: Record<string, unknown> = {}
-    Object.setPrototypeOf(out, null)
-    for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
-        out[k] = AUDIT_ARG_SECRET_KEY_RE.test(k)
-            ? '[REDACTED]'
-            : sanitizeAuditArgNode(v, depth + 1, seen)
-    }
-    return out
 }
 
 /** Fence untrusted non-canonical audit fields and scrub secret tokens before MCP egress. */

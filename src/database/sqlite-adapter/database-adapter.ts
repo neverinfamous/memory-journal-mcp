@@ -203,6 +203,7 @@ export class DatabaseAdapter extends AdapterDelegates implements IDatabaseAdapte
             isArchived?: boolean
             expectedVersion?: number
             workspaceId?: string
+            anchors?: { anchorPath: string; anchorType: string; status?: string | undefined }[]
             trustScore?: number
             impactScore?: number
             validationStatus?: 'passed' | 'failed' | 'none'

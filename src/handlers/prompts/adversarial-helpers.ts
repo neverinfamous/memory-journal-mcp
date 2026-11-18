@@ -141,11 +141,13 @@ export function hasExplicitPromptTarget(
     const requested = workspaceId?.trim()
     if (requested !== undefined && requested !== '' && requested !== '*') {
         if (requested.toLowerCase() === 'default') return true
-        if (/^#?\d{1,10}$/.test(requested)) {
-            const num = Number(requested.replace(/^#/, ''))
+        if (/^#?[1-9]\d{0,9}$/.test(requested)) {
+            const digits = requested.replace(/^#/, '')
+            const num = Number(digits)
             return (
                 Number.isSafeInteger(num) &&
                 num > 0 &&
+                String(num) === digits &&
                 registry !== undefined &&
                 uniqueWorkspaceForProject(num, registry) !== undefined
             )
@@ -173,12 +175,16 @@ export function resolvePromptPriorWorkspace(
     const requested = workspaceId?.trim()
     if (requested !== undefined && requested !== '' && requested !== '*') {
         if (requested.toLowerCase() === 'default') return 'default'
-        if (/^#?\d{1,10}$/.test(requested)) {
+        if (/^#?[1-9]\d{0,9}$/.test(requested)) {
             // [INVARIANT] A numeric id resolves only through the registry; an unmatched number
             // returns `default` instead of leaking cwd/session context (C13).
-            const num = Number(requested.replace(/^#/, ''))
+            const digits = requested.replace(/^#/, '')
+            const num = Number(digits)
             const matchByNum =
-                Number.isSafeInteger(num) && num > 0 && registry !== undefined
+                Number.isSafeInteger(num) &&
+                num > 0 &&
+                String(num) === digits &&
+                registry !== undefined
                     ? uniqueWorkspaceForProject(num, registry)
                     : undefined
             return matchByNum !== undefined

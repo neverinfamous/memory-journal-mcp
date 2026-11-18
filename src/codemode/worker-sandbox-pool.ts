@@ -88,7 +88,8 @@ export class WorkerSandboxPool {
         timeoutMs?: number,
         contextObj?: Record<string, unknown>,
         readonlyMode?: boolean,
-        maxResultSizeOverride?: number
+        maxResultSizeOverride?: number,
+        modeFlags?: { dryRunMode?: boolean | undefined; useTestDbMode?: boolean | undefined }
     ): Promise<SandboxResult> {
         let availableSandbox = this.pool.find((s) => !s.isBusy)
 
@@ -112,7 +113,8 @@ export class WorkerSandboxPool {
             timeoutMs,
             contextObj,
             readonlyMode,
-            maxResultSizeOverride
+            maxResultSizeOverride,
+            modeFlags
         )
     }
 

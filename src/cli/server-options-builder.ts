@@ -7,6 +7,7 @@ import { defaultDbPath } from './option-groups.js'
 import { activeProjectRegistry, pairStoredScope } from '../utils/write-scope.js'
 import { logger } from '../utils/logger.js'
 import { parsePositiveProjectNumber } from '../utils/safe-positive-int.js'
+import { parseByteSizeValue } from '../codemode/shared-context-parsers.js'
 import type { ServerOptions } from '../server/mcp-server/types.js'
 import {
     assertAdditionalTeamDbIsNotSymlink,
@@ -144,9 +145,24 @@ function applyEnvironmentOverrides(
     options: Record<string, unknown>,
     catchConfig: CatchConfig
 ): void {
-    const codemodeMaxResultSize = catchConfig(() => resolver.resolve<string>('codemodeMaxResultSize', 'CODE_MODE_MAX_RESULT_SIZE'), undefined)
-    if (codemodeMaxResultSize) {
-        process.env['CODE_MODE_MAX_RESULT_SIZE'] = codemodeMaxResultSize
+    const codemodeMaxResultSize = catchConfig(() => {
+        const raw = resolver.resolve<string | number>(
+            'codemodeMaxResultSize',
+            'CODE_MODE_MAX_RESULT_SIZE'
+        )
+        if (raw === undefined || raw === null || (typeof raw === 'string' && raw.trim() === '')) {
+            return undefined
+        }
+        const parsed = parseByteSizeValue(raw)
+        if (parsed === undefined) {
+            throw new Error(
+                `Invalid codemodeMaxResultSize '${String(raw)}'. Expected a positive byte count or size string (e.g. '64kb', '2mb').`
+            )
+        }
+        return Math.min(parsed, 50 * 1024 * 1024)
+    }, undefined)
+    if (codemodeMaxResultSize !== undefined) {
+        process.env['CODE_MODE_MAX_RESULT_SIZE'] = String(codemodeMaxResultSize)
     }
 
     const metricsPort = catchConfig(() => resolver.resolve<string>('metricsPort', 'MJ_METRICS_PORT'), undefined)

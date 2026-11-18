@@ -10,7 +10,6 @@
  * repeated I/O on every briefing read.
  */
 
-import * as fs from 'node:fs'
 import * as fsPromises from 'node:fs/promises'
 import * as path from 'node:path'
 
@@ -24,10 +23,8 @@ import { getPrompts } from '../../../prompts/index.js'
 import { logger } from '../../../../utils/logger.js'
 import type { BriefingConfig } from '../../shared.js'
 import {
-    fetchGitHistoryFromRepo,
     fetchGitHistoryFromRepoAsync,
     formatBriefingLocalTime,
-    readRepoIndicators,
     readRepoIndicatorsAsync,
     resolveProjectRoot,
 } from './system-section-helpers.js'
@@ -137,88 +134,6 @@ function setCached<T>(map: Map<string, TtlCacheEntry<T>>, key: string, value: T)
     return value
 }
 
-function loadCachedGitHistory(
-    commitCount: number,
-    targetPath?: string | null
-): GitHistorySummary | null {
-    if (targetPath === null) return null
-    const root = targetPath || resolveProjectRoot()
-    const cacheKey = `${root}::${String(commitCount)}`
-    const cached = getCached(cachedGitHistory, cacheKey)
-    if (cached.hit) return cached.value
-
-    try {
-        if (process.env['VITEST']) {
-            return setCached(cachedGitHistory, cacheKey, null)
-        }
-        return setCached(cachedGitHistory, cacheKey, fetchGitHistoryFromRepo(root, commitCount))
-    } catch (err: unknown) {
-        logger.debug('Failed to get git history via child_process (non-critical)', {
-            module: 'BRIEFING',
-            operation: 'git-history',
-            error: err instanceof Error ? err.message : String(err),
-        })
-        return setCached(cachedGitHistory, cacheKey, null)
-    }
-}
-
-function readReadmeBadgeChunk(root: string): string {
-    const readmePath = path.join(root, 'README.md')
-    const fd = fs.openSync(readmePath, 'r')
-    try {
-        const buf = Buffer.alloc(2048)
-        const bytesRead = fs.readSync(fd, buf, 0, 2048, 0)
-        return buf.toString('utf-8', 0, bytesRead)
-    } finally {
-        fs.closeSync(fd)
-    }
-}
-
-function loadCachedTestHealth(targetPath?: string | null): TestHealth | null {
-    if (targetPath === null) return null
-    const root = targetPath || resolveProjectRoot()
-    const cached = getCached(cachedTestHealth, root)
-    if (cached.hit) return cached.value
-
-    try {
-        // Primary: read structured coverage data from vitest json-summary output
-        const coveragePath = path.join(root, '.test-output', 'coverage', 'coverage-summary.json')
-        if (fs.existsSync(coveragePath)) {
-            const raw = fs.readFileSync(coveragePath, 'utf-8')
-            const summary = JSON.parse(raw) as {
-                total?: { lines?: { pct?: number } }
-            }
-            const coverage = summary.total?.lines?.pct ?? 0
-
-            let unitTests = 0
-            let e2eTests = 0
-            try {
-                const badgeContent = readReadmeBadgeChunk(root)
-                const unitMatch = /(?<!E2E[_ ]|E2E)Tests-(\d+)[_ %]*(passed|%20passed)/i.exec(
-                    badgeContent
-                )
-                const e2eMatch = /E2E(?:[_ ]|%20)*Tests-(\d+)[_ %]*(passed|%20passed)/i.exec(
-                    badgeContent
-                )
-                unitTests = unitMatch?.[1] ? parseInt(unitMatch[1], 10) : 0
-                e2eTests = e2eMatch?.[1] ? parseInt(e2eMatch[1], 10) : 0
-            } catch {
-                // Ignore error if README.md doesn't exist or is unreadable
-            }
-            return setCached(cachedTestHealth, root, { unitTests, e2eTests, coverage })
-        } else {
-            // Fallback: parse everything from README badges (legacy path)
-            return setCached(cachedTestHealth, root, parseTestHealth(readReadmeBadgeChunk(root)))
-        }
-    } catch {
-        logger.debug('Test health data not found or unreadable (non-critical)', {
-            module: 'BRIEFING',
-            operation: 'test-health-parse',
-        })
-        return setCached(cachedTestHealth, root, null)
-    }
-}
-
 // ============================================================================
 // Last Release Age (from CHANGELOG.md)
 // ============================================================================
@@ -231,29 +146,6 @@ export function parseLastReleaseAge(content: string): number | null {
     const releaseDate = new Date(match[1] + 'T00:00:00Z')
     const elapsed = Date.now() - releaseDate.getTime()
     return Math.max(0, Math.floor(elapsed / 86_400_000))
-}
-
-function loadCachedLastReleaseDaysAgo(targetPath?: string | null): number | null {
-    if (targetPath === null) return null
-    const root = targetPath || resolveProjectRoot()
-    const cached = getCached(cachedLastReleaseDaysAgo, root)
-    if (cached.hit) return cached.value
-
-    try {
-        const changelogPath = path.join(root, 'CHANGELOG.md')
-        if (fs.existsSync(changelogPath)) {
-            const content = fs.readFileSync(changelogPath, 'utf-8')
-            const age = parseLastReleaseAge(content)
-            return setCached(cachedLastReleaseDaysAgo, root, age)
-        }
-        return setCached(cachedLastReleaseDaysAgo, root, null)
-    } catch {
-        logger.debug('Failed to get release info (non-critical)', {
-            module: 'BRIEFING',
-            operation: 'release-age',
-        })
-        return setCached(cachedLastReleaseDaysAgo, root, null)
-    }
 }
 
 // ============================================================================
@@ -347,7 +239,7 @@ async function loadCachedLastReleaseDaysAgoAsync(
 }
 
 /**
- * Parallel non-blocking counterpart to `buildSystemContext` used by async briefing reads.
+ * Build system-level context asynchronously for briefing reads.
  */
 export async function buildBriefingSystemSummary(
     config?: BriefingConfig,
@@ -388,56 +280,6 @@ export async function buildBriefingSystemSummary(
         hasCodeMap: indicators.hasCodeMap,
         lastReleaseDaysAgo,
         localCheck: indicators.localCheck,
-        workspaceId: activeWorkspaceId ?? config?.defaultWorkspaceId,
-    }
-}
-
-/**
- * Build system-level context for the briefing.
- *
- * Version, tool count, and prompt count are derived from live registries.
- * Unreleased summary and test health are startup-cached from project files.
- * localTime provides chronological grounding for date-relative agent queries.
- * Filter, instruction level, and registry state are derived from runtime config.
- */
-export function buildSystemContext(
-    config?: BriefingConfig,
-    filterConfig?: ToolFilterConfig | null,
-    targetRepoPath?: string | null,
-    resourceCount?: number,
-    activeWorkspaceId?: string
-): SystemContext {
-    const localTime = formatBriefingLocalTime()
-
-    // Filter summary — only show when a filter is actually narrowing the tool set
-    const totalTools = getAllToolNames().length
-    let filterSummary: string | null = null
-    if (filterConfig) {
-        const enabled = filterConfig.enabledTools.size
-        if (enabled < totalTools) {
-            filterSummary = `${filterConfig.raw} (${String(enabled)}/${String(totalTools)})`
-        }
-    }
-
-    const isReadonly = filterConfig ? isFilterEffectivelyReadOnly(filterConfig) : false
-    const ioRootCount = config?.allowedIoRoots?.length ?? 0
-    const root = targetRepoPath === null ? null : (targetRepoPath || resolveProjectRoot())
-    const { hasCodeMap, localCheck } = readRepoIndicators(root)
-
-    return {
-        version: VERSION,
-        toolCount: totalTools,
-        resourceCount: resourceCount ?? 0,
-        promptCount: getPrompts().length,
-        localTime,
-        gitHistory: loadCachedGitHistory(config?.commitCount ?? 3, targetRepoPath),
-        testHealth: loadCachedTestHealth(targetRepoPath),
-        filterSummary,
-        isReadonly,
-        ioRootCount,
-        hasCodeMap,
-        lastReleaseDaysAgo: loadCachedLastReleaseDaysAgo(targetRepoPath),
-        localCheck,
         workspaceId: activeWorkspaceId ?? config?.defaultWorkspaceId,
     }
 }

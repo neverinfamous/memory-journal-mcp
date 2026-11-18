@@ -17,12 +17,17 @@
  * propagate to tool callers.
  */
 
-import { appendFile, mkdir, open, rename, stat } from 'node:fs/promises'
+import { appendFile, mkdir, open } from 'node:fs/promises'
 import { dirname } from 'node:path'
 import type { AuditConfig, AuditEntry, AuditSearchFilters } from './types.js'
 import { logger } from '../utils/logger.js'
 import { getRequestContext } from '../utils/request-context.js'
-import { parseAuditLine, searchAuditFileBackward } from './audit-query-helpers.js'
+import {
+    nodeErrorCode,
+    parseAuditLine,
+    rotateAuditLogFiles,
+    searchAuditFileBackward,
+} from './audit-query-helpers.js'
 
 // ============================================================================
 // Constants
@@ -39,12 +44,6 @@ const DEFAULT_RECENT_COUNT = 50
 
 /** Special logPath value that routes audit output to stderr */
 const STDERR_SENTINEL = 'stderr'
-
-function nodeErrorCode(err: unknown): string | undefined {
-    if (typeof err !== 'object' || err === null || !('code' in err)) return undefined
-    const code = err.code
-    return typeof code === 'string' ? code : undefined
-}
 
 /**
  * Maximum bytes to read from the end of the audit log for `recent()`.
@@ -113,7 +112,28 @@ export class AuditLogger {
     log(entry: AuditEntry): void {
         if (this.closed || !this.config.enabled) return
 
-        this.buffer.push(JSON.stringify(entry))
+        let serialized: string
+        try {
+            serialized = JSON.stringify(entry, (_key: string, value: unknown) =>
+                typeof value === 'bigint' ? value.toString() : value
+            )
+        } catch {
+            serialized = JSON.stringify({
+                timestamp: entry.timestamp,
+                requestId: entry.requestId,
+                tool: entry.tool,
+                category: entry.category,
+                scope: entry.scope,
+                user: entry.user,
+                scopes: entry.scopes,
+                durationMs: entry.durationMs,
+                tokenEstimate: entry.tokenEstimate,
+                success: entry.success,
+                ...(entry.error !== undefined ? { error: entry.error } : {}),
+                args: { _serializationError: 'Audit args could not be JSON serialized' },
+            })
+        }
+        this.buffer.push(serialized)
 
         // Hard cap to prevent unbounded heap growth if flush loop hangs
         if (this.buffer.length > 5000) {
@@ -393,39 +413,13 @@ export class AuditLogger {
         if (this.approxSizeBytes !== null && this.approxSizeBytes < this.config.maxSizeBytes) {
             return
         }
-        try {
-            const info = await stat(this.config.logPath).catch((err: unknown) => {
-                if (nodeErrorCode(err) !== 'ENOENT') {
-                    const message = err instanceof Error ? err.message : String(err)
-                    logger.debug(`Audit log stat failed before rotation: ${message}`, {
-                        module: 'Audit',
-                    })
-                }
-                return null
-            })
-            this.approxSizeBytes = info?.size ?? 0
-            if (!info || info.size < this.config.maxSizeBytes) return
-
-            // Cascade rename from .4 to .5, .3 to .4, etc. to keep 5 backups
-            for (let i = MAX_ARCHIVES - 1; i >= 1; i--) {
-                const oldFile = `${this.config.logPath}.${String(i)}`
-                const newFile = `${this.config.logPath}.${String(i + 1)}`
-                await rename(oldFile, newFile).catch((err: unknown) => {
-                    if (nodeErrorCode(err) === 'ENOENT') return
-                    const message = err instanceof Error ? err.message : String(err)
-                    logger.error(`Audit log rotation failed: ${message}`, { module: 'Audit' })
-                    throw err
-                })
-            }
-
-            // Rename current directly to .1 to avoid a crash window where data is left in a .tmp file
-            const rotatedPath = `${this.config.logPath}.1`
-            await rename(this.config.logPath, rotatedPath)
-            this.approxSizeBytes = 0
-        } catch (err) {
-            // Rotation failure must not block logging
-            const message = err instanceof Error ? err.message : String(err)
-            logger.error(`Rotate failed: ${message}`, { module: 'Audit' })
+        const nextSize = await rotateAuditLogFiles(
+            this.config.logPath,
+            this.config.maxSizeBytes,
+            MAX_ARCHIVES
+        )
+        if (nextSize !== null) {
+            this.approxSizeBytes = nextSize
         }
     }
 }

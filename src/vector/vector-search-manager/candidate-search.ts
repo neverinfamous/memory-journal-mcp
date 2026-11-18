@@ -105,20 +105,6 @@ export async function runPipelineBatchEmbeddingsSettled(
     return results
 }
 
-/** Batch-extract embeddings from a pipeline function when it returns a 2D tensor [N, D]. */
-export async function runPipelineBatchEmbeddings(
-    pipeline: unknown,
-    texts: readonly string[],
-    dimensions: number,
-    fallbackSingle: (text: string) => Promise<Float32Array>
-): Promise<Float32Array[]> {
-    const settled = await runPipelineBatchEmbeddingsSettled(pipeline, texts, dimensions, fallbackSingle)
-    return settled.map((item) => {
-        if (item.status === 'rejected') throw item.reason
-        return item.value
-    })
-}
-
 /**
  * Convert raw sqlite-vec hits into scored candidates above `threshold`,
  * optionally skipping `excludeId` (the query entry itself).
@@ -175,7 +161,7 @@ export function resolveCandidates(
             : dbAdapter.getEntryById(candidate.entryId, targetWs)
         if (
             entry &&
-            (targetWs === '*' || entry.workspaceId === targetWs) &&
+            (targetWs === '*' || (entry.workspaceId ?? 'default') === targetWs) &&
             (projectNumber === undefined || entry.projectNumber === projectNumber)
         ) {
             searchResults.push({

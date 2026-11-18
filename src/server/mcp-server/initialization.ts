@@ -311,10 +311,11 @@ export async function initializeDependencies(options: ServerOptions): Promise<Se
         })
         runtime.pendingVectorInit = pendingVectorInit
 
-        const github = await initializeGitHubIntegration(options, runtime)
         const configAndJobs = await initConfigAndStartupJobs({ options, db, vectorManager, runtime })
         configManager = configAndJobs.configManager
         scheduler = configAndJobs.scheduler
+
+        const github = await initializeGitHubIntegration(options, runtime)
 
         const allowedIoRoots = resolveFinalAllowedIoRoots(options)
         const skillCatalog = await loadBundledSkillCatalog()

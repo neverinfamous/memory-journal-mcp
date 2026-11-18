@@ -211,11 +211,15 @@ function buildDateRangeQuery(
     endDate: string,
     options: DateRangeQueryOptions | undefined
 ): { sql: string; params: unknown[]; useImportance: boolean; offset: number; limit: number } {
-    let start = startDate
-    if (!start.includes('T')) start += 'T00:00:00.000Z'
+    const conditions = ['e.deleted_at IS NULL']
+    const params: unknown[] = []
 
-    const conditions = ['e.deleted_at IS NULL', 'e.timestamp >= ?']
-    const params: unknown[] = [start]
+    if (startDate.length > 0) {
+        let start = startDate
+        if (!start.includes('T')) start += 'T00:00:00.000Z'
+        conditions.push('e.timestamp >= ?')
+        params.push(start)
+    }
 
     const targetWs = effectiveWorkspace(options?.workspaceId)
     if (targetWs !== '*') {

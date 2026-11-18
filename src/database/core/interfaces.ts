@@ -170,8 +170,8 @@ export interface IDatabaseAdapter extends IDatabaseVectorAndAdminAdapter {
             impactScore?: number
             validationStatus?: 'passed' | 'failed' | 'none'
             sessionId?: string | null
-            targetWorkspaceId?: string
             anchors?: { anchorPath: string; anchorType: string; status?: string | undefined }[]
+            targetWorkspaceId?: string
         }
     ): JournalEntry | null
     deleteEntry(id: number, permanent?: boolean, workspaceId?: string): { success: boolean; warning?: string }
@@ -233,6 +233,7 @@ export interface IDatabaseAdapter extends IDatabaseVectorAndAdminAdapter {
             impactScore?: number
             validationStatus?: 'passed' | 'failed' | 'none'
             sessionId?: string | null
+            anchors?: { anchorPath: string; anchorType: string; status?: string | undefined }[]
             targetWorkspaceId?: string
         }[]
     ): { updated: JournalEntry[]; notFound: number[]; errors: { id: number; error: Error }[] }

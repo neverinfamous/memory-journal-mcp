@@ -29,7 +29,16 @@ const GetKanbanBoardSchema = z
         repo: z.string().optional(),
         workspace_id: githubScopeParseFields.workspace_id,
         summary_only: z.boolean().optional().default(false),
-        item_limit: z.number().int().min(0).max(100).optional().default(25),
+        item_limit: z
+            .preprocess((val) => {
+                if (typeof val !== 'string') return val
+                const trimmed = val.trim()
+                if (!/^(?:0|[1-9]\d*)$/.test(trimmed)) return val
+                const parsed = Number(trimmed)
+                return Number.isSafeInteger(parsed) && String(parsed) === trimmed ? parsed : val
+            }, z.number().int().min(0).max(100))
+            .optional()
+            .default(25),
     })
     .strict()
 

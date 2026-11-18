@@ -14,7 +14,7 @@ import {
     assertIncomingBackupIntact,
     assertWalCheckpointComplete,
 } from '../../src/database/sqlite-adapter/backup-helpers.js'
-import { chunkedInPredicate } from '../../src/database/sqlite-adapter/row-helpers.js'
+import { bucketInParams, chunkedInPredicate } from '../../src/database/sqlite-adapter/row-helpers.js'
 import { extractMetadataContextAliases } from '../../src/codemode/normalizers/generic-field-aliases.js'
 import { synthesizeNaturalLanguageOrEntryPayload } from '../../src/handlers/tools/codemode/natural-language-synthesizer.js'
 import { unwrapFencedRemoteText } from '../../src/handlers/tools/github/fencing-helpers.js'
@@ -252,13 +252,13 @@ describe('pass 36 code quality', () => {
         expect(padded.params).toEqual(['a', 'b', 'c', 'c'])
         const values = Array.from({ length: 501 }, (_, index) => `tag${String(index)}`)
         const membership = chunkedInPredicate(values, (placeholders) => `IN (${placeholders})`, 'OR')
-        expect(membership.sql.startsWith('(')).toBe(true)
-        expect(membership.sql).toContain(' OR ')
-        expect(membership.params).toHaveLength(501)
+        expect(membership.sql).toBe('IN (SELECT value FROM json_each(?))')
+        expect(membership.params).toEqual([JSON.stringify(values)])
+        expect(bucketInParams(values)).toHaveLength(2)
     })
 
     it('records the pass 36 prompt revision and restore rules', async () => {
-        expect(AUDIT_PROMPT_REVISION).toBe('2026-11-18-audit-pass39')
+        expect(AUDIT_PROMPT_REVISION).toBe('2026-11-18-audit-pass40')
         const db = new DatabaseAdapter(':memory:')
         await db.initialize()
         try {

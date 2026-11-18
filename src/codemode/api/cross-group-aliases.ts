@@ -28,15 +28,15 @@ export interface CrossGroupAliasesContext {
 function parseEntryProjectNumber(rec: Record<string, unknown>): number | undefined {
     if (typeof rec['project_number'] === 'string') {
         const cleaned = rec['project_number'].trim()
-        const pMatch = /^p-?(\d+)$/i.exec(cleaned)
+        const pMatch = /^p-?([1-9]\d*)$/i.exec(cleaned)
         const candidate = pMatch?.[1] ?? cleaned
-        const num = /^\d+$/.test(candidate) ? Number(candidate) : Number.NaN
-        if (!Number.isInteger(num) || num <= 0) {
+        const parsed = /^[1-9]\d*$/.test(candidate) ? Number(candidate) : Number.NaN
+        if (!Number.isSafeInteger(parsed) || parsed <= 0 || String(parsed) !== candidate) {
             throw new ValidationError(
                 `Invalid project_number '${rec['project_number']}'. Expected a positive integer.`
             )
         }
-        rec['project_number'] = num
+        rec['project_number'] = parsed
     }
     if (typeof rec['project_number'] === 'number') return rec['project_number']
     return typeof rec['projectNumber'] === 'number' ? rec['projectNumber'] : undefined

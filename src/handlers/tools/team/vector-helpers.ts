@@ -146,6 +146,7 @@ function hydrateAndFilterTeamSemanticHits(
         ...entry,
         author: authorMap.get(entry.id) ?? null,
         similarity,
+        source: 'team' as const,
     }))
 
     const includeHint = input.hint_on_empty ?? true

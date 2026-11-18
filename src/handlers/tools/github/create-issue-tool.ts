@@ -162,6 +162,8 @@ async function executeCreateIssueOutbox(
             projectNumber,
             input.initial_status
         )
+    } else if (projectNumber !== undefined) {
+        projectResult = { projectNumber, added: false, error: 'Issue nodeId unavailable' }
     }
 
     return { entryId: entry.id, issue: issueRes.issue, projectResult }

@@ -1,5 +1,6 @@
 import { ValidationError } from '../../types/errors.js'
 import {
+    fenceNonCanonicalRefOrKey,
     isAlreadyFencedUntrustedContent,
     isAlreadyInlineFencedUntrustedContent,
     markUntrustedContent,
@@ -185,8 +186,25 @@ export function fenceCommitEntry(c: CommitEntry): CommitEntry {
     if (c.patch !== undefined) next.patch = ensureBlockFenced(c.patch)
     if (c.coAuthors !== undefined) next.coAuthors = c.coAuthors.map(ensureInlineFenced)
     if (c.reviewers !== undefined) next.reviewers = c.reviewers.map(ensureInlineFenced)
-    if (c.scope !== undefined && /[<>\r\n]|\s/.test(c.scope)) {
-        next.scope = ensureInlineFenced(c.scope)
+    if (c.refs !== undefined) next.refs = c.refs.map((r) => fenceNonCanonicalRefOrKey(r))
+    if (c.tags !== undefined) next.tags = c.tags.map((t) => fenceNonCanonicalRefOrKey(t))
+    if (c.files !== undefined) {
+        next.files = c.files.map((f) => ({
+            ...f,
+            file: fenceNonCanonicalRefOrKey(f.file),
+            ...(f.oldFile !== undefined ? { oldFile: fenceNonCanonicalRefOrKey(f.oldFile) } : {}),
+        }))
+    }
+    if (c.trailersObj !== undefined) {
+        const fencedTrailers = Object.create(null) as Record<string, string>
+        for (const [k, v] of Object.entries(c.trailersObj)) {
+            if (k === '__proto__' || k === 'constructor' || k === 'prototype') continue
+            fencedTrailers[fenceNonCanonicalRefOrKey(k, true)] = ensureInlineFenced(v)
+        }
+        next.trailersObj = fencedTrailers
+    }
+    if (c.scope !== undefined) {
+        next.scope = fenceNonCanonicalRefOrKey(c.scope)
     }
     return next
 }
@@ -199,5 +217,5 @@ export function fenceCommitEntries(commits: CommitEntry[]): CommitEntry[] {
 /** Fence a git tag string at MCP egress when it contains markup/control/whitespace characters. */
 export function fenceUnreleasedTag(tag: string | null): string | null {
     if (tag === null) return null
-    return /[<>\r\n]|\s/.test(tag) ? ensureInlineFenced(tag) : tag
+    return fenceNonCanonicalRefOrKey(tag)
 }

@@ -180,6 +180,8 @@ async function runSemanticSearchQueries(
                   ...filterOptions,
                   limit: Math.min(internalLimit, 500),
                   similarityThreshold: threshold,
+                  enforceSimilarityThreshold:
+                      input.similarity_threshold !== undefined && input.similarity_threshold > 0,
               })
             : Promise.resolve<EntryWithSource[]>([])
 

@@ -161,6 +161,9 @@ function buildWebhookPayloadAndHeaders(
 }
 
 function isMockedGlobalFetch(): boolean {
+    if (process.env['NODE_ENV'] !== 'test' && !process.env['VITEST']) {
+        return false
+    }
     const currentFetch: unknown = globalThis.fetch
     return (
         currentFetch !== NATIVE_FETCH ||

@@ -4,6 +4,11 @@
  */
 
 import * as vm from 'node:vm'
+import {
+    normalizeUserContextPayload,
+    parseByteSizeValue,
+    parseStringContextPayload,
+} from '../shared-context-parsers.js'
 
 /**
  * Extracts executable JS code from nested `executeCode` arguments, returning `null`
@@ -85,11 +90,11 @@ export function readNestedQuerySearch(
         searchPayload.workspace_id = wsProp.trim()
     }
     const projProp = (Reflect.get(arg, 'project_number') ?? Reflect.get(arg, 'projectNumber')) as unknown
-    if (typeof projProp === 'number' && Number.isInteger(projProp) && projProp > 0) {
+    if (typeof projProp === 'number' && Number.isSafeInteger(projProp) && projProp > 0) {
         searchPayload.project_number = projProp
     }
     const limitProp = Reflect.get(arg, 'limit') as unknown
-    if (typeof limitProp === 'number' && Number.isInteger(limitProp) && limitProp > 0) {
+    if (typeof limitProp === 'number' && Number.isSafeInteger(limitProp) && limitProp > 0) {
         searchPayload.limit = limitProp
     }
     return searchPayload
@@ -196,20 +201,6 @@ function isNestedPlainRecord(val: unknown): val is Record<string, unknown> {
     return typeof val === 'object' && val !== null && !Array.isArray(val)
 }
 
-function parseNestedStringContext(raw: string): Record<string, unknown> {
-    const trimmed = raw.trim()
-    const looksJson =
-        (trimmed.startsWith('{') && trimmed.endsWith('}')) ||
-        (trimmed.startsWith('[') && trimmed.endsWith(']'))
-    if (!looksJson) return { content: raw, text: raw, raw }
-    try {
-        const parsed: unknown = JSON.parse(trimmed)
-        return isNestedPlainRecord(parsed) ? parsed : { value: parsed, raw, text: raw, content: raw }
-    } catch {
-        return { content: raw, text: raw, raw }
-    }
-}
-
 /**
  * Extracts and normalizes a `context` payload from nested `executeCode` arguments,
  * wrapping strings and arrays safely to match top-level `buildSandboxUserContext`.
@@ -221,7 +212,7 @@ export function extractNestedContextRecord(
     const rawCtx = argRec['context']
     if (rawCtx === undefined || rawCtx === null) return undefined
     if (isNestedPlainRecord(rawCtx)) return { ...rawCtx }
-    if (typeof rawCtx === 'string') return parseNestedStringContext(rawCtx)
+    if (typeof rawCtx === 'string') return parseStringContextPayload(rawCtx)
     return { value: rawCtx, raw: rawCtx }
 }
 
@@ -250,38 +241,39 @@ export function extractNestedAutoVersion(
     return undefined
 }
 
-function parseNestedByteSize(val: unknown, defaultUnit: 'b' | 'kb'): number | undefined {
-    const mult = defaultUnit === 'kb' ? 1024 : 1
-    if (typeof val === 'number') return Number.isFinite(val) && val > 0 ? Math.round(val * mult) : undefined
-    if (typeof val === 'string') {
-        const trimmed = val.trim()
-        const match = /^(\d+(?:\.\d+)?)\s*(kb|mb|bytes|b)?$/i.exec(trimmed)
-        if (match?.[1] !== undefined) {
-            const num = parseFloat(match[1])
-            if (!Number.isFinite(num) || num <= 0) return undefined
-            const unit = (match[2] ?? defaultUnit).toLowerCase()
-            if (unit === 'mb') return Math.round(num * 1024 * 1024)
-            if (unit === 'kb') return Math.round(num * 1024)
-            return Math.round(num)
-        }
-    }
-    return undefined
-}
-
 /** Extracts nested `max_result_size*` (or `_kb`) bounds, monotonically clamped to outer limit when set. */
 export function extractNestedMaxResultSize(
     argRec: Record<string, unknown> | undefined,
     outerMaxResultSize?: number
 ): number | undefined {
     if (argRec === undefined) return undefined
-    const direct = parseNestedByteSize(
+    const nestedCtxRaw = argRec['context']
+    const nestedCtx =
+        isNestedPlainRecord(nestedCtxRaw) || typeof nestedCtxRaw === 'string'
+            ? normalizeUserContextPayload(nestedCtxRaw)
+            : undefined
+    const direct = parseByteSizeValue(
         argRec['max_result_size'] ??
             argRec['maxResultSize'] ??
             argRec['max_result_size_bytes'] ??
-            argRec['maxResultSizeBytes'],
+            argRec['maxResultSizeBytes'] ??
+            argRec['max_bytes'] ??
+            argRec['maxBytes'] ??
+            nestedCtx?.['max_result_size'] ??
+            nestedCtx?.['maxResultSize'] ??
+            nestedCtx?.['max_result_size_bytes'] ??
+            nestedCtx?.['maxResultSizeBytes'] ??
+            nestedCtx?.['max_bytes'] ??
+            nestedCtx?.['maxBytes'],
         'b'
     )
-    const kb = parseNestedByteSize(argRec['max_result_size_kb'] ?? argRec['maxResultSizeKb'], 'kb')
+    const kb = parseByteSizeValue(
+        argRec['max_result_size_kb'] ??
+            argRec['maxResultSizeKb'] ??
+            nestedCtx?.['max_result_size_kb'] ??
+            nestedCtx?.['maxResultSizeKb'],
+        'kb'
+    )
     const requested = direct ?? kb
     if (requested === undefined) return undefined
     return outerMaxResultSize !== undefined && outerMaxResultSize > 0

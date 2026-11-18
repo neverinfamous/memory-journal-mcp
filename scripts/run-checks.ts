@@ -43,7 +43,9 @@ function checkFileLengths(): boolean {
                 walk(fullPath)
             } else if (
                 entry.isFile() &&
-                /\.(ts|tsx|js|mjs|cjs)$/.test(entry.name) &&
+                (/\.(ts|tsx|js|mjs|cjs)$/.test(entry.name) ||
+                    ((dir === 'skills' || dir.startsWith(`skills${sep}`)) &&
+                        entry.name.endsWith('.md'))) &&
                 !entry.name.endsWith('.d.ts')
             ) {
                 const content = readFileSync(fullPath, 'utf-8')
@@ -75,6 +77,7 @@ function checkFileLengths(): boolean {
 
     walk('src')
     walk('scripts')
+    walk('skills')
     walk('tests')
 
     if (largeTestFiles > 0) {
@@ -92,6 +95,27 @@ function checkFileLengths(): boolean {
     }
 
     return violations.length === 0
+}
+
+function hasLintableSkillFiles(dir = 'skills'): boolean {
+    let entries
+    try {
+        entries = readdirSync(dir, { withFileTypes: true })
+    } catch (error) {
+        if (isEnoent(error)) return false
+        throw error
+    }
+    for (const entry of entries) {
+        if (entry.isSymbolicLink()) continue
+        const fullPath = join(dir, entry.name)
+        if (IGNORE_DIR_REGEX.test(fullPath)) continue
+        if (entry.isDirectory()) {
+            if (hasLintableSkillFiles(fullPath)) return true
+        } else if (entry.isFile() && /\.(?:ts|mjs)$/.test(entry.name) && !entry.name.endsWith('.d.ts')) {
+            return true
+        }
+    }
+    return false
 }
 
 function runChecksMain(): void {
@@ -122,7 +146,8 @@ function runChecksMain(): void {
 
     if (!target || target === 'lint') {
         console.log('Running lint...')
-        const passed = runCommand('pnpm', ['exec', 'eslint', 'src/', 'tests/', 'scripts/'])
+        const lintDirs = ['src/', 'tests/', 'scripts/', ...(hasLintableSkillFiles() ? ['skills/'] : [])]
+        const passed = runCommand('pnpm', ['exec', 'eslint', ...lintDirs])
         console.log('Checking file lengths (<= 500 lines)...')
         const lengthsPassed = checkFileLengths()
         lintOk = passed && lengthsPassed

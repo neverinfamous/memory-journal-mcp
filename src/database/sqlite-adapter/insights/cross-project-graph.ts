@@ -3,6 +3,7 @@ import {
     bucketInParams,
     chunkedInPredicate,
     DUAL_IN_PARAM_BUCKETS,
+    SCOPED_IN_PARAM_BUCKETS,
 } from '../row-helpers.js'
 import { effectiveWorkspace } from '../../workspace-scope.js'
 import { expandTagFilterValues } from '../tags.js'
@@ -314,7 +315,7 @@ function queryGraphEdges(
 
     const idSet = new Set(entryIds)
     const edges: { from: string | number; to: string | number; label: string; type: string }[] = []
-    for (const { placeholders, params } of bucketInParams(entryIds)) {
+    for (const { placeholders, params } of bucketInParams(entryIds, SCOPED_IN_PARAM_BUCKETS)) {
         const rows = db
             .prepare(
                 `SELECT from_entry_id, to_entry_id, relationship_type

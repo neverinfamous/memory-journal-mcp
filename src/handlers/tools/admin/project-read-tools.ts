@@ -2,6 +2,7 @@ import type { ToolDefinition, ToolContext, ProjectRegistryEntry } from '../../..
 import { ConfigManager } from '../../../utils/config-manager.js'
 import { formatHandlerError } from '../../../utils/error-helpers.js'
 import { isForbiddenProjectKey } from '../../../utils/project-registry-guards.js'
+import { findCanonicalRegistryKey } from '../../../utils/workspace-resolver.js'
 import { GetProjectSchemaMcp, ListProjectsSchemaMcp, ProjectOutputSchema } from './schemas.js'
 
 type RawRegistryEntry = ProjectRegistryEntry & { id?: number; description?: string }
@@ -163,8 +164,11 @@ function resolveProjectMatch(
     registry: RawRegistry,
     coerceRegistryProjectNumber: ProjectReadToolDeps['coerceRegistryProjectNumber']
 ): { foundName?: string; projectInfo?: RawRegistryEntry; error?: Record<string, unknown> } {
-    let foundName = parsed.name
-    let projectInfo = Object.hasOwn(registry, foundName) ? registry[foundName] : undefined
+    const canonicalKey = Object.hasOwn(registry, parsed.name)
+        ? parsed.name
+        : findCanonicalRegistryKey(parsed.name, registry)
+    let foundName = canonicalKey ?? parsed.name
+    let projectInfo = canonicalKey !== undefined ? registry[canonicalKey] : undefined
     const rawProjNum = (parsed as Record<string, unknown>)['project_number']
     if (rawProjNum !== undefined && typeof rawProjNum !== 'number' && typeof rawProjNum !== 'string') {
         return {

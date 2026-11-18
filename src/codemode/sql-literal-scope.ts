@@ -342,9 +342,9 @@ export function isSupportedWhereClause(
 
         if (col === 'id' || col === 'entry_id') {
             if (allowPlaceholder && isSqlBindPlaceholder(rhs)) continue
-            if (!/^\d+$/.test(rhs)) return false
+            if (!/^[1-9]\d*$/.test(rhs)) return false
             const n = Number(rhs)
-            if (!Number.isSafeInteger(n) || n <= 0) return false
+            if (!Number.isSafeInteger(n) || n <= 0 || String(n) !== rhs) return false
             continue
         }
         if (col === 'project_number' || col === 'project_id') {
@@ -355,9 +355,9 @@ export function isSupportedWhereClause(
                     (rhs.startsWith('"') && rhs.endsWith('"')))
                     ? unquoteSqlLiteral(rhs).trim()
                     : rhs
-            if (!/^\d+$/.test(unquoted)) return false
+            if (!/^[1-9]\d*$/.test(unquoted)) return false
             const n = Number(unquoted)
-            if (!Number.isSafeInteger(n) || n <= 0) return false
+            if (!Number.isSafeInteger(n) || n <= 0 || String(n) !== unquoted) return false
             continue
         }
         if (col === 'workspace_id') {

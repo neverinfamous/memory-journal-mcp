@@ -157,16 +157,28 @@ export function preprocessRelationshipItem(item: unknown): unknown {
     if (typeof item === 'number' && !Number.isNaN(item)) {
         return { targetId: item, relationType: 'references' }
     }
-    if (typeof item === 'string' && /^\d+$/.test(item.trim())) {
-        return { targetId: Number(item.trim()), relationType: 'references' }
+    if (typeof item === 'string') {
+        const trimmed = item.trim()
+        if (/^[1-9]\d*$/.test(trimmed)) {
+            const parsed = Number(trimmed)
+            if (Number.isSafeInteger(parsed) && String(parsed) === trimmed) {
+                return { targetId: parsed, relationType: 'references' }
+            }
+        }
     }
     if (item !== null && typeof item === 'object') {
         const relObj = item as Record<string, unknown>
         const rawTarget = pickRecordField(relObj, RELATIONSHIP_TARGET_KEYS)
-        const targetId =
-            typeof rawTarget === 'string' && /^\d+$/.test(rawTarget.trim())
-                ? Number(rawTarget.trim())
-                : rawTarget
+        let targetId: unknown = rawTarget
+        if (typeof rawTarget === 'string') {
+            const trimmed = rawTarget.trim()
+            if (/^[1-9]\d*$/.test(trimmed)) {
+                const parsed = Number(trimmed)
+                if (Number.isSafeInteger(parsed) && String(parsed) === trimmed) {
+                    targetId = parsed
+                }
+            }
+        }
         return {
             targetId,
             relationType: pickRecordField(relObj, RELATIONSHIP_TYPE_KEYS) ?? 'references',

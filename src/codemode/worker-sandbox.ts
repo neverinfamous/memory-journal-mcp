@@ -88,6 +88,8 @@ interface WorkerDispatchParams {
     timeoutHandle: NodeJS.Timeout
     contextObj: Record<string, unknown> | undefined
     readonlyMode: boolean | undefined
+    dryRunMode: boolean | undefined
+    useTestDbMode: boolean | undefined
     startTime: number
     resolve: (result: SandboxResult) => void
 }
@@ -273,6 +275,8 @@ export class WorkerSandbox {
                 rpcPort: MessagePort
                 contextObj: Record<string, unknown> | undefined
                 readonlyMode: boolean | undefined
+                dryRunMode?: boolean
+                useTestDbMode?: boolean
                 methodList?: Record<string, string[]>
                 schemaList?: Record<string, Record<string, string>>
             } = {
@@ -284,6 +288,8 @@ export class WorkerSandbox {
                 rpcPort: params.workerPort,
                 contextObj: params.contextObj,
                 readonlyMode: params.readonlyMode,
+                ...(params.dryRunMode !== undefined ? { dryRunMode: params.dryRunMode } : {}),
+                ...(params.useTestDbMode !== undefined ? { useTestDbMode: params.useTestDbMode } : {}),
                 ...(sendMethodList ? { methodList: params.methodList } : {}),
                 ...(sendSchemas && params.schemas !== undefined
                     ? { schemaList: params.schemas }
@@ -328,7 +334,8 @@ export class WorkerSandbox {
         timeoutMs?: number,
         contextObj?: Record<string, unknown>,
         readonlyMode?: boolean,
-        maxResultSizeOverride?: number
+        maxResultSizeOverride?: number,
+        modeFlags?: { dryRunMode?: boolean | undefined; useTestDbMode?: boolean | undefined }
     ): Promise<SandboxResult> {
         if (this.isBusy || this.currentExecution !== null) {
             return {
@@ -385,6 +392,8 @@ export class WorkerSandbox {
                 timeoutHandle,
                 contextObj,
                 readonlyMode,
+                dryRunMode: modeFlags?.dryRunMode,
+                useTestDbMode: modeFlags?.useTestDbMode,
                 startTime,
                 resolve,
             })

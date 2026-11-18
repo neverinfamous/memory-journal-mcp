@@ -184,18 +184,30 @@ function readRelationshipItem(
     item: unknown,
     canonicalType: string
 ): { targetId?: number; relType: string } {
-    if (typeof item === 'number' && !Number.isNaN(item)) {
+    if (typeof item === 'number' && Number.isSafeInteger(item) && item > 0) {
         return { targetId: item, relType: canonicalType }
     }
-    if (typeof item === 'string' && /^\d+$/.test(item.trim())) {
-        return { targetId: Number(item.trim()), relType: canonicalType }
+    if (typeof item === 'string') {
+        const trimmed = item.trim()
+        if (/^[1-9]\d*$/.test(trimmed)) {
+            const parsed = Number(trimmed)
+            if (Number.isSafeInteger(parsed) && String(parsed) === trimmed) {
+                return { targetId: parsed, relType: canonicalType }
+            }
+        }
     }
     if (typeof item !== 'object' || item === null) return { relType: canonicalType }
     const itemObj = item as Record<string, unknown>
     const rawId = pickRecordField(itemObj, RELATIONSHIP_TARGET_KEYS)
     let targetId: number | undefined
-    if (typeof rawId === 'number' && !Number.isNaN(rawId)) targetId = rawId
-    else if (typeof rawId === 'string' && /^\d+$/.test(rawId.trim())) targetId = Number(rawId.trim())
+    if (typeof rawId === 'number' && Number.isSafeInteger(rawId) && rawId > 0) targetId = rawId
+    else if (typeof rawId === 'string') {
+        const trimmed = rawId.trim()
+        if (/^[1-9]\d*$/.test(trimmed)) {
+            const parsed = Number(trimmed)
+            if (Number.isSafeInteger(parsed) && String(parsed) === trimmed) targetId = parsed
+        }
+    }
     const explicitType = pickRecordField(itemObj, RELATIONSHIP_TYPE_KEYS)
     const relType =
         typeof explicitType === 'string' && explicitType.trim() !== ''

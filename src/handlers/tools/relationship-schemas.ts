@@ -7,10 +7,14 @@ import { RelationshipOutputSchema, relaxedNumber, StrictProjectNumberSchema } fr
 import { ErrorFieldsMixin } from './error-fields-mixin.js'
 import { parsePositiveProjectNumber } from '../../utils/safe-positive-int.js'
 
-/** Coerce relaxedNumber string input to number; blank -> undefined, junk -> NaN (rejected downstream). */
+/** Coerce relaxedNumber string input to number; blank -> undefined, malformed/unsafe -> NaN (rejected downstream). */
 function coerceRelaxed(v: number | string | undefined): number | undefined {
     if (v === undefined || typeof v === 'number') return v
-    return v.trim() === '' ? undefined : Number(v)
+    const trimmed = v.trim()
+    if (trimmed === '') return undefined
+    if (!/^-?(?:0|[1-9]\d*)$/.test(trimmed)) return Number.NaN
+    const parsed = Number(trimmed)
+    return Number.isSafeInteger(parsed) && String(parsed) === trimmed ? parsed : Number.NaN
 }
 
 function coerceCanonicalId(v: number | string | undefined): number | undefined {
@@ -148,8 +152,13 @@ export const VisualizeInputSchemaMcp = z.object({
         if (queryVal) extractedTags = [queryVal];
     }
     const rawLimit = data.keep ?? data.limit
-    const numLimit = rawLimit !== undefined ? Number(rawLimit) : undefined
-    const clampedLimit = numLimit !== undefined && !Number.isNaN(numLimit) ? Math.min(Math.max(1, numLimit), 500) : 20
+    const numLimit = coerceRelaxed(rawLimit)
+    const clampedLimit =
+        numLimit === undefined
+            ? 20
+            : Number.isSafeInteger(numLimit) && numLimit >= 1
+              ? Math.min(numLimit, 500)
+              : numLimit
     return {
         ...data,
         entry_id: coerceCanonicalId(data.entry_id ?? data.id),

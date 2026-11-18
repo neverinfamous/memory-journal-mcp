@@ -1,65 +1,26 @@
-import type { ProjectRegistryEntry } from '../../types/index.js'
-import { resolveProjectContextWithRegistry } from '../../utils/workspace-resolver-pure.js'
-import { pairStoredScope } from '../../utils/workspace-registry-match.js'
 import { hasMethodToken } from '../method-tokens.js'
 import { parseCanonicalPositiveInt } from '../../utils/safe-positive-int.js'
 import { isRecord } from './shared-utils.js'
+import {
+    aliasValidationError,
+    applyProjectNameAlias,
+    normalizeProjectAliases,
+} from './project-alias-helpers.js'
+
+export {
+    getActiveProjectRegistry,
+    readProjectRegistryPayload,
+    resolveCreateEntryProjectContext,
+    resolveEffectiveProjectRegistry,
+    setActiveProjectRegistry,
+    setFallbackProjectRegistryLoader,
+} from './project-alias-helpers.js'
 
 const NUMERIC_ID_KEYS = [
     'entry_id', 'entryId', 'id', 'from_entry_id', 'fromEntryId', 'to_entry_id', 'toEntryId',
     'project_number', 'projectNumber', 'issue_number', 'issueNumber', 'pr_number', 'prNumber',
     'milestone_number', 'milestoneNumber', 'offset', 'limit',
 ]
-
-let activeProjectRegistry: Record<string, ProjectRegistryEntry> | undefined
-let fallbackRegistryLoader: (() => Record<string, ProjectRegistryEntry> | undefined) | undefined
-
-export function setActiveProjectRegistry(registry: Record<string, ProjectRegistryEntry> | undefined): void {
-    activeProjectRegistry = registry
-}
-
-export function setFallbackProjectRegistryLoader(loader: (() => Record<string, ProjectRegistryEntry> | undefined) | undefined): void {
-    fallbackRegistryLoader = loader
-}
-
-export function resolveEffectiveProjectRegistry(): Record<string, ProjectRegistryEntry> | undefined {
-    return activeProjectRegistry ?? fallbackRegistryLoader?.()
-}
-
-export function getActiveProjectRegistry(): Record<string, ProjectRegistryEntry> | undefined {
-    return activeProjectRegistry
-}
-
-export function readProjectRegistryPayload(value: unknown): Record<string, ProjectRegistryEntry> | undefined {
-    if (typeof value !== 'object' || value === null || Array.isArray(value)) return undefined
-    const registry: Record<string, ProjectRegistryEntry> = {}
-    for (const [key, entry] of Object.entries(value)) {
-        if (!isRecord(entry)) continue
-        const pathValue = entry['path']
-        const projectNumber = entry['project_number']
-        const hasPath = typeof pathValue === 'string' && pathValue.trim() !== ''
-        const hasProject = typeof projectNumber === 'number' && !Number.isNaN(projectNumber)
-        // [H6] Pathless / `owner/repo`-keyed registry entries are preserved (path: '') so
-        // name -> project_number resolution keeps working inside the worker.
-        if (!hasPath && !hasProject) continue
-        const record: ProjectRegistryEntry = { path: hasPath ? pathValue : '' }
-        if (hasProject) record.project_number = projectNumber
-        registry[key] = record
-    }
-    return registry
-}
-
-function validationError(error: string): { error: Record<string, unknown> } {
-    return {
-        error: {
-            success: false,
-            error,
-            code: 'VALIDATION_ERROR',
-            category: 'validation',
-            recoverable: true,
-        },
-    }
-}
 
 export function cleanSdkMetadataKeys(obj: Record<string, unknown>): void {
     for (const k of ['_u_r_i', '_uri']) {
@@ -196,7 +157,7 @@ export function coerceNumericStringIds(
         }
         if (/^-?\d+$/.test(strVal)) {
             if (key === 'project_number' || key === 'projectNumber') {
-                return validationError(
+                return aliasValidationError(
                     `project_number '${strVal}' is not a canonical positive integer`,
                 )
             }
@@ -204,7 +165,7 @@ export function coerceNumericStringIds(
         } else if ((key === 'project_number' || key === 'projectNumber') && /^p-?\d+$/i.test(strVal)) {
             const parsed = parseCanonicalPositiveInt(strVal.replace(/^p-?/i, ''))
             if (parsed === undefined) {
-                return validationError(
+                return aliasValidationError(
                     `project_number '${strVal}' is not a canonical positive integer`,
                 )
             }
@@ -214,7 +175,7 @@ export function coerceNumericStringIds(
             Reflect.deleteProperty(obj, key)
             if (applyProjectNameAlias(strVal, obj) !== 'applied') {
                 obj[key] = preserved
-                return validationError(
+                return aliasValidationError(
                     `project_number '${strVal}' is not a number and does not match a registered project`,
                 )
             }
@@ -289,160 +250,6 @@ function normalizeValidationStatusAlias(obj: Record<string, unknown>): void {
         } else if (typeof vs === 'string' && !['passed', 'none', 'failed'].includes(vs)) {
             obj['validation_status'] = 'none'
         }
-    }
-}
-
-type ProjectNameAliasResult = 'applied' | 'unregistered' | { conflict: string }
-
-function formatScalarOrJson(val: unknown): string {
-    return typeof val === 'string' || typeof val === 'number' || typeof val === 'boolean'
-        ? String(val)
-        : (JSON.stringify(val) ?? typeof val)
-}
-
-function canonicalAliasProject(rawVal: unknown): number | undefined {
-    if (typeof rawVal === 'number') {
-        return Number.isSafeInteger(rawVal) && rawVal > 0 ? rawVal : undefined
-    }
-    if (typeof rawVal === 'string') return parseCanonicalPositiveInt(rawVal)
-    return undefined
-}
-
-function applyProjectNameAlias(rawVal: unknown, obj: Record<string, unknown>): ProjectNameAliasResult {
-    const existingProj = obj['project_number'] ?? obj['projectNumber']
-    const num = canonicalAliasProject(rawVal)
-    const strVal = typeof rawVal === 'string' || typeof rawVal === 'number' ? String(rawVal) : ''
-    if (num !== undefined && strVal.trim() !== '') {
-        if (existingProj !== undefined) {
-            const existingNum = canonicalAliasProject(existingProj)
-            if (existingNum !== num) {
-                return {
-                    conflict: `Project alias '${strVal.trim()}' conflicts with project_number '${formatScalarOrJson(existingProj)}'`,
-                }
-            }
-            return 'applied'
-        }
-        obj['project_number'] = num
-        return 'applied'
-    }
-    if (typeof rawVal !== 'string' || rawVal.trim() === '') return 'applied'
-    const name = rawVal.trim()
-    const registry = resolveEffectiveProjectRegistry()
-    const matchedKey =
-        registry === undefined
-            ? undefined
-            : Object.keys(registry).find((key) => key.toLowerCase() === name.toLowerCase())
-    const existingWs = obj['workspace_id'] ?? obj['workspaceId'] ?? obj['workspace']
-    if (typeof existingWs === 'string' && existingWs.trim() !== '') {
-        const expectedWs = matchedKey ?? name
-        if (existingWs.trim().toLowerCase() !== expectedWs.toLowerCase()) {
-            return {
-                conflict: `Project alias '${name}' conflicts with workspace_id '${existingWs.trim()}'`,
-            }
-        }
-    }
-    if (matchedKey === undefined || registry === undefined) return 'unregistered'
-    const projectNumber = registry[matchedKey]?.project_number
-    if (existingProj !== undefined && projectNumber !== undefined && Number(existingProj) !== projectNumber) {
-        return {
-            conflict: `Project alias '${name}' (project #${String(projectNumber)}) conflicts with project_number '${formatScalarOrJson(existingProj)}'`,
-        }
-    }
-    if (projectNumber !== undefined && obj['project_number'] === undefined) {
-        obj['project_number'] = projectNumber
-    }
-    if (obj['workspace_id'] === undefined) {
-        obj['workspace_id'] = matchedKey
-        obj['_alias_derived_workspace'] = true
-    }
-    return 'applied'
-}
-
-function normalizeProjectAliases(obj: Record<string, unknown>): { error: Record<string, unknown> } | undefined {
-    if (obj['workspace_id'] === undefined) {
-        if (typeof obj['workspaceId'] === 'string') {
-            obj['workspace_id'] = obj['workspaceId']
-        } else if (typeof obj['workspace'] === 'string') {
-            obj['workspace_id'] = obj['workspace']
-        }
-    }
-    Reflect.deleteProperty(obj, 'workspaceId')
-    if (obj['workspace_id'] !== undefined) {
-        Reflect.deleteProperty(obj, 'workspace')
-    }
-    if (obj['project_number'] === undefined && obj['projectNumber'] !== undefined) {
-        obj['project_number'] = obj['projectNumber']
-    }
-    Reflect.deleteProperty(obj, 'projectNumber')
-    for (const projAlias of ['project_name', 'projectName', 'project'] as const) {
-        if (obj[projAlias] === undefined) continue
-        const res = applyProjectNameAlias(obj[projAlias], obj)
-        if (typeof res === 'object') {
-            return validationError(res.conflict)
-        }
-        if (res === 'applied') {
-            Reflect.deleteProperty(obj, projAlias)
-        }
-    }
-    return undefined
-}
-
-export function resolveCreateEntryProjectContext(obj: Record<string, unknown>): void {
-    if (obj['workspace_id'] === undefined && typeof obj['workspaceId'] === 'string') {
-        obj['workspace_id'] = obj['workspaceId']
-    }
-    if (obj['project_number'] === undefined && obj['projectNumber'] !== undefined) {
-        obj['project_number'] = obj['projectNumber']
-    }
-    let projNum =
-        typeof obj['project_number'] === 'number' &&
-        Number.isSafeInteger(obj['project_number']) &&
-        obj['project_number'] > 0
-            ? obj['project_number']
-            : undefined
-    if (typeof obj['project_number'] === 'string') {
-        const cleaned = obj['project_number'].trim()
-        const parsedNum = /^p-?\d+$/i.test(cleaned)
-            ? parseCanonicalPositiveInt(cleaned.replace(/^p-?/i, ''))
-            : parseCanonicalPositiveInt(cleaned)
-        if (parsedNum !== undefined) {
-            projNum = parsedNum
-            obj['project_number'] = parsedNum
-        } else if (cleaned !== '') {
-            const preserved = obj['project_number']
-            Reflect.deleteProperty(obj, 'project_number')
-            if (applyProjectNameAlias(cleaned, obj) === 'applied') {
-                projNum = typeof obj['project_number'] === 'number' ? obj['project_number'] : undefined
-            } else {
-                obj['project_number'] = preserved
-            }
-        } else {
-            obj['project_number'] = cleaned
-        }
-    }
-    // [INVARIANT] No content/tag/CWD guessing here: the host `secure-dispatcher` binds the
-    // session scope first. Only validate/pair when workspace_id was explicitly provided.
-    const wsRaw = typeof obj['workspace_id'] === 'string' ? obj['workspace_id'] : undefined
-    const wsTrimmed = wsRaw?.trim()
-    const workspaceIsConcrete = wsTrimmed !== undefined && wsTrimmed !== '' && wsTrimmed !== '*'
-    if (!workspaceIsConcrete) return
-    const effectiveRegistry = resolveEffectiveProjectRegistry()
-    const resolved = resolveProjectContextWithRegistry(
-        {
-            workspace_id: wsTrimmed,
-            ...(projNum !== undefined ? { project_number: projNum } : {}),
-        },
-        effectiveRegistry !== undefined ? { projectRegistry: effectiveRegistry } : undefined,
-        effectiveRegistry
-    )
-    if (projNum !== undefined) {
-        pairStoredScope(wsTrimmed, projNum, effectiveRegistry)
-    } else if (
-        wsTrimmed.toLowerCase() !== 'default' &&
-        obj['project_number'] === undefined &&
-        resolved.projectNumber !== undefined
-    ) {
-        obj['project_number'] = resolved.projectNumber
     }
 }
 

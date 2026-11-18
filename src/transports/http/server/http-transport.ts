@@ -348,9 +348,7 @@ export class HttpTransport {
                 resolve()
             })
             this.httpServer = server
-            if (typeof server.setTimeout === 'function') {
-                server.setTimeout(HTTP_REQUEST_TIMEOUT_MS)
-            }
+            server.requestTimeout = HTTP_REQUEST_TIMEOUT_MS
             server.keepAliveTimeout = HTTP_KEEP_ALIVE_TIMEOUT_MS
             server.headersTimeout = HTTP_HEADERS_TIMEOUT_MS
 

@@ -17,7 +17,7 @@ import {
     validateDryRunRelationships,
     type PendingRelationshipLink,
 } from './import-relationships.js'
-import { parseFrontmatter } from './frontmatter.js'
+import { parseFrontmatter, type FrontmatterAnchor } from './frontmatter.js'
 import { assertSafeDirectoryPath, assertSafeFilePath } from '../utils/security-utils.js'
 import {
     indexImportedEntries,
@@ -106,7 +106,7 @@ export interface ParsedFile {
         workspace_id?: string
         project_number?: number
         relationships?: { type: string; target_id: number }[]
-        anchors?: string[]
+        anchors?: FrontmatterAnchor[]
     }
 }
 async function readAndParseMarkdownFile(
@@ -218,7 +218,7 @@ function runDryRunImportValidation(
     prefetchedById: ReturnType<typeof prefetchImportedEntriesById>,
     result: ImportResult
 ): void {
-    const inBatchMjIds = new Set<number>()
+    const inBatchScopes = new Map<number, { workspaceId: string; projectNumber?: number | null }>()
     const pendingLinks: PendingRelationshipLink[] = []
     for (let idx = 0; idx < files.length; idx++) {
         const file = files[idx]
@@ -235,7 +235,10 @@ function runDryRunImportValidation(
             result.created++
         }
         if (file.metadata.mj_id !== undefined) {
-            inBatchMjIds.add(file.metadata.mj_id)
+            inBatchScopes.set(file.metadata.mj_id, {
+                workspaceId: effectiveWsId ?? 'default',
+                ...(effectiveProjNum !== undefined ? { projectNumber: effectiveProjNum } : {}),
+            })
         }
         if (file.metadata.relationships !== undefined && file.metadata.relationships.length > 0) {
             pendingLinks.push({
@@ -247,7 +250,7 @@ function runDryRunImportValidation(
             })
         }
     }
-    validateDryRunRelationships(db, pendingLinks, inBatchMjIds, result)
+    validateDryRunRelationships(db, pendingLinks, inBatchScopes, result)
 }
 
 function upsertParsedFile(
@@ -261,10 +264,19 @@ function upsertParsedFile(
     const { author } = options
     const { effectiveWsId, effectiveProjNum, rawEntryType, significanceType, existing } =
         validateImportedFileEntry(file, db, options, prefetchedById)
-    const mappedAnchors = metadata.anchors?.map((anchorPath) => ({
-        anchorPath,
-        anchorType: 'file',
-    }))
+    const mappedAnchors = metadata.anchors?.map((anchor) => {
+        if (typeof anchor === 'string') {
+            return {
+                anchorPath: anchor,
+                anchorType: anchor.includes('#') ? 'symbol' : 'file',
+            }
+        }
+        return {
+            anchorPath: anchor.anchor_path,
+            anchorType: anchor.anchor_type ?? (anchor.anchor_path.includes('#') ? 'symbol' : 'file'),
+            ...(anchor.status !== undefined ? { status: anchor.status } : {}),
+        }
+    })
 
     if (existing && metadata.mj_id !== undefined) {
         const updated = db.updateEntry(metadata.mj_id, {
@@ -323,7 +335,7 @@ export async function processImportBatch(
 ): Promise<ImportResult> {
     const { dry_run = false, limit } = options
     // [BOUNDARY] Direct callers (e.g. team import) bypass the directory scan, so enforce limit here too.
-    const files = limit !== undefined && limit >= 0 ? parsedFiles.slice(0, limit) : parsedFiles
+    const files = limit !== undefined ? parsedFiles.slice(0, Math.max(0, limit)) : parsedFiles
 
     const result: ImportResult = {
         success: true,

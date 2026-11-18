@@ -4,6 +4,7 @@ import { sendProgress } from '../../../utils/progress-utils.js'
 import { activeProjectRegistry, pairStoredScope } from '../../../utils/write-scope.js'
 import { resolveWriteWorkspaceId } from '../write-workspace.js'
 import type { BatchDeleteEntriesSchema } from './schemas.js'
+import { canonicalTargetWorkspace } from './update-scope-helpers.js'
 
 type BatchDeleteInput = z.infer<typeof BatchDeleteEntriesSchema>
 
@@ -80,15 +81,34 @@ export function findWildcardProjectMismatches(
         .filter((u) => {
             if (u.target_workspace_id !== undefined) {
                 const sourceWs = u.workspace_id ?? rootWorkspaceId
-                if (sourceWs === '*' && rootProjectNumber !== undefined) {
-                    return resolveEntry(u.entry_id)?.projectNumber !== rootProjectNumber
+                const entry = resolveEntry(u.entry_id)
+                const isWildcardSource = sourceWs === '*'
+                const isDefaultSource =
+                    sourceWs?.toLowerCase() === 'default' ||
+                    (sourceWs === undefined && entry?.workspaceId?.toLowerCase() === 'default')
+                if ((isWildcardSource || isDefaultSource) && rootProjectNumber !== undefined) {
+                    return entry?.projectNumber !== rootProjectNumber
                 }
                 if (
-                    sourceWs === '*' &&
+                    isWildcardSource &&
                     rootProjectNumber === undefined &&
                     typeof u.project_number === 'number'
                 ) {
-                    return resolveEntry(u.entry_id)?.projectNumber !== u.project_number
+                    return entry?.projectNumber !== u.project_number
+                }
+                if (
+                    isDefaultSource &&
+                    rootProjectNumber === undefined &&
+                    typeof u.project_number === 'number'
+                ) {
+                    const targetCanonical = canonicalTargetWorkspace(u.target_workspace_id, config)
+                    const targetRegProj =
+                        targetCanonical !== undefined && registry !== undefined
+                            ? registry[targetCanonical]?.project_number
+                            : undefined
+                    if (targetRegProj === undefined || u.project_number !== targetRegProj) {
+                        return entry?.projectNumber !== u.project_number
+                    }
                 }
                 return false
             }

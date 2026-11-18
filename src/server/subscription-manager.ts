@@ -1,5 +1,6 @@
 import type { McpServer } from '@modelcontextprotocol/server'
 import { logger } from '../utils/logger.js'
+import { getBaseUri } from '../handlers/resources/uri-and-fencing.js'
 
 /**
  * Manages MCP resource subscriptions globally for the server.
@@ -147,21 +148,29 @@ export class SubscriptionManager {
     }
 
     private collectTargetsForUri(uri: string): [string, Set<string>][] {
+        const baseUri = getBaseUri(uri)
+        const isBriefingRoot = baseUri === 'memory://briefing'
+        const isBriefingSection = baseUri.startsWith('memory://briefing/')
+        const seenUris = new Set<string>()
         const targets: [string, Set<string>][] = []
-        const directSessions = this.subscriptions.get(uri)
-        if (directSessions && directSessions.size > 0) {
-            targets.push([uri, directSessions])
+        const pushIfActive = (subUri: string, sessions: Set<string>): void => {
+            if (sessions.size === 0 || seenUris.has(subUri)) return
+            seenUris.add(subUri)
+            targets.push([subUri, sessions])
         }
-        if (uri === 'memory://briefing') {
-            for (const [subUri, subSessions] of this.subscriptions.entries()) {
-                if (subUri.startsWith('memory://briefing/') && subSessions.size > 0) {
-                    targets.push([subUri, subSessions])
-                }
-            }
-        } else if (uri.startsWith('memory://briefing/')) {
-            const rootSessions = this.subscriptions.get('memory://briefing')
-            if (rootSessions && rootSessions.size > 0) {
-                targets.push(['memory://briefing', rootSessions])
+        const directSessions = this.subscriptions.get(uri)
+        if (directSessions !== undefined) {
+            pushIfActive(uri, directSessions)
+        }
+        for (const [subUri, subSessions] of this.subscriptions.entries()) {
+            if (subSessions.size === 0 || seenUris.has(subUri)) continue
+            const subBase = getBaseUri(subUri)
+            if (
+                subBase === baseUri ||
+                (isBriefingRoot && subBase.startsWith('memory://briefing/')) ||
+                (isBriefingSection && subBase === 'memory://briefing')
+            ) {
+                pushIfActive(subUri, subSessions)
             }
         }
         return targets

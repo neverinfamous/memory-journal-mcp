@@ -21,6 +21,32 @@ interface Facets {
     degraded?: boolean
 }
 
+function mergeFacetBuckets(
+    personal: { name: string; count: number }[],
+    team: { name: string; count: number }[],
+    maxItems?: number
+): { name: string; count: number }[] {
+    const counts = new Map<string, number>()
+    for (const item of personal) {
+        counts.set(item.name, (counts.get(item.name) ?? 0) + item.count)
+    }
+    for (const item of team) {
+        counts.set(item.name, (counts.get(item.name) ?? 0) + item.count)
+    }
+    const merged = Array.from(counts.entries())
+        .map(([name, count]) => ({ name, count }))
+        .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name))
+    return maxItems !== undefined ? merged.slice(0, maxItems) : merged
+}
+
+function mergeSearchFacets(personal: Facets, team: Facets): Facets {
+    return {
+        tags: mergeFacetBuckets(personal.tags, team.tags, 20),
+        entryTypes: mergeFacetBuckets(personal.entryTypes, team.entryTypes),
+        ...(personal.degraded === true || team.degraded === true ? { degraded: true } : {}),
+    }
+}
+
 interface PreparedSearchEntries {
     wsId: string
     query: string
@@ -48,6 +74,43 @@ function hasSearchEntriesFilter(input: SearchEntriesInput): boolean {
         input.start_date !== undefined ||
         input.end_date !== undefined
     )
+}
+
+function computeSearchEntriesFacets(
+    context: ToolContext,
+    input: SearchEntriesInput,
+    query: string,
+    wsId: string,
+    projectNumber: number | undefined,
+    includeTeam: boolean
+): Facets | undefined {
+    if (!input.include_facets) return undefined
+    const facetOptions = {
+        isPersonal: input.is_personal,
+        projectNumber,
+        issueNumber: input.issue_number,
+        prNumber: input.pr_number,
+        prStatus: input.pr_status,
+        workflowRunId: input.workflow_run_id,
+        tags: input.tags,
+        ...(input.exclude_tags !== undefined ? { excludeTags: input.exclude_tags } : {}),
+        entryType: input.entry_type,
+        startDate: input.start_date,
+        endDate: input.end_date,
+        includeArchived: input.include_archived,
+        workspaceId: wsId,
+    }
+    const personalFacets = context.db.getSearchFacets(query, facetOptions)
+    const teamFacets =
+        includeTeam &&
+        input.is_personal !== true &&
+        context.teamDb !== undefined &&
+        typeof context.teamDb.getSearchFacets === 'function'
+            ? context.teamDb.getSearchFacets(query, facetOptions)
+            : undefined
+    return personalFacets !== undefined && teamFacets !== undefined
+        ? mergeSearchFacets(personalFacets, teamFacets)
+        : personalFacets
 }
 
 function buildSearchEntriesContext(
@@ -104,23 +167,7 @@ function buildSearchEntriesContext(
         workspaceId: wsId,
         ...(context.config !== undefined ? { config: context.config } : {}),
     }
-    const facets = input.include_facets
-        ? context.db.getSearchFacets(query, {
-              isPersonal: input.is_personal,
-              projectNumber,
-              issueNumber: input.issue_number,
-              prNumber: input.pr_number,
-              prStatus: input.pr_status,
-              workflowRunId: input.workflow_run_id,
-              tags: input.tags,
-              ...(input.exclude_tags !== undefined ? { excludeTags: input.exclude_tags } : {}),
-              entryType: input.entry_type,
-              startDate: input.start_date,
-              endDate: input.end_date,
-              includeArchived: input.include_archived,
-              workspaceId: wsId,
-          })
-        : undefined
+    const facets = computeSearchEntriesFacets(context, input, query, wsId, projectNumber, includeTeam)
     return { wsId, query, hasFilters, isAuto, effectiveMode: resolvedMode, searchOptions, facets }
 }
 

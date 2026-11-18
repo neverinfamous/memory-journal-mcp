@@ -5,12 +5,8 @@
  * context sections for the briefing resource.
  */
 
-import type { BriefingConfig, ResourceContext } from '../../shared.js'
+import { sliceUntrustedInline, type BriefingConfig, type ResourceContext } from '../../shared.js'
 import { logger } from '../../../../utils/logger.js'
-
-import {
-    markUntrustedContentInline,
-} from '../../../../utils/security-utils.js'
 import { canAccessTeamSilently } from '../../../tools/search/helpers.js'
 import type { JournalEntry } from '../../../../types/index.js'
 
@@ -21,11 +17,22 @@ import type { JournalEntry } from '../../../../types/index.js'
 /** Content preview length for briefing entry summaries */
 const PREVIEW_LENGTH = 120
 
+const PREVIEW_FENCE_WRAPPER_RE =
+    /^<untrusted_remote_content>\r?\n?([\s\S]*?)\r?\n?<\/untrusted_remote_content>$/i
+
 function cleanPreview(content: string | undefined | null, length: number): string {
     if (!content) return ''
-    
+    const fencedMatch = PREVIEW_FENCE_WRAPPER_RE.exec(content.trim())
+    const unwrapped =
+        fencedMatch?.[1] !== undefined
+            ? fencedMatch[1]
+                  .replaceAll('&lt;', '<')
+                  .replaceAll('&gt;', '>')
+                  .replaceAll('&amp;', '&')
+            : content
+
     // Path Truncation and Noise Reduction
-    const cleaned = content
+    const cleaned = unwrapped
         .replace(/## Accomplished - /g, '')
         .replace(/## Accomplished\n?/g, '')
         // Windows paths
@@ -38,7 +45,7 @@ function cleanPreview(content: string | undefined | null, length: number): strin
         .replace(/\/Users\/[^/]+\/Desktop/g, '<desktop>')
         .replace(/\r?\n/g, ' ')
         .trim()
-        
+
     if (cleaned.length <= length) return cleaned
 
     // First try to truncate at the last full sentence or bullet point within the length limit
@@ -170,7 +177,7 @@ function formatSummaryEntries(
             id: entry.id,
             timestamp: entry.timestamp,
             type: entry.entryType,
-            preview: markUntrustedContentInline(cleanPreview(titleLine, PREVIEW_LENGTH)),
+            preview: sliceUntrustedInline(cleanPreview(titleLine, PREVIEW_LENGTH), PREVIEW_LENGTH + 1),
         }
     })
 }
@@ -225,7 +232,7 @@ export function buildJournalContext(
         id: e.id,
         timestamp: e.timestamp,
         type: e.entryType,
-        preview: markUntrustedContentInline(cleanPreview(e.content, PREVIEW_LENGTH)),
+        preview: sliceUntrustedInline(cleanPreview(e.content, PREVIEW_LENGTH), PREVIEW_LENGTH + 1),
     }))
 
     const totalEntries = context.db.getActiveEntryCount(targetWs)
@@ -293,7 +300,7 @@ export function buildTeamContext(
             ? ((teamLatestEntry['content'] as string | undefined) ?? '')
             : ''
         const teamLatest = teamLatestEntry
-            ? `#${String(teamLatestEntry['id'])}: ${markUntrustedContentInline(cleanPreview(teamContent, TEAM_PREVIEW_LENGTH))}`
+            ? `#${String(teamLatestEntry['id'])}: ${sliceUntrustedInline(cleanPreview(teamContent, TEAM_PREVIEW_LENGTH), TEAM_PREVIEW_LENGTH + 1)}`
             : null
         const teamInfo = {
             totalEntries: teamTotalEntries,
@@ -314,8 +321,9 @@ export function buildTeamContext(
                     id: e.id,
                     timestamp: e.timestamp,
                     type: e.entryType,
-                    preview: markUntrustedContentInline(
-                        cleanPreview(e.content, TEAM_PREVIEW_LENGTH)
+                    preview: sliceUntrustedInline(
+                        cleanPreview(e.content, TEAM_PREVIEW_LENGTH),
+                        TEAM_PREVIEW_LENGTH + 1
                     ),
                 }
             })

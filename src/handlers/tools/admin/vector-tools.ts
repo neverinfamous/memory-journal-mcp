@@ -37,8 +37,8 @@ export const AddToVectorIndexSchema = z.preprocess(
     preprocessVectorEntryId,
     z
         .object({
-            entry_id: z.number(),
-            project_number: z.number().int().optional(),
+            entry_id: z.number().int().positive(),
+            project_number: z.number().int().positive().optional(),
             workspace_id: z.string().optional(),
         })
         .strict()
@@ -69,7 +69,7 @@ export function getVectorTools(context: ToolContext): ToolDefinition[] {
                 try {
                     const parsed = z
                         .object({
-                            project_number: z.number().int().optional(),
+                            project_number: z.number().int().min(0).optional(),
                             workspace_id: z.string().optional(),
                         })
                         .strict()

@@ -21,7 +21,10 @@ function parseSupervisorLookbackHours(val: unknown): unknown {
     if (typeof val === 'string') {
         const trimmed = val.trim()
         if (trimmed === '') return undefined
-        if (/^-?\d+$/.test(trimmed)) return Number(trimmed)
+        if (/^-?(?:0|[1-9]\d*)$/.test(trimmed)) {
+            const parsed = Number(trimmed)
+            if (Number.isSafeInteger(parsed) && String(parsed) === trimmed) return parsed
+        }
     }
     return val
 }

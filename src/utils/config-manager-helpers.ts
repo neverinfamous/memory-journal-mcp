@@ -24,6 +24,7 @@ export interface ConfigCliEnvBaseline {
 }
 
 export type BriefingConfigurableKey =
+    | 'commitCount'
     | 'entryCount'
     | 'summaryCount'
     | 'includeTeam'
@@ -34,23 +35,54 @@ export type BriefingConfigurableKey =
     | 'workflowCount'
     | 'workflowStatusBreakdown'
     | 'copilotReviews'
+    | 'briefingImportanceThreshold'
+
+export type BriefingValueKind = 'number' | 'boolean' | 'unit'
 
 export type BriefingBaselineMap = Record<BriefingConfigurableKey, number | boolean>
 
-/** Config-file keys that map onto `BriefingConfig` fields, with the expected value type. */
+/** Config-file keys that map onto `BriefingConfig` fields, with expected value type and optional aliases. */
 export const BRIEFING_CONFIG_KEY_MAP: Readonly<
-    Record<string, { target: BriefingConfigurableKey; kind: 'number' | 'boolean' }>
+    Record<
+        string,
+        {
+            target: BriefingConfigurableKey
+            kind: BriefingValueKind
+            aliases?: readonly string[]
+        }
+    >
 > = {
+    briefingCommits: { target: 'commitCount', kind: 'number' },
     briefingEntries: { target: 'entryCount', kind: 'number' },
     briefingSummaries: { target: 'summaryCount', kind: 'number' },
     briefingIncludeTeam: { target: 'includeTeam', kind: 'boolean' },
     briefingIssues: { target: 'issueCount', kind: 'number' },
-    briefingPrs: { target: 'prCount', kind: 'number' },
+    briefingPrs: { target: 'prCount', kind: 'number', aliases: ['briefingPrCount'] },
     briefingPrStatus: { target: 'prStatusBreakdown', kind: 'boolean' },
     briefingMilestones: { target: 'milestoneCount', kind: 'number' },
     briefingWorkflows: { target: 'workflowCount', kind: 'number' },
     briefingWorkflowStatus: { target: 'workflowStatusBreakdown', kind: 'boolean' },
     briefingCopilot: { target: 'copilotReviews', kind: 'boolean' },
+    briefingImportanceThreshold: { target: 'briefingImportanceThreshold', kind: 'unit' },
+}
+
+/** Look up a briefing config entry by aliases (e.g. `briefingPrCount`) before primary file key (`briefingPrs`). */
+export function readBriefingConfigEntry(
+    obj: Record<string, unknown>,
+    primaryKey: string,
+    aliases?: readonly string[]
+): { key: string; value: unknown } | undefined {
+    if (aliases !== undefined) {
+        for (const alias of aliases) {
+            if (alias in obj && obj[alias] !== undefined && obj[alias] !== null) {
+                return { key: alias, value: obj[alias] }
+            }
+        }
+    }
+    if (primaryKey in obj && obj[primaryKey] !== undefined && obj[primaryKey] !== null) {
+        return { key: primaryKey, value: obj[primaryKey] }
+    }
+    return undefined
 }
 
 export interface InitialBaselinesResult {
@@ -78,10 +110,13 @@ export interface UpdateConfigOptions {
 
 export function isValidBriefingConfigValue(
     value: unknown,
-    kind: 'number' | 'boolean'
+    kind: BriefingValueKind
 ): boolean {
     if (kind === 'boolean') return typeof value === 'boolean'
-    return typeof value === 'number' && Number.isInteger(value) && value >= 0
+    if (kind === 'unit') {
+        return typeof value === 'number' && Number.isFinite(value) && value >= 0 && value <= 1
+    }
+    return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0
 }
 
 /**
@@ -240,7 +275,8 @@ export function reloadBriefingConfigKeys(
 ): boolean {
     let bcChanged = false
     for (const [key, mapping] of Object.entries(BRIEFING_CONFIG_KEY_MAP)) {
-        if (!(key in parsed) || parsed[key] === undefined || parsed[key] === null) {
+        const match = readBriefingConfigEntry(parsed, key, mapping.aliases)
+        if (match === undefined) {
             const baselineVal = initialBriefingBaseline[mapping.target]
             if (bc[mapping.target] !== baselineVal) {
                 Object.assign(bc, { [mapping.target]: baselineVal })
@@ -248,12 +284,17 @@ export function reloadBriefingConfigKeys(
             }
             continue
         }
-        const value = parsed[key]
+        const value = match.value
         if (!isValidBriefingConfigValue(value, mapping.kind)) {
             logger.warning('Ignoring briefing config value with unexpected type or range', {
                 module: 'ConfigManager',
-                key,
-                expected: mapping.kind === 'number' ? 'non-negative integer' : mapping.kind,
+                key: match.key,
+                expected:
+                    mapping.kind === 'number'
+                        ? 'non-negative integer'
+                        : mapping.kind === 'unit'
+                          ? 'number in [0, 1]'
+                          : mapping.kind,
             })
             continue
         }

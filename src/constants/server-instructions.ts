@@ -9,7 +9,7 @@
 import type { ToolGroup } from '../types/index.js'
 import { getEnabledGroups } from '../filtering/tool-filter.js'
 import { TOOL_GROUPS } from '../filtering/tool-constants.js'
-import { markUntrustedContentInline } from '../utils/security-utils.js'
+import { sliceUntrustedInline } from '../handlers/resources/uri-and-fencing.js'
 
 import { CORE_INSTRUCTIONS, CODE_MODE_INSTRUCTIONS } from './instructions/base.js';
 import { CORE_HELP } from './instructions/core.js';
@@ -136,9 +136,11 @@ export function generateStandardInstructions(
 
     // Add latest entry snapshot for immediate context (compact format)
     if (level !== 'essential' && latestEntry) {
-        const rawPreview =
-            latestEntry.content.slice(0, 120) + (latestEntry.content.length > 120 ? '...' : '')
-        const fencedPreview = markUntrustedContentInline(rawPreview.replace(/\r?\n/g, ' '))
+        const fencedPreview = sliceUntrustedInline(
+            latestEntry.content.replace(/\r?\n/g, ' '),
+            120,
+            '...'
+        )
         instructions += `\n**Latest**: #${String(latestEntry.id)} (${latestEntry.timestamp}) ${latestEntry.entryType}\n> ${fencedPreview}\n`
     }
 

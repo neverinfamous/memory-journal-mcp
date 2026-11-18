@@ -1,7 +1,7 @@
-import * as fs from 'fs'
-import * as fsPromises from 'fs/promises'
-import * as path from 'path'
-import { fileURLToPath } from 'url'
+import * as fs from 'node:fs'
+import * as fsPromises from 'node:fs/promises'
+import * as path from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { sanitizeErrorForLogging } from './security-utils.js'
 
 const SENSITIVE_KEY_RE =
@@ -57,6 +57,7 @@ export function sanitizeIssueInput(
     if (value === null || value === undefined) return value
     if (depth > 8) return '[Truncated]'
     if (typeof value === 'string') return truncateIssueString(sanitizeErrorForLogging(value))
+    if (typeof value === 'bigint') return value.toString()
     if (typeof value !== 'object') return value
     if (seen.has(value)) return '[Circular]'
     seen.add(value)
@@ -136,7 +137,7 @@ function scheduleFlush(): void {
 }
 
 export async function flushAgentIssues(): Promise<void> {
-    await drainIssueQueue()
+    activeFlush = activeFlush.then(() => drainIssueQueue())
     await activeFlush
 }
 
@@ -170,6 +171,21 @@ export function logAgentIssue(
     if (pendingLines.length >= MAX_PENDING_ISSUE_LINES) {
         pendingLines.shift()
     }
-    pendingLines.push(JSON.stringify(fullIssue) + '\n')
+    let serialized: string
+    try {
+        serialized = JSON.stringify(fullIssue, (_key: string, val: unknown) =>
+            typeof val === 'bigint' ? val.toString() : val
+        )
+    } catch {
+        serialized = JSON.stringify({
+            timestamp: fullIssue.timestamp,
+            level: fullIssue.level,
+            source: fullIssue.source,
+            action: fullIssue.action,
+            input: '[Unserializable]',
+            error: fullIssue.error,
+        })
+    }
+    pendingLines.push(serialized + '\n')
     scheduleFlush()
 }

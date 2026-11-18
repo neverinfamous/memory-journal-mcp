@@ -10,6 +10,7 @@ import { formatHandlerError } from '../../../utils/error-helpers.js'
 import { sendProgress } from '../../../utils/progress-utils.js'
 import { resolveTeamCreateAuthor } from './admin-tools/batch-create-helpers.js'
 import { resolveIssueUrl } from '../../../utils/github-helpers.js'
+import { resolveEntryAnchors } from '../core/staleness-tools.js'
 import { autoIndexEntry } from '../../../utils/vector-index-helpers.js'
 import { encodeCursor } from '../../../database/sqlite-adapter/entries/search/cursor.js'
 import { resolveWorkspaceId, resolveProjectContext } from '../../../utils/workspace-resolver.js'
@@ -101,26 +102,15 @@ function resolveTeamCreateScopeAndAuthor(
     return { wsId, projectNumber, author: authorResult.author }
 }
 
-async function executeTeamCreateEntry(
-    context: ToolContext,
-    teamDb: TeamDbInstance,
-    params: unknown
-): Promise<Record<string, unknown>> {
-    const input = TeamCreateEntrySchema.parse(params)
-    const scope = resolveTeamCreateScopeAndAuthor(context, teamDb, input)
-    if ('errorResponse' in scope) return scope.errorResponse
-    const { wsId, projectNumber, author } = scope
-
-    // Optional progress for long operations
-    await sendProgress(context.progress, 0, 2, 'Creating team entry...')
-    const resolvedIssueUrl = await resolveIssueUrl(
-        context,
-        projectNumber,
-        input.issue_number,
-        input.issue_url,
-        wsId
-    )
-    const entry = teamDb.createEntry({
+function buildTeamEntryPayload(
+    input: TeamCreateInput,
+    wsId: string,
+    projectNumber: number,
+    author: string,
+    resolvedIssueUrl: string | undefined,
+    resolvedAnchors: Awaited<ReturnType<typeof resolveEntryAnchors>>
+): Parameters<TeamDbInstance['createEntry']>[0] {
+    return {
         content: input.content,
         entryType: input.entry_type,
         tags: input.tags,
@@ -143,16 +133,38 @@ async function executeTeamCreateEntry(
         trustScore: input.trust_score,
         validationStatus: input.validation_status,
         sessionId: input.session_id,
-        ...(input.anchors !== undefined
-            ? {
-                  anchors: input.anchors.map((a) => ({
-                      anchorPath: a.anchor_path,
-                      anchorType: a.anchor_type,
-                      ...(a.status !== undefined ? { status: a.status } : {}),
-                  })),
-              }
-            : {}),
-    })
+        ...(resolvedAnchors !== undefined ? { anchors: resolvedAnchors } : {}),
+    }
+}
+
+async function executeTeamCreateEntry(
+    context: ToolContext,
+    teamDb: TeamDbInstance,
+    params: unknown
+): Promise<Record<string, unknown>> {
+    const input = TeamCreateEntrySchema.parse(params)
+    const scope = resolveTeamCreateScopeAndAuthor(context, teamDb, input)
+    if ('errorResponse' in scope) return scope.errorResponse
+    const { wsId, projectNumber, author } = scope
+
+    // Optional progress for long operations
+    await sendProgress(context.progress, 0, 2, 'Creating team entry...')
+    const resolvedIssueUrl = await resolveIssueUrl(
+        context,
+        projectNumber,
+        input.issue_number,
+        input.issue_url,
+        wsId
+    )
+    const resolvedAnchors = await resolveEntryAnchors(
+        input.anchors,
+        input.auto_context,
+        wsId,
+        context
+    )
+    const entry = teamDb.createEntry(
+        buildTeamEntryPayload(input, wsId, projectNumber, author, resolvedIssueUrl, resolvedAnchors)
+    )
 
     const relationshipWarnings = linkRequestedRelationships(
         teamDb,
@@ -307,6 +319,7 @@ export function getTeamCoreTools(context: ToolContext): ToolDefinition[] {
                     const enriched = entries.map((e) => ({
                         ...e,
                         author: authorMap.get(e.id) ?? null,
+                        source: 'team' as const,
                     }))
 
                     return {

@@ -2,7 +2,7 @@ import type { ImportanceBreakdown, ImportanceResult, JournalEntry } from '../../
 import { effectiveWorkspace } from '../../workspace-scope.js'
 import { type EntriesSharedContext, rowToObject } from './shared.js'
 import { getEntriesByIds } from './crud.js'
-import { DUAL_IN_PARAM_BUCKETS, bucketInParams } from '../row-helpers.js'
+import { DUAL_IN_PARAM_BUCKETS, SCOPED_IN_PARAM_BUCKETS, bucketInParams } from '../row-helpers.js'
 
 export const IMPORTANCE_WEIGHTS = {
     significance: 0.3,
@@ -385,7 +385,7 @@ export function getImportanceScoresByIds(
         timestamp: string
     }[] = []
 
-    for (const { placeholders, params } of bucketInParams(entryIds)) {
+    for (const { placeholders, params } of bucketInParams(entryIds, SCOPED_IN_PARAM_BUCKETS)) {
         const rows = db
             .prepare(
                 `SELECT id, significance_type as significanceType, impact_score as impactScore, trust_score as trustScore, validation_status as validationStatus, timestamp

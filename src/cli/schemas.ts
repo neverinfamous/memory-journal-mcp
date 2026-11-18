@@ -2,8 +2,16 @@ import { z } from 'zod'
 
 export const safeCoerceNumber = z.preprocess((val) => {
     if (val === undefined || val === null || val === '') return undefined
-    const num = Number(val)
-    return isNaN(num) ? val : num
+    if (typeof val === 'number') return Number.isFinite(val) ? val : val
+    if (typeof val === 'string') {
+        const trimmed = val.trim()
+        if (!/^-?(?:0|[1-9]\d*)(?:\.\d+)?$/.test(trimmed)) return val
+        const parsed = Number(trimmed)
+        if (!Number.isFinite(parsed)) return val
+        if (!trimmed.includes('.') && !Number.isSafeInteger(parsed)) return val
+        return parsed
+    }
+    return val
 }, z.number().optional())
 
 export const safeCoerceValidationStatus = z.preprocess((val) => {

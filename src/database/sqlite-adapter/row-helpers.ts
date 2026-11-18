@@ -35,10 +35,11 @@ export function getSingleRow(queryResult: SqliteQueryResult[]): Record<string, u
 }
 
 export const IN_PARAM_BUCKETS = [1, 2, 4, 8, 16, 32, 64, 128, 256, 500] as const
+export const SCOPED_IN_PARAM_BUCKETS = [1, 2, 4, 8, 16, 32, 64, 128, 256, 480] as const
 export const DUAL_IN_PARAM_BUCKETS = [1, 2, 4, 8, 16, 32, 64, 128, 240] as const
 
 const BUCKET_PLACEHOLDERS = new Map<number, string>(
-    [...IN_PARAM_BUCKETS, 240].map((size) => [size, Array<string>(size).fill('?').join(',')])
+    [...IN_PARAM_BUCKETS, 480, 240].map((size) => [size, Array<string>(size).fill('?').join(',')])
 )
 
 export interface BucketedInChunk<T> {
@@ -73,12 +74,18 @@ export function bucketInParams<T>(
     return chunks
 }
 
-/** Join bucketed `IN` fragments. Positive membership uses OR; exclusion uses AND. */
+/** Join bucketed `IN` fragments. Uses `json_each(?)` above 240 items to preserve the 500-bind budget. */
 export function chunkedInPredicate(
     values: readonly string[],
     render: (placeholders: string) => string,
     join: 'AND' | 'OR'
 ): { sql: string; params: string[] } {
+    if (values.length > 240) {
+        return {
+            sql: render('SELECT value FROM json_each(?)'),
+            params: [JSON.stringify(values)],
+        }
+    }
     const parts: string[] = []
     const params: string[] = []
     for (const chunk of bucketInParams(values)) {

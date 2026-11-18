@@ -23,16 +23,15 @@ import { canonicalizeTeamAuthor, getCallerIdentity, resolveScopedTeamRole } from
 import type { TeamBatchCreateEntriesSchema } from '../schemas.js'
 import type { TeamDbInstance } from './batch-delete-helpers.js'
 import { runTeamBatchTx } from './batch-prefetch-helpers.js'
+import {
+    buildTeamBatchCreateInputs,
+    type ResolvedTeamBatchCreateItem,
+} from './batch-create-hydration.js'
 
 type TeamBatchCreateInput = z.infer<typeof TeamBatchCreateEntriesSchema>
 type TeamBatchCreateItem = TeamBatchCreateInput['entries'][number]
 
-interface ResolvedBatchCreateItem {
-    e: TeamBatchCreateItem
-    author: string
-    projectNumber: number
-    workspaceId: string
-}
+type ResolvedBatchCreateItem = ResolvedTeamBatchCreateItem
 
 function sanitizeAuthorClaim(raw: string): string {
     return raw.replace(/\p{Cc}+/gu, ' ').trim()
@@ -299,44 +298,6 @@ function validateTeamBatchCreateEntries(
     return { resolvedEntries }
 }
 
-function buildTeamBatchCreateInputs(
-    resolvedEntries: ResolvedBatchCreateItem[]
-): Parameters<TeamDbInstance['createEntries']>[0] {
-    return resolvedEntries.map(({ e, author, projectNumber, workspaceId }) => ({
-        content: e.content,
-        entryType: e.entry_type,
-        tags: e.tags,
-        significanceType: e.significance_type,
-        autoContext: e.auto_context,
-        projectNumber,
-        projectOwner: e.project_owner,
-        issueNumber: e.issue_number,
-        issueUrl: e.issue_url,
-        prNumber: e.pr_number,
-        prUrl: e.pr_url,
-        prStatus: e.pr_status,
-        workflowRunId: e.workflow_run_id,
-        workflowName: e.workflow_name,
-        workflowStatus: e.workflow_status,
-        isPersonal: false,
-        author,
-        impactScore: e.impact_score,
-        trustScore: e.trust_score,
-        validationStatus: e.validation_status,
-        sessionId: e.session_id,
-        workspaceId,
-        ...(e.anchors !== undefined
-            ? {
-                  anchors: e.anchors.map((a) => ({
-                      anchorPath: a.anchor_path,
-                      anchorType: a.anchor_type,
-                      ...(a.status !== undefined ? { status: a.status } : {}),
-                  })),
-              }
-            : {}),
-    }))
-}
-
 function linkBatchCreatedRelationships(
     teamDb: TeamDbInstance,
     results: ReturnType<TeamDbInstance['createEntries']>['created'],
@@ -373,7 +334,7 @@ export async function executeTeamBatchCreate(
     const validation = validateTeamBatchCreateEntries(input, teamDb, context.config)
     if ('errorResponse' in validation) return validation.errorResponse
 
-    const inputs = buildTeamBatchCreateInputs(validation.resolvedEntries)
+    const inputs = await buildTeamBatchCreateInputs(validation.resolvedEntries, context)
     const { created: results, errors } = teamDb.createEntries(inputs)
     const failedIndices = new Set(errors.map((err) => err.index))
     const createdSourceIndices = inputs.flatMap((_, idx) => (failedIndices.has(idx) ? [] : [idx]))

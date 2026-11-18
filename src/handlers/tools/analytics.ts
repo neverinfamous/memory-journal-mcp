@@ -36,12 +36,14 @@ function coerceAnalyticsProjectNumber(projectNumber: unknown): number | undefine
         }
         return projectNumber
     }
-    if (typeof projectNumber === 'string' && /^\d+$/.test(projectNumber.trim())) {
-        const parsed = Number(projectNumber.trim())
-        if (!Number.isSafeInteger(parsed) || parsed <= 0) {
-            throw new ValidationError(PROJECT_NUMBER_ERROR)
+    if (typeof projectNumber === 'string') {
+        const trimmed = projectNumber.trim()
+        if (/^[1-9]\d*$/.test(trimmed)) {
+            const parsed = Number(trimmed)
+            if (Number.isSafeInteger(parsed) && parsed > 0 && String(parsed) === trimmed) {
+                return parsed
+            }
         }
-        return parsed
     }
     throw new ValidationError(PROJECT_NUMBER_ERROR)
 }

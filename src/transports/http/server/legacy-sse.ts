@@ -55,6 +55,9 @@ export class LegacySSEServerTransport implements Transport {
             return
         }
         this.res = res
+        if (typeof res.setTimeout === 'function') {
+            res.setTimeout(0)
+        }
         res.writeHead(200, {
             'Content-Type': 'text/event-stream',
             'Cache-Control': 'no-cache, no-transform',

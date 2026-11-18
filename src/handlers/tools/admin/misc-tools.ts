@@ -10,6 +10,7 @@ import { healAgentHallucinations } from '../schemas/hallucination-healer.js'
 import {
     MergeTagsOutputSchema,
     SearchAuditLogSchema,
+    SearchAuditLogSchemaMcp,
     SearchAuditLogOutputSchema,
 } from './schemas.js'
 
@@ -156,7 +157,7 @@ export function getMiscTools(context: ToolContext): ToolDefinition[] {
             title: 'Search Audit Log',
             description: 'Search operational telemetry audit logs by tool name, user, date range, status, or category. Returns the most recent matches up to the limit.',
             group: 'admin',
-            inputSchema: SearchAuditLogSchema,
+            inputSchema: SearchAuditLogSchemaMcp,
             outputSchema: SearchAuditLogOutputSchema,
             annotations: {
                 readOnlyHint: true,
