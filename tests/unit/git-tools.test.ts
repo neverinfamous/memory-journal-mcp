@@ -177,6 +177,24 @@ describe('Git Tools Handler', () => {
 
         expect(res.success).toBe(true)
         expect(res.changelog.truncated).toBe(true)
+        expect(res.changelog.commits).toHaveLength(100)
+    })
+
+    it('get_unreleased_commits should honor explicit limit and summary options', async () => {
+        const tools = getGitTools(context)
+        const tool = tools.find((t) => t.name === 'get_unreleased_commits')
+        if (tool === undefined) throw new Error('get_unreleased_commits missing')
+        const res = (await tool.handler({ limit: 25, summary: true })) as {
+            success: boolean
+            changelog: { commits: unknown[]; truncated: boolean }
+        }
+
+        expect(res.success).toBe(true)
+        expect(res.changelog.commits).toHaveLength(2)
+        expect(mockBuildGitBaseArgs).toHaveBeenCalledWith(
+            expect.objectContaining({ limit: 25, summary: true }),
+            expect.any(String)
+        )
     })
 
     it('analyze_commit_patterns should aggregate commit types, authors, breaking changes, and categories', async () => {

@@ -30,7 +30,7 @@ function sanitizeCliArgList(args: unknown[], depth = 0): unknown[] {
                 }
                 continue
             }
-            out.push(sanitizeErrorForLogging(item))
+            out.push(truncateIssueString(sanitizeErrorForLogging(item)))
             continue
         }
         out.push(sanitizeIssueInput(item, depth + 1))

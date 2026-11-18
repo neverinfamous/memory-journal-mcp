@@ -203,7 +203,7 @@ An entry is considered incomplete and worthy of auditing/enrichment if it lacks 
 2. **NEVER** use \`permanent: true\` unless explicitly asked to "hard delete".
 3. **ALWAYS** call \`backup_journal\` (and \`cleanup_backups\` with \`keep_count: 15\`) before any batch mutation/delete. Abort if backup fails.
 4. **NEVER** delete entries with \`significance_type\` set.
-5. Max batch size: 50 entries per mutation pass.
+5. Max batch size: 30 entries per \`mj_execute_code\` call so synchronous HNSW vector re-indexing stays well within the 30s worker timeout.
 6. **Log operations**: Create a journal entry with \`entry_type: 'maintenance'\`, ${logProjectSpec}, and tags \`['cms', 'cms-02-nrem-consolidation', 'database-optimizer', 'maintenance']\`.
 7. **Execution Scope**: Systematically process entries across registered projects in \`PROJECT_REGISTRY\` (or restricted to \`${targetProject !== undefined && targetProject !== '' ? targetProject : 'all'}\` if specified).
 
@@ -241,6 +241,7 @@ const entries = await mj.core.getRecentEntries({ limit: 100, workspace_id: '*' }
 const graph = [];
 
 for (const entry of (entries.entries || [])) {
+  if (entry.source === 'team') continue;
   const full = await mj.core.getEntryById({ entry_id: entry.id, workspace_id: '*' });
   if (full.success && full.relationships && full.relationships.length > 0) {
     graph.push({

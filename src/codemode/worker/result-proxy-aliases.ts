@@ -10,6 +10,7 @@ const TOTAL_COLLECTION_KEYS: ReadonlySet<string> = new Set([
     'items',
     'rows',
     'records',
+    'commits',
 ])
 
 const isObject = (val: unknown): val is Record<string, unknown> =>
@@ -66,6 +67,10 @@ export function resolvePaginationAndStatsProp(
         if (targetKey !== undefined && Array.isArray(targetRecord[targetKey])) {
             return { matched: true, value: targetRecord[targetKey].length }
         }
+        const changelogObj = targetRecord['changelog']
+        if (isObject(changelogObj) && Array.isArray(changelogObj['commits'])) {
+            return { matched: true, value: changelogObj['commits'].length }
+        }
     }
     return { matched: false }
 }
@@ -109,6 +114,23 @@ export function resolveWrappedAliasProp(
 
     const projMatch = resolveProjectAliasProp(targetRecord, prop)
     if (projMatch.matched) return projMatch
+
+    const changelogObj = targetRecord['changelog']
+    if (isObject(changelogObj)) {
+        if (prop === 'tag' || prop === 'baseRef' || prop === 'latest_tag') {
+            return { matched: true, value: changelogObj['latestTag'] }
+        }
+        if ((prop === 'count' || prop === 'unreleasedCount') && Array.isArray(changelogObj['commits'])) {
+            return { matched: true, value: changelogObj['commits'].length }
+        }
+        if (typeof prop === 'string' && prop in changelogObj) {
+            const val = changelogObj[prop]
+            return {
+                matched: true,
+                value: val !== null && typeof val === 'object' && !Array.isArray(val) ? wrapResultFn(val) : val,
+            }
+        }
+    }
 
     if (prop === 'entryIds' && 'entries' in targetRecord && Array.isArray(targetRecord['entries'])) {
         return { matched: true, value: targetRecord['entries'].filter(hasNumberId).map((e) => e.id) }

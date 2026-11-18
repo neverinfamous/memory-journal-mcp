@@ -25,6 +25,7 @@ export const GitHistoryOptionsSchema = z.object({
     sortBy: z.enum(['date', 'impact']).optional(),
     scope: z.string().optional(),
     techDebtAudit: z.boolean().optional(),
+    summary: z.boolean().optional(),
     repo: z.string().optional(),
     repo_name: z.string().optional(),
     workspace_id: z.string().optional(),
@@ -51,6 +52,7 @@ export const GitHistoryOptionsSchemaMcp = z.object({
     scope: z.string().optional().describe('Filter commits by a specific scope'),
     techDebtAudit: z.boolean().optional().describe('Filter for high impact commits with low trust or missing validation'),
     tech_debt_audit: z.boolean().optional().describe('Alias for techDebtAudit'),
+    summary: z.boolean().optional().describe('Skip per-file diffstat computation for fast commit metadata queries'),
 }).transform((d) => ({
     ...d,
     maxCount: coerceRelaxed(d.maxCount ?? d.max_count ?? d.limit),
@@ -65,6 +67,7 @@ export const GitSearchOptionsSchema = z.object({
     sortBy: z.enum(['date', 'impact']).optional(),
     scope: z.string().optional(),
     techDebtAudit: z.boolean().optional(),
+    summary: z.boolean().optional(),
     repo: z.string().optional(),
     repo_name: z.string().optional(),
     workspace_id: z.string().optional(),
@@ -89,6 +92,7 @@ export const GitSearchOptionsSchemaMcp = z.object({
     scope: z.string().optional().describe('Filter commits by a specific scope'),
     techDebtAudit: z.boolean().optional().describe('Filter for high impact commits with low trust or missing validation'),
     tech_debt_audit: z.boolean().optional().describe('Alias for techDebtAudit'),
+    summary: z.boolean().optional().describe('Skip per-file diffstat computation for fast commit search queries'),
 }).transform((d) => ({
     ...d,
     maxCount: coerceRelaxed(d.maxCount ?? d.max_count ?? d.limit),
@@ -118,14 +122,36 @@ export const GitReleaseInfoOptionsSchemaMcp = z
         project_number: coerceCanonicalProject(d.project_number),
     }))
 
-export const GitUnreleasedOptionsSchema = z.object({
-    repo: z.string().optional().describe('Target repository or workspace name'),
-    repo_name: z.string().optional().describe('Alias for repo'),
-    workspace_id: z.string().optional().describe('Target workspace identifier'),
-    workspaceId: z.string().optional().describe('Alias for workspace_id'),
-    project_number: relaxedNumber().optional().describe('Target GitHub project number'),
-    cwd: z.string().optional().describe('Working directory path for git operations'),
-})
+export const GitUnreleasedOptionsSchema = z
+    .object({
+        maxCount: relaxedNumber()
+            .optional()
+            .describe('Maximum number of unreleased commits to return (default: 100, max: 5000)'),
+        max_count: relaxedNumber().optional().describe('Alias for maxCount'),
+        limit: relaxedNumber().optional().describe('Alias for maxCount'),
+        summary: z
+            .boolean()
+            .optional()
+            .describe('Skip per-file diffstat computation for fast changelog retrieval'),
+        repo: z.string().optional().describe('Target repository or workspace name'),
+        repo_name: z.string().optional().describe('Alias for repo'),
+        workspace_id: z.string().optional().describe('Target workspace identifier'),
+        workspaceId: z.string().optional().describe('Alias for workspace_id'),
+        project_number: relaxedNumber().optional().describe('Target GitHub project number'),
+        cwd: z.string().optional().describe('Working directory path for git operations'),
+    })
+    .transform((d) => {
+        const rawMax = coerceRelaxed(d.maxCount ?? d.max_count ?? d.limit)
+        const parsedMax =
+            rawMax !== undefined
+                ? z.number().int().positive().max(5000).parse(rawMax)
+                : undefined
+        return {
+            ...d,
+            maxCount: parsedMax,
+            project_number: coerceCanonicalProject(d.project_number),
+        }
+    })
 
 export const GitAnalyzePatternsOptionsSchema = z.object({
     maxCount: relaxedNumber().optional().describe('Maximum number of commits to analyze. Default: 50'),

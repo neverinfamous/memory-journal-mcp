@@ -337,5 +337,47 @@ describe('Ecosystem Audit Regressions: Code Mode Proxies, Recall, Search, CLI An
         const longPayload = sanitizeIssueInput({ code: 'x'.repeat(800) }) as { code: string }
         expect(longPayload.code.length).toBeLessThan(550)
         expect(longPayload.code.endsWith('...[truncated]')).toBe(true)
+
+        const longArrayPayload = sanitizeIssueInput({
+            content: ['y'.repeat(900)],
+        }) as { content: string[] }
+        expect(longArrayPayload.content[0]?.length).toBeLessThan(550)
+        expect(longArrayPayload.content[0]?.endsWith('...[truncated]')).toBe(true)
+
+        const wrappedCommits = wrapResult({
+            success: true,
+            commits: [{ commit: 'abc12345', subject: 'feat: test' }],
+        }) as {
+            length: number
+            total: number
+            map: <T>(fn: (c: { commit: string }) => T) => T[]
+        }
+        expect(wrappedCommits.length).toBe(1)
+        expect(wrappedCommits.total).toBe(1)
+        expect(wrappedCommits.map((c) => c.commit)).toEqual(['abc12345'])
+
+        const wrappedUnreleased = wrapResult({
+            success: true,
+            changelog: {
+                latestTag: 'v5.0.1',
+                commits: [{ commit: 'def67890' }, { commit: 'fed09876' }],
+                truncated: true,
+            },
+        }) as {
+            latestTag: string
+            tag: string
+            baseRef: string
+            commits: { commit: string }[]
+            count: number
+            total: number
+            truncated: boolean
+        }
+        expect(wrappedUnreleased.latestTag).toBe('v5.0.1')
+        expect(wrappedUnreleased.tag).toBe('v5.0.1')
+        expect(wrappedUnreleased.baseRef).toBe('v5.0.1')
+        expect(wrappedUnreleased.commits).toHaveLength(2)
+        expect(wrappedUnreleased.count).toBe(2)
+        expect(wrappedUnreleased.total).toBe(2)
+        expect(wrappedUnreleased.truncated).toBe(true)
     })
 })

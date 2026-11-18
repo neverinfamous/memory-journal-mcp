@@ -16,14 +16,14 @@ const RESULT_COLLECTION_KEYS: ReadonlySet<string> = new Set([
     'flags', 'groups', 'users', 'capabilities', 'metrics', 'events', 'records',
     'logs', 'aliases', 'tags', 'issues', 'pullRequests', 'milestones', 'columns',
     'comments', 'files', 'errors', 'backups', 'deleted', 'updated', 'notFound',
-    'history', 'relationships', 'members', 'data', 'nodes', 'edges',
+    'history', 'relationships', 'members', 'data', 'nodes', 'edges', 'commits',
 ])
 
 const ITERATOR_COLLECTION_KEYS: ReadonlySet<string> = new Set([
     'entries', 'results', 'projects', 'items', 'issues', 'pullRequests',
     'milestones', 'columns', 'comments', 'files', 'errors', 'backups',
     'deleted', 'updated', 'notFound', 'history', 'relationships', 'members',
-    'nodes', 'edges',
+    'nodes', 'edges', 'commits',
 ])
 
 const FAILED_ARRAY_METHODS: ReadonlySet<string> = new Set([
@@ -42,7 +42,7 @@ const MUTATOR_ARRAY_METHODS: ReadonlySet<string> = new Set([
 
 const ARRAY_SELF_ALIASES: ReadonlySet<string> = new Set([
     'projects', 'entries', 'results', 'items', 'data', 'rows',
-    'relationships', 'members', 'tags', 'history', 'records',
+    'relationships', 'members', 'tags', 'history', 'records', 'commits',
 ])
 
 const RESULT_LIST_ALIASES: ReadonlySet<string> = new Set([

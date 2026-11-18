@@ -20,6 +20,7 @@ export interface FetchCommitsInput {
     sortBy?: 'date' | 'impact'
     scope?: string
     techDebtAudit?: boolean
+    summary?: boolean
 }
 
 const ALREADY_FENCED_RE =
@@ -81,6 +82,7 @@ export async function fetchCommits(
         path: input.path,
         since: input.since,
         grep: input.query,
+        ...(input.summary === true ? { summary: true } : {}),
     }
     const gitArgs = [
         'log',
@@ -118,29 +120,45 @@ export async function fetchCommits(
     return needsPostProcessing ? processed.slice(0, input.maxCount ?? 50) : processed
 }
 
-/** Upper bound on commits returned by get_unreleased_commits. */
+/** Upper bound on commits returned by get_unreleased_commits when requested explicitly. */
 const UNRELEASED_MAX_COMMITS = 5000
+/** Default commit ceiling on get_unreleased_commits so multi-thousand-commit repos stay within Code Mode 30s/100KB budgets. */
+const DEFAULT_UNRELEASED_MAX_COMMITS = 100
 /** Cap for the no-tag fallback, where "unreleased" is the whole history. */
 const NO_TAG_FALLBACK_MAX_COMMITS = 100
 
 /** Collect commits since the latest reachable git tag. */
 export async function getUnreleasedChangelog(
-    cwd: string
+    cwd: string,
+    options?: { maxCount?: number; summary?: boolean }
 ): Promise<{ latestTag: string | null; commits: CommitEntry[]; truncated: boolean }> {
     const latestTag = await readLatestGitTag(cwd)
+    const summaryOpt = options?.summary === true ? { summary: true } : {}
     if (latestTag === null) {
-        const commits = await fetchCommits({ maxCount: NO_TAG_FALLBACK_MAX_COMMITS }, cwd)
+        const fallbackCap =
+            options?.maxCount !== undefined
+                ? Math.min(Math.max(1, options.maxCount), UNRELEASED_MAX_COMMITS)
+                : NO_TAG_FALLBACK_MAX_COMMITS
+        const commits = await fetchCommits({ maxCount: fallbackCap, ...summaryOpt }, cwd)
         return {
             latestTag: null,
-            commits,
-            truncated: commits.length >= NO_TAG_FALLBACK_MAX_COMMITS,
+            commits: commits.slice(0, fallbackCap),
+            truncated: commits.length >= fallbackCap,
         }
     }
+    const effectiveMax =
+        options?.maxCount !== undefined
+            ? Math.min(Math.max(1, options.maxCount), UNRELEASED_MAX_COMMITS)
+            : DEFAULT_UNRELEASED_MAX_COMMITS
     const commits = await fetchCommits(
-        { ref: `${latestTag}..HEAD`, maxCount: UNRELEASED_MAX_COMMITS },
+        { ref: `${latestTag}..HEAD`, maxCount: effectiveMax, ...summaryOpt },
         cwd
     )
-    return { latestTag, commits, truncated: commits.length >= UNRELEASED_MAX_COMMITS }
+    return {
+        latestTag,
+        commits: commits.slice(0, effectiveMax),
+        truncated: commits.length >= effectiveMax,
+    }
 }
 
 /** Fence untrusted free-text fields on a commit record at MCP tool egress. */

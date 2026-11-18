@@ -128,7 +128,10 @@ export function getGitTools(context: ToolContext): ToolDefinition[] {
                     const input = GitUnreleasedOptionsSchema.parse(params ?? {})
                     const cwd = resolveGitWorkingDir(input, context.config)
                     await sendProgress(context.progress, 0, 1, 'Fetching unreleased commits...')
-                    const rawChangelog = await getUnreleasedChangelog(cwd)
+                    const rawChangelog = await getUnreleasedChangelog(cwd, {
+                        ...(input.maxCount !== undefined ? { maxCount: input.maxCount } : {}),
+                        ...(input.summary === true ? { summary: true } : {}),
+                    })
                     return {
                         success: true,
                         changelog: {
@@ -245,7 +248,9 @@ export function getGitTools(context: ToolContext): ToolDefinition[] {
             },
             handler: (params: unknown) =>
                 runCheckEntryStaleness(params, context, (anchorPath, since, cwd, maxCount) =>
-                    fetchCommits({ path: anchorPath, since, maxCount }, cwd).then((c) => c.length)
+                    fetchCommits({ path: anchorPath, since, maxCount, summary: true }, cwd).then(
+                        (c) => c.length
+                    )
                 ),
         }
     ]
