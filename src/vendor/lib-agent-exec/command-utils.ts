@@ -563,7 +563,7 @@ export function healFragmentedQuotes(args: string[]): string[] {
     if (/^[a-zA-Z]:\\/i.test(s) || /^\.\.?\\/.test(s) || /^\\\\/.test(s)) {
       return true;
     }
-    const withoutTrailing = s.slice(0, -1);
+    const withoutTrailing = (s.endsWith('\\') || s.endsWith('/')) ? s.slice(0, -1) : s;
     if (withoutTrailing.includes('/') || withoutTrailing.includes('\\')) {
       const strippedEscapes = withoutTrailing.replace(
         /\\([.*+?^${}()|[\]\\"'`~<>:;!@#%&=,\-_/]|w|W|d|D|s|S|b|B|[0-9])/g,
@@ -581,7 +581,7 @@ export function healFragmentedQuotes(args: string[]): string[] {
       return false;
     }
     // Avoid treating Windows paths (e.g. C:\..., .\..., ..\..., or paths with directory separators) as fragmented words
-    const withoutTrailing = s.slice(0, -1);
+    const withoutTrailing = (s.endsWith('\\') || s.endsWith('/')) ? s.slice(0, -1) : s;
     if (/^[a-zA-Z]:\\/i.test(s) || /^\.\.?\\/.test(s) || /^\\\\/.test(s)) {
       return false;
     }
@@ -693,9 +693,9 @@ export function healFragmentedQuotes(args: string[]): string[] {
           }
         } else if (
           !isPathWithTrailingSlash(next) &&
-          /^([^\\]+)\\(\).*|[,;\]].*)$/.test(next)
+          /^([^\\]+)\\(\).*|[:;,\]].*)$/.test(next)
         ) {
-          const m = next.match(/^([^\\]+)\\(\).*|[,;\]].*)$/);
+          const m = next.match(/^([^\\]+)\\(\).*|[:;,\]].*)$/);
           if (m !== null && m[1] !== undefined && m[2] !== undefined) {
             internalWord = m[1];
             internalRest = m[2];

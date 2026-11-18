@@ -313,6 +313,17 @@ export function packageManagerInterceptor(ctx: ExecutionContext): void {
           ctx.payload.args = args;
         }
       }
+      if (cmdBasename.startsWith('bun')) {
+        for (let i = 0; i < args.length; i++) {
+          const arg = args[i];
+          if (arg !== undefined && /^\.[a-zA-Z0-9_].*[/\\]/.test(arg)) {
+            args[i] = `./${arg.replace(/\\/g, '/')}`;
+          }
+        }
+        if ('command' in ctx.payload) {
+          ctx.payload.args = args;
+        }
+      }
     }
     const nonFlagArgs = args.filter(a => !a.startsWith('-'));
     const tsxBin = (subCmd === 'tsx' || subCmd === 'ts-node')

@@ -475,30 +475,44 @@ export function systemInterceptor(ctx: ExecutionContext): void {
       if (isPlaywright) {
         defaultWslTimeout = 600000;
         payload.bypassInterceptors = true;
-        console.error(`\n   🛠️ AUTONOMOUS HEALING: Detected Playwright/E2E test in WSL2 eval payload. Auto-extending timeout to 600s... (Frictionless Recovery)`);
+        if (payload.timeoutMs === undefined || payload.timeoutMs < defaultWslTimeout) {
+          console.error(`\n   🛠️ AUTONOMOUS HEALING: Detected Playwright/E2E test in WSL2 eval payload. Auto-extending timeout to 600s... (Frictionless Recovery)`);
+        }
       } else if (isDockerScout) {
         defaultWslTimeout = 1800000;
         payload.bypassInterceptors = true;
-        console.error(`\n   🛠️ AUTONOMOUS HEALING: Detected Docker scout in WSL2 eval payload. Auto-extending timeout to 1800s... (Frictionless Recovery)`);
+        if (payload.timeoutMs === undefined || payload.timeoutMs < defaultWslTimeout) {
+          console.error(`\n   🛠️ AUTONOMOUS HEALING: Detected Docker scout in WSL2 eval payload. Auto-extending timeout to 1800s... (Frictionless Recovery)`);
+        }
       } else if (isDockerBuild) {
         defaultWslTimeout = 600000;
         payload.bypassInterceptors = true;
-        console.error(`\n   🛠️ AUTONOMOUS HEALING: Detected Docker build/ecosystem orchestration in WSL2 eval payload. Auto-extending timeout to 600s... (Frictionless Recovery)`);
+        if (payload.timeoutMs === undefined || payload.timeoutMs < defaultWslTimeout) {
+          console.error(`\n   🛠️ AUTONOMOUS HEALING: Detected Docker build/ecosystem orchestration in WSL2 eval payload. Auto-extending timeout to 600s... (Frictionless Recovery)`);
+        }
       } else if (isCoverage) {
         defaultWslTimeout = 300000;
         payload.bypassInterceptors = true;
-        console.error(`\n   🛠️ AUTONOMOUS HEALING: Detected test coverage in WSL2 eval payload. Auto-extending timeout to 300s... (Frictionless Recovery)`);
+        if (payload.timeoutMs === undefined || payload.timeoutMs < defaultWslTimeout) {
+          console.error(`\n   🛠️ AUTONOMOUS HEALING: Detected test coverage in WSL2 eval payload. Auto-extending timeout to 300s... (Frictionless Recovery)`);
+        }
       } else if (isChainedQuality) {
         defaultWslTimeout = 180000;
         payload.bypassInterceptors = true;
-        console.error(`\n   🛠️ AUTONOMOUS HEALING: Detected chained quality checks in WSL2 eval payload. Auto-extending timeout to 180s... (Frictionless Recovery)`);
+        if (payload.timeoutMs === undefined || payload.timeoutMs < defaultWslTimeout) {
+          console.error(`\n   🛠️ AUTONOMOUS HEALING: Detected chained quality checks in WSL2 eval payload. Auto-extending timeout to 180s... (Frictionless Recovery)`);
+        }
       } else if (hasQualityCheck || isKnownDeterministic) {
         defaultWslTimeout = 90000;
         payload.bypassInterceptors = true;
-        console.error(`\n   🛠️ AUTONOMOUS HEALING: Detected quality check or deterministic script in WSL2 eval payload. Auto-extending timeout to 90s... (Frictionless Recovery)`);
+        if (payload.timeoutMs === undefined || payload.timeoutMs < defaultWslTimeout) {
+          console.error(`\n   🛠️ AUTONOMOUS HEALING: Detected quality check or deterministic script in WSL2 eval payload. Auto-extending timeout to 90s... (Frictionless Recovery)`);
+        }
       } else if (hasMountedSearch) {
         defaultWslTimeout = 90000;
-        console.error(`\n   🛠️ AUTONOMOUS HEALING: Detected file search across mounted filesystem in WSL2 eval payload. Auto-extending timeout to 90s... (Frictionless Recovery)`);
+        if (payload.timeoutMs === undefined || payload.timeoutMs < defaultWslTimeout) {
+          console.error(`\n   🛠️ AUTONOMOUS HEALING: Detected file search across mounted filesystem in WSL2 eval payload. Auto-extending timeout to 90s... (Frictionless Recovery)`);
+        }
       }
     } else if (payload.type === 'command') {
       const underlyingScript = getUnderlyingPackageScript(cmdBasename, args, payload.cwd);
@@ -604,28 +618,38 @@ export function systemInterceptor(ctx: ExecutionContext): void {
       const isChainedQuality = !isInlineShellHallucination && payload.type === 'eval' && Boolean(codeOrScript && /(?:typecheck|tsc|lint|check|build|test).*(?:&&|;).*(?:typecheck|tsc|lint|check|build|test)/i.test(codeOrScript));
       const hasQualityCheck = !isInlineShellHallucination && payload.type === 'eval' && Boolean(codeOrScript && /(?:(?:bun|pnpm|npm|yarn|npx|bunx|pnpx)\s+(?:run\s+)?(?:typecheck|tsc|lint|check|build|test)\b|\b(?:vitest|jest|tsc|eslint)\b)/i.test(codeOrScript));
       if (isPlaywright) {
+        if (payload.timeoutMs === undefined || payload.timeoutMs < 600000) {
+          console.error(`\n   🛠️ AUTONOMOUS HEALING: Detected Playwright/E2E test in Windows eval payload. Auto-extending timeout to 600s... (Frictionless Recovery)`);
+        }
         payload.timeoutMs = Math.max(payload.timeoutMs || 600000, 600000);
         payload.bypassInterceptors = true;
-        console.error(`\n   🛠️ AUTONOMOUS HEALING: Detected Playwright/E2E test in Windows eval payload. Auto-extending timeout to 600s... (Frictionless Recovery)`);
       } else if (isDocker) {
+        if (payload.timeoutMs === undefined || payload.timeoutMs < 600000) {
+          console.error(`\n   🛠️ AUTONOMOUS HEALING: Detected Docker build/scout or ecosystem orchestration in Windows eval payload. Auto-extending timeout to 600s... (Frictionless Recovery)`);
+        }
         payload.timeoutMs = Math.max(payload.timeoutMs || 600000, 600000);
         payload.bypassInterceptors = true;
-        console.error(`\n   🛠️ AUTONOMOUS HEALING: Detected Docker build/scout or ecosystem orchestration in Windows eval payload. Auto-extending timeout to 600s... (Frictionless Recovery)`);
       } else if (isCoverage) {
+        if (payload.timeoutMs === undefined || payload.timeoutMs < 600000) {
+          console.error(`\n   🛠️ AUTONOMOUS HEALING: Detected test coverage in Windows eval payload. Auto-extending timeout to 600s... (Frictionless Recovery)`);
+        }
         payload.timeoutMs = Math.max(payload.timeoutMs || 600000, 600000);
         payload.bypassInterceptors = true;
-        console.error(`\n   🛠️ AUTONOMOUS HEALING: Detected test coverage in Windows eval payload. Auto-extending timeout to 600s... (Frictionless Recovery)`);
       } else if (isChainedQuality) {
+        if (payload.timeoutMs === undefined || payload.timeoutMs < 600000) {
+          console.error(`\n   🛠️ AUTONOMOUS HEALING: Detected chained quality checks in Windows eval payload. Auto-extending timeout to 600s... (Frictionless Recovery)`);
+        }
         payload.timeoutMs = Math.max(payload.timeoutMs || 600000, 600000);
         payload.bypassInterceptors = true;
-        console.error(`\n   🛠️ AUTONOMOUS HEALING: Detected chained quality checks in Windows eval payload. Auto-extending timeout to 600s... (Frictionless Recovery)`);
       } else if (hasQualityCheck || isKnownDeterministic) {
         const isFullLintOrCheck = Boolean(codeOrScript && /(?:lint|check)/i.test(codeOrScript) && !/\.(?:ts|js|tsx|jsx)\b/i.test(codeOrScript));
         const hasLargeFile = Boolean(codeOrScript && /(?:api\.ts|codemode|bundle|generated)/i.test(codeOrScript));
         const qualityTimeout = (isFullLintOrCheck || hasLargeFile || isBackupConversations) ? 600000 : 240000;
+        if (payload.timeoutMs === undefined || payload.timeoutMs < qualityTimeout) {
+          console.error(`\n   🛠️ AUTONOMOUS HEALING: Detected quality check or deterministic script in Windows eval payload. Auto-extending timeout to ${qualityTimeout / 1000}s... (Frictionless Recovery)`);
+        }
         payload.timeoutMs = Math.max(payload.timeoutMs || qualityTimeout, qualityTimeout);
         payload.bypassInterceptors = true;
-        console.error(`\n   🛠️ AUTONOMOUS HEALING: Detected quality check or deterministic script in Windows eval payload. Auto-extending timeout to ${qualityTimeout / 1000}s... (Frictionless Recovery)`);
       }
     } else if (payload.type === 'command') {
       const underlyingScript = getUnderlyingPackageScript(cmdBasename, args, payload.cwd);

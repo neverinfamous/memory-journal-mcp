@@ -50,8 +50,23 @@ function hasUnambiguousRegexMeta(arg: string): boolean {
   return /[()*+?[\]^$|{}]/.test(arg) || arg.includes('|');
 }
 
+function hasNonGlobRegexMeta(arg: string): boolean {
+  return /[()+[\]^$|{}]/.test(arg) || arg.includes('|');
+}
+
 function hasBackslashRegexEscape(arg: string): boolean {
   return /\\[bBwWdDsSnrtv0()[\]{}.*+?^$|\-.]/.test(arg);
+}
+
+// [INTENT]: Recognizes file/directory glob paths (e.g., 'tests/adapters/sqlite/tools/stats*', 'tests/**/*.test.ts', '*.ts') so multi-target rg/grep invocations do not misclassify intermediate glob paths as unquoted multi-word search patterns.
+function isGlobPathArg(arg: string): boolean {
+  if (!arg.includes('*') && !arg.includes('?')) return false;
+  if (hasNonGlobRegexMeta(arg) || hasUriOrNonDriveColon(arg) || /\s/.test(arg)) return false;
+  if (!/^[a-zA-Z]:[/\\]/.test(arg) && !/^\.{1,2}[/\\]/.test(arg) && hasBackslashRegexEscape(arg)) {
+    return false;
+  }
+  if (/(?<![/\\])\.\*/.test(arg)) return false;
+  return arg.includes('/') || arg.includes('\\') || /\.[a-zA-Z0-9_-]{1,6}$/.test(arg);
 }
 
 // [INTENT]: Distinguishes directory targets from patterns and single-file paths in rg/grep interceptors.
@@ -554,6 +569,7 @@ export function handleRipgrepInterception(ctx: ExecutionContext, hasStdin: boole
   const isDir = (arg: string): boolean => isLikelyDirectoryArg(arg, ctx.payload.cwd);
 
   const isPathLike = (arg: string): boolean => {
+    if (isGlobPathArg(arg)) return true;
     if (hasUnambiguousRegexMeta(arg)) return false;
     if (!/^[a-zA-Z]:[/\\]/.test(arg) && !/^\.{1,2}[/\\]/.test(arg) && hasBackslashRegexEscape(arg)) return false;
     return (
@@ -829,6 +845,7 @@ export function handleGrepInterception(ctx: ExecutionContext, hasStdin: boolean)
 
   if (!hasStdin && !hasPatternFlag && positionalArgs.length > 2) {
     const isPathLike = (arg: string): boolean => {
+      if (isGlobPathArg(arg)) return true;
       if (hasUnambiguousRegexMeta(arg)) return false;
       if (!/^[a-zA-Z]:[/\\]/.test(arg) && !/^\.{1,2}[/\\]/.test(arg) && hasBackslashRegexEscape(arg)) return false;
       return (

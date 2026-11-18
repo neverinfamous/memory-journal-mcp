@@ -110,13 +110,22 @@ export function analyzeExitCode1(payload: ExecPayload, code: number, stdout: str
             }
         } else if (isWrapper && new RegExp(commandBoundaryRegex.source + '(npm|pnpm|yarn|bun)\\s+(?:--?\\w+\\s+)*outdated\\b').test(allArgsStr)) {
             isOutdatedInfo = true;
+        } else if (isWrapper && stderr.trim().length === 0 && new RegExp(commandBoundaryRegex.source + 'git(?:\\.exe)?(?:\\s+-[^\\s]+)*\\s+config\\s+(?:--get(?:-all|-regexp|-urlmatch)?|get)\\b').test(allArgsStr)) {
+            isGrepNoMatch = true;
         } else if (['git', 'git.exe'].includes(origCmd)) {
             const origArgs = payload.args || [];
             const diffIndex = origArgs.indexOf('diff');
             const grepIndex = origArgs.indexOf('grep');
+            const configIndex = origArgs.indexOf('config');
             if (diffIndex === 0 || (diffIndex === 1 && origArgs[0].startsWith('-'))) {
                 isDiffFound = true;
             } else if (grepIndex === 0 || (grepIndex === 1 && origArgs[0].startsWith('-'))) {
+                isGrepNoMatch = true;
+            } else if (
+                (configIndex === 0 || (configIndex > 0 && origArgs.slice(0, configIndex).every(a => a.startsWith('-')))) &&
+                origArgs.slice(configIndex + 1).some(a => ['--get', '--get-all', '--get-regexp', '--get-urlmatch', 'get'].includes(a)) &&
+                stderr.trim().length === 0
+            ) {
                 isGrepNoMatch = true;
             }
         }
@@ -168,7 +177,8 @@ export function analyzeExitCode1(payload: ExecPayload, code: number, stdout: str
       } else if (code === 1) {
         if (
           new RegExp(commandBoundaryRegex.source + '(grep|egrep|fgrep|rg)\\b').test(scriptContent) ||
-          new RegExp(commandBoundaryRegex.source + 'git(?:\\.exe)?(?:\\s+-[^\\s]+)*\\s+grep\\b').test(scriptContent)
+          new RegExp(commandBoundaryRegex.source + 'git(?:\\.exe)?(?:\\s+-[^\\s]+)*\\s+grep\\b').test(scriptContent) ||
+          (stderr.trim().length === 0 && new RegExp(commandBoundaryRegex.source + 'git(?:\\.exe)?(?:\\s+-[^\\s]+)*\\s+config\\s+(?:--get(?:-all|-regexp|-urlmatch)?|get)\\b').test(scriptContent))
         ) {
           isGrepNoMatch = true;
         }
