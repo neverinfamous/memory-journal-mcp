@@ -12,7 +12,7 @@
 
 import type { ConvertedFile } from './index.js'
 import type { FrontmatterData } from '../frontmatter.js'
-import { basename, dirname, parse } from 'node:path'
+import { posix } from 'node:path'
 import { addBoundedTag, toBoundedTags } from './utils.js'
 
 export function convertNotion(
@@ -20,6 +20,7 @@ export function convertNotion(
     filename: string,
     defaultEntryType?: string
 ): ConvertedFile {
+    const posixFile = filename.replace(/\\/g, '/')
     const mjMeta: FrontmatterData = {
         source: 'notion',
         entry_type: defaultEntryType ?? 'other',
@@ -29,9 +30,9 @@ export function convertNotion(
 
     // 1. Tag derivation from directory structure
     // Notion nested exports look like: "Engineering a8f9.../Architecture f7e.../My Doc.md"
-    const dir = dirname(filename)
-    if (dir && dir !== '.' && dir !== parse(dir).root) {
-        const parts = dir.split(/[\\/]/)
+    const dir = posix.dirname(posixFile)
+    if (dir && dir !== '.' && dir !== posix.parse(dir).root) {
+        const parts = dir.split('/')
         for (const part of parts) {
             // Remove the Notion 32-char hex hash suffix from folder names if present
             const cleanName = part.trim().replace(/[ \t]{1,64}[a-f0-9]{32}$/i, '').trim()
@@ -61,7 +62,7 @@ export function convertNotion(
         // It's already an H1, good.
     } else {
         // Fallback title from filename (removing the hash)
-        const base = basename(filename).replace(/\.md$/i, '')
+        const base = posix.basename(posixFile).replace(/\.md$/i, '')
         const cleanTitle = base.trim().replace(/[ \t]{1,64}[a-f0-9]{32}$/i, '').trim()
         if (cleanTitle && !processedBody.startsWith('# ')) {
             processedBody = `# ${cleanTitle}\n\n${processedBody}`

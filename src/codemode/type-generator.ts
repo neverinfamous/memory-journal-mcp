@@ -18,7 +18,11 @@ function isSchemaOptional(schema: unknown, seen = new WeakSet()): boolean {
     if (schema instanceof z.ZodLazy) {
         if (seen.has(schema)) return false
         seen.add(schema)
-        return isSchemaOptional(schema.unwrap(), seen)
+        try {
+            return isSchemaOptional(schema.unwrap(), seen)
+        } finally {
+            seen.delete(schema)
+        }
     }
     if (
         schema instanceof z.ZodNullable ||
@@ -44,7 +48,11 @@ export function getZodTypeString(schema: unknown, seen = new WeakSet()): string 
     if (schema instanceof z.ZodLazy) {
         if (seen.has(schema)) return 'unknown'
         seen.add(schema)
-        return getZodTypeString(schema.unwrap(), seen)
+        try {
+            return getZodTypeString(schema.unwrap(), seen)
+        } finally {
+            seen.delete(schema)
+        }
     }
 
     if (schema instanceof z.ZodLiteral) {
@@ -102,7 +110,7 @@ export function getZodTypeString(schema: unknown, seen = new WeakSet()): string 
     if (schema instanceof z.ZodObject) {
         const shape = schema.shape as Record<string, unknown>
         const props = Object.entries(shape).map(([k, v]) => {
-            const isOptional = isSchemaOptional(v, seen)
+            const isOptional = isSchemaOptional(v, new WeakSet())
             return `${k}${isOptional ? '?' : ''}: ${getZodTypeString(v, seen)}`
         })
         return `{ ${props.join(', ')} }`

@@ -171,6 +171,33 @@ export function markUntrustedContent(content: string | undefined | null): string
     return `<untrusted_remote_content>\n${trimmed}\n</untrusted_remote_content>`
 }
 
+const INLINE_ALREADY_FENCED_RE =
+    /^<untrusted_remote_content>[^<>\n]*<\/untrusted_remote_content>$/
+const BLOCK_ALREADY_FENCED_RE =
+    /^<untrusted_remote_content>(?:\n[^<>]*\n|[^<>\n]*)<\/untrusted_remote_content>$/
+const ENCODED_FENCE_TAG_RE = /&lt;\/?untrusted_remote_content/i
+
+/** Return true when `value` already has a single unescaped inline `<untrusted_remote_content>` wrapper. */
+export function isAlreadyInlineFencedUntrustedContent(value: string): boolean {
+    return INLINE_ALREADY_FENCED_RE.test(value) && !ENCODED_FENCE_TAG_RE.test(value)
+}
+
+/** Return true when `value` already has a single unescaped block or inline `<untrusted_remote_content>` wrapper. */
+export function isAlreadyFencedUntrustedContent(value: string): boolean {
+    return BLOCK_ALREADY_FENCED_RE.test(value) && !ENCODED_FENCE_TAG_RE.test(value)
+}
+
+/** Fence non-canonical git refs, branch names, or dynamic map keys containing markup/control chars. */
+export function fenceNonCanonicalRefOrKey(value: string, allowSpaces = false): string {
+    const needsFence = allowSpaces
+        ? /[<>&\r\n]/u.test(value) || /\p{Cc}/u.test(value)
+        : /[<>&\r\n\s]/u.test(value) || /\p{Cc}/u.test(value)
+    if (!needsFence) return value
+    return isAlreadyInlineFencedUntrustedContent(value)
+        ? value
+        : markUntrustedContentInline(value)
+}
+
 /**
  * Utility for formatting remote content natively for inline single-line contexts.
  */

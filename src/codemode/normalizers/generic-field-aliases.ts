@@ -163,46 +163,60 @@ export function extractMetadataContextAliases(
     }
 }
 
+function coerceNonProjectNumericField(
+    obj: Record<string, unknown>,
+    key: string,
+    strVal: string
+): void {
+    if (!/^(?:0|[1-9]\d*)$/.test(strVal)) return
+    const parsed = Number(strVal)
+    if (
+        Number.isSafeInteger(parsed) &&
+        String(parsed) === strVal &&
+        (key === 'offset' || parsed > 0)
+    ) {
+        obj[key] = parsed
+    }
+}
+
 export function coerceNumericStringIds(
     obj: Record<string, unknown>,
 ): { error: Record<string, unknown> } | undefined {
     for (const key of NUMERIC_ID_KEYS) {
         const val = obj[key]
-        if (typeof val === 'string') {
-            const strVal = val.trim()
-            if (strVal === '') continue
-            if (key === 'project_number' || key === 'projectNumber') {
-                const canonical = parseCanonicalPositiveInt(strVal)
-                if (canonical !== undefined) {
-                    obj[key] = canonical
-                    continue
-                }
+        if (typeof val !== 'string') continue
+        const strVal = val.trim()
+        if (strVal === '') continue
+        if (key === 'project_number' || key === 'projectNumber') {
+            const canonical = parseCanonicalPositiveInt(strVal)
+            if (canonical !== undefined) {
+                obj[key] = canonical
+                continue
             }
-            if (/^-?\d+$/.test(strVal)) {
-                if (key === 'project_number' || key === 'projectNumber') {
-                    return validationError(
-                        `project_number '${strVal}' is not a canonical positive integer`,
-                    )
-                }
-                const parsed = parseInt(strVal, 10)
-                if (!isNaN(parsed)) obj[key] = parsed
-            } else if ((key === 'project_number' || key === 'projectNumber') && /^p-?\d+$/i.test(strVal)) {
-                const parsed = parseCanonicalPositiveInt(strVal.replace(/^p-?/i, ''))
-                if (parsed === undefined) {
-                    return validationError(
-                        `project_number '${strVal}' is not a canonical positive integer`,
-                    )
-                }
-                obj[key] = parsed
-            } else if (key === 'project_number' || key === 'projectNumber') {
-                const preserved = obj[key]
-                Reflect.deleteProperty(obj, key)
-                if (applyProjectNameAlias(strVal, obj) !== 'applied') {
-                    obj[key] = preserved
-                    return validationError(
-                        `project_number '${strVal}' is not a number and does not match a registered project`,
-                    )
-                }
+        }
+        if (/^-?\d+$/.test(strVal)) {
+            if (key === 'project_number' || key === 'projectNumber') {
+                return validationError(
+                    `project_number '${strVal}' is not a canonical positive integer`,
+                )
+            }
+            coerceNonProjectNumericField(obj, key, strVal)
+        } else if ((key === 'project_number' || key === 'projectNumber') && /^p-?\d+$/i.test(strVal)) {
+            const parsed = parseCanonicalPositiveInt(strVal.replace(/^p-?/i, ''))
+            if (parsed === undefined) {
+                return validationError(
+                    `project_number '${strVal}' is not a canonical positive integer`,
+                )
+            }
+            obj[key] = parsed
+        } else if (key === 'project_number' || key === 'projectNumber') {
+            const preserved = obj[key]
+            Reflect.deleteProperty(obj, key)
+            if (applyProjectNameAlias(strVal, obj) !== 'applied') {
+                obj[key] = preserved
+                return validationError(
+                    `project_number '${strVal}' is not a number and does not match a registered project`,
+                )
             }
         }
     }

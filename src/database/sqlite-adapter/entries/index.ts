@@ -117,6 +117,7 @@ export class EntriesManager {
             validationStatus?: 'passed' | 'failed' | 'none'
             sessionId?: string | null
             targetWorkspaceId?: string
+            anchors?: { anchorPath: string; anchorType: string; status?: string | undefined }[]
         }
     ): JournalEntry | null {
         return updateEntry(this.sharedContext, id, input)

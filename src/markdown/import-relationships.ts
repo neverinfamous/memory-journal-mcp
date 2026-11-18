@@ -197,3 +197,65 @@ export function applyImportedRelationshipBatch(
         }
     }
 }
+
+/** Validate relationship types and target existence during `dry_run` without mutating DB rows. */
+export function validateDryRunRelationships(
+    db: IDatabaseAdapter,
+    pendingLinks: readonly PendingRelationshipLink[],
+    inBatchMjIds: ReadonlySet<number>,
+    result: ImportedRelationshipBatchResult
+): void {
+    const externalPending: PendingRelationshipLink[] = []
+    for (const pending of pendingLinks) {
+        if (pending.relationships === undefined || pending.relationships.length === 0) continue
+        const filtered = pending.relationships.filter(
+            (rel) => isRelationshipType(rel.type) && !inBatchMjIds.has(rel.target_id)
+        )
+        if (filtered.length > 0) {
+            externalPending.push({ ...pending, relationships: filtered })
+        }
+    }
+    const { prefetchedTargetsByWs } = prefetchBatchRelationshipContext(
+        db,
+        externalPending,
+        new Map()
+    )
+
+    for (const pending of pendingLinks) {
+        if (pending.relationships === undefined || pending.relationships.length === 0) continue
+        const wsKey = pending.workspaceId ?? '*'
+        const targetsMap = prefetchedTargetsByWs.get(wsKey)
+        const rejectedSet = new Set<string>()
+        const missingTargetsSet = new Set<number>()
+        for (const rel of pending.relationships) {
+            if (!isRelationshipType(rel.type)) {
+                rejectedSet.add(rel.type)
+                continue
+            }
+            if (rel.target_id === pending.entryId || inBatchMjIds.has(rel.target_id)) continue
+            const target = targetsMap ? targetsMap.get(rel.target_id) : db.getEntryById(rel.target_id, pending.workspaceId)
+            const wrongProject =
+                pending.projectNumber !== undefined &&
+                target?.projectNumber !== null &&
+                target?.projectNumber !== undefined &&
+                target.projectNumber !== pending.projectNumber
+            if (target === null || target === undefined || wrongProject) {
+                missingTargetsSet.add(rel.target_id)
+            }
+        }
+        for (const targetId of missingTargetsSet) {
+            result.errors.push({
+                file: pending.filename,
+                error: `Relationship target ${String(targetId)} does not exist and was not linked`,
+            })
+            result.success = false
+        }
+        for (const relType of rejectedSet) {
+            result.errors.push({
+                file: pending.filename,
+                error: `Unknown relationship type '${relType}' was not linked`,
+            })
+            result.success = false
+        }
+    }
+}

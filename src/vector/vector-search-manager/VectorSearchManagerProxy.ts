@@ -6,6 +6,7 @@ const ASYNC_VECTOR_METHODS = new Set<PropertyKey>([
     'initialize',
     'generateEmbedding',
     'generateEmbeddings',
+    'generateEmbeddingsSettled',
     'addEntry',
     'addEntries',
     'search',

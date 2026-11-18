@@ -171,6 +171,7 @@ export interface IDatabaseAdapter extends IDatabaseVectorAndAdminAdapter {
             validationStatus?: 'passed' | 'failed' | 'none'
             sessionId?: string | null
             targetWorkspaceId?: string
+            anchors?: { anchorPath: string; anchorType: string; status?: string | undefined }[]
         }
     ): JournalEntry | null
     deleteEntry(id: number, permanent?: boolean, workspaceId?: string): { success: boolean; warning?: string }
@@ -263,6 +264,7 @@ export interface IDatabaseAdapter extends IDatabaseVectorAndAdminAdapter {
             fuzzy_match?: boolean
             auto_correct?: boolean
             workspaceId?: string
+            offset?: number
         }
     ): { entries: JournalEntry[]; nextCursor?: string; degraded?: boolean; highlights?: { id: number; snippet: string }[]; suggestions?: string[]; correctedQuery?: string }
     getSearchFacets(

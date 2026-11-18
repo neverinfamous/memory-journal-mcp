@@ -12,6 +12,7 @@ import {
     type ResourceResult,
 } from '../shared.js'
 import { withPriority, ASSISTANT_FOCUSED } from '../../../utils/resource-annotations.js'
+import { parseCanonicalPositiveInt } from '../../../utils/safe-positive-int.js'
 
 function formatDefaultAgentContext(
     config: ResourceContext['briefingConfig'],
@@ -47,11 +48,11 @@ function handleAgentContextResource(uri: string, context: ResourceContext): Reso
     }
 
     const repo = rawRepo
-    const numericRepo = repo !== undefined ? /^#?(\d+)$/.exec(repo) : null
+    const numericRepo = repo !== undefined ? parseCanonicalPositiveInt(repo) : undefined
     const exactRepo = repo !== undefined ? exactRegistryKey(repo, fallbackRegistry) : undefined
     const numericWorkspace =
-        numericRepo !== null
-            ? uniqueWorkspaceForProject(Number(numericRepo[1]), fallbackRegistry)
+        numericRepo !== undefined
+            ? uniqueWorkspaceForProject(numericRepo, fallbackRegistry)
             : undefined
     const namedRepo = exactRepo ?? numericWorkspace
     // [INVARIANT] An explicit but unknown repo never falls back to cwd/session/first

@@ -115,6 +115,7 @@ export class DatabaseAdapter extends AdapterDelegates implements IDatabaseAdapte
             workspaceId?: string
             targetWorkspaceId?: string
             sessionId?: string | null
+            anchors?: { anchorPath: string; anchorType: string; status?: string | undefined }[]
         }
     ): JournalEntry | null {
         return this.entriesMgr.updateEntry(id, updates)
@@ -263,6 +264,7 @@ export class DatabaseAdapter extends AdapterDelegates implements IDatabaseAdapte
             fuzzy_match?: boolean
             auto_correct?: boolean
             workspaceId?: string
+            offset?: number
         }
     ): {
         entries: JournalEntry[]
@@ -309,7 +311,7 @@ export class DatabaseAdapter extends AdapterDelegates implements IDatabaseAdapte
             prNumber?: number
             workflowRunId?: number
             limit?: number
-            sortBy?: 'timestamp' | 'importance'
+            sortBy?: 'timestamp' | 'importance' | 'blended'
             cursor?: string
             includeArchived?: boolean
             workspaceId?: string

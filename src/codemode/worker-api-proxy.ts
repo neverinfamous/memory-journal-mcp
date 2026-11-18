@@ -210,13 +210,8 @@ function computeGroupNamespaceProperty(
 
 export const LAZY_GROUP_METHOD_NAMES = Symbol('lazyGroupMethodNames')
 
-function createGroupNamespaceProxy(ctx: GroupProxyContext): object {
-    const { group, methodNames, createMethodProxyFn } = ctx
-    const domainMethods = methodNames.filter((m) => m !== 'help' && m !== 'describe')
-    const methodSet = new Set(domainMethods)
-    const resolvedCache = new Map<string, unknown>()
-
-    const helpFn = (): Promise<unknown> => Promise.resolve({ group, methods: methodNames })
+function createGroupHelpFn(group: string, frozenMethods: readonly string[]): () => Promise<unknown> {
+    const helpFn = (): Promise<unknown> => Promise.resolve({ group, methods: [...frozenMethods] })
     attachMethodIntrospection(
         helpFn,
         group,
@@ -224,6 +219,16 @@ function createGroupNamespaceProxy(ctx: GroupProxyContext): object {
         () => '() => Promise<{ group: string, methods: string[] }>',
         `List available methods in group '${group}'.`
     )
+    return helpFn
+}
+
+function createGroupNamespaceProxy(ctx: GroupProxyContext): object {
+    const { group, methodNames, createMethodProxyFn } = ctx
+    const frozenMethods = Object.isFrozen(methodNames) ? methodNames : Object.freeze([...methodNames])
+    const domainMethods = frozenMethods.filter((m) => m !== 'help' && m !== 'describe')
+    const methodSet = new Set(domainMethods)
+    const resolvedCache = new Map<string, unknown>()
+    const helpFn = createGroupHelpFn(group, frozenMethods)
 
     const groupCallable = function (): void {
         /* callable namespace target */
@@ -231,7 +236,7 @@ function createGroupNamespaceProxy(ctx: GroupProxyContext): object {
     Object.defineProperty(groupCallable, 'help', { value: helpFn, enumerable: false, configurable: true, writable: true })
     Object.defineProperty(groupCallable, 'describe', { value: helpFn, enumerable: false, configurable: true, writable: true })
     Object.defineProperty(groupCallable, LAZY_GROUP_METHOD_NAMES, {
-        value: methodNames,
+        value: frozenMethods,
         enumerable: false,
         configurable: false,
     })
@@ -262,7 +267,7 @@ function createGroupNamespaceProxy(ctx: GroupProxyContext): object {
                 Promise.resolve(
                     wrapResult({
                         success: false,
-                        error: `Group '${group}' is a tool namespace, not a function. Available methods in '${group}': ${methodNames.join(', ')}.`,
+                        error: `Group '${group}' is a tool namespace, not a function. Available methods in '${group}': ${frozenMethods.join(', ')}.`,
                         code: 'VALIDATION_ERROR',
                         category: 'validation',
                         recoverable: true,
@@ -272,7 +277,7 @@ function createGroupNamespaceProxy(ctx: GroupProxyContext): object {
             )
         },
         get(target: object, prop: string | symbol): unknown {
-            if (prop === LAZY_GROUP_METHOD_NAMES) return methodNames
+            if (prop === LAZY_GROUP_METHOD_NAMES) return frozenMethods
             if (typeof prop === 'symbol') return undefined
             const cached = resolvedCache.get(prop)
             if (cached !== undefined || resolvedCache.has(prop)) return cached
@@ -283,6 +288,8 @@ function createGroupNamespaceProxy(ctx: GroupProxyContext): object {
             }
             return resolveGroupNamespaceProperty(ctx, target, prop, resolvedCache)
         },
+        isExtensible: () => true,
+        preventExtensions: () => false,
         set: () => false,
         defineProperty: () => false,
         deleteProperty: () => false,

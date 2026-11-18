@@ -212,6 +212,9 @@ export async function searchSimilarEntriesById(
     if (!sourceEntry) {
         throw new Error(`Entry ${entryId} not found`)
     }
+    if (targetWs !== '*' && (sourceEntry.workspaceId ?? 'default') !== targetWs) {
+        throw new Error(`Entry ${entryId} not found`)
+    }
     if (projectNumber !== undefined && sourceEntry.projectNumber !== projectNumber) {
         throw new Error(`Entry ${entryId} not found`)
     }

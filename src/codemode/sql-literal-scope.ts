@@ -260,7 +260,12 @@ export function scopeFromInsertLiterals(cleanSql: string): Record<string, unknow
                     (raw.startsWith('"') && raw.endsWith('"')))
                     ? unquoteSqlLiteral(raw).trim()
                     : raw.trim()
-            if (/^\d+$/.test(unquoted)) scope['project_number'] = Number(unquoted)
+            if (/^[1-9]\d*$/.test(unquoted)) {
+                const parsed = Number(unquoted)
+                if (Number.isSafeInteger(parsed) && String(parsed) === unquoted) {
+                    scope['project_number'] = parsed
+                }
+            }
         }
     }
     return scope
@@ -393,11 +398,14 @@ export function scopeFromSqlLiterals(cleanSql: string): Record<string, unknown> 
     for (const rawClause of splitTopLevelSqlAndClauses(whereClause)) {
         const clause = stripBalancedOuterParens(rawClause)
         const projMatch =
-            /^(?:[`"']?[a-zA-Z_][\w]*[`"']?\.)?[`"']?(?:project_number|project_id)[`"']?\s*=\s*['"]?(\d+)['"]?$/i.exec(
+            /^(?:[`"']?[a-zA-Z_][\w]*[`"']?\.)?[`"']?(?:project_number|project_id)[`"']?\s*=\s*['"]?([1-9]\d*)['"]?$/i.exec(
                 clause
             )
         if (projMatch?.[1] !== undefined && scope['project_number'] === undefined) {
-            scope['project_number'] = parseInt(projMatch[1], 10)
+            const parsed = Number(projMatch[1])
+            if (Number.isSafeInteger(parsed) && String(parsed) === projMatch[1]) {
+                scope['project_number'] = parsed
+            }
             continue
         }
         const wsMatch =

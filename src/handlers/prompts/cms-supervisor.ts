@@ -260,6 +260,7 @@ export function getCmsSupervisorPromptDefinitions(): InternalPromptDef[] {
             description:
                 'REM Meta-Cognitive Supervisor & Self-Adaptation workflow (CMS-04). Audits recent NREM consolidation (CMS-02) mutations and soft-deletions, mines cross-run telemetry and unresolved blockers, and enforces the Dirty-Tree Conditional Single-Pass Validation Gate.',
             icons: [ICON_PROMPT],
+            capabilities: { requiresAdminScope: true },
             arguments: [
                 {
                     name: 'lookbackHours',

@@ -255,6 +255,24 @@ function buildSecurityErrorResult(error: string): Record<string, unknown> {
     return { success: false, error, project_id: undefined, executionTimeMs: 0 }
 }
 
+function resolveCodeModeRunOptions(input: ExecuteCodeInput): {
+    sessionId: string | undefined
+    timeoutMs: number | undefined
+    readonlyRequested: boolean
+    isDryRun: boolean
+    useTestDb: boolean
+} {
+    const rawSession = input.session_id ?? input.sessionId
+    const sessionId = typeof rawSession === 'string' && rawSession.trim() !== '' ? rawSession.trim() : undefined
+    return {
+        sessionId,
+        timeoutMs: input.timeout ?? input.timeout_ms ?? input.timeoutMs,
+        readonlyRequested: input.readonly === true || input.read_only === true || input.readOnly === true,
+        isDryRun: input.dry_run || input.dryRun === true,
+        useTestDb: input.use_test_db === true || input.useTestDb === true,
+    }
+}
+
 async function executeCodeModeHandler(
     context: ToolContext,
     securityManager: ReturnType<typeof getSecurityManager>,
@@ -273,8 +291,7 @@ async function executeCodeModeHandler(
         if (sizeErr !== null) return buildSecurityErrorResult(sizeErr)
 
         const input: ExecuteCodeInput = ExecuteCodeSchema.parse(params)
-        const sessionId =
-            typeof input.session_id === 'string' && input.session_id.trim() !== '' ? input.session_id.trim() : undefined
+        const { sessionId, timeoutMs, readonlyRequested, isDryRun, useTestDb } = resolveCodeModeRunOptions(input)
         const healingEnabled = context.config?.agentHealing !== false
         const payloadRes = resolveExecutionPayload(input, params, healingEnabled, start)
         if ('earlyReturn' in payloadRes) return payloadRes.earlyReturn
@@ -287,9 +304,7 @@ async function executeCodeModeHandler(
         if ('errorResponse' in sessionRes) return sessionRes.errorResponse
         const { sessionContext, projectId, numericProjectId, workspaceId, explicitWorkspace } = sessionRes
 
-        const readonlyRequested = input.readonly === true || input.read_only === true || input.readOnly === true
         const { tools, allEnabledTools, isSandboxReadonly } = filterToolsForSandbox(sessionContext, context, readonlyRequested)
-        const isDryRun = input.dry_run || input.dryRun === true
         let mutatedDuringRun = false
         const secureDispatcher = createSecureDispatcher({
             tools,
@@ -310,8 +325,8 @@ async function executeCodeModeHandler(
         const execResult = await runSandboxWithAutonomousRecovery({
             pool: getSandboxPool(), securityManager, executionCode, originalCode: input.code,
             apiBindings: journalApi.createSandboxBindings(sessionContext.progress), schemas,
-            timeoutMs: input.timeout ?? input.timeout_ms, userContext, isSandboxReadonly,
-            useTestDb: input.use_test_db === true || input.useTestDb === true,
+            timeoutMs, userContext, isSandboxReadonly,
+            useTestDb,
             sessionId,
             requestedMaxResultSize, healingEnabled,
             getMutated: () => mutatedDuringRun, resetMutated: () => { mutatedDuringRun = false },

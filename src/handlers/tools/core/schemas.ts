@@ -351,18 +351,12 @@ export const GetRecentEntriesOutputSchema = z
     .extend(ErrorFieldsMixin.shape)
 
 export const ListTagsSchema = z.object({
-    project_number: z.preprocess(
-        (v: unknown) => (v === null || v === '' ? undefined : v),
-        z.coerce.number().int().positive().optional()
-    ),
+    project_number: StrictProjectNumberSchema.optional(),
     workspace_id: z.string().optional(),
 })
 
 export const ListTagsSchemaMcp = z.object({
-    project_number: z.preprocess(
-        (v: unknown) => (v === null || v === '' ? undefined : v),
-        z.coerce.number().int().positive().optional()
-    ),
+    project_number: relaxedNumber().optional(),
     workspace_id: z.string().optional(),
 })
 

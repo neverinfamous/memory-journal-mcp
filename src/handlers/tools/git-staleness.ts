@@ -16,6 +16,7 @@ import {
     resolveWorkspaceId,
 } from '../../utils/workspace-resolver.js'
 import { StrictProjectNumberSchema } from './schemas.js'
+import { parseCanonicalPositiveInt } from '../../utils/safe-positive-int.js'
 
 export { resolveGitWorkingDir, type GitWorkingDirInput } from './git-workdir.js'
 
@@ -237,6 +238,44 @@ function collectStalenessTargetsForWorkspace(
     return recent.map((r) => ({ id: r.id, timestamp: r.timestamp }))
 }
 
+async function awaitAllSettledOrThrow<T>(tasks: readonly Promise<T>[]): Promise<T[]> {
+    const settled = await Promise.allSettled(tasks)
+    const values: T[] = []
+    for (const outcome of settled) {
+        if (outcome.status === 'rejected') {
+            throw outcome.reason instanceof Error
+                ? outcome.reason
+                : new Error(String(outcome.reason))
+        }
+        values.push(outcome.value)
+    }
+    return values
+}
+
+async function runAnchorChunkSettled(
+    db: IDatabaseAdapter,
+    chunk: readonly {
+        anchor: { id?: number; anchorPath: string; status: AnchorStatus }
+        entryTimestamp: string
+    }[],
+    registryPath: string,
+    cachedCountCommits: (anchorPath: string, since: string) => Promise<number>,
+    wsId: string
+): Promise<StalenessCheckRow[]> {
+    return awaitAllSettledOrThrow(
+        chunk.map(({ anchor, entryTimestamp }) =>
+            evaluateAnchorStaleness(
+                db,
+                anchor,
+                entryTimestamp,
+                registryPath,
+                cachedCountCommits,
+                wsId
+            )
+        )
+    )
+}
+
 /** Evaluate all anchors in a single workspace and report whether it was skipped for missing a path. */
 export async function evaluateWorkspaceAnchors(options: {
     db: IDatabaseAdapter
@@ -301,26 +340,21 @@ export async function evaluateWorkspaceAnchors(options: {
     const rows: StalenessCheckRow[] = []
     const STALENESS_CONCURRENCY = 8
     for (let i = 0; i < anchorJobs.length; i += STALENESS_CONCURRENCY) {
-        const chunk = anchorJobs.slice(i, i + STALENESS_CONCURRENCY)
-        const chunkRows = await Promise.all(
-            chunk.map(({ anchor, entryTimestamp }) =>
-                evaluateAnchorStaleness(
-                    db,
-                    anchor,
-                    entryTimestamp,
-                    registryPath,
-                    cachedCountCommits,
-                    wsId
-                )
-            )
+        rows.push(
+            ...(await runAnchorChunkSettled(
+                db,
+                anchorJobs.slice(i, i + STALENESS_CONCURRENCY),
+                registryPath,
+                cachedCountCommits,
+                wsId
+            ))
         )
-        rows.push(...chunkRows)
     }
     return { rows, skipped: false }
 }
 
 const coercedPositiveInt = z.preprocess(
-    (v) => (typeof v === 'string' && /^\d+$/.test(v.trim()) ? Number(v.trim()) : v),
+    (v) => (typeof v === 'string' ? (parseCanonicalPositiveInt(v) ?? v) : v),
     z.number().int().positive()
 )
 
@@ -392,7 +426,7 @@ export async function runCheckEntryStaleness(
 
         const maxRecentEntries = targetWorkspaces.length > 1 ? 8 : 20
         const maxCommitsPerAnchor = targetWorkspaces.length > 1 ? 5 : 25
-        const outcomes = await Promise.all(
+        const outcomes = await awaitAllSettledOrThrow(
             targetWorkspaces.map((wsId) =>
                 evaluateWorkspaceAnchors({
                     db: context.db,

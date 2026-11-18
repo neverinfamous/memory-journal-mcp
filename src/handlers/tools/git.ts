@@ -2,6 +2,7 @@ import { z } from 'zod'
 import type { ToolDefinition, ToolContext } from '../../types/index.js'
 import { formatHandlerError } from '../../utils/error-helpers.js'
 import { sendProgress } from '../../utils/progress-utils.js'
+import { fenceNonCanonicalRefOrKey } from '../../utils/security-utils.js'
 import { resolveGitWorkingDir, runCheckEntryStaleness } from './git-staleness.js'
 import { ErrorFieldsMixin } from './error-fields-mixin.js'
 import { relaxedNumber } from './schemas.js'
@@ -183,7 +184,8 @@ export function getGitTools(context: ToolContext): ToolDefinition[] {
                             analysis.byType[c.type] = (analysis.byType[c.type] ?? 0) + 1
                         }
                         if (c.author) {
-                            analysis.byAuthor[c.author] = (analysis.byAuthor[c.author] ?? 0) + 1
+                            const authorKey = fenceNonCanonicalRefOrKey(c.author, true)
+                            analysis.byAuthor[authorKey] = (analysis.byAuthor[authorKey] ?? 0) + 1
                         }
                         if (c.isBreaking) {
                             analysis.breakingCount++
@@ -199,7 +201,8 @@ export function getGitTools(context: ToolContext): ToolDefinition[] {
 
                         const categories = c.metadata?.category ?? []
                         for (const cat of categories) {
-                            analysis.byCategory[cat] = (analysis.byCategory[cat] ?? 0) + 1
+                            const catKey = fenceNonCanonicalRefOrKey(cat, true)
+                            analysis.byCategory[catKey] = (analysis.byCategory[catKey] ?? 0) + 1
                         }
                     }
 

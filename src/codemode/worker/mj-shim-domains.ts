@@ -392,6 +392,8 @@ export function createSearchDomainProxy(target: Record<string, unknown>): unknow
                 if (p in targetFn) return Reflect.get(targetFn, p, receiver) as unknown
                 return Reflect.get(searchGroup, p, receiver) as unknown
             },
+            isExtensible: () => true,
+            preventExtensions: () => false,
         })
     }
     return searchGroup

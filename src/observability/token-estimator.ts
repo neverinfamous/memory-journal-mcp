@@ -125,6 +125,7 @@ export function estimatePayloadTokens(payload: unknown): number {
 export function invalidateSerializedPayload(payload: unknown): void {
     if (typeof payload === 'object' && payload !== null) {
         serializedPayloadCache.delete(payload)
+        payloadTokenCache.delete(payload)
     }
 }
 
@@ -179,7 +180,10 @@ export function injectTokenEstimate(payload: unknown): unknown {
         if (cachedRawJson !== undefined && cachedRawJson.startsWith('{') && cachedRawJson.endsWith('}')) {
             const cachedEst = payloadTokenCache.get(payload) ?? estimateTokens(cachedRawJson, 'json')
             const enriched = { ...obj, _meta: { tokenEstimate: cachedEst } }
-            const finalJson = `${cachedRawJson.slice(0, -1)},"_meta":{"tokenEstimate":${String(cachedEst)}}}`
+            const finalJson =
+                cachedRawJson === '{}'
+                    ? `{"_meta":{"tokenEstimate":${String(cachedEst)}}}`
+                    : `${cachedRawJson.slice(0, -1)},"_meta":{"tokenEstimate":${String(cachedEst)}}}`
             payloadTokenCache.set(enriched, cachedEst)
             serializedPayloadCache.set(enriched, finalJson)
             return enriched

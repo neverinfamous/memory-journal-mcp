@@ -9,6 +9,21 @@ import { dumpConfigAndExit } from '../dump-config.js'
 
 export const serveSchema = serverOptionsSchema
 
+function applyValidatedLogLevel(logLevel: string, configErrors: string[]): void {
+    if (
+        logLevel !== 'debug' &&
+        logLevel !== 'info' &&
+        logLevel !== 'warning' &&
+        logLevel !== 'error'
+    ) {
+        configErrors.push(
+            `Invalid log level '${logLevel}': expected one of debug, info, warning, error.`
+        )
+        return
+    }
+    logger.setLevel(logLevel)
+}
+
 export async function serveAction(options: z.infer<typeof serveSchema>, command: Command): Promise<void> {
     let resolver: ConfigResolver
     const configPath = options.config ?? process.env['MEMORY_JOURNAL_CONFIG']
@@ -29,9 +44,9 @@ export async function serveAction(options: z.infer<typeof serveSchema>, command:
     } catch (e) {
         configErrors.push(e instanceof Error ? e.message : String(e))
     }
-    
+
     if (options.dumpConfig !== true) {
-        logger.setLevel(logLevel as 'debug' | 'info' | 'warning' | 'error')
+        applyValidatedLogLevel(logLevel, configErrors)
     }
 
     // Validate against default placeholder secrets

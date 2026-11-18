@@ -28,10 +28,17 @@ export function batchValidationError(
 }
 
 function parseNumericBatchId(val: unknown): number | undefined {
-    if (typeof val === 'number' && Number.isInteger(val) && val > 0) return val
+    if (typeof val === 'number') {
+        return Number.isSafeInteger(val) && val > 0 ? val : undefined
+    }
     if (typeof val === 'string') {
-        const trimmed = val.trim()
-        if (/^#?[1-9]\d*$/.test(trimmed)) return parseInt(trimmed.replace(/^#/, ''), 10)
+        const trimmed = val.trim().replace(/^#/, '')
+        if (/^[1-9]\d*$/.test(trimmed)) {
+            const parsed = Number(trimmed)
+            if (Number.isSafeInteger(parsed) && parsed > 0 && String(parsed) === trimmed) {
+                return parsed
+            }
+        }
     }
     return undefined
 }

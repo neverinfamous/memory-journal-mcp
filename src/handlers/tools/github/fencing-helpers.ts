@@ -1,7 +1,10 @@
-import { markUntrustedContent, markUntrustedContentInline } from '../../../utils/security-utils.js'
+import {
+    isAlreadyFencedUntrustedContent,
+    isAlreadyInlineFencedUntrustedContent,
+    markUntrustedContent,
+    markUntrustedContentInline,
+} from '../../../utils/security-utils.js'
 
-const ALREADY_FENCED_RE =
-    /^<untrusted_remote_content>(?:\n[\s\S]*\n|[^\n]*)<\/untrusted_remote_content>$/
 const SAFE_GH_HANDLE_RE = /^[A-Za-z0-9_.-]{1,64}(?:\[bot\])?$/
 
 /** Undo egress fencing when a cached title is written back into a journal entry. */
@@ -12,13 +15,15 @@ export function unwrapFencedRemoteText(value: string): string {
 
 /** Idempotently fence a single-line remote GitHub string. */
 export function ensureInlineFenced(value: string): string {
-    return ALREADY_FENCED_RE.test(value) ? value : markUntrustedContentInline(value)
+    return isAlreadyInlineFencedUntrustedContent(value)
+        ? value
+        : markUntrustedContentInline(value)
 }
 
 /** Idempotently fence a multi-line remote GitHub body string. */
 export function ensureBlockFenced(value: string | null | undefined): string {
     if (value === undefined || value === null || value === '') return ''
-    return ALREADY_FENCED_RE.test(value) ? value : markUntrustedContent(value)
+    return isAlreadyFencedUntrustedContent(value) ? value : markUntrustedContent(value)
 }
 
 /** Keep plain GitHub handles intact while fencing injected or non-canonical login strings. */

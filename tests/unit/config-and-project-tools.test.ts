@@ -237,13 +237,13 @@ describe('ConfigManager & Configuration Tools', () => {
             expect(parsed.briefing_entries).toBe(7)
         })
 
-        it('should strip unparseable string project_number in preprocessor', () => {
-            const parsed = updateConfigurationSchema.parse({
-                project_number: 'invalid-num',
-                briefing_include_team: false,
-            })
-            expect(parsed.project_number).toBeUndefined()
-            expect(parsed.briefing_include_team).toBe(false)
+        it('should reject unparseable string project_number in preprocessor', () => {
+            expect(() =>
+                updateConfigurationSchema.parse({
+                    project_number: 'invalid-num',
+                    briefing_include_team: false,
+                })
+            ).toThrow()
         })
 
         it('should throw when Runtime or ConfigManager is not available', () => {

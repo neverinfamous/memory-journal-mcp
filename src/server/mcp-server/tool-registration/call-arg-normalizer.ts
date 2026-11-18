@@ -94,6 +94,8 @@ function resolveOpaqueTopLevelKeys(toolName: string | undefined): ReadonlySet<st
     return undefined
 }
 
+const OPAQUE_ANY_DEPTH_KEYS = new Set(['auto_context', 'prompt'])
+
 function needsSnakeCaseNormalization(
     value: unknown,
     depth: number,
@@ -108,7 +110,12 @@ function needsSnakeCaseNormalization(
         if (FORBIDDEN_KEYS.has(k)) return true
         const snakeKey = toSnakeKey(k)
         if (snakeKey !== k) return true
-        if (depth === 0 && opaqueTopLevelKeys?.has(snakeKey) === true) continue
+        if (
+            OPAQUE_ANY_DEPTH_KEYS.has(snakeKey) ||
+            (depth === 0 && opaqueTopLevelKeys?.has(snakeKey) === true)
+        ) {
+            continue
+        }
         if (needsSnakeCaseNormalization(v, depth + 1)) return true
     }
     return false
@@ -146,7 +153,10 @@ export function deepCamelToSnake(
         ) {
             continue
         }
-        if (depth === 0 && opaqueTopLevelKeys?.has(snakeKey) === true) {
+        if (
+            OPAQUE_ANY_DEPTH_KEYS.has(snakeKey) ||
+            (depth === 0 && opaqueTopLevelKeys?.has(snakeKey) === true)
+        ) {
             newObj[snakeKey] = v
             continue
         }

@@ -12,7 +12,7 @@
 
 import type { ConvertedFile } from './index.js'
 import type { FrontmatterData } from '../frontmatter.js'
-import { basename } from 'node:path'
+import { posix } from 'node:path'
 import { parseYamlFrontmatter } from './yaml-parser.js'
 import {
     addBoundedTag,
@@ -28,7 +28,7 @@ export function convertObsidian(
     defaultEntryType?: string
 ): ConvertedFile {
     const { metadata: yamlMeta, body } = parseYamlFrontmatter(content)
-    const baseFilename = basename(filename)
+    const baseFilename = posix.basename(filename.replace(/\\/g, '/'))
     
     const mjMeta: FrontmatterData = {
         source: 'obsidian',

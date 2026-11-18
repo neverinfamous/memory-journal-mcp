@@ -16,17 +16,15 @@ import {
     uniqueWorkspaceForProject,
 } from '../../utils/write-scope.js'
 import type { BriefingConfig } from '../resources/shared.js'
+import { parseCanonicalPositiveInt } from '../../utils/safe-positive-int.js'
 
 export function resolveRegistryMatchForTarget(
     registry: NonNullable<BriefingConfig['projectRegistry']>,
     cleanTarget: string
 ): string | undefined {
     if (/^#?\d{1,10}$/.test(cleanTarget)) {
-        const num = Number(cleanTarget.replace(/^#/, ''))
-        const matchByNum =
-            Number.isSafeInteger(num) && num > 0
-                ? uniqueWorkspaceForProject(num, registry)
-                : undefined
+        const num = parseCanonicalPositiveInt(cleanTarget)
+        const matchByNum = num !== undefined ? uniqueWorkspaceForProject(num, registry) : undefined
         if (matchByNum !== undefined) return matchByNum
     }
     const exactMatch = exactRegistryKey(cleanTarget, registry)
@@ -86,11 +84,8 @@ function preprocessProjectNumber(val: unknown): unknown {
     if (typeof val !== 'string') return val
     const trimmed = val.trim()
     if (trimmed === '') return undefined
-    const match = /^#?(\d+)$/.exec(trimmed)
-    if (match?.[1] !== undefined) {
-        return Number(match[1])
-    }
-    return val
+    const parsed = parseCanonicalPositiveInt(trimmed)
+    return parsed ?? val
 }
 
 export const planReviewArgsSchema = z.object({

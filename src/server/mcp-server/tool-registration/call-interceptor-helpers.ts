@@ -18,6 +18,11 @@ import { TOOL_GROUPS } from '../../../filtering/tool-constants.js'
 import { logAgentIssue } from '../../../utils/issue-logger.js'
 import { logger } from '../../../utils/logger.js'
 import { resolveMcpCreateWorkspaceScope } from './create-scope-interceptor.js'
+import { isForbiddenProjectKey } from '../../../utils/project-registry-guards.js'
+import {
+    parseCanonicalPositiveInt,
+    parsePositiveProjectNumber,
+} from '../../../utils/safe-positive-int.js'
 
 export { resolveMcpCreateWorkspaceScope }
 
@@ -194,13 +199,15 @@ export function resolveSingleProjectFromRegistry(
                 ? toolArgs['repo']
                 : undefined
     const numArg =
-        typeof toolArgs['project_number'] === 'number'
-            ? toolArgs['project_number']
-            : typeof toolArgs['id'] === 'number'
-              ? toolArgs['id']
-              : undefined
+        parsePositiveProjectNumber(toolArgs['project_number']) ??
+        parsePositiveProjectNumber(toolArgs['id'])
 
-    if (nameArg !== undefined && Object.hasOwn(reg, nameArg) && reg[nameArg] !== undefined) {
+    if (
+        nameArg !== undefined &&
+        !isForbiddenProjectKey(nameArg) &&
+        Object.hasOwn(reg, nameArg) &&
+        reg[nameArg] !== undefined
+    ) {
         const info = reg[nameArg]
         return {
             success: true,
@@ -216,7 +223,7 @@ export function resolveSingleProjectFromRegistry(
 
     const numericTarget =
         numArg ??
-        (nameArg !== undefined && !Number.isNaN(Number(nameArg)) ? Number(nameArg) : undefined)
+        (nameArg !== undefined ? parseCanonicalPositiveInt(nameArg) : undefined)
     if (numericTarget !== undefined) {
         const matches = Object.entries(reg).filter(
             ([, pData]) => pData.project_number === numericTarget

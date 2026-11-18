@@ -9,7 +9,11 @@ const SENSITIVE_KEY_RE =
 const SENSITIVE_CLI_FLAG_RE =
     /^--(?:auth-token|report-webhook-auth|report-webhook-url|github-token|oauth-.*secret|key|password|secret|token)(?:=(.*))?$/i
 
-function sanitizeCliArgList(args: unknown[], depth = 0): unknown[] {
+function sanitizeCliArgList(
+    args: unknown[],
+    depth: number,
+    seen: WeakSet<WeakKey>
+): unknown[] {
     const out: unknown[] = []
     let redactNext = false
     for (const item of args) {
@@ -33,7 +37,7 @@ function sanitizeCliArgList(args: unknown[], depth = 0): unknown[] {
             out.push(truncateIssueString(sanitizeErrorForLogging(item)))
             continue
         }
-        out.push(sanitizeIssueInput(item, depth + 1))
+        out.push(sanitizeIssueInput(item, depth + 1, seen))
     }
     return out
 }
@@ -45,23 +49,34 @@ function truncateIssueString(val: string): string {
     return `${val.slice(0, MAX_ISSUE_STRING_LENGTH)}...[truncated]`
 }
 
-export function sanitizeIssueInput(value: unknown, depth = 0): unknown {
-    if (depth > 8 || value === null || value === undefined) return value
+export function sanitizeIssueInput(
+    value: unknown,
+    depth = 0,
+    seen = new WeakSet()
+): unknown {
+    if (value === null || value === undefined) return value
+    if (depth > 8) return '[Truncated]'
     if (typeof value === 'string') return truncateIssueString(sanitizeErrorForLogging(value))
     if (typeof value !== 'object') return value
-    if (Array.isArray(value)) {
-        return sanitizeCliArgList(value, depth)
-    }
-    const clean: Record<string, unknown> = {}
-    for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
-        if (k === '__proto__' || k === 'constructor' || k === 'prototype') continue
-        if (SENSITIVE_KEY_RE.test(k)) {
-            clean[k] = '[REDACTED]'
-        } else {
-            clean[k] = sanitizeIssueInput(v, depth + 1)
+    if (seen.has(value)) return '[Circular]'
+    seen.add(value)
+    try {
+        if (Array.isArray(value)) {
+            return sanitizeCliArgList(value, depth, seen)
         }
+        const clean: Record<string, unknown> = {}
+        for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
+            if (k === '__proto__' || k === 'constructor' || k === 'prototype') continue
+            if (SENSITIVE_KEY_RE.test(k)) {
+                clean[k] = '[REDACTED]'
+            } else {
+                clean[k] = sanitizeIssueInput(v, depth + 1, seen)
+            }
+        }
+        return clean
+    } finally {
+        seen.delete(value)
     }
-    return clean
 }
 
 export interface AgentIssue {

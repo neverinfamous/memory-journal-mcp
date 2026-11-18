@@ -41,6 +41,7 @@ export const CrossTeamSearchSchema = z.preprocess(
         .optional()
         .describe('Specific team DB labels to search. Omit to search all configured DBs.'),
     tags: z.array(z.string()).optional(),
+    exclude_tags: z.array(z.string()).optional(),
     project_number: StrictProjectNumberSchema.optional(),
     workspace_id: z.string().optional().describe('Optional workspace isolation identifier (e.g. "alpha"). Do not use numeric project IDs or "workspace" as the key.'),
     entry_type: z.enum(ENTRY_TYPES).optional(),
@@ -67,6 +68,7 @@ export const CrossTeamSearchSchemaMcp = z.preprocess(
                 .optional()
                 .describe('Specific team DB labels to search. Omit to search all configured DBs.'),
             tags: z.array(z.string()).optional(),
+            exclude_tags: z.array(z.string()).optional(),
             project_number: relaxedNumber().optional(),
             workspace_id: z
                 .string()
@@ -238,6 +240,7 @@ async function querySingleTeamDb(
     const results = adapter.searchEntries(args.query, {
         limit: perDbLimit,
         tags: args.tags,
+        ...(args.exclude_tags !== undefined ? { excludeTags: args.exclude_tags } : {}),
         entryType: args.entry_type,
         startDate: args.start_date,
         endDate: args.end_date,

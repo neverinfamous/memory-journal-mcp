@@ -178,7 +178,7 @@ async function runSemanticSearchQueries(
         effectiveQuery !== ''
             ? collectTeamSearchEntries(effectiveQuery, teamDb, teamVectorManager, {
                   ...filterOptions,
-                  limit: input.limit,
+                  limit: Math.min(internalLimit, 500),
                   similarityThreshold: threshold,
               })
             : Promise.resolve<EntryWithSource[]>([])

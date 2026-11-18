@@ -1,5 +1,10 @@
 import { ValidationError } from '../../types/errors.js'
-import { markUntrustedContent, markUntrustedContentInline } from '../../utils/security-utils.js'
+import {
+    isAlreadyFencedUntrustedContent,
+    isAlreadyInlineFencedUntrustedContent,
+    markUntrustedContent,
+    markUntrustedContentInline,
+} from '../../utils/security-utils.js'
 import {
     RECORD_SEPARATOR,
     FIELD_SEPARATOR,
@@ -23,15 +28,14 @@ export interface FetchCommitsInput {
     summary?: boolean
 }
 
-const ALREADY_FENCED_RE =
-    /^<untrusted_remote_content>(?:\n[\s\S]*\n|[^\n]*)<\/untrusted_remote_content>$/
-
 function ensureInlineFenced(value: string): string {
-    return ALREADY_FENCED_RE.test(value) ? value : markUntrustedContentInline(value)
+    return isAlreadyInlineFencedUntrustedContent(value)
+        ? value
+        : markUntrustedContentInline(value)
 }
 
 function ensureBlockFenced(value: string): string {
-    return ALREADY_FENCED_RE.test(value) ? value : markUntrustedContent(value)
+    return isAlreadyFencedUntrustedContent(value) ? value : markUntrustedContent(value)
 }
 
 function applyCommitFilterSort(commits: CommitEntry[], input: FetchCommitsInput): CommitEntry[] {

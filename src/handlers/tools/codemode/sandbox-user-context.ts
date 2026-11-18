@@ -62,9 +62,10 @@ export function buildSandboxUserContext(
     const resolvedProjectNumber =
         numericProjectId ?? (typeof projectId === 'number' ? projectId : undefined)
     const sessionFromUser = getNonEmptyString(userContext, {}, ['session_id', 'sessionId'])
+    const rawSessionId = input.session_id ?? input.sessionId
     const resolvedSessionId =
-        typeof input.session_id === 'string' && input.session_id.trim() !== ''
-            ? input.session_id.trim()
+        typeof rawSessionId === 'string' && rawSessionId.trim() !== ''
+            ? rawSessionId.trim()
             : (sessionFromUser ?? getRequestContext()?.sessionId ?? 'session-default')
     const resolvedWorkspaceId = workspaceId ?? sessionContext.config?.defaultWorkspaceId
 

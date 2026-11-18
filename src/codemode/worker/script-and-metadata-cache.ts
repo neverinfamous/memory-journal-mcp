@@ -65,8 +65,29 @@ export function formatVmErrorResult(
 const MAX_COMPILED_SCRIPTS = 64
 const compiledScriptCache = new Map<string, vm.Script>()
 
-let cachedMethodList: Record<string, string[]> = {}
+let cachedMethodList: Record<string, string[]> = Object.freeze({})
 let cachedSchemaList: Record<string, Record<string, string>> | undefined
+
+function freezeMethodList(raw: Record<string, string[]>): Record<string, string[]> {
+    const frozen: Record<string, string[]> = {}
+    for (const [group, methods] of Object.entries(raw)) {
+        const copy: string[] = Array.isArray(methods) ? [...methods] : []
+        Object.freeze(copy)
+        frozen[group] = copy
+    }
+    return Object.freeze(frozen)
+}
+
+function freezeSchemaList(
+    raw: Record<string, Record<string, string>> | undefined
+): Record<string, Record<string, string>> | undefined {
+    if (raw === undefined) return undefined
+    const frozen: Record<string, Record<string, string>> = {}
+    for (const [group, schemas] of Object.entries(raw)) {
+        frozen[group] = Object.freeze({ ...schemas })
+    }
+    return Object.freeze(frozen)
+}
 
 export interface WorkerExecuteMetadataMsg {
     methodList?: Record<string, string[]>
@@ -98,18 +119,18 @@ export function getOrCompileVmScript(wrappedSource: string): vm.Script {
 }
 
 /**
- * Resolve execution `methodList` and `schemaList`, reusing cached metadata when omitted
- * on warm worker `EXECUTE` messages.
+ * Resolve execution `methodList` and `schemaList`, freezing and retaining unchanged metadata
+ * on warm worker `EXECUTE` messages so untrusted VM code cannot mutate shared cache arrays.
  */
 export function resolveWorkerMetadata(msg: WorkerExecuteMetadataMsg): {
     methodList: Record<string, string[]>
     schemaList: Record<string, Record<string, string>> | undefined
 } {
     if ('methodList' in msg && msg.methodList !== undefined) {
-        cachedMethodList = msg.methodList
+        cachedMethodList = freezeMethodList(msg.methodList)
     }
     if ('schemaList' in msg) {
-        cachedSchemaList = msg.schemaList
+        cachedSchemaList = freezeSchemaList(msg.schemaList)
     }
     return {
         methodList: cachedMethodList,

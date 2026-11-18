@@ -148,6 +148,11 @@ function resolveDefaultBriefingProject(params: {
     return candidateProj
 }
 
+const activeBriefingConfigCache = new WeakMap<
+    object,
+    { roots: string[]; resolved: typeof DEFAULT_BRIEFING_CONFIG }
+>()
+
 /**
  * Merge live briefing config with server-level defaults.
  * [INVARIANT] Sticky session context is only consulted when `sessionRuntime` is supplied
@@ -160,6 +165,12 @@ export function resolveActiveBriefingConfig(
     allowedIoRoots: string[],
     sessionRuntime?: object | null
 ): typeof DEFAULT_BRIEFING_CONFIG {
+    if (sessionRuntime === undefined) {
+        const cached = activeBriefingConfigCache.get(briefingConfig)
+        if (cached?.roots === allowedIoRoots) {
+            return cached.resolved
+        }
+    }
     const sessionCtx: { workspaceId?: string; projectNumber?: number } =
         sessionRuntime !== undefined ? getActiveSessionProject(sessionRuntime) : {}
     const resolvedRegistry = briefingConfig.projectRegistry
@@ -200,7 +211,24 @@ export function resolveActiveBriefingConfig(
     else delete nextConfig.projectRegistry
     if (resolvedDefaultWs !== undefined) nextConfig.defaultWorkspaceId = resolvedDefaultWs
     else delete nextConfig.defaultWorkspaceId
+    if (sessionRuntime === undefined) {
+        activeBriefingConfigCache.set(briefingConfig, {
+            roots: allowedIoRoots,
+            resolved: nextConfig,
+        })
+    }
     return nextConfig
+}
+
+/** Wrap `server.close` so non-HTTP `stdio` resource subscriptions release when closed. */
+export function attachStdioCloseCleanup(server: Parameters<typeof globalSubscriptionManager.registerServer>[1]): void {
+    const serverWithClose = server as { close?: () => Promise<void> }
+    const origClose = serverWithClose.close
+    if (typeof origClose !== 'function') return
+    serverWithClose.close = async () => {
+        globalSubscriptionManager.unregisterServerIfMatch('stdio', server)
+        return origClose.call(server)
+    }
 }
 
 /**
@@ -213,6 +241,7 @@ export function syncLiveHandlerConfig(
     liveBriefing: ReturnType<typeof resolveActiveBriefingConfig>
 ): void {
     target.briefingConfig = liveBriefing
+    target.filterConfig = liveConfig.toolFilterConfig
     if (liveConfig.codemodeInternalFullAccess !== undefined) {
         target.codemodeInternalFullAccess = liveConfig.codemodeInternalFullAccess
     } else if (options.codemodeInternalFullAccess !== undefined) {

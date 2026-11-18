@@ -90,7 +90,7 @@ function resolveProjectAliasProp(targetRecord: Record<string, unknown>, prop: st
     return { matched: false }
 }
 
-export function resolveWrappedAliasProp(
+function resolveEntryAndChangelogAliasProp(
     targetRecord: Record<string, unknown>,
     prop: string | symbol,
     wrapResultFn: (val: unknown) => unknown
@@ -131,7 +131,13 @@ export function resolveWrappedAliasProp(
             }
         }
     }
+    return { matched: false }
+}
 
+function resolveCollectionAndGraphAliasProp(
+    targetRecord: Record<string, unknown>,
+    prop: string | symbol
+): AliasMatch {
     if (prop === 'entryIds' && 'entries' in targetRecord && Array.isArray(targetRecord['entries'])) {
         return { matched: true, value: targetRecord['entries'].filter(hasNumberId).map((e) => e.id) }
     }
@@ -172,4 +178,14 @@ export function resolveWrappedAliasProp(
         return { matched: true, value: relationships }
     }
     return { matched: false }
+}
+
+export function resolveWrappedAliasProp(
+    targetRecord: Record<string, unknown>,
+    prop: string | symbol,
+    wrapResultFn: (val: unknown) => unknown
+): AliasMatch {
+    const entryOrChangelog = resolveEntryAndChangelogAliasProp(targetRecord, prop, wrapResultFn)
+    if (entryOrChangelog.matched) return entryOrChangelog
+    return resolveCollectionAndGraphAliasProp(targetRecord, prop)
 }

@@ -101,6 +101,8 @@ const RESOURCE_SUGGESTIONS: Record<string, string> = {
     'memory://tags': 'mj.core.listTags()',
     'memory://significant': 'mj.search.searchEntries({ sort_by: "importance" })',
     'memory://insights': 'mj.analytics.getCrossProjectInsights()',
+    'memory://agent-context': 'mj.admin.getConfig()',
+    'memory://agent-id': 'mj.admin.getConfig()',
 }
 
 /**
@@ -110,7 +112,13 @@ export function createReadResourceInterceptor(): (uri?: string) => Promise<unkno
     return (uri?: string) => {
         let hint = ''
         if (typeof uri === 'string') {
-            const match = Object.entries(RESOURCE_SUGGESTIONS).find(([k]) => uri.startsWith(k))
+            const match = Object.entries(RESOURCE_SUGGESTIONS).find(
+                ([k]) =>
+                    uri === k ||
+                    uri.startsWith(`${k}/`) ||
+                    uri.startsWith(`${k}?`) ||
+                    uri.startsWith(`${k}#`)
+            )
             if (match !== undefined) hint = ` Try: ${match[1]}`
         }
         return wrapPromise(

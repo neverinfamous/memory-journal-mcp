@@ -12,6 +12,7 @@ import { z } from 'zod'
 import type { IDatabaseAdapter } from '../database/core/interfaces.js'
 import { getPrompt } from '../handlers/prompts/index.js'
 import { auditOperation } from '../audit/interceptor.js'
+import { extractAuditScopeFromArgs } from '../audit/audit-query-helpers.js'
 import type { ServerRuntime } from '../utils/maintenance-lock.js'
 import { ConfigurationError } from '../types/errors.js'
 import { enforceAccessBoundary } from '../auth/validation.js'
@@ -221,7 +222,11 @@ export function registerPrompts(
 
                         return await runtime.maintenanceManager.withActiveJob(executePrompt)
                     },
-                    { forceAudit, capabilities: promptDef.capabilities }
+                    {
+                        forceAudit,
+                        capabilities: promptDef.capabilities,
+                        ...extractAuditScopeFromArgs(providedArgs),
+                    }
                 )
             }
         )

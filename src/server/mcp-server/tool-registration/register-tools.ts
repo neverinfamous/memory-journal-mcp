@@ -25,6 +25,7 @@ import { attachListToolsInterceptor, type RequestHandlerMap } from './list-inter
 import { attachCallToolInterceptor } from './call-interceptor.js'
 import {
     MUTATING_TOOLS,
+    attachStdioCloseCleanup,
     buildServerInstructions,
     createResourceReadHandler,
     formatToolFailure,
@@ -270,7 +271,6 @@ async function executeRegisteredTool(
             currentConfig.briefingConfig,
             allowedIoRoots
         )
-        customToolHandlerConfig.filterConfig = currentConfig.toolFilterConfig
         syncLiveHandlerConfig(customToolHandlerConfig, currentConfig, options, nextBriefing)
 
         const toolArgs =
@@ -434,5 +434,6 @@ export function createServerInstance(
     const requestHandlers = getRequestHandlers(server.server)
     attachListToolsInterceptor(requestHandlers, configManager, allToolNames, readOnlyHints)
     attachCallToolInterceptor(requestHandlers, context, options, prompts, allTools, allToolNames, customToolHandlerConfig)
+    attachStdioCloseCleanup(server)
     return server
 }

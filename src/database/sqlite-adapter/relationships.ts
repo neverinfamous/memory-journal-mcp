@@ -193,13 +193,13 @@ export class RelationshipsManager {
                FROM relationships r
                JOIN memory_journal endpoint ON endpoint.id = r.from_entry_id
                JOIN memory_journal peer ON peer.id = r.to_entry_id
-               WHERE ${peerFilter}
+               WHERE ${peerFilter} AND r.from_entry_id != r.to_entry_id
                GROUP BY r.from_entry_id`
         const linkTo = `SELECT r.to_entry_id as entry_id, COUNT(*) as link_count
                FROM relationships r
                JOIN memory_journal endpoint ON endpoint.id = r.to_entry_id
                JOIN memory_journal peer ON peer.id = r.from_entry_id
-               WHERE ${peerFilter}
+               WHERE ${peerFilter} AND r.from_entry_id != r.to_entry_id
                GROUP BY r.to_entry_id`
         const wsFilter = scoped ? ' AND m.workspace_id = ?' : ''
         const params: unknown[] = scoped

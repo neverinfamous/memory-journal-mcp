@@ -7,7 +7,10 @@
 import { z } from 'zod'
 import type { ToolDefinition, ToolContext } from '../../../types/index.js'
 import { formatHandlerError } from '../../../utils/error-helpers.js'
-import { markUntrustedContentInline } from '../../../utils/security-utils.js'
+import {
+    fenceNonCanonicalRefOrKey,
+    markUntrustedContentInline,
+} from '../../../utils/security-utils.js'
 import { RepoInsightsOutputSchema } from './schemas.js'
 import { githubScopeInputFields, githubScopeParseFields, resolveOwnerRepo } from './helpers.js'
 
@@ -95,7 +98,7 @@ async function fetchRepoInsightSections(
         result.openIssues = stats.openIssues
         if (sectionSet.has('all')) {
             result.size = stats.size
-            result.defaultBranch = stats.defaultBranch
+            result.defaultBranch = fenceNonCanonicalRefOrKey(stats.defaultBranch)
         }
     }
 

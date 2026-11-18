@@ -42,18 +42,20 @@ function resolveSessionProjectId(
     input: ExecuteCodeInput,
     effectiveRegistry: ProjectRegistry
 ): number | string | undefined {
-    let projectId: number | string | undefined = input.project_number
-    if ((projectId === undefined || projectId === null) && input.workspace_id !== undefined && input.workspace_id !== '') {
-        const wsEntry = lookupRegistryEntry(effectiveRegistry, input.workspace_id)
+    const rawWorkspace = input.workspace_id ?? input.workspaceId
+    const rawProjInput = input.project_number ?? input.projectNumber
+    let projectId: number | string | undefined = rawProjInput
+    if ((projectId === undefined || projectId === null) && rawWorkspace !== undefined && rawWorkspace !== '') {
+        const wsEntry = lookupRegistryEntry(effectiveRegistry, rawWorkspace)
         if (wsEntry?.project_number !== undefined) projectId = wsEntry.project_number
     }
-    const rawRepo = (input.repo ?? input.repo_name)?.trim()
+    const rawRepo = (input.repo ?? input.repo_name ?? input.repoName)?.trim()
     if ((projectId === undefined || projectId === null) && rawRepo !== undefined && rawRepo !== '') {
         const repoEntry = lookupRegistryEntry(effectiveRegistry, rawRepo)
         if (repoEntry?.project_number !== undefined) projectId = repoEntry.project_number
     }
     const callerExplicitWorkspaceOrRepo =
-        (input.workspace_id !== undefined && input.workspace_id.trim() !== '') ||
+        (rawWorkspace !== undefined && rawWorkspace.trim() !== '') ||
         (rawRepo !== undefined && rawRepo !== '')
     if (!callerExplicitWorkspaceOrRepo) {
         projectId ??= projectIdFromDefaults(context, effectiveRegistry)
@@ -193,8 +195,8 @@ function validateExplicitRepoAndWorkspaceInput(
     input: ExecuteCodeInput,
     effectiveRegistry: ProjectRegistry
 ): ValidatedSessionInput | { errorResponse: Record<string, unknown> } {
-    const rawWsTrimmed = input.workspace_id?.trim()
-    const rawRepoTrimmed = (input.repo ?? input.repo_name)?.trim()
+    const rawWsTrimmed = (input.workspace_id ?? input.workspaceId)?.trim()
+    const rawRepoTrimmed = (input.repo ?? input.repo_name ?? input.repoName)?.trim()
     const hasExplicitRepo = rawRepoTrimmed !== undefined && rawRepoTrimmed !== ''
     const hasExplicitConcreteWs =
         rawWsTrimmed !== undefined && rawWsTrimmed !== '' && rawWsTrimmed !== '*'
@@ -265,17 +267,19 @@ function resolveSessionWorkspaceAndProjectPair(
 ):
     | { projectId: number | string | undefined; numericProjectId: number | undefined; workspaceId: string }
     | { errorResponse: Record<string, unknown> } {
+    const rawWorkspaceInput = input.workspace_id ?? input.workspaceId
+    const rawProjectInput = input.project_number ?? input.projectNumber
     const explicitDefaultWithoutProject =
-        validated.rawWsTrimmed?.toLowerCase() === 'default' && input.project_number === undefined
+        validated.rawWsTrimmed?.toLowerCase() === 'default' && rawProjectInput === undefined
     let projectId = explicitDefaultWithoutProject
         ? undefined
         : resolveSessionProjectId(context, input, effectiveRegistry)
     if (
-        input.project_number !== undefined &&
+        rawProjectInput !== undefined &&
         (typeof projectId !== 'number' || !Number.isSafeInteger(projectId) || projectId <= 0)
     ) {
         return githubInjectError(
-            `Invalid project_number '${String(input.project_number)}'. Expected a positive integer or registered project name.`
+            `Invalid project_number '${String(rawProjectInput)}'. Expected a positive integer or registered project name.`
         )
     }
 
@@ -299,14 +303,14 @@ function resolveSessionWorkspaceAndProjectPair(
             : undefined
     const hasActiveSessionScope = sessionWs !== undefined || sessionCtx.projectNumber !== undefined
     const fallbackConfiguredWs =
-        input.project_number === undefined && configuredDefaultWs !== undefined
+        rawProjectInput === undefined && configuredDefaultWs !== undefined
             ? configuredDefaultWs.toLowerCase() === 'default' && hasActiveSessionScope
                 ? sessionWs
                 : configuredDefaultWs
             : undefined
     const effectiveProjectInput =
         numericProjectId ??
-        (input.project_number === undefined &&
+        (rawProjectInput === undefined &&
         configuredDefaultWs?.toLowerCase() === 'default' &&
         sessionWs === undefined
             ? sessionCtx.projectNumber
@@ -315,7 +319,7 @@ function resolveSessionWorkspaceAndProjectPair(
     const resolvedContext = resolveProjectContext(
         {
             workspace_id:
-                input.workspace_id ??
+                rawWorkspaceInput ??
                 (!validated.hasExplicitConcreteWs ? (fallbackRepoWs ?? fallbackConfiguredWs) : undefined),
             project_number: effectiveProjectInput,
         },
@@ -353,7 +357,7 @@ export async function resolveCodeModeSessionContext(
 
     const repoContext = await injectRepoGithub(
         context,
-        input.repo ?? input.repo_name,
+        input.repo ?? input.repo_name ?? input.repoName,
         effectiveRegistry
     )
     if ('errorResponse' in repoContext) return repoContext

@@ -24,6 +24,7 @@ import {
     isForbiddenProjectKey,
     isValidProjectPath,
 } from '../../../utils/project-registry-guards.js'
+import { parsePositiveProjectNumber } from '../../../utils/safe-positive-int.js'
 import {
     readProjectRegistryFile,
     writeProjectRegistryFile,
@@ -96,13 +97,7 @@ function saveConfig(
 }
 
 function coerceRegistryProjectNumber(raw: number | string | undefined): number | undefined {
-    const num =
-        typeof raw === 'number'
-            ? raw
-            : typeof raw === 'string' && raw.trim() !== ''
-              ? Number(raw)
-              : undefined
-    return num !== undefined && Number.isInteger(num) && num > 0 ? num : undefined
+    return parsePositiveProjectNumber(raw)
 }
 
 function invalidProjectNumber(raw: number | string | undefined): boolean {

@@ -294,87 +294,85 @@ const CONTEXT_COLLECTION_NAMES = [
     'list',
 ]
 
+function stringifyContextTarget(target: Record<string, unknown>): string {
+    try {
+        return JSON.stringify(target)
+    } catch {
+        return '[object Object]'
+    }
+}
+
+function createContextGetFn(
+    target: Record<string, unknown>
+): (key?: string) => Promise<unknown> {
+    return (key?: string) => {
+        if (typeof key !== 'string') {
+            return Promise.resolve(wrapResult(target))
+        }
+        const snakeKey = key.replace(/([a-z0-9])([A-Z])/g, '$1_$2').toLowerCase()
+        if (key in target) return Promise.resolve(wrapResult(target[key]))
+        if (snakeKey !== key && snakeKey in target) {
+            return Promise.resolve(wrapResult(target[snakeKey]))
+        }
+        return Promise.resolve(
+            wrapResult({
+                success: false,
+                error: `Context key '${key}' was not found`,
+                code: 'RESOURCE_NOT_FOUND',
+            })
+        )
+    }
+}
+
+function createPromptBlockedFn(prop: string): (_promptName?: string) => Promise<unknown> {
+    return (_promptName?: string) =>
+        Promise.resolve({
+            success: false,
+            error: `Code Mode cannot execute MCP Prompts via context.${prop}(). Code Mode is for running JavaScript with mj.* tools. Use mj.core.createEntry to save entries.`,
+            code: 'VALIDATION_ERROR',
+            category: 'validation',
+            recoverable: true,
+        })
+}
+
+function resolveContextProxyProp(target: Record<string, unknown>, prop: string | symbol): unknown {
+    if (Object.prototype.hasOwnProperty.call(target, prop)) {
+        return Reflect.get(target, prop)
+    }
+    if (typeof prop === 'symbol') {
+        if (prop === Symbol.toPrimitive) {
+            return (hint: string) =>
+                hint === 'number' ? NaN : stringifyContextTarget(target)
+        }
+        return undefined
+    }
+    if (prop === 'toString') return () => stringifyContextTarget(target)
+    if (prop === 'toJSON') return () => target
+    if (prop === 'get' || prop === 'getContext' || prop === 'get_context') {
+        return createContextGetFn(target)
+    }
+    if (prop in target) return target[prop]
+    // [INVARIANT]: Outer MCP parameter normalization converts camelCase keys inside `context`
+    // into snake_case; fall back transparently so `context.myKey` resolves `target.my_key`.
+    const snakeProp = prop.replace(/([a-z0-9])([A-Z])/g, '$1_$2').toLowerCase()
+    if (snakeProp !== prop && snakeProp in target) {
+        return target[snakeProp]
+    }
+    if (prop === 'executeSystemPrompt' || prop === 'getPrompt' || prop === 'executePrompt') {
+        return createPromptBlockedFn(prop)
+    }
+    if (CONTEXT_COLLECTION_NAMES.includes(prop)) {
+        return createEmptyFallback()
+    }
+    return target[prop]
+}
+
 /**
  * Builds the frozen `context` global proxy for the sandbox.
  */
 export function createContextProxy(contextObj?: Record<string, unknown>): Record<string, unknown> {
     const contextProxy = new Proxy(contextObj ?? {}, {
-        get(target, prop): unknown {
-            if (typeof prop === 'symbol') {
-                if (prop === Symbol.toPrimitive) {
-                    return (hint: string) => {
-                        if (hint === 'number') return NaN
-                        try {
-                            return JSON.stringify(target)
-                        } catch {
-                            return '[object Object]'
-                        }
-                    }
-                }
-                return undefined
-            }
-            if (Object.prototype.hasOwnProperty.call(target, prop)) {
-                return Reflect.get(target, prop)
-            }
-            if (prop === 'toString') {
-                return () => {
-                    try {
-                        return JSON.stringify(target)
-                    } catch {
-                        return '[object Object]'
-                    }
-                }
-            }
-            if (prop === 'toJSON') {
-                return () => target
-            }
-            if (prop === 'get' || prop === 'getContext' || prop === 'get_context') {
-                return (key?: string) => {
-                    if (typeof key !== 'string') {
-                        return Promise.resolve(wrapResult(target))
-                    }
-                    const snakeKey = key.replace(/([a-z0-9])([A-Z])/g, '$1_$2').toLowerCase()
-                    if (key in target) return Promise.resolve(wrapResult(target[key]))
-                    if (snakeKey !== key && snakeKey in target) {
-                        return Promise.resolve(wrapResult(target[snakeKey]))
-                    }
-                    return Promise.resolve(
-                        wrapResult({
-                            success: false,
-                            error: `Context key '${key}' was not found`,
-                            code: 'RESOURCE_NOT_FOUND',
-                        })
-                    )
-                }
-            }
-            if (prop in target) return target[prop]
-            // [INVARIANT]: Outer MCP parameter normalization converts camelCase keys inside `context`
-            // into snake_case; fall back transparently so `context.myKey` resolves `target.my_key`.
-            if (typeof prop === 'string') {
-                const snakeProp = prop.replace(/([a-z0-9])([A-Z])/g, '$1_$2').toLowerCase()
-                if (snakeProp !== prop && snakeProp in target) {
-                    return target[snakeProp]
-                }
-            }
-            if (
-                prop === 'executeSystemPrompt' ||
-                prop === 'getPrompt' ||
-                prop === 'executePrompt'
-            ) {
-                return (_promptName?: string) =>
-                    Promise.resolve({
-                        success: false,
-                        error: `Code Mode cannot execute MCP Prompts via context.${prop}(). Code Mode is for running JavaScript with mj.* tools. Use mj.core.createEntry to save entries.`,
-                        code: 'VALIDATION_ERROR',
-                        category: 'validation',
-                        recoverable: true,
-                    })
-            }
-            if (typeof prop === 'string' && CONTEXT_COLLECTION_NAMES.includes(prop)) {
-                return createEmptyFallback()
-            }
-            return target[prop]
-        },
+        get: (target, prop): unknown => resolveContextProxyProp(target, prop),
     })
     return Object.freeze(contextProxy)
 }

@@ -6,6 +6,7 @@ import { markUntrustedContentInline } from '../../utils/security-utils.js'
 import { ValidationError } from '../../types/errors.js'
 import { resourceWorkspace, type BriefingConfig } from '../resources/shared.js'
 import { exactRegistryKey, uniqueWorkspaceForProject } from '../../utils/write-scope.js'
+import { parseCanonicalPositiveInt } from '../../utils/safe-positive-int.js'
 
 const ISSUE_COMMANDER_WORKFLOWS = new Set(['triage', 'milestone'])
 const PR_COMMANDER_WORKFLOWS = new Set(['summary', 'review', 'dependencies'])
@@ -51,7 +52,7 @@ export function requirePositiveIntOrPlaceholder(
         return placeholder
     }
     const trimmed = raw.trim()
-    if (/^[1-9]\d*$/.test(trimmed)) {
+    if (parseCanonicalPositiveInt(trimmed) !== undefined) {
         return trimmed
     }
     throw new ValidationError(`Invalid ${fieldName}: expected a positive integer`)

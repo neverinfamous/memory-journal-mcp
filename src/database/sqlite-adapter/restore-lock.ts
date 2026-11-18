@@ -11,6 +11,10 @@ function hasErrorCode(err: unknown, code: string): boolean {
     return typeof err === 'object' && err !== null && 'code' in err && err.code === code
 }
 
+function toValidPid(val: unknown): number | undefined {
+    return typeof val === 'number' && Number.isSafeInteger(val) && val > 0 ? val : undefined
+}
+
 /** Parse the lock file content into holding PID and timestamp (supports legacy raw PID format). */
 function parseLockContent(lockContent: string): {
     holdingPid: number | undefined
@@ -18,20 +22,22 @@ function parseLockContent(lockContent: string): {
 } {
     try {
         const parsed: unknown = JSON.parse(lockContent)
-        if (typeof parsed === 'number' && Number.isInteger(parsed)) {
-            return { holdingPid: parsed, lockTimestamp: undefined }
+        if (typeof parsed === 'number') {
+            return { holdingPid: toValidPid(parsed), lockTimestamp: undefined }
         }
         if (typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed)) {
             const record = parsed as { pid?: unknown; timestamp?: unknown }
             return {
-                holdingPid: typeof record.pid === 'number' ? record.pid : undefined,
+                holdingPid: toValidPid(record.pid),
                 lockTimestamp: typeof record.timestamp === 'number' ? record.timestamp : undefined,
             }
         }
         return { holdingPid: undefined, lockTimestamp: undefined }
     } catch {
         // Legacy raw PID string format fallback
-        return { holdingPid: parseInt(lockContent, 10), lockTimestamp: undefined }
+        const trimmed = lockContent.trim()
+        const pid = /^[1-9]\d*$/.test(trimmed) ? Number(trimmed) : Number.NaN
+        return { holdingPid: toValidPid(pid), lockTimestamp: undefined }
     }
 }
 

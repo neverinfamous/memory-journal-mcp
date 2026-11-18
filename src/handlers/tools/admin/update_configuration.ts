@@ -14,6 +14,17 @@ import { activeProjectRegistry, exactRegistryKey, pairStoredScope } from '../../
 import { ValidationError } from '../../../types/errors.js'
 import { relaxedNumber } from '../schemas.js'
 
+function normalizeConfigProjectNumber(obj: Record<string, unknown>): void {
+    const raw = obj['project_number']
+    if (typeof raw !== 'string') return
+    const pMatch = /^(?:#|p-?)?([1-9]\d*)$/i.exec(raw.trim())
+    if (pMatch?.[1] === undefined) return
+    const parsed = Number(pMatch[1])
+    if (Number.isSafeInteger(parsed)) {
+        obj['project_number'] = parsed
+    }
+}
+
 function preprocessUpdateConfig(val: unknown): unknown {
     if (typeof val === 'object' && val !== null) {
         let obj = { ...(val as Record<string, unknown>) }
@@ -29,20 +40,8 @@ function preprocessUpdateConfig(val: unknown): unknown {
             delete obj['filter']
         }
 
-        if (
-            'project_number' in obj &&
-            obj['project_number'] !== undefined &&
-            obj['project_number'] !== null
-        ) {
-            if (typeof obj['project_number'] === 'string') {
-                const trimmed = obj['project_number'].trim()
-                const pMatch = /^(?:#|p-?)?(\d+)$/i.exec(trimmed) ?? /^(-?\d+)$/.exec(trimmed)
-                if (pMatch?.[1] !== undefined) {
-                    obj['project_number'] = Number(pMatch[1])
-                } else {
-                    delete obj['project_number']
-                }
-            }
+        if ('project_number' in obj) {
+            normalizeConfigProjectNumber(obj)
         }
 
         for (const key of [

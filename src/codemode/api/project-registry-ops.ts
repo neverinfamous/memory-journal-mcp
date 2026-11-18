@@ -7,6 +7,13 @@ import * as path from 'node:path'
 import { isRecord, safeString } from '../normalizers/shared-utils.js'
 import { readProjectRegistryFile, writeProjectRegistryFile } from '../../utils/registry-config-file.js'
 import { mcpLogger } from '../../utils/mcp-logger.js'
+import {
+    findCaseInsensitiveKeyConflict,
+    findProjectNumberConflict,
+    isForbiddenProjectKey,
+    isValidProjectPath,
+} from '../../utils/project-registry-guards.js'
+import { parsePositiveProjectNumber } from '../../utils/safe-positive-int.js'
 import { parseProjectRegistry, type GroupApiRecord, type ProjectRegistryProvider } from './types.js'
 
 function getConfigPath(): string {
@@ -55,19 +62,92 @@ export function createGetConfigFn(
         })
 }
 
-const FORBIDDEN_PROJECT_KEYS = new Set(['__proto__', 'constructor', 'prototype'])
-
-function isForbiddenProjectKey(name: string): boolean {
-    return name.trim().length === 0 || FORBIDDEN_PROJECT_KEYS.has(name.trim())
+function toGuardRegistry(
+    registry: Record<string, unknown>
+): Record<string, { path?: string; project_number?: number } | undefined> {
+    const out = Object.create(null) as Record<
+        string,
+        { path?: string; project_number?: number } | undefined
+    >
+    for (const [k, v] of Object.entries(registry)) {
+        if (isRecord(v)) {
+            out[k] = {
+                ...(typeof v['path'] === 'string' ? { path: v['path'] } : {}),
+                ...(typeof v['project_number'] === 'number'
+                    ? { project_number: v['project_number'] }
+                    : {}),
+            }
+        }
+    }
+    return out
 }
 
-function isValidProjectPath(dirPath: string): boolean {
-    if (dirPath.trim().length === 0) return false
-    // [H6] Reject UNC/network paths with any separator mix (`\\`, `//`, `\/`, `/\`).
-    if (dirPath.includes('\0') || /^[\\/]{2}/.test(dirPath)) return false
-    if (!path.isAbsolute(dirPath)) return false
-    // Reject any `..` segment so the registered path is the canonical location the caller named.
-    return !dirPath.split(/[\\/]+/).includes('..')
+function resolveCanonicalDirPath(dirPath: string): string {
+    return /^[A-Za-z]:[\\/]/.test(dirPath) ? path.win32.resolve(dirPath) : path.resolve(dirPath)
+}
+
+function checkRegistryConflicts(
+    registry: Record<string, unknown>,
+    targetName: string,
+    projectNumber: number | undefined,
+    existingName?: string
+): string | undefined {
+    const guardReg = toGuardRegistry(registry)
+    if (existingName !== undefined && targetName !== existingName && Object.hasOwn(registry, targetName)) {
+        return `Project '${targetName}' already exists; refusing to overwrite it.`
+    }
+    const keyConflict = findCaseInsensitiveKeyConflict(guardReg, targetName, existingName ?? targetName)
+    if (keyConflict !== undefined) {
+        return `Project '${keyConflict}' already exists (conflicts with '${targetName}').`
+    }
+    if (projectNumber !== undefined) {
+        const ignoreKeys = existingName !== undefined ? [existingName, targetName] : [targetName]
+        const numConflict = findProjectNumberConflict(guardReg, projectNumber, ignoreKeys)
+        if (numConflict !== undefined) {
+            return `Project number ${String(projectNumber)} is already assigned to project '${numConflict}'.`
+        }
+    }
+    return undefined
+}
+
+async function recordProjectInitEntry(
+    coreApi: GroupApiRecord,
+    name: string,
+    projectNumber: number | undefined
+): Promise<{ success: boolean; message?: string; warning?: string }> {
+    const createEntryFn = coreApi['createEntry']
+    if (!createEntryFn) {
+        return {
+            success: true,
+            warning: 'createEntry tool is missing. DB init skipped.',
+            message: `Project '${name}' registered, but createEntry tool is missing. DB init skipped.`,
+        }
+    }
+    try {
+        await createEntryFn({
+            entryType: 'project_decision',
+            significanceType: 'architecture',
+            content: `Initialized project ${name}`,
+            tags: ['project-initialization', 'setup'],
+            workspaceId: name,
+            ...(projectNumber !== undefined ? { projectNumber } : {}),
+            trustScore: 1.0,
+            impactScore: 0.8,
+            autoContext: JSON.stringify({ action: 'register_project', target: name }),
+        })
+        return { success: true, message: `Project '${name}' successfully registered.` }
+    } catch (err) {
+        const dbInitError = registryError(err)
+        mcpLogger.warning('codemode', 'Project initialization entry failed', {
+            project: name,
+            error: dbInitError,
+        })
+        return {
+            success: true,
+            warning: dbInitError,
+            message: `Project '${name}' registered, but the initialization journal entry failed: ${dbInitError}`,
+        }
+    }
 }
 
 export function createRegisterProjectFn(
@@ -76,8 +156,15 @@ export function createRegisterProjectFn(
     return async (...args: unknown[]): Promise<{ success: boolean; message?: string; warning?: string; error?: string }> => {
         const name = safeString(args[0] ?? '')
         const absolutePath = safeString(args[1] ?? '')
-        const projectNumber = typeof args[2] === 'number' ? args[2] : undefined
+        const rawProjectNumber = args[2]
+        const projectNumber =
+            rawProjectNumber !== undefined && rawProjectNumber !== null
+                ? parsePositiveProjectNumber(rawProjectNumber)
+                : undefined
 
+        if (rawProjectNumber !== undefined && rawProjectNumber !== null && projectNumber === undefined) {
+            return { success: false, error: 'Invalid project_number: expected a positive integer.' }
+        }
         if (isForbiddenProjectKey(name)) {
             return { success: false, error: `Invalid project name: '${name}'` }
         }
@@ -96,49 +183,18 @@ export function createRegisterProjectFn(
         } catch (err) {
             return { success: false, error: registryError(err) }
         }
-        const entry: Record<string, unknown> = { path: path.resolve(absolutePath) }
-        if (typeof projectNumber === 'number' && !Number.isNaN(projectNumber)) {
+        const conflict = checkRegistryConflicts(registry, name, projectNumber)
+        if (conflict !== undefined) {
+            return { success: false, error: conflict }
+        }
+        const entry: Record<string, unknown> = { path: resolveCanonicalDirPath(absolutePath) }
+        if (projectNumber !== undefined) {
             entry['project_number'] = projectNumber
         }
         registry[name] = entry
         saveRegistryConfig(configPath, config)
 
-        const createEntryFn = coreApi['createEntry']
-        if (!createEntryFn) {
-            return {
-                success: true,
-                warning: 'createEntry tool is missing. DB init skipped.',
-                message: `Project '${name}' registered, but createEntry tool is missing. DB init skipped.`,
-            }
-        }
-        let dbInitError: string | undefined
-        try {
-            await createEntryFn({
-                entryType: 'project_decision',
-                significanceType: 'architecture',
-                content: `Initialized project ${name}`,
-                tags: ['project-initialization', 'setup'],
-                workspaceId: name,
-                ...(projectNumber !== undefined ? { projectNumber } : {}),
-                trustScore: 1.0,
-                impactScore: 0.8,
-                autoContext: JSON.stringify({ action: 'register_project', target: name }),
-            })
-        } catch (err) {
-            dbInitError = registryError(err)
-            mcpLogger.warning('codemode', 'Project initialization entry failed', {
-                project: name,
-                error: dbInitError,
-            })
-        }
-        if (dbInitError !== undefined) {
-            return {
-                success: true,
-                warning: dbInitError,
-                message: `Project '${name}' registered, but the initialization journal entry failed: ${dbInitError}`,
-            }
-        }
-        return { success: true, message: `Project '${name}' successfully registered.` }
+        return recordProjectInitEntry(coreApi, name, projectNumber)
     }
 }
 
@@ -151,8 +207,15 @@ export function createUpdateProjectFn(): (...args: unknown[]) => Promise<{
         const name = safeString(args[0] ?? '')
         const newName = typeof args[1] === 'string' && args[1] !== '' ? args[1] : undefined
         const absolutePath = typeof args[2] === 'string' && args[2] !== '' ? args[2] : undefined
-        const projectNumber = typeof args[3] === 'number' ? args[3] : undefined
+        const rawProjectNumber = args[3]
+        const projectNumber =
+            rawProjectNumber !== undefined && rawProjectNumber !== null
+                ? parsePositiveProjectNumber(rawProjectNumber)
+                : undefined
 
+        if (rawProjectNumber !== undefined && rawProjectNumber !== null && projectNumber === undefined) {
+            return Promise.resolve({ success: false, error: 'Invalid project_number: expected a positive integer.' })
+        }
         if (isForbiddenProjectKey(name) || (newName !== undefined && isForbiddenProjectKey(newName))) {
             return Promise.resolve({ success: false, error: 'Invalid project name.' })
         }
@@ -175,13 +238,15 @@ export function createUpdateProjectFn(): (...args: unknown[]) => Promise<{
         if (!isRecord(project)) {
             return Promise.resolve({ success: false, error: `🛠️ AUTONOMOUS HEALING: Project not found: '${name}'` })
         }
-
-        if (absolutePath !== undefined) project['path'] = path.resolve(absolutePath)
-        if (typeof projectNumber === 'number' && !Number.isNaN(projectNumber)) {
-            project['project_number'] = projectNumber
+        const targetName = newName ?? name
+        const conflict = checkRegistryConflicts(registry, targetName, projectNumber, name)
+        if (conflict !== undefined) {
+            return Promise.resolve({ success: false, error: conflict })
         }
 
-        const targetName = newName ?? name
+        if (absolutePath !== undefined) project['path'] = resolveCanonicalDirPath(absolutePath)
+        if (projectNumber !== undefined) project['project_number'] = projectNumber
+
         const rest = Object.fromEntries(Object.entries(registry).filter(([key]) => key !== name))
         config['projectRegistry'] = { ...rest, [targetName]: project }
         saveRegistryConfig(configPath, config)
@@ -292,12 +357,7 @@ export function createGetProjectFn(
             }
 
             if (searchVal !== undefined) {
-                const isNum =
-                    typeof searchVal === 'number' ||
-                    (typeof searchVal === 'string' &&
-                        searchVal.trim() !== '' &&
-                        !Number.isNaN(Number(searchVal)))
-                const numVal = isNum ? Number(searchVal) : undefined
+                const numVal = parsePositiveProjectNumber(searchVal)
                 const strVal = String(searchVal).trim().toLowerCase()
 
                 const projects = await listProjectsFn()

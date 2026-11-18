@@ -42,7 +42,7 @@ function hasAuthorColumn(db: EntriesSharedContext['db']): boolean {
             if (typeof row !== 'object' || row === null || !('name' in row)) return false
             return Object.getOwnPropertyDescriptor(row, 'name')?.value === 'author'
         })
-    authorColumnCache.set(db, hasCol)
+    if (hasCol) authorColumnCache.set(db, true)
     return hasCol
 }
 

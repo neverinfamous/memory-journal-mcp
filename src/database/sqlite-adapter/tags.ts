@@ -152,7 +152,7 @@ export class TagsManager {
                         "SELECT 1 FROM pragma_table_info('memory_journal') WHERE name = 'deleted_at'"
                     )
                     .get() !== undefined
-            hasDeletedAtCache.set(this.db, hasDeletedAt)
+            if (hasDeletedAt) hasDeletedAtCache.set(this.db, true)
         }
         const filters = [hasDeletedAt ? 'mj.deleted_at IS NULL' : '1 = 1']
         const params: unknown[] = []
@@ -270,7 +270,7 @@ export class TagsManager {
         const newEntryIds = entryIds.filter((id) => !existingEntryIds.has(id))
         if (newEntryIds.length === 0) return 0
 
-        const CHUNK_SIZE = 500
+        const CHUNK_SIZE = 250
         let insertedCount = 0
         for (let i = 0; i < newEntryIds.length; i += CHUNK_SIZE) {
             const chunk = newEntryIds.slice(i, i + CHUNK_SIZE)
@@ -350,7 +350,7 @@ export class TagsManager {
                     ? ` AND entry_id IN (SELECT id FROM memory_journal WHERE ${scopeConds.join(' AND ')})`
                     : ''
 
-            const CHUNK_SIZE = 500
+            const CHUNK_SIZE = 490
             let totalDeleted = 0
             for (let i = 0; i < entryIds.length; i += CHUNK_SIZE) {
                 const chunk = entryIds.slice(i, i + CHUNK_SIZE)

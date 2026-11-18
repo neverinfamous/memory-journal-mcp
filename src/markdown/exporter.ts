@@ -84,7 +84,11 @@ interface ExportRelationshipRef {
     toEntryId: number
 }
 
-function buildExportFileContent(entry: ExportableEntry, relationships: readonly ExportRelationshipRef[]): string {
+function buildExportFileContent(
+    entry: ExportableEntry,
+    relationships: readonly ExportRelationshipRef[],
+    anchors?: readonly string[]
+): string {
     const fmData: FrontmatterData = {
         mj_id: entry.id,
         entry_type: entry.entryType,
@@ -93,7 +97,11 @@ function buildExportFileContent(entry: ExportableEntry, relationships: readonly 
         ...(entry.workspaceId !== undefined && entry.workspaceId.trim() !== ''
             ? { workspace_id: entry.workspaceId }
             : {}),
-        ...(entry.projectNumber !== undefined ? { project_number: entry.projectNumber } : {}),
+        ...(entry.projectNumber !== undefined &&
+        Number.isSafeInteger(entry.projectNumber) &&
+        entry.projectNumber > 0
+            ? { project_number: entry.projectNumber }
+            : {}),
         source: 'memory-journal-mcp',
     }
     if (entry.tags !== undefined && entry.tags.length > 0) {
@@ -111,6 +119,9 @@ function buildExportFileContent(entry: ExportableEntry, relationships: readonly 
             type: r.relationshipType,
             target_id: r.toEntryId,
         }))
+    }
+    if (anchors !== undefined && anchors.length > 0) {
+        fmData.anchors = [...anchors]
     }
     return serializeFrontmatter(fmData) + '\n' + entry.content + '\n'
 }
@@ -194,6 +205,34 @@ function loadExportRelationships(
     return merged
 }
 
+function loadExportAnchors(
+    db: IDatabaseAdapter,
+    entries: ExportableEntry[]
+): Map<number, string[]> {
+    const result = new Map<number, string[]>()
+    if (entries.length === 0 || typeof db.getAnchorsByEntryIds !== 'function') return result
+
+    const idsByWorkspace = new Map<string, number[]>()
+    for (const entry of entries) {
+        const workspaceId = entry.workspaceId ?? 'default'
+        const ids = idsByWorkspace.get(workspaceId)
+        if (ids === undefined) idsByWorkspace.set(workspaceId, [entry.id])
+        else ids.push(entry.id)
+    }
+
+    for (const [workspaceId, ids] of idsByWorkspace) {
+        const part = db.getAnchorsByEntryIds(ids, workspaceId)
+        for (const [entryId, anchors] of part) {
+            const paths = anchors.map((a) => a.anchorPath)
+            if (paths.length === 0) continue
+            const existing = result.get(entryId)
+            if (existing === undefined) result.set(entryId, paths)
+            else existing.push(...paths)
+        }
+    }
+    return result
+}
+
 /**
  * Export journal entries to frontmattered markdown files.
  *
@@ -241,6 +280,7 @@ export async function exportEntriesToMarkdown(
     skipped += entries.length - validEntries.length
 
     const relationshipsMap = loadExportRelationships(db, validEntries)
+    const anchorsMap = loadExportAnchors(db, validEntries)
 
     const CHUNK_SIZE = 50
     for (let i = 0; i < validEntries.length; i += CHUNK_SIZE) {
@@ -251,7 +291,8 @@ export async function exportEntriesToMarkdown(
         await Promise.all(
             chunk.map(async (entry) => {
                 const relationships = relationshipsMap.get(entry.id) ?? []
-                const fileContent = buildExportFileContent(entry, relationships)
+                const anchors = anchorsMap.get(entry.id)
+                const fileContent = buildExportFileContent(entry, relationships, anchors)
                 const filename = generateFilename(entry.id, entry.content)
                 const outcome = await writeExportFile(preChunkRealpath, filename, fileContent)
                 if (outcome === 'written') {

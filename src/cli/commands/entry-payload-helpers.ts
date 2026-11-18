@@ -170,12 +170,18 @@ export function parseRelationshipArray(
         }
         const rec = z.record(z.string(), z.unknown()).parse(r)
         const rawTarget = pickRecordField(rec, RELATIONSHIP_TARGET_KEYS)
+        const trimmedTarget = typeof rawTarget === 'string' ? rawTarget.trim() : undefined
         const targetId =
-            typeof rawTarget === 'number' ||
-            (typeof rawTarget === 'string' && rawTarget.trim() !== '')
-                ? Number(rawTarget)
-                : Number.NaN
-        if (!Number.isInteger(targetId) || targetId < 1) {
+            typeof rawTarget === 'number'
+                ? rawTarget
+                : trimmedTarget !== undefined && /^[1-9]\d*$/.test(trimmedTarget)
+                  ? Number(trimmedTarget)
+                  : Number.NaN
+        if (
+            !Number.isSafeInteger(targetId) ||
+            targetId < 1 ||
+            (trimmedTarget !== undefined && String(targetId) !== trimmedTarget)
+        ) {
             throw new ValidationError(
                 `Invalid relationship target_id '${String(rawTarget)}' at index ${String(index)} in ${source}: expected a positive integer.`
             )

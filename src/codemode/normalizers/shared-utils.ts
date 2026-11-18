@@ -215,7 +215,12 @@ export function healAutoContext(result: Record<string, unknown>): void {
     const ac = result['auto_context']
     if (typeof ac === 'string') {
         try {
-            const parsed = JSON.parse(ac.replace(/'/g, '"')) as unknown
+            let parsed: unknown
+            try {
+                parsed = JSON.parse(ac) as unknown
+            } catch {
+                parsed = JSON.parse(ac.replace(/'/g, '"')) as unknown
+            }
             if (!isRecord(parsed)) return
             let changed = false
 

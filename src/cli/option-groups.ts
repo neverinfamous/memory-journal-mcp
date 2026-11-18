@@ -340,6 +340,7 @@ export function addMetricsOptions(command: Command): Command {
 export function addOutputOptions(command: Command): Command {
     return withGroup(command, 'Command Options', (cmd) => {
         cmd.option('--json', 'Output results as a structured JSON envelope')
+            .option('--no-json', 'Output plain-text summary instead of JSON')
     })
 }
 

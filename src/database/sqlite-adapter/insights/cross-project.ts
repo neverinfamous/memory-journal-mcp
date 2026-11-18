@@ -1,5 +1,6 @@
 import type { NativeConnectionManager } from '../native-connection.js'
 import { effectiveWorkspace } from '../../workspace-scope.js'
+import { bucketInParams } from '../row-helpers.js'
 
 export { visualizeRelationships, getRecentGraphRelationships } from './cross-project-graph.js'
 
@@ -102,26 +103,33 @@ function attachTopTags(
     startDate?: string,
     endDate?: string
 ): void {
-    if (projects.length > 0) {
-        const projectNumbers = projects.map((p) => p['project_number'] as number)
-        const placeholders = projectNumbers.map(() => '?').join(',')
-        const mjWsFilter = scopeId !== '*' ? ' AND mj.workspace_id = ?' : ''
-        // [INVARIANT] Bind only the workspace param here; project filtering is already
-        // expressed by the IN (...) list, so extra project params would overflow the binds.
-        const wsOnly: unknown[] = scopeId !== '*' ? [scopeId] : []
-        const dateClauses: string[] = []
-        const dateParams: unknown[] = []
-        if (startDate !== undefined) {
-            dateClauses.push('AND mj.timestamp >= ?')
-            dateParams.push(startDate)
-        }
-        if (endDate !== undefined) {
-            dateClauses.push('AND mj.timestamp <= ?')
-            dateParams.push(endDate)
-        }
-        const dateFilter = dateClauses.length > 0 ? ` ${dateClauses.join(' ')}` : ''
-        const tagRows = connection
-            .getNativeDb()
+    if (projects.length === 0) return
+
+    const uniqueProjectNumbers = Array.from(
+        new Set(projects.map((p) => p['project_number'] as number))
+    )
+    const mjWsFilter = scopeId !== '*' ? ' AND mj.workspace_id = ?' : ''
+    // [INVARIANT] Bind only the workspace param here; project filtering is already
+    // expressed by the IN (...) list, so extra project params would overflow the binds.
+    const wsOnly: unknown[] = scopeId !== '*' ? [scopeId] : []
+    const dateClauses: string[] = []
+    const dateParams: unknown[] = []
+    if (startDate !== undefined) {
+        dateClauses.push('AND mj.timestamp >= ?')
+        dateParams.push(startDate)
+    }
+    if (endDate !== undefined) {
+        dateClauses.push('AND mj.timestamp <= ?')
+        dateParams.push(endDate)
+    }
+    const dateFilter = dateClauses.length > 0 ? ` ${dateClauses.join(' ')}` : ''
+    const tagMap = new Map<number, { name: string; count: number }[]>()
+    const nativeDb = connection.getNativeDb()
+
+    const TOP_TAG_BUCKETS = [1, 2, 4, 8, 16, 32, 64, 128, 256, 450] as const
+
+    for (const { placeholders, params } of bucketInParams(uniqueProjectNumbers, TOP_TAG_BUCKETS)) {
+        const tagRows = nativeDb
             .prepare(
                 `
             SELECT mj.project_number as project_number, t.name as name, COUNT(*) as count
@@ -133,20 +141,20 @@ function attachTopTags(
             ORDER BY count DESC
             `
             )
-            .all(...projectNumbers, ...wsOnly, ...dateParams) as {
+            .all(...params, ...wsOnly, ...dateParams) as {
             project_number: number
             name: string
             count: number
         }[]
-        const tagMap = new Map<number, { name: string; count: number }[]>()
         for (const row of tagRows) {
             const list = tagMap.get(row.project_number) ?? []
             list.push({ name: row.name, count: row.count })
             tagMap.set(row.project_number, list)
         }
-        for (const p of projects) {
-            p['top_tags'] = (tagMap.get(p['project_number'] as number) ?? []).slice(0, 5)
-        }
+    }
+
+    for (const p of projects) {
+        p['top_tags'] = (tagMap.get(p['project_number'] as number) ?? []).slice(0, 5)
     }
 }
 

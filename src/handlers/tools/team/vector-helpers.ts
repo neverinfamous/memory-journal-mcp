@@ -39,6 +39,7 @@ async function runTeamVectorQuery(
 ): Promise<SemanticSearchResult[] | { errorResponse: Record<string, unknown> }> {
     const hasFilters =
         input.tags !== undefined ||
+        (input.exclude_tags !== undefined && input.exclude_tags.length > 0) ||
         input.entry_type !== undefined ||
         input.start_date !== undefined ||
         input.end_date !== undefined ||
@@ -117,6 +118,7 @@ function hydrateAndFilterTeamSemanticHits(
 
     const filterOpts = {
         tags: input.tags,
+        excludeTags: input.exclude_tags,
         entryType: input.entry_type,
         startDate: input.start_date,
         endDate: input.end_date,

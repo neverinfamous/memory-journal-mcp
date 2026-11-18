@@ -42,6 +42,13 @@ export class SubscriptionManager {
         this.unsubscribeSession(sessionId)
     }
 
+    /** Unregister `sessionId` only when it is still bound to `server`. */
+    public unregisterServerIfMatch(sessionId: string, server: McpServer): void {
+        if (this.servers.get(sessionId) === server) {
+            this.unregisterServer(sessionId)
+        }
+    }
+
     /**
      * Subscribe a session to a resource URI.
      */

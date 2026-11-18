@@ -61,7 +61,7 @@ export function runWithRpcExecutionOverrides<T>(
         merged.projectNumber = parent.projectNumber
     } else if (
         typeof overrides.projectNumber === 'number' &&
-        Number.isInteger(overrides.projectNumber) &&
+        Number.isSafeInteger(overrides.projectNumber) &&
         overrides.projectNumber > 0
     ) {
         merged.projectNumber = overrides.projectNumber

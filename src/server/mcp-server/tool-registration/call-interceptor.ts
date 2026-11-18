@@ -203,7 +203,6 @@ function resolveAndSyncLiveBriefing(
     const liveConfig = context.configManager.getConfig()
     const canReuseSynced =
         syncedState?.rawConfig === liveConfig &&
-        liveConfig.briefingConfig.projectRegistry !== undefined &&
         customToolHandlerConfig.briefingConfig === syncedState.liveBriefing
     const liveBriefing = canReuseSynced
         ? syncedState.liveBriefing

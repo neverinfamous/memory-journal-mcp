@@ -20,6 +20,7 @@ import { AuditLogger } from '../../audit/audit-logger.js'
 import type { AuditEntry } from '../../audit/types.js'
 import { DEFAULT_AUDIT_LOG_MAX_SIZE_BYTES } from '../../audit/types.js'
 import { VectorSearchManager } from '../../vector/vector-search-manager/index.js'
+import { writeCliResult } from './cli-output.js'
 
 export const backupSchema = adminBackupOptionsSchema
 export const restoreSchema = adminRestoreOptionsSchema
@@ -284,7 +285,7 @@ export async function auditAction(options: z.infer<typeof auditSchema>, command:
             await logger.close()
         }
 
-        process.stdout.write(JSON.stringify(result, null, 2) + '\n')
+        writeCliResult(result, options.json, `Audit entries matched: ${String(result.length)}`)
     } catch (e) {
         process.stderr.write("Audit search failed: " + (e instanceof Error ? e.message : String(e)) + '\n')
         process.exit(1)
@@ -336,12 +337,20 @@ export async function rebuildIndexAction(options: z.infer<typeof rebuildIndexSch
             process.stderr.write(
                 `Rebuild index failed: ${String(result.failed)} entries could not be indexed${result.firstError !== null ? ` (${result.firstError})` : ''}\n`
             )
-            process.stdout.write(JSON.stringify({ status: 'failed', ...result, stats }, null, 2) + '\n')
+            writeCliResult(
+                { status: 'failed', ...result, stats },
+                options.json,
+                `Rebuild index failed (${String(result.failed)} failed)`
+            )
             exitCode = 1
             return
         }
 
-        process.stdout.write(JSON.stringify({ status: 'success', stats }, null, 2) + '\n')
+        writeCliResult(
+            { status: 'success', stats },
+            options.json,
+            `Rebuilt vector index (${String(stats.itemCount)} vectors)`
+        )
     } catch (e) {
         process.stderr.write("Rebuild index failed: " + (e instanceof Error ? e.message : String(e)) + '\n')
         exitCode = 1

@@ -14,6 +14,7 @@ import type { VectorSearchManager } from '../vector/vector-search-manager/index.
 import type { JournalEntry, ToolHandlerConfig } from '../types/index.js'
 import {
     applyImportedRelationshipBatch,
+    validateDryRunRelationships,
     type PendingRelationshipLink,
 } from './import-relationships.js'
 import { parseFrontmatter } from './frontmatter.js'
@@ -105,6 +106,7 @@ export interface ParsedFile {
         workspace_id?: string
         project_number?: number
         relationships?: { type: string; target_id: number }[]
+        anchors?: string[]
     }
 }
 async function readAndParseMarkdownFile(
@@ -209,6 +211,45 @@ export async function importMarkdownEntries(
 
 /* Author ownership, validation, and prefetched lookup helpers imported from ./importer-scope.ts */
 
+function runDryRunImportValidation(
+    files: ParsedFile[],
+    db: IDatabaseAdapter,
+    options: ImportOptions,
+    prefetchedById: ReturnType<typeof prefetchImportedEntriesById>,
+    result: ImportResult
+): void {
+    const inBatchMjIds = new Set<number>()
+    const pendingLinks: PendingRelationshipLink[] = []
+    for (let idx = 0; idx < files.length; idx++) {
+        const file = files[idx]
+        if (file === undefined) continue
+        const { effectiveWsId, effectiveProjNum, existing } = validateImportedFileEntry(
+            file,
+            db,
+            options,
+            prefetchedById
+        )
+        if (existing) {
+            result.updated++
+        } else {
+            result.created++
+        }
+        if (file.metadata.mj_id !== undefined) {
+            inBatchMjIds.add(file.metadata.mj_id)
+        }
+        if (file.metadata.relationships !== undefined && file.metadata.relationships.length > 0) {
+            pendingLinks.push({
+                entryId: file.metadata.mj_id ?? -(idx + 1),
+                filename: file.filename,
+                relationships: file.metadata.relationships,
+                workspaceId: effectiveWsId,
+                projectNumber: effectiveProjNum,
+            })
+        }
+    }
+    validateDryRunRelationships(db, pendingLinks, inBatchMjIds, result)
+}
+
 function upsertParsedFile(
     file: ParsedFile,
     db: IDatabaseAdapter,
@@ -220,6 +261,10 @@ function upsertParsedFile(
     const { author } = options
     const { effectiveWsId, effectiveProjNum, rawEntryType, significanceType, existing } =
         validateImportedFileEntry(file, db, options, prefetchedById)
+    const mappedAnchors = metadata.anchors?.map((anchorPath) => ({
+        anchorPath,
+        anchorType: 'file',
+    }))
 
     if (existing && metadata.mj_id !== undefined) {
         const updated = db.updateEntry(metadata.mj_id, {
@@ -228,6 +273,7 @@ function upsertParsedFile(
             tags: metadata.tags,
             ...(significanceType !== undefined && { significanceType }),
             ...(effectiveProjNum !== undefined && { projectNumber: effectiveProjNum }),
+            ...(mappedAnchors !== undefined ? { anchors: mappedAnchors } : {}),
             workspaceId: effectiveWsId,
         })
         if (updated === null) {
@@ -254,6 +300,7 @@ function upsertParsedFile(
         ...(significanceType !== undefined && { significanceType }),
         ...(resolvedAuthor !== undefined && { author: resolvedAuthor }),
         ...(effectiveProjNum !== undefined && { projectNumber: effectiveProjNum }),
+        ...(mappedAnchors !== undefined ? { anchors: mappedAnchors } : {}),
         workspaceId: effectiveWsId,
     })
     result.created++
@@ -293,22 +340,16 @@ export async function processImportBatch(
     const prefetchedById = prefetchImportedEntriesById(db, files)
 
     db.executeInTransaction(() => {
+        if (dry_run) {
+            runDryRunImportValidation(files, db, options, prefetchedById, result)
+            return
+        }
+
         const idRemap = new Map<number, number>()
         const pendingLinks: PendingRelationshipLink[] = []
 
         for (const file of files) {
             const { filename, metadata } = file
-
-            if (dry_run) {
-                const { existing } = validateImportedFileEntry(file, db, options, prefetchedById)
-                if (existing) {
-                    result.updated++
-                } else {
-                    result.created++
-                }
-                continue
-            }
-
             const {
                 entry,
                 entryId,

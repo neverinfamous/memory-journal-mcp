@@ -16,6 +16,7 @@ import {
     RELATIONSHIP_TYPE_KEYS,
     pickRecordField,
 } from '../../handlers/tools/schemas/entry-constants.js'
+import { parseCanonicalPositiveInt } from '../../utils/safe-positive-int.js'
 
 const FORBIDDEN_DYNAMIC_KEYS = new Set(['__proto__', 'constructor', 'prototype'])
 
@@ -35,6 +36,13 @@ const GIT_COMMIT_METHODS = new Set([
     'searchcommits',
 ])
 
+function parseCoercedNumericString(raw: string, allowZero: boolean): number | undefined {
+    if (allowZero && raw.trim() === '0') {
+        return 0
+    }
+    return parseCanonicalPositiveInt(raw)
+}
+
 /** Coerce numeric string IDs/project numbers and normalize entry_type aliases. */
 export function coerceNumericValue(
     snakeKey: string,
@@ -45,8 +53,8 @@ export function coerceNumericValue(
         (snakeKey.endsWith('_id') || snakeKey === 'id' || snakeKey === 'project_number') &&
         typeof value === 'string'
     ) {
-        const num = Number(value)
-        if (!Number.isNaN(num) && value.trim() !== '') {
+        const num = parseCoercedNumericString(value, snakeKey === 'project_number')
+        if (num !== undefined) {
             return { value: num }
         }
     }
@@ -54,8 +62,8 @@ export function coerceNumericValue(
         return {
             value: value.map((v: unknown) => {
                 if (typeof v === 'string') {
-                    const num = Number(v)
-                    if (!Number.isNaN(num) && v.trim() !== '') return num
+                    const num = parseCanonicalPositiveInt(v)
+                    if (num !== undefined) return num
                 }
                 return v
             }),

@@ -138,6 +138,14 @@ export async function resolveValidatedRestorePath(
     backupsDir: string,
     filename: string
 ): Promise<string> {
+    if (
+        filename.includes('\0') ||
+        filename.includes(':') ||
+        /%(?:2f|5c|2e|00)/i.test(filename) ||
+        /^(?:con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\.|$)/i.test(path.win32.basename(filename))
+    ) {
+        throw new ValidationError('Invalid or unsafe backup filename during restore resolution.')
+    }
     assertNoPathTraversal(filename)
 
     const fold = (p: string): string => (process.platform === 'win32' ? p.toLowerCase() : p)
@@ -269,6 +277,12 @@ export async function applySwappedDatabase(
         if (integrityVal !== 'ok') {
             throw new Error(`Integrity check failed: ${String(integrityVal)}`)
         }
+        const fkViolations = nativeDb.prepare('PRAGMA foreign_key_check').all()
+        if (fkViolations.length > 0) {
+            throw new Error(
+                `Foreign key check failed: ${String(fkViolations.length)} constraint violation(s)`
+            )
+        }
         return
     }
     const integrityResult = ctx.exec('PRAGMA integrity_check')
@@ -276,6 +290,11 @@ export async function applySwappedDatabase(
         throw new Error(
             `Integrity check failed: ${String(integrityResult[0]?.values[0]?.[0])}`
         )
+    }
+    const fkResult = ctx.exec('PRAGMA foreign_key_check')
+    const fkCount = fkResult[0]?.values.length ?? 0
+    if (fkCount > 0) {
+        throw new Error(`Foreign key check failed: ${String(fkCount)} constraint violation(s)`)
     }
 }
 

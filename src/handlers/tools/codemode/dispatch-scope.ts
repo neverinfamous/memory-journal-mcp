@@ -53,7 +53,13 @@ export function deepCamelToSnake(
                 const opaqueKey = UPPERCASE_RE.test(k)
                     ? k.replace(/[A-Z]/g, (letter) => `_${letter.toLowerCase()}`)
                     : k
-                if (!FORBIDDEN_KEYS.has(opaqueKey)) newObj[opaqueKey] = v
+                const shouldWrite =
+                    k === opaqueKey
+                        ? v !== undefined || !Object.hasOwn(newObj, opaqueKey)
+                        : !Object.hasOwn(obj, opaqueKey) || obj[opaqueKey] === undefined
+                if (!FORBIDDEN_KEYS.has(opaqueKey) && shouldWrite) {
+                    newObj[opaqueKey] = v
+                }
                 continue
             }
             if (depth === 0 && !CANONICAL_SNAKE_SCOPE_KEYS.has(k) && (acceptsKey?.(k) ?? false)) {

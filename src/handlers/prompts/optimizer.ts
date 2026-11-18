@@ -314,6 +314,7 @@ export function getOptimizerPromptDefinitions(): InternalPromptDef[] {
             description:
                 "Guided database pruning, graph verification, episodic-to-semantic compaction, and multi-agent audit workflow. Optional arguments: `lookback` (Number of recent entries, default: 10), `limit` (Entry processing cap; pass `0` for unlimited across all history, default: 500 or 0 in full/autoRun mode), `project` (Target project name or number, optional), `autoRun` (boolean, default: false), `mode` ('quick' | 'targeted' | 'full', default: 'quick'), `targetDimension` ('unassigned' | 'relationships' | 'scores' | 'tags' | 'all', default: 'all').",
             icons: [ICON_PROMPT],
+            capabilities: { requiresAdminScope: true },
             arguments: [
                 {
                     name: 'lookback',

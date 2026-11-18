@@ -21,6 +21,7 @@ import {
 } from './shared.js'
 import { createGitHubMilestoneResources } from './github-milestones.js'
 import { logger } from '../../utils/logger.js'
+import { fenceNonCanonicalRefOrKey } from '../../utils/security-utils.js'
 
 // ============================================================================
 // Resource API Limits
@@ -301,7 +302,7 @@ async function handleGitHubStatusResource(
         status: fetchStatus,
         failures: failures.length > 0 ? failures : undefined,
         repository: `${owner}/${repo}`,
-        branch,
+        branch: branch !== null ? fenceNonCanonicalRefOrKey(branch) : null,
         commit: commit?.slice(0, 7) ?? null,
         ci: { status: ciStatus, latestRun },
         issues: {

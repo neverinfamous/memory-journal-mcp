@@ -8,6 +8,7 @@ import {
     pairStoredScope,
 } from '../../../utils/write-scope.js'
 import type { ProjectRegistry } from '../../../utils/write-scope.js'
+import { insertAnchors } from './anchors.js'
 import { snapshotAndEvictRevisions } from './revisions.js'
 
 /** Thrown inside the update transaction to roll back revision bookkeeping when no row matched. */
@@ -51,7 +52,11 @@ export interface UpdateEntryInput {
     impactScore?: number | undefined
     sessionId?: string | null | undefined
     targetWorkspaceId?: string | undefined
+    anchors?: { anchorPath: string; anchorType: string; status?: string | undefined }[] | undefined
 }
+
+const nonEmptyNullable = (s: string | null | undefined): string | null | undefined =>
+    s === undefined ? undefined : s !== null && s !== '' ? s : null
 
 interface ExistingEntryRow {
     id: number
@@ -108,6 +113,13 @@ const OPTIONAL_SNAKE_FIELDS = [
     ['workflow_status', 'workflowStatus'],
 ] as const
 
+const EMPTY_STRING_NULL_KEYS = new Set<string>([
+    'projectOwner',
+    'issueUrl',
+    'prUrl',
+    'workflowName',
+])
+
 /** Build the SET clauses (and bound values) for the columns present in `input`. */
 function buildUpdateSets(
     id: number,
@@ -123,7 +135,7 @@ function buildUpdateSets(
         ['entry_type', input.entryType],
         ['content', input.content],
         ['is_personal', input.isPersonal !== undefined ? (input.isPersonal ? 1 : 0) : undefined],
-        ['significance_type', input.significanceType],
+        ['significance_type', nonEmptyNullable(input.significanceType)],
         ['auto_context', input.autoContext !== undefined ? (input.autoContext ?? null) : undefined],
         ['is_archived', input.isArchived !== undefined ? (input.isArchived ? 1 : 0) : undefined],
         ['trust_score', input.trustScore],
@@ -140,8 +152,12 @@ function buildUpdateSets(
     }
 
     for (const [snakeKey, camelKey] of OPTIONAL_SNAKE_FIELDS) {
-        const val = input[camelKey]
-        if (val !== undefined) {
+        const rawVal = input[camelKey]
+        if (rawVal !== undefined) {
+            const val =
+                typeof rawVal === 'string' && EMPTY_STRING_NULL_KEYS.has(camelKey)
+                    ? nonEmptyNullable(rawVal)
+                    : rawVal
             updates.push(`${snakeKey} = ?`)
             values.push(val ?? null)
         }
@@ -299,6 +315,11 @@ export function performUpdateEntry(
             ).run(id)
             db.prepare('DELETE FROM entry_tags WHERE entry_id = ?').run(id)
             tagsMgr.linkTagsToEntry(id, input.tags.map(normalizeTag))
+        }
+
+        if (input.anchors !== undefined) {
+            db.prepare('DELETE FROM entry_anchors WHERE entry_id = ?').run(id)
+            insertAnchors(context, id, input.anchors)
         }
 
         return true

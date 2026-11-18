@@ -22,6 +22,7 @@ import type {
 } from '../handlers/resources/shared.js'
 import { ASSISTANT_FOCUSED } from '../utils/resource-annotations.js'
 import {
+    isAlreadyInlineFencedUntrustedContent,
     markUntrustedContentInline,
     sanitizeErrorForLogging,
 } from '../utils/security-utils.js'
@@ -75,11 +76,11 @@ const CANONICAL_AUDIT_ID_RE =
     /^(?:resource:|prompt:)?(?:memory:\/\/[A-Za-z0-9_./-]+|[A-Za-z0-9_.:@-]{1,128})$/
 const AUDIT_ARG_SECRET_KEY_RE =
     /(?:token|secret|password|passwd|authorization|auth_header|api_key|apikey|encryption_key|webhook|private_key|client_secret)/i
-const ALREADY_FENCED_RE =
-    /^<untrusted_remote_content>(?:\n[\s\S]*\n|[^\n]*)<\/untrusted_remote_content>$/
 
 function fenceInlineIdempotent(value: string): string {
-    return ALREADY_FENCED_RE.test(value) ? value : markUntrustedContentInline(value)
+    return isAlreadyInlineFencedUntrustedContent(value)
+        ? value
+        : markUntrustedContentInline(value)
 }
 
 function fenceNonCanonicalAuditId(value: unknown): string {
@@ -93,7 +94,8 @@ function sanitizeAuditArgNode(value: unknown, depth: number, seen: WeakSet<objec
         return fenceInlineIdempotent(sanitizeErrorForLogging(value))
     }
     if (value === null || typeof value !== 'object') return value
-    if (depth >= 6 || seen.has(value)) return value
+    if (seen.has(value)) return '[Circular]'
+    if (depth >= 6) return '[Truncated]'
     seen.add(value)
 
     if (Array.isArray(value)) {
@@ -111,22 +113,35 @@ function sanitizeAuditArgNode(value: unknown, depth: number, seen: WeakSet<objec
 
 /** Fence untrusted non-canonical audit fields and scrub secret tokens before MCP egress. */
 export function sanitizeAuditEntryForEgress(e: AuditEntry): AuditEntry {
-    const cleanArgs =
-        e.args !== undefined
-            ? (sanitizeAuditArgNode(e.args, 0, new WeakSet()) as Record<string, unknown>)
-            : undefined
-    return {
-        ...e,
+    const isPlainArgs = typeof e.args === 'object' && e.args !== null && !Array.isArray(e.args)
+    const cleanArgs = isPlainArgs
+        ? (sanitizeAuditArgNode(e.args, 0, new WeakSet()) as Record<string, unknown>)
+        : undefined
+    const rawSuccess: unknown = e.success
+    const base: AuditEntry = {
+        timestamp: typeof e.timestamp === 'string' ? e.timestamp : '',
+        requestId: typeof e.requestId === 'string' ? fenceNonCanonicalAuditId(e.requestId) : '',
         tool: typeof e.tool === 'string' ? fenceNonCanonicalAuditId(e.tool) : '',
+        category: e.category,
+        scope: typeof e.scope === 'string' ? e.scope : '',
         user: typeof e.user === 'string' ? fenceNonCanonicalAuditId(e.user) : null,
-        ...(typeof e.workspaceId === 'string'
-            ? { workspaceId: fenceNonCanonicalAuditId(e.workspaceId) }
-            : {}),
-        ...(typeof e.error === 'string'
-            ? { error: fenceInlineIdempotent(sanitizeErrorForLogging(e.error)) }
-            : {}),
-        ...(cleanArgs !== undefined ? { args: cleanArgs } : {}),
+        scopes: Array.isArray(e.scopes)
+            ? e.scopes.filter((s): s is string => typeof s === 'string').map(fenceNonCanonicalAuditId)
+            : [],
+        durationMs: typeof e.durationMs === 'number' ? e.durationMs : 0,
+        tokenEstimate: typeof e.tokenEstimate === 'number' ? e.tokenEstimate : 0,
+        success: rawSuccess === true,
     }
+    if (typeof e.sessionId === 'string') base.sessionId = fenceNonCanonicalAuditId(e.sessionId)
+    if (typeof e.workspaceId === 'string') {
+        base.workspaceId = fenceNonCanonicalAuditId(e.workspaceId)
+    }
+    if (typeof e.projectNumber === 'number') base.projectNumber = e.projectNumber
+    if (typeof e.error === 'string') {
+        base.error = fenceInlineIdempotent(sanitizeErrorForLogging(e.error))
+    }
+    if (cleanArgs !== undefined) base.args = cleanArgs
+    return base
 }
 
 function formatAuditEntryYaml(e: AuditEntry): string {

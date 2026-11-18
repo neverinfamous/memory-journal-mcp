@@ -149,7 +149,8 @@ const MAX_SCRUB_DEPTH = 6
 function scrubAuditArgValue(val: unknown, depth: number, seen: WeakSet<object>): unknown {
     if (typeof val === 'string') return sanitizeErrorForLogging(val)
     if (val === null || typeof val !== 'object') return val
-    if (depth >= MAX_SCRUB_DEPTH || seen.has(val)) return val
+    if (seen.has(val)) return '[Circular]'
+    if (depth >= MAX_SCRUB_DEPTH) return '[Truncated]'
     seen.add(val)
 
     if (Array.isArray(val)) {

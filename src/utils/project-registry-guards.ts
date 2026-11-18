@@ -4,6 +4,9 @@ import { assertSafeDirectoryPath } from './security-utils.js'
 
 const FORBIDDEN_PROJECT_KEYS = new Set(['__proto__', 'constructor', 'prototype'])
 
+const WIN_DRIVE_PATH_RE = /^[A-Za-z]:[\\/]/
+const ENCODED_TRAVERSAL_RE = /%(?:2f|5c|2e|00)/i
+
 const SYSTEM_DIR_EXACT = new Set([
     '/usr',
     '/bin',
@@ -13,10 +16,11 @@ const SYSTEM_DIR_EXACT = new Set([
     '/proc',
     '/sys',
     '/dev',
+    '/windows',
     'c:/windows',
 ])
 
-const SYSTEM_DIR_PREFIXES = ['/etc/', '/proc/', '/sys/', '/dev/', 'c:/windows/']
+const SYSTEM_DIR_PREFIXES = ['/etc/', '/proc/', '/sys/', '/dev/', '/windows/', 'c:/windows/']
 
 /** Return true when a workspace/registry key is empty, wildcard, or a prototype pollution key. */
 export function isForbiddenProjectKey(key: string): boolean {
@@ -24,8 +28,16 @@ export function isForbiddenProjectKey(key: string): boolean {
     return trimmed === '' || trimmed === '*' || FORBIDDEN_PROJECT_KEYS.has(trimmed)
 }
 
-function isSystemOrRootDirectory(rawInput: string, resolvedPath: string): boolean {
-    const parsedRoot = path.parse(resolvedPath).root.replace(/[\\/]+$/, '').toLowerCase()
+function selectPathModule(rawPath: string): typeof path {
+    return WIN_DRIVE_PATH_RE.test(rawPath) ? path.win32 : path
+}
+
+function isSystemOrRootDirectory(
+    rawInput: string,
+    resolvedPath: string,
+    pathMod: typeof path
+): boolean {
+    const parsedRoot = pathMod.parse(resolvedPath).root.replace(/[\\/]+$/, '').toLowerCase()
     const resolvedFolded = resolvedPath.replace(/[\\/]+$/, '').toLowerCase()
     if (resolvedFolded === '' || resolvedFolded === parsedRoot) {
         return true
@@ -46,7 +58,10 @@ function isSystemOrRootDirectory(rawInput: string, resolvedPath: string): boolea
     return false
 }
 
-function hasUnsafeExistingAncestor(resolvedPath: string): boolean {
+function hasUnsafeExistingAncestor(
+    resolvedPath: string,
+    pathMod: typeof path
+): boolean {
     let current = resolvedPath
     let checkedDeepestExisting = false
     while (true) {
@@ -62,7 +77,7 @@ function hasUnsafeExistingAncestor(resolvedPath: string): boolean {
                 return true
             }
         }
-        const parent = path.dirname(current)
+        const parent = pathMod.dirname(current)
         if (parent === current) {
             return false
         }
@@ -78,21 +93,39 @@ export function isValidProjectPath(p: string, allowedRoots?: string[]): boolean 
     if (p === '' || p.includes('\0') || p.startsWith('\\\\') || p.startsWith('//')) {
         return false
     }
+    if (ENCODED_TRAVERSAL_RE.test(p) || p.replace(/^[A-Za-z]:/, '').includes(':')) {
+        return false
+    }
+    const pathMod = selectPathModule(p)
     const slashSplit = p.replace(/\\/g, '/').split('/')
-    const normalizedSplit = path.normalize(p).split(path.sep)
+    const normalizedSplit = pathMod.normalize(p).split(pathMod.sep)
     if (slashSplit.includes('..') || normalizedSplit.includes('..')) {
         return false
     }
-    if (!path.isAbsolute(p)) {
+    if (!pathMod.isAbsolute(p)) {
         return false
     }
 
-    const resolved = path.resolve(p)
-    if (isSystemOrRootDirectory(p, resolved)) {
+    const resolved = pathMod.resolve(p)
+    if (isSystemOrRootDirectory(p, resolved, pathMod) || hasUnsafeExistingAncestor(resolved, pathMod)) {
         return false
     }
-    if (hasUnsafeExistingAncestor(resolved)) {
-        return false
+
+    let decoded = p
+    try {
+        decoded = decodeURIComponent(p)
+    } catch {
+        // Leave non-URI percent sequences as raw path characters
+    }
+    if (decoded !== p) {
+        const decodedPathMod = selectPathModule(decoded)
+        const decodedResolved = decodedPathMod.resolve(decoded)
+        if (
+            isSystemOrRootDirectory(decoded, decodedResolved, decodedPathMod) ||
+            hasUnsafeExistingAncestor(decodedResolved, decodedPathMod)
+        ) {
+            return false
+        }
     }
 
     if (allowedRoots !== undefined) {

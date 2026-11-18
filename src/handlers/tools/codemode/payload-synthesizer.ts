@@ -214,7 +214,9 @@ function transformInitialExecutionCode(
 ): { executionCode: string } | { earlyReturn: Record<string, unknown> } {
     const trimmedInitial = executionCode.trim()
     const hasExplicitContent =
-        typeof params === 'object' && params !== null && 'content' in params
+        isRecord(params) &&
+        typeof params['content'] === 'string' &&
+        params['content'].trim().length > 0
     const looksLikeSqlQuery = RAW_SQL_QUERY_RE.test(trimmedInitial)
 
     if (sourceKey === 'query' && !hasExplicitContent) {

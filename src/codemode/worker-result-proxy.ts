@@ -17,6 +17,7 @@ const RESULT_COLLECTION_KEYS: ReadonlySet<string> = new Set([
     'logs', 'aliases', 'tags', 'issues', 'pullRequests', 'milestones', 'columns',
     'comments', 'files', 'errors', 'backups', 'deleted', 'updated', 'notFound',
     'history', 'relationships', 'members', 'data', 'nodes', 'edges', 'commits',
+    'changelog', 'revisions', 'entryIds', 'deletedIds', 'list', 'dataArray',
 ])
 
 const ITERATOR_COLLECTION_KEYS: ReadonlySet<string> = new Set([
@@ -113,6 +114,9 @@ function createFailedResultProxy(result: object): unknown {
     return new Proxy(result, {
         ownKeys: (target) => Reflect.ownKeys(target),
         getOwnPropertyDescriptor: (target, prop) => Reflect.getOwnPropertyDescriptor(target, prop),
+        isExtensible: () => true,
+        preventExtensions: () => false,
+        defineProperty: () => false,
         get(target, prop): unknown {
             const errVal: unknown = Reflect.get(target, 'error')
             const codeVal: unknown = Reflect.get(target, 'code')
@@ -159,14 +163,31 @@ function createArrayResultProxy(arr: unknown[]): unknown {
 
 type ArrayForwardMatch = { matched: true; value: unknown } | { matched: false }
 
+function findPrimaryArray(
+    targetRecord: Record<string, unknown>,
+    keysToCheck: ReadonlySet<string> = RESULT_COLLECTION_KEYS
+): unknown[] | undefined {
+    const targetKey = findPrimaryArrayKey(targetRecord, keysToCheck)
+    const candidate = targetKey !== undefined ? targetRecord[targetKey] : undefined
+    if (Array.isArray(candidate)) {
+        const arr: unknown[] = candidate
+        return arr
+    }
+    const changelogObj = targetRecord['changelog']
+    if (isObject(changelogObj) && Array.isArray(changelogObj['commits'])) {
+        const commits: unknown[] = changelogObj['commits']
+        return commits
+    }
+    return undefined
+}
+
 function resolveIteratorOrListAlias(
     targetRecord: Record<string, unknown>,
     prop: string | symbol
 ): ArrayForwardMatch {
     if (prop === Symbol.iterator) {
-        const targetKey = findPrimaryArrayKey(targetRecord, ITERATOR_COLLECTION_KEYS)
-        if (targetKey !== undefined && Array.isArray(targetRecord[targetKey])) {
-            const arrToYield: unknown[] = targetRecord[targetKey]
+        const arrToYield = findPrimaryArray(targetRecord, ITERATOR_COLLECTION_KEYS)
+        if (arrToYield !== undefined) {
             return { matched: true, value: function* () { yield* arrToYield } }
         }
         if ('project' in targetRecord && isObject(targetRecord['project'])) {
@@ -184,8 +205,8 @@ function resolveIteratorOrListAlias(
     }
 
     if (typeof prop === 'string' && RESULT_LIST_ALIASES.has(prop)) {
-        const targetKey = findPrimaryArrayKey(targetRecord)
-        if (targetKey !== undefined) return { matched: true, value: targetRecord[targetKey] }
+        const primaryArr = findPrimaryArray(targetRecord)
+        if (primaryArr !== undefined) return { matched: true, value: primaryArr }
         if ('projects' in targetRecord && isObject(targetRecord['projects'])) {
             return { matched: true, value: wrapResult(dictToItems(targetRecord['projects'])) }
         }
@@ -205,9 +226,9 @@ function resolveLengthOrIndexAccess(
     prop: string | symbol
 ): ArrayForwardMatch {
     if (prop === 'length') {
-        const targetKey = findPrimaryArrayKey(targetRecord)
-        if (targetKey !== undefined && Array.isArray(targetRecord[targetKey])) {
-            return { matched: true, value: targetRecord[targetKey].length }
+        const primaryArr = findPrimaryArray(targetRecord)
+        if (primaryArr !== undefined) {
+            return { matched: true, value: primaryArr.length }
         }
         if ('project' in targetRecord && isObject(targetRecord['project'])) return { matched: true, value: 1 }
         if ('projects' in targetRecord && isObject(targetRecord['projects'])) {
@@ -221,9 +242,9 @@ function resolveLengthOrIndexAccess(
         if ('project' in targetRecord && isObject(targetRecord['project']) && idx === 0) {
             return { matched: true, value: targetRecord['project'] }
         }
-        const targetKey = findPrimaryArrayKey(targetRecord)
-        if (targetKey !== undefined && Array.isArray(targetRecord[targetKey])) {
-            return { matched: true, value: targetRecord[targetKey][idx] }
+        const primaryArr = findPrimaryArray(targetRecord)
+        if (primaryArr !== undefined) {
+            return { matched: true, value: primaryArr[idx] }
         }
         if ('projects' in targetRecord && isObject(targetRecord['projects'])) {
             return { matched: true, value: dictToItems(targetRecord['projects'])[idx] }
@@ -238,9 +259,9 @@ function resolveArrayMethodForwarding(
     prop: string | symbol
 ): ArrayForwardMatch {
     if (typeof prop === 'string' && SUCCESS_ARRAY_METHODS.has(prop)) {
-        const targetKey = findPrimaryArrayKey(targetRecord)
-        if (targetKey !== undefined && Array.isArray(targetRecord[targetKey])) {
-            const bound = bindArrayMethod(targetRecord[targetKey], prop)
+        const primaryArr = findPrimaryArray(targetRecord)
+        if (primaryArr !== undefined) {
+            const bound = bindArrayMethod(primaryArr, prop)
             if (bound !== undefined) return { matched: true, value: bound }
         }
         if ('project' in targetRecord && isObject(targetRecord['project'])) {

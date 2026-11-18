@@ -38,11 +38,11 @@ function buildStatsCteBody(seedCte?: { name: string; col: string }): string {
             FROM (
                 SELECT r.from_entry_id AS entry_id, r.relationship_type
                 ${seedRelFrom}
-                JOIN memory_journal peer ON peer.id = r.to_entry_id AND peer.deleted_at IS NULL
+                JOIN memory_journal peer ON peer.id = r.to_entry_id AND peer.deleted_at IS NULL AND r.from_entry_id != r.to_entry_id
                 UNION ALL
                 SELECT r.to_entry_id AS entry_id, r.relationship_type
                 ${seedRelTo}
-                JOIN memory_journal peer ON peer.id = r.from_entry_id AND peer.deleted_at IS NULL
+                JOIN memory_journal peer ON peer.id = r.from_entry_id AND peer.deleted_at IS NULL AND r.from_entry_id != r.to_entry_id
             )
             GROUP BY entry_id
         ),
@@ -195,7 +195,7 @@ export function calculateImportance(
         FROM (
             SELECT r.relationship_type
             FROM relationships r
-            JOIN memory_journal p ON p.id = r.to_entry_id AND p.deleted_at IS NULL
+            JOIN memory_journal p ON p.id = r.to_entry_id AND p.deleted_at IS NULL AND r.from_entry_id != r.to_entry_id
             WHERE r.from_entry_id = ?
             UNION ALL
             SELECT r.relationship_type
@@ -246,12 +246,12 @@ function loadRelStatsChunk(
         FROM (
             SELECT r.from_entry_id AS entry_id, r.relationship_type
             FROM relationships r
-            JOIN memory_journal peer ON peer.id = r.to_entry_id AND peer.deleted_at IS NULL
+            JOIN memory_journal peer ON peer.id = r.to_entry_id AND peer.deleted_at IS NULL AND r.from_entry_id != r.to_entry_id
             WHERE r.from_entry_id IN (${marks})
             UNION ALL
             SELECT r.to_entry_id AS entry_id, r.relationship_type
             FROM relationships r
-            JOIN memory_journal peer ON peer.id = r.from_entry_id AND peer.deleted_at IS NULL
+            JOIN memory_journal peer ON peer.id = r.from_entry_id AND peer.deleted_at IS NULL AND r.from_entry_id != r.to_entry_id
             WHERE r.to_entry_id IN (${marks})
         )
         GROUP BY entry_id

@@ -61,7 +61,7 @@ function buildRpcOverrides(req: RpcRequest): RpcExecutionOverrides | undefined {
     }
     if (
         typeof req.projectNumber === 'number' &&
-        Number.isInteger(req.projectNumber) &&
+        Number.isSafeInteger(req.projectNumber) &&
         req.projectNumber > 0
     ) {
         overrides.projectNumber = req.projectNumber

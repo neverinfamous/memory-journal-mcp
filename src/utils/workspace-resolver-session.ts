@@ -5,11 +5,15 @@
  * shared, long-lived config objects (see C1 in the pass-20 audit).
  */
 
-import { getRequestContext } from './request-context.js'
+import { getRequestContext, type RequestContext } from './request-context.js'
 
 interface SessionProjectEntry {
     workspaceId?: string
     projectNumber?: number
+}
+
+function isEphemeralHttpStore(reqCtx: RequestContext): boolean {
+    return reqCtx.ephemeralSessionProject !== undefined || reqCtx.ip !== undefined
 }
 
 const MAX_HTTP_SESSIONS = 1000
@@ -84,13 +88,15 @@ export function setActiveSessionProject(
             }
             return
         }
-        reqCtx.ephemeralSessionProject = computeNextSessionEntry(
-            reqCtx.ephemeralSessionProject,
-            validWs,
-            validProj,
-            clearProject
-        )
-        return
+        if (isEphemeralHttpStore(reqCtx)) {
+            reqCtx.ephemeralSessionProject = computeNextSessionEntry(
+                reqCtx.ephemeralSessionProject,
+                validWs,
+                validProj,
+                clearProject
+            )
+            return
+        }
     }
 
     if (runtime !== undefined) {
@@ -124,7 +130,9 @@ export function getActiveSessionProject(runtime?: object | null): {
         if (reqCtx.sessionId !== undefined && reqCtx.sessionId !== '') {
             return cloneEntry(httpSessionProjects.get(reqCtx.sessionId))
         }
-        return cloneEntry(reqCtx.ephemeralSessionProject)
+        if (isEphemeralHttpStore(reqCtx)) {
+            return cloneEntry(reqCtx.ephemeralSessionProject)
+        }
     }
 
     if (runtime !== undefined) {
@@ -152,10 +160,12 @@ export function clearActiveSessionProject(runtime?: object | null): void {
     if (reqCtx !== undefined) {
         if (reqCtx.sessionId !== undefined && reqCtx.sessionId !== '') {
             httpSessionProjects.delete(reqCtx.sessionId)
-        } else {
-            delete reqCtx.ephemeralSessionProject
+            return
         }
-        return
+        if (isEphemeralHttpStore(reqCtx)) {
+            delete reqCtx.ephemeralSessionProject
+            return
+        }
     }
 
     if (runtime !== undefined) {
