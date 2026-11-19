@@ -15,8 +15,10 @@ This directory contains the satellite monitoring stack for `memory-journal-mcp`,
    pnpm infra:status
    ```
 4. **Access:**
-   - **Grafana**: [http://localhost:3001](http://localhost:3001) (admin/admin)
-   - **Dozzle**: [http://localhost:8080](http://localhost:8080)
+   - **Grafana**: [http://localhost:3002](http://localhost:3002) (admin/admin)
+   - **Prometheus**: [http://localhost:9091](http://localhost:9091)
+   - **Loki**: [http://localhost:3102](http://localhost:3102)
+   - **Dozzle**: [http://localhost:8082](http://localhost:8082)
 
 ## How It Works
 
