@@ -90,8 +90,13 @@ export interface BriefingGitHub {
               reviewStatus?: string | undefined
               commentCount?: number | undefined
               ciStatus?: string | undefined
+              reviewSuppressed?: boolean | undefined
+              ciSuppressed?: boolean | undefined
           }
         | undefined
+    ciSuppressed?: boolean | undefined
+    issuesSuppressed?: boolean | undefined
+    prsSuppressed?: boolean | undefined
     degraded?: boolean | undefined
     degradedReasons?: string[] | undefined
 }
@@ -138,13 +143,18 @@ export async function buildGitHubSection(
         const issues = hideResolvedIssues(unpacked.issuesAndPrs, unpacked.localGitStatus.resolvedIssues)
         const localBranch =
             'branch' in unpacked.localGitStatus ? unpacked.localGitStatus.branch : undefined
-        const activePr = await loadActivePr(
-            repoGithub,
-            owner,
-            repo,
-            unpacked.issuesAndPrs.allPrs,
-            localBranch,
-        )
+        const includePrs = config.prCount > 0 || config.prStatusBreakdown
+        const includeCi = config.workflowCount > 0 || config.workflowStatusBreakdown
+        const activePr = includePrs
+            ? await loadActivePr(
+                  repoGithub,
+                  owner,
+                  repo,
+                  unpacked.issuesAndPrs.allPrs,
+                  localBranch,
+                  { includeCopilot: config.copilotReviews, includeCi },
+              )
+            : undefined
         return assembleBriefingGitHub({
             owner,
             repo,

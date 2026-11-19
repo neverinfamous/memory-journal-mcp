@@ -258,13 +258,15 @@ export async function buildBriefingData(
             journal.workspaceId
         ),
     ])
-    const team = buildTeamContext(
-        context,
-        config,
-        activeProjectNumber,
-        activeWorkspaceId,
-        journal.mirrorCandidates
-    )
+    const team = config.includeTeam
+        ? buildTeamContext(
+              context,
+              config,
+              activeProjectNumber,
+              activeWorkspaceId,
+              journal.mirrorCandidates
+          )
+        : undefined
     const insights = buildInsightsSection(context, activeWorkspaceId)
     const graphStats = buildGraphContext(context, journal.workspaceId, journal.totalEntries)
     const graphPivotsEnabled = config.graphPivots !== false
@@ -293,16 +295,25 @@ export async function buildBriefingData(
           )
         : null
 
+    const ciSuppressed =
+        github !== null
+            ? github.ciSuppressed === true
+            : config.workflowCount <= 0 && !config.workflowStatusBreakdown
+
     const userMessage = formatUserMessage({
         repoName: github?.repo ?? 'local',
         branchName: github?.branch ?? 'unknown',
         ciStatus: github?.ci ?? 'unknown',
+        ...(ciSuppressed ? { ciSuppressed: true } : {}),
+        ...(config.entryCount <= 0 ? { entriesSuppressed: true } : {}),
         totalEntries: journal.totalEntries,
         latestPreviews,
         ...(teamLatestPreviews !== undefined ? { teamLatestPreviews } : {}),
         summaryPreviews,
         github,
-        teamTotalEntries: team?.teamInfo.totalEntries,
+        ...(config.includeTeam && team?.teamInfo.totalEntries !== undefined
+            ? { teamTotalEntries: team.teamInfo.totalEntries }
+            : {}),
         analyticsInsights: insights ?? undefined,
         graphSummary: graphStats,
         ...(graphPivots !== undefined ? { graphPivots } : {}),

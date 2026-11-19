@@ -91,6 +91,7 @@ function fetchBriefingSummaries(
     projectNumber: number | null | undefined,
     filterImportant: (entries: JournalEntry[]) => JournalEntry[]
 ): JournalEntry[] {
+    if ((config.summaryCount ?? 1) <= 0) return []
     const summaryFetchLimit = Math.max(20, (config.summaryCount ?? 1) * 5)
     const rawSummaryEntries = extractEntries(
         context.db.searchEntries('', {
@@ -214,15 +215,17 @@ export function buildJournalContext(
     const latestSessionSummary = sessionSummaries?.[0]
 
     // Fetch a larger buffer to account for entries that might get deduplicated out or filtered by importance
-    const fetchLimit = Math.max(100, config.entryCount * 10)
-    const rawRecentEntries = extractEntries(
-        context.db.searchEntries('', {
-            limit: fetchLimit,
-            workspaceId: targetWs,
-            ...(typeof projectNumber === 'number' ? { projectNumber } : {}),
-            sortBy: 'timestamp',
-        })
-    )
+    const rawRecentEntries =
+        config.entryCount > 0
+            ? extractEntries(
+                  context.db.searchEntries('', {
+                      limit: Math.max(100, config.entryCount * 10),
+                      workspaceId: targetWs,
+                      ...(typeof projectNumber === 'number' ? { projectNumber } : {}),
+                      sortBy: 'timestamp',
+                  })
+              )
+            : []
 
     let recentEntries = filterImportant(rawRecentEntries)
     if (recentEntries.length === 0 && rawRecentEntries.length > 0) {

@@ -227,12 +227,12 @@ export function addBriefingOptions(command: Command): Command {
             )
             .option(
                 '--briefing-issues <count>',
-                'Number of issues to list in briefing; 0 = count only (env: BRIEFING_ISSUE_COUNT)',
+                'Number of issues to list in briefing; 0 = hide (env: BRIEFING_ISSUE_COUNT)',
                 '0'
             )
             .option(
                 '--briefing-prs <count>',
-                'Number of PRs to list in briefing; 0 = count only (env: BRIEFING_PR_COUNT)',
+                'Number of PRs to list in briefing; 0 = hide (env: BRIEFING_PR_COUNT)',
                 '0'
             )
             .option(
@@ -254,7 +254,7 @@ export function addBriefingOptions(command: Command): Command {
             )
             .option(
                 '--briefing-workflows <count>',
-                'Number of workflow runs to list in briefing; 0 = status only (env: BRIEFING_WORKFLOW_COUNT)',
+                'Number of workflow runs to list in briefing; 0 = hide (env: BRIEFING_WORKFLOW_COUNT)',
                 '0'
             )
             .option(

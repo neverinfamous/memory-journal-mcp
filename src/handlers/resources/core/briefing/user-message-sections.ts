@@ -18,6 +18,8 @@ export interface BriefingUserMessageOptions {
     repoName: string
     branchName: string
     ciStatus: string
+    ciSuppressed?: boolean
+    entriesSuppressed?: boolean
     totalEntries: number
     latestPreviews: string[]
     teamLatestPreviews?: string[]
@@ -104,10 +106,11 @@ function formatWorkflowCounts(
 }
 
 export function buildGithubParts(opts: BriefingUserMessageOptions, ciDisplay: string): string[] {
+    const suppressCi = opts.ciSuppressed === true || opts.github?.ciSuppressed === true
     const githubParts = [
         `**${escapeCell(opts.repoName)}**`,
         escapeCell(fenceNonCanonicalRefOrKey(opts.branchName)),
-        escapeCell(ciDisplay),
+        ...(suppressCi ? [] : [escapeCell(ciDisplay)]),
     ]
     const local = opts.github?.localGitStatus
     if (local && !local.isClean) {
@@ -119,8 +122,8 @@ export function buildGithubParts(opts: BriefingUserMessageOptions, ciDisplay: st
 export function buildTrackingParts(github: BriefingGitHub | null): string[] {
     const trackingParts: string[] = []
     if (!github) return trackingParts
-    appendIssueTracking(github, trackingParts)
-    appendPullRequestTracking(github, trackingParts)
+    if (github.issuesSuppressed !== true) appendIssueTracking(github, trackingParts)
+    if (github.prsSuppressed !== true) appendPullRequestTracking(github, trackingParts)
     appendMilestoneTracking(github, trackingParts)
     return trackingParts
 }
@@ -134,21 +137,29 @@ function appendIssueTracking(github: BriefingGitHub, trackingParts: string[]): v
     trackingParts.push(`Issues: ${String(github.openIssues)} open`)
 }
 
-function appendPullRequestTracking(github: BriefingGitHub, trackingParts: string[]): void {
-    if (github.activePr) {
-        const apr = github.activePr
+function formatActivePrLine(apr: NonNullable<BriefingGitHub['activePr']>): string {
+    const details: string[] = []
+    if (apr.reviewSuppressed !== true) {
         let reviewStr = 'Pending Review'
         if (apr.reviewStatus === 'approved') reviewStr = 'Approved'
         else if (apr.reviewStatus === 'changes_requested')
             reviewStr = `Changes Requested (${String(apr.commentCount ?? 0)} comments)`
         else if (apr.reviewStatus) reviewStr = apr.reviewStatus
-
+        details.push(escapeCell(reviewStr))
+    }
+    if (apr.ciSuppressed !== true) {
         const ciStr = apr.ciStatus
             ? `CI: ${apr.ciStatus.charAt(0).toUpperCase() + apr.ciStatus.slice(1)}`
             : 'CI: Unknown'
-        trackingParts.push(
-            `Current PR (#${String(apr.number)}): ${escapeCell(reviewStr)} · ${escapeCell(ciStr)}`,
-        )
+        details.push(escapeCell(ciStr))
+    }
+    const suffix = details.length > 0 ? details.join(' · ') : escapeCell(apr.title)
+    return `Current PR (#${String(apr.number)}): ${suffix}`
+}
+
+function appendPullRequestTracking(github: BriefingGitHub, trackingParts: string[]): void {
+    if (github.activePr) {
+        trackingParts.push(formatActivePrLine(github.activePr))
     }
 
     if (github.prStatusSummary) {
@@ -205,7 +216,7 @@ export function buildJournalParts(opts: BriefingUserMessageOptions): string[] {
         for (let i = 1; i < latestPreviews.length; i++) {
             journalParts.push(`Entry: ${escapeCell(latestPreviews[i] ?? '')}`)
         }
-    } else if (!summaryPreviews || summaryPreviews.length === 0) {
+    } else if (opts.entriesSuppressed !== true && (!summaryPreviews || summaryPreviews.length === 0)) {
         journalParts.push('Latest: No entries yet')
     }
     if (summaryPreviews && summaryPreviews.length > 0) {

@@ -156,7 +156,7 @@ async function loadCachedGitHistoryAsync(
     commitCount: number,
     targetPath?: string | null
 ): Promise<GitHistorySummary | null> {
-    if (targetPath === null) return null
+    if (commitCount <= 0 || targetPath === null) return null
     const root = targetPath || resolveProjectRoot()
     const cacheKey = `${root}::${String(commitCount)}`
     const cached = getCached(cachedGitHistory, cacheKey)

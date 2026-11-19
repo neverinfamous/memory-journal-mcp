@@ -160,6 +160,17 @@ describe('buildJournalContext', () => {
 
         expect(result.latestEntries[0]!.preview).toBe('')
     })
+
+    it('skips searchEntries queries when entryCount and summaryCount are 0', () => {
+        const db = createMockDb()
+        const config = createMockConfig({ entryCount: 0, summaryCount: 0 })
+        const result = buildJournalContext({ db } as never, config as never)
+
+        expect(db.searchEntries).not.toHaveBeenCalled()
+        expect(result.totalEntries).toBe(42)
+        expect(result.latestEntries).toEqual([])
+        expect(result.sessionSummaries).toBeUndefined()
+    })
 })
 
 // ============================================================================

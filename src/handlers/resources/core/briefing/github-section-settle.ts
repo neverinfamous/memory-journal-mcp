@@ -164,6 +164,7 @@ export async function loadActivePr(
     repo: string,
     allPrs: IssuesAndPrs['allPrs'],
     localBranch: string | null | undefined,
+    options?: { includeCopilot?: boolean; includeCi?: boolean },
 ): Promise<BriefingGitHub['activePr']> {
     const activePrData =
         localBranch !== undefined && localBranch !== '' && allPrs !== undefined
@@ -171,8 +172,12 @@ export async function loadActivePr(
             : undefined
     if (activePrData === undefined) return undefined
 
-    const review = await readReviewSummary(github, owner, repo, activePrData.number)
-    const ciStatus = await readPullRequestCi(github, owner, repo, activePrData.headRef)
+    const includeCopilot = options?.includeCopilot ?? true
+    const includeCi = options?.includeCi ?? true
+    const review = includeCopilot
+        ? await readReviewSummary(github, owner, repo, activePrData.number)
+        : { reviewStatus: undefined, commentCount: 0 }
+    const ciStatus = includeCi ? await readPullRequestCi(github, owner, repo, activePrData.headRef) : undefined
     return {
         number: activePrData.number,
         title: markUntrustedContentInline(activePrData.title),
@@ -181,6 +186,8 @@ export async function loadActivePr(
         reviewStatus: review.reviewStatus,
         commentCount: review.commentCount,
         ciStatus,
+        ...(!includeCopilot ? { reviewSuppressed: true } : {}),
+        ...(!includeCi ? { ciSuppressed: true } : {}),
     }
 }
 
@@ -256,6 +263,11 @@ export function assembleBriefingGitHub(input: {
         insights: unpacked.insights,
         openIssueList: input.openIssueList,
         openPrList,
+        ...(unpacked.ciStatus.ciSuppressed === true ? { ciSuppressed: true } : {}),
+        ...(input.config.issueCount <= 0 ? { issuesSuppressed: true } : {}),
+        ...(input.config.prCount <= 0 && !input.config.prStatusBreakdown
+            ? { prsSuppressed: true }
+            : {}),
         ...(input.activePr !== undefined ? { activePr: input.activePr } : {}),
         ...(input.config.prStatusBreakdown && prSummarySource !== undefined
             ? { prStatusSummary: summarizePrStates(prSummarySource, openPRs) }

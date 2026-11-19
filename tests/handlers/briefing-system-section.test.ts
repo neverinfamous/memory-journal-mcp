@@ -122,4 +122,25 @@ describe('buildBriefingSystemSummary', () => {
         // Should match pattern like "2026-05-25 06:12 EDT" or "2026-05-25 06:12 UTC"
         expect(result.localTime).toMatch(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2} \w+/)
     })
+
+    it('returns gitHistory: null when commitCount is 0', async () => {
+        const result = await buildBriefingSystemSummary(
+            {
+                commitCount: 0,
+                entryCount: 3,
+                includeTeam: false,
+                issueCount: 0,
+                prCount: 0,
+                prStatusBreakdown: false,
+                workflowCount: 0,
+                workflowStatusBreakdown: false,
+                copilotReviews: false,
+            },
+            undefined,
+            undefined,
+            42
+        )
+
+        expect(result.gitHistory).toBeNull()
+    })
 })

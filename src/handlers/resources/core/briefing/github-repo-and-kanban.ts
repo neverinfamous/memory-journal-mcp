@@ -15,6 +15,7 @@ export interface CiResult {
     ciName?: string | undefined
     ciUpdatedAt?: string | undefined
     workflowSummary?: BriefingGitHub['workflowSummary'] | undefined
+    ciSuppressed?: boolean | undefined
     degraded?: boolean | undefined
 }
 
@@ -102,6 +103,9 @@ export async function fetchCiStatus(
     repo: string,
     config: BriefingConfig
 ): Promise<CiResult> {
+    if (config.workflowCount <= 0 && !config.workflowStatusBreakdown) {
+        return { status: 'unknown', ciSuppressed: true }
+    }
     try {
         const runLimit = Math.max(5, config.workflowCount, config.workflowStatusBreakdown ? 10 : 1)
         const runs = await github.getWorkflowRuns(owner, repo, runLimit)
@@ -153,20 +157,24 @@ export async function fetchIssuesAndPrs(
         | undefined
     degraded?: boolean | undefined
 }> {
+    const includeIssues = config.issueCount > 0
+    const includePrs = config.prCount > 0 || config.prStatusBreakdown
+    if (!includeIssues && !includePrs) {
+        return { openIssues: 0, openPRs: 0 }
+    }
     try {
-        // [INVARIANT] H29: When issueCount/prCount is 0 (summary count only), fetch enough items
-        // for accurate totals instead of capping at 1, while slicing lists to 0 below.
-        const issueLimit = config.issueCount > 0 ? config.issueCount : 100
         const prState = config.prStatusBreakdown ? ('all' as const) : ('open' as const)
         const prLimit = config.prStatusBreakdown
             ? Math.max(20, config.prCount)
-            : config.prCount > 0
-              ? config.prCount
-              : 100
+            : config.prCount
 
         const [issues, prs] = await Promise.all([
-            github.getIssues(owner, repo, 'open', issueLimit),
-            github.getPullRequests(owner, repo, prState, prLimit),
+            includeIssues
+                ? github.getIssues(owner, repo, 'open', config.issueCount)
+                : Promise.resolve([]),
+            includePrs
+                ? github.getPullRequests(owner, repo, prState, prLimit)
+                : Promise.resolve([]),
         ])
 
         const openIssues = issues.length > 0 ? issues.length : 0

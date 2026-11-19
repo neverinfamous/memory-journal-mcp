@@ -210,9 +210,9 @@ export interface BriefingConfig {
     summaryCount?: number
     /** Include team DB entries in briefing preview (default: false) */
     includeTeam: boolean
-    /** Number of open issues to list with titles; 0 = count only (default: 0) */
+    /** Number of open issues to list with titles; 0 = hide (default: 0) */
     issueCount: number
-    /** Number of PRs to list with titles; 0 = count only (default: 0) */
+    /** Number of PRs to list with titles; 0 = hide unless prStatusBreakdown is true (default: 0) */
     prCount: number
     /** Show PR status breakdown (open/merged/closed) instead of simple count (default: false) */
     prStatusBreakdown: boolean
@@ -222,7 +222,7 @@ export interface BriefingConfig {
     rulesFilePath?: string
     /** Path to the user's skills directory for awareness in briefing */
     skillsDirPath?: string
-    /** Number of recent workflow runs to list; 0 = latest-only status (default: 0) */
+    /** Number of recent workflow runs to list; 0 = hide unless workflowStatusBreakdown is true (default: 0) */
     workflowCount: number
     /** Show workflow run status breakdown (passing/failing/pending) (default: false) */
     workflowStatusBreakdown: boolean

@@ -437,4 +437,73 @@ describe('formatUserMessage', () => {
         expect(result).toContain('evolves_from: 8')
         expect(result).toContain('(use `visualize_relationships`)')
     })
+
+    // ========================================================================
+    // 0 / false Suppression Formatting
+    // ========================================================================
+
+    it('omits CI status and Tracking row when ciSuppressed, issuesSuppressed, prsSuppressed are true and milestones empty', () => {
+        const result = formatUserMessage({
+            ...baseOpts(),
+            ciStatus: 'unknown',
+            ciSuppressed: true,
+            github: {
+                repo: 'neverinfamous/memory-journal-mcp',
+                branch: 'main',
+                ci: 'unknown',
+                ciSuppressed: true,
+                issuesSuppressed: true,
+                prsSuppressed: true,
+                openIssues: 0,
+                openPRs: 0,
+                milestones: [],
+            },
+        })
+
+        expect(result).toContain('**GitHub**')
+        expect(result).not.toContain('unknown')
+        expect(result).not.toContain('Issues:')
+        expect(result).not.toContain('PRs:')
+        expect(result).not.toContain('**Tracking**')
+    })
+
+    it('formats activePr without Pending Review or CI when reviewSuppressed and ciSuppressed are true', () => {
+        const result = formatUserMessage({
+            ...baseOpts(),
+            github: {
+                repo: 'neverinfamous/memory-journal-mcp',
+                branch: 'feat/test',
+                ci: 'unknown',
+                ciSuppressed: true,
+                issuesSuppressed: true,
+                openIssues: 0,
+                openPRs: 1,
+                milestones: [],
+                activePr: {
+                    number: 77,
+                    title: 'Feat PR',
+                    url: 'https://github.com/o/r/pull/77',
+                    state: 'OPEN',
+                    reviewSuppressed: true,
+                    ciSuppressed: true,
+                },
+            },
+        })
+
+        expect(result).toContain('Current PR (#77): Feat PR')
+        expect(result).not.toContain('Pending Review')
+        expect(result).not.toContain('CI: Unknown')
+    })
+
+    it('omits Latest: No entries yet when entriesSuppressed is true', () => {
+        const result = formatUserMessage({
+            ...baseOpts(),
+            totalEntries: 42,
+            latestPreviews: [],
+            entriesSuppressed: true,
+        })
+
+        expect(result).toContain('42 entries')
+        expect(result).not.toContain('Latest: No entries yet')
+    })
 })
