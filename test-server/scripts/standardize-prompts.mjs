@@ -46,6 +46,10 @@ function fixFormatting(text) {
   fixed = fixed.replace(/`bun \.\\\\\.agents\\\\scripts\\\\commit\.ts/g, '`pnpm exec tsx scripts/commit.ts');
   fixed = fixed.replace(/`bun \.\\.agents\\scripts\\commit\.ts/g, '`pnpm exec tsx scripts/commit.ts');
   fixed = fixed.replace(/`bun \.\/\.agents\/scripts\/commit\.ts/g, '`pnpm exec tsx scripts/commit.ts');
+
+  // Use the repo typecheck script (pnpm-only policy) and explicit staging instead of `npx tsc` / `--add .`
+  fixed = fixed.replace(/\bnpx tsc --noEmit\b/g, 'pnpm run typecheck');
+  fixed = fixed.replace(/--journal --add \.` utility\./g, '--journal --add <path> [--add <path> ...]` utility, staging only the files you changed (never `--add .`).');
   
   return fixed;
 }
@@ -261,8 +265,8 @@ for (const file of files) {
        let verifText = localVerifMatch[0];
        // Rename 3. and 4. to 1. and 2. 
        verifText = verifText.replace(/^3\./, '1.').replace(/\n4\./, '\n2.');
-       // Update commit args for usability
-       verifText = verifText.replace(/--msg "[^"]+" --impact <0\.1-1\.0> --confidence <0\.1-1\.0> --validation passed --journal --add <path>/, '--msg "test(usability): optimize tool usage" --impact 0.5 --confidence 1.0 --validation passed --journal --add .');
+       // Update commit args for usability (keep explicit `--add <path>` staging; never emit `--add .`)
+       verifText = verifText.replace(/--msg "[^"]+" --impact <0\.1-1\.0> --confidence <0\.1-1\.0> --validation passed --journal --add <path>/, '--msg "test(usability): optimize tool usage" --impact 0.5 --confidence 1.0 --validation passed --journal --add <path>');
        
        // Replace in usability file
        const verifRegex = /1\. Run `pnpm run lint`[\s\S]*?(?=4\. Conclude the test and report your findings\.)/;

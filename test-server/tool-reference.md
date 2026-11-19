@@ -41,8 +41,8 @@ Entry lifecycle — create, retrieve, tags, and test.
 
 | Tool                   | Description                                                                        |
 | ---------------------- | ---------------------------------------------------------------------------------- |
-| `create_entry`         | Create a new journal entry with context and tags. Supports `workspace_id` for multi-tenancy. |
-| `get_entry_by_id`      | Get a specific journal entry by ID with full details.                              |
+| `create_entry`         | Create a new journal entry with context and tags. Supports `workspace_id` for multi-tenancy and returns `suggested_links` when `relationships` is omitted. |
+| `get_entry_by_id`      | Get a specific journal entry by ID with full details (`source: "team"` queries Team DB). |
 | `get_recent_entries`   | Get recent journal entries. Supports `sort_by` (timestamp or importance), cursor pagination, and `workspace_id`.          |
 | `get_entry_history`    | Get the revision history of a specific journal entry (capped at 10 revisions).     |
 | `test_simple`          | Simple test tool that just returns a message.                                      |
@@ -86,7 +86,7 @@ Link entries and visualize knowledge graphs.
 | Tool                      | Description                                                      |
 | ------------------------- | ---------------------------------------------------------------- |
 | `link_entries`            | Create a relationship between two journal entries.               |
-| `visualize_relationships` | Generate a Mermaid diagram visualization of entry relationships. |
+| `visualize_relationships` | Generate a Mermaid/edges visualization of entry relationships (`include_content: false` default, `format`, `source: "team"`). |
 
 ---
 
@@ -162,7 +162,7 @@ Commit history mining, release tracking, and commit analytics using `simple-git`
 
 | Tool                      | Description                                                                                                                               |
 | ------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
-| `get_commit_history`      | Fetch the commit history of the repository (with optional range or limit).                                                                 |
+| `get_commit_history`      | Fetch repository commit history (or pass `uncommitted: true` for working-tree status/diffstat).                                            |
 | `search_commits`          | Search commit messages or authors within the repository.                                                                                  |
 | `get_release_info`        | Retrieve information about a specific release tag, including commit count and timestamp.                                                   |
 | `get_unreleased_commits`  | Track commits that have been merged since the last release tag.                                                                            |

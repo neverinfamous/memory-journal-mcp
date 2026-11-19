@@ -15,13 +15,13 @@ Execute all usability tests in `test-server/usability/` to fuzz the `memory-jour
    - Use the `invoke_subagent` tool to spawn a `self` subagent for each test file.
    - Provide the exact path to the test file as the subagent's prompt.
 3. **Local Verification**:
-   - If you or a subagent modifies the codebase, you MUST run the linter and typechecker (`pnpm run lint` and `npx tsc --noEmit`) locally, and ensure they all pass completely cleanly **BEFORE** committing.
-   - **Quality Gates**: Pay strict attention to ESLint and TypeScript compiler outputs. You MUST fix all `pnpm run lint` and `npx tsc --noEmit` validation issues prior to committing. Do NOT ignore warnings or errors. Follow strict TypeScript guidelines: NEVER use `any` (use `unknown` with type guards), avoid unsafe typecasts, and ensure explicit return types.
+   - If you or a subagent modifies the codebase, you MUST run the linter and typechecker (`pnpm run lint` and `pnpm run typecheck`) locally, and ensure they all pass completely cleanly **BEFORE** committing.
+   - **Quality Gates**: Pay strict attention to ESLint and TypeScript compiler outputs. You MUST fix all `pnpm run lint` and `pnpm run typecheck` validation issues prior to committing. Do NOT ignore warnings or errors. Follow strict TypeScript guidelines: NEVER use `any` (use `unknown` with type guards), avoid unsafe typecasts, and ensure explicit return types.
    - **WARNING**: Do NOT commit your code and then attempt to use `git commit --amend` to fix a lingering lint or test issue later. Amending a commit rewrites the commit SHA, which will permanently break the changelog tracking workflow.
    - DO NOT perform live server verification. DO NOT wait for a server restart. DO NOT pause or send a message asking the user to refresh the server.
    - The user will verify the live fixes in a completely new run/pass in a separate thread.
 4. **Commit**:
-   - Once all local tests pass, the subagent will commit the code (`pnpm exec tsx scripts/commit.ts --msg "test(usability): optimize [group] tool usage" --impact 0.5 --confidence 1.0 --validation passed --journal --add .`), summarize findings, and exit. If no modifications were needed, no commit is required.
+   - Once all local tests pass, the subagent will commit the code (`pnpm exec tsx scripts/commit.ts --msg "test(usability): optimize [group] tool usage" --impact 0.5 --confidence 1.0 --validation passed --journal --add <changed-path> [--add <changed-path> ...]`; never `--add .`), summarize findings, and exit. If no modifications were needed, no commit is required.
    - Once the subagent completes, mark the task as done and move to the next test in the queue.
 5. **Code Mode Error Testing Protocol**:
    - Subagents executing Code Mode test matrices must anticipate structured `VALIDATION_ERROR` payloads with `{ success: false }` for type mismatches, rather than expecting sandbox crashes or thrown `ZodError` messages.
@@ -106,4 +106,4 @@ Execute all usability tests in `test-server/usability/` to fuzz the `memory-jour
 
 ## Finalization
 
-Once all subagents have completed their tests, run `pnpm run lint` and `npx tsc --noEmit` to ensure no type errors or formatting issues were introduced by the optimization layers.
+Once all subagents have completed their tests, run `pnpm run lint` and `pnpm run typecheck` to ensure no type errors or formatting issues were introduced by the optimization layers.

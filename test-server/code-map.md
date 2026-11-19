@@ -534,6 +534,8 @@ Each file below registers tools with `group` labels. The `index.ts` barrel compo
 | `memory://github/milestones/{+repo}` | GitHub Milestones (Dynamic) |
 | `memory://github/status` | GitHub Status |
 | `memory://github/status/{+repo}` | GitHub Status (Dynamic) |
+| `memory://graph` | Graph Neighborhood |
+| `memory://graph/{+repo}` | Graph Neighborhood (Dynamic) |
 | `memory://health` | Server Health |
 | `memory://help` | Help — Tool Groups |
 | `memory://help/{group}` | Help — Tool Group Detail |
