@@ -17,7 +17,7 @@ graph TD
 
 ## Setup
 
-Use `pnpm infra:up` (or `node test-server/infrastructure/scripts/recreate-ecosystem.mjs` for a clean rebuild) to start the monitoring containers (`mj-dozzle`, `mj-prometheus`, `mj-grafana`, `mj-loki`, `mj-alloy`, `mj-datadog-unified`).
+Use `pnpm infra:up` (or `node test-server/infrastructure/scripts/recreate-ecosystem.mjs` for a clean rebuild that omits `-v` on `docker compose down` so `mj-dozzle-data:/data` on `:8082` persists while `mj-infrastructure_prometheus_data` is reset) to start the monitoring containers (`mj-dozzle`, `mj-prometheus`, `mj-grafana`, `mj-loki`, `mj-alloy`, `mj-datadog-unified`).
 The MCP server natively binds its embedded metrics server strictly to loopback (`127.0.0.1:9465`, configurable via `MJ_METRICS_PORT`) whenever `--metrics-export prometheus` is set. On Windows + WSL2 `docker-ce` setups, `recreate-ecosystem.mjs` installs a lightweight user-systemd relay (`mj-metrics-relay.service` from `scripts/wsl-metrics-relay.mjs`) on WSL2's `docker0` `host-gateway` (`172.17.0.1:9465`) that forwards container scrapes (`host.docker.internal:9465`) to Windows `127.0.0.1:9465` without opening Windows Firewall or non-loopback host interfaces.
 
 ## Ports
