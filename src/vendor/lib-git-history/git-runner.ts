@@ -103,11 +103,15 @@ export function setupGitProcessLifecycle(proc: ReturnType<typeof spawn>, ac: Abo
         if (isStderrEnded) {
           finalizeFailure(code, signal);
         } else {
+          let drainTimer: ReturnType<typeof setTimeout> | undefined;
           const drainCap = new Promise<void>(r => {
-            const timer = setTimeout(r, 250);
-            timer.unref();
+            drainTimer = setTimeout(r, 2000);
           });
-          void Promise.race([stderrSettled, drainCap]).then(() => finalizeFailure(code, signal));
+          void Promise.race([stderrSettled, drainCap])
+            .finally(() => {
+              if (drainTimer !== undefined) clearTimeout(drainTimer);
+            })
+            .then(() => finalizeFailure(code, signal));
         }
       } else {
         resolve();

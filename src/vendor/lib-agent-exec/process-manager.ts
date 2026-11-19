@@ -126,8 +126,12 @@ export function killProcessTree(child: ChildProcess) {
           stdio: 'ignore',
           windowsHide: true,
         });
-        if (!result.error && (result.status === 0 || !isPidStillRunning(pid))) {
+        if (!result.error && result.status === 0) {
           taskkillSuccess = true;
+        } else if (!isPidStillRunning(pid)) {
+          // Root PID is already dead (attempt 0 may have killed it before descendant teardown failed);
+          // run the CIM descendant fallback immediately rather than mistaking status 128 for full-tree success.
+          break;
         }
       } catch { /* ignore */ }
     }
