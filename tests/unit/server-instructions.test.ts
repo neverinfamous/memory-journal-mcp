@@ -60,4 +60,12 @@ describe('server-instructions generation', () => {
         expect(text).toMatch(/Read `memory:\/\/help\/\{group\}` for:.*github/i)
         expect(text).not.toContain('codemode')
     })
+
+    it('counts only canonical TOOL_GROUPS tools in Active Tools header and ignores dummy aliases', () => {
+        const tools = new Set(['create_entry', 'search_entries', 'view_file', 'grep_search'])
+        const text = generateStandardInstructions(tools, [])
+        expect(text).toContain('## Active Tools (2)')
+        expect(text).not.toContain('view_file')
+        expect(text).not.toContain('grep_search')
+    })
 })

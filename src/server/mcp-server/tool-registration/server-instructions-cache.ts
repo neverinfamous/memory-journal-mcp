@@ -1,4 +1,5 @@
 import {
+    getAllToolNames,
     getEnabledGroups,
     isReadonlyMetaActive,
     isToolVisibleForFilter,
@@ -42,6 +43,7 @@ interface CachedInstructionsEntry {
 
 const MAX_INSTRUCTIONS_CACHE = 16
 const INSTRUCTIONS_CACHE: CachedInstructionsEntry[] = []
+const CANONICAL_TOOL_NAMES = new Set(getAllToolNames())
 
 function computeServerInstructions(
     currentConfig: ReturnType<ServerContext['configManager']['getConfig']>,
@@ -51,7 +53,10 @@ function computeServerInstructions(
     readOnlyHints?: ReadonlyMap<string, boolean | undefined>
 ): string {
     const filterRaw = currentConfig.toolFilterConfig?.raw
-    let enabledSet = currentConfig.toolFilterConfig?.enabledTools ?? allToolNames
+    const canonicalToolNames = new Set(
+        [...allToolNames].filter((name) => CANONICAL_TOOL_NAMES.has(name))
+    )
+    let enabledSet = currentConfig.toolFilterConfig?.enabledTools ?? canonicalToolNames
     if (isReadonlyMetaActive(filterRaw) && readOnlyHints !== undefined) {
         enabledSet = new Set(
             [...enabledSet].filter((name) =>
@@ -88,11 +93,11 @@ function computeServerInstructions(
         const sandboxVisibleTools =
             isReadonlyMetaActive(filterRaw) && readOnlyHints !== undefined
                 ? new Set(
-                      [...allToolNames].filter((name) =>
+                      [...canonicalToolNames].filter((name) =>
                           isToolVisibleForFilter(name, readOnlyHints.get(name), filterRaw)
                       )
                   )
-                : allToolNames
+                : canonicalToolNames
         const finalGroups =
             currentConfig.codemodeInternalFullAccess === true
                 ? isReadonlyMetaActive(filterRaw)

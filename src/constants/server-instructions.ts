@@ -87,7 +87,8 @@ function buildActiveGroupsSummary(enabledTools: Set<string>): string {
 
     if (activeGroups.length === 0) return ''
 
-    let summary = `\n\n## Active Tools (${String(enabledTools.size)})\n`
+    const activeCount = activeGroups.reduce((sum, g) => sum + g.tools.length, 0)
+    let summary = `\n\n## Active Tools (${String(activeCount)})\n`
     for (const { group, tools } of activeGroups) {
         summary += `**${group}**: ${tools.map((t) => `\`${t}\``).join(', ')}\n`
     }
