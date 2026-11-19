@@ -81,8 +81,9 @@ export function buildGraphNeighborhoodMarkdown(
     const ws = resolveGraphWorkspace(context, repo)
     const days = readIntParam(uri, 'days', DEFAULT_DAYS, 1, MAX_DAYS)
     const limit = readIntParam(uri, 'limit', DEFAULT_EDGE_LIMIT, 1, MAX_EDGE_LIMIT)
-    const db = context.db
-    if (typeof db.getRecentNeighborhood !== 'function') {
+    const ctx: Partial<ResourceContext> | undefined = context
+    const db = ctx?.db
+    if (db === undefined || db === null || typeof db.getRecentNeighborhood !== 'function') {
         return `# Graph neighborhood\nGraph neighborhood queries are unavailable on this database adapter.`
     }
     const hood = db.getRecentNeighborhood(isoDaysAgo(days), limit, ws)

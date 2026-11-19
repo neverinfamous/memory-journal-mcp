@@ -15,6 +15,8 @@ import { isCanonicalEntryType } from '../../../utils/legacy-commit-narrative.js'
 /** Aliases healed to `project_decision` + significance `architecture` (matches the tool healer). */
 const ARCHITECTURE_ALIASES: ReadonlySet<string> = new Set([
     'architecture',
+    'architecture_decision',
+    'architecture-decision',
     'architectural_decision',
     'architectural-decision',
     'adr',

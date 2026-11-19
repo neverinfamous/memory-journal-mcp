@@ -51,7 +51,7 @@ describe('Team Resource Handlers', () => {
         }
         const entry3 = teamDb.createEntry({
             content: 'flag:blocker @neverinfamous: API is down',
-            entryType: 'flag',
+            entryType: 'technical_note',
             autoContext: JSON.stringify(flagContext),
         })
 

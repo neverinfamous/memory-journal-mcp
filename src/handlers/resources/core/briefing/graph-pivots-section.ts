@@ -81,8 +81,11 @@ export function buildGraphPivots(
     commitHashes: readonly string[],
     now: number = Date.now()
 ): BriefingGraphPivots | undefined {
-    const db = context.db
+    const ctx: Partial<ResourceContext> | undefined = context
+    const db = ctx?.db
     if (
+        db === undefined ||
+        db === null ||
         typeof db.getRelationshipDegrees !== 'function' ||
         typeof db.getActiveThreads !== 'function' ||
         typeof db.getRecentLinkageStats !== 'function'

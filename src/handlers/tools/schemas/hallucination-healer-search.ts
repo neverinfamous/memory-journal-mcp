@@ -63,6 +63,8 @@ export function mapKnownEntryTypeAlias(
     }
     if (
         etLower === 'architecture' ||
+        etLower === 'architecture_decision' ||
+        etLower === 'architecture-decision' ||
         etLower === 'architectural_decision' ||
         etLower === 'architectural-decision' ||
         etLower === 'adr'
