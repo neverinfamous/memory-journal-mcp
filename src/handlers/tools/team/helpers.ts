@@ -9,7 +9,13 @@ import { logger } from '../../../utils/logger.js'
 import { sanitizeAuthor } from '../../../utils/security-utils.js'
 import { resolveWorkspaceId } from '../../../utils/workspace-resolver.js'
 import { findWorkspaceByProjectNumber } from '../../../utils/workspace-resolver-registry.js'
-import { activeProjectRegistry, pairStoredScope } from '../../../utils/write-scope.js'
+import {
+    activeProjectRegistry,
+    concreteWorkspace,
+    exactRegistryKey,
+    pairStoredScope,
+    workspacesForProject,
+} from '../../../utils/write-scope.js'
 import { TeamGetEntryByIdSchema } from './schemas.js'
 
 // ============================================================================
@@ -194,7 +200,18 @@ export function executeTeamGetEntryById(
         }
     }
 
-    if (entry.projectNumber !== projectNumber) {
+    const canRealignLegacyProject = (): boolean => {
+        if (entry.projectNumber === null || entry.projectNumber === undefined) return false
+        const storedWs = concreteWorkspace(entry.workspaceId)
+        if (storedWs === undefined) return false
+        const registry = activeProjectRegistry(context.config?.projectRegistry)
+        const regKey = exactRegistryKey(storedWs, registry)
+        if (regKey?.toLowerCase() !== wsId.trim().toLowerCase()) return false
+        if (registry?.[regKey]?.project_number !== projectNumber) return false
+        return workspacesForProject(entry.projectNumber, registry).length === 0
+    }
+
+    if (entry.projectNumber !== projectNumber && !canRealignLegacyProject()) {
         return {
             success: false,
             error: `Team entry ${String(entry_id)} does not belong to project ${String(projectNumber)}`,

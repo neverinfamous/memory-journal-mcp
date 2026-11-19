@@ -8,7 +8,11 @@ import {
 import { relaxedNumber, StrictProjectNumberSchema } from '../schemas.js'
 import { logger } from '../../../utils/logger.js'
 import { resolveWorkspaceId } from '../../../utils/workspace-resolver.js'
-import { activeProjectRegistry, alignedProjectFilter } from '../../../utils/write-scope.js'
+import {
+    activeProjectRegistry,
+    alignedProjectFilter,
+    uniqueWorkspaceForProject,
+} from '../../../utils/write-scope.js'
 
 const preprocessVectorEntryId = (val: unknown): unknown => {
     if (typeof val === 'object' && val !== null) {
@@ -56,6 +60,7 @@ export function getVectorTools(context: ToolContext): ToolDefinition[] {
                 .object({
                     project_number: relaxedNumber().optional(),
                     workspace_id: z.string().optional(),
+                    session_id: z.string().optional(),
                 })
                 .strict(),
             outputSchema: RebuildVectorIndexOutputSchema,
@@ -71,6 +76,7 @@ export function getVectorTools(context: ToolContext): ToolDefinition[] {
                         .object({
                             project_number: StrictProjectNumberSchema.optional(),
                             workspace_id: z.string().optional(),
+                            session_id: z.string().optional(),
                         })
                         .strict()
                         .parse(params)
@@ -86,15 +92,17 @@ export function getVectorTools(context: ToolContext): ToolDefinition[] {
                             recoverable: false,
                         }
                     }
-                    const wsId =
-                        parsed.workspace_id === '*'
-                            ? '*'
-                            : resolveWorkspaceId(parsed.workspace_id, parsed.project_number, context.config)
-                    const projectNumber = alignedProjectFilter(
-                        wsId,
-                        parsed.project_number,
-                        activeProjectRegistry(context.config?.projectRegistry)
-                    )
+                    const isWildcard = parsed.workspace_id?.trim() === '*'
+                    const registry = activeProjectRegistry(context.config?.projectRegistry)
+                    const wsId = isWildcard
+                        ? '*'
+                        : resolveWorkspaceId(parsed.workspace_id, parsed.project_number, context.config)
+                    const projectNumber =
+                        isWildcard &&
+                        parsed.project_number !== undefined &&
+                        uniqueWorkspaceForProject(parsed.project_number, registry) !== undefined
+                            ? undefined
+                            : alignedProjectFilter(wsId, parsed.project_number, registry)
                     const rebuildOpts: { projectNumber?: number; workspaceId?: string } = {
                         workspaceId: wsId,
                         ...(projectNumber !== undefined ? { projectNumber } : {}),

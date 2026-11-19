@@ -21,6 +21,50 @@ import {
     preprocessBatchDeleteIds,
 } from '../../admin/schemas/batch-preprocessors.js'
 
+export function hasNonProjectTeamUpdateFields(data: {
+    content?: unknown
+    entry_type?: unknown
+    tags?: unknown
+    significance_type?: unknown
+    project_owner?: unknown
+    issue_number?: unknown
+    issue_url?: unknown
+    pr_number?: unknown
+    pr_url?: unknown
+    pr_status?: unknown
+    workflow_run_id?: unknown
+    workflow_name?: unknown
+    workflow_status?: unknown
+    is_archived?: unknown
+    auto_context?: unknown
+    impact_score?: unknown
+    trust_score?: unknown
+    validation_status?: unknown
+    session_id?: unknown
+}): boolean {
+    return (
+        data.content !== undefined ||
+        data.entry_type !== undefined ||
+        data.tags !== undefined ||
+        data.significance_type !== undefined ||
+        data.project_owner !== undefined ||
+        data.issue_number !== undefined ||
+        data.issue_url !== undefined ||
+        data.pr_number !== undefined ||
+        data.pr_url !== undefined ||
+        data.pr_status !== undefined ||
+        data.workflow_run_id !== undefined ||
+        data.workflow_name !== undefined ||
+        data.workflow_status !== undefined ||
+        data.is_archived !== undefined ||
+        data.auto_context !== undefined ||
+        data.impact_score !== undefined ||
+        data.trust_score !== undefined ||
+        data.validation_status !== undefined ||
+        data.session_id !== undefined
+    )
+}
+
 /** team_update_entry — strict */
 export const TeamUpdateEntrySchema = z.preprocess(
     (val: unknown) => healAgentHallucinations(val),
@@ -71,32 +115,10 @@ export const TeamUpdateEntrySchema = z.preprocess(
             session_id: z.string().optional(),
         })
         .strict()
-        .refine(
-            (data) =>
-                data.content !== undefined ||
-                data.entry_type !== undefined ||
-                data.tags !== undefined ||
-                data.significance_type !== undefined ||
-                data.project_owner !== undefined ||
-                data.issue_number !== undefined ||
-                data.issue_url !== undefined ||
-                data.pr_number !== undefined ||
-                data.pr_url !== undefined ||
-                data.pr_status !== undefined ||
-                data.workflow_run_id !== undefined ||
-                data.workflow_name !== undefined ||
-                data.workflow_status !== undefined ||
-                data.is_archived !== undefined ||
-                data.auto_context !== undefined ||
-                data.impact_score !== undefined ||
-                data.trust_score !== undefined ||
-                data.validation_status !== undefined ||
-                data.session_id !== undefined,
-            {
-                message:
-                    'At least one updatable field must be specified in team_update_entry (empty metadata-only updates are rejected).',
-            }
-        )
+        .refine((data) => data.project_number !== undefined || hasNonProjectTeamUpdateFields(data), {
+            message:
+                'At least one updatable field must be specified in team_update_entry (empty metadata-only updates are rejected).',
+        })
 )
 
 /** team_update_entry — relaxed */

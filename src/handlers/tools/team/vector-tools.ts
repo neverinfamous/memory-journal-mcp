@@ -50,7 +50,7 @@ export function getTeamVectorTools(context: ToolContext): ToolDefinition[] {
             description:
                 'Get statistics about the team vector search index (item count, model, dimensions). Requires TEAM_DB_PATH.',
             group: 'team',
-            inputSchema: z.object({}).strict(),
+            inputSchema: z.object({ workspace_id: z.string().optional(), project_number: relaxedNumber().optional(), session_id: z.string().optional() }).strict(),
             outputSchema: TeamVectorStatsOutputSchema,
             annotations: {
                 readOnlyHint: true,
@@ -88,7 +88,11 @@ export function getTeamVectorTools(context: ToolContext): ToolDefinition[] {
                 'Rebuild the team semantic search vector index from all existing team entries. Requires TEAM_DB_PATH. [REQUIRES ADMIN SCOPE]',
             group: 'team',
             inputSchema: z
-                .object({ workspace_id: z.string().optional(), project_number: relaxedNumber().optional() })
+                .object({
+                    workspace_id: z.string().optional(),
+                    project_number: relaxedNumber().optional(),
+                    session_id: z.string().optional(),
+                })
                 .strict(),
             outputSchema: TeamRebuildVectorIndexOutputSchema,
             annotations: {

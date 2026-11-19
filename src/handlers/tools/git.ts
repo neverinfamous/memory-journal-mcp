@@ -246,6 +246,7 @@ export function getGitTools(context: ToolContext): ToolDefinition[] {
                 workspaceId: z.string().optional().describe('Workspace identifier alias'),
                 project_number: relaxedNumber().optional().describe('Numeric project identifier'),
                 projectNumber: relaxedNumber().optional().describe('Numeric project identifier alias'),
+                session_id: z.string().optional().describe('Optional agent session identifier'),
             }),
             outputSchema: z.object({
                 success: z.boolean().optional(),
@@ -268,10 +269,14 @@ export function getGitTools(context: ToolContext): ToolDefinition[] {
                 openWorldHint: false,
             },
             handler: (params: unknown) =>
-                runCheckEntryStaleness(params, context, (anchorPath, since, cwd, maxCount) =>
-                    fetchCommits({ path: anchorPath, since, maxCount, summary: true }, cwd).then(
-                        (c) => c.length
-                    )
+                runCheckEntryStaleness(
+                    params,
+                    context,
+                    (anchorPath, since, cwd, maxCount) =>
+                        fetchCommits({ path: anchorPath, since, maxCount, summary: true }, cwd).then(
+                            (c) => c.length
+                        ),
+                    (since, cwd, maxCount) => fetchCommits({ since, maxCount, summary: true }, cwd)
                 ),
         }
     ]

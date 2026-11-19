@@ -6,14 +6,19 @@
 
 import type { z } from 'zod'
 import type { JournalEntry, ToolDefinition, ToolContext } from '../../../../types/index.js'
+import { ValidationError } from '../../../../types/errors.js'
 import { formatHandlerError } from '../../../../utils/error-helpers.js'
 import { logger } from '../../../../utils/logger.js'
 import { resolveWriteWorkspaceId } from '../../write-workspace.js'
 import { TEAM_DB_ERROR_RESPONSE, fetchAuthor, triggerTeamNotifications } from '../helpers.js'
 import { checkSingleTeamOwnership, missingProjectNumberResponse, type TeamDbInstance } from './batch-delete-helpers.js'
-import { resolveTeamMutationProjectNumber } from './team-pk-scope-helpers.js'
+import {
+    canRealignOrphanedRegisteredProject,
+    resolveTeamMutationProjectNumber,
+} from './team-pk-scope-helpers.js'
 import { createTeamMergeTagsTool } from './merge-tags-tool.js'
 import {
+     hasNonProjectTeamUpdateFields,
     TeamUpdateEntrySchema,
     TeamUpdateEntrySchemaMcp,
     TeamDeleteEntrySchema,
@@ -52,7 +57,8 @@ function resolveTeamUpdateScope(
         input.project_number !== undefined &&
         existing.projectNumber !== null &&
         existing.projectNumber !== undefined &&
-        existing.projectNumber !== input.project_number
+        existing.projectNumber !== input.project_number &&
+        !canRealignOrphanedRegisteredProject(context, wsId, input.project_number, existing)
     ) {
         return {
             errorResponse: {
@@ -84,7 +90,8 @@ function resolveTeamUpdateScope(
     if (
         existing.projectNumber !== null &&
         existing.projectNumber !== undefined &&
-        existing.projectNumber !== projectNumber
+        existing.projectNumber !== projectNumber &&
+        !canRealignOrphanedRegisteredProject(context, wsId, projectNumber, existing)
     ) {
         return {
             errorResponse: {
@@ -96,6 +103,11 @@ function resolveTeamUpdateScope(
                 recoverable: true,
             },
         }
+    }
+    if (!hasNonProjectTeamUpdateFields(input) && existing.projectNumber === projectNumber) {
+        throw new ValidationError(
+            'At least one updatable field must be specified in team_update_entry (empty metadata-only updates are rejected).'
+        )
     }
     const denied = checkSingleTeamOwnership(teamDb, context, input.entry_id, 'modify', wsId)
     if (denied !== null) return { errorResponse: denied }
@@ -212,7 +224,11 @@ function executeTeamDeleteEntry(
     )
 
     // Verify entry exists and belongs to project (if projectNumber is specified)
-    if (existing?.projectNumber !== projectNumber) {
+    if (
+        !existing ||
+        (existing.projectNumber !== projectNumber &&
+            !canRealignOrphanedRegisteredProject(context, wsId, projectNumber, existing))
+    ) {
         return {
             success: false,
             error: `Team entry ${String(entry_id)} not found or lacks permission for project ${projectNumber}`,
@@ -356,7 +372,11 @@ export function getTeamAdminCrudTools(context: ToolContext): ToolDefinition[] {
                     )
 
                     // Verify entry exists and belongs to project (if projectNumber is specified)
-                    if (existing?.projectNumber !== projectNumber) {
+                    if (
+                        !existing ||
+                        (existing.projectNumber !== projectNumber &&
+                            !canRealignOrphanedRegisteredProject(context, wsId, projectNumber, existing))
+                    ) {
                         return {
                             success: false,
                             entryId: entry_id,

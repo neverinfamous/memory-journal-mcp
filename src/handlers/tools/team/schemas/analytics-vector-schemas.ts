@@ -26,6 +26,7 @@ export const TeamGetStatisticsSchema = z
             .describe(
                 'Optional workspace isolation identifier (e.g. "alpha"). Do not use numeric project IDs or "workspace" as the key.'
             ),
+        session_id: z.string().optional(),
     })
     .strict()
 
@@ -39,6 +40,7 @@ export const TeamGetStatisticsSchemaMcp = z.object({
         .describe(
             'Optional workspace isolation identifier (e.g. "alpha"). Do not use numeric project IDs or "workspace" as the key.'
         ),
+    session_id: z.string().optional(),
 })
 
 /** team_link_entries — strict */
@@ -67,6 +69,7 @@ export const TeamLinkEntriesSchema = z.preprocess(
             description: z.string().optional(),
             project_number: StrictProjectNumberSchema.optional(),
             workspace_id: z.string().optional(),
+            session_id: z.string().optional(),
         })
         .strict()
 )
@@ -96,6 +99,7 @@ export const TeamLinkEntriesSchemaMcp = z.preprocess(
             .describe(
                 'Optional workspace isolation identifier (e.g. "alpha"). Do not use numeric project IDs or "workspace" as the key.'
             ),
+        session_id: z.string().optional(),
     })
 )
 
@@ -112,6 +116,7 @@ export const TeamVisualizeRelationshipsSchema = z
             .describe(
                 'Optional workspace isolation identifier (e.g. "alpha"). Do not use numeric project IDs or "workspace" as the key.'
             ),
+        session_id: z.string().optional(),
     })
     .strict()
 
@@ -127,6 +132,7 @@ export const TeamVisualizeRelationshipsSchemaMcp = z.object({
         .describe(
             'Optional workspace isolation identifier (e.g. "alpha"). Do not use numeric project IDs or "workspace" as the key.'
         ),
+    session_id: z.string().optional(),
 })
 
 export const TeamStatisticsOutputSchema = z
@@ -207,6 +213,7 @@ export const TeamSemanticSearchSchema = z.preprocess(
                 .optional()
                 .describe('Filter results by GitHub Actions workflow run ID'),
             include_archived: z.boolean().optional().default(false),
+            session_id: z.string().optional(),
         })
         .strict()
 )
@@ -242,6 +249,7 @@ export const TeamSemanticSearchSchemaMcp = z.preprocess(
             .optional()
             .describe('Filter results by GitHub Actions workflow run ID'),
         include_archived: z.boolean().optional().default(false).describe('Include archived entries in results'),
+        session_id: z.string().optional(),
     })
 )
 
@@ -251,6 +259,7 @@ export const TeamAddToVectorIndexSchema = z
         entry_id: z.number().int().positive(),
         project_number: StrictProjectNumberSchema.optional(),
         workspace_id: z.string().optional(),
+        session_id: z.string().optional(),
     })
     .strict()
 
@@ -264,6 +273,7 @@ export const TeamAddToVectorIndexSchemaMcp = z.object({
         .describe(
             'Optional workspace isolation identifier (e.g. "alpha"). Do not use numeric project IDs or "workspace" as the key.'
         ),
+    session_id: z.string().optional(),
 })
 
 const TeamSemanticEntryOutputSchema = TeamEntryOutputSchema.extend({
@@ -334,6 +344,7 @@ export const TeamCrossProjectInsightsSchema = z
             .describe(
                 'Optional workspace isolation identifier (e.g. "alpha"). Do not use numeric project IDs or "workspace" as the key.'
             ),
+        session_id: z.string().optional(),
     })
     .strict()
 
@@ -350,6 +361,7 @@ export const TeamCrossProjectInsightsSchemaMcp = z.object({
         .describe(
             'Optional workspace isolation identifier (e.g. "alpha"). Do not use numeric project IDs or "workspace" as the key.'
         ),
+    session_id: z.string().optional(),
 })
 
 export {

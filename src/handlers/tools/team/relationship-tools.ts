@@ -12,7 +12,10 @@ import { ValidationError } from '../../../types/errors.js'
 import { resolveWorkspaceId } from '../../../utils/workspace-resolver.js'
 import { resolveWriteWorkspaceId } from '../write-workspace.js'
 import { TEAM_DB_ERROR_RESPONSE, triggerTeamNotifications, resolveTeamProjectNumber, missingTeamProjectNumberError } from './helpers.js'
-import { resolveTeamMutationProjectNumber } from './admin-tools/team-pk-scope-helpers.js'
+import {
+    canRealignOrphanedRegisteredProject,
+    resolveTeamMutationProjectNumber,
+} from './admin-tools/team-pk-scope-helpers.js'
 import { DATE_MIN_SENTINEL, DATE_MAX_SENTINEL } from '../schemas.js'
 import {
     TeamLinkEntriesSchema,
@@ -26,6 +29,8 @@ import {
 type TeamLinkInput = z.infer<typeof TeamLinkEntriesSchema>
 
 function validateTeamEntryProjectMembership(
+    context: ToolContext,
+    wsId: string,
     entryId: number,
     entry: JournalEntry | null | undefined,
     projectNumber: number
@@ -40,7 +45,10 @@ function validateTeamEntryProjectMembership(
             recoverable: true,
         }
     }
-    if (entry.projectNumber !== projectNumber) {
+    if (
+        entry.projectNumber !== projectNumber &&
+        !canRealignOrphanedRegisteredProject(context, wsId, projectNumber, entry)
+    ) {
         return {
             success: false,
             error: `Team entry ${String(entryId)} does not belong to project ${String(projectNumber)}`,
@@ -91,10 +99,22 @@ function resolveValidatedTeamLinkTargets(
     }
     wsId = resolveWriteWorkspaceId(workspace_id ?? wsId, projectNumber, context.config)
 
-    const fromErr = validateTeamEntryProjectMembership(from_entry_id, fromEntry, projectNumber)
+    const fromErr = validateTeamEntryProjectMembership(
+        context,
+        wsId,
+        from_entry_id,
+        fromEntry,
+        projectNumber
+    )
     if (fromErr !== undefined) return { errorResponse: fromErr }
     const toEntry = teamDb.getEntryById(to_entry_id, wsId)
-    const toErr = validateTeamEntryProjectMembership(to_entry_id, toEntry, projectNumber)
+    const toErr = validateTeamEntryProjectMembership(
+        context,
+        wsId,
+        to_entry_id,
+        toEntry,
+        projectNumber
+    )
     if (toErr !== undefined) return { errorResponse: toErr }
 
     if (fromEntry?.workspaceId !== toEntry?.workspaceId) {
@@ -156,6 +176,7 @@ function executeTeamLinkEntries(
 }
 
 function collectTeamVisualizeEntryIds(
+    context: ToolContext,
     teamDb: IDatabaseAdapter,
     initialWsId: string,
     projectNumber: number,
@@ -169,7 +190,11 @@ function collectTeamVisualizeEntryIds(
         if (fromEntry?.workspaceId !== undefined && wsId === '*') {
             wsId = fromEntry.workspaceId
         }
-        if (fromEntry?.projectNumber !== projectNumber) {
+        if (
+            !fromEntry ||
+            (fromEntry.projectNumber !== projectNumber &&
+                !canRealignOrphanedRegisteredProject(context, wsId, projectNumber, fromEntry))
+        ) {
             return {
                 errorResponse: {
                     success: false,
@@ -224,6 +249,7 @@ export function executeTeamVisualizeRelationships(
     }
 
     const collected = collectTeamVisualizeEntryIds(
+        context,
         teamDb,
         initialWsId,
         projectNumber,

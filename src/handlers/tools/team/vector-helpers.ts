@@ -11,6 +11,7 @@ import { resolveWorkspaceId } from '../../../utils/workspace-resolver.js'
 import {
     activeProjectRegistry,
     alignedProjectFilter,
+    uniqueWorkspaceForProject,
 } from '../../../utils/write-scope.js'
 import { resolveWriteWorkspaceId } from '../write-workspace.js'
 import type { SemanticSearchResult } from '../../../vector/vector-search-manager/index.js'
@@ -22,7 +23,10 @@ import {
     missingTeamProjectNumberError,
     resolveTeamProjectNumber,
 } from './helpers.js'
-import { resolveTeamMutationProjectNumber } from './admin-tools/team-pk-scope-helpers.js'
+import {
+    canRealignOrphanedRegisteredProject,
+    resolveTeamMutationProjectNumber,
+} from './admin-tools/team-pk-scope-helpers.js'
 import { TeamAddToVectorIndexSchema, TeamSemanticSearchSchema } from './schemas.js'
 
 const QUALITY_FLOOR = 0.5
@@ -252,6 +256,7 @@ export async function executeTeamRebuildVectorIndex(
             .object({
                 workspace_id: z.string().optional(),
                 project_number: StrictProjectNumberSchema.optional(),
+                session_id: z.string().optional(),
             })
             .strict()
             .parse(params ?? {})
@@ -266,26 +271,20 @@ export async function executeTeamRebuildVectorIndex(
                 recoverable: true,
             }
         }
-        if (parsed.workspace_id?.trim() === '*' && parsed.project_number !== undefined) {
-            return {
-                success: false,
-                entriesIndexed: 0,
-                error: "Cannot combine wildcard workspace_id '*' with project_number.",
-                code: 'VALIDATION_ERROR',
-                category: 'validation',
-                recoverable: true,
-            }
-        }
-
-        const wsId =
-            parsed.workspace_id?.trim() === '*'
-                ? '*'
-                : resolveWorkspaceId(parsed.workspace_id, parsed.project_number, context.config)
-        const projectNumber = alignedProjectFilter(
-            wsId,
-            parsed.project_number,
-            activeProjectRegistry(context.config?.projectRegistry)
-        )
+        const isWildcard = parsed.workspace_id?.trim() === '*'
+        const registry = activeProjectRegistry(context.config?.projectRegistry)
+        // [INVARIANT] Code Mode outer session scope (`workspace_id: '*'`, `project_number: <registered>`)
+        // auto-injects `project_number` onto inner calls; strip registered single-workspace project IDs
+        // when the caller explicitly requested a global `workspace_id: '*'` rebuild.
+        const wsId = isWildcard
+            ? '*'
+            : resolveWorkspaceId(parsed.workspace_id, parsed.project_number, context.config)
+        const projectNumber =
+            isWildcard &&
+            parsed.project_number !== undefined &&
+            uniqueWorkspaceForProject(parsed.project_number, registry) !== undefined
+                ? undefined
+                : alignedProjectFilter(wsId, parsed.project_number, registry)
         const { success, indexed, failed, firstError, warning } =
             await teamVectorManager.rebuildIndex(progress, {
                 workspaceId: wsId,
@@ -353,7 +352,11 @@ export async function executeTeamAddToVectorIndex(
                 recoverable: true,
             }
         }
-        if (entry?.projectNumber !== projectNumber) {
+        if (
+            !entry ||
+            (entry.projectNumber !== projectNumber &&
+                !canRealignOrphanedRegisteredProject(context, wsId, projectNumber, entry))
+        ) {
             return {
                 success: false,
                 entryId: entry_id,

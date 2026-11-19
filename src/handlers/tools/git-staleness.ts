@@ -254,26 +254,83 @@ async function awaitAllSettledOrThrow<T>(tasks: readonly Promise<T>[]): Promise<
 
 async function runAnchorChunkSettled(
     db: IDatabaseAdapter,
-    chunk: readonly {
-        anchor: { id?: number; anchorPath: string; status: AnchorStatus }
-        entryTimestamp: string
-    }[],
+    chunk: readonly { anchor: { id?: number; anchorPath: string; status: AnchorStatus }; entryTimestamp: string }[],
     registryPath: string,
     cachedCountCommits: (anchorPath: string, since: string) => Promise<number>,
     wsId: string
 ): Promise<StalenessCheckRow[]> {
     return awaitAllSettledOrThrow(
         chunk.map(({ anchor, entryTimestamp }) =>
-            evaluateAnchorStaleness(
-                db,
-                anchor,
-                entryTimestamp,
-                registryPath,
-                cachedCountCommits,
-                wsId
-            )
+            evaluateAnchorStaleness(db, anchor, entryTimestamp, registryPath, cachedCountCommits, wsId)
         )
     )
+}
+
+export interface PrefetchedCommitFiles {
+    date: string
+    files?: { file: string; oldFile?: string | undefined }[] | undefined
+    isFilesTruncated?: boolean | undefined
+}
+
+function normalizeRepoRelPath(p: string): string {
+    const clean = p.replace(/\\/g, '/').replace(/^\.\//, '')
+    return process.platform === 'win32' ? clean.toLowerCase() : clean
+}
+
+function buildPrefetchedCommitCounter(
+    prefetched: readonly PrefetchedCommitFiles[],
+    fetchCap: number,
+    maxCommitsPerAnchor: number
+): (anchorPath: string, since: string) => number | undefined {
+    const indexed = prefetched.map((c) => {
+        const paths = new Set<string>()
+        for (const f of c.files ?? []) {
+            paths.add(normalizeRepoRelPath(f.file))
+            if (f.oldFile !== undefined) paths.add(normalizeRepoRelPath(f.oldFile))
+        }
+        return { epochMs: Date.parse(c.date), paths, truncated: c.isFilesTruncated === true }
+    })
+    const windowTruncated = prefetched.length >= fetchCap
+    const oldestMs = indexed.reduce((m, c) => (!Number.isNaN(c.epochMs) && c.epochMs < m ? c.epochMs : m), Infinity)
+    return (anchorPath: string, since: string): number | undefined => {
+        const sinceMs = Date.parse(since)
+        if (Number.isNaN(sinceMs)) return undefined
+        const target = normalizeRepoRelPath(anchorPath)
+        let hits = 0
+        let sawTruncated = false
+        for (const c of indexed) {
+            if (Number.isNaN(c.epochMs) || c.epochMs < sinceMs) continue
+            if (c.paths.has(target)) hits++
+            else if (c.truncated) sawTruncated = true
+        }
+        if (hits === 0 && (sawTruncated || (windowTruncated && sinceMs < oldestMs))) return undefined
+        return Math.min(hits, maxCommitsPerAnchor)
+    }
+}
+
+async function resolvePrefetchedLookup(
+    anchorJobs: readonly { entryTimestamp: string }[],
+    registryPath: string,
+    maxCommitsPerAnchor: number,
+    prefetchCommitsSince: ((since: string, cwd: string, maxCount: number) => Promise<PrefetchedCommitFiles[]>) | undefined
+): Promise<((anchorPath: string, since: string) => number | undefined) | undefined> {
+    if (prefetchCommitsSince === undefined || anchorJobs.length < 4) return undefined
+    let earliestSince = anchorJobs[0]?.entryTimestamp ?? ''
+    let earliestMs = Date.parse(earliestSince)
+    for (const job of anchorJobs) {
+        const ms = Date.parse(job.entryTimestamp)
+        if (!Number.isNaN(ms) && (Number.isNaN(earliestMs) || ms < earliestMs)) {
+            earliestMs = ms
+            earliestSince = job.entryTimestamp
+        }
+    }
+    if (earliestSince === '') return undefined
+    try {
+        const prefetched = await prefetchCommitsSince(earliestSince, registryPath, 500)
+        return buildPrefetchedCommitCounter(prefetched, 500, maxCommitsPerAnchor)
+    } catch {
+        return undefined
+    }
 }
 
 /** Evaluate all anchors in a single workspace and report whether it was skipped for missing a path. */
@@ -285,9 +342,16 @@ export async function evaluateWorkspaceAnchors(options: {
     resolvedEntryId: number | undefined
     registry: ToolHandlerConfig['projectRegistry'] | undefined
     maxRecentEntries?: number | undefined
+    maxCommitsPerAnchor?: number | undefined
     countCommitsSince: (anchorPath: string, since: string, cwd: string) => Promise<number>
+    prefetchCommitsSince?:
+        | ((since: string, cwd: string, maxCount: number) => Promise<PrefetchedCommitFiles[]>)
+        | undefined
 }): Promise<{ rows: StalenessCheckRow[]; skipped: boolean }> {
-    const { db, wsId, rawWs, rawProj, resolvedEntryId, registry, maxRecentEntries, countCommitsSince } = options
+    const {
+        db, wsId, rawWs, rawProj, resolvedEntryId, registry, maxRecentEntries,
+        maxCommitsPerAnchor = 25, countCommitsSince, prefetchCommitsSince,
+    } = options
     const canonicalWs = findCanonicalRegistryKey(wsId, registry) ?? wsId
     const registryPath = registry?.[canonicalWs]?.path
     if (registryPath === undefined || registryPath.length === 0 || !(await pathExistsAsync(registryPath))) {
@@ -299,23 +363,22 @@ export async function evaluateWorkspaceAnchors(options: {
         )
     }
 
-    const targets = collectStalenessTargetsForWorkspace(
-        db,
-        wsId,
-        rawWs,
-        rawProj,
-        resolvedEntryId,
-        maxRecentEntries ?? 20
-    )
+    const targets = collectStalenessTargetsForWorkspace(db, wsId, rawWs, rawProj, resolvedEntryId, maxRecentEntries ?? 20)
     const anchorsByEntry =
         targets.length > 0 && typeof db.getAnchorsByEntryIds === 'function'
-            ? db.getAnchorsByEntryIds(
-                  targets.map((t) => t.id),
-                  wsId
-              )
+            ? db.getAnchorsByEntryIds(targets.map((t) => t.id), wsId)
             : undefined
+    const anchorJobs: { anchor: { id?: number; anchorPath: string; status: AnchorStatus }; entryTimestamp: string }[] = []
+    for (const target of targets) {
+        const anchors = anchorsByEntry !== undefined ? (anchorsByEntry.get(target.id) ?? []) : db.getAnchorsByEntryId(target.id, wsId)
+        for (const anchor of anchors) anchorJobs.push({ anchor, entryTimestamp: target.timestamp })
+    }
+
+    const fastLookup = await resolvePrefetchedLookup(anchorJobs, registryPath, maxCommitsPerAnchor, prefetchCommitsSince)
     const commitCountCache = new Map<string, Promise<number>>()
     const cachedCountCommits = (anchorPath: string, since: string): Promise<number> => {
+        const fastCount = fastLookup?.(anchorPath, since)
+        if (fastCount !== undefined) return Promise.resolve(fastCount)
         const key = `${anchorPath}\0${since}`
         let pending = commitCountCache.get(key)
         if (pending === undefined) {
@@ -324,31 +387,10 @@ export async function evaluateWorkspaceAnchors(options: {
         }
         return pending
     }
-    const anchorJobs: {
-        anchor: { id?: number; anchorPath: string; status: AnchorStatus }
-        entryTimestamp: string
-    }[] = []
-    for (const target of targets) {
-        const anchors =
-            anchorsByEntry !== undefined
-                ? (anchorsByEntry.get(target.id) ?? [])
-                : db.getAnchorsByEntryId(target.id, wsId)
-        for (const anchor of anchors) {
-            anchorJobs.push({ anchor, entryTimestamp: target.timestamp })
-        }
-    }
     const rows: StalenessCheckRow[] = []
     const STALENESS_CONCURRENCY = 8
     for (let i = 0; i < anchorJobs.length; i += STALENESS_CONCURRENCY) {
-        rows.push(
-            ...(await runAnchorChunkSettled(
-                db,
-                anchorJobs.slice(i, i + STALENESS_CONCURRENCY),
-                registryPath,
-                cachedCountCommits,
-                wsId
-            ))
-        )
+        rows.push(...(await runAnchorChunkSettled(db, anchorJobs.slice(i, i + STALENESS_CONCURRENCY), registryPath, cachedCountCommits, wsId)))
     }
     return { rows, skipped: false }
 }
@@ -365,6 +407,7 @@ const CheckEntryStalenessParseSchema = z.object({
     workspaceId: z.string().optional(),
     project_number: StrictProjectNumberSchema.optional(),
     projectNumber: StrictProjectNumberSchema.optional(),
+    session_id: z.string().optional(),
 })
 
 function formatStalenessResponse(
@@ -381,18 +424,12 @@ function formatStalenessResponse(
         else results.push(...outcome.rows)
     }
 
-    const failureMessages = results
-        .filter((row) => row.error !== undefined)
-        .map((row) => `${row.path}: ${row.error ?? ''}`)
+    const failureMessages = results.filter((row) => row.error !== undefined).map((row) => `${row.path}: ${row.error ?? ''}`)
     const skipped = skippedWorkspaces.length > 0 ? { skippedWorkspaces } : {}
     if (failureMessages.length > 0) {
         return { success: false, results, error: failureMessages.join('; '), ...skipped }
     }
-    if (
-        results.length === 0 &&
-        skippedWorkspaces.length > 0 &&
-        skippedWorkspaces.length === targetWorkspaces.length
-    ) {
+    if (results.length === 0 && skippedWorkspaces.length > 0 && skippedWorkspaces.length === targetWorkspaces.length) {
         return {
             success: false,
             results,
@@ -407,7 +444,8 @@ function formatStalenessResponse(
 export async function runCheckEntryStaleness(
     params: unknown,
     context: ToolContext,
-    countCommits: (anchorPath: string, since: string, cwd: string, maxCount: number) => Promise<number>
+    countCommits: (anchorPath: string, since: string, cwd: string, maxCount: number) => Promise<number>,
+    prefetchCommits?: (since: string, cwd: string, maxCount: number) => Promise<PrefetchedCommitFiles[]>
 ): Promise<unknown> {
     try {
         const parsed = CheckEntryStalenessParseSchema.parse(params)
@@ -415,14 +453,7 @@ export async function runCheckEntryStaleness(
         const rawWs = parsed.workspace_id ?? parsed.workspaceId
         const rawProj = parsed.project_number ?? parsed.projectNumber
         const registry = context.config?.projectRegistry ?? loadProjectRegistryFromConfig()
-        const targetWorkspaces = resolveStalenessTargetWorkspaces(
-            context.db,
-            rawWs,
-            rawProj,
-            resolvedEntryId,
-            registry,
-            context.config
-        )
+        const targetWorkspaces = resolveStalenessTargetWorkspaces(context.db, rawWs, rawProj, resolvedEntryId, registry, context.config)
 
         const maxRecentEntries = targetWorkspaces.length > 1 ? 8 : 20
         const maxCommitsPerAnchor = targetWorkspaces.length > 1 ? 5 : 25
@@ -436,8 +467,9 @@ export async function runCheckEntryStaleness(
                     resolvedEntryId,
                     registry,
                     maxRecentEntries,
-                    countCommitsSince: (anchorPath, since, cwd) =>
-                        countCommits(anchorPath, since, cwd, maxCommitsPerAnchor),
+                    maxCommitsPerAnchor,
+                    countCommitsSince: (anchorPath, since, cwd) => countCommits(anchorPath, since, cwd, maxCommitsPerAnchor),
+                    ...(prefetchCommits !== undefined ? { prefetchCommitsSince: prefetchCommits } : {}),
                 })
             )
         )

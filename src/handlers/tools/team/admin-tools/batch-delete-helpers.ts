@@ -7,14 +7,21 @@
 
 import type { z } from 'zod'
 import type { JournalEntry, ToolContext } from '../../../../types/index.js'
-import { AuthorizationError } from '../../../../types/errors.js'
+import { AuthorizationError, ValidationError } from '../../../../types/errors.js'
 import { enforceAccessBoundary } from '../../../../auth/validation.js'
 import type { TeamRole } from '../../../../database/core/interfaces.js'
 import { fetchAuthor, batchFetchAuthors, resolveTeamProjectNumber, triggerTeamNotifications } from '../helpers.js'
-import { resolveTeamMutationProjectNumber } from './team-pk-scope-helpers.js'
+import {
+    canRealignOrphanedRegisteredProject,
+    resolveTeamMutationProjectNumber,
+} from './team-pk-scope-helpers.js'
 import { enforceEntryOwnership, resolveScopedTeamRole } from '../rbac.js'
 import { resolveWriteWorkspaceId } from '../../write-workspace.js'
-import type { TeamBatchDeleteEntriesSchema, TeamBatchUpdateEntriesSchema } from '../schemas.js'
+import {
+    hasNonProjectTeamUpdateFields,
+    type TeamBatchDeleteEntriesSchema,
+    type TeamBatchUpdateEntriesSchema,
+} from '../schemas.js'
 import { createBatchProgressReporter, sendProgress } from '../../../../utils/progress-utils.js'
 import { logger } from '../../../../utils/logger.js'
 import { resolveAuthenticatedAuthor } from '../../../../utils/security-utils.js'
@@ -108,7 +115,13 @@ function validateSingleTeamBatchUpdate(
         prefetchedEntries !== null
             ? validateTeamEntryWorkspaceScope(rawExisting, wsId)
             : rawExisting
-    if (existing !== null && existing !== undefined && explicitPn !== undefined && existing.projectNumber !== explicitPn) {
+    if (
+        existing !== null &&
+        existing !== undefined &&
+        explicitPn !== undefined &&
+        existing.projectNumber !== explicitPn &&
+        !canRealignOrphanedRegisteredProject(context, wsId, explicitPn, existing)
+    ) {
         return { status: 'not_found', entryId: u.entry_id }
     }
     const projectNumber = resolveTeamMutationProjectNumber(
@@ -127,6 +140,19 @@ function validateSingleTeamBatchUpdate(
         }
     }
     if (!existing) return { status: 'not_found', entryId: u.entry_id }
+    if (
+        existing.projectNumber !== null &&
+        existing.projectNumber !== undefined &&
+        existing.projectNumber !== projectNumber &&
+        !canRealignOrphanedRegisteredProject(context, wsId, projectNumber, existing)
+    ) {
+        return { status: 'not_found', entryId: u.entry_id }
+    }
+    if (!hasNonProjectTeamUpdateFields(u) && existing.projectNumber === projectNumber) {
+        throw new ValidationError(
+            'At least one updatable field must be specified in team_update_entry (empty metadata-only updates are rejected).'
+        )
+    }
 
     const effectiveWs = existing.workspaceId ?? wsId
     const callerRole = resolveRole(effectiveWs)
