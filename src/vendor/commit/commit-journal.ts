@@ -294,11 +294,82 @@ export function buildCommitJournalContent(
   return `${frontmatterLines.join('\n')}\n${journalBody}\n\nCommit: ${sha}`;
 }
 
-export function resolveMemoryJournalCli(cwd: string): { command: string; prefixArgs: string[] } {
-  const candidates: string[] = [
-    path.join(cwd, 'dist', 'cli.js'),
-    path.resolve(cwd, '..', 'memory-journal-mcp', 'dist', 'cli.js'),
-  ];
+const packageJsonNameSchema = z.object({
+  name: z.string().optional(),
+});
+
+const MEMORY_JOURNAL_PACKAGE_NAMES = new Set([
+  'memory-journal-mcp',
+  '@neverinfamous/memory-journal-mcp',
+]);
+
+function isMemoryJournalPackageDir(dirPath: string): boolean {
+  const pkgPath = path.join(dirPath, 'package.json');
+  if (!fs.existsSync(pkgPath)) {
+    return false;
+  }
+  try {
+    const rawContent = fs.readFileSync(pkgPath, 'utf-8');
+    const parsedJson: unknown = JSON.parse(rawContent);
+    const parsedPkg = packageJsonNameSchema.safeParse(parsedJson);
+    return (
+      parsedPkg.success &&
+      parsedPkg.data.name !== undefined &&
+      MEMORY_JOURNAL_PACKAGE_NAMES.has(parsedPkg.data.name)
+    );
+  } catch {
+    return false;
+  }
+}
+
+function resolveRegistryMemoryJournalCli(configPath?: string): string | null {
+  const effectiveConfigPath =
+    configPath !== undefined && configPath.length > 0
+      ? configPath
+      : getDefaultConfigPath();
+  if (!fs.existsSync(effectiveConfigPath)) {
+    return null;
+  }
+  try {
+    const rawContent = fs.readFileSync(effectiveConfigPath, 'utf-8');
+    const parsedJson: unknown = JSON.parse(rawContent);
+    const parsedConfig = memoryJournalConfigSchema.safeParse(parsedJson);
+    const mjEntry = parsedConfig.success
+      ? parsedConfig.data.projectRegistry?.['memory-journal-mcp']
+      : undefined;
+    if (mjEntry === undefined) {
+      return null;
+    }
+    const mjDir = path.resolve(mjEntry.path);
+    const cliPath = path.join(mjDir, 'dist', 'cli.js');
+    if (isMemoryJournalPackageDir(mjDir) && fs.existsSync(cliPath)) {
+      return cliPath;
+    }
+  } catch {
+    // Non-fatal: continue to remaining CLI resolution candidates
+  }
+  return null;
+}
+
+export function resolveMemoryJournalCli(
+  cwd: string,
+  configPath?: string
+): { command: string; prefixArgs: string[] } {
+  const candidates: string[] = [];
+
+  if (isMemoryJournalPackageDir(cwd)) {
+    candidates.push(path.join(cwd, 'dist', 'cli.js'));
+  }
+
+  const siblingMjDir = path.resolve(cwd, '..', 'memory-journal-mcp');
+  if (isMemoryJournalPackageDir(siblingMjDir)) {
+    candidates.push(path.join(siblingMjDir, 'dist', 'cli.js'));
+  }
+
+  const registryCli = resolveRegistryMemoryJournalCli(configPath);
+  if (registryCli !== null) {
+    candidates.push(registryCli);
+  }
 
   const appData = process.env['APPDATA'];
   if (appData !== undefined && appData.length > 0) {
