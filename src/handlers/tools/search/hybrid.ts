@@ -20,6 +20,7 @@ import {
     type EntryWithSource,
 } from './helpers.js'
 import { collapseTeamMirrors } from '../../../utils/team-mirror.js'
+import { sanitizeAuthor } from '../../../utils/security-utils.js'
 import { canReadTeamEntriesRbac } from '../team/rbac.js'
 import { logger } from '../../../utils/logger.js'
 
@@ -212,7 +213,14 @@ function hydrateQualifiedStoreCandidates(
     for (const id of ids) {
         const entry = hydratedById.get(id)
         if (!entry || !passMetadataFilters(entry, options, store)) continue
-        candidates.push({ ...entry, source })
+        const rawAuthor = (entry as { author?: unknown }).author
+        candidates.push({
+            ...entry,
+            ...(source === 'team' && typeof rawAuthor === 'string'
+                ? { author: sanitizeAuthor(rawAuthor) }
+                : {}),
+            source,
+        })
     }
     return candidates
 }

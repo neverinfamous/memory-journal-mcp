@@ -389,7 +389,20 @@ describe('HttpTransport', () => {
             const transport = new HttpTransport(config)
             await transport.start((() => mockServer) as never)
 
-            const corsMw = mockMiddlewares[1]
+            const corsMw = mockMiddlewares.find((mw) => {
+                const probe = mockRes()
+                try {
+                    mw(mockReq(), probe, () => {})
+                } catch {
+                    return false
+                }
+                const calls = (probe['setHeader'] as ReturnType<typeof vi.fn>).mock.calls as [
+                    string,
+                    unknown,
+                ][]
+                return calls.some((c) => c[0] === 'X-Content-Type-Options')
+            })
+            expect(corsMw).toBeDefined()
             const req = mockReq({ method: 'POST' })
             const res = mockRes()
             let nextCalled = false
@@ -494,7 +507,18 @@ describe('HttpTransport', () => {
             const transport = new HttpTransport(config)
             await transport.start((() => mockServer) as never)
 
-            const optionsMw = mockMiddlewares[1]
+            const optionsMw = mockMiddlewares.find((mw) => {
+                const probe = mockRes()
+                try {
+                    mw(mockReq({ method: 'OPTIONS' }), probe, () => {})
+                } catch {
+                    return false
+                }
+                return (probe['status'] as ReturnType<typeof vi.fn>).mock.calls.some(
+                    (c: unknown[]) => c[0] === 204
+                )
+            })
+            expect(optionsMw).toBeDefined()
             const req = mockReq({ method: 'POST' })
             const res = mockRes()
             let nextCalled = false

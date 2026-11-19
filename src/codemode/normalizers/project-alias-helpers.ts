@@ -4,6 +4,7 @@
  */
 
 import type { ProjectRegistryEntry } from '../../types/index.js'
+import { isForbiddenProjectKey } from '../../utils/project-registry-guards.js'
 import { resolveProjectContextWithRegistry } from '../../utils/workspace-resolver-pure.js'
 import { findCanonicalRegistryKey, pairStoredScope } from '../../utils/workspace-registry-match.js'
 import { parseCanonicalPositiveInt } from '../../utils/safe-positive-int.js'
@@ -58,9 +59,9 @@ export function readProjectRegistryPayload(
     value: unknown
 ): Record<string, ProjectRegistryEntry> | undefined {
     if (typeof value !== 'object' || value === null || Array.isArray(value)) return undefined
-    const registry: Record<string, ProjectRegistryEntry> = {}
+    const registry = Object.create(null) as Record<string, ProjectRegistryEntry>
     for (const [key, entry] of Object.entries(value)) {
-        if (!isRecord(entry)) continue
+        if (isForbiddenProjectKey(key) || !isRecord(entry)) continue
         const pathValue = entry['path']
         const projectNumber = entry['project_number']
         const hasPath = typeof pathValue === 'string' && pathValue.trim() !== ''

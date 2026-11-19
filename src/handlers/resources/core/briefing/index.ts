@@ -19,6 +19,7 @@ import {
     setActiveSessionProject,
 } from '../../../../utils/workspace-resolver.js'
 import { parseCanonicalPositiveInt } from '../../../../utils/safe-positive-int.js'
+import { ValidationError } from '../../../../types/errors.js'
 import { exactRegistryKey, uniqueWorkspaceForProject } from '../../../../utils/write-scope.js'
 import {
     DEFAULT_BRIEFING_CONFIG,
@@ -168,13 +169,16 @@ function resolveBriefingScope(
             ...resolveDefaultBriefingScope(context, config, registry, initialWorkspaceId, initialProjectNumber),
         }
     }
-
+    if (targetRepo.trim() === '*') {
+        throw new ValidationError(
+            "Wildcard '*' is not supported for memory://briefing/{+repo}. Specify a concrete repository name."
+        )
+    }
     const numericTarget = /^#?(\d+)$/.exec(targetRepo)
     const parsedTarget = numericTarget?.[1] !== undefined ? parseCanonicalPositiveInt(numericTarget[1]) : undefined
     const numericWorkspace =
         parsedTarget !== undefined ? uniqueWorkspaceForProject(parsedTarget, registry) : undefined
     const resolvedRepo = exactRegistryKey(targetRepo, registry) ?? numericWorkspace
-
     if (resolvedRepo !== undefined) {
         const registryEntry = registry?.[resolvedRepo]
         const repoPath = registryEntry?.path
@@ -192,7 +196,6 @@ function resolveBriefingScope(
             activeProjectNumber,
         }
     }
-
     if (targetRepo.trim().toLowerCase() === 'default') {
         const defaultEntry = registry?.['default']
         const registeredDefault =
@@ -212,15 +215,78 @@ function resolveBriefingScope(
             activeGithub: hasDefaultPath ? getGitHubIntegration(defaultPath, context.runtime) : undefined,
         }
     }
+    return { registry, hasRegistry, activeWorkspaceId: targetRepo, activeProjectNumber: undefined, activeRepoPath: undefined, activeGithub: undefined }
+}
 
-    return {
-        registry,
-        hasRegistry,
-        activeWorkspaceId: targetRepo,
-        activeProjectNumber: undefined,
-        activeRepoPath: undefined,
-        activeGithub: undefined,
-    }
+function renderBriefingUserMessage(params: {
+    context: ResourceContext
+    config: typeof DEFAULT_BRIEFING_CONFIG
+    activeGithub: ResourceContext['github']
+    activeWorkspaceId: string | undefined
+    journal: ReturnType<typeof buildJournalContext>
+    github: Awaited<ReturnType<typeof buildGitHubSection>>
+    system: Awaited<ReturnType<typeof buildBriefingSystemSummary>>
+    team: ReturnType<typeof buildTeamContext>
+}): string {
+    const { context, config, activeGithub, activeWorkspaceId, journal, github, system, team } = params
+    const insights = buildInsightsSection(context, activeWorkspaceId)
+    const graphStats = buildGraphContext(context, journal.workspaceId, journal.totalEntries)
+    const graphPivots =
+        config.graphPivots !== false
+            ? buildGraphPivots(
+                  context,
+                  journal.workspaceId,
+                  [
+                      ...journal.latestEntries.map((e) => e.id),
+                      ...(journal.sessionSummaries ?? []).map((s) => s.id),
+                  ],
+                  system.gitHistory?.commits.map((c) => c.hash) ?? []
+              )
+            : undefined
+    const toolNaming = resolveBriefingToolNaming(context.filterConfig)
+    const latestPreviews = journal.latestEntries.map(
+        (e) => `#${e.id} (${e.type})${degreeSuffix(graphPivots, e.id)}: ${e.preview}`
+    )
+    const teamLatestPreviews =
+        config.includeTeam && team?.teamLatestEntries && team.teamLatestEntries.length > 0
+            ? team.teamLatestEntries.map((e) => `#${e.id} (${e.type}): ${e.preview}`)
+            : undefined
+    const summaryPreviews = journal.sessionSummaries
+        ? journal.sessionSummaries.map(
+              (s) => `#${s.id} (${s.type})${degreeSuffix(graphPivots, s.id)}: ${s.preview}`
+          )
+        : null
+    const ciSuppressed =
+        github !== null
+            ? github.ciSuppressed === true
+            : config.workflowCount <= 0 && !config.workflowStatusBreakdown
+
+    return formatUserMessage({
+        repoName: github?.repo ?? 'local',
+        branchName: github?.branch ?? 'unknown',
+        ciStatus: github?.ci ?? 'unknown',
+        ...(ciSuppressed ? { ciSuppressed: true } : {}),
+        ...(config.entryCount <= 0 ? { entriesSuppressed: true } : {}),
+        totalEntries: journal.totalEntries,
+        latestPreviews,
+        ...(teamLatestPreviews !== undefined ? { teamLatestPreviews } : {}),
+        summaryPreviews,
+        github,
+        ...(config.includeTeam && team?.teamInfo.totalEntries !== undefined
+            ? { teamTotalEntries: team.teamInfo.totalEntries }
+            : {}),
+        analyticsInsights: insights ?? undefined,
+        graphSummary: graphStats,
+        ...(graphPivots !== undefined ? { graphPivots } : {}),
+        toolNaming,
+        gitHistory: system.gitHistory ?? undefined,
+        isReadonly: system.isReadonly,
+        teamConfigured: !!context.teamDb,
+        githubConfigured: !!activeGithub,
+        ioRootCount: system.ioRootCount,
+        workspaceId: journal.workspaceId ?? system.workspaceId,
+        deprecationWarnings: context.runtime?.metrics?.getDeprecationWarnings() ?? [],
+    })
 }
 
 export async function buildBriefingData(
@@ -267,64 +333,15 @@ export async function buildBriefingData(
               journal.mirrorCandidates
           )
         : undefined
-    const insights = buildInsightsSection(context, activeWorkspaceId)
-    const graphStats = buildGraphContext(context, journal.workspaceId, journal.totalEntries)
-    const graphPivotsEnabled = config.graphPivots !== false
-    const graphPivots = graphPivotsEnabled
-        ? buildGraphPivots(
-              context,
-              journal.workspaceId,
-              [
-                  ...journal.latestEntries.map((e) => e.id),
-                  ...(journal.sessionSummaries ?? []).map((s) => s.id),
-              ],
-              system.gitHistory?.commits.map((c) => c.hash) ?? []
-          )
-        : undefined
-    const toolNaming = resolveBriefingToolNaming(context.filterConfig)
-    const latestPreviews = journal.latestEntries.map(
-        (e) => `#${e.id} (${e.type})${degreeSuffix(graphPivots, e.id)}: ${e.preview}`
-    )
-    const teamLatestPreviews =
-        config.includeTeam && team?.teamLatestEntries && team.teamLatestEntries.length > 0
-            ? team.teamLatestEntries.map((e) => `#${e.id} (${e.type}): ${e.preview}`)
-            : undefined
-    const summaryPreviews = journal.sessionSummaries
-        ? journal.sessionSummaries.map(
-              (s) => `#${s.id} (${s.type})${degreeSuffix(graphPivots, s.id)}: ${s.preview}`
-          )
-        : null
-
-    const ciSuppressed =
-        github !== null
-            ? github.ciSuppressed === true
-            : config.workflowCount <= 0 && !config.workflowStatusBreakdown
-
-    const userMessage = formatUserMessage({
-        repoName: github?.repo ?? 'local',
-        branchName: github?.branch ?? 'unknown',
-        ciStatus: github?.ci ?? 'unknown',
-        ...(ciSuppressed ? { ciSuppressed: true } : {}),
-        ...(config.entryCount <= 0 ? { entriesSuppressed: true } : {}),
-        totalEntries: journal.totalEntries,
-        latestPreviews,
-        ...(teamLatestPreviews !== undefined ? { teamLatestPreviews } : {}),
-        summaryPreviews,
+    const userMessage = renderBriefingUserMessage({
+        context,
+        config,
+        activeGithub,
+        activeWorkspaceId,
+        journal,
         github,
-        ...(config.includeTeam && team?.teamInfo.totalEntries !== undefined
-            ? { teamTotalEntries: team.teamInfo.totalEntries }
-            : {}),
-        analyticsInsights: insights ?? undefined,
-        graphSummary: graphStats,
-        ...(graphPivots !== undefined ? { graphPivots } : {}),
-        toolNaming,
-        gitHistory: system.gitHistory ?? undefined,
-        isReadonly: system.isReadonly,
-        teamConfigured: !!context.teamDb,
-        githubConfigured: !!activeGithub,
-        ioRootCount: system.ioRootCount,
-        workspaceId: journal.workspaceId ?? system.workspaceId,
-        deprecationWarnings: context.runtime?.metrics?.getDeprecationWarnings() ?? [],
+        system,
+        team,
     })
 
     return {

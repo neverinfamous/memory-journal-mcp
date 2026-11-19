@@ -1,6 +1,6 @@
 import { getAuthContext } from './auth-context.js'
 import { hasScope, SCOPES } from './scopes.js'
-import { getRequiredScope } from './scope-map.js'
+import { canonicalizeMemoryResourceUri, getRequiredScope } from './scope-map.js'
 import { getToolGroup } from '../filtering/tool-filter.js'
 import { PermissionError } from '../types/errors.js'
 import { logger } from '../utils/logger.js'
@@ -12,6 +12,15 @@ interface AccessCapabilities {
     requiresTeamScope?: boolean
     requiresAdminScope?: boolean
     requiresAuditScope?: boolean
+}
+
+export function getGrantedAuthScopes(
+    auth: ReturnType<typeof getAuthContext>
+): string[] {
+    if (!auth?.authenticated) return []
+    if (Array.isArray(auth.claims?.scopes)) return auth.claims.scopes
+    if (Array.isArray(auth.scopes)) return auth.scopes
+    return []
 }
 
 function isTeamResourceUri(normalizedTarget: string): boolean {
@@ -53,12 +62,13 @@ function classifyAccessTarget(
     targetType: 'resource' | 'tool' | 'prompt',
     capabilities?: AccessCapabilities
 ): { isTeam: boolean; isAudit: boolean; isAdmin: boolean } {
-    const normalizedTarget = targetType === 'resource' ? targetName.replace(/#.*$/, '') : targetName
+    const normalizedTarget =
+        targetType === 'resource' ? canonicalizeMemoryResourceUri(targetName) : targetName.trim()
     const isTeam =
         capabilities?.requiresTeamScope ??
         (targetType === 'resource'
             ? isTeamResourceUri(normalizedTarget)
-            : isTeamToolOrPromptName(targetName))
+            : isTeamToolOrPromptName(normalizedTarget))
     const isAudit =
         capabilities?.requiresAuditScope ??
         (targetType === 'resource' ? isAuditResourceUri(normalizedTarget) : false)
@@ -76,6 +86,7 @@ function assertTeamAccessBoundary(
     const hasAuthClaim = auth?.authenticated === true && auth?.claims !== undefined
     if (author !== 'unknown' || hasAuthClaim) return
 
+    const grantedScopes = getGrantedAuthScopes(auth)
     logger.warning(`Access to team ${targetType} denied: unauthenticated`, {
         module: 'AUTH',
         operation: 'fail-closed',
@@ -83,7 +94,7 @@ function assertTeamAccessBoundary(
     })
     auditLogger?.logDenial(targetName, 'Unauthenticated team access', {
         user: auth?.claims?.sub ?? null,
-        scopes: auth?.claims?.scopes ?? [],
+        scopes: grantedScopes,
         category: 'team',
         scope: SCOPES.TEAM,
     })
@@ -148,7 +159,8 @@ export function enforceAccessBoundary(
         classification,
         capabilities
     )
-    if (hasScope(auth.claims?.scopes ?? [], requiredScope)) return
+    const grantedScopes = getGrantedAuthScopes(auth)
+    if (hasScope(grantedScopes, requiredScope)) return
 
     logger.warning(`Insufficient scope for ${targetType}: ${targetName}`, {
         module: 'AUTH',
@@ -160,7 +172,7 @@ export function enforceAccessBoundary(
         // [INTENT] Denial category mirrors the scope that was required (M6).
         auditLogger.logDenial(targetName, 'Insufficient scope', {
             ...(auth.claims?.sub !== undefined ? { user: auth.claims.sub } : {}),
-            scopes: auth.claims?.scopes ?? [],
+            scopes: grantedScopes,
             category: scopeToDenialCategory(requiredScope),
             scope: requiredScope,
         })

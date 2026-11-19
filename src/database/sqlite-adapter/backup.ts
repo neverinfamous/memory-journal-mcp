@@ -66,7 +66,7 @@ export class BackupManager {
         }
 
         if (!fs.existsSync(backupsDir)) {
-            await fs.promises.mkdir(backupsDir, { recursive: true })
+            await fs.promises.mkdir(backupsDir, { recursive: true, mode: 0o700 })
         }
 
         const timestamp = new Date().toISOString().replace(/[:.]/g, '-')

@@ -521,7 +521,7 @@ describe('Team tools with teamDb but no vectorManager', () => {
     it('team_merge_tags: successful merge', async () => {
         const result = (await callTool(
             'team_merge_tags',
-            { source_tag: 'extra', target_tag: 'catch-test' },
+            { source_tag: 'extra', target_tag: 'catch-test', project_number: 1 },
             db,
             undefined,
             undefined,

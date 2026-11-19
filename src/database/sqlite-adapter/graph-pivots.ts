@@ -300,11 +300,13 @@ export function queryEntriesSharingAnchors(
 ): { entryId: number; entryType: string; content: string; sharedAnchors: number }[] {
     const { scoped, id: ws } = scopeOf(workspaceId)
     const entryWs = scoped ? ' AND m.workspace_id = ?' : ''
+    const mineWs = scoped ? ' AND me.workspace_id = ?' : ''
     const rows = db
         .prepare(
             `SELECT m.id AS entry_id, m.entry_type AS entry_type, m.content AS content,
                     COUNT(DISTINCT other.anchor_path) AS shared
              FROM entry_anchors mine
+             JOIN memory_journal me ON me.id = mine.entry_id AND me.deleted_at IS NULL${mineWs}
              JOIN entry_anchors other ON other.anchor_path = mine.anchor_path AND other.entry_id != mine.entry_id
              JOIN memory_journal m ON m.id = other.entry_id AND m.deleted_at IS NULL${entryWs}
              WHERE mine.entry_id = ? AND julianday(m.timestamp) >= julianday(?)
@@ -312,7 +314,7 @@ export function queryEntriesSharingAnchors(
              ORDER BY shared DESC, m.id DESC
              LIMIT ?`
         )
-        .all(...(scoped ? [ws, entryId, sinceIso, limit] : [entryId, sinceIso, limit])) as {
+        .all(...(scoped ? [ws, ws, entryId, sinceIso, limit] : [entryId, sinceIso, limit])) as {
         entry_id: number
         entry_type: string
         content: string

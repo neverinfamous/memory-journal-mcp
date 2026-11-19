@@ -167,6 +167,48 @@ export function buildCliAttributionFlags(
     return parts.length > 0 ? `${parts.join(' ')} ` : ''
 }
 
+function resolveWorkflowEffectiveProjectNumber(
+    workspaceId: string,
+    briefingConfig?: Partial<BriefingConfig>,
+    explicitProjectNumber?: number,
+    explicitDefaultRequested = false
+): number | undefined {
+    if (explicitProjectNumber !== undefined) return explicitProjectNumber
+    const registry = briefingConfig?.projectRegistry ?? loadProjectRegistryFromConfig()
+    const canonical = exactRegistryKey(workspaceId, registry)
+    if (canonical !== undefined && registry?.[canonical]?.project_number !== undefined) {
+        return registry[canonical].project_number
+    }
+    if (workspaceId.toLowerCase() === 'default' && !explicitDefaultRequested) {
+        const defProj = briefingConfig?.defaultProjectNumber
+        if (defProj !== undefined && workspacesForProject(defProj, registry).length === 0) {
+            return defProj
+        }
+    }
+    return undefined
+}
+
+function assertTeamWorkflowProjectScope(
+    workspaceId: string,
+    effectiveProjectNumber: number | undefined,
+    explicitDefaultRequested: boolean,
+    briefingConfig?: Partial<BriefingConfig>
+): void {
+    if (effectiveProjectNumber !== undefined) return
+    const registry = briefingConfig?.projectRegistry ?? loadProjectRegistryFromConfig()
+    const hasRegistry = registry !== undefined && Object.keys(registry).length > 0
+    if (
+        explicitDefaultRequested ||
+        workspaceId.toLowerCase() !== 'default' ||
+        hasRegistry ||
+        briefingConfig?.defaultProjectNumber !== undefined
+    ) {
+        throw new ValidationError(
+            'Missing project_number for team workflow prompt on shared or unregistered workspace. Pass project_number or target a registered workspace.'
+        )
+    }
+}
+
 export function generateSummaryPrompt(
     db: IDatabaseAdapter,
     teamDb: IDatabaseAdapter | undefined,
@@ -177,11 +219,23 @@ export function generateSummaryPrompt(
     explicitDefaultRequested = false,
     runtime?: PromptTeamRuntime | null
 ): { messages: PromptMessage[] } {
+    const effectiveProjectNumber = resolveWorkflowEffectiveProjectNumber(
+        workspaceId,
+        briefingConfig,
+        projectNumber,
+        explicitDefaultRequested
+    )
     if (target === 'team') {
         if (!teamDb) {
             throw new ConfigurationError('Team database not configured')
         }
         enforceWorkflowTeamPromptRbac(teamDb, 'member', workspaceId, briefingConfig, runtime)
+        assertTeamWorkflowProjectScope(
+            workspaceId,
+            effectiveProjectNumber,
+            explicitDefaultRequested,
+            briefingConfig
+        )
     }
 
     const targetDb = target === 'team' && teamDb ? teamDb : db
@@ -192,32 +246,18 @@ export function generateSummaryPrompt(
         undefined,
         false,
         workspaceId,
-        projectNumber
+        effectiveProjectNumber
     )
 
     const entrySummary =
         recent.length > 0
             ? recent
-                  .map(
-                      (e) =>
-                          `- #${String(e.id)} (${e.entryType}) ${e.content.slice(0, 80)}${e.content.length > 80 ? '...' : ''}`
-                  )
+                  .map((e) => `- #${String(e.id)} (${e.entryType}) ${e.content.slice(0, 80)}${e.content.length > 80 ? '...' : ''}`)
                   .join('\n')
             : '- No entries yet'
-
     const registryHint = getProjectRegistryHint(briefingConfig)
-    const attributionArgs = buildExplicitAttributionArgs(
-        workspaceId,
-        briefingConfig,
-        projectNumber,
-        explicitDefaultRequested
-    )
-    const cliFlags = buildCliAttributionFlags(
-        workspaceId,
-        briefingConfig,
-        projectNumber,
-        explicitDefaultRequested
-    )
+    const attributionArgs = buildExplicitAttributionArgs(workspaceId, briefingConfig, projectNumber, explicitDefaultRequested)
+    const cliFlags = buildCliAttributionFlags(workspaceId, briefingConfig, projectNumber, explicitDefaultRequested)
 
     return {
         messages: [
@@ -225,13 +265,7 @@ export function generateSummaryPrompt(
                 role: 'user',
                 content: {
                     type: 'text',
-                    text: buildSummaryPromptText({
-                        target,
-                        registryHint,
-                        entrySummary,
-                        attributionArgs,
-                        cliFlags,
-                    }),
+                    text: buildSummaryPromptText({ target, registryHint, entrySummary, attributionArgs, cliFlags }),
                 },
             },
         ],
@@ -318,14 +352,26 @@ export function generateUpdateEntryPrompt(
     explicitDefaultRequested = false,
     runtime?: PromptTeamRuntime | null
 ): { messages: PromptMessage[] } {
+    const effectiveProjectNumber = resolveWorkflowEffectiveProjectNumber(
+        workspaceId,
+        briefingConfig,
+        projectNumber,
+        explicitDefaultRequested
+    )
     if (target === 'team') {
         if (!teamDb) {
             throw new ConfigurationError('Team database not configured')
         }
         enforceWorkflowTeamPromptRbac(teamDb, 'member', workspaceId, briefingConfig, runtime)
+        assertTeamWorkflowProjectScope(
+            workspaceId,
+            effectiveProjectNumber,
+            explicitDefaultRequested,
+            briefingConfig
+        )
     }
     const targetDb = target === 'team' && teamDb ? teamDb : db
-    const entryContext = fetchTargetEntryContext(targetDb, workspaceId, projectNumber)
+    const entryContext = fetchTargetEntryContext(targetDb, workspaceId, effectiveProjectNumber)
     const registryHint = getProjectRegistryHint(briefingConfig)
     const attributionArgs = buildExplicitAttributionArgs(
         workspaceId,

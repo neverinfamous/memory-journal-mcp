@@ -54,21 +54,30 @@ export class LegacySSEServerTransport implements Transport {
             res.status(409).json({ error: { message: 'SSE stream already connected for this session' } })
             return
         }
+        if (req.destroyed || res.writableEnded || res.destroyed) {
+            void this.close()
+            return
+        }
         this.res = res
         if (typeof res.setTimeout === 'function') {
             res.setTimeout(0)
         }
-        res.writeHead(200, {
-            'Content-Type': 'text/event-stream',
-            'Cache-Control': 'no-cache, no-transform',
-            'Connection': 'keep-alive',
-            'X-Accel-Buffering': 'no',
-            'mcp-session-id': this.sessionId
-        })
-        
-        // Send the endpoint event immediately to inform the client where to POST messages
-        const endpointUrl = `${this.messagesEndpoint}?sessionId=${this.sessionId}`
-        res.write(`event: endpoint\ndata: ${endpointUrl}\n\n`)
+        try {
+            res.writeHead(200, {
+                'Content-Type': 'text/event-stream',
+                'Cache-Control': 'no-cache, no-transform',
+                'Connection': 'keep-alive',
+                'X-Accel-Buffering': 'no',
+                'mcp-session-id': this.sessionId,
+            })
+
+            // Send the endpoint event immediately to inform the client where to POST messages
+            const endpointUrl = `${this.messagesEndpoint}?sessionId=${this.sessionId}`
+            res.write(`event: endpoint\ndata: ${endpointUrl}\n\n`)
+        } catch (err) {
+            void this.close()
+            throw err
+        }
 
         const onStreamAbort = (err?: Error): void => {
             if (err !== undefined) {

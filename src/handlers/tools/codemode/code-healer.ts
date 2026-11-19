@@ -68,6 +68,7 @@ function unwrapNestedExecuteCode(src: string): string {
             !/\b(const|let|var|function|return|await|import|export|mj\.)\b/.test(inner)
         if (isNatural || /^(?:create|add|new|record|log)?\s*entry\b/i.test(inner)) {
             const firstLine = (inner.split('\n')[0] ?? '')
+                .slice(0, 200)
                 .replace(/^(?:create|add|new|record|log|insert)?\s*entry\s*(?:for|:)?\s*/i, '')
                 .replace(/[:.]+$/, '')
                 .trim()
@@ -81,6 +82,7 @@ function unwrapNestedExecuteCode(src: string): string {
 
 const ACCIDENTAL_TAGGED_TEMPLATE_RE =
     /(?<!\\)`(?:\.[a-zA-Z0-9_$-]+(?:\.[a-zA-Z0-9_$-]+)*|\[[^\]]+\])`/
+const MAX_DELIMITER_HEAL_CANDIDATES = 16
 
 function hasAccidentalTaggedTemplateBackticks(src: string): boolean {
     return ACCIDENTAL_TAGGED_TEMPLATE_RE.test(src)
@@ -92,7 +94,26 @@ function shouldLeaveValidSnippetUntouched(snippet: string, isExpression: boolean
     return isValidJsScript(wrapped)
 }
 
+function countRegexMatchesUpTo(src: string, re: RegExp, cap: number): number {
+    let count = 0
+    for (const match of src.matchAll(re)) {
+        if (match[0].length > 0) count++
+        if (count > cap) return count
+    }
+    return count
+}
+
 function applyTemplateAndQuoteDelimiterHealing(src: string): string {
+    if (!hasAccidentalTaggedTemplateBackticks(src) && isValidJsScript(src)) return src
+    if (
+        countRegexMatchesUpTo(
+            src,
+            /\b(?:content|title|text|description|message|instructions|body|notes|details|resolution_notes|query|script|comment|summary|heading|createEntry|teamCreateEntry|appendEntry|updateEntry|teamUpdateEntry|searchEntries|teamSearch|const|let|var)\b/g,
+            MAX_DELIMITER_HEAL_CANDIDATES
+        ) > MAX_DELIMITER_HEAL_CANDIDATES
+    ) {
+        return src
+    }
     let executionCode = src
     const statementKeywordsOrBraces =
         /(?:;\s*\n|\b(?:const|let|var|return|if|for|while|function|switch|class|export|import)\b|\{|\})/
@@ -101,27 +122,19 @@ function applyTemplateAndQuoteDelimiterHealing(src: string): string {
         executionCode,
         /(\b(?:content|title|text|description|message|instructions|body|notes|details|resolution_notes|query|script|comment|summary|heading)\s*:\s*)`([\s\S]*?)`(?=\s*(?:,\s*[a-zA-Z_$][\w$]*\s*:|\s*,\s*\}|\s*\}|\s*\)))/g,
         (match: string, prefix: string, content: string): string =>
-            shouldLeaveValidSnippetUntouched(`{ ${match} }`, true)
-                ? match
-                : `${prefix}\`${escapeDelimiterChar(content, '`')}\``
+            shouldLeaveValidSnippetUntouched(`{ ${match} }`, true) ? match : `${prefix}\`${escapeDelimiterChar(content, '`')}\``
     )
-
     executionCode = replaceOutsideNonCode(
         executionCode,
         /(\b(?:content|title|text|description|message|instructions|body|notes|details|resolution_notes|query|script|comment|summary|heading)\s*:\s*)'([\s\S]*?)'(?=\s*(?:,\s*[a-zA-Z_$][\w$]*\s*:|\s*,\s*\}|\s*\}|\s*\)))/g,
         (_match: string, prefix: string, content: string): string =>
-            content.includes('\n')
-                ? `${prefix}\`${escapeTemplateInterpolation(content)}\``
-                : `${prefix}'${escapeDelimiterChar(content, "'")}'`
+            content.includes('\n') ? `${prefix}\`${escapeTemplateInterpolation(content)}\`` : `${prefix}'${escapeDelimiterChar(content, "'")}'`
     )
-
     executionCode = replaceOutsideNonCode(
         executionCode,
         /(\b(?:content|title|text|description|message|instructions|body|notes|details|resolution_notes|query|script|comment|summary|heading)\s*:\s*)"([\s\S]*?)"(?=\s*(?:,\s*[a-zA-Z_$][\w$]*\s*:|\s*,\s*\}|\s*\}|\s*\)))/g,
         (_match: string, prefix: string, content: string): string =>
-            content.includes('\n')
-                ? `${prefix}\`${escapeTemplateInterpolation(content)}\``
-                : `${prefix}"${escapeDelimiterChar(content, '"')}"`
+            content.includes('\n') ? `${prefix}\`${escapeTemplateInterpolation(content)}\`` : `${prefix}"${escapeDelimiterChar(content, '"')}"`
     )
 
     executionCode = replaceOutsideNonCode(

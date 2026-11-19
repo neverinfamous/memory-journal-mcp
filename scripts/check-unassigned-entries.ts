@@ -81,7 +81,7 @@ function openReadonlyDatabase(dbPath: string, rawKey: string | undefined): Datab
         const rawMsg = err instanceof Error ? err.message : String(err)
         const safeMsg = rawMsg
             .replace(/x'[0-9a-fA-F]*'/gi, "x'[REDACTED]'")
-            .replace(/(pragma\s+key\s*=\s*)'[^']*'/gi, "$1'[REDACTED]'")
+            .replace(/(pragma\s+(?:re)?key\s*=\s*)(?:"(?:[^"]|"")*"|'(?:[^']|'')*')/gi, "$1'[REDACTED]'")
         console.error(`❌ Could not open database at '${dbPath}': ${safeMsg}`)
         process.exit(1)
     }

@@ -11,7 +11,6 @@ import { resolveWorkspaceId } from '../../../utils/workspace-resolver.js'
 import {
     activeProjectRegistry,
     alignedProjectFilter,
-    uniqueWorkspaceForProject,
 } from '../../../utils/write-scope.js'
 
 const preprocessVectorEntryId = (val: unknown): unknown => {
@@ -97,12 +96,7 @@ export function getVectorTools(context: ToolContext): ToolDefinition[] {
                     const wsId = isWildcard
                         ? '*'
                         : resolveWorkspaceId(parsed.workspace_id, parsed.project_number, context.config)
-                    const projectNumber =
-                        isWildcard &&
-                        parsed.project_number !== undefined &&
-                        uniqueWorkspaceForProject(parsed.project_number, registry) !== undefined
-                            ? undefined
-                            : alignedProjectFilter(wsId, parsed.project_number, registry)
+                    const projectNumber = alignedProjectFilter(wsId, parsed.project_number, registry)
                     const rebuildOpts: { projectNumber?: number; workspaceId?: string } = {
                         workspaceId: wsId,
                         ...(projectNumber !== undefined ? { projectNumber } : {}),

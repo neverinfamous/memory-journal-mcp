@@ -220,11 +220,13 @@ export async function readAndConvertExternalMarkdownFiles(
     progress: ToolContext['progress']
 ): Promise<{ parsedFiles: ParsedFile[]; errors: { file: string; error: string }[]; skipped: number }> {
     assertSafeDirectoryPath(sourceDir, allowedRoots)
+    const MAX_DIRECTORY_SCAN_ENTRIES = 10_000
     const allMdFiles: string[] = []
     const dir = await fs.opendir(sourceDir)
     for await (const dirent of dir) {
         if (dirent.isFile() && dirent.name.endsWith('.md')) {
             allMdFiles.push(dirent.name)
+            if (allMdFiles.length >= MAX_DIRECTORY_SCAN_ENTRIES) break
         }
     }
     allMdFiles.sort((a, b) => a.localeCompare(b))

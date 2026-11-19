@@ -6,15 +6,15 @@
  */
 
 import { sliceUntrustedInline, type BriefingConfig, type ResourceContext } from '../../shared.js'
-import { logger } from '../../../../utils/logger.js'
-import { canAccessTeamSilently } from '../../../tools/search/helpers.js'
 import type { JournalEntry } from '../../../../types/index.js'
-import {
-    buildPersonalMirrorIndex,
-    isTeamMirrorOf,
-    type MirrorCandidate,
-} from '../../../../utils/team-mirror.js'
-import { previewLabel } from './graph-pivots-section.js'
+import type { MirrorCandidate } from '../../../../utils/team-mirror.js'
+
+export {
+    buildGraphContext,
+    buildTeamContext,
+    type GraphSummary,
+    type TeamContext,
+} from './team-and-graph-context.js'
 
 // ============================================================================
 // Journal Context
@@ -26,7 +26,7 @@ const PREVIEW_LENGTH = 120
 const PREVIEW_FENCE_WRAPPER_RE =
     /^<untrusted_remote_content>\r?\n?([\s\S]*?)\r?\n?<\/untrusted_remote_content>$/i
 
-function cleanPreview(content: string | undefined | null, length: number): string {
+export function cleanPreview(content: string | undefined | null, length: number): string {
     if (!content) return ''
     const fencedMatch = PREVIEW_FENCE_WRAPPER_RE.exec(content.trim())
     const unwrapped =
@@ -77,7 +77,7 @@ export interface JournalContext {
     mirrorCandidates?: MirrorCandidate[]
 }
 
-function extractEntries(result: JournalEntry[] | { entries: JournalEntry[] }): JournalEntry[] {
+export function extractEntries(result: JournalEntry[] | { entries: JournalEntry[] }): JournalEntry[] {
     if (Array.isArray(result)) return result
     return 'entries' in result ? result.entries : []
 }
@@ -268,220 +268,5 @@ export function buildJournalContext(
         lastModified,
         workspaceId: targetWs,
         mirrorCandidates,
-    }
-}
-
-// ============================================================================
-// Team Context
-// ============================================================================
-
-/** Team DB preview length */
-const TEAM_PREVIEW_LENGTH = 60
-
-export interface TeamContext {
-    teamInfo: { totalEntries: number; latestPreview: string | null }
-    teamLatestEntries?: { id: number; timestamp: string; type: string; preview: string }[]
-}
-
-export function buildTeamContext(
-    context: ResourceContext,
-    config: BriefingConfig,
-    projectNumber?: number | null,
-    activeWorkspaceId?: string,
-    personalCandidates?: readonly MirrorCandidate[]
-): TeamContext | undefined {
-    if (!context.teamDb) return undefined
-
-    try {
-        const teamWorkspace = activeWorkspaceId ?? config.defaultWorkspaceId ?? 'default'
-        const accessAllowed = canAccessTeamSilently(
-            'search_entries',
-            {
-                teamDb: context.teamDb,
-                config: {
-                    ...(config.defaultWorkspaceId !== undefined
-                        ? { defaultWorkspaceId: config.defaultWorkspaceId }
-                        : {}),
-                    ...(config.defaultProjectNumber !== undefined
-                        ? { defaultProjectNumber: config.defaultProjectNumber }
-                        : {}),
-                    ...(config.projectRegistry !== undefined
-                        ? { projectRegistry: config.projectRegistry }
-                        : {}),
-                    teamDefaultRole: context.runtime?.teamDefaultRole ?? 'denied',
-                },
-            },
-            teamWorkspace
-        )
-        if (!accessAllowed) return undefined
-        const teamTotalEntries = context.teamDb.getActiveEntryCount(teamWorkspace)
-        const fetchCap = Math.max((config.entryCount ?? 3) * 3, 10)
-        const teamCandidates =
-            typeof projectNumber === 'number'
-                ? extractEntries(
-                      context.teamDb.searchEntries('', {
-                          limit: fetchCap,
-                          projectNumber,
-                          workspaceId: teamWorkspace,
-                      })
-                  )
-                : extractEntries(
-                      context.teamDb.getRecentEntries(
-                          fetchCap,
-                          undefined,
-                          'timestamp',
-                          undefined,
-                          false,
-                          teamWorkspace
-                      )
-                  )
-        const origins =
-            teamCandidates.length > 0
-                ? context.teamDb.getMirrorOrigins?.(teamCandidates.map((e) => e.id))
-                : undefined
-        const personalIdx =
-            personalCandidates && personalCandidates.length > 0
-                ? buildPersonalMirrorIndex(personalCandidates)
-                : undefined
-        const distinctTeam = personalIdx
-            ? teamCandidates.filter((e) => {
-                  const explicitOrigin =
-                      'originPersonalId' in e && typeof e.originPersonalId === 'number'
-                          ? e.originPersonalId
-                          : undefined
-                  const originId = origins?.get(e.id) ?? explicitOrigin
-                  return !isTeamMirrorOf(
-                      {
-                          id: e.id,
-                          content: e.content,
-                          timestamp: e.timestamp,
-                          ...(e.workspaceId !== undefined ? { workspaceId: e.workspaceId } : {}),
-                          ...(originId !== undefined ? { originPersonalId: originId } : {}),
-                      },
-                      personalIdx
-                  )
-              })
-            : teamCandidates
-
-        const teamLatestEntry = distinctTeam[0]
-        const teamLatest = teamLatestEntry
-            ? `#${String(teamLatestEntry.id)}: ${sliceUntrustedInline(cleanPreview(teamLatestEntry.content, TEAM_PREVIEW_LENGTH), TEAM_PREVIEW_LENGTH + 1)}`
-            : null
-        const teamInfo = {
-            totalEntries: teamTotalEntries,
-            latestPreview: teamLatest,
-        }
-
-        let teamLatestEntries:
-            | { id: number; timestamp: string; type: string; preview: string }[]
-            | undefined = undefined
-
-        if (config.includeTeam) {
-            teamLatestEntries = distinctTeam.slice(0, config.entryCount).map((e) => {
-                return {
-                    id: e.id,
-                    timestamp: e.timestamp,
-                    type: e.entryType,
-                    preview: sliceUntrustedInline(
-                        cleanPreview(e.content, TEAM_PREVIEW_LENGTH),
-                        TEAM_PREVIEW_LENGTH + 1
-                    ),
-                }
-            })
-        }
-
-        return { teamInfo, teamLatestEntries }
-    } catch (error) {
-        logger.debug('Failed to build team context', {
-            module: 'BRIEFING',
-            operation: 'team-context',
-            error: error instanceof Error ? error.message : String(error),
-        })
-        return undefined
-    }
-}
-
-// ============================================================================
-// Rules & Skills Awareness
-// ============================================================================
-
-
-
-
-
-// ============================================================================
-// Graph Context
-// ============================================================================
-
-export interface GraphSummary {
-    totalRelationships: number
-    density: number
-    causalMetrics: Record<string, number>
-    topHubs: { id: number; preview: string; count: number }[]
-    orphanRatio?: number
-    degraded?: boolean
-}
-
-export function buildGraphContext(
-    context: ResourceContext,
-    workspaceId?: string,
-    precomputedActiveCount?: number
-): GraphSummary | undefined {
-    try {
-        const targetWs = workspaceId ?? 'default'
-        const stats = context.db.getStatistics('week', undefined, undefined, false, targetWs)
-        const comp = stats['relationshipComplexity'] as
-            | { totalRelationships: number; avgPerEntry: number }
-            | undefined
-        const causal = stats['causalMetrics'] as Record<string, number> | undefined
-
-        if (!comp || !causal) return undefined
-
-
-        const totalActiveEntries =
-            precomputedActiveCount ?? context.db.getActiveEntryCount(targetWs)
-
-        // Fetch top hubs and orphan ratio via purpose-built safe methods
-        let topHubs: { id: number; preview: string; count: number }[] = []
-        let orphanRatio: number | undefined
-        let degraded = false
-
-        try {
-            const hubs = context.db.getRelationshipHubs(3, targetWs)
-            topHubs = hubs.map(hub => ({
-                id: hub.entryId,
-                count: hub.totalLinks,
-                // [INTENT] Previews let agents judge whether a hub is worth expanding (bare IDs cannot).
-                preview: previewLabel(hub.content),
-            }))
-
-            if (totalActiveEntries > 0) {
-                const orphanCount = context.db.getOrphanCount(targetWs)
-                orphanRatio = orphanCount / totalActiveEntries
-            }
-        } catch (error) {
-            degraded = true
-            logger.warning('Graph hub query failed', {
-                module: 'BRIEFING',
-                operation: 'graph-context',
-                error: error instanceof Error ? error.message : String(error),
-            })
-        }
-
-        return {
-            totalRelationships: comp.totalRelationships,
-            density: comp.avgPerEntry,
-            causalMetrics: causal,
-            topHubs,
-            orphanRatio,
-            ...(degraded ? { degraded: true } : {}),
-        }
-    } catch (error) {
-        logger.debug('Failed to build graph context', {
-            module: 'BRIEFING',
-            operation: 'graph-context',
-            error: error instanceof Error ? error.message : String(error),
-        })
-        return undefined
     }
 }

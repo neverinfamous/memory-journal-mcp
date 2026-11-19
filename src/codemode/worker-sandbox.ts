@@ -136,6 +136,7 @@ export class WorkerSandbox {
 
         const spawnedWorker = new Worker(getWorkerScriptPath(), {
             workerData: {}, // Initialized without specific execution data
+            env: {},
             resourceLimits,
         })
         this.worker = spawnedWorker

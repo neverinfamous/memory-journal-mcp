@@ -49,11 +49,11 @@ const MEMORY_ROOT_PREFIXES = [
 export function extractUriFromArgs(args: Record<string, unknown>): string | undefined {
     let uri =
         typeof args['uri'] === 'string'
-            ? args['uri']
+            ? args['uri'].trim()
             : typeof args['Uri'] === 'string'
-              ? args['Uri']
+              ? args['Uri'].trim()
               : typeof args['_uri'] === 'string'
-                ? args['_uri']
+                ? args['_uri'].trim()
                 : undefined
     if (uri === undefined || uri === '') {
         for (const key of URI_CANDIDATE_KEYS) {

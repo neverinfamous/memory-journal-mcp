@@ -120,13 +120,14 @@ export class HttpTransport {
         const isAuthenticatedWildcard =
             isWildcardBindHost(host) && hasAuth && !hasCustomPublicOrigin
 
-        this.app.use(
-            isLocalhost && !hasCustomPublicOrigin
-                ? localhostHostValidation()
-                : isAuthenticatedWildcard
-                  ? createWildcardHostValidationMiddleware()
-                  : hostHeaderValidation(allowedHosts)
-        )
+        this.app.use(createWildcardHostValidationMiddleware())
+        if (!isAuthenticatedWildcard) {
+            this.app.use(
+                isLocalhost && !hasCustomPublicOrigin
+                    ? localhostHostValidation()
+                    : hostHeaderValidation(allowedHosts)
+            )
+        }
         logger.info('DNS rebinding protection enabled (host header validation)', {
             module: 'HTTP',
             allowedHosts:

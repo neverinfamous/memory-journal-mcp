@@ -21,6 +21,7 @@ export interface DispatchParamContext {
     workspaceId: string | undefined
     explicitWorkspace?: boolean
     sessionId?: string | undefined
+    rpcPinnedProject?: boolean | undefined
 }
 
 export function isDefaultWorkspaceName(value: unknown): boolean {
@@ -260,14 +261,19 @@ function applyRootSessionInheritance(
     }
 
     // [INVARIANT] Explicit `workspace_id: 'default'` inherits session projectId only when the session itself is explicit `'default'`.
+    // Explicit `workspace_id: '*'` inherits session projectId only when a nested executeCode pinned `project_number` (`rpcPinnedProject === true`).
+    const canInheritProjectOnCallerWs =
+        callerWorkspaceId === undefined ||
+        (callerWorkspaceId === '*'
+            ? ctx.rpcPinnedProject === true
+            : typeof workspaceId === 'string' &&
+              callerWorkspaceId.toLowerCase() === workspaceId.toLowerCase())
     if (
         !flags.hasCrossWorkspaceTarget &&
         !repoTargetsForeignProject &&
         paramsObj['project_number'] === undefined &&
         projectId !== undefined &&
-        (callerWorkspaceId === undefined ||
-            (typeof workspaceId === 'string' &&
-                callerWorkspaceId.toLowerCase() === workspaceId.toLowerCase())) &&
+        canInheritProjectOnCallerWs &&
         (!isDefaultWorkspaceName(callerWorkspaceId) ||
             (isDefaultWorkspaceName(workspaceId) && explicitWorkspace === true)) &&
         checkSchemaAcceptsKey(tool.inputSchema, 'project_number')

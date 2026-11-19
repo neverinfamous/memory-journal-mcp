@@ -32,19 +32,34 @@ export function closeTransportQuietly(
     })
 }
 
-export function resolveRequestSubject(): string | undefined {
-    const claims = getAuthContext()?.claims as
-        | { sub?: string; email?: string; client_id?: string; subject?: string; clientId?: string }
-        | undefined
-    const sub =
-        claims?.sub ??
-        claims?.email ??
-        claims?.client_id ??
-        claims?.subject ??
-        claims?.clientId
-    if (typeof sub !== 'string') return undefined
-    const trimmed = sub.trim()
+function nonEmptyClaim(val: unknown): string | undefined {
+    if (typeof val !== 'string') return undefined
+    const trimmed = val.trim()
     return trimmed.length > 0 ? trimmed : undefined
+}
+
+export function resolveRequestSubject(): string | undefined {
+    const auth = getAuthContext()
+    if (auth?.authenticated === false) return undefined
+    const claims = auth?.claims as
+        | {
+              sub?: string
+              email?: string
+              email_verified?: boolean
+              client_id?: string
+              subject?: string
+              clientId?: string
+          }
+        | undefined
+    const verifiedEmail =
+        claims?.email_verified === true ? nonEmptyClaim(claims.email) : undefined
+    return (
+        nonEmptyClaim(claims?.sub) ??
+        verifiedEmail ??
+        nonEmptyClaim(claims?.client_id) ??
+        nonEmptyClaim(claims?.subject) ??
+        nonEmptyClaim(claims?.clientId)
+    )
 }
 
 /** Remove all bookkeeping for a session (transport, owner, activity, subscriptions). */
@@ -88,18 +103,13 @@ function connectTransportToServer(
     res: Response,
     next: NextFunction
 ): void {
-    const { serverFactory, activeServers, sseTransports, sessionOwners, sessionLastActivity } =
-        state
+    const { serverFactory, activeServers, sseTransports, sessionOwners, sessionLastActivity } = state
     const server = serverFactory()
-
     const callerSubject = resolveRequestSubject()
-    if (callerSubject !== undefined) {
-        sessionOwners.set(sessionId, callerSubject)
-    }
+    if (callerSubject !== undefined) sessionOwners.set(sessionId, callerSubject)
     sessionLastActivity.set(sessionId, Date.now())
 
-    const authLog = callerSubject !== undefined ? ` as ${callerSubject}` : ''
-    logger.info(`New MCP stateful session initialized${authLog}`, {
+    logger.info(`New MCP stateful session initialized${callerSubject !== undefined ? ` as ${callerSubject}` : ''}`, {
         module: 'HTTP',
         sessionId,
         ...(callerSubject !== undefined ? { subject: callerSubject } : {}),
@@ -107,7 +117,6 @@ function connectTransportToServer(
 
     activeServers.add(server)
     globalSubscriptionManager.registerServer(sessionId, server)
-
     const originalClose = server.close.bind(server)
     server.close = async () => {
         activeServers.delete(server)
@@ -118,9 +127,7 @@ function connectTransportToServer(
     sseTransports.set(sessionId, transport)
     transport.onclose = () => {
         server.close().catch((err: unknown) =>
-            logger.error('Error closing server on transport close', {
-                error: String(err),
-            })
+            logger.error('Error closing server on transport close', { error: String(err) })
         )
     }
 
@@ -132,18 +139,22 @@ function connectTransportToServer(
                 transport.handleSseRequest(req, res)
                 return
             }
-            transport.handleRequest(req, res, req.body).catch((err: unknown) => {
-                logger.error('Error handling transport request', {
-                    error: String(err),
-                    ...(err instanceof Error && err.stack !== undefined ? { stack: err.stack } : {}),
+            transport
+                .handleRequest(req, res, req.body)
+                .then(() => {
+                    if (transport.sessionId === undefined) void server.close()
                 })
-                next(err)
-            })
+                .catch((err: unknown) => {
+                    if (transport.sessionId === undefined) void server.close()
+                    logger.error('Error handling transport request', {
+                        error: String(err),
+                        ...(err instanceof Error && err.stack !== undefined ? { stack: err.stack } : {}),
+                    })
+                    next(err)
+                })
         })
         .catch((err: unknown) => {
-            logger.error('Error connecting server to transport', {
-                error: String(err),
-            })
+            logger.error('Error connecting server to transport', { error: String(err) })
             activeServers.delete(server)
             sseTransports.delete(sessionId)
             forgetSession(state, sessionId)

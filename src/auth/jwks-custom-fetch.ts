@@ -93,6 +93,7 @@ async function fetchLoopbackJwks(urlStr: string, init?: RequestInit): Promise<Re
     }
     const contentLen = Number(response.headers?.get?.('content-length'))
     if (Number.isFinite(contentLen) && contentLen > MAX_JWKS_RESPONSE_BYTES) {
+        await response.body?.cancel?.().catch(() => undefined)
         throw new Error('JWKS response exceeded 1MB limit')
     }
     let buf: Buffer
@@ -104,9 +105,10 @@ async function fetchLoopbackJwks(urlStr: string, init?: RequestInit): Promise<Re
             throw new Error('JWKS response exceeded 1MB limit')
         }
     }
+    const contentType = response.headers?.get?.('content-type') ?? 'application/json'
     return new Response(buf, {
         status: response.status,
-        headers: response.headers,
+        headers: { 'content-type': contentType },
     })
 }
 

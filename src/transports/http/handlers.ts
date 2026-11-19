@@ -44,8 +44,11 @@ export function handlePrometheusMetrics(runtime: ServerRuntime): (req: Request, 
 
         try {
             const authCtx = getAuthContext()
-            const includeUserBreakdown =
-                authCtx !== undefined && hasScope(authCtx.scopes, SCOPES.AUDIT)
+            const grantedScopes =
+                authCtx?.authenticated === true
+                    ? (authCtx.claims?.scopes ?? authCtx.scopes)
+                    : []
+            const includeUserBreakdown = hasScope(grantedScopes, SCOPES.AUDIT)
             const metricsText = formatPrometheusMetrics(runtime.metrics, { includeUserBreakdown })
             res.set('Content-Type', 'text/plain; version=0.0.4; charset=utf-8')
             res.set('Cache-Control', 'no-store')

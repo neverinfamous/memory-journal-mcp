@@ -6,10 +6,6 @@ import { AuthorizationError, ValidationError } from '../../types/errors.js'
 import { CliExitError, enforceCliTeamRbac } from './db-helper.js'
 import { canonicalizeTeamAuthor } from '../../handlers/tools/team/rbac.js'
 import { resolveEntryAnchors } from '../../handlers/tools/core/staleness-tools.js'
-import {
-    computeSuggestedLinks,
-    previewDraftSuggestedLinks,
-} from '../../handlers/tools/core/link-suggestions.js'
 import { resolveTeamCreateAuthor } from '../../handlers/tools/team/admin-tools/batch-create-helpers.js'
 import { checkSingleTeamOwnership } from '../../handlers/tools/team/admin-tools/batch-delete-helpers.js'
 import { createEntryOptionsSchema, updateEntryOptionsSchema } from '../schemas.js'
@@ -30,6 +26,8 @@ import {
 } from './entry-payload.js'
 import {
     applyCliEntryFlagAliases,
+    autoPopulateCliSuggestedLinks,
+    handleCliDryRunLinks,
     type HealedEntryOptions,
 } from './entry-payload-helpers.js'
 
@@ -171,41 +169,50 @@ const CLI_CREATE_SCOPE_SCHEMA = z.object({
         .positive('project_number must be a positive project id.'),
 })
 
+function resolveCliCreateScopeAndAuthor(
+    options: HealedEntryOptions,
+    payload: EntryPayload,
+    db: IDatabaseAdapter,
+    config: ToolHandlerConfig
+): { resolvedWs: string | undefined; resolvedAuthor: string | undefined } {
+    let resolvedWs = payload.workspaceId?.trim()
+    // [INVARIANT] `*` is an admin read override and can never be a write target (H4).
+    if (resolvedWs === '*') {
+        throw new ValidationError(
+            "workspace_id '*' cannot be used to create an entry. Pass a concrete workspace.",
+            { workspaceId: '*' }
+        )
+    }
+    if (resolvedWs === undefined || resolvedWs === '' || resolvedWs.toLowerCase() === 'test') {
+        resolvedWs = undefined
+    }
+    CLI_CREATE_SCOPE_SCHEMA.parse({ workspace_id: resolvedWs, project_number: payload.projectNumber })
+    let resolvedAuthor: string | undefined
+    if (options.team === true) {
+        const authorResult = resolveTeamCreateAuthor(undefined, db, config, resolvedWs)
+        if ('errorResponse' in authorResult) {
+            throw new AuthorizationError(String(authorResult.errorResponse['error']))
+        }
+        resolvedAuthor = canonicalizeTeamAuthor(db, authorResult.author, resolvedWs)
+    }
+    return { resolvedWs, resolvedAuthor }
+}
+
 export async function createEntryAction(...args: unknown[]): Promise<void> {
     const command = args[args.length - 1] as Command
     const options = (args.length > 1 ? args[args.length - 2] : {}) as HealedEntryOptions
-
     applyCliEntryFlagAliases(options, args.slice(0, args.length - 2))
-
     const { db, config } = await getDb(options, command)
     let exitCode: number | undefined
 
     try {
         const { content, payload } = await loadCliEntryContentAndPayload(options, config)
-
-        let resolvedWs = payload.workspaceId?.trim()
-        // [INVARIANT] `*` is an admin read override and can never be a write target (H4).
-        if (resolvedWs === '*') {
-            throw new ValidationError(
-                "workspace_id '*' cannot be used to create an entry. Pass a concrete workspace.",
-                { workspaceId: '*' }
-            )
-        }
-        if (resolvedWs === undefined || resolvedWs === '' || resolvedWs.toLowerCase() === 'test') {
-            resolvedWs = undefined
-        }
-
-        CLI_CREATE_SCOPE_SCHEMA.parse({ workspace_id: resolvedWs, project_number: payload.projectNumber })
-
-        let resolvedAuthor: string | undefined
-        if (options.team === true) {
-            const authorResult = resolveTeamCreateAuthor(undefined, db, config, resolvedWs)
-            if ('errorResponse' in authorResult) {
-                throw new AuthorizationError(String(authorResult.errorResponse['error']))
-            }
-            resolvedAuthor = canonicalizeTeamAuthor(db, authorResult.author, resolvedWs)
-        }
-
+        const { resolvedWs, resolvedAuthor } = resolveCliCreateScopeAndAuthor(
+            options,
+            payload,
+            db,
+            config
+        )
         const resolvedAnchors = await resolveEntryAnchors(
             payload.anchors,
             payload.autoContextStr,
@@ -214,22 +221,14 @@ export async function createEntryAction(...args: unknown[]): Promise<void> {
         )
 
         if (options.dryRunLinks === true) {
-            const suggested = previewDraftSuggestedLinks({
+            handleCliDryRunLinks({
                 db,
                 workspaceId: resolvedWs ?? 'default',
                 projectNumber: payload.projectNumber,
                 sessionId: payload.sessionId,
-                anchors: resolvedAnchors?.map((a) => ({ anchor_path: a.anchorPath })),
+                anchors: resolvedAnchors,
+                json: options.json,
             })
-            if (options.json === true) {
-                process.stdout.write(
-                    JSON.stringify({ status: 'dry-run', suggested_links: suggested }) + '\n'
-                )
-            } else {
-                process.stderr.write(
-                    `Dry-run suggested links (${String(suggested.length)}): ${suggested.map((s) => `#${String(s.targetId)} (${s.relationType}, ${s.reason})`).join(', ') || 'none'}\n`
-                )
-            }
             return
         }
 
@@ -252,35 +251,18 @@ export async function createEntryAction(...args: unknown[]): Promise<void> {
         }
 
         const newEntry = db.createEntry(entryInput)
-        if (
-            payload.relationships.length === 0 &&
-            payload.relatedIds.length === 0 &&
-            payload.autoLink === true &&
-            options.team !== true
-        ) {
-            const autoTargets = (
-                await computeSuggestedLinks({
-                    db,
-                    entry: newEntry,
-                    workspaceId: resolvedWs ?? 'default',
-                    projectNumber: payload.projectNumber,
-                    sessionId: payload.sessionId,
-                    limit: 2,
-                })
-            ).filter((s) => s.reason === 'same-session' || s.reason === 'shared-anchor')
-            for (const target of autoTargets) {
-                payload.relationships.push({
-                    target_id: target.targetId,
-                    relation_type: target.relationType,
-                })
-            }
-        }
-        const linkFailures = linkCliEntryRelationships(
+        await autoPopulateCliSuggestedLinks({
             db,
-            newEntry.id,
-            payload,
-            resolvedWs
-        )
+            entry: newEntry,
+            workspaceId: resolvedWs ?? 'default',
+            projectNumber: payload.projectNumber,
+            sessionId: payload.sessionId,
+            relationships: payload.relationships,
+            relatedIds: payload.relatedIds,
+            autoLink: payload.autoLink,
+            isTeam: options.team,
+        })
+        const linkFailures = linkCliEntryRelationships(db, newEntry.id, payload, resolvedWs)
         db.flushSave()
         writeCliEntryResult(newEntry, linkFailures, options.json, 'created')
     } catch (e) {
@@ -288,9 +270,7 @@ export async function createEntryAction(...args: unknown[]): Promise<void> {
     } finally {
         db.close()
     }
-    if (exitCode !== undefined) {
-        process.exit(exitCode)
-    }
+    if (exitCode !== undefined) process.exit(exitCode)
 }
 
 function buildUpdatedEntryPayload(

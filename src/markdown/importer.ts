@@ -169,10 +169,12 @@ export async function importMarkdownEntries(
     assertSafeDirectoryPath(sourceDir, allowedRoots)
 
     const allMdFiles: string[] = []
+    const MAX_IMPORT_DIR_ENTRIES = 10_000
     const dir = await opendir(sourceDir)
     for await (const dirent of dir) {
         if (dirent.isFile() && /\.md$/i.test(dirent.name)) {
             allMdFiles.push(dirent.name)
+            if (allMdFiles.length >= MAX_IMPORT_DIR_ENTRIES) break
         }
     }
     allMdFiles.sort((a, b) => a.localeCompare(b, undefined, { numeric: true }))

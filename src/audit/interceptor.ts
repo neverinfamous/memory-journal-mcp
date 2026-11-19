@@ -19,6 +19,7 @@ import type { AuditLogger } from './audit-logger.js'
 import type { AuditCategory, AuditEntry } from './types.js'
 import { getRequiredScope } from '../auth/scope-map.js'
 import { getAuthContext } from '../auth/auth-context.js'
+import { getGrantedAuthScopes } from '../auth/validation.js'
 import { getRequestContext } from '../utils/request-context.js'
 import { SENSITIVE_KEY_RE, sanitizeErrorForLogging } from '../utils/security-utils.js'
 import { estimateTokens, estimatePayloadTokens } from '../observability/token-estimator.js'
@@ -258,8 +259,8 @@ async function executeAuditedTool<T>(
 
     const authCtx = getAuthContext()
     const reqCtx = getRequestContext()
-    const user = authCtx?.claims?.sub ?? null
-    const scopes = authCtx?.claims?.scopes ?? []
+    const user = authCtx?.authenticated === true ? (authCtx.claims?.sub ?? null) : null
+    const scopes = getGrantedAuthScopes(authCtx)
     const sessionId = reqCtx?.sessionId
     const scopeMeta = extractAuditScopeFromArgs(args, reqCtx)
     const requestId = generateRequestId()
@@ -370,8 +371,8 @@ export async function auditOperation<T>(
 
     const authCtx = getAuthContext()
     const reqCtx = getRequestContext()
-    const user = authCtx?.claims?.sub ?? null
-    const scopes = authCtx?.claims?.scopes ?? []
+    const user = authCtx?.authenticated === true ? (authCtx.claims?.sub ?? null) : null
+    const scopes = getGrantedAuthScopes(authCtx)
     const sessionId = reqCtx?.sessionId
     const uriScope = extractAuditScopeFromUri(target, reqCtx)
     const workspaceId = options?.workspaceId ?? uriScope.workspaceId

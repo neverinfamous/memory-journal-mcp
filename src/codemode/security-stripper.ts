@@ -30,10 +30,7 @@ function scanIdentifierWord(code: string, start: number): { word: string; next: 
 
 export { scanIdentifierWord }
 
-function decodeUnicodeEscape(
-    code: string,
-    slashIdx: number
-): { ch: string; next: number } | null {
+function decodeUnicodeEscape(code: string, slashIdx: number): { ch: string; next: number } | null {
     const len = code.length
     if (code[slashIdx + 2] === '{') {
         let end = slashIdx + 3
@@ -51,11 +48,7 @@ function decodeUnicodeEscape(
         : null
 }
 
-function decodeEscapeAt(
-    code: string,
-    slashIdx: number,
-    allowHexEscape: boolean
-): { ch: string; next: number } {
+function decodeEscapeAt(code: string, slashIdx: number, allowHexEscape: boolean): { ch: string; next: number } {
     const len = code.length
     if (slashIdx + 1 >= len) return { ch: '', next: slashIdx + 1 }
     const esc = code[slashIdx + 1] ?? ''
@@ -193,14 +186,26 @@ function scanTemplateLiteral(
 
 const REGEX_PRECEDING_KEYWORDS =
     /^(?:return|typeof|instanceof|in|of|void|delete|throw|new|case|yield|await|else|do)$/
-const CONTROL_HEADER_KEYWORDS = /^(?:if|while|for|with)$/
+const CONTROL_HEADER_KEYWORDS = /^(?:if|while|for|with|catch|switch)$/
+const STATEMENT_PRECEDING_TOKENS = new Set([
+    '',
+    ';',
+    '{',
+    '}block',
+    ')ctrl',
+    'else',
+    'do',
+    'try',
+    'finally',
+    'export',
+])
 const BLOCK_PRECEDING_TOKENS = new Set([
     '',
     ';',
     '{',
     '}block',
     ')ctrl',
-    ')',
+    ')decl',
     '=>',
     'else',
     'do',
@@ -210,7 +215,7 @@ const BLOCK_PRECEDING_TOKENS = new Set([
 ])
 
 export function canStartRegexLiteral(prev: string): boolean {
-    if (!prev || prev === '}block' || prev === ')ctrl') return true
+    if (!prev || prev === '}block' || prev === ')ctrl' || prev === '=>') return true
     if (/^[([{:;,=!?&|+\-~*%^<>]$/.test(prev)) return true
     return REGEX_PRECEDING_KEYWORDS.test(prev)
 }
@@ -257,39 +262,78 @@ export function skipLineOrBlockComment(
 export interface DelimiterState {
     templateBraces: number[]
     parenCtrl: boolean[]
+    parenFnDecl: boolean[]
     braceBlock: boolean[]
     awaitingForParen: boolean
     awaitingClassBody: boolean
+    pendingFnDecl: boolean
+    pendingAsyncStmt: boolean
 }
 
 export function createDelimiterState(): DelimiterState {
     return {
         templateBraces: [],
         parenCtrl: [],
+        parenFnDecl: [],
         braceBlock: [],
         awaitingForParen: false,
         awaitingClassBody: false,
+        pendingFnDecl: false,
+        pendingAsyncStmt: false,
     }
 }
 
 export function trackIdentifierToken(word: string, prevToken: string, state: DelimiterState): string {
-    state.awaitingForParen = prevToken === 'for' && word === 'await'
-    if (word === 'class') {
-        state.awaitingClassBody = true
-    } else if (word === 'catch' || word === 'finally' || word === 'try' || word === 'else') {
+    if (prevToken === '.' || prevToken === '?.') {
+        state.awaitingForParen = false
         state.awaitingClassBody = false
+        state.pendingFnDecl = false
+        state.pendingAsyncStmt = false
+        return '$prop'
+    }
+    state.awaitingForParen = prevToken === 'for' && word === 'await'
+    if (word === 'async') {
+        state.pendingAsyncStmt = STATEMENT_PRECEDING_TOKENS.has(prevToken)
+        state.pendingFnDecl = false
+    } else if (word === 'function') {
+        state.pendingFnDecl =
+            STATEMENT_PRECEDING_TOKENS.has(prevToken) ||
+            (prevToken === 'async' && state.pendingAsyncStmt)
+        state.pendingAsyncStmt = false
+        state.awaitingClassBody = false
+    } else if (word === 'class') {
+        state.awaitingClassBody = STATEMENT_PRECEDING_TOKENS.has(prevToken)
+        state.pendingFnDecl = false
+        state.pendingAsyncStmt = false
+    } else {
+        if (prevToken !== 'function') state.pendingFnDecl = false
+        state.pendingAsyncStmt = false
+        if (word === 'catch' || word === 'finally' || word === 'try' || word === 'else') {
+            state.awaitingClassBody = false
+        }
     }
     return word
 }
 
 export function trackPunctuationToken(ch: string, prevToken: string, state: DelimiterState): string {
+    if (ch === '*' && prevToken === 'function' && state.pendingFnDecl) {
+        return 'function'
+    }
     if (ch === '(') {
         const isCtrl = CONTROL_HEADER_KEYWORDS.test(prevToken) || (state.awaitingForParen && prevToken === 'await')
         state.parenCtrl.push(isCtrl)
+        state.parenFnDecl.push(!isCtrl && state.pendingFnDecl)
         state.awaitingForParen = false
+        state.pendingFnDecl = false
+        state.pendingAsyncStmt = false
         return '('
     }
-    if (ch === ')') return state.parenCtrl.pop() === true ? ')ctrl' : ')'
+    if (ch === ')') {
+        const isCtrl = state.parenCtrl.pop() === true
+        const isFnDecl = state.parenFnDecl.pop() === true
+        if (isCtrl) return ')ctrl'
+        return isFnDecl ? ')decl' : ')'
+    }
     if (ch === '{') {
         if (state.templateBraces.length > 0) {
             const topIdx = state.templateBraces.length - 1
@@ -301,6 +345,8 @@ export function trackPunctuationToken(ch: string, prevToken: string, state: Deli
             (BLOCK_PRECEDING_TOKENS.has(prevToken) &&
                 (prevToken !== '{' || state.braceBlock.at(-1) === true))
         state.awaitingClassBody = false
+        state.pendingFnDecl = false
+        state.pendingAsyncStmt = false
         state.braceBlock.push(isBlock)
         return '{'
     }
@@ -314,6 +360,8 @@ export function trackPunctuationToken(ch: string, prevToken: string, state: Deli
     }
     if (ch === ';') state.awaitingClassBody = false
     state.awaitingForParen = false
+    state.pendingFnDecl = false
+    state.pendingAsyncStmt = false
     return ch
 }
 
@@ -364,7 +412,12 @@ export function stripCommentsAndStrings(rawCode: string): string {
             if (scanned.lastToken !== undefined) lastNonWsToken = scanned.lastToken
             continue
         }
-        if ((ch === '+' && next === '+') || (ch === '-' && next === '-') || (ch === '=' && next === '>')) {
+        if (
+            (ch === '+' && next === '+') ||
+            (ch === '-' && next === '-') ||
+            (ch === '=' && next === '>') ||
+            (ch === '?' && next === '.' && !/[0-9]/.test(code[i + 2] ?? ''))
+        ) {
             lastNonWsToken = ch + next
             out += ch + next
             i += 2

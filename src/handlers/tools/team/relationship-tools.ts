@@ -28,6 +28,15 @@ import {
 
 type TeamLinkInput = z.infer<typeof TeamLinkEntriesSchema>
 
+function teamRelError(
+    error: string,
+    code: 'RESOURCE_NOT_FOUND' | 'VALIDATION_ERROR',
+    category: 'resource' | 'validation',
+    suggestion: string
+): Record<string, unknown> {
+    return { success: false, error, code, category, suggestion, recoverable: true }
+}
+
 function validateTeamEntryProjectMembership(
     context: ToolContext,
     wsId: string,
@@ -36,27 +45,23 @@ function validateTeamEntryProjectMembership(
     projectNumber: number
 ): Record<string, unknown> | undefined {
     if (!entry) {
-        return {
-            success: false,
-            error: `Team entry ${String(entryId)} not found`,
-            code: 'RESOURCE_NOT_FOUND',
-            category: 'resource',
-            suggestion: 'Verify the team entry ID and try again',
-            recoverable: true,
-        }
+        return teamRelError(
+            `Team entry ${String(entryId)} not found`,
+            'RESOURCE_NOT_FOUND',
+            'resource',
+            'Verify the team entry ID and try again'
+        )
     }
     if (
         entry.projectNumber !== projectNumber &&
         !canRealignOrphanedRegisteredProject(context, wsId, projectNumber, entry)
     ) {
-        return {
-            success: false,
-            error: `Team entry ${String(entryId)} does not belong to project ${String(projectNumber)}`,
-            code: 'RESOURCE_NOT_FOUND',
-            category: 'resource',
-            suggestion: 'Verify the team entry ID and project number, and try again',
-            recoverable: true,
-        }
+        return teamRelError(
+            `Team entry ${String(entryId)} does not belong to project ${String(projectNumber)}`,
+            'RESOURCE_NOT_FOUND',
+            'resource',
+            'Verify the team entry ID and project number, and try again'
+        )
     }
     return undefined
 }
@@ -75,14 +80,12 @@ function resolveValidatedTeamLinkTargets(
     let wsId = resolveWriteWorkspaceId(workspace_id, project_number, context.config)
     if (from_entry_id === to_entry_id) {
         return {
-            errorResponse: {
-                success: false,
-                error: 'Cannot link an entry to itself',
-                code: 'VALIDATION_ERROR',
-                category: 'validation',
-                suggestion: 'Choose a different target entry to create a meaningful relationship',
-                recoverable: true,
-            },
+            errorResponse: teamRelError(
+                'Cannot link an entry to itself',
+                'VALIDATION_ERROR',
+                'validation',
+                'Choose a different target entry to create a meaningful relationship'
+            ),
         }
     }
 
@@ -94,39 +97,23 @@ function resolveValidatedTeamLinkTargets(
         workspace_id,
         fromEntry?.projectNumber
     )
-    if (projectNumber === undefined) {
-        return { errorResponse: missingTeamProjectNumberError() }
-    }
+    if (projectNumber === undefined) return { errorResponse: missingTeamProjectNumberError() }
     wsId = resolveWriteWorkspaceId(workspace_id ?? wsId, projectNumber, context.config)
 
-    const fromErr = validateTeamEntryProjectMembership(
-        context,
-        wsId,
-        from_entry_id,
-        fromEntry,
-        projectNumber
-    )
+    const fromErr = validateTeamEntryProjectMembership(context, wsId, from_entry_id, fromEntry, projectNumber)
     if (fromErr !== undefined) return { errorResponse: fromErr }
     const toEntry = teamDb.getEntryById(to_entry_id, wsId)
-    const toErr = validateTeamEntryProjectMembership(
-        context,
-        wsId,
-        to_entry_id,
-        toEntry,
-        projectNumber
-    )
+    const toErr = validateTeamEntryProjectMembership(context, wsId, to_entry_id, toEntry, projectNumber)
     if (toErr !== undefined) return { errorResponse: toErr }
 
     if (fromEntry?.workspaceId !== toEntry?.workspaceId) {
         return {
-            errorResponse: {
-                success: false,
-                error: 'Cannot link team entries that belong to different workspaces',
-                code: 'VALIDATION_ERROR',
-                category: 'validation',
-                suggestion: 'Both team entries must belong to the same workspace',
-                recoverable: true,
-            },
+            errorResponse: teamRelError(
+                'Cannot link team entries that belong to different workspaces',
+                'VALIDATION_ERROR',
+                'validation',
+                'Both team entries must belong to the same workspace'
+            ),
         }
     }
     return { wsId }
@@ -206,7 +193,10 @@ function collectTeamVisualizeEntryIds(
                 },
             }
         }
-        return { wsId, entryIds: collectNeighborhood(teamDb, entryId, depth, wsId, projectNumber) }
+        return {
+            wsId,
+            entryIds: collectNeighborhood(teamDb, entryId, depth, wsId, projectNumber, context),
+        }
     }
     if (tag) {
         const { entries: tagEntries } = teamDb.searchByDateRange(DATE_MIN_SENTINEL, DATE_MAX_SENTINEL, {
@@ -271,7 +261,7 @@ export function executeTeamVisualizeRelationships(
         }
     }
 
-    const { nodes, edges } = buildRelationshipGraph(teamDb, entryIds, wsId, projectNumber)
+    const { nodes, edges } = buildRelationshipGraph(teamDb, entryIds, wsId, projectNumber, context)
     let mermaid = 'graph LR\n'
     for (const [id, label] of nodes) {
         mermaid += `  e${String(id)}["#${String(id)}: ${label}"]\n`
@@ -297,11 +287,16 @@ export function executeTeamVisualizeRelationships(
 function isInScopedGraphPartition(
     entry: { workspaceId?: string; projectNumber?: number | null } | null | undefined,
     wsId: string,
-    projectNumber?: number
+    projectNumber?: number,
+    context?: ToolContext
 ): boolean {
     if (!entry) return false
     const wsMatches = wsId === '*' || entry.workspaceId === undefined || entry.workspaceId === wsId
-    const projMatches = projectNumber === undefined || entry.projectNumber === projectNumber
+    const projMatches =
+        projectNumber === undefined ||
+        entry.projectNumber === projectNumber ||
+        (context !== undefined &&
+            canRealignOrphanedRegisteredProject(context, wsId, projectNumber, entry))
     return wsMatches && projMatches
 }
 
@@ -311,7 +306,8 @@ function collectNeighborhood(
     startId: number,
     depth: number,
     workspaceId: string,
-    projectNumber?: number
+    projectNumber?: number,
+    context?: ToolContext
 ): number[] {
     const entryIds: number[] = [startId]
     const visited = new Set<number>(entryIds)
@@ -341,7 +337,7 @@ function collectNeighborhood(
                     : null
             nextFrontier = candidateIds.filter((cid) => {
                 const target = batchEntries ? (batchEntries.get(cid) ?? null) : teamDb.getEntryById(cid, workspaceId)
-                return isInScopedGraphPartition(target, workspaceId, projectNumber)
+                return isInScopedGraphPartition(target, workspaceId, projectNumber, context)
             })
         }
         frontier = nextFrontier
@@ -355,7 +351,8 @@ export function buildRelationshipGraph(
     teamDb: IDatabaseAdapter,
     entryIds: number[],
     wsId: string,
-    projectNumber?: number
+    projectNumber?: number,
+    context?: ToolContext
 ): { nodes: Map<number, string>; edges: { from: number; to: number; type: string }[] } {
     const nodes = new Map<number, string>()
     const edges: { from: number; to: number; type: string }[] = []
@@ -370,7 +367,10 @@ export function buildRelationshipGraph(
 
     for (const eid of entryIds) {
         const rawEntry = batchEntries ? (batchEntries.get(eid) ?? null) : teamDb.getEntryById(eid, wsId)
-        const entry = rawEntry && isInScopedGraphPartition(rawEntry, wsId, projectNumber) ? rawEntry : null
+        const entry =
+            rawEntry && isInScopedGraphPartition(rawEntry, wsId, projectNumber, context)
+                ? rawEntry
+                : null
         if (entry) {
             let label = entry.content.substring(0, 40).replace(/[\r\n`]+/g, ' ')
             if (entry.content.length > 40) label += '...'
@@ -389,17 +389,11 @@ export function buildRelationshipGraph(
     }
     // Only keep edges whose endpoints both resolved to nodes in this workspace/project;
     // links that cross into another project or workspace must not leak through.
-    const scopedEdges = edges.filter((e) => nodes.has(e.from) && nodes.has(e.to))
-    return { nodes, edges: scopedEdges }
+    return { nodes, edges: edges.filter((e) => nodes.has(e.from) && nodes.has(e.to)) }
 }
-
-// ============================================================================
-// Tool Definitions
-// ============================================================================
 
 export function getTeamRelationshipTools(context: ToolContext): ToolDefinition[] {
     const { teamDb } = context
-
     return [
         {
             name: 'team_link_entries',
@@ -408,12 +402,7 @@ export function getTeamRelationshipTools(context: ToolContext): ToolDefinition[]
             group: 'team',
             inputSchema: TeamLinkEntriesSchemaMcp,
             outputSchema: TeamLinkEntriesOutputSchema,
-            annotations: {
-                readOnlyHint: false,
-                destructiveHint: false,
-                idempotentHint: false,
-                openWorldHint: false,
-            },
+            annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
             handler: (params: unknown) => {
                 try {
                     if (!teamDb) return { ...TEAM_DB_ERROR_RESPONSE }
@@ -431,12 +420,7 @@ export function getTeamRelationshipTools(context: ToolContext): ToolDefinition[]
             group: 'team',
             inputSchema: TeamVisualizeRelationshipsSchemaMcp,
             outputSchema: TeamVisualizeOutputSchema,
-            annotations: {
-                readOnlyHint: true,
-                destructiveHint: false,
-                idempotentHint: true,
-                openWorldHint: false,
-            },
+            annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
             handler: (params: unknown) => {
                 try {
                     if (!teamDb) return { ...TEAM_DB_ERROR_RESPONSE }

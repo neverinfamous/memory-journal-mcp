@@ -121,8 +121,7 @@ async function tryJournalSearchFallback(
     if (
         filterConfig !== null &&
         filterConfig !== undefined &&
-        !filterConfig.enabledTools.has('search_entries') &&
-        context.config?.codemodeInternalFullAccess !== true
+        !filterConfig.enabledTools.has('search_entries')
     ) {
         return undefined
     }

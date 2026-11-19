@@ -32,6 +32,31 @@ import {
 
 type TeamUpdateInput = z.infer<typeof TeamUpdateEntrySchema>
 
+function teamUpdateProjectMismatchResponse(
+    context: ToolContext,
+    wsId: string,
+    targetPn: number | undefined,
+    existing: JournalEntry
+): Record<string, unknown> | undefined {
+    if (
+        targetPn === undefined ||
+        existing.projectNumber === null ||
+        existing.projectNumber === undefined ||
+        existing.projectNumber === targetPn ||
+        canRealignOrphanedRegisteredProject(context, wsId, targetPn, existing)
+    ) {
+        return undefined
+    }
+    return {
+        success: false,
+        error: `Team entry ${String(existing.id)} not found in project ${String(targetPn)}`,
+        code: 'RESOURCE_NOT_FOUND',
+        category: 'resource',
+        suggestion: 'Verify the team entry ID and project number',
+        recoverable: true,
+    }
+}
+
 function resolveTeamUpdateScope(
     teamDb: TeamDbInstance,
     context: ToolContext,
@@ -53,24 +78,14 @@ function resolveTeamUpdateScope(
             },
         }
     }
-    if (
-        input.project_number !== undefined &&
-        existing.projectNumber !== null &&
-        existing.projectNumber !== undefined &&
-        existing.projectNumber !== input.project_number &&
-        !canRealignOrphanedRegisteredProject(context, wsId, input.project_number, existing)
-    ) {
-        return {
-            errorResponse: {
-                success: false,
-                error: `Team entry ${String(input.entry_id)} not found in project ${String(input.project_number)}`,
-                code: 'RESOURCE_NOT_FOUND',
-                category: 'resource',
-                suggestion: 'Verify the team entry ID and project number',
-                recoverable: true,
-            },
-        }
-    }
+    const explicitMismatch = teamUpdateProjectMismatchResponse(
+        context,
+        wsId,
+        input.project_number,
+        existing
+    )
+    if (explicitMismatch !== undefined) return { errorResponse: explicitMismatch }
+
     // [INVARIANT] Existing entries keep their stored workspace; never re-infer scope from content/tags or pass '*' to the write resolver.
     wsId = resolveWriteWorkspaceId(
         input.workspace_id ?? existing.workspaceId,
@@ -87,23 +102,14 @@ function resolveTeamUpdateScope(
     if (projectNumber === undefined || projectNumber === null) {
         return { errorResponse: missingProjectNumberResponse() }
     }
-    if (
-        existing.projectNumber !== null &&
-        existing.projectNumber !== undefined &&
-        existing.projectNumber !== projectNumber &&
-        !canRealignOrphanedRegisteredProject(context, wsId, projectNumber, existing)
-    ) {
-        return {
-            errorResponse: {
-                success: false,
-                error: `Team entry ${String(input.entry_id)} not found in project ${String(projectNumber)}`,
-                code: 'RESOURCE_NOT_FOUND',
-                category: 'resource',
-                suggestion: 'Verify the team entry ID and project number',
-                recoverable: true,
-            },
-        }
-    }
+    const resolvedMismatch = teamUpdateProjectMismatchResponse(
+        context,
+        wsId,
+        projectNumber,
+        existing
+    )
+    if (resolvedMismatch !== undefined) return { errorResponse: resolvedMismatch }
+
     if (!hasNonProjectTeamUpdateFields(input) && existing.projectNumber === projectNumber) {
         throw new ValidationError(
             'At least one updatable field must be specified in team_update_entry (empty metadata-only updates are rejected).'

@@ -92,7 +92,7 @@ export class McpLogger {
      * Set minimum log level (from logging/setLevel request)
      */
     setLevel(level: McpLogLevel): void {
-        if (level in LOG_LEVEL_PRIORITY) {
+        if (Object.hasOwn(LOG_LEVEL_PRIORITY, level)) {
             this.minLevel = level
         }
     }

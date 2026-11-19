@@ -62,7 +62,10 @@ function checkOrphans() {
 
         if (rows.length > 0) process.exitCode = 1
     } catch (e) {
-        const msg = e instanceof Error ? e.message : String(e)
+        const rawMsg = e instanceof Error ? e.message : String(e)
+        const msg = rawMsg
+            .replace(/x'[0-9a-fA-F]*'/gi, "x'[REDACTED]'")
+            .replace(/(pragma\s+(?:re)?key\s*=\s*)(?:"(?:[^"]|"")*"|'(?:[^']|'')*')/gi, "$1'[REDACTED]'")
         console.error(`\n❌ Error accessing database: ${msg}`)
         console.log('Usage: node scripts/check-orphans.mjs [path/to/database.db]')
         process.exitCode = 1

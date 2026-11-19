@@ -162,69 +162,87 @@ function buildRelationshipMermaid(
     return mermaidLines.join('\n')
 }
 
+type VisualizeInput = ReturnType<typeof VisualizeInputSchema.parse>
+
+function delegateTeamVisualizeRelationships(
+    input: VisualizeInput,
+    wsId: string,
+    context: ToolContext
+): Record<string, unknown> {
+    enforceAccessBoundary('team_visualize_relationships', 'tool', { requiresTeamScope: true })
+    if (!context.teamDb) {
+        return { ...TEAM_DB_ERROR_RESPONSE }
+    }
+    enforceTeamRbac(context, getCallerIdentity(), 'viewer', wsId)
+    const teamRes = executeTeamVisualizeRelationships(context, context.teamDb, {
+        ...(input.entry_id !== undefined ? { entry_id: input.entry_id } : {}),
+        ...(input.tags?.[0] !== undefined ? { tag: input.tags[0] } : {}),
+        depth: input.depth,
+        ...(input.project_number !== undefined ? { project_number: input.project_number } : {}),
+        ...(input.workspace_id !== undefined ? { workspace_id: input.workspace_id } : {}),
+    })
+    if (teamRes['success'] === false) {
+        return teamRes
+    }
+    const format = input.format
+    return {
+        success: true,
+        entry_count: teamRes['nodeCount'],
+        relationship_count: teamRes['edgeCount'],
+        root_entry: input.entry_id ?? null,
+        depth: input.depth,
+        ...(format !== 'edges' ? { mermaid: teamRes['mermaid'] } : {}),
+        ...(format !== 'mermaid' ? { nodes: teamRes['nodes'], edges: teamRes['edges'] } : {}),
+    }
+}
+
+function assertPersonalVisualizeSeedExists(
+    input: VisualizeInput,
+    wsId: string,
+    context: ToolContext
+): Record<string, unknown> | undefined {
+    if (input.entry_id === undefined) return undefined
+    const entry = context.db.getEntryById(input.entry_id, wsId)
+    const foreignProject =
+        input.project_number !== undefined && entry?.projectNumber !== input.project_number
+    if (entry && !entry.deletedAt && !foreignProject) return undefined
+
+    const baseErr = {
+        ...formatHandlerError(new ResourceNotFoundError('Entry', String(input.entry_id))),
+        success: false,
+    }
+    if (
+        !entry &&
+        probeMatchingTeamEntry(
+            context,
+            input.entry_id,
+            wsId,
+            input.project_number,
+            'team_visualize_relationships'
+        )
+    ) {
+        return {
+            ...baseErr,
+            suggestion: `No personal entry #${String(input.entry_id)} was found in workspace '${wsId}', but team entry #${String(input.entry_id)} exists in the team database. Call team_visualize_relationships (or mj.team.teamVisualizeRelationships) instead.`,
+        }
+    }
+    return baseErr
+}
+
 function executeVisualizeRelationships(params: unknown, context: ToolContext): Record<string, unknown> {
     const { db } = context
     const input = VisualizeInputSchema.parse(VisualizeInputSchemaMcp.parse(params))
     const wsId = resolveWorkspaceId(input.workspace_id, input.project_number, context.config)
     if (input.source === 'team') {
-        enforceAccessBoundary('team_visualize_relationships', 'tool', { requiresTeamScope: true })
-        if (!context.teamDb) {
-            return { ...TEAM_DB_ERROR_RESPONSE }
-        }
-        enforceTeamRbac(context, getCallerIdentity(), 'viewer', wsId)
-        const teamRes = executeTeamVisualizeRelationships(context, context.teamDb, {
-            ...(input.entry_id !== undefined ? { entry_id: input.entry_id } : {}),
-            ...(input.tags?.[0] !== undefined ? { tag: input.tags[0] } : {}),
-            depth: input.depth,
-            ...(input.project_number !== undefined ? { project_number: input.project_number } : {}),
-            ...(input.workspace_id !== undefined ? { workspace_id: input.workspace_id } : {}),
-        })
-        if (teamRes['success'] === false) {
-            return teamRes
-        }
-        const format = input.format
-        return {
-            success: true,
-            entry_count: teamRes['nodeCount'],
-            relationship_count: teamRes['edgeCount'],
-            root_entry: input.entry_id ?? null,
-            depth: input.depth,
-            ...(format !== 'edges' ? { mermaid: teamRes['mermaid'] } : {}),
-            ...(format !== 'mermaid' ? { nodes: teamRes['nodes'], edges: teamRes['edges'] } : {}),
-        }
+        return delegateTeamVisualizeRelationships(input, wsId, context)
     }
     const projectNumber = alignedProjectFilter(
         wsId,
         input.project_number,
         activeProjectRegistry(context.config?.projectRegistry)
     )
-    if (input.entry_id !== undefined) {
-        const entry = db.getEntryById(input.entry_id, wsId)
-        const foreignProject =
-            input.project_number !== undefined && entry?.projectNumber !== input.project_number
-        if (!entry || entry.deletedAt || foreignProject) {
-            const baseErr = {
-                ...formatHandlerError(new ResourceNotFoundError('Entry', String(input.entry_id))),
-                success: false,
-            }
-            if (
-                !entry &&
-                probeMatchingTeamEntry(
-                    context,
-                    input.entry_id,
-                    wsId,
-                    input.project_number,
-                    'team_visualize_relationships'
-                )
-            ) {
-                return {
-                    ...baseErr,
-                    suggestion: `No personal entry #${String(input.entry_id)} was found in workspace '${wsId}', but team entry #${String(input.entry_id)} exists in the team database. Call team_visualize_relationships (or mj.team.teamVisualizeRelationships) instead.`,
-                }
-            }
-            return baseErr
-        }
-    }
+    const seedError = assertPersonalVisualizeSeedExists(input, wsId, context)
+    if (seedError !== undefined) return seedError
 
     const results = db.visualizeRelationships({
         entryId: input.entry_id,

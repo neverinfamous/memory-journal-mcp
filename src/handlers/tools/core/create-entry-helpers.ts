@@ -4,11 +4,95 @@ import { AuthorizationError, PermissionError } from '../../../types/errors.js'
 import { enforceAccessBoundary } from '../../../auth/validation.js'
 import { sendProgress, type ProgressContext } from '../../../utils/progress-utils.js'
 import { resolveAuthenticatedAuthor } from '../../../utils/security-utils.js'
-import { canonicalizeTeamAuthor, enforceTeamRbac } from '../team/rbac.js'
+import { resolveWorkspaceId } from '../../../utils/workspace-resolver.js'
+import { canonicalizeTeamAuthor, enforceTeamRbac, getCallerIdentity } from '../team/rbac.js'
+import { TEAM_DB_ERROR_RESPONSE, executeTeamGetEntryById } from '../team/helpers.js'
+import { probeMatchingTeamEntry } from '../search/helpers.js'
 import { isDummyToolAllowedByFilter } from '../dummy-filter-helpers.js'
-import type { CreateEntrySchema } from './schemas.js'
+import { GetEntryByIdSchema, type CreateEntrySchema } from './schemas.js'
 
 type CreateEntryParams = z.infer<typeof CreateEntrySchema>
+type GetEntryByIdParams = z.infer<typeof GetEntryByIdSchema>
+
+function delegateTeamGetEntryById(
+    input: GetEntryByIdParams,
+    context: ToolContext
+): Record<string, unknown> {
+    enforceAccessBoundary('team_get_entry_by_id', 'tool', { requiresTeamScope: true })
+    if (!context.teamDb) {
+        return { ...TEAM_DB_ERROR_RESPONSE }
+    }
+    const targetWs = resolveWorkspaceId(input.workspace_id, input.project_number, context.config)
+    enforceTeamRbac(context, getCallerIdentity(), 'viewer', targetWs)
+    const teamRes = executeTeamGetEntryById(context, context.teamDb, {
+        entry_id: input.entry_id,
+        include_relationships: input.include_relationships,
+        ...(input.project_number !== undefined ? { project_number: input.project_number } : {}),
+        ...(input.workspace_id !== undefined ? { workspace_id: input.workspace_id } : {}),
+    })
+    const rawImp = teamRes['importance']
+    if (
+        typeof rawImp === 'object' &&
+        rawImp !== null &&
+        'score' in rawImp &&
+        typeof rawImp.score === 'number'
+    ) {
+        teamRes['importance'] = rawImp.score
+        if ('breakdown' in rawImp && rawImp.breakdown !== undefined) {
+            teamRes['importanceBreakdown'] = rawImp.breakdown
+        }
+    }
+    return teamRes
+}
+
+export function executeGetEntryById(params: unknown, context: ToolContext): unknown {
+    const resourceFallback = tryResolveEntryResourceUri(params, context)
+    if (resourceFallback !== undefined) return resourceFallback
+    const input = GetEntryByIdSchema.parse(params)
+    if (input.source === 'team') {
+        return delegateTeamGetEntryById(input, context)
+    }
+    let wsId = resolveWorkspaceId(input.workspace_id, input.project_number, context.config)
+    const entry = context.db.getEntryById(input.entry_id, wsId)
+    if (entry?.workspaceId !== undefined && (wsId === '*' || wsId === 'default')) {
+        wsId = entry.workspaceId
+    }
+    if (
+        !entry ||
+        (input.project_number !== undefined && entry.projectNumber !== input.project_number)
+    ) {
+        const matchingTeamEntry =
+            !entry &&
+            probeMatchingTeamEntry(
+                context,
+                input.entry_id,
+                wsId,
+                input.project_number,
+                'team_get_entry_by_id'
+            )
+        return {
+            success: false,
+            error: `Entry ${String(input.entry_id)} not found`,
+            code: 'RESOURCE_NOT_FOUND',
+            category: 'resource',
+            suggestion: matchingTeamEntry
+                ? `No personal entry #${String(input.entry_id)} was found in workspace '${wsId}', but team entry #${String(input.entry_id)} exists in the team database. Call team_get_entry_by_id (or mj.team.teamGetEntryById / mj.team.getEntryById) instead.`
+                : 'Verify the entry ID exists and you have access to it',
+            recoverable: true,
+        }
+    }
+
+    const result: Record<string, unknown> = { success: true, entry }
+    if (input.include_relationships) {
+        result['relationships'] = context.db.getRelationships(input.entry_id, wsId)
+    }
+    const importance = context.db.calculateImportance(input.entry_id, wsId)
+    if (importance !== null) {
+        result['importance'] = importance.score
+        result['importanceBreakdown'] = importance.breakdown
+    }
+    return result
+}
 
 type EntryAnchors = CreateEntryInput['anchors']
 

@@ -86,7 +86,12 @@ function findLastStatementBoundary(trimmed: string): number {
         } else if (ch === '/' && trimmed[i + 1] !== '/' && trimmed[i + 1] !== '*' && canStartRegexLiteral(prevToken)) {
             i = skipRegexLiteralBody(trimmed, i + 1) - 1
             prevToken = '/'
-        } else if ((ch === '+' && trimmed[i + 1] === '+') || (ch === '-' && trimmed[i + 1] === '-') || (ch === '=' && trimmed[i + 1] === '>')) {
+        } else if (
+            (ch === '+' && trimmed[i + 1] === '+') ||
+            (ch === '-' && trimmed[i + 1] === '-') ||
+            (ch === '=' && trimmed[i + 1] === '>') ||
+            (ch === '?' && trimmed[i + 1] === '.' && !/[0-9]/.test(trimmed[i + 2] ?? ''))
+        ) {
             prevToken = ch + (trimmed[i + 1] ?? '')
             i++
         } else if (

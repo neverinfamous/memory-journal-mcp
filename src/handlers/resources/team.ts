@@ -98,6 +98,16 @@ export function getTeamResourceDefinitions(): InternalResourceDef[] {
                 const wsId = resourceWorkspace(context)
                 const projectNumber = resourceProjectNumber(context, wsId)
                 enforceTeamResourceRbac(context, wsId)
+                if (projectNumber === undefined) {
+                    return {
+                        data: {
+                            error: 'Missing project_number for team resource read. Configure DEFAULT_PROJECT_NUMBER, register the workspace in projectRegistry, or read memory://agent-context/{repo} first.',
+                            entries: [],
+                            count: 0,
+                            code: -32602,
+                        },
+                    }
+                }
                 const { entries } = context.teamDb.getRecentEntries(
                     10,
                     undefined,

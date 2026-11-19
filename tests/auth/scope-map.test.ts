@@ -86,6 +86,7 @@ describe('scope-map', () => {
                             'team_backup',
                             'team_merge_tags',
                             'team_rebuild_vector_index',
+                            'team_export_markdown',
                             'team_add_author_alias',
                             'team_remove_author_alias',
                             'team_list_author_aliases',

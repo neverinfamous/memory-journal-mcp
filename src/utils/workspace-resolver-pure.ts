@@ -73,6 +73,14 @@ function parseConfiguredDefaultWs(
     return trimmed !== '' && trimmed !== '*' ? trimmed : undefined
 }
 
+function lookupOwnRegistryProject(
+    registry: RegistryMap,
+    key: string
+): number | undefined {
+    if (registry === undefined || !Object.hasOwn(registry, key)) return undefined
+    return registry[key]?.project_number
+}
+
 function resolveExplicitWorkspaceOrProject(
     sanitizedWorkspaceId: string | undefined,
     input: ResolutionInput,
@@ -82,7 +90,7 @@ function resolveExplicitWorkspaceOrProject(
 ): ResolvedContext | undefined {
     if (sanitizedWorkspaceId !== undefined) {
         const wsId = findCanonicalRegistryKey(sanitizedWorkspaceId, registry) ?? sanitizedWorkspaceId
-        const registryProject = registry?.[wsId]?.project_number
+        const registryProject = lookupOwnRegistryProject(registry, wsId)
         if (input.project_number !== undefined && input.project_number !== null) {
             if (registryProject !== undefined && input.project_number !== registryProject) {
                 throw new ValidationError(
@@ -106,7 +114,7 @@ function resolveExplicitWorkspaceOrProject(
         const rawCandidateWs =
             registeredCwd?.workspaceId ?? config?.defaultWorkspaceId ?? sessionCtx.workspaceId ?? 'default'
         const candidateWs = findCanonicalRegistryKey(rawCandidateWs, registry) ?? rawCandidateWs
-        const candidateProject = registry?.[candidateWs]?.project_number
+        const candidateProject = lookupOwnRegistryProject(registry, candidateWs)
         const fallbackWs =
             candidateProject !== undefined && candidateProject !== input.project_number
                 ? 'default'
@@ -136,7 +144,7 @@ function resolveSessionScope(
                 return { workspaceId: sessionWorkspace, projectNumber: sessionCtx.projectNumber }
             }
         }
-        const registryProject = registry?.[canonicalSessionWs]?.project_number
+        const registryProject = lookupOwnRegistryProject(registry, canonicalSessionWs)
         const sessionProject =
             registryProject ??
             unclaimedByOtherWorkspace(sessionCtx.projectNumber, canonicalSessionWs, registry) ??
@@ -152,7 +160,7 @@ function resolveSessionScope(
         }
         const rawDefaultWs = configuredDefaultWs ?? 'default'
         const canonicalDefaultWs = findCanonicalRegistryKey(rawDefaultWs, registry) ?? rawDefaultWs
-        const defaultOwnerProj = registry?.[canonicalDefaultWs]?.project_number
+        const defaultOwnerProj = lookupOwnRegistryProject(registry, canonicalDefaultWs)
         const fallbackWs =
             defaultOwnerProj !== undefined && defaultOwnerProj !== sessionCtx.projectNumber
                 ? 'default'
@@ -183,7 +191,7 @@ function resolveFallbackContext(
             : undefined
     const rawFallbackWs = configuredDefaultWs ?? sessionWsFallback ?? 'default'
     const fallbackWorkspace = findCanonicalRegistryKey(rawFallbackWs, registry) ?? rawFallbackWs
-    const fallbackRegistryProj = registry?.[fallbackWorkspace]?.project_number
+    const fallbackRegistryProj = lookupOwnRegistryProject(registry, fallbackWorkspace)
     return {
         workspaceId: fallbackWorkspace,
         projectNumber:

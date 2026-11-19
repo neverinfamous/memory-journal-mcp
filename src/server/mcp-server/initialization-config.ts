@@ -21,6 +21,19 @@ function createServerConfigManager(
     const rawToolFilter =
         options.toolFilter ?? process.env['MEMORY_JOURNAL_MCP_TOOL_FILTER']
 
+    const cliEnvBaseline = {
+        ...(rawToolFilter !== undefined ? { rawToolFilter } : {}),
+        ...(options.defaultWorkspaceId !== undefined
+            ? { defaultWorkspaceId: options.defaultWorkspaceId }
+            : {}),
+        ...(options.defaultProjectNumber !== undefined
+            ? { defaultProjectNumber: options.defaultProjectNumber }
+            : {}),
+        ...(options.projectRegistry !== undefined
+            ? { projectRegistry: options.projectRegistry }
+            : {}),
+    }
+
     return new ConfigManager(
         {
             rawToolFilter,
@@ -42,7 +55,8 @@ function createServerConfigManager(
             },
             codemodeInternalFullAccess: options.codemodeInternalFullAccess,
         },
-        options.configFilePath
+        options.configFilePath,
+        cliEnvBaseline
     )
 }
 

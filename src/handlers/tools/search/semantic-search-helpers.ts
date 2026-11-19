@@ -265,6 +265,46 @@ function buildSemanticFilterOptions(
     }
 }
 
+function mergeAndFormatSemanticResponse(
+    context: ToolContext,
+    vectorManager: VectorManager,
+    input: SemanticSearchInput,
+    filterOptions: Record<string, unknown>,
+    wsId: string,
+    queryOutcome: {
+        results: SemanticSearchResult[]
+        effectiveQuery: string | undefined
+        teamEntries: EntryWithSource[]
+    }
+): Record<string, unknown> {
+    const personalEntries = hydratePersonalSemanticEntries(
+        context.db,
+        queryOutcome.results,
+        input,
+        filterOptions,
+        wsId
+    )
+    const entries =
+        queryOutcome.teamEntries.length > 0
+            ? mergeAndDedup(
+                  personalEntries,
+                  queryOutcome.teamEntries,
+                  input.limit,
+                  'similarity',
+                  context.teamDb
+              )
+            : personalEntries.slice(0, input.limit)
+    const hint = buildSemanticSearchHint(vectorManager, entries, input)
+    return {
+        success: true,
+        query: input.query,
+        ...(input.entry_id !== undefined ? { entryId: input.entry_id } : {}),
+        entries,
+        count: entries.length,
+        ...(hint !== undefined ? { hint } : {}),
+    }
+}
+
 /**
  * Execute semantic/vector search across personal entries and optional team database.
  */
@@ -272,7 +312,7 @@ export async function executeSemanticSearch(
     context: ToolContext,
     params: unknown
 ): Promise<Record<string, unknown> | ReturnType<typeof formatHandlerError>> {
-    const { db, vectorManager } = context
+    const { vectorManager } = context
     try {
         const input = SemanticSearchSchema.parse(params)
         const wsId = resolveWorkspaceId(input.workspace_id, input.project_number, context.config)
@@ -314,36 +354,16 @@ export async function executeSemanticSearch(
             filterOptions,
             includeTeam
         )
-        if ('errorResponse' in queryOutcome) {
-            return queryOutcome.errorResponse
-        }
+        if ('errorResponse' in queryOutcome) return queryOutcome.errorResponse
 
-        const personalEntries = hydratePersonalSemanticEntries(
-            db,
-            queryOutcome.results,
+        return mergeAndFormatSemanticResponse(
+            context,
+            vectorManager,
             input,
             filterOptions,
-            wsId
+            wsId,
+            queryOutcome
         )
-        const entries =
-            queryOutcome.teamEntries.length > 0
-                ? mergeAndDedup(
-                      personalEntries,
-                      queryOutcome.teamEntries,
-                      input.limit,
-                      'similarity',
-                      context.teamDb
-                  )
-                : personalEntries.slice(0, input.limit)
-        const hint = buildSemanticSearchHint(vectorManager, entries, input)
-        return {
-            success: true,
-            query: input.query,
-            ...(input.entry_id !== undefined ? { entryId: input.entry_id } : {}),
-            entries,
-            count: entries.length,
-            ...(hint !== undefined ? { hint } : {}),
-        }
     } catch (err) {
         if (err instanceof PermissionError) throw err
         return formatHandlerError(err)

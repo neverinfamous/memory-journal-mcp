@@ -1,6 +1,7 @@
 import type { ToolDefinition, ToolContext, ProjectRegistryEntry } from '../../../types/index.js'
 import { logger } from '../../../utils/logger.js'
 import { formatHandlerError } from '../../../utils/error-helpers.js'
+import { sanitizeErrorForLogging } from '../../../utils/security-utils.js'
 import { getRequestContext, requestContextStorage } from '../../../utils/request-context.js'
 import { runWithAuthContext, getAuthContext } from '../../../auth/auth-context.js'
 import { ConfigurationError } from '../../../types/errors.js'
@@ -369,7 +370,10 @@ async function executeCodeModeHandler(
             success: Boolean(execResult?.success),
             executionTimeMs: Math.round((performance.now() - start) * 100) / 100,
             result: execResult?.result,
-            error: execResult?.error,
+            error:
+                typeof execResult?.error === 'string'
+                    ? sanitizeErrorForLogging(execResult.error)
+                    : execResult?.error,
             metrics: execResult?.metrics,
             simulated: isDryRun ? true : undefined,
             project_id: projectId,

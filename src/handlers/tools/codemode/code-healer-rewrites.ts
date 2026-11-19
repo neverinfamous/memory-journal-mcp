@@ -79,7 +79,12 @@ function scanLexicalSpans(
             if (stopAtOffset !== undefined && endRegex > limit) return { stateAtOffset: 'code', spans }
             i = endRegex - 1
             prevToken = '/'
-        } else if ((ch === '+' && code[i + 1] === '+') || (ch === '-' && code[i + 1] === '-') || (ch === '=' && code[i + 1] === '>')) {
+        } else if (
+            (ch === '+' && code[i + 1] === '+') ||
+            (ch === '-' && code[i + 1] === '-') ||
+            (ch === '=' && code[i + 1] === '>') ||
+            (ch === '?' && code[i + 1] === '.' && !/[0-9]/.test(code[i + 2] ?? ''))
+        ) {
             prevToken = ch + (code[i + 1] ?? '')
             i++
         } else if (

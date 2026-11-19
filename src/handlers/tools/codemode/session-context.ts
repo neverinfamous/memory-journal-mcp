@@ -8,6 +8,7 @@ import {
     resolveProjectContext,
 } from '../../../utils/workspace-resolver.js'
 import { parseCanonicalPositiveInt } from '../../../utils/safe-positive-int.js'
+import { sanitizeErrorForLogging } from '../../../utils/security-utils.js'
 import { activeProjectRegistry, pairStoredScope } from '../../../utils/write-scope.js'
 import type { ExecuteCodeInput } from './payload-synthesizer.js'
 
@@ -131,7 +132,9 @@ async function injectRepoGithub(
         return { ...context, github: injectedGithub }
     } catch (error) {
         return githubInjectError(
-            `Failed to initialize injected repository '${repo}': ${error instanceof Error ? error.message : String(error)}`
+            sanitizeErrorForLogging(
+                `Failed to initialize injected repository '${repo}': ${error instanceof Error ? error.message : String(error)}`
+            )
         )
     }
 }
@@ -176,7 +179,9 @@ function injectProjectGithub(
         return { ...sessionContext, github: injectedGithub }
     } catch (error) {
         return githubInjectError(
-            `Failed to initialize GitHub context for project ${String(projectId)}: ${error instanceof Error ? error.message : String(error)}`
+            sanitizeErrorForLogging(
+                `Failed to initialize GitHub context for project ${String(projectId)}: ${error instanceof Error ? error.message : String(error)}`
+            )
         )
     }
 }

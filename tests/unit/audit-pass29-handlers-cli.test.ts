@@ -253,7 +253,7 @@ describe('Pass 29 Handler, Schema, CLI, Resource & Prompt Regressions', () => {
     })
 
     it('AP1-AP5: code-quality audit prompt uses Pass 29 revision, bench exclusions, factory clarity, and end-to-end backstop rules', async () => {
-        expect(AUDIT_PROMPT_REVISION).toBe('2026-11-19-audit-pass43')
+        expect(AUDIT_PROMPT_REVISION).toBe('2026-11-19-audit-pass44')
         const prompt = getCodeQualityAuditPromptDefinition()
         const res = (await prompt.handler({}, db)) as { messages: { content: { text: string } }[] }
         const text = res.messages[0]?.content.text ?? ''

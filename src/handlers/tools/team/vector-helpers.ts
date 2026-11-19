@@ -11,7 +11,6 @@ import { resolveWorkspaceId } from '../../../utils/workspace-resolver.js'
 import {
     activeProjectRegistry,
     alignedProjectFilter,
-    uniqueWorkspaceForProject,
 } from '../../../utils/write-scope.js'
 import { resolveWriteWorkspaceId } from '../write-workspace.js'
 import type { SemanticSearchResult } from '../../../vector/vector-search-manager/index.js'
@@ -195,9 +194,11 @@ export async function executeTeamSemanticSearch(
         const projectNumber =
             resolveTeamProjectNumber(context, wsId, input.project_number, input.workspace_id) ??
             undefined
-        if (wsId === '*' && projectNumber === undefined) {
+        if (projectNumber === undefined) {
             return missingTeamProjectNumberError(
-                'Missing project_number. Cross-tenant searches without project_number are not allowed.'
+                wsId === '*'
+                    ? 'Missing project_number. Cross-tenant searches without project_number are not allowed.'
+                    : undefined
             )
         }
         if ((input.query === undefined || input.query === '') && input.entry_id === undefined) {
@@ -273,18 +274,10 @@ export async function executeTeamRebuildVectorIndex(
         }
         const isWildcard = parsed.workspace_id?.trim() === '*'
         const registry = activeProjectRegistry(context.config?.projectRegistry)
-        // [INVARIANT] Code Mode outer session scope (`workspace_id: '*'`, `project_number: <registered>`)
-        // auto-injects `project_number` onto inner calls; strip registered single-workspace project IDs
-        // when the caller explicitly requested a global `workspace_id: '*'` rebuild.
         const wsId = isWildcard
             ? '*'
             : resolveWorkspaceId(parsed.workspace_id, parsed.project_number, context.config)
-        const projectNumber =
-            isWildcard &&
-            parsed.project_number !== undefined &&
-            uniqueWorkspaceForProject(parsed.project_number, registry) !== undefined
-                ? undefined
-                : alignedProjectFilter(wsId, parsed.project_number, registry)
+        const projectNumber = alignedProjectFilter(wsId, parsed.project_number, registry)
         const { success, indexed, failed, firstError, warning } =
             await teamVectorManager.rebuildIndex(progress, {
                 workspaceId: wsId,

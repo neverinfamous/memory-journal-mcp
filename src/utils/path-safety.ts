@@ -236,9 +236,21 @@ export function hasWinReservedDeviceSegment(targetPath: string): boolean {
  * @param dirPath - The directory path to validate
  * @throws PathTraversalError if the path escapes the sandboxed boundaries
  */
+const UNC_OR_WIN_DEVICE_PREFIX_RE = /^(?:\\\\|\/\/)/
+
+function hasUncOrWinDevicePrefix(targetPath: string, providedRoots: readonly string[]): boolean {
+    if (!UNC_OR_WIN_DEVICE_PREFIX_RE.test(targetPath.trimStart())) return false
+    // Reject `\\.\` / `\\?\` / `//./` / `//?/` Win32 device namespace prefixes unconditionally
+    if (/^(?:\\\\|\/\/)[.?][\\/]/.test(targetPath.trimStart())) return true
+    // On Windows (or for backslash UNC paths), block UNC paths prior to any fs syscall unless an operator explicitly configured a UNC root
+    if (process.platform !== 'win32' && !targetPath.trimStart().startsWith('\\\\')) return false
+    return !providedRoots.some((r) => UNC_OR_WIN_DEVICE_PREFIX_RE.test(r.trimStart()))
+}
+
 export function assertSafeDirectoryPath(dirPath: string, providedRoots: string[]): void {
     if (
         dirPath.includes('\0') ||
+        hasUncOrWinDevicePrefix(dirPath, providedRoots) ||
         hasUnsafeAdsColon(dirPath) ||
         hasWinReservedDeviceSegment(dirPath) ||
         hasTrailingSpaceSegment(dirPath) ||
@@ -251,6 +263,7 @@ export function assertSafeDirectoryPath(dirPath: string, providedRoots: string[]
     }
     const decodedDir = decodeSafeDirPath(dirPath)
     if (
+        hasUncOrWinDevicePrefix(decodedDir, providedRoots) ||
         hasUnsafeAdsColon(decodedDir) ||
         hasWinReservedDeviceSegment(decodedDir) ||
         hasTrailingSpaceSegment(decodedDir)

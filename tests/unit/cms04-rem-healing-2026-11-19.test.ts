@@ -279,8 +279,11 @@ describe('CMS-04 REM Healing (2026-11-19)', () => {
         })
     })
 
-    describe('3. Wildcard vector index rebuild with inherited registered project_number', () => {
-        it('strips registered single-workspace project_number when workspace_id is "*" on team_rebuild_vector_index and rebuild_vector_index', async () => {
+    describe('3. Wildcard vector index rebuild with inherited vs explicit project_number', () => {
+        it('omits inherited outer project_number in Code Mode when inner call passes workspace_id: "*" without project_number, while honoring explicit project_number', async () => {
+            const { normalizeDispatchParams } = await import(
+                '../../src/handlers/tools/codemode/dispatch-scope.js'
+            )
             const config = createStubConfig({
                 'memory-journal-mcp': { path: process.cwd(), project_number: 5 },
                 'db-mcp': { path: process.cwd(), project_number: 15 },
@@ -288,13 +291,40 @@ describe('CMS-04 REM Healing (2026-11-19)', () => {
             const { manager: personalVec, rebuildSpy: personalSpy } = createStubVectorManager()
             const { manager: teamVec, rebuildSpy: teamSpy } = createStubVectorManager()
 
+            const inheritedOutcome = await normalizeDispatchParams(
+                {
+                    name: 'team_rebuild_vector_index',
+                    inputSchema: {
+                        shape: {
+                            workspace_id: {},
+                            project_number: {},
+                            session_id: {},
+                        },
+                    },
+                    annotations: { readOnlyHint: false },
+                } as never,
+                { workspace_id: '*', session_id: 'session-test-123' },
+                {
+                    workspaceId: '*',
+                    projectId: 5,
+                    sessionId: 'session-test-123',
+                    rpcPinnedProject: false,
+                    sessionContext: {
+                        db: personalDb,
+                        vectorManager: personalVec,
+                        config,
+                        teamDb,
+                        teamVectorManager: teamVec,
+                    },
+                }
+            )
+            expect('params' in inheritedOutcome).toBe(true)
+            const inheritedParams = (inheritedOutcome as { params: Record<string, unknown> }).params
+            expect(inheritedParams['project_number']).toBeUndefined()
+
             const teamRes = (await callTool(
                 'team_rebuild_vector_index',
-                {
-                    workspace_id: '*',
-                    project_number: 5,
-                    session_id: 'session-test-123',
-                },
+                inheritedParams,
                 personalDb,
                 personalVec,
                 undefined,
@@ -324,7 +354,10 @@ describe('CMS-04 REM Healing (2026-11-19)', () => {
             )) as { success: boolean; entriesIndexed?: number }
             expect(personalRes.success).toBe(true)
             expect(personalRes.entriesIndexed).toBe(12)
-            expect(personalSpy).toHaveBeenCalledWith(undefined, { workspaceId: '*' })
+            expect(personalSpy).toHaveBeenCalledWith(undefined, {
+                workspaceId: '*',
+                projectNumber: 5,
+            })
         })
     })
 

@@ -394,7 +394,7 @@ export class MetricsAccumulator {
         try {
             const state = this.exportState()
             await fs.mkdir(dirname(path), { recursive: true, mode: 0o700 })
-            await fs.writeFile(tmpPath, state, { encoding: 'utf8', mode: 0o600 })
+            await fs.writeFile(tmpPath, state, { encoding: 'utf8', mode: 0o600, flag: 'wx' })
             await fs.rename(tmpPath, path)
             logger.debug('Metrics saved to disk', { module: 'Metrics', path })
         } catch (error) {

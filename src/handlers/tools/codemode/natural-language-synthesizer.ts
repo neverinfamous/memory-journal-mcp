@@ -165,6 +165,7 @@ function resolveTitle(
     if (typeof rawObj['entry_id'] === 'string' && Number.isNaN(Number(rawObj['entry_id']))) return rawObj['entry_id']
     if (learnedVal !== undefined) return 'Learned Context'
     const firstLine = (executionCode.trim().split('\n')[0] ?? '')
+        .slice(0, 200)
         .replace(/^(?:create|add|new|record|log|insert)?\s*entry\s*(?:for|:)?\s*/i, '')
         .replace(/[:.]+$/, '')
         .trim()

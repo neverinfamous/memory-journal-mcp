@@ -4,24 +4,20 @@ import { sendProgress } from '../../../utils/progress-utils.js'
 import { resolveIssueUrl } from '../../../utils/github-helpers.js'
 import {
     buildCreateEntryInput,
+    executeGetEntryById,
     indexCreatedEntry,
     recordTeamShareOutcome,
-    tryResolveEntryResourceUri,
 } from './create-entry-helpers.js'
 import { resolveWorkspaceId, resolveProjectContext } from '../../../utils/workspace-resolver.js'
 import { activeProjectRegistry, alignedProjectFilter } from '../../../utils/write-scope.js'
 import { logger } from '../../../utils/logger.js'
 import { probeMatchingTeamEntry } from '../search/helpers.js'
-import { enforceAccessBoundary } from '../../../auth/validation.js'
-import { TEAM_DB_ERROR_RESPONSE, executeTeamGetEntryById } from '../team/helpers.js'
-import { enforceTeamRbac, getCallerIdentity } from '../team/rbac.js'
 import { computeSuggestedLinks } from './link-suggestions.js'
 
 import {
     CreateEntrySchema,
     CreateEntrySchemaMcp,
     CreateEntryOutputSchema,
-    GetEntryByIdSchema,
     GetEntryByIdSchemaMcp,
     EntryByIdOutputSchema,
     GetRecentEntriesSchema,
@@ -75,6 +71,15 @@ function resolveCreateEntryScope(
     return { wsId: resolved.workspaceId, projectNumber }
 }
 
+function notifyRecentEntriesSubscription(context: ToolContext): void {
+    if (!context.config?.subscriptionManager) return
+    void context.config.subscriptionManager
+        .notifyResourceUpdated('memory://recent')
+        .catch((err: unknown) => {
+            logger.debug('Failed to notify resource updated', { error: err })
+        })
+}
+
 async function executeCreateEntry(
     params: unknown,
     context: ToolContext
@@ -83,9 +88,7 @@ async function executeCreateEntry(
     coerceSignificanceAlias(params)
     const input = CreateEntrySchema.parse(params)
     const scope = resolveCreateEntryScope(input, context.config)
-    if ('errorResponse' in scope) {
-        return scope.errorResponse
-    }
+    if ('errorResponse' in scope) return scope.errorResponse
     const { wsId, projectNumber } = scope
 
     await sendProgress(progress, 0, 2, 'Creating entry...')
@@ -119,14 +122,7 @@ async function executeCreateEntry(
         projectNumber
     )
     const vectorWarning = await indexCreatedEntry(context, progress, createdEntry)
-
-    if (context.config?.subscriptionManager) {
-        void context.config.subscriptionManager
-            .notifyResourceUpdated('memory://recent')
-            .catch((err: unknown) => {
-                logger.debug('Failed to notify resource updated', { error: err })
-            })
-    }
+    notifyRecentEntriesSubscription(context)
 
     // [INVARIANT] M2: stamp the team mirror with its personal origin (team-only column, migration 020).
     const teamShare = input.share_with_team
@@ -158,10 +154,7 @@ async function executeCreateEntry(
         entry: createdEntry,
         ...(allWarnings.length > 0 ? { warning: allWarnings.join('; ') } : {}),
         ...(teamShare.sharedWithTeam
-            ? {
-                  sharedWithTeam: true,
-                  ...(teamShare.author !== undefined ? { author: teamShare.author } : {}),
-              }
+            ? { sharedWithTeam: true, ...(teamShare.author !== undefined ? { author: teamShare.author } : {}) }
             : {}),
         ...(relationshipWarnings.length > 0 ? { relationshipWarnings } : {}),
         ...(suggestedLinks.length > 0 ? { suggested_links: suggestedLinks } : {}),
@@ -216,89 +209,7 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
             },
             handler: (params: unknown) => {
                 try {
-                    const resourceFallback = tryResolveEntryResourceUri(params, context)
-                    if (resourceFallback !== undefined) return resourceFallback
-                    const input = GetEntryByIdSchema.parse(params)
-                    if (input.source === 'team') {
-                        enforceAccessBoundary('team_get_entry_by_id', 'tool', { requiresTeamScope: true })
-                        if (!context.teamDb) {
-                            return { ...TEAM_DB_ERROR_RESPONSE }
-                        }
-                        const targetWs = resolveWorkspaceId(
-                            input.workspace_id,
-                            input.project_number,
-                            context.config
-                        )
-                        enforceTeamRbac(context, getCallerIdentity(), 'viewer', targetWs)
-                        const teamRes = executeTeamGetEntryById(context, context.teamDb, {
-                            entry_id: input.entry_id,
-                            include_relationships: input.include_relationships,
-                            ...(input.project_number !== undefined
-                                ? { project_number: input.project_number }
-                                : {}),
-                            ...(input.workspace_id !== undefined
-                                ? { workspace_id: input.workspace_id }
-                                : {}),
-                        })
-                        const rawImp = teamRes['importance']
-                        if (
-                            typeof rawImp === 'object' &&
-                            rawImp !== null &&
-                            'score' in rawImp &&
-                            typeof rawImp.score === 'number'
-                        ) {
-                            teamRes['importance'] = rawImp.score
-                            if ('breakdown' in rawImp && rawImp.breakdown !== undefined) {
-                                teamRes['importanceBreakdown'] = rawImp.breakdown
-                            }
-                        }
-                        return teamRes
-                    }
-                    let wsId = resolveWorkspaceId(input.workspace_id, input.project_number, context.config)
-                    const entry = db.getEntryById(input.entry_id, wsId)
-                    if (entry?.workspaceId !== undefined && (wsId === '*' || wsId === 'default')) {
-                        wsId = entry.workspaceId
-                    }
-                    if (
-                        !entry ||
-                        (input.project_number !== undefined &&
-                            entry.projectNumber !== input.project_number)
-                    ) {
-                        const matchingTeamEntry =
-                            !entry &&
-                            probeMatchingTeamEntry(
-                                context,
-                                input.entry_id,
-                                wsId,
-                                input.project_number,
-                                'team_get_entry_by_id'
-                            )
-                        return {
-                            success: false,
-                            error: `Entry ${String(input.entry_id)} not found`,
-                            code: 'RESOURCE_NOT_FOUND',
-                            category: 'resource',
-                            suggestion: matchingTeamEntry
-                                ? `No personal entry #${String(input.entry_id)} was found in workspace '${wsId}', but team entry #${String(input.entry_id)} exists in the team database. Call team_get_entry_by_id (or mj.team.teamGetEntryById / mj.team.getEntryById) instead.`
-                                : 'Verify the entry ID exists and you have access to it',
-                            recoverable: true,
-                        }
-                    }
-
-                    const result: Record<string, unknown> = { success: true, entry }
-
-                    if (input.include_relationships) {
-                        const relationships = db.getRelationships(input.entry_id, wsId)
-                        result['relationships'] = relationships
-                    }
-
-                    const importance = db.calculateImportance(input.entry_id, wsId)
-                    if (importance !== null) {
-                        result['importance'] = importance.score
-                        result['importanceBreakdown'] = importance.breakdown
-                    }
-
-                    return result
+                    return executeGetEntryById(params, context)
                 } catch (err) {
                     return formatHandlerError(err)
                 }

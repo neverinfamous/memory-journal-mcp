@@ -115,7 +115,7 @@ export CORS_ORIGIN="http://localhost:3000,https://my-app.com"
 ### **Request Size Limits & Metrics Isolation**
 
 - ✅ **Pre-Body Auth & 1MB Limits** — Rate limiting and Bearer/OAuth authentication execute *before* JSON body parsing (`src/transports/http/server/http-transport.ts`), while JSON parsing and protocol route handlers (`src/transports/http/server/protocol-route-handlers.ts`) enforce `1MB` / `maxRequestBodySize` limits to prevent memory-exhaustion DoS.
-- ✅ **Health & Metrics Endpoint Protection** — Only `GET` and `HEAD` requests to `/health` (and `GET`/`HEAD` requests to OAuth `.well-known` discovery endpoints) bypass authentication (`src/auth/middleware.ts`, `src/transports/http/handlers.ts`); `/metrics` on the HTTP transport requires authentication under **both** OAuth 2.1 and static Bearer auth. The standalone Prometheus server (`src/observability/metrics-server.ts`, default `127.0.0.1:9465`) rejects whitespace-only `authToken` values on non-loopback binds, validates Bearer tokens via constant-time SHA-256 `crypto.timingSafeEqual`, and only emits `mcp_user_calls_total` when Bearer auth is configured and `MCP_AUTH_SCOPES` grants `audit` (`admin`/`full`).
+- ✅ **Health & Metrics Endpoint Protection** — Only `GET` and `HEAD` requests to `/health` (and `GET`/`HEAD` requests to OAuth `.well-known` discovery endpoints) bypass authentication (`src/auth/middleware.ts`, `src/transports/http/handlers.ts`); `/metrics` on the HTTP transport requires authentication under **both** OAuth 2.1 and static Bearer auth. The standalone Prometheus server (`src/observability/metrics-server.ts`, default `127.0.0.1:9465`) rejects whitespace-only and placeholder `authToken` values unconditionally across all binds, validates Bearer tokens via constant-time SHA-256 `crypto.timingSafeEqual`, and only emits `mcp_user_calls_total` when Bearer auth is configured and `MCP_AUTH_SCOPES` grants `audit` (`admin`/`full`).
 
 ## 🔐 **OAuth 2.1 Authentication**
 
@@ -127,7 +127,7 @@ For production HTTP deployments, Memory Journal supports **OAuth 2.1 authenticat
 | Auth Server Discovery       | ✅     | RFC 8414 metadata discovery with SSRF guards and caching                    |
 | Token Validation            | ✅     | JWT validation with DNS-pinned JWKS fetching (`jose` + `createPinnedJwksFetch`) |
 | Scope Enforcement           | ✅     | Granular `read`, `write`, `team`, `audit`, `admin`, `full` scopes           |
-| HTTP Middleware             | ✅     | Constant-time Bearer validation (`GET`/`HEAD`-only public route bypass)     |
+| HTTP Middleware             | ✅     | OAuth JWT & constant-time static Bearer validation (`GET`/`HEAD`-only public route bypass) |
 
 ### **Supported Scopes**
 

@@ -5,12 +5,19 @@
 import type { MessagePort } from 'node:worker_threads'
 import type { RpcRequest, RpcResponse } from './types.js'
 import { runWithRpcExecutionOverrides, type RpcExecutionOverrides } from './rpc-context.js'
+import {
+    DEFAULT_MAX_TOOL_INPUT_ELEMENTS,
+    exceedsMaxToolInputElements,
+} from '../utils/tool-input-bounds.js'
+import { sanitizeErrorForLogging } from '../utils/security-utils.js'
 
 function safePostRpcResponse(hostPort: MessagePort, response: RpcResponse): void {
     try {
         hostPort.postMessage(response)
     } catch (postErr) {
-        const fallbackMsg = postErr instanceof Error ? postErr.message : String(postErr)
+        const fallbackMsg = sanitizeErrorForLogging(
+            postErr instanceof Error ? postErr.message : String(postErr)
+        )
         try {
             hostPort.postMessage({
                 id: response.id,
@@ -106,6 +113,17 @@ export async function handleRpcRequest(
         }
 
         const safeArgs = Array.isArray(req.args) ? req.args : []
+        if (exceedsMaxToolInputElements(safeArgs, DEFAULT_MAX_TOOL_INPUT_ELEMENTS)) {
+            response.result = {
+                success: false,
+                error: `Tool input exceeds maximum of ${String(DEFAULT_MAX_TOOL_INPUT_ELEMENTS)} elements.`,
+                code: 'VALIDATION_ERROR',
+                category: 'validation',
+                recoverable: false,
+            }
+            safePostRpcResponse(hostPort, response)
+            return
+        }
         const target = resolveRpcTarget(req, apiBindings)
 
         if (typeof target === 'function') {
@@ -120,7 +138,7 @@ export async function handleRpcRequest(
             response.error = `Unknown method: ${req.group}.${req.method}`
         }
     } catch (err) {
-        response.error = err instanceof Error ? err.message : String(err)
+        response.error = sanitizeErrorForLogging(err instanceof Error ? err.message : String(err))
     }
 
     safePostRpcResponse(hostPort, response)

@@ -17,7 +17,12 @@ import {
 } from '../../utils/workspace-resolver.js'
 import { StrictProjectNumberSchema } from './schemas.js'
 import { parseCanonicalPositiveInt } from '../../utils/safe-positive-int.js'
+import {
+    resolvePrefetchedLookup,
+    type PrefetchedCommitFiles,
+} from './git-staleness-prefetch.js'
 
+export type { PrefetchedCommitFiles } from './git-staleness-prefetch.js'
 export { resolveGitWorkingDir, type GitWorkingDirInput } from './git-workdir.js'
 
 export interface StalenessCheckRow {
@@ -49,7 +54,7 @@ export async function readLatestGitTag(cwd: string): Promise<string | null> {
             timeout: 5000,
         })
         const described = stdout.trim()
-        return described === '' ? null : described
+        return described === '' || described.startsWith('-') ? null : described
     } catch (err: unknown) {
         const message = err instanceof Error ? err.message : String(err)
         if (`${message}\n${stderrText(err)}`.includes('No names found')) return null
@@ -70,11 +75,38 @@ function isEnoent(err: unknown): boolean {
     return typeof err === 'object' && err !== null && 'code' in err && err.code === 'ENOENT'
 }
 
-/**
- * Evaluate one anchor against the repository at `workspaceRoot`, persist any status change,
- * and return the result row. Failures are mapped through `stalenessFailure`.
- * `countCommitsSince` returns how many commits touched `anchorPath` since `since`.
- */
+function isOutsideRoot(rootPath: string, candidatePath: string): boolean {
+    const relPath =
+        process.platform === 'win32'
+            ? path.relative(rootPath.toLowerCase(), candidatePath.toLowerCase())
+            : path.relative(rootPath, candidatePath)
+    return relPath === '..' || relPath.startsWith('..' + path.sep) || path.isAbsolute(relPath)
+}
+
+async function assertAnchorWithinRealWorkspaceRoot(
+    resolvedRoot: string,
+    fullPath: string,
+    rawAnchorPath: string
+): Promise<boolean> {
+    try {
+        if ((await fs.promises.lstat(fullPath)).isSymbolicLink()) {
+            throw new Error(`Path traversal detected: ${rawAnchorPath}`)
+        }
+        const [realRoot, realFull] = await Promise.all([
+            fs.promises.realpath(resolvedRoot).catch(() => resolvedRoot),
+            fs.promises.realpath(fullPath),
+        ])
+        if (isOutsideRoot(realRoot, realFull)) {
+            throw new Error(`Path traversal detected: ${rawAnchorPath}`)
+        }
+        return false
+    } catch (err) {
+        if (isEnoent(err)) return true
+        throw err
+    }
+}
+
+/** Evaluate one anchor against `workspaceRoot`, persist status changes, and return the result row. */
 export async function evaluateAnchorStaleness(
     db: Pick<IDatabaseAdapter, 'updateAnchorStatus'>,
     anchor: { id?: number; anchorPath: string; status: AnchorStatus },
@@ -93,15 +125,15 @@ export async function evaluateAnchorStaleness(
             throw new Error(`Path traversal detected: ${anchor.anchorPath}`)
         }
         const fullPath = path.resolve(resolvedRoot, relAnchorFile)
-        const relPath =
-            process.platform === 'win32'
-                ? path.relative(resolvedRoot.toLowerCase(), fullPath.toLowerCase())
-                : path.relative(resolvedRoot, fullPath)
-        if (relPath === '..' || relPath.startsWith('..' + path.sep) || path.isAbsolute(relPath)) {
+        if (isOutsideRoot(resolvedRoot, fullPath)) {
             throw new Error(`Path traversal detected: ${anchor.anchorPath}`)
         }
 
-        const isDeleted = !(await pathExistsAsync(fullPath))
+        const isDeleted = await assertAnchorWithinRealWorkspaceRoot(
+            resolvedRoot,
+            fullPath,
+            anchor.anchorPath
+        )
         let commitsSince = 0
         let newStatus: AnchorStatus = anchor.status
 
@@ -264,73 +296,6 @@ async function runAnchorChunkSettled(
             evaluateAnchorStaleness(db, anchor, entryTimestamp, registryPath, cachedCountCommits, wsId)
         )
     )
-}
-
-export interface PrefetchedCommitFiles {
-    date: string
-    files?: { file: string; oldFile?: string | undefined }[] | undefined
-    isFilesTruncated?: boolean | undefined
-}
-
-function normalizeRepoRelPath(p: string): string {
-    const clean = p.replace(/\\/g, '/').replace(/^\.\//, '')
-    return process.platform === 'win32' ? clean.toLowerCase() : clean
-}
-
-function buildPrefetchedCommitCounter(
-    prefetched: readonly PrefetchedCommitFiles[],
-    fetchCap: number,
-    maxCommitsPerAnchor: number
-): (anchorPath: string, since: string) => number | undefined {
-    const indexed = prefetched.map((c) => {
-        const paths = new Set<string>()
-        for (const f of c.files ?? []) {
-            paths.add(normalizeRepoRelPath(f.file))
-            if (f.oldFile !== undefined) paths.add(normalizeRepoRelPath(f.oldFile))
-        }
-        return { epochMs: Date.parse(c.date), paths, truncated: c.isFilesTruncated === true }
-    })
-    const windowTruncated = prefetched.length >= fetchCap
-    const oldestMs = indexed.reduce((m, c) => (!Number.isNaN(c.epochMs) && c.epochMs < m ? c.epochMs : m), Infinity)
-    return (anchorPath: string, since: string): number | undefined => {
-        const sinceMs = Date.parse(since)
-        if (Number.isNaN(sinceMs)) return undefined
-        const target = normalizeRepoRelPath(anchorPath)
-        let hits = 0
-        let sawTruncated = false
-        for (const c of indexed) {
-            if (Number.isNaN(c.epochMs) || c.epochMs < sinceMs) continue
-            if (c.paths.has(target)) hits++
-            else if (c.truncated) sawTruncated = true
-        }
-        if (hits === 0 && (sawTruncated || (windowTruncated && sinceMs < oldestMs))) return undefined
-        return Math.min(hits, maxCommitsPerAnchor)
-    }
-}
-
-async function resolvePrefetchedLookup(
-    anchorJobs: readonly { entryTimestamp: string }[],
-    registryPath: string,
-    maxCommitsPerAnchor: number,
-    prefetchCommitsSince: ((since: string, cwd: string, maxCount: number) => Promise<PrefetchedCommitFiles[]>) | undefined
-): Promise<((anchorPath: string, since: string) => number | undefined) | undefined> {
-    if (prefetchCommitsSince === undefined || anchorJobs.length < 4) return undefined
-    let earliestSince = anchorJobs[0]?.entryTimestamp ?? ''
-    let earliestMs = Date.parse(earliestSince)
-    for (const job of anchorJobs) {
-        const ms = Date.parse(job.entryTimestamp)
-        if (!Number.isNaN(ms) && (Number.isNaN(earliestMs) || ms < earliestMs)) {
-            earliestMs = ms
-            earliestSince = job.entryTimestamp
-        }
-    }
-    if (earliestSince === '') return undefined
-    try {
-        const prefetched = await prefetchCommitsSince(earliestSince, registryPath, 500)
-        return buildPrefetchedCommitCounter(prefetched, 500, maxCommitsPerAnchor)
-    } catch {
-        return undefined
-    }
 }
 
 /** Evaluate all anchors in a single workspace and report whether it was skipped for missing a path. */

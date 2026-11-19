@@ -86,6 +86,7 @@ export const TOOL_SCOPE_OVERRIDES: Record<string, StandardScope> = {
     team_backup: SCOPES.ADMIN,
     team_merge_tags: SCOPES.ADMIN,
     team_rebuild_vector_index: SCOPES.ADMIN,
+    team_export_markdown: SCOPES.ADMIN,
     team_add_author_alias: SCOPES.ADMIN,
     team_remove_author_alias: SCOPES.ADMIN,
     team_list_author_aliases: SCOPES.ADMIN,

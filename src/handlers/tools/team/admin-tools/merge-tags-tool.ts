@@ -8,6 +8,7 @@ import { formatHandlerError } from '../../../../utils/error-helpers.js'
 import { resolveWriteWorkspaceId } from '../../write-workspace.js'
 import { activeProjectRegistry, alignedProjectFilter } from '../../../../utils/write-scope.js'
 import { TEAM_DB_ERROR_RESPONSE, triggerTeamNotifications, resolveTeamProjectNumber } from '../helpers.js'
+import { missingProjectNumberResponse } from './batch-delete-helpers.js'
 import {
     TeamMergeTagsSchema,
     TeamMergeTagsSchemaMcp,
@@ -16,7 +17,6 @@ import {
 
 export function createTeamMergeTagsTool(context: ToolContext): ToolDefinition {
     const { teamDb } = context
-
     return {
         name: 'team_merge_tags',
         title: 'Merge Team Tags',
@@ -25,30 +25,18 @@ export function createTeamMergeTagsTool(context: ToolContext): ToolDefinition {
         group: 'team',
         inputSchema: TeamMergeTagsSchemaMcp,
         outputSchema: TeamMergeTagsOutputSchema,
-        annotations: {
-            readOnlyHint: false,
-            destructiveHint: true,
-            idempotentHint: false,
-            openWorldHint: false,
-        },
-        capabilities: {
-            requiresAdminScope: true,
-        },
+        annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: false },
+        capabilities: { requiresAdminScope: true },
         handler: (params: unknown) => {
             try {
-                if (!teamDb) {
-                    return { ...TEAM_DB_ERROR_RESPONSE }
-                }
-
+                if (!teamDb) return { ...TEAM_DB_ERROR_RESPONSE }
                 const { source_tag, target_tag, project_number, workspace_id } =
                     TeamMergeTagsSchema.parse(params)
-
                 if (workspace_id?.trim() === '*') {
                     throw new ValidationError(
                         "Wildcard workspace_id '*' is not supported for team_merge_tags. Specify a concrete workspace_id."
                     )
                 }
-
                 if (source_tag === target_tag) {
                     return {
                         success: false,
@@ -59,27 +47,18 @@ export function createTeamMergeTagsTool(context: ToolContext): ToolDefinition {
                         recoverable: true,
                     }
                 }
-
                 const wsId = resolveWriteWorkspaceId(workspace_id, project_number, context.config)
-                const scopedProject = resolveTeamProjectNumber(
-                    context,
-                    wsId,
-                    project_number,
-                    workspace_id
-                )
+                const scopedProject = resolveTeamProjectNumber(context, wsId, project_number, workspace_id)
+                if (scopedProject === undefined || scopedProject === null) {
+                    return missingProjectNumberResponse()
+                }
                 const result = teamDb.mergeTags(
                     source_tag,
                     target_tag,
                     wsId,
-                    alignedProjectFilter(
-                        wsId,
-                        scopedProject ?? undefined,
-                        activeProjectRegistry(context.config?.projectRegistry)
-                    )
+                    alignedProjectFilter(wsId, scopedProject, activeProjectRegistry(context.config?.projectRegistry))
                 )
-
                 triggerTeamNotifications(context)
-
                 return {
                     success: true,
                     message: `Merged tag "${source_tag}" into "${target_tag}". Updated ${String(result.entriesUpdated)} entries.`,

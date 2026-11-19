@@ -39,7 +39,7 @@ export function enforceCliTeamRbac(
 
 /**
  * Enforce Team RBAC on `--team` CLI read commands (`search`, `session`, `analytics`, `visualize`).
- * Rejects wildcard `'*'` without an explicit `projectNumber` unless the caller holds `'admin'` team RBAC role.
+ * Rejects wildcard `'*'` or unresolved `projectNumber` unless the caller holds `'admin'` team RBAC role.
  */
 export function enforceCliTeamReadScope(
     db: IDatabaseAdapter,
@@ -48,13 +48,18 @@ export function enforceCliTeamReadScope(
     projectNumber: number | undefined
 ): void {
     enforceCliTeamRbac(db, config, 'viewer', workspaceId)
-    if (workspaceId === '*' && projectNumber === undefined) {
+    if (projectNumber === undefined) {
         if (db.isTeamRbacActive()) {
             enforceCliTeamRbac(db, config, 'admin', workspaceId)
         }
-        if (!isCallerTeamAdmin(db, getCallerIdentity(), config, workspaceId)) {
+        if (workspaceId === '*' && !isCallerTeamAdmin(db, getCallerIdentity(), config, workspaceId)) {
             throw new ValidationError(
                 "Cross-tenant wildcard '--workspace *' on --team reads requires an explicit --default-project unless the caller holds the 'admin' team RBAC role."
+            )
+        }
+        if (workspaceId !== '*') {
+            throw new ValidationError(
+                "Missing project_number for --team read on shared/unregistered workspace. Pass --default-project (or --project) or register the workspace in projectRegistry."
             )
         }
     }

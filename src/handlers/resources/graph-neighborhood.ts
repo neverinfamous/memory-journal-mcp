@@ -11,8 +11,10 @@ import {
     isoDaysAgo,
     type RecentNeighborhood,
 } from '../../database/sqlite-adapter/graph-pivots.js'
+import { ValidationError } from '../../types/errors.js'
+import { parseCanonicalPositiveInt } from '../../utils/safe-positive-int.js'
 import { loadProjectRegistryFromConfig } from '../../utils/workspace-resolver.js'
-import { exactRegistryKey } from '../../utils/write-scope.js'
+import { exactRegistryKey, uniqueWorkspaceForProject } from '../../utils/write-scope.js'
 import { previewLabel } from './core/briefing/graph-pivots-section.js'
 import { resourceWorkspace, type ResourceContext } from './shared.js'
 
@@ -31,10 +33,35 @@ function readIntParam(uri: string, key: string, fallback: number, min: number, m
     return Math.min(max, Math.max(min, Number.parseInt(raw.trim(), 10)))
 }
 
-function resolveGraphWorkspace(context: ResourceContext, repo: string | undefined): string {
-    if (repo === undefined || repo.trim() === '') return resourceWorkspace(context)
+function resolveGraphWorkspace(
+    context: ResourceContext,
+    repo: string | undefined
+): { ws: string; unresolvedRepo?: string } {
+    if (repo === undefined || repo.trim() === '') return { ws: resourceWorkspace(context) }
+    const trimmed = repo.trim()
+    if (trimmed === '*') {
+        throw new ValidationError(
+            "Wildcard '*' is not supported for memory://graph/{+repo}. Specify a concrete repository name."
+        )
+    }
+    if (trimmed.toLowerCase() === 'default') return { ws: 'default' }
     const registry = context.briefingConfig?.projectRegistry ?? loadProjectRegistryFromConfig()
-    return exactRegistryKey(repo, registry) ?? repo
+    const hasRegistry = registry !== undefined && Object.keys(registry).length > 0
+    const numericTarget = /^#?(\d+)$/.exec(trimmed)
+    const parsedNum =
+        numericTarget?.[1] !== undefined ? parseCanonicalPositiveInt(numericTarget[1]) : undefined
+    const matched =
+        exactRegistryKey(trimmed, registry) ??
+        (parsedNum !== undefined ? uniqueWorkspaceForProject(parsedNum, registry) : undefined)
+    if (matched !== undefined) return { ws: matched }
+    const configuredDefaultWs = context.briefingConfig?.defaultWorkspaceId?.trim()
+    if (configuredDefaultWs?.toLowerCase() === trimmed.toLowerCase()) {
+        return { ws: configuredDefaultWs }
+    }
+    if (hasRegistry) {
+        return { ws: trimmed, unresolvedRepo: trimmed }
+    }
+    return { ws: trimmed }
 }
 
 function renderNeighborhood(
@@ -78,7 +105,11 @@ export function buildGraphNeighborhoodMarkdown(
     context: ResourceContext,
     repo: string | undefined
 ): string {
-    const ws = resolveGraphWorkspace(context, repo)
+    const { ws, unresolvedRepo } = resolveGraphWorkspace(context, repo)
+    if (unresolvedRepo !== undefined) {
+        const safeRepo = unresolvedRepo.replace(/[^A-Za-z0-9._\-/*@]/g, '_')
+        return `# Graph neighborhood · ${safeRepo} · unresolved\n'${safeRepo}' is not a registered project. Use list_projects (or the project registry) to find the correct repo, then re-read memory://graph/{repo}.`
+    }
     const days = readIntParam(uri, 'days', DEFAULT_DAYS, 1, MAX_DAYS)
     const limit = readIntParam(uri, 'limit', DEFAULT_EDGE_LIMIT, 1, MAX_EDGE_LIMIT)
     const ctx: Partial<ResourceContext> | undefined = context

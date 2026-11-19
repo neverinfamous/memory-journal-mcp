@@ -476,7 +476,7 @@ describe('Team Admin Tool Handlers', () => {
 
             const mergeResult = (await callTool(
                 'team_merge_tags',
-                { source_tag: 'merge-source-tag', target_tag: 'merge-target-tag' },
+                { source_tag: 'merge-source-tag', target_tag: 'merge-target-tag', project_number: 1 },
                 personalDb,
                 undefined,
                 undefined,

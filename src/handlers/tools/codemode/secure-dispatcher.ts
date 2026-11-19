@@ -132,32 +132,33 @@ async function executeDispatcherCall(
     const scopeRes = resolveEffectiveRpcScope({ workspaceId, projectId, explicitWorkspace, sessionId }, rpcOverrides, reg)
     if ('errorResult' in scopeRes) return scopeRes.errorResult
 
-    const normalized = await normalizeDispatchParams(tool, cleanToolParams, {
-        sessionContext,
-        projectId: scopeRes.effectiveProjectId,
-        workspaceId: scopeRes.effectiveWorkspaceId,
-        ...(scopeRes.effectiveExplicitWorkspace !== undefined
-            ? { explicitWorkspace: scopeRes.effectiveExplicitWorkspace }
-            : {}),
-        ...(scopeRes.effectiveSessionId !== undefined ? { sessionId: scopeRes.effectiveSessionId } : {}),
-    })
-    if ('errorResult' in normalized) return normalized.errorResult
-    const normalizedParams = normalized.params
-    const boundsErr = validateRpcOverrideBounds(tool, normalizedParams, rpcOverrides, reg)
-    if (boundsErr !== undefined) return boundsErr
-
-    if (rpcOverrides?.readonly === true && tool.annotations?.readOnlyHint !== true) {
-        return {
-            success: false,
-            error: `🛠️ AUTONOMOUS HEALING: Operation '${tool.name}' is blocked in readonly mode. Read operations only.`,
-            code: 'PERMISSION_DENIED',
-            category: 'auth',
-            recoverable: true,
-        }
-    }
-
     const effectiveAutoVersion = rpcOverrides?.autoVersion === false ? false : autoVersion
     const executeWithScope = async (): Promise<unknown> => {
+        const normalized = await normalizeDispatchParams(tool, cleanToolParams, {
+            sessionContext,
+            projectId: scopeRes.effectiveProjectId,
+            workspaceId: scopeRes.effectiveWorkspaceId,
+            ...(scopeRes.effectiveExplicitWorkspace !== undefined
+                ? { explicitWorkspace: scopeRes.effectiveExplicitWorkspace }
+                : {}),
+            ...(scopeRes.effectiveSessionId !== undefined ? { sessionId: scopeRes.effectiveSessionId } : {}),
+            ...(rpcOverrides?.projectNumber !== undefined ? { rpcPinnedProject: true } : {}),
+        })
+        if ('errorResult' in normalized) return normalized.errorResult
+        const normalizedParams = normalized.params
+        const boundsErr = validateRpcOverrideBounds(tool, normalizedParams, rpcOverrides, reg)
+        if (boundsErr !== undefined) return boundsErr
+
+        if (rpcOverrides?.readonly === true && tool.annotations?.readOnlyHint !== true) {
+            return {
+                success: false,
+                error: `🛠️ AUTONOMOUS HEALING: Operation '${tool.name}' is blocked in readonly mode. Read operations only.`,
+                code: 'PERMISSION_DENIED',
+                category: 'auth',
+                recoverable: true,
+            }
+        }
+
         const finalParams = applyAutoVersion(tool, normalizedParams, effectiveAutoVersion, sessionContext)
         if (tool.annotations?.readOnlyHint !== true && (dryRun || rpcOverrides?.dryRun === true)) {
             return {

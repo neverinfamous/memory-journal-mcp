@@ -68,11 +68,13 @@ async function readAndConvertExternalFiles(
     )
 
     assertSafeDirectoryPath(input.source_dir, allowedRoots)
+    const MAX_DIRECTORY_SCAN_ENTRIES = 10_000
     const allMdFiles: string[] = []
     const dir = await fs.opendir(input.source_dir)
     for await (const dirent of dir) {
         if (dirent.isFile() && dirent.name.endsWith('.md')) {
             allMdFiles.push(dirent.name)
+            if (allMdFiles.length >= MAX_DIRECTORY_SCAN_ENTRIES) break
         }
     }
     allMdFiles.sort((a, b) => a.localeCompare(b))

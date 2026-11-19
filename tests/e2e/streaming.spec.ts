@@ -15,6 +15,8 @@ import { startServer, stopServer } from './helpers.js'
 const STREAM_PORT = 5123 + (Number(process.env.TEST_PARALLEL_INDEX || 0) * 100)
 const STREAM_BASE = `http://localhost:${STREAM_PORT}`
 
+test.describe.configure({ mode: 'serial' })
+
 test.describe('HTTP/SSE Streaming', () => {
     test.beforeAll(async () => {
         await startServer(STREAM_PORT, [])

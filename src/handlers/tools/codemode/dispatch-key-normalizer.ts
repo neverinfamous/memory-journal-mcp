@@ -35,13 +35,24 @@ function hasDefinedKey(obj: Record<string, unknown>, keys: readonly string[]): b
 export function deepCamelToSnake(
     obj: unknown,
     depth = 0,
-    acceptsKey?: (key: string) => boolean
+    acceptsKey?: (key: string) => boolean,
+    memo = new WeakMap<object, unknown>()
 ): unknown {
     if (depth > 12) return obj
-    if (Array.isArray(obj)) return obj.map((item) => deepCamelToSnake(item, depth + 1))
+    if (Array.isArray(obj)) {
+        if (depth > 0 && memo.has(obj)) return memo.get(obj)
+        const mapped: unknown[] = []
+        if (depth > 0) memo.set(obj, mapped)
+        for (const item of obj) {
+            mapped.push(deepCamelToSnake(item, depth + 1, undefined, memo))
+        }
+        return mapped
+    }
     if (!isRecord(obj)) return obj
+    if (depth > 0 && memo.has(obj)) return memo.get(obj)
 
     const newObj: Record<string, unknown> = {}
+    if (depth > 0) memo.set(obj, newObj)
     const canAlias = (alias: string): boolean => depth === 0 && !(acceptsKey?.(alias) ?? false)
 
     for (const [k, v] of Object.entries(obj)) {
@@ -61,7 +72,7 @@ export function deepCamelToSnake(
         }
         if (depth === 0 && !CANONICAL_SNAKE_SCOPE_KEYS.has(k) && (acceptsKey?.(k) ?? false)) {
             if (v === undefined && Object.hasOwn(newObj, k) && newObj[k] !== undefined) continue
-            newObj[k] = deepCamelToSnake(v, depth + 1)
+            newObj[k] = deepCamelToSnake(v, depth + 1, undefined, memo)
             continue
         }
         const snakeKey = UPPERCASE_RE.test(k)
@@ -72,14 +83,14 @@ export function deepCamelToSnake(
             if (v === undefined && Object.hasOwn(newObj, 'entry_id') && newObj['entry_id'] !== undefined) {
                 continue
             }
-            newObj['entry_id'] = deepCamelToSnake(v, depth + 1)
+            newObj['entry_id'] = deepCamelToSnake(v, depth + 1, undefined, memo)
             continue
         }
         if (snakeKey === 'ids' && !hasDefinedKey(obj, ['entry_ids', 'entryIds']) && canAlias('ids')) {
             if (v === undefined && Object.hasOwn(newObj, 'entry_ids') && newObj['entry_ids'] !== undefined) {
                 continue
             }
-            const vSnake = deepCamelToSnake(v, depth + 1)
+            const vSnake = deepCamelToSnake(v, depth + 1, undefined, memo)
             newObj['entry_ids'] = Array.isArray(vSnake) ? vSnake : [vSnake]
             continue
         }
@@ -89,7 +100,7 @@ export function deepCamelToSnake(
         if (v === undefined && Object.hasOwn(newObj, snakeKey) && newObj[snakeKey] !== undefined) {
             continue
         }
-        newObj[snakeKey] = deepCamelToSnake(v, depth + 1)
+        newObj[snakeKey] = deepCamelToSnake(v, depth + 1, undefined, memo)
     }
     return newObj
 }

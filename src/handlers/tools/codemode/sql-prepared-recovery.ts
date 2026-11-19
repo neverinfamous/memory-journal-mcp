@@ -145,6 +145,106 @@ function hasValidJsSyntax(src: string): boolean {
 const REAL_MJ_API_CALL_RE =
     /\bmj\s*\.\s*(?:core|search|admin|team|analytics|relationships|io|git|backup|github|executeCode|help|readResource|getContext|createEntry|searchEntries|getRecentEntries|getEntryById|updateEntry|deleteEntry|listTags)\b/
 
+function scanBalancedQuotedString(
+    code: string,
+    openQuoteIdx: number
+): { value: string; closeQuoteIdx: number } | null {
+    const quote = code[openQuoteIdx]
+    if (quote !== "'" && quote !== '"' && quote !== '`') return null
+    let i = openQuoteIdx + 1
+    while (i < code.length) {
+        const ch = code[i]
+        if (ch === '\\') {
+            i += 2
+            continue
+        }
+        if (ch === quote) {
+            return { value: code.slice(openQuoteIdx + 1, i), closeQuoteIdx: i }
+        }
+        i++
+    }
+    return null
+}
+
+function scanSimpleParenBody(
+    code: string,
+    openParenIdx: number
+): { body: string; afterCloseIdx: number } | null {
+    if (code[openParenIdx] !== '(') return null
+    let depth = 1
+    let i = openParenIdx + 1
+    while (i < code.length && depth > 0) {
+        const ch = code[i]
+        if (ch === "'" || ch === '"' || ch === '`') {
+            const quoted = scanBalancedQuotedString(code, i)
+            if (quoted === null) return null
+            i = quoted.closeQuoteIdx + 1
+            continue
+        }
+        if (ch === '(') depth++
+        else if (ch === ')') depth--
+        i++
+    }
+    if (depth !== 0) return null
+    return { body: code.slice(openParenIdx + 1, i - 1), afterCloseIdx: i }
+}
+
+function extractPrepareSqlAt(
+    code: string,
+    prepareIdx: number
+): { sql: string; afterPrepareCloseIdx: number } | null {
+    const afterKeyword = prepareIdx + '.prepare'.length
+    let i = afterKeyword
+    while (i < code.length && /\s/.test(code[i] ?? '')) i++
+    if (code[i] !== '(') return null
+    i++
+    while (i < code.length && /\s/.test(code[i] ?? '')) i++
+    const quoted = scanBalancedQuotedString(code, i)
+    if (quoted === null) return null
+    let j = quoted.closeQuoteIdx + 1
+    while (j < code.length && /\s/.test(code[j] ?? '')) j++
+    if (code[j] !== ')') return null
+    return { sql: quoted.value.trim(), afterPrepareCloseIdx: j + 1 }
+}
+
+function extractPreparedSqlAndRunArgs(
+    code: string
+): { rawSql: string; rawRunArgs: string } | null {
+    const prepIdx = code.indexOf('.prepare')
+    if (prepIdx === -1) return null
+    const prep = extractPrepareSqlAt(code, prepIdx)
+    if (prep === null) return null
+
+    const tail = code.slice(prep.afterPrepareCloseIdx)
+    const chainedExec = /^\s*\.(?:run|get|all)\s*\(/.exec(tail)
+    if (chainedExec !== null) {
+        const openParenIdx = prep.afterPrepareCloseIdx + chainedExec[0].length - 1
+        const callArgs = scanSimpleParenBody(code, openParenIdx)
+        if (callArgs === null) return null
+        const afterCall = code.slice(callArgs.afterCloseIdx)
+        if (!/^(?:\s*;|\s*\r?\n|\s*$)/.test(afterCall)) return null
+        return { rawSql: prep.sql, rawRunArgs: callArgs.body }
+    }
+
+    const prefix = code.slice(0, prepIdx)
+    const boundVarMatch = /(?:^|[;\n])\s*(?:(?:const|let|var)\s+)?([A-Za-z_$][\w$]*)\s*=[^;\n]*$/.exec(
+        prefix
+    )
+    const stmtVar = boundVarMatch?.[1]
+    if (stmtVar === undefined) return null
+    const stmtCallRe = /\b([A-Za-z_$][\w$]*)\s*\.(?:run|get|all)\s*\(/g
+    for (const m of tail.matchAll(stmtCallRe)) {
+        if (m[1] !== stmtVar || m.index === undefined) continue
+        const openParenIdx = prep.afterPrepareCloseIdx + m.index + m[0].length - 1
+        const callArgs = scanSimpleParenBody(code, openParenIdx)
+        if (callArgs === null) continue
+        const afterCall = code.slice(callArgs.afterCloseIdx)
+        if (!/^(?:\s*;|\s*\r?\n|\s*$)/.test(afterCall)) continue
+        return { rawSql: prep.sql, rawRunArgs: callArgs.body }
+    }
+    return null
+}
+
 export function extractAndRecoverPreparedStatementCode(code: string): string | null {
     if (!code || typeof code !== 'string') return null
     const stripped = stripCommentsAndStrings(code)
@@ -154,43 +254,16 @@ export function extractAndRecoverPreparedStatementCode(code: string): string | n
         return null
     }
 
-    const chainedMatch =
-        /\.prepare\s*\(\s*(['"`])([\s\S]*?)\1\s*\)\s*\.(?:run|get|all)\s*\(([\s\S]*?)\)(?:\s*;|\s*\n|$)/.exec(
-            code
-        )
-    let rawSql: string | undefined
-    let rawRunArgs: string | undefined
-    if (chainedMatch?.[2] !== undefined) {
-        rawSql = chainedMatch[2].trim()
-        rawRunArgs = chainedMatch[3]
-    } else {
-        const boundMatch =
-            /(?:(?:^|[;\n])\s*(?:const|let|var)\s+|(?:^|[;\n])\s*)([A-Za-z_$][\w$]*)\s*=[^;\n]*?\.prepare\s*\(\s*(['"`])([\s\S]*?)\2\s*\)/.exec(
-                code
-            )
-        const stmtVar = boundMatch?.[1]
-        if (stmtVar !== undefined && boundMatch?.[3] !== undefined) {
-            const afterPrep = code.slice(boundMatch.index + boundMatch[0].length)
-            const stmtCallRe = /\b([A-Za-z_$][\w$]*)\s*\.(?:run|get|all)\s*\(([\s\S]*?)\)(?:\s*;|\s*\n|$)/g
-            for (const m of afterPrep.matchAll(stmtCallRe)) {
-                if (m[1] === stmtVar) {
-                    rawSql = boundMatch[3].trim()
-                    rawRunArgs = m[2]
-                    break
-                }
-            }
-        }
-    }
-    if (rawSql === undefined) return null
+    const extracted = extractPreparedSqlAndRunArgs(code)
+    if (extracted === null) return null
+    const { rawSql, rawRunArgs } = extracted
 
     let parsedArgs: unknown[] = []
-    if (rawRunArgs !== undefined) {
-        const rawArgs = rawRunArgs.trim()
-        if (rawArgs.length > 0) {
-            const recovered = parsePreparedStatementArgs(rawArgs)
-            if (recovered === null) return null
-            parsedArgs = recovered
-        }
+    const rawArgs = rawRunArgs.trim()
+    if (rawArgs.length > 0) {
+        const recovered = parsePreparedStatementArgs(rawArgs)
+        if (recovered === null) return null
+        parsedArgs = recovered
     }
 
     const { action, params } = parseSqlStatement(rawSql, parsedArgs)
