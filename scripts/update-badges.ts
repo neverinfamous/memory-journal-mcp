@@ -91,48 +91,104 @@ const CoverageSummarySchema = z.object({
 });
 
 const PlaywrightResultsSchema = z.object({
+  suites: z.array(z.unknown()).optional(),
   stats: z.object({
     expected: z.number().optional().default(0),
     skipped: z.number().optional().default(0),
   }),
 });
 
-function loadBadgeMetrics(): BadgeMetrics {
-  const summaryPath = path.join(ROOT_DIR, ".test-output/coverage/coverage-summary.json");
-  const playwrightPath = path.join(ROOT_DIR, ".test-output/playwright-results.json");
+export interface LoadBadgeMetricsOptions {
+  rootDir?: string;
+  argv?: readonly string[];
+}
+
+export function countE2eSpecFiles(e2eDir: string): number {
+  if (!fs.existsSync(e2eDir)) return 0;
+  let count = 0;
+  const stack: string[] = [e2eDir];
+  while (stack.length > 0) {
+    const current = stack.pop();
+    if (current === undefined) continue;
+    const entries = fs.readdirSync(current, { withFileTypes: true });
+    for (const entry of entries) {
+      const fullPath = path.join(current, entry.name);
+      if (entry.isDirectory()) {
+        stack.push(fullPath);
+      } else if (entry.isFile() && /\.(spec|test)\.(?:[cm]?[jt]sx?)$/i.test(entry.name)) {
+        count += 1;
+      }
+    }
+  }
+  return count;
+}
+
+export function isPartialPlaywrightRun(
+  pw: { suites?: readonly unknown[] | undefined },
+  rootDir: string,
+  argv: readonly string[] = process.argv,
+): boolean {
+  if (argv.includes("--allow-partial")) return false;
+  if (pw.suites === undefined) return false;
+  const totalSpecs = countE2eSpecFiles(path.join(rootDir, "tests", "e2e"));
+  return totalSpecs > 0 && pw.suites.length < totalSpecs;
+}
+
+export function loadBadgeMetrics(options: LoadBadgeMetricsOptions = {}): BadgeMetrics {
+  const rootDir = options.rootDir ?? ROOT_DIR;
+  const argv = options.argv ?? process.argv;
+  const coverageOnly = argv.includes("--coverage-only");
+  const e2eOnly = argv.includes("--e2e-only");
+  const includeCoverage = !e2eOnly || coverageOnly;
+  const includeE2e = !coverageOnly || e2eOnly;
+
+  const summaryPath = path.join(rootDir, ".test-output/coverage/coverage-summary.json");
+  const playwrightPath = path.join(rootDir, ".test-output/playwright-results.json");
 
   let linesPct = 0;
   let coverageColor = "red";
   let hasCoverage = false;
-  if (fs.existsSync(summaryPath)) {
-    const summary = CoverageSummarySchema.parse(
-      JSON.parse(fs.readFileSync(summaryPath, "utf-8"))
-    );
-    linesPct = summary.total.lines.pct;
-    coverageColor = getBadgeColor(linesPct);
-    hasCoverage = true;
-  } else {
-    console.warn(`Coverage summary not found at ${summaryPath}`);
+  if (includeCoverage) {
+    if (fs.existsSync(summaryPath)) {
+      const summary = CoverageSummarySchema.parse(
+        JSON.parse(fs.readFileSync(summaryPath, "utf-8"))
+      );
+      linesPct = summary.total.lines.pct;
+      coverageColor = getBadgeColor(linesPct);
+      hasCoverage = true;
+    } else {
+      console.warn(`Coverage summary not found at ${summaryPath}`);
+    }
   }
 
   let e2ePassing = 0;
   let e2eSkipped = 0;
   let hasE2e = false;
-  if (fs.existsSync(playwrightPath)) {
-    const pw = PlaywrightResultsSchema.parse(
-      JSON.parse(fs.readFileSync(playwrightPath, "utf-8"))
-    );
-    e2ePassing = pw.stats.expected;
-    e2eSkipped = pw.stats.skipped;
-    hasE2e = true;
-  } else {
-    console.warn(`Playwright results not found at ${playwrightPath}`);
+  if (includeE2e) {
+    if (fs.existsSync(playwrightPath)) {
+      const pw = PlaywrightResultsSchema.parse(
+        JSON.parse(fs.readFileSync(playwrightPath, "utf-8"))
+      );
+      if (isPartialPlaywrightRun(pw, rootDir, argv)) {
+        const totalSpecs = countE2eSpecFiles(path.join(rootDir, "tests", "e2e"));
+        const executedSpecs = pw.suites?.length ?? 0;
+        console.warn(
+          `Skipping E2E badge update: partial Playwright run (${String(executedSpecs)}/${String(totalSpecs)} specs). Pass --allow-partial to override.`
+        );
+      } else {
+        e2ePassing = pw.stats.expected;
+        e2eSkipped = pw.stats.skipped;
+        hasE2e = true;
+      }
+    } else {
+      console.warn(`Playwright results not found at ${playwrightPath}`);
+    }
   }
 
   if (
     !hasCoverage &&
     !hasE2e &&
-    (process.env['GITHUB_ACTIONS'] || process.argv.includes("--strict"))
+    (Boolean(process.env['GITHUB_ACTIONS']) || argv.includes("--strict"))
   ) {
     console.error("Strict mode active: Failing because neither coverage nor E2E results were found.");
     process.exit(1);
@@ -146,9 +202,9 @@ function loadBadgeMetrics(): BadgeMetrics {
     e2eSkipped,
     hasE2e,
     covRegex: /!\[Coverage\]\(https:\/\/img\.shields\.io\/badge\/Coverage-[0-9.]+[^)]*\.svg\)/g,
-    newCovBadge: `![Coverage](https://img.shields.io/badge/Coverage-${linesPct}%25-${coverageColor}.svg)`,
+    newCovBadge: `![Coverage](https://img.shields.io/badge/Coverage-${String(linesPct)}%25-${coverageColor}.svg)`,
     e2eRegex: /!\[E2E\]\(https:\/\/img\.shields\.io\/badge\/E2E-[^)]+\)/g,
-    newE2eBadge: `![E2E](https://img.shields.io/badge/E2E-${e2ePassing}%20passing%20%C2%B7%20${e2eSkipped}%20skipped-blue.svg)`,
+    newE2eBadge: `![E2E](https://img.shields.io/badge/E2E-${String(e2ePassing)}%20passing%20%C2%B7%20${String(e2eSkipped)}%20skipped-blue.svg)`,
   };
 }
 
@@ -203,8 +259,39 @@ function updateBadgeTargetFile(file: string, metrics: BadgeMetrics): boolean {
   }
 }
 
+export interface CommitInvocation {
+  command: string;
+  args: string[];
+}
+
+export function buildCommitInvocation(
+  rootDir: string,
+  dirtyFiles: readonly string[],
+): CommitInvocation {
+  const tsxCli = path.join(rootDir, "node_modules", "tsx", "dist", "cli.mjs");
+  const commitScript = path.join(rootDir, "scripts", "commit.ts");
+  return {
+    command: process.execPath,
+    args: [
+      tsxCli,
+      commitScript,
+      "--msg",
+      "chore(docs): update test badges",
+      "--impact",
+      "0.1",
+      "--confidence",
+      "1.0",
+      "--validation",
+      "none",
+      "--no-history",
+      ...dirtyFiles.flatMap((f) => ["--add", f]),
+    ],
+  };
+}
+
 function autoCommitDirtyBadgeFiles(filesToUpdate: readonly string[], updatedFiles: readonly string[]): void {
-  if (process.env['GITHUB_ACTIONS']) return;
+  const ghActions = process.env['GITHUB_ACTIONS'];
+  if (ghActions !== undefined && ghActions.length > 0) return;
   const commitScript = path.join(ROOT_DIR, "scripts", "commit.ts");
   if (!fs.existsSync(commitScript)) return;
   const dirtyFiles = filesToUpdate.filter((file) => {
@@ -223,25 +310,17 @@ function autoCommitDirtyBadgeFiles(filesToUpdate: readonly string[], updatedFile
 
   if (dirtyFiles.length === 0) return;
   console.log(`\nAuto-committing badge updates for: ${dirtyFiles.join(", ")}`);
-  const args = [
-    commitScript,
-    "--msg",
-    "chore(docs): update test badges",
-    "--impact",
-    "0.1",
-    "--confidence",
-    "1.0",
-    "--validation",
-    "none",
-    "--no-history",
-    ...dirtyFiles.flatMap((f) => ["--add", f]),
-  ];
+  const inv = buildCommitInvocation(ROOT_DIR, dirtyFiles);
+  const tsxCli = inv.args[0] ?? "";
+  if (!fs.existsSync(tsxCli)) {
+    console.error(`Failed to auto-commit badge updates: tsx CLI not found at ${tsxCli}`);
+    process.exit(1);
+  }
 
   try {
-    execFileSync("pnpm", ["exec", "tsx", ...args], {
+    execFileSync(inv.command, inv.args, {
       stdio: "inherit",
       cwd: ROOT_DIR,
-      shell: process.platform === "win32",
     });
     console.log("Successfully auto-committed badge updates.");
   } catch (err: unknown) {
@@ -250,11 +329,24 @@ function autoCommitDirtyBadgeFiles(filesToUpdate: readonly string[], updatedFile
   }
 }
 
-function updateBadges(): void {
+export function updateBadges(): void {
   const metrics = loadBadgeMetrics();
   const filesToUpdate = ["README.md", "DOCKER_README.md"];
   const updatedFiles = filesToUpdate.filter((file) => updateBadgeTargetFile(file, metrics));
   autoCommitDirtyBadgeFiles(filesToUpdate, updatedFiles);
 }
 
-updateBadges();
+function normalizePathForCompare(p: string): string {
+  const resolved = path.resolve(p);
+  return process.platform === "win32" ? resolved.toLowerCase() : resolved;
+}
+
+function isMainModule(): boolean {
+  const entry = process.argv[1];
+  if (entry === undefined || entry.length === 0) return false;
+  return normalizePathForCompare(entry) === normalizePathForCompare(__filename);
+}
+
+if (isMainModule()) {
+  updateBadges();
+}
