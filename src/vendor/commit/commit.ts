@@ -1,5 +1,5 @@
 // @ts-nocheck
-import { execSync, execFileSync } from 'node:child_process';
+import { execSync, execFileSync, spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
@@ -21,7 +21,45 @@ export { cliSchema, CANONICAL_RELATION_TYPES };
 
 const COMMIT_MSG_PREFIX = 'commit-msg-';
 
-
+/**
+ * [INTENT]: Detect when an `--add <path>` target has already been staged as deleted (`D  <path>`) in `.git/index`
+ * and removed from disk, where re-running `git add <path>` would fail with exit 128 (`did not match any files`)
+ * even though `git commit --only -- <path>` can commit the deletion directly.
+ */
+export function isAlreadyStagedDeletion(cwd: string, targetPath: string): boolean {
+  const absTarget = path.resolve(cwd, targetPath);
+  if (fs.existsSync(absTarget)) {
+    return false;
+  }
+  const rel = path.relative(cwd, absTarget);
+  if (rel === '' || rel === '.' || rel === '..' || rel.startsWith(`..${path.sep}`)) {
+    return false;
+  }
+  try {
+    const indexRes = spawnSync('git', ['ls-files', '-z', '--', absTarget], {
+      cwd,
+      encoding: 'utf8',
+      timeout: 10000,
+      windowsHide: true,
+    });
+    if (indexRes.status !== 0 || (typeof indexRes.stdout === 'string' && indexRes.stdout.length > 0)) {
+      return false;
+    }
+    const cachedDelRes = spawnSync(
+      'git',
+      ['diff', '--cached', '--name-only', '--diff-filter=D', '-z', '--', absTarget],
+      {
+        cwd,
+        encoding: 'utf8',
+        timeout: 10000,
+        windowsHide: true,
+      },
+    );
+    return cachedDelRes.status === 0 && typeof cachedDelRes.stdout === 'string' && cachedDelRes.stdout.length > 0;
+  } catch {
+    return false;
+  }
+}
 
 // [INTENT]: Validates the git index state to prevent accidental staging of agent scratch payloads. [SIDE-EFFECT]: Aborts process if '.agents/scratch' paths are detected in the staging area. [AGENT-HINT]: Do NOT bypass this check; it is a critical safeguard for the project repository.
 function ensureStagedFiles(cwd: string, filesToAdd?: string[]): void {
@@ -44,11 +82,19 @@ function ensureStagedFiles(cwd: string, filesToAdd?: string[]): void {
     // Ignore error here and let git commands catch it properly
   }
 
-  if (filesToAdd && filesToAdd.length > 0) {
-    try {
-      execFileSync('git', ['add', ...filesToAdd], { stdio: 'inherit', cwd });
-    } catch (e) {
-      fatalError(`Error adding files: ${getErrorMessage(e)}`);
+  if (filesToAdd !== undefined && filesToAdd.length > 0) {
+    const pathsToStage = filesToAdd.filter(f => !isAlreadyStagedDeletion(cwd, f));
+    if (pathsToStage.length < filesToAdd.length) {
+      console.warn(
+        '⚠️ AUTONOMOUS HEALING: Skipping git add for already-staged deletion(s) (preserving staged removal for commit).',
+      );
+    }
+    if (pathsToStage.length > 0) {
+      try {
+        execFileSync('git', ['add', ...pathsToStage], { stdio: 'inherit', cwd });
+      } catch (e) {
+        fatalError(`Error adding files: ${getErrorMessage(e)}`);
+      }
     }
   }
 

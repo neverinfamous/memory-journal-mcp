@@ -17,7 +17,7 @@ The module utilizes native Git `--name-status -z` and `--numstat -z` flags, leve
    - **`parser-metadata.ts`**: Provides helper utilities for evaluating and extracting numeric metadata (like Impact, Confidence, and deprecated Trust) from string values.
 3. **`schema.ts`**: The contract. Uses `zod` to enforce strict constraints (e.g., `.int()` precision for metrics). **Always consult this schema** if modifying the data returned by the parser.
 4. **`../get-git-history-json.ts`**: The primary CLI entrypoint. Agent workflows invoke this file (using `bun`) to retrieve filtered JSON subsets of the history. Use the `--summary` flag to retrieve `metadata` without the heavy patch/body diffs, or the `--stats` flag for lightweight file modification metrics.
-5. **`../search-conversation-history.ts`**: The conversation history search wrapper. Target-binds execution (`process.chdir`) to the `~/.gemini` repository to allow agents to search past conversation logs, session history, and system state snapshots.
+5. **`uncommitted.ts`**: Extracts structured staged, unstaged, and untracked working-tree status (including nested untracked directory expansion with `-uall` and bounded non-binary text line counts up to 5MB) for `--uncommitted` queries.
 
 ## 🧹 Scratch Workspace Protocol
 
@@ -43,9 +43,8 @@ The module utilizes native Git `--name-status -z` and `--numstat -z` flags, leve
   - `--impact <val>`, `--confidence <val>` (filter by numerical impact/confidence thresholds)
   - `--diff-filter <filter>`, `--patch-search <pattern>`, `--reverse` (filter by file status, patch content, or order)
   - `--diff-context <lines>`, `--max-body-length <bytes>`, `--max-patch-length <bytes>` (constrain diff patch and body memory boundaries)
-- **Uncommitted State**: To get a deterministic JSON readout of the current staged, unstaged, and untracked files in the working directory, use the host's `get-git-history-json.ts --uncommitted --stats` wrapper (combine with `--path <file_or_dir>` to scope large multi-root trees like `~/.gemini --path config`; expands nested untracked directories with `-uall` and computes non-binary untracked text line counts up to 5MB). Do NOT parse raw `git status` text.
+- **Uncommitted State**: To get a deterministic JSON readout of the current staged, unstaged, and untracked files in the working directory, use the host's `get-git-history-json.ts --uncommitted --stats` wrapper (combine with `--path <file_or_dir>`, e.g. `--path config`, to scope large multi-root repositories; expands nested untracked directories with `-uall` and computes non-binary untracked text line counts up to 5MB). Do NOT parse raw `git status` text.
 - **Execution Contexts (WSL & Docker)**: The underlying `git-runner.ts` explicitly accepts a `cwd`. When operating across OS boundaries (e.g., executing Git natively from Windows PowerShell 5.1 / PowerShell 7.7 targeting a WSL Container UNC path `\\wsl.localhost\...` or a Docker mount), the wrapper maintains deterministic string isolation. Ensure you pass the correct mapped Windows path to `--cwd`.
-- **Historical Conversation Search**: To search Antigravity conversation logs, session histories, or state snapshots tracked in `~/.gemini`, use the host's `search-conversation-history.ts` wrapper (e.g., `--search "query"` or `--summary`).
 - **Output Formats & Streaming**: The default output is a JSON object. Use `--jsonl` to stream JSON Lines output. Use `--stream-to-file <path>` to write directly to disk and avoid stdout buffer limits. Use `--no-body` to skip retrieving expensive diff patches, file metrics, and commit bodies. You can also specify `--max-body-length` (default 100MB) to constrain parser memory.
 - **Context & Caching**: Use `--package-version` to inject the `package.json` version into the output metadata. Enable caching with `--cache` and auto-expand issue references (e.g., `#123`) using `--issue-tracker <url>`.
 - **Read-Only**: Treat this library as core infrastructure. If you must modify it, ensure you run the rigorous test suite using **Bun** (`bun test`) to prevent regressions. Do NOT attempt to run Vitest or Playwright.
@@ -57,7 +56,7 @@ The module utilizes native Git `--name-status -z` and `--numstat -z` flags, leve
 
 ## 📖 Related Context
 
-- If you need to write a commit using this system, use the `/mcp:memory-journal-mcp:commit` or `/mcp:memory-journal-mcp:quick-commit` prompts.
+- If you need to write a commit using this system, use `pnpm exec tsx scripts/commit.ts` with explicit `--add <path>` flags (never raw `git commit`).
 - Do NOT hand-edit generated changelogs; always extract history using `get-git-history-json.ts` or `/bump-deploy` (Mode A) instead.
 
 ## 🧪 Usability & Hallucination Testing

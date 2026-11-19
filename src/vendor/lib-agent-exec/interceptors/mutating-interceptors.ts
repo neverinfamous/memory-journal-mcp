@@ -54,13 +54,212 @@ export function isWholesaleAgentsIgnore(pattern: string | null): boolean {
   return ['.agents', '.agents/', '.agents/*', '.agents/**'].includes(norm);
 }
 
+interface ParsedGitInvocation {
+  gitCwd: string;
+  subcmdIndex: number;
+  subcmd: string | undefined;
+}
+
+/**
+ * [INTENT]: Resolve effective git working directory (honoring top-level `-C <dir>`) and locate the git subcommand
+ * before `gitInterceptor` strips `-C`, preventing false matches on arguments like `git remote add`.
+ */
+function parseGitInvocation(ctx: ExecutionContext): ParsedGitInvocation {
+  const baseCwd =
+    ctx.payload.cwd !== undefined && ctx.payload.cwd.length > 0
+      ? path.resolve(ctx.payload.cwd)
+      : ctx.cwd !== undefined && ctx.cwd.length > 0
+        ? path.resolve(ctx.cwd)
+        : process.cwd();
+  let gitCwd = baseCwd;
+  let i = 0;
+  while (i < ctx.args.length) {
+    const a = ctx.args[i];
+    if (a === undefined) break;
+    if (a === '-C') {
+      const next = ctx.args[i + 1];
+      if (next !== undefined && !/^\d+$/.test(next)) {
+        gitCwd = path.isAbsolute(next) ? next : path.resolve(gitCwd, next);
+      }
+      i += 2;
+      continue;
+    }
+    if (a.startsWith('-C') && a.length > 2) {
+      const candidate = a.slice(2);
+      if (!/^\d+$/.test(candidate)) {
+        gitCwd = path.isAbsolute(candidate) ? candidate : path.resolve(gitCwd, candidate);
+      }
+      i += 1;
+      continue;
+    }
+    if (a === '-c' || a === '--git-dir' || a === '--work-tree' || a === '--namespace' || a === '--exec-path') {
+      i += 2;
+      continue;
+    }
+    if (a.startsWith('-')) {
+      i += 1;
+      continue;
+    }
+    break;
+  }
+  return { gitCwd, subcmdIndex: i, subcmd: ctx.args[i] };
+}
+
+function syncPayloadArgs(ctx: ExecutionContext): void {
+  if ('args' in ctx.payload && Array.isArray(ctx.payload.args)) {
+    ctx.payload.args = [...ctx.args];
+  }
+}
+
+/**
+ * [INTENT]: Detect when a non-glob pathspec is absent from both the worktree and `.git/index`, yet already staged
+ * as a deletion (`D  <path>`) relative to `HEAD`. In that state, `git rm <path>` and `git add [-u] <path>` exit 128
+ * (`did not match any files`) even though the caller's staging intent is already satisfied.
+ * [INVARIANT]: Returns false for unstaged deletions (` D`), recreated files on disk, globs, and genuine path typos.
+ */
+export function isAlreadyStagedGitDeletion(gitCwd: string, rawPathspec: string): boolean {
+  const cleaned = rawPathspec.trim().replace(/^['"]|['"]$/g, '');
+  if (
+    cleaned.length === 0 ||
+    cleaned === '.' ||
+    cleaned === '..' ||
+    cleaned.startsWith(':') ||
+    /[*?[\]]/.test(cleaned)
+  ) {
+    return false;
+  }
+  const absPath = path.resolve(gitCwd, cleaned);
+  if (fs.existsSync(absPath)) {
+    return false;
+  }
+  try {
+    const indexRes = spawnSync('git', ['ls-files', '-z', '--', cleaned], {
+      cwd: gitCwd,
+      encoding: 'utf8',
+      timeout: 10000,
+      windowsHide: true,
+    });
+    if (indexRes.status !== 0 || (typeof indexRes.stdout === 'string' && indexRes.stdout.length > 0)) {
+      return false;
+    }
+    const cachedDelRes = spawnSync(
+      'git',
+      ['diff', '--cached', '--name-only', '--diff-filter=D', '-z', '--', cleaned],
+      {
+        cwd: gitCwd,
+        encoding: 'utf8',
+        timeout: 10000,
+        windowsHide: true,
+      },
+    );
+    return cachedDelRes.status === 0 && typeof cachedDelRes.stdout === 'string' && cachedDelRes.stdout.length > 0;
+  } catch {
+    return false;
+  }
+}
+
+function healGitRmStagedDeletions(ctx: ExecutionContext, gitCwd: string, rmIdx: number): void {
+  const afterRm = ctx.args.slice(rmIdx + 1);
+  if (
+    afterRm.includes('--ignore-unmatch') ||
+    afterRm.some(a => a === '--pathspec-from-file' || a.startsWith('--pathspec-from-file='))
+  ) {
+    return;
+  }
+  const paths: string[] = [];
+  let sawSeparator = false;
+  for (const a of afterRm) {
+    if (!sawSeparator && a === '--') {
+      sawSeparator = true;
+      continue;
+    }
+    if (!sawSeparator && a.startsWith('-')) continue;
+    paths.push(a);
+  }
+  if (paths.length > 0 && paths.some(p => isAlreadyStagedGitDeletion(gitCwd, p))) {
+    console.error(
+      `\n   🛠️ AUTONOMOUS HEALING: Injecting '--ignore-unmatch' into 'git rm' for already-staged deletion(s)... (Frictionless Recovery)\x1b[0m`,
+    );
+    ctx.args.splice(rmIdx + 1, 0, '--ignore-unmatch');
+    syncPayloadArgs(ctx);
+  }
+}
+
+function healGitAddStagedDeletions(ctx: ExecutionContext, gitCwd: string, addIdx: number): boolean {
+  const afterAdd = ctx.args.slice(addIdx + 1);
+  if (
+    afterAdd.some(
+      a =>
+        a === '-n' ||
+        a === '--dry-run' ||
+        a === '-i' ||
+        a === '--interactive' ||
+        a === '-p' ||
+        a === '--patch' ||
+        a === '-e' ||
+        a === '--edit' ||
+        a === '--pathspec-from-file' ||
+        a.startsWith('--pathspec-from-file='),
+    )
+  ) {
+    return false;
+  }
+
+  const pathSpecs: Array<{ argIndex: number; value: string }> = [];
+  let sawSeparator = false;
+  for (let offset = 0; offset < afterAdd.length; offset++) {
+    const a = afterAdd[offset];
+    if (a === undefined) continue;
+    if (!sawSeparator && a === '--') {
+      sawSeparator = true;
+      continue;
+    }
+    if (!sawSeparator && a.startsWith('-')) continue;
+    pathSpecs.push({ argIndex: addIdx + 1 + offset, value: a });
+  }
+  if (pathSpecs.length === 0) return false;
+
+  const stagedDeleted: Array<{ argIndex: number; value: string }> = [];
+  const active: Array<{ argIndex: number; value: string }> = [];
+  for (const spec of pathSpecs) {
+    if (isAlreadyStagedGitDeletion(gitCwd, spec.value)) {
+      stagedDeleted.push(spec);
+    } else {
+      active.push(spec);
+    }
+  }
+  if (stagedDeleted.length === 0) return false;
+
+  if (active.length > 0) {
+    for (let idx = stagedDeleted.length - 1; idx >= 0; idx--) {
+      const item = stagedDeleted[idx];
+      if (item !== undefined) {
+        ctx.args.splice(item.argIndex, 1);
+      }
+    }
+    syncPayloadArgs(ctx);
+    console.error(
+      `\n   🛠️ AUTONOMOUS HEALING: Omitting already-staged deletion(s) from 'git add' pathspecs to prevent exit 128... (Frictionless Recovery)\x1b[0m`,
+    );
+    return false;
+  }
+
+  // [INVARIANT]: Never strip the sole pathspec from `git add -u <path>`, which would widen staging to the whole repo.
+  const prefixFlags = ctx.args.slice(0, addIdx);
+  ctx.args.splice(0, ctx.args.length, ...prefixFlags, 'ls-files', '--stage', '--', ...stagedDeleted.map(s => s.value));
+  syncPayloadArgs(ctx);
+  console.error(
+    `\n   🛠️ AUTONOMOUS HEALING: Pathspec(s) passed to 'git add' are already staged as deleted; treating as idempotent no-op to prevent exit 128... (Frictionless Recovery)\x1b[0m`,
+  );
+  return true;
+}
+
 /**
  * [INTENT]: `git add` on `.agents` paths: inject `-f` only when git reports the path ignored by a narrow rule.
  * [INVARIANT]: Never force-add scratch/cache dirs, `*issues.jsonl` logs, or `.agents/` in repos that ignore it
  * wholesale (satellite repos keep private agent tooling out of public history).
  */
-function healGitAddForceFlag(ctx: ExecutionContext, gitCwd: string): void {
-  const addIdx = ctx.args.indexOf('add');
+function healGitAddForceFlag(ctx: ExecutionContext, gitCwd: string, addIdx: number): void {
   if (addIdx === -1) return;
   const afterAdd = ctx.args.slice(addIdx + 1);
   const hasForce = afterAdd.some(a => a === '--force' || GIT_ADD_FORCE_RE.test(a));
@@ -100,6 +299,7 @@ function healGitAddForceFlag(ctx: ExecutionContext, gitCwd: string): void {
   if (needsForce) {
     console.error(`\n   🛠️ AUTONOMOUS HEALING: Injecting '-f' to 'git add' for '.agents' path(s) that git check-ignore reports as ignored... (Frictionless Recovery)\x1b[0m`);
     ctx.args.splice(addIdx + 1, 0, '-f');
+    syncPayloadArgs(ctx);
   }
 }
 
@@ -160,7 +360,7 @@ export function runMutatingInterceptors(
       }
     })
     .with({ cmd: P.union('git', 'git.exe') }, ({ args: matchedArgs }) => {
-      const gitCwd = ctx.payload.cwd !== undefined && ctx.payload.cwd.length > 0 ? path.resolve(ctx.payload.cwd) : process.cwd();
+      const { gitCwd, subcmdIndex, subcmd } = parseGitInvocation(ctx);
       const lockPath = path.join(gitCwd, '.git', 'index.lock');
       if (fs.existsSync(lockPath)) {
         try {
@@ -174,10 +374,17 @@ export function runMutatingInterceptors(
           // ignore
         }
       }
-      if (matchedArgs.includes('add') && ctx.payload.target !== 'wsl2') {
-        healGitAddForceFlag(ctx, gitCwd);
+      if (ctx.payload.target !== 'wsl2') {
+        if (subcmd === 'rm') {
+          healGitRmStagedDeletions(ctx, gitCwd, subcmdIndex);
+        } else if (subcmd === 'add') {
+          const rewrittenToNoop = healGitAddStagedDeletions(ctx, gitCwd, subcmdIndex);
+          if (!rewrittenToNoop) {
+            healGitAddForceFlag(ctx, gitCwd, subcmdIndex);
+          }
+        }
       }
-      if (matchedArgs.includes('branch') && matchedArgs.includes('-r')) {
+      if (subcmd === 'branch' && matchedArgs.includes('-r')) {
         console.error(`\n   💡 AGENT HINT: 'git branch -r' may return stale deleted branches.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Synchronously running 'git fetch -p' to prune the cache before executing branch listing.\x1b[0m`);
         try {
           execSync('git fetch -p', { cwd: gitCwd, stdio: 'ignore', timeout: 60000 });
