@@ -75,3 +75,15 @@ export function runWithRpcExecutionOverrides<T>(
 export function getRpcExecutionOverrides(): RpcExecutionOverrides | undefined {
     return rpcOverridesStorage.getStore()
 }
+
+const silentTeamProbeStorage = new AsyncLocalStorage<boolean>()
+
+/** Execute `fn` inside an async context flagging speculative personal->team probes as silent. */
+export function runWithSilentTeamProbe<T>(fn: () => Promise<T>): Promise<T> {
+    return silentTeamProbeStorage.run(true, fn)
+}
+
+/** True when executing inside a silent Code Mode personal->team routing probe. */
+export function isSilentTeamProbeActive(): boolean {
+    return silentTeamProbeStorage.getStore() === true
+}

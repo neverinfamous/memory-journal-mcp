@@ -229,6 +229,11 @@ export interface CreateEntryInput {
     validationStatus?: 'passed' | 'failed' | 'none' | undefined
     anchors?: { anchorPath: string; anchorType: string }[] | undefined
     sessionId?: string | undefined
+    /**
+     * Team mirrors only: personal entry ID this team row was shared from (migration 020).
+     * Ignored by databases without the `origin_personal_id` column.
+     */
+    originPersonalId?: number | undefined
 }
 
 /**

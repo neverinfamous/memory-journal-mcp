@@ -1,5 +1,10 @@
 import type { JournalEntry } from '../../types/index.js'
 import type { DigestSnapshot } from '../sqlite-adapter/entries/digest.js'
+import type {
+    ActiveThreadRow,
+    RecentLinkageStats,
+    RecentNeighborhood,
+} from '../sqlite-adapter/graph-pivots.js'
 
 export interface VectorSearchRow {
     entry_id: number
@@ -203,4 +208,19 @@ export interface IDatabaseVectorAndAdminAdapter {
     executeInTransaction<T>(cb: () => T): T
     getRelationshipHubs(limit: number, workspaceId?: string): RelationshipHubRow[]
     getOrphanCount(workspaceId?: string): number
+    // Graph pivots (optional so lightweight adapters/mocks degrade gracefully)
+    getRelationshipDegrees?(entryIds: readonly number[], workspaceId?: string): Map<number, number>
+    getActiveThreads?(sinceIso: string, limit: number, workspaceId?: string): ActiveThreadRow[]
+    getRecentLinkageStats?(sinceIso: string, workspaceId?: string): RecentLinkageStats
+    getEntryIdsByCommitShas?(shas: readonly string[], workspaceId?: string): Map<string, number>
+    getRecentNeighborhood?(sinceIso: string, edgeLimit: number, workspaceId?: string): RecentNeighborhood
+    /** Entries written under one agent session (newest first) — used for post-compaction recovery. */
+    getEntriesBySession?(sessionId: string, limit?: number, workspaceId?: string): JournalEntry[]
+    /** Recent entries sharing file/symbol anchors with `entryId` (write-time link suggestions). */
+    getEntriesSharingAnchors?(
+        entryId: number,
+        sinceIso: string,
+        limit: number,
+        workspaceId?: string
+    ): { entryId: number; entryType: string; content: string; sharedAnchors: number }[]
 }

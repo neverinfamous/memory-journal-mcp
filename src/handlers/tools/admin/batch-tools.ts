@@ -25,8 +25,15 @@ async function linkBatchEntries(
     createdIndexes: number[]
 ): Promise<string[]> {
     const { db } = context
+    // [INVARIANT] M2: map prepared index -> created personal ID so team mirrors carry origin_personal_id.
+    const personalIdsByIndex = new Map<number, number>()
+    results.forEach((created, i) => {
+        const sourceIndex = createdIndexes[i]
+        if (sourceIndex !== undefined) personalIdsByIndex.set(sourceIndex, created.id)
+    })
     const relationshipWarnings = [
-        ...(await shareBatchEntriesWithTeam(context, prepared, createdIndexes)).warnings,
+        ...(await shareBatchEntriesWithTeam(context, prepared, createdIndexes, personalIdsByIndex))
+            .warnings,
     ]
     for (let i = 0; i < results.length; i++) {
         const createdEntry = results[i]

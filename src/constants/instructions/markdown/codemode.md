@@ -3,13 +3,13 @@
 In Code Mode (`mj_execute_code`), you do NOT have native MCP tool schemas. You must orchestrate the server using the `mj.*` API inside the sandbox.
 
 ## Sandbox Environment
-- **Top-Level `mj_execute_code` Parameters:** Pass `workspace_id`, `project_number`, `repo` (for `git`/`github`), `context` (`{ content }` or `{ entry }`), `readonly`, `dry_run`, `auto_version` (default `true`), `max_result_size`, and `timeout` alongside `code`.
+- **Top-Level `mj_execute_code` Parameters:** Pass `workspace_id`, `project_number`, `repo` (for `git`/`github`), `session_id` (active conversation UUID), `context` (`{ content }` or `{ entry }`), `readonly`, `dry_run`, `auto_version` (default `true`), `max_result_size`, and `timeout` alongside `code`.
 - **Schema Introspection:** Call `await mj.<group>.<method>.schema()` (e.g. `await mj.core.createEntry.schema()`) at any time — including when `readonly: true` — to inspect parameter definitions before calling unfamiliar methods. Call `mj.help()` (`{ groups, totalMethods, usage }`) or `mj.<group>.help()` for namespace discovery.
 - **Network:** Disabled. `fetch()` is blocked and returns a 403 `VALIDATION_ERROR` response object. Node network modules are stripped.
 - **Native Modules & Shims:** `child_process`, `require()`, `import`, and real disk I/O are blocked. A deterministic `path` shim and a read-only virtual `fs` (`context.content`) exist, while `fs` write calls throw `VALIDATION_ERROR`. Pass file contents or external markdown via `context` (accessible inside JS code as `context`).
 - **Globals:** `createEntry()`, `find()`, `recent()`, `searchEntries()`, `deleteEntry()`, `help()` work without the `mj.` prefix.
 - **Positional Arguments:** `createEntry("note")`, `searchEntries("performance")`, `mj.backup.backupJournal("snapshot")`.
-- **Healing Aliases:** The proxy auto-heals common hallucinations: `query` (`search`, `q`, `term`, `keyword`), `source_dir` (`path` for imports), `output_dir` (`path` for exports), `keep_count` (`keep`), `target_user` (`user`, `assignee`), `project_number` (`project`, `proj`), `workspace_id` (`workspace`, `repo`, `repo_name` on core tools), `repo` (`repo_name` on GitHub/git tools), `share_with_team` (`team`), and `author` on team member tools. Attach code/file `anchors` directly on `mj.core.createEntry` when referencing source files.
+- **Anchors:** Attach code/file `anchors` directly on `mj.core.createEntry` when referencing source files (parameter alias healing is summarized under `Aliases:` in the server instructions).
 - **Arrays & Methods:** Proxies seamlessly support native array properties/methods (e.g., `.length`, `[0]`, `.map()`, `.filter()`, `.includes()`, `.shift()`, `.concat()`). Calling an unsupported method returns an actionable `VALIDATION_ERROR` rather than crashing.
 - **Async/Await:** Do NOT access `Promise` objects synchronously. Always `await` async operations. Missing `await` statements will be intercepted and return an actionable `VALIDATION_ERROR`.
 - **SQL Translation & Auto-Healing:** Code Mode executes JavaScript via the `mj.*` API. If raw SQL statements are passed against the `memory_journal` table (e.g., `SELECT * FROM memory_journal LIMIT 10`), the server translates them to `mj.core.getRecentEntries({ limit: 10 })` or `mj.search.searchEntries({ query: "..." })`. Prefer `mj.*` methods directly.
@@ -26,9 +26,6 @@ In Code Mode (`mj_execute_code`), you do NOT have native MCP tool schemas. You m
 - `getEntryById(params)`
 - `getRecentEntries(params)`
 - `getEntryHistory(params)`
-- `testSimple(params)`
-- `testErrorHandling(params)`
-- `triggerProgress(params)`
 - `listTags(params)`
 - `markAnchorsStale(params)`
 

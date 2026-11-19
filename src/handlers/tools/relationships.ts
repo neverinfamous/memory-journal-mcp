@@ -11,6 +11,10 @@ import { resolveWorkspaceId } from '../../utils/workspace-resolver.js'
 import { activeProjectRegistry, alignedProjectFilter } from '../../utils/write-scope.js'
 import { resolveWriteWorkspaceId } from './write-workspace.js'
 import { probeMatchingTeamEntry } from './search/helpers.js'
+import { enforceAccessBoundary } from '../../auth/validation.js'
+import { TEAM_DB_ERROR_RESPONSE } from './team/helpers.js'
+import { enforceTeamRbac, getCallerIdentity } from './team/rbac.js'
+import { executeTeamVisualizeRelationships } from './team/relationship-tools.js'
 import {
     LinkEntriesSchema,
     LinkEntriesSchemaMcp,
@@ -162,6 +166,33 @@ function executeVisualizeRelationships(params: unknown, context: ToolContext): R
     const { db } = context
     const input = VisualizeInputSchema.parse(VisualizeInputSchemaMcp.parse(params))
     const wsId = resolveWorkspaceId(input.workspace_id, input.project_number, context.config)
+    if (input.source === 'team') {
+        enforceAccessBoundary('team_visualize_relationships', 'tool', { requiresTeamScope: true })
+        if (!context.teamDb) {
+            return { ...TEAM_DB_ERROR_RESPONSE }
+        }
+        enforceTeamRbac(context, getCallerIdentity(), 'viewer', wsId)
+        const teamRes = executeTeamVisualizeRelationships(context, context.teamDb, {
+            ...(input.entry_id !== undefined ? { entry_id: input.entry_id } : {}),
+            ...(input.tags?.[0] !== undefined ? { tag: input.tags[0] } : {}),
+            depth: input.depth,
+            ...(input.project_number !== undefined ? { project_number: input.project_number } : {}),
+            ...(input.workspace_id !== undefined ? { workspace_id: input.workspace_id } : {}),
+        })
+        if (teamRes['success'] === false) {
+            return teamRes
+        }
+        const format = input.format
+        return {
+            success: true,
+            entry_count: teamRes['nodeCount'],
+            relationship_count: teamRes['edgeCount'],
+            root_entry: input.entry_id ?? null,
+            depth: input.depth,
+            ...(format !== 'edges' ? { mermaid: teamRes['mermaid'] } : {}),
+            ...(format !== 'mermaid' ? { nodes: teamRes['nodes'], edges: teamRes['edges'] } : {}),
+        }
+    }
     const projectNumber = alignedProjectFilter(
         wsId,
         input.project_number,
@@ -217,26 +248,33 @@ function executeVisualizeRelationships(params: unknown, context: ToolContext): R
             edges: [],
         }
     }
+    const format = input.format
+    const nodes = input.include_content ? results.nodes : compactNodeContent(results.nodes)
     return {
         entry_count: results.nodes.length,
         relationship_count: results.edges.length,
         root_entry: input.entry_id ?? null,
         depth: input.depth,
-        mermaid: buildRelationshipMermaid(results),
-        nodes: results.nodes,
-        edges: results.edges,
-        legend: {
-            blue: 'Personal entries',
-            orange: 'Project entries',
-            arrows: {
-                '-->': 'references / evolves_from',
-                '==>': 'implements / resolved',
-                '-.->': 'clarifies / caused',
-                '<-->': 'response_to',
-                '--x': 'blocked_by',
-            },
-        },
+        // [INTENT] Mermaid labels come from full content, so build the diagram before compaction.
+        ...(format !== 'edges' ? { mermaid: buildRelationshipMermaid(results) } : {}),
+        ...(format !== 'mermaid' ? { nodes, edges: results.edges } : {}),
     }
+}
+
+/** Preview length for node metadata content when `include_content` is false. */
+const NODE_CONTENT_PREVIEW_LENGTH = 120
+
+function compactNodeContent(
+    nodes: ReturnType<ToolContext['db']['visualizeRelationships']>['nodes']
+): ReturnType<ToolContext['db']['visualizeRelationships']>['nodes'] {
+    return nodes.map((node) => {
+        const raw = node.metadata?.['content']
+        if (typeof raw !== 'string' || raw.length <= NODE_CONTENT_PREVIEW_LENGTH) return node
+        return {
+            ...node,
+            metadata: { ...node.metadata, content: `${raw.slice(0, NODE_CONTENT_PREVIEW_LENGTH)}…` },
+        }
+    })
 }
 
 export function getRelationshipTools(context: ToolContext): ToolDefinition[] {

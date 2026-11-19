@@ -4,6 +4,7 @@ import { join, dirname, resolve, relative, isAbsolute, sep } from 'path';
 import { execFileSync } from 'child_process';
 import { builtinModules } from 'module';
 import { z } from 'zod';
+import { hasHostScriptReferences, neutralizeVendoredDoc } from './vendor-doc-neutralizer.js';
 
 /**
  * Extract third-party package names imported by a TypeScript source file.
@@ -84,6 +85,7 @@ const PackageJsonDepsSchema = z
 type VendorManifest = z.infer<typeof VendorManifestSchema>;
 type StagedWrite =
   | { kind: 'ts'; destFile: string; content: string }
+  | { kind: 'doc'; destFile: string; content: string }
   | { kind: 'copy'; srcFile: string; destFile: string };
 
 function readDeclaredPackages(cwd: string): Set<string> {
@@ -158,6 +160,9 @@ function stageVendorWrites(
         const cleanContent = content.startsWith('// @ts-nocheck') ? content : '// @ts-nocheck\n' + content;
         stagedTsSources.set(destFile, cleanContent);
         writes.push({ kind: 'ts', destFile, content: cleanContent });
+      } else if (file.endsWith('.md')) {
+        // [INTENT] Upstream docs cite host-only `.agents/scripts` wrappers; ship path-neutral wording instead.
+        writes.push({ kind: 'doc', destFile, content: neutralizeVendoredDoc(readFileSync(srcFile, 'utf8')) });
       } else {
         writes.push({ kind: 'copy', srcFile, destFile });
       }
@@ -205,6 +210,23 @@ function validateVendorLibraries(
   return { unresolved, missing };
 }
 
+function findNonNeutralVendorDocs(cwd: string, libsToSync: string[], manifest: VendorManifest): string[] {
+  const offenders: string[] = [];
+  for (const lib of libsToSync) {
+    const libConfig = manifest.libs[lib];
+    if (libConfig === undefined) continue;
+    for (const file of libConfig.files) {
+      if (!file.endsWith('.md')) continue;
+      const filePath = resolve(join(cwd, 'src', 'vendor', lib, file));
+      if (!existsSync(filePath)) continue;
+      if (hasHostScriptReferences(readFileSync(filePath, 'utf8'))) {
+        offenders.push(`${lib}/${file.replace(/\\/g, '/')}`);
+      }
+    }
+  }
+  return offenders;
+}
+
 function reportAndExitOnVendorIssues(
   unresolved: Map<string, Set<string>>,
   missing: Map<string, Set<string>>,
@@ -240,8 +262,8 @@ function commitStagedVendorWrites(
       mkdirSync(dir, { recursive: true });
       createdDirs.add(dir);
     }
-    if (item.kind === 'ts') writeFileSync(item.destFile, item.content);
-    else cpSync(item.srcFile, item.destFile);
+    if (item.kind === 'copy') cpSync(item.srcFile, item.destFile);
+    else writeFileSync(item.destFile, item.content);
   }
   writeFileSync(vendorJsonPath, JSON.stringify(staged.nextManifest, null, 2) + '\n');
   console.log(`\nSynced ${String(staged.writes.length)} file(s) and updated VENDOR.json`);
@@ -302,7 +324,15 @@ function runSyncVendor(): void {
   );
 
   reportAndExitOnVendorIssues(unresolved, missing, upstreamDeps);
-  if (staged !== undefined) {
+  if (staged === undefined) {
+    // [INVARIANT] Synced docs are neutralized at stage time; --check guards against hand-copied upstream READMEs.
+    const nonNeutralDocs = findNonNeutralVendorDocs(cwd, libsToSync, vendorData);
+    if (nonNeutralDocs.length > 0) {
+      console.error('\nVendored docs still reference host-only `.agents/scripts` wrappers (re-run `pnpm run sync:vendor`):');
+      for (const doc of nonNeutralDocs) console.error(`  - ${doc}`);
+      process.exit(1);
+    }
+  } else {
     commitStagedVendorWrites(vendorJsonPath, staged);
   }
 

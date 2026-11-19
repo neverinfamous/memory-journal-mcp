@@ -15,6 +15,7 @@ import {
 import { parseGitRecord, processBatch } from '../../vendor/lib-git-history/parser.js'
 import type { CliArgs } from '../../vendor/lib-git-history/cli.js'
 import type { CommitEntry } from '../../vendor/lib-git-history/schema.js'
+import { getUncommittedState } from '../../vendor/lib-git-history/uncommitted.js'
 import { readLatestGitTag } from './git-staleness.js'
 
 export interface FetchCommitsInput {
@@ -216,6 +217,13 @@ export function fenceCommitEntry(c: CommitEntry): CommitEntry {
 /** Fence a list of commit records at MCP tool egress. */
 export function fenceCommitEntries(commits: CommitEntry[]): CommitEntry[] {
     return commits.map(fenceCommitEntry)
+}
+
+/** Capture and fence uncommitted working-tree status and diffstat for a repository path. */
+export function fetchUncommittedWorkingTree(cwd: string, pathFilter?: string): CommitEntry {
+    return fenceCommitEntry(
+        getUncommittedState(pathFilter !== undefined ? { path: pathFilter } : {}, cwd)
+    )
 }
 
 /** Fence a git tag string at MCP egress when it contains markup/control/whitespace characters. */

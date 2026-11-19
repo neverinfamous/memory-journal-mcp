@@ -9,6 +9,7 @@ import type {
 import type { IDatabaseAdapter, CreateEntryInput } from '../core/interfaces.js'
 import type { EntriesManager } from './entries/index.js'
 import { AdapterDelegates } from './adapter-delegates.js'
+import { getMirrorOrigins } from './entries/mirror-origins.js'
 import { logger } from '../../utils/logger.js'
 
 /**
@@ -17,6 +18,11 @@ import { logger } from '../../utils/logger.js'
 export class DatabaseAdapter extends AdapterDelegates implements IDatabaseAdapter {
     createEntry(input: CreateEntryInput): JournalEntry {
         return this.entriesMgr.createEntry(input)
+    }
+
+    /** Team DB: team entry ID -> origin personal ID for mirrored rows (empty when unsupported). */
+    getMirrorOrigins(entryIds: number[]): Map<number, number> {
+        return getMirrorOrigins(this.connection.getNativeDb(), entryIds)
     }
 
     getEntryById(id: number, workspaceId?: string): JournalEntry | null {

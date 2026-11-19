@@ -341,7 +341,7 @@ describe('CMS-04 REM Self-Healing Regressions (agent-issues.jsonl & audit teleme
         const anchorOnly = CreateEntrySchema.parse({
             workspace_id: 'db-mcp',
             project_number: 15,
-            session_id: '293870e8-469c-4d61-9d2c-be616f637da7',
+            session_id: '00000000-0000-4000-8000-000000000001',
             entry_type: 'bug_fix',
             impact_score: 0.4,
             trust_score: 0.95,

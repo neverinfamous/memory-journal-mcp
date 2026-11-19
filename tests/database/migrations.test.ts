@@ -19,7 +19,7 @@ describe('Database Migration Framework', () => {
             name: string
         }[]
 
-        expect(applied.length).toBe(17) // 1 to 6, plus 8 through 18 (7 is team-only)
+        expect(applied.length).toBe(18) // 1 to 6, plus 8 through 19 (7 and 20 are team-only)
         expect(applied[0].version).toBe(1)
         expect(applied[0].name).toBe('001-init')
         expect(applied[12].version).toBe(14)
@@ -29,6 +29,7 @@ describe('Database Migration Framework', () => {
         expect(applied[14].name).toBe('016-fts-soft-delete-triggers')
         expect(applied[15].name).toBe('017-add-performance-indexes')
         expect(applied[16].name).toBe('018-add-project-and-prune-duplicate-indexes')
+        expect(applied[17].name).toBe('019-normalize-legacy-commit-entries')
 
         // Verify tables exist
         const tables = db
@@ -55,6 +56,7 @@ describe('Database Migration Framework', () => {
         expect(cols).toContain('version')
         expect(cols).toContain('workspace_id')
         expect(cols).not.toContain('author') // personal db should not have author
+        expect(cols).not.toContain('origin_personal_id') // team-only mirror back-reference
 
         db.close()
     })
@@ -71,14 +73,16 @@ describe('Database Migration Framework', () => {
             name: string
         }[]
 
-        expect(applied.length).toBe(18)
+        expect(applied.length).toBe(20)
         expect(applied[6].version).toBe(7)
         expect(applied[6].name).toBe('007-add-team-author')
+        expect(applied[19].name).toBe('020-add-team-origin-personal-id')
 
         // Verify memory_journal has author column
         const tableInfo = db.prepare('PRAGMA table_info(memory_journal)').all() as { name: string }[]
         const cols = tableInfo.map((row) => row.name)
         expect(cols).toContain('author')
+        expect(cols).toContain('origin_personal_id')
 
         db.close()
     })
@@ -164,7 +168,7 @@ describe('Database Migration Framework', () => {
             name: string
         }[]
 
-        expect(applied.length).toBe(17)
+        expect(applied.length).toBe(18)
         expect(applied[0].version).toBe(1)
         expect(applied[1].version).toBe(2)
         expect(applied[2].version).toBe(3) // applied in run
@@ -203,8 +207,8 @@ describe('Database Migration Framework', () => {
             c: number
         }).c
 
-        expect(count1).toBe(17)
-        expect(count2).toBe(17)
+        expect(count1).toBe(18)
+        expect(count2).toBe(18)
 
         db.close()
     })

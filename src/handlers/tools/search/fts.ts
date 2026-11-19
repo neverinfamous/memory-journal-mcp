@@ -181,13 +181,15 @@ function querySingleFtsStore(
 function mergeFtsStoreResults(
     personalResult: ReturnType<IDatabaseAdapter['searchEntries']>,
     teamResult: ReturnType<IDatabaseAdapter['searchEntries']>,
-    options: FtsSearchOptions
+    options: FtsSearchOptions,
+    teamDb?: IDatabaseAdapter
 ): FtsSearchResponse {
     const merged = mergeAndDedup(
         personalResult.entries.map((e) => ({ ...e, source: 'personal' as const })),
         teamResult.entries.map((e) => ({ ...e, source: 'team' as const })),
         options.limit,
-        options.sortBy === 'blended' ? 'preserve' : options.sortBy
+        options.sortBy === 'blended' ? 'preserve' : options.sortBy,
+        teamDb
     )
     const compoundNextCursor =
         personalResult.nextCursor || teamResult.nextCursor
@@ -257,7 +259,7 @@ export function ftsSearch(
             hasFilters,
             options
         )
-        return mergeFtsStoreResults(personalResult, teamResult, options)
+        return mergeFtsStoreResults(personalResult, teamResult, options, teamDb)
     }
 
     const isPersonalDegraded = 'degraded' in personalResult && personalResult.degraded === true

@@ -16,6 +16,8 @@ import { Migration015AliasWorkspaceUnique } from './015-alias-workspace-unique.j
 import { Migration016FtsSoftDeleteTriggers } from './016-fts-soft-delete-triggers.js'
 import { Migration017AddPerformanceIndexes } from './017-add-performance-indexes.js'
 import { Migration018AddProjectAndPruneDuplicateIndexes } from './018-add-project-and-prune-duplicate-indexes.js'
+import { Migration019NormalizeLegacyCommitEntries } from './019-normalize-legacy-commit-entries.js'
+import { Migration020AddTeamOriginPersonalId } from './020-add-team-origin-personal-id.js'
 import type { Migration } from './migration.js'
 
 export const MIGRATIONS: Migration[] = [
@@ -37,4 +39,6 @@ export const MIGRATIONS: Migration[] = [
     Migration016FtsSoftDeleteTriggers,
     Migration017AddPerformanceIndexes,
     Migration018AddProjectAndPruneDuplicateIndexes,
+    Migration019NormalizeLegacyCommitEntries,
+    Migration020AddTeamOriginPersonalId,
 ]

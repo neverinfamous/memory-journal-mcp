@@ -241,6 +241,12 @@ export interface BriefingConfig {
     allowedIoRoots?: string[]
     /** Minimum significance score for entries to be included in the briefing (default: 0.3) */
     briefingImportanceThreshold?: number
+    /**
+     * Graph & git pivots in the briefing (default: true): per-entry link degree (`↔N` / `⚪`),
+     * commit→entry refs (`→#id`), recency-scoped active threads and 14-day unlinked rate.
+     * Disable with `--no-briefing-graph`, `BRIEFING_GRAPH=false`, or config `briefingGraph: false`.
+     */
+    graphPivots?: boolean
 }
 
 /** Default briefing configuration — preserves pre-existing behavior */
@@ -257,6 +263,7 @@ export const DEFAULT_BRIEFING_CONFIG: BriefingConfig = {
     workflowStatusBreakdown: false,
     copilotReviews: false,
     briefingImportanceThreshold: 0.3,
+    graphPivots: true,
 }
 
 /**

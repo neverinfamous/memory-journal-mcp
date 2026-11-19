@@ -153,6 +153,7 @@ export class JournalApi {
             core: this.core,
             search: this.search,
             admin: this.admin,
+            relationships: this.relationships,
             team: this.team,
             hasDispatcher: this.hasDispatcher,
             registryProvider: this.registryProvider,

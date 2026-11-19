@@ -7,45 +7,63 @@ import { fileURLToPath } from 'node:url';
 import os from 'node:os';
 import dotenv from 'dotenv';
 
-export function recordAgentIssue(issueType: string, message: string, payload?: unknown) {
+const SECRET_FIELD_RE = /(?:token|secret|passw(?:or)?d|credential|api[_-]?key|private[_-]?key|(?:^|_)key$|^auth$|^authorization$|(?:^|_)auth(?:_|$))/i;
+const MAX_LOGGED_STRING = 2000;
+
+/**
+ * [INTENT]: Redacted, size-bounded deep copy of an arbitrary payload for issue logs.
+ * [INVARIANT]: Never writes values of secret-like keys (env tokens, API keys) to disk.
+ */
+export function redactPayloadForLog(value: unknown, depth = 0): unknown {
+  if (typeof value === 'string') {
+    return value.length > MAX_LOGGED_STRING ? `${value.substring(0, MAX_LOGGED_STRING)}... [truncated]` : value;
+  }
+  if (value === null || typeof value !== 'object') return value;
+  if (depth > 6) return '[depth-limit]';
+  if (Array.isArray(value)) {
+    return value.slice(0, 200).map(v => redactPayloadForLog(v, depth + 1));
+  }
+  const out: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(value)) {
+    out[k] = SECRET_FIELD_RE.test(k) && v !== null && v !== undefined && v !== '' ? '[REDACTED]' : redactPayloadForLog(v, depth + 1);
+  }
+  return out;
+}
+
+let lastStderrTail = '';
+
+/** [INTENT]: Child-process stderr tail captured right before a failing exit is reported (attached to EXECUTION_ERROR records). */
+export function setLastStderrTail(tail: string): void {
+  lastStderrTail = tail;
+}
+
+export function getLastStderrTail(maxChars = 500): string {
+  return lastStderrTail.length > maxChars ? lastStderrTail.slice(-maxChars) : lastStderrTail;
+}
+
+export function recordAgentIssue(issueType: string, message: string, payload?: unknown, extra?: Record<string, unknown>) {
   if (process.env.NODE_ENV === 'test' || process.env.AGENT_EXEC_SILENT === '1') return;
   try {
     const filename = fileURLToPath(import.meta.url);
     let targetDir = path.join(path.dirname(filename), '..', '..');
 
-    if (payload && typeof payload === 'object' && typeof (payload as Record<string, unknown>).cwd === 'string') {
-      const root = findEcosystemRoot((payload as Record<string, unknown>).cwd as string);
+    if (payload && typeof payload === 'object' && 'cwd' in payload && typeof payload.cwd === 'string') {
+      const root = findEcosystemRoot(payload.cwd);
       if (root) {
         targetDir = path.join(root, '.agents');
       }
     }
     
     const issuesFilePath = path.join(targetDir, 'agent-exec-issues.jsonl');
-    
-    let safePayload = payload;
-    if (payload && typeof payload === 'object') {
-      const p = payload as Record<string, unknown>;
-      let cloned = false;
-      const truncateStr = (val: unknown) => {
-        if (typeof val === 'string' && val.length > 2000) {
-          return val.substring(0, 2000) + '... [truncated]';
-        }
-        return val;
-      };
-
-      for (const key of ['stdin', 'code', 'integrationContext']) {
-        if (key in p && typeof p[key] === 'string' && (p[key] as string).length > 2000) {
-          if (!cloned) {
-            safePayload = { ...p };
-            cloned = true;
-          }
-          (safePayload as Record<string, unknown>)[key] = truncateStr(p[key]);
-        }
-      }
-    }
+    const safePayload = redactPayloadForLog(payload);
+    const safeExtra = extra !== undefined ? redactPayloadForLog(extra) : undefined;
 
     const timestamp = new Date().toISOString();
-    const entry = JSON.stringify({ timestamp, issueType, message, payload: safePayload }) + '\n';
+    const record: Record<string, unknown> = { timestamp, issueType, message, payload: safePayload };
+    if (safeExtra !== null && typeof safeExtra === 'object') {
+      Object.assign(record, safeExtra);
+    }
+    const entry = JSON.stringify(record) + '\n';
     
     fs.appendFileSync(issuesFilePath, entry, 'utf8');
   } catch {
@@ -55,6 +73,83 @@ export function recordAgentIssue(issueType: string, message: string, payload?: u
 
 function hasKey<K extends string>(obj: object, key: K): obj is object & Record<K, unknown> {
   return key in obj;
+}
+
+const nativeBinaryCache = new Map<string, string | null>();
+
+/**
+ * [INTENT]: Memoized PATH x PATHEXT lookup for a native binary (no child process spawn).
+ * Returns the absolute path, or null when the binary is not installed natively.
+ */
+export function resolveNativeBinary(name: string): string | null {
+  const cached = nativeBinaryCache.get(name);
+  if (cached !== undefined) return cached;
+
+  const rawPath = process.env.PATH ?? process.env.Path ?? '';
+  const dirs = rawPath.split(path.delimiter).map(d => d.trim().replace(/^"|"$/g, '')).filter(d => d.length > 0);
+  const isWin = process.platform === 'win32';
+  const exts = isWin
+    ? (process.env.PATHEXT ?? '.COM;.EXE;.BAT;.CMD').split(';').map(e => e.trim().toLowerCase()).filter(e => e.length > 0)
+    : [''];
+  const hasExt = isWin && exts.includes(path.extname(name).toLowerCase());
+
+  let resolved: string | null = null;
+  outer: for (const dir of dirs) {
+    const candidates = hasExt ? [name] : exts.map(ext => `${name}${ext}`);
+    for (const candidate of candidates) {
+      const full = path.join(dir, candidate);
+      try {
+        if (fs.statSync(full).isFile()) {
+          resolved = full;
+          break outer;
+        }
+      } catch {
+        // not present in this PATH entry
+      }
+    }
+  }
+  nativeBinaryCache.set(name, resolved);
+  return resolved;
+}
+
+/** Test hook: clears the memoized native binary lookups. */
+export function clearNativeBinaryCache(): void {
+  nativeBinaryCache.clear();
+}
+
+/**
+ * [INTENT]: Routine argument rewrites that are working as designed (not hallucination healing).
+ * They are logged as issueType 'NORMALIZATION' so CMS-03 only triages real healing events.
+ */
+const NORMALIZATION_PATTERNS: readonly RegExp[] = [
+  /Resolved missing '.*' to '/,
+  /Expanded glob/i,
+  /globs are not expanded automatically/,
+  /Normalizing to ripgrep '-g'/,
+];
+
+export function classifyHealingMessage(message: string): 'NORMALIZATION' | 'AUTONOMOUS_HEALING_TRIGGERED' {
+  return NORMALIZATION_PATTERNS.some(re => re.test(message)) ? 'NORMALIZATION' : 'AUTONOMOUS_HEALING_TRIGGERED';
+}
+
+/**
+ * [INTENT]: Decode payload files regardless of how the agent's shell wrote them.
+ * Windows PowerShell 5.1 `>`/Out-File emits UTF-16LE with an FF FE BOM (NUL bytes when read as UTF-8).
+ */
+export function decodePayloadBuffer(buf: Buffer): string {
+  if (buf.length >= 2 && buf[0] === 0xff && buf[1] === 0xfe) {
+    return buf.subarray(2).toString('utf16le');
+  }
+  if (buf.length >= 2 && buf[0] === 0xfe && buf[1] === 0xff) {
+    const raw = buf.subarray(2);
+    const body = Buffer.from(raw.subarray(0, raw.length - (raw.length % 2)));
+    body.swap16();
+    return body.toString('utf16le');
+  }
+  if (buf.length >= 3 && buf[0] === 0xef && buf[1] === 0xbb && buf[2] === 0xbf) {
+    return buf.subarray(3).toString('utf8');
+  }
+  return buf.toString('utf8').replace(/^\uFEFF/, '');
 }
 
 export const BUILT_INS = ['echo', 'cd', 'pwd', 'del', 'copy', 'move', 'ren', 'mkdir', 'rmdir', 'type'];

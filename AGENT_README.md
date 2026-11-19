@@ -86,8 +86,8 @@ The server supports strict data isolation using `workspace_id`.
 Read the workspace briefing via `memory://briefing/{+repo}` (or use the `load-briefing` prompt / fallback `memory://briefing`) at session start, and must NOT autonomously execute tasks listed in the briefing.
 When provided, the briefing contains:
 - `memory://briefing` (or `memory://briefing/{+repo}` for multi-repo environments)
-- This provides ~350 tokens of high-value ambient context: server health, GitHub CI status, active milestones, and unreleased changes.
-Review it thoroughly before proceeding. For mid-session context recovery (project number, workspace, or agent ID), query `memory://agent-context` / `memory://agent-context/{+repo}` (or `memory://agent-id` / `memory://agent-id/{+repo}`) instead of re-reading `memory://briefing`.
+- This provides ~350–450 tokens of high-value ambient context: server health, GitHub CI status, active milestones, unreleased changes, and compact graph pivots (degrees on recent/summary IDs, active graph threads, commit→entry map, 14d linkage rate; disable via `--no-briefing-graph` or `BRIEFING_GRAPH=false`).
+Review it thoroughly before proceeding. For mid-session context recovery (project number, workspace, or agent ID), query `memory://agent-context` / `memory://agent-context/{+repo}` (append `?session_id=<conversation-id>` after context compaction to recover recent link targets), and read `memory://graph` / `memory://graph/{+repo}` to scan recent 14-day edges and unlinked IDs without fetching full entry bodies.
 
 ---
 

@@ -319,6 +319,8 @@ export interface IDatabaseAdapter extends IDatabaseVectorAndAdminAdapter {
     // Tags Manager
     getTagsForEntry(entryId: number): string[]
     getTagsForEntries(entryIds: number[]): Map<number, string[]>
+    /** Team DB only: team entry ID -> origin personal ID for mirrored rows (migration 020). */
+    getMirrorOrigins?(entryIds: number[]): Map<number, number>
     listTags(workspaceId?: string, projectNumber?: number): Tag[]
     mergeTags(
         sourceTag: string,

@@ -10,6 +10,7 @@ import {
 import type { ProjectRegistry } from '../../../utils/write-scope.js'
 import { insertAnchors } from './anchors.js'
 import { snapshotAndEvictRevisions } from './revisions.js'
+import { guardEntryTypeWrite } from './entry-type-guard.js'
 
 /** Thrown inside the update transaction to roll back revision bookkeeping when no row matched. */
 class NoRowsUpdatedError extends Error {
@@ -291,7 +292,12 @@ export function performUpdateEntry(
 
         assertUpdateAllowed(id, existing, callerWorkspace, isRegisteredCaller, input)
 
-        const writeInput = resolveUpdateScope(id, existing, input, registry)
+        const scopedInput = resolveUpdateScope(id, existing, input, registry)
+        // [INVARIANT] M1 write guard: only canonical ENTRY_TYPES reach storage.
+        const writeInput: UpdateEntryInput =
+            scopedInput.entryType !== undefined
+                ? { ...scopedInput, entryType: guardEntryTypeWrite(scopedInput.entryType).entryType }
+                : scopedInput
         const { updates, values } = buildUpdateSets(
             id,
             existing,

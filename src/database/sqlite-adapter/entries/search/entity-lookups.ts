@@ -9,6 +9,10 @@ import { effectiveWorkspace } from '../../../workspace-scope.js'
 import { sanitizeSearchQuery } from '../../../../utils/security-utils.js'
 import { chunkedInPredicate } from '../../row-helpers.js'
 import { expandTagFilterValues } from '../../tags.js'
+import {
+    excludesCommitNarrative,
+    legacyCommitExclusionSql,
+} from '../../../../utils/legacy-commit-narrative.js'
 
 interface SearchFacetOptions {
     isPersonal?: boolean
@@ -330,6 +334,10 @@ function appendFacetTagFilters(
             )
             conditions.push(membership.sql)
             params.push(...membership.params)
+        }
+        // [INVARIANT] M1 read-side fallback: untagged legacy session-commits rows are also excluded.
+        if (excludesCommitNarrative(expandedExcluded)) {
+            conditions.push(legacyCommitExclusionSql('e'))
         }
     }
 }

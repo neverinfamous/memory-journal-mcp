@@ -12,12 +12,14 @@ import type { JournalEntry, EntryType } from '../../../types/index.js'
 import type { IDatabaseAdapter } from '../../../database/core/interfaces.js'
 import type { VectorSearchManager } from '../../../vector/vector-search-manager/index.js'
 import {
+    attachTeamMirrorOrigins,
     passMetadataFilters,
     canAccessTeamSilently,
     isTeamDbReady,
     type ISearchFilters,
     type EntryWithSource,
 } from './helpers.js'
+import { collapseTeamMirrors } from '../../../utils/team-mirror.js'
 import { canReadTeamEntriesRbac } from '../team/rbac.js'
 import { logger } from '../../../utils/logger.js'
 
@@ -323,9 +325,11 @@ function assembleHybridCandidates(
         chunkSize = Math.max(chunkSize * 2, 64)
     }
 
-    return accumulated
-        .sort((a, b) => compareHybridCandidates(a, b, qualifiedFusionScores))
-        .slice(0, options.limit)
+    const ordered = accumulated.sort((a, b) => compareHybridCandidates(a, b, qualifiedFusionScores))
+    // [INVARIANT] M2: collapse personal/team mirror pairs (keep personal, annotate `alsoInTeam`).
+    return collapseTeamMirrors(
+        attachTeamMirrorOrigins(canQueryTeam ? teamDb : undefined, ordered)
+    ).slice(0, options.limit)
 }
 
 function fuseHybridStoreResults(

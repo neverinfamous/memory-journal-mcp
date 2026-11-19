@@ -51,6 +51,8 @@ export interface CommitJournalArgs {
   relate?: CommitRelationSpec[] | undefined;
   category?: CommitCategory | undefined;
   'no-history': boolean;
+  'no-auto-link'?: boolean | undefined;
+  'dry-run-links'?: boolean | undefined;
 }
 
 export interface ResolvedJournalTarget {
@@ -279,6 +281,9 @@ export function buildCommitJournalContent(
   frontmatterLines.push(`impact: ${args.impact}`);
   frontmatterLines.push(`trust: ${args.confidence}`);
   frontmatterLines.push(`validation_status: "${args.validation}"`);
+  if (args['no-auto-link'] !== true) {
+    frontmatterLines.push('auto_link: true');
+  }
 
   frontmatterLines.push('auto_context:');
   frontmatterLines.push('  type: "session-commits"');
@@ -287,6 +292,34 @@ export function buildCommitJournalContent(
 
   const journalBody = historyContent.length > 0 ? historyContent : header;
   return `${frontmatterLines.join('\n')}\n${journalBody}\n\nCommit: ${sha}`;
+}
+
+export function resolveMemoryJournalCli(cwd: string): { command: string; prefixArgs: string[] } {
+  const candidates: string[] = [
+    path.join(cwd, 'dist', 'cli.js'),
+    path.resolve(cwd, '..', 'memory-journal-mcp', 'dist', 'cli.js'),
+  ];
+
+  const appData = process.env['APPDATA'];
+  if (appData !== undefined && appData.length > 0) {
+    candidates.push(path.join(appData, 'npm', 'node_modules', 'memory-journal-mcp', 'dist', 'cli.js'));
+  }
+
+  const rawPath = process.env['PATH'] ?? '';
+  for (const dir of rawPath.split(path.delimiter)) {
+    if (dir.length === 0) continue;
+    candidates.push(path.join(dir, 'node_modules', 'memory-journal-mcp', 'dist', 'cli.js'));
+    candidates.push(path.join(path.dirname(dir), 'node_modules', 'memory-journal-mcp', 'dist', 'cli.js'));
+    candidates.push(path.join(path.dirname(dir), 'lib', 'node_modules', 'memory-journal-mcp', 'dist', 'cli.js'));
+  }
+
+  for (const candidate of candidates) {
+    if (fs.existsSync(candidate)) {
+      return { command: 'node', prefixArgs: [candidate] };
+    }
+  }
+
+  return { command: 'memory-journal-mcp', prefixArgs: [] };
 }
 
 export function createJournalEntry(
@@ -311,9 +344,15 @@ export function createJournalEntry(
     fs.writeFileSync(journalFile, journalContent, { mode: 0o600 });
 
     try {
-      execFileSync('memory-journal-mcp', ['entry', 'create', '--file', journalFile], {
+      const resolvedCli = resolveMemoryJournalCli(cwd);
+      const cliArgs = [...resolvedCli.prefixArgs, 'entry', 'create', '--file', journalFile];
+      if (args['dry-run-links'] === true) {
+        cliArgs.push('--dry-run-links');
+      }
+      execFileSync(resolvedCli.command, cliArgs, {
         stdio: 'inherit',
-        shell: process.platform === 'win32',
+        shell: false,
+        windowsHide: true,
         cwd,
       });
     } finally {

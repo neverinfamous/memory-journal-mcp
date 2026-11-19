@@ -2752,7 +2752,7 @@ return { success: true, projectId };
             const parsed = CreateEntrySchema.parse({
                 workspace_id: 'core-platform',
                 project_number: 16,
-                session_id: 'c019df63-1145-4e67-b34c-d42dad4ed8db',
+                session_id: '00000000-0000-4000-8000-000000000002',
                 entry_type: 'maintenance',
                 content: 'Reflex healing summary',
                 tags: ['cms', 'cms-03-reflex-healing'],

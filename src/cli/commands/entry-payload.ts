@@ -46,6 +46,7 @@ export interface EntryPayload {
     relationships: { target_id: number; relation_type: RelationshipType }[]
     relatedIds: number[]
     anchors?: { anchor_path: string; anchor_type: string }[]
+    autoLink?: boolean | undefined
 }
 
 export async function getDb(
@@ -401,6 +402,10 @@ export function buildEntryPayload(
     const { relationships, relatedIds } = resolvePayloadRelationships(normalizedOptions, metadata)
     const anchors = parseMetadataAnchors(metadata['anchors'])
 
+    const autoLink =
+        normalizedOptions.autoLink ??
+        (metadata['auto_link'] === true || metadata['autoLink'] === true ? true : undefined)
+
     return {
         entryType,
         significanceType,
@@ -420,5 +425,6 @@ export function buildEntryPayload(
         relationships,
         relatedIds,
         ...(anchors !== undefined ? { anchors } : {}),
+        ...(autoLink !== undefined ? { autoLink } : {}),
     }
 }

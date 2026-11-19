@@ -25,6 +25,41 @@ const FILE_TOOLS = new Set([
   'dir', 'dir.exe',
 ]);
 
+const GENERIC_VALUE_TAKING_FLAGS: ReadonlySet<string> = new Set([
+  '-e', '-f', '-m', '-n', '-c', '-o', '--config', '--ignore-path',
+  '-A', '-B', '-C', '-g', '-t', '-T',
+  '--glob', '--iglob', '--type', '--type-not', '--max-count', '--max-depth',
+  '--after-context', '--before-context', '--context', '--exclude', '--include',
+]);
+
+const VALUE_TAKING_FLAGS: Record<string, ReadonlySet<string>> = {
+  rg: new Set([
+    '-e', '--regexp', '-f', '--file', '-g', '--glob', '--iglob',
+    '-t', '--type', '-T', '--type-not', '--type-add', '--type-clear',
+    '-m', '--max-count', '-d', '--max-depth', '--max-filesize', '-M', '--max-columns',
+    '-A', '--after-context', '-B', '--before-context', '-C', '--context',
+    '-j', '--threads', '-E', '--encoding', '--engine', '-r', '--replace',
+    '--color', '--colors', '--field-context-separator', '--field-match-separator',
+    '--path-separator', '--pre', '--pre-glob', '--sort', '--sortr',
+  ]),
+  grep: new Set([
+    '-e', '--regexp', '-f', '--file', '-m', '--max-count',
+    '-A', '--after-context', '-B', '--before-context', '-C', '--context',
+    '--exclude', '--exclude-dir', '--exclude-from', '--include', '--label', '--color', '--colour',
+  ]),
+  egrep: new Set(['-e', '--regexp', '-f', '--file', '-m', '--max-count', '-A', '-B', '-C', '--exclude', '--exclude-dir', '--exclude-from', '--include', '--color', '--label']),
+  fgrep: new Set(['-e', '--regexp', '-f', '--file', '-m', '--max-count', '-A', '-B', '-C', '--exclude', '--exclude-dir', '--exclude-from', '--include', '--color', '--label']),
+  head: new Set(['-n', '--lines', '-c', '--bytes']),
+  tail: new Set(['-n', '--lines', '-c', '--bytes', '-s', '--sleep-interval']),
+  eslint: new Set(['-c', '--config', '--ignore-path', '--rule', '--parser']),
+  prettier: new Set(['-c', '--config', '--ignore-path', '--parser']),
+  sed: new Set(['-e', '--expression', '-f', '--file', '-i', '--in-place']),
+  awk: new Set(['-F', '--field-separator', '-v', '--assign', '-f', '--file']),
+  find: new Set(['-maxdepth', '-mindepth', '-name', '-iname', '-path', '-ipath', '-regex', '-iregex', '-type', '-size', '-mtime']),
+  bun: new Set(['-e', '--eval', '-p', '--print', '--cwd', '--env-file', '-c', '--config', '--port', '--define', '-r', '--preload', '--filter']),
+  node: new Set(['-e', '--eval', '-p', '--print', '-r', '--require', '--import', '--env-file', '-C', '--conditions']),
+};
+
 const BUN_SUBCOMMANDS = new Set([
   'test',
   'run',
@@ -1161,6 +1196,28 @@ export function healPathHallucinations(ctx: ExecutionContext): void {
     }
   }
 
+  // [INVARIANT]: Values of value-taking flags (globs, types, patterns, context counts) are never paths to heal.
+  const valueFlags = VALUE_TAKING_FLAGS[base.replace(/\.exe$/, '')] ?? GENERIC_VALUE_TAKING_FLAGS;
+  for (let i = 0; i < args.length - 1; i++) {
+    if (valueFlags.has(args[i])) skipIndices.add(i + 1);
+  }
+
+  const resolveArgForCompare = (value: string): string => {
+    const raw = value.replace(/^['"]|['"]$/g, '');
+    const norm = raw.startsWith('/mnt/')
+      ? raw.replace(/^\/mnt\/([a-zA-Z])\/(.*)$/, (_, drive: string, rest: string) => `${drive.toUpperCase()}:/${rest}`)
+      : raw;
+    return (path.isAbsolute(norm) ? path.normalize(norm) : path.resolve(cwd, norm)).replace(/[\\/]+$/, '').toLowerCase();
+  };
+  // [INVARIANT]: Never heal an arg into a duplicate of another existing arg (e.g. two copies of the same file).
+  const applyHeal = (idx: number, healed: string): boolean => {
+    const target = resolveArgForCompare(healed);
+    const duplicate = args.some((other, j) => j !== idx && !other.startsWith('-') && resolveArgForCompare(other) === target);
+    if (duplicate) return false;
+    args[idx] = healed;
+    return true;
+  };
+
   for (let i = 0; i < args.length; i++) {
     if (skipIndices.has(i)) continue;
     const arg = args[i];
@@ -1170,6 +1227,8 @@ export function healPathHallucinations(ctx: ExecutionContext): void {
       arg === undefined ||
       arg.length === 0 ||
       arg.startsWith('-') ||
+      trimmedArg.startsWith('!') ||
+      /^['"]!/.test(trimmedArg) ||
       (arg.startsWith('/') && !isWslPath) ||
       arg.includes('*') ||
       arg.includes('?') ||
@@ -1184,6 +1243,7 @@ export function healPathHallucinations(ctx: ExecutionContext): void {
     }
 
     const rawPath = arg.replace(/^['"]|['"]$/g, '');
+    const hadTrailingSlash = /[\\/]$/.test(rawPath);
     const wslNormalized = isWslPath
       ? rawPath.replace(/^\/mnt\/([a-zA-Z])\/(.*)$/, (_, drive, rest) => `${drive.toUpperCase()}:/${rest}`)
       : rawPath;
@@ -1214,15 +1274,16 @@ export function healPathHallucinations(ctx: ExecutionContext): void {
         const isSearchTool = ['grep', 'grep.exe', 'egrep', 'egrep.exe', 'fgrep', 'fgrep.exe', 'rg', 'rg.exe'].includes(base);
         if (isSearchTool) {
           const healedDir = preserveQuotes(arg, withoutExt);
-          console.error(`\n   💡 AGENT HINT: File '${arg}' not found, but modular directory '${withoutExt}' exists.`);
-          console.error(`\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Auto-correcting path to '${healedDir}'... (Frictionless Recovery)\x1b[0m`);
-          args[i] = healedDir;
-          if (['grep', 'grep.exe', 'egrep', 'egrep.exe', 'fgrep', 'fgrep.exe'].includes(base)) {
-            const hasRecurse = args.some(a => a === '-r' || a === '-R' || a === '--recursive' || (a.startsWith('-') && !a.startsWith('--') && (a.includes('r') || a.includes('R'))));
-            if (!hasRecurse) {
-              console.error(`\n   💡 AGENT HINT: 'grep' called on directory '${withoutExt}' without recursive flag.`);
-              console.error(`\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Auto-injecting '-r' to search directory recursively... (Frictionless Recovery)\x1b[0m`);
-              args.unshift('-r');
+          if (applyHeal(i, healedDir)) {
+            console.error(`\n   💡 AGENT HINT: File '${arg}' not found, but modular directory '${withoutExt}' exists.`);
+            console.error(`\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Auto-correcting path to '${healedDir}'... (Frictionless Recovery)\x1b[0m`);
+            if (['grep', 'grep.exe', 'egrep', 'egrep.exe', 'fgrep', 'fgrep.exe'].includes(base)) {
+              const hasRecurse = args.some(a => a === '-r' || a === '-R' || a === '--recursive' || (a.startsWith('-') && !a.startsWith('--') && (a.includes('r') || a.includes('R'))));
+              if (!hasRecurse) {
+                console.error(`\n   💡 AGENT HINT: 'grep' called on directory '${withoutExt}' without recursive flag.`);
+                console.error(`\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Auto-injecting '-r' to search directory recursively... (Frictionless Recovery)\x1b[0m`);
+                args.unshift('-r');
+              }
             }
           }
           continue;
@@ -1241,24 +1302,29 @@ export function healPathHallucinations(ctx: ExecutionContext): void {
           const sep = withoutExt.includes('\\') ? '\\' : '/';
           const barrelPath = `${withoutExt}${sep}${foundBarrel}`;
           const healedBarrel = preserveQuotes(arg, barrelPath);
-          console.error(`\n   💡 AGENT HINT: File '${arg}' not found on disk, but directory '${withoutExt}' exists with entrypoint '${foundBarrel}'.`);
-          console.error(`\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Auto-correcting path to '${healedBarrel}'... (Frictionless Recovery)\x1b[0m`);
-          args[i] = healedBarrel;
+          if (applyHeal(i, healedBarrel)) {
+            console.error(`\n   💡 AGENT HINT: File '${arg}' not found on disk, but directory '${withoutExt}' exists with entrypoint '${foundBarrel}'.`);
+            console.error(`\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Auto-correcting path to '${healedBarrel}'... (Frictionless Recovery)\x1b[0m`);
+          }
           continue;
         }
       }
     }
 
-    // 3b. Check candidate extensions
+    // 3b. Check candidate extensions (never heal a trailing-slash directory into non-code files like .json/.md)
+    const CODE_MODULE_EXTENSIONS = new Set(['.ts', '.js', '.tsx', '.jsx', '.mts', '.cts', '.mjs', '.cjs']);
+    const cleanResolved = resolved.replace(/[\\/]+$/, '');
     let extensionHealed = false;
     for (const ext of CANDIDATE_EXTENSIONS) {
-      const candidate = resolved + ext;
+      if (hadTrailingSlash && !CODE_MODULE_EXTENSIONS.has(ext)) continue;
+      const candidate = cleanResolved + ext;
       if (fs.existsSync(candidate) && !fs.statSync(candidate).isDirectory()) {
         const healedArg = formatHealedPath(arg, candidate, cwd, isWslPath);
-        console.error(`\n   💡 AGENT HINT: Path '${arg}' not found on disk, but '${healedArg}' exists.`);
-        console.error(`\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Auto-correcting path to '${healedArg}'... (Frictionless Recovery)\x1b[0m`);
-        args[i] = healedArg;
-        extensionHealed = true;
+        if (applyHeal(i, healedArg)) {
+          console.error(`\n   💡 AGENT HINT: Path '${arg}' not found on disk, but '${healedArg}' exists.`);
+          console.error(`\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Auto-correcting path to '${healedArg}'... (Frictionless Recovery)\x1b[0m`);
+          extensionHealed = true;
+        }
         break;
       }
     }
@@ -1271,17 +1337,24 @@ export function healPathHallucinations(ctx: ExecutionContext): void {
     if (!isSearchOrListTool && !rawPath.includes('/') && !rawPath.includes('\\')) {
       continue;
     }
-    const candidatePath = resolvePathWithDirectorySynonyms(resolved, isSearchOrListTool) ?? resolveBuildSrcSwap(resolved, isSearchOrListTool) ?? findNeighborFilePath(resolved, isSearchOrListTool);
+    const candidatePath =
+      resolvePathWithDirectorySynonyms(resolved, isSearchOrListTool) ??
+      resolveBuildSrcSwap(resolved, isSearchOrListTool) ??
+      (hadTrailingSlash ? null : findNeighborFilePath(resolved, isSearchOrListTool));
     if (candidatePath !== null) {
-      const healedArg = formatHealedPath(arg, candidatePath, cwd, isWslPath);
       const isDir = fs.existsSync(candidatePath) && fs.statSync(candidatePath).isDirectory();
-      console.error(`\n   💡 AGENT HINT: ${isDir ? 'Directory' : 'File'} '${arg}' not found on disk, but found at '${healedArg}'.`);
-      console.error(`\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Auto-correcting path to '${healedArg}'... (Frictionless Recovery)\x1b[0m`);
-      args[i] = healedArg;
-      if (isDir && ['grep', 'grep.exe', 'egrep', 'egrep.exe', 'fgrep', 'fgrep.exe'].includes(base)) {
-        const hasRecurse = args.some(a => a === '-r' || a === '-R' || a === '--recursive' || (a.startsWith('-') && !a.startsWith('--') && (a.includes('r') || a.includes('R'))));
-        if (!hasRecurse) {
-          args.unshift('-r');
+      if (hadTrailingSlash && !isDir) {
+        continue;
+      }
+      const healedArg = formatHealedPath(arg, candidatePath, cwd, isWslPath);
+      if (applyHeal(i, healedArg)) {
+        console.error(`\n   💡 AGENT HINT: ${isDir ? 'Directory' : 'File'} '${arg}' not found on disk, but found at '${healedArg}'.`);
+        console.error(`\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Auto-correcting path to '${healedArg}'... (Frictionless Recovery)\x1b[0m`);
+        if (isDir && ['grep', 'grep.exe', 'egrep', 'egrep.exe', 'fgrep', 'fgrep.exe'].includes(base)) {
+          const hasRecurse = args.some(a => a === '-r' || a === '-R' || a === '--recursive' || (a.startsWith('-') && !a.startsWith('--') && (a.includes('r') || a.includes('R'))));
+          if (!hasRecurse) {
+            args.unshift('-r');
+          }
         }
       }
       continue;

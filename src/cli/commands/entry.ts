@@ -6,6 +6,10 @@ import { AuthorizationError, ValidationError } from '../../types/errors.js'
 import { CliExitError, enforceCliTeamRbac } from './db-helper.js'
 import { canonicalizeTeamAuthor } from '../../handlers/tools/team/rbac.js'
 import { resolveEntryAnchors } from '../../handlers/tools/core/staleness-tools.js'
+import {
+    computeSuggestedLinks,
+    previewDraftSuggestedLinks,
+} from '../../handlers/tools/core/link-suggestions.js'
 import { resolveTeamCreateAuthor } from '../../handlers/tools/team/admin-tools/batch-create-helpers.js'
 import { checkSingleTeamOwnership } from '../../handlers/tools/team/admin-tools/batch-delete-helpers.js'
 import { createEntryOptionsSchema, updateEntryOptionsSchema } from '../schemas.js'
@@ -209,6 +213,26 @@ export async function createEntryAction(...args: unknown[]): Promise<void> {
             { db, config }
         )
 
+        if (options.dryRunLinks === true) {
+            const suggested = previewDraftSuggestedLinks({
+                db,
+                workspaceId: resolvedWs ?? 'default',
+                projectNumber: payload.projectNumber,
+                sessionId: payload.sessionId,
+                anchors: resolvedAnchors?.map((a) => ({ anchor_path: a.anchorPath })),
+            })
+            if (options.json === true) {
+                process.stdout.write(
+                    JSON.stringify({ status: 'dry-run', suggested_links: suggested }) + '\n'
+                )
+            } else {
+                process.stderr.write(
+                    `Dry-run suggested links (${String(suggested.length)}): ${suggested.map((s) => `#${String(s.targetId)} (${s.relationType}, ${s.reason})`).join(', ') || 'none'}\n`
+                )
+            }
+            return
+        }
+
         const entryInput: CreateEntryInput = {
             content,
             entryType: payload.entryType,
@@ -228,6 +252,29 @@ export async function createEntryAction(...args: unknown[]): Promise<void> {
         }
 
         const newEntry = db.createEntry(entryInput)
+        if (
+            payload.relationships.length === 0 &&
+            payload.relatedIds.length === 0 &&
+            payload.autoLink === true &&
+            options.team !== true
+        ) {
+            const autoTargets = (
+                await computeSuggestedLinks({
+                    db,
+                    entry: newEntry,
+                    workspaceId: resolvedWs ?? 'default',
+                    projectNumber: payload.projectNumber,
+                    sessionId: payload.sessionId,
+                    limit: 2,
+                })
+            ).filter((s) => s.reason === 'same-session' || s.reason === 'shared-anchor')
+            for (const target of autoTargets) {
+                payload.relationships.push({
+                    target_id: target.targetId,
+                    relation_type: target.relationType,
+                })
+            }
+        }
         const linkFailures = linkCliEntryRelationships(
             db,
             newEntry.id,

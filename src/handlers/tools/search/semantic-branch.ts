@@ -236,7 +236,7 @@ export async function runSemanticSearch(
                 relevanceMap.set(`team:${String(id)}`, sim)
             }
         }
-        ranked = mergeAndDedup(ranked, teamEntries, undefined, 'similarity')
+        ranked = mergeAndDedup(ranked, teamEntries, undefined, 'similarity', teamDb)
     }
 
     // Post-fetch importance or blended relevance × importance re-sort for vector results

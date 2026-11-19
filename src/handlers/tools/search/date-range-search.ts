@@ -70,7 +70,8 @@ async function queryTeamDateRangeAndMerge(
         personalEntries.entries.map((e) => ({ ...e, source: 'personal' as const })),
         teamEntries.entries.map((e) => ({ ...e, source: 'team' as const })),
         input.limit,
-        input.sort_by
+        input.sort_by,
+        teamDb
     )
     let compoundNextCursor: string | undefined
     if (personalEntries.nextCursor || teamEntries.nextCursor) {

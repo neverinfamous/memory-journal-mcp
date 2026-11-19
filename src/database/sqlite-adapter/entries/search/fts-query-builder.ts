@@ -12,6 +12,10 @@ import { sanitizeFtsQuery } from './fts-sanitizer.js'
 import { effectiveWorkspace } from '../../../workspace-scope.js'
 import { chunkedInPredicate } from '../../row-helpers.js'
 import { expandTagFilterValues } from '../../tags.js'
+import {
+    excludesCommitNarrative,
+    legacyCommitExclusionSql,
+} from '../../../../utils/legacy-commit-narrative.js'
 
 export interface SearchQueryOptions {
     limit?: number
@@ -170,6 +174,13 @@ function appendFilterConditions(
     }
     appendTagMembership(conditions, params, options?.tags, false)
     appendTagMembership(conditions, params, options?.excludeTags, true)
+    // [INVARIANT] M1 read-side fallback: untagged legacy session-commits rows are also excluded.
+    if (
+        options?.excludeTags !== undefined &&
+        excludesCommitNarrative(expandTagFilterValues(options.excludeTags))
+    ) {
+        conditions.push(legacyCommitExclusionSql('e'))
+    }
     if (options?.entryType !== undefined) {
         conditions.push(`e.entry_type = ?`)
         params.push(options.entryType)

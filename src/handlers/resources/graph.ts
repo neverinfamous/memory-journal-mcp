@@ -1,12 +1,15 @@
 /**
  * Memory Journal MCP Server - Graph Resource Definitions
  *
- * Resources: graph/recent, graph/actions, actions/recent
+ * Resources:
+ * - memory://graph, memory://graph/{+repo} — compact recent relationship neighborhood
+ *   (edge list + node labels + unlinked ids; no full content). Query: `?days=14&limit=40`.
+ * - memory://actions/recent, memory://actions/recent/{+repo} — recent workflow runs
  */
 
 import { ICON_GITHUB } from '../../constants/icons.js'
 // removed ENTRY_COLUMNS
-import { ASSISTANT_FOCUSED } from '../../utils/resource-annotations.js'
+import { ASSISTANT_FOCUSED, withPriority } from '../../utils/resource-annotations.js'
 import type { InternalResourceDef, ResourceContext, ResourceResult } from './shared.js'
 import {
     getBaseUri,
@@ -17,6 +20,39 @@ import {
 } from './shared.js'
 import { markUntrustedContentInline } from '../../utils/security-utils.js'
 import { ProtocolError, ProtocolErrorCode } from '@modelcontextprotocol/server'
+import { buildGraphNeighborhoodMarkdown } from './graph-neighborhood.js'
+
+/** memory://graph resources (static + dynamic repo template). */
+export function getGraphNeighborhoodResourceDefinitions(): InternalResourceDef[] {
+    const handler = (uri: string, context: ResourceContext): ResourceResult => {
+        const match = /^memory:\/\/graph(?:\/(.+))?$/.exec(getBaseUri(uri))
+        const repo = match?.[1] !== undefined ? safeDecodeUriSegment(match[1]) : undefined
+        return { data: buildGraphNeighborhoodMarkdown(uri, context, repo) }
+    }
+    const base = {
+        mimeType: 'text/markdown',
+        annotations: withPriority(0.6, ASSISTANT_FOCUSED),
+        handler,
+    }
+    return [
+        {
+            ...base,
+            uri: 'memory://graph',
+            name: 'Graph Neighborhood',
+            title: 'Recent Relationship Neighborhood',
+            description:
+                'Compact edge list of the recent (default 14d) relationship neighborhood for the active workspace: node labels, link degrees, and unlinked entry ids. Query: ?days=1-90&limit=1-100.',
+        },
+        {
+            ...base,
+            uri: 'memory://graph/{+repo}',
+            name: 'Graph Neighborhood (Dynamic)',
+            title: 'Project Relationship Neighborhood',
+            description:
+                'Same as memory://graph for an explicit registered repository/workspace (e.g. memory://graph/my-repo?days=14).',
+        },
+    ]
+}
 
 /**
  * Get graph resource definitions
@@ -97,5 +133,5 @@ export function getDynamicGraphResourceDefinitions(): InternalResourceDef[] {
         }
     }
 
-    return [...definitions, ...dynamicDefinitions]
+    return [...definitions, ...dynamicDefinitions, ...getGraphNeighborhoodResourceDefinitions()]
 }

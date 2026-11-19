@@ -112,8 +112,19 @@ export const VisualizeInputSchema = z.object({
         .describe('Filter to show only this relationship type'),
     depth: z.number().int().min(1).max(3).optional().default(2).describe('Relationship traversal depth'),
     limit: z.number().int().min(1).max(500).optional().default(20).describe('Maximum entries to include'),
+    include_content: z
+        .boolean()
+        .optional()
+        .default(false)
+        .describe('Include full entry content in node metadata (default false: 120-char preview only, saves tokens)'),
+    format: z
+        .enum(['mermaid', 'edges', 'both'])
+        .optional()
+        .default('both')
+        .describe("Output shape: 'mermaid' (diagram only), 'edges' (nodes + edges arrays, no diagram), or 'both' (default)"),
     project_number: StrictProjectNumberSchema.optional(),
     workspace_id: z.string().optional(),
+    source: z.enum(['personal', 'team']).optional(),
 })
 
 /** Relaxed schema — passed to SDK inputSchema so Zod min/max errors reach the handler */
@@ -142,8 +153,17 @@ export const VisualizeInputSchemaMcp = z.object({
             'Maximum entries to include (1-500, default: 20). Anti-Hallucination Hint: Values > 500 will be auto-clamped to 500.'
         ),
     keep: relaxedNumber().optional(),
+    include_content: z
+        .boolean()
+        .optional()
+        .describe('Include full entry content in node metadata (default false: 120-char preview only, saves tokens)'),
+    format: z
+        .string()
+        .optional()
+        .describe("Output shape: 'mermaid' (diagram only), 'edges' (nodes + edges arrays, no diagram), or 'both' (default)"),
     project_number: relaxedNumber().optional(),
     workspace_id: z.string().optional(),
+    source: z.string().optional().describe("Store to visualize: 'personal' (default) or 'team'"),
 }).transform(data => {
     // Collect all string queries into an array of tags
     let extractedTags = data.tags;
@@ -167,6 +187,8 @@ export const VisualizeInputSchemaMcp = z.object({
         project_number: coerceCanonicalId(data.project_number),
         limit: clampedLimit,
         tags: extractedTags,
+        format: data.format?.trim().toLowerCase(),
+        ...(data.source !== undefined ? { source: data.source.trim().toLowerCase() } : {}),
     };
 })
 

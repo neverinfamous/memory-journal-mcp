@@ -191,12 +191,35 @@ export const CreateEntryOutputSchema = z
         warning: z.string().optional(),
         error: z.string().optional(),
         relationshipWarnings: z.array(z.string()).optional(),
+        suggested_links: z
+            .array(
+                z.object({
+                    targetId: z.number().describe('Existing entry id to link to'),
+                    relationType: z.string().describe('Suggested canonical relationship type'),
+                    reason: z
+                        .enum(['same-session', 'shared-anchor', 'semantic'])
+                        .describe('Why this target was suggested'),
+                    preview: z.string().describe('Short fenced preview of the target entry'),
+                })
+            )
+            .optional()
+            .describe(
+                'Present only when the entry was created without relationships: candidate link targets (same session, shared file anchors, semantic neighbors). Link with mj.relationships.linkEntries / link_entries to keep the entry out of the auto-prune orphan funnel.'
+            ),
     })
     .extend(ErrorFieldsMixin.shape)
 
 function preprocessGetEntryById(val: unknown): unknown {
     if (typeof val !== 'object' || val === null || Array.isArray(val)) return val
     const obj = { ...(val as Record<string, unknown>) }
+    let modified = false
+    if (typeof obj['source'] === 'string') {
+        const normalizedSource = obj['source'].trim().toLowerCase()
+        if (normalizedSource !== obj['source']) {
+            obj['source'] = normalizedSource
+            modified = true
+        }
+    }
     if (obj['entry_id'] === undefined && typeof obj['uri'] === 'string') {
         const match = /^memory:\/\/(?:entries|entry)\/([1-9]\d*)$/i.exec(obj['uri'].trim())
         if (match?.[1] !== undefined) {
@@ -208,7 +231,7 @@ function preprocessGetEntryById(val: unknown): unknown {
             }
         }
     }
-    return val
+    return modified ? obj : val
 }
 
 export const GetEntryByIdSchema = z.preprocess(
@@ -218,6 +241,7 @@ export const GetEntryByIdSchema = z.preprocess(
         include_relationships: z.boolean().optional().default(true),
         project_number: StrictProjectNumberSchema.optional(),
         workspace_id: z.string().optional(),
+        source: z.enum(['personal', 'team']).optional(),
     })
 )
 
@@ -226,6 +250,7 @@ export const GetEntryByIdSchemaMcp = z.object({
     include_relationships: z.boolean().optional().default(true).describe('If true, includes all linked relationships (causal, related) in the response'),
     project_number: relaxedNumber().optional(),
     workspace_id: z.string().optional().describe('Optional workspace isolation identifier (e.g. "alpha"). Do not use numeric project IDs or "workspace" as the key. [ANTI-HALLUCINATION] If an entry returns RESOURCE_NOT_FOUND, it might belong to another workspace. Set workspace_id: "*" to search globally.'),
+    source: z.string().optional().describe("Store to read from: 'personal' (default) or 'team' (delegates to team_get_entry_by_id with Team RBAC)"),
     uri: z.string().optional(),
 })
 

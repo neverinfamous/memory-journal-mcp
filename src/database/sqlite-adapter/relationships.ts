@@ -4,6 +4,17 @@ import { ResourceNotFoundError } from '../../types/errors.js'
 import type { NativeConnectionManager } from './native-connection.js'
 import { effectiveWorkspace } from '../workspace-scope.js'
 import { bucketInParams, DUAL_IN_PARAM_BUCKETS } from './row-helpers.js'
+import {
+    queryActiveThreads,
+    queryEntriesSharingAnchors,
+    queryEntryIdsByCommitShas,
+    queryRecentLinkageStats,
+    queryRecentNeighborhood,
+    queryRelationshipDegrees,
+    type ActiveThreadRow,
+    type RecentLinkageStats,
+    type RecentNeighborhood,
+} from './graph-pivots.js'
 
 export class RelationshipsManager {
     private ctx: NativeConnectionManager
@@ -258,5 +269,38 @@ export class RelationshipsManager {
             .get(...params) as { orphan_count: unknown } | undefined
 
         return typeof row?.orphan_count === 'number' ? row.orphan_count : 0
+    }
+
+    // ------------------------------------------------------------------
+    // Graph pivots (briefing + memory://graph) — see graph-pivots.ts
+    // ------------------------------------------------------------------
+
+    getRelationshipDegrees(entryIds: readonly number[], workspaceId?: string): Map<number, number> {
+        return queryRelationshipDegrees(this.db, entryIds, workspaceId)
+    }
+
+    getActiveThreads(sinceIso: string, limit: number, workspaceId?: string): ActiveThreadRow[] {
+        return queryActiveThreads(this.db, sinceIso, limit, workspaceId)
+    }
+
+    getRecentLinkageStats(sinceIso: string, workspaceId?: string): RecentLinkageStats {
+        return queryRecentLinkageStats(this.db, sinceIso, workspaceId)
+    }
+
+    getEntryIdsByCommitShas(shas: readonly string[], workspaceId?: string): Map<string, number> {
+        return queryEntryIdsByCommitShas(this.db, shas, workspaceId)
+    }
+
+    getRecentNeighborhood(sinceIso: string, edgeLimit: number, workspaceId?: string): RecentNeighborhood {
+        return queryRecentNeighborhood(this.db, sinceIso, edgeLimit, workspaceId)
+    }
+
+    getEntriesSharingAnchors(
+        entryId: number,
+        sinceIso: string,
+        limit: number,
+        workspaceId?: string
+    ): { entryId: number; entryType: string; content: string; sharedAnchors: number }[] {
+        return queryEntriesSharingAnchors(this.db, entryId, sinceIso, limit, workspaceId)
     }
 }

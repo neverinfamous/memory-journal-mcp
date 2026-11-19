@@ -36,6 +36,11 @@ import {
 import { formatUserMessage } from './user-message.js'
 import { buildInsightsSection } from './insights-section.js'
 import { buildBriefingSystemSummary } from './system-section.js'
+import {
+    buildGraphPivots,
+    degreeSuffix,
+    resolveBriefingToolNaming,
+} from './graph-pivots-section.js'
 
 function parsePinSessionOption(uri: string): boolean {
     const queryIdx = uri.indexOf('?')
@@ -253,16 +258,39 @@ export async function buildBriefingData(
             journal.workspaceId
         ),
     ])
-    const team = buildTeamContext(context, config, activeProjectNumber, activeWorkspaceId)
+    const team = buildTeamContext(
+        context,
+        config,
+        activeProjectNumber,
+        activeWorkspaceId,
+        journal.mirrorCandidates
+    )
     const insights = buildInsightsSection(context, activeWorkspaceId)
     const graphStats = buildGraphContext(context, journal.workspaceId, journal.totalEntries)
-    const latestPreviews = journal.latestEntries.map((e) => `#${e.id} (${e.type}): ${e.preview}`)
+    const graphPivotsEnabled = config.graphPivots !== false
+    const graphPivots = graphPivotsEnabled
+        ? buildGraphPivots(
+              context,
+              journal.workspaceId,
+              [
+                  ...journal.latestEntries.map((e) => e.id),
+                  ...(journal.sessionSummaries ?? []).map((s) => s.id),
+              ],
+              system.gitHistory?.commits.map((c) => c.hash) ?? []
+          )
+        : undefined
+    const toolNaming = resolveBriefingToolNaming(context.filterConfig)
+    const latestPreviews = journal.latestEntries.map(
+        (e) => `#${e.id} (${e.type})${degreeSuffix(graphPivots, e.id)}: ${e.preview}`
+    )
     const teamLatestPreviews =
         config.includeTeam && team?.teamLatestEntries && team.teamLatestEntries.length > 0
             ? team.teamLatestEntries.map((e) => `#${e.id} (${e.type}): ${e.preview}`)
             : undefined
     const summaryPreviews = journal.sessionSummaries
-        ? journal.sessionSummaries.map((s) => `#${s.id} (${s.type}): ${s.preview}`)
+        ? journal.sessionSummaries.map(
+              (s) => `#${s.id} (${s.type})${degreeSuffix(graphPivots, s.id)}: ${s.preview}`
+          )
         : null
 
     const userMessage = formatUserMessage({
@@ -277,6 +305,8 @@ export async function buildBriefingData(
         teamTotalEntries: team?.teamInfo.totalEntries,
         analyticsInsights: insights ?? undefined,
         graphSummary: graphStats,
+        ...(graphPivots !== undefined ? { graphPivots } : {}),
+        toolNaming,
         gitHistory: system.gitHistory ?? undefined,
         isReadonly: system.isReadonly,
         teamConfigured: !!context.teamDb,

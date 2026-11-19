@@ -204,7 +204,7 @@ function collectTeamVisualizeEntryIds(
     return { wsId, entryIds: recent.map((e) => e.id) }
 }
 
-function executeTeamVisualizeRelationships(
+export function executeTeamVisualizeRelationships(
     context: ToolContext,
     teamDb: IDatabaseAdapter,
     params: unknown

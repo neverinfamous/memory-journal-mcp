@@ -52,6 +52,16 @@ export const EntryOutputSchema = z
         workflowStatus: z.string().nullable().optional(),
         workspaceId: z.string().optional().describe('Workspace isolation identifier'),
         source: z.enum(['personal', 'team']).optional(),
+        alsoInTeam: z
+            .number()
+            .optional()
+            .describe(
+                'Team entry ID mirroring this personal entry (share_with_team); the team duplicate was collapsed from merged results'
+            ),
+        originPersonalId: z
+            .number()
+            .optional()
+            .describe('Team entries only: personal entry ID this team row was mirrored from'),
         importanceScore: z
             .number()
             .optional()

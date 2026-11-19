@@ -47,7 +47,7 @@ const optimizeJournalArgsSchema = z.object({
     targetDimension: z.preprocess(
         (val) => (typeof val === 'string' ? val.toLowerCase() : val),
         z
-            .enum(['unassigned', 'relationships', 'scores', 'tags', 'all'])
+            .enum(['unassigned', 'relationships', 'scores', 'tags', 'legacy-commits', 'all'])
             .optional()
             .default('all')
     ),
@@ -139,6 +139,7 @@ function buildOptimizeWorkflowOptionsSection(
    - \`relationships\`: Audit only orphan entries lacking graph anchors.
    - \`scores\`: Audit only entries with \`trust_score < 0.9\` or unrated \`impact_score\`.
    - \`tags\`: Audit entries with generic or empty tag arrays.
+   - \`legacy-commits\`: Audit legacy commit narratives (\`autoContext\` containing \`session-commits\` or non-canonical \`entryType\`) lacking the \`commit-narrative\` tag or canonical \`technical_note\` type.
 3. Process entries in sequential single-batch calls of **\`<= 25–30\`** entries per \`mj_execute_code\` invocation (1 batch per call — avoid multi-batch loops inside a single worker run to stay well within sandbox memory/timeout budgets), updating metadata via \`mj.admin.batchUpdateEntries\`.
 
 ${optionCHeading}
@@ -183,7 +184,7 @@ Include the reference table of configurable prompt parameters (\`mode\`, \`targe
 | Parameter | Type / Values | Default | Purpose |
 | :--- | :--- | :---: | :--- |
 | \`mode\` | \`'quick'\` \\| \`'targeted'\` \\| \`'full'\` | \`'quick'\` | Controls overall execution depth (\`'full'\` runs all tiers non-interactively). |
-| \`targetDimension\` | \`'unassigned'\` \\| \`'relationships'\` \\| \`'scores'\` \\| \`'tags'\` \\| \`'all'\` | \`'all'\` | Narrows optimization to specific quality defects. |
+| \`targetDimension\` | \`'unassigned'\` \\| \`'relationships'\` \\| \`'scores'\` \\| \`'tags'\` \\| \`'legacy-commits'\` \\| \`'all'\` | \`'all'\` | Narrows optimization to specific quality defects. |
 | \`project\` | Project name or number (e.g., \`'mysql-mcp'\` or \`9\`) | \`undefined\` (all) | Restricts analysis/pruning to a single project domain. |
 | \`limit\` | Number (\`0\` = unlimited, or \`1 – 50000\`) | \`500\` (\`0\` in \`full\`/\`autoRun\`) | Processing cap for entry auditing (\`0\` scans all history). |
 | \`lookback\` | Number (\`1 – 2000\`) | \`10\` | Recent unverified entry lookback window. |
@@ -312,7 +313,7 @@ export function getOptimizerPromptDefinitions(): InternalPromptDef[] {
         {
             name: 'optimize-journal',
             description:
-                "Guided database pruning, graph verification, episodic-to-semantic compaction, and multi-agent audit workflow. Optional arguments: `lookback` (Number of recent entries, default: 10), `limit` (Entry processing cap; pass `0` for unlimited across all history, default: 500 or 0 in full/autoRun mode), `project` (Target project name or number, optional), `autoRun` (boolean, default: false), `mode` ('quick' | 'targeted' | 'full', default: 'quick'), `targetDimension` ('unassigned' | 'relationships' | 'scores' | 'tags' | 'all', default: 'all').",
+                "Guided database pruning, graph verification, episodic-to-semantic compaction, and multi-agent audit workflow. Optional arguments: `lookback` (Number of recent entries, default: 10), `limit` (Entry processing cap; pass `0` for unlimited across all history, default: 500 or 0 in full/autoRun mode), `project` (Target project name or number, optional), `autoRun` (boolean, default: false), `mode` ('quick' | 'targeted' | 'full', default: 'quick'), `targetDimension` ('unassigned' | 'relationships' | 'scores' | 'tags' | 'legacy-commits' | 'all', default: 'all').",
             icons: [ICON_PROMPT],
             capabilities: { requiresAdminScope: true },
             arguments: [
@@ -343,7 +344,7 @@ export function getOptimizerPromptDefinitions(): InternalPromptDef[] {
                 },
                 {
                     name: 'targetDimension',
-                    description: "Quality dimension filter: 'unassigned' | 'relationships' | 'scores' | 'tags' | 'all' (default: 'all')",
+                    description: "Quality dimension filter: 'unassigned' | 'relationships' | 'scores' | 'tags' | 'legacy-commits' | 'all' (default: 'all')",
                     required: false,
                 },
             ],

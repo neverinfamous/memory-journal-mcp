@@ -87,8 +87,8 @@ const rawPayloadUnion = z.discriminatedUnion("type", [
 ]);
 
 export const PayloadSchema = z.preprocess((val) => {
-  if (typeof val === 'object' && val !== null) {
-    const obj = { ...(val as Record<string, unknown>) };
+  if (typeof val === 'object' && val !== null && !Array.isArray(val)) {
+    const obj: Record<string, unknown> = Object.fromEntries(Object.entries(val));
     const knownKeys = new Set([
       'type', 'command', 'scriptPath', 'code', 'interpreter',
       'args', 'cwd', 'env', 'integrationContext', 'templateOverride',

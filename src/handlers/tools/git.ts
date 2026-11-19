@@ -21,6 +21,7 @@ import {
     fetchCommits,
     fenceCommitEntries,
     fenceUnreleasedTag,
+    fetchUncommittedWorkingTree,
     getUnreleasedChangelog,
 } from './git-commit-helpers.js'
 
@@ -56,6 +57,22 @@ export function getGitTools(context: ToolContext): ToolDefinition[] {
                     const parsedMcp = GitHistoryOptionsSchemaMcp.parse(params)
                     const cwd = resolveGitWorkingDir(parsedMcp, context.config)
                     const input = GitHistoryOptionsSchema.parse(parsedMcp)
+                    if (input.uncommitted === true) {
+                        await sendProgress(context.progress, 0, 1, 'Fetching working-tree state...')
+                        const uncommitted = fetchUncommittedWorkingTree(cwd, input.path)
+                        const historyRequested =
+                            parsedMcp.maxCount !== undefined ||
+                            parsedMcp.ref !== undefined ||
+                            parsedMcp.since !== undefined ||
+                            parsedMcp.sortBy !== undefined ||
+                            parsedMcp.scope !== undefined ||
+                            parsedMcp.techDebtAudit === true
+                        if (!historyRequested) {
+                            return { success: true, commits: [], uncommitted }
+                        }
+                        const commits = await fetchCommits(input, cwd)
+                        return { success: true, commits: fenceCommitEntries(commits), uncommitted }
+                    }
                     await sendProgress(context.progress, 0, 1, 'Fetching commit history...')
                     const commits = await fetchCommits(input, cwd)
                     return { success: true, commits: fenceCommitEntries(commits) }

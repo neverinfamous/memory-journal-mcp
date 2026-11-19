@@ -12,6 +12,7 @@
 | Resource reads  | `memory://metrics/resources`|
 | Project staleness| `memory://staleness`        |
 | Agent context   | `memory://agent-context/{+repo}` |
+| Graph neighborhood| `memory://graph/{+repo}` |
 
 ## Help Resources
 

@@ -11,6 +11,10 @@ import { encodeCursor, decodeCursor, type SortBy } from './cursor.js'
 import { effectiveWorkspace } from '../../../workspace-scope.js'
 import { chunkedInPredicate } from '../../row-helpers.js'
 import { expandTagFilterValues } from '../../tags.js'
+import {
+    excludesCommitNarrative,
+    legacyCommitExclusionSql,
+} from '../../../../utils/legacy-commit-narrative.js'
 
 /** Importance-ranked page of recent entries (offset-paginated). */
 function getRecentEntriesByImportance(
@@ -379,6 +383,10 @@ function appendDateRangeFilters(
             )
             conditions.push(membership.sql)
             params.push(...membership.params)
+        }
+        // [INVARIANT] M1 read-side fallback: untagged legacy session-commits rows are also excluded.
+        if (excludesCommitNarrative(expandedExcluded)) {
+            conditions.push(legacyCommitExclusionSql('e'))
         }
     }
 

@@ -156,6 +156,7 @@ export const briefingOptionsSchema = z.object({
     briefingWorkflows: z.string().optional(),
     briefingWorkflowStatus: z.boolean().optional(),
     briefingCopilot: z.boolean().optional(),
+    briefingGraph: z.boolean().optional(),
     workflowSummary: z.string().optional()
 })
 
@@ -258,6 +259,8 @@ export const baseEntryOptionsSchema = z.object({
     autoContext: z.string().optional(),
     autoContextFile: z.string().optional(),
     metadata: z.string().optional(),
+    autoLink: z.boolean().optional(),
+    dryRunLinks: z.boolean().optional(),
     team: z.boolean().optional()
 }).extend(coreOptionsSchema.shape).extend(databaseOptionsSchema.shape).extend(outputOptionsSchema.shape)
 

@@ -4,6 +4,7 @@ import { ValidationError } from '../../../types/errors.js'
 import { effectiveWorkspace } from '../../workspace-scope.js'
 import { resolveProjectContext } from '../../../utils/workspace-resolver.js'
 import { activeProjectRegistry, pairStoredScope } from '../../../utils/write-scope.js'
+import { guardEntryTypeWrite } from './entry-type-guard.js'
 
 const ENTRY_INSERT_COLUMNS = [
     'entry_type',
@@ -31,17 +32,32 @@ const ENTRY_INSERT_COLUMNS = [
 ] as const
 
 const authorColumnCache = new WeakMap<object, boolean>()
+const originColumnCache = new WeakMap<object, boolean>()
+
+function tableHasColumn(db: EntriesSharedContext['db'], column: string): boolean {
+    const rows = db.prepare('PRAGMA table_info(memory_journal)').all()
+    return (
+        Array.isArray(rows) &&
+        rows.some((row): boolean => {
+            if (typeof row !== 'object' || row === null || !('name' in row)) return false
+            return Object.getOwnPropertyDescriptor(row, 'name')?.value === column
+        })
+    )
+}
+
+/** True when the team-only `origin_personal_id` column (migration 020) exists. */
+function hasOriginPersonalIdColumn(db: EntriesSharedContext['db']): boolean {
+    const cached = originColumnCache.get(db)
+    if (cached !== undefined) return cached
+    const hasCol = tableHasColumn(db, 'origin_personal_id')
+    if (hasCol) originColumnCache.set(db, true)
+    return hasCol
+}
 
 function hasAuthorColumn(db: EntriesSharedContext['db']): boolean {
     const cached = authorColumnCache.get(db)
     if (cached !== undefined) return cached
-    const rows = db.prepare('PRAGMA table_info(memory_journal)').all()
-    const hasCol =
-        Array.isArray(rows) &&
-        rows.some((row): boolean => {
-            if (typeof row !== 'object' || row === null || !('name' in row)) return false
-            return Object.getOwnPropertyDescriptor(row, 'name')?.value === 'author'
-        })
+    const hasCol = tableHasColumn(db, 'author')
     if (hasCol) authorColumnCache.set(db, true)
     return hasCol
 }
@@ -84,13 +100,16 @@ export function buildEntryInsertPayload(
     timestamp: string
 ): { columns: string[]; values: unknown[] } {
     const { finalProjNum, finalWsId } = resolveInsertScope(context, input)
+    // [INVARIANT] M1 write guard: only canonical ENTRY_TYPES reach storage.
+    const guarded = guardEntryTypeWrite(input.entryType ?? 'personal_reflection')
+    const significance = nonEmpty(input.significanceType) ?? guarded.defaultSignificance ?? null
     const columns: string[] = [...ENTRY_INSERT_COLUMNS]
     const values: unknown[] = [
-        input.entryType ?? 'personal_reflection',
+        guarded.entryType,
         input.content,
         timestamp,
         (input.isPersonal ?? true) ? 1 : 0,
-        nonEmpty(input.significanceType),
+        significance,
         nonEmpty(input.autoContext),
         finalProjNum,
         nonEmpty(input.projectOwner),
@@ -113,6 +132,11 @@ export function buildEntryInsertPayload(
     if (input.author !== undefined && hasAuthorColumn(context.db)) {
         columns.push('author')
         values.push(input.author)
+    }
+
+    if (input.originPersonalId !== undefined && hasOriginPersonalIdColumn(context.db)) {
+        columns.push('origin_personal_id')
+        values.push(input.originPersonalId)
     }
 
     return { columns, values }

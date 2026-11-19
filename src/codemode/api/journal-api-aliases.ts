@@ -3,6 +3,7 @@ import { METHOD_ALIASES } from '../api-constants.js'
 import type { GroupApiRecord, ProjectRegistryProvider } from './types.js'
 import { toolNameToMethodName } from './group-factory.js'
 import { isRecord } from '../normalizers/shared-utils.js'
+import { runWithSilentTeamProbe } from '../rpc-context.js'
 import {
     createGetConfigFn,
     createRegisterProjectFn,
@@ -16,6 +17,7 @@ export interface ProjectAndTeamAliasDeps {
     core: GroupApiRecord
     search: GroupApiRecord
     admin: GroupApiRecord
+    relationships: GroupApiRecord
     team: GroupApiRecord
     hasDispatcher: boolean
     registryProvider: ProjectRegistryProvider | undefined
@@ -173,10 +175,97 @@ function wireProjectQueryAndTeamAliases(deps: ProjectAndTeamAliasDeps): void {
     }
 }
 
+interface TeamAutoRouteOptions {
+    primaryGroup: GroupApiRecord
+    primaryMethod: string
+    snakeMethod: string
+    teamFn: GroupApiRecord[string] | undefined
+    suggestionHint: string
+    buildTeamArgs: (args: Record<string, unknown>) => Record<string, unknown>
+    copyFnSchema: (source: unknown, wrapper: (...args: unknown[]) => unknown) => void
+}
+
+function wrapTeamAutoRoute(opts: TeamAutoRouteOptions): void {
+    const primaryFn = opts.primaryGroup[opts.primaryMethod]
+    const teamFn = opts.teamFn
+    if (typeof primaryFn !== 'function' || typeof teamFn !== 'function') return
+
+    const wrapped = async (...args: unknown[]): Promise<unknown> => {
+        const firstArg = args[0]
+        if (!isRecord(firstArg) || firstArg['source'] !== undefined) {
+            return await primaryFn(...args)
+        }
+        const res = await runWithSilentTeamProbe(() => primaryFn(...args))
+        if (
+            isRecord(res) &&
+            res['success'] === false &&
+            res['code'] === 'RESOURCE_NOT_FOUND' &&
+            typeof res['suggestion'] === 'string' &&
+            res['suggestion'].includes(opts.suggestionHint)
+        ) {
+            const teamRes = await teamFn(opts.buildTeamArgs(firstArg))
+            if (isRecord(teamRes) && teamRes['success'] !== false) {
+                return { ...teamRes, _healed: { routedTo: 'team' } }
+            }
+        }
+        return res
+    }
+    opts.copyFnSchema(primaryFn, wrapped)
+    opts.primaryGroup[opts.primaryMethod] = wrapped
+    if (opts.primaryGroup[opts.snakeMethod] !== undefined) {
+        opts.primaryGroup[opts.snakeMethod] = wrapped
+    }
+}
+
+function wireSilentTeamFallbackRouting(deps: ProjectAndTeamAliasDeps): void {
+    const { core, relationships, team, copyFnSchema } = deps
+    wrapTeamAutoRoute({
+        primaryGroup: core,
+        primaryMethod: 'getEntryById',
+        snakeMethod: 'get_entry_by_id',
+        teamFn: team['teamGetEntryById'],
+        suggestionHint: 'team_get_entry_by_id',
+        copyFnSchema,
+        buildTeamArgs: (p) => ({
+            entry_id: p['entry_id'],
+            ...(p['include_relationships'] !== undefined
+                ? { include_relationships: p['include_relationships'] }
+                : {}),
+            ...(p['workspace_id'] !== undefined ? { workspace_id: p['workspace_id'] } : {}),
+            ...(p['project_number'] !== undefined ? { project_number: p['project_number'] } : {}),
+        }),
+    })
+    wrapTeamAutoRoute({
+        primaryGroup: relationships,
+        primaryMethod: 'visualizeRelationships',
+        snakeMethod: 'visualize_relationships',
+        teamFn: team['teamVisualizeRelationships'],
+        suggestionHint: 'team_visualize_relationships',
+        copyFnSchema,
+        buildTeamArgs: (p) => {
+            const tagsVal = p['tags']
+            const firstTag =
+                Array.isArray(tagsVal) && typeof tagsVal[0] === 'string'
+                    ? tagsVal[0]
+                    : typeof p['tag'] === 'string'
+                      ? p['tag']
+                      : undefined
+            return {
+                ...(p['entry_id'] !== undefined ? { entry_id: p['entry_id'] } : {}),
+                ...(firstTag !== undefined ? { tag: firstTag } : {}),
+                ...(p['depth'] !== undefined ? { depth: p['depth'] } : {}),
+                ...(p['workspace_id'] !== undefined ? { workspace_id: p['workspace_id'] } : {}),
+                ...(p['project_number'] !== undefined ? { project_number: p['project_number'] } : {}),
+            }
+        },
+    })
+}
+
 /** Wires positional project management wrappers, project listing helpers, and team aliases. */
 export function wireProjectAndTeamAliasesHelper(deps: ProjectAndTeamAliasDeps): void {
     wireProjectMutationWrappers(deps)
     wireProjectQueryAndTeamAliases(deps)
+    wireSilentTeamFallbackRouting(deps)
 }
 
 function collectGroupObjectSchemas(

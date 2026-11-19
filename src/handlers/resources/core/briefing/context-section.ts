@@ -9,6 +9,12 @@ import { sliceUntrustedInline, type BriefingConfig, type ResourceContext } from 
 import { logger } from '../../../../utils/logger.js'
 import { canAccessTeamSilently } from '../../../tools/search/helpers.js'
 import type { JournalEntry } from '../../../../types/index.js'
+import {
+    buildPersonalMirrorIndex,
+    isTeamMirrorOf,
+    type MirrorCandidate,
+} from '../../../../utils/team-mirror.js'
+import { previewLabel } from './graph-pivots-section.js'
 
 // ============================================================================
 // Journal Context
@@ -68,6 +74,7 @@ export interface JournalContext {
     sessionSummaries?: { id: number; timestamp: string; type: string; preview: string }[]
     lastModified: string
     workspaceId?: string
+    mirrorCandidates?: MirrorCandidate[]
 }
 
 function extractEntries(result: JournalEntry[] | { entries: JournalEntry[] }): JournalEntry[] {
@@ -237,6 +244,18 @@ export function buildJournalContext(
 
     const totalEntries = context.db.getActiveEntryCount(targetWs)
     const lastModified = recentEntries[0]?.timestamp ?? new Date().toISOString()
+    const seenMirrorIds = new Set<number>()
+    const mirrorCandidates: MirrorCandidate[] = []
+    for (const e of [...finalSummaryEntries, ...rawRecentEntries]) {
+        if (seenMirrorIds.has(e.id)) continue
+        seenMirrorIds.add(e.id)
+        mirrorCandidates.push({
+            id: e.id,
+            content: e.content,
+            timestamp: e.timestamp,
+            ...(e.workspaceId !== undefined ? { workspaceId: e.workspaceId } : {}),
+        })
+    }
 
     return {
         totalEntries,
@@ -245,6 +264,7 @@ export function buildJournalContext(
         sessionSummaries,
         lastModified,
         workspaceId: targetWs,
+        mirrorCandidates,
     }
 }
 
@@ -264,7 +284,8 @@ export function buildTeamContext(
     context: ResourceContext,
     config: BriefingConfig,
     projectNumber?: number | null,
-    activeWorkspaceId?: string
+    activeWorkspaceId?: string,
+    personalCandidates?: readonly MirrorCandidate[]
 ): TeamContext | undefined {
     if (!context.teamDb) return undefined
 
@@ -291,16 +312,57 @@ export function buildTeamContext(
         )
         if (!accessAllowed) return undefined
         const teamTotalEntries = context.teamDb.getActiveEntryCount(teamWorkspace)
-        const teamRecent =
+        const fetchCap = Math.max((config.entryCount ?? 3) * 3, 10)
+        const teamCandidates =
             typeof projectNumber === 'number'
-                ? extractEntries(context.teamDb.searchEntries('', { limit: 1, projectNumber, workspaceId: teamWorkspace }))
-                : extractEntries(context.teamDb.getRecentEntries(1, undefined, 'timestamp', undefined, false, teamWorkspace))
-        const teamLatestEntry = teamRecent[0] as Record<string, unknown> | undefined
-        const teamContent = teamLatestEntry
-            ? ((teamLatestEntry['content'] as string | undefined) ?? '')
-            : ''
+                ? extractEntries(
+                      context.teamDb.searchEntries('', {
+                          limit: fetchCap,
+                          projectNumber,
+                          workspaceId: teamWorkspace,
+                      })
+                  )
+                : extractEntries(
+                      context.teamDb.getRecentEntries(
+                          fetchCap,
+                          undefined,
+                          'timestamp',
+                          undefined,
+                          false,
+                          teamWorkspace
+                      )
+                  )
+        const origins =
+            teamCandidates.length > 0
+                ? context.teamDb.getMirrorOrigins?.(teamCandidates.map((e) => e.id))
+                : undefined
+        const personalIdx =
+            personalCandidates && personalCandidates.length > 0
+                ? buildPersonalMirrorIndex(personalCandidates)
+                : undefined
+        const distinctTeam = personalIdx
+            ? teamCandidates.filter((e) => {
+                  const explicitOrigin =
+                      'originPersonalId' in e && typeof e.originPersonalId === 'number'
+                          ? e.originPersonalId
+                          : undefined
+                  const originId = origins?.get(e.id) ?? explicitOrigin
+                  return !isTeamMirrorOf(
+                      {
+                          id: e.id,
+                          content: e.content,
+                          timestamp: e.timestamp,
+                          ...(e.workspaceId !== undefined ? { workspaceId: e.workspaceId } : {}),
+                          ...(originId !== undefined ? { originPersonalId: originId } : {}),
+                      },
+                      personalIdx
+                  )
+              })
+            : teamCandidates
+
+        const teamLatestEntry = distinctTeam[0]
         const teamLatest = teamLatestEntry
-            ? `#${String(teamLatestEntry['id'])}: ${sliceUntrustedInline(cleanPreview(teamContent, TEAM_PREVIEW_LENGTH), TEAM_PREVIEW_LENGTH + 1)}`
+            ? `#${String(teamLatestEntry.id)}: ${sliceUntrustedInline(cleanPreview(teamLatestEntry.content, TEAM_PREVIEW_LENGTH), TEAM_PREVIEW_LENGTH + 1)}`
             : null
         const teamInfo = {
             totalEntries: teamTotalEntries,
@@ -312,11 +374,7 @@ export function buildTeamContext(
             | undefined = undefined
 
         if (config.includeTeam) {
-            const teamEntries =
-                typeof projectNumber === 'number'
-                    ? extractEntries(context.teamDb.searchEntries('', { limit: config.entryCount, projectNumber, workspaceId: teamWorkspace }))
-                    : extractEntries(context.teamDb.getRecentEntries(config.entryCount, undefined, 'timestamp', undefined, false, teamWorkspace))
-            teamLatestEntries = teamEntries.map((e) => {
+            teamLatestEntries = distinctTeam.slice(0, config.entryCount).map((e) => {
                 return {
                     id: e.id,
                     timestamp: e.timestamp,
@@ -390,7 +448,8 @@ export function buildGraphContext(
             topHubs = hubs.map(hub => ({
                 id: hub.entryId,
                 count: hub.totalLinks,
-                preview: ''
+                // [INTENT] Previews let agents judge whether a hub is worth expanding (bare IDs cannot).
+                preview: previewLabel(hub.content),
             }))
 
             if (totalActiveEntries > 0) {

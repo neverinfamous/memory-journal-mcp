@@ -35,7 +35,14 @@ export function formatUserMessage(opts: BriefingUserMessageOptions): string {
         journalParts: buildJournalParts(opts),
         configLines: buildConfigLines(opts),
         insightsLines: buildInsightsLines(opts),
-        graphLines: buildGraphLines(opts.graphSummary),
+        graphLines: buildGraphLines(opts.graphSummary, {
+            ...(opts.graphPivots !== undefined ? { graphPivots: opts.graphPivots } : {}),
+            ...(opts.toolNaming !== undefined ? { toolNaming: opts.toolNaming } : {}),
+            ...(opts.workspaceId !== undefined ? { workspaceId: opts.workspaceId } : {}),
+            ...(opts.analyticsInsights?.relationshipDensity !== undefined
+                ? { relationshipDensity: opts.analyticsInsights.relationshipDensity }
+                : {}),
+        }),
         gitHistoryLines: buildGitHistoryLines(opts),
     })
     const footer = `\n\n> **Directive:** Context ingested. Await explicit user instruction before execution.`

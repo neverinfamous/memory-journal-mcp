@@ -166,10 +166,10 @@ ${markUntrustedContent(params.deletedSnippet)}
 > [!IMPORTANT]
 > **LOAD OPTIMIZATION INVARIANT (DIRTY-TREE CONDITIONAL SINGLE-PASS VALIDATION GATE)**:
 > Full-suite validation (\`lint\`, \`typecheck\`, \`build\`, \`vitest\`, \`playwright\`) is resource-intensive and MUST ONLY run when repository files were actually modified by this \`CMS-04\` run.
-> **CONCURRENT-AGENT ISOLATION & HITL GUARDRAIL**: Capture a pre-flight baseline of uncommitted files (using \`get-git-history-json.ts --uncommitted --stats\` when workspace lifecycle scripts are configured, or explicit \`git diff --name-only\` checks in standalone hosts) and active \`vitest\`/\`playwright\`/\`tsc\` processes before editing. Never overwrite or stage foreign WIP files from another active session, and do NOT modify executable source code or global environment files without explicit user approval unless running in an explicitly approved autonomous maintenance session.
+> **CONCURRENT-AGENT ISOLATION & HITL GUARDRAIL**: Capture a pre-flight baseline of uncommitted files (using Code Mode \`mj.git.getCommitHistory({ uncommitted: true })\`, or explicit \`git diff --name-only\` checks in standalone hosts) and active \`vitest\`/\`playwright\`/\`tsc\` processes before editing. Never overwrite or stage foreign WIP files from another active session, and do NOT modify executable source code or global environment files without explicit user approval unless running in an explicitly approved autonomous maintenance session.
 
 1. Record the pre-flight baseline of already-uncommitted files, then apply all approved code, schema, prompt, or documentation fixes in a single cohesive batch without touching foreign WIP files.
-2. Re-check working tree status against the pre-flight baseline (\`get-git-history-json.ts --uncommitted --stats\` in hook-guarded workspaces, or standalone Git diff/status excluding pre-existing WIP).
+2. Re-check working tree status against the pre-flight baseline (\`mj.git.getCommitHistory({ uncommitted: true })\`, or standalone Git diff/status excluding pre-existing WIP).
 3. **If \`0\` files were modified/added by this \`CMS-04\` run**:
    - **SKIP** \`pnpm run lint\`, \`pnpm run typecheck\`, \`pnpm run build\`, \`pnpm exec vitest run\`, and \`pnpm exec playwright test\` completely! Proceed directly to step 5 / Phase D.
 4. **If \`>= 1\` files were modified by this \`CMS-04\` run**:

@@ -97,6 +97,10 @@ export const updateConfigurationSchema = z.preprocess(
             briefing_workflows: z.number().int().min(0).optional(),
             briefing_workflow_status: z.boolean().optional(),
             briefing_copilot: z.boolean().optional(),
+            briefing_graph: z
+                .boolean()
+                .optional()
+                .describe('Show graph/git pivots (entry link degree, commit→entry refs, active threads) in the briefing'),
             project_number: z.number().int().positive().optional(),
             workspace_id: z.string().optional(),
         })
@@ -124,6 +128,10 @@ export const updateConfigurationSchemaMcp = z.preprocess(
             briefing_workflows: relaxedNumber().optional(),
             briefing_workflow_status: z.boolean().optional(),
             briefing_copilot: z.boolean().optional(),
+            briefing_graph: z
+                .boolean()
+                .optional()
+                .describe('Show graph/git pivots (entry link degree, commit→entry refs, active threads) in the briefing'),
             project_number: relaxedNumber().optional(),
             workspace_id: z.string().optional(),
         })
@@ -293,6 +301,7 @@ export function handleUpdateConfiguration(
     if (args.briefing_workflows !== undefined) { newBc.workflowCount = args.briefing_workflows; bcChanged = true; updatedKeys.push('briefing_workflows'); mutatedBriefingKeys.push('workflowCount'); }
     if (args.briefing_workflow_status !== undefined) { newBc.workflowStatusBreakdown = args.briefing_workflow_status; bcChanged = true; updatedKeys.push('briefing_workflow_status'); mutatedBriefingKeys.push('workflowStatusBreakdown'); }
     if (args.briefing_copilot !== undefined) { newBc.copilotReviews = args.briefing_copilot; bcChanged = true; updatedKeys.push('briefing_copilot'); mutatedBriefingKeys.push('copilotReviews'); }
+    if (args.briefing_graph !== undefined) { newBc.graphPivots = args.briefing_graph; bcChanged = true; updatedKeys.push('briefing_graph'); mutatedBriefingKeys.push('graphPivots'); }
 
     if (mutatedBriefingKeys.length > 0) {
         mutatedFields.briefingKeys = mutatedBriefingKeys

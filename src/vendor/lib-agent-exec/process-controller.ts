@@ -5,7 +5,7 @@ import fs from 'node:fs';
 import { IOController } from './io-controller.js';
 import { killProcessTree } from './process-manager.js';
 import { ExecPayload } from './schema.js';
-import { sendWebhook, sendDatadogTelemetry, BUILT_INS, AUTONOMOUS_HEALING_MSG } from './utils.js';
+import { sendWebhook, sendDatadogTelemetry, BUILT_INS, AUTONOMOUS_HEALING_MSG, setLastStderrTail } from './utils.js';
 
 const TIMEOUT_EXIT_FORCE_MS = 5000;
 const STREAM_DAEMON_CHECK_MS = 100;
@@ -600,6 +600,7 @@ export class ProcessController {
                     suppressRedundantExit = true;
                 }
             }
+            setLastStderrTail(this.ioController?.stderrTail || '');
             if (!this.isJson && !suppressRedundantExit) console.error(`\n❌ Command exited with code ${code}`);
             if (process.platform === 'win32') {
                 if (BUILT_INS.includes(this.cmd.toLowerCase())) { if (!this.isJson) console.error(`\n   💡 AGENT HINT: '${this.cmd}' is a shell built-in, not an executable file. It should be routed through a system shell.\n${AUTONOMOUS_HEALING_MSG}`);

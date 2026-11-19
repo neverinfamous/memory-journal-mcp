@@ -11,6 +11,10 @@ import type { VectorSearchManager } from '../../../vector/vector-search-manager/
 import { logger } from '../../../utils/logger.js'
 import { enforceAccessBoundary } from '../../../auth/validation.js'
 import { canReadTeamEntriesRbac } from '../team/rbac.js'
+import {
+    excludesCommitNarrative,
+    isSessionCommitsAutoContext,
+} from '../../../utils/legacy-commit-narrative.js'
 
 export interface EntryWithSource {
     content: string
@@ -119,6 +123,13 @@ export function passMetadataFilters(
             ? entry.tags
             : db.getTagsForEntry(entry.id)
         if (options.excludeTags.some((t: string) => entryTags.includes(t))) return false
+        // [INVARIANT] M1 read-side fallback for untagged legacy session-commits rows (vector/hybrid paths).
+        if (
+            excludesCommitNarrative(options.excludeTags) &&
+            isSessionCommitsAutoContext(entry.autoContext)
+        ) {
+            return false
+        }
     }
     if (!options.includeArchived && entry.isArchived) return false
     return true

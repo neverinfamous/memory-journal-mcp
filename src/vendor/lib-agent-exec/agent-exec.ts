@@ -10,6 +10,7 @@ import { buildEnvironment } from './environment.js';
 import { PayloadSchema, agentExecCliArgsSchema, normalizeTarget } from './schema.js';
 import { showHelp, showUsageError } from './help.js';
 import { convertToWindowsPath } from './command-utils.js';
+import { decodePayloadBuffer } from './utils.js';
 import { AGENT_EXEC_README_URL } from './interceptors/utils.js';
 
 const DEFAULT_MAX_PAYLOAD_SIZE = 10 * 1024 * 1024;
@@ -60,7 +61,7 @@ try {
     }
     throw err;
   }
-  targetOverride = values.target as string | undefined;
+  targetOverride = typeof values.target === 'string' ? values.target : undefined;
   
   
 
@@ -139,7 +140,7 @@ try {
     if (payloadBuf.length > maxPayloadSize) {
       fatalError(`Payload file exceeds ${maxPayloadSize} bytes limit.`);
     }
-    payloadStr = payloadBuf.toString('utf8');
+    payloadStr = decodePayloadBuffer(payloadBuf);
   }
 
   const rawPayload = JSON.parse(payloadStr);

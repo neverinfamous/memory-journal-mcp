@@ -497,20 +497,32 @@ export function handleWindowsUnixCommandWrappers(
   const unixUtilsForGlob = ['grep', 'ls', 'rm', 'cp', 'mv', 'cat', 'rg'];
   if (unixUtilsForGlob.includes(cmdBasenameForGlob)) {
     const patternExprIdx = findPatternExprIndex(cmdBasenameForGlob, resolvedArgs);
-    const hasGlobs = resolvedArgs.some((a, idx) => {
-      if (idx === patternExprIdx) return false;
+    const globIdxs: number[] = [];
+    resolvedArgs.forEach((a, idx) => {
+      if (idx === patternExprIdx) return;
       if (idx > 0) {
         const prev = resolvedArgs[idx - 1];
-        if (['-g', '--glob', '--include', '--exclude', '-name', '-iname', '-path', '-wholename', '-filter'].includes(prev)) {
-          return false;
+        if (['-g', '--glob', '--iglob', '--include', '--exclude', '-name', '-iname', '-path', '-wholename', '-filter'].includes(prev)) {
+          return;
         }
       }
       if (a.startsWith('-g=') || a.startsWith('--glob=') || a.startsWith('--include=') || a.startsWith('--exclude=')) {
-        return false;
+        return;
       }
-      return (a.includes('*') || a.includes('?')) && !a.startsWith('-');
+      if ((a.includes('*') || a.includes('?')) && !a.startsWith('-')) globIdxs.push(idx);
     });
-    if (hasGlobs) {
+    if (globIdxs.length > 0) {
+      // [INTENT]: rg/grep globs are expanded in-process (no 'sh -c' + WSL hop). Literals are kept when nothing matches.
+      const globCwd = payload.cwd !== undefined && payload.cwd.length > 0 ? path.resolve(payload.cwd) : process.cwd();
+      const canExpandInProcess = (cmdBasenameForGlob === 'rg' || cmdBasenameForGlob === 'grep') && fs.existsSync(globCwd);
+      if (canExpandInProcess) {
+        const expansion = expandGlobArgsInProcess(resolvedArgs, globIdxs, globCwd, payload.target === 'wsl2');
+        resolvedArgs = expansion.args;
+        if (expansion.expandedCount > 0) {
+          console.error(`\n   🛠️ AUTONOMOUS HEALING: Expanded glob argument(s) in-process for '${cmdBasenameForGlob}' (${expansion.expandedCount} glob(s), ${expansion.matchCount} match(es)); unmatched globs kept literal... (Frictionless Recovery)`);
+        }
+        return { cmd: resolvedCmd, args: resolvedArgs };
+      }
       const originalArgs = resolvedArgs.map((a, idx) => {
         if (idx === patternExprIdx) return escapeUnixArg(a, false);
         return escapeUnixArg(convertToWslPath(a), true);
@@ -531,6 +543,45 @@ export function handleWindowsUnixCommandWrappers(
   }
 
   return { cmd: resolvedCmd, args: resolvedArgs };
+}
+
+/**
+ * [INTENT]: Expand shell-style globs with fs.globSync relative to cwd. `/mnt/<drive>/` globs are expanded via
+ * their Windows mapping and converted back so WSL-targeted commands still receive WSL paths.
+ * [INVARIANT]: A glob with zero matches is passed through unchanged (literal), matching bash's default.
+ */
+export function expandGlobArgsInProcess(
+  args: string[],
+  globIdxs: number[],
+  cwd: string,
+  toWsl = false
+): { args: string[]; expandedCount: number; matchCount: number } {
+  const idxSet = new Set(globIdxs);
+  const out: string[] = [];
+  let expandedCount = 0;
+  let matchCount = 0;
+  args.forEach((arg, idx) => {
+    if (!idxSet.has(idx)) {
+      out.push(arg);
+      return;
+    }
+    const isWslMount = process.platform === 'win32' && /^\/mnt\/[a-zA-Z](?:\/|$)/.test(arg);
+    const pattern = (isWslMount ? convertToWindowsPath(arg) : arg).replace(/\\/g, '/');
+    let matches: string[];
+    try {
+      matches = fs.globSync(pattern, { cwd }).map(m => m.replace(/\\/g, '/')).sort();
+    } catch {
+      matches = [];
+    }
+    if (matches.length === 0) {
+      out.push(arg);
+      return;
+    }
+    expandedCount++;
+    matchCount += matches.length;
+    out.push(...(isWslMount || toWsl ? matches.map(m => convertToWslPath(m)) : matches));
+  });
+  return { args: out, expandedCount, matchCount };
 }
 
 export function healFragmentedQuotes(args: string[]): string[] {
@@ -861,7 +912,10 @@ export function tryHealJsonPayload(rawJson: string): unknown | null {
     // continue
   }
 
-  // Candidate 7: Heal unescaped control characters, hex escapes (\xHH -> \u00HH), null escapes (\0 -> \u0000), and invalid backslashes inside JSON strings
+  // Candidate 7: Heal unescaped control characters, hex escapes (\xHH -> \u00HH), and invalid backslashes inside JSON strings.
+  // [INVARIANT]: Never synthesize NUL bytes: '\0' and '\x00' are left for the invalid-backslash pass, which keeps them
+  // as literal backslash sequences (PayloadSchema rejects NULs).
+  const healHexEscape = (match: string, hex: string): string => (hex === '00' ? match : `\\u00${hex}`);
   try {
     const healedStrings = trimmed.replace(/"((?:[^"\\]|\\.)*)"/gs, (_m, inner: string) => {
       const healedInner = inner
@@ -869,8 +923,7 @@ export function tryHealJsonPayload(rawJson: string): unknown | null {
         .replace(/\n/g, '\\n')
         .replace(/\r/g, '\\n')
         .replace(/\t/g, '\\t')
-        .replace(/\\x([0-9a-fA-F]{2})/g, '\\u00$1')
-        .replace(/\\0(?![0-9])/g, '\\u0000')
+        .replace(/\\x([0-9a-fA-F]{2})/g, healHexEscape)
         .replace(/\\(?!["\\/bfnrt]|u[0-9a-fA-F]{4})/g, () => '\\\\');
       return `"${healedInner}"`;
     });
@@ -887,8 +940,7 @@ export function tryHealJsonPayload(rawJson: string): unknown | null {
         .replace(/\n/g, '\\n')
         .replace(/\r/g, '\\n')
         .replace(/\t/g, '\\t')
-        .replace(/\\x([0-9a-fA-F]{2})/g, '\\u00$1')
-        .replace(/\\0(?![0-9])/g, '\\u0000')
+        .replace(/\\x([0-9a-fA-F]{2})/g, healHexEscape)
         .replace(/\\(?!["\\/bfnrt]|u[0-9a-fA-F]{4})/g, () => '\\\\');
       return `"${healedInner}"`;
     }).replace(/,\s*([}\]])/g, '$1');
@@ -900,8 +952,7 @@ export function tryHealJsonPayload(rawJson: string): unknown | null {
   // Candidate 9: Heal invalid backslash escapes across entire payload string (e.g. unescaped paths like \data, \xHH, \0)
   try {
     const healedEscapes = trimmed
-      .replace(/\\x([0-9a-fA-F]{2})/g, '\\u00$1')
-      .replace(/\\0(?![0-9])/g, '\\u0000')
+      .replace(/\\x([0-9a-fA-F]{2})/g, healHexEscape)
       .replace(/\\(?!["\\/bfnrt]|u[0-9a-fA-F]{4})/g, () => '\\\\')
       .replace(/,\s*([}\]])/g, '$1');
     return JSON.parse(healedEscapes);

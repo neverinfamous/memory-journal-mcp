@@ -13,6 +13,7 @@ import {
 } from '../shared.js'
 import { withPriority, ASSISTANT_FOCUSED } from '../../../utils/resource-annotations.js'
 import { parseCanonicalPositiveInt } from '../../../utils/safe-positive-int.js'
+import { previewLabel } from './briefing/graph-pivots-section.js'
 
 function formatDefaultAgentContext(
     config: ResourceContext['briefingConfig'],
@@ -94,8 +95,34 @@ function handleAgentContextResource(uri: string, context: ResourceContext): Reso
             `Project Number: ${projectNumber === -1 ? 'unresolved' : String(projectNumber)}`,
             `Workspace ID: ${workspaceId}`,
             'Instructions: Use your Conversation ID as the session_id for all tool calls.',
+            ...buildSessionEntryLines(uri, context, workspaceId),
         ].join('\n'),
     }
+}
+
+/** Maximum session entries listed by `?session_id=`. */
+const SESSION_ENTRY_LIMIT = 10
+
+/**
+ * [INTENT] After context compaction an agent loses the ids of entries it already wrote, so it
+ * cannot link new entries to them. `?session_id=<id>` lists them (newest first) as link targets.
+ */
+function buildSessionEntryLines(uri: string, context: ResourceContext, workspaceId: string): string[] {
+    const queryIdx = uri.indexOf('?')
+    if (queryIdx === -1) return []
+    const hashIdx = uri.indexOf('#', queryIdx)
+    const sessionId = new URLSearchParams(
+        hashIdx === -1 ? uri.slice(queryIdx + 1) : uri.slice(queryIdx + 1, hashIdx)
+    )
+        .get('session_id')
+        ?.trim()
+    if (sessionId === undefined || sessionId === '' || typeof context.db.getEntriesBySession !== 'function') {
+        return []
+    }
+    const entries = context.db.getEntriesBySession(sessionId, SESSION_ENTRY_LIMIT, workspaceId)
+    if (entries.length === 0) return ['Session Entries: none yet (no entries written with this session_id)']
+    const items = entries.map((e) => `#${String(e.id)} (${e.entryType}) ${previewLabel(e.content)}`)
+    return [`Session Entries (newest first; link targets): ${items.join(' · ')}`]
 }
 
 export function getAgentContextResource(): InternalResourceDef {
@@ -103,7 +130,7 @@ export function getAgentContextResource(): InternalResourceDef {
         uri: 'memory://agent-context/{+repo}',
         name: 'Agent Context',
         title: 'Agent Context',
-        description: 'Lightweight context for mid-thread agent reorientation. Returns project number, workspace ID, and session rules.',
+        description: 'Lightweight context for mid-thread agent reorientation. Returns project number, workspace ID, and session rules. Append ?session_id=<conversation-id> to also list entries you already wrote this session (link targets after context compaction).',
         mimeType: 'text/yaml',
         annotations: withPriority(1.0, ASSISTANT_FOCUSED),
         handler: handleAgentContextResource,

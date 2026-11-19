@@ -28,6 +28,7 @@ import {
     type EntryWithSource,
     type ISearchFilters,
 } from './team-search-helpers.js'
+import { collapseTeamMirrors } from '../../../utils/team-mirror.js'
 
 export {
     canAccessTeamSilently,
@@ -146,13 +147,44 @@ export function calcPerDbLimit(limit: number, hasTeamDb: boolean): number {
 }
 
 /**
- * Merge multiple arrays of entries, deduplicate by content/source,
+ * Team DB: stamp `originPersonalId` (migration 020) onto same-store team hits so
+ * `collapseTeamMirrors` can match them precisely. No-op without team support.
+ */
+export function attachTeamMirrorOrigins(
+    teamDb: IDatabaseAdapter | undefined,
+    entries: EntryWithSource[]
+): EntryWithSource[] {
+    if (teamDb === undefined || typeof teamDb.getMirrorOrigins !== 'function') return entries
+    const teamIds: number[] = []
+    for (const entry of entries) {
+        const id = entry['id']
+        if (entry.source === 'team' && entry.team_db === undefined && typeof id === 'number') {
+            teamIds.push(id)
+        }
+    }
+    if (teamIds.length === 0) return entries
+    const origins = teamDb.getMirrorOrigins(teamIds)
+    if (origins.size === 0) return entries
+    return entries.map((entry) => {
+        const id = entry['id']
+        const origin =
+            entry.source === 'team' && typeof id === 'number' ? origins.get(id) : undefined
+        return origin !== undefined ? { ...entry, originPersonalId: origin } : entry
+    })
+}
+
+/**
+ * Merge multiple arrays of entries, deduplicate by `source[:team_db]:id`, collapse
+ * personal/team mirror pairs (keeping the personal hit annotated with `alsoInTeam`),
  * and sort by timestamp, importance, similarity, or preserve existing rank order.
+ * Pass `teamDb` to match mirrors precisely via `origin_personal_id`; without it,
+ * mirrors are matched by normalized-content sha256 + workspace.
  */
 export function mergeMultipleSources(
     sources: EntryWithSource[][],
     limit?: number,
-    sortBy: 'timestamp' | 'importance' | 'similarity' | 'preserve' = 'timestamp'
+    sortBy: 'timestamp' | 'importance' | 'similarity' | 'preserve' = 'timestamp',
+    teamDb?: IDatabaseAdapter
 ): EntryWithSource[] {
     const seen = new Set<string>()
     const merged: EntryWithSource[] = []
@@ -194,18 +226,20 @@ export function mergeMultipleSources(
         }
     }
 
-    return limit !== undefined ? merged.slice(0, limit) : merged
+    const collapsed = collapseTeamMirrors(attachTeamMirrorOrigins(teamDb, merged))
+    return limit !== undefined ? collapsed.slice(0, limit) : collapsed
 }
 
 /**
- * Merge personal and team results, deduplicate by content,
+ * Merge personal and team results (see `mergeMultipleSources` for dedupe and mirror collapse),
  * and sort by timestamp, importance, similarity, or preserve existing rank order.
  */
 export function mergeAndDedup(
     personal: EntryWithSource[],
     team: EntryWithSource[],
     limit?: number,
-    sortBy: 'timestamp' | 'importance' | 'similarity' | 'preserve' = 'timestamp'
+    sortBy: 'timestamp' | 'importance' | 'similarity' | 'preserve' = 'timestamp',
+    teamDb?: IDatabaseAdapter
 ): EntryWithSource[] {
-    return mergeMultipleSources([personal, team], limit, sortBy)
+    return mergeMultipleSources([personal, team], limit, sortBy, teamDb)
 }

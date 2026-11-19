@@ -327,7 +327,13 @@ export async function executeSemanticSearch(
         )
         const entries =
             queryOutcome.teamEntries.length > 0
-                ? mergeAndDedup(personalEntries, queryOutcome.teamEntries, input.limit, 'similarity')
+                ? mergeAndDedup(
+                      personalEntries,
+                      queryOutcome.teamEntries,
+                      input.limit,
+                      'similarity',
+                      context.teamDb
+                  )
                 : personalEntries.slice(0, input.limit)
         const hint = buildSemanticSearchHint(vectorManager, entries, input)
         return {

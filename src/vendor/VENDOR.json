@@ -15,10 +15,11 @@
         "parser-utils.ts",
         "parser.ts",
         "schema.ts",
+        "uncommitted.ts",
         "AGENT_README.md"
       ],
-      "syncedAt": "2026-11-19T05:21:44.396Z",
-      "syncedFromCommit": "27a04b6a9dbca1a8c8646609caf3aee56a4f4d75"
+      "syncedAt": "2026-11-19T08:07:18.894Z",
+      "syncedFromCommit": "f38594ff5f57925125e94baa318a40867dc32262"
     },
     "lib-agent-exec": {
       "source": ".agents/scripts/lib-agent-exec",
@@ -56,17 +57,18 @@
         "interceptors/system-interceptor.ts",
         "AGENT_README.md"
       ],
-      "syncedAt": "2026-11-19T05:21:44.396Z",
-      "syncedFromCommit": "27a04b6a9dbca1a8c8646609caf3aee56a4f4d75"
+      "syncedAt": "2026-11-19T08:07:18.894Z",
+      "syncedFromCommit": "f38594ff5f57925125e94baa318a40867dc32262"
     },
     "commit": {
       "source": ".agents/scripts",
       "files": [
         "commit.ts",
+        "commit-cli-schema.ts",
         "commit-journal.ts"
       ],
-      "syncedAt": "2026-11-19T05:21:44.396Z",
-      "syncedFromCommit": "27a04b6a9dbca1a8c8646609caf3aee56a4f4d75"
+      "syncedAt": "2026-11-19T08:07:18.894Z",
+      "syncedFromCommit": "f38594ff5f57925125e94baa318a40867dc32262"
     }
   }
 }

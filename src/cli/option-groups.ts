@@ -266,6 +266,10 @@ export function addBriefingOptions(command: Command): Command {
                 'Aggregate Copilot review state across recent PRs in briefing (env: BRIEFING_COPILOT_REVIEWS)'
             )
             .option(
+                '--no-briefing-graph',
+                'Disable graph/git pivots in briefing: entry link degree, commit→entry refs, active threads (env: BRIEFING_GRAPH=false)'
+            )
+            .option(
                 '--workflow-summary <text>',
                 'Workflow summary for memory://workflows resource (env: MEMORY_JOURNAL_WORKFLOW_SUMMARY)'
             )

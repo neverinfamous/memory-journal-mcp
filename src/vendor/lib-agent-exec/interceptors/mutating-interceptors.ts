@@ -3,10 +3,105 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { match, P } from 'ts-pattern';
-import { execSync } from 'node:child_process';
+import { execSync, spawnSync } from 'node:child_process';
 import { ExecutionContext } from './types.js';
 import { getPositionalArgs, convertToWslPath } from '../command-utils.js';
 import { AGENT_EXEC_README_URL } from './utils.js';
+
+/** [INVARIANT]: Keep in sync with commit.ts stale-lock threshold (5 minutes). */
+export const STALE_INDEX_LOCK_MS = 5 * 60 * 1000;
+
+const AGENTS_PATH_RE = /(?:^|[\\/])\.agents(?:[\\/]|$)/;
+const PRIVATE_PATH_RE = /(?:^|[\\/])\.agents[\\/](?:scratch|cache)(?:[\\/]|$)|issues\.jsonl$/i;
+const GIT_ADD_FORCE_RE = /^-[nvfipeuAN]*f[nvfipeuAN]*$/;
+
+export interface GitIgnoreProbe {
+  ignored: boolean;
+  pattern: string | null;
+}
+
+/**
+ * [INTENT]: Ask git (in the payload cwd) whether a path is ignored, and by which pattern.
+ * Tracked files are never reported as ignored by `git check-ignore`.
+ */
+export function probeGitIgnore(cwd: string, target: string): GitIgnoreProbe {
+  try {
+    const res = spawnSync('git', ['check-ignore', '-v', '--', target], {
+      cwd,
+      encoding: 'utf8',
+      timeout: 10000,
+      windowsHide: true,
+    });
+    if (res.status !== 0 || typeof res.stdout !== 'string' || res.stdout.trim() === '') {
+      return { ignored: false, pattern: null };
+    }
+    // Format: <source>:<linenum>:<pattern>\t<pathname>
+    const meta = (res.stdout.split(/\r?\n/)[0] ?? '').split('\t')[0] ?? '';
+    const patternMatch = meta.match(/^.*?:\d+:(.*)$/);
+    const pattern = patternMatch !== null && patternMatch[1] !== undefined ? patternMatch[1] : null;
+    if (pattern !== null && pattern.startsWith('!')) {
+      return { ignored: false, pattern };
+    }
+    return { ignored: true, pattern };
+  } catch {
+    return { ignored: false, pattern: null };
+  }
+}
+
+export function isWholesaleAgentsIgnore(pattern: string | null): boolean {
+  if (pattern === null) return false;
+  const norm = pattern.trim().replace(/^\/+/, '').replace(/^\*\*\//, '');
+  return ['.agents', '.agents/', '.agents/*', '.agents/**'].includes(norm);
+}
+
+/**
+ * [INTENT]: `git add` on `.agents` paths: inject `-f` only when git reports the path ignored by a narrow rule.
+ * [INVARIANT]: Never force-add scratch/cache dirs, `*issues.jsonl` logs, or `.agents/` in repos that ignore it
+ * wholesale (satellite repos keep private agent tooling out of public history).
+ */
+function healGitAddForceFlag(ctx: ExecutionContext, gitCwd: string): void {
+  const addIdx = ctx.args.indexOf('add');
+  if (addIdx === -1) return;
+  const afterAdd = ctx.args.slice(addIdx + 1);
+  const hasForce = afterAdd.some(a => a === '--force' || GIT_ADD_FORCE_RE.test(a));
+
+  const paths: string[] = [];
+  let sawSeparator = false;
+  for (const a of afterAdd) {
+    if (!sawSeparator && a === '--') {
+      sawSeparator = true;
+      continue;
+    }
+    if (!sawSeparator && a.startsWith('-')) continue;
+    paths.push(a);
+  }
+
+  let needsForce = false;
+  for (const p of paths) {
+    const isPrivate = PRIVATE_PATH_RE.test(p);
+    const isAgents = AGENTS_PATH_RE.test(p) || p === '.agents';
+    if (!isPrivate && !isAgents) continue;
+
+    const probe = probeGitIgnore(gitCwd, p);
+    const wholesale = isAgents && probe.ignored && isWholesaleAgentsIgnore(probe.pattern);
+    if ((isPrivate || wholesale) && (hasForce || probe.ignored)) {
+      const reason = isPrivate
+        ? 'scratch/cache directories and *issues.jsonl logs are private runtime state'
+        : `this repo ignores '.agents/' wholesale (${probe.pattern ?? '.agents/'}), so its agent tooling must stay out of git`;
+      console.error(`\n   💡 AGENT HINT: Refusing to ${hasForce ? 'force-add' : 'add'} '${p}': ${reason}.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Execution blocked. Remove '${p}' from 'git add' (and drop -f). Stage explicit tracked paths only. Ref: [AGENT_README.md](${AGENT_EXEC_README_URL})\x1b[0m`);
+      process.exit(1);
+      return;
+    }
+    if (probe.ignored && !hasForce) {
+      needsForce = true;
+    }
+  }
+
+  if (needsForce) {
+    console.error(`\n   🛠️ AUTONOMOUS HEALING: Injecting '-f' to 'git add' for '.agents' path(s) that git check-ignore reports as ignored... (Frictionless Recovery)\x1b[0m`);
+    ctx.args.splice(addIdx + 1, 0, '-f');
+  }
+}
 
 export function runMutatingInterceptors(
   ctx: ExecutionContext,
@@ -70,7 +165,8 @@ export function runMutatingInterceptors(
       if (fs.existsSync(lockPath)) {
         try {
           const stats = fs.statSync(lockPath);
-          if (Date.now() - stats.mtimeMs > 10000) {
+          // [INVARIANT]: Matches commit.ts STALE_LOCK_MS (5 min) so a live long-running git op never loses its lock.
+          if (Date.now() - stats.mtimeMs > STALE_INDEX_LOCK_MS) {
             console.error(`\n   🛠️ AUTONOMOUS HEALING: Detected stale '.git/index.lock' (age: ${Math.round((Date.now() - stats.mtimeMs) / 1000)}s). Removing lock to prevent exit 128... (Frictionless Recovery)\x1b[0m`);
             fs.unlinkSync(lockPath);
           }
@@ -78,16 +174,13 @@ export function runMutatingInterceptors(
           // ignore
         }
       }
-      if (matchedArgs.includes('add') && matchedArgs.some(a => a.includes('.agents'))) {
-        if (!matchedArgs.includes('-f') && !matchedArgs.includes('--force')) {
-           console.error(`\n   🛠️ AUTONOMOUS HEALING: Injecting '-f' to 'git add' for '.agents' path which is ignored... (Frictionless Recovery)\x1b[0m`);
-           ctx.args.splice(ctx.args.indexOf('add') + 1, 0, '-f');
-        }
+      if (matchedArgs.includes('add') && ctx.payload.target !== 'wsl2') {
+        healGitAddForceFlag(ctx, gitCwd);
       }
       if (matchedArgs.includes('branch') && matchedArgs.includes('-r')) {
         console.error(`\n   💡 AGENT HINT: 'git branch -r' may return stale deleted branches.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Synchronously running 'git fetch -p' to prune the cache before executing branch listing.\x1b[0m`);
         try {
-          execSync('git fetch -p', { stdio: 'ignore' });
+          execSync('git fetch -p', { cwd: gitCwd, stdio: 'ignore', timeout: 60000 });
         } catch {
           // ignore
         }

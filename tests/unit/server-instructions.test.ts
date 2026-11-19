@@ -39,6 +39,23 @@ describe('server-instructions generation', () => {
         expect(text).toContain('### `mj.core`')
     })
 
+    it('separates the Code Mode snippet with a blank line and advertises session_id in the top-level contract', () => {
+        const tools = new Set(['create_entry', 'mj_execute_code'])
+        const text = generateStandardInstructions(tools, [])
+        expect(text).toMatch(/\n\n## Code Mode\n/)
+        expect(text).toMatch(/Top-Level Contract: `mj_execute_code\(\{[^}]*\bsession_id\b[^}]*\}\)`/)
+    })
+
+    it('omits test-only methods and the duplicated Healing Aliases bullet from the full Code Mode reference', () => {
+        const text = generateCodeModeInstructions(new Set(['mj_execute_code']), [])
+        for (const testOnly of ['testSimple', 'testErrorHandling', 'triggerProgress']) {
+            expect(text).not.toContain(testOnly)
+        }
+        expect(text).not.toContain('**Healing Aliases:**')
+        expect(text.match(/^Aliases: /gm)?.length).toBe(1)
+        expect(text).toContain('`session_id` (active conversation UUID)')
+    })
+
     it('scopes Active Tools to registered MCP tools when enabledGroups expands for sandbox access', () => {
         const tools = new Set(['mj_execute_code', 'update_configuration'])
         const groups = new Set<ToolGroup>(['core', 'search', 'admin', 'codemode'])

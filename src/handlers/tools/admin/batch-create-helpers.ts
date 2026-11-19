@@ -152,7 +152,8 @@ export async function prepareBatchCreateInputs(
 export async function shareBatchEntriesWithTeam(
     context: ToolContext,
     prepared: PreparedBatchEntry[],
-    createdIndexes: number[]
+    createdIndexes: number[],
+    personalIdsByIndex?: ReadonlyMap<number, number>
 ): Promise<{ sharedCount: number; warnings: string[] }> {
     const warnings: string[] = []
     let sharedCount = 0
@@ -193,12 +194,15 @@ export async function shareBatchEntriesWithTeam(
         for (const i of wanted) {
             const entry = prepared[i]
             if (!entry) continue
+            const originPersonalId = personalIdsByIndex?.get(i)
             if (
                 tryInsertBatchSharedEntry(
                     context,
                     teamDb,
                     author,
-                    entry,
+                    originPersonalId !== undefined
+                        ? { ...entry, input: { ...entry.input, originPersonalId } }
+                        : entry,
                     i,
                     rbacVerifiedWs,
                     canonicalAuthorByWs,

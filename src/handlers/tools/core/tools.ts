@@ -12,6 +12,10 @@ import { resolveWorkspaceId, resolveProjectContext } from '../../../utils/worksp
 import { activeProjectRegistry, alignedProjectFilter } from '../../../utils/write-scope.js'
 import { logger } from '../../../utils/logger.js'
 import { probeMatchingTeamEntry } from '../search/helpers.js'
+import { enforceAccessBoundary } from '../../../auth/validation.js'
+import { TEAM_DB_ERROR_RESPONSE, executeTeamGetEntryById } from '../team/helpers.js'
+import { enforceTeamRbac, getCallerIdentity } from '../team/rbac.js'
+import { computeSuggestedLinks } from './link-suggestions.js'
 
 import {
     CreateEntrySchema,
@@ -124,9 +128,26 @@ async function executeCreateEntry(
             })
     }
 
+    // [INVARIANT] M2: stamp the team mirror with its personal origin (team-only column, migration 020).
     const teamShare = input.share_with_team
-        ? await recordTeamShareOutcome(context, entryInput, relationshipWarnings)
+        ? await recordTeamShareOutcome(
+              context,
+              { ...entryInput, originPersonalId: id },
+              relationshipWarnings
+          )
         : { sharedWithTeam: false }
+    const suggestedLinks =
+        (!input.relationships || input.relationships.length === 0) &&
+        !input.tags?.includes('commit-narrative')
+            ? await computeSuggestedLinks({
+                  db,
+                  vectorManager: context.vectorManager,
+                  entry: createdEntry,
+                  workspaceId: wsId,
+                  projectNumber,
+                  sessionId: input.session_id,
+              })
+            : []
     const allWarnings = [
         ...(vectorWarning !== undefined ? [vectorWarning] : []),
         ...relationshipWarnings,
@@ -143,6 +164,7 @@ async function executeCreateEntry(
               }
             : {}),
         ...(relationshipWarnings.length > 0 ? { relationshipWarnings } : {}),
+        ...(suggestedLinks.length > 0 ? { suggested_links: suggestedLinks } : {}),
     }
 }
 
@@ -197,6 +219,41 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
                     const resourceFallback = tryResolveEntryResourceUri(params, context)
                     if (resourceFallback !== undefined) return resourceFallback
                     const input = GetEntryByIdSchema.parse(params)
+                    if (input.source === 'team') {
+                        enforceAccessBoundary('team_get_entry_by_id', 'tool', { requiresTeamScope: true })
+                        if (!context.teamDb) {
+                            return { ...TEAM_DB_ERROR_RESPONSE }
+                        }
+                        const targetWs = resolveWorkspaceId(
+                            input.workspace_id,
+                            input.project_number,
+                            context.config
+                        )
+                        enforceTeamRbac(context, getCallerIdentity(), 'viewer', targetWs)
+                        const teamRes = executeTeamGetEntryById(context, context.teamDb, {
+                            entry_id: input.entry_id,
+                            include_relationships: input.include_relationships,
+                            ...(input.project_number !== undefined
+                                ? { project_number: input.project_number }
+                                : {}),
+                            ...(input.workspace_id !== undefined
+                                ? { workspace_id: input.workspace_id }
+                                : {}),
+                        })
+                        const rawImp = teamRes['importance']
+                        if (
+                            typeof rawImp === 'object' &&
+                            rawImp !== null &&
+                            'score' in rawImp &&
+                            typeof rawImp.score === 'number'
+                        ) {
+                            teamRes['importance'] = rawImp.score
+                            if ('breakdown' in rawImp && rawImp.breakdown !== undefined) {
+                                teamRes['importanceBreakdown'] = rawImp.breakdown
+                            }
+                        }
+                        return teamRes
+                    }
                     let wsId = resolveWorkspaceId(input.workspace_id, input.project_number, context.config)
                     const entry = db.getEntryById(input.entry_id, wsId)
                     if (entry?.workspaceId !== undefined && (wsId === '*' || wsId === 'default')) {

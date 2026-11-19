@@ -7,6 +7,11 @@ import type { BriefingGitHub } from './github-section.js'
 import type { GraphSummary } from './context-section.js'
 import type { BriefingInsights } from './insights-section.js'
 import type { GitHistorySummary } from './system-section.js'
+import {
+    isRecentUnlinkedAlert,
+    type BriefingGraphPivots,
+    type BriefingToolNaming,
+} from './graph-pivots-section.js'
 import { fenceNonCanonicalRefOrKey } from '../../../../utils/security-utils.js'
 
 export interface BriefingUserMessageOptions {
@@ -21,6 +26,10 @@ export interface BriefingUserMessageOptions {
     teamTotalEntries?: number
     analyticsInsights?: BriefingInsights
     graphSummary?: GraphSummary
+    /** Cross-source pivots (degree, commit refs, active threads); absent when disabled */
+    graphPivots?: BriefingGraphPivots
+    /** Operation naming for hints; `codemode` emits `mj.*` APIs (default: legacy mixed hints) */
+    toolNaming?: BriefingToolNaming
     gitHistory?: GitHistorySummary | null
     isReadonly?: boolean
     teamConfigured?: boolean
@@ -200,17 +209,22 @@ export function buildJournalParts(opts: BriefingUserMessageOptions): string[] {
         journalParts.push('Latest: No entries yet')
     }
     if (summaryPreviews && summaryPreviews.length > 0) {
+        const summaryHint =
+            opts.toolNaming === 'direct'
+                ? '`get_entry_by_id`'
+                : '`mj.core.getEntryById` via `mj_execute_code`'
         for (const s of summaryPreviews) {
             const cleaned = s.replace(/#+\s/g, '').replace(/\*\*/g, '').replace(/[-*]\s/g, '• ')
             journalParts.push(
-                `Summary: ${escapeCell(cleaned)} (Use \`mj.core.getEntryById\` via \`mj_execute_code\` to view full entry)`,
+                `Summary: ${escapeCell(cleaned)} (Use ${summaryHint} to view full entry)`,
             )
         }
     }
     if (opts.teamLatestPreviews && opts.teamLatestPreviews.length > 0) {
+        const teamHint = opts.toolNaming === 'direct' ? '`team_get_entry_by_id`' : '`mj.team.teamGetEntryById`'
         for (const teamEntry of opts.teamLatestPreviews) {
             journalParts.push(
-                `Team: ${escapeCell(teamEntry)} (Use \`mj.team.teamGetEntryById\` to view full team entry)`,
+                `Team: ${escapeCell(teamEntry)} (Use ${teamHint} to view full team entry)`,
             )
         }
     }
@@ -239,7 +253,8 @@ export function buildConfigLines(opts: BriefingUserMessageOptions): string[] {
 export function buildInsightsLines(opts: BriefingUserMessageOptions): string[] {
     const insightsLines: string[] = []
     appendRepoInsights(opts.github, insightsLines)
-    appendAnalyticsInsights(opts.analyticsInsights, insightsLines)
+    // [INTENT] With graph pivots on, density moves to the Graph row next to the other graph metrics.
+    appendAnalyticsInsights(opts.analyticsInsights, insightsLines, opts.graphPivots === undefined)
     return insightsLines
 }
 
@@ -266,41 +281,21 @@ function appendRepoInsights(github: BriefingGitHub | null, insightsLines: string
 function appendAnalyticsInsights(
     analyticsInsights: BriefingInsights | undefined,
     insightsLines: string[],
+    includeDensity = true,
 ): void {
     if (analyticsInsights === undefined) return
     insightsLines.push(`📈 ${escapeCell(analyticsInsights.activityTrend)}`)
     const metricParts: string[] = []
     if (analyticsInsights.significanceSpike !== null)
         metricParts.push(`🔥 ${escapeCell(analyticsInsights.significanceSpike)}`)
-    if (analyticsInsights.relationshipDensity !== undefined)
+    if (includeDensity && analyticsInsights.relationshipDensity !== undefined)
         metricParts.push(`🔗 Density: ${escapeCell(String(analyticsInsights.relationshipDensity))}`)
     if (metricParts.length > 0) insightsLines.push(metricParts.join(' · '))
     if (analyticsInsights.staleProjects.length > 0)
         insightsLines.push(`💤 ${String(analyticsInsights.staleProjects.length)} stale projects`)
 }
 
-export function buildGraphLines(graphSummary: GraphSummary | undefined): string[] {
-    const graphLines: string[] = []
-    if (!graphSummary || graphSummary.totalRelationships === 0) return graphLines
-    const topTypes =
-        Object.entries(graphSummary.causalMetrics)
-            .filter(([_, count]) => count > 0)
-            .map(([type, count]) => `${type}: ${String(count)}`)
-            .join(', ') || 'none'
-
-    const orphanAlert = graphSummary.orphanRatio !== undefined && graphSummary.orphanRatio > 0.2 ? '🔴 ' : ''
-    let graphText = `${orphanAlert}${String(graphSummary.totalRelationships)} relationships<br>Causal: ${escapeCell(topTypes)} (use \`visualize_relationships\`)`
-
-    if (graphSummary.topHubs.length > 0) {
-        const hubsStr = graphSummary.topHubs
-            .map((h) => `#${String(h.id)}${h.preview ? ` ${h.preview}` : ''}`.trim())
-            .join(', ')
-        graphText += `<br>Context Hubs: ${escapeCell(hubsStr)}`
-    }
-
-    graphLines.push(graphText)
-    return graphLines
-}
+export { buildGraphLines } from './graph-lines.js'
 
 export function buildGitHistoryLines(opts: BriefingUserMessageOptions): string[] {
     const gitHistoryLines: string[] = []
@@ -313,12 +308,17 @@ export function buildGitHistoryLines(opts: BriefingUserMessageOptions): string[]
     }
 
     const repoPathUrl = opts.github?.repo ? `https://github.com/${opts.github.repo}/commit/` : null
+    const commitRefs = opts.graphPivots?.commitRefs
     const shortCommits = opts.gitHistory.commits
-        .map((c) => formatCommitLine(c, repoPathUrl))
+        .map((c) => formatCommitLine(c, repoPathUrl, commitRefs?.[c.hash]))
         .join('<br>')
     gitHistoryLines.push(`**Recent Changes:**<br>${shortCommits}`)
+    const historyHint =
+        opts.toolNaming === 'codemode'
+            ? '`mj.git.getCommitHistory` or `mj.git.searchCommits`'
+            : '`get_commit_history` or `search_commits`'
     gitHistoryLines.push(
-        `💡 **Tip:** Use \`get_commit_history\` or \`search_commits\` for deep Git history analysis instead of raw git commands.`,
+        `💡 **Tip:** Use ${historyHint} for deep Git history analysis instead of raw git commands.`,
     )
     return gitHistoryLines
 }
@@ -326,6 +326,7 @@ export function buildGitHistoryLines(opts: BriefingUserMessageOptions): string[]
 function formatCommitLine(
     c: GitHistorySummary['commits'][number],
     repoPathUrl: string | null,
+    entryRef?: number,
 ): string {
     const shaText = c.isPushed && repoPathUrl ? `[\`${c.hash}\`](${repoPathUrl}${c.hash})` : `\`${c.hash}\``
     const metaParts: string[] = []
@@ -339,13 +340,21 @@ function formatCommitLine(
         c.associatedIssues && c.associatedIssues.length > 0
             ? ` (${c.associatedIssues.map((i) => escapeCell(i)).join(', ')})`
             : ''
-    return `${shaText}${metaStr} ${escapeCell(c.message)}${issuesStr}`
+    const refStr = entryRef !== undefined ? ` →#${String(entryRef)}` : ''
+    return `${shaText}${metaStr} ${escapeCell(c.message)}${issuesStr}${refStr}`
 }
 
 export function buildFlagsAlert(opts: BriefingUserMessageOptions): string {
     let flagsAlert = ''
     const graphSummary = opts.graphSummary
-    if (graphSummary?.orphanRatio !== undefined && graphSummary.orphanRatio > 0.2) {
+    const pivots = opts.graphPivots
+    if (pivots !== undefined) {
+        // [INTENT] Recency-scoped: the all-time ratio is diluted by historical bulk-linking.
+        if (isRecentUnlinkedAlert(pivots)) {
+            const linkHint = opts.toolNaming === 'codemode' ? '`mj.relationships.linkEntries`' : '`link_entries`'
+            flagsAlert += `⚠️ **Journal Health:** ${String(pivots.unlinkedEntries)}/${String(pivots.recentEntries)} entries from the last ${String(pivots.windowDays)} days are unlinked (⚪) and at risk of auto-prune. Link them via \`relationships\` on create or ${linkHint}.\n\n`
+        }
+    } else if (graphSummary?.orphanRatio !== undefined && graphSummary.orphanRatio > 0.2) {
         const orphanPct = Math.round(graphSummary.orphanRatio * 100)
         flagsAlert += `⚠️ **Journal Health:** ${orphanPct}% of entries are orphaned (0 relationships). Consider running \`optimize-journal\`.\n\n`
     }

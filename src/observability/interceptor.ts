@@ -19,6 +19,7 @@ import type { MetricsAccumulator } from './metrics.js'
 import { logger } from '../utils/logger.js'
 import { logAgentIssue } from '../utils/issue-logger.js'
 import { getAuthContext } from '../auth/auth-context.js'
+import { isSilentTeamProbeActive } from '../codemode/rpc-context.js'
 
 // ============================================================================
 // Types
@@ -139,16 +140,22 @@ export function wrapWithMetrics(
         }
 
         const durationMs = Math.round(performance.now() - start)
+        const suppressSilentProbe =
+            isError &&
+            isSilentTeamProbeActive() &&
+            typeof result === 'object' &&
+            result !== null &&
+            (result as Record<string, unknown>)['code'] === 'RESOURCE_NOT_FOUND'
         recordInvocationMetrics(
             accumulator,
             toolName,
             durationMs,
             args,
             estimatePayloadTokens(result),
-            isError,
+            suppressSilentProbe ? false : isError,
             'result'
         )
-        if (isError) {
+        if (isError && !suppressSilentProbe) {
             reportToolErrorIssue(toolName, args, result)
         }
         return result

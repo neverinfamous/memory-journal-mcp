@@ -2,7 +2,8 @@
 import path from 'node:path';
 import fs from 'node:fs';
 import { ExecutionContext } from './types.js';
-import { convertToWslPath, getPositionalArgs, findPatternExprIndex, tokenizeArgs, healFragmentedQuotes } from '../command-utils.js';
+import { convertToWslPath, convertToWindowsPath, getPositionalArgs, findPatternExprIndex, tokenizeArgs, healFragmentedQuotes } from '../command-utils.js';
+import { resolveNativeBinary } from '../utils.js';
 
 export const GREP_EXCLUDE_DIRS = [
   'node_modules',
@@ -553,12 +554,25 @@ export function handleRipgrepInterception(ctx: ExecutionContext, hasStdin: boole
   }
   ctx.args = healedArgs;
 
-  if (hasStdin) {
-    console.error(`\n   💡 AGENT INTERCEPT: Search command with stdin detected. Switching execution target to WSL2... (Frictionless Recovery)`);
-    ctx.payload.target = 'wsl2';
-  } else if (process.platform === 'win32' && ctx.payload.target !== 'wsl2') {
-    console.error(`\n   💡 AGENT INTERCEPT: 'rg' natively fails or is not installed on Windows. Switching execution target to WSL2... (Frictionless Recovery)`);
-    ctx.payload.target = 'wsl2';
+  // [INTENT]: Prefer the native Windows rg binary (scoop/WinGet) over a WSL hop with slow /mnt/c I/O.
+  // Native rg reads stdin fine, so stdin alone no longer forces WSL. WSL is only a fallback when no
+  // native binary exists or the search targets Linux-only POSIX paths (e.g. /etc, /var/log).
+  if (process.platform === 'win32' && ctx.payload.target !== 'wsl2') {
+    const rgPatternIdx = findPatternExprIndex(cmdBasename, ctx.args);
+    const targetsLinuxOnlyPath = ctx.args.some((a, idx) =>
+      idx !== rgPatternIdx && a.startsWith('/') && !a.startsWith('//') && !/^\/mnt\/[a-zA-Z](?:\/|$)/.test(a)
+    );
+    if (resolveNativeBinary('rg') === null) {
+      console.error(`\n   💡 AGENT INTERCEPT: No native 'rg' binary on PATH. Switching execution target to WSL2... (Frictionless Recovery)`);
+      ctx.payload.target = 'wsl2';
+    } else if (targetsLinuxOnlyPath) {
+      console.error(`\n   💡 AGENT INTERCEPT: 'rg' targets a Linux-only POSIX path. Switching execution target to WSL2... (Frictionless Recovery)`);
+      ctx.payload.target = 'wsl2';
+    } else {
+      ctx.args = ctx.args.map((a, idx) =>
+        idx !== rgPatternIdx && /^\/mnt\/[a-zA-Z](?:\/|$)/.test(a) ? convertToWindowsPath(a) : a
+      );
+    }
   }
 
   let positionalArgs = getPositionalArgs(cmdBasename, ctx.args);

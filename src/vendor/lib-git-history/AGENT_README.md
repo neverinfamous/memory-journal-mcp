@@ -38,14 +38,14 @@ The module utilizes native Git `--name-status -z` and `--numstat -z` flags, leve
 
 ## 🛠️ Usage Guidelines for Agents
 
-- **CLI Help**: The script has a comprehensive built-in manual. Run `bun .\.agents\scripts\get-git-history-json.ts --help` to explore all available filtering and formatting options. Key flags include:
+- **CLI Help**: The script has a comprehensive built-in manual. Run the host's `get-git-history-json.ts --help` wrapper to explore all available filtering and formatting options. Key flags include:
   - `--type <type>`, `--category <cat>`, `--breaking` (filter by conventional commit parameters)
   - `--impact <val>`, `--confidence <val>` (filter by numerical impact/confidence thresholds)
   - `--diff-filter <filter>`, `--patch-search <pattern>`, `--reverse` (filter by file status, patch content, or order)
   - `--diff-context <lines>`, `--max-body-length <bytes>`, `--max-patch-length <bytes>` (constrain diff patch and body memory boundaries)
-- **Uncommitted State**: To get a deterministic JSON readout of the current staged, unstaged, and untracked files in the working directory, use `bun .\.agents\scripts\get-git-history-json.ts --uncommitted --stats`. Do NOT parse raw `git status` text.
+- **Uncommitted State**: To get a deterministic JSON readout of the current staged, unstaged, and untracked files in the working directory, use the host's `get-git-history-json.ts --uncommitted --stats` wrapper (combine with `--path <file_or_dir>` to scope large multi-root trees like `~/.gemini --path config`; expands nested untracked directories with `-uall` and computes non-binary untracked text line counts up to 5MB). Do NOT parse raw `git status` text.
 - **Execution Contexts (WSL & Docker)**: The underlying `git-runner.ts` explicitly accepts a `cwd`. When operating across OS boundaries (e.g., executing Git natively from Windows PowerShell 5.1 / PowerShell 7.7 targeting a WSL Container UNC path `\\wsl.localhost\...` or a Docker mount), the wrapper maintains deterministic string isolation. Ensure you pass the correct mapped Windows path to `--cwd`.
-- **Historical Conversation Search**: To search Antigravity conversation logs, session histories, or state snapshots tracked in `~/.gemini`, use `bun .\.agents\scripts\search-conversation-history.ts` (e.g., `--search "query"` or `--summary`).
+- **Historical Conversation Search**: To search Antigravity conversation logs, session histories, or state snapshots tracked in `~/.gemini`, use the host's `search-conversation-history.ts` wrapper (e.g., `--search "query"` or `--summary`).
 - **Output Formats & Streaming**: The default output is a JSON object. Use `--jsonl` to stream JSON Lines output. Use `--stream-to-file <path>` to write directly to disk and avoid stdout buffer limits. Use `--no-body` to skip retrieving expensive diff patches, file metrics, and commit bodies. You can also specify `--max-body-length` (default 100MB) to constrain parser memory.
 - **Context & Caching**: Use `--package-version` to inject the `package.json` version into the output metadata. Enable caching with `--cache` and auto-expand issue references (e.g., `#123`) using `--issue-tracker <url>`.
 - **Read-Only**: Treat this library as core infrastructure. If you must modify it, ensure you run the rigorous test suite using **Bun** (`bun test`) to prevent regressions. Do NOT attempt to run Vitest or Playwright.
@@ -63,8 +63,8 @@ The module utilizes native Git `--name-status -z` and `--numstat -z` flags, leve
 ## 🧪 Usability & Hallucination Testing
 
 If you are modifying the history parsing logic, you MUST run the usability testing suite to ensure LLMs do not hallucinate or break when piping large JSON responses.
-- **Run the Fuzzing Suite:** Follow `skills/lib-agent-exec/references/usability-audit.md`, or manually trigger the subagents defined in `.agents/scripts/usability/coordinator-workflow.md`.
-- **Test Auto-Generation:** The tests in `test-usability-*.md` are **auto-generated**. Do not edit them directly. Update `.agents/scripts/usability/scripts/test-manifest.ts` or the `content/` partials instead, then run `bun .\.agents\scripts\usability\scripts\generate-tests.ts`.
+- **Run the Fuzzing Suite:** Follow `skills/lib-agent-exec/references/usability-audit.md`, or manually trigger the subagents defined in the host's `usability/coordinator-workflow.md`.
+- **Test Auto-Generation:** The tests in `test-usability-*.md` are **auto-generated**. Do not edit them directly. Update the host's `usability/scripts/test-manifest.ts` or the `content/` partials instead, then run the host's `usability/scripts/generate-tests.ts` wrapper.
 
 ---
 

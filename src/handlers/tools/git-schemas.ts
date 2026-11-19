@@ -38,6 +38,7 @@ export const GitHistoryOptionsSchema = z.object({
     scope: z.string().optional(),
     techDebtAudit: z.boolean().optional(),
     summary: z.boolean().optional(),
+    uncommitted: z.boolean().optional(),
     repo: z.string().optional(),
     repo_name: z.string().optional(),
     workspace_id: z.string().optional(),
@@ -65,6 +66,7 @@ export const GitHistoryOptionsSchemaMcp = z.object({
     techDebtAudit: z.boolean().optional().describe('Filter for high impact commits with low trust or missing validation'),
     tech_debt_audit: z.boolean().optional().describe('Alias for techDebtAudit'),
     summary: z.boolean().optional().describe('Skip per-file diffstat computation for fast commit metadata queries'),
+    uncommitted: z.boolean().optional().describe('Include uncommitted working-tree status and diffstat (staged, unstaged, untracked) in uncommitted field'),
 }).transform((d) => ({
     ...d,
     maxCount: coerceRelaxed(d.maxCount ?? d.max_count ?? d.limit),
@@ -80,6 +82,7 @@ export const GitSearchOptionsSchema = z.object({
     scope: z.string().optional(),
     techDebtAudit: z.boolean().optional(),
     summary: z.boolean().optional(),
+    uncommitted: z.boolean().optional(),
     repo: z.string().optional(),
     repo_name: z.string().optional(),
     workspace_id: z.string().optional(),
@@ -185,5 +188,6 @@ export const GitOutputSchema = z.object({
     success: z.boolean().optional(),
     commits: z.array(z.unknown()).optional(),
     changelog: z.unknown().optional(),
+    uncommitted: z.unknown().optional(),
     error: z.string().optional(),
 }).extend(ErrorFieldsMixin.shape)

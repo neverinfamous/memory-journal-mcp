@@ -2,8 +2,8 @@ import type { Database } from 'better-sqlite3'
 import { logger } from '../../utils/logger.js'
 import { MIGRATIONS } from './migration-list.js'
 
-/** Migration version that only applies to team databases. */
-const TEAM_ONLY_MIGRATION_VERSION = 7
+/** Migration versions that only apply to team databases (7: author, 20: origin_personal_id). */
+const TEAM_ONLY_MIGRATION_VERSIONS: ReadonlySet<number> = new Set([7, 20])
 
 /**
  * Ensures the schema_migrations table exists.
@@ -149,9 +149,8 @@ export const MigrationManager = {
         // Run migrations inside a transaction
         db.transaction(() => {
             for (const migration of MIGRATIONS) {
-                // If it is migration 7 (team author) and we are not a team database,
-                // skip it unless it's explicitly team mode.
-                if (migration.version === TEAM_ONLY_MIGRATION_VERSION && !isTeam) {
+                // Team-only migrations (author, origin_personal_id) are skipped for personal databases.
+                if (TEAM_ONLY_MIGRATION_VERSIONS.has(migration.version) && !isTeam) {
                     continue
                 }
 

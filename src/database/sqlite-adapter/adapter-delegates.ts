@@ -17,6 +17,7 @@ import { AliasManager } from './aliases.js'
 import { TagsManager } from './tags.js'
 import { EntriesManager } from './entries/index.js'
 import { RelationshipsManager } from './relationships.js'
+import type { ActiveThreadRow, RecentLinkageStats, RecentNeighborhood } from './graph-pivots.js'
 import { BackupManager } from './backup.js'
 import { MembersManager } from './members.js'
 import { HealthOperations } from './health-operations.js'
@@ -224,6 +225,35 @@ export class AdapterDelegates {
 
     getOrphanCount(workspaceId?: string): number {
         return this.relationshipsMgr.getOrphanCount(workspaceId)
+    }
+
+    getRelationshipDegrees(entryIds: readonly number[], workspaceId?: string): Map<number, number> {
+        return this.relationshipsMgr.getRelationshipDegrees(entryIds, workspaceId)
+    }
+
+    getActiveThreads(sinceIso: string, limit: number, workspaceId?: string): ActiveThreadRow[] {
+        return this.relationshipsMgr.getActiveThreads(sinceIso, limit, workspaceId)
+    }
+
+    getRecentLinkageStats(sinceIso: string, workspaceId?: string): RecentLinkageStats {
+        return this.relationshipsMgr.getRecentLinkageStats(sinceIso, workspaceId)
+    }
+
+    getEntryIdsByCommitShas(shas: readonly string[], workspaceId?: string): Map<string, number> {
+        return this.relationshipsMgr.getEntryIdsByCommitShas(shas, workspaceId)
+    }
+
+    getRecentNeighborhood(sinceIso: string, edgeLimit: number, workspaceId?: string): RecentNeighborhood {
+        return this.relationshipsMgr.getRecentNeighborhood(sinceIso, edgeLimit, workspaceId)
+    }
+
+    getEntriesSharingAnchors(
+        entryId: number,
+        sinceIso: string,
+        limit: number,
+        workspaceId?: string
+    ): { entryId: number; entryType: string; content: string; sharedAnchors: number }[] {
+        return this.relationshipsMgr.getEntriesSharingAnchors(entryId, sinceIso, limit, workspaceId)
     }
 
     // Backups & Health
