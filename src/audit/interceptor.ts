@@ -163,9 +163,13 @@ function scrubAuditArgValue(val: unknown, depth: number, seen: WeakSet<object>):
         const out: Record<string, unknown> = {}
         Object.setPrototypeOf(out, null)
         for (const [k, v] of Object.entries(val as Record<string, unknown>)) {
-            out[k] = SENSITIVE_KEY_RE.test(k)
-                ? '[REDACTED]'
-                : scrubAuditArgValue(v, depth + 1, seen)
+            const cleanKey = sanitizeErrorForLogging(k)
+            const safeKey =
+                cleanKey.length > 256 ? `${cleanKey.slice(0, 256)}...[truncated]` : cleanKey
+            out[safeKey] =
+                SENSITIVE_KEY_RE.test(k) || SENSITIVE_KEY_RE.test(safeKey)
+                    ? '[REDACTED]'
+                    : scrubAuditArgValue(v, depth + 1, seen)
         }
         return out
     } finally {

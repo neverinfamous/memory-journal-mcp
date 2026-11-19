@@ -21,6 +21,11 @@ import {
     healIncomingToolCallParams,
 } from './call-arg-normalizer.js'
 import { isAutonomousShimBlockedByFilter } from '../../../handlers/tools/dummy-filter-helpers.js'
+import { getAuthContext } from '../../../auth/auth-context.js'
+import { hasScope } from '../../../auth/scopes.js'
+import { getRequiredScope } from '../../../auth/scope-map.js'
+import { getGrantedAuthScopes } from '../../../auth/validation.js'
+import { isToolVisibleForFilter } from '../../../filtering/tool-filter.js'
 import type { PromptDefinition } from '../../registration.js'
 import { logAgentIssue } from '../../../utils/issue-logger.js'
 import { setFallbackProjectRegistryLoader } from '../../../codemode/normalizers/generic-field-aliases.js'
@@ -254,6 +259,34 @@ function checkCallElementLimit(
     )
 }
 
+function isRegisteredToolBlocked(
+    toolName: string | undefined,
+    allTools: ToolRegistration[],
+    allToolNames: Set<string>,
+    config: ToolHandlerConfig
+): boolean {
+    if (toolName === undefined || !allToolNames.has(toolName)) return false
+    const filterCfg = config.filterConfig
+    if (
+        filterCfg !== undefined &&
+        filterCfg !== null &&
+        config.codemodeInternalFullAccess !== true
+    ) {
+        const reg = allTools.find((t) => t.name === toolName)
+        if (
+            !filterCfg.enabledTools.has(toolName) ||
+            !isToolVisibleForFilter(toolName, reg?.annotations?.readOnlyHint, filterCfg.raw)
+        ) {
+            return true
+        }
+    }
+    const auth = getAuthContext()
+    if (auth !== undefined && !hasScope(getGrantedAuthScopes(auth), getRequiredScope(toolName))) {
+        return true
+    }
+    return false
+}
+
 async function executeInterceptedToolCall(
     request: unknown,
     extra: unknown,
@@ -280,9 +313,17 @@ async function executeInterceptedToolCall(
         const limitErr = checkCallElementLimit(params?.arguments, options.maxToolInputElements)
         if (limitErr !== undefined) return limitErr
 
+        if (isRegisteredToolBlocked(params?.name, allTools, allToolNames, customToolHandlerConfig)) {
+            return await originalHandler(request, extra)
+        }
+
         if (params !== undefined && healingEnabled) {
             const healError = healIncomingToolCallParams(params, options, liveBriefing)
             if (healError !== undefined) return healError
+        }
+
+        if (isRegisteredToolBlocked(params?.name, allTools, allToolNames, customToolHandlerConfig)) {
+            return await originalHandler(request, extra)
         }
 
         applyCreateWorkspaceScope(params, customToolHandlerConfig, liveBriefing, context.runtime)

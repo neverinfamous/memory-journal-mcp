@@ -279,6 +279,9 @@ export class ConfigResolver {
         if (typeof this.command?.getOptionValueSource !== 'function') {
             return false
         }
+        if (!Object.hasOwn(this.cliOptions, cliKey) || this.cliOptions[cliKey] === undefined) {
+            return false
+        }
         try {
             return this.command.getOptionValueSource(cliKey) === 'cli'
         } catch {

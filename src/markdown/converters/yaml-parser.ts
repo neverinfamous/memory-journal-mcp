@@ -53,27 +53,29 @@ function assignFrontmatterKey(
 function extractFrontmatterHeaderBounds(
     content: string
 ): { fmLines: string[]; body: string } | null {
-    if (content.length > MAX_FRONTMATTER_CONTENT_LENGTH) return null
-    const lines = content.split(/\r?\n/)
-    if (lines[0]?.trim() !== '---') return null
+    const firstNl = content.indexOf('\n')
+    if (firstNl === -1) return null
+    const firstLine = content.slice(0, firstNl).replace(/\r$/, '').trim()
+    if (firstLine !== '---') return null
 
-    let closingIndex = -1
-    const maxScan = Math.min(lines.length, MAX_FRONTMATTER_LINES + 1)
-    for (let i = 1; i < maxScan; i++) {
-        if (lines[i]?.trim() === '---') {
-            closingIndex = i
-            break
+    const fmLines: string[] = []
+    let pos = firstNl + 1
+    while (pos < content.length && fmLines.length < MAX_FRONTMATTER_LINES && pos <= MAX_FRONTMATTER_CONTENT_LENGTH) {
+        const nextNl = content.indexOf('\n', pos)
+        const rawLine = nextNl === -1 ? content.slice(pos) : content.slice(pos, nextNl)
+        const cleanLine = rawLine.replace(/\r$/, '')
+        if (cleanLine.trim() === '---') {
+            const bodyStart = nextNl === -1 ? content.length : nextNl + 1
+            return {
+                fmLines,
+                body: content.slice(bodyStart).replace(/^\r?\n/, ''),
+            }
         }
+        fmLines.push(cleanLine)
+        if (nextNl === -1) break
+        pos = nextNl + 1
     }
-    if (closingIndex === -1) return null
-
-    return {
-        fmLines: lines.slice(1, closingIndex),
-        body: lines
-            .slice(closingIndex + 1)
-            .join('\n')
-            .replace(/^\n/, ''),
-    }
+    return null
 }
 
 function parseYamlFrontmatterLines(fmLines: string[]): FrontmatterData {
@@ -129,6 +131,9 @@ function parseYamlFrontmatterLines(fmLines: string[]): FrontmatterData {
 }
 
 export function parseYamlFrontmatter(content: string): YamlParseResult {
+    if (content.length > MAX_FRONTMATTER_CONTENT_LENGTH) {
+        return { metadata: Object.create(null) as FrontmatterData, body: content }
+    }
     const extracted = extractFrontmatterHeaderBounds(content)
     if (extracted === null) {
         return { metadata: Object.create(null) as FrontmatterData, body: content }

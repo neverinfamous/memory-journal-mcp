@@ -3,7 +3,23 @@
  * security validation and recovery heuristics. Worker-thread safe (no npm imports).
  */
 
-const SENSITIVE_STRING_CONTENT = /^(?:constructor|__proto__|prototype)$/i
+import {
+    decodeEscapeAt,
+    findNextJsLineTerminator,
+    isJsLineTerminator,
+    scanQuotedLiteral,
+    scanTemplateLiteral,
+    skipLineOrBlockComment,
+    skipRegexLiteralBody,
+} from './security-stripper-escapes.js'
+
+export {
+    decodeEscapeAt,
+    findNextJsLineTerminator,
+    isJsLineTerminator,
+    skipLineOrBlockComment,
+    skipRegexLiteralBody,
+}
 
 function scanIdentifierWord(code: string, start: number): { word: string; next: number } {
     let word = ''
@@ -30,166 +46,13 @@ function scanIdentifierWord(code: string, start: number): { word: string; next: 
 
 export { scanIdentifierWord }
 
-function decodeUnicodeEscape(code: string, slashIdx: number): { ch: string; next: number } | null {
-    const len = code.length
-    if (code[slashIdx + 2] === '{') {
-        let end = slashIdx + 3
-        while (end < len && end - (slashIdx + 3) < 8 && code[end] !== '}') end++
-        if (end >= len || code[end] !== '}') return null
-        const hex = code.slice(slashIdx + 3, end)
-        if (!/^[0-9a-fA-F]+$/.test(hex)) return null
-        const cp = Number.parseInt(hex, 16)
-        return cp <= 0x10ffff ? { ch: String.fromCodePoint(cp), next: end + 1 } : null
-    }
-    if (slashIdx + 6 > len) return null
-    const hex = code.slice(slashIdx + 2, slashIdx + 6)
-    return /^[0-9a-fA-F]{4}$/.test(hex)
-        ? { ch: String.fromCharCode(Number.parseInt(hex, 16)), next: slashIdx + 6 }
-        : null
-}
-
-function decodeEscapeAt(code: string, slashIdx: number, allowHexEscape: boolean): { ch: string; next: number } {
-    const len = code.length
-    if (slashIdx + 1 >= len) return { ch: '', next: slashIdx + 1 }
-    const esc = code[slashIdx + 1] ?? ''
-    if (esc === 'u') {
-        const decoded = decodeUnicodeEscape(code, slashIdx)
-        if (decoded !== null) return decoded
-    } else if (allowHexEscape && esc === 'x' && slashIdx + 4 <= len) {
-        const hex = code.slice(slashIdx + 2, slashIdx + 4)
-        if (/^[0-9a-fA-F]{2}$/.test(hex)) {
-            return { ch: String.fromCharCode(Number.parseInt(hex, 16)), next: slashIdx + 4 }
-        }
-    }
-    return { ch: esc, next: slashIdx + 2 }
-}
-
-export function isJsLineTerminator(ch: string | undefined): boolean {
-    return ch === '\n' || ch === '\r' || ch === '\u2028' || ch === '\u2029'
-}
-
-export function findNextJsLineTerminator(src: string, from: number): number {
-    for (let i = from; i < src.length; i++) {
-        if (isJsLineTerminator(src[i])) return i
-    }
-    return -1
-}
-
-/**
- * Skips a regex literal body starting just after the opening `/`.
- * Returns the index after the closing `/` and its flags (or at the line end if unterminated).
- */
-export function skipRegexLiteralBody(code: string, start: number): number {
-    const len = code.length
-    let i = start
-    let inCharClass = false
-    while (i < len) {
-        const c = code[i] ?? ''
-        if (c === '\\') {
-            i += i + 1 < len ? 2 : 1
-            continue
-        }
-        if (c === '[') {
-            inCharClass = true
-        } else if (c === ']') {
-            inCharClass = false
-        } else if (c === '/' && !inCharClass) {
-            i++
-            while (i < len && /[dgimsuvy]/.test(code[i] ?? '')) {
-                i++
-            }
-            break
-        } else if (isJsLineTerminator(c)) {
-            break
-        }
-        i++
-    }
-    return i
-}
-
-/**
- * Scans a quoted string literal starting just after the opening quote.
- * Returns the unescaped content and the index after the closing quote.
- */
-function scanQuotedLiteral(
-    code: string,
-    start: number,
-    quote: string
-): { content: string; next: number } {
-    const len = code.length
-    let i = start
-    let content = ''
-    while (i < len) {
-        const c = code[i] ?? ''
-        if (c === '\\') {
-            const dec = decodeEscapeAt(code, i, true)
-            content += dec.ch
-            i = dec.next
-            continue
-        }
-        if (c === quote) {
-            i++
-            break
-        }
-        content += c
-        i++
-    }
-    return { content, next: i }
-}
-
-/**
- * Scans a template literal segment starting just after the opening backtick (or the
- * closing `}` of a `${...}` interpolation when `resumed` is true).
- */
-function scanTemplateLiteral(
-    code: string,
-    start: number,
-    resumed: boolean,
-    braceDepthStack: number[]
-): { out: string; next: number; lastToken: string | undefined } {
-    const len = code.length
-    let out = resumed ? ')`' : '`'
-    let i = start
-    let lastToken: string | undefined
-
-    let content = ''
-    while (i < len) {
-        const c = code[i] ?? ''
-        if (c === '\\') {
-            const dec = decodeEscapeAt(code, i, true)
-            content += dec.ch
-            i = dec.next
-            continue
-        }
-        if (c === '$' && code[i + 1] === '{') {
-            out += '`' + '+('
-            braceDepthStack.push(0)
-            lastToken = '('
-            i += 2
-            break
-        }
-        if (c === '`') {
-            if (SENSITIVE_STRING_CONTENT.test(content.trim())) {
-                out += `${content.trim()}\``
-            } else {
-                out += '`'
-            }
-            lastToken = '`'
-            i++
-            break
-        }
-        content += c
-        i++
-    }
-    return { out, next: i, lastToken }
-}
-
 const REGEX_PRECEDING_KEYWORDS =
-    /^(?:return|typeof|instanceof|in|of|void|delete|throw|new|case|yield|await|else|do)$/
+    /^(?:return|typeof|instanceof|in|void|delete|throw|new|case|yield|await|else|do)$/
 const CONTROL_HEADER_KEYWORDS = /^(?:if|while|for|with|catch|switch)$/
 const STATEMENT_PRECEDING_TOKENS = new Set([
     '',
     ';',
+    ':label',
     '{',
     '}block',
     ')ctrl',
@@ -202,6 +65,7 @@ const STATEMENT_PRECEDING_TOKENS = new Set([
 const BLOCK_PRECEDING_TOKENS = new Set([
     '',
     ';',
+    ':label',
     '{',
     '}block',
     ')ctrl',
@@ -214,49 +78,11 @@ const BLOCK_PRECEDING_TOKENS = new Set([
     'finally',
 ])
 
-export function canStartRegexLiteral(prev: string): boolean {
-    if (!prev || prev === '}block' || prev === ')ctrl' || prev === '=>') return true
+export function canStartRegexLiteral(prev: string, inControlParen = false): boolean {
+    if (!prev || prev === '}block' || prev === ')ctrl' || prev === '=>' || prev === ':label') return true
+    if (inControlParen && prev === 'of') return true
     if (/^[([{:;,=!?&|+\-~*%^<>]$/.test(prev)) return true
     return REGEX_PRECEDING_KEYWORDS.test(prev)
-}
-
-export function skipLineOrBlockComment(
-    code: string,
-    start: number
-): { out: string; next: number; unterminated?: boolean } | null {
-    const ch = code[start] ?? ''
-    const next = start + 1 < code.length ? (code[start + 1] ?? '') : ''
-    if (ch === '/' && next === '/') {
-        let i = start + 2
-        while (i < code.length && !isJsLineTerminator(code[i])) i++
-        return { out: ' ', next: i, ...(i >= code.length ? { unterminated: true } : {}) }
-    }
-    if (ch === '<' && code.slice(start, start + 4) === '<!--') {
-        let i = start + 4
-        while (i < code.length && !isJsLineTerminator(code[i])) i++
-        return { out: ' ', next: i, ...(i >= code.length ? { unterminated: true } : {}) }
-    }
-    if (ch === '-' && code.slice(start, start + 3) === '-->') {
-        let pos = start - 1
-        while (pos >= 0 && (code[pos] === ' ' || code[pos] === '\t')) pos--
-        if (pos < 0 || isJsLineTerminator(code[pos])) {
-            let i = start + 3
-            while (i < code.length && !isJsLineTerminator(code[i])) i++
-            return { out: ' ', next: i, ...(i >= code.length ? { unterminated: true } : {}) }
-        }
-    }
-    if (ch === '/' && next === '*') {
-        let out = ' '
-        let i = start + 2
-        while (i < code.length && !(code[i] === '*' && code[i + 1] === '/')) {
-            if (isJsLineTerminator(code[i])) out += '\n'
-            i++
-        }
-        const closed = i < code.length
-        if (closed) i += 2
-        return { out, next: i, ...(!closed ? { unterminated: true } : {}) }
-    }
-    return null
 }
 
 export interface DelimiterState {
@@ -266,8 +92,12 @@ export interface DelimiterState {
     braceBlock: boolean[]
     awaitingForParen: boolean
     awaitingClassBody: boolean
+    classBraceDepth: number
+    classParenDepth: number
     pendingFnDecl: boolean
     pendingAsyncStmt: boolean
+    pendingLabel: boolean
+    inCaseClause: boolean
 }
 
 export function createDelimiterState(): DelimiterState {
@@ -278,38 +108,75 @@ export function createDelimiterState(): DelimiterState {
         braceBlock: [],
         awaitingForParen: false,
         awaitingClassBody: false,
+        classBraceDepth: -1,
+        classParenDepth: -1,
         pendingFnDecl: false,
         pendingAsyncStmt: false,
+        pendingLabel: false,
+        inCaseClause: false,
     }
+}
+
+function isStatementContext(prevToken: string, state: DelimiterState): boolean {
+    return (
+        STATEMENT_PRECEDING_TOKENS.has(prevToken) &&
+        (prevToken !== '{' || state.braceBlock.at(-1) !== false)
+    )
+}
+
+function isAtClassSignatureDepth(state: DelimiterState): boolean {
+    return (
+        state.awaitingClassBody &&
+        state.braceBlock.length === state.classBraceDepth &&
+        state.parenCtrl.length === state.classParenDepth
+    )
+}
+
+function clearClassSignature(state: DelimiterState): void {
+    state.awaitingClassBody = false
+    state.classBraceDepth = -1
+    state.classParenDepth = -1
 }
 
 export function trackIdentifierToken(word: string, prevToken: string, state: DelimiterState): string {
     if (prevToken === '.' || prevToken === '?.') {
         state.awaitingForParen = false
-        state.awaitingClassBody = false
+        if (!isAtClassSignatureDepth(state)) clearClassSignature(state)
         state.pendingFnDecl = false
         state.pendingAsyncStmt = false
+        state.pendingLabel = false
         return '$prop'
     }
+    const stmtStart = isStatementContext(prevToken, state)
     state.awaitingForParen = prevToken === 'for' && word === 'await'
+    state.pendingLabel =
+        word === 'default' ||
+        (stmtStart && word !== 'else' && word !== 'do' && word !== 'try' && word !== 'finally')
+    if (word === 'case' && state.braceBlock.at(-1) === true) {
+        state.inCaseClause = true
+    }
     if (word === 'async') {
-        state.pendingAsyncStmt = STATEMENT_PRECEDING_TOKENS.has(prevToken)
+        state.pendingAsyncStmt = stmtStart
         state.pendingFnDecl = false
     } else if (word === 'function') {
-        state.pendingFnDecl =
-            STATEMENT_PRECEDING_TOKENS.has(prevToken) ||
-            (prevToken === 'async' && state.pendingAsyncStmt)
+        state.pendingFnDecl = stmtStart || (prevToken === 'async' && state.pendingAsyncStmt)
         state.pendingAsyncStmt = false
-        state.awaitingClassBody = false
+        clearClassSignature(state)
     } else if (word === 'class') {
-        state.awaitingClassBody = STATEMENT_PRECEDING_TOKENS.has(prevToken)
+        if (stmtStart) {
+            state.awaitingClassBody = true
+            state.classBraceDepth = state.braceBlock.length
+            state.classParenDepth = state.parenCtrl.length
+        } else {
+            clearClassSignature(state)
+        }
         state.pendingFnDecl = false
         state.pendingAsyncStmt = false
     } else {
         if (prevToken !== 'function') state.pendingFnDecl = false
         state.pendingAsyncStmt = false
         if (word === 'catch' || word === 'finally' || word === 'try' || word === 'else') {
-            state.awaitingClassBody = false
+            clearClassSignature(state)
         }
     }
     return word
@@ -317,6 +184,7 @@ export function trackIdentifierToken(word: string, prevToken: string, state: Del
 
 export function trackPunctuationToken(ch: string, prevToken: string, state: DelimiterState): string {
     if (ch === '*' && prevToken === 'function' && state.pendingFnDecl) {
+        state.pendingLabel = false
         return 'function'
     }
     if (ch === '(') {
@@ -326,27 +194,30 @@ export function trackPunctuationToken(ch: string, prevToken: string, state: Deli
         state.awaitingForParen = false
         state.pendingFnDecl = false
         state.pendingAsyncStmt = false
+        state.pendingLabel = false
         return '('
     }
     if (ch === ')') {
         const isCtrl = state.parenCtrl.pop() === true
         const isFnDecl = state.parenFnDecl.pop() === true
+        state.pendingLabel = false
         if (isCtrl) return ')ctrl'
         return isFnDecl ? ')decl' : ')'
     }
     if (ch === '{') {
         if (state.templateBraces.length > 0) {
             const topIdx = state.templateBraces.length - 1
-            const top = state.templateBraces[topIdx] ?? 0
-            state.templateBraces[topIdx] = top + 1
+            state.templateBraces[topIdx] = (state.templateBraces[topIdx] ?? 0) + 1
         }
+        const isClassBody = isAtClassSignatureDepth(state)
         const isBlock =
-            state.awaitingClassBody ||
+            isClassBody ||
             (BLOCK_PRECEDING_TOKENS.has(prevToken) &&
                 (prevToken !== '{' || state.braceBlock.at(-1) === true))
-        state.awaitingClassBody = false
+        if (isClassBody) clearClassSignature(state)
         state.pendingFnDecl = false
         state.pendingAsyncStmt = false
+        state.pendingLabel = false
         state.braceBlock.push(isBlock)
         return '{'
     }
@@ -356,12 +227,24 @@ export function trackPunctuationToken(ch: string, prevToken: string, state: Deli
             const top = state.templateBraces[topIdx] ?? 0
             if (top > 0) state.templateBraces[topIdx] = top - 1
         }
+        state.pendingLabel = false
         return state.braceBlock.pop() === true ? '}block' : '}expr'
     }
-    if (ch === ';') state.awaitingClassBody = false
+    if (ch === ':') {
+        const isLabelOrCase = state.pendingLabel || state.inCaseClause
+        state.pendingLabel = false
+        state.inCaseClause = false
+        state.awaitingForParen = false
+        state.pendingFnDecl = false
+        state.pendingAsyncStmt = false
+        if (isAtClassSignatureDepth(state)) clearClassSignature(state)
+        return isLabelOrCase ? ':label' : ':'
+    }
+    if (ch === ';' && isAtClassSignatureDepth(state)) clearClassSignature(state)
     state.awaitingForParen = false
     state.pendingFnDecl = false
     state.pendingAsyncStmt = false
+    state.pendingLabel = false
     return ch
 }
 
@@ -388,7 +271,12 @@ export function stripCommentsAndStrings(rawCode: string): string {
             i = comment.next
             continue
         }
-        if (ch === '/' && next !== '/' && next !== '*' && canStartRegexLiteral(lastNonWsToken)) {
+        if (
+            ch === '/' &&
+            next !== '/' &&
+            next !== '*' &&
+            canStartRegexLiteral(lastNonWsToken, state.parenCtrl.at(-1) === true)
+        ) {
             out += '/ /'
             i = skipRegexLiteralBody(code, i + 1)
             lastNonWsToken = '/'
@@ -397,8 +285,7 @@ export function stripCommentsAndStrings(rawCode: string): string {
         if (ch === '"' || ch === "'") {
             const scanned = scanQuotedLiteral(code, i + 1, ch)
             i = scanned.next
-            const trimmed = scanned.content.trim().normalize('NFKC')
-            out += SENSITIVE_STRING_CONTENT.test(trimmed) ? `${ch}${trimmed}${ch}` : `${ch}${ch}`
+            out += scanned.sensitive ? `${ch}${scanned.content}${ch}` : `${ch}${ch}`
             lastNonWsToken = ch
             continue
         }

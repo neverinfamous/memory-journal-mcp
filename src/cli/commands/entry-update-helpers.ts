@@ -3,8 +3,14 @@ import type { IDatabaseAdapter } from '../../database/core/interfaces.js'
 import type { CreateEntryInput, ToolHandlerConfig } from '../../types/index.js'
 import { ValidationError } from '../../types/errors.js'
 import { resolveEntryAnchors } from '../../handlers/tools/core/staleness-tools.js'
-import { activeProjectRegistry, pairStoredScope } from '../../utils/write-scope.js'
-import { resolveWorkspaceId } from '../../utils/workspace-resolver.js'
+import {
+    activeProjectRegistry,
+    concreteWorkspace,
+    exactRegistryKey,
+    pairStoredScope,
+    workspacesForProject,
+} from '../../utils/write-scope.js'
+import { findCanonicalRegistryKey, resolveWorkspaceId } from '../../utils/workspace-resolver.js'
 import type { updateEntryOptionsSchema } from '../schemas.js'
 import { CliExitError } from './db-helper.js'
 import type { EntryPayload } from './entry-payload.js'
@@ -81,12 +87,26 @@ function resolveExplicitSourceWorkspace(
     return undefined
 }
 
+function sameCliWorkspaceScope(
+    left: string,
+    right: string,
+    registry: Parameters<typeof findCanonicalRegistryKey>[1]
+): boolean {
+    const leftKey = findCanonicalRegistryKey(left, registry)
+    const rightKey = findCanonicalRegistryKey(right, registry)
+    if (leftKey !== undefined && rightKey !== undefined) {
+        return leftKey.toLowerCase() === rightKey.toLowerCase()
+    }
+    return left === right
+}
+
 function assertImplicitUpdateWorkspaceMatch(
     entryId: number,
     existingEntry: { workspaceId?: string } | null | undefined,
     trimmedTargetWs: string | undefined,
     config: ToolHandlerConfig
 ): void {
+    const registry = activeProjectRegistry(config.projectRegistry)
     const implicitWorkspace = resolveWorkspaceId(undefined, undefined, {
         runtime: null,
         ...(config.defaultWorkspaceId !== undefined
@@ -99,8 +119,9 @@ function assertImplicitUpdateWorkspaceMatch(
     if (
         trimmedTargetWs !== undefined &&
         existingEntry?.workspaceId !== undefined &&
-        existingEntry.workspaceId.toLowerCase() !== trimmedTargetWs.toLowerCase() &&
-        existingEntry.workspaceId.toLowerCase() !== implicitWorkspace?.toLowerCase()
+        !sameCliWorkspaceScope(existingEntry.workspaceId, trimmedTargetWs, registry) &&
+        (implicitWorkspace === undefined ||
+            !sameCliWorkspaceScope(existingEntry.workspaceId, implicitWorkspace, registry))
     ) {
         throw new ValidationError(
             `Entry #${String(entryId)} belongs to workspace '${existingEntry.workspaceId}'. Pass --workspace '${existingEntry.workspaceId}' --target-workspace '${trimmedTargetWs}' explicitly to reassign it.`,
@@ -114,7 +135,7 @@ function assertImplicitUpdateWorkspaceMatch(
     if (
         existingEntry?.workspaceId !== undefined &&
         implicitWorkspace !== undefined &&
-        existingEntry.workspaceId.toLowerCase() !== implicitWorkspace.toLowerCase()
+        !sameCliWorkspaceScope(existingEntry.workspaceId, implicitWorkspace, registry)
     ) {
         throw new ValidationError(
             `Entry #${String(entryId)} belongs to workspace '${existingEntry.workspaceId}', not active workspace '${implicitWorkspace}'. Pass --workspace '${existingEntry.workspaceId}' explicitly to update it.`,
@@ -150,9 +171,10 @@ export function assertCliUpdateWorkspaceOwnership(
         metaSourceWs
     )
     if (explicitSourceWs !== undefined) {
+        const registry = activeProjectRegistry(config.projectRegistry)
         if (
             existingEntry?.workspaceId !== undefined &&
-            existingEntry.workspaceId.toLowerCase() !== explicitSourceWs.toLowerCase()
+            !sameCliWorkspaceScope(existingEntry.workspaceId, explicitSourceWs, registry)
         ) {
             throw new ValidationError(
                 `Entry #${String(entryId)} belongs to workspace '${existingEntry.workspaceId}', not '${explicitSourceWs}'. Pass --workspace '${existingEntry.workspaceId}' --target-workspace '${trimmedTargetWs ?? explicitSourceWs}' explicitly to reassign it.`,
@@ -167,6 +189,54 @@ export function assertCliUpdateWorkspaceOwnership(
     }
 
     assertImplicitUpdateWorkspaceMatch(entryId, existingEntry, trimmedTargetWs, config)
+}
+
+export function assertCliUpdateProjectOwnership(
+    entryId: number,
+    existingEntry: { workspaceId?: string; projectNumber?: number | null } | null | undefined,
+    payload: EntryPayload,
+    trimmedTargetWs: string | undefined,
+    config: ToolHandlerConfig,
+    isTeam = false
+): void {
+    if (trimmedTargetWs !== undefined) return
+    if (payload.hasExplicitProject !== true || payload.projectNumber === undefined) return
+
+    const registry = activeProjectRegistry(config.projectRegistry)
+    const effectiveWs = existingEntry?.workspaceId ?? payload.workspaceId
+    pairStoredScope(effectiveWs, payload.projectNumber, registry)
+
+    const existingProject = existingEntry?.projectNumber
+    if (
+        existingProject === null ||
+        existingProject === undefined ||
+        existingProject === 0 ||
+        existingProject === payload.projectNumber
+    ) {
+        return
+    }
+
+    if (!isTeam && existingEntry?.workspaceId?.toLowerCase() === 'default') return
+
+    const storedWs = concreteWorkspace(existingEntry?.workspaceId)
+    const regKey = storedWs !== undefined ? exactRegistryKey(storedWs, registry) : undefined
+    const registeredProject =
+        regKey !== undefined ? registry?.[regKey]?.project_number : undefined
+    const canRealignOrphanedRegisteredProject =
+        !isTeam &&
+        registeredProject === payload.projectNumber &&
+        workspacesForProject(existingProject, registry).length === 0
+
+    if (!canRealignOrphanedRegisteredProject) {
+        throw new ValidationError(
+            `Entry #${String(entryId)} belongs to project ${String(existingProject)}, not ${String(payload.projectNumber)}.`,
+            {
+                entryId,
+                entryProjectNumber: existingProject,
+                requestedProjectNumber: payload.projectNumber,
+            }
+        )
+    }
 }
 
 export type CliEntryUpdateInput = Omit<Partial<CreateEntryInput>, 'projectNumber'> & {
@@ -203,9 +273,10 @@ export function buildCliEntryUpdateObject(
 
     if (trimmedTargetWs !== undefined) {
         const targetWorkspace = payload.workspaceId ?? trimmedTargetWs
+        const registry = activeProjectRegistry(config.projectRegistry)
         if (
             existingEntry?.workspaceId !== undefined &&
-            existingEntry.workspaceId.toLowerCase() !== targetWorkspace.toLowerCase()
+            !sameCliWorkspaceScope(existingEntry.workspaceId, targetWorkspace, registry)
         ) {
             updates.workspaceId = '*'
             updates.targetWorkspaceId = targetWorkspace
@@ -259,4 +330,52 @@ export async function applyCliUpdateAnchors(
     if (resolved !== undefined) {
         updates.anchors = resolved
     }
+}
+
+export async function prepareCliEntryUpdate(params: {
+    entryId: number
+    version: number
+    existingEntry: { workspaceId?: string; projectNumber?: number | null } | null | undefined
+    rawWorkspaceOpt: string | undefined
+    trimmedTargetWs: string | undefined
+    metaSourceWs: string | undefined
+    content: string
+    payload: EntryPayload
+    config: ToolHandlerConfig
+    db: IDatabaseAdapter
+    isTeam: boolean
+}): Promise<CliEntryUpdateInput> {
+    assertCliUpdateWorkspaceOwnership(
+        params.entryId,
+        params.existingEntry,
+        params.rawWorkspaceOpt,
+        params.payload,
+        params.trimmedTargetWs,
+        params.config,
+        params.metaSourceWs
+    )
+    assertCliUpdateProjectOwnership(
+        params.entryId,
+        params.existingEntry,
+        params.payload,
+        params.trimmedTargetWs,
+        params.config,
+        params.isTeam
+    )
+    const updates = buildCliEntryUpdateObject(
+        params.content,
+        params.version,
+        params.payload,
+        params.existingEntry,
+        params.trimmedTargetWs,
+        params.config
+    )
+    await applyCliUpdateAnchors(
+        updates,
+        params.payload,
+        updates.workspaceId ?? params.existingEntry?.workspaceId ?? 'default',
+        params.db,
+        params.config
+    )
+    return updates
 }

@@ -207,6 +207,12 @@ export class AuditLogger {
                         process.stderr.write(payload)
                     } else {
                         await this.ensureDirectory()
+                        const { isUnsafeSymlinkOrSpecialFile } = await import('./audit-file-helpers.js')
+                        if (await isUnsafeSymlinkOrSpecialFile(this.config.logPath)) {
+                            throw new Error(
+                                `Refusing to write audit log to symlink or non-regular file: ${this.config.logPath}`
+                            )
+                        }
                         // One appendFile call with all buffered lines — each terminated by \n
                         await appendFile(this.config.logPath, payload, {
                             encoding: 'utf-8',

@@ -14,7 +14,7 @@ import {
     getCliCommandDb as getDb,
 } from './db-helper.js'
 import { writeCliResult } from './cli-output.js'
-import { exportEntriesToMarkdown, importMarkdownEntries, processImportBatch, convertFile, type ParsedFile } from '../../markdown/index.js'
+import { exportEntriesToMarkdown, importMarkdownEntries, processImportBatch } from '../../markdown/index.js'
 import { VectorSearchManager } from '../../vector/vector-search-manager/index.js'
 import {
     findCanonicalRegistryKey,
@@ -27,12 +27,9 @@ import {
     pairStoredScope,
     uniqueWorkspaceForProject,
 } from '../../utils/write-scope.js'
-import { assertSafeFilePath } from '../../utils/security-utils.js'
+import { collectExternalMarkdownFiles } from './io-external-helpers.js'
 import * as fs from 'node:fs/promises'
 import * as path from 'node:path'
-import { constants } from 'node:fs'
-
-const MAX_IMPORT_FILE_SIZE_BYTES = 5 * 1024 * 1024
 
 export const exportJsonSchema = ioExportJsonOptionsSchema
 export const exportMarkdownSchema = ioExportMarkdownOptionsSchema
@@ -319,76 +316,6 @@ export async function importMarkdownAction(options: z.infer<typeof importMarkdow
     }
 }
 
-async function collectExternalMarkdownFiles(
-    resolvedDir: string,
-    format: NonNullable<z.infer<typeof importExternalSchema>['format']>
-): Promise<{ parsedFiles: ParsedFile[]; errors: { file: string; error: string }[] }> {
-    const mdFiles: string[] = []
-    const dir = await fs.opendir(resolvedDir)
-    for await (const dirent of dir) {
-        if (dirent.isFile() && dirent.name.endsWith('.md')) {
-            mdFiles.push(dirent.name)
-        }
-    }
-    mdFiles.sort((a, b) => a.localeCompare(b))
-
-    const parsedFiles: ParsedFile[] = []
-    const errors: { file: string; error: string }[] = []
-    const READ_CONCURRENCY = 16
-    const allowedRoots = [resolvedDir]
-
-    const readSingleExternalFile = async (
-        filename: string
-    ): Promise<{ ok: true; file: ParsedFile | null } | { ok: false; error: string }> => {
-        let handle
-        try {
-            const filepath = path.join(resolvedDir, filename)
-            assertSafeFilePath(filepath, allowedRoots)
-            handle = await fs.open(filepath, constants.O_RDONLY | constants.O_NOFOLLOW)
-            const stats = await handle.stat()
-            if (stats.size > MAX_IMPORT_FILE_SIZE_BYTES) {
-                throw new Error(
-                    `File exceeds maximum allowed import size (${String(MAX_IMPORT_FILE_SIZE_BYTES)} bytes)`
-                )
-            }
-            const content = await handle.readFile('utf-8')
-            const converted = convertFile(content, filename, format)
-            if (!converted.body.trim()) return { ok: true, file: null }
-            return {
-                ok: true,
-                file: {
-                    filename,
-                    body: converted.body,
-                    metadata: converted.metadata,
-                },
-            }
-        } catch (err) {
-            return {
-                ok: false,
-                error: err instanceof Error ? err.message : String(err),
-            }
-        } finally {
-            if (handle) await handle.close()
-        }
-    }
-
-    for (let i = 0; i < mdFiles.length; i += READ_CONCURRENCY) {
-        const batch = mdFiles.slice(i, i + READ_CONCURRENCY)
-        const settled = await Promise.all(batch.map((filename) => readSingleExternalFile(filename)))
-        for (let j = 0; j < settled.length; j++) {
-            const outcome = settled[j]
-            const filename = batch[j]
-            if (outcome === undefined || filename === undefined) continue
-            if (!outcome.ok) {
-                errors.push({ file: filename, error: outcome.error })
-            } else if (outcome.file !== null) {
-                parsedFiles.push(outcome.file)
-            }
-        }
-    }
-    return { parsedFiles, errors }
-}
-
 export async function importExternalAction(options: z.infer<typeof importExternalSchema>, command: Command): Promise<void> {
     const { db, serverOptions } = await getDb(options, command)
     let exitCode = 0
@@ -397,7 +324,11 @@ export async function importExternalAction(options: z.infer<typeof importExterna
         const resolvedDir = await assertSafeCliDir(options.dir, 'external import')
         const { workspaceId, projectNumber } = resolveImportWriteScope(options, serverOptions)
         const vectorManager = new VectorSearchManager(db, { modelName: serverOptions.embeddingModel })
-        const { parsedFiles, errors } = await collectExternalMarkdownFiles(resolvedDir, options.format)
+        const { parsedFiles, errors } = await collectExternalMarkdownFiles(
+            resolvedDir,
+            options.format,
+            options.limit ?? 500
+        )
 
         const result = await processImportBatch(
             parsedFiles,

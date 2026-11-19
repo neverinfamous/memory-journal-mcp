@@ -46,9 +46,12 @@ function sameRegistryWorkspace(
     right: string,
     registry: Parameters<typeof findCanonicalRegistryKey>[1]
 ): boolean {
-    const leftKey = findCanonicalRegistryKey(left, registry) ?? left
-    const rightKey = findCanonicalRegistryKey(right, registry) ?? right
-    return leftKey.toLowerCase() === rightKey.toLowerCase()
+    const leftKey = findCanonicalRegistryKey(left, registry)
+    const rightKey = findCanonicalRegistryKey(right, registry)
+    if (leftKey !== undefined && rightKey !== undefined) {
+        return leftKey.toLowerCase() === rightKey.toLowerCase()
+    }
+    return left === right
 }
 
 function assertExplicitImportScopeMatchesRegistry(

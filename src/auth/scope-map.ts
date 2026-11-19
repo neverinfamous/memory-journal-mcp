@@ -141,7 +141,7 @@ export function canonicalizeMemoryResourceUri(rawUri: string): string {
     }
 }
 
-function normalizePromptAliasForScope(name: string): string {
+export function normalizePromptAliasForScope(name: string): string {
     return name
         .trim()
         .replace(/^mj[_-]/i, '')

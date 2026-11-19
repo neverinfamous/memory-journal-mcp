@@ -149,9 +149,11 @@ function sanitizeAuditArgNode(value: unknown, depth: number, seen: WeakSet<objec
         const out: Record<string, unknown> = {}
         Object.setPrototypeOf(out, null)
         for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
-            out[k] = SENSITIVE_KEY_RE.test(k)
-                ? '[REDACTED]'
-                : sanitizeAuditArgNode(v, depth + 1, seen)
+            const safeKey = fenceNonCanonicalAuditId(k)
+            out[safeKey] =
+                SENSITIVE_KEY_RE.test(k) || SENSITIVE_KEY_RE.test(safeKey)
+                    ? '[REDACTED]'
+                    : sanitizeAuditArgNode(v, depth + 1, seen)
         }
         return out
     } finally {

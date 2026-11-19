@@ -33,7 +33,8 @@ export function startConfiguredMetricsServer(
     if (options.metricsExport !== 'prometheus') {
         return undefined
     }
-    const envToken = process.env['MCP_AUTH_TOKEN']?.trim()
+    const rawEnvToken = process.env['MCP_AUTH_TOKEN']
+    const envToken = rawEnvToken !== undefined && rawEnvToken !== '' ? rawEnvToken : undefined
     const effectiveAuthToken =
         options.authToken !== undefined && options.authToken !== ''
             ? options.authToken

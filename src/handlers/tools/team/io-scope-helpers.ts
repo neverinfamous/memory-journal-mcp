@@ -222,8 +222,10 @@ export async function readAndConvertExternalMarkdownFiles(
     assertSafeDirectoryPath(sourceDir, allowedRoots)
     const MAX_DIRECTORY_SCAN_ENTRIES = 10_000
     const allMdFiles: string[] = []
+    let scannedEntries = 0
     const dir = await fs.opendir(sourceDir)
     for await (const dirent of dir) {
+        if (++scannedEntries > MAX_DIRECTORY_SCAN_ENTRIES) break
         if (dirent.isFile() && dirent.name.endsWith('.md')) {
             allMdFiles.push(dirent.name)
             if (allMdFiles.length >= MAX_DIRECTORY_SCAN_ENTRIES) break
@@ -244,6 +246,9 @@ export async function readAndConvertExternalMarkdownFiles(
             assertSafeFilePath(filepath, allowedRoots)
             handle = await fs.open(filepath, fsConstants.O_RDONLY | fsConstants.O_NOFOLLOW)
             const stats = await handle.stat()
+            if (!stats.isFile()) {
+                throw new Error(`Refusing to import non-regular file: ${filename}`)
+            }
             if (stats.size > MAX_IMPORT_FILE_BYTES) {
                 throw new Error(
                     `File exceeds maximum size limit of ${String(MAX_IMPORT_FILE_BYTES / (1024 * 1024))}MB (${stats.size} bytes)`

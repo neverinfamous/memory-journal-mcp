@@ -7,6 +7,7 @@ import { getGitHubIntegration } from '../../../github/github-integration/index.j
 import type { GitHubIntegration } from '../../../github/github-integration/index.js'
 import { findCanonicalRegistryKey } from '../../../utils/workspace-resolver.js'
 import { markUntrustedContentInline } from '../../../utils/security-utils.js'
+import { getRpcExecutionOverrides } from '../../../codemode/rpc-context.js'
 import { z } from 'zod'
 import { relaxedNumber, StrictProjectNumberSchema } from '../schemas.js'
 import {
@@ -200,6 +201,31 @@ async function resolveScopeAndGithub(
     }
 }
 
+function checkNestedRpcOwnerConflict(
+    parsedOwner: string | undefined,
+    detectedOwner: string | null,
+    matchedRegistryKey: string | undefined
+): { error: true; response: Record<string, unknown> } | undefined {
+    const rpc = getRpcExecutionOverrides()
+    const hasPinned =
+        rpc !== undefined &&
+        (rpc.projectNumber !== undefined ||
+            (typeof rpc.workspaceId === 'string' &&
+                rpc.workspaceId.trim() !== '' &&
+                rpc.workspaceId.trim() !== '*'))
+    if (!hasPinned || parsedOwner === undefined) return undefined
+    const isForeign =
+        detectedOwner !== null && parsedOwner.toLowerCase() !== detectedOwner.toLowerCase()
+    const matchesRegistryPrefix =
+        matchedRegistryKey?.toLowerCase().startsWith(`${parsedOwner.toLowerCase()}/`) === true
+    if (isForeign || (detectedOwner === null && !matchesRegistryPrefix)) {
+        return githubScopeValidationError(
+            `GitHub owner '${parsedOwner}' conflicts with nested executeCode scope.`
+        )
+    }
+    return undefined
+}
+
 /**
  * Resolve owner (owner-only, no repo required)
  */
@@ -231,6 +257,12 @@ export async function resolveOwner(
 
     const repoInfo = await toolGithub.getRepoInfo()
     const detectedOwner = repoInfo.owner
+    const nestedOwnerErr = checkNestedRpcOwnerConflict(
+        parsedOwner,
+        detectedOwner,
+        scopeRes.matchedRegistryKey
+    )
+    if (nestedOwnerErr !== undefined) return nestedOwnerErr
     const isForeignOwner =
         parsedOwner !== undefined &&
         detectedOwner !== null &&
@@ -301,6 +333,12 @@ export async function resolveOwnerRepo(
     const repoInfo = await toolGithub.getRepoInfo()
     const detectedOwner = repoInfo.owner
     const detectedRepo = repoInfo.repo
+    const nestedOwnerErr = checkNestedRpcOwnerConflict(
+        parsedOwner,
+        detectedOwner,
+        scopeRes.matchedRegistryKey
+    )
+    if (nestedOwnerErr !== undefined) return nestedOwnerErr
     const isForeignOwner =
         parsedOwner !== undefined &&
         detectedOwner !== null &&

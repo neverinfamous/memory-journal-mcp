@@ -57,10 +57,10 @@ function checkDefAcceptsKey(
     key: string,
     visited: Set<unknown>
 ): boolean {
-    if (isRecord(def.shape) && key in def.shape) return true
+    if (isRecord(def.shape) && Object.hasOwn(def.shape, key)) return true
     const typeName = def.typeName ?? def.type
     if ((typeName === 'ZodObject' || typeName === 'object') && isRecord(s.shape)) {
-        return key in s.shape
+        return Object.hasOwn(s.shape, key)
     }
     if (typeName === 'ZodIntersection' || typeName === 'intersection') {
         return (
@@ -119,7 +119,8 @@ function checkDefAcceptsKey(
     )
 }
 
-const SCHEMA_KEY_CACHE = new WeakMap<object, Map<string, boolean>>()
+const MAX_CACHED_SCHEMA_KEYS = 512
+const SCHEMA_KEY_CACHE = new WeakMap<object, Set<string>>()
 
 function computeSchemaAcceptsKey(
     schema: unknown,
@@ -129,7 +130,11 @@ function computeSchemaAcceptsKey(
     if (!isRecord(schema) || visited.has(schema)) return false
     visited.add(schema)
     try {
-        if ('properties' in schema && isRecord(schema['properties']) && key in schema['properties']) {
+        if (
+            Object.hasOwn(schema, 'properties') &&
+            isRecord(schema['properties']) &&
+            Object.hasOwn(schema['properties'], key)
+        ) {
             return true
         }
         for (const comboKey of ['anyOf', 'oneOf', 'allOf'] as const) {
@@ -140,7 +145,7 @@ function computeSchemaAcceptsKey(
         }
 
         const s = schema as ZodLike
-        if (isRecord(s.shape) && key in s.shape) return true
+        if (isRecord(s.shape) && Object.hasOwn(s.shape, key)) return true
 
         const def = s._zod?.def ?? s.def ?? s._def
         if (def !== undefined && def !== null && checkDefAcceptsKey(s, def, key, visited)) {
@@ -168,13 +173,16 @@ export function checkSchemaAcceptsKey(
     }
     if (!isRecord(schema)) return false
     let cache = SCHEMA_KEY_CACHE.get(schema)
-    if (cache === undefined) {
-        cache = new Map<string, boolean>()
-        SCHEMA_KEY_CACHE.set(schema, cache)
-    }
-    const cached = cache.get(key)
-    if (cached !== undefined) return cached
+    if (cache?.has(key) === true) return true
     const accepted = computeSchemaAcceptsKey(schema, key, new Set<unknown>())
-    cache.set(key, accepted)
+    if (accepted) {
+        if (cache === undefined) {
+            cache = new Set<string>()
+            SCHEMA_KEY_CACHE.set(schema, cache)
+        }
+        if (cache.size < MAX_CACHED_SCHEMA_KEYS) {
+            cache.add(key)
+        }
+    }
     return accepted
 }

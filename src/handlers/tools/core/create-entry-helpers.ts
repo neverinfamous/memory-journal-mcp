@@ -6,7 +6,11 @@ import { sendProgress, type ProgressContext } from '../../../utils/progress-util
 import { resolveAuthenticatedAuthor } from '../../../utils/security-utils.js'
 import { resolveWorkspaceId } from '../../../utils/workspace-resolver.js'
 import { canonicalizeTeamAuthor, enforceTeamRbac, getCallerIdentity } from '../team/rbac.js'
-import { TEAM_DB_ERROR_RESPONSE, executeTeamGetEntryById } from '../team/helpers.js'
+import {
+    TEAM_DB_ERROR_RESPONSE,
+    assertCanonicalFallbackToolAllowed,
+    executeTeamGetEntryById,
+} from '../team/helpers.js'
 import { probeMatchingTeamEntry } from '../search/helpers.js'
 import { isDummyToolAllowedByFilter } from '../dummy-filter-helpers.js'
 import { GetEntryByIdSchema, type CreateEntrySchema } from './schemas.js'
@@ -18,7 +22,13 @@ function delegateTeamGetEntryById(
     input: GetEntryByIdParams,
     context: ToolContext
 ): Record<string, unknown> {
-    enforceAccessBoundary('team_get_entry_by_id', 'tool', { requiresTeamScope: true })
+    assertCanonicalFallbackToolAllowed('team_get_entry_by_id', 'team', context)
+    enforceAccessBoundary(
+        'team_get_entry_by_id',
+        'tool',
+        { requiresTeamScope: true },
+        context.config?.runtime?.auditLogger
+    )
     if (!context.teamDb) {
         return { ...TEAM_DB_ERROR_RESPONSE }
     }

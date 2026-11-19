@@ -74,7 +74,7 @@ function scanLexicalSpans(
         if (ch === "'" || ch === '"' || ch === '`') {
             inString = ch
             spanStart = i
-        } else if (ch === '/' && code[i + 1] !== '/' && code[i + 1] !== '*' && canStartRegexLiteral(prevToken)) {
+        } else if (ch === '/' && code[i + 1] !== '/' && code[i + 1] !== '*' && canStartRegexLiteral(prevToken, state.parenCtrl.at(-1) === true)) {
             const endRegex = skipRegexLiteralBody(code, i + 1)
             if (stopAtOffset !== undefined && endRegex > limit) return { stateAtOffset: 'code', spans }
             i = endRegex - 1

@@ -18,6 +18,7 @@ const FLEXIBLE_PASSTHROUGH_SCHEMA = z.looseObject({ ...ErrorFieldsMixin.shape })
 export { searchDirectory, searchDirectoryAsync } from './directory-search.js'
 export type { GrepMatch, SearchDirectoryOptions } from './directory-search.js'
 import { isSafeUserRegex, searchDirectoryAsync, searchSingleFileAsync } from './directory-search.js'
+import { listBoundedDirectoryEntries, readSafeViewFile } from './fs-view-helpers.js'
 import { ValidationError } from '../../../../types/errors.js'
 import { logger } from '../../../../utils/logger.js'
 
@@ -241,81 +242,6 @@ export async function handleGrepSearch(
     }
 }
 
-function sliceViewedFileLines(content: string, rawArgs: Record<string, unknown>): string {
-    const startLine =
-        typeof rawArgs['start_line'] === 'number'
-            ? rawArgs['start_line']
-            : typeof rawArgs['StartLine'] === 'number'
-              ? rawArgs['StartLine']
-              : undefined
-    const endLine =
-        typeof rawArgs['end_line'] === 'number'
-            ? rawArgs['end_line']
-            : typeof rawArgs['EndLine'] === 'number'
-              ? rawArgs['EndLine']
-              : undefined
-    if (startLine === undefined && endLine === undefined) return content
-    const lines = content.split(/\r?\n/)
-    const start = Math.max(1, startLine ?? 1) - 1
-    const end = Math.min(lines.length, endLine ?? lines.length)
-    return lines.slice(start, end).join('\n')
-}
-
-async function openSafeReadHandle(resolved: string): Promise<fs.promises.FileHandle | undefined> {
-    try {
-        return await fs.promises.open(resolved, fs.constants.O_RDONLY | (fs.constants.O_NOFOLLOW ?? 0))
-    } catch {
-        return undefined
-    }
-}
-
-async function readSafeViewFile(
-    resolved: string,
-    targetPath: string,
-    toolName: string,
-    rawArgs: Record<string, unknown>
-): Promise<unknown> {
-    const handle = await openSafeReadHandle(resolved)
-    if (handle === undefined) {
-        return {
-            success: false,
-            error: `🛠️ AUTONOMOUS HEALING: File not found at '${targetPath}'.`,
-            code: 'NOT_FOUND',
-            category: 'filesystem',
-            recoverable: true,
-        }
-    }
-    try {
-        const stat = await handle.stat()
-        if (stat.size > 2 * 1024 * 1024) {
-            return {
-                success: false,
-                error: 'File exceeds maximum size limit of 2MB',
-                code: 'VALIDATION_ERROR',
-                category: 'validation',
-                recoverable: false,
-            }
-        }
-        const content = await handle.readFile('utf-8')
-        return {
-            success: true,
-            path: resolved,
-            content: sliceViewedFileLines(content, rawArgs),
-            _healing_note: `🛠️ AUTONOMOUS HEALING: '${toolName}' is an agent-native tool, but was invoked directly as an MCP tool. File read successfully from disk.`,
-        }
-    } catch (err) {
-        return {
-            success: false,
-            error: `Failed to read file '${targetPath}': ${err instanceof Error ? err.message : String(err)}`,
-            code: 'IO_ERROR',
-            category: 'filesystem',
-            recoverable: true,
-        }
-    } finally {
-        await handle.close()
-    }
-}
-
 export async function handleViewFile(
     params: unknown,
     toolName: string,
@@ -390,8 +316,7 @@ export async function handleListDir(
 
     try {
         await fs.promises.stat(dirToRead)
-        const dirents = await fs.promises.readdir(dirToRead, { withFileTypes: true })
-        const entries = dirents.map((d) => ({ name: d.name, isDirectory: d.isDirectory(), isFile: d.isFile() }))
+        const entries = await listBoundedDirectoryEntries(dirToRead)
         return {
             success: true,
             path: dirToRead,

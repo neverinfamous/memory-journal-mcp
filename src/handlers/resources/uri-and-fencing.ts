@@ -1,5 +1,8 @@
 import { ProtocolError, ProtocolErrorCode } from '@modelcontextprotocol/server'
-import { markUntrustedContentInline } from '../../utils/security-utils.js'
+import {
+    isAlreadyInlineFencedUntrustedContent,
+    markUntrustedContentInline,
+} from '../../utils/security-utils.js'
 
 const INLINE_UNTRUSTED_RE = /^<untrusted_remote_content>([^<>]*)<\/untrusted_remote_content>$/
 
@@ -24,10 +27,7 @@ export function safeDecodeUriSegment(raw: string): string {
 
 /** Wrap a string in `<untrusted_remote_content>` once without double-escaping existing wrappers. */
 export function fenceUntrustedInline(value: string): string {
-    if (
-        INLINE_UNTRUSTED_RE.test(value) &&
-        !/&lt;\/?untrusted_remote_content/i.test(value)
-    ) {
+    if (isAlreadyInlineFencedUntrustedContent(value)) {
         return value
     }
     return markUntrustedContentInline(value)
@@ -43,7 +43,10 @@ export function sliceUntrustedInline(value: string, maxLen: number, suffix = '')
                   .replaceAll('&gt;', '>')
                   .replaceAll('&amp;', '&')
             : value
-    const truncated = raw.length > maxLen ? `${raw.slice(0, maxLen)}${suffix}` : raw
+    const cleanRaw = raw.replace(/\p{Cc}/gu, (ch) =>
+        ch === '\t' || ch === '\n' || ch === '\r' ? ch : ''
+    )
+    const truncated = cleanRaw.length > maxLen ? `${cleanRaw.slice(0, maxLen)}${suffix}` : cleanRaw
     return markUntrustedContentInline(truncated)
 }
 

@@ -6,11 +6,15 @@ function checkOrphans() {
     const dbPath = process.argv[2] ?? process.env['DB_PATH'] ?? defaultDbPath
 
     let db
+    let rawKey
     try {
         console.log(`Checking for orphaned entries in: ${dbPath}`)
         db = new Database(dbPath, { readonly: true, fileMustExist: true })
-        const rawKey = process.env['MJ_DB_ENCRYPTION_KEY'] ?? process.env['DB_ENCRYPTION_KEY']
+        rawKey = process.env['MJ_DB_ENCRYPTION_KEY'] ?? process.env['DB_ENCRYPTION_KEY']
         if (rawKey !== undefined && rawKey !== '') {
+            if (rawKey.includes('\0')) {
+                throw new Error('Invalid encryption key: NUL bytes are not allowed')
+            }
             if (rawKey.startsWith("x'") || rawKey.startsWith("X'")) {
                 if (!/^x'(?:[0-9a-fA-F]{2})+'$/i.test(rawKey)) {
                     throw new Error("Invalid hex encryption key: expected x'<even hex digits>'")
@@ -63,9 +67,12 @@ function checkOrphans() {
         if (rows.length > 0) process.exitCode = 1
     } catch (e) {
         const rawMsg = e instanceof Error ? e.message : String(e)
-        const msg = rawMsg
+        let msg = rawMsg
             .replace(/x'[0-9a-fA-F]*'/gi, "x'[REDACTED]'")
             .replace(/(pragma\s+(?:re)?key\s*=\s*)(?:"(?:[^"]|"")*"|'(?:[^']|'')*')/gi, "$1'[REDACTED]'")
+        if (rawKey !== undefined && rawKey !== '') {
+            msg = msg.split(rawKey).join('[REDACTED]')
+        }
         console.error(`\n❌ Error accessing database: ${msg}`)
         console.log('Usage: node scripts/check-orphans.mjs [path/to/database.db]')
         process.exitCode = 1

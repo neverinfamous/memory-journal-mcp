@@ -63,20 +63,20 @@ function extractRecoveredEntryContentAndTitle(
     code: string
 ): { content: string; title: string | undefined; scanCode: string } | null {
     const backtickMatch =
-        /\bcontent\s*:\s*`([\s\S]*?)`(?=\s*(?:,\s*[a-zA-Z_$][\w$]*\s*:|\s*,\s*\}|\s*\}|\s*\)))/i.exec(
+        /\bcontent\s*:\s*`([\s\S]*?)`(?=\s*(?:,\s*[a-zA-Z_$][\w$]*\s*:|,\s*\}|\}|\)))/i.exec(
             code
         )
     const singleMatch =
-        /\bcontent\s*:\s*'([\s\S]*?)'(?=\s*(?:,\s*[a-zA-Z_$][\w$]*\s*:|\s*,\s*\}|\s*\}|\s*\)))/i.exec(
+        /\bcontent\s*:\s*'([\s\S]*?)'(?=\s*(?:,\s*[a-zA-Z_$][\w$]*\s*:|,\s*\}|\}|\)))/i.exec(
             code
         )
     const doubleMatch =
-        /\bcontent\s*:\s*"([\s\S]*?)"(?=\s*(?:,\s*[a-zA-Z_$][\w$]*\s*:|\s*,\s*\}|\s*\}|\s*\)))/i.exec(
+        /\bcontent\s*:\s*"([\s\S]*?)"(?=\s*(?:,\s*[a-zA-Z_$][\w$]*\s*:|,\s*\}|\}|\)))/i.exec(
             code
         )
     // Require matching closing quote before `,`/`}`/`)`, or an explicit next-property / `}` boundary so unclosed parenthetical prose like `(see note)` is not truncated at `)`.
     const fallbackMatch =
-        /\bcontent\s*:\s*([`'"])([\s\S]*?)(?:\1(?=\s*(?:,|\}|\)))|(?=\s*,\s*[a-zA-Z_$][\w$]*\s*:|\s*,\s*\}|\s*\}))/i.exec(
+        /\bcontent\s*:\s*([`'"])([\s\S]*?)(?:\1(?=\s*(?:,|\}|\)))|(?=\s*,\s*[a-zA-Z_$][\w$]*\s*:|,\s*\}|\}))/i.exec(
             code
         )
 
@@ -84,7 +84,7 @@ function extractRecoveredEntryContentAndTitle(
         backtickMatch?.[1] ?? singleMatch?.[1] ?? doubleMatch?.[1] ?? fallbackMatch?.[2]
     content ??= /\bcontent\s*:\s*`([\s\S]*?)`(?=,\s*[\w$]+\s*:|\s*\})/i.exec(code)?.[1]
     content ??=
-        /\b(?:description|summary)\s*:\s*(['"`])([\s\S]*?)\1(?=\s*(?:,\s*[a-zA-Z_$][\w$]*\s*:|\s*,\s*\}|\s*\}|\s*\)))/i.exec(
+        /\b(?:description|summary)\s*:\s*(['"`])([\s\S]*?)\1(?=\s*(?:,\s*[a-zA-Z_$][\w$]*\s*:|,\s*\}|\}|\)))/i.exec(
             code
         )?.[2]
     if (content === undefined || content === '') return null
@@ -93,7 +93,7 @@ function extractRecoveredEntryContentAndTitle(
     // `workspace_id: 'x'` text quoted inside content or title can never re-scope the write.
     const scanWithTitle = code.split(content).join('')
     const titleMatch =
-        /\btitle\s*:\s*(['"`])([\s\S]*?)\1(?=\s*(?:,\s*[a-zA-Z_$][\w$]*\s*:|\s*,\s*\}|\s*\}|\s*\)))/i.exec(
+        /\btitle\s*:\s*(['"`])([\s\S]*?)\1(?=\s*(?:,\s*[a-zA-Z_$][\w$]*\s*:|,\s*\}|\}|\)))/i.exec(
             scanWithTitle
         ) ?? /\btitle\s*:\s*(['"])([^'"]+)\1/i.exec(scanWithTitle)
     const scanCode =
@@ -193,7 +193,7 @@ function populateRecoveredEntryMetadata(payload: Record<string, unknown>, scanCo
         payload['tags'] = rawTags.split(',').map((s) => s.trim().replace(/^['"]|['"]$/g, '')).filter(Boolean)
     }
 
-    const rawAutoContext = /\bauto_context\s*:\s*(\{[\s\S]*?\})(?=\s*,\s*\n|\s*\n\s*\})/i.exec(scanCode)?.[1]
+    const rawAutoContext = /\bauto_context\s*:\s*(\{[\s\S]*?\})(?=[ \t\r]*,\s*\n|[ \t\r]*\n\s*\})/i.exec(scanCode)?.[1]
     if (rawAutoContext !== undefined) {
         const parsedAutoContext = parseRelaxedAutoContext(rawAutoContext)
         if (parsedAutoContext !== undefined) payload['auto_context'] = parsedAutoContext

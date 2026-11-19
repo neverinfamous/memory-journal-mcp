@@ -12,7 +12,7 @@ import type { MetricsAccumulator } from './metrics.js'
  * Escapes characters for Prometheus label values: \, ", and \n.
  */
 function escapeLabelValue(value: string): string {
-    return value.replace(/\\/g, '\\\\').replace(/\n/g, '\\n').replace(/"/g, '\\"')
+    return value.replace(/\\/g, '\\\\').replace(/\n/g, '\\n').replace(/\r/g, '\\r').replace(/"/g, '\\"')
 }
 
 /**

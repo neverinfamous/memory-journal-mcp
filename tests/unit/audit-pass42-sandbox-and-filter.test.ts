@@ -173,16 +173,26 @@ describe('Pass 42 Security Audit — Sandbox Isolation, Lexical Scanners & Filte
             })
             expect(hasActiveProjectRegistry()).toBe(true)
 
-            let deep: Record<string, unknown> = { leaf: 'x' }
-            for (let i = 0; i < 80; i++) deep = { nested: deep }
+            let moderateDeep: Record<string, unknown> = { leaf: 'x' }
+            for (let i = 0; i < 40; i++) moderateDeep = { nested: moderateDeep }
             const codeModeTool = getCodeModeTools({ db, config: { codemodeEnabled: true, runtime } } as never)[0]
             expect(codeModeTool).toBeDefined()
+            const moderateRes = (await codeModeTool?.handler({
+                code: 'return 1',
+                context: moderateDeep,
+                autoVersion: false,
+            })) as { success: boolean; error?: string }
+            expect(moderateRes.success).toBe(true)
+
+            let deep: Record<string, unknown> = { leaf: 'x' }
+            for (let i = 0; i < 80; i++) deep = { nested: deep }
             const deepRes = (await codeModeTool?.handler({
                 code: 'return 1',
                 context: deep,
                 autoVersion: false,
             })) as { success: boolean; error?: string }
-            expect(deepRes.success).toBe(true)
+            expect(deepRes.success).toBe(false)
+            expect(deepRes.error).toContain('maximum nesting depth')
 
             const escapeBoom = '\u0007'.repeat(900_000)
             const hugeRes = (await codeModeTool?.handler({

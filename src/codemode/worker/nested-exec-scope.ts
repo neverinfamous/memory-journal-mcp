@@ -302,7 +302,7 @@ export function createSandboxExecutor(options: SandboxExecutorOptions): (arg: un
         }
         if (vmContextRef.current === undefined) return { success: false, error: 'No code was executed', code: 'VALIDATION_ERROR' }
 
-        const wrapped = `(async () => {\n${transformedCode}\n})()`
+        const wrapped = `(async () => {\n"use strict";\n${transformedCode}\n})()`
         const isolation = buildIsolationOverrides(argRec, timeoutMs, maxResultSize, narrowed)
         const escalates =
             (effectiveReadonly && readonlyMode !== true) ||

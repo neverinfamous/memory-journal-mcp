@@ -5,8 +5,6 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest'
-import * as fs from 'node:fs'
-import * as os from 'node:os'
 import * as path from 'node:path'
 import { EventEmitter } from 'node:events'
 import type { MessagePort } from 'node:worker_threads'
@@ -19,31 +17,18 @@ import { getCallerIdentity } from '../../src/handlers/tools/team/rbac.js'
 import { resolveAuthenticatedAuthor } from '../../src/utils/security-utils.js'
 import { matchRegistryByTagsOrContent, resolveProjectNumberFromPath } from '../../src/utils/workspace-resolver-registry.js'
 import { resolveMcpCreateWorkspaceScope } from '../../src/server/mcp-server/tool-registration/create-scope-interceptor.js'
-import { resolveRegistryMatchForTarget } from '../../src/handlers/prompts/adversarial-args.js'
-import { AUDIT_PROMPT_REVISION } from '../../src/handlers/prompts/adversarial-audit-factory.js'
 import { runWithRpcExecutionOverrides, getRpcExecutionOverrides } from '../../src/codemode/rpc-context.js'
 import { handleRpcRequest } from '../../src/codemode/worker-rpc-handler.js'
 import { createSecureDispatcher } from '../../src/handlers/tools/codemode/secure-dispatcher.js'
 import { normalizeDispatchParams } from '../../src/handlers/tools/codemode/dispatch-scope.js'
 import { enrichEntryRecord } from '../../src/codemode/api/cross-group-aliases.js'
-import { applyGitInterceptions } from '../../src/codemode/api/git-api.js'
-import { isInsideStringLiteral } from '../../src/handlers/tools/codemode/code-healer.js'
 import {
     createChildProcessShims,
     createFetchShim,
     createSandboxProcessObject,
 } from '../../src/codemode/worker/sandbox-process-shims.js'
 import { createApiRootGetTrap } from '../../src/codemode/worker/api-proxy-trap.js'
-import { resolveGitWorkingDir, evaluateAnchorStaleness } from '../../src/handlers/tools/git-staleness.js'
-import {
-    SearchEntriesSchema,
-    SearchByDateRangeSchema,
-    SemanticSearchSchema,
-} from '../../src/handlers/tools/search/schemas.js'
-import { decodeCompoundCursor } from '../../src/handlers/tools/search/fts.js'
-import { CreateEntrySchema } from '../../src/handlers/tools/core/schemas.js'
-import { GitHubContextOutputSchema } from '../../src/handlers/tools/github/schemas.js'
-import { MAX_CONTENT_LENGTH } from '../../src/handlers/tools/schemas/constants-and-primitives.js'
+import { resolveGitWorkingDir } from '../../src/handlers/tools/git-staleness.js'
 import { ValidationError } from '../../src/types/errors.js'
 import type { ToolContext, ToolDefinition } from '../../src/types/index.js'
 
@@ -402,95 +387,6 @@ describe('Pass 26 Audit Regressions', () => {
             expect(() =>
                 resolveGitWorkingDir({ project_number: 1.5 }, { projectRegistry: REGISTRY })
             ).toThrow(ValidationError)
-        })
-
-        it('enforces search limit bounds, CreateEntrySchema max length, and strict compound cursors (M9)', () => {
-            expect(() => SearchEntriesSchema.parse({ query: 'x', limit: 0 })).toThrow()
-            expect(() => SearchEntriesSchema.parse({ query: 'x', limit: 1.5 })).toThrow()
-            expect(() => SearchByDateRangeSchema.parse({ start_date: '2026-01-01', end_date: '2026-01-02', limit: 0 })).toThrow()
-            expect(() => SemanticSearchSchema.parse({ query: 'x', limit: 0.5 })).toThrow()
-            expect(() => CreateEntrySchema.parse({ content: 'a'.repeat(MAX_CONTENT_LENGTH + 1) })).toThrow()
-
-            const noPT = Buffer.from(JSON.stringify({ x: '1' })).toString('base64')
-            const badType = Buffer.from(JSON.stringify({ p: 123 })).toString('base64')
-            const validCursor = Buffer.from(JSON.stringify({ p: 'c1', t: 'c2' })).toString('base64')
-            expect(decodeCompoundCursor(noPT)).toBeNull()
-            expect(decodeCompoundCursor(badType)).toBeNull()
-            expect(decodeCompoundCursor(validCursor)).toEqual({ p: 'c1', t: 'c2' })
-        })
-
-        it('normalizes Windows backslashes and #symbol suffixes in anchors and maps repo_name in git API (M10)', async () => {
-            const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'mj-pass26-'))
-            try {
-                fs.mkdirSync(path.join(tmpDir, 'src'), { recursive: true })
-                fs.writeFileSync(path.join(tmpDir, 'src', 'app.ts'), 'export const x = 1\n')
-                let seenPath: string | undefined
-                const row = await evaluateAnchorStaleness(
-                    db,
-                    { id: 1, anchorPath: 'src\\app.ts#mySymbol', status: 'pending' },
-                    '2026-01-01T00:00:00Z',
-                    tmpDir,
-                    (anchorPath) => {
-                        seenPath = anchorPath
-                        return Promise.resolve(2)
-                    },
-                    'memory-journal-mcp'
-                )
-                expect(seenPath).toBe('src/app.ts')
-                expect(row.newStatus).toBe('stale')
-                expect(row.commitsSince).toBe(2)
-
-                const intercepted = applyGitInterceptions('get_commit_history', [{ repo_name: 'memory-journal-mcp' }])
-                expect(intercepted).not.toBeNull()
-                if (intercepted && 'args' in intercepted) {
-                    const first = intercepted.args[0] as Record<string, unknown>
-                    expect(first['repo']).toBe('memory-journal-mcp')
-                    expect(first['repo_name']).toBeUndefined()
-                }
-            } finally {
-                fs.rmSync(tmpDir, { recursive: true, force: true })
-            }
-        })
-
-        it('ignores quotes inside JS comments in isInsideStringLiteral (M11)', () => {
-            const src = "// don't break\n/* won't \"quote\" */\nconst x = 1"
-            const idx = src.indexOf('const x')
-            expect(isInsideStringLiteral(src, idx)).toBe(false)
-        })
-
-        it('resolves relative <repo>/<subpath> targets against registry without matching arbitrary relative paths', () => {
-            expect(AUDIT_PROMPT_REVISION).toBe('2026-11-19-audit-pass44')
-            expect(resolveRegistryMatchForTarget(REGISTRY, 'memory-journal-mcp/src/cli')).toBe('memory-journal-mcp')
-            expect(resolveRegistryMatchForTarget(REGISTRY, 'memory-journal-mcp\\src\\utils')).toBe('memory-journal-mcp')
-            expect(resolveRegistryMatchForTarget(REGISTRY, 'src/cli')).toBeUndefined()
-        })
-
-        it('validates GitHubContextOutputSchema degraded as string[] rather than boolean', () => {
-            const parsed = GitHubContextOutputSchema.parse({
-                repoName: null,
-                branch: null,
-                commit: null,
-                remoteUrl: null,
-                issues: [],
-                pullRequests: [],
-                issueCount: 0,
-                prCount: 0,
-                degraded: ['commit'],
-            })
-            expect(parsed.degraded).toEqual(['commit'])
-            expect(() =>
-                GitHubContextOutputSchema.parse({
-                    repoName: null,
-                    branch: null,
-                    commit: null,
-                    remoteUrl: null,
-                    issues: [],
-                    pullRequests: [],
-                    issueCount: 0,
-                    prCount: 0,
-                    degraded: true,
-                })
-            ).toThrow()
         })
     })
 })

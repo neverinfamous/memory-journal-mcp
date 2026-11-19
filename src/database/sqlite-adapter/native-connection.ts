@@ -38,13 +38,15 @@ const FTS_REBUILD_DEFER_TEST_MS = 10
 export class NativeConnectionManager implements IDatabaseConnection {
     private db: Database | null = null
     private readonly dbPath: string
+    private readonly explicitBackupsDir: string | undefined
     private initialized = false
     private initializingPromise: Promise<void> | null = null
     private teamSchemaApplied = false
     private ftsRebuildTimer: ReturnType<typeof setTimeout> | null = null
 
-    constructor(dbPath: string) {
+    constructor(dbPath: string, backupsDir?: string) {
         this.dbPath = dbPath
+        this.explicitBackupsDir = backupsDir
     }
 
     async initialize(): Promise<void> {
@@ -349,6 +351,8 @@ export class NativeConnectionManager implements IDatabaseConnection {
     }
 
     getBackupsDir(): string {
+        if (this.explicitBackupsDir !== undefined) return this.explicitBackupsDir
+        if (this.teamSchemaApplied) return path.join(path.dirname(this.dbPath), 'backups-team')
         return path.join(path.dirname(this.dbPath), 'backups')
     }
 

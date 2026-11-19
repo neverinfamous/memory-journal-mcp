@@ -10,7 +10,38 @@ import { ZodError } from 'zod'
 import { MemoryJournalMcpError } from '../types/errors.js'
 import type { ErrorResponse } from '../types/error-types.js'
 import { matchSuggestion } from './errors/suggestions.js'
-import { sanitizeErrorForLogging } from './security-utils.js'
+import { SENSITIVE_KEY_RE, sanitizeErrorForLogging } from './security-utils.js'
+
+const MAX_ERROR_DETAILS_SCRUB_DEPTH = 6
+const HOST_FILESYSTEM_PATH_RE =
+    /(?<![a-zA-Z]:\/\/)(?:[A-Za-z]:[\\/][\w./\\-]+|\\\\[\w.-]+\\[\w./\\-]+|(?<![\w:/])\/(?:Users|home|var|tmp|private|etc|opt|mnt|root|app|data|srv)\/[\w./-]+)/g
+
+function scrubDetailsValue(value: unknown, depth: number, seen: WeakSet<object>): unknown {
+    if (typeof value === 'string') {
+        return sanitizeErrorForLogging(value).replace(HOST_FILESYSTEM_PATH_RE, '<sanitized_path>')
+    }
+    if (value === null || typeof value !== 'object') return value
+    if (seen.has(value)) return '[Circular]'
+    if (depth >= MAX_ERROR_DETAILS_SCRUB_DEPTH) return '[Truncated]'
+    seen.add(value)
+    try {
+        if (Array.isArray(value)) {
+            return value.map((item) => scrubDetailsValue(item, depth + 1, seen))
+        }
+        const out: Record<string, unknown> = {}
+        Object.setPrototypeOf(out, null)
+        for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
+            const safeKey = sanitizeErrorForLogging(k)
+            out[safeKey] =
+                SENSITIVE_KEY_RE.test(k) || SENSITIVE_KEY_RE.test(safeKey)
+                    ? '[REDACTED]'
+                    : scrubDetailsValue(v, depth + 1, seen)
+        }
+        return out
+    } finally {
+        seen.delete(value)
+    }
+}
 
 /**
  * Extract human-readable messages from a ZodError instead of raw JSON array.
@@ -95,6 +126,18 @@ export function formatHandlerError(err: unknown): ErrorResponse {
     if (err instanceof MemoryJournalMcpError) {
         const response = err.toResponse()
         response.error = sanitizeErrorForLogging(response.error)
+        if (Array.isArray(response.aggregated_errors)) {
+            response.aggregated_errors = response.aggregated_errors.map((entry) => ({
+                ...entry,
+                message: sanitizeErrorMessageForResponse(entry.message),
+            }))
+        }
+        if (response.details !== undefined) {
+            response.details = scrubDetailsValue(response.details, 0, new WeakSet()) as Record<
+                string,
+                unknown
+            >
+        }
         if (!err.hasExplicitSuggestion) {
             const matched = matchSuggestion(err.message)
             if (matched?.suggestion !== undefined) {

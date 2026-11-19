@@ -236,14 +236,16 @@ export function hasWinReservedDeviceSegment(targetPath: string): boolean {
  * @param dirPath - The directory path to validate
  * @throws PathTraversalError if the path escapes the sandboxed boundaries
  */
-const UNC_OR_WIN_DEVICE_PREFIX_RE = /^(?:\\\\|\/\/)/
+const UNC_OR_WIN_DEVICE_PREFIX_RE = /^[\\/]{2}/
 
 function hasUncOrWinDevicePrefix(targetPath: string, providedRoots: readonly string[]): boolean {
-    if (!UNC_OR_WIN_DEVICE_PREFIX_RE.test(targetPath.trimStart())) return false
-    // Reject `\\.\` / `\\?\` / `//./` / `//?/` Win32 device namespace prefixes unconditionally
-    if (/^(?:\\\\|\/\/)[.?][\\/]/.test(targetPath.trimStart())) return true
-    // On Windows (or for backslash UNC paths), block UNC paths prior to any fs syscall unless an operator explicitly configured a UNC root
-    if (process.platform !== 'win32' && !targetPath.trimStart().startsWith('\\\\')) return false
+    const trimmed = targetPath.trimStart()
+    if (!UNC_OR_WIN_DEVICE_PREFIX_RE.test(trimmed)) return false
+    // Reject `\\.\` / `\\?\` / `\/.\` / `/\?\` / `//./` / `//?/` Win32 device namespace prefixes unconditionally
+    if (/^[\\/]{2}[.?][\\/]/.test(trimmed)) return true
+    // On Windows (or for prefixes containing a backslash), block UNC paths prior to any fs syscall unless an operator explicitly configured a UNC root
+    const leadingTwo = trimmed.slice(0, 2)
+    if (process.platform !== 'win32' && !leadingTwo.includes('\\')) return false
     return !providedRoots.some((r) => UNC_OR_WIN_DEVICE_PREFIX_RE.test(r.trimStart()))
 }
 

@@ -272,43 +272,13 @@ export function generateSummaryPrompt(
     }
 }
 
-export function generateEntryPrompt(
-    _db: IDatabaseAdapter,
-    teamDb: IDatabaseAdapter | undefined,
+function buildEntryTemplateText(
     target: 'personal' | 'team',
-    workspaceId = 'default',
-    briefingConfig?: Partial<BriefingConfig>,
-    projectNumber?: number,
-    explicitDefaultRequested = false,
-    runtime?: PromptTeamRuntime | null
-): { messages: PromptMessage[] } {
-    if (target === 'team') {
-        if (!teamDb) {
-            throw new ConfigurationError('Team database not configured')
-        }
-        enforceWorkflowTeamPromptRbac(teamDb, 'member', workspaceId, briefingConfig, runtime)
-    }
-    const registryHint = getProjectRegistryHint(briefingConfig)
-    const attributionArgs = buildExplicitAttributionArgs(
-        workspaceId,
-        briefingConfig,
-        projectNumber,
-        explicitDefaultRequested
-    )
-    const cliFlags = buildCliAttributionFlags(
-        workspaceId,
-        briefingConfig,
-        projectNumber,
-        explicitDefaultRequested
-    )
-
-    return {
-        messages: [
-            {
-                role: 'user',
-                content: {
-                    type: 'text',
-                    text: `Create a ${target === 'team' ? 'team ' : ''}mid-thread journal entry using EXACTLY this template:
+    registryHint: string,
+    attributionArgs: string,
+    cliFlags: string
+): string {
+    return `Create a ${target === 'team' ? 'team ' : ''}mid-thread journal entry using EXACTLY this template:
 
 **Required YAML Frontmatter:**
 At the top of your markdown file, include a YAML frontmatter block with the following keys:
@@ -335,7 +305,58 @@ ${registryHint}- If you lose track of your project number, workspace, or agent I
 
 **Execution:**
 - **Option 1 (Code Mode / MCP Tool - Recommended):** Execute directly via \`mj.core.createEntry({ content: "...", entry_type: "project_decision", tags: ["tag1"]${attributionArgs}${target === 'team' ? ', share_with_team: true' : ''} })\`.
-- **Option 2 (CLI Scratch File):** Write markdown file (with YAML frontmatter) to your scratch directory (e.g. \`<appDataDir>\\brain\\<conversation-id>\\scratch\\\`) then execute: \`memory-journal-mcp entry create ${target === 'team' ? '--team ' : ''}${cliFlags}--file <scratch_dir>/entry.md\``,
+- **Option 2 (CLI Scratch File):** Write markdown file (with YAML frontmatter) to your scratch directory (e.g. \`<appDataDir>\\brain\\<conversation-id>\\scratch\\\`) then execute: \`memory-journal-mcp entry create ${target === 'team' ? '--team ' : ''}${cliFlags}--file <scratch_dir>/entry.md\``
+}
+
+export function generateEntryPrompt(
+    _db: IDatabaseAdapter,
+    teamDb: IDatabaseAdapter | undefined,
+    target: 'personal' | 'team',
+    workspaceId = 'default',
+    briefingConfig?: Partial<BriefingConfig>,
+    projectNumber?: number,
+    explicitDefaultRequested = false,
+    runtime?: PromptTeamRuntime | null
+): { messages: PromptMessage[] } {
+    const effectiveProjectNumber = resolveWorkflowEffectiveProjectNumber(
+        workspaceId,
+        briefingConfig,
+        projectNumber,
+        explicitDefaultRequested
+    )
+    if (target === 'team') {
+        if (!teamDb) {
+            throw new ConfigurationError('Team database not configured')
+        }
+        enforceWorkflowTeamPromptRbac(teamDb, 'member', workspaceId, briefingConfig, runtime)
+        assertTeamWorkflowProjectScope(
+            workspaceId,
+            effectiveProjectNumber,
+            explicitDefaultRequested,
+            briefingConfig
+        )
+    }
+    const registryHint = getProjectRegistryHint(briefingConfig)
+    const attributionArgs = buildExplicitAttributionArgs(
+        workspaceId,
+        briefingConfig,
+        effectiveProjectNumber,
+        explicitDefaultRequested
+    )
+    const cliFlags = buildCliAttributionFlags(
+        workspaceId,
+        briefingConfig,
+        effectiveProjectNumber,
+        explicitDefaultRequested
+    )
+
+    return {
+        messages: [
+            {
+                role: 'user',
+                content: {
+                    type: 'text',
+                    text: buildEntryTemplateText(target, registryHint, attributionArgs, cliFlags),
                 },
             },
         ],

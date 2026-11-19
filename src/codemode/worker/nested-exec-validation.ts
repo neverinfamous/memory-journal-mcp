@@ -120,6 +120,13 @@ function validateWorkspaceAliases(
     return null
 }
 
+function extractPinnedGitHubOwner(pinnedWorkspace: string, canonPinned: string): string | undefined {
+    const candidate = canonPinned.includes('/') ? canonPinned : pinnedWorkspace.includes('/') ? pinnedWorkspace : undefined
+    if (candidate === undefined) return undefined
+    const parts = candidate.split('/').filter(Boolean)
+    return parts.length >= 2 ? parts[0] : undefined
+}
+
 function validateRepoAliases(
     records: Record<string, unknown>[],
     pinnedWorkspace: string,
@@ -127,12 +134,23 @@ function validateRepoAliases(
     registry: Record<string, ProjectRegistryEntry> | undefined
 ): { error: string } | null {
     const repoKeys = ['repo', 'repo_name', 'repoName', 'repository'] as const
+    const pinnedOwner = extractPinnedGitHubOwner(pinnedWorkspace, canonPinned)
     for (const rec of records) {
+        const rawOwner = rec['owner']
+        if (typeof rawOwner === 'string' && rawOwner.trim() !== '' && pinnedOwner !== undefined) {
+            if (rawOwner.trim().toLowerCase() !== pinnedOwner.toLowerCase()) {
+                return { error: `GitHub owner '${rawOwner.trim()}' conflicts with pinned session workspace '${pinnedWorkspace}'` }
+            }
+        }
         for (const key of repoKeys) {
             const rawRepo = rec[key]
             if (typeof rawRepo !== 'string' || rawRepo.trim() === '') continue
             const trimmedRepo = rawRepo.trim()
-            const repoSlug = trimmedRepo.split(/[/\\]/).filter(Boolean).pop() ?? trimmedRepo
+            const slashParts = trimmedRepo.split(/[/\\]/).filter(Boolean)
+            if (pinnedOwner !== undefined && slashParts.length >= 2 && slashParts[0]?.toLowerCase() !== pinnedOwner.toLowerCase()) {
+                return { error: `Repository '${trimmedRepo}' conflicts with pinned session workspace '${pinnedWorkspace}'` }
+            }
+            const repoSlug = slashParts.pop() ?? trimmedRepo
             const matchedRepoKey =
                 findRegistryKey(trimmedRepo, registry) ?? findRegistryKey(repoSlug, registry)
             if (matchedRepoKey !== undefined) {

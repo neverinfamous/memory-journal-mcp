@@ -55,7 +55,7 @@ function unwrapNestedExecuteCode(src: string): string {
     const current = src.trim()
     const stripped = stripLeadingShimAssignments(current)
     const nestedMatch =
-        /^(?:(?:const|let|var)\s+[\w$]+\s*=\s*)?(?:return\s+)?(?:await\s+)?(?:(?:__mcp|mcp|mj|tools)\.)*(?:mj_)?(?:execute_code|executeCode|execute)\s*\(\s*(?:\{\s*(?:code|script)\s*:\s*)?([`'"])([\s\S]*?)\1\s*\}?\s*\)\s*;?(?:\s*return\s+[\w$]+;?)?$/i.exec(
+        /^(?:(?:const|let|var)\s+[\w$]+\s*=\s*)?(?:return\s+)?(?:await\s+)?(?:(?:__mcp|mcp|mj|tools)\.)*(?:mj_)?(?:execute_code|executeCode|execute)\s*\(\s*(?:\{\s*(?:code|script)\s*:\s*)?([`'"])([\s\S]*?)\1\s*(?:\}\s*)?\)\s*;?(?:\s*return\s+[\w$]+;?)?$/i.exec(
             stripped
         )
     if (nestedMatch?.[2] !== undefined) {
@@ -120,19 +120,19 @@ function applyTemplateAndQuoteDelimiterHealing(src: string): string {
 
     executionCode = replaceOutsideNonCode(
         executionCode,
-        /(\b(?:content|title|text|description|message|instructions|body|notes|details|resolution_notes|query|script|comment|summary|heading)\s*:\s*)`([\s\S]*?)`(?=\s*(?:,\s*[a-zA-Z_$][\w$]*\s*:|\s*,\s*\}|\s*\}|\s*\)))/g,
+        /(\b(?:content|title|text|description|message|instructions|body|notes|details|resolution_notes|query|script|comment|summary|heading)\s*:\s*)`([\s\S]*?)`(?=\s*(?:,\s*[a-zA-Z_$][\w$]*\s*:|,\s*\}|\}|\)))/g,
         (match: string, prefix: string, content: string): string =>
             shouldLeaveValidSnippetUntouched(`{ ${match} }`, true) ? match : `${prefix}\`${escapeDelimiterChar(content, '`')}\``
     )
     executionCode = replaceOutsideNonCode(
         executionCode,
-        /(\b(?:content|title|text|description|message|instructions|body|notes|details|resolution_notes|query|script|comment|summary|heading)\s*:\s*)'([\s\S]*?)'(?=\s*(?:,\s*[a-zA-Z_$][\w$]*\s*:|\s*,\s*\}|\s*\}|\s*\)))/g,
+        /(\b(?:content|title|text|description|message|instructions|body|notes|details|resolution_notes|query|script|comment|summary|heading)\s*:\s*)'([\s\S]*?)'(?=\s*(?:,\s*[a-zA-Z_$][\w$]*\s*:|,\s*\}|\}|\)))/g,
         (_match: string, prefix: string, content: string): string =>
             content.includes('\n') ? `${prefix}\`${escapeTemplateInterpolation(content)}\`` : `${prefix}'${escapeDelimiterChar(content, "'")}'`
     )
     executionCode = replaceOutsideNonCode(
         executionCode,
-        /(\b(?:content|title|text|description|message|instructions|body|notes|details|resolution_notes|query|script|comment|summary|heading)\s*:\s*)"([\s\S]*?)"(?=\s*(?:,\s*[a-zA-Z_$][\w$]*\s*:|\s*,\s*\}|\s*\}|\s*\)))/g,
+        /(\b(?:content|title|text|description|message|instructions|body|notes|details|resolution_notes|query|script|comment|summary|heading)\s*:\s*)"([\s\S]*?)"(?=\s*(?:,\s*[a-zA-Z_$][\w$]*\s*:|,\s*\}|\}|\)))/g,
         (_match: string, prefix: string, content: string): string =>
             content.includes('\n') ? `${prefix}\`${escapeTemplateInterpolation(content)}\`` : `${prefix}"${escapeDelimiterChar(content, '"')}"`
     )
@@ -168,7 +168,7 @@ function applyTemplateAndQuoteDelimiterHealing(src: string): string {
 
     executionCode = replaceOutsideNonCode(
         executionCode,
-        /(\b(?:const|let|var)\s+[\w$]+\s*=\s*)`([\s\S]*?)`(?=\s*(?:;|\n\s*(?:const|let|var|return|await|mj\.|function|\/\*|\/\/)))/g,
+        /(\b(?:const|let|var)\s+[\w$]+\s*=\s*)`([\s\S]*?)`(?=(?:\s*;|[ \t\r]*\n\s*(?:const|let|var|return|await|mj\.|function|\/\*|\/\/)))/g,
         (match: string, prefix: string, content: string): string =>
             shouldLeaveValidSnippetUntouched(match, false)
                 ? match

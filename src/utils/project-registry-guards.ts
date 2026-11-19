@@ -101,7 +101,7 @@ function hasUnsafeExistingAncestor(
  * filesystem roots, OS system directories, symlinks/non-directory ancestors, and `allowedRoots` escapes.
  */
 export function isValidProjectPath(p: string, allowedRoots?: string[]): boolean {
-    if (p === '' || p.includes('\0') || p.startsWith('\\\\') || p.startsWith('//')) {
+    if (p === '' || p.includes('\0') || /^[\\/]{2}/.test(p.trimStart())) {
         return false
     }
     if (
@@ -136,6 +136,7 @@ export function isValidProjectPath(p: string, allowedRoots?: string[]): boolean 
     if (decoded !== p) {
         if (
             decoded.includes('\0') ||
+            /^[\\/]{2}/.test(decoded.trimStart()) ||
             hasUnsafeAdsColon(decoded) ||
             hasWinReservedDeviceSegment(decoded) ||
             hasTrailingDotOrSpaceSegment(decoded) ||

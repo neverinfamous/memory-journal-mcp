@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url'
 import { SENSITIVE_KEY_RE, sanitizeErrorForLogging } from './security-utils.js'
 
 const SENSITIVE_CLI_FLAG_RE =
-    /^--(?:auth-token|github-token|oauth-.*secret|encryption-key|api-key|webhook-auth|passphrase|key|password|secret|token)(?:=(.*))?$/i
+    /^--(?:[a-z0-9_-]+[-_])?(?:auth[-_]?token|token|secret|password|passwd|passphrase|api[-_]?key|apikey|webhook[-_]?auth|encryption[-_]?key|private[-_]?key|key)(?:=(.*))?$/i
 
 function sanitizeCliArgList(
     args: unknown[],
@@ -66,10 +66,11 @@ export function sanitizeIssueInput(
         const clean: Record<string, unknown> = {}
         for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
             if (k === '__proto__' || k === 'constructor' || k === 'prototype') continue
-            if (SENSITIVE_KEY_RE.test(k)) {
-                clean[k] = '[REDACTED]'
+            const safeKey = truncateIssueString(sanitizeErrorForLogging(k))
+            if (SENSITIVE_KEY_RE.test(k) || SENSITIVE_KEY_RE.test(safeKey)) {
+                clean[safeKey] = '[REDACTED]'
             } else {
-                clean[k] = sanitizeIssueInput(v, depth + 1, seen)
+                clean[safeKey] = sanitizeIssueInput(v, depth + 1, seen)
             }
         }
         return clean
@@ -118,6 +119,16 @@ async function drainIssueQueue(): Promise<void> {
             logsDirEnsured = true
         }
         const logFile = path.join(logsDir, 'agent-issues.jsonl')
+        try {
+            const stat = await fsPromises.lstat(logFile)
+            if (stat.isSymbolicLink() || !stat.isFile()) return
+        } catch (lstatErr) {
+            const code =
+                lstatErr instanceof Error && 'code' in lstatErr
+                    ? (lstatErr as NodeJS.ErrnoException).code
+                    : undefined
+            if (code !== 'ENOENT') return
+        }
         await fsPromises.appendFile(logFile, batch, { encoding: 'utf8', mode: 0o600 })
         await fsPromises.chmod(logFile, 0o600).catch(() => undefined)
     } catch (e) {

@@ -86,6 +86,17 @@ async function configureMetricsPersistence(
     return configuredPath
 }
 
+function resolveIsolatedBackupsDir(targetDbPath: string, roleSuffix: string): string {
+    const ext = path.extname(targetDbPath)
+    const rawStem = path.basename(targetDbPath, ext)
+    const cleanStem = rawStem.replace(/[^A-Za-z0-9._-]+/g, '_').replace(/^_+|_+$/g, '')
+    const dirName =
+        cleanStem !== '' && cleanStem !== 'backups'
+            ? `backups-${roleSuffix}-${cleanStem}`
+            : `backups-${roleSuffix}`
+    return path.join(path.dirname(targetDbPath), dirName)
+}
+
 async function initializeTeamDatabase(options: ServerOptions): Promise<{
     primaryTeamDb: IDatabaseAdapter | undefined
     testTeamDb: IDatabaseAdapter | undefined
@@ -105,7 +116,9 @@ async function initializeTeamDatabase(options: ServerOptions): Promise<{
         logger.info('Team database initialized', { module: 'McpServer', teamDbPath })
 
         if (testTeamDbPath) {
-            testTeamDb = await DatabaseAdapterFactory.create(testTeamDbPath, options)
+            testTeamDb = await DatabaseAdapterFactory.create(testTeamDbPath, options, {
+                backupsDir: resolveIsolatedBackupsDir(testTeamDbPath, 'team-test'),
+            })
             await testTeamDb.initialize()
             testTeamDb.applyTeamSchema()
             logger.info('Test team database initialized', { module: 'McpServer', testTeamDbPath })
@@ -251,7 +264,9 @@ async function setupCoreDatabasesAndAudit(options: ServerOptions, runtime: Serve
 
     let testDb: IDatabaseAdapter | undefined
     if (testDbPath) {
-        testDb = await DatabaseAdapterFactory.create(testDbPath, options)
+        testDb = await DatabaseAdapterFactory.create(testDbPath, options, {
+            backupsDir: resolveIsolatedBackupsDir(testDbPath, 'test'),
+        })
         await testDb.initialize()
         logger.info('Test database initialized', { module: 'McpServer', testDbPath })
     }

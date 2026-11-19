@@ -19,7 +19,6 @@ import type { SandboxResult } from '../../../codemode/types.js'
 setFallbackProjectRegistryLoader(loadProjectRegistryFromConfig)
 
 import { isFilterEffectivelyReadOnly, isToolVisibleForFilter } from '../../../filtering/tool-filter.js'
-import { isRecord } from '../../../codemode/normalizers/shared-utils.js'
 import { ExecuteCodeSchema, ExecuteCodeSchemaMcp } from './schemas.js'
 import { collectNonCodeModeTools, getSandboxPool, getSecurityManager } from './singleton-state.js'
 import { healCodeModeScript, healTemplateBackticksOnRuntimeError, isValidJsScript } from './code-healer.js'
@@ -27,123 +26,7 @@ import { extractAndRecoverJsonCode, extractAndRecoverEntryCode } from './json-en
 import { extractAndRecoverSqlCode, extractAndRecoverPreparedStatementCode } from './sql-recovery.js'
 import { resolveExecutionPayload, buildSandboxUserContext, type ExecuteCodeInput } from './payload-synthesizer.js'
 import { createSecureDispatcher, resolveCodeModeSessionContext } from './secure-dispatcher.js'
-
-const MAX_CONTEXT_BYTES = 5 * 1024 * 1024
-const MAX_ESTIMATE_DEPTH = 64
-
-function estimateSerializedByteBounds(
-    val: unknown,
-    limitBytes: number,
-    seen: Set<unknown>,
-    depth = 0
-): { lowerBytes: number; exactBytes: number | null; circular?: boolean } {
-    if (val === null || val === undefined) return { lowerBytes: 4, exactBytes: 4 }
-    if (typeof val === 'string') {
-        const rawBytes = Buffer.byteLength(val, 'utf-8')
-        return { lowerBytes: rawBytes + 2, exactBytes: rawBytes > limitBytes ? null : rawBytes * 6 + 2 }
-    }
-    if (typeof val === 'number' || typeof val === 'boolean') return { lowerBytes: 1, exactBytes: 24 }
-    if (typeof val === 'bigint') return { lowerBytes: 0, exactBytes: null }
-    if (typeof val !== 'object') return { lowerBytes: 0, exactBytes: 0 }
-    if (depth > MAX_ESTIMATE_DEPTH) return { lowerBytes: 2, exactBytes: null }
-    if (seen.has(val)) return { lowerBytes: 0, exactBytes: null, circular: true }
-    seen.add(val)
-
-    const record = val as { toJSON?: unknown }
-    if (typeof record.toJSON === 'function') {
-        seen.delete(val)
-        return { lowerBytes: 0, exactBytes: null }
-    }
-
-    let lowerBytes = 2
-    let exactUpper: number | null = 2
-    if (Array.isArray(val)) {
-        for (let i = 0; i < val.length; i++) {
-            const sub = estimateSerializedByteBounds(val[i], limitBytes, seen, depth + 1)
-            if (sub.circular === true) return sub
-            lowerBytes += sub.lowerBytes + (i > 0 ? 1 : 0)
-            if (lowerBytes > limitBytes) {
-                seen.delete(val)
-                return { lowerBytes, exactBytes: null }
-            }
-            exactUpper =
-                exactUpper !== null && sub.exactBytes !== null ? exactUpper + sub.exactBytes + 1 : null
-        }
-    } else {
-        let first = true
-        for (const [k, v] of Object.entries(val)) {
-            if (v === undefined) continue
-            const rawKeyBytes = Buffer.byteLength(k, 'utf-8')
-            const keyBytes = rawKeyBytes + 3
-            const sub = estimateSerializedByteBounds(v, limitBytes, seen, depth + 1)
-            if (sub.circular === true) return sub
-            lowerBytes += keyBytes + sub.lowerBytes + (first ? 0 : 1)
-            first = false
-            if (lowerBytes > limitBytes) {
-                seen.delete(val)
-                return { lowerBytes, exactBytes: null }
-            }
-            exactUpper =
-                exactUpper !== null && sub.exactBytes !== null
-                    ? exactUpper + rawKeyBytes * 6 + 3 + sub.exactBytes + 1
-                    : null
-        }
-    }
-    seen.delete(val)
-    return { lowerBytes, exactBytes: exactUpper }
-}
-
-function checkSerializedByteLimit(val: unknown, limitBytes: number, errorMsg: string): string | null {
-    try {
-        if (typeof val === 'string') {
-            return Buffer.byteLength(val, 'utf-8') > limitBytes ? errorMsg : null
-        }
-        const bounds = estimateSerializedByteBounds(val, limitBytes, new Set())
-        if (bounds.circular === true) {
-            return 'Security validation failed: Invalid non-serializable payload object'
-        }
-        if (bounds.lowerBytes > limitBytes) {
-            return errorMsg
-        }
-        if (bounds.exactBytes !== null && bounds.exactBytes <= limitBytes) {
-            return null
-        }
-        const serialized = JSON.stringify(val)
-        if (typeof serialized === 'string' && Buffer.byteLength(serialized, 'utf-8') > limitBytes) {
-            return errorMsg
-        }
-        return null
-    } catch {
-        return 'Security validation failed: Invalid non-serializable payload object'
-    }
-}
-
-function validateRawPayloadSize(params: unknown, maxCodeLength: number): string | null {
-    const overLimit = (): string => `Security validation failed: Code exceeds maximum length of ${String(maxCodeLength)} bytes`
-    if (typeof params === 'string') {
-        return Buffer.byteLength(params, 'utf-8') > maxCodeLength ? overLimit() : null
-    }
-    if (!isRecord(params)) return null
-    for (const [key, val] of Object.entries(params)) {
-        if (val === undefined || val === null) continue
-        if (key === 'context') {
-            const ctxErr = checkSerializedByteLimit(
-                val,
-                MAX_CONTEXT_BYTES,
-                `Security validation failed: Context exceeds maximum length of ${String(MAX_CONTEXT_BYTES)} bytes`
-            )
-            if (ctxErr !== null) return ctxErr
-            continue
-        }
-        if (typeof val === 'string') {
-            if (Buffer.byteLength(val, 'utf-8') > maxCodeLength) return overLimit()
-        } else if (typeof val === 'object') {
-            const objErr = checkSerializedByteLimit(val, maxCodeLength, overLimit())
-            if (objErr !== null) return objErr
-        }
-    }
-    return null
-}
+import { validateRawPayloadSize } from './payload-byte-bounds.js'
 
 export {
     healCodeModeScript,
@@ -318,7 +201,7 @@ async function executeCodeModeHandler(
         if (!securityManager.checkRateLimit(clientId)) {
             return buildSecurityErrorResult('Rate limit exceeded: Maximum code executions per minute reached.')
         }
-        const sizeErr = validateRawPayloadSize(params, securityManager.getConfig().maxCodeLength)
+        const sizeErr = validateRawPayloadSize(params, securityManager.getConfig().maxCodeLength, context.config?.maxToolInputElements)
         if (sizeErr !== null) return buildSecurityErrorResult(sizeErr)
 
         const input: ExecuteCodeInput = ExecuteCodeSchema.parse(params)

@@ -16,7 +16,9 @@ export const DEFAULT_MAX_TOOL_INPUT_ELEMENTS = 25_000
  * - positive number -> passed through as-is
  */
 export function resolveEffectiveMaxToolInputElements(configured: number | undefined): number {
-    if (configured === undefined) return DEFAULT_MAX_TOOL_INPUT_ELEMENTS
+    if (configured === undefined || Number.isNaN(configured) || configured < 0) {
+        return DEFAULT_MAX_TOOL_INPUT_ELEMENTS
+    }
     return configured === 0 || configured === Infinity ? Infinity : configured
 }
 
@@ -64,6 +66,11 @@ export function exceedsMaxToolInputElements(value: unknown, maxElements: number)
         }
         if (active.has(cur)) continue
 
+        if (cur instanceof String || Object.prototype.toString.call(cur) === '[object String]') {
+            count += 1 + (cur as { length: number }).length
+            if (count > maxElements) return true
+            continue
+        }
         if (ArrayBuffer.isView(cur) || isByteBufferInstance(cur)) {
             count += 1 + cur.byteLength
             if (count > maxElements) return true

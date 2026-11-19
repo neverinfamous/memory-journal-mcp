@@ -6,13 +6,17 @@
  * and applying scope filters during audit searches.
  */
 
-import { chmod, open, rename, stat } from 'node:fs/promises'
 import type { RequestContext } from '../utils/request-context.js'
 import { getActiveSessionProject } from '../utils/workspace-resolver.js'
 import { estimateTokens } from '../observability/token-estimator.js'
 import { logger } from '../utils/logger.js'
 import { parseCanonicalPositiveInt, parsePositiveProjectNumber } from '../utils/safe-positive-int.js'
-import { ADMIN_PROMPT_NAMES, TEAM_PROMPT_NAMES } from '../auth/scope-map.js'
+import {
+    ADMIN_PROMPT_NAMES,
+    canonicalizeMemoryResourceUri,
+    normalizePromptAliasForScope,
+    TEAM_PROMPT_NAMES,
+} from '../auth/scope-map.js'
 import type { AuditCategory, AuditEntry, AuditSearchFilters } from './types.js'
 
 export interface AuditScopeMetadata {
@@ -67,29 +71,29 @@ export function matchesAuditFilters(entry: AuditEntry, filters: AuditSearchFilte
     return true
 }
 
-/** Normalize resource URI targets (stripping fragments and adding `memory://` for scheme-less paths). */
+/** Normalize resource URI targets (stripping fragments, canonicalizing dot segments/percent encoding, and adding `memory://` for scheme-less paths). */
 export function normalizeAuditResourceUri(raw: string): string {
     const trimmed = raw.trim()
     const withScheme =
         !trimmed.includes('://') && SCHEMELESS_SENSITIVE_PATH_RE.test(trimmed)
             ? `memory://${trimmed}`
             : trimmed
-    return withScheme.replace(/#.*$/, '')
+    return canonicalizeMemoryResourceUri(withScheme)
 }
 
 function isTeamPromptTarget(name: string): boolean {
     const trimmed = name.trim()
     if (TEAM_PROMPT_NAMES.has(trimmed)) return true
-    const normalized = trimmed.replace(/^mj_/, '').replace(/_/g, '-')
-    return TEAM_PROMPT_NAMES.has(normalized)
+    return TEAM_PROMPT_NAMES.has(normalizePromptAliasForScope(trimmed))
 }
 
 function isAdminPromptTarget(name: string): boolean {
     const trimmed = name.trim()
     if (ADMIN_PROMPT_NAMES.has(trimmed)) return true
-    const normalized = trimmed.replace(/^mj_/, '').replace(/_/g, '-')
-    return ADMIN_PROMPT_NAMES.has(normalized)
+    return ADMIN_PROMPT_NAMES.has(normalizePromptAliasForScope(trimmed))
 }
+
+const PROMPT_TARGET_KEYS = ['name', 'prompt', 'prompt_name', 'Name', 'promptName'] as const
 
 /** Extract a sensitive resource URI or team/admin prompt target from tool arguments, if present. */
 export function extractSensitiveTargetFromArgs(toolName: string, args: unknown): string | undefined {
@@ -114,17 +118,14 @@ export function extractSensitiveTargetFromArgs(toolName: string, args: unknown):
         if (isSensitiveAuditTarget(normalized)) return normalized
     }
 
-    const promptCandidate =
-        record['name'] ??
-        record['Name'] ??
-        record['prompt_name'] ??
-        record['promptName'] ??
-        record['prompt']
-    if (
-        typeof promptCandidate === 'string' &&
-        (isTeamPromptTarget(promptCandidate) || isAdminPromptTarget(promptCandidate))
-    ) {
-        return promptCandidate.trim()
+    for (const key of PROMPT_TARGET_KEYS) {
+        const val = record[key]
+        if (typeof val !== 'string') continue
+        const trimmed = val.trim()
+        if (trimmed === '') continue
+        if (isTeamPromptTarget(trimmed) || isAdminPromptTarget(trimmed)) {
+            return trimmed
+        }
     }
 
     return undefined
@@ -243,92 +244,6 @@ export function extractAuditScopeFromUri(
     )
 }
 
-const AUDIT_SEARCH_CHUNK_BYTES = 65_536
-
-/**
- * Scan one JSONL audit log file backwards in 64 KB chunks without loading the whole file.
- */
-function decodeReversedAuditChunk(
-    chunkSlice: Buffer,
-    trailingBytes: Buffer,
-    startOffset: number
-): { chunkText: string | undefined; trailingBytes: Buffer; overflowSkipped: number } {
-    const combined =
-        trailingBytes.length > 0
-            ? Buffer.concat([chunkSlice, trailingBytes])
-            : Buffer.from(chunkSlice)
-    if (startOffset === 0) {
-        return { chunkText: combined.toString('utf-8'), trailingBytes: Buffer.alloc(0), overflowSkipped: 0 }
-    }
-    const firstNl = combined.indexOf(0x0a)
-    if (firstNl === -1) {
-        if (combined.length > 1_048_576) {
-            return { chunkText: undefined, trailingBytes: Buffer.alloc(0), overflowSkipped: 1 }
-        }
-        return { chunkText: undefined, trailingBytes: combined, overflowSkipped: 0 }
-    }
-    return {
-        chunkText: combined.subarray(firstNl + 1).toString('utf-8'),
-        trailingBytes: combined.subarray(0, firstNl),
-        overflowSkipped: 0,
-    }
-}
-
-export async function searchAuditFileBackward(
-    filePath: string,
-    filters: AuditSearchFilters,
-    remainingLimit: number,
-    results: AuditEntry[]
-): Promise<{ skippedLines: number; limitReached: boolean }> {
-    let fh: Awaited<ReturnType<typeof open>>
-    try {
-        fh = await open(filePath, 'r')
-    } catch (err: unknown) {
-        const code =
-            typeof err === 'object' && err !== null && 'code' in err ? err.code : undefined
-        if (code === 'ENOENT' || code === 'EISDIR') return { skippedLines: 0, limitReached: false }
-        throw err
-    }
-
-    let skippedLines = 0
-    try {
-        const info = await fh.stat()
-        if (info.size === 0 || info.isDirectory()) return { skippedLines: 0, limitReached: false }
-
-        const buf = Buffer.alloc(Math.min(AUDIT_SEARCH_CHUNK_BYTES, info.size))
-        let pos = info.size
-        let trailingBytes: Buffer = Buffer.alloc(0)
-
-        while (pos > 0) {
-            const readLen = Math.min(AUDIT_SEARCH_CHUNK_BYTES, pos)
-            const startOffset = pos - readLen
-            await fh.read(buf, 0, readLen, startOffset)
-            const decoded = decodeReversedAuditChunk(buf.subarray(0, readLen), trailingBytes, startOffset)
-            trailingBytes = decoded.trailingBytes
-            skippedLines += decoded.overflowSkipped
-            pos = startOffset
-            if (decoded.chunkText === undefined) continue
-
-            const lines = decoded.chunkText.split('\n')
-            for (let i = lines.length - 1; i >= 0; i--) {
-                const rawLine = lines[i]
-                if (rawLine === undefined || rawLine.length === 0) continue
-                const entry = parseAuditLine(rawLine)
-                if (entry === null) {
-                    skippedLines++
-                    continue
-                }
-                if (!matchesAuditFilters(entry, filters)) continue
-                results.push(entry)
-                if (results.length >= remainingLimit) return { skippedLines, limitReached: true }
-            }
-        }
-        return { skippedLines, limitReached: false }
-    } finally {
-        await fh.close()
-    }
-}
-
 function estimateEnvelopeTextTokens(result: unknown): number | undefined {
     if (typeof result !== 'object' || result === null) return undefined
     const rec = result as Record<string, unknown>
@@ -393,52 +308,4 @@ export function estimateOperationResultTokens(result: unknown, name: string): nu
     return undefined
 }
 
-/** Extract `err.code` when `err` is an error-like object with a string `code`. */
-export function nodeErrorCode(err: unknown): string | undefined {
-    if (typeof err !== 'object' || err === null || !('code' in err)) return undefined
-    const code = err.code
-    return typeof code === 'string' ? code : undefined
-}
-
-/**
- * Rotate the audit log file if its size meets or exceeds `maxSizeBytes`,
- * returning the updated approximate size in bytes or `null` on failure.
- */
-export async function rotateAuditLogFiles(
-    logPath: string,
-    maxSizeBytes: number,
-    maxArchives: number
-): Promise<number | null> {
-    try {
-        const info = await stat(logPath).catch((err: unknown) => {
-            if (nodeErrorCode(err) !== 'ENOENT') {
-                const message = err instanceof Error ? err.message : String(err)
-                logger.debug(`Audit log stat failed before rotation: ${message}`, {
-                    module: 'Audit',
-                })
-            }
-            return null
-        })
-        const currentSize = info?.size ?? 0
-        if (!info || info.size < maxSizeBytes) return currentSize
-
-        for (let i = maxArchives - 1; i >= 1; i--) {
-            const oldFile = `${logPath}.${String(i)}`
-            const newFile = `${logPath}.${String(i + 1)}`
-            await rename(oldFile, newFile).catch((err: unknown) => {
-                if (nodeErrorCode(err) === 'ENOENT') return
-                const message = err instanceof Error ? err.message : String(err)
-                logger.error(`Audit log rotation failed: ${message}`, { module: 'Audit' })
-                throw err
-            })
-        }
-
-        await rename(logPath, `${logPath}.1`)
-        await chmod(`${logPath}.1`, 0o600).catch(() => undefined)
-        return 0
-    } catch (err) {
-        const message = err instanceof Error ? err.message : String(err)
-        logger.error(`Rotate failed: ${message}`, { module: 'Audit' })
-        return null
-    }
-}
+export { nodeErrorCode, rotateAuditLogFiles, searchAuditFileBackward } from './audit-file-helpers.js'

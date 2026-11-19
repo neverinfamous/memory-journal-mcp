@@ -31,8 +31,8 @@ export class AdapterBaseDelegates {
     protected insightsOps: InsightsOperations
     protected vectorOps: VectorOperations
 
-    constructor(dbPath: string, config?: ToolHandlerConfig) {
-        this.connection = new NativeConnectionManager(dbPath)
+    constructor(dbPath: string, config?: ToolHandlerConfig, adapterOptions?: { backupsDir?: string }) {
+        this.connection = new NativeConnectionManager(dbPath, adapterOptions?.backupsDir)
         this.tagsMgr = new TagsManager(this.connection)
         this.entriesMgr = new EntriesManager(this.connection, this.tagsMgr, config)
         this.relationshipsMgr = new RelationshipsManager(this.connection)

@@ -142,6 +142,7 @@ withGroup(importExternalCmd, 'Command Options', (cmd: Command) => {
     cmd
         .option('--dir <path>', 'Source directory (required)')
         .option('--format <format>', 'External format: notion, obsidian, or logseq (required)')
+        .option('-l, --limit <number>', 'Maximum markdown files to import (default: 500)')
 })
 addCoreOptions(importExternalCmd)
 addDatabaseOptions(importExternalCmd)

@@ -9,6 +9,9 @@
 import { parentPort } from 'node:worker_threads'
 import * as vm from 'node:vm'
 import type { MessagePort } from 'node:worker_threads'
+
+// Capture host macrotask scheduler before prototype/global hardening runs.
+const hostSetImmediate = setImmediate
 import type { RpcRequest, RpcResponse, SandboxResult, ExecutionMetrics } from './types.js'
 import { transformAutoReturn } from './auto-return.js'
 import { validateSandboxCode } from './security.js'
@@ -244,7 +247,7 @@ async function executeCode(
                 }
             }
         }
-        const script = getOrCompileVmScript(`(async () => {\n${transformed}\n})()`)
+        const script = getOrCompileVmScript(`(async () => {\n"use strict";\n${transformed}\n})()`)
         const resultPromise = script.runInContext(context, { timeout: timeoutMs }) as Promise<unknown>
         const result = await resultPromise
         const endTime = performance.now()
@@ -303,6 +306,13 @@ parentPort?.on('message', (msg: unknown) => {
                 useTestDbMode,
                 activeTimers
             )
+            // Drain V8's microtask checkpoint before posting RESULT so unawaited microtask loops
+            // or delayed async rejections cannot disarm the host timeout watchdog.
+            if (!resultSent && activeExecutionId === id) {
+                await new Promise<void>((resolve) => {
+                    hostSetImmediate(resolve)
+                })
+            }
             serializeAndEnforceEgress(result, maxResultSize)
             if (!resultSent && activeExecutionId === id) {
                 parentPort?.postMessage({ type: 'RESULT', id, result })

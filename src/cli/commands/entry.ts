@@ -10,9 +10,7 @@ import { resolveTeamCreateAuthor } from '../../handlers/tools/team/admin-tools/b
 import { checkSingleTeamOwnership } from '../../handlers/tools/team/admin-tools/batch-delete-helpers.js'
 import { createEntryOptionsSchema, updateEntryOptionsSchema } from '../schemas.js'
 import {
-    applyCliUpdateAnchors,
-    assertCliUpdateWorkspaceOwnership,
-    buildCliEntryUpdateObject,
+    prepareCliEntryUpdate,
     validateCliUpdateArgsAndTarget,
     type UpdateEntryCliOptions,
 } from './entry-update-helpers.js'
@@ -354,11 +352,9 @@ function enforceCliUpdateTeamPermissions(
 export async function updateEntryAction(...args: unknown[]): Promise<void> {
     const command = args[args.length - 1] as Command
     const options = (args.length > 1 ? args[args.length - 2] : {}) as UpdateEntryCliOptions
-
     applyCliEntryFlagAliases(options, args.slice(0, args.length - 2))
     const { db, config } = await getDb(options, command)
     let exitCode: number | undefined
-
     try {
         const { entryId, version, rawWorkspaceOpt, trimmedTargetWs } =
             validateCliUpdateArgsAndTarget(options)
@@ -379,44 +375,25 @@ export async function updateEntryAction(...args: unknown[]): Promise<void> {
             trimmedTargetWs,
             existingEntry?.workspaceId
         )
-
-        assertCliUpdateWorkspaceOwnership(
+        const updates = await prepareCliEntryUpdate({
             entryId,
+            version,
             existingEntry,
             rawWorkspaceOpt,
-            payload,
             trimmedTargetWs,
-            config,
-            metaSourceWs
-        )
-
-        const updates = buildCliEntryUpdateObject(
+            metaSourceWs,
             content,
-            version,
             payload,
-            existingEntry,
-            trimmedTargetWs,
-            config
-        )
-        await applyCliUpdateAnchors(
-            updates,
-            payload,
-            updates.workspaceId ?? existingEntry?.workspaceId ?? 'default',
+            config,
             db,
-            config
-        )
+            isTeam: Boolean(options.team),
+        })
         const result = db.updateEntry(entryId, updates)
         if (result === null) {
             process.stderr.write(`Error: Entry #${entryId} not found or version mismatch.\n`)
             throw new CliExitError(1)
         }
-
-        const linkFailures = linkCliEntryRelationships(
-            db,
-            entryId,
-            payload,
-            result.workspaceId ?? payload.workspaceId
-        )
+        const linkFailures = linkCliEntryRelationships(db, entryId, payload, result.workspaceId ?? payload.workspaceId)
         db.flushSave()
         writeCliEntryResult(result, linkFailures, options.json, 'updated')
     } catch (e) {
@@ -424,7 +401,5 @@ export async function updateEntryAction(...args: unknown[]): Promise<void> {
     } finally {
         db.close()
     }
-    if (exitCode !== undefined) {
-        process.exit(exitCode)
-    }
+    if (exitCode !== undefined) process.exit(exitCode)
 }

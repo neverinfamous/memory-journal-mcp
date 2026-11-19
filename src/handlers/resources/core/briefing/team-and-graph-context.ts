@@ -7,6 +7,7 @@
 
 import { sliceUntrustedInline, type BriefingConfig, type ResourceContext } from '../../shared.js'
 import { logger } from '../../../../utils/logger.js'
+import { activeProjectRegistry } from '../../../../utils/write-scope.js'
 import { canAccessTeamSilently } from '../../../tools/search/helpers.js'
 import type { JournalEntry } from '../../../../types/index.js'
 import {
@@ -84,6 +85,40 @@ function fetchDistinctTeamBriefingEntries(
     })
 }
 
+function canBuildScopedTeamContext(
+    teamDb: NonNullable<ResourceContext['teamDb']>,
+    config: BriefingConfig,
+    teamWorkspace: string,
+    projectNumber: number | null | undefined,
+    runtime: ResourceContext['runtime']
+): boolean {
+    const accessAllowed = canAccessTeamSilently(
+        'search_entries',
+        {
+            teamDb,
+            config: {
+                ...(config.defaultWorkspaceId !== undefined
+                    ? { defaultWorkspaceId: config.defaultWorkspaceId }
+                    : {}),
+                ...(config.defaultProjectNumber !== undefined
+                    ? { defaultProjectNumber: config.defaultProjectNumber }
+                    : {}),
+                ...(config.projectRegistry !== undefined
+                    ? { projectRegistry: config.projectRegistry }
+                    : {}),
+                teamDefaultRole: runtime?.teamDefaultRole ?? 'denied',
+            },
+        },
+        teamWorkspace
+    )
+    if (!accessAllowed) return false
+
+    const resolvedRegistry = activeProjectRegistry(config.projectRegistry)
+    const hasActiveRegistry =
+        resolvedRegistry !== undefined && Object.keys(resolvedRegistry).length > 0
+    return !(typeof projectNumber !== 'number' && hasActiveRegistry)
+}
+
 export function buildTeamContext(
     context: ResourceContext,
     config: BriefingConfig,
@@ -95,28 +130,23 @@ export function buildTeamContext(
 
     try {
         const teamWorkspace = activeWorkspaceId ?? config.defaultWorkspaceId ?? 'default'
-        const accessAllowed = canAccessTeamSilently(
-            'search_entries',
-            {
-                teamDb: context.teamDb,
-                config: {
-                    ...(config.defaultWorkspaceId !== undefined
-                        ? { defaultWorkspaceId: config.defaultWorkspaceId }
-                        : {}),
-                    ...(config.defaultProjectNumber !== undefined
-                        ? { defaultProjectNumber: config.defaultProjectNumber }
-                        : {}),
-                    ...(config.projectRegistry !== undefined
-                        ? { projectRegistry: config.projectRegistry }
-                        : {}),
-                    teamDefaultRole: context.runtime?.teamDefaultRole ?? 'denied',
-                },
-            },
-            teamWorkspace
-        )
-        if (!accessAllowed) return undefined
+        if (
+            !canBuildScopedTeamContext(
+                context.teamDb,
+                config,
+                teamWorkspace,
+                projectNumber,
+                context.runtime
+            )
+        ) {
+            return undefined
+        }
 
-        const teamTotalEntries = context.teamDb.getActiveEntryCount(teamWorkspace)
+        const scopedProject = typeof projectNumber === 'number' ? projectNumber : undefined
+        const teamTotalEntries =
+            scopedProject !== undefined
+                ? context.teamDb.getActiveEntryCount(teamWorkspace, scopedProject)
+                : context.teamDb.getActiveEntryCount(teamWorkspace)
         const fetchCap = Math.max((config.entryCount ?? 3) * 3, 10)
         const distinctTeam = fetchDistinctTeamBriefingEntries(
             context.teamDb,

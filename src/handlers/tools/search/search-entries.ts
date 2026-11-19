@@ -62,7 +62,7 @@ function hasSearchEntriesFilter(input: SearchEntriesInput): boolean {
         (input.workspace_id !== undefined &&
             input.workspace_id.trim() !== '' &&
             input.workspace_id.trim() !== 'default') ||
-        input.project_number !== undefined ||
+        (input.project_number !== undefined && input.project_number > 0) ||
         input.issue_number !== undefined ||
         input.pr_number !== undefined ||
         input.pr_status !== undefined ||

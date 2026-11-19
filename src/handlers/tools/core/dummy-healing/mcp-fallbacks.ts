@@ -18,6 +18,7 @@ import { getCodeModeTools } from '../../codemode/index.js'
 import { getGitTools } from '../../git.js'
 import { readResource, getResources } from '../../../resources/index.js'
 import { ErrorFieldsMixin } from '../../error-fields-mixin.js'
+import { isDummyToolAllowedByFilter } from '../../dummy-filter-helpers.js'
 import { handlePrompt, handleListPrompts, handleGetPrompt } from './mcp-prompt-fallbacks.js'
 import {
     DUMMY_RESOURCE_TOOL_NAMES,
@@ -101,6 +102,28 @@ export async function tryHandleResourceUriFallback(
                 code: 'VALIDATION_ERROR',
                 category: 'validation',
                 recoverable: true,
+            },
+        }
+    }
+    if (
+        context?.config?.filterConfig !== undefined &&
+        context.config.filterConfig !== null &&
+        !isDummyToolAllowedByFilter(
+            'read_resource',
+            context.config.filterConfig,
+            true,
+            context.config.codemodeInternalFullAccess === true
+        )
+    ) {
+        return {
+            handled: true,
+            result: {
+                success: false,
+                error: "Tool 'read_resource' is disabled by the active --tool-filter configuration.",
+                code: 'TOOL_DISABLED',
+                category: 'authorization',
+                suggestion: 'Update the active tool filter or use an enabled tool.',
+                recoverable: false,
             },
         }
     }

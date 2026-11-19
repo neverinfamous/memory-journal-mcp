@@ -61,3 +61,60 @@ export function resolveDatabasePaths(
 
     return { db, testDb, teamDb, testTeamDb }
 }
+
+/**
+ * Resolves `authToken` while preserving whitespace-only `MCP_AUTH_TOKEN` values
+ * and rejecting explicit empty CLI `--auth-token ""` so downstream HTTP/metrics
+ * startup checks fail closed rather than falling back to unauthenticated mode.
+ */
+export function resolveAuthTokenOption(resolver: ConfigResolver): string | undefined {
+    if (resolver.isCliProvided('authToken')) {
+        const cliVal = resolver.resolve<string>('authToken')
+        if (cliVal !== undefined) {
+            if (cliVal.trim() === '') {
+                throw new Error('FATAL: Authentication token cannot be empty or whitespace-only.')
+            }
+            return cliVal
+        }
+    }
+    const rawEnv = process.env['MCP_AUTH_TOKEN']
+    if (rawEnv !== undefined && rawEnv !== '') {
+        if (rawEnv.trim() === '') {
+            throw new Error('FATAL: Authentication token cannot be whitespace-only.')
+        }
+        return rawEnv
+    }
+    const cfgVal = resolver.resolve<string>('authToken')
+    if (typeof cfgVal === 'string' && cfgVal !== '' && cfgVal.trim() === '') {
+        throw new Error('FATAL: Authentication token cannot be whitespace-only.')
+    }
+    return cfgVal !== '' ? cfgVal : undefined
+}
+
+export function buildOAuthOptionsGroup(resolver: ConfigResolver, catchConfig: CatchConfig): {
+    corsOrigins: string[] | undefined
+    enableHSTS: boolean
+    authToken: string | undefined
+    oauthEnabled: boolean
+    oauthIssuer: string | undefined
+    oauthAudience: string | undefined
+    oauthJwksUri: string | undefined
+    oauthClockTolerance: number
+    allowPlaintextLoopbackOAuth: boolean
+    trustProxy: boolean
+    publicOrigin: string | undefined
+} {
+    return {
+        corsOrigins: catchConfig(() => resolver.resolveStringArray('corsOrigin', 'CORS_ORIGIN'), undefined),
+        enableHSTS: catchConfig(() => resolver.resolveBool('enableHsts', 'MCP_ENABLE_HSTS') ?? false, false),
+        authToken: catchConfig(() => resolveAuthTokenOption(resolver), undefined),
+        oauthEnabled: catchConfig(() => resolver.resolveBool('oauthEnabled', 'OAUTH_ENABLED') ?? false, false),
+        oauthIssuer: catchConfig(() => resolver.resolve<string>('oauthIssuer', 'OAUTH_ISSUER'), undefined),
+        oauthAudience: catchConfig(() => resolver.resolve<string>('oauthAudience', 'OAUTH_AUDIENCE'), undefined),
+        oauthJwksUri: catchConfig(() => resolver.resolve<string>('oauthJwksUri', 'OAUTH_JWKS_URI'), undefined),
+        oauthClockTolerance: catchConfig(() => resolver.resolveInt('oauthClockTolerance', 'OAUTH_CLOCK_TOLERANCE', 0) ?? 60, 60),
+        allowPlaintextLoopbackOAuth: catchConfig(() => resolver.resolveBool('oauthAllowPlaintextLoopback', 'OAUTH_ALLOW_PLAINTEXT_LOOPBACK') ?? false, false),
+        trustProxy: catchConfig(() => resolver.resolveBool('trustProxy', 'TRUST_PROXY') ?? false, false),
+        publicOrigin: catchConfig(() => resolver.resolve<string>('publicOrigin', 'PUBLIC_ORIGIN'), undefined),
+    }
+}

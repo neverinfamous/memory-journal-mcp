@@ -1,6 +1,12 @@
 import { getAuthContext } from './auth-context.js'
 import { hasScope, SCOPES } from './scopes.js'
-import { canonicalizeMemoryResourceUri, getRequiredScope } from './scope-map.js'
+import {
+    ADMIN_PROMPT_NAMES,
+    canonicalizeMemoryResourceUri,
+    getRequiredScope,
+    normalizePromptAliasForScope,
+    TEAM_PROMPT_NAMES,
+} from './scope-map.js'
 import { getToolGroup } from '../filtering/tool-filter.js'
 import { PermissionError } from '../types/errors.js'
 import { logger } from '../utils/logger.js'
@@ -35,6 +41,7 @@ function isTeamResourceUri(normalizedTarget: string): boolean {
 }
 
 function isTeamToolOrPromptName(targetName: string): boolean {
+    const normalizedPrompt = normalizePromptAliasForScope(targetName)
     return (
         getToolGroup(targetName) === 'team' ||
         targetName === 'cross_team_search' ||
@@ -42,7 +49,8 @@ function isTeamToolOrPromptName(targetName: string): boolean {
         targetName.startsWith('team-') ||
         targetName.endsWith('-team-entry') ||
         targetName.endsWith('_team_entry') ||
-        targetName === 'mj_team_session_summary'
+        TEAM_PROMPT_NAMES.has(targetName) ||
+        TEAM_PROMPT_NAMES.has(normalizedPrompt)
     )
 }
 
@@ -64,6 +72,8 @@ function classifyAccessTarget(
 ): { isTeam: boolean; isAudit: boolean; isAdmin: boolean } {
     const normalizedTarget =
         targetType === 'resource' ? canonicalizeMemoryResourceUri(targetName) : targetName.trim()
+    const normalizedPrompt =
+        targetType === 'prompt' ? normalizePromptAliasForScope(normalizedTarget) : ''
     const isTeam =
         capabilities?.requiresTeamScope ??
         (targetType === 'resource'
@@ -72,7 +82,10 @@ function classifyAccessTarget(
     const isAudit =
         capabilities?.requiresAuditScope ??
         (targetType === 'resource' ? isAuditResourceUri(normalizedTarget) : false)
-    const isAdmin = capabilities?.requiresAdminScope ?? false
+    const isAdmin =
+        capabilities?.requiresAdminScope ??
+        (targetType === 'prompt' &&
+            (ADMIN_PROMPT_NAMES.has(normalizedTarget) || ADMIN_PROMPT_NAMES.has(normalizedPrompt)))
     return { isTeam, isAudit, isAdmin }
 }
 

@@ -8,12 +8,12 @@ vi.mock('node:fs/promises', () => ({
     opendir: vi.fn(),
     readFile: vi.fn(),
     stat: vi.fn().mockResolvedValue({ isDirectory: () => true, size: 100 }),
-    lstat: vi.fn().mockResolvedValue({ isSymbolicLink: () => false }),
+    lstat: vi.fn().mockResolvedValue({ isSymbolicLink: () => false, isFile: () => true }),
     realpath: vi.fn(),
     open: vi.fn().mockImplementation(async (path) => {
         const fsPromises = await import('node:fs/promises')
         return {
-            stat: vi.fn().mockResolvedValue({ size: 100 }),
+            stat: vi.fn().mockResolvedValue({ isFile: () => true, size: 100 }),
             readFile: () => fsPromises.readFile(path),
             close: vi.fn(),
         }

@@ -2,6 +2,8 @@ import type { ToolDefinition, ToolContext } from '../../../types/index.js'
 import { formatHandlerError } from '../../../utils/error-helpers.js'
 import { autoIndexEntry } from '../../../utils/vector-index-helpers.js'
 import { resolveWorkspaceId } from '../../../utils/workspace-resolver.js'
+import { activeProjectRegistry } from '../../../utils/write-scope.js'
+import { findCanonicalRegistryKey } from '../../../utils/workspace-registry-match.js'
 import { coerceSignificanceAlias } from '../schemas.js'
 import {
     UpdateEntrySchema,
@@ -94,13 +96,19 @@ function validateDeletePreconditions(
     expectedVersion: number | undefined,
     projectNumber: number | undefined,
     wsId: string,
-    existingByPk: ReturnType<ToolContext['db']['getEntryByIdIncludeDeleted']> | undefined
+    existingByPk: ReturnType<ToolContext['db']['getEntryByIdIncludeDeleted']> | undefined,
+    registry: ReturnType<typeof activeProjectRegistry>
 ): Record<string, unknown> | undefined {
     if (expectedVersion !== undefined) {
-        const scopeMatches =
-            wsId === '*' ||
-            existingByPk?.workspaceId === undefined ||
-            existingByPk.workspaceId.toLowerCase() === wsId.toLowerCase()
+        let scopeMatches = wsId === '*' || existingByPk?.workspaceId === undefined
+        if (!scopeMatches && existingByPk?.workspaceId !== undefined) {
+            const leftKey = findCanonicalRegistryKey(existingByPk.workspaceId, registry)
+            const rightKey = findCanonicalRegistryKey(wsId, registry)
+            scopeMatches =
+                leftKey !== undefined && rightKey !== undefined
+                    ? leftKey.toLowerCase() === rightKey.toLowerCase()
+                    : existingByPk.workspaceId === wsId
+        }
         const existing = scopeMatches ? existingByPk : null
         if (existing && existing.version !== expectedVersion) {
             return {
@@ -157,7 +165,8 @@ function executeDeleteEntry(params: unknown, context: ToolContext): Record<strin
         expected_version,
         project_number,
         wsId,
-        existingByPk
+        existingByPk,
+        activeProjectRegistry(context.config?.projectRegistry)
     )
     if (preconditionError !== undefined) return preconditionError
 

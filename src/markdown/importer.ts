@@ -138,6 +138,9 @@ async function readAndParseMarkdownFile(
         }
 
         const stats = await handle.stat()
+        if (!stats.isFile()) {
+            throw new Error(`Refusing to import non-regular file: ${filename}`)
+        }
         if (stats.size > MAX_IMPORT_FILE_SIZE_BYTES) {
             throw new Error(
                 `File exceeds maximum size limit of 5MB (${String(stats.size)} bytes)`
@@ -170,8 +173,10 @@ export async function importMarkdownEntries(
 
     const allMdFiles: string[] = []
     const MAX_IMPORT_DIR_ENTRIES = 10_000
+    let scannedEntries = 0
     const dir = await opendir(sourceDir)
     for await (const dirent of dir) {
+        if (++scannedEntries > MAX_IMPORT_DIR_ENTRIES) break
         if (dirent.isFile() && /\.md$/i.test(dirent.name)) {
             allMdFiles.push(dirent.name)
             if (allMdFiles.length >= MAX_IMPORT_DIR_ENTRIES) break

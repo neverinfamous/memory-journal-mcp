@@ -12,7 +12,7 @@ import { activeProjectRegistry, alignedProjectFilter } from '../../utils/write-s
 import { resolveWriteWorkspaceId } from './write-workspace.js'
 import { probeMatchingTeamEntry } from './search/helpers.js'
 import { enforceAccessBoundary } from '../../auth/validation.js'
-import { TEAM_DB_ERROR_RESPONSE } from './team/helpers.js'
+import { TEAM_DB_ERROR_RESPONSE, assertCanonicalFallbackToolAllowed } from './team/helpers.js'
 import { enforceTeamRbac, getCallerIdentity } from './team/rbac.js'
 import { executeTeamVisualizeRelationships } from './team/relationship-tools.js'
 import {
@@ -169,7 +169,13 @@ function delegateTeamVisualizeRelationships(
     wsId: string,
     context: ToolContext
 ): Record<string, unknown> {
-    enforceAccessBoundary('team_visualize_relationships', 'tool', { requiresTeamScope: true })
+    assertCanonicalFallbackToolAllowed('team_visualize_relationships', 'team', context)
+    enforceAccessBoundary(
+        'team_visualize_relationships',
+        'tool',
+        { requiresTeamScope: true },
+        context.config?.runtime?.auditLogger
+    )
     if (!context.teamDb) {
         return { ...TEAM_DB_ERROR_RESPONSE }
     }

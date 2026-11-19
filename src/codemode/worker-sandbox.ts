@@ -16,6 +16,7 @@ import {
     type RpcRequest,
 } from './types.js'
 import { handleRpcRequest } from './worker-rpc-handler.js'
+import { sanitizeErrorForLogging } from '../utils/security-utils.js'
 
 // =============================================================================
 // Worker Script Path Resolution
@@ -245,7 +246,7 @@ export class WorkerSandbox {
             const worker = this.worker
             this.worker = null
             worker.terminate().catch((err: unknown) => {
-                const detail = err instanceof Error ? err.message : String(err)
+                const detail = sanitizeErrorForLogging(err instanceof Error ? err.message : String(err))
                 process.stderr.write(`Code mode worker terminate failed: ${detail}\n`)
             })
         }

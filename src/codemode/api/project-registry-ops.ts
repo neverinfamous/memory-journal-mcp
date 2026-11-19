@@ -14,6 +14,7 @@ import {
     isValidProjectPath,
 } from '../../utils/project-registry-guards.js'
 import { parsePositiveProjectNumber } from '../../utils/safe-positive-int.js'
+import { sanitizeErrorForLogging } from '../../utils/security-utils.js'
 import { findCanonicalRegistryKey } from '../../utils/workspace-registry-match.js'
 import { parseProjectRegistry, type GroupApiRecord, type ProjectRegistryProvider } from './types.js'
 
@@ -35,7 +36,7 @@ function readRegistryConfig(): {
 }
 
 function registryError(err: unknown): string {
-    return err instanceof Error ? err.message : String(err)
+    return sanitizeErrorForLogging(err instanceof Error ? err.message : String(err))
 }
 
 function saveRegistryConfig(configPath: string, config: Record<string, unknown>): void {

@@ -21,6 +21,7 @@ import {
 } from './server-options-parsers.js'
 
 import {
+    buildOAuthOptionsGroup,
     resolveDatabasePaths,
     type CatchConfig,
 } from './server-options-groups.js'
@@ -272,34 +273,6 @@ function resolveMaxToolInputElementsOption(
         }
         return resolver.resolveInt('maxToolInputElements', 'MAX_TOOL_INPUT_ELEMENTS', 0)
     }, undefined)
-}
-
-function buildOAuthOptionsGroup(resolver: ConfigResolver, catchConfig: CatchConfig): {
-    corsOrigins: string[] | undefined
-    enableHSTS: boolean
-    authToken: string | undefined
-    oauthEnabled: boolean
-    oauthIssuer: string | undefined
-    oauthAudience: string | undefined
-    oauthJwksUri: string | undefined
-    oauthClockTolerance: number
-    allowPlaintextLoopbackOAuth: boolean
-    trustProxy: boolean
-    publicOrigin: string | undefined
-} {
-    return {
-        corsOrigins: catchConfig(() => resolver.resolveStringArray('corsOrigin', 'CORS_ORIGIN'), undefined),
-        enableHSTS: catchConfig(() => resolver.resolveBool('enableHsts', 'MCP_ENABLE_HSTS') ?? false, false),
-        authToken: catchConfig(() => resolver.resolve<string>('authToken', 'MCP_AUTH_TOKEN'), undefined),
-        oauthEnabled: catchConfig(() => resolver.resolveBool('oauthEnabled', 'OAUTH_ENABLED') ?? false, false),
-        oauthIssuer: catchConfig(() => resolver.resolve<string>('oauthIssuer', 'OAUTH_ISSUER'), undefined),
-        oauthAudience: catchConfig(() => resolver.resolve<string>('oauthAudience', 'OAUTH_AUDIENCE'), undefined),
-        oauthJwksUri: catchConfig(() => resolver.resolve<string>('oauthJwksUri', 'OAUTH_JWKS_URI'), undefined),
-        oauthClockTolerance: catchConfig(() => resolver.resolveInt('oauthClockTolerance', 'OAUTH_CLOCK_TOLERANCE', 0) ?? 60, 60),
-        allowPlaintextLoopbackOAuth: catchConfig(() => resolver.resolveBool('oauthAllowPlaintextLoopback', 'OAUTH_ALLOW_PLAINTEXT_LOOPBACK') ?? false, false),
-        trustProxy: catchConfig(() => resolver.resolveBool('trustProxy', 'TRUST_PROXY') ?? false, false),
-        publicOrigin: catchConfig(() => resolver.resolve<string>('publicOrigin', 'PUBLIC_ORIGIN'), undefined),
-    }
 }
 
 function buildLifecycleOptionsGroup(resolver: ConfigResolver, catchConfig: CatchConfig): {
