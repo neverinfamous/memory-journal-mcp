@@ -27,7 +27,7 @@ export function runMutatingInterceptors(
     .with({ cmd: P.union('ping', 'ping.exe') }, ({ args: matchedArgs }) => {
       if (process.platform === 'win32' || cmd === 'ping.exe') {
         if (matchedArgs.includes('-t')) {
-          console.error(`\n   💡 AGENT HINT: 'ping -t' runs indefinitely. Stripping '-t'.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Execution blocked. Fix parameters, use native tool, or spawn /heal-infrastructure. Ref: [AGENT_README.md](${AGENT_EXEC_README_URL})\x1b[0m`);
+          console.error(`\n   💡 AGENT HINT: 'ping -t' runs indefinitely. Stripping '-t'.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Execution blocked. Fix parameters or invoke the appropriate native tool (logged for CMS-03). Ref: [AGENT_README.md](${AGENT_EXEC_README_URL})\x1b[0m`);
           for (let i = ctx.args.length - 1; i >= 0; i--) {
             if (ctx.args[i] === '-t') ctx.args.splice(i, 1);
           }

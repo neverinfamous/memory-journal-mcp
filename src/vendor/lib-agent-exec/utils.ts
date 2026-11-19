@@ -157,6 +157,33 @@ export function findEcosystemScript(startDir: string, scriptName: string): strin
   return null;
 }
 
+const AGENT_SCRIPT_REF_RE = /^(?:(?:\.[\\/])?\.agents|.*[\\/]\.agents)[\\/]scripts[\\/]([a-zA-Z0-9_.-]+\.(?:ts|js|mjs))$/;
+
+export function resolveAgentScriptFallback(rawArg: string, projectDir: string): string | null {
+  const matchResult = rawArg.match(AGENT_SCRIPT_REF_RE);
+  if (matchResult === null) return null;
+
+  if (fs.existsSync(path.resolve(projectDir, rawArg))) {
+    return null;
+  }
+
+  const scriptName = matchResult[1];
+  if (scriptName === undefined) return null;
+
+  const localScriptPath = path.join(projectDir, 'scripts', scriptName);
+  if (fs.existsSync(localScriptPath)) {
+    return `scripts/${scriptName}`;
+  }
+
+  const bundledScriptsDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+  const bundledCandidate = path.join(bundledScriptsDir, scriptName);
+  if (fs.existsSync(bundledCandidate)) {
+    return bundledCandidate;
+  }
+
+  return null;
+}
+
 export async function sendDatadogTelemetry(
   payload: ExecPayload,
   cwd: string,
@@ -168,7 +195,11 @@ export async function sendDatadogTelemetry(
 ) {
   if (process.env.NODE_ENV === 'test' || process.env.AGENT_EXEC_SILENT === '1') return;
   try {
-    const root = findEcosystemRoot(cwd) || findEcosystemRoot(fileURLToPath(import.meta.url));
+    const cwdRoot = findEcosystemRoot(cwd);
+    const scriptRoot = findEcosystemRoot(fileURLToPath(import.meta.url));
+    const root = (cwdRoot && fs.existsSync(path.join(cwdRoot, 'secrets.env')))
+      ? cwdRoot
+      : scriptRoot;
     if (!root) return;
     const envPath = path.join(root, 'secrets.env');
     if (!fs.existsSync(envPath)) return;

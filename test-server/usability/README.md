@@ -7,7 +7,7 @@ This directory contains organic testing prompts designed to "fuzz" the `memory-j
 ## Testing Philosophy
 Unlike the deterministic integration tests in `test-server/codemode/` and `test-server/standard/`, these prompts instruct agents to act intuitively, guess properties, and purposefully omit syntax like `await`. 
 
-When an agent fails, they are instructed to permanently heal the codebase using the optimization layers described in `.agents/workflows/heal-mcp-server.md` (`/heal-mcp-server`).
+When an agent fails, they are instructed to permanently heal the codebase using the 6 architectural optimization layers described in `/mcp-audit` (`references/anti-hallucination-healing.md`).
 
 ## Execution Workflow (Divide & Conquer)
 

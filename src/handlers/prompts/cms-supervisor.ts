@@ -153,7 +153,14 @@ ${markUntrustedContent(params.deletedSnippet)}
 ### Phase B — Cross-Run Experience, Telemetry Mining & Automation Self-Improvement
 1. Inspect \`logs/agent-issues.jsonl\` and \`logs/mcp-audit.jsonl\` for recurring tool validation failures, parameter hallucinations, or unhandled edge cases.
 2. Review the **Root-Cause Investigation** section of the latest \`CMS-02\` maintenance entry and recent \`session-summary\` \`## Unfinished / Blocked\` sections across projects.
-3. Formulate targeted, minimal code/schema/prompt/automation adaptations for any recurring friction or improvement opportunities discovered (e.g., adding parameter alias coercions in \`src/handlers/tools/schemas/hallucination-healer.ts\`, refining prompt instructions in \`src/handlers/prompts/\`, updating server docs, or refining scheduled CMS automation templates).
+3. Follow the **Two-Tier Healing Hierarchy** — **Prevent** first (coerce, normalize, or alias hallucinatory inputs seamlessly), **Mitigate** only when safe inference risks data loss (throw pre-validation error prefixed verbatim with \`🛠️ AUTONOMOUS HEALING: \`) — across the **6 Architectural Healing Layers**:
+   - **Layer 1**: Zod \`.describe()\` hints and \`src/constants/instructions/markdown/*.md\` compiled via \`pnpm run generate:instructions\` (never edit auto-generated instruction \`.ts\` outputs directly).
+   - **Layer 2**: Dispatcher normalizers (\`hallucination-healer.ts\`, \`group-factory.ts\`, param normalizers) for \`snake_case\`/\`camelCase\`, coercion, and defaults.
+   - **Layer 3**: Sandbox proxies (\`worker-api-proxy.ts\`, \`worker-result-proxy.ts\`, \`namespace-shims.ts\`) for missing \`await\` and safe fallbacks.
+   - **Layer 4**: \`METHOD_ALIASES\` (\`src/codemode/constants/method-aliases.ts\`) obeying the same-group resolution invariant (every alias resolves to a real method in its own group).
+   - **Layer 5**: CLI synonyms, catch-all args, and \`addHelpText\` guardrails.
+   - **Layer 6**: Native tools first, verify apparent line-shift type errors with \`pnpm run typecheck\`, and never pass \`-CommandType Application\` to \`Get-Command\` under PowerShell proxy functions.
+4. Check and update \`memory-journal-mcp\` documentation as needed and appropriate when schemas, tools, Code Mode aliases, CLI flags, prompts, or supervisor rules change (\`AGENT_README.md\`, \`README.md\`, \`DOCKER_README.md\` strictly \`< 25,000\` chars, \`SECURITY.md\`, bundled \`skills/memory-journal-mcp/SKILL.md\`, \`src/constants/instructions/markdown/*.md\` compiled via \`pnpm run generate:instructions\`, \`test-server/code-map.md\` via \`pnpm run generate:code-map\`, \`test-server/tool-reference.md\`, \`test-server/prompts-reference.md\`, and affected wiki pages including \`Automations.md\`).
 
 ### Phase C — Batched Adaptation & Dirty-Tree Conditional Single-Pass Validation Gate
 > [!IMPORTANT]
@@ -174,7 +181,7 @@ ${markUntrustedContent(params.deletedSnippet)}
      4. \`pnpm exec vitest run\`
      5. \`pnpm exec playwright test\`
    - Commit **ONLY explicit paths modified by this \`CMS-04\` run** (never \`git add .\` or \`--add .\`) via \`commit.ts\` (\`--add <changed_files>\`) in hook-guarded workspaces, or explicit \`git commit -m "fix(cms): <summary>" -- <changed_files>\` in standalone hosts.
-5. If any client automation template or CMS guide was improved, commit those explicit changes separately in their own repository.
+5. If any wiki pages (e.g., \`Automations.md\`, \`Prompts.md\`, \`Tools.md\`) or client automation configs (\`AGENTS.md\`, \`sidecars/\`) were improved, commit those explicit changes separately in their respective repositories.
 
 ### Phase D — Telemetry Cleanup & Supervisor Journal Entry
 1. If \`logs/agent-issues.jsonl\` contained issues that were resolved and validated in Phase C, clear \`logs/agent-issues.jsonl\`.

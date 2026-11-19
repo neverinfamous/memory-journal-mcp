@@ -61,7 +61,7 @@ relationships:
 - Do NOT omit any of the four required sections
 - Use bullet points within each section
 - Reference specific entry IDs, file names, and PR numbers where relevant
-- To populate \`auto_context.commits\`, use \`bun .\\.agents\\scripts\\get-git-history-json.ts --summary -n 20\` to retrieve recent commit SHAs. Do NOT use raw \`git log\`.
+- To populate \`auto_context.commits\`, call \`mj.git.getCommitHistory({ limit: 20 })\` inside \`mj_execute_code\` (or \`get_commit_history\`) to retrieve recent commit SHAs. Do NOT use raw \`git log\`.
 - Note: \`workspace_id\` and \`project_number\` are automatically resolved from your active workspace context if omitted.
 ${registryHint}- If you lose track of your project number, workspace, or agent ID, read the \`memory://agent-context/{repo}\` resource to retrieve it instead of reloading the full briefing (which wastes tokens)
 

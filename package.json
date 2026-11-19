@@ -19,6 +19,7 @@
     "build:js": "tsup",
     "build:types": "tsc --project tsconfig.build.json --emitDeclarationOnly",
     "cli": "tsx src/cli/index.ts",
+    "commit": "tsx scripts/commit.ts",
     "dev": "tsc --watch",
     "lint": "tsx scripts/run-checks.ts lint",
     "lint:fix": "eslint src/ tests/ scripts/ --fix && tsx scripts/run-checks.ts lint",

@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { execSync, execFileSync } from 'node:child_process';
 import { parseArgs } from 'node:util';
 import fs from 'node:fs';
@@ -547,7 +548,7 @@ function executeCommit(header: string, body: string, cwd?: string, onlyFiles?: s
   return sha;
 }
 
-function main(): void {
+export function main(): void {
   try {
     const args = parseArguments();
 

@@ -14,13 +14,13 @@ export function runStructuralInterceptors(
 
   match({ cmd, originalCmd, isCommand, hasInlineCmd, inlineFlag, innerCmdStr, positionalArgs, args, hasStdin, isWin32: process.platform === 'win32', payload })
     .with({ isCommand: true, originalCmd: P.union('pwsh', 'pwsh.exe', 'powershell', 'powershell.exe', 'cmd', 'cmd.exe', 'bash', 'bash.exe', 'sh', 'sh.exe', 'wsl', 'wsl.exe'), hasInlineCmd: true, inlineFlag: P.union('-ec', '-encodedcommand', '-en') }, () => {
-      console.error(`\n   💡 AGENT HINT: Inline '-EncodedCommand' shell wrappers are blocked by agent-exec to prevent bypasses.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Execution blocked. Fix parameters, use native tool, or spawn /heal-infrastructure. Ref: [AGENT_README.md](${AGENT_EXEC_README_URL})\x1b[0m`);
+      console.error(`\n   💡 AGENT HINT: Inline '-EncodedCommand' shell wrappers are blocked by agent-exec to prevent bypasses.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Execution blocked. Fix parameters or invoke the appropriate native tool (logged for CMS-03). Ref: [AGENT_README.md](${AGENT_EXEC_README_URL})\x1b[0m`);
       process.exit(1);
     })
     .with({ isCommand: true, originalCmd: P.union('pwsh', 'pwsh.exe', 'powershell', 'powershell.exe'), hasInlineCmd: false, args: P.when((a: string[]) => {
       return a.length > 0 && !a.some(arg => ['-file', '-help', '-version', '-?', '/?'].includes(arg.toLowerCase()));
     }) }, () => {
-      console.error(`\n   💡 AGENT HINT: You attempted to run an inline shell command implicitly via powershell.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Execution blocked. Fix parameters, use native tool, or spawn /heal-infrastructure. Ref: [AGENT_README.md](${AGENT_EXEC_README_URL})\x1b[0m`);
+      console.error(`\n   💡 AGENT HINT: You attempted to run an inline shell command implicitly via powershell.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Execution blocked. Fix parameters or invoke the appropriate native tool (logged for CMS-03). Ref: [AGENT_README.md](${AGENT_EXEC_README_URL})\x1b[0m`);
       console.error(`   This bypasses the agent-exec robustness interceptors and risks hanging the process.`);
       console.error(`   Please use the proper execution payloads ('command', 'eval', or 'script') or native tools.`);
       console.error(`   If you need shell pipes/redirects, write a script file to the scratch directory and use a 'script' payload.`);
@@ -30,7 +30,7 @@ export function runStructuralInterceptors(
         const stripped = getUnquoted(s);
         return stripped.includes('&&') || stripped.includes('||') || stripped.includes('|') || stripped.includes('>');
     }) }, () => {
-      console.error(`\n   💡 AGENT HINT: In PowerShell, avoid using '&&', '||', '|', and '>'. You MUST use semicolons (;) for simple commands, or use a WSL2 JSON payload for POSIX pipelines.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Execution blocked. Fix parameters, use native tool, or spawn /heal-infrastructure. Ref: [AGENT_README.md](${AGENT_EXEC_README_URL})\x1b[0m`);
+      console.error(`\n   💡 AGENT HINT: In PowerShell, avoid using '&&', '||', '|', and '>'. You MUST use semicolons (;) for simple commands, or use a WSL2 JSON payload for POSIX pipelines.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Execution blocked. Fix parameters or invoke the appropriate native tool (logged for CMS-03). Ref: [AGENT_README.md](${AGENT_EXEC_README_URL})\x1b[0m`);
       process.exit(1);
     })
     .with({ isCommand: true, originalCmd: P.union('pwsh', 'pwsh.exe', 'powershell', 'powershell.exe', 'cmd', 'cmd.exe', 'bash', 'bash.exe', 'sh', 'sh.exe', 'wsl', 'wsl.exe'), hasInlineCmd: true }, () => {
@@ -84,7 +84,7 @@ export function runStructuralInterceptors(
       }
 
       const wrappedShell = (cmdBasename === 'wsl.exe' || cmdBasename === 'wsl') ? (args.find((a: string) => ['bash', 'sh', 'pwsh', 'powershell'].includes(a.toLowerCase())) || cmdBasename) : cmdBasename;
-      console.error(`\n   💡 AGENT HINT: You attempted to run an inline shell command (${wrappedShell} ${flag}). This is an agent hallucination.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Execution blocked. Fix parameters, use native tool, or spawn /heal-infrastructure. Ref: [AGENT_README.md](${AGENT_EXEC_README_URL})\x1b[0m`);
+      console.error(`\n   💡 AGENT HINT: You attempted to run an inline shell command (${wrappedShell} ${flag}). This is an agent hallucination.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Execution blocked. Fix parameters or invoke the appropriate native tool (logged for CMS-03). Ref: [AGENT_README.md](${AGENT_EXEC_README_URL})\x1b[0m`);
       console.error(`   This bypasses the agent-exec robustness interceptors and risks hanging the process.`);
       console.error(`   Please use the proper execution payloads ('command', 'eval', or 'script') or native tools.`);
       console.error(`   If you need shell pipes/redirects, write a script file to the scratch directory and use a 'script' payload.`);
@@ -93,50 +93,50 @@ export function runStructuralInterceptors(
 
     // Interactive blocks
     .with({ cmd: P.union('su', 'su.exe', 'passwd', 'passwd.exe', 'chsh', 'chsh.exe') }, () => {
-      console.error(`\n   💡 AGENT HINT: '${cmdBasename}' requires an interactive password/tty prompt. Blocking execution.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Execution blocked. Fix parameters, use native tool, or spawn /heal-infrastructure. Ref: [AGENT_README.md](${AGENT_EXEC_README_URL})\x1b[0m`);
+      console.error(`\n   💡 AGENT HINT: '${cmdBasename}' requires an interactive password/tty prompt. Blocking execution.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Execution blocked. Fix parameters or invoke the appropriate native tool (logged for CMS-03). Ref: [AGENT_README.md](${AGENT_EXEC_README_URL})\x1b[0m`);
       process.exit(1);
     })
     .with({ cmd: P.union('ssh-keygen', 'ssh-keygen.exe') }, () => {
       if (!args.includes('-f') || !args.includes('-N')) {
-        console.error(`\n   💡 AGENT HINT: 'ssh-keygen' without '-f' (file) and '-N' (passphrase) will prompt interactively.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Execution blocked. Fix parameters, use native tool, or spawn /heal-infrastructure. Ref: [AGENT_README.md](${AGENT_EXEC_README_URL})\x1b[0m`);
+        console.error(`\n   💡 AGENT HINT: 'ssh-keygen' without '-f' (file) and '-N' (passphrase) will prompt interactively.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Execution blocked. Fix parameters or invoke the appropriate native tool (logged for CMS-03). Ref: [AGENT_README.md](${AGENT_EXEC_README_URL})\x1b[0m`);
         console.error(`   Please provide '-f <path>' and '-N ""' to run non-interactively. Blocking execution.`);
         process.exit(1);
       }
     })
     .with({ cmd: P.union('runas', 'runas.exe') }, () => {
-      console.error(`\n   💡 AGENT HINT: 'runas' requires an interactive password prompt. Blocking execution.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Execution blocked. Fix parameters, use native tool, or spawn /heal-infrastructure. Ref: [AGENT_README.md](${AGENT_EXEC_README_URL})\x1b[0m`);
+      console.error(`\n   💡 AGENT HINT: 'runas' requires an interactive password prompt. Blocking execution.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Execution blocked. Fix parameters or invoke the appropriate native tool (logged for CMS-03). Ref: [AGENT_README.md](${AGENT_EXEC_README_URL})\x1b[0m`);
       process.exit(1);
     })
     .with({ cmd: P.union('sudo', 'sudo.exe'), isWin32: true }, () => {
-      console.error(`\n   💡 AGENT HINT: 'sudo' on Windows triggers an interactive UAC dialog. Blocking execution to prevent headless hang.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Execution blocked. Fix parameters, use native tool, or spawn /heal-infrastructure. Ref: [AGENT_README.md](${AGENT_EXEC_README_URL})\x1b[0m`);
+      console.error(`\n   💡 AGENT HINT: 'sudo' on Windows triggers an interactive UAC dialog. Blocking execution to prevent headless hang.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Execution blocked. Fix parameters or invoke the appropriate native tool (logged for CMS-03). Ref: [AGENT_README.md](${AGENT_EXEC_README_URL})\x1b[0m`);
       process.exit(1);
     })
 
     // Indefinite Hang Blocks
     .with({ cmd: P.union('watch', 'watch.exe') }, () => {
-      console.error(`\n   💡 AGENT HINT: 'watch' command runs indefinitely. Blocking execution to prevent agent hanging.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Execution blocked. Fix parameters, use native tool, or spawn /heal-infrastructure. Ref: [AGENT_README.md](${AGENT_EXEC_README_URL})\x1b[0m`);
+      console.error(`\n   💡 AGENT HINT: 'watch' command runs indefinitely. Blocking execution to prevent agent hanging.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Execution blocked. Fix parameters or invoke the appropriate native tool (logged for CMS-03). Ref: [AGENT_README.md](${AGENT_EXEC_README_URL})\x1b[0m`);
       process.exit(1);
     })
     .with({ cmd: P.union('tail', 'tail.exe') }, () => {
       if (args.includes('-f') || args.includes('--follow') || args.some(a => a.startsWith('--follow='))) {
-        console.error(`\n   💡 AGENT HINT: 'tail -f' runs indefinitely. Blocking execution to prevent agent hanging.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Execution blocked. Fix parameters, use native tool, or spawn /heal-infrastructure. Ref: [AGENT_README.md](${AGENT_EXEC_README_URL})\x1b[0m`);
+        console.error(`\n   💡 AGENT HINT: 'tail -f' runs indefinitely. Blocking execution to prevent agent hanging.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Execution blocked. Fix parameters or invoke the appropriate native tool (logged for CMS-03). Ref: [AGENT_README.md](${AGENT_EXEC_README_URL})\x1b[0m`);
         process.exit(1);
       }
     })
     .with({ cmd: P.union('journalctl', 'journalctl.exe') }, () => {
       if (args.some(a => a === '-f' || a === '--follow' || /^-[exqrkaobml]*f[exqrkaobml]*$/i.test(a))) {
-        console.error(`\n   💡 AGENT HINT: 'journalctl -f' runs indefinitely. Blocking execution.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Execution blocked. Fix parameters, use native tool, or spawn /heal-infrastructure. Ref: [AGENT_README.md](${AGENT_EXEC_README_URL})\x1b[0m`);
+        console.error(`\n   💡 AGENT HINT: 'journalctl -f' runs indefinitely. Blocking execution.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Execution blocked. Fix parameters or invoke the appropriate native tool (logged for CMS-03). Ref: [AGENT_README.md](${AGENT_EXEC_README_URL})\x1b[0m`);
         process.exit(1);
       }
     })
 
     // Native tool enforcement
     .with({ isCommand: true, hasStdin: false, cmd: P.union('cat', 'cat.exe', 'wc', 'wc.exe', 'head', 'head.exe', 'tail', 'tail.exe', 'sort', 'sort.exe', 'uniq', 'uniq.exe', 'tee', 'tee.exe', 'find', 'find.exe', 'findstr', 'findstr.exe', 'gpg', 'gpg.exe'), positionalArgs: P.when(pa => pa.length === 0) }, () => {
-      console.error(`\n   💡 AGENT HINT: '${cmd.replace(/\.exe$/, '')}' called without file arguments and no stdin. It will hang indefinitely.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Execution blocked. Fix parameters, use native tool, or spawn /heal-infrastructure. Ref: [AGENT_README.md](${AGENT_EXEC_README_URL})\x1b[0m`);
+      console.error(`\n   💡 AGENT HINT: '${cmd.replace(/\.exe$/, '')}' called without file arguments and no stdin. It will hang indefinitely.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Execution blocked. Fix parameters or invoke the appropriate native tool (logged for CMS-03). Ref: [AGENT_README.md](${AGENT_EXEC_README_URL})\x1b[0m`);
       process.exit(1);
     })
     .with({ isCommand: true, hasStdin: false, cmd: P.union('xargs', 'xargs.exe') }, () => {
-      console.error(`\n   💡 AGENT HINT: 'xargs' reads from stdin, but no stdin payload was provided. It will hang indefinitely.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Execution blocked. Fix parameters, use native tool, or spawn /heal-infrastructure. Ref: [AGENT_README.md](${AGENT_EXEC_README_URL})\x1b[0m`);
+      console.error(`\n   💡 AGENT HINT: 'xargs' reads from stdin, but no stdin payload was provided. It will hang indefinitely.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Execution blocked. Fix parameters or invoke the appropriate native tool (logged for CMS-03). Ref: [AGENT_README.md](${AGENT_EXEC_README_URL})\x1b[0m`);
       process.exit(1);
     })
     .with({ isCommand: true, hasStdin: false, cmd: P.union('awk', 'gawk', 'sed', 'sed.exe', 'jq', 'jq.exe', 'yq', 'yq.exe'), positionalArgs: P.when(pa => pa.length <= 1) }, () => {
@@ -148,7 +148,7 @@ export function runStructuralInterceptors(
       
       if (!isSafe) {
         ctx.args = ctx.args.map(a => a.startsWith('C:\\') ? `/mnt/c/${a.slice(3).replace(/\\/g, '/')}` : a);
-        console.error(`\n   💡 AGENT HINT: '${cmd.replace(/\.exe$/, '')}' called without file arguments and no stdin. It will hang indefinitely.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Execution blocked. Fix parameters, use native tool, or spawn /heal-infrastructure. Ref: [AGENT_README.md](${AGENT_EXEC_README_URL})\x1b[0m`);
+        console.error(`\n   💡 AGENT HINT: '${cmd.replace(/\.exe$/, '')}' called without file arguments and no stdin. It will hang indefinitely.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Execution blocked. Fix parameters or invoke the appropriate native tool (logged for CMS-03). Ref: [AGENT_README.md](${AGENT_EXEC_README_URL})\x1b[0m`);
         process.exit(1);
       }
     })
@@ -262,7 +262,7 @@ export function runStructuralInterceptors(
           return;
         }
       }
-      console.error(`\n   💡 AGENT HINT: '${cmdBasename}' is an agent-native tool, NOT a terminal CLI binary. Please invoke the '${cmdBasename}' tool directly instead of executing it via the terminal.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Execution blocked. Fix parameters, use native tool, or spawn /heal-infrastructure. Ref: [AGENT_README.md](${AGENT_EXEC_README_URL})\x1b[0m`);
+      console.error(`\n   💡 AGENT HINT: '${cmdBasename}' is an agent-native tool, NOT a terminal CLI binary. Please invoke the '${cmdBasename}' tool directly instead of executing it via the terminal.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Execution blocked. Fix parameters or invoke the appropriate native tool (logged for CMS-03). Ref: [AGENT_README.md](${AGENT_EXEC_README_URL})\x1b[0m`);
       process.exit(1);
     })
     .with({ originalCmd: P.when((c: string) => (ECOSYSTEM_MCP_TOOLS as readonly string[]).includes(c.toLowerCase().replace(/\.exe$/, ''))) }, () => {

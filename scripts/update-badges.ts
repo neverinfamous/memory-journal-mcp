@@ -205,7 +205,7 @@ function updateBadgeTargetFile(file: string, metrics: BadgeMetrics): boolean {
 
 function autoCommitDirtyBadgeFiles(filesToUpdate: readonly string[], updatedFiles: readonly string[]): void {
   if (process.env['GITHUB_ACTIONS']) return;
-  const commitScript = path.join(ROOT_DIR, ".agents", "scripts", "commit.ts");
+  const commitScript = path.join(ROOT_DIR, "scripts", "commit.ts");
   if (!fs.existsSync(commitScript)) return;
   const dirtyFiles = filesToUpdate.filter((file) => {
     if (updatedFiles.includes(file)) return true;
@@ -238,7 +238,11 @@ function autoCommitDirtyBadgeFiles(filesToUpdate: readonly string[], updatedFile
   ];
 
   try {
-    execFileSync("bun", args, { stdio: "inherit", cwd: ROOT_DIR });
+    execFileSync("pnpm", ["exec", "tsx", ...args], {
+      stdio: "inherit",
+      cwd: ROOT_DIR,
+      shell: process.platform === "win32",
+    });
     console.log("Successfully auto-committed badge updates.");
   } catch (err: unknown) {
     console.error("Failed to auto-commit badge updates:", err instanceof Error ? err.message : String(err));

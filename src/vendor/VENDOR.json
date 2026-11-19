@@ -2,8 +2,6 @@
   "libs": {
     "lib-git-history": {
       "source": ".agents/scripts/lib-git-history",
-      "syncedAt": "2026-11-18T09:40:25.906Z",
-      "syncedFromCommit": "edca1ce07432fd4088391bc057c252898612826f",
       "files": [
         "cache.ts",
         "cli.ts",
@@ -18,12 +16,12 @@
         "parser.ts",
         "schema.ts",
         "AGENT_README.md"
-      ]
+      ],
+      "syncedAt": "2026-11-19T05:21:44.396Z",
+      "syncedFromCommit": "27a04b6a9dbca1a8c8646609caf3aee56a4f4d75"
     },
     "lib-agent-exec": {
       "source": ".agents/scripts/lib-agent-exec",
-      "syncedAt": "2026-11-18T09:40:25.964Z",
-      "syncedFromCommit": "edca1ce07432fd4088391bc057c252898612826f",
       "files": [
         "schema.ts",
         "environment.ts",
@@ -57,7 +55,18 @@
         "interceptors/structural-interceptors.ts",
         "interceptors/system-interceptor.ts",
         "AGENT_README.md"
-      ]
+      ],
+      "syncedAt": "2026-11-19T05:21:44.396Z",
+      "syncedFromCommit": "27a04b6a9dbca1a8c8646609caf3aee56a4f4d75"
+    },
+    "commit": {
+      "source": ".agents/scripts",
+      "files": [
+        "commit.ts",
+        "commit-journal.ts"
+      ],
+      "syncedAt": "2026-11-19T05:21:44.396Z",
+      "syncedFromCommit": "27a04b6a9dbca1a8c8646609caf3aee56a4f4d75"
     }
   }
 }

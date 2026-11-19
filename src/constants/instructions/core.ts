@@ -113,7 +113,7 @@ Only link truly related entries. Do NOT create bulk relationships between unrela
 
 When committing changes to a repository:
 
-- **Commit Journaling**: Record a corresponding \`commit-narrative\` journal entry containing \`auto_context: { "commits": ["<sha>"] }\` along with accurate heuristic scores (\`impact_score\`, \`trust_score\`, \`validation_status\`). If your workspace provides a \`commit.ts\` wrapper (e.g. \`.agents/scripts/commit.ts\`), append \`--journal\` to automate this step; otherwise use standard \`git commit\` and log the entry via \`mj_execute_code\`, \`create_entry\`, or \`memory-journal-mcp entry create\`.
+- **Commit Journaling**: Record a corresponding \`commit-narrative\` journal entry containing \`auto_context: { "commits": ["<sha>"] }\` along with accurate heuristic scores (\`impact_score\`, \`trust_score\`, \`validation_status\`). If your workspace provides a \`commit.ts\` wrapper (e.g. \`scripts/commit.ts\`), append \`--journal\` to automate this step; otherwise use standard \`git commit\` and log the entry via \`mj_execute_code\`, \`create_entry\`, or \`memory-journal-mcp entry create\`.
 - **Scoring**: Provide accurate scores (\`0.1-1.0\`) for blast radius (\`impact_score\`) and verification level (\`trust_score\`). **NEVER "rubber stamp" 1.0** without rigorous validation; accurately reflect verification.
 - **Validation**: Provide \`validation_status\` (\`passed\`, \`failed\`, or \`none\`).
 

@@ -124,12 +124,8 @@ dmypy.json
 *.swo
 *~
 
-# Synced consumer skills (installed by npx neverinfamous-agent-skills)
-.agents/*
-!.agents/scripts/
-.agents/scripts/*
-!.agents/scripts/commit.ts
-!.agents/scripts/commit-journal.ts
+# Local agent runtime scratch/telemetry (never tracked)
+.agents/
 
 # OS files
 .DS_Store

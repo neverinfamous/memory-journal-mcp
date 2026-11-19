@@ -94,8 +94,10 @@ export function gitInterceptor(ctx: ExecutionContext): void {
         const cwd = ctx.payload.cwd || process.cwd();
         const fallbackCommitScript = path.resolve(__dirname, '../../commit.ts');
         const resolvedCommitScript = findEcosystemScript(targetCwd, 'commit.ts') || findEcosystemScript(rawCwd, 'commit.ts') || findEcosystemScript(cwd, 'commit.ts') || (fs.existsSync(fallbackCommitScript) ? fallbackCommitScript : null);
-        const commitScriptCandidate = (resolvedCommitScript !== null && path.resolve(targetCwd) === path.resolve(process.cwd()) && fs.existsSync(path.join(targetCwd, '.agents', 'scripts', 'commit.ts')))
-          ? '.\\.agents\\scripts\\commit.ts'
+        const localAgentCommit = fs.existsSync(path.join(targetCwd, '.agents', 'scripts', 'commit.ts'));
+        const localScriptsCommit = fs.existsSync(path.join(targetCwd, 'scripts', 'commit.ts'));
+        const commitScriptCandidate = (path.resolve(targetCwd) === path.resolve(process.cwd()) && (localAgentCommit || localScriptsCommit))
+          ? (localAgentCommit ? '.\\.agents\\scripts\\commit.ts' : '.\\scripts\\commit.ts')
           : resolvedCommitScript;
         const hasWrapper = commitScriptCandidate !== null;
         

@@ -14,7 +14,7 @@ import {
   replTuiInterceptor, 
   systemInterceptor 
 } from './interceptors/index.js';
-import { replaceIntegrationContext, BUILT_INS, recordAgentIssue } from './utils.js';
+import { replaceIntegrationContext, BUILT_INS, recordAgentIssue, resolveAgentScriptFallback } from './utils.js';
 import { DEFAULT_ENV_VARS } from './environment.js';
 import { resolveEvalExecutionTarget, hasTopLevelReturn, wrapCodeInAsyncIife, healStrippedSqlTemplateLiterals } from './eval-healer.js';
 import { configureCwdModuleResolution, healStrippedStringRawLiterals } from './inline-script-healer.js';
@@ -250,6 +250,13 @@ export function buildCommand(payload: ExecPayload, cwd: string, isJson: boolean 
       let localCmd: string;
       let localArgs: string[];
       let scriptFile = path.resolve(cwd, p.scriptPath);
+      if (!fs.existsSync(scriptFile)) {
+        const fallbackScript = resolveAgentScriptFallback(p.scriptPath, cwd);
+        if (fallbackScript !== null) {
+          console.error(`\n   🛠️ AUTONOMOUS HEALING: Resolved missing '${p.scriptPath}' to '${fallbackScript}'... (Frictionless Recovery)`);
+          scriptFile = path.resolve(cwd, fallbackScript);
+        }
+      }
       if (!fs.existsSync(scriptFile) || !fs.statSync(scriptFile).isFile()) {
         exitWithError(`The script file '${scriptFile}' does not exist or is not a file.`);
       }

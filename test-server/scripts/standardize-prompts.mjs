@@ -42,9 +42,10 @@ function fixFormatting(text) {
   // Clean up edge cases where it appears twice back-to-back
   fixed = fixed.replace(/workspace_id:\s*"test-ws",\s*workspace_id:\s*"test-ws"/g, 'workspace_id: "test-ws"');
   
-  // Fix backslash paths in the standardization script for commit.ts
-  fixed = fixed.replace(/`bun \.\\\\\.agents\\\\scripts\\\\commit\.ts/g, '`bun ./.agents/scripts/commit.ts');
-  fixed = fixed.replace(/`bun \.\\.agents\\scripts\\commit\.ts/g, '`bun ./.agents/scripts/commit.ts');
+  // Fix backslash paths and rewrite legacy .agents/scripts/commit.ts calls to scripts/commit.ts
+  fixed = fixed.replace(/`bun \.\\\\\.agents\\\\scripts\\\\commit\.ts/g, '`pnpm exec tsx scripts/commit.ts');
+  fixed = fixed.replace(/`bun \.\\.agents\\scripts\\commit\.ts/g, '`pnpm exec tsx scripts/commit.ts');
+  fixed = fixed.replace(/`bun \.\/\.agents\/scripts\/commit\.ts/g, '`pnpm exec tsx scripts/commit.ts');
   
   return fixed;
 }
@@ -236,10 +237,10 @@ for (const file of files) {
   // Fix hallucinated parameter drift in mutation tests
   updatedContent = updatedContent.replace(/ or `permanent: true`/g, '');
   
-  // Fix legacy healing references to the maintainer workflow
+  // Fix legacy healing references to the maintainer skill
   updatedContent = updatedContent.replace(
-    /skills\/mj-mcp-heal\/SKILL\.md|\/mcp:memory-journal-mcp:mcp-heal prompt/g,
-    '`.agents/workflows/heal-mcp-server.md` (`/heal-mcp-server`)'
+    /(?:the\s+`\/heal-mcp-server`\s+skill|skills\/mj-mcp-heal\/SKILL\.md|\/mcp:memory-journal-mcp:mcp-heal prompt|`?\.agents\/workflows\/heal-mcp-server\.md`?\s*\(`?\/heal-mcp-server`?\))/g,
+    'the `/mcp-audit` anti-hallucination guide (`references/anti-hallucination-healing.md`)'
   );
   
   // Fix logic flaw: remove parameter drift hallucination (use_test_db)
@@ -269,8 +270,8 @@ for (const file of files) {
     }
   }
 
-  // Catch any remaining older string patterns and replace them so the regex matches later if needed
-  updatedContent = updatedContent.replace(/`bun \.\/\.agents\/scripts\/commit\.ts/g, '`bun ./.agents/scripts/commit.ts');
+  // Rewrite any remaining legacy .agents/scripts/commit.ts calls to scripts/commit.ts
+  updatedContent = updatedContent.replace(/`bun \.\/\.agents\/scripts\/commit\.ts/g, '`pnpm exec tsx scripts/commit.ts');
   
   // Fix hallucinated project admin parameters
   updatedContent = updatedContent.replace(/project_number: <new_project_number>/g, 'name: "test-proj"');

@@ -1,22 +1,53 @@
 // @ts-nocheck
 import fs from 'fs';
 import path from 'path';
-import { AUTONOMOUS_HEALING_MSG } from '../utils.js';
+import { AUTONOMOUS_HEALING_MSG, resolveAgentScriptFallback } from '../utils.js';
 import { ExecutionContext, AGENT_NATIVE_TOOLS, ECOSYSTEM_MCP_TOOLS } from './types.js';
 import { handleRipgrepInterception } from './search-interceptor.js';
 import { getUnderlyingPackageScript } from '../command-utils.js';
 import { configureCwdModuleResolution, rewriteInlineScriptToTempFile } from '../inline-script-healer.js';
+
+function healMissingAgentScriptArgs(
+  args: string[],
+  projectDir: string,
+  payload: ExecutionContext['payload']
+): void {
+  if (args.some((a) => path.basename(a).toLowerCase() === 'agent-exec.ts')) return;
+  let mutated = false;
+  for (let i = 0; i < args.length; i++) {
+    const rawArg = args[i];
+    if (rawArg === undefined) continue;
+    if (rawArg === '--') break;
+    if (rawArg.startsWith('-')) continue;
+    const resolved = resolveAgentScriptFallback(rawArg, projectDir);
+    if (resolved !== null) {
+      console.error(`\n   🛠️ AUTONOMOUS HEALING: Resolved missing '${rawArg}' to '${resolved}'... (Frictionless Recovery)`);
+      args[i] = resolved;
+      mutated = true;
+      break;
+    }
+    if (/\.(?:ts|js|mjs|cjs)$/i.test(rawArg)) break;
+  }
+  if (mutated && 'command' in payload) {
+    payload.args = args;
+  }
+}
 
 export function packageManagerInterceptor(ctx: ExecutionContext): void {
   let { cmdBasename } = ctx;
   const { envOverrides } = ctx;
   let { args } = ctx;
   if (!args) args = [];
-  if (args.includes('--help') || args.includes('-h')) return;
 
   const projectDir = ctx.payload.cwd !== undefined && ctx.payload.cwd.length > 0
     ? path.resolve(ctx.payload.cwd)
     : (ctx.cwd !== undefined && ctx.cwd.length > 0 ? path.resolve(ctx.cwd) : process.cwd());
+
+  if (['npm', 'npm.cmd', 'npm.exe', 'pnpm', 'pnpm.cmd', 'pnpm.exe', 'yarn', 'yarn.cmd', 'yarn.exe', 'bun', 'bun.cmd', 'bun.exe', 'npx', 'npx.cmd', 'npx.exe', 'pnpx', 'pnpx.cmd', 'pnpx.exe', 'bunx', 'bunx.cmd', 'bunx.exe'].includes(cmdBasename)) {
+    healMissingAgentScriptArgs(args, projectDir, ctx.payload);
+  }
+
+  if (args.includes('--help') || args.includes('-h')) return;
 
   if (['apt', 'apt-get'].includes(cmdBasename)) {
     envOverrides['DEBIAN_FRONTEND'] = 'noninteractive';

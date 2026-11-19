@@ -48,19 +48,19 @@ You are initiating a high-integrity procedure for committing code changes. You m
 ${validationText}
 
 ## 2. Commit Invocation
-Stage your changes and commit. If your environment provides \`commit.ts\` (available via proxy interceptors or at \`.agents/scripts/commit.ts\`), use it as the primary commit method. Otherwise, fall back to standard \`git commit\` with conventional commit format.
+Stage your changes and commit. If your environment provides \`commit.ts\` (available via proxy interceptors or at \`scripts/commit.ts\`), use it as the primary commit method. Otherwise, fall back to standard \`git commit\` with conventional commit format.
 
 > [!WARNING]
 > **DO NOT USE \`git add .\` OR \`git commit -a\`**. You MUST only stage the specific files you modified (e.g., \`git add src/foo.ts\`) to avoid committing in-progress work from other agents or humans. Only use \`git add .\` if the user explicitly asks you to commit everything.
 
 > [!WARNING]
-> **Scratch File Guard:** \`commit.ts\` will **abort** if files matching \`scratch/\`, \`.agents/scratch\`, \`scratch.ts\`, or \`scratch.js\` are staged. Ensure temporary files are written to the isolated scratch directory (\`<appDataDir>\\\\brain\\\\<conversation-id>\\\\scratch\\\\\`) and never staged for commit.
+> **Scratch File Guard:** \`commit.ts\` will **abort** if files matching \`scratch/\`, \`scratch.ts\`, or \`scratch.js\` are staged. Ensure temporary files are written to the isolated scratch directory (\`<appDataDir>\\\\brain\\\\<conversation-id>\\\\scratch\\\\\`) and never staged for commit.
 
 > **🛠️ AUTONOMOUS HEALING - PowerShell Operators:** If you are executing commands natively in Windows PowerShell, you MUST use semicolons (\`;\`) to chain commands. DO NOT use Unix shell operators like \`&&\` or \`||\`, as they will throw a ParserError.
 
 **\`commit.ts\` CLI Reference:**
 \`\`\`
-bun .\\.agents\\\\scripts\\\\commit.ts --msg "type(scope): subject" --impact <0.1-1.0> --confidence <0.1-1.0> --validation <passed|none|failed> --add <path> [--add <path2>]
+pnpm exec tsx scripts/commit.ts --msg "type(scope): subject" --impact <0.1-1.0> --confidence <0.1-1.0> --validation <passed|none|failed> --add <path> [--add <path2>]
 \`\`\`
 
 Key flags:
@@ -109,19 +109,19 @@ For substantive changes (impact > 0.4), ensure a journal entry is created:
 For non-application file changes (configuration, documentation, Markdown, text files, or changes already verified externally). Skips lint/typecheck. Use \`/mcp:commit\` for application source code.
 
 ## 1. Commit Invocation
-Stage your changes and commit. If your environment provides \`commit.ts\` (available via proxy interceptors or at \`.agents/scripts/commit.ts\`), use it as the primary commit method. Otherwise, fall back to standard \`git commit\` with conventional commit format.
+Stage your changes and commit. If your environment provides \`commit.ts\` (available via proxy interceptors or at \`scripts/commit.ts\`), use it as the primary commit method. Otherwise, fall back to standard \`git commit\` with conventional commit format.
 
 > [!WARNING]
 > **DO NOT USE \`git add .\` OR \`git commit -a\`**. You MUST only stage the specific files you modified (e.g., \`git add src/foo.ts\`) to avoid committing in-progress work from other agents or humans. Only use \`git add .\` if the user explicitly asks you to commit everything.
 
 > [!WARNING]
-> **Scratch File Guard:** \`commit.ts\` will **abort** if files matching \`scratch/\`, \`.agents/scratch\`, \`scratch.ts\`, or \`scratch.js\` are staged. Ensure temporary files are written to the isolated scratch directory (\`<appDataDir>\\\\brain\\\\<conversation-id>\\\\scratch\\\\\`) and never staged for commit.
+> **Scratch File Guard:** \`commit.ts\` will **abort** if files matching \`scratch/\`, \`scratch.ts\`, or \`scratch.js\` are staged. Ensure temporary files are written to the isolated scratch directory (\`<appDataDir>\\\\brain\\\\<conversation-id>\\\\scratch\\\\\`) and never staged for commit.
 
 > **🛠️ AUTONOMOUS HEALING - PowerShell Operators:** If you are executing commands natively in Windows PowerShell, you MUST use semicolons (\`;\`) to chain commands. DO NOT use Unix shell operators like \`&&\` or \`||\`, as they will throw a ParserError.
 
 **\`commit.ts\` CLI Reference:**
 \`\`\`
-bun .\\.agents\\\\scripts\\\\commit.ts --msg "type(scope): subject" --impact <0.1-1.0> --confidence <0.1-1.0> --validation <passed|none|failed> --add <path> [--add <path2>]
+pnpm exec tsx scripts/commit.ts --msg "type(scope): subject" --impact <0.1-1.0> --confidence <0.1-1.0> --validation <passed|none|failed> --add <path> [--add <path2>]
 \`\`\`
 
 Key flags:
