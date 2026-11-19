@@ -1,11 +1,13 @@
 import { createHash, timingSafeEqual } from 'node:crypto';
 import * as http from 'node:http';
+import { hasScope, SCOPES } from '../auth/scopes.js';
 import { logger } from '../utils/logger.js';
 import type { ServerRuntime } from '../utils/maintenance-lock.js';
 import { formatPrometheusMetrics } from './prometheus-formatter.js';
 
 export interface MetricsServerOptions {
     authToken?: string | undefined;
+    authScopes?: readonly string[] | undefined;
 }
 
 function parseMetricsPort(metricsPort: number | undefined): number {
@@ -109,6 +111,7 @@ interface ResolvedMetricsServerConfig {
     isLoopbackBind: boolean;
     authToken: string | undefined;
     expectedTokenDigest: Buffer | undefined;
+    includeUserBreakdown: boolean;
 }
 
 const DEFAULT_PLACEHOLDER_TOKEN = 'change_this_to_a_secure_token_for_production';
@@ -140,15 +143,19 @@ function resolveMetricsServerConfig(
     }
     const expectedTokenDigest =
         authToken !== undefined ? createHash('sha256').update(authToken, 'utf8').digest() : undefined;
-    return { port, host, isLoopbackBind, authToken, expectedTokenDigest };
+    const authScopes = options?.authScopes ?? [];
+    const includeUserBreakdown =
+        expectedTokenDigest !== undefined && hasScope([...authScopes], SCOPES.AUDIT);
+    return { port, host, isLoopbackBind, authToken, expectedTokenDigest, includeUserBreakdown };
 }
 
 function servePrometheusMetrics(
     req: http.IncomingMessage,
     res: http.ServerResponse,
     runtime: ServerRuntime,
-    expectedTokenDigest: Buffer | undefined
+    config: ResolvedMetricsServerConfig
 ): void {
+    const { expectedTokenDigest, includeUserBreakdown } = config;
     if (
         expectedTokenDigest !== undefined &&
         !isValidBearerToken(req.headers.authorization, expectedTokenDigest)
@@ -159,23 +166,31 @@ function servePrometheusMetrics(
             'Cache-Control': 'no-store',
             'X-Content-Type-Options': 'nosniff',
         });
-        res.end('Unauthorized');
+        res.end();
         return;
     }
     try {
-        const metrics = formatPrometheusMetrics(runtime.metrics);
+        const metrics = formatPrometheusMetrics(runtime.metrics, { includeUserBreakdown });
         res.writeHead(200, {
             'Content-Type': 'text/plain; version=0.0.4; charset=utf-8',
             'Cache-Control': 'no-store',
             'X-Content-Type-Options': 'nosniff',
         });
-        res.end(metrics);
+        res.end(req.method === 'HEAD' ? undefined : metrics);
     } catch (error) {
         logger.error('Failed to generate metrics', {
             error: error instanceof Error ? error.message : String(error),
         });
         res.writeHead(500, { 'Content-Type': 'text/plain' });
-        res.end('Internal Server Error');
+        res.end(req.method === 'HEAD' ? undefined : 'Internal Server Error');
+    }
+}
+
+function parseMetricsPathname(rawUrl: string | undefined): string {
+    try {
+        return new URL(rawUrl ?? '/', 'http://localhost').pathname;
+    } catch {
+        return '';
     }
 }
 
@@ -185,27 +200,29 @@ function handleMetricsRequest(
     runtime: ServerRuntime,
     config: ResolvedMetricsServerConfig
 ): void {
-    const { host, isLoopbackBind, authToken, expectedTokenDigest } = config;
+    const { host, isLoopbackBind, authToken } = config;
     if (!isMetricsHostHeaderAllowed(req.headers.host, host, isLoopbackBind, authToken !== undefined)) {
         res.writeHead(403, { 'Content-Type': 'text/plain; charset=utf-8' });
-        res.end('Forbidden');
+        res.end(req.method === 'HEAD' ? undefined : 'Forbidden');
         return;
     }
-    if (req.url === '/metrics' && req.method === 'GET') {
-        servePrometheusMetrics(req, res, runtime, expectedTokenDigest);
+    const pathname = parseMetricsPathname(req.url);
+    const method = req.method ?? '';
+    if (pathname === '/metrics' && (method === 'GET' || method === 'HEAD')) {
+        servePrometheusMetrics(req, res, runtime, config);
         return;
     }
-    if (req.url === '/health' && req.method === 'GET') {
+    if (pathname === '/health' && (method === 'GET' || method === 'HEAD')) {
         res.writeHead(200, {
             'Content-Type': 'application/json',
             'Cache-Control': 'no-store',
             'X-Content-Type-Options': 'nosniff',
         });
-        res.end(JSON.stringify({ status: 'ok' }));
+        res.end(method === 'HEAD' ? undefined : JSON.stringify({ status: 'ok' }));
         return;
     }
     res.writeHead(404, { 'Content-Type': 'text/plain' });
-    res.end('Not Found');
+    res.end(method === 'HEAD' ? undefined : 'Not Found');
 }
 
 function closeBoundMetricsServer(

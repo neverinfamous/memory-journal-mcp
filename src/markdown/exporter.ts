@@ -5,7 +5,7 @@
  * Deterministic filenames allow re-export to overwrite identically.
  */
 
-import { mkdir, open } from 'node:fs/promises'
+import { lstat, mkdir, open } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { isAbsolute, join, relative, resolve, sep } from 'node:path'
 import { constants, realpathSync } from 'node:fs'
@@ -138,11 +138,31 @@ async function writeExportFile(
     fileContent: string
 ): Promise<'written' | { error: string }> {
     const filepath = join(resolvedOutputDir, filename)
+    try {
+        const preStat = await lstat(filepath)
+        if (
+            preStat.isSymbolicLink() ||
+            (typeof preStat.isFile === 'function' && !preStat.isFile())
+        ) {
+            logger.warning('Refusing to overwrite symlink during export', { module: 'Exporter', filepath })
+            return { error: 'Refusing to overwrite symlink during export' }
+        }
+    } catch (statErr: unknown) {
+        if (filesystemErrorCode(statErr) !== 'ENOENT') {
+            const errMessage = statErr instanceof Error ? statErr.message : String(statErr)
+            logger.error('Failed to write markdown file', {
+                module: 'Exporter',
+                filepath,
+                error: errMessage,
+            })
+            return { error: errMessage }
+        }
+    }
     let handle: Awaited<ReturnType<typeof open>> | undefined
     try {
         handle = await open(
             filepath,
-            constants.O_WRONLY | constants.O_CREAT | constants.O_TRUNC | constants.O_NOFOLLOW,
+            constants.O_WRONLY | constants.O_CREAT | constants.O_TRUNC | (constants.O_NOFOLLOW ?? 0),
             0o600
         )
         await handle.writeFile(fileContent, 'utf-8')

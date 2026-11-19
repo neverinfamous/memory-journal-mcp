@@ -20,7 +20,7 @@ import type { AuditCategory, AuditEntry } from './types.js'
 import { getRequiredScope } from '../auth/scope-map.js'
 import { getAuthContext } from '../auth/auth-context.js'
 import { getRequestContext } from '../utils/request-context.js'
-import { sanitizeErrorForLogging } from '../utils/security-utils.js'
+import { SENSITIVE_KEY_RE, sanitizeErrorForLogging } from '../utils/security-utils.js'
 import { estimateTokens, estimatePayloadTokens } from '../observability/token-estimator.js'
 import {
     estimateOperationResultTokens,
@@ -142,8 +142,6 @@ function estimateErrorTokens(sanitizedError: string): number {
     return estimateTokens(enriched, 'json')
 }
 
-const AUDIT_SENSITIVE_KEY_RE =
-    /(?:token|secret|password|passwd|authorization|auth_header|api_key|apikey|encryption_key|webhook|private_key|client_secret)/i
 const MAX_SCRUB_DEPTH = 6
 
 function scrubAuditArgValue(val: unknown, depth: number, seen: WeakSet<object>): unknown {
@@ -164,7 +162,7 @@ function scrubAuditArgValue(val: unknown, depth: number, seen: WeakSet<object>):
         const out: Record<string, unknown> = {}
         Object.setPrototypeOf(out, null)
         for (const [k, v] of Object.entries(val as Record<string, unknown>)) {
-            out[k] = AUDIT_SENSITIVE_KEY_RE.test(k)
+            out[k] = SENSITIVE_KEY_RE.test(k)
                 ? '[REDACTED]'
                 : scrubAuditArgValue(v, depth + 1, seen)
         }

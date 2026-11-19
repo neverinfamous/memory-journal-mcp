@@ -8,7 +8,11 @@
 import type { z } from 'zod'
 import type { ToolContext, ToolHandlerConfig } from '../../../../types/index.js'
 import { getAuthContext } from '../../../../auth/auth-context.js'
-import { resolveAuthor, resolveAuthenticatedAuthor } from '../../../../utils/security-utils.js'
+import {
+    resolveAuthor,
+    resolveAuthenticatedAuthor,
+    sanitizeAuthor,
+} from '../../../../utils/security-utils.js'
 import {
     findCanonicalRegistryKey,
     resolveProjectContext,
@@ -34,7 +38,7 @@ type TeamBatchCreateItem = TeamBatchCreateInput['entries'][number]
 type ResolvedBatchCreateItem = ResolvedTeamBatchCreateItem
 
 function sanitizeAuthorClaim(raw: string): string {
-    return raw.replace(/\p{Cc}+/gu, ' ').trim()
+    return sanitizeAuthor(raw).trim()
 }
 
 function unknownIdentityError(): Record<string, unknown> {

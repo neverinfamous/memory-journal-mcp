@@ -88,6 +88,20 @@ function readNarrowedWorkspace(
     return undefined
 }
 
+function uniqueWorkspaceForProjectNum(
+    projectNum: number,
+    registry: Record<string, ProjectRegistryEntry> | undefined
+): string | undefined {
+    if (registry === undefined) return undefined
+    let matched: string | undefined
+    for (const [key, entry] of Object.entries(registry)) {
+        if (entry.project_number !== projectNum) continue
+        if (matched !== undefined) return undefined
+        matched = key
+    }
+    return matched
+}
+
 function resolveNestedNarrowedScope(
     argRec: Record<string, unknown> | undefined,
     pinnedWorkspace: string | undefined,
@@ -103,7 +117,7 @@ function resolveNestedNarrowedScope(
     const registry = readProjectRegistryPayload(projectRegistryRaw)
     const ctxRec = isPlainRecord(argRec['context']) ? argRec['context'] : undefined
     const sources = ctxRec !== undefined ? [argRec, ctxRec] : [argRec]
-    const workspaceId =
+    let workspaceId =
         pinnedWorkspace === undefined ? readNarrowedWorkspace(sources, registry) : undefined
 
     let projectNumber: number | undefined
@@ -126,6 +140,12 @@ function resolveNestedNarrowedScope(
             if (typeof regProj === 'number' && Number.isSafeInteger(regProj) && regProj > 0) {
                 projectNumber = regProj
             }
+        }
+    }
+    if (workspaceId === undefined && pinnedWorkspace === undefined) {
+        const effectiveProj = projectNumber ?? pinnedProjectNumber
+        if (effectiveProj !== undefined) {
+            workspaceId = uniqueWorkspaceForProjectNum(effectiveProj, registry)
         }
     }
 
@@ -253,6 +273,19 @@ export function createSandboxExecutor(options: SandboxExecutorOptions): (arg: un
         const effectiveReadonly = readonlyMode === true || argRec?.['readonly'] === true || argRec?.['read_only'] === true || argRec?.['readOnly'] === true
         const effectiveDryRun = dryRunMode === true || argRec?.['dry_run'] === true || argRec?.['dryRun'] === true
         const effectiveUseTestDb = useTestDbMode === true || argRec?.['use_test_db'] === true || argRec?.['useTestDb'] === true
+        const rawNestedCode =
+            typeof arg === 'string'
+                ? arg
+                : typeof argRec?.['code'] === 'string'
+                  ? argRec['code']
+                  : typeof argRec?.['script'] === 'string'
+                    ? argRec['script']
+                    : typeof argRec?.['query'] === 'string'
+                      ? argRec['query']
+                      : undefined
+        if (rawNestedCode !== undefined && Buffer.byteLength(rawNestedCode, 'utf-8') > 50 * 1024) {
+            return { success: false, error: 'Code exceeds maximum length of 51200 bytes', code: 'SECURITY_VIOLATION' }
+        }
         const narrowed = resolveNestedNarrowedScope(argRec, pinnedWorkspace, pinnedProjectNumber, projectRegistryRaw)
         const shortcut = await tryDispatchNestedShortcut({
             arg, argRec, narrowed, pinnedWorkspace, pinnedProjectNumber,
@@ -261,14 +294,15 @@ export function createSandboxExecutor(options: SandboxExecutorOptions): (arg: un
         if (shortcut.handled) return shortcut.value
 
         const { codeToExec, isQueryOnlyArg } = shortcut
-        const validation = validateSandboxCode(codeToExec)
+        const transformedCode = transformAutoReturn(codeToExec)
+        const validation = validateSandboxCode(transformedCode)
         if (!validation.valid) return { success: false, error: validation.errors.join('; '), code: 'SECURITY_VIOLATION' }
         if (isQueryOnlyArg && !/^(?:return\s+|await\s+mj\.)/.test(codeToExec.trim())) {
             return { success: false, error: 'Nested executeCode query could not be executed as a read-only search.', code: 'VALIDATION_ERROR' }
         }
         if (vmContextRef.current === undefined) return { success: false, error: 'No code was executed', code: 'VALIDATION_ERROR' }
 
-        const wrapped = `(async () => {\n${transformAutoReturn(codeToExec)}\n})()`
+        const wrapped = `(async () => {\n${transformedCode}\n})()`
         const isolation = buildIsolationOverrides(argRec, timeoutMs, maxResultSize, narrowed)
         const escalates =
             (effectiveReadonly && readonlyMode !== true) ||

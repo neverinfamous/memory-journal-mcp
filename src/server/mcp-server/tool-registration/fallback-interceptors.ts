@@ -1,6 +1,6 @@
 import { wrapWithMetrics } from '../../../observability/index.js'
 import type { ServerRuntime } from '../../../utils/maintenance-lock.js'
-import { TEAM_PROMPT_NAMES } from '../../../auth/scope-map.js'
+import { ADMIN_PROMPT_NAMES, TEAM_PROMPT_NAMES } from '../../../auth/scope-map.js'
 import { AuthorizationError, PermissionError } from '../../../types/errors.js'
 import {
     DUMMY_HEALING_TOOL_NAMES,
@@ -49,7 +49,12 @@ export function resolveKnownFallbackAuditName(
     matchingPrompt: PromptDefinition | undefined
 ): string | undefined {
     if (matchingPrompt !== undefined) {
-        return TEAM_PROMPT_NAMES.has(matchingPrompt.name) ? matchingPrompt.name : 'get_prompt'
+        return matchingPrompt.capabilities?.requiresAdminScope === true ||
+            matchingPrompt.capabilities?.requiresTeamScope === true ||
+            TEAM_PROMPT_NAMES.has(matchingPrompt.name) ||
+            ADMIN_PROMPT_NAMES.has(matchingPrompt.name)
+            ? matchingPrompt.name
+            : 'get_prompt'
     }
     if (requestedTool.startsWith('memory://')) {
         return requestedTool

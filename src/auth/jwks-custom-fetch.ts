@@ -60,6 +60,27 @@ function readHttpsJwksBody(
     })
 }
 
+async function readLimitedJwksStream(body: NonNullable<Response['body']>): Promise<Buffer> {
+    const reader = body.getReader()
+    const chunks: Uint8Array[] = []
+    let total = 0
+    for (;;) {
+        const step: unknown = await reader.read()
+        if (typeof step !== 'object' || step === null) break
+        if ('done' in step && step.done === true) break
+        const value: unknown = 'value' in step ? step.value : undefined
+        if (value instanceof Uint8Array) {
+            total += value.byteLength
+            if (total > MAX_JWKS_RESPONSE_BYTES) {
+                await reader.cancel().catch(() => undefined)
+                throw new Error('JWKS response exceeded 1MB limit')
+            }
+            chunks.push(value)
+        }
+    }
+    return Buffer.concat(chunks)
+}
+
 async function fetchLoopbackJwks(urlStr: string, init?: RequestInit): Promise<Response> {
     const response = await NATIVE_FETCH(urlStr, {
         method: init?.method ?? 'GET',
@@ -70,9 +91,18 @@ async function fetchLoopbackJwks(urlStr: string, init?: RequestInit): Promise<Re
     if (!response.ok) {
         throw new Error(`HTTP error! status: ${String(response.status)}`)
     }
-    const buf = Buffer.from(await response.arrayBuffer())
-    if (buf.length > MAX_JWKS_RESPONSE_BYTES) {
+    const contentLen = Number(response.headers?.get?.('content-length'))
+    if (Number.isFinite(contentLen) && contentLen > MAX_JWKS_RESPONSE_BYTES) {
         throw new Error('JWKS response exceeded 1MB limit')
+    }
+    let buf: Buffer
+    if (response.body !== null && response.body !== undefined && typeof response.body.getReader === 'function') {
+        buf = await readLimitedJwksStream(response.body)
+    } else {
+        buf = Buffer.from(await response.arrayBuffer())
+        if (buf.length > MAX_JWKS_RESPONSE_BYTES) {
+            throw new Error('JWKS response exceeded 1MB limit')
+        }
     }
     return new Response(buf, {
         status: response.status,

@@ -262,16 +262,12 @@ function resolvePayloadScope(
     explicitWorkspaceId: string | undefined,
     explicitProjectNum: number | undefined,
     fallbackWorkspaceId: string | undefined,
-    content: string | undefined,
-    tags: string[] | undefined,
     config?: ToolHandlerConfig
 ): { projectNumber: number | undefined; workspaceId: string | undefined } {
     const resolved = resolveProjectContext(
         {
             workspace_id: explicitWorkspaceId ?? fallbackWorkspaceId,
             project_number: explicitProjectNum,
-            content,
-            tags,
             preferCwdOverKeywords: true,
         },
         config
@@ -372,7 +368,7 @@ export function buildEntryPayload(
     options: HealedEntryOptions,
     metadata: Record<string, unknown>,
     config?: ToolHandlerConfig,
-    content?: string,
+    _content?: string,
     fallbackWorkspaceId?: string
 ): EntryPayload {
     const normalizedOptions: HealedEntryOptions = { ...options }
@@ -387,8 +383,6 @@ export function buildEntryPayload(
         explicitWorkspaceId,
         explicitProjectNum,
         fallbackWorkspaceId,
-        content ?? normalizedOptions.content,
-        tags,
         config
     )
 

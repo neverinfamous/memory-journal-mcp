@@ -88,7 +88,7 @@ export function chunkedInPredicate(
     }
     const parts: string[] = []
     const params: string[] = []
-    for (const chunk of bucketInParams(values)) {
+    for (const chunk of bucketInParams(values, DUAL_IN_PARAM_BUCKETS)) {
         parts.push(render(chunk.placeholders))
         params.push(...chunk.params)
     }

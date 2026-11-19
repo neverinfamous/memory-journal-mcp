@@ -38,10 +38,13 @@ export function exceedsMaxToolInputElements(value: unknown, maxElements: number)
         seen.add(cur)
 
         if (Array.isArray(cur)) {
-            count++
+            count += 1 + cur.length
             if (count > maxElements) return true
-            for (const item of cur) {
-                stack.push(item)
+            const items: readonly unknown[] = cur
+            for (const item of items) {
+                if (item !== null && typeof item === 'object') {
+                    stack.push(item)
+                }
             }
             continue
         }
@@ -51,7 +54,10 @@ export function exceedsMaxToolInputElements(value: unknown, maxElements: number)
         if (count > maxElements) return true
         const rec = cur as Record<string, unknown>
         for (const key of keys) {
-            stack.push(rec[key])
+            const val = rec[key]
+            if (val !== null && typeof val === 'object') {
+                stack.push(val)
+            }
         }
     }
     return false

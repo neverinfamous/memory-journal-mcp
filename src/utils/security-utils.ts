@@ -108,7 +108,7 @@ export function assertNoPathTraversal(filename: string): void {
  * Used to scrub error output before logging.
  */
 export const SENSITIVE_KEY_RE =
-    /(?:token|secret|password|passwd|authorization|auth_header|api_key|apikey|encryption_key|webhook|private_key|client_secret|credential|cookie|bearer)/i
+    /(?:token|secret|password|passwd|passphrase|authorization|auth[-_]?header|api[-_]?key|apikey|encryption[-_]?key|webhook(?:[-_]?(?:auth|url))?|private[-_]?key|client[-_]?secret|credential|cookie|bearer|^key$)/i
 
 const TOKEN_PATTERNS = [
     // GitHub personal access tokens (classic and fine-grained)
@@ -120,10 +120,10 @@ const TOKEN_PATTERNS = [
     /xox[baprs]-[A-Za-z0-9-]+/g,
     // AWS API Keys
     /(?:AKIA|ABIA|ACCA|ASIA)[0-9A-Z]{16}/g,
-    // CLI secret flags (--auth-token, --token, --secret, --password, --api-key, --webhook-auth, --encryption-key)
-    /(--(?:auth-token|token|secret|password|api-key|webhook-auth|encryption-key)(?:=|\s+))["']?[^\s"']+["']?/gi,
-    // SQLCipher key/rekey pragmas
-    /(pragma\s+(?:re)?key\s*=\s*)(?:"x'[^']*'"|x'[^']*'|'[^']*')/gi,
+    // CLI secret flags (--auth-token, --token, --secret, --password, --passphrase, --api-key, --webhook-auth, --encryption-key)
+    /(--(?:auth-token|token|secret|password|passphrase|api-key|webhook-auth|encryption-key)(?:=|\s+))(?:"[^"]*"|'[^']*'|[^\s"']+)/gi,
+    // SQLCipher key/rekey pragmas (handles escaped '' within single quotes)
+    /(pragma\s+(?:re)?key\s*=\s*)(?:"x'[^']*'"|x'[^']*'|'(?:[^']|'')*')/gi,
     // URL embedded credentials
     /(https?:\/\/[^/\s:@]+:)[^/\s@]+(@)/gi,
     // Authorization headers in error dumps (catch-all for token, Bearer, Basic)
@@ -134,7 +134,7 @@ const TOKEN_PATTERNS = [
 ] as const
 
 const POTENTIAL_SECRET_RE =
-    /(?:gh[pousr]_|github_pat_|eyJ|xox[baprs]-|AKIA|ABIA|ACCA|ASIA|Authorization:|Bearer\s|Basic\s|--(?:auth-token|token|secret|password|api-key|webhook-auth|encryption-key)(?:=|\s)|pragma\s+(?:re)?key\s*=|https?:\/\/[^/\s:@]+:[^/\s@]+@)/i
+    /(?:gh[pousr]_|github_pat_|eyJ|xox[baprs]-|AKIA|ABIA|ACCA|ASIA|Authorization:|Bearer\s|Basic\s|--(?:auth-token|token|secret|password|passphrase|api-key|webhook-auth|encryption-key)(?:=|\s)|pragma\s+(?:re)?key\s*=|https?:\/\/[^/\s:@]+:[^/\s@]+@)/i
 
 /**
  * Sanitizes an error message by replacing any detected tokens with '[REDACTED]'.

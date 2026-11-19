@@ -112,6 +112,7 @@ export function countE2eSpecFiles(e2eDir: string): number {
     if (current === undefined) continue;
     const entries = fs.readdirSync(current, { withFileTypes: true });
     for (const entry of entries) {
+      if (entry.isSymbolicLink()) continue;
       const fullPath = path.join(current, entry.name);
       if (entry.isDirectory()) {
         stack.push(fullPath);

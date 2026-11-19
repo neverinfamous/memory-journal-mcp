@@ -1,6 +1,7 @@
 import { type McpServer } from '@modelcontextprotocol/server'
 import { getTools } from '../../handlers/tools/index.js'
 import { getRequiredScope } from '../../auth/scope-map.js'
+import { resolveEnvAuthScopes } from '../../auth/scopes.js'
 import { getResources } from '../../handlers/resources/index.js'
 import { getPrompts } from '../../handlers/prompts/index.js'
 import type { ToolHandlerConfig } from '../../types/index.js'
@@ -47,7 +48,9 @@ export function startConfiguredMetricsServer(
         return undefined
     }
     return startMetricsServer(runtime, options.metricsPort, {
-        ...(effectiveAuthToken !== undefined ? { authToken: effectiveAuthToken } : {}),
+        ...(effectiveAuthToken !== undefined
+            ? { authToken: effectiveAuthToken, authScopes: resolveEnvAuthScopes() }
+            : {}),
     })
 }
 

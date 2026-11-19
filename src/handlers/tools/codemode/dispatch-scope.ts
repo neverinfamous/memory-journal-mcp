@@ -113,7 +113,8 @@ function applyTargetWorkspaceScope(
     paramsObj: Record<string, unknown>,
     reg: NonNullable<ToolContext['config']>['projectRegistry'],
     workspaceId: string | undefined,
-    supplied: number | undefined
+    supplied: number | undefined,
+    sessionProjectId: number | string | undefined
 ): { hasCrossWorkspaceTarget: boolean } | { errorResult: Record<string, unknown> } {
     const callerTargetWs =
         typeof paramsObj['target_workspace_id'] === 'string' && paramsObj['target_workspace_id'].trim() !== ''
@@ -135,9 +136,12 @@ function applyTargetWorkspaceScope(
         (typeof workspaceId !== 'string' || callerTargetWs.toLowerCase() !== workspaceId.toLowerCase())
 
     if (callerTargetWs !== undefined) {
+        const isWildcardMoveSource = paramsObj['workspace_id'] === '*' || workspaceId === '*'
         if (supplied !== undefined) {
             pairStoredScope(callerTargetWs, supplied, reg)
         } else if (
+            !isWildcardMoveSource &&
+            typeof sessionProjectId !== 'number' &&
             !isDefaultWorkspaceName(callerTargetWs) &&
             checkSchemaAcceptsKey(tool.inputSchema, 'project_number')
         ) {
@@ -157,7 +161,7 @@ function resolveRootScopePairing(
     ctx: DispatchParamContext,
     aliasDerivedWs: boolean
 ): RootScopeFlags {
-    const { workspaceId, explicitWorkspace } = ctx
+    const { workspaceId, explicitWorkspace, projectId } = ctx
     const callerHasExplicitWs = paramsObj['workspace_id'] !== undefined && !aliasDerivedWs
     const callerPassedProjectOnly = paramsObj['project_number'] !== undefined && !callerHasExplicitWs
 
@@ -182,7 +186,7 @@ function resolveRootScopePairing(
     }
 
     const supplied = typeof paramsObj['project_number'] === 'number' ? paramsObj['project_number'] : undefined
-    const targetScopeRes = applyTargetWorkspaceScope(tool, paramsObj, reg, workspaceId, supplied)
+    const targetScopeRes = applyTargetWorkspaceScope(tool, paramsObj, reg, workspaceId, supplied, projectId)
     if ('errorResult' in targetScopeRes) {
         const rawErr = targetScopeRes.errorResult['error']
         throw new ValidationError(
@@ -293,6 +297,41 @@ function applyRootSessionInheritance(
     }
 }
 
+function verifyWildcardUpdateSourceProject(
+    tool: ToolDefinition,
+    paramsObj: Record<string, unknown>,
+    flags: RootScopeFlags,
+    sessionContext: ToolContext,
+    workspaceId: string | undefined,
+    projectId: number | string | undefined
+): Record<string, unknown> | undefined {
+    if (
+        tool.name !== 'update_entry' ||
+        !flags.hasCrossWorkspaceTarget ||
+        typeof projectId !== 'number' ||
+        (paramsObj['workspace_id'] !== '*' &&
+            !(paramsObj['workspace_id'] === undefined && workspaceId === '*'))
+    ) {
+        return undefined
+    }
+    const rawEntryId = paramsObj['entry_id']
+    if (typeof rawEntryId !== 'number' || typeof sessionContext.db?.getEntryById !== 'function') {
+        return undefined
+    }
+    const sourceEntry = sessionContext.db.getEntryById(rawEntryId, '*')
+    if (sourceEntry !== null && sourceEntry !== undefined && sourceEntry.projectNumber !== projectId) {
+        return {
+            success: false,
+            error: `Entry ${String(rawEntryId)} not found`,
+            code: 'RESOURCE_NOT_FOUND',
+            category: 'resource',
+            suggestion: 'Verify the entry ID and project number, and try again',
+            recoverable: true,
+        }
+    }
+    return undefined
+}
+
 export async function normalizeDispatchParams(
     tool: ToolDefinition,
     toolParams: unknown,
@@ -324,6 +363,9 @@ export async function normalizeDispatchParams(
     }
 
     const flags = resolveRootScopePairing(tool, paramsObj, reg, ctx, aliasDerivedWs)
+    const sourceErr = verifyWildcardUpdateSourceProject(tool, paramsObj, flags, sessionContext, workspaceId, projectId)
+    if (sourceErr !== undefined) return { errorResult: sourceErr }
+
     const batchArrayKey =
         (tool.name === 'batch_create_entries' || tool.name === 'team_batch_create_entries') &&
         Array.isArray(paramsObj['entries'])
@@ -336,17 +378,12 @@ export async function normalizeDispatchParams(
     if (batchArrayKey !== undefined) {
         if (
             (tool.name === 'batch_update_entries' || tool.name === 'team_batch_update_entries') &&
-            paramsObj['workspace_id'] === '*' &&
+            (paramsObj['workspace_id'] === '*' || paramsObj['workspace_id'] === undefined) &&
             paramsObj['project_number'] === undefined &&
             typeof projectId === 'number' &&
-            explicitWorkspace !== false
+            workspaceId === '*'
         ) {
-            // Only stamp session projectId onto wildcard batch updates when the caller did not
-            // explicitly pass `workspace_id: '*'` on the batch_update_entries call itself
-            // (i.e., when `workspaceId === '*'` came from the outer session).
-            if (workspaceId === '*') {
-                paramsObj['project_number'] = projectId
-            }
+            paramsObj['project_number'] = projectId
         }
         const batchError = normalizeBatchDispatchItems(batchArrayKey, paramsObj, reg, {
             projectId,

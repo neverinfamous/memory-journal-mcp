@@ -21,7 +21,7 @@ import type {
     ResourceResult,
 } from '../handlers/resources/shared.js'
 import { ASSISTANT_FOCUSED } from '../utils/resource-annotations.js'
-import { sanitizeErrorForLogging } from '../utils/security-utils.js'
+import { SENSITIVE_KEY_RE, sanitizeErrorForLogging } from '../utils/security-utils.js'
 import { sliceUntrustedInline } from '../handlers/resources/uri-and-fencing.js'
 import { ValidationError } from '../types/errors.js'
 import { parseCanonicalPositiveInt } from '../utils/safe-positive-int.js'
@@ -109,8 +109,20 @@ function computeSessionSummary(entries: AuditEntry[]): {
 
 const CANONICAL_AUDIT_ID_RE =
     /^(?:resource:|prompt:)?(?:memory:\/\/[A-Za-z0-9_./-]+|[A-Za-z0-9_.:@-]{1,128})$/
-const AUDIT_ARG_SECRET_KEY_RE =
-    /(?:token|secret|password|passwd|authorization|auth_header|api_key|apikey|encryption_key|webhook|private_key|client_secret)/i
+const ISO_AUDIT_TS_RE = /^\d{4}-\d{2}-\d{2}T[0-9:.+-Z]{6,32}$/
+
+function sanitizeAuditCategory(raw: unknown): AuditEntry['category'] {
+    switch (raw) {
+        case 'read':
+        case 'write':
+        case 'admin':
+        case 'team':
+        case 'audit':
+            return raw
+        default:
+            return 'read'
+    }
+}
 
 function fenceNonCanonicalAuditId(value: unknown): string {
     if (typeof value !== 'string') return ''
@@ -137,7 +149,7 @@ function sanitizeAuditArgNode(value: unknown, depth: number, seen: WeakSet<objec
         const out: Record<string, unknown> = {}
         Object.setPrototypeOf(out, null)
         for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
-            out[k] = AUDIT_ARG_SECRET_KEY_RE.test(k)
+            out[k] = SENSITIVE_KEY_RE.test(k)
                 ? '[REDACTED]'
                 : sanitizeAuditArgNode(v, depth + 1, seen)
         }
@@ -154,12 +166,18 @@ export function sanitizeAuditEntryForEgress(e: AuditEntry): AuditEntry {
         ? (sanitizeAuditArgNode(e.args, 0, new WeakSet()) as Record<string, unknown>)
         : undefined
     const rawSuccess: unknown = e.success
+    const safeTimestamp =
+        typeof e.timestamp === 'string'
+            ? ISO_AUDIT_TS_RE.test(e.timestamp)
+                ? e.timestamp
+                : fenceNonCanonicalAuditId(e.timestamp)
+            : ''
     const base: AuditEntry = {
-        timestamp: typeof e.timestamp === 'string' ? e.timestamp : '',
+        timestamp: safeTimestamp,
         requestId: typeof e.requestId === 'string' ? fenceNonCanonicalAuditId(e.requestId) : '',
         tool: typeof e.tool === 'string' ? fenceNonCanonicalAuditId(e.tool) : '',
-        category: e.category,
-        scope: typeof e.scope === 'string' ? e.scope : '',
+        category: sanitizeAuditCategory(e.category),
+        scope: typeof e.scope === 'string' ? fenceNonCanonicalAuditId(e.scope) : '',
         user: typeof e.user === 'string' ? fenceNonCanonicalAuditId(e.user) : null,
         scopes: Array.isArray(e.scopes)
             ? e.scopes.filter((s): s is string => typeof s === 'string').map(fenceNonCanonicalAuditId)
@@ -182,10 +200,14 @@ export function sanitizeAuditEntryForEgress(e: AuditEntry): AuditEntry {
 
 function formatAuditEntryYaml(e: AuditEntry): string {
     const safe = sanitizeAuditEntryForEgress(e)
+    const tsOut = ISO_AUDIT_TS_RE.test(safe.timestamp)
+        ? safe.timestamp
+        : JSON.stringify(safe.timestamp)
+    const scopeOut = /^[a-z]*$/.test(safe.scope) ? safe.scope : JSON.stringify(safe.scope)
     const parts: string[] = [
-        `- timestamp: ${safe.timestamp}`,
+        `- timestamp: ${tsOut}`,
         `  tool: ${JSON.stringify(safe.tool)}`,
-        `  scope: ${safe.scope}`,
+        `  scope: ${scopeOut}`,
         `  category: ${safe.category}`,
         `  duration_ms: ${String(safe.durationMs)}`,
         `  success: ${String(safe.success)}`,

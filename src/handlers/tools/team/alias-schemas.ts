@@ -191,7 +191,12 @@ export const ResolveAuthorSchema = z.preprocess(
     createAliasPreprocessor('resolve'),
     z
         .object({
-            author: z.string().trim().min(1).describe('The raw author name to resolve'),
+            author: z
+                .string()
+                .trim()
+                .min(1)
+                .max(255)
+                .describe('The raw author name to resolve'),
             project_number: StrictProjectNumberSchema,
             workspace_id: z.string().optional().describe(WORKSPACE_FIELD_DESC),
         })

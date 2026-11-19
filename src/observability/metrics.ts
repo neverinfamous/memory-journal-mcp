@@ -16,6 +16,7 @@
  */
 
 import { promises as fs } from 'node:fs'
+import { dirname } from 'node:path'
 import { randomUUID } from 'node:crypto'
 import { z } from 'zod'
 import { LatencyTracker } from './latency-tracker.js'
@@ -392,6 +393,7 @@ export class MetricsAccumulator {
         const tmpPath = `${path}.${String(process.pid)}.${String(Date.now())}.${randomUUID().slice(0, 8)}.tmp`
         try {
             const state = this.exportState()
+            await fs.mkdir(dirname(path), { recursive: true, mode: 0o700 })
             await fs.writeFile(tmpPath, state, { encoding: 'utf8', mode: 0o600 })
             await fs.rename(tmpPath, path)
             logger.debug('Metrics saved to disk', { module: 'Metrics', path })

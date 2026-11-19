@@ -305,7 +305,7 @@ export function validateDryRunRelationships(
     )
 
     for (const pending of pendingLinks) {
-        const wsKey = pending.workspaceId ?? '*'
+        const wsKey = pending.workspaceId ?? DEFAULT_WS_SENTINEL
         evaluateDryRunPendingItem(db, pending, inBatchScopes, prefetchedTargetsByWs.get(wsKey), result)
     }
 }

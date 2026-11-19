@@ -2,6 +2,21 @@ import { getGitHubIntegration } from '../github/github-integration/index.js'
 import type { ToolContext } from '../types/index.js'
 import { activeProjectRegistry, uniqueWorkspaceForProject } from './write-scope.js'
 
+/** Resolve normalized GitHub hostname (stripping protocol, credentials, paths, queries, and trailing slashes). */
+export function resolveGithubHost(rawEnv = process.env['GITHUB_HOST']): string {
+    const raw = rawEnv?.trim()
+    if (raw === undefined || raw === '') return 'github.com'
+    if (raw.includes('://') && !/^https?:\/\//i.test(raw)) return 'github.com'
+    try {
+        const candidate = /^https?:\/\//i.test(raw) ? raw : `https://${raw}`
+        const parsed = new URL(candidate)
+        if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') return 'github.com'
+        return parsed.host !== '' ? parsed.host : 'github.com'
+    } catch {
+        return 'github.com'
+    }
+}
+
 async function resolveIssueUrlFromRepoPath(
     repoPath: string | undefined,
     issueNumber: number,
@@ -18,7 +33,7 @@ async function resolveIssueUrlFromRepoPath(
         process.env['GITHUB_TOKEN']
     )
     const repoInfo = await targetGithub.getRepoInfo()
-    const host = process.env['GITHUB_HOST'] ?? 'github.com'
+    const host = resolveGithubHost()
     if (repoInfo.owner && repoInfo.repo) {
         return `https://${host}/${repoInfo.owner}/${repoInfo.repo}/issues/${String(issueNumber)}`
     }
@@ -69,7 +84,7 @@ export async function resolveIssueUrl(
 
     // 2. Omitted project number and workspace may use the process repo cache.
     if (context.github) {
-        const host = process.env['GITHUB_HOST'] ?? 'github.com'
+        const host = resolveGithubHost()
         const cachedRepo =
             context.github.getCachedRepoInfo() ?? (await context.github.getRepoInfo())
         if (cachedRepo?.owner && cachedRepo?.repo) {

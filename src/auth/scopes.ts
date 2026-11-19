@@ -189,6 +189,23 @@ export function parseScopes(scopeString: string): string[] {
         .filter((s) => s.length > 0)
 }
 
+/**
+ * Resolve configured bearer/metrics auth scopes from `MCP_AUTH_SCOPES` (comma/whitespace-delimited),
+ * defaulting to `['read']` when unset or when any invalid scope is present.
+ */
+export function resolveEnvAuthScopes(
+    envScopes: string | undefined = process.env['MCP_AUTH_SCOPES']
+): string[] {
+    const parsed = envScopes
+        ? envScopes
+              .split(/[\s,]+/)
+              .map((s) => s.trim())
+              .filter(Boolean)
+        : []
+    if (parsed.length === 0) return [SCOPES.READ]
+    return parsed.every((s) => isValidScope(s)) ? parsed : [SCOPES.READ]
+}
+
 // =============================================================================
 // Scope Validation
 // =============================================================================

@@ -17,7 +17,7 @@ import type { GitHubIntegration } from '../../github/github-integration/index.js
 import { getAdversarialPromptDefinitions } from './adversarial.js'
 import { getOptimizerPromptDefinitions } from './optimizer.js'
 import { getLoadBriefingPromptDefinitions } from './load-briefing.js'
-import { ResourceNotFoundError } from '../../types/errors.js'
+import { ResourceNotFoundError, ValidationError } from '../../types/errors.js'
 import { enforceAccessBoundary } from '../../auth/validation.js'
 import type { AuditLogger } from '../../audit/index.js'
 
@@ -89,6 +89,15 @@ export function getPrompt(
     briefingConfig?: BriefingConfig,
     runtime?: object | null
 ): Promise<{ messages: PromptMessage[] }> {
+    if (args !== null && args !== undefined && typeof args === 'object') {
+        for (const [key, val] of Object.entries(args)) {
+            if (typeof val === 'string' && val.length > 10_000) {
+                throw new ValidationError(
+                    `Prompt argument '${key}' exceeds maximum length of 10000 characters`
+                )
+            }
+        }
+    }
     getAllPromptDefinitions()
     const prompt = cachedPromptMap?.get(name)
 

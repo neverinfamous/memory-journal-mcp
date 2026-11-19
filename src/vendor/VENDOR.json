@@ -67,8 +67,8 @@
         "commit-cli-schema.ts",
         "commit-journal.ts"
       ],
-      "syncedAt": "2026-11-19T10:44:22.550Z",
-      "syncedFromCommit": "1e002f2fb1292fb69a869de3816140bb9c2ecd4e"
+      "syncedAt": "2026-11-19T11:28:23.671Z",
+      "syncedFromCommit": "297423c80c5dfbb0ba3dad1b314d9f8b53373873"
     }
   }
 }

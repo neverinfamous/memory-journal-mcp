@@ -137,21 +137,29 @@ function stageVendorWrites(
   for (const lib of libsToSync) {
     const libConfig = nextManifest.libs[lib];
     if (libConfig === undefined) continue;
+    const vendorRoot = resolve(join(cwd, 'src', 'vendor'));
     const sourceDir = resolve(join(upstreamRoot, libConfig.source));
-    const destDir = resolve(join(cwd, 'src', 'vendor', lib));
+    const destDir = resolve(join(vendorRoot, lib));
+    const destDirRel = relative(vendorRoot, destDir);
+    if (destDirRel === '..' || destDirRel.startsWith('..' + sep) || isAbsolute(destDirRel)) {
+      throw new Error(`Vendor library path escapes src/vendor: ${lib}`);
+    }
     for (const file of libConfig.files) {
       const srcFile = resolve(join(sourceDir, file));
       const srcRel = relative(sourceDir, srcFile);
       if (srcRel === '..' || srcRel.startsWith('..' + sep) || isAbsolute(srcRel)) {
         throw new Error(`Vendor source path escapes upstream library root: ${file}`);
       }
-      if (existsSync(srcFile) && lstatSync(srcFile).isSymbolicLink()) {
+      if (lstatSync(srcFile, { throwIfNoEntry: false })?.isSymbolicLink()) {
         throw new Error(`Refusing symbolic link in vendor source: ${file}`);
       }
       const destFile = resolve(join(destDir, file));
       const destRel = relative(destDir, destFile);
       if (destRel === '..' || destRel.startsWith('..' + sep) || isAbsolute(destRel)) {
         throw new Error(`Vendor destination path escapes src/vendor/${lib}: ${file}`);
+      }
+      if (lstatSync(destFile, { throwIfNoEntry: false })?.isSymbolicLink()) {
+        throw new Error(`Refusing symbolic link at vendor destination: ${file}`);
       }
       stagedPaths.add(destFile);
       if (file.endsWith('.ts')) {
@@ -269,6 +277,25 @@ function commitStagedVendorWrites(
   console.log(`\nSynced ${String(staged.writes.length)} file(s) and updated VENDOR.json`);
 }
 
+function runVendorSelfTests(cwd: string): void {
+  console.log('\nRunning tests...');
+  execFileSync(
+    process.execPath,
+    [join(cwd, 'node_modules', 'tsx', 'dist', 'cli.mjs'), join(cwd, 'scripts', 'sync-vendor.ts'), '--check'],
+    { stdio: 'inherit', shell: false }
+  );
+  execFileSync(
+    process.execPath,
+    [
+      join(cwd, 'node_modules', 'vitest', 'vitest.mjs'),
+      'run',
+      'tests/unit/git-tools.test.ts',
+      'tests/unit/vendor-doc-neutralizer.test.ts',
+    ],
+    { stdio: 'inherit', shell: false }
+  );
+}
+
 function runSyncVendor(): void {
   const args = parseArgs({
     options: {
@@ -337,8 +364,7 @@ function runSyncVendor(): void {
   }
 
   if (args.values.test) {
-    console.log('\nRunning tests...');
-    execFileSync('pnpm', ['run', 'test:vendor'], { stdio: 'inherit', shell: process.platform === 'win32' });
+    runVendorSelfTests(cwd);
   }
 }
 

@@ -147,6 +147,15 @@ export const TEAM_PROMPT_NAMES = new Set([
     'mj_update_team_entry',
 ])
 
+export const ADMIN_PROMPT_NAMES = new Set([
+    'project-setup',
+    'optimize-journal',
+    'cms-rem-supervisor',
+    'project_setup',
+    'optimize_journal',
+    'cms_rem_supervisor',
+])
+
 export function getRequiredScope(toolName: string): StandardScope {
     const scope = toolScopeMap.get(toolName)
     if (scope) {
@@ -171,6 +180,9 @@ export function getRequiredScope(toolName: string): StandardScope {
     }
     if (TEAM_PROMPT_NAMES.has(toolName)) {
         return SCOPES.TEAM
+    }
+    if (ADMIN_PROMPT_NAMES.has(toolName)) {
+        return SCOPES.ADMIN
     }
     if (DUMMY_HEALING_TOOL_NAMES.has(toolName)) {
         return SCOPES.READ

@@ -233,6 +233,27 @@ function resolveAndSyncLiveBriefing(
     return liveBriefing
 }
 
+function checkCallElementLimit(
+    argsVal: unknown,
+    maxToolInputElements: number | undefined
+): ReturnType<typeof formatTokenEstimatedError> | undefined {
+    const maxElements = resolveEffectiveMaxToolInputElements(maxToolInputElements)
+    if (argsVal === undefined || !exceedsMaxToolInputElements(argsVal, maxElements)) {
+        return undefined
+    }
+    return formatTokenEstimatedError(
+        {
+            success: false,
+            error: `Tool input exceeds maximum allowed element count (${String(maxElements)}).`,
+            code: 'VALIDATION_ERROR',
+            category: 'validation',
+            suggestion: 'Reduce input payload size or batch items into smaller requests.',
+            recoverable: false,
+        },
+        true
+    )
+}
+
 async function executeInterceptedToolCall(
     request: unknown,
     extra: unknown,
@@ -256,23 +277,8 @@ async function executeInterceptedToolCall(
             syncedState
         )
 
-        const maxElements = resolveEffectiveMaxToolInputElements(options.maxToolInputElements)
-        if (
-            params?.arguments !== undefined &&
-            exceedsMaxToolInputElements(params.arguments, maxElements)
-        ) {
-            return formatTokenEstimatedError(
-                {
-                    success: false,
-                    error: `Tool input exceeds maximum allowed element count (${String(maxElements)}).`,
-                    code: 'VALIDATION_ERROR',
-                    category: 'validation',
-                    suggestion: 'Reduce input payload size or batch items into smaller requests.',
-                    recoverable: false,
-                },
-                true
-            )
-        }
+        const limitErr = checkCallElementLimit(params?.arguments, options.maxToolInputElements)
+        if (limitErr !== undefined) return limitErr
 
         if (params !== undefined && healingEnabled) {
             const healError = healIncomingToolCallParams(params, options, liveBriefing)
@@ -286,9 +292,15 @@ async function executeInterceptedToolCall(
             params.name !== '' &&
             !allToolNames.has(params.name)
         ) {
+            const normalizedToolArgs =
+                typeof params.arguments === 'object' &&
+                params.arguments !== null &&
+                !Array.isArray(params.arguments)
+                    ? params.arguments
+                    : {}
             return await handleUnknownTool(
                 params.name,
-                params.arguments ?? {},
+                normalizedToolArgs,
                 healingEnabled,
                 prompts,
                 context,

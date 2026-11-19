@@ -11,6 +11,7 @@ import type { VectorSearchManager } from '../../../vector/vector-search-manager/
 import { logger } from '../../../utils/logger.js'
 import { enforceAccessBoundary } from '../../../auth/validation.js'
 import { canReadTeamEntriesRbac } from '../team/rbac.js'
+import { sanitizeAuthor } from '../../../utils/security-utils.js'
 import {
     excludesCommitNarrative,
     isSessionCommitsAutoContext,
@@ -262,6 +263,9 @@ export async function collectTeamSearchEntries(
         seen.add(entry.id)
         ranked.push({
             ...entry,
+            ...('author' in entry && typeof entry.author === 'string'
+                ? { author: sanitizeAuthor(entry.author) }
+                : {}),
             content: entry.content,
             timestamp: entry.timestamp,
             source: 'team',

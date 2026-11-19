@@ -203,4 +203,26 @@ describe('exportEntriesToMarkdown', () => {
             exportEntriesToMarkdown(entries as any, './export', mockDb as any, [process.cwd()])
         ).rejects.toThrow(/Directory swapped during export operation/)
     })
+
+    it('should reject pre-existing file symlink before calling open (Windows O_NOFOLLOW fallback)', async () => {
+        vi.mocked(fs.lstat).mockResolvedValueOnce({
+            isSymbolicLink: () => true,
+            isFile: () => false,
+        } as never)
+
+        const entries = [
+            {
+                id: 99,
+                content: 'Symlink target test',
+                timestamp: '2026-11-19T06:00:00Z',
+                entryType: 'note',
+            },
+        ]
+        const result = await exportEntriesToMarkdown(entries as any, './export', mockDb as any, [
+            process.cwd(),
+        ])
+        expect(result.exported_count).toBe(0)
+        expect(result.skipped).toBe(1)
+        expect(fs.open).not.toHaveBeenCalled()
+    })
 })

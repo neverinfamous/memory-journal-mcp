@@ -142,7 +142,9 @@ function collectAliasesForKey(key: string): readonly string[] {
             derived.push(stem, stem.replace(/_/g, '-'), stem.replace(/-/g, '_'))
         }
     }
-    const directAliases = PROJECT_KEYWORD_ALIASES[key] ?? []
+    const directAliases = Object.hasOwn(PROJECT_KEYWORD_ALIASES, key)
+        ? (PROJECT_KEYWORD_ALIASES[key] ?? [])
+        : []
     const matchedAliases = new Set<string>([
         ...derived,
         ...directAliases.map((a) => a.toLowerCase()),

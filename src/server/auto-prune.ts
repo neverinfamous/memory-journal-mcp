@@ -211,6 +211,25 @@ function finalizeLivePrune(
     }
 }
 
+function probeLifecycleHasCandidates(db: IDatabaseAdapter, options: AutoPruneOptions): boolean {
+    const probe = db.executeDataLifecycle({
+        archiveOlderThanDays: options.archiveOlderThanDays,
+        pruneOlderThanDays: options.pruneOlderThanDays,
+        hardDeleteOlderThanDays: options.hardDeleteOlderThanDays,
+        importanceThreshold: options.importanceThreshold,
+        dryRun: true,
+        excludeTags: options.excludeTags,
+        workspaceId: options.workspaceId,
+        ...(options.projectNumber !== undefined ? { projectNumber: options.projectNumber } : {}),
+    })
+    return probe.candidates !== undefined
+        ? probe.candidates.archived.length +
+              probe.candidates.pruned.length +
+              probe.candidates.hardDeleted.length >
+          0
+        : probe.archivedCount + probe.prunedCount + probe.hardDeletedCount > 0
+}
+
 /**
  * Run the auto-prune sweep against the database.
  *
@@ -254,25 +273,7 @@ export async function runAutoPrune(
     }
 
     // ── Step 1: Dry-run probe before safety backup ──────────────────────
-    const probe = db.executeDataLifecycle({
-        archiveOlderThanDays,
-        pruneOlderThanDays,
-        hardDeleteOlderThanDays,
-        importanceThreshold,
-        dryRun: true,
-        excludeTags,
-        workspaceId,
-        ...(projectNumber !== undefined ? { projectNumber } : {}),
-    })
-    const hasCandidates =
-        probe.candidates !== undefined
-            ? probe.candidates.archived.length +
-                  probe.candidates.pruned.length +
-                  probe.candidates.hardDeleted.length >
-              0
-            : probe.archivedCount + probe.prunedCount + probe.hardDeletedCount > 0
-
-    if (!hasCandidates) {
+    if (!probeLifecycleHasCandidates(db, options)) {
         const zeroCounts = { archivedCount: 0, prunedCount: 0, hardDeletedCount: 0 }
         finalizeLivePrune(db, options, zeroCounts)
         return buildAutoPruneResult(options, zeroCounts, null)

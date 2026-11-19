@@ -46,22 +46,25 @@ export function getToolsCatalogResourceDefinitions(): InternalResourceDef[] {
                 for (const [groupName, names] of Object.entries(TOOL_GROUPS)) {
                     for (const name of names) groupOf.set(name, groupName)
                 }
-                const toolsByGroup: Record<string, typeof allTools> = {}
+                const toolsByGroup = new Map<string, typeof allTools>()
                 for (const tool of allTools) {
                     const group = groupOf.get(tool.name) ?? 'other'
-                    
-                    toolsByGroup[group] ??= []
-                    toolsByGroup[group]?.push(tool)
+                    let list = toolsByGroup.get(group)
+                    if (list === undefined) {
+                        list = []
+                        toolsByGroup.set(group, list)
+                    }
+                    list.push(tool)
                 }
 
-                const groups = Object.keys(toolsByGroup).sort()
+                const groups = Array.from(toolsByGroup.keys()).sort()
 
                 let md = `## Available Tools\n\n`
                 md += `### Currently Enabled\n`
                 md += `Active filter: \`${activeFilterRaw}\`\n\n`
 
                 for (const group of groups) {
-                    const toolsInGroup = toolsByGroup[group] ?? []
+                    const toolsInGroup = toolsByGroup.get(group) ?? []
                     
                     // Determine how many tools in this group are enabled
                     let enabledCount = 0

@@ -7,23 +7,26 @@ import * as vm from 'node:vm'
 import {
     canStartRegexLiteral,
     createDelimiterState,
+    scanIdentifierWord,
     skipLineOrBlockComment,
     skipRegexLiteralBody,
     trackIdentifierToken,
     trackPunctuationToken,
 } from '../../../codemode/security-stripper.js'
 
+export type NonCodeSpan = readonly [number, number]
+
 function advanceStringLiteralStep(
     code: string,
     i: number,
-    offset: number,
     inString: string,
     isEscaped: boolean,
-    state: ReturnType<typeof createDelimiterState>
+    state: ReturnType<typeof createDelimiterState>,
+    stopLimit: number
 ): { inString: string | null; isEscaped: boolean; next: number; prevToken?: string } {
     const ch = code[i]
     if (ch === '\\') return { inString, isEscaped: !isEscaped, next: i + 1 }
-    if (inString === '`' && !isEscaped && ch === '$' && code[i + 1] === '{' && i + 1 < offset) {
+    if (inString === '`' && !isEscaped && ch === '$' && code[i + 1] === '{' && i + 1 < stopLimit) {
         state.templateBraces.push(0)
         return { inString: null, isEscaped: false, next: i + 2, prevToken: '(' }
     }
@@ -33,63 +36,104 @@ function advanceStringLiteralStep(
     return { inString, isEscaped: false, next: i + 1 }
 }
 
-function scanCodeOffsetState(code: string, offset: number): 'code' | 'string' | 'comment' {
+function scanLexicalSpans(
+    code: string,
+    stopAtOffset?: number
+): { stateAtOffset: 'code' | 'string' | 'comment'; spans: NonCodeSpan[] } {
+    const limit = stopAtOffset ?? code.length
+    const spans: NonCodeSpan[] = []
     let inString: string | null = null
+    let spanStart = -1
     let isEscaped = false
     let prevToken = ''
     const state = createDelimiterState()
 
-    for (let i = 0; i < offset; i++) {
+    for (let i = 0; i < limit; i++) {
         const ch = code[i] ?? ''
         if (inString !== null) {
-            const step = advanceStringLiteralStep(code, i, offset, inString, isEscaped, state)
+            const step = advanceStringLiteralStep(code, i, inString, isEscaped, state, limit)
             inString = step.inString
             isEscaped = step.isEscaped
             if (step.prevToken !== undefined) prevToken = step.prevToken
+            if (inString === null && stopAtOffset === undefined && spanStart >= 0) {
+                spans.push([spanStart, step.next])
+                spanStart = -1
+            }
             i = step.next - 1
             continue
         }
         const comment = skipLineOrBlockComment(code, i)
         if (comment !== null) {
-            if (comment.next > offset || (comment.next === code.length && comment.unterminated === true)) {
-                return 'comment'
+            if (stopAtOffset !== undefined && (comment.next > limit || (comment.next === code.length && comment.unterminated === true))) {
+                return { stateAtOffset: 'comment', spans }
             }
+            if (stopAtOffset === undefined) spans.push([i, comment.next])
             i = comment.next - 1
             continue
         }
         if (ch === "'" || ch === '"' || ch === '`') {
             inString = ch
+            spanStart = i
         } else if (ch === '/' && code[i + 1] !== '/' && code[i + 1] !== '*' && canStartRegexLiteral(prevToken)) {
-            i = skipRegexLiteralBody(code, i + 1) - 1
+            const endRegex = skipRegexLiteralBody(code, i + 1)
+            if (stopAtOffset !== undefined && endRegex > limit) return { stateAtOffset: 'code', spans }
+            i = endRegex - 1
             prevToken = '/'
-        } else if (/[A-Za-z0-9_$]/.test(ch)) {
-            let j = i
-            while (j < offset && /[A-Za-z0-9_$]/.test(code[j] ?? '')) j++
-            prevToken = trackIdentifierToken(code.slice(i, j), prevToken, state)
-            i = j - 1
-        } else if (ch === '=' && code[i + 1] === '>') {
-            prevToken = '=>'
+        } else if ((ch === '+' && code[i + 1] === '+') || (ch === '-' && code[i + 1] === '-') || (ch === '=' && code[i + 1] === '>')) {
+            prevToken = ch + (code[i + 1] ?? '')
             i++
+        } else if (
+            /[A-Za-z0-9_$]/.test(ch) ||
+            (ch === '\\' && code[i + 1] === 'u') ||
+            ((code.codePointAt(i) ?? 0) > 0x7f && /[\p{ID_Start}\p{ID_Continue}$_]/u.test(String.fromCodePoint(code.codePointAt(i) ?? 0)))
+        ) {
+            const ident = scanIdentifierWord(code, i)
+            prevToken = trackIdentifierToken(ident.word, prevToken, state)
+            i = ident.next - 1
         } else {
             const closingInterp = ch === '}' && state.templateBraces.length > 0 && state.templateBraces.at(-1) === 0
             if (closingInterp) {
                 state.templateBraces.pop()
                 inString = '`'
+                spanStart = i
                 isEscaped = false
             } else if (!/\s/.test(ch)) {
                 prevToken = trackPunctuationToken(ch, prevToken, state)
             }
         }
     }
-    return inString !== null ? 'string' : 'code'
+    if (stopAtOffset === undefined && inString !== null && spanStart >= 0) {
+        spans.push([spanStart, limit])
+    }
+    return { stateAtOffset: inString !== null ? 'string' : 'code', spans }
+}
+
+/** Collects non-code (string/template/comment) ranges in one linear pass for O(log K) offset checks. */
+export function buildNonCodeSpans(code: string): readonly NonCodeSpan[] {
+    return scanLexicalSpans(code).spans
+}
+
+/** Binary-searches sorted non-code spans produced by `buildNonCodeSpans`. */
+export function isOffsetInNonCodeSpan(spans: readonly NonCodeSpan[], offset: number): boolean {
+    let lo = 0
+    let hi = spans.length - 1
+    while (lo <= hi) {
+        const mid = (lo + hi) >>> 1
+        const span = spans[mid]
+        if (span === undefined) break
+        if (offset < span[0]) hi = mid - 1
+        else if (offset >= span[1]) lo = mid + 1
+        else return true
+    }
+    return false
 }
 
 export function isInsideStringLiteral(code: string, offset: number): boolean {
-    return scanCodeOffsetState(code, offset) === 'string'
+    return scanLexicalSpans(code, offset).stateAtOffset === 'string'
 }
 
 export function isInsideStringOrComment(code: string, offset: number): boolean {
-    return scanCodeOffsetState(code, offset) !== 'code'
+    return scanLexicalSpans(code, offset).stateAtOffset !== 'code'
 }
 
 const VALID_JS_CACHE_MAX = 256
@@ -177,97 +221,99 @@ function mapModuleBindingReplacement(varName: string, modName: string, commentTa
     return `const ${targetVar} = mj;`
 }
 
+/** Replace regex matches whose start offset falls outside string/template literals and comments. */
+export function replaceOutsideNonCode(
+    src: string,
+    regex: RegExp,
+    replacer: (match: string, ...captures: string[]) => string
+): string {
+    let spans: readonly NonCodeSpan[] | undefined
+    return src.replace(regex, (...args: unknown[]) => {
+        const match = typeof args[0] === 'string' ? args[0] : ''
+        const fullStr = typeof args.at(-1) === 'string' ? (args.at(-1) as string) : src
+        const offset = typeof args.at(-2) === 'number' ? (args.at(-2) as number) : 0
+        spans ??= buildNonCodeSpans(fullStr)
+        if (isOffsetInNonCodeSpan(spans, offset)) return match
+        const captures = args.slice(1, -2).map((v) => (typeof v === 'string' ? v : ''))
+        return replacer(match, ...captures)
+    })
+}
+
 /** Rewrite top-level ESM/CommonJS module statements outside string literals and comments into `mj` bindings. */
 export function rewriteModuleImportsAndExports(src: string): string {
     let executionCode = src
-    executionCode = executionCode.replace(
-        /export\s+default\s+async\s+function(?:\s+[\w$]+)?\s*\(([^)]*)\)\s*\{([\s\S]*)\}/g,
-        (match: string, param: string, body: string, offset: number, fullStr: string): string => {
-            if (isInsideStringOrComment(fullStr, offset)) return match
-            const p = param.trim()
-            return `(async (${p ? `${p} = mj` : ''}) => { ${body} })()`
-        }
+    if (executionCode.includes('export') && executionCode.includes('{') && executionCode.includes('}')) {
+        executionCode = replaceOutsideNonCode(
+            executionCode,
+            /export\s+default\s+async\s+function(?:\s+[\w$]+)?\s*\(([^()\n]{0,500})\)\s*\{([\s\S]*)\}/g,
+            (_match: string, param: string, body: string): string => {
+                const p = param.trim()
+                return `(async (${p ? `${p} = mj` : ''}) => { ${body} })()`
+            }
+        )
+        executionCode = replaceOutsideNonCode(
+            executionCode,
+            /export\s+default\s+function(?:\s+[\w$]+)?\s*\(([^()\n]{0,500})\)\s*\{([\s\S]*)\}/g,
+            (_match: string, param: string, body: string): string => {
+                const p = param.trim()
+                return `(async (${p ? `${p} = mj` : ''}) => { ${body} })()`
+            }
+        )
+    }
+    executionCode = replaceOutsideNonCode(executionCode, /export\s+default\s+/g, () => '')
+    executionCode = replaceOutsideNonCode(executionCode, /\btools\./g, () => 'mj.')
+    executionCode = replaceOutsideNonCode(
+        executionCode,
+        /(?:const|let|var)\s+(\{[^}\n]{0,300}\}|[\w$]+)\s*=\s*(?:await\s+)?import\s*\(\s*['"]([^'"\n]{1,300})['"]\s*\);?/g,
+        (_match: string, varName: string, modName: string): string =>
+            mapModuleBindingReplacement(varName, modName, 'dynamic import')
     )
-    executionCode = executionCode.replace(
-        /export\s+default\s+function(?:\s+[\w$]+)?\s*\(([^)]*)\)\s*\{([\s\S]*)\}/g,
-        (match: string, param: string, body: string, offset: number, fullStr: string): string => {
-            if (isInsideStringOrComment(fullStr, offset)) return match
-            const p = param.trim()
-            return `(async (${p ? `${p} = mj` : ''}) => { ${body} })()`
-        }
+    executionCode = replaceOutsideNonCode(
+        executionCode,
+        /(?:await\s+)?import\s*\(\s*['"](?:fs|node:fs|path|node:path|memory-journal(?:-mcp)?|sqlite-journal|mcp|@modelcontextprotocol\/[^'"\n]{1,200})['"]\s*\);?/g,
+        () => '/* auto-healed dynamic import */'
     )
-    executionCode = executionCode.replace(
-        /export\s+default\s+/g,
-        (match: string, offset: number, fullStr: string): string =>
-            isInsideStringOrComment(fullStr, offset) ? match : ''
+    executionCode = replaceOutsideNonCode(
+        executionCode,
+        /(?:const|let|var)\s+(\{[^}\n]{0,300}\}|[\w$]+)\s*=\s*require\s*\(\s*['"]([^'"\n]{1,300})['"]\s*\);?/g,
+        (_match: string, varName: string, modName: string): string =>
+            mapModuleBindingReplacement(varName, modName, 'require')
     )
-    executionCode = executionCode.replace(
-        /\btools\./g,
-        (match: string, offset: number, fullStr: string): string =>
-            isInsideStringOrComment(fullStr, offset) ? match : 'mj.'
+    executionCode = replaceOutsideNonCode(
+        executionCode,
+        /^\s*require\s*\(\s*['"](?:fs|node:fs|path|node:path|memory-journal(?:-mcp)?|sqlite-journal|mcp|@modelcontextprotocol\/[^'"\n]{1,200})['"]\s*\);?/gm,
+        () => '/* auto-healed require */'
     )
-    executionCode = executionCode.replace(
-        /(?:const|let|var)\s+(\{[^}]*\}|[\w$]+)\s*=\s*(?:await\s+)?import\s*\(\s*['"]([^'"]+)['"]\s*\);?/g,
-        (match: string, varName: string, modName: string, offset: number, fullStr: string): string =>
-            isInsideStringOrComment(fullStr, offset)
-                ? match
-                : mapModuleBindingReplacement(varName, modName, 'dynamic import')
-    )
-    executionCode = executionCode.replace(
-        /(?:await\s+)?import\s*\(\s*['"](?:fs|node:fs|path|node:path|memory-journal(?:-mcp)?|sqlite-journal|mcp|@modelcontextprotocol\/[^'"]+)['"]\s*\);?/g,
-        (match: string, offset: number, fullStr: string): string =>
-            isInsideStringOrComment(fullStr, offset) ? match : '/* auto-healed dynamic import */'
-    )
-    executionCode = executionCode.replace(
-        /(?:const|let|var)\s+(\{[^}]*\}|[\w$]+)\s*=\s*require\s*\(\s*['"]([^'"]+)['"]\s*\);?/g,
-        (match: string, varName: string, modName: string, offset: number, fullStr: string): string =>
-            isInsideStringOrComment(fullStr, offset)
-                ? match
-                : mapModuleBindingReplacement(varName, modName, 'require')
-    )
-    executionCode = executionCode.replace(
-        /^\s*require\s*\(\s*['"](?:fs|node:fs|path|node:path|memory-journal(?:-mcp)?|sqlite-journal|mcp|@modelcontextprotocol\/[^'"]+)['"]\s*\);?/gm,
-        (match: string, offset: number, fullStr: string): string =>
-            isInsideStringOrComment(fullStr, offset) ? match : '/* auto-healed require */'
-    )
-    return executionCode.replace(
-        /import\s+(\{[^}]*\}|\*\s+as\s+[\w$]+|[\w$]+)\s+from\s+['"]([^'"]+)['"]\s*;?/g,
-        (match: string, varName: string, modName: string, offset: number, fullStr: string): string =>
-            isInsideStringOrComment(fullStr, offset)
-                ? match
-                : mapModuleBindingReplacement(varName, modName, 'import')
+    return replaceOutsideNonCode(
+        executionCode,
+        /import\s+(\{[^}\n]{0,300}\}|\*\s+as\s+[\w$]+|[\w$]+)\s+from\s+['"]([^'"\n]{1,300})['"]\s*;?/g,
+        (_match: string, varName: string, modName: string): string =>
+            mapModuleBindingReplacement(varName, modName, 'import')
     )
 }
 
 /** Guard `JSON.parse(context...)` calls outside string/template literals and comments. */
 export function rewriteContextJsonParseCalls(src: string): string {
     let executionCode = src
-    executionCode = executionCode.replace(
+    executionCode = replaceOutsideNonCode(
+        executionCode,
         /\bJSON\.parse\s*\(\s*context\s*\)/g,
-        (match: string, offset: number, fullStr: string): string =>
-            isInsideStringOrComment(fullStr, offset)
-                ? match
-                : '(typeof context === "string" ? JSON.parse(context) : context)'
+        () => '(typeof context === "string" ? JSON.parse(context) : context)'
     )
-    executionCode = executionCode.replace(
-        /\bJSON\.parse\s*\(\s*context\s*\|\|\s*['"][^'"]*['"]\s*\)/g,
-        (match: string, offset: number, fullStr: string): string =>
-            isInsideStringOrComment(fullStr, offset)
-                ? match
-                : '(typeof context === "string" ? JSON.parse(context) : context)'
+    executionCode = replaceOutsideNonCode(
+        executionCode,
+        /\bJSON\.parse\s*\(\s*context\s*\|\|\s*['"][^'"\n]{0,500}['"]\s*\)/g,
+        () => '(typeof context === "string" ? JSON.parse(context) : context)'
     )
-    executionCode = executionCode.replace(
-        /\bJSON\.parse\s*\(\s*context\s*\?\?\s*['"][^'"]*['"]\s*\)/g,
-        (match: string, offset: number, fullStr: string): string =>
-            isInsideStringOrComment(fullStr, offset)
-                ? match
-                : '(typeof context === "string" ? JSON.parse(context) : context)'
+    executionCode = replaceOutsideNonCode(
+        executionCode,
+        /\bJSON\.parse\s*\(\s*context\s*\?\?\s*['"][^'"\n]{0,500}['"]\s*\)/g,
+        () => '(typeof context === "string" ? JSON.parse(context) : context)'
     )
-    return executionCode.replace(
+    return replaceOutsideNonCode(
+        executionCode,
         /\bJSON\.parse\s*\(\s*(context\.[a-zA-Z0-9_$]+)\s*\)/g,
-        (match: string, prop: string, offset: number, fullStr: string): string =>
-            isInsideStringOrComment(fullStr, offset)
-                ? match
-                : `(typeof ${prop} === "string" ? JSON.parse(${prop}) : ${prop})`
+        (_match: string, prop: string): string =>
+            `(typeof ${prop} === "string" ? JSON.parse(${prop}) : ${prop})`
     )
 }

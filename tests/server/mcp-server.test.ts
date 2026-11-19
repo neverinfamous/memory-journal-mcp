@@ -83,6 +83,14 @@ const {
 
 vi.mock('../../src/auth/scope-map.js', () => ({
     TEAM_PROMPT_NAMES: new Set(['team-session-summary', 'create-team-entry', 'update-team-entry']),
+    ADMIN_PROMPT_NAMES: new Set([
+        'project-setup',
+        'optimize-journal',
+        'cms-rem-supervisor',
+        'project_setup',
+        'optimize_journal',
+        'cms_rem_supervisor',
+    ]),
     getRequiredScope: vi.fn().mockImplementation((toolName: string) => {
         // Return a default scope for fake test tools
         if (toolName.startsWith('fake_')) return 'core'

@@ -4,12 +4,15 @@
  * or any mutation runs.
  */
 
+import { sanitizeErrorForLogging } from '../utils/security-utils.js'
+
 const SENSITIVE_KEY_FRAGMENTS = [
     'token',
     'secret',
     'issuer',
     'uri',
     'password',
+    'passphrase',
     'key',
     'auth',
     'webhook',
@@ -22,7 +25,7 @@ const SENSITIVE_KEY_FRAGMENTS = [
 ] as const
 
 const REDACTED_FLAG_VALUE_RE =
-    /(--?[a-z0-9-]*(?:token|secret|password|key|auth|webhook|issuer)[a-z0-9-]*(?:=|\s+))([^\s"']+)/gi
+    /(--?[a-z0-9-]*(?:token|secret|password|passphrase|key|auth|webhook|issuer)[a-z0-9-]*(?:=|\s+))(?:"[^"]*"|'[^']*'|[^\s"']+)/gi
 
 function isRecord(value: unknown): value is Record<string, unknown> {
     return typeof value === 'object' && value !== null && !Array.isArray(value)
@@ -30,7 +33,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function redactScalarString(value: string, keySensitive: boolean): string {
     if (keySensitive && value.length > 0) return '[REDACTED]'
-    return value.replace(REDACTED_FLAG_VALUE_RE, '$1[REDACTED]')
+    return sanitizeErrorForLogging(value.replace(REDACTED_FLAG_VALUE_RE, '$1[REDACTED]'))
 }
 
 function maskSensitiveArray(items: unknown[], parentKeySensitive: boolean): void {
@@ -41,22 +44,26 @@ function maskSensitiveArray(items: unknown[], parentKeySensitive: boolean): void
         } else if (Array.isArray(item)) {
             maskSensitiveArray(item, parentKeySensitive)
         } else if (isRecord(item)) {
-            maskSensitive(item)
+            maskSensitive(item, parentKeySensitive)
         }
     }
 }
 
-function maskSensitive(obj: Record<string, unknown>): void {
+function maskSensitive(obj: Record<string, unknown>, parentKeySensitive = false): void {
     for (const key of Object.keys(obj)) {
+        if (!Object.hasOwn(obj, key) || key === '__proto__' || key === 'constructor' || key === 'prototype') {
+            continue
+        }
         const lowerKey = key.toLowerCase()
-        const keySensitive = SENSITIVE_KEY_FRAGMENTS.some((f) => lowerKey.includes(f))
+        const keySensitive =
+            parentKeySensitive || SENSITIVE_KEY_FRAGMENTS.some((f) => lowerKey.includes(f))
         const value = obj[key]
         if (typeof value === 'string') {
             obj[key] = redactScalarString(value, keySensitive)
         } else if (Array.isArray(value)) {
             maskSensitiveArray(value, keySensitive)
         } else if (isRecord(value)) {
-            maskSensitive(value)
+            maskSensitive(value, keySensitive)
         }
     }
 }

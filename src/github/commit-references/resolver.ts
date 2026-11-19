@@ -25,6 +25,12 @@ export async function resolveReferences(
     }
 
     const promises = refs.map(async (ref): Promise<ResolvedReference> => {
+        if (
+            (ref.owner !== undefined && ref.owner.toLowerCase() !== defaultOwner.toLowerCase()) ||
+            (ref.repo !== undefined && ref.repo.toLowerCase() !== defaultRepo.toLowerCase())
+        ) {
+            return { ...ref, type: 'unknown' }
+        }
         const owner = ref.owner ?? defaultOwner
         const repo = ref.repo ?? defaultRepo
 

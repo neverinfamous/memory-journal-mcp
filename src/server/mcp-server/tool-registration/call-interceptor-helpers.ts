@@ -39,7 +39,7 @@ export const ALL_KNOWN_GROUP_TOOLS = new Set(Object.values(TOOL_GROUPS).flat())
 
 export interface ToolCallParams {
     name?: string
-    arguments?: Record<string, unknown>
+    arguments?: Record<string, unknown> | unknown[] | null | undefined
 }
 
 function isPlainRecord(value: unknown): value is Record<string, unknown> {
@@ -286,6 +286,8 @@ export function hasToolCallRequestShape(request: unknown): request is { params?:
     const argsOk =
         !('arguments' in params) ||
         params['arguments'] === undefined ||
+        params['arguments'] === null ||
+        Array.isArray(params['arguments']) ||
         isPlainRecord(params['arguments'])
     return nameOk && argsOk
 }

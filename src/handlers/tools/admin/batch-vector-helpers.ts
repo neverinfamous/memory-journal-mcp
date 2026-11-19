@@ -86,7 +86,7 @@ export function findWildcardProjectMismatches(
                 const isDefaultSource =
                     sourceWs?.toLowerCase() === 'default' ||
                     (sourceWs === undefined && entry?.workspaceId?.toLowerCase() === 'default')
-                if ((isWildcardSource || isDefaultSource) && rootProjectNumber !== undefined) {
+                if (rootProjectNumber !== undefined) {
                     return entry?.projectNumber !== rootProjectNumber
                 }
                 if (

@@ -16,9 +16,12 @@ function isEnoent(error: unknown): boolean {
     return typeof error === 'object' && error !== null && 'code' in error && error.code === 'ENOENT'
 }
 
-function runCommand(command: string, args: string[]): boolean {
-    const fullCommand = `${command} ${args.join(' ')}`
-    const result = spawnSync(fullCommand, { stdio: 'inherit', shell: true })
+function runNodeBin(binSegments: string[], args: string[]): boolean {
+    const binPath = resolve(process.cwd(), ...binSegments)
+    const result = spawnSync(process.execPath, [binPath, ...args], {
+        stdio: 'inherit',
+        shell: false,
+    })
     return result.status === 0
 }
 
@@ -118,6 +121,20 @@ function hasLintableSkillFiles(dir = 'skills'): boolean {
     return false
 }
 
+function runFullSuiteFollowupChecks(): boolean {
+    console.log('Running code-map generation...')
+    const codeMapPassed = runNodeBin(
+        ['node_modules', 'tsx', 'dist', 'cli.mjs'],
+        ['scripts/update-code-map.ts']
+    )
+    console.log('Running workspace isolation check...')
+    const unassignedPassed = runNodeBin(
+        ['node_modules', 'tsx', 'dist', 'cli.mjs'],
+        ['scripts/check-unassigned-entries.ts']
+    )
+    return codeMapPassed && unassignedPassed
+}
+
 function runChecksMain(): void {
     const target = process.argv[2] // 'lint', 'typecheck', or undefined for all
     if (target !== undefined && target !== 'lint' && target !== 'typecheck') {
@@ -147,7 +164,7 @@ function runChecksMain(): void {
     if (!target || target === 'lint') {
         console.log('Running lint...')
         const lintDirs = ['src/', 'tests/', 'scripts/', ...(hasLintableSkillFiles() ? ['skills/'] : [])]
-        const passed = runCommand('pnpm', ['exec', 'eslint', ...lintDirs])
+        const passed = runNodeBin(['node_modules', 'eslint', 'bin', 'eslint.js'], lintDirs)
         console.log('Checking file lengths (<= 500 lines)...')
         const lengthsPassed = checkFileLengths()
         lintOk = passed && lengthsPassed
@@ -157,26 +174,17 @@ function runChecksMain(): void {
     if (!target || target === 'typecheck') {
         console.log('Running typecheck...')
         const passed =
-            runCommand('pnpm', ['exec', 'tsc', '--noEmit']) &&
-            runCommand('pnpm', ['exec', 'tsc', '-p', 'tsconfig.scripts.json', '--noEmit'])
+            runNodeBin(['node_modules', 'typescript', 'bin', 'tsc'], ['--noEmit']) &&
+            runNodeBin(
+                ['node_modules', 'typescript', 'bin', 'tsc'],
+                ['-p', 'tsconfig.scripts.json', '--noEmit']
+            )
         typecheckOk = passed
         if (!passed) success = false
     }
 
     if (!target) {
-        // Also run code-map if running all
-        console.log('Running code-map generation...')
-        const codeMapPassed = runCommand('pnpm', ['exec', 'tsx', 'scripts/update-code-map.ts'])
-        if (!codeMapPassed) success = false
-
-        // Run workspace isolation check
-        console.log('Running workspace isolation check...')
-        const unassignedPassed = runCommand('pnpm', [
-            'exec',
-            'tsx',
-            'scripts/check-unassigned-entries.ts',
-        ])
-        if (!unassignedPassed) success = false
+        if (!runFullSuiteFollowupChecks()) success = false
     }
 
     console.log(success ? 'Checks passed!' : 'Checks failed!')

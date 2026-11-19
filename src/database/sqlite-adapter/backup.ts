@@ -34,6 +34,7 @@ interface BackupEntry {
 export class BackupManager {
     private cachedBackupsDir: string | null = null
     private cachedBackupsDirMtimeNs = -1n
+    private cachedBackupsEntryNamesKey = ''
     private cachedBackups: BackupEntry[] | null = null
 
     constructor(private ctx: IDatabaseConnection) {}
@@ -41,6 +42,7 @@ export class BackupManager {
     private invalidateBackupsCache(): void {
         this.cachedBackups = null
         this.cachedBackupsDirMtimeNs = -1n
+        this.cachedBackupsEntryNamesKey = ''
     }
 
     async exportToFile(
@@ -105,15 +107,22 @@ export class BackupManager {
             return []
         }
 
+        const dirents = fs.readdirSync(backupsDir, { withFileTypes: true })
+        const entryNamesKey = dirents
+            .filter((d) => /\.db$/i.test(d.name) && d.isFile())
+            .map((d) => d.name)
+            .sort()
+            .join('\0')
+
         if (
             this.cachedBackups !== null &&
             this.cachedBackupsDir === backupsDir &&
-            this.cachedBackupsDirMtimeNs === dirStats.mtimeNs
+            this.cachedBackupsDirMtimeNs === dirStats.mtimeNs &&
+            this.cachedBackupsEntryNamesKey === entryNamesKey
         ) {
             return this.cachedBackups.slice()
         }
 
-        const dirents = fs.readdirSync(backupsDir, { withFileTypes: true })
         const backups: BackupEntry[] = []
 
         for (const dirent of dirents) {
@@ -125,11 +134,15 @@ export class BackupManager {
             try {
                 const stats = fs.lstatSync(filePath)
                 if (stats.isFile() && !stats.isSymbolicLink()) {
+                    const effectiveCreatedMs =
+                        stats.birthtimeMs > 0
+                            ? Math.min(stats.birthtimeMs, stats.mtimeMs)
+                            : stats.mtimeMs
                     backups.push({
                         filename,
                         path: filePath,
                         sizeBytes: stats.size,
-                        createdAt: stats.birthtime.toISOString(),
+                        createdAt: new Date(effectiveCreatedMs).toISOString(),
                     })
                 }
             } catch (error: unknown) {
@@ -145,6 +158,7 @@ export class BackupManager {
         backups.sort((a, b) => (b.createdAt > a.createdAt ? 1 : b.createdAt < a.createdAt ? -1 : 0))
         this.cachedBackupsDir = backupsDir
         this.cachedBackupsDirMtimeNs = dirStats.mtimeNs
+        this.cachedBackupsEntryNamesKey = entryNamesKey
         this.cachedBackups = backups
         return backups.slice()
     }

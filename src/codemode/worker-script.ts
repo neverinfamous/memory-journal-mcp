@@ -11,6 +11,8 @@ import * as vm from 'node:vm'
 import type { MessagePort } from 'node:worker_threads'
 import type { RpcRequest, RpcResponse, SandboxResult, ExecutionMetrics } from './types.js'
 import { transformAutoReturn } from './auto-return.js'
+import { validateSandboxCode } from './security.js'
+import { DEFAULT_SECURITY_CONFIG } from './types.js'
 import { readProjectRegistryPayload, setActiveProjectRegistry } from './normalizers/generic-field-aliases.js'
 import { buildApiProxy } from './worker-api-proxy.js'
 import { hardenOuterFunctionPrototypes, freezeInnerVmContext } from './worker/prototype-hardening.js'
@@ -229,6 +231,19 @@ async function executeCode(
             activeTimers,
         })
         const transformed = transformAutoReturn(code)
+        if (transformed !== code) {
+            const postValidation = validateSandboxCode(transformed, {
+                ...DEFAULT_SECURITY_CONFIG,
+                maxCodeLength: DEFAULT_SECURITY_CONFIG.maxCodeLength + 32,
+            })
+            if (!postValidation.valid) {
+                return {
+                    success: false,
+                    error: postValidation.errors.join('; '),
+                    metrics: { wallTimeMs: 0, cpuTimeMs: 0, memoryUsedMb: 0 },
+                }
+            }
+        }
         const script = getOrCompileVmScript(`(async () => {\n${transformed}\n})()`)
         const resultPromise = script.runInContext(context, { timeout: timeoutMs }) as Promise<unknown>
         const result = await resultPromise

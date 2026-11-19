@@ -5,6 +5,31 @@
 
 const SENSITIVE_STRING_CONTENT = /^(?:constructor|__proto__|prototype)$/i
 
+function scanIdentifierWord(code: string, start: number): { word: string; next: number } {
+    let word = ''
+    let j = start
+    while (j < code.length) {
+        const nextCh = code[j]
+        if (nextCh === '\\' && code[j + 1] === 'u') {
+            const dec = decodeEscapeAt(code, j, false)
+            word += dec.ch
+            j = dec.next
+            continue
+        }
+        const cp = code.codePointAt(j)
+        if (cp === undefined) break
+        const ch = String.fromCodePoint(cp)
+        const isIdent =
+            /[A-Za-z0-9_$]/.test(ch) || (cp > 0x7f && /[\p{ID_Continue}$_]/u.test(ch))
+        if (!isIdent) break
+        word += ch
+        j += ch.length
+    }
+    return { word: word.normalize('NFKC'), next: j }
+}
+
+export { scanIdentifierWord }
+
 function decodeUnicodeEscape(
     code: string,
     slashIdx: number
@@ -180,6 +205,7 @@ const BLOCK_PRECEDING_TOKENS = new Set([
     'else',
     'do',
     'try',
+    'catch',
     'finally',
 ])
 
@@ -228,29 +254,12 @@ export function skipLineOrBlockComment(
     return null
 }
 
-function scanIdentifierWord(code: string, start: number): { word: string; next: number } {
-    let word = ''
-    let j = start
-    while (j < code.length) {
-        const nextCh = code[j]
-        if (nextCh === '\\' && code[j + 1] === 'u') {
-            const dec = decodeEscapeAt(code, j, false)
-            word += dec.ch
-            j = dec.next
-            continue
-        }
-        if (nextCh === undefined || !/[A-Za-z0-9_$]/.test(nextCh)) break
-        word += nextCh
-        j++
-    }
-    return { word, next: j }
-}
-
 export interface DelimiterState {
     templateBraces: number[]
     parenCtrl: boolean[]
     braceBlock: boolean[]
     awaitingForParen: boolean
+    awaitingClassBody: boolean
 }
 
 export function createDelimiterState(): DelimiterState {
@@ -259,11 +268,17 @@ export function createDelimiterState(): DelimiterState {
         parenCtrl: [],
         braceBlock: [],
         awaitingForParen: false,
+        awaitingClassBody: false,
     }
 }
 
 export function trackIdentifierToken(word: string, prevToken: string, state: DelimiterState): string {
     state.awaitingForParen = prevToken === 'for' && word === 'await'
+    if (word === 'class') {
+        state.awaitingClassBody = true
+    } else if (word === 'catch' || word === 'finally' || word === 'try' || word === 'else') {
+        state.awaitingClassBody = false
+    }
     return word
 }
 
@@ -282,8 +297,10 @@ export function trackPunctuationToken(ch: string, prevToken: string, state: Deli
             state.templateBraces[topIdx] = top + 1
         }
         const isBlock =
-            BLOCK_PRECEDING_TOKENS.has(prevToken) &&
-            (prevToken !== '{' || state.braceBlock.at(-1) === true)
+            state.awaitingClassBody ||
+            (BLOCK_PRECEDING_TOKENS.has(prevToken) &&
+                (prevToken !== '{' || state.braceBlock.at(-1) === true))
+        state.awaitingClassBody = false
         state.braceBlock.push(isBlock)
         return '{'
     }
@@ -295,6 +312,7 @@ export function trackPunctuationToken(ch: string, prevToken: string, state: Deli
         }
         return state.braceBlock.pop() === true ? '}block' : '}expr'
     }
+    if (ch === ';') state.awaitingClassBody = false
     state.awaitingForParen = false
     return ch
 }
@@ -305,17 +323,12 @@ export function trackPunctuationToken(ch: string, prevToken: string, state: Deli
  * sensitive prototype property strings, and regex literal boundaries.
  */
 export function stripCommentsAndStrings(rawCode: string): string {
-    const code = rawCode.normalize('NFKC')
+    const code = rawCode
     const len = code.length
     let out = ''
     let i = 0
     let lastNonWsToken = ''
-    const state: DelimiterState = {
-        templateBraces: [],
-        parenCtrl: [],
-        braceBlock: [],
-        awaitingForParen: false,
-    }
+    const state = createDelimiterState()
 
     while (i < len) {
         const ch = code[i] ?? ''
@@ -336,7 +349,7 @@ export function stripCommentsAndStrings(rawCode: string): string {
         if (ch === '"' || ch === "'") {
             const scanned = scanQuotedLiteral(code, i + 1, ch)
             i = scanned.next
-            const trimmed = scanned.content.trim()
+            const trimmed = scanned.content.trim().normalize('NFKC')
             out += SENSITIVE_STRING_CONTENT.test(trimmed) ? `${ch}${trimmed}${ch}` : `${ch}${ch}`
             lastNonWsToken = ch
             continue
@@ -357,10 +370,14 @@ export function stripCommentsAndStrings(rawCode: string): string {
             i += 2
             continue
         }
-        if (/[A-Za-z0-9_$]/.test(ch) || (ch === '\\' && next === 'u')) {
+        const cp = code.codePointAt(i)
+        if (
+            /[A-Za-z0-9_$]/.test(ch) ||
+            (ch === '\\' && next === 'u') ||
+            (cp !== undefined && cp > 0x7f && /[\p{ID_Start}\p{ID_Continue}$_]/u.test(String.fromCodePoint(cp)))
+        ) {
             const ident = scanIdentifierWord(code, i)
-            state.awaitingForParen = lastNonWsToken === 'for' && ident.word === 'await'
-            lastNonWsToken = ident.word
+            lastNonWsToken = trackIdentifierToken(ident.word, lastNonWsToken, state)
             out += ident.word
             i = ident.next
             continue

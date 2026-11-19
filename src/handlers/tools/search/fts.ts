@@ -8,6 +8,7 @@
 import type { IDatabaseAdapter } from '../../../database/core/interfaces.js'
 import type { EntryType, ToolHandlerConfig } from '../../../types/index.js'
 import { canReadTeamEntriesRbac } from '../team/rbac.js'
+import { sanitizeAuthor } from '../../../utils/security-utils.js'
 import {
     calcPerDbLimit,
     canAccessTeamSilently,
@@ -186,7 +187,13 @@ function mergeFtsStoreResults(
 ): FtsSearchResponse {
     const merged = mergeAndDedup(
         personalResult.entries.map((e) => ({ ...e, source: 'personal' as const })),
-        teamResult.entries.map((e) => ({ ...e, source: 'team' as const })),
+        teamResult.entries.map((e) => ({
+            ...e,
+            ...('author' in e && typeof e.author === 'string'
+                ? { author: sanitizeAuthor(e.author) }
+                : {}),
+            source: 'team' as const,
+        })),
         options.limit,
         options.sortBy === 'blended' ? 'preserve' : options.sortBy,
         teamDb

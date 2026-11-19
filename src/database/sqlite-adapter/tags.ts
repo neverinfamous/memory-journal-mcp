@@ -24,7 +24,7 @@ export function expandTagFilterValues(tags: readonly string[]): string[] {
         const lower = raw.trim().toLowerCase()
         if (lower === '') continue
         expanded.add(lower)
-        const forward = TAG_ALIASES[lower]
+        const forward = Object.hasOwn(TAG_ALIASES, lower) ? TAG_ALIASES[lower] : undefined
         if (forward !== undefined) {
             const canonical = forward.toLowerCase()
             expanded.add(canonical)

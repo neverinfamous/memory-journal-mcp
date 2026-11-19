@@ -69,11 +69,19 @@ export class ConfigResolver {
             }
             try {
                 const content = fs.readFileSync(filePath, 'utf-8')
-                if (filePath.endsWith('.yaml') || filePath.endsWith('.yml')) {
-                    this.configFileOptions = (parseYaml(content) as Record<string, unknown>) ?? {}
-                } else {
-                    this.configFileOptions = (JSON.parse(content) as Record<string, unknown>) ?? {}
+                const parsed: unknown = /\.ya?ml$/i.test(filePath)
+                    ? parseYaml(content)
+                    : JSON.parse(content)
+                if (
+                    parsed !== null &&
+                    parsed !== undefined &&
+                    (typeof parsed !== 'object' || Array.isArray(parsed))
+                ) {
+                    throw new ConfigurationError(
+                        `Configuration file ${filePath} must contain a top-level YAML/JSON object`
+                    )
                 }
+                this.configFileOptions = (parsed as Record<string, unknown> | null | undefined) ?? {}
                 this.loadedConfigPath = filePath
                 logger.info('Loaded configuration from file', {
                     module: 'ConfigResolver',
@@ -126,7 +134,10 @@ export class ConfigResolver {
                 source = 'env'
             }
             // 3. Config File
-            else if (this.configFileOptions[cliKey] !== undefined) {
+            else if (
+                Object.hasOwn(this.configFileOptions, cliKey) &&
+                this.configFileOptions[cliKey] !== undefined
+            ) {
                 value = this.configFileOptions[cliKey]
                 source = 'config'
             }

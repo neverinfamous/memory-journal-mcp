@@ -79,11 +79,14 @@ function isRestrictedIpv6(groups: readonly number[]): boolean {
     if (g0 === 0 && g1 === 0 && g2 === 0 && g3 === 0 && g4 === 0 && g5 === 0 && (g6 === 0 && (g7 === 0 || g7 === 1))) {
         return true
     }
-    if ((g0 & 0xfe00) === 0xfc00 || (g0 & 0xffc0) === 0xfe80 || (g0 & 0xff00) === 0xff00) {
+    if ((g0 & 0xfe00) === 0xfc00 || (g0 & 0xffc0) === 0xfe80 || (g0 & 0xffc0) === 0xfec0 || (g0 & 0xff00) === 0xff00) {
         return true
     }
+    if (g0 === 0x0100 && g1 === 0 && g2 === 0 && g3 === 0) return true
     if (g0 === 0x0064 && g1 === 0xff9b) return true
     if (g0 === 0x2001 && g1 === 0x0000) return true
+    if (g0 === 0x2001 && g1 === 0x0002 && g2 === 0) return true
+    if (g0 === 0x2001 && ((g1 & 0xfff0) === 0x0010 || (g1 & 0xfff0) === 0x0020)) return true
     if (g0 === 0x2002) return isRestrictedIpv4(wordsToIpv4(g1, g2))
     if (g0 === 0 && g1 === 0 && g2 === 0 && g3 === 0 && g4 === 0 && g5 === 0xffff) {
         return isRestrictedIpv4(wordsToIpv4(g6, g7))

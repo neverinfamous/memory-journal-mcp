@@ -165,6 +165,8 @@ export function buildSandboxGlobals(
         globalThis: shimMj,
         Proxy: undefined,
         Reflect: undefined,
+        SharedArrayBuffer: undefined,
+        FinalizationRegistry: undefined,
     }
 
     exposeApiMethodsOnSandbox(sandbox, mjApi)

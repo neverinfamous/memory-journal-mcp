@@ -4,6 +4,7 @@
 
 import type { ToolContext } from '../../../types/index.js'
 import { logger } from '../../../utils/logger.js'
+import { resolveGithubHost } from '../../../utils/github-helpers.js'
 import { activeProjectRegistry } from '../../../utils/write-scope.js'
 import { cwdMatchesRegistryPath } from '../../../utils/workspace-registry-match.js'
 import { parsePositiveProjectNumber } from '../../../utils/safe-positive-int.js'
@@ -21,12 +22,6 @@ function isPathOutsideCwd(
 
 function isDefaultWs(value: unknown): boolean {
     return typeof value === 'string' && value.trim().toLowerCase() === 'default'
-}
-
-function resolveGithubHost(): string {
-    const raw = process.env['GITHUB_HOST']?.trim()
-    if (raw === undefined || raw === '') return 'github.com'
-    return raw.replace(/^https?:\/\//i, '').replace(/\/+$/, '') || 'github.com'
 }
 
 function matchesRepoSlug(candidate: string, owner: string, repo: string): boolean {

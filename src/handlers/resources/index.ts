@@ -28,7 +28,7 @@ import { getInsightResourceDefinitions } from './insights.js'
 import { getStalenessResourceDefinitions } from './staleness.js'
 import { getToolsCatalogResourceDefinitions } from './tools-catalog.js'
 import { getBaseUri, type InternalResourceDef, type ResourceResult } from './shared.js'
-import { ResourceNotFoundError } from '../../types/errors.js'
+import { ResourceNotFoundError, ValidationError } from '../../types/errors.js'
 import { getAuditResourceDef } from '../../audit/index.js'
 
 const templateRegexCache = new Map<string, RegExp>()
@@ -94,6 +94,9 @@ export async function readResource(
     briefingConfig?: BriefingConfig,
     runtime?: ServerRuntime
 ): Promise<{ data: unknown; annotations?: { lastModified?: string } }> {
+    if (Buffer.byteLength(uri, 'utf8') > 8192) {
+        throw new ValidationError('Resource URI exceeds maximum length of 8192 bytes')
+    }
     const resources = getAllResourceDefinitions(runtime)
     const context = {
         db,

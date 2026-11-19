@@ -272,7 +272,10 @@ async function runSandboxWithAutonomousRecovery(opts: RecoveryRunOptions): Promi
             logger.warning('CODEMODE_RECOVERY_REJECTED', { errors: retryValidation.errors })
             return
         }
-        logger.info('CODEMODE_AUTONOMOUS_RECOVERY', { originalError: execResult.error, recoveredCode })
+        logger.info('CODEMODE_AUTONOMOUS_RECOVERY', {
+            originalError: execResult.error,
+            recoveredBytes: Buffer.byteLength(recoveredCode, 'utf-8'),
+        })
         await runSandbox(recoveredCode)
     })
     return execResult

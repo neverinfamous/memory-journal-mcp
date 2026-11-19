@@ -9,6 +9,7 @@ import type { ToolDefinition, ToolContext } from '../../../types/index.js'
 import { formatHandlerError } from '../../../utils/error-helpers.js'
 import { sendProgress } from '../../../utils/progress-utils.js'
 import { resolveTeamCreateAuthor } from './admin-tools/batch-create-helpers.js'
+import { sanitizeAuthor } from '../../../utils/security-utils.js'
 import { resolveIssueUrl } from '../../../utils/github-helpers.js'
 import { resolveEntryAnchors } from '../core/staleness-tools.js'
 import { autoIndexEntry } from '../../../utils/vector-index-helpers.js'
@@ -183,10 +184,11 @@ async function executeTeamCreateEntry(
             : []),
         ...relationshipWarnings,
     ]
+    const safeAuthor = sanitizeAuthor(author)
     return {
         success: true,
-        entry: { ...entry, author },
-        author,
+        entry: { ...entry, author: safeAuthor },
+        author: safeAuthor,
         vectorIndex: indexStatus,
         ...(warnings.length > 0 ? { warning: warnings.join('; ') } : {}),
         ...(relationshipWarnings.length > 0 ? { relationshipWarnings } : {}),

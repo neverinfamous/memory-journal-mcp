@@ -60,7 +60,7 @@ export const TeamCreateEntrySchema = z.preprocess(
             workflow_run_id: z.number().int().positive().optional(),
             workflow_name: z.string().optional(),
             workflow_status: z.enum(['queued', 'in_progress', 'completed']).optional(),
-            author: z.string().optional(),
+            author: z.string().max(100).optional(),
             auto_context: z.string().optional(),
             impact_score: z.number().min(0).max(1).optional(),
             trust_score: z.number().min(0).max(1).optional(),

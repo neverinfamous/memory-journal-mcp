@@ -6,12 +6,13 @@
  * and applying scope filters during audit searches.
  */
 
-import { open, rename, stat } from 'node:fs/promises'
+import { chmod, open, rename, stat } from 'node:fs/promises'
 import type { RequestContext } from '../utils/request-context.js'
+import { getActiveSessionProject } from '../utils/workspace-resolver.js'
 import { estimateTokens } from '../observability/token-estimator.js'
 import { logger } from '../utils/logger.js'
 import { parseCanonicalPositiveInt, parsePositiveProjectNumber } from '../utils/safe-positive-int.js'
-import { TEAM_PROMPT_NAMES } from '../auth/scope-map.js'
+import { ADMIN_PROMPT_NAMES, TEAM_PROMPT_NAMES } from '../auth/scope-map.js'
 import type { AuditCategory, AuditEntry, AuditSearchFilters } from './types.js'
 
 export interface AuditScopeMetadata {
@@ -23,11 +24,6 @@ const SENSITIVE_AUDIT_URI_RE =
     /^memory:\/\/(?:team|audit|metrics\/users|insights\/team-collaboration)(?:\/|$|\?|#)/i
 const SCHEMELESS_SENSITIVE_PATH_RE =
     /^(?:team|audit|metrics\/users|insights\/team-collaboration)(?:\/|$|\?|#)/i
-
-const ADMIN_PROMPT_NAMES = new Set([
-    'project-setup', 'optimize-journal', 'cms-rem-supervisor',
-    'project_setup', 'optimize_journal', 'cms_rem_supervisor',
-])
 
 const AUDIT_URI_KEYS = [
     'uri', 'Uri', '_uri', 'resourceUri', 'resource_uri', 'url', 'Url', 'resource',
@@ -164,6 +160,23 @@ export function resolveResourceAuditCategory(uriOrName: string): AuditCategory {
     return 'read'
 }
 
+function applyActiveSessionScopeFallback(
+    scope: AuditScopeMetadata,
+    reqCtx?: RequestContext
+): AuditScopeMetadata {
+    const sessionProj = reqCtx?.ephemeralSessionProject ?? getActiveSessionProject()
+    const workspaceId =
+        scope.workspaceId ??
+        (sessionProj.workspaceId !== undefined && sessionProj.workspaceId.length > 0
+            ? sessionProj.workspaceId
+            : undefined)
+    const projectNumber = scope.projectNumber ?? sessionProj.projectNumber
+    return {
+        ...(workspaceId !== undefined ? { workspaceId } : {}),
+        ...(projectNumber !== undefined ? { projectNumber } : {}),
+    }
+}
+
 /** Extract optional workspaceId / projectNumber from tool arguments and active request context. */
 export function extractAuditScopeFromArgs(
     args: unknown,
@@ -183,17 +196,13 @@ export function extractAuditScopeFromArgs(
         if (parsedProject !== undefined) projectNumber = parsedProject
     }
 
-    if (workspaceId === undefined && reqCtx?.ephemeralSessionProject?.workspaceId) {
-        workspaceId = reqCtx.ephemeralSessionProject.workspaceId
-    }
-    if (projectNumber === undefined && reqCtx?.ephemeralSessionProject?.projectNumber !== undefined) {
-        projectNumber = reqCtx.ephemeralSessionProject.projectNumber
-    }
-
-    return {
-        ...(workspaceId !== undefined ? { workspaceId } : {}),
-        ...(projectNumber !== undefined ? { projectNumber } : {}),
-    }
+    return applyActiveSessionScopeFallback(
+        {
+            ...(workspaceId !== undefined ? { workspaceId } : {}),
+            ...(projectNumber !== undefined ? { projectNumber } : {}),
+        },
+        reqCtx
+    )
 }
 
 /** Extract optional workspace_id / project_number query params or URI path repo from a memory:// URI. */
@@ -225,17 +234,13 @@ export function extractAuditScopeFromUri(
         // Ignore malformed URI strings during audit extraction
     }
 
-    if (workspaceId === undefined && reqCtx?.ephemeralSessionProject?.workspaceId) {
-        workspaceId = reqCtx.ephemeralSessionProject.workspaceId
-    }
-    if (projectNumber === undefined && reqCtx?.ephemeralSessionProject?.projectNumber !== undefined) {
-        projectNumber = reqCtx.ephemeralSessionProject.projectNumber
-    }
-
-    return {
-        ...(workspaceId !== undefined ? { workspaceId } : {}),
-        ...(projectNumber !== undefined ? { projectNumber } : {}),
-    }
+    return applyActiveSessionScopeFallback(
+        {
+            ...(workspaceId !== undefined ? { workspaceId } : {}),
+            ...(projectNumber !== undefined ? { projectNumber } : {}),
+        },
+        reqCtx
+    )
 }
 
 const AUDIT_SEARCH_CHUNK_BYTES = 65_536
@@ -281,7 +286,7 @@ export async function searchAuditFileBackward(
     } catch (err: unknown) {
         const code =
             typeof err === 'object' && err !== null && 'code' in err ? err.code : undefined
-        if (code === 'ENOENT') return { skippedLines: 0, limitReached: false }
+        if (code === 'ENOENT' || code === 'EISDIR') return { skippedLines: 0, limitReached: false }
         throw err
     }
 
@@ -429,6 +434,7 @@ export async function rotateAuditLogFiles(
         }
 
         await rename(logPath, `${logPath}.1`)
+        await chmod(`${logPath}.1`, 0o600).catch(() => undefined)
         return 0
     } catch (err) {
         const message = err instanceof Error ? err.message : String(err)

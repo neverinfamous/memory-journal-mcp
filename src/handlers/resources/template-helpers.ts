@@ -141,43 +141,51 @@ export function fenceEnrichedCommits(commits: EnrichedCommit[]): EnrichedCommit[
 }
 
 export function groupCommitsByIssue(enrichedCommits: EnrichedCommit[]): IssueGroup[] {
-    const issues: Record<number, IssueGroup> = {}
+    const issues = new Map<number, IssueGroup>()
     for (const commit of enrichedCommits) {
         for (const ref of commit.references) {
             if (ref.type !== 'issue') continue
-            issues[ref.number] ??= {
-                number: ref.number,
-                ...(ref.title !== undefined ? { title: fenceUntrustedInline(ref.title) } : {}),
-                ...(ref.state !== undefined ? { state: fenceUntrustedInline(ref.state) } : {}),
-                ...(ref.milestone !== undefined
-                    ? {
-                          milestone: {
-                              ...ref.milestone,
-                              title: fenceUntrustedInline(ref.milestone.title),
-                          },
-                      }
-                    : {}),
-                commits: [],
+            let group = issues.get(ref.number)
+            if (group === undefined) {
+                group = {
+                    number: ref.number,
+                    ...(ref.title !== undefined ? { title: fenceUntrustedInline(ref.title) } : {}),
+                    ...(ref.state !== undefined ? { state: fenceUntrustedInline(ref.state) } : {}),
+                    ...(ref.milestone !== undefined
+                        ? {
+                              milestone: {
+                                  ...ref.milestone,
+                                  title: fenceUntrustedInline(ref.milestone.title),
+                              },
+                          }
+                        : {}),
+                    commits: [],
+                }
+                issues.set(ref.number, group)
             }
-            issues[ref.number]?.commits.push(toCommitSummary(commit))
+            group.commits.push(toCommitSummary(commit))
         }
     }
-    return Object.values(issues)
+    return Array.from(issues.values())
 }
 
 export function groupCommitsByPr(enrichedCommits: EnrichedCommit[]): PrGroup[] {
-    const prs: Record<number, PrGroup> = {}
+    const prs = new Map<number, PrGroup>()
     for (const commit of enrichedCommits) {
         for (const ref of commit.references) {
             if (ref.type !== 'pull_request') continue
-            prs[ref.number] ??= {
-                number: ref.number,
-                ...(ref.title !== undefined ? { title: fenceUntrustedInline(ref.title) } : {}),
-                ...(ref.state !== undefined ? { state: fenceUntrustedInline(ref.state) } : {}),
-                commits: [],
+            let group = prs.get(ref.number)
+            if (group === undefined) {
+                group = {
+                    number: ref.number,
+                    ...(ref.title !== undefined ? { title: fenceUntrustedInline(ref.title) } : {}),
+                    ...(ref.state !== undefined ? { state: fenceUntrustedInline(ref.state) } : {}),
+                    commits: [],
+                }
+                prs.set(ref.number, group)
             }
-            prs[ref.number]?.commits.push(toCommitSummary(commit))
+            group.commits.push(toCommitSummary(commit))
         }
     }
-    return Object.values(prs)
+    return Array.from(prs.values())
 }

@@ -3,6 +3,7 @@ import { PermissionError } from '../../../types/errors.js'
 import { resolveWorkspaceId } from '../../../utils/workspace-resolver.js'
 import { activeProjectRegistry, alignedProjectFilter } from '../../../utils/write-scope.js'
 import { formatHandlerError } from '../../../utils/error-helpers.js'
+import { sanitizeAuthor } from '../../../utils/security-utils.js'
 import { calcPerDbLimit, isTeamDbReady, mergeAndDedup, resolveAuthorizedIncludeTeam } from './helpers.js'
 import { SearchByDateRangeSchema, SearchByDateRangeSchemaMcp } from './schemas.js'
 import { EntriesListOutputSchema } from '../schemas.js'
@@ -68,7 +69,13 @@ async function queryTeamDateRangeAndMerge(
           })
     const merged = mergeAndDedup(
         personalEntries.entries.map((e) => ({ ...e, source: 'personal' as const })),
-        teamEntries.entries.map((e) => ({ ...e, source: 'team' as const })),
+        teamEntries.entries.map((e) => ({
+            ...e,
+            ...('author' in e && typeof e.author === 'string'
+                ? { author: sanitizeAuthor(e.author) }
+                : {}),
+            source: 'team' as const,
+        })),
         input.limit,
         input.sort_by,
         teamDb

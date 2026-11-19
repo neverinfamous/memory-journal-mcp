@@ -5,6 +5,7 @@ import { enforceAccessBoundary } from '../../../auth/validation.js'
 import { sendProgress, type ProgressContext } from '../../../utils/progress-utils.js'
 import { resolveAuthenticatedAuthor } from '../../../utils/security-utils.js'
 import { canonicalizeTeamAuthor, enforceTeamRbac } from '../team/rbac.js'
+import { isDummyToolAllowedByFilter } from '../dummy-filter-helpers.js'
 import type { CreateEntrySchema } from './schemas.js'
 
 type CreateEntryParams = z.infer<typeof CreateEntrySchema>
@@ -155,6 +156,25 @@ export function tryResolveEntryResourceUri(
     const uri = obj['uri'].trim()
     if (!uri.startsWith('memory://') || /^memory:\/\/(?:entries|entry)\/\d+$/i.test(uri)) {
         return undefined
+    }
+    if (
+        context.config?.filterConfig !== undefined &&
+        context.config.filterConfig !== null &&
+        !isDummyToolAllowedByFilter(
+            'read_resource',
+            context.config.filterConfig,
+            true,
+            context.config.codemodeInternalFullAccess === true
+        )
+    ) {
+        return Promise.resolve({
+            success: false,
+            error: "Tool 'read_resource' is disabled by the active --tool-filter configuration.",
+            code: 'TOOL_DISABLED',
+            category: 'authorization',
+            suggestion: 'Update the active tool filter or use an enabled tool.',
+            recoverable: false,
+        })
     }
     return (async (): Promise<unknown> => {
         try {

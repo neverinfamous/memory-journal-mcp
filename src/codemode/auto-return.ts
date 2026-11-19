@@ -17,6 +17,7 @@ import {
     findNextJsLineTerminator,
     skipRegexLiteralBody,
     canStartRegexLiteral,
+    scanIdentifierWord,
     trackIdentifierToken,
     trackPunctuationToken,
     createDelimiterState,
@@ -85,14 +86,17 @@ function findLastStatementBoundary(trimmed: string): number {
         } else if (ch === '/' && trimmed[i + 1] !== '/' && trimmed[i + 1] !== '*' && canStartRegexLiteral(prevToken)) {
             i = skipRegexLiteralBody(trimmed, i + 1) - 1
             prevToken = '/'
-        } else if (/[A-Za-z0-9_$]/.test(ch)) {
-            let j = i
-            while (j < trimmed.length && /[A-Za-z0-9_$]/.test(trimmed[j] ?? '')) j++
-            prevToken = trackIdentifierToken(trimmed.slice(i, j), prevToken, state)
-            i = j - 1
-        } else if (ch === '=' && trimmed[i + 1] === '>') {
-            prevToken = '=>'
+        } else if ((ch === '+' && trimmed[i + 1] === '+') || (ch === '-' && trimmed[i + 1] === '-') || (ch === '=' && trimmed[i + 1] === '>')) {
+            prevToken = ch + (trimmed[i + 1] ?? '')
             i++
+        } else if (
+            /[A-Za-z0-9_$]/.test(ch) ||
+            (ch === '\\' && trimmed[i + 1] === 'u') ||
+            ((trimmed.codePointAt(i) ?? 0) > 0x7f && /[\p{ID_Start}\p{ID_Continue}$_]/u.test(String.fromCodePoint(trimmed.codePointAt(i) ?? 0)))
+        ) {
+            const ident = scanIdentifierWord(trimmed, i)
+            prevToken = trackIdentifierToken(ident.word, prevToken, state)
+            i = ident.next - 1
         } else {
             const closingInterp = ch === '}' && state.templateBraces.length > 0 && state.templateBraces.at(-1) === 0
             if (closingInterp) {

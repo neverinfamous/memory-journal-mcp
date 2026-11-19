@@ -2,12 +2,10 @@ import * as fs from 'node:fs'
 import * as fsPromises from 'node:fs/promises'
 import * as path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { sanitizeErrorForLogging } from './security-utils.js'
+import { SENSITIVE_KEY_RE, sanitizeErrorForLogging } from './security-utils.js'
 
-const SENSITIVE_KEY_RE =
-    /(?:token|secret|password|passphrase|authorization|webhook_?auth|webhook_?url|encryption_?key|api_?key|private_?key|^key$)/i
 const SENSITIVE_CLI_FLAG_RE =
-    /^--(?:auth-token|github-token|oauth-.*secret|key|password|secret|token)(?:=(.*))?$/i
+    /^--(?:auth-token|github-token|oauth-.*secret|encryption-key|api-key|webhook-auth|passphrase|key|password|secret|token)(?:=(.*))?$/i
 
 function sanitizeCliArgList(
     args: unknown[],
@@ -121,6 +119,7 @@ async function drainIssueQueue(): Promise<void> {
         }
         const logFile = path.join(logsDir, 'agent-issues.jsonl')
         await fsPromises.appendFile(logFile, batch, { encoding: 'utf8', mode: 0o600 })
+        await fsPromises.chmod(logFile, 0o600).catch(() => undefined)
     } catch (e) {
         // Fail silently so we don't crash the main process if logging fails
         console.error('Failed to write to agent-issues.jsonl:', e)

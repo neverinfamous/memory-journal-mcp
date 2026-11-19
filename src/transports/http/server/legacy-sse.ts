@@ -38,8 +38,8 @@ export class LegacySSEServerTransport implements Transport {
     }
 
     send(message: JSONRPCMessage): Promise<void> {
-        if (!this.res) {
-            return Promise.reject(new Error("Not connected"))
+        if (!this.res || this.res.writableEnded || this.res.destroyed) {
+            return Promise.reject(new Error('Not connected'))
         }
         // Send JSON-RPC message as SSE data
         this.res.write(`event: message\ndata: ${JSON.stringify(message)}\n\n`)
@@ -70,12 +70,22 @@ export class LegacySSEServerTransport implements Transport {
         const endpointUrl = `${this.messagesEndpoint}?sessionId=${this.sessionId}`
         res.write(`event: endpoint\ndata: ${endpointUrl}\n\n`)
 
-        // Keep the connection alive
-        req.on('close', () => {
-            this.close().catch((err: unknown) => {
-                logger.error('Error closing Legacy SSE transport', { error: String(err) })
+        const onStreamAbort = (err?: Error): void => {
+            if (err !== undefined) {
+                this.onerror?.(err)
+            }
+            this.close().catch((closeErr: unknown) => {
+                logger.error('Error closing Legacy SSE transport', { error: String(closeErr) })
             })
-        })
+        }
+        if (typeof req.on === 'function') {
+            req.on('close', () => onStreamAbort())
+            req.on('error', onStreamAbort)
+        }
+        if (typeof res.on === 'function') {
+            res.on('close', () => onStreamAbort())
+            res.on('error', onStreamAbort)
+        }
     }
 
     /**

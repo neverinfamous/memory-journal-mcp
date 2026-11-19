@@ -17,14 +17,13 @@
  * propagate to tool callers.
  */
 
-import { appendFile, mkdir, open } from 'node:fs/promises'
+import { appendFile, chmod, mkdir } from 'node:fs/promises'
 import { dirname } from 'node:path'
 import type { AuditConfig, AuditEntry, AuditSearchFilters } from './types.js'
 import { logger } from '../utils/logger.js'
 import { getRequestContext } from '../utils/request-context.js'
 import {
     nodeErrorCode,
-    parseAuditLine,
     rotateAuditLogFiles,
     searchAuditFileBackward,
 } from './audit-query-helpers.js'
@@ -45,13 +44,6 @@ const DEFAULT_RECENT_COUNT = 50
 /** Special logPath value that routes audit output to stderr */
 const STDERR_SENTINEL = 'stderr'
 
-/**
- * Maximum bytes to read from the end of the audit log for `recent()`.
- * 64 KB is enough for ~100+ typical JSONL audit entries (~500 bytes each).
- * Files smaller than this are read in full; larger files only read the tail.
- */
-const TAIL_READ_BYTES = 65_536
-
 /** Default number of archives to keep */
 const MAX_ARCHIVES = 5
 
@@ -68,6 +60,7 @@ export class AuditLogger {
     private closed = false
     private flushError: Error | null = null
     private dirEnsured = false
+    private fileModeEnsured = false
     private readonly stderrMode: boolean
     private approxSizeBytes: number | null = null
 
@@ -121,6 +114,7 @@ export class AuditLogger {
             serialized = JSON.stringify({
                 timestamp: entry.timestamp,
                 requestId: entry.requestId,
+                ...(entry.sessionId !== undefined ? { sessionId: entry.sessionId } : {}),
                 tool: entry.tool,
                 category: entry.category,
                 scope: entry.scope,
@@ -128,6 +122,8 @@ export class AuditLogger {
                 scopes: entry.scopes,
                 durationMs: entry.durationMs,
                 tokenEstimate: entry.tokenEstimate,
+                ...(entry.workspaceId !== undefined ? { workspaceId: entry.workspaceId } : {}),
+                ...(entry.projectNumber !== undefined ? { projectNumber: entry.projectNumber } : {}),
                 success: entry.success,
                 ...(entry.error !== undefined ? { error: entry.error } : {}),
                 args: { _serializationError: 'Audit args could not be JSON serialized' },
@@ -216,6 +212,10 @@ export class AuditLogger {
                             encoding: 'utf-8',
                             mode: 0o600,
                         })
+                        if (!this.fileModeEnsured) {
+                            await chmod(this.config.logPath, 0o600).catch(() => undefined)
+                            this.fileModeEnsured = true
+                        }
                         if (this.approxSizeBytes !== null) {
                             this.approxSizeBytes += Buffer.byteLength(payload, 'utf-8')
                         }
@@ -278,69 +278,26 @@ export class AuditLogger {
      */
     async recent(count: number = DEFAULT_RECENT_COUNT): Promise<AuditEntry[]> {
         // Stderr mode has no file to read from
-        if (this.stderrMode) return []
+        if (this.stderrMode || count <= 0) return []
 
         // Force flush buffered entries to ensure the read includes up-to-the-millisecond events
         await this.flush()
 
         try {
-            // Open directly — avoids TOCTOU race between stat() and open()
-            let fh: Awaited<ReturnType<typeof open>>
-            try {
-                fh = await open(this.config.logPath, 'r')
-            } catch (openErr) {
-                const code = nodeErrorCode(openErr)
-                if (code === 'ENOENT' || code === 'EISDIR') return []
-                logger.warning('Failed to open audit log file for reading', {
-                    module: 'AuditLogger',
+            const results: AuditEntry[] = []
+            const { skippedLines } = await searchAuditFileBackward(
+                this.config.logPath,
+                {},
+                count,
+                results
+            )
+            if (skippedLines > 0) {
+                logger.debug(`Skipped ${String(skippedLines)} unparseable audit log line(s)`, {
+                    module: 'Audit',
                     logPath: this.config.logPath,
-                    error: openErr instanceof Error ? openErr.message : String(openErr),
                 })
-                throw openErr
             }
-
-            try {
-                // stat after open — file is guaranteed to exist since we hold the FD
-                const info = await fh.stat()
-                if (info.isDirectory()) return []
-                const fileSize = info.size
-                if (fileSize === 0) return []
-
-                // Read only the tail of the file — avoids loading entire log into memory
-                const readSize = Math.min(fileSize, TAIL_READ_BYTES)
-                const startOffset = fileSize - readSize
-
-                const buf = Buffer.alloc(readSize)
-                await fh.read(buf, 0, readSize, startOffset)
-                const chunk = buf.toString('utf-8')
-
-                // Split into lines: if we started mid-file, discard the first
-                // (likely partial) line
-                const rawLines = chunk.split('\n').filter(Boolean)
-                const lines = startOffset > 0 ? rawLines.slice(1) : rawLines
-                const tail = lines.slice(-count)
-
-                let skippedLines = 0
-                const parsed = tail.reduce<AuditEntry[]>((acc, line) => {
-                    const entry = parseAuditLine(line)
-                    if (entry === null) {
-                        // Corrupted, partial, or malformed log entries are skipped (counted below)
-                        skippedLines++
-                    } else {
-                        acc.push(entry)
-                    }
-                    return acc
-                }, [])
-                if (skippedLines > 0) {
-                    logger.debug(`Skipped ${String(skippedLines)} unparseable audit log line(s)`, {
-                        module: 'Audit',
-                        logPath: this.config.logPath,
-                    })
-                }
-                return parsed
-            } finally {
-                await fh.close()
-            }
+            return results.reverse()
         } catch (err) {
             throw new Error(
                 `Failed to read telemetry log: ${err instanceof Error ? err.message : String(err)}`,
@@ -393,7 +350,7 @@ export class AuditLogger {
     private async ensureDirectory(): Promise<void> {
         if (this.dirEnsured) return
         try {
-            await mkdir(dirname(this.config.logPath), { recursive: true })
+            await mkdir(dirname(this.config.logPath), { recursive: true, mode: 0o700 })
             this.dirEnsured = true
         } catch (err: unknown) {
             if (nodeErrorCode(err) === 'EEXIST') {
@@ -423,6 +380,9 @@ export class AuditLogger {
         )
         if (nextSize !== null) {
             this.approxSizeBytes = nextSize
+            if (nextSize === 0) {
+                this.fileModeEnsured = false
+            }
         }
     }
 }

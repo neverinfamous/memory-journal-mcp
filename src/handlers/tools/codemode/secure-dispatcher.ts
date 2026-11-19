@@ -13,6 +13,10 @@ import { logger } from '../../../utils/logger.js'
 import { activeProjectRegistry, uniqueWorkspaceForProject } from '../../../utils/write-scope.js'
 import { getRpcExecutionOverrides } from '../../../codemode/rpc-context.js'
 import { getRequestContext, requestContextStorage } from '../../../utils/request-context.js'
+import {
+    exceedsMaxToolInputElements,
+    resolveEffectiveMaxToolInputElements,
+} from '../../../utils/tool-input-bounds.js'
 import { normalizeDispatchParams } from './dispatch-scope.js'
 import { resolveEffectiveRpcScope, validateRpcOverrideBounds } from './dispatch-rpc-bounds.js'
 
@@ -76,6 +80,43 @@ function extractTestDbOverride(toolParams: unknown): {
     return { cleanToolParams: toolParams, callUseTestDb }
 }
 
+function enforceDispatcherElementBounds(
+    toolParams: unknown,
+    configuredMax: number | undefined
+): Record<string, unknown> | undefined {
+    const maxElements = resolveEffectiveMaxToolInputElements(configuredMax)
+    if (!exceedsMaxToolInputElements(toolParams, maxElements)) return undefined
+    return {
+        success: false,
+        error: `Tool input exceeds maximum of ${String(maxElements)} elements.`,
+        code: 'VALIDATION_ERROR',
+        category: 'validation',
+        recoverable: false,
+    }
+}
+
+function runInAdjustedRequestContext(
+    callUseTestDb: boolean,
+    rpcOverrides: ReturnType<typeof getRpcExecutionOverrides>,
+    effectiveUseSessionIdInCtx: string | undefined,
+    executeWithScope: () => Promise<unknown>
+): Promise<unknown> {
+    const existingReqCtx = getRequestContext()
+    const effectiveUseTestDb = callUseTestDb || rpcOverrides?.useTestDb === true || existingReqCtx?.useTestDb === true
+    const needTestDbCtx = effectiveUseTestDb && existingReqCtx?.useTestDb !== true
+    const needSessCtx =
+        effectiveUseSessionIdInCtx !== undefined && existingReqCtx?.sessionId !== effectiveUseSessionIdInCtx
+    if (!needTestDbCtx && !needSessCtx) return executeWithScope()
+    return requestContextStorage.run(
+        {
+            ...(existingReqCtx ?? {}),
+            ...(effectiveUseTestDb ? { useTestDb: true } : {}),
+            ...(effectiveUseSessionIdInCtx !== undefined ? { sessionId: effectiveUseSessionIdInCtx } : {}),
+        },
+        executeWithScope
+    )
+}
+
 async function executeDispatcherCall(
     tool: ToolDefinition,
     toolParams: unknown,
@@ -83,6 +124,8 @@ async function executeDispatcherCall(
     options: SecureDispatcherOptions
 ): Promise<unknown> {
     const { sessionContext, projectId, workspaceId, explicitWorkspace, sessionId, autoVersion, dryRun } = options
+    const limitErr = enforceDispatcherElementBounds(toolParams, sessionContext.config?.maxToolInputElements)
+    if (limitErr !== undefined) return limitErr
     const { cleanToolParams, callUseTestDb } = extractTestDbOverride(toolParams)
     const rpcOverrides = getRpcExecutionOverrides()
     const reg = activeProjectRegistry(sessionContext.config?.projectRegistry)
@@ -131,25 +174,12 @@ async function executeDispatcherCall(
         return invokeToolWithGuards(tool, finalParams, sessionContext)
     }
 
-    const existingReqCtx = getRequestContext()
-    const effectiveUseTestDb = callUseTestDb || rpcOverrides?.useTestDb === true || existingReqCtx?.useTestDb === true
-    const needTestDbCtx = effectiveUseTestDb && existingReqCtx?.useTestDb !== true
-    const needSessCtx =
-        scopeRes.effectiveUseSessionIdInCtx !== undefined &&
-        existingReqCtx?.sessionId !== scopeRes.effectiveUseSessionIdInCtx
-    if (needTestDbCtx || needSessCtx) {
-        return requestContextStorage.run(
-            {
-                ...(existingReqCtx ?? {}),
-                ...(effectiveUseTestDb ? { useTestDb: true } : {}),
-                ...(scopeRes.effectiveUseSessionIdInCtx !== undefined
-                    ? { sessionId: scopeRes.effectiveUseSessionIdInCtx }
-                    : {}),
-            },
-            executeWithScope
-        )
-    }
-    return executeWithScope()
+    return runInAdjustedRequestContext(
+        callUseTestDb,
+        rpcOverrides,
+        scopeRes.effectiveUseSessionIdInCtx,
+        executeWithScope
+    )
 }
 
 export function createSecureDispatcher(

@@ -59,7 +59,7 @@ export function resolveRegistryMatchForTarget(
 }
 
 function emptyToUndefined(val: unknown): unknown {
-    return typeof val === 'string' && val.trim() === '' ? undefined : val
+    return typeof val === 'string' && val.length <= 10_000 && val.trim() === '' ? undefined : val
 }
 
 function preprocessDepth(val: unknown): unknown {
@@ -89,17 +89,17 @@ function preprocessProjectNumber(val: unknown): unknown {
 }
 
 export const planReviewArgsSchema = z.object({
-    topic: z.preprocess(emptyToUndefined, z.string().optional()),
+    topic: z.preprocess(emptyToUndefined, z.string().max(10_000).optional()),
     depth: z.preprocess(preprocessDepth, z.enum(['light', 'standard', 'deep']).optional()),
     copilot: z.preprocess(preprocessCopilot, z.enum(['true', 'false']).optional()),
-    workspace_id: z.preprocess(emptyToUndefined, z.string().optional()),
+    workspace_id: z.preprocess(emptyToUndefined, z.string().max(10_000).optional()),
     project_number: z.preprocess(preprocessProjectNumber, z.number().int().positive().optional()),
 })
 
 export const auditArgsSchema = z.object({
-    target: z.preprocess(emptyToUndefined, z.string().optional()),
+    target: z.preprocess(emptyToUndefined, z.string().max(10_000).optional()),
     copilot: z.preprocess(preprocessCopilot, z.enum(['true', 'false']).optional()),
-    workspace_id: z.preprocess(emptyToUndefined, z.string().optional()),
+    workspace_id: z.preprocess(emptyToUndefined, z.string().max(10_000).optional()),
     project_number: z.preprocess(preprocessProjectNumber, z.number().int().positive().optional()),
 })
 

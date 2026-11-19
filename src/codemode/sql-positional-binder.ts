@@ -79,7 +79,8 @@ function listPlaceholders(cleanSql: string): Placeholder[] {
         if (ch === '(') depth++
         else if (ch === ')' && depth > 0) depth--
         if (ch === '?') {
-            const match = COLUMN_BEFORE_PLACEHOLDER.exec(cleanSql.slice(0, i))
+            const windowStart = Math.max(0, i - 160)
+            const match = COLUMN_BEFORE_PLACEHOLDER.exec(cleanSql.slice(windowStart, i))
             const inWhere = whereIdx >= 0 && i >= whereIdx && depth >= 0
             result.push({
                 column: match?.[1] !== undefined ? normalizeColumn(match[1]) : undefined,

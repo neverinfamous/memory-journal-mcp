@@ -23,6 +23,7 @@ import type { VectorSearchManager } from '../../vector/vector-search-manager/ind
 import type { GitHubIntegration } from '../../github/github-integration/index.js'
 import type { ProgressContext } from '../../utils/progress-utils.js'
 import { isToolVisibleForFilter } from '../../filtering/tool-filter.js'
+import { isCacheHit, type CachedToolContextRefs } from './tool-cache-helpers.js'
 import {
     captureActiveProjectRegistryState,
     restoreActiveProjectRegistryState,
@@ -142,48 +143,7 @@ let toolMapCache: Map<string, ToolDefinition> | null = null
 let mappedToolsCache: ToolRegistration[] | null = null
 /** Typed empty map for safe fallback */
 const EMPTY_TOOL_MAP = new Map<string, ToolDefinition>()
-let cachedContextRefs: {
-    db: IDatabaseAdapter
-    github?: GitHubIntegration
-    vectorManager?: VectorSearchManager
-    config?: ToolHandlerConfig
-    teamDb?: IDatabaseAdapter
-    teamVectorManager?: VectorSearchManager
-} | null = null
-
-function safeIsAvailable(gh: GitHubIntegration | undefined | null): boolean | undefined {
-    if (!gh) return undefined
-    return gh.isApiAvailable()
-}
-
-function safeIsInitialized(vm: VectorSearchManager | undefined | null): boolean | undefined {
-    if (!vm) return undefined
-    return typeof vm.isInitialized === 'function' ? vm.isInitialized() : undefined
-}
-
-function isCacheHit(
-    refs: typeof cachedContextRefs,
-    cache: Map<string, ToolDefinition> | null | undefined,
-    db: IDatabaseAdapter,
-    vectorManager?: VectorSearchManager,
-    github?: GitHubIntegration,
-    config?: ToolHandlerConfig,
-    teamDb?: IDatabaseAdapter,
-    teamVectorManager?: VectorSearchManager
-): boolean {
-    return Boolean(
-        cache &&
-            refs?.db === db &&
-            refs.github === github &&
-            safeIsAvailable(refs.github) === safeIsAvailable(github) &&
-            refs.vectorManager === vectorManager &&
-            safeIsInitialized(refs.vectorManager) === safeIsInitialized(vectorManager) &&
-            refs.config === config &&
-            refs.teamDb === teamDb &&
-            refs.teamVectorManager === teamVectorManager &&
-            safeIsInitialized(refs.teamVectorManager) === safeIsInitialized(teamVectorManager)
-    )
-}
+let cachedContextRefs: CachedToolContextRefs | null = null
 
 function ensureToolCache(
     db: IDatabaseAdapter,
@@ -365,15 +325,18 @@ export async function callTool(
     args = healed.args
 
     const mapToUse = config?.runtime?.toolMapCache ?? toolMapCache ?? EMPTY_TOOL_MAP
+    const trimmedEntryUri =
+        typeof args['uri'] === 'string' ? args['uri'].trim() : undefined
     if (
         config?.agentHealing !== false &&
         name === 'get_entry_by_id' &&
         args['entry_id'] === undefined &&
-        typeof args['uri'] === 'string' &&
-        args['uri'].startsWith('memory://') &&
-        !/^memory:\/\/(?:entries|entry)\/\d+(?:[?#].*)?$/i.test(args['uri']) &&
+        trimmedEntryUri !== undefined &&
+        trimmedEntryUri.startsWith('memory://') &&
+        !/^memory:\/\/(?:entries|entry)\/\d+$/i.test(trimmedEntryUri) &&
         mapToUse.has('read_resource')
     ) {
+        args = { ...args, uri: trimmedEntryUri }
         name = 'read_resource'
     }
     const tool = mapToUse.get(name)

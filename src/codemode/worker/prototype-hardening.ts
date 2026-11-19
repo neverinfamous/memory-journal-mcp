@@ -5,6 +5,30 @@
 
 import * as vm from 'node:vm'
 
+const OPTIONAL_RUNTIME_GLOBALS = [
+    'AggregateError',
+    'Buffer',
+    'Symbol',
+    'BigInt',
+    'SharedArrayBuffer',
+    'Atomics',
+    'WeakRef',
+    'FinalizationRegistry',
+    'SuppressedError',
+    'DisposableStack',
+    'AsyncDisposableStack',
+    'Temporal',
+] as const
+
+function collectOptionalOuterBuiltins(): unknown[] {
+    const out: unknown[] = []
+    const g = globalThis as Record<string, unknown>
+    for (const name of OPTIONAL_RUNTIME_GLOBALS) {
+        if (g[name] !== undefined) out.push(g[name])
+    }
+    return out
+}
+
 const OUTER_BUILTIN_CTORS: readonly unknown[] = [
     Object,
     Function,
@@ -20,7 +44,6 @@ const OUTER_BUILTIN_CTORS: readonly unknown[] = [
     SyntaxError,
     URIError,
     EvalError,
-    ...(typeof AggregateError !== 'undefined' ? [AggregateError] : []),
     Map,
     Set,
     WeakMap,
@@ -29,7 +52,6 @@ const OUTER_BUILTIN_CTORS: readonly unknown[] = [
     Date,
     ArrayBuffer,
     DataView,
-    ...(typeof Buffer !== 'undefined' ? [Buffer] : []),
     Int8Array,
     Uint8Array,
     Uint8ClampedArray,
@@ -43,6 +65,7 @@ const OUTER_BUILTIN_CTORS: readonly unknown[] = [
     BigUint64Array,
     JSON,
     Math,
+    ...collectOptionalOuterBuiltins(),
 ]
 
 function freezeOuterBuiltinCtors(failures: string[]): void {
@@ -186,6 +209,16 @@ const FREEZE_INNER_CONTEXT_SCRIPT = new vm.Script(`(function() {
         JSON, Math,
     ];
     if (typeof AggregateError !== "undefined") builtins.push(AggregateError);
+    if (typeof Symbol !== "undefined") builtins.push(Symbol);
+    if (typeof BigInt !== "undefined") builtins.push(BigInt);
+    if (typeof SharedArrayBuffer !== "undefined") builtins.push(SharedArrayBuffer);
+    if (typeof Atomics !== "undefined") builtins.push(Atomics);
+    if (typeof WeakRef !== "undefined") builtins.push(WeakRef);
+    if (typeof FinalizationRegistry !== "undefined") builtins.push(FinalizationRegistry);
+    if (typeof SuppressedError !== "undefined") builtins.push(SuppressedError);
+    if (typeof DisposableStack !== "undefined") builtins.push(DisposableStack);
+    if (typeof AsyncDisposableStack !== "undefined") builtins.push(AsyncDisposableStack);
+    if (typeof Temporal !== "undefined") builtins.push(Temporal);
     if (TypedArrayCtor) builtins.push(TypedArrayCtor);
     if (GlobalIter) builtins.push(GlobalIter);
     for (const B of builtins) {
