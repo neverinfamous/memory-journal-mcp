@@ -126,7 +126,7 @@ describe('OAuth Scopes, Team RBAC, Audit Boundary & DatabaseAdapterProxy Integra
             ).rejects.toThrow(PermissionError)
 
             await expect(
-                readResource('memory://audit', proxiedDb, undefined, null, null, null, teamDb, undefined, runtime)
+                readResource('memory://audit', proxiedDb, undefined, null, null, teamDb, undefined, runtime)
             ).rejects.toThrow(PermissionError)
 
             expect(() => validateResourceSubscription('memory://audit', runtime)).toThrow(PermissionError)
@@ -152,7 +152,7 @@ describe('OAuth Scopes, Team RBAC, Audit Boundary & DatabaseAdapterProxy Integra
         })
 
         await runWithAuthContext(adminCtx, async () => {
-            const auditResource = await readResource('memory://audit', proxiedDb, undefined, null, null, null, teamDb, undefined, runtime)
+            const auditResource = await readResource('memory://audit', proxiedDb, undefined, null, null, teamDb, undefined, runtime)
             expect(typeof auditResource.data).toBe('string')
             const auditText = String(auditResource.data)
             expect(auditText).toContain('Access Denied: Insufficient scope')

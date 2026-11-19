@@ -10,7 +10,6 @@ import {
     InvalidDateFormatError,
 } from '../../src/utils/security-utils.js'
 import { resolveProjectContext } from '../../src/utils/workspace-resolver.js'
-import { validateWebhookUrl } from '../../src/server/digest-reporter.js'
 
 describe('Adversarial Security Audit Regressions', () => {
     describe('SEC-C01: SQL Recovery State-Machine Parser (No Host VM Execution)', () => {
@@ -88,24 +87,6 @@ describe('Adversarial Security Audit Regressions', () => {
             expect(() => assertSafeDirectoryPath('%2e%2e/secret', roots)).toThrow(PathTraversalError)
             expect(() => assertSafeDirectoryPath('foo%2f..%2fbar', roots)).toThrow(PathTraversalError)
             expect(() => assertSafeDirectoryPath('foo\0bar', roots)).toThrow(PathTraversalError)
-        })
-    })
-
-    describe('SEC-M05: Webhook SSRF Validation', () => {
-        it('blocks non-HTTPS and private/loopback/metadata webhook targets', async () => {
-            await expect(validateWebhookUrl('http://example.com/webhook')).rejects.toThrow(
-                /Disallowed webhook protocol/
-            )
-            await expect(validateWebhookUrl('https://127.0.0.1/webhook')).rejects.toThrow(
-                /restricted network address/
-            )
-            await expect(validateWebhookUrl('https://169.254.169.254/latest/meta-data')).rejects.toThrow(
-                /restricted network address/
-            )
-            await expect(validateWebhookUrl('https://localhost:8080/hook')).rejects.toThrow(
-                /restricted network address/
-            )
-            await expect(validateWebhookUrl('https://hooks.slack.com/services/T00/B00/X00')).resolves.toBeUndefined()
         })
     })
 })

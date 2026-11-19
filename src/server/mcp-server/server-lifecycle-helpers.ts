@@ -11,7 +11,6 @@ import { logger } from '../../utils/logger.js'
 import { flushAgentIssues } from '../../utils/issue-logger.js'
 import type { ServerRuntime } from '../../utils/maintenance-lock.js'
 import { globalSubscriptionManager } from '../subscription-manager.js'
-import type { Scheduler } from '../scheduler.js'
 import type { ServerOptions } from './types.js'
 import {
     awaitPendingVectorInit,
@@ -84,9 +83,8 @@ export function registerConfigChangeListener(params: {
     allowedIoRoots: string[]
     baseConfig: ToolHandlerConfig
     customToolHandlerConfig: ToolHandlerConfig
-    scheduler: Scheduler | null
 }): void {
-    const { configManager, options, allowedIoRoots, baseConfig, customToolHandlerConfig, scheduler } = params
+    const { configManager, options, allowedIoRoots, baseConfig, customToolHandlerConfig } = params
     configManager.on('changed', (newConfig: DynamicConfig) => {
         const nextBriefing = resolveActiveBriefingConfig(newConfig.briefingConfig, allowedIoRoots)
         baseConfig.filterConfig = newConfig.toolFilterConfig
@@ -105,11 +103,6 @@ export function registerConfigChangeListener(params: {
             else if (options.codemodeInternalFullAccess !== undefined) target.codemodeInternalFullAccess = options.codemodeInternalFullAccess
             else delete target.codemodeInternalFullAccess
         }
-        scheduler?.updateWorkspaceContext({
-            ...(nextBriefing.defaultWorkspaceId !== undefined ? { defaultWorkspaceId: nextBriefing.defaultWorkspaceId } : {}),
-            ...(nextBriefing.defaultProjectNumber !== undefined ? { defaultProjectNumber: nextBriefing.defaultProjectNumber } : {}),
-            ...(nextBriefing.projectRegistry !== undefined ? { projectRegistry: nextBriefing.projectRegistry } : {}),
-        })
         void Promise.resolve(globalSubscriptionManager.notifyResourceUpdated('memory://briefing')).catch((error: unknown) => {
             logger.debug('Failed to send briefing updated notification to MCP client', {
                 module: 'McpServer',
@@ -130,14 +123,13 @@ export function registerConfigChangeListener(params: {
 export async function startSelectedTransport(params: {
     options: ServerOptions
     getServerInstance: () => McpServer
-    scheduler: Scheduler | null
     runtime: GracefulShutdownParams['runtime']
     configManager: GracefulShutdownParams['configManager']
     shutdownMetrics: (() => Promise<void>) | undefined
     activeMetricsPath: string | undefined
     closeDatabases: () => void
 }): Promise<void> {
-    const { options, getServerInstance, scheduler, runtime, configManager, shutdownMetrics, activeMetricsPath, closeDatabases } = params
+    const { options, getServerInstance, runtime, configManager, shutdownMetrics, activeMetricsPath, closeDatabases } = params
     if (options.transport === 'stdio') {
         const stdioTransport = new StdioServerTransport()
         const server = getServerInstance()
@@ -180,7 +172,7 @@ export async function startSelectedTransport(params: {
     }
 
     const httpTransport = new HttpTransport(buildHttpTransportConfig(options))
-    await httpTransport.start(getServerInstance, scheduler, runtime)
+    await httpTransport.start(getServerInstance, runtime)
 
     let httpShutdownStarted = false
     const handleHttpShutdown = (): void => {
@@ -191,7 +183,7 @@ export async function startSelectedTransport(params: {
             configManager,
             runtime,
             shutdownMetrics,
-            stopHttpTransport: () => httpTransport.stop(scheduler),
+            stopHttpTransport: () => httpTransport.stop(),
             activeMetricsPath,
             closeDatabases,
             detachSignals: () => {

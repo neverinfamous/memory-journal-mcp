@@ -52,7 +52,7 @@ test.describe('E2E Resource Reads (via MCP SDK Client)', () => {
         const parsed = JSON.parse(text)
         expect(parsed).toHaveProperty('database')
         expect(parsed).toHaveProperty('vectorIndex')
-        expect(parsed).toHaveProperty('scheduler')
+        expect(parsed).not.toHaveProperty('scheduler')
     })
 
     test('should read memory://briefing resource', async () => {

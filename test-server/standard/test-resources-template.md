@@ -1,6 +1,6 @@
 # Re-Test memory-journal-mcp — Resources
 
-**Scope:** All 33 resources — 26 static resources, 7 template resources (happy path + error paths).
+**Scope:** All 32 resources — 25 static resources, 7 template resources (happy path + error paths).
 
 **Prerequisites:**
 
@@ -66,7 +66,7 @@
 > **Important:** Copy these success criteria into your internal task artifact and track your progress there. Do not check off items in this file.
 
 - Agent reports the Total Token Estimate in the final summary (using `_meta.tokenEstimate` from responses). The tokens tracked should only count the estimated tokens that actually entered the context window.
-- All 26 static resources return valid data
+- All 25 static resources return valid data
 - All 7 template resources work with valid parameters
 - All 7 template resources handle invalid/nonexistent IDs gracefully (no crashes)
 - `memory://significant` includes `importance` field and is sorted by importance (primary) then timestamp (secondary)
@@ -81,4 +81,3 @@
 - `memory://audit` returns last 50 audit entries
 - `memory://insights/digest` handles empty digest gracefully
 - `memory://insights/team-collaboration` returns collaboration matrix or graceful empty
-- `memory://insights/reports` returns list of report snapshots or graceful empty

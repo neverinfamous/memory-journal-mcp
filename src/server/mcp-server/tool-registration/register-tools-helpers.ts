@@ -283,7 +283,7 @@ export function createResourceReadHandler(
         annotations?: Record<string, unknown>
     }[]
 }> {
-    const { configManager, db, teamDb, vectorManager, github, scheduler, allowedIoRoots, runtime } =
+    const { configManager, db, teamDb, vectorManager, github, allowedIoRoots, runtime } =
         context
     return async (uri: URL, mimeType: string) => {
         const currentConfig = configManager.getConfig()
@@ -300,7 +300,6 @@ export function createResourceReadHandler(
                 vectorManager,
                 currentConfig.toolFilterConfig,
                 github,
-                scheduler,
                 teamDb ?? undefined,
                 activeBriefingConfig,
                 runtime

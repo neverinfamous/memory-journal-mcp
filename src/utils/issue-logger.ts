@@ -7,7 +7,7 @@ import { sanitizeErrorForLogging } from './security-utils.js'
 const SENSITIVE_KEY_RE =
     /(?:token|secret|password|passphrase|authorization|webhook_?auth|webhook_?url|encryption_?key|api_?key|private_?key|^key$)/i
 const SENSITIVE_CLI_FLAG_RE =
-    /^--(?:auth-token|report-webhook-auth|report-webhook-url|github-token|oauth-.*secret|key|password|secret|token)(?:=(.*))?$/i
+    /^--(?:auth-token|github-token|oauth-.*secret|key|password|secret|token)(?:=(.*))?$/i
 
 function sanitizeCliArgList(
     args: unknown[],

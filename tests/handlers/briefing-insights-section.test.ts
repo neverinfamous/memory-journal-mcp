@@ -10,7 +10,7 @@ describe('Briefing Insights Section', () => {
         expect(result).toBeNull()
     })
 
-    it('should build insights section from scheduler digest', () => {
+    it('should build insights section from live compute digest', () => {
         const mockSnapshot: DigestSnapshot = {
             computedAt: '2026-04-11T12:00:00Z',
             currentPeriodEntries: 10,
@@ -28,8 +28,8 @@ describe('Briefing Insights Section', () => {
         }
 
         const context: ResourceContext = {
-            scheduler: {
-                getLatestDigest: vi.fn().mockReturnValue(mockSnapshot),
+            db: {
+                computeDigest: vi.fn().mockReturnValue(mockSnapshot),
             } as any,
         }
 
@@ -91,8 +91,8 @@ describe('Briefing Insights Section', () => {
         }
 
         const context: ResourceContext = {
-            scheduler: {
-                getLatestDigest: vi.fn().mockReturnValue(mockSnapshot),
+            db: {
+                computeDigest: vi.fn().mockReturnValue(mockSnapshot),
             } as any,
         }
 

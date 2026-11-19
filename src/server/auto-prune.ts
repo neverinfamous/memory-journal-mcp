@@ -1,15 +1,17 @@
 /**
  * Memory Journal MCP Server - Auto-Prune
  *
- * Importance-based garbage collector that soft-deletes old, low-importance
- * journal entries on server startup. Configurable via CLI flags / env vars.
+ * Importance-based garbage collector that archives, soft-deletes, or hard-deletes
+ * old, low-importance journal entries. Runs on startup, via CLI (`admin prune`),
+ * or via MCP (`run_auto_prune`, e.g. nightly CMS-02 maintenance).
  *
  * Algorithm:
  *   1. Create a safety backup before any mutations.
  *   2. Use the adapter's executeDataLifecycle() to identify and transition
  *      candidate entries older than `olderThanDays` with an importance
  *      score below `importanceThreshold` (computed entirely in SQL).
- *   3. Clean up stale vector embeddings.
+ *   3. Refresh SQLite query planner statistics (`PRAGMA optimize`) and clean up
+ *      stale vector embeddings.
  */
 
 import * as fs from 'node:fs'
@@ -156,11 +158,27 @@ function buildAutoPruneResult(
     }
 }
 
+function tryOptimizePlanner(db: IDatabaseAdapter): void {
+    if (typeof db.pragma !== 'function') {
+        return
+    }
+    try {
+        db.pragma('optimize')
+    } catch (optError) {
+        logger.debug('Auto-prune: PRAGMA optimize skipped', {
+            module: 'AutoPrune',
+            error: optError instanceof Error ? optError.message : String(optError),
+        })
+    }
+}
+
 function finalizeLivePrune(
     db: IDatabaseAdapter,
     options: AutoPruneOptions,
     counts: { archivedCount: number; prunedCount: number; hardDeletedCount: number }
 ): void {
+    tryOptimizePlanner(db)
+
     const { archiveOlderThanDays, pruneOlderThanDays, hardDeleteOlderThanDays, importanceThreshold } =
         options
     const { archivedCount, prunedCount, hardDeletedCount } = counts

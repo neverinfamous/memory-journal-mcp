@@ -431,7 +431,7 @@ describe('Pass 27 Audit Regressions', () => {
 
             const regSpy = vi.spyOn(globalSubscriptionManager, 'registerServer')
             const subSpy = vi.spyOn(globalSubscriptionManager, 'subscribe')
-            createServerInstance({ db, runtime: new ServerRuntime(), vectorManager: new FixedDimsVectorManager(db), github: new GitHubIntegration('.'), configManager: new ConfigManager({ rawToolFilter: undefined, codemodeInternalFullAccess: false, briefingConfig: DEFAULT_BRIEFING_CONFIG }), scheduler: null, allowedIoRoots: [] }, { transport: 'http', dbPath: ':memory:', statelessHttp: true }, [], [], [], new Set(), {})
+            createServerInstance({ db, runtime: new ServerRuntime(), vectorManager: new FixedDimsVectorManager(db), github: new GitHubIntegration('.'), configManager: new ConfigManager({ rawToolFilter: undefined, codemodeInternalFullAccess: false, briefingConfig: DEFAULT_BRIEFING_CONFIG }), allowedIoRoots: [] }, { transport: 'http', dbPath: ':memory:', statelessHttp: true }, [], [], [], new Set(), {})
             expect(regSpy).not.toHaveBeenCalled()
             expect(subSpy).not.toHaveBeenCalled()
 

@@ -165,7 +165,6 @@ export function tryResolveEntryResourceUri(
                 context.vectorManager,
                 context.config?.filterConfig,
                 context.github,
-                undefined,
                 context.teamDb,
                 context.config?.briefingConfig,
                 context.config?.runtime

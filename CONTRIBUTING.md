@@ -236,9 +236,7 @@ src/
 ├── server/
 │   ├── mcp-server/             # MCP server setup
 │   ├── auto-prune.ts           # Automated entry retention and pruning lifecycle
-│   ├── digest-reporter.ts      # Scheduled digest report generation and webhook dispatch
 │   ├── registration.ts         # Tool/resource/prompt registration
-│   ├── scheduler.ts            # Recurring task scheduler
 │   └── subscription-manager.ts # Resource subscription management
 ├── transports/                 # HTTP/SSE transport
 ├── types/                      # TypeScript type definitions

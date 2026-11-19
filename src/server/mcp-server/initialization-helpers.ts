@@ -7,18 +7,16 @@ import {
     getFilterSummary,
     getAllToolNames,
 } from '../../filtering/tool-filter.js'
-import { Scheduler } from '../scheduler.js'
 import { runAutoPrune } from '../auto-prune.js'
 import { resolveAutoPruneScope, resolveWorkspaceId } from '../../utils/workspace-resolver.js'
 export { resolveAutoPruneScope }
-import type { ServerRuntime } from '../../utils/maintenance-lock.js'
 import type { IDatabaseAdapter } from '../../database/core/interfaces.js'
 import type { ToolFilterConfig } from '../../filtering/tool-filter.js'
 import type { ServerOptions } from './types.js'
 
 /**
  * Helpers extracted from `initializeDependencies` (startup auto-prune, vector managers,
- * tool filter resolution, scheduler wiring, digest seeding). Behaviour is unchanged.
+ * tool filter resolution, digest seeding). Behaviour is unchanged.
  */
 
 /**
@@ -283,57 +281,8 @@ export function resolveToolFilterConfig(options: ServerOptions): ToolFilterConfi
 }
 
 /**
- * Build the scheduler (HTTP/SSE only) when any job interval is configured.
- * Inherits auto-prune thresholds and the default workspace from the server options.
- */
-export function createSchedulerIfConfigured(
-    options: ServerOptions,
-    db: IDatabaseAdapter,
-    vectorManager: ConstructorParameters<typeof Scheduler>[2],
-    runtime: ServerRuntime
-): Scheduler | null {
-    if (!options.scheduler) return null
-
-    const hasAnyJob =
-        options.scheduler.backupIntervalMinutes > 0 ||
-        options.scheduler.vacuumIntervalMinutes > 0 ||
-        options.scheduler.rebuildIndexIntervalMinutes > 0 ||
-        options.scheduler.digestIntervalMinutes > 0 ||
-        options.scheduler.pruneIntervalMinutes > 0 ||
-        options.scheduler.reportIntervalMinutes > 0
-
-    if (hasAnyJob && options.transport === 'stdio') {
-        logger.warning(
-            'Scheduler options ignored for stdio transport (session is ephemeral). ' +
-                'Use HTTP/SSE transport for automated scheduling.',
-            { module: 'Scheduler' }
-        )
-        return null
-    }
-    if (!hasAnyJob) return null
-
-    // Inherit auto-prune thresholds for the scheduler's prune job
-    options.scheduler.archiveOlderThanDays = options.archiveOlderThanDays
-    options.scheduler.pruneOlderThanDays = options.pruneOlderThanDays
-    options.scheduler.hardDeleteOlderThanDays = options.hardDeleteOlderThanDays
-    options.scheduler.pruneImportanceThreshold = options.pruneImportanceThreshold
-    options.scheduler.pruneDryRun = options.pruneDryRun
-    options.scheduler.pruneExcludeTags = options.pruneExcludeTags
-    const resolvedDefaultWs = resolveWorkspaceId(
-        options.defaultWorkspaceId,
-        options.defaultProjectNumber,
-        options
-    )
-    options.scheduler.defaultWorkspaceId = resolvedDefaultWs
-    options.scheduler.defaultProjectNumber = options.defaultProjectNumber
-    options.scheduler.projectRegistry = options.projectRegistry
-
-    return new Scheduler(options.scheduler, db, vectorManager, runtime)
-}
-
-/**
  * Seed initial digest snapshot so first briefing read has analytics.
- * Skipped if a snapshot already exists (previous session or scheduler run).
+ * Skipped if a snapshot already exists (from a previous session).
  */
 export function seedInitialDigest(db: IDatabaseAdapter, options: ServerOptions): void {
     try {

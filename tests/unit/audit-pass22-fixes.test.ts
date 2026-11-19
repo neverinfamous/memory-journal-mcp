@@ -99,7 +99,6 @@ describe('Pass 22 Adversarial Code Quality Audit Fixes', () => {
                 undefined,
                 null,
                 null,
-                null,
                 undefined,
                 briefingConfig
             )
@@ -249,7 +248,6 @@ describe('Pass 22 Adversarial Code Quality Audit Fixes', () => {
                 'memory://staleness/42',
                 db,
                 undefined,
-                null,
                 null,
                 null,
                 undefined,

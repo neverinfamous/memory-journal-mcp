@@ -167,4 +167,26 @@ describe('Auto Prune', () => {
             '/tmp/pre-prune-5.db',
         ])
     })
+
+    it('runs PRAGMA optimize on live prune and skips it on dryRun', async () => {
+        mockDb.pragma = vi.fn()
+
+        await runAutoPrune(mockDb as unknown as IDatabaseAdapter, {
+            archiveOlderThanDays: 14,
+            pruneOlderThanDays: 5,
+            hardDeleteOlderThanDays: 5,
+            importanceThreshold: 0.6,
+            dryRun: true,
+        })
+        expect(mockDb.pragma).not.toHaveBeenCalled()
+
+        await runAutoPrune(mockDb as unknown as IDatabaseAdapter, {
+            archiveOlderThanDays: 14,
+            pruneOlderThanDays: 5,
+            hardDeleteOlderThanDays: 5,
+            importanceThreshold: 0.6,
+            dryRun: false,
+        })
+        expect(mockDb.pragma).toHaveBeenCalledWith('optimize')
+    })
 })

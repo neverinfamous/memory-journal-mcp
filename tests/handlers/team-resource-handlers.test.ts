@@ -87,7 +87,6 @@ describe('Team Resource Handlers', () => {
                 undefined,
                 undefined,
                 undefined,
-                undefined,
                 teamDb
             )
 
@@ -113,7 +112,6 @@ describe('Team Resource Handlers', () => {
             const result = await readResource(
                 'memory://team/recent',
                 personalDb,
-                undefined,
                 undefined,
                 undefined,
                 undefined,
@@ -145,7 +143,6 @@ describe('Team Resource Handlers', () => {
             const result = await readResource(
                 'memory://team/statistics',
                 personalDb,
-                undefined,
                 undefined,
                 undefined,
                 undefined,

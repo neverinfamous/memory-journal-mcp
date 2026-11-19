@@ -149,7 +149,7 @@ describe('HttpTransport', () => {
         } as never)
 
         const mockServer = { connect: vi.fn() }
-        await expect(transport.start(mockServer as never, null)).rejects.toThrow(
+        await expect(transport.start(mockServer as never)).rejects.toThrow(
             /FATAL.*wildcard CORS/i
         )
     })
@@ -162,7 +162,7 @@ describe('HttpTransport', () => {
         } as never)
 
         const mockServer = { connect: vi.fn() }
-        await transport.start(mockServer as never, null)
+        await transport.start(mockServer as never)
 
         const { logger } = await import('../../src/utils/logger.js')
         expect(logger.warning).toHaveBeenCalledWith(
@@ -180,7 +180,7 @@ describe('HttpTransport', () => {
         } as never)
 
         const mockServer = { connect: vi.fn() }
-        await transport.start(mockServer as never, null)
+        await transport.start(mockServer as never)
 
         // authToken is set, so no "no auth" warning
         const { logger } = await import('../../src/utils/logger.js')
@@ -188,20 +188,6 @@ describe('HttpTransport', () => {
             expect.stringContaining('No authentication'),
             expect.any(Object)
         )
-    })
-
-    it('should start scheduler if provided', async () => {
-        const transport = new HttpTransport({
-            port: 3000,
-            host: 'localhost',
-            corsOrigins: ['http://example.com'],
-        } as never)
-
-        const mockServer = { connect: vi.fn() }
-        const mockScheduler = { start: vi.fn(), stop: vi.fn() }
-        await transport.start(mockServer as never, mockScheduler as never)
-
-        expect(mockScheduler.start).toHaveBeenCalled()
     })
 
     it('should configure HTTP server timeouts and close handler', async () => {
@@ -212,7 +198,7 @@ describe('HttpTransport', () => {
         } as never)
 
         const mockServer = { connect: vi.fn() }
-        await transport.start(mockServer as never, null)
+        await transport.start(mockServer as never)
 
         // httpServer is mocked in express listen
         const { logger } = await import('../../src/utils/logger.js')
@@ -235,7 +221,7 @@ describe('HttpTransport', () => {
         } as never)
 
         const mockServer = { connect: vi.fn() }
-        await transport.start(mockServer as never, null)
+        await transport.start(mockServer as never)
 
         const rateLimitMap = (transport as any).rateLimitMap as Map<string, any>
         rateLimitMap.set('192.168.1.1', { resetTime: Date.now() - 1000, count: 50 })
@@ -260,7 +246,7 @@ describe('HttpTransport', () => {
         } as never)
 
         const mockServer = { connect: vi.fn() }
-        await transport.start(mockServer as never, null)
+        await transport.start(mockServer as never)
 
         // Add mock servers
         const mockServer2 = { close: vi.fn().mockResolvedValue(undefined) }
@@ -279,29 +265,12 @@ describe('HttpTransport', () => {
         } as never)
 
         const mockServer = { connect: vi.fn() }
-        await transport.start(mockServer as never, null)
+        await transport.start(mockServer as never)
 
         const errorServer = { close: vi.fn().mockRejectedValue(new Error('close error')) }
         transport.activeServers.add(errorServer as never)
 
         // Should not throw
-        await expect(transport.stop(null)).resolves.toBeUndefined()
-    })
-
-
-    it('should stop scheduler during shutdown', async () => {
-        const transport = new HttpTransport({
-            port: 3000,
-            host: 'localhost',
-            corsOrigins: ['http://example.com'],
-        } as never)
-
-        const mockServer = { connect: vi.fn() }
-        const mockScheduler = { start: vi.fn(), stop: vi.fn() }
-        await transport.start(mockServer as never, mockScheduler as never)
-
-        await transport.stop(mockScheduler as never)
-
-        expect(mockScheduler.stop).toHaveBeenCalled()
+        await expect(transport.stop()).resolves.toBeUndefined()
     })
 })

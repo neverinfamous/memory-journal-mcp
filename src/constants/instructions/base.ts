@@ -11,7 +11,6 @@ export const CORE_INSTRUCTIONS = `# memory-journal-mcp
 | Metrics/Latency | \`memory://metrics/latency\`  |
 | Resource reads  | \`memory://metrics/resources\`|
 | Project staleness| \`memory://staleness\`        |
-| Report history  | \`memory://insights/reports\` |
 | Agent context   | \`memory://agent-context/{+repo}\` |
 
 ## Help Resources

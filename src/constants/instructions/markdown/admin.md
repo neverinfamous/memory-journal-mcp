@@ -3,18 +3,10 @@
 
 ### Auto-Prune
 
-Auto-prune is opt-in: it runs on startup (and periodically when `--auto-prune-interval` is set) only when retention day thresholds (`> 0`) are configured, or on demand via `run_auto_prune({ dry_run })`.
+Auto-prune is opt-in: it runs on startup only when retention day thresholds (`> 0`) are configured, or on demand via `run_auto_prune({ dry_run })`.
 - **Two-Stage Retention & Composite Importance**: Evaluates composite importance scores (default threshold `0.15`; protected tags `architecture`, `important`, `keep`, `never-prune`, `reference` exempt by default) across archive (`--archive-older-than-days`), soft-delete (`--prune-older-than-days`), and hard-delete (`--hard-delete-older-than-days`) stages. Automatically creates a `pre-prune-*` backup before mutating.
 - **Exclusion Rules**: Exempt additional tags via `--prune-exclude-tags <tags>`.
 - **Dry Run**: Preview candidates without mutating via `--prune-dry-run` (CLI) or `run_auto_prune({ dry_run: true })` (MCP/Code Mode).
-
-### Scheduled Reports
-
-When deployed in HTTP mode with `--report-interval <minutes>`, the server periodically computes digest snapshots (`memory://insights/reports`, returning `{ computedAt, preview }`). Delivery occurs only when `--report-webhook-url <url>` is configured; snapshots still persist locally without a webhook URL (and `memory://insights/reports` does not record webhook delivery status). Report delivery failures are logged without crashing the server.
-
-- **Formats**: `slack` (default, `{"text":"<markdown>"}`), `discord` (`{"content":"<markdown>"}`), or `json` (raw DigestSnapshot payload).
-- **Report history**: Read `memory://insights/reports` to view the last 5 computed report snapshots.
-- **Independent from digest**: The `report` job is separate from the `digest` analytics job. You can run one without the other.
 
 ### Real-Time Subscriptions
 

@@ -152,7 +152,7 @@ describe('Pass 35 Security Audit — Transport, SSRF, Storage, RBAC & Fencing', 
 
         const scrubbed = sanitizeIssueInput({
             auth_token: 'ghp_' + 'a'.repeat(40),
-            cliArgs: ['--auth-token', 'sec1', '--report-webhook-auth=sec2'],
+            cliArgs: ['--auth-token', 'sec1', '--github-token=sec2'],
         }) as { auth_token: string; cliArgs: string[] }
         expect(scrubbed.auth_token).toBe('[REDACTED]')
         expect(scrubbed.cliArgs[1]).toBe('[REDACTED]')

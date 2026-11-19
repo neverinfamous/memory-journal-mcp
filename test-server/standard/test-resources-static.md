@@ -1,6 +1,6 @@
 # Re-Test memory-journal-mcp — Resources
 
-**Scope:** All 33 resources — 26 static resources, 7 template resources (happy path + error paths).
+**Scope:** All 32 resources — 25 static resources, 7 template resources (happy path + error paths).
 
 **Prerequisites:**
 
@@ -53,6 +53,5 @@
 | Audit log         | `memory://audit`                       | Last 50 audit entries with tool name, timestamp, and result                                                                         |
 | Insights digest   | `memory://insights/digest`             | Cross-project digest snapshot (graceful empty if no digest available)                                                               |
 | Insights team     | `memory://insights/team-collaboration` | Team collaboration matrix with `authorActivity` and `impactFactor` (graceful if team DB not configured)                             |
-| Insights reports  | `memory://insights/reports`            | Last 5 scheduled digest report snapshots and previews                                                                               |
 | Project staleness | `memory://staleness`                   | Overview of staleness across all projects                                                                                           |
 

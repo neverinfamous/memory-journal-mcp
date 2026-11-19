@@ -6,7 +6,7 @@ const WORKERS = Number(process.env.PLAYWRIGHT_WORKERS || 4)
 const createWebServerConfig = (workerIndex: number) => {
     const port = 3105 + workerIndex
     return {
-        command: `node dist/cli.js --transport http --port ${port} --db ./.test-output/e2e/test-e2e-worker-${workerIndex}.db --backup-interval 1 --keep-backups 3 --vacuum-interval 2 --rebuild-index-interval 2`,
+        command: `node dist/cli.js --transport http --port ${port} --db ./.test-output/e2e/test-e2e-worker-${workerIndex}.db`,
         env: {
             ...process.env,
             DISABLE_ISSUE_LOGGING: 'true',

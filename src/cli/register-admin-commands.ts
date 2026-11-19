@@ -152,7 +152,7 @@ function registerAdminMaintenanceCommands(adminCmd: Command): void {
     addCoreOptions(pruneCmd)
     addDatabaseOptions(pruneCmd)
     addWorkspaceScopeOptions(pruneCmd)
-    addPruningOptions(pruneCmd, false)
+    addPruningOptions(pruneCmd)
     addAgentInstructions(pruneCmd,
         `
 🤖 AI AGENT INSTRUCTIONS:

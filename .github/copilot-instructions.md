@@ -108,10 +108,8 @@ src/
 ├── observability/              # Metrics interceptor, token estimator, latency tracker, Prometheus server/formatter
 ├── server/
 │   ├── mcp-server/             # MCP server setup & tool registration
-│   ├── auto-prune.ts           # Automated pruning & archiving scheduler
-│   ├── digest-reporter.ts      # Scheduled digest report formatting & webhook delivery
+│   ├── auto-prune.ts           # Startup & on-demand importance-based pruning
 │   ├── registration.ts         # Resource & prompt capability registration
-│   ├── scheduler.ts            # Periodic maintenance jobs (backup, vacuum, prune, rebuild-index, digest, report)
 │   └── subscription-manager.ts # MCP resource subscription notifications
 ├── transports/
 │   └── http/                   # HTTP/SSE transport (modularized)

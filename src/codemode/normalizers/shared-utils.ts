@@ -71,7 +71,6 @@ export const PARAM_ALIASES: Record<string, string> = {
     to: 'to_entry_id',
     kind: 'entry_type',
     format_type: 'format',
-    webhook: 'report_webhook_url',
     comment: 'resolution',
     resolution_comment: 'resolution',
     severity: 'flag_type',

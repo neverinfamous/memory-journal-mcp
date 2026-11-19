@@ -337,7 +337,6 @@ describe('Pass 23 Scope Isolation & Code Quality Regressions', () => {
                     undefined,
                     null,
                     null,
-                    null,
                     undefined,
                     briefingConfig,
                     runtime
@@ -346,7 +345,6 @@ describe('Pass 23 Scope Isolation & Code Quality Regressions', () => {
                     'memory://briefing/repo-b?pin_session=false',
                     db,
                     undefined,
-                    null,
                     null,
                     null,
                     undefined,
@@ -363,7 +361,6 @@ describe('Pass 23 Scope Isolation & Code Quality Regressions', () => {
                     'memory://agent-context/default?foo=1#bar',
                     db,
                     undefined,
-                    null,
                     null,
                     null,
                     undefined,

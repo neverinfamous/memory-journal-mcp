@@ -21,7 +21,6 @@ import {
 } from './server-options-parsers.js'
 
 import {
-    buildSchedulerOptions,
     resolveDatabasePaths,
     type CatchConfig,
 } from './server-options-groups.js'
@@ -420,7 +419,6 @@ export function buildServerOptions(
         defaultProjectNumber,
         defaultWorkspaceId,
         autoRebuildIndex: catchConfig(() => resolver.resolveBool('autoRebuildIndex', 'AUTO_REBUILD_INDEX') ?? false, false),
-        scheduler: buildSchedulerOptions(resolver, catchConfig),
         codemodeInternalFullAccess: catchConfig(() => resolver.resolveBool('codemodeInternalFullAccess', 'CODEMODE_INTERNAL_FULL_ACCESS') ?? false, false),
         projectRegistry,
         additionalTeamDbs: catchConfig(() => parseAdditionalTeamDbsOption(resolver.resolve<unknown>('additionalTeamDbs', 'ADDITIONAL_TEAM_DBS')), undefined),

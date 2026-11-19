@@ -15,7 +15,6 @@ import type { VectorSearchManager } from '../../vector/vector-search-manager/ind
 import type { ToolFilterConfig } from '../../filtering/tool-filter.js'
 import type { McpIcon, ProjectRegistryEntry } from '../../types/index.js'
 import type { GitHubIntegration } from '../../github/github-integration/index.js'
-import type { Scheduler } from '../../server/scheduler.js'
 import type { ServerRuntime } from '../../utils/maintenance-lock.js'
 import { fenceNonCanonicalRefOrKey } from '../../utils/security-utils.js'
 import {
@@ -370,7 +369,6 @@ export interface ResourceContext {
     vectorManager?: VectorSearchManager
     filterConfig?: ToolFilterConfig | null
     github?: GitHubIntegration | null
-    scheduler?: Scheduler | null
     briefingConfig?: BriefingConfig
     runtime?: ServerRuntime
     resourceCount?: number

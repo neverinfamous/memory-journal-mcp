@@ -105,8 +105,12 @@ async function stageAndVerifyBackup(
         await stageFn()
         await assertIncomingBackupIntact(tempBackupPath)
         await fs.promises.rename(tempBackupPath, backupPath)
+        await unlinkBestEffort(`${tempBackupPath}-wal`)
+        await unlinkBestEffort(`${tempBackupPath}-shm`)
     } catch (err) {
         await unlinkBestEffort(tempBackupPath)
+        await unlinkBestEffort(`${tempBackupPath}-wal`)
+        await unlinkBestEffort(`${tempBackupPath}-shm`)
         throw err
     }
 }

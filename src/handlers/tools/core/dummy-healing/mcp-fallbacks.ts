@@ -142,7 +142,6 @@ export async function handleReadResource(
                 context.vectorManager,
                 context.config?.filterConfig,
                 context.github,
-                undefined,
                 context.teamDb,
                 context.config?.briefingConfig,
                 context.config?.runtime
@@ -263,7 +262,6 @@ export async function handleServerInfo(
                 context.vectorManager,
                 context.config?.filterConfig,
                 context.github,
-                undefined,
                 context.teamDb,
                 context.config?.briefingConfig,
                 context.config?.runtime

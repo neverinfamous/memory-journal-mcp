@@ -161,60 +161,8 @@ export function addCodeModeOptions(command: Command): Command {
     })
 }
 
-export function addSchedulerOptions(command: Command): Command {
-    return withGroup(command, 'Scheduler Options', (cmd) => {
-        cmd
-            .option(
-                '--backup-interval <minutes>',
-                'Automated backup interval in minutes, HTTP only (0 = disabled)',
-                '0'
-            )
-            .option('--keep-backups <count>', 'Max backups to retain during automated cleanup', '5')
-            .option(
-                '--vacuum-interval <minutes>',
-                'Database optimize interval in minutes, HTTP only (0 = disabled)',
-                '0'
-            )
-            .option(
-                '--rebuild-index-interval <minutes>',
-                'Vector index rebuild interval in minutes, HTTP only (0 = disabled)',
-                '0'
-            )
-            .option(
-                '--digest-interval <minutes>',
-                'Analytics digest interval in minutes, HTTP only (0 = disabled; recommended: 1440 for daily)',
-                '0'
-            )
-            .option(
-                '--report-interval <minutes>',
-                'Scheduled report generation interval in minutes, HTTP only (0 = disabled)',
-                '0'
-            )
-            .option(
-                '--report-webhook-url <url>',
-                'Webhook URL for report delivery (POST) (env: REPORT_WEBHOOK_URL)'
-            )
-            .option(
-                '--report-webhook-auth <token>',
-                'Optional Authorization header value for the report webhook (env: REPORT_WEBHOOK_AUTH)'
-            )
-            .option(
-                '--report-content-type <type>',
-                'Webhook payload format: slack, discord, or json (env: REPORT_CONTENT_TYPE)',
-                'slack'
-            )
-    })
-}
-
-export function addPruningOptions(command: Command, includeInterval = true): Command {
+export function addPruningOptions(command: Command): Command {
     return withGroup(command, 'Pruning Options', (cmd) => {
-        if (includeInterval) {
-            cmd.option(
-                '--auto-prune-interval <minutes>',
-                'Interval to run autonomous pruning in background (env: AUTO_PRUNE_INTERVAL_MINUTES, 0 = disabled)',
-                '0'
-            )
-        }
         cmd
             .option(
                 '--archive-older-than-days <days>',
@@ -353,7 +301,6 @@ export function addServerOptions(command: Command): Command {
     addOAuthOptions(command)
     addAuditOptions(command)
     addCodeModeOptions(command)
-    addSchedulerOptions(command)
     addPruningOptions(command)
     addBriefingOptions(command)
     addMetricsOptions(command)

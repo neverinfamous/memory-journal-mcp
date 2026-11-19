@@ -3,14 +3,11 @@
  */
 
 import type { IDatabaseAdapter } from '../../database/core/interfaces.js'
-import type { VectorSearchManager } from '../../vector/vector-search-manager/index.js'
 import { DEFAULT_BRIEFING_CONFIG } from '../../handlers/resources/shared.js'
 import { ConfigManager } from '../../utils/config-manager.js'
-import type { ServerRuntime } from '../../utils/maintenance-lock.js'
 import { logger } from '../../utils/logger.js'
-import type { Scheduler } from '../scheduler.js'
+import type { ServerRuntime } from '../../utils/maintenance-lock.js'
 import {
-    createSchedulerIfConfigured,
     resolveToolFilterConfig,
     runStartupAutoPrune,
     seedInitialDigest,
@@ -75,10 +72,9 @@ function resolveEffectiveServerOptions(
 export async function initConfigAndStartupJobs(params: {
     options: ServerOptions
     db: IDatabaseAdapter
-    vectorManager: VectorSearchManager | null
     runtime: ServerRuntime
-}): Promise<{ configManager: ConfigManager; scheduler: Scheduler | null }> {
-    const { options, db, vectorManager, runtime } = params
+}): Promise<{ configManager: ConfigManager }> {
+    const { options, db, runtime } = params
     const filterConfig = resolveToolFilterConfig(options)
     const configManager = createServerConfigManager(options, filterConfig)
     runtime.configManager = configManager
@@ -99,15 +95,9 @@ export async function initConfigAndStartupJobs(params: {
     })
 
     const effectiveOptions = resolveEffectiveServerOptions(options, loadedBriefing)
-    const scheduler = createSchedulerIfConfigured(
-        effectiveOptions,
-        db,
-        vectorManager ?? undefined,
-        runtime
-    )
     seedInitialDigest(db, effectiveOptions)
 
-    return { configManager, scheduler }
+    return { configManager }
 }
 
 export function resolveFinalAllowedIoRoots(options: ServerOptions): string[] {

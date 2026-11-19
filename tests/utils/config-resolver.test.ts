@@ -146,11 +146,11 @@ describe('ConfigResolver', () => {
         process.env['PORT'] = ''
         process.env['STATELESS'] = ''
         process.env['AUDIT_REDACT'] = ''
-        process.env['BACKUP_INTERVAL'] = '   '
+        process.env['METRICS_PORT'] = '   '
 
         const resolver = new ConfigResolver(mockCommand as Command, cliOptions)
         expect(resolver.resolveInt('port', 'PORT')).toBe(3000)
-        expect(resolver.resolveNumber('backupInterval', 'BACKUP_INTERVAL')).toBeUndefined()
+        expect(resolver.resolveNumber('metricsPort', 'METRICS_PORT')).toBeUndefined()
         expect(resolver.resolveBool('stateless', 'STATELESS')).toBe(false)
         expect(resolver.resolveBool('auditRedact', 'AUDIT_REDACT')).toBe(true)
     })

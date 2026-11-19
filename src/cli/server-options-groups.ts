@@ -1,10 +1,5 @@
-import { z } from 'zod'
 import type { ConfigResolver } from '../utils/config-resolver.js'
 import { defaultDbPath, defaultTeamDbPath } from './option-groups.js'
-import type { ServerOptions } from '../server/mcp-server/types.js'
-
-const reportContentTypeSchema = z.enum(['slack', 'discord', 'json'])
-type ReportContentType = z.infer<typeof reportContentTypeSchema>
 
 export type CatchConfig = <T>(fn: () => T, fallback: T) => T
 
@@ -65,31 +60,4 @@ export function resolveDatabasePaths(
     const testTeamDb = rawTestTeamDb ?? configTestTeamDbPath
 
     return { db, testDb, teamDb, testTeamDb }
-}
-
-export function buildSchedulerOptions(
-    resolver: ConfigResolver,
-    catchConfig: CatchConfig
-): NonNullable<ServerOptions['scheduler']> {
-    return {
-        backupIntervalMinutes: catchConfig(() => resolver.resolveInt('backupInterval', 'BACKUP_INTERVAL', 0) ?? 0, 0),
-        keepBackups: catchConfig(() => resolver.resolveInt('keepBackups', 'KEEP_BACKUPS', 1, 100) ?? 5, 5),
-        vacuumIntervalMinutes: catchConfig(() => resolver.resolveInt('vacuumInterval', 'VACUUM_INTERVAL', 0) ?? 0, 0),
-        rebuildIndexIntervalMinutes: catchConfig(() => resolver.resolveInt('rebuildIndexInterval', 'REBUILD_INDEX_INTERVAL', 0) ?? 0, 0),
-        digestIntervalMinutes: catchConfig(() => resolver.resolveInt('digestInterval', 'DIGEST_INTERVAL', 0) ?? 0, 0),
-        pruneIntervalMinutes: catchConfig(() => resolver.resolveInt('autoPruneInterval', 'AUTO_PRUNE_INTERVAL_MINUTES', 0) ?? 0, 0),
-        reportIntervalMinutes: catchConfig(() => resolver.resolveInt('reportInterval', 'REPORT_INTERVAL', 0) ?? 0, 0),
-        reportDeliveryOptions: {
-            webhookUrl: catchConfig(() => resolver.resolve<string>('reportWebhookUrl', 'REPORT_WEBHOOK_URL') ?? '', ''),
-            webhookAuth: catchConfig(() => resolver.resolve<string>('reportWebhookAuth', 'REPORT_WEBHOOK_AUTH'), undefined),
-            contentType: catchConfig((): ReportContentType => {
-                const raw = resolver.resolve<string>('reportContentType', 'REPORT_CONTENT_TYPE') ?? 'slack'
-                const parsed = reportContentTypeSchema.safeParse(raw)
-                if (!parsed.success) {
-                    throw new Error(`Invalid report content type '${raw}'. Use slack, discord, or json.`)
-                }
-                return parsed.data
-            }, 'slack'),
-        },
-    }
 }

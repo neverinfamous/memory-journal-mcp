@@ -4,7 +4,6 @@ import type { McpServerFactory } from '../../../server/mcp-server/index.js'
 import express from 'express'
 import type { Express, Request, Response, RequestHandler, NextFunction } from 'express'
 import { logger } from '../../../utils/logger.js'
-import type { Scheduler } from '../../../server/scheduler.js'
 import type { HttpTransportConfig, RateLimitEntry } from '../types.js'
 import {
     DEFAULT_MAX_BODY_BYTES,
@@ -141,7 +140,6 @@ export class HttpTransport {
 
     async start(
         serverFactory: McpServerFactory,
-        scheduler: Scheduler | null,
         runtime: ServerRuntime
     ): Promise<void> {
         const { port, host, authToken, corsOrigins } = this.config
@@ -189,7 +187,7 @@ export class HttpTransport {
             )
             this.installBodyParsing()
             this.installRoutes(serverFactory, runtime, oauthInstalled)
-            await this.listen(port, host, scheduler)
+            await this.listen(port, host)
         } catch (error) {
             // [SIDE-EFFECT] Release timers so a failed start does not keep the process alive.
             if (this.rateLimitCleanupTimer !== null) {
@@ -331,8 +329,8 @@ export class HttpTransport {
         })
     }
 
-    /** Bind the HTTP server; rejects on bind errors (e.g. EADDRINUSE) and starts the scheduler once listening. */
-    private async listen(port: number, host: string, scheduler: Scheduler | null): Promise<void> {
+    /** Bind the HTTP server; rejects on bind errors (e.g. EADDRINUSE). */
+    private async listen(port: number, host: string): Promise<void> {
         await new Promise<void>((resolve, reject) => {
             const server = this.app.listen(port, host, () => {
                 logger.info(
@@ -344,7 +342,6 @@ export class HttpTransport {
                         endpoint: `http://${host}:${String(port)}/mcp`,
                     }
                 )
-                scheduler?.start()
                 resolve()
             })
             this.httpServer = server
@@ -357,7 +354,6 @@ export class HttpTransport {
                     module: 'HTTP',
                     error: err.message,
                 })
-                scheduler?.stop()
                 // Rejecting after start() already resolved is a no-op, so only a bind failure surfaces.
                 reject(err)
             })
@@ -368,10 +364,8 @@ export class HttpTransport {
         })
     }
 
-    async stop(scheduler: Scheduler | null): Promise<void> {
+    async stop(): Promise<void> {
         logger.info('Shutting down HTTP server...', { module: 'HTTP' })
-
-        scheduler?.stop()
 
         if (this.rateLimitCleanupTimer !== null) {
             clearInterval(this.rateLimitCleanupTimer)

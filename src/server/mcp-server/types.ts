@@ -1,7 +1,6 @@
 import type { BriefingConfig } from '../../handlers/resources/shared.js'
 import type { ProjectRegistryEntry } from '../../types/index.js'
 import type { AuditConfig } from '../../audit/index.js'
-import type { SchedulerOptions } from '../scheduler.js'
 
 export interface ServerOptions {
     transport: 'stdio' | 'http'
@@ -21,7 +20,6 @@ export interface ServerOptions {
     corsOrigins?: string[]
     authToken?: string
     enableHSTS?: boolean
-    scheduler?: SchedulerOptions
 
     // OAuth 2.1 options
     oauthEnabled?: boolean
@@ -78,7 +76,6 @@ import type { ServerRuntime } from '../../utils/maintenance-lock.js'
 import type { VectorSearchManager } from '../../vector/vector-search-manager/index.js'
 import type { GitHubIntegration } from '../../github/github-integration/index.js'
 import type { ConfigManager } from '../../utils/config-manager.js'
-import type { Scheduler } from '../scheduler.js'
 
 export interface ServerContext {
     db: IDatabaseAdapter;
@@ -90,7 +87,6 @@ export interface ServerContext {
     teamVectorManager?: VectorSearchManager;
     github: GitHubIntegration;
     configManager: ConfigManager;
-    scheduler: Scheduler | null;
     allowedIoRoots: string[];
     activeMetricsPath?: string;
     skillCatalog?: SkillCatalog;

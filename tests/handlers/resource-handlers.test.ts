@@ -154,7 +154,6 @@ describe('Resource Handlers', () => {
                 undefined,
                 undefined,
                 undefined,
-                undefined,
                 runtimeDisabled
             )
             const textDisabled = resDisabled.data as string
@@ -172,7 +171,6 @@ describe('Resource Handlers', () => {
                 db,
                 undefined,
                 filterConfig,
-                undefined,
                 undefined,
                 undefined,
                 undefined,

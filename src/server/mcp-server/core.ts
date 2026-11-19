@@ -96,14 +96,12 @@ function buildServerToolConfigs(
 }
 
 async function cleanupFailedStartup(params: {
-    scheduler: ServerContext['scheduler']
     runtime: ServerRuntime
     configManager: ServerContext['configManager']
     shutdownMetrics: (() => Promise<void>) | undefined
     closeDatabases: () => void
 }): Promise<void> {
-    const { scheduler, runtime, configManager, shutdownMetrics, closeDatabases } = params
-    scheduler?.stop()
+    const { runtime, configManager, shutdownMetrics, closeDatabases } = params
     runtime.stopBackgroundTasks?.()
     configManager.close()
     if (shutdownMetrics !== undefined) {
@@ -142,7 +140,6 @@ export async function createServer(options: ServerOptions): Promise<void> {
         testTeamDb,
         runtime,
         configManager,
-        scheduler,
         allowedIoRoots,
         activeMetricsPath,
     } = context
@@ -159,7 +156,6 @@ export async function createServer(options: ServerOptions): Promise<void> {
         allowedIoRoots,
         baseConfig,
         customToolHandlerConfig,
-        scheduler,
     })
 
     const getServerInstance = (): McpServer =>
@@ -183,7 +179,6 @@ export async function createServer(options: ServerOptions): Promise<void> {
         await startSelectedTransport({
             options,
             getServerInstance,
-            scheduler,
             runtime,
             configManager,
             shutdownMetrics,
@@ -192,7 +187,6 @@ export async function createServer(options: ServerOptions): Promise<void> {
         })
     } catch (startupError) {
         await cleanupFailedStartup({
-            scheduler,
             runtime,
             configManager,
             shutdownMetrics,

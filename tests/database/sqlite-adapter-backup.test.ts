@@ -143,4 +143,13 @@ describe('Backup Manager Edge Cases', () => {
             fs.promises.copyFile = originalCopy
         }
     })
+
+    it('should not leave orphaned .tmp, .tmp-wal, or .tmp-shm files after exportToFile', async () => {
+        await db.exportToFile('clean-sidecar-test')
+        const backupsDir = path.join(testDir, 'backups')
+        const leftoverTmp = fs
+            .readdirSync(backupsDir)
+            .filter((name) => /\.tmp(?:-(?:wal|shm))?$/i.test(name))
+        expect(leftoverTmp).toEqual([])
+    })
 })

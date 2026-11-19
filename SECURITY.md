@@ -116,7 +116,6 @@ export CORS_ORIGIN="http://localhost:3000,https://my-app.com"
 
 - ✅ **Pre-Body Auth & 1MB Limits** — Rate limiting and Bearer/OAuth authentication execute *before* JSON body parsing (`src/transports/http/server/http-transport.ts`), while JSON parsing and protocol route handlers (`src/transports/http/server/protocol-route-handlers.ts`) enforce `1MB` / `maxRequestBodySize` limits to prevent memory-exhaustion DoS.
 - ✅ **Health & Metrics Endpoint Protection** — Only `GET` and `HEAD` requests to `/health` (and `GET`/`HEAD` requests to OAuth `.well-known` discovery endpoints) bypass authentication (`src/auth/middleware.ts`, `src/transports/http/handlers.ts`); `/metrics` on the HTTP transport requires authentication under **both** OAuth 2.1 and static Bearer auth. The standalone Prometheus server (`src/observability/metrics-server.ts`, default `127.0.0.1:9465`) rejects whitespace-only `authToken` values on non-loopback binds and validates Bearer tokens via constant-time SHA-256 `crypto.timingSafeEqual`.
-- ✅ **Outbound Webhook SSRF Protection** — Scheduled digest webhooks (`--report-webhook-url` / `REPORT_WEBHOOK_URL`) require `https:` (unless `ALLOW_INSECURE_WEBHOOK_HTTP=true` is explicitly set for local testing), resolve DNS prior to dispatch, block loopback/private/link-local/cloud-metadata IP ranges, and disable HTTP redirects (`redirect: 'error'`)
 
 ## 🔐 **OAuth 2.1 Authentication**
 

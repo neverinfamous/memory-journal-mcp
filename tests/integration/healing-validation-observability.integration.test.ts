@@ -155,7 +155,6 @@ describe('Cross-Subsystem Integration: Autonomous Healing, Validation & Observab
             vectorManager,
             github,
             configManager,
-            scheduler: null,
             allowedIoRoots: [tempDir],
         }
 

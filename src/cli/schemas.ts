@@ -131,20 +131,7 @@ export const codeModeOptionsSchema = z.object({
     toolFilter: z.string().optional()
 })
 
-export const schedulerOptionsSchema = z.object({
-    backupInterval: z.string().optional(),
-    keepBackups: z.string().optional(),
-    vacuumInterval: z.string().optional(),
-    rebuildIndexInterval: z.string().optional(),
-    digestInterval: z.string().optional(),
-    reportInterval: z.string().optional(),
-    reportWebhookUrl: z.string().optional(),
-    reportWebhookAuth: z.string().optional(),
-    reportContentType: z.string().optional()
-})
-
 export const pruningOptionsSchema = z.object({
-    autoPruneInterval: z.string().optional(),
     archiveOlderThanDays: z.string().optional(),
     pruneOlderThanDays: z.string().optional(),
     hardDeleteOlderThanDays: z.string().optional(),
@@ -191,7 +178,6 @@ export const serverOptionsSchema = coreOptionsSchema
     .extend(oauthOptionsSchema.shape)
     .extend(auditOptionsSchema.shape)
     .extend(codeModeOptionsSchema.shape)
-    .extend(schedulerOptionsSchema.shape)
     .extend(pruningOptionsSchema.shape)
     .extend(briefingOptionsSchema.shape)
     .extend(metricsOptionsSchema.shape)
@@ -219,8 +205,6 @@ export const adminVacuumOptionsSchema = coreOptionsSchema
     .extend(outputOptionsSchema.shape)
 
 export const adminPruneOptionsSchema = pruningOptionsSchema
-    // [INTENT] One-shot prune ignores the scheduler interval; do not accept it as a validated input.
-    .omit({ autoPruneInterval: true })
     .extend(coreOptionsSchema.shape)
     .extend(databaseOptionsSchema.shape)
     .extend(workspaceOptionsSchema.shape)

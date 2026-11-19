@@ -1225,65 +1225,6 @@ describe('McpServer', function () {
     })
 
     // ========================================================================
-    // Scheduler
-    // ========================================================================
-
-    describe('createServer - scheduler', function () {
-        it('should warn and not start scheduler on stdio transport', async function () {
-            await createServer({
-                transport: 'stdio',
-                dbPath: './.test-output/vitest/test-server.db',
-                scheduler: {
-                    backupIntervalMinutes: 60,
-                    vacuumIntervalMinutes: 120,
-                    rebuildIndexIntervalMinutes: 180,
-                    keepBackups: 5,
-                    digestIntervalMinutes: 0,
-                },
-            })
-
-            // Scheduler should NOT be started for stdio
-            // (no way to directly check but the code path is covered)
-            expect(mockDbInitialize).toHaveBeenCalled()
-        })
-
-        it('should start scheduler on HTTP transport', async function () {
-            await createServer({
-                transport: 'http',
-                allowedIoRoots: ['C:/dummy/root'],
-                dbPath: './.test-output/vitest/test-server.db',
-                statelessHttp: true,
-                scheduler: {
-                    backupIntervalMinutes: 60,
-                    vacuumIntervalMinutes: 0,
-                    rebuildIndexIntervalMinutes: 0,
-                    keepBackups: 5,
-                    digestIntervalMinutes: 0,
-                },
-            })
-
-            expect(mockDbInitialize).toHaveBeenCalled()
-        })
-
-        it('should not create scheduler when all intervals are 0', async function () {
-            await createServer({
-                transport: 'http',
-                allowedIoRoots: ['C:/dummy/root'],
-                dbPath: './.test-output/vitest/test-server.db',
-                scheduler: {
-                    backupIntervalMinutes: 0,
-                    vacuumIntervalMinutes: 0,
-                    rebuildIndexIntervalMinutes: 0,
-                    keepBackups: 5,
-                    digestIntervalMinutes: 0,
-                },
-            })
-
-            expect(mockDbInitialize).toHaveBeenCalled()
-        })
-    })
-
-    // ========================================================================
     // Tool handler with outputSchema
     // ========================================================================
 

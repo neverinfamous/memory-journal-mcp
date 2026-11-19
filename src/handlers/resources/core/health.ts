@@ -73,7 +73,6 @@ function handleHealthResource(_uri: string, context: ResourceContext): ResourceR
                   ...context.teamDb.getHealthStatus(),
               }
             : { configured: false },
-        scheduler: context.scheduler ? context.scheduler.getStatus() : { active: false, jobs: [] },
         audit: context.runtime?.auditLogger
             ? {
                   droppedCount: context.runtime.auditLogger.droppedCount,

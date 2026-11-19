@@ -61,7 +61,7 @@ Memory Journal builds your project's long-term memory. It acts as a **Project Co
 | **Heuristic Scoring**         | Optimize context delivery by scoring entries based on veracity and impact.                                           |
 | **Team Collaboration**        | Share databases across teams with cross-project insights, author attribution, and role-based access control.         |
 | **Data Interoperability**     | Export schemas safely, sync Markdown directories, and maintain a unified IO namespace.                               |
-| **Backup & Restore**          | Secure data with automated scheduling, retention policies, and one-command restores.                                 |
+| **Backup & Restore**          | Secure data with CLI/CMS maintenance automation, retention policies, and one-command restores.                       |
 | **Auto-Pruning**              | Soft-delete low-value entries automatically to maintain search relevance over long-running projects.                 |
 | **Security & Transport**      | Ensure secure connections with OAuth 2.1, Streamable HTTP, rate limiting, and SQL injection prevention.              |
 | **Structured Error Handling** | Provide agents with classification, remediation hints, and recoverability signals on every tool call.                |
@@ -401,13 +401,13 @@ For remote access or web-based clients, run the server in HTTP mode:
 memory-journal-mcp --transport http --port 3000 --allowed-io-roots /path/to/allowed/dir
 ```
 
-To bind to all interfaces (required for containers) and enable the automated proactive analytics scheduler (e.g. daily digest), you MUST provide both `ALLOWED_IO_ROOTS` and an authentication token:
+To bind to all interfaces (required for containers), you MUST provide both `ALLOWED_IO_ROOTS` and an authentication token:
 
 ```bash
 export MCP_AUTH_TOKEN="your_secure_random_token"
 export MCP_AUTH_SCOPES="full" # Defaults to "read" if omitted
 export ALLOWED_IO_ROOTS="/path/to/allowed/dir"
-memory-journal-mcp --transport http --port 3000 --server-host 0.0.0.0 --digest-interval 1440
+memory-journal-mcp --transport http --port 3000 --server-host 0.0.0.0
 ```
 
 **Endpoints:**
@@ -466,40 +466,32 @@ memory-journal-mcp --transport http --port 3000 --stateless --allowed-io-roots /
 | Stateful (default)        | ✅ Yes                 | ✅ Yes     | ⚠️ Complex |
 | Stateless (`--stateless`) | ❌ No                  | ❌ No      | ✅ Native  |
 
-#### Automated Scheduling (HTTP Only)
+#### Maintenance, Auto-Prune & Scheduled Jobs
 
-When running in HTTP/SSE mode, enable periodic maintenance jobs with CLI flags. These jobs run in-process on `setInterval` — no external cron needed.
+Startup auto-prune enforces two-stage data lifecycle hygiene automatically on boot (`0` = disabled), and one-shot `admin` CLI subcommands handle database maintenance (`backup`, `restore`, `vacuum`, `prune`, `rebuild-index`) without running a background scheduler inside the MCP server.
 
-> **Note:** These flags are ignored for stdio transport because stdio sessions are short-lived (tied to your IDE session). For stdio, use client-driven **[Nightly CMS Automations →](https://github.com/neverinfamous/memory-journal-mcp/wiki/Automations)** (`CMS-02` / `CMS-04`), OS-level scheduling (Task Scheduler, cron), or run the backup/cleanup tools manually.
+> **Note:** For recurring automation across IDE sessions, use client-driven **[Nightly CMS Automations →](https://github.com/neverinfamous/memory-journal-mcp/wiki/Automations)** (`CMS-02` / `CMS-04`) or OS-level scheduling (`cron`, Windows Task Scheduler) invoking `memory-journal-mcp admin <command>` or `mj_execute_code` tools directly.
 
 ```bash
-memory-journal-mcp --transport http --port 3000 \
-  --allowed-io-roots /path/to/projects \
-  --backup-interval 60 --keep-backups 10 \
-  --vacuum-interval 1440 \
-  --rebuild-index-interval 720
+memory-journal-mcp --archive-older-than-days 90 \
+  --prune-older-than-days 5 --hard-delete-older-than-days 5 \
+  --prune-importance-threshold 0.15
+
+# One-shot maintenance commands (stdio or headless hosts)
+memory-journal-mcp admin backup
+memory-journal-mcp admin vacuum
+memory-journal-mcp admin prune
+memory-journal-mcp admin rebuild-index
 ```
 
 | Flag                                   | Default | Description                                                                        |
 | -------------------------------------- | ------- | ---------------------------------------------------------------------------------- |
-| `--backup-interval <min>`              | 0 (off) | Create timestamped database backups and prune old ones automatically               |
-| `--keep-backups <count>`               | 5       | Max backups retained during automated cleanup                                      |
-| `--vacuum-interval <min>`              | 0 (off) | Run `PRAGMA optimize` and flush database to disk                                   |
-| `--rebuild-index-interval <min>`       | 0 (off) | Full vector index rebuild to maintain semantic search quality                      |
-| `--report-interval <min>`              | 0 (off) | Scheduled report generation interval in minutes                                    |
-| `--report-webhook-url <url>`           | —       | HTTPS webhook URL for scheduled report delivery                                    |
-| `--report-webhook-auth <header>`       | —       | Custom `Authorization` header for webhook requests                                 |
-| `--report-content-type <type>`         | `slack` | Webhook payload format: `slack`, `discord`, or `json` (env: `REPORT_CONTENT_TYPE`) |
-| `--digest-interval <min>`              | 0 (off) | Scheduled periodic digest analysis report                                          |
-| `--auto-prune-interval <min>`          | 0 (off) | Run autonomous garbage collection (archive, soft-delete, hard-delete)              |
-| `--archive-older-than-days <days>`     | 0 (off) | Auto-archive low-importance entries older than N days                              |
-| `--prune-older-than-days <days>`       | 0 (off) | Auto soft-delete entries older than N days                                         |
-| `--hard-delete-older-than-days <days>` | 0 (off) | Permanently purge soft-deleted entries older than N days                           |
+| `--archive-older-than-days <days>`     | 0 (off) | Auto-archive low-importance entries older than N days on startup / prune           |
+| `--prune-older-than-days <days>`       | 0 (off) | Auto soft-delete entries older than N days on startup / prune                      |
+| `--hard-delete-older-than-days <days>` | 0 (off) | Permanently purge soft-deleted entries older than N days on startup / prune        |
 | `--prune-importance-threshold <score>` | 0.15    | Max importance score (`0.0`–`1.0`) eligible for archiving/pruning                  |
 | `--prune-dry-run`                      | false   | Log auto-prune candidates without mutating entries                                 |
 | `--prune-exclude-tags <tags>`          | —       | Comma-separated tags exempt from auto-prune (only the tags passed here are exempt; rows already stored with `is_archived = 1` are not selected for archive or soft-delete) |
-
-Each job is error-isolated — a failure in one job won't affect the others. Scheduler status (last run, result, next run) is visible via `memory://health`.
 
 ### Integrate Seamlessly with GitHub
 
@@ -644,9 +636,7 @@ Trigger either workflow on demand or via scheduled background agents in **Cursor
 | **Telemetry & Administration**                                                                                                                                                              |                                                                                                                                                                                                                                                                        |
 | `AUDIT_LOG_PATH` / `AUDIT_REDACT` / `AUDIT_READS` / `AUDIT_LOG_MAX_SIZE`                                                                                                                    | Path to JSONL audit log file, argument/result redaction, read-call logging, and rotation size limit (default: 10MB)                                                                                                                                                    |
 | `METRICS_EXPORT` / `PERSIST_METRICS` / `METRICS_PATH` / `MJ_METRICS_PORT` / `MJ_METRICS_HOST`                                                                                               | Prometheus export (`METRICS_EXPORT=prometheus` auto-starts the standalone metrics server on `127.0.0.1:9465` in addition to mounting `/metrics` on the HTTP transport), disk-persisted metrics (`--persist-metrics`, `--metrics-path`), and dedicated scrape port/host |
-| `AUTO_PRUNE_INTERVAL_MINUTES` / `ARCHIVE_OLDER_THAN_DAYS` / `PRUNE_OLDER_THAN_DAYS` / `HARD_DELETE_OLDER_THAN_DAYS` / `PRUNE_IMPORTANCE_THRESHOLD` / `PRUNE_DRY_RUN` / `PRUNE_EXCLUDE_TAGS` | Autonomous lifecycle pruning, archiving (interval/days default: `0` = disabled), importance threshold (default: `0.15`), dry-run (default: `false`), and exclusion tags                                                                                                |
-| `BACKUP_INTERVAL` / `KEEP_BACKUPS` / `VACUUM_INTERVAL` / `REBUILD_INDEX_INTERVAL` / `DIGEST_INTERVAL`                                                                                       | Scheduled HTTP maintenance intervals in minutes (`--backup-interval`, `--vacuum-interval`, `--rebuild-index-interval`, `--digest-interval`) and backup retention count (`--keep-backups`, default: `5`)                                                                |
-| `REPORT_INTERVAL` / `REPORT_WEBHOOK_URL` / `REPORT_WEBHOOK_AUTH` / `REPORT_CONTENT_TYPE` / `ALLOW_INSECURE_WEBHOOK_HTTP`                                                                    | Scheduled HTTP reports, webhook delivery headers/content-type, and local dev HTTP webhook override                                                                                                                                                                     |
+| `ARCHIVE_OLDER_THAN_DAYS` / `PRUNE_OLDER_THAN_DAYS` / `HARD_DELETE_OLDER_THAN_DAYS` / `PRUNE_IMPORTANCE_THRESHOLD` / `PRUNE_DRY_RUN` / `PRUNE_EXCLUDE_TAGS` | Startup lifecycle archiving and pruning (days default: `0` = disabled), importance threshold (default: `0.15`), dry-run (default: `false`), and exclusion tags                                                                                                     |
 | `DEBUG` / `DISABLE_ISSUE_LOGGING`                                                                                                                                                           | Verbose debug logging and suppression of automated runtime issue logging                                                                                                                                                                                               |
 
 ### GitHub Integration (Optional)
@@ -765,7 +755,7 @@ Extensively tested across two frameworks:
 | Suite                     | Command             | Covers                                                                                                                                                  |
 | ------------------------- | ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Vitest (unit/integration) | `pnpm test`         | Extensive Vitest unit and integration suite with strict quality gates (database, tools, resources, handlers, security, GitHub, vector search, codemode) |
-| Playwright (e2e)          | `pnpm run test:e2e` | HTTP/SSE transport, auth, sessions, CORS, security headers, scheduler                                                                                   |
+| Playwright (e2e)          | `pnpm run test:e2e` | HTTP/SSE transport, auth, sessions, CORS, security headers                                                                                              |
 
 ```bash
 pnpm test          # Unit + integration tests
@@ -779,7 +769,7 @@ pnpm run test:e2e  # End-to-end HTTP/SSE transport tests
 - **Deterministic error handling** - Every tool returns structured `{success, error, code, category, suggestion, recoverable}` responses with actionable context — no raw exceptions, no silent failures, no misleading messages
 - **Local-first** - All data stored locally, no external API calls (except optional GitHub)
 - **Input validation** - Zod schemas, content size limits, SQL injection prevention, and `<untrusted_remote_content>` prompt-injection boundary tagging
-- **Path traversal & SSRF protection** - `ALLOWED_IO_ROOTS` sandbox containment with URL-decode/symlink verification, backup path validation, and outbound webhook DNS/IP SSRF blocking
+- **Path traversal protection** - `ALLOWED_IO_ROOTS` sandbox containment with URL-decode/symlink verification and backup path validation
 - **Multi-tenant & filter enforcement** - End-to-end `workspace_id` isolation across SQLite and Vector search, plus execution-layer `--tool-filter` enforcement across `tools/call`, Code Mode (`mj.*`), and fallback handlers
 - **MCP 2025-11-25 annotations & icons** - Behavioral hints (`readOnlyHint`, `destructiveHint`, etc.) and capability icons
 - **HTTP transport hardening** - OAuth 2.1 `tokenClaims` propagation, principal-bound stateful sessions (`100` max active sessions), comprehensive security headers, configurable multi-origin CORS, 1MB body/stream limit, built-in per-subject/IP rate limiting (100 req/min), server timeouts, HSTS (opt-in), 30-min session timeout, and localhost-bound metrics (`METRICS_EXPORT=prometheus` automatically starts the standalone metrics server on `127.0.0.1:9465`, customizable via `MJ_METRICS_PORT` and `MJ_METRICS_HOST`, in addition to mounting `/metrics` on the HTTP transport)

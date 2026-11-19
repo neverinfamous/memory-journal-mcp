@@ -2,8 +2,7 @@
  * Briefing Insights Section
  *
  * Formats a DigestSnapshot into a compact briefing section (~50 tokens).
- * Only included when a digest snapshot is available (scheduler has run at least once,
- * or a snapshot was restored from a previous server session).
+ * Uses live compute with a 60s TTL cache, falling back to persisted DB snapshots.
  */
 
 import {
@@ -40,9 +39,8 @@ const LIVE_DIGEST_TTL_MS = 60_000
  * Build the insights section from the latest digest snapshot.
  *
  * Resolution order:
- * 1. Scheduler's in-memory digest (HTTP transport with digest job running)
- * 2. Persisted DB snapshot (survives server restarts)
- * 3. Live compute with 60s TTL cache (stdio transport, fresh databases)
+ * 1. Live compute with 60s TTL cache
+ * 2. Persisted DB snapshot (survives server restarts / fallback if compute fails)
  *
  * Returns null only if compute itself fails or database has no entries.
  */
@@ -57,9 +55,7 @@ export function buildInsightsSection(
 }
 
 /**
- * Resolve the latest digest snapshot from scheduler, database, or live compute.
- * When `workspaceId` is given (a briefing for a specific target repo), the scheduler's
- * and the persisted snapshot are not workspace-scoped, so only the live compute is used.
+ * Resolve the latest digest snapshot from live compute (with 60s TTL cache) or DB fallback.
  */
 function resolveDigestSnapshot(
     context: ResourceContext,
@@ -67,13 +63,7 @@ function resolveDigestSnapshot(
 ): DigestSnapshot | null {
     const effectiveWorkspace = workspaceId ?? resourceWorkspace(context)
 
-    // Primary: scheduler's accessor (includes just-computed data, workspace-scoped)
-    const schedulerDigest = context.scheduler?.getLatestDigest?.(effectiveWorkspace)
-    if (schedulerDigest) return schedulerDigest
-
-    // Live compute: real-time digest when no cached snapshot exists.
-    // Covers stdio transport (no scheduler) and fresh databases.
-    // TTL cache prevents redundant recomputation across rapid reads.
+    // Live compute with 60s TTL cache to prevent redundant recomputation across rapid reads.
     const dbObj: unknown = context.db
     const dbCacheKey = typeof dbObj === 'object' && dbObj !== null ? dbObj : undefined
     const cachedDigest = dbCacheKey !== undefined ? liveDigestCache.get(dbCacheKey) : undefined
@@ -95,7 +85,7 @@ function resolveDigestSnapshot(
                     expiresAt: Date.now() + LIVE_DIGEST_TTL_MS,
                 })
             }
-            logger.debug('Live digest computed for briefing (no scheduler/persisted snapshot)', {
+            logger.debug('Live digest computed for briefing', {
                 module: 'BRIEFING',
                 operation: 'insights-live-compute',
             })

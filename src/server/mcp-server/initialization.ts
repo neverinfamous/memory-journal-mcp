@@ -8,7 +8,6 @@ import { getGitHubIntegration } from '../../github/github-integration/index.js'
 import { logger } from '../../utils/logger.js'
 import { ServerRuntime } from '../../utils/maintenance-lock.js'
 import type { ConfigManager } from '../../utils/config-manager.js'
-import type { Scheduler } from '../scheduler.js'
 import { AuditLogger, createAuditInterceptor } from '../../audit/index.js'
 import { awaitPendingVectorInit } from './core-helpers.js'
 import { createVectorManagers } from './initialization-helpers.js'
@@ -202,7 +201,6 @@ async function initializeGitHubIntegration(
 }
 
 async function safeCloseStartupResources(resources: {
-    scheduler: Scheduler | null
     configManager: ConfigManager | undefined
     runtime: ServerRuntime
     testTeamDb: IDatabaseAdapter | undefined
@@ -210,11 +208,6 @@ async function safeCloseStartupResources(resources: {
     testDb: IDatabaseAdapter | undefined
     primaryDb: IDatabaseAdapter | undefined
 }): Promise<void> {
-    try {
-        resources.scheduler?.stop()
-    } catch {
-        // Ignore cleanup errors during aborted startup
-    }
     try {
         resources.configManager?.close()
     } catch {
@@ -289,7 +282,6 @@ export async function initializeDependencies(options: ServerOptions): Promise<Se
     let primaryTeamDb: IDatabaseAdapter | undefined
     let testTeamDb: IDatabaseAdapter | undefined
     let configManager: ConfigManager | undefined
-    let scheduler: Scheduler | null = null
 
     try {
         const coreSetup = await setupCoreDatabasesAndAudit(options, runtime)
@@ -311,9 +303,8 @@ export async function initializeDependencies(options: ServerOptions): Promise<Se
         })
         runtime.pendingVectorInit = pendingVectorInit
 
-        const configAndJobs = await initConfigAndStartupJobs({ options, db, vectorManager, runtime })
+        const configAndJobs = await initConfigAndStartupJobs({ options, db, runtime })
         configManager = configAndJobs.configManager
-        scheduler = configAndJobs.scheduler
 
         const github = await initializeGitHubIntegration(options, runtime)
 
@@ -330,14 +321,12 @@ export async function initializeDependencies(options: ServerOptions): Promise<Se
             teamVectorManager,
             github,
             configManager,
-            scheduler,
             allowedIoRoots,
             activeMetricsPath,
             ...(skillCatalog ? { skillCatalog } : {}),
         }
     } catch (error: unknown) {
         await safeCloseStartupResources({
-            scheduler,
             configManager,
             runtime,
             testTeamDb,

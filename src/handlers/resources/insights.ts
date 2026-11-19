@@ -1,8 +1,8 @@
 /**
  * Memory Journal MCP Server - Insights Resources
  *
- * Resources for surfacing pre-computed analytics on demand.
- * - memory://insights/digest — Latest full digest snapshot
+ * Resources for surfacing analytics snapshots on demand:
+ * - memory://insights/digest — Latest analytics digest snapshot
  * - memory://insights/team-collaboration — Team collaboration matrix
  */
 
@@ -50,7 +50,7 @@ export const digestInsightsResource: InternalResourceDef = {
     name: 'Analytics Digest',
     title: 'Latest Analytics Digest Snapshot',
     description:
-        'Full pre-computed analytics digest with activity trends, significance spikes, stale projects, relationship density, and top importance entries. Updated by the scheduled digest job.',
+        'Full analytics digest with activity trends, significance spikes, stale projects, relationship density, and top importance entries.',
     mimeType: 'application/json',
     icons: [ICON_ANALYTICS],
     annotations: {
@@ -60,18 +60,7 @@ export const digestInsightsResource: InternalResourceDef = {
         const lastModified = new Date().toISOString()
         const wsId = resourceWorkspace(context)
 
-        // Try scheduler first, then persisted DB snapshot
-        const schedulerDigest = context.scheduler?.getLatestDigest?.(wsId)
-        if (schedulerDigest) {
-            const data = { success: true, snapshot: sanitizeDigestSnapshot(schedulerDigest) }
-            const tokenEstimate = Math.ceil(JSON.stringify(data).length / 4)
-            return {
-                data: { ...data, _meta: { tokenEstimate } },
-                annotations: { lastModified },
-            }
-        }
-
-        // Live compute fallback (stdio transport, fresh databases)
+        // Live compute primary path (falls back to persisted DB snapshot if compute fails or is unavailable)
         try {
             const liveDigest = context.db?.computeDigest?.(wsId)
             if (liveDigest !== undefined) {
@@ -87,7 +76,7 @@ export const digestInsightsResource: InternalResourceDef = {
                 }
             }
         } catch {
-            // Non-critical — fall through to "no digest available" message or persisted snapshot
+            // Non-critical — fall through to persisted snapshot
         }
 
         const dbSnapshot = context.db?.getLatestAnalyticsSnapshot?.('digest', wsId)
@@ -105,8 +94,8 @@ export const digestInsightsResource: InternalResourceDef = {
             }
         }
 
-        throw new ProtocolError(ProtocolErrorCode.InternalError, 
-            'No digest available — enable with --digest-interval <minutes> (HTTP transport only)'
+        throw new ProtocolError(ProtocolErrorCode.InternalError,
+            'No digest available for the current workspace.'
         )
     },
 }
@@ -189,52 +178,6 @@ export const teamCollaborationResource: InternalResourceDef = {
 }
 
 // ============================================================================
-// memory://insights/reports
-// ============================================================================
-
-export const reportHistoryResource: InternalResourceDef = {
-    uri: 'memory://insights/reports',
-    name: 'Report History',
-    title: 'Recent Scheduled Digest Reports',
-    description:
-        'The last 5 generated digest report snapshots. Updated by the scheduled report job.',
-    mimeType: 'application/json',
-    icons: [ICON_ANALYTICS],
-    annotations: {
-        ...withPriority(0.3, ASSISTANT_FOCUSED),
-    },
-    handler: (_uri: string, context: ResourceContext): ResourceResult => {
-        const lastModified = new Date().toISOString()
-
-        try {
-            const snapshots = context.db.getAnalyticsSnapshots?.('report', 5, resourceWorkspace(context)) ?? []
-            
-            const reports = snapshots.map(snapshot => {
-                const data = snapshot.data
-                const topEntries = data['topImportanceEntries'] as { preview?: string }[] | undefined
-                const rawPreview = (data['preview'] as string | undefined) ?? topEntries?.[0]?.preview
-                return {
-                    computedAt: snapshot.createdAt,
-                    preview:
-                        typeof rawPreview === 'string' && rawPreview.length > 0
-                            ? sliceUntrustedInline(rawPreview, DIGEST_PREVIEW_LIMIT, '...')
-                            : 'No preview available',
-                }
-            })
-
-            const data = { success: true, reports }
-            const tokenEstimate = Math.ceil(JSON.stringify(data).length / 4)
-            return {
-                data: { ...data, _meta: { tokenEstimate } },
-                annotations: { lastModified: reports[0]?.computedAt ?? lastModified },
-            }
-        } catch (error) {
-            throw new ProtocolError(ProtocolErrorCode.InternalError,  error instanceof Error ? error.message : String(error))
-        }
-    },
-}
-
-// ============================================================================
 
 // Removed computeTeamCollaborationMatrix (migrated to SQLite adapter)
 
@@ -242,5 +185,5 @@ export const reportHistoryResource: InternalResourceDef = {
  * Get all insight resource definitions
  */
 export function getInsightResourceDefinitions(): InternalResourceDef[] {
-    return [digestInsightsResource, teamCollaborationResource, reportHistoryResource]
+    return [digestInsightsResource, teamCollaborationResource]
 }

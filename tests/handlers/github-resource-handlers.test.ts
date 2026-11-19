@@ -523,18 +523,12 @@ describe('GitHub Resource Handlers', () => {
     // ========================================================================
 
     describe('memory://health', () => {
-        it('should return health status with vector and scheduler info', async () => {
+        it('should return health status with vector info', async () => {
             const mockVectorManager = {
                 getStats: vi.fn().mockReturnValue({
                     itemCount: 50,
                     modelName: 'test-model',
                     dimensions: 384,
-                }),
-            }
-            const mockScheduler = {
-                getStatus: vi.fn().mockReturnValue({
-                    active: true,
-                    jobs: [{ name: 'backup', intervalMinutes: 60 }],
                 }),
             }
 
@@ -543,20 +537,18 @@ describe('GitHub Resource Handlers', () => {
                 db,
                 mockVectorManager as any,
                 null,
-                null,
-                mockScheduler as any
+                null
             )
 
             const data = result.data as {
                 vectorIndex: { available: boolean; itemCount: number }
-                scheduler: { active: boolean }
                 toolFilter: { active: boolean }
             }
 
             expect(data.vectorIndex).toBeDefined()
             expect(data.vectorIndex.available).toBe(true)
             expect(data.vectorIndex.itemCount).toBe(50)
-            expect(data.scheduler.active).toBe(true)
+            expect(data).not.toHaveProperty('scheduler')
             expect(data.toolFilter.active).toBe(false) // filterConfig is null
         })
 
@@ -571,7 +563,6 @@ describe('GitHub Resource Handlers', () => {
                 'memory://health',
                 db,
                 mockVectorManager as any,
-                null,
                 null,
                 null
             )
@@ -672,7 +663,6 @@ describe('GitHub Resource Handlers', () => {
                 undefined,
                 undefined,
                 github,
-                undefined,
                 undefined,
                 {
                     entryCount: 3,
