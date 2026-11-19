@@ -610,7 +610,6 @@ The `memory://briefing` resource is modular — each section is a separate file:
 | `goal-tracker` | Milestone and achievement tracking |
 | `issue-commander` | Issue triage, milestone sprinting, and roadmap kickoff with HITL checkpoints. Op... |
 | `load-briefing` | Load one or more project briefings to initialize your session context. Pass proj... |
-| `mcp-heal` | Guide for modifying MCP codebase to proactively prevent, mitigate, and heal LLM ... |
 | `optimize-journal` | Guided database pruning, graph verification, episodic-to-semantic compaction, an... |
 | `pr-commander` | Pull request summary, review prep, and dependency updates with validation gates.... |
 | `pr-retrospective` | Conduct a retrospective analysis on a completed pull request |

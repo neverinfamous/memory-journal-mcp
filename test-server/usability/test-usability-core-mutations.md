@@ -26,7 +26,7 @@ Use the following tools in this test pass:
 If you encounter any failures, data corruption, or lack of actionable error messages:
 
 1. STOP. Do not just work around the issue in your script.
-2. Read the hardening guidelines in `/mcp:memory-journal-mcp:mcp-heal prompt`.
+2. Read the hardening guidelines in `.agents/workflows/heal-mcp-server.md` (`/heal-mcp-server`).
 3. Locate the appropriate file in the codebase (e.g., schemas in `src/handlers/tools/[group]/schemas.ts`, proxies in `src/codemode/worker-api-proxy.ts`, or dispatch logic).
 4. Apply the permanent fix. Ensure that both strict validation schemas and MCP relaxed schemas are appropriately hardened.
 

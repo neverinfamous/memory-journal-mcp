@@ -130,9 +130,6 @@ dmypy.json
 .agents/scripts/*
 !.agents/scripts/commit.ts
 !.agents/scripts/commit-journal.ts
-!.agents/workflows/
-.agents/workflows/*
-!.agents/workflows/heal-mcp-server.md
 
 # OS files
 .DS_Store

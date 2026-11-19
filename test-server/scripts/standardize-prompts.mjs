@@ -236,8 +236,11 @@ for (const file of files) {
   // Fix hallucinated parameter drift in mutation tests
   updatedContent = updatedContent.replace(/ or `permanent: true`/g, '');
   
-  // Fix hallucinated skill file path to the correct MCP prompt
-  updatedContent = updatedContent.replace(/skills\/mj-mcp-heal\/SKILL\.md/g, '/mcp:memory-journal-mcp:mcp-heal prompt');
+  // Fix legacy healing references to the maintainer workflow
+  updatedContent = updatedContent.replace(
+    /skills\/mj-mcp-heal\/SKILL\.md|\/mcp:memory-journal-mcp:mcp-heal prompt/g,
+    '`.agents/workflows/heal-mcp-server.md` (`/heal-mcp-server`)'
+  );
   
   // Fix logic flaw: remove parameter drift hallucination (use_test_db)
   updatedContent = updatedContent.replace(/\n>\s*\n> \*\*CRITICAL:\*\* You MUST pass `use_test_db: true`[\s\S]*?instead of production\./g, '');

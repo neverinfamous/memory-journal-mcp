@@ -184,7 +184,7 @@ describe('Pass 41 Audit — Storage, Path Containment, Resource Isolation & Prom
 
         expect(metricsUsersResource.capabilities?.requiresAuditScope).toBe(true)
         const prompts = getPrompts() as { name: string; capabilities?: { requiresAdminScope?: boolean } }[]
-        expect(prompts.find((p) => p.name === 'mcp-heal')?.capabilities?.requiresAdminScope).toBe(true)
+        expect(prompts.find((p) => p.name === 'mcp-heal')).toBeUndefined()
         expect(prompts.find((p) => p.name === 'project-setup')?.capabilities?.requiresAdminScope).toBe(true)
     })
 

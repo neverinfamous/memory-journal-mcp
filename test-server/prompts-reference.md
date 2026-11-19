@@ -44,10 +44,6 @@ These prompts are used to initialize sessions, manage entries, and handle core j
 **Description**: Update an existing team journal entry.
 - **Arguments**: None
 
-### `mcp-heal`
-**Description**: Autonomous healing workflow to resolve tool execution failures.
-- **Arguments**: None
-
 ### `project-setup`
 **Description**: Set up a new project tracking environment.
 - **Arguments**: None

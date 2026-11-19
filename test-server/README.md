@@ -27,7 +27,7 @@ These suites verify features that run at server startup or across transport/wiri
 | --- | --- | --- |
 | `tests/server/filter-instructions.test.ts` | Filter-aware instructions, `--codemode-internal-full-access`, and `memory://help` index across all 9 presets | Vitest |
 | `tests/handlers/tool-annotations.test.ts` | Full `108`-tool behavioral annotation hints, contradictions, and canonical allowlists | Vitest |
-| `pnpm run test:prompts` (`prompts.spec.ts` + `prompts-expanded.spec.ts`) | `prompts/list` + `prompts/get` for all 32 prompts (shape + error handling) | Playwright |
+| `pnpm run test:prompts` (`prompts.spec.ts` + `prompts-expanded.spec.ts`) | `prompts/list` + `prompts/get` for all 31 prompts (shape + error handling) | Playwright |
 | `pnpm test` & `pnpm run test:e2e` | Full Vitest + Playwright suite (schemas, CLI config dump/reload, subscriptions, progress, HTTP/stdio boundaries) | Vitest + Playwright |
 
 ### Quick Run

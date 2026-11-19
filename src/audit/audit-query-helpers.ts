@@ -25,8 +25,8 @@ const SCHEMELESS_SENSITIVE_PATH_RE =
     /^(?:team|audit|metrics\/users|insights\/team-collaboration)(?:\/|$|\?|#)/i
 
 const ADMIN_PROMPT_NAMES = new Set([
-    'mcp-heal', 'project-setup', 'optimize-journal', 'cms-rem-supervisor',
-    'mcp_heal', 'project_setup', 'optimize_journal', 'cms_rem_supervisor',
+    'project-setup', 'optimize-journal', 'cms-rem-supervisor',
+    'project_setup', 'optimize_journal', 'cms_rem_supervisor',
 ])
 
 const AUDIT_URI_KEYS = [
