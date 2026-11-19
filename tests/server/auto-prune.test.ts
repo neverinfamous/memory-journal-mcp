@@ -14,7 +14,7 @@ describe('Auto Prune', () => {
         }
     })
 
-    it('should create a backup and not prune if count is 0', async () => {
+    it('should skip backup and optimize planner when count is 0', async () => {
         const result = await runAutoPrune(mockDb as unknown as IDatabaseAdapter, {
             archiveOlderThanDays: 60,
             pruneOlderThanDays: 30,
@@ -22,26 +22,23 @@ describe('Auto Prune', () => {
             importanceThreshold: 2,
         })
 
-        expect(mockDb.exportToFile).toHaveBeenCalledTimes(1)
-        const backupName = mockDb.exportToFile.mock.calls[0][0] as string
-        expect(backupName.startsWith('pre-prune-')).toBe(true)
-        expect(backupName.includes(':')).toBe(false)
-        expect(backupName.length).toBeLessThanOrEqual(50)
+        expect(mockDb.exportToFile).not.toHaveBeenCalled()
+        expect(mockDb.executeDataLifecycle).toHaveBeenCalledTimes(1)
         expect(mockDb.executeDataLifecycle).toHaveBeenCalledWith({
             archiveOlderThanDays: 60,
             pruneOlderThanDays: 30,
             hardDeleteOlderThanDays: 90,
             importanceThreshold: 2,
-            dryRun: undefined,
+            dryRun: true,
             excludeTags: undefined,
         })
         expect(mockDb.cleanupStaleVectors).not.toHaveBeenCalled()
 
         expect(result.prunedCount).toBe(0)
-        expect(result.backupFile).toBe('test-backup.db')
+        expect(result.backupFile).toBeNull()
     })
 
-    it('should clean up stale vectors if prunedCount > 0', async () => {
+    it('should create a pre-prune backup and clean up stale vectors if prunedCount > 0', async () => {
         mockDb.executeDataLifecycle.mockReturnValue({ archivedCount: 0, prunedCount: 5, hardDeletedCount: 0 })
 
         const result = await runAutoPrune(mockDb as unknown as IDatabaseAdapter, {
@@ -51,7 +48,20 @@ describe('Auto Prune', () => {
             importanceThreshold: 1,
         })
 
-        expect(mockDb.executeDataLifecycle).toHaveBeenCalledWith({
+        expect(mockDb.exportToFile).toHaveBeenCalledTimes(1)
+        const backupName = mockDb.exportToFile.mock.calls[0][0] as string
+        expect(backupName.startsWith('pre-prune-')).toBe(true)
+        expect(backupName.includes(':')).toBe(false)
+        expect(backupName.length).toBeLessThanOrEqual(50)
+        expect(mockDb.executeDataLifecycle).toHaveBeenNthCalledWith(1, {
+            archiveOlderThanDays: 20,
+            pruneOlderThanDays: 10,
+            hardDeleteOlderThanDays: 30,
+            importanceThreshold: 1,
+            dryRun: true,
+            excludeTags: undefined,
+        })
+        expect(mockDb.executeDataLifecycle).toHaveBeenNthCalledWith(2, {
             archiveOlderThanDays: 20,
             pruneOlderThanDays: 10,
             hardDeleteOlderThanDays: 30,
@@ -60,6 +70,7 @@ describe('Auto Prune', () => {
             excludeTags: undefined,
         })
         expect(mockDb.cleanupStaleVectors).toHaveBeenCalled()
+        expect(result.backupFile).toBe('test-backup.db')
         expect(result.prunedCount).toBe(5)
     })
 
@@ -75,7 +86,16 @@ describe('Auto Prune', () => {
         })
 
         expect(result.backupFile).toBeNull()
-        expect(mockDb.executeDataLifecycle).not.toHaveBeenCalled()
+        expect(result.aborted).toBe(true)
+        expect(mockDb.executeDataLifecycle).toHaveBeenCalledTimes(1)
+        expect(mockDb.executeDataLifecycle).toHaveBeenCalledWith({
+            archiveOlderThanDays: 10,
+            pruneOlderThanDays: 5,
+            hardDeleteOlderThanDays: 15,
+            importanceThreshold: 1,
+            dryRun: true,
+            excludeTags: undefined,
+        })
         expect(mockDb.cleanupStaleVectors).not.toHaveBeenCalled()
         expect(result.prunedCount).toBe(0)
     })

@@ -9,11 +9,12 @@ description: Use when you need to review MCP server agent issues (logs/agent-iss
 
 ---
 
-## 1. Workflow Initialization
+## 1. Workflow Initialization & Pre-Flight Baseline
 
 1. Identify the target MCP server workspace (e.g. `C:\Users\chris\Desktop\memory-journal-mcp` or `C:\Users\chris\Desktop\mysql-mcp`).
-2. Read and review the error log file at `<repo_root>/logs/agent-issues.jsonl`.
-3. Categorize each error by source (`MCP`, `CLI`, `CodeMode`, `Protocol`, `Transports`) and formulate a concrete healing plan.
+2. **Pre-Flight Baseline & Concurrent-Agent Isolation**: Capture baseline uncommitted files (`bun C:\Users\chris\Desktop\memory-journal-mcp\.agents\scripts\get-git-history-json.ts --cwd <repo_root> --uncommitted --stats`) and verify no active `vitest`, `playwright`, or `tsc` process is running; NEVER overwrite files dirtied in that baseline by another active session.
+3. Read and review the error log file at `<repo_root>/logs/agent-issues.jsonl`.
+4. Categorize each error by source (`MCP`, `CLI`, `CodeMode`, `Protocol`, `Transports`) and formulate a concrete healing plan.
 
 ---
 
@@ -45,7 +46,7 @@ Prevent friction first; mitigate only as fallback. Address issues across the 6 a
 2. Add regression tests to the test suite (e.g., `tests/codemode-healing-guardrails.test.ts`).
 3. **MANDATORY VALIDATION MATRIX (CRITICAL GATE):**
    > [!WARNING]
-   > **Override Notice**: The full validation test suite execution below strictly **OVERRIDES** any default single-file testing rule. You must run all validation steps sequentially before committing.
+   > **Override Notice**: The full validation test suite execution below strictly **OVERRIDES** any default single-file testing rule. You must run all validation steps sequentially before committing (or, if foreign WIP test files already existed in your Pre-Flight Baseline, run `lint`, `typecheck`, `build`, and targeted Vitest/Playwright specs without `pretest:e2e` or `update-badges.ts` so concurrent work is not disturbed).
 
    Execute the following commands in order:
    ```pwsh
@@ -58,9 +59,9 @@ Prevent friction first; mitigate only as fallback. Address issues across the 6 a
    *(Note: DO NOT run `pnpm run check` as it is an unmanaged meta-script that may hang or time out).*
 
 4. If usability coordinator workflows apply, run them.
-5. Commit your changes locally using `commit.ts`:
+5. Commit **ONLY the explicit files modified by this run** locally using `commit.ts` (NEVER use `--add .` if baseline WIP exists):
    ```pwsh
-   bun .\.agents\scripts\commit.ts --msg "fix(infra): heal MCP server guardrails, aliases, and error handlers" --impact 0.7 --confidence 0.95 --validation passed --journal --add <paths>
+   bun C:\Users\chris\Desktop\memory-journal-mcp\.agents\scripts\commit.ts --msg "fix(infra): heal MCP server guardrails, aliases, and error handlers" --impact 0.7 --confidence 0.95 --validation passed --journal --add <explicit_paths>
    ```
 6. **Automation & Documentation Self-Improvement (`sidecar.json` & CMS Docs)**:
    - If you also noticed and applied improvements to the scheduled CMS automation prompts (`C:\Users\chris\.gemini\config\sidecars\heal-memory-journal-mcp\sidecar.json` or sibling sidecars) or the canonical CMS documentation (`C:\Users\chris\Desktop\adamic\docs\cognitive-management-system.md` and `C:\Users\chris\Desktop\memory-journal-mcp.wiki\Automations.md`), commit those explicit files in their respective repositories:

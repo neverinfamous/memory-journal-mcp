@@ -158,22 +158,22 @@ ${markUntrustedContent(params.deletedSnippet)}
 ### Phase C — Batched Adaptation & Dirty-Tree Conditional Single-Pass Validation Gate
 > [!IMPORTANT]
 > **LOAD OPTIMIZATION INVARIANT (DIRTY-TREE CONDITIONAL SINGLE-PASS VALIDATION GATE)**:
-> Full-suite validation (\`lint\`, \`typecheck\`, \`build\`, \`vitest\`, \`playwright\`) is resource-intensive and MUST ONLY run when repository files have actually been modified.
-> **HITL CODE MODIFICATION GUARDRAIL**: Do NOT modify executable source code or global environment files without explicit user approval unless running in an explicitly approved autonomous maintenance session.
+> Full-suite validation (\`lint\`, \`typecheck\`, \`build\`, \`vitest\`, \`playwright\`) is resource-intensive and MUST ONLY run when repository files were actually modified by this \`CMS-04\` run.
+> **CONCURRENT-AGENT ISOLATION & HITL GUARDRAIL**: Capture a pre-flight baseline of uncommitted files (using \`get-git-history-json.ts --uncommitted --stats\` when workspace lifecycle scripts are configured, or explicit \`git diff --name-only\` checks in standalone hosts) and active \`vitest\`/\`playwright\`/\`tsc\` processes before editing. Never overwrite or stage foreign WIP files from another active session, and do NOT modify executable source code or global environment files without explicit user approval unless running in an explicitly approved autonomous maintenance session.
 
-1. Apply all approved code, schema, prompt, or documentation fixes in a single cohesive batch.
-2. Check working tree status via \`git status --porcelain\`.
-3. **If \`0\` files are modified/untracked in \`memory-journal-mcp\`**:
+1. Record the pre-flight baseline of already-uncommitted files, then apply all approved code, schema, prompt, or documentation fixes in a single cohesive batch without touching foreign WIP files.
+2. Re-check working tree status against the pre-flight baseline (\`get-git-history-json.ts --uncommitted --stats\` in hook-guarded workspaces, or standalone Git diff/status excluding pre-existing WIP).
+3. **If \`0\` files were modified/added by this \`CMS-04\` run**:
    - **SKIP** \`pnpm run lint\`, \`pnpm run typecheck\`, \`pnpm run build\`, \`pnpm exec vitest run\`, and \`pnpm exec playwright test\` completely! Proceed directly to step 5 / Phase D.
-4. **If \`>= 1\` files are modified in \`memory-journal-mcp\`**:
+4. **If \`>= 1\` files were modified by this \`CMS-04\` run**:
    - Terminate stalled audit subagents (\`manage_subagents\` \`Action: 'kill'\` with explicit IDs) and verify no competing \`vitest\`, \`playwright\`, or \`tsc\` process is active.
-   - Run the 5-stage validation gate **strictly sequentially once** (never concurrently):
+   - If foreign baseline WIP test files are present, run \`pnpm run lint\`, \`pnpm run typecheck\`, \`pnpm run build\`, and targeted \`pnpm exec vitest run\` / \`pnpm exec playwright test\` on specs touched by \`CMS-04\` (skipping \`pretest:e2e\` and \`update-badges.ts\` to protect concurrent work); otherwise run the 5-stage validation gate **strictly sequentially once** (never concurrently):
      1. \`pnpm run lint\`
      2. \`pnpm run typecheck\`
      3. \`pnpm run build\`
      4. \`pnpm exec vitest run\`
      5. \`pnpm exec playwright test\`
-   - Commit the verified changes via \`git add <changed_files>; git commit -m "fix(cms): <summary>"\`.
+   - Commit **ONLY explicit paths modified by this \`CMS-04\` run** (never \`git add .\` or \`--add .\`) via \`commit.ts\` (\`--add <changed_files>\`) in hook-guarded workspaces, or explicit \`git commit -m "fix(cms): <summary>" -- <changed_files>\` in standalone hosts.
 5. If any client automation template or CMS guide was improved, commit those explicit changes separately in their own repository.
 
 ### Phase D — Telemetry Cleanup & Supervisor Journal Entry

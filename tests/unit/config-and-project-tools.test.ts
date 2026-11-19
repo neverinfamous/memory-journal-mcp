@@ -507,7 +507,31 @@ describe('ConfigManager & Configuration Tools', () => {
             expect(dryRes.success).toBe(true)
             expect(dryRes.dryRun).toBe(true)
 
-            const liveRes = (await pruneTool.handler({
+            const zeroCandidateRes = (await pruneTool.handler({
+                archive_older_than_days: 30,
+                prune_older_than_days: 90,
+                hard_delete_older_than_days: 30,
+                importance_threshold: 0.5,
+                dry_run: false,
+            })) as {
+                success: boolean
+                dryRun: boolean
+                archivedCount: number
+                backupFile?: string
+            }
+
+            expect(zeroCandidateRes.success).toBe(true)
+            expect(zeroCandidateRes.dryRun).toBe(false)
+            expect(zeroCandidateRes.archivedCount).toBe(0)
+            expect(zeroCandidateRes.backupFile).toBeUndefined()
+
+            const oldEntry = db.createEntry({
+                content: 'Old candidate entry',
+                entryType: 'personal_reflection',
+                timestamp: new Date(Date.now() - 45 * 86_400_000).toISOString(),
+            })
+
+            const abortRes = (await pruneTool.handler({
                 archive_older_than_days: 30,
                 prune_older_than_days: 90,
                 hard_delete_older_than_days: 30,
@@ -515,9 +539,10 @@ describe('ConfigManager & Configuration Tools', () => {
                 dry_run: false,
             })) as { success: boolean; dryRun: boolean; error?: string }
 
-            expect(liveRes.success).toBe(false)
-            expect(liveRes.error).toContain('backup')
-            expect(liveRes.dryRun).toBe(false)
+            expect(abortRes.success).toBe(false)
+            expect(abortRes.error).toContain('backup')
+            expect(abortRes.dryRun).toBe(false)
+            expect(db.getEntryById(oldEntry.id)?.isArchived).toBe(false)
         })
 
         it('should handle search_audit_log when auditLogger is disabled or enabled', async () => {

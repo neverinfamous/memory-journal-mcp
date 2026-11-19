@@ -6,12 +6,10 @@
  * or via MCP (`run_auto_prune`, e.g. nightly CMS-02 maintenance).
  *
  * Algorithm:
- *   1. Create a safety backup before any mutations.
- *   2. Use the adapter's executeDataLifecycle() to identify and transition
- *      candidate entries older than `olderThanDays` with an importance
- *      score below `importanceThreshold` (computed entirely in SQL).
- *   3. Refresh SQLite query planner statistics (`PRAGMA optimize`) and clean up
- *      stale vector embeddings.
+ *   1. Probe lifecycle candidates first via dry-run; skip backup creation if 0 candidates match.
+ *   2. When candidates exist, create a safety backup before any mutations.
+ *   3. Execute `executeDataLifecycle()` to transition eligible entries (computed in SQL).
+ *   4. Refresh SQLite query planner statistics (`PRAGMA optimize`) and clean stale vectors.
  */
 
 import * as fs from 'node:fs'
@@ -236,22 +234,63 @@ export async function runAutoPrune(
         projectNumber,
     } = options
 
-    // ── Step 1: Safety backup ───────────────────────────────────────────
-    let backupFile: string | null = null
-    if (!dryRun) {
-        const safety = await createPrePruneSafetyBackup(db)
-        if (safety.aborted) {
-            return buildAutoPruneResult(
-                options,
-                { archivedCount: 0, prunedCount: 0, hardDeletedCount: 0 },
-                null,
-                true
-            )
-        }
-        backupFile = safety.backupFile
+    if (dryRun) {
+        const result = db.executeDataLifecycle({
+            archiveOlderThanDays,
+            pruneOlderThanDays,
+            hardDeleteOlderThanDays,
+            importanceThreshold,
+            dryRun: true,
+            excludeTags,
+            workspaceId,
+            ...(projectNumber !== undefined ? { projectNumber } : {}),
+        })
+        const { cArchived, cPruned, cHard } = logDryRunCandidates(options, result.candidates)
+        return buildAutoPruneResult(
+            options,
+            { archivedCount: cArchived, prunedCount: cPruned, hardDeletedCount: cHard },
+            null
+        )
     }
 
-    // ── Step 2: Prune via adapter ───────────────────────────────────────
+    // ── Step 1: Dry-run probe before safety backup ──────────────────────
+    const probe = db.executeDataLifecycle({
+        archiveOlderThanDays,
+        pruneOlderThanDays,
+        hardDeleteOlderThanDays,
+        importanceThreshold,
+        dryRun: true,
+        excludeTags,
+        workspaceId,
+        ...(projectNumber !== undefined ? { projectNumber } : {}),
+    })
+    const hasCandidates =
+        probe.candidates !== undefined
+            ? probe.candidates.archived.length +
+                  probe.candidates.pruned.length +
+                  probe.candidates.hardDeleted.length >
+              0
+            : probe.archivedCount + probe.prunedCount + probe.hardDeletedCount > 0
+
+    if (!hasCandidates) {
+        const zeroCounts = { archivedCount: 0, prunedCount: 0, hardDeletedCount: 0 }
+        finalizeLivePrune(db, options, zeroCounts)
+        return buildAutoPruneResult(options, zeroCounts, null)
+    }
+
+    // ── Step 2: Safety backup (only when >= 1 candidate will mutate) ────
+    const safety = await createPrePruneSafetyBackup(db)
+    if (safety.aborted) {
+        return buildAutoPruneResult(
+            options,
+            { archivedCount: 0, prunedCount: 0, hardDeletedCount: 0 },
+            null,
+            true
+        )
+    }
+    const backupFile = safety.backupFile
+
+    // ── Step 3: Live prune via adapter ──────────────────────────────────
     const result = db.executeDataLifecycle({
         archiveOlderThanDays,
         pruneOlderThanDays,
@@ -262,15 +301,6 @@ export async function runAutoPrune(
         workspaceId,
         ...(projectNumber !== undefined ? { projectNumber } : {}),
     })
-
-    if (dryRun) {
-        const { cArchived, cPruned, cHard } = logDryRunCandidates(options, result.candidates)
-        return buildAutoPruneResult(
-            options,
-            { archivedCount: cArchived, prunedCount: cPruned, hardDeletedCount: cHard },
-            backupFile
-        )
-    }
 
     finalizeLivePrune(db, options, result)
     return buildAutoPruneResult(options, result, backupFile)

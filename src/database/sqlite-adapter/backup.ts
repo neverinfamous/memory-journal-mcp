@@ -149,15 +149,42 @@ export class BackupManager {
         return backups.slice()
     }
 
-    deleteOldBackups(keepCount: number): { deleted: string[]; failed: string[]; kept: number } {
-        const backups = this.listBackups()
+    private sweepStaleTempFiles(backupsDir: string, maxAgeMs = 15 * 60 * 1000): void {
+        let dirents: fs.Dirent[]
+        try {
+            dirents = fs.readdirSync(backupsDir, { withFileTypes: true })
+        } catch {
+            return
+        }
+        const cutoffMs = Date.now() - maxAgeMs
+        for (const dirent of dirents) {
+            if (!/\.tmp(?:-(?:wal|shm))?$/i.test(dirent.name) || !dirent.isFile()) continue
+            const filePath = path.join(backupsDir, dirent.name)
+            try {
+                const stats = fs.lstatSync(filePath)
+                if (stats.isFile() && !stats.isSymbolicLink() && stats.mtimeMs <= cutoffMs) {
+                    fs.unlinkSync(filePath)
+                }
+            } catch {
+                // Best-effort orphan sweep (ignore ENOENT or active locks)
+            }
+        }
+    }
 
+    deleteOldBackups(keepCount: number): { deleted: string[]; failed: string[]; kept: number } {
         if (keepCount < 1 || Number.isNaN(keepCount)) {
             throw new ValidationError('keepCount must be at least 1')
         }
 
-        const toKeep = backups.slice(0, keepCount)
-        const toDelete = backups.slice(keepCount)
+        const backupsDir = this.ctx.getBackupsDir()
+        this.sweepStaleTempFiles(backupsDir)
+
+        const regularBackups = this.listBackups().filter(
+            (backup) => !backup.filename.startsWith('pre-prune-')
+        )
+
+        const toKeep = regularBackups.slice(0, keepCount)
+        const toDelete = regularBackups.slice(keepCount)
         const deleted: string[] = []
         const failed: string[] = []
 

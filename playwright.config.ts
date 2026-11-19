@@ -1,6 +1,8 @@
 import { defineConfig } from '@playwright/test'
 import path from 'node:path'
 
+process.env['DISABLE_ISSUE_LOGGING'] ??= 'true'
+
 const WORKERS = Number(process.env.PLAYWRIGHT_WORKERS || 4)
 
 const createWebServerConfig = (workerIndex: number) => {

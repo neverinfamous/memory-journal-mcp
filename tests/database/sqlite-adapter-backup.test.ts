@@ -152,4 +152,36 @@ describe('Backup Manager Edge Cases', () => {
             .filter((name) => /\.tmp(?:-(?:wal|shm))?$/i.test(name))
         expect(leftoverTmp).toEqual([])
     })
+
+    it('should sweep stale .tmp* files and exclude pre-prune-* from deleteOldBackups keepCount', () => {
+        const backupsDir = path.join(testDir, 'backups')
+        if (!fs.existsSync(backupsDir)) fs.mkdirSync(backupsDir, { recursive: true })
+
+        const staleTmp = path.join(backupsDir, 'stale.db.123.tmp-shm')
+        const freshTmp = path.join(backupsDir, 'fresh.db.123.tmp-wal')
+        const prePruneFile = path.join(backupsDir, 'pre-prune-keep.db')
+        const reg1 = path.join(backupsDir, 'backup_keep_newest.db')
+        const reg2 = path.join(backupsDir, 'backup_delete_oldest.db')
+
+        fs.writeFileSync(staleTmp, 'stale')
+        const oldDate = new Date(Date.now() - 30 * 60 * 1000)
+        fs.utimesSync(staleTmp, oldDate, oldDate)
+        fs.writeFileSync(freshTmp, 'fresh')
+        fs.writeFileSync(prePruneFile, 'preprune')
+        fs.writeFileSync(reg2, 'old')
+        const earlier = new Date(Date.now() - 10_000)
+        fs.utimesSync(reg2, earlier, earlier)
+        fs.writeFileSync(reg1, 'new')
+
+        const cleanupRes = db.deleteOldBackups(1)
+        expect(fs.existsSync(staleTmp)).toBe(false)
+        expect(fs.existsSync(freshTmp)).toBe(true)
+        expect(fs.existsSync(prePruneFile)).toBe(true)
+        expect(cleanupRes.deleted).toContain('backup_delete_oldest.db')
+        expect(cleanupRes.deleted).not.toContain('pre-prune-keep.db')
+
+        for (const f of [freshTmp, prePruneFile, reg1]) {
+            if (fs.existsSync(f)) fs.unlinkSync(f)
+        }
+    })
 })

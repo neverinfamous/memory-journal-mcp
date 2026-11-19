@@ -270,6 +270,7 @@ export async function startServer(
             env: Object.fromEntries(
                 Object.entries({
                     ...process.env,
+                    DISABLE_ISSUE_LOGGING: 'true',
                     GITHUB_TOKEN: '',
                     GITHUB_PERSONAL_ACCESS_TOKEN: '',
                     ALLOWED_IO_ROOTS: process.cwd(),
