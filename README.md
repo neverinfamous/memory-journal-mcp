@@ -247,7 +247,7 @@ This exposes only `mj_execute_code` and `update_configuration` to the client's `
 
 ## 🚀 Quick Start & Deployment
 
-_Note: Configuration is resolved using strict precedence: `CLI flags > Environment Variables > Config File > Defaults`._
+_Note: Configuration is resolved using strict precedence: `CLI flags > Environment Variables > Config File > Defaults` (see [`memory-journal-config-example.json`](memory-journal-config-example.json), [`mcp-config-example.json`](mcp-config-example.json), and [`.env.example`](.env.example))._
 
 > 🛠️ **Debugging Configuration:** Run `memory-journal-mcp --dump-config` (or pass `--dump-config` as an arg) to print the fully resolved configuration payload with automatically redacted secrets. This is the primary method for diagnosing overriding issues.
 

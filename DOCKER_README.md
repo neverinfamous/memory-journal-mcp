@@ -256,7 +256,7 @@ Restart Cursor or your MCP client and start journaling!
 
 ### 🔧 Configuration Highlights
 
-- **`--config <path>`**: Load settings from `.yaml` or `.json`. Use `--dump-config` to debug precedence.
+- **`--config <path>`**: Load settings from `.yaml` or `.json` (see [`memory-journal-config-example.json`](https://github.com/neverinfamous/memory-journal-mcp/blob/main/memory-journal-config-example.json)). Use `--dump-config` to debug precedence.
 - **`ALLOWED_IO_ROOTS` / `--allowed-io-roots`**: Comma-separated allowed filesystem paths (default: none — fail-closed in stdio; mandatory when `--transport http` is used).
 - **`MCP_AUTH_TOKEN` / `MCP_AUTH_SCOPES`** (`--auth-token`, `--auth-scopes`): Static Bearer token and granted scopes (`read` default; use `full` for full access).
 - **`MEMORY_JOURNAL_MCP_TOOL_FILTER` / `--tool-filter`**: Control tool exposure (`full`, `starter`, `essential`, `codemode`, `readonly`, `-github`; config key: `"toolFilter"`).

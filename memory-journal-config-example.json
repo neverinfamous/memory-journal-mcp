@@ -1,0 +1,67 @@
+{
+  "dbPath": "/path/to/data/memory_journal.db",
+  "teamDbPath": "/path/to/data/memory_journal_team.db",
+  "additionalTeamDbs": {
+    "other-team": "/path/to/data/other_team.db"
+  },
+  "teamDefaultRole": "viewer",
+  "teamAdmin": "your_username",
+  "defaultWorkspaceId": "default",
+  "projectRegistry": {
+    "my-repo": {
+      "path": "/path/to/projects/my-repo",
+      "project_number": 1
+    },
+    "other-repo": {
+      "path": "/path/to/projects/other-repo",
+      "project_number": 2
+    }
+  },
+  "toolFilter": "codemode",
+  "codemodeInternalFullAccess": true,
+  "codemodeMaxResultSize": 102400,
+  "allowedIoRoots": [
+    "/path/to/projects",
+    "/path/to/data",
+    "/path/to/skills"
+  ],
+  "agentHealing": true,
+  "maxToolInputElements": 25000,
+  "embeddingModel": "Xenova/all-MiniLM-L6-v2",
+  "autoRebuildIndex": false,
+  "briefingEntries": 3,
+  "briefingCommits": 5,
+  "briefingSummaries": 1,
+  "briefingImportanceThreshold": 0.3,
+  "briefingIncludeTeam": true,
+  "briefingIssues": 0,
+  "briefingPrs": 0,
+  "briefingPrStatus": false,
+  "briefingMilestones": 1,
+  "briefingWorkflows": 0,
+  "briefingWorkflowStatus": false,
+  "briefingCopilot": false,
+  "briefingGraph": true,
+  "rulesFile": "/path/to/AGENTS.md",
+  "skillsDir": "/path/to/skills",
+  "workflowSummary": "/bump-deploy: version bump + PR deploy | /update-deps: dependency + CVE updates",
+  "auditLog": "/path/to/logs/mcp-audit.jsonl",
+  "auditRedact": true,
+  "auditReads": false,
+  "auditLogMaxSize": 10485760,
+  "metricsExport": "prometheus",
+  "metricsPort": 9465,
+  "persistMetrics": false,
+  "archiveOlderThanDays": 0,
+  "pruneOlderThanDays": 0,
+  "hardDeleteOlderThanDays": 0,
+  "pruneImportanceThreshold": 0.15,
+  "pruneDryRun": false,
+  "pruneExcludeTags": [
+    "architecture",
+    "important",
+    "keep",
+    "never-prune",
+    "reference"
+  ]
+}
