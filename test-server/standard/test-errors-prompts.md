@@ -26,12 +26,12 @@
 ### 11.1 Prompt Handler Validation
 
 > [!NOTE]
-> Prompts are tested via the existing script `test-server/scripts/test-prompts.mjs`. Run it directly — do **not** use a browser or try to invoke `get_prompt` through the MCP client.
+> Prompts are tested automatically via Playwright in [prompts.spec.ts](../../tests/e2e/prompts.spec.ts) and [prompts-expanded.spec.ts](../../tests/e2e/prompts-expanded.spec.ts). Run `pnpm run test:prompts` — do **not** use a browser or try to invoke `get_prompt` through the MCP client.
 
 **Command:**
 
-```
-node test-server/scripts/test-prompts.mjs
+```bash
+pnpm run test:prompts
 ```
 
 | Test                         | Expected Result                                                     |
@@ -59,6 +59,6 @@ Every tool must return `{success: false, error, code, category, suggestion, reco
 | **team**   | `team_create_entry(workspace_id: "test-ws")` | `type: "invalid"`                            | `success:false`, `code:"VALIDATION_ERROR"`, enum listed in error                   |
 | **team**   | `team_update_entry(workspace_id: "test-ws")` | `id: 999999`                                 | `success:false`, `code:"RESOURCE_NOT_FOUND"`, `recoverable:true`                   |
 
-*Note: Team tools requiring `TEAM_AUTHOR` and protocol-level boundary validations are verified by executing `node test-server/scripts/test-sdk-boundaries.mjs`.*
+*Note: Team tools requiring `TEAM_AUTHOR` and protocol-level boundary validations are verified automatically by running `pnpm exec playwright test tests/e2e/stdio-transport.spec.ts`.*
 
 \n\n## Success Criteria\n- Agent reports the Total Token Estimate...

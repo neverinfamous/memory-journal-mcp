@@ -40,7 +40,7 @@ The Dual-Schema pattern allows `.optional()` on the SDK-facing schema. Verify th
 | Array where string    | `create_entry(workspace_id: "test-ws", content: ["array"])`         | ⚠️ SDK coerces to `'["array"]'` — accepted (expected SDK behavior)   |
 
 > [!NOTE]
-> Under MCP SDK 1.29+ with strict Zod integration, the two ⚠️ findings (boolean and array coercion) now properly throw `VALIDATION_ERROR` rather than silently coercing. The new strict behavior, along with team-scoped permission rejections, is verified directly via the `test-server/scripts/test-sdk-boundaries.mjs` script.
+> Under MCP SDK 1.29+ with strict Zod integration, the two ⚠️ findings (boolean and array coercion) now properly throw `VALIDATION_ERROR` rather than silently coercing. The new strict behavior, along with team-scoped permission rejections, is verified automatically via `tests/e2e/boundary.spec.ts` and `tests/e2e/stdio-transport.spec.ts`.
 
 ### 11.4 Empty Parameter (`{}`) Sweep — Critical Tools
 

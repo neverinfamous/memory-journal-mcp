@@ -25,13 +25,14 @@
 
 > **Efficiency Update:** Instead of manually testing 70+ tools sequentially, use the dedicated programmatic verification script.
 
-Run the validation script to ensure all exported tools (except `mj_execute_code`) have strict `outputSchema` definitions:
+Run the automated Vitest and Playwright schema verification checks to ensure all exported tools (except `mj_execute_code`) define strict `outputSchema` and advertise them over `tools/list`:
 
 ```bash
-node test-server/scripts/verify-schemas.mjs
+pnpm exec vitest run tests/handlers/tool-output-schemas.test.ts
+pnpm exec playwright test tests/e2e/tools.spec.ts
 ```
 
-_The script will output `SUCCESS: All X tools have outputSchema defined.` if all schemas are correctly wired, which guarantees that `mcp-server.ts` will append `structuredContent` to all responses._
+_Both suites verify `outputSchema` presence, `ErrorFieldsMixin` alignment, and live MCP wire advertisements._
 
 ---
 

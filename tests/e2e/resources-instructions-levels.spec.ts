@@ -11,7 +11,7 @@
  *   Semantic search row in Quick Access — `search` group only
  *
  * This exercises the HTTP-transport path for instructions, which is
- * distinct from the stdio path tested in test-filter-instructions.mjs.
+ * distinct from the in-process Vitest checks in `tests/server/filter-instructions.test.ts`.
  *
  * Uses dedicated server ports 3110, 3111.
  */

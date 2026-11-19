@@ -14,22 +14,21 @@
 | [`tool-reference.md`](tool-reference.md) | **Tool Reference** — Categorized list of all tools across 11 groups + codemode | Reference |
 | [`code-map.md`](code-map.md) | **Source Code Map** — Directory tree, handler→tool mapping, type locations, error hierarchy, key constants, architecture patterns | When debugging source code or making changes |
 
-## Integration Test Scripts
+## Automated Protocol & Transport Suites
 
-These scripts test features that require separate server processes — they **cannot** be run via MCP tool calls. All scripts are Node.js (`.mjs`), require no dependencies beyond Node.js, and exit with code 0 on success.
+These suites verify features that run at server startup or across transport/wiring boundaries using automated Vitest and Playwright runners.
 
 > [!IMPORTANT]
-> Always `pnpm run build` before running these scripts — they execute `dist/cli.js` directly.
+> Always `pnpm run build` before running Playwright specs (`tests/e2e/` executes `dist/cli.js`).
 
-### Script Reference
+### Suite Reference
 
-| Script                                 | Tests                                                                                                                                 | Transport     | Duration |
-| -------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- | ------------- | -------- |
-| `scripts/test-instruction-levels.mjs`  | `--instruction-level` essential/standard/full token ordering                                                                          | stdio         | ~10s     |
-| `scripts/test-filter-instructions.mjs` | Filter-aware sections — validates each `--tool-filter` config includes/excludes correct sections + reports token estimates per filter | stdio         | ~90s     |
-| `scripts/test-tool-annotations.mjs`    | `tools/list` openWorldHint annotation counts — all tools verified                                                                      | stdio         | ~5s      |
-| `scripts/test-prompts.mjs`             | `prompts/list` + `prompts/get` for all prompts (shape + errors)                                                                    | stdio         | ~10s     |
-| `scripts/test-scheduler.mjs`           | Scheduler job execution (backup, vacuum, rebuild-index)                                                                               | HTTP stateful | ~130s    |
+| Suite / Command | Tests | Runner |
+| --- | --- | --- |
+| `tests/server/filter-instructions.test.ts` | Filter-aware instructions, `--codemode-internal-full-access`, and `memory://help` index across all 9 presets | Vitest |
+| `tests/handlers/tool-annotations.test.ts` | Full `108`-tool behavioral annotation hints, contradictions, and canonical allowlists | Vitest |
+| `pnpm run test:prompts` (`prompts.spec.ts` + `prompts-expanded.spec.ts`) | `prompts/list` + `prompts/get` for all 32 prompts (shape + error handling) | Playwright |
+| `pnpm test` & `pnpm run test:e2e` | Full Vitest + Playwright suite (schemas, CLI config dump/reload, subscriptions, progress, HTTP/stdio boundaries) | Vitest + Playwright |
 
 ### Quick Run
 
@@ -37,42 +36,25 @@ These scripts test features that require separate server processes — they **ca
 cd /path/to/memory-journal-mcp
 pnpm run build
 
-# Phase 1.3A — Instruction levels
-node test-server/scripts/test-instruction-levels.mjs
+# Instruction filtering & tool annotations (Vitest)
+pnpm exec vitest run tests/server/filter-instructions.test.ts tests/handlers/tool-annotations.test.ts
 
-# Phase 1.3B — Filter-aware instruction sections + token estimates
-node test-server/scripts/test-filter-instructions.mjs
+# Prompt handlers (Playwright)
+pnpm run test:prompts
 
-# Phase 1.3C — Tool annotations
-node test-server/scripts/test-tool-annotations.mjs
-
-# Phase 8 — Prompt handlers
-node test-server/scripts/test-prompts.mjs
-
-# Phase 9 — Scheduler (requires HTTP server in a separate terminal)
-node dist/cli.js --transport http --port 3099 --db .test-output/test-memory-journal.db --backup-interval 1 --keep-backups 3 --vacuum-interval 2 --rebuild-index-interval 2
-# In another terminal:
-node test-server/scripts/test-scheduler.mjs
+# Full automated Playwright E2E suite
+pnpm run pretest:e2e; pnpm run test:e2e
 ```
-
-### Scheduler Script Options
-
-| Env Variable   | Default                     | Description                                                          |
-| -------------- | --------------------------- | -------------------------------------------------------------------- |
-| `MCP_URL`      | `http://localhost:3099/mcp` | HTTP endpoint URL                                                    |
-| `WAIT_SECONDS` | `130`                       | Seconds to wait for jobs to fire (set to `0` for initial check only) |
 
 ### Dual Transport Notes
 
 The server supports three transport modes:
 
-| Mode           | CLI Flags                      | Scheduler   | Sessions                 |
-| -------------- | ------------------------------ | ----------- | ------------------------ |
-| stdio          | `--transport stdio` (default)  | ❌ Inactive | N/A                      |
-| HTTP stateful  | `--transport http`             | ✅ Active   | `mcp-session-id` header  |
-| HTTP stateless | `--transport http --stateless` | ✅ Active   | No sessions (serverless) |
-
-The scheduler activates in **both** HTTP modes. The test script handles SSE response parsing automatically (HTTP transport returns `text/event-stream`). In stateless mode, there are no sessions so each request is independent — the scheduler still runs but session-scoped resources behave differently.
+| Mode           | CLI Flags                      | Sessions                 |
+| -------------- | ------------------------------ | ------------------------ |
+| stdio          | `--transport stdio` (default)  | N/A                      |
+| HTTP stateful  | `--transport http`             | `mcp-session-id` header  |
+| HTTP stateless | `--transport http --stateless` | No sessions (serverless) |
 
 ## Success Criteria
 
@@ -98,18 +80,6 @@ The scheduler activates in **both** HTTP modes. The test script handles SSE resp
 
 - [ ] all tools returned, all with `annotations` object
 - [ ] Tools correctly categorized by `openWorldHint` with 0 missing
-
-### Scheduler (Phase 9)
-
-- [ ] `memory://health` shows `scheduler.active: false` and empty `jobs` array in stdio mode
-- [ ] Server logs confirm scheduler started with correct intervals
-- [ ] `memory://health` shows all 3 jobs active with `nextRun` timestamps
-- [ ] Backup job creates timestamped `.db` files and prunes to `--keep-backups` limit
-- [ ] Vacuum job logs `PRAGMA optimize` completion
-- [ ] Rebuild-index job logs vector index rebuild with entry count
-- [ ] All `lastResult` values are `"success"` after jobs fire
-- [ ] `lastError` remains `null` for all jobs
-- [ ] Error in one job does not prevent others from running
 
 ## Conventions & Protocols
 
@@ -149,7 +119,7 @@ When you run automated testing (e.g., `pnpm run test:e2e` or `vitest`), the test
 1. Read the server instructions you received during initialization, then `memory://briefing`.
 2. Navigate to the `standard/` directory and **always run `standard/test-seed.md` first** — all other test files depend on it.
 3. See `standard/coordinator-workflow.md` for the complete sequence queue and dependency DAG. You may run them in the specified order or individually if their dependencies are met.
-4. **Run integration test scripts** for instruction levels, annotations, prompts, and scheduler (see Script Reference above).
+4. **Run automated protocol suites** for instruction filtering, tool annotations, and prompts (see Automated Protocol & Transport Suites above).
 5. Provide manual cleanup (e.g., deleting test nodes) if testing stateful behavior.
 6. Report findings returning proper handler formatting.
 7. (Optional) Run Code Mode tests from `codemode/` — see `codemode/coordinator-workflow.md` for the module list and dependency DAG.

@@ -8,6 +8,7 @@
 import { test, expect } from './test-fixture.js'
 import { Client } from '@modelcontextprotocol/client'
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/client'
+import { getAllToolNames } from '../../src/filtering/tool-filter.js'
 
 import { getServerUrl } from './helpers.js'
 
@@ -158,5 +159,53 @@ test.describe('E2E Tool Execution (via MCP SDK Client)', () => {
         expect(parsed).toHaveProperty('success', true)
         expect(parsed.entry.entryType).toBe('other')
         expect(parsed.entry.tags).toContain('invalid-type')
+    })
+
+    test('every standard tool advertises outputSchema over tools/list while mj_execute_code omits it', async () => {
+        const listResponse = await client.listTools()
+        const canonicalSet = new Set(getAllToolNames())
+        const canonicalListed = listResponse.tools.filter((t) => canonicalSet.has(t.name))
+        expect(canonicalListed).toHaveLength(108)
+
+        const codeModeTool = listResponse.tools.find((t) => t.name === 'mj_execute_code')
+        expect(codeModeTool).toBeDefined()
+        expect(codeModeTool?.outputSchema).toBeUndefined()
+
+        const missingOutputSchema = listResponse.tools
+            .filter((t) => t.name !== 'mj_execute_code')
+            .filter((t) => typeof t.outputSchema !== 'object' || t.outputSchema === null)
+            .map((t) => t.name)
+        expect(missingOutputSchema).toEqual([])
+    })
+
+    test('every listed tool includes annotations and a non-empty title over tools/list', async () => {
+        const listResponse = await client.listTools()
+        const canonicalSet = new Set(getAllToolNames())
+        const canonicalListed = listResponse.tools.filter((t) => canonicalSet.has(t.name))
+        expect(canonicalListed).toHaveLength(108)
+
+        for (const tool of listResponse.tools) {
+            expect(
+                typeof tool.title === 'string' && tool.title.length > 0,
+                `${tool.name} missing non-empty title`
+            ).toBe(true)
+            expect(
+                typeof tool.annotations === 'object' && tool.annotations !== null,
+                `${tool.name} missing annotations`
+            ).toBe(true)
+            expect(typeof tool.annotations?.readOnlyHint).toBe('boolean')
+            expect(typeof tool.annotations?.openWorldHint).toBe('boolean')
+        }
+
+        for (const tool of canonicalListed) {
+            expect(
+                typeof tool.annotations?.destructiveHint,
+                `${tool.name} missing destructiveHint`
+            ).toBe('boolean')
+            expect(
+                typeof tool.annotations?.idempotentHint,
+                `${tool.name} missing idempotentHint`
+            ).toBe('boolean')
+        }
     })
 })

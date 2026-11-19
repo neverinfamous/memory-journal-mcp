@@ -43,8 +43,7 @@
     "test:e2e": "playwright test && tsx scripts/update-badges.ts",
     "test:wsl": "wsl bash -c \"pnpm run test\"",
     "test:e2e:wsl": "wsl bash -c \"pnpm run test:e2e\"",
-    "test:scheduler": "node test-server/scripts/test-scheduler.mjs",
-    "test:prompts": "node test-server/scripts/test-prompts.mjs",
+    "test:prompts": "playwright test tests/e2e/prompts.spec.ts tests/e2e/prompts-expanded.spec.ts",
     "encrypt-db": "tsx scripts/encrypt-db.ts",
     "prepublishOnly": "pnpm run check && pnpm run build"
   },

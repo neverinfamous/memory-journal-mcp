@@ -32,7 +32,6 @@
 | Trigger progress   | `trigger_progress`     | Emits progress notifications and returns complete                                               |
 | Health resource    | Read `memory://health` | Shows DB stats, tool filter status, vector index health                                         |
 | Health team block  | Read `memory://health` | Includes `teamDatabase` block with `configured`, `entryCount`, `path` (requires `TEAM_DB_PATH`) |
-| Scheduler inactive | Read `memory://health` | `scheduler.active: false`, `scheduler.jobs: []` (scheduler is HTTP-only, inactive in stdio)     |
 | Statistics         | `get_statistics`       | Returns `structuredContent` with entry counts, types, periods                                   |
 | Enhanced analytics | `get_statistics`       | Returns `decisionDensity`, `relationshipComplexity`, `activityTrend`, `causalMetrics`           |
 | Database Indexes   | Run raw check via SQLite or verify in health/schema checks | `idx_memory_journal_active_timestamp`, `idx_memory_journal_active_recent`, `idx_memory_journal_type_timestamp` exist |
@@ -53,68 +52,21 @@
 | Skills metadata                  | Inspect `skillsDir` field        | Present when `SKILLS_DIR_PATH` set — has `count`, `names` array                                        |
 | Enhanced CI row                  | Inspect briefing.userMessage     | CI row shows breakdown or named runs (not just single-word status) when workflow env vars are set      |
 
-### 1.3 Protocol Validation — Run via Scripts - DO NOT SKIP!
+### 1.3 Protocol Validation — Automated Vitest & Playwright Suites
 
 > [!IMPORTANT]
-> These tests require **separate server starts** — they cannot be run via MCP tool calls. Run the scripts below in a terminal. Ensure the project is built first. See `test-server/scripts/README.md` for full details.
+> These checks verify server-startup, transport, and CLI behavior via Vitest and Playwright rather than direct agent MCP calls. Build first with `pnpm run build` before running Playwright specs.
 
 ```powershell
 # Ensure latest build
-npm run build
+pnpm run build
 
-# Test A — Instruction levels (essential < standard < full)
-node test-server/scripts/test-instruction-levels.mjs
+# Vitest — Instruction filters, annotations, schemas, metrics persistence
+pnpm exec vitest run tests/handlers/tool-annotations.test.ts tests/handlers/tool-output-schemas.test.ts tests/server/filter-instructions.test.ts tests/unit/observability-and-resources.test.ts
 
-# Test B — Tool annotations
-node test-server/scripts/test-tool-annotations.mjs
-
-# Test C — Filter instructions token ordering
-node test-server/scripts/test-filter-instructions.mjs
-
-# Test D — Prompts API
-node test-server/scripts/test-prompts.mjs
-
-# Test E — Progress notifications
-node test-server/scripts/test-progress.mjs
-
-# Test F — Team DB Fallback
-node test-server/scripts/test-team-db-fallback.mjs
-
-# Test G — Scheduler (Requires background server)
-# Term 1: $env:ALLOWED_IO_ROOTS="$PWD"; node dist/cli.js --transport http --port 3099 --backup-interval 1 --keep-backups 3 --vacuum-interval 2 --rebuild-index-interval 2 --digest-interval 2
-# Term 2: npm run test:scheduler
-
-# Test H — Resource Subscriptions
-node test-server/scripts/test-subscribe.mjs
-
-# Test I — Prometheus Metrics (Requires background server)
-# Term 1: $env:ALLOWED_IO_ROOTS="$PWD"; node dist/cli.js --transport http --port 3100 --metrics-export prometheus --stateless
-# Term 2: Invoke-RestMethod -Uri http://localhost:3100/metrics | Select-String "mcp_tool_calls_total"
-
-# Test J — Metrics Persistence
-# Term 1: npx tsx test-server/scripts/test-metrics-persistence.mjs
-
-# Test K — Config Dump & Validation
-node test-server/scripts/test-dump-config.mjs
-
-# Test L — Config Reload
-node test-server/scripts/test-config-reload.mjs
-
-# Test M — Schema Verification
-node test-server/scripts/verify-schemas.mjs
-
-# Test N — Boundaries & Zod
-node test-server/scripts/test-team-zod.mjs
-node test-server/scripts/test-sdk-boundaries.mjs
-
-# Test O — Transport Limits
-node test-server/scripts/test-50k-boundary.mjs
-node test-server/scripts/test-http.mjs
-node test-server/scripts/test-long-mcp.mjs
-
-# Cleanup Test Artifacts
-rm test-team-prompts.db*
-rm *_metrics.json
+# Playwright — Instructions, tools/schemas, prompts, progress, team fallback, subscriptions, Prometheus, CLI/config, HTTP/stdio boundaries
+pnpm run pretest:e2e
+pnpm exec playwright test tests/e2e/resources-instructions-levels.spec.ts tests/e2e/tools.spec.ts tests/e2e/prompts.spec.ts tests/e2e/prompts-expanded.spec.ts tests/e2e/progress-notifications.spec.ts tests/e2e/payloads-team.spec.ts tests/e2e/subscriptions.spec.ts tests/e2e/prometheus.spec.ts tests/e2e/cli-commands.spec.ts tests/e2e/config-parsing.spec.ts tests/e2e/boundary.spec.ts tests/e2e/stdio-transport.spec.ts tests/e2e/security.spec.ts
 ```
 
 | Check               | Expected                                                             |
@@ -125,7 +77,6 @@ rm *_metrics.json
 | Prompts API         | Successfully fetches and parses all 29 prompts                       |
 | Progress            | Both native and code-mode progress APIs successfully complete        |
 | Team DB Fallback    | Graceful rejection when TEAM_DB_PATH is missing                      |
-| Scheduler           | HTTP server executes backup, vacuum, index, and digest jobs          |
 | Subscriptions       | Subscriptions are authorized via scope checks and emit notifications upon mutation |
 | Prometheus Metrics  | HTTP endpoint returns prometheus exposition format with tool metrics |
 | Metrics Persistence | Server loads/saves JSON metrics across restarts automatically        |
@@ -148,7 +99,7 @@ rm *_metrics.json
 - Agent reports the Total Token Estimate in the final summary (using `_meta.tokenEstimate` from responses). The tokens tracked should only count the estimated tokens that actually entered the context window.
 - `test_simple` returns echo message
 - `test_error_handling` correctly returns structured errors based on `code`
-- `memory://health` shows DB stats, vector index health, team DB block, and `scheduler.active: false`
+- `memory://health` shows DB stats, vector index health, and team DB block
 - [ ] `memory://briefing` returns complete Markdown string with all expected context
 - Server instructions length respects `--instruction-level`: essential (~1.9K tokens) < standard (~2.2K) < full (~3.3K)
 - 108 tools total registered and annotated correctly

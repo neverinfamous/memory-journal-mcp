@@ -23,7 +23,7 @@
 
 ## 1. Zod Boundary & Type Mismatch Matrix
 
-> **Note:** Type mismatch leakage (e.g., `-32602` raw MCP errors instead of structured `VALIDATION_ERROR`) is now automatically tested in CI via `test-server/scripts/test-team-zod.mjs`.
+> **Note:** Type mismatch leakage (e.g., `-32602` raw MCP errors instead of structured `VALIDATION_ERROR`) is covered automatically in `tests/e2e/boundary.spec.ts` and over stdio via `tests/e2e/stdio-transport.spec.ts`.
 
 | Tool                                           | Domain Error Test                                    | Zod Empty Param (`{}`)            | Zod Type Mismatch |
 | ---------------------------------------------- | ---------------------------------------------------- | --------------------------------- | ----------------- |

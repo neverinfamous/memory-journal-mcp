@@ -88,4 +88,51 @@ test.describe('E2E Prompts: Expanded Coverage', () => {
         })
         expectValidPrompt(response)
     })
+
+    test('listPrompts returns all 32 registered prompts', async () => {
+        const { prompts } = await client.listPrompts()
+        expect(prompts).toHaveLength(32)
+    })
+
+    test('every registered prompt resolves non-empty user text messages', async () => {
+        const sampleValues: Record<string, string> = {
+            pr_number: '1',
+            project_number: '1',
+            workspace_id: 'default',
+            topic: 'testing',
+            target: 'src/index.ts',
+        }
+        const { prompts } = await client.listPrompts()
+
+        for (const prompt of prompts) {
+            const args: Record<string, string> = {}
+            for (const arg of prompt.arguments ?? []) {
+                const sample = sampleValues[arg.name]
+                if (sample !== undefined) {
+                    args[arg.name] = sample
+                }
+            }
+            const response = await client.getPrompt({ name: prompt.name, arguments: args })
+            expectValidPrompt(response)
+            const first = response.messages[0]
+            expect(first?.role, `${prompt.name} role`).toBe('user')
+            const content = first?.content as { type?: unknown; text?: unknown } | undefined
+            expect(content?.type, `${prompt.name} content type`).toBe('text')
+            expect(typeof content?.text === 'string' && content.text.length > 0, `${prompt.name} empty text`).toBe(true)
+        }
+    })
+
+    test('load-briefing reports unknown project gracefully and nonexistent-prompt rejects', async () => {
+        const unknownProject = await client.getPrompt({
+            name: 'load-briefing',
+            arguments: { projects: 'nonexistent-project-xyz' },
+        })
+        expectValidPrompt(unknownProject)
+        const text = (unknownProject.messages[0]?.content as { text?: string } | undefined)?.text ?? ''
+        expect(text).toMatch(/not found/i)
+
+        await expect(
+            client.getPrompt({ name: 'nonexistent-prompt', arguments: {} })
+        ).rejects.toThrow()
+    })
 })

@@ -1,20 +1,32 @@
 import { test, expect } from './test-fixture.js'
+import type { Client } from '@modelcontextprotocol/client'
 import * as fs from 'node:fs'
 import * as path from 'node:path'
-import { startServer, stopServer, createClient } from './helpers'
+import { startServer, stopServer, createClient } from './helpers.js'
 
 test.describe('Configuration File Parsing', () => {
     const port = 5127 + (Number(process.env.TEST_WORKER_INDEX || process.env.TEST_PARALLEL_INDEX || 0) * 100)
-    let client: any
+    const hotReloadPort = port + 1
+    let client: Client | undefined
     const testConfigPath = path.join(process.cwd(), '.test-output', 'e2e', `test-config-${port}.json`)
+    const hotReloadConfigPath = path.join(
+        process.cwd(),
+        '.test-output',
+        'e2e',
+        `test-hot-reload-${hotReloadPort}.json`
+    )
 
     test.afterEach(async () => {
-        if (client) {
+        if (client !== undefined) {
             await client.close()
+            client = undefined
         }
         stopServer(port)
-        if (fs.existsSync(testConfigPath)) {
-            fs.unlinkSync(testConfigPath)
+        stopServer(hotReloadPort)
+        for (const cfg of [testConfigPath, hotReloadConfigPath]) {
+            if (fs.existsSync(cfg)) {
+                fs.unlinkSync(cfg)
+            }
         }
     })
 
@@ -46,5 +58,42 @@ test.describe('Configuration File Parsing', () => {
         const toolNames = response.tools.map(t => t.name)
         expect(toolNames).toContain('mj_execute_code')
         expect(toolNames).toContain('update_configuration')
+    })
+
+    test('persists update_configuration changes to disk and hot-reloads external config file edits', async () => {
+        fs.mkdirSync(path.dirname(hotReloadConfigPath), { recursive: true })
+        fs.writeFileSync(
+            hotReloadConfigPath,
+            JSON.stringify({ toolFilter: 'full', briefingEntries: 2 }, null, 2)
+        )
+
+        await startServer(hotReloadPort, ['--config', hotReloadConfigPath], 'config-hot-reload')
+        client = await createClient(hotReloadPort)
+
+        const initial = await client.listTools(undefined, { cacheMode: 'refresh' })
+        expect(initial.tools).toHaveLength(108)
+
+        await client.callTool({
+            name: 'update_configuration',
+            arguments: { tool_filter: 'full,-github', briefing_entries: 5 },
+        })
+
+        const afterUpdate = await client.listTools(undefined, { cacheMode: 'refresh' })
+        expect(afterUpdate.tools).toHaveLength(90)
+
+        const diskConfig = JSON.parse(fs.readFileSync(hotReloadConfigPath, 'utf-8')) as Record<string, unknown>
+        expect(diskConfig['briefingEntries']).toBe(5)
+
+        fs.writeFileSync(
+            hotReloadConfigPath,
+            JSON.stringify({ ...diskConfig, toolFilter: 'codemode', briefingEntries: 9 }, null, 2)
+        )
+        await new Promise((resolve) => setTimeout(resolve, 1500))
+
+        const afterReload = await client.listTools(undefined, { cacheMode: 'refresh' })
+        expect(afterReload.tools).toHaveLength(2)
+        const reloadedNames = afterReload.tools.map((t) => t.name)
+        expect(reloadedNames).toContain('mj_execute_code')
+        expect(reloadedNames).toContain('update_configuration')
     })
 })
