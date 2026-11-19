@@ -60,29 +60,57 @@ export function setupGitProcessLifecycle(proc: ReturnType<typeof spawn>, ac: Abo
     }
   });
 
+  // [INTENT]: In Bun on Windows (`#handleOnExit` -> `#maybeClose`), ChildProcess `'close'` can fire before
+  // `proc.stderr`'s buffered `Readable` decoder flushes its final `'data'`/`'end'` events under parallel load.
+  const hasStderrOnce = proc.stderr !== null && proc.stderr !== undefined && typeof proc.stderr.once === 'function';
+  let isStderrEnded = !hasStderrOnce;
+  const stderrSettled = hasStderrOnce
+    ? new Promise<void>(resolveStderr => {
+        const finish = () => {
+          if (!isStderrEnded) {
+            isStderrEnded = true;
+            resolveStderr();
+          }
+        };
+        proc.stderr?.once('end', finish);
+        proc.stderr?.once('close', finish);
+        proc.stderr?.once('error', finish);
+      })
+    : Promise.resolve();
+
   let streamError: Error | null = null;
   const processComplete = new Promise<void>((resolve, reject) => {
     let resolved = false;
+    const finalizeFailure = (code: number | null, signal: NodeJS.Signals | null) => {
+      const errText = errChunks.join('');
+      if (errText.includes("ambiguous argument 'HEAD': unknown revision") || errText.includes("bad default revision 'HEAD'")) {
+        resolve();
+      } else {
+        streamError = new Error(`Git failed with code ${code} and signal ${signal}: ${errText}`);
+        reject(streamError);
+      }
+    };
     proc.on('close', (code, signal) => {
-      if (!resolved) {
-        resolved = true;
-        if (ac.signal.aborted) {
-          streamError = new Error(`Git process timed out and was aborted: ${errChunks.join('')}`);
-          reject(streamError);
-        } else if (signal === 'SIGKILL' || signal === 'SIGTERM') {
-          streamError = new Error(`Git process was killed with signal ${signal}`);
-          reject(streamError);
-        } else if ((code !== 0 && code !== null && code !== SIGPIPE_EXIT_CODE) || (signal && signal !== 'SIGPIPE')) {
-          const errText = errChunks.join('');
-          if (errText.includes("ambiguous argument 'HEAD': unknown revision") || errText.includes("bad default revision 'HEAD'")) {
-            resolve();
-          } else {
-            streamError = new Error(`Git failed with code ${code} and signal ${signal}: ${errText}`);
-            reject(streamError);
-          }
+      if (resolved) return;
+      resolved = true;
+      if (ac.signal.aborted) {
+        streamError = new Error(`Git process timed out and was aborted: ${errChunks.join('')}`);
+        reject(streamError);
+      } else if (signal === 'SIGKILL' || signal === 'SIGTERM') {
+        streamError = new Error(`Git process was killed with signal ${signal}`);
+        reject(streamError);
+      } else if ((code !== 0 && code !== null && code !== SIGPIPE_EXIT_CODE) || (signal && signal !== 'SIGPIPE')) {
+        if (isStderrEnded) {
+          finalizeFailure(code, signal);
         } else {
-          resolve();
+          const drainCap = new Promise<void>(r => {
+            const timer = setTimeout(r, 250);
+            timer.unref();
+          });
+          void Promise.race([stderrSettled, drainCap]).then(() => finalizeFailure(code, signal));
         }
+      } else {
+        resolve();
       }
     });
     proc.on('error', err => {
