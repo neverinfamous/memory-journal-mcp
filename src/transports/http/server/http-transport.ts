@@ -301,7 +301,7 @@ export class HttpTransport {
 
         if (this.config.metricsExport === 'prometheus') {
             if (this.config.oauthEnabled === true) {
-                this.app.get('/metrics', requireScope('read'), handlePrometheusMetrics(runtime))
+                this.app.get('/metrics', requireScope('audit'), handlePrometheusMetrics(runtime))
             } else {
                 this.app.get('/metrics', handlePrometheusMetrics(runtime))
             }

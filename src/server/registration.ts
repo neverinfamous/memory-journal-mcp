@@ -93,7 +93,7 @@ function getCachedPromptArgsSchema(
     if (cached === undefined) {
         const shape: Record<string, z.ZodType> = {}
         for (const arg of promptDef.arguments) {
-            const described = z.string().describe(arg.description)
+            const described = z.string().max(10_000).describe(arg.description)
             shape[arg.name] = arg.required === true ? described : described.optional()
         }
         cached = z.object(shape)

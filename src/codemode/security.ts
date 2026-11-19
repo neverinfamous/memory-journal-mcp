@@ -30,16 +30,21 @@ export function validateSandboxCode(
     code: string,
     config: SecurityConfig = DEFAULT_SECURITY_CONFIG
 ): ValidationResult {
-    const errors: string[] = []
-
     if (Buffer.byteLength(code, 'utf-8') > config.maxCodeLength) {
-        errors.push(`Code exceeds maximum length of ${String(config.maxCodeLength)} bytes`)
+        return {
+            valid: false,
+            errors: [`Code exceeds maximum length of ${String(config.maxCodeLength)} bytes`],
+        }
     }
 
     if (code.trim().length === 0) {
-        errors.push('Code cannot be empty')
+        return {
+            valid: false,
+            errors: ['Code cannot be empty'],
+        }
     }
 
+    const errors: string[] = []
     const strippedCode = stripCommentsAndStrings(code)
 
     for (const pattern of config.blockedPatterns) {

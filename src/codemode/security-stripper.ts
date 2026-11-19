@@ -46,11 +46,22 @@ function decodeEscapeAt(
     return { ch: esc, next: slashIdx + 2 }
 }
 
+export function isJsLineTerminator(ch: string | undefined): boolean {
+    return ch === '\n' || ch === '\r' || ch === '\u2028' || ch === '\u2029'
+}
+
+export function findNextJsLineTerminator(src: string, from: number): number {
+    for (let i = from; i < src.length; i++) {
+        if (isJsLineTerminator(src[i])) return i
+    }
+    return -1
+}
+
 /**
  * Skips a regex literal body starting just after the opening `/`.
  * Returns the index after the closing `/` and its flags (or at the line end if unterminated).
  */
-function skipRegexLiteralBody(code: string, start: number): number {
+export function skipRegexLiteralBody(code: string, start: number): number {
     const len = code.length
     let i = start
     let inCharClass = false
@@ -70,7 +81,7 @@ function skipRegexLiteralBody(code: string, start: number): number {
                 i++
             }
             break
-        } else if (c === '\n') {
+        } else if (isJsLineTerminator(c)) {
             break
         }
         i++
@@ -155,48 +166,64 @@ function scanTemplateLiteral(
     return { out, next: i, lastToken }
 }
 
-function canStartRegexLiteral(prev: string): boolean {
-    if (!prev) return true
+const REGEX_PRECEDING_KEYWORDS =
+    /^(?:return|typeof|instanceof|in|of|void|delete|throw|new|case|yield|await|else|do)$/
+const CONTROL_HEADER_KEYWORDS = /^(?:if|while|for|with)$/
+const BLOCK_PRECEDING_TOKENS = new Set([
+    '',
+    ';',
+    '{',
+    '}block',
+    ')ctrl',
+    ')',
+    '=>',
+    'else',
+    'do',
+    'try',
+    'finally',
+])
+
+export function canStartRegexLiteral(prev: string): boolean {
+    if (!prev || prev === '}block' || prev === ')ctrl') return true
     if (/^[([{:;,=!?&|+\-~*%^<>]$/.test(prev)) return true
-    return /^(?:return|typeof|instanceof|in|of|void|delete|throw|new|case|yield|await|else|do)$/.test(
-        prev
-    )
+    return REGEX_PRECEDING_KEYWORDS.test(prev)
 }
 
-function skipLineOrBlockComment(
+export function skipLineOrBlockComment(
     code: string,
     start: number
-): { out: string; next: number } | null {
+): { out: string; next: number; unterminated?: boolean } | null {
     const ch = code[start] ?? ''
     const next = start + 1 < code.length ? (code[start + 1] ?? '') : ''
     if (ch === '/' && next === '/') {
         let i = start + 2
-        while (i < code.length && code[i] !== '\n') i++
-        return { out: ' ', next: i }
+        while (i < code.length && !isJsLineTerminator(code[i])) i++
+        return { out: ' ', next: i, ...(i >= code.length ? { unterminated: true } : {}) }
     }
     if (ch === '<' && code.slice(start, start + 4) === '<!--') {
         let i = start + 4
-        while (i < code.length && code[i] !== '\n') i++
-        return { out: ' ', next: i }
+        while (i < code.length && !isJsLineTerminator(code[i])) i++
+        return { out: ' ', next: i, ...(i >= code.length ? { unterminated: true } : {}) }
     }
     if (ch === '-' && code.slice(start, start + 3) === '-->') {
         let pos = start - 1
         while (pos >= 0 && (code[pos] === ' ' || code[pos] === '\t')) pos--
-        if (pos < 0 || code[pos] === '\n' || code[pos] === '\r') {
+        if (pos < 0 || isJsLineTerminator(code[pos])) {
             let i = start + 3
-            while (i < code.length && code[i] !== '\n') i++
-            return { out: ' ', next: i }
+            while (i < code.length && !isJsLineTerminator(code[i])) i++
+            return { out: ' ', next: i, ...(i >= code.length ? { unterminated: true } : {}) }
         }
     }
     if (ch === '/' && next === '*') {
         let out = ' '
         let i = start + 2
         while (i < code.length && !(code[i] === '*' && code[i + 1] === '/')) {
-            if (code[i] === '\n') out += '\n'
+            if (isJsLineTerminator(code[i])) out += '\n'
             i++
         }
-        if (i < code.length) i += 2
-        return { out, next: i }
+        const closed = i < code.length
+        if (closed) i += 2
+        return { out, next: i, ...(!closed ? { unterminated: true } : {}) }
     }
     return null
 }
@@ -219,12 +246,57 @@ function scanIdentifierWord(code: string, start: number): { word: string; next: 
     return { word, next: j }
 }
 
-function updateTemplateBraceDepth(ch: string, stack: number[]): void {
-    if (stack.length === 0) return
-    const topIdx = stack.length - 1
-    const currentDepth = stack[topIdx] ?? 0
-    if (ch === '{') stack[topIdx] = currentDepth + 1
-    else if (ch === '}' && currentDepth > 0) stack[topIdx] = currentDepth - 1
+export interface DelimiterState {
+    templateBraces: number[]
+    parenCtrl: boolean[]
+    braceBlock: boolean[]
+    awaitingForParen: boolean
+}
+
+export function createDelimiterState(): DelimiterState {
+    return {
+        templateBraces: [],
+        parenCtrl: [],
+        braceBlock: [],
+        awaitingForParen: false,
+    }
+}
+
+export function trackIdentifierToken(word: string, prevToken: string, state: DelimiterState): string {
+    state.awaitingForParen = prevToken === 'for' && word === 'await'
+    return word
+}
+
+export function trackPunctuationToken(ch: string, prevToken: string, state: DelimiterState): string {
+    if (ch === '(') {
+        const isCtrl = CONTROL_HEADER_KEYWORDS.test(prevToken) || (state.awaitingForParen && prevToken === 'await')
+        state.parenCtrl.push(isCtrl)
+        state.awaitingForParen = false
+        return '('
+    }
+    if (ch === ')') return state.parenCtrl.pop() === true ? ')ctrl' : ')'
+    if (ch === '{') {
+        if (state.templateBraces.length > 0) {
+            const topIdx = state.templateBraces.length - 1
+            const top = state.templateBraces[topIdx] ?? 0
+            state.templateBraces[topIdx] = top + 1
+        }
+        const isBlock =
+            BLOCK_PRECEDING_TOKENS.has(prevToken) &&
+            (prevToken !== '{' || state.braceBlock.at(-1) === true)
+        state.braceBlock.push(isBlock)
+        return '{'
+    }
+    if (ch === '}') {
+        if (state.templateBraces.length > 0) {
+            const topIdx = state.templateBraces.length - 1
+            const top = state.templateBraces[topIdx] ?? 0
+            if (top > 0) state.templateBraces[topIdx] = top - 1
+        }
+        return state.braceBlock.pop() === true ? '}block' : '}expr'
+    }
+    state.awaitingForParen = false
+    return ch
 }
 
 /**
@@ -238,7 +310,12 @@ export function stripCommentsAndStrings(rawCode: string): string {
     let out = ''
     let i = 0
     let lastNonWsToken = ''
-    const templateBraceDepthStack: number[] = []
+    const state: DelimiterState = {
+        templateBraces: [],
+        parenCtrl: [],
+        braceBlock: [],
+        awaitingForParen: false,
+    }
 
     while (i < len) {
         const ch = code[i] ?? ''
@@ -250,14 +327,12 @@ export function stripCommentsAndStrings(rawCode: string): string {
             i = comment.next
             continue
         }
-
         if (ch === '/' && next !== '/' && next !== '*' && canStartRegexLiteral(lastNonWsToken)) {
             out += '/ /'
             i = skipRegexLiteralBody(code, i + 1)
             lastNonWsToken = '/'
             continue
         }
-
         if (ch === '"' || ch === "'") {
             const scanned = scanQuotedLiteral(code, i + 1, ch)
             i = scanned.next
@@ -266,37 +341,31 @@ export function stripCommentsAndStrings(rawCode: string): string {
             lastNonWsToken = ch
             continue
         }
-
-        const closingInterpolation =
-            ch === '}' &&
-            templateBraceDepthStack.length > 0 &&
-            templateBraceDepthStack[templateBraceDepthStack.length - 1] === 0
-        if (ch === '`' || closingInterpolation) {
-            if (ch === '}') templateBraceDepthStack.pop()
-            const scanned = scanTemplateLiteral(code, i + 1, ch === '}', templateBraceDepthStack)
+        const closingInterp =
+            ch === '}' && state.templateBraces.length > 0 && state.templateBraces.at(-1) === 0
+        if (ch === '`' || closingInterp) {
+            if (ch === '}') state.templateBraces.pop()
+            const scanned = scanTemplateLiteral(code, i + 1, ch === '}', state.templateBraces)
             out += scanned.out
             i = scanned.next
             if (scanned.lastToken !== undefined) lastNonWsToken = scanned.lastToken
             continue
         }
-
-        if ((ch === '+' && next === '+') || (ch === '-' && next === '-')) {
+        if ((ch === '+' && next === '+') || (ch === '-' && next === '-') || (ch === '=' && next === '>')) {
             lastNonWsToken = ch + next
             out += ch + next
             i += 2
             continue
         }
-
-        updateTemplateBraceDepth(ch, templateBraceDepthStack)
-
         if (/[A-Za-z0-9_$]/.test(ch) || (ch === '\\' && next === 'u')) {
             const ident = scanIdentifierWord(code, i)
+            state.awaitingForParen = lastNonWsToken === 'for' && ident.word === 'await'
             lastNonWsToken = ident.word
             out += ident.word
             i = ident.next
             continue
         }
-        if (!/\s/.test(ch)) lastNonWsToken = ch
+        if (!/\s/.test(ch)) lastNonWsToken = trackPunctuationToken(ch, lastNonWsToken, state)
         out += ch
         i++
     }

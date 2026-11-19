@@ -1,7 +1,7 @@
 import type { Database } from 'better-sqlite3'
 import { logger } from '../../utils/logger.js'
 
-const HEX_CIPHER_KEY_RE = /^x'[0-9a-fA-F]+'$/
+const HEX_CIPHER_KEY_RE = /^x'(?:[0-9a-fA-F]{2})+'$/i
 
 /**
  * [INTENT] Apply SQLCipher encryption key from environment variables to a native DB handle.
@@ -24,13 +24,14 @@ export function applySqlCipherKey(db: Database, logSuccess = false): void {
     if (rawKey.includes('\0')) {
         throw new Error('Invalid encryption key: null bytes are not allowed')
     }
-    if (rawKey.startsWith("x'") && rawKey.endsWith("'") && !HEX_CIPHER_KEY_RE.test(rawKey)) {
+    const isHexKey = rawKey.startsWith("x'") || rawKey.startsWith("X'")
+    if (isHexKey && !HEX_CIPHER_KEY_RE.test(rawKey)) {
         throw new Error('Invalid hex encryption key format')
     }
     try {
-        if (rawKey.startsWith("x'") && rawKey.endsWith("'")) {
-            // Raw hex keys must not be wrapped in additional single quotes
-            db.pragma(`key = "${rawKey}"`)
+        if (isHexKey) {
+            const hexLiteral = `x'${rawKey.slice(2)}`
+            db.pragma(`key = ${hexLiteral}`)
         } else {
             const escapedKey = rawKey.replace(/'/g, "''")
             db.pragma(`key = '${escapedKey}'`)

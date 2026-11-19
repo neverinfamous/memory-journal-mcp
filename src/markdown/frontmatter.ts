@@ -85,27 +85,28 @@ const FrontmatterAnchorSchema = z.union([
 
 const FrontmatterSchema = z.object({
     mj_id: z.number().int().positive().optional(),
-    entry_type: z.string().optional(),
-    author: z.string().optional(),
+    entry_type: z.string().max(255).optional(),
+    author: z.string().max(255).optional(),
     tags: z.array(z.string().max(100)).max(50).optional(),
-    timestamp: z.string().optional(),
-    significance: z.string().optional(),
-    workspace_id: z.string().optional(),
+    timestamp: z.string().max(255).optional(),
+    significance: z.string().max(255).optional(),
+    workspace_id: z.string().max(255).optional(),
     project_number: z.number().int().positive().optional(),
-    relationships: z
-        .array(
-            z.preprocess(
-                preprocessFrontmatterRelationship,
-                z.object({
-                    type: z.string(),
-                    target_id: z.number().int().positive(),
-                })
+    relationships:
+        z
+            .array(
+                z.preprocess(
+                    preprocessFrontmatterRelationship,
+                    z.object({
+                        type: z.string().max(100),
+                        target_id: z.number().int().positive(),
+                    })
+                )
             )
-        )
-        .max(100)
-        .optional(),
+            .max(100)
+            .optional(),
     anchors: z.array(FrontmatterAnchorSchema).max(100).optional(),
-    source: z.string().optional(),
+    source: z.string().max(255).optional(),
 })
 
 // ============================================================================
@@ -188,12 +189,16 @@ export function parseFrontmatter(content: string): ParseResult {
         throw new Error('Invalid frontmatter: Found opening --- fence but no closing --- fence')
     }
 
-    const fmText = normalized.slice(firstNl + 1, closingLineStart).trim()
-    let raw: Record<string, unknown>
+    const rawFmText = normalized.slice(firstNl + 1, closingLineStart)
+    if (rawFmText.length > 100_000) {
+        throw new Error('Invalid frontmatter: Frontmatter block exceeds maximum size of 100KB.')
+    }
+    const fmText = rawFmText.trim()
+    let raw: unknown
 
     if (fmText.startsWith('{') && fmText.endsWith('}')) {
         try {
-            raw = JSON.parse(fmText) as Record<string, unknown>
+            raw = JSON.parse(fmText) as unknown
         } catch (err: unknown) {
             if (err instanceof Error) {
                 throw new Error(`Invalid JSON frontmatter: ${err.message}`, { cause: err })
@@ -204,6 +209,10 @@ export function parseFrontmatter(content: string): ParseResult {
         throw new Error(
             'Invalid frontmatter: Frontmatter must be strict JSON enclosed in { } braces.'
         )
+    }
+
+    if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) {
+        throw new Error('Invalid frontmatter: Parsed frontmatter must be a JSON object.')
     }
 
     // Validate against schema

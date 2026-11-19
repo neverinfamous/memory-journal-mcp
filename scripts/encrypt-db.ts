@@ -123,7 +123,11 @@ try {
     console.log('To use it, start the server with DB_ENCRYPTION_KEY=<your-key>')
     console.log(`and point the database configuration to ${outPath}.`)
 } catch (error) {
-    console.error('❌ Failed to encrypt database:', error)
+    const rawMsg = error instanceof Error ? error.message : String(error)
+    const safeMsg = rawMsg
+        .replace(/x'[0-9a-fA-F]*'/gi, "x'[REDACTED]'")
+        .replace(/(pragma\s+(?:re)?key\s*=\s*)(?:"[^"]*"|'[^']*')/gi, "$1'[REDACTED]'")
+    console.error('❌ Failed to encrypt database:', safeMsg)
     removeIfExists(tmpPath)
     removeIfExists(`${tmpPath}-wal`)
     removeIfExists(`${tmpPath}-shm`)

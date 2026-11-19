@@ -23,6 +23,7 @@ import { ConfigurationError, PermissionError, ValidationError } from '../../../t
 import { enforceAccessBoundary } from '../../../auth/validation.js'
 import { enforceTeamRbac, getCallerIdentity } from '../team/rbac.js'
 import { formatHandlerError } from '../../../utils/error-helpers.js'
+import { sanitizeAuthor } from '../../../utils/security-utils.js'
 import { resolveWorkspaceId } from '../../../utils/workspace-resolver.js'
 import { activeProjectRegistry, alignedProjectFilter } from '../../../utils/write-scope.js'
 import { mergeMultipleSources, type EntryWithSource } from './helpers.js'
@@ -330,11 +331,22 @@ export async function handleCrossTeamSearch(
         targetLabels
     )
     const merged = mergeMultipleSources(sources, args.limit, args.sort_by)
-    const finalEntries = merged.map((entry) => ({
-        ...entry,
-        team_db: entry.team_db || '',
-        source: entry.source ?? ('team' as const),
-    })) as (z.infer<typeof EntryOutputSchema> & { team_db: string; author?: string | null })[]
+    const finalEntries = merged.map((entry) => {
+        const rawAuthor: unknown =
+            'author' in entry ? (entry as { author?: unknown }).author : undefined
+        const author =
+            typeof rawAuthor === 'string'
+                ? sanitizeAuthor(rawAuthor)
+                : rawAuthor === null
+                  ? null
+                  : undefined
+        return {
+            ...entry,
+            team_db: entry.team_db || '',
+            source: entry.source ?? ('team' as const),
+            ...(author !== undefined ? { author } : {}),
+        }
+    }) as (z.infer<typeof EntryOutputSchema> & { team_db: string; author?: string | null })[]
 
     const everySearchFailed = searched_dbs.length === 0 && errors.length > 0
     return {

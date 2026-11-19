@@ -12,6 +12,17 @@
  * unchanged (returning `undefined`, the previous behavior).
  */
 
+import {
+    isJsLineTerminator,
+    findNextJsLineTerminator,
+    skipRegexLiteralBody,
+    canStartRegexLiteral,
+    trackIdentifierToken,
+    trackPunctuationToken,
+    createDelimiterState,
+    skipLineOrBlockComment,
+} from './security-stripper.js'
+
 // Statements that must NOT be prefixed with `return`
 const NON_RETURNABLE =
     /^\s*(return|throw|const |let |var |if\b|else\b|for\b|while\b|do\b|switch\b|try\b|catch\b|finally\b|class |function |\/\/|\/\*|\{|\})/
@@ -26,28 +37,23 @@ const NON_RETURNABLE =
  *   `return 42`                       → `return 42`          (no change)
  *   `for (const x of xs) { ... }`    → unchanged             (control flow)
  */
-function trySkipRegexLiteral(trimmed: string, slashIdx: number): number | null {
-    const next = trimmed[slashIdx + 1]
-    if (next === '/' || next === '*') return null
-    let prevIdx = slashIdx - 1
-    while (prevIdx >= 0 && /\s/.test(trimmed[prevIdx] ?? '')) prevIdx--
-    const prevCh = prevIdx >= 0 ? (trimmed[prevIdx] ?? '') : ''
-    if (prevCh !== '' && !/[([{:;,=!?&|+\-~*%^<>]/.test(prevCh)) return null
-
-    let i = slashIdx + 1
-    let inClass = false
-    while (i < trimmed.length) {
-        const rc = trimmed[i]
-        if (rc === '\\') {
-            i += 2
-            continue
-        }
-        if (rc === '[') inClass = true
-        else if (rc === ']') inClass = false
-        else if ((rc === '/' && !inClass) || rc === '\n') break
-        i++
+function scanStringStep(
+    trimmed: string,
+    i: number,
+    inString: string,
+    isEscaped: boolean,
+    state: ReturnType<typeof createDelimiterState>
+): { inString: string | null; isEscaped: boolean; next: number; prevToken?: string } {
+    const ch = trimmed[i] ?? ''
+    if (ch === '\\') return { inString, isEscaped: !isEscaped, next: i + 1 }
+    if (inString === '`' && !isEscaped && ch === '$' && trimmed[i + 1] === '{') {
+        state.templateBraces.push(0)
+        return { inString: null, isEscaped: false, next: i + 2, prevToken: '(' }
     }
-    return i
+    if (ch === inString && !isEscaped) {
+        return { inString: null, isEscaped: false, next: i + 1, prevToken: inString }
+    }
+    return { inString, isEscaped: false, next: i + 1 }
 }
 
 function findLastStatementBoundary(trimmed: string): number {
@@ -55,72 +61,52 @@ function findLastStatementBoundary(trimmed: string): number {
     let isEscaped = false
     let lastBoundary = -1
     let depth = 0
-    const templateBraces: number[] = []
+    let prevToken = ''
+    const state = createDelimiterState()
 
-    // Forward pass to safely find statement boundaries
     for (let i = 0; i < trimmed.length; i++) {
-        const ch = trimmed[i]
-        if (inString) {
-            if (ch === '\\') {
-                isEscaped = !isEscaped
-                continue
-            }
-            if (inString === '`' && !isEscaped && ch === '$' && trimmed[i + 1] === '{') {
-                templateBraces.push(0)
-                inString = null
-                isEscaped = false
-                i++
-                continue
-            }
-            if (ch === inString && !isEscaped) inString = null
-            isEscaped = false
+        const ch = trimmed[i] ?? ''
+        if (inString !== null) {
+            const step = scanStringStep(trimmed, i, inString, isEscaped, state)
+            inString = step.inString
+            isEscaped = step.isEscaped
+            if (step.prevToken !== undefined) prevToken = step.prevToken
+            i = step.next - 1
             continue
         }
-        if (ch === '/' && trimmed[i + 1] === '/') {
-            const nl = trimmed.indexOf('\n', i)
-            if (nl === -1) break
-            i = nl - 1
-            continue
-        }
-        if (ch === '/' && trimmed[i + 1] === '*') {
-            const end = trimmed.indexOf('*/', i + 2)
-            if (end === -1) break
-            i = end + 1
+        const comment = skipLineOrBlockComment(trimmed, i)
+        if (comment !== null) {
+            if (comment.next === trimmed.length && findNextJsLineTerminator(trimmed, i) === -1) break
+            i = comment.next - 1
             continue
         }
         if (ch === "'" || ch === '"' || ch === '`') {
             inString = ch
-        } else if (ch === '/') {
-            const regexEnd = trySkipRegexLiteral(trimmed, i)
-            if (regexEnd !== null) i = regexEnd
-        } else if (ch === '{') {
-            if (templateBraces.length > 0) {
-                const topIdx = templateBraces.length - 1
-                const top = templateBraces[topIdx]
-                if (top !== undefined) templateBraces[topIdx] = top + 1
-            } else {
-                depth++
+        } else if (ch === '/' && trimmed[i + 1] !== '/' && trimmed[i + 1] !== '*' && canStartRegexLiteral(prevToken)) {
+            i = skipRegexLiteralBody(trimmed, i + 1) - 1
+            prevToken = '/'
+        } else if (/[A-Za-z0-9_$]/.test(ch)) {
+            let j = i
+            while (j < trimmed.length && /[A-Za-z0-9_$]/.test(trimmed[j] ?? '')) j++
+            prevToken = trackIdentifierToken(trimmed.slice(i, j), prevToken, state)
+            i = j - 1
+        } else if (ch === '=' && trimmed[i + 1] === '>') {
+            prevToken = '=>'
+            i++
+        } else {
+            const closingInterp = ch === '}' && state.templateBraces.length > 0 && state.templateBraces.at(-1) === 0
+            if (closingInterp) {
+                state.templateBraces.pop()
+                inString = '`'
+                isEscaped = false
+                continue
             }
-        } else if (ch === '}') {
-            if (templateBraces.length > 0) {
-                const topIdx = templateBraces.length - 1
-                const top = templateBraces[topIdx]
-                if (top === 0) {
-                    templateBraces.pop()
-                    inString = '`'
-                    isEscaped = false
-                } else if (top !== undefined) {
-                    templateBraces[topIdx] = top - 1
-                }
-            } else {
-                depth--
+            if (ch === '{' || ch === '[' || ch === '(') depth++
+            else if (ch === '}' || ch === ']' || ch === ')') depth--
+            if (depth === 0 && state.templateBraces.length === 0 && (ch === ';' || isJsLineTerminator(ch))) {
+                lastBoundary = i
             }
-        } else if (ch === '[' || ch === '(') {
-            depth++
-        } else if (ch === ']' || ch === ')') {
-            depth--
-        } else if (depth === 0 && templateBraces.length === 0 && (ch === ';' || ch === '\n')) {
-            lastBoundary = i
+            if (!/\s/.test(ch)) prevToken = trackPunctuationToken(ch, prevToken, state)
         }
     }
     return lastBoundary

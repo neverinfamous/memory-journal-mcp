@@ -26,12 +26,12 @@ export const DEFAULT_QUERY_LIMIT = 100
  * Usage: `z.preprocess(coerceNumber, z.number().optional())`
  */
 export function coerceNumber(val: unknown): unknown {
-    if (typeof val === 'number') return val
+    if (typeof val === 'number') return Number.isFinite(val) ? val : undefined
     if (typeof val === 'string') {
         // [INVARIANT] Empty/whitespace strings mean "not provided", never Number('') === 0.
         if (val.trim() === '') return undefined
         const n = Number(val)
-        return Number.isNaN(n) ? undefined : n
+        return Number.isFinite(n) ? n : undefined
     }
     return undefined
 }
@@ -67,9 +67,9 @@ export function coerceLimit(
     if (raw === undefined || raw === null) return defaultLimit
     if (typeof raw === 'string' && raw.trim() === '') return defaultLimit
     const num = Number(raw)
-    if (Number.isNaN(num)) return defaultLimit
+    if (!Number.isFinite(num)) return defaultLimit
     if (num === 0) return null
-    return num > 0 ? num : defaultLimit
+    return num > 0 ? Math.floor(num) : defaultLimit
 }
 
 /**
@@ -77,5 +77,9 @@ export function coerceLimit(
  * `null` means "no limit" — returns an empty string.
  */
 export function buildLimitClause(limitVal: number | null): string {
-    return limitVal !== null ? ` LIMIT ${String(limitVal)}` : ''
+    if (limitVal === null) return ''
+    if (!Number.isSafeInteger(limitVal) || limitVal < 0) {
+        throw new RangeError(`Invalid SQL LIMIT value: ${String(limitVal)}`)
+    }
+    return ` LIMIT ${String(limitVal)}`
 }

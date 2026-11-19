@@ -20,28 +20,18 @@ export interface AuditScopeMetadata {
 }
 
 const SENSITIVE_AUDIT_URI_RE =
-    /^memory:\/\/(?:team|audit|insights\/team-collaboration)(?:\/|$|\?|#)/i
+    /^memory:\/\/(?:team|audit|metrics\/users|insights\/team-collaboration)(?:\/|$|\?|#)/i
 const SCHEMELESS_SENSITIVE_PATH_RE =
-    /^(?:team|audit|insights\/team-collaboration)(?:\/|$|\?|#)/i
+    /^(?:team|audit|metrics\/users|insights\/team-collaboration)(?:\/|$|\?|#)/i
+
+const ADMIN_PROMPT_NAMES = new Set([
+    'mcp-heal', 'project-setup', 'optimize-journal', 'cms-rem-supervisor',
+    'mcp_heal', 'project_setup', 'optimize_journal', 'cms_rem_supervisor',
+])
 
 const AUDIT_URI_KEYS = [
-    'uri',
-    'Uri',
-    '_uri',
-    'resourceUri',
-    'resource_uri',
-    'url',
-    'Url',
-    'resource',
-    'Resource',
-    'path',
-    'Path',
-    'target',
-    'Target',
-    'name',
-    'Name',
-    'ServerName',
-    'server_name',
+    'uri', 'Uri', '_uri', 'resourceUri', 'resource_uri', 'url', 'Url', 'resource',
+    'Resource', 'path', 'Path', 'target', 'Target', 'name', 'Name', 'ServerName', 'server_name',
 ] as const
 
 /** Parse one JSONL audit line; returns null for empty, unparseable, or malformed lines. */
@@ -98,7 +88,14 @@ function isTeamPromptTarget(name: string): boolean {
     return TEAM_PROMPT_NAMES.has(normalized)
 }
 
-/** Extract a sensitive resource URI or team prompt target from tool arguments, if present. */
+function isAdminPromptTarget(name: string): boolean {
+    const trimmed = name.trim()
+    if (ADMIN_PROMPT_NAMES.has(trimmed)) return true
+    const normalized = trimmed.replace(/^mj_/, '').replace(/_/g, '-')
+    return ADMIN_PROMPT_NAMES.has(normalized)
+}
+
+/** Extract a sensitive resource URI or team/admin prompt target from tool arguments, if present. */
 export function extractSensitiveTargetFromArgs(toolName: string, args: unknown): string | undefined {
     if (toolName.startsWith('memory://')) {
         const normalizedToolUri = normalizeAuditResourceUri(toolName)
@@ -127,31 +124,37 @@ export function extractSensitiveTargetFromArgs(toolName: string, args: unknown):
         record['prompt_name'] ??
         record['promptName'] ??
         record['prompt']
-    if (typeof promptCandidate === 'string' && isTeamPromptTarget(promptCandidate)) {
+    if (
+        typeof promptCandidate === 'string' &&
+        (isTeamPromptTarget(promptCandidate) || isAdminPromptTarget(promptCandidate))
+    ) {
         return promptCandidate.trim()
     }
 
     return undefined
 }
 
-/** Whether a resource URI, team prompt, or capability flags require unconditional audit logging. */
+/** Whether a resource URI, team/admin prompt, or capability flags require unconditional audit logging. */
 export function isSensitiveAuditTarget(
     uriOrName: string,
-    capabilities?: { requiresTeamScope?: boolean; requiresAuditScope?: boolean }
+    capabilities?: { requiresTeamScope?: boolean; requiresAuditScope?: boolean; requiresAdminScope?: boolean }
 ): boolean {
     const normalized = normalizeAuditResourceUri(uriOrName)
     return (
         capabilities?.requiresTeamScope === true ||
         capabilities?.requiresAuditScope === true ||
+        capabilities?.requiresAdminScope === true ||
         SENSITIVE_AUDIT_URI_RE.test(normalized) ||
-        isTeamPromptTarget(uriOrName)
+        isTeamPromptTarget(uriOrName) ||
+        isAdminPromptTarget(uriOrName)
     )
 }
 
 /** Derive the audit category for an audited resource or prompt operation. */
 export function resolveResourceAuditCategory(uriOrName: string): AuditCategory {
     const normalized = normalizeAuditResourceUri(uriOrName)
-    if (/^memory:\/\/audit(?:\/|$|\?|#)/i.test(normalized)) return 'audit'
+    if (/^memory:\/\/(?:audit|metrics\/users)(?:\/|$|\?|#)/i.test(normalized)) return 'audit'
+    if (isAdminPromptTarget(uriOrName)) return 'admin'
     if (
         /^memory:\/\/(?:team|insights\/team-collaboration)(?:\/|$|\?|#)/i.test(normalized) ||
         isTeamPromptTarget(uriOrName)
@@ -240,6 +243,32 @@ const AUDIT_SEARCH_CHUNK_BYTES = 65_536
 /**
  * Scan one JSONL audit log file backwards in 64 KB chunks without loading the whole file.
  */
+function decodeReversedAuditChunk(
+    chunkSlice: Buffer,
+    trailingBytes: Buffer,
+    startOffset: number
+): { chunkText: string | undefined; trailingBytes: Buffer; overflowSkipped: number } {
+    const combined =
+        trailingBytes.length > 0
+            ? Buffer.concat([chunkSlice, trailingBytes])
+            : Buffer.from(chunkSlice)
+    if (startOffset === 0) {
+        return { chunkText: combined.toString('utf-8'), trailingBytes: Buffer.alloc(0), overflowSkipped: 0 }
+    }
+    const firstNl = combined.indexOf(0x0a)
+    if (firstNl === -1) {
+        if (combined.length > 1_048_576) {
+            return { chunkText: undefined, trailingBytes: Buffer.alloc(0), overflowSkipped: 1 }
+        }
+        return { chunkText: undefined, trailingBytes: combined, overflowSkipped: 0 }
+    }
+    return {
+        chunkText: combined.subarray(firstNl + 1).toString('utf-8'),
+        trailingBytes: combined.subarray(0, firstNl),
+        overflowSkipped: 0,
+    }
+}
+
 export async function searchAuditFileBackward(
     filePath: string,
     filters: AuditSearchFilters,
@@ -263,18 +292,20 @@ export async function searchAuditFileBackward(
 
         const buf = Buffer.alloc(Math.min(AUDIT_SEARCH_CHUNK_BYTES, info.size))
         let pos = info.size
-        let trailingPartial = ''
+        let trailingBytes: Buffer = Buffer.alloc(0)
 
         while (pos > 0) {
             const readLen = Math.min(AUDIT_SEARCH_CHUNK_BYTES, pos)
             const startOffset = pos - readLen
             await fh.read(buf, 0, readLen, startOffset)
-            const chunkText = buf.subarray(0, readLen).toString('utf-8') + trailingPartial
-            const lines = chunkText.split('\n')
-            const firstCompleteIdx = startOffset > 0 ? 1 : 0
-            trailingPartial = startOffset > 0 ? (lines[0] ?? '') : ''
+            const decoded = decodeReversedAuditChunk(buf.subarray(0, readLen), trailingBytes, startOffset)
+            trailingBytes = decoded.trailingBytes
+            skippedLines += decoded.overflowSkipped
+            pos = startOffset
+            if (decoded.chunkText === undefined) continue
 
-            for (let i = lines.length - 1; i >= firstCompleteIdx; i--) {
+            const lines = decoded.chunkText.split('\n')
+            for (let i = lines.length - 1; i >= 0; i--) {
                 const rawLine = lines[i]
                 if (rawLine === undefined || rawLine.length === 0) continue
                 const entry = parseAuditLine(rawLine)
@@ -284,11 +315,8 @@ export async function searchAuditFileBackward(
                 }
                 if (!matchesAuditFilters(entry, filters)) continue
                 results.push(entry)
-                if (results.length >= remainingLimit) {
-                    return { skippedLines, limitReached: true }
-                }
+                if (results.length >= remainingLimit) return { skippedLines, limitReached: true }
             }
-            pos = startOffset
         }
         return { skippedLines, limitReached: false }
     } finally {

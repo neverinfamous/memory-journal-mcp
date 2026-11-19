@@ -1,4 +1,4 @@
-import type { ToolDefinition, ToolContext } from '../../../types/index.js'
+import type { ToolDefinition, ToolContext, ProjectRegistryEntry } from '../../../types/index.js'
 import { logger } from '../../../utils/logger.js'
 import { formatHandlerError } from '../../../utils/error-helpers.js'
 import { getRequestContext, requestContextStorage } from '../../../utils/request-context.js'
@@ -6,7 +6,12 @@ import { runWithAuthContext, getAuthContext } from '../../../auth/auth-context.j
 import { ConfigurationError } from '../../../types/errors.js'
 import { activeProjectRegistry } from '../../../utils/write-scope.js'
 import { loadProjectRegistryFromConfig } from '../../../utils/workspace-resolver.js'
-import { setFallbackProjectRegistryLoader } from '../../../codemode/normalizers/generic-field-aliases.js'
+import {
+    captureActiveProjectRegistryState,
+    restoreActiveProjectRegistryState,
+    setActiveProjectRegistry,
+    setFallbackProjectRegistryLoader,
+} from '../../../codemode/normalizers/project-alias-helpers.js'
 import { createJournalApi, getCachedSandboxSchemas } from '../../../codemode/api/journal-api.js'
 import type { SandboxResult } from '../../../codemode/types.js'
 
@@ -23,20 +28,23 @@ import { resolveExecutionPayload, buildSandboxUserContext, type ExecuteCodeInput
 import { createSecureDispatcher, resolveCodeModeSessionContext } from './secure-dispatcher.js'
 
 const MAX_CONTEXT_BYTES = 5 * 1024 * 1024
+const MAX_ESTIMATE_DEPTH = 64
 
 function estimateSerializedByteBounds(
     val: unknown,
     limitBytes: number,
-    seen: Set<unknown>
+    seen: Set<unknown>,
+    depth = 0
 ): { lowerBytes: number; exactBytes: number | null; circular?: boolean } {
     if (val === null || val === undefined) return { lowerBytes: 4, exactBytes: 4 }
     if (typeof val === 'string') {
         const rawBytes = Buffer.byteLength(val, 'utf-8')
-        return { lowerBytes: rawBytes + 2, exactBytes: rawBytes > limitBytes ? null : rawBytes * 2 + 2 }
+        return { lowerBytes: rawBytes + 2, exactBytes: rawBytes > limitBytes ? null : rawBytes * 6 + 2 }
     }
     if (typeof val === 'number' || typeof val === 'boolean') return { lowerBytes: 1, exactBytes: 24 }
     if (typeof val === 'bigint') return { lowerBytes: 0, exactBytes: null }
     if (typeof val !== 'object') return { lowerBytes: 0, exactBytes: 0 }
+    if (depth > MAX_ESTIMATE_DEPTH) return { lowerBytes: 2, exactBytes: null }
     if (seen.has(val)) return { lowerBytes: 0, exactBytes: null, circular: true }
     seen.add(val)
 
@@ -50,7 +58,7 @@ function estimateSerializedByteBounds(
     let exactUpper: number | null = 2
     if (Array.isArray(val)) {
         for (let i = 0; i < val.length; i++) {
-            const sub = estimateSerializedByteBounds(val[i], limitBytes, seen)
+            const sub = estimateSerializedByteBounds(val[i], limitBytes, seen, depth + 1)
             if (sub.circular === true) return sub
             lowerBytes += sub.lowerBytes + (i > 0 ? 1 : 0)
             if (lowerBytes > limitBytes) {
@@ -64,8 +72,9 @@ function estimateSerializedByteBounds(
         let first = true
         for (const [k, v] of Object.entries(val)) {
             if (v === undefined) continue
-            const keyBytes = Buffer.byteLength(k, 'utf-8') + 3
-            const sub = estimateSerializedByteBounds(v, limitBytes, seen)
+            const rawKeyBytes = Buffer.byteLength(k, 'utf-8')
+            const keyBytes = rawKeyBytes + 3
+            const sub = estimateSerializedByteBounds(v, limitBytes, seen, depth + 1)
             if (sub.circular === true) return sub
             lowerBytes += keyBytes + sub.lowerBytes + (first ? 0 : 1)
             first = false
@@ -75,7 +84,7 @@ function estimateSerializedByteBounds(
             }
             exactUpper =
                 exactUpper !== null && sub.exactBytes !== null
-                    ? exactUpper + keyBytes * 2 + sub.exactBytes + 1
+                    ? exactUpper + rawKeyBytes * 6 + 3 + sub.exactBytes + 1
                     : null
         }
     }
@@ -202,8 +211,22 @@ interface RecoveryRunOptions {
     sessionId?: string | undefined
     requestedMaxResultSize: number | undefined
     healingEnabled: boolean
+    projectRegistry?: Record<string, ProjectRegistryEntry> | undefined
     getMutated: () => boolean
     resetMutated: () => void
+}
+
+function runWithScopedRegistry<T>(
+    registry: Record<string, ProjectRegistryEntry> | undefined,
+    fn: () => T
+): T {
+    const prev = captureActiveProjectRegistryState()
+    setActiveProjectRegistry(registry)
+    try {
+        return fn()
+    } finally {
+        restoreActiveProjectRegistryState(prev)
+    }
 }
 
 async function runSandboxWithAutonomousRecovery(opts: RecoveryRunOptions): Promise<SandboxResult | undefined> {
@@ -234,12 +257,14 @@ async function runSandboxWithAutonomousRecovery(opts: RecoveryRunOptions): Promi
         if (opts.getMutated() || !opts.healingEnabled || !execResult || execResult.success || typeof execResult.error !== 'string') return
         if (!isRecoverableSyntaxError(execResult.error)) return
         const originalInput = opts.originalCode ?? opts.executionCode
-        const recoveredCode = isValidJsScript(opts.executionCode)
-            ? healTemplateBackticksOnRuntimeError(opts.executionCode)
-            : extractAndRecoverSqlCode(originalInput) ??
-              extractAndRecoverEntryCode(originalInput) ??
-              extractAndRecoverJsonCode(originalInput) ??
-              healTemplateBackticksOnRuntimeError(opts.executionCode)
+        const recoveredCode = runWithScopedRegistry(opts.projectRegistry, () =>
+            isValidJsScript(opts.executionCode)
+                ? healTemplateBackticksOnRuntimeError(opts.executionCode)
+                : extractAndRecoverSqlCode(originalInput) ??
+                  extractAndRecoverEntryCode(originalInput) ??
+                  extractAndRecoverJsonCode(originalInput) ??
+                  healTemplateBackticksOnRuntimeError(opts.executionCode)
+        )
         if (recoveredCode === null || recoveredCode === opts.executionCode) return
         // [BOUNDARY] Recovered code is re-validated before it ever runs.
         const retryValidation = opts.securityManager.validateCode(recoveredCode)
@@ -295,7 +320,9 @@ async function executeCodeModeHandler(
         const input: ExecuteCodeInput = ExecuteCodeSchema.parse(params)
         const { sessionId, timeoutMs, readonlyRequested, isDryRun, useTestDb } = resolveCodeModeRunOptions(input)
         const healingEnabled = context.config?.agentHealing !== false
-        const payloadRes = resolveExecutionPayload(input, params, healingEnabled, start)
+        const payloadRes = runWithScopedRegistry(context.config?.projectRegistry, () =>
+            resolveExecutionPayload(input, params, healingEnabled, start)
+        )
         if ('earlyReturn' in payloadRes) return payloadRes.earlyReturn
         const executionCode = payloadRes.executionCode
 
@@ -315,7 +342,7 @@ async function executeCodeModeHandler(
             workspaceId,
             explicitWorkspace,
             sessionId,
-            autoVersion: input.autoVersion ?? input.auto_version,
+            autoVersion: input.auto_version ?? input.autoVersion ?? true,
             dryRun: isDryRun,
             onMutatingDispatch: () => { mutatedDuringRun = true },
         })
@@ -332,6 +359,7 @@ async function executeCodeModeHandler(
             useTestDb,
             sessionId,
             requestedMaxResultSize, healingEnabled,
+            projectRegistry: context.config?.projectRegistry,
             getMutated: () => mutatedDuringRun, resetMutated: () => { mutatedDuringRun = false },
         })
         return {

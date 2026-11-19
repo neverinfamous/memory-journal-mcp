@@ -133,22 +133,25 @@ function buildToolAndTokenBlocks(
 
 function buildUserAndLatencyBlocks(
     userBreakdown: ReturnType<MetricsAccumulator['getUserBreakdown']>,
-    latencySummary: ReturnType<MetricsAccumulator['getLatencySummary']>
+    latencySummary: ReturnType<MetricsAccumulator['getLatencySummary']>,
+    includeUsers = true
 ): string[] {
     const blocks: string[] = []
-    const users: { value: number; labels: Record<string, string> }[] = []
-    for (const [user, count] of Object.entries(userBreakdown)) {
-        users.push({ value: count, labels: { user } })
-    }
-    if (users.length > 0) {
-        blocks.push(
-            formatMetricBlock(
-                'mcp_user_calls_total',
-                'Total tool calls partitioned by user',
-                'counter',
-                users
+    if (includeUsers) {
+        const users: { value: number; labels: Record<string, string> }[] = []
+        for (const [user, count] of Object.entries(userBreakdown)) {
+            users.push({ value: count, labels: { user } })
+        }
+        if (users.length > 0) {
+            blocks.push(
+                formatMetricBlock(
+                    'mcp_user_calls_total',
+                    'Total tool calls partitioned by user',
+                    'counter',
+                    users
+                )
             )
-        )
+        }
     }
 
     const p50Metrics: { value: number; labels: Record<string, string> }[] = []
@@ -175,9 +178,13 @@ function buildUserAndLatencyBlocks(
  * Transforms all MetricsAccumulator state into Prometheus exposition format.
  * Returns a complete text/plain payload ready for HTTP transmission.
  */
-export function formatPrometheusMetrics(metrics: MetricsAccumulator): string {
+export function formatPrometheusMetrics(
+    metrics: MetricsAccumulator,
+    options?: { includeUserBreakdown?: boolean }
+): string {
     const summary = metrics.getSummary()
     const system = metrics.getSystemMetrics()
+    const includeUsers = options?.includeUserBreakdown !== false
 
     const blocks: string[] = [
         formatMetricBlock(
@@ -220,7 +227,7 @@ export function formatPrometheusMetrics(metrics: MetricsAccumulator): string {
             { value: system.uptimeSeconds },
         ]),
         ...buildToolAndTokenBlocks(summary, metrics.getTokenBreakdown()),
-        ...buildUserAndLatencyBlocks(metrics.getUserBreakdown(), metrics.getLatencySummary()),
+        ...buildUserAndLatencyBlocks(metrics.getUserBreakdown(), metrics.getLatencySummary(), includeUsers),
     ]
 
     return blocks.filter((b) => b.length > 0).join('\n') + (blocks.length > 0 ? '' : '\n')

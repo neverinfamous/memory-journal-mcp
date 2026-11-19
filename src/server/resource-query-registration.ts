@@ -95,6 +95,9 @@ export function attachResourceQueryHandler(server: McpServer): void {
         if (typeof rawUri !== 'string') {
             return originalHandler(request, extra)
         }
+        if (rawUri.length > 8_192) {
+            throw new ConfigurationError('Resource URI exceeds maximum allowed length (8192 bytes)')
+        }
         let parsedUri: URL
         try {
             parsedUri = new URL(rawUri)

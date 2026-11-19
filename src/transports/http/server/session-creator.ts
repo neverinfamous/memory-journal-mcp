@@ -42,7 +42,9 @@ export function resolveRequestSubject(): string | undefined {
         claims?.client_id ??
         claims?.subject ??
         claims?.clientId
-    return typeof sub === 'string' && sub.length > 0 ? sub : undefined
+    if (typeof sub !== 'string') return undefined
+    const trimmed = sub.trim()
+    return trimmed.length > 0 ? trimmed : undefined
 }
 
 /** Remove all bookkeeping for a session (transport, owner, activity, subscriptions). */

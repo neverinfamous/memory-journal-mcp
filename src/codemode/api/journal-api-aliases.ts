@@ -23,10 +23,7 @@ export interface ProjectAndTeamAliasDeps {
 }
 
 function wireProjectMutationWrappers(deps: ProjectAndTeamAliasDeps): void {
-    const { core, admin, hasDispatcher, registryProvider, copyFnSchema } = deps
-    const getConfigFn = createGetConfigFn(registryProvider)
-    admin['getConfig'] = getConfigFn
-    core['getConfig'] = getConfigFn
+    const { core, admin, hasDispatcher, copyFnSchema } = deps
 
     const existingRegisterProject = admin['registerProject']
     const existingUpdateProject = admin['updateProject']
@@ -80,22 +77,39 @@ function wireProjectMutationWrappers(deps: ProjectAndTeamAliasDeps): void {
     }
 }
 
+function disabledToolStub(toolName: string): () => Promise<unknown> {
+    return (): Promise<unknown> =>
+        Promise.resolve({
+            success: false,
+            error: `Tool '${toolName}' is disabled by the active --tool-filter configuration.`,
+            code: 'TOOL_DISABLED',
+            category: 'authorization',
+            recoverable: false,
+        })
+}
+
+function resolveGetConfigFn(
+    hasDispatcher: boolean,
+    existingListProjects: unknown,
+    listProjectsFn: (...args: unknown[]) => Promise<unknown>,
+    registryProvider: ProjectRegistryProvider | undefined
+): (...args: unknown[]) => Promise<unknown> {
+    if (!hasDispatcher) return createGetConfigFn(registryProvider)
+    if (typeof existingListProjects !== 'function') return disabledToolStub('list_projects')
+    // [M3] Route through listProjectsFn so --tool-filter, OAuth scopes, and AuditInterceptor apply identically.
+    return async (): Promise<unknown> => {
+        const res = await listProjectsFn({})
+        if (isRecord(res) && res['success'] === false) return res
+        const registryPayload = isRecord(res) ? (res['items'] ?? res['projects']) : res
+        return { PROJECT_REGISTRY: registryPayload, dbPath: 'memory://internal' }
+    }
+}
+
 function wireProjectQueryAndTeamAliases(deps: ProjectAndTeamAliasDeps): void {
     const { core, search, admin, team, hasDispatcher, registryProvider, copyFnSchema } = deps
     const existingListProjects = admin['listProjects']
     const existingGetProject = admin['getProject']
     const fallbackListProjectsFn = createListProjectsFn(registryProvider)
-
-    const disabledToolStub = (toolName: string): (() => Promise<unknown>) => {
-        return (): Promise<unknown> =>
-            Promise.resolve({
-                success: false,
-                error: `Tool '${toolName}' is disabled by the active --tool-filter configuration.`,
-                code: 'TOOL_DISABLED',
-                category: 'authorization',
-                recoverable: false,
-            })
-    }
 
     let listProjectsFn: (...args: unknown[]) => Promise<unknown>
     if (hasDispatcher) {
@@ -140,6 +154,10 @@ function wireProjectQueryAndTeamAliases(deps: ProjectAndTeamAliasDeps): void {
     }
     core['searchProjects'] = listProjectsFn
     search['searchProjects'] = listProjectsFn
+
+    const getConfigFn = resolveGetConfigFn(hasDispatcher, existingListProjects, listProjectsFn, registryProvider)
+    admin['getConfig'] = getConfigFn
+    core['getConfig'] = getConfigFn
 
     if (team['teamDeleteEntry']) {
         team['deleteEntry'] = team['teamDeleteEntry']

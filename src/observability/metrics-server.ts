@@ -42,23 +42,24 @@ function isWildcardBindHost(host: string): boolean {
 
 function extractHostWithoutPort(hostHeader: string): string | null {
     const trimmed = hostHeader.trim().toLowerCase();
-    if (trimmed.length === 0) return null;
-    if (trimmed.startsWith('[')) {
-        const closeIdx = trimmed.indexOf(']');
-        if (closeIdx === -1) return null;
-        const rest = trimmed.slice(closeIdx + 1);
-        if (rest !== '' && !/^:\d+$/.test(rest)) return null;
-        return trimmed.slice(1, closeIdx);
-    }
+    if (trimmed.length === 0 || /\s/.test(trimmed)) return null;
     if (trimmed === '::1') return '::1';
-    const colonIdx = trimmed.indexOf(':');
-    if (colonIdx !== -1) {
-        const hostPart = trimmed.slice(0, colonIdx);
-        const portPart = trimmed.slice(colonIdx + 1);
-        if (!/^\d+$/.test(portPart) || hostPart.length === 0) return null;
-        return hostPart;
+    try {
+        const parsed = new URL(`http://${trimmed}`);
+        if (
+            parsed.username !== '' ||
+            parsed.password !== '' ||
+            parsed.pathname !== '/' ||
+            parsed.search !== '' ||
+            parsed.hash !== ''
+        ) {
+            return null;
+        }
+        const host = parsed.hostname.replace(/^\[|\]$/g, '').toLowerCase();
+        return host.length > 0 ? host : null;
+    } catch {
+        return null;
     }
-    return trimmed;
 }
 
 function isLoopbackHostHeader(
@@ -132,9 +133,9 @@ function resolveMetricsServerConfig(
             `FATAL: Refusing to bind standalone metrics server to non-loopback interface '${host}' without an authentication token (--auth-token or MCP_AUTH_TOKEN).`
         );
     }
-    if (!isLoopbackBind && authToken === DEFAULT_PLACEHOLDER_TOKEN) {
+    if (authToken?.trim() === DEFAULT_PLACEHOLDER_TOKEN) {
         throw new Error(
-            `FATAL: Default auth token detected for non-loopback standalone metrics server '${host}'. You MUST change MCP_AUTH_TOKEN to a secure, cryptographically random value for production.`
+            `FATAL: Default auth token detected for standalone metrics server '${host}'. You MUST change MCP_AUTH_TOKEN to a secure, cryptographically random value for production.`
         );
     }
     const expectedTokenDigest =
@@ -155,13 +156,19 @@ function servePrometheusMetrics(
         res.writeHead(401, {
             'Content-Type': 'text/plain; charset=utf-8',
             'WWW-Authenticate': 'Bearer',
+            'Cache-Control': 'no-store',
+            'X-Content-Type-Options': 'nosniff',
         });
         res.end('Unauthorized');
         return;
     }
     try {
         const metrics = formatPrometheusMetrics(runtime.metrics);
-        res.writeHead(200, { 'Content-Type': 'text/plain' });
+        res.writeHead(200, {
+            'Content-Type': 'text/plain; version=0.0.4; charset=utf-8',
+            'Cache-Control': 'no-store',
+            'X-Content-Type-Options': 'nosniff',
+        });
         res.end(metrics);
     } catch (error) {
         logger.error('Failed to generate metrics', {
@@ -189,7 +196,11 @@ function handleMetricsRequest(
         return;
     }
     if (req.url === '/health' && req.method === 'GET') {
-        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.writeHead(200, {
+            'Content-Type': 'application/json',
+            'Cache-Control': 'no-store',
+            'X-Content-Type-Options': 'nosniff',
+        });
         res.end(JSON.stringify({ status: 'ok' }));
         return;
     }

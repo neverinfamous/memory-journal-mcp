@@ -43,7 +43,7 @@ async function filterReadonlyTools(
     return { enabledTools: filtered, readOnlyHints }
 }
 
-function hasCodemodeFullAccess(context: ResourceContext): boolean {
+export function hasCodemodeFullAccess(context: ResourceContext): boolean {
     const rawMgr = context.runtime?.configManager
     if (
         rawMgr === null ||

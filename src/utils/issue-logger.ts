@@ -116,11 +116,11 @@ async function drainIssueQueue(): Promise<void> {
     try {
         const logsDir = resolveLogsDir()
         if (!logsDirEnsured) {
-            await fsPromises.mkdir(logsDir, { recursive: true })
+            await fsPromises.mkdir(logsDir, { recursive: true, mode: 0o700 })
             logsDirEnsured = true
         }
         const logFile = path.join(logsDir, 'agent-issues.jsonl')
-        await fsPromises.appendFile(logFile, batch, 'utf8')
+        await fsPromises.appendFile(logFile, batch, { encoding: 'utf8', mode: 0o600 })
     } catch (e) {
         // Fail silently so we don't crash the main process if logging fails
         console.error('Failed to write to agent-issues.jsonl:', e)

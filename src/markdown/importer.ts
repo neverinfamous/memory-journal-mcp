@@ -18,7 +18,11 @@ import {
     type PendingRelationshipLink,
 } from './import-relationships.js'
 import { parseFrontmatter, type FrontmatterAnchor } from './frontmatter.js'
-import { assertSafeDirectoryPath, assertSafeFilePath } from '../utils/security-utils.js'
+import {
+    assertSafeDirectoryPath,
+    assertSafeFilePath,
+    sanitizeAuthor,
+} from '../utils/security-utils.js'
 import {
     indexImportedEntries,
     prefetchImportedEntriesById,
@@ -303,7 +307,13 @@ function upsertParsedFile(
     }
 
     const canonicalOptionAuthor = resolveCanonicalImportAuthor(db, author, effectiveWsId)
-    const resolvedAuthor = canonicalOptionAuthor ?? metadata.author
+    const sanitizedMetadataAuthor =
+        metadata.author !== undefined ? sanitizeAuthor(metadata.author) : undefined
+    const resolvedAuthor =
+        canonicalOptionAuthor ??
+        (sanitizedMetadataAuthor !== undefined && sanitizedMetadataAuthor.length > 0
+            ? sanitizedMetadataAuthor
+            : undefined)
     const newEntry = db.createEntry({
         content: body,
         entryType: rawEntryType ?? 'personal_reflection',

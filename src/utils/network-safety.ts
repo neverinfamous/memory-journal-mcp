@@ -2,90 +2,117 @@
  * Network address safety helpers shared by SSRF guards.
  */
 
-const PRIVATE_172_RE = /^172\.(1[6-9]|2[0-9]|3[0-1])\./
-const CGNAT_100_RE = /^100\.(6[4-9]|[7-9][0-9]|1[01][0-9]|12[0-7])\./
-const BENCHMARK_198_RE = /^198\.1[89]\./
-const UNIQUE_LOCAL_V6_RE = /^f[cd][0-9a-f]{0,2}:/
-const LINK_LOCAL_V6_RE = /^fe[89ab][0-9a-f]?:/
-const MULTICAST_V6_RE = /^ff[0-9a-f]{2}:/
-const MAPPED_HEX_RE = /^(?:0{0,4}:){0,5}(?::|0{0,4}:)?ffff:([0-9a-f]{1,4}):([0-9a-f]{1,4})$/
-const SIIT_HEX_RE = /^(?:0{0,4}:){0,4}ffff:0{1,4}:([0-9a-f]{1,4}):([0-9a-f]{1,4})$/
-const COMPAT_HEX_RE = /^::([0-9a-f]{1,4}):([0-9a-f]{1,4})$/
-const NAT64_HEX_RE = /^64:ff9b:(?:1:[0-9a-f]{0,4}:)?(?:0{0,4}:){0,3}([0-9a-f]{1,4}):([0-9a-f]{1,4})$/
-const SIXTOFOUR_HEX_RE = /^2002:([0-9a-f]{1,4}):([0-9a-f]{1,4})(?::|$)/
-const MAPPED_DOTTED_RE = /^(?:0{0,4}:){0,5}(?::|0{0,4}:)?ffff:(\d{1,3}(?:\.\d{1,3}){3})$/
-const COMPAT_DOTTED_RE = /^::(\d{1,3}(?:\.\d{1,3}){3})$/
+const IPV4_DOTTED_RE = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/
 
-function hexPairToIpv4(high: string, low: string): string {
-    const hi = parseInt(high, 16)
-    const lo = parseInt(low, 16)
-    return `${String(hi >> 8)}.${String(hi & 0xff)}.${String(lo >> 8)}.${String(lo & 0xff)}`
+function wordsToIpv4(hi: number, lo: number): string {
+    return `${String((hi >> 8) & 0xff)}.${String(hi & 0xff)}.${String((lo >> 8) & 0xff)}.${String(lo & 0xff)}`
 }
 
-/**
- * [INTENT] Normalize a host/IP literal: strip brackets, zone IDs, trailing dots, and unwrap
- * IPv4-mapped/compatible/SIIT/NAT64/6to4 IPv6 forms to dotted IPv4 when embedded.
- */
-function normalizeAddress(address: string): string {
-    let normalized = address.trim().toLowerCase()
-    if (normalized.startsWith('[') && normalized.endsWith(']')) normalized = normalized.slice(1, -1)
-    const zoneIdx = normalized.indexOf('%')
-    if (zoneIdx !== -1) normalized = normalized.slice(0, zoneIdx)
-    while (normalized.endsWith('.')) normalized = normalized.slice(0, -1)
-    const dotted = MAPPED_DOTTED_RE.exec(normalized) ?? COMPAT_DOTTED_RE.exec(normalized)
-    if (dotted?.[1] !== undefined) return dotted[1]
-    const hex =
-        MAPPED_HEX_RE.exec(normalized) ??
-        SIIT_HEX_RE.exec(normalized) ??
-        NAT64_HEX_RE.exec(normalized) ??
-        SIXTOFOUR_HEX_RE.exec(normalized)
-    if (hex?.[1] !== undefined && hex[2] !== undefined) return hexPairToIpv4(hex[1], hex[2])
-    const compatHex = COMPAT_HEX_RE.exec(normalized)
-    if (compatHex?.[1] !== undefined && compatHex[2] !== undefined) {
-        const hi = parseInt(compatHex[1], 16)
-        const lo = parseInt(compatHex[2], 16)
-        if (hi !== 0 || lo > 1) return hexPairToIpv4(compatHex[1], compatHex[2])
+function isRestrictedIpv4(address: string): boolean {
+    const m = IPV4_DOTTED_RE.exec(address)
+    if (!m) return false
+    const a = Number(m[1])
+    const b = Number(m[2])
+    const c = Number(m[3])
+    const d = Number(m[4])
+    if (a > 255 || b > 255 || c > 255 || d > 255) return false
+    return (
+        a === 0 ||
+        a === 10 ||
+        a === 127 ||
+        (a === 169 && b === 254) ||
+        (a === 172 && b >= 16 && b <= 31) ||
+        (a === 192 && b === 168) ||
+        (a === 100 && b >= 64 && b <= 127) ||
+        (a === 198 && (b === 18 || b === 19)) ||
+        a >= 224
+    )
+}
+
+function parseHexWords(section: string): number[] | null {
+    if (section === '') return []
+    const rawParts = section.split(':')
+    const words: number[] = []
+    for (let i = 0; i < rawParts.length; i++) {
+        const part = rawParts[i]
+        if (part === undefined || part === '') return null
+        if (i === rawParts.length - 1 && part.includes('.')) {
+            const m = IPV4_DOTTED_RE.exec(part)
+            if (!m) return null
+            const octets = [Number(m[1]), Number(m[2]), Number(m[3]), Number(m[4])]
+            if (octets.some((o) => o > 255)) return null
+            words.push(((octets[0] ?? 0) << 8) | (octets[1] ?? 0))
+            words.push(((octets[2] ?? 0) << 8) | (octets[3] ?? 0))
+        } else {
+            if (!/^[0-9a-f]{1,4}$/.test(part)) return null
+            words.push(parseInt(part, 16))
+        }
     }
-    return normalized
+    return words
 }
 
-function isUnspecifiedOrLoopbackV6(normalized: string): boolean {
-    if (!normalized.includes(':') || !/^[0-9a-f:]+$/.test(normalized)) return false
+function parseIpv6Groups(normalized: string): number[] | null {
+    if (!normalized.includes(':')) return null
     const halves = normalized.split('::')
-    if (halves.length > 2) return false
-    const head = (halves[0] ?? '').split(':').filter((g) => g !== '')
-    const tail = halves.length === 2 ? (halves[1] ?? '').split(':').filter((g) => g !== '') : []
-    const fill = halves.length === 2 ? 8 - head.length - tail.length : 0
-    if (fill < 0) return false
-    const groups = [...head, ...Array<string>(fill).fill('0'), ...tail].map((g) => parseInt(g, 16))
-    if (groups.length !== 8) return false
-    // `::` (unspecified) or `::1` (loopback)
-    return groups.slice(0, 7).every((g) => g === 0) && (groups[7] === 0 || groups[7] === 1)
+    if (halves.length > 2) return null
+    const head = parseHexWords(halves[0] ?? '')
+    if (head === null) return null
+    if (halves.length === 1) {
+        return head.length === 8 ? head : null
+    }
+    const tail = parseHexWords(halves[1] ?? '')
+    if (tail === null) return null
+    const fill = 8 - head.length - tail.length
+    if (fill < 1) return null
+    return [...head, ...Array<number>(fill).fill(0), ...tail]
+}
+
+function isRestrictedIpv6(groups: readonly number[]): boolean {
+    const g0 = groups[0] ?? 0
+    const g1 = groups[1] ?? 0
+    const g2 = groups[2] ?? 0
+    const g3 = groups[3] ?? 0
+    const g4 = groups[4] ?? 0
+    const g5 = groups[5] ?? 0
+    const g6 = groups[6] ?? 0
+    const g7 = groups[7] ?? 0
+    if (g0 === 0 && g1 === 0 && g2 === 0 && g3 === 0 && g4 === 0 && g5 === 0 && (g6 === 0 && (g7 === 0 || g7 === 1))) {
+        return true
+    }
+    if ((g0 & 0xfe00) === 0xfc00 || (g0 & 0xffc0) === 0xfe80 || (g0 & 0xff00) === 0xff00) {
+        return true
+    }
+    if (g0 === 0x0064 && g1 === 0xff9b) return true
+    if (g0 === 0x2001 && g1 === 0x0000) return true
+    if (g0 === 0x2002) return isRestrictedIpv4(wordsToIpv4(g1, g2))
+    if (g0 === 0 && g1 === 0 && g2 === 0 && g3 === 0 && g4 === 0 && g5 === 0xffff) {
+        return isRestrictedIpv4(wordsToIpv4(g6, g7))
+    }
+    if (g0 === 0 && g1 === 0 && g2 === 0 && g3 === 0 && g4 === 0xffff && g5 === 0) {
+        return isRestrictedIpv4(wordsToIpv4(g6, g7))
+    }
+    if (g0 === 0 && g1 === 0 && g2 === 0 && g3 === 0 && g4 === 0 && g5 === 0 && (g6 !== 0 || g7 > 1)) {
+        return isRestrictedIpv4(wordsToIpv4(g6, g7))
+    }
+    return false
 }
 
 /**
  * True when an IP literal (or the textual host form of one) points at a loopback,
  * unspecified, private (RFC 1918), CGNAT, link-local, unique-local, multicast, or
- * embedded IPv4 translation address (mapped/compatible/SIIT/NAT64/6to4).
+ * embedded IPv4 translation address (mapped/compatible/SIIT/NAT64/6to4/Teredo).
  */
 export function isPrivateOrLoopbackAddress(address: string): boolean {
-    const normalized = normalizeAddress(address)
-    return (
-        normalized === 'localhost' ||
-        normalized.endsWith('.localhost') ||
-        isUnspecifiedOrLoopbackV6(normalized) ||
-        normalized.startsWith('0.') ||
-        normalized === '0' ||
-        normalized.startsWith('127.') ||
-        normalized.startsWith('10.') ||
-        normalized.startsWith('192.168.') ||
-        PRIVATE_172_RE.test(normalized) ||
-        CGNAT_100_RE.test(normalized) ||
-        BENCHMARK_198_RE.test(normalized) ||
-        normalized.startsWith('169.254.') ||
-        normalized.startsWith('64:ff9b:') ||
-        LINK_LOCAL_V6_RE.test(normalized) ||
-        UNIQUE_LOCAL_V6_RE.test(normalized) ||
-        MULTICAST_V6_RE.test(normalized)
-    )
+    let normalized = address.trim().toLowerCase()
+    if (normalized.startsWith('[') && normalized.endsWith(']')) normalized = normalized.slice(1, -1)
+    const zoneIdx = normalized.indexOf('%')
+    if (zoneIdx !== -1) normalized = normalized.slice(0, zoneIdx)
+    while (normalized.endsWith('.')) normalized = normalized.slice(0, -1)
+
+    if (normalized === 'localhost' || normalized.endsWith('.localhost') || normalized === '0') {
+        return true
+    }
+    if (isRestrictedIpv4(normalized)) return true
+    const v6 = parseIpv6Groups(normalized)
+    return v6 !== null ? isRestrictedIpv6(v6) : false
 }

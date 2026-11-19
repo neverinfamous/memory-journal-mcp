@@ -150,7 +150,8 @@ export function isTargetExcludedByRules(
 export function isDummyToolAllowedByFilter(
     name: string,
     filterConfig: ToolFilterConfig,
-    agentHealingEnabled: boolean
+    agentHealingEnabled: boolean,
+    codemodeInternalFullAccess = false
 ): boolean {
     if (!agentHealingEnabled || !DUMMY_HEALING_TOOL_NAMES.has(name)) {
         return false
@@ -164,10 +165,15 @@ export function isDummyToolAllowedByFilter(
     if (isTargetExcludedByRules(matchTargets, filterConfig)) {
         return false
     }
-    if (!isReadOnly) {
-        if (info === undefined || (info.isMcpTool && !filterConfig.enabledTools.has(info.target))) {
-            return false
-        }
+    if (!isReadOnly && info === undefined) {
+        return false
+    }
+    if (info !== undefined && info.isMcpTool && !filterConfig.enabledTools.has(info.target)) {
+        const allowFullCodemode =
+            codemodeInternalFullAccess &&
+            filterConfig.enabledTools.has('mj_execute_code') &&
+            (isReadOnly || !isFilterEffectivelyReadOnly(filterConfig))
+        if (!allowFullCodemode) return false
     }
     return true
 }
@@ -176,7 +182,8 @@ export function isDummyToolAllowedByFilter(
 export function isAutonomousShimBlockedByFilter(
     requestedTool: string,
     matchingPromptName: string | undefined,
-    filterConfig: ToolFilterConfig
+    filterConfig: ToolFilterConfig,
+    codemodeInternalFullAccess = false
 ): boolean {
     const shimInfo = resolveDummyTargetInfo(requestedTool)
     const shimTargets =
@@ -192,12 +199,16 @@ export function isAutonomousShimBlockedByFilter(
         return true
     }
 
-    if (shimInfo !== undefined && !shimInfo.readOnly) {
-        if (isFilterEffectivelyReadOnly(filterConfig)) {
+    if (shimInfo !== undefined) {
+        if (!shimInfo.readOnly && isFilterEffectivelyReadOnly(filterConfig)) {
             return true
         }
         if (shimInfo.isMcpTool && !filterConfig.enabledTools.has(shimInfo.target)) {
-            return true
+            const allowFullCodemode =
+                codemodeInternalFullAccess &&
+                filterConfig.enabledTools.has('mj_execute_code') &&
+                (shimInfo.readOnly || !isFilterEffectivelyReadOnly(filterConfig))
+            if (!allowFullCodemode) return true
         }
     }
 

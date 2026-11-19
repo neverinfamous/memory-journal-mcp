@@ -10,6 +10,7 @@ import type { EntryType, JournalEntry, SignificanceType } from '../types/index.j
 import { ENTRY_TYPES, SIGNIFICANCE_TYPES } from '../types/index.js'
 import { PermissionError, ValidationError } from '../types/errors.js'
 import { logger } from '../utils/logger.js'
+import { sanitizeAuthor } from '../utils/security-utils.js'
 import {
     MAX_CONTENT_LENGTH,
     normalizeSignificanceValue,
@@ -150,8 +151,14 @@ export function resolveCanonicalImportAuthor(
     workspaceId?: string
 ): string | undefined {
     if (author === undefined) return undefined
-    if (typeof db.resolveAuthor !== 'function') return author
-    return workspaceId !== undefined ? db.resolveAuthor(author, workspaceId) : db.resolveAuthor(author)
+    const sanitized = sanitizeAuthor(author).trim()
+    if (sanitized === '') return undefined
+    if (typeof db.resolveAuthor !== 'function') return sanitized
+    const resolved =
+        workspaceId !== undefined
+            ? db.resolveAuthor(sanitized, workspaceId)
+            : db.resolveAuthor(sanitized)
+    return sanitizeAuthor(resolved)
 }
 
 export function assertImportAuthorOwnership(

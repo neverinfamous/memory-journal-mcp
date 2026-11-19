@@ -74,7 +74,7 @@ export const ExecuteCodeSchema = z.preprocess((val) => {
     insight: z.string().optional(),
     knowledge: z.string().optional(),
     entry: z.unknown().optional(),
-    auto_version: z.boolean().optional().default(true),
+    auto_version: z.boolean().optional(),
     autoVersion: z.boolean().optional(),
     project_number: relaxedNumber().optional(),
     projectNumber: relaxedNumber().optional(),

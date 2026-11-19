@@ -20,6 +20,7 @@ const OUTER_BUILTIN_CTORS: readonly unknown[] = [
     SyntaxError,
     URIError,
     EvalError,
+    ...(typeof AggregateError !== 'undefined' ? [AggregateError] : []),
     Map,
     Set,
     WeakMap,
@@ -28,6 +29,18 @@ const OUTER_BUILTIN_CTORS: readonly unknown[] = [
     Date,
     ArrayBuffer,
     DataView,
+    ...(typeof Buffer !== 'undefined' ? [Buffer] : []),
+    Int8Array,
+    Uint8Array,
+    Uint8ClampedArray,
+    Int16Array,
+    Uint16Array,
+    Int32Array,
+    Uint32Array,
+    Float32Array,
+    Float64Array,
+    BigInt64Array,
+    BigUint64Array,
     JSON,
     Math,
 ]
@@ -172,6 +185,7 @@ const FREEZE_INNER_CONTEXT_SCRIPT = new vm.Script(`(function() {
         Float32Array, Float64Array, BigInt64Array, BigUint64Array,
         JSON, Math,
     ];
+    if (typeof AggregateError !== "undefined") builtins.push(AggregateError);
     if (TypedArrayCtor) builtins.push(TypedArrayCtor);
     if (GlobalIter) builtins.push(GlobalIter);
     for (const B of builtins) {

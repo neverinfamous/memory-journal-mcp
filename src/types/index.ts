@@ -241,6 +241,8 @@ export interface ToolHandlerConfig {
     pruneImportanceThreshold?: number
     /** Tags skipped by archive, soft-delete, and hard-delete */
     pruneExcludeTags?: string[]
+    /** Maximum number of array elements and object properties allowed across a tool input payload */
+    maxToolInputElements?: number
 }
 
 /**

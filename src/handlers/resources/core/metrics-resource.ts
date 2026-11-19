@@ -19,6 +19,7 @@ import {
     ASSISTANT_FOCUSED,
 } from '../../../utils/resource-annotations.js'
 import { fenceNonCanonicalRefOrKey } from '../../../utils/security-utils.js'
+import { sliceUntrustedInline } from '../uri-and-fencing.js'
 import type { InternalResourceDef, ResourceContext, ResourceResult } from '../shared.js'
 
 // ============================================================================
@@ -141,13 +142,18 @@ export const metricsResourcesResource: InternalResourceDef = {
             }
         }
 
+        const CANONICAL_RESOURCE_URI_RE = /^memory:\/\/[A-Za-z0-9_./-]+$/
         const rows = breakdown
-            .map(
-                (r) =>
-                    `  - uri: ${r.uri}\n` +
+            .map((r) => {
+                const safeUri = CANONICAL_RESOURCE_URI_RE.test(r.uri)
+                    ? r.uri
+                    : JSON.stringify(sliceUntrustedInline(r.uri, 256, '...'))
+                return (
+                    `  - uri: ${safeUri}\n` +
                     `    read_count: ${r.readCount}\n` +
                     `    error_count: ${r.errorCount}`
-            )
+                )
+            })
             .join('\n')
 
         const text = `resource_breakdown:\n  as_of: ${lastModified}\n${rows}\n`

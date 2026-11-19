@@ -16,8 +16,8 @@ The server uses the native **better-sqlite3** driver with **sqlite-vec** for vec
 ### **SQLCipher Encryption at Rest & Staged Backups**
 
 - ✅ **Environment-Only Encryption Keys** — Optional SQLCipher keys are read exclusively from `MJ_DB_ENCRYPTION_KEY` or `DB_ENCRYPTION_KEY` (`src/database/sqlite-adapter/sqlcipher-key.ts`); `scripts/encrypt-db.ts` omits any CLI `--key` flag so secrets never appear in OS process listings (`ps`).
-- ✅ **Key Validation & Error Redaction** — `applySqlCipherKey()` rejects NUL bytes, validates `x'...'` hex keys against `HEX_CIPHER_KEY_RE`, escapes single-quoted passphrases, and throws generic error messages without echoing key material.
-- ✅ **Staged Backups & Restore Locking** — Database backups write to staged `.tmp` files serialized under `restore-lock.ts` with pre-swap SQLite integrity verification.
+- ✅ **Key Validation & Error Redaction** — `applySqlCipherKey()` rejects NUL bytes, validates case-insensitive even-hex `x'...'` keys against `HEX_CIPHER_KEY_RE`, normalizes raw hex pragmas, escapes single-quoted passphrases, and throws generic error messages without echoing key material.
+- ✅ **Staged Backups & Restore Locking** — Database backups write to staged `.tmp` files serialized under `restore-lock.ts` with pre-swap SQLite integrity verification, `.db` extension checks, and regular-file checks.
 
 ### **File Permissions (Docker)**
 
@@ -52,21 +52,21 @@ The server uses the native **better-sqlite3** driver with **sqlite-vec** for vec
 ### **Path Traversal & Filesystem Boundaries**
 
 - ✅ **Explicit Filesystem Boundaries** — Filesystem access MUST be explicitly granted via `ALLOWED_IO_ROOTS`. The server operates in a **fail-closed** mode (`ALLOWED_IO_ROOTS=[]`) by default if not explicitly configured, preventing all filesystem interaction.
-- ✅ **URL-Encoded, Null-Byte, Win32 & Symlink Rejection** — `assertSafeDirectoryPath` and `assertSafeFilePath` (`src/utils/path-safety.ts`) reject URL-encoded traversal sequences (`%2e`, `%2f`, `%5c`, `%00`), raw/decoded NUL bytes, Windows Alternate Data Streams (`:`), and Windows reserved DOS device names (`CON`, `PRN`, `AUX`, `NUL`, `COM1`–`COM9`, `LPT1`–`LPT9`); resolve ancestor symlinks iteratively via `fs.realpathSync.native()` and validate containment via `path.relative()` on **both raw and percent-decoded paths**; reject file-level symlinks via `fs.lstatSync(filePath).isSymbolicLink()`; and re-verify pre-chunk and post-chunk `assertSafeDirectoryPath(realpathSync.native(...))` during Markdown exports (`src/markdown/exporter.ts`) to prevent TOCTOU swaps.
+- ✅ **URL-Encoded, Null-Byte, Win32 & Symlink Rejection** — `assertSafeDirectoryPath` and `assertSafeFilePath` (`src/utils/path-safety.ts`) reject URL-encoded traversal sequences (`%2e`, `%2f`, `%5c`, `%00`), raw/decoded NUL bytes, Windows Alternate Data Streams (`:`), and Windows reserved DOS device names (`CON`, `PRN`, `AUX`, `NUL`, `COM1`–`COM9`, `LPT1`–`LPT9`); resolve ancestor symlinks iteratively via `fs.realpathSync.native()`, reject dangling symlinks via `fs.lstatSync()`, and validate containment via `path.relative()` on **both raw and percent-decoded paths**; reject file-level symlinks via `fs.lstatSync(filePath).isSymbolicLink()`; and verify post-`mkdir`, pre-chunk, and post-chunk `assertSafeDirectoryPath(realpathSync.native(...))` during Markdown exports (`src/markdown/exporter.ts`) to prevent TOCTOU swaps.
 - ✅ **Implicit Authority Disabled** — The server no longer derives ambient filesystem authority from the location of database files.
-- ✅ **Backup & Restore Boundaries** — `backup_journal` and `restore_backup` enforce `path.relative()` containment against the backup directory and reject symlinks or traversal characters (`/`, `\`, `..`).
-- ✅ **Agent-Healing Filesystem Fallbacks** — When `--no-agent-healing` is not set, read-only fallback tools (`view_file`, `list_dir`, `grep_search`) enforce `ALLOWED_IO_ROOTS` (fail-closed `[]` when unconfigured; `list_dir` defaults its target directory argument to `process.cwd()`), reject symlink file targets (`view_file`, single-file `grep_search`), resolve directory realpaths (`list_dir`, directory `grep_search`), skip symbolic links during recursive `grep_search` traversal, cap file reads at 2MB, and require `admin` scope under OAuth 2.1.
+- ✅ **Backup & Restore Boundaries** — `backup_journal` and `restore_backup` enforce `path.relative()` containment against the backup directory, require a `.db` extension and regular-file stat, and reject symlinks or traversal characters (`/`, `\`, `..`).
+- ✅ **Agent-Healing Filesystem Fallbacks** — When `--no-agent-healing` is not set, read-only fallback tools (`view_file`, `list_dir`, `grep_search`) enforce `--tool-filter` / `codemodeInternalFullAccess` and `ALLOWED_IO_ROOTS` (fail-closed `[]` when unconfigured; `list_dir` defaults its target directory argument to `process.cwd()`), reject symlink file targets (`view_file`, single-file `grep_search`), resolve directory realpaths (`list_dir`, directory `grep_search`), skip symbolic links during recursive `grep_search` traversal, cap file reads at 2MB, and require `admin` scope under OAuth 2.1.
 - ✅ **Typed security errors** with consistent error codes
 
 ### **Multi-Tenant Workspace Isolation (`workspace_id`)**
 
-- ✅ **End-to-End Tenant Scoping** — All personal and team entry reads, updates, soft-deletes, restores, FTS5 searches, and vector semantic searches (`semantic_search`, `team_semantic_search`) enforce `workspace_id` and `project_number` isolation. Unregistered workspace updates enforce exact case-sensitive `workspace_id` ownership (`src/database/sqlite-adapter/entries/crud-update.ts`), writes require positive-integer `project_number` (while finite non-positive read filters fail closed with zero matches), and scoped `merge_tags` verifies source-tag existence in the target workspace before creating a target tag (`src/database/sqlite-adapter/tags.ts`).
+- ✅ **End-to-End Tenant Scoping** — All personal and team entry reads, updates, soft-deletes, restores, FTS5 searches, and vector semantic searches (`semantic_search`, `team_semantic_search`) enforce `workspace_id` and `project_number` isolation. Unregistered workspace updates enforce exact case-sensitive `workspace_id` ownership (`src/database/sqlite-adapter/entries/crud-update.ts`), writes require positive-integer `project_number` (while non-positive/non-integer read filters fail closed with zero matches), and scoped `merge_tags` verifies source-tag existence in the target workspace before creating a target tag (`src/database/sqlite-adapter/tags.ts`).
 - ✅ **Wildcard workspace guards** — `create_entry` ignores `workspace_id: "*"` and stores a resolved workspace; `update_entry` accepts `workspace_id: "*"` with an explicit `target_workspace_id` move target but rejects `target_workspace_id: "*"`; and `delete_entry`, `restore_entry`, and batch deletes accept `workspace_id: "*"` for explicit ID-based matching.
-- ✅ **`--tool-filter` & Code Mode namespace isolation** — `--tool-filter` acts as an allow-list on registration, `tools/list`, `tools/call`, and Code Mode (`filterToolsForSandbox` / `disabledToolStub` across tool groups and `mj.team.*` namespace isolation in `worker-api-proxy.ts` and `api-proxy-trap.ts` so personal `mj.core.*` or unprefixed root `mj.*` calls never silently route to `team_*` tools). `readonly` drops non-read-only tools and blocks mutating `mj.*` calls/aliases. `update_configuration` and `mj_execute_code` stay registered; `--codemode-internal-full-access` cannot be enabled via config hot-reload.
+- ✅ **`--tool-filter` & Code Mode namespace isolation** — `--tool-filter` acts as an allow-list on registration, `tools/list`, `tools/call`, and Code Mode (`filterToolsForSandbox` / `disabledToolStub` across tool groups, `mj.getConfig()` routing through `list_projects`, and `mj.team.*` namespace isolation in `worker-api-proxy.ts` and `api-proxy-trap.ts` so personal `mj.core.*` or unprefixed root `mj.*` calls never silently route to `team_*` tools). `readonly` drops non-read-only tools and blocks mutating `mj.*` calls/aliases. `update_configuration` and `mj_execute_code` stay registered; `--codemode-internal-full-access` is required for unrestricted dummy shims and full help group visibility and cannot be enabled via config hot-reload.
 
 ### **Prompt-Injection Defense (`<untrusted_remote_content>`)**
 
-- ✅ **Untrusted Boundary Tagging** — External inputs surfaced across MCP Tools, Resources, Resource Templates, Server Instructions, and Workflow Prompts (Git commit subjects/bodies/authors/unreleased tags via `git-commit-helpers.ts` and `git-staleness.ts`, GitHub issue/PR/milestone titles/bodies/branches/refs/labels/handles & Copilot review comments via `fencing-helpers.ts` and `copilot-tools.ts`, journal entry previews, and non-canonical audit log fields/arguments/errors via `sanitizeAuditEntryForEgress` in `src/audit/audit-resource.ts`) are truncated via `sliceUntrustedInline` before idempotent `<untrusted_remote_content>` wrapping (`&`, `<`, `>` entity-escaped), while keeping internal domain structs and Kanban status enums raw.
+- ✅ **Untrusted Boundary Tagging** — External inputs surfaced across MCP Tools, Resources, Resource Templates, Server Instructions, and Workflow Prompts (Git commit subjects/bodies/authors/unreleased tags via `git-commit-helpers.ts` and `git-staleness.ts`, GitHub issue/PR/milestone titles/bodies/branches/refs/labels/handles & Copilot review comments via `fencing-helpers.ts` and `copilot-tools.ts`, team member/alias/cross-team author fields, journal entry previews/tags, and non-canonical audit log fields/arguments/errors via `sanitizeAuditEntryForEgress` in `src/audit/audit-resource.ts`) strip C0/C1 control characters and are truncated via `sliceUntrustedInline` before idempotent `<untrusted_remote_content>` wrapping (`&`, `<`, `>` entity-escaped), while keeping internal domain structs, entry content, canonical `memory://` URIs, and Kanban status enums raw.
 
 ## 🌐 **HTTP Transport Security**
 
@@ -427,38 +427,40 @@ chmod 700 /shared/team-data
 ## 📋 **Security Checklist**
 
 - [x] Foreign key enforcement (`PRAGMA foreign_keys = ON`, initialized in `src/database/sqlite-adapter/native-connection.ts`)
-- [x] SQLCipher environment-only key loading & error redaction (`sqlcipher-key.ts`, `scripts/encrypt-db.ts`)
-- [x] Input validation and length limits (Zod schemas, centralized in `src/handlers/tools/schemas/constants-and-primitives.ts`)
-- [x] Parameterized SQL queries & scoped workspace/project isolation (`crud-update.ts`, `tags.ts`)
+- [x] SQLCipher environment-only key loading, case-insensitive even-hex validation, & error redaction (`sqlcipher-key.ts`, `scripts/encrypt-db.ts`)
+- [x] Input validation and length limits (Zod schemas, prompt arg / resource URI bounds, `.max(100)` member bounds)
+- [x] Parameterized SQL queries & scoped workspace/project isolation (`crud-update.ts`, `tags.ts`, positive-int SQLite bounds, `query-helpers.ts`)
 - [x] SQL injection detection heuristics (defense-in-depth)
-- [x] Path traversal, Win32 ADS/DOS & TOCTOU export protection (`assertSafeDirectoryPath`, `assertSafeFilePath` in `src/utils/path-safety.ts`; `src/markdown/exporter.ts`)
-- [x] Explicit Filesystem Boundaries (`ALLOWED_IO_ROOTS` enforcement)
-- [x] Constant-time SHA-256 Bearer verification, whitespace/placeholder rejection, `GET`/`HEAD`-only `/health` & `.well-known` bypass, and OIDC `email_verified === true` check
-- [x] DNS-pinned JWKS & discovery SSRF protection (`jwks-ssrf-guard.ts`, `jwks-custom-fetch.ts`, `network-safety.ts`)
+- [x] Path traversal, dangling symlink (`lstatSync`), Win32 ADS/DOS, `.db` regular-file restore, & TOCTOU export protection (`src/utils/path-safety.ts`, `backup-helpers.ts`, `exporter.ts`)
+- [x] Explicit Filesystem Boundaries (`ALLOWED_IO_ROOTS`, `--tool-filter` & `codemodeInternalFullAccess` enforcement)
+- [x] Restrictive `0o600`/`0o700` permissions on persisted configs, audit logs, agent issue logs, and metrics snapshots
+- [x] Constant-time SHA-256 Bearer verification, unconditional placeholder rejection, trimmed `sub`, `GET`/`HEAD`-only `/health` & `.well-known` bypass, OIDC discovery SSRF/HTTPS validation, and `email_verified === true` check
+- [x] DNS-pinned JWKS & discovery SSRF protection (`jwks-ssrf-guard.ts`, `jwks-custom-fetch.ts`, `network-safety.ts` IPv6 `uint16[8]`/Teredo/multicast filtering)
+- [x] `/metrics` `audit` OAuth scope, conditional `mcp_user_calls_total` PII gating, and `no-store`/`nosniff` metrics headers
 - [x] FTS5 / LIKE pattern & operator sanitization (`sanitizeFtsQuery` in `src/database/sqlite-adapter/entries/search/fts-sanitizer.ts`)
 - [x] Date format whitelisting (`validateDateFormatPattern`)
-- [x] HTTP pre-body rate limit/auth ordering, 1MB body limit, and `maxRequestBodySize` enforcement
-- [x] Tool input element count limit (`MAX_TOOL_INPUT_ELEMENTS`, default 25,000) and Code Mode non-`context` / 5MB `context` payload caps
+- [x] HTTP pre-body rate limit/auth ordering, 1MB body limit, `415` unparsed non-JSON rejection, and `maxRequestBodySize` enforcement
+- [x] Tool input element count limit (`MAX_TOOL_INPUT_ELEMENTS`, default 25,000) and Code Mode non-`context` / `50KB` `context` recovery / depth-bounded byte estimation caps
 - [x] Configurable CORS multi-origin with exact-match enforcement
 - [x] HTTP timeouts and built-in rate limiter (100 req/min)
-- [x] DNS rebinding protection and opt-in HSTS (`--enable-hsts` / `MCP_ENABLE_HSTS`)
+- [x] DNS rebinding protection (`new URL` Host parsing on `metrics-server.ts`) and opt-in HSTS (`--enable-hsts` / `MCP_ENABLE_HSTS`)
 - [x] Security headers (CSP, X-Content-Type-Options, X-Frame-Options, Cache-Control, Referrer-Policy, Permissions-Policy)
 - [x] Session idle timeout (30 minutes), active session cap (100), principal binding, and 1-minute sweep interval
 - [x] Non-root Docker user
 - [x] Multi-stage Docker build
 - [x] Local-first data architecture
-- [x] Secret/token & CLI flag scrubbing across logs, audit egress, `agent-issues.jsonl`, and `ConfigManager` baselines
-- [x] Idempotent `<untrusted_remote_content>` egress fencing across Git, GitHub/Copilot, audit logs, templates, instructions, resources, and prompts
+- [x] Secret/token & CLI flag scrubbing across logs, `Error` objects, `--dump-config`, audit egress, `agent-issues.jsonl`, and `ConfigManager` baselines
+- [x] Idempotent `<untrusted_remote_content>` C0/C1 control-char stripping & egress fencing across Git (`--name-status`/`-z` before `--`), GitHub (`github.com` host/slug checks), team authors/aliases, metrics, audit logs, templates, instructions, resources, and prompts
 - [x] 3-tier Team RBAC parity (`viewer`/`member`/`admin`) & `Promise.allSettled` cross-team DB isolation (`cross-team.ts`)
-- [x] Code Mode sandbox isolation (worker_threads V8 isolate + vm.createContext)
+- [x] Code Mode sandbox isolation (worker_threads V8 isolate, per-execution lexical RPC bridge, fatal worker termination, and `vm.createContext`)
 - [x] Code Mode V8 codeGeneration restrictions (eval/Function disabled at engine level)
-- [x] Code Mode frozen built-in prototypes & iterators (`%GeneratorPrototype%`, `%AsyncGeneratorPrototype%`, `%IteratorPrototype%`, `%TypedArray%`)
-- [x] Code Mode lexical/Annex-B/Unicode stripper & blocked patterns (including bare `Reflect` & destructured helpers)
+- [x] Code Mode frozen built-in prototypes & iterators (`%GeneratorPrototype%`, `%AsyncGeneratorPrototype%`, `%IteratorPrototype%`, concrete `%TypedArray%`, `Buffer`, `AggregateError`)
+- [x] Code Mode lexical/Annex-B/regex-state/Unicode stripper, healer, & `auto-return` scanners + blocked patterns (including bare `Reflect` & destructured helpers)
 - [x] Code Mode `Proxy` constructor nullified & unconditional `JSON.parse` structured-clone egress unwrapping (`result-compactor.ts`)
-- [x] Code Mode `Promise.race` wall-clock timeouts & strict `mj.team.*` namespace isolation
+- [x] Code Mode `Promise.race` wall-clock timeouts, explicit empty `{}` `projectRegistry` isolation, & strict `mj.team.*` namespace / `mj.getConfig()` isolation
 - [x] Code Mode RPC allowlist validation & readonly Proxy traps
 - [x] CI/CD security pipeline (CodeQL, Trivy, secret scanning)
-- [x] Code Mode frozen API surfaces (`Object.freeze` on `mj.*`, console, context, `path` shims, `ADAPTER_ITEMS`, `JOURNAL_TABLES`)
+- [x] Code Mode frozen API surfaces (`Object.freeze` on `mj.*`, console, context, `fs`/`sql`/`path` shims, `ADAPTER_ITEMS`, `JOURNAL_TABLES`)
 - [x] Code Mode pre-warmed worker pool with lifecycle management
 - [x] Comprehensive security documentation
 

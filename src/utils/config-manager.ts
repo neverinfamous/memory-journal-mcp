@@ -1,7 +1,6 @@
 import * as fs from 'node:fs'
-import { randomBytes } from 'node:crypto'
 import { EventEmitter } from 'node:events'
-import { parse as parseYaml, stringify as stringifyYaml } from 'yaml'
+import { parse as parseYaml } from 'yaml'
 import { logger } from './logger.js'
 import { RegistryConfigError } from './registry-config-file.js'
 import { parseToolFilter } from '../filtering/tool-filter.js'
@@ -21,7 +20,11 @@ import {
     type UpdateConfigOptions,
 } from './config-manager-helpers.js'
 import { syncBriefingProvenanceFromFile } from './config-manager-baselines.js'
-import { applyPersistableConfigKeys } from './config-manager-persist.js'
+import {
+    applyPersistableConfigKeys,
+    serializeConfigObject,
+    writeTempAndRenameConfig,
+} from './config-manager-persist.js'
 
 export type {
     BriefingConfigurableKey,
@@ -248,20 +251,6 @@ export class ConfigManager extends EventEmitter {
         this.watcher = undefined
     }
 
-    private writeTempAndRenameConfig(tmpPath: string, serialized: string, targetPath: string): void {
-        try {
-            fs.writeFileSync(tmpPath, serialized, { encoding: 'utf-8', flag: 'wx' })
-            fs.renameSync(tmpPath, targetPath)
-        } catch (writeErr: unknown) {
-            try {
-                fs.rmSync(tmpPath, { force: true })
-            } catch {
-                // [SIDE-EFFECT] Best-effort temp cleanup; the original error is reported below.
-            }
-            throw writeErr
-        }
-    }
-
     private persistToFile(): string | undefined {
         if (!this.configFilePath) return undefined
         this.isWriting = true
@@ -284,18 +273,14 @@ export class ConfigManager extends EventEmitter {
                 briefingKeys: this.briefingKeysFromFile,
             })
 
-            let serialized: string
-            if (!isYaml) {
-                serialized = JSON.stringify(parsed, null, 2)
-            } else {
+            if (isYaml) {
                 // To avoid destroying yaml comments, ideally we'd use a robust yaml editor.
                 // But this is just a best effort fallback for CLI config rewrites.
                 logger.warning('YAML file updates from update_configuration tool will drop comments.', { module: 'ConfigManager' })
-                serialized = (stringifyYaml as (value: unknown) => string)(parsed)
             }
+            const serialized = serializeConfigObject(parsed, isYaml)
             // [INVARIANT] Atomic temp+rename so a crash or concurrent reader never sees a truncated config.
-            const tmpPath = `${this.configFilePath}.${String(process.pid)}.${randomBytes(8).toString('hex')}.tmp`
-            this.writeTempAndRenameConfig(tmpPath, serialized, this.configFilePath)
+            writeTempAndRenameConfig(this.configFilePath, serialized)
             // [SIDE-EFFECT] rename replaces the inode, so re-arm the watcher on the new file.
             if (!this.closed && this.watcher !== undefined) {
                 this.watcher.close()

@@ -25,6 +25,7 @@ export interface ScopedRpcOverrides {
 
 export interface VmExecutionContextOptions {
     rpcFn: RpcCallFn
+    sendRpcRequest: SendRpcRequestFn
     methodList: Record<string, string[]>
     schemaList: Record<string, Record<string, string>> | undefined
     timeoutMs: number
@@ -150,6 +151,7 @@ function buildNestedVmContextOptions(
         nextTimeout,
         nextMaxResult,
         vmOpts: {
+            sendRpcRequest,
             rpcFn: createScopedRpcCall(sendRpcRequest, rpcOverrides),
             methodList: options.methodList,
             schemaList: options.schemaList,

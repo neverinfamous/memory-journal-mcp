@@ -4,58 +4,80 @@
  */
 
 import * as vm from 'node:vm'
+import {
+    canStartRegexLiteral,
+    createDelimiterState,
+    skipLineOrBlockComment,
+    skipRegexLiteralBody,
+    trackIdentifierToken,
+    trackPunctuationToken,
+} from '../../../codemode/security-stripper.js'
+
+function advanceStringLiteralStep(
+    code: string,
+    i: number,
+    offset: number,
+    inString: string,
+    isEscaped: boolean,
+    state: ReturnType<typeof createDelimiterState>
+): { inString: string | null; isEscaped: boolean; next: number; prevToken?: string } {
+    const ch = code[i]
+    if (ch === '\\') return { inString, isEscaped: !isEscaped, next: i + 1 }
+    if (inString === '`' && !isEscaped && ch === '$' && code[i + 1] === '{' && i + 1 < offset) {
+        state.templateBraces.push(0)
+        return { inString: null, isEscaped: false, next: i + 2, prevToken: '(' }
+    }
+    if (ch === inString && !isEscaped) {
+        return { inString: null, isEscaped: false, next: i + 1, prevToken: inString }
+    }
+    return { inString, isEscaped: false, next: i + 1 }
+}
 
 function scanCodeOffsetState(code: string, offset: number): 'code' | 'string' | 'comment' {
     let inString: string | null = null
     let isEscaped = false
-    const templateBraceDepthStack: number[] = []
+    let prevToken = ''
+    const state = createDelimiterState()
+
     for (let i = 0; i < offset; i++) {
-        const ch = code[i]
+        const ch = code[i] ?? ''
         if (inString !== null) {
-            if (ch === '\\') {
-                isEscaped = !isEscaped
-                continue
-            }
-            if (inString === '`' && !isEscaped && ch === '$' && code[i + 1] === '{' && i + 1 < offset) {
-                templateBraceDepthStack.push(0)
-                inString = null
-                isEscaped = false
-                i++
-                continue
-            }
-            if (ch === inString && !isEscaped) {
-                inString = null
-            }
-            isEscaped = false
+            const step = advanceStringLiteralStep(code, i, offset, inString, isEscaped, state)
+            inString = step.inString
+            isEscaped = step.isEscaped
+            if (step.prevToken !== undefined) prevToken = step.prevToken
+            i = step.next - 1
             continue
         }
-        if (ch === '/' && code[i + 1] === '/') {
-            const nl = code.indexOf('\n', i)
-            if (nl === -1 || nl > offset) return 'comment'
-            i = nl
-            continue
-        }
-        if (ch === '/' && code[i + 1] === '*') {
-            const end = code.indexOf('*/', i + 2)
-            if (end === -1 || end + 2 > offset) return 'comment'
-            i = end + 1
+        const comment = skipLineOrBlockComment(code, i)
+        if (comment !== null) {
+            if (comment.next > offset || (comment.next === code.length && comment.unterminated === true)) {
+                return 'comment'
+            }
+            i = comment.next - 1
             continue
         }
         if (ch === "'" || ch === '"' || ch === '`') {
             inString = ch
-        } else if (ch === '{' && templateBraceDepthStack.length > 0) {
-            const topIdx = templateBraceDepthStack.length - 1
-            const top = templateBraceDepthStack[topIdx]
-            if (top !== undefined) templateBraceDepthStack[topIdx] = top + 1
-        } else if (ch === '}' && templateBraceDepthStack.length > 0) {
-            const topIdx = templateBraceDepthStack.length - 1
-            const top = templateBraceDepthStack[topIdx]
-            if (top === 0) {
-                templateBraceDepthStack.pop()
+        } else if (ch === '/' && code[i + 1] !== '/' && code[i + 1] !== '*' && canStartRegexLiteral(prevToken)) {
+            i = skipRegexLiteralBody(code, i + 1) - 1
+            prevToken = '/'
+        } else if (/[A-Za-z0-9_$]/.test(ch)) {
+            let j = i
+            while (j < offset && /[A-Za-z0-9_$]/.test(code[j] ?? '')) j++
+            prevToken = trackIdentifierToken(code.slice(i, j), prevToken, state)
+            i = j - 1
+        } else if (ch === '=' && code[i + 1] === '>') {
+            prevToken = '=>'
+            i++
+        } else {
+            const closingInterp = ch === '}' && state.templateBraces.length > 0 && state.templateBraces.at(-1) === 0
+            if (closingInterp) {
+                state.templateBraces.pop()
                 inString = '`'
                 isEscaped = false
-            } else if (top !== undefined) {
-                templateBraceDepthStack[topIdx] = top - 1
+            } else if (!/\s/.test(ch)) {
+                prevToken = trackPunctuationToken(ch, prevToken, state)
             }
         }
     }

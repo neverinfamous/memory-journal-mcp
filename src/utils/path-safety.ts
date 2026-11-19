@@ -71,6 +71,18 @@ function resolveRealTargetPath(targetInput: string): string {
     let existingRealPath = ''
 
     while (currentDir !== pathMod.parse(currentDir).root) {
+        try {
+            const stat = fs.lstatSync(currentDir)
+            if (stat.isSymbolicLink() && !fs.existsSync(currentDir)) {
+                throw new PathTraversalError(
+                    `Dangling symbolic link cannot be verified inside sandbox boundaries: ${currentDir}`
+                )
+            }
+        } catch (err: unknown) {
+            if (err instanceof PathTraversalError) {
+                throw err
+            }
+        }
         if (fs.existsSync(currentDir)) {
             existingRealPath = fs.realpathSync.native(currentDir)
             break

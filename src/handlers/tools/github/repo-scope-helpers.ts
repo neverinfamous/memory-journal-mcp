@@ -49,9 +49,32 @@ export function githubScopeValidationError(error: string): {
     }
 }
 
+export const VALID_GITHUB_SLUG_RE = /^[A-Za-z0-9_.-]{1,100}$/
+
+export function isValidGitHubSlugPart(part: string): boolean {
+    return VALID_GITHUB_SLUG_RE.test(part) && part !== '.' && part !== '..'
+}
+
+export function isValidGitHubRepoSlug(value: string): boolean {
+    if (isValidGitHubSlugPart(value)) return true
+    const parts = value.split('/')
+    return (
+        parts.length === 2 &&
+        parts[0] !== undefined &&
+        parts[1] !== undefined &&
+        isValidGitHubSlugPart(parts[0]) &&
+        isValidGitHubSlugPart(parts[1])
+    )
+}
+
 const GITHUB_HTTPS_URL_RE = /^https?:\/\/([^/]+)\/([^/]+)\/([^/?#]+?)(?:\.git)?(?:[/?#].*)?$/i
 const GITHUB_SSH_URL_RE = /^ssh:\/\/git@([^/]+)\/([^/]+)\/([^/?#]+?)(?:\.git)?(?:\/.*)?$/i
 const GITHUB_SCP_SSH_RE = /^git@([^:]+):([^/]+)\/([^/\s]+?)(?:\.git)?$/i
+
+function isTrustedGitHubHost(host: string): boolean {
+    const lower = host.replace(/:\d+$/, '').toLowerCase()
+    return lower === 'github.com' || lower === 'www.github.com'
+}
 
 /**
  * Parse a `repo` parameter (`owner/repo`, GitHub URL, repo name, or filesystem path)
@@ -66,10 +89,18 @@ export function parseRepoSlug(repo?: string): ParsedRepoSlug {
         GITHUB_HTTPS_URL_RE.exec(trimmed) ??
         GITHUB_SSH_URL_RE.exec(trimmed) ??
         GITHUB_SCP_SSH_RE.exec(trimmed)
-    if (urlMatch?.[2] && urlMatch[3]) {
+    if (urlMatch?.[1] && urlMatch[2] && urlMatch[3]) {
+        const parsedRepo = urlMatch[3].replace(/\.git$/i, '')
+        if (
+            !isTrustedGitHubHost(urlMatch[1]) ||
+            !isValidGitHubSlugPart(urlMatch[2]) ||
+            !isValidGitHubSlugPart(parsedRepo)
+        ) {
+            return { invalidPath: true, rawInput: trimmed }
+        }
         return {
             owner: urlMatch[2],
-            repo: urlMatch[3].replace(/\.git$/i, ''),
+            repo: parsedRepo,
             rawInput: trimmed,
         }
     }
@@ -91,7 +122,12 @@ export function parseRepoSlug(repo?: string): ParsedRepoSlug {
     if (trimmed.includes('/')) {
         const parts = trimmed.split('/').filter(Boolean)
         if (parts.length === 2 && parts[0] && parts[1]) {
-            return { owner: parts[0], repo: parts[1].replace(/\.git$/i, ''), rawInput: trimmed }
+            const ownerPart = parts[0]
+            const repoPart = parts[1].replace(/\.git$/i, '')
+            if (!isValidGitHubSlugPart(ownerPart) || !isValidGitHubSlugPart(repoPart)) {
+                return { invalidPath: true, rawInput: trimmed }
+            }
+            return { owner: ownerPart, repo: repoPart, rawInput: trimmed }
         }
         const multiSegment = parts.length > 2
         const leaf = parts.pop()?.replace(/\.git$/i, '')

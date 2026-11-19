@@ -118,20 +118,22 @@ export class ConfigResolver {
         if (isCliSource) {
             value = this.cliOptions[cliKey]
             source = 'cli'
-        }
-        // 2. Env Var
-        else if (envKey && process.env[envKey] !== undefined && process.env[envKey] !== '') {
-            value = process.env[envKey]
-            source = 'env'
-        }
-        // 3. Config File
-        else if (this.configFileOptions[cliKey] !== undefined) {
-            value = this.configFileOptions[cliKey]
-            source = 'config'
-        }
-        // 4. Default from Commander
-        else {
-            value = this.cliOptions[cliKey]
+        } else {
+            const rawEnvVal = envKey !== undefined && envKey !== '' ? process.env[envKey] : undefined
+            // 2. Env Var (ignore whitespace-only values so blank env vars do not mask lower layers)
+            if (rawEnvVal !== undefined && rawEnvVal.trim() !== '') {
+                value = rawEnvVal
+                source = 'env'
+            }
+            // 3. Config File
+            else if (this.configFileOptions[cliKey] !== undefined) {
+                value = this.configFileOptions[cliKey]
+                source = 'config'
+            }
+            // 4. Default from Commander
+            else {
+                value = this.cliOptions[cliKey]
+            }
         }
 
         if (value === undefined) {
@@ -229,7 +231,12 @@ export class ConfigResolver {
         if (val === undefined || val === null || (typeof val === 'string' && val.trim() === '')) return undefined
         
         if (typeof val === 'boolean') return val
-        if (typeof val === 'string') return val.toLowerCase() === 'true'
+        if (typeof val === 'string') {
+            const normalized = val.trim().toLowerCase()
+            if (normalized === 'true' || normalized === '1') return true
+            if (normalized === 'false' || normalized === '0') return false
+            throw new ConfigurationError(`Invalid boolean configuration value for ${cliKey}: '${val}'`)
+        }
         return Boolean(val)
     }
 

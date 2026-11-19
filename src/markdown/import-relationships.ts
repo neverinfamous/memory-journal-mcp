@@ -53,6 +53,10 @@ export function linkImportedRelationships(
             continue
         }
         const targetId = idRemap.get(rel.target_id) ?? rel.target_id
+        if (!Number.isSafeInteger(targetId) || targetId <= 0) {
+            missingTargetsSet.add(targetId)
+            continue
+        }
         if (targetId === entryId) continue
         const pairKey = `${relType}:${String(targetId)}`
         if (seenPairs.has(pairKey)) continue
@@ -100,6 +104,8 @@ export function linkImportedRelationships(
     }
 }
 
+const DEFAULT_WS_SENTINEL = '\0default'
+
 function prefetchBatchRelationshipContext(
     db: IDatabaseAdapter,
     pendingLinks: readonly PendingRelationshipLink[],
@@ -112,7 +118,7 @@ function prefetchBatchRelationshipContext(
     const entriesByWs = new Map<string, number[]>()
     for (const pending of pendingLinks) {
         if (pending.relationships === undefined || pending.relationships.length === 0) continue
-        const wsKey = pending.workspaceId ?? '*'
+        const wsKey = pending.workspaceId ?? DEFAULT_WS_SENTINEL
         const eList = entriesByWs.get(wsKey) ?? []
         eList.push(pending.entryId)
         entriesByWs.set(wsKey, eList)
@@ -128,7 +134,7 @@ function prefetchBatchRelationshipContext(
         for (const [wsKey, idSet] of targetsByWs) {
             prefetchedTargetsByWs.set(
                 wsKey,
-                db.getEntriesByIds(Array.from(idSet), wsKey === '*' ? undefined : wsKey)
+                db.getEntriesByIds(Array.from(idSet), wsKey === DEFAULT_WS_SENTINEL ? undefined : wsKey)
             )
         }
     }
@@ -138,7 +144,7 @@ function prefetchBatchRelationshipContext(
         for (const [wsKey, entryIds] of entriesByWs) {
             prefetchedRelsByWs.set(
                 wsKey,
-                db.getRelationshipsForEntries(entryIds, wsKey === '*' ? undefined : wsKey)
+                db.getRelationshipsForEntries(entryIds, wsKey === DEFAULT_WS_SENTINEL ? undefined : wsKey)
             )
         }
     }
@@ -159,7 +165,7 @@ export function applyImportedRelationshipBatch(
     )
 
     for (const pending of pendingLinks) {
-        const wsKey = pending.workspaceId ?? '*'
+        const wsKey = pending.workspaceId ?? DEFAULT_WS_SENTINEL
         const targetsMap = prefetchedTargetsByWs.get(wsKey)
         const relsMap = prefetchedRelsByWs.get(wsKey)
         const options: LinkImportedOptions | undefined =

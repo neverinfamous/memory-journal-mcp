@@ -126,7 +126,10 @@ export function getActiveEntryCount(
         query += ' AND workspace_id = ?'
         params.push(scopeId)
     }
-    if (typeof projectNumber === 'number' && Number.isFinite(projectNumber)) {
+    if (projectNumber !== undefined) {
+        if (!Number.isSafeInteger(projectNumber) || projectNumber <= 0) {
+            return 0
+        }
         query += ' AND project_number = ?'
         params.push(projectNumber)
     }
@@ -150,7 +153,10 @@ export function getDeletedEntries(
         scopeFilter += ' AND workspace_id = ?'
         scopeParams.push(scopeId)
     }
-    if (typeof options?.projectNumber === 'number') {
+    if (options?.projectNumber !== undefined) {
+        if (!Number.isSafeInteger(options.projectNumber) || options.projectNumber <= 0) {
+            return { entries: [], count: 0 }
+        }
         scopeFilter += ' AND project_number = ?'
         scopeParams.push(options.projectNumber)
     }

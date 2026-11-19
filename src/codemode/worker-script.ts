@@ -41,11 +41,13 @@ const hardeningError =
 
 let activeExecutionId: number | null = null
 let resultSent = false
+let activeAbortCleanup: ((reason: string) => void) | null = null
 
 function postExecutionFailure(reason: unknown): void {
     if (activeExecutionId === null || resultSent) return
     const id = activeExecutionId
     resultSent = true
+    activeAbortCleanup?.('Sandbox execution aborted due to unhandled async error')
     const error = reason instanceof Error ? reason : new Error(String(reason))
     const result: SandboxResult = {
         success: false,
@@ -53,7 +55,8 @@ function postExecutionFailure(reason: unknown): void {
         metrics: { wallTimeMs: 0, cpuTimeMs: 0, memoryUsedMb: 0 },
         ...(error.stack !== undefined ? { stack: error.stack } : {}),
     }
-    parentPort?.postMessage({ type: 'RESULT', id, result })
+    // [H1] Mark async-error failures fatal so WorkerSandbox evicts any still-running background timers/microtasks.
+    parentPort?.postMessage({ type: 'RESULT', id, result, fatal: true })
 }
 
 process.on('unhandledRejection', (reason: unknown) => {
@@ -63,38 +66,69 @@ process.on('uncaughtException', (err: unknown) => {
     postExecutionFailure(err)
 })
 
-let rpcPort: MessagePort | null = null
-let rpcIdCounter = 0
-const pendingRpcRequests = new Map<
-    number,
-    { resolve: (value: unknown) => void; reject: (reason: Error) => void }
->()
-
-function rejectPendingRpcRequests(message: string): void {
-    for (const pending of pendingRpcRequests.values()) {
-        pending.reject(new Error(message))
-    }
-    pendingRpcRequests.clear()
+interface ExecutionRpcBridge {
+    sendRpcRequest: (payload: Omit<RpcRequest, 'id'>) => Promise<unknown>
+    rpcCall: (group: string, method: string, args: unknown[]) => Promise<unknown>
+    closeBridge: (reason: string) => void
 }
 
-function sendRpcRequest(payload: Omit<RpcRequest, 'id'>): Promise<unknown> {
-    return new Promise((resolve, reject) => {
-        if (!rpcPort) {
-            reject(new Error('RPC port not initialized'))
-            return
+function createExecutionRpcBridge(port: MessagePort): ExecutionRpcBridge {
+    let closed = false
+    let rpcIdCounter = 0
+    const pendingRpcRequests = new Map<
+        number,
+        { resolve: (value: unknown) => void; reject: (reason: Error) => void }
+    >()
+
+    const rejectAll = (message: string): void => {
+        for (const pending of pendingRpcRequests.values()) {
+            pending.reject(new Error(message))
         }
-        const id = ++rpcIdCounter
-        pendingRpcRequests.set(id, { resolve, reject })
-        rpcPort.postMessage({ id, ...payload })
-    })
-}
+        pendingRpcRequests.clear()
+    }
 
-const rpcCall = createScopedRpcCall(sendRpcRequest)
+    port.on('message', (response: RpcResponse) => {
+        const pending = pendingRpcRequests.get(response.id)
+        if (pending !== undefined) {
+            pendingRpcRequests.delete(response.id)
+            if (response.error !== undefined) pending.reject(new Error(response.error))
+            else pending.resolve(response.result)
+        }
+    })
+
+    const sendRpcRequest = (payload: Omit<RpcRequest, 'id'>): Promise<unknown> =>
+        new Promise((resolve, reject) => {
+            if (closed) {
+                reject(new Error('Sandbox execution has already ended'))
+                return
+            }
+            const id = ++rpcIdCounter
+            pendingRpcRequests.set(id, { resolve, reject })
+            try {
+                port.postMessage({ id, ...payload })
+            } catch (err: unknown) {
+                pendingRpcRequests.delete(id)
+                reject(err instanceof Error ? err : new Error(String(err)))
+            }
+        })
+
+    return {
+        sendRpcRequest,
+        rpcCall: createScopedRpcCall(sendRpcRequest),
+        closeBridge: (reason: string): void => {
+            if (closed) return
+            closed = true
+            rejectAll(reason)
+            port.close()
+        },
+    }
+}
 
 function createVmExecutionContext(options: VmExecutionContextOptions): vm.Context {
     const {
-        rpcFn, methodList, schemaList, timeoutMs, maxResultSize, contextObj, readonlyMode, dryRunMode,
-        useTestDbMode, pinnedWorkspaceRaw, pinnedProjectRaw, projectRegistryRaw, activeTimers,
+        rpcFn, sendRpcRequest, methodList, schemaList, timeoutMs, maxResultSize, contextObj,
+        readonlyMode, dryRunMode, useTestDbMode, pinnedWorkspaceRaw, pinnedProjectRaw,
+        projectRegistryRaw, activeTimers,
     } = options
     const mjApi = buildApiProxy(rpcFn, methodList, schemaList, readonlyMode, contextObj)
     Object.freeze(mjApi)
@@ -158,6 +192,7 @@ function extractScopeContext(contextObj?: Record<string, unknown>): {
 
 async function executeCode(
     code: string,
+    bridge: ExecutionRpcBridge,
     methodList: Record<string, string[]>,
     schemaList: Record<string, Record<string, string>> | undefined,
     timeoutMs: number,
@@ -165,20 +200,21 @@ async function executeCode(
     readonlyMode?: boolean,
     maxResultSize?: number,
     dryRunMode?: boolean,
-    useTestDbMode?: boolean
+    useTestDbMode?: boolean,
+    activeTimers = new Set<NodeJS.Timeout>()
 ): Promise<SandboxResult> {
     const startCpu = process.cpuUsage()
     const startTime = performance.now()
     if (hardeningError !== null) {
         return { success: false, error: hardeningError, metrics: { wallTimeMs: 0, cpuTimeMs: 0, memoryUsedMb: 0 } }
     }
-    const activeTimers = new Set<NodeJS.Timeout>()
     const { registryPayload, pinnedWorkspaceRaw, pinnedProjectRaw } = extractScopeContext(contextObj)
     setActiveProjectRegistry(readProjectRegistryPayload(registryPayload))
 
     try {
         const context = createVmExecutionContext({
-            rpcFn: rpcCall,
+            rpcFn: bridge.rpcCall,
+            sendRpcRequest: bridge.sendRpcRequest,
             methodList,
             schemaList,
             timeoutMs,
@@ -228,24 +264,20 @@ parentPort?.on('message', (msg: unknown) => {
             useTestDbMode,
         } = msg
         const { methodList, schemaList } = resolveWorkerMetadata(msg)
-        rpcPort = newRpcPort
-        rpcIdCounter = 0
-        rejectPendingRpcRequests('Sandbox execution ended before the call completed')
+        const bridge = createExecutionRpcBridge(newRpcPort)
+        const activeTimers = new Set<NodeJS.Timeout>()
         activeExecutionId = id
         resultSent = false
-
-        rpcPort?.on('message', (response: RpcResponse) => {
-            const pending = pendingRpcRequests.get(response.id)
-            if (pending !== undefined) {
-                pendingRpcRequests.delete(response.id)
-                if (response.error !== undefined) pending.reject(new Error(response.error))
-                else pending.resolve(response.result)
-            }
-        })
+        activeAbortCleanup = (reason: string): void => {
+            for (const handle of activeTimers) clearTimeout(handle)
+            activeTimers.clear()
+            bridge.closeBridge(reason)
+        }
 
         try {
             const result = await executeCode(
                 code,
+                bridge,
                 methodList,
                 schemaList,
                 timeoutMs ?? 30000,
@@ -253,20 +285,22 @@ parentPort?.on('message', (msg: unknown) => {
                 readonlyMode,
                 maxResultSize,
                 dryRunMode,
-                useTestDbMode
+                useTestDbMode,
+                activeTimers
             )
             serializeAndEnforceEgress(result, maxResultSize)
-            if (!resultSent) {
+            if (!resultSent && activeExecutionId === id) {
                 parentPort?.postMessage({ type: 'RESULT', id, result })
                 resultSent = true
             }
         } catch (err: unknown) {
             postExecutionFailure(err)
         } finally {
-            rejectPendingRpcRequests('Sandbox execution ended before the call completed')
-            rpcPort?.close()
-            rpcPort = null
-            activeExecutionId = null
+            bridge.closeBridge('Sandbox execution ended before the call completed')
+            if (activeExecutionId === id) {
+                activeExecutionId = null
+                activeAbortCleanup = null
+            }
         }
     })()
 })

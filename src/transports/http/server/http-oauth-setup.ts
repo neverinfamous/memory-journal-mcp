@@ -108,7 +108,7 @@ export async function installHttpAuthentication(
             createOAuthMiddleware({
                 tokenValidator,
                 resourceServer,
-                publicPaths: ['/health', '/', '/.well-known/*'],
+                publicPaths: ['/health'],
             })
         )
 

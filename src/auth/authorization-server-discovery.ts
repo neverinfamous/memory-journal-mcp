@@ -16,6 +16,7 @@ import {
     resolveSafePublicDnsAddresses,
     type ResolvedPublicAddress,
 } from './jwks-ssrf-guard.js'
+import { isPrivateOrLoopbackAddress } from '../utils/network-safety.js'
 import * as https from 'node:https'
 import type { IncomingMessage } from 'node:http'
 
@@ -261,6 +262,34 @@ export class AuthorizationServerDiscovery {
     /**
      * Validate required metadata fields per RFC 8414
      */
+    private assertSafeHttpsMetadataEndpoint(rawUrl: string, fieldName: string): void {
+        let parsed: URL
+        try {
+            parsed = new URL(rawUrl)
+        } catch {
+            throw new ConfigurationError(`Invalid ${fieldName} URL in authorization server metadata`)
+        }
+        if (parsed.protocol !== 'https:') {
+            throw new ConfigurationError(`Metadata field '${fieldName}' must use https:`)
+        }
+        if (parsed.username !== '' || parsed.password !== '') {
+            throw new ConfigurationError(`Metadata field '${fieldName}' must not contain credentials`)
+        }
+        const normalizedHost = parsed.hostname.replace(/^\[|\]$/g, '').replace(/\.+$/, '').toLowerCase()
+        if (
+            normalizedHost === '' ||
+            normalizedHost === 'localhost' ||
+            normalizedHost.endsWith('.localhost') ||
+            normalizedHost.endsWith('.local') ||
+            normalizedHost.endsWith('.internal') ||
+            isPrivateOrLoopbackAddress(normalizedHost)
+        ) {
+            throw new ConfigurationError(
+                `Metadata field '${fieldName}' resolves to restricted network address: ${normalizedHost}`
+            )
+        }
+    }
+
     private validateMetadata(metadata: AuthorizationServerMetadata): void {
         if (!metadata.issuer) {
             throw new ConfigurationError('Missing required field: issuer')
@@ -268,6 +297,21 @@ export class AuthorizationServerDiscovery {
 
         if (!metadata.token_endpoint) {
             throw new ConfigurationError('Missing required field: token_endpoint')
+        }
+
+        this.assertSafeHttpsMetadataEndpoint(metadata.issuer, 'issuer')
+        this.assertSafeHttpsMetadataEndpoint(metadata.token_endpoint, 'token_endpoint')
+        const optionalUrls: [string, string | undefined][] = [
+            ['authorization_endpoint', metadata.authorization_endpoint],
+            ['jwks_uri', metadata.jwks_uri],
+            ['registration_endpoint', metadata.registration_endpoint],
+            ['revocation_endpoint', metadata.revocation_endpoint],
+            ['introspection_endpoint', metadata.introspection_endpoint],
+        ]
+        for (const [field, urlVal] of optionalUrls) {
+            if (urlVal !== undefined) {
+                this.assertSafeHttpsMetadataEndpoint(urlVal, field)
+            }
         }
 
         // Validate issuer matches the expected URL

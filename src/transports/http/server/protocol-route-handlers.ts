@@ -76,7 +76,7 @@ export function assertHttpBindIsSafe(
         throw new Error(errorMsg)
     }
 
-    if (authToken === 'change_this_to_a_secure_token_for_production') {
+    if (authToken?.trim() === 'change_this_to_a_secure_token_for_production') {
         const errorMsg = `FATAL: Default auth token detected. You MUST change MCP_AUTH_TOKEN to a secure, cryptographically random value for production.`
         logError(errorMsg)
         throw new Error(errorMsg)
@@ -215,6 +215,16 @@ export function createStatefulGetHandler(
     }
 }
 
+function hasUnparsedNonEmptyBody(req: Request): boolean {
+    if (req.body !== undefined) return false
+    if (req.headers['transfer-encoding'] !== undefined) return true
+    const contentLength = req.headers['content-length']
+    if (typeof contentLength === 'string' && contentLength.trim() !== '' && contentLength.trim() !== '0') {
+        return true
+    }
+    return false
+}
+
 export function createPostHandler(
     state: McpRouteState,
     createSessionAndHandle: SessionCreator,
@@ -223,6 +233,17 @@ export function createPostHandler(
 ): RouteHandler {
     const { config, sseTransports } = state
     return (req, res, next) => {
+        if (hasUnparsedNonEmptyBody(req)) {
+            res.status(415).json({
+                jsonrpc: '2.0',
+                error: {
+                    code: -32000,
+                    message: 'Unsupported Media Type: Expected application/json request body',
+                },
+                id: null,
+            })
+            return
+        }
         const sid = extractSessionId(req)
 
         /* codeql[js/user-controlled-bypass] */

@@ -7,6 +7,7 @@
 import { z } from 'zod'
 import type { ToolDefinition, ToolContext } from '../../../types/index.js'
 import { formatHandlerError } from '../../../utils/error-helpers.js'
+import { sanitizeAuthor } from '../../../utils/security-utils.js'
 import { TEAM_DB_ERROR_RESPONSE, triggerTeamNotifications } from './helpers.js'
 import { getCallerIdentity } from './rbac.js'
 import { ErrorFieldsMixin } from '../error-fields-mixin.js'
@@ -59,13 +60,31 @@ const preprocessMember = (val: unknown): unknown => {
     return val;
 };
 
+function sanitizeMemberRecord<
+    T extends { author: string; displayName?: string | null; addedBy?: string | null },
+>(member: T): T {
+    return {
+        ...member,
+        author: sanitizeAuthor(member.author),
+        ...(member.displayName !== undefined
+            ? {
+                  displayName:
+                      member.displayName !== null ? sanitizeAuthor(member.displayName) : null,
+              }
+            : {}),
+        ...(member.addedBy !== undefined
+            ? { addedBy: member.addedBy !== null ? sanitizeAuthor(member.addedBy) : null }
+            : {}),
+    }
+}
+
 const TeamAddMemberSchema = z.preprocess(
     preprocessMember,
     z
         .object({
-            author: z.string().min(1).describe('The author ID/username to add'),
+            author: z.string().trim().min(1).max(100).describe('The author ID/username to add'),
             role: z.enum(['admin', 'member', 'viewer']).describe('The role to assign'),
-            display_name: z.string().optional().describe('Optional display name'),
+            display_name: z.string().trim().max(100).optional().describe('Optional display name'),
         })
         .strict()
 )
@@ -85,7 +104,7 @@ const TeamRemoveMemberSchema = z.preprocess(
     preprocessMember,
     z
         .object({
-            author: z.string().min(1).describe('The author ID/username to remove'),
+            author: z.string().trim().min(1).max(100).describe('The author ID/username to remove'),
         })
         .strict()
 )
@@ -103,7 +122,7 @@ const TeamUpdateMemberRoleSchema = z.preprocess(
     preprocessMember,
     z
         .object({
-            author: z.string().min(1).describe('The author ID/username to update'),
+            author: z.string().trim().min(1).max(100).describe('The author ID/username to update'),
             role: z.enum(['admin', 'member', 'viewer']).describe('The new role to assign'),
         })
         .strict()
@@ -123,7 +142,7 @@ const TeamGetMemberSchema = z.preprocess(
     preprocessMember,
     z
         .object({
-            author: z.string().min(1).describe('The author ID/username to fetch'),
+            author: z.string().trim().min(1).max(100).describe('The author ID/username to fetch'),
         })
         .strict()
 )
@@ -196,7 +215,8 @@ export function getTeamMemberTools(context: ToolContext): ToolDefinition[] {
 
                     const member = teamDb.addTeamMember(input.author, input.role, caller, input.display_name)
                     triggerTeamNotifications(context)
-                    return { success: true, member, message: `Added ${input.author} as ${input.role}` }
+                    const safeMember = sanitizeMemberRecord(member)
+                    return { success: true, member: safeMember, message: `Added ${safeMember.author} as ${safeMember.role}` }
                 } catch (err) {
                     return formatHandlerError(err)
                 }
@@ -289,7 +309,7 @@ export function getTeamMemberTools(context: ToolContext): ToolDefinition[] {
                         return { success: false, error: `Member ${author} not found`, code: 'RESOURCE_NOT_FOUND' }
                     }
                     triggerTeamNotifications(context)
-                    return { success: true, member: updated }
+                    return { success: true, member: sanitizeMemberRecord(updated) }
                 } catch (err) {
                     return formatHandlerError(err)
                 }
@@ -318,7 +338,7 @@ export function getTeamMemberTools(context: ToolContext): ToolDefinition[] {
                     if (!teamDb) return { ...TEAM_DB_ERROR_RESPONSE }
                     if (teamDb.listTeamMembers === undefined) return { success: false, error: 'Unsupported' }
 
-                    const members = teamDb.listTeamMembers()
+                    const members = teamDb.listTeamMembers().map(sanitizeMemberRecord)
                     return { success: true, members, count: members.length }
                 } catch (err) {
                     return formatHandlerError(err)
@@ -352,7 +372,7 @@ export function getTeamMemberTools(context: ToolContext): ToolDefinition[] {
                     if (!member) {
                         return { success: false, error: `Member ${author} not found`, code: 'RESOURCE_NOT_FOUND' }
                     }
-                    return { success: true, member }
+                    return { success: true, member: sanitizeMemberRecord(member) }
                 } catch (err) {
                     return formatHandlerError(err)
                 }

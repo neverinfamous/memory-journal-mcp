@@ -35,28 +35,18 @@ import {
     syncLiveHandlerConfig,
 } from './register-tools-helpers.js'
 
-/**
- * Default maximum number of array elements and object properties allowed across a
- * single tool input payload before Zod validation runs.
- */
-export const DEFAULT_MAX_TOOL_INPUT_ELEMENTS = 25_000
+import {
+    DEFAULT_MAX_TOOL_INPUT_ELEMENTS,
+    resolveEffectiveMaxToolInputElements,
+} from '../../../utils/tool-input-bounds.js'
+
+export { DEFAULT_MAX_TOOL_INPUT_ELEMENTS, resolveEffectiveMaxToolInputElements }
 
 function readOnlyHintOf(tool: { annotations?: { readOnlyHint?: boolean } }): boolean | undefined {
     if (tool.annotations === undefined) {
         return undefined
     }
     return tool.annotations.readOnlyHint
-}
-
-/**
- * Resolves the configured `maxToolInputElements` option into the value passed to `McpServer`.
- * - `undefined` -> `DEFAULT_MAX_TOOL_INPUT_ELEMENTS` (25,000)
- * - `0` or `Infinity` -> `Infinity` (disables the SDK's element limit check)
- * - positive number -> passed through as-is
- */
-export function resolveEffectiveMaxToolInputElements(configured: number | undefined): number {
-    if (configured === undefined) return DEFAULT_MAX_TOOL_INPUT_ELEMENTS
-    return configured === 0 || configured === Infinity ? Infinity : configured
 }
 
 interface ModernToolConfig {

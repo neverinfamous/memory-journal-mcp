@@ -6,7 +6,7 @@
  * Automatically sanitizes error fields to prevent token leakage.
  */
 
-import { sanitizeErrorForLogging } from './security-utils.js'
+import { sanitizeErrorForLogging, SENSITIVE_KEY_RE } from './security-utils.js'
 
 type LogLevel = 'debug' | 'info' | 'notice' | 'warning' | 'error' | 'critical'
 
@@ -41,7 +41,10 @@ function sanitizeLogValue(value: unknown, seen = new WeakSet(), depth = 0): unkn
         const out: Record<string, unknown> = {}
         for (const [k, v] of Object.entries(value)) {
             if (k === '__proto__' || k === 'constructor' || k === 'prototype') continue
-            out[k] = sanitizeLogValue(v, seen, depth + 1)
+            out[k] =
+                SENSITIVE_KEY_RE.test(k) && v !== undefined && v !== null && v !== ''
+                    ? '[REDACTED]'
+                    : sanitizeLogValue(v, seen, depth + 1)
         }
         return out
     } finally {
@@ -83,7 +86,11 @@ class Logger {
         const sanitizedExtras: Record<string, unknown> = {}
         for (const [k, v] of Object.entries(extras)) {
             if (k === '__proto__' || k === 'constructor' || k === 'prototype') continue
-            sanitizedExtras[sanitizeErrorForLogging(k)] = sanitizeLogValue(v)
+            const safeKey = sanitizeErrorForLogging(k)
+            sanitizedExtras[safeKey] =
+                SENSITIVE_KEY_RE.test(k) && v !== undefined && v !== null && v !== ''
+                    ? '[REDACTED]'
+                    : sanitizeLogValue(v)
         }
 
         if (Object.keys(sanitizedExtras).length > 0) {

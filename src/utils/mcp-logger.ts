@@ -7,7 +7,7 @@
  */
 
 import { type McpServer } from '@modelcontextprotocol/server'
-import { sanitizeErrorForLogging } from './security-utils.js'
+import { sanitizeErrorForLogging, SENSITIVE_KEY_RE } from './security-utils.js'
 import { onLogLevelChange } from './logger.js'
 
 /**
@@ -116,6 +116,12 @@ export class McpLogger {
         depth = 0,
         seen = new WeakSet()
     ): unknown {
+        if (value instanceof Error) {
+            return sanitizeErrorForLogging(`${value.name}: ${value.message}`).replace(
+                /[\r\n]+/g,
+                ' '
+            )
+        }
         if (typeof value === 'string') {
             return sanitizeErrorForLogging(value).replace(/[\r\n]+/g, ' ')
         }
@@ -139,7 +145,11 @@ export class McpLogger {
             const sanitized: Record<string, unknown> = {}
             Object.setPrototypeOf(sanitized, null)
             for (const [k, v] of Object.entries(value)) {
-                sanitized[k] = this.sanitizeValue(v, depth + 1, seen)
+                if (k === '__proto__' || k === 'constructor' || k === 'prototype') continue
+                sanitized[k] =
+                    SENSITIVE_KEY_RE.test(k) && v !== undefined && v !== null && v !== ''
+                        ? '[REDACTED]'
+                        : this.sanitizeValue(v, depth + 1, seen)
             }
             return sanitized
         } finally {

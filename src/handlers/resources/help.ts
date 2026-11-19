@@ -21,6 +21,7 @@ import {
     type ResourceContext,
     type ResourceResult,
 } from './shared.js'
+import { hasCodemodeFullAccess } from './core/instructions.js'
 import type { getTools } from '../../handlers/tools/index.js'
 import { ProtocolError, ProtocolErrorCode } from '@modelcontextprotocol/server'
 import {
@@ -60,16 +61,15 @@ function filterVisibleHelpTools(
     rawTools: MinimalToolDef[],
     context: ResourceContext
 ): MinimalToolDef[] {
-    // Filter out tools disabled by --tool-filter, UNLESS codemode is enabled.
-    // Code Mode exposes the full API surface area via the sandbox,
-    // while readonly meta-filter always restricts mutating tools.
-    const hasCodeMode = context.filterConfig?.enabledTools.has('mj_execute_code') ?? false
+    const codemodeFull =
+        (context.filterConfig?.enabledTools.has('mj_execute_code') ?? false) &&
+        hasCodemodeFullAccess(context)
     const filterRaw = context.filterConfig?.raw
     return rawTools.filter((t) => {
         if (!isToolVisibleForFilter(t.name, t.annotations?.readOnlyHint, filterRaw)) {
             return false
         }
-        if (!context.filterConfig || hasCodeMode) return true
+        if (!context.filterConfig || codemodeFull) return true
         return context.filterConfig.enabledTools.has(t.name)
     })
 }

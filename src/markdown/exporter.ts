@@ -290,7 +290,9 @@ async function prepareSafeExportDir(outputDir: string, allowedRoots: string[]): 
     }
 
     await mkdir(resolvedOutputDir, { recursive: true })
-    if (isInsideTmp(realpathSync.native(resolvedOutputDir))) {
+    const postMkdirReal = realpathSync.native(resolvedOutputDir)
+    assertSafeDirectoryPath(postMkdirReal, allowedRoots)
+    if (isInsideTmp(postMkdirReal)) {
         throw new Error('Refusing to export markdown files into the OS temporary directory')
     }
     return resolvedOutputDir

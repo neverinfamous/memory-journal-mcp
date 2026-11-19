@@ -8,7 +8,8 @@ import { timingSafeEqual, createHash } from 'node:crypto'
 import type { Request, Response } from 'express'
 import { logger } from '../../utils/logger.js'
 import { VERSION } from '../../version.js'
-import { isValidScope } from '../../auth/scopes.js'
+import { isValidScope, hasScope, SCOPES } from '../../auth/scopes.js'
+import { getAuthContext } from '../../auth/auth-context.js'
 import { getClientIp } from './security.js'
 import type { ServerRuntime } from '../../utils/maintenance-lock.js'
 import { formatPrometheusMetrics } from '../../observability/index.js'
@@ -42,8 +43,13 @@ export function handlePrometheusMetrics(runtime: ServerRuntime): (req: Request, 
         }
 
         try {
-            const metricsText = formatPrometheusMetrics(runtime.metrics)
+            const authCtx = getAuthContext()
+            const includeUserBreakdown =
+                authCtx !== undefined && hasScope(authCtx.scopes, SCOPES.AUDIT)
+            const metricsText = formatPrometheusMetrics(runtime.metrics, { includeUserBreakdown })
             res.set('Content-Type', 'text/plain; version=0.0.4; charset=utf-8')
+            res.set('Cache-Control', 'no-store')
+            res.set('X-Content-Type-Options', 'nosniff')
             res.status(200).send(metricsText)
         } catch (error) {
             logger.error('Failed to format Prometheus metrics', { module: 'HTTP', error })

@@ -117,6 +117,15 @@ async function tryJournalSearchFallback(
     query: string
 ): Promise<unknown> {
     if (context === undefined || query.trim() === '') return undefined
+    const filterConfig = context.config?.filterConfig
+    if (
+        filterConfig !== null &&
+        filterConfig !== undefined &&
+        !filterConfig.enabledTools.has('search_entries') &&
+        context.config?.codemodeInternalFullAccess !== true
+    ) {
+        return undefined
+    }
     const searchTool = findCachedOrFallbackTool(context, 'search_entries', getSearchTools)
     if (searchTool === undefined) return undefined
     try {

@@ -89,12 +89,16 @@ export async function fetchCommits(
         grep: input.query,
         ...(input.summary === true ? { summary: true } : {}),
     }
+    const refName = input.ref || 'HEAD'
+    if (refName.trim().startsWith('-')) {
+        throw new ValidationError('Invalid git ref: leading hyphen options are not allowed')
+    }
     const gitArgs = [
         'log',
-        ...buildGitBaseArgs(cliArgs, input.ref || 'HEAD'),
         '--name-status',
         '-z',
         `--format=${RECORD_SEPARATOR}%H${FIELD_SEPARATOR}%D${FIELD_SEPARATOR}%aN${FIELD_SEPARATOR}%aE${FIELD_SEPARATOR}%aI${FIELD_SEPARATOR}%cN${FIELD_SEPARATOR}%cE${FIELD_SEPARATOR}%cI${FIELD_SEPARATOR}%s${FIELD_SEPARATOR}%b${FIELD_SEPARATOR}%(trailers:unfold,only)${FIELD_SEPARATOR}%(trailers:unfold)${FIELD_SEPARATOR}%P`,
+        ...buildGitBaseArgs(cliArgs, refName),
     ]
 
     const batch = []

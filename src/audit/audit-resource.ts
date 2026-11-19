@@ -21,11 +21,8 @@ import type {
     ResourceResult,
 } from '../handlers/resources/shared.js'
 import { ASSISTANT_FOCUSED } from '../utils/resource-annotations.js'
-import {
-    isAlreadyInlineFencedUntrustedContent,
-    markUntrustedContentInline,
-    sanitizeErrorForLogging,
-} from '../utils/security-utils.js'
+import { sanitizeErrorForLogging } from '../utils/security-utils.js'
+import { sliceUntrustedInline } from '../handlers/resources/uri-and-fencing.js'
 import { ValidationError } from '../types/errors.js'
 import { parseCanonicalPositiveInt } from '../utils/safe-positive-int.js'
 import type { AuditLogger } from './audit-logger.js'
@@ -115,21 +112,17 @@ const CANONICAL_AUDIT_ID_RE =
 const AUDIT_ARG_SECRET_KEY_RE =
     /(?:token|secret|password|passwd|authorization|auth_header|api_key|apikey|encryption_key|webhook|private_key|client_secret)/i
 
-function fenceInlineIdempotent(value: string): string {
-    return isAlreadyInlineFencedUntrustedContent(value)
-        ? value
-        : markUntrustedContentInline(value)
-}
-
 function fenceNonCanonicalAuditId(value: unknown): string {
     if (typeof value !== 'string') return ''
     const clean = sanitizeErrorForLogging(value)
-    return CANONICAL_AUDIT_ID_RE.test(clean) ? clean : fenceInlineIdempotent(clean)
+    return CANONICAL_AUDIT_ID_RE.test(clean) && clean.length <= 256
+        ? clean
+        : sliceUntrustedInline(clean, 256, '...')
 }
 
 function sanitizeAuditArgNode(value: unknown, depth: number, seen: WeakSet<object>): unknown {
     if (typeof value === 'string') {
-        return fenceInlineIdempotent(sanitizeErrorForLogging(value))
+        return sliceUntrustedInline(sanitizeErrorForLogging(value), 2048, '...')
     }
     if (typeof value === 'bigint') return value.toString()
     if (value === null || typeof value !== 'object') return value
@@ -181,7 +174,7 @@ export function sanitizeAuditEntryForEgress(e: AuditEntry): AuditEntry {
     }
     if (typeof e.projectNumber === 'number') base.projectNumber = e.projectNumber
     if (typeof e.error === 'string') {
-        base.error = fenceInlineIdempotent(sanitizeErrorForLogging(e.error))
+        base.error = sliceUntrustedInline(sanitizeErrorForLogging(e.error), 2048, '...')
     }
     if (cleanArgs !== undefined) base.args = cleanArgs
     return base

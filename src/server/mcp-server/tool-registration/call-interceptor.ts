@@ -108,6 +108,38 @@ function buildToolNotFoundErrorPayload(
     }
 }
 
+function resolveBlockedShimResponse(
+    requestedTool: string,
+    matchingPrompt: PromptDefinition | undefined,
+    context: ServerContext
+): unknown {
+    const liveConfig = context.configManager.getConfig()
+    const activeFilter = liveConfig.toolFilterConfig
+    if (
+        activeFilter === null ||
+        activeFilter === undefined ||
+        !isAutonomousShimBlockedByFilter(
+            requestedTool,
+            matchingPrompt?.name,
+            activeFilter,
+            liveConfig.codemodeInternalFullAccess === true
+        )
+    ) {
+        return undefined
+    }
+    return formatTokenEstimatedError(
+        {
+            success: false,
+            error: `Tool '${requestedTool}' is disabled by the active --tool-filter configuration.`,
+            code: 'TOOL_DISABLED',
+            category: 'authorization',
+            suggestion: 'Update the active tool filter or use an enabled tool.',
+            recoverable: false,
+        },
+        true
+    )
+}
+
 /** Healing fallbacks and a structured TOOL_NOT_FOUND response for tools that are not registered. */
 async function handleUnknownTool(
     requestedTool: string,
@@ -131,24 +163,8 @@ async function handleUnknownTool(
     if (healingEnabled) {
         const auditTargetName = resolveKnownFallbackAuditName(requestedTool, matchingPrompt)
         if (auditTargetName !== undefined) {
-            const activeFilter = context.configManager.getConfig().toolFilterConfig
-            if (
-                activeFilter !== null &&
-                activeFilter !== undefined &&
-                isAutonomousShimBlockedByFilter(requestedTool, matchingPrompt?.name, activeFilter)
-            ) {
-                return formatTokenEstimatedError(
-                    {
-                        success: false,
-                        error: `Tool '${requestedTool}' is disabled by the active --tool-filter configuration.`,
-                        code: 'TOOL_DISABLED',
-                        category: 'authorization',
-                        suggestion: 'Update the active tool filter or use an enabled tool.',
-                        recoverable: false,
-                    },
-                    true
-                )
-            }
+            const blockedResponse = resolveBlockedShimResponse(requestedTool, matchingPrompt, context)
+            if (blockedResponse !== undefined) return blockedResponse
             const accessTargets = resolvePromptOrResourceAccessTargets(
                 requestedTool,
                 toolArgs,

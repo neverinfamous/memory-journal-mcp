@@ -11,6 +11,8 @@ import { z } from 'zod'
 import { relaxedNumber, StrictProjectNumberSchema } from '../schemas.js'
 import {
     githubScopeValidationError,
+    isValidGitHubRepoSlug,
+    isValidGitHubSlugPart,
     parseRepoSlug,
     resolveGitHubRegistryScope,
     resolveProjectNumber,
@@ -256,6 +258,10 @@ export async function resolveOwner(
         }
     }
 
+    if (!isValidGitHubSlugPart(owner) || (repo !== undefined && !isValidGitHubRepoSlug(repo))) {
+        return githubScopeValidationError('Invalid GitHub owner or repository slug.')
+    }
+
     return { owner, detectedOwner, repo, github: toolGithub }
 }
 
@@ -328,6 +334,10 @@ export async function resolveOwnerRepo(
                     : {}),
             },
         }
+    }
+
+    if (!isValidGitHubSlugPart(owner) || !isValidGitHubSlugPart(repo)) {
+        return githubScopeValidationError('Invalid GitHub owner or repository slug.')
     }
 
     return { owner, repo, detectedOwner, detectedRepo, github: toolGithub }

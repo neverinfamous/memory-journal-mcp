@@ -23,9 +23,12 @@ export function getAuthorStatistics(
     projectNumber?: number
 ): { author: string; count: number }[] {
     try {
+        if (projectNumber !== undefined && (!Number.isSafeInteger(projectNumber) || projectNumber <= 0)) {
+            return []
+        }
         const scopeId = effectiveWorkspace(workspaceId)
         const wsFilter = scopeId !== '*' ? ' AND mj.workspace_id = ?' : ''
-        const hasProject = typeof projectNumber === 'number' && Number.isFinite(projectNumber)
+        const hasProject = projectNumber !== undefined
         const projFilter = hasProject ? ' AND mj.project_number = ?' : ''
         const params: unknown[] = [
             ...(scopeId !== '*' ? [scopeId] : []),
@@ -109,8 +112,12 @@ function scopeClause(alias: string, scope: CollabScope): { sql: string; params: 
         params.push(scope.workspaceId)
     }
     if (scope.projectNumber !== undefined) {
-        sql += ` AND ${alias}.project_number = ?`
-        params.push(scope.projectNumber)
+        if (!Number.isSafeInteger(scope.projectNumber) || scope.projectNumber <= 0) {
+            sql += ' AND 1 = 0'
+        } else {
+            sql += ` AND ${alias}.project_number = ?`
+            params.push(scope.projectNumber)
+        }
     }
     return { sql, params }
 }

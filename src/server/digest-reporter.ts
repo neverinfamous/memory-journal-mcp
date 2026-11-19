@@ -5,6 +5,7 @@ import { isIP } from 'node:net'
 import type { DigestSnapshot } from '../database/sqlite-adapter/entries/digest.js'
 import { logger } from '../utils/logger.js'
 import { isPrivateOrLoopbackAddress } from '../utils/network-safety.js'
+import { markUntrustedContentInline } from '../utils/security-utils.js'
 
 const NATIVE_FETCH = globalThis.fetch
 
@@ -126,7 +127,9 @@ export function formatDigestReport(snapshot: DigestSnapshot, serverVersion: stri
     if (snapshot.topImportanceEntries.length > 0) {
         lines.push(`## Top Importance Entries`)
         for (const entry of snapshot.topImportanceEntries) {
-            const preview = entry.preview.replace(/\n/g, ' ').trim()
+            const preview = markUntrustedContentInline(
+                entry.preview.replace(/\r?\n/g, ' ').trim()
+            )
             lines.push(`- **#${String(entry.id)}** [Score: ${String(entry.score)}]: ${preview}...`)
         }
     }

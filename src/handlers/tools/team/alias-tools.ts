@@ -2,6 +2,7 @@ import { ValidationError, ResourceNotFoundError } from '../../../types/errors.js
 import type { ToolDefinition, ToolContext } from '../../../types/index.js'
 import { TEAM_DB_ERROR_RESPONSE, triggerTeamNotifications, resolveTeamProjectNumber } from './helpers.js'
 import { formatHandlerError } from '../../../utils/error-helpers.js'
+import { sanitizeAuthor } from '../../../utils/security-utils.js'
 import { getCallerIdentity } from './rbac.js'
 import { resolveWorkspaceId } from '../../../utils/workspace-resolver.js'
 import { resolveWriteWorkspaceId } from '../write-workspace.js'
@@ -44,6 +45,19 @@ function scopedWriteWorkspace(
     return resolveWriteWorkspaceId(workspaceId, projectNumber, context.config)
 }
 
+function sanitizeAliasRecord<
+    T extends { alias: string; canonicalAuthor: string; createdBy?: string | null },
+>(record: T): T {
+    return {
+        ...record,
+        alias: sanitizeAuthor(record.alias),
+        canonicalAuthor: sanitizeAuthor(record.canonicalAuthor),
+        ...(record.createdBy !== undefined
+            ? { createdBy: record.createdBy !== null ? sanitizeAuthor(record.createdBy) : null }
+            : {}),
+    }
+}
+
 function handleAddAuthorAlias(context: ToolContext) {
     return (params: unknown) => {
         try {
@@ -68,7 +82,7 @@ function handleAddAuthorAlias(context: ToolContext) {
 
             return {
                 success: true,
-                alias: createdAlias,
+                alias: sanitizeAliasRecord(createdAlias),
             }
         } catch (error) {
             return formatHandlerError(error)
@@ -114,7 +128,7 @@ function handleListAuthorAliases(context: ToolContext) {
 
             return {
                 success: true,
-                aliases,
+                aliases: aliases.map(sanitizeAliasRecord),
             }
         } catch (error) {
             return formatHandlerError(error)
@@ -139,8 +153,8 @@ function handleResolveAuthor(context: ToolContext) {
 
             return {
                 success: true,
-                original_author: author,
-                canonical_author: resolved,
+                original_author: sanitizeAuthor(author),
+                canonical_author: sanitizeAuthor(resolved),
                 is_aliased: resolved !== author,
             }
         } catch (error) {
@@ -187,7 +201,7 @@ function handleConsolidateAuthors(context: ToolContext) {
             return {
                 success: true,
                 updated_count: updatedCount,
-                canonical_author,
+                canonical_author: sanitizeAuthor(canonical_author),
             }
         } catch (error) {
             return formatHandlerError(error)

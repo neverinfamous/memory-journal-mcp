@@ -289,9 +289,11 @@ export function resolveExecutionPayload(
 
     if (executionCode === undefined || executionCode.trim() === '') {
         if (!healingEnabled) return validationFailure('Missing required parameter: code')
-        executionCode = recoverFromContextField(
+        const recovered = recoverFromContextField(
             input.context ?? (isRecord(params) ? params['context'] : undefined)
         )
+        if (typeof recovered === 'object') return recovered
+        executionCode = recovered
         if (executionCode === undefined || executionCode.trim() === '') {
             return buildActiveSandboxStatusResponse(start)
         }
@@ -300,28 +302,68 @@ export function resolveExecutionPayload(
     return { executionCode }
 }
 
-function recoverFromContextField(ctxVal: unknown): string | undefined {
-    if (typeof ctxVal === 'string' && ctxVal.trim().length > 0) return ctxVal
+const MAX_RECOVERED_CONTEXT_CODE_BYTES = 50 * 1024
+
+function oversizedContextFailure(): { earlyReturn: Record<string, unknown> } {
+    return validationFailure(
+        `Recovered context code exceeds maximum length of ${String(MAX_RECOVERED_CONTEXT_CODE_BYTES)} bytes.`
+    )
+}
+
+function recoverFromContextField(
+    ctxVal: unknown
+): string | { earlyReturn: Record<string, unknown> } | undefined {
+    if (typeof ctxVal === 'string' && ctxVal.trim().length > 0) {
+        return Buffer.byteLength(ctxVal, 'utf-8') <= MAX_RECOVERED_CONTEXT_CODE_BYTES
+            ? ctxVal
+            : oversizedContextFailure()
+    }
     if (isRecord(ctxVal)) {
-        if (typeof ctxVal['code'] === 'string' && ctxVal['code'].trim().length > 0) return ctxVal['code']
-        if (typeof ctxVal['script'] === 'string' && ctxVal['script'].trim().length > 0) return ctxVal['script']
+        if (typeof ctxVal['code'] === 'string' && ctxVal['code'].trim().length > 0) {
+            return Buffer.byteLength(ctxVal['code'], 'utf-8') <= MAX_RECOVERED_CONTEXT_CODE_BYTES
+                ? ctxVal['code']
+                : oversizedContextFailure()
+        }
+        if (typeof ctxVal['script'] === 'string' && ctxVal['script'].trim().length > 0) {
+            return Buffer.byteLength(ctxVal['script'], 'utf-8') <= MAX_RECOVERED_CONTEXT_CODE_BYTES
+                ? ctxVal['script']
+                : oversizedContextFailure()
+        }
         const wsVal = readWorkspaceField(ctxVal, {})
         const projVal = parseProjectNumberField(ctxVal, {})
         if (typeof ctxVal['query'] === 'string' && ctxVal['query'].trim().length > 0) {
+            if (Buffer.byteLength(ctxVal['query'], 'utf-8') > MAX_RECOVERED_CONTEXT_CODE_BYTES) {
+                return oversizedContextFailure()
+            }
             const searchPayload: Record<string, unknown> = { query: ctxVal['query'] }
             if (wsVal !== undefined) searchPayload['workspace_id'] = wsVal
             if (projVal !== undefined) searchPayload['project_number'] = projVal
-            return `return await mj.searchEntries(${JSON.stringify(searchPayload)});`
+            const synthesized = `return await mj.searchEntries(${JSON.stringify(searchPayload)});`
+            return Buffer.byteLength(synthesized, 'utf-8') <= MAX_RECOVERED_CONTEXT_CODE_BYTES
+                ? synthesized
+                : oversizedContextFailure()
         }
-        if (typeof ctxVal['content'] === 'string' || typeof ctxVal['instructions'] === 'string') {
+        const rawBody =
+            typeof ctxVal['content'] === 'string'
+                ? ctxVal['content']
+                : typeof ctxVal['instructions'] === 'string'
+                  ? ctxVal['instructions']
+                  : undefined
+        if (rawBody !== undefined) {
+            if (Buffer.byteLength(rawBody, 'utf-8') > MAX_RECOVERED_CONTEXT_CODE_BYTES) {
+                return oversizedContextFailure()
+            }
             const entryPayload: Record<string, unknown> = {
                 title: typeof ctxVal['title'] === 'string' ? ctxVal['title'] : 'Journal Entry',
-                content: typeof ctxVal['content'] === 'string' ? ctxVal['content'] : ctxVal['instructions'],
+                content: rawBody,
                 entry_type: typeof ctxVal['type'] === 'string' ? ctxVal['type'] : 'technical_note',
             }
             if (wsVal !== undefined) entryPayload['workspace_id'] = wsVal
             if (projVal !== undefined) entryPayload['project_number'] = projVal
-            return `return await mj.createEntry(${JSON.stringify(entryPayload)});`
+            const synthesized = `return await mj.createEntry(${JSON.stringify(entryPayload)});`
+            return Buffer.byteLength(synthesized, 'utf-8') <= MAX_RECOVERED_CONTEXT_CODE_BYTES
+                ? synthesized
+                : oversizedContextFailure()
         }
     }
     return undefined

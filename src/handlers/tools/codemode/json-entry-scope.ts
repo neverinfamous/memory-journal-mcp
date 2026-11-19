@@ -4,8 +4,9 @@
 
 import {
     getActiveProjectRegistry,
+    hasActiveProjectRegistry,
     resolveEffectiveProjectRegistry,
-} from '../../../codemode/normalizers/generic-field-aliases.js'
+} from '../../../codemode/normalizers/project-alias-helpers.js'
 import { findCanonicalRegistryKey, loadProjectRegistryFromConfig } from '../../../utils/workspace-resolver.js'
 import { parseCanonicalPositiveInt } from '../../../utils/safe-positive-int.js'
 
@@ -38,7 +39,9 @@ export function resolveRepoWorkspace(repo: unknown): string | undefined {
     if (typeof repo !== 'string' || repo.trim() === '') return undefined
     const name = repo.trim().split(/[/\\]/).filter(Boolean).pop()?.trim() ?? ''
     if (name === '') return undefined
-    const registry = getActiveProjectRegistry() ?? resolveEffectiveProjectRegistry() ?? loadProjectRegistryFromConfig()
+    const registry = hasActiveProjectRegistry()
+        ? getActiveProjectRegistry()
+        : (resolveEffectiveProjectRegistry() ?? loadProjectRegistryFromConfig())
     if (registry === undefined) return undefined
     return findCanonicalRegistryKey(name, registry)
 }

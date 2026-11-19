@@ -79,5 +79,5 @@ export function createPreparedStatementShim(
         expand: () => stmtObj,
         safeIntegers: () => stmtObj,
     }
-    return stmtObj
+    return Object.freeze(stmtObj)
 }

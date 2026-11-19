@@ -1,6 +1,6 @@
 import { parseArgs } from 'util';
-import { readFileSync, writeFileSync, cpSync, mkdirSync, existsSync, readdirSync } from 'fs';
-import { join, dirname, resolve } from 'path';
+import { readFileSync, writeFileSync, cpSync, mkdirSync, existsSync, readdirSync, lstatSync } from 'fs';
+import { join, dirname, resolve, relative, isAbsolute, sep } from 'path';
 import { execFileSync } from 'child_process';
 import { builtinModules } from 'module';
 import { z } from 'zod';
@@ -135,11 +135,22 @@ function stageVendorWrites(
   for (const lib of libsToSync) {
     const libConfig = nextManifest.libs[lib];
     if (libConfig === undefined) continue;
-    const sourceDir = join(upstreamRoot, libConfig.source);
-    const destDir = join(cwd, 'src', 'vendor', lib);
+    const sourceDir = resolve(join(upstreamRoot, libConfig.source));
+    const destDir = resolve(join(cwd, 'src', 'vendor', lib));
     for (const file of libConfig.files) {
-      const srcFile = join(sourceDir, file);
+      const srcFile = resolve(join(sourceDir, file));
+      const srcRel = relative(sourceDir, srcFile);
+      if (srcRel === '..' || srcRel.startsWith('..' + sep) || isAbsolute(srcRel)) {
+        throw new Error(`Vendor source path escapes upstream library root: ${file}`);
+      }
+      if (existsSync(srcFile) && lstatSync(srcFile).isSymbolicLink()) {
+        throw new Error(`Refusing symbolic link in vendor source: ${file}`);
+      }
       const destFile = resolve(join(destDir, file));
+      const destRel = relative(destDir, destFile);
+      if (destRel === '..' || destRel.startsWith('..' + sep) || isAbsolute(destRel)) {
+        throw new Error(`Vendor destination path escapes src/vendor/${lib}: ${file}`);
+      }
       stagedPaths.add(destFile);
       if (file.endsWith('.ts')) {
         const content = readFileSync(srcFile, 'utf8');

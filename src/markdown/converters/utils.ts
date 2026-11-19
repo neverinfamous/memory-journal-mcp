@@ -81,6 +81,18 @@ export function getFirstString(yamlMeta: Record<string, unknown>, keys: string[]
 
 const FENCE_OPEN_RE = /^[ ]{0,3}(`{3,}|~{3,})/
 
+function isClosingCodeFence(trimmedLine: string, fenceChar: string, fenceLen: number): boolean {
+    let idx = 0
+    while (idx < 3 && trimmedLine[idx] === ' ') idx++
+    let count = 0
+    while (trimmedLine[idx] === fenceChar) {
+        count++
+        idx++
+    }
+    if (count < fenceLen) return false
+    return trimmedLine.slice(idx).trim() === ''
+}
+
 /**
  * Transform only prose segments outside fenced code blocks (` ``` ` / `~~~`),
  * leaving fenced code snippets byte-for-byte untouched.
@@ -112,8 +124,7 @@ export function transformOutsideCodeFences(
             proseLines.push(line)
         } else {
             out.push(line)
-            const closeRe = new RegExp(`^[ ]{0,3}\\${activeFenceChar}{${String(activeFenceLen)},}\\s*$`)
-            if (closeRe.test(trimmed)) {
+            if (isClosingCodeFence(trimmed, activeFenceChar, activeFenceLen)) {
                 activeFenceChar = null
                 activeFenceLen = 0
             }

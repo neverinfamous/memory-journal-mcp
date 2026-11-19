@@ -140,10 +140,10 @@ export class TagsManager {
 
     listTags(workspaceId?: string, projectNumber?: number): Tag[] {
         const wsId = effectiveWorkspace(workspaceId)
-        const scopedProject =
-            typeof projectNumber === 'number' && Number.isFinite(projectNumber)
-                ? projectNumber
-                : undefined
+        if (projectNumber !== undefined && (!Number.isSafeInteger(projectNumber) || projectNumber <= 0)) {
+            return []
+        }
+        const scopedProject = projectNumber
         let hasDeletedAt = hasDeletedAtCache.get(this.db)
         if (hasDeletedAt === undefined) {
             hasDeletedAt =
@@ -191,12 +191,12 @@ export class TagsManager {
                 `Cannot merge tag '${sourceTag}' into itself ('${targetTag}').`
             )
         }
+        if (projectNumber !== undefined && (!Number.isSafeInteger(projectNumber) || projectNumber <= 0)) {
+            throw new ValidationError('project_number must be a positive integer')
+        }
         const scopeId = effectiveWorkspace(workspaceId)
         const scopedWorkspace = scopeId === '*' ? undefined : scopeId
-        const scopedProject =
-            typeof projectNumber === 'number' && Number.isFinite(projectNumber)
-                ? projectNumber
-                : undefined
+        const scopedProject = projectNumber
 
         const mergeOp = this.db.transaction(() => {
             const sourceTagId = this.resolveSourceTagId(sourceTag)

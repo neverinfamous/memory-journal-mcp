@@ -106,7 +106,10 @@ export function updateAnchorStatus(
         conditions.push('workspace_id = ?')
         params.push(scope)
     }
-    if (typeof projectNumber === 'number' && Number.isFinite(projectNumber)) {
+    if (projectNumber !== undefined) {
+        if (!Number.isSafeInteger(projectNumber) || projectNumber <= 0) {
+            return false
+        }
         conditions.push('project_number = ?')
         params.push(projectNumber)
     }

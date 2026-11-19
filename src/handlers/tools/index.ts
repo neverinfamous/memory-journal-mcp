@@ -23,7 +23,15 @@ import type { VectorSearchManager } from '../../vector/vector-search-manager/ind
 import type { GitHubIntegration } from '../../github/github-integration/index.js'
 import type { ProgressContext } from '../../utils/progress-utils.js'
 import { isToolVisibleForFilter } from '../../filtering/tool-filter.js'
-import { setActiveProjectRegistry } from '../../codemode/normalizers/generic-field-aliases.js'
+import {
+    captureActiveProjectRegistryState,
+    restoreActiveProjectRegistryState,
+    setActiveProjectRegistry,
+} from '../../codemode/normalizers/project-alias-helpers.js'
+import {
+    exceedsMaxToolInputElements,
+    resolveEffectiveMaxToolInputElements,
+} from '../../utils/tool-input-bounds.js'
 
 import {
     getCoreTools,
@@ -98,12 +106,18 @@ export function getTools(
     if (filterConfig) {
         const mapToUse = config?.runtime?.toolMapCache ?? toolMapCache ?? EMPTY_TOOL_MAP
         const includeDummyTools = config?.agentHealing !== false
+        const codemodeInternalFullAccess = config?.codemodeInternalFullAccess === true
         const raw = filterConfig.raw
         return Array.from(mapToUse.values())
             .filter(
                 (t) =>
                     (filterConfig.enabledTools.has(t.name) ||
-                        isDummyToolAllowedByFilter(t.name, filterConfig, includeDummyTools)) &&
+                        isDummyToolAllowedByFilter(
+                            t.name,
+                            filterConfig,
+                            includeDummyTools,
+                            codemodeInternalFullAccess
+                        )) &&
                     isToolVisibleForFilter(t.name, t.annotations.readOnlyHint, raw)
             )
             .map(mapTool)
@@ -256,13 +270,30 @@ function applyToolHealingArgs(
     config?: ToolHandlerConfig
 ): { args: Record<string, unknown> } | { error: Record<string, unknown> } {
     if (config?.agentHealing === false || ALREADY_HEALED_ARGS.has(args)) return { args }
+    const prevRegistryState = captureActiveProjectRegistryState()
     setActiveProjectRegistry(config?.projectRegistry)
     try {
         const intercept = applyArgInterceptions(name, [args])
         if ('error' in intercept) return intercept
         return { args: (intercept.args[0] as Record<string, unknown>) ?? args }
     } finally {
-        setActiveProjectRegistry(undefined)
+        restoreActiveProjectRegistryState(prevRegistryState)
+    }
+}
+
+function enforceToolInputElementBound(
+    args: Record<string, unknown>,
+    config?: ToolHandlerConfig
+): Record<string, unknown> | undefined {
+    const maxElements = resolveEffectiveMaxToolInputElements(config?.maxToolInputElements)
+    if (!exceedsMaxToolInputElements(args, maxElements)) return undefined
+    return {
+        success: false,
+        error: `Tool input exceeds maximum element count (${String(maxElements)}).`,
+        code: 'VALIDATION_ERROR',
+        category: 'validation',
+        suggestion: 'Reduce the number of keys, array items, or nesting depth in tool arguments.',
+        recoverable: false,
     }
 }
 
@@ -270,10 +301,16 @@ function assertToolFilterAllowsCall(
     name: string,
     tool: ToolDefinition,
     filterConfig: ToolFilterConfig,
-    agentHealing: boolean | undefined
+    agentHealing: boolean | undefined,
+    codemodeInternalFullAccess: boolean
 ): Record<string, unknown> | undefined {
     const isPrimaryEnabled = filterConfig.enabledTools.has(name)
-    const isDummyAllowed = isDummyToolAllowedByFilter(name, filterConfig, agentHealing !== false)
+    const isDummyAllowed = isDummyToolAllowedByFilter(
+        name,
+        filterConfig,
+        agentHealing !== false,
+        codemodeInternalFullAccess
+    )
     const isCodeModeShortcut =
         agentHealing !== false &&
         filterConfig.enabledTools.has('mj_execute_code') &&
@@ -319,6 +356,9 @@ export async function callTool(
     teamDb?: IDatabaseAdapter,
     teamVectorManager?: VectorSearchManager
 ): Promise<unknown> {
+    const elementLimitError = enforceToolInputElementBound(args, config)
+    if (elementLimitError !== undefined) return elementLimitError
+
     ensureToolCache(db, vectorManager, github, config, teamDb, teamVectorManager)
     const healed = applyToolHealingArgs(name, args, config)
     if ('error' in healed) return healed.error
@@ -344,7 +384,8 @@ export async function callTool(
             name,
             tool,
             config.filterConfig,
-            config.agentHealing
+            config.agentHealing,
+            config.codemodeInternalFullAccess === true
         )
         if (disabled !== undefined) return disabled
     }

@@ -107,6 +107,9 @@ export function assertNoPathTraversal(filename: string): void {
  * Patterns that may contain sensitive tokens in error messages.
  * Used to scrub error output before logging.
  */
+export const SENSITIVE_KEY_RE =
+    /(?:token|secret|password|passwd|authorization|auth_header|api_key|apikey|encryption_key|webhook|private_key|client_secret|credential|cookie|bearer)/i
+
 const TOKEN_PATTERNS = [
     // GitHub personal access tokens (classic and fine-grained)
     /gh[pousr]_[A-Za-z0-9_]{36,}/g,
@@ -117,6 +120,12 @@ const TOKEN_PATTERNS = [
     /xox[baprs]-[A-Za-z0-9-]+/g,
     // AWS API Keys
     /(?:AKIA|ABIA|ACCA|ASIA)[0-9A-Z]{16}/g,
+    // CLI secret flags (--auth-token, --token, --secret, --password, --api-key, --webhook-auth, --encryption-key)
+    /(--(?:auth-token|token|secret|password|api-key|webhook-auth|encryption-key)(?:=|\s+))["']?[^\s"']+["']?/gi,
+    // SQLCipher key/rekey pragmas
+    /(pragma\s+(?:re)?key\s*=\s*)(?:"x'[^']*'"|x'[^']*'|'[^']*')/gi,
+    // URL embedded credentials
+    /(https?:\/\/[^/\s:@]+:)[^/\s@]+(@)/gi,
     // Authorization headers in error dumps (catch-all for token, Bearer, Basic)
     /Authorization:(?:\s+(?:token|Bearer|Basic))?\s+["']?[A-Za-z0-9._~+/#=-]+["']?/gi,
     // Generic token patterns standalone
@@ -125,7 +134,7 @@ const TOKEN_PATTERNS = [
 ] as const
 
 const POTENTIAL_SECRET_RE =
-    /(?:gh[pousr]_|github_pat_|eyJ|xox[baprs]-|AKIA|ABIA|ACCA|ASIA|Authorization:|Bearer\s|Basic\s)/i
+    /(?:gh[pousr]_|github_pat_|eyJ|xox[baprs]-|AKIA|ABIA|ACCA|ASIA|Authorization:|Bearer\s|Basic\s|--(?:auth-token|token|secret|password|api-key|webhook-auth|encryption-key)(?:=|\s)|pragma\s+(?:re)?key\s*=|https?:\/\/[^/\s:@]+:[^/\s@]+@)/i
 
 /**
  * Sanitizes an error message by replacing any detected tokens with '[REDACTED]'.
@@ -137,10 +146,19 @@ const POTENTIAL_SECRET_RE =
 export function sanitizeErrorForLogging(message: string): string {
     if (!POTENTIAL_SECRET_RE.test(message)) return message
     let sanitized = message
-    for (const pattern of TOKEN_PATTERNS) {
-        // Reset lastIndex for global regex patterns
+    for (let i = 0; i < TOKEN_PATTERNS.length; i++) {
+        const pattern = TOKEN_PATTERNS[i]
+        if (pattern === undefined) continue
         pattern.lastIndex = 0
-        sanitized = sanitized.replace(pattern, '[REDACTED]')
+        if (i === 5) {
+            sanitized = sanitized.replace(pattern, '$1[REDACTED]')
+        } else if (i === 6) {
+            sanitized = sanitized.replace(pattern, "$1'[REDACTED]'")
+        } else if (i === 7) {
+            sanitized = sanitized.replace(pattern, '$1[REDACTED]$2')
+        } else {
+            sanitized = sanitized.replace(pattern, '[REDACTED]')
+        }
     }
     return sanitized
 }
@@ -149,28 +167,41 @@ export function sanitizeErrorForLogging(message: string): string {
 // Untrusted Content Boundaries
 // ============================================================================
 
-/**
- * Marks free-text content as untrusted remote origin for LLM instruction consumption.
- * Defends against prompt-injection by surrounding external inputs with tags.
- *
- * Will not insert nested tags if the content is already marked.
- */
+// C0/C1 control chars excluding horizontal tab (\t), LF (\n), and CR (\r).
+function stripUntrustedControlChars(value: string): string {
+    return value.replace(/\p{Cc}/gu, (ch) =>
+        ch === '\t' || ch === '\n' || ch === '\r' ? ch : ''
+    )
+}
+
+function hasUntrustedControlChars(value: string): boolean {
+    for (let i = 0; i < value.length; i++) {
+        const c = value.charCodeAt(i)
+        if (c <= 8 || c === 11 || c === 12 || (c >= 14 && c <= 31) || (c >= 127 && c <= 159)) {
+            return true
+        }
+    }
+    return false
+}
+
 function unescapeFenceEntities(value: string): string {
     return value.replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&')
 }
 
 export function markUntrustedContent(content: string | undefined | null): string {
     if (!content) return ''
-    let trimmed = content.trim()
+    let trimmed = stripUntrustedControlChars(content).trim()
     if (!trimmed) return ''
     if (isAlreadyFencedUntrustedContent(trimmed)) return trimmed
 
     // Strip any existing literal or entity-encoded tags to prevent breakout/nesting, then normalize
     // entities so repeated calls stay idempotent without growing `&amp;lt;`.
-    trimmed = unescapeFenceEntities(
-        trimmed.replace(
-            /&lt;\/?untrusted_remote_content[^&]*&gt;|<\/?untrusted_remote_content[^>]*>/gi,
-            ''
+    trimmed = stripUntrustedControlChars(
+        unescapeFenceEntities(
+            trimmed.replace(
+                /&lt;\/?untrusted_remote_content[^&]*&gt;|<\/?untrusted_remote_content[^>]*>/gi,
+                ''
+            )
         )
     ).trim()
     if (!trimmed) return ''
@@ -188,12 +219,20 @@ const ENCODED_FENCE_TAG_RE = /&lt;\/?untrusted_remote_content/i
 
 /** Return true when `value` already has a single unescaped inline `<untrusted_remote_content>` wrapper. */
 export function isAlreadyInlineFencedUntrustedContent(value: string): boolean {
-    return INLINE_ALREADY_FENCED_RE.test(value) && !ENCODED_FENCE_TAG_RE.test(value)
+    return (
+        INLINE_ALREADY_FENCED_RE.test(value) &&
+        !ENCODED_FENCE_TAG_RE.test(value) &&
+        !hasUntrustedControlChars(value)
+    )
 }
 
 /** Return true when `value` already has a single unescaped block or inline `<untrusted_remote_content>` wrapper. */
 export function isAlreadyFencedUntrustedContent(value: string): boolean {
-    return BLOCK_ALREADY_FENCED_RE.test(value) && !ENCODED_FENCE_TAG_RE.test(value)
+    return (
+        BLOCK_ALREADY_FENCED_RE.test(value) &&
+        !ENCODED_FENCE_TAG_RE.test(value) &&
+        !hasUntrustedControlChars(value)
+    )
 }
 
 /** Fence non-canonical git refs, branch names, or dynamic map keys containing markup/control chars. */
@@ -212,14 +251,16 @@ export function fenceNonCanonicalRefOrKey(value: string, allowSpaces = false): s
  */
 export function markUntrustedContentInline(content: string | undefined | null): string {
     if (!content) return ''
-    let cleaned = content.replace(/[\r\n]+/g, ' ')
+    let cleaned = stripUntrustedControlChars(content.replace(/[\r\n]+/g, ' '))
     if (isAlreadyInlineFencedUntrustedContent(cleaned)) return cleaned
 
     // Strip existing literal or entity-encoded wrappers to normalize for inline layout
-    cleaned = unescapeFenceEntities(
-        cleaned.replace(
-            /&lt;\/?untrusted_remote_content[^&]*&gt;|<\/?untrusted_remote_content[^>]*>/gi,
-            ''
+    cleaned = stripUntrustedControlChars(
+        unescapeFenceEntities(
+            cleaned.replace(
+                /&lt;\/?untrusted_remote_content[^&]*&gt;|<\/?untrusted_remote_content[^>]*>/gi,
+                ''
+            )
         )
     )
     // Escape HTML entities to prevent prompt injection (& first so &lt; cannot be unescaped)

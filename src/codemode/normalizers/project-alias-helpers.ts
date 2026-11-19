@@ -10,12 +10,32 @@ import { parseCanonicalPositiveInt } from '../../utils/safe-positive-int.js'
 import { isRecord } from './shared-utils.js'
 
 let activeProjectRegistry: Record<string, ProjectRegistryEntry> | undefined
+let activeProjectRegistryBound = false
 let fallbackRegistryLoader: (() => Record<string, ProjectRegistryEntry> | undefined) | undefined
+
+export interface ActiveRegistrySnapshot {
+    registry: Record<string, ProjectRegistryEntry> | undefined
+    bound: boolean
+}
 
 export function setActiveProjectRegistry(
     registry: Record<string, ProjectRegistryEntry> | undefined
 ): void {
     activeProjectRegistry = registry
+    activeProjectRegistryBound = registry !== undefined
+}
+
+export function captureActiveProjectRegistryState(): ActiveRegistrySnapshot {
+    return { registry: activeProjectRegistry, bound: activeProjectRegistryBound }
+}
+
+export function restoreActiveProjectRegistryState(snapshot: ActiveRegistrySnapshot): void {
+    activeProjectRegistry = snapshot.registry
+    activeProjectRegistryBound = snapshot.bound
+}
+
+export function hasActiveProjectRegistry(): boolean {
+    return activeProjectRegistryBound
 }
 
 export function setFallbackProjectRegistryLoader(
@@ -27,7 +47,7 @@ export function setFallbackProjectRegistryLoader(
 export function resolveEffectiveProjectRegistry():
     | Record<string, ProjectRegistryEntry>
     | undefined {
-    return activeProjectRegistry ?? fallbackRegistryLoader?.()
+    return activeProjectRegistryBound ? activeProjectRegistry : fallbackRegistryLoader?.()
 }
 
 export function getActiveProjectRegistry(): Record<string, ProjectRegistryEntry> | undefined {

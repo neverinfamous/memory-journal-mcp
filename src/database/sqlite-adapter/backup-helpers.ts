@@ -175,6 +175,9 @@ export async function resolveValidatedRestorePath(
     ) {
         throw new ValidationError('Path traversal detected during restore resolution.')
     }
+    if (!/\.db$/i.test(filename) || !/\.db$/i.test(decodedFilename)) {
+        throw new ValidationError('Backup filename must use a .db extension.')
+    }
 
     let stat: fs.Stats
     try {
@@ -187,6 +190,9 @@ export async function resolveValidatedRestorePath(
     }
     if (stat.isSymbolicLink()) {
         throw new ValidationError('Symlinks are not allowed for backup restore.')
+    }
+    if (!stat.isFile()) {
+        throw new ValidationError('Backup restore target must be a regular file.')
     }
 
     const realBackupPath = await fs.promises.realpath(backupPath)

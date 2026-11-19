@@ -1,3 +1,6 @@
+import * as fs from 'node:fs'
+import { randomBytes } from 'node:crypto'
+import { stringify as stringifyYaml } from 'yaml'
 import {
     BRIEFING_CONFIG_KEY_MAP,
     type BriefingConfigurableKey,
@@ -51,5 +54,31 @@ export function applyPersistableConfigKeys(
         } else {
             delete parsed['defaultProjectNumber']
         }
+    }
+}
+
+export function serializeConfigObject(
+    parsed: Record<string, unknown>,
+    isYaml: boolean
+): string {
+    if (!isYaml) return JSON.stringify(parsed, null, 2)
+    return (stringifyYaml as (value: unknown) => string)(parsed)
+}
+
+export function writeTempAndRenameConfig(
+    targetPath: string,
+    serialized: string
+): void {
+    const tmpPath = `${targetPath}.${String(process.pid)}.${randomBytes(8).toString('hex')}.tmp`
+    try {
+        fs.writeFileSync(tmpPath, serialized, { encoding: 'utf-8', flag: 'wx', mode: 0o600 })
+        fs.renameSync(tmpPath, targetPath)
+    } catch (writeErr: unknown) {
+        try {
+            fs.rmSync(tmpPath, { force: true })
+        } catch {
+            // [SIDE-EFFECT] Best-effort temp cleanup; the original error is reported below.
+        }
+        throw writeErr
     }
 }

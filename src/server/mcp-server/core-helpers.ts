@@ -43,6 +43,9 @@ export function buildBaseToolConfig(
         ...(options.pruneExcludeTags !== undefined
             ? { pruneExcludeTags: options.pruneExcludeTags }
             : {}),
+        ...(options.maxToolInputElements !== undefined
+            ? { maxToolInputElements: options.maxToolInputElements }
+            : {}),
     }
 }
 

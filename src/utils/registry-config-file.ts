@@ -109,13 +109,13 @@ export function readCachedConfigObject(configPath: string): Record<string, unkno
 export function writeProjectRegistryFile(configPath: string, config: Record<string, unknown>): void {
     const resolved = path.resolve(configPath)
     registryFileCache.delete(resolved)
-    fs.mkdirSync(path.dirname(resolved), { recursive: true })
+    fs.mkdirSync(path.dirname(resolved), { recursive: true, mode: 0o700 })
     const serialized = isYamlPath(resolved)
         ? (stringifyYaml as (value: unknown) => string)(config)
         : JSON.stringify(config, null, 4)
     const tmpPath = `${resolved}.${String(process.pid)}.${randomBytes(8).toString('hex')}.tmp`
     try {
-        fs.writeFileSync(tmpPath, serialized, { encoding: 'utf-8', flag: 'wx' })
+        fs.writeFileSync(tmpPath, serialized, { encoding: 'utf-8', flag: 'wx', mode: 0o600 })
         fs.renameSync(tmpPath, resolved)
         try {
             const stat = fs.statSync(resolved)

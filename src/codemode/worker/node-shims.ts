@@ -90,7 +90,7 @@ export function createSafeFsShim(contextObj?: Record<string, unknown>): SafeFsSh
         birthtime: new Date(),
     })
 
-    return {
+    return Object.freeze({
         existsSync: (_filePath?: unknown): boolean => false,
         statSync: (_filePath?: unknown) => buildStats(),
         stat: (
@@ -117,12 +117,12 @@ export function createSafeFsShim(contextObj?: Record<string, unknown>): SafeFsSh
         appendFileSync: (): void => disabledFsOperation('appendFileSync'),
         unlinkSync: (): void => disabledFsOperation('unlinkSync'),
         readdirSync: (): string[] => [],
-        promises: {
+        promises: Object.freeze({
             stat: () => Promise.resolve(buildStats()),
             readFile: (): Promise<string> => Promise.resolve(readContent()),
             writeFile: (): Promise<void> => rejectFsOperation('promises.writeFile'),
-        },
-    }
+        }),
+    })
 }
 
 const toPosix = (p: unknown): string => toStr(p).replace(/\\/g, '/')

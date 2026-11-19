@@ -141,31 +141,44 @@ export class WorkerSandbox {
         this.worker = spawnedWorker
         spawnedWorker.unref()
 
-        spawnedWorker.on('message', (msg: { type: string; id: number; result: SandboxResult }) => {
-            if (this.worker !== spawnedWorker) return
-            // [INVARIANT] Ignore stale RESULT messages from a previous (timed-out) execution.
-            if (msg.type === 'RESULT' && this.currentExecution && msg.id === this.executionId) {
-                clearTimeout(this.currentExecution.timeoutHandle)
-                this.currentExecution.hostPort.close()
-                this.worker.unref()
+        spawnedWorker.on(
+            'message',
+            (msg: { type: string; id: number; result: SandboxResult; fatal?: boolean }) => {
+                if (this.worker !== spawnedWorker) return
+                // [INVARIANT] Ignore stale RESULT messages from a previous (timed-out) execution.
+                if (msg.type === 'RESULT' && this.currentExecution && msg.id === this.executionId) {
+                    clearTimeout(this.currentExecution.timeoutHandle)
+                    this.currentExecution.hostPort.close()
 
-                const endTime = performance.now()
-                const endRss = process.memoryUsage.rss()
-                const result = msg.result
+                    const endTime = performance.now()
+                    const endRss = process.memoryUsage.rss()
+                    const result = msg.result
 
-                result.metrics = {
-                    wallTimeMs: Math.round(endTime - this.currentExecution.startTime),
-                    cpuTimeMs: result.metrics.cpuTimeMs,
-                    memoryUsedMb: Math.max(0, Math.round((endRss - this.currentExecution.startRss) / 1024 / 1024)),
+                    result.metrics = {
+                        wallTimeMs: Math.round(endTime - this.currentExecution.startTime),
+                        cpuTimeMs: result.metrics.cpuTimeMs,
+                        memoryUsedMb: Math.max(
+                            0,
+                            Math.round((endRss - this.currentExecution.startRss) / 1024 / 1024)
+                        ),
+                    }
+
+                    const resolve = this.currentExecution.resolve
+                    this.currentExecution = null
+                    this.isBusy = false
+                    this.lastUsedAt = Date.now()
+                    if (msg.fatal === true) {
+                        // [H1] Evict and terminate tainted worker when unhandled async rejection/exception fired.
+                        this.worker = null
+                        this.resetSentMetadata()
+                        void spawnedWorker.terminate()
+                    } else {
+                        this.worker.unref()
+                    }
+                    resolve(result)
                 }
-
-                const resolve = this.currentExecution.resolve
-                this.currentExecution = null
-                this.isBusy = false
-                this.lastUsedAt = Date.now()
-                resolve(result)
             }
-        })
+        )
 
         spawnedWorker.on('error', (err: Error) => {
             if (this.worker !== spawnedWorker) return

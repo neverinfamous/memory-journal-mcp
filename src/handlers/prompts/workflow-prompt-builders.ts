@@ -8,7 +8,7 @@
 import type { IDatabaseAdapter } from '../../database/core/interfaces.js'
 import { RELATIONSHIP_TYPES } from '../../types/entities.js'
 import { logger } from '../../utils/logger.js'
-import { markUntrustedContent } from '../../utils/security-utils.js'
+import { markUntrustedContent, markUntrustedContentInline } from '../../utils/security-utils.js'
 
 export function buildSummaryPromptText(params: {
     target: 'personal' | 'team'
@@ -96,8 +96,8 @@ export function fetchTargetEntryContext(
 **Target Entry Details (Pre-fetched for your convenience):**
 - **ID:** ${String(recent['id'])}
 - **Version:** ${String(recent['version'])}
-- **Type:** ${String(recent['entryType'])}
-- **Tags:** ${recent['tags'] !== null && recent['tags'] !== undefined ? JSON.stringify(recent['tags']) : '[]'}
+- **Type:** ${markUntrustedContentInline(String(recent['entryType']))}
+- **Tags:** ${recent['tags'] !== null && recent['tags'] !== undefined ? markUntrustedContentInline(JSON.stringify(recent['tags'])) : '[]'}
 - **Content:**
 ${markUntrustedContent(String(recent['content']))}
 `

@@ -212,7 +212,10 @@ export class AuditLogger {
                     } else {
                         await this.ensureDirectory()
                         // One appendFile call with all buffered lines — each terminated by \n
-                        await appendFile(this.config.logPath, payload, 'utf-8')
+                        await appendFile(this.config.logPath, payload, {
+                            encoding: 'utf-8',
+                            mode: 0o600,
+                        })
                         if (this.approxSizeBytes !== null) {
                             this.approxSizeBytes += Buffer.byteLength(payload, 'utf-8')
                         }

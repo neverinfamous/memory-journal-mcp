@@ -207,8 +207,9 @@ export class TokenValidator {
             )
         }
 
-        const { sub } = payload
-        if (typeof sub !== 'string' || sub.length === 0) {
+        const rawSub: unknown = payload.sub
+        const sub = typeof rawSub === 'string' ? rawSub.trim() : ''
+        if (sub.length === 0) {
             throw new jose.errors.JWTClaimValidationFailed(
                 'missing required "sub" claim',
                 payload,

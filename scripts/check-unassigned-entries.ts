@@ -61,6 +61,9 @@ function openReadonlyDatabase(dbPath: string, rawKey: string | undefined): Datab
     try {
         db = new Database(dbPath, { readonly: true })
         if (rawKey) {
+            if (rawKey.includes('\0')) {
+                throw new Error('Invalid encryption key: NUL bytes are not allowed')
+            }
             if (rawKey.startsWith("x'") || rawKey.startsWith("X'")) {
                 if (!/^x'(?:[0-9a-fA-F]{2})+'$/i.test(rawKey)) {
                     throw new Error("Invalid hex encryption key: expected x'<even hex digits>'")
@@ -75,8 +78,11 @@ function openReadonlyDatabase(dbPath: string, rawKey: string | undefined): Datab
         if (db?.open) {
             db.close()
         }
-        const msg = err instanceof Error ? err.message : String(err)
-        console.error(`❌ Could not open database at '${dbPath}': ${msg}`)
+        const rawMsg = err instanceof Error ? err.message : String(err)
+        const safeMsg = rawMsg
+            .replace(/x'[0-9a-fA-F]*'/gi, "x'[REDACTED]'")
+            .replace(/(pragma\s+key\s*=\s*)'[^']*'/gi, "$1'[REDACTED]'")
+        console.error(`❌ Could not open database at '${dbPath}': ${safeMsg}`)
         process.exit(1)
     }
 }

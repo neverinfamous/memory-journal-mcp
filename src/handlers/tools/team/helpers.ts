@@ -6,6 +6,7 @@
 
 import type { JournalEntry, ToolContext } from '../../../types/index.js'
 import { logger } from '../../../utils/logger.js'
+import { sanitizeAuthor } from '../../../utils/security-utils.js'
 import { resolveWorkspaceId } from '../../../utils/workspace-resolver.js'
 import { findWorkspaceByProjectNumber } from '../../../utils/workspace-resolver-registry.js'
 import { activeProjectRegistry, pairStoredScope } from '../../../utils/write-scope.js'
@@ -42,7 +43,12 @@ export function batchFetchAuthors(
     entryIds: number[]
 ): Map<number, string | null> {
     if (entryIds.length === 0) return new Map<number, string | null>()
-    return teamDb.getAuthorsForEntries(entryIds)
+    const rawMap = teamDb.getAuthorsForEntries(entryIds)
+    const sanitizedMap = new Map<number, string | null>()
+    for (const [id, author] of rawMap.entries()) {
+        sanitizedMap.set(id, author !== null ? sanitizeAuthor(author) : null)
+    }
+    return sanitizedMap
 }
 
 /**
@@ -52,7 +58,7 @@ export function fetchAuthor(
     teamDb: NonNullable<ToolContext['teamDb']>,
     entryId: number
 ): string | null {
-    const authorMap = teamDb.getAuthorsForEntries([entryId])
+    const authorMap = batchFetchAuthors(teamDb, [entryId])
     return authorMap.get(entryId) ?? null
 }
 

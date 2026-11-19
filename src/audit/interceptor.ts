@@ -147,7 +147,10 @@ const AUDIT_SENSITIVE_KEY_RE =
 const MAX_SCRUB_DEPTH = 6
 
 function scrubAuditArgValue(val: unknown, depth: number, seen: WeakSet<object>): unknown {
-    if (typeof val === 'string') return sanitizeErrorForLogging(val)
+    if (typeof val === 'string') {
+        const clean = sanitizeErrorForLogging(val)
+        return clean.length > 2048 ? `${clean.slice(0, 2048)}...[truncated]` : clean
+    }
     if (typeof val === 'bigint') return val.toString()
     if (val === null || typeof val !== 'object') return val
     if (seen.has(val)) return '[Circular]'
@@ -213,7 +216,9 @@ function buildToolAuditEntry(params: {
         sensitiveTarget !== undefined ? resolveResourceAuditCategory(sensitiveTarget) : 'read'
     const category = isReadScope ? readCategory : scopeToCategory(scope)
     const effectiveScope =
-        isReadScope && (readCategory === 'audit' || readCategory === 'team') ? readCategory : scope
+        isReadScope && (readCategory === 'audit' || readCategory === 'team' || readCategory === 'admin')
+            ? readCategory
+            : scope
     const sanitizedError = error !== undefined ? sanitizeErrorForLogging(error) : undefined
     const scrubbedArgs = !isReadScope && !redact ? scrubAuditArgs(args) : undefined
 
