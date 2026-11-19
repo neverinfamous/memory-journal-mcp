@@ -11,6 +11,7 @@ services:
       - "8082:8080"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
+      - dozzle_data:/data
     stop_grace_period: 15s
     mem_limit: 256m
     logging:
@@ -176,4 +177,6 @@ services:
 
 volumes:
   prometheus_data:
+  dozzle_data:
+    name: mj-dozzle-data
 networks: {}

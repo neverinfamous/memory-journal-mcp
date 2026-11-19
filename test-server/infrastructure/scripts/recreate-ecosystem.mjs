@@ -147,7 +147,9 @@ try {
         runDockerQuiet(['rm', '-f', name]);
     }
 
-    runDocker(['compose', 'down', '-v', '--remove-orphans']);
+    // [INVARIANT] Omit `-v` so `mj-dozzle-data` (UI users & preferences) persists across stack recreates.
+    runDocker(['compose', 'down', '--remove-orphans']);
+    runDockerQuiet(['volume', 'rm', '-f', 'mj-infrastructure_prometheus_data']);
     console.log('  Giving Docker daemon time to flush networks...');
     await setTimeout(3000);
 
