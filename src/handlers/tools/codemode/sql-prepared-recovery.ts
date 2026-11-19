@@ -245,8 +245,17 @@ function extractPreparedSqlAndRunArgs(
     return null
 }
 
+const MAX_PREPARED_RECOVERY_LENGTH = 32_768
+
 export function extractAndRecoverPreparedStatementCode(code: string): string | null {
-    if (!code || typeof code !== 'string') return null
+    if (
+        !code ||
+        typeof code !== 'string' ||
+        code.length > MAX_PREPARED_RECOVERY_LENGTH ||
+        !code.includes('.prepare')
+    ) {
+        return null
+    }
     const stripped = stripCommentsAndStrings(code)
     if (!stripped.includes('.prepare(')) return null
     if (!/\.(?:run|get|all)\s*\(/.test(stripped)) return null

@@ -103,6 +103,17 @@ export function skipRegexLiteralBody(code: string, start: number): number {
 }
 
 /**
+ * Applies Unicode NFKC normalization only when non-ASCII code units (`> 0x7f`) are present,
+ * avoiding V8 -> ICU boundary crossings on pure ASCII tokens (invariant under UAX #15 NFKC).
+ */
+export function normalizeNfkcIfNonAscii(value: string): string {
+    for (let i = 0; i < value.length; i++) {
+        if (value.charCodeAt(i) > 0x7f) return value.normalize('NFKC')
+    }
+    return value
+}
+
+/**
  * Scans a quoted string literal starting just after the opening quote.
  * Returns the unescaped content and the index after the closing quote.
  */
@@ -129,8 +140,10 @@ export function scanQuotedLiteral(
         content += c
         i++
     }
-    const trimmed = content.trim().normalize('NFKC')
-    return { content: trimmed, next: i, sensitive: SENSITIVE_STRING_CONTENT.test(trimmed) }
+    const rawTrimmed = content.trim()
+    const trimmed = rawTrimmed.length <= 64 ? normalizeNfkcIfNonAscii(rawTrimmed) : rawTrimmed
+    const sensitive = trimmed.length <= 64 && SENSITIVE_STRING_CONTENT.test(trimmed)
+    return { content: trimmed, next: i, sensitive }
 }
 
 /**
@@ -165,8 +178,13 @@ export function scanTemplateLiteral(
             break
         }
         if (c === '`') {
-            const trimmed = content.trim().normalize('NFKC')
-            out += SENSITIVE_STRING_CONTENT.test(trimmed) ? `${trimmed}\`` : '`'
+            const rawTrimmed = content.trim()
+            const trimmed =
+                rawTrimmed.length <= 64 ? normalizeNfkcIfNonAscii(rawTrimmed) : rawTrimmed
+            out +=
+                trimmed.length <= 64 && SENSITIVE_STRING_CONTENT.test(trimmed)
+                    ? `${trimmed}\``
+                    : '`'
             lastToken = '`'
             i++
             break

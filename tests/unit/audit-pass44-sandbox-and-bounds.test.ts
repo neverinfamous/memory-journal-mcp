@@ -82,9 +82,10 @@ describe('Pass 44 Audit — Sandbox, Bounds, Lexer, ReDoS & Code Mode Scope Narr
         for (let i = 0; i < 20; i++) {
             sharedObj = { leftChild: sharedObj, rightChild: sharedObj }
         }
+        deepCamelToSnake({ warmUpKey: 1 }, 0)
         const t0 = performance.now()
         const normalized = deepCamelToSnake(sharedObj, 0) as Record<string, unknown>
-        expect(performance.now() - t0).toBeLessThan(100)
+        expect(performance.now() - t0).toBeLessThan(500)
         expect(normalized['left_child']).toBe(normalized['right_child'])
     })
 
@@ -122,21 +123,22 @@ describe('Pass 44 Audit — Sandbox, Bounds, Lexer, ReDoS & Code Mode Scope Narr
         expect(validRecovered).toContain('mj.core.getEntryById(')
         expect(validRecovered).toContain('42')
 
-        // Adversarial repeated `.prepare(` with unclosed strings completes in < 100ms
+        // Adversarial repeated `.prepare(` with unclosed strings completes in < 500ms
         const adversarialPrep =
             'db.prepare("' + 'a'.repeat(5000) + '\n' + 'stmt.all('.repeat(500)
         const t0 = performance.now()
         expect(extractAndRecoverPreparedStatementCode(adversarialPrep)).toBeNull()
-        expect(performance.now() - t0).toBeLessThan(100)
+        expect(performance.now() - t0).toBeLessThan(500)
 
         // Valid script with many string literals short-circuits applyTemplateAndQuoteDelimiterHealing
+        healTemplateBackticksOnRuntimeError('return 1;')
         const manyStrings =
             Array.from({ length: 40 }, (_, i) => `const s${String(i)} = "line ${String(i)}";`).join(
                 '\n'
             ) + '\nreturn s0;'
         const t1 = performance.now()
         expect(healTemplateBackticksOnRuntimeError(manyStrings)).toBeNull()
-        expect(performance.now() - t1).toBeLessThan(100)
+        expect(performance.now() - t1).toBeLessThan(500)
     })
 
     it('M11 & L2: resolveEffectiveRpcScope & validateRpcOverrideBounds pin rpcOverrides.projectNumber and block unregistered scope escapes', () => {

@@ -7,6 +7,7 @@ import {
     decodeEscapeAt,
     findNextJsLineTerminator,
     isJsLineTerminator,
+    normalizeNfkcIfNonAscii,
     scanQuotedLiteral,
     scanTemplateLiteral,
     skipLineOrBlockComment,
@@ -21,27 +22,49 @@ export {
     skipRegexLiteralBody,
 }
 
+function isAsciiIdentCode(cc: number): boolean {
+    return (
+        (cc >= 0x61 && cc <= 0x7a) ||
+        (cc >= 0x41 && cc <= 0x5a) ||
+        (cc >= 0x30 && cc <= 0x39) ||
+        cc === 0x5f ||
+        cc === 0x24
+    )
+}
+
 function scanIdentifierWord(code: string, start: number): { word: string; next: number } {
-    let word = ''
-    let j = start
+    let fastEnd = start
+    while (fastEnd < code.length && isAsciiIdentCode(code.charCodeAt(fastEnd))) {
+        fastEnd++
+    }
+    const stopCode = fastEnd < code.length ? code.charCodeAt(fastEnd) : 0
+    if (stopCode !== 0x5c && stopCode <= 0x7f) {
+        return { word: code.slice(start, fastEnd), next: fastEnd }
+    }
+    let word = code.slice(start, fastEnd)
+    let j = fastEnd
     while (j < code.length) {
-        const nextCh = code[j]
-        if (nextCh === '\\' && code[j + 1] === 'u') {
+        const cc = code.charCodeAt(j)
+        if (isAsciiIdentCode(cc)) {
+            word += code[j] ?? ''
+            j++
+            continue
+        }
+        if (cc === 0x5c && code[j + 1] === 'u') {
             const dec = decodeEscapeAt(code, j, false)
             word += dec.ch
             j = dec.next
             continue
         }
+        if (cc <= 0x7f) break
         const cp = code.codePointAt(j)
         if (cp === undefined) break
         const ch = String.fromCodePoint(cp)
-        const isIdent =
-            /[A-Za-z0-9_$]/.test(ch) || (cp > 0x7f && /[\p{ID_Continue}$_]/u.test(ch))
-        if (!isIdent) break
+        if (!/[\p{ID_Continue}$_]/u.test(ch)) break
         word += ch
         j += ch.length
     }
-    return { word: word.normalize('NFKC'), next: j }
+    return { word: normalizeNfkcIfNonAscii(word), next: j }
 }
 
 export { scanIdentifierWord }
@@ -310,9 +333,10 @@ export function stripCommentsAndStrings(rawCode: string): string {
             i += 2
             continue
         }
-        const cp = code.codePointAt(i)
+        const cc = code.charCodeAt(i)
+        const cp = cc > 0x7f ? code.codePointAt(i) : cc
         if (
-            /[A-Za-z0-9_$]/.test(ch) ||
+            isAsciiIdentCode(cc) ||
             (ch === '\\' && next === 'u') ||
             (cp !== undefined && cp > 0x7f && /[\p{ID_Start}\p{ID_Continue}$_]/u.test(String.fromCodePoint(cp)))
         ) {
