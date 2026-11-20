@@ -104,9 +104,18 @@ function resolveMoveUpdateScope(
         isWildcardOrDefaultSource &&
         typeof input.project_number === 'number' &&
         hasGetById &&
-        scoped?.projectNumber !== input.project_number
+        scoped?.projectNumber !== null &&
+        scoped?.projectNumber !== undefined &&
+        scoped.projectNumber > 0 &&
+        scoped.projectNumber !== input.project_number
     ) {
-        return { errorResponse: notFoundErrorResponse(input.entry_id) }
+        return {
+            errorResponse: {
+                ...notFoundErrorResponse(input.entry_id),
+                suggestion:
+                    "🛠️ AUTONOMOUS HEALING: Verify the entry ID and source project_number. When moving an entry across workspaces via update_entry({ entry_id, workspace_id: '*', target_workspace_id }), omit project_number so target_workspace_id resolves the destination project_number from projectRegistry (and in mj_execute_code omit top-level project_number when moving foreign-project entries).",
+            },
+        }
     }
 
     const baseTarget = resolveProjectContext({ workspace_id: targetWorkspaceId }, config)

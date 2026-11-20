@@ -147,7 +147,7 @@ ${markUntrustedContent(params.deletedSnippet)}
    - Inspect the recent soft-deleted entries above (or query \`await mj.search.listDeletedEntries({ limit: 50, workspace_id: '*' })\` and \`await mj.admin.searchAuditLog({ limit: 100, category: 'write' })\` via \`mj_execute_code\`).
    - If any soft-deleted entry from the last \`${String(params.lookbackHours)}h\` has \`significanceType !== null\`, \`impactScore >= 0.5\`, or active relationships, ${params.autoRestore ? `**immediately restore it** via \`await mj.admin.restoreEntry({ entry_id, workspace_id: '*' })\` and record the false-positive pruning pattern.` : `**do NOT restore it automatically** (\`autoRestore\` is off): list it as a restore candidate with its id, workspace, and reason, and record the false-positive pruning pattern for user review.`}
 2. **Global Invariant Verification**:
-   - Confirm \`0\` unassigned (\`workspaceId === 'default'\` or \`projectNumber <= 0\`) entries exist across \`workspace_id: '*'\`.
+   - Confirm \`0\` unassigned (\`workspaceId === 'default'\` or \`projectNumber <= 0\`) entries exist across \`workspace_id: '*'\` via \`mj.core.getRecentEntries({ workspace_id: 'default', limit: 50 })\` and cursor-paginated \`mj.core.getRecentEntries({ workspace_id: '*', limit: 100 })\` (never call \`search_entries\` without a \`query\` or non-default filter).
    - Check vector index parity via \`await mj.search.getVectorIndexStats({})\`; if vector count drifts from active entry count, run \`await mj.admin.rebuildVectorIndex({ workspace_id: '*' })\`.
 
 ### Phase B — Cross-Run Experience, Telemetry Mining & Automation Self-Improvement

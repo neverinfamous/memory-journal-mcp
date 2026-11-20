@@ -41,6 +41,10 @@ const VALID_ENTRY_FIELDS = new Set([
     'anchors',
     'auto_link',
     'author',
+    'repo',
+    'repo_name',
+    'repoName',
+    'repository',
 ])
 
 /**

@@ -41,7 +41,7 @@ Entry lifecycle — create, retrieve, tags, and test.
 
 | Tool                   | Description                                                                        |
 | ---------------------- | ---------------------------------------------------------------------------------- |
-| `create_entry`         | Create a new journal entry with context and tags. Supports `workspace_id` for multi-tenancy and returns `suggested_links` when `relationships` is omitted. |
+| `create_entry`         | Create a new journal entry with context and tags. Supports `workspace_id` for multi-tenancy, `auto_link: true` for deterministic same-session/shared-anchor linking, and returns `suggested_links` when `relationships` is omitted. |
 | `get_entry_by_id`      | Get a specific journal entry by ID with full details (`source: "team"` queries Team DB). |
 | `get_recent_entries`   | Get recent journal entries. Supports `sort_by` (timestamp or importance), cursor pagination, and `workspace_id`.          |
 | `get_entry_history`    | Get the revision history of a specific journal entry (capped at 10 revisions).     |

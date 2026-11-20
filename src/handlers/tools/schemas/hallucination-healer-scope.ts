@@ -78,12 +78,33 @@ function resolveNamedProjectTarget(
     return false
 }
 
+const PROJECT_ALIAS_KEYS = ['project_name', 'projectName', 'project'] as const
+const REPO_ALIAS_KEYS = ['repo', 'repo_name', 'repoName', 'repository'] as const
+
+function isUnregisteredRepoSlug(
+    strVal: string,
+    registry: Record<string, ProjectRegistryEntry> | undefined
+): boolean {
+    if (
+        strVal.includes('\\') ||
+        strVal.startsWith('/') ||
+        strVal.startsWith('./') ||
+        strVal.startsWith('../') ||
+        /^[A-Za-z]:/.test(strVal)
+    ) {
+        return false
+    }
+    const parts = strVal.split('/')
+    if (parts.length !== 2 || parts[0] === '' || parts[1] === '') return false
+    return findCanonicalRegistryKey(strVal, registry) === undefined
+}
+
 function applyNamedProjectAlias(
     obj: Record<string, unknown>,
     registry: Record<string, ProjectRegistryEntry> | undefined
 ): boolean {
     let modified = false
-    for (const aliasKey of ['project_name', 'projectName', 'project'] as const) {
+    for (const aliasKey of PROJECT_ALIAS_KEYS) {
         if (!(aliasKey in obj)) continue
         const rawVal = obj[aliasKey]
         if (typeof rawVal !== 'string' && typeof rawVal !== 'number') continue
@@ -95,6 +116,29 @@ function applyNamedProjectAlias(
         const conflicting = resolveNamedProjectTarget(obj, strVal, existingWs, registry)
         if (!conflicting) {
             Reflect.deleteProperty(obj, aliasKey)
+            modified = true
+        }
+    }
+
+    const hasExplicitOwner = typeof obj['owner'] === 'string' && obj['owner'].trim() !== ''
+    for (const repoKey of REPO_ALIAS_KEYS) {
+        if (!(repoKey in obj)) continue
+        const rawVal = obj[repoKey]
+        if (typeof rawVal !== 'string') continue
+        const strVal = rawVal.trim()
+        if (hasExplicitOwner || isUnregisteredRepoSlug(strVal, registry)) continue
+        const existingWs =
+            typeof obj['workspace_id'] === 'string' && obj['workspace_id'].trim() !== ''
+                ? obj['workspace_id'].trim()
+                : undefined
+        if (existingWs?.toLowerCase() === strVal.toLowerCase()) {
+            Reflect.deleteProperty(obj, repoKey)
+            modified = true
+            continue
+        }
+        const conflicting = resolveNamedProjectTarget(obj, strVal, existingWs, registry)
+        if (!conflicting) {
+            Reflect.deleteProperty(obj, repoKey)
             modified = true
         }
     }

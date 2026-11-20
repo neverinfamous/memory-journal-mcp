@@ -11,6 +11,7 @@ Team tools require \`TEAM_DB_PATH\` (\`--team-db\`) plus caller identity via \`T
 - **Managing Members**: Admins manage members using \`team_add_member\`, \`team_remove_member\`, \`team_update_member_role\`, \`team_list_members\`, and \`team_get_member\`. 
 - **Author Aliases**: Admins consolidate multi-username attribution via \`team_add_author_alias\`, \`team_list_author_aliases\`, \`team_resolve_author\`, \`team_remove_author_alias\`, and \`team_consolidate_authors\`.
 - **OAuth Scopes**: When HTTP OAuth is active, OAuth scopes (\`read\`, \`write\`, \`team\`, \`audit\`, \`admin\`, \`full\`) and RBAC roles must both permit the operation.
+- **Per-Project Tenant Isolation**: Team read, search, and relationship tools (\`team_get_recent\`, \`team_get_entry_by_id\`, \`team_search\`, \`team_link_entries\`) require a concrete registered \`workspace_id\` and \`project_number\` and reject \`workspace_id: '*'\`. For cross-project team audits, iterate \`list_projects\` and call \`team_get_recent({ workspace_id, project_number, limit: 200 })\` per project instead of passing \`workspace_id: '*'\` or probing sequential entry IDs.
 
 ## Available Tools
 

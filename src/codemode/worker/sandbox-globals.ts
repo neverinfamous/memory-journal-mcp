@@ -171,6 +171,7 @@ export function buildSandboxGlobals(
         prepare: (sql?: string) =>
             createPreparedStatementShim(typeof sql === 'string' ? sql : '', shimMj),
         context: frozenContext,
+        ctx: frozenContext,
         console: frozenConsoleShim,
         fetch: createFetchShim(),
         sleep: (ms: number) =>

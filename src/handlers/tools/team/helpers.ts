@@ -129,7 +129,7 @@ export function missingTeamProjectNumberError(
         code: 'VALIDATION_ERROR',
         category: 'validation',
         suggestion:
-            'Specify the project_number in your tool call, or ensure DEFAULT_PROJECT_NUMBER is configured on the server.',
+            "🛠️ AUTONOMOUS HEALING: Specify a concrete registered workspace_id and project_number (or configure DEFAULT_PROJECT_NUMBER). Team DB enforces per-project tenant isolation and rejects workspace_id: '*'; for global audits, iterate Object.entries((await mj.admin.listProjects({})).projects) and call mj.team.teamGetRecent({ workspace_id, project_number, limit: 200 }) per project instead of probing sequential IDs.",
         recoverable: true,
     }
 }

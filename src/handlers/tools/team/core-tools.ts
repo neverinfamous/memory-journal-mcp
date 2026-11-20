@@ -298,7 +298,8 @@ export function getTeamCoreTools(context: ToolContext): ToolDefinition[] {
                             error: 'Missing project_number. Cross-tenant queries without project_number are not allowed.',
                             code: 'VALIDATION_ERROR',
                             category: 'validation',
-                            suggestion: 'Specify a project_number or workspace_id.',
+                            suggestion:
+                                "🛠️ AUTONOMOUS HEALING: Specify a concrete registered workspace_id and project_number. Team DB enforces per-project tenant isolation and rejects workspace_id: '*'; for global audits, iterate Object.entries((await mj.admin.listProjects({})).projects) and call mj.team.teamGetRecent({ workspace_id, project_number, limit: 200 }) per project.",
                             recoverable: true,
                         }
                     }

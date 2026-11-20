@@ -70,12 +70,12 @@ All errors must extend `MemoryJournalMcpError` (`ValidationError`, `ResourceNotF
 The server supports strict data isolation using `workspace_id`.
 - All CRUD, Search, and Analytics tools accept a `workspace_id`. 
 - If omitted, the server auto-resolves `workspace_id` from `project_number` (via `PROJECT_REGISTRY`) or `process.cwd()` before falling back to `DEFAULT_WORKSPACE_ID` (default: `default`).
-- The `workspace_id` is assigned upon creation and cannot be overwritten directly on standard updates; cross-workspace entry migration uses `update_entry` with `workspace_id: '*'` and `target_workspace_id`.
+- The `workspace_id` is assigned upon creation and cannot be overwritten directly on standard updates; cross-workspace entry migration uses `update_entry` with `workspace_id: '*'` and `target_workspace_id` (omitting `project_number` when `target_workspace_id` is registered so destination `project_number` resolves automatically without triggering source-project ownership rejection).
 - Read, search, and visualization tools accept `workspace_id: "*"` to query across all workspaces (`resolveWorkspaceId('*')` preserves wildcard sentinel `'*'`); `create_entry` uses `resolveProjectContext`, which treats `workspace_id: '*'` as omitted so `'*'` is never stored (and supports cross-workspace `relationships` at creation time). `update_entry`, `delete_entry`, `restore_entry`, `batch_update_entries`, `batch_delete_entries`, and `team_link_entries` keep `'*'` as a cross-workspace caller scope, whereas `link_entries` requires a concrete `workspace_id` or `project_number` and links entries within that workspace. A stored workspace changes only when `target_workspace_id` is set and is not `'*'`.
 
 ### 4. Knowledge Graph Relationships & Parameter Healing
 
-- Tools creating entries (`create_entry`, `team_create_entry`, `batch_create_entries`, and `team_batch_create_entries`) accept a canonical `relationships: [{ targetId, relationType }]` array.
+- Tools creating entries (`create_entry`, `team_create_entry`, `batch_create_entries`, and `team_batch_create_entries`) accept a canonical `relationships: [{ targetId, relationType }]` array (and `create_entry` supports `auto_link: true` to auto-link up to 2 high-confidence `same-session`/`shared-anchor` entries when `relationships` is omitted).
 - Autonomous agents frequently supply top-level relationship fields (`evolves_from`, `references`, `implements`, `related_to`, `clarifies`, `response_to`, `blocked_by`, `resolved`, `resolves`, `caused`, `depends_on`, or their camelCase equivalents).
 - `healAgentHallucinations` autonomously intercepts and translates top-level relationship parameters into the canonical `relationships` structure and purges the top-level keys before strict Zod validation, ensuring zero friction across single and batch creation flows.
 

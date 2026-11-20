@@ -25,7 +25,7 @@ Static operational anchor for `memory-journal-mcp` Code Mode (`mj_execute_code`)
   `mj_execute_code({ code, workspace_id, project_number, repo, session_id, context, readonly, dry_run, auto_version, max_result_size, timeout })`
   - **[ALWAYS]** pass explicit **`workspace_id`** (exact repo name) AND **`project_number`** (plus **`repo`** for `mj.git.*` / `mj.github.*` calls) **both** at the top level of `mj_execute_code` **and** on inner `mj.*` mutations — **NEVER** rely on `workspace_id` auto-resolution.
   - **Session & Versioning:** Pass `session_id` (active conversation UUID) to tag sandbox entries and telemetry. `auto_version` defaults to `true`, injecting `expected_version` for optimistic concurrency on entry updates/deletes (personal and team); pass `auto_version: false` only when supplying `expected_version` yourself.
-  - **Safe Markdown Passing (`context.content`):** Pass multi-line Markdown bodies via `context: { content: "..." }` and reference `context.content` inside `code` to avoid template-literal and backtick escaping errors.
+  - **Safe Markdown Passing (`context.content`):** Pass multi-line Markdown bodies via `context: { content: "..." }` and reference `context.content` (or `ctx.content`) inside `code` to avoid template-literal and backtick escaping errors.
   - **Execution Guards & Introspection:** Pass `readonly: true` for read-only audits, `dry_run: true` to preview mutations, `max_result_size` to bound large outputs, and `await mj.<group>.<method>.schema()` to inspect unfamiliar parameter schemas at runtime.
 - **Unbiased Pre-Planning Hybrid & Graph Recall:** Omit `sort_by: 'importance'` (or use `sort_by: 'blended'`) and exclude commit noise (both `commit-narrative` and legacy `session-commits` rows) so architectural decisions rank by relevance before expanding the graph. Pass `source: top.source` (or rely on Code Mode silent team fallback auto-routing with `_healed.routedTo`):
   ```javascript
@@ -69,7 +69,7 @@ Every manual journal entry (`mj.core.createEntry`) **MUST** populate:
 4. **`entry_type`**: Canonical enum value — `'technical_note'`, `'project_decision'`, `'bug_fix'`, `'feature_implementation'`, `'planning'`, `'retrospective'`, or `'maintenance'` (pair architectural decisions with `significance_type: 'architecture' | 'decision'`).
 5. **`impact_score`** (`0.0–1.0`) & **`trust_score`** (`0.0–1.0`).
 6. **`validation_status`**: `'passed'`, `'none'`, or `'failed'`.
-7. **Graph `relationships`**: Pass **`relationships: [{ targetId: <number>, relationType: <canonical_type> }]`** (if omitted, `create_entry` returns up to 3 `suggested_links` from same-session, shared-anchor, and semantic neighbors) using **only** canonical types:
+7. **Graph `relationships`**: Pass **`relationships: [{ targetId: <number>, relationType: <canonical_type> }]`** (if omitted, `create_entry` returns up to 3 `suggested_links` from same-session, shared-anchor, and semantic neighbors, or pass `auto_link: true` to auto-link up to 2 same-session/shared-anchor targets) using **only** canonical types:
    - Causal (carry 20% of importance score): `'resolved'`, `'caused'`, `'blocked_by'`
    - Structural / informational: `'evolves_from'`, `'implements'`, `'clarifies'`, `'response_to'`, `'references'`
    - **NEVER** use `'caused_by'` (invert source/target or use `'resolved'` / `'evolves_from'`).

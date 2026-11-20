@@ -132,7 +132,7 @@ async function executeCreateEntry(
               relationshipWarnings
           )
         : { sharedWithTeam: false }
-    const suggestedLinks =
+    const candidateSuggestions =
         (!input.relationships || input.relationships.length === 0) &&
         !input.tags?.includes('commit-narrative')
             ? await computeSuggestedLinks({
@@ -144,6 +144,24 @@ async function executeCreateEntry(
                   sessionId: input.session_id,
               })
             : []
+    const autoTargets =
+        input.auto_link === true
+            ? candidateSuggestions
+                  .filter((s) => s.reason === 'same-session' || s.reason === 'shared-anchor')
+                  .slice(0, 2)
+            : []
+    if (autoTargets.length > 0) {
+        relationshipWarnings.push(
+            ...linkRequestedRelationships(
+                db,
+                id,
+                autoTargets.map((t) => ({ targetId: t.targetId, relationType: t.relationType })),
+                wsId,
+                projectNumber
+            )
+        )
+    }
+    const suggestedLinks = autoTargets.length > 0 ? [] : candidateSuggestions
     const allWarnings = [
         ...(vectorWarning !== undefined ? [vectorWarning] : []),
         ...relationshipWarnings,

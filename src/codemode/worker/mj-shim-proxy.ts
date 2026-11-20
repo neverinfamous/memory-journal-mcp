@@ -202,7 +202,7 @@ function resolveCoreAndMetaShimProp(
 ): ShimMatch {
     const { mjApi: target, executeCodeFnRef, getUpdateMemoryFn } = options
     if (typeof prop === 'string' && SELF_REFERENTIAL_PROPS.has(prop)) return { matched: true, value: shimMj }
-    if (prop === 'context') return { matched: true, value: target['context'] }
+    if (prop === 'context' || prop === 'ctx') return { matched: true, value: target['context'] }
     if (prop === 'getContext' || prop === 'get_context') return { matched: true, value: target['getContext'] }
     if (prop === 'schema') return { matched: true, value: createSchemaShim(shimMj) }
 

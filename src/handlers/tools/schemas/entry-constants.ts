@@ -200,6 +200,7 @@ export const KEY_ALIAS_MAP: Record<string, string> = {
     significanceType: 'significance_type',
     significance: 'significance_type',
     autoContext: 'auto_context',
+    autoLink: 'auto_link',
     impactScore: 'impact_score',
     impact: 'impact_score',
     trustScore: 'trust_score',

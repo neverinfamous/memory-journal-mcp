@@ -61,6 +61,7 @@ export const TeamCreateEntrySchema = z.preprocess(
             workflow_name: z.string().optional(),
             workflow_status: z.enum(['queued', 'in_progress', 'completed']).optional(),
             author: z.string().max(100).optional(),
+            auto_link: z.boolean().optional(),
             auto_context: z.string().optional(),
             impact_score: z.number().min(0).max(1).optional(),
             trust_score: z.number().min(0).max(1).optional(),
@@ -211,6 +212,10 @@ export const TeamCreateEntrySchemaMcp = z.preprocess(
             workflow_name: z.string().optional(),
             workflow_status: z.string().optional(),
             author: z.string().optional().describe('Override author name (default: auto-detected)'),
+            auto_link: z
+                .boolean()
+                .optional()
+                .describe('Compatibility option accepted for parity with create_entry / CLI --auto-link.'),
             auto_context: z.string().optional(),
             impact_score: relaxedNumber()
                 .optional()

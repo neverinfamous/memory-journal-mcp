@@ -132,9 +132,13 @@ function applyTargetWorkspaceScope(
             },
         }
     }
+    const effectiveSourceWs =
+        typeof paramsObj['workspace_id'] === 'string' ? paramsObj['workspace_id'] : workspaceId
     const hasCrossWorkspaceTarget =
         callerTargetWs !== undefined &&
-        (typeof workspaceId !== 'string' || callerTargetWs.toLowerCase() !== workspaceId.toLowerCase())
+        (typeof effectiveSourceWs !== 'string' ||
+            effectiveSourceWs === '*' ||
+            callerTargetWs.toLowerCase() !== effectiveSourceWs.toLowerCase())
 
     if (callerTargetWs !== undefined) {
         const isWildcardMoveSource = paramsObj['workspace_id'] === '*' || workspaceId === '*'
@@ -325,13 +329,20 @@ function verifyWildcardUpdateSourceProject(
         return undefined
     }
     const sourceEntry = sessionContext.db.getEntryById(rawEntryId, '*')
-    if (sourceEntry !== null && sourceEntry !== undefined && sourceEntry.projectNumber !== projectId) {
+    const sourceProject = sourceEntry?.projectNumber
+    if (
+        sourceProject !== null &&
+        sourceProject !== undefined &&
+        sourceProject > 0 &&
+        sourceProject !== projectId
+    ) {
         return {
             success: false,
             error: `Entry ${String(rawEntryId)} not found`,
             code: 'RESOURCE_NOT_FOUND',
             category: 'resource',
-            suggestion: 'Verify the entry ID and project number, and try again',
+            suggestion:
+                "🛠️ AUTONOMOUS HEALING: Cross-workspace moves from another project are blocked when mj_execute_code pins a different top-level project_number. Re-run mj_execute_code with workspace_id: '*' (omitting top-level project_number) and call mj.admin.updateEntry({ entry_id, workspace_id: '*', target_workspace_id }) without inner project_number.",
             recoverable: true,
         }
     }

@@ -177,7 +177,7 @@ function buildUpdateSets(
         )
         if (callerWorkspace !== '*' && !sameWorkspace) {
             throw new ConflictError(
-                `Cannot move entry ${String(id)} to workspace '${input.targetWorkspaceId}' from '${callerWorkspace}'. Moving an entry to another workspace requires workspaceId = '*'.`,
+                `🛠️ AUTONOMOUS HEALING: Cannot move entry ${String(id)} to workspace '${input.targetWorkspaceId}' from '${callerWorkspace}'. Moving an entry to another workspace requires workspaceId = '*' (call update_entry with workspace_id: '*' and target_workspace_id, omitting project_number for registered destinations; in mj_execute_code omit top-level project_number when moving across projects).`,
                 { id: existing.id, version: existing.version, workspaceId: existing.workspaceId }
             )
         }

@@ -51,6 +51,7 @@ export const CreateEntrySchema = z.preprocess(
             status: z.enum(['pending', 'valid', 'stale', 'invalidated', 'unresolvable']).optional().default('pending'),
         })).optional(),
         share_with_team: z.boolean().optional().default(false),
+        auto_link: z.boolean().optional(),
         auto_context: z.string().optional(),
         session_id: z.string().optional(),
         relationships: z.array(
@@ -167,6 +168,12 @@ export const CreateEntrySchemaMcp = z.preprocess(
             status: z.string().optional().default('pending'),
         })).optional().describe('Files or lines of code that this entry is fundamentally anchored to. If the anchor becomes stale/invalid, the entry importance score drops.'),
         share_with_team: z.boolean().optional().default(false).describe('If true, saves a copy of this entry to the Team database (if configured) using your team alias'),
+        auto_link: z
+            .boolean()
+            .optional()
+            .describe(
+                'When true and relationships is omitted, automatically links up to 2 high-confidence same-session or shared-anchor entries (parity with CLI --auto-link).'
+            ),
         auto_context: z.string().optional().describe('JSON string with structured metadata. Used for session-commits context.'),
         session_id: z.string().optional().describe('Agent session ID for thread isolation (usually conversation ID).'),
         relationships: z.array(
