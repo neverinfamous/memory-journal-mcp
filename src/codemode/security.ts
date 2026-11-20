@@ -180,6 +180,7 @@ export class CodeModeSecurityManager {
                 const ancestors: object[] = []
                 actualBytes = Buffer.byteLength(
                     JSON.stringify(result, function (this: unknown, _key: string, value: unknown): unknown {
+                        if (typeof value === 'bigint') return value.toString()
                         if (typeof value === 'object' && value !== null) {
                             const holderIdx =
                                 typeof this === 'object' && this !== null ? ancestors.lastIndexOf(this) : -1

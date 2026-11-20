@@ -16,6 +16,7 @@ import {
     type RpcRequest,
 } from './types.js'
 import { handleRpcRequest } from './worker-rpc-handler.js'
+import { parseByteSizeValue } from './shared-context-parsers.js'
 import { sanitizeErrorForLogging } from '../utils/security-utils.js'
 
 // =============================================================================
@@ -71,7 +72,7 @@ function resolveEffectiveMaxResultSize(override?: number): number {
     let maxResultSize = override
     if (maxResultSize === undefined || Number.isNaN(maxResultSize) || maxResultSize <= 0) {
         const envVal = process.env['CODE_MODE_MAX_RESULT_SIZE']
-        maxResultSize = envVal ? parseInt(envVal, 10) : 100 * 1024
+        maxResultSize = envVal ? (parseByteSizeValue(envVal, 'b') ?? 100 * 1024) : 100 * 1024
     }
     if (Number.isNaN(maxResultSize) || maxResultSize <= 0) return 100 * 1024
     return maxResultSize > 50 * 1024 * 1024 ? 50 * 1024 * 1024 : maxResultSize

@@ -4,6 +4,7 @@
  */
 
 import { wrapResult } from './worker-result-proxy.js'
+import { IMMUTABLE_PROXY_TRAPS } from './worker/result-proxy-aliases.js'
 
 /**
  * Wraps a tool call Promise with a Proxy that gives actionable Autonomous Healing
@@ -144,6 +145,7 @@ export function createFactoryFnProxy(api: Record<string, unknown>): object {
         return api
     }
     return new Proxy(factoryFn, {
+        ...IMMUTABLE_PROXY_TRAPS,
         apply: () => api,
         construct: () => api,
         get(_t, p): unknown {
@@ -163,6 +165,7 @@ export function createFactoryFnProxy(api: Record<string, unknown>): object {
  */
 export function createUnknownGroupRejectionProxy(prop: string, reason: string): object {
     return new Proxy(() => undefined, {
+        ...IMMUTABLE_PROXY_TRAPS,
         apply(): Promise<unknown> {
             return wrapPromise(
                 Promise.resolve(

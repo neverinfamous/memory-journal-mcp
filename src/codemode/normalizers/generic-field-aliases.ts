@@ -141,7 +141,7 @@ function coerceNonProjectNumericField(
     }
 }
 
-const READ_ONLY_PROJECT_FILTER_METHODS = new Set([
+export const READ_ONLY_PROJECT_FILTER_METHODS = new Set([
     'get_recent_entries',
     'getRecentEntries',
     'search_entries',

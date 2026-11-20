@@ -5,6 +5,7 @@
 
 import { wrapResult } from './worker-result-proxy.js'
 import { wrapPromise } from './proxy-helpers.js'
+import { IMMUTABLE_PROXY_TRAPS } from './worker/result-proxy-aliases.js'
 import { PACKAGE_VERSION } from './package-version.js'
 import { JOURNAL_TABLES, getSchemaHelp, listJournalTables } from './api/schema-help.js'
 
@@ -77,15 +78,6 @@ const SYSTEM_STATS_METHODS = new Set([
     'getstatistics',
     'statistics',
 ])
-
-const IMMUTABLE_PROXY_TRAPS = {
-    isExtensible: (): boolean => true,
-    preventExtensions: (): boolean => false,
-    set: (): boolean => false,
-    defineProperty: (): boolean => false,
-    deleteProperty: (): boolean => false,
-    setPrototypeOf: (): boolean => false,
-} as const
 
 /**
  * Builds the `mj.schema` virtual namespace proxy.

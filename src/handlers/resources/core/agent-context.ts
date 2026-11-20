@@ -25,7 +25,9 @@ function formatDefaultAgentContext(
 ): ResourceResult {
     const defaultProjNum =
         fallbackRegistry?.['default']?.project_number ??
-        (config?.defaultWorkspaceId === 'default' ? config.defaultProjectNumber : undefined)
+        (config?.defaultWorkspaceId?.trim().toLowerCase() === 'default'
+            ? config.defaultProjectNumber
+            : undefined)
     setActiveSessionProject(
         'default',
         defaultProjNum !== undefined && defaultProjNum > 0 ? defaultProjNum : null,

@@ -5,6 +5,7 @@
 
 import { wrapResult } from '../worker-result-proxy.js'
 import { JOURNAL_TABLES, getSchemaHelp, listJournalTables } from '../api/schema-help.js'
+import { IMMUTABLE_PROXY_TRAPS } from './result-proxy-aliases.js'
 
 export const DB_TO_JOURNAL: Record<string, [string, string]> = {
     count: ['analytics', 'getStatistics'],
@@ -52,6 +53,7 @@ export function createCallableShim(shimMj: Record<string, unknown>, fnName = 'Me
         return shimMj
     }
     return new Proxy(callableFn, {
+        ...IMMUTABLE_PROXY_TRAPS,
         apply(_t, _thisArg, _args): unknown {
             return shimMj
         },
@@ -154,6 +156,7 @@ export function wrapDelegatingTool(
     targetFnGetter: () => unknown
 ): unknown {
     return new Proxy(fn, {
+        ...IMMUTABLE_PROXY_TRAPS,
         get(target, prop, receiver): unknown {
             const real = targetFnGetter()
             if (
@@ -181,6 +184,7 @@ export function createSchemaShim(shimMj: Record<string, unknown>): object {
         return schemaHelpFn()
     }
     return new Proxy(schemaCallable, {
+        ...IMMUTABLE_PROXY_TRAPS,
         apply(): unknown {
             return schemaHelpFn()
         },
@@ -250,6 +254,7 @@ export function createEmptyFallback(): unknown {
         flatMap: () => [],
     }
     return new Proxy(fallback, {
+        ...IMMUTABLE_PROXY_TRAPS,
         get(t, p): unknown {
             if (p in t) return t[p]
             if (typeof p === 'symbol') return undefined

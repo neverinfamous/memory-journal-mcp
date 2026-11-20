@@ -156,7 +156,12 @@ function sanitizeAuditArgNode(
     budget.count++
 
     if (ArrayBuffer.isView(value)) return `[Binary: ${String(value.byteLength)} bytes]`
-    if (value instanceof Date) return value.toISOString()
+    if (value instanceof Date) {
+        return Number.isNaN(value.getTime()) ? 'Invalid Date' : value.toISOString()
+    }
+    if (value instanceof URL) {
+        return sliceUntrustedInline(sanitizeErrorForLogging(value.href), 2048, '...')
+    }
     if (value instanceof Error) {
         return sliceUntrustedInline(sanitizeErrorForLogging(`${value.name}: ${value.message}`), 2048, '...')
     }

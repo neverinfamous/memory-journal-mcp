@@ -274,7 +274,10 @@ async function handleGitHubStatusResource(
         targetRepo !== undefined && targetRepo !== ''
             ? targetRepo
             : resourceWorkspace(context)
-    const canonicalRepo = findCanonicalRegistryKey(activeWs, registry) ?? activeWs
+    const canonicalRepo =
+        findCanonicalRegistryKey(activeWs, registry) ??
+        findCanonicalRegistryKey(repo, registry) ??
+        activeWs
     const kanbanProject = resolveStatusKanbanProject(context, canonicalRepo, registry)
 
     const [repoContextResult, kanbanResult] = await Promise.allSettled([

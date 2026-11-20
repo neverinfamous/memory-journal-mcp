@@ -84,7 +84,8 @@ export function scrubAuditArgValue(
     budget.count++
 
     if (ArrayBuffer.isView(val)) return `[Binary: ${String(val.byteLength)} bytes]`
-    if (val instanceof Date) return val.toISOString()
+    if (val instanceof Date) return Number.isNaN(val.getTime()) ? 'Invalid Date' : val.toISOString()
+    if (val instanceof URL) return scrubAndTruncateAuditString(val.href, 2048)
     if (val instanceof Error) {
         return scrubAndTruncateAuditString(`${val.name}: ${val.message}`, 2048)
     }

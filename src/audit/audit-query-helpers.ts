@@ -164,15 +164,24 @@ export function resolveResourceAuditCategory(uriOrName: string): AuditCategory {
 
 function applyActiveSessionScopeFallback(
     scope: AuditScopeMetadata,
-    reqCtx?: RequestContext
+    reqCtx?: RequestContext,
+    explicitWildcardWorkspace = false
 ): AuditScopeMetadata {
+    if (explicitWildcardWorkspace) {
+        return {
+            ...(scope.projectNumber !== undefined ? { projectNumber: scope.projectNumber } : {}),
+        }
+    }
     const sessionProj = reqCtx?.ephemeralSessionProject ?? getActiveSessionProject()
     const workspaceId =
         scope.workspaceId ??
         (sessionProj.workspaceId !== undefined && sessionProj.workspaceId.length > 0
             ? sessionProj.workspaceId
             : undefined)
-    const projectNumber = scope.projectNumber ?? sessionProj.projectNumber
+    const canFallbackProject =
+        scope.workspaceId === undefined || scope.workspaceId === sessionProj.workspaceId
+    const projectNumber =
+        scope.projectNumber ?? (canFallbackProject ? sessionProj.projectNumber : undefined)
     return {
         ...(workspaceId !== undefined ? { workspaceId } : {}),
         ...(projectNumber !== undefined ? { projectNumber } : {}),
@@ -186,12 +195,18 @@ export function extractAuditScopeFromArgs(
 ): AuditScopeMetadata {
     let workspaceId: string | undefined
     let projectNumber: number | undefined
+    let explicitWildcardWorkspace = false
 
     if (typeof args === 'object' && args !== null) {
         const record = args as Record<string, unknown>
         const rawWs = record['workspace_id'] ?? record['workspaceId'] ?? record['workspace']
-        if (typeof rawWs === 'string' && rawWs.trim().length > 0 && rawWs.trim() !== '*') {
-            workspaceId = sanitizeErrorForLogging(rawWs.trim()).slice(0, 255)
+        if (typeof rawWs === 'string') {
+            const trimmedWs = rawWs.trim()
+            if (trimmedWs === '*') {
+                explicitWildcardWorkspace = true
+            } else if (trimmedWs.length > 0) {
+                workspaceId = sanitizeErrorForLogging(trimmedWs).slice(0, 255)
+            }
         }
         const rawProj = record['project_number'] ?? record['projectNumber']
         const parsedProject = parsePositiveProjectNumber(rawProj)
@@ -203,7 +218,8 @@ export function extractAuditScopeFromArgs(
             ...(workspaceId !== undefined ? { workspaceId } : {}),
             ...(projectNumber !== undefined ? { projectNumber } : {}),
         },
-        reqCtx
+        reqCtx,
+        explicitWildcardWorkspace
     )
 }
 
@@ -214,19 +230,31 @@ export function extractAuditScopeFromUri(
 ): AuditScopeMetadata {
     let workspaceId: string | undefined
     let projectNumber: number | undefined
+    let explicitWildcardWorkspace = false
 
     try {
         const parsed = new URL(uri)
         const wsParam = parsed.searchParams.get('workspace_id')
-        if (wsParam !== null && wsParam.trim().length > 0 && wsParam.trim() !== '*') {
-            workspaceId = sanitizeErrorForLogging(wsParam.trim()).slice(0, 255)
+        if (wsParam !== null) {
+            const trimmedWs = wsParam.trim()
+            if (trimmedWs === '*') {
+                explicitWildcardWorkspace = true
+            } else if (trimmedWs.length > 0) {
+                workspaceId = sanitizeErrorForLogging(trimmedWs).slice(0, 255)
+            }
         }
         const projParam = parsed.searchParams.get('project_number')
         if (projParam !== null) {
             const n = parseCanonicalPositiveInt(projParam)
             if (n !== undefined) projectNumber = n
         }
-        if (workspaceId === undefined && (parsed.hostname === 'briefing' || parsed.hostname === 'agent-context' || parsed.hostname === 'agent-id')) {
+        if (
+            workspaceId === undefined &&
+            !explicitWildcardWorkspace &&
+            (parsed.hostname === 'briefing' ||
+                parsed.hostname === 'agent-context' ||
+                parsed.hostname === 'agent-id')
+        ) {
             const rawRepo = parsed.pathname.replace(/^\/+/, '').trim()
             if (rawRepo.length > 0) {
                 workspaceId = sanitizeErrorForLogging(decodeURIComponent(rawRepo)).slice(0, 255)
@@ -241,7 +269,8 @@ export function extractAuditScopeFromUri(
             ...(workspaceId !== undefined ? { workspaceId } : {}),
             ...(projectNumber !== undefined ? { projectNumber } : {}),
         },
-        reqCtx
+        reqCtx,
+        explicitWildcardWorkspace
     )
 }
 

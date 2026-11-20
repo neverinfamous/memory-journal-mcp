@@ -178,7 +178,9 @@ function resolveNamedDefaultBriefingScope(
     const defaultEntry = registry?.['default']
     const registeredDefault =
         defaultEntry?.project_number ??
-        (config.defaultWorkspaceId === 'default' ? config.defaultProjectNumber : undefined)
+        (config.defaultWorkspaceId?.trim().toLowerCase() === 'default'
+            ? config.defaultProjectNumber
+            : undefined)
     const defaultPath = defaultEntry?.path
     const hasDefaultPath = defaultPath !== undefined && defaultPath.trim() !== ''
     if (pinSession) {

@@ -64,7 +64,7 @@ function resolveCreateEntryScope(
                 error: 'Missing or unresolvable project_number. Entry creation blocked because no valid project could be determined for this entry.',
                 code: 'VALIDATION_ERROR',
                 category: 'validation',
-                suggestion: 'To find your project_number, call list_projects (or mj.core.listProjects()), read memory://agent-context/<repo-name> via read_resource (e.g. read_resource("memory-journal-mcp", "memory://agent-context/memory-journal-mcp")), or inspect memory://briefing/<project-name>. Avoid bare memory://agent-id in multi-project setups. Then pass project_number explicitly in your request.',
+                suggestion: 'To find your project_number, call list_projects (or mj.admin.listProjects()), read memory://agent-context/<repo-name> via read_resource (e.g. read_resource("memory-journal-mcp", "memory://agent-context/memory-journal-mcp")), or inspect memory://briefing/<project-name>. Avoid bare memory://agent-id in multi-project setups. Then pass project_number explicitly in your request.',
                 recoverable: true,
             },
         }

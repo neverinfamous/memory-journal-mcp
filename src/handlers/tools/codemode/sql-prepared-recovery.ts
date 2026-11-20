@@ -5,6 +5,7 @@
 import * as vm from 'node:vm'
 import { parseSqlStatement } from '../../../codemode/sql-positional-binder.js'
 import { stripCommentsAndStrings } from '../../../codemode/security-stripper.js'
+import { buildNonCodeSpans, isOffsetInNonCodeSpan } from './code-healer-rewrites.js'
 
 const UNPARSEABLE_ARG = Symbol('UNPARSEABLE_ARG')
 
@@ -207,14 +208,25 @@ function extractPrepareSqlAt(
     return { sql: quoted.value.trim(), afterPrepareCloseIdx: j + 1 }
 }
 
-function extractPreparedSqlAndRunArgs(
-    code: string
-): { rawSql: string; rawRunArgs: string } | null {
-    const prepIdx = code.indexOf('.prepare')
-    if (prepIdx === -1) return null
-    const prep = extractPrepareSqlAt(code, prepIdx)
-    if (prep === null) return null
+function findNextCodePrepareIdx(
+    code: string,
+    spans: ReturnType<typeof buildNonCodeSpans>,
+    fromIdx: number
+): number {
+    let idx = code.indexOf('.prepare', fromIdx)
+    while (idx !== -1) {
+        if (!isOffsetInNonCodeSpan(spans, idx)) return idx
+        idx = code.indexOf('.prepare', idx + '.prepare'.length)
+    }
+    return -1
+}
 
+function extractPreparedRunArgsAt(
+    code: string,
+    spans: ReturnType<typeof buildNonCodeSpans>,
+    prepIdx: number,
+    prep: { sql: string; afterPrepareCloseIdx: number }
+): { rawSql: string; rawRunArgs: string } | null {
     const tail = code.slice(prep.afterPrepareCloseIdx)
     const chainedExec = /^\s*\.(?:run|get|all)\s*\(/.exec(tail)
     if (chainedExec !== null) {
@@ -235,12 +247,30 @@ function extractPreparedSqlAndRunArgs(
     const stmtCallRe = /\b([A-Za-z_$][\w$]*)\s*\.(?:run|get|all)\s*\(/g
     for (const m of tail.matchAll(stmtCallRe)) {
         if (m[1] !== stmtVar || m.index === undefined) continue
-        const openParenIdx = prep.afterPrepareCloseIdx + m.index + m[0].length - 1
+        const matchStart = prep.afterPrepareCloseIdx + m.index
+        if (isOffsetInNonCodeSpan(spans, matchStart)) continue
+        const openParenIdx = matchStart + m[0].length - 1
         const callArgs = scanSimpleParenBody(code, openParenIdx)
         if (callArgs === null) continue
         const afterCall = code.slice(callArgs.afterCloseIdx)
         if (!/^(?:\s*;|\s*\r?\n|\s*$)/.test(afterCall)) continue
         return { rawSql: prep.sql, rawRunArgs: callArgs.body }
+    }
+    return null
+}
+
+function extractPreparedSqlAndRunArgs(
+    code: string
+): { rawSql: string; rawRunArgs: string } | null {
+    const spans = buildNonCodeSpans(code)
+    let prepIdx = findNextCodePrepareIdx(code, spans, 0)
+    while (prepIdx !== -1) {
+        const prep = extractPrepareSqlAt(code, prepIdx)
+        if (prep !== null) {
+            const matched = extractPreparedRunArgsAt(code, spans, prepIdx, prep)
+            if (matched !== null) return matched
+        }
+        prepIdx = findNextCodePrepareIdx(code, spans, prepIdx + '.prepare'.length)
     }
     return null
 }

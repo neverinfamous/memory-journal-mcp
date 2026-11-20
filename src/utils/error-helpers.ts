@@ -41,7 +41,14 @@ function scrubDetailsValue(value: unknown, depth: number, seen: WeakSet<object>)
     if (typeof value === 'string') {
         return sanitizeErrorForLogging(value).replace(HOST_FILESYSTEM_PATH_RE, '<sanitized_path>')
     }
+    if (typeof value === 'bigint') return value.toString()
     if (value === null || typeof value !== 'object') return value
+    if (value instanceof Date) {
+        return Number.isNaN(value.getTime()) ? 'Invalid Date' : value.toISOString()
+    }
+    if (value instanceof URL) {
+        return sanitizeErrorForLogging(value.href)
+    }
     if (seen.has(value)) return '[Circular]'
     if (depth >= MAX_ERROR_DETAILS_SCRUB_DEPTH) return '[Truncated]'
     seen.add(value)

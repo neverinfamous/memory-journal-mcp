@@ -81,7 +81,7 @@ export function convertKeysToSnakeCase(obj: Record<string, unknown>, methodName?
             continue
         }
 
-        const coerced = coerceNumericValue(snakeKey, value)
+        const coerced = coerceNumericValue(snakeKey, value, methodLower)
         if (coerced !== undefined) {
             result[snakeKey] = coerced.value
             continue

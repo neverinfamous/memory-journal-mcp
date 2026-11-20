@@ -211,7 +211,11 @@ function clearStaleLock(
             throwContendedLockError(lockDir, renameErr)
         }
         try {
-            fs.unlinkSync(lockFile)
+            try {
+                fs.unlinkSync(lockFile)
+            } catch (unlinkErr: unknown) {
+                if (!hasErrorCode(unlinkErr, 'ENOENT')) throw unlinkErr
+            }
             fs.rmdirSync(lockDir)
         } catch {
             throwContendedLockError(lockDir, renameErr)

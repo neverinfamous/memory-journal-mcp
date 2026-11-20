@@ -6,6 +6,7 @@
 import { PACKAGE_VERSION } from '../package-version.js'
 import { createPreparedStatementShim } from './node-shims.js'
 import { createSchemaShim } from './namespace-shims.js'
+import { IMMUTABLE_PROXY_TRAPS } from './result-proxy-aliases.js'
 
 function getGroupProp(target: Record<string, unknown>, group: string, prop: string): unknown {
     const g = target[group]
@@ -64,6 +65,7 @@ export function createAdaptersShim(prop: string): object {
         get: returnAdapters,
     })
     return new Proxy(callable, {
+        ...IMMUTABLE_PROXY_TRAPS,
         apply: () => returnAdapters(),
         get(t, p): unknown {
             if (typeof p === 'symbol' || p === 'then') return undefined
@@ -145,6 +147,7 @@ export function createDbDomainProxy(
     return new Proxy(
         {},
         {
+            ...IMMUTABLE_PROXY_TRAPS,
             get(_t, dbProp): unknown {
                 if (typeof dbProp === 'symbol' || dbProp === 'then') return undefined
                 if (dbProp === 'schema') return createSchemaShim(shimMj)
@@ -220,6 +223,7 @@ export function createSystemDatabaseDomainProxy(
     }
     for (const k of STATS_METHOD_KEYS) dbShim[k] = getStatsFn
     return new Proxy(dbShim, {
+        ...IMMUTABLE_PROXY_TRAPS,
         get(t, p): unknown {
             if (typeof p === 'symbol' || p === 'then') return undefined
             if (typeof p === 'string' && p in t) return t[p]

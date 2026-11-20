@@ -413,13 +413,28 @@ function parseWhereOnly(cleanSql: string, args: unknown[], action: 'delete' | 'g
     return { action, params: payload }
 }
 
-/** Strips leading line comments and block comments from a SQL string. */
+/** Strips `--` line comments and block comments outside SQL string literals. */
 export function cleanSqlText(sql: string): string {
-    return sql
-        .trim()
-        .replace(/^--[^\n]*\n/gm, '')
-        .replace(/\/\*[\s\S]*?\*\//g, '')
-        .trim()
+    const out: string[] = []
+    let quote: string | null = null
+    for (let i = 0; i < sql.length; i++) {
+        const ch = sql[i] ?? ''
+        if (quote !== null) {
+            out.push(ch)
+            if (ch === quote && sql[i + 1] === quote) { out.push(quote); i++ }
+            else if (ch === quote) quote = null
+        } else if (ch === "'" || ch === '"') { quote = ch; out.push(ch) }
+        else if (ch === '-' && sql[i + 1] === '-') {
+            const nl = sql.indexOf('\n', i + 2)
+            if (nl === -1) break
+            out.push('\n'); i = nl
+        } else if (ch === '/' && sql[i + 1] === '*') {
+            const end = sql.indexOf('*/', i + 2)
+            if (end === -1) break
+            out.push(' '); i = end + 1
+        } else out.push(ch)
+    }
+    return out.join('').trim()
 }
 
 /** Parses a SQL statement + positional/record binds into a journal action payload. */

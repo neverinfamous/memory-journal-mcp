@@ -168,8 +168,9 @@ function collectTeamVisualizeEntryIds(
     initialWsId: string,
     projectNumber: number,
     entryId: number | undefined,
-    tag: string | undefined,
-    depth: number
+    tags: string[] | undefined,
+    depth: number,
+    limit?: number
 ): { wsId: string; entryIds: number[] } | { errorResponse: Record<string, unknown> } {
     let wsId = initialWsId
     if (entryId !== undefined) {
@@ -193,22 +194,20 @@ function collectTeamVisualizeEntryIds(
                 },
             }
         }
-        return {
-            wsId,
-            entryIds: collectNeighborhood(teamDb, entryId, depth, wsId, projectNumber, context),
-        }
+        const ids = collectNeighborhood(teamDb, entryId, depth, wsId, projectNumber, context)
+        return { wsId, entryIds: limit !== undefined ? ids.slice(0, limit) : ids }
     }
-    if (tag) {
+    if (tags !== undefined && tags.length > 0) {
         const { entries: tagEntries } = teamDb.searchByDateRange(DATE_MIN_SENTINEL, DATE_MAX_SENTINEL, {
-            tags: [tag],
-            limit: 50,
+            tags,
+            limit: limit ?? 50,
             workspaceId: wsId,
             projectNumber,
         })
         return { wsId, entryIds: tagEntries.map((e) => e.id) }
     }
     const { entries: recent } = teamDb.getRecentEntries(
-        20,
+        limit ?? 20,
         undefined,
         undefined,
         undefined,
@@ -219,13 +218,25 @@ function collectTeamVisualizeEntryIds(
     return { wsId, entryIds: recent.map((e) => e.id) }
 }
 
+export interface TeamVisualizeExtraOptions {
+    tags?: string[]
+    limit?: number
+}
+
 export function executeTeamVisualizeRelationships(
     context: ToolContext,
     teamDb: IDatabaseAdapter,
-    params: unknown
+    params: unknown,
+    extra?: TeamVisualizeExtraOptions
 ): Record<string, unknown> {
     const { entry_id, tag, depth, project_number, workspace_id } =
         TeamVisualizeRelationshipsSchema.parse(params)
+    const effectiveTags =
+        extra?.tags !== undefined && extra.tags.length > 0
+            ? extra.tags
+            : tag !== undefined
+              ? [tag]
+              : undefined
     const initialWsId = resolveWorkspaceId(workspace_id, project_number, context.config)
     const resolvedProject = resolveTeamProjectNumber(
         context,
@@ -244,8 +255,9 @@ export function executeTeamVisualizeRelationships(
         initialWsId,
         projectNumber,
         entry_id,
-        tag,
-        depth
+        effectiveTags,
+        depth,
+        extra?.limit
     )
     if ('errorResponse' in collected) return collected.errorResponse
     const { wsId, entryIds } = collected

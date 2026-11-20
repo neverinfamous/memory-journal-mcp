@@ -19,6 +19,15 @@ const isObject = (val: unknown): val is Record<string, unknown> =>
 const hasNumberId = (val: unknown): val is { id: number } =>
     isObject(val) && typeof val['id'] === 'number'
 
+export const IMMUTABLE_PROXY_TRAPS = {
+    isExtensible: (): boolean => true,
+    preventExtensions: (): boolean => false,
+    set: (): boolean => false,
+    defineProperty: (): boolean => false,
+    deleteProperty: (): boolean => false,
+    setPrototypeOf: (): boolean => false,
+} as const
+
 export type AliasMatch = { matched: true; value: unknown } | { matched: false }
 
 export function resolvePaginationAndStatsProp(
@@ -154,10 +163,11 @@ function resolveCollectionAndGraphAliasProp(
         const revisions = targetRecord['history'].filter(isObject).map(
             (h) =>
                 new Proxy(h, {
+                    ...IMMUTABLE_PROXY_TRAPS,
                     get(t: Record<string, unknown>, p: string | symbol): unknown {
                         if (p === 'revisionNumber') return t['revisionId']
                         if (p === 'contentSnapshot') return t['content']
-                        return typeof p === 'string' ? t[p] : undefined
+                        return Reflect.get(t, p) as unknown
                     },
                 })
         )

@@ -14,7 +14,13 @@ import type { ConvertedFile } from './index.js'
 import type { FrontmatterData } from '../frontmatter.js'
 import { posix } from 'node:path'
 import { parseYamlFrontmatter } from './yaml-parser.js'
-import { addBoundedTag, extractTags, formatToISODate, toBoundedTags } from './utils.js'
+import {
+    addBoundedTag,
+    extractTags,
+    formatToISODate,
+    isClosingCodeFence,
+    toBoundedTags,
+} from './utils.js'
 
 function applyLogseqPropertyLine(
     line: string,
@@ -119,18 +125,18 @@ export function convertLogseq(
     let openFence: { marker: string; minLen: number } | undefined
     for (const rawLine of normalizedBody.split('\n')) {
         const line = rawLine ?? ''
-        const fenceMatch = /^(`{3,}|~{3,})/.exec(line.trimStart())
-        if (fenceMatch?.[1] !== undefined) {
-            const marker = fenceMatch[1]
-            if (openFence === undefined) {
-                openFence = { marker: marker[0] ?? '`', minLen: marker.length }
-            } else if (marker.startsWith(openFence.marker) && marker.length >= openFence.minLen) {
+        const trimmedLine = line.trimStart()
+        if (openFence !== undefined) {
+            if (isClosingCodeFence(trimmedLine, openFence.marker, openFence.minLen)) {
                 openFence = undefined
             }
             processedLines.push(line)
             continue
         }
-        if (openFence !== undefined) {
+        const fenceMatch = /^(`{3,}|~{3,})/.exec(trimmedLine)
+        if (fenceMatch?.[1] !== undefined) {
+            const marker = fenceMatch[1]
+            openFence = { marker: marker[0] ?? '`', minLen: marker.length }
             processedLines.push(line)
             continue
         }

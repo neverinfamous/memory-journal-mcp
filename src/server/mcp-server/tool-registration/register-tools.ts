@@ -284,7 +284,7 @@ async function executeRegisteredTool(
             content: [
                 {
                     type: 'text' as const,
-                    text: JSON.stringify(errorResult),
+                    text: getSerializedPayloadJson(errorResult),
                 },
             ],
             ...(hasOutputSchema ? { structuredContent: errorResult } : {}),

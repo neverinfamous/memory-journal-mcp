@@ -4,6 +4,7 @@
 
 import { recoverStructuredJsonCode, recoverStructuredRecord } from './json-entry-structured.js'
 import { stripCommentsAndStrings } from '../../../codemode/security.js'
+import { skipLineOrBlockComment } from '../../../codemode/security-stripper.js'
 import {
     parseCanonicalPositiveInt,
     parsePositiveProjectNumber,
@@ -153,7 +154,37 @@ function parseRelaxedAutoContext(rawAutoContext: string): unknown {
     }
 }
 
-function populateRecoveredEntryMetadata(payload: Record<string, unknown>, scanCode: string): void {
+function stripJsCommentsPreservingStrings(code: string): string {
+    const out: string[] = []
+    let quote: string | null = null
+    let escaped = false
+    for (let i = 0; i < code.length; i++) {
+        const ch = code[i] ?? ''
+        if (quote !== null) {
+            out.push(ch)
+            if (escaped) escaped = false
+            else if (ch === '\\') escaped = true
+            else if (ch === quote) quote = null
+            continue
+        }
+        if (ch === "'" || ch === '"' || ch === '`') {
+            quote = ch
+            out.push(ch)
+            continue
+        }
+        const comment = skipLineOrBlockComment(code, i, false)
+        if (comment !== null) {
+            out.push(comment.hasNewline === true ? '\n' : ' ')
+            i = comment.next - 1
+            continue
+        }
+        out.push(ch)
+    }
+    return out.join('')
+}
+
+function populateRecoveredEntryMetadata(payload: Record<string, unknown>, rawScanCode: string): void {
+    const scanCode = stripJsCommentsPreservingStrings(rawScanCode)
     const projectMatch =
         /\b(?:project_number|projectNumber|project_id|projectId|project_name|projectName|project)\s*:\s*(?:(\d+)|(['"`])([^'"`]+)\2)/i.exec(
             scanCode

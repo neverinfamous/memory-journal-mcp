@@ -71,6 +71,11 @@ export function sanitizeIssueInput(
     if (typeof value === 'string') return scrubAndTruncateIssueString(value)
     if (typeof value === 'bigint') return value.toString()
     if (typeof value !== 'object') return value
+    if (value instanceof Date) {
+        return Number.isNaN(value.getTime()) ? 'Invalid Date' : value.toISOString()
+    }
+    if (value instanceof URL) return scrubAndTruncateIssueString(value.href)
+    if (value instanceof Error) return scrubAndTruncateIssueString(`${value.name}: ${value.message}`)
     if (seen.has(value)) return '[Circular]'
     budget.count++
     seen.add(value)

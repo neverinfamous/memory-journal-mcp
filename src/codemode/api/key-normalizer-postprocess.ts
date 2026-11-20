@@ -17,6 +17,11 @@ import {
     pickRecordField,
 } from '../../handlers/tools/schemas/entry-constants.js'
 import { parseCanonicalPositiveInt } from '../../utils/safe-positive-int.js'
+import { READ_ONLY_PROJECT_FILTER_METHODS } from '../normalizers/generic-field-aliases.js'
+
+const READ_ONLY_PROJECT_FILTER_METHODS_LOWER = new Set(
+    Array.from(READ_ONLY_PROJECT_FILTER_METHODS, (m) => m.toLowerCase())
+)
 
 const FORBIDDEN_DYNAMIC_KEYS = new Set(['__proto__', 'constructor', 'prototype'])
 
@@ -46,14 +51,18 @@ function parseCoercedNumericString(raw: string, allowZero: boolean): number | un
 /** Coerce numeric string IDs/project numbers and normalize entry_type aliases. */
 export function coerceNumericValue(
     snakeKey: string,
-    value: unknown
+    value: unknown,
+    methodLower?: string
 ): { value: unknown } | undefined {
     if (
         !STRING_ID_KEYS.has(snakeKey) &&
         (snakeKey.endsWith('_id') || snakeKey === 'id' || snakeKey === 'project_number') &&
         typeof value === 'string'
     ) {
-        const num = parseCoercedNumericString(value, snakeKey === 'project_number')
+        const allowZero =
+            snakeKey === 'project_number' &&
+            (methodLower === undefined || READ_ONLY_PROJECT_FILTER_METHODS_LOWER.has(methodLower))
+        const num = parseCoercedNumericString(value, allowZero)
         if (num !== undefined) {
             return { value: num }
         }

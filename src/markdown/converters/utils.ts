@@ -81,7 +81,7 @@ export function getFirstString(yamlMeta: Record<string, unknown>, keys: string[]
 
 const FENCE_OPEN_RE = /^[ ]{0,3}(`{3,}|~{3,})/
 
-function isClosingCodeFence(trimmedLine: string, fenceChar: string, fenceLen: number): boolean {
+export function isClosingCodeFence(trimmedLine: string, fenceChar: string, fenceLen: number): boolean {
     let idx = 0
     while (idx < 3 && trimmedLine[idx] === ' ') idx++
     let count = 0

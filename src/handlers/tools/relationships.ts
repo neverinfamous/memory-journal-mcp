@@ -164,6 +164,49 @@ function buildRelationshipMermaid(
 
 type VisualizeInput = ReturnType<typeof VisualizeInputSchema.parse>
 
+function formatTeamVisualizePayload(
+    input: VisualizeInput,
+    teamRes: Record<string, unknown>
+): Record<string, unknown> {
+    const rawNodes = Array.isArray(teamRes['nodes'])
+        ? (teamRes['nodes'] as { id: number; label: string }[])
+        : []
+    const rawEdges = Array.isArray(teamRes['edges'])
+        ? (teamRes['edges'] as { from: number; to: number; type: string }[])
+        : []
+    const edges =
+        input.relationship_type !== undefined
+            ? rawEdges.filter((e) => e.type === input.relationship_type)
+            : rawEdges
+    const omitContent = !input.include_content
+    const nodes = omitContent
+        ? rawNodes.map((n) => ({ id: n.id, label: `#${String(n.id)}` }))
+        : rawNodes
+    const needsRebuild = input.relationship_type !== undefined || omitContent
+    let mermaid = typeof teamRes['mermaid'] === 'string' ? teamRes['mermaid'] : 'graph LR\n'
+    if (needsRebuild) {
+        mermaid = 'graph LR\n'
+        for (const n of nodes) {
+            const nodeText = omitContent ? `#${String(n.id)}` : `#${String(n.id)}: ${n.label}`
+            mermaid += `  e${String(n.id)}["${nodeText}"]\n`
+        }
+        for (const e of edges) {
+            const safeType = e.type.replace(/[\r\n`|]+/g, ' ')
+            mermaid += `  e${String(e.from)} -->|${safeType}| e${String(e.to)}\n`
+        }
+    }
+    const format = input.format
+    return {
+        success: true,
+        entry_count: nodes.length,
+        relationship_count: edges.length,
+        root_entry: input.entry_id ?? null,
+        depth: input.depth,
+        ...(format !== 'edges' ? { mermaid } : {}),
+        ...(format !== 'mermaid' ? { nodes, edges } : {}),
+    }
+}
+
 function delegateTeamVisualizeRelationships(
     input: VisualizeInput,
     wsId: string,
@@ -180,26 +223,25 @@ function delegateTeamVisualizeRelationships(
         return { ...TEAM_DB_ERROR_RESPONSE }
     }
     enforceTeamRbac(context, getCallerIdentity(), 'viewer', wsId)
-    const teamRes = executeTeamVisualizeRelationships(context, context.teamDb, {
-        ...(input.entry_id !== undefined ? { entry_id: input.entry_id } : {}),
-        ...(input.tags?.[0] !== undefined ? { tag: input.tags[0] } : {}),
-        depth: input.depth,
-        ...(input.project_number !== undefined ? { project_number: input.project_number } : {}),
-        ...(input.workspace_id !== undefined ? { workspace_id: input.workspace_id } : {}),
-    })
+    const teamRes = executeTeamVisualizeRelationships(
+        context,
+        context.teamDb,
+        {
+            ...(input.entry_id !== undefined ? { entry_id: input.entry_id } : {}),
+            ...(input.tags?.[0] !== undefined ? { tag: input.tags[0] } : {}),
+            depth: input.depth,
+            ...(input.project_number !== undefined ? { project_number: input.project_number } : {}),
+            ...(input.workspace_id !== undefined ? { workspace_id: input.workspace_id } : {}),
+        },
+        {
+            ...(input.tags !== undefined && input.tags.length > 0 ? { tags: input.tags } : {}),
+            limit: input.limit,
+        }
+    )
     if (teamRes['success'] === false) {
         return teamRes
     }
-    const format = input.format
-    return {
-        success: true,
-        entry_count: teamRes['nodeCount'],
-        relationship_count: teamRes['edgeCount'],
-        root_entry: input.entry_id ?? null,
-        depth: input.depth,
-        ...(format !== 'edges' ? { mermaid: teamRes['mermaid'] } : {}),
-        ...(format !== 'mermaid' ? { nodes: teamRes['nodes'], edges: teamRes['edges'] } : {}),
-    }
+    return formatTeamVisualizePayload(input, teamRes)
 }
 
 function assertPersonalVisualizeSeedExists(
