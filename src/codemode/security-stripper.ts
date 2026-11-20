@@ -130,6 +130,11 @@ function stepStripperTemplate(
     }
 }
 
+function matchMultiCharStripperOperator(code: string, i: number, ch: string, next: string): string | null {
+    if (ch === '.' && next === '.' && code[i + 2] === '.') return '...'
+    return isTwoCharStripperOperator(code, i, ch, next) ? ch + next : null
+}
+
 export function stripCommentsAndStrings(code: string): string {
     const len = code.length
     let out = ''
@@ -177,11 +182,15 @@ export function stripCommentsAndStrings(code: string): string {
             lineOnlyWsOrComments = false
             continue
         }
-        if (isTwoCharStripperOperator(code, i, ch, next)) {
-            lastNonWsToken = trackTwoCharOperatorToken(ch + next, lastNonWsToken, state)
+        const multiOp = matchMultiCharStripperOperator(code, i, ch, next)
+        if (multiOp !== null) {
+            lastNonWsToken =
+                multiOp === '...'
+                    ? trackPunctuationToken('...', lastNonWsToken, state)
+                    : trackTwoCharOperatorToken(multiOp, lastNonWsToken, state)
             lineOnlyWsOrComments = false
-            out += ch + next
-            i += 2
+            out += multiOp
+            i += multiOp.length
             continue
         }
         if (isStripperIdentStart(code, i, ch, next)) {

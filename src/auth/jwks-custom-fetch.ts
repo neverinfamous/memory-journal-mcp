@@ -89,6 +89,7 @@ async function fetchLoopbackJwks(urlStr: string, init?: RequestInit): Promise<Re
         redirect: 'error',
     })
     if (!response.ok) {
+        await response.body?.cancel?.().catch(() => undefined)
         throw new Error(`HTTP error! status: ${String(response.status)}`)
     }
     const contentLen = Number(response.headers?.get?.('content-length'))

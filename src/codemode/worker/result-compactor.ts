@@ -5,6 +5,7 @@
 
 import type { SandboxResult } from '../types.js'
 import { unwrapResultProxy } from '../worker-result-proxy.js'
+import { safeFormatSandboxError } from './script-and-metadata-cache.js'
 
 const MAX_COMPACTION_DEPTH = 6
 const COMPACTED_ARRAY_MAX_ITEMS = 20
@@ -227,7 +228,12 @@ function handleEgressSerializationFailure(
         return
     }
     result.success = false
-    result.error = `Result could not be serialized or exceeded memory limits: ${err instanceof Error ? err.message : String(err)}`
+    const safeMsg = safeFormatSandboxError(err).message
+    const fullError = `Result could not be serialized or exceeded memory limits: ${safeMsg}`
+    result.error =
+        fullError.length > MAX_EGRESS_ERROR_CHARS
+            ? `${fullError.slice(0, MAX_EGRESS_ERROR_CHARS)}...[truncated]`
+            : fullError
     result.result = undefined
 }
 

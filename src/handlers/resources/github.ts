@@ -22,6 +22,7 @@ import {
 import { createGitHubMilestoneResources } from './github-milestones.js'
 import { logger } from '../../utils/logger.js'
 import { fenceNonCanonicalRefOrKey } from '../../utils/security-utils.js'
+import { fenceKanbanStatus } from '../tools/github/fencing-helpers.js'
 
 // ============================================================================
 // Resource API Limits
@@ -178,7 +179,7 @@ function buildKanbanSummary(
     if (kanbanResult.status === 'fulfilled' && kanbanResult.value) {
         const summary = Object.create(null) as Record<string, number>
         for (const col of kanbanResult.value.columns) {
-            summary[col.status] = col.items.length
+            summary[fenceKanbanStatus(col.status)] = col.items.length
         }
         return summary
     }

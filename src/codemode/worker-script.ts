@@ -36,6 +36,7 @@ import {
     isExecuteMessage,
     resolveWorkerMetadata,
     safeFormatSandboxError,
+    type ExecuteWorkerMessage,
 } from './worker/script-and-metadata-cache.js'
 import { hasUnbalancedClosingDelimiter, stripCommentsAndStrings } from './security-stripper.js'
 
@@ -306,85 +307,87 @@ async function executeCode(
     }
 }
 
-parentPort?.on('message', (msg: unknown) => {
-    void (async () => {
-        if (!isExecuteMessage(msg)) return
-        const {
-            id,
+async function handleExecuteMessage(msg: ExecuteWorkerMessage): Promise<void> {
+    const {
+        id,
+        code,
+        timeoutMs,
+        maxResultSize,
+        rpcPort: newRpcPort,
+        contextObj,
+        readonlyMode,
+        dryRunMode,
+        useTestDbMode,
+    } = msg
+    const { methodList, schemaList } = resolveWorkerMetadata(msg)
+    const activeTimers = new Set<NodeJS.Timeout>()
+    const executionLifecycle: ExecutionLifecycleState = {
+        ended: false,
+        postCloseActivity: false,
+    }
+    const bridge = createExecutionRpcBridge(newRpcPort, executionLifecycle)
+    activeExecutionId = id
+    resultSent = false
+    activeAbortCleanup = (reason: string): void => {
+        executionLifecycle.ended = true
+        for (const handle of activeTimers) clearTimeout(handle)
+        activeTimers.clear()
+        bridge.closeBridge(reason)
+    }
+
+    try {
+        const result = await executeCode(
             code,
-            timeoutMs,
-            maxResultSize,
-            rpcPort: newRpcPort,
+            bridge,
+            methodList,
+            schemaList,
+            timeoutMs ?? 30000,
             contextObj,
             readonlyMode,
+            maxResultSize,
             dryRunMode,
             useTestDbMode,
-        } = msg
-        const { methodList, schemaList } = resolveWorkerMetadata(msg)
-        const activeTimers = new Set<NodeJS.Timeout>()
-        const executionLifecycle: ExecutionLifecycleState = {
-            ended: false,
-            postCloseActivity: false,
+            activeTimers,
+            executionLifecycle
+        )
+        // [M11] Close the RPC bridge strictly BEFORE serializeAndEnforceEgress invokes
+        // untrusted toJSON()/getters so egress hooks cannot dispatch live Host RPCs.
+        executionLifecycle.ended = true
+        for (const handle of activeTimers) clearTimeout(handle)
+        activeTimers.clear()
+        bridge.closeBridge('Sandbox execution ended')
+        // Serialize and run toJSON()/getters BEFORE draining V8 microtasks via hostSetImmediate
+        // so post-execution callbacks cannot queue unawaited microtask spins or timers past the watchdog.
+        serializeAndEnforceEgress(result, maxResultSize)
+        if (!resultSent && activeExecutionId === id) {
+            await new Promise<void>((resolve) => {
+                hostSetImmediate(resolve)
+            })
         }
-        const bridge = createExecutionRpcBridge(newRpcPort, executionLifecycle)
-        activeExecutionId = id
-        resultSent = false
-        activeAbortCleanup = (reason: string): void => {
-            executionLifecycle.ended = true
-            for (const handle of activeTimers) clearTimeout(handle)
-            activeTimers.clear()
-            bridge.closeBridge(reason)
+        if (!resultSent && activeExecutionId === id) {
+            parentPort?.postMessage({
+                type: 'RESULT',
+                id,
+                result,
+                ...(executionLifecycle.postCloseActivity ? { fatal: true } : {}),
+            })
+            resultSent = true
         }
+    } catch (err: unknown) {
+        postExecutionFailure(err)
+    } finally {
+        executionLifecycle.ended = true
+        for (const handle of activeTimers) clearTimeout(handle)
+        activeTimers.clear()
+        bridge.closeBridge('Sandbox execution ended before the call completed')
+        if (activeExecutionId === id) {
+            activeExecutionId = null
+            activeAbortCleanup = null
+        }
+    }
+}
 
-        try {
-            const result = await executeCode(
-                code,
-                bridge,
-                methodList,
-                schemaList,
-                timeoutMs ?? 30000,
-                contextObj,
-                readonlyMode,
-                maxResultSize,
-                dryRunMode,
-                useTestDbMode,
-                activeTimers,
-                executionLifecycle
-            )
-            // [M11] Close the RPC bridge strictly BEFORE serializeAndEnforceEgress invokes
-            // untrusted toJSON()/getters so egress hooks cannot dispatch live Host RPCs.
-            executionLifecycle.ended = true
-            for (const handle of activeTimers) clearTimeout(handle)
-            activeTimers.clear()
-            bridge.closeBridge('Sandbox execution ended')
-            // Serialize and run toJSON()/getters BEFORE draining V8 microtasks via hostSetImmediate
-            // so post-execution callbacks cannot queue unawaited microtask spins or timers past the watchdog.
-            serializeAndEnforceEgress(result, maxResultSize)
-            if (!resultSent && activeExecutionId === id) {
-                await new Promise<void>((resolve) => {
-                    hostSetImmediate(resolve)
-                })
-            }
-            if (!resultSent && activeExecutionId === id) {
-                parentPort?.postMessage({
-                    type: 'RESULT',
-                    id,
-                    result,
-                    ...(executionLifecycle.postCloseActivity ? { fatal: true } : {}),
-                })
-                resultSent = true
-            }
-        } catch (err: unknown) {
-            postExecutionFailure(err)
-        } finally {
-            executionLifecycle.ended = true
-            for (const handle of activeTimers) clearTimeout(handle)
-            activeTimers.clear()
-            bridge.closeBridge('Sandbox execution ended before the call completed')
-            if (activeExecutionId === id) {
-                activeExecutionId = null
-                activeAbortCleanup = null
-            }
-        }
-    })()
+parentPort?.on('message', (msg: unknown) => {
+    if (!isExecuteMessage(msg)) return
+    void handleExecuteMessage(msg)
 })

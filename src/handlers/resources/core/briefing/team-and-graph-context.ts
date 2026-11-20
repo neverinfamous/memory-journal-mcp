@@ -93,7 +93,7 @@ function canBuildScopedTeamContext(
     runtime: ResourceContext['runtime'],
     filterConfig: ResourceContext['filterConfig']
 ): boolean {
-    if (!isTeamFilterAllowed('team_search', { filterConfig }, true)) return false
+    if (!isTeamFilterAllowed('team_search', { filterConfig })) return false
     const accessAllowed = canAccessTeamSilently(
         'search_entries',
         {

@@ -175,10 +175,12 @@ function sanitizeAuditArgNode(
                     out['_truncatedKeys'] = Math.max(0, value.size - MAX_AUDIT_EGRESS_OBJECT_KEYS)
                     break
                 }
-                const safeKey = fenceNonCanonicalAuditId(String(mk))
-                out[safeKey] = SENSITIVE_KEY_RE.test(safeKey)
-                    ? '[REDACTED]'
-                    : sanitizeAuditArgNode(mv, depth + 1, seen, budget)
+                const rawKey = String(mk)
+                const safeKey = fenceNonCanonicalAuditId(rawKey)
+                out[safeKey] =
+                    SENSITIVE_KEY_RE.test(rawKey) || SENSITIVE_KEY_RE.test(safeKey)
+                        ? '[REDACTED]'
+                        : sanitizeAuditArgNode(mv, depth + 1, seen, budget)
             }
             return out
         }

@@ -150,8 +150,8 @@ export const GitUnreleasedOptionsSchema = z
             .describe('Skip per-file diffstat computation for fast changelog retrieval'),
         repo: z.string().optional().describe('Target repository or workspace name'),
         repo_name: z.string().optional().describe('Alias for repo'),
-        workspace_id: z.string().optional().describe('Target workspace identifier'),
-        workspaceId: z.string().optional().describe('Alias for workspace_id'),
+        workspace_id: z.string().max(255).optional().describe('Target workspace identifier'),
+        workspaceId: z.string().max(255).optional().describe('Alias for workspace_id'),
         project_number: relaxedNumber().optional().describe('Target GitHub project number'),
         cwd: z.string().optional().describe('Working directory path for git operations'),
     })
@@ -174,8 +174,8 @@ export const GitAnalyzePatternsOptionsSchema = z.object({
     limit: relaxedNumber().optional().describe('Alias for maxCount'),
     repo: z.string().optional().describe('Target repository or workspace name'),
     repo_name: z.string().optional().describe('Alias for repo'),
-    workspace_id: z.string().optional().describe('Target workspace identifier'),
-    workspaceId: z.string().optional().describe('Alias for workspace_id'),
+    workspace_id: z.string().max(255).optional().describe('Target workspace identifier'),
+    workspaceId: z.string().max(255).optional().describe('Alias for workspace_id'),
     project_number: relaxedNumber().optional().describe('Target GitHub project number'),
     cwd: z.string().optional().describe('Working directory path for git operations'),
 }).transform((d) => ({

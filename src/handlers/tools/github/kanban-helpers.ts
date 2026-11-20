@@ -12,7 +12,7 @@ import {
     resolveOwnerRepo,
     resolveProjectNumber,
 } from './helpers.js'
-import { ensureInlineFenced, fenceUntrustedHandle } from './fencing-helpers.js'
+import { ensureInlineFenced, fenceKanbanStatus, fenceUntrustedHandle } from './fencing-helpers.js'
 
 export const MISSING_PROJECT_NUMBER_ERROR = {
     success: false,
@@ -93,12 +93,17 @@ function formatKanbanBoardResponse(
     itemLimit: number
 ): Record<string, unknown> {
     const projectTitle = fenceUntrustedInline(board.projectTitle)
+    const fencedStatusOptions = board.statusOptions.map((opt) => ({
+        ...opt,
+        name: fenceKanbanStatus(opt.name),
+    }))
     if (summaryOnly || itemLimit === 0) {
         return {
             ...board,
             projectTitle,
+            statusOptions: fencedStatusOptions,
             columns: board.columns.map((col) => ({
-                status: col.status,
+                status: fenceKanbanStatus(col.status),
                 statusOptionId: col.statusOptionId,
                 items: [],
                 itemCount: col.items.length,
@@ -108,7 +113,7 @@ function formatKanbanBoardResponse(
                 col.items.map((item) => ({
                     id: item.id,
                     title: fenceUntrustedInline(item.title),
-                    status: item.status,
+                    status: item.status !== null ? fenceKanbanStatus(item.status) : null,
                 }))
             ),
         }
@@ -117,9 +122,12 @@ function formatKanbanBoardResponse(
     return {
         ...board,
         projectTitle,
+        statusOptions: fencedStatusOptions,
         columns: board.columns.map((col) => {
+            const fencedColStatus = fenceKanbanStatus(col.status)
             const sliced = col.items.slice(0, itemLimit).map((item) => ({
                 ...item,
+                status: item.status !== null ? fenceKanbanStatus(item.status) : null,
                 title: fenceUntrustedInline(item.title),
                 ...(item.labels !== undefined
                     ? { labels: item.labels.map(ensureInlineFenced) }
@@ -129,8 +137,8 @@ function formatKanbanBoardResponse(
                     : {}),
             }))
             return col.items.length <= itemLimit
-                ? { ...col, items: sliced, itemCount: col.items.length }
-                : { ...col, items: sliced, itemCount: col.items.length, truncated: true }
+                ? { ...col, status: fencedColStatus, items: sliced, itemCount: col.items.length }
+                : { ...col, status: fencedColStatus, items: sliced, itemCount: col.items.length, truncated: true }
         }),
     }
 }
@@ -232,7 +240,7 @@ export async function handleMoveKanbanItem(
             return {
                 success: false,
                 error: `Status "${input.target_status}" not found`,
-                availableStatuses: board.statusOptions.map((o) => o.name),
+                availableStatuses: board.statusOptions.map((o) => fenceKanbanStatus(o.name)),
                 code: 'VALIDATION_ERROR',
                 category: 'validation',
                 suggestion: 'Use one of the available status column names.',

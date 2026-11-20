@@ -73,6 +73,11 @@ function stepCodeLexicalChar(
         scan.lineOnlyWsOrComments = false
         return endRegex - 1
     }
+    if (ch === '.' && code[i + 1] === '.' && code[i + 2] === '.') {
+        scan.prevToken = trackPunctuationToken('...', scan.prevToken, delim)
+        scan.lineOnlyWsOrComments = false
+        return i + 2
+    }
     if (
         (ch === '+' && code[i + 1] === '+') ||
         (ch === '-' && code[i + 1] === '-') ||

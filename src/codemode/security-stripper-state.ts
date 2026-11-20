@@ -148,7 +148,7 @@ export function canStartRegexLiteral(
 ): boolean {
     const state = typeof inControlOrState === 'object' ? inControlOrState : undefined
     if (state?.canAsiRegex === true) return true
-    if (!prev || prev === '}block' || prev === ')ctrl' || prev === '=>' || prev === ':label') return true
+    if (!prev || prev === '}block' || prev === ')ctrl' || prev === '=>' || prev === ':label' || prev === '...') return true
     if (prev === 'of') {
         return state !== undefined ? state.parenKind.at(-1) === 'for' && state.ofIsForOf : inControlOrState === true
     }

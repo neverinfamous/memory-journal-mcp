@@ -6,6 +6,12 @@ import {
 } from '../../../utils/security-utils.js'
 
 const SAFE_GH_HANDLE_RE = /^[A-Za-z0-9_.-]{1,64}(?:\[bot\])?$/
+const SAFE_KANBAN_STATUS_RE = /^[A-Za-z0-9 _.-]{1,40}$/
+
+/** Keep canonical ASCII Kanban status enums intact while fencing injected or non-canonical names. */
+export function fenceKanbanStatus(status: string): string {
+    return SAFE_KANBAN_STATUS_RE.test(status) ? status : ensureInlineFenced(status)
+}
 
 /** Undo egress fencing when a cached title is written back into a journal entry. */
 export function unwrapFencedRemoteText(value: string): string {

@@ -201,6 +201,7 @@ export class McpLogger {
         if (!this.shouldLog(level)) return
 
         const sanitized = this.sanitizeData(data)
+        const safeLogger = sanitizeErrorForLogging(loggerName).replace(/[\r\n]+/g, ' ')
 
         // Send via MCP protocol if server connected
         if (this.server) {
@@ -208,7 +209,7 @@ export class McpLogger {
                 void Promise.resolve(
                     this.server.sendLoggingMessage({
                         level,
-                        logger: loggerName,
+                        logger: safeLogger,
                         data: sanitized,
                     })
                 ).catch(() => {
@@ -220,7 +221,7 @@ export class McpLogger {
         }
 
         // Always also log to stderr for local debugging
-        console.error(this.formatSanitizedForStderr(level, loggerName, sanitized))
+        console.error(this.formatSanitizedForStderr(level, safeLogger, sanitized))
     }
 
     // Convenience methods

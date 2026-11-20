@@ -57,7 +57,9 @@ function maskQuotedTokens(sql: string): string {
         const ch = sql[i] ?? ''
         if (ch === "'" || ch === '"' || ch === '`' || ch === '[') {
             i = scanSqlQuotedSpan(sql, i, ch)
-            out += ' '
+            // Keep string literals as whitespace, but replace identifier-quoted spans with a
+            // sentinel identifier so quoted function calls (e.g. "zeroblob"(10)) still match.
+            out += ch === "'" ? ' ' : ' _QID_ '
             continue
         }
         out += ch
@@ -191,7 +193,7 @@ export function isAllowedBackupVirtualTable(name: string, cleanSql: string): boo
 
 function extractKeywordParenClauses(cleanSql: string, keyword: string): string[] {
     const bodies: string[] = []
-    const kwRe = new RegExp(`\\b${keyword}\\s*\\(`, 'gi')
+    const kwRe = new RegExp(`\\b${keyword}\\s*\\(`, 'yi')
     let i = 0
     while (i < cleanSql.length) {
         const ch = cleanSql[i] ?? ''

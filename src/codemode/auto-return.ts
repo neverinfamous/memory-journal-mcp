@@ -117,6 +117,10 @@ function findLastStatementBoundary(trimmed: string): number {
             prevToken = '/'
             state.canAsiRegex = false
             lineOnlyWsOrComments = false
+        } else if (ch === '.' && trimmed[i + 1] === '.' && trimmed[i + 2] === '.') {
+            prevToken = trackPunctuationToken('...', prevToken, state)
+            lineOnlyWsOrComments = false
+            i += 2
         } else if (isTwoCharBoundaryOperator(trimmed, i, ch)) {
             prevToken = trackTwoCharOperatorToken(ch + (trimmed[i + 1] ?? ''), prevToken, state)
             lineOnlyWsOrComments = false
