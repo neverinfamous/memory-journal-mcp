@@ -36,8 +36,9 @@ export function cleanSdkMetadataKeys(obj: Record<string, unknown>): void {
     delete obj['_server_name']
     delete obj['_tool_name']
     delete obj['_meta']
+    Reflect.deleteProperty(obj, '_alias_derived_workspace')
     for (const key of Object.keys(obj)) {
-        if (key.startsWith('_') && key !== '_journal' && key !== '_alias_derived_workspace') {
+        if (key.startsWith('_') && key !== '_journal') {
             const strippedKey = key.replace(/^_+/, '')
             if (strippedKey.length > 0 && obj[strippedKey] === undefined) obj[strippedKey] = obj[key]
             Reflect.deleteProperty(obj, key)

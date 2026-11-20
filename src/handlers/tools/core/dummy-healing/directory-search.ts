@@ -6,6 +6,9 @@ import * as fs from 'node:fs'
 import * as path from 'node:path'
 import { ValidationError } from '../../../../types/errors.js'
 import { logger } from '../../../../utils/logger.js'
+import { isSafeUserRegex, MAX_USER_REGEX_LENGTH } from './regex-safety.js'
+
+export { isSafeUserRegex }
 
 export interface GrepMatch {
     file: string
@@ -24,84 +27,11 @@ const IGNORED_DIRS = new Set([
     'node_modules', '.git', '.test-output', 'dist', '.cache', 'coverage', '.turbo',
 ])
 
-const MAX_USER_REGEX_LENGTH = 256
 const MAX_REGEX_LINE_LENGTH = 4096
 const MAX_FILE_PATTERN_WILDCARDS = 8
 const MAX_SEARCH_DIRENTS = 10_000
 const MAX_SEARCH_FILES = 1_000
 const MAX_SEARCH_DEPTH = 16
-const NESTED_QUANTIFIER_REGEX = /(?:[+*?}]|\{\d+,?\d*\})\s*\)[+*?{]/
-const BACKREFERENCE_REGEX = /\\[1-9]|\\k</
-const REPEATED_WILDCARD_REGEX = /(?:\.\*|\.\+){2,}/
-
-function isGroupQuantifierFollow(ch: string | undefined): boolean {
-    return ch === '*' || ch === '+' || ch === '{' || ch === '?'
-}
-
-function hasUnsafeGroupNesting(pattern: string): boolean {
-    const stack: { hasQuantOrAlt: boolean; justOpened: boolean }[] = []
-    let escaped = false
-    let inClass = false
-    for (let i = 0; i < pattern.length; i++) {
-        const ch = pattern[i]
-        if (ch === undefined) break
-        if (escaped) {
-            escaped = false
-            const cur = stack.at(-1)
-            if (cur !== undefined) cur.justOpened = false
-            continue
-        }
-        if (ch === '\\') {
-            escaped = true
-            continue
-        }
-        if (inClass) {
-            if (ch === ']') inClass = false
-            continue
-        }
-        if (ch === '[') {
-            inClass = true
-            const cur = stack.at(-1)
-            if (cur !== undefined) cur.justOpened = false
-            continue
-        }
-        if (ch === '(') {
-            stack.push({ hasQuantOrAlt: false, justOpened: true })
-            continue
-        }
-        if (ch === ')') {
-            const popped = stack.pop()
-            if (popped?.hasQuantOrAlt === true && isGroupQuantifierFollow(pattern[i + 1])) return true
-            const parent = stack[stack.length - 1]
-            if (parent !== undefined) {
-                if (popped?.hasQuantOrAlt === true) parent.hasQuantOrAlt = true
-                parent.justOpened = false
-            }
-            continue
-        }
-        const top = stack[stack.length - 1]
-        if (top === undefined) continue
-        if (top.justOpened && ch === '?') {
-            top.justOpened = false
-            continue
-        }
-        top.justOpened = false
-        if (ch === '*' || ch === '+' || ch === '{' || ch === '|' || ch === '?') {
-            top.hasQuantOrAlt = true
-        }
-    }
-    return false
-}
-
-/** Reject over-long regexes, nested quantifiers (ReDoS), repeated wildcards, and backreferences. */
-export function isSafeUserRegex(pattern: string): boolean {
-    if (pattern.length > MAX_USER_REGEX_LENGTH) return false
-    if (NESTED_QUANTIFIER_REGEX.test(pattern)) return false
-    if (BACKREFERENCE_REGEX.test(pattern)) return false
-    if (REPEATED_WILDCARD_REGEX.test(pattern)) return false
-    if (hasUnsafeGroupNesting(pattern)) return false
-    return true
-}
 
 function buildMatcher(query: string, options: SearchDirectoryOptions): RegExp {
     const flags = options.caseInsensitive === true ? 'i' : ''

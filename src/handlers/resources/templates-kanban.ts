@@ -23,6 +23,7 @@ import {
     safeDecodeUriSegment,
 } from './shared.js'
 import { resolveProjectScope } from './template-helpers.js'
+import { fenceKanbanStatus } from '../tools/github/fencing-helpers.js'
 
 export const fenceInline = fenceUntrustedInline
 
@@ -59,14 +60,18 @@ export function sanitizeKanbanBoard(board: KanbanBoard): KanbanBoard {
     return {
         ...board,
         projectTitle: fenceInline(board.projectTitle),
+        statusOptions: board.statusOptions.map((opt) => ({
+            ...opt,
+            name: fenceKanbanStatus(opt.name),
+        })),
         columns: board.columns.map((column) => ({
             ...column,
-            status: column.status,
+            status: fenceKanbanStatus(column.status),
             items: column.items.map((item) => {
                 const cloned = {
                     ...item,
                     title: fenceInline(item.title),
-                    ...(item.status !== null ? { status: item.status } : {}),
+                    ...(item.status !== null ? { status: fenceKanbanStatus(item.status) } : {}),
                     ...(item.labels !== undefined
                         ? { labels: item.labels.map((label) => fenceInline(label)) }
                         : {}),

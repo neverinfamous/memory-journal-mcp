@@ -254,12 +254,13 @@ export async function handleMoveKanbanItem(
             board.statusFieldId,
             statusOption.id
         )
+        const fencedStatus = fenceKanbanStatus(statusOption.name)
         return {
             success: result.success,
             itemId: input.item_id,
-            newStatus: statusOption.name,
+            newStatus: fencedStatus,
             projectNumber: projectNum,
-            message: result.success ? `Moved item to "${statusOption.name}"` : undefined,
+            message: result.success ? `Moved item to "${fencedStatus}"` : undefined,
             error: result.error,
         }
     } catch (err) {

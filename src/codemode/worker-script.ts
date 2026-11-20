@@ -54,9 +54,9 @@ let activeAbortCleanup: ((reason: string) => void) | null = null
 function postExecutionFailure(reason: unknown): void {
     if (activeExecutionId === null || resultSent) return
     const id = activeExecutionId
-    const formatted = safeFormatSandboxError(reason)
     resultSent = true
     activeAbortCleanup?.('Sandbox execution aborted due to unhandled async error')
+    const formatted = safeFormatSandboxError(reason)
     const result: SandboxResult = {
         success: false,
         error: formatted.message,
@@ -296,6 +296,14 @@ async function executeCode(
         }
         return { success: true, result, metrics }
     } catch (err) {
+        // [L2] Close lifecycle, timers, and RPC bridge BEFORE formatVmErrorResult invokes
+        // untrusted [Symbol.toPrimitive]/toString() hooks on thrown sandbox values.
+        if (executionLifecycle !== undefined) {
+            executionLifecycle.ended = true
+        }
+        for (const handle of activeTimers) clearTimeout(handle)
+        activeTimers.clear()
+        bridge.closeBridge('Sandbox execution failed')
         return formatVmErrorResult(err, startTime, startCpu)
     } finally {
         if (executionLifecycle !== undefined) {

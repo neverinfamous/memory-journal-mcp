@@ -83,11 +83,12 @@ function resolveBatchItemAliasAndTarget(
 
     if (itemTargetWs !== undefined && itemProjNum !== undefined) {
         pairStoredScope(itemTargetWs, itemProjNum, reg)
-    } else if (hasItemWs && callerItemWs !== '*' && !itemCrossWsMove) {
+    } else if (callerItemWs !== undefined && callerItemWs !== '*' && !itemCrossWsMove) {
         const wsReg = lookupRegistryEntry(reg, callerItemWs)
         if (itemProjNum !== undefined) {
             pairStoredScope(callerItemWs, itemProjNum, reg)
         } else if (
+            hasItemWs &&
             batchArrayKey === 'entries' &&
             !isDefaultWorkspaceName(callerItemWs) &&
             wsReg?.project_number !== undefined &&

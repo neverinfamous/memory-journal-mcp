@@ -200,12 +200,12 @@ describe('Pass 33 Quality, Schema, Search, Storage & Prompt Regressions (M1-M12,
         expect(next).toHaveBeenCalled()
 
         expect(getRequiredScope('get_recent_entries', 'tool')).toBe(SCOPES.READ)
-        expect(AUDIT_PROMPT_REVISION).toBe('2026-11-20-audit-pass49')
+        expect(AUDIT_PROMPT_REVISION).toBe('2026-11-20-audit-pass50')
 
         const qualityPrompt = getCodeQualityAuditPromptDefinition()
         const renderedQuality = await qualityPrompt.handler({ target: 'memory-journal-mcp' }, db)
         const qText = renderedQuality.messages.map((m) => m.content.text).join('\n')
-        expect(qText).toContain('2026-11-20-audit-pass49')
+        expect(qText).toContain('2026-11-20-audit-pass50')
         expect(qText).toContain("'skills'")
         expect(qText).toContain('path.win32')
         expect(qText).toContain('finally { Remove-Item')

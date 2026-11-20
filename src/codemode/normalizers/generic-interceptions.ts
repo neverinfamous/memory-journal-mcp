@@ -73,6 +73,7 @@ function normalizeSingleBatchCreateItem(
 ): { item: unknown } | { error: Record<string, unknown> } {
     if (!isRecord(rawItem)) return { item: rawItem }
     const item: Record<string, unknown> = { ...rawItem }
+    Reflect.deleteProperty(item, '_alias_derived_workspace')
     extractMetadataContextAliases(item)
     const itemError = coerceNumericStringIds(item, 'create_entry')
     if (itemError !== undefined) return itemError

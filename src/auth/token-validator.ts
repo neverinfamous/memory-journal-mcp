@@ -60,13 +60,16 @@ export class TokenValidator {
         const isLoopback = (host: string): boolean =>
             host === 'localhost' || host === '127.0.0.1' || host === '::1' || host === '[::1]'
 
-        if (issuerUrl.protocol !== 'https:' && !isLoopback(issuerUrl.hostname)) {
+        const isAllowedProtocol = (url: URL): boolean =>
+            url.protocol === 'https:' || (isLoopback(url.hostname) && url.protocol === 'http:')
+
+        if (!isAllowedProtocol(issuerUrl)) {
             throw new Error(
                 `Security Violation: Issuer must use HTTPS protocol (got ${this.issuer})`
             )
         }
 
-        if (this.jwksUrl.protocol !== 'https:' && !isLoopback(this.jwksUrl.hostname)) {
+        if (!isAllowedProtocol(this.jwksUrl)) {
             throw new Error(
                 `Security Violation: JWKS URI must use HTTPS protocol (got ${this.jwksUri})`
             )
