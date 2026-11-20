@@ -269,13 +269,16 @@ export function buildCommitInvocation(
   rootDir: string,
   dirtyFiles: readonly string[],
 ): CommitInvocation {
+  const compiledCommit = path.join(rootDir, "dist", "vendor", "commit", "commit.js");
   const tsxCli = path.join(rootDir, "node_modules", "tsx", "dist", "cli.mjs");
   const commitScript = path.join(rootDir, "scripts", "commit.ts");
+  const scriptEntryArgs = fs.existsSync(compiledCommit)
+    ? [compiledCommit]
+    : [tsxCli, commitScript];
   return {
     command: process.execPath,
     args: [
-      tsxCli,
-      commitScript,
+      ...scriptEntryArgs,
       "--msg",
       "chore(docs): update test badges",
       "--impact",

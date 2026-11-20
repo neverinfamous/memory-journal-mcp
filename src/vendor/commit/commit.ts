@@ -210,9 +210,12 @@ function executeCommit(header: string, body: string, cwd?: string, onlyFiles?: s
   return sha;
 }
 
-export function main(): void {
+let didRunCliMain = false;
+
+export async function main(rawArgv?: readonly string[]): Promise<void> {
+  didRunCliMain = true;
   try {
-    const args = parseArguments();
+    const args = parseArguments(rawArgv);
 
     let cwd = process.cwd();
     if (args.cwd) {
@@ -264,7 +267,7 @@ export function main(): void {
 
     const body = generateHistoryEntry(args, type, historyContent, cwd);
     const sha = executeCommit(args.msg, body, cwd, args.add);
-    createJournalEntry(
+    await createJournalEntry(
       sha,
       args.msg,
       args,
@@ -283,6 +286,21 @@ export function main(): void {
   }
 }
 
-if (import.meta.main) {
-  main();
+function shouldAutoRunMain(): boolean {
+  if (didRunCliMain) return false;
+  if (typeof import.meta.main === 'boolean' && import.meta.main) {
+    return true;
+  }
+  const entryArg = process.argv[1];
+  if (entryArg === undefined || entryArg.length === 0) return false;
+  const normalized = entryArg.replace(/\\/g, '/');
+  return (
+    normalized.endsWith('/dist/vendor/commit/commit.js') ||
+    normalized.endsWith('/src/vendor/commit/commit.ts') ||
+    normalized.endsWith('/.agents/scripts/commit.ts')
+  );
+}
+
+if (shouldAutoRunMain()) {
+  void main();
 }

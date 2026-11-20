@@ -463,7 +463,7 @@ export function systemInterceptor(ctx: ExecutionContext): void {
     if (payload.type === 'eval' || payload.type === 'script') {
       const codeOrScript = payload.type === 'eval' ? payload.code : (payload.scriptPath || '');
       const isInlineShellHallucination = payload.type === 'eval' && /^\s*(?:pwsh|powershell|cmd|bash|sh|wsl)(?:\.exe)?\b/i.test(codeOrScript);
-      const isKnownDeterministic = !isInlineShellHallucination && Boolean(codeOrScript && /(?:commit\.ts|get-git-history-json\.ts|backup-conversations\.ts)/i.test(codeOrScript));
+      const isKnownDeterministic = !isInlineShellHallucination && Boolean(codeOrScript && /(?:commit\.(?:ts|js)|get-git-history-json\.ts|backup-conversations\.ts)/i.test(codeOrScript));
       const isPlaywright = !isInlineShellHallucination && !isKnownDeterministic && Boolean(codeOrScript && /(?:playwright|cypress|\be2e\b|test:e2e)/i.test(codeOrScript));
       const isCoverage = !isInlineShellHallucination && !isKnownDeterministic && Boolean(codeOrScript && /(?:coverage|--coverage)/i.test(codeOrScript));
       const isDockerScout = !isInlineShellHallucination && Boolean(codeOrScript && /(?:docker|docker-compose|podman)/i.test(codeOrScript) && /scout/i.test(codeOrScript));
@@ -558,8 +558,8 @@ export function systemInterceptor(ctx: ExecutionContext): void {
         'rm', 'rmdir', 'cp', 'mv', 'mkdir', 'touch', 'chmod', 'diff',
       ].includes(normalizedWslCmdBase);
       const isKnownDeterministic = !isWslNonRunnerCli && (
-        /(?:commit\.ts|get-git-history-json\.ts|backup-conversations\.ts)/i.test(cmdBasename) ||
-        Boolean(args && args.some(a => /(?:commit\.ts|get-git-history-json\.ts|backup-conversations\.ts)/i.test(a)))
+        /(?:commit\.(?:ts|js)|get-git-history-json\.ts|backup-conversations\.ts)/i.test(cmdBasename) ||
+        Boolean(args && args.some(a => /(?:commit\.(?:ts|js)|get-git-history-json\.ts|backup-conversations\.ts)/i.test(a)))
       );
       const isDockerScout = /(?:docker|docker-compose|podman)/i.test(cmdBasename) && (args && args.some(a => /scout/i.test(a)));
       const isInfraOrchestration = !isKnownDeterministic && !isWslNonRunnerCli && (
@@ -623,7 +623,7 @@ export function systemInterceptor(ctx: ExecutionContext): void {
     if (payload.type === 'eval' || payload.type === 'script') {
       const codeOrScript = payload.type === 'eval' ? payload.code : (payload.scriptPath || '');
       const isInlineShellHallucination = payload.type === 'eval' && /^\s*(?:pwsh|powershell|cmd|bash|sh|wsl)(?:\.exe)?\b/i.test(codeOrScript);
-      const isKnownDeterministic = !isInlineShellHallucination && Boolean(codeOrScript && /(?:commit\.ts|get-git-history-json\.ts|backup-conversations\.ts)/i.test(codeOrScript));
+      const isKnownDeterministic = !isInlineShellHallucination && Boolean(codeOrScript && /(?:commit\.(?:ts|js)|get-git-history-json\.ts|backup-conversations\.ts)/i.test(codeOrScript));
       const isBackupConversations = !isInlineShellHallucination && Boolean(codeOrScript && /backup-conversations\.ts/i.test(codeOrScript));
       const isPlaywright = !isInlineShellHallucination && !isKnownDeterministic && Boolean(codeOrScript && /(?:playwright|cypress|\be2e\b|test:e2e)/i.test(codeOrScript));
       const isCoverage = !isInlineShellHallucination && !isKnownDeterministic && Boolean(codeOrScript && /(?:coverage|--coverage)/i.test(codeOrScript));
@@ -708,8 +708,8 @@ export function systemInterceptor(ctx: ExecutionContext): void {
         'rm', 'rmdir', 'cp', 'mv', 'mkdir', 'touch', 'chmod', 'diff',
       ].includes(normalizedWinCmdBase);
       const isKnownDeterministic = !isWinNonRunnerCli && (
-        /(?:commit\.ts|get-git-history-json\.ts|backup-conversations\.ts)/i.test(cmdBasename) ||
-        Boolean(args && args.some(a => /(?:commit\.ts|get-git-history-json\.ts|backup-conversations\.ts)/i.test(a)))
+        /(?:commit\.(?:ts|js)|get-git-history-json\.ts|backup-conversations\.ts)/i.test(cmdBasename) ||
+        Boolean(args && args.some(a => /(?:commit\.(?:ts|js)|get-git-history-json\.ts|backup-conversations\.ts)/i.test(a)))
       );
       const isBackupConversations = /backup-conversations\.ts/i.test(cmdBasename) || Boolean(args && args.some(a => /backup-conversations\.ts/i.test(a)));
       const isInfraOrchestration = !isKnownDeterministic && !isWinNonRunnerCli && (

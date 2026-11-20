@@ -1,7 +1,11 @@
 // @ts-nocheck
 import fs from 'fs';
 import path from 'path';
-import { AUTONOMOUS_HEALING_MSG, resolveAgentScriptFallback } from '../utils.js';
+import {
+  AUTONOMOUS_HEALING_MSG,
+  resolveAgentScriptFallback,
+  tryAccelerateCompiledCommitScript,
+} from '../utils.js';
 import { ExecutionContext, AGENT_NATIVE_TOOLS, ECOSYSTEM_MCP_TOOLS } from './types.js';
 import { handleRipgrepInterception } from './search-interceptor.js';
 import { getUnderlyingPackageScript } from '../command-utils.js';
@@ -45,6 +49,25 @@ export function packageManagerInterceptor(ctx: ExecutionContext): void {
 
   if (['npm', 'npm.cmd', 'npm.exe', 'pnpm', 'pnpm.cmd', 'pnpm.exe', 'yarn', 'yarn.cmd', 'yarn.exe', 'bun', 'bun.cmd', 'bun.exe', 'npx', 'npx.cmd', 'npx.exe', 'pnpx', 'pnpx.cmd', 'pnpx.exe', 'bunx', 'bunx.cmd', 'bunx.exe'].includes(cmdBasename)) {
     healMissingAgentScriptArgs(args, projectDir, ctx.payload);
+    if (!cmdBasename.startsWith('bun')) {
+      const accelerated = tryAccelerateCompiledCommitScript(args, projectDir, ctx.payload.target);
+      if (accelerated !== null) {
+        const nodeCmd = process.platform === 'win32' ? 'node.exe' : 'node';
+        ctx.cmdBasename = nodeCmd;
+        args.splice(0, args.length, accelerated.compiledPath, ...accelerated.remainingArgs);
+        ctx.args = args;
+        if ('command' in ctx.payload) {
+          ctx.payload.command = nodeCmd;
+          ctx.payload.args = args;
+        }
+        console.error(`\n   💡 AGENT INTERCEPT: Disabling stall interceptors and extending timeout for deterministic workflow script to prevent false positive aborts.`);
+        ctx.payload.bypassInterceptors = true;
+        if (ctx.payload.timeoutMs === undefined || ctx.payload.timeoutMs < 240000) {
+          ctx.payload.timeoutMs = 240000;
+        }
+        return;
+      }
+    }
   }
 
   if (args.includes('--help') || args.includes('-h')) return;
@@ -384,7 +407,7 @@ export function packageManagerInterceptor(ctx: ExecutionContext): void {
     const isPackageResolution = ['install', 'i', 'ci', 'add', 'update', 'up', 'dedupe'].includes(subCmdLower);
     const targetScript = (subCmd === 'run' || subCmd === 'exec') ? nonFlagArgs[1] : subCmd;
     const underlyingScript = getUnderlyingPackageScript(cmdBasename, args, ctx.payload.cwd);
-    const isKnownDeterministic = args.some(a => /(?:commit\.ts|get-git-history-json\.ts|backup-conversations\.ts)/i.test(a));
+    const isKnownDeterministic = args.some(a => /(?:commit\.(?:ts|js)|get-git-history-json\.ts|backup-conversations\.ts)/i.test(a));
     const isBackupConversations = args.some(a => /backup-conversations\.ts/i.test(a));
     const isPlaywright = !isPackageResolution && !isKnownDeterministic && Boolean(
       (targetScript && /(?:playwright|cypress|\be2e\b|test:e2e|test-e2e)/i.test(targetScript)) ||
@@ -546,7 +569,7 @@ export function packageManagerInterceptor(ctx: ExecutionContext): void {
           }
         }
       }
-      const isKnownDeterministic = args.some(a => /(?:commit\.ts|get-git-history-json\.ts|backup-conversations\.ts)/i.test(a));
+      const isKnownDeterministic = args.some(a => /(?:commit\.(?:ts|js)|get-git-history-json\.ts|backup-conversations\.ts)/i.test(a));
       const isBackupConversations = args.some(a => /backup-conversations\.ts/i.test(a));
       const isPlaywright = !isKnownDeterministic && args.some(a => /(?:playwright|cypress|\be2e\b|test:e2e|test-e2e)/i.test(a));
       const isCoverage = !isKnownDeterministic && args.some(a => /(?:coverage|--coverage|test:coverage)/i.test(a));

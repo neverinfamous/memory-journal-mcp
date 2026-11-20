@@ -232,6 +232,18 @@ sessionCmd.action(withValidation(searchOptionsSchema, async (args: string[], opt
     await searchAction(query, rest, command);
 }))
 
+// Setup 'commit' command delegating directly to the vendored commit wrapper
+program
+    .command('commit [args...]')
+    .description('Stage files, enforce commit safety/trailers, and optionally record a Memory Journal entry')
+    .allowUnknownOption(true)
+    .allowExcessArguments(true)
+    .helpOption(false)
+    .action(async () => {
+        const { main } = await import('../vendor/commit/commit.js')
+        await main(process.argv.slice(3))
+    })
+
 void program.parseAsync(normalizeCliArgv(process.argv)).catch((err: unknown) => {
     process.stderr.write(`\x1b[31mError:\x1b[0m ${formatCliError(err)}\n`)
     process.exitCode = 1

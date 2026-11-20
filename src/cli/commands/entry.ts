@@ -204,10 +204,10 @@ function resolveCliCreateScopeAndAuthor(
     return { resolvedWs, resolvedAuthor }
 }
 
-export async function createEntryAction(...args: unknown[]): Promise<void> {
-    const command = args[args.length - 1] as Command
-    const options = (args.length > 1 ? args[args.length - 2] : {}) as HealedEntryOptions
-    applyCliEntryFlagAliases(options, args.slice(0, args.length - 2))
+async function runCreateEntry(
+    options: HealedEntryOptions,
+    command: Command
+): Promise<number | undefined> {
     const { db, config } = await getDb(options, command)
     let exitCode: number | undefined
 
@@ -235,7 +235,7 @@ export async function createEntryAction(...args: unknown[]): Promise<void> {
                 anchors: resolvedAnchors,
                 json: options.json,
             })
-            return
+            return undefined
         }
 
         const entryInput: CreateEntryInput = {
@@ -276,7 +276,32 @@ export async function createEntryAction(...args: unknown[]): Promise<void> {
     } finally {
         db.close()
     }
+    return exitCode
+}
+
+export async function createEntryAction(...args: unknown[]): Promise<void> {
+    const command = args[args.length - 1] as Command
+    const options = (args.length > 1 ? args[args.length - 2] : {}) as HealedEntryOptions
+    applyCliEntryFlagAliases(options, args.slice(0, args.length - 2))
+    const exitCode = await runCreateEntry(options, command)
     if (exitCode !== undefined) process.exit(exitCode)
+}
+
+export async function createEntryFromFileInProcess(options: {
+    file: string
+    dryRunLinks?: boolean | undefined
+}): Promise<number> {
+    const healedOptions: HealedEntryOptions = {
+        file: options.file,
+        ...(options.dryRunLinks === true ? { dryRunLinks: true } : {}),
+    }
+    const stubCommand = {
+        name: () => 'create',
+        getOptionValueSource: (key: string) =>
+            Object.hasOwn(healedOptions, key) ? 'cli' : 'default',
+    } as unknown as Command
+    const exitCode = await runCreateEntry(healedOptions, stubCommand)
+    return exitCode ?? 0
 }
 
 function buildUpdatedEntryPayload(

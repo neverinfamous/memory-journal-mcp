@@ -284,8 +284,8 @@ Options:
   process.exit(0);
 }
 
-export function parseArguments(): CliArgs {
-  const rawArgs = process.argv.slice(2);
+export function parseArguments(rawArgv?: readonly string[]): CliArgs {
+  const rawArgs = [...(rawArgv ?? process.argv.slice(2))];
 
   for (let i = 0; i < rawArgs.length - 1; i++) {
     const currentArg = rawArgs[i];

@@ -49,6 +49,18 @@ describe('update-badges script helpers', () => {
             expect(inv.args).toContain('README.md')
             expect(inv.args).toContain('DOCKER_README.md')
         })
+
+        it('uses precompiled dist/vendor/commit/commit.js directly when present', () => {
+            const compiledCommit = path.join(tempDir, 'dist', 'vendor', 'commit', 'commit.js')
+            fs.mkdirSync(path.dirname(compiledCommit), { recursive: true })
+            fs.writeFileSync(compiledCommit, 'export {}\n', 'utf-8')
+
+            const inv = buildCommitInvocation(tempDir, ['README.md'])
+            expect(inv.command).toBe(process.execPath)
+            expect(inv.args[0]).toBe(compiledCommit)
+            expect(inv.args[1]).toBe('--msg')
+            expect(inv.args[2]).toBe('chore(docs): update test badges')
+        })
     })
 
     describe('countE2eSpecFiles & isPartialPlaywrightRun', () => {

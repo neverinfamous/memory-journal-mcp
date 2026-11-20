@@ -279,6 +279,75 @@ export function resolveAgentScriptFallback(rawArg: string, projectDir: string): 
   return null;
 }
 
+/**
+ * [INTENT]: Resolve a fresh precompiled `dist/vendor/commit/commit.js` bundle for `scripts/commit.ts`
+ * so `pnpm [exec] tsx scripts/commit.ts` bypasses `pwsh` + `pnpm.cmd` + `tsx` compilation overhead.
+ */
+export function resolveFreshCompiledCommitBundle(
+  rawScriptArg: string,
+  projectDir: string
+): string | null {
+  if (!/(?:^|[/\\])commit\.ts$/i.test(rawScriptArg)) {
+    return null;
+  }
+  const absScript = path.resolve(projectDir, rawScriptArg);
+  const scriptDir = path.dirname(absScript);
+  const repoRoot =
+    path.basename(scriptDir).toLowerCase() === 'scripts'
+      ? path.dirname(scriptDir)
+      : projectDir;
+  const compiledPath = path.join(repoRoot, 'dist', 'vendor', 'commit', 'commit.js');
+  try {
+    if (!fs.existsSync(compiledPath)) {
+      return null;
+    }
+    const compiledMtime = fs.statSync(compiledPath).mtimeMs;
+    const sourceCandidates = [
+      absScript,
+      path.join(repoRoot, 'scripts', 'commit.ts'),
+      path.join(repoRoot, 'src', 'vendor', 'commit', 'commit.ts'),
+      path.join(repoRoot, 'src', 'vendor', 'commit', 'commit-journal.ts'),
+      path.join(repoRoot, 'src', 'vendor', 'commit', 'commit-cli-schema.ts'),
+    ];
+    for (const candidate of sourceCandidates) {
+      if (fs.existsSync(candidate) && fs.statSync(candidate).mtimeMs > compiledMtime) {
+        return null;
+      }
+    }
+    return compiledPath;
+  } catch {
+    return null;
+  }
+}
+
+export function tryAccelerateCompiledCommitScript(
+  args: string[],
+  projectDir: string,
+  target?: string
+): { compiledPath: string; remainingArgs: string[] } | null {
+  if (target === 'wsl2') return null;
+  let tsxIdx = -1;
+  if (args[0] === 'tsx' && args[1] !== undefined && !args[1].startsWith('-')) {
+    tsxIdx = 0;
+  } else if (
+    (args[0] === 'exec' || args[0] === 'run') &&
+    args[1] === 'tsx' &&
+    args[2] !== undefined &&
+    !args[2].startsWith('-')
+  ) {
+    tsxIdx = 1;
+  }
+  if (tsxIdx === -1) return null;
+  const scriptCandidate = args[tsxIdx + 1];
+  if (scriptCandidate === undefined) return null;
+  const compiledPath = resolveFreshCompiledCommitBundle(scriptCandidate, projectDir);
+  if (compiledPath === null) return null;
+  return {
+    compiledPath,
+    remainingArgs: args.slice(tsxIdx + 2),
+  };
+}
+
 export async function sendDatadogTelemetry(
   payload: ExecPayload,
   cwd: string,

@@ -23,6 +23,7 @@ vi.mock('@huggingface/transformers', () => ({
 import {
     buildEntryPayload,
     createEntryAction,
+    createEntryFromFileInProcess,
     updateEntryAction,
 } from '../../src/cli/commands/entry.js'
 import { execAction } from '../../src/cli/commands/exec.js'
@@ -455,6 +456,52 @@ describe('CLI Entry & Exec Commands', () => {
                     delete process.env['PROJECT_REGISTRY']
                 }
                 cwdSpy.mockRestore()
+            }
+        })
+
+        it('createEntryFromFileInProcess persists a frontmatter journal file in-process without calling process.exit', async () => {
+            const mdFile = path.join(tmpDir, 'in-process-commit.md')
+            fs.writeFileSync(
+                mdFile,
+                [
+                    '---',
+                    'type: "technical_note"',
+                    'tags: ["commit-narrative"]',
+                    'workspace_id: "memory-journal-mcp"',
+                    'project: 5',
+                    'impact: 0.4',
+                    'trust: 0.95',
+                    'validation_status: "passed"',
+                    '---',
+                    'perf(commit): run journal entry creation in-process',
+                ].join('\n'),
+                'utf-8'
+            )
+
+            const savedConfigEnv = process.env['MEMORY_JOURNAL_CONFIG']
+            const cfgFile = path.join(tmpDir, 'in-process-config.json')
+            fs.writeFileSync(
+                cfgFile,
+                JSON.stringify({
+                    db: dbPath,
+                    projectRegistry: {
+                        'memory-journal-mcp': { path: tmpDir, project_number: 5 },
+                    },
+                }),
+                'utf-8'
+            )
+            process.env['MEMORY_JOURNAL_CONFIG'] = cfgFile
+            try {
+                stderrOutput = []
+                const code = await createEntryFromFileInProcess({ file: mdFile })
+                expect(code).toBe(0)
+                expect(stderrOutput.join('')).toContain('Successfully created entry #')
+            } finally {
+                if (savedConfigEnv !== undefined) {
+                    process.env['MEMORY_JOURNAL_CONFIG'] = savedConfigEnv
+                } else {
+                    delete process.env['MEMORY_JOURNAL_CONFIG']
+                }
             }
         })
     })

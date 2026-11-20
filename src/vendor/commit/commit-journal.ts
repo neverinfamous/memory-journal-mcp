@@ -3,6 +3,7 @@ import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { pathToFileURL } from 'node:url';
 import { z } from 'zod';
 
 export const VALID_CATEGORIES = ['Added', 'Changed', 'Fixed', 'Removed', 'Security', 'Deprecated'] as const;
@@ -393,7 +394,74 @@ export function resolveMemoryJournalCli(
   return { command: 'memory-journal-mcp', prefixArgs: [] };
 }
 
-export function createJournalEntry(
+export function resolveInProcessEntryModule(
+  resolvedCli: { command: string; prefixArgs: string[] }
+): string | null {
+  if (resolvedCli.command !== 'node' || resolvedCli.prefixArgs.length !== 1) {
+    return null;
+  }
+  const cliScriptPath = resolvedCli.prefixArgs[0];
+  if (cliScriptPath === undefined || cliScriptPath.length === 0) {
+    return null;
+  }
+  const candidate = path.join(path.dirname(cliScriptPath), 'cli', 'commands', 'entry.js');
+  return fs.existsSync(candidate) ? candidate : null;
+}
+
+interface InProcessEntryModule {
+  createEntryFromFileInProcess?: (options: {
+    file: string;
+    dryRunLinks?: boolean | undefined;
+  }) => Promise<number>;
+}
+
+export async function tryCreateJournalEntryInProcess(
+  entryModulePath: string,
+  journalFile: string,
+  cwd: string,
+  dryRunLinks?: boolean
+): Promise<boolean> {
+  if (typeof process.versions['bun'] !== 'undefined') {
+    return false;
+  }
+  let mod: InProcessEntryModule;
+  try {
+    mod = (await import(pathToFileURL(entryModulePath).href)) as InProcessEntryModule;
+  } catch {
+    return false;
+  }
+  if (typeof mod.createEntryFromFileInProcess !== 'function') {
+    return false;
+  }
+  const prevCwd = process.cwd();
+  const prevExitCode = process.exitCode;
+  const targetCwd = path.resolve(cwd);
+  const shouldChdir = fs.existsSync(targetCwd) && path.resolve(prevCwd) !== targetCwd;
+  if (shouldChdir) {
+    process.chdir(targetCwd);
+  }
+  try {
+    const exitCode = await mod.createEntryFromFileInProcess({
+      file: journalFile,
+      ...(dryRunLinks === true ? { dryRunLinks: true } : {}),
+    });
+    if (exitCode !== 0) {
+      throw new Error(`In-process entry create exited with code ${String(exitCode)}`);
+    }
+    return true;
+  } finally {
+    process.exitCode = prevExitCode;
+    if (shouldChdir) {
+      try {
+        process.chdir(prevCwd);
+      } catch {
+        // Ignore restore failure if directory was removed
+      }
+    }
+  }
+}
+
+export async function createJournalEntry(
   sha: string,
   header: string,
   args: CommitJournalArgs,
@@ -402,7 +470,7 @@ export function createJournalEntry(
   registerTempFile: (filepath: string) => void,
   cleanupTempFile: (filepath: string) => void,
   formatError: (error: unknown) => string
-): void {
+): Promise<void> {
   if (!args.journal) {
     return;
   }
@@ -416,16 +484,28 @@ export function createJournalEntry(
 
     try {
       const resolvedCli = resolveMemoryJournalCli(cwd);
-      const cliArgs = [...resolvedCli.prefixArgs, 'entry', 'create', '--file', journalFile];
-      if (args['dry-run-links'] === true) {
-        cliArgs.push('--dry-run-links');
+      const inProcessModule = resolveInProcessEntryModule(resolvedCli);
+      const ranInProcess =
+        inProcessModule !== null
+          ? await tryCreateJournalEntryInProcess(
+              inProcessModule,
+              journalFile,
+              cwd,
+              args['dry-run-links']
+            )
+          : false;
+      if (!ranInProcess) {
+        const cliArgs = [...resolvedCli.prefixArgs, 'entry', 'create', '--file', journalFile];
+        if (args['dry-run-links'] === true) {
+          cliArgs.push('--dry-run-links');
+        }
+        execFileSync(resolvedCli.command, cliArgs, {
+          stdio: 'inherit',
+          shell: false,
+          windowsHide: true,
+          cwd,
+        });
       }
-      execFileSync(resolvedCli.command, cliArgs, {
-        stdio: 'inherit',
-        shell: false,
-        windowsHide: true,
-        cwd,
-      });
     } finally {
       cleanupTempFile(journalFile);
     }

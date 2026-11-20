@@ -10,6 +10,8 @@ export default defineConfig({
         index: 'src/index.ts',
         cli: 'src/cli/index.ts',
         'cli/index': 'src/cli/index.ts',
+        'cli/commands/entry': 'src/cli/commands/entry.ts',
+        'vendor/commit/commit': 'src/vendor/commit/commit.ts',
         'worker-script': 'src/codemode/worker-script.ts',
     },
     format: ['esm'],
