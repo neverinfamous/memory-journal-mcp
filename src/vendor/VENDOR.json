@@ -19,8 +19,8 @@
         "uncommitted.ts",
         "AGENT_README.md"
       ],
-      "syncedAt": "2026-11-20T21:58:48.550Z",
-      "syncedFromCommit": "562f7af795ebf6aa16b791aef093213cf70d3dc6"
+      "syncedAt": "2026-11-20T22:22:33.572Z",
+      "syncedFromCommit": "bc28df090b7549ee179d7605218aff3c2d4e5da4"
     },
     "lib-agent-exec": {
       "source": ".agents/scripts/lib-agent-exec",
@@ -58,18 +58,19 @@
         "interceptors/system-interceptor.ts",
         "AGENT_README.md"
       ],
-      "syncedAt": "2026-11-20T21:58:48.550Z",
-      "syncedFromCommit": "562f7af795ebf6aa16b791aef093213cf70d3dc6"
+      "syncedAt": "2026-11-20T22:22:33.572Z",
+      "syncedFromCommit": "bc28df090b7549ee179d7605218aff3c2d4e5da4"
     },
     "commit": {
       "source": ".agents/scripts",
       "files": [
         "commit.ts",
         "commit-cli-schema.ts",
-        "commit-journal.ts"
+        "commit-journal.ts",
+        "commit-journal-bridge.ts"
       ],
-      "syncedAt": "2026-11-20T21:58:48.550Z",
-      "syncedFromCommit": "562f7af795ebf6aa16b791aef093213cf70d3dc6"
+      "syncedAt": "2026-11-20T22:22:33.572Z",
+      "syncedFromCommit": "bc28df090b7549ee179d7605218aff3c2d4e5da4"
     }
   }
 }

@@ -59,7 +59,6 @@ export function getGitTools(context: ToolContext): ToolDefinition[] {
                     const input = GitHistoryOptionsSchema.parse(parsedMcp)
                     if (input.uncommitted === true) {
                         await sendProgress(context.progress, 0, 1, 'Fetching working-tree state...')
-                        const uncommitted = fetchUncommittedWorkingTree(cwd, input.path)
                         const historyRequested =
                             parsedMcp.maxCount !== undefined ||
                             parsedMcp.ref !== undefined ||
@@ -68,10 +67,20 @@ export function getGitTools(context: ToolContext): ToolDefinition[] {
                             parsedMcp.scope !== undefined ||
                             parsedMcp.techDebtAudit === true
                         if (!historyRequested) {
+                            const uncommitted = await fetchUncommittedWorkingTree(cwd, input.path)
                             return { success: true, commits: [], uncommitted }
                         }
-                        const commits = await fetchCommits(input, cwd)
-                        return { success: true, commits: fenceCommitEntries(commits), uncommitted }
+                        const [uncommittedRes, commitsRes] = await Promise.allSettled([
+                            fetchUncommittedWorkingTree(cwd, input.path),
+                            fetchCommits(input, cwd),
+                        ])
+                        if (uncommittedRes.status === 'rejected') throw uncommittedRes.reason
+                        if (commitsRes.status === 'rejected') throw commitsRes.reason
+                        return {
+                            success: true,
+                            commits: fenceCommitEntries(commitsRes.value),
+                            uncommitted: uncommittedRes.value,
+                        }
                     }
                     await sendProgress(context.progress, 0, 1, 'Fetching commit history...')
                     const commits = await fetchCommits(input, cwd)
