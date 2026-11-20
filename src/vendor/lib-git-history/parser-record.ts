@@ -1,10 +1,48 @@
 // @ts-nocheck
-import { match, P } from 'ts-pattern';
 import type { CliArgs } from './cli.js';
 import { FIELD_SEPARATOR } from './git-runner.js';
-import { extractIssues, getLanguage, truncateSafely, flattenString } from './parser-utils.js';
-import { extractNumericMetadata, evaluateNumericFilter } from './parser-metadata.js';
-import { MAX_BODY_LENGTH, MAX_SUBJECT_LENGTH, MAX_TRAILER_LENGTH, EXPECTED_RECORD_PARTS, MAX_STATUS_ITERATIONS, MAX_EMPTY_STATUS_COUNT, MAX_PARSED_FILES, MAX_ARRAY_LENGTH, RECORD_START_FIELDS, RECORD_END_FIELDS, REGEX_FILE_STATUS, REGEX_CONVENTIONAL_COMMIT, REGEX_VALIDATION_TRAILER, REGEX_REFERENCE_TRAILER, REGEX_BREAKING_CHANGE, REGEX_REVERT_COMMIT } from './constants.js';
+import { extractIssues, truncateSafely, flattenString } from './parser-utils.js';
+import { evaluateNumericFilter } from './parser-metadata.js';
+import { parseTrailersBlock } from './parser-trailers.js';
+import {
+  MAX_BODY_LENGTH,
+  MAX_SUBJECT_LENGTH,
+  EXPECTED_RECORD_PARTS,
+  MAX_STATUS_ITERATIONS,
+  MAX_EMPTY_STATUS_COUNT,
+  MAX_PARSED_FILES,
+  RECORD_START_FIELDS,
+  RECORD_END_FIELDS,
+  REGEX_FILE_STATUS,
+  REGEX_CONVENTIONAL_COMMIT,
+  REGEX_BREAKING_CHANGE,
+  REGEX_REVERT_COMMIT,
+} from './constants.js';
+
+interface ParsedCliFilters {
+  allowedCategories?: Set<string>;
+  allowedTypes?: Set<string>;
+}
+
+const CLI_FILTER_CACHE = new WeakMap<CliArgs, ParsedCliFilters>();
+const CHANGELOG_TYPES = new Set(['feat', 'fix', 'perf', 'revert']);
+const REGEX_TRAILING_DIGITS = /(\d{1,3})$/;
+const REGEX_BREAKING_FALLBACK = /^BREAKING[\s-]CHANGES?(?::|$)/im;
+const REGEX_REVERT_SUBJECT = /^revert:? /i;
+
+function getParsedCliFilters(args: CliArgs): ParsedCliFilters {
+  let cached = CLI_FILTER_CACHE.get(args);
+  if (cached) return cached;
+  cached = {};
+  if (args.category) {
+    cached.allowedCategories = new Set(args.category.split(',').map(c => c.trim().toLowerCase()));
+  }
+  if (args.type) {
+    cached.allowedTypes = new Set(args.type.split(',').map(t => t.trim().toLowerCase()));
+  }
+  CLI_FILTER_CACHE.set(args, cached);
+  return cached;
+}
 
 export type RawCommitBatchItem = {
   sha: string; parents: string[]; refs: string[]; tags: string[]; authorName: string; authorEmail: string; date: string;
@@ -46,11 +84,47 @@ function extractRecordParts(commitBlock: string): string[] | null {
   return parts;
 }
 
-function parseFilesBlock(filesBlock: string, sha: string): { rawFiles: Array<{ status: string; file: string; oldFile?: string; similarityScore?: number }>, trueFileCount: number } {
-  const rawFiles: Array<{ status: string; file: string; oldFile?: string; similarityScore?: number }> = [];
+type RawFileItem = { status: string; file: string; oldFile?: string; similarityScore?: number };
+
+function parseSingleFileStatus(
+  statusRaw: string,
+  getNextFilePart: () => string | null,
+): RawFileItem | null {
+  let status = statusRaw;
+  let similarityScore: number | undefined;
+  const digitsMatch = statusRaw.match(REGEX_TRAILING_DIGITS);
+  if (digitsMatch && digitsMatch[1]) {
+    similarityScore = parseInt(digitsMatch[1], 10);
+    status = statusRaw.slice(0, -digitsMatch[1].length);
+  }
+
+  let numOldFiles = 0;
+  const statusLetters = status.replace(/\d+/g, '');
+  if (statusLetters.length === 1 && (statusLetters === 'R' || statusLetters === 'C')) {
+    numOldFiles = 1;
+  }
+
+  let oldFile: string | undefined;
+  if (numOldFiles > 0) {
+    oldFile = getNextFilePart() || undefined;
+  }
+  const file = getNextFilePart();
+  if (!file) return null;
+
+  const flatOldFile = oldFile ? flattenString(oldFile) : undefined;
+  return {
+    status: flattenString(status),
+    file: flattenString(file),
+    ...(flatOldFile ? { oldFile: flatOldFile } : {}),
+    ...(similarityScore !== undefined ? { similarityScore } : {}),
+  };
+}
+
+function parseFilesBlock(filesBlock: string, sha: string): { rawFiles: RawFileItem[]; trueFileCount: number } {
+  const rawFiles: RawFileItem[] = [];
   let trueFileCount = 0;
   let fileBlockIdx = 0;
-  
+
   const getNextFilePart = (): string | null => {
     if (!filesBlock || fileBlockIdx >= filesBlock.length) return null;
     const nulIdx = filesBlock.indexOf('\x00', fileBlockIdx);
@@ -65,80 +139,128 @@ function parseFilesBlock(filesBlock: string, sha: string): { rawFiles: Array<{ s
   };
 
   let firstStatus = getNextFilePart();
-  if (firstStatus !== null) {
-    firstStatus = firstStatus.replace(/^[\r\n]+/, '');
-    if (firstStatus || fileBlockIdx < filesBlock.length) {
-      let statusRaw: string | null = firstStatus;
-      let iterations = 0;
-      let emptyCount = 0;
-      while (statusRaw !== null && iterations < MAX_STATUS_ITERATIONS) {
-        iterations++;
-        statusRaw = statusRaw.replace(/\r/g, '');
-        if (statusRaw === '') {
-          emptyCount++;
-          if (emptyCount > MAX_EMPTY_STATUS_COUNT) break; // Safeguard against malformed NUL floods
-          statusRaw = getNextFilePart();
-          continue;
-        }
-        emptyCount = 0;
-        const shouldPush = rawFiles.length < MAX_PARSED_FILES;
-        
-        const isValidStatus = REGEX_FILE_STATUS.test(statusRaw) && statusRaw.length <= 20;
-        if (!isValidStatus) {
-          console.warn(`[lib-git-history] Warning: Desynced or invalid file status "${statusRaw}" in commit ${sha}. Stopping file parsing for this commit.`);
-          break; // Desynced or invalid status. Stop parsing files for this commit.
-        }
-        
-        let status = statusRaw;
-        let similarityScore;
-        const digitsMatch = statusRaw.match(/(\d{1,3})$/);
-        if (digitsMatch && digitsMatch[1]) {
-          similarityScore = parseInt(digitsMatch[1], 10);
-          status = statusRaw.slice(0, -digitsMatch[1].length);
-        }
-        
-        let numOldFiles = 0;
-        const statusLetters = status.replace(/\d+/g, '');
-        if (statusLetters.length === 1) {
-          for (const char of statusLetters) {
-            if (char === 'R' || char === 'C') numOldFiles++;
-          }
-        }
-        
-        let oldFile;
-        if (numOldFiles > 0) {
-          oldFile = getNextFilePart() || undefined;
-          for (let j = 1; j < numOldFiles; j++) {
-            getNextFilePart();
-          }
-        }
-        const file = getNextFilePart();
-        
-        if (file) {
-          trueFileCount++;
-          if (shouldPush) {
-            const flatFile = flattenString(file);
-            const flatStatus = flattenString(status);
-            const flatOldFile = oldFile ? flattenString(oldFile) : undefined;
-            const lang = getLanguage(flatFile);
-            rawFiles.push({
-               status: flatStatus, file: flatFile, ...(flatOldFile ? { oldFile: flatOldFile } : {}),
-               ...(lang ? { language: lang } : {}),
-               ...(similarityScore !== undefined ? { similarityScore } : {})
-            });
-          }
-        }
-        statusRaw = getNextFilePart();
-      }
+  if (firstStatus === null) return { rawFiles, trueFileCount };
+  firstStatus = firstStatus.replace(/^[\r\n]+/, '');
+  if (!firstStatus && fileBlockIdx >= filesBlock.length) return { rawFiles, trueFileCount };
+
+  let statusRaw: string | null = firstStatus;
+  let iterations = 0;
+  let emptyCount = 0;
+  while (statusRaw !== null && iterations < MAX_STATUS_ITERATIONS) {
+    iterations++;
+    statusRaw = statusRaw.replace(/\r/g, '');
+    if (statusRaw === '') {
+      emptyCount++;
+      if (emptyCount > MAX_EMPTY_STATUS_COUNT) break;
+      statusRaw = getNextFilePart();
+      continue;
     }
+    emptyCount = 0;
+    if (!REGEX_FILE_STATUS.test(statusRaw) || statusRaw.length > 20) {
+      console.warn(`[lib-git-history] Warning: Desynced or invalid file status "${statusRaw}" in commit ${sha}. Stopping file parsing for this commit.`);
+      break;
+    }
+    const parsedFile = parseSingleFileStatus(statusRaw, getNextFilePart);
+    if (parsedFile) {
+      trueFileCount++;
+      if (rawFiles.length < MAX_PARSED_FILES) rawFiles.push(parsedFile);
+    }
+    statusRaw = getNextFilePart();
   }
   return { rawFiles, trueFileCount };
 }
 
-export function parseGitRecord(
-  commitBlock: string,
-  args: CliArgs
-): RawCommitBatchItem | null {
+function parseParentsAndFiles(parentsAndFiles: string): { parentsRaw: string; filesBlock: string } {
+  const firstNewline = parentsAndFiles.indexOf('\n');
+  const firstNul = parentsAndFiles.indexOf('\0');
+  if (firstNewline !== -1 && (firstNul === -1 || firstNewline < firstNul)) {
+    return {
+      parentsRaw: parentsAndFiles.slice(0, firstNewline).trim(),
+      filesBlock: parentsAndFiles.slice(firstNewline + 1).replace(/^\r+/, ''),
+    };
+  }
+  if (firstNul !== -1) {
+    return {
+      parentsRaw: parentsAndFiles.slice(0, firstNul).trim(),
+      filesBlock: parentsAndFiles.slice(firstNul + 1),
+    };
+  }
+  return { parentsRaw: parentsAndFiles.trim(), filesBlock: '' };
+}
+
+function stripExactTrailerBlock(body: string, exactTrailerBlock: string): string {
+  if (!exactTrailerBlock) return body;
+  const normalizedBody = body.replace(/\r\n?/g, '\n');
+  const trailerTrimmed = exactTrailerBlock.replace(/\r\n?/g, '\n').trim();
+  if (trailerTrimmed.length === 0) return body;
+  const trimmedBody = normalizedBody.trimEnd();
+  if (trimmedBody.endsWith(trailerTrimmed)) {
+    return trimmedBody.slice(0, -trailerTrimmed.length).trimEnd();
+  }
+  return body;
+}
+
+function matchesRecordFilters(
+  args: CliArgs,
+  categories: string[],
+  entriesParsed: string[],
+  type: string | undefined,
+  isBreaking: boolean,
+  metadataObj: Record<string, unknown>,
+): boolean {
+  const parsedFilters = getParsedCliFilters(args);
+  if (parsedFilters.allowedCategories) {
+    const filterCategories = categories.length > 0 ? categories : (type ? [type.charAt(0).toUpperCase() + type.slice(1)] : ['Uncategorized']);
+    if (!filterCategories.some((c) => parsedFilters.allowedCategories?.has(c.toLowerCase()))) return false;
+  }
+  if (parsedFilters.allowedTypes) {
+    if (!type || !parsedFilters.allowedTypes.has(type.toLowerCase())) return false;
+  }
+  if (args.breaking && !isBreaking) return false;
+  if (args['changelog-only'] && entriesParsed.length === 0 && !(CHANGELOG_TYPES.has(type || '') || isBreaking)) return false;
+  if (args['impact']) {
+    const rawImpact = metadataObj['impact'];
+    if (!evaluateNumericFilter(args['impact'], typeof rawImpact === 'number' ? rawImpact : undefined)) return false;
+  }
+  if (args['confidence']) {
+    const rawConfidence = metadataObj['confidence'];
+    if (!evaluateNumericFilter(args['confidence'], typeof rawConfidence === 'number' ? rawConfidence : undefined)) return false;
+  }
+  return true;
+}
+
+function applyIssueTrackerUrls(issuesMap: Map<string, string | null>, tracker: string | undefined): void {
+  if (!tracker) return;
+  for (const [issue, action] of Array.from(issuesMap.entries())) {
+    let finalIssue = issue;
+    if (issue.startsWith('#')) {
+      finalIssue = tracker + issue.slice(1);
+    } else if (!issue.startsWith('http')) {
+      finalIssue = tracker.endsWith('/') ? tracker + issue : tracker + '/' + issue;
+    }
+    if (finalIssue !== issue) {
+      issuesMap.delete(issue);
+      issuesMap.set(finalIssue, action);
+    }
+  }
+}
+
+function normalizeSubjectAndBody(rawSubject: string, bodyParts: string[]): { subject: string; body: string } {
+  let subject = rawSubject.trim().replace(/\r\n/g, '\n').replace(/\n$/, '');
+  if (subject.length > MAX_SUBJECT_LENGTH) {
+    subject = truncateSafely(subject, MAX_SUBJECT_LENGTH, '...[subject truncated]');
+  }
+  let body = bodyParts.join(FIELD_SEPARATOR).replace(/\r\n/g, '\n');
+  if (body.length > MAX_BODY_LENGTH) {
+    body = truncateSafely(body, MAX_BODY_LENGTH, '\n\n...[body truncated to prevent memory exhaustion]');
+  }
+  const hasBOM = body.startsWith('\uFEFF');
+  body = body.trim();
+  if (hasBOM && !body.startsWith('\uFEFF')) body = '\uFEFF' + body;
+  return { subject, body };
+}
+
+export function parseGitRecord(commitBlock: string, args: CliArgs): RawCommitBatchItem | null {
   const parts = extractRecordParts(commitBlock);
   if (!parts || parts.length < 12) return null;
 
@@ -150,250 +272,68 @@ export function parseGitRecord(
   const committerName = parts[5].trim();
   const committerEmail = parts[6].trim();
   const committerDate = parts[7].trim();
-  let subject = parts[8].trim();
-  
   const bodyEndIdx = parts.length - 3;
-  let body = parts.slice(9, bodyEndIdx).join(FIELD_SEPARATOR);
-  body = body.replace(/\r\n/g, '\n');
-  if (body.length > MAX_BODY_LENGTH) {
-    body = truncateSafely(body, MAX_BODY_LENGTH, '\n\n...[body truncated to prevent memory exhaustion]');
-  }
-  const hasBOM = body.startsWith('\uFEFF');
-  body = body.trim();
-  if (hasBOM && !body.startsWith('\uFEFF')) {
-    body = '\uFEFF' + body;
-  }
+  const normalized = normalizeSubjectAndBody(parts[8], parts.slice(9, bodyEndIdx));
+  const subject = normalized.subject;
+  let body = normalized.body;
+
   const exactTrailerBlock = (parts[bodyEndIdx] ?? '').trim();
   const rawTrailers = (parts[bodyEndIdx + 1] ?? '').trim();
-  
-  const parentsAndFiles = parts[bodyEndIdx + 2] ?? '';
-  let parentsRaw: string;
-  let filesBlock = '';
-  const firstNewline = parentsAndFiles.indexOf('\n');
-  const firstNul = parentsAndFiles.indexOf('\0');
-  
-  if (firstNewline !== -1 && (firstNul === -1 || firstNewline < firstNul)) {
-    parentsRaw = parentsAndFiles.slice(0, firstNewline).trim();
-    filesBlock = parentsAndFiles.slice(firstNewline + 1).replace(/^\r+/, '');
-  } else if (firstNul !== -1) {
-    parentsRaw = parentsAndFiles.slice(0, firstNul).trim();
-    filesBlock = parentsAndFiles.slice(firstNul + 1);
-  } else {
-    parentsRaw = parentsAndFiles.trim();
-  }
-
+  const { parentsRaw, filesBlock } = parseParentsAndFiles(parts[bodyEndIdx + 2] ?? '');
   const { rawFiles, trueFileCount } = parseFilesBlock(filesBlock, sha);
-
-  subject = subject.replace(/\r\n/g, '\n').replace(/\n$/, '');
-  if (subject.length > MAX_SUBJECT_LENGTH) {
-    subject = truncateSafely(subject, MAX_SUBJECT_LENGTH, '...[subject truncated]');
-  }
 
   const cleanStart = subject.replace(/^[\s\p{Emoji_Presentation}\p{Extended_Pictographic}]+/u, '').replace(/^:\w+:\s*/, '');
   const convMatch = cleanStart.match(REGEX_CONVENTIONAL_COMMIT);
-  let type, scope, cleanSubject = subject;
-  let isBreaking = false;
-  let breakingChangeDescription: string | undefined = undefined;
-  if (convMatch) {
-    type = convMatch[1];
-    scope = convMatch[2];
-    isBreaking = !!convMatch[3];
-    cleanSubject = convMatch[4].trim();
-  }
+  const type = convMatch ? convMatch[1] : undefined;
+  const scope = convMatch ? convMatch[2] : undefined;
+  const cleanSubject = convMatch ? convMatch[4].trim() : subject;
 
-  const categories: string[] = [];
-  const entriesParsed: string[] = [];
-  const references: string[] = [];
-  const coAuthors: string[] = [];
-  const reviewers: string[] = [];
-  const metadataObj: Record<string, unknown> = Object.create(null);
-  const customTrailers: Record<string, string[]> = Object.create(null);
-  const trailersObj: Record<string, string> = Object.create(null);
+  const trailers = parseTrailersBlock(rawTrailers, sha);
+  let isBreaking = Boolean(convMatch?.[3]) || trailers.isBreaking;
+  let breakingChangeDescription = trailers.breakingChangeDescription;
 
-  if (rawTrailers) {
-    const trailerList = rawTrailers.split('\x1C').filter(Boolean);
-    for (const t of trailerList) {
-      const colonIdx = t.indexOf(':');
-      const keyRaw = colonIdx === -1 ? t.trim() : t.slice(0, colonIdx).trim();
-      const key = keyRaw.toLowerCase().replace(/\s+/g, '-');
-      if (key === '__proto__' || key === 'constructor' || key === 'prototype') continue;
-      const rawVal = colonIdx === -1 ? '' : t.slice(colonIdx + 1).trim();
-      let val = rawVal.replace(/\r?\n[ \t]+/g, '\n').replace(/\u200B/g, '');
-      
-      if (val.length > MAX_TRAILER_LENGTH) {
-        val = truncateSafely(val, MAX_TRAILER_LENGTH, '\n...[trailer truncated due to length]');
-      }
-      
-      trailersObj[keyRaw] = val;
-
-      match(key)
-        .with(P.union('history-category', 'changelog-category', 'category'), () => {
-          const titleCase = (s: string) => s.split(/[\s-]+/).map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
-          const splitVals: string[] = [];
-          let current = '';
-          let inQuotes = false;
-          for (let i = 0; i < val.length; i++) {
-            const char = val[i];
-            if (char === '"') inQuotes = !inQuotes;
-            if (char === ',' && !inQuotes) {
-              splitVals.push(current);
-              current = '';
-            } else {
-              current += char;
-            }
-          }
-          splitVals.push(current);
-          categories.push(...splitVals.map(s => titleCase(s.trim().replace(/^"|"$/g, ''))).filter(Boolean));
-        })
-        .with(P.union('history-entry', 'changelog-entry', 'entry'), () => { entriesParsed.push(val); })
-        .with(P.union('history-significance', 'changelog-significance', 'significance'), () => { metadataObj['significance'] = val; })
-        .with(P.union('history-impact', 'changelog-impact', 'impact'), () => {
-          const ext = extractNumericMetadata(val);
-          if (ext !== undefined) metadataObj['impact'] = ext;
-        })
-        .with(P.union('history-confidence', 'changelog-confidence', 'confidence'), () => {
-          const ext = extractNumericMetadata(val);
-          if (ext !== undefined) metadataObj['confidence'] = ext;
-        })
-        .with(P.union('history-trust', 'changelog-trust', 'trust'), () => {
-          const ext = extractNumericMetadata(val);
-          if (ext !== undefined) metadataObj['trust'] = ext;
-        })
-        .with(P.when((k: string) => REGEX_VALIDATION_TRAILER.test(k)), () => {
-          let v = val.toLowerCase();
-          if (['success', 'ok', 'passing'].includes(v)) v = 'passed';
-          else if (['error', 'failing', 'fail'].includes(v)) v = 'failed';
-          metadataObj['validation'] = v;
-        })
-        .with(P.union('breaking-change', 'breaking-changes'), () => {
-          isBreaking = true;
-          if (val.trim()) breakingChangeDescription = val;
-        })
-        .with('co-authored-by', () => { coAuthors.push(...val.split(',').map(s => s.trim()).filter(Boolean)); })
-        .with('reviewed-by', () => { if (val) reviewers.push(val); })
-        .with(P.when((k: string) => REGEX_REFERENCE_TRAILER.test(k)), () => {
-          const niceKey = key.split('-').map(p => p.charAt(0).toUpperCase() + p.slice(1)).join('-');
-          if (val) references.push(`${niceKey}: ${val}`);
-        })
-        .otherwise(() => {
-          if (colonIdx === -1) return; // Skip malformed custom trailers missing colons
-          if (!customTrailers[key]) customTrailers[key] = [];
-          customTrailers[key].push(val);
-        });
-    }
-  }
-
-  const enforceMaxArray = (arr: unknown[], name: string) => {
-    if (arr.length > MAX_ARRAY_LENGTH) {
-      console.warn(`[lib-git-history] Warning: Array ${name} truncated from ${arr.length} to ${MAX_ARRAY_LENGTH} items in commit ${sha}`);
-      arr.length = MAX_ARRAY_LENGTH;
-    }
-  };
-
-  enforceMaxArray(categories, 'categories');
-  enforceMaxArray(entriesParsed, 'entriesParsed');
-  enforceMaxArray(references, 'references');
-  enforceMaxArray(coAuthors, 'coAuthors');
-  enforceMaxArray(reviewers, 'reviewers');
-  for (const k of Object.keys(customTrailers)) {
-    enforceMaxArray(customTrailers[k], `customTrailers[${k}]`);
-  }
-
-  if (exactTrailerBlock) {
-    const normalizedBody = body.replace(/\r\n?/g, '\n');
-    const trailerTrimmed = exactTrailerBlock.replace(/\r\n?/g, '\n').trim();
-    if (trailerTrimmed.length > 0) {
-      const trimmedBody = normalizedBody.trimEnd();
-      if (trimmedBody.endsWith(trailerTrimmed)) {
-        body = trimmedBody.slice(0, -trailerTrimmed.length).trimEnd();
-      }
-    }
-  }
-
+  body = stripExactTrailerBlock(body, exactTrailerBlock);
   const bcMatch = body.match(REGEX_BREAKING_CHANGE);
-  match(bcMatch)
-    .with(P.not(P.nullish), (m) => {
-      isBreaking = true;
-      if (!breakingChangeDescription) {
-        breakingChangeDescription = m[1].trim();
-      }
-    })
-    .otherwise(() => {
-      if (!isBreaking && /^BREAKING[\s-]CHANGES?(?::|$)/im.test(body)) {
-        isBreaking = true;
-      }
-    });
-
-  if (categories.length > 0) metadataObj['category'] = categories;
-  if (entriesParsed.length > 0) metadataObj['entry'] = entriesParsed;
-  if (Object.keys(customTrailers).length > 0) metadataObj['customTrailers'] = customTrailers;
-
-  const filterCategories = categories.length > 0 ? categories : (type ? [type.charAt(0).toUpperCase() + type.slice(1)] : ['Uncategorized']);
-  if (args['category']) {
-    const allowedCategories = args['category'].split(',').map(c => c.trim().toLowerCase());
-    if (!filterCategories.some(c => allowedCategories.includes(c.toLowerCase()))) return null;
-  }
-  if (args.type) {
-    const allowedTypes = args.type.split(',').map(t => t.trim().toLowerCase());
-    if (!type || !allowedTypes.includes(type.toLowerCase())) return null;
-  }
-  if (args.breaking && !isBreaking) return null;
-  if (args['changelog-only'] && entriesParsed.length === 0 && !(['feat', 'fix', 'perf', 'revert'].includes(type || '') || isBreaking)) return null;
-
-  if (args['impact']) {
-    const rawImpact = metadataObj['impact'];
-    const pass = evaluateNumericFilter(args['impact'], typeof rawImpact === 'number' ? rawImpact : undefined);
-    if (!pass) return null;
+  if (bcMatch !== null) {
+    isBreaking = true;
+    if (!breakingChangeDescription) breakingChangeDescription = bcMatch[1].trim();
+  } else if (!isBreaking && REGEX_BREAKING_FALLBACK.test(body)) {
+    isBreaking = true;
   }
 
-  if (args['confidence']) {
-    const rawConfidence = metadataObj['confidence'];
-    const pass = evaluateNumericFilter(args['confidence'], typeof rawConfidence === 'number' ? rawConfidence : undefined);
-    if (!pass) return null;
+  if (trailers.categories.length > 0) trailers.metadataObj['category'] = trailers.categories;
+  if (trailers.entriesParsed.length > 0) trailers.metadataObj['entry'] = trailers.entriesParsed;
+  if (Object.keys(trailers.customTrailers).length > 0) trailers.metadataObj['customTrailers'] = trailers.customTrailers;
+
+  if (!matchesRecordFilters(args, trailers.categories, trailers.entriesParsed, type, isBreaking, trailers.metadataObj)) {
+    return null;
   }
 
-  const refs = refsRaw ? refsRaw.split(', ').map(r => r.trim().replace(/^HEAD -> /, '')).filter(Boolean) : [];
-  const tags = refs.filter(r => r.startsWith('tag: ')).map(r => r.replace(/^tag:\s*/, ''));
+  const refs = refsRaw ? refsRaw.split(', ').map((r) => r.trim().replace(/^HEAD -> /, '')).filter(Boolean) : [];
+  const tags = refs.filter((r) => r.startsWith('tag: ')).map((r) => r.replace(/^tag:\s*/, ''));
   const parents = parentsRaw ? parentsRaw.split(/\s+/).filter(Boolean) : [];
-  
-  let isRevert = false;
-  let revertedCommit: string | undefined = undefined;
+
   const revertMatch = body.match(REGEX_REVERT_COMMIT);
-  if (/^revert:? /i.test(subject) || revertMatch) {
-    isRevert = true;
-    if (revertMatch) revertedCommit = revertMatch[1];
-  }
+  const isRevert = REGEX_REVERT_SUBJECT.test(subject) || Boolean(revertMatch);
+  const revertedCommit = revertMatch ? revertMatch[1] : undefined;
 
   const issuesMap = new Map<string, string | null>();
   extractIssues(subject, issuesMap, args['issue-pattern']);
   extractIssues(body, issuesMap, args['issue-pattern']);
-
-  if (args['issue-tracker']) {
-    const tracker = args['issue-tracker'];
-    for (const [issue, action] of issuesMap.entries()) {
-      let finalIssue = issue;
-      if (issue.startsWith('#')) {
-        finalIssue = tracker + (tracker.endsWith('/') ? '' : '') + issue.slice(1);
-      } else if (!issue.startsWith('http')) {
-        finalIssue = tracker.endsWith('/') ? tracker + issue : tracker + '/' + issue;
-      }
-      if (finalIssue !== issue) {
-        issuesMap.delete(issue);
-        issuesMap.set(finalIssue, action);
-      }
-    }
-  }
+  applyIssueTrackerUrls(issuesMap, args['issue-tracker']);
 
   return {
-    sha: flattenString(sha), parents, refs, tags, 
-    authorName: flattenString(authorName), authorEmail: flattenString(authorEmail), 
-    date: flattenString(date), committerName: flattenString(committerName), 
+    sha: flattenString(sha), parents, refs, tags,
+    authorName: flattenString(authorName), authorEmail: flattenString(authorEmail),
+    date: flattenString(date), committerName: flattenString(committerName),
     committerEmail: flattenString(committerEmail), committerDate: flattenString(committerDate),
-    subject: flattenString(subject), body, cleanSubject: flattenString(cleanSubject), 
-    type: type ? flattenString(type) : undefined, scope: scope ? flattenString(scope) : undefined, 
-    isBreaking, isRevert, 
-    revertedCommit: revertedCommit ? flattenString(revertedCommit) : undefined, 
+    subject: flattenString(subject), body, cleanSubject: flattenString(cleanSubject),
+    type: type ? flattenString(type) : undefined, scope: scope ? flattenString(scope) : undefined,
+    isBreaking, isRevert,
+    revertedCommit: revertedCommit ? flattenString(revertedCommit) : undefined,
     breakingChangeDescription: breakingChangeDescription ? flattenString(breakingChangeDescription) : undefined,
-    rawFiles, metadataObj, trailersObj, references, coAuthors, reviewers, issuesMap, trueFileCount
+    rawFiles, metadataObj: trailers.metadataObj, trailersObj: trailers.trailersObj,
+    references: trailers.references, coAuthors: trailers.coAuthors, reviewers: trailers.reviewers,
+    issuesMap, trueFileCount,
   };
 }

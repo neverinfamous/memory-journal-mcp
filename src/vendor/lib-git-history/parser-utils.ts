@@ -1,10 +1,13 @@
 // @ts-nocheck
 import { readFileSync } from 'node:fs';
-import type { z } from 'zod';
+import path from 'node:path';
+import { z } from 'zod';
 import type { entrySchema } from './schema.js';
 import type { CliArgs } from './cli.js';
-import { match } from 'ts-pattern';
 import { MAX_ISSUE_TEXT_LENGTH } from './constants.js';
+
+const slackMapSchema = z.record(z.string(), z.string());
+const EMPTY_SLACK_MAP: Record<string, string> = Object.create(null) as Record<string, string>;
 
 export function flattenString(str: string): string {
   return (' ' + str).slice(1);
@@ -27,20 +30,34 @@ export function truncateSafely(str: string, maxLength: number, truncateMsg: stri
   return str.slice(0, safeLen) + truncateMsg;
 }
 
-let slackMapCache: Record<string, string> | null = null;
-export function getSlackMap(args: CliArgs): Record<string, string> {
-  if (slackMapCache !== null) return slackMapCache;
-  if (!args['slack-map']) {
-    slackMapCache = {};
-    return slackMapCache;
-  }
+const SLACK_MAP_CACHE = new Map<string, Record<string, string>>();
+const MAX_SLACK_MAP_CACHE = 16;
+
+export function getSlackMap(args: CliArgs, cwd: string = process.cwd()): Record<string, string> {
+  const rawPath = args['slack-map'];
+  if (!rawPath) return EMPTY_SLACK_MAP;
+  const resolvedPath = path.resolve(cwd, rawPath);
+  const cached = SLACK_MAP_CACHE.get(resolvedPath);
+  if (cached !== undefined) return cached;
+
+  const safeMap: Record<string, string> = Object.create(null) as Record<string, string>;
   try {
-    slackMapCache = JSON.parse(readFileSync(args['slack-map'], 'utf-8'));
+    const raw: unknown = JSON.parse(readFileSync(resolvedPath, 'utf-8'));
+    const parsed = slackMapSchema.safeParse(raw);
+    if (parsed.success) {
+      for (const [k, v] of Object.entries(parsed.data)) {
+        if (k === '__proto__' || k === 'constructor' || k === 'prototype') continue;
+        safeMap[k] = v;
+      }
+    } else {
+      console.warn(`[lib-git-history] Warning: Invalid slack-map JSON shape at ${resolvedPath}`);
+    }
   } catch (err: unknown) {
     console.warn(`[lib-git-history] Warning: Failed to parse slack-map JSON: ${err}`);
-    slackMapCache = {};
   }
-  return slackMapCache || {};
+  if (SLACK_MAP_CACHE.size >= MAX_SLACK_MAP_CACHE) SLACK_MAP_CACHE.clear();
+  SLACK_MAP_CACHE.set(resolvedPath, safeMap);
+  return safeMap;
 }
 
 export function resolveIssueTrackerUrl(issue: string, repoHost: string, repoPath: string, args: CliArgs): string | null {
@@ -93,157 +110,202 @@ const NOISE_FILE_REGEX = new RegExp(NOISE_FILE_PATTERNS.join('|'), 'i');
 
 export const isNoiseFile = (file: string) => NOISE_FILE_REGEX.test(file);
 
+const ACTION_REGEX = /(?:^|[^\w])(fixes|fix|closes|close|resolves|resolve|addresses|address|implements|related to|see also)?[\s:-]{0,10}(?:([@\w.-]+\/[\w.-]+)?#(\d+)|([A-Z][A-Z0-9_]+-\d+))\b/ig;
+const URL_REGEX = /(?:^|[^\w])(fixes|fix|closes|close|resolves|resolve|addresses|address|implements|related to|see also)?[\s:-]{0,10}https?:\/\/(?:[a-zA-Z0-9.-]+\.)?(github\.com|gitlab\.com|bitbucket\.org|atlassian\.net|linear\.app|slack\.com|notion\.so)\/([A-Za-z0-9_./-]*[A-Za-z0-9_/-])/ig;
+const SIMPLE_LIST_REGEX = /^\s*(?:and|&|,|or|\()?\s*$/i;
+const SENTENCE_BREAK_REGEX = /[.;\n]/;
+const WHITESPACE_SPLIT_REGEX = /\s+/;
+const IGNORED_ISSUE_PREFIX_REGEX = /^(UTF|ISO|SHA|RFC|CVE|MAC|IP|IPV4|IPV6|X86|AMD64)-/;
+const GIT_HOST_PATH_REGEX = /^(?:([\w.-]+\/[\w.-]+)\/)?(?:-\/)?(?:issues|pull|merge_requests|pull-requests)\/([A-Z0-9_.-]+)/i;
+const ATLASSIAN_PATH_REGEX = /browse\/([A-Z0-9_.-]+)/i;
+const LINEAR_PATH_REGEX = /issue\/([A-Z0-9_.-]+)/i;
+
+const CUSTOM_ISSUE_REGEX_CACHE = new Map<string, RegExp | null>();
+const MAX_CUSTOM_REGEX_CACHE = 32;
+
+function getCustomIssueRegex(issuePattern: string): RegExp | null {
+  const cached = CUSTOM_ISSUE_REGEX_CACHE.get(issuePattern);
+  if (cached !== undefined) return cached;
+  let compiled: RegExp | null = null;
+  try {
+    compiled = new RegExp(`(?:^|[^\\w])(fixes|fix|closes|close|resolves|resolve|addresses|address|implements|related to|see also)?[\\s:-]{0,10}(?:${issuePattern})\\b`, 'ig');
+  } catch (err: unknown) {
+    console.warn(`[lib-git-history] Warning: Invalid issue-pattern regex '${issuePattern}': ${err instanceof Error ? err.message : String(err)}`);
+  }
+  if (CUSTOM_ISSUE_REGEX_CACHE.size >= MAX_CUSTOM_REGEX_CACHE) {
+    CUSTOM_ISSUE_REGEX_CACHE.clear();
+  }
+  CUSTOM_ISSUE_REGEX_CACHE.set(issuePattern, compiled);
+  return compiled;
+}
+
+function resolveMatchAction(
+  safeText: string,
+  matchIndex: number,
+  capturedAction: string | undefined,
+  lastAction: string | null,
+  lastIndex: number,
+): string | null {
+  const textBetween = safeText.slice(lastIndex, matchIndex);
+  const isSimpleList = SIMPLE_LIST_REGEX.test(textBetween);
+  let effectiveLast = lastAction;
+  if (!isSimpleList && (SENTENCE_BREAK_REGEX.test(textBetween) || textBetween.trim().split(WHITESPACE_SPLIT_REGEX).length > 2)) {
+    effectiveLast = null;
+  }
+  return capturedAction ? capturedAction.toLowerCase() : effectiveLast;
+}
+
+function recordIssueMatch(issuesMap: Map<string, string | null>, issue: string | undefined, action: string | null): void {
+  if (issue && (!issuesMap.has(issue) || (action && !issuesMap.get(issue)))) {
+    issuesMap.set(issue, action);
+  }
+}
+
+function extractActionIssues(safeText: string, issuesMap: Map<string, string | null>): void {
+  if (!safeText.includes('#') && !safeText.includes('-')) return;
+  ACTION_REGEX.lastIndex = 0;
+  let m: RegExpExecArray | null;
+  let lastAction: string | null = null;
+  let lastIndex = 0;
+
+  while ((m = ACTION_REGEX.exec(safeText)) !== null) {
+    if (m.index === ACTION_REGEX.lastIndex) ACTION_REGEX.lastIndex++;
+    const action = resolveMatchAction(safeText, m.index, m[1], lastAction, lastIndex);
+    lastAction = m[1] ? m[1].toLowerCase() : action;
+    lastIndex = ACTION_REGEX.lastIndex;
+
+    let issue = '';
+    if (m[3]) {
+      let repo = m[2];
+      if (repo && repo.endsWith('.git')) repo = repo.slice(0, -4);
+      issue = repo ? `${repo}#${m[3]}` : `#${m[3]}`;
+    } else if (m[4]) {
+      if (!IGNORED_ISSUE_PREFIX_REGEX.test(m[4].toUpperCase()) && safeText[m.index] !== '/') {
+        issue = m[4];
+      }
+    }
+    recordIssueMatch(issuesMap, issue, action);
+  }
+}
+
+function extractUrlIssueId(domain: string | undefined, fullPath: string | undefined): string | undefined {
+  if (!fullPath) return undefined;
+  if (domain === 'github.com' || domain === 'gitlab.com' || domain === 'bitbucket.org') {
+    const pathMatch = fullPath.match(GIT_HOST_PATH_REGEX);
+    if (!pathMatch) return undefined;
+    let repo = pathMatch[1];
+    if (repo && repo.endsWith('.git')) repo = repo.slice(0, -4);
+    return repo ? `${repo}#${pathMatch[2]}` : `#${pathMatch[2]}`;
+  }
+  if (domain === 'atlassian.net') return fullPath.match(ATLASSIAN_PATH_REGEX)?.[1];
+  if (domain === 'linear.app') return fullPath.match(LINEAR_PATH_REGEX)?.[1];
+  if (domain === 'slack.com' && fullPath.startsWith('archives/')) return fullPath;
+  if (domain === 'notion.so') return fullPath;
+  return undefined;
+}
+
+function extractUrlIssues(safeText: string, issuesMap: Map<string, string | null>): void {
+  if (!safeText.includes('http://') && !safeText.includes('https://') && !safeText.includes('HTTP://') && !safeText.includes('HTTPS://')) {
+    return;
+  }
+  URL_REGEX.lastIndex = 0;
+  let m: RegExpExecArray | null;
+  let lastAction: string | null = null;
+  let lastIndex = 0;
+
+  while ((m = URL_REGEX.exec(safeText)) !== null) {
+    if (m.index === URL_REGEX.lastIndex) URL_REGEX.lastIndex++;
+    const action = resolveMatchAction(safeText, m.index, m[1], lastAction, lastIndex);
+    lastAction = m[1] ? m[1].toLowerCase() : action;
+    lastIndex = URL_REGEX.lastIndex;
+    recordIssueMatch(issuesMap, extractUrlIssueId(m[2], m[3]), action);
+  }
+}
+
+function extractCustomPatternIssues(safeText: string, issuesMap: Map<string, string | null>, issuePattern: string): void {
+  const customRegex = getCustomIssueRegex(issuePattern);
+  if (!customRegex) return;
+  customRegex.lastIndex = 0;
+  let customMatch: RegExpExecArray | null;
+  let lastAction: string | null = null;
+  let lastIndex = 0;
+
+  while ((customMatch = customRegex.exec(safeText)) !== null) {
+    if (customMatch.index === customRegex.lastIndex) customRegex.lastIndex++;
+    const action = resolveMatchAction(safeText, customMatch.index, customMatch[1], lastAction, lastIndex);
+    lastAction = customMatch[1] ? customMatch[1].toLowerCase() : action;
+    lastIndex = customRegex.lastIndex;
+
+    let potentialIssue = customMatch[2];
+    if (!potentialIssue) {
+      const fullMatch = customMatch[0];
+      const actionPart = customMatch[1] ? fullMatch.slice(0, fullMatch.indexOf(customMatch[1]) + customMatch[1].length) : '';
+      potentialIssue = fullMatch.slice(actionPart.length).replace(/^[\s:-]+/, '');
+    }
+    recordIssueMatch(issuesMap, potentialIssue, action);
+  }
+}
+
 export const extractIssues = (text: string, issuesMap: Map<string, string | null>, issuePattern?: string) => {
   if (!text) return;
   const safeText = text.length > MAX_ISSUE_TEXT_LENGTH ? text.slice(0, MAX_ISSUE_TEXT_LENGTH) : text;
-  const actionRegex = /(?:^|[^\w])(fixes|fix|closes|close|resolves|resolve|addresses|address|implements|related to|see also)?[\s:-]{0,10}(?:([@\w.-]+\/[\w.-]+)?#(\d+)|([A-Z][A-Z0-9_]+-\d+))\b/ig;
-  let match;
-  let lastAction: string | null = null;
-  let lastIndex = 0;
-  
-  while ((match = actionRegex.exec(safeText)) !== null) {
-    if (match.index === actionRegex.lastIndex) actionRegex.lastIndex++;
-    const textBetween = safeText.slice(lastIndex, match.index);
-    const isSimpleList = /^\s*(?:and|&|,|or|\()?\s*$/i.test(textBetween);
-    if (!isSimpleList && (/[.;\n]/.test(textBetween) || textBetween.trim().split(/\s+/).length > 2)) {
-      lastAction = null;
-    }
-    const action = match[1] ? match[1].toLowerCase() : lastAction;
-    if (match[1]) lastAction = match[1].toLowerCase();
-    lastIndex = actionRegex.lastIndex;
-    
-    let issue = '';
-    if (match[3]) {
-      let repo = match[2];
-      const num = match[3];
-      if (repo && repo.endsWith('.git')) repo = repo.slice(0, -4);
-      issue = repo ? `${repo}#${num}` : `#${num}`;
-    } else if (match[4]) {
-      const potentialIssue = match[4].toUpperCase();
-      if (!/^(UTF|ISO|SHA|RFC|CVE|MAC|IP|IPV4|IPV6|X86|AMD64)-/.test(potentialIssue)) {
-        if (safeText[match.index] === '/') continue;
-        issue = match[4];
-      }
-    }
-    if (issue) {
-      if (!issuesMap.has(issue) || (action && !issuesMap.get(issue))) {
-         issuesMap.set(issue, action);
-      }
-    }
-  }
-  
-  const urlRegex = /(?:^|[^\w])(fixes|fix|closes|close|resolves|resolve|addresses|address|implements|related to|see also)?[\s:-]{0,10}https?:\/\/(?:[a-zA-Z0-9.-]+\.)?(github\.com|gitlab\.com|bitbucket\.org|atlassian\.net|linear\.app|slack\.com|notion\.so)\/([A-Za-z0-9_./-]*[A-Za-z0-9_/-])/ig;
-  lastAction = null;
-  lastIndex = 0;
-  while ((match = urlRegex.exec(safeText)) !== null) {
-    if (match.index === urlRegex.lastIndex) urlRegex.lastIndex++;
-    const textBetween = safeText.slice(lastIndex, match.index);
-    const isSimpleList = /^\s*(?:and|&|,|or|\()?\s*$/i.test(textBetween);
-    if (!isSimpleList && (/[.;\n]/.test(textBetween) || textBetween.trim().split(/\s+/).length > 2)) {
-      lastAction = null;
-    }
-    const action = match[1] ? match[1].toLowerCase() : lastAction;
-    if (match[1]) lastAction = match[1].toLowerCase();
-    lastIndex = urlRegex.lastIndex;
-    
-    const domain = match[2];
-    const fullPath = match[3];
-    let issue: string | undefined;
-    
-    if (fullPath && (domain === 'github.com' || domain === 'gitlab.com' || domain === 'bitbucket.org')) {
-      const pathMatch = fullPath.match(/^(?:([\w.-]+\/[\w.-]+)\/)?(?:-\/)?(?:issues|pull|merge_requests|pull-requests)\/([A-Z0-9_.-]+)/i);
-      if (pathMatch) {
-        let repo = pathMatch[1];
-        const num = pathMatch[2];
-        if (repo && repo.endsWith('.git')) repo = repo.slice(0, -4);
-        issue = repo ? `${repo}#${num}` : `#${num}`;
-      }
-    } else if (fullPath && domain === 'atlassian.net') {
-      const pathMatch = fullPath.match(/browse\/([A-Z0-9_.-]+)/i);
-      if (pathMatch) issue = pathMatch[1];
-    } else if (fullPath && domain === 'linear.app') {
-      const pathMatch = fullPath.match(/issue\/([A-Z0-9_.-]+)/i);
-      if (pathMatch) issue = pathMatch[1];
-    } else if (domain === 'slack.com' && fullPath?.startsWith('archives/')) {
-      issue = fullPath;
-    } else if (domain === 'notion.so' && fullPath) {
-      issue = fullPath;
-    }
-    
-    if (issue && (!issuesMap.has(issue) || (action && !issuesMap.get(issue)))) {
-      issuesMap.set(issue, action);
-    }
-  }
-  
-  if (issuePattern) {
-    try {
-      const customRegex = new RegExp(`(?:^|[^\\w])(fixes|fix|closes|close|resolves|resolve|addresses|address|implements|related to|see also)?[\\s:-]{0,10}(?:${issuePattern})\\b`, 'ig');
-      let customMatch;
-      let lastAction: string | null = null;
-      let lastIndex = 0;
-      
-      while ((customMatch = customRegex.exec(safeText)) !== null) {
-        if (customMatch.index === customRegex.lastIndex) customRegex.lastIndex++;
-        
-        const textBetween = safeText.slice(lastIndex, customMatch.index);
-        const isSimpleList = /^\s*(?:and|&|,|or|\()?\s*$/i.test(textBetween);
-        if (!isSimpleList && (/[.;\n]/.test(textBetween) || textBetween.trim().split(/\s+/).length > 2)) {
-          lastAction = null;
-        }
-        const action = customMatch[1] ? customMatch[1].toLowerCase() : lastAction;
-        if (customMatch[1]) lastAction = customMatch[1].toLowerCase();
-        lastIndex = customRegex.lastIndex;
-        
-        let potentialIssue = customMatch[2];
-        if (!potentialIssue) {
-          const fullMatch = customMatch[0];
-          const actionPart = customMatch[1] ? fullMatch.slice(0, fullMatch.indexOf(customMatch[1]) + customMatch[1].length) : '';
-          potentialIssue = fullMatch.slice(actionPart.length).replace(/^[\s:-]+/, '');
-        }
-        
-        if (potentialIssue && (!issuesMap.has(potentialIssue) || (action && !issuesMap.get(potentialIssue)))) {
-          issuesMap.set(potentialIssue, action);
-        }
-      }
-    } catch (err: unknown) {
-      console.warn(`[lib-git-history] Warning: Invalid issue-pattern regex '${issuePattern}': ${err instanceof Error ? err.message : String(err)}`);
-    }
-  }
+  extractActionIssues(safeText, issuesMap);
+  extractUrlIssues(safeText, issuesMap);
+  if (issuePattern) extractCustomPatternIssues(safeText, issuesMap, issuePattern);
+};
+
+const EXT_TO_LANGUAGE: Readonly<Record<string, string>> = {
+  ts: 'TypeScript',
+  tsx: 'TypeScript',
+  mts: 'TypeScript',
+  cts: 'TypeScript',
+  js: 'JavaScript',
+  jsx: 'JavaScript',
+  mjs: 'JavaScript',
+  cjs: 'JavaScript',
+  py: 'Python',
+  go: 'Go',
+  rs: 'Rust',
+  md: 'Markdown',
+  json: 'JSON',
+  jsonc: 'JSON',
+  yml: 'YAML',
+  yaml: 'YAML',
+  css: 'CSS',
+  scss: 'Sass',
+  sass: 'Sass',
+  html: 'HTML',
+  htm: 'HTML',
+  sh: 'Shell',
+  bash: 'Shell',
+  zsh: 'Shell',
+  rb: 'Ruby',
+  java: 'Java',
+  c: 'C',
+  h: 'C++',
+  cpp: 'C++',
+  hpp: 'C++',
+  cc: 'C++',
+  cs: 'C#',
+  php: 'PHP',
+  sql: 'SQL',
+  vue: 'Vue',
+  svelte: 'Svelte',
+  toml: 'TOML',
+  xml: 'XML',
+  swift: 'Swift',
+  kt: 'Kotlin',
+  kts: 'Kotlin',
+  dart: 'Dart',
+  ex: 'Elixir',
+  exs: 'Elixir',
 };
 
 export const getLanguage = (file: string): string | undefined => {
-  const parts = file.split('.');
-  if (parts.length < 2 && !file.includes('.')) return undefined;
-  const ext = parts.pop()?.toLowerCase() ?? '';
-  return match(ext)
-    .with('ts', 'tsx', 'mts', 'cts', () => 'TypeScript')
-    .with('js', 'jsx', 'mjs', 'cjs', () => 'JavaScript')
-    .with('py', () => 'Python')
-    .with('go', () => 'Go')
-    .with('rs', () => 'Rust')
-    .with('md', () => 'Markdown')
-    .with('json', 'jsonc', () => 'JSON')
-    .with('yml', 'yaml', () => 'YAML')
-    .with('css', () => 'CSS')
-    .with('scss', 'sass', () => 'Sass')
-    .with('html', 'htm', () => 'HTML')
-    .with('sh', 'bash', 'zsh', () => 'Shell')
-    .with('rb', () => 'Ruby')
-    .with('java', () => 'Java')
-    .with('c', () => 'C')
-    .with('h', 'cpp', 'hpp', 'cc', () => 'C++')
-    .with('cs', () => 'C#')
-    .with('php', () => 'PHP')
-    .with('sql', () => 'SQL')
-    .with('vue', () => 'Vue')
-    .with('svelte', () => 'Svelte')
-    .with('toml', () => 'TOML')
-    .with('xml', () => 'XML')
-    .with('swift', () => 'Swift')
-    .with('kt', 'kts', () => 'Kotlin')
-    .with('dart', () => 'Dart')
-    .with('ex', 'exs', () => 'Elixir')
-    .otherwise(() => undefined);
+  const dotIdx = file.lastIndexOf('.');
+  if (dotIdx === -1) return undefined;
+  const ext = file.slice(dotIdx + 1).toLowerCase();
+  return Object.prototype.hasOwnProperty.call(EXT_TO_LANGUAGE, ext) ? EXT_TO_LANGUAGE[ext] : undefined;
 };
 
 export function iterateChangelog(
@@ -261,7 +323,8 @@ export function iterateChangelog(
     const sortedCategories = Array.from(categoryMap.keys()).sort();
     for (const cat of sortedCategories) {
       callbacks.onCategory(cat);
-      const commits = categoryMap.get(cat)!;
+      const commits = categoryMap.get(cat);
+      if (!commits) continue;
       for (const commit of commits) {
         const entries = commit.metadata?.entry && commit.metadata.entry.length > 0 ? commit.metadata.entry : [commit.cleanSubject || commit.subject];
         callbacks.onCommit(commit, entries);

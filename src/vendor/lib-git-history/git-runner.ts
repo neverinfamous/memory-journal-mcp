@@ -26,6 +26,67 @@ export const FIELD_SEPARATOR = `\x1E<GIT_FIELD_BOUNDARY_${UNIQUE_ID}>\x1E`;
 export const NUMSTAT_BOUNDARY_STR = `\x1E<GIT_NUMSTAT_BOUNDARY_${UNIQUE_ID}>\x1E`;
 export const PATCH_BOUNDARY_STR = `\x1E<GIT_PATCH_BOUNDARY_${UNIQUE_ID}>\x1E`;
 
+function attachStderrCollector(proc: ReturnType<typeof spawn>) {
+  const errChunks: string[] = [];
+  let errLength = 0;
+  let hasTruncatedErr = false;
+  proc.stderr?.on('data', (d) => {
+    const s = Buffer.isBuffer(d) ? d.toString('utf-8') : String(d);
+    if (errLength < MAX_STDERR_LENGTH) { errChunks.push(s); errLength += s.length; }
+    else if (!hasTruncatedErr) { errChunks.push('\n...[stderr truncated]'); hasTruncatedErr = true; }
+  });
+  // [INTENT]: In Bun on Windows, ChildProcess `'close'` can fire before `proc.stderr` flushes its final events.
+  const hasStderrOnce = proc.stderr !== null && proc.stderr !== undefined && typeof proc.stderr.once === 'function';
+  let stderrEnded = !hasStderrOnce;
+  const stderrSettled = hasStderrOnce
+    ? new Promise<void>((resolveStderr) => {
+        const finish = () => { if (!stderrEnded) { stderrEnded = true; resolveStderr(); } };
+        proc.stderr?.once('end', finish);
+        proc.stderr?.once('close', finish);
+        proc.stderr?.once('error', finish);
+      })
+    : Promise.resolve();
+  return { getErrText: () => errChunks.join(''), isStderrEnded: () => stderrEnded, stderrSettled };
+}
+
+function createProcessCompletionPromise(
+  proc: ReturnType<typeof spawn>,
+  ac: AbortController,
+  stderr: ReturnType<typeof attachStderrCollector>,
+  onError: (err: Error) => void,
+): Promise<void> {
+  return new Promise<void>((resolve, reject) => {
+    let resolved = false;
+    const rejectWith = (err: Error) => { onError(err); reject(err); };
+    const finalizeFailure = (code: number | null, signal: NodeJS.Signals | null) => {
+      const errText = stderr.getErrText();
+      if (errText.includes("ambiguous argument 'HEAD': unknown revision") || errText.includes("bad default revision 'HEAD'")) resolve();
+      else rejectWith(new Error(`Git failed with code ${code} and signal ${signal}: ${errText}`));
+    };
+    proc.on('close', (code, signal) => {
+      if (resolved) return;
+      resolved = true;
+      if (ac.signal.aborted) { rejectWith(new Error(`Git process timed out and was aborted: ${stderr.getErrText()}`)); return; }
+      if (signal === 'SIGKILL' || signal === 'SIGTERM') { rejectWith(new Error(`Git process was killed with signal ${signal}`)); return; }
+      if ((code !== 0 && code !== null && code !== SIGPIPE_EXIT_CODE) || (signal && signal !== 'SIGPIPE')) {
+        if (stderr.isStderrEnded()) { finalizeFailure(code, signal); return; }
+        let drainTimer: ReturnType<typeof setTimeout> | undefined;
+        const drainCap = new Promise<void>((r) => { drainTimer = setTimeout(r, 2000); drainTimer.unref(); });
+        void Promise.race([stderr.stderrSettled, drainCap]).finally(() => { if (drainTimer !== undefined) clearTimeout(drainTimer); }).then(() => finalizeFailure(code, signal));
+      } else { resolve(); }
+    });
+    proc.on('error', (err) => {
+      if (resolved) return;
+      resolved = true;
+      if (ac.signal.aborted || (err instanceof Error && err.name === 'AbortError')) {
+        rejectWith(new Error(`Git process timed out after ${Math.round(GIT_IDLE_TIMEOUT_MS / 1000)}s of inactivity and was aborted: ${stderr.getErrText()}`));
+      } else if (isErrnoException(err) && err.code === 'ENOENT') {
+        rejectWith(new Error(JSON.stringify({ error: 'GitExecutableNotFound', message: 'The git binary is missing from the environment PATH.' }), { cause: err }));
+      } else { rejectWith(err); }
+    });
+  });
+}
+
 export function setupGitProcessLifecycle(proc: ReturnType<typeof spawn>, ac: AbortController, functionName: string) {
   let idleTimeout = setTimeout(() => ac.abort(), GIT_IDLE_TIMEOUT_MS);
   idleTimeout.unref();
@@ -34,102 +95,22 @@ export function setupGitProcessLifecycle(proc: ReturnType<typeof spawn>, ac: Abo
     ac.abort();
   }, GIT_ABSOLUTE_TIMEOUT_MS);
   absoluteTimeout.unref();
-  
+
   const clearTimeouts = () => {
     clearTimeout(idleTimeout);
     clearTimeout(absoluteTimeout);
   };
-  
+
   const resetTimeout = () => {
     clearTimeout(idleTimeout);
     idleTimeout = setTimeout(() => ac.abort(), GIT_IDLE_TIMEOUT_MS);
     idleTimeout.unref();
   };
 
-  const errChunks: string[] = [];
-  let errLength = 0;
-  let hasTruncatedErr = false;
-  proc.stderr?.on('data', d => {
-    const s = Buffer.isBuffer(d) ? d.toString('utf-8') : String(d);
-    if (errLength < MAX_STDERR_LENGTH) {
-      errChunks.push(s);
-      errLength += s.length;
-    } else if (!hasTruncatedErr) {
-      errChunks.push('\n...[stderr truncated]');
-      hasTruncatedErr = true;
-    }
-  });
-
-  // [INTENT]: In Bun on Windows (`#handleOnExit` -> `#maybeClose`), ChildProcess `'close'` can fire before
-  // `proc.stderr`'s buffered `Readable` decoder flushes its final `'data'`/`'end'` events under parallel load.
-  const hasStderrOnce = proc.stderr !== null && proc.stderr !== undefined && typeof proc.stderr.once === 'function';
-  let isStderrEnded = !hasStderrOnce;
-  const stderrSettled = hasStderrOnce
-    ? new Promise<void>(resolveStderr => {
-        const finish = () => {
-          if (!isStderrEnded) {
-            isStderrEnded = true;
-            resolveStderr();
-          }
-        };
-        proc.stderr?.once('end', finish);
-        proc.stderr?.once('close', finish);
-        proc.stderr?.once('error', finish);
-      })
-    : Promise.resolve();
-
+  const stderr = attachStderrCollector(proc);
   let streamError: Error | null = null;
-  const processComplete = new Promise<void>((resolve, reject) => {
-    let resolved = false;
-    const finalizeFailure = (code: number | null, signal: NodeJS.Signals | null) => {
-      const errText = errChunks.join('');
-      if (errText.includes("ambiguous argument 'HEAD': unknown revision") || errText.includes("bad default revision 'HEAD'")) {
-        resolve();
-      } else {
-        streamError = new Error(`Git failed with code ${code} and signal ${signal}: ${errText}`);
-        reject(streamError);
-      }
-    };
-    proc.on('close', (code, signal) => {
-      if (resolved) return;
-      resolved = true;
-      if (ac.signal.aborted) {
-        streamError = new Error(`Git process timed out and was aborted: ${errChunks.join('')}`);
-        reject(streamError);
-      } else if (signal === 'SIGKILL' || signal === 'SIGTERM') {
-        streamError = new Error(`Git process was killed with signal ${signal}`);
-        reject(streamError);
-      } else if ((code !== 0 && code !== null && code !== SIGPIPE_EXIT_CODE) || (signal && signal !== 'SIGPIPE')) {
-        if (isStderrEnded) {
-          finalizeFailure(code, signal);
-        } else {
-          let drainTimer: ReturnType<typeof setTimeout> | undefined;
-          const drainCap = new Promise<void>(r => {
-            drainTimer = setTimeout(r, 2000);
-          });
-          void Promise.race([stderrSettled, drainCap])
-            .finally(() => {
-              if (drainTimer !== undefined) clearTimeout(drainTimer);
-            })
-            .then(() => finalizeFailure(code, signal));
-        }
-      } else {
-        resolve();
-      }
-    });
-    proc.on('error', err => {
-      if (!resolved) {
-        resolved = true;
-        if (ac.signal.aborted || (err instanceof Error && err.name === 'AbortError')) {
-          streamError = new Error(`Git process timed out after ${Math.round(GIT_IDLE_TIMEOUT_MS / 1000)}s of inactivity and was aborted: ${errChunks.join('')}`);
-        } else if (isErrnoException(err) && err.code === 'ENOENT') {
-          streamError = new Error(JSON.stringify({ error: 'GitExecutableNotFound', message: 'The git binary is missing from the environment PATH.' }), { cause: err });
-        } else {
-          streamError = err;
-        }
-        reject(streamError);
-      }
-    });
+  const processComplete = createProcessCompletionPromise(proc, ac, stderr, (err) => {
+    streamError = err;
   });
   processComplete.catch(() => {});
 
@@ -142,6 +123,15 @@ export function setupGitProcessLifecycle(proc: ReturnType<typeof spawn>, ac: Abo
   };
 
   return { resetTimeout, processComplete, getStreamError: () => streamError, clearTimeouts, cleanup };
+}
+
+export function getHeadSha(cwd: string = process.cwd()): string {
+  const execOpts = { cwd, encoding: 'utf-8' as const, stdio: 'pipe' as const, timeout: GIT_TIMEOUT_MS, maxBuffer: GIT_CMD_MAX_BUFFER, windowsHide: true };
+  try {
+    return execFileSync('git', ['--no-pager', 'rev-parse', 'HEAD'], execOpts).trim() || 'HEAD';
+  } catch {
+    return 'HEAD';
+  }
 }
 
 export function getGitTagRange(cwd: string = process.cwd()): { range: string; isFallback: boolean; headSha: string } {
@@ -223,8 +213,8 @@ export function buildGitBaseArgs(args: CliArgs, targetRange: string | undefined)
     gitArgs.push('--all');
   } else if (!targetRange || targetRange === 'HEAD') {
     const format = args.format?.replace(/^["']|["']$/g, '');
-    if (!args.limit && !hasTsFilters && !hasNativeFilters && !args.reverse && (!format || format === 'json')) gitArgs.push('-n', '100');
-    else if ((hasTsFilters || (!args.limit && format && format !== 'json')) && !args.reverse) gitArgs.push('-n', '50000');
+    if (args.limit === undefined && !hasTsFilters && !hasNativeFilters && !args.reverse && (!format || format === 'json')) gitArgs.push('-n', '100');
+    else if ((hasTsFilters || (args.limit === undefined && format && format !== 'json')) && !args.reverse) gitArgs.push('-n', '50000');
     gitArgs.push('HEAD');
   } else {
     gitArgs.push(targetRange);
@@ -238,79 +228,95 @@ export function buildGitBaseArgs(args: CliArgs, targetRange: string | undefined)
   return gitArgs;
 }
 
-export async function* streamGitRecords(args: string[], cwd: string = process.cwd(), maxBufferLimit: number = GIT_STREAM_BUFFER_DEFAULT): AsyncGenerator<string> {
-  const ac = new AbortController();
-  let proc: ReturnType<typeof spawn>;
+interface TextStreamState {
+  buffer: string;
+  searchOffset: number;
+  droppingMassiveCommit: boolean;
+}
+
+function drainTextBuffer(state: TextStreamState, chunkLen: number, maxBufferLimit: number): string[] {
+  const records: string[] = [];
+  if (state.droppingMassiveCommit) {
+    const nextBoundary = state.buffer.indexOf(RECORD_SEPARATOR);
+    if (nextBoundary === -1) {
+      state.buffer = state.buffer.length > RECORD_SEPARATOR.length ? (' ' + state.buffer.slice(-(RECORD_SEPARATOR.length - 1))).slice(1) : state.buffer;
+      state.searchOffset = 0;
+      return records;
+    }
+    state.droppingMassiveCommit = false;
+    state.buffer = (' ' + state.buffer.slice(nextBoundary + RECORD_SEPARATOR.length)).slice(1);
+    state.searchOffset = 0;
+  }
+
+  let lastSlice = 0;
+  let sepIdx: number;
+  while ((sepIdx = state.buffer.indexOf(RECORD_SEPARATOR, state.searchOffset)) !== -1) {
+    const record = state.buffer.slice(lastSlice, sepIdx);
+    if (record.trim()) {
+      if (record.length >= maxBufferLimit) {
+        console.warn(`Warning: Git record exceeded ${Math.round(maxBufferLimit / 1024 / 1024)}MB. Dropping massive commit.`);
+      } else {
+        records.push(record);
+      }
+    }
+    lastSlice = sepIdx + RECORD_SEPARATOR.length;
+    state.searchOffset = lastSlice;
+  }
+
+  if (lastSlice > 0) {
+    state.buffer = (' ' + state.buffer.slice(lastSlice)).slice(1);
+    state.searchOffset = Math.max(0, state.searchOffset - lastSlice);
+  } else {
+    state.searchOffset = Math.max(0, state.buffer.length - chunkLen - RECORD_SEPARATOR.length);
+  }
+
+  if (state.buffer.length > maxBufferLimit) {
+    console.warn(`Warning: Git record buffer exceeded ${Math.round(maxBufferLimit / 1024 / 1024)}MB. Dropping massive commit to prevent memory exhaustion.`);
+    state.buffer = state.buffer.length > RECORD_SEPARATOR.length ? (' ' + state.buffer.slice(-(RECORD_SEPARATOR.length - 1))).slice(1) : state.buffer;
+    state.searchOffset = 0;
+    state.droppingMassiveCommit = true;
+  }
+  return records;
+}
+
+function spawnGitWithEnoentGuard(args: string[], cwd: string, signal: AbortSignal): ReturnType<typeof spawn> {
   try {
-    proc = spawn('git', ['--no-pager', ...args], { cwd, signal: ac.signal, windowsHide: true });
+    const proc = spawn('git', args, { cwd, signal, windowsHide: true });
     activeProcesses.add(proc);
+    return proc;
   } catch (err: unknown) {
     if (isErrnoException(err) && err.code === 'ENOENT') {
       throw new Error(JSON.stringify({ error: 'GitExecutableNotFound', message: 'The git binary is missing from the environment PATH.' }), { cause: err });
     }
     throw err;
   }
-  
-  if (!proc.stdout || !proc.stderr) {
+}
+
+export async function* streamGitRecords(args: string[], cwd: string = process.cwd(), maxBufferLimit: number = GIT_STREAM_BUFFER_DEFAULT): AsyncGenerator<string> {
+  const ac = new AbortController();
+  const proc = spawnGitWithEnoentGuard(['--no-pager', ...args], cwd, ac.signal);
+  const stdout = proc.stdout;
+  if (!stdout || !proc.stderr) {
     activeProcesses.delete(proc);
     try { proc.kill('SIGKILL'); } catch { /* ignore */ }
     throw new Error('Missing stdio');
   }
 
-  proc.stdout.setEncoding('utf-8');
+  stdout.setEncoding('utf-8');
   proc.stderr.setEncoding('utf-8');
-
   const { resetTimeout, processComplete, getStreamError, cleanup } = setupGitProcessLifecycle(proc, ac, 'streamGitRecords');
+  const state: TextStreamState = { buffer: '', searchOffset: 0, droppingMassiveCommit: false };
 
-  let buffer = '';
-  let searchOffset = 0;
-  let droppingMassiveCommit = false;
   try {
     try {
-      for await (const chunk of proc.stdout!) {
+      for await (const chunk of stdout) {
         const streamError = getStreamError();
         if (streamError) throw streamError;
         resetTimeout();
-        buffer += chunk;
-        let sepIdx;
-        let lastSlice = 0;
-
-        if (droppingMassiveCommit) {
-          const nextBoundary = buffer.indexOf(RECORD_SEPARATOR);
-          if (nextBoundary !== -1) {
-            droppingMassiveCommit = false;
-            buffer = (' ' + buffer.slice(nextBoundary + RECORD_SEPARATOR.length)).slice(1);
-            searchOffset = 0;
-          } else {
-            buffer = buffer.length > RECORD_SEPARATOR.length ? (' ' + buffer.slice(-(RECORD_SEPARATOR.length - 1))).slice(1) : buffer;
-            searchOffset = 0;
-            continue;
-          }
-        }
-
-        while ((sepIdx = buffer.indexOf(RECORD_SEPARATOR, searchOffset)) !== -1) {
-          const record = buffer.slice(lastSlice, sepIdx);
-          if (record.trim()) {
-            if (record.length >= maxBufferLimit) {
-              console.warn(`Warning: Git record exceeded ${Math.round(maxBufferLimit/1024/1024)}MB. Dropping massive commit.`);
-            } else {
-              yield record;
-            }
-          }
-          lastSlice = sepIdx + RECORD_SEPARATOR.length;
-          searchOffset = lastSlice;
-        }
-        if (lastSlice > 0) {
-          buffer = (' ' + buffer.slice(lastSlice)).slice(1);
-          searchOffset = Math.max(0, searchOffset - lastSlice);
-        } else {
-          searchOffset = Math.max(0, buffer.length - chunk.length - RECORD_SEPARATOR.length);
-        }
-        if (buffer.length > maxBufferLimit) {
-          console.warn(`Warning: Git record buffer exceeded ${Math.round(maxBufferLimit/1024/1024)}MB. Dropping massive commit to prevent memory exhaustion.`);
-          buffer = buffer.length > RECORD_SEPARATOR.length ? (' ' + buffer.slice(-(RECORD_SEPARATOR.length - 1))).slice(1) : buffer;
-          searchOffset = 0;
-          droppingMassiveCommit = true;
+        const textChunk = typeof chunk === 'string' ? chunk : String(chunk);
+        state.buffer += textChunk;
+        for (const rec of drainTextBuffer(state, textChunk.length, maxBufferLimit)) {
+          yield rec;
         }
       }
     } catch (err: unknown) {
@@ -323,10 +329,47 @@ export async function* streamGitRecords(args: string[], cwd: string = process.cw
       }
     }
     await processComplete;
-    if (!droppingMassiveCommit && buffer.trim() && buffer.length < maxBufferLimit) yield buffer;
+    if (!state.droppingMassiveCommit && state.buffer.trim() && state.buffer.length < maxBufferLimit) yield state.buffer;
   } finally {
     cleanup();
   }
+}
+
+function hasCrossChunkBoundary(chunks: Buffer[], buf: Buffer, boundary: Buffer): boolean {
+  const needed = boundary.length - 1;
+  let gathered = 0;
+  const tailChunks: Buffer[] = [];
+  for (let i = chunks.length - 2; i >= 0 && gathered < needed; i--) {
+    const c = chunks[i];
+    if (!c) continue;
+    const take = Math.min(c.length, needed - gathered);
+    tailChunks.unshift(c.subarray(c.length - take));
+    gathered += take;
+  }
+  const headSlice = buf.subarray(0, Math.min(buf.length, needed));
+  tailChunks.push(headSlice);
+  return Buffer.concat(tailChunks, gathered + headSlice.length).indexOf(boundary) !== -1;
+}
+
+function drainBinaryChunks(
+  chunks: Buffer[],
+  chunksLength: number,
+  boundary: Buffer,
+  maxBufferLimit: number,
+): { emitted: Buffer[]; nextChunks: Buffer[]; nextLength: number } {
+  const emitted: Buffer[] = [];
+  let pendingBuffer = Buffer.concat(chunks, chunksLength);
+  let nextIdx = pendingBuffer.indexOf(boundary);
+  while (nextIdx !== -1) {
+    if (nextIdx > 0) emitted.push(pendingBuffer.subarray(0, nextIdx));
+    pendingBuffer = pendingBuffer.subarray(nextIdx + boundary.length);
+    nextIdx = pendingBuffer.indexOf(boundary);
+  }
+  if (pendingBuffer.length > maxBufferLimit) {
+    console.warn(`Warning: Git binary buffer exceeded ${Math.round(maxBufferLimit / 1024 / 1024)}MB. Dropping buffer to prevent memory exhaustion.`);
+    return { emitted, nextChunks: [], nextLength: 0 };
+  }
+  return { emitted, nextChunks: pendingBuffer.length > 0 ? [pendingBuffer] : [], nextLength: pendingBuffer.length };
 }
 
 export async function* spawnGitBinaryStream(
@@ -337,8 +380,7 @@ export async function* spawnGitBinaryStream(
   cwd: string = process.cwd()
 ): AsyncGenerator<Buffer, void, unknown> {
   const ac = new AbortController();
-  const proc = spawn('git', args, { cwd, signal: ac.signal, windowsHide: true });
-  activeProcesses.add(proc);
+  const proc = spawnGitWithEnoentGuard(args, cwd, ac.signal);
 
   if (!proc.stdout || !proc.stderr || !proc.stdin) {
     activeProcesses.delete(proc);
@@ -348,10 +390,8 @@ export async function* spawnGitBinaryStream(
 
   if (stdinShas) {
     proc.stdin.on('error', (err: unknown) => {
-      if (err instanceof Error) {
-        if (!('code' in err) || (err.code !== 'EPIPE' && err.code !== 'EOF')) {
-          console.error('stdin error:', err.message);
-        }
+      if (err instanceof Error && (!('code' in err) || (err.code !== 'EPIPE' && err.code !== 'EOF'))) {
+        console.error('stdin error:', err.message);
       }
     });
     try {
@@ -365,53 +405,24 @@ export async function* spawnGitBinaryStream(
   try {
     let chunks: Buffer[] = [];
     let chunksLength = 0;
-    const BOUNDARY = Buffer.from(boundaryStr);
-    
+    const boundary = Buffer.from(boundaryStr);
+
     for await (const chunk of proc.stdout) {
       resetTimeout();
       const buf = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
       chunks.push(buf);
       chunksLength += buf.length;
-      
-      let checkBuf = buf;
-      if (chunksLength > buf.length) {
-        const needed = BOUNDARY.length - 1;
-        let gathered = 0;
-        const gatherChunks = [buf];
-        for (let i = chunks.length - 2; i >= 0 && gathered < needed; i--) {
-          const c = chunks[i];
-          if (!c) continue;
-          const take = Math.min(c.length, needed - gathered);
-          gatherChunks.unshift(c.subarray(c.length - take));
-          gathered += take;
-        }
-        checkBuf = Buffer.concat(gatherChunks);
-      }
-      
-      if (checkBuf.indexOf(BOUNDARY) !== -1 || chunksLength >= maxBufferLimit) {
-        let pendingBuffer = Buffer.concat(chunks, chunksLength);
-        let nextIdx = pendingBuffer.indexOf(BOUNDARY);
-        while (nextIdx !== -1) {
-          if (nextIdx > 0) {
-            yield pendingBuffer.subarray(0, nextIdx);
-          }
-          pendingBuffer = pendingBuffer.subarray(nextIdx + BOUNDARY.length);
-          nextIdx = pendingBuffer.indexOf(BOUNDARY);
-        }
-        if (pendingBuffer.length > maxBufferLimit) {
-          console.warn(`Warning: Git binary buffer exceeded ${Math.round(maxBufferLimit/1024/1024)}MB. Dropping buffer to prevent memory exhaustion.`);
-          chunks = [];
-          chunksLength = 0;
-        } else {
-          chunks = pendingBuffer.length > 0 ? [pendingBuffer] : [];
-          chunksLength = pendingBuffer.length;
-        }
+
+      const hasBoundary = buf.indexOf(boundary) !== -1 || (chunksLength > buf.length && hasCrossChunkBoundary(chunks, buf, boundary));
+      if (hasBoundary || chunksLength >= maxBufferLimit) {
+        const drained = drainBinaryChunks(chunks, chunksLength, boundary, maxBufferLimit);
+        for (const rec of drained.emitted) yield rec;
+        chunks = drained.nextChunks;
+        chunksLength = drained.nextLength;
       }
     }
     await processComplete;
-    if (chunksLength > 0) {
-      yield Buffer.concat(chunks, chunksLength);
-    }
+    if (chunksLength > 0) yield Buffer.concat(chunks, chunksLength);
   } finally {
     cleanup();
   }

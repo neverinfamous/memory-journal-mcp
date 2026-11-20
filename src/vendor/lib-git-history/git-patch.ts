@@ -5,6 +5,45 @@ import type { CliArgs } from './cli.js';
 import { DEFAULT_MAX_PATCH_LEN, GIT_EXCLUDE_PATTERNS, GIT_STREAM_BUFFER_DEFAULT } from './constants.js';
 import { extractShaFromBuffer } from './parser-utils.js';
 
+const DIFF_HEADER_NL = Buffer.from('\ndiff --git ');
+const DIFF_HEADER_START = Buffer.from('diff --git ');
+
+function truncateOversizedPatch(
+  recordBuf: Buffer,
+  startOffset: number,
+  maxPatchLen: number,
+): { patch: string; truncated: boolean } {
+  const processedDiffs: string[] = [];
+  let searchStart = startOffset;
+  let truncated = false;
+
+  const firstDiff = recordBuf.indexOf(DIFF_HEADER_START, searchStart);
+  if (firstDiff !== -1 && firstDiff - searchStart < 10) {
+    searchStart = firstDiff;
+  }
+
+  while (searchStart < recordBuf.length) {
+    const nextDiff = recordBuf.indexOf(DIFF_HEADER_NL, searchStart + 1);
+    const diffEnd = nextDiff !== -1 ? nextDiff : recordBuf.length;
+
+    const diffLen = diffEnd - searchStart;
+    if (diffLen > maxPatchLen) {
+      truncated = true;
+      processedDiffs.push(
+        recordBuf.toString('utf-8', searchStart, searchStart + maxPatchLen).trim() +
+          '\n...[patch truncated due to length]',
+      );
+    } else {
+      processedDiffs.push(recordBuf.toString('utf-8', searchStart, diffEnd).trim());
+    }
+
+    if (nextDiff === -1) break;
+    searchStart = nextDiff + 1;
+  }
+
+  return { patch: processedDiffs.filter(Boolean).join('\n'), truncated };
+}
+
 export async function getPatchMap(lockedArgs: string[], args: CliArgs, stdinShas?: string, cwd: string = process.cwd()) {
   if (!args['include-patch'] && args['diff-context'] === undefined) return new Map();
   const patchBaseArgs = [...lockedArgs];
@@ -24,46 +63,12 @@ export async function getPatchMap(lockedArgs: string[], args: CliArgs, stdinShas
 
   for await (const recordBuf of spawnGitBinaryStream(patchArgs, PATCH_BOUNDARY_STR, stdinShas, GIT_STREAM_BUFFER_DEFAULT, cwd)) {
     const { sha: hash, shaEnd: hashEnd } = extractShaFromBuffer(recordBuf);
-    if (hash) {
-      const patchByteLen = recordBuf.length - (hashEnd + 1);
-      
-      if (patchByteLen > maxPatchLen) {
-        const DIFF_HEADER = Buffer.from('\ndiff --git ');
-        const processedDiffs: string[] = [];
-        let searchStart = hashEnd + 1;
-        let truncated = false;
-        
-        // Handle the first diff --git which might not have a leading newline
-        if (searchStart < recordBuf.length && recordBuf.subarray(searchStart, searchStart + 11).toString('utf-8') !== 'diff --git ') {
-           // It's possible there is some preamble before the first diff, though usually it starts right away.
-        }
-        
-        const firstDiff = recordBuf.indexOf(Buffer.from('diff --git '), searchStart);
-        if (firstDiff !== -1 && firstDiff - searchStart < 10) {
-           searchStart = firstDiff;
-        }
-
-        while (searchStart < recordBuf.length) {
-          const nextDiff = recordBuf.indexOf(DIFF_HEADER, searchStart + 1);
-          const diffEnd = nextDiff !== -1 ? nextDiff : recordBuf.length;
-          
-          const diffLen = diffEnd - searchStart;
-          if (diffLen > maxPatchLen) {
-            truncated = true;
-            processedDiffs.push(recordBuf.toString('utf-8', searchStart, searchStart + maxPatchLen).trim() + '\n...[patch truncated due to length]');
-          } else {
-            processedDiffs.push(recordBuf.toString('utf-8', searchStart, diffEnd).trim());
-          }
-          
-          if (nextDiff === -1) break;
-          searchStart = nextDiff + 1; // skip the leading newline so it starts with 'diff --git '
-        }
-        
-        map.set(hash, { patch: processedDiffs.filter(Boolean).join('\n'), truncated });
-      } else {
-        const patch = recordBuf.toString('utf-8', hashEnd + 1).trim();
-        map.set(hash, { patch, truncated: false });
-      }
+    if (!hash) continue;
+    const patchByteLen = recordBuf.length - (hashEnd + 1);
+    if (patchByteLen > maxPatchLen) {
+      map.set(hash, truncateOversizedPatch(recordBuf, hashEnd + 1, maxPatchLen));
+    } else {
+      map.set(hash, { patch: recordBuf.toString('utf-8', hashEnd + 1).trim(), truncated: false });
     }
   }
 

@@ -321,13 +321,13 @@ describe('Pass 44 Audit — Team Fencing, Vector Scope, HTTP DoS, Path Safety & 
         }
 
         // Prompt revision check
-        expect(AUDIT_PROMPT_REVISION).toBe('2026-11-20-audit-pass55')
+        expect(AUDIT_PROMPT_REVISION).toBe('2026-11-20-audit-pass56')
         const secDef = getSecurityAuditPromptDefinition()
         const rendered = await Promise.resolve(
             secDef.handler({ target: 'memory-journal-mcp' }, db)
         )
         const text = rendered.messages[0]?.content.text ?? ''
-        expect(text).toContain('Prompt revision: 2026-11-20-audit-pass55')
+        expect(text).toContain('Prompt revision: 2026-11-20-audit-pass56')
         expect(text).toContain('Float16Array')
         expect(text).toContain('rpcPinnedProject')
     })

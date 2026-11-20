@@ -36,6 +36,7 @@ function parseWithFallbacks(entryObj: Record<string, unknown>, sha: string, subj
   if (retryResult.success) {
     const finalData = retryResult.data;
     finalData.validationErrors = parseResult.error.issues;
+    finalData.isCorrupted = true;
     return finalData;
   }
 
@@ -80,51 +81,28 @@ function truncateBodyWithContext(body: string, maxBodyLen: number): string {
   return flattenString(newBody + '\n\n...[truncated to protect context]');
 }
 
-export async function processBatch(
-  batch: RawCommitBatchItem[],
-  args: CliArgs,
-  formattingFlags: string[],
-  cwd: string = process.cwd()
-): Promise<CommitEntry[]> {
-  if (batch.length === 0) return [];
-  const shas = batch.map(b => b.sha).join('\n') + '\n';
-  
-  const numstatMap = new Map<string, Map<string, { insertions: number; deletions: number; path: string; isBinary?: boolean }>>();
-  const patchMap = new Map<string, { patch: string; truncated: boolean }>();
-  
-  const [nMap, pMapResult] = await Promise.all([
-    (args.summary) ? Promise.resolve(new Map()) : getNumstatMap(formattingFlags, shas, cwd).catch((err) => {
-      console.warn('Warning: Failed to get numstat map (This may cause missing file stats for this batch):', err instanceof Error ? err.message : String(err));
-      return new Map();
-    }),
-    ((args['include-patch'] || args['diff-context'] !== undefined) && !args.summary) ? getPatchMap(formattingFlags, args, shas, cwd).catch((err) => {
-      console.warn('Warning: Failed to get patch map (This may cause missing patches for this batch):', err instanceof Error ? err.message : String(err));
-      return undefined;
-    }) : Promise.resolve(undefined)
-  ]);
-  for (const [k, v] of nMap.entries()) numstatMap.set(k, v);
-  
-  if (pMapResult && typeof pMapResult.entries === 'function') {
-    for (const [k, v] of pMapResult.entries()) patchMap.set(k, v);
-  }
+type NumstatCommitMap = Map<string, { insertions: number; deletions: number; path: string; isBinary?: boolean }>;
 
-  const processed: CommitEntry[] = [];
-  const parsedMaxBodyLen = args['max-body-length'];
-  const maxBodyLen = (parsedMaxBodyLen !== undefined && !Number.isNaN(parsedMaxBodyLen) && parsedMaxBodyLen >= 0) ? parsedMaxBodyLen : DEFAULT_MAX_BODY_LEN;
-  const maxFilesPerCommit = MAX_FILES_PER_COMMIT;
+function aggregateCommitFileStats(
+  b: RawCommitBatchItem,
+  statsForCommit: NumstatCommitMap | undefined,
+): {
+  parsedFiles: z.infer<typeof fileStatusSchema>[];
+  trueFileCount: number;
+  commitInsertions: number;
+  commitDeletions: number;
+  nonNoiseInsertions: number;
+  nonNoiseDeletions: number;
+} {
+  let commitInsertions = 0;
+  let commitDeletions = 0;
+  let nonNoiseInsertions = 0;
+  let nonNoiseDeletions = 0;
+  let uniqueStatsCount = 0;
 
-  for (const b of batch) {
-    const { sha, parents, refs, tags, authorName, authorEmail, committerName, committerEmail, committerDate, date, type, scope, isBreaking, breakingChangeDescription, cleanSubject, subject, rawFiles, metadataObj, trailersObj, references, coAuthors, reviewers, issuesMap, isRevert, revertedCommit } = b;
-    let body = b['body'];
-
-    const parsedFiles: z.infer<typeof fileStatusSchema>[] = [];
-    const statsForCommit = numstatMap.get(sha) || new Map();
-    const fileLines = rawFiles;
-    
-    let commitInsertions = 0, commitDeletions = 0;
-    let nonNoiseInsertions = 0, nonNoiseDeletions = 0;
-
+  if (statsForCommit && statsForCommit.size > 0) {
     const uniqueStats = new Set(statsForCommit.values());
+    uniqueStatsCount = uniqueStats.size;
     for (const stats of uniqueStats) {
       commitInsertions += stats.insertions;
       commitDeletions += stats.deletions;
@@ -133,101 +111,172 @@ export async function processBatch(
         nonNoiseDeletions += stats.deletions;
       }
     }
+  }
 
-    const trueFileCount = b.trueFileCount !== undefined ? Math.max(b.trueFileCount, uniqueStats.size) : Math.max(fileLines.length, uniqueStats.size);
+  const trueFileCount =
+    b.trueFileCount !== undefined
+      ? Math.max(b.trueFileCount, uniqueStatsCount)
+      : Math.max(b.rawFiles.length, uniqueStatsCount);
 
-    for (const line of fileLines) {
-      const { status, file, oldFile, similarityScore } = line;
+  const parsedFiles: z.infer<typeof fileStatusSchema>[] = [];
+  for (const line of b.rawFiles) {
+    if (parsedFiles.length >= MAX_FILES_PER_COMMIT) break;
+    const { status, file, oldFile, similarityScore } = line;
+    const stats = statsForCommit?.get(file) ?? (oldFile ? statsForCommit?.get(oldFile) : undefined);
+    const language = getLanguage(file);
+    parsedFiles.push({
+      status,
+      file,
+      ...(oldFile ? { oldFile } : {}),
+      ...(similarityScore !== undefined ? { similarityScore } : {}),
+      ...(stats && stats.insertions !== undefined ? { insertions: stats.insertions } : {}),
+      ...(stats && stats.deletions !== undefined ? { deletions: stats.deletions } : {}),
+      ...(stats?.isBinary ? { isBinary: true } : {}),
+      ...(language ? { language } : {}),
+    });
+  }
 
-      let stats = statsForCommit.get(file);
-      if (!stats && oldFile) stats = statsForCommit.get(oldFile);
+  if (trueFileCount > MAX_FILES_PER_COMMIT) {
+    parsedFiles.push({
+      status: 'M',
+      file: `...and ${trueFileCount - parsedFiles.length} more files omitted`,
+    });
+  }
 
-      if (parsedFiles.length < maxFilesPerCommit) {
-        const language = getLanguage(file);
-        parsedFiles.push({
-          status, file, ...(oldFile ? { oldFile } : {}),
-          ...(similarityScore !== undefined ? { similarityScore } : {}),
-          ...(stats && stats.insertions !== undefined ? { insertions: stats.insertions } : {}),
-          ...(stats && stats.deletions !== undefined ? { deletions: stats.deletions } : {}),
-          ...(stats?.isBinary ? { isBinary: true } : {}),
-          ...(language ? { language } : {}),
-        });
-      }
+  return { parsedFiles, trueFileCount, commitInsertions, commitDeletions, nonNoiseInsertions, nonNoiseDeletions };
+}
+
+function detectIsRebased(b: RawCommitBatchItem): boolean {
+  if (b.committerEmail && b.authorEmail && b.committerEmail !== b.authorEmail && b.committerName !== 'GitHub') {
+    return true;
+  }
+  if (b.committerDate && b.date && b.committerDate !== b.date) {
+    const cTime = Date.parse(b.committerDate);
+    const aTime = Date.parse(b.date);
+    if (!Number.isNaN(cTime) && !Number.isNaN(aTime) && Math.abs(cTime - aTime) > MS_PER_DAY) {
+      return true;
     }
+  }
+  return false;
+}
 
-    if (trueFileCount > maxFilesPerCommit) {
-      parsedFiles.push({
-        status: 'M',
-        file: `...and ${trueFileCount - parsedFiles.length} more files omitted`
-      });
-    }
+function buildCommitEntryObject(
+  b: RawCommitBatchItem,
+  statsForCommit: NumstatCommitMap | undefined,
+  patchData: { patch: string; truncated: boolean } | undefined,
+  slackMap: Record<string, string>,
+  maxBodyLen: number,
+): Record<string, unknown> {
+  const { parsedFiles, trueFileCount, commitInsertions, commitDeletions, nonNoiseInsertions, nonNoiseDeletions } =
+    aggregateCommitFileStats(b, statsForCommit);
+  const size = computeCommitSize(nonNoiseInsertions + nonNoiseDeletions, trueFileCount);
+  const isRebased = detectIsRebased(b);
+  const slackId =
+    b.authorEmail && slackMap[b.authorEmail]
+      ? slackMap[b.authorEmail]
+      : b.authorName && slackMap[b.authorName]
+        ? slackMap[b.authorName]
+        : undefined;
 
-    const size = computeCommitSize(nonNoiseInsertions + nonNoiseDeletions, trueFileCount);
+  const entryObj: Record<string, unknown> = {
+    commit: b.sha || 'unknown_commit',
+    ...(b.parents.length > 0 ? { parents: b.parents } : {}),
+    ...(b.refs.length > 0 ? { refs: b.refs } : {}),
+    ...(b.tags.length > 0 ? { tags: b.tags } : {}),
+    author: b.authorName || 'Unknown Author',
+    ...(b.authorEmail ? { email: b.authorEmail } : {}),
+    ...(slackId ? { slackId } : {}),
+    ...(b.committerName && b.committerName !== b.authorName ? { committer: b.committerName } : {}),
+    ...(b.committerEmail && b.committerEmail !== b.authorEmail ? { committerEmail: b.committerEmail } : {}),
+    ...(b.committerDate && b.committerDate !== b.date ? { committerDate: b.committerDate } : {}),
+    date: b.date || new Date().toISOString(),
+    ...(b.type ? { type: b.type } : {}),
+    ...(b.scope ? { scope: b.scope } : {}),
+    ...(b.isBreaking ? { isBreaking: true } : {}),
+    subject: b.subject || 'No Subject',
+    ...(b.cleanSubject !== b.subject ? { cleanSubject: b.cleanSubject } : {}),
+    ...(size ? { size } : {}),
+    ...(parsedFiles.length > 0 ? { files: parsedFiles } : {}),
+    ...(trueFileCount > 0 ? { fileCount: trueFileCount } : {}),
+    ...(trueFileCount > MAX_FILES_PER_COMMIT ? { isFilesTruncated: true } : {}),
+    totalInsertions: commitInsertions,
+    totalDeletions: commitDeletions,
+  };
 
-    const cTime = committerDate ? new Date(committerDate).getTime() : NaN;
-    const aTime = date ? new Date(date).getTime() : NaN;
-    const isRebased = (committerEmail && authorEmail && committerEmail !== authorEmail && committerName !== 'GitHub') || 
-                      (!isNaN(cTime) && !isNaN(aTime) && Math.abs(cTime - aTime) > MS_PER_DAY);
+  if (b.issuesMap.size > 0) {
+    entryObj['associatedIssues'] = Array.from(b.issuesMap.entries()).map(([issue, action]) => ({ issue, action }));
+  }
+  if (patchData) {
+    entryObj['patch'] = patchData.patch;
+    if (patchData.truncated) entryObj['isPatchTruncated'] = true;
+  }
+  if (Object.keys(b.metadataObj).length > 0) entryObj['metadata'] = b.metadataObj;
+  if (b.references.length > 0) entryObj['references'] = b.references;
+  if (b.coAuthors.length > 0) entryObj['coAuthors'] = b.coAuthors;
+  if (b.reviewers.length > 0) entryObj['reviewers'] = b.reviewers;
+  if (b.trailersObj && Object.keys(b.trailersObj).length > 0) entryObj['trailersObj'] = b.trailersObj;
+  if (b.isRevert) entryObj['isRevert'] = true;
+  if (b.revertedCommit) entryObj['revertedCommit'] = b.revertedCommit;
+  if (b.breakingChangeDescription) entryObj['breakingChangeDescription'] = b.breakingChangeDescription;
+  if (isRebased) entryObj['isRebased'] = true;
 
-    const map = getSlackMap(args);
-    const slackId = (authorEmail && map[authorEmail]) ? map[authorEmail] : (authorName && map[authorName] ? map[authorName] : undefined);
+  let body = b.body.replace(/(?:\r?\n){3,}/g, '\n\n');
+  if (body.length > maxBodyLen) {
+    body = truncateBodyWithContext(body, maxBodyLen);
+    entryObj['isBodyTruncated'] = true;
+  }
+  if (body) entryObj['body'] = flattenString(body);
+  return entryObj;
+}
 
-    const entryObj: Record<string, unknown> = {
-      commit: sha || 'unknown_commit',
-      ...(parents.length > 0 ? { parents } : {}),
-      ...(refs.length > 0 ? { refs } : {}),
-      ...(tags.length > 0 ? { tags } : {}),
-      author: authorName || 'Unknown Author',
-      ...(authorEmail ? { email: authorEmail } : {}),
-      ...(slackId ? { slackId } : {}),
-      ...(committerName && committerName !== authorName ? { committer: committerName } : {}),
-      ...(committerEmail && committerEmail !== authorEmail ? { committerEmail } : {}),
-      ...(committerDate && committerDate !== date ? { committerDate } : {}),
-      date: date || new Date().toISOString(), 
-      ...(type ? { type } : {}), ...(scope ? { scope } : {}), ...(isBreaking ? { isBreaking } : {}),
-      subject: subject || 'No Subject',
-      ...(cleanSubject !== subject ? { cleanSubject } : {}),
-      ...(size ? { size } : {}),
-      ...(parsedFiles.length > 0 ? { files: parsedFiles } : {}),
-      ...(trueFileCount > 0 ? { fileCount: trueFileCount } : {}),
-      ...(trueFileCount > maxFilesPerCommit ? { isFilesTruncated: true } : {}),
-      ...(commitInsertions !== undefined ? { totalInsertions: commitInsertions } : {}),
-      ...(commitDeletions !== undefined ? { totalDeletions: commitDeletions } : {}),
-    };
+export async function processBatch(
+  batch: RawCommitBatchItem[],
+  args: CliArgs,
+  formattingFlags: string[],
+  cwd: string = process.cwd()
+): Promise<CommitEntry[]> {
+  if (batch.length === 0) return [];
+  const shas = batch.map((b) => b.sha).join('\n') + '\n';
 
-    if (issuesMap.size > 0) {
-      entryObj['associatedIssues'] = Array.from(issuesMap.entries()).map(([issue, action]) => ({ issue, action }));
-    }
+  const skipDiffs = Boolean(args.summary || args['no-body']);
+  const wantPatch = Boolean(args['include-patch'] || args['diff-context'] !== undefined);
+  const [numstatRes, patchRes] = await Promise.allSettled([
+    skipDiffs ? Promise.resolve(new Map<string, NumstatCommitMap>()) : getNumstatMap(formattingFlags, shas, cwd),
+    wantPatch && !skipDiffs
+      ? getPatchMap(formattingFlags, args, shas, cwd)
+      : Promise.resolve(new Map<string, { patch: string; truncated: boolean }>()),
+  ]);
 
-    if ((args['include-patch'] || args['diff-context'] !== undefined) && patchMap.has(sha)) {
-      const patchData = patchMap.get(sha);
-      if (patchData) {
-        entryObj['patch'] = patchData.patch;
-        if (patchData.truncated) entryObj['isPatchTruncated'] = true;
-      }
-    }
+  let numstatMap = new Map<string, NumstatCommitMap>();
+  if (numstatRes.status === 'fulfilled') {
+    numstatMap = numstatRes.value;
+  } else {
+    const err = numstatRes.reason;
+    console.warn('Warning: Failed to get numstat map (This may cause missing file stats for this batch):', err instanceof Error ? err.message : String(err));
+  }
 
-    if (Object.keys(metadataObj).length > 0) entryObj['metadata'] = metadataObj;
-    if (references.length > 0) entryObj['references'] = references;
-    if (coAuthors.length > 0) entryObj['coAuthors'] = coAuthors;
-    if (reviewers.length > 0) entryObj['reviewers'] = reviewers;
-    if (trailersObj && Object.keys(trailersObj).length > 0) entryObj['trailersObj'] = trailersObj;
+  let patchMap = new Map<string, { patch: string; truncated: boolean }>();
+  if (patchRes.status === 'fulfilled') {
+    patchMap = patchRes.value;
+  } else {
+    const err = patchRes.reason;
+    console.warn('Warning: Failed to get patch map (This may cause missing patches for this batch):', err instanceof Error ? err.message : String(err));
+  }
 
-    if (isRevert) entryObj['isRevert'] = true;
-    if (revertedCommit) entryObj['revertedCommit'] = revertedCommit;
-    if (isBreaking) entryObj['isBreaking'] = true;
-    if (breakingChangeDescription) entryObj['breakingChangeDescription'] = breakingChangeDescription;
-    if (isRebased) entryObj['isRebased'] = true;
+  const processed: CommitEntry[] = [];
+  const parsedMaxBodyLen = args['max-body-length'];
+  const maxBodyLen = parsedMaxBodyLen !== undefined && !Number.isNaN(parsedMaxBodyLen) && parsedMaxBodyLen >= 0 ? parsedMaxBodyLen : DEFAULT_MAX_BODY_LEN;
+  const slackMap = getSlackMap(args, cwd);
 
-    body = body.replace(/(?:\r?\n){3,}/g, '\n\n');
-    
-    if (body.length > maxBodyLen) {
-      body = truncateBodyWithContext(body, maxBodyLen);
-      entryObj['isBodyTruncated'] = true;
-    }
-    if (body) entryObj['body'] = flattenString(body);
-
-    const parsedEntry = parseWithFallbacks(entryObj, sha, subject, date, authorName);
+  for (const b of batch) {
+    const entryObj = buildCommitEntryObject(
+      b,
+      numstatMap.get(b.sha),
+      wantPatch ? patchMap.get(b.sha) : undefined,
+      slackMap,
+      maxBodyLen,
+    );
+    const parsedEntry = parseWithFallbacks(entryObj, b.sha, b.subject, b.date, b.authorName);
     if (parsedEntry) processed.push(parsedEntry);
   }
   return processed;

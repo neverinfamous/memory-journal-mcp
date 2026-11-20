@@ -79,7 +79,7 @@ afterEach(() => {
 
 describe('Pass 47 Security Audit — Storage, Filter & Egress Parity', () => {
     it('H2/M6/M7: enforces compound readonly,+tool filters across dummy aliases, fallbacks, and pre-healing OAuth/filter interception', async () => {
-        expect(AUDIT_PROMPT_REVISION).toBe('2026-11-20-audit-pass55')
+        expect(AUDIT_PROMPT_REVISION).toBe('2026-11-20-audit-pass56')
         const compoundFilter = parseToolFilter('readonly,+delete_entry')
         expect(isDummyToolAllowedByFilter('mj_core_delete_entry', compoundFilter, true, false)).toBe(true)
         expect(isDummyToolAllowedByFilter('mj_core_update_entry', compoundFilter, true, false)).toBe(false)
