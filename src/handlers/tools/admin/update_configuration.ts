@@ -88,14 +88,14 @@ export const updateConfigurationSchema = z.preprocess(
                 .string()
                 .optional()
                 .describe('A comma-separated list of tool groups to enable, or "all"'),
-            briefing_entries: z.number().int().min(0).optional(),
-            briefing_summaries: z.number().int().min(0).optional(),
+            briefing_entries: z.number().int().min(0).max(100).optional(),
+            briefing_summaries: z.number().int().min(0).max(100).optional(),
             briefing_include_team: z.boolean().optional(),
-            briefing_issues: z.number().int().min(0).optional(),
-            briefing_prs: z.number().int().min(0).optional(),
+            briefing_issues: z.number().int().min(0).max(100).optional(),
+            briefing_prs: z.number().int().min(0).max(100).optional(),
             briefing_pr_status: z.boolean().optional(),
-            briefing_milestones: z.number().int().min(0).optional(),
-            briefing_workflows: z.number().int().min(0).optional(),
+            briefing_milestones: z.number().int().min(0).max(100).optional(),
+            briefing_workflows: z.number().int().min(0).max(100).optional(),
             briefing_workflow_status: z.boolean().optional(),
             briefing_copilot: z.boolean().optional(),
             briefing_graph: z

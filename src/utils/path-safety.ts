@@ -380,8 +380,8 @@ export function assertSafeFilePath(filePath: string, providedRoots: string[]): v
         decodedBase === '..' ||
         decodedBase === '.' ||
         decodedBase.includes('\0') ||
-        /[. ]$/.test(rawBase) ||
-        /[. ]$/.test(decodedBase) ||
+        /[.\s]$/.test(rawBase) ||
+        /[.\s]$/.test(decodedBase) ||
         WIN_RESERVED_DEVICE_RE.test(rawBase) ||
         WIN_RESERVED_DEVICE_RE.test(decodedBase)
     ) {

@@ -79,17 +79,43 @@ function isDisjointShorthandPair(a: string, b: string): boolean {
     )
 }
 
-function readUnboundedQuantifierEnd(pattern: string, pos: number): number {
+interface QuantifierReadResult {
+    end: number
+    repeating: boolean
+    nullable: boolean
+}
+
+function readQuantifierAt(pattern: string, pos: number): QuantifierReadResult | null {
     const ch = pattern[pos]
-    if (ch === '*' || ch === '+') return pos + (pattern[pos + 1] === '?' ? 2 : 1)
-    if (ch !== '{') return -1
+    if (ch === '*' || ch === '+') {
+        return { end: pos + (pattern[pos + 1] === '?' ? 2 : 1), repeating: true, nullable: ch === '*' }
+    }
+    if (ch === '?') {
+        return { end: pos + (pattern[pos + 1] === '?' ? 2 : 1), repeating: false, nullable: true }
+    }
+    if (ch !== '{') return null
     let j = pos + 1
     while (j < pattern.length && (pattern[j] ?? '') >= '0' && (pattern[j] ?? '') <= '9') j++
-    if (j === pos + 1 || pattern[j] !== ',') return -1
+    if (j === pos + 1 || pattern[j] !== ',') return null
+    const minVal = Number(pattern.slice(pos + 1, j))
     j++
-    const closeIdx = pattern.indexOf('}', j)
-    if (closeIdx === -1 || closeIdx !== j) return -1
-    return closeIdx + (pattern[closeIdx + 1] === '?' ? 2 : 1)
+    const maxStart = j
+    while (j < pattern.length && (pattern[j] ?? '') >= '0' && (pattern[j] ?? '') <= '9') j++
+    if (pattern[j] !== '}') return null
+    const maxStr = pattern.slice(maxStart, j)
+    const end = j + (pattern[j + 1] === '?' ? 2 : 1)
+    if (maxStr === '') return { end, repeating: true, nullable: minVal === 0 }
+    const maxVal = Number(maxStr)
+    if (maxVal <= minVal) return null
+    return { end, repeating: maxVal > 1, nullable: minVal === 0 }
+}
+
+function areAtomsProvablyDisjoint(a: string, b: string): boolean {
+    if (a === b || a === '.' || b === '.') return false
+    if (isDisjointShorthandPair(a, b)) return true
+    const aIsLiteral = a.length === 1 && a !== '[' && a !== '\\'
+    const bIsLiteral = b.length === 1 && b !== '[' && b !== '\\'
+    return aIsLiteral && bIsLiteral
 }
 
 function readAtomToken(pattern: string, i: number): { token: string; next: number } {
@@ -111,7 +137,7 @@ function readAtomToken(pattern: string, i: number): { token: string; next: numbe
 
 /** Reject ungrouped overlapping/adjacent quantifiers and excessive wildcard/unbounded quantifier chains. */
 function hasUnsafeUngroupedQuantifiers(pattern: string): boolean {
-    let unboundedCount = 0
+    let repeatingCount = 0
     let wildcardCount = 0
     let prevQuantAtom: string | null = null
     let i = 0
@@ -123,27 +149,32 @@ function hasUnsafeUngroupedQuantifiers(pattern: string): boolean {
             continue
         }
         const { token, next } = readAtomToken(pattern, i)
-        const quantEnd = readUnboundedQuantifierEnd(pattern, next)
-        if (quantEnd === -1) {
+        if (token === '\\b' || token === '\\B') {
+            i = next
+            continue
+        }
+        const quant = readQuantifierAt(pattern, next)
+        if (quant === null) {
             prevQuantAtom = null
             i = next
             continue
         }
-        unboundedCount++
+        if (!quant.repeating) {
+            i = quant.end
+            continue
+        }
+        repeatingCount++
         if (token === '.') wildcardCount++
-        if (unboundedCount > MAX_UNBOUNDED_QUANTIFIERS || wildcardCount > MAX_UNBOUNDED_WILDCARDS) {
+        if (repeatingCount > MAX_UNBOUNDED_QUANTIFIERS || wildcardCount > MAX_UNBOUNDED_WILDCARDS) {
             return true
         }
-        if (
-            prevQuantAtom !== null &&
-            (prevQuantAtom === token || prevQuantAtom === '.' || token === '.' ||
-                (!isDisjointShorthandPair(prevQuantAtom, token) &&
-                    (prevQuantAtom.startsWith('[') || token.startsWith('['))))
-        ) {
+        if (prevQuantAtom !== null && !areAtomsProvablyDisjoint(prevQuantAtom, token)) {
             return true
         }
-        prevQuantAtom = token
-        i = quantEnd
+        if (!quant.nullable || prevQuantAtom === null) {
+            prevQuantAtom = token
+        }
+        i = quant.end
     }
     return false
 }

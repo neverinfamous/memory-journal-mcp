@@ -96,8 +96,12 @@ export async function installHttpAuthentication(
 
         await tokenValidator.preload()
 
+        const trimmedPublicOrigin = config.publicOrigin?.trim()
         const resourceServer = createOAuthResourceServer({
-            resource: config.publicOrigin ?? `http://${formatHostForUrl(host)}:${String(port)}`,
+            resource:
+                trimmedPublicOrigin !== undefined && trimmedPublicOrigin !== ''
+                    ? trimmedPublicOrigin
+                    : `http://${formatHostForUrl(host)}:${String(port)}`,
             authorizationServers: [oauthIssuer],
             scopesSupported: [...SUPPORTED_SCOPES],
         })

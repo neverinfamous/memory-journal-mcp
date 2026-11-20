@@ -8,28 +8,45 @@ import { unwrapResultProxy } from '../worker-result-proxy.js'
 import { safeFormatSandboxError } from './script-and-metadata-cache.js'
 
 const MAX_COMPACTION_DEPTH = 6
+const MAX_COMPACTION_NODES = 2_000
 const COMPACTED_ARRAY_MAX_ITEMS = 20
 const COMPACTED_ARRAY_TRIGGER_LENGTH = 25
 const COMPACTED_OBJECT_MAX_KEYS = 100
 const TRUNCATED_STRING_THRESHOLD_CHARS = 400
 const TRUNCATED_STRING_PREVIEW_CHARS = 300
 
+class CompactionBudgetExceeded extends Error {
+    constructor() {
+        super('Compaction node budget exceeded')
+        this.name = 'CompactionBudgetExceeded'
+    }
+}
+
+function consumeCompactionBudget(budget: { remaining: number }, count = 1): void {
+    budget.remaining -= count
+    if (budget.remaining < 0) {
+        throw new CompactionBudgetExceeded()
+    }
+}
+
 function compactOversizedArray(
     arr: unknown[],
     limitBytes: number,
     depth: number,
-    seen: WeakSet<object>
+    seen: WeakSet<object>,
+    budget: { remaining: number }
 ): unknown[] {
     const maxItems = arr.length > COMPACTED_ARRAY_TRIGGER_LENGTH ? COMPACTED_ARRAY_MAX_ITEMS : arr.length
     const compactedArr: unknown[] = []
     for (let i = 0; i < maxItems; i++) {
         const item: unknown = arr[i]
         if (typeof item === 'string' && item.length > TRUNCATED_STRING_THRESHOLD_CHARS) {
+            consumeCompactionBudget(budget)
             compactedArr.push(
                 `${item.slice(0, TRUNCATED_STRING_PREVIEW_CHARS)}... [truncated by Code Mode result size guardrail]`
             )
         } else {
-            compactedArr.push(compactOversizedResult(item, limitBytes, depth + 1, seen))
+            compactedArr.push(compactOversizedResult(item, limitBytes, depth + 1, seen, budget))
         }
     }
     if (arr.length > maxItems) {
@@ -46,7 +63,8 @@ function compactOversizedObject(
     val: object,
     limitBytes: number,
     depth: number,
-    seen: WeakSet<object>
+    seen: WeakSet<object>,
+    budget: { remaining: number }
 ): Record<string, unknown> {
     const compactedObj: Record<string, unknown> = {}
     const keys = Object.keys(val)
@@ -57,13 +75,16 @@ function compactOversizedObject(
         if (k === '__proto__' || k === 'constructor' || k === 'prototype') continue
         const v: unknown = Reflect.get(val, k)
         if (typeof v === 'string' && v.length > TRUNCATED_STRING_THRESHOLD_CHARS) {
+            consumeCompactionBudget(budget)
             compactedObj[k] =
                 `${v.slice(0, TRUNCATED_STRING_PREVIEW_CHARS)}... [truncated by Code Mode result size guardrail]`
         } else if (typeof v === 'bigint') {
+            consumeCompactionBudget(budget)
             compactedObj[k] = v.toString()
         } else if (typeof v === 'object' && v !== null) {
-            compactedObj[k] = compactOversizedResult(v, limitBytes, depth + 1, seen)
+            compactedObj[k] = compactOversizedResult(v, limitBytes, depth + 1, seen, budget)
         } else {
+            consumeCompactionBudget(budget)
             compactedObj[k] = v
         }
     }
@@ -89,8 +110,10 @@ export function compactOversizedResult(
     rawVal: unknown,
     limitBytes: number,
     depth = 0,
-    seen = new WeakSet()
+    seen = new WeakSet(),
+    budget: { remaining: number } = { remaining: MAX_COMPACTION_NODES }
 ): unknown {
+    consumeCompactionBudget(budget)
     const val = unwrapResultProxy(rawVal)
     if (typeof val === 'bigint') return val.toString()
     if (val === null || val === undefined || typeof val !== 'object') return val
@@ -103,7 +126,7 @@ export function compactOversizedResult(
         if (typeof toJsonFn === 'function') {
             const converted = (toJsonFn as () => unknown).call(val)
             if (converted !== val) {
-                return compactOversizedResult(converted, limitBytes, depth + 1, seen)
+                return compactOversizedResult(converted, limitBytes, depth + 1, seen, budget)
             }
         }
         if (val instanceof Error) {
@@ -115,11 +138,11 @@ export function compactOversizedResult(
                 if (k === '__proto__' || k === 'constructor' || k === 'prototype') continue
                 errObj[k] = Reflect.get(val, k)
             }
-            return compactOversizedObject(errObj, limitBytes, depth, seen)
+            return compactOversizedObject(errObj, limitBytes, depth, seen, budget)
         }
         return Array.isArray(val)
-            ? compactOversizedArray(val, limitBytes, depth, seen)
-            : compactOversizedObject(val, limitBytes, depth, seen)
+            ? compactOversizedArray(val, limitBytes, depth, seen, budget)
+            : compactOversizedObject(val, limitBytes, depth, seen, budget)
     } finally {
         seen.delete(val)
     }

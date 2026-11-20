@@ -279,7 +279,15 @@ export function validateOAuthTransportConfig(
         validateOAuthEndpointUrl(config.oauthJwksUri, 'jwksUri', allowPlaintext, logError)
     }
 
-    if (!isLocalhost && (config.publicOrigin === undefined || config.publicOrigin === '')) {
+    const rawPublicOrigin = config.publicOrigin
+    const trimmedPublicOrigin = rawPublicOrigin?.trim()
+    if (rawPublicOrigin !== undefined && rawPublicOrigin !== '' && trimmedPublicOrigin === '') {
+        const errorMsg = `FATAL: 'publicOrigin' cannot be whitespace-only. Provide a valid http:// or https:// URL (e.g. 'https://api.example.com').`
+        logError(errorMsg, { module: 'HTTP' })
+        throw new Error(errorMsg)
+    }
+
+    if (!isLocalhost && (trimmedPublicOrigin === undefined || trimmedPublicOrigin === '')) {
         const errorMsg = `FATAL: OAuth is enabled on a non-loopback interface ('${host}'), but no 'publicOrigin' was provided. You MUST specify an explicit public origin (e.g. 'https://api.example.com') for secure OAuth token audience binding.`
         logError(errorMsg, { module: 'HTTP' })
         throw new Error(errorMsg)

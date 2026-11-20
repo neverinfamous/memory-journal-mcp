@@ -209,10 +209,13 @@ function snapshotUntrustedValue(
         throw new Error('Nested executeCode argument contains circular references')
     }
     if (Array.isArray(val)) {
-        budget.remaining -= 1
+        const len = val.length
+        if (len > budget.remaining) {
+            throw new Error('Nested executeCode argument exceeds snapshot bounds')
+        }
+        budget.remaining -= Math.max(1, len)
         active.add(val)
         try {
-            const len = val.length
             const out: unknown[] = new Array<unknown>(len)
             for (let i = 0; i < len; i++) {
                 out[i] = snapshotUntrustedValue(val[i], depth + 1, budget, active)
@@ -223,11 +226,15 @@ function snapshotUntrustedValue(
         }
     }
     if (!isPlainRecord(val)) return val
-    budget.remaining -= 1
+    const keys = Object.keys(val)
+    if (keys.length > budget.remaining) {
+        throw new Error('Nested executeCode argument exceeds snapshot bounds')
+    }
+    budget.remaining -= Math.max(1, keys.length)
     active.add(val)
     try {
         const snap = Object.create(null) as Record<string, unknown>
-        for (const key of Object.keys(val)) {
+        for (const key of keys) {
             if (key === '__proto__' || key === 'constructor' || key === 'prototype') continue
             snap[key] = snapshotUntrustedValue(val[key], depth + 1, budget, active)
         }

@@ -99,10 +99,13 @@ function extractRecoveredEntryContentAndTitle(
     // [C4] Field regexes scan the code with content and title literals removed, so `project: 5` or
     // `workspace_id: 'x'` text quoted inside content or title can never re-scope the write.
     const scanWithTitle = code.split(content).join('')
+    const titleCandidates = scanWithTitle.match(/\btitle\s*:/gi)
     const titleMatch =
-        /\btitle\s*:\s*(['"`])([\s\S]*?)\1(?=\s*(?:,\s*[a-zA-Z_$][\w$]*\s*:|,\s*\}|\}|\)))/i.exec(
-            scanWithTitle
-        ) ?? /\btitle\s*:\s*(['"])([^'"]+)\1/i.exec(scanWithTitle)
+        titleCandidates !== null && titleCandidates.length > MAX_ENTRY_FIELD_CANDIDATES
+            ? null
+            : /\btitle\s*:\s*(['"`])([\s\S]*?)\1(?=\s*(?:,\s*[a-zA-Z_$][\w$]*\s*:|,\s*\}|\}|\)))/i.exec(
+                  scanWithTitle
+              ) ?? /\btitle\s*:\s*(['"])([^'"]+)\1/i.exec(scanWithTitle)
     const scanCode =
         titleMatch?.[0] !== undefined ? scanWithTitle.split(titleMatch[0]).join('') : scanWithTitle
 
@@ -200,7 +203,13 @@ function populateRecoveredEntryMetadata(payload: Record<string, unknown>, scanCo
         payload['tags'] = rawTags.split(',').map((s) => s.trim().replace(/^['"]|['"]$/g, '')).filter(Boolean)
     }
 
-    const rawAutoContext = /\bauto_context\s*:\s*(\{[\s\S]*?\})(?=[ \t\r]*,\s*\n|[ \t\r]*\n\s*\})/i.exec(scanCode)?.[1]
+    const autoContextCandidates = scanCode.match(/\bauto_context\s*:/gi)
+    const rawAutoContext =
+        autoContextCandidates !== null && autoContextCandidates.length > MAX_ENTRY_FIELD_CANDIDATES
+            ? undefined
+            : /\bauto_context\s*:\s*(\{[\s\S]*?\})(?=[ \t\r]*,\s*\n|[ \t\r]*\n\s*\})/i.exec(
+                  scanCode
+              )?.[1]
     if (rawAutoContext !== undefined) {
         const parsedAutoContext = parseRelaxedAutoContext(rawAutoContext)
         if (parsedAutoContext !== undefined) payload['auto_context'] = parsedAutoContext
