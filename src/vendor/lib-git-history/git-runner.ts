@@ -134,32 +134,44 @@ export function getHeadSha(cwd: string = process.cwd()): string {
   }
 }
 
+const DESCRIBE_LONG_REGEX = /^(.*)-(\d+)-g([0-9a-f]{40})$/i;
+const FULL_SHA_REGEX = /^[0-9a-f]{40}$/i;
+
+function parseDescribeLong(output: string): { tagName: string; distance: number; sha: string } | null {
+  const m = output.match(DESCRIBE_LONG_REGEX);
+  if (!m || !m[1] || !m[2] || !m[3]) return null;
+  return { tagName: m[1], distance: parseInt(m[2], 10), sha: m[3] };
+}
+
 export function getGitTagRange(cwd: string = process.cwd()): { range: string; isFallback: boolean; headSha: string } {
   let headSha = 'HEAD';
   const execOpts = { cwd, encoding: 'utf-8' as const, stdio: 'pipe' as const, timeout: GIT_TIMEOUT_MS, maxBuffer: GIT_CMD_MAX_BUFFER, windowsHide: true };
   try {
-    headSha = execFileSync('git', ['--no-pager', 'rev-parse', 'HEAD'], execOpts).trim();
-    let tagName = execFileSync('git', ['--no-pager', 'describe', '--tags', '--abbrev=0'], execOpts).trim();
+    // [INTENT]: Single `describe --tags --long --abbrev=40 --always` yields HEAD SHA, nearest tag, and distance in 1 spawn.
+    const raw = execFileSync('git', ['--no-pager', 'describe', '--tags', '--long', '--abbrev=40', '--always'], execOpts).trim();
+    const parsed = parseDescribeLong(raw);
+    if (!parsed) {
+      if (FULL_SHA_REGEX.test(raw)) headSha = raw;
+      return { range: 'HEAD', isFallback: true, headSha };
+    }
+    headSha = parsed.sha;
+    let tagName = parsed.tagName;
     if (!tagName || tagName.startsWith('-')) {
       return { range: 'HEAD', isFallback: true, headSha };
     }
-
-    let tagSha = execFileSync('git', ['--no-pager', 'rev-parse', '--verify', '--end-of-options', `${tagName}^{commit}`], execOpts).trim();
-    if (tagSha === headSha) {
+    if (parsed.distance === 0) {
       try {
-        tagName = execFileSync('git', ['--no-pager', 'describe', '--tags', '--abbrev=0', '--end-of-options', `${tagName}^`], execOpts).trim();
-        if (!tagName || tagName.startsWith('-')) {
+        const prevRaw = execFileSync('git', ['--no-pager', 'describe', '--tags', '--long', '--abbrev=40', '--end-of-options', `${tagName}^`], execOpts).trim();
+        const prev = parseDescribeLong(prevRaw);
+        if (!prev || !prev.tagName || prev.tagName.startsWith('-')) {
           return { range: 'HEAD', isFallback: true, headSha };
         }
-        tagSha = execFileSync('git', ['--no-pager', 'rev-parse', '--verify', '--end-of-options', `${tagName}^{commit}`], execOpts).trim();
+        tagName = prev.tagName;
       } catch {
         return { range: 'HEAD', isFallback: true, headSha };
       }
     }
-
-    if (tagName && !tagName.startsWith('-') && tagSha !== headSha) {
-      return { range: `${tagName}..HEAD`, isFallback: false, headSha };
-    }
+    return { range: `${tagName}..HEAD`, isFallback: false, headSha };
   } catch {
     // Ignore and fallback
   }

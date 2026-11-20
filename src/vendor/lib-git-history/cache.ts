@@ -191,6 +191,8 @@ export function initCache(dbPath?: string): Database {
     db.close();
     db = null;
     currentDbPath = null;
+    cachedInsertTx = null;
+    cachedInsertTxDb = null;
     stmtCache.clear();
   }
   
@@ -209,12 +211,16 @@ export function initCache(dbPath?: string): Database {
   ensureCacheSchemaColumns(db);
   
   db.exec('CREATE INDEX IF NOT EXISTS idx_commits_author ON commits(author);');
-  db.exec('CREATE INDEX IF NOT EXISTS idx_commits_type ON commits(type);');
+  db.exec('DROP INDEX IF EXISTS idx_commits_type;');
+  db.exec('CREATE INDEX IF NOT EXISTS idx_commits_type_scope ON commits(type, scope);');
   db.exec('CREATE INDEX IF NOT EXISTS idx_commits_scope ON commits(scope);');
   db.exec('CREATE INDEX IF NOT EXISTS idx_commits_isBreaking ON commits(isBreaking);');
   
   return db;
 }
+
+let cachedInsertTx: ((commits: CommitEntry[]) => void) | null = null;
+let cachedInsertTxDb: Database | null = null;
 
 export function closeCache(): void {
   if (db) {
@@ -222,60 +228,64 @@ export function closeCache(): void {
     db.close();
     db = null;
     currentDbPath = null;
+    cachedInsertTx = null;
+    cachedInsertTxDb = null;
     stmtCache.clear();
   }
 }
 
 export function insertCommits(batch: CommitEntry[]): void {
+  if (batch.length === 0) return;
   const currentDb = db || initCache();
-  const insert = getOrPrepare(currentDb, INSERT_COMMIT_SQL);
-  
-  const transaction = currentDb.transaction((commits: CommitEntry[]) => {
-    for (const c of commits) {
-      insert.run({
-        $commit_hash: c.commit,
-        $parents: c.parents ? JSON.stringify(c.parents) : null,
-        $refs: c.refs ? JSON.stringify(c.refs) : null,
-        $tags: c.tags ? JSON.stringify(c.tags) : null,
-        $author: c.author,
-        $email: c.email || null,
-        $committer: c.committer || null,
-        $committerEmail: c.committerEmail || null,
-        $committerDate: c.committerDate || null,
-        $date: c.date,
-        $type: c.type || null,
-        $scope: c.scope || null,
-        $isBreaking: c.isBreaking ? 1 : 0,
-        $breakingChangeDescription: c.breakingChangeDescription || null,
-        $isRevert: c.isRevert ? 1 : 0,
-        $revertedCommit: c.revertedCommit || null,
-        $isRebased: c.isRebased ? 1 : 0,
-        $subject: c.subject,
-        $cleanSubject: c.cleanSubject || null,
-        $body: c.body || null,
-        $isBodyTruncated: c.isBodyTruncated ? 1 : 0,
-        $size: c.size || null,
-        $files: c.files ? JSON.stringify(c.files) : null,
-        $fileCount: c.fileCount ?? null,
-        $isFilesTruncated: c.isFilesTruncated ? 1 : 0,
-        $totalInsertions: c.totalInsertions ?? null,
-        $totalDeletions: c.totalDeletions ?? null,
-        $metadata: c.metadata ? JSON.stringify(c.metadata) : null,
-        $trailersObj: c.trailersObj ? JSON.stringify(c.trailersObj) : null,
-        $patch: c.patch || null,
-        $isPatchTruncated: c.isPatchTruncated ? 1 : 0,
-        $references: c.references ? JSON.stringify(c.references) : null,
-        $coAuthors: c.coAuthors ? JSON.stringify(c.coAuthors) : null,
-        $reviewers: c.reviewers ? JSON.stringify(c.reviewers) : null,
-        $associatedIssues: c.associatedIssues ? JSON.stringify(c.associatedIssues) : null,
-        $slackId: c.slackId || null,
-        $validationErrors: c.validationErrors ? JSON.stringify(c.validationErrors) : null,
-        $isCorrupted: c.isCorrupted ? 1 : 0
-      });
-    }
-  });
-  
-  transaction(batch);
+  if (!cachedInsertTx || cachedInsertTxDb !== currentDb) {
+    const insert = getOrPrepare(currentDb, INSERT_COMMIT_SQL);
+    cachedInsertTx = currentDb.transaction((commits: CommitEntry[]) => {
+      for (const c of commits) {
+        insert.run({
+          $commit_hash: c.commit,
+          $parents: c.parents ? JSON.stringify(c.parents) : null,
+          $refs: c.refs ? JSON.stringify(c.refs) : null,
+          $tags: c.tags ? JSON.stringify(c.tags) : null,
+          $author: c.author,
+          $email: c.email || null,
+          $committer: c.committer || null,
+          $committerEmail: c.committerEmail || null,
+          $committerDate: c.committerDate || null,
+          $date: c.date,
+          $type: c.type || null,
+          $scope: c.scope || null,
+          $isBreaking: c.isBreaking ? 1 : 0,
+          $breakingChangeDescription: c.breakingChangeDescription || null,
+          $isRevert: c.isRevert ? 1 : 0,
+          $revertedCommit: c.revertedCommit || null,
+          $isRebased: c.isRebased ? 1 : 0,
+          $subject: c.subject,
+          $cleanSubject: c.cleanSubject || null,
+          $body: c.body || null,
+          $isBodyTruncated: c.isBodyTruncated ? 1 : 0,
+          $size: c.size || null,
+          $files: c.files ? JSON.stringify(c.files) : null,
+          $fileCount: c.fileCount ?? null,
+          $isFilesTruncated: c.isFilesTruncated ? 1 : 0,
+          $totalInsertions: c.totalInsertions ?? null,
+          $totalDeletions: c.totalDeletions ?? null,
+          $metadata: c.metadata ? JSON.stringify(c.metadata) : null,
+          $trailersObj: c.trailersObj ? JSON.stringify(c.trailersObj) : null,
+          $patch: c.patch || null,
+          $isPatchTruncated: c.isPatchTruncated ? 1 : 0,
+          $references: c.references ? JSON.stringify(c.references) : null,
+          $coAuthors: c.coAuthors ? JSON.stringify(c.coAuthors) : null,
+          $reviewers: c.reviewers ? JSON.stringify(c.reviewers) : null,
+          $associatedIssues: c.associatedIssues ? JSON.stringify(c.associatedIssues) : null,
+          $slackId: c.slackId || null,
+          $validationErrors: c.validationErrors ? JSON.stringify(c.validationErrors) : null,
+          $isCorrupted: c.isCorrupted ? 1 : 0
+        });
+      }
+    });
+    cachedInsertTxDb = currentDb;
+  }
+  cachedInsertTx(batch);
 }
 
 export function queryCommits(filters: Partial<CommitEntry> = {}): CommitEntry[] {
@@ -335,7 +345,7 @@ export function batchQueryCommits(shas: string[]): Map<string, CommitEntry> {
 
   for (let i = 0; i < shas.length; i += CHUNK) {
     const chunk = shas.slice(i, i + CHUNK);
-    const placeholders = chunk.map(() => '?').join(',');
+    const placeholders = '?,'.repeat(chunk.length - 1) + '?';
     const query = `SELECT * FROM commits WHERE commit_hash IN (${placeholders})`;
 
     const stmt = getOrPrepare(currentDb, query);

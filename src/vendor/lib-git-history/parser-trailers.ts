@@ -147,6 +147,9 @@ function applySingleTrailer(
   }
 }
 
+const REGEX_TRAILER_CONTINUATION = /\r?\n[ \t]+/g;
+const REGEX_ZERO_WIDTH_SPACE = /\u200B/g;
+
 export function parseTrailersBlock(rawTrailers: string, sha: string): ParsedTrailersResult {
   const state: ParsedTrailersResult = {
     categories: [],
@@ -169,7 +172,8 @@ export function parseTrailersBlock(rawTrailers: string, sha: string): ParsedTrai
       const key = keyRaw.toLowerCase().replace(/\s+/g, '-');
       if (key === '__proto__' || key === 'constructor' || key === 'prototype') continue;
       const rawVal = colonIdx === -1 ? '' : t.slice(colonIdx + 1).trim();
-      let val = rawVal.replace(/\r?\n[ \t]+/g, '\n').replace(/\u200B/g, '');
+      let val = rawVal.includes('\n') ? rawVal.replace(REGEX_TRAILER_CONTINUATION, '\n') : rawVal;
+      if (val.includes('\u200B')) val = val.replace(REGEX_ZERO_WIDTH_SPACE, '');
       if (val.length > MAX_TRAILER_LENGTH) {
         val = truncateSafely(val, MAX_TRAILER_LENGTH, '\n...[trailer truncated due to length]');
       }

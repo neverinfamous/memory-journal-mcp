@@ -27,8 +27,11 @@ interface ParsedCliFilters {
 const CLI_FILTER_CACHE = new WeakMap<CliArgs, ParsedCliFilters>();
 const CHANGELOG_TYPES = new Set(['feat', 'fix', 'perf', 'revert']);
 const REGEX_TRAILING_DIGITS = /(\d{1,3})$/;
+const REGEX_DIGITS_GLOBAL = /\d+/g;
 const REGEX_BREAKING_FALLBACK = /^BREAKING[\s-]CHANGES?(?::|$)/im;
 const REGEX_REVERT_SUBJECT = /^revert:? /i;
+const REGEX_LEADING_EMOJI = /^[\s\p{Emoji_Presentation}\p{Extended_Pictographic}]+/u;
+const REGEX_LEADING_SHORTCODE = /^:\w+:\s*/;
 
 function getParsedCliFilters(args: CliArgs): ParsedCliFilters {
   let cached = CLI_FILTER_CACHE.get(args);
@@ -56,27 +59,34 @@ export type RawCommitBatchItem = {
 
 function extractRecordParts(commitBlock: string): string[] | null {
   const parts: string[] = [];
-  let currentStr = commitBlock;
-  
+  const sepLen = FIELD_SEPARATOR.length;
+  let startPos = 0;
+
   for (let i = 0; i < RECORD_START_FIELDS; i++) {
-    const idx = currentStr.indexOf(FIELD_SEPARATOR);
+    const idx = commitBlock.indexOf(FIELD_SEPARATOR, startPos);
     if (idx === -1) break;
-    parts.push(currentStr.slice(0, idx));
-    currentStr = currentStr.slice(idx + FIELD_SEPARATOR.length);
+    parts.push(commitBlock.slice(startPos, idx));
+    startPos = idx + sepLen;
   }
-  
-  const endParts: string[] = [];
-  let tempStr = currentStr;
+
+  const endParts: string[] = new Array<string>(RECORD_END_FIELDS);
+  let endCount = 0;
+  let endPos = commitBlock.length;
   for (let i = 0; i < RECORD_END_FIELDS; i++) {
-    const idx = tempStr.lastIndexOf(FIELD_SEPARATOR);
-    if (idx === -1) break;
-    endParts.unshift(tempStr.slice(idx + FIELD_SEPARATOR.length));
-    tempStr = tempStr.slice(0, idx);
+    const searchFrom = endPos - sepLen;
+    if (searchFrom < startPos) break;
+    const idx = commitBlock.lastIndexOf(FIELD_SEPARATOR, searchFrom);
+    if (idx < startPos) break;
+    endParts[RECORD_END_FIELDS - 1 - endCount] = commitBlock.slice(idx + sepLen, endPos);
+    endCount++;
+    endPos = idx;
   }
-  
-  parts.push(tempStr);
-  parts.push(...endParts);
-  
+
+  parts.push(commitBlock.slice(startPos, endPos));
+  for (let i = RECORD_END_FIELDS - endCount; i < RECORD_END_FIELDS; i++) {
+    parts.push(endParts[i]);
+  }
+
   if (parts.length < EXPECTED_RECORD_PARTS) {
     console.warn(`[lib-git-history] Warning: Dropping malformed git record with only ${parts.length} parts (expected at least ${EXPECTED_RECORD_PARTS}).`);
     return null;
@@ -92,32 +102,39 @@ function parseSingleFileStatus(
 ): RawFileItem | null {
   let status = statusRaw;
   let similarityScore: number | undefined;
-  const digitsMatch = statusRaw.match(REGEX_TRAILING_DIGITS);
-  if (digitsMatch && digitsMatch[1]) {
-    similarityScore = parseInt(digitsMatch[1], 10);
-    status = statusRaw.slice(0, -digitsMatch[1].length);
+  let hasOldFile: boolean;
+
+  if (statusRaw.length === 1) {
+    hasOldFile = statusRaw === 'R' || statusRaw === 'C';
+  } else {
+    const digitsMatch = statusRaw.match(REGEX_TRAILING_DIGITS);
+    if (digitsMatch && digitsMatch[1]) {
+      similarityScore = parseInt(digitsMatch[1], 10);
+      status = statusRaw.slice(0, -digitsMatch[1].length);
+    }
+    const statusLetters = status.length === 1 ? status : status.replace(REGEX_DIGITS_GLOBAL, '');
+    hasOldFile = statusLetters.length === 1 && (statusLetters === 'R' || statusLetters === 'C');
   }
 
-  let numOldFiles = 0;
-  const statusLetters = status.replace(/\d+/g, '');
-  if (statusLetters.length === 1 && (statusLetters === 'R' || statusLetters === 'C')) {
-    numOldFiles = 1;
-  }
-
-  let oldFile: string | undefined;
-  if (numOldFiles > 0) {
-    oldFile = getNextFilePart() || undefined;
-  }
+  const oldFile = hasOldFile ? (getNextFilePart() || undefined) : undefined;
   const file = getNextFilePart();
   if (!file) return null;
 
   const flatOldFile = oldFile ? flattenString(oldFile) : undefined;
   return {
-    status: flattenString(status),
+    status: status.length === 1 ? status : flattenString(status),
     file: flattenString(file),
     ...(flatOldFile ? { oldFile: flatOldFile } : {}),
     ...(similarityScore !== undefined ? { similarityScore } : {}),
   };
+}
+
+function isValidFileStatus(statusRaw: string): boolean {
+  if (statusRaw.length === 1) {
+    const code = statusRaw.charCodeAt(0);
+    return code >= 65 && code <= 90;
+  }
+  return statusRaw.length <= 20 && REGEX_FILE_STATUS.test(statusRaw);
 }
 
 function parseFilesBlock(filesBlock: string, sha: string): { rawFiles: RawFileItem[]; trueFileCount: number } {
@@ -148,7 +165,7 @@ function parseFilesBlock(filesBlock: string, sha: string): { rawFiles: RawFileIt
   let emptyCount = 0;
   while (statusRaw !== null && iterations < MAX_STATUS_ITERATIONS) {
     iterations++;
-    statusRaw = statusRaw.replace(/\r/g, '');
+    if (statusRaw.includes('\r')) statusRaw = statusRaw.replace(/\r/g, '');
     if (statusRaw === '') {
       emptyCount++;
       if (emptyCount > MAX_EMPTY_STATUS_COUNT) break;
@@ -156,7 +173,7 @@ function parseFilesBlock(filesBlock: string, sha: string): { rawFiles: RawFileIt
       continue;
     }
     emptyCount = 0;
-    if (!REGEX_FILE_STATUS.test(statusRaw) || statusRaw.length > 20) {
+    if (!isValidFileStatus(statusRaw)) {
       console.warn(`[lib-git-history] Warning: Desynced or invalid file status "${statusRaw}" in commit ${sha}. Stopping file parsing for this commit.`);
       break;
     }
@@ -260,6 +277,29 @@ function normalizeSubjectAndBody(rawSubject: string, bodyParts: string[]): { sub
   return { subject, body };
 }
 
+function stripLeadingEmojiAndShortcode(subject: string): string {
+  if (subject.length === 0) return subject;
+  const c = subject.charCodeAt(0);
+  if ((c >= 97 && c <= 122) || (c >= 65 && c <= 90) || (c >= 48 && c <= 57)) return subject;
+  return subject.replace(REGEX_LEADING_EMOJI, '').replace(REGEX_LEADING_SHORTCODE, '');
+}
+
+function detectBodyBreaking(
+  body: string,
+  initialIsBreaking: boolean,
+  initialDesc: string | undefined,
+): { isBreaking: boolean; breakingChangeDescription: string | undefined } {
+  if (body.length === 0) return { isBreaking: initialIsBreaking, breakingChangeDescription: initialDesc };
+  const bcMatch = body.match(REGEX_BREAKING_CHANGE);
+  if (bcMatch !== null) {
+    return { isBreaking: true, breakingChangeDescription: initialDesc || bcMatch[1].trim() };
+  }
+  if (!initialIsBreaking && REGEX_BREAKING_FALLBACK.test(body)) {
+    return { isBreaking: true, breakingChangeDescription: initialDesc };
+  }
+  return { isBreaking: initialIsBreaking, breakingChangeDescription: initialDesc };
+}
+
 export function parseGitRecord(commitBlock: string, args: CliArgs): RawCommitBatchItem | null {
   const parts = extractRecordParts(commitBlock);
   if (!parts || parts.length < 12) return null;
@@ -282,24 +322,18 @@ export function parseGitRecord(commitBlock: string, args: CliArgs): RawCommitBat
   const { parentsRaw, filesBlock } = parseParentsAndFiles(parts[bodyEndIdx + 2] ?? '');
   const { rawFiles, trueFileCount } = parseFilesBlock(filesBlock, sha);
 
-  const cleanStart = subject.replace(/^[\s\p{Emoji_Presentation}\p{Extended_Pictographic}]+/u, '').replace(/^:\w+:\s*/, '');
-  const convMatch = cleanStart.match(REGEX_CONVENTIONAL_COMMIT);
+  const convMatch = stripLeadingEmojiAndShortcode(subject).match(REGEX_CONVENTIONAL_COMMIT);
   const type = convMatch ? convMatch[1] : undefined;
   const scope = convMatch ? convMatch[2] : undefined;
   const cleanSubject = convMatch ? convMatch[4].trim() : subject;
 
   const trailers = parseTrailersBlock(rawTrailers, sha);
-  let isBreaking = Boolean(convMatch?.[3]) || trailers.isBreaking;
-  let breakingChangeDescription = trailers.breakingChangeDescription;
-
   body = stripExactTrailerBlock(body, exactTrailerBlock);
-  const bcMatch = body.match(REGEX_BREAKING_CHANGE);
-  if (bcMatch !== null) {
-    isBreaking = true;
-    if (!breakingChangeDescription) breakingChangeDescription = bcMatch[1].trim();
-  } else if (!isBreaking && REGEX_BREAKING_FALLBACK.test(body)) {
-    isBreaking = true;
-  }
+  const { isBreaking, breakingChangeDescription } = detectBodyBreaking(
+    body,
+    Boolean(convMatch?.[3]) || trailers.isBreaking,
+    trailers.breakingChangeDescription,
+  );
 
   if (trailers.categories.length > 0) trailers.metadataObj['category'] = trailers.categories;
   if (trailers.entriesParsed.length > 0) trailers.metadataObj['entry'] = trailers.entriesParsed;
@@ -313,7 +347,7 @@ export function parseGitRecord(commitBlock: string, args: CliArgs): RawCommitBat
   const tags = refs.filter((r) => r.startsWith('tag: ')).map((r) => r.replace(/^tag:\s*/, ''));
   const parents = parentsRaw ? parentsRaw.split(/\s+/).filter(Boolean) : [];
 
-  const revertMatch = body.match(REGEX_REVERT_COMMIT);
+  const revertMatch = body.includes('This reverts commit ') ? body.match(REGEX_REVERT_COMMIT) : null;
   const isRevert = REGEX_REVERT_SUBJECT.test(subject) || Boolean(revertMatch);
   const revertedCommit = revertMatch ? revertMatch[1] : undefined;
 

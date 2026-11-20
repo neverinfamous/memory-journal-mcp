@@ -12,14 +12,18 @@ import { flattenString, getLanguage } from './parser-utils.js';
 const execFileAsync = promisify(execFile);
 const MAX_UNTRACKED_STAT_BYTES = 5 * 1024 * 1024;
 const BINARY_PEEK_BYTES = 8192;
+const STREAM_READ_CHUNK_BYTES = 65536;
 
-function countNewlinesInBuffer(buf: Buffer): number {
-  if (buf.length === 0) return 0;
+function countNewlinesInSlice(buf: Buffer, len: number): number {
   let newlines = 0;
-  for (let i = 0; i < buf.length; i++) {
-    if (buf[i] === 0x0a) newlines++;
+  let pos = 0;
+  while (pos < len) {
+    const next = buf.indexOf(0x0a, pos);
+    if (next === -1 || next >= len) break;
+    newlines++;
+    pos = next + 1;
   }
-  return buf[buf.length - 1] === 0x0a ? newlines : newlines + 1;
+  return newlines;
 }
 
 function countUntrackedLines(cwd: string, relFile: string): number {
@@ -34,22 +38,26 @@ function countUntrackedLines(cwd: string, relFile: string): number {
     try {
       const peekBuf = Buffer.allocUnsafe(peekLen);
       const bytesRead = fs.readSync(fd, peekBuf, 0, peekLen, 0);
+      if (bytesRead <= 0) return 0;
       const peekSlice = peekBuf.subarray(0, bytesRead);
       if (peekSlice.includes(0)) {
         return 0;
       }
+      let totalNewlines = countNewlinesInSlice(peekSlice, bytesRead);
+      let lastByte = peekSlice[bytesRead - 1] ?? 0;
       if (stat.size <= BINARY_PEEK_BYTES) {
-        return countNewlinesInBuffer(peekSlice);
+        return lastByte === 0x0a ? totalNewlines : totalNewlines + 1;
       }
-      const fullBuf = Buffer.allocUnsafe(stat.size);
-      peekSlice.copy(fullBuf, 0);
+      const chunkBuf = Buffer.allocUnsafe(Math.min(STREAM_READ_CHUNK_BYTES, stat.size - bytesRead));
       let offset = bytesRead;
       while (offset < stat.size) {
-        const readNow = fs.readSync(fd, fullBuf, offset, stat.size - offset, offset);
+        const readNow = fs.readSync(fd, chunkBuf, 0, Math.min(chunkBuf.length, stat.size - offset), offset);
         if (readNow <= 0) break;
+        totalNewlines += countNewlinesInSlice(chunkBuf, readNow);
+        lastByte = chunkBuf[readNow - 1] ?? lastByte;
         offset += readNow;
       }
-      return countNewlinesInBuffer(fullBuf.subarray(0, offset));
+      return lastByte === 0x0a ? totalNewlines : totalNewlines + 1;
     } finally {
       fs.closeSync(fd);
     }
