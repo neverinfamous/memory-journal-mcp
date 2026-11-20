@@ -69,21 +69,21 @@ export const BRIEFING_CONFIG_KEY_MAP: Readonly<
     briefingGraph: { target: 'graphPivots', kind: 'boolean' },
 }
 
-/** Look up a briefing config entry by aliases (e.g. `briefingPrCount`) before primary file key (`briefingPrs`). */
+/** Look up a briefing config entry by primary file key (`briefingPrs`) before legacy aliases (`briefingPrCount`). */
 export function readBriefingConfigEntry(
     obj: Record<string, unknown>,
     primaryKey: string,
     aliases?: readonly string[]
 ): { key: string; value: unknown } | undefined {
+    if (primaryKey in obj && obj[primaryKey] !== undefined && obj[primaryKey] !== null) {
+        return { key: primaryKey, value: obj[primaryKey] }
+    }
     if (aliases !== undefined) {
         for (const alias of aliases) {
             if (alias in obj && obj[alias] !== undefined && obj[alias] !== null) {
                 return { key: alias, value: obj[alias] }
             }
         }
-    }
-    if (primaryKey in obj && obj[primaryKey] !== undefined && obj[primaryKey] !== null) {
-        return { key: primaryKey, value: obj[primaryKey] }
     }
     return undefined
 }
@@ -250,7 +250,7 @@ export function buildInitialBaselines(
     const fileProjNum =
         initialFile !== null &&
         typeof initialFile['defaultProjectNumber'] === 'number' &&
-        Number.isInteger(initialFile['defaultProjectNumber']) &&
+        Number.isSafeInteger(initialFile['defaultProjectNumber']) &&
         initialFile['defaultProjectNumber'] > 0
             ? initialFile['defaultProjectNumber']
             : undefined

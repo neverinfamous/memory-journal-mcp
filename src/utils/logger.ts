@@ -28,6 +28,8 @@ const LOG_LEVELS: Record<LogLevel, number> = {
 
 function sanitizeLogValue(value: unknown, seen = new WeakSet(), depth = 0): unknown {
     if (value instanceof Error) return sanitizeErrorForLogging(`${value.name}: ${value.message}`)
+    if (value instanceof Date) return Number.isNaN(value.getTime()) ? 'Invalid Date' : value.toISOString()
+    if (value instanceof URL) return sanitizeErrorForLogging(value.toString())
     if (typeof value === 'string') return sanitizeErrorForLogging(value)
     if (typeof value === 'bigint') return value.toString()
     if (typeof value !== 'object' || value === null) return value
@@ -96,15 +98,9 @@ class Logger {
 
         if (Object.keys(sanitizedExtras).length > 0) {
             try {
-                const seen = new WeakSet()
-                const serialized = JSON.stringify(sanitizedExtras, (_k: string, val: unknown) => {
-                    if (typeof val === 'bigint') return val.toString()
-                    if (typeof val === 'object' && val !== null) {
-                        if (seen.has(val)) return '[Circular]'
-                        seen.add(val)
-                    }
-                    return val
-                })
+                const serialized = JSON.stringify(sanitizedExtras, (_k: string, val: unknown) =>
+                    typeof val === 'bigint' ? val.toString() : val
+                )
                 line += ` ${serialized.replace(/\n|\r/g, '')}`
             } catch {
                 line += ' {"_serializationError":"unserializable log context"}'

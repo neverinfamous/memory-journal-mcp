@@ -31,6 +31,14 @@ export type ProjectRegistry = Record<string, Pick<ProjectRegistryEntry, 'project
 /** Placeholder registry keys that must never be matched as real projects by keyword. */
 const SENTINEL_PROJECT_KEYS: readonly string[] = ['default', 'test']
 
+const FORBIDDEN_PROJECT_KEYS = new Set(['__proto__', 'constructor', 'prototype'])
+
+/** Return true when a workspace/registry key is empty, wildcard, or a prototype pollution key. */
+export function isForbiddenProjectKey(key: string): boolean {
+    const trimmed = key.trim()
+    return trimmed === '' || trimmed === '*' || FORBIDDEN_PROJECT_KEYS.has(trimmed)
+}
+
 export const PROJECT_KEYWORD_ALIASES: Record<string, string[]> = {
     'db-mcp': [
         'sqlite',

@@ -6,8 +6,7 @@ import {
     hasWinReservedDeviceSegment,
 } from './path-safety.js'
 import { assertSafeDirectoryPath } from './security-utils.js'
-
-const FORBIDDEN_PROJECT_KEYS = new Set(['__proto__', 'constructor', 'prototype'])
+export { isForbiddenProjectKey } from './workspace-registry-match.js'
 
 const WIN_DRIVE_PATH_RE = /^[A-Za-z]:[\\/]/
 const ENCODED_TRAVERSAL_RE = /%(?:2f|5c|2e|00)/i
@@ -36,12 +35,6 @@ const SYSTEM_DIR_PREFIXES = [
     '/windows/',
     'c:/windows/',
 ]
-
-/** Return true when a workspace/registry key is empty, wildcard, or a prototype pollution key. */
-export function isForbiddenProjectKey(key: string): boolean {
-    const trimmed = key.trim()
-    return trimmed === '' || trimmed === '*' || FORBIDDEN_PROJECT_KEYS.has(trimmed)
-}
 
 function selectPathModule(rawPath: string): typeof path {
     return WIN_DRIVE_PATH_RE.test(rawPath) ? path.win32 : path

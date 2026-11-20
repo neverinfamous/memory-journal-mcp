@@ -279,7 +279,7 @@ describe('Audit Pass 38 Performance Remediations', () => {
     })
 
     it('bumps AUDIT_PROMPT_REVISION to 2026-11-18-audit-pass38 and includes AP1-AP7 portable guidance', async () => {
-        expect(AUDIT_PROMPT_REVISION).toBe('2026-11-20-audit-pass52')
+        expect(AUDIT_PROMPT_REVISION).toBe('2026-11-20-audit-pass53')
         const def = getPerformanceAuditPromptDefinition()
         const rendered = await Promise.resolve(def.handler({ target: 'memory-journal-mcp' }, {
             searchByDateRange: () => [],
@@ -287,7 +287,7 @@ describe('Audit Pass 38 Performance Remediations', () => {
         } as never))
         const text = rendered.messages.map((m) => m.content.text).join('\n')
 
-        expect(text).toContain('Prompt revision: 2026-11-20-audit-pass52')
+        expect(text).toContain('Prompt revision: 2026-11-20-audit-pass53')
         expect(text).toContain('PRAGMA optimize')
         expect(text).toContain('progressive chunk hydration')
         expect(text).toContain('AsyncLocalStorage')

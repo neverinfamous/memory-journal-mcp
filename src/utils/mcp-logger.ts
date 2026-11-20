@@ -128,6 +128,12 @@ export class McpLogger {
         if (typeof value === 'bigint') {
             return value.toString()
         }
+        if (value instanceof Date) {
+            return Number.isNaN(value.getTime()) ? 'Invalid Date' : value.toISOString()
+        }
+        if (value instanceof URL) {
+            return sanitizeErrorForLogging(value.toString())
+        }
         if (value === null || typeof value !== 'object') {
             return value
         }

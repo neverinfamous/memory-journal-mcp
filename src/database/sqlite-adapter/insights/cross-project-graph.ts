@@ -127,7 +127,7 @@ function queryConnectedGraphEntries(
                     WHEN r.from_entry_id = ce.id THEN r.to_entry_id
                     ELSE r.from_entry_id
                 END
-            WHERE ce.distance < ? AND nx.deleted_at IS NULL${f.nxWsFilter}${f.nxProjFilter}${f.relTypeSql}
+            WHERE ce.distance < ? AND r.from_entry_id != r.to_entry_id AND nx.deleted_at IS NULL${f.nxWsFilter}${f.nxProjFilter}${f.relTypeSql}
         ),
         deduped_ce AS (
             SELECT id, MIN(distance) AS distance
@@ -298,7 +298,8 @@ function queryGraphEdges(
                 `SELECT from_entry_id, to_entry_id, relationship_type
                  FROM relationships
                  WHERE from_entry_id IN (${chunk.placeholders})
-                   AND to_entry_id IN (${chunk.placeholders})${relTypeSql}`
+                   AND to_entry_id IN (${chunk.placeholders})
+                   AND from_entry_id != to_entry_id${relTypeSql}`
             )
             .all(...chunk.params, ...chunk.params, ...relTypeParams) as {
             from_entry_id: number
@@ -320,7 +321,8 @@ function queryGraphEdges(
             .prepare(
                 `SELECT from_entry_id, to_entry_id, relationship_type
                  FROM relationships
-                 WHERE from_entry_id IN (${placeholders})${relTypeSql}`
+                 WHERE from_entry_id IN (${placeholders})
+                   AND from_entry_id != to_entry_id${relTypeSql}`
             )
             .all(...params, ...relTypeParams) as {
             from_entry_id: number

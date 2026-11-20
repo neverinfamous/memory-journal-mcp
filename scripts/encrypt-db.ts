@@ -123,6 +123,12 @@ try {
         if (integrity !== 'ok') {
             throw new Error(`Encrypted database integrity check failed: ${String(integrity)}`)
         }
+        const fkViolations = verify.pragma('foreign_key_check') as unknown[]
+        if (fkViolations.length > 0) {
+            throw new Error(
+                `Encrypted database foreign_key_check failed with ${String(fkViolations.length)} violation(s)`
+            )
+        }
     } finally {
         verify.close()
     }

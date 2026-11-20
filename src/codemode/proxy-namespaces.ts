@@ -79,6 +79,8 @@ const SYSTEM_STATS_METHODS = new Set([
 ])
 
 const IMMUTABLE_PROXY_TRAPS = {
+    isExtensible: (): boolean => true,
+    preventExtensions: (): boolean => false,
     set: (): boolean => false,
     defineProperty: (): boolean => false,
     deleteProperty: (): boolean => false,

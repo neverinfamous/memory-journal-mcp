@@ -357,14 +357,13 @@ export async function rebuildIndexAction(options: z.infer<typeof rebuildIndexSch
                 `Rebuild index failed (${String(result.failed)} failed)`
             )
             exitCode = 1
-            return
+        } else {
+            writeCliResult(
+                { status: 'success', stats },
+                options.json,
+                `Rebuilt vector index (${String(stats.itemCount)} vectors)`
+            )
         }
-
-        writeCliResult(
-            { status: 'success', stats },
-            options.json,
-            `Rebuilt vector index (${String(stats.itemCount)} vectors)`
-        )
     } catch (e) {
         process.stderr.write(`Rebuild index failed: ${formatCliError(e)}\n`)
         exitCode = 1

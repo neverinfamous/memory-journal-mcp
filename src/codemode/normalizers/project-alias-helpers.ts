@@ -4,9 +4,12 @@
  */
 
 import type { ProjectRegistryEntry } from '../../types/index.js'
-import { isForbiddenProjectKey } from '../../utils/project-registry-guards.js'
 import { resolveProjectContextWithRegistry } from '../../utils/workspace-resolver-pure.js'
-import { findCanonicalRegistryKey, pairStoredScope } from '../../utils/workspace-registry-match.js'
+import {
+    findCanonicalRegistryKey,
+    isForbiddenProjectKey,
+    pairStoredScope,
+} from '../../utils/workspace-registry-match.js'
 import { parseCanonicalPositiveInt } from '../../utils/safe-positive-int.js'
 import { isRecord } from './shared-utils.js'
 

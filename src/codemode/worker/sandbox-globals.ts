@@ -124,6 +124,8 @@ function createReadonlyMirrorProxy(target: Record<string, unknown>): Record<stri
     return new Proxy(
         {},
         {
+            isExtensible: (): boolean => true,
+            preventExtensions: (): boolean => false,
             get: (): unknown => target,
             set: (): boolean => false,
             defineProperty: (): boolean => false,

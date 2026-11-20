@@ -193,12 +193,12 @@ export class ConfigResolver {
         const rawStr = typeof val === 'number' ? String(val) : val.trim()
         const numericPattern = isFloat
             ? /^-?(?:\d+\.?\d*|\.\d+)(?:e[+-]?\d+)?$/i
-            : /^-?\d+$/
+            : /^(?:0|-?[1-9]\d*)$/
         if (rawStr === '' || !numericPattern.test(rawStr)) {
             throw new ConfigurationError(`Invalid numeric configuration for ${cliKey}: ${rawStr}`)
         }
         const parsed = typeof val === 'number' ? val : Number(rawStr)
-        if (!Number.isFinite(parsed) || (!isFloat && !Number.isInteger(parsed))) {
+        if (!Number.isFinite(parsed) || (!isFloat && !Number.isSafeInteger(parsed))) {
             throw new ConfigurationError(`Invalid numeric configuration for ${cliKey}: ${rawStr}`)
         }
         if (min !== undefined && parsed < min) {

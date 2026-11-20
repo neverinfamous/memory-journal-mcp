@@ -71,7 +71,9 @@ export function setActiveSessionProject(
             : undefined
     const clearProject = projectNumber === null
     const validProj =
-        typeof projectNumber === 'number' && !Number.isNaN(projectNumber) && projectNumber > 0
+        typeof projectNumber === 'number' &&
+        Number.isSafeInteger(projectNumber) &&
+        projectNumber > 0
             ? projectNumber
             : undefined
 

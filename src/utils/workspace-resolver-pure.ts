@@ -277,12 +277,10 @@ export function resolveProjectContextWithRegistry(
     }
 
     if (input.project_number !== undefined && input.project_number !== null) {
-        const mappedWs =
-            registry !== undefined ? undefined : getRegisteredCwd()?.workspaceId
         const explicitProj = resolveExplicitWorkspaceOrProject(
             undefined,
             input,
-            mappedWs !== undefined ? { workspaceId: mappedWs, projectNumber: undefined } : getRegisteredCwd(),
+            getRegisteredCwd(),
             config,
             registry
         )

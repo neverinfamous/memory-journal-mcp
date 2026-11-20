@@ -40,6 +40,9 @@ export function applyPersistableConfigKeys(
             parsed[existingAlias] = val
         } else {
             parsed[fileKey] = val
+            for (const alias of mapping.aliases ?? []) {
+                if (alias !== fileKey) Reflect.deleteProperty(parsed, alias)
+            }
         }
     }
     if (provenance.defaultWorkspaceId) {

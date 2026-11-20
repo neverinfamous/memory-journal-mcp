@@ -82,7 +82,6 @@ export const GitSearchOptionsSchema = z.object({
     scope: z.string().optional(),
     techDebtAudit: z.boolean().optional(),
     summary: z.boolean().optional(),
-    uncommitted: z.boolean().optional(),
     repo: z.string().optional(),
     repo_name: z.string().optional(),
     workspace_id: z.string().max(255).optional(),
