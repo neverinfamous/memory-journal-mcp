@@ -182,6 +182,7 @@ function buildIsolationOverrides(
 interface ShortcutDispatchInput {
     arg: unknown
     argRec: Record<string, unknown> | undefined
+    rawNestedCode: string | null
     narrowed: { workspaceId?: string; projectNumber?: number }
     pinnedWorkspace: string | undefined
     pinnedProjectNumber: number | undefined
@@ -191,11 +192,24 @@ interface ShortcutDispatchInput {
     shimMj: Record<string, unknown>
 }
 
+function snapshotUntrustedArg(arg: unknown): {
+    safeArg: unknown
+    argRec: Record<string, unknown> | undefined
+} {
+    if (!isPlainRecord(arg)) return { safeArg: arg, argRec: undefined }
+    const snap = Object.create(null) as Record<string, unknown>
+    for (const key of Object.keys(arg)) {
+        if (key === '__proto__' || key === 'constructor' || key === 'prototype') continue
+        snap[key] = arg[key]
+    }
+    return { safeArg: snap, argRec: snap }
+}
+
 async function tryDispatchNestedShortcut(
     input: ShortcutDispatchInput
 ): Promise<{ handled: true; value: unknown } | { handled: false; codeToExec: string; isQueryOnlyArg: boolean }> {
     const {
-        arg, argRec, narrowed, pinnedWorkspace, pinnedProjectNumber,
+        arg, argRec, rawNestedCode, narrowed, pinnedWorkspace, pinnedProjectNumber,
         effectiveReadonly, effectiveDryRun, effectiveUseTestDb, shimMj,
     } = input
     const nestedQuerySearch = readNestedQuerySearch(arg)
@@ -223,7 +237,7 @@ async function tryDispatchNestedShortcut(
         typeof argRec['script'] !== 'string' &&
         typeof argRec['query'] === 'string' &&
         argRec['query'].trim() !== ''
-    const codeToExec = readExecutableCode(arg)
+    const codeToExec = rawNestedCode
     const invokeCreate = (payload: unknown): unknown => invokeShimGroupMethod(shimMj, 'core', 'createEntry', payload)
     if (codeToExec === null) {
         const scoped = mergeNestedSynthesizedScope(arg, argRec, narrowed, pinnedWorkspace, pinnedProjectNumber)
@@ -266,8 +280,16 @@ export function createSandboxExecutor(options: SandboxExecutorOptions): (arg: un
             ? pinnedProjectRaw
             : undefined
 
-    return async (arg: unknown): Promise<unknown> => {
-        const argRec = isPlainRecord(arg) ? arg : undefined
+    return async (rawArg: unknown): Promise<unknown> => {
+        let arg: unknown
+        let argRec: Record<string, unknown> | undefined
+        try {
+            const snapped = snapshotUntrustedArg(rawArg)
+            arg = snapped.safeArg
+            argRec = snapped.argRec
+        } catch {
+            return { success: false, error: 'Nested executeCode argument snapshot failed', code: 'VALIDATION_ERROR' }
+        }
         const scopeErr = validateNestedExecScope(argRec, pinnedWorkspace, pinnedProjectNumber, projectRegistryRaw)
         if (scopeErr !== null) return { success: false, error: scopeErr.error, code: 'VALIDATION_ERROR' }
 
@@ -280,7 +302,7 @@ export function createSandboxExecutor(options: SandboxExecutorOptions): (arg: un
         }
         const narrowed = resolveNestedNarrowedScope(argRec, pinnedWorkspace, pinnedProjectNumber, projectRegistryRaw)
         const shortcut = await tryDispatchNestedShortcut({
-            arg, argRec, narrowed, pinnedWorkspace, pinnedProjectNumber,
+            arg, argRec, rawNestedCode, narrowed, pinnedWorkspace, pinnedProjectNumber,
             effectiveReadonly, effectiveDryRun, effectiveUseTestDb, shimMj,
         })
         if (shortcut.handled) return shortcut.value

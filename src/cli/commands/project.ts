@@ -20,6 +20,7 @@ import { validateProjectRegistryObject } from '../server-options-parsers.js'
 import { buildServerOptions } from '../server-options-builder.js'
 import { parsePositiveProjectNumber } from '../../utils/safe-positive-int.js'
 import { dumpConfigAndExit } from '../dump-config.js'
+import { formatCliError } from './cli-output.js'
 import {
     resolveProjectConfigPath,
     syncCliTopLevelDefaults,
@@ -99,7 +100,7 @@ function buildValidatedProjectServerOptions(
             resolver = new ConfigResolver(command, options, existingCliConfig)
         } catch (e) {
             process.stderr.write(
-                `\nInvalid configuration, refusing to register project: ${e instanceof Error ? e.message : String(e)}\n`
+                `\nInvalid configuration, refusing to register project: ${formatCliError(e)}\n`
             )
             process.stderr.write(
                 `Fix the configuration and run 'memory-journal-mcp entry create' manually.\n`
@@ -225,7 +226,7 @@ async function createProjectInitEntry(
         }
     } catch (e) {
         process.stderr.write(
-            `\nFailed to automatically initialize database entry: ${e instanceof Error ? e.message : String(e)}\n`
+            `\nFailed to automatically initialize database entry: ${formatCliError(e)}\n`
         )
         process.stderr.write(`You may need to run 'memory-journal-mcp entry create' manually.\n`)
         process.exitCode = 1

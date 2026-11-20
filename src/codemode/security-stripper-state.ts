@@ -37,12 +37,27 @@ const BLOCK_PRECEDING_TOKENS = new Set([
 ])
 const CLASS_EXTENDS_OBJ_PRECEDING = new Set(['extends', '=', '(', '[', ',', '?', ':', '&&', '||', '??'])
 const FOR_OF_DECL_KEYWORDS = new Set(['var', 'let', 'const', 'using', 'await'])
+const FOR_OF_NON_LHS_KEYWORDS = new Set([
+    'typeof',
+    'void',
+    'new',
+    'delete',
+    'in',
+    'instanceof',
+    'yield',
+    'throw',
+    'return',
+    'case',
+    'else',
+    'do',
+])
 const NON_LHS_BEFORE_IDENT = new Set(['=', '+', '-', '*', '/', '%', '**', '&', '|', '^', '<', '>', '!', '~', '?', ':', ',', ';', '[', '{', 'return', 'typeof', 'void', 'delete', 'throw', 'yield', 'case', 'in', 'instanceof'])
 
 export interface BraceFrame {
     stmtInterior: boolean
     closesAsBlock: boolean
     isClassBody: boolean
+    isSwitchBody: boolean
 }
 
 export interface PendingClassFrame {
@@ -59,14 +74,21 @@ export interface DelimiterState {
     parenCtrl: boolean[]
     parenKind: ParenKind[]
     parenFnDecl: boolean[]
+    parenFnExpr: boolean[]
+    parenIsSwitch: boolean[]
     braceStack: BraceFrame[]
     pendingClasses: PendingClassFrame[]
     awaitingForParen: boolean
     pendingFnDecl: boolean
+    pendingFnExpr: boolean
+    lastParenWasFnExpr: boolean
     pendingAsyncStmt: boolean
+    pendingSwitchOpen: boolean
     pendingLabel: boolean
     inCaseClause: boolean
     caseTernaryDepth: number
+    caseBraceDepth: number
+    caseParenDepth: number
     prevPrevToken: string
     ofIsForOf: boolean
     pendingAsiStmtKeyword: 'break' | 'continue' | 'var_let' | null
@@ -80,14 +102,21 @@ export function createDelimiterState(): DelimiterState {
         parenCtrl: [],
         parenKind: [],
         parenFnDecl: [],
+        parenFnExpr: [],
+        parenIsSwitch: [],
         braceStack: [],
         pendingClasses: [],
         awaitingForParen: false,
         pendingFnDecl: false,
+        pendingFnExpr: false,
+        lastParenWasFnExpr: false,
         pendingAsyncStmt: false,
+        pendingSwitchOpen: false,
         pendingLabel: false,
         inCaseClause: false,
         caseTernaryDepth: 0,
+        caseBraceDepth: 0,
+        caseParenDepth: 0,
         prevPrevToken: '',
         ofIsForOf: false,
         pendingAsiStmtKeyword: null,
@@ -143,7 +172,7 @@ function isValidForOfLhsBeforeOf(prevToken: string, prevPrevToken: string): bool
     if (!/^[A-Za-z_$][\w$]*$/.test(prevToken) && (prevToken.codePointAt(0) ?? 0) <= 0x7f) {
         return false
     }
-    if (FOR_OF_DECL_KEYWORDS.has(prevToken)) return false
+    if (FOR_OF_DECL_KEYWORDS.has(prevToken) || FOR_OF_NON_LHS_KEYWORDS.has(prevToken)) return false
     if (FOR_OF_DECL_KEYWORDS.has(prevPrevToken) || prevPrevToken === '(') return true
     return !NON_LHS_BEFORE_IDENT.has(prevPrevToken)
 }
@@ -168,38 +197,54 @@ function updateAsiTrackingOnIdentifier(word: string, stmtStart: boolean, state: 
     state.identAfterAsiKeyword = false
 }
 
+function resetNonMemberPendingFlags(state: DelimiterState): void {
+    state.awaitingForParen = false
+    state.pendingFnDecl = false
+    state.pendingFnExpr = false
+    state.pendingAsyncStmt = false
+    state.pendingSwitchOpen = false
+    state.pendingLabel = false
+    state.lastParenWasFnExpr = false
+}
+
 export function trackIdentifierToken(word: string, prevToken: string, state: DelimiterState): string {
     const prevPrev = state.prevPrevToken
     state.prevPrevToken = prevToken
-    if (prevToken === '.' || prevToken === '?.') {
-        state.awaitingForParen = false
-        state.pendingFnDecl = false
-        state.pendingAsyncStmt = false
-        state.pendingLabel = false
+    if (prevToken === '.' || prevToken === '?.' || prevToken === '.#') {
+        resetNonMemberPendingFlags(state)
         state.pendingAsiStmtKeyword = null
         state.identAfterAsiKeyword = false
         state.canAsiRegex = false
         state.ofIsForOf = false
         return '$prop'
     }
+    state.pendingSwitchOpen = false
+    state.lastParenWasFnExpr = false
     const stmtStart = isStatementContext(prevToken, state)
     const clsTop = isAtPendingClassTop(state)
+    const inSwitchBody = state.braceStack.at(-1)?.isSwitchBody === true
     state.ofIsForOf = word === 'of' && state.parenKind.at(-1) === 'for' && isValidForOfLhsBeforeOf(prevToken, prevPrev)
     state.awaitingForParen = prevToken === 'for' && word === 'await'
     state.pendingLabel =
-        word === 'default' ||
-        (stmtStart && word !== 'else' && word !== 'do' && word !== 'try' && word !== 'finally')
+        word === 'default'
+            ? inSwitchBody
+            : stmtStart && word !== 'else' && word !== 'do' && word !== 'try' && word !== 'finally'
     updateAsiTrackingOnIdentifier(word, stmtStart, state)
 
     if (word === 'case' && state.braceStack.at(-1)?.stmtInterior === true) {
         state.inCaseClause = true
         state.caseTernaryDepth = 0
+        state.caseBraceDepth = state.braceStack.length
+        state.caseParenDepth = state.parenKind.length
     }
     if (word === 'async') {
         state.pendingAsyncStmt = stmtStart
         state.pendingFnDecl = false
+        state.pendingFnExpr = false
     } else if (word === 'function') {
-        state.pendingFnDecl = stmtStart || (prevToken === 'async' && state.pendingAsyncStmt)
+        const isDeclFn = stmtStart || (prevToken === 'async' && state.pendingAsyncStmt)
+        state.pendingFnDecl = isDeclFn
+        state.pendingFnExpr = !isDeclFn
         state.pendingAsyncStmt = false
     } else if (word === 'class') {
         state.pendingClasses.push({
@@ -209,9 +254,13 @@ export function trackIdentifierToken(word: string, prevToken: string, state: Del
             inExtends: false,
         })
         state.pendingFnDecl = false
+        state.pendingFnExpr = false
         state.pendingAsyncStmt = false
     } else {
-        if (prevToken !== 'function') state.pendingFnDecl = false
+        if (prevToken !== 'function') {
+            state.pendingFnDecl = false
+            state.pendingFnExpr = false
+        }
         state.pendingAsyncStmt = false
         if (word === 'extends' && clsTop !== undefined) clsTop.inExtends = true
         else if (word === 'catch' || word === 'finally' || word === 'try' || word === 'else') {
@@ -232,6 +281,7 @@ function handleOpenBrace(prevToken: string, state: DelimiterState): string {
     const isClassBody = clsTop !== undefined && !isExtendsObjLiteral
     if (isClassBody) state.pendingClasses.pop()
 
+    const isSwitchBody = prevToken === ')ctrl' && state.pendingSwitchOpen
     const isStaticBlock = prevToken === 'static' && parentFrame?.isClassBody === true
     const isMethodOrFnExprBody = !isClassBody && prevToken === ')'
     const isNestedStmtBlock = prevToken === '{' && parentFrame?.stmtInterior === true
@@ -240,29 +290,36 @@ function handleOpenBrace(prevToken: string, state: DelimiterState): string {
     const closesAsBlock = isClassBody
         ? clsTop.isDecl
         : isMethodOrFnExprBody
-          ? parentFrame?.isClassBody === true
+          ? parentFrame?.isClassBody === true && !state.lastParenWasFnExpr
           : isStaticBlock || isStdBlock
 
-    state.braceStack.push({ stmtInterior, closesAsBlock, isClassBody })
-    state.pendingFnDecl = false
-    state.pendingAsyncStmt = false
-    state.pendingLabel = false
+    state.braceStack.push({ stmtInterior, closesAsBlock, isClassBody, isSwitchBody })
+    resetNonMemberPendingFlags(state)
     return '{'
 }
 
 function handleColonOrSemicolon(ch: string, state: DelimiterState): string {
+    state.pendingSwitchOpen = false
+    state.lastParenWasFnExpr = false
     if (ch === ':') {
-        if (state.inCaseClause && state.caseTernaryDepth > 0) {
+        const atCaseTop =
+            state.inCaseClause &&
+            state.braceStack.length === state.caseBraceDepth &&
+            state.parenKind.length === state.caseParenDepth
+        if (atCaseTop && state.caseTernaryDepth > 0) {
             state.caseTernaryDepth--
             state.pendingLabel = false
             return ':'
         }
-        const isLabelOrCase = state.pendingLabel || state.inCaseClause
+        const isLabelOrCase = state.pendingLabel || atCaseTop
         state.pendingLabel = false
-        state.inCaseClause = false
-        state.caseTernaryDepth = 0
+        if (atCaseTop) {
+            state.inCaseClause = false
+            state.caseTernaryDepth = 0
+        }
         state.awaitingForParen = false
         state.pendingFnDecl = false
+        state.pendingFnExpr = false
         state.pendingAsyncStmt = false
         if (isAtPendingClassTop(state) !== undefined) state.pendingClasses.pop()
         return isLabelOrCase ? ':label' : ':'
@@ -280,27 +337,37 @@ export function trackPunctuationToken(ch: string, prevToken: string, state: Deli
     state.ofIsForOf = false
     state.pendingAsiStmtKeyword = null
     state.identAfterAsiKeyword = false
-    if (ch === '*' && prevToken === 'function' && state.pendingFnDecl) {
+    if (ch === '#' && (prevToken === '.' || prevToken === '?.')) {
+        resetNonMemberPendingFlags(state)
+        return '.#'
+    }
+    if (ch === '*' && prevToken === 'function' && (state.pendingFnDecl || state.pendingFnExpr)) {
         state.pendingLabel = false
+        state.pendingSwitchOpen = false
+        state.lastParenWasFnExpr = false
         return 'function'
     }
     if (ch === '(') {
         const isFor = prevToken === 'for' || (state.awaitingForParen && prevToken === 'await')
+        const isSwitch = prevToken === 'switch'
         const isCtrl = isFor || CONTROL_HEADER_KEYWORDS.test(prevToken)
         const isFnDecl = !isCtrl && state.pendingFnDecl
+        const isFnExpr = !isCtrl && state.pendingFnExpr
         state.parenCtrl.push(isCtrl)
         state.parenKind.push(isFor ? 'for' : isCtrl ? 'ctrl' : isFnDecl ? 'decl' : 'expr')
         state.parenFnDecl.push(isFnDecl)
+        state.parenFnExpr.push(isFnExpr)
+        state.parenIsSwitch.push(isSwitch)
+        resetNonMemberPendingFlags(state)
         state.awaitingForParen = false
-        state.pendingFnDecl = false
-        state.pendingAsyncStmt = false
-        state.pendingLabel = false
         return '('
     }
     if (ch === ')') {
         state.parenCtrl.pop()
         const kind = state.parenKind.pop()
         const isFnDecl = state.parenFnDecl.pop() === true
+        state.lastParenWasFnExpr = state.parenFnExpr.pop() === true
+        state.pendingSwitchOpen = state.parenIsSwitch.pop() === true
         state.pendingLabel = false
         if (kind === 'for' || kind === 'ctrl') return ')ctrl'
         return isFnDecl ? ')decl' : ')'
@@ -312,22 +379,24 @@ export function trackPunctuationToken(ch: string, prevToken: string, state: Deli
             const top = state.templateBraces[topIdx] ?? 0
             if (top > 0) state.templateBraces[topIdx] = top - 1
         }
-        state.pendingLabel = false
+        resetNonMemberPendingFlags(state)
         return state.braceStack.pop()?.closesAsBlock === true ? '}block' : '}expr'
     }
-    if (ch === '?' && state.inCaseClause) {
+    if (
+        ch === '?' &&
+        state.inCaseClause &&
+        state.braceStack.length === state.caseBraceDepth &&
+        state.parenKind.length === state.caseParenDepth
+    ) {
         state.caseTernaryDepth++
-        state.pendingLabel = false
+        resetNonMemberPendingFlags(state)
         return ch
     }
     if (ch === ':' || ch === ';') {
         if (ch === ':') return handleColonOrSemicolon(ch, state)
         handleColonOrSemicolon(ch, state)
     }
-    state.awaitingForParen = false
-    state.pendingFnDecl = false
-    state.pendingAsyncStmt = false
-    state.pendingLabel = false
+    resetNonMemberPendingFlags(state)
     return ch
 }
 

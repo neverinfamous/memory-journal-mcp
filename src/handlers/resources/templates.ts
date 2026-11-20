@@ -267,7 +267,7 @@ async function handleProjectCommitsResource(
 
     const uniqueCommits = Array.from(new Set(commits))
     const enrichedCommits =
-        uniqueCommits.length > 0
+        uniqueCommits.length > 0 && scope.cwd !== undefined
             ? fenceEnrichedCommits(
                   await enrichCommits(scope.cwd, uniqueCommits, resolveCommitGithub(context, scope))
               )
@@ -302,7 +302,7 @@ async function handleCommitsByIssueResource(
     })
     const uniqueCommits = collectUniqueCommits(entries)
     const issues =
-        uniqueCommits.length > 0
+        uniqueCommits.length > 0 && scope.cwd !== undefined
             ? groupCommitsByIssue(
                   await enrichCommits(scope.cwd, uniqueCommits, resolveCommitGithub(context, scope))
               )
@@ -330,7 +330,7 @@ async function handleCommitsByPrResource(
     })
     const uniqueCommits = collectUniqueCommits(entries)
     const pullRequests =
-        uniqueCommits.length > 0
+        uniqueCommits.length > 0 && scope.cwd !== undefined
             ? groupCommitsByPr(
                   await enrichCommits(scope.cwd, uniqueCommits, resolveCommitGithub(context, scope))
               )

@@ -336,7 +336,17 @@ function attachResourceAndSubscriptionHandlers(
         const transportSessionId =
             sessionId !== undefined && sessionId !== '' ? sessionId : 'stdio'
 
-        validateResourceSubscription(request.params.uri, context.runtime)
+        const liveBriefing = resolveActiveBriefingConfig(
+            context.configManager.getConfig().briefingConfig,
+            context.allowedIoRoots,
+            context.runtime
+        )
+        validateResourceSubscription(
+            request.params.uri,
+            context.runtime,
+            context.teamDb ?? undefined,
+            liveBriefing
+        )
 
         if (
             (options.transport === 'http' || options.statelessHttp === true) &&

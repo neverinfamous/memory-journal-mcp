@@ -302,7 +302,7 @@ export function resolveEffectiveRpcScope(
     if (!outerCanNarrow && hasConcreteOverrideWs && workspaceId !== undefined && workspacesConflict(overrideWs, workspaceId, registry)) {
         return { errorResult: validationErrResult(`Nested executeCode workspace '${overrideWs}' conflicts with pinned outer workspace '${workspaceId}'.`) }
     }
-    if (!outerCanNarrow && typeof projectId === 'number' && rpcOverrides?.projectNumber !== undefined && rpcOverrides.projectNumber !== projectId) {
+    if (typeof projectId === 'number' && rpcOverrides?.projectNumber !== undefined && rpcOverrides.projectNumber !== projectId) {
         return { errorResult: validationErrResult(`Nested executeCode project_number ${String(rpcOverrides.projectNumber)} conflicts with pinned outer project_number ${String(projectId)}.`) }
     }
 

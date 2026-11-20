@@ -44,7 +44,7 @@ function isWildcardBindHost(host: string): boolean {
 
 function extractHostWithoutPort(hostHeader: string): string | null {
     const trimmed = hostHeader.trim().toLowerCase();
-    if (trimmed.length === 0 || /\s/.test(trimmed)) return null;
+    if (trimmed.length === 0 || /\s/.test(trimmed) || /[@/?#\\]/.test(trimmed)) return null;
     if (trimmed === '::1') return '::1';
     try {
         const parsed = new URL(`http://${trimmed}`);

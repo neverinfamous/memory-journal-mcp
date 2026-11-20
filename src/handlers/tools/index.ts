@@ -39,8 +39,10 @@ import {
     getStalenessTools,
     getDummyHealingTools,
 } from './core/index.js'
-import { DUMMY_HEALING_TOOL_NAMES } from './core/dummy-healing/alias-catalog.js'
-import { isDummyToolAllowedByFilter } from './dummy-filter-helpers.js'
+import {
+    assertToolFilterAllowsCall,
+    isDummyToolAllowedByFilter,
+} from './dummy-filter-helpers.js'
 import { getSearchTools } from './search/index.js'
 import { getAnalyticsTools } from './analytics.js'
 import { getRelationshipTools } from './relationships.js'
@@ -257,49 +259,55 @@ function enforceToolInputElementBound(
     }
 }
 
-function assertToolFilterAllowsCall(
+function getEntryToResourceRewriteUri(
     name: string,
-    tool: ToolDefinition,
-    filterConfig: ToolFilterConfig,
-    agentHealing: boolean | undefined,
-    codemodeInternalFullAccess: boolean
-): Record<string, unknown> | undefined {
-    const isPrimaryEnabled = filterConfig.enabledTools.has(name)
-    const isDummyAllowed = isDummyToolAllowedByFilter(
-        name,
-        filterConfig,
-        agentHealing !== false,
-        codemodeInternalFullAccess
-    )
-    const isCodeModeShortcut =
-        agentHealing !== false &&
-        filterConfig.enabledTools.has('mj_execute_code') &&
-        DUMMY_HEALING_TOOL_NAMES.has(name) &&
-        isDummyAllowed
-    if (!isPrimaryEnabled && !isDummyAllowed && !isCodeModeShortcut) {
-        return {
-            success: false,
-            error: `Tool '${name}' is disabled by the active --tool-filter configuration.`,
-            code: 'TOOL_DISABLED',
-            category: 'authorization',
-            suggestion: 'Update the active tool filter or use an enabled tool.',
-            recoverable: false,
-        }
+    args: Record<string, unknown>,
+    mapToUse: Map<string, ToolDefinition>,
+    config?: ToolHandlerConfig
+): string | undefined {
+    if (config?.agentHealing === false || name !== 'get_entry_by_id' || args['entry_id'] !== undefined) {
+        return undefined
     }
+    const trimmedUri = typeof args['uri'] === 'string' ? args['uri'].trim() : undefined
     if (
-        isPrimaryEnabled &&
-        !isToolVisibleForFilter(name, tool.annotations.readOnlyHint, filterConfig.raw)
+        trimmedUri !== undefined &&
+        trimmedUri.startsWith('memory://') &&
+        !/^memory:\/\/(?:entries|entry)\/\d+$/i.test(trimmedUri) &&
+        mapToUse.has('read_resource')
     ) {
-        return {
-            success: false,
-            error: `Tool '${name}' is disabled by the active --tool-filter configuration.`,
-            code: 'TOOL_DISABLED',
-            category: 'authorization',
-            suggestion: 'Update the active tool filter or use an enabled tool.',
-            recoverable: false,
-        }
+        return trimmedUri
     }
     return undefined
+}
+
+function enforcePreHealingToolGuards(
+    name: string,
+    preTool: ToolDefinition | undefined,
+    isRewrite: boolean,
+    config?: ToolHandlerConfig
+): { blocked: boolean; result?: unknown } {
+    if (preTool === undefined) return { blocked: false }
+    if (!isRewrite && config?.filterConfig) {
+        const preDisabled = assertToolFilterAllowsCall(
+            name,
+            preTool.annotations.readOnlyHint,
+            config.filterConfig,
+            config.agentHealing,
+            config.codemodeInternalFullAccess === true
+        )
+        if (preDisabled !== undefined) return { blocked: true, result: preDisabled }
+    }
+    if (config?.runtime?.maintenanceManager !== undefined) {
+        try {
+            enforceAccessBoundary(name, 'tool', preTool.capabilities, config.runtime.auditLogger)
+        } catch (error) {
+            return {
+                blocked: true,
+                result: Promise.reject(error instanceof Error ? error : new Error(String(error))),
+            }
+        }
+    }
+    return { blocked: false }
 }
 
 /**
@@ -320,23 +328,22 @@ export async function callTool(
     if (elementLimitError !== undefined) return elementLimitError
 
     ensureToolCache(db, vectorManager, github, config, teamDb, teamVectorManager)
+    const mapToUse = config?.runtime?.toolMapCache ?? toolMapCache ?? EMPTY_TOOL_MAP
+    const preGuard = enforcePreHealingToolGuards(
+        name,
+        mapToUse.get(name),
+        getEntryToResourceRewriteUri(name, args, mapToUse, config) !== undefined,
+        config
+    )
+    if (preGuard.blocked) return preGuard.result
+
     const healed = applyToolHealingArgs(name, args, config)
     if ('error' in healed) return healed.error
     args = healed.args
 
-    const mapToUse = config?.runtime?.toolMapCache ?? toolMapCache ?? EMPTY_TOOL_MAP
-    const trimmedEntryUri =
-        typeof args['uri'] === 'string' ? args['uri'].trim() : undefined
-    if (
-        config?.agentHealing !== false &&
-        name === 'get_entry_by_id' &&
-        args['entry_id'] === undefined &&
-        trimmedEntryUri !== undefined &&
-        trimmedEntryUri.startsWith('memory://') &&
-        !/^memory:\/\/(?:entries|entry)\/\d+$/i.test(trimmedEntryUri) &&
-        mapToUse.has('read_resource')
-    ) {
-        args = { ...args, uri: trimmedEntryUri }
+    const rewriteUri = getEntryToResourceRewriteUri(name, args, mapToUse, config)
+    if (rewriteUri !== undefined) {
+        args = { ...args, uri: rewriteUri }
         name = 'read_resource'
     }
     const tool = mapToUse.get(name)
@@ -345,7 +352,7 @@ export async function callTool(
     if (config?.filterConfig) {
         const disabled = assertToolFilterAllowsCall(
             name,
-            tool,
+            tool.annotations.readOnlyHint,
             config.filterConfig,
             config.agentHealing,
             config.codemodeInternalFullAccess === true

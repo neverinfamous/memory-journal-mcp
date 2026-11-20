@@ -11,6 +11,7 @@ import {
     assertBackupHeaderAndCipherFormat,
     assertHasMemoryJournalTable,
     assertSafeBackupSchemaPreIntegrity,
+    copyRegularFileNoFollow,
 } from './backup-schema-guard.js'
 
 function hasErrorCode(err: unknown, code: string): boolean {
@@ -167,7 +168,8 @@ function hasUnsafeRestoreSegment(name: string): boolean {
 /** Validate `filename` against traversal and symlinks inside `backupsDir`, and verify SQLite integrity. */
 export async function resolveValidatedRestorePath(
     backupsDir: string,
-    filename: string
+    filename: string,
+    options?: { skipIntegrityCheck?: boolean }
 ): Promise<string> {
     let decodedFilename: string
     try {
@@ -220,7 +222,9 @@ export async function resolveValidatedRestorePath(
         throw new ValidationError('Resolved backup path escapes the backups directory.')
     }
 
-    await assertIncomingBackupIntact(backupPath)
+    if (options?.skipIntegrityCheck !== true) {
+        await assertIncomingBackupIntact(backupPath)
+    }
     return backupPath
 }
 
@@ -254,6 +258,32 @@ export function releaseRestoreLock(lockDir: string, lockFile: string): void {
     }
 }
 
+/** Capture a pre-restore snapshot of the live database before touching it on disk. */
+export async function preparePreRestoreSnapshot(
+    ctx: IDatabaseConnection,
+    tempDbPath: string,
+    oldDbBackupPath: string
+): Promise<void> {
+    try {
+        // [INVARIANT] Complete pre-swap snapshot before any swap step; if snapshot creation fails,
+        // the live DB is untouched so rollback must never copy a partial oldDbBackupPath over it.
+        await fs.promises.copyFile(ctx.getDbPath(), oldDbBackupPath)
+    } catch (prepErr) {
+        await unlinkBestEffort(oldDbBackupPath)
+        await unlinkBestEffort(tempDbPath)
+        try {
+            await ctx.initialize()
+        } catch (reinitErr) {
+            logger.error('Failed to re-initialize DB after pre-swap snapshot error', {
+                module: 'SqliteAdapter',
+                operation: 'restoreFromFile',
+                error: reinitErr instanceof Error ? reinitErr.message : String(reinitErr),
+            })
+        }
+        throw prepErr
+    }
+}
+
 /** Stage the incoming backup and capture a pre-restore snapshot before touching the live database. */
 export async function prepareRestoreTempFiles(
     ctx: IDatabaseConnection,
@@ -262,7 +292,8 @@ export async function prepareRestoreTempFiles(
     oldDbBackupPath: string
 ): Promise<void> {
     try {
-        await fs.promises.copyFile(backupPath, tempDbPath)
+        await copyRegularFileNoFollow(backupPath, tempDbPath)
+        await assertIncomingBackupIntact(tempDbPath)
         // [INVARIANT] Complete pre-swap snapshot before any swap step; if snapshot creation fails,
         // the live DB is untouched so rollback must never copy a partial oldDbBackupPath over it.
         await fs.promises.copyFile(ctx.getDbPath(), oldDbBackupPath)

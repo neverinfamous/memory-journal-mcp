@@ -31,7 +31,7 @@ export const SearchEntriesSchema = z.preprocess(
             'Search strategy: auto (default, heuristic-based), fts (FTS5 keyword), semantic (vector), hybrid (RRF fusion of FTS5+vector)'
         ),
     limit: z.number().int().min(1).max(MAX_QUERY_LIMIT).optional().default(10),
-    workspace_id: z.string().optional(),
+    workspace_id: z.string().max(255).optional(),
     is_personal: z.boolean().optional(),
     project_number: z.number().int().min(0).optional(),
     issue_number: z.number().int().positive().optional(),
@@ -128,7 +128,7 @@ export const SearchByDateRangeSchema = z.preprocess(
         .array(z.string())
         .optional()
         .describe('Exclude entries having any of these tags'),
-    workspace_id: z.string().optional(),
+    workspace_id: z.string().max(255).optional(),
     is_personal: z.boolean().optional(),
     project_number: z.number().int().min(0).optional(),
     issue_number: z.number().int().positive().optional(),
@@ -202,7 +202,7 @@ export const SemanticSearchSchema = z.preprocess(
         ),
     limit: z.number().int().min(1).max(MAX_QUERY_LIMIT).optional().default(10),
     similarity_threshold: z.number().optional().default(0.25),
-    workspace_id: z.string().optional(),
+    workspace_id: z.string().max(255).optional(),
     is_personal: z.boolean().optional(),
     project_number: z.number().int().min(0).optional().describe('Filter results by project number'),
     issue_number: z.number().int().positive().optional().describe('Filter results by GitHub issue number'),

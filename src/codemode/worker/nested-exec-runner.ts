@@ -8,6 +8,7 @@ import type { RpcRequest, SandboxResult } from '../types.js'
 import { serializeAndEnforceEgress } from './result-compactor.js'
 import type { NestedExecIsolationOverrides, RunIsolatedNestedFn } from './nested-exec-scope.js'
 import { raceWithSandboxTimeout } from './nested-exec-payload.js'
+import type { ExecutionLifecycleState } from './sandbox-globals.js'
 import { getOrCompileVmScript } from './script-and-metadata-cache.js'
 
 export type RpcCallFn = (group: string, method: string, args: unknown[]) => Promise<unknown>
@@ -39,6 +40,7 @@ export interface VmExecutionContextOptions {
     pinnedProjectRaw: unknown
     projectRegistryRaw: unknown
     activeTimers: Set<NodeJS.Timeout>
+    executionLifecycle?: ExecutionLifecycleState
 }
 
 export function createScopedRpcCall(
@@ -173,6 +175,9 @@ function buildNestedVmContextOptions(
             pinnedProjectRaw: nextProj ?? options.pinnedProjectRaw,
             projectRegistryRaw: options.projectRegistryRaw,
             activeTimers: options.activeTimers,
+            ...(options.executionLifecycle !== undefined
+                ? { executionLifecycle: options.executionLifecycle }
+                : {}),
         },
     }
 }

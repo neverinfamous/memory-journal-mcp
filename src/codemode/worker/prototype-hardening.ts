@@ -18,6 +18,8 @@ export const OPTIONAL_RUNTIME_GLOBALS = [
     'DisposableStack',
     'AsyncDisposableStack',
     'Temporal',
+    'Intl',
+    'WebAssembly',
     'Float16Array',
 ] as const
 
@@ -69,6 +71,38 @@ const OUTER_BUILTIN_CTORS: readonly unknown[] = [
     ...collectOptionalOuterBuiltins(),
 ]
 
+function freezeNamespaceMembers(ns: object, failures: string[], label: string): void {
+    for (const prop of Object.getOwnPropertyNames(ns)) {
+        let member: unknown
+        try {
+            member = Reflect.get(ns, prop)
+        } catch {
+            continue
+        }
+        if (typeof member === 'function') {
+            const proto = Reflect.get(member, 'prototype') as unknown
+            if ((typeof proto === 'object' && proto !== null) || typeof proto === 'function') {
+                try {
+                    Object.freeze(proto)
+                } catch {
+                    failures.push(`freeze-prototype:${label}.${prop}`)
+                }
+            }
+            try {
+                Object.freeze(member)
+            } catch {
+                failures.push(`freeze:${label}.${prop}`)
+            }
+        } else if (typeof member === 'object' && member !== null) {
+            try {
+                Object.freeze(member)
+            } catch {
+                failures.push(`freeze:${label}.${prop}`)
+            }
+        }
+    }
+}
+
 function freezeOuterBuiltinCtors(failures: string[]): void {
     for (const B of OUTER_BUILTIN_CTORS) {
         const label = typeof B === 'function' && B.name !== '' ? B.name : 'builtin'
@@ -81,6 +115,8 @@ function freezeOuterBuiltinCtors(failures: string[]): void {
             } catch {
                 failures.push(`freeze-prototype:${label}`)
             }
+        } else if (typeof B === 'object' && B !== null) {
+            freezeNamespaceMembers(B, failures, label)
         }
         try {
             Object.freeze(B)
@@ -155,6 +191,22 @@ function collectGeneratorAndIteratorPrototypes(): (object | null)[] {
             }
         }
     ).Iterator
+    const GlobalIntl = (
+        globalThis as {
+            Intl?: {
+                Segmenter?: new () => { segment: (s: string) => Iterable<unknown> }
+            }
+        }
+    ).Intl
+    let SegmentIterProto: object | null = null
+    if (typeof GlobalIntl?.Segmenter === 'function') {
+        try {
+            const iter = new GlobalIntl.Segmenter().segment('a')[Symbol.iterator]()
+            SegmentIterProto = Object.getPrototypeOf(iter) as object | null
+        } catch {
+            SegmentIterProto = null
+        }
+    }
     return [
         Object.prototype,
         Function.prototype,
@@ -170,6 +222,7 @@ function collectGeneratorAndIteratorPrototypes(): (object | null)[] {
         SetIterProto,
         RegExpStringIterProto,
         ...collectIteratorHelperPrototypes(GlobalIter),
+        SegmentIterProto,
         AsyncIterProto,
         TypedArrayCtor ?? null,
         TypedArrayProto,
@@ -250,6 +303,10 @@ const FREEZE_INNER_CONTEXT_SCRIPT = new vm.Script(`(function() {
         try { IterHelperProto = Object.getPrototypeOf(GlobalIter.from([]).map(function(x) { return x; })); } catch(e) {}
         try { WrapIterProto = Object.getPrototypeOf(GlobalIter.from({ next: function() { return { done: true, value: undefined }; } })); } catch(e) {}
     }
+    let SegmentIterProto = null;
+    if (typeof Intl !== "undefined" && typeof Intl.Segmenter === "function") {
+        try { SegmentIterProto = Object.getPrototypeOf(new Intl.Segmenter().segment("a")[Symbol.iterator]()); } catch(e) {}
+    }
     for (const proto of [Function.prototype, AsyncFnProto, GenFnProto, AsyncGenFnProto, GenProto, AsyncGenProto]) {
         if (proto) {
             try {
@@ -284,11 +341,24 @@ const FREEZE_INNER_CONTEXT_SCRIPT = new vm.Script(`(function() {
     if (typeof DisposableStack !== "undefined") builtins.push(DisposableStack);
     if (typeof AsyncDisposableStack !== "undefined") builtins.push(AsyncDisposableStack);
     if (typeof Temporal !== "undefined") builtins.push(Temporal);
+    if (typeof Intl !== "undefined") builtins.push(Intl);
+    if (typeof WebAssembly !== "undefined") builtins.push(WebAssembly);
     if (TypedArrayCtor) builtins.push(TypedArrayCtor);
     if (GlobalIter) builtins.push(GlobalIter);
     for (const B of builtins) {
         if (B && typeof B === "function" && B.prototype) {
             try { Object.freeze(B.prototype); } catch(e) { /* already frozen or non-extensible */ }
+        } else if (B && typeof B === "object") {
+            for (const prop of Object.getOwnPropertyNames(B)) {
+                let member;
+                try { member = B[prop]; } catch(e) { continue; }
+                if (typeof member === "function" && member.prototype) {
+                    try { Object.freeze(member.prototype); } catch(e) {}
+                }
+                if ((typeof member === "object" && member !== null) || typeof member === "function") {
+                    try { Object.freeze(member); } catch(e) {}
+                }
+            }
         }
         try { Object.freeze(B); } catch(e) { /* already frozen or non-extensible */ }
     }
@@ -296,7 +366,7 @@ const FREEZE_INNER_CONTEXT_SCRIPT = new vm.Script(`(function() {
         Object.prototype, Function.prototype, AsyncFnProto, GenFnProto,
         AsyncGenFnProto, GenProto, AsyncGenProto, IterProto, ArrayIterProto,
         StringIterProto, MapIterProto, SetIterProto, RegExpStringIterProto,
-        IterHelperProto, WrapIterProto, AsyncIterProto, TypedArrayProto,
+        IterHelperProto, WrapIterProto, SegmentIterProto, AsyncIterProto, TypedArrayProto,
     ]) {
         if (proto) {
             try { Object.freeze(proto); } catch(e) { /* already frozen or non-extensible */ }

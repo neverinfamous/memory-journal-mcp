@@ -42,6 +42,9 @@ function filterToolsForSandbox(
     readonlyRequested: boolean | undefined
 ): { tools: ToolDefinition[]; allEnabledTools: ToolDefinition[]; isSandboxReadonly: boolean } {
     let tools = collectNonCodeModeTools(sessionContext)
+    if (context.config?.codemodeInternalFullAccess !== true) {
+        tools = tools.filter((t) => t.name !== 'update_configuration')
+    }
     if (
         context.config?.codemodeInternalFullAccess !== true &&
         context.config?.filterConfig?.enabledTools !== undefined
@@ -50,7 +53,6 @@ function filterToolsForSandbox(
         const rawFilter = context.config.filterConfig.raw
         tools = tools.filter(
             (t) =>
-                t.name !== 'update_configuration' &&
                 enabledSet.has(t.name) &&
                 isToolVisibleForFilter(t.name, t.annotations?.readOnlyHint, rawFilter)
         )

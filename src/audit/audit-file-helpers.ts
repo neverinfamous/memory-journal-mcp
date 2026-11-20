@@ -121,6 +121,31 @@ export async function searchAuditFileBackward(
 }
 
 /**
+ * Append `payload` to a regular non-symlink file using `O_NOFOLLOW` + handle `fstat`/`chmod`,
+ * preventing symlink TOCTOU races between `lstat` and path-based `appendFile`/`chmod`.
+ */
+export async function appendRegularFileNoFollow(filePath: string, payload: string): Promise<void> {
+    if (await isUnsafeSymlinkOrSpecialFile(filePath)) {
+        throw new Error(`Refusing to write log to symlink or non-regular file: ${filePath}`)
+    }
+    const fh = await open(
+        filePath,
+        fsConstants.O_WRONLY | fsConstants.O_CREAT | fsConstants.O_APPEND | (fsConstants.O_NOFOLLOW ?? 0),
+        0o600
+    )
+    try {
+        const info = await fh.stat()
+        if (!info.isFile()) {
+            throw new Error(`Refusing to write log to non-regular file: ${filePath}`)
+        }
+        await fh.writeFile(payload, 'utf-8')
+        await fh.chmod(0o600).catch(() => undefined)
+    } finally {
+        await fh.close()
+    }
+}
+
+/**
  * Rotate the audit log file if its size meets or exceeds `maxSizeBytes`,
  * returning the updated approximate size in bytes or `null` on failure.
  */

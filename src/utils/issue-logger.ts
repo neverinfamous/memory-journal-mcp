@@ -129,8 +129,22 @@ async function drainIssueQueue(): Promise<void> {
                     : undefined
             if (code !== 'ENOENT') return
         }
-        await fsPromises.appendFile(logFile, batch, { encoding: 'utf8', mode: 0o600 })
-        await fsPromises.chmod(logFile, 0o600).catch(() => undefined)
+        const fh = await fsPromises.open(
+            logFile,
+            fs.constants.O_WRONLY |
+                fs.constants.O_CREAT |
+                fs.constants.O_APPEND |
+                (fs.constants.O_NOFOLLOW ?? 0),
+            0o600
+        )
+        try {
+            const fhStat = await fh.stat()
+            if (!fhStat.isFile()) return
+            await fh.writeFile(batch, 'utf8')
+            await fh.chmod(0o600).catch(() => undefined)
+        } finally {
+            await fh.close()
+        }
     } catch (e) {
         // Fail silently so we don't crash the main process if logging fails
         console.error('Failed to write to agent-issues.jsonl:', e)

@@ -8,6 +8,7 @@ import type { JournalEntry, ToolContext } from '../../../types/index.js'
 import { PermissionError } from '../../../types/errors.js'
 import { logger } from '../../../utils/logger.js'
 import { isTargetExcludedByRules } from '../dummy-filter-helpers.js'
+import { isToolVisibleForFilter } from '../../../filtering/tool-filter.js'
 import { sanitizeAuthor } from '../../../utils/security-utils.js'
 import { resolveWorkspaceId } from '../../../utils/workspace-resolver.js'
 import { findWorkspaceByProjectNumber } from '../../../utils/workspace-resolver-registry.js'
@@ -44,15 +45,16 @@ export const TEAM_DB_ERROR_RESPONSE = {
 export function assertCanonicalFallbackToolAllowed(
     toolName: string,
     groupName: string,
-    context: ToolContext
+    context: ToolContext,
+    readOnlyHint = false
 ): void {
     const filterCfg = context.config?.filterConfig
+    if (filterCfg === undefined || filterCfg === null) return
     if (
-        filterCfg !== undefined &&
-        filterCfg !== null &&
-        context.config?.codemodeInternalFullAccess !== true &&
-        (!filterCfg.enabledTools.has(toolName) ||
-            isTargetExcludedByRules([toolName, groupName], filterCfg))
+        isTargetExcludedByRules([toolName, groupName], filterCfg) ||
+        !isToolVisibleForFilter(toolName, readOnlyHint, filterCfg.raw) ||
+        (context.config?.codemodeInternalFullAccess !== true &&
+            !filterCfg.enabledTools.has(toolName))
     ) {
         throw new PermissionError(`Tool '${toolName}' is disabled by active tool filter.`)
     }

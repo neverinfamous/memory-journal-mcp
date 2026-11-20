@@ -9,7 +9,6 @@ import type { VectorSearchManager } from '../../vector/vector-search-manager/ind
 import type { ToolFilterConfig } from '../../filtering/tool-filter.js'
 import type { GitHubIntegration } from '../../github/github-integration/index.js'
 import type { IDatabaseAdapter } from '../../database/core/interfaces.js'
-import type { BriefingConfig } from './shared.js'
 import type { ServerRuntime } from '../../utils/maintenance-lock.js'
 import { enforceAccessBoundary } from '../../auth/validation.js'
 
@@ -22,12 +21,19 @@ import { getDynamicGraphResourceDefinitions } from './graph.js'
 import { getGitHubResourceDefinitions } from './github.js'
 import { getTemplateResourceDefinitions } from './templates.js'
 import { getAgentContextResource, getAgentIdResource } from './core/agent-context.js'
-import { getTeamResourceDefinitions } from './team.js'
+import { enforceTeamResourceRbac, getTeamResourceDefinitions } from './team.js'
 import { getHelpResourceDefinitions } from './help.js'
 import { getInsightResourceDefinitions } from './insights.js'
 import { getStalenessResourceDefinitions } from './staleness.js'
 import { getToolsCatalogResourceDefinitions } from './tools-catalog.js'
-import { getBaseUri, type InternalResourceDef, type ResourceResult } from './shared.js'
+import {
+    getBaseUri,
+    resourceWorkspace,
+    type BriefingConfig,
+    type InternalResourceDef,
+    type ResourceContext,
+    type ResourceResult,
+} from './shared.js'
 import { ResourceNotFoundError, ValidationError } from '../../types/errors.js'
 import { getAuditResourceDef } from '../../audit/index.js'
 
@@ -233,13 +239,33 @@ function getAllResourceDefinitions(runtime?: ServerRuntime): InternalResourceDef
  * Validates whether the current request is authorized to subscribe to a resource.
  * Throws an error if the URI is not found or the user lacks the required scope.
  */
-export function validateResourceSubscription(uri: string, runtime?: ServerRuntime): void {
+export function validateResourceSubscription(
+    uri: string,
+    runtime?: ServerRuntime,
+    teamDb?: IDatabaseAdapter,
+    briefingConfig?: BriefingConfig
+): void {
+    if (Buffer.byteLength(uri, 'utf8') > 8192) {
+        throw new ValidationError('Resource URI exceeds maximum length of 8192 bytes')
+    }
     const resources = getAllResourceDefinitions(runtime)
     const baseUri = getBaseUri(uri)
+
+    const checkTeamSubscriptionRbac = (capabilities: InternalResourceDef['capabilities']): void => {
+        if (capabilities?.requiresTeamScope !== true || teamDb === undefined) return
+        const subCtx: ResourceContext = {
+            db: teamDb,
+            teamDb,
+            ...(briefingConfig !== undefined ? { briefingConfig } : {}),
+            ...(runtime !== undefined ? { runtime } : {}),
+        }
+        enforceTeamResourceRbac(subCtx, resourceWorkspace(subCtx))
+    }
 
     const exactMatch = resources.find((r) => r.uri === baseUri)
     if (exactMatch) {
         enforceAccessBoundary(baseUri, 'resource', exactMatch.capabilities, runtime?.auditLogger)
+        checkTeamSubscriptionRbac(exactMatch.capabilities)
         return
     }
 
@@ -253,6 +279,7 @@ export function validateResourceSubscription(uri: string, runtime?: ServerRuntim
                     resource.capabilities,
                     runtime?.auditLogger
                 )
+                checkTeamSubscriptionRbac(resource.capabilities)
                 return
             }
         }

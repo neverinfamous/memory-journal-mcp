@@ -40,7 +40,7 @@ export interface PrGroup {
 export function resolveProjectScope(
     context: ResourceContext,
     projectNumber: number
-): { workspaceId: string; cwd: string; repoPath?: string; hasRegistry: boolean; hint?: string } {
+): { workspaceId: string; cwd?: string; repoPath?: string; hasRegistry: boolean; hint?: string } {
     const registry = context.briefingConfig?.projectRegistry ?? loadProjectRegistryFromConfig()
     if (registry !== undefined && Object.keys(registry).length > 0) {
         const matches = Object.entries(registry).filter(
@@ -59,8 +59,7 @@ export function resolveProjectScope(
                 entry.path !== undefined && entry.path.trim() !== '' ? entry.path : undefined
             return {
                 workspaceId: key,
-                cwd: entryPath ?? process.cwd(),
-                ...(entryPath !== undefined ? { repoPath: entryPath } : {}),
+                ...(entryPath !== undefined ? { cwd: entryPath, repoPath: entryPath } : {}),
                 hasRegistry: true,
             }
         }

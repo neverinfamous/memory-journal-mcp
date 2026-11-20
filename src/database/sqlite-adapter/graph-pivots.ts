@@ -79,6 +79,7 @@ export function queryRelationshipDegrees(
     if (ids.length === 0) return result
     const { scoped, id: ws } = scopeOf(workspaceId)
     const peerWs = scoped ? ' AND p.workspace_id = ?' : ''
+    const srcWs = scoped ? ' AND m.workspace_id = ?' : ''
     const rows = db
         .prepare(
             `WITH ids(id) AS (SELECT CAST(value AS INTEGER) FROM json_each(?))
@@ -89,9 +90,10 @@ export function queryRelationshipDegrees(
                   + (SELECT COUNT(*) FROM relationships r JOIN memory_journal p ON p.id = r.from_entry_id
                       WHERE r.to_entry_id = ids.id AND r.from_entry_id != r.to_entry_id
                         AND p.deleted_at IS NULL${peerWs}) AS degree
-             FROM ids`
+             FROM ids
+             JOIN memory_journal m ON m.id = ids.id AND m.deleted_at IS NULL${srcWs}`
         )
-        .all(...(scoped ? [JSON.stringify(ids), ws, ws] : [JSON.stringify(ids)])) as {
+        .all(...(scoped ? [JSON.stringify(ids), ws, ws, ws] : [JSON.stringify(ids)])) as {
         entry_id: number
         degree: number
     }[]

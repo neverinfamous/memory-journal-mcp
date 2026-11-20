@@ -22,7 +22,7 @@ import { hardenOuterFunctionPrototypes, freezeInnerVmContext } from './worker/pr
 import { createSafeFsShim } from './worker/node-shims.js'
 import { createUpdateMemoryFn, createContextProxy } from './worker/namespace-shims.js'
 import { createShimMjProxy } from './worker/mj-shim-proxy.js'
-import { buildSandboxGlobals } from './worker/sandbox-globals.js'
+import { buildSandboxGlobals, type ExecutionLifecycleState } from './worker/sandbox-globals.js'
 import { serializeAndEnforceEgress } from './worker/result-compactor.js'
 import {
     createIsolatedNestedRunner,
@@ -139,7 +139,7 @@ function createVmExecutionContext(options: VmExecutionContextOptions): vm.Contex
     const {
         rpcFn, sendRpcRequest, methodList, schemaList, timeoutMs, maxResultSize, contextObj,
         readonlyMode, dryRunMode, useTestDbMode, pinnedWorkspaceRaw, pinnedProjectRaw,
-        projectRegistryRaw, activeTimers,
+        projectRegistryRaw, activeTimers, executionLifecycle,
     } = options
     const mjApi = buildApiProxy(rpcFn, methodList, schemaList, readonlyMode, contextObj)
     Object.freeze(mjApi)
@@ -173,7 +173,14 @@ function createVmExecutionContext(options: VmExecutionContextOptions): vm.Contex
     executeCodeFnRef.current = executeCodeFn
 
     const sandbox = buildSandboxGlobals({
-        mjApi, shimMj, safeFsShim, frozenContext, executeCodeFn, updateMemoryFn, activeTimers,
+        mjApi,
+        shimMj,
+        safeFsShim,
+        frozenContext,
+        executeCodeFn,
+        updateMemoryFn,
+        activeTimers,
+        ...(executionLifecycle !== undefined ? { executionLifecycle } : {}),
     })
 
     const context = vm.createContext(sandbox, {
@@ -201,6 +208,31 @@ function extractScopeContext(contextObj?: Record<string, unknown>): {
     return { registryPayload, pinnedWorkspaceRaw, pinnedProjectRaw }
 }
 
+function makeZeroMetricError(error: string): SandboxResult {
+    return {
+        success: false,
+        error,
+        metrics: { wallTimeMs: 0, cpuTimeMs: 0, memoryUsedMb: 0 },
+    }
+}
+
+function prepareTransformedSandboxCode(code: string): { transformed: string } | { error: string } {
+    const transformed = transformAutoReturn(code)
+    if (transformed !== code) {
+        const postValidation = validateSandboxCode(transformed, {
+            ...DEFAULT_SECURITY_CONFIG,
+            maxCodeLength: DEFAULT_SECURITY_CONFIG.maxCodeLength + 32,
+        })
+        if (!postValidation.valid) {
+            return { error: postValidation.errors.join('; ') }
+        }
+    }
+    if (hasUnbalancedClosingDelimiter(stripCommentsAndStrings(transformed))) {
+        return { error: 'Syntax error in Code Mode execution: unbalanced closing delimiter' }
+    }
+    return { transformed }
+}
+
 async function executeCode(
     code: string,
     bridge: ExecutionRpcBridge,
@@ -212,12 +244,13 @@ async function executeCode(
     maxResultSize?: number,
     dryRunMode?: boolean,
     useTestDbMode?: boolean,
-    activeTimers = new Set<NodeJS.Timeout>()
+    activeTimers = new Set<NodeJS.Timeout>(),
+    executionLifecycle?: ExecutionLifecycleState
 ): Promise<SandboxResult> {
     const startCpu = process.cpuUsage()
     const startTime = performance.now()
     if (hardeningError !== null) {
-        return { success: false, error: hardeningError, metrics: { wallTimeMs: 0, cpuTimeMs: 0, memoryUsedMb: 0 } }
+        return makeZeroMetricError(hardeningError)
     }
     const { registryPayload, pinnedWorkspaceRaw, pinnedProjectRaw } = extractScopeContext(contextObj)
     setActiveProjectRegistry(readProjectRegistryPayload(registryPayload))
@@ -238,29 +271,13 @@ async function executeCode(
             pinnedProjectRaw,
             projectRegistryRaw: registryPayload,
             activeTimers,
+            ...(executionLifecycle !== undefined ? { executionLifecycle } : {}),
         })
-        const transformed = transformAutoReturn(code)
-        if (transformed !== code) {
-            const postValidation = validateSandboxCode(transformed, {
-                ...DEFAULT_SECURITY_CONFIG,
-                maxCodeLength: DEFAULT_SECURITY_CONFIG.maxCodeLength + 32,
-            })
-            if (!postValidation.valid) {
-                return {
-                    success: false,
-                    error: postValidation.errors.join('; '),
-                    metrics: { wallTimeMs: 0, cpuTimeMs: 0, memoryUsedMb: 0 },
-                }
-            }
+        const prepared = prepareTransformedSandboxCode(code)
+        if ('error' in prepared) {
+            return makeZeroMetricError(prepared.error)
         }
-        if (hasUnbalancedClosingDelimiter(stripCommentsAndStrings(transformed))) {
-            return {
-                success: false,
-                error: 'Syntax error in Code Mode execution: unbalanced closing delimiter',
-                metrics: { wallTimeMs: 0, cpuTimeMs: 0, memoryUsedMb: 0 },
-            }
-        }
-        const script = getOrCompileVmScript(`"use strict";\n(async () => {\n${transformed}\n})()`)
+        const script = getOrCompileVmScript(`"use strict";\n(async () => {\n${prepared.transformed}\n})()`)
         const resultPromise = script.runInContext(context, { timeout: timeoutMs }) as Promise<unknown>
         const result = await resultPromise
         const endTime = performance.now()
@@ -274,6 +291,9 @@ async function executeCode(
     } catch (err) {
         return formatVmErrorResult(err, startTime, startCpu)
     } finally {
+        if (executionLifecycle !== undefined) {
+            executionLifecycle.ended = true
+        }
         setActiveProjectRegistry(undefined)
         for (const handle of activeTimers) clearTimeout(handle)
         activeTimers.clear()
@@ -297,9 +317,14 @@ parentPort?.on('message', (msg: unknown) => {
         const { methodList, schemaList } = resolveWorkerMetadata(msg)
         const bridge = createExecutionRpcBridge(newRpcPort)
         const activeTimers = new Set<NodeJS.Timeout>()
+        const executionLifecycle: ExecutionLifecycleState = {
+            ended: false,
+            postCloseActivity: false,
+        }
         activeExecutionId = id
         resultSent = false
         activeAbortCleanup = (reason: string): void => {
+            executionLifecycle.ended = true
             for (const handle of activeTimers) clearTimeout(handle)
             activeTimers.clear()
             bridge.closeBridge(reason)
@@ -317,23 +342,32 @@ parentPort?.on('message', (msg: unknown) => {
                 maxResultSize,
                 dryRunMode,
                 useTestDbMode,
-                activeTimers
+                activeTimers,
+                executionLifecycle
             )
-            // Drain V8's microtask checkpoint before posting RESULT so unawaited microtask loops
-            // or delayed async rejections cannot disarm the host timeout watchdog.
+            // Serialize and run toJSON()/getters BEFORE draining V8 microtasks via hostSetImmediate
+            // so post-execution callbacks cannot queue unawaited microtask spins or timers past the watchdog.
+            serializeAndEnforceEgress(result, maxResultSize)
             if (!resultSent && activeExecutionId === id) {
                 await new Promise<void>((resolve) => {
                     hostSetImmediate(resolve)
                 })
             }
-            serializeAndEnforceEgress(result, maxResultSize)
             if (!resultSent && activeExecutionId === id) {
-                parentPort?.postMessage({ type: 'RESULT', id, result })
+                parentPort?.postMessage({
+                    type: 'RESULT',
+                    id,
+                    result,
+                    ...(executionLifecycle.postCloseActivity ? { fatal: true } : {}),
+                })
                 resultSent = true
             }
         } catch (err: unknown) {
             postExecutionFailure(err)
         } finally {
+            executionLifecycle.ended = true
+            for (const handle of activeTimers) clearTimeout(handle)
+            activeTimers.clear()
             bridge.closeBridge('Sandbox execution ended before the call completed')
             if (activeExecutionId === id) {
                 activeExecutionId = null

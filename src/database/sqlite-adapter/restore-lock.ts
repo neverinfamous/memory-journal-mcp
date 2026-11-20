@@ -116,8 +116,29 @@ function isLockStale(lockDir: string, lockFile: string, runtime: unknown): boole
     }
 }
 
-/** Remove a stale lock directory, preferring an atomic rename and falling back to removal. */
-function clearStaleLock(lockDir: string): void {
+function parseLockRecord(lockFile: string): { holdingPid: number | undefined; nonce?: string } | null {
+    try {
+        const raw = fs.readFileSync(lockFile, 'utf-8').trim()
+        if (!raw) return null
+        const parsed = parseLockContent(raw)
+        let nonce: string | undefined
+        try {
+            const obj = JSON.parse(raw) as unknown
+            if (typeof obj === 'object' && obj !== null && 'nonce' in obj && typeof obj.nonce === 'string') {
+                nonce = obj.nonce
+            }
+        } catch {
+            // legacy format has no nonce
+        }
+        return { holdingPid: parsed.holdingPid, ...(nonce !== undefined ? { nonce } : {}) }
+    } catch {
+        return null
+    }
+}
+
+/** Remove a stale lock directory via atomic rename, re-checking staleness before any fallback cleanup. */
+function clearStaleLock(lockDir: string, lockFile: string, runtime: unknown): void {
+    const expected = parseLockRecord(lockFile)
     logger.warning('Found stale database restore lock (dead PID), atomically renaming', {
         path: lockDir,
         module: 'SqliteAdapter',
@@ -135,17 +156,28 @@ function clearStaleLock(lockDir: string): void {
             })
         }
     } catch (renameErr) {
-        // On Windows or concurrent environments, renaming a directory with files can throw EPERM/EBUSY.
-        // Fall back to safely removing the stale lock directory.
+        if (hasErrorCode(renameErr, 'ENOENT')) return
+        if (!isLockStale(lockDir, lockFile, runtime)) {
+            throw new Error(
+                `Another process is currently holding the database lock at ${lockDir}. Backup restore cannot safely proceed.`,
+                { cause: renameErr }
+            )
+        }
+        const current = parseLockRecord(lockFile)
+        if (
+            expected !== null &&
+            current !== null &&
+            (expected.holdingPid !== current.holdingPid || expected.nonce !== current.nonce)
+        ) {
+            throw new Error(
+                `Another process is currently holding the database lock at ${lockDir}. Backup restore cannot safely proceed.`,
+                { cause: renameErr }
+            )
+        }
         try {
-            fs.rmSync(lockDir, {
-                recursive: true,
-                force: true,
-                maxRetries: 5,
-                retryDelay: 50,
-            })
+            fs.unlinkSync(lockFile)
+            fs.rmdirSync(lockDir)
         } catch {
-            // If rename and rmSync fail, another process likely beat us to it.
             throw new Error(
                 `Another process is currently holding the database lock at ${lockDir}. Backup restore cannot safely proceed.`,
                 { cause: renameErr }
@@ -167,7 +199,7 @@ function reclaimAndRetryLockDir(
             { cause: lockError }
         )
     }
-    clearStaleLock(lockDir)
+    clearStaleLock(lockDir, lockFile, runtime)
     // [INVARIANT] Retry with a non-recursive mkdir so a concurrent reclaimer loses with EEXIST
     // instead of both processes believing they own the lock.
     try {

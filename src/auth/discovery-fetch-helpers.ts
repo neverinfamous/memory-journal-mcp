@@ -36,10 +36,9 @@ function readMetadataResponseBody(
     safeResolve: (value: AuthorizationServerMetadata) => void,
     safeReject: (reason: unknown) => void
 ): void {
+    res.on('error', safeReject)
     if (res.statusCode === undefined || res.statusCode < 200 || res.statusCode >= 300) {
-        if ('resume' in res && typeof res.resume === 'function') {
-            res.resume()
-        }
+        req.destroy()
         safeReject(
             new ConfigurationError(
                 `HTTP ${String(res.statusCode ?? 'unknown')}: ${res.statusMessage || ''}`
@@ -50,7 +49,6 @@ function readMetadataResponseBody(
     const chunks: Buffer[] = []
     let totalBytes = 0
     const maxBytes = 1024 * 1024
-    res.on('error', safeReject)
     res.on('data', (d: Buffer) => {
         totalBytes += d.length
         if (totalBytes > maxBytes) {

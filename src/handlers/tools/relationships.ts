@@ -169,7 +169,7 @@ function delegateTeamVisualizeRelationships(
     wsId: string,
     context: ToolContext
 ): Record<string, unknown> {
-    assertCanonicalFallbackToolAllowed('team_visualize_relationships', 'team', context)
+    assertCanonicalFallbackToolAllowed('team_visualize_relationships', 'team', context, true)
     enforceAccessBoundary(
         'team_visualize_relationships',
         'tool',

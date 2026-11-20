@@ -5,6 +5,7 @@ import { effectiveWorkspace } from '../../workspace-scope.js'
 const NON_TOKEN_CHAR_RE = /[^a-zA-Z0-9_-]/
 const WHITESPACE_SPLIT_RE = /\s+/
 const VOCAB_TTL_MS = 5_000
+const MAX_VOCAB_CACHE_WORKSPACES = 64
 const vocabCache = new WeakMap<Database, Map<string, { expiresAt: number; vocab: string[] }>>()
 
 /**
@@ -49,15 +50,41 @@ export function levenshteinDistance(a: string, b: string, maxDistance?: number):
     return prev[m] ?? 0
 }
 
+function storeCachedVocabulary(
+    db: Database,
+    scopeId: string,
+    now: number,
+    result: string[]
+): void {
+    let byWs = vocabCache.get(db)
+    if (!byWs) {
+        byWs = new Map()
+        vocabCache.set(db, byWs)
+    }
+    for (const [k, v] of byWs.entries()) {
+        if (v.expiresAt <= now) byWs.delete(k)
+    }
+    while (byWs.size >= MAX_VOCAB_CACHE_WORKSPACES) {
+        const oldestKey = byWs.keys().next().value
+        if (oldestKey === undefined) break
+        byWs.delete(oldestKey)
+    }
+    byWs.set(scopeId, { expiresAt: now + VOCAB_TTL_MS, vocab: result })
+}
+
 /**
  * Builds a vocabulary for fuzzy matching consisting of tag names and entry types (cached for 5s per DB/workspace).
  */
 export function buildVocabulary(db: Database, workspaceId?: string): string[] {
     const scopeId = effectiveWorkspace(workspaceId)
     const now = Date.now()
-    let byWs = vocabCache.get(db)
+    const byWs = vocabCache.get(db)
     const cached = byWs?.get(scopeId)
     if (cached && cached.expiresAt > now) {
+        if (byWs !== undefined) {
+            byWs.delete(scopeId)
+            byWs.set(scopeId, cached)
+        }
         return cached.vocab
     }
 
@@ -115,11 +142,7 @@ export function buildVocabulary(db: Database, workspaceId?: string): string[] {
     }
 
     const result = Array.from(vocab)
-    if (!byWs) {
-        byWs = new Map()
-        vocabCache.set(db, byWs)
-    }
-    byWs.set(scopeId, { expiresAt: now + VOCAB_TTL_MS, vocab: result })
+    storeCachedVocabulary(db, scopeId, now, result)
     return result
 }
 

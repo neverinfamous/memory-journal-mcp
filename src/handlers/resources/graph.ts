@@ -19,6 +19,7 @@ import {
     safeDecodeUriSegment,
 } from './shared.js'
 import { markUntrustedContentInline } from '../../utils/security-utils.js'
+import { sanitizeErrorMessageForResponse } from '../../utils/error-helpers.js'
 import { ProtocolError, ProtocolErrorCode } from '@modelcontextprotocol/server'
 import { buildGraphNeighborhoodMarkdown } from './graph-neighborhood.js'
 
@@ -102,7 +103,11 @@ export function getGraphResourceDefinitions(): InternalResourceDef[] {
                 } catch (error) {
                     if (error instanceof ProtocolError) throw error;
                     if (targetRepo) {
-                        throw new ProtocolError(ProtocolErrorCode.InternalError,  `GitHub integration failed: ${error instanceof Error ? error.message : String(error)}`)
+                        const rawErr = error instanceof Error ? error.message : String(error)
+                        throw new ProtocolError(
+                            ProtocolErrorCode.InternalError,
+                            `GitHub integration failed: ${sanitizeErrorMessageForResponse(rawErr)}`
+                        )
                     }
                     // Fallback to DB if GitHub fails for default case
                 }

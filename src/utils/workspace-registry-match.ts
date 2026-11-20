@@ -346,7 +346,7 @@ export function workspaceForProject(
 }
 
 function suppliedProject(projectNumber: number | null | undefined): number | undefined {
-    if (typeof projectNumber !== 'number' || Number.isNaN(projectNumber)) return undefined
+    if (typeof projectNumber !== 'number' || !Number.isFinite(projectNumber)) return undefined
     return projectNumber
 }
 
@@ -396,9 +396,11 @@ export function alignedProjectFilter(
     requested: number | undefined,
     registry: ProjectRegistry | undefined
 ): number | undefined {
-    if (requested === undefined) return undefined
+    if (requested === undefined || !Number.isFinite(requested)) return undefined
     const trimmed = workspaceId.trim()
     if (trimmed === '' || trimmed === '*') return requested
     const paired = pairStoredScope(trimmed, requested, registry)
-    return typeof paired.projectNumber === 'number' ? paired.projectNumber : requested
+    return typeof paired.projectNumber === 'number' && Number.isFinite(paired.projectNumber)
+        ? paired.projectNumber
+        : requested
 }

@@ -109,7 +109,7 @@ function computeSessionSummary(entries: AuditEntry[]): {
 
 const CANONICAL_AUDIT_ID_RE =
     /^(?:resource:|prompt:)?(?:memory:\/\/[A-Za-z0-9_./-]+|[A-Za-z0-9_.:@-]{1,128})$/
-const ISO_AUDIT_TS_RE = /^\d{4}-\d{2}-\d{2}T[0-9:.+-Z]{6,32}$/
+const ISO_AUDIT_TS_RE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,9})?(?:Z|[+-]\d{2}:\d{2})$/
 
 function sanitizeAuditCategory(raw: unknown): AuditEntry['category'] {
     switch (raw) {

@@ -171,6 +171,28 @@ export async function getUnreleasedChangelog(
     }
 }
 
+function fenceCommitMetadata(
+    meta: NonNullable<CommitEntry['metadata']>
+): NonNullable<CommitEntry['metadata']> {
+    const fenced: NonNullable<CommitEntry['metadata']> = { ...meta }
+    if (meta.category !== undefined) fenced.category = meta.category.map(ensureInlineFenced)
+    if (meta.entry !== undefined) fenced.entry = meta.entry.map(ensureInlineFenced)
+    if (meta.significance !== undefined) fenced.significance = ensureInlineFenced(meta.significance)
+    if (meta.validation !== undefined) fenced.validation = ensureInlineFenced(meta.validation)
+    if (typeof meta.impact === 'string') fenced.impact = ensureInlineFenced(meta.impact)
+    if (typeof meta.trust === 'string') fenced.trust = ensureInlineFenced(meta.trust)
+    if (typeof meta.confidence === 'string') fenced.confidence = ensureInlineFenced(meta.confidence)
+    if (meta.customTrailers !== undefined) {
+        const fencedCustom = Object.create(null) as Record<string, string[]>
+        for (const [k, vals] of Object.entries(meta.customTrailers)) {
+            if (k === '__proto__' || k === 'constructor' || k === 'prototype') continue
+            fencedCustom[fenceNonCanonicalRefOrKey(k, true)] = vals.map(ensureInlineFenced)
+        }
+        fenced.customTrailers = fencedCustom
+    }
+    return fenced
+}
+
 /** Fence untrusted free-text fields on a commit record at MCP tool egress. */
 export function fenceCommitEntry(c: CommitEntry): CommitEntry {
     const next: CommitEntry = {
@@ -193,6 +215,15 @@ export function fenceCommitEntry(c: CommitEntry): CommitEntry {
     if (c.reviewers !== undefined) next.reviewers = c.reviewers.map(ensureInlineFenced)
     if (c.refs !== undefined) next.refs = c.refs.map((r) => fenceNonCanonicalRefOrKey(r))
     if (c.tags !== undefined) next.tags = c.tags.map((t) => fenceNonCanonicalRefOrKey(t))
+    if (c.references !== undefined) next.references = c.references.map(ensureInlineFenced)
+    if (c.associatedIssues !== undefined) {
+        next.associatedIssues = c.associatedIssues.map((ai) => ({
+            issue: ensureInlineFenced(ai.issue),
+            action: ai.action !== null ? ensureInlineFenced(ai.action) : null,
+        }))
+    }
+    if (c.slackId !== undefined) next.slackId = ensureInlineFenced(c.slackId)
+    if (c.metadata !== undefined) next.metadata = fenceCommitMetadata(c.metadata)
     if (c.files !== undefined) {
         next.files = c.files.map((f) => ({
             ...f,

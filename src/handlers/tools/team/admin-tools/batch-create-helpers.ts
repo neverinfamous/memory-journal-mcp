@@ -352,10 +352,13 @@ export async function executeTeamBatchCreate(
             inputs
         )
     )
-    const entries = results.map((r, i) => ({
-        ...r,
-        author: inputs[createdSourceIndices[i] ?? i]?.author,
-    }))
+    const entries = results.map((r, i) => {
+        const rawAuthor = inputs[createdSourceIndices[i] ?? i]?.author
+        return {
+            ...r,
+            author: rawAuthor !== undefined ? sanitizeAuthor(rawAuthor) : undefined,
+        }
+    })
     await sendProgress(context.progress, 1, 2, `Created ${String(entries.length)} team entries...`)
 
     const { indexStatuses, indexErrors } = await indexBatchEntries({

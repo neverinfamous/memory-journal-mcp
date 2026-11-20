@@ -6,11 +6,13 @@ import { assertNoPathTraversal, PathTraversalError } from '../../utils/security-
 import { ValidationError } from '../../types/errors.js'
 import type { IDatabaseConnection } from '../core/interfaces.js'
 import { acquireRestoreLock } from './restore-lock.js'
+import { copyRegularFileNoFollow } from './backup-schema-guard.js'
 import {
     applySwappedDatabase,
+    assertIncomingBackupIntact,
     assertWalCheckpointComplete,
     countActiveEntries,
-    prepareRestoreTempFiles,
+    preparePreRestoreSnapshot,
     releaseRestoreLock,
     resolveValidatedRestorePath,
     rollbackFailedRestore,
@@ -243,17 +245,24 @@ export class BackupManager {
             )
         }
         const backupsDir = this.ctx.getBackupsDir()
-        const backupPath = await resolveValidatedRestorePath(backupsDir, filename)
+        const backupPath = await resolveValidatedRestorePath(backupsDir, filename, {
+            skipIntegrityCheck: true,
+        })
 
         const lockDir = `${this.ctx.getDbPath()}.lock.d`
         const lockFile = path.join(lockDir, 'lock.json')
         acquireRestoreLock(lockDir, lockFile, runtime)
 
+        const stagedTempPath = `${this.ctx.getDbPath()}.restore_tmp_${randomUUID()}`
         try {
+            // [TOCTOU] Copy with O_NOFOLLOW inside the restore lock and validate the staged
+            // copy directly before closing or touching the live database.
+            await copyRegularFileNoFollow(backupPath, stagedTempPath)
+            await assertIncomingBackupIntact(stagedTempPath)
             const previousEntryCount = countActiveEntries(this.ctx)
             assertWalCheckpointComplete(this.ctx)
             this.ctx.closeDbBeforeRestore()
-            await this.swapDatabase(backupPath)
+            await this.swapDatabase(stagedTempPath)
             this.invalidateBackupsCache()
             const newEntryCount = countActiveEntries(this.ctx)
 
@@ -264,16 +273,18 @@ export class BackupManager {
             })
 
             return { restoredFrom: filename, previousEntryCount, newEntryCount }
+        } catch (err) {
+            await unlinkBestEffort(stagedTempPath)
+            throw err
         } finally {
             releaseRestoreLock(lockDir, lockFile)
         }
     }
 
-    /** Swap the backup into place, re-initialize and verify; roll back to the pre-restore copy on failure. */
-    private async swapDatabase(backupPath: string): Promise<void> {
+    /** Swap the verified staged backup into place, re-initialize and verify; roll back on failure. */
+    private async swapDatabase(tempDbPath: string): Promise<void> {
         const oldDbBackupPath = `${this.ctx.getDbPath()}.old_tmp_${randomUUID()}`
-        const tempDbPath = `${this.ctx.getDbPath()}.restore_tmp_${randomUUID()}`
-        await prepareRestoreTempFiles(this.ctx, backupPath, tempDbPath, oldDbBackupPath)
+        await preparePreRestoreSnapshot(this.ctx, tempDbPath, oldDbBackupPath)
 
         try {
             await applySwappedDatabase(this.ctx, tempDbPath)

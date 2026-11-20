@@ -12,6 +12,11 @@ import {
     createSandboxProcessObject,
 } from './sandbox-process-shims.js'
 
+export interface ExecutionLifecycleState {
+    ended: boolean
+    postCloseActivity: boolean
+}
+
 export interface BuildSandboxGlobalsOptions {
     mjApi: Record<string, unknown>
     shimMj: Record<string, unknown>
@@ -20,9 +25,13 @@ export interface BuildSandboxGlobalsOptions {
     executeCodeFn: (arg: unknown) => Promise<unknown>
     updateMemoryFn: (arg: unknown) => unknown
     activeTimers?: Set<NodeJS.Timeout>
+    executionLifecycle?: ExecutionLifecycleState
 }
 
-function createSafeTimerHelpers(activeTimers?: Set<NodeJS.Timeout>): {
+function createSafeTimerHelpers(
+    activeTimers?: Set<NodeJS.Timeout>,
+    executionLifecycle?: ExecutionLifecycleState
+): {
     createSafeTimeout: (cb: (...args: unknown[]) => void, ms: number, ...args: unknown[]) => number
     clearSafeTimeout: (id: unknown) => void
 } {
@@ -33,12 +42,20 @@ function createSafeTimerHelpers(activeTimers?: Set<NodeJS.Timeout>): {
         ms: number,
         ...args: unknown[]
     ): number => {
+        if (executionLifecycle?.ended === true) {
+            executionLifecycle.postCloseActivity = true
+            return 0
+        }
         const id = nextTimerId++
         const delay = Number.isFinite(ms) ? Math.min(Math.max(0, ms), 30_000) : 0
         const handle = setTimeout(
             (...cbArgs: unknown[]) => {
                 timerMap.delete(id)
                 activeTimers?.delete(handle)
+                if (executionLifecycle?.ended === true) {
+                    executionLifecycle.postCloseActivity = true
+                    return
+                }
                 cb(...cbArgs)
             },
             delay,
@@ -109,8 +126,20 @@ function exposeApiMethodsOnSandbox(
 export function buildSandboxGlobals(
     options: BuildSandboxGlobalsOptions
 ): Record<string, unknown> {
-    const { mjApi, shimMj, safeFsShim, frozenContext, executeCodeFn, updateMemoryFn, activeTimers } = options
-    const { createSafeTimeout, clearSafeTimeout } = createSafeTimerHelpers(activeTimers)
+    const {
+        mjApi,
+        shimMj,
+        safeFsShim,
+        frozenContext,
+        executeCodeFn,
+        updateMemoryFn,
+        activeTimers,
+        executionLifecycle,
+    } = options
+    const { createSafeTimeout, clearSafeTimeout } = createSafeTimerHelpers(
+        activeTimers,
+        executionLifecycle
+    )
     const servicesProxy = new Proxy({}, { get: (): unknown => shimMj })
     const kernelProxy = new Proxy({}, { get: (): unknown => shimMj })
     const frozenPathShim = Object.freeze({ ...pathShim })
@@ -166,6 +195,8 @@ export function buildSandboxGlobals(
         Proxy: undefined,
         Reflect: undefined,
         SharedArrayBuffer: undefined,
+        Atomics: undefined,
+        WebAssembly: undefined,
         FinalizationRegistry: undefined,
     }
 

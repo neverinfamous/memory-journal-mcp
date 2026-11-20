@@ -17,7 +17,7 @@
  * propagate to tool callers.
  */
 
-import { appendFile, chmod, mkdir } from 'node:fs/promises'
+import { mkdir } from 'node:fs/promises'
 import { dirname } from 'node:path'
 import type { AuditConfig, AuditEntry, AuditSearchFilters } from './types.js'
 import { logger } from '../utils/logger.js'
@@ -105,7 +105,6 @@ export class AuditLogger {
     private closed = false
     private flushError: Error | null = null
     private dirEnsured = false
-    private fileModeEnsured = false
     private readonly stderrMode: boolean
     private approxSizeBytes: number | null = null
 
@@ -229,21 +228,8 @@ export class AuditLogger {
                         process.stderr.write(payload)
                     } else {
                         await this.ensureDirectory()
-                        const { isUnsafeSymlinkOrSpecialFile } = await import('./audit-file-helpers.js')
-                        if (await isUnsafeSymlinkOrSpecialFile(this.config.logPath)) {
-                            throw new Error(
-                                `Refusing to write audit log to symlink or non-regular file: ${this.config.logPath}`
-                            )
-                        }
-                        // One appendFile call with all buffered lines — each terminated by \n
-                        await appendFile(this.config.logPath, payload, {
-                            encoding: 'utf-8',
-                            mode: 0o600,
-                        })
-                        if (!this.fileModeEnsured) {
-                            await chmod(this.config.logPath, 0o600).catch(() => undefined)
-                            this.fileModeEnsured = true
-                        }
+                        const { appendRegularFileNoFollow } = await import('./audit-file-helpers.js')
+                        await appendRegularFileNoFollow(this.config.logPath, payload)
                         if (this.approxSizeBytes !== null) {
                             this.approxSizeBytes += Buffer.byteLength(payload, 'utf-8')
                         }
@@ -408,9 +394,6 @@ export class AuditLogger {
         )
         if (nextSize !== null) {
             this.approxSizeBytes = nextSize
-            if (nextSize === 0) {
-                this.fileModeEnsured = false
-            }
         }
     }
 }

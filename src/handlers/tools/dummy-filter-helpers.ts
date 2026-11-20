@@ -1,5 +1,8 @@
 import type { ToolFilterConfig } from '../../types/index.js'
-import { isFilterEffectivelyReadOnly } from '../../filtering/tool-filter.js'
+import {
+    isFilterEffectivelyReadOnly,
+    isToolVisibleForFilter,
+} from '../../filtering/tool-filter.js'
 import {
     DUMMY_HEALING_TOOL_NAMES,
     DUMMY_ENTRY_CREATION_TOOL_NAMES,
@@ -177,6 +180,9 @@ export function isDummyToolAllowedByFilter(
     if (!isReadOnly && isFilterEffectivelyReadOnly(filterConfig)) {
         return false
     }
+    if (info !== undefined && !isToolVisibleForFilter(info.target, info.readOnly, filterConfig.raw)) {
+        return false
+    }
     const matchTargets = appendTeamShimGroup(
         info !== undefined ? [name, info.target, info.group] : [name],
         name,
@@ -224,6 +230,9 @@ export function isAutonomousShimBlockedByFilter(
         if (!shimInfo.readOnly && isFilterEffectivelyReadOnly(filterConfig)) {
             return true
         }
+        if (!isToolVisibleForFilter(shimInfo.target, shimInfo.readOnly, filterConfig.raw)) {
+            return true
+        }
         if (shimInfo.isMcpTool && !filterConfig.enabledTools.has(shimInfo.target)) {
             const allowFullCodemode =
                 codemodeInternalFullAccess &&
@@ -234,4 +243,47 @@ export function isAutonomousShimBlockedByFilter(
     }
 
     return false
+}
+
+function buildToolDisabledResponse(name: string): Record<string, unknown> {
+    return {
+        success: false,
+        error: `Tool '${name}' is disabled by the active --tool-filter configuration.`,
+        code: 'TOOL_DISABLED',
+        category: 'authorization',
+        suggestion: 'Update the active tool filter or use an enabled tool.',
+        recoverable: false,
+    }
+}
+
+/** Enforce active `--tool-filter` rules against primary tools and dummy aliases before dispatch. */
+export function assertToolFilterAllowsCall(
+    name: string,
+    toolReadOnlyHint: boolean | undefined,
+    filterConfig: ToolFilterConfig,
+    agentHealing: boolean | undefined,
+    codemodeInternalFullAccess: boolean
+): Record<string, unknown> | undefined {
+    const isPrimaryEnabled = filterConfig.enabledTools.has(name)
+    const isDummyAllowed = isDummyToolAllowedByFilter(
+        name,
+        filterConfig,
+        agentHealing !== false,
+        codemodeInternalFullAccess
+    )
+    const isCodeModeShortcut =
+        agentHealing !== false &&
+        filterConfig.enabledTools.has('mj_execute_code') &&
+        DUMMY_HEALING_TOOL_NAMES.has(name) &&
+        isDummyAllowed
+    if (!isPrimaryEnabled && !isDummyAllowed && !isCodeModeShortcut) {
+        return buildToolDisabledResponse(name)
+    }
+    const dummyInfo = !isPrimaryEnabled ? resolveDummyTargetInfo(name) : undefined
+    const visibilityTarget = dummyInfo?.target ?? name
+    const visibilityReadOnly = dummyInfo?.readOnly ?? toolReadOnlyHint
+    if (!isToolVisibleForFilter(visibilityTarget, visibilityReadOnly, filterConfig.raw)) {
+        return buildToolDisabledResponse(name)
+    }
+    return undefined
 }

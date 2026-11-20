@@ -108,7 +108,7 @@ function applyTemplateAndQuoteDelimiterHealing(src: string): string {
     if (
         countRegexMatchesUpTo(
             src,
-            /\b(?:content|title|text|description|message|instructions|body|notes|details|resolution_notes|query|script|comment|summary|heading|createEntry|teamCreateEntry|appendEntry|updateEntry|teamUpdateEntry|searchEntries|teamSearch|const|let|var)\b/g,
+            /\b(?:content|title|text|description|message|instructions|body|notes|details|resolution_notes|query|script|comment|summary|heading|createEntry|teamCreateEntry|appendEntry|updateEntry|teamUpdateEntry|searchEntries|teamSearch|mj_create_entry|mjCreateEntry|mj_update_entry|mjUpdateEntry|mj_search_entries|mjSearchEntries|const|let|var)\b/g,
             MAX_DELIMITER_HEAL_CANDIDATES
         ) > MAX_DELIMITER_HEAL_CANDIDATES
     ) {

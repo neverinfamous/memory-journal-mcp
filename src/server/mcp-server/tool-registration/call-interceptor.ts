@@ -270,6 +270,10 @@ function isRegisteredToolBlocked(
     config: ToolHandlerConfig
 ): boolean {
     if (toolName === undefined || !allToolNames.has(toolName)) return false
+    const auth = getAuthContext()
+    if (auth !== undefined && !hasScope(getGrantedAuthScopes(auth), getRequiredScope(toolName))) {
+        return true
+    }
     const filterCfg = config.filterConfig
     if (
         filterCfg !== undefined &&
@@ -289,10 +293,6 @@ function isRegisteredToolBlocked(
         ) {
             return false
         }
-        return true
-    }
-    const auth = getAuthContext()
-    if (auth !== undefined && !hasScope(getGrantedAuthScopes(auth), getRequiredScope(toolName))) {
         return true
     }
     return false

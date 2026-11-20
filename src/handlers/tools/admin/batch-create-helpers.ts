@@ -168,7 +168,7 @@ export async function shareBatchEntriesWithTeam(
     }
 
     try {
-        assertCanonicalFallbackToolAllowed('team_create_entry', 'team', context)
+        assertCanonicalFallbackToolAllowed('team_create_entry', 'team', context, false)
         enforceAccessBoundary(
             'team_create_entry',
             'tool',

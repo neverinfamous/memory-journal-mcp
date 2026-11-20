@@ -22,7 +22,7 @@ function delegateTeamGetEntryById(
     input: GetEntryByIdParams,
     context: ToolContext
 ): Record<string, unknown> {
-    assertCanonicalFallbackToolAllowed('team_get_entry_by_id', 'team', context)
+    assertCanonicalFallbackToolAllowed('team_get_entry_by_id', 'team', context, true)
     enforceAccessBoundary(
         'team_get_entry_by_id',
         'tool',
@@ -155,7 +155,7 @@ export function shareCreatedEntryWithTeam(
 ): { author: string; entry: JournalEntry } | undefined {
     const { teamDb } = context
     if (!teamDb) return undefined
-    assertCanonicalFallbackToolAllowed('team_create_entry', 'team', context)
+    assertCanonicalFallbackToolAllowed('team_create_entry', 'team', context, false)
     enforceAccessBoundary(
         'team_create_entry',
         'tool',

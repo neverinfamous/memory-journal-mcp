@@ -314,16 +314,15 @@ export function resolveAuthenticatedAuthor(): string {
         const claims = authCtx.claims
         const verifiedEmail =
             claims?.['email_verified'] === true ? nonEmptyAuthClaim(claims['email']) : undefined
-        const claimAuthor =
-            nonEmptyAuthClaim(claims?.sub) ??
-            nonEmptyAuthClaim(claims?.['subject']) ??
-            verifiedEmail ??
-            nonEmptyAuthClaim(claims?.client_id)
-        if (claimAuthor !== undefined) {
-            const sanitized = sanitizeAuthor(claimAuthor)
-            if (sanitized.length > 0 && sanitized.toLowerCase() !== 'unknown') {
-                return sanitized
-            }
+        const candidates = [
+            nonEmptyAuthClaim(claims?.sub),
+            nonEmptyAuthClaim(claims?.['subject']),
+            verifiedEmail,
+            nonEmptyAuthClaim(claims?.client_id),
+        ]
+        for (const candidate of candidates) {
+            const sanitized = sanitizeValidAuthor(candidate)
+            if (sanitized !== undefined) return sanitized
         }
         return 'unknown'
     }

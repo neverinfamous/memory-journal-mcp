@@ -4,6 +4,7 @@
 
 import type { SafeFsShim } from './node-shims.js'
 import { createCallableShim, createSchemaShim, wrapDelegatingTool } from './namespace-shims.js'
+import { safeFormatSandboxError } from './script-and-metadata-cache.js'
 
 export const FACTORY_SHIM_NAMES = [
     'getInstance', 'get_instance', 'createInstance', 'create_instance',
@@ -151,6 +152,11 @@ export function createProcessOperationFn(shimMj: Record<string, unknown>): (arg:
  * Shared spawn-disabled shim factory reused across sandbox process shims
  * and mj shim proxy mocks so blocked spawn/spawnSync/fork calls log consistently.
  */
+function formatSandboxCallbackError(callbackError: unknown): string {
+    const msg = safeFormatSandboxError(callbackError).message
+    return msg.replace(/[\p{Cc}\u2028\u2029]+/gu, ' ').slice(0, 512)
+}
+
 export function createDisabledSpawnShim(
     label = 'spawn'
 ): (_cmd?: unknown, cbOrOptions?: unknown, maybeCb?: unknown) => Record<string, unknown> {
@@ -170,7 +176,7 @@ export function createDisabledSpawnShim(
             } catch (callbackError) {
                 // Callback errors must not escape the shim; the worker has no logger, so use stderr.
                 process.stderr.write(
-                    `[codemode] ${label} shim callback threw: ${callbackError instanceof Error ? callbackError.message : String(callbackError)}\n`
+                    `[codemode] ${label} shim callback threw: ${formatSandboxCallbackError(callbackError)}\n`
                 )
             }
         }
@@ -211,7 +217,7 @@ export function createChildProcessShims(): Record<string, unknown> {
                 } catch (callbackError) {
                     // Callback errors must not escape the shim; the worker has no logger, so use stderr.
                     process.stderr.write(
-                        `[codemode] exec shim callback threw: ${callbackError instanceof Error ? callbackError.message : String(callbackError)}\n`
+                        `[codemode] exec shim callback threw: ${formatSandboxCallbackError(callbackError)}\n`
                     )
                 }
             }

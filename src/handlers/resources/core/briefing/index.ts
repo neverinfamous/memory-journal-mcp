@@ -89,6 +89,7 @@ interface BriefingScopeResolution {
     activeRepoPath: string | undefined
     activeWorkspaceId: string | undefined
     activeProjectNumber: number | undefined
+    unresolvedRepo?: string
 }
 
 function resolveDefaultBriefingScope(
@@ -215,6 +216,28 @@ function resolveBriefingScope(
             activeGithub: hasDefaultPath ? getGitHubIntegration(defaultPath, context.runtime) : undefined,
         }
     }
+    const configuredDefaultWs = config.defaultWorkspaceId?.trim()
+    if (configuredDefaultWs?.toLowerCase() === targetRepo.trim().toLowerCase()) {
+        return {
+            registry,
+            hasRegistry,
+            activeWorkspaceId: configuredDefaultWs,
+            activeProjectNumber: config.defaultProjectNumber,
+            activeRepoPath: undefined,
+            activeGithub: undefined,
+        }
+    }
+    if (hasRegistry) {
+        return {
+            registry,
+            hasRegistry,
+            activeWorkspaceId: undefined,
+            activeProjectNumber: undefined,
+            activeRepoPath: undefined,
+            activeGithub: undefined,
+            unresolvedRepo: targetRepo.trim(),
+        }
+    }
     return { registry, hasRegistry, activeWorkspaceId: targetRepo, activeProjectNumber: undefined, activeRepoPath: undefined, activeGithub: undefined }
 }
 
@@ -295,8 +318,15 @@ export async function buildBriefingData(
     options?: { pinSession?: boolean }
 ): Promise<ResourceResult> {
     const config = { ...DEFAULT_BRIEFING_CONFIG, ...context.briefingConfig }
-    const { hasRegistry, activeGithub, activeRepoPath, activeWorkspaceId, activeProjectNumber } =
+    const { hasRegistry, activeGithub, activeRepoPath, activeWorkspaceId, activeProjectNumber, unresolvedRepo } =
         resolveBriefingScope(context, config, targetRepo, options)
+
+    if (unresolvedRepo !== undefined) {
+        const safeRepo = unresolvedRepo.replace(/[^A-Za-z0-9._\-/*@]/g, '_').slice(0, 128)
+        return {
+            data: `# Briefing · ${safeRepo}\n\nWorkspace \`${safeRepo}\` is not a registered project in \`projectRegistry\`. Use a registered repository name or \`memory://briefing/default\`.`,
+        }
+    }
 
     const journal = buildJournalContext(context, config, activeProjectNumber, activeWorkspaceId)
     const suppressSystemCwd =

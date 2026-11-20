@@ -28,15 +28,15 @@ function readHttpsJwksBody(
     safeResolve: (res: Response) => void,
     safeReject: (err: unknown) => void
 ): void {
+    res.on('error', safeReject)
     const status = res.statusCode ?? 0
     if (status !== 200) {
-        if ('resume' in res && typeof res.resume === 'function') res.resume()
+        req.destroy()
         safeReject(new Error(`JWKS HTTP error! status: ${String(status)}`))
         return
     }
     const chunks: Buffer[] = []
     let totalBytes = 0
-    res.on('error', safeReject)
     res.on('data', (chunk: Buffer) => {
         totalBytes += chunk.length
         if (totalBytes > MAX_JWKS_RESPONSE_BYTES) {

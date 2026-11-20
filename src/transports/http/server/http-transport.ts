@@ -50,7 +50,7 @@ function isWildcardBindHost(host: string): boolean {
 function isValidWildcardHostHeader(rawHost: string | string[] | undefined): boolean {
     if (typeof rawHost !== 'string') return false
     const trimmed = rawHost.trim()
-    if (trimmed.length === 0 || /\s/.test(trimmed)) return false
+    if (trimmed.length === 0 || /\s/.test(trimmed) || /[@/?#\\]/.test(trimmed)) return false
     try {
         const parsed = new URL(`http://${trimmed}`)
         return (

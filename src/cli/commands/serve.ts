@@ -53,7 +53,7 @@ export async function serveAction(options: z.infer<typeof serveSchema>, command:
     const sensitiveEnvVars = ['GITHUB_TOKEN', 'MCP_AUTH_TOKEN', 'OAUTH_ISSUER', 'OAUTH_JWKS_URI']
     for (const envVar of sensitiveEnvVars) {
         const envValue = process.env[envVar]
-        if (typeof envValue === 'string' && envValue.startsWith('CHANGEME_')) {
+        if (typeof envValue === 'string' && envValue.trim().startsWith('CHANGEME_')) {
             configErrors.push(
                 `FATAL: Insecure configuration detected. ${envVar} contains default placeholder value. Please update your environment variables.`
             )

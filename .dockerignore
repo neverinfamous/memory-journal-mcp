@@ -114,6 +114,7 @@ logs/
 *.key
 .env
 .env.*
+secrets.env
 auth.json
 github_auth.json
 .mcpregistry_*
