@@ -12,7 +12,6 @@ import { activeProjectRegistry, pairStoredScope } from '../../utils/write-scope.
 import { ValidationError } from '../../types/errors.js'
 import { logger } from '../../utils/logger.js'
 import { z } from 'zod'
-import * as p from '@clack/prompts'
 import * as yaml from 'yaml'
 import type { BaseEntryOptionsSchema } from '../schemas.js'
 import { CliExitError, getCliCommandDb } from './db-helper.js'
@@ -106,6 +105,7 @@ export async function parseContent(options: HealedEntryOptions): Promise<string>
             return stdinStr
         }
     } else if (!process.env['CI'] && !process.env['NonInteractive']) {
+        const p = await import('@clack/prompts')
         p.intro('Interactive Entry Creation')
 
         const titlePrompt = await p.text({

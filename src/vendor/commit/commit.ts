@@ -1,5 +1,5 @@
 // @ts-nocheck
-import { execSync, execFileSync, spawnSync } from 'node:child_process';
+import { execFileSync, spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
@@ -20,34 +20,66 @@ import {
 export { cliSchema, CANONICAL_RELATION_TYPES };
 
 const COMMIT_MSG_PREFIX = 'commit-msg-';
+/** [INVARIANT]: Keep in sync with lib-agent-exec mutating-interceptors STALE_INDEX_LOCK_MS (5 minutes). */
+const STALE_LOCK_MS = 5 * 60 * 1000;
+
+function normalizeRelGitPath(relPath: string): string {
+  return relPath.replace(/\\/g, '/');
+}
+
+function getValidatedRepoRelPath(cwd: string, targetPath: string): string | null {
+  const absTarget = path.resolve(cwd, targetPath);
+  const rel = path.relative(cwd, absTarget);
+  if (rel === '' || rel === '.' || rel === '..' || rel.startsWith(`..${path.sep}`) || path.isAbsolute(rel)) {
+    return null;
+  }
+  return normalizeRelGitPath(rel);
+}
 
 /**
- * [INTENT]: Detect when an `--add <path>` target has already been staged as deleted (`D  <path>`) in `.git/index`
- * and removed from disk, where re-running `git add <path>` would fail with exit 128 (`did not match any files`)
- * even though `git commit --only -- <path>` can commit the deletion directly.
+ * [INTENT]: Batched O(1)-subprocess detector for `--add` paths that are missing on disk and
+ * already staged as deletions (`D  <path>`) in `.git/index`, preventing `git add` exit 128.
  */
-export function isAlreadyStagedDeletion(cwd: string, targetPath: string): boolean {
-  const absTarget = path.resolve(cwd, targetPath);
-  if (fs.existsSync(absTarget)) {
-    return false;
+export function findAlreadyStagedDeletions(cwd: string, targetPaths: readonly string[]): Set<string> {
+  const stagedDeletions = new Set<string>();
+  const missingTargets: Array<{ original: string; relPosix: string }> = [];
+
+  for (const targetPath of targetPaths) {
+    const absTarget = path.resolve(cwd, targetPath);
+    if (fs.statSync(absTarget, { throwIfNoEntry: false }) !== undefined) {
+      continue;
+    }
+    const relPosix = getValidatedRepoRelPath(cwd, targetPath);
+    if (relPosix !== null) {
+      missingTargets.push({ original: targetPath, relPosix });
+    }
   }
-  const rel = path.relative(cwd, absTarget);
-  if (rel === '' || rel === '.' || rel === '..' || rel.startsWith(`..${path.sep}`)) {
-    return false;
+  if (missingTargets.length === 0) {
+    return stagedDeletions;
   }
+
+  const relArgs = missingTargets.map((m) => m.relPosix);
   try {
-    const indexRes = spawnSync('git', ['ls-files', '-z', '--', absTarget], {
+    const indexRes = spawnSync('git', ['ls-files', '-z', '--', ...relArgs], {
       cwd,
       encoding: 'utf8',
       timeout: 10000,
       windowsHide: true,
     });
-    if (indexRes.status !== 0 || (typeof indexRes.stdout === 'string' && indexRes.stdout.length > 0)) {
-      return false;
+    if (indexRes.status !== 0) {
+      return stagedDeletions;
     }
+    const indexedSet = new Set(
+      (typeof indexRes.stdout === 'string' ? indexRes.stdout : '').split('\0').filter(Boolean)
+    );
+    const unindexedTargets = missingTargets.filter((m) => !indexedSet.has(m.relPosix));
+    if (unindexedTargets.length === 0) {
+      return stagedDeletions;
+    }
+
     const cachedDelRes = spawnSync(
       'git',
-      ['diff', '--cached', '--name-only', '--diff-filter=D', '-z', '--', absTarget],
+      ['diff', '--cached', '--name-only', '--diff-filter=D', '-z', '--', ...unindexedTargets.map((m) => m.relPosix)],
       {
         cwd,
         encoding: 'utf8',
@@ -55,76 +87,89 @@ export function isAlreadyStagedDeletion(cwd: string, targetPath: string): boolea
         windowsHide: true,
       },
     );
-    return cachedDelRes.status === 0 && typeof cachedDelRes.stdout === 'string' && cachedDelRes.stdout.length > 0;
+    if (cachedDelRes.status !== 0 || typeof cachedDelRes.stdout !== 'string') {
+      return stagedDeletions;
+    }
+    const cachedDeletedSet = new Set(cachedDelRes.stdout.split('\0').filter(Boolean));
+    for (const item of unindexedTargets) {
+      if (cachedDeletedSet.has(item.relPosix)) {
+        stagedDeletions.add(item.original);
+      }
+    }
   } catch {
-    return false;
+    return stagedDeletions;
+  }
+  return stagedDeletions;
+}
+
+/**
+ * [INTENT]: Detect when a single `--add <path>` target has already been staged as deleted (`D  <path>`).
+ */
+export function isAlreadyStagedDeletion(cwd: string, targetPath: string): boolean {
+  return findAlreadyStagedDeletions(cwd, [targetPath]).has(targetPath);
+}
+
+function resolveGitDir(cwd: string): string | null {
+  try {
+    const gitDir = execFileSync('git', ['rev-parse', '--git-dir'], {
+      encoding: 'utf-8',
+      cwd,
+      windowsHide: true,
+    }).trim();
+    return gitDir.length > 0 ? path.resolve(cwd, gitDir) : null;
+  } catch {
+    return null;
   }
 }
 
-// [INTENT]: Validates the git index state to prevent accidental staging of agent scratch payloads. [SIDE-EFFECT]: Aborts process if '.agents/scratch' paths are detected in the staging area. [AGENT-HINT]: Do NOT bypass this check; it is a critical safeguard for the project repository.
-function ensureStagedFiles(cwd: string, filesToAdd?: string[]): void {
-  try {
-    const gitDir = execSync('git rev-parse --git-dir', { encoding: 'utf-8', cwd }).trim();
-    const resolvedGitDir = path.resolve(cwd, gitDir);
-    const lockFile = path.join(resolvedGitDir, 'index.lock');
-    if (fs.existsSync(lockFile)) {
-      const ageMs = Date.now() - fs.statSync(lockFile).mtimeMs;
-      if (ageMs > 5 * 60 * 1000) {
-        try {
-          fs.unlinkSync(lockFile);
-          console.warn(`⚠️ AUTONOMOUS HEALING: Removed stale git index.lock (${Math.round(ageMs / 60000)}m old) in ${resolvedGitDir}`);
-        } catch {
-          // Ignore and let git surface the error if locked by an active process
-        }
-      }
-    }
-  } catch {
-    // Ignore error here and let git commands catch it properly
-  }
-
-  if (filesToAdd !== undefined && filesToAdd.length > 0) {
-    const pathsToStage = filesToAdd.filter(f => !isAlreadyStagedDeletion(cwd, f));
-    if (pathsToStage.length < filesToAdd.length) {
-      console.warn(
-        '⚠️ AUTONOMOUS HEALING: Skipping git add for already-staged deletion(s) (preserving staged removal for commit).',
-      );
-    }
-    if (pathsToStage.length > 0) {
-      try {
-        execFileSync('git', ['add', ...pathsToStage], { stdio: 'inherit', cwd });
-      } catch (e) {
-        fatalError(`Error adding files: ${getErrorMessage(e)}`);
-      }
+function healStaleIndexLock(resolvedGitDir: string): void {
+  const lockFile = path.join(resolvedGitDir, 'index.lock');
+  const lockStats = fs.statSync(lockFile, { throwIfNoEntry: false });
+  if (lockStats === undefined) return;
+  const ageMs = Date.now() - lockStats.mtimeMs;
+  if (ageMs > STALE_LOCK_MS) {
+    try {
+      fs.unlinkSync(lockFile);
+      console.warn(`⚠️ AUTONOMOUS HEALING: Removed stale git index.lock (${Math.round(ageMs / 60000)}m old) in ${resolvedGitDir}`);
+    } catch {
+      // Ignore and let git surface the error if locked by an active process
     }
   }
+}
 
-  try {
-    const gitDir = execSync('git rev-parse --git-dir', { encoding: 'utf-8', cwd }).trim();
-    const resolvedGitDir = path.resolve(cwd, gitDir);
-    if (fs.existsSync(path.join(resolvedGitDir, 'MERGE_HEAD')) ||
-        fs.existsSync(path.join(resolvedGitDir, 'rebase-merge')) ||
-        fs.existsSync(path.join(resolvedGitDir, 'rebase-apply'))) {
-      fatalError('Repository is in a merge/rebase state. Resolve conflicts first.');
-    }
-  } catch {
-    // Ignore error here and let git status catch it properly
+function assertNoMergeRebaseConflict(resolvedGitDir: string): void {
+  if (
+    fs.statSync(path.join(resolvedGitDir, 'MERGE_HEAD'), { throwIfNoEntry: false }) !== undefined ||
+    fs.statSync(path.join(resolvedGitDir, 'rebase-merge'), { throwIfNoEntry: false }) !== undefined ||
+    fs.statSync(path.join(resolvedGitDir, 'rebase-apply'), { throwIfNoEntry: false }) !== undefined
+  ) {
+    fatalError('Repository is in a merge/rebase state. Resolve conflicts first.');
   }
+}
 
-  let status: string;
-  try {
-    const statusArgs = ['status', '-z'];
-    if (filesToAdd && filesToAdd.length > 0 && !filesToAdd.some(f => path.resolve(cwd, f) === path.resolve(cwd))) {
-      statusArgs.push('-uno', '--', ...filesToAdd);
-    }
-    status = execFileSync('git', statusArgs, { encoding: 'utf-8', cwd });
-  } catch (e) {
-    fatalError(`Not a git repository or git command failed.\n${getErrorMessage(e)}`);
+function stageExplicitFiles(cwd: string, filesToAdd: readonly string[]): void {
+  const stagedDeletions = findAlreadyStagedDeletions(cwd, filesToAdd);
+  const pathsToStage = filesToAdd.filter((f) => !stagedDeletions.has(f));
+  if (pathsToStage.length < filesToAdd.length) {
+    console.warn(
+      '⚠️ AUTONOMOUS HEALING: Skipping git add for already-staged deletion(s) (preserving staged removal for commit).',
+    );
   }
+  if (pathsToStage.length > 0) {
+    try {
+      execFileSync('git', ['add', ...pathsToStage], { stdio: 'inherit', cwd, windowsHide: true });
+    } catch (e) {
+      fatalError(`Error adding files: ${getErrorMessage(e)}`);
+    }
+  }
+}
 
+function parseStagedStatus(status: string): { hasStagedFiles: boolean; stagedScratchFiles: string[]; stagedFiles: string[] } {
   const parts = status.split('\0');
   const stagedScratchFiles: string[] = [];
+  const stagedFiles: string[] = [];
   let hasStagedFiles = false;
-  
+
   let i = 0;
   while (i < parts.length) {
     const part = parts[i];
@@ -135,31 +180,71 @@ function ensureStagedFiles(cwd: string, filesToAdd?: string[]): void {
     const indexStatus = part[0];
     const workTreeStatus = part[1];
     const filepath = part.substring(3);
-    
+
     if (indexStatus !== ' ' && indexStatus !== '?') {
       hasStagedFiles = true;
+      stagedFiles.push(filepath);
       if (indexStatus !== 'D') {
-        if (filepath.includes('scratch/') || filepath.includes('.agents/scratch') || filepath.endsWith('scratch.ts') || filepath.endsWith('scratch.js')) {
+        if (
+          filepath.includes('scratch/') ||
+          filepath.includes('.agents/scratch') ||
+          filepath.endsWith('scratch.ts') ||
+          filepath.endsWith('scratch.js')
+        ) {
           stagedScratchFiles.push(filepath);
         }
       }
     }
-    
+
     if (indexStatus === 'R' || indexStatus === 'C' || workTreeStatus === 'R' || workTreeStatus === 'C') {
       i += 2;
     } else {
       i += 1;
     }
   }
-  
+  return { hasStagedFiles, stagedScratchFiles, stagedFiles };
+}
+
+// [INTENT]: Validates the git index state to prevent accidental staging of agent scratch payloads. [SIDE-EFFECT]: Aborts process if '.agents/scratch' paths are detected in the staging area. [AGENT-HINT]: Do NOT bypass this check; it is a critical safeguard for the project repository.
+function ensureStagedFiles(cwd: string, filesToAdd?: string[]): string[] {
+  const resolvedGitDir = resolveGitDir(cwd);
+  if (resolvedGitDir !== null) {
+    healStaleIndexLock(resolvedGitDir);
+  }
+
+  if (filesToAdd !== undefined && filesToAdd.length > 0) {
+    stageExplicitFiles(cwd, filesToAdd);
+  }
+
+  if (resolvedGitDir !== null) {
+    assertNoMergeRebaseConflict(resolvedGitDir);
+  }
+
+  let status: string;
+  try {
+    const statusArgs = ['status', '-z'];
+    if (filesToAdd && filesToAdd.length > 0 && !filesToAdd.some((f) => path.resolve(cwd, f) === path.resolve(cwd))) {
+      statusArgs.push('-uno', '--', ...filesToAdd);
+    }
+    status = execFileSync('git', statusArgs, { encoding: 'utf-8', cwd, windowsHide: true });
+  } catch (e) {
+    fatalError(`Not a git repository or git command failed.\n${getErrorMessage(e)}`);
+  }
+
+  const { hasStagedFiles, stagedScratchFiles, stagedFiles } = parseStagedStatus(status);
+
   if (!hasStagedFiles) {
     console.error('🛠️ AUTONOMOUS HEALING: No files staged for commit.');
     console.error('You MUST explicitly stage the files you want to commit using `git add <file-path>` before running this wrapper.');
     console.error('If you used `git add .` or `--add .`, ensure you actually had modified files to stage.');
-    const shortStatus = execSync('git status --short', { encoding: 'utf-8', cwd });
-    if (shortStatus.trim()) {
-      console.error('Current status:');
-      console.error(shortStatus);
+    try {
+      const shortStatus = execFileSync('git', ['status', '--short'], { encoding: 'utf-8', cwd, windowsHide: true });
+      if (shortStatus.trim()) {
+        console.error('Current status:');
+        console.error(shortStatus);
+      }
+    } catch {
+      // Non-fatal: still abort via fatalError below
     }
     fatalError('No files staged for commit.');
   }
@@ -172,6 +257,8 @@ function ensureStagedFiles(cwd: string, filesToAdd?: string[]): void {
     }
     fatalError('Commit aborted: Scratch files staged.');
   }
+
+  return stagedFiles;
 }
 
 const tempFilesToCleanup = new Set<string>();
@@ -183,7 +270,7 @@ process.on('exit', () => {
 
 function cleanupTempFile(filepath: string): void {
   try {
-    if (fs.existsSync(filepath)) fs.unlinkSync(filepath);
+    if (fs.statSync(filepath, { throwIfNoEntry: false }) !== undefined) fs.unlinkSync(filepath);
     tempFilesToCleanup.delete(filepath);
   } catch { /* ignore */ }
 }
@@ -195,18 +282,18 @@ function executeCommit(header: string, body: string, cwd?: string, onlyFiles?: s
   fs.writeFileSync(msgFile, `${header}${body}`, { mode: 0o600 });
   try {
     const commitArgs = ['commit', '-q', '-F', msgFile];
-    if (onlyFiles && onlyFiles.length > 0 && !onlyFiles.some(f => path.resolve(cwd ?? process.cwd(), f) === path.resolve(cwd ?? process.cwd()))) {
+    if (onlyFiles && onlyFiles.length > 0 && !onlyFiles.some((f) => path.resolve(cwd ?? process.cwd(), f) === path.resolve(cwd ?? process.cwd()))) {
       commitArgs.push('--only', '--', ...onlyFiles);
     }
-    execFileSync('git', commitArgs, { stdio: 'inherit', cwd });
+    execFileSync('git', commitArgs, { stdio: 'inherit', cwd, windowsHide: true });
   } finally {
-      cleanupTempFile(msgFile);
+    cleanupTempFile(msgFile);
   }
 
-  const sha = execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf-8', cwd }).trim();
+  const sha = execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf-8', cwd, windowsHide: true }).trim();
   console.log(`\n✅ Successfully committed ${sha.slice(0, 7)} (${sha})`);
   console.log(`__COMMIT_SHA__:${sha}`);
-  
+
   return sha;
 }
 
@@ -220,18 +307,19 @@ export async function main(rawArgv?: readonly string[]): Promise<void> {
     let cwd = process.cwd();
     if (args.cwd) {
       const targetCwd = path.resolve(args.cwd);
-      if (!fs.existsSync(targetCwd) || !fs.statSync(targetCwd).isDirectory()) {
+      const cwdStats = fs.statSync(targetCwd, { throwIfNoEntry: false });
+      if (cwdStats === undefined || !cwdStats.isDirectory()) {
         fatalError(`Commit failed: Directory does not exist or is not a directory: ${targetCwd}`);
       }
       cwd = targetCwd;
     }
 
     if (args.add) {
-      args.add = args.add.flatMap(p => {
+      args.add = args.add.flatMap((p) => {
         const resolved = path.resolve(cwd, p);
-        if (!fs.existsSync(resolved) && p.includes(' ')) {
+        if (fs.statSync(resolved, { throwIfNoEntry: false }) === undefined && p.includes(' ')) {
           console.warn(`⚠️ AUTONOMOUS HEALING: Path '${p}' not found and contains spaces. Splitting by space to recover hallucinated --add list.`);
-          return p.split(' ').filter(Boolean).map(sp => path.resolve(cwd, sp));
+          return p.split(' ').filter(Boolean).map((sp) => path.resolve(cwd, sp));
         }
         return resolved;
       });
@@ -240,15 +328,16 @@ export async function main(rawArgv?: readonly string[]): Promise<void> {
     const firstLine = args.msg.trim().split('\n')[0];
     const commitMatch = firstLine.match(CONVENTIONAL_COMMIT_REGEX);
     const type = commitMatch ? commitMatch[1] : 'chore';
-    ensureStagedFiles(cwd, args.add);
-    
+    const stagedFiles = ensureStagedFiles(cwd, args.add);
+
     let historyContent = args.history ? args.history.replace(/^\uFEFF/, '').replace(/\r\n/g, '\n') : '';
     if (args['history-file']) {
       const candidateCwdPath = path.resolve(cwd, args['history-file']);
-      const resolvedPath = fs.existsSync(candidateCwdPath)
-        ? candidateCwdPath
-        : path.resolve(args['history-file']);
-      if (!fs.existsSync(resolvedPath)) {
+      const resolvedPath =
+        fs.statSync(candidateCwdPath, { throwIfNoEntry: false }) !== undefined
+          ? candidateCwdPath
+          : path.resolve(args['history-file']);
+      if (fs.statSync(resolvedPath, { throwIfNoEntry: false }) === undefined) {
         console.warn(`⚠️ AUTONOMOUS HEALING: History file '${args['history-file']}' not found. Defaulting to --no-history.`);
         args['no-history'] = true;
       } else {
@@ -275,7 +364,8 @@ export async function main(rawArgv?: readonly string[]): Promise<void> {
       cwd,
       (filepath) => { tempFilesToCleanup.add(filepath); },
       cleanupTempFile,
-      getErrorMessage
+      getErrorMessage,
+      stagedFiles.length > 0 ? stagedFiles : undefined
     );
 
   } catch (error) {

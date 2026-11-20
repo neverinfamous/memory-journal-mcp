@@ -69,6 +69,43 @@ export function getErrorMessage(error: unknown): string {
   return String(error);
 }
 
+const VALID_COMMIT_TYPES: ReadonlySet<string> = new Set([
+  'feat', 'fix', 'docs', 'style', 'refactor', 'perf', 'test', 'build', 'ci', 'chore', 'revert',
+]);
+
+const VALIDATION_PASSED_ALIASES: ReadonlySet<string> = new Set(['pass', 'yes', 'true', 'ok', 'passed']);
+const VALIDATION_FAILED_ALIASES: ReadonlySet<string> = new Set(['fail', 'no', 'false', 'error', 'failed']);
+const VALIDATION_NONE_ALIASES: ReadonlySet<string> = new Set(['skip', 'skipped', 'not-run', 'na', 'n_a', 'none']);
+
+const KEYWORD_RULES: ReadonlyArray<{ type: string; re: RegExp }> = [
+  { type: 'fix', re: /^fix\b\s*/i },
+  { type: 'fix', re: /^resolve\b\s*/i },
+  { type: 'fix', re: /^patch\b\s*/i },
+  { type: 'feat', re: /^add\b\s*/i },
+  { type: 'feat', re: /^implement\b\s*/i },
+  { type: 'feat', re: /^introduce\b\s*/i },
+  { type: 'docs', re: /^doc\b\s*/i },
+  { type: 'docs', re: /^readme\b\s*/i },
+  { type: 'test', re: /^test\b\s*/i },
+  { type: 'test', re: /^spec\b\s*/i },
+  { type: 'refactor', re: /^refactor\b\s*/i },
+  { type: 'refactor', re: /^restructure\b\s*/i },
+];
+
+const CANONICAL_POSITIVE_INT_RE = /^[1-9]\d*$/;
+const SPACE_CONVENTIONAL_RE = /^([A-Za-z0-9_-]+)(?:\s*\(\s*([^)]+?)\s*\))?\s*(!)?[\s:]+(.+)$/;
+
+function matchKeywordPrefix(firstLine: string): string {
+  for (const rule of KEYWORD_RULES) {
+    if (rule.re.test(firstLine)) {
+      const replaced = firstLine.replace(rule.re, '');
+      const stripped = replaced.length > 0 ? replaced.charAt(0).toLowerCase() + replaced.slice(1) : firstLine;
+      return `${rule.type}: ${stripped}`;
+    }
+  }
+  return `chore: ${firstLine}`;
+}
+
 function normalizeCommitMsg(val: unknown): unknown {
   if (typeof val !== 'string') return val;
   const normalized = val.replace(/\r\n/g, '\n');
@@ -83,39 +120,13 @@ function normalizeCommitMsg(val: unknown): unknown {
       corrected = true;
     }
   } else {
-    const spaceMatch = firstLine.match(/^([A-Za-z0-9_-]+)(?:\s*\(\s*([^)]+?)\s*\))?\s*(!)?[\s:]+(.+)$/);
-    if (spaceMatch) {
+    const spaceMatch = firstLine.match(SPACE_CONVENTIONAL_RE);
+    if (spaceMatch && VALID_COMMIT_TYPES.has(spaceMatch[1].toLowerCase())) {
       const [, type, scope, bang, subject] = spaceMatch;
-      const lowerType = type.toLowerCase();
-      const validTypes = ['feat', 'fix', 'docs', 'style', 'refactor', 'perf', 'test', 'build', 'ci', 'chore', 'revert'];
-      if (validTypes.includes(lowerType)) {
-        firstLine = `${lowerType}${scope ? `(${scope})` : ''}${bang || ''}: ${subject}`;
-        corrected = true;
-      }
-    }
-
-    if (!corrected) {
-      const lowerFirst = firstLine.toLowerCase();
-      let matchedType = 'chore';
-      let strippedFirst = firstLine;
-      const keywordMap: Record<string, string> = {
-        fix: 'fix', resolve: 'fix', patch: 'fix',
-        add: 'feat', implement: 'feat', introduce: 'feat',
-        doc: 'docs', readme: 'docs',
-        test: 'test', spec: 'test',
-        refactor: 'refactor', restructure: 'refactor',
-      };
-      for (const [kw, t] of Object.entries(keywordMap)) {
-        if (lowerFirst.startsWith(kw)) {
-          matchedType = t;
-          const replaced = firstLine.replace(new RegExp(`^${kw}\\s*`, 'i'), '');
-          if (replaced.length > 0) {
-            strippedFirst = replaced.charAt(0).toLowerCase() + replaced.slice(1);
-          }
-          break;
-        }
-      }
-      firstLine = `${matchedType}: ${strippedFirst}`;
+      firstLine = `${type.toLowerCase()}${scope ? `(${scope})` : ''}${bang || ''}: ${subject}`;
+      corrected = true;
+    } else {
+      firstLine = matchKeywordPrefix(firstLine);
       corrected = true;
     }
   }
@@ -149,10 +160,9 @@ function normalizeRelateSpecs(val: unknown): unknown {
         console.warn(`⚠️ AUTONOMOUS HEALING: Normalized --relate type '${rawRel}' to '${aliased}'.`);
       }
       const relationType = aliased ?? rawRel;
-      specs.push({
-        targetId: /^\d+$/.test(idStr) ? Number(idStr) : idStr,
-        relationType,
-      });
+      const parsedId = CANONICAL_POSITIVE_INT_RE.test(idStr) ? Number(idStr) : Number.NaN;
+      const targetId = Number.isSafeInteger(parsedId) && String(parsedId) === idStr ? parsedId : idStr;
+      specs.push({ targetId, relationType });
     }
   }
   return specs.length > 0 ? specs : undefined;
@@ -180,15 +190,15 @@ export const cliSchema = z.object({
     if (val === undefined) return undefined;
     if (typeof val === 'string') {
       const lower = val.toLowerCase();
-      if (['pass', 'yes', 'true', 'ok', 'passed'].includes(lower)) {
+      if (VALIDATION_PASSED_ALIASES.has(lower)) {
         if (val !== 'passed') console.warn(`⚠️ AUTONOMOUS HEALING: Normalized validation state '${val}' to 'passed'.`);
         return 'passed';
       }
-      if (['fail', 'no', 'false', 'error', 'failed'].includes(lower)) {
+      if (VALIDATION_FAILED_ALIASES.has(lower)) {
         if (val !== 'failed') console.warn(`⚠️ AUTONOMOUS HEALING: Normalized validation state '${val}' to 'failed'.`);
         return 'failed';
       }
-      if (['skip', 'skipped', 'not-run', 'na', 'n_a', 'none'].includes(lower)) {
+      if (VALIDATION_NONE_ALIASES.has(lower)) {
         if (val !== 'none') console.warn(`⚠️ AUTONOMOUS HEALING: Normalized validation state '${val}' to 'none'.`);
         return 'none';
       }
@@ -234,7 +244,9 @@ export const cliSchema = z.object({
   relate: z.preprocess(
     normalizeRelateSpecs,
     z.array(z.object({
-      targetId: z.number().int().positive(),
+      targetId: z.number().int().positive().refine((n) => Number.isSafeInteger(n), {
+        message: 'Entry ID must be a safe positive integer.',
+      }),
       relationType: z.enum(CANONICAL_RELATION_TYPES),
     })).optional()
   ),
@@ -254,7 +266,7 @@ function showHelpAndExit(): never {
   console.log(`Usage: bun commit.ts [commit message] [options]
 
 Options:
-  --msg <string>         Conventional commit message (e.g. 'feat(core): subject') (or provide as first positional argument)
+  --msg, -m <string>     Conventional commit message (alias: --message; or provide as first positional argument)
   --history <string>     History narrative. Prefix with 'Category: ' to explicitly set category.
   --history-file <path>  Path to a file containing the history narrative (prevents shell escaping issues).
   --no-history           Skip history entry for trivial changes.
@@ -269,7 +281,7 @@ Options:
   --journal              Automatically create a memory journal entry for this commit (auto-populates file anchors).
   --journal-project <id> Specify the project ID for the journal entry (auto-resolved from projectRegistry if omitted).
   --session-id <id>      Conversation/session ID to attach to the automated journal entry.
-  --tags <tag>           Add tag(s) to the automated journal entry (repeatable or comma-separated).
+  --tags <tag>           Add tag(s) to the automated journal entry (alias: --tag; repeatable or comma-separated).
   --relate <id[:type]>   Link commit journal entry to an existing entry (e.g. '14653:evolves_from'; repeatable/comma-separated; aliases resolves/depends_on/relates_to supported).
   --no-auto-link         Disable frontmatter auto_link: true heuristic linking in the automated journal entry.
   --dry-run-links        Forward --dry-run-links to memory-journal-mcp entry create (preview suggested_links without persisting).
@@ -284,9 +296,7 @@ Options:
   process.exit(0);
 }
 
-export function parseArguments(rawArgv?: readonly string[]): CliArgs {
-  const rawArgs = [...(rawArgv ?? process.argv.slice(2))];
-
+function normalizeNegativeAndBulletArgs(rawArgs: string[]): void {
   for (let i = 0; i < rawArgs.length - 1; i++) {
     const currentArg = rawArgs[i];
     const nextArg = rawArgs[i + 1];
@@ -304,43 +314,40 @@ export function parseArguments(rawArgv?: readonly string[]): CliArgs {
       i--;
     }
   }
+}
 
-  function parseCLI() {
-    try {
-      return parseArgs({ args: rawArgs, options: CLI_OPTIONS, allowPositionals: true });
-    } catch (error: unknown) {
-      return match(error)
-        .with({ code: 'ERR_PARSE_ARGS_UNKNOWN_OPTION' }, (e) => fatalError(`Unknown CLI argument. ${getErrorMessage(e)}`))
-        .otherwise((e) => fatalError(`Error parsing CLI arguments: ${getErrorMessage(e)}`));
-    }
+function parseRawCli(rawArgs: string[]) {
+  try {
+    return parseArgs({ args: rawArgs, options: CLI_OPTIONS, allowPositionals: true });
+  } catch (error: unknown) {
+    return match(error)
+      .with({ code: 'ERR_PARSE_ARGS_UNKNOWN_OPTION' }, (e) => fatalError(`Unknown CLI argument. ${getErrorMessage(e)}`))
+      .otherwise((e) => fatalError(`Error parsing CLI arguments: ${getErrorMessage(e)}`));
   }
+}
 
-  const cliResult = parseCLI();
-  const values = cliResult.values;
-  const positionals = cliResult.positionals;
-
+function mergeAliasFlagsAndPositionals(
+  values: ReturnType<typeof parseRawCli>['values'],
+  positionals: string[]
+) {
   const hasMessageFlag = !!(values.msg || values.message);
   const mergedValues = { ...values };
 
   if (values.msg && values.message) {
     console.warn("⚠️ AUTONOMOUS HEALING: Multiple commit messages provided via --msg and --message aliases. Using --msg.");
   }
-
   if (mergedValues.message) {
     mergedValues.msg = mergedValues.msg || mergedValues.message;
     delete mergedValues.message;
   }
-
   if (mergedValues.tag !== undefined) {
     mergedValues.tags = [...(mergedValues.tags ?? []), ...mergedValues.tag];
     delete mergedValues.tag;
   }
-
   if (mergedValues.trust !== undefined && mergedValues.confidence === undefined) {
     console.warn("⚠️ AUTONOMOUS HEALING: Deprecated --trust flag used. Mapping to --confidence.");
     mergedValues.confidence = mergedValues.trust;
   }
-
   if (positionals.length > 0) {
     if (hasMessageFlag) {
       console.warn("⚠️ AUTONOMOUS HEALING: Extra positional arguments detected alongside --msg. Assuming these are space-separated files for --add.");
@@ -353,6 +360,52 @@ export function parseArguments(rawArgv?: readonly string[]): CliArgs {
       }
     }
   }
+  return mergedValues;
+}
+
+function formatZodValidationIssue(
+  err: z.ZodIssue,
+  mergedValues: ReturnType<typeof mergeAliasFlagsAndPositionals>
+): string {
+  return match(err)
+    .with({ code: 'too_small', type: 'string' }, (e) => `Too small: expected string length to be ${e.inclusive ? '>=' : '>'}${e.minimum}`)
+    .with({ code: 'too_small', type: 'array' }, (e) => `Too small: expected array length to be ${e.inclusive ? '>=' : '>'}${e.minimum}`)
+    .with({ code: 'too_small', type: 'number' }, (e) => `Too small: expected number to be ${e.inclusive ? '>=' : '>'}${e.minimum}`)
+    .with({ code: 'too_big', type: 'string' }, (e) => `Too big: expected string length to be ${e.inclusive ? '<=' : '<'}${e.maximum}`)
+    .with({ code: 'too_big', type: 'array' }, (e) => `Too big: expected array length to be ${e.inclusive ? '<=' : '<'}${e.maximum}`)
+    .with({ code: 'too_big', type: 'number' }, (e) => `Too big: expected number to be ${e.inclusive ? '<=' : '<'}${e.maximum}`)
+    .with({ code: 'unrecognized_keys' }, (e) => `Unrecognized keys: ${e.keys.join(', ')}`)
+    .with({ code: P.string, path: ['validation'] }, () => {
+      const states = VALIDATION_STATES.map((v) => `'--validation ${v}'`).join(', ');
+      if (mergedValues.validation === undefined) {
+        return `Missing required flag. You MUST append one of: ${states} to your command.`;
+      }
+      return `Invalid validation status '${mergedValues.validation}'. You MUST append one of: ${states} to your command.`;
+    })
+    .with(
+      { code: P.string, path: ['category'] },
+      () => `Invalid explicit category '${mergedValues.category}'. Must be one of: ${VALID_CATEGORIES.join(', ')}`
+    )
+    .with(
+      { code: 'invalid_type', path: ['relate', P.number, 'targetId'] },
+      () => 'Invalid entry ID in --relate. Expected a positive integer entry ID (e.g. 14653:evolves_from).'
+    )
+    .with(
+      { code: 'invalid_type', received: P.union('nan', 'NaN') },
+      (e) => `Invalid data type for --${String(e.path[0])}. Expected a number, but received a non-numeric value.`
+    )
+    .with({ code: 'invalid_type', path: ['impact'] }, () => `Missing required flag. You MUST append an impact score (e.g. '--impact 0.5').`)
+    .with({ code: 'invalid_type', path: ['confidence'] }, () => `Missing required flag. You MUST append a confidence score (e.g. '--confidence 1.0').`)
+    .with({ code: 'invalid_type' }, () => `Missing required flag.`)
+    .otherwise((e) => e.message);
+}
+
+export function parseArguments(rawArgv?: readonly string[]): CliArgs {
+  const rawArgs = [...(rawArgv ?? process.argv.slice(2))];
+  normalizeNegativeAndBulletArgs(rawArgs);
+
+  const { values, positionals } = parseRawCli(rawArgs);
+  const mergedValues = mergeAliasFlagsAndPositionals(values, positionals);
 
   if (mergedValues.help) {
     showHelpAndExit();
@@ -364,59 +417,11 @@ export function parseArguments(rawArgv?: readonly string[]): CliArgs {
       fatalError('CRITICAL: Missing Commit Message!');
     }
     console.error("🛠️ AUTONOMOUS HEALING: Invalid CLI arguments provided to commit.ts");
-    parsed.error.issues.forEach((err) => {
+    for (const err of parsed.error.issues) {
       const field = err.path.join('.');
-
-      const formattedMsg = match(err)
-        .with({ code: 'too_small', type: 'string' }, (e) => `Too small: expected string length to be ${e.inclusive ? '>=' : '>'}${e.minimum}`)
-        .with({ code: 'too_small', type: 'array' }, (e) => `Too small: expected array length to be ${e.inclusive ? '>=' : '>'}${e.minimum}`)
-        .with({ code: 'too_small', type: 'number' }, (e) => `Too small: expected number to be ${e.inclusive ? '>=' : '>'}${e.minimum}`)
-        .with({ code: 'too_big', type: 'string' }, (e) => `Too big: expected string length to be ${e.inclusive ? '<=' : '<'}${e.maximum}`)
-        .with({ code: 'too_big', type: 'array' }, (e) => `Too big: expected array length to be ${e.inclusive ? '<=' : '<'}${e.maximum}`)
-        .with({ code: 'too_big', type: 'number' }, (e) => `Too big: expected number to be ${e.inclusive ? '<=' : '<'}${e.maximum}`)
-        .with({ code: 'unrecognized_keys' }, (e) => `Unrecognized keys: ${e.keys.join(', ')}`)
-        .with(
-          { code: P.string, path: ['validation'] },
-          () => {
-            if (mergedValues.validation === undefined) {
-              return `Missing required flag. You MUST append one of: ${VALIDATION_STATES.map((v) => `'--validation ${v}'`).join(', ')} to your command.`;
-            }
-            return `Invalid validation status '${mergedValues.validation}'. You MUST append one of: ${VALIDATION_STATES.map((v) => `'--validation ${v}'`).join(', ')} to your command.`;
-          }
-        )
-        .with(
-          { code: P.string, path: ['category'] },
-          () => `Invalid explicit category '${mergedValues.category}'. Must be one of: ${VALID_CATEGORIES.join(', ')}`
-        )
-        .with(
-          { code: 'invalid_type', path: ['relate', P.number, 'targetId'] },
-          () => 'Invalid entry ID in --relate. Expected a positive integer entry ID (e.g. 14653:evolves_from).'
-        )
-        .with(
-          { code: 'invalid_type', received: P.union('nan', 'NaN') },
-          (e) => `Invalid data type for --${String(e.path[0])}. Expected a number, but received a non-numeric value.`
-        )
-        .with(
-          { code: 'invalid_type', path: ['validation'] },
-          () => `Missing required flag. You MUST append one of: ${VALIDATION_STATES.map((v) => `'--validation ${v}'`).join(', ')} to your command.`
-        )
-        .with(
-          { code: 'invalid_type', path: ['impact'] },
-          () => `Missing required flag. You MUST append an impact score (e.g. '--impact 0.5').`
-        )
-        .with(
-          { code: 'invalid_type', path: ['confidence'] },
-          () => `Missing required flag. You MUST append a confidence score (e.g. '--confidence 1.0').`
-        )
-        .with(
-          { code: 'invalid_type' },
-          () => `Missing required flag.`
-        )
-        .otherwise((e) => e.message);
-
       const prefix = err.path.length > 0 ? `--${field}: ` : '';
-      console.error(`- ${prefix}${formattedMsg}`);
-    });
+      console.error(`- ${prefix}${formatZodValidationIssue(err, mergedValues)}`);
+    }
     process.exit(1);
   }
 

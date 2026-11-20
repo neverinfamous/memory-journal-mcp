@@ -315,9 +315,9 @@ function autoCommitDirtyBadgeFiles(filesToUpdate: readonly string[], updatedFile
   if (dirtyFiles.length === 0) return;
   console.log(`\nAuto-committing badge updates for: ${dirtyFiles.join(", ")}`);
   const inv = buildCommitInvocation(ROOT_DIR, dirtyFiles);
-  const tsxCli = inv.args[0] ?? "";
-  if (!fs.existsSync(tsxCli)) {
-    console.error(`Failed to auto-commit badge updates: tsx CLI not found at ${tsxCli}`);
+  const entryScript = inv.args[0] ?? "";
+  if (!fs.existsSync(entryScript)) {
+    console.error(`Failed to auto-commit badge updates: commit entrypoint not found at ${entryScript}`);
     process.exit(1);
   }
 

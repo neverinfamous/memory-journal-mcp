@@ -298,19 +298,26 @@ export function resolveFreshCompiledCommitBundle(
       : projectDir;
   const compiledPath = path.join(repoRoot, 'dist', 'vendor', 'commit', 'commit.js');
   try {
-    if (!fs.existsSync(compiledPath)) {
+    const compiledStats = fs.statSync(compiledPath, { throwIfNoEntry: false });
+    if (compiledStats === undefined || !compiledStats.isFile()) {
       return null;
     }
-    const compiledMtime = fs.statSync(compiledPath).mtimeMs;
-    const sourceCandidates = [
+    const compiledMtime = compiledStats.mtimeMs;
+    const sourceCandidates: string[] = [
       absScript,
       path.join(repoRoot, 'scripts', 'commit.ts'),
-      path.join(repoRoot, 'src', 'vendor', 'commit', 'commit.ts'),
-      path.join(repoRoot, 'src', 'vendor', 'commit', 'commit-journal.ts'),
-      path.join(repoRoot, 'src', 'vendor', 'commit', 'commit-cli-schema.ts'),
     ];
+    const vendorCommitDir = path.join(repoRoot, 'src', 'vendor', 'commit');
+    if (fs.statSync(vendorCommitDir, { throwIfNoEntry: false })?.isDirectory()) {
+      for (const file of fs.readdirSync(vendorCommitDir)) {
+        if (file.endsWith('.ts')) {
+          sourceCandidates.push(path.join(vendorCommitDir, file));
+        }
+      }
+    }
     for (const candidate of sourceCandidates) {
-      if (fs.existsSync(candidate) && fs.statSync(candidate).mtimeMs > compiledMtime) {
+      const candidateStats = fs.statSync(candidate, { throwIfNoEntry: false });
+      if (candidateStats !== undefined && candidateStats.mtimeMs > compiledMtime) {
         return null;
       }
     }
