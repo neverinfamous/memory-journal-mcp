@@ -50,9 +50,15 @@ COPY src/ ./src/
 RUN pnpm run build
 
 # Compile sqlite-vec native extension from source for Alpine (musl libc)
-# We use v0.1.9 to match the package.json version
-RUN curl -L https://github.com/asg017/sqlite-vec/archive/refs/tags/v0.1.9.tar.gz | tar -xz && \
-    cd sqlite-vec-0.1.9 && \
+# Pinned by commit SHA and verified by SHA-256 tarball checksum
+ARG SQLITE_VEC_COMMIT=e9f598abfa0c06b328d8fe5da9c3760cce74be10
+ARG SQLITE_VEC_SHA256=ee2eb0be751c02286d5a6c6c113dd9e754f0ac29973b01aba35a2d736e35ed3b
+RUN curl -fsSL --proto '=https' --tlsv1.2 "https://github.com/asg017/sqlite-vec/archive/${SQLITE_VEC_COMMIT}.tar.gz" -o sqlite-vec.tar.gz && \
+    echo "${SQLITE_VEC_SHA256}  sqlite-vec.tar.gz" | sha256sum -c - && \
+    mkdir -p sqlite-vec-src && \
+    tar -xz --strip-components=1 -C sqlite-vec-src -f sqlite-vec.tar.gz && \
+    rm -f sqlite-vec.tar.gz && \
+    cd sqlite-vec-src && \
     sed -i 's/typedef u_int8_t uint8_t;//g' sqlite-vec.c && \
     sed -i 's/typedef u_int16_t uint16_t;//g' sqlite-vec.c && \
     sed -i 's/typedef u_int32_t uint32_t;//g' sqlite-vec.c && \
@@ -60,7 +66,7 @@ RUN curl -L https://github.com/asg017/sqlite-vec/archive/refs/tags/v0.1.9.tar.gz
     make loadable && \
     cp dist/vec0.so /app/vec0.so && \
     cd .. && \
-    rm -rf sqlite-vec-0.1.9
+    rm -rf sqlite-vec-src
 
 # Install production-only dependencies in a separate directory for clean copy
 RUN mkdir /app/prod_modules && \

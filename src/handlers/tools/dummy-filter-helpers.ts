@@ -146,6 +146,22 @@ export function isTargetExcludedByRules(
     return excluded
 }
 
+const TEAM_SCOPED_PROMPT_SHIMS = new Set([
+    'team-session-summary',
+    'team_session_summary',
+    'mj_team_session_summary',
+    'create-team-entry',
+    'mj_create_team_entry',
+    'update-team-entry',
+    'mj_update_team_entry',
+])
+
+function appendTeamShimGroup(targets: string[], ...candidates: (string | undefined)[]): string[] {
+    return candidates.some((c) => c !== undefined && TEAM_SCOPED_PROMPT_SHIMS.has(c))
+        ? [...targets, 'team']
+        : targets
+}
+
 /** [M7] Enforce read-only filters, mutating target activation, and explicit `-tool`/`-group` exclusions on dummy aliases. */
 export function isDummyToolAllowedByFilter(
     name: string,
@@ -161,7 +177,11 @@ export function isDummyToolAllowedByFilter(
     if (!isReadOnly && isFilterEffectivelyReadOnly(filterConfig)) {
         return false
     }
-    const matchTargets = info !== undefined ? [name, info.target, info.group] : [name]
+    const matchTargets = appendTeamShimGroup(
+        info !== undefined ? [name, info.target, info.group] : [name],
+        name,
+        info?.target
+    )
     if (isTargetExcludedByRules(matchTargets, filterConfig)) {
         return false
     }
@@ -186,7 +206,7 @@ export function isAutonomousShimBlockedByFilter(
     codemodeInternalFullAccess = false
 ): boolean {
     const shimInfo = resolveDummyTargetInfo(requestedTool)
-    const shimTargets =
+    const rawTargets =
         shimInfo !== undefined
             ? [requestedTool, shimInfo.target, shimInfo.group]
             : requestedTool.startsWith('memory://')
@@ -194,6 +214,7 @@ export function isAutonomousShimBlockedByFilter(
               : matchingPromptName !== undefined
                 ? [requestedTool, matchingPromptName, 'get_prompt', 'prompts']
                 : [requestedTool]
+    const shimTargets = appendTeamShimGroup(rawTargets, requestedTool, shimInfo?.target, matchingPromptName)
 
     if (isTargetExcludedByRules(shimTargets, filterConfig)) {
         return true

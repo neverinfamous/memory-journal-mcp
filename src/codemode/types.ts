@@ -127,6 +127,7 @@ export const DEFAULT_SECURITY_CONFIG: SecurityConfig = {
         /\bReflect\b/, // No Reflect API access or destructuring
         /\bSymbol\s*\./i, // No Symbol access (hasInstance, toPrimitive, etc.)
         /\bnew\s+Proxy\s*\(/i, // No Proxy construction
+        /\bwith\s*\(/, // No sloppy-mode scope injection
         /\bchild_process\b/, // No child processes
         /\bfs\s*\./, // No filesystem
         /\bnet\s*\./, // No networking

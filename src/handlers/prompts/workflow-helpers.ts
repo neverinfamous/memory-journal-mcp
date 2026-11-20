@@ -9,6 +9,7 @@ import { logger } from '../../utils/logger.js'
 import { loadProjectRegistryFromConfig } from '../../utils/workspace-resolver.js'
 import { exactRegistryKey, workspacesForProject } from '../../utils/write-scope.js'
 import type { BriefingConfig } from '../resources/shared.js'
+import { sliceUntrustedInline } from '../resources/uri-and-fencing.js'
 import { RELATIONSHIP_TYPES } from '../../types/entities.js'
 import { enforceTeamRbac, getCallerIdentity } from '../tools/team/rbac.js'
 import {
@@ -252,12 +253,15 @@ export function generateSummaryPrompt(
     const entrySummary =
         recent.length > 0
             ? recent
-                  .map((e) => `- #${String(e.id)} (${e.entryType}) ${e.content.slice(0, 80)}${e.content.length > 80 ? '...' : ''}`)
+                  .map(
+                      (e) =>
+                          `- #${String(e.id)} (${e.entryType}) ${sliceUntrustedInline(e.content, 80, '...')}`
+                  )
                   .join('\n')
             : '- No entries yet'
     const registryHint = getProjectRegistryHint(briefingConfig)
-    const attributionArgs = buildExplicitAttributionArgs(workspaceId, briefingConfig, projectNumber, explicitDefaultRequested)
-    const cliFlags = buildCliAttributionFlags(workspaceId, briefingConfig, projectNumber, explicitDefaultRequested)
+    const attributionArgs = buildExplicitAttributionArgs(workspaceId, briefingConfig, effectiveProjectNumber, explicitDefaultRequested)
+    const cliFlags = buildCliAttributionFlags(workspaceId, briefingConfig, effectiveProjectNumber, explicitDefaultRequested)
 
     return {
         messages: [
@@ -397,13 +401,13 @@ export function generateUpdateEntryPrompt(
     const attributionArgs = buildExplicitAttributionArgs(
         workspaceId,
         briefingConfig,
-        projectNumber,
+        effectiveProjectNumber,
         explicitDefaultRequested
     )
     const cliFlags = buildCliAttributionFlags(
         workspaceId,
         briefingConfig,
-        projectNumber,
+        effectiveProjectNumber,
         explicitDefaultRequested
     )
     const updateApiCall = target === 'team' ? 'mj.team.teamUpdateEntry' : 'mj.admin.updateEntry'

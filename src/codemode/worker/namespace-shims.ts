@@ -171,7 +171,7 @@ export function wrapDelegatingTool(
 
 const SHIM_TABLES = JOURNAL_TABLES
 
-export const schemaHelpFn = (): Promise<unknown> => getSchemaHelp()
+export const schemaHelpFn = Object.freeze((): Promise<unknown> => getSchemaHelp())
 
 /**
  * Creates the `schema` shim proxy for `shimMj`.

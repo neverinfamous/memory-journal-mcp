@@ -13,8 +13,29 @@ import { matchSuggestion } from './errors/suggestions.js'
 import { SENSITIVE_KEY_RE, sanitizeErrorForLogging } from './security-utils.js'
 
 const MAX_ERROR_DETAILS_SCRUB_DEPTH = 6
-const HOST_FILESYSTEM_PATH_RE =
+export const HOST_FILESYSTEM_PATH_RE =
     /(?<![a-zA-Z]:\/\/)(?:[A-Za-z]:[\\/][\w./\\-]+|\\\\[\w.-]+\\[\w./\\-]+|(?<![\w:/])\/(?:Users|home|var|tmp|private|etc|opt|mnt|root|app|data|srv)\/[\w./-]+)/g
+
+function scrubObjectRecord(
+    value: object,
+    depth: number,
+    seen: WeakSet<object>
+): Record<string, unknown> {
+    const out: Record<string, unknown> = {}
+    Object.setPrototypeOf(out, null)
+    if (value instanceof Error) {
+        out['name'] = sanitizeErrorForLogging(value.name)
+        out['message'] = sanitizeErrorMessageForResponse(value.message)
+    }
+    for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
+        const safeKey = sanitizeErrorForLogging(k)
+        out[safeKey] =
+            SENSITIVE_KEY_RE.test(k) || SENSITIVE_KEY_RE.test(safeKey)
+                ? '[REDACTED]'
+                : scrubDetailsValue(v, depth + 1, seen)
+    }
+    return out
+}
 
 function scrubDetailsValue(value: unknown, depth: number, seen: WeakSet<object>): unknown {
     if (typeof value === 'string') {
@@ -28,16 +49,7 @@ function scrubDetailsValue(value: unknown, depth: number, seen: WeakSet<object>)
         if (Array.isArray(value)) {
             return value.map((item) => scrubDetailsValue(item, depth + 1, seen))
         }
-        const out: Record<string, unknown> = {}
-        Object.setPrototypeOf(out, null)
-        for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
-            const safeKey = sanitizeErrorForLogging(k)
-            out[safeKey] =
-                SENSITIVE_KEY_RE.test(k) || SENSITIVE_KEY_RE.test(safeKey)
-                    ? '[REDACTED]'
-                    : scrubDetailsValue(v, depth + 1, seen)
-        }
-        return out
+        return scrubObjectRecord(value, depth, seen)
     } finally {
         seen.delete(value)
     }
@@ -56,7 +68,7 @@ export function formatZodError(error: ZodError): string {
         .join('; ')
 }
 
-function sanitizeErrorMessageForResponse(message: string): string {
+export function sanitizeErrorMessageForResponse(message: string): string {
     return sanitizeErrorForLogging(message).replace(
         /(?:[A-Za-z]:)?(?:[\\/][\w.-]+)+[\\/]?/g,
         '<sanitized_path>'
@@ -125,18 +137,21 @@ export function formatHandlerError(err: unknown): ErrorResponse {
     // MemoryJournalMcpError and subclasses (OAuthError, SecurityError, etc.)
     if (err instanceof MemoryJournalMcpError) {
         const response = err.toResponse()
-        response.error = sanitizeErrorForLogging(response.error)
+        response.error = sanitizeErrorForLogging(response.error).replace(
+            HOST_FILESYSTEM_PATH_RE,
+            '<sanitized_path>'
+        )
         if (Array.isArray(response.aggregated_errors)) {
-            response.aggregated_errors = response.aggregated_errors.map((entry) => ({
-                ...entry,
-                message: sanitizeErrorMessageForResponse(entry.message),
-            }))
+            response.aggregated_errors = response.aggregated_errors.map((entry) => {
+                const scrubbed = scrubObjectRecord(entry, 0, new WeakSet())
+                return {
+                    ...scrubbed,
+                    message: sanitizeErrorMessageForResponse(entry.message),
+                }
+            })
         }
         if (response.details !== undefined) {
-            response.details = scrubDetailsValue(response.details, 0, new WeakSet()) as Record<
-                string,
-                unknown
-            >
+            response.details = scrubObjectRecord(response.details, 0, new WeakSet())
         }
         if (!err.hasExplicitSuggestion) {
             const matched = matchSuggestion(err.message)
@@ -151,20 +166,23 @@ export function formatHandlerError(err: unknown): ErrorResponse {
     if (typeof AggregateError !== 'undefined' && err instanceof AggregateError) {
         return {
             success: false,
-            error: sanitizeErrorForLogging(err.message),
+            error: sanitizeErrorMessageForResponse(err.message),
             code: 'AGGREGATE_ERROR',
             category: 'internal',
             recoverable: false,
             aggregated_errors: err.errors.map((e: unknown) => ({
-                message: sanitizeErrorForLogging(e instanceof Error ? e.message : String(e)),
-                ...(e instanceof Error && e.name ? { name: e.name } : {}),
+                message: sanitizeErrorMessageForResponse(e instanceof Error ? e.message : String(e)),
+                ...(e instanceof Error && e.name ? { name: sanitizeErrorForLogging(e.name) } : {}),
             })),
         }
     }
 
     // Zod validation errors
     if (err instanceof ZodError) {
-        const formatted = sanitizeErrorForLogging(formatZodError(err))
+        const formatted = sanitizeErrorForLogging(formatZodError(err)).replace(
+            HOST_FILESYSTEM_PATH_RE,
+            '<sanitized_path>'
+        )
         const matched = matchSuggestion(formatted)
         return {
             success: false,

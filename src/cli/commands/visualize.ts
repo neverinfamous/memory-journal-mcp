@@ -9,6 +9,7 @@ import {
     getCliCommandDb as getDb,
     resolveCliReadScope,
 } from './db-helper.js'
+import { formatCliError } from './cli-output.js'
 
 export const visualizeSchema = visualizeOptionsSchema
 
@@ -126,7 +127,7 @@ export async function visualizeAction(options: z.infer<typeof visualizeSchema>, 
         }
     } catch (e) {
         failed = true
-        process.stderr.write("Visualize failed: " + (e instanceof Error ? e.message : String(e)) + '\n')
+        process.stderr.write(`Visualize failed: ${formatCliError(e)}\n`)
     } finally {
         db.close()
     }

@@ -7,6 +7,8 @@ import * as vm from 'node:vm'
 import {
     canStartRegexLiteral,
     createDelimiterState,
+    isJsLineTerminator,
+    markLineTerminator,
     scanIdentifierWord,
     skipLineOrBlockComment,
     skipRegexLiteralBody,
@@ -36,81 +38,137 @@ function advanceStringLiteralStep(
     return { inString, isEscaped: false, next: i + 1 }
 }
 
+interface LexicalScanState {
+    inString: string | null
+    spanStart: number
+    isEscaped: boolean
+    prevToken: string
+    lineOnlyWsOrComments: boolean
+    abortToCode: boolean
+}
+
+function stepCodeLexicalChar(
+    code: string,
+    i: number,
+    limit: number,
+    scan: LexicalScanState,
+    delim: ReturnType<typeof createDelimiterState>
+): number {
+    const ch = code[i] ?? ''
+    if (ch === "'" || ch === '"' || ch === '`') {
+        scan.inString = ch
+        scan.spanStart = i
+        scan.lineOnlyWsOrComments = false
+        return i
+    }
+    if (ch === '/' && code[i + 1] !== '/' && code[i + 1] !== '*' && canStartRegexLiteral(scan.prevToken, delim)) {
+        const endRegex = skipRegexLiteralBody(code, i + 1)
+        if (limit < code.length && endRegex > limit) {
+            scan.abortToCode = true
+            return i
+        }
+        scan.prevToken = '/'
+        delim.canAsiRegex = false
+        scan.lineOnlyWsOrComments = false
+        return endRegex - 1
+    }
+    if (
+        (ch === '+' && code[i + 1] === '+') ||
+        (ch === '-' && code[i + 1] === '-') ||
+        (ch === '=' && code[i + 1] === '>') ||
+        (ch === '?' && code[i + 1] === '?') ||
+        (ch === '?' && code[i + 1] === '.' && !/[0-9]/.test(code[i + 2] ?? ''))
+    ) {
+        scan.prevToken = ch + (code[i + 1] ?? '')
+        delim.canAsiRegex = false
+        scan.lineOnlyWsOrComments = false
+        return i + 1
+    }
+    if (
+        /[A-Za-z0-9_$]/.test(ch) ||
+        (ch === '\\' && code[i + 1] === 'u') ||
+        ((code.codePointAt(i) ?? 0) > 0x7f &&
+            /[\p{ID_Start}\p{ID_Continue}$_]/u.test(String.fromCodePoint(code.codePointAt(i) ?? 0)))
+    ) {
+        const ident = scanIdentifierWord(code, i)
+        scan.prevToken = trackIdentifierToken(ident.word, scan.prevToken, delim)
+        scan.lineOnlyWsOrComments = false
+        return ident.next - 1
+    }
+    if (ch === '}' && delim.templateBraces.length > 0 && delim.templateBraces.at(-1) === 0) {
+        delim.templateBraces.pop()
+        scan.inString = '`'
+        scan.spanStart = i
+        scan.isEscaped = false
+        scan.lineOnlyWsOrComments = false
+        return i
+    }
+    if (isJsLineTerminator(ch)) {
+        scan.lineOnlyWsOrComments = true
+        markLineTerminator(delim)
+    } else if (!/\s/.test(ch)) {
+        scan.prevToken = trackPunctuationToken(ch, scan.prevToken, delim)
+        scan.lineOnlyWsOrComments = false
+    }
+    return i
+}
+
 function scanLexicalSpans(
     code: string,
     stopAtOffset?: number
 ): { stateAtOffset: 'code' | 'string' | 'comment'; spans: NonCodeSpan[] } {
     const limit = stopAtOffset ?? code.length
     const spans: NonCodeSpan[] = []
-    let inString: string | null = null
-    let spanStart = -1
-    let isEscaped = false
-    let prevToken = ''
-    const state = createDelimiterState()
+    const delim = createDelimiterState()
+    const scan: LexicalScanState = {
+        inString: null,
+        spanStart: -1,
+        isEscaped: false,
+        prevToken: '',
+        lineOnlyWsOrComments: true,
+        abortToCode: false,
+    }
 
     for (let i = 0; i < limit; i++) {
-        const ch = code[i] ?? ''
-        if (inString !== null) {
-            const step = advanceStringLiteralStep(code, i, inString, isEscaped, state, limit)
-            inString = step.inString
-            isEscaped = step.isEscaped
-            if (step.prevToken !== undefined) prevToken = step.prevToken
-            if (inString === null && stopAtOffset === undefined && spanStart >= 0) {
-                spans.push([spanStart, step.next])
-                spanStart = -1
+        if (scan.inString !== null) {
+            const step = advanceStringLiteralStep(code, i, scan.inString, scan.isEscaped, delim, limit)
+            scan.inString = step.inString
+            scan.isEscaped = step.isEscaped
+            if (step.prevToken !== undefined) {
+                scan.prevToken = step.prevToken
+                delim.canAsiRegex = false
+            }
+            scan.lineOnlyWsOrComments = false
+            if (scan.inString === null && stopAtOffset === undefined && scan.spanStart >= 0) {
+                spans.push([scan.spanStart, step.next])
+                scan.spanStart = -1
             }
             i = step.next - 1
             continue
         }
-        const comment = skipLineOrBlockComment(code, i)
+        const comment = skipLineOrBlockComment(code, i, scan.lineOnlyWsOrComments)
         if (comment !== null) {
-            if (stopAtOffset !== undefined && (comment.next > limit || (comment.next === code.length && comment.unterminated === true))) {
+            if (
+                stopAtOffset !== undefined &&
+                (comment.next > limit || (comment.next === code.length && comment.unterminated === true))
+            ) {
                 return { stateAtOffset: 'comment', spans }
             }
             if (stopAtOffset === undefined) spans.push([i, comment.next])
+            if (comment.hasNewline === true) {
+                scan.lineOnlyWsOrComments = true
+                markLineTerminator(delim)
+            }
             i = comment.next - 1
             continue
         }
-        if (ch === "'" || ch === '"' || ch === '`') {
-            inString = ch
-            spanStart = i
-        } else if (ch === '/' && code[i + 1] !== '/' && code[i + 1] !== '*' && canStartRegexLiteral(prevToken, state.parenCtrl.at(-1) === true)) {
-            const endRegex = skipRegexLiteralBody(code, i + 1)
-            if (stopAtOffset !== undefined && endRegex > limit) return { stateAtOffset: 'code', spans }
-            i = endRegex - 1
-            prevToken = '/'
-        } else if (
-            (ch === '+' && code[i + 1] === '+') ||
-            (ch === '-' && code[i + 1] === '-') ||
-            (ch === '=' && code[i + 1] === '>') ||
-            (ch === '?' && code[i + 1] === '.' && !/[0-9]/.test(code[i + 2] ?? ''))
-        ) {
-            prevToken = ch + (code[i + 1] ?? '')
-            i++
-        } else if (
-            /[A-Za-z0-9_$]/.test(ch) ||
-            (ch === '\\' && code[i + 1] === 'u') ||
-            ((code.codePointAt(i) ?? 0) > 0x7f && /[\p{ID_Start}\p{ID_Continue}$_]/u.test(String.fromCodePoint(code.codePointAt(i) ?? 0)))
-        ) {
-            const ident = scanIdentifierWord(code, i)
-            prevToken = trackIdentifierToken(ident.word, prevToken, state)
-            i = ident.next - 1
-        } else {
-            const closingInterp = ch === '}' && state.templateBraces.length > 0 && state.templateBraces.at(-1) === 0
-            if (closingInterp) {
-                state.templateBraces.pop()
-                inString = '`'
-                spanStart = i
-                isEscaped = false
-            } else if (!/\s/.test(ch)) {
-                prevToken = trackPunctuationToken(ch, prevToken, state)
-            }
-        }
+        i = stepCodeLexicalChar(code, i, limit, scan, delim)
+        if (scan.abortToCode) return { stateAtOffset: 'code', spans }
     }
-    if (stopAtOffset === undefined && inString !== null && spanStart >= 0) {
-        spans.push([spanStart, limit])
+    if (stopAtOffset === undefined && scan.inString !== null && scan.spanStart >= 0) {
+        spans.push([scan.spanStart, limit])
     }
-    return { stateAtOffset: inString !== null ? 'string' : 'code', spans }
+    return { stateAtOffset: scan.inString !== null ? 'string' : 'code', spans }
 }
 
 /** Collects non-code (string/template/comment) ranges in one linear pass for O(log K) offset checks. */
@@ -152,7 +210,7 @@ export function isValidJsScript(src: string): boolean {
     }
     let valid: boolean
     try {
-        new vm.Script(`(async () => {\n${src}\n})()`)
+        new vm.Script(`"use strict";\n(async () => {\n${src}\n})()`)
         valid = true
     } catch {
         valid = false
@@ -247,7 +305,12 @@ export function replaceOutsideNonCode(
 /** Rewrite top-level ESM/CommonJS module statements outside string literals and comments into `mj` bindings. */
 export function rewriteModuleImportsAndExports(src: string): string {
     let executionCode = src
-    if (executionCode.includes('export') && executionCode.includes('{') && executionCode.includes('}')) {
+    const exportDefaultCount = executionCode.match(/\bexport\s+default\b/g)?.length ?? 0
+    if (
+        exportDefaultCount === 1 &&
+        executionCode.includes('{') &&
+        executionCode.includes('}')
+    ) {
         executionCode = replaceOutsideNonCode(
             executionCode,
             /export\s+default\s+async\s+function(?:\s+[\w$]+)?\s*\(([^()\n]{0,500})\)\s*\{([\s\S]*)\}/g,
@@ -286,7 +349,7 @@ export function rewriteModuleImportsAndExports(src: string): string {
     )
     executionCode = replaceOutsideNonCode(
         executionCode,
-        /^\s*require\s*\(\s*['"](?:fs|node:fs|path|node:path|memory-journal(?:-mcp)?|sqlite-journal|mcp|@modelcontextprotocol\/[^'"\n]{1,200})['"]\s*\);?/gm,
+        /^[ \t]*require\s*\(\s*['"](?:fs|node:fs|path|node:path|memory-journal(?:-mcp)?|sqlite-journal|mcp|@modelcontextprotocol\/[^'"\n]{1,200})['"]\s*\);?/gm,
         () => '/* auto-healed require */'
     )
     return replaceOutsideNonCode(

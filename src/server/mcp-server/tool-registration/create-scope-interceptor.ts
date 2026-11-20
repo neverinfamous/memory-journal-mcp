@@ -2,6 +2,9 @@ import type { ToolHandlerConfig } from '../../../types/index.js'
 import { parsePositiveProjectNumber } from '../../../utils/safe-positive-int.js'
 import { resolveProjectContext } from '../../../utils/workspace-resolver.js'
 import { activeProjectRegistry, pairStoredScope } from '../../../utils/write-scope.js'
+import { DUMMY_ENTRY_CREATION_TOOL_NAMES } from '../../../handlers/tools/core/dummy-healing/alias-catalog.js'
+
+const DUMMY_CREATE_SCOPE_SET = new Set<string>(DUMMY_ENTRY_CREATION_TOOL_NAMES)
 
 export { parsePositiveProjectNumber }
 
@@ -152,7 +155,7 @@ export function resolveMcpCreateWorkspaceScope(
     if (typeof toolArgs !== 'object' || toolArgs === null || Array.isArray(toolArgs)) {
         return
     }
-    if (toolName === 'create_entry') {
+    if (toolName === 'create_entry' || (toolName !== undefined && DUMMY_CREATE_SCOPE_SET.has(toolName))) {
         resolveSingleCreateScope(toolArgs, resolverConfig)
         return
     }

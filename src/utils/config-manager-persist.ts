@@ -1,6 +1,7 @@
 import * as fs from 'node:fs'
 import { randomBytes } from 'node:crypto'
 import { stringify as stringifyYaml } from 'yaml'
+import { assertSafeConfigWriteTargetSync } from './config-file-safety.js'
 import {
     BRIEFING_CONFIG_KEY_MAP,
     type BriefingConfigurableKey,
@@ -69,9 +70,11 @@ export function writeTempAndRenameConfig(
     targetPath: string,
     serialized: string
 ): void {
+    assertSafeConfigWriteTargetSync(targetPath)
     const tmpPath = `${targetPath}.${String(process.pid)}.${randomBytes(8).toString('hex')}.tmp`
     try {
         fs.writeFileSync(tmpPath, serialized, { encoding: 'utf-8', flag: 'wx', mode: 0o600 })
+        fs.chmodSync(tmpPath, 0o600)
         fs.renameSync(tmpPath, targetPath)
     } catch (writeErr: unknown) {
         try {

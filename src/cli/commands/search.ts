@@ -4,7 +4,7 @@ import { searchOptionsSchema } from '../schemas.js'
 import { getCliCommandDb as getDb, resolveCliReadScope } from './db-helper.js'
 import { VectorSearchManager } from '../../vector/vector-search-manager/index.js'
 import { hybridSearch } from '../../handlers/tools/search/hybrid.js'
-import { writeCliResult } from './cli-output.js'
+import { formatCliError, writeCliResult } from './cli-output.js'
 
 export const searchSchema = searchOptionsSchema
 
@@ -45,7 +45,7 @@ export async function searchAction(query: string | undefined, options: z.infer<t
         writeCliResult(result, options.json, 'Search finished.')
     } catch (e) {
         failed = true
-        process.stderr.write("Search failed: " + (e instanceof Error ? e.message : String(e)) + '\n')
+        process.stderr.write(`Search failed: ${formatCliError(e)}\n`)
     } finally {
         db.close()
     }

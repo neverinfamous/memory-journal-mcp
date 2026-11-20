@@ -79,21 +79,26 @@ export class AliasManager {
     }
 
     removeAlias(alias: string, workspaceId?: string): boolean {
+        if (workspaceId?.trim() === '*') {
+            throw new ValidationError(
+                "Wildcard workspace_id '*' is not allowed when removing an author alias."
+            )
+        }
         try {
             const scopeId = effectiveWorkspace(workspaceId)
-            const scoped = scopeId !== '*'
-            const deleteSql = scoped
-                ? `DELETE FROM author_aliases WHERE alias = ? COLLATE NOCASE AND workspace_id = ?`
-                : `DELETE FROM author_aliases WHERE alias = ? COLLATE NOCASE`
-            const deleteParams = scoped ? [alias, scopeId] : [alias]
+            const isDefaultScope = scopeId === 'default'
+            const deleteSql = isDefaultScope
+                ? `DELETE FROM author_aliases WHERE id = (SELECT id FROM author_aliases WHERE alias = ? COLLATE NOCASE AND (workspace_id = ? OR workspace_id IS NULL) ORDER BY workspace_id DESC LIMIT 1)`
+                : `DELETE FROM author_aliases WHERE alias = ? COLLATE NOCASE AND workspace_id = ?`
+            const deleteParams = [alias, scopeId]
             const nativeDb = this.db.getNativeDb?.()
             if (nativeDb !== undefined) {
                 return nativeDb.prepare(deleteSql).run(...deleteParams).changes > 0
             }
 
-            const selectSql = scoped
-                ? `SELECT id FROM author_aliases WHERE alias = ? COLLATE NOCASE AND workspace_id = ?`
-                : `SELECT id FROM author_aliases WHERE alias = ? COLLATE NOCASE`
+            const selectSql = isDefaultScope
+                ? `SELECT id FROM author_aliases WHERE alias = ? COLLATE NOCASE AND (workspace_id = ? OR workspace_id IS NULL) ORDER BY workspace_id DESC LIMIT 1`
+                : `SELECT id FROM author_aliases WHERE alias = ? COLLATE NOCASE AND workspace_id = ?`
             const results = this.db.exec(selectSql, deleteParams)
             const row = getSingleRow(results)
             if (!row) return false

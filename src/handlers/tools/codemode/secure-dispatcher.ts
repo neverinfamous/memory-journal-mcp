@@ -148,6 +148,18 @@ async function executeDispatcherCall(
         const normalizedParams = normalized.params
         const boundsErr = validateRpcOverrideBounds(tool, normalizedParams, rpcOverrides, reg)
         if (boundsErr !== undefined) return boundsErr
+        if (
+            tool.name === 'update_configuration' &&
+            sessionContext.config?.codemodeInternalFullAccess !== true
+        ) {
+            return {
+                success: false,
+                error: "Operation 'update_configuration' is blocked inside Code Mode unless --codemode-internal-full-access is enabled.",
+                code: 'PERMISSION_DENIED',
+                category: 'authorization',
+                recoverable: false,
+            }
+        }
 
         if (rpcOverrides?.readonly === true && tool.annotations?.readOnlyHint !== true) {
             return {

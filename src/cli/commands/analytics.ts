@@ -1,7 +1,7 @@
 import type { Command } from 'commander'
 import { type z } from 'zod'
 import { analyticsOptionsSchema } from '../schemas.js'
-import { writeCliResult } from './cli-output.js'
+import { formatCliError, writeCliResult } from './cli-output.js'
 import { getCliCommandDb as getDb, resolveCliReadScope } from './db-helper.js'
 
 export const analyticsSchema = analyticsOptionsSchema
@@ -22,7 +22,7 @@ export async function analyticsStatsAction(options: z.infer<typeof analyticsSche
         writeCliResult(result, options.json, 'Statistics ready.')
     } catch (e) {
         failed = true
-        process.stderr.write("Analytics stats failed: " + (e instanceof Error ? e.message : String(e)) + '\n')
+        process.stderr.write(`Analytics stats failed: ${formatCliError(e)}\n`)
     } finally {
         db.close()
     }
@@ -45,7 +45,7 @@ export async function analyticsInsightsAction(options: z.infer<typeof analyticsS
         writeCliResult(result, options.json, 'Insights ready.')
     } catch (e) {
         failed = true
-        process.stderr.write("Analytics insights failed: " + (e instanceof Error ? e.message : String(e)) + '\n')
+        process.stderr.write(`Analytics insights failed: ${formatCliError(e)}\n`)
     } finally {
         db.close()
     }

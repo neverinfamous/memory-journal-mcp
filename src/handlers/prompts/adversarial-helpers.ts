@@ -127,7 +127,7 @@ const MAX_WORKSPACE_ID_LENGTH = 128
  */
 export function sanitizePromptTarget(target: string): string {
     return target
-        .replace(/[\r\n]+/g, ' ')
+        .replace(/[\r\n\u2028\u2029]+/g, ' ')
         .replaceAll('`', "'")
         .slice(0, MAX_PROMPT_TARGET_LENGTH)
 }

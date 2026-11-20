@@ -1,4 +1,5 @@
 import { logger } from '../../utils/logger.js'
+import { sanitizeErrorMessageForResponse } from '../../utils/error-helpers.js'
 import type { GitHubClient } from './client.js'
 import type { GitHubMilestone } from '../../types/index.js'
 
@@ -69,7 +70,9 @@ export class MilestonesManager {
         } catch (error) {
             logger.error('Failed to get milestones', {
                 module: 'GitHub',
-                error: error instanceof Error ? error.message : String(error),
+                error: sanitizeErrorMessageForResponse(
+                    error instanceof Error ? error.message : String(error)
+                ),
             })
             throw error
         }
@@ -106,7 +109,9 @@ export class MilestonesManager {
             logger.error('Failed to get milestone', {
                 module: 'GitHub',
                 entityId: milestoneNumber,
-                error: error instanceof Error ? error.message : String(error),
+                error: sanitizeErrorMessageForResponse(
+                    error instanceof Error ? error.message : String(error)
+                ),
             })
             throw error
         }
@@ -147,7 +152,9 @@ export class MilestonesManager {
         } catch (error) {
             logger.error('Failed to create milestone', {
                 module: 'GitHub',
-                error: error instanceof Error ? error.message : String(error),
+                error: sanitizeErrorMessageForResponse(
+                    error instanceof Error ? error.message : String(error)
+                ),
                 context: { title, owner, repo },
             })
             throw error
@@ -201,7 +208,9 @@ export class MilestonesManager {
             logger.error('Failed to update milestone', {
                 module: 'GitHub',
                 entityId: milestoneNumber,
-                error: error instanceof Error ? error.message : String(error),
+                error: sanitizeErrorMessageForResponse(
+                    error instanceof Error ? error.message : String(error)
+                ),
             })
             throw error
         } finally {
@@ -235,7 +244,9 @@ export class MilestonesManager {
 
             return { success: true }
         } catch (error) {
-            const errorMessage = error instanceof Error ? error.message : String(error)
+            const errorMessage = sanitizeErrorMessageForResponse(
+                error instanceof Error ? error.message : String(error)
+            )
             logger.error('Failed to delete milestone', {
                 module: 'GitHub',
                 entityId: milestoneNumber,

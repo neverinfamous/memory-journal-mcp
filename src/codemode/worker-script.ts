@@ -35,7 +35,9 @@ import {
     getOrCompileVmScript,
     isExecuteMessage,
     resolveWorkerMetadata,
+    safeFormatSandboxError,
 } from './worker/script-and-metadata-cache.js'
+import { hasUnbalancedClosingDelimiter, stripCommentsAndStrings } from './security-stripper.js'
 
 // [L4] Hardening failures are fatal: refuse to execute any user code in a half-hardened realm.
 const hardeningFailures = hardenOuterFunctionPrototypes()
@@ -51,17 +53,21 @@ let activeAbortCleanup: ((reason: string) => void) | null = null
 function postExecutionFailure(reason: unknown): void {
     if (activeExecutionId === null || resultSent) return
     const id = activeExecutionId
+    const formatted = safeFormatSandboxError(reason)
     resultSent = true
     activeAbortCleanup?.('Sandbox execution aborted due to unhandled async error')
-    const error = reason instanceof Error ? reason : new Error(String(reason))
     const result: SandboxResult = {
         success: false,
-        error: error.message,
+        error: formatted.message,
         metrics: { wallTimeMs: 0, cpuTimeMs: 0, memoryUsedMb: 0 },
-        ...(error.stack !== undefined ? { stack: error.stack } : {}),
+        ...(formatted.stack !== undefined ? { stack: formatted.stack } : {}),
     }
     // [H1] Mark async-error failures fatal so WorkerSandbox evicts any still-running background timers/microtasks.
-    parentPort?.postMessage({ type: 'RESULT', id, result, fatal: true })
+    try {
+        parentPort?.postMessage({ type: 'RESULT', id, result, fatal: true })
+    } catch {
+        // Worker is already shutting down or port is closed
+    }
 }
 
 process.on('unhandledRejection', (reason: unknown) => {
@@ -247,7 +253,14 @@ async function executeCode(
                 }
             }
         }
-        const script = getOrCompileVmScript(`(async () => {\n"use strict";\n${transformed}\n})()`)
+        if (hasUnbalancedClosingDelimiter(stripCommentsAndStrings(transformed))) {
+            return {
+                success: false,
+                error: 'Syntax error in Code Mode execution: unbalanced closing delimiter',
+                metrics: { wallTimeMs: 0, cpuTimeMs: 0, memoryUsedMb: 0 },
+            }
+        }
+        const script = getOrCompileVmScript(`"use strict";\n(async () => {\n${transformed}\n})()`)
         const resultPromise = script.runInContext(context, { timeout: timeoutMs }) as Promise<unknown>
         const result = await resultPromise
         const endTime = performance.now()

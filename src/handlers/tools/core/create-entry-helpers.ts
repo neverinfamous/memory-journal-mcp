@@ -155,6 +155,7 @@ export function shareCreatedEntryWithTeam(
 ): { author: string; entry: JournalEntry } | undefined {
     const { teamDb } = context
     if (!teamDb) return undefined
+    assertCanonicalFallbackToolAllowed('team_create_entry', 'team', context)
     enforceAccessBoundary(
         'team_create_entry',
         'tool',

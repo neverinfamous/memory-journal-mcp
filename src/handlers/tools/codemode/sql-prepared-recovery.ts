@@ -130,7 +130,7 @@ function parsePreparedStatementArgs(rawArgs: string): unknown[] | null {
 
 function hasValidJsSyntax(src: string): boolean {
     try {
-        new vm.Script(`(async () => {\n${src}\n})()`)
+        new vm.Script(`"use strict";\n(async () => {\n${src}\n})()`)
         return true
     } catch {
         return false
@@ -227,7 +227,7 @@ function extractPreparedSqlAndRunArgs(
     }
 
     const prefix = code.slice(0, prepIdx)
-    const boundVarMatch = /(?:^|[;\n])\s*(?:(?:const|let|var)\s+)?([A-Za-z_$][\w$]*)\s*=[^;\n]*$/.exec(
+    const boundVarMatch = /(?:^|[;\n])[ \t\r]*(?:(?:const|let|var)\s+)?([A-Za-z_$][\w$]*)\s*=[^;\n]*$/.exec(
         prefix
     )
     const stmtVar = boundVarMatch?.[1]

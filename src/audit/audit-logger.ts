@@ -51,6 +51,51 @@ const MAX_ARCHIVES = 5
 // AuditLogger Class
 // ============================================================================
 
+const MAX_AUDIT_LINE_BYTES = 262_144
+
+function serializeBoundedAuditEntry(entry: AuditEntry): string {
+    const serializeWithFallback = (target: AuditEntry): string => {
+        try {
+            return JSON.stringify(target, (_key: string, value: unknown) =>
+                typeof value === 'bigint' ? value.toString() : value
+            )
+        } catch {
+            return JSON.stringify({
+                timestamp: entry.timestamp,
+                requestId: entry.requestId,
+                ...(entry.sessionId !== undefined ? { sessionId: entry.sessionId } : {}),
+                tool: entry.tool,
+                category: entry.category,
+                scope: entry.scope,
+                user: entry.user,
+                scopes: entry.scopes,
+                durationMs: entry.durationMs,
+                tokenEstimate: entry.tokenEstimate,
+                ...(entry.workspaceId !== undefined ? { workspaceId: entry.workspaceId } : {}),
+                ...(entry.projectNumber !== undefined ? { projectNumber: entry.projectNumber } : {}),
+                success: entry.success,
+                ...(entry.error !== undefined ? { error: entry.error.slice(0, 4096) } : {}),
+                args: { _serializationError: 'Audit args could not be JSON serialized' },
+            })
+        }
+    }
+
+    const serialized = serializeWithFallback(entry)
+    const lineBytes = Buffer.byteLength(serialized, 'utf8')
+    if (lineBytes <= MAX_AUDIT_LINE_BYTES) return serialized
+
+    // Keep the serialized JSONL line well below the 1 MB backward-reader skip ceiling
+    return serializeWithFallback({
+        ...entry,
+        ...(entry.error !== undefined && entry.error.length > 4096
+            ? { error: `${entry.error.slice(0, 4096)}...[truncated]` }
+            : {}),
+        ...(entry.args !== undefined
+            ? { args: { _truncated: true, originalBytes: lineBytes } }
+            : {}),
+    })
+}
+
 export class AuditLogger {
     readonly config: AuditConfig
 
@@ -105,30 +150,7 @@ export class AuditLogger {
     log(entry: AuditEntry): void {
         if (this.closed || !this.config.enabled) return
 
-        let serialized: string
-        try {
-            serialized = JSON.stringify(entry, (_key: string, value: unknown) =>
-                typeof value === 'bigint' ? value.toString() : value
-            )
-        } catch {
-            serialized = JSON.stringify({
-                timestamp: entry.timestamp,
-                requestId: entry.requestId,
-                ...(entry.sessionId !== undefined ? { sessionId: entry.sessionId } : {}),
-                tool: entry.tool,
-                category: entry.category,
-                scope: entry.scope,
-                user: entry.user,
-                scopes: entry.scopes,
-                durationMs: entry.durationMs,
-                tokenEstimate: entry.tokenEstimate,
-                ...(entry.workspaceId !== undefined ? { workspaceId: entry.workspaceId } : {}),
-                ...(entry.projectNumber !== undefined ? { projectNumber: entry.projectNumber } : {}),
-                success: entry.success,
-                ...(entry.error !== undefined ? { error: entry.error } : {}),
-                args: { _serializationError: 'Audit args could not be JSON serialized' },
-            })
-        }
+        const serialized = serializeBoundedAuditEntry(entry)
         this.buffer.push(serialized)
 
         // Hard cap to prevent unbounded heap growth if flush loop hangs

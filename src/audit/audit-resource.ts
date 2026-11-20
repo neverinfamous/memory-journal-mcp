@@ -132,28 +132,76 @@ function fenceNonCanonicalAuditId(value: unknown): string {
         : sliceUntrustedInline(clean, 256, '...')
 }
 
-function sanitizeAuditArgNode(value: unknown, depth: number, seen: WeakSet<object>): unknown {
+const MAX_AUDIT_EGRESS_ARRAY_ITEMS = 50
+const MAX_AUDIT_EGRESS_OBJECT_KEYS = 50
+const MAX_AUDIT_EGRESS_TOTAL_NODES = 250
+
+function sanitizeAuditArgNode(
+    value: unknown,
+    depth: number,
+    seen: WeakSet<object>,
+    budget: { count: number }
+): unknown {
     if (typeof value === 'string') {
         return sliceUntrustedInline(sanitizeErrorForLogging(value), 2048, '...')
     }
     if (typeof value === 'bigint') return value.toString()
     if (value === null || typeof value !== 'object') return value
     if (seen.has(value)) return '[Circular]'
-    if (depth >= 6) return '[Truncated]'
-    seen.add(value)
+    if (depth >= 6 || budget.count >= MAX_AUDIT_EGRESS_TOTAL_NODES) return '[Truncated]'
+    budget.count++
 
+    if (ArrayBuffer.isView(value)) return `[Binary: ${String(value.byteLength)} bytes]`
+    if (value instanceof Date) return value.toISOString()
+    if (value instanceof Error) {
+        return sliceUntrustedInline(sanitizeErrorForLogging(`${value.name}: ${value.message}`), 2048, '...')
+    }
+
+    seen.add(value)
     try {
-        if (Array.isArray(value)) {
-            return value.map((item) => sanitizeAuditArgNode(item, depth + 1, seen))
+        if (value instanceof Set) {
+            return sanitizeAuditArgNode(Array.from(value.values()), depth, seen, budget)
         }
+        if (value instanceof Map) {
+            const out: Record<string, unknown> = {}
+            Object.setPrototypeOf(out, null)
+            let count = 0
+            for (const [mk, mv] of value.entries()) {
+                if (count++ >= MAX_AUDIT_EGRESS_OBJECT_KEYS || budget.count >= MAX_AUDIT_EGRESS_TOTAL_NODES) {
+                    out['_truncatedKeys'] = Math.max(0, value.size - MAX_AUDIT_EGRESS_OBJECT_KEYS)
+                    break
+                }
+                const safeKey = fenceNonCanonicalAuditId(String(mk))
+                out[safeKey] = SENSITIVE_KEY_RE.test(safeKey)
+                    ? '[REDACTED]'
+                    : sanitizeAuditArgNode(mv, depth + 1, seen, budget)
+            }
+            return out
+        }
+        if (Array.isArray(value)) {
+            const sliced = value.slice(0, MAX_AUDIT_EGRESS_ARRAY_ITEMS)
+            const out = sliced.map((item) => sanitizeAuditArgNode(item, depth + 1, seen, budget))
+            if (value.length > MAX_AUDIT_EGRESS_ARRAY_ITEMS) {
+                out.push(`...[+${String(value.length - MAX_AUDIT_EGRESS_ARRAY_ITEMS)} more]`)
+            }
+            return out
+        }
+        const entries = Object.entries(value as Record<string, unknown>)
         const out: Record<string, unknown> = {}
         Object.setPrototypeOf(out, null)
-        for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
+        const limit = Math.min(entries.length, MAX_AUDIT_EGRESS_OBJECT_KEYS)
+        for (let i = 0; i < limit; i++) {
+            const pair = entries[i]
+            if (pair === undefined) continue
+            const [k, v] = pair
             const safeKey = fenceNonCanonicalAuditId(k)
             out[safeKey] =
                 SENSITIVE_KEY_RE.test(k) || SENSITIVE_KEY_RE.test(safeKey)
                     ? '[REDACTED]'
-                    : sanitizeAuditArgNode(v, depth + 1, seen)
+                    : sanitizeAuditArgNode(v, depth + 1, seen, budget)
+        }
+        if (entries.length > MAX_AUDIT_EGRESS_OBJECT_KEYS) {
+            out['_truncatedKeys'] = entries.length - MAX_AUDIT_EGRESS_OBJECT_KEYS
         }
         return out
     } finally {
@@ -165,7 +213,7 @@ function sanitizeAuditArgNode(value: unknown, depth: number, seen: WeakSet<objec
 export function sanitizeAuditEntryForEgress(e: AuditEntry): AuditEntry {
     const isPlainArgs = typeof e.args === 'object' && e.args !== null && !Array.isArray(e.args)
     const cleanArgs = isPlainArgs
-        ? (sanitizeAuditArgNode(e.args, 0, new WeakSet()) as Record<string, unknown>)
+        ? (sanitizeAuditArgNode(e.args, 0, new WeakSet(), { count: 0 }) as Record<string, unknown>)
         : undefined
     const rawSuccess: unknown = e.success
     const safeTimestamp =

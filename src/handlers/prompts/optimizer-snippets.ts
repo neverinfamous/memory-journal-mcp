@@ -36,13 +36,17 @@ function formatRelationshipTypes(stats: Stats): string {
     return `\n  - Relationship Types: ${String(ref)} references | ${String(imp)} implements | ${String(evo)} evolves_from | ${String(res)} resolved | ${String(blk)} blocked_by | ${String(cau)} caused | ${String(cla)} clarifies | ${String(rsp)} response_to`
 }
 
+function escapeBreakdownCell(text: string): string {
+    return text.replace(/[\r\n\u2028\u2029]+/g, ' ').replaceAll('|', '\\|')
+}
+
 function formatProjectBreakdown(stats: Stats): string {
     if (!stats.projectBreakdown || !Array.isArray(stats.projectBreakdown)) return ''
     let text = '\n\n**Project Breakdown:**\n| Project Name | Project # | Entries |\n|---|---|---|\n'
     for (const p of stats.projectBreakdown) {
-        const name =
+        const rawName =
             p.name !== undefined && p.name !== '' ? p.name : `Project ${String(p.project_number)}`
-        text += `| ${name} | ${String(p.project_number)} | ${String(p.entry_count)} |\n`
+        text += `| ${escapeBreakdownCell(rawName)} | ${String(p.project_number)} | ${String(p.entry_count)} |\n`
     }
     return text
 }

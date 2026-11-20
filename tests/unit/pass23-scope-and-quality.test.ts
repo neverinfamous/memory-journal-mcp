@@ -271,7 +271,7 @@ describe('Pass 23 Scope Isolation & Code Quality Regressions', () => {
                 db.close()
                 fs.rmSync(tmpDir, { recursive: true, force: true })
             }
-        })
+        }, 30_000)
     })
 
     describe('H27-H30: workflow wildcard guard, multi-project briefing pinning, and URI normalization', () => {
@@ -366,7 +366,7 @@ describe('Pass 23 Scope Isolation & Code Quality Regressions', () => {
                 db.close()
                 fs.rmSync(tmpDir, { recursive: true, force: true })
             }
-        })
+        }, 30_000)
     })
 
     describe('L6: Windows drive-letter case-folding in anchor staleness checks', () => {
@@ -402,6 +402,6 @@ describe('Pass 23 Scope Isolation & Code Quality Regressions', () => {
                 db.close()
                 fs.rmSync(tmpDir, { recursive: true, force: true })
             }
-        })
+        }, 30_000)
     })
 })

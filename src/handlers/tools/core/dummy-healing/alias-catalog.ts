@@ -313,6 +313,7 @@ const GET_PROJECT_ALIASES = new Set([
     'find_project',
     'project_get',
     'projects_get',
+    'projects_get_project',
     'projects_find',
     'project_find',
 ])
@@ -326,6 +327,8 @@ const LIST_PROJECTS_ALIASES = new Set([
     'get_all_projects',
     'list_all_projects',
     'projects_list',
+    'projects_list_projects',
+    'projects_get_projects',
     'projects_all',
 ])
 

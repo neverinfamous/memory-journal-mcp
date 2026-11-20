@@ -10,7 +10,8 @@ import type {
 } from './shared.js'
 import { resourceProjectNumber, resourceWorkspace } from './shared.js'
 import { logger } from '../../utils/logger.js'
-import { markUntrustedContent, sanitizeAuthor } from '../../utils/security-utils.js'
+import { markUntrustedContent, sanitizeAuthor, sanitizeErrorForLogging } from '../../utils/security-utils.js'
+import { activeProjectRegistry } from '../../utils/write-scope.js'
 import { enforceTeamRbac, getCallerIdentity } from '../tools/team/rbac.js'
 
 // ============================================================================
@@ -162,6 +163,17 @@ export function getTeamResourceDefinitions(): InternalResourceDef[] {
                 const wsId = resourceWorkspace(context)
                 const projectNumber = resourceProjectNumber(context, wsId)
                 enforceTeamResourceRbac(context, wsId)
+                const resolvedRegistry = activeProjectRegistry(context.briefingConfig?.projectRegistry)
+                const hasActiveRegistry =
+                    resolvedRegistry !== undefined && Object.keys(resolvedRegistry).length > 0
+                if ((wsId === '*' || hasActiveRegistry) && projectNumber === undefined) {
+                    return {
+                        data: {
+                            error: 'Missing project_number for team statistics resource read. Configure DEFAULT_PROJECT_NUMBER, register the workspace in projectRegistry, or read memory://agent-context/{repo} first.',
+                            code: -32602,
+                        },
+                    }
+                }
                 const stats = context.teamDb.getStatistics(
                     'week',
                     undefined,
@@ -177,8 +189,9 @@ export function getTeamResourceDefinitions(): InternalResourceDef[] {
                 try {
                     authors = context.teamDb.getAuthorStatistics(wsId, projectNumber)
                 } catch (error: unknown) {
-                    authorStatsWarning =
+                    authorStatsWarning = sanitizeErrorForLogging(
                         error instanceof Error ? error.message : 'Failed to get team author statistics'
+                    )
                     logger.warning('Failed to get team author statistics', {
                         module: 'ResourceHandler',
                         error: authorStatsWarning,

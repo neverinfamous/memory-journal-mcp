@@ -63,11 +63,12 @@ export function buildSchemaHelpPayload(usage?: string): SchemaHelpPayload {
 }
 
 /** Return resolved schema help payload for `mj.schema`. */
-export function getSchemaHelp(usage?: string): Promise<SchemaHelpPayload> {
-    return Promise.resolve(buildSchemaHelpPayload(usage))
-}
+export const getSchemaHelp = Object.freeze(
+    (usage?: string): Promise<SchemaHelpPayload> => Promise.resolve(buildSchemaHelpPayload(usage))
+)
 
 /** Return resolved table list for `mj.schema.listTables()`. */
-export function listJournalTables(): Promise<{ success: boolean; tables: string[] }> {
-    return Promise.resolve({ success: true, tables: [...JOURNAL_TABLES] })
-}
+export const listJournalTables = Object.freeze(
+    (): Promise<{ success: boolean; tables: string[] }> =>
+        Promise.resolve({ success: true, tables: [...JOURNAL_TABLES] })
+)

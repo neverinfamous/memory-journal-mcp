@@ -20,11 +20,12 @@ function decodeUnicodeEscape(code: string, slashIdx: number): { ch: string; next
     const len = code.length
     if (code[slashIdx + 2] === '{') {
         let end = slashIdx + 3
-        while (end < len && end - (slashIdx + 3) < 8 && code[end] !== '}') end++
-        if (end >= len || code[end] !== '}') return null
+        while (end < len && /^[0-9a-fA-F]$/.test(code[end] ?? '')) end++
+        if (end <= slashIdx + 3 || end >= len || code[end] !== '}') return null
         const hex = code.slice(slashIdx + 3, end)
-        if (!/^[0-9a-fA-F]+$/.test(hex)) return null
-        const cp = Number.parseInt(hex, 16)
+        const sig = hex.replace(/^0+/, '') || '0'
+        if (sig.length > 6) return null
+        const cp = Number.parseInt(sig, 16)
         return cp <= 0x10ffff ? { ch: String.fromCodePoint(cp), next: end + 1 } : null
     }
     if (slashIdx + 6 > len) return null
@@ -197,8 +198,9 @@ export function scanTemplateLiteral(
 
 export function skipLineOrBlockComment(
     code: string,
-    start: number
-): { out: string; next: number; unterminated?: boolean } | null {
+    start: number,
+    allowHtmlClose?: boolean
+): { out: string; next: number; unterminated?: boolean; hasNewline?: boolean } | null {
     const ch = code[start] ?? ''
     const next = start + 1 < code.length ? (code[start + 1] ?? '') : ''
     if (ch === '/' && next === '/') {
@@ -212,9 +214,13 @@ export function skipLineOrBlockComment(
         return { out: ' ', next: i, ...(i >= code.length ? { unterminated: true } : {}) }
     }
     if (ch === '-' && code.slice(start, start + 3) === '-->') {
-        let pos = start - 1
-        while (pos >= 0 && (code[pos] === ' ' || code[pos] === '\t')) pos--
-        if (pos < 0 || isJsLineTerminator(code[pos])) {
+        let canCloseHtml = allowHtmlClose
+        if (canCloseHtml === undefined) {
+            let pos = start - 1
+            while (pos >= 0 && !isJsLineTerminator(code[pos]) && /\s/.test(code[pos] ?? '')) pos--
+            canCloseHtml = pos < 0 || isJsLineTerminator(code[pos])
+        }
+        if (canCloseHtml) {
             let i = start + 3
             while (i < code.length && !isJsLineTerminator(code[i])) i++
             return { out: ' ', next: i, ...(i >= code.length ? { unterminated: true } : {}) }
@@ -222,14 +228,18 @@ export function skipLineOrBlockComment(
     }
     if (ch === '/' && next === '*') {
         let out = ' '
+        let hasNewline = false
         let i = start + 2
         while (i < code.length && !(code[i] === '*' && code[i + 1] === '/')) {
-            if (isJsLineTerminator(code[i])) out += '\n'
+            if (isJsLineTerminator(code[i])) {
+                out += '\n'
+                hasNewline = true
+            }
             i++
         }
         const closed = i < code.length
         if (closed) i += 2
-        return { out, next: i, ...(!closed ? { unterminated: true } : {}) }
+        return { out, next: i, ...(hasNewline ? { hasNewline } : {}), ...(!closed ? { unterminated: true } : {}) }
     }
     return null
 }

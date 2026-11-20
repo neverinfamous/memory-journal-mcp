@@ -33,7 +33,7 @@ export interface YamlParseResult {
  */
 const FORBIDDEN_FRONTMATTER_KEYS = new Set(['__proto__', 'constructor', 'prototype'])
 const MAX_FRONTMATTER_LINES = 500
-const MAX_FRONTMATTER_CONTENT_LENGTH = 512 * 1024
+export const MAX_FRONTMATTER_CONTENT_LENGTH = 512 * 1024
 
 function assignFrontmatterKey(
     metadata: FrontmatterData,

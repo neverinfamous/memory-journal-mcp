@@ -65,7 +65,7 @@ export function isNaturalLanguagePrompt(text: string): boolean {
         return false
     }
     if (NATURAL_VERB_PATTERN.test(trimmed)) return true
-    if (/^\s*([*#-]\s*\*?|\d+\.\s|[A-Z][a-z0-9_-]+:)/m.test(trimmed)) return true
+    if (/^[ \t]*([*#-]\s*\*?|\d+\.\s|[A-Z][a-z0-9_-]+:)/m.test(trimmed)) return true
     return trimmed.split(/\s+/).length >= 3 && !/[;{}=]/.test(trimmed)
 }
 

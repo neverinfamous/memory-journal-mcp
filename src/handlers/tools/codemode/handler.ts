@@ -50,6 +50,7 @@ function filterToolsForSandbox(
         const rawFilter = context.config.filterConfig.raw
         tools = tools.filter(
             (t) =>
+                t.name !== 'update_configuration' &&
                 enabledSet.has(t.name) &&
                 isToolVisibleForFilter(t.name, t.annotations?.readOnlyHint, rawFilter)
         )

@@ -21,7 +21,7 @@ import { AuditLogger } from '../../audit/audit-logger.js'
 import type { AuditEntry } from '../../audit/types.js'
 import { DEFAULT_AUDIT_LOG_MAX_SIZE_BYTES } from '../../audit/types.js'
 import { VectorSearchManager } from '../../vector/vector-search-manager/index.js'
-import { writeCliResult } from './cli-output.js'
+import { formatCliError, writeCliResult } from './cli-output.js'
 
 export const backupSchema = adminBackupOptionsSchema
 export const restoreSchema = adminRestoreOptionsSchema
@@ -43,7 +43,7 @@ export async function backupAction(options: z.infer<typeof backupSchema>, comman
             process.stderr.write(`Backup successful: ${result.path} (${result.sizeBytes} bytes)\n`)
         }
     } catch (e) {
-        process.stderr.write("Backup failed: " + (e instanceof Error ? e.message : String(e)) + '\n')
+        process.stderr.write(`Backup failed: ${formatCliError(e)}\n`)
         exitCode = 1
     } finally {
         db.close()
@@ -64,7 +64,7 @@ export async function restoreAction(file: string, options: z.infer<typeof restor
             process.stderr.write(`Restore successful from ${result.restoredFrom}. Previous entries: ${result.previousEntryCount}, New entries: ${result.newEntryCount}\n`)
         }
     } catch (e) {
-        process.stderr.write("Restore failed: " + (e instanceof Error ? e.message : String(e)) + '\n')
+        process.stderr.write(`Restore failed: ${formatCliError(e)}\n`)
         exitCode = 1
     } finally {
         db.close()
@@ -86,7 +86,7 @@ export async function vacuumAction(options: z.infer<typeof vacuumSchema>, comman
             process.stderr.write("Vacuum and optimize successful.\n")
         }
     } catch (e) {
-        process.stderr.write("Vacuum failed: " + (e instanceof Error ? e.message : String(e)) + '\n')
+        process.stderr.write(`Vacuum failed: ${formatCliError(e)}\n`)
         exitCode = 1
     } finally {
         db.close()
@@ -206,7 +206,7 @@ export async function pruneAction(options: z.infer<typeof pruneSchema>, command:
             exitCode = 1
         }
     } catch (e) {
-        process.stderr.write("Prune failed: " + (e instanceof Error ? e.message : String(e)) + '\n')
+        process.stderr.write(`Prune failed: ${formatCliError(e)}\n`)
         exitCode = 1
     } finally {
         db.close()
@@ -301,7 +301,7 @@ export async function auditAction(options: z.infer<typeof auditSchema>, command:
 
         writeCliResult(result, options.json, `Audit entries matched: ${String(result.length)}`)
     } catch (e) {
-        process.stderr.write("Audit search failed: " + (e instanceof Error ? e.message : String(e)) + '\n')
+        process.stderr.write(`Audit search failed: ${formatCliError(e)}\n`)
         process.exit(1)
     }
 }
@@ -366,7 +366,7 @@ export async function rebuildIndexAction(options: z.infer<typeof rebuildIndexSch
             `Rebuilt vector index (${String(stats.itemCount)} vectors)`
         )
     } catch (e) {
-        process.stderr.write("Rebuild index failed: " + (e instanceof Error ? e.message : String(e)) + '\n')
+        process.stderr.write(`Rebuild index failed: ${formatCliError(e)}\n`)
         exitCode = 1
     } finally {
         db.close()

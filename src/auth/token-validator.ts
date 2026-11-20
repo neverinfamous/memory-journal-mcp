@@ -108,7 +108,7 @@ export class TokenValidator {
             const jwks = this.getJwks()
 
             // Verify the token
-            const { payload } = await jose.jwtVerify(token, jwks, {
+            const { payload, protectedHeader } = await jose.jwtVerify(token, jwks, {
                 issuer: this.issuer,
                 audience: this.audience,
                 clockTolerance: this.clockTolerance,
@@ -117,6 +117,21 @@ export class TokenValidator {
                 // without an expiry cannot become a permanent credential.
                 requiredClaims: ['exp'],
             })
+
+            if (protectedHeader.typ !== undefined) {
+                const normalizedTyp = protectedHeader.typ
+                    .trim()
+                    .toLowerCase()
+                    .replace(/^application\//, '')
+                if (normalizedTyp !== 'jwt' && normalizedTyp !== 'at+jwt') {
+                    throw new jose.errors.JWTClaimValidationFailed(
+                        `Unsupported JWT typ header: ${protectedHeader.typ}`,
+                        payload,
+                        'typ',
+                        'check_failed'
+                    )
+                }
+            }
 
             // Extract and normalize claims
             const claims = this.extractClaims(payload)

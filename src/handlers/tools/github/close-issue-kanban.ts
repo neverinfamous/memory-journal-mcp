@@ -3,6 +3,7 @@
  */
 
 import type { GitHubIntegration } from '../../../github/github-integration/index.js'
+import { sanitizeErrorMessageForResponse } from '../../../utils/error-helpers.js'
 
 export interface KanbanMoveResult {
     moved: boolean
@@ -41,11 +42,20 @@ export async function moveIssueToDone(
             board.statusFieldId,
             doneOption.id
         )
-        return { moved: moveResult.success, error: moveResult.error, projectNumber }
+        return {
+            moved: moveResult.success,
+            error:
+                moveResult.error !== undefined
+                    ? sanitizeErrorMessageForResponse(moveResult.error)
+                    : undefined,
+            projectNumber,
+        }
     } catch (err) {
         return {
             moved: false,
-            error: err instanceof Error ? err.message : String(err),
+            error: sanitizeErrorMessageForResponse(
+                err instanceof Error ? err.message : String(err)
+            ),
             projectNumber,
         }
     }

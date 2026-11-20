@@ -112,6 +112,61 @@ async function fetchLoopbackJwks(urlStr: string, init?: RequestInit): Promise<Re
     })
 }
 
+function createPinnedDnsLookup(
+    primary: ResolvedPublicAddress,
+    resolvedRecords: readonly ResolvedPublicAddress[]
+): NonNullable<https.RequestOptions['lookup']> {
+    return (_hostname, options, callback) => {
+        const wantAll =
+            typeof options === 'object' &&
+            options !== null &&
+            'all' in options &&
+            options.all === true
+        if (wantAll) {
+            const cb = callback as unknown as (
+                err: NodeJS.ErrnoException | null,
+                addresses: ResolvedPublicAddress[]
+            ) => void
+            cb(null, [...resolvedRecords])
+            return
+        }
+        callback(null, primary.address, primary.family)
+    }
+}
+
+function attachJwksDeadlineAndAbort(
+    req: ReturnType<typeof https.request>,
+    signal: AbortSignal | null | undefined,
+    safeReject: (err: unknown) => void
+): NodeJS.Timeout {
+    const deadlineTimer = setTimeout(() => {
+        req.destroy()
+        safeReject(new Error('JWKS request timeout'))
+    }, JWKS_TIMEOUT_MS)
+    deadlineTimer.unref()
+    req.on('error', safeReject)
+    req.on('timeout', () => {
+        req.destroy()
+        safeReject(new Error('JWKS request timeout'))
+    })
+    if (signal !== undefined && signal !== null) {
+        const onAbort = (): void => {
+            clearTimeout(deadlineTimer)
+            req.destroy()
+            safeReject(new Error('JWKS request aborted'))
+        }
+        if (signal.aborted) {
+            onAbort()
+            return deadlineTimer
+        }
+        signal.addEventListener('abort', onAbort, { once: true })
+        req.on('close', () => {
+            signal.removeEventListener('abort', onAbort)
+        })
+    }
+    return deadlineTimer
+}
+
 function fetchPinnedHttpsJwks(
     urlStr: string,
     parsedUrl: URL,
@@ -124,14 +179,23 @@ function fetchPinnedHttpsJwks(
     }
     return new Promise<Response>((resolve, reject) => {
         let settled = false
+        let deadlineTimer: NodeJS.Timeout | undefined
+        const clearDeadline = (): void => {
+            if (deadlineTimer !== undefined) {
+                clearTimeout(deadlineTimer)
+                deadlineTimer = undefined
+            }
+        }
         const safeResolve = (value: Response): void => {
             if (settled) return
             settled = true
+            clearDeadline()
             resolve(value)
         }
         const safeReject = (err: unknown): void => {
             if (settled) return
             settled = true
+            clearDeadline()
             reject(err instanceof Error ? err : new Error(String(err)))
         }
 
@@ -143,49 +207,15 @@ function fetchPinnedHttpsJwks(
                     Accept: 'application/json',
                     Host: parsedUrl.host,
                 },
-                lookup: (_hostname, options, callback) => {
-                    const wantAll =
-                        typeof options === 'object' &&
-                        options !== null &&
-                        'all' in options &&
-                        options.all === true
-                    if (wantAll) {
-                        const cb = callback as unknown as (
-                            err: NodeJS.ErrnoException | null,
-                            addresses: ResolvedPublicAddress[]
-                        ) => void
-                        cb(null, [...resolvedRecords])
-                        return
-                    }
-                    callback(null, primary.address, primary.family)
-                },
+                lookup: createPinnedDnsLookup(primary, resolvedRecords),
                 timeout: JWKS_TIMEOUT_MS,
             },
             (res) => {
                 readHttpsJwksBody(req, res, safeResolve, safeReject)
             }
         )
-        req.on('error', safeReject)
-        req.on('timeout', () => {
-            req.destroy()
-            safeReject(new Error('JWKS request timeout'))
-        })
-        if (init?.signal !== undefined && init.signal !== null) {
-            if (init.signal.aborted) {
-                req.destroy()
-                safeReject(new Error('JWKS request aborted'))
-                return
-            }
-            const onAbort = (): void => {
-                req.destroy()
-                safeReject(new Error('JWKS request aborted'))
-            }
-            init.signal.addEventListener('abort', onAbort, { once: true })
-            req.on('close', () => {
-                init.signal?.removeEventListener('abort', onAbort)
-            })
-        }
-        req.end()
+        deadlineTimer = attachJwksDeadlineAndAbort(req, init?.signal, safeReject)
+        if (!settled) req.end()
     })
 }
 

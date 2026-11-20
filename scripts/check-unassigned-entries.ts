@@ -50,10 +50,25 @@ function resolveEncryptionKey(): string | undefined {
     } catch (err) {
         console.warn(
             'Warning: Failed to read mcp_config.json fallback:',
-            err instanceof Error ? err.message : String(err)
+            sanitizeScriptError(err)
         )
     }
     return undefined
+}
+
+function sanitizeScriptError(err: unknown, secret?: string): string {
+    const raw = err instanceof Error ? err.message : String(err)
+    let safe = raw
+        .replace(/x'[0-9a-fA-F]*'/gi, "x'[REDACTED]'")
+        .replace(/(pragma\s+(?:re)?key\s*=\s*)(?:"(?:[^"]|"")*"|'(?:[^']|'')*')/gi, "$1'[REDACTED]'")
+    if (secret !== undefined && secret.length > 0) {
+        safe = safe.replaceAll(secret, '[REDACTED]')
+        const escaped = secret.replace(/'/g, "''")
+        if (escaped !== secret) {
+            safe = safe.replaceAll(escaped, '[REDACTED]')
+        }
+    }
+    return safe
 }
 
 function openReadonlyDatabase(dbPath: string, rawKey: string | undefined): Database.Database {
@@ -78,11 +93,7 @@ function openReadonlyDatabase(dbPath: string, rawKey: string | undefined): Datab
         if (db?.open) {
             db.close()
         }
-        const rawMsg = err instanceof Error ? err.message : String(err)
-        const safeMsg = rawMsg
-            .replace(/x'[0-9a-fA-F]*'/gi, "x'[REDACTED]'")
-            .replace(/(pragma\s+(?:re)?key\s*=\s*)(?:"(?:[^"]|"")*"|'(?:[^']|'')*')/gi, "$1'[REDACTED]'")
-        console.error(`❌ Could not open database at '${dbPath}': ${safeMsg}`)
+        console.error(`❌ Could not open database at '${dbPath}': ${sanitizeScriptError(err, rawKey)}`)
         process.exit(1)
     }
 }

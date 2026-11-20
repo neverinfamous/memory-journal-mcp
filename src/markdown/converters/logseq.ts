@@ -64,7 +64,7 @@ function transformLogseqLine(
         if (match[2]) addBoundedTag(mergedTags, match[2].toLowerCase())
     }
 
-    line = line.replace(/\[\[([^\]]{1,500})\]\]/g, (_match: string, inner: string) => {
+    line = line.replace(/\[\[([^\][\r\n]{1,500})\]\]/g, (_match: string, inner: string) => {
         const parts = inner.split('|')
         return (parts.length > 1 ? parts[1] : parts[0]) ?? ''
     })

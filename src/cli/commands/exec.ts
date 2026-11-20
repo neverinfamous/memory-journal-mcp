@@ -13,7 +13,7 @@ import { buildServerOptions } from '../server-options-builder.js'
 import { dumpConfigAndExit } from '../dump-config.js'
 import { type z } from 'zod'
 import { execOptionsSchema } from '../schemas.js'
-import { writeCliResult } from './cli-output.js'
+import { formatCliError, writeCliResult } from './cli-output.js'
 
 export const execSchema = execOptionsSchema
 type ExecOptions = z.infer<typeof execSchema>
@@ -189,7 +189,7 @@ export async function execAction(scriptPath: string, options: ExecOptions, comma
         }
         writeCliResult(result, options.json, exitCode === 0 ? 'Execution completed.' : 'Execution failed.')
     } catch (error) {
-        process.stderr.write(`Execution failed: ${error instanceof Error ? error.message : String(error)}\n`)
+        process.stderr.write(`Execution failed: ${formatCliError(error)}\n`)
         exitCode = 1
     } finally {
         try {

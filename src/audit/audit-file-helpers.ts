@@ -41,10 +41,13 @@ function decodeReversedAuditChunk(
         trailingBytes.length > 0
             ? Buffer.concat([chunkSlice, trailingBytes])
             : Buffer.from(chunkSlice)
+    const firstNl = combined.indexOf(0x0a)
     if (startOffset === 0) {
+        if (firstNl === -1 && combined.length > 1_048_576) {
+            return { chunkText: undefined, trailingBytes: Buffer.alloc(0), overflowSkipped: 1 }
+        }
         return { chunkText: combined.toString('utf-8'), trailingBytes: Buffer.alloc(0), overflowSkipped: 0 }
     }
-    const firstNl = combined.indexOf(0x0a)
     if (firstNl === -1) {
         if (combined.length > 1_048_576) {
             return { chunkText: undefined, trailingBytes: Buffer.alloc(0), overflowSkipped: 1 }

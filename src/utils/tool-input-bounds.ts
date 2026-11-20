@@ -23,10 +23,83 @@ export function resolveEffectiveMaxToolInputElements(configured: number | undefi
 }
 
 const POP_ANCESTOR = Symbol('popAncestor')
+const CANONICAL_INDEX_RE = /^(?:0|[1-9]\d{0,9})$/
 
-function isByteBufferInstance(cur: object): cur is ArrayBuffer | SharedArrayBuffer {
-    if (cur instanceof ArrayBuffer) return true
-    return typeof SharedArrayBuffer !== 'undefined' && cur instanceof SharedArrayBuffer
+const mapSizeDesc = Object.getOwnPropertyDescriptor(Map.prototype, 'size')
+const setSizeDesc = Object.getOwnPropertyDescriptor(Set.prototype, 'size')
+const typedArrayProto = Object.getPrototypeOf(Uint8Array.prototype) as object
+const byteLengthDescriptors = [
+    Object.getOwnPropertyDescriptor(typedArrayProto, 'byteLength'),
+    Object.getOwnPropertyDescriptor(DataView.prototype, 'byteLength'),
+    Object.getOwnPropertyDescriptor(ArrayBuffer.prototype, 'byteLength'),
+    typeof SharedArrayBuffer !== 'undefined'
+        ? Object.getOwnPropertyDescriptor(SharedArrayBuffer.prototype, 'byteLength')
+        : undefined,
+] as const
+
+function safeNonNegativeInt(value: unknown): number {
+    if (typeof value !== 'number' || !Number.isFinite(value) || value <= 0) return 0
+    return Math.trunc(value)
+}
+
+function tryReadBoxedStringLength(cur: object): number | null {
+    try {
+        const primitive = String.prototype.valueOf.call(cur)
+        return typeof primitive === 'string' ? primitive.length : null
+    } catch {
+        return null
+    }
+}
+
+function tryReadByteBufferLength(cur: object): number | null {
+    for (const desc of byteLengthDescriptors) {
+        if (desc === undefined) continue
+        try {
+            const len: unknown = desc.get?.call(cur)
+            if (typeof len === 'number') return safeNonNegativeInt(len)
+        } catch {
+            // Internal slot mismatch; try next byte-backed intrinsic
+        }
+    }
+    return null
+}
+
+function tryReadAuthenticMap(cur: object): { size: number; entries: IterableIterator<[unknown, unknown]> } | null {
+    if (mapSizeDesc === undefined) return null
+    try {
+        const rawSize: unknown = mapSizeDesc.get?.call(cur)
+        if (typeof rawSize !== 'number') return null
+        return { size: safeNonNegativeInt(rawSize), entries: Map.prototype.entries.call(cur) }
+    } catch {
+        return null
+    }
+}
+
+function tryReadAuthenticSet(cur: object): { size: number; values: IterableIterator<unknown> } | null {
+    if (setSizeDesc === undefined) return null
+    try {
+        const rawSize: unknown = setSizeDesc.get?.call(cur)
+        if (typeof rawSize !== 'number') return null
+        return { size: safeNonNegativeInt(rawSize), values: Set.prototype.values.call(cur) }
+    } catch {
+        return null
+    }
+}
+
+function pushOwnObjectKeys(cur: object, stack: unknown[], skipArrayIndicesBelow?: number): number {
+    const keys = Object.keys(cur)
+    const rec = cur as Record<string, unknown>
+    let extraCount = 0
+    for (const key of keys) {
+        if (skipArrayIndicesBelow !== undefined && CANONICAL_INDEX_RE.test(key)) {
+            const idx = Number(key)
+            if (idx < skipArrayIndicesBelow) continue
+        }
+        extraCount++
+        const val = rec[key]
+        if (val !== null && typeof val === 'object') stack.push(val)
+    }
+    return extraCount
 }
 
 function pushObjectChildren(
@@ -40,17 +113,84 @@ function pushObjectChildren(
     stack.push(POP_ANCESTOR)
 }
 
+function visitInputContainerNode(
+    cur: object,
+    maxElements: number,
+    state: { count: number },
+    stack: unknown[],
+    ancestors: object[],
+    active: WeakSet<object>
+): boolean {
+    const boxedStrLen = tryReadBoxedStringLength(cur)
+    if (boxedStrLen !== null) {
+        state.count += 1 + boxedStrLen
+        if (state.count > maxElements) return true
+        pushObjectChildren(cur, stack, ancestors, active)
+        state.count += pushOwnObjectKeys(cur, stack, boxedStrLen)
+        return state.count > maxElements
+    }
+    const byteLen = tryReadByteBufferLength(cur)
+    if (byteLen !== null) {
+        state.count += 1 + byteLen
+        if (state.count > maxElements) return true
+        pushObjectChildren(cur, stack, ancestors, active)
+        state.count += pushOwnObjectKeys(cur, stack, byteLen)
+        return state.count > maxElements
+    }
+    if (Array.isArray(cur)) {
+        const arrLen = safeNonNegativeInt(cur.length)
+        state.count += 1 + arrLen
+        if (state.count > maxElements) return true
+        pushObjectChildren(cur, stack, ancestors, active)
+        state.count += pushOwnObjectKeys(cur, stack, arrLen)
+        if (state.count > maxElements) return true
+        const items: readonly unknown[] = cur
+        for (const item of items) {
+            if (item !== null && typeof item === 'object') stack.push(item)
+        }
+        return false
+    }
+    const mapData = tryReadAuthenticMap(cur)
+    if (mapData !== null) {
+        state.count += 1 + mapData.size * 2
+        if (state.count > maxElements) return true
+        pushObjectChildren(cur, stack, ancestors, active)
+        state.count += pushOwnObjectKeys(cur, stack)
+        if (state.count > maxElements) return true
+        for (const [k, v] of mapData.entries) {
+            if (k !== null && typeof k === 'object') stack.push(k)
+            if (v !== null && typeof v === 'object') stack.push(v)
+        }
+        return false
+    }
+    const setData = tryReadAuthenticSet(cur)
+    if (setData !== null) {
+        state.count += 1 + setData.size
+        if (state.count > maxElements) return true
+        pushObjectChildren(cur, stack, ancestors, active)
+        state.count += pushOwnObjectKeys(cur, stack)
+        if (state.count > maxElements) return true
+        for (const item of setData.values) {
+            if (item !== null && typeof item === 'object') stack.push(item)
+        }
+        return false
+    }
+    pushObjectChildren(cur, stack, ancestors, active)
+    state.count += 1 + pushOwnObjectKeys(cur, stack)
+    return state.count > maxElements
+}
+
 /**
  * Counts input elements iteratively (cycle-safe via active-ancestor tracking so shared
- * DAG references count on every expansion, plus O(1) TypedArray/ArrayBuffer/Map/Set bounds)
- * and aborts as soon as `maxElements` is exceeded.
+ * DAG references count on every expansion, plus O(1) internal-slot brand-checked
+ * TypedArray/ArrayBuffer/Map/Set/String/Array expando bounds) and aborts above `maxElements`.
  */
 export function exceedsMaxToolInputElements(value: unknown, maxElements: number): boolean {
     if (!Number.isFinite(maxElements) || maxElements < 0) return false
     const stack: unknown[] = [value]
     const ancestors: object[] = []
     const active = new WeakSet()
-    let count = 0
+    const state = { count: 0 }
 
     while (stack.length > 0) {
         const cur = stack.pop()
@@ -60,60 +200,13 @@ export function exceedsMaxToolInputElements(value: unknown, maxElements: number)
             continue
         }
         if (cur === null || typeof cur !== 'object') {
-            count++
-            if (count > maxElements) return true
+            state.count++
+            if (state.count > maxElements) return true
             continue
         }
         if (active.has(cur)) continue
-
-        if (cur instanceof String || Object.prototype.toString.call(cur) === '[object String]') {
-            count += 1 + (cur as { length: number }).length
-            if (count > maxElements) return true
-            continue
-        }
-        if (ArrayBuffer.isView(cur) || isByteBufferInstance(cur)) {
-            count += 1 + cur.byteLength
-            if (count > maxElements) return true
-            continue
-        }
-        if (Array.isArray(cur)) {
-            count += 1 + cur.length
-            if (count > maxElements) return true
-            pushObjectChildren(cur, stack, ancestors, active)
-            const items: readonly unknown[] = cur
-            for (const item of items) {
-                if (item !== null && typeof item === 'object') stack.push(item)
-            }
-            continue
-        }
-        if (cur instanceof Map) {
-            count += 1 + cur.size * 2
-            if (count > maxElements) return true
-            pushObjectChildren(cur, stack, ancestors, active)
-            for (const [k, v] of cur.entries()) {
-                if (k !== null && typeof k === 'object') stack.push(k)
-                if (v !== null && typeof v === 'object') stack.push(v)
-            }
-            continue
-        }
-        if (cur instanceof Set) {
-            count += 1 + cur.size
-            if (count > maxElements) return true
-            pushObjectChildren(cur, stack, ancestors, active)
-            for (const item of cur.values()) {
-                if (item !== null && typeof item === 'object') stack.push(item)
-            }
-            continue
-        }
-
-        const keys = Object.keys(cur)
-        count += 1 + keys.length
-        if (count > maxElements) return true
-        pushObjectChildren(cur, stack, ancestors, active)
-        const rec = cur as Record<string, unknown>
-        for (const key of keys) {
-            const val = rec[key]
-            if (val !== null && typeof val === 'object') stack.push(val)
+        if (visitInputContainerNode(cur, maxElements, state, stack, ancestors, active)) {
+            return true
         }
     }
     return false

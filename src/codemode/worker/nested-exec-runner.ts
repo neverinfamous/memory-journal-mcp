@@ -102,13 +102,14 @@ export function mergeNestedExecutionContext(
 }
 
 export function enforceNestedResultLimit(rawResult: unknown, maxResultSize: number | undefined): unknown {
-    if (maxResultSize === undefined || rawResult === undefined) return rawResult
+    if (rawResult === undefined) return rawResult
+    const effectiveLimit = maxResultSize ?? 100 * 1024
     const wrapper: SandboxResult = {
         success: true,
         result: rawResult,
         metrics: { wallTimeMs: 0, cpuTimeMs: 0, memoryUsedMb: 0 },
     }
-    serializeAndEnforceEgress(wrapper, maxResultSize)
+    serializeAndEnforceEgress(wrapper, effectiveLimit)
     if (!wrapper.success) {
         throw new Error(wrapper.error ?? 'Nested execution output limit exceeded')
     }

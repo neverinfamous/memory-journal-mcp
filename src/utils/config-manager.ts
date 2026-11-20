@@ -20,6 +20,7 @@ import {
     type UpdateConfigOptions,
 } from './config-manager-helpers.js'
 import { syncBriefingProvenanceFromFile } from './config-manager-baselines.js'
+import { readSafeRegularConfigTextSync } from './config-file-safety.js'
 import {
     applyPersistableConfigKeys,
     serializeConfigObject,
@@ -90,9 +91,11 @@ export class ConfigManager extends EventEmitter {
     }
 
     private readRawConfigObject(): Record<string, unknown> | null {
-        if (!this.configFilePath || !fs.existsSync(this.configFilePath)) return null
+        if (!this.configFilePath) return null
         try {
-            const content = fs.readFileSync(this.configFilePath, 'utf-8')
+            const loaded = readSafeRegularConfigTextSync(this.configFilePath)
+            if (loaded === undefined) return null
+            const content = loaded.content
             const raw: unknown = this.isYamlConfigPath()
                 ? (parseYaml as (text: string) => unknown)(content)
                 : JSON.parse(content)
@@ -255,7 +258,11 @@ export class ConfigManager extends EventEmitter {
         if (!this.configFilePath) return undefined
         this.isWriting = true
         try {
-            const content = fs.readFileSync(this.configFilePath, 'utf-8')
+            const loaded = readSafeRegularConfigTextSync(this.configFilePath)
+            if (loaded === undefined) {
+                throw new Error('Configuration file not found')
+            }
+            const content = loaded.content
             const isYaml = this.isYamlConfigPath()
             const rawParsed: unknown = isYaml
                 ? (parseYaml as (text: string) => unknown)(content)

@@ -34,6 +34,41 @@ export function isExecuteMessage(msg: unknown): msg is ExecuteWorkerMessage {
     )
 }
 
+const MAX_ERROR_STRING_CHARS = 16_384
+
+function boundErrorText(text: string): string {
+    return text.length > MAX_ERROR_STRING_CHARS
+        ? `${text.slice(0, MAX_ERROR_STRING_CHARS)}...[truncated]`
+        : text
+}
+
+/**
+ * Safely extracts error message and stack without throwing on `Object.create(null)` rejection values
+ * and caps error/stack payload sizes prior to structured-clone egress.
+ */
+export function safeFormatSandboxError(reason: unknown): { message: string; stack?: string } {
+    if (reason instanceof Error) {
+        let message: string
+        try {
+            message = typeof reason.message === 'string' ? reason.message : String(reason.message)
+        } catch {
+            message = 'Error'
+        }
+        let stack: string | undefined
+        try {
+            if (typeof reason.stack === 'string') stack = boundErrorText(reason.stack)
+        } catch {
+            stack = undefined
+        }
+        return { message: boundErrorText(message), ...(stack !== undefined ? { stack } : {}) }
+    }
+    try {
+        return { message: boundErrorText(String(reason)) }
+    } catch {
+        return { message: 'Unknown non-primitive sandbox error' }
+    }
+}
+
 export function formatVmErrorResult(
     err: unknown,
     startTime: number,
@@ -41,21 +76,23 @@ export function formatVmErrorResult(
 ): SandboxResult {
     const endTime = performance.now()
     const endCpu = process.cpuUsage(startCpu)
-    const error = err instanceof Error ? err : new Error(String(err))
-    const errString = String(err)
+    const formatted = safeFormatSandboxError(err)
+    let message = formatted.message
     if (
-        errString.includes('missing ) after argument list') ||
-        errString.includes('is not a function') ||
-        errString.includes('Invalid or unexpected token') ||
-        errString.includes('Unexpected token') ||
-        errString.includes('Unexpected identifier') ||
-        errString.includes('Cannot use import statement')
+        message.includes('missing ) after argument list') ||
+        message.includes('is not a function') ||
+        message.includes('Invalid or unexpected token') ||
+        message.includes('Unexpected token') ||
+        message.includes('Unexpected identifier') ||
+        message.includes('Cannot use import statement')
     ) {
-        error.message = `🛠️ AUTONOMOUS HEALING: Syntax error in Code Mode execution (${error.message}). Code Mode requires valid JavaScript code (e.g., 'return await mj.core.getRecentEntries({ limit: 10 })' or 'return await mj.core.createEntry(...)'), not raw SQL statements or unquoted text.\n\n💡 Tip: When querying the journal, use Code Mode methods like 'return await mj.core.getRecentEntries({ limit: 10 })' or 'return await mj.search.searchEntries({ query: "..." })'. When passing long multi-line strings or markdown with embedded quotes/backticks, pass them safely via the \`context\` parameter and reference them as \`context.myParam\`.`
+        message = boundErrorText(
+            `🛠️ AUTONOMOUS HEALING: Syntax error in Code Mode execution (${message}). Code Mode requires valid JavaScript code (e.g., 'return await mj.core.getRecentEntries({ limit: 10 })' or 'return await mj.core.createEntry(...)'), not raw SQL statements or unquoted text.\n\n💡 Tip: When querying the journal, use Code Mode methods like 'return await mj.core.getRecentEntries({ limit: 10 })' or 'return await mj.search.searchEntries({ query: "..." })'. When passing long multi-line strings or markdown with embedded quotes/backticks, pass them safely via the \`context\` parameter and reference them as \`context.myParam\`.`
+        )
     }
     return {
         success: false,
-        error: error.message,
+        error: message,
         metrics: {
             wallTimeMs: Math.round(endTime - startTime),
             cpuTimeMs: Math.round((endCpu.user + endCpu.system) / 1000),

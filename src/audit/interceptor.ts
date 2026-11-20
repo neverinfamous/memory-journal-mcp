@@ -21,7 +21,8 @@ import { getRequiredScope } from '../auth/scope-map.js'
 import { getAuthContext } from '../auth/auth-context.js'
 import { getGrantedAuthScopes } from '../auth/validation.js'
 import { getRequestContext } from '../utils/request-context.js'
-import { SENSITIVE_KEY_RE, sanitizeErrorForLogging } from '../utils/security-utils.js'
+import { sanitizeErrorForLogging } from '../utils/security-utils.js'
+import { scrubAuditArgs } from './audit-arg-scrubber.js'
 import { estimateTokens, estimatePayloadTokens } from '../observability/token-estimator.js'
 import {
     estimateOperationResultTokens,
@@ -141,45 +142,6 @@ function estimateErrorTokens(sanitizedError: string): number {
         _meta: { tokenEstimate: 0 },
     })
     return estimateTokens(enriched, 'json')
-}
-
-const MAX_SCRUB_DEPTH = 6
-
-function scrubAuditArgValue(val: unknown, depth: number, seen: WeakSet<object>): unknown {
-    if (typeof val === 'string') {
-        const clean = sanitizeErrorForLogging(val)
-        return clean.length > 2048 ? `${clean.slice(0, 2048)}...[truncated]` : clean
-    }
-    if (typeof val === 'bigint') return val.toString()
-    if (val === null || typeof val !== 'object') return val
-    if (seen.has(val)) return '[Circular]'
-    if (depth >= MAX_SCRUB_DEPTH) return '[Truncated]'
-    seen.add(val)
-
-    try {
-        if (Array.isArray(val)) {
-            return val.map((item) => scrubAuditArgValue(item, depth + 1, seen))
-        }
-        const out: Record<string, unknown> = {}
-        Object.setPrototypeOf(out, null)
-        for (const [k, v] of Object.entries(val as Record<string, unknown>)) {
-            const cleanKey = sanitizeErrorForLogging(k)
-            const safeKey =
-                cleanKey.length > 256 ? `${cleanKey.slice(0, 256)}...[truncated]` : cleanKey
-            out[safeKey] =
-                SENSITIVE_KEY_RE.test(k) || SENSITIVE_KEY_RE.test(safeKey)
-                    ? '[REDACTED]'
-                    : scrubAuditArgValue(v, depth + 1, seen)
-        }
-        return out
-    } finally {
-        seen.delete(val)
-    }
-}
-
-function scrubAuditArgs(args: unknown): Record<string, unknown> | undefined {
-    if (typeof args !== 'object' || args === null || Array.isArray(args)) return undefined
-    return scrubAuditArgValue(args, 0, new WeakSet()) as Record<string, unknown>
 }
 
 function buildToolAuditEntry(params: {

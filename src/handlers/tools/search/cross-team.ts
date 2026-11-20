@@ -22,10 +22,11 @@ import type { ToolContext, ToolDefinition } from '../../../types/index.js'
 import { ConfigurationError, PermissionError, ValidationError } from '../../../types/errors.js'
 import { enforceAccessBoundary } from '../../../auth/validation.js'
 import { enforceTeamRbac, getCallerIdentity } from '../team/rbac.js'
+import { resolveTeamProjectNumber } from '../team/helpers.js'
 import { formatHandlerError } from '../../../utils/error-helpers.js'
-import { sanitizeAuthor } from '../../../utils/security-utils.js'
+import { sanitizeAuthor, sanitizeErrorForLogging } from '../../../utils/security-utils.js'
 import { resolveWorkspaceId } from '../../../utils/workspace-resolver.js'
-import { activeProjectRegistry, alignedProjectFilter } from '../../../utils/write-scope.js'
+import { activeProjectRegistry } from '../../../utils/write-scope.js'
 import { mergeMultipleSources, type EntryWithSource } from './helpers.js'
 import { logger } from '../../../utils/logger.js'
 
@@ -281,7 +282,9 @@ function collectSettledTeamResults(
             if (authFailure === undefined && result.reason instanceof Error && result.reason.name === 'AuthorizationError') {
                 authFailure = result.reason
             }
-            const errorMessage = result.reason instanceof Error ? result.reason.message : String(result.reason)
+            const errorMessage = sanitizeErrorForLogging(
+                result.reason instanceof Error ? result.reason.message : String(result.reason)
+            )
             errors.push({ team_db: label, error: errorMessage })
             logger.error(`Cross-team search failed for DB: ${label}`, {
                 module: 'CrossTeamSearch',
@@ -301,11 +304,21 @@ export async function handleCrossTeamSearch(
 ): Promise<z.infer<typeof CrossTeamSearchOutputSchema>> {
     const { config } = context
     const wsId = resolveWorkspaceId(args.workspace_id, args.project_number, config)
-    const alignedProject = alignedProjectFilter(
+    const activeRegistry = activeProjectRegistry(config?.projectRegistry)
+    const hasActiveRegistry =
+        activeRegistry !== undefined && Object.keys(activeRegistry).length > 0
+    const resolvedProj = resolveTeamProjectNumber(
+        context,
         wsId,
         args.project_number,
-        activeProjectRegistry(config?.projectRegistry)
+        args.workspace_id
     )
+    const alignedProject = typeof resolvedProj === 'number' ? resolvedProj : undefined
+    if ((wsId === '*' || hasActiveRegistry) && alignedProject === undefined) {
+        throw new ValidationError(
+            'cross_team_search requires an explicit project_number bound to the workspace'
+        )
+    }
     const additionalDbs: Record<string, string> = { ...(config?.additionalTeamDbs ?? {}) }
     const targetLabels = resolveCrossTeamTargetLabels(args, context, additionalDbs)
 

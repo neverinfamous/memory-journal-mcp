@@ -6,10 +6,11 @@
  */
 
 import type { FrontmatterData } from '../frontmatter.js'
+import { ValidationError } from '../../types/errors.js'
 import { convertObsidian } from './obsidian.js'
 import { convertNotion } from './notion.js'
 import { convertLogseq } from './logseq.js'
-import { parseYamlFrontmatter } from './yaml-parser.js'
+import { MAX_FRONTMATTER_CONTENT_LENGTH, parseYamlFrontmatter } from './yaml-parser.js'
 
 export { parseYamlFrontmatter }
 
@@ -36,6 +37,11 @@ export function convertFile(
     format: SourceFormat,
     defaultEntryType?: string
 ): ConvertedFile {
+    if (content.length > MAX_FRONTMATTER_CONTENT_LENGTH) {
+        throw new ValidationError(
+            `External markdown file exceeds maximum converter size of ${String(MAX_FRONTMATTER_CONTENT_LENGTH)} bytes`
+        )
+    }
     switch (format) {
         case 'obsidian':
             return convertObsidian(content, filename, defaultEntryType)

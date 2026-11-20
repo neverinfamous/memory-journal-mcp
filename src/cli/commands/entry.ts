@@ -14,6 +14,7 @@ import {
     validateCliUpdateArgsAndTarget,
     type UpdateEntryCliOptions,
 } from './entry-update-helpers.js'
+import { formatCliError } from './cli-output.js'
 import {
     getDb,
     parseContent,
@@ -53,7 +54,7 @@ function handleCliEntryError(e: unknown, actionLabel: 'create' | 'update'): numb
         )
     } else {
         process.stderr.write(
-            `Failed to ${actionLabel} entry: ${e instanceof Error ? e.message : String(e)}\n`
+            `Failed to ${actionLabel} entry: ${formatCliError(e)}\n`
         )
     }
     return 1

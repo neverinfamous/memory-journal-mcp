@@ -22,6 +22,8 @@ import type { FallbackAccessTarget } from './fallback-interceptors.js'
 import { TOOL_GROUPS } from '../../../filtering/tool-constants.js'
 import { logAgentIssue } from '../../../utils/issue-logger.js'
 import { logger } from '../../../utils/logger.js'
+import { HOST_FILESYSTEM_PATH_RE } from '../../../utils/error-helpers.js'
+import { sanitizeErrorForLogging } from '../../../utils/security-utils.js'
 import { resolveMcpCreateWorkspaceScope } from './create-scope-interceptor.js'
 import { isForbiddenProjectKey } from '../../../utils/project-registry-guards.js'
 import {
@@ -66,7 +68,11 @@ export function toValidationFailureResponse(
         return undefined
     }
 
-    const errorMessage = parseZodErrorsFromMessage(text, text.includes(prefix) ? prefix : undefined)
+    const rawMessage = parseZodErrorsFromMessage(text, text.includes(prefix) ? prefix : undefined)
+    const errorMessage = sanitizeErrorForLogging(rawMessage).replace(
+        HOST_FILESYSTEM_PATH_RE,
+        '<sanitized_path>'
+    )
     const errorResult = {
         success: false,
         error: errorMessage,
@@ -96,6 +102,10 @@ export function toThrownValidationResponse(
     if (errorMessage.includes('Invalid arguments for tool')) {
         errorMessage = parseZodErrorsFromMessage(errorMessage)
     }
+    errorMessage = sanitizeErrorForLogging(errorMessage).replace(
+        HOST_FILESYSTEM_PATH_RE,
+        '<sanitized_path>'
+    )
 
     const errorResult = {
         success: false,

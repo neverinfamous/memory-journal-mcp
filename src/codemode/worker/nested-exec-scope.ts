@@ -8,6 +8,7 @@ import type { ProjectRegistryEntry } from '../../types/index.js'
 import { transformAutoReturn } from '../auto-return.js'
 import { readProjectRegistryPayload } from '../normalizers/generic-field-aliases.js'
 import { validateSandboxCode } from '../security.js'
+import { hasUnbalancedClosingDelimiter, stripCommentsAndStrings } from '../security-stripper.js'
 import {
     dispatchSynthesizedNestedEntry,
     extractNestedAutoVersion,
@@ -273,17 +274,8 @@ export function createSandboxExecutor(options: SandboxExecutorOptions): (arg: un
         const effectiveReadonly = readonlyMode === true || argRec?.['readonly'] === true || argRec?.['read_only'] === true || argRec?.['readOnly'] === true
         const effectiveDryRun = dryRunMode === true || argRec?.['dry_run'] === true || argRec?.['dryRun'] === true
         const effectiveUseTestDb = useTestDbMode === true || argRec?.['use_test_db'] === true || argRec?.['useTestDb'] === true
-        const rawNestedCode =
-            typeof arg === 'string'
-                ? arg
-                : typeof argRec?.['code'] === 'string'
-                  ? argRec['code']
-                  : typeof argRec?.['script'] === 'string'
-                    ? argRec['script']
-                    : typeof argRec?.['query'] === 'string'
-                      ? argRec['query']
-                      : undefined
-        if (rawNestedCode !== undefined && Buffer.byteLength(rawNestedCode, 'utf-8') > 50 * 1024) {
+        const rawNestedCode = readExecutableCode(arg)
+        if (rawNestedCode !== null && rawNestedCode !== '' && Buffer.byteLength(rawNestedCode, 'utf-8') > 50 * 1024) {
             return { success: false, error: 'Code exceeds maximum length of 51200 bytes', code: 'SECURITY_VIOLATION' }
         }
         const narrowed = resolveNestedNarrowedScope(argRec, pinnedWorkspace, pinnedProjectNumber, projectRegistryRaw)
@@ -297,12 +289,15 @@ export function createSandboxExecutor(options: SandboxExecutorOptions): (arg: un
         const transformedCode = transformAutoReturn(codeToExec)
         const validation = validateSandboxCode(transformedCode)
         if (!validation.valid) return { success: false, error: validation.errors.join('; '), code: 'SECURITY_VIOLATION' }
+        if (hasUnbalancedClosingDelimiter(stripCommentsAndStrings(transformedCode))) {
+            return { success: false, error: 'Security validation failed: unbalanced closing delimiter', code: 'SECURITY_VIOLATION' }
+        }
         if (isQueryOnlyArg && !/^(?:return\s+|await\s+mj\.)/.test(codeToExec.trim())) {
             return { success: false, error: 'Nested executeCode query could not be executed as a read-only search.', code: 'VALIDATION_ERROR' }
         }
         if (vmContextRef.current === undefined) return { success: false, error: 'No code was executed', code: 'VALIDATION_ERROR' }
 
-        const wrapped = `(async () => {\n"use strict";\n${transformedCode}\n})()`
+        const wrapped = `"use strict";\n(async () => {\n${transformedCode}\n})()`
         const isolation = buildIsolationOverrides(argRec, timeoutMs, maxResultSize, narrowed)
         const escalates =
             (effectiveReadonly && readonlyMode !== true) ||

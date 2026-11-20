@@ -121,7 +121,7 @@ const TOKEN_PATTERNS = [
     // AWS API Keys
     /(?:AKIA|ABIA|ACCA|ASIA)[0-9A-Z]{16}/g,
     // CLI secret flags (--auth-token, --github-token, --oauth-client-secret, --token, --secret, --password, --passphrase, --api-key, --webhook-auth, --encryption-key, --key)
-    /(--(?:(?:[a-z0-9-]+-)?(?:auth-token|token|secret|password|passphrase|api-key|webhook-auth|encryption-key|private-key)|key)(?:=|\s+))(?:"[^"]*"|'[^']*'|[^\s"']+)/gi,
+    /(--(?:(?:[a-z0-9_-]+[-_])?(?:auth[-_]?token|token|secret|password|passphrase|api[-_]?key|webhook[-_]?auth|encryption[-_]?key|private[-_]?key)|key)(?:=|\s+))("(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|[^\s"']+)/gi,
     // SQLCipher key/rekey pragmas (handles escaped '' / \' within single quotes and "" / \" within double quotes)
     /(pragma\s+(?:re)?key\s*=\s*)(?:"x'[^']*'"|x'[^']*'|'(?:\\.|[^'\\]|'')*'|"(?:\\.|[^"\\]|"")*")/gi,
     // URL embedded credentials
@@ -134,7 +134,7 @@ const TOKEN_PATTERNS = [
 ] as const
 
 const POTENTIAL_SECRET_RE =
-    /(?:gh[pousr]_|github_pat_|eyJ|xox[baprs]-|AKIA|ABIA|ACCA|ASIA|Authorization:|Bearer\s|Basic\s|--(?:(?:[a-z0-9-]+-)?(?:auth-token|token|secret|password|passphrase|api-key|webhook-auth|encryption-key|private-key)|key)(?:=|\s)|pragma\s+(?:re)?key\s*=|https?:\/\/[^/\s:@]+:[^/\s@]+@)/i
+    /(?:gh[pousr]_|github_pat_|eyJ|xox[baprs]-|AKIA|ABIA|ACCA|ASIA|Authorization:|Bearer\s|Basic\s|--(?:(?:[a-z0-9_-]+[-_])?(?:auth[-_]?token|token|secret|password|passphrase|api[-_]?key|webhook[-_]?auth|encryption[-_]?key|private[-_]?key)|key)(?:=|\s)|pragma\s+(?:re)?key\s*=|https?:\/\/[^/\s:@]+:[^/\s@]+@)/i
 
 /**
  * Sanitizes an error message by replacing any detected tokens with '[REDACTED]'.
@@ -167,9 +167,9 @@ export function sanitizeErrorForLogging(message: string): string {
 // Untrusted Content Boundaries
 // ============================================================================
 
-// C0/C1 control chars excluding horizontal tab (\t), LF (\n), and CR (\r).
+// C0/C1 control chars excluding horizontal tab (\t), LF (\n), and CR (\r), plus Unicode line/paragraph separators.
 function stripUntrustedControlChars(value: string): string {
-    return value.replace(/\p{Cc}/gu, (ch) =>
+    return value.replace(/[\p{Cc}\u2028\u2029]/gu, (ch) =>
         ch === '\t' || ch === '\n' || ch === '\r' ? ch : ''
     )
 }
@@ -177,7 +177,15 @@ function stripUntrustedControlChars(value: string): string {
 function hasUntrustedControlChars(value: string): boolean {
     for (let i = 0; i < value.length; i++) {
         const c = value.charCodeAt(i)
-        if (c <= 8 || c === 11 || c === 12 || (c >= 14 && c <= 31) || (c >= 127 && c <= 159)) {
+        if (
+            c <= 8 ||
+            c === 11 ||
+            c === 12 ||
+            (c >= 14 && c <= 31) ||
+            (c >= 127 && c <= 159) ||
+            c === 0x2028 ||
+            c === 0x2029
+        ) {
             return true
         }
     }
@@ -212,9 +220,9 @@ export function markUntrustedContent(content: string | undefined | null): string
 }
 
 const INLINE_ALREADY_FENCED_RE =
-    /^<untrusted_remote_content>[^<>\n]*<\/untrusted_remote_content>$/
+    /^<untrusted_remote_content>[^<>\r\n\u2028\u2029]*<\/untrusted_remote_content>$/
 const BLOCK_ALREADY_FENCED_RE =
-    /^<untrusted_remote_content>(?:\n[^<>]*\n|[^<>\n]*)<\/untrusted_remote_content>$/
+    /^<untrusted_remote_content>(?:\n[^<>\u2028\u2029]*\n|[^<>\r\n\u2028\u2029]*)<\/untrusted_remote_content>$/
 const ENCODED_FENCE_TAG_RE = /&lt;\/?untrusted_remote_content/i
 
 /** Return true when `value` already has a single unescaped inline `<untrusted_remote_content>` wrapper. */
@@ -238,8 +246,8 @@ export function isAlreadyFencedUntrustedContent(value: string): boolean {
 /** Fence non-canonical git refs, branch names, or dynamic map keys containing markup/control chars. */
 export function fenceNonCanonicalRefOrKey(value: string, allowSpaces = false): string {
     const needsFence = allowSpaces
-        ? /[<>&\r\n]/u.test(value) || /\p{Cc}/u.test(value)
-        : /[<>&\r\n\s]/u.test(value) || /\p{Cc}/u.test(value)
+        ? /[<>&\r\n\u2028\u2029]/u.test(value) || /\p{Cc}/u.test(value)
+        : /[<>&\r\n\u2028\u2029\s]/u.test(value) || /\p{Cc}/u.test(value)
     if (!needsFence) return value
     return isAlreadyInlineFencedUntrustedContent(value)
         ? value
@@ -251,7 +259,7 @@ export function fenceNonCanonicalRefOrKey(value: string, allowSpaces = false): s
  */
 export function markUntrustedContentInline(content: string | undefined | null): string {
     if (!content) return ''
-    let cleaned = stripUntrustedControlChars(content.replace(/[\r\n]+/g, ' '))
+    let cleaned = stripUntrustedControlChars(content.replace(/[\r\n\u2028\u2029]+/g, ' '))
     if (isAlreadyInlineFencedUntrustedContent(cleaned)) return cleaned
 
     // Strip existing literal or entity-encoded wrappers to normalize for inline layout
@@ -282,7 +290,7 @@ export function markUntrustedContentInline(content: string | undefined | null): 
  * @returns Sanitized string with control characters removed and length capped at 100
  */
 export function sanitizeAuthor(raw: string): string {
-    return raw.replace(/\p{Cc}/gu, '').slice(0, 100)
+    return raw.replace(/[\p{Cc}\u2028\u2029]/gu, '').slice(0, 100)
 }
 
 // ============================================================================

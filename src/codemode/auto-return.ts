@@ -17,6 +17,7 @@ import {
     findNextJsLineTerminator,
     skipRegexLiteralBody,
     canStartRegexLiteral,
+    markLineTerminator,
     scanIdentifierWord,
     trackIdentifierToken,
     trackPunctuationToken,
@@ -57,12 +58,30 @@ function scanStringStep(
     return { inString, isEscaped: false, next: i + 1 }
 }
 
+function isTwoCharBoundaryOperator(trimmed: string, i: number, ch: string): boolean {
+    const next = trimmed[i + 1] ?? ''
+    return (
+        (ch === '+' && next === '+') ||
+        (ch === '-' && next === '-') ||
+        (ch === '=' && next === '>') ||
+        (ch === '?' && next === '?') ||
+        (ch === '?' && next === '.' && !/[0-9]/.test(trimmed[i + 2] ?? ''))
+    )
+}
+
+function isBoundaryIdentStart(trimmed: string, i: number, ch: string): boolean {
+    if (/[A-Za-z0-9_$]/.test(ch) || (ch === '\\' && trimmed[i + 1] === 'u')) return true
+    const cp = trimmed.codePointAt(i) ?? 0
+    return cp > 0x7f && /[\p{ID_Start}\p{ID_Continue}$_]/u.test(String.fromCodePoint(cp))
+}
+
 function findLastStatementBoundary(trimmed: string): number {
     let inString: string | null = null
     let isEscaped = false
     let lastBoundary = -1
     let depth = 0
     let prevToken = ''
+    let lineOnlyWsOrComments = true
     const state = createDelimiterState()
 
     for (let i = 0; i < trimmed.length; i++) {
@@ -71,36 +90,41 @@ function findLastStatementBoundary(trimmed: string): number {
             const step = scanStringStep(trimmed, i, inString, isEscaped, state)
             inString = step.inString
             isEscaped = step.isEscaped
-            if (step.prevToken !== undefined) prevToken = step.prevToken
+            if (step.prevToken !== undefined) {
+                prevToken = step.prevToken
+                state.canAsiRegex = false
+            }
+            lineOnlyWsOrComments = false
             i = step.next - 1
             continue
         }
-        const comment = skipLineOrBlockComment(trimmed, i)
+        const comment = skipLineOrBlockComment(trimmed, i, lineOnlyWsOrComments)
         if (comment !== null) {
+            if (comment.hasNewline === true) {
+                lineOnlyWsOrComments = true
+                markLineTerminator(state)
+            }
             if (comment.next === trimmed.length && findNextJsLineTerminator(trimmed, i) === -1) break
             i = comment.next - 1
             continue
         }
         if (ch === "'" || ch === '"' || ch === '`') {
             inString = ch
-        } else if (ch === '/' && trimmed[i + 1] !== '/' && trimmed[i + 1] !== '*' && canStartRegexLiteral(prevToken, state.parenCtrl.at(-1) === true)) {
+            lineOnlyWsOrComments = false
+        } else if (ch === '/' && trimmed[i + 1] !== '/' && trimmed[i + 1] !== '*' && canStartRegexLiteral(prevToken, state)) {
             i = skipRegexLiteralBody(trimmed, i + 1) - 1
             prevToken = '/'
-        } else if (
-            (ch === '+' && trimmed[i + 1] === '+') ||
-            (ch === '-' && trimmed[i + 1] === '-') ||
-            (ch === '=' && trimmed[i + 1] === '>') ||
-            (ch === '?' && trimmed[i + 1] === '.' && !/[0-9]/.test(trimmed[i + 2] ?? ''))
-        ) {
+            state.canAsiRegex = false
+            lineOnlyWsOrComments = false
+        } else if (isTwoCharBoundaryOperator(trimmed, i, ch)) {
             prevToken = ch + (trimmed[i + 1] ?? '')
+            state.canAsiRegex = false
+            lineOnlyWsOrComments = false
             i++
-        } else if (
-            /[A-Za-z0-9_$]/.test(ch) ||
-            (ch === '\\' && trimmed[i + 1] === 'u') ||
-            ((trimmed.codePointAt(i) ?? 0) > 0x7f && /[\p{ID_Start}\p{ID_Continue}$_]/u.test(String.fromCodePoint(trimmed.codePointAt(i) ?? 0)))
-        ) {
+        } else if (isBoundaryIdentStart(trimmed, i, ch)) {
             const ident = scanIdentifierWord(trimmed, i)
             prevToken = trackIdentifierToken(ident.word, prevToken, state)
+            lineOnlyWsOrComments = false
             i = ident.next - 1
         } else {
             const closingInterp = ch === '}' && state.templateBraces.length > 0 && state.templateBraces.at(-1) === 0
@@ -108,6 +132,7 @@ function findLastStatementBoundary(trimmed: string): number {
                 state.templateBraces.pop()
                 inString = '`'
                 isEscaped = false
+                lineOnlyWsOrComments = false
                 continue
             }
             if (ch === '{' || ch === '[' || ch === '(') depth++
@@ -115,7 +140,13 @@ function findLastStatementBoundary(trimmed: string): number {
             if (depth === 0 && state.templateBraces.length === 0 && (ch === ';' || isJsLineTerminator(ch))) {
                 lastBoundary = i
             }
-            if (!/\s/.test(ch)) prevToken = trackPunctuationToken(ch, prevToken, state)
+            if (isJsLineTerminator(ch)) {
+                lineOnlyWsOrComments = true
+                markLineTerminator(state)
+            } else if (!/\s/.test(ch)) {
+                prevToken = trackPunctuationToken(ch, prevToken, state)
+                lineOnlyWsOrComments = false
+            }
         }
     }
     return lastBoundary

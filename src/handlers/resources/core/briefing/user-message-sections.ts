@@ -41,7 +41,8 @@ export interface BriefingUserMessageOptions {
     workspaceId?: string
 }
 
-const escapeContent = (text: string): string => text.replace(/\r?\n/g, ' ')
+const escapeContent = (text: string): string =>
+    text.replace(/[\r\n\u2028\u2029]+/g, ' ').replace(/\p{Cc}/gu, '')
 
 /** Escape pipe characters for use inside markdown table cells */
 const escapeCell = (text: string): string =>

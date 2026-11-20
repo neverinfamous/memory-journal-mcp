@@ -1,10 +1,10 @@
-import * as fs from 'node:fs'
 import * as path from 'node:path'
 import * as os from 'node:os'
 import { parse as parseYaml } from 'yaml'
 import type { Command } from 'commander'
 import { logger } from './logger.js'
 import { ConfigurationError } from '../types/errors.js'
+import { readSafeRegularConfigTextSync } from './config-file-safety.js'
 
 export class ConfigResolver {
     private configFileOptions: Record<string, unknown> = {}
@@ -29,9 +29,20 @@ export class ConfigResolver {
         ]
 
         for (const filePath of envPaths) {
-            if (!fs.existsSync(filePath)) continue
+            let loaded: ReturnType<typeof readSafeRegularConfigTextSync>
+            try {
+                loaded = readSafeRegularConfigTextSync(filePath)
+            } catch (err) {
+                logger.warning('Skipping unsafe or unreadable env file', {
+                    module: 'ConfigResolver',
+                    path: filePath,
+                    error: err instanceof Error ? err.message : String(err),
+                })
+                continue
+            }
+            if (loaded === undefined) continue
 
-            const content = fs.readFileSync(filePath, 'utf-8')
+            const content = loaded.content
             for (const line of content.split('\n')) {
                 const trimmed = line.trim()
                 if (!trimmed || trimmed.startsWith('#')) continue
@@ -61,14 +72,31 @@ export class ConfigResolver {
               ]
 
         for (const filePath of pathsToTry) {
-            if (!fs.existsSync(filePath)) {
+            let loaded: ReturnType<typeof readSafeRegularConfigTextSync>
+            try {
+                loaded = readSafeRegularConfigTextSync(filePath)
+            } catch (err) {
+                const msg = err instanceof Error ? err.message : String(err)
+                if (configPathOverride) {
+                    throw new ConfigurationError(`Failed to load config file ${filePath}: ${msg}`, {
+                        cause: err instanceof Error ? err : undefined,
+                    })
+                }
+                logger.warning('Failed to read configuration file; continuing to next candidate', {
+                    module: 'ConfigResolver',
+                    path: filePath,
+                    error: msg,
+                })
+                continue
+            }
+            if (loaded === undefined) {
                 if (configPathOverride) {
                     throw new ConfigurationError(`Failed to load config file ${filePath}: File does not exist`)
                 }
                 continue
             }
             try {
-                const content = fs.readFileSync(filePath, 'utf-8')
+                const content = loaded.content
                 const parsed: unknown = /\.ya?ml$/i.test(filePath)
                     ? parseYaml(content)
                     : JSON.parse(content)

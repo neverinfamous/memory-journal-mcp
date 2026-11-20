@@ -40,13 +40,16 @@ function buildInteractiveProjectListResponse(
         }
     }
 
+    const escapeTableCell = (text: string): string =>
+        text.replace(/[\r\n\u2028\u2029]+/g, ' ').replaceAll('|', '\\|')
+
     const rows = registryKeys
         .map((key) => {
             const entry = registry[key] as { path?: string }
             const projectPath = entry?.path ?? '-'
             const projectNumber = getProjectNumber(entry)
             const idCell = projectNumber !== undefined ? String(projectNumber) : '-'
-            return `| ${idCell} | ${key} | ${projectPath} |`
+            return `| ${idCell} | ${escapeTableCell(key)} | ${escapeTableCell(projectPath)} |`
         })
         .join('\n')
 

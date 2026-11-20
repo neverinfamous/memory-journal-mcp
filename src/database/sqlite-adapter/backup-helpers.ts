@@ -6,6 +6,12 @@ import { assertNoPathTraversal } from '../../utils/security-utils.js'
 import { ResourceNotFoundError, ValidationError } from '../../types/errors.js'
 import type { IDatabaseConnection } from '../core/interfaces.js'
 import { applySqlCipherKey, hasSqlCipherKey } from './sqlcipher-key.js'
+import { loadVecExtensionOnDb } from './connection-pragmas.js'
+import {
+    assertBackupHeaderAndCipherFormat,
+    assertHasMemoryJournalTable,
+    assertSafeBackupSchemaPreIntegrity,
+} from './backup-schema-guard.js'
 
 function hasErrorCode(err: unknown, code: string): boolean {
     return typeof err === 'object' && err !== null && 'code' in err && err.code === code
@@ -29,10 +35,16 @@ export async function unlinkBestEffort(filePath: string): Promise<void> {
 /** Verify a SQLite backup file opens cleanly and passes `PRAGMA integrity_check`. */
 export async function assertIncomingBackupIntact(backupPath: string): Promise<void> {
     try {
+        const cipherRequired = hasSqlCipherKey()
+        assertBackupHeaderAndCipherFormat(backupPath, cipherRequired)
         const Database = (await import('better-sqlite3')).default
         const tempDb = new Database(backupPath, { fileMustExist: true, readonly: true })
         try {
             applySqlCipherKey(tempDb)
+            const { hasVecTable } = assertSafeBackupSchemaPreIntegrity(tempDb)
+            if (hasVecTable) {
+                await loadVecExtensionOnDb(tempDb, () => tempDb.open)
+            }
 
             const tempStmt = tempDb.prepare('PRAGMA integrity_check')
             const result: unknown = tempStmt.get()
@@ -49,6 +61,7 @@ export async function assertIncomingBackupIntact(backupPath: string): Promise<vo
                     `Foreign key check failed: ${String(foreignKeyRows.length)} violation(s)`
                 )
             }
+            assertHasMemoryJournalTable(tempDb)
         } finally {
             tempDb.close()
         }

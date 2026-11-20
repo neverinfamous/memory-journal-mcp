@@ -150,22 +150,25 @@ export function getGitTagRange(cwd: string = process.cwd()): { range: string; is
   try {
     headSha = execFileSync('git', ['--no-pager', 'rev-parse', 'HEAD'], execOpts).trim();
     let tagName = execFileSync('git', ['--no-pager', 'describe', '--tags', '--abbrev=0'], execOpts).trim();
-    
-    if (tagName) {
-      let tagSha = execFileSync('git', ['--no-pager', 'rev-parse', `${tagName}^{commit}`], execOpts).trim();
-      
-      if (tagSha === headSha) {
-        try {
-          tagName = execFileSync('git', ['--no-pager', 'describe', '--tags', '--abbrev=0', `${tagName}^`], execOpts).trim();
-          tagSha = execFileSync('git', ['--no-pager', 'rev-parse', `${tagName}^{commit}`], execOpts).trim();
-        } catch {
+    if (!tagName || tagName.startsWith('-')) {
+      return { range: 'HEAD', isFallback: true, headSha };
+    }
+
+    let tagSha = execFileSync('git', ['--no-pager', 'rev-parse', '--end-of-options', `${tagName}^{commit}`], execOpts).trim();
+    if (tagSha === headSha) {
+      try {
+        tagName = execFileSync('git', ['--no-pager', 'describe', '--tags', '--abbrev=0', '--end-of-options', `${tagName}^`], execOpts).trim();
+        if (!tagName || tagName.startsWith('-')) {
           return { range: 'HEAD', isFallback: true, headSha };
         }
+        tagSha = execFileSync('git', ['--no-pager', 'rev-parse', '--end-of-options', `${tagName}^{commit}`], execOpts).trim();
+      } catch {
+        return { range: 'HEAD', isFallback: true, headSha };
       }
-      
-      if (tagName && tagSha !== headSha) {
-        return { range: `${tagName}..HEAD`, isFallback: false, headSha };
-      }
+    }
+
+    if (tagName && !tagName.startsWith('-') && tagSha !== headSha) {
+      return { range: `${tagName}..HEAD`, isFallback: false, headSha };
     }
   } catch {
     // Ignore and fallback

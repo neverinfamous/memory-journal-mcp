@@ -231,6 +231,8 @@ function handleEgressSerializationFailure(
     result.result = undefined
 }
 
+const MAX_EGRESS_ERROR_CHARS = 16_384
+
 /**
  * Enforces the egress byte limit during JSON serialization and applies
  * `compactOversizedResult` fallback when an object/array exceeds the boundary.
@@ -239,7 +241,15 @@ export function serializeAndEnforceEgress(
     result: SandboxResult,
     maxResultSize?: number
 ): void {
-    if (!result.success) return
+    if (!result.success) {
+        if (typeof result.error === 'string' && result.error.length > MAX_EGRESS_ERROR_CHARS) {
+            result.error = `${result.error.slice(0, MAX_EGRESS_ERROR_CHARS)}...[truncated]`
+        }
+        if (typeof result.stack === 'string' && result.stack.length > MAX_EGRESS_ERROR_CHARS) {
+            result.stack = `${result.stack.slice(0, MAX_EGRESS_ERROR_CHARS)}...[truncated]`
+        }
+        return
+    }
 
     const egressLimit = maxResultSize ?? 100 * 1024
     const rootValue = unwrapResultProxy(result.result)

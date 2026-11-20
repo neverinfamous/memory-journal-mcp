@@ -13,7 +13,7 @@ import {
     assertSafeCliOutputFile,
     getCliCommandDb as getDb,
 } from './db-helper.js'
-import { writeCliResult } from './cli-output.js'
+import { formatCliError, writeCliResult } from './cli-output.js'
 import { exportEntriesToMarkdown, importMarkdownEntries, processImportBatch } from '../../markdown/index.js'
 import { VectorSearchManager } from '../../vector/vector-search-manager/index.js'
 import {
@@ -83,7 +83,7 @@ export async function exportJsonAction(options: z.infer<typeof exportJsonSchema>
             `Exported ${String(entries.length)} entries to ${destPath}.`
         )
     } catch (e) {
-        process.stderr.write("JSON export failed: " + (e instanceof Error ? e.message : String(e)) + '\n')
+        process.stderr.write(`JSON export failed: ${formatCliError(e)}\n`)
         exitCode = 1
     } finally {
         db.close()
@@ -125,7 +125,7 @@ export async function exportMarkdownAction(options: z.infer<typeof exportMarkdow
             process.exitCode = 1
         }
     } catch (e) {
-        process.stderr.write("Export markdown failed: " + (e instanceof Error ? e.message : String(e)) + '\n')
+        process.stderr.write(`Export markdown failed: ${formatCliError(e)}\n`)
         exitCode = 1
     } finally {
         db.close()
@@ -306,7 +306,7 @@ export async function importMarkdownAction(options: z.infer<typeof importMarkdow
             process.exitCode = 1
         }
     } catch (e) {
-        process.stderr.write("Import markdown failed: " + (e instanceof Error ? e.message : String(e)) + '\n')
+        process.stderr.write(`Import markdown failed: ${formatCliError(e)}\n`)
         exitCode = 1
     } finally {
         db.close()
@@ -349,7 +349,7 @@ export async function importExternalAction(options: z.infer<typeof importExterna
             process.exitCode = 1
         }
     } catch (e) {
-        process.stderr.write("Import external failed: " + (e instanceof Error ? e.message : String(e)) + '\n')
+        process.stderr.write(`Import external failed: ${formatCliError(e)}\n`)
         exitCode = 1
     } finally {
         db.close()

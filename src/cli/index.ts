@@ -10,6 +10,7 @@ import {
     addOutputOptions
 } from './option-groups.js'
 import { lazyAction } from './lazy-action.js'
+import { formatCliError } from './commands/cli-output.js'
 import {
     serverOptionsSchema,
     execOptionsSchema,
@@ -232,7 +233,6 @@ sessionCmd.action(withValidation(searchOptionsSchema, async (args: string[], opt
 }))
 
 void program.parseAsync(normalizeCliArgv(process.argv)).catch((err: unknown) => {
-    const msg = err instanceof Error ? err.message : String(err)
-    process.stderr.write(`\x1b[31mError:\x1b[0m ${msg}\n`)
+    process.stderr.write(`\x1b[31mError:\x1b[0m ${formatCliError(err)}\n`)
     process.exitCode = 1
 })

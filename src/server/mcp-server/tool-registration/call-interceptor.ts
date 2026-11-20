@@ -20,7 +20,11 @@ import {
     applyCreateWorkspaceScope,
     healIncomingToolCallParams,
 } from './call-arg-normalizer.js'
-import { isAutonomousShimBlockedByFilter } from '../../../handlers/tools/dummy-filter-helpers.js'
+import {
+    isAutonomousShimBlockedByFilter,
+    isDummyToolAllowedByFilter,
+} from '../../../handlers/tools/dummy-filter-helpers.js'
+import { DUMMY_HEALING_TOOL_NAMES } from '../../../handlers/tools/core/dummy-healing/alias-catalog.js'
 import { getAuthContext } from '../../../auth/auth-context.js'
 import { hasScope } from '../../../auth/scopes.js'
 import { getRequiredScope } from '../../../auth/scope-map.js'
@@ -274,11 +278,18 @@ function isRegisteredToolBlocked(
     ) {
         const reg = allTools.find((t) => t.name === toolName)
         if (
-            !filterCfg.enabledTools.has(toolName) ||
-            !isToolVisibleForFilter(toolName, reg?.annotations?.readOnlyHint, filterCfg.raw)
+            filterCfg.enabledTools.has(toolName) &&
+            isToolVisibleForFilter(toolName, reg?.annotations?.readOnlyHint, filterCfg.raw)
         ) {
-            return true
+            return false
         }
+        if (
+            DUMMY_HEALING_TOOL_NAMES.has(toolName) &&
+            isDummyToolAllowedByFilter(toolName, filterCfg, config.agentHealing !== false, false)
+        ) {
+            return false
+        }
+        return true
     }
     const auth = getAuthContext()
     if (auth !== undefined && !hasScope(getGrantedAuthScopes(auth), getRequiredScope(toolName))) {

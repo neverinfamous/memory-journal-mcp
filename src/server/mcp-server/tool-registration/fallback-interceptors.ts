@@ -74,7 +74,11 @@ function resolveDispatchFallbackAccessTarget(
     if (DUMMY_SERVER_INFO_TOOL_NAMES.includes(requestedTool)) {
         return { targetName: 'server_info', targetType: 'tool' }
     }
-    if (matchesExactName(requestedTool, DUMMY_PROJECT_TOOL_NAMES) || requestedTool === 'projects') {
+    if (
+        matchesExactName(requestedTool, DUMMY_PROJECT_TOOL_NAMES) ||
+        requestedTool === 'projects' ||
+        projectAliasTarget(requestedTool) !== undefined
+    ) {
         const target = requestedTool === 'projects' ? 'list_projects' : projectAliasTarget(requestedTool)
         return target !== undefined ? { targetName: target, targetType: 'tool' } : undefined
     }
@@ -216,7 +220,8 @@ export async function dispatchKnownGroupFallbackTools(
 
     if (
         matchesExactName(requestedTool, DUMMY_PROJECT_TOOL_NAMES) ||
-        requestedTool === 'projects'
+        requestedTool === 'projects' ||
+        projectAliasTarget(requestedTool) !== undefined
     ) {
         const target = requestedTool === 'projects' ? 'list_projects' : projectAliasTarget(requestedTool)
         if (target !== undefined) {

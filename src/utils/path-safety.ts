@@ -171,9 +171,11 @@ function isWithinAllowedRoots(targetPath: string, allowedRoots: string[]): boole
 
 const WIN_RESERVED_DEVICE_RE =
     /^(?:CON|PRN|AUX|NUL|COM[1-9\u00b9\u00b2\u00b3]|LPT[1-9\u00b9\u00b2\u00b3])(?:\s*\..*)?\s*$/i
+const WIN_DRIVE_RELATIVE_RE = /^[A-Za-z]:(?![\\/])/
 
 export function hasUnsafeAdsColon(dirPath: string): boolean {
-    return dirPath.replace(/^[A-Za-z]:(?=[\\/]|$)/, '').includes(':')
+    const trimmed = dirPath.trimStart()
+    return WIN_DRIVE_RELATIVE_RE.test(trimmed) || trimmed.replace(/^[A-Za-z]:(?=[\\/])/, '').includes(':')
 }
 
 export function hasTrailingDotOrSpaceSegment(targetPath: string): boolean {
@@ -326,6 +328,9 @@ function assertNotSymbolicLink(candidatePath: string): void {
  * percent-decoded paths) to prevent any file-level traversal tricks.
  */
 export function assertSafeFilePath(filePath: string, providedRoots: string[]): void {
+    if (WIN_DRIVE_RELATIVE_RE.test(filePath.trimStart())) {
+        throw new PathTraversalError(filePath)
+    }
     const pathMod: typeof path = WIN_DRIVE_PATH_RE.test(filePath) ? path.win32 : path
     // First ensure the logical directory path is within boundaries
     const rawDir = pathMod.dirname(filePath)

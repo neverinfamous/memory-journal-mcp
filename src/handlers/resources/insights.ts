@@ -10,7 +10,8 @@ import { ICON_ANALYTICS } from '../../constants/icons.js'
 import { withPriority, ASSISTANT_FOCUSED } from '../../utils/resource-annotations.js'
 import type { InternalResourceDef, ResourceContext, ResourceResult } from './shared.js'
 import { resourceProjectNumber, resourceWorkspace, sliceUntrustedInline } from './shared.js'
-import { sanitizeAuthor } from '../../utils/security-utils.js'
+import { sanitizeAuthor, sanitizeErrorForLogging } from '../../utils/security-utils.js'
+import { activeProjectRegistry } from '../../utils/write-scope.js'
 import { enforceTeamResourceRbac } from './team.js'
 import { ProtocolError, ProtocolErrorCode } from '@modelcontextprotocol/server'
 
@@ -126,6 +127,15 @@ export const teamCollaborationResource: InternalResourceDef = {
         const wsId = resourceWorkspace(context)
         const projectNumber = resourceProjectNumber(context, wsId)
         enforceTeamResourceRbac(context, wsId)
+        const resolvedRegistry = activeProjectRegistry(context.briefingConfig?.projectRegistry)
+        const hasActiveRegistry =
+            resolvedRegistry !== undefined && Object.keys(resolvedRegistry).length > 0
+        if ((wsId === '*' || hasActiveRegistry) && projectNumber === undefined) {
+            throw new ProtocolError(
+                ProtocolErrorCode.InvalidParams,
+                'Team collaboration resource requires an explicit project_number bound to the workspace'
+            )
+        }
 
         // Compute collaboration matrix live from team DB
         try {
@@ -172,7 +182,10 @@ export const teamCollaborationResource: InternalResourceDef = {
                 annotations: { lastModified },
             }
         } catch (error) {
-            throw new ProtocolError(ProtocolErrorCode.InternalError,  error instanceof Error ? error.message : String(error))
+            throw new ProtocolError(
+                ProtocolErrorCode.InternalError,
+                sanitizeErrorForLogging(error instanceof Error ? error.message : String(error))
+            )
         }
     },
 }

@@ -3,10 +3,23 @@ import { ConfigResolver } from '../../src/utils/config-resolver.js'
 import { Command } from 'commander'
 import * as fs from 'node:fs'
 import * as path from 'node:path'
+import { fileURLToPath } from 'node:url'
 
-vi.mock('node:fs')
+vi.mock('node:fs', async (importOriginal) => {
+    const actual = await importOriginal<typeof import('node:fs')>()
+    return {
+        ...actual,
+        existsSync: vi.fn(),
+        readFileSync: vi.fn(),
+        lstatSync: vi.fn(),
+        openSync: vi.fn(),
+        fstatSync: vi.fn(),
+        closeSync: vi.fn(),
+    }
+})
 
 describe('ConfigResolver', () => {
+    const regularFileStat = fs.statSync(fileURLToPath(import.meta.url))
     let mockCommand: any
     let cliOptions: Record<string, unknown>
     let originalEnv: NodeJS.ProcessEnv
@@ -23,6 +36,15 @@ describe('ConfigResolver', () => {
         // Mock fs methods
         vi.mocked(fs.existsSync).mockReturnValue(false)
         vi.mocked(fs.readFileSync).mockReturnValue('')
+        vi.mocked(fs.lstatSync).mockImplementation(((p: fs.PathLike) => {
+            if (!fs.existsSync(p)) {
+                throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' })
+            }
+            return regularFileStat
+        }) as typeof fs.lstatSync)
+        vi.mocked(fs.openSync).mockReturnValue(42)
+        vi.mocked(fs.fstatSync).mockReturnValue(regularFileStat)
+        vi.mocked(fs.closeSync).mockImplementation(() => undefined)
     })
 
     afterEach(() => {

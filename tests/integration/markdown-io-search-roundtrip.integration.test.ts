@@ -355,6 +355,7 @@ describe('Markdown IO, Vector/Hybrid Search & Cross-Team Roundtrip Integration',
             tags: ['runbook', 'deployment'],
             author: 'alice',
             workspaceId: 'ws-alpha',
+            projectNumber: 101,
         })
         extraTeamEngDb.createEntry({
             content: 'Engineering team deployment architecture for blue-green rollout.',
@@ -362,6 +363,7 @@ describe('Markdown IO, Vector/Hybrid Search & Cross-Team Roundtrip Integration',
             tags: ['engineering', 'deployment'],
             author: 'bob',
             workspaceId: 'ws-alpha',
+            projectNumber: 101,
         })
         extraTeamOpsDb.createEntry({
             content: 'Operations team deployment checklist and incident rollback plan.',
@@ -369,6 +371,7 @@ describe('Markdown IO, Vector/Hybrid Search & Cross-Team Roundtrip Integration',
             tags: ['ops', 'deployment'],
             author: 'carol',
             workspaceId: 'ws-alpha',
+            projectNumber: 101,
         })
         extraTeamOpsDb.createEntry({
             content: 'Operations team deployment secret in ws-beta.',
@@ -376,6 +379,7 @@ describe('Markdown IO, Vector/Hybrid Search & Cross-Team Roundtrip Integration',
             tags: ['ops', 'deployment'],
             author: 'carol',
             workspaceId: 'ws-beta',
+            projectNumber: 202,
         })
 
         const crossRes = await callTool(

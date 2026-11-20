@@ -67,8 +67,8 @@ export function convertObsidian(
             if (match[2]) addBoundedTag(mergedTags, match[2].toLowerCase())
         }
         return segment
-            .replace(/!\[\[([^\]]{1,500})\]\]/g, '> _Embedded: $1_')
-            .replace(/\[\[([^\]]{1,500})\]\]/g, (_match: string, inner: string) => {
+            .replace(/!\[\[([^\][\r\n]{1,500})\]\]/g, '> _Embedded: $1_')
+            .replace(/\[\[([^\][\r\n]{1,500})\]\]/g, (_match: string, inner: string) => {
                 const parts = inner.split('|')
                 return (parts.length > 1 ? parts[1] : parts[0]) ?? ''
             })

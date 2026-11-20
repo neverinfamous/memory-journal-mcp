@@ -1,7 +1,14 @@
 import { logger } from '../../utils/logger.js'
+import { HOST_FILESYSTEM_PATH_RE } from '../../utils/error-helpers.js'
+import { sanitizeErrorForLogging } from '../../utils/security-utils.js'
 import type { GitHubClient } from './client.js'
 import { groupItemsIntoColumns, type ProjectV2Data } from './kanban-columns.js'
 import type { KanbanBoard, ProjectV2StatusOption } from '../../types/index.js'
+
+function toSafeGitHubError(error: unknown): string {
+    const raw = error instanceof Error ? error.message : String(error)
+    return sanitizeErrorForLogging(raw).replace(HOST_FILESYSTEM_PATH_RE, '<sanitized_path>')
+}
 
 interface UserProjectResponse {
     user: { projectV2: ProjectV2Data | null } | null
@@ -342,7 +349,7 @@ export class ProjectsManager {
 
             return { success: true }
         } catch (error) {
-            const errorMessage = error instanceof Error ? error.message : String(error)
+            const errorMessage = toSafeGitHubError(error)
             logger.error('Failed to move project item', {
                 module: 'GitHub',
                 entityId: itemId,
@@ -398,12 +405,8 @@ export class ProjectsManager {
             }
             return { success: true, itemId }
         } catch (error) {
-            const errorMessage = error instanceof Error ? error.message : String(error)
-            logger.error('Failed to add item to project', {
-                module: 'GitHub',
-                context: { projectId, contentId },
-                error: errorMessage,
-            })
+            const errorMessage = toSafeGitHubError(error)
+            logger.error('Failed to add item to project', { module: 'GitHub', context: { projectId, contentId }, error: errorMessage })
             return { success: false, error: errorMessage }
         } finally {
             if (typeof this.client.invalidateCache === 'function') {
@@ -430,7 +433,7 @@ export class ProjectsManager {
             logger.info('Deleted project item', { module: 'GitHub', context: { projectId, itemId } })
             return { success: true }
         } catch (error) {
-            const errorMessage = error instanceof Error ? error.message : String(error)
+            const errorMessage = toSafeGitHubError(error)
             logger.error('Failed to delete item from project', { module: 'GitHub', context: { projectId, itemId }, error: errorMessage })
             return { success: false, error: errorMessage }
         } finally {

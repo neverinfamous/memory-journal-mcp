@@ -16,7 +16,7 @@ export function safeDecodeUriSegment(raw: string): string {
             `Malformed percent-encoding in resource URI segment: ${raw}`
         )
     }
-    if (/\p{Cc}/u.test(decoded)) {
+    if (/[\p{Cc}\u2028\u2029]/u.test(decoded)) {
         throw new ProtocolError(
             ProtocolErrorCode.InvalidParams,
             'Control characters are not allowed in resource URI segments'
@@ -43,9 +43,9 @@ export function sliceUntrustedInline(value: string, maxLen: number, suffix = '')
                   .replaceAll('&gt;', '>')
                   .replaceAll('&amp;', '&')
             : value
-    const cleanRaw = raw.replace(/\p{Cc}/gu, (ch) =>
-        ch === '\t' || ch === '\n' || ch === '\r' ? ch : ''
-    )
+    const cleanRaw = raw
+        .replace(/[\r\n\u2028\u2029]+/g, ' ')
+        .replace(/\p{Cc}/gu, (ch) => (ch === '\t' ? ch : ''))
     const truncated = cleanRaw.length > maxLen ? `${cleanRaw.slice(0, maxLen)}${suffix}` : cleanRaw
     return markUntrustedContentInline(truncated)
 }

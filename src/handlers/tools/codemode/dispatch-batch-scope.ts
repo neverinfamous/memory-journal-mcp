@@ -12,6 +12,8 @@ export interface BatchScopeHelpersContext {
     projectId: number | string | undefined
     workspaceId: string | undefined
     explicitWorkspace?: boolean | undefined
+    toolName?: string | undefined
+    sessionContext?: ToolContext | undefined
     isDefaultWorkspaceName: (value: unknown) => boolean
     coerceProjectNumberField: (
         obj: Record<string, unknown>,
@@ -161,6 +163,44 @@ function applyBatchItemSessionDefaults(
     }
 }
 
+function verifyBatchWildcardMoveProjects(
+    batchArrayKey: 'entries' | 'updates',
+    nextItems: readonly unknown[],
+    parentWorkspaceId: unknown,
+    ctx: BatchScopeHelpersContext
+): { errorResult: Record<string, unknown> } | undefined {
+    const { projectId, workspaceId, toolName, sessionContext } = ctx
+    if (batchArrayKey !== 'updates' || typeof projectId !== 'number') return undefined
+    const targetDb = toolName === 'team_batch_update_entries' ? sessionContext?.teamDb : sessionContext?.db
+    if (typeof targetDb?.getEntryById !== 'function') return undefined
+
+    const parentWs = typeof parentWorkspaceId === 'string' ? parentWorkspaceId.trim() : undefined
+    for (const item of nextItems) {
+        if (!isRecord(item)) continue
+        const targetWs = trimmedStringField(item, 'target_workspace_id')
+        const entryId = item['entry_id']
+        if (targetWs === undefined || typeof entryId !== 'number') continue
+        const itemWs = trimmedStringField(item, 'workspace_id')
+        const isWildcardSource =
+            itemWs === '*' ||
+            (itemWs === undefined && (parentWs === '*' || (parentWs === undefined && workspaceId === '*')))
+        if (!isWildcardSource) continue
+        const sourceEntry = targetDb.getEntryById(entryId, '*')
+        if (sourceEntry !== null && sourceEntry !== undefined && sourceEntry.projectNumber !== projectId) {
+            return {
+                errorResult: {
+                    success: false,
+                    error: `Batch update aborted because entries were not found in the requested project: ${String(entryId)}. No rows were updated.`,
+                    code: 'RESOURCE_NOT_FOUND',
+                    category: 'resource',
+                    recoverable: true,
+                },
+            }
+        }
+    }
+    return undefined
+}
+
 export function normalizeBatchDispatchItems(
     batchArrayKey: 'entries' | 'updates',
     paramsObj: Record<string, unknown>,
@@ -204,6 +244,8 @@ export function normalizeBatchDispatchItems(
         )
         nextItems.push(nextItem)
     }
+    const wildcardErr = verifyBatchWildcardMoveProjects(batchArrayKey, nextItems, parentWorkspaceId, ctx)
+    if (wildcardErr !== undefined) return wildcardErr
     paramsObj[batchArrayKey] = nextItems
     return undefined
 }

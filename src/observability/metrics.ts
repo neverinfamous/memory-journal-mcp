@@ -15,13 +15,11 @@
  *   - latency percentiles (p50/p95/p99) via LatencyTracker
  */
 
-import { promises as fs } from 'node:fs'
-import { dirname } from 'node:path'
-import { randomUUID } from 'node:crypto'
 import { z } from 'zod'
 import { LatencyTracker } from './latency-tracker.js'
 import type { LatencyPercentiles } from './latency-tracker.js'
 import { logger } from '../utils/logger.js'
+import { readMetricsSnapshotFile, writeMetricsSnapshotFile } from './metrics-persistence.js'
 
 const FORBIDDEN_KEYS = new Set(['__proto__', 'constructor', 'prototype'])
 
@@ -390,19 +388,11 @@ export class MetricsAccumulator {
      * Save metrics to a file atomically via temp file + rename.
      */
     async saveToFile(path: string): Promise<void> {
-        const tmpPath = `${path}.${String(process.pid)}.${String(Date.now())}.${randomUUID().slice(0, 8)}.tmp`
         try {
             const state = this.exportState()
-            await fs.mkdir(dirname(path), { recursive: true, mode: 0o700 })
-            await fs.writeFile(tmpPath, state, { encoding: 'utf8', mode: 0o600, flag: 'wx' })
-            await fs.rename(tmpPath, path)
+            await writeMetricsSnapshotFile(path, state)
             logger.debug('Metrics saved to disk', { module: 'Metrics', path })
         } catch (error) {
-            try {
-                await fs.rm(tmpPath, { force: true })
-            } catch {
-                // Best-effort cleanup of temp file
-            }
             logger.error('Failed to save metrics to disk', { module: 'Metrics', error: String(error), path })
         }
     }
@@ -412,21 +402,16 @@ export class MetricsAccumulator {
      */
     async loadFromFile(path: string): Promise<void> {
         try {
-            const data = await fs.readFile(path, 'utf8')
+            const data = await readMetricsSnapshotFile(path)
+            if (data === undefined) return
             this.importState(data)
             logger.info('Metrics loaded from disk', { module: 'Metrics', path })
         } catch (error: unknown) {
-            const errorCode =
-                typeof error === 'object' && error !== null && 'code' in error
-                    ? error.code
-                    : undefined
-            if (errorCode !== 'ENOENT') {
-                logger.error('Failed to load metrics from disk', {
-                    module: 'Metrics',
-                    error: error instanceof Error ? error.message : JSON.stringify(error),
-                    path,
-                })
-            }
+            logger.error('Failed to load metrics from disk', {
+                module: 'Metrics',
+                error: error instanceof Error ? error.message : JSON.stringify(error),
+                path,
+            })
         }
     }
 }

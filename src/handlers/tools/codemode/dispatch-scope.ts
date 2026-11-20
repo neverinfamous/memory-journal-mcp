@@ -384,10 +384,10 @@ export async function normalizeDispatchParams(
     if (batchArrayKey !== undefined) {
         if (
             (tool.name === 'batch_update_entries' || tool.name === 'team_batch_update_entries') &&
-            (paramsObj['workspace_id'] === '*' || paramsObj['workspace_id'] === undefined) &&
             paramsObj['project_number'] === undefined &&
             typeof projectId === 'number' &&
-            workspaceId === '*'
+            (paramsObj['workspace_id'] === '*' ||
+                (paramsObj['workspace_id'] === undefined && workspaceId === '*'))
         ) {
             paramsObj['project_number'] = projectId
         }
@@ -395,6 +395,8 @@ export async function normalizeDispatchParams(
             projectId,
             workspaceId,
             explicitWorkspace,
+            toolName: tool.name,
+            sessionContext,
             isDefaultWorkspaceName,
             coerceProjectNumberField,
         })

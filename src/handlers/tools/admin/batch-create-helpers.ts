@@ -6,6 +6,7 @@ import { resolveAuthenticatedAuthor } from '../../../utils/security-utils.js'
 import { resolveProjectContext } from '../../../utils/workspace-resolver.js'
 import { PermissionError, ValidationError } from '../../../types/errors.js'
 import { canonicalizeTeamAuthor, enforceTeamRbac } from '../team/rbac.js'
+import { assertCanonicalFallbackToolAllowed } from '../team/helpers.js'
 import { logger } from '../../../utils/logger.js'
 import { prefetchBatchCommitFiles, resolveEntryAnchors } from '../core/staleness-tools.js'
 import type { BatchCreateEntriesSchema } from './schemas.js'
@@ -167,6 +168,7 @@ export async function shareBatchEntriesWithTeam(
     }
 
     try {
+        assertCanonicalFallbackToolAllowed('team_create_entry', 'team', context)
         enforceAccessBoundary(
             'team_create_entry',
             'tool',

@@ -48,6 +48,21 @@ function applyKey(db: Database.Database, pragma: 'key' | 'rekey', secret: string
     }
 }
 
+function sanitizeScriptError(err: unknown, secret?: string): string {
+    const raw = err instanceof Error ? err.message : String(err)
+    let safe = raw
+        .replace(/x'[0-9a-fA-F]*'/gi, "x'[REDACTED]'")
+        .replace(/(pragma\s+(?:re)?key\s*=\s*)(?:"(?:[^"]|"")*"|'(?:[^']|'')*')/gi, "$1'[REDACTED]'")
+    if (secret !== undefined && secret.length > 0) {
+        safe = safe.replaceAll(secret, '[REDACTED]')
+        const escaped = secret.replace(/'/g, "''")
+        if (escaped !== secret) {
+            safe = safe.replaceAll(escaped, '[REDACTED]')
+        }
+    }
+    return safe
+}
+
 const tmpPath = `${outPath}.tmp-${String(process.pid)}`
 
 function removeIfExists(filePath: string): void {
@@ -55,7 +70,7 @@ function removeIfExists(filePath: string): void {
     try {
         fs.unlinkSync(filePath)
     } catch (e) {
-        console.warn(`Warning: Failed to clean up temporary file ${filePath}:`, e)
+        console.warn(`Warning: Failed to clean up temporary file ${filePath}: ${sanitizeScriptError(e, key)}`)
     }
 }
 
@@ -123,11 +138,7 @@ try {
     console.log('To use it, start the server with DB_ENCRYPTION_KEY=<your-key>')
     console.log(`and point the database configuration to ${outPath}.`)
 } catch (error) {
-    const rawMsg = error instanceof Error ? error.message : String(error)
-    const safeMsg = rawMsg
-        .replace(/x'[0-9a-fA-F]*'/gi, "x'[REDACTED]'")
-        .replace(/(pragma\s+(?:re)?key\s*=\s*)(?:"(?:[^"]|"")*"|'(?:[^']|'')*')/gi, "$1'[REDACTED]'")
-    console.error('❌ Failed to encrypt database:', safeMsg)
+    console.error('❌ Failed to encrypt database:', sanitizeScriptError(error, key))
     removeIfExists(tmpPath)
     removeIfExists(`${tmpPath}-wal`)
     removeIfExists(`${tmpPath}-shm`)

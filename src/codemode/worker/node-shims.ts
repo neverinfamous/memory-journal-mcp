@@ -134,11 +134,11 @@ const stringParts = (parts: unknown[]): string[] =>
  * separators are handled; `resolve` never consults the host `process.cwd()`.
  */
 export const pathShim = Object.freeze({
-    join: (...parts: unknown[]): string => {
+    join: Object.freeze((...parts: unknown[]): string => {
         const valid = stringParts(parts)
         return valid.length === 0 ? '.' : nodePath.posix.join(...valid)
-    },
-    resolve: (...parts: unknown[]): string => {
+    }),
+    resolve: Object.freeze((...parts: unknown[]): string => {
         const valid = stringParts(parts)
         let start = 0
         for (let i = valid.length - 1; i >= 0; i--) {
@@ -149,21 +149,23 @@ export const pathShim = Object.freeze({
         }
         const joined = valid.slice(start)
         return joined.length === 0 ? '.' : nodePath.posix.normalize(joined.join('/')).replace(/(.)\/$/, '$1')
-    },
-    basename: (p: unknown, ext?: string): string => nodePath.posix.basename(toPosix(p), ext),
-    dirname: (p: unknown): string => nodePath.posix.dirname(toPosix(p)),
-    extname: (p: unknown): string => nodePath.posix.extname(toPosix(p)),
-    normalize: (p: unknown): string => nodePath.posix.normalize(toPosix(p)),
-    isAbsolute: (p: unknown): boolean =>
-        nodePath.win32.isAbsolute(toStr(p)) || nodePath.posix.isAbsolute(toPosix(p)),
+    }),
+    basename: Object.freeze((p: unknown, ext?: string): string => nodePath.posix.basename(toPosix(p), ext)),
+    dirname: Object.freeze((p: unknown): string => nodePath.posix.dirname(toPosix(p))),
+    extname: Object.freeze((p: unknown): string => nodePath.posix.extname(toPosix(p))),
+    normalize: Object.freeze((p: unknown): string => nodePath.posix.normalize(toPosix(p))),
+    isAbsolute: Object.freeze(
+        (p: unknown): boolean =>
+            nodePath.win32.isAbsolute(toStr(p)) || nodePath.posix.isAbsolute(toPosix(p))
+    ),
     sep: '/',
     delimiter: ':',
 })
 
 export const consoleShim = Object.freeze({
-    log: (...args: unknown[]) => args,
-    warn: (...args: unknown[]) => args,
-    error: (...args: unknown[]) => args,
-    info: (...args: unknown[]) => args,
-    debug: (...args: unknown[]) => args,
+    log: Object.freeze((...args: unknown[]) => args),
+    warn: Object.freeze((...args: unknown[]) => args),
+    error: Object.freeze((...args: unknown[]) => args),
+    info: Object.freeze((...args: unknown[]) => args),
+    debug: Object.freeze((...args: unknown[]) => args),
 })

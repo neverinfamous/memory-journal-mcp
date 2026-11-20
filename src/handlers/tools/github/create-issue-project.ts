@@ -4,6 +4,7 @@
  */
 
 import type { GitHubIntegration } from '../../../github/github-integration/index.js'
+import { sanitizeErrorMessageForResponse } from '../../../utils/error-helpers.js'
 
 export interface IssueProjectResult {
     projectNumber: number
@@ -41,7 +42,14 @@ async function applyInitialStatus(
     if (moveResult.success) {
         return { status: statusOption.name, set: true }
     }
-    return { status: initialStatus, set: false, error: moveResult.error }
+    return {
+        status: initialStatus,
+        set: false,
+        error:
+            moveResult.error !== undefined
+                ? sanitizeErrorMessageForResponse(moveResult.error)
+                : undefined,
+    }
 }
 
 /** Add the issue (by node id) to the project board; never throws. */
@@ -64,7 +72,14 @@ export async function addIssueToProject(
         }
         const added = await github.addProjectItem(board.projectId, issueNodeId)
         if (!added.success) {
-            return { projectNumber, added: false, error: added.error }
+            return {
+                projectNumber,
+                added: false,
+                error:
+                    added.error !== undefined
+                        ? sanitizeErrorMessageForResponse(added.error)
+                        : undefined,
+            }
         }
 
         let statusResult: IssueProjectResult['initialStatus']
@@ -85,7 +100,9 @@ export async function addIssueToProject(
         return {
             projectNumber,
             added: false,
-            error: error instanceof Error ? error.message : String(error),
+            error: sanitizeErrorMessageForResponse(
+                error instanceof Error ? error.message : String(error)
+            ),
         }
     }
 }

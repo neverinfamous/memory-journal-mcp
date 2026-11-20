@@ -25,7 +25,7 @@ const SENSITIVE_KEY_FRAGMENTS = [
 ] as const
 
 const REDACTED_FLAG_VALUE_RE =
-    /(--?[a-z0-9-]*(?:token|secret|password|passphrase|key|auth|webhook|issuer)[a-z0-9-]*(?:=|\s+))(?:"[^"]*"|'[^']*'|[^\s"']+)/gi
+    /(--?[a-z0-9_-]*(?:token|secret|password|passphrase|key|auth|webhook|issuer)[a-z0-9_-]*(?:=|\s+))("(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|[^\s"']+)/gi
 
 function isRecord(value: unknown): value is Record<string, unknown> {
     return typeof value === 'object' && value !== null && !Array.isArray(value)

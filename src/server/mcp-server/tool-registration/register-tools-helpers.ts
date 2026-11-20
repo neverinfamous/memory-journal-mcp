@@ -3,6 +3,7 @@ import type { ToolHandlerConfig } from '../../../types/index.js'
 import type { DEFAULT_BRIEFING_CONFIG } from '../../../handlers/resources/shared.js'
 import { globalSubscriptionManager } from '../../subscription-manager.js'
 import { logAgentIssue } from '../../../utils/issue-logger.js'
+import { formatHandlerError } from '../../../utils/error-helpers.js'
 import { findCanonicalRegistryKey, getActiveSessionProject } from '../../../utils/workspace-resolver.js'
 import { activeProjectRegistry, pairStoredScope } from '../../../utils/write-scope.js'
 import type { ServerContext, ServerOptions } from '../types.js'
@@ -47,23 +48,7 @@ export function formatToolFailure(
     toolName: string,
     args: unknown
 ): Record<string, unknown> {
-    let errorResult: Record<string, unknown>
-    if (
-        error instanceof Error &&
-        'toResponse' in error &&
-        typeof (error as { toResponse?: unknown }).toResponse === 'function'
-    ) {
-        errorResult = (error as { toResponse: () => Record<string, unknown> }).toResponse()
-    } else {
-        const errorMessage = error instanceof Error ? error.message : String(error)
-        errorResult = {
-            success: false,
-            error: errorMessage,
-            code: 'INTERNAL_ERROR',
-            category: 'internal',
-            recoverable: false,
-        }
-    }
+    const errorResult: Record<string, unknown> = { ...formatHandlerError(error) }
 
     logAgentIssue(
         {

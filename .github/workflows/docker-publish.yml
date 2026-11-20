@@ -18,7 +18,6 @@ permissions:
   contents: read
   packages: write
   security-events: write
-  pull-requests: write
   id-token: write
   attestations: write
 

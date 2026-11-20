@@ -52,8 +52,8 @@ export function convertNotion(
     // 2. Process Body Text (preserve links and images inside fenced code blocks)
     let processedBody = transformOutsideCodeFences(content, (segment) =>
         segment
-            .replace(/\[([^\]]{1,500})\]\([^)\n]{1,500}\.md\)/gi, '$1')
-            .replace(/!\[([^\]]{0,500})\]\([^)\n]{1,500}\)/gi, '> _Image: $1_')
+            .replace(/\[([^\][\r\n]{1,500})\]\([^()\r\n]{1,500}\.md\)/gi, '$1')
+            .replace(/!\[([^\][\r\n]{0,500})\]\([^()\r\n]{1,500}\)/gi, '> _Image: $1_')
     )
 
     // Check for a title in the first line

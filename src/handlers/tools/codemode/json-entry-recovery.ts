@@ -59,9 +59,16 @@ function unescapeQuotes(value: string): string {
     return value.replace(/\\+'/g, "'").replace(/\\+"/g, '"').replace(/\\`/g, '`')
 }
 
+const MAX_FUZZY_ENTRY_RECOVERY_LENGTH = 32_768
+const MAX_ENTRY_FIELD_CANDIDATES = 16
+
 function extractRecoveredEntryContentAndTitle(
     code: string
 ): { content: string; title: string | undefined; scanCode: string } | null {
+    const fieldCandidates = code.match(/\b(?:content|description|summary)\s*:/gi)
+    if (fieldCandidates !== null && fieldCandidates.length > MAX_ENTRY_FIELD_CANDIDATES) {
+        return null
+    }
     const backtickMatch =
         /\bcontent\s*:\s*`([\s\S]*?)`(?=\s*(?:,\s*[a-zA-Z_$][\w$]*\s*:|,\s*\}|\}|\)))/i.exec(
             code
@@ -208,6 +215,7 @@ export function extractAndRecoverEntryCode(code: string): string | null {
 
     const jsonRecovered = extractAndRecoverJsonCode(code)
     if (jsonRecovered !== null) return jsonRecovered
+    if (code.length > MAX_FUZZY_ENTRY_RECOVERY_LENGTH) return null
 
     const detected = detectRecoverableEntryCall(code)
     if (detected === null) return null

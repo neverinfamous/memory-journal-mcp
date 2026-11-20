@@ -29,8 +29,7 @@ jobs:
   trivy:
     uses: ./.github/workflows/security-update.yml
     permissions:
-      contents: write
-      pull-requests: write
+      contents: read
       issues: write
       security-events: write
 
@@ -53,11 +52,9 @@ jobs:
       needs.e2e.result == 'success'
     uses: ./.github/workflows/docker-publish.yml
     permissions:
-      contents: write
+      contents: read
       packages: write
       security-events: write
-      issues: write
-      pull-requests: write
       id-token: write
       attestations: write
       deployments: write

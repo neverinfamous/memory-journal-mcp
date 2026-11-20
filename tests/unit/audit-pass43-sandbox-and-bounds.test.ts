@@ -76,7 +76,7 @@ describe('Pass 43 Audit — Code Mode Sandbox, Scope Bounds, Lexer & ReDoS/DoS C
         })
         await nestedExecutor({ project_number: 5, code: 'return 1', readonly: true })
         expect(runIsolatedNestedCode).toHaveBeenCalledWith(
-            '(async () => {\n"use strict";\nreturn 1\n})()',
+            '"use strict";\n(async () => {\nreturn 1\n})()',
             true,
             false,
             false,
