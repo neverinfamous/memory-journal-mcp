@@ -150,7 +150,7 @@ export function formatHandlerError(err: unknown): ErrorResponse {
         )
         if (Array.isArray(response.aggregated_errors)) {
             response.aggregated_errors = response.aggregated_errors.map((entry) => {
-                const scrubbed = scrubObjectRecord(entry, 0, new WeakSet())
+                const scrubbed = scrubObjectRecord(entry, 0, new WeakSet([entry]))
                 return {
                     ...scrubbed,
                     message: sanitizeErrorMessageForResponse(entry.message),
@@ -158,7 +158,11 @@ export function formatHandlerError(err: unknown): ErrorResponse {
             })
         }
         if (response.details !== undefined) {
-            response.details = scrubObjectRecord(response.details, 0, new WeakSet())
+            response.details = scrubObjectRecord(
+                response.details,
+                0,
+                new WeakSet([response.details])
+            )
         }
         if (!err.hasExplicitSuggestion) {
             const matched = matchSuggestion(err.message)

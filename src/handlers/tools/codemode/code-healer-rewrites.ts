@@ -230,6 +230,11 @@ export function isValidJsScript(src: string): boolean {
     return valid
 }
 
+function formatEscapedDelimiter(bsCount: number, delimiter: string): string {
+    if (bsCount === 2 && (delimiter === "'" || delimiter === '"')) return `\\${delimiter}`
+    return '\\'.repeat(bsCount % 2 === 0 ? bsCount + 1 : bsCount) + delimiter
+}
+
 export function escapeDelimiterChar(content: string, delimiter: string): string {
     let result = ''
     let i = 0
@@ -241,7 +246,7 @@ export function escapeDelimiterChar(content: string, delimiter: string): string 
                 i++
             }
             if (i < content.length && content[i] === delimiter) {
-                result += `\\${delimiter}`
+                result += formatEscapedDelimiter(bsCount, delimiter)
                 i++
             } else {
                 result += '\\'.repeat(bsCount)

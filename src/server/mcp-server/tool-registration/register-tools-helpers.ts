@@ -4,6 +4,7 @@ import type { DEFAULT_BRIEFING_CONFIG } from '../../../handlers/resources/shared
 import { globalSubscriptionManager } from '../../subscription-manager.js'
 import { logAgentIssue } from '../../../utils/issue-logger.js'
 import { formatHandlerError } from '../../../utils/error-helpers.js'
+import { bigintReplacer } from '../../../observability/token-estimator.js'
 import { findCanonicalRegistryKey, getActiveSessionProject } from '../../../utils/workspace-resolver.js'
 import { activeProjectRegistry, pairStoredScope } from '../../../utils/write-scope.js'
 import type { ServerContext, ServerOptions } from '../types.js'
@@ -310,7 +311,7 @@ export function createResourceReadHandler(
             const dataStr =
                 typeof result.data === 'string'
                     ? result.data
-                    : JSON.stringify(result.data, null, 2)
+                    : JSON.stringify(result.data, bigintReplacer, 2)
             return {
                 contents: [
                     {

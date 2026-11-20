@@ -338,7 +338,7 @@ function upsertParsedFile(
         entry: newEntry,
         entryId: newEntry.id,
         workspaceId: newEntry.workspaceId ?? effectiveWsId,
-        projectNumber: effectiveProjNum,
+        projectNumber: newEntry.projectNumber ?? effectiveProjNum,
     }
 }
 

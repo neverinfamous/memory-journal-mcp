@@ -4,7 +4,7 @@ import {
     type EntriesSharedContext,
     rowsToEntries,
 } from '../shared.js'
-import { sanitizeFtsQuery } from './fts-sanitizer.js'
+import { isFts5QueryError, sanitizeFtsQuery } from './fts-sanitizer.js'
 import { effectiveWorkspace } from '../../../workspace-scope.js'
 import { sanitizeSearchQuery } from '../../../../utils/security-utils.js'
 import { chunkedInPredicate } from '../../row-helpers.js'
@@ -279,7 +279,7 @@ function executeFacetCountQueries(
             cnt: number
         }[]
     } catch (err) {
-        if (useFts && err instanceof Error && /fts5: syntax error/i.test(err.message)) {
+        if (useFts && isFts5QueryError(err)) {
             const tags = replaceFtsMatchWithLike(conditions, params, likeFallbackQuery ?? '')
             const types = replaceFtsMatchWithLike(
                 entryTypeConditions,

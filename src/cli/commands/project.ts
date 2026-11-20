@@ -70,13 +70,13 @@ export function projectListAction(options: Record<string, unknown>, command: Com
     const config = loadConfig(options)
     const registry = (config['projectRegistry'] ?? {}) as Record<string, { path: string, project_number?: number }>
     
-    if (Object.keys(registry).length === 0) {
-        process.stdout.write('No projects registered.\n')
+    if (options['json'] === true) {
+        process.stdout.write(JSON.stringify(registry, null, 2) + '\n')
         return
     }
 
-    if (options['json'] === true) {
-        process.stdout.write(JSON.stringify(registry, null, 2) + '\n')
+    if (Object.keys(registry).length === 0) {
+        process.stdout.write('No projects registered.\n')
         return
     }
 

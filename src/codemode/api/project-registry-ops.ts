@@ -85,7 +85,9 @@ function toGuardRegistry(
 }
 
 function resolveCanonicalDirPath(dirPath: string): string {
-    return /^[A-Za-z]:[\\/]/.test(dirPath) ? path.win32.resolve(dirPath) : path.resolve(dirPath)
+    if (/^[A-Za-z]:[\\/]/.test(dirPath)) return path.win32.resolve(dirPath)
+    if (dirPath.startsWith('/')) return path.posix.resolve(dirPath)
+    return path.resolve(dirPath)
 }
 
 function checkRegistryConflicts(

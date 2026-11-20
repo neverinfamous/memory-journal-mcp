@@ -223,7 +223,7 @@ describe('Pass 53 Adversarial Code Quality Audit Regressions', () => {
     })
 
     it('AP1–AP3: bumps AUDIT_PROMPT_REVISION to 2026-11-20-audit-pass53 and includes Pass 53 guidance', () => {
-        expect(AUDIT_PROMPT_REVISION).toBe('2026-11-20-audit-pass56')
+        expect(AUDIT_PROMPT_REVISION).toBe('2026-11-20-audit-pass57')
         const def = getCodeQualityAuditPromptDefinition()
         const rendered = def.handler({ target: 'memory-journal-mcp' }, {
             searchByDateRange: () => [],
@@ -231,7 +231,7 @@ describe('Pass 53 Adversarial Code Quality Audit Regressions', () => {
             searchEntries: () => [],
         } as never) as { messages: { content: { text: string } }[] }
         const text = rendered.messages[0]?.content.text ?? ''
-        expect(text).toContain('Prompt revision: 2026-11-20-audit-pass56')
+        expect(text).toContain('Prompt revision: 2026-11-20-audit-pass57')
         expect(text).toContain('node:async_hooks')
         expect(text).toContain('process.exit(exitCode)')
         expect(text).toContain('standalone DB encryption/migration scripts')

@@ -308,12 +308,12 @@ describe('Pass 45 Storage, Transport, Filter & CLI Regressions', () => {
             expect(zeroProjRes.success).toBe(false)
             expect(zeroProjRes.code).toBe('VALIDATION_ERROR')
 
-            expect(AUDIT_PROMPT_REVISION).toBe('2026-11-20-audit-pass56')
+            expect(AUDIT_PROMPT_REVISION).toBe('2026-11-20-audit-pass57')
             const secPrompt = await Promise.resolve(
                 getSecurityAuditPromptDefinition().handler({ target: 'memory-journal-mcp' }, db)
             )
             const text = secPrompt.messages[0]?.content.text ?? ''
-            expect(text).toContain('Prompt revision: 2026-11-20-audit-pass56')
+            expect(text).toContain('Prompt revision: 2026-11-20-audit-pass57')
             expect(text).toContain('setImmediate')
             expect(text).toContain('backups-team')
             expect(text).toContain('ISATAP')

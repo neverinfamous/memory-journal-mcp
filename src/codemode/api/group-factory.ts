@@ -92,7 +92,9 @@ function invokeGroupToolMethod(
                 code:
                     isRecord(error) && typeof error['code'] === 'string'
                         ? error['code']
-                        : (error as Error)?.name,
+                        : error instanceof Error
+                          ? error.name
+                          : undefined,
             }
         }
     }

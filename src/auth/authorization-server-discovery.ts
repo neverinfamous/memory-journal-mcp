@@ -25,6 +25,11 @@ function parseDiscoveryUrl(metadataUrl: string): URL {
     if (parsedUrl.protocol !== 'https:') {
         throw new ConfigurationError(`Authorization server URL must use HTTPS: ${metadataUrl}`)
     }
+    if (parsedUrl.username !== '' || parsedUrl.password !== '') {
+        throw new ConfigurationError(
+            `Authorization server URL must not contain credentials: ${parsedUrl.origin}`
+        )
+    }
     return parsedUrl
 }
 

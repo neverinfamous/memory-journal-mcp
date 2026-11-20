@@ -421,9 +421,10 @@ export function cleanSqlText(sql: string): string {
         const ch = sql[i] ?? ''
         if (quote !== null) {
             out.push(ch)
-            if (ch === quote && sql[i + 1] === quote) { out.push(quote); i++ }
+            if (ch === '\\' && i + 1 < sql.length) { out.push(sql[++i] ?? '') }
+            else if (ch === quote && sql[i + 1] === quote) { out.push(quote); i++ }
             else if (ch === quote) quote = null
-        } else if (ch === "'" || ch === '"') { quote = ch; out.push(ch) }
+        } else if (ch === "'" || ch === '"' || ch === '`') { quote = ch; out.push(ch) }
         else if (ch === '-' && sql[i + 1] === '-') {
             const nl = sql.indexOf('\n', i + 2)
             if (nl === -1) break

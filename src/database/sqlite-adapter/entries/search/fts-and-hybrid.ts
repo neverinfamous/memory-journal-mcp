@@ -4,6 +4,7 @@ import { type EntriesSharedContext, rowsToEntries } from '../shared.js'
 import { attachImportanceScoresToEntries } from '../importance.js'
 import { buildVocabulary, expandFuzzyQuery } from '../fuzzy-matcher.js'
 import { encodeCursor } from './cursor.js'
+import { isFts5QueryError } from './fts-sanitizer.js'
 import { effectiveWorkspace } from '../../../workspace-scope.js'
 import {
     buildSearchQuery,
@@ -157,14 +158,7 @@ export function searchEntries(
             const fuzzy = applyFuzzyFallback(context, db, queryStr, options, result)
             return fuzzy ?? result
         } catch (error) {
-            const isSyntaxError =
-                error instanceof Error &&
-                (error.message.includes('syntax error') ||
-                    error.message.includes('no such column') ||
-                    error.message.includes('unterminated string') ||
-                    error.message.includes('unrecognized token'))
-
-            if (!isSyntaxError) {
+            if (!isFts5QueryError(error)) {
                 throw error
             }
 

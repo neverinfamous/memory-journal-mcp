@@ -43,6 +43,8 @@ export function disposeCodemodeResources(): void {
     const security = globalSecurityManager
     globalSandboxPool = null
     globalSecurityManager = null
+    cachedNonCodeModeTools = null
+    cachedCodeModeContext = null
     pool?.dispose()
     security?.dispose()
 }

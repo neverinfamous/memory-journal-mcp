@@ -409,7 +409,7 @@ export class MetricsAccumulator {
         } catch (error: unknown) {
             logger.error('Failed to load metrics from disk', {
                 module: 'Metrics',
-                error: error instanceof Error ? error.message : JSON.stringify(error),
+                error: error instanceof Error ? error.message : String(error),
                 path,
             })
         }

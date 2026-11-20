@@ -124,3 +124,18 @@ export function sanitizeFtsQuery(query: string): string {
 
     return [...phrases, ...safeTokens].join(' ')
 }
+
+/**
+ * Returns true when an error is a recoverable SQLite FTS5 query syntax/column/token failure
+ * that should trigger a LIKE fallback across both search and facet count queries.
+ */
+export function isFts5QueryError(err: unknown): boolean {
+    if (!(err instanceof Error)) return false
+    const msg = err.message.toLowerCase()
+    return (
+        msg.includes('syntax error') ||
+        msg.includes('no such column') ||
+        msg.includes('unterminated string') ||
+        msg.includes('unrecognized token')
+    )
+}
