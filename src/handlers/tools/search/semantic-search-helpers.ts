@@ -328,7 +328,8 @@ export async function executeSemanticSearch(
             context.config?.runtime?.auditLogger,
             context.teamDb,
             context.config,
-            wsId
+            wsId,
+            projectNumber
         )
 
         const preconditionError = validateSemanticSearchPreconditions(input, vectorManager)

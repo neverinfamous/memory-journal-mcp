@@ -76,9 +76,16 @@ export class AdapterDelegates extends AdapterBaseDelegates {
         entryId: number,
         sinceIso: string,
         limit: number,
-        workspaceId?: string
+        workspaceId?: string,
+        projectNumber?: number
     ): { entryId: number; entryType: string; content: string; sharedAnchors: number }[] {
-        return this.relationshipsMgr.getEntriesSharingAnchors(entryId, sinceIso, limit, workspaceId)
+        return this.relationshipsMgr.getEntriesSharingAnchors(
+            entryId,
+            sinceIso,
+            limit,
+            workspaceId,
+            projectNumber
+        )
     }
 
     // Backups & Health

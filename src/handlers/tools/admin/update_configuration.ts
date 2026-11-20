@@ -12,6 +12,7 @@ import {
 } from '../../../utils/workspace-resolver.js'
 import { activeProjectRegistry, exactRegistryKey, pairStoredScope } from '../../../utils/write-scope.js'
 import { ValidationError } from '../../../types/errors.js'
+import { isForbiddenProjectKey } from '../../../utils/project-registry-guards.js'
 import { relaxedNumber } from '../schemas.js'
 
 function normalizeConfigProjectNumber(obj: Record<string, unknown>): void {
@@ -102,7 +103,7 @@ export const updateConfigurationSchema = z.preprocess(
                 .optional()
                 .describe('Show graph/git pivots (entry link degree, commit→entry refs, active threads) in the briefing'),
             project_number: z.number().int().positive().optional(),
-            workspace_id: z.string().optional(),
+            workspace_id: z.string().max(255).optional(),
         })
         .strict()
         .describe(
@@ -155,6 +156,9 @@ function validateScopeConfigurationInputs(args: UpdateConfigurationArgs): string
     }
     if (args.workspace_id?.trim() === '') {
         throw new ValidationError('workspace_id cannot be empty.')
+    }
+    if (args.workspace_id !== undefined && isForbiddenProjectKey(args.workspace_id)) {
+        throw new ValidationError(`Invalid workspace_id '${args.workspace_id}'.`)
     }
     if (
         args.project_number !== undefined &&

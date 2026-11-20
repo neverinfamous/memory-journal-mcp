@@ -45,7 +45,7 @@ export const CrossTeamSearchSchema = z.preprocess(
     tags: z.array(z.string()).optional(),
     exclude_tags: z.array(z.string()).optional(),
     project_number: StrictProjectNumberSchema.optional(),
-    workspace_id: z.string().optional().describe('Optional workspace isolation identifier (e.g. "alpha"). Do not use numeric project IDs or "workspace" as the key.'),
+    workspace_id: z.string().max(255).optional().describe('Optional workspace isolation identifier (e.g. "alpha"). Do not use numeric project IDs or "workspace" as the key.'),
     entry_type: z.enum(ENTRY_TYPES).optional(),
     start_date: z.string().regex(DATE_FORMAT_REGEX, DATE_FORMAT_MESSAGE).optional(),
     end_date: z.string().regex(DATE_FORMAT_REGEX, DATE_FORMAT_MESSAGE).optional(),

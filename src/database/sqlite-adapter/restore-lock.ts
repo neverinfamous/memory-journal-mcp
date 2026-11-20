@@ -101,44 +101,77 @@ function isOrphanedLockDir(lockDir: string): boolean {
     }
 }
 
-function isLockStale(lockDir: string, lockFile: string, runtime: unknown): boolean {
-    try {
-        const lockContent = fs.readFileSync(lockFile, 'utf-8').trim()
-        if (!lockContent) return isOrphanedLockDir(lockDir)
-        const { holdingPid } = parseLockContent(lockContent)
-        if (holdingPid === undefined || Number.isNaN(holdingPid)) return false
-        return isHoldingPidStale(holdingPid, lockDir, runtime)
-    } catch (readErr: unknown) {
-        // Only treat a missing lock.json as orphaned after a creation grace window so a contender
-        // between mkdirSync(lockDir) and writeLockFile(lockFile) is never falsely reclaimed.
-        if (!hasErrorCode(readErr, 'ENOENT')) return false
-        return isOrphanedLockDir(lockDir)
-    }
+interface LockRecord {
+    holdingPid: number | undefined
+    nonce?: string
 }
 
-function parseLockRecord(lockFile: string): { holdingPid: number | undefined; nonce?: string } | null {
+interface LockStaleCheck {
+    stale: boolean
+    observed: LockRecord | null
+}
+
+function parseLockRecordText(raw: string): LockRecord | null {
+    if (!raw) return null
+    const parsed = parseLockContent(raw)
+    let nonce: string | undefined
+    try {
+        const obj = JSON.parse(raw) as unknown
+        if (typeof obj === 'object' && obj !== null && 'nonce' in obj && typeof obj.nonce === 'string') {
+            nonce = obj.nonce
+        }
+    } catch {
+        // legacy format has no nonce
+    }
+    return { holdingPid: parsed.holdingPid, ...(nonce !== undefined ? { nonce } : {}) }
+}
+
+function parseLockRecord(lockFile: string): LockRecord | null {
     try {
         const raw = fs.readFileSync(lockFile, 'utf-8').trim()
-        if (!raw) return null
-        const parsed = parseLockContent(raw)
-        let nonce: string | undefined
-        try {
-            const obj = JSON.parse(raw) as unknown
-            if (typeof obj === 'object' && obj !== null && 'nonce' in obj && typeof obj.nonce === 'string') {
-                nonce = obj.nonce
-            }
-        } catch {
-            // legacy format has no nonce
-        }
-        return { holdingPid: parsed.holdingPid, ...(nonce !== undefined ? { nonce } : {}) }
+        return parseLockRecordText(raw)
     } catch {
         return null
     }
 }
 
+function isLockStale(lockDir: string, lockFile: string, runtime: unknown): LockStaleCheck {
+    try {
+        const lockContent = fs.readFileSync(lockFile, 'utf-8').trim()
+        if (!lockContent) return { stale: isOrphanedLockDir(lockDir), observed: null }
+        const observed = parseLockRecordText(lockContent)
+        if (observed?.holdingPid === undefined || Number.isNaN(observed.holdingPid)) {
+            return { stale: false, observed }
+        }
+        return { stale: isHoldingPidStale(observed.holdingPid, lockDir, runtime), observed }
+    } catch (readErr: unknown) {
+        // Only treat a missing lock.json as orphaned after a creation grace window so a contender
+        // between mkdirSync(lockDir) and writeLockFile(lockFile) is never falsely reclaimed.
+        if (!hasErrorCode(readErr, 'ENOENT')) return { stale: false, observed: null }
+        return { stale: isOrphanedLockDir(lockDir), observed: null }
+    }
+}
+
+function lockRecordChanged(expected: LockRecord | null, observed: LockRecord | null): boolean {
+    if (observed === null) return false
+    if (expected === null) return true
+    return expected.holdingPid !== observed.holdingPid || expected.nonce !== observed.nonce
+}
+
+function throwContendedLockError(lockDir: string, cause?: unknown): never {
+    throw new Error(
+        `Another process is currently holding the database lock at ${lockDir}. Backup restore cannot safely proceed.`,
+        cause !== undefined ? { cause } : undefined
+    )
+}
+
 /** Remove a stale lock directory via atomic rename, re-checking staleness before any fallback cleanup. */
-function clearStaleLock(lockDir: string, lockFile: string, runtime: unknown): void {
-    const expected = parseLockRecord(lockFile)
+function clearStaleLock(
+    lockDir: string,
+    lockFile: string,
+    runtime: unknown,
+    expected: LockRecord | null
+): void {
     logger.warning('Found stale database restore lock (dead PID), atomically renaming', {
         path: lockDir,
         module: 'SqliteAdapter',
@@ -146,6 +179,16 @@ function clearStaleLock(lockDir: string, lockFile: string, runtime: unknown): vo
     const staleDir = `${lockDir}.${randomUUID()}.stale`
     try {
         fs.renameSync(lockDir, staleDir)
+        const movedLockFile = path.join(staleDir, path.basename(lockFile))
+        const movedRecord = parseLockRecord(movedLockFile)
+        if (lockRecordChanged(expected, movedRecord) && !isLockStale(staleDir, movedLockFile, runtime).stale) {
+            try {
+                fs.renameSync(staleDir, lockDir)
+            } catch {
+                // Best-effort restore if contender recreated lockDir
+            }
+            throwContendedLockError(lockDir)
+        }
         try {
             fs.rmSync(staleDir, { recursive: true, force: true, maxRetries: 3, retryDelay: 25 })
         } catch (err: unknown) {
@@ -157,31 +200,21 @@ function clearStaleLock(lockDir: string, lockFile: string, runtime: unknown): vo
         }
     } catch (renameErr) {
         if (hasErrorCode(renameErr, 'ENOENT')) return
-        if (!isLockStale(lockDir, lockFile, runtime)) {
-            throw new Error(
-                `Another process is currently holding the database lock at ${lockDir}. Backup restore cannot safely proceed.`,
-                { cause: renameErr }
-            )
-        }
-        const current = parseLockRecord(lockFile)
         if (
-            expected !== null &&
-            current !== null &&
-            (expected.holdingPid !== current.holdingPid || expected.nonce !== current.nonce)
+            renameErr instanceof Error &&
+            renameErr.message.startsWith('Another process is currently holding the database lock')
         ) {
-            throw new Error(
-                `Another process is currently holding the database lock at ${lockDir}. Backup restore cannot safely proceed.`,
-                { cause: renameErr }
-            )
+            throw renameErr
+        }
+        const recheck = isLockStale(lockDir, lockFile, runtime)
+        if (!recheck.stale || lockRecordChanged(expected, recheck.observed)) {
+            throwContendedLockError(lockDir, renameErr)
         }
         try {
             fs.unlinkSync(lockFile)
             fs.rmdirSync(lockDir)
         } catch {
-            throw new Error(
-                `Another process is currently holding the database lock at ${lockDir}. Backup restore cannot safely proceed.`,
-                { cause: renameErr }
-            )
+            throwContendedLockError(lockDir, renameErr)
         }
     }
 }
@@ -193,23 +226,18 @@ function reclaimAndRetryLockDir(
     runtime: unknown,
     lockError: unknown
 ): void {
-    if (!isLockStale(lockDir, lockFile, runtime)) {
-        throw new Error(
-            `Another process is currently holding the database lock at ${lockDir}. Backup restore cannot safely proceed.`,
-            { cause: lockError }
-        )
+    const staleCheck = isLockStale(lockDir, lockFile, runtime)
+    if (!staleCheck.stale) {
+        throwContendedLockError(lockDir, lockError)
     }
-    clearStaleLock(lockDir, lockFile, runtime)
+    clearStaleLock(lockDir, lockFile, runtime, staleCheck.observed)
     // [INVARIANT] Retry with a non-recursive mkdir so a concurrent reclaimer loses with EEXIST
     // instead of both processes believing they own the lock.
     try {
         fs.mkdirSync(lockDir)
     } catch (retryError: unknown) {
         if (hasErrorCode(retryError, 'EEXIST')) {
-            throw new Error(
-                `Another process is currently holding the database lock at ${lockDir}. Backup restore cannot safely proceed.`,
-                { cause: retryError }
-            )
+            throwContendedLockError(lockDir, retryError)
         }
         throw retryError
     }

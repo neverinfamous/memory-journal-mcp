@@ -239,7 +239,7 @@ export function ftsSearch(
         isTeamDbReady(teamDb) &&
         options.includeTeam === true &&
         options.isPersonal !== true &&
-        canAccessTeamSilently('search_entries') &&
+        canAccessTeamSilently('search_entries', { teamDb, config: options.config }, options.workspaceId) &&
         canReadTeamEntriesRbac(teamDb, options.config, options.workspaceId)
     const cursors = resolveFtsCursors(options.cursor, canIncludeTeam)
     const perDbLimit = calcPerDbLimit(options.limit, canIncludeTeam)

@@ -64,7 +64,7 @@ const TeamImportMarkdownSchema = z
         dry_run: z.boolean().optional().default(false),
         project_number: StrictProjectNumberSchema.optional(),
         limit: z.number().int().min(1).max(500).optional().default(100),
-        workspace_id: z.string().optional(),
+        workspace_id: z.string().max(255).optional(),
     })
     .strict()
 
@@ -108,7 +108,7 @@ const TeamImportExternalSchema = z
         project_number: StrictProjectNumberSchema.optional(),
         limit: z.number().int().min(1).max(500).optional().default(100),
         default_entry_type: z.enum(ENTRY_TYPES).optional(),
-        workspace_id: z.string().optional(),
+        workspace_id: z.string().max(255).optional(),
     })
     .strict()
 

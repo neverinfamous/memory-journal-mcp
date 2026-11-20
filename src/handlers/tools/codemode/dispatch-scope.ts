@@ -239,12 +239,11 @@ function applyRootSessionInheritance(
     const { projectId, workspaceId, explicitWorkspace } = ctx
     const callerWorkspaceId =
         typeof paramsObj['workspace_id'] === 'string' ? paramsObj['workspace_id'] : undefined
+    const rawRepoHint = paramsObj['repo'] ?? paramsObj['repo_name'] ?? paramsObj['repository']
     const callerRepoHint =
-        typeof paramsObj['repo'] === 'string' && paramsObj['repo'].trim() !== ''
-            ? paramsObj['repo'].trim()
-            : typeof paramsObj['repo_name'] === 'string' && paramsObj['repo_name'].trim() !== ''
-              ? paramsObj['repo_name'].trim()
-              : undefined
+        typeof rawRepoHint === 'string' && rawRepoHint.trim() !== ''
+            ? rawRepoHint.trim()
+            : undefined
     const repoReg = callerRepoHint !== undefined ? lookupRegistryEntry(reg, callerRepoHint) : undefined
     const repoTargetsForeignProject =
         callerRepoHint !== undefined &&

@@ -78,6 +78,13 @@ const SYSTEM_STATS_METHODS = new Set([
     'statistics',
 ])
 
+const IMMUTABLE_PROXY_TRAPS = {
+    set: (): boolean => false,
+    defineProperty: (): boolean => false,
+    deleteProperty: (): boolean => false,
+    setPrototypeOf: (): boolean => false,
+} as const
+
 /**
  * Builds the `mj.schema` virtual namespace proxy.
  */
@@ -89,6 +96,7 @@ export function createSchemaProxy(_safeRpcCall: SafeRpcCallFn): object {
     const schemaCallable = (..._args: unknown[]): Promise<unknown> => schemaHelp()
 
     return new Proxy(schemaCallable, {
+        ...IMMUTABLE_PROXY_TRAPS,
         apply: () => schemaHelp(),
         get(_t, p): unknown {
             if (typeof p === 'symbol' || p === 'then') return undefined
@@ -164,6 +172,7 @@ export function createProjectsProxy(
         removeProject: adminDeleteProject,
     })
     return new Proxy(projectsCallable, {
+        ...IMMUTABLE_PROXY_TRAPS,
         apply: (_t, _thisArg, args: unknown[]) => adminListProjects(...args),
         get(t, p): unknown {
             if (typeof p === 'symbol' || p === 'then') return undefined
@@ -219,6 +228,7 @@ export function createTagsProxy(
         merge_tags: adminMergeTags,
     })
     return new Proxy(tagsCallable, {
+        ...IMMUTABLE_PROXY_TRAPS,
         apply: (_t, _thisArg, args: unknown[]) => coreListTags(...args),
         get(t, p): unknown {
             if (typeof p === 'symbol' || p === 'then') return undefined
@@ -264,6 +274,7 @@ export function createSystemProxy(
     for (const k of statsKeys) systemObj[k] = getStats
     Object.assign(systemCallable, systemObj)
     return new Proxy(systemCallable, {
+        ...IMMUTABLE_PROXY_TRAPS,
         apply: (_t, _thisArg, args: unknown[]) => getStats(...args),
         get(t, p): unknown {
             if (typeof p === 'symbol' || p === 'then') return undefined
@@ -274,6 +285,57 @@ export function createSystemProxy(
             return Reflect.get(t, p) as unknown
         },
     })
+}
+
+const CONTEXT_METHOD_KEYS = new Set(['get', 'getContext', 'get_context', 'find', 'list'])
+
+function buildContextProxyHandler(
+    contextData: Record<string, unknown>,
+    getContextRpc: (keyOrObj?: unknown) => Promise<unknown>
+): ProxyHandler<(...args: unknown[]) => Promise<unknown>> {
+    const resolveContextProp = (t: (...args: unknown[]) => Promise<unknown>, p: string): unknown => {
+        if (p === 'length' || p === 'name') return Reflect.get(t, p) as unknown
+        if (CONTEXT_METHOD_KEYS.has(p)) return getContextRpc
+        if (Object.hasOwn(contextData, p)) return contextData[p]
+        return Reflect.get(t, p) as unknown
+    }
+    return {
+        ...IMMUTABLE_PROXY_TRAPS,
+        apply: (_t, _thisArg, args: unknown[]) => getContextRpc(args[0]),
+        get(t, p): unknown {
+            if (typeof p === 'symbol' || p === 'then') return undefined
+            return resolveContextProp(t, p)
+        },
+        has(t, p): boolean {
+            if (typeof p === 'string' && (CONTEXT_METHOD_KEYS.has(p) || Object.hasOwn(contextData, p))) {
+                return true
+            }
+            return Reflect.has(t, p)
+        },
+        ownKeys(t): (string | symbol)[] {
+            return Array.from(
+                new Set<string | symbol>([
+                    ...Reflect.ownKeys(t),
+                    ...CONTEXT_METHOD_KEYS,
+                    ...Object.keys(contextData),
+                ])
+            )
+        },
+        getOwnPropertyDescriptor(t, p): PropertyDescriptor | undefined {
+            if (p === 'length' || p === 'name' || Object.hasOwn(t, p)) {
+                return Reflect.getOwnPropertyDescriptor(t, p)
+            }
+            if (typeof p === 'string' && (CONTEXT_METHOD_KEYS.has(p) || Object.hasOwn(contextData, p))) {
+                return {
+                    enumerable: true,
+                    configurable: true,
+                    writable: false,
+                    value: CONTEXT_METHOD_KEYS.has(p) ? getContextRpc : contextData[p],
+                }
+            }
+            return undefined
+        },
+    }
 }
 
 /**
@@ -325,27 +387,5 @@ export function createContextNamespaceProxy(contextObj?: Record<string, unknown>
     }
 
     const contextCallable = (...args: unknown[]): Promise<unknown> => getContextRpc(args[0])
-    Object.assign(contextCallable, {
-        get: getContextRpc,
-        getContext: getContextRpc,
-        get_context: getContextRpc,
-        find: getContextRpc,
-        list: getContextRpc,
-        ...contextData,
-    })
-
-    const contextProxy = new Proxy(contextCallable, {
-        apply: (_t, _thisArg, args: unknown[]) => getContextRpc(args[0]),
-        get(t, p): unknown {
-            if (typeof p === 'symbol' || p === 'then') return undefined
-            if (p in t) return Reflect.get(t, p) as unknown
-            if (typeof p === 'string') {
-                if (['get', 'getContext', 'get_context', 'find', 'list'].includes(p)) return getContextRpc
-                if (p in contextData) return contextData[p]
-            }
-            return Reflect.get(t, p) as unknown
-        },
-    })
-
-    return { contextProxy, getContextRpc }
+    return { contextProxy: new Proxy(contextCallable, buildContextProxyHandler(contextData, getContextRpc)), getContextRpc }
 }

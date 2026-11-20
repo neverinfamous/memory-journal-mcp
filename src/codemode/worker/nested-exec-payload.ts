@@ -241,6 +241,9 @@ export function extractNestedAutoVersion(
 }
 
 /** Extracts nested `max_result_size*` (or `_kb`) bounds, monotonically clamped to outer limit when set. */
+const DEFAULT_NESTED_MAX_RESULT_SIZE = 100 * 1024
+const ABSOLUTE_MAX_RESULT_SIZE = 50 * 1024 * 1024
+
 export function extractNestedMaxResultSize(
     argRec: Record<string, unknown> | undefined,
     outerMaxResultSize?: number
@@ -275,9 +278,11 @@ export function extractNestedMaxResultSize(
     )
     const requested = direct ?? kb
     if (requested === undefined) return undefined
-    return outerMaxResultSize !== undefined && outerMaxResultSize > 0
-        ? Math.min(outerMaxResultSize, requested)
-        : requested
+    const ceiling =
+        outerMaxResultSize !== undefined && outerMaxResultSize > 0
+            ? Math.min(outerMaxResultSize, ABSOLUTE_MAX_RESULT_SIZE)
+            : DEFAULT_NESTED_MAX_RESULT_SIZE
+    return Math.min(ceiling, requested)
 }
 
 const EXECUTE_CODE_CONTROL_KEYS = new Set([

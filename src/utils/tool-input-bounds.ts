@@ -28,14 +28,24 @@ const CANONICAL_INDEX_RE = /^(?:0|[1-9]\d{0,9})$/
 const mapSizeDesc = Object.getOwnPropertyDescriptor(Map.prototype, 'size')
 const setSizeDesc = Object.getOwnPropertyDescriptor(Set.prototype, 'size')
 const typedArrayProto = Object.getPrototypeOf(Uint8Array.prototype) as object
+const typedArrayLengthDesc = Object.getOwnPropertyDescriptor(typedArrayProto, 'length')
 const byteLengthDescriptors = [
-    Object.getOwnPropertyDescriptor(typedArrayProto, 'byteLength'),
     Object.getOwnPropertyDescriptor(DataView.prototype, 'byteLength'),
     Object.getOwnPropertyDescriptor(ArrayBuffer.prototype, 'byteLength'),
     typeof SharedArrayBuffer !== 'undefined'
         ? Object.getOwnPropertyDescriptor(SharedArrayBuffer.prototype, 'byteLength')
         : undefined,
 ] as const
+
+function tryReadTypedArrayLength(cur: object): number | null {
+    if (typedArrayLengthDesc === undefined) return null
+    try {
+        const len: unknown = typedArrayLengthDesc.get?.call(cur)
+        return typeof len === 'number' ? safeNonNegativeInt(len) : null
+    } catch {
+        return null
+    }
+}
 
 function safeNonNegativeInt(value: unknown): number {
     if (typeof value !== 'number' || !Number.isFinite(value) || value <= 0) return 0
@@ -129,12 +139,20 @@ function visitInputContainerNode(
         state.count += pushOwnObjectKeys(cur, stack, boxedStrLen)
         return state.count > maxElements
     }
+    const typedLen = tryReadTypedArrayLength(cur)
+    if (typedLen !== null) {
+        state.count += 1 + typedLen
+        if (state.count > maxElements) return true
+        pushObjectChildren(cur, stack, ancestors, active)
+        state.count += pushOwnObjectKeys(cur, stack, typedLen)
+        return state.count > maxElements
+    }
     const byteLen = tryReadByteBufferLength(cur)
     if (byteLen !== null) {
         state.count += 1 + byteLen
         if (state.count > maxElements) return true
         pushObjectChildren(cur, stack, ancestors, active)
-        state.count += pushOwnObjectKeys(cur, stack, byteLen)
+        state.count += pushOwnObjectKeys(cur, stack)
         return state.count > maxElements
     }
     if (Array.isArray(cur)) {
@@ -144,8 +162,10 @@ function visitInputContainerNode(
         pushObjectChildren(cur, stack, ancestors, active)
         state.count += pushOwnObjectKeys(cur, stack, arrLen)
         if (state.count > maxElements) return true
-        const items: readonly unknown[] = cur
-        for (const item of items) {
+        const arr = cur as readonly unknown[]
+        for (let i = 0; i < arrLen; i++) {
+            if (!Object.hasOwn(arr, i)) continue
+            const item = arr[i]
             if (item !== null && typeof item === 'object') stack.push(item)
         }
         return false

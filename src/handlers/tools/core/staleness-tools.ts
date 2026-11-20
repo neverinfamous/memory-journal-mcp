@@ -295,7 +295,7 @@ export const MarkAnchorsStaleSchema = z.preprocess(
                 )
                 .min(1)
                 .max(MAX_QUERY_LIMIT),
-            workspace_id: z.string().optional(),
+            workspace_id: z.string().max(255).optional(),
             project_number: StrictProjectNumberSchema.optional(),
         })
         .strict()

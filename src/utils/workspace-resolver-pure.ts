@@ -112,7 +112,10 @@ function resolveExplicitWorkspaceOrProject(
         }
         const sessionCtx = activeSessionReader(config?.runtime)
         const rawCandidateWs =
-            registeredCwd?.workspaceId ?? config?.defaultWorkspaceId ?? sessionCtx.workspaceId ?? 'default'
+            registeredCwd?.workspaceId ??
+            parseConfiguredDefaultWs(config) ??
+            sessionCtx.workspaceId ??
+            'default'
         const candidateWs = findCanonicalRegistryKey(rawCandidateWs, registry) ?? rawCandidateWs
         const candidateProject = lookupOwnRegistryProject(registry, candidateWs)
         const fallbackWs =

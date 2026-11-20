@@ -255,7 +255,7 @@ export async function executeTeamRebuildVectorIndex(
 
         const parsed = z
             .object({
-                workspace_id: z.string().optional(),
+                workspace_id: z.string().max(255).optional(),
                 project_number: StrictProjectNumberSchema.optional(),
                 session_id: z.string().optional(),
             })

@@ -25,7 +25,17 @@ const SYSTEM_DIR_EXACT = new Set([
     'c:/windows',
 ])
 
-const SYSTEM_DIR_PREFIXES = ['/etc/', '/proc/', '/sys/', '/dev/', '/windows/', 'c:/windows/']
+const SYSTEM_DIR_PREFIXES = [
+    '/bin/',
+    '/sbin/',
+    '/var/run/',
+    '/etc/',
+    '/proc/',
+    '/sys/',
+    '/dev/',
+    '/windows/',
+    'c:/windows/',
+]
 
 /** Return true when a workspace/registry key is empty, wildcard, or a prototype pollution key. */
 export function isForbiddenProjectKey(key: string): boolean {

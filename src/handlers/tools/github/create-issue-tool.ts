@@ -39,7 +39,7 @@ const CreateIssueHandlerInputSchema = z.preprocess(
             assignees: z.array(z.string()).optional(),
             milestone_number: z.number().int().positive().optional(),
             project_number: StrictProjectNumberSchema,
-            workspace_id: z.string().optional(),
+            workspace_id: z.string().max(255).optional(),
             initial_status: z.string().optional(),
             owner: z.string().optional(),
             repo: z.string().optional(),

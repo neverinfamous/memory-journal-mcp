@@ -299,8 +299,16 @@ export class RelationshipsManager {
         entryId: number,
         sinceIso: string,
         limit: number,
-        workspaceId?: string
+        workspaceId?: string,
+        projectNumber?: number
     ): { entryId: number; entryType: string; content: string; sharedAnchors: number }[] {
-        return queryEntriesSharingAnchors(this.db, entryId, sinceIso, limit, workspaceId)
+        return queryEntriesSharingAnchors(
+            this.db,
+            entryId,
+            sinceIso,
+            limit,
+            workspaceId,
+            projectNumber
+        )
     }
 }

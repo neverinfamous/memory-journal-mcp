@@ -155,6 +155,14 @@ export class WorkerSandbox {
                     const endTime = performance.now()
                     const endRss = process.memoryUsage.rss()
                     const result = msg.result
+                    if (!result.success) {
+                        if (typeof result.error === 'string') {
+                            result.error = sanitizeErrorForLogging(result.error)
+                        }
+                        if (typeof result.stack === 'string') {
+                            result.stack = sanitizeErrorForLogging(result.stack)
+                        }
+                    }
 
                     result.metrics = {
                         wallTimeMs: Math.round(endTime - this.currentExecution.startTime),
@@ -184,7 +192,10 @@ export class WorkerSandbox {
 
         spawnedWorker.on('error', (err: Error) => {
             if (this.worker !== spawnedWorker) return
-            this.handleWorkerDeath(err.message, err.stack)
+            this.handleWorkerDeath(
+                sanitizeErrorForLogging(err.message),
+                err.stack !== undefined ? sanitizeErrorForLogging(err.stack) : undefined
+            )
         })
 
         spawnedWorker.on('exit', (exitCode) => {
@@ -215,8 +226,8 @@ export class WorkerSandbox {
 
             resolve({
                 success: false,
-                error: errorMsg,
-                ...(stack !== undefined ? { stack } : {}),
+                error: sanitizeErrorForLogging(errorMsg),
+                ...(stack !== undefined ? { stack: sanitizeErrorForLogging(stack) } : {}),
                 metrics: {
                     wallTimeMs: Math.round(endTime - startTime),
                     cpuTimeMs: 0,
@@ -265,7 +276,7 @@ export class WorkerSandbox {
                 }
             },
             (err: unknown) => {
-                const detail = err instanceof Error ? err.message : String(err)
+                const detail = sanitizeErrorForLogging(err instanceof Error ? err.message : String(err))
                 if (this.executionId === timedOutId) {
                     this.handleWorkerDeath(
                         `Code execution timed out and the worker could not be terminated: ${detail}`

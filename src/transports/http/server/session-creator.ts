@@ -10,6 +10,7 @@ import { LegacySSEServerTransport } from './legacy-sse.js'
 import type { McpRouteState } from './protocol-route-handlers.js'
 
 const MAX_ACTIVE_SESSIONS = 100
+const MAX_SESSIONS_PER_PRINCIPAL = 20
 
 export type SessionCreator = (
     req: Request,
@@ -71,28 +72,66 @@ export function forgetSession(state: McpRouteState, sid: string): void {
     clearHttpSessionProject(sid)
 }
 
-function evictOldestIdleSessionIfFull(state: McpRouteState): void {
-    const { sseTransports, sessionLastActivity } = state
+function countPrincipalSessions(
+    state: McpRouteState,
+    subject: string
+): { count: number; oldestSid: string | undefined; oldestTime: number } {
+    let count = 0
+    let oldestSid: string | undefined
+    let oldestTime = Infinity
+    for (const [sid, owner] of state.sessionOwners.entries()) {
+        if (owner !== subject || !state.sseTransports.has(sid)) continue
+        count++
+        const lastActive = state.sessionLastActivity.get(sid) ?? 0
+        if (lastActive < oldestTime) {
+            oldestTime = lastActive
+            oldestSid = sid
+        }
+    }
+    return { count, oldestSid, oldestTime }
+}
+
+function evictSessionIfIdle(
+    state: McpRouteState,
+    sid: string | undefined,
+    lastActive: number
+): void {
+    if (sid === undefined || Date.now() - lastActive <= 5_000) return
+    const staleTransport = state.sseTransports.get(sid)
+    if (staleTransport !== undefined) {
+        closeTransportQuietly(staleTransport, 'Failed to close evicted SSE transport')
+    }
+    forgetSession(state, sid)
+}
+
+function evictOldestIdleSessionIfFull(
+    state: McpRouteState,
+    callerSubject: string | undefined
+): void {
+    const { sseTransports, sessionOwners, sessionLastActivity } = state
+    if (callerSubject !== undefined) {
+        const principal = countPrincipalSessions(state, callerSubject)
+        if (
+            principal.count >= MAX_SESSIONS_PER_PRINCIPAL ||
+            sseTransports.size >= MAX_ACTIVE_SESSIONS
+        ) {
+            evictSessionIfIdle(state, principal.oldestSid, principal.oldestTime)
+        }
+        return
+    }
     if (sseTransports.size < MAX_ACTIVE_SESSIONS) return
 
-    // Evict the oldest idle stateful session (LRU) if past a brief grace window (5s),
-    // preventing multi-client test suites from exhausting the cap while still enforcing
-    // the hard cap under burst floods.
+    // Evict the oldest idle unowned session (LRU) past 5s without crossing into owned tenant sessions.
     let oldestSid: string | undefined
     let oldestTime = Infinity
     for (const [candidateSid, lastActive] of sessionLastActivity.entries()) {
+        if (sessionOwners.has(candidateSid) || !sseTransports.has(candidateSid)) continue
         if (lastActive < oldestTime) {
             oldestTime = lastActive
             oldestSid = candidateSid
         }
     }
-    if (oldestSid !== undefined && Date.now() - oldestTime > 5_000) {
-        const staleTransport = sseTransports.get(oldestSid)
-        if (staleTransport !== undefined) {
-            closeTransportQuietly(staleTransport, 'Failed to close evicted SSE transport')
-        }
-        forgetSession(state, oldestSid)
-    }
+    evictSessionIfIdle(state, oldestSid, oldestTime)
 }
 
 function connectTransportToServer(
@@ -176,7 +215,20 @@ function handleSessionCreation(
     requestedSid?: string,
     isLegacySse = false
 ): void {
-    evictOldestIdleSessionIfFull(state)
+    const callerSubject = resolveRequestSubject()
+    evictOldestIdleSessionIfFull(state, callerSubject)
+
+    if (
+        callerSubject !== undefined &&
+        countPrincipalSessions(state, callerSubject).count >= MAX_SESSIONS_PER_PRINCIPAL
+    ) {
+        res.status(429).json({
+            error: {
+                message: 'Too Many Requests: Maximum active stateful sessions per principal reached',
+            },
+        })
+        return
+    }
 
     if (state.sseTransports.size >= MAX_ACTIVE_SESSIONS) {
         res.status(503).json({

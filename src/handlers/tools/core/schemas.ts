@@ -31,7 +31,7 @@ export const CreateEntrySchema = z.preprocess(
         tags: z.array(z.string()).optional(),
         is_personal: z.boolean().optional().default(true),
         significance_type: z.enum(SIGNIFICANCE_TYPES).optional(),
-        workspace_id: z.string().min(1, 'workspace_id (repository name) is required').optional(),
+        workspace_id: z.string().min(1, 'workspace_id (repository name) is required').max(255).optional(),
         project_number: StrictProjectNumberSchema.optional(),
         project_owner: z.string().optional(),
         issue_number: z.number().int().positive().optional(),
@@ -247,7 +247,7 @@ export const GetEntryByIdSchema = z.preprocess(
         entry_id: z.number().int(),
         include_relationships: z.boolean().optional().default(true),
         project_number: StrictProjectNumberSchema.optional(),
-        workspace_id: z.string().optional(),
+        workspace_id: z.string().max(255).optional(),
         source: z.enum(['personal', 'team']).optional(),
     })
 )
@@ -297,7 +297,7 @@ export const GetRecentEntriesSchema = z.preprocess(
     z.object({
         limit: z.number().int().min(1).max(MAX_SEARCH_LIMIT).optional().default(10),
         project_number: StrictProjectNumberSchema.optional(),
-        workspace_id: z.string().optional(),
+        workspace_id: z.string().max(255).optional(),
         is_personal: z.boolean().optional(),
         sort_by: z
             .enum(['timestamp', 'importance'])
@@ -338,7 +338,7 @@ export const GetRecentEntriesSchemaMcp = z.preprocess(
 export const GetEntryHistorySchema = z.object({
     entry_id: z.number().int(),
     project_number: StrictProjectNumberSchema.optional(),
-    workspace_id: z.string().optional(),
+    workspace_id: z.string().max(255).optional(),
 })
 
 export const GetEntryHistorySchemaMcp = z.object({
@@ -393,7 +393,7 @@ export const GetRecentEntriesOutputSchema = z
 
 export const ListTagsSchema = z.object({
     project_number: StrictProjectNumberSchema.optional(),
-    workspace_id: z.string().optional(),
+    workspace_id: z.string().max(255).optional(),
 })
 
 export const ListTagsSchemaMcp = z.object({

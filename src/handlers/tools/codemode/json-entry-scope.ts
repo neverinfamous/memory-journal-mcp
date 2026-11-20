@@ -50,7 +50,9 @@ export function resolveRepoWorkspace(repo: unknown): string | undefined {
 export function readWorkspaceId(target: Record<string, unknown>): string | undefined {
     const raw = target['workspace_id'] ?? target['workspaceId'] ?? target['workspace']
     if (typeof raw === 'string' && raw.trim() !== '') return raw.trim()
-    return resolveRepoWorkspace(target['repo'] ?? target['repo_name'] ?? target['repoName'])
+    return resolveRepoWorkspace(
+        target['repo'] ?? target['repo_name'] ?? target['repoName'] ?? target['repository']
+    )
 }
 
 /**

@@ -89,9 +89,16 @@ function propagateBatchProjectNumber(result: Record<string, unknown>): void {
             if (!isRecord(item)) continue
             const rawItemWs = item['workspace_id'] ?? item['workspaceId'] ?? item['workspace']
             const rawItemTargetWs = item['target_workspace_id'] ?? item['targetWorkspaceId']
+            const rawItemRepo =
+                item['repo'] ?? item['repo_name'] ?? item['repoName'] ?? item['repository']
             const itemWs = typeof rawItemWs === 'string' ? rawItemWs.trim() : undefined
             const itemTargetWs =
                 typeof rawItemTargetWs === 'string' ? rawItemTargetWs.trim() : undefined
+            const itemRepoRaw = typeof rawItemRepo === 'string' ? rawItemRepo.trim() : undefined
+            const itemRepo =
+                itemRepoRaw !== undefined && itemRepoRaw !== ''
+                    ? (itemRepoRaw.split(/[/\\]/).filter(Boolean).pop() ?? itemRepoRaw)
+                    : undefined
             const itemPn =
                 item['project_number'] ??
                 item['projectNumber'] ??
@@ -107,7 +114,10 @@ function propagateBatchProjectNumber(result: Record<string, unknown>): void {
                     itemTargetWs !== '' &&
                     (ws === undefined ||
                         ws === '' ||
-                        itemTargetWs.toLowerCase() !== ws.toLowerCase()))
+                        itemTargetWs.toLowerCase() !== ws.toLowerCase())) ||
+                (itemRepo !== undefined &&
+                    itemRepo !== '' &&
+                    (ws === undefined || ws === '' || itemRepo.toLowerCase() !== ws.toLowerCase()))
             if (pn !== undefined && itemPn === undefined && !namesOtherWs) {
                 item['project_number'] = pn
             }
@@ -116,7 +126,8 @@ function propagateBatchProjectNumber(result: Record<string, unknown>): void {
                 ws !== '' &&
                 item['workspace_id'] === undefined &&
                 item['workspaceId'] === undefined &&
-                item['workspace'] === undefined
+                item['workspace'] === undefined &&
+                itemRepo === undefined
             ) {
                 item['workspace_id'] = ws
             }

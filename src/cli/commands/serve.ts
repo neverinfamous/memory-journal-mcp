@@ -1,5 +1,6 @@
 import type { Command } from 'commander'
 import { logger } from '../../utils/logger.js'
+import { isPlaceholderAuthToken } from '../../utils/security-utils.js'
 import { createServer } from '../../server/mcp-server/index.js'
 import { ConfigResolver } from '../../utils/config-resolver.js'
 import { buildServerOptions } from '../server-options-builder.js'
@@ -53,7 +54,7 @@ export async function serveAction(options: z.infer<typeof serveSchema>, command:
     const sensitiveEnvVars = ['GITHUB_TOKEN', 'MCP_AUTH_TOKEN', 'OAUTH_ISSUER', 'OAUTH_JWKS_URI']
     for (const envVar of sensitiveEnvVars) {
         const envValue = process.env[envVar]
-        if (typeof envValue === 'string' && envValue.trim().startsWith('CHANGEME_')) {
+        if (isPlaceholderAuthToken(envValue)) {
             configErrors.push(
                 `FATAL: Insecure configuration detected. ${envVar} contains default placeholder value. Please update your environment variables.`
             )

@@ -87,9 +87,11 @@ export function readWorkspaceField(primary: Record<string, unknown>, secondary: 
             primary['repo'] ??
                 primary['repo_name'] ??
                 primary['repoName'] ??
+                primary['repository'] ??
                 secondary['repo'] ??
                 secondary['repo_name'] ??
-                secondary['repoName']
+                secondary['repoName'] ??
+                secondary['repository']
         )
     )
 }

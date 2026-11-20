@@ -20,6 +20,7 @@ import {
     markLineTerminator,
     trackIdentifierToken,
     trackPunctuationToken,
+    trackTwoCharOperatorToken,
     type DelimiterState,
 } from './security-stripper-state.js'
 
@@ -35,6 +36,7 @@ export {
     skipRegexLiteralBody,
     trackIdentifierToken,
     trackPunctuationToken,
+    trackTwoCharOperatorToken,
     type DelimiterState,
 }
 
@@ -176,8 +178,7 @@ export function stripCommentsAndStrings(code: string): string {
             continue
         }
         if (isTwoCharStripperOperator(code, i, ch, next)) {
-            lastNonWsToken = ch + next
-            state.canAsiRegex = false
+            lastNonWsToken = trackTwoCharOperatorToken(ch + next, lastNonWsToken, state)
             lineOnlyWsOrComments = false
             out += ch + next
             i += 2

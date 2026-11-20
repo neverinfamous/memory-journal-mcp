@@ -4,6 +4,15 @@ const MAX_SCRUB_DEPTH = 6
 const MAX_AUDIT_ARRAY_ITEMS = 50
 const MAX_AUDIT_OBJECT_KEYS = 50
 const MAX_AUDIT_TOTAL_NODES = 250
+const MAX_AUDIT_RAW_SCRUB_CHARS = 4096
+
+function scrubAndTruncateAuditString(raw: string, maxChars: number): string {
+    const bounded = raw.length > MAX_AUDIT_RAW_SCRUB_CHARS ? raw.slice(0, MAX_AUDIT_RAW_SCRUB_CHARS) : raw
+    const clean = sanitizeErrorForLogging(bounded)
+    return clean.length > maxChars || raw.length > maxChars
+        ? `${clean.slice(0, maxChars)}...[truncated]`
+        : clean
+}
 
 function isRecordObject(val: unknown): val is Record<string, unknown> {
     return typeof val === 'object' && val !== null
@@ -23,9 +32,7 @@ function scrubAuditObject(
         const pair = entries[i]
         if (pair === undefined) continue
         const [k, v] = pair
-        const cleanKey = sanitizeErrorForLogging(k)
-        const safeKey =
-            cleanKey.length > 256 ? `${cleanKey.slice(0, 256)}...[truncated]` : cleanKey
+        const safeKey = scrubAndTruncateAuditString(k, 256)
         out[safeKey] =
             SENSITIVE_KEY_RE.test(k) || SENSITIVE_KEY_RE.test(safeKey)
                 ? '[REDACTED]'
@@ -51,10 +58,12 @@ function scrubAuditMap(
             entries['_truncatedKeys'] = Math.max(0, val.size - MAX_AUDIT_OBJECT_KEYS)
             break
         }
-        const keyStr = sanitizeErrorForLogging(String(mk)).slice(0, 256)
-        entries[keyStr] = SENSITIVE_KEY_RE.test(keyStr)
-            ? '[REDACTED]'
-            : scrubAuditArgValue(mv, depth + 1, seen, budget)
+        const rawKey = String(mk)
+        const keyStr = scrubAndTruncateAuditString(rawKey, 256)
+        entries[keyStr] =
+            SENSITIVE_KEY_RE.test(rawKey) || SENSITIVE_KEY_RE.test(keyStr)
+                ? '[REDACTED]'
+                : scrubAuditArgValue(mv, depth + 1, seen, budget)
     }
     return entries
 }
@@ -66,8 +75,7 @@ export function scrubAuditArgValue(
     budget: { count: number }
 ): unknown {
     if (typeof val === 'string') {
-        const clean = sanitizeErrorForLogging(val)
-        return clean.length > 2048 ? `${clean.slice(0, 2048)}...[truncated]` : clean
+        return scrubAndTruncateAuditString(val, 2048)
     }
     if (typeof val === 'bigint') return val.toString()
     if (val === null || typeof val !== 'object') return val
@@ -78,7 +86,7 @@ export function scrubAuditArgValue(
     if (ArrayBuffer.isView(val)) return `[Binary: ${String(val.byteLength)} bytes]`
     if (val instanceof Date) return val.toISOString()
     if (val instanceof Error) {
-        return sanitizeErrorForLogging(`${val.name}: ${val.message}`).slice(0, 2048)
+        return scrubAndTruncateAuditString(`${val.name}: ${val.message}`, 2048)
     }
 
     seen.add(val)

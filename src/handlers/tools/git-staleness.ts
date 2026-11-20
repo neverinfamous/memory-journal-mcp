@@ -368,8 +368,8 @@ const coercedPositiveInt = z.preprocess(
 const CheckEntryStalenessParseSchema = z.object({
     entry_id: coercedPositiveInt.optional(),
     entryId: coercedPositiveInt.optional(),
-    workspace_id: z.string().optional(),
-    workspaceId: z.string().optional(),
+    workspace_id: z.string().max(255).optional(),
+    workspaceId: z.string().max(255).optional(),
     project_number: StrictProjectNumberSchema.optional(),
     projectNumber: StrictProjectNumberSchema.optional(),
     session_id: z.string().optional(),

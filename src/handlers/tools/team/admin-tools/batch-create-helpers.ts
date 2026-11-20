@@ -22,7 +22,7 @@ import { sendProgress } from '../../../../utils/progress-utils.js'
 import { collectIndexWorkspaces, indexBatchEntries } from '../../batch-indexing.js'
 import { linkRequestedRelationships } from '../../relationship-linking.js'
 import { resolveWriteWorkspaceId } from '../../write-workspace.js'
-import { triggerTeamNotifications } from '../helpers.js'
+import { assertCanonicalFallbackToolAllowed, triggerTeamNotifications } from '../helpers.js'
 import { canonicalizeTeamAuthor, getCallerIdentity, resolveScopedTeamRole } from '../rbac.js'
 import type { TeamBatchCreateEntriesSchema } from '../schemas.js'
 import type { TeamDbInstance } from './batch-delete-helpers.js'
@@ -328,6 +328,18 @@ function linkBatchCreatedRelationships(
     return relationshipWarnings
 }
 
+function assertTeamBatchCreateLinksAllowed(
+    context: ToolContext,
+    entries: TeamBatchCreateInput['entries']
+): void {
+    const requestsLinking = entries.some(
+        (e) => (e.relationships !== undefined && e.relationships.length > 0) || e.auto_link === true
+    )
+    if (requestsLinking) {
+        assertCanonicalFallbackToolAllowed('team_link_entries', 'team', context, false)
+    }
+}
+
 /** Validate and execute `team_batch_create_entries` with shallow control flow. */
 export async function executeTeamBatchCreate(
     context: ToolContext,
@@ -337,6 +349,7 @@ export async function executeTeamBatchCreate(
     await sendProgress(context.progress, 0, 2, 'Creating team entries...')
     const validation = validateTeamBatchCreateEntries(input, teamDb, context.config)
     if ('errorResponse' in validation) return validation.errorResponse
+    assertTeamBatchCreateLinksAllowed(context, input.entries)
 
     const inputs = await buildTeamBatchCreateInputs(validation.resolvedEntries, context)
     const { created: results, errors } = teamDb.createEntries(inputs)

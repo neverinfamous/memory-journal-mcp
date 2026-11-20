@@ -13,8 +13,10 @@ import { MAX_QUERY_LIMIT } from '../schemas.js'
 import type { IDatabaseAdapter } from '../../../database/core/interfaces.js'
 import * as crypto from 'node:crypto'
 import { enforceAccessBoundary } from '../../../auth/validation.js'
+import { PermissionError, ValidationError } from '../../../types/errors.js'
 import type { AuditLogger } from '../../../audit/index.js'
 import type { ToolHandlerConfig } from '../../../types/index.js'
+import { activeProjectRegistry } from '../../../utils/write-scope.js'
 import {
     canReadTeamEntriesRbac,
     enforceTeamRbac,
@@ -24,6 +26,7 @@ import {
     canAccessTeamSilently,
     collectTeamSearchEntries,
     isTeamDbReady,
+    isTeamFilterAllowed,
     passMetadataFilters,
     type EntryWithSource,
     type ISearchFilters,
@@ -34,6 +37,7 @@ export {
     canAccessTeamSilently,
     collectTeamSearchEntries,
     isTeamDbReady,
+    isTeamFilterAllowed,
     passMetadataFilters,
     type EntryWithSource,
     type ISearchFilters,
@@ -82,7 +86,7 @@ export function probeMatchingTeamEntry(
     const teamDb = context.teamDb
     if (
         !isTeamDbReady(teamDb) ||
-        !canAccessTeamSilently(toolName) ||
+        !canAccessTeamSilently(toolName, { teamDb, config: context.config }, wsId) ||
         !canReadTeamEntriesRbac(teamDb, context.config, wsId)
     ) {
         return false
@@ -99,8 +103,8 @@ export function probeMatchingTeamEntry(
 
 /**
  * Authorize team-DB merging on personal search tools:
- * - Explicit `include_team: true` enforces OAuth team scope + Team RBAC (`AuthorizationError`/`PermissionError`).
- * - Defaulted `include_team` silently drops team results when unauthorized so personal searches still work.
+ * - Explicit `include_team: true` enforces tool filter, scoped project_number, OAuth team scope, and Team RBAC.
+ * - Defaulted `include_team` silently drops team results when unauthorized or unscoped so personal searches still work.
  */
 export function resolveAuthorizedIncludeTeam(
     toolName: string,
@@ -109,13 +113,30 @@ export function resolveAuthorizedIncludeTeam(
     auditLogger?: AuditLogger | null,
     teamDb?: IDatabaseAdapter,
     config?: ToolHandlerConfig,
-    workspaceId?: string
+    workspaceId?: string,
+    projectNumber?: number
 ): boolean {
     if (!parsedIncludeTeam) return false
     const explicit = hasExplicitIncludeTeam(rawParams)
+    if (!isTeamFilterAllowed('team_search', config)) {
+        if (explicit) {
+            throw new PermissionError("Tool 'team_search' is disabled by active tool filter.")
+        }
+        return false
+    }
+    const registry = activeProjectRegistry(config?.projectRegistry)
+    const hasActiveRegistry = registry !== undefined && Object.keys(registry).length > 0
+    if (projectNumber === undefined && (workspaceId === '*' || hasActiveRegistry)) {
+        if (explicit) {
+            throw new ValidationError(
+                'Missing project_number. Including team entries in wildcard or multi-project workspaces requires a resolved project_number.'
+            )
+        }
+        return false
+    }
     if (explicit) {
         enforceAccessBoundary(toolName, 'tool', { requiresTeamScope: true }, auditLogger)
-    } else if (!canAccessTeamSilently(toolName)) {
+    } else if (!canAccessTeamSilently(toolName, { config }, workspaceId)) {
         return false
     }
     if (teamDb !== undefined && !isTeamDbReady(teamDb)) {

@@ -83,7 +83,10 @@ interface ExecutionRpcBridge {
     closeBridge: (reason: string) => void
 }
 
-function createExecutionRpcBridge(port: MessagePort): ExecutionRpcBridge {
+function createExecutionRpcBridge(
+    port: MessagePort,
+    executionLifecycle?: ExecutionLifecycleState
+): ExecutionRpcBridge {
     let closed = false
     let rpcIdCounter = 0
     const pendingRpcRequests = new Map<
@@ -109,7 +112,10 @@ function createExecutionRpcBridge(port: MessagePort): ExecutionRpcBridge {
 
     const sendRpcRequest = (payload: Omit<RpcRequest, 'id'>): Promise<unknown> =>
         new Promise((resolve, reject) => {
-            if (closed) {
+            if (closed || executionLifecycle?.ended === true) {
+                if (executionLifecycle !== undefined) {
+                    executionLifecycle.postCloseActivity = true
+                }
                 reject(new Error('Sandbox execution has already ended'))
                 return
             }
@@ -315,12 +321,12 @@ parentPort?.on('message', (msg: unknown) => {
             useTestDbMode,
         } = msg
         const { methodList, schemaList } = resolveWorkerMetadata(msg)
-        const bridge = createExecutionRpcBridge(newRpcPort)
         const activeTimers = new Set<NodeJS.Timeout>()
         const executionLifecycle: ExecutionLifecycleState = {
             ended: false,
             postCloseActivity: false,
         }
+        const bridge = createExecutionRpcBridge(newRpcPort, executionLifecycle)
         activeExecutionId = id
         resultSent = false
         activeAbortCleanup = (reason: string): void => {
@@ -345,6 +351,12 @@ parentPort?.on('message', (msg: unknown) => {
                 activeTimers,
                 executionLifecycle
             )
+            // [M11] Close the RPC bridge strictly BEFORE serializeAndEnforceEgress invokes
+            // untrusted toJSON()/getters so egress hooks cannot dispatch live Host RPCs.
+            executionLifecycle.ended = true
+            for (const handle of activeTimers) clearTimeout(handle)
+            activeTimers.clear()
+            bridge.closeBridge('Sandbox execution ended')
             // Serialize and run toJSON()/getters BEFORE draining V8 microtasks via hostSetImmediate
             // so post-execution callbacks cannot queue unawaited microtask spins or timers past the watchdog.
             serializeAndEnforceEgress(result, maxResultSize)

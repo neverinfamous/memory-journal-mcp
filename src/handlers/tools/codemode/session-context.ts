@@ -50,7 +50,7 @@ function resolveSessionProjectId(
         const wsEntry = lookupRegistryEntry(effectiveRegistry, rawWorkspace)
         if (wsEntry?.project_number !== undefined) projectId = wsEntry.project_number
     }
-    const rawRepo = (input.repo ?? input.repo_name ?? input.repoName)?.trim()
+    const rawRepo = (input.repo ?? input.repo_name ?? input.repoName ?? input.repository)?.trim()
     if ((projectId === undefined || projectId === null) && rawRepo !== undefined && rawRepo !== '') {
         const repoEntry = lookupRegistryEntry(effectiveRegistry, rawRepo)
         if (repoEntry?.project_number !== undefined) projectId = repoEntry.project_number
@@ -201,7 +201,7 @@ function validateExplicitRepoAndWorkspaceInput(
     effectiveRegistry: ProjectRegistry
 ): ValidatedSessionInput | { errorResponse: Record<string, unknown> } {
     const rawWsTrimmed = (input.workspace_id ?? input.workspaceId)?.trim()
-    const rawRepoTrimmed = (input.repo ?? input.repo_name ?? input.repoName)?.trim()
+    const rawRepoTrimmed = (input.repo ?? input.repo_name ?? input.repoName ?? input.repository)?.trim()
     const hasExplicitRepo = rawRepoTrimmed !== undefined && rawRepoTrimmed !== ''
     const hasExplicitConcreteWs =
         rawWsTrimmed !== undefined && rawWsTrimmed !== '' && rawWsTrimmed !== '*'
@@ -362,7 +362,7 @@ export async function resolveCodeModeSessionContext(
 
     const repoContext = await injectRepoGithub(
         context,
-        input.repo ?? input.repo_name ?? input.repoName,
+        input.repo ?? input.repo_name ?? input.repoName ?? input.repository,
         effectiveRegistry
     )
     if ('errorResponse' in repoContext) return repoContext

@@ -8,6 +8,7 @@ import { canonicalizeTeamAuthor } from '../../handlers/tools/team/rbac.js'
 import { resolveEntryAnchors } from '../../handlers/tools/core/staleness-tools.js'
 import { resolveTeamCreateAuthor } from '../../handlers/tools/team/admin-tools/batch-create-helpers.js'
 import { checkSingleTeamOwnership } from '../../handlers/tools/team/admin-tools/batch-delete-helpers.js'
+import { linkRequestedRelationships } from '../../handlers/tools/relationship-linking.js'
 import { createEntryOptionsSchema, updateEntryOptionsSchema } from '../schemas.js'
 import {
     prepareCliEntryUpdate,
@@ -101,25 +102,31 @@ function linkCliEntryRelationships(
     payload: EntryPayload,
     workspaceId: string | undefined
 ): { target_id: number; error: string }[] {
-    const linkFailures: { target_id: number; error: string }[] = []
-    const linkRequests: { targetId: number; type: RelationshipType }[] = [
-        ...payload.relatedIds.map((targetId) => ({ targetId, type: 'references' as const })),
+    const linkRequests: { targetId: number; relationType: RelationshipType }[] = [
+        ...payload.relatedIds.map((targetId) => ({ targetId, relationType: 'references' as const })),
         ...payload.relationships.map((rel) => ({
             targetId: rel.target_id,
-            type: rel.relation_type,
+            relationType: rel.relation_type,
         })),
     ]
-    for (const request of linkRequests) {
-        try {
-            db.linkEntries(entryId, request.targetId, request.type, undefined, workspaceId)
-        } catch (linkError) {
-            linkFailures.push({
-                target_id: request.targetId,
-                error: linkError instanceof Error ? linkError.message : String(linkError),
-            })
+    if (linkRequests.length === 0) return []
+    const warnings = linkRequestedRelationships(
+        db,
+        entryId,
+        linkRequests,
+        workspaceId,
+        payload.projectNumber
+    )
+    return warnings.map((msg, idx) => {
+        const match = /-> #(\d+) was not created: (.+)$/.exec(msg)
+        return {
+            target_id:
+                match?.[1] !== undefined
+                    ? Number(match[1])
+                    : (linkRequests[idx]?.targetId ?? 0),
+            error: match?.[2] ?? msg,
         }
-    }
-    return linkFailures
+    })
 }
 
 function writeCliEntryResult(

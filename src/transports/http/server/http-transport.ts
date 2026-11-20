@@ -111,12 +111,9 @@ export class HttpTransport {
     }
 
     private installHostValidation(host: string, isLocalhost: boolean, hasAuth: boolean): void {
-        const baseAllowedHosts = buildAllowedHostHeaders(host, undefined)
         const allowedHosts = buildAllowedHostHeaders(host, this.config.publicOrigin)
         const hasCustomPublicOrigin =
-            this.config.publicOrigin !== undefined &&
-            this.config.publicOrigin.trim() !== '' &&
-            allowedHosts.length > baseAllowedHosts.length
+            this.config.publicOrigin !== undefined && this.config.publicOrigin.trim() !== ''
         const isAuthenticatedWildcard =
             isWildcardBindHost(host) && hasAuth && !hasCustomPublicOrigin
 

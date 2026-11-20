@@ -106,13 +106,13 @@ COPY skills ./skills
 COPY package*.json ./
 COPY LICENSE ./
 
-# Create data directory for SQLite database with proper permissions
-RUN mkdir -p /app/data && chmod 700 /app/data
+# Create writable data and logs directories while leaving /app read-only to appuser
+RUN mkdir -p /app/data /app/logs && chmod 700 /app/data /app/logs
 
 # Create non-root user for security
 RUN addgroup -g 1001 -S appgroup && \
     adduser -u 1001 -S appuser -G appgroup && \
-    chown -R appuser:appgroup /app
+    chown -R appuser:appgroup /app/data /app/logs
 
 # Set environment variables
 ENV NODE_ENV=production

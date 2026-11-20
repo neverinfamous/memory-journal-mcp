@@ -35,7 +35,7 @@ const RestoreEntryStrictSchema = z.preprocess(
         .object({
             entry_id: z.number().int().positive(),
             project_number: z.number().int().positive().optional(),
-            workspace_id: z.string().optional(),
+            workspace_id: z.string().max(255).optional(),
         })
         .strict()
 )

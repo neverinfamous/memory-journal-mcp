@@ -37,7 +37,7 @@ export const githubScopeInputFields = {
 }
 
 export const githubScopeParseFields = {
-    workspace_id: z.string().optional(),
+    workspace_id: z.string().max(255).optional(),
     project_number: StrictProjectNumberSchema.optional(),
 }
 

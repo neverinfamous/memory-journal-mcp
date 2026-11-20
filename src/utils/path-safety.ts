@@ -240,15 +240,45 @@ export function hasWinReservedDeviceSegment(targetPath: string): boolean {
  */
 const UNC_OR_WIN_DEVICE_PREFIX_RE = /^[\\/]{2}/
 
+function extractUncShareRoot(rawPath: string): { hostShare: string; segments: string[] } | null {
+    const normalized = rawPath.trimStart().replace(/\\/g, '/')
+    if (!normalized.startsWith('//')) return null
+    const rest = normalized.slice(2).replace(/\/+$/, '')
+    const parts = rest.split('/')
+    const host = parts[0] ?? ''
+    const share = parts[1] ?? ''
+    if (host === '' || host === '.' || host === '?' || share === '') return null
+    return {
+        hostShare: `//${host.toLowerCase()}/${share.toLowerCase()}`,
+        segments: parts.map((s) => s.toLowerCase()),
+    }
+}
+
+function isWithinLogicalUncRoot(targetPath: string, providedRoots: readonly string[]): boolean {
+    const forward = targetPath.trimStart().replace(/\\/g, '/')
+    if (forward.split('/').some((s) => s === '..')) return false
+    const targetUnc = extractUncShareRoot(targetPath)
+    if (targetUnc === null) return false
+    return providedRoots.some((root) => {
+        const rootUnc = extractUncShareRoot(root)
+        if (rootUnc?.hostShare !== targetUnc.hostShare) return false
+        if (targetUnc.segments.length < rootUnc.segments.length) return false
+        for (let i = 0; i < rootUnc.segments.length; i++) {
+            if (targetUnc.segments[i] !== rootUnc.segments[i]) return false
+        }
+        return true
+    })
+}
+
 function hasUncOrWinDevicePrefix(targetPath: string, providedRoots: readonly string[]): boolean {
     const trimmed = targetPath.trimStart()
     if (!UNC_OR_WIN_DEVICE_PREFIX_RE.test(trimmed)) return false
     // Reject `\\.\` / `\\?\` / `\/.\` / `/\?\` / `//./` / `//?/` Win32 device namespace prefixes unconditionally
     if (/^[\\/]{2}[.?][\\/]/.test(trimmed)) return true
-    // On Windows (or for prefixes containing a backslash), block UNC paths prior to any fs syscall unless an operator explicitly configured a UNC root
+    // On Windows (or for prefixes containing a backslash), block UNC paths prior to any fs syscall unless within a configured UNC root's share and prefix
     const leadingTwo = trimmed.slice(0, 2)
     if (process.platform !== 'win32' && !leadingTwo.includes('\\')) return false
-    return !providedRoots.some((r) => UNC_OR_WIN_DEVICE_PREFIX_RE.test(r.trimStart()))
+    return !isWithinLogicalUncRoot(trimmed, providedRoots)
 }
 
 export function assertSafeDirectoryPath(dirPath: string, providedRoots: string[]): void {

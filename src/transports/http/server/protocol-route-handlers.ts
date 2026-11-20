@@ -4,6 +4,7 @@ import { randomUUID } from 'node:crypto'
 import type { Request, Response, NextFunction } from 'express'
 import type { McpServerFactory } from '../../../server/mcp-server/index.js'
 import { logger } from '../../../utils/logger.js'
+import { isPlaceholderAuthToken } from '../../../utils/security-utils.js'
 import { getRequestContext, requestContextStorage } from '../../../utils/request-context.js'
 import type { HttpTransportConfig } from '../types.js'
 import { DEFAULT_MAX_BODY_BYTES, SESSION_TIMEOUT_MS, SESSION_SWEEP_INTERVAL_MS } from '../types.js'
@@ -76,7 +77,7 @@ export function assertHttpBindIsSafe(
         throw new Error(errorMsg)
     }
 
-    if (authToken?.trim() === 'change_this_to_a_secure_token_for_production') {
+    if (isPlaceholderAuthToken(authToken)) {
         const errorMsg = `FATAL: Default auth token detected. You MUST change MCP_AUTH_TOKEN to a secure, cryptographically random value for production.`
         logError(errorMsg)
         throw new Error(errorMsg)

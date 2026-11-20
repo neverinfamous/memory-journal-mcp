@@ -121,7 +121,7 @@ const TOKEN_PATTERNS = [
     // AWS API Keys
     /(?:AKIA|ABIA|ACCA|ASIA)[0-9A-Z]{16}/g,
     // CLI secret flags (--auth-token, --github-token, --oauth-client-secret, --token, --secret, --password, --passphrase, --api-key, --webhook-auth, --encryption-key, --key)
-    /(--(?:(?:[a-z0-9_-]+[-_])?(?:auth[-_]?token|token|secret|password|passphrase|api[-_]?key|webhook[-_]?auth|encryption[-_]?key|private[-_]?key)|key)(?:=|\s+))("(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|[^\s"']+)/gi,
+    /(?<![A-Za-z0-9_-])(--(?:(?:[a-z0-9]{1,32}[-_]){0,4}(?:auth[-_]?token|token|secret|password|passphrase|api[-_]?key|webhook[-_]?auth|encryption[-_]?key|private[-_]?key)|key)(?:=|\s+))("(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|[^\s"']+)/gi,
     // SQLCipher key/rekey pragmas (handles escaped '' / \' within single quotes and "" / \" within double quotes)
     /(pragma\s+(?:re)?key\s*=\s*)(?:"x'[^']*'"|x'[^']*'|'(?:\\.|[^'\\]|'')*'|"(?:\\.|[^"\\]|"")*")/gi,
     // URL embedded credentials
@@ -134,7 +134,16 @@ const TOKEN_PATTERNS = [
 ] as const
 
 const POTENTIAL_SECRET_RE =
-    /(?:gh[pousr]_|github_pat_|eyJ|xox[baprs]-|AKIA|ABIA|ACCA|ASIA|Authorization:|Bearer\s|Basic\s|--(?:(?:[a-z0-9_-]+[-_])?(?:auth[-_]?token|token|secret|password|passphrase|api[-_]?key|webhook[-_]?auth|encryption[-_]?key|private[-_]?key)|key)(?:=|\s)|pragma\s+(?:re)?key\s*=|https?:\/\/[^/\s:@]+:[^/\s@]+@)/i
+    /(?:gh[pousr]_|github_pat_|eyJ|xox[baprs]-|AKIA|ABIA|ACCA|ASIA|Authorization:|Bearer\s|Basic\s|(?<![A-Za-z0-9_-])--(?:(?:[a-z0-9]{1,32}[-_]){0,4}(?:auth[-_]?token|token|secret|password|passphrase|api[-_]?key|webhook[-_]?auth|encryption[-_]?key|private[-_]?key)|key)(?:=|\s)|pragma\s+(?:re)?key\s*=|https?:\/\/[^/\s:@]+:[^/\s@]+@)/i
+
+const DEFAULT_PLACEHOLDER_AUTH_TOKEN = 'change_this_to_a_secure_token_for_production'
+
+/** Returns true when `token` matches a default or `CHANGEME_` placeholder secret. */
+export function isPlaceholderAuthToken(token: string | undefined | null): boolean {
+    if (typeof token !== 'string') return false
+    const trimmed = token.trim()
+    return trimmed === DEFAULT_PLACEHOLDER_AUTH_TOKEN || /^CHANGEME_/i.test(trimmed)
+}
 
 /**
  * Sanitizes an error message by replacing any detected tokens with '[REDACTED]'.
@@ -207,7 +216,7 @@ export function markUntrustedContent(content: string | undefined | null): string
     trimmed = stripUntrustedControlChars(
         unescapeFenceEntities(
             trimmed.replace(
-                /&lt;\/?untrusted_remote_content[^&]*&gt;|<\/?untrusted_remote_content[^>]*>/gi,
+                /&lt;\/?untrusted_remote_content[^&]*&gt;|<\/?untrusted_remote_content[^<>]*>/gi,
                 ''
             )
         )
@@ -266,7 +275,7 @@ export function markUntrustedContentInline(content: string | undefined | null): 
     cleaned = stripUntrustedControlChars(
         unescapeFenceEntities(
             cleaned.replace(
-                /&lt;\/?untrusted_remote_content[^&]*&gt;|<\/?untrusted_remote_content[^>]*>/gi,
+                /&lt;\/?untrusted_remote_content[^&]*&gt;|<\/?untrusted_remote_content[^<>]*>/gi,
                 ''
             )
         )

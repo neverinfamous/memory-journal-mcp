@@ -53,6 +53,38 @@ const MAX_ARCHIVES = 5
 
 const MAX_AUDIT_LINE_BYTES = 262_144
 
+function capAuditString(value: string | undefined, maxLen: number): string | undefined {
+    if (value === undefined) return undefined
+    return value.length > maxLen ? value.slice(0, maxLen) : value
+}
+
+function capBoundedAuditEntry(entry: AuditEntry, lineBytes: number): AuditEntry {
+    const boundedScopes = Array.isArray(entry.scopes)
+        ? entry.scopes.slice(0, 32).map((sc) => sc.slice(0, 64))
+        : []
+    const boundedError =
+        entry.error !== undefined && entry.error.length > 4096
+            ? `${entry.error.slice(0, 4096)}...[truncated]`
+            : entry.error
+    return {
+        timestamp: entry.timestamp.slice(0, 64),
+        requestId: entry.requestId.slice(0, 128),
+        ...(entry.sessionId !== undefined ? { sessionId: capAuditString(entry.sessionId, 256) } : {}),
+        tool: entry.tool.slice(0, 256),
+        category: entry.category,
+        scope: entry.scope,
+        user: entry.user !== null ? entry.user.slice(0, 256) : null,
+        scopes: boundedScopes,
+        durationMs: entry.durationMs,
+        tokenEstimate: entry.tokenEstimate,
+        ...(entry.workspaceId !== undefined ? { workspaceId: capAuditString(entry.workspaceId, 255) } : {}),
+        ...(entry.projectNumber !== undefined ? { projectNumber: entry.projectNumber } : {}),
+        success: entry.success,
+        ...(boundedError !== undefined ? { error: boundedError } : {}),
+        ...(entry.args !== undefined ? { args: { _truncated: true, originalBytes: lineBytes } } : {}),
+    }
+}
+
 function serializeBoundedAuditEntry(entry: AuditEntry): string {
     const serializeWithFallback = (target: AuditEntry): string => {
         try {
@@ -61,20 +93,20 @@ function serializeBoundedAuditEntry(entry: AuditEntry): string {
             )
         } catch {
             return JSON.stringify({
-                timestamp: entry.timestamp,
-                requestId: entry.requestId,
-                ...(entry.sessionId !== undefined ? { sessionId: entry.sessionId } : {}),
-                tool: entry.tool,
-                category: entry.category,
-                scope: entry.scope,
-                user: entry.user,
-                scopes: entry.scopes,
-                durationMs: entry.durationMs,
-                tokenEstimate: entry.tokenEstimate,
-                ...(entry.workspaceId !== undefined ? { workspaceId: entry.workspaceId } : {}),
-                ...(entry.projectNumber !== undefined ? { projectNumber: entry.projectNumber } : {}),
-                success: entry.success,
-                ...(entry.error !== undefined ? { error: entry.error.slice(0, 4096) } : {}),
+                timestamp: target.timestamp,
+                requestId: target.requestId,
+                ...(target.sessionId !== undefined ? { sessionId: target.sessionId } : {}),
+                tool: target.tool,
+                category: target.category,
+                scope: target.scope,
+                user: target.user,
+                scopes: target.scopes,
+                durationMs: target.durationMs,
+                tokenEstimate: target.tokenEstimate,
+                ...(target.workspaceId !== undefined ? { workspaceId: target.workspaceId } : {}),
+                ...(target.projectNumber !== undefined ? { projectNumber: target.projectNumber } : {}),
+                success: target.success,
+                ...(target.error !== undefined ? { error: target.error.slice(0, 4096) } : {}),
                 args: { _serializationError: 'Audit args could not be JSON serialized' },
             })
         }
@@ -84,15 +116,22 @@ function serializeBoundedAuditEntry(entry: AuditEntry): string {
     const lineBytes = Buffer.byteLength(serialized, 'utf8')
     if (lineBytes <= MAX_AUDIT_LINE_BYTES) return serialized
 
-    // Keep the serialized JSONL line well below the 1 MB backward-reader skip ceiling
-    return serializeWithFallback({
-        ...entry,
-        ...(entry.error !== undefined && entry.error.length > 4096
-            ? { error: `${entry.error.slice(0, 4096)}...[truncated]` }
-            : {}),
-        ...(entry.args !== undefined
-            ? { args: { _truncated: true, originalBytes: lineBytes } }
-            : {}),
+    // Keep the serialized JSONL line well below the 1 MB backward-reader skip ceiling across ALL fields
+    const bounded = serializeWithFallback(capBoundedAuditEntry(entry, lineBytes))
+    if (Buffer.byteLength(bounded, 'utf8') <= MAX_AUDIT_LINE_BYTES) return bounded
+
+    return JSON.stringify({
+        timestamp: entry.timestamp.slice(0, 64),
+        requestId: entry.requestId.slice(0, 128),
+        tool: entry.tool.slice(0, 256),
+        category: entry.category,
+        scope: entry.scope,
+        user: entry.user !== null ? entry.user.slice(0, 128) : null,
+        scopes: [],
+        durationMs: entry.durationMs,
+        tokenEstimate: entry.tokenEstimate,
+        success: entry.success,
+        args: { _truncated: true, originalBytes: lineBytes },
     })
 }
 

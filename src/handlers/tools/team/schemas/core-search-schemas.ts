@@ -50,7 +50,7 @@ export const TeamCreateEntrySchema = z.preprocess(
             tags: z.array(z.string()).optional().default([]),
             significance_type: z.enum(SIGNIFICANCE_TYPES).optional(),
             project_number: StrictProjectNumberSchema.optional(),
-            workspace_id: z.string().min(1, 'workspace_id (repository name) is required').optional(),
+            workspace_id: z.string().min(1, 'workspace_id (repository name) is required').max(255).optional(),
             project_owner: z.string().optional(),
             issue_number: z.number().int().positive().optional(),
             issue_url: z.string().optional(),
@@ -272,7 +272,7 @@ export const TeamGetRecentSchema = z.preprocess(
             cursor: z.string().optional().describe('Cursor for pagination'),
             offset: z.number().int().min(0).optional().default(0),
             project_number: StrictProjectNumberSchema.optional(),
-            workspace_id: z.string().optional(),
+            workspace_id: z.string().max(255).optional(),
             sort_by: z.enum(['timestamp', 'importance', 'blended']).optional().default('timestamp').describe(SORT_BY_DESC),
             include_archived: z.boolean().optional().default(false),
         })
@@ -304,7 +304,7 @@ export const TeamSearchSchema = z.preprocess(
             exclude_tags: z.array(z.string()).optional().describe('Exclude entries having any of these tags'),
             entry_type: z.enum(ENTRY_TYPES).optional(),
             project_number: StrictProjectNumberSchema.optional(),
-            workspace_id: z.string().optional(),
+            workspace_id: z.string().max(255).optional(),
             limit: z.number().int().min(1).max(500).optional().default(10),
             sort_by: z.enum(['timestamp', 'importance', 'blended']).optional().default('timestamp').describe(SORT_BY_DESC),
             include_archived: z.boolean().optional().default(false),
@@ -339,7 +339,7 @@ export const TeamListDeletedEntriesSchema = z
         limit: z.number().int().min(1).max(MAX_QUERY_LIMIT).optional().default(50),
         offset: z.number().int().min(0).optional().default(0),
         project_number: StrictProjectNumberSchema.optional(),
-        workspace_id: z.string().optional(),
+        workspace_id: z.string().max(255).optional(),
     })
     .strict()
 
@@ -357,7 +357,7 @@ export const TeamGetEntryByIdSchema = z
         entry_id: z.number().int().positive(),
         include_relationships: z.boolean().optional().default(true),
         project_number: StrictProjectNumberSchema.optional(),
-        workspace_id: z.string().optional(),
+        workspace_id: z.string().max(255).optional(),
     })
     .strict()
 
@@ -381,7 +381,7 @@ export const TeamSearchByDateRangeSchema = z.preprocess(
             tags: z.array(z.string()).optional(),
             exclude_tags: z.array(z.string()).optional().describe('Exclude entries having any of these tags'),
             project_number: StrictProjectNumberSchema.optional(),
-            workspace_id: z.string().optional(),
+            workspace_id: z.string().max(255).optional(),
             limit: z.number().int().min(1).max(500).optional().default(50),
             sort_by: z.enum(['timestamp', 'importance', 'blended']).optional().default('timestamp').describe(SORT_BY_DESC),
             include_archived: z.boolean().optional().default(false),

@@ -14,7 +14,7 @@ import { promisify } from 'node:util'
 
 const execFileAsync = promisify(execFile)
 
-import { markUntrustedContentInline } from '../../../../utils/security-utils.js'
+import { fenceNonCanonicalRefOrKey, markUntrustedContentInline } from '../../../../utils/security-utils.js'
 import type { GitHistorySummary } from './system-section.js'
 
 /** Walk upward from `startDir` looking for a directory containing `package.json`. */
@@ -61,8 +61,11 @@ function parseGitCommitLines(
 
     const commits: GitHistorySummary['commits'] = lines.map((line) => {
         const parts = line.split('|')
-        const hash = (parts[0] ?? '').trim()
-        const subject = (parts[1] ?? '').trim()
+        const hash = fenceNonCanonicalRefOrKey((parts[0] ?? '').trim())
+        const subject =
+            parts.length >= 3
+                ? parts.slice(1, -1).join('|').trim()
+                : (parts[1] ?? '').trim()
         const typeMatch = /^([a-zA-Z]+)(?:\([^)]+\))?(!)?:/i.exec(subject)
         const commitType = typeMatch?.[1]?.toLowerCase()
         const isBreaking = Boolean(typeMatch?.[2])

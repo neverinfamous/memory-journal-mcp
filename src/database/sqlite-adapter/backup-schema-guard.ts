@@ -1,6 +1,11 @@
 import * as fs from 'node:fs'
 import { constants as fsConstants } from 'node:fs'
 import type { Database } from 'better-sqlite3'
+import {
+    assertSafeTableAndIndexDdl,
+    isAllowedBackupVirtualTable,
+    stripSqlComments,
+} from './backup-ddl-validators.js'
 
 const SQLITE_HEADER_MAGIC = Buffer.from('SQLite format 3\0', 'ascii')
 const MIN_VALID_BACKUP_BYTES = 512
@@ -54,58 +59,6 @@ export function assertBackupHeaderAndCipherFormat(backupPath: string, cipherRequ
 const CANONICAL_FTS_TRIGGER_RE =
     /^\s*CREATE\s+TRIGGER\s+(?:IF\s+NOT\s+EXISTS\s+)?["`[]?(?:fts_content_ai|fts_content_au|fts_content_ad|fts_content_soft_delete|fts_content_restore)["`\]]?\s+AFTER\s+(?:INSERT|DELETE|UPDATE\s+OF\s+(?:content|deleted_at))\s+ON\s+["`[]?memory_journal["`\]]?(?:\s+WHEN\s+(?:old\.deleted_at\s+IS\s+NULL(?:\s+AND\s+new\.deleted_at\s+IS\s+NULL)?|new\.deleted_at\s+IS\s+(?:NOT\s+)?NULL\s+AND\s+old\.deleted_at\s+IS\s+(?:NOT\s+)?NULL))?\s+BEGIN\s+(?:INSERT\s+INTO\s+["`[]?fts_content["`\]]?\s*\((?:fts_content,\s*)?rowid,\s*content\)\s*VALUES\s*\((?:'delete',\s*old\.id,\s*old\.content|new\.id,\s*new\.content)\)\s*;\s*){1,2}END\s*;?\s*$/i
 
-const FTS_CONTENT_VTAB_RE =
-    /^\s*CREATE\s+VIRTUAL\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?(?:["`[]?main["`\]]?\.)?["`[]?fts_content["`\]]?\s+USING\s+fts5\s*\(/i
-const VEC_EMBEDDINGS_VTAB_RE =
-    /^\s*CREATE\s+VIRTUAL\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?(?:["`[]?main["`\]]?\.)?["`[]?vec_embeddings["`\]]?\s+USING\s+vec0\s*\(/i
-
-function scanSqlQuotedSpan(sql: string, start: number, open: string): number {
-    const close = open === '[' ? ']' : open
-    let i = start + 1
-    while (i < sql.length) {
-        const c = sql[i] ?? ''
-        if (c === close) {
-            if (close !== ']' && sql[i + 1] === close) {
-                i += 2
-                continue
-            }
-            return i + 1
-        }
-        i++
-    }
-    return i
-}
-
-function stripSqlComments(sql: string): string {
-    let out = ''
-    let i = 0
-    while (i < sql.length) {
-        const ch = sql[i] ?? ''
-        const next = sql[i + 1] ?? ''
-        if (ch === "'" || ch === '"' || ch === '`' || ch === '[') {
-            const end = scanSqlQuotedSpan(sql, i, ch)
-            out += sql.slice(i, end)
-            i = end
-            continue
-        }
-        if (ch === '-' && next === '-') {
-            const nl = sql.indexOf('\n', i + 2)
-            i = nl === -1 ? sql.length : nl + 1
-            out += ' '
-            continue
-        }
-        if (ch === '/' && next === '*') {
-            const end = sql.indexOf('*/', i + 2)
-            i = end === -1 ? sql.length : end + 2
-            out += ' '
-            continue
-        }
-        out += ch
-        i++
-    }
-    return out
-}
-
 function isAllowedTrigger(name: string, tblName: string, sql: string): boolean {
     return (
         tblName === 'memory_journal' &&
@@ -114,16 +67,9 @@ function isAllowedTrigger(name: string, tblName: string, sql: string): boolean {
     )
 }
 
-function isAllowedVirtualTable(name: string, sql: string): boolean {
-    const cleanSql = stripSqlComments(sql)
-    if (name === 'fts_content') return FTS_CONTENT_VTAB_RE.test(cleanSql)
-    if (name === 'vec_embeddings') return VEC_EMBEDDINGS_VTAB_RE.test(cleanSql)
-    return false
-}
-
 /**
  * Disables `trusted_schema` on the inspection handle and rejects any SQLite views,
- * non-allowlisted triggers, or non-allowlisted virtual tables before `integrity_check`.
+ * non-allowlisted triggers, non-allowlisted virtual tables, or unsafe table/index DDLs before `integrity_check`.
  */
 export function assertSafeBackupSchemaPreIntegrity(tempDb: Database): { hasVecTable: boolean } {
     tempDb.pragma('trusted_schema = OFF')
@@ -146,6 +92,7 @@ export function assertSafeBackupSchemaPreIntegrity(tempDb: Database): { hasVecTa
         const name = typeof row.name === 'string' ? row.name : ''
         const tblName = typeof row.tbl_name === 'string' ? row.tbl_name : ''
         const sql = typeof row.sql === 'string' ? row.sql : ''
+        const cleanSql = stripSqlComments(sql)
 
         if (type === 'view') {
             throw new Error(`Disallowed SQLite view in backup: ${name}`)
@@ -153,14 +100,16 @@ export function assertSafeBackupSchemaPreIntegrity(tempDb: Database): { hasVecTa
         if (type === 'trigger' && !isAllowedTrigger(name, tblName, sql)) {
             throw new Error(`Disallowed SQLite trigger in backup: ${name}`)
         }
-        if (type === 'table' && (virtualTableNames.has(name) || CREATE_VIRTUAL_TABLE_RE.test(stripSqlComments(sql)))) {
+        if (type === 'table' && (virtualTableNames.has(name) || CREATE_VIRTUAL_TABLE_RE.test(cleanSql))) {
             checkedVirtual.add(name)
-            if (!isAllowedVirtualTable(name, sql)) {
+            if (!isAllowedBackupVirtualTable(name, cleanSql)) {
                 throw new Error(`Disallowed SQLite virtual table in backup: ${name}`)
             }
             if (name === 'vec_embeddings') {
                 hasVecTable = true
             }
+        } else if ((type === 'table' || type === 'index') && cleanSql.trim() !== '') {
+            assertSafeTableAndIndexDdl(type, name, cleanSql)
         }
     }
     for (const vname of virtualTableNames) {

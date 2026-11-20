@@ -60,7 +60,7 @@ export const MergeTagsSchema = z
             z.string().min(1)
         ),
         project_number: StrictProjectNumberSchema.optional(),
-        workspace_id: z.string().optional(),
+        workspace_id: z.string().max(255).optional(),
     })
     .strict()
 

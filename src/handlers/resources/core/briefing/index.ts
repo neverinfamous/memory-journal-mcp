@@ -144,77 +144,80 @@ function resolveDefaultBriefingScope(
     }
 }
 
-function resolveBriefingScope(
+function resolveRegisteredBriefingScope(
+    context: ResourceContext,
+    registry: ReturnType<typeof loadProjectRegistryFromConfig>,
+    hasRegistry: boolean,
+    resolvedRepo: string,
+    pinSession: boolean
+): BriefingScopeResolution {
+    const registryEntry = registry?.[resolvedRepo]
+    const repoPath = registryEntry?.path
+    const hasRepoPath = repoPath !== undefined && repoPath.trim() !== ''
+    const activeProjectNumber = registryEntry?.project_number
+    if (registryEntry && pinSession) {
+        setActiveSessionProject(resolvedRepo, activeProjectNumber ?? null, context.runtime)
+    }
+    return {
+        registry,
+        hasRegistry,
+        activeWorkspaceId: resolvedRepo,
+        activeRepoPath: hasRepoPath ? repoPath : undefined,
+        activeGithub: hasRepoPath ? getGitHubIntegration(repoPath, context.runtime) : undefined,
+        activeProjectNumber,
+    }
+}
+
+function resolveNamedDefaultBriefingScope(
     context: ResourceContext,
     config: typeof DEFAULT_BRIEFING_CONFIG,
-    targetRepo: string | undefined,
+    registry: ReturnType<typeof loadProjectRegistryFromConfig>,
+    hasRegistry: boolean,
+    pinSession: boolean
+): BriefingScopeResolution {
+    const defaultEntry = registry?.['default']
+    const registeredDefault =
+        defaultEntry?.project_number ??
+        (config.defaultWorkspaceId === 'default' ? config.defaultProjectNumber : undefined)
+    const defaultPath = defaultEntry?.path
+    const hasDefaultPath = defaultPath !== undefined && defaultPath.trim() !== ''
+    if (pinSession) {
+        setActiveSessionProject('default', registeredDefault ?? null, context.runtime)
+    }
+    return {
+        registry,
+        hasRegistry,
+        activeWorkspaceId: 'default',
+        activeProjectNumber: registeredDefault,
+        activeRepoPath: hasDefaultPath ? defaultPath : undefined,
+        activeGithub: hasDefaultPath ? getGitHubIntegration(defaultPath, context.runtime) : undefined,
+    }
+}
+
+function resolveExplicitBriefingTarget(
+    context: ResourceContext,
+    config: typeof DEFAULT_BRIEFING_CONFIG,
+    registry: ReturnType<typeof loadProjectRegistryFromConfig>,
+    hasRegistry: boolean,
+    targetRepo: string,
     options?: { pinSession?: boolean }
 ): BriefingScopeResolution {
-    const registry = config.projectRegistry ?? loadProjectRegistryFromConfig()
-    const hasRegistry = registry !== undefined && Object.keys(registry).length > 0
-    const initialWorkspaceId = resourceWorkspace({
-        briefingConfig: config,
-        ...(context.runtime !== undefined ? { runtime: context.runtime } : {}),
-    })
-    const initialProjectNumber =
-        (config.defaultWorkspaceId === undefined && initialWorkspaceId !== 'default') ||
-        (initialWorkspaceId !== undefined &&
-            config.defaultWorkspaceId?.toLowerCase() === initialWorkspaceId.toLowerCase())
-            ? config.defaultProjectNumber
-            : undefined
-
-    if (!targetRepo) {
-        return {
-            registry,
-            hasRegistry,
-            ...resolveDefaultBriefingScope(context, config, registry, initialWorkspaceId, initialProjectNumber),
-        }
-    }
     if (targetRepo.trim() === '*') {
         throw new ValidationError(
             "Wildcard '*' is not supported for memory://briefing/{+repo}. Specify a concrete repository name."
         )
     }
     const numericTarget = /^#?(\d+)$/.exec(targetRepo)
-    const parsedTarget = numericTarget?.[1] !== undefined ? parseCanonicalPositiveInt(numericTarget[1]) : undefined
+    const parsedTarget =
+        numericTarget?.[1] !== undefined ? parseCanonicalPositiveInt(numericTarget[1]) : undefined
     const numericWorkspace =
         parsedTarget !== undefined ? uniqueWorkspaceForProject(parsedTarget, registry) : undefined
     const resolvedRepo = exactRegistryKey(targetRepo, registry) ?? numericWorkspace
     if (resolvedRepo !== undefined) {
-        const registryEntry = registry?.[resolvedRepo]
-        const repoPath = registryEntry?.path
-        const hasRepoPath = repoPath !== undefined && repoPath.trim() !== ''
-        const activeProjectNumber = registryEntry?.project_number
-        if (registryEntry && options?.pinSession !== false) {
-            setActiveSessionProject(resolvedRepo, activeProjectNumber ?? null, context.runtime)
-        }
-        return {
-            registry,
-            hasRegistry,
-            activeWorkspaceId: resolvedRepo,
-            activeRepoPath: hasRepoPath ? repoPath : undefined,
-            activeGithub: hasRepoPath ? getGitHubIntegration(repoPath, context.runtime) : undefined,
-            activeProjectNumber,
-        }
+        return resolveRegisteredBriefingScope(context, registry, hasRegistry, resolvedRepo, options?.pinSession !== false)
     }
     if (targetRepo.trim().toLowerCase() === 'default') {
-        const defaultEntry = registry?.['default']
-        const registeredDefault =
-            defaultEntry?.project_number ??
-            (config.defaultWorkspaceId === 'default' ? config.defaultProjectNumber : undefined)
-        const defaultPath = defaultEntry?.path
-        const hasDefaultPath = defaultPath !== undefined && defaultPath.trim() !== ''
-        if (options?.pinSession !== false) {
-            setActiveSessionProject('default', registeredDefault ?? null, context.runtime)
-        }
-        return {
-            registry,
-            hasRegistry,
-            activeWorkspaceId: 'default',
-            activeProjectNumber: registeredDefault,
-            activeRepoPath: hasDefaultPath ? defaultPath : undefined,
-            activeGithub: hasDefaultPath ? getGitHubIntegration(defaultPath, context.runtime) : undefined,
-        }
+        return resolveNamedDefaultBriefingScope(context, config, registry, hasRegistry, options?.pinSession !== false)
     }
     const configuredDefaultWs = config.defaultWorkspaceId?.trim()
     if (configuredDefaultWs?.toLowerCase() === targetRepo.trim().toLowerCase()) {
@@ -238,7 +241,48 @@ function resolveBriefingScope(
             unresolvedRepo: targetRepo.trim(),
         }
     }
-    return { registry, hasRegistry, activeWorkspaceId: targetRepo, activeProjectNumber: undefined, activeRepoPath: undefined, activeGithub: undefined }
+    return {
+        registry,
+        hasRegistry,
+        activeWorkspaceId: targetRepo,
+        activeProjectNumber: undefined,
+        activeRepoPath: undefined,
+        activeGithub: undefined,
+    }
+}
+
+function resolveBriefingScope(
+    context: ResourceContext,
+    config: typeof DEFAULT_BRIEFING_CONFIG,
+    targetRepo: string | undefined,
+    options?: { pinSession?: boolean }
+): BriefingScopeResolution {
+    const registry = config.projectRegistry ?? loadProjectRegistryFromConfig()
+    const hasRegistry = registry !== undefined && Object.keys(registry).length > 0
+    if (targetRepo) {
+        return resolveExplicitBriefingTarget(context, config, registry, hasRegistry, targetRepo, options)
+    }
+    const initialWorkspaceId = resourceWorkspace({
+        briefingConfig: config,
+        ...(context.runtime !== undefined ? { runtime: context.runtime } : {}),
+    })
+    const initialProjectNumber =
+        (config.defaultWorkspaceId === undefined && initialWorkspaceId !== 'default') ||
+        (initialWorkspaceId !== undefined &&
+            config.defaultWorkspaceId?.toLowerCase() === initialWorkspaceId.toLowerCase())
+            ? config.defaultProjectNumber
+            : undefined
+    return {
+        registry,
+        hasRegistry,
+        ...resolveDefaultBriefingScope(
+            context,
+            config,
+            registry,
+            initialWorkspaceId,
+            initialProjectNumber
+        ),
+    }
 }
 
 function renderBriefingUserMessage(params: {

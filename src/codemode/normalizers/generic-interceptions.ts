@@ -81,6 +81,12 @@ function normalizeSingleBatchCreateItem(
 
     const rawItemWs = item['workspace_id'] ?? item['workspaceId']
     const itemWs = typeof rawItemWs === 'string' ? rawItemWs.trim() : undefined
+    const rawItemRepo = item['repo'] ?? item['repo_name'] ?? item['repoName'] ?? item['repository']
+    const itemRepoRaw = typeof rawItemRepo === 'string' ? rawItemRepo.trim() : undefined
+    const itemRepo =
+        itemRepoRaw !== undefined && itemRepoRaw !== ''
+            ? (itemRepoRaw.split(/[/\\]/).filter(Boolean).pop() ?? itemRepoRaw)
+            : undefined
     const itemHasExplicitProj =
         item['project_number'] !== undefined ||
         item['projectNumber'] !== undefined ||
@@ -89,10 +95,18 @@ function normalizeSingleBatchCreateItem(
     const itemIsDefaultWs = itemWs?.toLowerCase() === 'default'
     const topIsDefaultWs = typeof topWs === 'string' && topWs.trim().toLowerCase() === 'default'
     const itemNamesSameOrNoWs =
-        itemWs === undefined ||
-        itemWs === '' ||
-        (typeof topWs === 'string' && itemWs.toLowerCase() === topWs.trim().toLowerCase())
-    if ((itemWs === undefined || itemWs === '') && !itemHasExplicitProj && topWs !== undefined) {
+        (itemWs === undefined ||
+            itemWs === '' ||
+            (typeof topWs === 'string' && itemWs.toLowerCase() === topWs.trim().toLowerCase())) &&
+        (itemRepo === undefined ||
+            itemRepo === '' ||
+            (typeof topWs === 'string' && itemRepo.toLowerCase() === topWs.trim().toLowerCase()))
+    if (
+        (itemWs === undefined || itemWs === '') &&
+        (itemRepo === undefined || itemRepo === '') &&
+        !itemHasExplicitProj &&
+        topWs !== undefined
+    ) {
         item['workspace_id'] = topWs
     }
     if (

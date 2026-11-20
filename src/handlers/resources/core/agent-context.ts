@@ -14,6 +14,7 @@ import {
 import { withPriority, ASSISTANT_FOCUSED } from '../../../utils/resource-annotations.js'
 import { parseCanonicalPositiveInt } from '../../../utils/safe-positive-int.js'
 import { previewLabel } from './briefing/graph-pivots-section.js'
+import { fenceNonCanonicalRefOrKey } from '../../../utils/security-utils.js'
 
 function formatDefaultAgentContext(
     config: ResourceContext['briefingConfig'],
@@ -59,12 +60,13 @@ function handleAgentContextResource(uri: string, context: ResourceContext): Reso
     // [INVARIANT] An explicit but unknown repo never falls back to cwd/session/first
     // registry context (H1): report it as unresolved instead.
     if (repo !== undefined && namedRepo === undefined) {
+        const safeRepo = fenceNonCanonicalRefOrKey(repo, true)
         return {
             data: [
-                `Project: ${repo}`,
+                `Project: ${safeRepo}`,
                 'Project Number: unresolved',
                 'Workspace ID: unresolved',
-                `Instructions: '${repo}' is not a registered project. Use list_projects (or the project registry) to find the correct repo, then re-read memory://agent-context/{repo}.`,
+                `Instructions: '${safeRepo}' is not a registered project. Use list_projects (or the project registry) to find the correct repo, then re-read memory://agent-context/{repo}.`,
             ].join('\n'),
         }
     }

@@ -132,9 +132,11 @@ export function resolveExplicitGitTarget(
                 }
             }
         }
-        if (fs.existsSync(target) && allowedRoots.length > 0) {
+        if (allowedRoots.length > 0) {
             assertSafeDirectoryPath(target, allowedRoots)
-            return target
+            if (fs.existsSync(target)) {
+                return target
+            }
         }
         throw new ValidationError(
             `Git repository '${target}' did not resolve to an existing path. ${formatRegisteredReposHint(registry)} Pass repo, project_number, or a registered cwd.`

@@ -22,6 +22,7 @@ export const TeamGetStatisticsSchema = z
         project_number: StrictProjectNumberSchema.optional(),
         workspace_id: z
             .string()
+            .max(255)
             .optional()
             .describe(
                 'Optional workspace isolation identifier (e.g. "alpha"). Do not use numeric project IDs or "workspace" as the key.'
@@ -112,6 +113,7 @@ export const TeamVisualizeRelationshipsSchema = z
         project_number: StrictProjectNumberSchema.optional(),
         workspace_id: z
             .string()
+            .max(255)
             .optional()
             .describe(
                 'Optional workspace isolation identifier (e.g. "alpha"). Do not use numeric project IDs or "workspace" as the key.'
@@ -203,7 +205,7 @@ export const TeamSemanticSearchSchema = z.preprocess(
                 .default(true)
                 .describe('Include hint when no results found (default: true)'),
             project_number: StrictProjectNumberSchema.optional(),
-            workspace_id: z.string().optional(),
+            workspace_id: z.string().max(255).optional(),
             issue_number: z.number().int().positive().optional().describe('Filter results by GitHub issue number'),
             pr_number: z.number().int().positive().optional().describe('Filter results by GitHub PR number'),
             workflow_run_id: z
@@ -258,7 +260,7 @@ export const TeamAddToVectorIndexSchema = z
     .object({
         entry_id: z.number().int().positive(),
         project_number: StrictProjectNumberSchema.optional(),
-        workspace_id: z.string().optional(),
+        workspace_id: z.string().max(255).optional(),
         session_id: z.string().optional(),
     })
     .strict()
@@ -340,6 +342,7 @@ export const TeamCrossProjectInsightsSchema = z
         project_number: StrictProjectNumberSchema.optional(),
         workspace_id: z
             .string()
+            .max(255)
             .optional()
             .describe(
                 'Optional workspace isolation identifier (e.g. "alpha"). Do not use numeric project IDs or "workspace" as the key.'

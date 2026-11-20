@@ -14,6 +14,7 @@ import {
     skipRegexLiteralBody,
     trackIdentifierToken,
     trackPunctuationToken,
+    trackTwoCharOperatorToken,
 } from '../../../codemode/security-stripper.js'
 
 export type NonCodeSpan = readonly [number, number]
@@ -79,8 +80,7 @@ function stepCodeLexicalChar(
         (ch === '?' && code[i + 1] === '?') ||
         (ch === '?' && code[i + 1] === '.' && !/[0-9]/.test(code[i + 2] ?? ''))
     ) {
-        scan.prevToken = ch + (code[i + 1] ?? '')
-        delim.canAsiRegex = false
+        scan.prevToken = trackTwoCharOperatorToken(ch + (code[i + 1] ?? ''), scan.prevToken, delim)
         scan.lineOnlyWsOrComments = false
         return i + 1
     }

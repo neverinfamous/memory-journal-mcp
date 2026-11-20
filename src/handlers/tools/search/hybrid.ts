@@ -406,7 +406,7 @@ export async function hybridSearch(
         options.includeTeam === true &&
         options.isPersonal !== true &&
         isTeamDbReady(teamDb) &&
-        canAccessTeamSilently('search_entries') &&
+        canAccessTeamSilently('search_entries', { teamDb, config: options.config }, options.workspaceId) &&
         canReadTeamEntriesRbac(teamDb, options.config, options.workspaceId)
 
     const [personalStoreRes, teamStoreRes] = await Promise.all([

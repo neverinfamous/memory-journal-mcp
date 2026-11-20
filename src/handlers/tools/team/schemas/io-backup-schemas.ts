@@ -18,7 +18,7 @@ export const TeamExportEntriesSchema = z
         tags: z.array(z.string()).optional(),
         limit: z.number().int().min(1).max(5000).optional().default(100),
         project_number: StrictProjectNumberSchema.optional(),
-        workspace_id: z.string().optional(),
+        workspace_id: z.string().max(255).optional(),
     })
     .strict()
 
@@ -44,7 +44,7 @@ export const TeamBackupSchema = z
     .object({
         name: z.string().optional().describe('Optional custom backup filename stem'),
         project_number: StrictProjectNumberSchema.optional(),
-        workspace_id: z.string().optional(),
+        workspace_id: z.string().max(255).optional(),
     })
     .strict()
 

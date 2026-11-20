@@ -8,7 +8,7 @@
 import { sliceUntrustedInline, type BriefingConfig, type ResourceContext } from '../../shared.js'
 import { logger } from '../../../../utils/logger.js'
 import { activeProjectRegistry } from '../../../../utils/write-scope.js'
-import { canAccessTeamSilently } from '../../../tools/search/helpers.js'
+import { canAccessTeamSilently, isTeamFilterAllowed } from '../../../tools/search/helpers.js'
 import type { JournalEntry } from '../../../../types/index.js'
 import {
     buildPersonalMirrorIndex,
@@ -90,8 +90,10 @@ function canBuildScopedTeamContext(
     config: BriefingConfig,
     teamWorkspace: string,
     projectNumber: number | null | undefined,
-    runtime: ResourceContext['runtime']
+    runtime: ResourceContext['runtime'],
+    filterConfig: ResourceContext['filterConfig']
 ): boolean {
+    if (!isTeamFilterAllowed('team_search', { filterConfig }, true)) return false
     const accessAllowed = canAccessTeamSilently(
         'search_entries',
         {
@@ -107,6 +109,7 @@ function canBuildScopedTeamContext(
                     ? { projectRegistry: config.projectRegistry }
                     : {}),
                 teamDefaultRole: runtime?.teamDefaultRole ?? 'denied',
+                ...(filterConfig !== undefined ? { filterConfig } : {}),
             },
         },
         teamWorkspace
@@ -136,7 +139,8 @@ export function buildTeamContext(
                 config,
                 teamWorkspace,
                 projectNumber,
-                context.runtime
+                context.runtime,
+                context.filterConfig
             )
         ) {
             return undefined

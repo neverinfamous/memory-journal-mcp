@@ -49,7 +49,7 @@ export const LinkEntriesSchema = z.object({
         .default('references'),
     description: z.string().optional(),
     project_number: StrictProjectNumberSchema.optional(),
-    workspace_id: z.string().optional(),
+    workspace_id: z.string().max(255).optional(),
 })
 
 export const LinkEntriesSchemaMcp = z
@@ -123,7 +123,7 @@ export const VisualizeInputSchema = z.object({
         .default('both')
         .describe("Output shape: 'mermaid' (diagram only), 'edges' (nodes + edges arrays, no diagram), or 'both' (default)"),
     project_number: StrictProjectNumberSchema.optional(),
-    workspace_id: z.string().optional(),
+    workspace_id: z.string().max(255).optional(),
     source: z.enum(['personal', 'team']).optional(),
 })
 

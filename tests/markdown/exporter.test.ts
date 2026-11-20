@@ -13,6 +13,7 @@ import { join, resolve } from 'node:path'
 const mockHandle = {
     writeFile: vi.fn().mockResolvedValue(undefined),
     close: vi.fn().mockResolvedValue(undefined),
+    stat: vi.fn().mockResolvedValue({ isFile: () => true }),
 }
 
 vi.mock('node:fs/promises', () => ({
@@ -75,6 +76,7 @@ describe('exportEntriesToMarkdown', () => {
         vi.mocked(realpathSync.native).mockImplementation((p) => String(p))
         mockHandle.writeFile.mockResolvedValue(undefined)
         mockHandle.close.mockResolvedValue(undefined)
+        mockHandle.stat.mockResolvedValue({ isFile: () => true })
         vi.mocked(fs.open).mockResolvedValue(mockHandle as any)
         mockDb.getTagsForEntry.mockReturnValue([])
         mockDb.getRelationships.mockReturnValue([])

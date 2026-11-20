@@ -18,6 +18,7 @@ import { resolveWorkspaceId, resolveProjectContext } from '../../../utils/worksp
 import { activeProjectRegistry, alignedProjectFilter, pairStoredScope } from '../../../utils/write-scope.js'
 import {
     TEAM_DB_ERROR_RESPONSE,
+    assertCanonicalFallbackToolAllowed,
     batchFetchAuthors,
     executeTeamGetEntryById,
     missingTeamProjectNumberError,
@@ -51,7 +52,7 @@ const TeamListTagsSchemaMcp = z.object({
 const TeamListTagsSchema = z
     .object({
         project_number: StrictProjectNumberSchema.optional(),
-        workspace_id: z.string().optional(),
+        workspace_id: z.string().max(255).optional(),
     })
     .strict()
 
@@ -146,6 +147,12 @@ async function executeTeamCreateEntry(
     const input = TeamCreateEntrySchema.parse(params)
     const scope = resolveTeamCreateScopeAndAuthor(context, teamDb, input)
     if ('errorResponse' in scope) return scope.errorResponse
+    if (
+        (input.relationships !== undefined && input.relationships.length > 0) ||
+        input.auto_link === true
+    ) {
+        assertCanonicalFallbackToolAllowed('team_link_entries', 'team', context, false)
+    }
     const { wsId, projectNumber, author } = scope
 
     // Optional progress for long operations
@@ -362,14 +369,17 @@ export function getTeamCoreTools(context: ToolContext): ToolDefinition[] {
                         input.project_number,
                         context.config
                     )
+                    const registry = activeProjectRegistry(context.config?.projectRegistry)
+                    const hasActiveRegistry =
+                        registry !== undefined && Object.keys(registry).length > 0
                     const resolvedProject = alignedProjectFilter(
                         wsId,
                         input.project_number,
-                        activeProjectRegistry(context.config?.projectRegistry)
+                        registry
                     )
-                    if (wsId === '*' && resolvedProject === undefined) {
+                    if ((wsId === '*' || hasActiveRegistry) && resolvedProject === undefined) {
                         return missingTeamProjectNumberError(
-                            'Missing project_number. Wildcard workspace_id "*" requires an explicit project_number.'
+                            'Missing project_number. Specify a concrete project_number or registered workspace.'
                         )
                     }
                     const rawTags = teamDb.listTags(wsId, resolvedProject)

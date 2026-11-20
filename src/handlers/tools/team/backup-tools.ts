@@ -104,7 +104,7 @@ export function getTeamBackupTools(context: ToolContext): ToolDefinition[] {
 
                     z.object({
                         project_number: StrictProjectNumberSchema.optional(),
-                        workspace_id: z.string().optional(),
+                        workspace_id: z.string().max(255).optional(),
                     })
                         .strict()
                         .parse(params ?? {})

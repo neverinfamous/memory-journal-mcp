@@ -60,6 +60,7 @@ export const TeamCollaborationMatrixSchema = z
         project_number: StrictProjectNumberSchema.optional(),
         workspace_id: z
             .string()
+            .max(255)
             .optional()
             .describe(
                 'Optional workspace isolation identifier (e.g. "alpha"). Do not use numeric project IDs or "workspace" as the key.'

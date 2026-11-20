@@ -10,6 +10,8 @@ import type { IDatabaseAdapter } from '../../../database/core/interfaces.js'
 import type { VectorSearchManager } from '../../../vector/vector-search-manager/index.js'
 import { logger } from '../../../utils/logger.js'
 import { enforceAccessBoundary } from '../../../auth/validation.js'
+import { isToolVisibleForFilter } from '../../../filtering/tool-filter.js'
+import { isTargetExcludedByRules } from '../dummy-filter-helpers.js'
 import { canReadTeamEntriesRbac } from '../team/rbac.js'
 import { sanitizeAuthor } from '../../../utils/security-utils.js'
 import {
@@ -59,6 +61,32 @@ export function isTeamDbReady(teamDb: IDatabaseAdapter | undefined): teamDb is I
     return typeof candidate.isInitialized === 'function' ? candidate.isInitialized() : true
 }
 
+/** Return true if active `--tool-filter` rules permit team search/read operations. */
+export function isTeamFilterAllowed(
+    teamToolName: string,
+    config:
+        | {
+              filterConfig?: ToolHandlerConfig['filterConfig']
+              codemodeInternalFullAccess?: boolean
+          }
+        | undefined,
+    allowCodemodeProxy = false
+): boolean {
+    const filterCfg = config?.filterConfig
+    if (filterCfg === undefined || filterCfg === null) return true
+    if (
+        isTargetExcludedByRules([teamToolName, 'team'], filterCfg) ||
+        !isToolVisibleForFilter(teamToolName, true, filterCfg.raw)
+    ) {
+        return false
+    }
+    return (
+        config?.codemodeInternalFullAccess === true ||
+        filterCfg.enabledTools.has(teamToolName) ||
+        (allowCodemodeProxy && filterCfg.enabledTools.has('mj_execute_code'))
+    )
+}
+
 /** Return true if team boundary access passes without triggering denial audit logs. */
 export function canAccessTeamSilently(
     toolName = 'search_entries',
@@ -70,6 +98,8 @@ export function canAccessTeamSilently(
 ): boolean {
     try {
         enforceAccessBoundary(toolName, 'tool', { requiresTeamScope: true })
+        const filterTool = toolName.startsWith('team_') ? toolName : 'team_search'
+        if (!isTeamFilterAllowed(filterTool, context?.config)) return false
         if (context?.teamDb !== undefined) {
             if (!isTeamDbReady(context.teamDb)) return false
             if (context.teamDb.isTeamRbacActive?.()) {
@@ -249,7 +279,7 @@ export async function collectTeamSearchEntries(
 ): Promise<EntryWithSource[]> {
     if (
         !isTeamDbReady(teamDb) ||
-        !canAccessTeamSilently('search_entries') ||
+        !canAccessTeamSilently('search_entries', { teamDb, config: options.config }, options.workspaceId) ||
         !canReadTeamEntriesRbac(teamDb, options.config, options.workspaceId)
     ) {
         return []

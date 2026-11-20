@@ -22,6 +22,8 @@ const EXPLICIT_CODE_ALIAS_KEYS = [
 const NON_CODE_METADATA_KEYS = new Set([
     'repo',
     'repo_name',
+    'repoName',
+    'repository',
     'workspace_id',
     'workspaceId',
     'workspace',
@@ -89,10 +91,12 @@ const ENTRY_CONTENT_ALIAS_KEYS = [
  * preserving read-only `query` calls and non-code metadata parameters.
  */
 export function normalizeExecuteCodeAliases(obj: Record<string, unknown>): void {
-    if (obj['repo_name'] !== undefined && obj['repo'] === undefined) {
-        obj['repo'] = obj['repo_name']
-        delete obj['repo_name']
+    const repoAlias = obj['repo_name'] ?? obj['repository']
+    if (repoAlias !== undefined && obj['repo'] === undefined) {
+        obj['repo'] = repoAlias
     }
+    delete obj['repo_name']
+    delete obj['repository']
     if (obj['readonly'] === undefined) {
         const readonlyAlias = obj['readOnly'] ?? obj['read_only']
         if (readonlyAlias !== undefined) {

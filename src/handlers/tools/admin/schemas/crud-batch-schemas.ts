@@ -89,9 +89,10 @@ export const UpdateEntrySchema = z.preprocess(
             is_archived: z.boolean().optional(),
             expected_version: z.number().int().positive().optional(),
             auto_context: z.string().nullable().optional(),
-            workspace_id: z.string().optional(),
+            workspace_id: z.string().max(255).optional(),
             target_workspace_id: z
                 .string()
+                .max(255)
                 .optional()
                 .describe('Target workspace to move entry into (e.g. "mysql-mcp")'),
             impact_score: z.number().min(0).max(1).optional(),
@@ -204,7 +205,7 @@ export const DeleteEntrySchema = z.preprocess(
             permanent: z.boolean().optional().default(false),
             project_number: z.number().int().positive().optional(),
             expected_version: z.number().int().positive().optional().describe('REQUIRED for concurrency safety'),
-            workspace_id: z.string().optional(),
+            workspace_id: z.string().max(255).optional(),
         })
         .strict()
 )
@@ -256,7 +257,7 @@ export const BatchCreateEntriesSchema = z.preprocess(
             entries: z.array(CreateEntrySchema).min(1).max(MAX_BATCH_SIZE),
             auto_index: z.boolean().optional().default(true),
             project_number: StrictProjectNumberSchema.optional(),
-            workspace_id: z.string().optional(),
+            workspace_id: z.string().max(255).optional(),
         })
         .strict()
 )
@@ -282,7 +283,7 @@ export const BatchUpdateEntriesSchema = z.preprocess(
             updates: z.array(UpdateEntrySchema).min(1).max(MAX_BATCH_SIZE),
             auto_index: z.boolean().optional().default(true),
             project_number: StrictProjectNumberSchema.optional(),
-            workspace_id: z.string().optional(),
+            workspace_id: z.string().max(255).optional(),
         })
         .strict()
 )
@@ -308,7 +309,7 @@ export const BatchDeleteEntriesSchema = z.preprocess(
             entry_ids: z.array(z.number().int().positive()).min(1).max(MAX_BATCH_SIZE),
             permanent: z.boolean().optional().default(false),
             project_number: z.number().int().positive().optional(),
-            workspace_id: z.string().optional(),
+            workspace_id: z.string().max(255).optional(),
         })
         .strict()
 )

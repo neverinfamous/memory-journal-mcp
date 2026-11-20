@@ -242,6 +242,9 @@ export function fenceCommitEntry(c: CommitEntry): CommitEntry {
     if (c.scope !== undefined) {
         next.scope = fenceNonCanonicalRefOrKey(c.scope)
     }
+    if (c.type !== undefined) {
+        next.type = fenceNonCanonicalRefOrKey(c.type)
+    }
     return next
 }
 

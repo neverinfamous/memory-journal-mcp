@@ -14,6 +14,8 @@ import {
 import { probeMatchingTeamEntry } from '../search/helpers.js'
 import { isDummyToolAllowedByFilter } from '../dummy-filter-helpers.js'
 import { GetEntryByIdSchema, type CreateEntrySchema } from './schemas.js'
+import { linkRequestedRelationships } from '../relationship-linking.js'
+import { computeSuggestedLinks } from './link-suggestions.js'
 
 type CreateEntryParams = z.infer<typeof CreateEntrySchema>
 type GetEntryByIdParams = z.infer<typeof GetEntryByIdSchema>
@@ -302,4 +304,49 @@ export function tryResolveEntryResourceUri(
             }
         }
     })()
+}
+
+/**
+ * Compute heuristic link suggestions and apply `auto_link` relationships for `create_entry`,
+ * extracted so `executeCreateEntry` stays under the 80-line function budget (Appendix B).
+ */
+export async function resolveAndApplyCreateLinks(params: {
+    context: ToolContext
+    createdEntry: JournalEntry
+    input: CreateEntryParams
+    wsId: string
+    projectNumber: number
+    relationshipWarnings: string[]
+}): Promise<Awaited<ReturnType<typeof computeSuggestedLinks>>> {
+    const { context, createdEntry, input, wsId, projectNumber, relationshipWarnings } = params
+    const candidateSuggestions =
+        (!input.relationships || input.relationships.length === 0) &&
+        !input.tags?.includes('commit-narrative')
+            ? await computeSuggestedLinks({
+                  db: context.db,
+                  vectorManager: context.vectorManager,
+                  entry: createdEntry,
+                  workspaceId: wsId,
+                  projectNumber,
+                  sessionId: input.session_id,
+              })
+            : []
+    const autoTargets =
+        input.auto_link === true
+            ? candidateSuggestions
+                  .filter((s) => s.reason === 'same-session' || s.reason === 'shared-anchor')
+                  .slice(0, 2)
+            : []
+    if (autoTargets.length > 0) {
+        relationshipWarnings.push(
+            ...linkRequestedRelationships(
+                context.db,
+                createdEntry.id,
+                autoTargets.map((t) => ({ targetId: t.targetId, relationType: t.relationType })),
+                wsId,
+                projectNumber
+            )
+        )
+    }
+    return autoTargets.length > 0 ? [] : candidateSuggestions
 }

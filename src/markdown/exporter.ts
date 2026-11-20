@@ -165,6 +165,14 @@ async function writeExportFile(
             constants.O_WRONLY | constants.O_CREAT | constants.O_TRUNC | (constants.O_NOFOLLOW ?? 0),
             0o600
         )
+        const openStat = await handle.stat()
+        if (!openStat.isFile()) {
+            logger.warning('Refusing to overwrite non-regular file during export', {
+                module: 'Exporter',
+                filepath,
+            })
+            return { error: 'Refusing to overwrite non-regular file during export' }
+        }
         await handle.writeFile(fileContent, 'utf-8')
         return 'written'
     } catch (err: unknown) {

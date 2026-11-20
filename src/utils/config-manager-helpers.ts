@@ -2,6 +2,7 @@ import { validateProjectRegistryObject } from '../cli/server-options-parsers.js'
 import type { ToolFilterConfig } from '../filtering/tool-filter.js'
 import type { BriefingConfig } from '../handlers/resources/shared.js'
 import { logger } from './logger.js'
+import { isForbiddenProjectKey } from './project-registry-guards.js'
 import { activeProjectRegistry, pairStoredScope } from './write-scope.js'
 import {
     buildFallbackCliEnvBaseline,
@@ -370,6 +371,10 @@ function extractFileScopeInputs(parsed: Record<string, unknown>): {
     if ('defaultWorkspaceId' in parsed && rawWsId !== undefined && rawWsId !== null) {
         if (trimmedWs === '*') {
             logger.warning("Ignoring wildcard defaultWorkspaceId '*' in reloaded config file", {
+                module: 'ConfigManager',
+            })
+        } else if (isForbiddenProjectKey(trimmedWs)) {
+            logger.warning('Ignoring forbidden defaultWorkspaceId key in reloaded config file', {
                 module: 'ConfigManager',
             })
         } else if (trimmedWs !== '') {

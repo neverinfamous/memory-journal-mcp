@@ -76,7 +76,7 @@ export const AddAuthorAliasSchema = z.preprocess(
                 .max(255)
                 .describe('The canonical author identity to map the alias to (e.g., "alex-dev")'),
             project_number: StrictProjectNumberSchema,
-            workspace_id: z.string().optional().describe(WORKSPACE_FIELD_DESC),
+            workspace_id: z.string().max(255).optional().describe(WORKSPACE_FIELD_DESC),
         })
         .strict()
 )
@@ -123,7 +123,7 @@ export const RemoveAuthorAliasSchema = z.preprocess(
         .object({
             alias: z.string().trim().min(1).max(255).describe('The alias mapping to remove'),
             project_number: StrictProjectNumberSchema,
-            workspace_id: z.string().optional().describe(WORKSPACE_FIELD_DESC),
+            workspace_id: z.string().max(255).optional().describe(WORKSPACE_FIELD_DESC),
         })
         .strict()
 )
@@ -155,7 +155,7 @@ export const ListAuthorAliasesSchema = z.preprocess(
                 .optional()
                 .describe('Optional canonical author to filter aliases by'),
             project_number: StrictProjectNumberSchema,
-            workspace_id: z.string().optional().describe(WORKSPACE_FIELD_DESC),
+            workspace_id: z.string().max(255).optional().describe(WORKSPACE_FIELD_DESC),
         })
         .strict()
 )
@@ -198,7 +198,7 @@ export const ResolveAuthorSchema = z.preprocess(
                 .max(255)
                 .describe('The raw author name to resolve'),
             project_number: StrictProjectNumberSchema,
-            workspace_id: z.string().optional().describe(WORKSPACE_FIELD_DESC),
+            workspace_id: z.string().max(255).optional().describe(WORKSPACE_FIELD_DESC),
         })
         .strict()
 )
@@ -235,7 +235,7 @@ export const ConsolidateAuthorsSchema = z.preprocess(
                     "The canonical author name. All entries matching any of this author's aliases will be updated to use this canonical name."
                 ),
             project_number: StrictProjectNumberSchema,
-            workspace_id: z.string().optional().describe(WORKSPACE_FIELD_DESC),
+            workspace_id: z.string().max(255).optional().describe(WORKSPACE_FIELD_DESC),
         })
         .strict()
 )

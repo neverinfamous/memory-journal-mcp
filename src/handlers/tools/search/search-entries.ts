@@ -131,7 +131,8 @@ function buildSearchEntriesContext(
         context.config?.runtime?.auditLogger,
         context.teamDb,
         context.config,
-        wsId
+        wsId,
+        projectNumber
     )
     const query = input.query?.trim() ?? ''
     const hasFilters = hasSearchEntriesFilter(input)

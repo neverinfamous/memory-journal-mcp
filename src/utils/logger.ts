@@ -41,7 +41,8 @@ function sanitizeLogValue(value: unknown, seen = new WeakSet(), depth = 0): unkn
         const out: Record<string, unknown> = {}
         for (const [k, v] of Object.entries(value)) {
             if (k === '__proto__' || k === 'constructor' || k === 'prototype') continue
-            out[k] =
+            const safeKey = sanitizeErrorForLogging(k)
+            out[safeKey] =
                 SENSITIVE_KEY_RE.test(k) && v !== undefined && v !== null && v !== ''
                     ? '[REDACTED]'
                     : sanitizeLogValue(v, seen, depth + 1)

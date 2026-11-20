@@ -65,17 +65,19 @@ function appendSharedAnchorSuggestions(params: {
     db: IDatabaseAdapter
     entryId: number
     workspaceId: string
+    projectNumber: number | undefined
     limit: number
     seenIds: Set<number>
     suggestions: SuggestedLink[]
 }): void {
-    const { db, entryId, workspaceId, limit, seenIds, suggestions } = params
+    const { db, entryId, workspaceId, projectNumber, limit, seenIds, suggestions } = params
     if (suggestions.length >= limit || typeof db.getEntriesSharingAnchors !== 'function') return
     const anchorPeers = db.getEntriesSharingAnchors(
         entryId,
         isoDaysAgo(ANCHOR_LOOKBACK_DAYS),
         5,
-        workspaceId
+        workspaceId,
+        projectNumber
     )
     for (const peer of anchorPeers) {
         if (suggestions.length >= limit) break
@@ -186,6 +188,7 @@ export async function computeSuggestedLinks(params: {
         db,
         entryId: entry.id,
         workspaceId,
+        projectNumber,
         limit,
         seenIds,
         suggestions,

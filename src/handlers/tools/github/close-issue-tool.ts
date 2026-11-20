@@ -22,7 +22,7 @@ const CloseIssueHandlerInputSchema = z
         comment: z.string().optional(),
         move_to_done: z.boolean().optional().default(false),
         project_number: StrictProjectNumberSchema,
-        workspace_id: z.string().optional(),
+        workspace_id: z.string().max(255).optional(),
         owner: z.string().optional(),
         repo: z.string().optional(),
         tags: z.array(z.string()).optional(),

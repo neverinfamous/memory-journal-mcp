@@ -32,8 +32,8 @@ const ListDeletedEntriesStrictSchema = z
             z.number().int().min(1).max(MAX_QUERY_LIMIT).optional().default(50)
         ),
         offset: z.preprocess(coerceNumber, z.number().int().min(0).optional().default(0)),
-        workspace_id: z.string().optional(),
-        workspaceId: z.string().optional(),
+        workspace_id: z.string().max(255).optional(),
+        workspaceId: z.string().max(255).optional(),
         project_number: z.preprocess(preprocessProjectNumber, z.number().int().positive().optional()),
         projectNumber: z.preprocess(preprocessProjectNumber, z.number().int().positive().optional()),
     })

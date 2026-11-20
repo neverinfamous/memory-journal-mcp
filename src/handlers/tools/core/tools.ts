@@ -7,12 +7,13 @@ import {
     executeGetEntryById,
     indexCreatedEntry,
     recordTeamShareOutcome,
+    resolveAndApplyCreateLinks,
 } from './create-entry-helpers.js'
 import { resolveWorkspaceId, resolveProjectContext } from '../../../utils/workspace-resolver.js'
 import { activeProjectRegistry, alignedProjectFilter } from '../../../utils/write-scope.js'
 import { logger } from '../../../utils/logger.js'
 import { probeMatchingTeamEntry } from '../search/helpers.js'
-import { computeSuggestedLinks } from './link-suggestions.js'
+import { assertCanonicalFallbackToolAllowed } from '../team/helpers.js'
 
 import {
     CreateEntrySchema,
@@ -89,6 +90,9 @@ async function executeCreateEntry(
     const input = CreateEntrySchema.parse(params)
     const scope = resolveCreateEntryScope(input, context.config)
     if ('errorResponse' in scope) return scope.errorResponse
+    if ((input.relationships !== undefined && input.relationships.length > 0) || input.auto_link === true) {
+        assertCanonicalFallbackToolAllowed('link_entries', 'relationships', context, false)
+    }
     const { wsId, projectNumber } = scope
 
     await sendProgress(progress, 0, 2, 'Creating entry...')
@@ -132,36 +136,14 @@ async function executeCreateEntry(
               relationshipWarnings
           )
         : { sharedWithTeam: false }
-    const candidateSuggestions =
-        (!input.relationships || input.relationships.length === 0) &&
-        !input.tags?.includes('commit-narrative')
-            ? await computeSuggestedLinks({
-                  db,
-                  vectorManager: context.vectorManager,
-                  entry: createdEntry,
-                  workspaceId: wsId,
-                  projectNumber,
-                  sessionId: input.session_id,
-              })
-            : []
-    const autoTargets =
-        input.auto_link === true
-            ? candidateSuggestions
-                  .filter((s) => s.reason === 'same-session' || s.reason === 'shared-anchor')
-                  .slice(0, 2)
-            : []
-    if (autoTargets.length > 0) {
-        relationshipWarnings.push(
-            ...linkRequestedRelationships(
-                db,
-                id,
-                autoTargets.map((t) => ({ targetId: t.targetId, relationType: t.relationType })),
-                wsId,
-                projectNumber
-            )
-        )
-    }
-    const suggestedLinks = autoTargets.length > 0 ? [] : candidateSuggestions
+    const suggestedLinks = await resolveAndApplyCreateLinks({
+        context,
+        createdEntry,
+        input,
+        wsId,
+        projectNumber,
+        relationshipWarnings,
+    })
     const allWarnings = [
         ...(vectorWarning !== undefined ? [vectorWarning] : []),
         ...relationshipWarnings,

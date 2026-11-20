@@ -125,6 +125,17 @@ export function createSafeFsShim(contextObj?: Record<string, unknown>): SafeFsSh
     })
 }
 
+function guardPathCall<T>(fn: () => T): T {
+    let errorMessage: string | undefined
+    try {
+        return fn()
+    } catch (err) {
+        // [H5] Never let outer-realm internal NodeError instances (or .cause) leak across the VM boundary.
+        errorMessage = err instanceof Error ? err.message : String(err)
+    }
+    throw new TypeError(errorMessage)
+}
+
 const toPosix = (p: unknown): string => toStr(p).replace(/\\/g, '/')
 const stringParts = (parts: unknown[]): string[] =>
     parts.filter((p): p is string => typeof p === 'string' && p.length > 0).map(toPosix)
@@ -134,29 +145,46 @@ const stringParts = (parts: unknown[]): string[] =>
  * separators are handled; `resolve` never consults the host `process.cwd()`.
  */
 export const pathShim = Object.freeze({
-    join: Object.freeze((...parts: unknown[]): string => {
-        const valid = stringParts(parts)
-        return valid.length === 0 ? '.' : nodePath.posix.join(...valid)
-    }),
-    resolve: Object.freeze((...parts: unknown[]): string => {
-        const valid = stringParts(parts)
-        let start = 0
-        for (let i = valid.length - 1; i >= 0; i--) {
-            if (nodePath.win32.isAbsolute(valid[i] ?? '') || (valid[i] ?? '').startsWith('/')) {
-                start = i
-                break
+    join: Object.freeze((...parts: unknown[]): string =>
+        guardPathCall(() => {
+            const valid = stringParts(parts)
+            return valid.length === 0 ? '.' : nodePath.posix.join(...valid)
+        })
+    ),
+    resolve: Object.freeze((...parts: unknown[]): string =>
+        guardPathCall(() => {
+            const valid = stringParts(parts)
+            let start = 0
+            for (let i = valid.length - 1; i >= 0; i--) {
+                if (nodePath.win32.isAbsolute(valid[i] ?? '') || (valid[i] ?? '').startsWith('/')) {
+                    start = i
+                    break
+                }
             }
-        }
-        const joined = valid.slice(start)
-        return joined.length === 0 ? '.' : nodePath.posix.normalize(joined.join('/')).replace(/(.)\/$/, '$1')
-    }),
-    basename: Object.freeze((p: unknown, ext?: string): string => nodePath.posix.basename(toPosix(p), ext)),
-    dirname: Object.freeze((p: unknown): string => nodePath.posix.dirname(toPosix(p))),
-    extname: Object.freeze((p: unknown): string => nodePath.posix.extname(toPosix(p))),
-    normalize: Object.freeze((p: unknown): string => nodePath.posix.normalize(toPosix(p))),
-    isAbsolute: Object.freeze(
-        (p: unknown): boolean =>
-            nodePath.win32.isAbsolute(toStr(p)) || nodePath.posix.isAbsolute(toPosix(p))
+            const joined = valid.slice(start)
+            return joined.length === 0
+                ? '.'
+                : nodePath.posix.normalize(joined.join('/')).replace(/(.)\/$/, '$1')
+        })
+    ),
+    basename: Object.freeze((p: unknown, ext?: unknown): string =>
+        guardPathCall(() =>
+            nodePath.posix.basename(toPosix(p), ext === undefined ? undefined : toStr(ext))
+        )
+    ),
+    dirname: Object.freeze((p: unknown): string =>
+        guardPathCall(() => nodePath.posix.dirname(toPosix(p)))
+    ),
+    extname: Object.freeze((p: unknown): string =>
+        guardPathCall(() => nodePath.posix.extname(toPosix(p)))
+    ),
+    normalize: Object.freeze((p: unknown): string =>
+        guardPathCall(() => nodePath.posix.normalize(toPosix(p)))
+    ),
+    isAbsolute: Object.freeze((p: unknown): boolean =>
+        guardPathCall(
+            () => nodePath.win32.isAbsolute(toStr(p)) || nodePath.posix.isAbsolute(toPosix(p))
+        )
     ),
     sep: '/',
     delimiter: ':',

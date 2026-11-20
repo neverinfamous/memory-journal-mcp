@@ -2,6 +2,7 @@ import { createHash, timingSafeEqual } from 'node:crypto';
 import * as http from 'node:http';
 import { hasScope, SCOPES } from '../auth/scopes.js';
 import { logger } from '../utils/logger.js';
+import { isPlaceholderAuthToken } from '../utils/security-utils.js';
 import type { ServerRuntime } from '../utils/maintenance-lock.js';
 import { formatPrometheusMetrics } from './prometheus-formatter.js';
 
@@ -114,8 +115,6 @@ interface ResolvedMetricsServerConfig {
     includeUserBreakdown: boolean;
 }
 
-const DEFAULT_PLACEHOLDER_TOKEN = 'change_this_to_a_secure_token_for_production';
-
 function resolveMetricsServerConfig(
     metricsPort: number | undefined,
     options: MetricsServerOptions | undefined
@@ -136,7 +135,7 @@ function resolveMetricsServerConfig(
             `FATAL: Refusing to bind standalone metrics server to non-loopback interface '${host}' without an authentication token (--auth-token or MCP_AUTH_TOKEN).`
         );
     }
-    if (authToken?.trim() === DEFAULT_PLACEHOLDER_TOKEN) {
+    if (isPlaceholderAuthToken(authToken)) {
         throw new Error(
             `FATAL: Default auth token detected for standalone metrics server '${host}'. You MUST change MCP_AUTH_TOKEN to a secure, cryptographically random value for production.`
         );

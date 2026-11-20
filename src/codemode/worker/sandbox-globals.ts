@@ -120,6 +120,52 @@ function exposeApiMethodsOnSandbox(
     }
 }
 
+function createReadonlyMirrorProxy(target: Record<string, unknown>): Record<string, unknown> {
+    return new Proxy(
+        {},
+        {
+            get: (): unknown => target,
+            set: (): boolean => false,
+            defineProperty: (): boolean => false,
+            deleteProperty: (): boolean => false,
+            setPrototypeOf: (): boolean => false,
+        }
+    )
+}
+
+function createBlockedAndTimerGlobals(
+    activeTimers?: Set<NodeJS.Timeout>,
+    executionLifecycle?: ExecutionLifecycleState
+): Record<string, unknown> {
+    const { createSafeTimeout, clearSafeTimeout } = createSafeTimerHelpers(
+        activeTimers,
+        executionLifecycle
+    )
+    return {
+        fetch: createFetchShim(),
+        sleep: (ms: number) =>
+            new Promise((resolve) => {
+                createSafeTimeout(() => resolve(undefined), ms)
+            }),
+        setTimeout: createSafeTimeout,
+        clearTimeout: clearSafeTimeout,
+        setInterval: undefined,
+        setImmediate: undefined,
+        process: createSandboxProcessObject(),
+        require: undefined,
+        __dirname: undefined,
+        __filename: undefined,
+        global: undefined,
+        Proxy: undefined,
+        Reflect: undefined,
+        SharedArrayBuffer: undefined,
+        Atomics: undefined,
+        WebAssembly: undefined,
+        FinalizationRegistry: undefined,
+        WeakRef: undefined,
+    }
+}
+
 /**
  * Builds and freezes the sandbox global object for `vm.createContext`.
  */
@@ -136,12 +182,6 @@ export function buildSandboxGlobals(
         activeTimers,
         executionLifecycle,
     } = options
-    const { createSafeTimeout, clearSafeTimeout } = createSafeTimerHelpers(
-        activeTimers,
-        executionLifecycle
-    )
-    const servicesProxy = new Proxy({}, { get: (): unknown => shimMj })
-    const kernelProxy = new Proxy({}, { get: (): unknown => shimMj })
     const frozenPathShim = Object.freeze({ ...pathShim })
     const frozenConsoleShim = Object.freeze({ ...consoleShim })
 
@@ -164,8 +204,8 @@ export function buildSandboxGlobals(
         core: shimMj,
         journal: shimMj,
         _journal: shimMj,
-        services: servicesProxy,
-        kernel: kernelProxy,
+        services: createReadonlyMirrorProxy(shimMj),
+        kernel: createReadonlyMirrorProxy(shimMj),
         path: frozenPathShim,
         __path: frozenPathShim,
         prepare: (sql?: string) =>
@@ -173,32 +213,13 @@ export function buildSandboxGlobals(
         context: frozenContext,
         ctx: frozenContext,
         console: frozenConsoleShim,
-        fetch: createFetchShim(),
-        sleep: (ms: number) =>
-            new Promise((resolve) => {
-                createSafeTimeout(() => resolve(undefined), ms)
-            }),
-        setTimeout: createSafeTimeout,
-        clearTimeout: clearSafeTimeout,
-        setInterval: undefined,
-        setImmediate: undefined,
         getConfig:
             typeof shimMj['getConfig'] === 'function'
                 ? (): Promise<unknown> =>
                       Promise.resolve((shimMj['getConfig'] as () => unknown)())
                 : (): Promise<unknown> => Promise.resolve({ dbPath: 'memory://internal' }),
-        process: createSandboxProcessObject(),
-        require: undefined,
-        __dirname: undefined,
-        __filename: undefined,
-        global: undefined,
         globalThis: shimMj,
-        Proxy: undefined,
-        Reflect: undefined,
-        SharedArrayBuffer: undefined,
-        Atomics: undefined,
-        WebAssembly: undefined,
-        FinalizationRegistry: undefined,
+        ...createBlockedAndTimerGlobals(activeTimers, executionLifecycle),
     }
 
     exposeApiMethodsOnSandbox(sandbox, mjApi)

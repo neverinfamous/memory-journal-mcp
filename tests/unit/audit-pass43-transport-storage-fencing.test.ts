@@ -290,13 +290,13 @@ describe('Pass 43 Audit — Transport, Scope Parity, Secrets, Egress, Storage & 
         )
         expect(bucket241.sql).toContain('json_each(?)')
 
-        expect(AUDIT_PROMPT_REVISION).toBe('2026-11-19-audit-pass47')
+        expect(AUDIT_PROMPT_REVISION).toBe('2026-11-20-audit-pass48')
         const secDef = getSecurityAuditPromptDefinition()
         const rendered = await Promise.resolve(
             secDef.handler({ target: 'memory-journal-mcp' }, db)
         )
         const text = rendered.messages[0]?.content.text ?? ''
-        expect(text).toContain('Prompt revision: 2026-11-19-audit-pass47')
+        expect(text).toContain('Prompt revision: 2026-11-20-audit-pass48')
         expect(text).toContain('O_NOFOLLOW')
         expect(text).toContain('fec0::/10')
         expect(text).toContain('SENSITIVE_KEY_RE')

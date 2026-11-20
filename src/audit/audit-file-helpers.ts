@@ -4,7 +4,7 @@
  */
 
 import { constants as fsConstants } from 'node:fs'
-import { chmod, lstat, open, rename, stat } from 'node:fs/promises'
+import { lstat, open, rename } from 'node:fs/promises'
 import { logger } from '../utils/logger.js'
 import type { AuditEntry, AuditSearchFilters } from './types.js'
 import { matchesAuditFilters, parseAuditLine } from './audit-query-helpers.js'
@@ -159,7 +159,7 @@ export async function rotateAuditLogFiles(
             logger.error('Refusing to rotate symlink or non-regular audit log file', { module: 'Audit' })
             return null
         }
-        const info = await stat(logPath).catch((err: unknown) => {
+        const info = await lstat(logPath).catch((err: unknown) => {
             if (nodeErrorCode(err) !== 'ENOENT') {
                 const message = err instanceof Error ? err.message : String(err)
                 logger.debug(`Audit log stat failed before rotation: ${message}`, {
@@ -168,6 +168,10 @@ export async function rotateAuditLogFiles(
             }
             return null
         })
+        if (info !== null && (info.isSymbolicLink() || !info.isFile())) {
+            logger.error('Refusing to rotate symlink or non-regular audit log file', { module: 'Audit' })
+            return null
+        }
         const currentSize = info?.size ?? 0
         if (!info || info.size < maxSizeBytes) return currentSize
 
@@ -195,7 +199,20 @@ export async function rotateAuditLogFiles(
             return null
         }
         await rename(logPath, firstArchive)
-        await chmod(firstArchive, 0o600).catch(() => undefined)
+        const archiveFh = await open(
+            firstArchive,
+            fsConstants.O_RDONLY | (fsConstants.O_NOFOLLOW ?? 0)
+        ).catch(() => null)
+        if (archiveFh !== null) {
+            try {
+                const archiveStat = await archiveFh.stat()
+                if (archiveStat.isFile()) {
+                    await archiveFh.chmod(0o600).catch(() => undefined)
+                }
+            } finally {
+                await archiveFh.close()
+            }
+        }
         return 0
     } catch (err) {
         const message = err instanceof Error ? err.message : String(err)

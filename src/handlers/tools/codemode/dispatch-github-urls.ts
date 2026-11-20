@@ -78,7 +78,7 @@ function resolveGithubUrlScope(
             unregisteredWs = wsForLookup
         }
     }
-    const rawRepoHint = paramsObj['repo'] ?? paramsObj['repo_name']
+    const rawRepoHint = paramsObj['repo'] ?? paramsObj['repo_name'] ?? paramsObj['repository']
     const repoHint =
         typeof rawRepoHint === 'string' && rawRepoHint.trim() !== '' ? rawRepoHint.trim() : undefined
     if (repoHint !== undefined && isPathOutsideCwd(reg, repoHint)) {

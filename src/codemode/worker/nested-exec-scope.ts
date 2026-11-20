@@ -192,16 +192,62 @@ interface ShortcutDispatchInput {
     shimMj: Record<string, unknown>
 }
 
+const MAX_SNAPSHOT_DEPTH = 12
+const MAX_SNAPSHOT_NODES = 2_000
+
+function snapshotUntrustedValue(
+    val: unknown,
+    depth: number,
+    budget: { remaining: number },
+    active: WeakSet<object>
+): unknown {
+    if (val === null || typeof val !== 'object') return val
+    if (depth >= MAX_SNAPSHOT_DEPTH || budget.remaining <= 0) {
+        throw new Error('Nested executeCode argument exceeds snapshot bounds')
+    }
+    if (active.has(val)) {
+        throw new Error('Nested executeCode argument contains circular references')
+    }
+    if (Array.isArray(val)) {
+        budget.remaining -= 1
+        active.add(val)
+        try {
+            const len = val.length
+            const out: unknown[] = new Array<unknown>(len)
+            for (let i = 0; i < len; i++) {
+                out[i] = snapshotUntrustedValue(val[i], depth + 1, budget, active)
+            }
+            return out
+        } finally {
+            active.delete(val)
+        }
+    }
+    if (!isPlainRecord(val)) return val
+    budget.remaining -= 1
+    active.add(val)
+    try {
+        const snap = Object.create(null) as Record<string, unknown>
+        for (const key of Object.keys(val)) {
+            if (key === '__proto__' || key === 'constructor' || key === 'prototype') continue
+            snap[key] = snapshotUntrustedValue(val[key], depth + 1, budget, active)
+        }
+        return snap
+    } finally {
+        active.delete(val)
+    }
+}
+
 function snapshotUntrustedArg(arg: unknown): {
     safeArg: unknown
     argRec: Record<string, unknown> | undefined
 } {
     if (!isPlainRecord(arg)) return { safeArg: arg, argRec: undefined }
-    const snap = Object.create(null) as Record<string, unknown>
-    for (const key of Object.keys(arg)) {
-        if (key === '__proto__' || key === 'constructor' || key === 'prototype') continue
-        snap[key] = arg[key]
-    }
+    const snap = snapshotUntrustedValue(
+        arg,
+        0,
+        { remaining: MAX_SNAPSHOT_NODES },
+        new WeakSet()
+    ) as Record<string, unknown>
     return { safeArg: snap, argRec: snap }
 }
 

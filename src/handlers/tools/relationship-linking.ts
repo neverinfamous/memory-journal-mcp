@@ -88,11 +88,13 @@ export function linkRequestedRelationships(
                     : undefined
             if (
                 projectNumber !== undefined &&
-                targetProject !== null &&
                 targetProject !== undefined &&
                 targetProject !== projectNumber
             ) {
-                const reason = `Target entry #${String(rel.targetId)} belongs to project #${String(targetProject)}, not project #${String(projectNumber)}`
+                const reason =
+                    targetProject === null
+                        ? `Target entry #${String(rel.targetId)} has no project_number, expected project #${String(projectNumber)}`
+                        : `Target entry #${String(rel.targetId)} belongs to project #${String(targetProject)}, not project #${String(projectNumber)}`
                 logger.warning(`Relationship link skipped: ${reason}`, {
                     module: 'RelationshipLinking',
                 })

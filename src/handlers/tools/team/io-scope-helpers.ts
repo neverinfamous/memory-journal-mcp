@@ -41,7 +41,7 @@ export const TeamExportMarkdownSchema = z
         tags: z.array(z.string()).optional(),
         project_number: StrictProjectNumberSchema.optional(),
         limit: z.number().int().min(1).max(500).optional().default(100),
-        workspace_id: z.string().optional(),
+        workspace_id: z.string().max(255).optional(),
     })
     .strict()
 

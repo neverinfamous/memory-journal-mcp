@@ -1,4 +1,5 @@
 import type { ConfigResolver } from '../utils/config-resolver.js'
+import { isPlaceholderAuthToken } from '../utils/security-utils.js'
 import { defaultDbPath, defaultTeamDbPath } from './option-groups.js'
 
 export type CatchConfig = <T>(fn: () => T, fallback: T) => T
@@ -74,6 +75,11 @@ export function resolveAuthTokenOption(resolver: ConfigResolver): string | undef
             if (cliVal.trim() === '') {
                 throw new Error('FATAL: Authentication token cannot be empty or whitespace-only.')
             }
+            if (isPlaceholderAuthToken(cliVal)) {
+                throw new Error(
+                    'FATAL: Default or placeholder authentication token detected. Please configure a secure token.'
+                )
+            }
             return cliVal
         }
     }
@@ -82,13 +88,26 @@ export function resolveAuthTokenOption(resolver: ConfigResolver): string | undef
         if (rawEnv.trim() === '') {
             throw new Error('FATAL: Authentication token cannot be whitespace-only.')
         }
+        if (isPlaceholderAuthToken(rawEnv)) {
+            throw new Error(
+                'FATAL: Default or placeholder MCP_AUTH_TOKEN detected. Please configure a secure token.'
+            )
+        }
         return rawEnv
     }
     const cfgVal = resolver.resolve<string>('authToken')
-    if (typeof cfgVal === 'string' && cfgVal !== '' && cfgVal.trim() === '') {
-        throw new Error('FATAL: Authentication token cannot be whitespace-only.')
+    if (typeof cfgVal === 'string' && cfgVal !== '') {
+        if (cfgVal.trim() === '') {
+            throw new Error('FATAL: Authentication token cannot be whitespace-only.')
+        }
+        if (isPlaceholderAuthToken(cfgVal)) {
+            throw new Error(
+                'FATAL: Default or placeholder authentication token detected in config. Please configure a secure token.'
+            )
+        }
+        return cfgVal
     }
-    return cfgVal !== '' ? cfgVal : undefined
+    return undefined
 }
 
 export function buildOAuthOptionsGroup(resolver: ConfigResolver, catchConfig: CatchConfig): {

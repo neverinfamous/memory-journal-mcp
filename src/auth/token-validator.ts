@@ -233,9 +233,9 @@ export class TokenValidator {
             )
         }
 
-        const clientId = payload['client_id']
+        const { client_id: rawClientId, ...restPayload } = payload
         return {
-            ...payload,
+            ...restPayload,
             sub,
             scopes,
             exp,
@@ -244,7 +244,7 @@ export class TokenValidator {
             aud: payload.aud,
             nbf: payload.nbf ?? undefined,
             jti: payload.jti,
-            ...(typeof clientId === 'string' ? { client_id: clientId } : {}),
+            ...(typeof rawClientId === 'string' ? { client_id: rawClientId } : {}),
         }
     }
 

@@ -211,7 +211,7 @@ const GetStatisticsSchema = z.object({
     start_date: z.string().regex(DATE_FORMAT_REGEX, DATE_FORMAT_MESSAGE).optional(),
     end_date: z.string().regex(DATE_FORMAT_REGEX, DATE_FORMAT_MESSAGE).optional(),
     project_breakdown: z.boolean().optional().default(false),
-    workspace_id: z.string().optional(),
+    workspace_id: z.string().max(255).optional(),
     project_number: z.unknown().optional(), // Allow injected project_number
 }).strict()
 
@@ -266,7 +266,7 @@ const CrossProjectInsightsInputSchema = z.object({
         .optional()
         .describe('End date (YYYY-MM-DD)'),
     min_entries: z.number().int().min(1).optional().default(3).describe('Minimum entries to include project'),
-    workspace_id: z.string().optional(),
+    workspace_id: z.string().max(255).optional(),
     project_number: z.unknown().optional(), // Allow injected project_number
 }).strict()
 

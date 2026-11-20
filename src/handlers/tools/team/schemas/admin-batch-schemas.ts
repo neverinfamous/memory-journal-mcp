@@ -95,7 +95,7 @@ export const TeamUpdateEntrySchema = z.preprocess(
             entry_type: z.enum(ENTRY_TYPES).optional(),
             tags: z.array(z.string()).optional(),
             project_number: StrictProjectNumberSchema.optional(),
-            workspace_id: z.string().optional(),
+            workspace_id: z.string().max(255).optional(),
             significance_type: z.enum(SIGNIFICANCE_TYPES).nullable().optional(),
             project_owner: z.string().nullable().optional(),
             issue_number: z.number().int().positive().nullable().optional(),
@@ -187,7 +187,7 @@ export const TeamDeleteEntrySchema = z.preprocess(
         .object({
             entry_id: z.number().int().positive(),
             project_number: StrictProjectNumberSchema.optional(),
-            workspace_id: z.string().optional(),
+            workspace_id: z.string().max(255).optional(),
             expected_version: z.number().int().positive().optional().describe('REQUIRED for concurrency safety'),
         })
         .strict()
@@ -222,7 +222,7 @@ export const TeamRestoreEntrySchema = z.preprocess(
         .object({
             entry_id: z.number().int().positive(),
             project_number: StrictProjectNumberSchema.optional(),
-            workspace_id: z.string().optional(),
+            workspace_id: z.string().max(255).optional(),
         })
         .strict()
 )
@@ -250,7 +250,7 @@ export const TeamMergeTagsSchema = z
         source_tag: z.string().min(1),
         target_tag: z.string().min(1),
         project_number: StrictProjectNumberSchema.optional(),
-        workspace_id: z.string().optional(),
+        workspace_id: z.string().max(255).optional(),
     })
     .strict()
 
@@ -274,7 +274,7 @@ export const TeamBatchCreateEntriesSchema = z.preprocess(
             entries: z.array(TeamCreateEntrySchema).min(1).max(MAX_BATCH_SIZE),
             auto_index: z.boolean().optional().default(true),
             project_number: StrictProjectNumberSchema.optional(),
-            workspace_id: z.string().optional(),
+            workspace_id: z.string().max(255).optional(),
         })
         .strict()
 )
@@ -301,7 +301,7 @@ export const TeamBatchUpdateEntriesSchema = z.preprocess(
             updates: z.array(TeamUpdateEntrySchema).min(1).max(MAX_BATCH_SIZE),
             auto_index: z.boolean().optional().default(true),
             project_number: StrictProjectNumberSchema.optional(),
-            workspace_id: z.string().optional(),
+            workspace_id: z.string().max(255).optional(),
         })
         .strict()
 )
@@ -329,7 +329,7 @@ export const TeamBatchDeleteEntriesSchema = z.preprocess(
         .object({
             entry_ids: z.array(z.number().int().positive()).min(1).max(MAX_BATCH_SIZE),
             project_number: StrictProjectNumberSchema.optional(),
-            workspace_id: z.string().optional(),
+            workspace_id: z.string().max(255).optional(),
             permanent: z.boolean().optional().default(false),
         })
         .strict()

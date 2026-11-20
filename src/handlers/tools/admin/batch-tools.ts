@@ -3,6 +3,7 @@ import { formatHandlerError } from '../../../utils/error-helpers.js'
 import { collectIndexWorkspaces, indexBatchEntries } from '../batch-indexing.js'
 import { sendProgress } from '../../../utils/progress-utils.js'
 import { linkRequestedRelationships } from '../relationship-linking.js'
+import { assertCanonicalFallbackToolAllowed } from '../team/helpers.js'
 import { prepareBatchCreateInputs, shareBatchEntriesWithTeam } from './batch-create-helpers.js'
 import { executeBatchUpdateEntries } from './batch-update-helpers.js'
 import { executeBatchDeleteEntries } from './batch-vector-helpers.js'
@@ -61,6 +62,15 @@ async function executeBatchCreateEntries(
 ): Promise<Record<string, unknown>> {
     const { db, vectorManager, progress } = context
     const input = BatchCreateEntriesSchema.parse(params)
+    if (
+        input.entries.some(
+            (e) =>
+                (e.relationships !== undefined && e.relationships.length > 0) ||
+                e.auto_link === true
+        )
+    ) {
+        assertCanonicalFallbackToolAllowed('link_entries', 'relationships', context, false)
+    }
     await sendProgress(progress, 0, 2, 'Creating entries...')
 
     const prepared = await prepareBatchCreateInputs(

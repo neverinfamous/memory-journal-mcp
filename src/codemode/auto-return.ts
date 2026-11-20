@@ -21,6 +21,7 @@ import {
     scanIdentifierWord,
     trackIdentifierToken,
     trackPunctuationToken,
+    trackTwoCharOperatorToken,
     createDelimiterState,
     skipLineOrBlockComment,
 } from './security-stripper.js'
@@ -117,8 +118,7 @@ function findLastStatementBoundary(trimmed: string): number {
             state.canAsiRegex = false
             lineOnlyWsOrComments = false
         } else if (isTwoCharBoundaryOperator(trimmed, i, ch)) {
-            prevToken = ch + (trimmed[i + 1] ?? '')
-            state.canAsiRegex = false
+            prevToken = trackTwoCharOperatorToken(ch + (trimmed[i + 1] ?? ''), prevToken, state)
             lineOnlyWsOrComments = false
             i++
         } else if (isBoundaryIdentStart(trimmed, i, ch)) {

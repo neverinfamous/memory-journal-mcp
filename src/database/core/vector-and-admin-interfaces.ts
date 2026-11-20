@@ -221,6 +221,7 @@ export interface IDatabaseVectorAndAdminAdapter {
         entryId: number,
         sinceIso: string,
         limit: number,
-        workspaceId?: string
+        workspaceId?: string,
+        projectNumber?: number
     ): { entryId: number; entryType: string; content: string; sharedAnchors: number }[]
 }

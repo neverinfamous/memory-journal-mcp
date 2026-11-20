@@ -103,8 +103,7 @@ export const SearchEntriesSchemaMcp = z.preprocess(
     include_team: z
         .boolean()
         .optional()
-        .default(true)
-        .describe('Include team entries in the search results'),
+        .describe('Include team entries in the search results (default: true)'),
     include_archived: z.boolean().optional().default(false),
     include_facets: z.boolean().optional().default(false).describe('Include facet distributions (tags, entry types) for the search results'),
     include_highlights: z.boolean().optional().default(false).describe('Include snippets with matched terms highlighted (only applies to fts mode)'),
@@ -182,8 +181,7 @@ export const SearchByDateRangeSchemaMcp = z.preprocess(
     include_team: z
         .boolean()
         .optional()
-        .default(true)
-        .describe('Include team entries in the search results'),
+        .describe('Include team entries in the search results (default: true)'),
     include_archived: z.boolean().optional().default(false),
 }).strict())
 
@@ -271,8 +269,7 @@ export const SemanticSearchSchemaMcp = z.preprocess(
     include_team: z
         .boolean()
         .optional()
-        .default(true)
-        .describe('Include team entries in the search results'),
+        .describe('Include team entries in the search results (default: true)'),
     include_archived: z.boolean().optional().default(false),
 }).strict())
 

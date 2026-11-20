@@ -89,7 +89,7 @@ function checkRecordWorkspaceAgainstPinnedProj(
     pinnedProj: number,
     registry: NonNullable<ToolContext['config']>['projectRegistry']
 ): Record<string, unknown> | undefined {
-    for (const key of ['workspace_id', 'target_workspace_id', 'repo', 'repo_name'] as const) {
+    for (const key of ['workspace_id', 'target_workspace_id', 'repo', 'repo_name', 'repository'] as const) {
         const raw = rec[key]
         if (typeof raw !== 'string') continue
         const trimmed = raw.trim()
@@ -144,7 +144,7 @@ function checkScopedRepoAndOwnerFields(
             )
         }
     }
-    for (const repoKey of ['repo', 'repo_name'] as const) {
+    for (const repoKey of ['repo', 'repo_name', 'repository'] as const) {
         const rawRepo = rec[repoKey]
         if (typeof rawRepo !== 'string' || rawRepo.trim() === '') continue
         const trimmedRepo = rawRepo.trim()

@@ -146,7 +146,8 @@ export class McpLogger {
             Object.setPrototypeOf(sanitized, null)
             for (const [k, v] of Object.entries(value)) {
                 if (k === '__proto__' || k === 'constructor' || k === 'prototype') continue
-                sanitized[k] =
+                const safeKey = sanitizeErrorForLogging(k)
+                sanitized[safeKey] =
                     SENSITIVE_KEY_RE.test(k) && v !== undefined && v !== null && v !== ''
                         ? '[REDACTED]'
                         : this.sanitizeValue(v, depth + 1, seen)
@@ -172,7 +173,8 @@ export class McpLogger {
     private formatSanitizedForStderr(level: McpLogLevel, loggerName: string, sanitized: LogData): string {
         const timestamp = new Date().toISOString()
         const levelUpper = level.toUpperCase().padEnd(9)
-        const module = loggerName ? `[${loggerName}]` : ''
+        const safeLogger = sanitizeErrorForLogging(loggerName).replace(/[\r\n]+/g, ' ')
+        const module = safeLogger ? `[${safeLogger}]` : ''
 
         let formatted = `[${timestamp}] [${levelUpper}] ${module} ${sanitized.message}`
 

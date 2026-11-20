@@ -59,7 +59,7 @@ export const SearchAuditLogSchema = z.preprocess(
             category: z.enum(['read', 'write', 'admin', 'team', 'audit']).optional(),
             limit: z.number().int().min(1).max(1000).optional().default(100),
             project_number: z.number().int().positive().optional(),
-            workspace_id: z.string().optional(),
+            workspace_id: z.string().max(255).optional(),
         })
         .strict()
 )
@@ -90,7 +90,7 @@ export const RunAutoPruneSchema = z
         prune_older_than_days: z.number().min(0).optional(),
         hard_delete_older_than_days: z.number().min(0).optional(),
         importance_threshold: z.number().min(0).max(1).optional(),
-        workspace_id: z.string().optional(),
+        workspace_id: z.string().max(255).optional(),
         project_number: z
             .preprocess((v) => {
                 if (typeof v !== 'string') return v

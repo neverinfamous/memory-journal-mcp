@@ -11,6 +11,7 @@ import { getActiveSessionProject } from '../utils/workspace-resolver.js'
 import { estimateTokens } from '../observability/token-estimator.js'
 import { logger } from '../utils/logger.js'
 import { parseCanonicalPositiveInt, parsePositiveProjectNumber } from '../utils/safe-positive-int.js'
+import { sanitizeErrorForLogging } from '../utils/security-utils.js'
 import {
     ADMIN_PROMPT_NAMES,
     canonicalizeMemoryResourceUri,
@@ -190,7 +191,7 @@ export function extractAuditScopeFromArgs(
         const record = args as Record<string, unknown>
         const rawWs = record['workspace_id'] ?? record['workspaceId'] ?? record['workspace']
         if (typeof rawWs === 'string' && rawWs.trim().length > 0 && rawWs.trim() !== '*') {
-            workspaceId = rawWs.trim()
+            workspaceId = sanitizeErrorForLogging(rawWs.trim()).slice(0, 255)
         }
         const rawProj = record['project_number'] ?? record['projectNumber']
         const parsedProject = parsePositiveProjectNumber(rawProj)
@@ -218,7 +219,7 @@ export function extractAuditScopeFromUri(
         const parsed = new URL(uri)
         const wsParam = parsed.searchParams.get('workspace_id')
         if (wsParam !== null && wsParam.trim().length > 0 && wsParam.trim() !== '*') {
-            workspaceId = wsParam.trim()
+            workspaceId = sanitizeErrorForLogging(wsParam.trim()).slice(0, 255)
         }
         const projParam = parsed.searchParams.get('project_number')
         if (projParam !== null) {
@@ -228,7 +229,7 @@ export function extractAuditScopeFromUri(
         if (workspaceId === undefined && (parsed.hostname === 'briefing' || parsed.hostname === 'agent-context' || parsed.hostname === 'agent-id')) {
             const rawRepo = parsed.pathname.replace(/^\/+/, '').trim()
             if (rawRepo.length > 0) {
-                workspaceId = decodeURIComponent(rawRepo)
+                workspaceId = sanitizeErrorForLogging(decodeURIComponent(rawRepo)).slice(0, 255)
             }
         }
     } catch {

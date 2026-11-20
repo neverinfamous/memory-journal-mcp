@@ -113,7 +113,8 @@ async function executeDateRangeSearch(
         context.config?.runtime?.auditLogger,
         teamDb,
         context.config,
-        wsId
+        wsId,
+        projectNumber
     )
     if (input.start_date > input.end_date) {
         return {

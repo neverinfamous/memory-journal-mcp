@@ -302,13 +302,26 @@ export function buildAllowedHostHeaders(
         allowed.add(normalizedHost)
     }
     if (publicOrigin !== undefined && publicOrigin.trim() !== '') {
+        const trimmedOrigin = publicOrigin.trim()
+        let parsed: URL
         try {
-            const parsed = new URL(publicOrigin.trim())
-            if (parsed.hostname !== '') allowed.add(parsed.hostname.toLowerCase())
-            if (parsed.host !== '') allowed.add(parsed.host.toLowerCase())
-        } catch {
-            // Ignore malformed publicOrigin when deriving host allowlist
+            parsed = new URL(trimmedOrigin)
+        } catch (cause) {
+            throw new Error(
+                `Invalid publicOrigin '${trimmedOrigin}': expected a valid http:// or https:// URL.`,
+                { cause }
+            )
         }
+        if (
+            (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') ||
+            parsed.hostname === ''
+        ) {
+            throw new Error(
+                `Invalid publicOrigin '${trimmedOrigin}': expected a valid http:// or https:// URL with a non-empty hostname.`
+            )
+        }
+        allowed.add(parsed.hostname.toLowerCase())
+        if (parsed.host !== '') allowed.add(parsed.host.toLowerCase())
     }
     return Array.from(allowed)
 }

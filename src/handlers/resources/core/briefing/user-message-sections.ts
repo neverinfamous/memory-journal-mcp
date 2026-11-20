@@ -319,7 +319,11 @@ export function buildGitHistoryLines(opts: BriefingUserMessageOptions): string[]
         )
     }
 
-    const repoPathUrl = opts.github?.repo ? `https://github.com/${opts.github.repo}/commit/` : null
+    const rawRepo = opts.github?.repo
+    const repoPathUrl =
+        typeof rawRepo === 'string' && /^[A-Za-z0-9._-]+\/[A-Za-z0-9._-]+$/.test(rawRepo)
+            ? `https://github.com/${rawRepo}/commit/`
+            : null
     const commitRefs = opts.graphPivots?.commitRefs
     const shortCommits = opts.gitHistory.commits
         .map((c) => formatCommitLine(c, repoPathUrl, commitRefs?.[c.hash]))
@@ -340,10 +344,15 @@ function formatCommitLine(
     repoPathUrl: string | null,
     entryRef?: number,
 ): string {
-    const shaText = c.isPushed && repoPathUrl ? `[\`${c.hash}\`](${repoPathUrl}${c.hash})` : `\`${c.hash}\``
+    const safeHash = escapeCell(fenceNonCanonicalRefOrKey(c.hash))
+    const isValidHexSha = /^[0-9a-f]{4,64}$/i.test(c.hash)
+    const shaText =
+        c.isPushed && repoPathUrl !== null && isValidHexSha
+            ? `[\`${safeHash}\`](${repoPathUrl}${c.hash})`
+            : `\`${safeHash}\``
     const metaParts: string[] = []
-    if (c.type) metaParts.push(c.type)
-    if (c.size) metaParts.push(c.size)
+    if (c.type) metaParts.push(escapeCell(fenceNonCanonicalRefOrKey(c.type)))
+    if (c.size) metaParts.push(escapeCell(fenceNonCanonicalRefOrKey(c.size)))
     if (c.significance !== undefined) metaParts.push(`Sig:${c.significance}`)
     if (c.confidence !== undefined) metaParts.push(`Conf:${c.confidence}`)
     if (c.isBreaking) metaParts.push('🚨')

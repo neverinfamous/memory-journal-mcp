@@ -61,10 +61,13 @@ export function getTeamAnalyticsTools(context: ToolContext): ToolDefinition[] {
 
                     const { group_by, project_number, workspace_id } = TeamGetStatisticsSchema.parse(params)
                     const wsId = resolveWorkspaceId(workspace_id, project_number, context.config)
+                    const registry = activeProjectRegistry(context.config?.projectRegistry)
+                    const hasActiveRegistry =
+                        registry !== undefined && Object.keys(registry).length > 0
                     const alignedProject =
                         resolveTeamProjectNumber(context, wsId, project_number, workspace_id) ??
                         undefined
-                    if (wsId === '*' && alignedProject === undefined) {
+                    if ((wsId === '*' || hasActiveRegistry) && alignedProject === undefined) {
                         return missingTeamProjectNumberError(
                             'Missing project_number. Cross-tenant statistics without project_number are not allowed.'
                         )
@@ -131,12 +134,11 @@ export function getTeamAnalyticsTools(context: ToolContext): ToolDefinition[] {
                         throw new ValidationError('start_date cannot be after end_date')
                     }
                     const wsId = resolveWorkspaceId(input.workspace_id, input.project_number, context.config)
-                    const alignedProject = alignedProjectFilter(
-                        wsId,
-                        input.project_number,
-                        activeProjectRegistry(context.config?.projectRegistry)
-                    )
-                    if (wsId === '*' && alignedProject === undefined) {
+                    const registry = activeProjectRegistry(context.config?.projectRegistry)
+                    const hasActiveRegistry =
+                        registry !== undefined && Object.keys(registry).length > 0
+                    const alignedProject = alignedProjectFilter(wsId, input.project_number, registry)
+                    if ((wsId === '*' || hasActiveRegistry) && alignedProject === undefined) {
                         return missingTeamProjectNumberError(
                             'Missing project_number. Cross-tenant cross-project insights without project_number are not allowed.'
                         )
@@ -219,10 +221,13 @@ export function getTeamAnalyticsTools(context: ToolContext): ToolDefinition[] {
 
                     const { period, limit, project_number, workspace_id } = TeamCollaborationMatrixSchema.parse(params)
                     const workspaceId = resolveWorkspaceId(workspace_id, project_number, context.config)
+                    const registry = activeProjectRegistry(context.config?.projectRegistry)
+                    const hasActiveRegistry =
+                        registry !== undefined && Object.keys(registry).length > 0
                     const projectNumber =
                         resolveTeamProjectNumber(context, workspaceId, project_number, workspace_id) ??
                         undefined
-                    if (workspaceId === '*' && projectNumber === undefined) {
+                    if ((workspaceId === '*' || hasActiveRegistry) && projectNumber === undefined) {
                         return missingTeamProjectNumberError(
                             'Missing project_number. Cross-tenant collaboration matrices without project_number are not allowed.'
                         )

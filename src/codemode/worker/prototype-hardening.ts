@@ -3,6 +3,7 @@
  * to prevent dynamic constructor chain escapes (`fn['con'+'structor']`).
  */
 
+import * as nodePath from 'node:path'
 import * as vm from 'node:vm'
 
 export const OPTIONAL_RUNTIME_GLOBALS = [
@@ -71,7 +72,17 @@ const OUTER_BUILTIN_CTORS: readonly unknown[] = [
     ...collectOptionalOuterBuiltins(),
 ]
 
-function freezeNamespaceMembers(ns: object, failures: string[], label: string): void {
+const MAX_NAMESPACE_FREEZE_DEPTH = 4
+
+function freezeNamespaceMembers(
+    ns: object,
+    failures: string[],
+    label: string,
+    seen = new WeakSet(),
+    depth = 0
+): void {
+    if (seen.has(ns) || depth > MAX_NAMESPACE_FREEZE_DEPTH) return
+    seen.add(ns)
     for (const prop of Object.getOwnPropertyNames(ns)) {
         let member: unknown
         try {
@@ -94,6 +105,7 @@ function freezeNamespaceMembers(ns: object, failures: string[], label: string): 
                 failures.push(`freeze:${label}.${prop}`)
             }
         } else if (typeof member === 'object' && member !== null) {
+            freezeNamespaceMembers(member, failures, `${label}.${prop}`, seen, depth + 1)
             try {
                 Object.freeze(member)
             } catch {
@@ -101,6 +113,33 @@ function freezeNamespaceMembers(ns: object, failures: string[], label: string): 
             }
         }
     }
+}
+
+function collectOuterNodeErrorPrototypes(): object[] {
+    const out: object[] = []
+    const triggers: (() => unknown)[] = [
+        () => {
+            nodePath.posix.basename('a', 123 as unknown as string)
+        },
+        () => new URL('invalid://[').href,
+        () => {
+            if (typeof Buffer === 'function') Buffer.alloc(1).writeInt8(0, 99)
+        },
+    ]
+    for (const trigger of triggers) {
+        try {
+            trigger()
+        } catch (err: unknown) {
+            if (typeof err === 'object' && err !== null) {
+                let cur: object | null = Object.getPrototypeOf(err) as object | null
+                while (cur !== null && cur !== Error.prototype && cur !== Object.prototype) {
+                    out.push(cur)
+                    cur = Object.getPrototypeOf(cur) as object | null
+                }
+            }
+        }
+    }
+    return out
 }
 
 function freezeOuterBuiltinCtors(failures: string[]): void {
@@ -198,12 +237,16 @@ function collectGeneratorAndIteratorPrototypes(): (object | null)[] {
             }
         }
     ).Intl
+    let SegmentsProto: object | null = null
     let SegmentIterProto: object | null = null
     if (typeof GlobalIntl?.Segmenter === 'function') {
         try {
-            const iter = new GlobalIntl.Segmenter().segment('a')[Symbol.iterator]()
+            const segments = new GlobalIntl.Segmenter().segment('a')
+            SegmentsProto = Object.getPrototypeOf(segments) as object | null
+            const iter = segments[Symbol.iterator]()
             SegmentIterProto = Object.getPrototypeOf(iter) as object | null
         } catch {
+            SegmentsProto = null
             SegmentIterProto = null
         }
     }
@@ -222,12 +265,14 @@ function collectGeneratorAndIteratorPrototypes(): (object | null)[] {
         SetIterProto,
         RegExpStringIterProto,
         ...collectIteratorHelperPrototypes(GlobalIter),
+        SegmentsProto,
         SegmentIterProto,
         AsyncIterProto,
         TypedArrayCtor ?? null,
         TypedArrayProto,
         GlobalIter ?? null,
         GlobalIter?.prototype ?? null,
+        ...collectOuterNodeErrorPrototypes(),
     ]
 }
 
@@ -303,9 +348,14 @@ const FREEZE_INNER_CONTEXT_SCRIPT = new vm.Script(`(function() {
         try { IterHelperProto = Object.getPrototypeOf(GlobalIter.from([]).map(function(x) { return x; })); } catch(e) {}
         try { WrapIterProto = Object.getPrototypeOf(GlobalIter.from({ next: function() { return { done: true, value: undefined }; } })); } catch(e) {}
     }
+    let SegmentsProto = null;
     let SegmentIterProto = null;
     if (typeof Intl !== "undefined" && typeof Intl.Segmenter === "function") {
-        try { SegmentIterProto = Object.getPrototypeOf(new Intl.Segmenter().segment("a")[Symbol.iterator]()); } catch(e) {}
+        try {
+            const segs = new Intl.Segmenter().segment("a");
+            SegmentsProto = Object.getPrototypeOf(segs);
+            SegmentIterProto = Object.getPrototypeOf(segs[Symbol.iterator]());
+        } catch(e) {}
     }
     for (const proto of [Function.prototype, AsyncFnProto, GenFnProto, AsyncGenFnProto, GenProto, AsyncGenProto]) {
         if (proto) {
@@ -345,20 +395,28 @@ const FREEZE_INNER_CONTEXT_SCRIPT = new vm.Script(`(function() {
     if (typeof WebAssembly !== "undefined") builtins.push(WebAssembly);
     if (TypedArrayCtor) builtins.push(TypedArrayCtor);
     if (GlobalIter) builtins.push(GlobalIter);
+    const seenNs = new WeakSet();
+    function freezeNs(ns, depth) {
+        if (seenNs.has(ns) || depth > 4) return;
+        seenNs.add(ns);
+        for (const prop of Object.getOwnPropertyNames(ns)) {
+            let member;
+            try { member = ns[prop]; } catch(e) { continue; }
+            if (typeof member === "function" && member.prototype) {
+                try { Object.freeze(member.prototype); } catch(e) {}
+            } else if (typeof member === "object" && member !== null) {
+                freezeNs(member, depth + 1);
+            }
+            if ((typeof member === "object" && member !== null) || typeof member === "function") {
+                try { Object.freeze(member); } catch(e) {}
+            }
+        }
+    }
     for (const B of builtins) {
         if (B && typeof B === "function" && B.prototype) {
             try { Object.freeze(B.prototype); } catch(e) { /* already frozen or non-extensible */ }
         } else if (B && typeof B === "object") {
-            for (const prop of Object.getOwnPropertyNames(B)) {
-                let member;
-                try { member = B[prop]; } catch(e) { continue; }
-                if (typeof member === "function" && member.prototype) {
-                    try { Object.freeze(member.prototype); } catch(e) {}
-                }
-                if ((typeof member === "object" && member !== null) || typeof member === "function") {
-                    try { Object.freeze(member); } catch(e) {}
-                }
-            }
+            freezeNs(B, 0);
         }
         try { Object.freeze(B); } catch(e) { /* already frozen or non-extensible */ }
     }
@@ -366,7 +424,7 @@ const FREEZE_INNER_CONTEXT_SCRIPT = new vm.Script(`(function() {
         Object.prototype, Function.prototype, AsyncFnProto, GenFnProto,
         AsyncGenFnProto, GenProto, AsyncGenProto, IterProto, ArrayIterProto,
         StringIterProto, MapIterProto, SetIterProto, RegExpStringIterProto,
-        IterHelperProto, WrapIterProto, SegmentIterProto, AsyncIterProto, TypedArrayProto,
+        IterHelperProto, WrapIterProto, SegmentsProto, SegmentIterProto, AsyncIterProto, TypedArrayProto,
     ]) {
         if (proto) {
             try { Object.freeze(proto); } catch(e) { /* already frozen or non-extensible */ }

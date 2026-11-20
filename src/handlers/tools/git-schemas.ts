@@ -41,8 +41,8 @@ export const GitHistoryOptionsSchema = z.object({
     uncommitted: z.boolean().optional(),
     repo: z.string().optional(),
     repo_name: z.string().optional(),
-    workspace_id: z.string().optional(),
-    workspaceId: z.string().optional(),
+    workspace_id: z.string().max(255).optional(),
+    workspaceId: z.string().max(255).optional(),
     project_number: StrictProjectNumberSchema.optional(),
     cwd: z.string().optional(),
 })
@@ -85,8 +85,8 @@ export const GitSearchOptionsSchema = z.object({
     uncommitted: z.boolean().optional(),
     repo: z.string().optional(),
     repo_name: z.string().optional(),
-    workspace_id: z.string().optional(),
-    workspaceId: z.string().optional(),
+    workspace_id: z.string().max(255).optional(),
+    workspaceId: z.string().max(255).optional(),
     project_number: StrictProjectNumberSchema.optional(),
     cwd: z.string().optional(),
 })
@@ -118,7 +118,7 @@ export const GitSearchOptionsSchemaMcp = z.object({
 
 export const GitReleaseInfoOptionsSchema = z.object({
     ref: z.string().optional(), repo: z.string().optional(), repo_name: z.string().optional(),
-    workspace_id: z.string().optional(), workspaceId: z.string().optional(),
+    workspace_id: z.string().max(255).optional(), workspaceId: z.string().max(255).optional(),
     project_number: StrictProjectNumberSchema.optional(), cwd: z.string().optional(),
 })
 

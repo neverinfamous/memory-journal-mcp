@@ -100,8 +100,12 @@ function computeSessionSummary(entries: AuditEntry[]): {
     let errorCount = 0
     let totalDuration = 0
     for (const e of entries) {
-        totalTokens += e.tokenEstimate ?? 0
-        totalDuration += e.durationMs
+        if (typeof e.tokenEstimate === 'number' && Number.isFinite(e.tokenEstimate)) {
+            totalTokens += e.tokenEstimate
+        }
+        if (typeof e.durationMs === 'number' && Number.isFinite(e.durationMs)) {
+            totalDuration += e.durationMs
+        }
         if (!e.success) errorCount++
     }
     return { totalTokens, errorCount, totalDuration }
@@ -232,15 +236,21 @@ export function sanitizeAuditEntryForEgress(e: AuditEntry): AuditEntry {
         scopes: Array.isArray(e.scopes)
             ? e.scopes.filter((s): s is string => typeof s === 'string').map(fenceNonCanonicalAuditId)
             : [],
-        durationMs: typeof e.durationMs === 'number' ? e.durationMs : 0,
-        tokenEstimate: typeof e.tokenEstimate === 'number' ? e.tokenEstimate : 0,
+        durationMs:
+            typeof e.durationMs === 'number' && Number.isFinite(e.durationMs) ? e.durationMs : 0,
+        tokenEstimate:
+            typeof e.tokenEstimate === 'number' && Number.isFinite(e.tokenEstimate)
+                ? e.tokenEstimate
+                : 0,
         success: rawSuccess === true,
     }
     if (typeof e.sessionId === 'string') base.sessionId = fenceNonCanonicalAuditId(e.sessionId)
     if (typeof e.workspaceId === 'string') {
         base.workspaceId = fenceNonCanonicalAuditId(e.workspaceId)
     }
-    if (typeof e.projectNumber === 'number') base.projectNumber = e.projectNumber
+    if (typeof e.projectNumber === 'number' && Number.isFinite(e.projectNumber)) {
+        base.projectNumber = e.projectNumber
+    }
     if (typeof e.error === 'string') {
         base.error = sliceUntrustedInline(sanitizeErrorForLogging(e.error), 2048, '...')
     }
@@ -248,8 +258,8 @@ export function sanitizeAuditEntryForEgress(e: AuditEntry): AuditEntry {
     return base
 }
 
-function formatAuditEntryYaml(e: AuditEntry): string {
-    const safe = sanitizeAuditEntryForEgress(e)
+function formatAuditEntryYaml(e: AuditEntry, preSanitized = false): string {
+    const safe = preSanitized ? e : sanitizeAuditEntryForEgress(e)
     const tsOut = ISO_AUDIT_TS_RE.test(safe.timestamp)
         ? safe.timestamp
         : JSON.stringify(safe.timestamp)
@@ -308,8 +318,9 @@ async function handleAuditResourceRead(
         }
     }
 
-    const { totalTokens, errorCount, totalDuration } = computeSessionSummary(entries)
-    const formattedEntries = entries.map(formatAuditEntryYaml).join('\n')
+    const sanitizedEntries = entries.map(sanitizeAuditEntryForEgress)
+    const { totalTokens, errorCount, totalDuration } = computeSessionSummary(sanitizedEntries)
+    const formattedEntries = sanitizedEntries.map((entry) => formatAuditEntryYaml(entry, true)).join('\n')
     const text =
         `audit_log: ${auditLogger.config.logPath}\n` +
         `entries_shown: ${String(entries.length)}\n` +

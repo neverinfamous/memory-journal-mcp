@@ -7,14 +7,31 @@ import { SENSITIVE_KEY_RE, sanitizeErrorForLogging } from './security-utils.js'
 const SENSITIVE_CLI_FLAG_RE =
     /^--(?:[a-z0-9_-]+[-_])?(?:auth[-_]?token|token|secret|password|passwd|passphrase|api[-_]?key|apikey|webhook[-_]?auth|encryption[-_]?key|private[-_]?key|key)(?:=(.*))?$/i
 
+const MAX_ISSUE_STRING_LENGTH = 500
+const MAX_ISSUE_RAW_SCRUB_CHARS = 1024
+const MAX_ISSUE_COLLECTION_ITEMS = 50
+const MAX_ISSUE_TOTAL_NODES = 250
+const MAX_ISSUE_LINE_BYTES = 32_768
+const MAX_ISSUE_LOG_BYTES = 10 * 1024 * 1024
+const MAX_ISSUE_ARCHIVES = 3
+
+function scrubAndTruncateIssueString(val: string, maxLen = MAX_ISSUE_STRING_LENGTH): string {
+    const bounded = val.length > MAX_ISSUE_RAW_SCRUB_CHARS ? val.slice(0, MAX_ISSUE_RAW_SCRUB_CHARS) : val
+    const clean = sanitizeErrorForLogging(bounded)
+    return clean.length > maxLen || val.length > maxLen ? `${clean.slice(0, maxLen)}...[truncated]` : clean
+}
+
 function sanitizeCliArgList(
     args: unknown[],
     depth: number,
-    seen: WeakSet<WeakKey>
+    seen: WeakSet<WeakKey>,
+    budget: { count: number }
 ): unknown[] {
     const out: unknown[] = []
     let redactNext = false
-    for (const item of args) {
+    const limit = Math.min(args.length, MAX_ISSUE_COLLECTION_ITEMS)
+    for (let i = 0; i < limit; i++) {
+        const item = args[i]
         if (redactNext) {
             out.push('[REDACTED]')
             redactNext = false
@@ -32,46 +49,52 @@ function sanitizeCliArgList(
                 }
                 continue
             }
-            out.push(truncateIssueString(sanitizeErrorForLogging(item)))
+            out.push(scrubAndTruncateIssueString(item))
             continue
         }
-        out.push(sanitizeIssueInput(item, depth + 1, seen))
+        out.push(sanitizeIssueInput(item, depth + 1, seen, budget))
+    }
+    if (args.length > MAX_ISSUE_COLLECTION_ITEMS) {
+        out.push(`...[+${String(args.length - MAX_ISSUE_COLLECTION_ITEMS)} more]`)
     }
     return out
-}
-
-const MAX_ISSUE_STRING_LENGTH = 500
-
-function truncateIssueString(val: string): string {
-    if (val.length <= MAX_ISSUE_STRING_LENGTH) return val
-    return `${val.slice(0, MAX_ISSUE_STRING_LENGTH)}...[truncated]`
 }
 
 export function sanitizeIssueInput(
     value: unknown,
     depth = 0,
-    seen = new WeakSet()
+    seen = new WeakSet(),
+    budget: { count: number } = { count: 0 }
 ): unknown {
     if (value === null || value === undefined) return value
-    if (depth > 8) return '[Truncated]'
-    if (typeof value === 'string') return truncateIssueString(sanitizeErrorForLogging(value))
+    if (depth > 8 || budget.count >= MAX_ISSUE_TOTAL_NODES) return '[Truncated]'
+    if (typeof value === 'string') return scrubAndTruncateIssueString(value)
     if (typeof value === 'bigint') return value.toString()
     if (typeof value !== 'object') return value
     if (seen.has(value)) return '[Circular]'
+    budget.count++
     seen.add(value)
     try {
         if (Array.isArray(value)) {
-            return sanitizeCliArgList(value, depth, seen)
+            return sanitizeCliArgList(value, depth, seen, budget)
         }
         const clean: Record<string, unknown> = {}
-        for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
+        const entries = Object.entries(value as Record<string, unknown>)
+        const limit = Math.min(entries.length, MAX_ISSUE_COLLECTION_ITEMS)
+        for (let i = 0; i < limit; i++) {
+            const pair = entries[i]
+            if (pair === undefined) continue
+            const [k, v] = pair
             if (k === '__proto__' || k === 'constructor' || k === 'prototype') continue
-            const safeKey = truncateIssueString(sanitizeErrorForLogging(k))
+            const safeKey = scrubAndTruncateIssueString(k, 256)
             if (SENSITIVE_KEY_RE.test(k) || SENSITIVE_KEY_RE.test(safeKey)) {
                 clean[safeKey] = '[REDACTED]'
             } else {
-                clean[safeKey] = sanitizeIssueInput(v, depth + 1, seen)
+                clean[safeKey] = sanitizeIssueInput(v, depth + 1, seen, budget)
             }
+        }
+        if (entries.length > MAX_ISSUE_COLLECTION_ITEMS) {
+            clean['_truncatedKeys'] = entries.length - MAX_ISSUE_COLLECTION_ITEMS
         }
         return clean
     } finally {
@@ -109,6 +132,39 @@ function resolveLogsDir(): string {
     return cachedLogsDir
 }
 
+async function isUnsafeIssueFile(targetPath: string): Promise<boolean> {
+    try {
+        const info = await fsPromises.lstat(targetPath)
+        return info.isSymbolicLink() || !info.isFile()
+    } catch (err: unknown) {
+        const code = err instanceof Error && 'code' in err ? (err as NodeJS.ErrnoException).code : undefined
+        return code !== 'ENOENT'
+    }
+}
+
+async function rotateIssueLogIfNeeded(logFile: string): Promise<boolean> {
+    try {
+        const info = await fsPromises.lstat(logFile)
+        if (info.isSymbolicLink() || !info.isFile()) return false
+        if (info.size < MAX_ISSUE_LOG_BYTES) return true
+        for (let i = MAX_ISSUE_ARCHIVES - 1; i >= 1; i--) {
+            const oldArchive = `${logFile}.${String(i)}`
+            const newArchive = `${logFile}.${String(i + 1)}`
+            if ((await isUnsafeIssueFile(oldArchive)) || (await isUnsafeIssueFile(newArchive))) {
+                return false
+            }
+            await fsPromises.rename(oldArchive, newArchive).catch(() => undefined)
+        }
+        const firstArchive = `${logFile}.1`
+        if (await isUnsafeIssueFile(firstArchive)) return false
+        await fsPromises.rename(logFile, firstArchive)
+        return true
+    } catch (err: unknown) {
+        const code = err instanceof Error && 'code' in err ? (err as NodeJS.ErrnoException).code : undefined
+        return code === 'ENOENT'
+    }
+}
+
 async function drainIssueQueue(): Promise<void> {
     if (pendingLines.length === 0) return
     const batch = pendingLines.splice(0, pendingLines.length).join('')
@@ -119,16 +175,7 @@ async function drainIssueQueue(): Promise<void> {
             logsDirEnsured = true
         }
         const logFile = path.join(logsDir, 'agent-issues.jsonl')
-        try {
-            const stat = await fsPromises.lstat(logFile)
-            if (stat.isSymbolicLink() || !stat.isFile()) return
-        } catch (lstatErr) {
-            const code =
-                lstatErr instanceof Error && 'code' in lstatErr
-                    ? (lstatErr as NodeJS.ErrnoException).code
-                    : undefined
-            if (code !== 'ENOENT') return
-        }
+        if (!(await rotateIssueLogIfNeeded(logFile))) return
         const fh = await fsPromises.open(
             logFile,
             fs.constants.O_WRONLY |
@@ -187,9 +234,10 @@ export function logAgentIssue(
     const fullIssue: AgentIssue = {
         timestamp: new Date().toISOString(),
         level: 'error',
-        ...issue,
+        source: issue.source,
+        action: scrubAndTruncateIssueString(issue.action, 256),
         input: sanitizeIssueInput(issue.input),
-        error: sanitizeErrorForLogging(issue.error),
+        error: scrubAndTruncateIssueString(issue.error, 2048),
     }
 
     if (pendingLines.length >= MAX_PENDING_ISSUE_LINES) {
@@ -208,6 +256,16 @@ export function logAgentIssue(
             action: fullIssue.action,
             input: '[Unserializable]',
             error: fullIssue.error,
+        })
+    }
+    if (Buffer.byteLength(serialized, 'utf8') > MAX_ISSUE_LINE_BYTES) {
+        serialized = JSON.stringify({
+            timestamp: fullIssue.timestamp,
+            level: fullIssue.level,
+            source: fullIssue.source,
+            action: fullIssue.action,
+            input: '[Truncated]',
+            error: fullIssue.error.slice(0, 1024),
         })
     }
     pendingLines.push(serialized + '\n')

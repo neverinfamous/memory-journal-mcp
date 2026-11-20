@@ -28,7 +28,7 @@ export const CODE_ALIAS_KEYS = [
 
 /** [M10] Scope/metadata keys never mistaken for executable code. */
 const NON_CODE_PARAM_KEYS = new Set([
-    'repo', 'repo_name', 'workspace_id', 'workspaceId', 'workspace', 'expected_version',
+    'repo', 'repo_name', 'repoName', 'repository', 'workspace_id', 'workspaceId', 'workspace', 'expected_version',
     'auto_version', 'project_number', 'projectNumber', 'readonly', 'session_id', 'sessionId',
     'context', 'timeout', 'timeout_ms', 'timeoutMs', 'max_result_size', 'maxResultSize',
     'max_result_size_bytes', 'maxResultSizeBytes', 'max_result_size_kb', 'maxResultSizeKb',

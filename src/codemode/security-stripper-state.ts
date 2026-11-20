@@ -52,6 +52,9 @@ const FOR_OF_NON_LHS_KEYWORDS = new Set([
     'do',
 ])
 const NON_LHS_BEFORE_IDENT = new Set(['=', '+', '-', '*', '/', '%', '**', '&', '|', '^', '<', '>', '!', '~', '?', ':', ',', ';', '[', '{', 'return', 'typeof', 'void', 'delete', 'throw', 'yield', 'case', 'in', 'instanceof'])
+const CLASS_MEMBER_NAME_PRECEDING = new Set(['{', '}block', ';', 'static', 'async', 'get', 'set', '*'])
+
+export { hasUnbalancedClosingDelimiter } from './security-stripper-delimiters.js'
 
 export interface BraceFrame {
     stmtInterior: boolean
@@ -73,6 +76,7 @@ export interface DelimiterState {
     templateBraces: number[]
     parenCtrl: boolean[]
     parenKind: ParenKind[]
+    parenBraceDepth: number[]
     parenFnDecl: boolean[]
     parenFnExpr: boolean[]
     parenIsSwitch: boolean[]
@@ -101,6 +105,7 @@ export function createDelimiterState(): DelimiterState {
         templateBraces: [],
         parenCtrl: [],
         parenKind: [],
+        parenBraceDepth: [],
         parenFnDecl: [],
         parenFnExpr: [],
         parenIsSwitch: [],
@@ -152,9 +157,8 @@ export function canStartRegexLiteral(
 }
 
 function isStatementContext(prevToken: string, state: DelimiterState): boolean {
-    if (!STATEMENT_PRECEDING_TOKENS.has(prevToken)) return false
-    if (prevToken === '{') return state.braceStack.at(-1)?.stmtInterior !== false
-    return true
+    if (state.braceStack.at(-1)?.stmtInterior === false) return false
+    return STATEMENT_PRECEDING_TOKENS.has(prevToken)
 }
 
 function isAtPendingClassTop(state: DelimiterState): PendingClassFrame | undefined {
@@ -207,6 +211,21 @@ function resetNonMemberPendingFlags(state: DelimiterState): void {
     state.lastParenWasFnExpr = false
 }
 
+/** Updates delimiter/ASI state across two-character operators (`++`, `--`, `=>`, `??`, `?.`). */
+export function trackTwoCharOperatorToken(
+    op: string,
+    prevToken: string,
+    state: DelimiterState
+): string {
+    state.prevPrevToken = prevToken
+    state.canAsiRegex = false
+    state.ofIsForOf = false
+    state.pendingAsiStmtKeyword = null
+    state.identAfterAsiKeyword = false
+    resetNonMemberPendingFlags(state)
+    return op
+}
+
 export function trackIdentifierToken(word: string, prevToken: string, state: DelimiterState): string {
     const prevPrev = state.prevPrevToken
     state.prevPrevToken = prevToken
@@ -223,7 +242,11 @@ export function trackIdentifierToken(word: string, prevToken: string, state: Del
     const stmtStart = isStatementContext(prevToken, state)
     const clsTop = isAtPendingClassTop(state)
     const inSwitchBody = state.braceStack.at(-1)?.isSwitchBody === true
-    state.ofIsForOf = word === 'of' && state.parenKind.at(-1) === 'for' && isValidForOfLhsBeforeOf(prevToken, prevPrev)
+    state.ofIsForOf =
+        word === 'of' &&
+        state.parenKind.at(-1) === 'for' &&
+        state.braceStack.length === state.parenBraceDepth.at(-1) &&
+        isValidForOfLhsBeforeOf(prevToken, prevPrev)
     state.awaitingForParen = prevToken === 'for' && word === 'await'
     state.pendingLabel =
         word === 'default'
@@ -247,12 +270,17 @@ export function trackIdentifierToken(word: string, prevToken: string, state: Del
         state.pendingFnExpr = !isDeclFn
         state.pendingAsyncStmt = false
     } else if (word === 'class') {
-        state.pendingClasses.push({
-            isDecl: stmtStart,
-            braceDepth: state.braceStack.length,
-            parenDepth: state.parenKind.length,
-            inExtends: false,
-        })
+        const inClassMemberSlot =
+            state.braceStack.at(-1)?.isClassBody === true &&
+            CLASS_MEMBER_NAME_PRECEDING.has(prevToken)
+        if (!inClassMemberSlot) {
+            state.pendingClasses.push({
+                isDecl: stmtStart,
+                braceDepth: state.braceStack.length,
+                parenDepth: state.parenKind.length,
+                inExtends: false,
+            })
+        }
         state.pendingFnDecl = false
         state.pendingFnExpr = false
         state.pendingAsyncStmt = false
@@ -324,7 +352,7 @@ function handleColonOrSemicolon(ch: string, state: DelimiterState): string {
         if (isAtPendingClassTop(state) !== undefined) state.pendingClasses.pop()
         return isLabelOrCase ? ':label' : ':'
     }
-    if (state.parenKind.at(-1) === 'for') {
+    if (state.parenKind.at(-1) === 'for' && state.braceStack.length === state.parenBraceDepth.at(-1)) {
         state.parenKind[state.parenKind.length - 1] = 'ctrl'
     }
     if (isAtPendingClassTop(state) !== undefined) state.pendingClasses.pop()
@@ -348,6 +376,8 @@ export function trackPunctuationToken(ch: string, prevToken: string, state: Deli
         return 'function'
     }
     if (ch === '(') {
+        const clsTop = isAtPendingClassTop(state)
+        if (clsTop !== undefined && !clsTop.inExtends) state.pendingClasses.pop()
         const isFor = prevToken === 'for' || (state.awaitingForParen && prevToken === 'await')
         const isSwitch = prevToken === 'switch'
         const isCtrl = isFor || CONTROL_HEADER_KEYWORDS.test(prevToken)
@@ -355,6 +385,7 @@ export function trackPunctuationToken(ch: string, prevToken: string, state: Deli
         const isFnExpr = !isCtrl && state.pendingFnExpr
         state.parenCtrl.push(isCtrl)
         state.parenKind.push(isFor ? 'for' : isCtrl ? 'ctrl' : isFnDecl ? 'decl' : 'expr')
+        state.parenBraceDepth.push(state.braceStack.length)
         state.parenFnDecl.push(isFnDecl)
         state.parenFnExpr.push(isFnExpr)
         state.parenIsSwitch.push(isSwitch)
@@ -365,6 +396,7 @@ export function trackPunctuationToken(ch: string, prevToken: string, state: Deli
     if (ch === ')') {
         state.parenCtrl.pop()
         const kind = state.parenKind.pop()
+        state.parenBraceDepth.pop()
         const isFnDecl = state.parenFnDecl.pop() === true
         state.lastParenWasFnExpr = state.parenFnExpr.pop() === true
         state.pendingSwitchOpen = state.parenIsSwitch.pop() === true
@@ -382,6 +414,10 @@ export function trackPunctuationToken(ch: string, prevToken: string, state: Deli
         resetNonMemberPendingFlags(state)
         return state.braceStack.pop()?.closesAsBlock === true ? '}block' : '}expr'
     }
+    if (ch === '=' || ch === ',') {
+        const clsTop = isAtPendingClassTop(state)
+        if (clsTop !== undefined && !clsTop.inExtends) state.pendingClasses.pop()
+    }
     if (
         ch === '?' &&
         state.inCaseClause &&
@@ -398,42 +434,4 @@ export function trackPunctuationToken(ch: string, prevToken: string, state: Deli
     }
     resetNonMemberPendingFlags(state)
     return ch
-}
-
-/**
- * Returns true if stripped sandbox code drops any delimiter (`}`, `)`, `]`) below zero depth,
- * preventing early breakout from the top-level `vm.Script` async IIFE wrapper.
- */
-export function hasUnbalancedClosingDelimiter(strippedCode: string): boolean {
-    let braceDepth = 0
-    let parenDepth = 0
-    let bracketDepth = 0
-    let inQuote: string | null = null
-    let i = 0
-    while (i < strippedCode.length) {
-        const ch = strippedCode[i] ?? ''
-        if (inQuote !== null) {
-            if (ch === '\\') {
-                i += 2
-                continue
-            }
-            if (ch === inQuote) inQuote = null
-            i++
-            continue
-        }
-        if (ch === "'" || ch === '"' || ch === '`') {
-            inQuote = ch
-        } else if (ch === '{') braceDepth++
-        else if (ch === '}') {
-            if (--braceDepth < 0) return true
-        } else if (ch === '(') parenDepth++
-        else if (ch === ')') {
-            if (--parenDepth < 0) return true
-        } else if (ch === '[') bracketDepth++
-        else if (ch === ']') {
-            if (--bracketDepth < 0) return true
-        }
-        i++
-    }
-    return false
 }
