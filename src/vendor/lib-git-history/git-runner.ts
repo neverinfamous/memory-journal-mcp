@@ -154,14 +154,14 @@ export function getGitTagRange(cwd: string = process.cwd()): { range: string; is
       return { range: 'HEAD', isFallback: true, headSha };
     }
 
-    let tagSha = execFileSync('git', ['--no-pager', 'rev-parse', '--end-of-options', `${tagName}^{commit}`], execOpts).trim();
+    let tagSha = execFileSync('git', ['--no-pager', 'rev-parse', '--verify', '--end-of-options', `${tagName}^{commit}`], execOpts).trim();
     if (tagSha === headSha) {
       try {
         tagName = execFileSync('git', ['--no-pager', 'describe', '--tags', '--abbrev=0', '--end-of-options', `${tagName}^`], execOpts).trim();
         if (!tagName || tagName.startsWith('-')) {
           return { range: 'HEAD', isFallback: true, headSha };
         }
-        tagSha = execFileSync('git', ['--no-pager', 'rev-parse', '--end-of-options', `${tagName}^{commit}`], execOpts).trim();
+        tagSha = execFileSync('git', ['--no-pager', 'rev-parse', '--verify', '--end-of-options', `${tagName}^{commit}`], execOpts).trim();
       } catch {
         return { range: 'HEAD', isFallback: true, headSha };
       }

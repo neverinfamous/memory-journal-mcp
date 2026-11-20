@@ -58,7 +58,7 @@ export function systemInterceptor(ctx: ExecutionContext): void {
           }
           if (/(?:docker|docker-compose|podman)/i.test(a) && /scout/i.test(a)) {
             nestedTimeout = Math.max(nestedTimeout, 1800000);
-          } else if (((/(?:docker|docker-compose|podman)/i.test(a) && /build/i.test(a)) || /recreate-ecosystem/i.test(a))) {
+          } else if (((/(?:docker|docker-compose|podman)/i.test(a) && /\b(?:build|pull|push|up|down|restart|recreate|load|save|import|export|prune)\b|Health\.Status/i.test(a)) || /recreate-ecosystem/i.test(a))) {
             nestedTimeout = Math.max(nestedTimeout, 600000);
           }
           if (/backup-conversations\.ts/i.test(a)) {
@@ -85,7 +85,7 @@ export function systemInterceptor(ctx: ExecutionContext): void {
               }
               if (/(?:docker|docker-compose|podman)/i.test(fileContent) && /scout/i.test(fileContent)) {
                 nestedTimeout = Math.max(nestedTimeout, 1800000);
-              } else if (((/(?:docker|docker-compose|podman)/i.test(fileContent) && /build/i.test(fileContent)) || /recreate-ecosystem/i.test(fileContent))) {
+              } else if (((/(?:docker|docker-compose|podman)/i.test(fileContent) && /\b(?:build|pull|push|up|down|restart|recreate|load|save|import|export|prune)\b|Health\.Status/i.test(fileContent)) || /recreate-ecosystem/i.test(fileContent))) {
                 nestedTimeout = Math.max(nestedTimeout, 600000);
               }
               if (/backup-conversations\.ts/i.test(fileContent)) {
@@ -467,7 +467,7 @@ export function systemInterceptor(ctx: ExecutionContext): void {
       const isPlaywright = !isInlineShellHallucination && !isKnownDeterministic && Boolean(codeOrScript && /(?:playwright|cypress|\be2e\b|test:e2e)/i.test(codeOrScript));
       const isCoverage = !isInlineShellHallucination && !isKnownDeterministic && Boolean(codeOrScript && /(?:coverage|--coverage)/i.test(codeOrScript));
       const isDockerScout = !isInlineShellHallucination && Boolean(codeOrScript && /(?:docker|docker-compose|podman)/i.test(codeOrScript) && /scout/i.test(codeOrScript));
-      const isDockerBuild = !isInlineShellHallucination && !isDockerScout && Boolean(codeOrScript && (((/(?:docker|docker-compose|podman)/i.test(codeOrScript) && /build/i.test(codeOrScript)) || /recreate-ecosystem/i.test(codeOrScript))));
+      const isDockerBuild = !isInlineShellHallucination && !isDockerScout && Boolean(codeOrScript && (((/(?:docker|docker-compose|podman)/i.test(codeOrScript) && /\b(?:build|pull|push|up|down|restart|recreate|load|save|import|export|prune)\b|Health\.Status/i.test(codeOrScript)) || /recreate-ecosystem/i.test(codeOrScript))));
       const isChainedQuality = !isInlineShellHallucination && payload.type === 'eval' && Boolean(codeOrScript && /(?:typecheck|tsc|lint|check|build|test).*(?:&&|;).*(?:typecheck|tsc|lint|check|build|test)/i.test(codeOrScript));
       const hasQualityCheck = !isInlineShellHallucination && payload.type === 'eval' && Boolean(codeOrScript && /(?:(?:bun|pnpm|npm|yarn|npx|bunx|pnpx)\s+(?:run\s+)?(?:typecheck|tsc|lint|check|build|test)\b|\b(?:vitest|jest|tsc|eslint)\b)/i.test(codeOrScript));
       const hasMountedSearch = !isInlineShellHallucination && Boolean(codeOrScript && /(?:find|grep|rg|ls|tree)\b/i.test(codeOrScript));
@@ -549,23 +549,36 @@ export function systemInterceptor(ctx: ExecutionContext): void {
           payload.args = args;
         }
       }
+      const normalizedWslCmdBase = cmdBasename.toLowerCase().replace(/\.(?:exe|cmd|bat)$/i, '');
+      const isWslNonRunnerCli = [
+        'rg', 'ripgrep', 'grep', 'egrep', 'fgrep', 'select-string',
+        'find', 'fd', 'fdfind', 'ls', 'dir', 'get-childitem', 'gci', 'tree',
+        'cat', 'get-content', 'head', 'tail', 'wc', 'sort', 'uniq', 'tee',
+        'jq', 'yq', 'sed', 'awk', 'gawk', 'git', 'gh', 'curl', 'wget',
+        'rm', 'rmdir', 'cp', 'mv', 'mkdir', 'touch', 'chmod', 'diff',
+      ].includes(normalizedWslCmdBase);
+      const isKnownDeterministic = !isWslNonRunnerCli && (
+        /(?:commit\.ts|get-git-history-json\.ts|backup-conversations\.ts)/i.test(cmdBasename) ||
+        Boolean(args && args.some(a => /(?:commit\.ts|get-git-history-json\.ts|backup-conversations\.ts)/i.test(a)))
+      );
       const isDockerScout = /(?:docker|docker-compose|podman)/i.test(cmdBasename) && (args && args.some(a => /scout/i.test(a)));
-      const isInfraOrchestration = /recreate-ecosystem/i.test(cmdBasename) ||
-        (args && args.some(a => /recreate-ecosystem/i.test(a))) ||
-        /recreate-ecosystem/i.test(underlyingScript);
-      const isDockerBuild = !isDockerScout && ((/(?:docker|docker-compose|podman)/i.test(cmdBasename) && (args && args.some(a => /build/i.test(a)))) || isInfraOrchestration);
-      const isKnownDeterministic = /(?:commit\.ts|get-git-history-json\.ts|backup-conversations\.ts)/i.test(cmdBasename) || (args && args.some(a => /(?:commit\.ts|get-git-history-json\.ts|backup-conversations\.ts)/i.test(a)));
-      const isPlaywright = !isKnownDeterministic && (
+      const isInfraOrchestration = !isKnownDeterministic && !isWslNonRunnerCli && (
+        /recreate-ecosystem/i.test(cmdBasename) ||
+        Boolean(args && args.some(a => /recreate-ecosystem/i.test(a))) ||
+        /recreate-ecosystem/i.test(underlyingScript)
+      );
+      const isDockerBuild = !isDockerScout && ((/(?:docker|docker-compose|podman)/i.test(cmdBasename) && (args && args.some(a => /^(?:build|pull|push|up|down|restart|recreate|load|save|import|export|prune)$/i.test(a)))) || isInfraOrchestration);
+      const isPlaywright = !isKnownDeterministic && !isWslNonRunnerCli && (
         /(?:playwright|cypress)/i.test(cmdBasename) ||
         (args && args.some(a => /(?:playwright|cypress|\be2e\b|test:e2e|test-e2e)/i.test(a))) ||
         /(?:playwright|cypress|\be2e\b)/i.test(underlyingScript)
       );
-      const isCoverage = !isKnownDeterministic && (
+      const isCoverage = !isKnownDeterministic && !isWslNonRunnerCli && (
         /(?:coverage)/i.test(cmdBasename) ||
         (args && args.some(a => /(?:coverage|--coverage|test:coverage)/i.test(a))) ||
         /(?:coverage|--coverage)/i.test(underlyingScript)
       );
-      const isQuality = !isNestedAgentExec && !isDockerScout && !isDockerBuild && (
+      const isQuality = !isNestedAgentExec && !isKnownDeterministic && !isWslNonRunnerCli && !isDockerScout && !isDockerBuild && (
         /(?:typecheck|tsc|lint|check|build|test|vitest|jest)/i.test(cmdBasename) ||
         (args && args.some(a => /(?:typecheck|tsc|lint|check|build|test|vitest|jest)/i.test(a))) ||
         /(?:typecheck|tsc|lint|check|build|test|vitest|jest)/i.test(underlyingScript)
@@ -614,7 +627,7 @@ export function systemInterceptor(ctx: ExecutionContext): void {
       const isBackupConversations = !isInlineShellHallucination && Boolean(codeOrScript && /backup-conversations\.ts/i.test(codeOrScript));
       const isPlaywright = !isInlineShellHallucination && !isKnownDeterministic && Boolean(codeOrScript && /(?:playwright|cypress|\be2e\b|test:e2e)/i.test(codeOrScript));
       const isCoverage = !isInlineShellHallucination && !isKnownDeterministic && Boolean(codeOrScript && /(?:coverage|--coverage)/i.test(codeOrScript));
-      const isDocker = !isInlineShellHallucination && Boolean(codeOrScript && (((/(?:docker|docker-compose|podman)/i.test(codeOrScript) && /(?:build|scout)/i.test(codeOrScript)) || /recreate-ecosystem/i.test(codeOrScript))));
+      const isDocker = !isInlineShellHallucination && Boolean(codeOrScript && (((/(?:docker|docker-compose|podman)/i.test(codeOrScript) && /\b(?:build|scout|pull|push|up|down|restart|recreate|load|save|import|export|prune)\b|Health\.Status/i.test(codeOrScript)) || /recreate-ecosystem/i.test(codeOrScript))));
       const isChainedQuality = !isInlineShellHallucination && payload.type === 'eval' && Boolean(codeOrScript && /(?:typecheck|tsc|lint|check|build|test).*(?:&&|;).*(?:typecheck|tsc|lint|check|build|test)/i.test(codeOrScript));
       const hasQualityCheck = !isInlineShellHallucination && payload.type === 'eval' && Boolean(codeOrScript && /(?:(?:bun|pnpm|npm|yarn|npx|bunx|pnpx)\s+(?:run\s+)?(?:typecheck|tsc|lint|check|build|test)\b|\b(?:vitest|jest|tsc|eslint)\b)/i.test(codeOrScript));
       if (isPlaywright) {
@@ -686,30 +699,43 @@ export function systemInterceptor(ctx: ExecutionContext): void {
           payload.args = args;
         }
       }
-      const isInfraOrchestration = /recreate-ecosystem/i.test(cmdBasename) ||
-        (args && args.some(a => /recreate-ecosystem/i.test(a))) ||
-        /recreate-ecosystem/i.test(underlyingScript);
-      const isDocker = (/(?:docker|docker-compose|podman)/i.test(cmdBasename) && (args && args.some(a => /(?:build|scout)/i.test(a)))) || isInfraOrchestration;
-      const isKnownDeterministic = /(?:commit\.ts|get-git-history-json\.ts|backup-conversations\.ts)/i.test(cmdBasename) || (args && args.some(a => /(?:commit\.ts|get-git-history-json\.ts|backup-conversations\.ts)/i.test(a)));
+      const normalizedWinCmdBase = cmdBasename.toLowerCase().replace(/\.(?:exe|cmd|bat)$/i, '');
+      const isWinNonRunnerCli = [
+        'rg', 'ripgrep', 'grep', 'egrep', 'fgrep', 'select-string',
+        'find', 'fd', 'fdfind', 'ls', 'dir', 'get-childitem', 'gci', 'tree',
+        'cat', 'get-content', 'head', 'tail', 'wc', 'sort', 'uniq', 'tee',
+        'jq', 'yq', 'sed', 'awk', 'gawk', 'git', 'gh', 'curl', 'wget',
+        'rm', 'rmdir', 'cp', 'mv', 'mkdir', 'touch', 'chmod', 'diff',
+      ].includes(normalizedWinCmdBase);
+      const isKnownDeterministic = !isWinNonRunnerCli && (
+        /(?:commit\.ts|get-git-history-json\.ts|backup-conversations\.ts)/i.test(cmdBasename) ||
+        Boolean(args && args.some(a => /(?:commit\.ts|get-git-history-json\.ts|backup-conversations\.ts)/i.test(a)))
+      );
       const isBackupConversations = /backup-conversations\.ts/i.test(cmdBasename) || Boolean(args && args.some(a => /backup-conversations\.ts/i.test(a)));
-      const isPlaywright = !isKnownDeterministic && (
+      const isInfraOrchestration = !isKnownDeterministic && !isWinNonRunnerCli && (
+        /recreate-ecosystem/i.test(cmdBasename) ||
+        Boolean(args && args.some(a => /recreate-ecosystem/i.test(a))) ||
+        /recreate-ecosystem/i.test(underlyingScript)
+      );
+      const isDocker = (/(?:docker|docker-compose|podman)/i.test(cmdBasename) && (args && args.some(a => /^(?:build|scout|pull|push|up|down|restart|recreate|load|save|import|export|prune)$/i.test(a)))) || isInfraOrchestration;
+      const isPlaywright = !isKnownDeterministic && !isWinNonRunnerCli && (
         /(?:playwright|cypress)/i.test(cmdBasename) ||
         (args && args.some(a => /(?:playwright|cypress|\be2e\b|test:e2e|test-e2e)/i.test(a))) ||
         /(?:playwright|cypress|\be2e\b)/i.test(underlyingScript)
       );
-      const isCoverage = !isKnownDeterministic && (
+      const isCoverage = !isKnownDeterministic && !isWinNonRunnerCli && (
         /(?:coverage)/i.test(cmdBasename) ||
         (args && args.some(a => /(?:coverage|--coverage|test:coverage)/i.test(a))) ||
         /(?:coverage|--coverage)/i.test(underlyingScript)
       );
-      const isQuality = !isNestedAgentExec && !isDocker && (
+      const isQuality = !isNestedAgentExec && !isKnownDeterministic && !isWinNonRunnerCli && !isDocker && (
         /(?:typecheck|tsc|lint|check|build|test|vitest|jest)/i.test(cmdBasename) ||
         (args && args.some(a => /(?:typecheck|tsc|lint|check|build|test|vitest|jest)/i.test(a))) ||
         /(?:typecheck|tsc|lint|check|build|test|vitest|jest)/i.test(underlyingScript)
       );
       if (isPlaywright || isDocker) {
         if (isInfraOrchestration) {
-          console.error(`\n   🛠️ AUTONOMOUS HEALING: Detected ecosystem orchestration script ('recreate-ecosystem'). Auto-extending timeout to 600s... (Frictionless Recovery)`);
+          console.error(`\n   💡 AGENT INTERCEPT: Detected ecosystem orchestration script ('recreate-ecosystem'). Auto-extending timeout to 600s...`);
         }
         payload.timeoutMs = Math.max(payload.timeoutMs || 600000, 600000);
         payload.bypassInterceptors = true;

@@ -56,7 +56,36 @@ function hasNonGlobRegexMeta(arg: string): boolean {
 }
 
 function hasBackslashRegexEscape(arg: string): boolean {
+  if (isWindowsBackslashPath(arg)) return false;
   return /\\[bBwWdDsSnrtv0()[\]{}.*+?^$|\-.]/.test(arg);
+}
+
+// [INTENT]: Recognizes relative and absolute Windows backslash paths (e.g., 'src\adapters\sqlite\schemas\vector\')
+// so path segments starting with regex-escape letters (\s, \d, \w, \b, \t, \n, \r, \v) are not misclassified as regex escapes.
+function isWindowsBackslashPath(arg: string, cwd?: string): boolean {
+  if (!arg.includes('\\')) return false;
+  if (/^[a-zA-Z]:[/\\]/.test(arg) || /^\.{1,2}[/\\]/.test(arg)) return true;
+  if (hasNonGlobRegexMeta(arg) || hasUriOrNonDriveColon(arg) || /\s/.test(arg)) return false;
+  if (arg.endsWith('\\') && !arg.endsWith('\\\\')) return true;
+  if (/^[a-zA-Z0-9_.-]+(?:\\[a-zA-Z0-9_*?-][a-zA-Z0-9_.*?-]*){2,}\\?$/.test(arg)) return true;
+  if (/^[a-zA-Z0-9_.-]+\\[a-zA-Z0-9_*?-][a-zA-Z0-9_.*?-]*\\?$/.test(arg)) {
+    const firstSeg = arg.split('\\')[0] ?? '';
+    if (/^(?:src|tests?|docs?|scripts?|packages?|apps?|lib|dist|build|config|examples?|tools?|skills?|vendor|\.agents|\.github)$/i.test(firstSeg)) {
+      return true;
+    }
+    try {
+      const baseDir = cwd !== undefined && cwd.length > 0 ? path.resolve(cwd) : process.cwd();
+      if (
+        fs.existsSync(path.resolve(baseDir, arg)) ||
+        (firstSeg.length > 0 && fs.existsSync(path.resolve(baseDir, firstSeg)))
+      ) {
+        return true;
+      }
+    } catch {
+      // ignore stat errors
+    }
+  }
+  return false;
 }
 
 // [INTENT]: Recognizes file/directory glob paths (e.g., 'tests/adapters/sqlite/tools/stats*', 'tests/**/*.test.ts', '*.ts') so multi-target rg/grep invocations do not misclassify intermediate glob paths as unquoted multi-word search patterns.
@@ -582,6 +611,35 @@ export function handleRipgrepInterception(ctx: ExecutionContext, hasStdin: boole
 
   const isDir = (arg: string): boolean => isLikelyDirectoryArg(arg, ctx.payload.cwd);
 
+  const isConfirmedDirForFiles = (arg: string): boolean => {
+    if (!isDir(arg)) return false;
+    if (
+      arg === '.' ||
+      arg === '..' ||
+      arg.startsWith('./') ||
+      arg.startsWith('../') ||
+      arg.startsWith('.\\') ||
+      arg.startsWith('..\\') ||
+      arg.endsWith('/') ||
+      arg.endsWith('\\') ||
+      /^[a-zA-Z]:[/\\]?/.test(arg) ||
+      /^\/mnt\/[a-zA-Z](?:\/|$)/.test(arg) ||
+      KNOWN_POSIX_ROOT_DIRS_REGEX.test(arg)
+    ) {
+      return true;
+    }
+    try {
+      const baseDir = ctx.payload.cwd !== undefined && ctx.payload.cwd.length > 0 ? path.resolve(ctx.payload.cwd) : process.cwd();
+      if (!fs.existsSync(baseDir)) {
+        return true;
+      }
+      const resolved = path.resolve(baseDir, arg);
+      return fs.existsSync(resolved) && fs.statSync(resolved).isDirectory();
+    } catch {
+      return false;
+    }
+  };
+
   const isPathLike = (arg: string): boolean => {
     if (isGlobPathArg(arg)) return true;
     if (hasUnambiguousRegexMeta(arg)) return false;
@@ -623,10 +681,10 @@ export function handleRipgrepInterception(ctx: ExecutionContext, hasStdin: boole
       ctx.args.unshift('--files');
       ctx.args.push('.');
       positionalArgs = ['.'];
-    } else if (positionalArgs.length === 1 && isDir(positionalArgs[0])) {
+    } else if (positionalArgs.length === 1 && isConfirmedDirForFiles(positionalArgs[0])) {
       console.error(`\n   🛠️ AUTONOMOUS HEALING: Detected 'rg' with glob flag and target path but no search pattern. Auto-injecting '--files' to search filenames... (Frictionless Recovery)\x1b[0m`);
       ctx.args.unshift('--files');
-    } else if (positionalArgs.length >= 2 && positionalArgs.every(a => isDir(a))) {
+    } else if (positionalArgs.length >= 2 && positionalArgs.every(a => isConfirmedDirForFiles(a))) {
       console.error(`\n   🛠️ AUTONOMOUS HEALING: Detected 'rg' with glob flag and directory targets but no search pattern. Auto-injecting '--files' to search filenames... (Frictionless Recovery)\x1b[0m`);
       ctx.args.unshift('--files');
     }
