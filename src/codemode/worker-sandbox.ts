@@ -95,6 +95,12 @@ interface WorkerDispatchParams {
     resolve: (result: SandboxResult) => void
 }
 
+function sanitizeFailedSandboxResult(result: SandboxResult): void {
+    if (result.success) return
+    if (typeof result.error === 'string') result.error = sanitizeErrorForLogging(result.error)
+    if (typeof result.stack === 'string') result.stack = sanitizeErrorForLogging(result.stack)
+}
+
 export class WorkerSandbox {
     private readonly options: Required<SandboxOptions>
     private worker: Worker | null = null
@@ -155,14 +161,7 @@ export class WorkerSandbox {
                     const endTime = performance.now()
                     const endRss = process.memoryUsage.rss()
                     const result = msg.result
-                    if (!result.success) {
-                        if (typeof result.error === 'string') {
-                            result.error = sanitizeErrorForLogging(result.error)
-                        }
-                        if (typeof result.stack === 'string') {
-                            result.stack = sanitizeErrorForLogging(result.stack)
-                        }
-                    }
+                    sanitizeFailedSandboxResult(result)
 
                     result.metrics = {
                         wallTimeMs: Math.round(endTime - this.currentExecution.startTime),
