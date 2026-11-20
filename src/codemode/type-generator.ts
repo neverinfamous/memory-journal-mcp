@@ -32,7 +32,13 @@ function isSchemaOptional(schema: unknown, seen = new WeakSet()): boolean {
         return isSchemaOptional(schema.unwrap(), seen)
     }
     if (schema instanceof z.ZodPipe) {
-        return isSchemaOptional(schema.in instanceof z.ZodTransform ? schema.out : schema.in, seen)
+        const inner =
+            schema.in instanceof z.ZodTransform ||
+            schema.in instanceof z.ZodUnknown ||
+            schema.in instanceof z.ZodAny
+                ? schema.out
+                : schema.in
+        return isSchemaOptional(inner, seen)
     }
     return false
 }
@@ -102,7 +108,13 @@ export function getZodTypeString(schema: unknown, seen = new WeakSet()): string 
         return `${getZodTypeString(schema.unwrap(), seen)} | null`
     }
     if (schema instanceof z.ZodPipe) {
-        return getZodTypeString(schema.in instanceof z.ZodTransform ? schema.out : schema.in, seen)
+        const inner =
+            schema.in instanceof z.ZodTransform ||
+            schema.in instanceof z.ZodUnknown ||
+            schema.in instanceof z.ZodAny
+                ? schema.out
+                : schema.in
+        return getZodTypeString(inner, seen)
     }
     if (schema instanceof z.ZodDiscriminatedUnion || schema instanceof z.ZodUnion) {
         return schema.options.map((o: unknown) => getZodTypeString(o, seen)).join(' | ')

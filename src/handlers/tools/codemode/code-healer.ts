@@ -17,7 +17,9 @@ import {
 export { escapeDelimiterChar, isInsideStringLiteral, isInsideStringOrComment, isValidJsScript }
 
 function escapeTemplateInterpolation(content: string): string {
-    return escapeDelimiterChar(content, '`').replace(/(?<!\\)\$\{/g, '\\${')
+    return escapeDelimiterChar(content, '`').replace(/(\\*)(\$\{)/g, (_m, slashes: string, token: string) =>
+        slashes.length % 2 === 0 ? `${slashes}\\${token}` : `${slashes}${token}`
+    )
 }
 
 function stripLeadingShimAssignments(src: string): string {

@@ -5,6 +5,8 @@
  */
 
 import { parsePositiveProjectNumber } from '../../utils/safe-positive-int.js'
+import { wrapResult } from '../worker-result-proxy.js'
+import { wrapPromise } from '../proxy-helpers.js'
 import { createCallableShim } from './namespace-shims.js'
 export {
     createAdaptersShim,
@@ -148,15 +150,17 @@ export function createGetReadFindInterceptor(
 }
 
 const disabledProjectTool = (tool: string) => (): Promise<unknown> =>
-    Promise.resolve({
-        success: false,
-        error: `Tool '${tool}' is not available in this sandbox.`,
-        code: 'TOOL_DISABLED',
-        projects: {},
-        items: [],
-        data: [],
-        _healing_note: `🛠️ AUTONOMOUS HEALING: 'mj.projects.${tool}()' requires '${tool}' to be enabled in the active tool filter.`,
-    })
+    wrapPromise(
+        Promise.resolve(
+            wrapResult({
+                success: false,
+                error: `Tool '${tool}' is not available in this sandbox.`,
+                code: 'TOOL_DISABLED',
+                _healing_note: `🛠️ AUTONOMOUS HEALING: 'mj.projects.${tool}()' requires '${tool}' to be enabled in the active tool filter.`,
+            })
+        ),
+        tool
+    )
 
 const PROJECT_LIST_PROPS = new Set([
     'list', 'listProjects', 'list_projects', 'getAll', 'all', 'getProjects', 'get_projects',

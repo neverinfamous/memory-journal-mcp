@@ -205,14 +205,29 @@ export function resolveActiveBriefingConfig(
     return nextConfig
 }
 
-/** Wrap `server.close` so non-HTTP `stdio` resource subscriptions release when closed. */
+/** Wrap `server.close` and `server.server.onclose` so non-HTTP `stdio` subscriptions release on close. */
 export function attachStdioCloseCleanup(server: Parameters<typeof globalSubscriptionManager.registerServer>[1]): void {
-    const serverWithClose = server as { close?: () => Promise<void> }
-    const origClose = serverWithClose.close
-    if (typeof origClose !== 'function') return
-    serverWithClose.close = async () => {
+    const unregister = (): void => {
         globalSubscriptionManager.unregisterServerIfMatch('stdio', server)
-        return origClose.call(server)
+    }
+    const serverWithClose = server as {
+        close?: () => Promise<void>
+        server?: { onclose?: (() => void) | undefined }
+    }
+    const origClose = serverWithClose.close
+    if (typeof origClose === 'function') {
+        serverWithClose.close = async () => {
+            unregister()
+            return origClose.call(server)
+        }
+    }
+    const inner = serverWithClose.server
+    if (inner !== undefined && typeof inner === 'object') {
+        const prevOnClose = inner.onclose
+        inner.onclose = () => {
+            unregister()
+            prevOnClose?.()
+        }
     }
 }
 

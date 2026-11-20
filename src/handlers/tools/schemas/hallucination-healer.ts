@@ -235,7 +235,9 @@ function healNestedContainersAndEntryIds(obj: Record<string, unknown>): boolean 
     if ('entry_ids' in obj && Array.isArray(obj['entry_ids'])) {
         const healedIds = obj['entry_ids'].map((id: unknown) => {
             if (typeof id === 'string') {
-                const cleaned = id.replace(/^[^0-9]+/, '')
+                const raw = id.trim()
+                if (raw.startsWith('-')) return id
+                const cleaned = raw.replace(/^[^0-9]+/, '')
                 const parsed = parsePositiveProjectNumber(cleaned)
                 return parsed !== undefined && /^[1-9]\d*$/.test(cleaned) ? parsed : id
             }

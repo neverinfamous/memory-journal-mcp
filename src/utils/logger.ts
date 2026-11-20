@@ -141,7 +141,8 @@ class Logger {
     }
 
     setLevel(level: LogLevel): void {
-        const normalized = typeof level === 'string' ? level.trim().toLowerCase() : ''
+        const raw = typeof level === 'string' ? level.trim().toLowerCase() : ''
+        const normalized = raw === 'warn' ? 'warning' : raw
         if (Object.hasOwn(LOG_LEVELS, normalized)) {
             const validLevel = normalized as LogLevel
             this.minLevel = LOG_LEVELS[validLevel]
@@ -158,8 +159,9 @@ export function onLogLevelChange(listener: LogLevelListener): void {
     logLevelListeners.push(listener)
 }
 
-// Get log level from environment (validated against known levels)
-const rawLevel = (process.env['LOG_LEVEL'] ?? 'info').trim().toLowerCase()
+// Get log level from environment (validated against known levels; map 'warn' -> 'warning' for mcp-logger parity)
+const rawLevelInput = (process.env['LOG_LEVEL'] ?? 'info').trim().toLowerCase()
+const rawLevel = rawLevelInput === 'warn' ? 'warning' : rawLevelInput
 const envLevel: LogLevel = Object.hasOwn(LOG_LEVELS, rawLevel) ? (rawLevel as LogLevel) : 'info'
 
 export const logger = new Logger(envLevel)

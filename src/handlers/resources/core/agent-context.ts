@@ -17,6 +17,8 @@ import { previewLabel } from './briefing/graph-pivots-section.js'
 import { fenceNonCanonicalRefOrKey } from '../../../utils/security-utils.js'
 
 function formatDefaultAgentContext(
+    uri: string,
+    context: ResourceContext,
     config: ResourceContext['briefingConfig'],
     fallbackRegistry: ReturnType<typeof loadProjectRegistryFromConfig>,
     runtime: ResourceContext['runtime']
@@ -35,6 +37,7 @@ function formatDefaultAgentContext(
             `Project Number: ${defaultProjNum !== undefined && defaultProjNum > 0 ? String(defaultProjNum) : 'unresolved'}`,
             'Workspace ID: default',
             'Instructions: Use your Conversation ID as the session_id for all tool calls.',
+            ...buildSessionEntryLines(uri, context, 'default'),
         ].join('\n'),
     }
 }
@@ -46,7 +49,7 @@ function handleAgentContextResource(uri: string, context: ResourceContext): Reso
     const match = /^memory:\/\/(?:agent-context|agent-id)(?:\/(.+))?$/.exec(getBaseUri(uri))
     const rawRepo = match?.[1] !== undefined ? safeDecodeUriSegment(match[1]) : undefined
     if (rawRepo?.toLowerCase() === 'default') {
-        return formatDefaultAgentContext(config, fallbackRegistry, context?.runtime)
+        return formatDefaultAgentContext(uri, context, config, fallbackRegistry, context?.runtime)
     }
 
     const repo = rawRepo

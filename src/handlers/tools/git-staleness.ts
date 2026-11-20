@@ -15,7 +15,6 @@ import {
     loadProjectRegistryFromConfig,
     resolveWorkspaceId,
 } from '../../utils/workspace-resolver.js'
-import { StrictProjectNumberSchema } from './schemas.js'
 import { parseCanonicalPositiveInt } from '../../utils/safe-positive-int.js'
 import {
     resolvePrefetchedLookup,
@@ -247,7 +246,8 @@ function collectStalenessTargetsForWorkspace(
     rawWs: string | undefined,
     rawProj: number | undefined,
     resolvedEntryId: number | undefined,
-    maxRecentEntries = 20
+    maxRecentEntries = 20,
+    sessionId?: string
 ): { id: number; timestamp: string }[] {
     if (resolvedEntryId !== undefined) {
         const entry = db.getEntryByIdIncludeDeleted(resolvedEntryId, rawWs === '*' ? '*' : wsId)
@@ -258,16 +258,10 @@ function collectStalenessTargetsForWorkspace(
         return [{ id: entry.id, timestamp: entry.timestamp }]
     }
     const projectNumber = typeof rawProj === 'number' ? rawProj : undefined
-    const { entries: recent } = db.getRecentEntries(
-        maxRecentEntries,
-        undefined,
-        undefined,
-        undefined,
-        false,
-        wsId,
-        projectNumber
-    )
-    return recent.map((r) => ({ id: r.id, timestamp: r.timestamp }))
+    const { entries: recent } = db.getRecentEntries(maxRecentEntries, undefined, undefined, undefined, false, wsId, projectNumber)
+    const trimmedSession = sessionId !== undefined && sessionId.trim() !== '' ? sessionId.trim() : undefined
+    const filtered = trimmedSession !== undefined ? recent.filter((r) => r.sessionId === trimmedSession) : recent
+    return filtered.map((r) => ({ id: r.id, timestamp: r.timestamp }))
 }
 
 async function awaitAllSettledOrThrow<T>(tasks: readonly Promise<T>[]): Promise<T[]> {
@@ -305,6 +299,7 @@ export async function evaluateWorkspaceAnchors(options: {
     rawWs: string | undefined
     rawProj: number | undefined
     resolvedEntryId: number | undefined
+    sessionId?: string | undefined
     registry: ToolHandlerConfig['projectRegistry'] | undefined
     maxRecentEntries?: number | undefined
     maxCommitsPerAnchor?: number | undefined
@@ -314,7 +309,7 @@ export async function evaluateWorkspaceAnchors(options: {
         | undefined
 }): Promise<{ rows: StalenessCheckRow[]; skipped: boolean }> {
     const {
-        db, wsId, rawWs, rawProj, resolvedEntryId, registry, maxRecentEntries,
+        db, wsId, rawWs, rawProj, resolvedEntryId, sessionId, registry, maxRecentEntries,
         maxCommitsPerAnchor = 25, countCommitsSince, prefetchCommitsSince,
     } = options
     const canonicalWs = findCanonicalRegistryKey(wsId, registry) ?? wsId
@@ -328,7 +323,7 @@ export async function evaluateWorkspaceAnchors(options: {
         )
     }
 
-    const targets = collectStalenessTargetsForWorkspace(db, wsId, rawWs, rawProj, resolvedEntryId, maxRecentEntries ?? 20)
+    const targets = collectStalenessTargetsForWorkspace(db, wsId, rawWs, rawProj, resolvedEntryId, maxRecentEntries ?? 20, sessionId)
     const anchorsByEntry =
         targets.length > 0 && typeof db.getAnchorsByEntryIds === 'function'
             ? db.getAnchorsByEntryIds(targets.map((t) => t.id), wsId)
@@ -370,8 +365,8 @@ const CheckEntryStalenessParseSchema = z.object({
     entryId: coercedPositiveInt.optional(),
     workspace_id: z.string().max(255).optional(),
     workspaceId: z.string().max(255).optional(),
-    project_number: StrictProjectNumberSchema.optional(),
-    projectNumber: StrictProjectNumberSchema.optional(),
+    project_number: coercedPositiveInt.optional(),
+    projectNumber: coercedPositiveInt.optional(),
     session_id: z.string().optional(),
 })
 
@@ -430,6 +425,7 @@ export async function runCheckEntryStaleness(
                     rawWs,
                     rawProj,
                     resolvedEntryId,
+                    ...(parsed.session_id !== undefined ? { sessionId: parsed.session_id } : {}),
                     registry,
                     maxRecentEntries,
                     maxCommitsPerAnchor,

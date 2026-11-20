@@ -79,7 +79,7 @@ export function resolveCompatibleInheritedScope(
         origProj !== undefined &&
         compatibleWs &&
         (!targetIsDefault || origIsDefault) &&
-        (!origIsDefaultWithoutTargetWs || allowDefaultProjForward || origIsDefault)
+        (!origIsDefaultWithoutTargetWs || allowDefaultProjForward)
 
     return {
         ...(workspaceId !== undefined ? { workspaceId } : {}),

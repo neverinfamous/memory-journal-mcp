@@ -6,6 +6,7 @@
 
 import type { Request, Response } from 'express'
 import { createHash } from 'node:crypto'
+import { parseCanonicalPositiveInt } from '../../utils/safe-positive-int.js'
 import type { HttpTransportConfig, RateLimitEntry } from './types.js'
 import {
     DEFAULT_RATE_LIMIT_WINDOW_MS,
@@ -69,12 +70,11 @@ export function checkRateLimit(
     const clientIdentity = rateLimitIdentity(undefined, getClientIp(req))
     const now = Date.now()
     const windowMs = config.rateLimitWindowMs ?? DEFAULT_RATE_LIMIT_WINDOW_MS
-    let envMaxRequests = process.env['MCP_RATE_LIMIT_MAX']
-        ? parseInt(process.env['MCP_RATE_LIMIT_MAX'], 10)
-        : NaN
-    if (Number.isNaN(envMaxRequests) || envMaxRequests <= 0) {
-        envMaxRequests = DEFAULT_RATE_LIMIT_MAX_REQUESTS
-    }
+    const parsedEnvMax =
+        process.env['MCP_RATE_LIMIT_MAX'] !== undefined
+            ? parseCanonicalPositiveInt(process.env['MCP_RATE_LIMIT_MAX'])
+            : undefined
+    const envMaxRequests = parsedEnvMax ?? DEFAULT_RATE_LIMIT_MAX_REQUESTS
     const maxRequests = config.rateLimitMaxRequests ?? envMaxRequests
 
     const entry = rateLimitMap.get(clientIdentity)

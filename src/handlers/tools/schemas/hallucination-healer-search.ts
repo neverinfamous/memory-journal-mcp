@@ -102,6 +102,7 @@ export function unpackFilterContainers(obj: Record<string, unknown>): boolean {
 export function coerceEntryIdField(obj: Record<string, unknown>): boolean {
     if ('entry_id' in obj && typeof obj['entry_id'] === 'string') {
         const raw = obj['entry_id'].trim()
+        if (raw.startsWith('-')) return false
         const stripped = raw.replace(/^[^0-9]+/, '')
         const parsed = parsePositiveProjectNumber(stripped)
         if (parsed !== undefined && /^[1-9]\d*$/.test(stripped)) {

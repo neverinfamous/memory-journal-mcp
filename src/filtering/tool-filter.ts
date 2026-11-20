@@ -373,21 +373,24 @@ export function isFilterEffectivelyReadOnly(filterConfig: ToolFilterConfig): boo
         )
     }
 
-    const explicitCodemode =
-        filterConfig.rules.some(
-            (r) =>
-                r.type === 'include' &&
-                (r.target === 'codemode' ||
-                    r.target === 'mj_execute_code' ||
-                    r.target === 'starter' ||
-                    r.target === 'essential' ||
-                    r.target === 'full')
-        ) &&
-        !filterConfig.rules.some(
-            (r) =>
-                r.type === 'exclude' &&
-                (r.target === 'codemode' || r.target === 'mj_execute_code')
-        )
+    let explicitCodemode = false
+    for (const r of filterConfig.rules) {
+        if (
+            r.type === 'include' &&
+            (r.target === 'codemode' ||
+                r.target === 'mj_execute_code' ||
+                r.target === 'starter' ||
+                r.target === 'essential' ||
+                r.target === 'full')
+        ) {
+            explicitCodemode = true
+        } else if (
+            r.type === 'exclude' &&
+            (r.target === 'codemode' || r.target === 'mj_execute_code')
+        ) {
+            explicitCodemode = false
+        }
+    }
     if (explicitCodemode) return false
 
     return ![...filterConfig.enabledTools].some((t) => MUTATING_NON_EXEMPT_TOOLS.has(t))

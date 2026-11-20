@@ -4,6 +4,7 @@ import {
     resolveWorkspaceFromFilePath,
     resolveWorkspaceId,
 } from '../../../utils/workspace-resolver.js'
+import { parsePositiveProjectNumber } from '../../../utils/safe-positive-int.js'
 import { normalizeProjectFields } from '../schemas/hallucination-healer-scope.js'
 
 const WORKSPACE_SCOPE_KEYS = [
@@ -104,13 +105,7 @@ function resolveWorkspaceFromContainers(
         return '*'
     }
     const projHit = readFirstScopeProp(containers, PROJECT_SCOPE_KEYS)
-    const projProp = projHit?.value
-    const numProj =
-        typeof projProp === 'number' && Number.isInteger(projProp)
-            ? projProp
-            : typeof projProp === 'string' && /^\d+$/.test(projProp.trim())
-              ? Number.parseInt(projProp.trim(), 10)
-              : undefined
+    const numProj = parsePositiveProjectNumber(projHit?.value)
     if ((rawWs === undefined || rawWs === '') && numProj === undefined) {
         const pathHit = readFirstScopeProp(containers, [
             'source_dir',

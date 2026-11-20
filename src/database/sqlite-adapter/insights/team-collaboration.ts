@@ -187,7 +187,7 @@ function queryCrossAuthorLinks(
                 FROM relationships r
                 JOIN memory_journal m1 ON r.from_entry_id = m1.id
                 JOIN memory_journal m2 ON r.to_entry_id = m2.id
-                WHERE m1.deleted_at IS NULL AND m2.deleted_at IS NULL AND m1.workspace_id = m2.workspace_id${c1.sql}${c2.sql}
+                WHERE m1.deleted_at IS NULL AND m2.deleted_at IS NULL AND r.from_entry_id != r.to_entry_id AND m1.workspace_id = m2.workspace_id${c1.sql}${c2.sql}
                 GROUP BY m1.author, m1.workspace_id, m2.author, m2.workspace_id
             ) raw
         ) resolved
@@ -223,7 +223,7 @@ function queryImpactFactor(
                 FROM relationships r
                 JOIN memory_journal m1 ON r.from_entry_id = m1.id
                 JOIN memory_journal m2 ON r.to_entry_id = m2.id
-                WHERE m1.deleted_at IS NULL AND m2.deleted_at IS NULL AND m1.workspace_id = m2.workspace_id${c1.sql}${c2.sql}
+                WHERE m1.deleted_at IS NULL AND m2.deleted_at IS NULL AND r.from_entry_id != r.to_entry_id AND m1.workspace_id = m2.workspace_id${c1.sql}${c2.sql}
                 GROUP BY m2.author, m2.workspace_id
             ) raw
         ) resolved

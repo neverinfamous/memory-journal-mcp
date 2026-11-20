@@ -268,9 +268,8 @@ function recoverEntryUpdate(
     if (Object.keys(setFields).length === 0) return null
     const whereProj =
         typeof scopeFields['project_number'] === 'number' ? scopeFields['project_number'] : undefined
-    const setProj =
-        typeof setFields['project_number'] === 'number' ? setFields['project_number'] : undefined
-    if (setProj !== undefined && whereProj !== undefined && setProj !== whereProj) {
+    const hasSetProj = Object.hasOwn(setFields, 'project_number') && setFields['project_number'] !== undefined
+    if (hasSetProj && whereProj !== undefined && setFields['project_number'] !== whereProj) {
         return null
     }
     const updatePayload: Record<string, unknown> = {

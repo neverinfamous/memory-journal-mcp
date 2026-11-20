@@ -23,7 +23,7 @@ function parseMetricsPort(metricsPort: number | undefined): number {
     const portStr = process.env['MJ_METRICS_PORT'];
     if (portStr === undefined || portStr.trim() === '') return 9465;
     const trimmed = portStr.trim();
-    if (!/^\d+$/.test(trimmed)) {
+    if (trimmed !== '0' && !/^[1-9]\d*$/.test(trimmed)) {
         throw new RangeError(`Invalid MJ_METRICS_PORT: '${portStr}' (expected integer 0..65535)`);
     }
     const parsed = Number(trimmed);

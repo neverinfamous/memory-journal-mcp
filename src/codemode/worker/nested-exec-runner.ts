@@ -136,7 +136,7 @@ function buildNestedVmContextOptions(
         overrides?.maxResultSize !== undefined && options.maxResultSize !== undefined
             ? Math.min(options.maxResultSize, overrides.maxResultSize)
             : (overrides?.maxResultSize ?? options.maxResultSize)
-    const nextSessionId = overrides?.sessionId ?? options.parentRpcOverrides?.sessionId
+    const nextSessionId = options.parentRpcOverrides?.sessionId ?? overrides?.sessionId
     const nextAutoVersion =
         options.parentRpcOverrides?.autoVersion === false
             ? false

@@ -117,6 +117,9 @@ function createFailedResultProxy(result: object): unknown {
         isExtensible: () => true,
         preventExtensions: () => false,
         defineProperty: () => false,
+        set: () => false,
+        deleteProperty: () => false,
+        setPrototypeOf: () => false,
         get(target, prop): unknown {
             const errVal: unknown = Reflect.get(target, 'error')
             const codeVal: unknown = Reflect.get(target, 'code')

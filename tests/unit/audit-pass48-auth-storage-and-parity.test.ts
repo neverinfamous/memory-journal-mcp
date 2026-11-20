@@ -388,7 +388,7 @@ describe('Audit Pass 48 — Team Search, Filter Parity, Linking, Analytics & Pro
         } as never)
         expect(linesNull.join('\n')).not.toContain('https://github.com/null')
 
-        expect(AUDIT_PROMPT_REVISION).toBe('2026-11-20-audit-pass51')
+        expect(AUDIT_PROMPT_REVISION).toBe('2026-11-20-audit-pass52')
         const secDef = getSecurityAuditPromptDefinition()
         const promptRes = await secDef.handler(
             { target: 'all' },
