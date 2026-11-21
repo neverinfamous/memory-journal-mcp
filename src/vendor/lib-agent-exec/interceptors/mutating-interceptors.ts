@@ -152,15 +152,10 @@ export function findAlreadyStagedGitDeletions(gitCwd: string, rawPathspecs: read
   }
   if (missingTargets.length === 0) return stagedDeletions;
   try {
-    const indexRes = spawnSync('git', ['ls-files', '-z', '--', ...missingTargets.map(m => m.relPosix)], { cwd: gitCwd, encoding: 'utf8', timeout: 10000, windowsHide: true });
-    if (indexRes.status !== 0) return stagedDeletions;
-    const indexedSet = new Set((typeof indexRes.stdout === 'string' ? indexRes.stdout : '').split('\0').filter(Boolean));
-    const unindexed = missingTargets.filter(m => !indexedSet.has(m.relPosix));
-    if (unindexed.length === 0) return stagedDeletions;
-    const cachedDelRes = spawnSync('git', ['diff', '--cached', '--relative', '--name-only', '--diff-filter=D', '-z', '--', ...unindexed.map(m => m.relPosix)], { cwd: gitCwd, encoding: 'utf8', timeout: 10000, windowsHide: true });
+    const cachedDelRes = spawnSync('git', ['diff', '--cached', '--relative', '--name-only', '--diff-filter=D', '-z', '--', ...missingTargets.map(m => m.relPosix)], { cwd: gitCwd, encoding: 'utf8', timeout: 10000, windowsHide: true });
     if (cachedDelRes.status !== 0 || typeof cachedDelRes.stdout !== 'string') return stagedDeletions;
     const cachedDeletedSet = new Set(cachedDelRes.stdout.split('\0').filter(Boolean));
-    for (const item of unindexed) {
+    for (const item of missingTargets) {
       if (cachedDeletedSet.has(item.relPosix)) stagedDeletions.add(item.original);
     }
   } catch {

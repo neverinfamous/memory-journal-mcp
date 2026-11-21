@@ -60,12 +60,36 @@ export function formatZodValidationIssue(
   mergedValues: { validation?: string | undefined; category?: string | undefined }
 ): string {
   return match(err)
-    .with({ code: 'too_small', origin: 'string' }, (e) => `Too small: expected string length to be ${e.inclusive ? '>=' : '>'}${e.minimum}`)
-    .with({ code: 'too_small', origin: 'array' }, (e) => `Too small: expected array length to be ${e.inclusive ? '>=' : '>'}${e.minimum}`)
-    .with({ code: 'too_small', origin: P.union('number', 'int') }, (e) => `Too small: expected number to be ${e.inclusive ? '>=' : '>'}${e.minimum}`)
-    .with({ code: 'too_big', origin: 'string' }, (e) => `Too big: expected string length to be ${e.inclusive ? '<=' : '<'}${e.maximum}`)
-    .with({ code: 'too_big', origin: 'array' }, (e) => `Too big: expected array length to be ${e.inclusive ? '<=' : '<'}${e.maximum}`)
-    .with({ code: 'too_big', origin: P.union('number', 'int') }, (e) => `Too big: expected number to be ${e.inclusive ? '<=' : '<'}${e.maximum}`)
+    .with({ code: 'too_small', origin: 'string' }, (e) =>
+      e.message.startsWith('Too small:')
+        ? `Too small: expected string length to be ${e.inclusive ? '>=' : '>'}${e.minimum}`
+        : e.message
+    )
+    .with({ code: 'too_small', origin: 'array' }, (e) =>
+      e.message.startsWith('Too small:')
+        ? `Too small: expected array length to be ${e.inclusive ? '>=' : '>'}${e.minimum}`
+        : e.message
+    )
+    .with({ code: 'too_small', origin: P.union('number', 'int') }, (e) =>
+      e.message.startsWith('Too small:')
+        ? `Too small: expected number to be ${e.inclusive ? '>=' : '>'}${e.minimum}`
+        : e.message
+    )
+    .with({ code: 'too_big', origin: 'string' }, (e) =>
+      e.message.startsWith('Too big:')
+        ? `Too big: expected string length to be ${e.inclusive ? '<=' : '<'}${e.maximum}`
+        : e.message
+    )
+    .with({ code: 'too_big', origin: 'array' }, (e) =>
+      e.message.startsWith('Too big:')
+        ? `Too big: expected array length to be ${e.inclusive ? '<=' : '<'}${e.maximum}`
+        : e.message
+    )
+    .with({ code: 'too_big', origin: P.union('number', 'int') }, (e) =>
+      e.message.startsWith('Too big:')
+        ? `Too big: expected number to be ${e.inclusive ? '<=' : '<'}${e.maximum}`
+        : e.message
+    )
     .with({ code: 'unrecognized_keys' }, (e) => `Unrecognized keys: ${e.keys.join(', ')}`)
     .with({ code: P.string, path: ['validation'] }, () => {
       const states = VALIDATION_STATES.map((v) => `'--validation ${v}'`).join(', ');

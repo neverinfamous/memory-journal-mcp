@@ -43,43 +43,52 @@ function getValidatedRepoRelPath(cwd: string, targetPath: string): string | null
   return normalizeRelGitPath(rel);
 }
 
+function queryMatchingGitRelPaths(
+  cwd: string,
+  candidates: ReadonlyArray<{ original: string; relPosix: string }>,
+  gitArgsPrefix: readonly string[]
+): Set<string> {
+  const matched = new Set<string>();
+  if (candidates.length === 0) return matched;
+  try {
+    const res = spawnSync('git', [...gitArgsPrefix, '--', ...candidates.map((c) => c.relPosix)], {
+      cwd,
+      encoding: 'utf8',
+      timeout: 10000,
+      windowsHide: true,
+    });
+    if (res.status !== 0 || typeof res.stdout !== 'string') return matched;
+    const hitSet = new Set(res.stdout.split('\0').filter(Boolean));
+    for (const item of candidates) {
+      if (hitSet.has(item.relPosix)) matched.add(item.original);
+    }
+  } catch {
+    return matched;
+  }
+  return matched;
+}
+
 /**
- * [INTENT]: Batched O(1)-subprocess detector for `--add` paths that are missing on disk and
+ * [INTENT]: Batched single-subprocess detector for `--add` paths that are missing on disk and
  * already staged as deletions (`D  <path>`) in `.git/index`, preventing `git add` exit 128.
  */
 export function findAlreadyStagedDeletions(cwd: string, targetPaths: readonly string[]): Set<string> {
-  const stagedDeletions = new Set<string>();
   const missingTargets: Array<{ original: string; relPosix: string }> = [];
-
   for (const targetPath of targetPaths) {
     if (fs.statSync(path.resolve(cwd, targetPath), { throwIfNoEntry: false }) !== undefined) continue;
     const relPosix = getValidatedRepoRelPath(cwd, targetPath);
     if (relPosix !== null) missingTargets.push({ original: targetPath, relPosix });
   }
-  if (missingTargets.length === 0) return stagedDeletions;
+  return queryMatchingGitRelPaths(cwd, missingTargets, ['diff', '--cached', '--relative', '--name-only', '--diff-filter=D', '-z']);
+}
 
-  const gitOpts = { cwd, encoding: 'utf8', timeout: 10000, windowsHide: true } as const;
-  try {
-    const indexRes = spawnSync('git', ['ls-files', '-z', '--', ...missingTargets.map((m) => m.relPosix)], gitOpts);
-    if (indexRes.status !== 0) return stagedDeletions;
-    const indexedSet = new Set((typeof indexRes.stdout === 'string' ? indexRes.stdout : '').split('\0').filter(Boolean));
-    const unindexedTargets = missingTargets.filter((m) => !indexedSet.has(m.relPosix));
-    if (unindexedTargets.length === 0) return stagedDeletions;
-
-    const cachedDelRes = spawnSync(
-      'git',
-      ['diff', '--cached', '--relative', '--name-only', '--diff-filter=D', '-z', '--', ...unindexedTargets.map((m) => m.relPosix)],
-      gitOpts,
-    );
-    if (cachedDelRes.status !== 0 || typeof cachedDelRes.stdout !== 'string') return stagedDeletions;
-    const cachedDeletedSet = new Set(cachedDelRes.stdout.split('\0').filter(Boolean));
-    for (const item of unindexedTargets) {
-      if (cachedDeletedSet.has(item.relPosix)) stagedDeletions.add(item.original);
-    }
-  } catch {
-    return stagedDeletions;
+function findTrackedIndexPaths(cwd: string, targetPaths: readonly string[]): Set<string> {
+  const candidates: Array<{ original: string; relPosix: string }> = [];
+  for (const targetPath of targetPaths) {
+    const relPosix = getValidatedRepoRelPath(cwd, targetPath);
+    if (relPosix !== null) candidates.push({ original: targetPath, relPosix });
   }
-  return stagedDeletions;
+  return queryMatchingGitRelPaths(cwd, candidates, ['ls-files', '-z']);
 }
 
 /**
@@ -124,7 +133,7 @@ function assertNoMergeRebaseConflict(resolvedGitDir: string): void {
 }
 
 function isScratchRepoPath(filepath: string): boolean {
-  const normalized = normalizeRelGitPath(filepath);
+  const normalized = normalizeRelGitPath(filepath).toLowerCase();
   return (
     normalized.includes('scratch/') ||
     normalized.includes('.agents/scratch') ||
@@ -316,18 +325,21 @@ function resolveExplicitAddPaths(
 
   const spacedStagedDeletions =
     spacedMissing.length > 0 ? findAlreadyStagedDeletions(cwd, spacedMissing) : new Set<string>();
+  const remainingSpaced = spacedMissing.filter((p) => !spacedStagedDeletions.has(p));
+  const trackedUnstagedSpaced =
+    remainingSpaced.length > 0 ? findTrackedIndexPaths(cwd, remainingSpaced) : new Set<string>();
   const paths: string[] = [];
   const knownStagedDeletions = new Set<string>();
 
   for (const item of classified) {
-    if (item.kind === 'spaced-missing' && !spacedStagedDeletions.has(item.raw)) {
+    if (item.kind === 'spaced-missing' && !spacedStagedDeletions.has(item.raw) && !trackedUnstagedSpaced.has(item.raw)) {
       console.warn(`⚠️ AUTONOMOUS HEALING: Path '${item.raw}' not found and contains spaces. Splitting by space to recover hallucinated --add list.`);
       for (const sp of item.raw.split(/\s+/).filter(Boolean)) {
         paths.push(path.resolve(cwd, sp));
       }
       continue;
     }
-    if (item.kind === 'spaced-missing') {
+    if (item.kind === 'spaced-missing' && spacedStagedDeletions.has(item.raw)) {
       knownStagedDeletions.add(item.resolved);
     }
     paths.push(item.resolved);

@@ -12,10 +12,10 @@ export function readCommitMessage(args: string[]): string | undefined {
   if (mIndex !== -1 && mIndex + 1 < args.length) return args[mIndex + 1];
   const amIndex = args.findIndex((arg) => arg === '-am' || arg === '-ma');
   if (amIndex !== -1 && amIndex + 1 < args.length) return args[amIndex + 1];
-  const mPrefix = args.find((arg) => (arg.startsWith('-m') || arg.startsWith('--message=')) && arg.length > 2);
-  if (mPrefix !== undefined) return mPrefix.startsWith('--message=') ? mPrefix.slice(10) : mPrefix.slice(2);
   const amPrefix = args.find((arg) => (arg.startsWith('-am') || arg.startsWith('-ma')) && arg.length > 3);
   if (amPrefix !== undefined) return amPrefix.slice(3);
+  const mPrefix = args.find((arg) => ((arg.startsWith('-m') && !arg.startsWith('-ma')) || arg.startsWith('--message=')) && arg.length > 2);
+  if (mPrefix !== undefined) return mPrefix.startsWith('--message=') ? mPrefix.slice(10) : mPrefix.slice(2);
   return undefined;
 }
 

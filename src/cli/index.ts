@@ -242,12 +242,20 @@ program
     .action(async (commitArgs: string[]) => {
         const { main } = await import('../vendor/commit/commit.js')
         const rawTail = process.argv.slice(2)
+        const valueTakingGlobalFlags = new Set<string>()
+        for (const opt of program.options) {
+            if (opt.required || opt.optional) {
+                if (opt.short !== undefined) valueTakingGlobalFlags.add(opt.short)
+                if (opt.long !== undefined) valueTakingGlobalFlags.add(opt.long)
+            }
+        }
         let commitIdx = -1
         for (let i = 0; i < rawTail.length; i++) {
             const token = rawTail[i]
+            if (token === '--') break
             if (token === 'commit') {
                 const prev = i > 0 ? rawTail[i - 1] : undefined
-                if (prev === undefined || !prev.startsWith('-') || prev.includes('=')) {
+                if (prev === undefined || !valueTakingGlobalFlags.has(prev)) {
                     commitIdx = i
                     break
                 }

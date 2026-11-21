@@ -151,7 +151,7 @@ export function resolveAutoContext(
     return autoContextStr
 }
 
-const UNKNOWN_RECORD_SCHEMA = z.record(z.string(), z.unknown())
+export const UNKNOWN_RECORD_SCHEMA = z.record(z.string(), z.unknown())
 
 const CLI_RELATION_TYPE_ALIASES: Readonly<Record<string, RelationshipType>> = {
     resolves: 'resolved',

@@ -79,8 +79,8 @@ export function isValidCategory(cat: string): cat is CommitCategory {
 function findLongestRegistryPathMatch(
   entries: readonly NormalizedRegistryEntry[],
   normalizedCwd: string
-): { workspaceId: string; projectNumber: number; matchLen: number } | undefined {
-  let best: { workspaceId: string; projectNumber: number; matchLen: number } | undefined;
+): { workspaceId: string; projectNumber?: number; matchLen: number } | undefined {
+  let best: { workspaceId: string; projectNumber?: number; matchLen: number } | undefined;
   for (const entry of entries) {
     const isMatch =
       normalizedCwd === entry.normalizedPath ||
@@ -88,7 +88,7 @@ function findLongestRegistryPathMatch(
     if (isMatch && (best === undefined || entry.normalizedPath.length > best.matchLen)) {
       best = {
         workspaceId: entry.workspaceId,
-        projectNumber: entry.projectNumber,
+        ...(entry.projectNumber !== undefined ? { projectNumber: entry.projectNumber } : {}),
         matchLen: entry.normalizedPath.length,
       };
     }
@@ -133,7 +133,9 @@ export function resolveJournalTarget(
     }
   } else if (bestPathMatch !== undefined) {
     result.workspaceId = bestPathMatch.workspaceId;
-    result.projectNumber = bestPathMatch.projectNumber;
+    if (bestPathMatch.projectNumber !== undefined) {
+      result.projectNumber = bestPathMatch.projectNumber;
+    }
   }
 
   return result;
@@ -205,8 +207,11 @@ export function generateHistoryEntry(
     body += `\nHistory-Journal: true`;
     const journalProject =
       args['journal-project'] ??
-      resolvedTarget?.projectNumber ??
-      (cwd !== undefined ? resolveJournalTarget(cwd).projectNumber : undefined);
+      (resolvedTarget !== undefined
+        ? resolvedTarget.projectNumber
+        : cwd !== undefined
+          ? resolveJournalTarget(cwd).projectNumber
+          : undefined);
     if (journalProject !== undefined) {
       body += `\nHistory-Journal-Project: ${journalProject}`;
     }

@@ -6,21 +6,30 @@ import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { z } from 'zod';
 
+const FORBIDDEN_REGISTRY_KEYS: ReadonlySet<string> = new Set([
+  '__proto__',
+  'constructor',
+  'prototype',
+  '*',
+]);
+
 const projectRegistryEntrySchema = z.object({
   path: z.string().min(1),
-  project_number: z.number().int().positive(),
+  project_number: z
+    .number()
+    .int()
+    .positive()
+    .refine((n) => Number.isSafeInteger(n))
+    .optional(),
 });
 
-const memoryJournalConfigSchema = z.object({
-  projectRegistry: z.record(z.string(), projectRegistryEntrySchema).optional(),
-});
-
-export type ProjectRegistry = Record<string, z.infer<typeof projectRegistryEntrySchema>>;
+export type ProjectRegistryEntry = z.infer<typeof projectRegistryEntrySchema>;
+export type ProjectRegistry = Record<string, ProjectRegistryEntry>;
 
 export interface NormalizedRegistryEntry {
   workspaceId: string;
   normalizedPath: string;
-  projectNumber: number;
+  projectNumber?: number;
 }
 
 interface CachedConfigEntry {
@@ -60,6 +69,32 @@ export function getDefaultConfigPath(): string {
   return path.join(os.homedir(), '.gemini', 'config', 'memory-journal.config.json');
 }
 
+function sanitizeProjectRegistry(raw: unknown, configPath: string): ProjectRegistry | undefined {
+  if (raw === undefined) return undefined;
+  if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) {
+    console.warn(`⚠️ Ignoring malformed projectRegistry in ${configPath}: expected a JSON object.`);
+    return undefined;
+  }
+  const clean = Object.create(null) as ProjectRegistry;
+  const skippedKeys: string[] = [];
+  for (const [workspaceId, value] of Object.entries(raw)) {
+    if (workspaceId.trim().length === 0 || FORBIDDEN_REGISTRY_KEYS.has(workspaceId)) {
+      skippedKeys.push(workspaceId);
+      continue;
+    }
+    const parsed = projectRegistryEntrySchema.safeParse(value);
+    if (parsed.success) {
+      clean[workspaceId] = parsed.data;
+    } else {
+      skippedKeys.push(workspaceId);
+    }
+  }
+  if (skippedKeys.length > 0) {
+    console.warn(`⚠️ Skipped malformed projectRegistry entry(s) in ${configPath}: ${skippedKeys.join(', ')}`);
+  }
+  return Object.keys(clean).length > 0 ? clean : undefined;
+}
+
 function readCachedConfigEntry(configPath?: string): CachedConfigEntry | undefined {
   const effectiveConfigPath =
     configPath !== undefined && configPath.length > 0
@@ -80,14 +115,17 @@ function readCachedConfigEntry(configPath?: string): CachedConfigEntry | undefin
   try {
     const rawContent = fs.readFileSync(effectiveConfigPath, 'utf-8');
     const parsedJson: unknown = JSON.parse(rawContent);
-    const parsedConfig = memoryJournalConfigSchema.safeParse(parsedJson);
-    const projectRegistry = parsedConfig.success ? parsedConfig.data.projectRegistry : undefined;
+    const rawRegistry =
+      parsedJson !== null && typeof parsedJson === 'object' && !Array.isArray(parsedJson) && 'projectRegistry' in parsedJson
+        ? parsedJson.projectRegistry
+        : undefined;
+    const projectRegistry = sanitizeProjectRegistry(rawRegistry, effectiveConfigPath);
     const normalizedEntries =
       projectRegistry !== undefined
         ? Object.entries(projectRegistry).map(([workspaceId, entry]) => ({
             workspaceId,
             normalizedPath: normalizeRegistryPath(entry.path),
-            projectNumber: entry.project_number,
+            ...(entry.project_number !== undefined ? { projectNumber: entry.project_number } : {}),
           }))
         : undefined;
     if (configCache.size >= MAX_CONFIG_CACHE_ENTRIES && !configCache.has(effectiveConfigPath)) {
@@ -186,7 +224,10 @@ function isMemoryJournalPackageDir(dirPath: string): boolean {
 
 function resolveRegistryMemoryJournalCli(configPath?: string): string | null {
   const registry = readMemoryJournalRegistry(configPath);
-  const mjEntry = registry?.['memory-journal-mcp'];
+  const mjEntry =
+    registry !== undefined && Object.hasOwn(registry, 'memory-journal-mcp')
+      ? registry['memory-journal-mcp']
+      : undefined;
   if (mjEntry === undefined) {
     return null;
   }

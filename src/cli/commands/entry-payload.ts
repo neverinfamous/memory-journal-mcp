@@ -11,11 +11,11 @@ import { resolveProjectContext } from '../../utils/workspace-resolver.js'
 import { activeProjectRegistry, pairStoredScope } from '../../utils/write-scope.js'
 import { ValidationError } from '../../types/errors.js'
 import { logger } from '../../utils/logger.js'
-import { z } from 'zod'
 import * as yaml from 'yaml'
 import type { BaseEntryOptionsSchema } from '../schemas.js'
 import { CliExitError, getCliCommandDb } from './db-core.js'
 import {
+    UNKNOWN_RECORD_SCHEMA,
     applyCliEntryFlagAliases,
     parseRelationshipArray,
     relationshipsFromMetadata,
@@ -173,7 +173,7 @@ export function parseFrontmatter(rawContent: string): {
             const body = rawContent.slice(endIdx + skip).trimStart()
             try {
                 const parsed: unknown = yaml.parse(yamlStr)
-                const parsedRec = z.record(z.string(), z.unknown()).safeParse(parsed)
+                const parsedRec = UNKNOWN_RECORD_SCHEMA.safeParse(parsed)
                 return { frontmatter: parsedRec.success ? parsedRec.data : {}, body }
             } catch (err) {
                 logger.debug('Frontmatter YAML parse failed; treating as body content', {
@@ -254,7 +254,7 @@ export function parseMetadata(metadataFile: unknown): Record<string, unknown> {
         )
     }
     if (typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed)) {
-        return z.record(z.string(), z.unknown()).parse(parsed)
+        return UNKNOWN_RECORD_SCHEMA.parse(parsed)
     }
     throw new Error('Failed to parse --metadata JSON: expected a JSON object')
 }
@@ -352,7 +352,7 @@ function parseMetadataAnchors(
                 parsed.push({ anchor_path: trimmed, anchor_type: 'file' })
             }
         } else if (typeof item === 'object' && item !== null && !Array.isArray(item)) {
-            const parsedRec = z.record(z.string(), z.unknown()).safeParse(item)
+            const parsedRec = UNKNOWN_RECORD_SCHEMA.safeParse(item)
             if (!parsedRec.success) continue
             const rec = parsedRec.data
             const pathRaw =
