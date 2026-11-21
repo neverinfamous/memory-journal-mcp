@@ -37,13 +37,22 @@ function applyCommitWrapper(ctx: ExecutionContext, script: string, message: stri
   console.error(`   🛠️ AUTONOMOUS HEALING: Transparently rewriting to '${script}' with default scores... (Frictionless Recovery)`);
   const compiledCommit = ctx.payload.target !== 'wsl2' ? resolveFreshCompiledCommitBundle(script, targetCwd) : null;
   if (compiledCommit !== null) {
-    ctx.cmdBasename = process.platform === 'win32' ? 'node.exe' : 'node';
+    const nodeCmd = process.platform === 'win32' ? 'node.exe' : 'node';
+    ctx.cmdBasename = nodeCmd;
     ctx.args = [compiledCommit, '--msg', message, '--impact', '0.5', '--confidence', '0.5', '--validation', 'passed'];
+    ctx.payload.bypassInterceptors = true;
+    if (ctx.payload.timeoutMs === undefined || ctx.payload.timeoutMs < 240000) {
+      ctx.payload.timeoutMs = 240000;
+    }
   } else {
     ctx.cmdBasename = 'bun';
     ctx.args = [script, '--msg', message, '--impact', '0.5', '--confidence', '0.5', '--validation', 'passed'];
   }
   if (explicitCwd !== undefined || path.resolve(targetCwd) !== path.resolve(process.cwd())) ctx.args.push('--cwd', targetCwd);
+  if ('command' in ctx.payload) {
+    ctx.payload.command = ctx.cmdBasename;
+    ctx.payload.args = ctx.args;
+  }
 }
 
 export function rewriteGitCommit(

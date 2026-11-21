@@ -35,7 +35,7 @@ describe('P1-P7: adversarial prompt hardening, schemas, sanitizer, and scope val
 
             const cqResult = await Promise.resolve(codeQuality?.handler({}, db))
             const cqText = cqResult?.messages[0]?.content.text ?? ''
-            expect(cqText).toContain('Prompt revision: 2026-11-21-audit-pass60')
+            expect(cqText).toContain('Prompt revision: 2026-11-21-audit-pass61')
             expect(cqText).toContain('This prompt is shared by every project')
             expect(cqText).toContain('DO audit executable tool calls')
             expect(cqText).toContain('.wrangler')
@@ -43,7 +43,7 @@ describe('P1-P7: adversarial prompt hardening, schemas, sanitizer, and scope val
 
             const secResult = await Promise.resolve(security?.handler({}, db))
             const secText = secResult?.messages[0]?.content.text ?? ''
-            expect(secText).toContain('Prompt revision: 2026-11-21-audit-pass60')
+            expect(secText).toContain('Prompt revision: 2026-11-21-audit-pass61')
             expect(secText).toContain('This prompt is shared by every project')
         } finally {
             db.close()

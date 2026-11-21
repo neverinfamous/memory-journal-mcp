@@ -164,7 +164,7 @@ function normalizeCommitMsg(val: unknown): unknown {
     lines[0] = firstLine;
     return lines.join('\n');
   }
-  return normalized;
+  return normalized.trim();
 }
 
 function normalizeRelateSpecs(val: unknown): unknown {
@@ -192,7 +192,7 @@ function normalizeRelateSpecs(val: unknown): unknown {
       specs.push({ targetId, relationType });
     }
   }
-  return specs.length > 0 ? specs : undefined;
+  return specs;
 }
 
 // [BOUNDARY]: Strict Zod CLI schema boundary. [INVARIANT]: All inputs must be coerced and validated here. Do NOT implement manual validation downstream.
@@ -232,7 +232,10 @@ export const cliSchema = z.object({
     }
     return val;
   }, z.enum(VALIDATION_STATES)),
-  significance: z.string().max(100).optional(),
+  significance: z.string().trim().min(1, 'Significance cannot be empty.').max(100).refine(
+    (s) => !/[\r\n]/.test(s),
+    { message: 'Significance must be a single-line value without newlines.' }
+  ).optional(),
   category: z.preprocess(
     (val) => {
       if (typeof val !== 'string') return val;
@@ -273,14 +276,14 @@ export const cliSchema = z.object({
         if (clean.length > 0) normalized.push(clean);
       }
     }
-    return normalized.length > 0 ? normalized : undefined;
-  }, z.array(z.string().min(1).max(128)).optional()),
+    return normalized;
+  }, z.array(z.string().min(1).max(128)).min(1, 'At least one non-empty tag is required for --tags.').optional()),
   relate: z.preprocess(
     normalizeRelateSpecs,
     z.array(z.object({
       targetId: z.number().int().positive().refine((n) => Number.isSafeInteger(n), { message: 'Entry ID must be a safe positive integer.' }),
       relationType: z.enum(CANONICAL_RELATION_TYPES),
-    })).optional()
+    })).min(1, 'At least one valid entry ID is required for --relate.').optional()
   ),
   'no-auto-link': z.boolean().default(false),
   'dry-run-links': z.boolean().default(false),
@@ -297,6 +300,9 @@ export type CliArgs = z.infer<typeof cliSchema>;
 function normalizeNegativeAndBulletArgs(rawArgs: string[]): void {
   for (let i = 0; i < rawArgs.length - 1; i++) {
     const currentArg = rawArgs[i];
+    if (currentArg === '--') {
+      break;
+    }
     const nextArg = rawArgs[i + 1];
     if (currentArg === '-m' && /^-\s/.test(nextArg)) {
       rawArgs[i] = `--msg=${nextArg}`;
@@ -350,9 +356,14 @@ function mergeAliasFlagsAndPositionals(
     mergedValues.tags = [...(mergedValues.tags ?? []), ...mergedValues.tag];
     delete mergedValues.tag;
   }
-  if (mergedValues.trust !== undefined && mergedValues.confidence === undefined) {
-    console.warn("⚠️ AUTONOMOUS HEALING: Deprecated --trust flag used. Mapping to --confidence.");
-    mergedValues.confidence = mergedValues.trust;
+  if (mergedValues.trust !== undefined) {
+    if (mergedValues.confidence === undefined) {
+      console.warn("⚠️ AUTONOMOUS HEALING: Deprecated --trust flag used. Mapping to --confidence.");
+      mergedValues.confidence = mergedValues.trust;
+    } else {
+      console.warn("⚠️ AUTONOMOUS HEALING: Deprecated --trust flag ignored because --confidence was also provided. Using --confidence.");
+    }
+    delete mergedValues.trust;
   }
   if (positionals.length > 0) {
     if (hasMessageFlag) {

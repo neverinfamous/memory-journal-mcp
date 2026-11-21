@@ -28,6 +28,12 @@ function normalizeRelGitPath(relPath: string): string {
   return relPath.replace(/\\/g, '/');
 }
 
+function isSameResolvedPath(a: string, b: string): boolean {
+  const normA = path.resolve(a);
+  const normB = path.resolve(b);
+  return process.platform === 'win32' ? normA.toLowerCase() === normB.toLowerCase() : normA === normB;
+}
+
 function getValidatedRepoRelPath(cwd: string, targetPath: string): string | null {
   const absTarget = path.resolve(cwd, targetPath);
   const rel = path.relative(cwd, absTarget);
@@ -216,7 +222,7 @@ function ensureStagedFiles(
   try {
     const statusArgs = ['status', '-z'];
     const absCwd = path.resolve(cwd);
-    if (filesToAdd && filesToAdd.length > 0 && !filesToAdd.some((f) => path.resolve(cwd, f) === absCwd)) {
+    if (filesToAdd && filesToAdd.length > 0 && !filesToAdd.some((f) => isSameResolvedPath(path.resolve(cwd, f), absCwd))) {
       statusArgs.push('-uno', '--', ...filesToAdd);
     }
     status = execFileSync('git', statusArgs, { encoding: 'utf-8', cwd, windowsHide: true });
@@ -271,7 +277,7 @@ function executeCommit(header: string, body: string, cwd?: string, onlyFiles?: s
   try {
     const commitArgs = ['commit', '-q', '-F', msgFile];
     const absCwd = path.resolve(cwd ?? process.cwd());
-    if (onlyFiles && onlyFiles.length > 0 && !onlyFiles.some((f) => path.resolve(absCwd, f) === absCwd)) {
+    if (onlyFiles && onlyFiles.length > 0 && !onlyFiles.some((f) => isSameResolvedPath(path.resolve(absCwd, f), absCwd))) {
       commitArgs.push('--only', '--', ...onlyFiles);
     }
     execFileSync('git', commitArgs, { stdio: 'inherit', cwd, windowsHide: true });

@@ -45,14 +45,14 @@ function parseGitShowPerCommitFiles(
 ): Map<string, string[]> {
     const filesByFullSha = new Map<string, string[]>()
     let currentSha: string | undefined
-    for (const rawLine of output.split(/\r?\n/)) {
-        const line = rawLine.trim()
-        if (line.length === 0) continue
-        if (line.startsWith(COMMIT_MARKER_PREFIX)) {
-            currentSha = line.slice(COMMIT_MARKER_PREFIX.length).trim().toLowerCase()
+    for (const rawToken of output.split('\0')) {
+        const token = rawToken.replace(/^[\r\n]+|[\r\n]+$/g, '')
+        if (token.length === 0) continue
+        if (token.startsWith(COMMIT_MARKER_PREFIX)) {
+            currentSha = token.slice(COMMIT_MARKER_PREFIX.length).trim().toLowerCase()
             if (!filesByFullSha.has(currentSha)) filesByFullSha.set(currentSha, [])
         } else if (currentSha !== undefined) {
-            filesByFullSha.get(currentSha)?.push(line)
+            filesByFullSha.get(currentSha)?.push(token)
         }
     }
     const mapped = new Map<string, string[]>()
@@ -75,7 +75,7 @@ async function fetchRepoCommitFilesBatch(
     try {
         const { stdout } = await execFileAsync(
             'git',
-            ['show', '--name-only', `--pretty=format:${COMMIT_MARKER_PREFIX}%H`, ...shas],
+            ['show', '--name-only', '-z', `--pretty=format:${COMMIT_MARKER_PREFIX}%H%x00`, ...shas],
             { cwd: repoPath, encoding: 'utf-8', timeout: 2500, windowsHide: true, maxBuffer: 1024 * 1024 }
         )
         return parseGitShowPerCommitFiles(stdout, shas)
@@ -87,14 +87,14 @@ async function fetchRepoCommitFilesBatch(
                 chunk.map(async (sha) => {
                     const { stdout } = await execFileAsync(
                         'git',
-                        ['show', '--name-only', '--pretty=format:', sha],
+                        ['show', '--name-only', '-z', '--pretty=format:', sha],
                         { cwd: repoPath, encoding: 'utf-8', timeout: 2500, windowsHide: true }
                     )
                     return {
                         sha: sha.toLowerCase(),
                         files: stdout
-                            .split(/\r?\n/)
-                            .map((line) => line.trim())
+                            .split('\0')
+                            .map((line) => line.replace(/^[\r\n]+|[\r\n]+$/g, ''))
                             .filter((line) => line.length > 0),
                     }
                 })
@@ -215,7 +215,7 @@ export async function resolveEntryAnchors(
 
         const { stdout: output } = await execFileAsync(
             'git',
-            ['show', '--name-only', '--pretty=format:', ...validShas],
+            ['show', '--name-only', '-z', '--pretty=format:', ...validShas],
             {
                 cwd: repoPath,
                 encoding: 'utf-8',
@@ -226,8 +226,8 @@ export async function resolveEntryAnchors(
         const uniqueFiles = Array.from(
             new Set(
                 output
-                    .split(/\r?\n/)
-                    .map((line) => line.trim())
+                    .split('\0')
+                    .map((line) => line.replace(/^[\r\n]+|[\r\n]+$/g, ''))
                     .filter((line) => line.length > 0)
             )
         ).slice(0, MAX_AUTO_ANCHORS)

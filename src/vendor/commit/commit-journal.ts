@@ -220,11 +220,11 @@ export function extractCommittedFiles(sha: string, cwd: string, limit = 25): str
   try {
     const out = execFileSync(
       'git',
-      ['diff-tree', '--no-commit-id', '--name-only', '-r', sha],
+      ['diff-tree', '--no-commit-id', '--name-only', '-r', '--root', '-z', sha],
       { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'], windowsHide: true }
     );
     return out
-      .split(/\r?\n/)
+      .split('\0')
       .map((line) => line.trim())
       .filter((line) => line.length > 0)
       .slice(0, limit);

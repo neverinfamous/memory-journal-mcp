@@ -131,23 +131,57 @@ function isFile(filePath: string): boolean {
   return stats !== undefined && stats.isFile();
 }
 
+interface CachedPackageCheck {
+  mtimeMs: number;
+  size: number;
+  isMemoryJournal: boolean;
+}
+
+const MAX_PKG_CACHE_ENTRIES = 32;
+const packageDirCache = new Map<string, CachedPackageCheck>();
+
+const MEMORY_JOURNAL_CLI_SEGMENTS: readonly (readonly string[])[] = [
+  ['memory-journal-mcp', 'dist', 'cli.js'],
+  ['@neverinfamous', 'memory-journal-mcp', 'dist', 'cli.js'],
+];
+
+function findCliInNodeModules(nodeModulesDir: string): string | null {
+  for (const segments of MEMORY_JOURNAL_CLI_SEGMENTS) {
+    const candidate = path.join(nodeModulesDir, ...segments);
+    if (isFile(candidate)) return candidate;
+  }
+  return null;
+}
+
 function isMemoryJournalPackageDir(dirPath: string): boolean {
   const pkgPath = path.join(dirPath, 'package.json');
-  if (!isFile(pkgPath)) {
+  const stats = fs.statSync(pkgPath, { throwIfNoEntry: false });
+  if (stats === undefined || !stats.isFile()) {
+    packageDirCache.delete(pkgPath);
     return false;
   }
+  const cached = packageDirCache.get(pkgPath);
+  if (cached !== undefined && cached.mtimeMs === stats.mtimeMs && cached.size === stats.size) {
+    return cached.isMemoryJournal;
+  }
+  let isMemoryJournal: boolean;
   try {
     const rawContent = fs.readFileSync(pkgPath, 'utf-8');
     const parsedJson: unknown = JSON.parse(rawContent);
     const parsedPkg = packageJsonNameSchema.safeParse(parsedJson);
-    return (
+    isMemoryJournal =
       parsedPkg.success &&
       parsedPkg.data.name !== undefined &&
-      MEMORY_JOURNAL_PACKAGE_NAMES.has(parsedPkg.data.name)
-    );
+      MEMORY_JOURNAL_PACKAGE_NAMES.has(parsedPkg.data.name);
   } catch {
     return false;
   }
+  if (packageDirCache.size >= MAX_PKG_CACHE_ENTRIES && !packageDirCache.has(pkgPath)) {
+    const oldestKey = packageDirCache.keys().next().value;
+    if (oldestKey !== undefined) packageDirCache.delete(oldestKey);
+  }
+  packageDirCache.set(pkgPath, { mtimeMs: stats.mtimeMs, size: stats.size, isMemoryJournal });
+  return isMemoryJournal;
 }
 
 function resolveRegistryMemoryJournalCli(configPath?: string): string | null {
@@ -164,15 +198,16 @@ function resolveRegistryMemoryJournalCli(configPath?: string): string | null {
 function resolvePathEnvMemoryJournalCli(): string | null {
   const rawPath = process.env['PATH'] ?? '';
   if (rawPath.length === 0) return null;
-  for (const dir of rawPath.split(path.delimiter)) {
+  for (const rawDir of rawPath.split(path.delimiter)) {
+    const dir = rawDir.trim().replace(/^"|"$/g, '');
     if (dir.length === 0) continue;
     const parent = path.dirname(dir);
-    const direct = path.join(dir, 'node_modules', 'memory-journal-mcp', 'dist', 'cli.js');
-    if (isFile(direct)) return direct;
-    const parentMod = path.join(parent, 'node_modules', 'memory-journal-mcp', 'dist', 'cli.js');
-    if (isFile(parentMod)) return parentMod;
-    const libMod = path.join(parent, 'lib', 'node_modules', 'memory-journal-mcp', 'dist', 'cli.js');
-    if (isFile(libMod)) return libMod;
+    const direct = findCliInNodeModules(path.join(dir, 'node_modules'));
+    if (direct !== null) return direct;
+    const parentMod = findCliInNodeModules(path.join(parent, 'node_modules'));
+    if (parentMod !== null) return parentMod;
+    const libMod = findCliInNodeModules(path.join(parent, 'lib', 'node_modules'));
+    if (libMod !== null) return libMod;
   }
   return null;
 }
@@ -203,8 +238,8 @@ export function resolveMemoryJournalCli(
 
   const appData = process.env['APPDATA'];
   if (appData !== undefined && appData.length > 0) {
-    const appDataCli = path.join(appData, 'npm', 'node_modules', 'memory-journal-mcp', 'dist', 'cli.js');
-    if (isFile(appDataCli)) {
+    const appDataCli = findCliInNodeModules(path.join(appData, 'npm', 'node_modules'));
+    if (appDataCli !== null) {
       return { command: 'node', prefixArgs: [appDataCli] };
     }
   }
