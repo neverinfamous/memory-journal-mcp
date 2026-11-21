@@ -57,7 +57,7 @@ Pick the lightest flag that satisfies your task (cost increases top to bottom):
 - **Schema & Trailer Contracts**: `totalInsertions`, `totalDeletions`, `similarityScore`, `insertions`, `deletions`, and `fileCount` are strict `.int()` integers. Renames (`R`) carry both `oldFile` and `file`. Mapped trailers populate `metadata`; all trailers populate `trailersObj` and `metadata.customTrailers` (`parser-trailers.ts` strips `\u200B` multiline markers emitted by `commit.ts`).
 - **Custom Formatting**: `--format <path>` (resolved relative to `--cwd`) supports `.hbs`/`.txt` Handlebars templates and `.ts`/`.js`/`.mjs`/`.cjs` modules exporting `default` or `format`. Built-in (`markdown`, `slack`) and custom formatters include all commits unless `--changelog-only` is passed.
 - **Code Quality & Vendor Budgets**: Keep every file `<= 450` lines, every function `<= 80` lines with control-flow nesting `<= 4`, preserve `-z`/UUID delimiters and `--end-of-options`, and keep all files/docs path-neutral (no machine-local paths or private repo names). Register any newly extracted `.ts` file in downstream `VENDOR.json`.
-- **Validation**: After modifying this library, run **strictly sequentially**: `bun run lint` → `bun run typecheck` → `bun test .agents/scripts/lib-git-history/tests/` (do NOT use Vitest or Playwright in this repo).
+- **Validation**: After modifying this library, run **strictly sequentially**: `bun run lint` → `bun run typecheck` → the host's `bun test lib-git-history/tests/` suite (do NOT use Vitest or Playwright in this repo).
 
 ## 📖 Related Context & Usability Testing
 

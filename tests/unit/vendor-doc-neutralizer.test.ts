@@ -24,12 +24,20 @@ describe('vendor-doc-neutralizer', () => {
         )
     })
 
-    it('rewrites bare concrete .agents/scripts file references but leaves placeholders and directories alone', () => {
-        const input =
-            'See `.agents/scripts/usability/coordinator-workflow.md`; fallback resolves `.agents/scripts/<name>`; never write to `.agents/scripts/scratch-repo`.'
-        expect(neutralizeVendoredDoc(input)).toBe(
-            "See the host's `usability/coordinator-workflow.md`; fallback resolves `.agents/scripts/<name>`; never write to `.agents/scripts/scratch-repo`."
-        )
+    it('rewrites bun test suite and trailing-slash directory spans under .agents/scripts while leaving bare names/placeholders alone', () => {
+        const input = [
+            'Run `bun test .agents/scripts/lib-git-history/tests/` sequentially.',
+            'Fixtures live in `.agents/scripts/lib-agent-exec/tests/`.',
+            'See `.agents/scripts/usability/coordinator-workflow.md`; fallback resolves `.agents/scripts/<name>`; never write to `.agents/scripts/scratch-repo`.',
+        ].join('\n')
+        const expected = [
+            "Run the host's `bun test lib-git-history/tests/` suite sequentially.",
+            "Fixtures live in the host's `lib-agent-exec/tests/`.",
+            "See the host's `usability/coordinator-workflow.md`; fallback resolves `.agents/scripts/<name>`; never write to `.agents/scripts/scratch-repo`.",
+        ].join('\n')
+        expect(hasHostScriptReferences(input)).toBe(true)
+        expect(neutralizeVendoredDoc(input)).toBe(expected)
+        expect(hasHostScriptReferences(expected)).toBe(false)
     })
 
     it('is idempotent and reports no remaining host references after rewriting', () => {

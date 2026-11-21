@@ -2,15 +2,31 @@
  * Tests for src/observability/interceptor.ts
  */
 
-import { describe, it, expect, beforeEach } from 'vitest'
+import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { MetricsAccumulator } from '../../src/observability/metrics.js'
 import { wrapWithMetrics } from '../../src/observability/interceptor.js'
+
+const { mockLogAgentIssue } = vi.hoisted(() => ({
+    mockLogAgentIssue: vi.fn(),
+}))
+
+vi.mock('../../src/utils/issue-logger.js', async (importOriginal) => {
+    const actual = await importOriginal<typeof import('../../src/utils/issue-logger.js')>()
+    return {
+        ...actual,
+        logAgentIssue: (...args: unknown[]) => {
+            mockLogAgentIssue(...args)
+            return actual.logAgentIssue(...(args as Parameters<typeof actual.logAgentIssue>))
+        },
+    }
+})
 
 describe('wrapWithMetrics', () => {
     let acc: MetricsAccumulator
 
     beforeEach(() => {
         acc = new MetricsAccumulator()
+        mockLogAgentIssue.mockClear()
     })
 
     it('passes through the original handler result unchanged', async () => {
@@ -110,5 +126,33 @@ describe('wrapWithMetrics', () => {
         // Should not throw — interceptor swallows accumulator errors
         const result = await wrapped({})
         expect(result).toEqual({ success: true })
+    })
+
+    it('throttles repeated RESOURCE_NOT_FOUND issue logs on team_get_entry_by_id without hiding non-404 errors', async () => {
+        const notFoundHandler = async (_args: Record<string, unknown>) => ({
+            success: false,
+            error: 'Team entry not found',
+            code: 'RESOURCE_NOT_FOUND',
+        })
+        const wrappedNotFound = wrapWithMetrics('team_get_entry_by_id', notFoundHandler, acc)
+
+        for (let i = 0; i < 6; i++) {
+            const res = (await wrappedNotFound({ entry_id: i + 1 })) as { success: boolean; code?: string }
+            expect(res.success).toBe(false)
+            expect(res.code).toBe('RESOURCE_NOT_FOUND')
+        }
+
+        // First 3 writes in 60s are logged; subsequent burst hits are throttled in issue log only
+        expect(mockLogAgentIssue).toHaveBeenCalledTimes(3)
+        expect(acc.getSummary().toolBreakdown['team_get_entry_by_id']?.errorCount).toBe(6)
+
+        const otherErrHandler = async (_args: Record<string, unknown>) => ({
+            success: false,
+            error: 'Invalid parameter',
+            code: 'VALIDATION_ERROR',
+        })
+        const wrappedOther = wrapWithMetrics('create_entry', otherErrHandler, acc)
+        await wrappedOther({ content: '' })
+        expect(mockLogAgentIssue).toHaveBeenCalledTimes(4)
     })
 })

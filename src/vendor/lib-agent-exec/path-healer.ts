@@ -4,6 +4,8 @@ import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import type { ExecutionContext } from './interceptors/types.js';
 import { findPatternExprIndex, convertToWslPath } from './command-utils.js';
+import { resolveEvalExecutionTarget } from './eval-healer.js';
+import { emitInterceptBanner } from './utils.js';
 
 const FILE_TOOLS = new Set([
   'rg', 'rg.exe',
@@ -737,12 +739,12 @@ export function resolveBuildSrcSwap(resolvedPath: string, allowDirectories = fal
   return null;
 }
 
-export function healModulePath(
+function healModulePathDetailed(
   rawPath: string,
   cwd: string,
   isEsm: boolean = false,
   target?: 'windows' | 'wsl2'
-): string {
+): { healed: string; wasExactFile: boolean } {
   const isWsl = target === 'wsl2' || rawPath.startsWith('/mnt/');
   const wslNormalized = rawPath.startsWith('/mnt/')
     ? rawPath.replace(/^\/mnt\/([a-zA-Z])\/(.*)$/, (_: string, drive: string, rest: string) => `${drive.toUpperCase()}:/${rest}`)
@@ -756,6 +758,7 @@ export function healModulePath(
     : path.resolve(windowsCwd, wslNormalized);
 
   let targetPath = resolvedPath;
+  let wasExactFile = false;
 
   if (!fs.existsSync(targetPath)) {
     // 1. If path ends in .js / .mjs / .cjs, but .ts / .tsx exists on disk (common in TS ESM)
@@ -802,34 +805,60 @@ export function healModulePath(
         break;
       }
     }
+  } else {
+    wasExactFile = true;
   }
 
   if (isWsl) {
     const wslPath = convertToWslPath(targetPath);
-    return isEsm ? `file://${wslPath}` : wslPath;
+    return { healed: isEsm ? `file://${wslPath}` : wslPath, wasExactFile };
   }
 
   if (isEsm) {
-    return pathToFileURL(targetPath).href;
+    return { healed: pathToFileURL(targetPath).href, wasExactFile };
   }
 
-  return targetPath.replace(/\\/g, '/');
+  return { healed: targetPath.replace(/\\/g, '/'), wasExactFile };
+}
+
+export function healModulePath(
+  rawPath: string,
+  cwd: string,
+  isEsm: boolean = false,
+  target?: 'windows' | 'wsl2'
+): string {
+  return healModulePathDetailed(rawPath, cwd, isEsm, target).healed;
+}
+
+export interface HealModuleImportOptions {
+  skipValidFileRewrite?: boolean;
 }
 
 export function healModuleImports(
   code: string,
   cwd: string,
-  target?: 'windows' | 'wsl2'
+  target?: 'windows' | 'wsl2',
+  options?: HealModuleImportOptions
 ): string {
   let updatedCode = code;
+  let routineRelocated = 0;
+  const healedRequires: string[] = [];
+  const healedImports: string[] = [];
+  const skipValid = options?.skipValidFileRewrite === true;
 
   // 1. require('./...') or require("../...")
   const requireRegex = /\brequire\s*\(\s*(['"])(\.[^'"]+)\1\s*\)/g;
   updatedCode = updatedCode.replace(requireRegex, (fullMatch, quote, relPath) => {
-    const healed = healModulePath(relPath, cwd, false, target);
+    const { healed, wasExactFile } = healModulePathDetailed(relPath, cwd, false, target);
+    if (skipValid && wasExactFile) {
+      return fullMatch;
+    }
     if (healed !== relPath) {
-      console.error(`\n   💡 AGENT HINT: Relative require '${relPath}' in script/eval resolved against cwd to '${healed}'.`);
-      console.error(`\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Auto-correcting relative require path to absolute... (Frictionless Recovery)\x1b[0m`);
+      if (wasExactFile) {
+        routineRelocated++;
+      } else {
+        healedRequires.push(`'${relPath}' -> '${healed}'`);
+      }
       return `require(${quote}${healed}${quote})`;
     }
     return fullMatch;
@@ -838,10 +867,16 @@ export function healModuleImports(
   // 2. Dynamic import('./...') or import("../...")
   const dynamicImportRegex = /\bimport\s*\(\s*(['"])(\.[^'"]+)\1((?:\s*,[^)]*)?)\)/g;
   updatedCode = updatedCode.replace(dynamicImportRegex, (fullMatch, quote, relPath, extraArgs) => {
-    const healed = healModulePath(relPath, cwd, true, target);
+    const { healed, wasExactFile } = healModulePathDetailed(relPath, cwd, true, target);
+    if (skipValid && wasExactFile) {
+      return fullMatch;
+    }
     if (healed !== relPath) {
-      console.error(`\n   💡 AGENT HINT: Relative dynamic import '${relPath}' in script/eval resolved against cwd to '${healed}'.`);
-      console.error(`\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Auto-correcting relative import path to file URL... (Frictionless Recovery)\x1b[0m`);
+      if (wasExactFile) {
+        routineRelocated++;
+      } else {
+        healedImports.push(`'${relPath}' -> '${healed}'`);
+      }
       return `import(${quote}${healed}${quote}${extraArgs ?? ''})`;
     }
     return fullMatch;
@@ -850,14 +885,32 @@ export function healModuleImports(
   // 3. Static import ... from './...' or export ... from './...' or import './...'
   const staticImportRegex = /\b(import|export)\s+((?:[\w\s{},*]+from\s+)?)(['"])(\.[^'"]+)\3/g;
   updatedCode = updatedCode.replace(staticImportRegex, (fullMatch, keyword, fromPart, quote, relPath) => {
-    const healed = healModulePath(relPath, cwd, true, target);
+    const { healed, wasExactFile } = healModulePathDetailed(relPath, cwd, true, target);
+    if (skipValid && wasExactFile) {
+      return fullMatch;
+    }
     if (healed !== relPath) {
-      console.error(`\n   💡 AGENT HINT: Relative import/export '${relPath}' in script/eval resolved against cwd to '${healed}'.`);
-      console.error(`\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Auto-correcting relative import path to file URL... (Frictionless Recovery)\x1b[0m`);
+      if (wasExactFile) {
+        routineRelocated++;
+      } else {
+        healedImports.push(`'${relPath}' -> '${healed}'`);
+      }
       return `${keyword} ${fromPart}${quote}${healed}${quote}`;
     }
     return fullMatch;
   });
+
+  if (routineRelocated > 0) {
+    emitInterceptBanner(`\n   💡 AGENT INTERCEPT: Rewrote ${String(routineRelocated)} valid relative module path(s) for temporary inline script execution.`);
+  }
+  if (healedRequires.length > 0) {
+    console.error(`\n   💡 AGENT HINT: Relative require (${healedRequires.join(', ')}) resolved against cwd.`);
+    console.error(`\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Auto-correcting relative require path to absolute... (Frictionless Recovery)\x1b[0m`);
+  }
+  if (healedImports.length > 0) {
+    console.error(`\n   💡 AGENT HINT: Relative import/export (${healedImports.join(', ')}) resolved against cwd.`);
+    console.error(`\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Auto-correcting relative import path to file URL... (Frictionless Recovery)\x1b[0m`);
+  }
 
   return updatedCode;
 }
@@ -865,7 +918,8 @@ export function healModuleImports(
 export function healEvalCodePathHallucinations(
   code: string,
   cwd: string,
-  target?: 'windows' | 'wsl2'
+  target?: 'windows' | 'wsl2',
+  options?: HealModuleImportOptions
 ): string {
   let updatedCode = code;
 
@@ -878,7 +932,7 @@ export function healEvalCodePathHallucinations(
   }
 
   // 2. Heal relative module imports and requires
-  updatedCode = healModuleImports(updatedCode, cwd, target);
+  updatedCode = healModuleImports(updatedCode, cwd, target, options);
 
   // Helper to heal a single path in eval code
   const healSinglePath = (
@@ -1102,7 +1156,13 @@ export function healPathHallucinations(ctx: ExecutionContext): void {
     : process.cwd();
 
   if (ctx.payload.type === 'eval' && typeof ctx.payload.code === 'string') {
-    ctx.payload.code = healEvalCodePathHallucinations(ctx.payload.code, cwd, ctx.payload.target);
+    const { effectiveInterpreter } = resolveEvalExecutionTarget(ctx.payload);
+    const skipValidFileRewrite =
+      ctx.payload.target !== 'wsl2' &&
+      ['node', 'js', 'javascript', 'tsx', 'ts-node'].includes(effectiveInterpreter.toLowerCase());
+    ctx.payload.code = healEvalCodePathHallucinations(ctx.payload.code, cwd, ctx.payload.target, {
+      skipValidFileRewrite,
+    });
   }
 
   const { args } = ctx;

@@ -294,5 +294,60 @@ describe('AGENTS.md Ecosystem Audit Regressions', () => {
             expect(updateTool?.description).not.toContain('instruction level')
             expect(updateTool?.description).toContain('tool filters')
         })
+
+        it('normalizes value/target/uri/location/filePath anchor objects in CreateEntrySchemaMcp and CLI buildEntryPayload', () => {
+            const parsed = CreateEntrySchemaMcp.parse({
+                workspace_id: 'default',
+                content: 'Replay live anchor value payload',
+                anchors: [
+                    { type: 'file', value: 'src/handlers/tools/schemas/hallucination-healer-anchors.ts' },
+                    { anchor_type: 'symbol', filePath: 'src/index.ts#main' },
+                    { target: 'src/cli/commands/entry-payload.ts' },
+                    { uri: 'README.md' },
+                    { location: 'DOCKER_README.md' },
+                ],
+            })
+            expect(parsed.anchors).toEqual([
+                {
+                    anchor_path: 'src/handlers/tools/schemas/hallucination-healer-anchors.ts',
+                    anchor_type: 'file',
+                    status: 'pending',
+                },
+                {
+                    anchor_path: 'src/index.ts#main',
+                    anchor_type: 'symbol',
+                    status: 'pending',
+                },
+                {
+                    anchor_path: 'src/cli/commands/entry-payload.ts',
+                    anchor_type: 'file',
+                    status: 'pending',
+                },
+                {
+                    anchor_path: 'README.md',
+                    anchor_type: 'file',
+                    status: 'pending',
+                },
+                {
+                    anchor_path: 'DOCKER_README.md',
+                    anchor_type: 'file',
+                    status: 'pending',
+                },
+            ])
+
+            const cliPayload = buildEntryPayload(
+                { project: '1' },
+                {
+                    anchors: [
+                        { type: 'file', value: 'src/foo.ts' },
+                        { target: 'src/bar.ts#baz' },
+                    ],
+                }
+            )
+            expect(cliPayload.anchors).toEqual([
+                { anchor_path: 'src/foo.ts', anchor_type: 'file' },
+                { anchor_path: 'src/bar.ts#baz', anchor_type: 'symbol' },
+            ])
+        })
     })
 })

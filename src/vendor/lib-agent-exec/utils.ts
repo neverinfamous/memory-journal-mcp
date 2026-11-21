@@ -41,6 +41,44 @@ export function getLastStderrTail(maxChars = 500): string {
   return lastStderrTail.length > maxChars ? lastStderrTail.slice(-maxChars) : lastStderrTail;
 }
 
+/** [INTENT]: Emit informational 💡 AGENT INTERCEPT notices only when AGENT_EXEC_VERBOSE is opted in. */
+export function emitInterceptBanner(message: string): void {
+  const v = process.env.AGENT_EXEC_VERBOSE;
+  if (v !== undefined && v !== '' && v !== '0' && v.toLowerCase() !== 'false') {
+    console.error(message);
+  }
+}
+
+export function sanitizeLoggedIssuePayload(payload: unknown, extra?: Record<string, unknown>): { safePayload: unknown; internalStallBypass: boolean } {
+  const safePayload = redactPayloadForLog(payload);
+  const pre = extra?.preInterceptorPayload;
+  const callerSentBypass =
+    pre !== null &&
+    pre !== undefined &&
+    typeof pre === 'object' &&
+    'bypassInterceptors' in pre &&
+    pre.bypassInterceptors === true;
+  if (
+    safePayload !== null &&
+    safePayload !== undefined &&
+    typeof safePayload === 'object' &&
+    !Array.isArray(safePayload) &&
+    'bypassInterceptors' in safePayload &&
+    safePayload.bypassInterceptors === true &&
+    !callerSentBypass &&
+    pre !== undefined
+  ) {
+    const cleaned: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(safePayload)) {
+      if (k !== 'bypassInterceptors') {
+        cleaned[k] = v;
+      }
+    }
+    return { safePayload: cleaned, internalStallBypass: true };
+  }
+  return { safePayload, internalStallBypass: false };
+}
+
 export function recordAgentIssue(issueType: string, message: string, payload?: unknown, extra?: Record<string, unknown>) {
   if (process.env.NODE_ENV === 'test' || process.env.AGENT_EXEC_SILENT === '1') return;
   try {
@@ -55,11 +93,14 @@ export function recordAgentIssue(issueType: string, message: string, payload?: u
     }
     
     const issuesFilePath = path.join(targetDir, 'agent-exec-issues.jsonl');
-    const safePayload = redactPayloadForLog(payload);
+    const { safePayload, internalStallBypass } = sanitizeLoggedIssuePayload(payload, extra);
     const safeExtra = extra !== undefined ? redactPayloadForLog(extra) : undefined;
 
     const timestamp = new Date().toISOString();
     const record: Record<string, unknown> = { timestamp, issueType, message, payload: safePayload };
+    if (internalStallBypass) {
+      record.internalStallBypass = true;
+    }
     if (safeExtra !== null && typeof safeExtra === 'object') {
       Object.assign(record, safeExtra);
     }
@@ -126,6 +167,7 @@ const NORMALIZATION_PATTERNS: readonly RegExp[] = [
   /Expanded glob/i,
   /globs are not expanded automatically/,
   /Normalizing to ripgrep '-g'/,
+  /Auto-correcting relative (?:import|require) path/i,
 ];
 
 export function classifyHealingMessage(message: string): 'NORMALIZATION' | 'AUTONOMOUS_HEALING_TRIGGERED' {
@@ -333,6 +375,36 @@ export function tryAccelerateCompiledCommitScript(
   target?: string
 ): { compiledPath: string; remainingArgs: string[] } | null {
   if (target === 'wsl2') return null;
+  if (args[0] === 'commit' || (args[0] === 'run' && args[1] === 'commit')) {
+    const flagStart = args[0] === 'run' ? 2 : 1;
+    const pkgPath = path.join(projectDir, 'package.json');
+    if (fs.existsSync(pkgPath)) {
+      try {
+        const rawPkg: unknown = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
+        if (
+          rawPkg !== null &&
+          typeof rawPkg === 'object' &&
+          'scripts' in rawPkg &&
+          rawPkg.scripts !== null &&
+          typeof rawPkg.scripts === 'object' &&
+          'commit' in rawPkg.scripts &&
+          typeof rawPkg.scripts.commit === 'string' &&
+          /\btsx\s+(?:\.[\\/])?scripts[\\/]commit\.ts\b/i.test(rawPkg.scripts.commit)
+        ) {
+          const compiledPath = resolveFreshCompiledCommitBundle('scripts/commit.ts', projectDir);
+          if (compiledPath !== null) {
+            const rem = args.slice(flagStart);
+            return {
+              compiledPath,
+              remainingArgs: rem[0] === '--' ? rem.slice(1) : rem,
+            };
+          }
+        }
+      } catch {
+        // ignore malformed package.json
+      }
+    }
+  }
   let tsxIdx = -1;
   if (args[0] === 'tsx' && args[1] !== undefined && !args[1].startsWith('-')) {
     tsxIdx = 0;

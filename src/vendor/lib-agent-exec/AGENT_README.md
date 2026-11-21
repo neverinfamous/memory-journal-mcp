@@ -41,13 +41,13 @@ We use **WSL Containers for Windows** natively with the Docker CLI, and **do NOT
 
 ## 🚪 Interactive Mode & Bypassing the Proxy
 
-If you are a **human user** attempting to run interactive commands natively in your PowerShell terminal (e.g., `gh auth login`), the proxy interceptor will normally block them. *Note: The proxy explicitly prints a helpful intercept message reminding users of these bypass methods whenever a command is forwarded.* You can bypass the proxy using the following methods:
+If you are a **human user** attempting to run interactive commands natively in your PowerShell terminal (e.g., `gh auth login`), the proxy interceptor will normally block them. *(Routine `💡 AGENT INTERCEPT` forwarding banners stay suppressed by default unless `AGENT_EXEC_VERBOSE=1` is set; blocking errors and `🛠️ AUTONOMOUS HEALING` hints always emit.)* You can bypass the proxy using the following methods:
 
 1. **Per-Command Flag**: Append `--agent-bypass` to any command.
    *Example*: `gh auth login --agent-bypass`
 2. **Native Passthrough Alias**: Prepend `native` to any command.
    *Example*: `native gh auth login`
-3. **Session-Wide Toggle**: Temporarily disable the interceptor completely by running `Disable-AgentExec`. To turn it back on, run `Enable-AgentExec`. This writes a temporary state file to `$env:TEMP\.agent_exec_bypass`, meaning the bypass will safely persist across separate agent `run_command` tool calls.
+3. **Interactive Session Toggle (Current Shell Only)**: In a persistent PowerShell session, run `Disable-AgentExec` / `Enable-AgentExec` (sets `$env:AGENT_EXEC_BYPASS` for that shell session). Note that single-command agent shells start cleanly without cross-process bypass files.
 
 ## Payload Schemas
 
@@ -161,7 +161,7 @@ Agents frequently hallucinate Unix tools or specific flags that break natively i
    * **Fix**: Prefer native `search_web`. When CLI HTTP requests are needed, `lib-agent-exec` automatically routes `curl`/`wget` to WSL2 (Frictionless Recovery), or you may invoke `curl.exe` explicitly.
 2. **`cat`, `ls`, `grep` & Native PowerShell Cmdlets**: PowerShell aliases `cat` to `Get-Content` and `ls` to `Get-ChildItem`, and lacks native Unix `grep` (`Select-String`).
    * **Fix**: **ALWAYS** prefer declared agent-native tools first (`read_file`, `edit_file`, `write_file`), and use `Get-ChildItem` or `rg` for directory discovery and code search.
-   * **WSL2 Frictionless Recovery**: If standalone `ls`, `grep`, `cat`, `rg`, `find`, `jq`, `sed`, or `awk` are invoked on Windows, `lib-agent-exec` transparently routes them to WSL2, converts Windows paths (`C:\...` -> `/mnt/c/...`), and injects recursive exclusions (`node_modules`, `.git`, `dist`, etc.) where appropriate.
+   * **WSL2 & Native Search Recovery**: Standalone `ls`, `grep`, `cat`, `find`, `sed`, and `awk` route to WSL2 with Windows-to-WSL path conversion (`C:\...` -> `/mnt/c/...`) and recursive exclusions (`node_modules`, `.git`, `dist`). Native `rg` and `jq` binaries run directly on Windows whenever installed on `PATH` (falling back to WSL2 only when absent or targeting Linux-only POSIX paths).
    * **Workspace Boundary Fallback**: For paths outside workspace roots, use `rg -n "pattern" "C:\path\outside\workspace"` or `Get-ChildItem`.
 3. **`gh run view --log`**: If a GitHub Action job is still running, this command exits with code 1 instead of waiting.
    * **Fix**: Do NOT poll this in a loop. Use the `schedule` tool to set an asynchronous timer to check back later.

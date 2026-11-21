@@ -14,7 +14,7 @@ import {
   replTuiInterceptor, 
   systemInterceptor 
 } from './interceptors/index.js';
-import { replaceIntegrationContext, BUILT_INS, recordAgentIssue, resolveAgentScriptFallback } from './utils.js';
+import { replaceIntegrationContext, BUILT_INS, emitInterceptBanner, recordAgentIssue, resolveAgentScriptFallback } from './utils.js';
 import { DEFAULT_ENV_VARS } from './environment.js';
 import { resolveEvalExecutionTarget, hasTopLevelReturn, wrapCodeInAsyncIife, healStrippedSqlTemplateLiterals } from './eval-healer.js';
 import { configureCwdModuleResolution, healStrippedStringRawLiterals } from './inline-script-healer.js';
@@ -209,6 +209,11 @@ export function buildCommand(payload: ExecPayload, cwd: string, isJson: boolean 
             }
           }
         }
+      } else if (['rg', 'rg.exe'].includes(path.basename(localCmd).toLowerCase())) {
+        const patternExprIdx = findPatternExprIndex(localCmd, localArgs);
+        if (patternExprIdx !== -1 && !localArgs.includes('-F') && !localArgs.includes('--fixed-strings')) {
+          localArgs[patternExprIdx] = sanitizeWslRegex(localArgs[patternExprIdx]);
+        }
       }
 
       const patternExprIdx = findPatternExprIndex(localCmd, localArgs);
@@ -327,7 +332,14 @@ export function buildCommand(payload: ExecPayload, cwd: string, isJson: boolean 
             codeToExecute = `${p.templateOverride}\n${p.code}`;
           }
         }
-        codeToExecute = healEvalCodePathHallucinations(codeToExecute, cwd, p.target);
+        const skipValidFileRewrite =
+          p.target !== 'wsl2' &&
+          ['node', 'tsx', 'ts-node'].includes(effectiveInterpreter.toLowerCase());
+        if (callerBypassedInterceptors || Boolean(p.templateOverride)) {
+          codeToExecute = healEvalCodePathHallucinations(codeToExecute, cwd, p.target, {
+            skipValidFileRewrite,
+          });
+        }
         if (ext === '.ps1') {
           codeToExecute = `[Console]::OutputEncoding = [System.Text.Encoding]::UTF8;\n$OutputEncoding = [System.Text.Encoding]::UTF8;\n$ErrorActionPreference = 'Stop';\n$ProgressPreference = 'SilentlyContinue';\n$ConfirmPreference = 'None';\n${codeToExecute}`;
         } else if (p.target === 'wsl2') {
@@ -468,7 +480,7 @@ export function buildCommand(payload: ExecPayload, cwd: string, isJson: boolean 
   if (payload.type === 'command') {
     const isWinBatch = cmd.toLowerCase().endsWith('.bat') || cmd.toLowerCase().endsWith('.cmd') || (process.platform === 'win32' && ['pnpm', 'npm', 'yarn', 'npx'].includes(cmd.toLowerCase()));
     if (isWinBatch && payload.target !== 'wsl2') {
-      console.error(`\n   💡 AGENT HINT: Intercepted Windows batch file execution. Routing through pwsh to prevent spawn failures and quote vulnerabilities.`);
+      emitInterceptBanner(`\n   💡 AGENT HINT: Intercepted Windows batch file execution. Routing through pwsh to prevent spawn failures and quote vulnerabilities.`);
       const wrapped = buildPwshWrapper(cmd, args);
       cmd = wrapped.cmd;
       args = wrapped.args;

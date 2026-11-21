@@ -140,10 +140,54 @@ export function escapeUnixArg(arg: string, allowGlobs = false): string {
   return `'${arg.replace(/'/g, "'\\''")}'`;
 }
 
+function escapeUnescapedLiteralBraces(pattern: string): string {
+  let out = '';
+  let escaped = false;
+  let inCharClass = false;
+  for (let i = 0; i < pattern.length; i++) {
+    const ch = pattern[i];
+    if (ch === undefined) continue;
+    if (escaped) {
+      out += ch;
+      escaped = false;
+      continue;
+    }
+    if (ch === '\\') {
+      out += ch;
+      escaped = true;
+      continue;
+    }
+    if (ch === '[' && !inCharClass) {
+      inCharClass = true;
+      out += ch;
+      continue;
+    }
+    if (ch === ']' && inCharClass) {
+      inCharClass = false;
+      out += ch;
+      continue;
+    }
+    if (ch === '{' && !inCharClass) {
+      const rest = pattern.slice(i);
+      const isQuantifierSyntax = /^\{\d+(?:,\d*)?\}/.test(rest);
+      const prevChar = i > 0 ? pattern[i - 1] : undefined;
+      const prevIsNonAtom =
+        prevChar === undefined ||
+        (['(', '|', '^', '*', '+', '?', '{'].includes(prevChar) && (i < 2 || pattern[i - 2] !== '\\'));
+      if (!isQuantifierSyntax || prevIsNonAtom) {
+        out += '\\{';
+        continue;
+      }
+    }
+    out += ch;
+  }
+  return out;
+}
+
 export function healRegexPattern(pattern: string): string {
   try {
     new RegExp(pattern);
-    return pattern;
+    return escapeUnescapedLiteralBraces(pattern);
   } catch {
     const parenStack: number[] = [];
     const bracketStack: number[] = [];
@@ -190,7 +234,7 @@ export function healRegexPattern(pattern: string): string {
       }
       try {
         new RegExp(result);
-        return result;
+        return escapeUnescapedLiteralBraces(result);
       } catch {
         // Fallback below
       }
@@ -807,13 +851,18 @@ export function healFragmentedQuotes(args: string[]): string[] {
           });
         };
 
+        const healTrailingEmptyQuoteRemnants = (s: string): string =>
+          s.replace(/(?<=[:=\s*])\\\\(?=$|[|\s),;])/g, '""');
+
         let reassembled: string;
         if (matchedType === 'pure-slash') {
           const last = lastArg.slice(0, -1);
           const healedTokens = healSqlTokenList([...rawMiddle, last]);
           reassembled = `${first}"${healedTokens.join(' ')}"`;
         } else if (matchedType === 'multi-quote' || matchedType === 'internal-slash' || matchedType === 'internal-close') {
-          const healedRest = internalRest.replace(/\\([a-zA-Z0-9_.-]+)\\/g, '"$1"');
+          const healedRest = healTrailingEmptyQuoteRemnants(
+            internalRest.replace(/\\([a-zA-Z0-9_.:/*?+-]+)\\/g, '"$1"')
+          );
           const healedTokens = healSqlTokenList([...rawMiddle, internalWord]);
           reassembled = `${first}"${healedTokens.join(' ')}"${healedRest}`;
         } else if (matchedType === 'escaped-paren') {
@@ -825,7 +874,7 @@ export function healFragmentedQuotes(args: string[]): string[] {
           const healedTokens = healSqlTokenList([...rawMiddle, last]);
           reassembled = `${first}"${healedTokens.join(' ')}/)`;
         } else if (matchedType === 'leading-slash') {
-          const last = lastArg.slice(1);
+          const last = healTrailingEmptyQuoteRemnants(lastArg.slice(1));
           const healedTokens = healSqlTokenList(rawMiddle);
           reassembled = `${first}"${healedTokens.join(' ')}"${last}`;
         } else {

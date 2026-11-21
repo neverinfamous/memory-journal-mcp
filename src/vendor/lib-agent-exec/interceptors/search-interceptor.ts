@@ -3,7 +3,7 @@ import path from 'node:path';
 import fs from 'node:fs';
 import { ExecutionContext } from './types.js';
 import { convertToWslPath, convertToWindowsPath, getPositionalArgs, findPatternExprIndex, tokenizeArgs, healFragmentedQuotes } from '../command-utils.js';
-import { resolveNativeBinary } from '../utils.js';
+import { emitInterceptBanner, resolveNativeBinary } from '../utils.js';
 
 export const GREP_EXCLUDE_DIRS = [
   'node_modules',
@@ -55,6 +55,24 @@ function hasNonGlobRegexMeta(arg: string): boolean {
   return /[()+[\]^$|{}]/.test(arg) || arg.includes('|');
 }
 
+// [INTENT]: Recognize real filesystem paths/globs that legally contain `+` (e.g. `.pnpm/@scope+pkg*`) or `[id]` segments before regex-meta rejection.
+function hasUnmistakableStructuredPathPrefix(arg: string): boolean {
+  if (/\s/.test(arg) || /[()^{}$|]/.test(arg)) return false;
+  if (/^(?:\.{1,2}[/\\]|node_modules[/\\]|\.pnpm[/\\]|\/mnt\/[a-zA-Z][/\\]|[a-zA-Z]:[/\\])/.test(arg)) {
+    return true;
+  }
+  return (arg.includes('/.pnpm/') || arg.includes('\\.pnpm\\') || arg.includes('/node_modules/') || arg.includes('\\node_modules\\'));
+}
+
+function existsOnDisk(arg: string, cwd?: string): boolean {
+  try {
+    const baseDir = cwd !== undefined && cwd.length > 0 ? path.resolve(cwd) : process.cwd();
+    return fs.existsSync(path.resolve(baseDir, arg));
+  } catch {
+    return false;
+  }
+}
+
 function hasBackslashRegexEscape(arg: string): boolean {
   if (isWindowsBackslashPath(arg)) return false;
   return /\\[bBwWdDsSnrtv0()[\]{}.*+?^$|\-.]/.test(arg);
@@ -91,7 +109,8 @@ function isWindowsBackslashPath(arg: string, cwd?: string): boolean {
 // [INTENT]: Recognizes file/directory glob paths (e.g., 'tests/adapters/sqlite/tools/stats*', 'tests/**/*.test.ts', '*.ts') so multi-target rg/grep invocations do not misclassify intermediate glob paths as unquoted multi-word search patterns.
 function isGlobPathArg(arg: string): boolean {
   if (!arg.includes('*') && !arg.includes('?')) return false;
-  if (hasNonGlobRegexMeta(arg) || hasUriOrNonDriveColon(arg) || /\s/.test(arg)) return false;
+  if (hasUriOrNonDriveColon(arg) || /\s/.test(arg)) return false;
+  if (!hasUnmistakableStructuredPathPrefix(arg) && hasNonGlobRegexMeta(arg)) return false;
   if (!/^[a-zA-Z]:[/\\]/.test(arg) && !/^\.{1,2}[/\\]/.test(arg) && hasBackslashRegexEscape(arg)) {
     return false;
   }
@@ -118,10 +137,31 @@ function isSecondExistingTargetOnly(first: string, second: string, cwd?: string)
 
 export function isLikelyDirectoryArg(arg: string, cwd?: string): boolean {
   if (arg.length === 0 || arg.startsWith('-') || arg.startsWith('\\-')) return false;
-  if (hasUnambiguousRegexMeta(arg)) {
+  if (hasUriOrNonDriveColon(arg)) {
     return false;
   }
-  if (hasUriOrNonDriveColon(arg)) {
+  if (/\s/.test(arg) || arg.includes('|')) {
+    return false;
+  }
+
+  try {
+    const baseDir = cwd !== undefined && cwd.length > 0 ? path.resolve(cwd) : process.cwd();
+    const resolved = path.resolve(baseDir, arg);
+    if (fs.existsSync(resolved)) {
+      return fs.statSync(resolved).isDirectory();
+    }
+  } catch {
+    // ignore stat errors
+  }
+
+  if (hasUnambiguousRegexMeta(arg)) {
+    if (
+      hasUnmistakableStructuredPathPrefix(arg) &&
+      (arg.endsWith('/') || arg.endsWith('\\')) &&
+      !/[()*?[\]^$|{}]/.test(arg)
+    ) {
+      return true;
+    }
     return false;
   }
 
@@ -592,10 +632,10 @@ export function handleRipgrepInterception(ctx: ExecutionContext, hasStdin: boole
       idx !== rgPatternIdx && a.startsWith('/') && !a.startsWith('//') && !/^\/mnt\/[a-zA-Z](?:\/|$)/.test(a)
     );
     if (resolveNativeBinary('rg') === null) {
-      console.error(`\n   💡 AGENT INTERCEPT: No native 'rg' binary on PATH. Switching execution target to WSL2... (Frictionless Recovery)`);
+      emitInterceptBanner(`\n   💡 AGENT INTERCEPT: No native 'rg' binary on PATH. Switching execution target to WSL2... (Frictionless Recovery)`);
       ctx.payload.target = 'wsl2';
     } else if (targetsLinuxOnlyPath) {
-      console.error(`\n   💡 AGENT INTERCEPT: 'rg' targets a Linux-only POSIX path. Switching execution target to WSL2... (Frictionless Recovery)`);
+      emitInterceptBanner(`\n   💡 AGENT INTERCEPT: 'rg' targets a Linux-only POSIX path. Switching execution target to WSL2... (Frictionless Recovery)`);
       ctx.payload.target = 'wsl2';
     } else {
       ctx.args = ctx.args.map((a, idx) =>
@@ -642,6 +682,11 @@ export function handleRipgrepInterception(ctx: ExecutionContext, hasStdin: boole
 
   const isPathLike = (arg: string): boolean => {
     if (isGlobPathArg(arg)) return true;
+    if (existsOnDisk(arg, ctx.payload.cwd)) return true;
+    if (hasUriOrNonDriveColon(arg) || /\s/.test(arg)) return false;
+    if (hasUnmistakableStructuredPathPrefix(arg) && !hasUnambiguousRegexMeta(arg.replace(/[+[\]]/g, ''))) {
+      return true;
+    }
     if (hasUnambiguousRegexMeta(arg)) return false;
     if (!/^[a-zA-Z]:[/\\]/.test(arg) && !/^\.{1,2}[/\\]/.test(arg) && hasBackslashRegexEscape(arg)) return false;
     return (
@@ -716,23 +761,26 @@ export function handleRipgrepInterception(ctx: ExecutionContext, hasStdin: boole
   }
   if (!hasPatternFlag && !updatedHasFiles) {
     // Also check if a leading or middle token of an unquoted multi-word pattern started with '-' (e.g. "-write\\|target", "===", "'write'|isReadonlyMetaActive", "src")
-    // and was excluded from positionalArgs by getPositionalArgs
-    const lastArg = ctx.args[ctx.args.length - 1];
-    if (lastArg !== undefined && !lastArg.startsWith('-') && isPathLike(lastArg)) {
-      const toolFlagsWithVal = new Set(['-A', '-B', '-C', '-m', '-M', '-e', '-f', '-g', '-t', '-T', '-r', '-j', '-E', '--after-context', '--before-context', '--context', '--max-count', '--max-columns', '--max-depth', '--regexp', '--file', '--glob', '--type', '--type-not', '--replace', '--threads', '--encoding', '--ignore-file', '--max-filesize']);
-      const candidateIdxs: number[] = [];
-      for (let i = 0; i < ctx.args.length - 1; i++) {
-        const a = ctx.args[i];
-        if (a === undefined) continue;
-        if (toolFlagsWithVal.has(a)) {
-          i++;
-          continue;
-        }
-        if (/^-[a-zA-Z0-9]+$/.test(a) || (a.startsWith('--') && /^--[a-zA-Z0-9-]+(?:=|$)/.test(a))) {
-          continue;
-        }
-        candidateIdxs.push(i);
+    // and was excluded from positionalArgs by getPositionalArgs, skipping trailing value-taking flags such as `-g *.mjs`.
+    const toolFlagsWithVal = new Set(['-A', '-B', '-C', '-m', '-M', '-e', '-f', '-g', '-t', '-T', '-r', '-j', '-E', '--after-context', '--before-context', '--context', '--max-count', '--max-columns', '--max-depth', '--regexp', '--file', '--glob', '--iglob', '--type', '--type-not', '--replace', '--threads', '--encoding', '--ignore-file', '--max-filesize']);
+    const nonFlagIndices: number[] = [];
+    for (let i = 0; i < ctx.args.length; i++) {
+      const a = ctx.args[i];
+      if (a === undefined) continue;
+      if (a === '--') break;
+      if (toolFlagsWithVal.has(a)) {
+        i++;
+        continue;
       }
+      if (/^-[a-zA-Z0-9]+$/.test(a) || (a.startsWith('--') && /^--[a-zA-Z0-9-]+(?:=|$)/.test(a))) {
+        continue;
+      }
+      nonFlagIndices.push(i);
+    }
+    const lastPosIdx = nonFlagIndices.length > 0 ? nonFlagIndices[nonFlagIndices.length - 1] : undefined;
+    const lastArg = lastPosIdx !== undefined ? ctx.args[lastPosIdx] : undefined;
+    if (lastPosIdx !== undefined && lastArg !== undefined && !lastArg.startsWith('-') && isPathLike(lastArg)) {
+      const candidateIdxs = nonFlagIndices.filter(idx => idx < lastPosIdx);
       if (candidateIdxs.length >= 2) {
         const patternParts = candidateIdxs.map(idx => ctx.args[idx]);
         const intermediateParts = patternParts.slice(1);
@@ -834,7 +882,7 @@ export function handleRipgrepInterception(ctx: ExecutionContext, hasStdin: boole
   if (!hasStdin && !hasHelpOrVersion && !ctx.args.includes('.')) {
     const updatedPositional = getPositionalArgs(cmdBasename, ctx.args);
     if ((hasPatternFlag && updatedPositional.length === 0) || (!hasPatternFlag && updatedPositional.length === 1)) {
-      console.error(`\n   💡 AGENT INTERCEPT: 'rg' missing target directory argument. Auto-appending '.' as target directory... (Frictionless Recovery)`);
+      emitInterceptBanner(`\n   💡 AGENT INTERCEPT: 'rg' missing target directory argument. Auto-appending '.' as target directory... (Frictionless Recovery)`);
       ctx.args.push('.');
     }
   }
@@ -879,10 +927,10 @@ export function handleGrepInterception(ctx: ExecutionContext, hasStdin: boolean)
   }
 
   if (hasStdin) {
-    console.error(`\n   💡 AGENT INTERCEPT: Search command with stdin detected. Switching execution target to WSL2... (Frictionless Recovery)`);
+    emitInterceptBanner(`\n   💡 AGENT INTERCEPT: Search command with stdin detected. Switching execution target to WSL2... (Frictionless Recovery)`);
     ctx.payload.target = 'wsl2';
   } else if (process.platform === 'win32' && ctx.payload.target !== 'wsl2') {
-    console.error(`\n   💡 AGENT INTERCEPT: '${cmdBasename}' search command detected. Switching execution target to WSL2... (Frictionless Recovery)`);
+    emitInterceptBanner(`\n   💡 AGENT INTERCEPT: '${cmdBasename}' search command detected. Switching execution target to WSL2... (Frictionless Recovery)`);
     ctx.payload.target = 'wsl2';
   }
 
@@ -918,6 +966,11 @@ export function handleGrepInterception(ctx: ExecutionContext, hasStdin: boolean)
   if (!hasStdin && !hasPatternFlag && positionalArgs.length > 2) {
     const isPathLike = (arg: string): boolean => {
       if (isGlobPathArg(arg)) return true;
+      if (existsOnDisk(arg, ctx.payload.cwd)) return true;
+      if (hasUriOrNonDriveColon(arg) || /\s/.test(arg)) return false;
+      if (hasUnmistakableStructuredPathPrefix(arg) && !hasUnambiguousRegexMeta(arg.replace(/[+[\]]/g, ''))) {
+        return true;
+      }
       if (hasUnambiguousRegexMeta(arg)) return false;
       if (!/^[a-zA-Z]:[/\\]/.test(arg) && !/^\.{1,2}[/\\]/.test(arg) && hasBackslashRegexEscape(arg)) return false;
       return (
@@ -998,7 +1051,7 @@ export function handleGrepInterception(ctx: ExecutionContext, hasStdin: boolean)
       ctx.args.push('.');
       isRecursive = true;
     } else if (!ctx.args.includes('.')) {
-      console.error(`\n   💡 AGENT INTERCEPT: Recursive '${cmdBasename.replace(/\.exe$/, '')}' missing target directory argument. Auto-appending '.' as target directory... (Frictionless Recovery)`);
+      emitInterceptBanner(`\n   💡 AGENT INTERCEPT: Recursive '${cmdBasename.replace(/\.exe$/, '')}' missing target directory argument. Auto-appending '.' as target directory... (Frictionless Recovery)`);
       ctx.args.push('.');
     }
   } else if (!hasStdin && fileArgsCount > 0 && !isRecursive) {

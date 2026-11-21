@@ -3,10 +3,12 @@ import fs from 'fs';
 import path from 'path';
 import {
   AUTONOMOUS_HEALING_MSG,
+  emitInterceptBanner,
   resolveAgentScriptFallback,
   tryAccelerateCompiledCommitScript,
 } from '../utils.js';
 import { ExecutionContext, AGENT_NATIVE_TOOLS, ECOSYSTEM_MCP_TOOLS } from './types.js';
+import { getPkgNonFlagArgs, stripInlineCodeArgs } from './utils.js';
 import { handleRipgrepInterception } from './search-interceptor.js';
 import { getUnderlyingPackageScript } from '../command-utils.js';
 import { configureCwdModuleResolution, rewriteInlineScriptToTempFile } from '../inline-script-healer.js';
@@ -60,7 +62,7 @@ export function packageManagerInterceptor(ctx: ExecutionContext): void {
           ctx.payload.command = nodeCmd;
           ctx.payload.args = args;
         }
-        console.error(`\n   💡 AGENT INTERCEPT: Disabling stall interceptors and extending timeout for deterministic workflow script to prevent false positive aborts.`);
+        emitInterceptBanner(`\n   💡 AGENT INTERCEPT: Disabling stall interceptors and extending timeout for deterministic workflow script to prevent false positive aborts.`);
         ctx.payload.bypassInterceptors = true;
         if (ctx.payload.timeoutMs === undefined || ctx.payload.timeoutMs < 240000) {
           ctx.payload.timeoutMs = 240000;
@@ -105,7 +107,7 @@ export function packageManagerInterceptor(ctx: ExecutionContext): void {
 
   if (['conda', 'conda.exe', 'mamba', 'mamba.exe'].includes(cmdBasename)) {
     if (!args.includes('-y') && !args.includes('--yes')) {
-      const subCmd = args.filter(a => !a.startsWith('-'))[0];
+      const subCmd = getPkgNonFlagArgs(args)[0];
       if (['install', 'create', 'update', 'upgrade', 'remove', 'uninstall'].includes(subCmd)) {
         console.error(`\n   🛠️ AUTONOMOUS HEALING: Automatically injecting '-y' into ${cmdBasename} ${subCmd} command to prevent prompt hanging.... (Frictionless Recovery)`);
         args.push('-y');
@@ -191,7 +193,7 @@ export function packageManagerInterceptor(ctx: ExecutionContext): void {
         if (args[i] === '--interactive' || (isYarnOrPnpm && args[i] === '-i')) args.splice(i, 1);
       }
     }
-    const subCmd = args.filter(a => !a.startsWith('-'))[0];
+    const subCmd = getPkgNonFlagArgs(args)[0];
     if (subCmd && (AGENT_NATIVE_TOOLS as readonly string[]).includes(subCmd)) {
       if (subCmd === 'grep_search') {
         const sIdx = args.findIndex(a => ['-s', '--symbol', '--pattern', '--searchpattern', '--search-pattern', '--targetcontent', '--target-content', '--content'].includes(a.toLowerCase()));
@@ -379,7 +381,7 @@ export function packageManagerInterceptor(ctx: ExecutionContext): void {
         }
       }
     }
-    const nonFlagArgs = args.filter(a => !a.startsWith('-'));
+    const nonFlagArgs = getPkgNonFlagArgs(args);
     const tsxBin = (subCmd === 'tsx' || subCmd === 'ts-node')
       ? subCmd
       : ((subCmd === 'exec' || subCmd === 'run') && (nonFlagArgs[1] === 'tsx' || nonFlagArgs[1] === 'ts-node') ? nonFlagArgs[1] : undefined);
@@ -407,16 +409,17 @@ export function packageManagerInterceptor(ctx: ExecutionContext): void {
     const isPackageResolution = ['install', 'i', 'ci', 'add', 'update', 'up', 'dedupe'].includes(subCmdLower);
     const targetScript = (subCmd === 'run' || subCmd === 'exec') ? nonFlagArgs[1] : subCmd;
     const underlyingScript = getUnderlyingPackageScript(cmdBasename, args, ctx.payload.cwd);
-    const isKnownDeterministic = args.some(a => /(?:commit\.(?:ts|js)|get-git-history-json\.ts|backup-conversations\.ts)/i.test(a));
-    const isBackupConversations = args.some(a => /backup-conversations\.ts/i.test(a));
+    const nonInlineArgs = stripInlineCodeArgs(cmdBasename, args);
+    const isKnownDeterministic = nonInlineArgs.some(a => /(?:commit\.(?:ts|js)|get-git-history-json\.ts|backup-conversations\.ts)/i.test(a));
+    const isBackupConversations = nonInlineArgs.some(a => /backup-conversations\.ts/i.test(a));
     const isPlaywright = !isPackageResolution && !isKnownDeterministic && Boolean(
       (targetScript && /(?:playwright|cypress|\be2e\b|test:e2e|test-e2e)/i.test(targetScript)) ||
-      args.some(a => /(?:playwright|cypress|\be2e\b|test:e2e|test-e2e)/i.test(a)) ||
+      nonInlineArgs.some(a => /(?:playwright|cypress|\be2e\b|test:e2e|test-e2e)/i.test(a)) ||
       (underlyingScript && /(?:playwright|cypress|\be2e\b)/i.test(underlyingScript))
     );
     const isCoverage = !isPackageResolution && !isKnownDeterministic && Boolean(
       (targetScript && /(?:coverage|test:coverage)/i.test(targetScript)) ||
-      args.some(a => /(?:coverage|--coverage|test:coverage)/i.test(a)) ||
+      nonInlineArgs.some(a => /(?:coverage|--coverage|test:coverage)/i.test(a)) ||
       (underlyingScript && /(?:coverage|--coverage)/i.test(underlyingScript))
     );
     const isLongRunningQualityCheck = !isPackageResolution && Boolean(
@@ -430,47 +433,47 @@ export function packageManagerInterceptor(ctx: ExecutionContext): void {
         targetScript.includes('lint') ||
         targetScript.includes('typecheck')
       )) ||
-      args.some(a => /(?:vitest|jest|playwright|cypress|test|lint|typecheck|tsc)/i.test(a)) ||
+      nonInlineArgs.some(a => /(?:vitest|jest|playwright|cypress|test|lint|typecheck|tsc)/i.test(a)) ||
       (underlyingScript && /(?:vitest|jest|playwright|cypress|eslint|tsc|typecheck|test)/i.test(underlyingScript))
     );
     if (isPackageResolution) {
-      console.error(`\n   💡 AGENT INTERCEPT: Disabling stall interceptors and extending timeout for package installation/resolution command to prevent false positive aborts.`);
+      emitInterceptBanner(`\n   💡 AGENT INTERCEPT: Disabling stall interceptors and extending timeout for package installation/resolution command to prevent false positive aborts.`);
       ctx.payload.bypassInterceptors = true;
       if (ctx.payload.timeoutMs === undefined || ctx.payload.timeoutMs < 300000) {
         ctx.payload.timeoutMs = 300000;
       }
     } else if (isPlaywright) {
-      console.error(`\n   💡 AGENT INTERCEPT: Disabling stall interceptors and extending timeout for Playwright/E2E test to prevent false positive aborts.`);
+      emitInterceptBanner(`\n   💡 AGENT INTERCEPT: Disabling stall interceptors and extending timeout for Playwright/E2E test to prevent false positive aborts.`);
       ctx.payload.bypassInterceptors = true;
       if (ctx.payload.timeoutMs === undefined || ctx.payload.timeoutMs < 600000) {
         ctx.payload.timeoutMs = 600000;
       }
     } else if (isKnownDeterministic) {
-      console.error(`\n   💡 AGENT INTERCEPT: Disabling stall interceptors and extending timeout for deterministic workflow script to prevent false positive aborts.`);
+      emitInterceptBanner(`\n   💡 AGENT INTERCEPT: Disabling stall interceptors and extending timeout for deterministic workflow script to prevent false positive aborts.`);
       ctx.payload.bypassInterceptors = true;
       const detTimeout = ctx.payload.target === 'wsl2' ? 90000 : (isBackupConversations ? 1500000 : 240000);
       if (ctx.payload.timeoutMs === undefined || ctx.payload.timeoutMs < detTimeout) {
         ctx.payload.timeoutMs = detTimeout;
       }
     } else if (isLongRunningQualityCheck) {
-      console.error(`\n   💡 AGENT INTERCEPT: Disabling stall interceptors and extending timeout for quality command to prevent false positive aborts.`);
+      emitInterceptBanner(`\n   💡 AGENT INTERCEPT: Disabling stall interceptors and extending timeout for quality command to prevent false positive aborts.`);
       ctx.payload.bypassInterceptors = true;
-      const testFiles = args.filter(a => /\.(?:test|spec)\.[a-zA-Z0-9]+$/i.test(a));
-      const testDirs = args.filter(a => !a.startsWith('-') && !['run', 'exec', 'test', 'vitest', 'jest', 'pytest', 'playwright', 'cypress', 'coverage'].includes(a.toLowerCase()) && /(?:^|[/\\])(?:tests?|__tests__)(?:[/\\][^\s.]*)?$/i.test(a) && !/\.[a-zA-Z0-9_-]+$/i.test(a));
+      const testFiles = nonInlineArgs.filter(a => /\.(?:test|spec)\.[a-zA-Z0-9]+$/i.test(a));
+      const testDirs = nonInlineArgs.filter(a => !a.startsWith('-') && !['run', 'exec', 'test', 'vitest', 'jest', 'pytest', 'playwright', 'cypress', 'coverage'].includes(a.toLowerCase()) && /(?:^|[/\\])(?:tests?|__tests__)(?:[/\\][^\s.]*)?$/i.test(a) && !/\.[a-zA-Z0-9_-]+$/i.test(a));
       const isMultiTest = testFiles.length > 1;
       const isTestDir = testDirs.length > 0;
       const isLargeTestBatch = testDirs.length > 1 || (testDirs.length >= 1 && testFiles.length + testDirs.length > 1) || testFiles.length >= 5;
       const isTestRunner = /(?:vitest|jest|pytest|playwright|cypress)/i.test(cmdBasename) ||
-        args.some(a => /(?:vitest|jest|pytest|playwright|cypress|^test(?::.*|-.*)?$|^coverage(?::.*)?$)/i.test(a)) ||
+        nonInlineArgs.some(a => /(?:vitest|jest|pytest|playwright|cypress|^test(?::.*|-.*)?$|^coverage(?::.*)?$)/i.test(a)) ||
         Boolean(targetScript && (targetScript.startsWith('test') || targetScript.includes('coverage'))) ||
         Boolean(underlyingScript && /(?:vitest|jest|pytest|playwright|cypress)/i.test(underlyingScript));
       const isFullSuite = isTestRunner && testFiles.length === 0 && !isTestDir;
-      const targetFiles = args.filter(a => !a.startsWith('-') && /\.(?:ts|js|tsx|jsx|json|mjs|cjs)$/i.test(a));
+      const targetFiles = nonInlineArgs.filter(a => !a.startsWith('-') && /\.(?:ts|js|tsx|jsx|json|mjs|cjs)$/i.test(a));
       const hasTargetFiles = targetFiles.length > 0;
       const isMultiFileLint = targetFiles.length > 1;
       const hasLargeFile = targetFiles.some(a => /(?:api\.ts|codemode|bundle|generated)/i.test(a));
       const isLintOrCheck = /(?:lint|check)/i.test(cmdBasename) ||
-        args.some(a => /(?:lint|check)/i.test(a)) ||
+        nonInlineArgs.some(a => /(?:lint|check)/i.test(a)) ||
         Boolean(targetScript && /(?:lint|check)/i.test(targetScript)) ||
         Boolean(underlyingScript && /(?:lint|check)/i.test(underlyingScript));
       const isFullLintOrCheck = isLintOrCheck && !hasTargetFiles;
@@ -569,22 +572,23 @@ export function packageManagerInterceptor(ctx: ExecutionContext): void {
           }
         }
       }
-      const isKnownDeterministic = args.some(a => /(?:commit\.(?:ts|js)|get-git-history-json\.ts|backup-conversations\.ts)/i.test(a));
-      const isBackupConversations = args.some(a => /backup-conversations\.ts/i.test(a));
-      const isPlaywright = !isKnownDeterministic && args.some(a => /(?:playwright|cypress|\be2e\b|test:e2e|test-e2e)/i.test(a));
-      const isCoverage = !isKnownDeterministic && args.some(a => /(?:coverage|--coverage|test:coverage)/i.test(a));
-      const isRunnerQuality = isKnownDeterministic || args.some(a => /(?:vitest|jest|playwright|cypress|test|lint|typecheck|tsc)/i.test(a));
+      const runnerNonInlineArgs = stripInlineCodeArgs(cmdBasename, args);
+      const isKnownDeterministic = runnerNonInlineArgs.some(a => /(?:commit\.(?:ts|js)|get-git-history-json\.ts|backup-conversations\.ts)/i.test(a));
+      const isBackupConversations = runnerNonInlineArgs.some(a => /backup-conversations\.ts/i.test(a));
+      const isPlaywright = !isKnownDeterministic && runnerNonInlineArgs.some(a => /(?:playwright|cypress|\be2e\b|test:e2e|test-e2e)/i.test(a));
+      const isCoverage = !isKnownDeterministic && runnerNonInlineArgs.some(a => /(?:coverage|--coverage|test:coverage)/i.test(a));
+      const isRunnerQuality = isKnownDeterministic || runnerNonInlineArgs.some(a => /(?:vitest|jest|playwright|cypress|test|lint|typecheck|tsc)/i.test(a));
       if (isPlaywright) {
-        console.error(`\n   💡 AGENT INTERCEPT: Disabling stall interceptors and extending timeout for Playwright/E2E test to prevent false positive aborts.`);
+        emitInterceptBanner(`\n   💡 AGENT INTERCEPT: Disabling stall interceptors and extending timeout for Playwright/E2E test to prevent false positive aborts.`);
         ctx.payload.bypassInterceptors = true;
         if (ctx.payload.timeoutMs === undefined || ctx.payload.timeoutMs < 600000) {
           ctx.payload.timeoutMs = 600000;
         }
       } else if (isRunnerQuality) {
-        console.error(`\n   💡 AGENT INTERCEPT: Disabling stall interceptors and extending timeout for ${isKnownDeterministic ? 'deterministic workflow script' : 'quality command'} to prevent false positive aborts.`);
+        emitInterceptBanner(`\n   💡 AGENT INTERCEPT: Disabling stall interceptors and extending timeout for ${isKnownDeterministic ? 'deterministic workflow script' : 'quality command'} to prevent false positive aborts.`);
         ctx.payload.bypassInterceptors = true;
-        const testFiles = args.filter(a => /\.(?:test|spec)\.[a-zA-Z0-9]+$/i.test(a));
-        const testDirs = args.filter(a => !a.startsWith('-') && !['run', 'exec', 'test', 'vitest', 'jest', 'pytest', 'playwright', 'cypress', 'coverage'].includes(a.toLowerCase()) && /(?:^|[/\\])(?:tests?|__tests__)(?:[/\\][^\s.]*)?$/i.test(a) && !/\.[a-zA-Z0-9_-]+$/i.test(a));
+        const testFiles = runnerNonInlineArgs.filter(a => /\.(?:test|spec)\.[a-zA-Z0-9]+$/i.test(a));
+        const testDirs = runnerNonInlineArgs.filter(a => !a.startsWith('-') && !['run', 'exec', 'test', 'vitest', 'jest', 'pytest', 'playwright', 'cypress', 'coverage'].includes(a.toLowerCase()) && /(?:^|[/\\])(?:tests?|__tests__)(?:[/\\][^\s.]*)?$/i.test(a) && !/\.[a-zA-Z0-9_-]+$/i.test(a));
         const isMultiTest = testFiles.length > 1;
         const isTestDir = testDirs.length > 0;
         const isLargeTestBatch = testDirs.length > 1 || (testDirs.length >= 1 && testFiles.length + testDirs.length > 1) || testFiles.length >= 5;

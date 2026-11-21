@@ -1,5 +1,5 @@
 // @ts-nocheck
-import { AUTONOMOUS_HEALING_MSG } from '../utils.js';
+import { AUTONOMOUS_HEALING_MSG, emitInterceptBanner } from '../utils.js';
 import { ExecutionContext } from './types.js';
 
 export function dockerInterceptor({ cmdBasename, args, payload }: ExecutionContext): void {
@@ -84,7 +84,7 @@ export function dockerInterceptor({ cmdBasename, args, payload }: ExecutionConte
     (dockerCmds.includes(cmdBasename) && (subCmd === 'scout' || args.includes('scout')));
 
   if (isDockerScout && process.platform === 'win32' && payload.target !== 'wsl2') {
-    console.error(`\n   💡 AGENT INTERCEPT: 'docker scout' on Windows Docker CLI experiences proxy timeouts while indexing images.`);
+    emitInterceptBanner(`\n   💡 AGENT INTERCEPT: 'docker scout' on Windows Docker CLI experiences proxy timeouts while indexing images.`);
     console.error(`\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Switching execution target to WSL2 with 1800s timeout... (Frictionless Recovery)\x1b[0m`);
     payload.target = 'wsl2';
     payload.bypassInterceptors = true;
@@ -92,7 +92,7 @@ export function dockerInterceptor({ cmdBasename, args, payload }: ExecutionConte
   } else if (isDockerBuild || isDockerScout) {
     const minTimeout = isDockerScout ? 1800000 : 600000;
     const timeoutMsg = isDockerScout ? '1800s' : '600s';
-    console.error(`\n   💡 AGENT INTERCEPT: Disabling stall interceptors and extending timeout to ${timeoutMsg} for Docker ${isDockerScout ? 'scout' : 'build'}.`);
+    emitInterceptBanner(`\n   💡 AGENT INTERCEPT: Disabling stall interceptors and extending timeout to ${timeoutMsg} for Docker ${isDockerScout ? 'scout' : 'build'}.`);
     payload.bypassInterceptors = true;
     if (payload.timeoutMs === undefined || payload.timeoutMs < minTimeout) {
       payload.timeoutMs = minTimeout;

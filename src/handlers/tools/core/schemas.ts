@@ -166,7 +166,7 @@ export const CreateEntrySchemaMcp = z.preprocess(
             anchor_path: z.string(),
             anchor_type: z.string(),
             status: z.string().optional().default('pending'),
-        })).optional().describe('Files or lines of code that this entry is fundamentally anchored to. If the anchor becomes stale/invalid, the entry importance score drops.'),
+        })).optional().describe('Files or symbols linked to this entry (`[{ anchor_path: "src/foo.ts", anchor_type: "file" }]`). Stale/invalid anchors reduce entry importance.'),
         share_with_team: z.boolean().optional().default(false).describe('If true, saves a copy of this entry to the Team database (if configured) using your team alias'),
         auto_link: z
             .boolean()

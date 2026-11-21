@@ -83,11 +83,42 @@ function recordInvocationMetrics(
     }
 }
 
+const NOT_FOUND_THROTTLE_WINDOW_MS = 60_000
+const NOT_FOUND_MAX_WRITES_PER_WINDOW = 3
+const NOT_FOUND_THROTTLED_TOOLS = new Set(['get_entry_by_id', 'team_get_entry_by_id'])
+const notFoundIssueTimestamps = new Map<string, number[]>()
+
+function isResourceNotFoundErrorResult(result: unknown): boolean {
+    return (
+        typeof result === 'object' &&
+        result !== null &&
+        'code' in result &&
+        result.code === 'RESOURCE_NOT_FOUND'
+    )
+}
+
+function shouldThrottleNotFoundIssue(toolName: string, result: unknown): boolean {
+    if (!NOT_FOUND_THROTTLED_TOOLS.has(toolName) || !isResourceNotFoundErrorResult(result)) {
+        return false
+    }
+    const now = Date.now()
+    const cutoff = now - NOT_FOUND_THROTTLE_WINDOW_MS
+    const recent = (notFoundIssueTimestamps.get(toolName) ?? []).filter((ts) => ts >= cutoff)
+    if (recent.length >= NOT_FOUND_MAX_WRITES_PER_WINDOW) {
+        notFoundIssueTimestamps.set(toolName, recent)
+        return true
+    }
+    recent.push(now)
+    notFoundIssueTimestamps.set(toolName, recent)
+    return false
+}
+
 function reportToolErrorIssue(
     toolName: string,
     args: Record<string, unknown>,
     result: unknown
 ): void {
+    if (shouldThrottleNotFoundIssue(toolName, result)) return
     const errField = (result as Record<string, unknown>)['error']
     const errorMessage = typeof errField === 'string' ? errField : JSON.stringify(errField)
     logAgentIssue({

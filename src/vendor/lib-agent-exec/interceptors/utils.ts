@@ -68,3 +68,63 @@ export function splitFirstShellSegment(code: string): { firstSegment: string; re
 
   return { firstSegment: code, remainder: '' };
 }
+
+const SCRIPT_INTERPRETERS = new Set(['node', 'bun', 'tsx', 'ts-node', 'python', 'python3']);
+const INLINE_EVAL_FLAGS = new Set(['-e', '--eval', '-p', '--print', '-c', '--command']);
+
+/**
+ * [INTENT]: Exclude inline code bodies (`-e "..."`, `--eval=...`) and rewritten temp script paths from
+ * quality-gate/test keyword regexes so JS/TS eval snippets mentioning "test"/"check" never trigger 240s timeouts or stall bypasses.
+ */
+export function stripInlineCodeArgs(cmdBasename: string, args: readonly string[]): string[] {
+  const base = cmdBasename.replace(/\.(?:exe|cmd|bat|com|ps1)$/i, '').toLowerCase();
+  let sawInterpreter = SCRIPT_INTERPRETERS.has(base);
+  const filtered: string[] = [];
+
+  for (let i = 0; i < args.length; i++) {
+    const a = args[i];
+    if (a === undefined) continue;
+    const baseName = a.replace(/^.*[\\/]/, '').replace(/\.(?:exe|cmd|bat)$/i, '').toLowerCase();
+    if (!a.startsWith('-') && SCRIPT_INTERPRETERS.has(baseName)) {
+      sawInterpreter = true;
+      filtered.push(a);
+      continue;
+    }
+    if (sawInterpreter) {
+      const lower = a.toLowerCase();
+      if (INLINE_EVAL_FLAGS.has(lower)) {
+        filtered.push(a);
+        i++;
+        continue;
+      }
+      if ([...INLINE_EVAL_FLAGS].some(flag => lower.startsWith(`${flag}=`))) {
+        continue;
+      }
+    }
+    if (baseName.startsWith('.agent_inline_script_') || /agent-exec-inline-/i.test(baseName)) {
+      continue;
+    }
+    filtered.push(a);
+  }
+
+  return filtered;
+}
+
+const PKG_VALUE_FLAGS = new Set(['--dir', '-C', '--cwd', '--prefix', '--filter', '--config', '-c']);
+
+/** [INTENT]: Return positional package-manager args while skipping value-taking flags (`--dir <path>`, `--filter <pkg>`). */
+export function getPkgNonFlagArgs(args: readonly string[]): string[] {
+  const out: string[] = [];
+  for (let i = 0; i < args.length; i++) {
+    const a = args[i];
+    if (a === undefined) continue;
+    if (a === '--') break;
+    if (PKG_VALUE_FLAGS.has(a)) {
+      i++;
+      continue;
+    }
+    if (a.startsWith('-')) continue;
+    out.push(a);
+  }
+  return out;
+}

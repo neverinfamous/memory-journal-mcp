@@ -199,6 +199,9 @@ function filterScopedTeamRelationships(
     })
 }
 
+const TEAM_ENTRY_NOT_FOUND_SUGGESTION =
+    '🛠️ AUTONOMOUS HEALING: Do not probe sequential IDs; call mj.team.teamGetRecent({ workspace_id, project_number, limit: 50 }) or mj.team.teamSearch({ query, workspace_id, project_number }) to discover valid team entry IDs.'
+
 export function executeTeamGetEntryById(
     context: ToolContext,
     teamDb: NonNullable<ToolContext['teamDb']>,
@@ -219,7 +222,7 @@ export function executeTeamGetEntryById(
             error: `Team entry ${String(entry_id)} not found`,
             code: 'RESOURCE_NOT_FOUND',
             category: 'resource',
-            suggestion: 'Verify the team entry ID and try again',
+            suggestion: TEAM_ENTRY_NOT_FOUND_SUGGESTION,
             recoverable: true,
         }
     }
@@ -241,7 +244,7 @@ export function executeTeamGetEntryById(
             error: `Team entry ${String(entry_id)} does not belong to project ${String(projectNumber)}`,
             code: 'RESOURCE_NOT_FOUND',
             category: 'resource',
-            suggestion: 'Verify the team entry ID and project number, and try again',
+            suggestion: TEAM_ENTRY_NOT_FOUND_SUGGESTION,
             recoverable: true,
         }
     }

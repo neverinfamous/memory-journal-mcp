@@ -3,9 +3,9 @@ import { ExecutionContext, AGENT_NATIVE_TOOLS, ECOSYSTEM_MCP_TOOLS } from './typ
 import { match, P } from 'ts-pattern';
 import path from 'node:path';
 import fs from 'node:fs';
-import { convertToWslPath, getPositionalArgs, healFragmentedQuotes, escapeUnixArg, getUnderlyingPackageScript } from '../command-utils.js';
-import { AGENT_EXEC_README_URL, getUnquoted, splitFirstShellSegment } from './utils.js';
-import { findEcosystemScript } from '../utils.js';
+import { convertToWslPath, convertToWindowsPath, getPositionalArgs, healFragmentedQuotes, escapeUnixArg, getUnderlyingPackageScript } from '../command-utils.js';
+import { AGENT_EXEC_README_URL, getUnquoted, splitFirstShellSegment, stripInlineCodeArgs } from './utils.js';
+import { emitInterceptBanner, findEcosystemScript, resolveNativeBinary } from '../utils.js';
 import { runMutatingInterceptors } from './mutating-interceptors.js';
 import { runStructuralInterceptors } from './structural-interceptors.js';
 import { healPathHallucinations } from '../path-healer.js';
@@ -476,42 +476,42 @@ export function systemInterceptor(ctx: ExecutionContext): void {
         defaultWslTimeout = 600000;
         payload.bypassInterceptors = true;
         if (payload.timeoutMs === undefined || payload.timeoutMs < defaultWslTimeout) {
-          console.error(`\n   💡 AGENT INTERCEPT: Detected Playwright/E2E test in WSL2 eval payload. Auto-extending timeout to 600s...`);
+          emitInterceptBanner(`\n   💡 AGENT INTERCEPT: Detected Playwright/E2E test in WSL2 eval payload. Auto-extending timeout to 600s...`);
         }
       } else if (isDockerScout) {
         defaultWslTimeout = 1800000;
         payload.bypassInterceptors = true;
         if (payload.timeoutMs === undefined || payload.timeoutMs < defaultWslTimeout) {
-          console.error(`\n   💡 AGENT INTERCEPT: Detected Docker scout in WSL2 eval payload. Auto-extending timeout to 1800s...`);
+          emitInterceptBanner(`\n   💡 AGENT INTERCEPT: Detected Docker scout in WSL2 eval payload. Auto-extending timeout to 1800s...`);
         }
       } else if (isDockerBuild) {
         defaultWslTimeout = 600000;
         payload.bypassInterceptors = true;
         if (payload.timeoutMs === undefined || payload.timeoutMs < defaultWslTimeout) {
-          console.error(`\n   💡 AGENT INTERCEPT: Detected Docker build/ecosystem orchestration in WSL2 eval payload. Auto-extending timeout to 600s...`);
+          emitInterceptBanner(`\n   💡 AGENT INTERCEPT: Detected Docker build/ecosystem orchestration in WSL2 eval payload. Auto-extending timeout to 600s...`);
         }
       } else if (isCoverage) {
         defaultWslTimeout = 300000;
         payload.bypassInterceptors = true;
         if (payload.timeoutMs === undefined || payload.timeoutMs < defaultWslTimeout) {
-          console.error(`\n   💡 AGENT INTERCEPT: Detected test coverage in WSL2 eval payload. Auto-extending timeout to 300s...`);
+          emitInterceptBanner(`\n   💡 AGENT INTERCEPT: Detected test coverage in WSL2 eval payload. Auto-extending timeout to 300s...`);
         }
       } else if (isChainedQuality) {
         defaultWslTimeout = 180000;
         payload.bypassInterceptors = true;
         if (payload.timeoutMs === undefined || payload.timeoutMs < defaultWslTimeout) {
-          console.error(`\n   💡 AGENT INTERCEPT: Detected chained quality checks in WSL2 eval payload. Auto-extending timeout to 180s...`);
+          emitInterceptBanner(`\n   💡 AGENT INTERCEPT: Detected chained quality checks in WSL2 eval payload. Auto-extending timeout to 180s...`);
         }
       } else if (hasQualityCheck || isKnownDeterministic) {
         defaultWslTimeout = 90000;
         payload.bypassInterceptors = true;
         if (payload.timeoutMs === undefined || payload.timeoutMs < defaultWslTimeout) {
-          console.error(`\n   💡 AGENT INTERCEPT: Detected quality check or deterministic script in WSL2 eval payload. Auto-extending timeout to 90s...`);
+          emitInterceptBanner(`\n   💡 AGENT INTERCEPT: Detected quality check or deterministic script in WSL2 eval payload. Auto-extending timeout to 90s...`);
         }
       } else if (hasMountedSearch) {
         defaultWslTimeout = 90000;
         if (payload.timeoutMs === undefined || payload.timeoutMs < defaultWslTimeout) {
-          console.error(`\n   💡 AGENT INTERCEPT: Detected file search across mounted filesystem in WSL2 eval payload. Auto-extending timeout to 90s...`);
+          emitInterceptBanner(`\n   💡 AGENT INTERCEPT: Detected file search across mounted filesystem in WSL2 eval payload. Auto-extending timeout to 90s...`);
         }
       }
     } else if (payload.type === 'command') {
@@ -561,29 +561,30 @@ export function systemInterceptor(ctx: ExecutionContext): void {
         /(?:commit\.(?:ts|js)|get-git-history-json\.ts|backup-conversations\.ts)/i.test(cmdBasename) ||
         Boolean(args && args.some(a => /(?:commit\.(?:ts|js)|get-git-history-json\.ts|backup-conversations\.ts)/i.test(a)))
       );
-      const isDockerScout = /(?:docker|docker-compose|podman)/i.test(cmdBasename) && (args && args.some(a => /scout/i.test(a)));
+      const nonInlineArgs = args ? stripInlineCodeArgs(cmdBasename, args) : [];
+      const isDockerScout = /(?:docker|docker-compose|podman)/i.test(cmdBasename) && nonInlineArgs.some(a => /scout/i.test(a));
       const isInfraOrchestration = !isKnownDeterministic && !isWslNonRunnerCli && (
         /recreate-ecosystem/i.test(cmdBasename) ||
-        Boolean(args && args.some(a => /recreate-ecosystem/i.test(a))) ||
+        nonInlineArgs.some(a => /recreate-ecosystem/i.test(a)) ||
         /recreate-ecosystem/i.test(underlyingScript)
       );
-      const isDockerBuild = !isDockerScout && ((/(?:docker|docker-compose|podman)/i.test(cmdBasename) && (args && args.some(a => /^(?:build|pull|push|up|down|restart|recreate|load|save|import|export|prune)$/i.test(a)))) || isInfraOrchestration);
+      const isDockerBuild = !isDockerScout && ((/(?:docker|docker-compose|podman)/i.test(cmdBasename) && nonInlineArgs.some(a => /^(?:build|pull|push|up|down|restart|recreate|load|save|import|export|prune)$/i.test(a))) || isInfraOrchestration);
       const isPlaywright = !isKnownDeterministic && !isWslNonRunnerCli && (
         /(?:playwright|cypress)/i.test(cmdBasename) ||
-        (args && args.some(a => /(?:playwright|cypress|\be2e\b|test:e2e|test-e2e)/i.test(a))) ||
+        nonInlineArgs.some(a => /(?:playwright|cypress|\be2e\b|test:e2e|test-e2e)/i.test(a)) ||
         /(?:playwright|cypress|\be2e\b)/i.test(underlyingScript)
       );
       const isCoverage = !isKnownDeterministic && !isWslNonRunnerCli && (
         /(?:coverage)/i.test(cmdBasename) ||
-        (args && args.some(a => /(?:coverage|--coverage|test:coverage)/i.test(a))) ||
+        nonInlineArgs.some(a => /(?:coverage|--coverage|test:coverage)/i.test(a)) ||
         /(?:coverage|--coverage)/i.test(underlyingScript)
       );
       const isQuality = !isNestedAgentExec && !isKnownDeterministic && !isWslNonRunnerCli && !isDockerScout && !isDockerBuild && (
         /(?:typecheck|tsc|lint|check|build|test|vitest|jest)/i.test(cmdBasename) ||
-        (args && args.some(a => /(?:typecheck|tsc|lint|check|build|test|vitest|jest)/i.test(a))) ||
+        nonInlineArgs.some(a => /(?:typecheck|tsc|lint|check|build|test|vitest|jest)/i.test(a)) ||
         /(?:typecheck|tsc|lint|check|build|test|vitest|jest)/i.test(underlyingScript)
       );
-      const isSearch = /(?:find|grep|rg|ls|tree)\b/i.test(cmdBasename) || (args && args.some(a => /(?:find|grep|rg|ls|tree)\b/i.test(a)));
+      const isSearch = /(?:find|grep|rg|ls|tree)\b/i.test(cmdBasename) || nonInlineArgs.some(a => /(?:find|grep|rg|ls|tree)\b/i.test(a));
       
       if (isDockerScout) {
         defaultWslTimeout = 1800000;
@@ -595,20 +596,20 @@ export function systemInterceptor(ctx: ExecutionContext): void {
         defaultWslTimeout = 90000;
         payload.bypassInterceptors = true;
       } else if (isQuality) {
-        const testFiles = args ? args.filter(a => /\.(?:test|spec)\.[a-zA-Z0-9]+$/i.test(a)) : [];
-        const testDirs = args ? args.filter(a => !a.startsWith('-') && !['run', 'exec', 'test', 'vitest', 'jest', 'pytest', 'playwright', 'cypress', 'coverage'].includes(a.toLowerCase()) && /(?:^|[/\\])(?:tests?|__tests__)(?:[/\\][^\s.]*)?$/i.test(a) && !/\.[a-zA-Z0-9_-]+$/i.test(a)) : [];
+        const testFiles = nonInlineArgs.filter(a => /\.(?:test|spec)\.[a-zA-Z0-9]+$/i.test(a));
+        const testDirs = nonInlineArgs.filter(a => !a.startsWith('-') && !['run', 'exec', 'test', 'vitest', 'jest', 'pytest', 'playwright', 'cypress', 'coverage'].includes(a.toLowerCase()) && /(?:^|[/\\])(?:tests?|__tests__)(?:[/\\][^\s.]*)?$/i.test(a) && !/\.[a-zA-Z0-9_-]+$/i.test(a));
         const isMultiTest = testFiles.length > 1;
         const isTestDir = testDirs.length > 0;
         const isLargeTestBatch = testDirs.length > 1 || (testDirs.length >= 1 && testFiles.length + testDirs.length > 1) || testFiles.length >= 5;
         const isTestRunner = /(?:vitest|jest|pytest|playwright|cypress)/i.test(cmdBasename) ||
-          (args && args.some(a => /(?:vitest|jest|pytest|playwright|cypress|^test(?::.*|-.*)?$|^coverage(?::.*)?$)/i.test(a))) ||
+          nonInlineArgs.some(a => /(?:vitest|jest|pytest|playwright|cypress|^test(?::.*|-.*)?$|^coverage(?::.*)?$)/i.test(a)) ||
           /(?:vitest|jest|pytest|playwright|cypress)/i.test(underlyingScript);
         const isFullSuite = isTestRunner && testFiles.length === 0 && !isTestDir;
-        const targetFiles = args ? args.filter(a => !a.startsWith('-') && /\.(?:ts|js|tsx|jsx|json|mjs|cjs)$/i.test(a)) : [];
+        const targetFiles = nonInlineArgs.filter(a => !a.startsWith('-') && /\.(?:ts|js|tsx|jsx|json|mjs|cjs)$/i.test(a));
         const hasTargetFiles = targetFiles.length > 0;
         const hasLargeFile = targetFiles.some(a => /(?:api\.ts|codemode|bundle|generated)/i.test(a));
         const isLintOrCheck = /(?:lint|check)/i.test(cmdBasename) ||
-          (args && args.some(a => /(?:lint|check)/i.test(a))) ||
+          nonInlineArgs.some(a => /(?:lint|check)/i.test(a)) ||
           /(?:lint|check)/i.test(underlyingScript);
         const isFullLintOrCheck = isLintOrCheck && !hasTargetFiles;
         defaultWslTimeout = isFullLintOrCheck || hasLargeFile ? 360000 : (isCoverage || isLargeTestBatch ? 300000 : (isMultiTest || isTestDir || isFullSuite ? 180000 : 90000));
@@ -632,25 +633,25 @@ export function systemInterceptor(ctx: ExecutionContext): void {
       const hasQualityCheck = !isInlineShellHallucination && payload.type === 'eval' && Boolean(codeOrScript && /(?:(?:bun|pnpm|npm|yarn|npx|bunx|pnpx)\s+(?:run\s+)?(?:typecheck|tsc|lint|check|build|test)\b|\b(?:vitest|jest|tsc|eslint)\b)/i.test(codeOrScript));
       if (isPlaywright) {
         if (payload.timeoutMs === undefined || payload.timeoutMs < 600000) {
-          console.error(`\n   💡 AGENT INTERCEPT: Detected Playwright/E2E test in Windows eval payload. Auto-extending timeout to 600s...`);
+          emitInterceptBanner(`\n   💡 AGENT INTERCEPT: Detected Playwright/E2E test in Windows eval payload. Auto-extending timeout to 600s...`);
         }
         payload.timeoutMs = Math.max(payload.timeoutMs || 600000, 600000);
         payload.bypassInterceptors = true;
       } else if (isDocker) {
         if (payload.timeoutMs === undefined || payload.timeoutMs < 600000) {
-          console.error(`\n   💡 AGENT INTERCEPT: Detected Docker build/scout or ecosystem orchestration in Windows eval payload. Auto-extending timeout to 600s...`);
+          emitInterceptBanner(`\n   💡 AGENT INTERCEPT: Detected Docker build/scout or ecosystem orchestration in Windows eval payload. Auto-extending timeout to 600s...`);
         }
         payload.timeoutMs = Math.max(payload.timeoutMs || 600000, 600000);
         payload.bypassInterceptors = true;
       } else if (isCoverage) {
         if (payload.timeoutMs === undefined || payload.timeoutMs < 600000) {
-          console.error(`\n   💡 AGENT INTERCEPT: Detected test coverage in Windows eval payload. Auto-extending timeout to 600s...`);
+          emitInterceptBanner(`\n   💡 AGENT INTERCEPT: Detected test coverage in Windows eval payload. Auto-extending timeout to 600s...`);
         }
         payload.timeoutMs = Math.max(payload.timeoutMs || 600000, 600000);
         payload.bypassInterceptors = true;
       } else if (isChainedQuality) {
         if (payload.timeoutMs === undefined || payload.timeoutMs < 600000) {
-          console.error(`\n   💡 AGENT INTERCEPT: Detected chained quality checks in Windows eval payload. Auto-extending timeout to 600s...`);
+          emitInterceptBanner(`\n   💡 AGENT INTERCEPT: Detected chained quality checks in Windows eval payload. Auto-extending timeout to 600s...`);
         }
         payload.timeoutMs = Math.max(payload.timeoutMs || 600000, 600000);
         payload.bypassInterceptors = true;
@@ -659,7 +660,7 @@ export function systemInterceptor(ctx: ExecutionContext): void {
         const hasLargeFile = Boolean(codeOrScript && /(?:api\.ts|codemode|bundle|generated)/i.test(codeOrScript));
         const qualityTimeout = isBackupConversations ? 1500000 : ((isFullLintOrCheck || hasLargeFile) ? 600000 : 240000);
         if (payload.timeoutMs === undefined || payload.timeoutMs < qualityTimeout) {
-          console.error(`\n   💡 AGENT INTERCEPT: Detected quality check or deterministic script in Windows eval payload. Auto-extending timeout to ${qualityTimeout / 1000}s...`);
+          emitInterceptBanner(`\n   💡 AGENT INTERCEPT: Detected quality check or deterministic script in Windows eval payload. Auto-extending timeout to ${qualityTimeout / 1000}s...`);
         }
         payload.timeoutMs = Math.max(payload.timeoutMs || qualityTimeout, qualityTimeout);
         payload.bypassInterceptors = true;
@@ -712,30 +713,31 @@ export function systemInterceptor(ctx: ExecutionContext): void {
         Boolean(args && args.some(a => /(?:commit\.(?:ts|js)|get-git-history-json\.ts|backup-conversations\.ts)/i.test(a)))
       );
       const isBackupConversations = /backup-conversations\.ts/i.test(cmdBasename) || Boolean(args && args.some(a => /backup-conversations\.ts/i.test(a)));
+      const nonInlineArgs = args ? stripInlineCodeArgs(cmdBasename, args) : [];
       const isInfraOrchestration = !isKnownDeterministic && !isWinNonRunnerCli && (
         /recreate-ecosystem/i.test(cmdBasename) ||
-        Boolean(args && args.some(a => /recreate-ecosystem/i.test(a))) ||
+        nonInlineArgs.some(a => /recreate-ecosystem/i.test(a)) ||
         /recreate-ecosystem/i.test(underlyingScript)
       );
-      const isDocker = (/(?:docker|docker-compose|podman)/i.test(cmdBasename) && (args && args.some(a => /^(?:build|scout|pull|push|up|down|restart|recreate|load|save|import|export|prune)$/i.test(a)))) || isInfraOrchestration;
+      const isDocker = (/(?:docker|docker-compose|podman)/i.test(cmdBasename) && nonInlineArgs.some(a => /^(?:build|scout|pull|push|up|down|restart|recreate|load|save|import|export|prune)$/i.test(a))) || isInfraOrchestration;
       const isPlaywright = !isKnownDeterministic && !isWinNonRunnerCli && (
         /(?:playwright|cypress)/i.test(cmdBasename) ||
-        (args && args.some(a => /(?:playwright|cypress|\be2e\b|test:e2e|test-e2e)/i.test(a))) ||
+        nonInlineArgs.some(a => /(?:playwright|cypress|\be2e\b|test:e2e|test-e2e)/i.test(a)) ||
         /(?:playwright|cypress|\be2e\b)/i.test(underlyingScript)
       );
       const isCoverage = !isKnownDeterministic && !isWinNonRunnerCli && (
         /(?:coverage)/i.test(cmdBasename) ||
-        (args && args.some(a => /(?:coverage|--coverage|test:coverage)/i.test(a))) ||
+        nonInlineArgs.some(a => /(?:coverage|--coverage|test:coverage)/i.test(a)) ||
         /(?:coverage|--coverage)/i.test(underlyingScript)
       );
       const isQuality = !isNestedAgentExec && !isKnownDeterministic && !isWinNonRunnerCli && !isDocker && (
         /(?:typecheck|tsc|lint|check|build|test|vitest|jest)/i.test(cmdBasename) ||
-        (args && args.some(a => /(?:typecheck|tsc|lint|check|build|test|vitest|jest)/i.test(a))) ||
+        nonInlineArgs.some(a => /(?:typecheck|tsc|lint|check|build|test|vitest|jest)/i.test(a)) ||
         /(?:typecheck|tsc|lint|check|build|test|vitest|jest)/i.test(underlyingScript)
       );
       if (isPlaywright || isDocker) {
         if (isInfraOrchestration) {
-          console.error(`\n   💡 AGENT INTERCEPT: Detected ecosystem orchestration script ('recreate-ecosystem'). Auto-extending timeout to 600s...`);
+          emitInterceptBanner(`\n   💡 AGENT INTERCEPT: Detected ecosystem orchestration script ('recreate-ecosystem'). Auto-extending timeout to 600s...`);
         }
         payload.timeoutMs = Math.max(payload.timeoutMs || 600000, 600000);
         payload.bypassInterceptors = true;
@@ -744,21 +746,21 @@ export function systemInterceptor(ctx: ExecutionContext): void {
         payload.timeoutMs = Math.max(payload.timeoutMs || detTimeout, detTimeout);
         payload.bypassInterceptors = true;
       } else if (isQuality) {
-        const testFiles = args ? args.filter(a => /\.(?:test|spec)\.[a-zA-Z0-9]+$/i.test(a)) : [];
-        const testDirs = args ? args.filter(a => !a.startsWith('-') && !['run', 'exec', 'test', 'vitest', 'jest', 'pytest', 'playwright', 'cypress', 'coverage'].includes(a.toLowerCase()) && /(?:^|[/\\])(?:tests?|__tests__)(?:[/\\][^\s.]*)?$/i.test(a) && !/\.[a-zA-Z0-9_-]+$/i.test(a)) : [];
+        const testFiles = nonInlineArgs.filter(a => /\.(?:test|spec)\.[a-zA-Z0-9]+$/i.test(a));
+        const testDirs = nonInlineArgs.filter(a => !a.startsWith('-') && !['run', 'exec', 'test', 'vitest', 'jest', 'pytest', 'playwright', 'cypress', 'coverage'].includes(a.toLowerCase()) && /(?:^|[/\\])(?:tests?|__tests__)(?:[/\\][^\s.]*)?$/i.test(a) && !/\.[a-zA-Z0-9_-]+$/i.test(a));
         const isMultiTest = testFiles.length > 1;
         const isTestDir = testDirs.length > 0;
         const isLargeTestBatch = testDirs.length > 1 || (testDirs.length >= 1 && testFiles.length + testDirs.length > 1) || testFiles.length >= 5;
         const isTestRunner = /(?:vitest|jest|pytest|playwright|cypress)/i.test(cmdBasename) ||
-          (args && args.some(a => /(?:vitest|jest|pytest|playwright|cypress|^test(?::.*|-.*)?$|^coverage(?::.*)?$)/i.test(a))) ||
+          nonInlineArgs.some(a => /(?:vitest|jest|pytest|playwright|cypress|^test(?::.*|-.*)?$|^coverage(?::.*)?$)/i.test(a)) ||
           /(?:vitest|jest|pytest|playwright|cypress)/i.test(underlyingScript);
         const isFullSuite = isTestRunner && testFiles.length === 0 && !isTestDir;
-        const targetFiles = args ? args.filter(a => !a.startsWith('-') && /\.(?:ts|js|tsx|jsx|json|mjs|cjs)$/i.test(a)) : [];
+        const targetFiles = nonInlineArgs.filter(a => !a.startsWith('-') && /\.(?:ts|js|tsx|jsx|json|mjs|cjs)$/i.test(a));
         const hasTargetFiles = targetFiles.length > 0;
         const isMultiFileLint = targetFiles.length > 1;
         const hasLargeFile = targetFiles.some(a => /(?:api\.ts|codemode|bundle|generated)/i.test(a));
         const isLintOrCheck = /(?:lint|check)/i.test(cmdBasename) ||
-          (args && args.some(a => /(?:lint|check)/i.test(a))) ||
+          nonInlineArgs.some(a => /(?:lint|check)/i.test(a)) ||
           /(?:lint|check)/i.test(underlyingScript);
         const isFullLintOrCheck = isLintOrCheck && !hasTargetFiles;
         const isIsolatedFullSuite = isFullSuite && Boolean(
@@ -790,7 +792,7 @@ export function systemInterceptor(ctx: ExecutionContext): void {
         console.error(`\n   💡 AGENT HINT: 'cat' called without file arguments and no stdin. It will hang indefinitely.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Execution blocked. Provide a file argument or use view_file.\x1b[0m`);
         process.exit(1);
       }
-      console.error(`\n   💡 AGENT INTERCEPT: 'cat' file inspection command detected. Switching execution target to WSL2... (Frictionless Recovery)`);
+      emitInterceptBanner(`\n   💡 AGENT INTERCEPT: 'cat' file inspection command detected. Switching execution target to WSL2... (Frictionless Recovery)`);
       ctx.payload.target = 'wsl2';
       ctx.args = ctx.args.map(a => convertToWslPath(a));
     })
@@ -816,7 +818,7 @@ export function systemInterceptor(ctx: ExecutionContext): void {
       if (['sh', 'bash', 'pwsh', 'powershell', 'cmd'].includes(cmd)) {
         return;
       }
-      console.error(`\n   💡 AGENT INTERCEPT: '${cmdBasename}' directory listing command detected. Switching execution target to WSL2... (Frictionless Recovery)`);
+      emitInterceptBanner(`\n   💡 AGENT INTERCEPT: '${cmdBasename}' directory listing command detected. Switching execution target to WSL2... (Frictionless Recovery)`);
       ctx.payload.target = 'wsl2';
       if ('interpreter' in ctx.payload && ctx.payload.interpreter && ['pwsh', 'pwsh.exe', 'powershell', 'powershell.exe', 'cmd', 'cmd.exe'].includes(ctx.payload.interpreter.toLowerCase())) {
         ctx.payload.interpreter = 'bash';
@@ -956,7 +958,7 @@ export function systemInterceptor(ctx: ExecutionContext): void {
     })
     .with({ originalCmd: P.union('curl', 'curl.exe', 'wget', 'wget.exe', 'invoke-webrequest', 'iwr') }, () => {
       if (ctx.payload.target !== 'wsl2') {
-        console.error(`\n   💡 AGENT INTERCEPT: '${cmdBasename}' network command detected. Switching execution target to WSL2... (Frictionless Recovery)`);
+        emitInterceptBanner(`\n   💡 AGENT INTERCEPT: '${cmdBasename}' network command detected. Switching execution target to WSL2... (Frictionless Recovery)`);
         ctx.payload.target = 'wsl2';
       }
       if (['invoke-webrequest', 'iwr'].includes(cmdBasename.toLowerCase())) {
@@ -964,9 +966,37 @@ export function systemInterceptor(ctx: ExecutionContext): void {
       }
       ctx.args = ctx.args.map(a => convertToWslPath(a));
     })
-    .with({ cmd: P.union('awk', 'gawk', 'sed', 'sed.exe', 'jq', 'jq.exe', 'yq', 'yq.exe', 'find', 'find.exe', 'tail', 'tail.exe', 'head', 'head.exe', 'wc', 'wc.exe', 'sort', 'sort.exe', 'uniq', 'uniq.exe', 'tee', 'tee.exe') }, () => {
+    .with({ cmd: P.union('jq', 'jq.exe') }, () => {
+      if (['sh', 'bash', 'pwsh', 'powershell', 'cmd'].includes(cmd)) {
+        return;
+      }
+      if (process.platform === 'win32' && ctx.payload.target !== 'wsl2') {
+        const jqPosArgs = getPositionalArgs('jq', ctx.args);
+        const hasFromFile = ctx.args.some(a => a === '-f' || a === '--from-file');
+        const jqFileArgs = hasFromFile ? jqPosArgs : jqPosArgs.slice(1);
+        const targetsLinuxOnlyPath = jqFileArgs.some(a =>
+          a.startsWith('/') && !a.startsWith('//') && !/^\/mnt\/[a-zA-Z](?:\/|$)/.test(a)
+        );
+        if (resolveNativeBinary('jq') === null) {
+          emitInterceptBanner(`\n   💡 AGENT INTERCEPT: No native 'jq' binary on PATH. Switching execution target to WSL2... (Frictionless Recovery)`);
+          ctx.payload.target = 'wsl2';
+          ctx.args = ctx.args.map(a => convertToWslPath(a));
+        } else if (targetsLinuxOnlyPath) {
+          emitInterceptBanner(`\n   💡 AGENT INTERCEPT: 'jq' targets a Linux-only POSIX path. Switching execution target to WSL2... (Frictionless Recovery)`);
+          ctx.payload.target = 'wsl2';
+          ctx.args = ctx.args.map(a => convertToWslPath(a));
+        } else {
+          ctx.args = ctx.args.map(a =>
+            /^\/mnt\/[a-zA-Z](?:\/|$)/.test(a) ? convertToWindowsPath(a) : a
+          );
+        }
+      } else if (ctx.payload.target === 'wsl2') {
+        ctx.args = ctx.args.map(a => convertToWslPath(a));
+      }
+    })
+    .with({ cmd: P.union('awk', 'gawk', 'sed', 'sed.exe', 'yq', 'yq.exe', 'find', 'find.exe', 'tail', 'tail.exe', 'head', 'head.exe', 'wc', 'wc.exe', 'sort', 'sort.exe', 'uniq', 'uniq.exe', 'tee', 'tee.exe') }, () => {
       if (ctx.payload.target !== 'wsl2') {
-        console.error(`\n   💡 AGENT INTERCEPT: '${cmdBasename}' natively fails, lacks features, or is not installed on Windows. Switching execution target to WSL2... (Frictionless Recovery)`);
+        emitInterceptBanner(`\n   💡 AGENT INTERCEPT: '${cmdBasename}' natively fails, lacks features, or is not installed on Windows. Switching execution target to WSL2... (Frictionless Recovery)`);
         ctx.payload.target = 'wsl2';
       }
 
@@ -982,13 +1012,6 @@ export function systemInterceptor(ctx: ExecutionContext): void {
         return;
       }
       handleRipgrepInterception(ctx, hasStdin);
-    })
-    .with({ cmd: P.union('gh', 'gh.exe', 'pnpm', 'npm', 'docker', 'docker.exe') }, ({ args }) => {
-      const isLogin = args.some(a => a === 'login' || a === 'auth');
-      if (isLogin) {
-        console.error(`\n   💡 AGENT HINT: Interactive login commands like '${cmdBasename} ${args.join(' ')}' hang the agent.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Blocking execution. Authentication must be handled externally.\x1b[0m`);
-        process.exit(1);
-      }
     })
     .with({ cmd: P.union('pwsh', 'pwsh.exe', 'powershell', 'powershell.exe') }, ({ args: matchedArgs }) => {
       const scriptStartFlags = ['-c', '-command', '/c', '-ec', '-encodedcommand', '-en', '-file', '-f'];

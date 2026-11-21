@@ -348,15 +348,29 @@ function parseMetadataAnchors(
             }
         } else if (typeof item === 'object' && item !== null && !Array.isArray(item)) {
             const rec = item as Record<string, unknown>
-            const pathRaw = rec['anchor_path'] ?? rec['anchorPath'] ?? rec['path']
+            const pathRaw =
+                rec['anchor_path'] ??
+                rec['anchorPath'] ??
+                rec['path'] ??
+                rec['file'] ??
+                rec['file_path'] ??
+                rec['filepath'] ??
+                rec['filePath'] ??
+                rec['value'] ??
+                rec['target'] ??
+                rec['uri'] ??
+                rec['location']
             const typeRaw = rec['anchor_type'] ?? rec['anchorType'] ?? rec['type']
             if (typeof pathRaw === 'string' && pathRaw.trim().length > 0) {
+                const normalizedPath = pathRaw.trim().replace(/\\/g, '/')
                 parsed.push({
-                    anchor_path: pathRaw.trim(),
+                    anchor_path: normalizedPath,
                     anchor_type:
                         typeof typeRaw === 'string' && typeRaw.trim().length > 0
                             ? typeRaw.trim()
-                            : 'file',
+                            : normalizedPath.includes('#')
+                              ? 'symbol'
+                              : 'file',
                 })
             }
         }

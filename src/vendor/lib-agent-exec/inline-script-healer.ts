@@ -6,6 +6,7 @@ import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { healStrippedSqlTemplateLiterals } from './eval-healer.js';
 import { healEvalCodePathHallucinations } from './path-healer.js';
+import { emitInterceptBanner } from './utils.js';
 
 const RESOLVER_MODULE_PATH = path.join(path.dirname(fileURLToPath(import.meta.url)), 'cwd-module-resolver.mjs');
 
@@ -278,7 +279,7 @@ export function rewriteInlineScriptToTempFile(params: {
   }
 
   const { flagIdx, isPrint, scriptContent, inputType, stripIndices } = details;
-  console.error(`\n   💡 AGENT INTERCEPT: Transparently rewriting inline ${interpreterName} script to a temporary file execution to avoid quoting bugs... (Frictionless Recovery)`);
+  emitInterceptBanner(`\n   💡 AGENT INTERCEPT: Transparently rewriting inline ${interpreterName} script to a temporary file execution to avoid quoting bugs... (Frictionless Recovery)`);
 
   const ext = interpreterName.startsWith('python')
     ? 'py'
@@ -291,11 +292,12 @@ export function rewriteInlineScriptToTempFile(params: {
     `.agent_inline_script_${Date.now()}_${crypto.randomUUID().slice(0, 8)}.${ext}`
   );
 
+  const skipValidFileRewrite = target !== 'wsl2' && ['node', 'tsx', 'ts-node'].includes(interpreterName);
   let fileContent = interpreterName.startsWith('python')
     ? `import sys; sys.path.insert(0, '')\n${scriptContent}`
     : healStrippedStringRawLiterals(
         healStrippedSqlTemplateLiterals(
-          healEvalCodePathHallucinations(scriptContent, cwd, target)
+          healEvalCodePathHallucinations(scriptContent, cwd, target, { skipValidFileRewrite })
         )
       );
 

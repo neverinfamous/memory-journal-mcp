@@ -4,7 +4,7 @@ version: 2.1.0
 tags:
   - "agent-skill"
 description: >-
-  Guidelines and Code Mode contracts for Memory Journal MCP (memory-journal-mcp): multi-repo briefing/agent-context, graph-first hybrid recall, 7-dimension entries, relationships, and CMS-04 summaries.
+  Guidelines and Code Mode contracts for Memory Journal MCP (memory-journal-mcp): multi-repo briefing/agent-context, graph-first hybrid recall, 7-dimension entries, relationships, and CMS-04 summaries. Use when calling mj_execute_code, memory:// resources, or entry CLI workflows. Do NOT use for generic SQLite queries or unrelated repo tasks.
 ---
 # Memory Journal MCP Guidelines (`v9.1.0+`)
 
@@ -57,7 +57,7 @@ Static operational anchor for `memory-journal-mcp` Code Mode (`mj_execute_code`)
 - **Ecosystem Namespaces & Runtime Config:**
   - **`mj.git.*`:** `getCommitHistory({ techDebtAudit: true, ... })` (or `getCommitHistory({ uncommitted: true, path? })` for working-tree status/diffstat instead of raw `git status`), `searchCommits`, `getUnreleasedCommits`, `checkEntryStaleness`.
   - **`mj.github.*`:** `getGithubIssues`, `getGithubPrs`, `getCopilotReviews`, `createGithubIssueWithEntry`, Kanban and Milestone tools.
-  - **`mj.team.*` / `share_with_team: true`:** Publish reusable cross-repository patterns to the shared team database (`mj.core.createEntry({ ..., share_with_team: true })`).
+  - **`mj.team.*` / `share_with_team: true`:** Omit `share_with_team` to keep routine entries in the Personal DB (default); pass `share_with_team: true` only when publishing reusable cross-repository patterns to the shared team database. Discover valid team IDs via `mj.team.teamGetRecent` or `mj.team.teamSearch` instead of probing sequential entry IDs.
   - **`update_configuration`:** Hot-reload `tool_filter`, briefing preferences (`briefing_graph`), and default workspace/project scope at runtime (automatically emits `notifications/tools/list_changed` without restarting the server).
 
 ## 3. 7-Dimension Entry Quality & Auto-Prune Guardrails
@@ -69,7 +69,7 @@ Every manual journal entry (`mj.core.createEntry`) **MUST** populate:
 4. **`entry_type`**: Canonical enum value — `'technical_note'`, `'project_decision'`, `'bug_fix'`, `'feature_implementation'`, `'planning'`, `'retrospective'`, or `'maintenance'` (pair architectural decisions with `significance_type: 'architecture' | 'decision'`).
 5. **`impact_score`** (`0.0–1.0`) & **`trust_score`** (`0.0–1.0`).
 6. **`validation_status`**: `'passed'`, `'none'`, or `'failed'`.
-7. **Graph `relationships`**: Pass **`relationships: [{ targetId: <number>, relationType: <canonical_type> }]`** (if omitted, `create_entry` returns up to 3 `suggested_links` from same-session, shared-anchor, and semantic neighbors, or pass `auto_link: true` to auto-link up to 2 same-session/shared-anchor targets) using **only** canonical types:
+7. **Canonical `anchors` & Graph `relationships`**: Pass file/symbol anchors as `anchors: [{ anchor_path: "src/foo.ts", anchor_type: "file" }]` (never invent arbitrary `{ type, value }` keys), and pass **`relationships: [{ targetId: <number>, relationType: <canonical_type> }]`** (if omitted, `create_entry` returns up to 3 `suggested_links` from same-session, shared-anchor, and semantic neighbors, or pass `auto_link: true` to auto-link up to 2 same-session/shared-anchor targets) using **only** canonical types:
    - Causal (carry 20% of importance score): `'resolved'`, `'caused'`, `'blocked_by'`
    - Structural / informational: `'evolves_from'`, `'implements'`, `'clarifies'`, `'response_to'`, `'references'`
    - **NEVER** use `'caused_by'` (invert source/target or use `'resolved'` / `'evolves_from'`).

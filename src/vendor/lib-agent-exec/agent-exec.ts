@@ -94,16 +94,30 @@ try {
 
 try {
   const scriptDir = path.dirname(fileURLToPath(import.meta.url));
+  const resolvedCwdRoot = path.resolve(process.cwd());
+  const resolvedScriptRoot = path.resolve(scriptDir);
   for (const interceptorsPath of interceptorsPaths) {
     const resolvedPath = path.resolve(interceptorsPath);
-    if (!resolvedPath.startsWith(process.cwd()) && !resolvedPath.startsWith(scriptDir)) {
+    const inCwd = resolvedPath === resolvedCwdRoot || resolvedPath.startsWith(resolvedCwdRoot + path.sep);
+    const inScriptDir = resolvedPath === resolvedScriptRoot || resolvedPath.startsWith(resolvedScriptRoot + path.sep);
+    if (!inCwd && !inScriptDir) {
       fatalError(`Interceptor plugin must be loaded from within the workspace: ${resolvedPath}`);
     }
-    const plugin = await import(pathToFileURL(resolvedPath).href);
-    if (plugin.default && Array.isArray(plugin.default)) {
-      customInterceptors.push(...plugin.default);
-    } else if (plugin.default && typeof plugin.default === 'function') {
-      customInterceptors.push(plugin.default);
+    const plugin: unknown = await import(pathToFileURL(resolvedPath).href);
+    if (plugin !== null && typeof plugin === 'object') {
+      const mod = plugin as { default?: unknown; interceptors?: unknown };
+      const candidates = [mod.interceptors, mod.default];
+      for (const candidate of candidates) {
+        if (Array.isArray(candidate)) {
+          for (const fn of candidate) {
+            if (typeof fn === 'function') {
+              customInterceptors.push(fn as (typeof customInterceptors)[number]);
+            }
+          }
+        } else if (typeof candidate === 'function') {
+          customInterceptors.push(candidate as (typeof customInterceptors)[number]);
+        }
+      }
     }
   }
 
@@ -182,7 +196,8 @@ try {
     fatalError(`The provided cwd '${cwd}' does not exist or is not a directory.`);
   }
 
-  const { cmd, args, tempScriptPath, envOverrides } = buildCommand(payload, cwd, isJson);
+  const { cmd, args, tempScriptPath, envOverrides, resolvedCwd } = buildCommand(payload, cwd, isJson);
+  const effectiveCwd = resolvedCwd ?? cwd;
   
   const env = buildEnvironment(payload.env);
   
@@ -196,7 +211,7 @@ try {
     finalEnv[targetKey] = v;
   }
 
-  await executeCommand(payload, cwd, cmd, args, finalEnv, tempScriptPath, isJson || !!payload.expectJsonEnvelope);
+  await executeCommand(payload, effectiveCwd, cmd, args, finalEnv, tempScriptPath, isJson || !!payload.expectJsonEnvelope);
 
 } catch (err) {
   if (err instanceof SyntaxError) {

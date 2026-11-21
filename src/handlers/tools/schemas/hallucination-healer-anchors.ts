@@ -96,7 +96,12 @@ function normalizeSingleAnchorItem(
         itemObj['path'] ??
         itemObj['file'] ??
         itemObj['file_path'] ??
-        itemObj['filepath']
+        itemObj['filepath'] ??
+        itemObj['filePath'] ??
+        itemObj['value'] ??
+        itemObj['target'] ??
+        itemObj['uri'] ??
+        itemObj['location']
     const rawType = itemObj['anchor_type'] ?? itemObj['anchorType'] ?? itemObj['type']
     const rawStatus = itemObj['status']
     const normalizedPath =
