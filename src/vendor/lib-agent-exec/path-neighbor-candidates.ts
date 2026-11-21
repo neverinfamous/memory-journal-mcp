@@ -72,7 +72,37 @@ function pushCompoundPart(results: string[], dir: string, part: string, ext: str
   pushFile(results, path.join(dir, `${part}.${ext}`));
 }
 
+function tokenPermutationKey(stem: string): string | null {
+  const tokens = stem.toLowerCase().split(/[-_.]+/).filter(Boolean);
+  if (tokens.length < 2) return null;
+  return [...tokens].sort().join('\0');
+}
+
+function collectTokenPermutationCandidates(dir: string, base: string, allowDirs: boolean, results: string[]): void {
+  if (results.length > 0) return;
+  const parsed = path.parse(base);
+  const targetKey = tokenPermutationKey(parsed.name);
+  if (targetKey === null) return;
+  try {
+    const entries = fs.readdirSync(dir, { withFileTypes: true });
+    for (const entry of entries) {
+      if (isIgnoredEntryName(entry.name)) continue;
+      if (entry.isDirectory()) {
+        if (allowDirs && parsed.ext.length === 0 && tokenPermutationKey(entry.name) === targetKey) {
+          results.push(path.join(dir, entry.name));
+        }
+        continue;
+      }
+      if (!entry.isFile() || !extensionAccepted(entry.name, base)) continue;
+      if (tokenPermutationKey(path.parse(entry.name).name) === targetKey) {
+        results.push(path.join(dir, entry.name));
+      }
+    }
+  } catch { /* ignore */ }
+}
+
 function collectCompoundCandidates(dir: string, base: string, allowDirs: boolean, results: string[]): void {
+  if (results.length > 0) return;
   const extMatch = base.match(CODE_EXT_RE);
   const ext = extMatch?.[1];
   if (extMatch === null || ext === undefined) return;
@@ -177,14 +207,15 @@ function collectModularDirectory(dir: string, base: string, allowDirs: boolean, 
   pushBarrelMatch(results, path.join(dir, parsed.name), allowDirs, true);
 }
 
-export function getFileCandidates(dir: string, base: string, allowDirs = false): string[] {
+export function getFileCandidates(dir: string, base: string, allowDirs = false, allowCompoundParts = true): string[] {
   if (!isDirectoryPath(dir)) return [];
   const exact = path.join(dir, base);
   if (fs.existsSync(exact) && (allowDirs || !fs.statSync(exact).isDirectory())) return [exact];
   const results: string[] = [];
   collectModifierCandidates(dir, base, allowDirs, results);
   collectPrefixCandidates(dir, base, results);
-  collectCompoundCandidates(dir, base, allowDirs, results);
+  collectTokenPermutationCandidates(dir, base, allowDirs, results);
+  if (allowCompoundParts) collectCompoundCandidates(dir, base, allowDirs, results);
   if (path.extname(base).length === 0) collectMissingExtensions(exact, results);
   else collectSwappedExtensions(dir, base, results);
   collectNormalizedCandidates(dir, base, allowDirs, results);
