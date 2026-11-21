@@ -241,7 +241,7 @@ program
     .helpOption(false)
     .action(async (commitArgs: string[]) => {
         const { main } = await import('../vendor/commit/commit.js')
-        const rawTail = process.argv.slice(2)
+        const rawTail = normalizeCliArgv(process.argv).slice(2)
         const valueTakingGlobalFlags = new Set<string>()
         for (const opt of program.options) {
             if (opt.required || opt.optional) {

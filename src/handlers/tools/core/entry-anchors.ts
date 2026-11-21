@@ -216,27 +216,20 @@ export async function resolveEntryAnchors(
             if (prefetched.allHit) return prefetched.anchors
         }
 
-        const { stdout: output } = await execFileAsync(
-            'git',
-            ['show', '--name-only', '-z', '--pretty=format:', ...validShas],
-            {
-                cwd: repoPath,
-                encoding: 'utf-8',
-                timeout: 2500,
-                windowsHide: true,
+        const filesBySha = await fetchRepoCommitFilesBatch(repoPath, validShas)
+        const uniqueFiles = new Set<string>()
+        for (const sha of validShas) {
+            const files = filesBySha.get(sha.toLowerCase())
+            if (files === undefined) continue
+            for (const file of files) {
+                uniqueFiles.add(file)
+                if (uniqueFiles.size >= MAX_AUTO_ANCHORS) break
             }
-        )
-        const uniqueFiles = Array.from(
-            new Set(
-                output
-                    .split('\0')
-                    .map((line) => line.replace(/^[\r\n]+|[\r\n]+$/g, ''))
-                    .filter((line) => line.length > 0)
-            )
-        ).slice(0, MAX_AUTO_ANCHORS)
+            if (uniqueFiles.size >= MAX_AUTO_ANCHORS) break
+        }
 
-        if (uniqueFiles.length === 0) return undefined
-        return uniqueFiles.map((anchorPath) => ({ anchorPath, anchorType: 'file' }))
+        if (uniqueFiles.size === 0) return undefined
+        return Array.from(uniqueFiles).map((anchorPath) => ({ anchorPath, anchorType: 'file' }))
     } catch (err) {
         mcpLogger.warning('git', 'Auto-anchor extraction failed', {
             error: err instanceof Error ? err.message : String(err),

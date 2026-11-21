@@ -223,7 +223,7 @@ describe('Pass 50 Security Audit Regressions', () => {
 
     describe('AP1–AP3: Portable adversarial-security prompt revision & guidance', () => {
         it('bumps AUDIT_PROMPT_REVISION to 2026-11-20-audit-pass50 and includes Pass 50 guidance', () => {
-            expect(AUDIT_PROMPT_REVISION).toBe('2026-11-21-audit-pass64')
+            expect(AUDIT_PROMPT_REVISION).toBe('2026-11-21-audit-pass65')
             const def = getSecurityAuditPromptDefinition()
             const mockDb = {
                 searchEntries: vi.fn().mockReturnValue([]),
@@ -232,7 +232,7 @@ describe('Pass 50 Security Audit Regressions', () => {
             } as unknown as IDatabaseAdapter
             const rendered = def.handler({ target: 'memory-journal-mcp' }, mockDb)
             const text = rendered.messages[0]?.content.text ?? ''
-            expect(text).toContain('Prompt revision: 2026-11-21-audit-pass64')
+            expect(text).toContain('Prompt revision: 2026-11-21-audit-pass65')
             expect(text).toContain('ungrouped overlapping/adjacent quantifiers')
             expect(text).toContain('formatVmErrorResult')
             expect(text).toContain('_alias_derived_workspace')

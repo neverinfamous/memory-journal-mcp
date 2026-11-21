@@ -35,7 +35,7 @@ const RELATION_TYPE_ALIASES: Record<string, (typeof CANONICAL_RELATION_TYPES)[nu
   relates_to: 'references',
 };
 
-export const CONVENTIONAL_COMMIT_REGEX = /^([a-zA-Z0-9_-]+)(?:\(([^)]+)\))?(!)?:\s+(.+)$/;
+export const CONVENTIONAL_COMMIT_REGEX = /^([a-zA-Z0-9_-]+)(?:\(([^)]+)\))?(!)?:\s+(\S.*)$/;
 
 const CLI_OPTIONS = {
   msg: { type: 'string', short: 'm' },
@@ -133,11 +133,16 @@ function matchKeywordPrefix(firstLine: string): string {
   return `chore: ${firstLine}`;
 }
 
+const EMPTY_CONVENTIONAL_SUBJECT_RE = /^[a-zA-Z0-9_-]+(?:\([^)]*\))?!?:$/;
+
 function normalizeCommitMsg(val: unknown): unknown {
   if (typeof val !== 'string') return val;
   const normalized = val.replace(/\r\n/g, '\n');
-  let firstLine = normalized.trim().split('\n')[0];
+  const trimmed = normalized.trim();
+  const lines = trimmed.split('\n');
+  let firstLine = (lines[0] ?? '').trim();
   if (firstLine.length === 0) return '';
+  if (EMPTY_CONVENTIONAL_SUBJECT_RE.test(firstLine)) return trimmed;
   let corrected = false;
 
   const strictMatch = firstLine.match(CONVENTIONAL_COMMIT_REGEX);
@@ -161,11 +166,10 @@ function normalizeCommitMsg(val: unknown): unknown {
 
   if (corrected) {
     console.warn(`⚠️ AUTONOMOUS HEALING: Auto-corrected commit message to conventional format: "${firstLine}"`);
-    const lines = normalized.trim().split('\n');
     lines[0] = firstLine;
     return lines.join('\n');
   }
-  return normalized.trim();
+  return trimmed;
 }
 
 function normalizeRelateSpecs(val: unknown): unknown {
@@ -203,7 +207,7 @@ export const cliSchema = z.object({
     z.string({ message: 'Missing Commit Message! You must provide a commit message using `--msg "..."` or as the first positional argument.' })
       .refine((val) => val.trim().split('\n')[0].length <= 200, { message: 'Too big: expected commit subject (first line) to be <=200 characters' })
       .refine((val) => {
-        const firstLine = val.trim().split('\n')[0];
+        const firstLine = (val.trim().split('\n')[0] ?? '').trim();
         return CONVENTIONAL_COMMIT_REGEX.test(firstLine);
       }, { message: "must follow conventional commit format (e.g., 'feat(core): subject' or 'feat!: breaking')." })
   ),
@@ -253,7 +257,7 @@ export const cliSchema = z.object({
     },
     z.enum(VALID_CATEGORIES)
   ).optional(),
-  cwd: z.string().max(4096).optional(),
+  cwd: z.string().trim().min(1, 'Directory path for --cwd cannot be empty.').max(4096).optional(),
   add: z.array(
     z.string().max(4096).refine((s) => s.trim().length > 0, {
       message: 'File path for --add cannot be empty.',
@@ -342,7 +346,7 @@ function mergeAliasFlagsAndPositionals(
 ) {
   const hasMsg = values.msg !== undefined && values.msg.length > 0;
   const hasAliasMessage = values.message !== undefined && values.message.length > 0;
-  const hasMessageFlag = hasMsg || hasAliasMessage;
+  const hasAnyMessageFlag = values.msg !== undefined || values.message !== undefined;
   const mergedValues = { ...values };
 
   if (hasMsg && hasAliasMessage) {
@@ -368,7 +372,7 @@ function mergeAliasFlagsAndPositionals(
     delete mergedValues.trust;
   }
   if (positionals.length > 0) {
-    if (hasMessageFlag) {
+    if (hasAnyMessageFlag) {
       console.warn("⚠️ AUTONOMOUS HEALING: Extra positional arguments detected alongside --msg. Assuming these are space-separated files for --add.");
       mergedValues.add = [...(mergedValues.add ?? []), ...positionals];
     } else {

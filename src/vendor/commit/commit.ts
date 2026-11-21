@@ -1,5 +1,5 @@
 // @ts-nocheck
-import { execFileSync, spawnSync } from 'node:child_process';
+import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
@@ -17,95 +17,24 @@ import {
   getErrorMessage,
   parseArguments,
 } from './commit-cli-schema.js';
+import {
+  abortIfScratchPaths,
+  findAlreadyStagedDeletions,
+  findTrackedIndexPaths,
+  getValidatedRepoRelPath,
+  isAlreadyStagedDeletion,
+  isSameResolvedPath,
+  isScratchRepoPath,
+  normalizeRelGitPath,
+  resolveGitDir,
+  resolveRepoRootForGuard,
+} from './commit-git-paths.js';
 
-export { cliSchema, CANONICAL_RELATION_TYPES };
+export { cliSchema, CANONICAL_RELATION_TYPES, findAlreadyStagedDeletions, isAlreadyStagedDeletion };
 
 const COMMIT_MSG_PREFIX = 'commit-msg-';
 /** [INVARIANT]: Keep in sync with lib-agent-exec mutating-interceptors STALE_INDEX_LOCK_MS (5 minutes). */
 const STALE_LOCK_MS = 5 * 60 * 1000;
-
-function normalizeRelGitPath(relPath: string): string {
-  return relPath.replace(/\\/g, '/');
-}
-
-function isSameResolvedPath(a: string, b: string): boolean {
-  const normA = path.resolve(a);
-  const normB = path.resolve(b);
-  return process.platform === 'win32' ? normA.toLowerCase() === normB.toLowerCase() : normA === normB;
-}
-
-function getValidatedRepoRelPath(cwd: string, targetPath: string): string | null {
-  const absTarget = path.resolve(cwd, targetPath);
-  const rel = path.relative(cwd, absTarget);
-  if (rel === '' || rel === '.' || rel === '..' || rel.startsWith(`..${path.sep}`) || path.isAbsolute(rel)) {
-    return null;
-  }
-  return normalizeRelGitPath(rel);
-}
-
-function queryMatchingGitRelPaths(
-  cwd: string,
-  candidates: ReadonlyArray<{ original: string; relPosix: string }>,
-  gitArgsPrefix: readonly string[]
-): Set<string> {
-  const matched = new Set<string>();
-  if (candidates.length === 0) return matched;
-  try {
-    const res = spawnSync('git', [...gitArgsPrefix, '--', ...candidates.map((c) => c.relPosix)], {
-      cwd,
-      encoding: 'utf8',
-      timeout: 10000,
-      windowsHide: true,
-    });
-    if (res.status !== 0 || typeof res.stdout !== 'string') return matched;
-    const hitSet = new Set(res.stdout.split('\0').filter(Boolean));
-    for (const item of candidates) {
-      if (hitSet.has(item.relPosix)) matched.add(item.original);
-    }
-  } catch {
-    return matched;
-  }
-  return matched;
-}
-
-/**
- * [INTENT]: Batched single-subprocess detector for `--add` paths that are missing on disk and
- * already staged as deletions (`D  <path>`) in `.git/index`, preventing `git add` exit 128.
- */
-export function findAlreadyStagedDeletions(cwd: string, targetPaths: readonly string[]): Set<string> {
-  const missingTargets: Array<{ original: string; relPosix: string }> = [];
-  for (const targetPath of targetPaths) {
-    if (fs.statSync(path.resolve(cwd, targetPath), { throwIfNoEntry: false }) !== undefined) continue;
-    const relPosix = getValidatedRepoRelPath(cwd, targetPath);
-    if (relPosix !== null) missingTargets.push({ original: targetPath, relPosix });
-  }
-  return queryMatchingGitRelPaths(cwd, missingTargets, ['diff', '--cached', '--relative', '--name-only', '--diff-filter=D', '-z']);
-}
-
-function findTrackedIndexPaths(cwd: string, targetPaths: readonly string[]): Set<string> {
-  const candidates: Array<{ original: string; relPosix: string }> = [];
-  for (const targetPath of targetPaths) {
-    const relPosix = getValidatedRepoRelPath(cwd, targetPath);
-    if (relPosix !== null) candidates.push({ original: targetPath, relPosix });
-  }
-  return queryMatchingGitRelPaths(cwd, candidates, ['ls-files', '-z']);
-}
-
-/**
- * [INTENT]: Detect when a single `--add <path>` target has already been staged as deleted (`D  <path>`).
- */
-export function isAlreadyStagedDeletion(cwd: string, targetPath: string): boolean {
-  return findAlreadyStagedDeletions(cwd, [targetPath]).has(targetPath);
-}
-
-function resolveGitDir(cwd: string): string | null {
-  try {
-    const gitDir = execFileSync('git', ['rev-parse', '--git-dir'], { encoding: 'utf-8', cwd, windowsHide: true }).trim();
-    return gitDir.length > 0 ? path.resolve(cwd, gitDir) : null;
-  } catch {
-    return null;
-  }
-}
 
 function healStaleIndexLock(resolvedGitDir: string): void {
   const lockFile = path.join(resolvedGitDir, 'index.lock');
@@ -132,36 +61,41 @@ function assertNoMergeRebaseConflict(resolvedGitDir: string): void {
   }
 }
 
-function isScratchRepoPath(filepath: string): boolean {
-  const normalized = normalizeRelGitPath(filepath).toLowerCase();
-  return (
-    normalized.includes('scratch/') ||
-    normalized.includes('.agents/scratch') ||
-    normalized.endsWith('scratch.ts') ||
-    normalized.endsWith('scratch.js')
-  );
+function resolveScratchCandidateRelPath(cwd: string, guardRoot: string, targetPath: string): string | null {
+  const fromGuardRoot = getValidatedRepoRelPath(guardRoot, targetPath);
+  if (fromGuardRoot !== null) return fromGuardRoot;
+  const relFromCwd = path.relative(cwd, path.resolve(cwd, targetPath));
+  if (relFromCwd.length > 0 && !path.isAbsolute(relFromCwd)) {
+    return normalizeRelGitPath(relFromCwd);
+  }
+  return null;
 }
 
-function abortIfScratchPaths(scratchFiles: readonly string[]): void {
-  console.error('🛠️ AUTONOMOUS HEALING: Scratch files detected in staging area.');
-  console.error('You MUST NOT commit scratch scripts, test data, or debug payloads. Please unstage the following files:');
-  for (const file of scratchFiles) console.error(`- ${file}`);
-  fatalError('Commit aborted: Scratch files staged.');
-}
-
-function stageExplicitFiles(cwd: string, filesToAdd: readonly string[], precomputedStagedDeletions?: ReadonlySet<string>): void {
+function stageExplicitFiles(
+  cwd: string,
+  filesToAdd: readonly string[],
+  resolvedGitDir: string | null,
+  precomputedStagedDeletions?: ReadonlySet<string>,
+  precomputedCheckedNotStaged?: ReadonlySet<string>
+): void {
   const unchecked =
-    precomputedStagedDeletions !== undefined && precomputedStagedDeletions.size > 0
-      ? filesToAdd.filter((f) => !precomputedStagedDeletions.has(f))
+    (precomputedStagedDeletions !== undefined && precomputedStagedDeletions.size > 0) ||
+    (precomputedCheckedNotStaged !== undefined && precomputedCheckedNotStaged.size > 0)
+      ? filesToAdd.filter(
+          (f) =>
+            !(precomputedStagedDeletions?.has(f) ?? false) &&
+            !(precomputedCheckedNotStaged?.has(f) ?? false)
+        )
       : filesToAdd;
   const extraDeletions = unchecked.length > 0 ? findAlreadyStagedDeletions(cwd, unchecked) : new Set<string>();
   const pathsToStage = filesToAdd.filter((f) => !(precomputedStagedDeletions?.has(f) ?? false) && !extraDeletions.has(f));
   if (pathsToStage.length < filesToAdd.length) {
     console.warn('⚠️ AUTONOMOUS HEALING: Skipping git add for already-staged deletion(s) (preserving staged removal for commit).');
   }
+  const guardRoot = resolveRepoRootForGuard(cwd, resolvedGitDir);
   const scratchToStage: string[] = [];
   for (const p of pathsToStage) {
-    const rel = getValidatedRepoRelPath(cwd, p);
+    const rel = resolveScratchCandidateRelPath(cwd, guardRoot, p);
     if (rel !== null && isScratchRepoPath(rel)) scratchToStage.push(rel);
   }
   if (scratchToStage.length > 0) abortIfScratchPaths(scratchToStage);
@@ -212,7 +146,8 @@ function parseStagedStatus(status: string): { hasStagedFiles: boolean; stagedScr
 function ensureStagedFiles(
   cwd: string,
   filesToAdd?: string[],
-  precomputedStagedDeletions?: ReadonlySet<string>
+  precomputedStagedDeletions?: ReadonlySet<string>,
+  precomputedCheckedNotStaged?: ReadonlySet<string>
 ): string[] {
   const resolvedGitDir = resolveGitDir(cwd);
   if (resolvedGitDir !== null) {
@@ -220,7 +155,7 @@ function ensureStagedFiles(
   }
 
   if (filesToAdd !== undefined && filesToAdd.length > 0) {
-    stageExplicitFiles(cwd, filesToAdd, precomputedStagedDeletions);
+    stageExplicitFiles(cwd, filesToAdd, resolvedGitDir, precomputedStagedDeletions, precomputedCheckedNotStaged);
   }
 
   if (resolvedGitDir !== null) {
@@ -306,7 +241,7 @@ let didRunCliMain = false;
 function resolveExplicitAddPaths(
   cwd: string,
   rawAdd: readonly string[]
-): { paths: string[]; knownStagedDeletions: Set<string> } {
+): { paths: string[]; knownStagedDeletions: Set<string>; checkedNotStagedDeletions: Set<string> } {
   const classified: Array<{ kind: 'direct' | 'spaced-missing'; raw: string; resolved: string }> = [];
   const spacedMissing: string[] = [];
 
@@ -330,6 +265,7 @@ function resolveExplicitAddPaths(
     remainingSpaced.length > 0 ? findTrackedIndexPaths(cwd, remainingSpaced) : new Set<string>();
   const paths: string[] = [];
   const knownStagedDeletions = new Set<string>();
+  const checkedNotStagedDeletions = new Set<string>();
 
   for (const item of classified) {
     if (item.kind === 'spaced-missing' && !spacedStagedDeletions.has(item.raw) && !trackedUnstagedSpaced.has(item.raw)) {
@@ -339,12 +275,16 @@ function resolveExplicitAddPaths(
       }
       continue;
     }
-    if (item.kind === 'spaced-missing' && spacedStagedDeletions.has(item.raw)) {
-      knownStagedDeletions.add(item.resolved);
+    if (item.kind === 'spaced-missing') {
+      if (spacedStagedDeletions.has(item.raw)) {
+        knownStagedDeletions.add(item.resolved);
+      } else {
+        checkedNotStagedDeletions.add(item.resolved);
+      }
     }
     paths.push(item.resolved);
   }
-  return { paths, knownStagedDeletions };
+  return { paths, knownStagedDeletions, checkedNotStagedDeletions };
 }
 
 function resolveHistoryContent(args: ReturnType<typeof parseArguments>, cwd: string): string {
@@ -382,7 +322,7 @@ export async function main(rawArgv?: readonly string[]): Promise<void> {
     const args = parseArguments(rawArgv);
 
     let cwd = process.cwd();
-    if (args.cwd) {
+    if (args.cwd !== undefined) {
       const targetCwd = path.resolve(args.cwd);
       const cwdStats = fs.statSync(targetCwd, { throwIfNoEntry: false });
       if (cwdStats === undefined || !cwdStats.isDirectory()) {
@@ -392,16 +332,18 @@ export async function main(rawArgv?: readonly string[]): Promise<void> {
     }
 
     let knownStagedDeletions: Set<string> | undefined;
+    let checkedNotStagedDeletions: Set<string> | undefined;
     if (args.add) {
       const resolvedAdd = resolveExplicitAddPaths(cwd, args.add);
       args.add = resolvedAdd.paths;
       knownStagedDeletions = resolvedAdd.knownStagedDeletions;
+      checkedNotStagedDeletions = resolvedAdd.checkedNotStagedDeletions;
     }
 
-    const firstLine = args.msg.trim().split('\n')[0];
+    const firstLine = args.msg.trim().split('\n')[0].trim();
     const commitMatch = firstLine.match(CONVENTIONAL_COMMIT_REGEX);
     const type = commitMatch ? commitMatch[1] : 'chore';
-    const stagedFiles = ensureStagedFiles(cwd, args.add, knownStagedDeletions);
+    const stagedFiles = ensureStagedFiles(cwd, args.add, knownStagedDeletions, checkedNotStagedDeletions);
     const historyContent = resolveHistoryContent(args, cwd);
 
     const resolvedJournalTarget = args.journal ? resolveJournalTarget(cwd, args['journal-project']) : undefined;

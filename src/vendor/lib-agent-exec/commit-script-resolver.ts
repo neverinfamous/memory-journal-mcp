@@ -31,6 +31,22 @@ export function resolveAgentScriptFallback(rawArg: string, projectDir: string): 
   return null;
 }
 
+function hasNewerTsInDir(dirPath: string, targetMtimeMs: number): boolean {
+  const dirStat = fs.lstatSync(dirPath, { throwIfNoEntry: false });
+  if (dirStat === undefined || dirStat.isSymbolicLink() || !dirStat.isDirectory()) return false;
+  for (const entry of fs.readdirSync(dirPath, { withFileTypes: true })) {
+    if (entry.isSymbolicLink()) continue;
+    const fullPath = path.join(dirPath, entry.name);
+    if (entry.isDirectory()) {
+      if (hasNewerTsInDir(fullPath, targetMtimeMs)) return true;
+    } else if (entry.isFile() && entry.name.endsWith('.ts')) {
+      const st = fs.lstatSync(fullPath, { throwIfNoEntry: false });
+      if (st !== undefined && st.mtimeMs > targetMtimeMs) return true;
+    }
+  }
+  return false;
+}
+
 /**
  * [INTENT]: Resolve a fresh precompiled `dist/vendor/commit/commit.js` bundle for `scripts/commit.ts`
  * so `pnpm [exec] tsx scripts/commit.ts` bypasses `pwsh` + `pnpm.cmd` + `tsx` compilation overhead.
@@ -55,23 +71,16 @@ export function resolveFreshCompiledCommitBundle(
       return null;
     }
     const compiledMtime = compiledStats.mtimeMs;
-    const sourceCandidates = new Set<string>([
-      absScript,
-      path.join(repoRoot, 'scripts', 'commit.ts'),
-    ]);
-    const vendorCommitDir = path.join(repoRoot, 'src', 'vendor', 'commit');
-    if (fs.statSync(vendorCommitDir, { throwIfNoEntry: false })?.isDirectory()) {
-      for (const file of fs.readdirSync(vendorCommitDir)) {
-        if (file.endsWith('.ts')) {
-          sourceCandidates.add(path.join(vendorCommitDir, file));
-        }
-      }
-    }
-    for (const candidate of sourceCandidates) {
+    const directCandidates = [absScript, path.join(repoRoot, 'scripts', 'commit.ts')];
+    for (const candidate of directCandidates) {
       const candidateStats = fs.statSync(candidate, { throwIfNoEntry: false });
       if (candidateStats !== undefined && candidateStats.mtimeMs > compiledMtime) {
         return null;
       }
+    }
+    const vendorCommitDir = path.join(repoRoot, 'src', 'vendor', 'commit');
+    if (hasNewerTsInDir(vendorCommitDir, compiledMtime)) {
+      return null;
     }
     return compiledPath;
   } catch {

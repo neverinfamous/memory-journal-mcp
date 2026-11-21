@@ -286,6 +286,10 @@ export async function createEntryFromFileInProcess(options: {
     file: string
     dryRunLinks?: boolean | undefined
 }): Promise<number> {
+    if (options.file.trim().length === 0) {
+        process.stderr.write('Error: Must provide a non-empty --file path for in-process entry creation.\n')
+        return 1
+    }
     const healedOptions: HealedEntryOptions = {
         file: options.file,
         ...(options.dryRunLinks === true ? { dryRunLinks: true } : {}),

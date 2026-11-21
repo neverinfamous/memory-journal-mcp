@@ -290,7 +290,7 @@ export function buildCommitJournalContent(
 
   frontmatterLines.push('auto_context:');
   frontmatterLines.push('  type: "session-commits"');
-  frontmatterLines.push(`  commits: ["${sha}"]`);
+  frontmatterLines.push(`  commits: [${JSON.stringify(sha)}]`);
   frontmatterLines.push('---');
 
   const journalBody = historyContent.length > 0 ? historyContent : header;

@@ -270,8 +270,8 @@ describe('Pass 62 Code-Quality Audit — DB, Lock, Sanitizers, Server & Prompts'
         }
     })
 
-    it('AP1–AP4: bumps AUDIT_PROMPT_REVISION to 2026-11-21-audit-pass64 and embeds Pass 62 detector rules cleanly', () => {
-        expect(AUDIT_PROMPT_REVISION).toBe('2026-11-21-audit-pass64')
+    it('AP1–AP4: bumps AUDIT_PROMPT_REVISION to 2026-11-21-audit-pass65 and embeds Pass 62 detector rules cleanly', () => {
+        expect(AUDIT_PROMPT_REVISION).toBe('2026-11-21-audit-pass65')
         const def = getCodeQualityAuditPromptDefinition()
         const rendered = def.handler({ target: 'memory-journal-mcp' }, {
             searchEntries: () => ({ entries: [] }),
@@ -279,7 +279,7 @@ describe('Pass 62 Code-Quality Audit — DB, Lock, Sanitizers, Server & Prompts'
             getRecentEntries: () => [],
         } as never) as { messages: { content: { text: string } }[] }
         const text = rendered.messages[0]?.content.text ?? ''
-        expect(text).toContain('Prompt revision: 2026-11-21-audit-pass64')
+        expect(text).toContain('Prompt revision: 2026-11-21-audit-pass65')
         expect(text).toContain('PRAGMA data_version')
         expect(text).toContain('lockRecordChanged(expected, null)')
         expect(text).toContain('Protocol.connect')

@@ -606,6 +606,14 @@ describe('CLI Entry & Exec Commands', () => {
                 }
             }
         })
+
+        it('createEntryFromFileInProcess fails fast with exit code 1 when options.file is blank (Q-L3)', async () => {
+            stderrOutput = []
+            const code = await createEntryFromFileInProcess({ file: '' })
+            expect(code).toBe(1)
+            expect(exitSpy).not.toHaveBeenCalled()
+            expect(stderrOutput.join('')).toContain('non-empty --file path')
+        })
     })
 
     describe('execAction (src/cli/commands/exec.ts)', () => {

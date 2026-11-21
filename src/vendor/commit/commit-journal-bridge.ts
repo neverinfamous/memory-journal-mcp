@@ -14,7 +14,7 @@ const FORBIDDEN_REGISTRY_KEYS: ReadonlySet<string> = new Set([
 ]);
 
 const projectRegistryEntrySchema = z.object({
-  path: z.string().min(1),
+  path: z.string().trim().min(1),
   project_number: z
     .number()
     .int()
@@ -143,6 +143,7 @@ function readCachedConfigEntry(configPath?: string): CachedConfigEntry | undefin
     configCache.set(effectiveConfigPath, entry);
     return entry;
   } catch (err: unknown) {
+    configCache.delete(effectiveConfigPath);
     console.warn(
       `⚠️ Failed to parse memory-journal config at ${effectiveConfigPath}: ${err instanceof Error ? err.message : String(err)}`
     );

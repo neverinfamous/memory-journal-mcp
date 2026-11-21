@@ -96,7 +96,7 @@ describe('Pass 26 Schema Bounds, Prompts & Normalization Regressions', () => {
     })
 
     it('resolves relative <repo>/<subpath> targets against registry without matching arbitrary relative paths', () => {
-        expect(AUDIT_PROMPT_REVISION).toBe('2026-11-21-audit-pass64')
+        expect(AUDIT_PROMPT_REVISION).toBe('2026-11-21-audit-pass65')
         expect(resolveRegistryMatchForTarget(REGISTRY, 'memory-journal-mcp/src/cli')).toBe('memory-journal-mcp')
         expect(resolveRegistryMatchForTarget(REGISTRY, 'memory-journal-mcp\\src\\utils')).toBe('memory-journal-mcp')
         expect(resolveRegistryMatchForTarget(REGISTRY, 'src/cli')).toBeUndefined()
