@@ -119,3 +119,100 @@ Development is optimized for **Windows Native Orchestration** using PowerShell. 
 
 - `pnpm run check` runs ESLint, the 500-line ceiling, `tsc --noEmit`, regenerates `test-server/code-map.md`, and the unassigned-entry check, then `pnpm test` and `pnpm run test:e2e`. Static-only runs are `pnpm run lint` and `pnpm run typecheck`.
 - Hard fail on security checks; never use `continue-on-error: true` in CI pipelines.
+
+## Repository Map
+
+<!-- BEGIN: REPO_TREE -->
+```text
+memory-journal-mcp/
+├── .github/ (19 files)                      # GitHub Actions CI, Docker, CodeQL, and Dependabot workflows
+├── releases/ (45 files)                     # Release notes archive
+├── scripts/                                 # Codegen, vendor sync, DB encryption, and QA automation scripts
+│   ├── check-orphans.mjs                    # Scans readonly SQLite DB for orphaned journal entries
+│   ├── check-unassigned-entries.ts          # Audits DB entries missing workspace/project assignment
+│   ├── commit.ts                            # Vendored conventional commit and journal linker CLI
+│   ├── encrypt-db.ts                        # SQLCipher database encryption utility
+│   ├── generate-instructions.ts             # Compiles markdown help into src/constants/instructions/*.ts
+│   ├── print-summary.ts                     # Prints live session-summary prompt output from a temp DB
+│   ├── query.ts                             # Quick readonly SQLite inspection helper script
+│   ├── README.md                            # Repository scripts usage reference
+│   ├── run-checks.ts                        # Runs sequential lint, line-limit, and typecheck gates
+│   ├── sync-vendor-guards.ts                # Safety lock and path-neutrality checks for vendor sync
+│   ├── sync-vendor.ts                       # Syncs lib-agent-exec/lib-git-history/commit from upstream
+│   ├── test-import.ts                       # Smoke checks compiled tool, resource, and prompt imports
+│   ├── update-badges.ts                     # Updates README test and coverage badges
+│   ├── update-code-map.ts                   # Regenerates test-server/code-map.md from live registries
+│   └── vendor-doc-neutralizer.ts            # Strips host-local references from synced vendor docs
+├── skills/ (1 file)                         # Bundled SEP-2640 memory-journal-mcp agent skill
+├── src/                                     # Memory Journal MCP Server TypeScript source
+│   ├── audit/ (8 files)                     # AuditInterceptor and JSONL audit log writers
+│   ├── auth/ (15 files)                     # OAuth 2.1, JWKS, and scope validation middleware
+│   ├── cli/ (30 files)                      # CLI option parsing, config loading, and admin subcommands
+│   ├── codemode/ (70 files)                 # V8 isolate Code Mode sandbox and mj.* API bridges
+│   ├── constants/ (32 files)                # Markdown SSoT and generated server instruction modules
+│   ├── database/ (83 files)                 # SQLite (better-sqlite3/FTS5) & Team DB schema/adapters
+│   ├── filtering/ (3 files)                 # Dynamic tool-group filter parser and presets
+│   ├── github/ (14 files)                   # GitHub Issues, PRs, Actions, and Projects v2 client
+│   ├── handlers/ (224 files)                # MCP tools, resources, prompts, schemas, and healers
+│   ├── markdown/ (13 files)                 # Markdown journal export/import formatters
+│   ├── observability/ (8 files)             # OpenTelemetry metrics, server (:9465), and trace helpers
+│   ├── server/ (24 files)                   # MCP server factory, briefing, and capability wiring
+│   ├── transports/ (12 files)               # stdio, Streamable HTTP, and Legacy SSE transports
+│   ├── types/ (8 files)                     # Core journal, relationship, and protocol TypeScript types
+│   ├── utils/ (35 files)                    # Security, error formatting, token estimation, and path helpers
+│   ├── vector/ (8 files)                    # Embedding provider and hybrid vector similarity index
+│   ├── vendor/ (106 files)                  # Vendored commit/exec/git-history tooling (managed by sync-vendor)
+│   ├── index.ts                             # CLI and server startup entrypoint
+│   └── version.ts                           # Runtime package.json version loader
+├── test-server/                             # Manual QA coordinators, Docker infra, and code maps
+│   ├── codemode/ (57 files)                 # Code Mode manual test prompts and coordinator workflow
+│   ├── infrastructure/ (30 files)           # Docker Compose observability stack (:3002/:9091/:3102/:8082)
+│   ├── scripts/ (13 files)                  # Prompt standardization generator and tool-map.json
+│   ├── standard/ (68 files)                 # Direct MCP tool manual test prompts and coordinator workflow
+│   ├── usability/ (69 files)                # Hallucination/fuzzing prompts and coordinator workflow
+│   ├── code-map.md                          # Auto-regenerated architecture and tool/resource/prompt map
+│   ├── prompts-reference.md                 # Complete reference of built-in MCP prompts
+│   ├── README.md                            # Manual QA suite overview
+│   ├── test-preflight.md                    # Pre-flight server instructions and resource check
+│   └── tool-reference.md                    # Complete MCP tool catalog and parameter reference
+├── tests/                                   # Automated Vitest and Playwright test suites
+│   ├── audit/ (3 files)                     # Audit logging unit tests
+│   ├── auth/ (11 files)                     # OAuth 2.1 and scope middleware tests
+│   ├── codemode/ (11 files)                 # Code Mode sandbox isolation and mj.* tests
+│   ├── constants/ (1 file)                  # Instruction module and server-instructions tests
+│   ├── database/ (22 files)                 # SQLite adapter, migrations, FTS5, and Team DB tests
+│   ├── e2e/ (70 files)                      # Playwright MCP protocol, transport, and OAuth E2E specs
+│   ├── filtering/ (1 file)                  # Tool filtering preset tests
+│   ├── github/ (9 files)                    # GitHub API integration and mocking tests
+│   ├── handlers/ (64 files)                 # Tool, resource, prompt, and schema handler tests
+│   ├── integration/ (5 files)               # End-to-end database/server integration specs
+│   ├── markdown/ (6 files)                  # Markdown export/import round-trip tests
+│   ├── observability/ (5 files)             # Metrics and telemetry endpoint tests
+│   ├── security/ (3 files)                  # Injection, path traversal, and SSRF guard tests
+│   ├── server/ (8 files)                    # Server wiring, briefing, and startup tests
+│   ├── transports/ (6 files)                # HTTP/SSE/stdio transport tests
+│   ├── unit/ (110 files)                    # Focused unit tests including vendor-doc-neutralizer
+│   ├── utils/ (12 files)                    # Utility and validation tests
+│   ├── vector/ (5 files)                    # Embedding and vector search tests
+│   ├── build-externals.test.ts              # Built dist/ externals verification test
+│   ├── codemode-healing-guardrails.test.ts  # Code Mode autonomous healing guardrail tests
+│   ├── edge-cases.test.ts                   # Anti-hallucination payload normalization edge-case tests
+│   ├── global-teardown.ts                   # Cleans temporary test backup artifacts after Vitest runs
+│   └── README.md                            # Automated test execution guide
+├── AGENT_README.md                          # Agent-optimized repository quick reference
+├── AGENTS.md                                # Repository-local rules (pnpm gates, codegen, vendor parity)
+├── CHANGELOG.md                             # Version changelog
+├── DOCKER_README.md                         # Docker Hub image overview
+├── docker-compose.yml                       # Local container orchestration config
+├── Dockerfile                               # Multi-stage container build
+├── eslint.config.js                         # ESLint flat configuration
+├── package.json                             # Dependencies, scripts, and bin entrypoint
+├── playwright.config.ts                     # Playwright E2E configuration
+├── README.md                                # Human-readable project documentation
+├── SECURITY.md                              # Security policy and vulnerability disclosure
+├── tsconfig.build.json                      # Production TypeScript compilation config
+├── tsconfig.json                            # Strict TypeScript configuration
+├── tsconfig.scripts.json                    # TypeScript configuration for scripts/
+└── vitest.config.ts                         # Vitest unit/coverage configuration
+```
+<!-- END: REPO_TREE -->
