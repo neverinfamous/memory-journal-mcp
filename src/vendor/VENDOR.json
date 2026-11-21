@@ -97,19 +97,20 @@
         "interceptors/system-timeouts.ts",
         "AGENT_README.md"
       ],
-      "syncedAt": "2026-11-21T08:40:06.059Z",
-      "syncedFromCommit": "57044c274ea8e1b615fd9512d60b7bf2eb18a606"
+      "syncedAt": "2026-11-21T12:38:01.647Z",
+      "syncedFromCommit": "8325eed33ae9d7b1cfe671da23ceb92327d6b11e"
     },
     "commit": {
       "source": ".agents/scripts",
       "files": [
         "commit.ts",
         "commit-cli-schema.ts",
+        "commit-cli-help.ts",
         "commit-journal.ts",
         "commit-journal-bridge.ts"
       ],
-      "syncedAt": "2026-11-21T08:40:06.059Z",
-      "syncedFromCommit": "57044c274ea8e1b615fd9512d60b7bf2eb18a606"
+      "syncedAt": "2026-11-21T12:37:57.085Z",
+      "syncedFromCommit": "8325eed33ae9d7b1cfe671da23ceb92327d6b11e"
     }
   }
 }

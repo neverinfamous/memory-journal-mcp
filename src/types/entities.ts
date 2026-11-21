@@ -243,3 +243,19 @@ export interface CreateTeamEntryInput extends CreateEntryInput {
     author?: string | undefined
     workspaceId?: string | undefined
 }
+
+/**
+ * Common hallucinated tags -> canonical tags
+ */
+export const TAG_ALIASES: Record<string, string> = Object.assign(
+    Object.create(null) as Record<string, string>,
+    {
+        'session_summary': 'session-summary',
+        'team_session_summary': 'session-summary',
+        'team-session-summary': 'session-summary',
+        'team session summary': 'session-summary',
+        'commit_narrative': 'commit-narrative',
+        'bug_fix': 'bug-fix',
+        'feature_implementation': 'feature',
+    }
+)

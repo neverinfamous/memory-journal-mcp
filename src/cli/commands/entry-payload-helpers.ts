@@ -1,13 +1,8 @@
 import { readFileSync } from 'node:fs'
 import { z } from 'zod'
-import type { IDatabaseAdapter } from '../../database/core/interfaces.js'
-import type { EntryType, JournalEntry, RelationshipType, SignificanceType } from '../../types/index.js'
+import type { EntryType, RelationshipType, SignificanceType } from '../../types/index.js'
 import { ENTRY_TYPES, RELATIONSHIP_TYPES, SIGNIFICANCE_TYPES } from '../../types/entities.js'
 import { ValidationError } from '../../types/errors.js'
-import {
-    computeSuggestedLinks,
-    previewDraftSuggestedLinks,
-} from '../../handlers/tools/core/link-suggestions.js'
 import {
     RELATIONSHIP_TARGET_KEYS,
     RELATIONSHIP_TYPE_KEYS,
@@ -16,69 +11,6 @@ import {
 } from '../../handlers/tools/schemas/constants-and-primitives.js'
 import type { createEntryOptionsSchema } from '../schemas.js'
 import { parsePositiveProjectNumber } from '../../utils/safe-positive-int.js'
-
-export function handleCliDryRunLinks(params: {
-    db: IDatabaseAdapter
-    workspaceId: string
-    projectNumber: number | undefined
-    sessionId: string | undefined
-    anchors: readonly { anchorPath: string }[] | undefined
-    json: boolean | undefined
-}): void {
-    const suggested = previewDraftSuggestedLinks({
-        db: params.db,
-        workspaceId: params.workspaceId,
-        projectNumber: params.projectNumber,
-        sessionId: params.sessionId,
-        anchors: params.anchors?.map((a) => ({ anchor_path: a.anchorPath })),
-    })
-    if (params.json === true) {
-        process.stdout.write(
-            JSON.stringify({ status: 'dry-run', suggested_links: suggested }) + '\n'
-        )
-    } else {
-        process.stderr.write(
-            `Dry-run suggested links (${String(suggested.length)}): ${suggested.map((s) => `#${String(s.targetId)} (${s.relationType}, ${s.reason})`).join(', ') || 'none'}\n`
-        )
-    }
-}
-
-export async function autoPopulateCliSuggestedLinks(params: {
-    db: IDatabaseAdapter
-    entry: JournalEntry
-    workspaceId: string
-    projectNumber: number | undefined
-    sessionId: string | undefined
-    relationships: { target_id: number; relation_type: RelationshipType }[]
-    relatedIds: number[]
-    autoLink: boolean | undefined
-    isTeam: boolean | undefined
-}): Promise<void> {
-    if (
-        params.relationships.length > 0 ||
-        params.relatedIds.length > 0 ||
-        params.autoLink !== true ||
-        params.isTeam === true
-    ) {
-        return
-    }
-    const autoTargets = (
-        await computeSuggestedLinks({
-            db: params.db,
-            entry: params.entry,
-            workspaceId: params.workspaceId,
-            projectNumber: params.projectNumber,
-            sessionId: params.sessionId,
-            limit: 2,
-        })
-    ).filter((s) => s.reason === 'same-session' || s.reason === 'shared-anchor')
-    for (const target of autoTargets) {
-        params.relationships.push({
-            target_id: target.targetId,
-            relation_type: target.relationType,
-        })
-    }
-}
 
 export type HealedEntryOptions = z.infer<typeof createEntryOptionsSchema> & {
     tag?: string
@@ -383,6 +315,31 @@ function resolveSignificanceType(
     return normalized as SignificanceType
 }
 
+const CANONICAL_SCORE_RE = /^-?(?:\d+(?:\.\d+)?|\.\d+)$/
+
+function parseStrictUnitScore(raw: unknown, label: string): number | undefined {
+    if (raw === undefined || raw === null) return undefined
+    let parsed: number
+    if (typeof raw === 'number') {
+        parsed = raw
+    } else if (typeof raw === 'string') {
+        const trimmed = raw.trim()
+        parsed = CANONICAL_SCORE_RE.test(trimmed) ? Number(trimmed) : Number.NaN
+    } else {
+        parsed = Number.NaN
+    }
+    if (!Number.isFinite(parsed) || parsed < 0 || parsed > 1) {
+        const display =
+            typeof raw === 'string' || typeof raw === 'number' || typeof raw === 'boolean'
+                ? String(raw)
+                : JSON.stringify(raw)
+        throw new ValidationError(
+            `Invalid ${label} '${display}'. Expected a number between 0 and 1.`
+        )
+    }
+    return parsed
+}
+
 export function resolveScoresAndValidation(
     options: z.infer<typeof createEntryOptionsSchema>,
     metadata: Record<string, unknown>
@@ -401,12 +358,7 @@ export function resolveScoresAndValidation(
         metadata['trustScore'] ??
         metadata['trust_score'] ??
         metadata['confidence']
-    const trustScore = trustRaw !== undefined ? Number(trustRaw) : undefined
-    if (trustScore !== undefined && (!Number.isFinite(trustScore) || trustScore < 0 || trustScore > 1)) {
-        throw new ValidationError(
-            `Invalid trust/confidence score '${String(trustRaw)}'. Expected a number between 0 and 1.`
-        )
-    }
+    const trustScore = parseStrictUnitScore(trustRaw, 'trust/confidence score')
 
     const impactRaw =
         options.impactScore ??
@@ -414,12 +366,7 @@ export function resolveScoresAndValidation(
         metadata['impact'] ??
         metadata['impactScore'] ??
         metadata['impact_score']
-    const impactScore = impactRaw !== undefined ? Number(impactRaw) : undefined
-    if (impactScore !== undefined && (!Number.isFinite(impactScore) || impactScore < 0 || impactScore > 1)) {
-        throw new ValidationError(
-            `Invalid impact score '${String(impactRaw)}'. Expected a number between 0 and 1.`
-        )
-    }
+    const impactScore = parseStrictUnitScore(impactRaw, 'impact score')
 
     const valStatusRaw =
         options.validationStatus ??

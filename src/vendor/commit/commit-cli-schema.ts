@@ -1,14 +1,23 @@
 // @ts-nocheck
 import { parseArgs } from 'node:util';
 import { z } from 'zod';
-import { match, P } from 'ts-pattern';
+import { match } from 'ts-pattern';
 import {
   VALID_CATEGORIES,
   TYPE_TO_CATEGORY,
   capitalizeCategory,
+  isValidCategory,
 } from './commit-journal.js';
+import {
+  VALIDATION_STATES,
+  fatalError,
+  getErrorMessage,
+  showHelpAndExit,
+  formatZodValidationIssue,
+} from './commit-cli-help.js';
 
-export const VALIDATION_STATES = ['passed', 'none', 'failed'] as const;
+export { VALIDATION_STATES, fatalError, getErrorMessage, formatZodValidationIssue };
+
 export const CANONICAL_RELATION_TYPES = [
   'evolves_from',
   'references',
@@ -53,21 +62,11 @@ const CLI_OPTIONS = {
   'dry-run-links': { type: 'boolean' },
 } as const;
 
-export function fatalError(msg: string): never {
-  console.error(`❌ ${msg}`);
-  process.exit(1);
-}
-
-export function getErrorMessage(error: unknown): string {
-  if (error instanceof Error) {
-    let msg = error.message;
-    if ('stderr' in error && error.stderr !== null && error.stderr !== undefined) {
-      msg += '\nSTDERR:\n' + String(error.stderr);
-    }
-    return msg;
-  }
-  return String(error);
-}
+const STRING_CLI_FLAGS: ReadonlySet<string> = new Set(
+  Object.entries(CLI_OPTIONS)
+    .filter(([, opt]) => opt.type === 'string')
+    .map(([key]) => key)
+);
 
 const VALID_COMMIT_TYPES: ReadonlySet<string> = new Set([
   'feat', 'fix', 'docs', 'style', 'refactor', 'perf', 'test', 'build', 'ci', 'chore', 'revert',
@@ -93,6 +92,7 @@ const KEYWORD_RULES: ReadonlyArray<{ type: string; re: RegExp }> = [
 ];
 
 const CANONICAL_POSITIVE_INT_RE = /^[1-9]\d*$/;
+const CANONICAL_DECIMAL_RE = /^-?(?:\d+(?:\.\d+)?|\.\d+)$/;
 const SPACE_CONVENTIONAL_RE = /^([A-Za-z0-9_-]+)(?:\s*\(\s*([^)]+?)\s*\))?\s*(!)?[\s:]+(.+)$/;
 
 function parseCanonicalPositiveInt(val: unknown): unknown {
@@ -111,8 +111,15 @@ function parseCanonicalPositiveInt(val: unknown): unknown {
 
 function parseStrictScoreNumber(val: unknown): unknown {
   if (val === undefined) return undefined;
-  if (typeof val === 'string' && val.trim() === '') return Number.NaN;
-  return Number(val);
+  if (typeof val === 'number') {
+    return Number.isFinite(val) ? val : Number.NaN;
+  }
+  if (typeof val === 'string') {
+    const trimmed = val.trim();
+    if (!CANONICAL_DECIMAL_RE.test(trimmed)) return Number.NaN;
+    return Number(trimmed);
+  }
+  return Number.NaN;
 }
 
 function matchKeywordPrefix(firstLine: string): string {
@@ -136,14 +143,14 @@ function normalizeCommitMsg(val: unknown): unknown {
   if (strictMatch) {
     const [, type, scope, bang, subject] = strictMatch;
     if (type !== type.toLowerCase()) {
-      firstLine = `${type.toLowerCase()}${scope ? `(${scope})` : ''}${bang || ''}: ${subject}`;
+      firstLine = `${type.toLowerCase()}${scope ? `(${scope})` : ''}${bang ?? ''}: ${subject}`;
       corrected = true;
     }
   } else {
     const spaceMatch = firstLine.match(SPACE_CONVENTIONAL_RE);
     if (spaceMatch && VALID_COMMIT_TYPES.has(spaceMatch[1].toLowerCase())) {
       const [, type, scope, bang, subject] = spaceMatch;
-      firstLine = `${type.toLowerCase()}${scope ? `(${scope})` : ''}${bang || ''}: ${subject}`;
+      firstLine = `${type.toLowerCase()}${scope ? `(${scope})` : ''}${bang ?? ''}: ${subject}`;
       corrected = true;
     } else {
       firstLine = matchKeywordPrefix(firstLine);
@@ -230,7 +237,7 @@ export const cliSchema = z.object({
     (val) => {
       if (typeof val !== 'string') return val;
       const cap = capitalizeCategory(val);
-      if ((VALID_CATEGORIES as readonly string[]).includes(cap)) return cap;
+      if (isValidCategory(cap)) return cap;
 
       const mapped = TYPE_TO_CATEGORY[val.toLowerCase()];
       if (mapped !== undefined) {
@@ -242,7 +249,11 @@ export const cliSchema = z.object({
     z.enum(VALID_CATEGORIES)
   ).optional(),
   cwd: z.string().max(4096).optional(),
-  add: z.array(z.string().max(4096)).optional(),
+  add: z.array(
+    z.string().max(4096).refine((s) => s.trim().length > 0, {
+      message: 'File path for --add cannot be empty.',
+    })
+  ).optional(),
   journal: z.boolean().default(false),
   'journal-project': z.preprocess(
     parseCanonicalPositiveInt,
@@ -283,56 +294,26 @@ export const cliSchema = z.object({
 
 export type CliArgs = z.infer<typeof cliSchema>;
 
-function showHelpAndExit(): never {
-  console.log(`Usage: bun commit.ts [commit message] [options]
-
-Options:
-  --msg, -m <string>     Conventional commit message (alias: --message; or provide as first positional argument)
-  --history <string>     History narrative. Prefix with 'Category: ' to explicitly set category.
-  --history-file <path>  Path to a file containing the history narrative (prevents shell escaping issues).
-  --no-history           Skip history entry for trivial changes.
-  --impact <number>      Impact score (0.0 to 1.0).
-  --trust <number>       Trust score (0.0 to 1.0) (deprecated, prefer --confidence).
-  --confidence <number>  Confidence score (0.0 to 1.0).
-  --validation <string>  Validation status ('passed', 'none', 'failed').
-  --significance <string> Significance type (e.g. 'milestone', 'security', 'breakthrough').
-  --category <string>    Explicit category override (e.g. 'Added', 'Fixed').
-  --add <path>           Explicitly stage these files before committing. Can be used multiple times (or provide as additional positional arguments).
-  --cwd <path>           Explicit working directory for the git command.
-  --journal              Automatically create a memory journal entry for this commit (auto-populates file anchors).
-  --journal-project <id> Specify the project ID for the journal entry (auto-resolved from projectRegistry if omitted).
-  --session-id <id>      Conversation/session ID to attach to the automated journal entry.
-  --tags <tag>           Add tag(s) to the automated journal entry (alias: --tag; repeatable or comma-separated).
-  --relate <id[:type]>   Link commit journal entry to an existing entry (e.g. '14653:evolves_from'; repeatable/comma-separated; aliases resolves/depends_on/relates_to supported).
-  --no-auto-link         Disable frontmatter auto_link: true heuristic linking in the automated journal entry.
-  --dry-run-links        Forward --dry-run-links to memory-journal-mcp entry create (preview suggested_links without persisting).
-  --help                 Show this help message.
-  
-🤖 AI AGENT INSTRUCTIONS:
-- MULTI-LINE HISTORY: ALWAYS write history to your conversation scratch dir (e.g. \`<scratch_dir>/hist.txt\`) and use \`--history-file <path>\` instead of \`--history\` to prevent shell escaping failures.
-- MESSAGE FORMAT: The commit message (\`--msg\` or first positional argument) MUST strictly follow conventional commits: \`type(scope): subject\`.
-- REQUIRED FLAGS: You MUST provide \`--impact\`, \`--confidence\`, and \`--validation\`.
-- STAGING: Stage ONLY explicit modified files using \`--add <path>\` (or additional positional arguments) to keep commits atomic; avoid wildcard \`--add .\`.
-- EXAMPLE: bun commit.ts "fix(cli): resolve option errors" --history-file "<scratch_dir>/hist.txt" --impact 0.6 --confidence 1.0 --validation passed --add "src/index.ts"`);
-  process.exit(0);
-}
-
 function normalizeNegativeAndBulletArgs(rawArgs: string[]): void {
   for (let i = 0; i < rawArgs.length - 1; i++) {
     const currentArg = rawArgs[i];
     const nextArg = rawArgs[i + 1];
+    if (currentArg === '-m' && /^-\s/.test(nextArg)) {
+      rawArgs[i] = `--msg=${nextArg}`;
+      rawArgs.splice(i + 1, 1);
+      continue;
+    }
+    if (!currentArg.startsWith('--') || currentArg.includes('=')) {
+      continue;
+    }
     const isNegativeNumericValue = nextArg.startsWith('-') && !Number.isNaN(Number(nextArg));
     const isMarkdownBulletHistoryOrMsg =
       (currentArg === '--history' || currentArg === '--msg' || currentArg === '--message') &&
       /^-\s/.test(nextArg);
-    if (
-      currentArg.startsWith('--') &&
-      !currentArg.includes('=') &&
-      (isNegativeNumericValue || isMarkdownBulletHistoryOrMsg)
-    ) {
+    const isNegForStringFlag = isNegativeNumericValue && STRING_CLI_FLAGS.has(currentArg.slice(2));
+    if (isNegForStringFlag || isMarkdownBulletHistoryOrMsg) {
       rawArgs[i] = `${currentArg}=${nextArg}`;
       rawArgs.splice(i + 1, 1);
-      i--;
     }
   }
 }
@@ -351,14 +332,18 @@ function mergeAliasFlagsAndPositionals(
   values: ReturnType<typeof parseRawCli>['values'],
   positionals: string[]
 ) {
-  const hasMessageFlag = !!(values.msg || values.message);
+  const hasMsg = values.msg !== undefined && values.msg.length > 0;
+  const hasAliasMessage = values.message !== undefined && values.message.length > 0;
+  const hasMessageFlag = hasMsg || hasAliasMessage;
   const mergedValues = { ...values };
 
-  if (values.msg && values.message) {
+  if (hasMsg && hasAliasMessage) {
     console.warn("⚠️ AUTONOMOUS HEALING: Multiple commit messages provided via --msg and --message aliases. Using --msg.");
   }
-  if (mergedValues.message) {
-    mergedValues.msg = mergedValues.msg || mergedValues.message;
+  if (mergedValues.message !== undefined) {
+    if ((!hasMsg && mergedValues.message.length > 0) || mergedValues.msg === undefined) {
+      mergedValues.msg = mergedValues.message;
+    }
     delete mergedValues.message;
   }
   if (mergedValues.tag !== undefined) {
@@ -382,43 +367,6 @@ function mergeAliasFlagsAndPositionals(
     }
   }
   return mergedValues;
-}
-
-export function formatZodValidationIssue(
-  err: z.ZodIssue,
-  mergedValues: ReturnType<typeof mergeAliasFlagsAndPositionals>
-): string {
-  return match(err)
-    .with({ code: 'too_small', origin: 'string' }, (e) => `Too small: expected string length to be ${e.inclusive ? '>=' : '>'}${e.minimum}`)
-    .with({ code: 'too_small', origin: 'array' }, (e) => `Too small: expected array length to be ${e.inclusive ? '>=' : '>'}${e.minimum}`)
-    .with({ code: 'too_small', origin: P.union('number', 'int') }, (e) => `Too small: expected number to be ${e.inclusive ? '>=' : '>'}${e.minimum}`)
-    .with({ code: 'too_big', origin: 'string' }, (e) => `Too big: expected string length to be ${e.inclusive ? '<=' : '<'}${e.maximum}`)
-    .with({ code: 'too_big', origin: 'array' }, (e) => `Too big: expected array length to be ${e.inclusive ? '<=' : '<'}${e.maximum}`)
-    .with({ code: 'too_big', origin: P.union('number', 'int') }, (e) => `Too big: expected number to be ${e.inclusive ? '<=' : '<'}${e.maximum}`)
-    .with({ code: 'unrecognized_keys' }, (e) => `Unrecognized keys: ${e.keys.join(', ')}`)
-    .with({ code: P.string, path: ['validation'] }, () => {
-      const states = VALIDATION_STATES.map((v) => `'--validation ${v}'`).join(', ');
-      if (mergedValues.validation === undefined) {
-        return `Missing required flag. You MUST append one of: ${states} to your command.`;
-      }
-      return `Invalid validation status '${mergedValues.validation}'. You MUST append one of: ${states} to your command.`;
-    })
-    .with(
-      { code: P.string, path: ['category'] },
-      () => `Invalid explicit category '${mergedValues.category}'. Must be one of: ${VALID_CATEGORIES.join(', ')}`
-    )
-    .with(
-      { code: 'invalid_type', path: ['relate', P.number, 'targetId'] },
-      () => 'Invalid entry ID in --relate. Expected a positive integer entry ID (e.g. 14653:evolves_from).'
-    )
-    .with(
-      { code: 'invalid_type', received: P.union('nan', 'NaN') },
-      (e) => `Invalid data type for --${String(e.path[0])}. Expected a number, but received a non-numeric value.`
-    )
-    .with({ code: 'invalid_type', path: ['impact'] }, () => `Missing required flag. You MUST append an impact score (e.g. '--impact 0.5').`)
-    .with({ code: 'invalid_type', path: ['confidence'] }, () => `Missing required flag. You MUST append a confidence score (e.g. '--confidence 1.0').`)
-    .with({ code: 'invalid_type' }, () => `Missing required flag.`)
-    .otherwise((e) => e.message);
 }
 
 export function parseArguments(rawArgv?: readonly string[]): CliArgs {

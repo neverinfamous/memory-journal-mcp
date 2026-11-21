@@ -265,8 +265,8 @@ export async function sendWebhook(
             console.error(`❌ Webhook Error: HTTP ${res.status} ${res.statusText}`);
           }
           return res.arrayBuffer();
-        }).catch((err) => { 
-          console.error(`❌ Webhook Error: Failed to invoke webhook: ${err.message}`); 
+        }).catch((err: unknown) => { 
+          console.error(`❌ Webhook Error: Failed to invoke webhook: ${err instanceof Error ? err.message : String(err)}`); 
         }); 
       } catch (err) { 
         console.error(`❌ Webhook Error: ${err instanceof Error ? err.message : String(err)}`); 

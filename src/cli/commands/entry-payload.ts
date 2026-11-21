@@ -1,5 +1,4 @@
 import { readFileSync } from 'node:fs'
-import type { Command } from 'commander'
 import type { IDatabaseAdapter } from '../../database/core/interfaces.js'
 import type {
     EntryType,
@@ -7,6 +6,7 @@ import type {
     SignificanceType,
     ToolHandlerConfig,
 } from '../../types/index.js'
+import type { CliCommandLike } from '../../utils/config-resolver.js'
 import { resolveProjectContext } from '../../utils/workspace-resolver.js'
 import { activeProjectRegistry, pairStoredScope } from '../../utils/write-scope.js'
 import { ValidationError } from '../../types/errors.js'
@@ -14,7 +14,7 @@ import { logger } from '../../utils/logger.js'
 import { z } from 'zod'
 import * as yaml from 'yaml'
 import type { BaseEntryOptionsSchema } from '../schemas.js'
-import { CliExitError, getCliCommandDb } from './db-helper.js'
+import { CliExitError, getCliCommandDb } from './db-core.js'
 import {
     applyCliEntryFlagAliases,
     parseRelationshipArray,
@@ -50,9 +50,10 @@ export interface EntryPayload {
 
 export async function getDb(
     options: BaseEntryOptionsSchema,
-    command: Command
+    command: CliCommandLike,
+    opts?: { throwOnExit?: boolean }
 ): Promise<{ db: IDatabaseAdapter; config: ToolHandlerConfig }> {
-    const { db, serverOptions } = await getCliCommandDb(options, command)
+    const { db, serverOptions } = await getCliCommandDb(options, command, opts)
     return { db, config: serverOptions }
 }
 

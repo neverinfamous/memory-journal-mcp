@@ -158,7 +158,7 @@ function resolveRegistryMemoryJournalCli(configPath?: string): string | null {
   }
   const mjDir = path.resolve(mjEntry.path);
   const cliPath = path.join(mjDir, 'dist', 'cli.js');
-  return isMemoryJournalPackageDir(mjDir) && isFile(cliPath) ? cliPath : null;
+  return isFile(cliPath) && isMemoryJournalPackageDir(mjDir) ? cliPath : null;
 }
 
 function resolvePathEnvMemoryJournalCli(): string | null {
@@ -185,19 +185,15 @@ export function resolveMemoryJournalCli(
   cwd: string,
   configPath?: string
 ): { command: string; prefixArgs: string[] } {
-  if (isMemoryJournalPackageDir(cwd)) {
-    const localCli = path.join(cwd, 'dist', 'cli.js');
-    if (isFile(localCli)) {
-      return { command: 'node', prefixArgs: [localCli] };
-    }
+  const localCli = path.join(cwd, 'dist', 'cli.js');
+  if (isFile(localCli) && isMemoryJournalPackageDir(cwd)) {
+    return { command: 'node', prefixArgs: [localCli] };
   }
 
   const siblingMjDir = path.resolve(cwd, '..', 'memory-journal-mcp');
-  if (isMemoryJournalPackageDir(siblingMjDir)) {
-    const siblingCli = path.join(siblingMjDir, 'dist', 'cli.js');
-    if (isFile(siblingCli)) {
-      return { command: 'node', prefixArgs: [siblingCli] };
-    }
+  const siblingCli = path.join(siblingMjDir, 'dist', 'cli.js');
+  if (isFile(siblingCli) && isMemoryJournalPackageDir(siblingMjDir)) {
+    return { command: 'node', prefixArgs: [siblingCli] };
   }
 
   const registryCli = resolveRegistryMemoryJournalCli(configPath);

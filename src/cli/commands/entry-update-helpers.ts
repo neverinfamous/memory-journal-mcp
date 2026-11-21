@@ -2,7 +2,7 @@ import type { z } from 'zod'
 import type { IDatabaseAdapter } from '../../database/core/interfaces.js'
 import type { CreateEntryInput, ToolHandlerConfig } from '../../types/index.js'
 import { ValidationError } from '../../types/errors.js'
-import { resolveEntryAnchors } from '../../handlers/tools/core/staleness-tools.js'
+import { resolveEntryAnchors } from '../../handlers/tools/core/entry-anchors.js'
 import {
     activeProjectRegistry,
     concreteWorkspace,
@@ -12,7 +12,7 @@ import {
 } from '../../utils/write-scope.js'
 import { findCanonicalRegistryKey, resolveWorkspaceId } from '../../utils/workspace-resolver.js'
 import type { updateEntryOptionsSchema } from '../schemas.js'
-import { CliExitError } from './db-helper.js'
+import { CliExitError } from './db-core.js'
 import type { EntryPayload } from './entry-payload.js'
 
 export type UpdateEntryCliOptions = z.infer<typeof updateEntryOptionsSchema> & {
@@ -373,7 +373,10 @@ export async function prepareCliEntryUpdate(params: {
     await applyCliUpdateAnchors(
         updates,
         params.payload,
-        updates.workspaceId ?? params.existingEntry?.workspaceId ?? 'default',
+        updates.targetWorkspaceId ??
+            (updates.workspaceId !== '*' ? updates.workspaceId : undefined) ??
+            params.existingEntry?.workspaceId ??
+            'default',
         params.db,
         params.config
     )

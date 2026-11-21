@@ -550,6 +550,62 @@ describe('CLI Entry & Exec Commands', () => {
                 }
             }
         })
+
+        it('createEntryFromFileInProcess returns exit code 1 on startup config errors without calling process.exit or mutating process.exitCode (Q-H1)', async () => {
+            const mdFile = path.join(tmpDir, 'in-process-bad-config.md')
+            fs.writeFileSync(
+                mdFile,
+                [
+                    '---',
+                    'type: "technical_note"',
+                    'tags: ["commit-narrative"]',
+                    'workspace_id: "memory-journal-mcp"',
+                    'project: 5',
+                    '---',
+                    'fix(cli): return exit code 1 cleanly without process.exit on config error',
+                ].join('\n'),
+                'utf-8'
+            )
+
+            const savedConfigEnv = process.env['MEMORY_JOURNAL_CONFIG']
+            const savedRegistryEnv = process.env['PROJECT_REGISTRY']
+            const savedExitCode = process.exitCode
+            process.exitCode = 0
+            delete process.env['PROJECT_REGISTRY']
+            const badCfgFile = path.join(tmpDir, 'duplicate-project-config.json')
+            fs.writeFileSync(
+                badCfgFile,
+                JSON.stringify({
+                    db: dbPath,
+                    projectRegistry: {
+                        'repo-a': { path: path.join(tmpDir, 'a'), project_number: 99 },
+                        'repo-b': { path: path.join(tmpDir, 'b'), project_number: 99 },
+                    },
+                }),
+                'utf-8'
+            )
+            process.env['MEMORY_JOURNAL_CONFIG'] = badCfgFile
+            try {
+                stderrOutput = []
+                const code = await createEntryFromFileInProcess({ file: mdFile })
+                expect(code).toBe(1)
+                expect(exitSpy).not.toHaveBeenCalled()
+                expect(process.exitCode).toBe(0)
+                expect(stderrOutput.join('')).toContain('Startup Configuration Errors:')
+            } finally {
+                process.exitCode = savedExitCode
+                if (savedConfigEnv !== undefined) {
+                    process.env['MEMORY_JOURNAL_CONFIG'] = savedConfigEnv
+                } else {
+                    delete process.env['MEMORY_JOURNAL_CONFIG']
+                }
+                if (savedRegistryEnv !== undefined) {
+                    process.env['PROJECT_REGISTRY'] = savedRegistryEnv
+                } else {
+                    delete process.env['PROJECT_REGISTRY']
+                }
+            }
+        })
     })
 
     describe('execAction (src/cli/commands/exec.ts)', () => {

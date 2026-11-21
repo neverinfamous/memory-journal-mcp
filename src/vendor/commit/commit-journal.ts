@@ -303,6 +303,17 @@ export async function createJournalEntry(
   resolvedTarget?: ResolvedJournalTarget
 ): Promise<void> {
   if (!args.journal) {
+    const ignoredFlags: string[] = [];
+    if (args['dry-run-links'] === true) ignoredFlags.push('--dry-run-links');
+    if (args.relate !== undefined && args.relate.length > 0) ignoredFlags.push('--relate');
+    if (args.tags !== undefined && args.tags.length > 0) ignoredFlags.push('--tags');
+    if (args['session-id'] !== undefined && args['session-id'].length > 0) ignoredFlags.push('--session-id');
+    if (args['no-auto-link'] === true) ignoredFlags.push('--no-auto-link');
+    if (ignoredFlags.length > 0) {
+      console.warn(
+        `⚠️ AUTONOMOUS HEALING: Journal-only flag(s) (${ignoredFlags.join(', ')}) ignored without --journal. Pass --journal to record a journal entry.`
+      );
+    }
     return;
   }
 

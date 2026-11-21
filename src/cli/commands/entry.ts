@@ -1,15 +1,11 @@
-import type { Command } from 'commander'
 import type { IDatabaseAdapter } from '../../database/core/interfaces.js'
-import type { RelationshipType, CreateEntryInput, ToolHandlerConfig } from '../../types/index.js'
+import type { RelationshipType, ToolHandlerConfig } from '../../types/index.js'
 import { z } from 'zod'
 import { AuthorizationError, ValidationError } from '../../types/errors.js'
-import { CliExitError, enforceCliTeamRbac } from './db-helper.js'
-import { canonicalizeTeamAuthor } from '../../handlers/tools/team/rbac.js'
-import { resolveEntryAnchors } from '../../handlers/tools/core/staleness-tools.js'
-import { resolveTeamCreateAuthor } from '../../handlers/tools/team/admin-tools/create-author-helper.js'
-import { checkSingleTeamOwnership } from '../../handlers/tools/team/admin-tools/batch-delete-helpers.js'
+import type { CliCommandLike } from '../../utils/config-resolver.js'
+import { CliExitError } from './db-core.js'
+import { resolveEntryAnchors } from '../../handlers/tools/core/entry-anchors.js'
 import { linkRequestedRelationships } from '../../handlers/tools/relationship-linking.js'
-import { createEntryOptionsSchema, updateEntryOptionsSchema } from '../schemas.js'
 import {
     prepareCliEntryUpdate,
     validateCliUpdateArgsAndTarget,
@@ -26,13 +22,12 @@ import {
 } from './entry-payload.js'
 import {
     applyCliEntryFlagAliases,
-    autoPopulateCliSuggestedLinks,
-    handleCliDryRunLinks,
     type HealedEntryOptions,
 } from './entry-payload-helpers.js'
-
-export const createEntrySchema = createEntryOptionsSchema
-export const updateEntrySchema = updateEntryOptionsSchema
+import {
+    autoPopulateCliSuggestedLinks,
+    handleCliDryRunLinks,
+} from './entry-link-helpers.js'
 
 export { getDb, parseContent, parseFrontmatter, buildEntryPayload, type EntryPayload }
 
@@ -133,9 +128,10 @@ function writeCliEntryResult(
     entry: { id: number; version?: number | undefined },
     linkFailures: { target_id: number; error: string }[],
     jsonOutput: boolean | undefined,
-    verb: 'created' | 'updated'
+    verb: 'created' | 'updated',
+    mutateProcessExitCode = true
 ): void {
-    if (linkFailures.length > 0) {
+    if (linkFailures.length > 0 && mutateProcessExitCode) {
         process.exitCode = 1
     }
 
@@ -175,12 +171,12 @@ const CLI_CREATE_SCOPE_SCHEMA = z.object({
         .positive('project_number must be a positive project id.'),
 })
 
-function resolveCliCreateScopeAndAuthor(
+async function resolveCliCreateScopeAndAuthor(
     options: HealedEntryOptions,
     payload: EntryPayload,
     db: IDatabaseAdapter,
     config: ToolHandlerConfig
-): { resolvedWs: string | undefined; resolvedAuthor: string | undefined } {
+): Promise<{ resolvedWs: string | undefined; resolvedAuthor: string | undefined }> {
     let resolvedWs = payload.workspaceId?.trim()
     // [INVARIANT] `*` is an admin read override and can never be a write target (H4).
     if (resolvedWs === '*') {
@@ -195,6 +191,10 @@ function resolveCliCreateScopeAndAuthor(
     CLI_CREATE_SCOPE_SCHEMA.parse({ workspace_id: resolvedWs, project_number: payload.projectNumber })
     let resolvedAuthor: string | undefined
     if (options.team === true) {
+        const [{ resolveTeamCreateAuthor }, { canonicalizeTeamAuthor }] = await Promise.all([
+            import('../../handlers/tools/team/admin-tools/create-author-helper.js'),
+            import('../../handlers/tools/team/rbac.js'),
+        ])
         const authorResult = resolveTeamCreateAuthor(undefined, db, config, resolvedWs)
         if ('errorResponse' in authorResult) {
             throw new AuthorizationError(String(authorResult.errorResponse['error']))
@@ -206,25 +206,19 @@ function resolveCliCreateScopeAndAuthor(
 
 async function runCreateEntry(
     options: HealedEntryOptions,
-    command: Command
+    command: CliCommandLike,
+    inProcess = false
 ): Promise<number | undefined> {
-    const { db, config } = await getDb(options, command)
+    let db: IDatabaseAdapter | undefined
     let exitCode: number | undefined
 
     try {
+        const loaded = await getDb(options, command, { throwOnExit: inProcess })
+        db = loaded.db
+        const { config } = loaded
         const { content, payload } = await loadCliEntryContentAndPayload(options, config)
-        const { resolvedWs, resolvedAuthor } = resolveCliCreateScopeAndAuthor(
-            options,
-            payload,
-            db,
-            config
-        )
-        const resolvedAnchors = await resolveEntryAnchors(
-            payload.anchors,
-            payload.autoContextStr,
-            resolvedWs ?? 'default',
-            { db, config }
-        )
+        const { resolvedWs, resolvedAuthor } = await resolveCliCreateScopeAndAuthor(options, payload, db, config)
+        const resolvedAnchors = await resolveEntryAnchors(payload.anchors, payload.autoContextStr, resolvedWs ?? 'default', { db, config })
 
         if (options.dryRunLinks === true) {
             handleCliDryRunLinks({
@@ -238,7 +232,7 @@ async function runCreateEntry(
             return undefined
         }
 
-        const entryInput: CreateEntryInput = {
+        const newEntry = db.createEntry({
             content,
             entryType: payload.entryType,
             significanceType: payload.significanceType,
@@ -254,9 +248,7 @@ async function runCreateEntry(
             ...(options.team === true && resolvedAuthor !== undefined
                 ? { isPersonal: false, author: resolvedAuthor }
                 : {}),
-        }
-
-        const newEntry = db.createEntry(entryInput)
+        })
         await autoPopulateCliSuggestedLinks({
             db,
             entry: newEntry,
@@ -270,20 +262,20 @@ async function runCreateEntry(
         })
         const linkFailures = linkCliEntryRelationships(db, newEntry.id, payload, resolvedWs)
         db.flushSave()
-        writeCliEntryResult(newEntry, linkFailures, options.json, 'created')
+        writeCliEntryResult(newEntry, linkFailures, options.json, 'created', !inProcess)
         if (linkFailures.length > 0) {
             exitCode = 1
         }
     } catch (e) {
         exitCode = handleCliEntryError(e, 'create')
     } finally {
-        db.close()
+        db?.close()
     }
     return exitCode
 }
 
 export async function createEntryAction(...args: unknown[]): Promise<void> {
-    const command = args[args.length - 1] as Command
+    const command = args[args.length - 1] as CliCommandLike
     const options = (args.length > 1 ? args[args.length - 2] : {}) as HealedEntryOptions
     applyCliEntryFlagAliases(options, args.slice(0, args.length - 2))
     const exitCode = await runCreateEntry(options, command)
@@ -298,12 +290,12 @@ export async function createEntryFromFileInProcess(options: {
         file: options.file,
         ...(options.dryRunLinks === true ? { dryRunLinks: true } : {}),
     }
-    const stubCommand = {
+    const stubCommand: CliCommandLike = {
         name: () => 'create',
         getOptionValueSource: (key: string) =>
             Object.hasOwn(healedOptions, key) ? 'cli' : 'default',
-    } as unknown as Command
-    const exitCode = await runCreateEntry(healedOptions, stubCommand)
+    }
+    const exitCode = await runCreateEntry(healedOptions, stubCommand, true)
     return exitCode ?? 0
 }
 
@@ -356,13 +348,17 @@ function buildUpdatedEntryPayload(
     return { content, payload, metaSourceWs }
 }
 
-function enforceCliUpdateTeamPermissions(
+async function enforceCliUpdateTeamPermissions(
     db: IDatabaseAdapter,
     config: ToolHandlerConfig,
     entryId: number,
     existingEntry: ReturnType<IDatabaseAdapter['getEntryById']>,
     trimmedTargetWs: string | undefined
-): void {
+): Promise<void> {
+    const [{ enforceCliTeamRbac }, { checkSingleTeamOwnership }] = await Promise.all([
+        import('./db-helper.js'),
+        import('../../handlers/tools/team/admin-tools/batch-delete-helpers.js'),
+    ])
     enforceCliTeamRbac(db, config, 'member', existingEntry?.workspaceId ?? trimmedTargetWs)
     if (
         trimmedTargetWs !== undefined &&
@@ -386,7 +382,7 @@ function enforceCliUpdateTeamPermissions(
 }
 
 export async function updateEntryAction(...args: unknown[]): Promise<void> {
-    const command = args[args.length - 1] as Command
+    const command = args[args.length - 1] as CliCommandLike
     const options = (args.length > 1 ? args[args.length - 2] : {}) as UpdateEntryCliOptions
     applyCliEntryFlagAliases(options, args.slice(0, args.length - 2))
     const { db, config } = await getDb(options, command)
@@ -396,7 +392,7 @@ export async function updateEntryAction(...args: unknown[]): Promise<void> {
             validateCliUpdateArgsAndTarget(options)
         const existingEntry = db.getEntryById(entryId, '*')
         if (options.team === true) {
-            enforceCliUpdateTeamPermissions(db, config, entryId, existingEntry, trimmedTargetWs)
+            await enforceCliUpdateTeamPermissions(db, config, entryId, existingEntry, trimmedTargetWs)
         }
         const rawContent =
             options.file === undefined &&

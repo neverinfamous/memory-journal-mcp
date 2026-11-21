@@ -1,4 +1,5 @@
 // @ts-nocheck
+import crypto from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -14,6 +15,19 @@ export const STALE_INDEX_LOCK_MS = 5 * 60 * 1000;
 const AGENTS_PATH_RE = /(?:^|[\\/])\.agents(?:[\\/]|$)/;
 const PRIVATE_PATH_RE = /(?:^|[\\/])\.agents[\\/](?:scratch|cache)(?:[\\/]|$)|issues\.jsonl$/i;
 const GIT_ADD_FORCE_RE = /^-[nvfipeuAN]*f[nvfipeuAN]*$/;
+
+const sanitizedJqTempFiles = new Set<string>();
+let jqExitCleanupRegistered = false;
+function registerJqTempFile(filePath: string): void {
+  sanitizedJqTempFiles.add(filePath);
+  if (jqExitCleanupRegistered) return;
+  jqExitCleanupRegistered = true;
+  process.on('exit', () => {
+    for (const p of sanitizedJqTempFiles) {
+      try { if (fs.statSync(p, { throwIfNoEntry: false }) !== undefined) fs.unlinkSync(p); } catch { /* ignore */ }
+    }
+  });
+}
 
 export interface GitIgnoreProbe {
   ignored: boolean;
@@ -412,12 +426,9 @@ export function runMutatingInterceptors(
 
             if (cleaned !== rawContent) {
               console.error(`\n   🛠️ AUTONOMOUS HEALING: Stripped untrusted wrapper tags / warning preambles from jq input file '${fileArg}'... (Frictionless Recovery)\x1b[0m`);
-              const outDir = os.tmpdir();
-              const tmpSanitized = path.join(outDir, `.agent_sanitized_jq_${Date.now()}_${path.basename(resolvedFile)}`);
+              const tmpSanitized = path.join(os.tmpdir(), `.agent_sanitized_jq_${crypto.randomUUID()}_${path.basename(resolvedFile)}`);
               fs.writeFileSync(tmpSanitized, cleaned, { encoding: 'utf8', mode: 0o600 });
-              process.on('exit', () => {
-                try { if (fs.existsSync(tmpSanitized)) fs.unlinkSync(tmpSanitized); } catch { /* ignore */ }
-              });
+              registerJqTempFile(tmpSanitized);
               const newFileArg = isWslPath ? convertToWslPath(tmpSanitized) : tmpSanitized;
               const idx = ctx.args.indexOf(fileArg);
               if (idx !== -1) {
