@@ -17,221 +17,9 @@ const FORCE_KILL_DELAY_MS = 2000;
 function isErrnoException(e: Error): e is NodeJS.ErrnoException {
   return 'code' in e || 'syscall' in e;
 }
+import { analyzeExitCode1 } from './exit-code-policy.js';
+export { analyzeExitCode1 };
 
-export function analyzeExitCode1(payload: ExecPayload, code: number, stdout: string, stderr: string): { isGrepNoMatch: boolean, isGrepMatchesFound: boolean, isDiffFound: boolean, isOutdatedInfo: boolean, isLsNoMatch: boolean, isRmNoMatch: boolean, isFindNoMatch: boolean } {
-  let isGrepNoMatch = false;
-  let isGrepMatchesFound = false;
-  let isDiffFound = false;
-  let isOutdatedInfo = false;
-  let isLsNoMatch = false;
-  let isRmNoMatch = false;
-  let isFindNoMatch = false;
-  
-  if (code === 1 || code === 2 || code === 123) {
-    let scriptContent = '';
-    
-    if (payload.type === 'command') {
-      const origCmd = path.basename(payload.command).toLowerCase();
-      const isWrapper = ['wsl', 'wsl.exe', 'bash', 'bash.exe', 'sh', 'sh.exe', 'cmd', 'cmd.exe', 'pwsh', 'pwsh.exe', 'powershell', 'powershell.exe'].includes(origCmd);
-      const allArgsStr = payload.args ? payload.args.join(' ').toLowerCase() : '';
-      const commandBoundaryRegex = /(?:^|[|;&\n]\s*|\b(?:time|xargs|sudo|nohup|wsl|-exec|-execdir|exec|(?:bun|npm|pnpm|yarn|npx|bunx)(?:\s+(?:run|exec|x|dlx))?)\s+|(?:^|\s)(?:-c|\/c|-command)\s+)(?:[a-zA-Z0-9_\-/.]*\/)?/;
-      
-      if (code === 1 || code === 2) {
-        if (['ls', 'ls.exe', 'dir', 'dir.exe'].includes(origCmd)) {
-          isLsNoMatch = true;
-        } else if (isWrapper && new RegExp(commandBoundaryRegex.source + '(ls|dir)\\b').test(allArgsStr)) {
-          isLsNoMatch = true;
-        }
-
-        if (['find', 'find.exe'].includes(origCmd)) {
-          isFindNoMatch = true;
-        } else if (isWrapper && new RegExp(commandBoundaryRegex.source + '(find|fd|fdfind)\\b').test(allArgsStr)) {
-          isFindNoMatch = true;
-        }
-
-        if (code === 2) {
-          const isGrepTool = ['grep', 'grep.exe', 'egrep', 'egrep.exe', 'fgrep', 'fgrep.exe', 'rg', 'rg.exe'].includes(origCmd) || (isWrapper && new RegExp(commandBoundaryRegex.source + '(grep|egrep|fgrep|rg)\\b').test(allArgsStr));
-          if (isGrepTool) {
-            if (stdout.trim().length > 0) {
-              isGrepMatchesFound = true;
-            } else if (allArgsStr.includes('-s') || allArgsStr.includes('--no-messages') || stderr.trim().length === 0 || stderr.includes('No such file or directory') || stderr.includes('Input/output error') || stderr.includes('os error') || stderr.includes('Permission denied')) {
-              isGrepNoMatch = true;
-            }
-          }
-        }
-      }
-
-      if (code === 1) {
-        if (['rm', 'rm.exe', 'rmdir'].includes(origCmd) || (isWrapper && new RegExp(commandBoundaryRegex.source + '(rm|rmdir)\\b').test(allArgsStr))) {
-          isRmNoMatch = true;
-        }
-      }
-
-      if (code === 123) {
-        if (origCmd === 'xargs' || (isWrapper && allArgsStr.includes('xargs'))) {
-          if (/(?:xargs(?:\s+-[^\s]+)*\s+)(?:[a-zA-Z0-9_\-/.]*\/)?(grep|egrep|fgrep|rg)\b/.test(allArgsStr)) {
-            isGrepNoMatch = true;
-          } else if (/(?:xargs(?:\s+-[^\s]+)*\s+)(?:[a-zA-Z0-9_\-/.]*\/)?(diff|cmp)\b/.test(allArgsStr)) {
-            isDiffFound = true;
-          }
-        }
-      } else if (code === 1) {
-        if (['grep', 'grep.exe', 'egrep', 'egrep.exe', 'fgrep', 'fgrep.exe', 'rg', 'rg.exe'].includes(origCmd)) {
-            isGrepNoMatch = true;
-        } else if (['find', 'find.exe'].includes(origCmd) && /(?:-exec|-execdir)\s+(?:[a-zA-Z0-9_\-/.]*\/)?(grep|egrep|fgrep|rg)\b/.test(allArgsStr)) {
-            isGrepNoMatch = true;
-        } else if (isWrapper && (
-          new RegExp(commandBoundaryRegex.source + '(grep|egrep|fgrep|rg)\\b').test(allArgsStr) ||
-          new RegExp(commandBoundaryRegex.source + 'git(?:\\.exe)?(?:\\s+-[^\\s]+)*\\s+grep\\b').test(allArgsStr)
-        )) {
-            isGrepNoMatch = true;
-        }
-
-        if (['diff', 'diff.exe', 'cmp', 'cmp.exe'].includes(origCmd)) {
-            isDiffFound = true;
-        } else if (isWrapper && (
-          new RegExp(commandBoundaryRegex.source + '(diff|cmp)\\b').test(allArgsStr) ||
-          new RegExp(commandBoundaryRegex.source + 'git(?:\\.exe)?(?:\\s+-[^\\s]+)*\\s+diff\\b').test(allArgsStr)
-        )) {
-            isDiffFound = true;
-        }
-
-        const pkgMgrs = ['npm', 'npm.cmd', 'npm.exe', 'pnpm', 'pnpm.cmd', 'pnpm.exe', 'yarn', 'yarn.cmd', 'yarn.exe', 'bun', 'bun.cmd', 'bun.exe', 'npx', 'npx.cmd', 'npx.exe', 'bunx', 'bunx.cmd', 'bunx.exe'];
-        if (pkgMgrs.includes(origCmd)) {
-            const origArgs = payload.args || [];
-            const nonFlagArgs = origArgs.filter(a => !a.startsWith('-')).map(a => a.toLowerCase());
-            const subCmd = nonFlagArgs.find(a => !['run', 'exec', 'x', 'dlx'].includes(a));
-            if (subCmd === 'outdated') {
-                isOutdatedInfo = true;
-            } else if (subCmd && ['grep', 'egrep', 'fgrep', 'rg'].includes(subCmd)) {
-                isGrepNoMatch = true;
-            } else if (subCmd && ['diff', 'cmp'].includes(subCmd)) {
-                isDiffFound = true;
-            }
-        } else if (isWrapper && new RegExp(commandBoundaryRegex.source + '(npm|pnpm|yarn|bun)\\s+(?:--?\\w+\\s+)*outdated\\b').test(allArgsStr)) {
-            isOutdatedInfo = true;
-        } else if (isWrapper && stderr.trim().length === 0 && new RegExp(commandBoundaryRegex.source + 'git(?:\\.exe)?(?:\\s+-[^\\s]+)*\\s+config\\s+(?:--get(?:-all|-regexp|-urlmatch)?|get)\\b').test(allArgsStr)) {
-            isGrepNoMatch = true;
-        } else if (['git', 'git.exe'].includes(origCmd)) {
-            const origArgs = payload.args || [];
-            let subIdx = -1;
-            for (let i = 0; i < origArgs.length; i++) {
-                const tok = origArgs[i];
-                if (tok === '-C' || tok === '-c' || tok === '--git-dir' || tok === '--work-tree' || tok === '--namespace') {
-                    i++;
-                    continue;
-                }
-                if (tok.startsWith('-')) continue;
-                subIdx = i;
-                break;
-            }
-            const gitSub = subIdx !== -1 ? origArgs[subIdx].toLowerCase() : '';
-            const subArgs = subIdx !== -1 ? origArgs.slice(subIdx + 1) : [];
-            if (gitSub === 'diff') {
-                isDiffFound = true;
-            } else if (gitSub === 'grep') {
-                isGrepNoMatch = true;
-            } else if (
-                gitSub === 'config' &&
-                subArgs.some(a => ['--get', '--get-all', '--get-regexp', '--get-urlmatch', 'get'].includes(a)) &&
-                stderr.trim().length === 0
-            ) {
-                isGrepNoMatch = true;
-            } else if (
-                (gitSub === 'check-ignore' || (gitSub === 'merge-base' && subArgs.includes('--is-ancestor'))) &&
-                stderr.trim().length === 0
-            ) {
-                isGrepNoMatch = true;
-            }
-        }
-      }
-    } else if (payload.type === 'eval') {
-      scriptContent = payload.code.toLowerCase();
-    } else if (payload.type === 'script') {
-      if (payload.scriptPath && fs.existsSync(payload.scriptPath)) {
-        try {
-          scriptContent = fs.readFileSync(payload.scriptPath, 'utf8').toLowerCase();
-        } catch { /* ignore */ }
-      }
-    }
-
-    if (scriptContent) {
-      const commandBoundaryRegex = /(?:^|[|;&\n]\s*|\b(?:time|xargs|sudo|nohup|wsl|exec|(?:bun|npm|pnpm|yarn|npx|bunx)(?:\s+(?:run|exec|x|dlx))?)\s+)(?:[a-zA-Z0-9_\-/.]*\/)?/;
-      
-      if (code === 1 || code === 2) {
-        if (new RegExp(commandBoundaryRegex.source + '(ls|dir)\\b').test(scriptContent)) {
-          isLsNoMatch = true;
-        }
-        if (new RegExp(commandBoundaryRegex.source + '(find|fd|fdfind)\\b').test(scriptContent)) {
-          isFindNoMatch = true;
-        }
-        if (code === 2) {
-          const isGrepTool = new RegExp(commandBoundaryRegex.source + '(grep|egrep|fgrep|rg)\\b').test(scriptContent);
-          if (isGrepTool) {
-            if (stdout.trim().length > 0) {
-              isGrepMatchesFound = true;
-            } else if (scriptContent.includes(' -s ') || scriptContent.includes(' -s\n') || scriptContent.includes('--no-messages') || stderr.trim().length === 0 || stderr.includes('No such file or directory') || stderr.includes('Input/output error') || stderr.includes('os error') || stderr.includes('Permission denied')) {
-              isGrepNoMatch = true;
-            }
-          }
-        }
-      }
-
-      if (code === 1) {
-        if (new RegExp(commandBoundaryRegex.source + '(rm|rmdir)\\b').test(scriptContent)) {
-          isRmNoMatch = true;
-        }
-      }
-
-      if (code === 123) {
-        if (scriptContent.includes('xargs') && /(?:xargs(?:\s+-[^\s]+)*\s+)(?:[a-zA-Z0-9_\-/.]*\/)?(grep|egrep|fgrep|rg)\b/.test(scriptContent)) {
-          isGrepNoMatch = true;
-        } else if (scriptContent.includes('xargs') && /(?:xargs(?:\s+-[^\s]+)*\s+)(?:[a-zA-Z0-9_\-/.]*\/)?(diff|cmp)\b/.test(scriptContent)) {
-          isDiffFound = true;
-        }
-      } else if (code === 1) {
-        if (
-          new RegExp(commandBoundaryRegex.source + '(grep|egrep|fgrep|rg)\\b').test(scriptContent) ||
-          new RegExp(commandBoundaryRegex.source + 'git(?:\\.exe)?(?:\\s+-[^\\s]+)*\\s+grep\\b').test(scriptContent) ||
-          (stderr.trim().length === 0 && new RegExp(commandBoundaryRegex.source + 'git(?:\\.exe)?(?:\\s+-[^\\s]+)*\\s+config\\s+(?:--get(?:-all|-regexp|-urlmatch)?|get)\\b').test(scriptContent))
-        ) {
-          isGrepNoMatch = true;
-        }
-        if (
-          new RegExp(commandBoundaryRegex.source + '(diff|cmp)\\b').test(scriptContent) ||
-          new RegExp(commandBoundaryRegex.source + 'git(?:\\.exe)?(?:\\s+-[^\\s]+)*\\s+diff\\b').test(scriptContent)
-        ) {
-          isDiffFound = true;
-        }
-        if (new RegExp(commandBoundaryRegex.source + '(npm|pnpm|yarn|bun)\\s+(?:--?\\w+\\s+)*outdated\\b').test(scriptContent)) {
-          isOutdatedInfo = true;
-        }
-      }
-    }
-  }
-
-  // Refine heuristic by analyzing stderr to prevent swallowing true faults (like package installation errors)
-  if (isOutdatedInfo && (stderr.includes('ERR_PNPM') || stderr.includes('npm ERR!') || stderr.includes('error:') || stderr.includes('Error:'))) {
-    isOutdatedInfo = false;
-  }
-  if (isGrepNoMatch && (stderr.includes('fatal:') || (code === 1 && stderr.includes('grep:')))) {
-    isGrepNoMatch = false;
-  }
-  if (isDiffFound && (stderr.includes('No such file or directory') || stderr.includes('diff:'))) {
-    isDiffFound = false;
-  }
-  if (isLsNoMatch && (!(stderr.includes('cannot access') || stderr.includes('No such file or directory') || stderr.includes('File Not Found')) || stderr.includes('Permission denied'))) {
-    isLsNoMatch = false;
-  }
-  if (isFindNoMatch && (!(stderr.includes('No such file or directory') || stderr.includes('cannot access') || stderr.includes('File Not Found') || stderr.includes('not found') || stderr.includes('does not exist')) || stderr.includes('Permission denied'))) {
-    isFindNoMatch = false;
-  }
-  if (isRmNoMatch && (!(stderr.includes('cannot remove') || stderr.includes('No such file or directory') || stderr.includes('cannot find') || stderr.includes('not found')) || stderr.includes('Permission denied') || stderr.includes('Operation not permitted'))) {
-    isRmNoMatch = false;
-  }
-
-  return { isGrepNoMatch, isGrepMatchesFound, isDiffFound, isOutdatedInfo, isLsNoMatch, isRmNoMatch, isFindNoMatch };
-}
 
 export class ProcessController {
   private child!: ChildProcess;
@@ -479,6 +267,7 @@ export class ProcessController {
       this.hasRetriedWsl = true;
       this.isFinished = false;
       if (this.ioController) {
+        this.ioController.flushAll();
         this.ioController.destroyStreams();
       }
       console.error(`\n   💡 AGENT HINT: 'wsl.exe' exited with code 255 (transient WSL VM startup/pipe issue).`);
@@ -504,10 +293,12 @@ export class ProcessController {
     const finalizeFinish = async () => {
       let computedCode = code;
       const envData = this.ioController && typeof this.ioController.getParsedEnvelope === 'function' ? this.ioController.getParsedEnvelope() : null;
-      if (this.payload.expectJsonEnvelope && envData) {
-         if (envData.status === 'error' || (envData.exit_code !== undefined && envData.exit_code !== 0)) {
-             computedCode = typeof envData.exit_code === 'number' ? envData.exit_code : 1;
-         } else if (envData.status === 'success') {
+      if (envData) {
+         const status = envData.status;
+         const exitCode = envData.exit_code;
+         if (status === 'error' || (typeof exitCode === 'number' && exitCode !== 0)) {
+             computedCode = typeof exitCode === 'number' ? exitCode : 1;
+         } else if (status === 'success') {
              computedCode = 0;
          }
       }

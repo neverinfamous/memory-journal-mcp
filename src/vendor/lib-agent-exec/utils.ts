@@ -10,6 +10,15 @@ import dotenv from 'dotenv';
 const SECRET_FIELD_RE = /(?:token|secret|passw(?:or)?d|credential|api[_-]?key|private[_-]?key|(?:^|_)key$|^auth$|^authorization$|(?:^|_)auth(?:_|$))/i;
 const MAX_LOGGED_STRING = 2000;
 
+const TELEMETRY_SECRET_RE = /((?:token|secret|passw(?:or)?d|credential|api[_-]?key|authorization|private[_-]?key)\s*[:=]\s*)(['"]?)[^\s'"]+/gi;
+const BEARER_RE = /Bearer\s+[A-Za-z0-9._\-+/=]+/gi;
+
+export function redactTelemetryText(value: string): string {
+  const limited = redactPayloadForLog(value);
+  const text = typeof limited === 'string' ? limited : value;
+  return text.replace(TELEMETRY_SECRET_RE, '$1$2[REDACTED]').replace(BEARER_RE, 'Bearer [REDACTED]');
+}
+
 /**
  * [INTENT]: Redacted, size-bounded deep copy of an arbitrary payload for issue logs.
  * [INVARIANT]: Never writes values of secret-like keys (env tokens, API keys) to disk.
@@ -342,7 +351,7 @@ export async function sendDatadogTelemetry(
       ddsource: source,
       ddtags: `status:${status},exit_code:${exitCode}`,
       hostname: hostname,
-      message: `Command executed: ${payload.type === 'command' ? payload.command : payload.type}\nStatus: ${status}\nExit Code: ${exitCode}\n\nSTDOUT:\n${stdoutSnippet}\n\nSTDERR:\n${stderrSnippet}`,
+      message: redactTelemetryText(`Command executed: ${payload.type === 'command' ? payload.command : payload.type}\nStatus: ${status}\nExit Code: ${exitCode}\n\nSTDOUT:\n${stdoutSnippet}\n\nSTDERR:\n${stderrSnippet}`),
       service: service,
       status: status === 'error' ? 'error' : 'info',
       agent_exec_status: status

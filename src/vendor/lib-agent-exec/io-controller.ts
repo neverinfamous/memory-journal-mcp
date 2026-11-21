@@ -61,17 +61,12 @@ export class IOController {
     
     const result = extractEnvelope(tail);
     if (result) {
-       this._lastParsedEnvelope = result.parsed;
        const envString = tail.slice(result.start, result.end);
        const idx = this.pendingStdout.lastIndexOf(envString);
-       if (idx !== -1) {
-          const beforeEnv = this.pendingStdout.slice(0, idx);
-          const afterEnv = this.pendingStdout.slice(idx + envString.length);
-          if (afterEnv.trim().length === 0) {
-             this.pendingStdout = beforeEnv;
-          } else {
-             this.pendingStdout = beforeEnv + afterEnv;
-          }
+       const afterEnv = idx === -1 ? tail : this.pendingStdout.slice(idx + envString.length);
+       if (idx !== -1 && afterEnv.trim().length === 0) {
+          this._lastParsedEnvelope = result.parsed;
+          this.pendingStdout = this.pendingStdout.slice(0, idx);
           if (this.pendingStdout.length > 0 && !this.pendingStdout.endsWith('\n')) {
              this.pendingStdout += '\n';
           }

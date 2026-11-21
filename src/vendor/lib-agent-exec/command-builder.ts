@@ -4,6 +4,7 @@ import fs from 'node:fs';
 import crypto from 'node:crypto';
 import os from 'node:os';
 import { match } from 'ts-pattern';
+import { replaceOutsideLineComments, replaceOutsideQuotes } from './quote-spans.js';
 import { ExecPayload } from './schema.js';
 import { 
   ExecutionContext, 
@@ -344,8 +345,8 @@ export function buildCommand(payload: ExecPayload, cwd: string, isJson: boolean 
           codeToExecute = `[Console]::OutputEncoding = [System.Text.Encoding]::UTF8;\n$OutputEncoding = [System.Text.Encoding]::UTF8;\n$ErrorActionPreference = 'Stop';\n$ProgressPreference = 'SilentlyContinue';\n$ConfirmPreference = 'None';\n${codeToExecute}`;
         } else if (p.target === 'wsl2') {
           codeToExecute = codeToExecute.replace(/\r\n/g, '\n');
-          codeToExecute = codeToExecute.replace(/\b([a-zA-Z]):[/\\]+[^\s"'`;&|)]*/g, (matchStr) => convertToWslPath(matchStr));
-          codeToExecute = codeToExecute.replace(/(^|[\s"'`=])(?:\.{1,2}|[a-zA-Z0-9_.-]+)\\[a-zA-Z0-9_.\-\\/]+/g, (matchStr) => matchStr.replace(/\\/g, '/'));
+          codeToExecute = replaceOutsideLineComments(codeToExecute, /\b([a-zA-Z]):[/\\]+[^\s"'`;&|)]*/g, (matchStr) => convertToWslPath(matchStr));
+          codeToExecute = replaceOutsideQuotes(codeToExecute, /(^|[\s"'`=])(?:\.{1,2}|[a-zA-Z0-9_.-]+)\\[a-zA-Z0-9_.\-\\/]+/g, (matchStr) => matchStr.replace(/\\/g, '/'));
           if (ext === '.sh') {
             codeToExecute = codeToExecute.replace(/(^|\n)\s*\/\/\s*(.*)/g, '$1# $2');
           }
