@@ -78,6 +78,17 @@ function resolveDefaultWorkspaceIdOption(
     }, undefined)
 }
 
+/**
+ * [INTENT] `briefingCopilot` historically read `BRIEFING_COPILOT_REVIEWS`; accept the key-aligned
+ * `BRIEFING_COPILOT` too. The legacy name wins when both are non-blank (no behavior change).
+ */
+function resolveCopilotEnvKey(): string {
+    const legacy = process.env['BRIEFING_COPILOT_REVIEWS']
+    if (legacy !== undefined && legacy.trim() !== '') return 'BRIEFING_COPILOT_REVIEWS'
+    const aligned = process.env['BRIEFING_COPILOT']
+    return aligned !== undefined && aligned.trim() !== '' ? 'BRIEFING_COPILOT' : 'BRIEFING_COPILOT_REVIEWS'
+}
+
 function buildBriefingConfigOptions(
     resolver: ConfigResolver,
     catchConfig: CatchConfig,
@@ -125,7 +136,10 @@ function buildBriefingConfigOptions(
         }, undefined),
         workflowCount: catchConfig(() => resolver.resolveInt('briefingWorkflows', 'BRIEFING_WORKFLOW_COUNT') ?? 0, 0),
         workflowStatusBreakdown: catchConfig(() => resolver.resolveBool('briefingWorkflowStatus', 'BRIEFING_WORKFLOW_STATUS') ?? false, false),
-        copilotReviews: catchConfig(() => resolver.resolveBool('briefingCopilot', 'BRIEFING_COPILOT_REVIEWS') ?? false, false),
+        copilotReviews: catchConfig(
+            () => resolver.resolveBool('briefingCopilot', resolveCopilotEnvKey()) ?? false,
+            false
+        ),
         graphPivots: catchConfig(() => resolver.resolveBool('briefingGraph', 'BRIEFING_GRAPH') ?? true, true),
         insights: catchConfig(() => resolver.resolveBool('briefingInsights', 'BRIEFING_INSIGHTS') ?? true, true),
         workflowSummary: catchConfig(() => resolver.resolve<string>('workflowSummary', 'MEMORY_JOURNAL_WORKFLOW_SUMMARY'), undefined),

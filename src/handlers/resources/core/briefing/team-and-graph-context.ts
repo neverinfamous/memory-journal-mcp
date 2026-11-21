@@ -151,14 +151,19 @@ export function buildTeamContext(
             scopedProject !== undefined
                 ? context.teamDb.getActiveEntryCount(teamWorkspace, scopedProject)
                 : context.teamDb.getActiveEntryCount(teamWorkspace)
+        // [INVARIANT] `briefingEntries: 0` hides team previews too, so skip the team entry query
+        // entirely (only the cheap active-count above is still needed for the Team total).
         const fetchCap = Math.max((config.entryCount ?? 3) * 3, 10)
-        const distinctTeam = fetchDistinctTeamBriefingEntries(
-            context.teamDb,
-            teamWorkspace,
-            fetchCap,
-            projectNumber,
-            personalCandidates
-        )
+        const distinctTeam =
+            (config.entryCount ?? 3) <= 0
+                ? []
+                : fetchDistinctTeamBriefingEntries(
+                      context.teamDb,
+                      teamWorkspace,
+                      fetchCap,
+                      projectNumber,
+                      personalCandidates
+                  )
 
         const teamLatestEntry = distinctTeam[0]
         const teamLatest = teamLatestEntry

@@ -226,6 +226,10 @@ export function addBriefingOptions(command: Command): Command {
                 'Include team DB entries in briefing (env: BRIEFING_INCLUDE_TEAM)'
             )
             .option(
+                '--no-briefing-include-team',
+                'Force-exclude team DB entries from briefing, overriding env/config (env: BRIEFING_INCLUDE_TEAM=false)'
+            )
+            .option(
                 '--briefing-issues <count>',
                 'Number of issues to list in briefing; 0 = hide (env: BRIEFING_ISSUE_COUNT)',
                 '0'
@@ -238,6 +242,10 @@ export function addBriefingOptions(command: Command): Command {
             .option(
                 '--briefing-pr-status',
                 'Show PR status breakdown in briefing (env: BRIEFING_PR_STATUS)'
+            )
+            .option(
+                '--no-briefing-pr-status',
+                'Force-hide PR status breakdown in briefing, overriding env/config (env: BRIEFING_PR_STATUS=false)'
             )
             .option(
                 '--briefing-milestones <count>',
@@ -262,8 +270,16 @@ export function addBriefingOptions(command: Command): Command {
                 'Show workflow run status breakdown in briefing (env: BRIEFING_WORKFLOW_STATUS)'
             )
             .option(
+                '--no-briefing-workflow-status',
+                'Force-hide workflow run status breakdown in briefing, overriding env/config (env: BRIEFING_WORKFLOW_STATUS=false)'
+            )
+            .option(
                 '--briefing-copilot',
-                'Aggregate Copilot review state across recent PRs in briefing (env: BRIEFING_COPILOT_REVIEWS)'
+                'Aggregate Copilot review state across recent PRs in briefing (env: BRIEFING_COPILOT or BRIEFING_COPILOT_REVIEWS)'
+            )
+            .option(
+                '--no-briefing-copilot',
+                'Force-hide Copilot review aggregation in briefing, overriding env/config (env: BRIEFING_COPILOT=false)'
             )
             .option(
                 '--no-briefing-graph',
