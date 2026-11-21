@@ -70,21 +70,21 @@ beforeAll(async () => {
     const readItems: { entryId: number; embedding: Float32Array }[] = []
     const writeItems: { entryId: number; embedding: Float32Array }[] = []
     readDb.executeInTransaction(() => {
-        for (let i = 0; i < 100; i++) {
-            const ws = i >= 80 ? 'bench-ws' : 'default'
+        for (let i = 0; i < 1000; i++) {
+            const ws = i >= 800 ? 'bench-ws' : 'default'
             const entry = readDb.createEntry({
                 workspaceId: ws,
                 projectNumber: 1,
                 content: `Vector benchmark entry ${i} content`,
             })
-            const vecSeed = i === 90 ? 42 : i
+            const vecSeed = i === 900 ? 42 : i
             readItems.push({ entryId: entry.id, embedding: makeUnitVec(vecSeed) })
         }
     })
     readDb.upsertVectors(readItems)
 
     writeDb.executeInTransaction(() => {
-        for (let i = 0; i < 100; i++) {
+        for (let i = 0; i < 1000; i++) {
             const entry = writeDb.createEntry({
                 workspaceId: 'default',
                 projectNumber: 1,
@@ -94,6 +94,15 @@ beforeAll(async () => {
         }
     })
     writeDb.upsertVectors(writeItems)
+
+    for (const targetDb of [readDb, writeDb]) {
+        const nativeDb = (
+            targetDb as unknown as {
+                connection: { getNativeDb: () => { exec: (sql: string) => void } }
+            }
+        ).connection.getNativeDb()
+        nativeDb.exec('ANALYZE')
+    }
 
     const probeHits = await readVm.search('Vector benchmark entry 42', 10, 0.1)
     if (probeHits.length === 0) {
@@ -141,7 +150,7 @@ test('search (scoped workspace + project)', async ({ bench }) => {
 
 test('addEntry', async ({ bench }) => {
     await bench('addEntry', async () => {
-        const id = Math.floor(Math.random() * 100) + 1
+        const id = Math.floor(Math.random() * 1000) + 1
         await writeVm.addEntry({
             id,
             workspaceId: 'default',

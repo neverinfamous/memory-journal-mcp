@@ -44,6 +44,16 @@ interface CachedInstructionsEntry {
 const MAX_INSTRUCTIONS_CACHE = 16
 const INSTRUCTIONS_CACHE: CachedInstructionsEntry[] = []
 const CANONICAL_TOOL_NAMES = new Set(getAllToolNames())
+const BRIEFING_JSON_CACHE = new WeakMap<object, string>()
+
+function getMemoizedBriefingJson(briefingConfig: object | null | undefined): string {
+    if (briefingConfig === null || briefingConfig === undefined) return 'null'
+    const cached = BRIEFING_JSON_CACHE.get(briefingConfig)
+    if (cached !== undefined) return cached
+    const json = JSON.stringify(briefingConfig)
+    BRIEFING_JSON_CACHE.set(briefingConfig, json)
+    return json
+}
 
 function computeServerInstructions(
     currentConfig: ReturnType<ServerContext['configManager']['getConfig']>,
@@ -130,7 +140,7 @@ export function buildServerInstructions(
     const currentConfig = context.configManager.getConfig()
     const filterRaw = currentConfig.toolFilterConfig?.raw
     const enabledTools = currentConfig.toolFilterConfig?.enabledTools
-    const briefingJson = JSON.stringify(currentConfig.briefingConfig ?? null)
+    const briefingJson = getMemoizedBriefingJson(currentConfig.briefingConfig)
 
     const hit = INSTRUCTIONS_CACHE.find(
         (entry) =>

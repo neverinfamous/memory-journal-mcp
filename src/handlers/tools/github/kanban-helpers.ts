@@ -286,11 +286,10 @@ export async function handleAddKanbanItem(
         )
         if (projectNum === undefined) return MISSING_PROJECT_NUMBER_ERROR
 
-        const issueDetails = await resolved.github.getIssue(
-            resolved.owner,
-            resolved.repo,
-            input.issue_number
-        )
+        const [issueDetails, board] = await Promise.all([
+            resolved.github.getIssue(resolved.owner, resolved.repo, input.issue_number),
+            resolved.github.getProjectKanban(resolved.owner, projectNum, resolved.repo),
+        ])
         let nodeId = issueDetails?.nodeId
         if (!nodeId) {
             const prDetails = await resolved.github.getPullRequest(
@@ -310,11 +309,6 @@ export async function handleAddKanbanItem(
             }
         }
 
-        const board = await resolved.github.getProjectKanban(
-            resolved.owner,
-            projectNum,
-            resolved.repo
-        )
         if (!board) {
             return {
                 success: false,

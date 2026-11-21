@@ -12,7 +12,6 @@ import {
 } from '../../../handlers/tools/core/dummy-healing.js'
 import { getBaseUri } from '../../../handlers/resources/shared.js'
 import {
-    bigintReplacer,
     getSerializedPayloadJson,
     injectTokenEstimate,
 } from '../../../observability/token-estimator.js'
@@ -134,7 +133,7 @@ export function formatSuccessPayload(payload: unknown): {
     content: { type: 'text'; text: string }[]
     structuredContent: Record<string, unknown>
 } {
-    const enriched = JSON.stringify(payload, bigintReplacer)
+    const enriched = getSerializedPayloadJson(payload)
     return {
         content: [{ type: 'text', text: enriched }],
         structuredContent: isPlainRecord(payload) ? payload : {},

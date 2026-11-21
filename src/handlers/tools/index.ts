@@ -23,16 +23,10 @@ import type { VectorSearchManager } from '../../vector/vector-search-manager/ind
 import type { GitHubIntegration } from '../../github/github-integration/index.js'
 import type { ProgressContext } from '../../utils/progress-utils.js'
 import { isToolVisibleForFilter } from '../../filtering/tool-filter.js'
-import { isCacheHit, type CachedToolContextRefs } from './tool-cache-helpers.js'
 import {
-    captureActiveProjectRegistryState,
-    restoreActiveProjectRegistryState,
-    setActiveProjectRegistry,
-} from '../../codemode/normalizers/project-alias-helpers.js'
-import {
-    exceedsMaxToolInputElements,
-    resolveEffectiveMaxToolInputElements,
-} from '../../utils/tool-input-bounds.js'
+    isBareRuntimeWrapperConfig,
+    type CachedToolContextRefs,
+} from './tool-cache-helpers.js'
 
 import {
     getCoreTools,
@@ -64,7 +58,12 @@ import {
     instrumentToolDefinitions,
     throwToolNotFoundError,
 } from './arg-interceptions.js'
-import { ALREADY_HEALED_ARGS } from '../../server/mcp-server/tool-registration/healed-args-marker.js'
+import {
+    applyToolHealingArgs,
+    enforcePreHealingToolGuards,
+    enforceToolInputElementBound,
+    getEntryToResourceRewriteUri,
+} from './call-guards.js'
 import { getAuthContext } from '../../auth/auth-context.js'
 import { getRequestContext, requestContextStorage } from '../../utils/request-context.js'
 
@@ -78,6 +77,19 @@ export {
 // ============================================================================
 // Public API
 // ============================================================================
+
+function mapToolToRegistration(t: ToolDefinition): ToolRegistration {
+    const reg: ToolRegistration = {
+        name: t.name,
+        title: t.title,
+        description: t.description,
+        inputSchema: t.inputSchema,
+        ...(t.outputSchema !== undefined ? { outputSchema: t.outputSchema } : {}),
+        annotations: t.annotations,
+        icons: getToolIcon(t.group),
+    }
+    return Object.assign(reg, { group: t.group })
+}
 
 /**
  * Get all tool definitions, optionally filtered by config
@@ -93,47 +105,50 @@ export function getTools(
 ): ToolRegistration[] {
     ensureToolCache(db, vectorManager, github, config, teamDb, teamVectorManager)
 
-    const mapTool = (t: ToolDefinition): ToolRegistration => {
-        const reg: ToolRegistration = {
-            name: t.name,
-            title: t.title,
-            description: t.description,
-            inputSchema: t.inputSchema,
-            ...(t.outputSchema !== undefined ? { outputSchema: t.outputSchema } : {}),
-            annotations: t.annotations,
-            icons: getToolIcon(t.group),
-        }
-        return Object.assign(reg, { group: t.group })
-    }
-
     if (filterConfig) {
         const mapToUse = config?.runtime?.toolMapCache ?? toolMapCache ?? EMPTY_TOOL_MAP
-        const includeDummyTools = config?.agentHealing !== false
-        const codemodeInternalFullAccess = config?.codemodeInternalFullAccess === true
+        const includeDummy = config?.agentHealing !== false
+        const fullAccess = config?.codemodeInternalFullAccess === true
         const raw = filterConfig.raw
-        return Array.from(mapToUse.values())
+        const cached = filteredToolsCache.get(filterConfig)
+        if (
+            cached?.toolMap === mapToUse &&
+            cached.raw === raw &&
+            cached.enabledTools === filterConfig.enabledTools &&
+            cached.includeDummy === includeDummy &&
+            cached.fullAccess === fullAccess
+        ) {
+            return cached.result
+        }
+        const result = Array.from(mapToUse.values())
             .filter(
                 (t) =>
                     (filterConfig.enabledTools.has(t.name) ||
-                        isDummyToolAllowedByFilter(
-                            t.name,
-                            filterConfig,
-                            includeDummyTools,
-                            codemodeInternalFullAccess
-                        )) &&
+                        isDummyToolAllowedByFilter(t.name, filterConfig, includeDummy, fullAccess)) &&
                     isToolVisibleForFilter(t.name, t.annotations.readOnlyHint, raw)
             )
-            .map(mapTool)
+            .map(mapToolToRegistration)
+        filteredToolsCache.set(filterConfig, {
+            toolMap: mapToUse,
+            raw,
+            enabledTools: filterConfig.enabledTools,
+            includeDummy,
+            fullAccess,
+            result,
+        })
+        return result
     }
 
     if (config?.runtime) {
         config.runtime.mappedToolsCache ??= Array.from(
             (config.runtime.toolMapCache ?? EMPTY_TOOL_MAP).values()
-        ).map(mapTool)
+        ).map(mapToolToRegistration)
         return config.runtime.mappedToolsCache
     }
 
-    mappedToolsCache ??= Array.from((toolMapCache ?? EMPTY_TOOL_MAP).values()).map(mapTool)
+    mappedToolsCache ??= Array.from((toolMapCache ?? EMPTY_TOOL_MAP).values()).map(
+        mapToolToRegistration
+    )
     return mappedToolsCache
 }
 
@@ -143,9 +158,127 @@ export function getTools(
 let toolMapCache: Map<string, ToolDefinition> | null = null
 /** Cached mapped tool output for unfiltered getTools calls */
 let mappedToolsCache: ToolRegistration[] | null = null
+/** Cached mapped tool output per active ToolFilterConfig instance */
+const filteredToolsCache = new WeakMap<
+    ToolFilterConfig,
+    {
+        toolMap: Map<string, ToolDefinition>
+        raw: string
+        enabledTools: Set<string>
+        includeDummy: boolean
+        fullAccess: boolean
+        result: ToolRegistration[]
+    }
+>()
 /** Typed empty map for safe fallback */
 const EMPTY_TOOL_MAP = new Map<string, ToolDefinition>()
 let cachedContextRefs: CachedToolContextRefs | null = null
+
+function safeIsAvailable(gh: GitHubIntegration | undefined | null): boolean | undefined {
+    return gh ? gh.isApiAvailable() : undefined
+}
+
+function safeIsInitialized(vm: VectorSearchManager | undefined | null): boolean | undefined {
+    if (!vm) return undefined
+    return typeof vm.isInitialized === 'function' ? vm.isInitialized() : undefined
+}
+
+export function isCacheHit(
+    refs: CachedToolContextRefs | null | undefined,
+    cache: Map<string, ToolDefinition> | null | undefined,
+    db: IDatabaseAdapter,
+    vectorManager?: VectorSearchManager,
+    github?: GitHubIntegration,
+    config?: ToolHandlerConfig,
+    teamDb?: IDatabaseAdapter,
+    teamVectorManager?: VectorSearchManager
+): boolean {
+    if (!cache || !refs) return false
+    if (refs.db !== db || refs.teamDb !== teamDb) return false
+    if (
+        refs.github !== github ||
+        refs.vectorManager !== vectorManager ||
+        refs.teamVectorManager !== teamVectorManager
+    ) {
+        return false
+    }
+    const ghAvail = github !== undefined ? github.isApiAvailable() : undefined
+    const vmInit =
+        vectorManager !== undefined && typeof vectorManager.isInitialized === 'function'
+            ? vectorManager.isInitialized()
+            : undefined
+    const tvmInit =
+        teamVectorManager !== undefined && typeof teamVectorManager.isInitialized === 'function'
+            ? teamVectorManager.isInitialized()
+            : undefined
+    const prevGhAvail =
+        'githubAvailable' in refs ? refs.githubAvailable : safeIsAvailable(refs.github)
+    const prevVmInit =
+        'vectorInitialized' in refs ? refs.vectorInitialized : safeIsInitialized(refs.vectorManager)
+    const prevTvmInit =
+        'teamVectorInitialized' in refs
+            ? refs.teamVectorInitialized
+            : safeIsInitialized(refs.teamVectorManager)
+    if (prevGhAvail !== ghAvail || prevVmInit !== vmInit || prevTvmInit !== tvmInit) {
+        return false
+    }
+    if (refs.config !== config) return false
+    if (
+        'agentHealing' in refs &&
+        (refs.agentHealing !== config?.agentHealing ||
+            refs.codemodeEnabled !== config?.codemodeEnabled ||
+            refs.codemodeInternalFullAccess !== config?.codemodeInternalFullAccess)
+    ) {
+        return false
+    }
+    return true
+}
+
+function hasValidToolCache(
+    db: IDatabaseAdapter,
+    vectorManager?: VectorSearchManager,
+    github?: GitHubIntegration,
+    config?: ToolHandlerConfig,
+    teamDb?: IDatabaseAdapter,
+    teamVectorManager?: VectorSearchManager
+): boolean {
+    if (config?.runtime) {
+        const rt = config.runtime
+        const refs = rt.cachedContextRefs as typeof cachedContextRefs
+        if (isCacheHit(refs, rt.toolMapCache, db, vectorManager, github, config, teamDb, teamVectorManager)) {
+            return true
+        }
+        return (
+            isBareRuntimeWrapperConfig(config) &&
+            rt.toolMapCache !== null &&
+            refs !== undefined &&
+            refs !== null &&
+            isCacheHit(refs, rt.toolMapCache, db, vectorManager, github, refs.config, teamDb, refs.teamVectorManager)
+        )
+    }
+    return isCacheHit(cachedContextRefs, toolMapCache, db, vectorManager, github, config, teamDb, teamVectorManager)
+}
+
+function createCachedToolContext(
+    db: IDatabaseAdapter,
+    vectorManager?: VectorSearchManager,
+    github?: GitHubIntegration,
+    config?: ToolHandlerConfig,
+    teamDb?: IDatabaseAdapter,
+    teamVectorManager?: VectorSearchManager
+): ToolContext {
+    return {
+        db, teamDb, vectorManager, teamVectorManager, github, config,
+        get progress(): ProgressContext | undefined {
+            return getRequestContext()?.progress
+        },
+        get auth(): ToolContext['auth'] {
+            const authCtx = getAuthContext()
+            if (authCtx?.claims === undefined) return undefined
+            return { ...(authCtx.claims.sub !== undefined ? { sub: authCtx.claims.sub } : {}), scopes: authCtx.claims.scopes }
+        },
+    }
+}
 
 function ensureToolCache(
     db: IDatabaseAdapter,
@@ -155,159 +288,26 @@ function ensureToolCache(
     teamDb?: IDatabaseAdapter,
     teamVectorManager?: VectorSearchManager
 ): void {
-    if (config?.runtime) {
-        const rt = config.runtime
-        const refs = rt.cachedContextRefs as typeof cachedContextRefs
-        if (
-            isCacheHit(
-                refs,
-                rt.toolMapCache,
-                db,
-                vectorManager,
-                github,
-                config,
-                teamDb,
-                teamVectorManager
-            )
-        ) {
-            return
-        }
-    } else if (
-        isCacheHit(
-            cachedContextRefs,
-            toolMapCache,
-            db,
-            vectorManager,
-            github,
-            config,
-            teamDb,
-            teamVectorManager
-        )
-    ) {
-        return
-    }
-
-    const context: ToolContext = {
-        db,
-        teamDb,
-        vectorManager,
-        teamVectorManager,
-        github,
-        config,
-        get progress(): ProgressContext | undefined {
-            return getRequestContext()?.progress
-        },
-        get auth(): ToolContext['auth'] {
-            const authCtx = getAuthContext()
-            if (authCtx?.claims === undefined) return undefined
-            return {
-                ...(authCtx.claims.sub !== undefined ? { sub: authCtx.claims.sub } : {}),
-                scopes: authCtx.claims.scopes,
-            }
-        },
-    }
+    if (hasValidToolCache(db, vectorManager, github, config, teamDb, teamVectorManager)) return
+    const context = createCachedToolContext(db, vectorManager, github, config, teamDb, teamVectorManager)
     const instrumentedDefs = instrumentToolDefinitions(getAllToolDefinitions(context), config)
-
+    const nextRefs: CachedToolContextRefs = {
+        db, github, githubAvailable: github !== undefined ? github.isApiAvailable() : undefined,
+        vectorManager,
+        vectorInitialized: vectorManager !== undefined && typeof vectorManager.isInitialized === 'function' ? vectorManager.isInitialized() : undefined,
+        config, agentHealing: config?.agentHealing, codemodeEnabled: config?.codemodeEnabled,
+        codemodeInternalFullAccess: config?.codemodeInternalFullAccess, teamDb, teamVectorManager,
+        teamVectorInitialized: teamVectorManager !== undefined && typeof teamVectorManager.isInitialized === 'function' ? teamVectorManager.isInitialized() : undefined,
+    }
     if (config?.runtime) {
         config.runtime.toolMapCache = new Map(instrumentedDefs.map((t) => [t.name, t]))
         config.runtime.mappedToolsCache = null
-        config.runtime.cachedContextRefs = {
-            db,
-            github,
-            vectorManager,
-            config,
-            teamDb,
-            teamVectorManager,
-        }
+        config.runtime.cachedContextRefs = nextRefs
     } else {
         toolMapCache = new Map(instrumentedDefs.map((t) => [t.name, t]))
         mappedToolsCache = null
-        cachedContextRefs = { db, github, vectorManager, config, teamDb, teamVectorManager }
+        cachedContextRefs = nextRefs
     }
-}
-
-function applyToolHealingArgs(
-    name: string,
-    args: Record<string, unknown>,
-    config?: ToolHandlerConfig
-): { args: Record<string, unknown> } | { error: Record<string, unknown> } {
-    if (config?.agentHealing === false || ALREADY_HEALED_ARGS.has(args)) return { args }
-    const prevRegistryState = captureActiveProjectRegistryState()
-    setActiveProjectRegistry(config?.projectRegistry)
-    try {
-        const intercept = applyArgInterceptions(name, [args])
-        if ('error' in intercept) return intercept
-        return { args: (intercept.args[0] as Record<string, unknown>) ?? args }
-    } finally {
-        restoreActiveProjectRegistryState(prevRegistryState)
-    }
-}
-
-function enforceToolInputElementBound(
-    args: Record<string, unknown>,
-    config?: ToolHandlerConfig
-): Record<string, unknown> | undefined {
-    const maxElements = resolveEffectiveMaxToolInputElements(config?.maxToolInputElements)
-    if (!exceedsMaxToolInputElements(args, maxElements)) return undefined
-    return {
-        success: false,
-        error: `Tool input exceeds maximum element count (${String(maxElements)}).`,
-        code: 'VALIDATION_ERROR',
-        category: 'validation',
-        suggestion: 'Reduce the number of keys, array items, or nesting depth in tool arguments.',
-        recoverable: false,
-    }
-}
-
-function getEntryToResourceRewriteUri(
-    name: string,
-    args: Record<string, unknown>,
-    mapToUse: Map<string, ToolDefinition>,
-    config?: ToolHandlerConfig
-): string | undefined {
-    if (config?.agentHealing === false || name !== 'get_entry_by_id' || args['entry_id'] !== undefined) {
-        return undefined
-    }
-    const trimmedUri = typeof args['uri'] === 'string' ? args['uri'].trim() : undefined
-    if (
-        trimmedUri !== undefined &&
-        trimmedUri.startsWith('memory://') &&
-        !/^memory:\/\/(?:entries|entry)\/\d+$/i.test(trimmedUri) &&
-        mapToUse.has('read_resource')
-    ) {
-        return trimmedUri
-    }
-    return undefined
-}
-
-function enforcePreHealingToolGuards(
-    name: string,
-    preTool: ToolDefinition | undefined,
-    isRewrite: boolean,
-    config?: ToolHandlerConfig
-): { blocked: boolean; result?: unknown } {
-    if (preTool === undefined) return { blocked: false }
-    if (!isRewrite && config?.filterConfig) {
-        const preDisabled = assertToolFilterAllowsCall(
-            name,
-            preTool.annotations.readOnlyHint,
-            config.filterConfig,
-            config.agentHealing,
-            config.codemodeInternalFullAccess === true
-        )
-        if (preDisabled !== undefined) return { blocked: true, result: preDisabled }
-    }
-    if (config?.runtime?.maintenanceManager !== undefined) {
-        try {
-            enforceAccessBoundary(name, 'tool', preTool.capabilities, config.runtime.auditLogger)
-        } catch (error) {
-            return {
-                blocked: true,
-                result: Promise.reject(error instanceof Error ? error : new Error(String(error))),
-            }
-        }
-    }
-    return { blocked: false }
 }
 
 /**
@@ -329,27 +329,27 @@ export async function callTool(
 
     ensureToolCache(db, vectorManager, github, config, teamDb, teamVectorManager)
     const mapToUse = config?.runtime?.toolMapCache ?? toolMapCache ?? EMPTY_TOOL_MAP
-    const preGuard = enforcePreHealingToolGuards(
-        name,
-        mapToUse.get(name),
-        getEntryToResourceRewriteUri(name, args, mapToUse, config) !== undefined,
-        config
-    )
+    const preTool = mapToUse.get(name)
+    const rewriteUri = getEntryToResourceRewriteUri(name, args, mapToUse, config)
+    const isRewrite = rewriteUri !== undefined
+    const preGuard = enforcePreHealingToolGuards(name, preTool, isRewrite, config)
     if (preGuard.blocked) return preGuard.result
 
     const healed = applyToolHealingArgs(name, args, config)
     if ('error' in healed) return healed.error
     args = healed.args
 
-    const rewriteUri = getEntryToResourceRewriteUri(name, args, mapToUse, config)
-    if (rewriteUri !== undefined) {
-        args = { ...args, uri: rewriteUri }
+    const postRewriteUri =
+        rewriteUri ?? getEntryToResourceRewriteUri(name, args, mapToUse, config)
+    if (postRewriteUri !== undefined) {
+        args = { ...args, uri: postRewriteUri }
         name = 'read_resource'
     }
-    const tool = mapToUse.get(name)
+    const tool = postRewriteUri !== undefined || preTool === undefined ? mapToUse.get(name) : preTool
     if (!tool) throwToolNotFoundError(name)
 
-    if (config?.filterConfig) {
+    const needsPostChecks = preTool === undefined || postRewriteUri !== undefined
+    if (needsPostChecks && config?.filterConfig) {
         const disabled = assertToolFilterAllowsCall(
             name,
             tool.annotations.readOnlyHint,
@@ -364,10 +364,12 @@ export async function callTool(
             'ServerRuntime is logically required for secure tool execution. Please initialize the server correctly.'
         )
     }
-    try {
-        enforceAccessBoundary(name, 'tool', tool.capabilities, config.runtime.auditLogger)
-    } catch (error) {
-        return Promise.reject(error instanceof Error ? error : new Error(String(error)))
+    if (needsPostChecks) {
+        try {
+            enforceAccessBoundary(name, 'tool', tool.capabilities, config.runtime.auditLogger)
+        } catch (error) {
+            return Promise.reject(error instanceof Error ? error : new Error(String(error)))
+        }
     }
 
     const maintenanceManager = config.runtime.maintenanceManager

@@ -128,26 +128,29 @@ export class ConfigManager extends EventEmitter {
      */
     public seedMissingScopeDefaults(defaults: ConfigCliEnvBaseline): void {
         if (this.configFilePath !== undefined) return
-        const bc = { ...this.config.briefingConfig }
-        let changed = false
-        if (bc.defaultProjectNumber === undefined && defaults.defaultProjectNumber !== undefined) {
+        const currentBc = this.config.briefingConfig
+        const setProject =
+            currentBc.defaultProjectNumber === undefined && defaults.defaultProjectNumber !== undefined
+        const setWorkspace =
+            currentBc.defaultWorkspaceId === undefined && defaults.defaultWorkspaceId !== undefined
+        const setRegistry =
+            currentBc.projectRegistry === undefined && defaults.projectRegistry !== undefined
+        if (!setProject && !setWorkspace && !setRegistry) return
+
+        const bc = { ...currentBc }
+        if (setProject) {
             bc.defaultProjectNumber = defaults.defaultProjectNumber
             this.cliEnvBaseline.defaultProjectNumber ??= defaults.defaultProjectNumber
-            changed = true
         }
-        if (bc.defaultWorkspaceId === undefined && defaults.defaultWorkspaceId !== undefined) {
+        if (setWorkspace) {
             bc.defaultWorkspaceId = defaults.defaultWorkspaceId
             this.cliEnvBaseline.defaultWorkspaceId ??= defaults.defaultWorkspaceId
-            changed = true
         }
-        if (bc.projectRegistry === undefined && defaults.projectRegistry !== undefined) {
+        if (setRegistry) {
             bc.projectRegistry = defaults.projectRegistry
             this.cliEnvBaseline.projectRegistry ??= defaults.projectRegistry
-            changed = true
         }
-        if (changed) {
-            this.config = { ...this.config, briefingConfig: bc }
-        }
+        this.config = { ...this.config, briefingConfig: bc }
     }
 
     /**

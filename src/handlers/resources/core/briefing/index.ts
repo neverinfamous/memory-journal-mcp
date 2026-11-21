@@ -299,7 +299,6 @@ function renderBriefingUserMessage(params: {
 }): string {
     const { context, config, activeGithub, activeWorkspaceId, journal, github, system, team } = params
     const insights = buildInsightsSection(context, activeWorkspaceId)
-    const graphStats = buildGraphContext(context, journal.workspaceId, journal.totalEntries)
     const graphPivots =
         config.graphPivots !== false
             ? buildGraphPivots(
@@ -312,6 +311,10 @@ function renderBriefingUserMessage(params: {
                   system.gitHistory?.commits.map((c) => c.hash) ?? []
               )
             : undefined
+    const graphStats = buildGraphContext(context, journal.workspaceId, journal.totalEntries, {
+        includeHubs: graphPivots === undefined || graphPivots.activeThreads.length === 0,
+        includeOrphanRatio: graphPivots === undefined,
+    })
     const toolNaming = resolveBriefingToolNaming(context.filterConfig)
     const latestPreviews = journal.latestEntries.map(
         (e) => `#${e.id} (${e.type})${degreeSuffix(graphPivots, e.id)}: ${e.preview}`
@@ -397,7 +400,8 @@ export async function buildBriefingData(
             context.filterConfig,
             systemRepoPath,
             context.resourceCount,
-            journal.workspaceId
+            journal.workspaceId,
+            { lite: true }
         ),
     ])
     const team = config.includeTeam

@@ -110,11 +110,18 @@ export class BackupManager {
         }
 
         const dirents = fs.readdirSync(backupsDir, { withFileTypes: true })
-        const entryNamesKey = dirents
-            .filter((d) => /\.db$/i.test(d.name) && d.isFile())
-            .map((d) => d.name)
-            .sort()
-            .join('\0')
+        const dbNames: string[] = []
+        for (const d of dirents) {
+            if (d.isFile() && /\.db$/i.test(d.name)) {
+                dbNames.push(d.name)
+            }
+        }
+        const entryNamesKey =
+            dbNames.length === 0
+                ? ''
+                : dbNames.length === 1
+                  ? (dbNames[0] ?? '')
+                  : dbNames.slice().sort().join('\0')
 
         if (
             this.cachedBackups !== null &&
@@ -127,10 +134,7 @@ export class BackupManager {
 
         const backups: BackupEntry[] = []
 
-        for (const dirent of dirents) {
-            const filename = dirent.name
-            if (!/\.db$/i.test(filename)) continue
-            if (!dirent.isFile()) continue
+        for (const filename of dbNames) {
 
             const filePath = path.join(backupsDir, filename)
             try {

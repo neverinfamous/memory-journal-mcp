@@ -45,18 +45,28 @@ export function mirrorContentKey(content: string, workspaceId: string | null | u
     return `${workspaceId ?? ''}|${digest}`
 }
 
-/** Build a mirror index from the personal entries of a result set. */
+/** Build a mirror index from the personal entries of a result set, deferring SHA-256 content hashes until legacy fallback is needed. */
 export function buildPersonalMirrorIndex(
     personalEntries: readonly MirrorCandidate[]
 ): PersonalMirrorIndex {
     const byId = new Map<number, MirrorCandidate>()
-    const byContentKey = new Map<string, number>()
     for (const entry of personalEntries) {
         byId.set(entry.id, entry)
-        const key = mirrorContentKey(entry.content, entry.workspaceId)
-        if (!byContentKey.has(key)) byContentKey.set(key, entry.id)
     }
-    return { byId, byContentKey }
+    let cachedContentKey: Map<string, number> | undefined
+    return {
+        byId,
+        get byContentKey(): ReadonlyMap<string, number> {
+            if (cachedContentKey === undefined) {
+                cachedContentKey = new Map<string, number>()
+                for (const entry of personalEntries) {
+                    const key = mirrorContentKey(entry.content, entry.workspaceId)
+                    if (!cachedContentKey.has(key)) cachedContentKey.set(key, entry.id)
+                }
+            }
+            return cachedContentKey
+        },
+    }
 }
 
 function withinMirrorWindow(a: string | undefined, b: string | undefined): boolean {
@@ -138,6 +148,15 @@ export function collapseTeamMirrors<
         team_db?: string | undefined
     },
 >(entries: readonly T[]): T[] {
+    let hasEligibleTeam = false
+    let hasPersonal = false
+    for (const entry of entries) {
+        if (entry.source === 'team' && entry.team_db === undefined) hasEligibleTeam = true
+        else if (entry.source === 'personal') hasPersonal = true
+        if (hasEligibleTeam && hasPersonal) break
+    }
+    if (!hasEligibleTeam || !hasPersonal) return [...entries]
+
     const personalCandidates: MirrorCandidate[] = []
     for (const entry of entries) {
         if (entry.source !== 'personal') continue

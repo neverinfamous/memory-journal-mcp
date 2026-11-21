@@ -3,6 +3,7 @@ import type { EntriesSharedContext } from './shared.js'
 import { ValidationError } from '../../../types/errors.js'
 import { effectiveWorkspace } from '../../workspace-scope.js'
 import { resolveProjectContext } from '../../../utils/workspace-resolver.js'
+import { resolveProjectContextWithRegistry } from '../../../utils/workspace-resolver-pure.js'
 import { activeProjectRegistry, pairStoredScope } from '../../../utils/write-scope.js'
 import { guardEntryTypeWrite } from './entry-type-guard.js'
 
@@ -31,8 +32,19 @@ const ENTRY_INSERT_COLUMNS = [
     'session_id',
 ] as const
 
-const authorColumnCache = new WeakMap<object, boolean>()
-const originColumnCache = new WeakMap<object, boolean>()
+interface CachedColumnState {
+    schemaVersion: number
+    hasCol: boolean
+}
+
+const authorColumnCache = new WeakMap<object, CachedColumnState>()
+const originColumnCache = new WeakMap<object, CachedColumnState>()
+
+function getSchemaVersion(db: EntriesSharedContext['db']): number | undefined {
+    if (typeof db.pragma !== 'function') return undefined
+    const raw = db.pragma('schema_version', { simple: true })
+    return typeof raw === 'number' ? raw : undefined
+}
 
 function tableHasColumn(db: EntriesSharedContext['db'], column: string): boolean {
     const rows = db.prepare('PRAGMA table_info(memory_journal)').all()
@@ -45,21 +57,30 @@ function tableHasColumn(db: EntriesSharedContext['db'], column: string): boolean
     )
 }
 
-/** True when the team-only `origin_personal_id` column (migration 020) exists. */
-function hasOriginPersonalIdColumn(db: EntriesSharedContext['db']): boolean {
-    const cached = originColumnCache.get(db)
-    if (cached !== undefined) return cached
-    const hasCol = tableHasColumn(db, 'origin_personal_id')
-    if (hasCol) originColumnCache.set(db, true)
+function hasCachedJournalColumn(
+    db: EntriesSharedContext['db'],
+    cache: WeakMap<object, CachedColumnState>,
+    column: string
+): boolean {
+    const schemaVersion = getSchemaVersion(db)
+    const cached = cache.get(db)
+    if (cached !== undefined && (schemaVersion === undefined || cached.schemaVersion === schemaVersion)) {
+        return cached.hasCol
+    }
+    const hasCol = tableHasColumn(db, column)
+    if (hasCol || schemaVersion !== undefined) {
+        cache.set(db, { schemaVersion: schemaVersion ?? -1, hasCol })
+    }
     return hasCol
 }
 
+/** True when the team-only `origin_personal_id` column (migration 020) exists. */
+function hasOriginPersonalIdColumn(db: EntriesSharedContext['db']): boolean {
+    return hasCachedJournalColumn(db, originColumnCache, 'origin_personal_id')
+}
+
 function hasAuthorColumn(db: EntriesSharedContext['db']): boolean {
-    const cached = authorColumnCache.get(db)
-    if (cached !== undefined) return cached
-    const hasCol = tableHasColumn(db, 'author')
-    if (hasCol) authorColumnCache.set(db, true)
-    return hasCol
+    return hasCachedJournalColumn(db, authorColumnCache, 'author')
 }
 
 const nonEmpty = (s: string | null | undefined): string | null =>
@@ -71,17 +92,19 @@ function resolveInsertScope(
 ): { finalProjNum: number | null; finalWsId: string } {
     const trimmedWorkspace = input.workspaceId?.trim()
     const omittedWorkspace = trimmedWorkspace === undefined || trimmedWorkspace.length === 0
-    const resolved = resolveProjectContext(
-        {
-            ...(omittedWorkspace ? {} : { workspace_id: trimmedWorkspace }),
-            ...(input.projectNumber !== undefined ? { project_number: input.projectNumber } : {}),
-        },
-        context.config
-    )
+    const effectiveRegistry = activeProjectRegistry(context.config?.projectRegistry)
+    const resolutionInput = {
+        ...(omittedWorkspace ? {} : { workspace_id: trimmedWorkspace }),
+        ...(input.projectNumber !== undefined ? { project_number: input.projectNumber } : {}),
+    }
+    const resolved =
+        context.config?.projectRegistry !== undefined
+            ? resolveProjectContext(resolutionInput, context.config)
+            : resolveProjectContextWithRegistry(resolutionInput, context.config, effectiveRegistry)
     const paired = pairStoredScope(
         resolved.workspaceId,
         input.projectNumber ?? resolved.projectNumber,
-        activeProjectRegistry(context.config?.projectRegistry)
+        effectiveRegistry
     )
     const finalProjNum = paired.projectNumber ?? null
     const finalWsId = effectiveWorkspace(paired.workspaceId)

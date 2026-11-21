@@ -23,6 +23,7 @@ import {
 import {
     getRecentEntries as getRecentEntriesQuery,
     getEntriesPage,
+    getEntriesAfter,
     searchEntries,
     getSearchFacets,
     searchByDateRange,
@@ -31,6 +32,7 @@ import {
     getEntriesByPR,
     getEntriesByWorkflowRun,
     getEntriesBySession,
+    getLatestEntryPerProject,
     type SortBy,
 } from './search/index.js'
 export { levenshteinDistance, buildVocabulary, findFuzzyMatches, expandFuzzyQuery } from './fuzzy-matcher.js'
@@ -186,6 +188,16 @@ export class EntriesManager {
         return getEntriesPage(this.sharedContext, offset, limit, order, workspaceId, projectNumber)
     }
 
+    getEntriesAfter(
+        limit: number,
+        order: 'asc' | 'desc' = 'desc',
+        workspaceId = 'default',
+        projectNumber?: number,
+        cursor?: { timestamp: string; id: number }
+    ): JournalEntry[] {
+        return getEntriesAfter(this.sharedContext, limit, order, workspaceId, projectNumber, cursor)
+    }
+
     searchEntries(
         queryStr: string,
         options?: {
@@ -327,5 +339,9 @@ export class EntriesManager {
 
     getEntriesBySession(sessionId: string, limit = 50, workspaceId?: string): JournalEntry[] {
         return getEntriesBySession(this.sharedContext, sessionId, limit, workspaceId)
+    }
+
+    getLatestEntryPerProject(): Map<string, { id: number; timestamp: string; entryType: string }> {
+        return getLatestEntryPerProject(this.sharedContext)
     }
 }

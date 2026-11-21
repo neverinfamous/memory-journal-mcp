@@ -1,5 +1,6 @@
 import type { InternalResourceDef, ResourceContext } from './shared.js'
 import { getTools } from '../tools/index.js'
+import { getRuntimeWrapperConfig } from '../tools/tool-cache-helpers.js'
 import { TOOL_GROUPS } from '../../filtering/tool-constants.js'
 import { getAllToolNames, isToolVisibleForFilter } from '../../filtering/tool-filter.js'
 
@@ -40,7 +41,7 @@ export function getToolsCatalogResourceDefinitions(): InternalResourceDef[] {
                     null,
                     vectorManager,
                     github ?? undefined,
-                    context.runtime !== undefined ? { runtime: context.runtime } : undefined,
+                    getRuntimeWrapperConfig(context.runtime),
                     teamDb,
                     undefined
                 ).filter((t) => CANONICAL_TOOL_NAMES.has(t.name))
@@ -62,45 +63,35 @@ export function getToolsCatalogResourceDefinitions(): InternalResourceDef[] {
 
                 const groups = Array.from(toolsByGroup.keys()).sort()
 
-                let md = `## Available Tools\n\n`
-                md += `### Currently Enabled\n`
-                md += `Active filter: \`${activeFilterRaw}\`\n\n`
+                const lines: string[] = [
+                    '## Available Tools\n',
+                    '### Currently Enabled',
+                    `Active filter: \`${activeFilterRaw}\`\n`,
+                ]
 
                 for (const group of groups) {
                     const toolsInGroup = toolsByGroup.get(group) ?? []
-                    
-                    // Determine how many tools in this group are enabled
                     let enabledCount = 0
+                    const toolLines: string[] = []
                     for (const tool of toolsInGroup) {
                         const isEnabled =
                             (!filterConfig || filterConfig.enabledTools.has(tool.name)) &&
                             isToolVisibleForFilter(tool.name, tool.annotations?.readOnlyHint, filterConfig?.raw)
-                        if (isEnabled) {
-                            enabledCount++
-                        }
+                        if (isEnabled) enabledCount++
+                        toolLines.push(`- ${tool.name}: ${tool.description}${isEnabled ? '' : ' (disabled)'}`)
                     }
-
-                    const isGroupEnabled = enabledCount > 0
-                    const statusEmoji = isGroupEnabled ? '✅ enabled' : '❌ disabled'
-                    
-                    md += `### ${group} (${toolsInGroup.length} tools) ${statusEmoji}\n`
-                    
-                    for (const tool of toolsInGroup) {
-                        const isEnabled =
-                            (!filterConfig || filterConfig.enabledTools.has(tool.name)) &&
-                            isToolVisibleForFilter(tool.name, tool.annotations?.readOnlyHint, filterConfig?.raw)
-                        const toolStatus = isEnabled ? '' : ' (disabled)'
-                        md += `- ${tool.name}: ${tool.description}${toolStatus}\n`
-                    }
-                    md += '\n'
+                    const statusEmoji = enabledCount > 0 ? '✅ enabled' : '❌ disabled'
+                    lines.push(`### ${group} (${String(toolsInGroup.length)} tools) ${statusEmoji}`)
+                    lines.push(...toolLines)
+                    lines.push('')
                 }
 
-                md += `### Quick Reference\n`
-                md += `To enable specific tools: \`update_configuration({ tool_filter: "starter,+get_github_issues,+get_github_prs" })\`\n`
-                md += `To enable a group: \`update_configuration({ tool_filter: "starter,github" })\`\n`
-                md += `To switch to minimal: \`update_configuration({ tool_filter: "create_entry,search_entries" })\`\n`
+                lines.push('### Quick Reference')
+                lines.push('To enable specific tools: `update_configuration({ tool_filter: "starter,+get_github_issues,+get_github_prs" })`')
+                lines.push('To enable a group: `update_configuration({ tool_filter: "starter,github" })`')
+                lines.push('To switch to minimal: `update_configuration({ tool_filter: "create_entry,search_entries" })`\n')
 
-                return md
+                return lines.join('\n')
             },
         },
     ]

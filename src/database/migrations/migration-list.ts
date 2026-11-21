@@ -18,6 +18,7 @@ import { Migration017AddPerformanceIndexes } from './017-add-performance-indexes
 import { Migration018AddProjectAndPruneDuplicateIndexes } from './018-add-project-and-prune-duplicate-indexes.js'
 import { Migration019NormalizeLegacyCommitEntries } from './019-normalize-legacy-commit-entries.js'
 import { Migration020AddTeamOriginPersonalId } from './020-add-team-origin-personal-id.js'
+import { Migration021AddEntityLookupAndPruneAliasIndex } from './021-add-entity-lookup-and-prune-alias-index.js'
 import type { Migration } from './migration.js'
 
 export const MIGRATIONS: Migration[] = [
@@ -41,4 +42,5 @@ export const MIGRATIONS: Migration[] = [
     Migration018AddProjectAndPruneDuplicateIndexes,
     Migration019NormalizeLegacyCommitEntries,
     Migration020AddTeamOriginPersonalId,
+    Migration021AddEntityLookupAndPruneAliasIndex,
 ]

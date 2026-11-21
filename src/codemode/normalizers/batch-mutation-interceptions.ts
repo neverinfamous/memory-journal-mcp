@@ -43,14 +43,21 @@ function parseNumericBatchId(val: unknown): number | undefined {
     return undefined
 }
 
+const BATCH_CREATE_METHODS = new Set([
+    'batch_create_entries', 'batchCreateEntries', 'team_batch_create_entries', 'teamBatchCreateEntries',
+])
+const BATCH_UPDATE_METHODS = new Set([
+    'batch_update_entries', 'batchUpdateEntries', 'team_batch_update_entries', 'teamBatchUpdateEntries',
+])
+const BATCH_DELETE_METHODS = new Set([
+    'batch_delete_entries', 'batchDeleteEntries', 'team_batch_delete_entries', 'teamBatchDeleteEntries',
+])
+
 function normalizeBatchCreateAndUpdateArgs(
     methodName: string,
     args: unknown[]
 ): { error: Record<string, unknown> } | undefined {
-    if (
-        ['batch_create_entries', 'batchCreateEntries', 'team_batch_create_entries', 'teamBatchCreateEntries'].includes(methodName) &&
-        args.length === 1
-    ) {
+    if (BATCH_CREATE_METHODS.has(methodName) && args.length === 1) {
         if (Array.isArray(args[0])) args[0] = { entries: args[0] }
         else if (isRecord(args[0]) && !('entries' in args[0])) {
             if (!Array.isArray(args[0]['items'])) {
@@ -62,10 +69,7 @@ function normalizeBatchCreateAndUpdateArgs(
         }
     }
 
-    if (
-        ['batch_update_entries', 'batchUpdateEntries', 'team_batch_update_entries', 'teamBatchUpdateEntries'].includes(methodName) &&
-        args.length === 1
-    ) {
+    if (BATCH_UPDATE_METHODS.has(methodName) && args.length === 1) {
         if (Array.isArray(args[0])) args[0] = { updates: args[0] }
         else if (isRecord(args[0]) && !('updates' in args[0])) {
             const aliasKey = Array.isArray(args[0]['items'])
@@ -88,7 +92,7 @@ function normalizeBatchDeleteArgs(
     methodName: string,
     args: unknown[]
 ): { args: unknown[] } | { error: Record<string, unknown> } {
-    if (!['batch_delete_entries', 'batchDeleteEntries', 'team_batch_delete_entries', 'teamBatchDeleteEntries'].includes(methodName)) {
+    if (!BATCH_DELETE_METHODS.has(methodName)) {
         return { args }
     }
     const multiCoerced = args.length > 1 ? args.map(parseNumericBatchId) : []

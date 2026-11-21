@@ -8,7 +8,7 @@ import type {
     ResourceContext,
     ResourceResult,
 } from './shared.js'
-import { resourceProjectNumber, resourceWorkspace } from './shared.js'
+import { resourceProjectNumber, resourceWorkspace, withResourceTokenMeta } from './shared.js'
 import { logger } from '../../utils/logger.js'
 import { markUntrustedContent, sanitizeAuthor, sanitizeErrorForLogging } from '../../utils/security-utils.js'
 import { activeProjectRegistry } from '../../utils/write-scope.js'
@@ -130,13 +130,8 @@ export function getTeamResourceDefinitions(): InternalResourceDef[] {
                     count: enriched.length,
                     source: 'team',
                 }
-                const tokenEstimate = Math.ceil(JSON.stringify(responseData).length / 4)
-
                 return {
-                    data: {
-                        ...responseData,
-                        _meta: { tokenEstimate }
-                    },
+                    data: withResourceTokenMeta(responseData),
                     annotations: { lastModified },
                 }
             },
@@ -211,13 +206,8 @@ export function getTeamResourceDefinitions(): InternalResourceDef[] {
                         ? { degraded: true, warning: authorStatsWarning }
                         : {}),
                 }
-                const tokenEstimate = Math.ceil(JSON.stringify(responseData).length / 4)
-
                 return {
-                    data: {
-                        ...responseData,
-                        _meta: { tokenEstimate }
-                    },
+                    data: withResourceTokenMeta(responseData),
                 }
             },
         },

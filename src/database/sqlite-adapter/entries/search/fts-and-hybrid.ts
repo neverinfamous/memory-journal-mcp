@@ -4,8 +4,9 @@ import { type EntriesSharedContext, rowsToEntries } from '../shared.js'
 import { attachImportanceScoresToEntries } from '../importance.js'
 import { buildVocabulary, expandFuzzyQuery } from '../fuzzy-matcher.js'
 import { encodeCursor } from './cursor.js'
-import { isFts5QueryError } from './fts-sanitizer.js'
+import { isFts5QueryError, sanitizeFtsQuery } from './fts-sanitizer.js'
 import { effectiveWorkspace } from '../../../workspace-scope.js'
+import { bucketInParams } from '../../row-helpers.js'
 import {
     buildSearchQuery,
     readSearchPosition,
@@ -21,6 +22,30 @@ interface SearchPage {
     entries: JournalEntry[]
     nextCursor?: string
     highlights?: { id: number; snippet: string }[]
+}
+
+function fetchPostLimitSnippets(
+    db: EntriesSharedContext['db'],
+    queryStr: string,
+    entryIds: number[]
+): Map<number, string> {
+    const snippetMap = new Map<number, string>()
+    if (entryIds.length === 0) return snippetMap
+    const sanitized = sanitizeFtsQuery(queryStr)
+    if (sanitized === '') return snippetMap
+    for (const { placeholders, params } of bucketInParams(entryIds)) {
+        const rows = db
+            .prepare(
+                `SELECT rowid AS id, snippet(fts_content, 0, '«', '»', '…', 64) AS highlight_snippet
+                 FROM fts_content
+                 WHERE fts_content MATCH ? AND rowid IN (${placeholders})`
+            )
+            .all(sanitized, ...params) as { id: number; highlight_snippet: string }[]
+        for (const row of rows) {
+            snippetMap.set(row.id, row.highlight_snippet)
+        }
+    }
+    return snippetMap
 }
 
 function executeSearchQuery(
@@ -67,7 +92,19 @@ function executeSearchQuery(
         result.nextCursor = nextCursor
     }
     if (useFts && options?.includeHighlights === true) {
-        result.highlights = rows.map((row: unknown) => extractSnippet(row))
+        if (needsImportance && entries.length > 0) {
+            const snippetMap = fetchPostLimitSnippets(
+                db,
+                queryStr,
+                entries.map((e) => e.id)
+            )
+            result.highlights = entries.map((e) => ({
+                id: e.id,
+                snippet: snippetMap.get(e.id) ?? '',
+            }))
+        } else {
+            result.highlights = rows.map((row: unknown) => extractSnippet(row))
+        }
     }
     return result
 }

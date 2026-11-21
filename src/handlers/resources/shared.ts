@@ -16,6 +16,7 @@ import type { ToolFilterConfig } from '../../filtering/tool-filter.js'
 import type { McpIcon, ProjectRegistryEntry } from '../../types/index.js'
 import type { GitHubIntegration } from '../../github/github-integration/index.js'
 import type { ServerRuntime } from '../../utils/maintenance-lock.js'
+import { injectTokenEstimate } from '../../observability/token-estimator.js'
 import { fenceNonCanonicalRefOrKey } from '../../utils/security-utils.js'
 import {
     findCanonicalRegistryKey,
@@ -423,4 +424,12 @@ export interface InternalResourceDef {
 export function milestoneCompletionPct(openIssues: number, closedIssues: number): number {
     const total = openIssues + closedIssues
     return total > 0 ? Math.round((closedIssues / total) * 100) : 0
+}
+
+/**
+ * Attach `_meta.tokenEstimate` to a JSON resource payload via `injectTokenEstimate`, populating
+ * `serializedPayloadCache` in one pass so `createResourceReadHandler` avoids a second stringify.
+ */
+export function withResourceTokenMeta(payload: object): unknown {
+    return injectTokenEstimate(payload)
 }

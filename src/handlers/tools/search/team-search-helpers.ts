@@ -279,8 +279,7 @@ export async function collectTeamSearchEntries(
 ): Promise<EntryWithSource[]> {
     if (
         !isTeamDbReady(teamDb) ||
-        !canAccessTeamSilently('search_entries', { teamDb, config: options.config }, options.workspaceId) ||
-        !canReadTeamEntriesRbac(teamDb, options.config, options.workspaceId)
+        !canAccessTeamSilently('search_entries', { teamDb, config: options.config }, options.workspaceId)
     ) {
         return []
     }

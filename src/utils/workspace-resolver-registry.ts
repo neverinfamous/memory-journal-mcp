@@ -63,18 +63,23 @@ function isValidLoadedRegistryEntry(
     return true
 }
 
+const SANITIZED_REGISTRY_CACHE = new WeakMap<object, Record<string, ProjectRegistryEntry>>()
+
 function sanitizeLoadedProjectRegistry(
     raw: unknown
 ): Record<string, ProjectRegistryEntry> | undefined {
     if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) {
         return undefined
     }
+    const cached = SANITIZED_REGISTRY_CACHE.get(raw)
+    if (cached !== undefined) return cached
     const clean = Object.create(null) as Record<string, ProjectRegistryEntry>
     for (const [k, v] of Object.entries(raw)) {
         if (isValidLoadedRegistryEntry(k, v)) {
             clean[k] = v
         }
     }
+    SANITIZED_REGISTRY_CACHE.set(raw, clean)
     return clean
 }
 

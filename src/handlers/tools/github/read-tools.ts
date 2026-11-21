@@ -62,11 +62,21 @@ async function executeGetGitHubIssue(context: ToolContext, params: unknown): Pro
         const resolved = await resolveOwnerRepo(context, input, 'is this issue from')
         if ('error' in resolved) return resolved.response
 
-        const issue = await resolved.github.getIssue(
+        const issuePromise = resolved.github.getIssue(
             resolved.owner,
             resolved.repo,
             input.issue_number
         )
+        const commentsPromise = input.include_comments
+            ? resolved.github
+                  .getIssueComments(resolved.owner, resolved.repo, input.issue_number)
+                  .then(
+                      (value) => ({ ok: true as const, value }),
+                      (error: unknown) => ({ ok: false as const, error })
+                  )
+            : undefined
+
+        const issue = await issuePromise
         if (!issue) {
             return {
                 success: false,
@@ -90,15 +100,12 @@ async function executeGetGitHubIssue(context: ToolContext, params: unknown): Pro
         )
         safeIssue.body = ensureBlockFenced(body)
 
-        // Fetch comments if requested
+        // Collect comments fetched concurrently when requested
         let comments: { author: string; body: string; createdAt: string }[] | undefined
-        if (input.include_comments) {
-            const rawComments = await resolved.github.getIssueComments(
-                resolved.owner,
-                resolved.repo,
-                input.issue_number
-            )
-            comments = rawComments.map((c) => ({
+        if (commentsPromise !== undefined) {
+            const commentsResult = await commentsPromise
+            if (!commentsResult.ok) throw commentsResult.error
+            comments = commentsResult.value.map((c) => ({
                 ...c,
                 author: fenceUntrustedHandle(c.author),
                 body: ensureBlockFenced(c.body),

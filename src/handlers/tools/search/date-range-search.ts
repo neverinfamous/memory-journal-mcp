@@ -5,23 +5,23 @@ import { activeProjectRegistry, alignedProjectFilter } from '../../../utils/writ
 import { formatHandlerError } from '../../../utils/error-helpers.js'
 import { sanitizeAuthor } from '../../../utils/security-utils.js'
 import { calcPerDbLimit, isTeamDbReady, mergeAndDedup, resolveAuthorizedIncludeTeam } from './helpers.js'
+import { decodeCompoundCursor, encodeCompoundCursor } from './fts.js'
 import { SearchByDateRangeSchema, SearchByDateRangeSchemaMcp } from './schemas.js'
 import { EntriesListOutputSchema } from '../schemas.js'
 
 type DateRangeInput = ReturnType<typeof SearchByDateRangeSchema.parse>
 
-async function resolveDateRangeCursors(
+function resolveDateRangeCursors(
     cursor: string | undefined,
     includeTeam: boolean,
     isPersonal: boolean | undefined
-): Promise<{
+): {
     personalCursor: string | undefined
     teamCursor: string | undefined
     personalExhausted: boolean
     teamExhausted: boolean
-}> {
+} {
     if (cursor && includeTeam && isPersonal !== true) {
-        const { decodeCompoundCursor } = await import('./fts.js')
         const compound = decodeCompoundCursor(cursor)
         if (compound) {
             return {
@@ -40,7 +40,7 @@ async function resolveDateRangeCursors(
     }
 }
 
-async function queryTeamDateRangeAndMerge(
+function queryTeamDateRangeAndMerge(
     teamDb: NonNullable<ToolContext['teamDb']>,
     input: DateRangeInput,
     wsId: string,
@@ -49,7 +49,7 @@ async function queryTeamDateRangeAndMerge(
     teamCursor: string | undefined,
     teamExhausted: boolean,
     personalEntries: ReturnType<ToolContext['db']['searchByDateRange']>
-): Promise<Record<string, unknown>> {
+): Record<string, unknown> {
     const emptyPage: ReturnType<ToolContext['db']['searchByDateRange']> = { entries: [] }
     const teamEntries = teamExhausted
         ? emptyPage
@@ -82,7 +82,6 @@ async function queryTeamDateRangeAndMerge(
     )
     let compoundNextCursor: string | undefined
     if (personalEntries.nextCursor || teamEntries.nextCursor) {
-        const { encodeCompoundCursor } = await import('./fts.js')
         compoundNextCursor = encodeCompoundCursor(personalEntries.nextCursor, teamEntries.nextCursor)
     }
     return {
@@ -94,10 +93,10 @@ async function queryTeamDateRangeAndMerge(
     }
 }
 
-async function executeDateRangeSearch(
+function executeDateRangeSearch(
     params: unknown,
     context: ToolContext
-): Promise<Record<string, unknown>> {
+): Record<string, unknown> {
     const { db, teamDb } = context
     const input = SearchByDateRangeSchema.parse(params)
     const wsId = resolveWorkspaceId(input.workspace_id, input.project_number, context.config)
@@ -130,7 +129,7 @@ async function executeDateRangeSearch(
     const hasReadyTeamDb = includeTeam && input.is_personal !== true && isTeamDbReady(teamDb)
     // [INVARIANT] A compound cursor with a missing side means that side is exhausted; never restart it at page 1.
     const { personalCursor, teamCursor, personalExhausted, teamExhausted } =
-        await resolveDateRangeCursors(input.cursor, includeTeam, input.is_personal)
+        resolveDateRangeCursors(input.cursor, includeTeam, input.is_personal)
     const perDbLimit = calcPerDbLimit(input.limit, hasReadyTeamDb)
     const emptyPage: ReturnType<typeof db.searchByDateRange> = { entries: [] }
     const personalEntries = personalExhausted
@@ -152,7 +151,7 @@ async function executeDateRangeSearch(
           })
 
     if (hasReadyTeamDb && isTeamDbReady(teamDb)) {
-        return await queryTeamDateRangeAndMerge(
+        return queryTeamDateRangeAndMerge(
             teamDb,
             input,
             wsId,
@@ -188,12 +187,12 @@ export function getDateRangeSearchTool(context: ToolContext): ToolDefinition[] {
                 idempotentHint: true,
                 openWorldHint: false,
             },
-            handler: async (params: unknown) => {
+            handler: (params: unknown) => {
                 try {
-                    return await executeDateRangeSearch(params, context)
+                    return Promise.resolve(executeDateRangeSearch(params, context))
                 } catch (err) {
-                    if (err instanceof PermissionError) throw err
-                    return formatHandlerError(err)
+                    if (err instanceof PermissionError) return Promise.reject(err)
+                    return Promise.resolve(formatHandlerError(err))
                 }
             },
         },

@@ -112,7 +112,7 @@ function isProjectAlias(name: string): boolean {
 }
 
 /** True when the alias's whole tokens end with `suffix` (e.g. `mj_core_delete_entry` ends with `delete entry`). */
-function endsWithTokens(tokens: string[], suffix: string[]): boolean {
+function endsWithTokens(tokens: readonly string[], suffix: readonly string[]): boolean {
     if (tokens.length < suffix.length) return false
     const offset = tokens.length - suffix.length
     return suffix.every((token, i) => tokens[offset + i] === token)

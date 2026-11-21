@@ -152,35 +152,21 @@ function collectUnmergedAliasWorkspaces(
  * Extracts the primary target workspace ID for RBAC evaluation across shallow-cloned
  * and project-normalized root and nested containers (`filters`, `filter`, `entry`, `metadata`, `context`).
  */
-export function extractTargetWorkspaceId(
-    params: unknown,
+function appendExtraWorkspaces(
+    params: Record<string, unknown>,
+    rootContainers: Record<string, unknown>[],
+    seen: Set<string>,
+    out: (string | undefined)[],
     config: ToolContext['config']
-): string | undefined {
-    const containers = collectScopeContainers(params, config)
-    return resolveWorkspaceFromContainers(containers, config)
-}
-
-/**
- * Collects additional destination, nested-container, conflicting alias, or batch-item
- * workspace IDs so `enforceTeamRbac` checks every workspace referenced in a payload.
- */
-export function collectExtraTargetWorkspaces(
-    params: unknown,
-    primaryWs: string | undefined,
-    config: ToolContext['config']
-): string[] {
-    if (!isPlainRecord(params)) return []
-    const extras: string[] = []
-    const seen = new Set<string>(primaryWs !== undefined ? [primaryWs.toLowerCase()] : [])
+): void {
     const addCandidate = (ws: string | undefined): void => {
         if (ws === undefined || ws === '') return
         const lower = ws.toLowerCase()
         if (!seen.has(lower)) {
             seen.add(lower)
-            extras.push(ws)
+            out.push(ws)
         }
     }
-    const rootContainers = collectScopeContainers(params, config)
     for (const nestedContainer of rootContainers.slice(1)) {
         addCandidate(resolveWorkspaceFromContainers([nestedContainer], config))
     }
@@ -199,5 +185,50 @@ export function collectExtraTargetWorkspaces(
             collectUnmergedAliasWorkspaces(itemContainers, config, addCandidate)
         }
     }
-    return extras
+}
+
+/**
+ * Extracts all distinct target workspace IDs (`[primaryWs, ...extraTargetWorkspaces]`)
+ * in a single `collectScopeContainers` pass for RBAC enforcement.
+ */
+export function collectAllTargetWorkspaces(
+    params: unknown,
+    config: ToolContext['config']
+): (string | undefined)[] {
+    const rootContainers = collectScopeContainers(params, config)
+    const primaryWs = resolveWorkspaceFromContainers(rootContainers, config)
+    if (!isPlainRecord(params)) return [primaryWs]
+    const seen = new Set<string>(primaryWs !== undefined && primaryWs !== '' ? [primaryWs.toLowerCase()] : [])
+    const workspaces: (string | undefined)[] = [primaryWs]
+    appendExtraWorkspaces(params, rootContainers, seen, workspaces, config)
+    return workspaces
+}
+
+/**
+ * Extracts the primary target workspace ID for RBAC evaluation across shallow-cloned
+ * and project-normalized root and nested containers (`filters`, `filter`, `entry`, `metadata`, `context`).
+ */
+export function extractTargetWorkspaceId(
+    params: unknown,
+    config: ToolContext['config']
+): string | undefined {
+    const containers = collectScopeContainers(params, config)
+    return resolveWorkspaceFromContainers(containers, config)
+}
+
+/**
+ * Collects additional destination, nested-container, conflicting alias, or batch-item
+ * workspace IDs so `enforceTeamRbac` checks every workspace referenced in a payload.
+ */
+export function collectExtraTargetWorkspaces(
+    params: unknown,
+    primaryWs: string | undefined,
+    config: ToolContext['config']
+): string[] {
+    if (!isPlainRecord(params)) return []
+    const rootContainers = collectScopeContainers(params, config)
+    const seen = new Set<string>(primaryWs !== undefined ? [primaryWs.toLowerCase()] : [])
+    const collected: (string | undefined)[] = []
+    appendExtraWorkspaces(params, rootContainers, seen, collected, config)
+    return collected.filter((ws): ws is string => ws !== undefined)
 }

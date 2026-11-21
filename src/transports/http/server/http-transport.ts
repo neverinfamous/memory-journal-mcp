@@ -372,17 +372,19 @@ export class HttpTransport {
         this.stopSessionSweep?.()
         this.stopSessionSweep = null
 
-        for (const server of this.activeServers) {
-            try {
-                await server.close()
-            } catch (error) {
+        const serversToClose = Array.from(this.activeServers)
+        this.activeServers.clear()
+        const closeResults = await Promise.allSettled(
+            serversToClose.map((server) => server.close())
+        )
+        for (const res of closeResults) {
+            if (res.status === 'rejected') {
                 logger.error('Error closing active server', {
                     module: 'HTTP',
-                    error: error instanceof Error ? error.message : String(error),
+                    error: res.reason instanceof Error ? res.reason.message : String(res.reason),
                 })
             }
         }
-        this.activeServers.clear()
 
         if (this.httpServer !== null) {
             const server = this.httpServer

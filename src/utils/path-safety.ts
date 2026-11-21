@@ -72,23 +72,23 @@ function resolveRealTargetPath(targetInput: string): string {
     let existingRealPath = ''
 
     while (currentDir !== root) {
-        let stat: fs.Stats | undefined
         try {
-            stat = fs.lstatSync(currentDir, { throwIfNoEntry: false })
-        } catch {
-            // Inaccessible segment (e.g., EACCES/ENOTDIR); step up to parent
-            stat = undefined
-        }
-        if (stat !== undefined) {
+            existingRealPath = fs.realpathSync.native(currentDir)
+            break
+        } catch (err: unknown) {
+            let stat: fs.Stats | undefined
             try {
-                existingRealPath = fs.realpathSync.native(currentDir)
-                break
-            } catch (err: unknown) {
-                if (stat.isSymbolicLink()) {
-                    throw new PathTraversalError(
-                        `Dangling symbolic link cannot be verified inside sandbox boundaries: ${currentDir}`
-                    )
-                }
+                stat = fs.lstatSync(currentDir, { throwIfNoEntry: false })
+            } catch {
+                // Inaccessible segment (e.g., EACCES/ENOTDIR); step up to parent
+                stat = undefined
+            }
+            if (stat?.isSymbolicLink()) {
+                throw new PathTraversalError(
+                    `Dangling symbolic link cannot be verified inside sandbox boundaries: ${currentDir}`
+                )
+            }
+            if (stat !== undefined) {
                 const code =
                     typeof err === 'object' && err !== null && 'code' in err
                         ? (err as { code?: unknown }).code
@@ -306,10 +306,11 @@ export function assertSafeDirectoryPath(dirPath: string, providedRoots: string[]
     }
     const decodedDir = decodeSafeDirPath(dirPath)
     if (
-        hasUncOrWinDevicePrefix(decodedDir, providedRoots) ||
-        hasUnsafeAdsColon(decodedDir) ||
-        hasWinReservedDeviceSegment(decodedDir) ||
-        hasTrailingSpaceSegment(decodedDir)
+        decodedDir !== dirPath &&
+        (hasUncOrWinDevicePrefix(decodedDir, providedRoots) ||
+            hasUnsafeAdsColon(decodedDir) ||
+            hasWinReservedDeviceSegment(decodedDir) ||
+            hasTrailingSpaceSegment(decodedDir))
     ) {
         throw new PathTraversalError(decodedDir)
     }
@@ -363,20 +364,11 @@ function assertNotSymbolicLink(candidatePath: string): void {
 }
 
 /**
- * Validates that a file path is strictly bounded and refuses symlinks (on both raw and
- * percent-decoded paths) to prevent any file-level traversal tricks.
+ * Validates basename traversal/encoding/device rules and refuses symlinks inside an
+ * already-validated parent directory.
  */
-export function assertSafeFilePath(filePath: string, providedRoots: string[]): void {
-    if (WIN_DRIVE_RELATIVE_RE.test(filePath.trimStart())) {
-        throw new PathTraversalError(filePath)
-    }
-    const pathMod: typeof path = WIN_DRIVE_PATH_RE.test(filePath) ? path.win32 : path
-    // First ensure the logical directory path is within boundaries
-    const rawDir = pathMod.dirname(filePath)
-    assertSafeDirectoryPath(rawDir, providedRoots)
-
-    // [BOUNDARY] The directory check never sees the basename; reject URL-encoded separators/traversal hidden in it.
-    const rawBase = pathMod.basename(filePath)
+export function assertSafeChildFile(rawDir: string, rawBase: string, filePath?: string): void {
+    const pathMod: typeof path = WIN_DRIVE_PATH_RE.test(rawDir) ? path.win32 : path
     let decodedBase: string
     try {
         decodedBase = decodeURIComponent(rawBase)
@@ -404,12 +396,30 @@ export function assertSafeFilePath(filePath: string, providedRoots: string[]): v
         throw new PathTraversalError(`Malformed URL-encoding in directory path: ${rawDir}`)
     }
 
+    const targetPath = filePath ?? pathMod.join(rawDir, rawBase)
     const candidates = new Set([
-        filePath,
+        targetPath,
         pathMod.join(rawDir, decodedBase),
         pathMod.join(decodedDir, decodedBase),
     ])
     for (const candidate of candidates) {
         assertNotSymbolicLink(candidate)
     }
+}
+
+/**
+ * Validates that a file path is strictly bounded and refuses symlinks (on both raw and
+ * percent-decoded paths) to prevent any file-level traversal tricks.
+ */
+export function assertSafeFilePath(filePath: string, providedRoots: string[]): void {
+    if (WIN_DRIVE_RELATIVE_RE.test(filePath.trimStart())) {
+        throw new PathTraversalError(filePath)
+    }
+    const pathMod: typeof path = WIN_DRIVE_PATH_RE.test(filePath) ? path.win32 : path
+    // First ensure the logical directory path is within boundaries
+    const rawDir = pathMod.dirname(filePath)
+    assertSafeDirectoryPath(rawDir, providedRoots)
+
+    // [BOUNDARY] The directory check never sees the basename; reject URL-encoded separators/traversal hidden in it.
+    assertSafeChildFile(rawDir, pathMod.basename(filePath), filePath)
 }

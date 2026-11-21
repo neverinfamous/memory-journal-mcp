@@ -41,17 +41,21 @@ function isTeamResourceUri(normalizedTarget: string): boolean {
 }
 
 function isTeamToolOrPromptName(targetName: string): boolean {
-    const normalizedPrompt = normalizePromptAliasForScope(targetName)
-    return (
-        getToolGroup(targetName) === 'team' ||
+    if (
         targetName === 'cross_team_search' ||
         targetName.startsWith('team_') ||
         targetName.startsWith('team-') ||
         targetName.endsWith('-team-entry') ||
         targetName.endsWith('_team_entry') ||
-        TEAM_PROMPT_NAMES.has(targetName) ||
-        TEAM_PROMPT_NAMES.has(normalizedPrompt)
-    )
+        TEAM_PROMPT_NAMES.has(targetName)
+    ) {
+        return true
+    }
+    const group = getToolGroup(targetName)
+    if (group !== undefined) {
+        return group === 'team'
+    }
+    return TEAM_PROMPT_NAMES.has(normalizePromptAliasForScope(targetName))
 }
 
 function isAuditResourceUri(normalizedTarget: string): boolean {

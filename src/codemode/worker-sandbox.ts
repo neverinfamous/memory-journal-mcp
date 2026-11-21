@@ -329,6 +329,28 @@ export class WorkerSandbox {
         }
     }
 
+    private attachHostRpcHandler(
+        hostPort: MessageChannel['port1'],
+        apiBindings: Record<string, unknown>,
+        methodSets: ReturnType<typeof getAllowedMethodMetadata>['methodSets'],
+        maxToolInputElements?: number
+    ): void {
+        hostPort.on('message', (msg: RpcRequest) => {
+            void handleRpcRequest(msg, apiBindings, hostPort, methodSets, maxToolInputElements).catch(
+                (err: unknown) => {
+                    try {
+                        hostPort.postMessage({
+                            id: typeof msg?.id === 'number' ? msg.id : 0,
+                            error: err instanceof Error ? err.message : String(err),
+                        })
+                    } catch {
+                        // Port already closed
+                    }
+                }
+            )
+        })
+    }
+
     /**
      * Execute code in the worker thread with RPC bridge.
      */
@@ -340,7 +362,11 @@ export class WorkerSandbox {
         contextObj?: Record<string, unknown>,
         readonlyMode?: boolean,
         maxResultSizeOverride?: number,
-        modeFlags?: { dryRunMode?: boolean | undefined; useTestDbMode?: boolean | undefined }
+        modeFlags?: {
+            dryRunMode?: boolean | undefined
+            useTestDbMode?: boolean | undefined
+            maxToolInputElements?: number | undefined
+        }
     ): Promise<SandboxResult> {
         if (this.isBusy || this.currentExecution !== null) {
             return {
@@ -352,10 +378,8 @@ export class WorkerSandbox {
 
         const effectiveTimeout = Math.min(timeoutMs ?? this.options.timeoutMs, 30000)
         if (!this.worker) this.initWorker()
-
         this.isBusy = true
         this.executionId++
-
         const startTime = performance.now()
         const startRss = process.memoryUsage.rss()
 
@@ -369,19 +393,7 @@ export class WorkerSandbox {
             timeoutHandle.unref()
 
             this.currentExecution = { resolve, hostPort, startTime, startRss, timeoutHandle }
-
-            hostPort.on('message', (msg: RpcRequest) => {
-                void handleRpcRequest(msg, apiBindings, hostPort, methodSets).catch((err: unknown) => {
-                    try {
-                        hostPort.postMessage({
-                            id: typeof msg?.id === 'number' ? msg.id : 0,
-                            error: err instanceof Error ? err.message : String(err),
-                        })
-                    } catch {
-                        // Port already closed
-                    }
-                })
-            })
+            this.attachHostRpcHandler(hostPort, apiBindings, methodSets, modeFlags?.maxToolInputElements)
             this.worker?.ref()
 
             this.dispatchWorkerMessage({

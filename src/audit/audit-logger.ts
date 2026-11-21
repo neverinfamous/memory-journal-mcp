@@ -114,6 +114,7 @@ function serializeBoundedAuditEntry(entry: AuditEntry): string {
     }
 
     const serialized = serializeWithFallback(entry)
+    if (serialized.length * 3 <= MAX_AUDIT_LINE_BYTES) return serialized
     const lineBytes = Buffer.byteLength(serialized, 'utf8')
     if (lineBytes <= MAX_AUDIT_LINE_BYTES) return serialized
 
@@ -140,7 +141,7 @@ export class AuditLogger {
     readonly config: AuditConfig
 
     private buffer: string[] = []
-    private flushTimer: ReturnType<typeof setInterval> | null = null
+    private flushTimer: ReturnType<typeof setTimeout> | null = null
     private flushQueue: Promise<void> = Promise.resolve()
     private closed = false
     private flushError: Error | null = null
@@ -153,14 +154,15 @@ export class AuditLogger {
     constructor(config: AuditConfig) {
         this.config = config
         this.stderrMode = config.logPath.toLowerCase() === STDERR_SENTINEL
+    }
 
-        if (config.enabled) {
-            // Use unref() so the timer doesn't keep the process alive
-            this.flushTimer = setInterval(() => {
-                void this.flush()
-            }, FLUSH_INTERVAL_MS)
-            this.flushTimer.unref()
-        }
+    private scheduleFlush(): void {
+        if (this.flushTimer !== null || this.closed || !this.config.enabled) return
+        this.flushTimer = setTimeout(() => {
+            this.flushTimer = null
+            void this.flush()
+        }, FLUSH_INTERVAL_MS)
+        this.flushTimer.unref()
     }
 
     /**
@@ -204,9 +206,11 @@ export class AuditLogger {
             this._droppedCount++
         }
 
-        // Eagerly flush when the buffer is full
+        // Eagerly flush when the buffer is full; otherwise arm a one-shot flush timer
         if (this.buffer.length >= BUFFER_HIGH_WATER) {
             void this.flush()
+        } else {
+            this.scheduleFlush()
         }
     }
 
@@ -245,6 +249,10 @@ export class AuditLogger {
      * Safe to call concurrently — serialises via `this.flushQueue` Promise chain.
      */
     async flush(): Promise<void> {
+        if (this.flushTimer !== null) {
+            clearTimeout(this.flushTimer)
+            this.flushTimer = null
+        }
         if (this.buffer.length === 0) {
             await this.flushQueue
             return

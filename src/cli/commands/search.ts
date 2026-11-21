@@ -2,8 +2,6 @@ import type { Command } from 'commander'
 import { type z } from 'zod'
 import { searchOptionsSchema } from '../schemas.js'
 import { getCliCommandDb as getDb, resolveCliReadScope } from './db-helper.js'
-import { VectorSearchManager } from '../../vector/vector-search-manager/index.js'
-import { hybridSearch } from '../../handlers/tools/search/hybrid.js'
 import { formatCliError, writeCliResult } from './cli-output.js'
 
 export const searchSchema = searchOptionsSchema
@@ -27,9 +25,14 @@ export async function searchAction(query: string | undefined, options: z.infer<t
         let result: unknown
 
         if (mode === 'semantic') {
+            const { VectorSearchManager } = await import('../../vector/vector-search-manager/index.js')
             const vectorManager = new VectorSearchManager(db, { modelName: serverOptions.embeddingModel })
             result = await vectorManager.search(finalQuery, limit, 0.25, workspaceId, projectNumber)
         } else if (mode === 'hybrid') {
+            const [{ VectorSearchManager }, { hybridSearch }] = await Promise.all([
+                import('../../vector/vector-search-manager/index.js'),
+                import('../../handlers/tools/search/hybrid.js'),
+            ])
             const vectorManager = new VectorSearchManager(db, { modelName: serverOptions.embeddingModel })
             result = await hybridSearch(finalQuery, db, vectorManager, { limit, ...workspaceFilter, ...projectFilter })
         } else {

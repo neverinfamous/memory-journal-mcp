@@ -164,7 +164,11 @@ export async function loadActivePr(
     repo: string,
     allPrs: IssuesAndPrs['allPrs'],
     localBranch: string | null | undefined,
-    options?: { includeCopilot?: boolean; includeCi?: boolean },
+    options?: {
+        includeCopilot?: boolean
+        includeCi?: boolean
+        prefetchedRuns?: CiResult['runs']
+    },
 ): Promise<BriefingGitHub['activePr']> {
     const activePrData =
         localBranch !== undefined && localBranch !== '' && allPrs !== undefined
@@ -179,7 +183,13 @@ export async function loadActivePr(
             ? readReviewSummary(github, owner, repo, activePrData.number)
             : Promise.resolve({ reviewStatus: undefined, commentCount: 0 }),
         includeCi
-            ? readPullRequestCi(github, owner, repo, activePrData.headRef)
+            ? readPullRequestCi(
+                  github,
+                  owner,
+                  repo,
+                  activePrData.headRef,
+                  options?.prefetchedRuns,
+              )
             : Promise.resolve(undefined),
     ])
     return {
@@ -221,9 +231,10 @@ async function readPullRequestCi(
     owner: string,
     repo: string,
     headRef: string | undefined,
+    prefetchedRuns?: CiResult['runs'],
 ): Promise<string | undefined> {
     try {
-        const runs = await github.getWorkflowRuns(owner, repo, 20)
+        const runs = prefetchedRuns ?? (await github.getWorkflowRuns(owner, repo, 20))
         const prRun = runs.find((run) => run.headBranch === headRef)
         if (prRun === undefined) return undefined
         if (prRun.status !== 'completed') return 'pending'

@@ -15,10 +15,11 @@ function toValidPid(val: unknown): number | undefined {
     return typeof val === 'number' && Number.isSafeInteger(val) && val > 0 ? val : undefined
 }
 
-/** Parse the lock file content into holding PID and timestamp (supports legacy raw PID format). */
+/** Parse the lock file content into holding PID, timestamp, and optional nonce (supports legacy raw PID format). */
 function parseLockContent(lockContent: string): {
     holdingPid: number | undefined
     lockTimestamp: number | undefined
+    nonce?: string
 } {
     try {
         const parsed: unknown = JSON.parse(lockContent)
@@ -26,10 +27,11 @@ function parseLockContent(lockContent: string): {
             return { holdingPid: toValidPid(parsed), lockTimestamp: undefined }
         }
         if (typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed)) {
-            const record = parsed as { pid?: unknown; timestamp?: unknown }
+            const record = parsed as { pid?: unknown; timestamp?: unknown; nonce?: unknown }
             return {
                 holdingPid: toValidPid(record.pid),
                 lockTimestamp: typeof record.timestamp === 'number' ? record.timestamp : undefined,
+                ...(typeof record.nonce === 'string' ? { nonce: record.nonce } : {}),
             }
         }
         return { holdingPid: undefined, lockTimestamp: undefined }
@@ -114,16 +116,10 @@ interface LockStaleCheck {
 function parseLockRecordText(raw: string): LockRecord | null {
     if (!raw) return null
     const parsed = parseLockContent(raw)
-    let nonce: string | undefined
-    try {
-        const obj = JSON.parse(raw) as unknown
-        if (typeof obj === 'object' && obj !== null && 'nonce' in obj && typeof obj.nonce === 'string') {
-            nonce = obj.nonce
-        }
-    } catch {
-        // legacy format has no nonce
+    return {
+        holdingPid: parsed.holdingPid,
+        ...(parsed.nonce !== undefined ? { nonce: parsed.nonce } : {}),
     }
-    return { holdingPid: parsed.holdingPid, ...(nonce !== undefined ? { nonce } : {}) }
 }
 
 function parseLockRecord(lockFile: string): LockRecord | null {

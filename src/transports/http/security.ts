@@ -41,15 +41,47 @@ export function getClientIp(req: Request): string {
  * authorization header, so buckets are keyed on client IP only (an unauthenticated
  * caller could otherwise mint unlimited buckets by rotating fake tokens).
  */
+const BEARER_PREFIX_RE = /^Bearer\s+(\S+)/i
+const MAX_IP_DIGEST_CACHE = 1024
+const IP_DIGEST_CACHE = new Map<string, string>()
+let cachedRateLimitEnvRaw: string | undefined
+let cachedRateLimitEnvMax = DEFAULT_RATE_LIMIT_MAX_REQUESTS
+
+function getEnvRateLimitMax(): number {
+    const raw = process.env['MCP_RATE_LIMIT_MAX']
+    if (raw !== cachedRateLimitEnvRaw) {
+        cachedRateLimitEnvRaw = raw
+        const parsed = raw !== undefined ? parseCanonicalPositiveInt(raw) : undefined
+        cachedRateLimitEnvMax = parsed ?? DEFAULT_RATE_LIMIT_MAX_REQUESTS
+    }
+    return cachedRateLimitEnvMax
+}
+
+function getCachedIpDigest(clientIp: string): string {
+    const cached = IP_DIGEST_CACHE.get(clientIp)
+    if (cached !== undefined) {
+        IP_DIGEST_CACHE.delete(clientIp)
+        IP_DIGEST_CACHE.set(clientIp, cached)
+        return cached
+    }
+    const digest = createHash('sha256').update(clientIp).digest('hex')
+    if (IP_DIGEST_CACHE.size >= MAX_IP_DIGEST_CACHE) {
+        const oldest = IP_DIGEST_CACHE.keys().next().value
+        if (oldest !== undefined) IP_DIGEST_CACHE.delete(oldest)
+    }
+    IP_DIGEST_CACHE.set(clientIp, digest)
+    return digest
+}
+
 export function rateLimitIdentity(authorization: string | undefined, clientIp: string): string {
     if (authorization !== undefined) {
-        const match = /^Bearer\s+(\S+)/i.exec(authorization.trim())
+        const match = BEARER_PREFIX_RE.exec(authorization.trim())
         const token = match?.[1]
         if (token !== undefined && token.length > 0) {
             return createHash('sha256').update(token).digest('hex')
         }
     }
-    return createHash('sha256').update(clientIp).digest('hex')
+    return getCachedIpDigest(clientIp)
 }
 
 /**
@@ -70,12 +102,7 @@ export function checkRateLimit(
     const clientIdentity = rateLimitIdentity(undefined, getClientIp(req))
     const now = Date.now()
     const windowMs = config.rateLimitWindowMs ?? DEFAULT_RATE_LIMIT_WINDOW_MS
-    const parsedEnvMax =
-        process.env['MCP_RATE_LIMIT_MAX'] !== undefined
-            ? parseCanonicalPositiveInt(process.env['MCP_RATE_LIMIT_MAX'])
-            : undefined
-    const envMaxRequests = parsedEnvMax ?? DEFAULT_RATE_LIMIT_MAX_REQUESTS
-    const maxRequests = config.rateLimitMaxRequests ?? envMaxRequests
+    const maxRequests = config.rateLimitMaxRequests ?? getEnvRateLimitMax()
 
     const entry = rateLimitMap.get(clientIdentity)
 
@@ -171,30 +198,69 @@ export function formatHostForUrl(host: string): string {
  * Wildcard subdomain patterns (`*.example.com`) are not supported when
  * `corsAllowCredentials` is true. For credentialed CORS, list explicit origins.
  */
-export function setCorsHeaders(req: Request, res: Response, config: HttpTransportConfig): boolean {
-    let corsOrigins = config.corsOrigins ?? []
+interface CachedCorsPolicy {
+    originsRef: readonly string[] | undefined
+    originsLen: number
+    isLocalhost: boolean
+    hasAuth: boolean
+    isWildcard: boolean
+    whitelist: Record<string, true>
+}
+
+const CORS_POLICY_CACHE = new WeakMap<HttpTransportConfig, CachedCorsPolicy>()
+
+function getCachedCorsPolicy(config: HttpTransportConfig): CachedCorsPolicy {
+    const originsRef = config.corsOrigins
+    const originsLen = originsRef?.length ?? 0
     const isLocalhost = isLoopbackHost(config.host ?? '')
     const hasAuth = Boolean(config.authToken) || config.oauthEnabled === true
+    const cached = CORS_POLICY_CACHE.get(config)
+    if (
+        cached !== undefined &&
+        cached.originsRef === originsRef &&
+        cached.originsLen === originsLen &&
+        cached.isLocalhost === isLocalhost &&
+        cached.hasAuth === hasAuth
+    ) {
+        return cached
+    }
 
+    let corsOrigins = originsRef ?? []
     // Hard-block wildcard CORS on localhost if no auth is configured to prevent local-browser CSRF
     if (isLocalhost && !hasAuth && corsOrigins.includes('*')) {
         corsOrigins = corsOrigins.filter((o) => o !== '*')
     }
-
     const isWildcard = corsOrigins.includes('*')
+    const whitelist = Object.create(null) as Record<string, true>
+    if (!isWildcard) {
+        for (const allowed of corsOrigins) {
+            whitelist[allowed] = true
+        }
+    }
+    const next: CachedCorsPolicy = {
+        originsRef,
+        originsLen,
+        isLocalhost,
+        hasAuth,
+        isWildcard,
+        whitelist,
+    }
+    CORS_POLICY_CACHE.set(config, next)
+    return next
+}
+
+export function setCorsHeaders(req: Request, res: Response, config: HttpTransportConfig): boolean {
+    const policy = getCachedCorsPolicy(config)
+    const { isWildcard, whitelist } = policy
     const origin = req.headers.origin
-    let whitelist: Record<string, true> | undefined
+    let checkedWhitelist: Record<string, true> | undefined
 
     if (isWildcard) {
         res.setHeader('Access-Control-Allow-Origin', '*')
     } else if (origin) {
-        // Build whitelist record once — CodeQL recognizes `origin in whitelist` as a sanitizer
-        whitelist = Object.create(null) as Record<string, true>
-        for (const allowed of corsOrigins) {
-            whitelist[allowed] = true
-        }
-
-        if (origin in whitelist) {
+        // CodeQL recognizes `origin in whitelist` as a sanitizer
+        checkedWhitelist = whitelist
+        if (origin in checkedWhitelist) {
             res.setHeader('Access-Control-Allow-Origin', origin)
             res.setHeader('Vary', 'Origin')
             if (config.corsAllowCredentials) {
@@ -211,8 +277,8 @@ export function setCorsHeaders(req: Request, res: Response, config: HttpTranspor
     res.setHeader('Access-Control-Expose-Headers', 'mcp-session-id')
     res.setHeader('Access-Control-Max-Age', String(CORS_PREFLIGHT_MAX_AGE_SECONDS))
 
-    if (origin && !isWildcard && whitelist !== undefined) {
-        if (!(origin in whitelist)) {
+    if (origin && !isWildcard && checkedWhitelist !== undefined) {
+        if (!(origin in checkedWhitelist)) {
             // Self-origin fallback removed to prevent host header injection
             return false
         }

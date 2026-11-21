@@ -152,17 +152,20 @@ export function createProcessOperationFn(shimMj: Record<string, unknown>): (arg:
  * Shared spawn-disabled shim factory reused across sandbox process shims
  * and mj shim proxy mocks so blocked spawn/spawnSync/fork calls log consistently.
  */
+// eslint-disable-next-line no-control-regex
+const CONTROL_CHAR_SEP_RE = /[\u0000-\u001F\u007F-\u009F\u2028\u2029]+/g
+const SHIM_NOOP = (): void => {
+    /* no-op */
+}
+
 function formatSandboxCallbackError(callbackError: unknown): string {
     const msg = safeFormatSandboxError(callbackError).message
-    return msg.replace(/[\p{Cc}\u2028\u2029]+/gu, ' ').slice(0, 512)
+    return msg.replace(CONTROL_CHAR_SEP_RE, ' ').slice(0, 512)
 }
 
 export function createDisabledSpawnShim(
     label = 'spawn'
 ): (_cmd?: unknown, cbOrOptions?: unknown, maybeCb?: unknown) => Record<string, unknown> {
-    const shimNoop = (): void => {
-        /* no-op */
-    }
     return (_cmd?: unknown, cbOrOptions?: unknown, maybeCb?: unknown) => {
         const cb =
             typeof cbOrOptions === 'function'
@@ -181,9 +184,9 @@ export function createDisabledSpawnShim(
             }
         }
         return {
-            on: shimNoop,
-            stdout: { on: shimNoop },
-            stderr: { on: shimNoop },
+            on: SHIM_NOOP,
+            stdout: { on: SHIM_NOOP },
+            stderr: { on: SHIM_NOOP },
             kill: () => false,
             status: 1,
             output: ['', '', `${label} is disabled in the sandbox`],

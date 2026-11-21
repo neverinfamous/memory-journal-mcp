@@ -108,10 +108,26 @@ function hasDefinedKey(record: Record<string, unknown>, key: string): boolean {
     return Object.hasOwn(record, key) && record[key] !== undefined
 }
 
+const HAS_UPPER_RE = /[A-Z]/
+const UPPER_LETTER_RE = /[A-Z]/g
+const SNAKE_KEY_CACHE = new Map<string, string>()
+const MAX_SNAKE_KEY_CACHE = 512
+
+function toSnakeCaseKey(key: string): string {
+    if (!HAS_UPPER_RE.test(key)) return key
+    const cached = SNAKE_KEY_CACHE.get(key)
+    if (cached !== undefined) return cached
+    const converted = key.replace(UPPER_LETTER_RE, (letter) => `_${letter.toLowerCase()}`)
+    if (SNAKE_KEY_CACHE.size < MAX_SNAKE_KEY_CACHE) {
+        SNAKE_KEY_CACHE.set(key, converted)
+    }
+    return converted
+}
+
 /** camelCase → snake_case plus context-aware renames (id, link params, type, filename, target_user). */
 function resolveBaseSnakeKey(key: string, ctx: KeyContext): string {
     const { obj, result, methodLower, isLinkMethod } = ctx
-    let snakeKey = key.replace(/[A-Z]/g, (letter) => `_${letter.toLowerCase()}`)
+    let snakeKey = toSnakeCaseKey(key)
 
     if (snakeKey === 'id' && !hasDefinedKey(obj, 'entry_id') && !hasDefinedKey(obj, 'entryId')) {
         snakeKey = 'entry_id'

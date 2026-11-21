@@ -63,32 +63,10 @@ export class VectorOperations {
         projectNumber?: number
     ): { entry_id: number; distance: number }[] {
         const db = this.connection.getNativeDb()
-        const totalVectors = this.getVectorCount()
-        if (totalVectors === 0) return []
-
         const scopeId = effectiveWorkspace(workspaceId)
         const wsScoped = scopeId !== '*'
         const pnScoped = projectNumber !== undefined
         const scoped = wsScoped || pnScoped
-
-        let scopedCount = totalVectors
-        if (scoped) {
-            const countClauses = ['deleted_at IS NULL']
-            const countParams: unknown[] = []
-            if (wsScoped) {
-                countClauses.push('workspace_id = ?')
-                countParams.push(scopeId)
-            }
-            if (pnScoped) {
-                countClauses.push('project_number = ?')
-                countParams.push(projectNumber)
-            }
-            const row = db
-                .prepare(`SELECT COUNT(*) as count FROM memory_journal WHERE ${countClauses.join(' AND ')}`)
-                .get(...countParams) as { count: number } | undefined
-            scopedCount = row?.count ?? 0
-            if (scopedCount === 0) return []
-        }
 
         const clauses = ['v.embedding MATCH ?', 'v.k = ?', 'mj.deleted_at IS NULL']
         if (wsScoped) clauses.push('mj.workspace_id = ?')
@@ -105,17 +83,50 @@ export class VectorOperations {
             ...(pnScoped ? [projectNumber] : []),
             limit,
         ]
-        const stmt = db.prepare(sql)
+        let runKnn: (kVal: number) => { entry_id: number; distance: number }[]
+        let rows: { entry_id: number; distance: number }[]
+        let k = Math.min(Math.max(1, limit * VECTOR_KNN_OVERFETCH), VECTOR_KNN_MAX_K)
+        try {
+            const stmt = db.prepare(sql)
+            runKnn = (kVal: number): { entry_id: number; distance: number }[] =>
+                stmt.all(...params(kVal)) as { entry_id: number; distance: number }[]
+            rows = runKnn(k)
+        } catch (error: unknown) {
+            if (isMissingTableError(error)) {
+                return []
+            }
+            throw error
+        }
 
-        // The vec0 KNN runs globally before the workspace/project JOIN filter, so a scoped slice
-        // holding a small share of the vectors can be under-filled. Widen k only up to indexed/scoped bounds.
+        if (!scoped || rows.length >= limit || k >= VECTOR_KNN_MAX_K) {
+            return rows
+        }
+
+        // Lazy bounds check: only query total/scoped counts when the initial KNN probe under-fills `limit`.
+        const totalVectors = this.getVectorCount()
+        if (totalVectors === 0) return []
         const effectiveMaxK = Math.min(VECTOR_KNN_MAX_K, totalVectors)
-        const targetRows = Math.min(limit, scopedCount)
-        let k = Math.min(Math.max(1, limit * VECTOR_KNN_OVERFETCH), effectiveMaxK)
-        let rows = stmt.all(...params(k)) as { entry_id: number; distance: number }[]
-        while (scoped && rows.length < targetRows && k < effectiveMaxK) {
+        if (k >= effectiveMaxK) return rows
+
+        const countClauses = ['deleted_at IS NULL']
+        const countParams: unknown[] = []
+        if (wsScoped) {
+            countClauses.push('workspace_id = ?')
+            countParams.push(scopeId)
+        }
+        if (pnScoped) {
+            countClauses.push('project_number = ?')
+            countParams.push(projectNumber)
+        }
+        const countRow = db
+            .prepare(`SELECT COUNT(*) as count FROM memory_journal WHERE ${countClauses.join(' AND ')}`)
+            .get(...countParams) as { count: number } | undefined
+        const targetRows = Math.min(limit, countRow?.count ?? 0)
+        if (targetRows === 0) return []
+
+        while (rows.length < targetRows && k < effectiveMaxK) {
             k = Math.min(k * 2, effectiveMaxK)
-            rows = stmt.all(...params(k)) as { entry_id: number; distance: number }[]
+            rows = runKnn(k)
         }
         return rows
     }
@@ -246,7 +257,7 @@ export class VectorOperations {
             const db = this.connection.getNativeDb()
             const result = db
                 .prepare(
-                    'DELETE FROM vec_embeddings WHERE entry_id NOT IN (SELECT id FROM memory_journal WHERE deleted_at IS NULL)'
+                    'DELETE FROM vec_embeddings WHERE NOT EXISTS (SELECT 1 FROM memory_journal mj WHERE mj.id = vec_embeddings.entry_id AND mj.deleted_at IS NULL)'
                 )
                 .run()
             return result.changes

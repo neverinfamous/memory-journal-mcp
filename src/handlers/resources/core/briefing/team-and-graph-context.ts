@@ -208,7 +208,8 @@ export interface GraphSummary {
 export function buildGraphContext(
     context: ResourceContext,
     workspaceId?: string,
-    precomputedActiveCount?: number
+    precomputedActiveCount?: number,
+    options?: { includeHubs?: boolean; includeOrphanRatio?: boolean }
 ): GraphSummary | undefined {
     try {
         const targetWs = workspaceId ?? 'default'
@@ -226,17 +227,34 @@ export function buildGraphContext(
         let topHubs: { id: number; preview: string; count: number }[] = []
         let orphanRatio: number | undefined
         let degraded = false
+        const includeHubs = options?.includeHubs ?? true
+        const includeOrphanRatio = options?.includeOrphanRatio ?? true
+
+        if (comp.totalRelationships === 0) {
+            if (includeOrphanRatio && totalActiveEntries > 0) {
+                orphanRatio = 1
+            }
+            return {
+                totalRelationships: comp.totalRelationships,
+                density: comp.avgPerEntry,
+                causalMetrics: causal,
+                topHubs,
+                orphanRatio,
+            }
+        }
 
         try {
-            const hubs = context.db.getRelationshipHubs(3, targetWs)
-            topHubs = hubs.map((hub) => ({
-                id: hub.entryId,
-                count: hub.totalLinks,
-                // [INTENT] Previews let agents judge whether a hub is worth expanding (bare IDs cannot).
-                preview: previewLabel(hub.content),
-            }))
+            if (includeHubs) {
+                const hubs = context.db.getRelationshipHubs(3, targetWs)
+                topHubs = hubs.map((hub) => ({
+                    id: hub.entryId,
+                    count: hub.totalLinks,
+                    // [INTENT] Previews let agents judge whether a hub is worth expanding (bare IDs cannot).
+                    preview: previewLabel(hub.content),
+                }))
+            }
 
-            if (totalActiveEntries > 0) {
+            if (includeOrphanRatio && totalActiveEntries > 0) {
                 const orphanCount = context.db.getOrphanCount(targetWs)
                 orphanRatio = orphanCount / totalActiveEntries
             }

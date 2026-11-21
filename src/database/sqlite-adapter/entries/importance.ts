@@ -25,7 +25,7 @@ export const RECENCY_WINDOW_DAYS = 90
 /** Baseline significance value when significance_type is set without a higher impact_score */
 export const SIGNIFICANCE_TYPE_BASELINE = 0.5
 
-function buildStatsCteBody(
+export function buildStatsCteBody(
     seedCte?: { name: string; col: string },
     scopedPeerWorkspace = false
 ): string {
@@ -48,11 +48,11 @@ function buildStatsCteBody(
             FROM (
                 SELECT r.from_entry_id AS entry_id, r.relationship_type
                 ${seedRelFrom}
-                JOIN memory_journal peer ON peer.id = r.to_entry_id AND peer.deleted_at IS NULL AND r.from_entry_id != r.to_entry_id${peerWsClause}
+                CROSS JOIN memory_journal peer ON peer.id = r.to_entry_id AND peer.deleted_at IS NULL AND r.from_entry_id != r.to_entry_id${peerWsClause}
                 UNION ALL
                 SELECT r.to_entry_id AS entry_id, r.relationship_type
                 ${seedRelTo}
-                JOIN memory_journal peer ON peer.id = r.from_entry_id AND peer.deleted_at IS NULL AND r.from_entry_id != r.to_entry_id${peerWsClause}
+                CROSS JOIN memory_journal peer ON peer.id = r.from_entry_id AND peer.deleted_at IS NULL AND r.from_entry_id != r.to_entry_id${peerWsClause}
             )
             GROUP BY entry_id
         ),
@@ -80,7 +80,7 @@ function buildStatsCteBody(
 export function buildImportanceCte(scopedToWorkspace = false): string {
     if (scopedToWorkspace) {
         return `
-        ws_entries AS (
+        ws_entries AS MATERIALIZED (
             SELECT id, workspace_id FROM memory_journal WHERE deleted_at IS NULL AND workspace_id = ?
         ),${buildStatsCteBody({ name: 'ws_entries', col: 'id' }, true)}
     `
@@ -206,12 +206,12 @@ export function calculateImportance(
         FROM (
             SELECT r.relationship_type
             FROM relationships r
-            JOIN memory_journal p ON p.id = r.to_entry_id AND p.deleted_at IS NULL AND r.from_entry_id != r.to_entry_id${peerWsClause}
+            CROSS JOIN memory_journal p ON p.id = r.to_entry_id AND p.deleted_at IS NULL AND r.from_entry_id != r.to_entry_id${peerWsClause}
             WHERE r.from_entry_id = ?
             UNION ALL
             SELECT r.relationship_type
             FROM relationships r
-            JOIN memory_journal p ON p.id = r.from_entry_id AND p.deleted_at IS NULL${peerWsClause}
+            CROSS JOIN memory_journal p ON p.id = r.from_entry_id AND p.deleted_at IS NULL${peerWsClause}
             WHERE r.to_entry_id = ? AND r.from_entry_id != ?
         )
     ) rel ON 1 = 1

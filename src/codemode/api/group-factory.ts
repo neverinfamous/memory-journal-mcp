@@ -18,6 +18,7 @@ import { isRecord } from '../normalizers/shared-utils.js'
 import {
     DEFAULT_MAX_TOOL_INPUT_ELEMENTS,
     exceedsMaxToolInputElements,
+    getValidatedToolInputMax,
 } from '../../utils/tool-input-bounds.js'
 import { sanitizeErrorForLogging } from '../../utils/security-utils.js'
 
@@ -62,13 +63,20 @@ function invokeGroupToolMethod(
 ): (...args: unknown[]) => Promise<unknown> {
     return async (...args: unknown[]): Promise<unknown> => {
         try {
-            if (exceedsMaxToolInputElements(args, DEFAULT_MAX_TOOL_INPUT_ELEMENTS)) {
-                return {
-                    success: false,
-                    error: `Tool input exceeds maximum of ${String(DEFAULT_MAX_TOOL_INPUT_ELEMENTS)} elements.`,
-                    code: 'VALIDATION_ERROR',
-                    category: 'validation',
-                    recoverable: false,
+            if (args.length > 0) {
+                const rpcValidatedMax =
+                    args.length === 1 ? getValidatedToolInputMax(args[0]) : undefined
+                if (
+                    rpcValidatedMax === undefined &&
+                    exceedsMaxToolInputElements(args, DEFAULT_MAX_TOOL_INPUT_ELEMENTS)
+                ) {
+                    return {
+                        success: false,
+                        error: `Tool input exceeds maximum of ${String(DEFAULT_MAX_TOOL_INPUT_ELEMENTS)} elements.`,
+                        code: 'VALIDATION_ERROR',
+                        category: 'validation',
+                        recoverable: false,
+                    }
                 }
             }
             const normalizedParams = normalizeParams(methodName, args) ?? {}

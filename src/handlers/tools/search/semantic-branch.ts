@@ -13,10 +13,26 @@ import {
     type EntryWithSource,
 } from './helpers.js'
 import { decodeCursor, encodeCursor } from '../../../database/sqlite-adapter/entries/search/cursor.js'
+import { progressiveSearchVectorResults } from './semantic-candidate-hydration.js'
 import type { SearchEntriesSchema } from './schemas.js'
 
 type SearchInput = z.infer<typeof SearchEntriesSchema>
 type SearchOptions = Parameters<typeof passMetadataFilters>[1]
+
+function hasSemanticPostFilters(input: SearchInput): boolean {
+    return (
+        input.is_personal !== undefined ||
+        input.tags !== undefined ||
+        (input.exclude_tags !== undefined && input.exclude_tags.length > 0) ||
+        input.entry_type !== undefined ||
+        input.start_date !== undefined ||
+        input.end_date !== undefined ||
+        input.issue_number !== undefined ||
+        input.pr_number !== undefined ||
+        input.pr_status !== undefined ||
+        input.workflow_run_id !== undefined
+    )
+}
 
 /** Offset encoded in a pagination cursor (0 when absent or invalid). */
 export function cursorOffset(cursor: string | undefined): number {
@@ -182,52 +198,81 @@ function hydratePersonalSemanticEntries(
     return { entries, relevanceMap }
 }
 
+async function fetchPersonalVectorResults(options: {
+    db: SemanticSearchParams['context']['db']
+    vectorManager: NonNullable<SemanticSearchParams['context']['vectorManager']>
+    query: string
+    candidateLimit: number
+    targetCount: number
+    wsId: string
+    searchOptions: SemanticSearchParams['searchOptions']
+    hasTagFilters: boolean
+    postFiltersActive: boolean
+}): Promise<SemanticSearchResult[]> {
+    const progressive = await progressiveSearchVectorResults({
+        db: options.db,
+        vectorManager: options.vectorManager,
+        query: options.query,
+        candidateLimit: options.candidateLimit,
+        targetCount: options.targetCount,
+        threshold: 0.25,
+        wsId: options.wsId,
+        projectNumber: options.searchOptions.projectNumber,
+        filterOptions: options.searchOptions,
+        hasTagFilters: options.hasTagFilters,
+        hasPostFilters: options.postFiltersActive,
+    })
+    if (progressive !== null) return progressive
+    return options.vectorManager.search(
+        options.query,
+        options.candidateLimit,
+        0.25,
+        options.wsId,
+        options.searchOptions.projectNumber
+    )
+}
+
 /** Run the vector search, apply metadata filters, merge team results and page the output. */
 export async function runSemanticSearch(
     params: SemanticSearchParams
 ): Promise<{ page: EntryWithSource[]; nextCursor?: string; degraded: boolean }> {
-    const { context, input, query, wsId, hasFilters, searchOptions } = params
+    const { context, input, query, wsId, searchOptions } = params
     const { db, teamDb, vectorManager, teamVectorManager } = context
     if (!vectorManager) return { page: [], degraded: true }
 
-    // Use semantic search with overfetching for filtering and cursor pagination reliability
     const needed = input.limit + cursorOffset(input.cursor)
-    const internalLimit = hasFilters
-        ? Math.min(Math.max(needed * 10, 100), 1000)
-        : Math.min(needed * 2, 1000)
+    const postFiltersActive = hasSemanticPostFilters(input)
+    const rerankByImportance = input.sort_by === 'blended' || input.sort_by === 'importance'
+    const targetCount = rerankByImportance ? Math.min(needed * 2, 500) : needed
+    const internalLimit = postFiltersActive
+        ? Math.min(Math.max(targetCount * 10, 100), 1000)
+        : Math.min(targetCount * 2, 1000)
+    const hasTagFilters =
+        (input.tags !== undefined && input.tags.length > 0) ||
+        (input.exclude_tags !== undefined && input.exclude_tags.length > 0)
     const canQueryTeam =
         searchOptions.includeTeam === true && input.is_personal !== true && isTeamDbReady(teamDb)
     const teamDiagnostics: { teamVectorFailed?: boolean } = {}
 
     const [semanticResults, teamEntries] = await Promise.all([
-        vectorManager.search(query, internalLimit, 0.25, wsId, searchOptions.projectNumber),
+        fetchPersonalVectorResults({
+            db, vectorManager, query, candidateLimit: internalLimit,
+            targetCount, wsId, searchOptions, hasTagFilters, postFiltersActive,
+        }),
         canQueryTeam && teamDb !== undefined
-            ? collectTeamSearchEntries(
-                  query,
-                  teamDb,
-                  teamVectorManager,
-                  {
-                      ...searchOptions,
-                      similarityThreshold: 0.25,
-                      limit: Math.min(internalLimit, 500),
-                  },
-                  teamDiagnostics
-              )
+            ? collectTeamSearchEntries(query, teamDb, teamVectorManager, {
+                  ...searchOptions,
+                  similarityThreshold: 0.25,
+                  limit: Math.min(targetCount * (postFiltersActive ? 5 : 2), 500),
+              }, teamDiagnostics)
             : Promise.resolve<EntryWithSource[]>([]),
     ])
     const degraded =
         (canQueryTeam && teamVectorManager === undefined) ||
         teamDiagnostics.teamVectorFailed === true
 
-    const { entries, relevanceMap } = hydratePersonalSemanticEntries(
-        semanticResults,
-        db,
-        input,
-        wsId,
-        searchOptions
-    )
+    const { entries, relevanceMap } = hydratePersonalSemanticEntries(semanticResults, db, input, wsId, searchOptions)
     let ranked = entries
-
     if (canQueryTeam) {
         for (const teamEntry of teamEntries) {
             const id = teamEntry['id']
@@ -239,12 +284,8 @@ export async function runSemanticSearch(
         ranked = mergeAndDedup(ranked, teamEntries, undefined, 'similarity', teamDb)
     }
 
-    // Post-fetch importance or blended relevance × importance re-sort for vector results
-    if (input.sort_by === 'blended') {
-        ranked = rankByBlendedScore(db, ranked, wsId, relevanceMap, teamDb)
-    } else if (input.sort_by === 'importance') {
-        ranked = rankByImportance(db, ranked, wsId, teamDb)
-    }
+    if (input.sort_by === 'blended') ranked = rankByBlendedScore(db, ranked, wsId, relevanceMap, teamDb)
+    else if (input.sort_by === 'importance') ranked = rankByImportance(db, ranked, wsId, teamDb)
 
     return { ...pageRows(ranked, input.cursor, input.limit), degraded }
 }

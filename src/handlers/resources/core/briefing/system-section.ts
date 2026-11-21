@@ -246,7 +246,8 @@ export async function buildBriefingSystemSummary(
     filterConfig?: ToolFilterConfig | null,
     targetRepoPath?: string | null,
     resourceCount?: number,
-    activeWorkspaceId?: string
+    activeWorkspaceId?: string,
+    options?: { lite?: boolean }
 ): Promise<SystemContext> {
     const localTime = formatBriefingLocalTime()
     const totalTools = getAllToolNames().length
@@ -259,6 +260,25 @@ export async function buildBriefingSystemSummary(
     }
     const isReadonly = filterConfig ? isFilterEffectivelyReadOnly(filterConfig) : false
     const ioRootCount = config?.allowedIoRoots?.length ?? 0
+    if (options?.lite === true) {
+        const gitHistory = await loadCachedGitHistoryAsync(config?.commitCount ?? 3, targetRepoPath)
+        return {
+            version: VERSION,
+            toolCount: totalTools,
+            resourceCount: resourceCount ?? 0,
+            promptCount: 0,
+            localTime,
+            gitHistory,
+            testHealth: null,
+            filterSummary,
+            isReadonly,
+            ioRootCount,
+            hasCodeMap: false,
+            lastReleaseDaysAgo: null,
+            localCheck: null,
+            workspaceId: activeWorkspaceId ?? config?.defaultWorkspaceId,
+        }
+    }
     const root = targetRepoPath === null ? null : (targetRepoPath || resolveProjectRoot())
     const [indicators, gitHistory, testHealth, lastReleaseDaysAgo] = await Promise.all([
         readRepoIndicatorsAsync(root),

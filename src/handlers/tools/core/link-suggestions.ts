@@ -120,22 +120,35 @@ async function appendSemanticLinkSuggestions(params: {
             projectNumber,
             entry
         )
-        const candidateIds = hits.map((h) => h.entryId).filter((id) => !seenIds.has(id))
-        if (candidateIds.length === 0) return
+        const unseenHits = hits.filter((h) => !seenIds.has(h.entryId))
+        if (unseenHits.length === 0) return
 
-        const hydratedMap = db.getEntriesByIds(candidateIds, workspaceId)
-        const missingTagIds = candidateIds.filter((id) => {
-            const c = hydratedMap.get(id)
-            return c !== undefined && !Array.isArray(c.tags)
-        })
+        const prehydratedById = new Map<number, JournalEntry>()
+        const missingIds: number[] = []
+        for (const h of unseenHits) {
+            if (h.entry !== undefined) prehydratedById.set(h.entryId, h.entry)
+            else missingIds.push(h.entryId)
+        }
+        const hydratedMap =
+            missingIds.length > 0
+                ? db.getEntriesByIds(missingIds, workspaceId)
+                : new Map<number, JournalEntry>()
+        const missingTagIds: number[] = []
+        for (const h of unseenHits) {
+            const candidate = prehydratedById.get(h.entryId) ?? hydratedMap.get(h.entryId)
+            if (candidate !== undefined && !Array.isArray(candidate.tags)) {
+                missingTagIds.push(h.entryId)
+            }
+        }
         const extraTags =
             missingTagIds.length > 0 && typeof db.getTagsForEntries === 'function'
                 ? db.getTagsForEntries(missingTagIds)
                 : undefined
 
-        for (const id of candidateIds) {
+        for (const h of unseenHits) {
             if (suggestions.length >= limit) break
-            const candidate = hydratedMap.get(id)
+            const id = h.entryId
+            const candidate = prehydratedById.get(id) ?? hydratedMap.get(id)
             if (candidate === undefined || !isEligibleCandidate(candidate, entry.id, projectNumber)) {
                 continue
             }

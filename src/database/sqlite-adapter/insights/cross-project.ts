@@ -72,8 +72,8 @@ export function getCrossProjectInsights(
         .prepare(
             `
         SELECT project_number, COUNT(*) as entry_count,
-               MIN(SUBSTR(timestamp, 1, 10)) as first_entry,
-               MAX(SUBSTR(timestamp, 1, 10)) as last_entry,
+               SUBSTR(MIN(timestamp), 1, 10) as first_entry,
+               SUBSTR(MAX(timestamp), 1, 10) as last_entry,
                COUNT(DISTINCT SUBSTR(timestamp, 1, 10)) as active_days
         FROM memory_journal ${where}
         GROUP BY project_number
@@ -85,14 +85,35 @@ export function getCrossProjectInsights(
 
     attachTopTags(connection, projects, scopeId, startBound, endBound)
 
-    const inactiveProjects = queryInactiveProjects(
-        connection,
-        options.inactiveThresholdDays,
-        wsFilter,
-        wsParams
-    )
+    const inactiveProjects =
+        startBound === undefined && endBound === undefined && options.minEntries <= 1
+            ? deriveInactiveProjectsFromSummary(projects, options.inactiveThresholdDays)
+            : queryInactiveProjects(
+                  connection,
+                  options.inactiveThresholdDays,
+                  wsFilter,
+                  wsParams
+              )
 
     return { projects, inactiveProjects }
+}
+
+function deriveInactiveProjectsFromSummary(
+    projects: Record<string, unknown>[],
+    inactiveThresholdDays: number
+): { project_number: number; last_entry_date: string }[] {
+    const cutoffDate = new Date(Date.now() - inactiveThresholdDays * 86_400_000)
+        .toISOString()
+        .slice(0, 10)
+    const inactive: { project_number: number; last_entry_date: string }[] = []
+    for (const p of projects) {
+        const pn = p['project_number']
+        const lastEntry = p['last_entry']
+        if (typeof pn === 'number' && typeof lastEntry === 'string' && lastEntry < cutoffDate) {
+            inactive.push({ project_number: pn, last_entry_date: lastEntry })
+        }
+    }
+    return inactive
 }
 
 /** Attach each project's top 5 tags as `top_tags`. */

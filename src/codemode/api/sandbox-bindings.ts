@@ -173,7 +173,10 @@ function buildCoreNamespaceAndMethodBindings(
     }
 }
 
-export function buildSandboxBindingsMap(api: SandboxBindingsSource, progressCtx?: ProgressContext): Record<string, unknown> {
+export function buildSandboxBindingsMap(
+    api: SandboxBindingsSource,
+    progressCtx?: ProgressContext | (() => ProgressContext | undefined)
+): Record<string, unknown> {
     const handleReadResource = createHandleReadResource(api)
     const schemaCallable = createSchemaCallable(api.analytics)
 
@@ -215,7 +218,8 @@ export function buildSandboxBindingsMap(api: SandboxBindingsSource, progressCtx?
             })
         },
         reportProgress: async (progress: number, total?: number, message?: string): Promise<void> => {
-            await sendProgress(progressCtx, progress, total, message)
+            const resolvedProgress = typeof progressCtx === 'function' ? progressCtx() : progressCtx
+            await sendProgress(resolvedProgress, progress, total, message)
         },
     }
 

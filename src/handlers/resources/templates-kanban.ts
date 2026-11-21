@@ -21,6 +21,7 @@ import {
     isResourceError,
     resolveScopedGitHubRepo,
     safeDecodeUriSegment,
+    withResourceTokenMeta,
 } from './shared.js'
 import { resolveProjectScope } from './template-helpers.js'
 import { fenceKanbanStatus } from '../tools/github/fencing-helpers.js'
@@ -129,8 +130,7 @@ async function handleKanbanResource(uri: string, context: ResourceContext): Prom
     }
 
     const sanitizedBoard = sanitizeKanbanBoard(board)
-    const tokenEstimate = Math.ceil(JSON.stringify(sanitizedBoard).length / 4)
-    return { ...sanitizedBoard, _meta: { tokenEstimate } }
+    return withResourceTokenMeta(sanitizedBoard)
 }
 
 /** Build Kanban board resource definitions, including dynamic `{+repo}` variants. */

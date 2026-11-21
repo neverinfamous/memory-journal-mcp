@@ -1,15 +1,25 @@
 import type { Database } from 'better-sqlite3'
 import { bucketInParams } from '../row-helpers.js'
 
-const originColumnCache = new WeakMap<object, boolean>()
+const originColumnCache = new WeakMap<object, { schemaVersion: number; hasCol: boolean }>()
+
+function getSchemaVersion(db: Database): number | undefined {
+    if (typeof db.pragma !== 'function') return undefined
+    const raw = db.pragma('schema_version', { simple: true })
+    return typeof raw === 'number' ? raw : undefined
+}
 
 function hasOriginColumn(db: Database): boolean {
+    const schemaVersion = getSchemaVersion(db)
     const cached = originColumnCache.get(db)
-    if (cached !== undefined) return cached
+    if (cached !== undefined && (schemaVersion === undefined || cached.schemaVersion === schemaVersion)) {
+        return cached.hasCol
+    }
     const rows = db.prepare('PRAGMA table_info(memory_journal)').all() as { name: string }[]
     const hasCol = rows.some((row) => row.name === 'origin_personal_id')
-    // [INVARIANT] Only cache positives: migration 020 may add the column later on this handle.
-    if (hasCol) originColumnCache.set(db, true)
+    if (hasCol || schemaVersion !== undefined) {
+        originColumnCache.set(db, { schemaVersion: schemaVersion ?? -1, hasCol })
+    }
     return hasCol
 }
 

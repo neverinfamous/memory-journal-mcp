@@ -17,6 +17,7 @@ import { getAllToolNames, getToolGroup, isToolVisibleForFilter } from '../../fil
 import {
     getBaseUri,
     safeDecodeUriSegment,
+    withResourceTokenMeta,
     type InternalResourceDef,
     type ResourceContext,
     type ResourceResult,
@@ -112,8 +113,7 @@ async function handleHelpRootResource(
         groups: groupList,
         hint: 'Read memory://help/{group} for detailed parameter info on each tool, or memory://help/gotchas / memory://help/templates.',
     }
-    const tokenEstimate = Math.ceil(JSON.stringify(data).length / 4)
-    return { data: { ...data, _meta: { tokenEstimate } } }
+    return { data: withResourceTokenMeta(data) }
 }
 
 interface HelpToolDetail {
@@ -200,9 +200,7 @@ async function handleHelpGroupResource(
         if (staticContent) {
             result['helpContent'] = staticContent
         }
-        const tokenEstimate = Math.ceil(JSON.stringify(result).length / 4)
-        result['_meta'] = { tokenEstimate }
-        return { data: result }
+        return { data: withResourceTokenMeta(result) }
     }
 
     if (staticContent) {
@@ -273,6 +271,8 @@ interface MinimalToolDef {
 /**
  * Cached reference to handlers/tools/index.js to avoid per-import overhead.
  */
+import { getRuntimeWrapperConfig } from '../tools/tool-cache-helpers.js'
+
 let toolIndexModule: { getTools: typeof getTools } | null = null
 
 /**
@@ -289,7 +289,7 @@ async function getAllToolDefinitionsAsync(context: ResourceContext): Promise<Min
             null,
             context.vectorManager,
             context.github ?? undefined,
-            context.runtime !== undefined ? { runtime: context.runtime } : undefined,
+            getRuntimeWrapperConfig(context.runtime),
             context.teamDb,
             undefined
         )

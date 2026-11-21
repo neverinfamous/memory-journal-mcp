@@ -209,6 +209,8 @@ export function handleListResources(toolName: string): unknown {
     }
 }
 
+const CANONICAL_TOOL_NAMES: ReadonlySet<string> = new Set(getAllToolNames())
+
 function buildToolFilterSummary(context?: ToolContext): {
     active: boolean
     enabledCount: number
@@ -216,7 +218,7 @@ function buildToolFilterSummary(context?: ToolContext): {
     filterString: string | null
 } {
     const filterConfig = context?.config?.filterConfig
-    const totalCount = getAllToolNames().length
+    const totalCount = CANONICAL_TOOL_NAMES.size
     return {
         active: filterConfig !== null && filterConfig !== undefined,
         enabledCount: filterConfig?.enabledTools.size ?? totalCount,
@@ -235,20 +237,27 @@ export function handleListTools(toolName: string, context?: ToolContext): unknow
         }
     }
     const filterConfig = context.config?.filterConfig
-    const toolsList = [
-        ...getCoreTools(context),
-        ...getStalenessTools(context),
-        ...getSearchTools(context),
-        ...getAnalyticsTools(context),
-        ...getRelationshipTools(context),
-        ...getIoTools(context),
-        ...getAdminTools(context),
-        ...getGitHubTools(context),
-        ...getBackupTools(context),
-        ...getTeamTools(context),
-        ...getCodeModeTools(context),
-        ...getGitTools(context),
-    ]
+    const cachedTools = context.config?.runtime?.toolMapCache
+    const rawTools: ToolDefinition[] =
+        cachedTools !== null &&
+        cachedTools !== undefined &&
+        cachedTools.size >= CANONICAL_TOOL_NAMES.size
+            ? [...cachedTools.values()].filter((t) => CANONICAL_TOOL_NAMES.has(t.name))
+            : [
+                  ...getCoreTools(context),
+                  ...getStalenessTools(context),
+                  ...getSearchTools(context),
+                  ...getAnalyticsTools(context),
+                  ...getRelationshipTools(context),
+                  ...getIoTools(context),
+                  ...getAdminTools(context),
+                  ...getGitHubTools(context),
+                  ...getBackupTools(context),
+                  ...getTeamTools(context),
+                  ...getCodeModeTools(context),
+                  ...getGitTools(context),
+              ]
+    const toolsList = rawTools
         .filter(
             (t) =>
                 (filterConfig === undefined ||

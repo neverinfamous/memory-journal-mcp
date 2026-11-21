@@ -7,7 +7,6 @@
 
 import type { IDatabaseAdapter } from '../../../database/core/interfaces.js'
 import type { EntryType, ToolHandlerConfig } from '../../../types/index.js'
-import { canReadTeamEntriesRbac } from '../team/rbac.js'
 import { sanitizeAuthor } from '../../../utils/security-utils.js'
 import {
     calcPerDbLimit,
@@ -239,8 +238,7 @@ export function ftsSearch(
         isTeamDbReady(teamDb) &&
         options.includeTeam === true &&
         options.isPersonal !== true &&
-        canAccessTeamSilently('search_entries', { teamDb, config: options.config }, options.workspaceId) &&
-        canReadTeamEntriesRbac(teamDb, options.config, options.workspaceId)
+        canAccessTeamSilently('search_entries', { teamDb, config: options.config }, options.workspaceId)
     const cursors = resolveFtsCursors(options.cursor, canIncludeTeam)
     const perDbLimit = calcPerDbLimit(options.limit, canIncludeTeam)
 

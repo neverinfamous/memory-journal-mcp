@@ -9,7 +9,6 @@ import { ValidationError } from '../../types/errors.js'
 import {
     enforceTeamRbac,
     getCallerIdentity,
-    isCallerTeamAdmin,
 } from '../../handlers/tools/team/rbac.js'
 import { ConfigResolver } from '../../utils/config-resolver.js'
 import { assertSafeDirectoryPath, assertSafeFilePath } from '../../utils/security-utils.js'
@@ -47,12 +46,10 @@ export function enforceCliTeamReadScope(
     workspaceId: string,
     projectNumber: number | undefined
 ): void {
-    enforceCliTeamRbac(db, config, 'viewer', workspaceId)
+    const rbacActive = typeof db.isTeamRbacActive === 'function' && db.isTeamRbacActive()
     if (projectNumber === undefined) {
-        if (db.isTeamRbacActive()) {
-            enforceCliTeamRbac(db, config, 'admin', workspaceId)
-        }
-        if (workspaceId === '*' && !isCallerTeamAdmin(db, getCallerIdentity(), config, workspaceId)) {
+        enforceCliTeamRbac(db, config, rbacActive ? 'admin' : 'viewer', workspaceId)
+        if (workspaceId === '*' && !rbacActive) {
             throw new ValidationError(
                 "Cross-tenant wildcard '--workspace *' on --team reads requires an explicit --default-project unless the caller holds the 'admin' team RBAC role."
             )
@@ -62,7 +59,9 @@ export function enforceCliTeamReadScope(
                 "Missing project_number for --team read on shared/unregistered workspace. Pass --default-project (or --project) or register the workspace in projectRegistry."
             )
         }
+        return
     }
+    enforceCliTeamRbac(db, config, 'viewer', workspaceId)
 }
 
 /**

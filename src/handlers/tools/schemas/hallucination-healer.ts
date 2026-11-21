@@ -121,6 +121,9 @@ function healMetadataAndContextFields(obj: Record<string, unknown>): boolean {
     return modified
 }
 
+const ENTRY_TYPE_SET = new Set<string>(ENTRY_TYPES)
+const SIGNIFICANCE_TYPE_SET = new Set<string>(SIGNIFICANCE_TYPES)
+
 function healTagsAndEntryType(obj: Record<string, unknown>): boolean {
     let modified = normalizeTagsField(obj)
 
@@ -139,7 +142,7 @@ function healTagsAndEntryType(obj: Record<string, unknown>): boolean {
                 obj['significance_type'] = mapped.significanceType
             }
             modified = true
-        } else if (!ENTRY_TYPES.some((t) => t === obj['entry_type'])) {
+        } else if (!ENTRY_TYPE_SET.has(obj['entry_type'])) {
             const cleanedTag = etLower.replace(/^[^a-z0-9]+/, '').replace(/_/g, '-')
             if (cleanedTag.length > 0) appendHealedTag(obj, cleanedTag)
             obj['entry_type'] = 'other'
@@ -152,7 +155,7 @@ function healTagsAndEntryType(obj: Record<string, unknown>): boolean {
         coerceSignificanceAlias(obj)
 
         if (typeof obj['significance_type'] === 'string') {
-            if (!SIGNIFICANCE_TYPES.some((t) => t === obj['significance_type'])) {
+            if (!SIGNIFICANCE_TYPE_SET.has(obj['significance_type'])) {
                 const badSig = obj['significance_type'].toLowerCase().trim()
                 appendHealedTag(obj, `significance:${badSig}`)
                 delete obj['significance_type']
@@ -233,17 +236,21 @@ function healNestedContainersAndEntryIds(obj: Record<string, unknown>): boolean 
 
     if (coerceEntryIdField(obj)) modified = true
     if ('entry_ids' in obj && Array.isArray(obj['entry_ids'])) {
+        let idsChanged = false
         const healedIds = obj['entry_ids'].map((id: unknown) => {
             if (typeof id === 'string') {
                 const raw = id.trim()
                 if (raw.startsWith('-')) return id
                 const cleaned = raw.replace(/^[^0-9]+/, '')
                 const parsed = parsePositiveProjectNumber(cleaned)
-                return parsed !== undefined && /^[1-9]\d*$/.test(cleaned) ? parsed : id
+                if (parsed !== undefined && /^[1-9]\d*$/.test(cleaned)) {
+                    idsChanged = true
+                    return parsed
+                }
             }
             return id
         })
-        if (JSON.stringify(obj['entry_ids']) !== JSON.stringify(healedIds)) {
+        if (idsChanged) {
             obj['entry_ids'] = healedIds
             modified = true
         }

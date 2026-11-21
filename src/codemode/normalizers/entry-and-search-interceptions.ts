@@ -28,21 +28,29 @@ const SINGLE_ID_METHODS = new Set([
     'restore', 'team_restore', 'teamRestore',
 ])
 
+const DATE_RANGE_METHODS = new Set([
+    'search_by_date_range', 'searchByDateRange', 'team_search_by_date_range', 'teamSearchByDateRange',
+])
+const SEARCH_MODE_METHODS = new Set(['search_entries', 'searchEntries', 'team_search', 'teamSearch'])
+const DATE_RANGE_FORBIDDEN_KEYS = ['q', 'query', 'text', 'message', 'description', 'keep', 'path'] as const
+const SEARCH_QUERY_ALIAS_KEYS = ['q', 'text', 'message', 'description', 'path', 'keep'] as const
+const POSITIVE_INT_STR_RE = /^[1-9]\d*$/
+
 function applySearchQueryInterception(
     methodName: string,
     obj: Record<string, unknown>
 ): { obj: Record<string, unknown> } | { error: Record<string, unknown> } {
     healIncludeArchivedField(obj)
 
-    const isDateRange = ['search_by_date_range', 'searchByDateRange', 'team_search_by_date_range', 'teamSearchByDateRange'].includes(methodName)
-    if (isDateRange && ['q', 'query', 'text', 'message', 'description', 'keep', 'path'].some((k) => obj[k] !== undefined)) {
+    const isDateRange = DATE_RANGE_METHODS.has(methodName)
+    if (isDateRange && DATE_RANGE_FORBIDDEN_KEYS.some((k) => obj[k] !== undefined)) {
         return validationError(
             `${methodName} does not support search queries. It only searches by date.`,
             'Use team_search (or search_entries) if you want to search by text, or remove the text/query parameters.'
         )
     }
 
-    for (const alias of ['q', 'text', 'message', 'description', 'path', 'keep']) {
+    for (const alias of SEARCH_QUERY_ALIAS_KEYS) {
         if (obj[alias] !== undefined && obj['query'] === undefined) {
             obj['query'] = obj[alias]
             Reflect.deleteProperty(obj, alias)
@@ -58,7 +66,7 @@ function applySearchQueryInterception(
     }
     if (typeof obj['limit'] === 'string') {
         const trimmed = obj['limit'].trim()
-        if (/^[1-9]\d*$/.test(trimmed)) {
+        if (POSITIVE_INT_STR_RE.test(trimmed)) {
             const parsed = Number(trimmed)
             if (Number.isSafeInteger(parsed) && String(parsed) === trimmed) obj['limit'] = parsed
         }
@@ -69,7 +77,7 @@ function applySearchQueryInterception(
     ) {
         delete obj['mode']
     }
-    if (!['search_entries', 'searchEntries', 'team_search', 'teamSearch'].includes(methodName) && obj['mode'] !== undefined) {
+    if (!SEARCH_MODE_METHODS.has(methodName) && obj['mode'] !== undefined) {
         return validationError(
             `${methodName} does not support the 'mode' parameter.`,
             'Remove the mode parameter or use search_entries instead.'

@@ -7,7 +7,7 @@
 
 import type { JournalEntry, ToolContext } from '../../../../types/index.js'
 import type { TeamRole } from '../../../../database/core/interfaces.js'
-import { resolveScopedTeamRole } from '../rbac.js'
+import { canonicalizeTeamAuthor, resolveScopedTeamRole } from '../rbac.js'
 import type { TeamDbInstance } from './batch-delete-helpers.js'
 
 /** Prefetch entries in one batched query when the adapter supports it, otherwise return null for mocks. */
@@ -83,4 +83,58 @@ export function runTeamBatchTx<T>(teamDb: Pick<TeamDbInstance, 'executeInTransac
         return teamDb.executeInTransaction(fn)
     }
     return fn()
+}
+
+/**
+ * Batch-resolve unique `(author, workspaceId)` pairs via `teamDb.resolveAuthors` when available,
+ * falling back to per-batch memoized `canonicalizeTeamAuthor` for mocks.
+ */
+export function createScopedAuthorCanonicalizer(
+    teamDb: TeamDbInstance,
+    pairs: Iterable<{ author: string | null | undefined; workspaceId?: string | undefined }>
+): (author: string, workspaceId?: string) => string {
+    const byWs = new Map<string, Set<string>>()
+    for (const pair of pairs) {
+        const ws = pair.workspaceId?.trim()
+        const rawAuthor = pair.author
+        if (
+            ws === undefined ||
+            ws === '' ||
+            ws === '*' ||
+            rawAuthor === null ||
+            rawAuthor === undefined ||
+            rawAuthor === ''
+        ) {
+            continue
+        }
+        let authors = byWs.get(ws)
+        if (authors === undefined) {
+            authors = new Set<string>()
+            byWs.set(ws, authors)
+        }
+        authors.add(rawAuthor)
+    }
+
+    const resolvedCache = new Map<string, string>()
+    if (typeof teamDb.resolveAuthors === 'function') {
+        for (const [ws, authors] of byWs) {
+            const batchMap = teamDb.resolveAuthors([...authors], ws)
+            for (const author of authors) {
+                resolvedCache.set(`${ws}\0${author}`, batchMap.get(author) ?? author)
+            }
+        }
+    }
+
+    return (author: string, workspaceId?: string): string => {
+        const trimmedWs = workspaceId?.trim()
+        if (trimmedWs === undefined || trimmedWs === '' || trimmedWs === '*') {
+            return author
+        }
+        const key = `${trimmedWs}\0${author}`
+        const cached = resolvedCache.get(key)
+        if (cached !== undefined) return cached
+        const canonical = canonicalizeTeamAuthor(teamDb, author, trimmedWs)
+        resolvedCache.set(key, canonical)
+        return canonical
+    }
 }

@@ -23,16 +23,39 @@ import { loadProjectRegistryFromConfig } from '../../utils/workspace-resolver.js
 
 setFallbackProjectRegistryLoader(loadProjectRegistryFromConfig)
 
+function stripMarkerArray(items: unknown[]): unknown[] {
+    let changed = false
+    const next = items.map((item) => {
+        const cleaned = stripInternalNormalizerMarkers(item)
+        if (cleaned !== item) changed = true
+        return cleaned
+    })
+    return changed ? next : items
+}
+
 function stripInternalNormalizerMarkers(val: unknown): unknown {
     if (typeof val !== 'object' || val === null) return val
-    if (Array.isArray(val)) return val.map(stripInternalNormalizerMarkers)
-    const obj = { ...(val as Record<string, unknown>) }
-    delete obj['_alias_derived_workspace']
-    if (Array.isArray(obj['entries'])) {
-        obj['entries'] = obj['entries'].map(stripInternalNormalizerMarkers)
+    if (Array.isArray(val)) return stripMarkerArray(val)
+    const record = val as Record<string, unknown>
+    const hasMarker = '_alias_derived_workspace' in record
+    const rawEntries = Array.isArray(record['entries']) ? (record['entries'] as unknown[]) : undefined
+    const cleanedEntries = rawEntries !== undefined ? stripMarkerArray(rawEntries) : undefined
+    const rawUpdates = Array.isArray(record['updates']) ? (record['updates'] as unknown[]) : undefined
+    const cleanedUpdates = rawUpdates !== undefined ? stripMarkerArray(rawUpdates) : undefined
+    if (
+        !hasMarker &&
+        cleanedEntries === rawEntries &&
+        cleanedUpdates === rawUpdates
+    ) {
+        return val
     }
-    if (Array.isArray(obj['updates'])) {
-        obj['updates'] = obj['updates'].map(stripInternalNormalizerMarkers)
+    const obj = { ...record }
+    if (hasMarker) delete obj['_alias_derived_workspace']
+    if (cleanedEntries !== rawEntries && cleanedEntries !== undefined) {
+        obj['entries'] = cleanedEntries
+    }
+    if (cleanedUpdates !== rawUpdates && cleanedUpdates !== undefined) {
+        obj['updates'] = cleanedUpdates
     }
     return obj
 }
@@ -129,7 +152,7 @@ export function injectProjectNames(
     obj: unknown,
     registry?: Record<string, ProjectRegistryEntry>,
     depth = 0,
-    seen = new WeakSet()
+    seen?: WeakSet<object>
 ): void {
     if (registry === undefined || obj === undefined || obj === null || typeof obj !== 'object') {
         return
@@ -139,7 +162,7 @@ export function injectProjectNames(
     }
     const reverseMap = getReverseProjectMap(registry)
     if (reverseMap.size > 0) {
-        const mutated = injectProjectNamesRecursive(obj, reverseMap, depth, seen)
+        const mutated = injectProjectNamesRecursive(obj, reverseMap, depth, seen ?? new WeakSet())
         if (mutated) {
             invalidateSerializedPayload(obj)
         }
@@ -280,6 +303,33 @@ export function wrapToolHandlerWithInterceptors(
     }
 }
 
+const USE_TEST_DB_EXTEND_SHAPE = { use_test_db: z.boolean().optional() }
+const EXTENDED_TEST_DB_SCHEMA_CACHE = new WeakMap<object, z.ZodType>()
+
+function extendSchemaWithUseTestDb(rawSchema: z.ZodType): z.ZodType
+function extendSchemaWithUseTestDb(rawSchema: unknown): unknown
+function extendSchemaWithUseTestDb(rawSchema: unknown): unknown {
+    if (typeof rawSchema !== 'object' || rawSchema === null) return rawSchema
+    const cached = EXTENDED_TEST_DB_SCHEMA_CACHE.get(rawSchema)
+    if (cached !== undefined) return cached
+    let extended = rawSchema
+    if (rawSchema instanceof z.ZodObject) {
+        extended = rawSchema.extend(USE_TEST_DB_EXTEND_SHAPE)
+    } else if (rawSchema instanceof z.ZodPipe && rawSchema.out instanceof z.ZodObject) {
+        extended = z.pipe(
+            rawSchema.in as z.ZodType,
+            rawSchema.out.extend(USE_TEST_DB_EXTEND_SHAPE)
+        )
+    } else if (rawSchema instanceof z.ZodPipe && rawSchema.in instanceof z.ZodObject) {
+        const extendedIn: z.ZodType = rawSchema.in.extend(USE_TEST_DB_EXTEND_SHAPE)
+        extended = z.pipe(extendedIn, rawSchema.out)
+    }
+    if (extended !== rawSchema && extended instanceof z.ZodType) {
+        EXTENDED_TEST_DB_SCHEMA_CACHE.set(rawSchema, extended)
+    }
+    return extended
+}
+
 /**
  * Instrument raw tool definitions with `use_test_db` schema extension and metrics/audit wrappers.
  */
@@ -288,15 +338,7 @@ export function instrumentToolDefinitions(
     config?: ToolHandlerConfig
 ): ToolDefinition[] {
     return rawDefs.map((t) => {
-        let schema = t.inputSchema
-        if (schema instanceof z.ZodObject) {
-            schema = schema.extend({ use_test_db: z.boolean().optional() })
-        } else if (schema instanceof z.ZodPipe && schema.out instanceof z.ZodObject) {
-            schema = z.pipe(schema.in, schema.out.extend({ use_test_db: z.boolean().optional() }))
-        } else if (schema instanceof z.ZodPipe && schema.in instanceof z.ZodObject) {
-            const extendedIn: z.ZodType = schema.in.extend({ use_test_db: z.boolean().optional() })
-            schema = z.pipe(extendedIn, schema.out)
-        }
+        const schema = extendSchemaWithUseTestDb(t.inputSchema)
         const finalHandler = wrapToolHandlerWithInterceptors(t.name, t.handler, config)
         return {
             ...t,

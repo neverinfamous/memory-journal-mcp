@@ -73,9 +73,21 @@ beforeAll(async () => {
         })
     }
 
+    const runAnalyze = (targetDb: DatabaseAdapter): void => {
+        const nativeDb = (
+            targetDb as unknown as {
+                connection: { getNativeDb: () => { exec: (sql: string) => void } }
+            }
+        ).connection.getNativeDb()
+        nativeDb.exec('ANALYZE')
+    }
+
     seedDataset(readDb, true, true)
     seedDataset(writeDb, false, false)
     seedDataset(updateDb, false, false)
+    runAnalyze(readDb)
+    runAnalyze(writeDb)
+    runAnalyze(updateDb)
     batch50Ids = Array.from({ length: 50 }, (_, idx) => idx * 10 + 1)
 
     if (readDb.getRecentEntries(50).entries.length === 0) {

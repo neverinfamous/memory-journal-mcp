@@ -34,6 +34,35 @@ const AUDIT_URI_KEYS = [
     'uri', 'Uri', '_uri', 'resourceUri', 'resource_uri', 'url', 'Url', 'resource',
     'Resource', 'path', 'Path', 'target', 'Target', 'name', 'Name', 'ServerName', 'server_name',
 ] as const
+const PROMPT_TARGET_KEYS = ['name', 'prompt', 'prompt_name', 'Name', 'promptName'] as const
+
+function isNormalizedSensitiveUri(normalized: string): boolean {
+    return SENSITIVE_AUDIT_URI_RE.test(normalized)
+}
+
+function isSensitivePromptName(trimmed: string): boolean {
+    if (TEAM_PROMPT_NAMES.has(trimmed) || ADMIN_PROMPT_NAMES.has(trimmed)) return true
+    const aliased = normalizePromptAliasForScope(trimmed)
+    return TEAM_PROMPT_NAMES.has(aliased) || ADMIN_PROMPT_NAMES.has(aliased)
+}
+
+function resolveSensitiveCategoryFromNormalized(normalized: string, rawOrName: string): AuditCategory {
+    if (/^memory:\/\/(?:audit|metrics\/users)(?:\/|$|\?|#)/i.test(normalized)) return 'audit'
+    const trimmed = rawOrName.trim()
+    const aliased =
+        ADMIN_PROMPT_NAMES.has(trimmed) || TEAM_PROMPT_NAMES.has(trimmed)
+            ? trimmed
+            : normalizePromptAliasForScope(trimmed)
+    if (ADMIN_PROMPT_NAMES.has(trimmed) || ADMIN_PROMPT_NAMES.has(aliased)) return 'admin'
+    if (
+        /^memory:\/\/(?:team|insights\/team-collaboration)(?:\/|$|\?|#)/i.test(normalized) ||
+        TEAM_PROMPT_NAMES.has(trimmed) ||
+        TEAM_PROMPT_NAMES.has(aliased)
+    ) {
+        return 'team'
+    }
+    return 'read'
+}
 
 /** Parse one JSONL audit line; returns null for empty, unparseable, or malformed lines. */
 export function parseAuditLine(line: string | undefined): AuditEntry | null {
@@ -75,6 +104,9 @@ export function matchesAuditFilters(entry: AuditEntry, filters: AuditSearchFilte
 /** Normalize resource URI targets (stripping fragments, canonicalizing dot segments/percent encoding, and adding `memory://` for scheme-less paths). */
 export function normalizeAuditResourceUri(raw: string): string {
     const trimmed = raw.trim()
+    if (!trimmed.includes('://') && !trimmed.includes('%') && !SCHEMELESS_SENSITIVE_PATH_RE.test(trimmed)) {
+        return trimmed
+    }
     const withScheme =
         !trimmed.includes('://') && SCHEMELESS_SENSITIVE_PATH_RE.test(trimmed)
             ? `memory://${trimmed}`
@@ -82,49 +114,55 @@ export function normalizeAuditResourceUri(raw: string): string {
     return canonicalizeMemoryResourceUri(withScheme)
 }
 
-function isTeamPromptTarget(name: string): boolean {
-    const trimmed = name.trim()
-    if (TEAM_PROMPT_NAMES.has(trimmed)) return true
-    return TEAM_PROMPT_NAMES.has(normalizePromptAliasForScope(trimmed))
+function checkUriKeyTarget(trimmed: string): string | undefined {
+    const normalized = normalizeAuditResourceUri(trimmed)
+    return isNormalizedSensitiveUri(normalized) ? normalized : undefined
 }
-
-function isAdminPromptTarget(name: string): boolean {
-    const trimmed = name.trim()
-    if (ADMIN_PROMPT_NAMES.has(trimmed)) return true
-    return ADMIN_PROMPT_NAMES.has(normalizePromptAliasForScope(trimmed))
-}
-
-const PROMPT_TARGET_KEYS = ['name', 'prompt', 'prompt_name', 'Name', 'promptName'] as const
 
 /** Extract a sensitive resource URI or team/admin prompt target from tool arguments, if present. */
 export function extractSensitiveTargetFromArgs(toolName: string, args: unknown): string | undefined {
     if (toolName.startsWith('memory://')) {
-        const normalizedToolUri = normalizeAuditResourceUri(toolName)
-        if (isSensitiveAuditTarget(normalizedToolUri)) return normalizedToolUri
+        const hit = checkUriKeyTarget(toolName)
+        if (hit !== undefined) return hit
     }
     if (typeof args !== 'object' || args === null) return undefined
     const record = args as Record<string, unknown>
 
+    let trimmedName: string | undefined
+    let trimmedCapName: string | undefined
+
     for (const key of AUDIT_URI_KEYS) {
         const val = record[key]
-        if (typeof val !== 'string' || val.trim() === '') continue
+        if (typeof val !== 'string') continue
         const trimmed = val.trim()
-        if (
+        if (trimmed === '') continue
+        if (key === 'name') {
+            trimmedName = trimmed
+            if (!trimmed.includes('://') && !SCHEMELESS_SENSITIVE_PATH_RE.test(trimmed)) continue
+        } else if (key === 'Name') {
+            trimmedCapName = trimmed
+            if (!trimmed.includes('://') && !SCHEMELESS_SENSITIVE_PATH_RE.test(trimmed)) continue
+        } else if (
             (key === 'ServerName' || key === 'server_name') &&
             (trimmed === 'memory-journal-mcp' || trimmed === 'memory-journal')
         ) {
             continue
         }
-        const normalized = normalizeAuditResourceUri(trimmed)
-        if (isSensitiveAuditTarget(normalized)) return normalized
+        const hit = checkUriKeyTarget(trimmed)
+        if (hit !== undefined) return hit
     }
 
     for (const key of PROMPT_TARGET_KEYS) {
-        const val = record[key]
-        if (typeof val !== 'string') continue
-        const trimmed = val.trim()
-        if (trimmed === '') continue
-        if (isTeamPromptTarget(trimmed) || isAdminPromptTarget(trimmed)) {
+        const trimmed =
+            key === 'name'
+                ? trimmedName
+                : key === 'Name'
+                  ? trimmedCapName
+                  : typeof record[key] === 'string'
+                    ? record[key].trim()
+                    : ''
+        if (trimmed === undefined || trimmed === '') continue
+        if (isSensitivePromptName(trimmed)) {
             return trimmed
         }
     }
@@ -137,29 +175,20 @@ export function isSensitiveAuditTarget(
     uriOrName: string,
     capabilities?: { requiresTeamScope?: boolean; requiresAuditScope?: boolean; requiresAdminScope?: boolean }
 ): boolean {
-    const normalized = normalizeAuditResourceUri(uriOrName)
-    return (
+    if (
         capabilities?.requiresTeamScope === true ||
         capabilities?.requiresAuditScope === true ||
-        capabilities?.requiresAdminScope === true ||
-        SENSITIVE_AUDIT_URI_RE.test(normalized) ||
-        isTeamPromptTarget(uriOrName) ||
-        isAdminPromptTarget(uriOrName)
-    )
+        capabilities?.requiresAdminScope === true
+    ) {
+        return true
+    }
+    const normalized = normalizeAuditResourceUri(uriOrName)
+    return isNormalizedSensitiveUri(normalized) || isSensitivePromptName(uriOrName)
 }
 
 /** Derive the audit category for an audited resource or prompt operation. */
 export function resolveResourceAuditCategory(uriOrName: string): AuditCategory {
-    const normalized = normalizeAuditResourceUri(uriOrName)
-    if (/^memory:\/\/(?:audit|metrics\/users)(?:\/|$|\?|#)/i.test(normalized)) return 'audit'
-    if (isAdminPromptTarget(uriOrName)) return 'admin'
-    if (
-        /^memory:\/\/(?:team|insights\/team-collaboration)(?:\/|$|\?|#)/i.test(normalized) ||
-        isTeamPromptTarget(uriOrName)
-    ) {
-        return 'team'
-    }
-    return 'read'
+    return resolveSensitiveCategoryFromNormalized(normalizeAuditResourceUri(uriOrName), uriOrName)
 }
 
 function applyActiveSessionScopeFallback(

@@ -365,7 +365,11 @@ export function createSandboxExecutor(options: SandboxExecutorOptions): (arg: un
         const transformedCode = transformAutoReturn(codeToExec)
         const validation = validateSandboxCode(transformedCode)
         if (!validation.valid) return { success: false, error: validation.errors.join('; '), code: 'SECURITY_VIOLATION' }
-        if (hasUnbalancedClosingDelimiter(stripCommentsAndStrings(transformedCode))) {
+        if (
+            hasUnbalancedClosingDelimiter(
+                validation.strippedCode ?? stripCommentsAndStrings(transformedCode)
+            )
+        ) {
             return { success: false, error: 'Security validation failed: unbalanced closing delimiter', code: 'SECURITY_VIOLATION' }
         }
         if (isQueryOnlyArg && !/^(?:return\s+|await\s+mj\.)/.test(codeToExec.trim())) {

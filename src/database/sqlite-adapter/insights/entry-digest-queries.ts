@@ -77,7 +77,7 @@ export function getWorkflowActionEntries(
         sql += ` AND workspace_id = ?`
         params.push(scopeId)
     }
-    sql += ` ORDER BY timestamp DESC LIMIT ?`
+    sql += ` ORDER BY timestamp DESC, id DESC LIMIT ?`
     params.push(limit)
 
     const rows = connection.getNativeDb().prepare(sql).all(...params) as RawEntryRow[]
@@ -104,7 +104,7 @@ export function getSignificantEntries(
         sql += ` AND workspace_id = ?`
         params.push(scopeId)
     }
-    sql += ` ORDER BY timestamp DESC LIMIT ?`
+    sql += ` ORDER BY timestamp DESC, id DESC LIMIT ?`
     params.push(limit)
 
     const rows = connection.getNativeDb().prepare(sql).all(...params) as RawEntryRow[]

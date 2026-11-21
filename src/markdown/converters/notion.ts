@@ -57,8 +57,8 @@ export function convertNotion(
     )
 
     // Check for a title in the first line
-    const lines = processedBody.split('\n')
-    const firstLine = lines[0]?.trim() ?? ''
+    const firstNewline = processedBody.indexOf('\n')
+    const firstLine = (firstNewline === -1 ? processedBody : processedBody.slice(0, firstNewline)).trim()
     
     // Sometimes Notion puts the title as an H1 on line 1.
     if (firstLine.startsWith('# ')) {
@@ -78,10 +78,9 @@ export function convertNotion(
 
     // 3. Heuristic Entry Type Inference
     if (!defaultEntryType) {
-        const lowerBody = processedBody.toLowerCase()
-        if (mergedTags.has('meeting-notes') || lowerBody.includes('meeting notes')) {
+        if (mergedTags.has('meeting-notes') || /meeting notes/i.test(processedBody)) {
             mjMeta.entry_type = 'meeting_notes'
-        } else if (mergedTags.has('decision') || lowerBody.includes('decision log')) {
+        } else if (mergedTags.has('decision') || /decision log/i.test(processedBody)) {
             mjMeta.entry_type = 'project_decision'
         }
     }

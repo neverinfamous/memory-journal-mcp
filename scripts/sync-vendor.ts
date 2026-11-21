@@ -315,7 +315,9 @@ function runSyncVendor(): void {
   try {
     const rawUpstream = typeof args.values['upstream-root'] === 'string' ? args.values['upstream-root'] : undefined;
     upstreamRoot = resolveUpstreamRoot(cwd, rawUpstream);
-    headSha = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: upstreamRoot, encoding: 'utf8' }).trim();
+    if (!args.values.check) {
+      headSha = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: upstreamRoot, encoding: 'utf8' }).trim();
+    }
   } catch (err: unknown) {
     if (!args.values.check) throw err;
   }

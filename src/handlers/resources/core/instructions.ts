@@ -25,12 +25,13 @@ async function filterReadonlyTools(
     readOnlyHints: Map<string, boolean | undefined>
 }> {
     const { getTools } = await import('../../tools/index.js')
+    const { getRuntimeWrapperConfig } = await import('../../tools/tool-cache-helpers.js')
     const toolDefs = getTools(
         context.db,
         null,
         context.vectorManager,
         context.github ?? undefined,
-        context.runtime !== undefined ? { runtime: context.runtime } : undefined,
+        getRuntimeWrapperConfig(context.runtime),
         context.teamDb,
         undefined
     ).filter((t) => allToolNames.has(t.name))

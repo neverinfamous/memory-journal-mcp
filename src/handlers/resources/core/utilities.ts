@@ -10,7 +10,11 @@ import {
     ASSISTANT_FOCUSED,
 } from '../../../utils/resource-annotations.js'
 import type { InternalResourceDef, ResourceContext, ResourceResult } from '../shared.js'
-import { resourceWorkspace, sliceUntrustedInline } from '../shared.js'
+import {
+    resourceWorkspace,
+    sliceUntrustedInline,
+    withResourceTokenMeta,
+} from '../shared.js'
 // removed transformEntryRow
 import * as fs from 'node:fs'
 import * as path from 'node:path'
@@ -35,12 +39,8 @@ export const recentResource: InternalResourceDef = {
         const { entries } = context.db.getRecentEntries(10, undefined, 'timestamp', undefined, false, resourceWorkspace(context))
         const lastModified = entries[0]?.timestamp ?? new Date().toISOString()
         const payloadData = { entries, count: entries.length }
-        const tokenEstimate = Math.ceil(JSON.stringify(payloadData).length / 4)
         return {
-            data: {
-                ...payloadData,
-                _meta: { tokenEstimate },
-            },
+            data: withResourceTokenMeta(payloadData),
             annotations: { lastModified },
         }
     },
@@ -58,7 +58,8 @@ export const significantResource: InternalResourceDef = {
     annotations: withPriority(0.7, ASSISTANT_FOCUSED),
     handler: (_uri: string, context: ResourceContext) => {
         // Importance weights mirror importance.ts constants (significance 0.3, relationships 0.35, causal 0.2, recency 0.15)
-        const entries = context.db.getSignificantEntries(100, undefined, resourceWorkspace(context))
+        const wsId = resourceWorkspace(context)
+        const entries = context.db.getSignificantEntries(100, undefined, wsId)
 
         const now = Date.now()
         const MS_PER_DAY = 86_400_000
@@ -67,10 +68,7 @@ export const significantResource: InternalResourceDef = {
         const MAX_CAUSAL_SCORE_AT = 3
 
         const entryIds = entries.map((e) => e.id)
-        const relationshipsMap = context.db.getRelationshipsForEntries(
-            entryIds,
-            resourceWorkspace(context)
-        )
+        const relationshipsMap = context.db.getRelationshipsForEntries(entryIds, wsId)
 
         const entriesWithImportance = entries.map((entry) => {
             const relationships = relationshipsMap.get(entry.id) ?? []
@@ -103,12 +101,8 @@ export const significantResource: InternalResourceDef = {
         })
         const top20 = entriesWithImportance.slice(0, 20)
         const payloadData = { entries: top20, count: top20.length }
-        const tokenEstimate = Math.ceil(JSON.stringify(payloadData).length / 4)
-        return { 
-            data: { 
-                ...payloadData, 
-                _meta: { tokenEstimate } 
-            } 
+        return {
+            data: withResourceTokenMeta(payloadData),
         }
     },
 }
@@ -227,12 +221,8 @@ export const workflowsResource: InternalResourceDef = {
             configured: true,
             summary: workflowSummary,
         }
-        const tokenEstimate = Math.ceil(JSON.stringify(payloadData).length / 4)
         return {
-            data: {
-                ...payloadData,
-                _meta: { tokenEstimate }
-            },
+            data: withResourceTokenMeta(payloadData),
         }
     },
 }
@@ -244,8 +234,13 @@ interface CachedSkillEntry {
 const cachedSkillsMap = new Map<string, CachedSkillEntry>()
 const SKILLS_CACHE_TTL_MS = 5 * 60 * 1000 // 5 minutes
 
+let cachedShippedSkillsDir: string | null | undefined
+
 /** Resolve the package's own skills/ directory (ships with npm package). */
 function getShippedSkillsDir(): string | undefined {
+    if (cachedShippedSkillsDir !== undefined) {
+        return cachedShippedSkillsDir ?? undefined
+    }
     try {
         const thisFile = fileURLToPath(import.meta.url)
         let dir = path.dirname(thisFile)
@@ -255,20 +250,53 @@ function getShippedSkillsDir(): string | undefined {
             const pkgJsonPath = path.join(dir, 'package.json')
             if (fs.existsSync(pkgJsonPath)) {
                 const shipped = path.join(dir, 'skills')
-                return fs.existsSync(shipped) ? shipped : undefined
+                cachedShippedSkillsDir = fs.existsSync(shipped) ? shipped : null
+                return cachedShippedSkillsDir ?? undefined
             }
 
             const parent = path.dirname(dir)
             if (parent === dir) {
-                // Reached filesystem root
                 break
             }
             dir = parent
         }
 
+        cachedShippedSkillsDir = null
         return undefined
     } catch {
+        cachedShippedSkillsDir = null
         return undefined
+    }
+}
+
+const SKILLS_READ_CONCURRENCY = 16
+
+async function readSingleSkillEntry(
+    dir: string,
+    skillName: string,
+    source: string
+): Promise<{ name: string; path: string; excerpt: string; source: string } | null> {
+    const skillMdPath = path.join(dir, skillName, 'SKILL.md')
+    try {
+        assertSafeFilePath(skillMdPath, [dir])
+        const handle = await fs.promises.open(skillMdPath, 'r')
+        let content: string
+        try {
+            const stats = await handle.stat()
+            if (!stats.isFile() || stats.size > 1024 * 1024) return null
+            content = await handle.readFile({ encoding: 'utf8' })
+        } finally {
+            await handle.close()
+        }
+        const bodyContent = content.replace(/^---\r?\n[\s\S]*?\r?\n---\r?\n?/, '')
+        const lines = bodyContent.split('\n')
+        const excerptLine = lines.find(
+            (l) => l.trim().length > 0 && !l.startsWith('#') && !l.startsWith('---')
+        )
+        const excerpt = excerptLine ? sliceUntrustedInline(excerptLine.trim(), 160) : ''
+        return { name: skillName, path: skillMdPath, excerpt, source }
+    } catch {
+        return null
     }
 }
 
@@ -277,38 +305,25 @@ async function scanSkillsDir(
     dir: string,
     source: string
 ): Promise<{ name: string; path: string; excerpt: string; source: string }[]> {
-    if (!fs.existsSync(dir)) return []
+    try {
+        await fs.promises.access(dir)
+    } catch {
+        return []
+    }
     const entries = await fs.promises.readdir(dir, { withFileTypes: true })
+    const dirNames = entries.filter((e) => e.isDirectory()).map((e) => e.name)
     const skills: { name: string; path: string; excerpt: string; source: string }[] = []
 
-    for (const entry of entries) {
-        if (!entry.isDirectory()) continue
-        const skillMdPath = path.join(dir, entry.name, 'SKILL.md')
-        let content: string
-        try {
-            assertSafeFilePath(skillMdPath, [dir])
-            const handle = await fs.promises.open(skillMdPath, 'r')
-            try {
-                const stats = await handle.stat()
-                if (!stats.isFile() || stats.size > 1024 * 1024) continue
-                content = await handle.readFile({ encoding: 'utf8' })
-            } finally {
-                await handle.close()
-            }
-        } catch {
-            continue
-        }
-        // Strip leading YAML frontmatter before selecting first readable body excerpt line
-        const bodyContent = content.replace(/^---\r?\n[\s\S]*?\r?\n---\r?\n?/, '')
-        const lines = bodyContent.split('\n')
-        const excerptLine = lines.find(
-            (l) => l.trim().length > 0 && !l.startsWith('#') && !l.startsWith('---')
+    for (let i = 0; i < dirNames.length; i += SKILLS_READ_CONCURRENCY) {
+        const chunk = dirNames.slice(i, i + SKILLS_READ_CONCURRENCY)
+        const settled = await Promise.allSettled(
+            chunk.map((skillName) => readSingleSkillEntry(dir, skillName, source))
         )
-        const excerpt = excerptLine
-            ? sliceUntrustedInline(excerptLine.trim(), 160)
-            : ''
-
-        skills.push({ name: entry.name, path: skillMdPath, excerpt, source })
+        for (const outcome of settled) {
+            if (outcome.status === 'fulfilled' && outcome.value !== null) {
+                skills.push(outcome.value)
+            }
+        }
     }
     return skills
 }
@@ -342,12 +357,8 @@ function buildSkillsPayloadResult(
         })),
         count: skills.length,
     }
-    const tokenEstimate = Math.ceil(JSON.stringify(payloadData).length / 4)
     return {
-        data: {
-            ...payloadData,
-            _meta: { tokenEstimate },
-        },
+        data: withResourceTokenMeta(payloadData),
     }
 }
 

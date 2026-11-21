@@ -4,6 +4,7 @@ import { SecurityError, PathTraversalError } from './path-safety.js'
 export {
     SecurityError,
     PathTraversalError,
+    assertSafeChildFile,
     assertSafeDirectoryPath,
     assertSafeFilePath,
 } from './path-safety.js'
@@ -178,6 +179,7 @@ export function sanitizeErrorForLogging(message: string): string {
 
 // C0/C1 control chars excluding horizontal tab (\t), LF (\n), and CR (\r), plus Unicode line/paragraph separators.
 function stripUntrustedControlChars(value: string): string {
+    if (!hasUntrustedControlChars(value)) return value
     return value.replace(/[\p{Cc}\u2028\u2029]/gu, (ch) =>
         ch === '\t' || ch === '\n' || ch === '\r' ? ch : ''
     )
@@ -213,12 +215,10 @@ export function markUntrustedContent(content: string | undefined | null): string
 
     // Strip any existing literal or entity-encoded tags to prevent breakout/nesting, then normalize
     // entities so repeated calls stay idempotent without growing `&amp;lt;`.
-    trimmed = stripUntrustedControlChars(
-        unescapeFenceEntities(
-            trimmed.replace(
-                /&lt;\/?untrusted_remote_content[^&]*&gt;|<\/?untrusted_remote_content[^<>]*>/gi,
-                ''
-            )
+    trimmed = unescapeFenceEntities(
+        trimmed.replace(
+            /&lt;\/?untrusted_remote_content[^&]*&gt;|<\/?untrusted_remote_content[^<>]*>/gi,
+            ''
         )
     ).trim()
     if (!trimmed) return ''
@@ -233,6 +233,8 @@ const INLINE_ALREADY_FENCED_RE =
 const BLOCK_ALREADY_FENCED_RE =
     /^<untrusted_remote_content>(?:\n[^<>\u2028\u2029]*\n|[^<>\r\n\u2028\u2029]*)<\/untrusted_remote_content>$/
 const ENCODED_FENCE_TAG_RE = /&lt;\/?untrusted_remote_content/i
+const UNSAFE_REF_ALLOW_SPACES_RE = /[<>&\t\r\n\u2028\u2029]/
+const UNSAFE_REF_STRICT_RE = /[<>&\r\n\u2028\u2029\s]/
 
 /** Return true when `value` already has a single unescaped inline `<untrusted_remote_content>` wrapper. */
 export function isAlreadyInlineFencedUntrustedContent(value: string): boolean {
@@ -254,9 +256,9 @@ export function isAlreadyFencedUntrustedContent(value: string): boolean {
 
 /** Fence non-canonical git refs, branch names, or dynamic map keys containing markup/control chars. */
 export function fenceNonCanonicalRefOrKey(value: string, allowSpaces = false): string {
-    const needsFence = allowSpaces
-        ? /[<>&\r\n\u2028\u2029]/u.test(value) || /\p{Cc}/u.test(value)
-        : /[<>&\r\n\u2028\u2029\s]/u.test(value) || /\p{Cc}/u.test(value)
+    const needsFence =
+        (allowSpaces ? UNSAFE_REF_ALLOW_SPACES_RE.test(value) : UNSAFE_REF_STRICT_RE.test(value)) ||
+        hasUntrustedControlChars(value)
     if (!needsFence) return value
     return isAlreadyInlineFencedUntrustedContent(value)
         ? value
@@ -272,12 +274,10 @@ export function markUntrustedContentInline(content: string | undefined | null): 
     if (isAlreadyInlineFencedUntrustedContent(cleaned)) return cleaned
 
     // Strip existing literal or entity-encoded wrappers to normalize for inline layout
-    cleaned = stripUntrustedControlChars(
-        unescapeFenceEntities(
-            cleaned.replace(
-                /&lt;\/?untrusted_remote_content[^&]*&gt;|<\/?untrusted_remote_content[^<>]*>/gi,
-                ''
-            )
+    cleaned = unescapeFenceEntities(
+        cleaned.replace(
+            /&lt;\/?untrusted_remote_content[^&]*&gt;|<\/?untrusted_remote_content[^<>]*>/gi,
+            ''
         )
     )
     // Escape HTML entities to prevent prompt injection (& first so &lt; cannot be unescaped)

@@ -118,6 +118,61 @@ export function normalizeNfkcIfNonAscii(value: string): string {
  * Scans a quoted string literal starting just after the opening quote.
  * Returns the unescaped content and the index after the closing quote.
  */
+const MAX_SENSITIVE_SCAN_CHARS = 65
+
+interface BoundedLiteralState {
+    body: string
+    pendingWs: string
+    pendingWsLen: number
+    tooLong: boolean
+}
+
+function appendBoundedLiteralChunk(state: BoundedLiteralState, ch: string): void {
+    if (state.tooLong || ch.length === 0) return
+    if (state.body.length === 0) {
+        const leadingTrimmed = ch.trimStart()
+        if (leadingTrimmed.length === 0) return
+        const core = leadingTrimmed.trimEnd()
+        if (core.length > MAX_SENSITIVE_SCAN_CHARS) {
+            state.tooLong = true
+            state.body = ''
+            return
+        }
+        state.body = core
+        const trailLen = leadingTrimmed.length - core.length
+        if (trailLen > 0) {
+            state.pendingWs = leadingTrimmed.slice(core.length)
+            state.pendingWsLen = trailLen
+        }
+        return
+    }
+    const trimmed = ch.trim()
+    if (trimmed.length === 0) {
+        state.pendingWsLen += ch.length
+        if (state.body.length + state.pendingWsLen <= MAX_SENSITIVE_SCAN_CHARS) {
+            state.pendingWs += ch
+        }
+        return
+    }
+    const leadTrim = ch.trimStart()
+    const leadWsLen = ch.length - leadTrim.length
+    const core = leadTrim.trimEnd()
+    const totalPending = state.pendingWsLen + leadWsLen
+    if (state.body.length + totalPending + core.length > MAX_SENSITIVE_SCAN_CHARS) {
+        state.tooLong = true
+        state.body = ''
+        state.pendingWs = ''
+        return
+    }
+    state.body += state.pendingWs + ch.slice(0, leadWsLen + core.length)
+    const trail = leadTrim.slice(core.length)
+    state.pendingWs = trail
+    state.pendingWsLen = trail.length
+}
+
+/**
+ * Scans a quoted string literal starting just after its opening `quote` character.
+ */
 export function scanQuotedLiteral(
     code: string,
     start: number,
@@ -125,12 +180,12 @@ export function scanQuotedLiteral(
 ): { content: string; next: number; sensitive: boolean } {
     const len = code.length
     let i = start
-    let content = ''
+    const literalState: BoundedLiteralState = { body: '', pendingWs: '', pendingWsLen: 0, tooLong: false }
     while (i < len) {
         const c = code[i] ?? ''
         if (c === '\\') {
-            const dec = decodeEscapeAt(code, i, true)
-            content += dec.ch
+            const dec = decodeEscapeAt(code, i, !literalState.tooLong)
+            appendBoundedLiteralChunk(literalState, dec.ch)
             i = dec.next
             continue
         }
@@ -138,10 +193,13 @@ export function scanQuotedLiteral(
             i++
             break
         }
-        content += c
+        appendBoundedLiteralChunk(literalState, c)
         i++
     }
-    const rawTrimmed = content.trim()
+    if (literalState.tooLong) {
+        return { content: '', next: i, sensitive: false }
+    }
+    const rawTrimmed = literalState.body
     const trimmed = rawTrimmed.length <= 64 ? normalizeNfkcIfNonAscii(rawTrimmed) : rawTrimmed
     const sensitive = trimmed.length <= 64 && SENSITIVE_STRING_CONTENT.test(trimmed)
     return { content: trimmed, next: i, sensitive }
@@ -162,12 +220,12 @@ export function scanTemplateLiteral(
     let i = start
     let lastToken: string | undefined
 
-    let content = ''
+    const literalState: BoundedLiteralState = { body: '', pendingWs: '', pendingWsLen: 0, tooLong: false }
     while (i < len) {
         const c = code[i] ?? ''
         if (c === '\\') {
-            const dec = decodeEscapeAt(code, i, true)
-            content += dec.ch
+            const dec = decodeEscapeAt(code, i, !literalState.tooLong)
+            appendBoundedLiteralChunk(literalState, dec.ch)
             i = dec.next
             continue
         }
@@ -179,18 +237,22 @@ export function scanTemplateLiteral(
             break
         }
         if (c === '`') {
-            const rawTrimmed = content.trim()
-            const trimmed =
-                rawTrimmed.length <= 64 ? normalizeNfkcIfNonAscii(rawTrimmed) : rawTrimmed
-            out +=
-                trimmed.length <= 64 && SENSITIVE_STRING_CONTENT.test(trimmed)
-                    ? `${trimmed}\``
-                    : '`'
+            if (literalState.tooLong) {
+                out += '`'
+            } else {
+                const rawTrimmed = literalState.body
+                const trimmed =
+                    rawTrimmed.length <= 64 ? normalizeNfkcIfNonAscii(rawTrimmed) : rawTrimmed
+                out +=
+                    trimmed.length <= 64 && SENSITIVE_STRING_CONTENT.test(trimmed)
+                        ? `${trimmed}\``
+                        : '`'
+            }
             lastToken = '`'
             i++
             break
         }
-        content += c
+        appendBoundedLiteralChunk(literalState, c)
         i++
     }
     return { out, next: i, lastToken }

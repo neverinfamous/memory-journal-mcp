@@ -41,6 +41,7 @@ export class TokenValidator {
 
     private jwks: jose.JWTVerifyGetKey | null = null
     private jwksExpiry = 0
+    private preloadedJwksResponse: Response | null = null
 
     constructor(config: TokenValidatorConfig) {
         this.jwksUri = config.jwksUri
@@ -169,12 +170,29 @@ export class TokenValidator {
         })
 
         try {
+            const pinnedFetch = createPinnedJwksFetch()
+            const jwksFetch: typeof fetch = async (input, init) => {
+                const cached = this.preloadedJwksResponse
+                if (cached !== null) {
+                    const urlStr =
+                        typeof input === 'string'
+                            ? input
+                            : input instanceof URL
+                              ? input.href
+                              : input.url
+                    if (urlStr === this.jwksUri) {
+                        this.preloadedJwksResponse = null
+                        return cached
+                    }
+                }
+                return pinnedFetch(input, init)
+            }
             // Create JWKS remote key set with SSRF-pinned custom fetch
             this.jwks = jose.createRemoteJWKSet(this.jwksUrl, {
                 cooldownDuration: 30000, // 30 seconds between retries
                 cacheMaxAge: this.jwksCacheTtl * 1000,
                 timeoutDuration: 5000, // Explicit 5s timeout to prevent socket hangs
-                [jose.customFetch]: createPinnedJwksFetch(),
+                [jose.customFetch]: jwksFetch,
             })
 
             this.jwksExpiry = Date.now() + this.jwksCacheTtl * 1000
@@ -329,6 +347,7 @@ export class TokenValidator {
     refreshJwks(): void {
         this.jwks = null
         this.jwksExpiry = 0
+        this.preloadedJwksResponse = null
         this.getJwks()
         logger.info('JWKS cache refreshed', { module: 'AUTH', operation: 'jwks-refresh' })
     }
@@ -339,6 +358,7 @@ export class TokenValidator {
     clearCache(): void {
         this.jwks = null
         this.jwksExpiry = 0
+        this.preloadedJwksResponse = null
         logger.info('Token validator cache cleared', { module: 'AUTH', operation: 'cache-clear' })
     }
 
@@ -378,7 +398,7 @@ export class TokenValidator {
 
         try {
             const jwksFetch = createPinnedJwksFetch()
-            await jwksFetch(this.jwksUri, {
+            this.preloadedJwksResponse = await jwksFetch(this.jwksUri, {
                 method: 'GET',
                 signal: AbortSignal.timeout(10000),
                 redirect: 'error',

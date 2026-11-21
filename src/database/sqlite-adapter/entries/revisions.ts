@@ -117,16 +117,18 @@ export function snapshotAndEvictRevisions(
         'INSERT INTO entry_revisions (entry_id, revision_number, content_snapshot, changed_at, changed_by) VALUES (?, ?, ?, ?, ?)'
     ).run(entryId, nextRev, previousContent, new Date().toISOString(), null)
 
-    db.prepare(
+    if (nextRev > MAX_REVISIONS_PER_ENTRY) {
+        db.prepare(
+            `
+            DELETE FROM entry_revisions
+            WHERE entry_id = ?
+              AND revision_number IN (
+                  SELECT revision_number FROM entry_revisions
+                  WHERE entry_id = ?
+                  ORDER BY revision_number DESC
+                  LIMIT -1 OFFSET ${String(MAX_REVISIONS_PER_ENTRY)}
+              )
         `
-        DELETE FROM entry_revisions
-        WHERE entry_id = ?
-          AND revision_number IN (
-              SELECT revision_number FROM entry_revisions
-              WHERE entry_id = ?
-              ORDER BY revision_number DESC
-              LIMIT -1 OFFSET ${String(MAX_REVISIONS_PER_ENTRY)}
-          )
-    `
-    ).run(entryId, entryId)
+        ).run(entryId, entryId)
+    }
 }

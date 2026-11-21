@@ -124,7 +124,7 @@ export function createRestoreEntryTool(context: ToolContext): ToolDefinition {
                 const indexStatus = await autoIndexEntry(
                     vectorManager,
                     db,
-                    entry_id,
+                    restored ?? entry_id,
                     restored?.workspaceId ?? wsId
                 )
                 return {

@@ -12,6 +12,7 @@ import { formatHandlerError } from '../../../utils/error-helpers.js'
 import { resolveWorkspaceId } from '../../../utils/workspace-resolver.js'
 import { activeProjectRegistry, alignedProjectFilter } from '../../../utils/write-scope.js'
 import type { SemanticSearchResult } from '../../../vector/vector-search-manager/index.js'
+import { progressiveSearchVectorResults } from './semantic-candidate-hydration.js'
 import {
     passMetadataFilters,
     collectTeamSearchEntries,
@@ -68,7 +69,6 @@ function computeSemanticInternalLimit(input: SemanticSearchInput): number {
         input.entry_type !== undefined ||
         input.start_date !== undefined ||
         input.end_date !== undefined ||
-        input.project_number !== undefined ||
         input.issue_number !== undefined ||
         input.pr_number !== undefined ||
         input.workflow_run_id !== undefined
@@ -93,20 +93,36 @@ function buildPersonalSemanticSearch(
     wsId: string,
     projectNumber: number | undefined,
     internalLimit: number,
-    threshold: number
+    threshold: number,
+    filterOptions: Record<string, unknown>
 ):
     | { personalPromise: Promise<SemanticSearchResult[]>; effectiveQuery: string | undefined }
     | { errorResponse: Record<string, unknown> } {
     if (input.entry_id === undefined) {
+        const hasPostFilters = internalLimit > input.limit * 2
+        const hasTagFilters =
+            (input.tags !== undefined && input.tags.length > 0) ||
+            (input.exclude_tags !== undefined && input.exclude_tags.length > 0)
+        const query = input.query ?? ''
         return {
             effectiveQuery: input.query,
-            personalPromise: vectorManager.search(
-                input.query ?? '',
-                internalLimit,
-                threshold,
-                wsId,
-                projectNumber
-            ),
+            personalPromise: (async () => {
+                const progressive = await progressiveSearchVectorResults({
+                    db,
+                    vectorManager,
+                    query,
+                    candidateLimit: internalLimit,
+                    targetCount: input.limit,
+                    threshold,
+                    wsId,
+                    projectNumber,
+                    filterOptions,
+                    hasTagFilters,
+                    hasPostFilters,
+                })
+                if (progressive !== null) return progressive
+                return vectorManager.search(query, internalLimit, threshold, wsId, projectNumber)
+            })(),
         }
     }
     const seed = db.getEntryById(input.entry_id, wsId)
@@ -164,7 +180,8 @@ async function runSemanticSearchQueries(
         wsId,
         projectNumber,
         internalLimit,
-        threshold
+        threshold,
+        filterOptions
     )
     if ('errorResponse' in personal) {
         return { errorResponse: personal.errorResponse }

@@ -166,6 +166,9 @@ export function getDeletedEntries(
     )
     const countRow = rowToObject(countStmt.get(...scopeParams))
     const count = typeof countRow?.['count'] === 'number' ? countRow['count'] : 0
+    if (count === 0 || offset >= count) {
+        return { entries: [], count }
+    }
 
     const stmt = db.prepare(
         `SELECT ${ENTRY_COLUMNS} FROM memory_journal WHERE deleted_at IS NOT NULL${scopeFilter} ORDER BY deleted_at DESC LIMIT ? OFFSET ?`

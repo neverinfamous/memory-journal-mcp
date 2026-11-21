@@ -9,6 +9,7 @@ import {
     milestoneCompletionPct,
     safeDecodeUriSegment,
     fenceUntrustedInline,
+    withResourceTokenMeta,
 } from './shared.js'
 
 function fenceMilestoneResource<
@@ -61,8 +62,7 @@ export function createGitHubMilestoneResources(resourceMilestoneLimit: number): 
                     count: milestonesWithProgress.length,
                     hint: 'Use get_github_milestones tool for state filtering. Use memory://milestones/{number} for detail.',
                 }
-                const tokenEstimate = Math.ceil(JSON.stringify(responseData).length / 4)
-                return { data: { ...responseData, _meta: { tokenEstimate } }, annotations: { lastModified } }
+                return { data: withResourceTokenMeta(responseData), annotations: { lastModified } }
             },
         },
         {
@@ -112,13 +112,8 @@ export function createGitHubMilestoneResources(resourceMilestoneLimit: number): 
                     },
                     hint: 'Use get_github_issues tool to list issues associated with this milestone.',
                 }
-                const tokenEstimate = Math.ceil(JSON.stringify(responseData).length / 4)
-
                 return {
-                    data: {
-                        ...responseData,
-                        _meta: { tokenEstimate },
-                    },
+                    data: withResourceTokenMeta(responseData),
                     annotations: { lastModified },
                 }
             },

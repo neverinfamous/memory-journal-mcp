@@ -86,8 +86,7 @@ export function probeMatchingTeamEntry(
     const teamDb = context.teamDb
     if (
         !isTeamDbReady(teamDb) ||
-        !canAccessTeamSilently(toolName, { teamDb, config: context.config }, wsId) ||
-        !canReadTeamEntriesRbac(teamDb, context.config, wsId)
+        !canAccessTeamSilently(toolName, { teamDb, config: context.config }, wsId)
     ) {
         return false
     }

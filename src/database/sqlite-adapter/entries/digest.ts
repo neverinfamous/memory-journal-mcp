@@ -215,9 +215,9 @@ function computeRelationshipDensity(
         `SELECT
             COALESCE(SUM(CASE WHEN SUBSTR(m.timestamp, 1, 7) = ? THEN 1 ELSE 0 END), 0) AS current_rels,
             COALESCE(SUM(CASE WHEN SUBSTR(m.timestamp, 1, 7) = ? THEN 1 ELSE 0 END), 0) AS previous_rels
-        FROM relationships r
-        JOIN memory_journal m ON r.from_entry_id = m.id
-        JOIN memory_journal p ON r.to_entry_id = p.id
+        FROM memory_journal m
+        CROSS JOIN relationships r ON r.from_entry_id = m.id
+        CROSS JOIN memory_journal p ON p.id = r.to_entry_id
         WHERE m.deleted_at IS NULL AND p.deleted_at IS NULL AND m.workspace_id = p.workspace_id
           AND r.from_entry_id != r.to_entry_id
           AND m.timestamp >= ? AND m.timestamp < ?${s.filterAlias}`,

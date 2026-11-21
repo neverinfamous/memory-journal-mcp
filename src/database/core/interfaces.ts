@@ -143,6 +143,13 @@ export interface IDatabaseAdapter extends IDatabaseVectorAndAdminAdapter {
         offset?: number
     ): { entries: JournalEntry[]; nextCursor?: string }
     getEntriesPage(offset: number, limit: number, workspaceId?: string, projectNumber?: number): { entries: JournalEntry[]; nextCursor?: string }
+    getEntriesAfter?(
+        limit: number,
+        workspaceId?: string,
+        projectNumber?: number,
+        cursor?: { timestamp: string; id: number }
+    ): JournalEntry[]
+    getLatestEntryPerProject?(): Map<string, { id: number; timestamp: string; entryType: string }>
     getActiveEntryCount(workspaceId?: string, projectNumber?: number): number
     updateEntry(
         id: number,

@@ -36,9 +36,25 @@ export function findRegistryKey(
     return pathMatches.length === 1 ? pathMatches[0] : undefined
 }
 
+const NESTED_SCOPE_KEYS = ['metadata', 'context', 'params', 'entry', 'payload', 'input'] as const
+const NESTED_WS_ALIAS_KEYS = [
+    'workspace_id',
+    'workspaceId',
+    'workspace',
+    'target_workspace_id',
+    'targetWorkspaceId',
+    'project_name',
+    'projectName',
+] as const
+const NESTED_REPO_ALIAS_KEYS = ['repo', 'repo_name', 'repoName', 'repository'] as const
+const NESTED_PROJ_ALIAS_KEYS = ['project_number', 'projectNumber', 'project_id', 'projectId', 'project'] as const
+const NESTED_PROJ_NUM_RE = /^(?:#|p-)?([1-9]\d*)$/i
+const NESTED_PROJ_DIGITS_RE = /^(?:#|p-)?\d+$/i
+const NESTED_PATH_SPLIT_RE = /[/\\]/
+
 function collectNestedScopeRecords(argRec: Record<string, unknown>): Record<string, unknown>[] {
     const records: Record<string, unknown>[] = [argRec]
-    for (const key of ['metadata', 'context', 'params', 'entry', 'payload', 'input'] as const) {
+    for (const key of NESTED_SCOPE_KEYS) {
         const nested = argRec[key]
         if (isPlainRecord(nested)) records.push(nested)
     }
@@ -54,7 +70,7 @@ export function parseProjectNumberCandidate(
     }
     if (typeof rawProj === 'string') {
         const trimmed = rawProj.trim()
-        const numMatch = /^(?:#|p-)?([1-9]\d*)$/i.exec(trimmed)
+        const numMatch = NESTED_PROJ_NUM_RE.exec(trimmed)
         if (numMatch?.[1] !== undefined) {
             const parsed = Number(numMatch[1])
             return Number.isSafeInteger(parsed) && parsed > 0 && String(parsed) === numMatch[1]
@@ -73,7 +89,7 @@ export function parseProjectNumberCandidate(
 export function isProjectStringValue(val: unknown): val is string {
     if (typeof val !== 'string') return false
     const trimmed = val.trim()
-    return trimmed !== '' && !/^(?:#|p-)?\d+$/i.test(trimmed)
+    return trimmed !== '' && !NESTED_PROJ_DIGITS_RE.test(trimmed)
 }
 
 function validateWorkspaceAliases(
@@ -82,17 +98,8 @@ function validateWorkspaceAliases(
     canonPinned: string,
     registry: Record<string, ProjectRegistryEntry> | undefined
 ): { error: string } | null {
-    const wsKeys = [
-        'workspace_id',
-        'workspaceId',
-        'workspace',
-        'target_workspace_id',
-        'targetWorkspaceId',
-        'project_name',
-        'projectName',
-    ] as const
     for (const rec of records) {
-        for (const key of wsKeys) {
+        for (const key of NESTED_WS_ALIAS_KEYS) {
             const raw = rec[key]
             if (typeof raw !== 'string') continue
             const trimmed = raw.trim()
@@ -133,7 +140,6 @@ function validateRepoAliases(
     canonPinned: string,
     registry: Record<string, ProjectRegistryEntry> | undefined
 ): { error: string } | null {
-    const repoKeys = ['repo', 'repo_name', 'repoName', 'repository'] as const
     const pinnedOwner = extractPinnedGitHubOwner(pinnedWorkspace, canonPinned)
     for (const rec of records) {
         const rawOwner = rec['owner']
@@ -142,11 +148,11 @@ function validateRepoAliases(
                 return { error: `GitHub owner '${rawOwner.trim()}' conflicts with pinned session workspace '${pinnedWorkspace}'` }
             }
         }
-        for (const key of repoKeys) {
+        for (const key of NESTED_REPO_ALIAS_KEYS) {
             const rawRepo = rec[key]
             if (typeof rawRepo !== 'string' || rawRepo.trim() === '') continue
             const trimmedRepo = rawRepo.trim()
-            const slashParts = trimmedRepo.split(/[/\\]/).filter(Boolean)
+            const slashParts = trimmedRepo.split(NESTED_PATH_SPLIT_RE).filter(Boolean)
             if (pinnedOwner !== undefined && slashParts.length >= 2 && slashParts[0]?.toLowerCase() !== pinnedOwner.toLowerCase()) {
                 return { error: `Repository '${trimmedRepo}' conflicts with pinned session workspace '${pinnedWorkspace}'` }
             }
@@ -172,6 +178,37 @@ function validateRepoAliases(
     return null
 }
 
+function hasRegistryProjectOwnerConflict(
+    parsedProj: number,
+    pinnedWorkspace: string | undefined,
+    pinnedProjectNumber: number | undefined,
+    canonPinnedLower: string | undefined,
+    registry: Record<string, ProjectRegistryEntry> | undefined
+): string | null {
+    if (pinnedProjectNumber !== undefined && parsedProj !== pinnedProjectNumber) {
+        return `project_number ${String(parsedProj)} conflicts with pinned session project_number ${String(pinnedProjectNumber)}`
+    }
+    if (pinnedWorkspace?.toLowerCase() === 'default') {
+        const defaultRegProj = registry?.['default']?.project_number
+        if (parsedProj !== pinnedProjectNumber && parsedProj !== defaultRegProj) {
+            return `project_number ${String(parsedProj)} conflicts with pinned session workspace '${pinnedWorkspace}'`
+        }
+        return null
+    }
+    if (pinnedWorkspace === undefined || registry === undefined || canonPinnedLower === undefined) {
+        return null
+    }
+    let hasOwner = false
+    for (const [ownerKey, entry] of Object.entries(registry)) {
+        if (entry.project_number !== parsedProj) continue
+        hasOwner = true
+        if (ownerKey.toLowerCase() === canonPinnedLower) return null
+    }
+    return hasOwner
+        ? `project_number ${String(parsedProj)} conflicts with pinned session workspace '${pinnedWorkspace}'`
+        : null
+}
+
 function validateProjectNumberAliases(
     records: Record<string, unknown>[],
     pinnedWorkspace: string | undefined,
@@ -179,9 +216,9 @@ function validateProjectNumberAliases(
     canonPinned: string | undefined,
     registry: Record<string, ProjectRegistryEntry> | undefined
 ): { error: string } | null {
-    const projKeys = ['project_number', 'projectNumber', 'project_id', 'projectId', 'project'] as const
+    const canonPinnedLower = canonPinned?.toLowerCase()
     for (const rec of records) {
-        for (const key of projKeys) {
+        for (const key of NESTED_PROJ_ALIAS_KEYS) {
             const rawProj = rec[key]
             if (rawProj === undefined || rawProj === null || rawProj === '') continue
             if (key === 'project' && isProjectStringValue(rawProj)) continue
@@ -195,31 +232,14 @@ function validateProjectNumberAliases(
                         : (JSON.stringify(rawProj) ?? 'invalid')
                 return { error: `Invalid project_number '${projDesc}' in nested executeCode` }
             }
-            if (pinnedProjectNumber !== undefined && parsedProj !== pinnedProjectNumber) {
-                return {
-                    error: `project_number ${String(parsedProj)} conflicts with pinned session project_number ${String(pinnedProjectNumber)}`,
-                }
-            }
-            if (pinnedWorkspace?.toLowerCase() === 'default') {
-                const defaultRegProj = registry?.['default']?.project_number
-                if (parsedProj !== pinnedProjectNumber && parsedProj !== defaultRegProj) {
-                    return {
-                        error: `project_number ${String(parsedProj)} conflicts with pinned session workspace '${pinnedWorkspace}'`,
-                    }
-                }
-            } else if (pinnedWorkspace !== undefined && registry !== undefined && canonPinned !== undefined) {
-                const owners = Object.entries(registry)
-                    .filter(([, entry]) => entry.project_number === parsedProj)
-                    .map(([ownerKey]) => ownerKey)
-                if (
-                    owners.length > 0 &&
-                    !owners.some((k) => k.toLowerCase() === canonPinned.toLowerCase())
-                ) {
-                    return {
-                        error: `project_number ${String(parsedProj)} conflicts with pinned session workspace '${pinnedWorkspace}'`,
-                    }
-                }
-            }
+            const conflict = hasRegistryProjectOwnerConflict(
+                parsedProj,
+                pinnedWorkspace,
+                pinnedProjectNumber,
+                canonPinnedLower,
+                registry
+            )
+            if (conflict !== null) return { error: conflict }
         }
     }
     return null
@@ -229,20 +249,10 @@ function validateUnpinnedScopeAliases(
     records: Record<string, unknown>[],
     registry: Record<string, ProjectRegistryEntry> | undefined
 ): { error?: string; inferredWorkspace?: string } {
-    const wsKeys = [
-        'workspace_id',
-        'workspaceId',
-        'workspace',
-        'target_workspace_id',
-        'targetWorkspaceId',
-        'project_name',
-        'projectName',
-    ] as const
-    const repoKeys = ['repo', 'repo_name', 'repoName', 'repository'] as const
     let resolvedWs: string | undefined
     for (const rec of records) {
         const candidates: string[] = []
-        for (const key of wsKeys) {
+        for (const key of NESTED_WS_ALIAS_KEYS) {
             const raw = rec[key]
             if (typeof raw === 'string' && raw.trim() !== '' && raw.trim() !== '*') {
                 candidates.push(raw.trim())
@@ -258,11 +268,11 @@ function validateUnpinnedScopeAliases(
             }
             resolvedWs = canon
         }
-        for (const key of repoKeys) {
+        for (const key of NESTED_REPO_ALIAS_KEYS) {
             const rawRepo = rec[key]
             if (typeof rawRepo !== 'string' || rawRepo.trim() === '') continue
             const trimmedRepo = rawRepo.trim()
-            const repoSlug = trimmedRepo.split(/[/\\]/).filter(Boolean).pop() ?? trimmedRepo
+            const repoSlug = trimmedRepo.split(NESTED_PATH_SPLIT_RE).filter(Boolean).pop() ?? trimmedRepo
             const matchedRepoKey =
                 findRegistryKey(trimmedRepo, registry) ?? findRegistryKey(repoSlug, registry)
             if (matchedRepoKey === undefined) {

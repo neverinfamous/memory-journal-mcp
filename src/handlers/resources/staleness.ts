@@ -5,7 +5,12 @@ import type {
     ResourceContext,
     ResourceResult,
 } from './shared.js'
-import { getBaseUri, safeDecodeUriSegment, sliceUntrustedInline } from './shared.js'
+import {
+    getBaseUri,
+    safeDecodeUriSegment,
+    sliceUntrustedInline,
+    withResourceTokenMeta,
+} from './shared.js'
 import { formatHandlerError } from '../../utils/error-helpers.js'
 import { loadProjectRegistryFromConfig } from '../../utils/workspace-resolver.js'
 import { workspacesForProject } from '../../utils/write-scope.js'
@@ -26,7 +31,11 @@ interface StalenessEnv {
 }
 
 function getEnvConfig(): StalenessEnv {
-    return EnvConfig.parse(process.env)
+    return EnvConfig.parse({
+        STALENESS_ACTIVE_HOURS: process.env['STALENESS_ACTIVE_HOURS'],
+        STALENESS_RECENT_DAYS: process.env['STALENESS_RECENT_DAYS'],
+        STALENESS_STALE_DAYS: process.env['STALENESS_STALE_DAYS'],
+    })
 }
 
 function calculateStaleness(
@@ -68,17 +77,23 @@ function handleStalenessOverviewResource(_uri: string, context: ResourceContext)
 
         const thresholds = getEnvConfig()
         const now = Date.now()
+        const latestByProject =
+            typeof context.db.getLatestEntryPerProject === 'function'
+                ? context.db.getLatestEntryPerProject()
+                : undefined
         for (const [name, entry] of Object.entries(registry)) {
             if (entry.project_number === undefined || entry.project_number === null) {
                 continue
             }
-            const searchResult = context.db.searchEntries('', {
-                projectNumber: entry.project_number,
-                workspaceId: name,
-                limit: 1,
-                sortBy: 'timestamp',
-            })
-            const latestEntry = searchResult.entries[0]
+            const latestEntry =
+                latestByProject !== undefined
+                    ? latestByProject.get(`${name}:${String(entry.project_number)}`)
+                    : context.db.searchEntries('', {
+                          projectNumber: entry.project_number,
+                          workspaceId: name,
+                          limit: 1,
+                          sortBy: 'timestamp',
+                      }).entries[0]
             const status = calculateStaleness(latestEntry?.timestamp, thresholds, now)
             const list = result[status] ?? []
             list.push({
@@ -93,8 +108,7 @@ function handleStalenessOverviewResource(_uri: string, context: ResourceContext)
         }
 
         const responseData = { thresholds, projects: result }
-        const tokenEstimate = Math.ceil(JSON.stringify(responseData).length / 4)
-        return { data: { ...responseData, _meta: { tokenEstimate } } }
+        return { data: withResourceTokenMeta(responseData) }
     } catch (error) {
         return { data: { ...formatHandlerError(error), code: -32603 } }
     }
@@ -222,8 +236,7 @@ function handleProjectStalenessResource(uri: string, context: ResourceContext): 
             type_breakdown: typeBreakdown,
             weekly_trend: { new_entries_last_7_days: newEntriesLast7Days },
         }
-        const tokenEstimate = Math.ceil(JSON.stringify(responseData).length / 4)
-        return { data: { ...responseData, _meta: { tokenEstimate } } }
+        return { data: withResourceTokenMeta(responseData) }
     } catch (error) {
         return { data: { ...formatHandlerError(error), code: -32603 } }
     }

@@ -346,10 +346,37 @@ function resolveShimMjProp(
  */
 export function createShimMjProxy(options: CreateShimMjOptions): Record<string, unknown> {
     const { mjApi } = options
+    const cachedShimProps = new Map<PropertyKey, unknown>()
 
     const shimMj: Record<string, unknown> = new Proxy({}, {
-        get: (_fakeTarget: Record<string, unknown>, prop: string | symbol): unknown =>
-            resolveShimMjProp(prop, options, shimMj),
+        get: (_fakeTarget: Record<string, unknown>, prop: string | symbol): unknown => {
+            if (cachedShimProps.has(prop)) return cachedShimProps.get(prop)
+            const resolved = resolveShimMjProp(prop, options, shimMj)
+            if (
+                prop === 'db' ||
+                prop === 'database' ||
+                prop === 'system' ||
+                prop === 'entries' ||
+                prop === 'entry' ||
+                prop === 'projects' ||
+                prop === 'project' ||
+                prop === 'schema' ||
+                prop === 'search' ||
+                prop === 'logger' ||
+                prop === 'fs' ||
+                prop === '__safeFs' ||
+                prop === 'safeFs' ||
+                prop === 'path' ||
+                prop === '__path' ||
+                prop === 'get' ||
+                prop === 'read' ||
+                prop === 'find' ||
+                prop === 'fetch'
+            ) {
+                cachedShimProps.set(prop, resolved)
+            }
+            return resolved
+        },
         has: (_fakeTarget, prop) => prop in mjApi,
         ownKeys: () => Reflect.ownKeys(mjApi),
         getOwnPropertyDescriptor(_fakeTarget, prop) {

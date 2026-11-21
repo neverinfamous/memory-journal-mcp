@@ -21,7 +21,6 @@ import {
 } from './helpers.js'
 import { collapseTeamMirrors } from '../../../utils/team-mirror.js'
 import { sanitizeAuthor } from '../../../utils/security-utils.js'
-import { canReadTeamEntriesRbac } from '../team/rbac.js'
 import { logger } from '../../../utils/logger.js'
 
 /** RRF tuning constant (standard value from Cormack et al. 2009) */
@@ -406,8 +405,7 @@ export async function hybridSearch(
         options.includeTeam === true &&
         options.isPersonal !== true &&
         isTeamDbReady(teamDb) &&
-        canAccessTeamSilently('search_entries', { teamDb, config: options.config }, options.workspaceId) &&
-        canReadTeamEntriesRbac(teamDb, options.config, options.workspaceId)
+        canAccessTeamSilently('search_entries', { teamDb, config: options.config }, options.workspaceId)
 
     const [personalStoreRes, teamStoreRes] = await Promise.all([
         queryStoreHybrid(query, db, vectorManager, options, overfetchLimit, options.isPersonal),

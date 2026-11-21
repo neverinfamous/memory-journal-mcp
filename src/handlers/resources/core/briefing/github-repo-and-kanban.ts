@@ -10,11 +10,20 @@ import { markUntrustedContentInline } from '../../../../utils/security-utils.js'
 import type { ServerRuntime } from '../../../../utils/maintenance-lock.js'
 import type { BriefingGitHub } from './github-section.js'
 
+export interface WorkflowRunLike {
+    name: string
+    status: string
+    conclusion?: string | null | undefined
+    url?: string | undefined
+    headBranch?: string | null | undefined
+}
+
 export interface CiResult {
     status: 'passing' | 'failing' | 'pending' | 'cancelled' | 'unknown'
     ciName?: string | undefined
     ciUpdatedAt?: string | undefined
     workflowSummary?: BriefingGitHub['workflowSummary'] | undefined
+    runs?: WorkflowRunLike[] | undefined
     ciSuppressed?: boolean | undefined
     degraded?: boolean | undefined
 }
@@ -33,13 +42,6 @@ export async function resolveBriefingRepo(
         branch: resolved.branch ?? null,
         github: resolved.github ?? github,
     }
-}
-
-interface WorkflowRunLike {
-    name: string
-    status: string
-    conclusion?: string | null | undefined
-    url?: string | undefined
 }
 
 /** Map a completed run's conclusion onto the CI status vocabulary. */
@@ -107,9 +109,14 @@ export async function fetchCiStatus(
         return { status: 'unknown', ciSuppressed: true }
     }
     try {
-        const runLimit = Math.max(5, config.workflowCount, config.workflowStatusBreakdown ? 10 : 1)
+        const includePrs = config.prCount > 0 || config.prStatusBreakdown
+        const runLimit = Math.max(
+            includePrs ? 20 : 5,
+            config.workflowCount,
+            config.workflowStatusBreakdown ? 10 : 1
+        )
         const runs = await github.getWorkflowRuns(owner, repo, runLimit)
-        if (runs.length === 0) return { status: 'unknown' }
+        if (runs.length === 0) return { status: 'unknown', runs }
 
         const latestRun = pickPrimaryRun(runs)
         let status: CiResult['status']
@@ -131,6 +138,7 @@ export async function fetchCiStatus(
             ciName: latestRun?.name ? markUntrustedContentInline(latestRun.name) : undefined,
             ciUpdatedAt: latestRun?.updatedAt,
             workflowSummary,
+            runs,
         }
     } catch (error) {
         logger.debug('Failed to fetch CI status', {
@@ -332,12 +340,19 @@ function aggregateCopilotReviewSummaries(
 export async function fetchCopilotReviews(
     github: GitHubIntegration,
     owner: string,
-    repo: string
+    repo: string,
+    prefetchedPrsPromise?: Promise<
+        { number: number; title: string; url: string; state: string; headRef?: string }[] | undefined
+    >
 ): Promise<
     { reviews?: BriefingGitHub['copilotReviews'] | undefined; degraded?: boolean | undefined } | undefined
 > {
     try {
-        const recentPrs = await github.getPullRequests(owner, repo, 'all', 10)
+        const prefetchedPrs =
+            prefetchedPrsPromise !== undefined
+                ? await prefetchedPrsPromise.catch(() => undefined)
+                : undefined
+        const recentPrs = prefetchedPrs ?? (await github.getPullRequests(owner, repo, 'all', 10))
         const summaries = await Promise.all(
             recentPrs.slice(0, 5).map((pr) => github.getCopilotReviewSummary(owner, repo, pr.number))
         )

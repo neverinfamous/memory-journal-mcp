@@ -17,10 +17,41 @@ import type { TeamBatchDeleteEntriesSchema } from '../schemas.js'
 import { createBatchProgressReporter, sendProgress } from '../../../../utils/progress-utils.js'
 import { logger } from '../../../../utils/logger.js'
 import { resolveAuthenticatedAuthor } from '../../../../utils/security-utils.js'
-import { buildTeamPermissionDeniedError } from './batch-prefetch-helpers.js'
+import {
+    buildTeamPermissionDeniedError,
+    createScopedAuthorCanonicalizer,
+} from './batch-prefetch-helpers.js'
 
 export type TeamDbInstance = NonNullable<ToolContext['teamDb']>
 export { buildValidatedTeamBatchUpdates } from './batch-update-validation.js'
+
+/**
+ * Enforce single-entry team ownership and return the fetched author alongside any PERMISSION_DENIED response.
+ */
+export function checkSingleTeamOwnershipWithAuthor(
+    teamDb: TeamDbInstance,
+    context: ToolContext,
+    entryId: number,
+    action: 'modify' | 'delete' | 'restore',
+    workspaceId?: string
+): { denied: Record<string, unknown> | null; author: string | null } {
+    const author = fetchAuthor(teamDb, entryId)
+    const currentUser = resolveAuthenticatedAuthor()
+    const rbacActive = teamDb.isTeamRbacActive?.() ?? false
+    const defaultRole = context.config?.teamDefaultRole ?? 'denied'
+    const callerRole = rbacActive ? resolveScopedTeamRole(teamDb, currentUser, defaultRole, workspaceId) : null
+    try {
+        enforceEntryOwnership(currentUser, author, callerRole, teamDb, workspaceId, rbacActive)
+        return { denied: null, author }
+    } catch (err) {
+        if (!(err instanceof AuthorizationError)) throw err
+        const actionVerb = action === 'modify' ? 'update' : action
+        return {
+            denied: buildTeamPermissionDeniedError(err, author, action, 'this team entry', actionVerb),
+            author,
+        }
+    }
+}
 
 /**
  * Enforce single-entry team ownership. Returns a PERMISSION_DENIED response or null when allowed.
@@ -32,19 +63,7 @@ export function checkSingleTeamOwnership(
     action: 'modify' | 'delete' | 'restore',
     workspaceId?: string
 ): Record<string, unknown> | null {
-    const author = fetchAuthor(teamDb, entryId)
-    const currentUser = resolveAuthenticatedAuthor()
-    const rbacActive = teamDb.isTeamRbacActive?.() ?? false
-    const defaultRole = context.config?.teamDefaultRole ?? 'denied'
-    const callerRole = rbacActive ? resolveScopedTeamRole(teamDb, currentUser, defaultRole, workspaceId) : null
-    try {
-        enforceEntryOwnership(currentUser, author, callerRole, teamDb, workspaceId, rbacActive)
-        return null
-    } catch (err) {
-        if (!(err instanceof AuthorizationError)) throw err
-        const actionVerb = action === 'modify' ? 'update' : action
-        return buildTeamPermissionDeniedError(err, author, action, 'this team entry', actionVerb)
-    }
+    return checkSingleTeamOwnershipWithAuthor(teamDb, context, entryId, action, workspaceId).denied
 }
 
 export function missingProjectNumberResponse(
@@ -106,6 +125,15 @@ export function filterDeletableIds(
         typeof teamDb.getAuthorsForEntries === 'function'
             ? batchFetchAuthors(teamDb, entryIds)
             : null
+    const canonicalizeAuthor =
+        callerRole === 'admin'
+            ? undefined
+            : createScopedAuthorCanonicalizer(teamDb, [
+                  { author: currentUser, workspaceId: wsId },
+                  ...(authorMap !== null
+                      ? Array.from(authorMap.values(), (author) => ({ author, workspaceId: wsId }))
+                      : []),
+              ])
 
     for (const id of entryIds) {
         const rawExisting = existingMap
@@ -125,7 +153,15 @@ export function filterDeletableIds(
 
         const author = authorMap ? (authorMap.get(id) ?? null) : fetchAuthor(teamDb, id)
         try {
-            enforceEntryOwnership(currentUser, author, callerRole, teamDb, wsId, rbacActive)
+            enforceEntryOwnership(
+                currentUser,
+                author,
+                callerRole,
+                teamDb,
+                wsId,
+                rbacActive,
+                canonicalizeAuthor
+            )
         } catch (err) {
             if (!(err instanceof AuthorizationError)) throw err
             return {

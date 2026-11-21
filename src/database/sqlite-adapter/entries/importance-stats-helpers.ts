@@ -17,11 +17,11 @@ function loadRelStatsChunk(
     scopedPeerWorkspace: boolean
 ): void {
     const fromJoin = scopedPeerWorkspace
-        ? 'JOIN memory_journal self_e ON self_e.id = r.from_entry_id JOIN memory_journal peer ON peer.id = r.to_entry_id AND peer.deleted_at IS NULL AND peer.workspace_id = self_e.workspace_id AND r.from_entry_id != r.to_entry_id'
-        : 'JOIN memory_journal peer ON peer.id = r.to_entry_id AND peer.deleted_at IS NULL AND r.from_entry_id != r.to_entry_id'
+        ? 'CROSS JOIN memory_journal self_e ON self_e.id = r.from_entry_id CROSS JOIN memory_journal peer ON peer.id = r.to_entry_id AND peer.deleted_at IS NULL AND peer.workspace_id = self_e.workspace_id AND r.from_entry_id != r.to_entry_id'
+        : 'CROSS JOIN memory_journal peer ON peer.id = r.to_entry_id AND peer.deleted_at IS NULL AND r.from_entry_id != r.to_entry_id'
     const toJoin = scopedPeerWorkspace
-        ? 'JOIN memory_journal self_e ON self_e.id = r.to_entry_id JOIN memory_journal peer ON peer.id = r.from_entry_id AND peer.deleted_at IS NULL AND peer.workspace_id = self_e.workspace_id AND r.from_entry_id != r.to_entry_id'
-        : 'JOIN memory_journal peer ON peer.id = r.from_entry_id AND peer.deleted_at IS NULL AND r.from_entry_id != r.to_entry_id'
+        ? 'CROSS JOIN memory_journal self_e ON self_e.id = r.to_entry_id CROSS JOIN memory_journal peer ON peer.id = r.from_entry_id AND peer.deleted_at IS NULL AND peer.workspace_id = self_e.workspace_id AND r.from_entry_id != r.to_entry_id'
+        : 'CROSS JOIN memory_journal peer ON peer.id = r.from_entry_id AND peer.deleted_at IS NULL AND r.from_entry_id != r.to_entry_id'
     const sql = `
         SELECT entry_id,
                COUNT(*) AS rel_count,

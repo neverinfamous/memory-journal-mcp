@@ -41,11 +41,16 @@ export function linkImportedRelationships(
     const missingTargetsSet = new Set<number>()
     const rejectedSet = new Set<string>()
     const seenPairs = new Set<string>()
-    const existingRels: Relationship[] = options?.prefetchedExisting
-        ? [...options.prefetchedExisting]
-        : typeof db.getRelationships === 'function'
-          ? db.getRelationships(entryId, workspaceId)
-          : []
+    const existingRels: readonly Relationship[] =
+        options?.prefetchedExisting ??
+        (typeof db.getRelationships === 'function'
+            ? db.getRelationships(entryId, workspaceId)
+            : [])
+    for (const existing of existingRels) {
+        if (existing.fromEntryId === entryId) {
+            seenPairs.add(`${existing.relationshipType}:${String(existing.toEntryId)}`)
+        }
+    }
     for (const rel of relationships) {
         const relType = rel.type
         if (!isRelationshipType(relType)) {
@@ -61,13 +66,6 @@ export function linkImportedRelationships(
         const pairKey = `${relType}:${String(targetId)}`
         if (seenPairs.has(pairKey)) continue
         seenPairs.add(pairKey)
-        const alreadyExists = existingRels.some(
-            (r) =>
-                r.fromEntryId === entryId &&
-                r.toEntryId === targetId &&
-                r.relationshipType === relType
-        )
-        if (alreadyExists) continue
         const targetExists = options?.prefetchedTargets
             ? options.prefetchedTargets.get(targetId)
             : db.getEntryById(targetId, workspaceId)
@@ -87,14 +85,6 @@ export function linkImportedRelationships(
         } else {
             db.linkEntries(entryId, targetId, relType)
         }
-        existingRels.push({
-            id: 0,
-            fromEntryId: entryId,
-            toEntryId: targetId,
-            relationshipType: relType,
-            description: null,
-            createdAt: '',
-        })
         linked++
     }
     return {

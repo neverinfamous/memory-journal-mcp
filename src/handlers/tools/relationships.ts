@@ -182,27 +182,32 @@ function formatTeamVisualizePayload(
     const nodes = omitContent
         ? rawNodes.map((n) => ({ id: n.id, label: `#${String(n.id)}` }))
         : rawNodes
-    const needsRebuild = input.relationship_type !== undefined || omitContent
-    let mermaid = typeof teamRes['mermaid'] === 'string' ? teamRes['mermaid'] : 'graph LR\n'
-    if (needsRebuild) {
-        mermaid = 'graph LR\n'
-        for (const n of nodes) {
-            const nodeText = omitContent ? `#${String(n.id)}` : `#${String(n.id)}: ${n.label}`
-            mermaid += `  e${String(n.id)}["${nodeText}"]\n`
-        }
-        for (const e of edges) {
-            const safeType = e.type.replace(/[\r\n`|]+/g, ' ')
-            mermaid += `  e${String(e.from)} -->|${safeType}| e${String(e.to)}\n`
+    const format = input.format
+    let mermaid: string | undefined
+    if (format !== 'edges') {
+        const needsRebuild = input.relationship_type !== undefined || omitContent
+        if (!needsRebuild && typeof teamRes['mermaid'] === 'string') {
+            mermaid = teamRes['mermaid']
+        } else {
+            const lines = ['graph LR']
+            for (const n of nodes) {
+                const nodeText = omitContent ? `#${String(n.id)}` : `#${String(n.id)}: ${n.label}`
+                lines.push(`  e${String(n.id)}["${nodeText}"]`)
+            }
+            for (const e of edges) {
+                const safeType = e.type.replace(/[\r\n`|]+/g, ' ')
+                lines.push(`  e${String(e.from)} -->|${safeType}| e${String(e.to)}`)
+            }
+            mermaid = `${lines.join('\n')}\n`
         }
     }
-    const format = input.format
     return {
         success: true,
         entry_count: nodes.length,
         relationship_count: edges.length,
         root_entry: input.entry_id ?? null,
         depth: input.depth,
-        ...(format !== 'edges' ? { mermaid } : {}),
+        ...(mermaid !== undefined ? { mermaid } : {}),
         ...(format !== 'mermaid' ? { nodes, edges } : {}),
     }
 }

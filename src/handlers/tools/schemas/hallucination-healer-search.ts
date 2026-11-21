@@ -187,18 +187,19 @@ export function healSearchPayload(val: unknown): unknown {
     const obj = { ...(val as Record<string, unknown>) }
     let modified = false
 
-    for (const [badKey, goodKey] of Object.entries(SEARCH_KEY_ALIAS_MAP)) {
-        if (badKey in obj) {
-            const hasConflict =
-                SCOPE_CONFLICT_PRESERVED_KEYS.has(badKey) &&
-                goodKey in obj &&
-                obj[goodKey] !== undefined &&
-                obj[goodKey] !== obj[badKey]
-            if (hasConflict) continue
-            if (!(goodKey in obj) && obj[badKey] !== undefined) obj[goodKey] = obj[badKey]
-            Reflect.deleteProperty(obj, badKey)
-            modified = true
-        }
+    for (const badKey of Object.keys(obj)) {
+        if (!Object.hasOwn(SEARCH_KEY_ALIAS_MAP, badKey)) continue
+        const goodKey = SEARCH_KEY_ALIAS_MAP[badKey]
+        if (goodKey === undefined) continue
+        const hasConflict =
+            SCOPE_CONFLICT_PRESERVED_KEYS.has(badKey) &&
+            goodKey in obj &&
+            obj[goodKey] !== undefined &&
+            obj[goodKey] !== obj[badKey]
+        if (hasConflict) continue
+        if (!(goodKey in obj) && obj[badKey] !== undefined) obj[goodKey] = obj[badKey]
+        Reflect.deleteProperty(obj, badKey)
+        modified = true
     }
 
     if (unpackFilterContainers(obj)) modified = true

@@ -219,6 +219,8 @@ export function resolveAutoContext(
     return autoContextStr
 }
 
+const UNKNOWN_RECORD_SCHEMA = z.record(z.string(), z.unknown())
+
 const CLI_RELATION_TYPE_ALIASES: Readonly<Record<string, RelationshipType>> = {
     resolves: 'resolved',
     depends_on: 'blocked_by',
@@ -236,7 +238,7 @@ export function parseRelationshipArray(
                 `Invalid relationship at index ${String(index)} in ${source}: expected an object with target_id and relation_type.`
             )
         }
-        const rec = z.record(z.string(), z.unknown()).parse(r)
+        const rec = UNKNOWN_RECORD_SCHEMA.parse(r)
         const rawTarget = pickRecordField(rec, RELATIONSHIP_TARGET_KEYS)
         const trimmedTarget = typeof rawTarget === 'string' ? rawTarget.trim() : undefined
         const targetId =
@@ -340,7 +342,7 @@ export function resolveExplicitProjectAndWorkspace(
         metadata['project_number']
     const explicitProjectNum = parseStrictPositiveProjectNumber(projectRaw)
 
-    const optsRec = z.record(z.string(), z.unknown()).parse(options)
+    const optsRec = UNKNOWN_RECORD_SCHEMA.parse(options)
     const rawWs =
         optsRec['workspaceId'] ??
         optsRec['workspace_id'] ??

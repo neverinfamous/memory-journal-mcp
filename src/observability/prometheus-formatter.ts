@@ -8,10 +8,14 @@
 
 import type { MetricsAccumulator } from './metrics.js'
 
+const LABEL_ESCAPE_CHECK_RE = /[\\\n\r"]/
+const LABEL_SANITIZE_CHECK_RE = /[^a-zA-Z0-9_]/
+
 /**
  * Escapes characters for Prometheus label values: \, ", and \n.
  */
 function escapeLabelValue(value: string): string {
+    if (!LABEL_ESCAPE_CHECK_RE.test(value)) return value
     return value.replace(/\\/g, '\\\\').replace(/\n/g, '\\n').replace(/\r/g, '\\r').replace(/"/g, '\\"')
 }
 
@@ -21,6 +25,7 @@ function escapeLabelValue(value: string): string {
  * Any other character is replaced with an underscore.
  */
 function sanitizeLabelName(name: string): string {
+    if (!LABEL_SANITIZE_CHECK_RE.test(name)) return name
     return name.replace(/[^a-zA-Z0-9_]/g, '_')
 }
 
@@ -28,15 +33,13 @@ function sanitizeLabelName(name: string): string {
  * Formats a single metric line.
  */
 function formatMetric(name: string, value: number, labels?: Record<string, string>): string {
-    if (!labels || Object.keys(labels).length === 0) {
-        return `${name} ${value}`
+    if (!labels) return `${name} ${value}`
+    let labelPairs = ''
+    for (const [k, v] of Object.entries(labels)) {
+        const pair = `${sanitizeLabelName(k)}="${escapeLabelValue(v)}"`
+        labelPairs = labelPairs.length === 0 ? pair : `${labelPairs},${pair}`
     }
-
-    const labelPairs = Object.entries(labels)
-        .map(([k, v]) => `${sanitizeLabelName(k)}="${escapeLabelValue(v)}"`)
-        .join(',')
-
-    return `${name}{${labelPairs}} ${value}`
+    return labelPairs.length === 0 ? `${name} ${value}` : `${name}{${labelPairs}} ${value}`
 }
 
 /**

@@ -14,6 +14,8 @@ import { sanitizeAuthor, sanitizeErrorForLogging } from '../../utils/security-ut
 import { activeProjectRegistry } from '../../utils/write-scope.js'
 import { enforceTeamResourceRbac } from './team.js'
 import { ProtocolError, ProtocolErrorCode } from '@modelcontextprotocol/server'
+import { injectTokenEstimate } from '../../observability/token-estimator.js'
+import { resolveCachedOrLiveDigest } from './core/briefing/insights-section.js'
 
 const DIGEST_PREVIEW_LIMIT = 200
 
@@ -61,37 +63,31 @@ export const digestInsightsResource: InternalResourceDef = {
         const lastModified = new Date().toISOString()
         const wsId = resourceWorkspace(context)
 
-        // Live compute primary path (falls back to persisted DB snapshot if compute fails or is unavailable)
-        try {
-            const liveDigest = context.db?.computeDigest?.(wsId)
-            if (liveDigest !== undefined) {
-                const data = {
-                    success: true,
-                    snapshot: sanitizeDigestSnapshot(liveDigest),
-                    source: 'computed',
-                }
-                const tokenEstimate = Math.ceil(JSON.stringify(data).length / 4)
-                return {
-                    data: { ...data, _meta: { tokenEstimate } },
-                    annotations: { lastModified },
-                }
-            }
-        } catch {
-            // Non-critical — fall through to persisted snapshot
-        }
-
-        const dbSnapshot = context.db?.getLatestAnalyticsSnapshot?.('digest', wsId)
-        if (dbSnapshot) {
-            const data = {
-                success: true,
-                snapshot: sanitizeDigestSnapshot(dbSnapshot.data),
-                computedAt: dbSnapshot.createdAt,
-                source: 'persisted',
-            }
-            const tokenEstimate = Math.ceil(JSON.stringify(data).length / 4)
+        const resolved = resolveCachedOrLiveDigest(context, wsId, { allowRawPersisted: true })
+        if (resolved !== null) {
+            const payload =
+                resolved.source === 'computed'
+                    ? {
+                          success: true,
+                          snapshot: sanitizeDigestSnapshot(resolved.snapshot),
+                          source: 'computed',
+                      }
+                    : {
+                          success: true,
+                          snapshot: sanitizeDigestSnapshot(resolved.snapshot),
+                          ...(resolved.computedAt !== undefined
+                              ? { computedAt: resolved.computedAt }
+                              : {}),
+                          source: 'persisted',
+                      }
             return {
-                data: { ...data, _meta: { tokenEstimate } },
-                annotations: { lastModified: dbSnapshot.createdAt },
+                data: injectTokenEstimate(payload),
+                annotations: {
+                    lastModified:
+                        resolved.source === 'persisted' && resolved.computedAt !== undefined
+                            ? resolved.computedAt
+                            : lastModified,
+                },
             }
         }
 
@@ -176,9 +172,8 @@ export const teamCollaborationResource: InternalResourceDef = {
                     : [],
             }
             const data = { success: true, matrix: sanitizedMatrix }
-            const tokenEstimate = Math.ceil(JSON.stringify(data).length / 4)
             return {
-                data: { ...data, _meta: { tokenEstimate } },
+                data: injectTokenEstimate(data),
                 annotations: { lastModified },
             }
         } catch (error) {

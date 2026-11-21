@@ -98,7 +98,7 @@ export class VectorSearchManager {
         transformersModule.env.localModelPath = cacheDir
 
         logger.info(`Loading embedding model: ${this.modelName}`)
-        this.pipeline = await this.loadPipelineWithRetry(transformersModule, cacheDir)
+        this.pipeline = await this.loadPipelineWithRetry(transformersModule, cacheDir, cachedLocally)
         logger.info('Embedding model loaded')
 
         const pipelineFunc = this.pipeline as (
@@ -115,13 +115,14 @@ export class VectorSearchManager {
             pipeline: (task: string, model: string, options: unknown) => Promise<unknown>
             env: { allowRemoteModels: boolean }
         },
-        cacheDir: string
+        cacheDir: string,
+        cachedLocally: boolean
     ): Promise<unknown> {
         const maxAttempts = 5
         let lastError: unknown
         for (let attempt = 1; attempt <= maxAttempts; attempt++) {
             try {
-                if (isModelCachedOnDisk(cacheDir, this.modelName)) {
+                if (attempt > 1 && (cachedLocally || isModelCachedOnDisk(cacheDir, this.modelName))) {
                     transformersModule.env.allowRemoteModels = false
                 }
                 return await transformersModule.pipeline('feature-extraction', this.modelName, { dtype: 'fp32' })
@@ -166,10 +167,7 @@ export class VectorSearchManager {
         }
     }
 
-    /**
-     * Verify the vec_journal_entries table exists and has the correct dimensions.
-     * If the model or dimensions changed, drops the old table and creates a new one.
-     */
+    /** Verify the vec_journal_entries table exists and matches model dimensions. */
     private verifyAndCreateVecTable(): void {
         const dimensions = this.dimensions
         if (dimensions === null) {
@@ -187,19 +185,20 @@ export class VectorSearchManager {
     }
 
     /** Generate an embedding for text. */
-    public async generateEmbedding(text: string): Promise<Float32Array> {
+    public async generateEmbedding(
+        text: string,
+        options?: { bypassQueryCache?: boolean }
+    ): Promise<Float32Array> {
         await this.initialize()
-
         if (this.getDimensions() === null) {
             throw new Error('Vector search not initialized properly. Cannot rebuild index.')
         }
-
         const canCache =
+            options?.bypassQueryCache !== true &&
             !this.hasCustomEmbeddingGenerator() &&
             this.transformers !== null &&
             text.length <= QUERY_EMBEDDING_CACHE_MAX_CHARS
         const pipelineFunc = this.pipeline as (text: string, options: unknown) => Promise<{ data: number[] }>
-
         return getOrComputeCachedEmbedding(this.modelName, text, canCache, async () => {
             const result = await pipelineFunc(text, { pooling: 'mean', normalize: true })
             return new Float32Array(result.data)
@@ -221,7 +220,10 @@ export class VectorSearchManager {
             const settled: PromiseSettledResult<Float32Array>[] = []
             for (const text of texts) {
                 try {
-                    settled.push({ status: 'fulfilled', value: await this.generateEmbedding(text) })
+                    settled.push({
+                        status: 'fulfilled',
+                        value: await this.generateEmbedding(text, { bypassQueryCache: true }),
+                    })
                 } catch (reason) {
                     settled.push({ status: 'rejected', reason })
                 }
@@ -229,7 +231,7 @@ export class VectorSearchManager {
             return settled
         }
         return runPipelineBatchEmbeddingsSettled(this.pipeline, texts, dims, (text) =>
-            this.generateEmbedding(text)
+            this.generateEmbedding(text, { bypassQueryCache: true })
         )
     }
 
@@ -246,7 +248,9 @@ export class VectorSearchManager {
         await this.initialize()
 
         try {
-            const embedding = await this.generateEmbedding(formatEntryForEmbedding(entry))
+            const embedding = await this.generateEmbedding(formatEntryForEmbedding(entry), {
+                bypassQueryCache: true,
+            })
             this.dbAdapter.upsertVector(entry.id, embedding)
         } catch (error) {
             logger.error(`Failed to add entry ${entry.id} to vector index`, {
@@ -422,8 +426,10 @@ export class VectorSearchManager {
             workspaceId?: string
         }
     ): Promise<{ success: boolean; indexed: number; failed: number; firstError: string | null; warning?: string }> {
+        const wasReady = this.ready
         await this.initialize()
         if (
+            wasReady &&
             this.dimensions !== null &&
             typeof this.dbAdapter.getVectorMetadata === 'function' &&
             typeof this.dbAdapter.createVecTable === 'function'

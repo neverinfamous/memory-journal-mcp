@@ -27,14 +27,28 @@ async function resolveCommitRefs(
     commit: RawGitCommit,
     github: GitHubIntegration | undefined,
     defaultOwner: string | null,
-    defaultRepo: string | null
+    defaultRepo: string | null,
+    refCache: Map<string, Promise<ResolvedReference[]>>
 ): Promise<EnrichedCommit> {
     const fullMessage = `${commit.message}\n\n${commit.body}`
     const rawRefs = parseCommitReferences(fullMessage)
-    const resolvedRefs: ResolvedReference[] =
-        github && defaultOwner && defaultRepo && rawRefs.length > 0
-            ? await resolveReferences(rawRefs, github, defaultOwner, defaultRepo)
-            : rawRefs.map((r) => ({ ...r, type: 'unknown' }))
+    let resolvedRefs: ResolvedReference[]
+    if (github && defaultOwner && defaultRepo && rawRefs.length > 0) {
+        resolvedRefs = await Promise.all(
+            rawRefs.map(async (ref) => {
+                const key = `${ref.owner ?? defaultOwner}/${ref.repo ?? defaultRepo}#${String(ref.number)}`
+                let pending = refCache.get(key)
+                if (pending === undefined) {
+                    pending = resolveReferences([ref], github, defaultOwner, defaultRepo)
+                    refCache.set(key, pending)
+                }
+                const [resolved] = await pending
+                return resolved ? { ...resolved, type: resolved.type } : { ...ref, type: 'unknown' as const }
+            })
+        )
+    } else {
+        resolvedRefs = rawRefs.map((r) => ({ ...r, type: 'unknown' }))
+    }
     return {
         hash: commit.hash,
         subject: commit.message,
@@ -106,10 +120,11 @@ export async function enrichCommits(
 
     const validHashes = commitHashes.filter((hash) => /^[0-9a-fA-F]{7,40}$/.test(hash))
     const rawCommits = await fetchCommitsBatched(validHashes, git)
+    const refCache = new Map<string, Promise<ResolvedReference[]>>()
     for (let i = 0; i < rawCommits.length; i += ENRICH_CONCURRENCY) {
         const chunk = rawCommits.slice(i, i + ENRICH_CONCURRENCY)
         const outcomes = await Promise.all(
-            chunk.map((commit) => resolveCommitRefs(commit, github, defaultOwner, defaultRepo))
+            chunk.map((commit) => resolveCommitRefs(commit, github, defaultOwner, defaultRepo, refCache))
         )
         enriched.push(...outcomes)
     }

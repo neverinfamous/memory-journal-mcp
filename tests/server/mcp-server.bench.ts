@@ -1,5 +1,6 @@
 import { test, beforeAll, afterAll } from 'vitest'
 import { getTools, callTool } from '../../src/handlers/tools/index.js'
+import { parseToolFilter } from '../../src/filtering/tool-filter.js'
 import { DatabaseAdapter } from '../../src/database/sqlite-adapter/index.js'
 import { ServerRuntime } from '../../src/utils/maintenance-lock.js'
 import { logger, type LogLevel } from '../../src/utils/logger.js'
@@ -12,6 +13,17 @@ let writeDb: DatabaseAdapter
 const readRuntime = new ServerRuntime()
 const writeRuntime = new ServerRuntime()
 const registry = { 'bench-ws': { path: process.cwd(), project_number: 1 } }
+const filteredToolFilter = parseToolFilter('-team,-github')
+const BENCH_SEARCH_TERMS = [
+    'benchmark',
+    'sqlite',
+    'codemode',
+    'vector',
+    'briefing',
+    'staleness',
+    'migration',
+    'telemetry',
+] as const
 const readConfig = {
     runtime: readRuntime,
     projectRegistry: registry,
@@ -64,14 +76,21 @@ beforeAll(async () => {
     const seedBenchDb = (db: DatabaseAdapter): void => {
         db.executeInTransaction(() => {
             for (let i = 0; i < 1000; i++) {
+                const term = BENCH_SEARCH_TERMS[i % BENCH_SEARCH_TERMS.length] ?? 'benchmark'
                 db.createEntry({
                     workspaceId: 'bench-ws',
                     projectNumber: 1,
-                    content: `Server benchmark tool entry ${i} ${Math.random().toString(36)}`,
+                    content: `Server benchmark ${term} tool entry ${i} ${Math.random().toString(36)}`,
                     entryType: 'project_decision',
                 })
             }
         })
+        const nativeDb = (
+            db as unknown as {
+                connection: { getNativeDb: () => { exec: (sql: string) => void } }
+            }
+        ).connection.getNativeDb()
+        nativeDb.exec('ANALYZE')
     }
     seedBenchDb(readDb)
     seedBenchDb(writeDb)
@@ -140,6 +159,13 @@ test('getTools', async ({ bench }) => {
     }).run()
 })
 
+test('getTools (filtered -team,-github)', async ({ bench }) => {
+    const getToolsFn = getTools
+    await bench('getTools (filtered -team,-github)', () => {
+        getToolsFn(readDb, filteredToolFilter, undefined, undefined, readConfig)
+    }).run()
+})
+
 test('callTool get_recent_entries', async ({ bench }) => {
     await bench('callTool get_recent_entries', async () => {
         await callTool(
@@ -167,11 +193,13 @@ test('callTool get_recent_entries (with progressToken)', async ({ bench }) => {
     }).run()
 })
 
+let searchTermCursor = 0
 test('callTool search_entries', async ({ bench }) => {
     await bench('callTool search_entries', async () => {
+        const query = BENCH_SEARCH_TERMS[searchTermCursor++ % BENCH_SEARCH_TERMS.length] ?? 'benchmark'
         await callTool(
             'search_entries',
-            { workspace_id: 'bench-ws', query: 'benchmark', limit: 20 },
+            { workspace_id: 'bench-ws', query, limit: 20 },
             readDb,
             undefined,
             undefined,

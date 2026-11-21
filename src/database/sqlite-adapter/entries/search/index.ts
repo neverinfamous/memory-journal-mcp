@@ -10,6 +10,7 @@ export {
     type SearchQueryRow,
     getRecentEntries,
     getEntriesPage,
+    getEntriesAfter,
     searchEntries,
     getSearchFacets,
     searchByDateRange,
@@ -18,4 +19,5 @@ export {
     getEntriesByPR,
     getEntriesByWorkflowRun,
     getEntriesBySession,
+    getLatestEntryPerProject,
 } from './query.js'

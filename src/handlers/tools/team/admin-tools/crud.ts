@@ -10,8 +10,13 @@ import { ValidationError } from '../../../../types/errors.js'
 import { formatHandlerError } from '../../../../utils/error-helpers.js'
 import { logger } from '../../../../utils/logger.js'
 import { resolveWriteWorkspaceId } from '../../write-workspace.js'
-import { TEAM_DB_ERROR_RESPONSE, fetchAuthor, triggerTeamNotifications } from '../helpers.js'
-import { checkSingleTeamOwnership, missingProjectNumberResponse, type TeamDbInstance } from './batch-delete-helpers.js'
+import { TEAM_DB_ERROR_RESPONSE, triggerTeamNotifications } from '../helpers.js'
+import {
+    checkSingleTeamOwnership,
+    checkSingleTeamOwnershipWithAuthor,
+    missingProjectNumberResponse,
+    type TeamDbInstance,
+} from './batch-delete-helpers.js'
 import {
     canRealignOrphanedRegisteredProject,
     resolveTeamMutationProjectNumber,
@@ -62,7 +67,7 @@ function resolveTeamUpdateScope(
     context: ToolContext,
     input: TeamUpdateInput
 ):
-    | { wsId: string; projectNumber: number; existing: JournalEntry }
+    | { wsId: string; projectNumber: number; existing: JournalEntry; author: string | null }
     | { errorResponse: Record<string, unknown> } {
     let wsId = resolveWriteWorkspaceId(input.workspace_id, input.project_number, context.config)
     const existing = teamDb.getEntryById(input.entry_id, wsId)
@@ -115,9 +120,15 @@ function resolveTeamUpdateScope(
             'At least one updatable field must be specified in team_update_entry (empty metadata-only updates are rejected).'
         )
     }
-    const denied = checkSingleTeamOwnership(teamDb, context, input.entry_id, 'modify', wsId)
+    const { denied, author } = checkSingleTeamOwnershipWithAuthor(
+        teamDb,
+        context,
+        input.entry_id,
+        'modify',
+        wsId
+    )
     if (denied !== null) return { errorResponse: denied }
-    return { wsId, projectNumber, existing }
+    return { wsId, projectNumber, existing, author }
 }
 
 async function executeTeamUpdateEntry(
@@ -128,8 +139,7 @@ async function executeTeamUpdateEntry(
     const input = TeamUpdateEntrySchema.parse(params)
     const scope = resolveTeamUpdateScope(teamDb, context, input)
     if ('errorResponse' in scope) return scope.errorResponse
-    const { wsId, projectNumber } = scope
-    const author = fetchAuthor(teamDb, input.entry_id)
+    const { wsId, projectNumber, author } = scope
 
     const updated = teamDb.updateEntry(input.entry_id, {
         content: input.content,

@@ -107,12 +107,14 @@ function getRelationshipCounts(
         : ''
     const peerScopeClause = `${peerWsClause}${peerProjClause}`
     const activePeerFilter = `EXISTS (SELECT 1 FROM memory_journal p WHERE p.id = r.to_entry_id AND r.to_entry_id != r.from_entry_id AND p.deleted_at IS NULL${peerScopeClause})`
+    const relStartFrom = dateParams.length > 0
+        ? `FROM memory_journal m CROSS JOIN relationships r ON r.from_entry_id = m.id`
+        : `FROM relationships r JOIN memory_journal m ON r.from_entry_id = m.id`
     const relTypeRows = db
         .prepare(
             `
         SELECT r.relationship_type, COUNT(*) as count
-        FROM relationships r
-        JOIN memory_journal m ON r.from_entry_id = m.id
+        ${relStartFrom}
         WHERE m.deleted_at IS NULL${dateFilter} AND ${activePeerFilter}
         GROUP BY r.relationship_type
     `
@@ -133,12 +135,12 @@ function getRelationshipCounts(
                AND (
                    EXISTS (
                        SELECT 1 FROM relationships r
-                       JOIN memory_journal p ON p.id = r.to_entry_id
+                       CROSS JOIN memory_journal p ON p.id = r.to_entry_id
                        WHERE r.from_entry_id = m.id AND r.from_entry_id != r.to_entry_id AND p.deleted_at IS NULL${peerScopeClause}
                    )
                    OR EXISTS (
                        SELECT 1 FROM relationships r
-                       JOIN memory_journal p ON p.id = r.from_entry_id
+                       CROSS JOIN memory_journal p ON p.id = r.from_entry_id
                        WHERE r.to_entry_id = m.id AND r.from_entry_id != r.to_entry_id AND p.deleted_at IS NULL${peerScopeClause}
                    )
                )`

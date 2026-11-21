@@ -4,7 +4,7 @@ import type { TeamRole } from '../../../database/core/interfaces.js'
 import { resolveAuthenticatedAuthor } from '../../../utils/security-utils.js'
 import { resolveWorkspaceId } from '../../../utils/workspace-resolver.js'
 import { formatHandlerError } from '../../../utils/error-helpers.js'
-import { collectExtraTargetWorkspaces, extractTargetWorkspaceId } from './rbac-scope-target.js'
+import { collectAllTargetWorkspaces } from './rbac-scope-target.js'
 
 /**
  * Resolves `author` via workspace-scoped alias mapping when a concrete workspace ID is available.
@@ -44,13 +44,25 @@ export function resolveScopedTeamRole(
     if (!teamDb || typeof teamDb.resolveTeamRole !== 'function') {
         return defaultRole === 'denied' ? null : defaultRole
     }
-    const directRole = normalizeResolvedRole(teamDb.resolveTeamRole(author, defaultRole))
     if (typeof teamDb.getTeamMember === 'function') {
+        if (typeof teamDb.isTeamRbacActive === 'function' && !teamDb.isTeamRbacActive()) {
+            return 'admin'
+        }
         const directMember = teamDb.getTeamMember(author)
         if (directMember !== null && directMember !== undefined) {
-            return directRole
+            return normalizeResolvedRole(directMember.role)
         }
-    } else if (directRole === 'admin') {
+        const canonical = canonicalizeTeamAuthor(teamDb, author, workspaceId)
+        if (canonical !== author) {
+            const canonicalRole = normalizeResolvedRole(teamDb.resolveTeamRole(canonical, 'denied'))
+            if (canonicalRole !== null) {
+                return canonicalRole
+            }
+        }
+        return defaultRole === 'denied' ? null : defaultRole
+    }
+    const directRole = normalizeResolvedRole(teamDb.resolveTeamRole(author, defaultRole))
+    if (directRole === 'admin') {
         return 'admin'
     }
     const canonical = canonicalizeTeamAuthor(teamDb, author, workspaceId)
@@ -176,7 +188,8 @@ export function enforceOwnership(
     role: TeamRole | null,
     teamDb?: ToolContext['teamDb'],
     workspaceId?: string,
-    rbacActive = false
+    rbacActive = false,
+    canonicalizeFn?: (name: string, ws?: string) => string
 ): void {
     if (rbacActive && (role === null || role === 'viewer')) {
         throw new AuthorizationError(
@@ -184,8 +197,9 @@ export function enforceOwnership(
         )
     }
     if (role === 'admin') return // Admins can bypass ownership checks
-    const effectiveCaller = canonicalizeTeamAuthor(teamDb, author, workspaceId)
-    const effectiveOwner = canonicalizeTeamAuthor(teamDb, resourceAuthor, workspaceId)
+    const canonicalize = canonicalizeFn ?? ((name: string, ws?: string) => canonicalizeTeamAuthor(teamDb, name, ws))
+    const effectiveCaller = canonicalize(author, workspaceId)
+    const effectiveOwner = canonicalize(resourceAuthor, workspaceId)
     if (effectiveCaller.toLowerCase() !== effectiveOwner.toLowerCase()) {
         throw new AuthorizationError(`Access denied: cannot modify resource owned by '${resourceAuthor}'. Only the original author or an admin can modify this entry.`)
     }
@@ -201,7 +215,8 @@ export function enforceEntryOwnership(
     role: TeamRole | null,
     teamDb?: ToolContext['teamDb'],
     workspaceId?: string,
-    rbacActive = false
+    rbacActive = false,
+    canonicalizeFn?: (name: string, ws?: string) => string
 ): void {
     if (entryAuthor === null || entryAuthor === undefined || entryAuthor.trim() === '') {
         if (role === 'admin' || (!rbacActive && role === null)) return
@@ -209,7 +224,7 @@ export function enforceEntryOwnership(
             'Access denied: this entry has no recorded author. Only a team admin can modify it.'
         )
     }
-    enforceOwnership(currentUser, entryAuthor, role, teamDb, workspaceId, rbacActive)
+    enforceOwnership(currentUser, entryAuthor, role, teamDb, workspaceId, rbacActive, canonicalizeFn)
 }
 
 /**
@@ -233,17 +248,11 @@ export function wrapWithRbac(context: ToolContext, tools: ToolDefinition[], defa
                 // Determine caller identity
                 const author = getCallerIdentity()
                 const isGlobal = GLOBAL_TEAM_TOOLS.has(tool.name)
-                const targetWs = isGlobal ? '*' : extractTargetWorkspaceId(params, context.config)
-
-                // Enforce role requirement
-                enforceTeamRbac(context, author, requiredRole, targetWs)
-                if (!isGlobal) {
-                    for (const extraWs of collectExtraTargetWorkspaces(
-                        params,
-                        targetWs,
-                        context.config
-                    )) {
-                        enforceTeamRbac(context, author, requiredRole, extraWs)
+                if (isGlobal) {
+                    enforceTeamRbac(context, author, requiredRole, '*')
+                } else {
+                    for (const ws of collectAllTargetWorkspaces(params, context.config)) {
+                        enforceTeamRbac(context, author, requiredRole, ws)
                     }
                 }
 

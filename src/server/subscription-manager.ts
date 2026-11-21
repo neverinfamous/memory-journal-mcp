@@ -17,10 +17,36 @@ export class SubscriptionManager {
     // Map of URI string -> Set of Session IDs
     private subscriptions = new Map<string, Set<string>>()
 
+    // Reverse index: Session ID -> Set of subscribed URI strings
+    private sessionUris = new Map<string, Set<string>>()
+
+    // Reverse index: normalized base URI -> Set of subscribed full URI strings
+    private baseUriToSubUris = new Map<string, Set<string>>()
+
     // Microtask-coalesced pending resource notifications
     private pendingNotificationUris = new Set<string>()
     private pendingNotificationWaiters: { resolve: () => void; reject: (err: unknown) => void }[] = []
     private flushScheduled = false
+
+    private indexSubscribedUri(uri: string): void {
+        const baseUri = getBaseUri(uri)
+        let urisForBase = this.baseUriToSubUris.get(baseUri)
+        if (urisForBase === undefined) {
+            urisForBase = new Set<string>()
+            this.baseUriToSubUris.set(baseUri, urisForBase)
+        }
+        urisForBase.add(uri)
+    }
+
+    private unindexSubscribedUri(uri: string): void {
+        const baseUri = getBaseUri(uri)
+        const urisForBase = this.baseUriToSubUris.get(baseUri)
+        if (urisForBase === undefined) return
+        urisForBase.delete(uri)
+        if (urisForBase.size === 0) {
+            this.baseUriToSubUris.delete(baseUri)
+        }
+    }
 
     /**
      * Register a server instance for a session to allow sending notifications.
@@ -58,13 +84,11 @@ export class SubscriptionManager {
             sessionId = 'stdio' // Fallback for stateless transports or stdio
         }
 
-        let sessionSubCount = 0
-        for (const sessSet of this.subscriptions.values()) {
-            if (sessSet.has(sessionId)) {
-                sessionSubCount++
-            }
+        let urisForSession = this.sessionUris.get(sessionId)
+        if (urisForSession?.has(uri) === true) {
+            return
         }
-        if (sessionSubCount >= SubscriptionManager.MAX_SUBSCRIPTIONS_PER_SESSION) {
+        if ((urisForSession?.size ?? 0) >= SubscriptionManager.MAX_SUBSCRIPTIONS_PER_SESSION) {
             logger.warning(`Session ${sessionId} reached maximum resource subscription limit`, {
                 module: 'SubscriptionManager',
             })
@@ -78,14 +102,18 @@ export class SubscriptionManager {
             }
             sessions = new Set<string>()
             this.subscriptions.set(uri, sessions)
+            this.indexSubscribedUri(uri)
         }
 
-        if (!sessions.has(sessionId)) {
-            sessions.add(sessionId)
-            logger.debug(`Session ${sessionId} subscribed to resource ${uri}`, {
-                module: 'SubscriptionManager',
-            })
+        sessions.add(sessionId)
+        if (urisForSession === undefined) {
+            urisForSession = new Set<string>()
+            this.sessionUris.set(sessionId, urisForSession)
         }
+        urisForSession.add(uri)
+        logger.debug(`Session ${sessionId} subscribed to resource ${uri}`, {
+            module: 'SubscriptionManager',
+        })
     }
 
     /**
@@ -99,12 +127,20 @@ export class SubscriptionManager {
         const sessions = this.subscriptions.get(uri)
         if (sessions?.has(sessionId)) {
             sessions.delete(sessionId)
+            const urisForSession = this.sessionUris.get(sessionId)
+            if (urisForSession !== undefined) {
+                urisForSession.delete(uri)
+                if (urisForSession.size === 0) {
+                    this.sessionUris.delete(sessionId)
+                }
+            }
             logger.debug(`Session ${sessionId} unsubscribed from resource ${uri}`, {
                 module: 'SubscriptionManager',
             })
 
             if (sessions.size === 0) {
                 this.subscriptions.delete(uri)
+                this.unindexSubscribedUri(uri)
             }
         }
     }
@@ -113,16 +149,23 @@ export class SubscriptionManager {
      * Unsubscribe a session from all resources (useful on transport disconnect).
      */
     public unsubscribeSession(sessionId: string): void {
+        const urisForSession = this.sessionUris.get(sessionId)
+        if (urisForSession === undefined || urisForSession.size === 0) {
+            this.sessionUris.delete(sessionId)
+            return
+        }
         let count = 0
-        for (const [uri, sessions] of this.subscriptions.entries()) {
-            if (sessions.has(sessionId)) {
-                sessions.delete(sessionId)
+        for (const uri of urisForSession) {
+            const sessions = this.subscriptions.get(uri)
+            if (sessions?.delete(sessionId)) {
                 count++
                 if (sessions.size === 0) {
                     this.subscriptions.delete(uri)
+                    this.unindexSubscribedUri(uri)
                 }
             }
         }
+        this.sessionUris.delete(sessionId)
         if (count > 0) {
             logger.debug(
                 `Session ${sessionId} disconnected, removed ${count} subscriptions`,
@@ -163,15 +206,28 @@ export class SubscriptionManager {
         if (directSessions !== undefined) {
             pushIfActive(uri, directSessions)
         }
-        for (const [subUri, subSessions] of this.subscriptions.entries()) {
-            if (subSessions.size === 0 || seenUris.has(subUri)) continue
-            const subBase = getBaseUri(subUri)
-            if (
-                subBase === baseUri ||
-                (isBriefingRoot && subBase.startsWith('memory://briefing/')) ||
-                (isBriefingSection && subBase === 'memory://briefing')
-            ) {
-                pushIfActive(subUri, subSessions)
+        const sameBaseUris = this.baseUriToSubUris.get(baseUri)
+        if (sameBaseUris !== undefined) {
+            for (const subUri of sameBaseUris) {
+                const subSessions = this.subscriptions.get(subUri)
+                if (subSessions !== undefined) pushIfActive(subUri, subSessions)
+            }
+        }
+        if (isBriefingRoot) {
+            for (const [subBase, subUris] of this.baseUriToSubUris.entries()) {
+                if (!subBase.startsWith('memory://briefing/')) continue
+                for (const subUri of subUris) {
+                    const subSessions = this.subscriptions.get(subUri)
+                    if (subSessions !== undefined) pushIfActive(subUri, subSessions)
+                }
+            }
+        } else if (isBriefingSection) {
+            const rootUris = this.baseUriToSubUris.get('memory://briefing')
+            if (rootUris !== undefined) {
+                for (const subUri of rootUris) {
+                    const subSessions = this.subscriptions.get(subUri)
+                    if (subSessions !== undefined) pushIfActive(subUri, subSessions)
+                }
             }
         }
         return targets

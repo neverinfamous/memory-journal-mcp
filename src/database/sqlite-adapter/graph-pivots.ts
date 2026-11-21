@@ -57,10 +57,10 @@ function scopeOf(workspaceId: string | undefined): ScopeInfo {
 /** SQL predicate: entry alias `alias` has at least one live (in-scope) peer. */
 function linkedPredicate(alias: string, scoped: boolean): string {
     const peerWs = scoped ? ' AND p.workspace_id = ?' : ''
-    return `(EXISTS (SELECT 1 FROM relationships r JOIN memory_journal p ON p.id = r.to_entry_id
+    return `(EXISTS (SELECT 1 FROM relationships r CROSS JOIN memory_journal p ON p.id = r.to_entry_id
                      WHERE r.from_entry_id = ${alias}.id AND r.to_entry_id != r.from_entry_id
                        AND p.deleted_at IS NULL${peerWs})
-          OR EXISTS (SELECT 1 FROM relationships r JOIN memory_journal p ON p.id = r.from_entry_id
+          OR EXISTS (SELECT 1 FROM relationships r CROSS JOIN memory_journal p ON p.id = r.from_entry_id
                      WHERE r.to_entry_id = ${alias}.id AND r.from_entry_id != r.to_entry_id
                        AND p.deleted_at IS NULL${peerWs}))`
 }
@@ -84,14 +84,14 @@ export function queryRelationshipDegrees(
         .prepare(
             `WITH ids(id) AS (SELECT CAST(value AS INTEGER) FROM json_each(?))
              SELECT ids.id AS entry_id,
-                    (SELECT COUNT(*) FROM relationships r JOIN memory_journal p ON p.id = r.to_entry_id
+                    (SELECT COUNT(*) FROM relationships r CROSS JOIN memory_journal p ON p.id = r.to_entry_id
                       WHERE r.from_entry_id = ids.id AND r.to_entry_id != r.from_entry_id
                         AND p.deleted_at IS NULL${peerWs})
-                  + (SELECT COUNT(*) FROM relationships r JOIN memory_journal p ON p.id = r.from_entry_id
+                  + (SELECT COUNT(*) FROM relationships r CROSS JOIN memory_journal p ON p.id = r.from_entry_id
                       WHERE r.to_entry_id = ids.id AND r.from_entry_id != r.to_entry_id
                         AND p.deleted_at IS NULL${peerWs}) AS degree
              FROM ids
-             JOIN memory_journal m ON m.id = ids.id AND m.deleted_at IS NULL${srcWs}`
+             CROSS JOIN memory_journal m ON m.id = ids.id AND m.deleted_at IS NULL${srcWs}`
         )
         .all(...(scoped ? [JSON.stringify(ids), ws, ws, ws] : [JSON.stringify(ids)])) as {
         entry_id: number
@@ -127,16 +127,26 @@ export function queryActiveThreads(
                  WHERE deleted_at IS NULL${recentWs}
                    AND timestamp >= ? AND julianday(timestamp) >= julianday(?)
              ),
+             recent_rels AS MATERIALIZED (
+                 SELECT r.id, r.from_entry_id, r.to_entry_id
+                 FROM recent rec
+                 CROSS JOIN relationships r ON r.from_entry_id = rec.id
+                 WHERE r.from_entry_id != r.to_entry_id
+                 UNION
+                 SELECT r.id, r.from_entry_id, r.to_entry_id
+                 FROM recent rec
+                 CROSS JOIN relationships r ON r.to_entry_id = rec.id
+                 WHERE r.from_entry_id != r.to_entry_id
+             ),
              edges AS (
-                 SELECT from_entry_id AS hub, to_entry_id AS peer FROM relationships WHERE from_entry_id != to_entry_id
+                 SELECT from_entry_id AS hub, to_entry_id AS peer FROM recent_rels
                  UNION ALL
-                 SELECT to_entry_id AS hub, from_entry_id AS peer FROM relationships WHERE from_entry_id != to_entry_id
+                 SELECT to_entry_id AS hub, from_entry_id AS peer FROM recent_rels
              )
              SELECT e.hub AS entry_id, m.entry_type AS entry_type, m.content AS content, COUNT(*) AS recent_links
              FROM edges e
-             JOIN memory_journal m ON m.id = e.hub AND m.deleted_at IS NULL${hubWs}
-             JOIN memory_journal p ON p.id = e.peer AND p.deleted_at IS NULL${peerWs}
-             WHERE e.hub IN (SELECT id FROM recent) OR e.peer IN (SELECT id FROM recent)
+             CROSS JOIN memory_journal m ON m.id = e.hub AND m.deleted_at IS NULL${hubWs}
+             CROSS JOIN memory_journal p ON p.id = e.peer AND p.deleted_at IS NULL${peerWs}
              GROUP BY e.hub
              HAVING COUNT(*) >= 2
              ORDER BY recent_links DESC, e.hub DESC
@@ -213,6 +223,32 @@ export function queryEntryIdsByCommitShas(
     return result
 }
 
+function fetchEdgeEndpointNodes(
+    db: Database,
+    edges: readonly { from: number; to: number }[]
+): RecentNeighborhood['nodes'] {
+    const nodeIds = [...new Set(edges.flatMap((e) => [e.from, e.to]))]
+    if (nodeIds.length === 0) return []
+    const rows = db
+        .prepare(
+            `SELECT id, entry_type, content, timestamp FROM memory_journal
+             WHERE id IN (SELECT CAST(value AS INTEGER) FROM json_each(?))
+             ORDER BY id DESC`
+        )
+        .all(JSON.stringify(nodeIds)) as {
+        id: number
+        entry_type: string
+        content: string
+        timestamp: string
+    }[]
+    return rows.map((r) => ({
+        id: r.id,
+        entryType: r.entry_type,
+        content: r.content,
+        timestamp: r.timestamp,
+    }))
+}
+
 /**
  * Compact recent neighborhood: edges touching an entry created on/after `sinceIso`
  * (newest relationships first, capped at `edgeLimit`), their endpoint nodes, and
@@ -226,7 +262,7 @@ export function queryRecentNeighborhood(
 ): RecentNeighborhood {
     const { scoped, id: ws } = scopeOf(workspaceId)
     const recentWs = scoped ? ' AND workspace_id = ?' : ''
-    const endpointWs = scoped ? ' AND mf.workspace_id = ? AND mt.workspace_id = ?' : ''
+    const endpointWs = scoped ? ' WHERE mf.workspace_id = ? AND mt.workspace_id = ?' : ''
     const sinceFloor = sinceIso.slice(0, 10)
     const edgeRows = db
         .prepare(
@@ -234,13 +270,22 @@ export function queryRecentNeighborhood(
                  SELECT id FROM memory_journal
                  WHERE deleted_at IS NULL${recentWs}
                    AND timestamp >= ? AND julianday(timestamp) >= julianday(?)
+             ),
+             recent_rels AS (
+                 SELECT r.id, r.from_entry_id, r.to_entry_id, r.relationship_type
+                 FROM recent rec
+                 CROSS JOIN relationships r ON r.from_entry_id = rec.id
+                 WHERE r.from_entry_id != r.to_entry_id
+                 UNION
+                 SELECT r.id, r.from_entry_id, r.to_entry_id, r.relationship_type
+                 FROM recent rec
+                 CROSS JOIN relationships r ON r.to_entry_id = rec.id
+                 WHERE r.from_entry_id != r.to_entry_id
              )
              SELECT r.from_entry_id AS from_id, r.to_entry_id AS to_id, r.relationship_type AS type
-             FROM relationships r
-             JOIN memory_journal mf ON mf.id = r.from_entry_id AND mf.deleted_at IS NULL
-             JOIN memory_journal mt ON mt.id = r.to_entry_id AND mt.deleted_at IS NULL
-             WHERE r.from_entry_id != r.to_entry_id${endpointWs}
-               AND (r.from_entry_id IN (SELECT id FROM recent) OR r.to_entry_id IN (SELECT id FROM recent))
+             FROM recent_rels r
+             CROSS JOIN memory_journal mf ON mf.id = r.from_entry_id AND mf.deleted_at IS NULL
+             CROSS JOIN memory_journal mt ON mt.id = r.to_entry_id AND mt.deleted_at IS NULL${endpointWs}
              ORDER BY r.id DESC
              LIMIT ?`
         )
@@ -250,53 +295,25 @@ export function queryRecentNeighborhood(
         type: string
     }[]
     const edges = edgeRows.map((r) => ({ from: r.from_id, to: r.to_id, type: r.type }))
-    const nodeIds = [...new Set(edges.flatMap((e) => [e.from, e.to]))]
-    const nodes =
-        nodeIds.length === 0
-            ? []
-            : (
-                  db
-                      .prepare(
-                          `SELECT id, entry_type, content, timestamp FROM memory_journal
-                           WHERE id IN (SELECT CAST(value AS INTEGER) FROM json_each(?))
-                           ORDER BY id DESC`
-                      )
-                      .all(JSON.stringify(nodeIds)) as {
-                      id: number
-                      entry_type: string
-                      content: string
-                      timestamp: string
-                  }[]
-              ).map((r) => ({
-                  id: r.id,
-                  entryType: r.entry_type,
-                  content: r.content,
-                  timestamp: r.timestamp,
-              }))
-
+    const nodes = fetchEdgeEndpointNodes(db, edges)
     const entryWs = scoped ? ' AND e.workspace_id = ?' : ''
-    const unlinkedRows = db
+    const windowRows = db
         .prepare(
-            `SELECT e.id AS id FROM memory_journal e
+            `SELECT e.id AS id, ${linkedPredicate('e', scoped)} AS is_linked
+             FROM memory_journal e
              WHERE e.deleted_at IS NULL${entryWs}
                AND e.timestamp >= ? AND julianday(e.timestamp) >= julianday(?)
-               AND NOT ${linkedPredicate('e', scoped)}
              ORDER BY e.id DESC`
         )
-        .all(...(scoped ? [ws, sinceFloor, sinceIso, ws, ws] : [sinceFloor, sinceIso])) as { id: number }[]
-    const countRow = db
-        .prepare(
-            `SELECT COUNT(*) AS recent FROM memory_journal e
-             WHERE e.deleted_at IS NULL${entryWs}
-               AND e.timestamp >= ? AND julianday(e.timestamp) >= julianday(?)`
-        )
-        .get(...(scoped ? [ws, sinceFloor, sinceIso] : [sinceFloor, sinceIso])) as { recent: number } | undefined
-    return {
-        nodes,
-        edges,
-        unlinkedIds: unlinkedRows.map((r) => r.id),
-        recentEntries: countRow?.recent ?? 0,
+        .all(...(scoped ? [ws, ws, ws, sinceFloor, sinceIso] : [sinceFloor, sinceIso])) as {
+        id: number
+        is_linked: number
+    }[]
+    const unlinkedIds: number[] = []
+    for (const r of windowRows) {
+        if (r.is_linked === 0) unlinkedIds.push(r.id)
     }
+    return { nodes, edges, unlinkedIds, recentEntries: windowRows.length }
 }
 
 /** ISO timestamp `days` days before now (UTC). */

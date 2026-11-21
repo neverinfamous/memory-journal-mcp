@@ -135,6 +135,21 @@ function matchMultiCharStripperOperator(code: string, i: number, ch: string, nex
     return isTwoCharStripperOperator(code, i, ch, next) ? ch + next : null
 }
 
+function isLineBreakChar(ch: string): boolean {
+    return ch === '\n' || ch === '\r' || ch === '\u2028' || ch === '\u2029'
+}
+
+function maybeSkipComment(
+    code: string,
+    i: number,
+    ch: string,
+    allowHtmlClose: boolean
+): ReturnType<typeof skipLineOrBlockComment> {
+    return ch === '/' || ch === '<' || ch === '-'
+        ? skipLineOrBlockComment(code, i, allowHtmlClose)
+        : null
+}
+
 export function stripCommentsAndStrings(code: string): string {
     const len = code.length
     let out = ''
@@ -147,7 +162,7 @@ export function stripCommentsAndStrings(code: string): string {
         const ch = code[i] ?? ''
         const next = i + 1 < len ? (code[i + 1] ?? '') : ''
 
-        const comment = skipLineOrBlockComment(code, i, lineOnlyWsOrComments)
+        const comment = maybeSkipComment(code, i, ch, lineOnlyWsOrComments)
         if (comment !== null) {
             out += comment.out
             if (comment.hasNewline === true) {
@@ -201,7 +216,7 @@ export function stripCommentsAndStrings(code: string): string {
             i = ident.next
             continue
         }
-        if (isJsLineTerminator(ch)) {
+        if (isLineBreakChar(ch)) {
             lineOnlyWsOrComments = true
             markLineTerminator(state)
         } else if (!/\s/.test(ch)) {

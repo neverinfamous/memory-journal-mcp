@@ -1,4 +1,3 @@
-import { z } from 'zod'
 import {
     McpServer,
     type CallToolResult,
@@ -30,7 +29,10 @@ import {
     createResourceReadHandler,
     formatToolFailure,
     getCachedReadOnlyHints,
+    isStandardSchemaWithJson,
     notifyMutationSubscribers,
+    relaxInputSchemaForMcp,
+    relaxOutputSchemaForMcp,
     resolveActiveBriefingConfig,
     syncLiveHandlerConfig,
 } from './register-tools-helpers.js'
@@ -59,85 +61,6 @@ interface ModernToolConfig {
 }
 
 const toolRegistrationOptionsCache = new WeakMap<ToolRegistration, ModernToolConfig>()
-
-function isStandardSchemaWithJson(value: unknown): value is StandardSchemaWithJSON {
-    return (
-        typeof value === 'object' &&
-        value !== null &&
-        ('~standard' in value || 'partial' in value || 'loose' in value || 'passthrough' in value)
-    )
-}
-
-function relaxInputSchemaForMcp(schema: unknown, depth = 0): unknown {
-    if (depth > 16 || typeof schema !== 'object' || schema === null) {
-        return schema
-    }
-    if (schema instanceof z.ZodObject) {
-        return schema.partial().loose()
-    }
-    if (schema instanceof z.ZodPipe) {
-        const relaxedIn = relaxInputSchemaForMcp(schema.in, depth + 1)
-        const relaxedOut = relaxInputSchemaForMcp(schema.out, depth + 1)
-        if (relaxedIn !== schema.in || relaxedOut !== schema.out) {
-            return z.pipe(relaxedIn as z.ZodType, relaxedOut as z.ZodType)
-        }
-        return schema
-    }
-    if ('partial' in schema && typeof schema.partial === 'function') {
-        const relaxed = (
-            schema as {
-                partial: () => {
-                    loose?: () => StandardSchemaWithJSON
-                    passthrough?: () => StandardSchemaWithJSON
-                }
-            }
-        ).partial()
-        if (typeof relaxed.loose === 'function') {
-            return relaxed.loose()
-        }
-        if (typeof relaxed.passthrough === 'function') {
-            return relaxed.passthrough()
-        }
-    }
-    return schema
-}
-
-function tryRelaxOutputSchema(outSchema: unknown): StandardSchemaWithJSON | undefined {
-    if (outSchema instanceof z.ZodObject) {
-        const looseSchema: unknown = outSchema.loose()
-        return isStandardSchemaWithJson(looseSchema) ? looseSchema : undefined
-    }
-    if (typeof outSchema !== 'object' || outSchema === null) {
-        return undefined
-    }
-    if ('loose' in outSchema && typeof outSchema.loose === 'function') {
-        return (outSchema as { loose: () => StandardSchemaWithJSON }).loose()
-    }
-    if ('passthrough' in outSchema && typeof outSchema.passthrough === 'function') {
-        return (outSchema as { passthrough: () => StandardSchemaWithJSON }).passthrough()
-    }
-    return undefined
-}
-
-function relaxOutputSchemaForMcp(
-    outSchema: unknown,
-    toolName: string
-): StandardSchemaWithJSON | undefined {
-    const fallbackOutputSchema = isStandardSchemaWithJson(outSchema) ? outSchema : undefined
-    try {
-        const relaxed = tryRelaxOutputSchema(outSchema)
-        if (relaxed !== undefined) {
-            return relaxed
-        }
-    } catch (error) {
-        logger.warning('Failed to relax output schema; using fallback schema', {
-            module: 'McpServer',
-            tool: toolName,
-            error: error instanceof Error ? error.message : String(error),
-        })
-    }
-    return fallbackOutputSchema
-}
 
 function buildToolRegistrationOptions(tool: ToolRegistration): ModernToolConfig {
     const cached = toolRegistrationOptionsCache.get(tool)

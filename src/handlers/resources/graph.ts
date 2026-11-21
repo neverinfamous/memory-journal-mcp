@@ -17,6 +17,7 @@ import {
     isResourceError,
     resourceWorkspace,
     safeDecodeUriSegment,
+    withResourceTokenMeta,
 } from './shared.js'
 import { markUntrustedContentInline } from '../../utils/security-utils.js'
 import { sanitizeErrorMessageForResponse } from '../../utils/error-helpers.js'
@@ -95,8 +96,7 @@ export function getGraphResourceDefinitions(): InternalResourceDef[] {
                         }))
 
                         const data = { entries, count: entries.length, source: 'github_api' }
-                        const tokenEstimate = Math.ceil(JSON.stringify(data).length / 4)
-                        return { data: { ...data, _meta: { tokenEstimate } } }
+                        return { data: withResourceTokenMeta(data) }
                     } else if (targetRepo) {
                         throw new ProtocolError(ProtocolErrorCode.InternalError,  `Repository not found or GitHub integration unavailable for: ${targetRepo}`)
                     }
@@ -114,8 +114,7 @@ export function getGraphResourceDefinitions(): InternalResourceDef[] {
 
                 const entries = context.db.getWorkflowActionEntries(10, resourceWorkspace(context))
                 const data = { entries, count: entries.length, source: 'database' }
-                const tokenEstimate = Math.ceil(JSON.stringify(data).length / 4)
-                return { data: { ...data, _meta: { tokenEstimate } } }
+                return { data: withResourceTokenMeta(data) }
             },
         },
     ]

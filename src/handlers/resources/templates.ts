@@ -15,11 +15,11 @@ import {
     resolveScopedGitHubRepo,
     isResourceError,
     resourceWorkspace,
+    withResourceTokenMeta,
 } from './shared.js'
 import { getKanbanTemplateDefinitions } from './templates-kanban.js'
 import { parseSessionCommitContext } from '../../types/auto-context.js'
 import { enrichCommits } from '../../github/commit-references/index.js'
-import { estimatePayloadTokens } from '../../observability/token-estimator.js'
 import { ProtocolError, ProtocolErrorCode } from '@modelcontextprotocol/server'
 import {
     resolveProjectScope,
@@ -43,11 +43,11 @@ function parsePositiveParam(uri: string, pattern: RegExp, errorMessage: string):
     return parsed
 }
 
-function withTokenMeta<T extends Record<string, unknown>>(data: T): T & { _meta: { tokenEstimate: number } } {
-    return { ...data, _meta: { tokenEstimate: estimatePayloadTokens(data) } }
+function withTokenMeta(data: Record<string, unknown>): unknown {
+    return withResourceTokenMeta(data)
 }
 
-function handleProjectTimelineResource(uri: string, context: ResourceContext): Record<string, unknown> {
+function handleProjectTimelineResource(uri: string, context: ResourceContext): unknown {
     const projectNumber = parsePositiveParam(
         uri,
         /^memory:\/\/projects\/(\d+)\/timeline$/,
@@ -72,7 +72,7 @@ function handleProjectTimelineResource(uri: string, context: ResourceContext): R
     return withTokenMeta({ projectNumber, entries, count: entries.length })
 }
 
-function handleIssueEntriesResource(uri: string, context: ResourceContext): Record<string, unknown> {
+function handleIssueEntriesResource(uri: string, context: ResourceContext): unknown {
     const issueNumber = parsePositiveParam(
         uri,
         /^memory:\/\/issues\/(\d+)\/entries$/,
@@ -86,7 +86,7 @@ function handleIssueEntriesResource(uri: string, context: ResourceContext): Reco
     return withTokenMeta({ issueNumber, entries, count: entries.length })
 }
 
-function handlePrEntriesResource(uri: string, context: ResourceContext): Record<string, unknown> {
+function handlePrEntriesResource(uri: string, context: ResourceContext): unknown {
     const prNumber = parsePositiveParam(
         uri,
         /^memory:\/\/prs\/(\d+)\/entries$/,
@@ -175,7 +175,7 @@ async function fetchPrMetadataForTimeline(
 async function handlePrTimelineResource(
     uri: string,
     context: ResourceContext
-): Promise<Record<string, unknown>> {
+): Promise<unknown> {
     const prNumber = parsePositiveParam(
         uri,
         /^memory:\/\/prs\/(\d+)\/timeline$/,
@@ -219,7 +219,7 @@ async function handlePrTimelineResource(
 async function handleProjectCommitsResource(
     uri: string,
     context: ResourceContext
-): Promise<Record<string, unknown>> {
+): Promise<unknown> {
     const projectNumber = parsePositiveParam(
         uri,
         /^memory:\/\/commits\/(\d+)$/,
@@ -285,7 +285,7 @@ async function handleProjectCommitsResource(
 async function handleCommitsByIssueResource(
     uri: string,
     context: ResourceContext
-): Promise<Record<string, unknown>> {
+): Promise<unknown> {
     const projectNumber = parsePositiveParam(
         uri,
         /^memory:\/\/commits\/(\d+)\/by-issue$/,
@@ -313,7 +313,7 @@ async function handleCommitsByIssueResource(
 async function handleCommitsByPrResource(
     uri: string,
     context: ResourceContext
-): Promise<Record<string, unknown>> {
+): Promise<unknown> {
     const projectNumber = parsePositiveParam(
         uri,
         /^memory:\/\/commits\/(\d+)\/by-pr$/,

@@ -56,36 +56,47 @@ const isObject = (val: unknown): val is Record<string, unknown> =>
     typeof val === 'object' && val !== null && !Array.isArray(val)
 
 const isDictLike = (obj: Record<string, unknown>): boolean => {
-    const keys = Object.keys(obj).filter((k) => typeof k === 'string' && !k.startsWith('_'))
-    return keys.length > 0 && !keys.includes('error') && !keys.includes('success')
+    if (Object.hasOwn(obj, 'error') || Object.hasOwn(obj, 'success')) return false
+    for (const k of Object.keys(obj)) {
+        if (!k.startsWith('_')) return true
+    }
+    return false
 }
 
-const dictToItems = (obj: Record<string, unknown>): unknown[] =>
-    Object.entries(obj)
-        .filter(([k]) => typeof k === 'string' && !k.startsWith('_'))
-        .map(([key, item]) => {
-            if (isObject(item)) {
-                const name = typeof item['name'] === 'string' && item['name'].length > 0 ? item['name'] : key
-                const desc = typeof item['description'] === 'string' ? item['description'] : ''
-                const projNum = item['project_number'] ?? item['projectNumber']
-                const mapped: Record<string, unknown> = { ...item, name, description: desc }
-                if (projNum !== undefined) {
-                    mapped['project_number'] = projNum
-                    mapped['projectNumber'] = projNum
-                }
-                return mapped
+const dictToItems = (obj: Record<string, unknown>): unknown[] => {
+    const items: unknown[] = []
+    for (const [key, item] of Object.entries(obj)) {
+        if (key.startsWith('_')) continue
+        if (isObject(item)) {
+            const name = typeof item['name'] === 'string' && item['name'].length > 0 ? item['name'] : key
+            const desc = typeof item['description'] === 'string' ? item['description'] : ''
+            const projNum = item['project_number'] ?? item['projectNumber']
+            const mapped: Record<string, unknown> = { ...item, name, description: desc }
+            if (projNum !== undefined) {
+                mapped['project_number'] = projNum
+                mapped['projectNumber'] = projNum
             }
-            return { name: key, description: '', value: item }
-        })
+            items.push(mapped)
+        } else {
+            items.push({ name: key, description: '', value: item })
+        }
+    }
+    return items
+}
 
 function findPrimaryArrayKey(
     targetRecord: Record<string, unknown>,
     keysToCheck: ReadonlySet<string> = RESULT_COLLECTION_KEYS
 ): string | undefined {
-    const arrayKeys = Object.keys(targetRecord).filter((k) => Array.isArray(targetRecord[k]))
-    const matched = arrayKeys.find((k) => keysToCheck.has(k))
-    if (matched !== undefined) return matched
-    return arrayKeys.length === 1 ? arrayKeys[0] : undefined
+    let soleArrayKey: string | undefined
+    let arrayCount = 0
+    for (const k of Object.keys(targetRecord)) {
+        if (!Array.isArray(targetRecord[k])) continue
+        if (keysToCheck.has(k)) return k
+        soleArrayKey = k
+        arrayCount++
+    }
+    return arrayCount === 1 ? soleArrayKey : undefined
 }
 
 function bindArrayMethod(arr: unknown[], prop: string): ((...args: unknown[]) => unknown) | undefined {

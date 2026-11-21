@@ -204,6 +204,25 @@ function visitInputContainerNode(
     return state.count > maxElements
 }
 
+const VALIDATED_TOOL_INPUT_MAX = new WeakMap<object, number>()
+
+/**
+ * Record that a host-side object graph was already verified within `maxElements`.
+ */
+export function markValidatedToolInput(value: unknown, maxElements: number): void {
+    if (value !== null && typeof value === 'object') {
+        VALIDATED_TOOL_INPUT_MAX.set(value, maxElements)
+    }
+}
+
+/**
+ * Return the element budget already verified for `value`, if any.
+ */
+export function getValidatedToolInputMax(value: unknown): number | undefined {
+    if (value === null || typeof value !== 'object') return undefined
+    return VALIDATED_TOOL_INPUT_MAX.get(value)
+}
+
 /**
  * Counts input elements iteratively (cycle-safe via active-ancestor tracking so shared
  * DAG references count on every expansion, plus O(1) internal-slot brand-checked

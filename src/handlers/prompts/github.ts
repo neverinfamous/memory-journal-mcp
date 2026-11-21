@@ -136,8 +136,7 @@ Please provide:
                                 type: 'text',
                                 text: `# Pull Request Summary
 Generate a summary for PR #${prNumber}.
-To complete this task, you MUST first read the following resources to obtain the PR's context:
-- \`memory://prs/${prNumber}/entries\`
+To complete this task, you MUST first read the following resource to obtain the PR's context (includes linked entries and PR metadata):
 - \`memory://prs/${prNumber}/timeline\`
 
 Please provide:
@@ -170,8 +169,7 @@ Please provide:
                                 type: 'text',
                                 text: `# Code Review Preparation
 Prepare a code review plan for PR #${prNumber}.
-To complete this task, you MUST first read the following resources to obtain the PR's context:
-- \`memory://prs/${prNumber}/entries\`
+To complete this task, you MUST first read the following resource to obtain the PR's context (includes linked entries and PR metadata):
 - \`memory://prs/${prNumber}/timeline\`
 
 Please provide:
@@ -204,8 +202,7 @@ Please provide:
                                 type: 'text',
                                 text: `# Pull Request Retrospective
 Conduct a retrospective analysis for PR #${prNumber}.
-To complete this task, you MUST first read the following resources to obtain the PR's context:
-- \`memory://prs/${prNumber}/entries\`
+To complete this task, you MUST first read the following resource to obtain the PR's context (includes linked entries and PR metadata):
 - \`memory://prs/${prNumber}/timeline\`
 
 Please provide:

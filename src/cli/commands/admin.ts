@@ -20,7 +20,6 @@ import {
 import { AuditLogger } from '../../audit/audit-logger.js'
 import type { AuditEntry } from '../../audit/types.js'
 import { DEFAULT_AUDIT_LOG_MAX_SIZE_BYTES } from '../../audit/types.js'
-import { VectorSearchManager } from '../../vector/vector-search-manager/index.js'
 import { formatCliError, writeCliResult } from './cli-output.js'
 
 export const backupSchema = adminBackupOptionsSchema
@@ -334,6 +333,7 @@ export async function rebuildIndexAction(options: z.infer<typeof rebuildIndexSch
         if (options.team === true) {
             enforceCliTeamRbac(db, serverOptions, 'admin', rebuildScope.workspaceId)
         }
+        const { VectorSearchManager } = await import('../../vector/vector-search-manager/index.js')
         const vectorManager = new VectorSearchManager(db, { modelName: serverOptions.embeddingModel })
 
         if (options.json !== true) {

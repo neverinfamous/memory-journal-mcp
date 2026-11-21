@@ -7,7 +7,6 @@ import { z } from 'zod'
 const execFileAsync = promisify(execFile)
 import type { AnchorStatus, ToolContext, ToolHandlerConfig } from '../../types/index.js'
 import type { IDatabaseAdapter } from '../../database/core/interfaces.js'
-import { mcpLogger } from '../../utils/mcp-logger.js'
 import { formatHandlerError } from '../../utils/error-helpers.js'
 import { ValidationError, ResourceNotFoundError } from '../../types/errors.js'
 import {
@@ -17,23 +16,16 @@ import {
 } from '../../utils/workspace-resolver.js'
 import { parseCanonicalPositiveInt } from '../../utils/safe-positive-int.js'
 import {
+    formatStalenessResponse,
+    isEnoent,
     resolvePrefetchedLookup,
+    stalenessFailure,
     type PrefetchedCommitFiles,
+    type StalenessCheckRow,
 } from './git-staleness-prefetch.js'
 
-export type { PrefetchedCommitFiles } from './git-staleness-prefetch.js'
+export { stalenessFailure, type PrefetchedCommitFiles, type StalenessCheckRow } from './git-staleness-prefetch.js'
 export { resolveGitWorkingDir, type GitWorkingDirInput } from './git-workdir.js'
-
-export interface StalenessCheckRow {
-    anchorId: number
-    path: string
-    oldStatus: AnchorStatus
-    newStatus: AnchorStatus
-    commitsSince: number
-    isDeleted: boolean
-    /** Set when git failed for a reason other than a missing path or rejected traversal. */
-    error?: string
-}
 
 function stderrText(err: unknown): string {
     if (typeof err !== 'object' || err === null || !('stderr' in err)) return ''
@@ -70,10 +62,6 @@ async function pathExistsAsync(targetPath: string): Promise<boolean> {
     }
 }
 
-function isEnoent(err: unknown): boolean {
-    return typeof err === 'object' && err !== null && 'code' in err && err.code === 'ENOENT'
-}
-
 function isOutsideRoot(rootPath: string, candidatePath: string): boolean {
     const relPath =
         process.platform === 'win32'
@@ -85,14 +73,17 @@ function isOutsideRoot(rootPath: string, candidatePath: string): boolean {
 async function assertAnchorWithinRealWorkspaceRoot(
     resolvedRoot: string,
     fullPath: string,
-    rawAnchorPath: string
+    rawAnchorPath: string,
+    precomputedRealRoot?: string
 ): Promise<boolean> {
     try {
         if ((await fs.promises.lstat(fullPath)).isSymbolicLink()) {
             throw new Error(`Path traversal detected: ${rawAnchorPath}`)
         }
         const [realRoot, realFull] = await Promise.all([
-            fs.promises.realpath(resolvedRoot).catch(() => resolvedRoot),
+            precomputedRealRoot !== undefined
+                ? Promise.resolve(precomputedRealRoot)
+                : fs.promises.realpath(resolvedRoot).catch(() => resolvedRoot),
             fs.promises.realpath(fullPath),
         ])
         if (isOutsideRoot(realRoot, realFull)) {
@@ -105,14 +96,15 @@ async function assertAnchorWithinRealWorkspaceRoot(
     }
 }
 
-/** Evaluate one anchor against `workspaceRoot`, persist status changes, and return the result row. */
 export async function evaluateAnchorStaleness(
     db: Pick<IDatabaseAdapter, 'updateAnchorStatus'>,
     anchor: { id?: number; anchorPath: string; status: AnchorStatus },
     entryTimestamp: string,
     workspaceRoot: string,
     countCommitsSince: (anchorPath: string, since: string) => Promise<number>,
-    workspaceId: string | undefined
+    workspaceId: string | undefined,
+    precomputedRealRoot?: string,
+    pendingUpdates?: { anchorId: number; status: AnchorStatus }[]
 ): Promise<StalenessCheckRow> {
     try {
         const resolvedRoot = path.resolve(workspaceRoot)
@@ -131,7 +123,8 @@ export async function evaluateAnchorStaleness(
         const isDeleted = await assertAnchorWithinRealWorkspaceRoot(
             resolvedRoot,
             fullPath,
-            anchor.anchorPath
+            anchor.anchorPath,
+            precomputedRealRoot
         )
         let commitsSince = 0
         let newStatus: AnchorStatus = anchor.status
@@ -148,7 +141,8 @@ export async function evaluateAnchorStaleness(
         }
 
         if (newStatus !== anchor.status && anchor.id !== undefined) {
-            db.updateAnchorStatus(anchor.id, newStatus, workspaceId)
+            if (pendingUpdates !== undefined) pendingUpdates.push({ anchorId: anchor.id, status: newStatus })
+            else db.updateAnchorStatus(anchor.id, newStatus, workspaceId)
         }
 
         return {
@@ -162,53 +156,13 @@ export async function evaluateAnchorStaleness(
     } catch (err: unknown) {
         const failure = stalenessFailure(anchor, err)
         if (failure.persistUnresolvable && anchor.id !== undefined) {
-            db.updateAnchorStatus(anchor.id, 'unresolvable', workspaceId)
+            if (pendingUpdates !== undefined) {
+                pendingUpdates.push({ anchorId: anchor.id, status: 'unresolvable' })
+            } else {
+                db.updateAnchorStatus(anchor.id, 'unresolvable', workspaceId)
+            }
         }
         return failure.row
-    }
-}
-
-/**
- * A missing path or a rejected traversal is a permanent resolution failure.
- * Other errors, including a failed git command, leave the stored status alone
- * and surface `error` on the row so the caller does not report success.
- */
-export function stalenessFailure(
-    anchor: { id?: number; anchorPath: string; status: AnchorStatus },
-    err: unknown
-): { row: StalenessCheckRow; persistUnresolvable: boolean } {
-    const message = err instanceof Error ? err.message : String(err)
-    const missingPath = isEnoent(err)
-    const pathRejected = message.includes('Path traversal detected')
-    if (missingPath || pathRejected) {
-        return {
-            persistUnresolvable: anchor.status !== 'unresolvable' && anchor.id !== undefined,
-            row: {
-                anchorId: anchor.id ?? 0,
-                path: anchor.anchorPath,
-                oldStatus: anchor.status,
-                newStatus: 'unresolvable',
-                commitsSince: 0,
-                isDeleted: missingPath,
-            },
-        }
-    }
-
-    mcpLogger.warning('git', 'Staleness check failed', {
-        path: anchor.anchorPath,
-        error: message,
-    })
-    return {
-        persistUnresolvable: false,
-        row: {
-            anchorId: anchor.id ?? 0,
-            path: anchor.anchorPath,
-            oldStatus: anchor.status,
-            newStatus: anchor.status,
-            commitsSince: 0,
-            isDeleted: false,
-            error: message,
-        },
     }
 }
 
@@ -283,11 +237,13 @@ async function runAnchorChunkSettled(
     chunk: readonly { anchor: { id?: number; anchorPath: string; status: AnchorStatus }; entryTimestamp: string }[],
     registryPath: string,
     cachedCountCommits: (anchorPath: string, since: string) => Promise<number>,
-    wsId: string
+    wsId: string,
+    precomputedRealRoot: string,
+    pendingUpdates: { anchorId: number; status: AnchorStatus }[]
 ): Promise<StalenessCheckRow[]> {
     return awaitAllSettledOrThrow(
         chunk.map(({ anchor, entryTimestamp }) =>
-            evaluateAnchorStaleness(db, anchor, entryTimestamp, registryPath, cachedCountCommits, wsId)
+            evaluateAnchorStaleness(db, anchor, entryTimestamp, registryPath, cachedCountCommits, wsId, precomputedRealRoot, pendingUpdates)
         )
     )
 }
@@ -323,7 +279,11 @@ export async function evaluateWorkspaceAnchors(options: {
         )
     }
 
-    const targets = collectStalenessTargetsForWorkspace(db, wsId, rawWs, rawProj, resolvedEntryId, maxRecentEntries ?? 20, sessionId)
+    const resolvedRoot = path.resolve(registryPath)
+    const [precomputedRealRoot, targets] = [
+        await fs.promises.realpath(resolvedRoot).catch(() => resolvedRoot),
+        collectStalenessTargetsForWorkspace(db, wsId, rawWs, rawProj, resolvedEntryId, maxRecentEntries ?? 20, sessionId),
+    ]
     const anchorsByEntry =
         targets.length > 0 && typeof db.getAnchorsByEntryIds === 'function'
             ? db.getAnchorsByEntryIds(targets.map((t) => t.id), wsId)
@@ -348,9 +308,17 @@ export async function evaluateWorkspaceAnchors(options: {
         return pending
     }
     const rows: StalenessCheckRow[] = []
+    const pendingUpdates: { anchorId: number; status: AnchorStatus }[] = []
     const STALENESS_CONCURRENCY = 8
     for (let i = 0; i < anchorJobs.length; i += STALENESS_CONCURRENCY) {
-        rows.push(...(await runAnchorChunkSettled(db, anchorJobs.slice(i, i + STALENESS_CONCURRENCY), registryPath, cachedCountCommits, wsId)))
+        rows.push(...(await runAnchorChunkSettled(db, anchorJobs.slice(i, i + STALENESS_CONCURRENCY), registryPath, cachedCountCommits, wsId, precomputedRealRoot, pendingUpdates)))
+    }
+    if (pendingUpdates.length > 0) {
+        const flushUpdates = (): void => {
+            for (const u of pendingUpdates) db.updateAnchorStatus(u.anchorId, u.status, wsId)
+        }
+        if (typeof db.executeInTransaction === 'function') db.executeInTransaction(flushUpdates)
+        else flushUpdates()
     }
     return { rows, skipped: false }
 }
@@ -369,36 +337,6 @@ const CheckEntryStalenessParseSchema = z.object({
     projectNumber: coercedPositiveInt.optional(),
     session_id: z.string().optional(),
 })
-
-function formatStalenessResponse(
-    targetWorkspaces: string[],
-    outcomes: { rows: StalenessCheckRow[]; skipped: boolean }[]
-): Record<string, unknown> {
-    const results: StalenessCheckRow[] = []
-    const skippedWorkspaces: string[] = []
-    for (let i = 0; i < targetWorkspaces.length; i++) {
-        const wsId = targetWorkspaces[i]
-        const outcome = outcomes[i]
-        if (wsId === undefined || outcome === undefined) continue
-        if (outcome.skipped) skippedWorkspaces.push(wsId)
-        else results.push(...outcome.rows)
-    }
-
-    const failureMessages = results.filter((row) => row.error !== undefined).map((row) => `${row.path}: ${row.error ?? ''}`)
-    const skipped = skippedWorkspaces.length > 0 ? { skippedWorkspaces } : {}
-    if (failureMessages.length > 0) {
-        return { success: false, results, error: failureMessages.join('; '), ...skipped }
-    }
-    if (results.length === 0 && skippedWorkspaces.length > 0 && skippedWorkspaces.length === targetWorkspaces.length) {
-        return {
-            success: false,
-            results,
-            error: 'No anchor check ran because no workspace had a registered repository path.',
-            skippedWorkspaces,
-        }
-    }
-    return { success: true, results, ...skipped }
-}
 
 /** Execute `check_entry_staleness` across target workspaces and format the aggregate result. */
 export async function runCheckEntryStaleness(

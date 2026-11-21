@@ -53,12 +53,19 @@ export function getCopilotReviewTools(context: ToolContext): ToolDefinition[] {
                     const resolved = await resolveOwnerRepo(context, input)
                     if ('error' in resolved) return resolved.response
 
-                    // Verify PR exists before fetching reviews to return clean 404
-                    const pullRequest = await resolved.github.getPullRequest(
-                        resolved.owner,
-                        resolved.repo,
-                        input.pr_number
-                    )
+                    const [pullRequest, summaryOutcome] = await Promise.all([
+                        resolved.github.getPullRequest(
+                            resolved.owner,
+                            resolved.repo,
+                            input.pr_number
+                        ),
+                        resolved.github
+                            .getCopilotReviewSummary(resolved.owner, resolved.repo, input.pr_number)
+                            .then(
+                                (value) => ({ ok: true as const, value }),
+                                (error: unknown) => ({ ok: false as const, error })
+                            ),
+                    ])
                     if (!pullRequest) {
                         return {
                             success: false,
@@ -73,12 +80,8 @@ export function getCopilotReviewTools(context: ToolContext): ToolDefinition[] {
                             detectedRepo: resolved.detectedRepo,
                         }
                     }
-
-                    const summary = await resolved.github.getCopilotReviewSummary(
-                        resolved.owner,
-                        resolved.repo,
-                        input.pr_number
-                    )
+                    if (!summaryOutcome.ok) throw summaryOutcome.error
+                    const summary = summaryOutcome.value
 
                     return {
                         prNumber: summary.prNumber,

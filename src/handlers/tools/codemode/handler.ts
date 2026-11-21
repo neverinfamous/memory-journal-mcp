@@ -5,7 +5,6 @@ import { sanitizeErrorForLogging } from '../../../utils/security-utils.js'
 import { getRequestContext, requestContextStorage } from '../../../utils/request-context.js'
 import { runWithAuthContext, getAuthContext } from '../../../auth/auth-context.js'
 import { ConfigurationError } from '../../../types/errors.js'
-import { activeProjectRegistry } from '../../../utils/write-scope.js'
 import { loadProjectRegistryFromConfig } from '../../../utils/workspace-resolver.js'
 import {
     captureActiveProjectRegistryState,
@@ -13,19 +12,18 @@ import {
     setActiveProjectRegistry,
     setFallbackProjectRegistryLoader,
 } from '../../../codemode/normalizers/project-alias-helpers.js'
-import { createJournalApi, getCachedSandboxSchemas } from '../../../codemode/api/journal-api.js'
 import type { SandboxResult } from '../../../codemode/types.js'
 
 setFallbackProjectRegistryLoader(loadProjectRegistryFromConfig)
 
-import { isFilterEffectivelyReadOnly, isToolVisibleForFilter } from '../../../filtering/tool-filter.js'
 import { ExecuteCodeSchema, ExecuteCodeSchemaMcp } from './schemas.js'
-import { collectNonCodeModeTools, getSandboxPool, getSecurityManager } from './singleton-state.js'
+import { getOrCreateCodemodeBundle, getSandboxPool, getSecurityManager } from './singleton-state.js'
+import { runWithCodemodeInvocation } from './invocation-store.js'
 import { healCodeModeScript, healTemplateBackticksOnRuntimeError, isValidJsScript } from './code-healer.js'
 import { extractAndRecoverJsonCode, extractAndRecoverEntryCode } from './json-entry-recovery.js'
 import { extractAndRecoverSqlCode, extractAndRecoverPreparedStatementCode } from './sql-recovery.js'
 import { resolveExecutionPayload, buildSandboxUserContext, type ExecuteCodeInput } from './payload-synthesizer.js'
-import { createSecureDispatcher, resolveCodeModeSessionContext } from './secure-dispatcher.js'
+import { resolveCodeModeSessionContext } from './secure-dispatcher.js'
 import { validateRawPayloadSize } from './payload-byte-bounds.js'
 
 export {
@@ -34,40 +32,6 @@ export {
     extractAndRecoverEntryCode,
     extractAndRecoverSqlCode,
     extractAndRecoverPreparedStatementCode,
-}
-
-function filterToolsForSandbox(
-    sessionContext: ToolContext,
-    context: ToolContext,
-    readonlyRequested: boolean | undefined
-): { tools: ToolDefinition[]; allEnabledTools: ToolDefinition[]; isSandboxReadonly: boolean } {
-    let tools = collectNonCodeModeTools(sessionContext)
-    if (context.config?.codemodeInternalFullAccess !== true) {
-        tools = tools.filter((t) => t.name !== 'update_configuration')
-    }
-    if (
-        context.config?.codemodeInternalFullAccess !== true &&
-        context.config?.filterConfig?.enabledTools !== undefined
-    ) {
-        const enabledSet = context.config.filterConfig.enabledTools
-        const rawFilter = context.config.filterConfig.raw
-        tools = tools.filter(
-            (t) =>
-                enabledSet.has(t.name) &&
-                isToolVisibleForFilter(t.name, t.annotations?.readOnlyHint, rawFilter)
-        )
-    }
-    const allEnabledTools = tools
-    const filterConfig = context.config?.filterConfig
-    const isGlobalReadonly =
-        filterConfig !== null && filterConfig !== undefined
-            ? isFilterEffectivelyReadOnly(filterConfig)
-            : false
-    const isSandboxReadonly = Boolean(readonlyRequested) || isGlobalReadonly
-    if (isSandboxReadonly) {
-        tools = tools.filter((t) => t.annotations?.readOnlyHint === true)
-    }
-    return { tools, allEnabledTools, isSandboxReadonly }
 }
 
 function isRecoverableSyntaxError(errorMessage: string): boolean {
@@ -88,8 +52,8 @@ interface RecoveryRunOptions {
     securityManager: ReturnType<typeof getSecurityManager>
     executionCode: string
     originalCode: string | undefined
-    apiBindings: ReturnType<ReturnType<typeof createJournalApi>['createSandboxBindings']>
-    schemas: ReturnType<ReturnType<typeof createJournalApi>['createSandboxSchemas']>
+    apiBindings: Record<string, unknown>
+    schemas: Record<string, Record<string, string>>
     timeoutMs: number | undefined
     userContext: Record<string, unknown>
     isSandboxReadonly: boolean
@@ -97,6 +61,7 @@ interface RecoveryRunOptions {
     useTestDb: boolean
     sessionId?: string | undefined
     requestedMaxResultSize: number | undefined
+    maxToolInputElements?: number | undefined
     healingEnabled: boolean
     projectRegistry?: Record<string, ProjectRegistryEntry> | undefined
     getMutated: () => boolean
@@ -133,7 +98,11 @@ async function runSandboxWithAutonomousRecovery(opts: RecoveryRunOptions): Promi
             execResult = await opts.pool.execute(
                 codeToRun, opts.apiBindings, opts.schemas, opts.timeoutMs,
                 opts.userContext, opts.isSandboxReadonly, opts.requestedMaxResultSize,
-                { dryRunMode: opts.isDryRun, useTestDbMode: effectiveUseTestDb }
+                {
+                    dryRunMode: opts.isDryRun,
+                    useTestDbMode: effectiveUseTestDb,
+                    maxToolInputElements: opts.maxToolInputElements,
+                }
             )
         }
         await (authCtx !== undefined ? runWithAuthContext(authCtx, executePool) : executePool())
@@ -190,6 +159,51 @@ function resolveCodeModeRunOptions(input: ExecuteCodeInput): {
     }
 }
 
+async function executeSandboxedInvocation(options: {
+    context: ToolContext
+    securityManager: ReturnType<typeof getSecurityManager>
+    input: ExecuteCodeInput
+    executionCode: string
+    sessionRes: Extract<Awaited<ReturnType<typeof resolveCodeModeSessionContext>>, { sessionContext: ToolContext }>
+    timeoutMs: number | undefined
+    readonlyRequested: boolean | undefined
+    isDryRun: boolean
+    useTestDb: boolean
+    sessionId: string | undefined
+}): Promise<SandboxResult | undefined> {
+    const { context, securityManager, input, executionCode, sessionRes, timeoutMs, readonlyRequested, isDryRun, useTestDb, sessionId } = options
+    const { sessionContext, projectId, numericProjectId, workspaceId, explicitWorkspace } = sessionRes
+    const { isSandboxReadonly, apiBindings, schemas } = getOrCreateCodemodeBundle(
+        sessionContext,
+        context,
+        readonlyRequested
+    )
+    let mutatedDuringRun = false
+    const { userContext, requestedMaxResultSize } = buildSandboxUserContext(
+        input, sessionContext, projectId, numericProjectId, workspaceId, explicitWorkspace
+    )
+    return await runWithCodemodeInvocation(
+        {
+            sessionContext, projectId, workspaceId, explicitWorkspace, sessionId,
+            autoVersion: input.auto_version ?? input.autoVersion ?? true,
+            dryRun: isDryRun,
+            projectRegistry: context.config?.projectRegistry,
+            onMutatingDispatch: () => { mutatedDuringRun = true },
+        },
+        () =>
+            runSandboxWithAutonomousRecovery({
+                pool: getSandboxPool(), securityManager, executionCode,
+                originalCode: input.code, apiBindings, schemas, timeoutMs,
+                userContext, isSandboxReadonly, isDryRun, useTestDb, sessionId,
+                requestedMaxResultSize, maxToolInputElements: context.config?.maxToolInputElements,
+                healingEnabled: context.config?.agentHealing !== false,
+                projectRegistry: context.config?.projectRegistry,
+                getMutated: () => mutatedDuringRun,
+                resetMutated: () => { mutatedDuringRun = false },
+            })
+    )
+}
+
 async function executeCodeModeHandler(
     context: ToolContext,
     securityManager: ReturnType<typeof getSecurityManager>,
@@ -221,48 +235,19 @@ async function executeCodeModeHandler(
 
         const sessionRes = await resolveCodeModeSessionContext(context, input)
         if ('errorResponse' in sessionRes) return sessionRes.errorResponse
-        const { sessionContext, projectId, numericProjectId, workspaceId, explicitWorkspace } = sessionRes
 
-        const { tools, allEnabledTools, isSandboxReadonly } = filterToolsForSandbox(sessionContext, context, readonlyRequested)
-        let mutatedDuringRun = false
-        const secureDispatcher = createSecureDispatcher({
-            tools,
-            sessionContext,
-            projectId,
-            workspaceId,
-            explicitWorkspace,
-            sessionId,
-            autoVersion: input.auto_version ?? input.autoVersion ?? true,
-            dryRun: isDryRun,
-            onMutatingDispatch: () => { mutatedDuringRun = true },
-        })
-        const journalApi = createJournalApi(tools, secureDispatcher, () => activeProjectRegistry(context.config?.projectRegistry))
-        const schemas = isSandboxReadonly ? getCachedSandboxSchemas(allEnabledTools) : journalApi.createSandboxSchemas()
-        const { userContext, requestedMaxResultSize } = buildSandboxUserContext(
-            input, sessionContext, projectId, numericProjectId, workspaceId, explicitWorkspace
-        )
-        const execResult = await runSandboxWithAutonomousRecovery({
-            pool: getSandboxPool(), securityManager, executionCode, originalCode: input.code,
-            apiBindings: journalApi.createSandboxBindings(sessionContext.progress), schemas,
-            timeoutMs, userContext, isSandboxReadonly,
-            isDryRun,
-            useTestDb,
-            sessionId,
-            requestedMaxResultSize, healingEnabled,
-            projectRegistry: context.config?.projectRegistry,
-            getMutated: () => mutatedDuringRun, resetMutated: () => { mutatedDuringRun = false },
+        const execResult = await executeSandboxedInvocation({
+            context, securityManager, input, executionCode, sessionRes,
+            timeoutMs, readonlyRequested, isDryRun, useTestDb, sessionId,
         })
         return {
             success: Boolean(execResult?.success),
             executionTimeMs: Math.round((performance.now() - start) * 100) / 100,
             result: execResult?.result,
-            error:
-                typeof execResult?.error === 'string'
-                    ? sanitizeErrorForLogging(execResult.error)
-                    : execResult?.error,
+            error: typeof execResult?.error === 'string' ? sanitizeErrorForLogging(execResult.error) : execResult?.error,
             metrics: execResult?.metrics,
             simulated: isDryRun ? true : undefined,
-            project_id: projectId,
+            project_id: sessionRes.projectId,
         }
     } catch (err) {
         logger.error('CODEMODE_HANDLER_ERROR', { error: err })

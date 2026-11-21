@@ -36,22 +36,58 @@ async function linkBatchEntries(
         ...(await shareBatchEntriesWithTeam(context, prepared, createdIndexes, personalIdsByIndex))
             .warnings,
     ]
+
+    const idsByWs = new Map<string | undefined, Set<number>>()
     for (let i = 0; i < results.length; i++) {
-        const createdEntry = results[i]
-        // [INVARIANT] H8: results are compacted (failed items omitted), so map back
-        // through createdIndexes to the originating input/prepared index.
         const sourceIndex = createdIndexes[i]
-        if (createdEntry && sourceIndex !== undefined) {
-            relationshipWarnings.push(
-                ...linkRequestedRelationships(
-                    db,
-                    createdEntry.id,
-                    input.entries[sourceIndex]?.relationships,
-                    prepared[sourceIndex]?.input.workspaceId,
-                    prepared[sourceIndex]?.input.projectNumber
-                )
-            )
+        if (sourceIndex === undefined || prepared[sourceIndex]?.input.projectNumber === undefined) {
+            continue
         }
+        const rels = input.entries[sourceIndex]?.relationships
+        if (rels === undefined || rels.length === 0) continue
+        const ws = prepared[sourceIndex]?.input.workspaceId
+        let idSet = idsByWs.get(ws)
+        if (idSet === undefined) {
+            idSet = new Set<number>()
+            idsByWs.set(ws, idSet)
+        }
+        for (const rel of rels) idSet.add(rel.targetId)
+    }
+
+    const prefetchedByWs = new Map<string | undefined, Map<number, { projectNumber?: number | null }>>()
+    if (typeof db.getEntriesByIds === 'function') {
+        for (const [ws, idSet] of idsByWs.entries()) {
+            if (idSet.size > 0) {
+                prefetchedByWs.set(ws, db.getEntriesByIds(Array.from(idSet), ws))
+            }
+        }
+    }
+
+    const runLinkLoop = (): void => {
+        for (let i = 0; i < results.length; i++) {
+            const createdEntry = results[i]
+            // [INVARIANT] H8: results are compacted (failed items omitted), so map back
+            // through createdIndexes to the originating input/prepared index.
+            const sourceIndex = createdIndexes[i]
+            if (createdEntry && sourceIndex !== undefined) {
+                const ws = prepared[sourceIndex]?.input.workspaceId
+                relationshipWarnings.push(
+                    ...linkRequestedRelationships(
+                        db,
+                        createdEntry.id,
+                        input.entries[sourceIndex]?.relationships,
+                        ws,
+                        prepared[sourceIndex]?.input.projectNumber,
+                        prefetchedByWs.get(ws)
+                    )
+                )
+            }
+        }
+    }
+    if (typeof db.executeInTransaction === 'function') {
+        db.executeInTransaction(runLinkLoop)
+    } else {
+        runLinkLoop()
     }
     return relationshipWarnings
 }

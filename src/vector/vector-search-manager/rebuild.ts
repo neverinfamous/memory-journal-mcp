@@ -126,7 +126,9 @@ async function embedEntry(
     stats: RebuildStats
 ): Promise<{ entryId: number; embedding: Float32Array } | null> {
     try {
-        const embedding = await manager.generateEmbedding(formatEntryForEmbedding(entry))
+        const embedding = await manager.generateEmbedding(formatEntryForEmbedding(entry), {
+            bypassQueryCache: true,
+        })
         return { entryId: entry.id, embedding }
     } catch (err) {
         recordEmbedError(entry.id, err, stats)
@@ -164,7 +166,7 @@ function lookupExistingBatchVectorIds(
     }
 }
 
-/** Embed and upsert one batch of entries, updating `stats`. */
+/** Embed and upsert one batch of entries, updating `stats`. Returns true when embedding work ran. */
 async function processBatch(
     manager: VectorSearchManager,
     dbAdapter: IDatabaseAdapter,
@@ -172,15 +174,9 @@ async function processBatch(
     force: boolean,
     skipExistenceCheck: boolean,
     projectNumber: number | undefined,
+    existingVectorIds: ReadonlySet<number> | undefined,
     stats: RebuildStats
-): Promise<void> {
-    const existingVectorIds = lookupExistingBatchVectorIds(
-        dbAdapter,
-        batch,
-        force,
-        skipExistenceCheck,
-        projectNumber
-    )
+): Promise<boolean> {
     const toEmbed: JournalEntry[] = []
     for (const entry of batch) {
         if (
@@ -198,7 +194,7 @@ async function processBatch(
         }
         toEmbed.push(entry)
     }
-    if (toEmbed.length === 0) return
+    if (toEmbed.length === 0) return false
 
     const vectorsToUpsert: { entryId: number; embedding: Float32Array }[] = []
     const canBatchPipeline =
@@ -227,7 +223,7 @@ async function processBatch(
     }
 
     // Upsert the batch into the database
-    if (vectorsToUpsert.length === 0) return
+    if (vectorsToUpsert.length === 0) return true
     try {
         dbAdapter.upsertVectors(vectorsToUpsert)
         stats.indexed += vectorsToUpsert.length
@@ -240,6 +236,7 @@ async function processBatch(
             batchSize: vectorsToUpsert.length,
         })
     }
+    return true
 }
 
 function cleanupStaleVectorsSafely(dbAdapter: IDatabaseAdapter): string | undefined {
@@ -266,27 +263,39 @@ async function runRebuildLoop(
     progress: ProgressContext | undefined,
     stats: RebuildStats
 ): Promise<void> {
+    const useKeyset = typeof dbAdapter.getEntriesAfter === 'function'
+    let cursor: { timestamp: string; id: number } | undefined
     let offset = 0
     while (offset < totalEntries) {
-        const result = dbAdapter.getEntriesPage(offset, pageSize, wsScope, projectNumber)
-        const entries = result.entries
+        const entries = useKeyset
+            ? dbAdapter.getEntriesAfter?.(pageSize, wsScope, projectNumber, cursor) ?? []
+            : dbAdapter.getEntriesPage(offset, pageSize, wsScope, projectNumber).entries
         if (entries.length === 0) break
 
-        // Process a page in smaller batches
+        const pageExistingVectorIds = lookupExistingBatchVectorIds(
+            dbAdapter,
+            entries,
+            force,
+            skipExistenceCheck,
+            projectNumber
+        )
+
         for (let i = 0; i < entries.length; i += batchSize) {
             const batch = entries.slice(i, i + batchSize)
-            await processBatch(
+            const didEmbed = await processBatch(
                 manager,
                 dbAdapter,
                 batch,
                 force,
                 skipExistenceCheck,
                 projectNumber,
+                pageExistingVectorIds,
                 stats
             )
 
-            // Yield to event loop
-            await new Promise((resolve) => setTimeoutFn(resolve, 0))
+            if (didEmbed) {
+                await new Promise((resolve) => setTimeoutFn(resolve, 0))
+            }
             await sendProgress(
                 progress,
                 offset + i + batch.length,
@@ -295,6 +304,12 @@ async function runRebuildLoop(
             )
         }
 
+        if (useKeyset) {
+            if (entries.length < pageSize) break
+            const last = entries[entries.length - 1]
+            if (last === undefined) break
+            cursor = { timestamp: last.timestamp, id: last.id }
+        }
         offset += pageSize
     }
 }

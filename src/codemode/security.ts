@@ -64,6 +64,7 @@ export function validateSandboxCode(
     return {
         valid: errors.length === 0,
         errors,
+        strippedCode,
     }
 }
 

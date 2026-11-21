@@ -84,7 +84,7 @@ function lookupOwnRegistryProject(
 function resolveExplicitWorkspaceOrProject(
     sanitizedWorkspaceId: string | undefined,
     input: ResolutionInput,
-    registeredCwd: ResolvedContext | undefined,
+    registeredCwdSource: ResolvedContext | (() => ResolvedContext | undefined) | undefined,
     config: WorkspaceResolverPureConfig | undefined,
     registry: RegistryMap
 ): ResolvedContext | undefined {
@@ -110,6 +110,8 @@ function resolveExplicitWorkspaceOrProject(
         if (wsId !== undefined) {
             return { workspaceId: wsId, projectNumber: input.project_number }
         }
+        const registeredCwd =
+            typeof registeredCwdSource === 'function' ? registeredCwdSource() : registeredCwdSource
         const sessionCtx = activeSessionReader(config?.runtime)
         const rawCandidateWs =
             registeredCwd?.workspaceId ??
@@ -280,7 +282,7 @@ export function resolveProjectContextWithRegistry(
         const explicitProj = resolveExplicitWorkspaceOrProject(
             undefined,
             input,
-            getRegisteredCwd(),
+            getRegisteredCwd,
             config,
             registry
         )

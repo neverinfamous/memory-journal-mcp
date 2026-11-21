@@ -146,11 +146,12 @@ export class RepositoryManager {
         }
     }
 
-    async getLocalGitStatus(): Promise<LocalGitStatus> {
+    async getLocalGitStatus(options?: { includeResolvedIssues?: boolean }): Promise<LocalGitStatus> {
         try {
+            const includeResolved = options?.includeResolvedIssues ?? true
             const [statusSettled, logSettled] = await Promise.allSettled([
                 this.client.git.status(),
-                this.client.git.log({ maxCount: 50 }),
+                includeResolved ? this.client.git.log({ maxCount: 50 }) : Promise.resolve(null),
             ])
             if (statusSettled.status === 'rejected') {
                 throw statusSettled.reason
@@ -159,7 +160,9 @@ export class RepositoryManager {
             const resolvedIssues: number[] = []
 
             if (logSettled.status === 'fulfilled') {
-                resolvedIssues.push(...extractResolvedIssueNumbers(logSettled.value.all.map((c) => c.message)))
+                if (logSettled.value !== null) {
+                    resolvedIssues.push(...extractResolvedIssueNumbers(logSettled.value.all.map((c) => c.message)))
+                }
             } else {
                 logger.debug('Failed to parse git log for resolved issues', {
                     module: 'GitHub',

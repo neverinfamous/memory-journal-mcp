@@ -201,7 +201,9 @@ export class JournalApi {
             .sort()
     }
 
-    createSandboxBindings(progressCtx?: ProgressContext): Record<string, unknown> {
+    createSandboxBindings(
+        progressCtx?: ProgressContext | (() => ProgressContext | undefined)
+    ): Record<string, unknown> {
         return buildSandboxBindingsMap(this, progressCtx)
     }
 

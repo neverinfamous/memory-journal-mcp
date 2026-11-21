@@ -28,18 +28,20 @@ function remapKeys(obj: Record<string, unknown>, fromKeys: string[], targetKey: 
     }
 }
 
-function hasAnyKey(obj: Record<string, unknown>, keys: string[]): boolean {
+const CONTEXT_PARAM_KEYS = ['maxTokens', 'max_tokens', 'temperature', 'model', 'top_p', 'topP'] as const
+const ANALYTICS_FORBIDDEN_KEYS = ['q', 'query', 'search', 'text', 'message', 'description', 'path', 'keep', 'mode'] as const
+const STATISTICS_METHOD_NAMES = new Set(['get_statistics', 'getStatistics', 'team_get_statistics', 'teamGetStatistics'])
+const CROSS_PROJECT_METHOD_NAMES = new Set(['get_cross_project_insights', 'getCrossProjectInsights'])
+
+function hasAnyKey(obj: Record<string, unknown>, keys: readonly string[]): boolean {
     return keys.some((k) => obj[k] !== undefined)
 }
 
 function applyConfigInterceptions(
     rawObj: Record<string, unknown>
 ): { obj: Record<string, unknown> } | { error: Record<string, unknown> } {
-    let obj = { ...rawObj }
-    if (isRecord(obj['config'])) {
-        obj = { ...obj, ...obj['config'] }
-        delete obj['config']
-    }
+    const obj = isRecord(rawObj['config']) ? { ...rawObj, ...rawObj['config'] } : rawObj
+    if (obj !== rawObj) delete obj['config']
 
     if (
         obj['update_notes'] !== undefined ||
@@ -52,7 +54,7 @@ function applyConfigInterceptions(
         )
     }
 
-    const hasContextParam = ['maxTokens', 'max_tokens', 'temperature', 'model', 'top_p', 'topP'].find((k) => k in obj)
+    const hasContextParam = CONTEXT_PARAM_KEYS.find((k) => k in obj)
     if (hasContextParam !== undefined) {
         return validationErr(
             `Unrecognized key: "${hasContextParam}". update_configuration is for configuring the memory-journal-mcp server and does not support changing LLM context parameters.`,
@@ -66,36 +68,33 @@ function applyAnalyticsInterceptions(
     methodName: string,
     rawObj: Record<string, unknown>
 ): { obj: Record<string, unknown> } | { error: Record<string, unknown> } {
-    const obj = { ...rawObj }
-
-    if (hasAnyKey(obj, ['q', 'query', 'search', 'text', 'message', 'description', 'path', 'keep', 'mode'])) {
+    if (hasAnyKey(rawObj, ANALYTICS_FORBIDDEN_KEYS)) {
         return validationErr(
             `${methodName} does not support search queries, content parameters, or modes. It returns analytical data.`,
             'Remove these parameters. Use search_entries or team_search if you want to find specific content.'
         )
     }
 
-    if (['get_statistics', 'getStatistics', 'team_get_statistics', 'teamGetStatistics'].includes(methodName)) {
-        const timeVal = obj['time'] ?? obj['timeframe'] ?? obj['period']
+    if (CROSS_PROJECT_METHOD_NAMES.has(methodName) && rawObj['limit'] !== undefined) {
+        return validationErr('get_cross_project_insights does not accept a limit parameter. It analyzes all projects.', 'Remove the limit parameter.')
+    }
+
+    if (STATISTICS_METHOD_NAMES.has(methodName)) {
+        const timeVal = rawObj['time'] ?? rawObj['timeframe'] ?? rawObj['period']
         if (timeVal !== undefined) {
+            const obj = { ...rawObj }
             if (obj['group_by'] === undefined && typeof timeVal === 'string') {
                 const lower = timeVal.toLowerCase()
-                obj['group_by'] = ['day', 'week', 'month'].includes(lower) ? lower : 'month'
+                obj['group_by'] = lower === 'day' || lower === 'week' || lower === 'month' ? lower : 'month'
             }
             delete obj['time']
             delete obj['timeframe']
             delete obj['period']
+            return { obj }
         }
     }
 
-    if (
-        ['get_cross_project_insights', 'getCrossProjectInsights'].includes(methodName) &&
-        obj['limit'] !== undefined
-    ) {
-        return validationErr('get_cross_project_insights does not accept a limit parameter. It analyzes all projects.', 'Remove the limit parameter.')
-    }
-
-    return { obj }
+    return { obj: rawObj }
 }
 
 export function applyDomainToolInterceptions(

@@ -225,6 +225,7 @@ function makeZeroMetricError(error: string): SandboxResult {
 
 function prepareTransformedSandboxCode(code: string): { transformed: string } | { error: string } {
     const transformed = transformAutoReturn(code)
+    let strippedForBalance: string | undefined
     if (transformed !== code) {
         const postValidation = validateSandboxCode(transformed, {
             ...DEFAULT_SECURITY_CONFIG,
@@ -233,8 +234,9 @@ function prepareTransformedSandboxCode(code: string): { transformed: string } | 
         if (!postValidation.valid) {
             return { error: postValidation.errors.join('; ') }
         }
+        strippedForBalance = postValidation.strippedCode
     }
-    if (hasUnbalancedClosingDelimiter(stripCommentsAndStrings(transformed))) {
+    if (hasUnbalancedClosingDelimiter(strippedForBalance ?? stripCommentsAndStrings(transformed))) {
         return { error: 'Syntax error in Code Mode execution: unbalanced closing delimiter' }
     }
     return { transformed }

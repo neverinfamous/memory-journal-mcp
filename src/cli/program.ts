@@ -59,16 +59,22 @@ function formatTextHelp(cmd: Command, helper: Help): string {
     if (desc) output += `\n${desc}\n`
 
     const args = helper.visibleArguments(cmd)
+    const options = helper.visibleOptions(cmd)
+    const commands = helper.visibleCommands(cmd)
+    const padWidth =
+        args.length > 0 || options.length > 0 || commands.length > 0
+            ? helper.padWidth(cmd, helper)
+            : 0
+
     if (args.length > 0) {
         output += '\nArguments:\n'
         args.forEach((arg) => {
             const term = helper.argumentTerm(arg)
             const argumentDesc = helper.argumentDescription(arg)
-            output += `  ${term.padEnd(helper.padWidth(cmd, helper))}  ${argumentDesc}\n`
+            output += `  ${term.padEnd(padWidth)}  ${argumentDesc}\n`
         })
     }
 
-    const options = helper.visibleOptions(cmd)
     if (options.length > 0) {
         const groups = new Map<string, typeof options>()
         options.forEach((opt) => {
@@ -78,7 +84,6 @@ function formatTextHelp(cmd: Command, helper: Help): string {
             if (group) group.push(opt)
         })
 
-        const padWidth = helper.padWidth(cmd, helper)
         const standardOptions = groups.get('Standard Options')
         groups.delete('Standard Options')
 
@@ -97,13 +102,12 @@ function formatTextHelp(cmd: Command, helper: Help): string {
         }
     }
 
-    const commands = helper.visibleCommands(cmd)
     if (commands.length > 0) {
         output += '\nCommands:\n'
         commands.forEach((c) => {
             const term = helper.subcommandTerm(c)
             const subcommandDesc = helper.subcommandDescription(c)
-            output += `  ${term.padEnd(helper.padWidth(cmd, helper))}  ${subcommandDesc}\n`
+            output += `  ${term.padEnd(padWidth)}  ${subcommandDesc}\n`
         })
     }
 

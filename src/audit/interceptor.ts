@@ -18,6 +18,7 @@ import { performance } from 'node:perf_hooks'
 import type { AuditLogger } from './audit-logger.js'
 import type { AuditCategory, AuditEntry } from './types.js'
 import { getRequiredScope } from '../auth/scope-map.js'
+import { getToolGroup } from '../filtering/tool-filter.js'
 import { getAuthContext } from '../auth/auth-context.js'
 import { getGrantedAuthScopes } from '../auth/validation.js'
 import { getRequestContext } from '../utils/request-context.js'
@@ -221,7 +222,16 @@ async function executeAuditedTool<T>(
     fn: () => Promise<T>
 ): Promise<T> {
     const scope = getRequiredScope(toolName)
-    const sensitiveTarget = extractSensitiveTargetFromArgs(toolName, args)
+    const isReadScope = scope === 'read'
+    const canTargetSensitiveResourceOrPrompt =
+        isReadScope &&
+        (toolName.startsWith('memory://') ||
+            toolName === 'read_resource' ||
+            toolName === 'get_prompt' ||
+            getToolGroup(toolName) === undefined)
+    const sensitiveTarget = canTargetSensitiveResourceOrPrompt
+        ? extractSensitiveTargetFromArgs(toolName, args)
+        : undefined
 
     // Read-scoped tools are only audited when --audit-reads is enabled or targeting a sensitive URI/prompt
     if (!ALWAYS_AUDITED_SCOPES.has(scope) && !auditReads && sensitiveTarget === undefined) {

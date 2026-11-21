@@ -188,8 +188,7 @@ If doing a milestone: Provide progress summary, upcoming milestones, timeline.`,
                                 text: `# GitHub PR Commander
 Execute a ${type} workflow for PR #${prStr}.
 If the PR number is '{pr_number}', determine it from the user's request. If the user hasn't specified a PR number, ask them for it now.
-To complete this task, you MUST first read the following resources to obtain the PR's context:
-- \`memory://prs/${prStr}/entries\`
+To complete this task, you MUST first read the following resource to obtain the PR's context (includes linked entries and PR metadata):
 - \`memory://prs/${prStr}/timeline\`
 
 ## Core Rules & Validation Gates

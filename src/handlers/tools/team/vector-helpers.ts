@@ -15,6 +15,7 @@ import {
 import { resolveWriteWorkspaceId } from '../write-workspace.js'
 import type { SemanticSearchResult } from '../../../vector/vector-search-manager/index.js'
 import { passMetadataFilters } from '../search/helpers.js'
+import { progressiveSearchVectorResults } from '../search/semantic-candidate-hydration.js'
 import { StrictProjectNumberSchema } from '../schemas.js'
 import {
     TEAM_DB_ERROR_RESPONSE,
@@ -47,7 +48,6 @@ async function runTeamVectorQuery(
         input.entry_type !== undefined ||
         input.start_date !== undefined ||
         input.end_date !== undefined ||
-        projectNumber !== undefined ||
         input.issue_number !== undefined ||
         input.pr_number !== undefined ||
         input.workflow_run_id !== undefined
@@ -75,11 +75,41 @@ async function runTeamVectorQuery(
             internalLimit,
             threshold,
             wsId,
-            projectNumber
+            projectNumber,
+            seed
         )
     }
 
-    return teamVectorManager.search(input.query ?? '', internalLimit, threshold, wsId, projectNumber)
+    const query = input.query ?? ''
+    const hasTagFilters =
+        (input.tags !== undefined && input.tags.length > 0) ||
+        (input.exclude_tags !== undefined && input.exclude_tags.length > 0)
+    const progressive = await progressiveSearchVectorResults({
+        db: teamDb,
+        vectorManager: teamVectorManager,
+        query,
+        candidateLimit: internalLimit,
+        targetCount: input.limit,
+        threshold,
+        wsId,
+        projectNumber,
+        filterOptions: {
+            tags: input.tags,
+            excludeTags: input.exclude_tags,
+            entryType: input.entry_type,
+            startDate: input.start_date,
+            endDate: input.end_date,
+            issueNumber: input.issue_number,
+            prNumber: input.pr_number,
+            workflowRunId: input.workflow_run_id,
+            includeArchived: input.include_archived,
+        },
+        hasTagFilters,
+        hasPostFilters: hasFilters,
+        enforceStrictWorkspace: true,
+    })
+    if (progressive !== null) return progressive
+    return teamVectorManager.search(query, internalLimit, threshold, wsId, projectNumber)
 }
 
 function resolveTeamSemanticEntries(

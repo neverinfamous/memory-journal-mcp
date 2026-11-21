@@ -16,8 +16,8 @@ import {
 } from '../handlers/tools/schemas/constants-and-primitives.js'
 import {
     findCanonicalRegistryKey,
-    resolveProjectContext,
 } from '../utils/workspace-resolver.js'
+import { resolveProjectContextWithRegistry } from '../utils/workspace-resolver-pure.js'
 import { effectiveWorkspace } from '../database/workspace-scope.js'
 import { activeProjectRegistry, pairStoredScope } from '../utils/write-scope.js'
 import type { ImportOptions, ImportResult, ParsedFile } from './importer.js'
@@ -127,12 +127,14 @@ export function resolveImportedFileContext(
 
     const effectiveInputWs =
         concreteCallerWorkspace(options.workspaceId) ?? concreteCallerWorkspace(metadata.workspace_id)
-    const resolved = resolveProjectContext(
-        {
-            ...(effectiveInputWs !== undefined ? { workspace_id: effectiveInputWs } : {}),
-            ...(rawProjectNumber !== undefined ? { project_number: rawProjectNumber } : {}),
-        },
-        options.config
+    const resolutionInput = {
+        ...(effectiveInputWs !== undefined ? { workspace_id: effectiveInputWs } : {}),
+        ...(rawProjectNumber !== undefined ? { project_number: rawProjectNumber } : {}),
+    }
+    const resolved = resolveProjectContextWithRegistry(
+        resolutionInput,
+        options.config,
+        effectiveRegistry
     )
     const paired = pairStoredScope(resolved.workspaceId, resolved.projectNumber, effectiveRegistry)
     const effectiveWsId = (paired.workspaceId ?? resolved.workspaceId).trim()
@@ -178,7 +180,8 @@ export function prefetchImportedEntriesById(
 /** Read and parse markdown files with bounded 16-way concurrency, preserving sorted file order. */
 export async function readMarkdownFilesParallel<T>(
     filenames: readonly string[],
-    reader: (filename: string) => Promise<{ parsed?: T; skipped?: boolean }>
+    reader: (filename: string) => Promise<{ parsed?: T; skipped?: boolean }>,
+    beforeChunk?: (chunkIndex: number) => void
 ): Promise<{
     parsedFiles: T[]
     skipped: number
@@ -189,6 +192,7 @@ export async function readMarkdownFilesParallel<T>(
     const errors: { file: string; error: string }[] = []
     const CONCURRENCY = 16
     for (let i = 0; i < filenames.length; i += CONCURRENCY) {
+        beforeChunk?.(i)
         const chunk = filenames.slice(i, i + CONCURRENCY)
         const outcomes = await Promise.all(
             chunk.map(async (filename) => {

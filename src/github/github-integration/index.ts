@@ -119,8 +119,8 @@ export class GitHubIntegration {
         this.repositoryManager.setCachedRepoInfo(info)
     }
 
-    async getLocalGitStatus(): Promise<LocalGitStatus> {
-        return this.repositoryManager.getLocalGitStatus()
+    async getLocalGitStatus(options?: { includeResolvedIssues?: boolean }): Promise<LocalGitStatus> {
+        return this.repositoryManager.getLocalGitStatus(options)
     }
 
     async getIssues(

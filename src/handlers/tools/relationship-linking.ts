@@ -65,20 +65,22 @@ export function linkRequestedRelationships(
     entryId: number,
     relationships: readonly RequestedRelationship[] | undefined,
     workspaceId?: string,
-    projectNumber?: number
+    projectNumber?: number,
+    prefetchedTargetsOverride?: Map<number, { projectNumber?: number | null }>
 ): string[] {
     const warnings: string[] = []
     if (relationships === undefined || relationships.length === 0) return warnings
 
     const prefetchedTargets =
-        projectNumber !== undefined &&
+        prefetchedTargetsOverride ??
+        (projectNumber !== undefined &&
         relationships.length > 1 &&
         typeof db.getEntriesByIds === 'function'
             ? db.getEntriesByIds(
                   Array.from(new Set(relationships.map((rel) => rel.targetId))),
                   workspaceId
               )
-            : undefined
+            : undefined)
 
     for (const rel of relationships) {
         try {

@@ -7,15 +7,14 @@ import * as vm from 'node:vm'
 import {
     canStartRegexLiteral,
     createDelimiterState,
-    isJsLineTerminator,
     markLineTerminator,
     scanIdentifierWord,
-    skipLineOrBlockComment,
     skipRegexLiteralBody,
     trackIdentifierToken,
     trackPunctuationToken,
     trackTwoCharOperatorToken,
 } from '../../../codemode/security-stripper.js'
+import { skipLineOrBlockComment } from '../../../codemode/security-stripper-escapes.js'
 
 export type NonCodeSpan = readonly [number, number]
 
@@ -46,6 +45,21 @@ interface LexicalScanState {
     prevToken: string
     lineOnlyWsOrComments: boolean
     abortToCode: boolean
+}
+
+function isLineBreakChar(ch: string): boolean {
+    return ch === '\n' || ch === '\r' || ch === '\u2028' || ch === '\u2029'
+}
+
+function maybeSkipComment(
+    code: string,
+    i: number,
+    allowHtmlClose: boolean
+): ReturnType<typeof skipLineOrBlockComment> {
+    const ch = code[i]
+    return ch === '/' || ch === '<' || ch === '-'
+        ? skipLineOrBlockComment(code, i, allowHtmlClose)
+        : null
 }
 
 function stepCodeLexicalChar(
@@ -108,7 +122,7 @@ function stepCodeLexicalChar(
         scan.lineOnlyWsOrComments = false
         return i
     }
-    if (isJsLineTerminator(ch)) {
+    if (isLineBreakChar(ch)) {
         scan.lineOnlyWsOrComments = true
         markLineTerminator(delim)
     } else if (!/\s/.test(ch)) {
@@ -151,7 +165,7 @@ function scanLexicalSpans(
             i = step.next - 1
             continue
         }
-        const comment = skipLineOrBlockComment(code, i, scan.lineOnlyWsOrComments)
+        const comment = maybeSkipComment(code, i, scan.lineOnlyWsOrComments)
         if (comment !== null) {
             if (
                 stopAtOffset !== undefined &&
@@ -211,7 +225,11 @@ const VALID_JS_CACHE = new Map<string, boolean>()
 export function isValidJsScript(src: string): boolean {
     if (src.length <= VALID_JS_MAX_LEN) {
         const cached = VALID_JS_CACHE.get(src)
-        if (cached !== undefined) return cached
+        if (cached !== undefined) {
+            VALID_JS_CACHE.delete(src)
+            VALID_JS_CACHE.set(src, cached)
+            return cached
+        }
     }
     let valid: boolean
     try {

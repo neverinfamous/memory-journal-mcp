@@ -6,8 +6,9 @@ import type { MessagePort } from 'node:worker_threads'
 import type { RpcRequest, RpcResponse } from './types.js'
 import { runWithRpcExecutionOverrides, type RpcExecutionOverrides } from './rpc-context.js'
 import {
-    DEFAULT_MAX_TOOL_INPUT_ELEMENTS,
+    markValidatedToolInput,
     exceedsMaxToolInputElements,
+    resolveEffectiveMaxToolInputElements,
 } from '../utils/tool-input-bounds.js'
 import { sanitizeErrorForLogging } from '../utils/security-utils.js'
 
@@ -133,7 +134,8 @@ export async function handleRpcRequest(
     req: RpcRequest,
     apiBindings: Record<string, unknown>,
     hostPort: MessagePort,
-    methodList: Record<string, string[] | ReadonlySet<string>>
+    methodList: Record<string, string[] | ReadonlySet<string>>,
+    configuredMaxToolInputElements?: number
 ): Promise<void> {
     if (typeof req !== 'object' || req === null || typeof req.id !== 'number') {
         return
@@ -163,16 +165,22 @@ export async function handleRpcRequest(
         }
 
         const safeArgs = Array.isArray(req.args) ? req.args : []
-        if (exceedsMaxToolInputElements(safeArgs, DEFAULT_MAX_TOOL_INPUT_ELEMENTS)) {
-            response.result = {
-                success: false,
-                error: `Tool input exceeds maximum of ${String(DEFAULT_MAX_TOOL_INPUT_ELEMENTS)} elements.`,
-                code: 'VALIDATION_ERROR',
-                category: 'validation',
-                recoverable: false,
+        if (safeArgs.length > 0) {
+            const maxElements = resolveEffectiveMaxToolInputElements(configuredMaxToolInputElements)
+            if (exceedsMaxToolInputElements(safeArgs, maxElements)) {
+                response.result = {
+                    success: false,
+                    error: `Tool input exceeds maximum of ${String(maxElements)} elements.`,
+                    code: 'VALIDATION_ERROR',
+                    category: 'validation',
+                    recoverable: false,
+                }
+                safePostRpcResponse(hostPort, response)
+                return
             }
-            safePostRpcResponse(hostPort, response)
-            return
+            if (safeArgs.length === 1 && safeArgs[0] !== null && typeof safeArgs[0] === 'object') {
+                markValidatedToolInput(safeArgs[0], maxElements)
+            }
         }
         const target = resolveRpcTarget(req, apiBindings)
 

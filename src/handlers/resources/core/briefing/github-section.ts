@@ -101,6 +101,49 @@ export interface BriefingGitHub {
     degradedReasons?: string[] | undefined
 }
 
+async function collectGitHubBriefingData(
+    repoGithub: GitHubIntegration,
+    owner: string,
+    repo: string,
+    config: BriefingConfig
+): ReturnType<typeof unpackGitHubFetches> extends infer R ? Promise<R> : never {
+    const issuesAndPrsPromise = fetchIssuesAndPrs(repoGithub, owner, repo, config)
+    const [
+        ciStatusResult,
+        issuesAndPrsResult,
+        milestonesResult,
+        insightsResult,
+        copilotReviewsResult,
+        localGitStatusResult,
+    ] = await Promise.allSettled([
+        fetchCiStatus(repoGithub, owner, repo, config),
+        issuesAndPrsPromise,
+        fetchMilestones(repoGithub, owner, repo, config.milestoneCount ?? 3),
+        fetchInsights(repoGithub, owner, repo),
+        config.copilotReviews
+            ? fetchCopilotReviews(
+                  repoGithub,
+                  owner,
+                  repo,
+                  config.prStatusBreakdown
+                      ? issuesAndPrsPromise.then((res) => res.allPrs)
+                      : undefined
+              )
+            : Promise.resolve(undefined),
+        repoGithub.getLocalGitStatus(
+            config.issueCount <= 0 ? { includeResolvedIssues: false } : undefined
+        ),
+    ])
+    return unpackGitHubFetches({
+        ciStatusResult,
+        issuesAndPrsResult,
+        milestonesResult,
+        insightsResult,
+        copilotReviewsResult,
+        localGitStatusResult,
+    })
+}
+
 /**
  * Fetch all GitHub context for the briefing.
  * Returns null if GitHub is unavailable or un-configured.
@@ -117,29 +160,7 @@ export async function buildGitHubSection(
         const resolved = await resolveBriefingRepo(github, config, targetRepo, runtime)
         if (!resolved) return null
         const { owner, repo, github: repoGithub } = resolved
-        const [
-            ciStatusResult,
-            issuesAndPrsResult,
-            milestonesResult,
-            insightsResult,
-            copilotReviewsResult,
-            localGitStatusResult,
-        ] = await Promise.allSettled([
-            fetchCiStatus(repoGithub, owner, repo, config),
-            fetchIssuesAndPrs(repoGithub, owner, repo, config),
-            fetchMilestones(repoGithub, owner, repo, config.milestoneCount ?? 3),
-            fetchInsights(repoGithub, owner, repo),
-            config.copilotReviews ? fetchCopilotReviews(repoGithub, owner, repo) : Promise.resolve(undefined),
-            repoGithub.getLocalGitStatus(),
-        ])
-        const unpacked = unpackGitHubFetches({
-            ciStatusResult,
-            issuesAndPrsResult,
-            milestonesResult,
-            insightsResult,
-            copilotReviewsResult,
-            localGitStatusResult,
-        })
+        const unpacked = await collectGitHubBriefingData(repoGithub, owner, repo, config)
         const issues = hideResolvedIssues(unpacked.issuesAndPrs, unpacked.localGitStatus.resolvedIssues)
         const localBranch =
             'branch' in unpacked.localGitStatus ? unpacked.localGitStatus.branch : undefined
@@ -152,7 +173,13 @@ export async function buildGitHubSection(
                   repo,
                   unpacked.issuesAndPrs.allPrs,
                   localBranch,
-                  { includeCopilot: config.copilotReviews, includeCi },
+                  {
+                      includeCopilot: config.copilotReviews,
+                      includeCi,
+                      ...(unpacked.ciStatus.runs !== undefined
+                          ? { prefetchedRuns: unpacked.ciStatus.runs }
+                          : {}),
+                  },
               )
             : undefined
         return assembleBriefingGitHub({

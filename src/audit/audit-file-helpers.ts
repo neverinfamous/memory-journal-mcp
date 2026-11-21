@@ -38,9 +38,7 @@ function decodeReversedAuditChunk(
     startOffset: number
 ): { chunkText: string | undefined; trailingBytes: Buffer; overflowSkipped: number } {
     const combined =
-        trailingBytes.length > 0
-            ? Buffer.concat([chunkSlice, trailingBytes])
-            : Buffer.from(chunkSlice)
+        trailingBytes.length > 0 ? Buffer.concat([chunkSlice, trailingBytes]) : chunkSlice
     const firstNl = combined.indexOf(0x0a)
     if (startOffset === 0) {
         if (firstNl === -1 && combined.length > 1_048_576) {
@@ -52,11 +50,15 @@ function decodeReversedAuditChunk(
         if (combined.length > 1_048_576) {
             return { chunkText: undefined, trailingBytes: Buffer.alloc(0), overflowSkipped: 1 }
         }
-        return { chunkText: undefined, trailingBytes: combined, overflowSkipped: 0 }
+        return {
+            chunkText: undefined,
+            trailingBytes: trailingBytes.length > 0 ? combined : Buffer.from(chunkSlice),
+            overflowSkipped: 0,
+        }
     }
     return {
         chunkText: combined.subarray(firstNl + 1).toString('utf-8'),
-        trailingBytes: combined.subarray(0, firstNl),
+        trailingBytes: Buffer.from(combined.subarray(0, firstNl)),
         overflowSkipped: 0,
     }
 }
@@ -139,7 +141,9 @@ export async function appendRegularFileNoFollow(filePath: string, payload: strin
             throw new Error(`Refusing to write log to non-regular file: ${filePath}`)
         }
         await fh.writeFile(payload, 'utf-8')
-        await fh.chmod(0o600).catch(() => undefined)
+        if ((info.mode & 0o777) !== 0o600) {
+            await fh.chmod(0o600).catch(() => undefined)
+        }
     } finally {
         await fh.close()
     }

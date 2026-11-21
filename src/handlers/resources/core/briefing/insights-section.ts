@@ -26,14 +26,101 @@ export interface BriefingInsights {
 // TTL Cache — avoids recomputing live digest on every briefing read
 // ============================================================================
 
-/** Cached live digest with expiry timestamp */
+/** Cached live digest by DB instance and workspace ID, with bounded expiry */
 const liveDigestCache = new WeakMap<
     object,
-    { snapshot: DigestSnapshot; workspaceId: string; expiresAt: number }
+    Map<string, { snapshot: DigestSnapshot; expiresAt: number }>
 >()
 
 /** Cache TTL in milliseconds (60 seconds) */
 const LIVE_DIGEST_TTL_MS = 60_000
+const MAX_DIGEST_CACHE_WORKSPACES = 64
+
+function writeLiveDigestCache(
+    dbCacheKey: object | undefined,
+    existingByWs: Map<string, { snapshot: DigestSnapshot; expiresAt: number }> | undefined,
+    effectiveWorkspace: string,
+    snapshot: DigestSnapshot,
+    expiresAt: number
+): void {
+    if (dbCacheKey === undefined) return
+    let wsMap = existingByWs
+    if (wsMap === undefined) {
+        wsMap = new Map()
+        liveDigestCache.set(dbCacheKey, wsMap)
+    }
+    if (wsMap.size >= MAX_DIGEST_CACHE_WORKSPACES && !wsMap.has(effectiveWorkspace)) {
+        const oldest = wsMap.keys().next().value
+        if (oldest !== undefined) wsMap.delete(oldest)
+    }
+    wsMap.set(effectiveWorkspace, { snapshot, expiresAt })
+}
+
+function resolvePersistedDigest(
+    context: ResourceContext,
+    effectiveWorkspace: string,
+    allowRawPersisted: boolean
+): { snapshot: unknown; source: 'persisted'; computedAt?: string } | null {
+    const dbSnapshot = context.db?.getLatestAnalyticsSnapshot?.('digest', effectiveWorkspace)
+    if (!dbSnapshot) return null
+    const parsed = parseDigestSnapshot(dbSnapshot.data)
+    if (parsed !== null) {
+        return { snapshot: parsed, source: 'persisted', computedAt: dbSnapshot.createdAt }
+    }
+    if (allowRawPersisted && dbSnapshot.data !== undefined && dbSnapshot.data !== null) {
+        return { snapshot: dbSnapshot.data, source: 'persisted', computedAt: dbSnapshot.createdAt }
+    }
+    return null
+}
+
+/**
+ * Resolve and cache the latest live digest snapshot for `dbObj` + `effectiveWorkspace` (60s TTL),
+ * or return the persisted DB snapshot when live compute is unavailable.
+ */
+export function resolveCachedOrLiveDigest(
+    context: ResourceContext,
+    workspaceId?: string
+): { snapshot: DigestSnapshot; source: 'computed' | 'persisted'; computedAt?: string } | null
+export function resolveCachedOrLiveDigest(
+    context: ResourceContext,
+    workspaceId: string | undefined,
+    options: { allowRawPersisted: true }
+): { snapshot: unknown; source: 'computed' | 'persisted'; computedAt?: string } | null
+export function resolveCachedOrLiveDigest(
+    context: ResourceContext,
+    workspaceId?: string,
+    options?: { allowRawPersisted?: boolean }
+): { snapshot: unknown; source: 'computed' | 'persisted'; computedAt?: string } | null {
+    const effectiveWorkspace = workspaceId ?? resourceWorkspace(context)
+    const dbObj: unknown = context.db
+    const dbCacheKey = typeof dbObj === 'object' && dbObj !== null ? dbObj : undefined
+    const byWs = dbCacheKey !== undefined ? liveDigestCache.get(dbCacheKey) : undefined
+    const cachedDigest = byWs?.get(effectiveWorkspace)
+    const now = Date.now()
+    if (cachedDigest !== undefined && now < cachedDigest.expiresAt) {
+        return { snapshot: cachedDigest.snapshot, source: 'computed' }
+    }
+
+    try {
+        const liveDigest = context.db?.computeDigest?.(effectiveWorkspace)
+        if (liveDigest !== undefined) {
+            writeLiveDigestCache(dbCacheKey, byWs, effectiveWorkspace, liveDigest, now + LIVE_DIGEST_TTL_MS)
+            logger.debug('Live digest computed for briefing', {
+                module: 'BRIEFING',
+                operation: 'insights-live-compute',
+            })
+            return { snapshot: liveDigest, source: 'computed' }
+        }
+    } catch (error) {
+        logger.debug('Failed to compute live digest (non-critical)', {
+            module: 'BRIEFING',
+            operation: 'insights-live-compute',
+            error: error instanceof Error ? error.message : String(error),
+        })
+    }
+
+    return resolvePersistedDigest(context, effectiveWorkspace, options?.allowRawPersisted === true)
+}
 
 /**
  * Build the insights section from the latest digest snapshot.
@@ -48,63 +135,9 @@ export function buildInsightsSection(
     context: ResourceContext,
     workspaceId?: string
 ): BriefingInsights | null {
-    const snapshot = resolveDigestSnapshot(context, workspaceId)
-    if (!snapshot) return null
-
-    return formatDigest(snapshot)
-}
-
-/**
- * Resolve the latest digest snapshot from live compute (with 60s TTL cache) or DB fallback.
- */
-function resolveDigestSnapshot(
-    context: ResourceContext,
-    workspaceId?: string
-): DigestSnapshot | null {
-    const effectiveWorkspace = workspaceId ?? resourceWorkspace(context)
-
-    // Live compute with 60s TTL cache to prevent redundant recomputation across rapid reads.
-    const dbObj: unknown = context.db
-    const dbCacheKey = typeof dbObj === 'object' && dbObj !== null ? dbObj : undefined
-    const cachedDigest = dbCacheKey !== undefined ? liveDigestCache.get(dbCacheKey) : undefined
-    if (
-        cachedDigest?.workspaceId === effectiveWorkspace &&
-        Date.now() < cachedDigest.expiresAt
-    ) {
-        return cachedDigest.snapshot
-    }
-
-    try {
-        const liveDigest = context.db?.computeDigest?.(effectiveWorkspace)
-        if (liveDigest !== undefined) {
-            const snapshot: DigestSnapshot = liveDigest
-            if (dbCacheKey !== undefined) {
-                liveDigestCache.set(dbCacheKey, {
-                    snapshot,
-                    workspaceId: effectiveWorkspace,
-                    expiresAt: Date.now() + LIVE_DIGEST_TTL_MS,
-                })
-            }
-            logger.debug('Live digest computed for briefing', {
-                module: 'BRIEFING',
-                operation: 'insights-live-compute',
-            })
-            return snapshot
-        }
-    } catch (error) {
-        logger.debug('Failed to compute live digest (non-critical)', {
-            module: 'BRIEFING',
-            operation: 'insights-live-compute',
-            error: error instanceof Error ? error.message : String(error),
-        })
-    }
-
-    // Fallback: persisted snapshot in database (survives server restarts)
-    // Guards against undefined db (test mocks) and missing method (older adapters)
-    const dbSnapshot = context.db?.getLatestAnalyticsSnapshot?.('digest', effectiveWorkspace)
-    if (dbSnapshot) return parseDigestSnapshot(dbSnapshot.data)
-
-    return null
+    const resolved = resolveCachedOrLiveDigest(context, workspaceId)
+    if (!resolved) return null
+    return formatDigest(resolved.snapshot)
 }
 
 /**

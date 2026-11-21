@@ -96,6 +96,11 @@ function shouldLeaveValidSnippetUntouched(snippet: string, isExpression: boolean
     return isValidJsScript(wrapped)
 }
 
+const DELIMITER_HEAL_KEYWORD_RE =
+    /\b(?:content|title|text|description|message|instructions|body|notes|details|resolution_notes|query|script|comment|summary|heading|createEntry|teamCreateEntry|appendEntry|updateEntry|teamUpdateEntry|searchEntries|teamSearch|mj_create_entry|mjCreateEntry|mj_update_entry|mjUpdateEntry|mj_search_entries|mjSearchEntries|const|let|var)\b/g
+const DELIMITER_HEAL_FAST_RE =
+    /\b(?:content|title|text|description|message|instructions|body|notes|details|resolution_notes|query|script|comment|summary|heading|createEntry|teamCreateEntry|appendEntry|updateEntry|teamUpdateEntry|searchEntries|teamSearch|mj_create_entry|mjCreateEntry|mj_update_entry|mjUpdateEntry|mj_search_entries|mjSearchEntries|const|let|var)\b/
+
 function countRegexMatchesUpTo(src: string, re: RegExp, cap: number): number {
     let count = 0
     for (const match of src.matchAll(re)) {
@@ -105,12 +110,16 @@ function countRegexMatchesUpTo(src: string, re: RegExp, cap: number): number {
     return count
 }
 
-function applyTemplateAndQuoteDelimiterHealing(src: string): string {
-    if (!hasAccidentalTaggedTemplateBackticks(src) && isValidJsScript(src)) return src
+function applyTemplateAndQuoteDelimiterHealing(
+    src: string,
+    precomputed?: { valid?: boolean; accidentalBackticks?: boolean }
+): string {
+    const accidental = precomputed?.accidentalBackticks ?? hasAccidentalTaggedTemplateBackticks(src)
+    if (!accidental && (precomputed?.valid ?? isValidJsScript(src))) return src
     if (
         countRegexMatchesUpTo(
             src,
-            /\b(?:content|title|text|description|message|instructions|body|notes|details|resolution_notes|query|script|comment|summary|heading|createEntry|teamCreateEntry|appendEntry|updateEntry|teamUpdateEntry|searchEntries|teamSearch|mj_create_entry|mjCreateEntry|mj_update_entry|mjUpdateEntry|mj_search_entries|mjSearchEntries|const|let|var)\b/g,
+            DELIMITER_HEAL_KEYWORD_RE,
             MAX_DELIMITER_HEAL_CANDIDATES
         ) > MAX_DELIMITER_HEAL_CANDIDATES
     ) {
@@ -212,8 +221,24 @@ function rewriteSandboxNodeAndContextCalls(src: string): string {
         () => 'undefined'
     )
     executionCode = replaceOutsideNonCode(executionCode, /process\.env\b/g, () => '{}')
-    if (!isValidJsScript(executionCode) || hasAccidentalTaggedTemplateBackticks(executionCode)) {
-        executionCode = applyTemplateAndQuoteDelimiterHealing(executionCode)
+    if (
+        executionCode.includes('`') ||
+        executionCode.includes("'") ||
+        executionCode.includes('"')
+    ) {
+        const accidentalBackticks =
+            executionCode.includes('`') && hasAccidentalTaggedTemplateBackticks(executionCode)
+        if (accidentalBackticks) {
+            executionCode = applyTemplateAndQuoteDelimiterHealing(executionCode, {
+                valid: false,
+                accidentalBackticks: true,
+            })
+        } else if (DELIMITER_HEAL_FAST_RE.test(executionCode) && !isValidJsScript(executionCode)) {
+            executionCode = applyTemplateAndQuoteDelimiterHealing(executionCode, {
+                valid: false,
+                accidentalBackticks: false,
+            })
+        }
     }
     return rewriteContextJsonParseCalls(executionCode)
 }

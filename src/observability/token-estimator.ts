@@ -38,30 +38,41 @@ const TOKEN_SENTINEL_TAIL = `"${TOKEN_ESTIMATE_SENTINEL}"}}`
 /**
  * Detect the content type of a string to apply the most accurate token heuristic.
  */
+const CODE_INDICATORS = ['function', 'const', 'let', 'class', 'import', 'export', '=>', ';'] as const
+
+function isAsciiWhitespaceCode(code: number): boolean {
+    return code === 32 || code === 9 || code === 10 || code === 13
+}
+
+/**
+ * Detect the content type of a string to apply the most accurate token heuristic.
+ */
 export function detectContentType(text: string): ContentType {
-    if (!text || text.length === 0) return 'prose'
-    
-    // Quick heuristic: look at the first and last non-whitespace characters
-    const trimmed = text.trimStart()
-    if (trimmed.startsWith('{') || trimmed.startsWith('[')) {
-        const endTrimmed = text.trimEnd()
-        if (endTrimmed.endsWith('}') || endTrimmed.endsWith(']')) {
-            return 'json'
-        }
+    const len = text.length
+    if (len === 0) return 'prose'
+
+    let start = 0
+    while (start < len && isAsciiWhitespaceCode(text.charCodeAt(start))) start++
+    if (start === len) return 'prose'
+    let end = len - 1
+    while (end > start && isAsciiWhitespaceCode(text.charCodeAt(end))) end--
+
+    const first = text.charCodeAt(start)
+    const last = text.charCodeAt(end)
+    if ((first === 123 && last === 125) || (first === 91 && last === 93)) {
+        return 'json'
     }
 
-    // Heuristic for code: look for common code indicators
-    // If it contains a high density of semicolons, braces, or keywords, call it code
-    const codeIndicators = ['function', 'const', 'let', 'class', 'import', 'export', '=>', ';']
-    let matches = 0
-    for (const indicator of codeIndicators) {
-        if (text.includes(indicator)) matches++
+    if (text.includes('{') && text.includes('}')) {
+        return 'code'
     }
-    
-    if (matches >= 2 || (text.includes('{') && text.includes('}'))) {
-         // Prevent over-classification: if it's very long and lacks many code keywords but has {}, it might be markdown with a snippet
-         // For now, if we match 2+ indicators or have braces, call it code.
-         return 'code'
+
+    let matches = 0
+    for (const indicator of CODE_INDICATORS) {
+        if (text.includes(indicator)) {
+            matches++
+            if (matches >= 2) return 'code'
+        }
     }
 
     return 'prose'
@@ -101,6 +112,12 @@ export function estimatePayloadTokens(payload: unknown): number {
                 payloadTokenCache.set(payload, existing)
                 return existing
             }
+        }
+        const cachedJson = serializedPayloadCache.get(payload)
+        if (cachedJson !== undefined) {
+            const est = estimateTokens(cachedJson, 'json')
+            payloadTokenCache.set(payload, est)
+            return est
         }
     }
     try {
@@ -152,6 +169,66 @@ export function getSerializedPayloadJson(payload: unknown): string {
 // Injection Helper
 // ============================================================================
 
+const TOKEN_EMPTY_META_ESTIMATE = Math.ceil(
+    Buffer.byteLength('{"_meta":{"tokenEstimate":0}}', 'utf8') / BYTES_PER_TOKEN_JSON
+)
+const TOKEN_EMPTY_META_JSON = `{"_meta":{"tokenEstimate":${String(TOKEN_EMPTY_META_ESTIMATE)}}}`
+const TOKEN_EXISTING_META_NEEDLE = `"tokenEstimate":"${TOKEN_ESTIMATE_SENTINEL}"`
+const TOKEN_EXISTING_META_PREFIX_OVERHEAD_BYTES =
+    Buffer.byteLength(`,"tokenEstimate":"${TOKEN_ESTIMATE_SENTINEL}"`, 'utf8') - 1
+const TOKEN_EXISTING_META_BARE_OVERHEAD_BYTES =
+    Buffer.byteLength(TOKEN_EXISTING_META_NEEDLE, 'utf8') - 1
+
+function injectIntoExistingMeta(
+    payload: unknown,
+    obj: Record<string, unknown>,
+    existingMeta: Record<string, unknown>
+): unknown {
+    const cleanMeta = { ...existingMeta }
+    delete cleanMeta['tokenEstimate']
+    const hadOtherMetaKeys = Object.keys(cleanMeta).length > 0
+    const placeholder = {
+        ...obj,
+        _meta: { ...cleanMeta, tokenEstimate: TOKEN_ESTIMATE_SENTINEL },
+    }
+    try {
+        const placeholderJson = JSON.stringify(placeholder, bigintReplacer)
+        const needleIdx = placeholderJson.indexOf(TOKEN_EXISTING_META_NEEDLE)
+        if (
+            needleIdx !== -1 &&
+            !placeholderJson.includes(TOKEN_EXISTING_META_NEEDLE, needleIdx + 1)
+        ) {
+            const overhead = hadOtherMetaKeys
+                ? TOKEN_EXISTING_META_PREFIX_OVERHEAD_BYTES
+                : TOKEN_EXISTING_META_BARE_OVERHEAD_BYTES
+            const rawBytes = Buffer.byteLength(placeholderJson, 'utf8') - overhead
+            const tokenEstimate =
+                rawBytes <= 0 ? 0 : Math.ceil(rawBytes / BYTES_PER_TOKEN_JSON)
+            const finalJson =
+                placeholderJson.slice(0, needleIdx) +
+                `"tokenEstimate":${String(tokenEstimate)}` +
+                placeholderJson.slice(needleIdx + TOKEN_EXISTING_META_NEEDLE.length)
+            const enriched = { ...obj, _meta: { ...cleanMeta, tokenEstimate } }
+            payloadTokenCache.set(enriched, tokenEstimate)
+            serializedPayloadCache.set(enriched, finalJson)
+            return enriched
+        }
+    } catch {
+        // Fall through to standard estimatePayloadTokens handling below.
+    }
+
+    const tokenEstimate = estimatePayloadTokens(payload)
+    const enriched = {
+        ...obj,
+        _meta: {
+            ...existingMeta,
+            tokenEstimate,
+        },
+    }
+    payloadTokenCache.set(enriched, tokenEstimate)
+    return enriched
+}
+
 /**
  * Inject a `_meta.tokenEstimate` field into a tool response payload.
  * Operates on a shallow copy — never mutates the original object.
@@ -193,6 +270,13 @@ export function injectTokenEstimate(payload: unknown): unknown {
             return enriched
         }
 
+        if (!('_meta' in obj) && Object.keys(obj).length === 0) {
+            const enriched = { _meta: { tokenEstimate: TOKEN_EMPTY_META_ESTIMATE } }
+            payloadTokenCache.set(enriched, TOKEN_EMPTY_META_ESTIMATE)
+            serializedPayloadCache.set(enriched, TOKEN_EMPTY_META_JSON)
+            return enriched
+        }
+
         const placeholder = { ...obj, _meta: { tokenEstimate: TOKEN_ESTIMATE_SENTINEL } }
         try {
             const placeholderJson = JSON.stringify(placeholder, bigintReplacer)
@@ -216,14 +300,5 @@ export function injectTokenEstimate(payload: unknown): unknown {
         }
     }
 
-    const tokenEstimate = estimatePayloadTokens(payload)
-    const enriched = {
-        ...obj,
-        _meta: {
-            ...existingMeta,
-            tokenEstimate,
-        },
-    }
-    payloadTokenCache.set(enriched, tokenEstimate)
-    return enriched
+    return injectIntoExistingMeta(payload, obj, existingMeta)
 }

@@ -1,10 +1,13 @@
+import { z } from 'zod'
+import type { StandardSchemaWithJSON } from '@modelcontextprotocol/server'
 import { readResource } from '../../../handlers/resources/index.js'
 import type { ToolHandlerConfig } from '../../../types/index.js'
 import type { DEFAULT_BRIEFING_CONFIG } from '../../../handlers/resources/shared.js'
 import { globalSubscriptionManager } from '../../subscription-manager.js'
 import { logAgentIssue } from '../../../utils/issue-logger.js'
+import { logger } from '../../../utils/logger.js'
 import { formatHandlerError } from '../../../utils/error-helpers.js'
-import { bigintReplacer } from '../../../observability/token-estimator.js'
+import { getSerializedPayloadJson } from '../../../observability/token-estimator.js'
 import { findCanonicalRegistryKey, getActiveSessionProject } from '../../../utils/workspace-resolver.js'
 import { activeProjectRegistry, pairStoredScope } from '../../../utils/write-scope.js'
 import type { ServerContext, ServerOptions } from '../types.js'
@@ -241,29 +244,37 @@ export function syncLiveHandlerConfig(
     options: ServerOptions,
     liveBriefing: ReturnType<typeof resolveActiveBriefingConfig>
 ): void {
-    target.briefingConfig = liveBriefing
-    target.filterConfig = liveConfig.toolFilterConfig
-    if (liveConfig.codemodeInternalFullAccess !== undefined) {
-        target.codemodeInternalFullAccess = liveConfig.codemodeInternalFullAccess
-    } else if (options.codemodeInternalFullAccess !== undefined) {
-        target.codemodeInternalFullAccess = options.codemodeInternalFullAccess
-    } else {
-        delete target.codemodeInternalFullAccess
+    if (target.briefingConfig !== liveBriefing) {
+        target.briefingConfig = liveBriefing
     }
-    if (liveBriefing.defaultProjectNumber !== undefined) {
-        target.defaultProjectNumber = liveBriefing.defaultProjectNumber
-    } else {
-        delete target.defaultProjectNumber
+    if (target.filterConfig !== liveConfig.toolFilterConfig) {
+        target.filterConfig = liveConfig.toolFilterConfig
     }
-    if (liveBriefing.defaultWorkspaceId !== undefined) {
-        target.defaultWorkspaceId = liveBriefing.defaultWorkspaceId
-    } else {
-        delete target.defaultWorkspaceId
+    const nextFullAccess = liveConfig.codemodeInternalFullAccess ?? options.codemodeInternalFullAccess
+    if (target.codemodeInternalFullAccess !== nextFullAccess) {
+        if (nextFullAccess !== undefined) target.codemodeInternalFullAccess = nextFullAccess
+        else if ('codemodeInternalFullAccess' in target) delete target.codemodeInternalFullAccess
     }
-    if (liveBriefing.projectRegistry !== undefined) {
-        target.projectRegistry = liveBriefing.projectRegistry
-    } else {
-        delete target.projectRegistry
+    if (target.defaultProjectNumber !== liveBriefing.defaultProjectNumber) {
+        if (liveBriefing.defaultProjectNumber !== undefined) {
+            target.defaultProjectNumber = liveBriefing.defaultProjectNumber
+        } else if ('defaultProjectNumber' in target) {
+            delete target.defaultProjectNumber
+        }
+    }
+    if (target.defaultWorkspaceId !== liveBriefing.defaultWorkspaceId) {
+        if (liveBriefing.defaultWorkspaceId !== undefined) {
+            target.defaultWorkspaceId = liveBriefing.defaultWorkspaceId
+        } else if ('defaultWorkspaceId' in target) {
+            delete target.defaultWorkspaceId
+        }
+    }
+    if (target.projectRegistry !== liveBriefing.projectRegistry) {
+        if (liveBriefing.projectRegistry !== undefined) {
+            target.projectRegistry = liveBriefing.projectRegistry
+        } else if ('projectRegistry' in target) {
+            delete target.projectRegistry
+        }
     }
 }
 
@@ -311,7 +322,7 @@ export function createResourceReadHandler(
             const dataStr =
                 typeof result.data === 'string'
                     ? result.data
-                    : JSON.stringify(result.data, bigintReplacer, 2)
+                    : getSerializedPayloadJson(result.data)
             return {
                 contents: [
                     {
@@ -329,4 +340,102 @@ export function createResourceReadHandler(
             throw error
         }
     }
+}
+
+const relaxedInputSchemaCache = new WeakMap<object, unknown>()
+const relaxedOutputSchemaCache = new WeakMap<object, StandardSchemaWithJSON | null>()
+
+export function isStandardSchemaWithJson(value: unknown): value is StandardSchemaWithJSON {
+    return (
+        typeof value === 'object' &&
+        value !== null &&
+        ('~standard' in value || 'partial' in value || 'loose' in value || 'passthrough' in value)
+    )
+}
+
+function relaxInputSchemaRecursive(schema: unknown, depth: number): unknown {
+    if (depth > 16 || typeof schema !== 'object' || schema === null) {
+        return schema
+    }
+    if (schema instanceof z.ZodObject) {
+        return schema.partial().loose()
+    }
+    if (schema instanceof z.ZodPipe) {
+        const relaxedIn = relaxInputSchemaRecursive(schema.in, depth + 1)
+        const relaxedOut = relaxInputSchemaRecursive(schema.out, depth + 1)
+        if (relaxedIn !== schema.in || relaxedOut !== schema.out) {
+            return z.pipe(relaxedIn as z.ZodType, relaxedOut as z.ZodType)
+        }
+        return schema
+    }
+    if ('partial' in schema && typeof schema.partial === 'function') {
+        const relaxed = (
+            schema as {
+                partial: () => {
+                    loose?: () => StandardSchemaWithJSON
+                    passthrough?: () => StandardSchemaWithJSON
+                }
+            }
+        ).partial()
+        if (typeof relaxed.loose === 'function') {
+            return relaxed.loose()
+        }
+        if (typeof relaxed.passthrough === 'function') {
+            return relaxed.passthrough()
+        }
+    }
+    return schema
+}
+
+/** Relax an MCP input schema (memoized per schema instance). */
+export function relaxInputSchemaForMcp(schema: unknown): unknown {
+    if (typeof schema !== 'object' || schema === null) return schema
+    const cached = relaxedInputSchemaCache.get(schema)
+    if (cached !== undefined) return cached
+    const relaxed = relaxInputSchemaRecursive(schema, 0)
+    relaxedInputSchemaCache.set(schema, relaxed)
+    return relaxed
+}
+
+function tryRelaxOutputSchema(outSchema: unknown): StandardSchemaWithJSON | undefined {
+    if (outSchema instanceof z.ZodObject) {
+        const looseSchema: unknown = outSchema.loose()
+        return isStandardSchemaWithJson(looseSchema) ? looseSchema : undefined
+    }
+    if (typeof outSchema !== 'object' || outSchema === null) {
+        return undefined
+    }
+    if ('loose' in outSchema && typeof outSchema.loose === 'function') {
+        return (outSchema as { loose: () => StandardSchemaWithJSON }).loose()
+    }
+    if ('passthrough' in outSchema && typeof outSchema.passthrough === 'function') {
+        return (outSchema as { passthrough: () => StandardSchemaWithJSON }).passthrough()
+    }
+    return undefined
+}
+
+/** Relax an MCP output schema (memoized per schema instance). */
+export function relaxOutputSchemaForMcp(
+    outSchema: unknown,
+    toolName: string
+): StandardSchemaWithJSON | undefined {
+    if (typeof outSchema !== 'object' || outSchema === null) return undefined
+    const cached = relaxedOutputSchemaCache.get(outSchema)
+    if (cached !== undefined) return cached ?? undefined
+    const fallbackOutputSchema = isStandardSchemaWithJson(outSchema) ? outSchema : undefined
+    try {
+        const relaxed = tryRelaxOutputSchema(outSchema)
+        if (relaxed !== undefined) {
+            relaxedOutputSchemaCache.set(outSchema, relaxed)
+            return relaxed
+        }
+    } catch (error) {
+        logger.warning('Failed to relax output schema; using fallback schema', {
+            module: 'McpServer',
+            tool: toolName,
+            error: error instanceof Error ? error.message : String(error),
+        })
+    }
+    relaxedOutputSchemaCache.set(outSchema, fallbackOutputSchema ?? null)
+    return fallbackOutputSchema
 }

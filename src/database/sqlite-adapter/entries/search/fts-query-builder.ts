@@ -89,7 +89,7 @@ function buildBaseSelect(
         : ''
 
     const snippetCol =
-        useFts && options?.includeHighlights === true
+        !useMaterializedFtsOuter && useFts && options?.includeHighlights === true
             ? ", snippet(fts_content, 0, '«', '»', '…', 64) AS highlight_snippet"
             : ''
 
@@ -210,8 +210,7 @@ export function buildSearchQuery(
     const targetWs = effectiveWorkspace(options?.workspaceId)
     const hasQuery = queryStr.length > 0
     const sanitizedFts = useFts && hasQuery ? sanitizeFtsQuery(queryStr) : ''
-    const useMaterializedFtsOuter =
-        needsImportance && useFts && hasQuery && options?.includeHighlights !== true
+    const useMaterializedFtsOuter = needsImportance && useFts && hasQuery
     let query = buildBaseSelect(options, useFts, targetWs, hasQuery, useMaterializedFtsOuter)
 
     const params: unknown[] = []

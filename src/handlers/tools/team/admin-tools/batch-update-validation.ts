@@ -22,6 +22,7 @@ import {
 } from '../schemas.js'
 import {
     buildTeamPermissionDeniedError,
+    createScopedAuthorCanonicalizer,
     createScopedTeamRoleLookup,
     prefetchTeamEntriesMap,
     validateTeamEntryWorkspaceScope,
@@ -77,6 +78,7 @@ interface BatchUpdateSharedCtx {
     preFetchedAuthors: Map<number, string | null> | null
     prefetchedEntries: Map<number, JournalEntry> | null
     resolveRole: (workspaceId: string | undefined) => TeamRole | null
+    canonicalizeAuthor: (author: string, workspaceId?: string) => string
     rbacActive: boolean
 }
 
@@ -136,7 +138,15 @@ function validateSingleTeamBatchUpdate(
     const effectiveWs = existing.workspaceId ?? wsId
     const author = preFetchedAuthors ? (preFetchedAuthors.get(u.entry_id) ?? null) : fetchAuthor(teamDb, u.entry_id)
     try {
-        enforceEntryOwnership(currentUser, author, resolveRole(effectiveWs), teamDb, effectiveWs, rbacActive)
+        enforceEntryOwnership(
+            currentUser,
+            author,
+            resolveRole(effectiveWs),
+            teamDb,
+            effectiveWs,
+            rbacActive,
+            shared.canonicalizeAuthor
+        )
     } catch (err) {
         if (!(err instanceof AuthorizationError)) throw err
         return {
@@ -168,6 +178,29 @@ export function buildValidatedTeamBatchUpdates(
     }
     const rbacActive = typeof teamDb.isTeamRbacActive === 'function' && teamDb.isTeamRbacActive()
     const defaultRole = context.config?.teamDefaultRole ?? 'denied'
+    const prefetchedEntries = prefetchTeamEntriesMap(
+        teamDb,
+        rawUpdates.map((u) => u.entry_id),
+        '*'
+    )
+    const resolveRole = createScopedTeamRoleLookup(teamDb, currentUser, defaultRole, rbacActive)
+    const authorPairs: { author: string | null | undefined; workspaceId?: string }[] = []
+    for (const u of rawUpdates) {
+        const explicitWs = u.workspace_id ?? rootWorkspaceId
+        const explicitPn = u.project_number ?? rootProjectNumber
+        const wsId = resolveWriteWorkspaceId(explicitWs, explicitPn, context.config)
+        const rawExisting = prefetchedEntries !== null ? prefetchedEntries.get(u.entry_id) : undefined
+        const existing =
+            prefetchedEntries !== null ? validateTeamEntryWorkspaceScope(rawExisting, wsId) : null
+        const effectiveWs = existing?.workspaceId ?? wsId
+        if (resolveRole(effectiveWs) === 'admin') continue
+        authorPairs.push({ author: currentUser, workspaceId: effectiveWs })
+        authorPairs.push({
+            author: preFetchedAuthors ? preFetchedAuthors.get(u.entry_id) : undefined,
+            workspaceId: effectiveWs,
+        })
+    }
+    const canonicalizeAuthor = createScopedAuthorCanonicalizer(teamDb, authorPairs)
     const shared: BatchUpdateSharedCtx = {
         teamDb,
         rootWorkspaceId,
@@ -175,12 +208,9 @@ export function buildValidatedTeamBatchUpdates(
         context,
         currentUser,
         preFetchedAuthors,
-        prefetchedEntries: prefetchTeamEntriesMap(
-            teamDb,
-            rawUpdates.map((u) => u.entry_id),
-            '*'
-        ),
-        resolveRole: createScopedTeamRoleLookup(teamDb, currentUser, defaultRole, rbacActive),
+        prefetchedEntries,
+        resolveRole,
+        canonicalizeAuthor,
         rbacActive,
     }
 

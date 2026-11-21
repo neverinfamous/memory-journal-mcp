@@ -18,6 +18,7 @@ import {
     safeDecodeUriSegment,
     fenceUntrustedInline,
     sliceUntrustedInline,
+    withResourceTokenMeta,
 } from './shared.js'
 import { createGitHubMilestoneResources } from './github-milestones.js'
 import { logger } from '../../utils/logger.js'
@@ -327,10 +328,9 @@ async function handleGitHubStatusResource(
         kanbanSummary,
         milestones: milestoneSummary,
     }
-    const tokenEstimate = Math.ceil(JSON.stringify(responseData).length / 4)
 
     return {
-        data: { ...responseData, _meta: { tokenEstimate } },
+        data: withResourceTokenMeta(responseData),
         annotations: { lastModified },
     }
 }

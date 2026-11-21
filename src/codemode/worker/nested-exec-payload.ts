@@ -38,9 +38,14 @@ export function readExecutableCode(arg: unknown): string | null {
     return hasEntryText ? null : ''
 }
 
+const SINGLE_IDENT_RE = /^[A-Za-z_$][\w$]*$/
+const COLON_PROSE_RE = /^[A-Za-z0-9_-]+:\s+/
+const JS_SYNTAX_PUNCT_RE = /[(.=[\];]/
+const EXPLICIT_QUERY_CODE_RE = /^(?:return\s+|await\s+mj\.)/
+
 export function isSyntacticallyValidJs(trimmed: string): boolean {
-    if (trimmed === '' || /^[A-Za-z_$][\w$]*$/.test(trimmed)) return false
-    if (/^[A-Za-z0-9_-]+:\s+/.test(trimmed) && !/[(.=[\];]/.test(trimmed)) return false
+    if (trimmed === '' || SINGLE_IDENT_RE.test(trimmed)) return false
+    if (COLON_PROSE_RE.test(trimmed) && !JS_SYNTAX_PUNCT_RE.test(trimmed)) return false
     try {
         new vm.Script(trimmed)
         return true
@@ -76,7 +81,7 @@ export function readNestedQuerySearch(
     const trimmedQuery = queryProp.trim()
     if (
         DANGEROUS_NESTED_QUERY_TOKEN_RE.test(trimmedQuery) ||
-        /^(?:return\s+|await\s+mj\.)/.test(trimmedQuery)
+        EXPLICIT_QUERY_CODE_RE.test(trimmedQuery)
     ) {
         return undefined
     }

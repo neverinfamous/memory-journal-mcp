@@ -90,6 +90,15 @@ export class DatabaseAdapter extends AdapterDelegates implements IDatabaseAdapte
         return this.entriesMgr.getEntriesPage(offset, limit, 'desc', workspaceId, projectNumber)
     }
 
+    getEntriesAfter(
+        limit: number,
+        workspaceId = 'default',
+        projectNumber?: number,
+        cursor?: { timestamp: string; id: number }
+    ): JournalEntry[] {
+        return this.entriesMgr.getEntriesAfter(limit, 'desc', workspaceId, projectNumber, cursor)
+    }
+
     getActiveEntryCount(workspaceId?: string, projectNumber?: number): number {
         return this.entriesMgr.getActiveEntryCount(workspaceId, projectNumber)
     }
@@ -367,5 +376,9 @@ export class DatabaseAdapter extends AdapterDelegates implements IDatabaseAdapte
 
     getEntriesBySession(sessionId: string, limit?: number, workspaceId?: string): JournalEntry[] {
         return this.entriesMgr.getEntriesBySession(sessionId, limit, workspaceId)
+    }
+
+    getLatestEntryPerProject(): Map<string, { id: number; timestamp: string; entryType: string }> {
+        return this.entriesMgr.getLatestEntryPerProject()
     }
 }

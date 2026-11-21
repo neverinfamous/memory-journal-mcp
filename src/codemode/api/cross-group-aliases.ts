@@ -2,7 +2,7 @@
  * Cross-group alias wiring and entry-creation scope enrichment helpers for JournalApi.
  */
 
-import type { ToolDefinition } from '../../types/index.js'
+import type { ProjectRegistryEntry, ToolDefinition } from '../../types/index.js'
 import { ValidationError } from '../../types/errors.js'
 import { resolveProjectContext } from '../../utils/workspace-resolver.js'
 import { activeProjectRegistry, pairStoredScope } from '../../utils/write-scope.js'
@@ -46,7 +46,8 @@ export function enrichEntryRecord(
     rec: Record<string, unknown>,
     registryProvider?: ProjectRegistryProvider,
     fallbackWs?: unknown,
-    fallbackProj?: unknown
+    fallbackProj?: unknown,
+    preloadedRegistry?: Record<string, ProjectRegistryEntry> | null
 ): void {
     const itemWs = rec['workspace_id'] ?? rec['workspaceId']
     const itemWsNorm = typeof itemWs === 'string' ? itemWs.trim().toLowerCase() : ''
@@ -75,7 +76,10 @@ export function enrichEntryRecord(
     if (!hasExplicitWs) return
 
     const trimmedWs = currentWs.trim()
-    const providerRegistry = readProjectRegistryPayload(registryProvider?.())
+    const providerRegistry =
+        preloadedRegistry !== undefined
+            ? (preloadedRegistry ?? undefined)
+            : readProjectRegistryPayload(registryProvider?.())
     const resolved = resolveProjectContext(
         {
             workspace_id: trimmedWs,
@@ -102,12 +106,18 @@ function wrapEntryCreatorFn(
     const wrapper = async (...args: unknown[]): Promise<unknown> => {
         const params = args[0]
         if (isRecord(params)) {
-            enrichEntryRecord(params, ctx.registryProvider)
-            if (Array.isArray(params['entries'])) {
+            const hasBatch = Array.isArray(params['entries'])
+            const preloadedRegistry = hasBatch
+                ? (readProjectRegistryPayload(ctx.registryProvider?.()) ?? null)
+                : undefined
+            enrichEntryRecord(params, ctx.registryProvider, undefined, undefined, preloadedRegistry)
+            if (hasBatch) {
                 const topWs = params['workspace_id'] ?? params['workspaceId']
                 const topProj = params['project_number'] ?? params['projectNumber']
-                for (const item of params['entries']) {
-                    if (isRecord(item)) enrichEntryRecord(item, ctx.registryProvider, topWs, topProj)
+                for (const item of params['entries'] as unknown[]) {
+                    if (isRecord(item)) {
+                        enrichEntryRecord(item, ctx.registryProvider, topWs, topProj, preloadedRegistry)
+                    }
                 }
             }
         }

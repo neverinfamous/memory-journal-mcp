@@ -15,10 +15,12 @@ import { getRpcExecutionOverrides } from '../../../codemode/rpc-context.js'
 import { getRequestContext, requestContextStorage } from '../../../utils/request-context.js'
 import {
     exceedsMaxToolInputElements,
+    getValidatedToolInputMax,
     resolveEffectiveMaxToolInputElements,
 } from '../../../utils/tool-input-bounds.js'
 import { normalizeDispatchParams } from './dispatch-scope.js'
 import { resolveEffectiveRpcScope, validateRpcOverrideBounds } from './dispatch-rpc-bounds.js'
+import { getCodemodeInvocationState } from './invocation-store.js'
 
 export { resolveCodeModeSessionContext } from './session-context.js'
 export { checkSchemaAcceptsKey, deepCamelToSnake } from './dispatch-scope.js'
@@ -85,6 +87,8 @@ function enforceDispatcherElementBounds(
     configuredMax: number | undefined
 ): Record<string, unknown> | undefined {
     const maxElements = resolveEffectiveMaxToolInputElements(configuredMax)
+    const validatedMax = getValidatedToolInputMax(toolParams)
+    if (validatedMax !== undefined && validatedMax <= maxElements) return undefined
     if (!exceedsMaxToolInputElements(toolParams, maxElements)) return undefined
     return {
         success: false,
@@ -207,6 +211,38 @@ export function createSecureDispatcher(
             )
         }
         return executeDispatcherCall(tool, toolParams, isSimulation, options)
+    }
+}
+
+/**
+ * Create a cached-bundle dispatcher reading per-invocation state from `invocation-store.ts`.
+ */
+export function createContextualSecureDispatcher(
+    tools: ToolDefinition[]
+): (toolName: string, toolParams: unknown, isSimulation?: boolean) => Promise<unknown> {
+    const toolByName = new Map(tools.map((t) => [t.name, t]))
+    return async (toolName: string, toolParams: unknown, isSimulation?: boolean): Promise<unknown> => {
+        const tool = toolByName.get(toolName)
+        if (!tool) {
+            throw new Error(
+                `[Security] Tool "${toolName}" is not available or registered in the environment. If you were trying to read a resource, use the proper readResource API instead.`
+            )
+        }
+        const state = getCodemodeInvocationState()
+        if (state === undefined) {
+            throw new Error('[Security] Code Mode invocation context is not active.')
+        }
+        return executeDispatcherCall(tool, toolParams, isSimulation, {
+            tools,
+            sessionContext: state.sessionContext,
+            projectId: state.projectId,
+            workspaceId: state.workspaceId,
+            explicitWorkspace: state.explicitWorkspace,
+            sessionId: state.sessionId,
+            autoVersion: state.autoVersion,
+            dryRun: state.dryRun,
+            onMutatingDispatch: state.onMutatingDispatch,
+        })
     }
 }
 

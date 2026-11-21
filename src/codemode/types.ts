@@ -144,6 +144,8 @@ export interface ValidationResult {
     valid: boolean
     /** Validation errors (if any) */
     errors: string[]
+    /** Pre-stripped code produced during validation for reuse by downstream delimiter checks */
+    strippedCode?: string
 }
 
 /**

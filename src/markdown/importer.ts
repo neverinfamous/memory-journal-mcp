@@ -19,8 +19,8 @@ import {
 } from './import-relationships.js'
 import { parseFrontmatter, type FrontmatterAnchor } from './frontmatter.js'
 import {
+    assertSafeChildFile,
     assertSafeDirectoryPath,
-    assertSafeFilePath,
     sanitizeAuthor,
 } from '../utils/security-utils.js'
 import {
@@ -115,15 +115,16 @@ export interface ParsedFile {
         anchors?: FrontmatterAnchor[]
     }
 }
+const NUMERIC_FILENAME_COLLATOR = new Intl.Collator(undefined, { numeric: true })
+
 async function readAndParseMarkdownFile(
     sourceDir: string,
-    filename: string,
-    allowedRoots: string[]
+    filename: string
 ): Promise<{ parsed?: ParsedFile; skipped?: boolean }> {
     let handle
     try {
         const filepath = join(sourceDir, filename)
-        assertSafeFilePath(filepath, allowedRoots)
+        assertSafeChildFile(sourceDir, filename, filepath)
         try {
             handle = await open(filepath, constants.O_RDONLY | constants.O_NOFOLLOW)
         } catch (err: unknown) {
@@ -184,7 +185,7 @@ export async function importMarkdownEntries(
             if (allMdFiles.length >= MAX_IMPORT_DIR_ENTRIES) break
         }
     }
-    allMdFiles.sort((a, b) => a.localeCompare(b, undefined, { numeric: true }))
+    allMdFiles.sort((a, b) => NUMERIC_FILENAME_COLLATOR.compare(a, b))
     const mdFiles = allMdFiles.slice(0, Math.max(0, limit))
 
     const result: ImportResult = {
@@ -202,8 +203,12 @@ export async function importMarkdownEntries(
         parsedFiles,
         skipped: readSkipped,
         errors: readErrors,
-    } = await readMarkdownFilesParallel(mdFiles, (filename) =>
-        readAndParseMarkdownFile(sourceDir, filename, allowedRoots)
+    } = await readMarkdownFilesParallel(
+        mdFiles,
+        (filename) => readAndParseMarkdownFile(sourceDir, filename),
+        (chunkIndex) => {
+            if (chunkIndex > 0) assertSafeDirectoryPath(sourceDir, allowedRoots)
+        }
     )
     result.skipped += readSkipped
     if (readErrors.length > 0) {

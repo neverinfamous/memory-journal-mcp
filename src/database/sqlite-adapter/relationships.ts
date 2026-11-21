@@ -93,15 +93,15 @@ export class RelationshipsManager {
                 `SELECT r.id, r.from_entry_id as fromEntryId, r.to_entry_id as toEntryId,
                         r.relationship_type as relationshipType, r.description, r.created_at as createdAt
                  FROM relationships r
-                 INNER JOIN memory_journal mf ON mf.id = r.from_entry_id
-                 INNER JOIN memory_journal mt ON mt.id = r.to_entry_id
+                 CROSS JOIN memory_journal mf ON mf.id = r.from_entry_id
+                 CROSS JOIN memory_journal mt ON mt.id = r.to_entry_id
                  WHERE r.from_entry_id = ? AND ${peerFilter}
                  UNION ALL
                  SELECT r.id, r.from_entry_id as fromEntryId, r.to_entry_id as toEntryId,
                         r.relationship_type as relationshipType, r.description, r.created_at as createdAt
                  FROM relationships r
-                 INNER JOIN memory_journal mf ON mf.id = r.from_entry_id
-                 INNER JOIN memory_journal mt ON mt.id = r.to_entry_id
+                 CROSS JOIN memory_journal mf ON mf.id = r.from_entry_id
+                 CROSS JOIN memory_journal mt ON mt.id = r.to_entry_id
                  WHERE r.to_entry_id = ? AND r.from_entry_id != ? AND ${peerFilter}`
             )
             .all(...buildParams([entryId]), ...buildParams([entryId, entryId])) as {
@@ -135,16 +135,16 @@ export class RelationshipsManager {
             const sql = `SELECT r.id, r.from_entry_id as fromEntryId, r.to_entry_id as toEntryId,
                                 r.relationship_type as relationshipType, r.description, r.created_at as createdAt
                          FROM relationships r
-                         INNER JOIN memory_journal mf ON mf.id = r.from_entry_id
-                         INNER JOIN memory_journal mt ON mt.id = r.to_entry_id
+                         CROSS JOIN memory_journal mf ON mf.id = r.from_entry_id
+                         CROSS JOIN memory_journal mt ON mt.id = r.to_entry_id
                          WHERE r.from_entry_id IN (${placeholders})
                            AND mf.deleted_at IS NULL AND mt.deleted_at IS NULL${wsFilter}
                          UNION ALL
                          SELECT r.id, r.from_entry_id as fromEntryId, r.to_entry_id as toEntryId,
                                 r.relationship_type as relationshipType, r.description, r.created_at as createdAt
                          FROM relationships r
-                         INNER JOIN memory_journal mf ON mf.id = r.from_entry_id
-                         INNER JOIN memory_journal mt ON mt.id = r.to_entry_id
+                         CROSS JOIN memory_journal mf ON mf.id = r.from_entry_id
+                         CROSS JOIN memory_journal mt ON mt.id = r.to_entry_id
                          WHERE r.to_entry_id IN (${placeholders})
                            AND mf.deleted_at IS NULL AND mt.deleted_at IS NULL${wsFilter}`
             const wsParams = scoped ? [scopeId, scopeId] : []

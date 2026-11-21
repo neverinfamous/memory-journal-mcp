@@ -240,21 +240,12 @@ return { processed, unassignedCount: unassigned.length, unassigned };
 \`\`\`
 
 ### 2. Inspect Full Relationship Graph Structure for a Project Domain
+(Prefer reading \`memory://graph/{repo}\` first for pre-rendered Mermaid topology; use this script for structured JSON edges.)
 \`\`\`javascript
-const entries = await mj.core.getRecentEntries({ limit: 100, workspace_id: '*' });
-const graph = [];
-
-for (const entry of (entries.entries || [])) {
-  if (entry.source === 'team') continue;
-  const full = await mj.core.getEntryById({ entry_id: entry.id, workspace_id: '*' });
-  if (full.success && full.relationships && full.relationships.length > 0) {
-    graph.push({
-      id: entry.id,
-      project: entry.projectName,
-      relationships: full.relationships.map(r => ({ fromId: r.fromEntryId, toId: r.toEntryId, type: r.relationshipType }))
-    });
-  }
-}
+const graph = await mj.relationships.visualizeRelationships({
+  workspace_id: '*',
+  limit: 100,
+});
 return graph;
 \`\`\``
 }

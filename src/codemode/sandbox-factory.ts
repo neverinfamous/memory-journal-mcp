@@ -20,6 +20,7 @@ export type SandboxMode = 'worker'
 export interface SandboxExecutionModeFlags {
     dryRunMode?: boolean | undefined
     useTestDbMode?: boolean | undefined
+    maxToolInputElements?: number | undefined
 }
 
 /** Common sandbox interface */

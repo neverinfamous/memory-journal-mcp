@@ -2,6 +2,7 @@ import { getAllToolNames } from '../../../filtering/tool-filter.js'
 import { ICON_HEALTH } from '../../../constants/icons.js'
 import { withPriority, ASSISTANT_FOCUSED } from '../../../utils/resource-annotations.js'
 import type { InternalResourceDef, ResourceContext, ResourceResult } from '../shared.js'
+import { withResourceTokenMeta } from '../shared.js'
 // globalMetrics removed
 
 /**
@@ -83,12 +84,8 @@ function handleHealthResource(_uri: string, context: ResourceContext): ResourceR
         timestamp: lastModified,
     }
 
-    const tokenEstimate = Math.ceil(JSON.stringify(payloadData).length / 4)
     return {
-        data: {
-            ...payloadData,
-            _meta: { tokenEstimate },
-        },
+        data: withResourceTokenMeta(payloadData),
         annotations: { lastModified },
     }
 }
