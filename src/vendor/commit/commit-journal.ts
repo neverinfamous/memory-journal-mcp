@@ -152,17 +152,19 @@ export function parseCategory(history: string, type: string): { category: string
       return { category: capitalizedMatch, entry: entryBody };
     }
 
-    const mapped = TYPE_TO_CATEGORY[matchedCat.toLowerCase()];
+    const lowerCat = matchedCat.toLowerCase();
+    const mapped = Object.hasOwn(TYPE_TO_CATEGORY, lowerCat) ? TYPE_TO_CATEGORY[lowerCat] : undefined;
     if (mapped !== undefined) {
       console.warn(`⚠️ AUTONOMOUS HEALING: Invalid history category '${matchedCat}' mapped to '${mapped}'.`);
       return { category: mapped, entry: entryBody };
     }
 
     console.warn(`⚠️ AUTONOMOUS HEALING: Unrecognized history category '${matchedCat}'. Falling back to default category.`);
-    return { category: TYPE_TO_CATEGORY[type] ?? 'Changed', entry: entryBody };
+    const fallbackCategory = Object.hasOwn(TYPE_TO_CATEGORY, type) ? TYPE_TO_CATEGORY[type] : 'Changed';
+    return { category: fallbackCategory, entry: entryBody };
   }
 
-  const category = TYPE_TO_CATEGORY[type] ?? 'Changed';
+  const category = Object.hasOwn(TYPE_TO_CATEGORY, type) ? TYPE_TO_CATEGORY[type] : 'Changed';
   return { category, entry: cleanHistory.trim() };
 }
 

@@ -242,7 +242,17 @@ program
     .action(async (commitArgs: string[]) => {
         const { main } = await import('../vendor/commit/commit.js')
         const rawTail = process.argv.slice(2)
-        const commitIdx = rawTail.indexOf('commit')
+        let commitIdx = -1
+        for (let i = 0; i < rawTail.length; i++) {
+            const token = rawTail[i]
+            if (token === 'commit') {
+                const prev = i > 0 ? rawTail[i - 1] : undefined
+                if (prev === undefined || !prev.startsWith('-') || prev.includes('=')) {
+                    commitIdx = i
+                    break
+                }
+            }
+        }
         await main(commitIdx !== -1 ? rawTail.slice(commitIdx + 1) : commitArgs)
     })
 

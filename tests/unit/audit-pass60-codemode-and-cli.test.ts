@@ -268,7 +268,7 @@ describe('Pass 60 Code Mode, CLI, Worker & Script Remediations (M1, M5–M8, M12
 
         const compiledCommit = path.join(dir, 'dist', 'vendor', 'commit', 'commit.js')
         const commitScript = path.join(dir, 'scripts', 'commit.ts')
-        const nestedVendor = path.join(dir, 'src', 'vendor', 'lib-agent-exec', 'interceptors', 'mutating-interceptors.ts')
+        const nestedVendor = path.join(dir, 'src', 'vendor', 'commit', 'nested', 'helper.ts')
         fs.mkdirSync(path.dirname(compiledCommit), { recursive: true })
         fs.mkdirSync(path.dirname(commitScript), { recursive: true })
         fs.mkdirSync(path.dirname(nestedVendor), { recursive: true })

@@ -137,6 +137,7 @@ function normalizeCommitMsg(val: unknown): unknown {
   if (typeof val !== 'string') return val;
   const normalized = val.replace(/\r\n/g, '\n');
   let firstLine = normalized.trim().split('\n')[0];
+  if (firstLine.length === 0) return '';
   let corrected = false;
 
   const strictMatch = firstLine.match(CONVENTIONAL_COMMIT_REGEX);
@@ -182,7 +183,7 @@ function normalizeRelateSpecs(val: unknown): unknown {
       const colonIdx = clean.indexOf(':');
       const idStr = colonIdx === -1 ? clean : clean.slice(0, colonIdx).trim();
       const rawRel = (colonIdx === -1 ? 'references' : clean.slice(colonIdx + 1).trim()).toLowerCase();
-      const aliased = RELATION_TYPE_ALIASES[rawRel];
+      const aliased = Object.hasOwn(RELATION_TYPE_ALIASES, rawRel) ? RELATION_TYPE_ALIASES[rawRel] : undefined;
       if (aliased !== undefined) {
         console.warn(`⚠️ AUTONOMOUS HEALING: Normalized --relate type '${rawRel}' to '${aliased}'.`);
       }
@@ -242,7 +243,8 @@ export const cliSchema = z.object({
       const cap = capitalizeCategory(val);
       if (isValidCategory(cap)) return cap;
 
-      const mapped = TYPE_TO_CATEGORY[val.toLowerCase()];
+      const lowerVal = val.toLowerCase();
+      const mapped = Object.hasOwn(TYPE_TO_CATEGORY, lowerVal) ? TYPE_TO_CATEGORY[lowerVal] : undefined;
       if (mapped !== undefined) {
         console.warn(`⚠️ AUTONOMOUS HEALING: Invalid category '${val}' mapped to '${mapped}'.`);
         return mapped;
@@ -304,7 +306,8 @@ function normalizeNegativeAndBulletArgs(rawArgs: string[]): void {
       break;
     }
     const nextArg = rawArgs[i + 1];
-    if (currentArg === '-m' && /^-\s/.test(nextArg)) {
+    const isNegativeNumericValue = nextArg.startsWith('-') && !Number.isNaN(Number(nextArg));
+    if (currentArg === '-m' && (/^-\s/.test(nextArg) || isNegativeNumericValue)) {
       rawArgs[i] = `--msg=${nextArg}`;
       rawArgs.splice(i + 1, 1);
       continue;
@@ -312,7 +315,6 @@ function normalizeNegativeAndBulletArgs(rawArgs: string[]): void {
     if (!currentArg.startsWith('--') || currentArg.includes('=')) {
       continue;
     }
-    const isNegativeNumericValue = nextArg.startsWith('-') && !Number.isNaN(Number(nextArg));
     const isMarkdownBulletHistoryOrMsg =
       (currentArg === '--history' || currentArg === '--msg' || currentArg === '--message') &&
       /^-\s/.test(nextArg);

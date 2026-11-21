@@ -19,10 +19,16 @@ export function readCommitMessage(args: string[]): string | undefined {
   return undefined;
 }
 
+function isSameResolvedPath(a: string, b: string): boolean {
+  const normA = path.resolve(a);
+  const normB = path.resolve(b);
+  return process.platform === 'win32' ? normA.toLowerCase() === normB.toLowerCase() : normA === normB;
+}
+
 function resolveCommitScript(targetCwd: string, rawCwd: string, cwd: string): string | null {
   const localAgentPath = path.join(targetCwd, '.agents', 'scripts', 'commit.ts');
   const localScriptsPath = path.join(targetCwd, 'scripts', 'commit.ts');
-  const sameAsProcessCwd = path.resolve(targetCwd) === path.resolve(process.cwd());
+  const sameAsProcessCwd = isSameResolvedPath(targetCwd, process.cwd());
   const fallbackCommitScript = path.resolve(COMMIT_DIR, '../../commit.ts');
   if (fs.existsSync(localAgentPath)) return sameAsProcessCwd ? './.agents/scripts/commit.ts' : localAgentPath;
   if (fs.existsSync(localScriptsPath)) return sameAsProcessCwd ? './scripts/commit.ts' : localScriptsPath;
@@ -48,7 +54,7 @@ function applyCommitWrapper(ctx: ExecutionContext, script: string, message: stri
     ctx.cmdBasename = 'bun';
     ctx.args = [script, '--msg', message, '--impact', '0.5', '--confidence', '0.5', '--validation', 'passed'];
   }
-  if (explicitCwd !== undefined || path.resolve(targetCwd) !== path.resolve(process.cwd())) ctx.args.push('--cwd', targetCwd);
+  if (explicitCwd !== undefined || !isSameResolvedPath(targetCwd, process.cwd())) ctx.args.push('--cwd', targetCwd);
   if ('command' in ctx.payload) {
     ctx.payload.command = ctx.cmdBasename;
     ctx.payload.args = ctx.args;

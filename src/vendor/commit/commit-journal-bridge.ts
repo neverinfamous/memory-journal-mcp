@@ -302,8 +302,13 @@ export async function tryCreateJournalEntryInProcess(
   const prevCwd = process.cwd();
   const prevExitCode = process.exitCode;
   const targetCwd = path.resolve(cwd);
+  const resolvedPrevCwd = path.resolve(prevCwd);
+  const sameCwd =
+    process.platform === 'win32'
+      ? resolvedPrevCwd.toLowerCase() === targetCwd.toLowerCase()
+      : resolvedPrevCwd === targetCwd;
   const targetStats = fs.statSync(targetCwd, { throwIfNoEntry: false });
-  const shouldChdir = targetStats !== undefined && targetStats.isDirectory() && path.resolve(prevCwd) !== targetCwd;
+  const shouldChdir = targetStats !== undefined && targetStats.isDirectory() && !sameCwd;
   if (shouldChdir) {
     process.chdir(targetCwd);
   }

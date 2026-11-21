@@ -1,7 +1,7 @@
-import fs from "fs";
-import path from "path";
-import { fileURLToPath } from "url";
-import { execFileSync } from "child_process";
+import fs from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+import { execFileSync } from "node:child_process";
 import { z } from "zod";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -294,7 +294,7 @@ function isCompiledCommitFresh(rootDir: string): boolean {
   const sourceStat = fs.statSync(commitScript, { throwIfNoEntry: false });
   if (sourceStat && sourceStat.mtimeMs > compiledStat.mtimeMs) return false;
 
-  for (const lib of ["commit", "lib-git-history", "lib-agent-exec"]) {
+  for (const lib of ["commit"]) {
     if (hasNewerTsInDir(path.join(rootDir, "src", "vendor", lib), compiledStat.mtimeMs)) {
       return false;
     }

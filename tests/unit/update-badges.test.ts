@@ -104,6 +104,29 @@ describe('update-badges script helpers', () => {
             expect(inv.args[0]).toBe(path.join(tempDir, 'node_modules', 'tsx', 'dist', 'cli.mjs'))
             expect(inv.args[1]).toBe(commitScript)
         })
+
+        it('keeps precompiled dist/vendor/commit/commit.js when only unrelated lib-agent-exec files are newer (P-M1)', () => {
+            const compiledCommit = path.join(tempDir, 'dist', 'vendor', 'commit', 'commit.js')
+            const commitScript = path.join(tempDir, 'scripts', 'commit.ts')
+            const unrelatedVendor = path.join(tempDir, 'src', 'vendor', 'lib-agent-exec', 'utils.ts')
+            fs.mkdirSync(path.dirname(compiledCommit), { recursive: true })
+            fs.mkdirSync(path.dirname(commitScript), { recursive: true })
+            fs.mkdirSync(path.dirname(unrelatedVendor), { recursive: true })
+            fs.writeFileSync(compiledCommit, 'export {}\n', 'utf-8')
+            fs.writeFileSync(commitScript, 'export {}\n', 'utf-8')
+            fs.writeFileSync(unrelatedVendor, 'export {}\n', 'utf-8')
+
+            const oldDate = new Date(Date.now() - 60_000)
+            const midDate = new Date(Date.now() - 30_000)
+            const newDate = new Date()
+            fs.utimesSync(commitScript, oldDate, oldDate)
+            fs.utimesSync(compiledCommit, midDate, midDate)
+            fs.utimesSync(unrelatedVendor, newDate, newDate)
+
+            const inv = buildCommitInvocation(tempDir, ['README.md'])
+            expect(inv.command).toBe(process.execPath)
+            expect(inv.args[0]).toBe(compiledCommit)
+        })
     })
 
     describe('countE2eSpecFiles & isPartialPlaywrightRun', () => {
