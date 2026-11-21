@@ -75,7 +75,7 @@ export function isGlobPathArg(arg: string): boolean {
     return false;
   }
   if (/(?<![/\\])\.\*/.test(arg)) return false;
-  return arg.includes('/') || arg.includes('\\') || /\.[a-zA-Z0-9_-]{1,6}$/.test(arg);
+  return arg.includes('/') || arg.includes('\\') || /\.[a-zA-Z0-9_-]{1,6}$/.test(arg) || /^[*?a-zA-Z0-9_.-]+$/.test(arg);
 }
 
 export function hasUriOrNonDriveColon(value: string): boolean {

@@ -3,8 +3,7 @@ import path from 'node:path';
 import fs from 'node:fs';
 import os from 'node:os';
 import crypto from 'node:crypto';
-import type { ExecPayload } from './schema.js';
-import { convertToWindowsPath, convertToWslPath } from './path-convert.js';
+import { convertToWslPath } from './path-convert.js';
 
 export { formatForCmdExe, convertToWslPath, convertToWindowsPath } from './path-convert.js';
 export { healRegexPattern, sanitizeWslRegex } from './regex-healer.js';
@@ -14,9 +13,16 @@ export { tryHealJsonPayload } from './json-payload-healer.js';
 export const isPwsh = (cmd: string) => ['pwsh', 'pwsh.exe', 'powershell', 'powershell.exe'].includes(cmd.toLowerCase());
 export const isCmd = (cmd: string) => ['cmd', 'cmd.exe'].includes(cmd.toLowerCase());
 
+/**
+ * [INTENT]: Escape ASCII and Unicode smart single-quote characters recognized by PowerShell CharTraits.IsSingleQuote.
+ */
+export function escapePwshSingleQuoted(value: string): string {
+  return value.replace(/['\u2018\u2019\u201a\u201b]/g, '$&$&');
+}
+
 export function buildPwshWrapper(cmd: string, args: string[]): { cmd: string; args: string[] } {
-  const escapedCmd = cmd.replace(/'/g, "''");
-  const escapedArgs = args.map(a => `'${a.replace(/'/g, "''")}'`).join(' ');
+  const escapedCmd = escapePwshSingleQuoted(cmd);
+  const escapedArgs = args.map(a => `'${escapePwshSingleQuoted(a)}'`).join(' ');
   const scriptContent = `[Console]::OutputEncoding = [System.Text.Encoding]::UTF8;\n$OutputEncoding = [System.Text.Encoding]::UTF8;\n$ErrorActionPreference = 'Continue';\n$ProgressPreference = 'SilentlyContinue'; $ConfirmPreference = 'None';\n& '${escapedCmd}' ${escapedArgs}\nexit $LASTEXITCODE`;
   const encoded = Buffer.from(scriptContent, 'utf16le').toString('base64');
   return {
@@ -122,7 +128,7 @@ export function resolveWindowsCommand(cmd: string, cwd: string, payloadEnv?: Rec
   return cmd;
 }
 
-const FLAGS_WITH_ARG_BY_TOOL: Record<string, string[]> = {
+export const FLAGS_WITH_ARG_BY_TOOL: Record<string, string[]> = {
   grep: ['-A', '-B', '-C', '-m', '-e', '-f', '-d', '-D', '--after-context', '--before-context', '--context', '--max-count', '--regexp', '--file', '--directories', '--devices', '--exclude', '--include', '--exclude-dir', '--exclude-from', '--include-from', '--label'],
   egrep: ['-A', '-B', '-C', '-m', '-e', '-f', '-d', '-D', '--after-context', '--before-context', '--context', '--max-count', '--regexp', '--file', '--directories', '--devices', '--exclude', '--include', '--exclude-dir', '--exclude-from', '--include-from', '--label'],
   fgrep: ['-A', '-B', '-C', '-m', '-e', '-f', '-d', '-D', '--after-context', '--before-context', '--context', '--max-count', '--regexp', '--file', '--directories', '--devices', '--exclude', '--include', '--exclude-dir', '--exclude-from', '--include-from', '--label'],
@@ -270,115 +276,7 @@ export function buildWslEnvArgs(payloadEnv?: Record<string, unknown>, envOverrid
   return wslEnvArgs;
 }
 
-export function handleWindowsUnixCommandWrappers(
-  cmd: string,
-  args: string[],
-  payload: ExecPayload
-): { cmd: string; args: string[] } {
-  let resolvedCmd = cmd;
-  let resolvedArgs = args;
-
-  if (resolvedCmd === 'find' || resolvedCmd === 'find.exe') {
-    const isUnixFind = resolvedArgs.some(a => a.startsWith('-name') || a.startsWith('-type') || a.startsWith('-exec') || a.startsWith('-mtime') || a === '.' || a === '..');
-    if (isUnixFind) {
-      const originalArgs = resolvedArgs.map(a => escapeUnixArg(a, false)).join(' ');
-      console.error(`\n   💡 AGENT HINT: Detected Unix-style 'find' command. Forwarding to 'sh -c' to bypass Windows find.exe limits.`);
-      resolvedCmd = 'sh';
-      resolvedArgs = ['-c', `find ${originalArgs}`];
-    }
-  }
-
-  // Handle glob expansion for Unix utilities running on Windows without a shell
-  const cmdBasenameForGlob = path.basename(resolvedCmd).toLowerCase().replace(/\.exe$/, '');
-  const unixUtilsForGlob = ['grep', 'ls', 'rm', 'cp', 'mv', 'cat', 'rg'];
-  if (unixUtilsForGlob.includes(cmdBasenameForGlob)) {
-    const patternExprIdx = findPatternExprIndex(cmdBasenameForGlob, resolvedArgs);
-    const globIdxs: number[] = [];
-    resolvedArgs.forEach((a, idx) => {
-      if (idx === patternExprIdx) return;
-      if (idx > 0) {
-        const prev = resolvedArgs[idx - 1];
-        if (['-g', '--glob', '--iglob', '--include', '--exclude', '-name', '-iname', '-path', '-wholename', '-filter'].includes(prev)) {
-          return;
-        }
-      }
-      if (a.startsWith('-g=') || a.startsWith('--glob=') || a.startsWith('--include=') || a.startsWith('--exclude=')) {
-        return;
-      }
-      if ((a.includes('*') || a.includes('?')) && !a.startsWith('-')) globIdxs.push(idx);
-    });
-    if (globIdxs.length > 0) {
-      // [INTENT]: rg/grep globs are expanded in-process (no 'sh -c' + WSL hop). Literals are kept when nothing matches.
-      const globCwd = payload.cwd !== undefined && payload.cwd.length > 0 ? path.resolve(payload.cwd) : process.cwd();
-      const canExpandInProcess = (cmdBasenameForGlob === 'rg' || cmdBasenameForGlob === 'grep') && fs.existsSync(globCwd);
-      if (canExpandInProcess) {
-        const expansion = expandGlobArgsInProcess(resolvedArgs, globIdxs, globCwd, payload.target === 'wsl2');
-        resolvedArgs = expansion.args;
-        if (expansion.expandedCount > 0) {
-          console.error(`\n   🛠️ AUTONOMOUS HEALING: Expanded glob argument(s) in-process for '${cmdBasenameForGlob}' (${expansion.expandedCount} glob(s), ${expansion.matchCount} match(es)); unmatched globs kept literal... (Frictionless Recovery)`);
-        }
-        return { cmd: resolvedCmd, args: resolvedArgs };
-      }
-      const originalArgs = resolvedArgs.map((a, idx) => {
-        if (idx === patternExprIdx) return escapeUnixArg(a, false);
-        return escapeUnixArg(convertToWslPath(a), true);
-      }).join(' ');
-      console.error(`\n   💡 AGENT HINT: Detected Unix utility '${cmdBasenameForGlob}' with glob patterns (* or ?).`);
-      console.error(`   🛠️ AUTONOMOUS HEALING: Because 'shell: false' is used, globs are not expanded automatically. Routing through 'sh -c' to expand globs...`);
-      if (cmdBasenameForGlob === 'ls') {
-        resolvedCmd = 'bash';
-        resolvedArgs = ['-c', `shopt -s nullglob; files=(${originalArgs}); if [ \${#files[@]} -gt 0 ]; then ls "\${files[@]}"; fi`];
-      } else {
-        resolvedCmd = 'sh';
-        resolvedArgs = ['-c', `${cmdBasenameForGlob} ${originalArgs}`];
-      }
-      if (process.platform === 'win32' && payload.target !== 'wsl2') {
-        payload.target = 'wsl2';
-      }
-    }
-  }
-
-  return { cmd: resolvedCmd, args: resolvedArgs };
-}
-
-/**
- * [INTENT]: Expand shell-style globs with fs.globSync relative to cwd. `/mnt/<drive>/` globs are expanded via
- * their Windows mapping and converted back so WSL-targeted commands still receive WSL paths.
- * [INVARIANT]: A glob with zero matches is passed through unchanged (literal), matching bash's default.
- */
-export function expandGlobArgsInProcess(
-  args: string[],
-  globIdxs: number[],
-  cwd: string,
-  toWsl = false
-): { args: string[]; expandedCount: number; matchCount: number } {
-  const idxSet = new Set(globIdxs);
-  const out: string[] = [];
-  let expandedCount = 0;
-  let matchCount = 0;
-  args.forEach((arg, idx) => {
-    if (!idxSet.has(idx)) {
-      out.push(arg);
-      return;
-    }
-    const isWslMount = process.platform === 'win32' && /^\/mnt\/[a-zA-Z](?:\/|$)/.test(arg);
-    const pattern = (isWslMount ? convertToWindowsPath(arg) : arg).replace(/\\/g, '/');
-    let matches: string[];
-    try {
-      matches = fs.globSync(pattern, { cwd }).map(m => m.replace(/\\/g, '/')).sort();
-    } catch {
-      matches = [];
-    }
-    if (matches.length === 0) {
-      out.push(arg);
-      return;
-    }
-    expandedCount++;
-    matchCount += matches.length;
-    out.push(...(isWslMount || toWsl ? matches.map(m => convertToWslPath(m)) : matches));
-  });
-  return { args: out, expandedCount, matchCount };
-}
+export { handleWindowsUnixCommandWrappers, expandGlobArgsInProcess } from './windows-wrapper-utils.js';
 
 export function getUnderlyingPackageScript(cmdBasename: string, args: string[] | undefined, payloadCwd: string | undefined): string {
   const base = cmdBasename.toLowerCase().replace(/\.(cmd|exe)$/i, '');

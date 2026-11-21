@@ -102,6 +102,46 @@ export class StreamManager {
     return chars.join('');
   }
 
+  private splitIncompleteAnsiSuffix(ansiBuffer: string): { safeStr: string; remainder: string } {
+    const lastEscapeIdx = Math.max(ansiBuffer.lastIndexOf('\u001b'), ansiBuffer.lastIndexOf('\u009b'));
+    if (lastEscapeIdx === -1) return { safeStr: ansiBuffer, remainder: '' };
+
+    const potentialSeq = ansiBuffer.substring(lastEscapeIdx);
+    const isOsc = potentialSeq.startsWith('\u001b]') || potentialSeq.startsWith('\u009b]');
+    const isCsi = potentialSeq.startsWith('\u001b[') || potentialSeq.startsWith('\u009b[');
+    const incomplete =
+      (isOsc && !COMPLETE_OSC_REGEX.test(potentialSeq) && potentialSeq.length < MAX_ANSI_SEQ_LENGTH_OSC) ||
+      (isCsi && !COMPLETE_CSI_REGEX.test(potentialSeq) && potentialSeq.length < MAX_ANSI_SEQ_LENGTH_CSI) ||
+      (DCS_START_REGEX.test(potentialSeq) && !DCS_COMPLETE_REGEX.test(potentialSeq) && potentialSeq.length < MAX_ANSI_SEQ_LENGTH_OSC) ||
+      (!isOsc && !isCsi && !DCS_START_REGEX.test(potentialSeq) && potentialSeq.length < 3);
+
+    if (incomplete) {
+      return { safeStr: ansiBuffer.substring(0, lastEscapeIdx), remainder: potentialSeq };
+    }
+    return { safeStr: ansiBuffer, remainder: '' };
+  }
+
+  private resolveMergedLines(lines: readonly string[], s: StreamState): string {
+    let result = '';
+    for (let i = 0; i < lines.length; i++) {
+      const resolved = this.resolveCarriageReturns(lines[i] ?? '');
+      if (i === 0 && s.flushedResolved) {
+        if (resolved.startsWith(s.flushedResolved)) {
+          result += `${resolved.substring(s.flushedResolved.length)}\n`;
+        } else {
+          const padding = ' '.repeat(Math.max(0, s.flushedResolved.length - resolved.length));
+          result += `\r${resolved}${padding}`;
+          if (padding.length > 0) result += `\r${resolved}`;
+          result += '\n';
+        }
+        s.flushedResolved = '';
+      } else {
+        result += `${resolved}\n`;
+      }
+    }
+    return result;
+  }
+
   public processChunk(isErr: boolean, data: string): string {
     const s = this.getState(isErr);
     const targetStream = isErr ? this.errStream : this.outStream;
@@ -109,85 +149,20 @@ export class StreamManager {
       return '';
     }
     s.ansiBuffer += data;
-    
-    let safeStr = s.ansiBuffer;
-    const lastEscapeIdx = Math.max(s.ansiBuffer.lastIndexOf('\u001b'), s.ansiBuffer.lastIndexOf('\u009b'));
-    
-    if (lastEscapeIdx !== -1) {
-      const potentialSeq = s.ansiBuffer.substring(lastEscapeIdx);
-      
-      if (potentialSeq.startsWith('\u001b]') || potentialSeq.startsWith('\u009b]')) {
-        const isComplete = COMPLETE_OSC_REGEX.test(potentialSeq);
-        if (!isComplete && potentialSeq.length < MAX_ANSI_SEQ_LENGTH_OSC) {
-          safeStr = s.ansiBuffer.substring(0, lastEscapeIdx);
-          s.ansiBuffer = potentialSeq;
-        } else {
-          s.ansiBuffer = '';
-        }
-      } else if (potentialSeq.startsWith('\u001b[') || potentialSeq.startsWith('\u009b[')) {
-        const isComplete = COMPLETE_CSI_REGEX.test(potentialSeq);
-        if (!isComplete && potentialSeq.length < MAX_ANSI_SEQ_LENGTH_CSI) {
-          safeStr = s.ansiBuffer.substring(0, lastEscapeIdx);
-          s.ansiBuffer = potentialSeq;
-        } else {
-          s.ansiBuffer = '';
-        }
-      } else if (DCS_START_REGEX.test(potentialSeq)) {
-        const isComplete = DCS_COMPLETE_REGEX.test(potentialSeq);
-        if (!isComplete && potentialSeq.length < MAX_ANSI_SEQ_LENGTH_OSC) {
-          safeStr = s.ansiBuffer.substring(0, lastEscapeIdx);
-          s.ansiBuffer = potentialSeq;
-        } else {
-          s.ansiBuffer = '';
-        }
-      } else if (potentialSeq.length < 3) {
-          safeStr = s.ansiBuffer.substring(0, lastEscapeIdx);
-          s.ansiBuffer = potentialSeq;
-      } else {
-          s.ansiBuffer = '';
-      }
-    } else {
-      s.ansiBuffer = '';
-    }
+    const { safeStr, remainder } = this.splitIncompleteAnsiSuffix(s.ansiBuffer);
+    s.ansiBuffer = remainder;
 
     const stripped = this.stripAnsi(safeStr);
-    
     s.lineBuffer += stripped;
-
     if (!stripped.includes('\n') && s.lineBuffer.length <= DEFENSIVE_LINE_LIMIT) {
       return '';
     }
-    
-    // Defensive memory limit: force a newline if the line exceeds 2MB
     if (s.lineBuffer.length > DEFENSIVE_LINE_LIMIT) {
       s.lineBuffer += '\n';
     }
-    
     const lines = s.lineBuffer.split('\n');
-    s.lineBuffer = lines.pop() || '';
-    
-    if (lines.length === 0) return '';
-    
-    let result = '';
-    for (let i = 0; i < lines.length; i++) {
-      const resolved = this.resolveCarriageReturns(lines[i]);
-      if (i === 0 && s.flushedResolved) {
-        if (resolved.startsWith(s.flushedResolved)) {
-          result += resolved.substring(s.flushedResolved.length) + '\n';
-        } else {
-          const padding = ' '.repeat(Math.max(0, s.flushedResolved.length - resolved.length));
-          result += '\r' + resolved + padding;
-          if (padding.length > 0) {
-             result += '\r' + resolved;
-          }
-          result += '\n';
-        }
-        s.flushedResolved = '';
-      } else {
-        result += resolved + '\n';
-      }
-    }
-    return result;
+    s.lineBuffer = lines.pop() ?? '';
+    return lines.length === 0 ? '' : this.resolveMergedLines(lines, s);
   }
 
   public flushPendingLine(isErr: boolean): string {
@@ -304,9 +279,13 @@ export class StreamManager {
     return this.getState(isErr).length;
   }
 
-  public getBufferedLength(isErr: boolean): number {
+  public getRawBufferedLength(isErr: boolean): number {
     const s = this.getState(isErr);
-    const rawLen = s.length + s.lineBuffer.length;
+    return s.length + s.lineBuffer.length;
+  }
+
+  public getBufferedLength(isErr: boolean): number {
+    const rawLen = this.getRawBufferedLength(isErr);
     if (this.truncateOutputLength) {
       return Math.min(rawLen, this.truncateOutputLength);
     }

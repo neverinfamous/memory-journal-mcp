@@ -15,10 +15,59 @@ function isPidAlive(pid: number): boolean {
     return true;
   } catch (err: unknown) {
     if (typeof err === 'object' && err !== null && 'code' in err) {
-      return (err as { code?: string }).code === 'EPERM';
+      return err.code === 'EPERM';
     }
     return false;
   }
+}
+
+async function tryAcquireMutex(mutexPath: string, deadlineMs: number): Promise<boolean> {
+  while (Date.now() < deadlineMs) {
+    try {
+      fs.mkdirSync(mutexPath); // Atomic operation
+      return true;
+    } catch {
+      try {
+        if (Date.now() - fs.statSync(mutexPath).mtimeMs > 15000) {
+          fs.rmdirSync(mutexPath);
+        }
+      } catch { /* ignore */ }
+      await new Promise(r => setTimeout(r, 20 + Math.random() * 50));
+    }
+  }
+  return false;
+}
+
+function releaseMutexDir(mutexPath: string): void {
+  try { fs.rmdirSync(mutexPath); } catch { /* ignore */ }
+}
+
+function isLockFileStale(lPath: string, nowMs: number): boolean {
+  const content = fs.readFileSync(lPath, 'utf8').trim();
+  const mtimeMs = fs.statSync(lPath).mtimeMs;
+  const ageMs = nowMs - mtimeMs;
+  const lockPid = Number.parseInt(content, 10);
+  if (!Number.isNaN(lockPid) && lockPid > 0) {
+    return !isPidAlive(lockPid) || ageMs > 7_200_000;
+  }
+  return ageMs > 10_000;
+}
+
+function countActiveAndPruneStaleLocks(): number {
+  const allLocks = fs.readdirSync(WSL_LOCK_DIR).filter(f => f.endsWith('.lock'));
+  const nowMs = Date.now();
+  let activeLockCount = 0;
+  for (const fileName of allLocks) {
+    const lPath = path.join(WSL_LOCK_DIR, fileName);
+    try {
+      if (isLockFileStale(lPath, nowMs)) {
+        fs.unlinkSync(lPath);
+      } else {
+        activeLockCount++;
+      }
+    } catch { /* ignore */ }
+  }
+  return activeLockCount;
 }
 
 export async function acquireWslLock(maxConcurrent = 4, timeoutMs = 30000): Promise<string> {
@@ -27,61 +76,20 @@ export async function acquireWslLock(maxConcurrent = 4, timeoutMs = 30000): Prom
   }
 
   const mutexPath = path.join(WSL_LOCK_DIR, 'mutex.dir');
-  const acquireMutex = async () => {
-    while (true) {
-      try {
-        fs.mkdirSync(mutexPath); // Atomic operation
-        return;
-      } catch {
-        try {
-          if (Date.now() - fs.statSync(mutexPath).mtimeMs > 15000) {
-            fs.rmdirSync(mutexPath);
-          }
-        } catch { /* ignore */ }
-        await new Promise(r => setTimeout(r, 20 + Math.random() * 50));
-      }
-    }
-  };
-
-  const releaseMutex = () => {
-    try { fs.rmdirSync(mutexPath); } catch { /* ignore */ }
-  };
-
   const lockFile = path.join(WSL_LOCK_DIR, `${Date.now()}-${crypto.randomUUID()}.lock`);
-  const startTime = Date.now();
-  
-  while (Date.now() - startTime < timeoutMs) {
-    await acquireMutex();
+  const deadlineMs = Date.now() + timeoutMs;
+
+  while (Date.now() < deadlineMs) {
+    const acquiredMutex = await tryAcquireMutex(mutexPath, deadlineMs);
+    if (!acquiredMutex) break;
     try {
-      const allLocks = fs.readdirSync(WSL_LOCK_DIR).filter(f => f.endsWith('.lock'));
-      // Clean stale locks and count active ones in a single pass
-      let activeLockCount = 0;
-      for (const l of allLocks) {
-        const lPath = path.join(WSL_LOCK_DIR, l);
-        try {
-          const content = fs.readFileSync(lPath, 'utf8').trim();
-          const mtimeMs = fs.statSync(lPath).mtimeMs;
-          let isStale = Date.now() - mtimeMs > 60000;
-          if (!isStale) {
-            const lockPid = parseInt(content, 10);
-            if (!Number.isNaN(lockPid) && lockPid > 0) {
-              isStale = !isPidAlive(lockPid);
-            }
-          }
-          if (isStale) {
-            fs.unlinkSync(lPath);
-          } else {
-            activeLockCount++;
-          }
-        } catch { /* ignore */ }
-      }
+      const activeLockCount = countActiveAndPruneStaleLocks();
       if (activeLockCount < maxConcurrent) {
         fs.writeFileSync(lockFile, process.pid.toString(), { encoding: 'utf8', mode: 0o600 });
-        releaseMutex();
         return lockFile;
       }
     } catch { /* ignore */ } finally {
-      releaseMutex();
+      releaseMutexDir(mutexPath);
     }
     await new Promise(resolve => setTimeout(resolve, 100 + Math.random() * 100));
   }
@@ -111,7 +119,9 @@ export async function executeCommand(
   }
 
   if (payload.target === 'wsl2') {
-    const maxConcurrency = process.env.AGENT_WSL_CONCURRENCY ? parseInt(process.env.AGENT_WSL_CONCURRENCY, 10) : 4;
+    const rawConcurrency = process.env['AGENT_WSL_CONCURRENCY'] ?? '';
+    const parsedConcurrency = Number.parseInt(rawConcurrency, 10);
+    const maxConcurrency = Number.isFinite(parsedConcurrency) && parsedConcurrency > 0 ? parsedConcurrency : 4;
     const lockWaitMs = payload.timeoutMs !== undefined && payload.timeoutMs > 30000
       ? Math.min(Math.floor(payload.timeoutMs * 0.5), 45000)
       : 30000;

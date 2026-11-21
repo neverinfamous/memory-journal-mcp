@@ -203,18 +203,13 @@ function hasGrepRecurse(args: readonly string[]): boolean {
   return args.some((item) => item === '-r' || item === '-R' || item === '--recursive' || (item.startsWith('-') && !item.startsWith('--') && (item.includes('r') || item.includes('R'))));
 }
 
-function ensureGrepRecurse(args: string[], base: string, label: string | null): void {
-  if (!GREP_TOOLS.has(base) || hasGrepRecurse(args)) return;
-  if (label !== null) {
-    logPathHeal(`'grep' called on directory '${label}' without recursive flag.`, `Auto-injecting '-r' to search directory recursively... (Frictionless Recovery)`);
-  }
-  args.unshift('-r');
-}
-
 function healExistingPath(args: string[], base: string, arg: string, resolved: string): boolean {
   if (!fs.existsSync(resolved)) return false;
-  if (fs.statSync(resolved).isDirectory()) ensureGrepRecurse(args, base, arg);
-  return true;
+  if (fs.statSync(resolved).isDirectory() && GREP_TOOLS.has(base) && !hasGrepRecurse(args)) {
+    logPathHeal(`'grep' called on directory '${arg}' without recursive flag.`, `Auto-injecting '-r' to search directory recursively... (Frictionless Recovery)`);
+    return true;
+  }
+  return false;
 }
 
 function findBarrelName(dirPath: string): string | null {
@@ -224,21 +219,29 @@ function findBarrelName(dirPath: string): string | null {
   return null;
 }
 
-function healModularDirectory(args: string[], base: string, index: number, arg: string, rawPath: string, isWslPath: boolean, cwd: string): boolean {
+function healModularDirectory(args: string[], base: string, index: number, arg: string, rawPath: string, isWslPath: boolean, cwd: string): { handled: boolean; needsRecurse: boolean } {
   const extMatch = rawPath.match(/\.(?:ts|js|tsx|jsx|mjs|cjs)$/i);
-  if (extMatch === null) return false;
+  if (extMatch === null) return { handled: false, needsRecurse: false };
   const withoutExt = rawPath.slice(0, -extMatch[0].length);
   const normalizedWithoutExt = isWslPath ? normalizeMntPath(withoutExt) : withoutExt;
   const resolvedWithoutExt = path.isAbsolute(normalizedWithoutExt) ? path.normalize(normalizedWithoutExt) : path.resolve(cwd, normalizedWithoutExt);
-  if (!isDirectoryPath(resolvedWithoutExt)) return false;
-  if (SEARCH_TOOLS.has(base)) return healSearchDirectory(args, base, index, arg, withoutExt, cwd);
+  if (!isDirectoryPath(resolvedWithoutExt)) return { handled: false, needsRecurse: false };
+  if (SEARCH_TOOLS.has(base)) {
+    return { handled: true, needsRecurse: healSearchDirectory(args, base, index, arg, withoutExt, cwd) };
+  }
   const foundBarrel = findBarrelName(resolvedWithoutExt);
-  if (foundBarrel === null) return false;
+  if (foundBarrel === null) return { handled: false, needsRecurse: false };
   const sep = withoutExt.includes('\\') ? '\\' : '/';
   const healedBarrel = preserveQuotes(arg, `${withoutExt}${sep}${foundBarrel}`);
   if (applyHeal(args, index, healedBarrel, cwd)) {
     logPathHeal(`File '${arg}' not found on disk, but directory '${withoutExt}' exists with entrypoint '${foundBarrel}'.`, `Auto-correcting path to '${healedBarrel}'... (Frictionless Recovery)`);
   }
+  return { handled: true, needsRecurse: false };
+}
+
+function notifyAndMarkGrepRecurse(args: string[], base: string): boolean {
+  if (!GREP_TOOLS.has(base) || hasGrepRecurse(args)) return false;
+  console.error(`\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Auto-injecting '-r' to search directory recursively... (Frictionless Recovery)\x1b[0m`);
   return true;
 }
 
@@ -246,9 +249,9 @@ function healSearchDirectory(args: string[], base: string, index: number, arg: s
   const healedDir = preserveQuotes(arg, withoutExt);
   if (applyHeal(args, index, healedDir, cwd)) {
     logPathHeal(`File '${arg}' not found, but modular directory '${withoutExt}' exists.`, `Auto-correcting path to '${healedDir}'... (Frictionless Recovery)`);
-    ensureGrepRecurse(args, base, withoutExt);
+    return notifyAndMarkGrepRecurse(args, base);
   }
-  return true;
+  return false;
 }
 
 function healAddedExtension(args: string[], index: number, arg: string, resolved: string, hadTrailingSlash: boolean, cwd: string, isWslPath: boolean): 'healed' | 'blocked' | 'none' {
@@ -265,23 +268,24 @@ function healAddedExtension(args: string[], index: number, arg: string, resolved
   return 'none';
 }
 
-function healNeighborArg(args: string[], base: string, index: number, arg: string, rawPath: string, resolved: string, hadTrailingSlash: boolean, cwd: string, isWslPath: boolean): void {
+function healNeighborArg(args: string[], base: string, index: number, arg: string, rawPath: string, resolved: string, hadTrailingSlash: boolean, cwd: string, isWslPath: boolean): boolean {
   const isSearchOrListTool = SEARCH_OR_LIST.has(base);
-  if (!isSearchOrListTool && !rawPath.includes('/') && !rawPath.includes('\\')) return;
+  if (!isSearchOrListTool && !rawPath.includes('/') && !rawPath.includes('\\')) return false;
   const candidatePath = resolvePathWithDirectorySynonyms(resolved, isSearchOrListTool)
     ?? resolveBuildSrcSwap(resolved, isSearchOrListTool)
     ?? (hadTrailingSlash ? null : findNeighborFilePath(resolved, isSearchOrListTool));
-  if (candidatePath === null) return;
+  if (candidatePath === null) return false;
   const isDir = isDirectoryPath(candidatePath);
-  if (hadTrailingSlash && !isDir) return;
+  if (hadTrailingSlash && !isDir) return false;
   const healedArg = formatHealedPath(arg, candidatePath, cwd, isWslPath);
-  if (!applyHeal(args, index, healedArg, cwd)) return;
+  if (!applyHeal(args, index, healedArg, cwd)) return false;
   const kind = isDir ? 'Directory' : 'File';
   logPathHeal(`${kind} '${arg}' not found on disk, but found at '${healedArg}'.`, `Auto-correcting path to '${healedArg}'... (Frictionless Recovery)`);
-  if (isDir) ensureGrepRecurse(args, base, null);
+  return isDir && notifyAndMarkGrepRecurse(args, base);
 }
 
 function healFileToolArgs(args: string[], base: string, cwd: string, skip: Set<number>): void {
+  let pendingGrepRecurse = false;
   for (let index = 0; index < args.length; index += 1) {
     if (skip.has(index)) continue;
     const arg = args[index];
@@ -291,11 +295,23 @@ function healFileToolArgs(args: string[], base: string, cwd: string, skip: Set<n
     const isWslPath = arg.startsWith('/mnt/');
     const wslNormalized = isWslPath ? normalizeMntPath(rawPath) : rawPath;
     const resolved = path.isAbsolute(wslNormalized) ? path.normalize(wslNormalized) : path.resolve(cwd, wslNormalized);
-    if (healExistingPath(args, base, arg, resolved)) continue;
-    if (healModularDirectory(args, base, index, arg, rawPath, isWslPath, cwd)) continue;
+    if (fs.existsSync(resolved)) {
+      if (healExistingPath(args, base, arg, resolved)) pendingGrepRecurse = true;
+      continue;
+    }
+    const modularResult = healModularDirectory(args, base, index, arg, rawPath, isWslPath, cwd);
+    if (modularResult.handled) {
+      if (modularResult.needsRecurse) pendingGrepRecurse = true;
+      continue;
+    }
     const extensionResult = healAddedExtension(args, index, arg, resolved, hadTrailingSlash, cwd, isWslPath);
     if (extensionResult === 'healed') continue;
-    healNeighborArg(args, base, index, arg, rawPath, resolved, hadTrailingSlash, cwd, isWslPath);
+    if (healNeighborArg(args, base, index, arg, rawPath, resolved, hadTrailingSlash, cwd, isWslPath)) {
+      pendingGrepRecurse = true;
+    }
+  }
+  if (pendingGrepRecurse && !hasGrepRecurse(args)) {
+    args.unshift('-r');
   }
 }
 

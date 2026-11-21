@@ -7,7 +7,8 @@ import { pathToFileURL } from 'node:url';
 const inlineCwd = process.env.AGENT_EXEC_INLINE_CWD;
 if (typeof module.registerHooks === 'function' && typeof inlineCwd === 'string' && inlineCwd.length > 0) {
   const cwdParentUrl = pathToFileURL(path.join(inlineCwd, '__agent_inline__.mjs')).href;
-  const tmpPrefix = pathToFileURL(os.tmpdir()).href.replace(/\/+$/, '').toLowerCase();
+  const rawTmpPrefix = pathToFileURL(os.tmpdir()).href.replace(/\/+$/, '').toLowerCase();
+  const tmpPrefix = `${rawTmpPrefix}/`;
   const scratchPattern = /\/\.gemini\/[^/]+\/brain\/[^/]+\/scratch\//i;
 
   module.registerHooks({
@@ -16,9 +17,11 @@ if (typeof module.registerHooks === 'function' && typeof inlineCwd === 'string' 
         return nextResolve(specifier, context);
       } catch (origErr) {
         const parentUrl = typeof context.parentURL === 'string' ? context.parentURL : '';
+        const lowerParent = parentUrl.toLowerCase();
         const isFromTmpOrScratch =
           parentUrl.length === 0 ||
-          parentUrl.toLowerCase().startsWith(tmpPrefix) ||
+          lowerParent === rawTmpPrefix ||
+          lowerParent.startsWith(tmpPrefix) ||
           scratchPattern.test(parentUrl);
         if (!isFromTmpOrScratch || specifier.startsWith('node:') || specifier.startsWith('file:')) {
           throw origErr;

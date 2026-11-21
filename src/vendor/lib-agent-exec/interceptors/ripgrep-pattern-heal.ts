@@ -66,8 +66,15 @@ export interface RipgrepSearchFlags {
 
 function hasRipgrepPatternFlag(args: string[]): boolean {
   return args.some((arg) =>
-    arg === '-e' || arg.startsWith('-e') || arg === '--regexp' || arg.startsWith('--regexp=') || arg === '-f' || arg.startsWith('--file')
+    arg === '-e' || (arg.startsWith('-e') && !arg.startsWith('--')) ||
+    arg === '--regexp' || arg.startsWith('--regexp=') ||
+    arg === '-f' || (arg.startsWith('-f') && !arg.startsWith('--')) ||
+    arg === '--file' || arg.startsWith('--file=')
   );
+}
+
+function resolveCtxCwd(ctx: ExecutionContext): string | undefined {
+  return ctx.payload.cwd ?? ctx.cwd;
 }
 
 export function readRipgrepSearchFlags(ctx: ExecutionContext): RipgrepSearchFlags {
@@ -130,7 +137,7 @@ function swapRipgrepReversedArgs(
   const first = positionalArgs[0];
   const second = positionalArgs[1];
   if (first === undefined || second === undefined) return positionalArgs;
-  const cwd = ctx.payload.cwd;
+  const cwd = resolveCtxCwd(ctx);
   if (!isLikelyDirectoryArg(first, cwd) || isLikelyDirectoryArg(second, cwd)) return positionalArgs;
   if (isSecondExistingTargetOnly(first, second, cwd)) return positionalArgs;
   console.error(`\n   🛠️ AUTONOMOUS HEALING: Detected reversed arguments in 'rg' (directory before pattern). Swapping arguments to place pattern first... (Frictionless Recovery)\x1b[0m`);
@@ -152,7 +159,7 @@ function injectRipgrepFilesForGlobs(
   positionalArgs: string[],
 ): string[] {
   if (hasStdin || hasPatternFlag || hasFiles || !hasGlob) return positionalArgs;
-  const cwd = ctx.payload.cwd;
+  const cwd = resolveCtxCwd(ctx);
   if (positionalArgs.length === 0) {
     console.error(`\n   🛠️ AUTONOMOUS HEALING: Detected 'rg' with glob flag but no search pattern. Auto-injecting '--files' and '.' to search filenames... (Frictionless Recovery)\x1b[0m`);
     ctx.args.unshift('--files');
@@ -196,7 +203,7 @@ function recombineRipgrepPositionalPattern(
   if (hasPatternFlag || hasFiles || positionalArgs.length <= 2) return;
   const lastArg = positionalArgs[positionalArgs.length - 1];
   const intermediateArgs = positionalArgs.slice(1, -1);
-  const cwd = ctx.payload.cwd;
+  const cwd = resolveCtxCwd(ctx);
   if (lastArg === undefined || !isRipgrepPathLike(lastArg, cwd)) return;
   if (intermediateArgs.some((arg) => isRipgrepPathLike(arg, cwd))) return;
   recombineListedPattern(ctx, positionalArgs.slice(0, -1));
@@ -234,7 +241,7 @@ function recombineRipgrepNonFlagPattern(ctx: ExecutionContext, hasPatternFlag: b
   const lastPosIdx = nonFlagIndices.length > 0 ? nonFlagIndices[nonFlagIndices.length - 1] : undefined;
   if (lastPosIdx === undefined) return;
   const lastArg = ctx.args[lastPosIdx];
-  const cwd = ctx.payload.cwd;
+  const cwd = resolveCtxCwd(ctx);
   if (lastArg === undefined || lastArg.startsWith('-') || !isRipgrepPathLike(lastArg, cwd)) return;
   const candidateIdxs = nonFlagIndices.filter((idx) => idx < lastPosIdx);
   if (candidateIdxs.length < 2) return;
@@ -287,7 +294,7 @@ function resolveHyphenCandidate(ctx: ExecutionContext, patternIdx: number): numb
   const currentUnquoted = current !== undefined ? unquoteArg(current) : '';
   if (patternIdx !== -1 && currentUnquoted.startsWith('-')) return patternIdx;
   const nonFlagArgs = listNonFlagArgs(ctx.args, RG_VALUE_FLAGS_NO_IGLOB);
-  const cwd = ctx.payload.cwd;
+  const cwd = resolveCtxCwd(ctx);
   const allNonFlagArePaths = nonFlagArgs.length > 0 && nonFlagArgs.every((arg) => isRipgrepPathLike(arg, cwd));
   return scanForHyphenPatternIndex(ctx.args, allNonFlagArePaths, nonFlagArgs.length);
 }

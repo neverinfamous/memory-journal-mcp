@@ -4,11 +4,28 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { healStrippedSqlTemplateLiterals } from './eval-healer.js';
+import { createCodeScanState, healStrippedSqlTemplateLiterals, stepCodeScanState } from './eval-healer.js';
 import { healEvalCodePathHallucinations } from './path-healer.js';
 import { emitInterceptBanner } from './utils.js';
 
 const RESOLVER_MODULE_PATH = path.join(path.dirname(fileURLToPath(import.meta.url)), 'cwd-module-resolver.mjs');
+const TEMP_FILES_TO_CLEANUP = new Set<string>();
+let exitCleanupRegistered = false;
+
+function registerTempScriptCleanup(tmpFile: string): void {
+  TEMP_FILES_TO_CLEANUP.add(tmpFile);
+  if (exitCleanupRegistered) return;
+  exitCleanupRegistered = true;
+  process.once('exit', () => {
+    for (const filePath of TEMP_FILES_TO_CLEANUP) {
+      try {
+        if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+      } catch {
+        // ignore cleanup failure
+      }
+    }
+  });
+}
 
 const INTERPRETER_INLINE_FLAGS: Record<string, readonly string[]> = {
   node: ['-e', '--eval', '-p', '--print'],
@@ -39,103 +56,60 @@ export interface InlineScriptDetails {
   stripIndices: number[];
 }
 
+function findStringRawEndIdx(code: string, startIdx: number): number {
+  let parenDepth = 0;
+  let bracketDepth = 0;
+  for (let k = startIdx; k < code.length; k++) {
+    const c = code[k];
+    if (c === '(') parenDepth++;
+    else if (c === ')') {
+      if (parenDepth === 0) return k;
+      parenDepth--;
+    } else if (c === '[') bracketDepth++;
+    else if (c === ']') {
+      if (bracketDepth === 0) return k;
+      bracketDepth--;
+    } else if (parenDepth === 0 && bracketDepth === 0 && (c === ',' || c === ';' || c === '\n' || c === '\r')) {
+      return k;
+    }
+  }
+  return code.length;
+}
+
+function tryHealStringRawAt(code: string, idx: number): { startIdx: number; endIdx: number; literal: string } | null {
+  const prevChar = idx > 0 ? (code[idx - 1] ?? '') : '';
+  if (code[idx] !== 'S' || /[A-Za-z0-9_$.]/.test(prevChar) || code.slice(idx, idx + 10) !== 'String.raw') {
+    return null;
+  }
+  const startIdx = idx + 10;
+  if (!/^(?:[a-zA-Z]:[/\\]|[/\\]|\.\.?[/\\])/.test(code.slice(startIdx))) {
+    return null;
+  }
+  const endIdx = findStringRawEndIdx(code, startIdx);
+  if (endIdx <= startIdx) return null;
+  const rawBody = code.slice(startIdx, endIdx).replace(/`/g, '\\`').replace(/\$\{/g, '\\${');
+  return { startIdx, endIdx, literal: `\`${rawBody}\`` };
+}
+
 // [INTENT]: Restores backtick template literals on String.raw`...` path expressions stripped by PowerShell double-quoting (e.g. String.rawC:\path\file -> String.raw`C:\path\file`).
 export function healStrippedStringRawLiterals(code: string): string {
   let result = '';
   let lastCopied = 0;
   let healedCount = 0;
-  let inSingle = false;
-  let inDouble = false;
-  let inBacktick = false;
-  let inLineComment = false;
-  let inBlockComment = false;
+  const scanState = createCodeScanState();
 
   for (let i = 0; i < code.length; i++) {
-    const ch = code[i];
-    const next = code[i + 1];
-
-    if (inLineComment) {
-      if (ch === '\n') inLineComment = false;
+    const nextScanIdx = stepCodeScanState(code, i, scanState);
+    if (nextScanIdx !== null) {
+      i = nextScanIdx;
       continue;
     }
-    if (inBlockComment) {
-      if (ch === '*' && next === '/') {
-        inBlockComment = false;
-        i++;
-      }
-      continue;
-    }
-    if (inSingle) {
-      if (ch === '\\') { i++; continue; }
-      if (ch === "'") inSingle = false;
-      continue;
-    }
-    if (inDouble) {
-      if (ch === '\\') { i++; continue; }
-      if (ch === '"') inDouble = false;
-      continue;
-    }
-    if (inBacktick) {
-      if (ch === '\\') { i++; continue; }
-      if (ch === '`') inBacktick = false;
-      continue;
-    }
-
-    if (ch === '/' && next === '/') {
-      inLineComment = true;
-      i++;
-      continue;
-    }
-    if (ch === '/' && next === '*') {
-      inBlockComment = true;
-      i++;
-      continue;
-    }
-    if (ch === "'") { inSingle = true; continue; }
-    if (ch === '"') { inDouble = true; continue; }
-    if (ch === '`') { inBacktick = true; continue; }
-
-    const prevChar = i > 0 ? (code[i - 1] ?? '') : '';
-    if (ch === 'S' && !/[A-Za-z0-9_$.]/.test(prevChar) && code.slice(i, i + 10) === 'String.raw') {
-      const startIdx = i + 10;
-      const afterRaw = code.slice(startIdx);
-      if (/^(?:[a-zA-Z]:[/\\]|[/\\]|\.\.?[/\\])/.test(afterRaw)) {
-        let parenDepth = 0;
-        let bracketDepth = 0;
-        let endIdx = code.length;
-        for (let k = startIdx; k < code.length; k++) {
-          const c = code[k];
-          if (c === '(') {
-            parenDepth++;
-          } else if (c === ')') {
-            if (parenDepth === 0) {
-              endIdx = k;
-              break;
-            }
-            parenDepth--;
-          } else if (c === '[') {
-            bracketDepth++;
-          } else if (c === ']') {
-            if (bracketDepth === 0) {
-              endIdx = k;
-              break;
-            }
-            bracketDepth--;
-          } else if (parenDepth === 0 && bracketDepth === 0 && (c === ',' || c === ';' || c === '\n' || c === '\r')) {
-            endIdx = k;
-            break;
-          }
-        }
-        if (endIdx > startIdx) {
-          const rawBody = code.slice(startIdx, endIdx).replace(/`/g, '\\`').replace(/\$\{/g, '\\${');
-          result += `${code.slice(lastCopied, startIdx)}\`${rawBody}\``;
-          lastCopied = endIdx;
-          i = endIdx - 1;
-          healedCount++;
-          continue;
-        }
-      }
-    }
+    const healed = tryHealStringRawAt(code, i);
+    if (healed === null) continue;
+    result += `${code.slice(lastCopied, healed.startIdx)}${healed.literal}`;
+    lastCopied = healed.endIdx;
+    i = healed.endIdx - 1;
+    healedCount++;
   }
 
   if (healedCount === 0) return code;
@@ -250,7 +224,7 @@ export function getInlineScriptDetails(interpreter: string, args: readonly strin
       return null;
     }
 
-    if (arg.startsWith('./') || arg.startsWith('.\\') || /\.(?:ts|js|mjs|cjs|py)$/i.test(arg)) {
+    if (arg.startsWith('./') || arg.startsWith('.\\')) {
       return null;
     }
 
@@ -302,7 +276,7 @@ export function rewriteInlineScriptToTempFile(params: {
       );
 
   if (isPrint) {
-    fileContent = `try {\n  const __res = eval(${JSON.stringify(fileContent)});\n  if (__res !== undefined) console.log(__res);\n} catch {\n  ${fileContent}\n}\n`;
+    fileContent = `try {\n  const __res = eval(${JSON.stringify(fileContent)});\n  if (__res !== undefined) console.log(__res);\n} catch (__err) {\n  if (!(__err instanceof SyntaxError)) throw __err;\n  ${fileContent}\n}\n`;
   }
 
   if (!interpreterName.startsWith('python')) {
@@ -310,15 +284,7 @@ export function rewriteInlineScriptToTempFile(params: {
   }
 
   fs.writeFileSync(tmpFile, fileContent, { mode: 0o600 });
-  process.on('exit', () => {
-    try {
-      if (fs.existsSync(tmpFile)) {
-        fs.unlinkSync(tmpFile);
-      }
-    } catch {
-      // ignore
-    }
-  });
+  registerTempScriptCleanup(tmpFile);
 
   const absFlagIdx = startIdx + flagIdx;
   args.splice(absFlagIdx, 2, tmpFile);

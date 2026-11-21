@@ -7,15 +7,21 @@ import { StringDecoder } from 'node:string_decoder';
 import { StreamManager } from './stream-manager.js';
 import { checkPrompt } from './prompt-detector.js';
 import { ExecPayload } from './schema.js';
-import { isEnvelopeObject, extractEnvelope, parseEnvelopeFromTail, createWebhookStream } from './io-utils.js';
+import {
+  DEFAULT_MAX_BUFFER,
+  INFINITE_MAX_BUFFER,
+  appendOutputTail,
+  createWebhookStream,
+  extractEnvelope,
+  hasAnsiTuiSequence,
+  isEnvelopeObject,
+  parseEnvelopeFromTail,
+  pauseStreamUntilDrained,
+} from './io-utils.js';
 
 const STDIN_CHUNK_SIZE = 64 * 1024;
 const PROMPT_STALL_TIMEOUT_MS = 2000;
-const TAIL_MAX_LENGTH = 2048;
-const TAIL_TRIM_LENGTH = 1024;
 const FLUSH_TIMEOUT_MS = 200;
-const DEFAULT_MAX_BUFFER = 10 * 1024 * 1024;
-const INFINITE_MAX_BUFFER = 1024 * 1024 * 1024;
 const PENDING_STDOUT_LIMIT = 1024 * 1024;
 
 export class IOController {
@@ -157,66 +163,44 @@ export class IOController {
 
   private setupStdin() {
     const input = this.payload.stdin;
-    if (input && this.child.stdin) {
-      this.child.stdin.on('error', (err: NodeJS.ErrnoException) => {
-        if (err.code === 'EPIPE' || err.code === 'EOF' || err.code === 'ECONNRESET') {
-          this.isStdinBroken = true;
-          try { this.child.stdin!.destroy(); } catch { /* ignore */ }
-        } else {
-          console.error(`❌ STDIN Stream Error:`, err);
-        }
-      });
-
-      const inputBuffer = Buffer.from(input, 'utf8');
-      const chunkSize = STDIN_CHUNK_SIZE;
-      let offset = 0;
-      
-      const writeNextChunk = () => {
-        const stdin = this.child.stdin;
-        if (!stdin || this.isStdinBroken) return;
-        let canWrite = true;
-        try {
-          while (offset < inputBuffer.length && canWrite && !this.isStdinBroken) {
-            const chunk = inputBuffer.subarray(offset, offset + chunkSize);
-            offset += chunkSize;
-            canWrite = stdin.write(chunk);
-          }
-          if (offset >= inputBuffer.length && !this.isStdinBroken) {
-            stdin.end();
-            this.isStdinClosed = true;
-          }
-        } catch {
-          this.isStdinBroken = true;
-        }
-      };
-
-      this.child.stdin.on('drain', writeNextChunk);
-      writeNextChunk();
-    } else if (this.child.stdin) {
-      this.child.stdin.end();
+    const stdin = this.child.stdin;
+    if (!stdin) return;
+    if (!input) {
+      stdin.end();
       this.isStdinClosed = true;
+      return;
     }
-  }
-
-  private safelyPauseAndDrain(source: NodeJS.ReadableStream | null | undefined, targets: Writable[]) {
-    if (!source || targets.length === 0 || ('isPaused' in source && typeof source.isPaused === 'function' && source.isPaused())) return;
-    source.pause();
-    let drainCount = targets.length;
-    targets.forEach(target => {
-      let handled = false;
-      const resumeIfDone = () => {
-        if (handled) return;
-        handled = true;
-        target.removeListener('drain', resumeIfDone);
-        target.removeListener('close', resumeIfDone);
-        target.removeListener('error', resumeIfDone);
-        drainCount--;
-        if (drainCount === 0) source.resume();
-      };
-      target.once('drain', resumeIfDone);
-      target.once('close', resumeIfDone);
-      target.once('error', resumeIfDone);
+    stdin.on('error', (err: NodeJS.ErrnoException) => {
+      if (err.code === 'EPIPE' || err.code === 'EOF' || err.code === 'ECONNRESET') {
+        this.isStdinBroken = true;
+        try { stdin.destroy(); } catch { /* ignore */ }
+      } else {
+        console.error(`❌ STDIN Stream Error:`, err);
+      }
     });
+
+    const inputBuffer = Buffer.from(input, 'utf8');
+    let offset = 0;
+    const writeNextChunk = () => {
+      if (this.isStdinBroken) return;
+      let canWrite = true;
+      try {
+        while (offset < inputBuffer.length && canWrite && !this.isStdinBroken) {
+          const chunk = inputBuffer.subarray(offset, offset + STDIN_CHUNK_SIZE);
+          offset += STDIN_CHUNK_SIZE;
+          canWrite = stdin.write(chunk);
+        }
+        if (offset >= inputBuffer.length && !this.isStdinBroken) {
+          stdin.end();
+          this.isStdinClosed = true;
+        }
+      } catch {
+        this.isStdinBroken = true;
+      }
+    };
+
+    stdin.on('drain', writeNextChunk);
+    writeNextChunk();
   }
 
   private resetStallTimer() {
@@ -229,42 +213,33 @@ export class IOController {
     }
   }
 
-  // Uses a safer regex that matches incomplete/split ANSI TUI sequences, or just relies on the sliding window
-  private hasTuiSequence(tail: string): boolean {
-    const ESC = String.fromCharCode(27);
-    return tail.includes(`${ESC}[?1049h`) || tail.includes(`${ESC}[?47h`) || 
-           tail.includes(`${ESC}[?1047h`) || tail.includes(`${ESC}[?2004h`);
-  }
-
   private evaluatePromptStall() {
     if (this.payload.bypassInterceptors) return;
-    if (!this.payload.stdin || this.isStdinClosed) {
-      if (this.hasTuiSequence(this._stdoutTail) || this.hasTuiSequence(this._stderrTail)) {
-        this.onStall('Execution stalled: Process attempted to enter an interactive alternate screen buffer or TUI.');
-        return;
-      }
+    if (this.payload.stdin && !this.isStdinClosed) return;
+    if (hasAnsiTuiSequence(this._stdoutTail) || hasAnsiTuiSequence(this._stderrTail)) {
+      this.onStall('Execution stalled: Process attempted to enter an interactive alternate screen buffer or TUI.');
+      return;
+    }
 
-      if (this.promptStallTimer) {
-        clearTimeout(this.promptStallTimer);
-        this.promptStallTimer = null;
-      }
-      
-      const isStdoutPrompt = checkPrompt(this._stdoutTail);
-      const isStderrPrompt = checkPrompt(this._stderrTail);
-      
-      if (isStdoutPrompt || isStderrPrompt) {
-        this.promptStallTimer = setTimeout(() => {
-          const source = isStdoutPrompt ? 'stdout' : 'stderr';
-          this.onStall(`Execution stalled: Process appears to be waiting for interactive input on ${source}.`);
-        }, PROMPT_STALL_TIMEOUT_MS);
-      }
+    if (this.promptStallTimer) {
+      clearTimeout(this.promptStallTimer);
+      this.promptStallTimer = null;
+    }
+
+    const isStdoutPrompt = checkPrompt(this._stdoutTail);
+    const isStderrPrompt = checkPrompt(this._stderrTail);
+    if (isStdoutPrompt || isStderrPrompt) {
+      this.promptStallTimer = setTimeout(() => {
+        const source = isStdoutPrompt ? 'stdout' : 'stderr';
+        this.onStall(`Execution stalled: Process appears to be waiting for interactive input on ${source}.`);
+      }, PROMPT_STALL_TIMEOUT_MS);
     }
   }
 
   private scheduleStreamFlush(isErr: boolean) {
     const timer = isErr ? this.stderrFlushTimer : this.stdoutFlushTimer;
     if (timer) return;
-    
+
     const newTimer = setTimeout(() => {
       if (isErr) this.stderrFlushTimer = null;
       else this.stdoutFlushTimer = null;
@@ -273,7 +248,7 @@ export class IOController {
         this.streamManager.addLength(isErr, str.length);
         const streamsToDrain = this.streamManager.writeData(isErr, str, this.payload.stdoutFile, this.payload.stderrFile);
         const stream = isErr ? this.child.stderr : this.child.stdout;
-        this.safelyPauseAndDrain(stream, streamsToDrain);
+        pauseStreamUntilDrained(stream, streamsToDrain);
       }
     }, FLUSH_TIMEOUT_MS);
 
@@ -281,58 +256,87 @@ export class IOController {
     else this.stdoutFlushTimer = newTimer;
   }
 
+  private processEnvelopeStreaming(decoded: string): string {
+    this.pendingStdout += decoded;
+    if (this.pendingStdout.length > PENDING_STDOUT_LIMIT) {
+      const full = this.pendingStdout;
+      this.pendingStdout = '';
+      return full;
+    }
+    const lines = this.pendingStdout.split('\n');
+    let toEmit = '';
+    for (let i = 0; i < lines.length - 1; i++) {
+      const line = lines[i] ?? '';
+      if (!this.tryConsumeEnvelopeLine(line)) toEmit += `${line}\n`;
+    }
+    const trailing = lines[lines.length - 1] ?? '';
+    if (trailing.length > 0 && !trailing.trimStart().startsWith('{')) {
+      this.pendingStdout = '';
+      return `${toEmit}${trailing}`;
+    }
+    this.pendingStdout = trailing;
+    return toEmit;
+  }
+
+  private tryConsumeEnvelopeLine(line: string): boolean {
+    const trimmed = line.trim();
+    if (!trimmed.startsWith('{') || !trimmed.endsWith('}')) return false;
+    try {
+      const parsed: unknown = JSON.parse(trimmed);
+      if (isEnvelopeObject(parsed)) {
+        this._lastParsedEnvelope = parsed;
+        return true;
+      }
+    } catch {
+      // Not valid JSON envelope
+    }
+    return false;
+  }
+
+  private enforceBufferLimits(): boolean {
+    if (this.payload.maxBuffer !== undefined) {
+      const totalLen = this.streamManager.getBufferedLength(false) + this.streamManager.getBufferedLength(true);
+      if (totalLen > this.payload.maxBuffer) {
+        this.onMaxBuffer(`Output exceeded maxBuffer of ${this.payload.maxBuffer} bytes.`);
+        return false;
+      }
+      return true;
+    }
+    if (this.payload.truncateOutputLength !== undefined) return true;
+    const outMax = this.payload.stdoutFile ? INFINITE_MAX_BUFFER : DEFAULT_MAX_BUFFER;
+    const errMax = this.payload.stderrFile ? INFINITE_MAX_BUFFER : DEFAULT_MAX_BUFFER;
+    const combinedMax = (this.payload.stdoutFile || this.payload.stderrFile) ? (outMax + errMax) : DEFAULT_MAX_BUFFER;
+    const outLen = this.streamManager.getBufferedLength(false);
+    const errLen = this.streamManager.getBufferedLength(true);
+    if (outLen > outMax) {
+      this.onMaxBuffer(`Output exceeded maxBuffer of ${outMax} bytes.`);
+      return false;
+    }
+    if (errLen > errMax) {
+      this.onMaxBuffer(`Output exceeded maxBuffer of ${errMax} bytes.`);
+      return false;
+    }
+    if ((outLen + errLen) > combinedMax) {
+      this.onMaxBuffer(`Output exceeded maxBuffer of ${combinedMax} bytes.`);
+      return false;
+    }
+    return true;
+  }
+
   private processData(isErr: boolean, data: Buffer) {
     this._lastDataTime = Date.now();
     let decoded = isErr ? this.stderrDecoder.write(data) : this.stdoutDecoder.write(data);
-    
     if (!isErr && this.payload.expectJsonEnvelope) {
-       this.pendingStdout += decoded;
-       
-       if (this.pendingStdout.length > PENDING_STDOUT_LIMIT) {
-          decoded = this.pendingStdout;
-          this.pendingStdout = '';
-       } else {
-          const lines = this.pendingStdout.split('\n');
-          let toEmit = '';
-          for (let i = 0; i < lines.length - 1; i++) {
-             const line = lines[i];
-             let isEnvelope = false;
-             const trimmed = line.trim();
-             if (trimmed.startsWith('{') && trimmed.endsWith('}')) {
-                try {
-                   const parsed = JSON.parse(trimmed);
-                   if (isEnvelopeObject(parsed)) {
-                      isEnvelope = true;
-                      this._lastParsedEnvelope = parsed;
-                   }
-                } catch { /* ignore */ }
-             }
-             if (!isEnvelope) {
-                toEmit += line + '\n';
-             }
-          }
-          this.pendingStdout = lines[lines.length - 1];
-          if (this.pendingStdout.length > 0 && !this.pendingStdout.trimStart().startsWith('{')) {
-             toEmit += this.pendingStdout;
-             this.pendingStdout = '';
-          }
-          decoded = toEmit;
-       }
+      decoded = this.processEnvelopeStreaming(decoded);
     }
-
-    // Robust sliding window for ANSI checking
     if (isErr) {
-      this._stderrTail += decoded;
-      if (this._stderrTail.length > TAIL_MAX_LENGTH) this._stderrTail = this._stderrTail.slice(-TAIL_TRIM_LENGTH);
+      this._stderrTail = appendOutputTail(this._stderrTail, decoded);
     } else {
-      this._stdoutTail += decoded;
+      this._stdoutTail = appendOutputTail(this._stdoutTail, decoded);
       if (this.payload.expectJsonEnvelope) {
-         const parsed = parseEnvelopeFromTail(this.pendingStdout || this._stdoutTail);
-         if (parsed) {
-            this._lastParsedEnvelope = parsed;
-         }
+        const parsed = parseEnvelopeFromTail(this.pendingStdout || this._stdoutTail);
+        if (parsed) this._lastParsedEnvelope = parsed;
       }
-      if (this._stdoutTail.length > TAIL_MAX_LENGTH) this._stdoutTail = this._stdoutTail.slice(-TAIL_TRIM_LENGTH);
     }
 
     this.evaluatePromptStall();
@@ -341,53 +345,24 @@ export class IOController {
 
     const str = this.streamManager.processChunk(isErr, decoded);
     this.streamManager.addLength(isErr, str.length);
-    
-    if (this.payload.maxBuffer !== undefined) {
-      if ((this.streamManager.getBufferedLength(false) + this.streamManager.getBufferedLength(true)) > this.payload.maxBuffer) {
-         this.onMaxBuffer(`Output exceeded maxBuffer of ${this.payload.maxBuffer} bytes.`);
-         return;
-      }
-    } else {
-      const stdoutMaxBuffer = this.payload.stdoutFile ? INFINITE_MAX_BUFFER : (this.payload.truncateOutputLength !== undefined ? Infinity : DEFAULT_MAX_BUFFER);
-      const stderrMaxBuffer = this.payload.stderrFile ? INFINITE_MAX_BUFFER : (this.payload.truncateOutputLength !== undefined ? Infinity : DEFAULT_MAX_BUFFER);
-      
-      const combinedMaxBuffer = this.payload.truncateOutputLength !== undefined ? Infinity :
-                              (this.payload.stdoutFile || this.payload.stderrFile) ? (stdoutMaxBuffer + stderrMaxBuffer) 
-                              : DEFAULT_MAX_BUFFER;
+    if (!this.enforceBufferLimits()) return;
 
-      if (this.streamManager.getBufferedLength(false) > stdoutMaxBuffer) {
-         this.onMaxBuffer(`Output exceeded maxBuffer of ${stdoutMaxBuffer} bytes.`);
-         return;
-      }
-      if (this.streamManager.getBufferedLength(true) > stderrMaxBuffer) {
-         this.onMaxBuffer(`Output exceeded maxBuffer of ${stderrMaxBuffer} bytes.`);
-         return;
-      }
-      if ((this.streamManager.getBufferedLength(false) + this.streamManager.getBufferedLength(true)) > combinedMaxBuffer) {
-         this.onMaxBuffer(`Output exceeded maxBuffer of ${combinedMaxBuffer} bytes.`);
-         return;
-      }
-    }
-    
     const streamsToDrain = this.streamManager.writeData(isErr, str, this.payload.stdoutFile, this.payload.stderrFile);
     const stream = isErr ? this.child.stderr : this.child.stdout;
-    if (streamsToDrain.length > 0 && stream) {
-       this.safelyPauseAndDrain(stream, streamsToDrain);
-    }
+    pauseStreamUntilDrained(stream, streamsToDrain);
   }
 
   private processEnd(isErr: boolean) {
     let decoded = isErr ? this.stderrDecoder.end() : this.stdoutDecoder.end();
     if (!isErr) {
       decoded = this.finalizeStdout(decoded);
-      this._stdoutTail += decoded;
-      if (this._stdoutTail.length > TAIL_MAX_LENGTH) this._stdoutTail = this._stdoutTail.slice(-TAIL_TRIM_LENGTH);
+      this._stdoutTail = appendOutputTail(this._stdoutTail, decoded);
     }
     let str = this.streamManager.processChunk(isErr, decoded);
     str += this.streamManager.flushChunk(isErr);
     if (str) {
-       this.streamManager.addLength(isErr, str.length);
-       this.streamManager.writeData(isErr, str, this.payload.stdoutFile, this.payload.stderrFile);
+      this.streamManager.addLength(isErr, str.length);
+      this.streamManager.writeData(isErr, str, this.payload.stdoutFile, this.payload.stderrFile);
     }
   }
 
@@ -412,55 +387,47 @@ export class IOController {
     if (this.stderrFlushTimer) clearTimeout(this.stderrFlushTimer);
 
     if (this.child.stdout) {
-       if (this.pendingStdout) {
-          const finalStr = this.finalizeStdout('');
-          if (finalStr) {
-             this._stdoutTail += finalStr;
-             if (this._stdoutTail.length > TAIL_MAX_LENGTH) this._stdoutTail = this._stdoutTail.slice(-TAIL_TRIM_LENGTH);
-             const str = this.streamManager.processChunk(false, finalStr);
-             this.streamManager.addLength(false, str.length);
-             this.streamManager.writeData(false, str, this.payload.stdoutFile, this.payload.stderrFile);
-          }
-       }
-       const str = this.streamManager.flushChunk(false);
-       if (str) {
+      if (this.pendingStdout) {
+        const finalStr = this.finalizeStdout('');
+        if (finalStr) {
+          this._stdoutTail = appendOutputTail(this._stdoutTail, finalStr);
+          const str = this.streamManager.processChunk(false, finalStr);
           this.streamManager.addLength(false, str.length);
           this.streamManager.writeData(false, str, this.payload.stdoutFile, this.payload.stderrFile);
-       }
+        }
+      }
+      const str = this.streamManager.flushChunk(false);
+      if (str) {
+        this.streamManager.addLength(false, str.length);
+        this.streamManager.writeData(false, str, this.payload.stdoutFile, this.payload.stderrFile);
+      }
     }
     if (this.child.stderr) {
-       const str = this.streamManager.flushChunk(true);
-       if (str) {
-          this.streamManager.addLength(true, str.length);
-          this.streamManager.writeData(true, str, this.payload.stdoutFile, this.payload.stderrFile);
-       }
+      const str = this.streamManager.flushChunk(true);
+      if (str) {
+        this.streamManager.addLength(true, str.length);
+        this.streamManager.writeData(true, str, this.payload.stdoutFile, this.payload.stderrFile);
+      }
     }
   }
 
   public async closeFileStreams(): Promise<void> {
     const closePromises: Promise<void>[] = [];
-    
-    const outStream = this.outStream;
-    if (outStream && !outStream.destroyed) {
-      closePromises.push(new Promise(resolve => outStream.end(resolve)));
-    } else if (outStream) {
-      closePromises.push(Promise.resolve());
+    for (const stream of [this.outStream, this.errStream]) {
+      if (!stream) continue;
+      if (!stream.destroyed) {
+        closePromises.push(new Promise((resolve) => stream.end(resolve)));
+      } else {
+        closePromises.push(Promise.resolve());
+      }
     }
-    
-    const errStream = this.errStream;
-    if (errStream && !errStream.destroyed) {
-      closePromises.push(new Promise(resolve => errStream.end(resolve)));
-    } else if (errStream) {
-      closePromises.push(Promise.resolve());
-    }
-
     try {
-      let timeoutId: NodeJS.Timeout;
+      let timeoutId: NodeJS.Timeout | undefined;
       await Promise.race([
         Promise.all(closePromises),
-        new Promise(resolve => { timeoutId = setTimeout(resolve, 2000); })
+        new Promise((resolve) => { timeoutId = setTimeout(resolve, 2000); }),
       ]);
-      clearTimeout(timeoutId!);
+      if (timeoutId !== undefined) clearTimeout(timeoutId);
     } catch { /* ignore */ }
   }
 

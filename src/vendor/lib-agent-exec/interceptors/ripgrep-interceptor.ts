@@ -37,7 +37,8 @@ function appendRipgrepDefaultTarget(
 ): void {
   if (hasStdin || hasHelpOrVersion || ctx.args.includes('.')) return;
   const updatedPositional = getPositionalArgs(ctx.cmdBasename, ctx.args);
-  const needsDot = (hasPatternFlag && updatedPositional.length === 0) || (!hasPatternFlag && updatedPositional.length === 1);
+  const patternOrFilesMode = hasPatternFlag || ctx.args.includes('--files');
+  const needsDot = (patternOrFilesMode && updatedPositional.length === 0) || (!patternOrFilesMode && updatedPositional.length === 1);
   if (!needsDot) return;
   emitInterceptBanner(`\n   💡 AGENT INTERCEPT: 'rg' missing target directory argument. Auto-appending '.' as target directory... (Frictionless Recovery)`);
   ctx.args.push('.');

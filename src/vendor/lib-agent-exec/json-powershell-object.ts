@@ -140,7 +140,7 @@ function cleanArrayItem(item: string): string {
   const doubleQuoted = cleaned.startsWith('"') && cleaned.endsWith('"');
   const singleQuoted = cleaned.startsWith("'") && cleaned.endsWith("'");
   if (doubleQuoted || singleQuoted) cleaned = cleaned.slice(1, -1);
-  return cleaned.replace(/\\/g, '');
+  return cleaned.replace(/\\(["',])/g, '$1');
 }
 
 function coerceArray(cleanVal: string): string[] | null {

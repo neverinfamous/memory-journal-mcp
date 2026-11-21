@@ -14,7 +14,8 @@ interface GitScope {
   explicitCwd: string | undefined;
 }
 
-function hasEditFlag(args: string[]): boolean {
+function hasEditFlag(cmd: string | undefined, args: readonly string[]): boolean {
+  if (cmd === 'grep') return false;
   return args.includes('-e') || args.includes('--edit');
 }
 
@@ -31,7 +32,7 @@ export function applyEarlyGitGuards(scope: GitScope): boolean {
       console.error(`   Please use standard 'git diff' or 'git merge' instead.`);
       process.exit(1);
     })
-    .with({ args: P.when(hasEditFlag) }, ({ cmd: tool }) => {
+    .with({ args: P.when((list: string[]) => hasEditFlag(cmd, list)) }, ({ cmd: tool }) => {
       console.error(`\n   💡 AGENT HINT: 'git ${tool} -e / --edit' requires an interactive editor and will hang indefinitely.\n${AUTONOMOUS_HEALING_MSG}`);
       console.error(`   Because 'agent-exec.ts' is non-interactive, this is blocked.`);
       process.exit(1);
@@ -106,11 +107,11 @@ export function applyEditorGitHeals(scope: GitScope): void {
       console.error(`\n   🛠️ AUTONOMOUS HEALING: Automatically injecting '--no-edit' into 'git ${tool}' to prevent interactive editor prompt... (Frictionless Recovery)`);
       matched.push('--no-edit');
     })
-    .with({ cmd: P.union('cherry-pick', 'revert'), args: P.when((list: string[]) => !list.includes('--no-edit') && !list.includes('--no-commit') && !list.includes('-n')) }, ({ cmd: tool }) => {
+    .with({ cmd: P.union('cherry-pick', 'revert'), args: P.when((list: string[]) => !list.includes('--no-edit') && !list.includes('--no-commit') && !list.includes('-n') && !list.includes('--abort') && !list.includes('--quit') && !list.includes('--skip')) }, ({ cmd: tool }) => {
       console.error(`\n   🛠️ AUTONOMOUS HEALING: 'git ${tool}' may open an interactive editor. Automatically injecting '--no-edit'.... (Frictionless Recovery)`);
       args.push('--no-edit');
     })
-    .with({ cmd: 'config', args: P.when(hasEditFlag) }, () => {
+    .with({ cmd: 'config', args: P.when((list: string[]) => hasEditFlag('config', list)) }, () => {
       console.error(`\n   💡 AGENT HINT: 'git config --edit' opens an interactive editor. Blocking execution.\n${AUTONOMOUS_HEALING_MSG}`);
       process.exit(1);
     })

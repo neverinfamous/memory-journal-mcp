@@ -13,6 +13,12 @@ import { routeEmbeddedShellTools } from './system-shell-routing.js';
 import { extendPayloadTimeouts } from './system-timeouts.js';
 import type { ExecutionContext } from './types.js';
 
+function syncDerivedArgs(ctx: ExecutionContext, derived: ReturnType<typeof buildSystemCommandContext>): void {
+  const combined = [...derived.embeddedArgs, ...ctx.args];
+  derived.args = combined;
+  derived.positionalArgs = getPositionalArgs(derived.cmdBasename, combined);
+}
+
 export function systemInterceptor(ctx: ExecutionContext): void {
   healFragmentedQuoteArgs(ctx);
   unwrapPackageRunnerShell(ctx);
@@ -23,11 +29,14 @@ export function systemInterceptor(ctx: ExecutionContext): void {
   extendPayloadTimeouts(derived);
 
   healPathHallucinations(ctx);
-  runMutatingInterceptors(ctx, { cmd: derived.cmd, cmdBasename: derived.cmdBasename, args: derived.args });
+  syncDerivedArgs(ctx, derived);
 
-  const activeCombinedArgs = [...derived.embeddedArgs, ...ctx.args];
-  const activePositionalArgs = getPositionalArgs(derived.cmdBasename, activeCombinedArgs);
-  runSystemCommandArms(ctx, derived, activePositionalArgs);
+  runMutatingInterceptors(ctx, { cmd: derived.cmd, cmdBasename: derived.cmdBasename, args: derived.args });
+  syncDerivedArgs(ctx, derived);
+
+  runSystemCommandArms(ctx, derived, derived.positionalArgs);
+  syncDerivedArgs(ctx, derived);
+
   blockUnsafePipes(derived);
 
   const inline = resolveInlineCommand(derived.args);

@@ -1,6 +1,5 @@
 // @ts-nocheck
 import path from 'node:path';
-import { ExecPayload } from './schema.js';
 import { recordAgentIssue } from './utils.js';
 
 
@@ -118,7 +117,21 @@ export const DEFAULT_ENV_VARS: Record<string, string> = {
     AZURE_CORE_COLLECT_TELEMETRY: '0'
 };
 
-export function buildEnvironment(payloadEnv: ExecPayload['env']) {
+export const IMMUTABLE_ENV_OVERRIDES: ReadonlySet<string> = new Set([
+  'GIT_EDITOR', 'GH_EDITOR', 'EDITOR', 'VISUAL', 'GIT_SEQUENCE_EDITOR',
+  'GIT_ASKPASS', 'SSH_ASKPASS', 'SSH_ASKPASS_REQUIRE', 'GH_PROMPT_DISABLED', 'GH_FORCE_TTY', 'GIT_TERMINAL_PROMPT',
+  'CI', 'NO_COLOR', 'PAGER', 'GIT_PAGER', 'GH_PAGER', 'GIT_CORE_PAGER',
+  'AWS_PAGER', 'BAT_PAGER', 'SYSTEMD_PAGER', 'KUBECTL_PAGER', 'DELTA_PAGER', 'MANPAGER',
+  'WSLENV', 'GIT_SSH_COMMAND', 'GCM_INTERACTIVE', 'GIT_MERGE_AUTOEDIT',
+  'GIT_CONFIG_COUNT', 'GIT_CONFIG_KEY_0', 'GIT_CONFIG_VALUE_0',
+  'GIT_CONFIG_KEY_1', 'GIT_CONFIG_VALUE_1', 'GIT_CONFIG_KEY_2', 'GIT_CONFIG_VALUE_2',
+  'GIT_CONFIG_KEY_3', 'GIT_CONFIG_VALUE_3',
+  'PYTHONUNBUFFERED', 'FORCE_COLOR', 'TERM', 'GPG_TTY',
+  'NPM_CONFIG_INTERACTIVE', 'DEBIAN_FRONTEND', 'TF_IN_AUTOMATION', 'NONINTERACTIVE',
+  'POETRY_INTERACTIVE', 'PIP_NO_INPUT', 'PYTHON_TEST_NO_INPUT'
+]);
+
+export function buildEnvironment(payloadEnv?: Record<string, string | number | boolean | undefined>) {
   const env: Record<string, string | undefined> = {};
   const isWin = process.platform === 'win32';
   const upperKeysMap = new Map<string, string>();
@@ -149,25 +162,20 @@ export function buildEnvironment(payloadEnv: ExecPayload['env']) {
     setEnv(key, value);
   }
 
-
-  const immutableOverrides = new Set([
-    'GIT_EDITOR', 'GH_EDITOR', 'EDITOR', 'VISUAL', 'GIT_SEQUENCE_EDITOR',
-    'GIT_ASKPASS', 'SSH_ASKPASS', 'GH_PROMPT_DISABLED', 'GH_FORCE_TTY', 'GIT_TERMINAL_PROMPT',
-    'CI', 'NO_COLOR', 'PAGER', 'PYTHONUNBUFFERED', 'FORCE_COLOR', 'TERM', 'GPG_TTY',
-    'NPM_CONFIG_INTERACTIVE', 'DEBIAN_FRONTEND', 'TF_IN_AUTOMATION', 'NONINTERACTIVE',
-    'POETRY_INTERACTIVE', 'PIP_NO_INPUT', 'PYTHON_TEST_NO_INPUT'
-  ]);
-
   if (payloadEnv) {
     for (const [key, value] of Object.entries(payloadEnv)) {
-      if (immutableOverrides.has(key.toUpperCase())) {
+      if (IMMUTABLE_ENV_OVERRIDES.has(key.toUpperCase())) {
         recordAgentIssue('IMMUTABLE_ENV_OVERRIDE', `Agent attempted to override immutable env var: ${key}`, { key, value });
         console.error(`\n   💡 AGENT HINT: The environment variable '${key}' is immutable to prevent hanging and cannot be overridden.`);
         continue;
       }
 
-      const valStr = String(value);
       const actualKey = findKey(key);
+      if (value === undefined) {
+        delete env[actualKey];
+        continue;
+      }
+      const valStr = String(value);
       const isNodeOpts = isWin ? actualKey.toUpperCase() === 'NODE_OPTIONS' : actualKey === 'NODE_OPTIONS';
       const isPath = isWin ? actualKey.toUpperCase() === 'PATH' : actualKey === 'PATH';
 

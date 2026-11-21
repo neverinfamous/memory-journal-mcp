@@ -4,7 +4,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const AGENT_SCRIPT_REF_RE = /^(?:(?:\.[\\/])?\.agents|.*[\\/]\.agents)[\\/]scripts[\\/]([a-zA-Z0-9_.-]+\.(?:ts|js|mjs))$/;
-const TSX_COMMIT_SCRIPT_RE = /\btsx\s+(?:\.[\\/])?scripts[\\/]commit\.ts\b/i;
+const TSX_COMMIT_SCRIPT_RE = /\b(?:tsx(?:\s+[^\s;|&]+)*|cli\.mjs)\s+['"]?(?:\.[\\/])?scripts[\\/]commit\.ts['"]?(?:\s|$|;|&|\|)/i;
 
 export function resolveAgentScriptFallback(rawArg: string, projectDir: string): string | null {
   const matchResult = rawArg.match(AGENT_SCRIPT_REF_RE);

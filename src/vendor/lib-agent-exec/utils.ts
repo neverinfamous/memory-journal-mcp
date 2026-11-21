@@ -7,25 +7,32 @@ import { fileURLToPath } from 'node:url';
 import os from 'node:os';
 import dotenv from 'dotenv';
 
-const SECRET_FIELD_RE = /(?:token|secret|passw(?:or)?d|credential|api[_-]?key|private[_-]?key|(?:^|_)key$|^auth$|^authorization$|(?:^|_)auth(?:_|$))/i;
+const SECRET_FIELD_RE = /(?:token|secret|passw(?:or)?d|credential|api[_-]?key|private[_-]?key|(?:^|[-_])key$|^auth$|^authorization$|(?:^|[-_])auth(?:[-_]|$)|^stdin$|^cookie$|^set[-_]?cookie$|^x-(?:auth|api|key|token|secret))/i;
 const MAX_LOGGED_STRING = 2000;
 
-const TELEMETRY_SECRET_RE = /((?:token|secret|passw(?:or)?d|credential|api[_-]?key|authorization|private[_-]?key)\s*[:=]\s*)(['"]?)[^\s'"]+/gi;
-const BEARER_RE = /Bearer\s+[A-Za-z0-9._\-+/=]+/gi;
+const URL_CREDENTIAL_RE = /(https?:\/\/)([^:@\s/]+):([^@\s/]+)@/gi;
+const BEARER_RE = /\b(Bearer|Basic)\s+[A-Za-z0-9._\-+/=]+/gi;
+const TELEMETRY_SECRET_RE = /((?:token|secret|passw(?:or)?d|credential|api[-_]?key|authorization|private[-_]?key|cookie|set[-_]?cookie|x-(?:auth|api|key|token|secret)[^\s:=]*)\s*[:=]\s*(?:(?:Bearer|Basic)\s+)?)(['"]?)[^\s'"]+/gi;
+
+function truncateForLog(value: string): string {
+  return value.length > MAX_LOGGED_STRING ? `${value.substring(0, MAX_LOGGED_STRING)}... [truncated]` : value;
+}
 
 export function redactTelemetryText(value: string): string {
-  const limited = redactPayloadForLog(value);
-  const text = typeof limited === 'string' ? limited : value;
-  return text.replace(TELEMETRY_SECRET_RE, '$1$2[REDACTED]').replace(BEARER_RE, 'Bearer [REDACTED]');
+  const text = truncateForLog(value);
+  return text
+    .replace(URL_CREDENTIAL_RE, '$1$2:[REDACTED]@')
+    .replace(BEARER_RE, '$1 [REDACTED]')
+    .replace(TELEMETRY_SECRET_RE, '$1$2[REDACTED]');
 }
 
 /**
  * [INTENT]: Redacted, size-bounded deep copy of an arbitrary payload for issue logs.
- * [INVARIANT]: Never writes values of secret-like keys (env tokens, API keys) to disk.
+ * [INVARIANT]: Never writes values of secret-like keys (env tokens, API keys) or secret strings to disk.
  */
 export function redactPayloadForLog(value: unknown, depth = 0): unknown {
   if (typeof value === 'string') {
-    return value.length > MAX_LOGGED_STRING ? `${value.substring(0, MAX_LOGGED_STRING)}... [truncated]` : value;
+    return redactTelemetryText(value);
   }
   if (value === null || typeof value !== 'object') return value;
   if (depth > 6) return '[depth-limit]';
@@ -105,8 +112,9 @@ export function recordAgentIssue(issueType: string, message: string, payload?: u
     const { safePayload, internalStallBypass } = sanitizeLoggedIssuePayload(payload, extra);
     const safeExtra = extra !== undefined ? redactPayloadForLog(extra) : undefined;
 
+    const safeMessage = redactTelemetryText(message);
     const timestamp = new Date().toISOString();
-    const record: Record<string, unknown> = { timestamp, issueType, message, payload: safePayload };
+    const record: Record<string, unknown> = { timestamp, issueType, message: safeMessage, payload: safePayload };
     if (internalStallBypass) {
       record.internalStallBypass = true;
     }
@@ -122,7 +130,7 @@ export function recordAgentIssue(issueType: string, message: string, payload?: u
 }
 
 function hasKey<K extends string>(obj: object, key: K): obj is object & Record<K, unknown> {
-  return key in obj;
+  return Object.hasOwn(obj, key);
 }
 
 const nativeBinaryCache = new Map<string, string | null>();

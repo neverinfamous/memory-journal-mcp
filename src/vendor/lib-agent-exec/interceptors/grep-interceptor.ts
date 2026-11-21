@@ -35,7 +35,10 @@ function hasGrepHelpOrVersion(args: string[]): boolean {
 
 function hasGrepPatternFlag(args: string[]): boolean {
   return args.some((arg) =>
-    arg === '-e' || arg.startsWith('-e') || arg === '--regexp' || arg.startsWith('--regexp=') || arg === '-f' || arg.startsWith('--file')
+    arg === '-e' || (arg.startsWith('-e') && !arg.startsWith('--')) ||
+    arg === '--regexp' || arg.startsWith('--regexp=') ||
+    arg === '-f' || (arg.startsWith('-f') && !arg.startsWith('--')) ||
+    arg === '--file' || arg.startsWith('--file=')
   );
 }
 
@@ -94,7 +97,7 @@ function recombineGrepMultiwordPattern(
   if (hasStdin || hasPatternFlag || positionalArgs.length <= 2) return positionalArgs;
   const lastArg = positionalArgs[positionalArgs.length - 1];
   const intermediateArgs = positionalArgs.slice(1, -1);
-  const cwd = ctx.payload.cwd;
+  const cwd = ctx.payload.cwd ?? ctx.cwd;
   if (lastArg === undefined || !isGrepPathLike(lastArg, cwd)) return positionalArgs;
   if (intermediateArgs.some((arg) => isGrepPathLike(arg, cwd))) return positionalArgs;
   const patternParts = positionalArgs.slice(0, -1);
@@ -123,7 +126,7 @@ function swapGrepReversedArgs(
   const first = positionalArgs[0];
   const second = positionalArgs[1];
   if (first === undefined || second === undefined) return positionalArgs;
-  const cwd = ctx.payload.cwd;
+  const cwd = ctx.payload.cwd ?? ctx.cwd;
   if (!isLikelyDirectoryArg(first, cwd) || isLikelyDirectoryArg(second, cwd)) return positionalArgs;
   if (isSecondExistingTargetOnly(first, second, cwd)) return positionalArgs;
   console.error(`\n   🛠️ AUTONOMOUS HEALING: Detected reversed arguments in '${ctx.cmdBasename}' (directory before pattern). Swapping arguments to place pattern first... (Frictionless Recovery)\x1b[0m`);
@@ -178,7 +181,8 @@ function ensureGrepRecursiveSearch(
   if (hasStdin) return isRecursive;
   const targetFileArgs = hasPatternFlag ? positionalArgs : positionalArgs.slice(1);
   if (targetFileArgs.length === 0) return injectGrepMissingTarget(ctx, isRecursive);
-  if (isRecursive || !targetFileArgs.some((arg) => isLikelyDirectoryArg(arg, ctx.payload.cwd))) return isRecursive;
+  const cwd = ctx.payload.cwd ?? ctx.cwd;
+  if (isRecursive || !targetFileArgs.some((arg) => isLikelyDirectoryArg(arg, cwd))) return isRecursive;
   console.error(`\n   💡 AGENT HINT: '${grepCommandName(ctx)}' called with a directory target without recursive flag.`);
   console.error(`\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Auto-injecting '-r' to search directory recursively... (Frictionless Recovery)\x1b[0m`);
   ctx.args.unshift('-r');
@@ -191,9 +195,9 @@ function convertGrepPathsForWsl(ctx: ExecutionContext): void {
   ctx.args = ctx.args.map((arg, idx) => idx === patternIdx ? arg : convertToWslPath(arg));
 }
 
-function applyRecursiveGrepGuards(ctx: ExecutionContext, isRecursive: boolean): void {
+function applyRecursiveGrepGuards(ctx: ExecutionContext, isRecursive: boolean, targetPaths: readonly string[]): void {
   if (!isRecursive) return;
-  injectRecursiveGrepExclusions(ctx.args);
+  injectRecursiveGrepExclusions(ctx.args, targetPaths);
   if (!ctx.args.includes('-s') && !ctx.args.includes('--no-messages')) ctx.args.unshift('-s');
   if (ctx.payload.target === 'wsl2' && (ctx.payload.timeoutMs === undefined || ctx.payload.timeoutMs <= 30000)) {
     console.error(`\n   🛠️ AUTONOMOUS HEALING: Recursive grep on mounted filesystem detected. Auto-extending timeout to 60000ms to prevent premature aborts... (Frictionless Recovery)\x1b[0m`);
@@ -214,5 +218,6 @@ export function handleGrepInterception(ctx: ExecutionContext, hasStdin: boolean)
   blockEmptyGrep(ctx, hasStdin, hasPatternFlag, positionalArgs);
   const isRecursive = ensureGrepRecursiveSearch(ctx, hasStdin, hasPatternFlag, positionalArgs);
   convertGrepPathsForWsl(ctx);
-  applyRecursiveGrepGuards(ctx, isRecursive);
+  const targetPaths = hasPatternFlag ? positionalArgs : positionalArgs.slice(1);
+  applyRecursiveGrepGuards(ctx, isRecursive, targetPaths);
 }

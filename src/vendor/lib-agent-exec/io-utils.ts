@@ -2,57 +2,109 @@
 import { Writable } from 'node:stream';
 import { ExecPayload, JsonEnvelopeSchema } from './schema.js';
 import { renderWebhookTemplate } from './webhook-template.js';
+import { recordAgentIssue } from './utils.js';
 
 export const WEBHOOK_FLUSH_INTERVAL_MS = 100;
+export const TAIL_MAX_LENGTH = 2048;
+export const TAIL_TRIM_LENGTH = 1024;
+export const DEFAULT_MAX_BUFFER = 10 * 1024 * 1024;
+export const INFINITE_MAX_BUFFER = 1024 * 1024 * 1024;
+
+export interface EnvelopeMatch {
+  parsed: Record<string, unknown>;
+  start: number;
+  end: number;
+}
 
 export function isEnvelopeObject(obj: unknown): obj is Record<string, unknown> {
   return JsonEnvelopeSchema.safeParse(obj).success;
 }
 
-export function extractEnvelope(tail: string): { parsed: Record<string, unknown>, start: number, end: number } | null {
+export function appendOutputTail(currentTail: string, chunk: string): string {
+  const next = currentTail + chunk;
+  return next.length > TAIL_MAX_LENGTH ? next.slice(-TAIL_TRIM_LENGTH) : next;
+}
+
+export function hasAnsiTuiSequence(tail: string): boolean {
+  const esc = String.fromCharCode(27);
+  return tail.includes(`${esc}[?1049h`) ||
+    tail.includes(`${esc}[?47h`) ||
+    tail.includes(`${esc}[?1047h`) ||
+    tail.includes(`${esc}[?2004h`);
+}
+
+export function pauseStreamUntilDrained(
+  source: NodeJS.ReadableStream | null | undefined,
+  targets: Writable[],
+): void {
+  if (!source || targets.length === 0 || ('isPaused' in source && typeof source.isPaused === 'function' && source.isPaused())) {
+    return;
+  }
+  source.pause();
+  let drainCount = targets.length;
+  targets.forEach((target) => {
+    let handled = false;
+    const resumeIfDone = () => {
+      if (handled) return;
+      handled = true;
+      target.removeListener('drain', resumeIfDone);
+      target.removeListener('close', resumeIfDone);
+      target.removeListener('error', resumeIfDone);
+      drainCount--;
+      if (drainCount === 0) source.resume();
+    };
+    target.once('drain', resumeIfDone);
+    target.once('close', resumeIfDone);
+    target.once('error', resumeIfDone);
+  });
+}
+
+function tryParseEnvelopeCandidate(tail: string, start: number, end: number): EnvelopeMatch | null {
+  try {
+    const parsed: unknown = JSON.parse(tail.slice(start, end));
+    if (isEnvelopeObject(parsed)) {
+      return { parsed, start, end };
+    }
+  } catch {
+    // Ignore invalid JSON brace spans
+  }
+  return null;
+}
+
+function isLineStartAt(text: string, idx: number): boolean {
+  return idx === 0 || text[idx - 1] === '\n' || text[idx - 1] === '\r';
+}
+
+export function extractEnvelope(tail: string): EnvelopeMatch | null {
   let braceCount = 0;
   let startIdx = -1;
   let inString = false;
   let escape = false;
-  let lastValidEnvelope: { parsed: Record<string, unknown>, start: number, end: number } | null = null;
+  let lastValidEnvelope: EnvelopeMatch | null = null;
 
   for (let i = 0; i < tail.length; i++) {
     const char = tail[i];
-    if (escape) {
-      escape = false;
-      continue;
-    }
-    if (char === '\\') {
-      escape = true;
-      continue;
-    }
-    if (char === '"') {
-      inString = !inString;
-      continue;
-    }
-    if (!inString) {
-      if (char === '{') {
-        if (braceCount === 0) startIdx = i;
-        braceCount++;
-      } else if (char === '}') {
-        if (braceCount > 0) {
-          braceCount--;
-          if (braceCount === 0 && startIdx !== -1) {
-            try {
-              const candidate = tail.slice(startIdx, i + 1);
-              const parsed: unknown = JSON.parse(candidate);
-              if (isEnvelopeObject(parsed)) {
-                lastValidEnvelope = { parsed, start: startIdx, end: i + 1 };
-              }
-            } catch {
-              // Ignore parse errors
-            }
-            startIdx = -1;
-          }
-        }
+    if (escape) { escape = false; continue; }
+    if (char === '\\') { escape = true; continue; }
+    if (char === '"') { inString = !inString; continue; }
+    if (inString) continue;
+
+    if (char === '{') {
+      if (braceCount === 0) startIdx = i;
+      braceCount++;
+    } else if (char === '}' && braceCount > 0) {
+      braceCount--;
+      if (braceCount === 0 && startIdx !== -1) {
+        const candidate = tryParseEnvelopeCandidate(tail, startIdx, i + 1);
+        if (candidate !== null) lastValidEnvelope = candidate;
+        startIdx = -1;
       }
     }
   }
+
+  if (lastValidEnvelope === null) return null;
+  if (!isLineStartAt(tail, lastValidEnvelope.start)) return null;
+  if (tail.slice(lastValidEnvelope.end).trim().length > 0) return null;
   return lastValidEnvelope;
 }
 
@@ -60,53 +112,62 @@ export function parseEnvelopeFromTail(tailStr: string): Record<string, unknown> 
   if (!tailStr) return null;
   const tail = tailStr.trim();
   if (tail.length === 0) return null;
-  
+
   const result = extractEnvelope(tail);
   return result ? result.parsed : null;
+}
+
+function dispatchWebhookChunk(
+  filePath: string,
+  payload: ExecPayload,
+  data: Buffer,
+  inFlightReqs: Set<Promise<void>>,
+): Promise<void> {
+  const method = payload.webhookMethod || 'POST';
+  const headers: Record<string, string> = { ...payload.webhookHeaders };
+  let bodyPayload: BodyInit = new Blob([new Uint8Array(data)]);
+
+  if (payload.webhookPayloadTemplate) {
+    headers['Content-Type'] = headers['Content-Type'] || 'application/json';
+    const chunkStr = data.toString('utf8');
+    bodyPayload = renderWebhookTemplate(
+      payload.webhookPayloadTemplate,
+      'integrationContext' in payload ? payload.integrationContext : null,
+      { stdout: chunkStr, stderr: chunkStr, success: true, code: null, signal: null },
+    );
+  }
+  const fetchOptions: RequestInit = { method, headers };
+  if (method !== 'GET') fetchOptions.body = bodyPayload;
+  const timeoutMs = payload.webhookTimeoutMs ?? 5000;
+  if (timeoutMs > 0) fetchOptions.signal = AbortSignal.timeout(timeoutMs);
+
+  const req = fetch(filePath, fetchOptions)
+    .then((res) => res.arrayBuffer())
+    .then(() => {})
+    .catch((err: unknown) => {
+      const msg = err instanceof Error ? err.message : String(err);
+      recordAgentIssue('WEBHOOK_DELIVERY_FAILED', `Webhook stream request failed: ${msg}`, { targetUrl: filePath, method });
+    });
+  inFlightReqs.add(req);
+  req.finally(() => inFlightReqs.delete(req));
+  return req;
 }
 
 export function createWebhookStream(filePath: string, payload: ExecPayload): Writable {
   let buffer: Buffer[] = [];
   let timer: NodeJS.Timeout | null = null;
-  const inFlightReqs: Set<Promise<void>> = new Set();
-  
-  const sendChunk = (data: Buffer) => {
-    const method = payload.webhookMethod || 'POST';
-    const headers: Record<string, string> = { ...payload.webhookHeaders };
-    let bodyPayload: BodyInit = new Blob([new Uint8Array(data)]);
+  const inFlightReqs = new Set<Promise<void>>();
 
-    if (payload.webhookPayloadTemplate) {
-      headers['Content-Type'] = headers['Content-Type'] || 'application/json';
-      const chunkStr = data.toString('utf8');
-      const vars = {
-        stdout: chunkStr,
-        stderr: chunkStr,
-        success: true,
-        code: null,
-        signal: null
-      };
-      bodyPayload = renderWebhookTemplate(
-        payload.webhookPayloadTemplate, 
-        'integrationContext' in payload ? payload.integrationContext : null, 
-        vars
-      );
+  const clearFlushTimer = () => {
+    if (timer) {
+      clearTimeout(timer);
+      timer = null;
     }
-    const fetchOptions: RequestInit = { method, headers };
-    if (method !== 'GET') {
-      fetchOptions.body = bodyPayload;
-    }
-    const timeoutMs = payload.webhookTimeoutMs ?? 5000;
-    if (timeoutMs > 0) {
-      fetchOptions.signal = AbortSignal.timeout(timeoutMs);
-    }
-    const req = fetch(filePath, fetchOptions).then(res => res.arrayBuffer()).then(() => {}).catch(() => {});
-    inFlightReqs.add(req);
-    req.finally(() => inFlightReqs.delete(req));
-    return req;
   };
+  const sendChunk = (data: Buffer) => dispatchWebhookChunk(filePath, payload, data, inFlightReqs);
 
   return new Writable({
-    write(chunk: Buffer, encoding: string, callback: (error?: Error | null) => void) {
+    write(chunk: Buffer, _encoding: string, callback: (error?: Error | null) => void) {
       buffer.push(chunk);
       if (!timer) {
         timer = setTimeout(() => {
@@ -120,21 +181,22 @@ export function createWebhookStream(filePath: string, payload: ExecPayload): Wri
     },
     final(callback) {
       const finish = () => {
+        clearFlushTimer();
         if (buffer.length > 0) {
           const data = Buffer.concat(buffer);
           buffer = [];
-          if (timer) clearTimeout(timer);
           sendChunk(data).finally(() => callback());
-        } else {
-          callback();
+          return;
         }
+        callback();
       };
-
-      if (inFlightReqs.size > 0) {
-        Promise.all(Array.from(inFlightReqs)).finally(finish);
-      } else {
-        finish();
-      }
-    }
+      if (inFlightReqs.size > 0) Promise.all(Array.from(inFlightReqs)).finally(finish);
+      else finish();
+    },
+    destroy(err, callback) {
+      clearFlushTimer();
+      buffer = [];
+      callback(err);
+    },
   });
 }

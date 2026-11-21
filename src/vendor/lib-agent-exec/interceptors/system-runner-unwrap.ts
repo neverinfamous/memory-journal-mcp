@@ -9,7 +9,8 @@ const DIRECT_SHELLS = ['pwsh', 'powershell', 'cmd', 'bash', 'sh', 'wsl'];
 
 export function healFragmentedQuoteArgs(ctx: ExecutionContext): void {
   const originalArgs = ctx.args;
-  ctx.args = healFragmentedQuotes(ctx.args);
+  const cwd = ctx.payload.cwd ?? ctx.cwd;
+  ctx.args = healFragmentedQuotes(ctx.args, cwd);
   const changed = ctx.args.length !== originalArgs.length || ctx.args.some((arg, idx) => arg !== originalArgs[idx]);
   if (!changed) return;
   if ('args' in ctx.payload && Array.isArray(ctx.payload.args)) {

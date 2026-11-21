@@ -3,7 +3,12 @@ import { tokenizeArgs } from '../command-utils.js';
 import { ExecutionContext } from './types.js';
 
 const BUNDLED_SHORT_FLAG = /^-[a-zA-Z0-9]+$/;
-const BUNDLED_LONG_FLAG = /^--[a-zA-Z0-9-]+(?:=.*)?$/;
+const BUNDLED_LONG_FLAG = /^--[a-zA-Z0-9-]+$/;
+const SEARCH_VALUE_FLAGS = new Set([
+  '-e', '--regexp', '-f', '--file', '-g', '--glob', '--iglob', '-t', '--type', '-T', '--type-not',
+  '-E', '--encoding', '-r', '--replace', '-A', '-B', '-C', '-m', '-M', '-j', '--ignore-file',
+  '--max-count', '--max-depth', '--max-columns', '--exclude', '--exclude-dir', '--include',
+]);
 
 function unpackBundledArg(arg: string): string[] | undefined {
   if (!arg.startsWith('-') || !arg.includes(' ')) return undefined;
@@ -17,13 +22,26 @@ function unpackBundledArg(arg: string): string[] | undefined {
 export function unbundleSearchCommandArgs(ctx: ExecutionContext): boolean {
   const unpackedArgs: string[] = [];
   let unbundledFlags = false;
-  for (const arg of ctx.args) {
+  let expectValue = false;
+  for (let i = 0; i < ctx.args.length; i++) {
+    const arg = ctx.args[i];
+    if (arg === undefined) continue;
+    if (arg === '--') {
+      unpackedArgs.push(...ctx.args.slice(i));
+      break;
+    }
+    if (expectValue) {
+      expectValue = false;
+      unpackedArgs.push(arg);
+      continue;
+    }
     const tokens = unpackBundledArg(arg);
     if (tokens !== undefined) {
       unpackedArgs.push(...tokens);
       unbundledFlags = true;
       continue;
     }
+    if (SEARCH_VALUE_FLAGS.has(arg)) expectValue = true;
     unpackedArgs.push(arg);
   }
   if (!unbundledFlags) return false;

@@ -1,7 +1,63 @@
 // @ts-nocheck
-import { match } from 'ts-pattern';
+import path from 'node:path';
 import { isPwsh, isCmd } from './command-utils.js';
 import type { ExecPayload } from './schema.js';
+
+export interface CodeScanState {
+  inSingle: boolean;
+  inDouble: boolean;
+  inBacktick: boolean;
+  inLineComment: boolean;
+  inBlockComment: boolean;
+}
+
+export function createCodeScanState(): CodeScanState {
+  return { inSingle: false, inDouble: false, inBacktick: false, inLineComment: false, inBlockComment: false };
+}
+
+// [INTENT]: Shared single-character string/comment scanner for eval/inline code rewriters so nested heuristics skip literals and comments.
+export function stepCodeScanState(code: string, i: number, state: CodeScanState): number | null {
+  const ch = code[i];
+  const next = code[i + 1];
+  if (state.inLineComment) {
+    if (ch === '\n') state.inLineComment = false;
+    return i;
+  }
+  if (state.inBlockComment) {
+    if (ch === '*' && next === '/') {
+      state.inBlockComment = false;
+      return i + 1;
+    }
+    return i;
+  }
+  if (state.inSingle) {
+    if (ch === '\\') return i + 1;
+    if (ch === "'") state.inSingle = false;
+    return i;
+  }
+  if (state.inDouble) {
+    if (ch === '\\') return i + 1;
+    if (ch === '"') state.inDouble = false;
+    return i;
+  }
+  if (state.inBacktick) {
+    if (ch === '\\') return i + 1;
+    if (ch === '`') state.inBacktick = false;
+    return i;
+  }
+  if (ch === '/' && next === '/') {
+    state.inLineComment = true;
+    return i + 1;
+  }
+  if (ch === '/' && next === '*') {
+    state.inBlockComment = true;
+    return i + 1;
+  }
+  if (ch === "'") { state.inSingle = true; return i; }
+  if (ch === '"') { state.inDouble = true; return i; }
+  if (ch === '`') { state.inBacktick = true; return i; }
+  return null;
+}
 
 export interface EvalExecutionTarget {
   effectiveInterpreter: string;
@@ -31,8 +87,11 @@ export function isShellCommandScript(code: string): boolean {
   const trimmed = code.trim();
   const lines = trimmed.split('\n').map(l => l.trim()).filter(l => l.length > 0 && !l.startsWith('//') && !l.startsWith('/*'));
   const shellCommands = /^(?:echo\s|cat\s|rm\s|mkdir\s|touch\s|cd\s|ls\s|dir\s|git\s|apt\s|apt-get\s|pnpm\s|npm\s|yarn\s|bun\s|node\s|python\s|python3\s|which\s|where\s|curl\s|wget\s|chmod\s|chown\s|source\s|export\s+[A-Za-z_][A-Za-z0-9_]*=)/;
-  const shellOperators = /(?:&&|\|\||\|(?!=)|>(?!=)|<(?!=))/;
-  return lines.some(line => shellCommands.test(line)) || shellOperators.test(code);
+  if (lines.some(line => shellCommands.test(line))) return true;
+  if (isJavaScriptOrTypeScriptCode(code) || isPythonCode(code) || isPowerShellCode(code)) return false;
+  if (/\b(?:type|interface|enum|class)\s+[A-Z]/.test(trimmed) || /=>/.test(trimmed)) return false;
+  const shellOperators = /(?:&&|\|\||(?<![|<>=!])\|(?![|=])|(?:^|\s)\d*>{1,2}\s+\S)/;
+  return lines.some(line => !line.startsWith('#') && shellOperators.test(line));
 }
 
 export function isPythonCode(code: string): boolean {
@@ -57,58 +116,16 @@ export function isPowerShellCode(code: string): boolean {
 
 export function hasTopLevelReturn(code: string): boolean {
   let depth = 0;
-  let inSingleQuote = false;
-  let inDoubleQuote = false;
-  let inBacktick = false;
-  let inLineComment = false;
-  let inBlockComment = false;
+  const scanState = createCodeScanState();
 
   for (let i = 0; i < code.length; i++) {
+    const nextScanIdx = stepCodeScanState(code, i, scanState);
+    if (nextScanIdx !== null) {
+      i = nextScanIdx;
+      continue;
+    }
+
     const char = code[i];
-    const nextChar = code[i + 1];
-
-    if (inLineComment) {
-      if (char === '\n') inLineComment = false;
-      continue;
-    }
-    if (inBlockComment) {
-      if (char === '*' && nextChar === '/') {
-        inBlockComment = false;
-        i++;
-      }
-      continue;
-    }
-    if (inSingleQuote) {
-      if (char === '\\') { i++; continue; }
-      if (char === "'") inSingleQuote = false;
-      continue;
-    }
-    if (inDoubleQuote) {
-      if (char === '\\') { i++; continue; }
-      if (char === '"') inDoubleQuote = false;
-      continue;
-    }
-    if (inBacktick) {
-      if (char === '\\') { i++; continue; }
-      if (char === '`') inBacktick = false;
-      continue;
-    }
-
-    if (char === '/' && nextChar === '/') {
-      inLineComment = true;
-      i++;
-      continue;
-    }
-    if (char === '/' && nextChar === '*') {
-      inBlockComment = true;
-      i++;
-      continue;
-    }
-
-    if (char === "'") { inSingleQuote = true; continue; }
-    if (char === '"') { inDoubleQuote = true; continue; }
-    if (char === '`') { inBacktick = true; continue; }
-
     if (char === '{') {
       depth++;
       continue;
@@ -118,14 +135,8 @@ export function hasTopLevelReturn(code: string): boolean {
       continue;
     }
 
-    // Check for return keyword at depth === 0
-    if (depth === 0 && (i === 0 || /[\s;]/.test(code[i - 1] ?? ''))) {
-      if (code.startsWith('return', i)) {
-        const afterReturn = code[i + 6] ?? '';
-        if (/[\s;({'"`]/.test(afterReturn)) {
-          return true;
-        }
-      }
+    if (depth === 0 && (i === 0 || /[\s;]/.test(code[i - 1] ?? '')) && code.startsWith('return', i)) {
+      if (/[\s;({'"`]/.test(code[i + 6] ?? '')) return true;
     }
   }
   return false;
@@ -243,94 +254,53 @@ function findMatchingSqlCloseParen(code: string, startIdx: number): number {
   return -1;
 }
 
+interface HealedSqlCall {
+  openParenIdx: number;
+  closeParenIdx: number;
+  sqlLiteral: string;
+}
+
+function tryHealSqlCallAt(code: string, dotIdx: number): HealedSqlCall | null {
+  const methodMatch = code.slice(dotIdx + 1).match(/^(exec|prepare)\s*\(/);
+  if (methodMatch === null || methodMatch[0] === undefined) return null;
+  const openParenIdx = dotIdx + methodMatch[0].length;
+  const afterOpen = code.slice(openParenIdx + 1);
+  const leadingMatch = afterOpen.match(/^\s*(?:\\\s*)?/);
+  const leadingOffset = leadingMatch?.[0]?.length ?? 0;
+  const candidateStart = afterOpen.slice(leadingOffset);
+  const firstChar = candidateStart[0];
+  if (firstChar === undefined || firstChar === "'" || firstChar === '"' || firstChar === '`') return null;
+  if (!UNQUOTED_SQL_START_REGEX.test(candidateStart)) return null;
+  const closeParenIdx = findMatchingSqlCloseParen(code, openParenIdx + 1);
+  if (closeParenIdx === -1) return null;
+  const rawBody = code.slice(openParenIdx + 1, closeParenIdx)
+    .replace(/^(\s*)\\/, '$1')
+    .replace(/\\(\s*)$/, '$1')
+    .replace(/`/g, '\\`')
+    .replace(/\$\{/g, '\\${');
+  return { openParenIdx, closeParenIdx, sqlLiteral: `\`${rawBody}\`` };
+}
+
 // [INTENT]: Restores backtick template literals around unquoted SQL statements inside .exec(...) and .prepare(...) when PowerShell double-quoting stripped the backticks.
 export function healStrippedSqlTemplateLiterals(code: string): string {
   let result = '';
   let lastCopied = 0;
   let healedCount = 0;
-  let inSingle = false;
-  let inDouble = false;
-  let inBacktick = false;
-  let inLineComment = false;
-  let inBlockComment = false;
+  const scanState = createCodeScanState();
 
   for (let i = 0; i < code.length; i++) {
-    const ch = code[i];
-    const next = code[i + 1];
-
-    if (inLineComment) {
-      if (ch === '\n') inLineComment = false;
+    const nextScanIdx = stepCodeScanState(code, i, scanState);
+    if (nextScanIdx !== null) {
+      i = nextScanIdx;
       continue;
     }
-    if (inBlockComment) {
-      if (ch === '*' && next === '/') {
-        inBlockComment = false;
-        i++;
-      }
-      continue;
-    }
-    if (inSingle) {
-      if (ch === '\\') { i++; continue; }
-      if (ch === "'") inSingle = false;
-      continue;
-    }
-    if (inDouble) {
-      if (ch === '\\') { i++; continue; }
-      if (ch === '"') inDouble = false;
-      continue;
-    }
-    if (inBacktick) {
-      if (ch === '\\') { i++; continue; }
-      if (ch === '`') inBacktick = false;
-      continue;
-    }
-
-    if (ch === '/' && next === '/') {
-      inLineComment = true;
-      i++;
-      continue;
-    }
-    if (ch === '/' && next === '*') {
-      inBlockComment = true;
-      i++;
-      continue;
-    }
-    if (ch === "'") { inSingle = true; continue; }
-    if (ch === '"') { inDouble = true; continue; }
-    if (ch === '`') { inBacktick = true; continue; }
-
-    if (ch === '.') {
-      const methodMatch = code.slice(i + 1).match(/^(exec|prepare)\s*\(/);
-      if (methodMatch !== null && methodMatch[0] !== undefined) {
-        const openParenIdx = i + methodMatch[0].length;
-        const afterOpen = code.slice(openParenIdx + 1);
-        const leadingTrimMatch = afterOpen.match(/^\s*(?:\\\s*)?/);
-        const leadingOffset = leadingTrimMatch !== null && leadingTrimMatch[0] !== undefined ? leadingTrimMatch[0].length : 0;
-        const candidateStart = afterOpen.slice(leadingOffset);
-        const firstSqlChar = candidateStart[0];
-
-        if (
-          firstSqlChar !== undefined &&
-          firstSqlChar !== "'" &&
-          firstSqlChar !== '"' &&
-          firstSqlChar !== '`' &&
-          UNQUOTED_SQL_START_REGEX.test(candidateStart)
-        ) {
-          const closeParenIdx = findMatchingSqlCloseParen(code, openParenIdx + 1);
-          if (closeParenIdx !== -1) {
-            let sqlBody = code.slice(openParenIdx + 1, closeParenIdx);
-            sqlBody = sqlBody.replace(/^(\s*)\\/, '$1').replace(/\\(\s*)$/, '$1');
-            sqlBody = sqlBody.replace(/`/g, '\\`').replace(/\$\{/g, '\\${');
-
-            result += code.slice(lastCopied, openParenIdx + 1) + '`' + sqlBody + '`';
-            lastCopied = closeParenIdx;
-            i = closeParenIdx - 1;
-            healedCount++;
-            continue;
-          }
-        }
-      }
-    }
+    if (code[i] !== '.') continue;
+    const healedCall = tryHealSqlCallAt(code, i);
+    if (healedCall === null) continue;
+    result += code.slice(lastCopied, healedCall.openParenIdx + 1) + healedCall.sqlLiteral;
+    lastCopied = healedCall.closeParenIdx;
+    i = healedCall.closeParenIdx - 1;
+    healedCount++;
   }
 
   if (healedCount === 0) return code;
@@ -338,6 +308,42 @@ export function healStrippedSqlTemplateLiterals(code: string): string {
   result += code.slice(lastCopied);
   console.error(`\n   🛠️ AUTONOMOUS HEALING: Detected unquoted SQL inside .exec()/.prepare() from PowerShell backtick stripping. Restoring template literals... (Frictionless Recovery)\x1b[0m`);
   return result;
+}
+
+const INTERPRETER_EXT_MAP: Readonly<Record<string, string>> = {
+  python: '.py',
+  python3: '.py',
+  py: '.py',
+  pwsh: '.ps1',
+  powershell: '.ps1',
+  ps1: '.ps1',
+  bash: '.sh',
+  sh: '.sh',
+  zsh: '.sh',
+  cmd: '.bat',
+  bat: '.bat',
+  node: '.js',
+  nodejs: '.js',
+  js: '.js',
+  javascript: '.js',
+  bun: '.ts',
+  tsx: '.ts',
+  ts: '.ts',
+  typescript: '.ts',
+};
+
+function mapInterpreterExtension(interp: string, fallback: string): string {
+  const base = path.basename(interp.trim().toLowerCase()).replace(/\.(?:exe|cmd|bat)$/i, '');
+  if (Object.hasOwn(INTERPRETER_EXT_MAP, base)) {
+    return INTERPRETER_EXT_MAP[base] ?? fallback;
+  }
+  if (base.includes('python')) return '.py';
+  if (base.includes('pwsh') || base.includes('powershell')) return '.ps1';
+  if (base.includes('bash') || base.includes('zsh') || base === 'sh') return '.sh';
+  if (base.includes('cmd') || base.includes('bat')) return '.bat';
+  if (base.includes('node')) return '.js';
+  if (base.includes('bun') || base.includes('ts')) return '.ts';
+  return fallback;
 }
 
 export function resolveEvalExecutionTarget(
@@ -375,18 +381,10 @@ export function resolveEvalExecutionTarget(
     }
   }
 
-  let ext = p.target === 'wsl2' ? '.sh' : '.ts';
-  if (effectiveInterpreter !== undefined) {
-    const interp = effectiveInterpreter.toLowerCase();
-    ext = match(interp)
-      .when(i => i.includes('python') || i === 'py', () => '.py')
-      .when(i => i.includes('pwsh') || i.includes('powershell') || i === 'ps1', () => '.ps1')
-      .when(i => i.includes('bash') || i.includes('sh') || i.includes('zsh'), () => '.sh')
-      .when(i => i.includes('cmd') || i.includes('bat'), () => '.bat')
-      .when(i => i.includes('node') || i === 'js' || i === 'javascript', () => '.js')
-      .when(i => i.includes('bun') || i === 'ts' || i === 'typescript', () => '.ts')
-      .otherwise(() => ext);
-  }
+  const defaultExt = p.target === 'wsl2' ? '.sh' : '.ts';
+  const ext = effectiveInterpreter !== undefined
+    ? mapInterpreterExtension(effectiveInterpreter, defaultExt)
+    : defaultExt;
 
   const finalInterpreter = effectiveInterpreter ?? (p.target === 'wsl2' ? 'bash' : 'bun');
   p.interpreter = finalInterpreter;

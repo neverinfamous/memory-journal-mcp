@@ -6,11 +6,13 @@ import type { ExecutionContext } from './types.js';
 
 export function handleListArm(ctx: ExecutionContext, cmd: string, cmdBasename: string): void {
   if (isWrapperShell(cmd)) return;
-  emitInterceptBanner(`\n   💡 AGENT INTERCEPT: '${cmdBasename}' directory listing command detected. Switching execution target to WSL2... (Frictionless Recovery)`);
-  ctx.payload.target = 'wsl2';
+  if (process.platform === 'win32' && ctx.payload.target !== 'wsl2') {
+    emitInterceptBanner(`\n   💡 AGENT INTERCEPT: '${cmdBasename}' directory listing command detected. Switching execution target to WSL2... (Frictionless Recovery)`);
+    ctx.payload.target = 'wsl2';
+  }
   retargetListInterpreter(ctx);
   if (rewriteListFilterToFind(ctx)) return;
-  if (rewriteRecursiveListToFind(ctx)) return;
+  if (rewriteRecursiveListToFind(ctx, cmdBasename)) return;
   renameDirToLs(ctx, cmdBasename);
   ctx.args = cleanWindowsListArgs(ctx.args);
 }
@@ -36,12 +38,16 @@ function rewriteListFilterToFind(ctx: ExecutionContext): boolean {
   return true;
 }
 
-function rewriteRecursiveListToFind(ctx: ExecutionContext): boolean {
+function rewriteRecursiveListToFind(ctx: ExecutionContext, cmdBasename: string): boolean {
   if (!hasRecurseFlag(ctx.args)) return false;
   const patternArg = ctx.args.filter(arg => !arg.startsWith('-') && !arg.startsWith('/'))[0];
   if (patternArg === undefined) return false;
   const located = splitPatternPath(patternArg);
   if (located.pattern.length === 0 || located.pattern === '.' || located.pattern === '..') return false;
+  const isGlobPattern = /[*?[\]]/.test(located.pattern);
+  const isWindowsDirFilePattern = ['dir', 'get-childitem', 'gci'].includes(cmdBasename.toLowerCase())
+    && /\.[a-zA-Z0-9_-]+$/.test(located.pattern);
+  if (!isGlobPattern && !isWindowsDirFilePattern) return false;
   applyFindRewrite(ctx, located.targetPath, located.pattern, false);
   return true;
 }

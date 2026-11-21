@@ -133,6 +133,16 @@ function buildFindPruneClause(dirsToPrune: string[]): string[] {
   return ['(', ...pruneConditions, ')', '-prune', '-o'];
 }
 
+function hasTopLevelOr(args: readonly string[]): boolean {
+  let depth = 0;
+  for (const a of args) {
+    if (a === '(' || a === '\\(') depth++;
+    else if (a === ')' || a === '\\)') depth = Math.max(0, depth - 1);
+    else if (depth === 0 && (a === '-o' || a === '-or')) return true;
+  }
+  return false;
+}
+
 function applyBroadFindPrune(
   ctx: ExecutionContext,
   effectivePaths: string[],
@@ -142,7 +152,8 @@ function applyBroadFindPrune(
   if (!isBroadFindSearch(effectivePaths) || dirsToPrune.length === 0) return;
   console.error(`\n   🛠️ AUTONOMOUS HEALING: Recursive find on mounted filesystem detected. Auto-injecting directory pruning for node_modules, .git, and cache dirs to prevent timeouts... (Frictionless Recovery)\x1b[0m`);
   const hasAction = restOfArgs.some((arg) => FIND_ACTIONS.includes(arg));
-  const finalRest = hasAction ? restOfArgs : (restOfArgs.length === 0 ? ['-print'] : [...restOfArgs, '-print']);
+  const groupedOr = restOfArgs.length > 0 && hasTopLevelOr(restOfArgs) ? ['(', ...restOfArgs, ')'] : restOfArgs;
+  const finalRest = hasAction ? groupedOr : (groupedOr.length === 0 ? ['-print'] : [...groupedOr, '-print']);
   ctx.args = [...effectivePaths, ...buildFindPruneClause(dirsToPrune), ...finalRest];
   if (ctx.payload.timeoutMs === undefined || ctx.payload.timeoutMs <= 30000) ctx.payload.timeoutMs = 60000;
 }

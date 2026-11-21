@@ -111,11 +111,30 @@ export function healRegexPattern(pattern: string): string {
   }
 }
 
+export function hasBalancedWrappingQuotes(value: string, quoteChar: '"' | "'"): boolean {
+  if (value.length < 2 || !value.startsWith(quoteChar) || !value.endsWith(quoteChar)) return false;
+  const inner = value.slice(1, -1);
+  let escaped = false;
+  for (let i = 0; i < inner.length; i++) {
+    const ch = inner[i];
+    if (escaped) {
+      escaped = false;
+      continue;
+    }
+    if (ch === '\\') {
+      escaped = true;
+      continue;
+    }
+    if (ch === quoteChar) return false;
+  }
+  return !escaped;
+}
+
 function stripWrappingQuotes(regexArg: string): string {
-  if (regexArg.startsWith('"') && regexArg.endsWith('"') && regexArg.length >= 2) {
+  if (hasBalancedWrappingQuotes(regexArg, '"')) {
     return regexArg.slice(1, -1);
   }
-  if (regexArg.startsWith("'") && regexArg.endsWith("'") && regexArg.length >= 2) {
+  if (hasBalancedWrappingQuotes(regexArg, "'")) {
     return regexArg.slice(1, -1);
   }
   return regexArg;

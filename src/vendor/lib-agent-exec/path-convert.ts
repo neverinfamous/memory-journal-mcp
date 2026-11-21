@@ -8,9 +8,10 @@ export function formatForCmdExe(args: string[]): string[] {
   const commandLine = originalCmdAndArgs.map(arg => {
     let crtArg = arg;
     if (/[ \t\n\v"]/.test(arg) || arg.length === 0) {
-      // CRT argv quoting doubles backslashes only when they precede a quote.
+      // CRT argv quoting doubles backslashes only when they precede a quote (including the closing quote).
       crtArg = arg.replace(/(\\+)(")/g, '$1$1$2'); // codeql[js/incomplete-sanitization]
       crtArg = crtArg.replace(/"/g, '\\"');
+      crtArg = crtArg.replace(/(\\+)$/, '$1$1');
       crtArg = `"${crtArg}"`;
     }
     let cmdArg = '';

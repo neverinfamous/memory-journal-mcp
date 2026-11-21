@@ -17,19 +17,19 @@ const FORCE_KILL_DELAY_MS = 2000;
 function isErrnoException(e: Error): e is NodeJS.ErrnoException {
   return 'code' in e || 'syscall' in e;
 }
-import { analyzeExitCode1 } from './exit-code-policy.js';
+import { analyzeExitCode1, isGracefulExitAnalysis, type ExitCodeAnalysis } from './exit-code-policy.js';
 export { analyzeExitCode1 };
 
-
 export class ProcessController {
-  private child!: ChildProcess;
-  private ioController!: IOController;
-  
+  private child?: ChildProcess;
+  private ioController?: IOController;
+
   private isFinished = false;
   private timedOut = false;
   private hasRetriedWsl = false;
   private timeoutTimer: NodeJS.Timeout | null = null;
   private forceKillTimer: NodeJS.Timeout | null = null;
+  private daemonCheckInterval: NodeJS.Timeout | null = null;
   private cleanupProcessHandlers: (() => void)[] = [];
 
   constructor(
@@ -63,11 +63,11 @@ export class ProcessController {
 
   private spawnChild() {
     const isCmd = path.basename(this.cmd).toLowerCase() === 'cmd.exe' || path.basename(this.cmd).toLowerCase() === 'cmd';
-    this.child = spawn(this.cmd, this.args, { 
-      cwd: this.cwd, 
-      env: this.env, 
-      stdio: ['pipe', 'pipe', 'pipe'], 
-      shell: false, 
+    this.child = spawn(this.cmd, this.args, {
+      cwd: this.cwd,
+      env: this.env,
+      stdio: ['pipe', 'pipe', 'pipe'],
+      shell: false,
       detached: process.platform !== 'win32',
       windowsHide: true,
       windowsVerbatimArguments: isCmd
@@ -75,9 +75,11 @@ export class ProcessController {
   }
 
   private setupIOController() {
+    const child = this.child;
+    if (child === undefined) return;
     this.ioController = new IOController(
-      this.child, 
-      this.payload, 
+      child,
+      this.payload,
       this.cwd,
       (reason) => this.handleStall(reason),
       (reason) => this.handleMaxBuffer(reason),
@@ -92,123 +94,159 @@ export class ProcessController {
     }
   }
 
-  private handleStall(reason: string) { console.error(`\n❌ ${reason} Forcing termination...`);
-    this.ioController.destroyStreams();
-    killProcessTree(this.child);
+  private clearActiveTimersAndHandlers() {
+    for (const cleanup of this.cleanupProcessHandlers) {
+      cleanup();
+    }
+    this.cleanupProcessHandlers = [];
+    if (this.timeoutTimer) { clearTimeout(this.timeoutTimer); this.timeoutTimer = null; }
+    if (this.forceKillTimer) { clearTimeout(this.forceKillTimer); this.forceKillTimer = null; }
+    if (this.daemonCheckInterval) { clearInterval(this.daemonCheckInterval); this.daemonCheckInterval = null; }
+  }
+
+  private handleStall(reason: string) {
+    console.error(`\n❌ ${reason} Forcing termination...`);
+    this.ioController?.destroyStreams();
+    if (this.child) killProcessTree(this.child);
     this.handleFinish(1, null, false);
   }
 
-  private handleMaxBuffer(reason: string) { if (!this.isJson) console.error(`\n❌ ${reason}`);
-    this.ioController.destroyStreams();
-    killProcessTree(this.child);
+  private handleMaxBuffer(reason: string) {
+    if (!this.isJson) console.error(`\n❌ ${reason}`);
+    this.ioController?.destroyStreams();
+    if (this.child) killProcessTree(this.child);
     this.handleFinish(1, null, false);
   }
 
   private setupEventHandlers() {
+    const child = this.child;
+    if (child === undefined) return;
+
     const onExit = () => {
       this.cleanupTempScript();
-      if (!this.isFinished) killProcessTree(this.child);
+      if (!this.isFinished && this.child) killProcessTree(this.child);
     };
     process.on('exit', onExit);
     this.cleanupProcessHandlers.push(() => process.off('exit', onExit));
 
-    const onUncaughtException = (err: Error) => { if (!this.isJson) console.error(`❌ Uncaught Exception in agent-exec:`, err);
+    const crashShutdown = (label: string, err: unknown) => {
+      if (!this.isJson) console.error(`❌ ${label}:`, err);
       this.cleanupTempScript();
-      this.ioController.closeFileStreams().then(() => {
-        killProcessTree(this.child);
+      const finish = () => {
+        if (this.child) killProcessTree(this.child);
         process.exit(1);
-      });
+      };
+      if (this.ioController) this.ioController.closeFileStreams().then(finish);
+      else finish();
     };
-    process.on('uncaughtException', onUncaughtException);
-    this.cleanupProcessHandlers.push(() => process.off('uncaughtException', onUncaughtException));
+    const onUncaught = (err: Error) => crashShutdown('Uncaught Exception in agent-exec', err);
+    const onUnhandled = (reason: unknown) => crashShutdown('Unhandled Rejection in agent-exec', reason);
+    process.on('uncaughtException', onUncaught);
+    process.on('unhandledRejection', onUnhandled);
+    this.cleanupProcessHandlers.push(
+      () => process.off('uncaughtException', onUncaught),
+      () => process.off('unhandledRejection', onUnhandled),
+    );
 
-    const onUnhandledRejection = (reason: unknown) => { if (!this.isJson) console.error(`❌ Unhandled Rejection in agent-exec:`, reason);
-      this.cleanupTempScript();
-      this.ioController.closeFileStreams().then(() => {
-        killProcessTree(this.child);
-        process.exit(1);
-      });
-    };
-    process.on('unhandledRejection', onUnhandledRejection);
-    this.cleanupProcessHandlers.push(() => process.off('unhandledRejection', onUnhandledRejection));
-
-    const handleSignal = (signal: NodeJS.Signals) => { if (!this.isJson) console.error(`\n⚠️ Received ${signal}, terminating process tree...`);
-      killProcessTree(this.child);
-      this.ioController.destroyStreams();
+    const handleSignal = (signal: NodeJS.Signals) => {
+      if (!this.isJson) console.error(`\n⚠️ Received ${signal}, terminating process tree...`);
+      if (this.child) killProcessTree(this.child);
+      this.ioController?.destroyStreams();
       this.handleFinish(null, signal, false);
     };
+    const onSigint = () => handleSignal('SIGINT');
+    const onSigterm = () => handleSignal('SIGTERM');
+    process.on('SIGINT', onSigint);
+    process.on('SIGTERM', onSigterm);
+    this.cleanupProcessHandlers.push(
+      () => process.off('SIGINT', onSigint),
+      () => process.off('SIGTERM', onSigterm),
+    );
 
-    const onSigInt = () => handleSignal('SIGINT');
-    process.on('SIGINT', onSigInt);
-    this.cleanupProcessHandlers.push(() => process.off('SIGINT', onSigInt));
-
-    const onSigTerm = () => handleSignal('SIGTERM');
-    process.on('SIGTERM', onSigTerm);
-    this.cleanupProcessHandlers.push(() => process.off('SIGTERM', onSigTerm));
-
-    this.child.on('exit', (code, signal) => this.onChildExit(code, signal));
-    this.child.on('close', (code, signal) => this.handleFinish(code, signal, false));
-    this.child.on('error', (error) => this.onChildError(error));
+    child.on('exit', (code, signal) => this.onChildExit(code, signal));
+    child.on('close', (code, signal) => this.handleFinish(code, signal, false));
+    child.on('error', (error) => this.onChildError(error));
   }
 
-  // [INTENT]: Resolves zombie processes where the main shell exits but leaves a background daemon holding stdout/stderr open. 
-  // [SIDE-EFFECT]: Forcibly destroys IO streams and kills the process tree if stalls exceed DAEMON_EXIT_STALL_MS. 
+  // [INTENT]: Resolves zombie processes where the main shell exits but leaves a background daemon holding stdout/stderr open.
+  // [SIDE-EFFECT]: Forcibly destroys IO streams and kills the process tree if stalls exceed DAEMON_EXIT_STALL_MS.
   // [AGENT-HINT]: Do NOT decrease this timeout, or you will prematurely kill valid background compilation tasks.
   private onChildExit(code: number | null, signal: NodeJS.Signals | null) {
-    // IOController already tracks stream activity; read its last-seen timestamp
-    // rather than attaching new data listeners after the process has already exited.
+    if (this.daemonCheckInterval) {
+      clearInterval(this.daemonCheckInterval);
+      this.daemonCheckInterval = null;
+    }
     const exitTime = Date.now();
-    const checkStreams = setInterval(() => {
+    this.daemonCheckInterval = setInterval(() => {
       if (this.isFinished) {
-        clearInterval(checkStreams);
+        if (this.daemonCheckInterval) { clearInterval(this.daemonCheckInterval); this.daemonCheckInterval = null; }
         return;
       }
       const lastDataTime = this.ioController?.lastDataTime ?? exitTime;
       const timeSinceData = Date.now() - lastDataTime;
       const timeSinceExit = Date.now() - exitTime;
 
-      if (timeSinceData > DAEMON_DATA_STALL_MS || timeSinceExit > DAEMON_EXIT_STALL_MS) {
-        if (timeSinceData <= DAEMON_DATA_STALL_MS) { if (!this.isJson) console.error(`\n⚠️ Main process exited, but stdio streams are still actively receiving data from a daemon. Forcing severing of streams...`);
-        } else { if (!this.isJson) console.error(`\n⚠️ Main process exited, but stdio streams remain open and idle (daemon detected). Severing streams to allow exit...`);
-        }
-        this.ioController.destroyStreams();
-        if (code !== 0) { if (!this.isJson) console.error(`\n❌ Process exited with error code ${code}, but left daemons running. Killing process tree...`);
-           killProcessTree(this.child);
-        }
-        this.handleFinish(code, signal, true);
-        clearInterval(checkStreams);
+      if (timeSinceData <= DAEMON_DATA_STALL_MS && timeSinceExit <= DAEMON_EXIT_STALL_MS) return;
+
+      if (!this.isJson) {
+        const msg = timeSinceData <= DAEMON_DATA_STALL_MS
+          ? '\n⚠️ Main process exited, but stdio streams are still actively receiving data from a daemon. Forcing severing of streams...'
+          : '\n⚠️ Main process exited, but stdio streams remain open and idle (daemon detected). Severing streams to allow exit...';
+        console.error(msg);
       }
+      this.ioController?.destroyStreams();
+      if (code !== 0) {
+        if (!this.isJson) console.error(`\n❌ Process exited with error code ${code}, but left daemons running. Killing process tree...`);
+        if (this.child) killProcessTree(this.child);
+      }
+      this.handleFinish(code, signal, true);
     }, STREAM_DAEMON_CHECK_MS);
-    checkStreams.unref();
+    this.daemonCheckInterval.unref();
+  }
+
+  private printSpawnHints(errCode: string | undefined, errSyscall: string | undefined) {
+    if (this.isJson || (errCode !== 'ENOENT' && errCode !== 'EUNKNOWN' && errSyscall !== 'uv_spawn')) return;
+    console.error(`   Executable '${this.cmd}' was not found in PATH or working directory.`);
+    if (process.platform === 'win32') {
+      if (BUILT_INS.includes(this.cmd.toLowerCase())) {
+        console.error(`\n   💡 AGENT HINT: '${this.cmd}' is a shell built-in, not an executable file. It should be routed through a system shell.\n${AUTONOMOUS_HEALING_MSG}`);
+      }
+      if (this.cmd === 'npm' || this.cmd === 'npx' || this.cmd === 'tsc') {
+        console.error(`\n   💡 AGENT HINT: On Windows, '${this.cmd}' is usually a .cmd or .ps1 script, not an .exe.\n${AUTONOMOUS_HEALING_MSG}`);
+        console.error(`   You may need to specify the extension (e.g. '${this.cmd}.cmd') or run it via 'pwsh.exe'.`);
+      }
+      if (this.cwd && this.cwd.length >= 260) {
+        console.error(`\n   💡 AGENT HINT: Your working directory path exceeds the Windows MAX_PATH limit (260 characters).\n${AUTONOMOUS_HEALING_MSG}`);
+        console.error(`   This causes libuv to fail to spawn the process with an ENOENT error.`);
+      }
+    }
+    if (this.cmd.includes('-') && /^[A-Z][a-z]+-[A-Z][a-zA-Z]+$/.test(this.cmd)) {
+      console.error(`\n   💡 AGENT HINT: '${this.cmd}' appears to be a PowerShell cmdlet (e.g. Get-Item, Write-Host).\n${AUTONOMOUS_HEALING_MSG}`);
+      console.error(`   You cannot execute cmdlets directly as files. Please wrap them using: {"command": "pwsh", "args": ["-c", "${this.cmd}"]}`);
+    } else if (/\.(?:sh|ps1|bat|cmd)$/i.test(this.cmd)) {
+      console.error(`\n   💡 AGENT HINT: You attempted to run a script file ('${this.cmd}') as a direct command.\n${AUTONOMOUS_HEALING_MSG}`);
+      console.error(`   Please use the {"type": "script", "scriptPath": "${this.cmd}"} payload type instead.`);
+    } else if (this.cmd.includes(' ')) {
+      const parts = this.cmd.split(' ');
+      const errArgs = parts.slice(1).map((s: string) => `"${s}"`).join(', ');
+      console.error(`\n   💡 AGENT HINT: Your command contains spaces. Because shell: false is used,\n${AUTONOMOUS_HEALING_MSG}`);
+      console.error(`   you MUST pass arguments in the 'args' array, not in the 'command' string.`);
+      console.error(`   ❌ BAD: {"command": "${this.cmd}"}`);
+      console.error(`   ✅ GOOD: {"command": "${parts[0]}", "args": [${errArgs}]}`);
+    }
   }
 
   private onChildError(error: unknown) {
     this.isFinished = true;
-    if (this.timeoutTimer) clearTimeout(this.timeoutTimer);
-    if (this.forceKillTimer) clearTimeout(this.forceKillTimer);
+    this.clearActiveTimersAndHandlers();
     this.cleanupTempScript();
 
     const handleError = () => {
       const msg = error instanceof Error ? error.message : String(error);
       const errCode = error instanceof Error && isErrnoException(error) && error.code ? String(error.code) : undefined;
-      const errSyscall = error instanceof Error && isErrnoException(error) && error.syscall ? String(error.syscall) : undefined; if (!this.isJson) console.error(`❌ Execution Error: ${msg}`);
-      if (errCode === 'ENOENT' || errCode === 'EUNKNOWN' || errSyscall === 'uv_spawn') { if (!this.isJson) console.error(`   Executable '${this.cmd}' was not found in PATH or working directory.`);
-         if (process.platform === 'win32') {
-             if (BUILT_INS.includes(this.cmd.toLowerCase())) { if (!this.isJson) console.error(`\n   💡 AGENT HINT: '${this.cmd}' is a shell built-in, not an executable file. It should be routed through a system shell.\n${AUTONOMOUS_HEALING_MSG}`);
-             }
-             if (this.cmd === 'npm' || this.cmd === 'npx' || this.cmd === 'tsc') { if (!this.isJson) console.error(`\n   💡 AGENT HINT: On Windows, '${this.cmd}' is usually a .cmd or .ps1 script, not an .exe.\n${AUTONOMOUS_HEALING_MSG}`); if (!this.isJson) console.error(`   You may need to specify the extension (e.g. '${this.cmd}.cmd') or run it via 'pwsh.exe'.`);
-             }
-         }
-         if (process.platform === 'win32' && this.cwd && this.cwd.length >= 260) { if (!this.isJson) console.error(`\n   💡 AGENT HINT: Your working directory path exceeds the Windows MAX_PATH limit (260 characters).\n${AUTONOMOUS_HEALING_MSG}`); if (!this.isJson) console.error(`   This causes libuv to fail to spawn the process with an ENOENT error.`);
-         }
-         if (this.cmd.includes('-') && /^[A-Z][a-z]+-[A-Z][a-zA-Z]+$/.test(this.cmd)) { if (!this.isJson) console.error(`\n   💡 AGENT HINT: '${this.cmd}' appears to be a PowerShell cmdlet (e.g. Get-Item, Write-Host).\n${AUTONOMOUS_HEALING_MSG}`); if (!this.isJson) console.error(`   You cannot execute cmdlets directly as files. Please wrap them using: {"command": "pwsh", "args": ["-c", "${this.cmd}"]}`);
-         } else if (this.cmd.toLowerCase().endsWith('.sh') || this.cmd.toLowerCase().endsWith('.ps1') || this.cmd.toLowerCase().endsWith('.bat') || this.cmd.toLowerCase().endsWith('.cmd')) { if (!this.isJson) console.error(`\n   💡 AGENT HINT: You attempted to run a script file ('${this.cmd}') as a direct command.\n${AUTONOMOUS_HEALING_MSG}`); if (!this.isJson) console.error(`   Please use the {"type": "script", "scriptPath": "${this.cmd}"} payload type instead.`);
-         } else if (this.cmd.includes(' ')) {
-           const parts = this.cmd.split(' ');
-           const rootCmd = parts[0];
-           const errArgs = parts.slice(1).map((s: string) => `"${s}"`).join(', '); if (!this.isJson) console.error(`\n   💡 AGENT HINT: Your command contains spaces. Because shell: false is used,\n${AUTONOMOUS_HEALING_MSG}`); if (!this.isJson) console.error(`   you MUST pass arguments in the 'args' array, not in the 'command' string.`); if (!this.isJson) console.error(`   ❌ BAD: {"command": "${this.cmd}"}`); if (!this.isJson) console.error(`   ✅ GOOD: {"command": "${rootCmd}", "args": [${errArgs}]}`);
-         }
-      }
+      const errSyscall = error instanceof Error && isErrnoException(error) && error.syscall ? String(error.syscall) : undefined;
+      if (!this.isJson) console.error(`❌ Execution Error: ${msg}`);
+      this.printSpawnHints(errCode, errSyscall);
       this.isFinished = false;
       this.handleFinish(1, null, false);
     };
@@ -222,202 +260,182 @@ export class ProcessController {
 
   private setupTimeouts() {
     const timeoutMs = this.payload.timeoutMs ?? DEFAULT_TIMEOUT_MS;
-    if (timeoutMs > 0) {
-      this.timeoutTimer = setTimeout(() => { 
-        this.timedOut = true;
-        console.error(`\n❌ Execution timed out after ${timeoutMs}ms. Attempting graceful shutdown...`);
-        console.error(`   💡 AGENT HINT: If you intended to start a long-running process (like a dev server), you must send it to the background by configuring your tool payload (e.g., using 'WaitMsBeforeAsync') AND set 'timeoutMs' to a large value (e.g. 86400000) in the JSON payload.`);
-        try {
-          if (this.child.pid) {
-            if (process.platform === 'win32') {
-              killProcessTree(this.child);
-            } else {
-              process.kill(-this.child.pid, 'SIGTERM');
-            }
-          }
-        } catch { /* ignore */ }
-        
-        this.forceKillTimer = setTimeout(() => {
-          if (!this.isFinished) { if (!this.isJson) console.error(`${this.timedOut ? 'ℹ️' : '❌'} Process did not exit gracefully. Force killing process tree...`);
-             killProcessTree(this.child);
-             this.ioController.destroyStreams();
-             this.handleFinish(null, 'SIGKILL', false);
-             setTimeout(() => { if (!this.isJson) console.error(`${this.timedOut ? 'ℹ️' : '❌'} Ultimate fallback: Process exit forced.`);
-               process.exit(1);
-             }, TIMEOUT_EXIT_FORCE_MS).unref();
-          }
-        }, FORCE_KILL_DELAY_MS);
-      }, timeoutMs);
-    }
+    if (timeoutMs <= 0) return;
+
+    this.timeoutTimer = setTimeout(() => {
+      this.timedOut = true;
+      console.error(`\n❌ Execution timed out after ${timeoutMs}ms. Attempting graceful shutdown...`);
+      console.error(`   💡 AGENT HINT: If you intended to start a long-running process (like a dev server), you must send it to the background by configuring your tool payload (e.g., using 'WaitMsBeforeAsync') AND set 'timeoutMs' to a large value (e.g. 86400000) in the JSON payload.`);
+      try {
+        if (this.child?.pid) {
+          if (process.platform === 'win32') killProcessTree(this.child);
+          else process.kill(-this.child.pid, 'SIGTERM');
+        }
+      } catch { /* ignore */ }
+
+      this.forceKillTimer = setTimeout(() => {
+        if (this.isFinished) return;
+        if (!this.isJson) console.error(`${this.timedOut ? 'ℹ️' : '❌'} Process did not exit gracefully. Force killing process tree...`);
+        if (this.child) killProcessTree(this.child);
+        this.ioController?.destroyStreams();
+        this.handleFinish(null, 'SIGKILL', false);
+        setTimeout(() => {
+          if (!this.isJson) console.error(`${this.timedOut ? 'ℹ️' : '❌'} Ultimate fallback: Process exit forced.`);
+          process.exit(1);
+        }, TIMEOUT_EXIT_FORCE_MS).unref();
+      }, FORCE_KILL_DELAY_MS);
+    }, timeoutMs);
   }
 
-  private handleFinish(code: number | null, signal: NodeJS.Signals | null, isDaemon: boolean) {
-    if (this.isFinished) return;
-    this.isFinished = true;
-
-    for (const cleanup of this.cleanupProcessHandlers) {
-      cleanup();
+  private retryWslLaunch() {
+    this.hasRetriedWsl = true;
+    const ioCtrl = this.ioController;
+    if (ioCtrl) {
+      ioCtrl.flushAll();
+      ioCtrl.destroyStreams();
     }
-    this.cleanupProcessHandlers = [];
+    console.error(`\n   💡 AGENT HINT: 'wsl.exe' exited with code 255 (transient WSL VM startup/pipe issue).`);
+    console.error(`\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Automatically retrying command in WSL2 after 500ms... (Frictionless Recovery)\x1b[0m`);
 
-    if (this.timeoutTimer) clearTimeout(this.timeoutTimer);
-    if (this.forceKillTimer) clearTimeout(this.forceKillTimer);
-
-    if (code === 255 && path.basename(this.cmd).toLowerCase() === 'wsl.exe' && !this.hasRetriedWsl && !signal) {
-      this.hasRetriedWsl = true;
+    const scheduleRetry = () => {
       this.isFinished = false;
-      if (this.ioController) {
-        this.ioController.flushAll();
-        this.ioController.destroyStreams();
-      }
-      console.error(`\n   💡 AGENT HINT: 'wsl.exe' exited with code 255 (transient WSL VM startup/pipe issue).`);
-      console.error(`\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Automatically retrying command in WSL2 after 500ms... (Frictionless Recovery)\x1b[0m`);
       setTimeout(() => {
         try {
           this.spawnChild();
           this.setupIOController();
           this.setupEventHandlers();
           this.setupTimeouts();
-        } catch {
+        } catch (retryErr: unknown) {
+          if (!this.isJson) console.error('❌ WSL retry spawn failed:', retryErr);
           this.handleFinish(1, null, false);
         }
       }, 500);
+    };
+
+    if (ioCtrl) {
+      ioCtrl.closeFileStreams().then(scheduleRetry, scheduleRetry);
+    } else {
+      scheduleRetry();
+    }
+  }
+
+  private computeFinalCode(code: number | null, signal: NodeJS.Signals | null, envData: Record<string, unknown> | null): number | null {
+    if (envData === null) return code;
+    const status = envData.status;
+    const exitCode = envData.exit_code;
+    if (status === 'error' || (typeof exitCode === 'number' && exitCode !== 0)) {
+      return typeof exitCode === 'number' ? exitCode : 1;
+    }
+    if (status === 'success' && !this.timedOut && signal === null) {
+      return 0;
+    }
+    return code;
+  }
+
+  private async dispatchWebhook(
+    target: string | string[] | undefined,
+    finalCode: number | null,
+    signal: NodeJS.Signals | null,
+    success: boolean,
+    envData: Record<string, unknown> | null,
+  ): Promise<void> {
+    if (!target) return;
+    await sendWebhook(this.payload, target, {
+      stdout: this.ioController?.stdoutTail || '',
+      stderr: this.ioController?.stderrTail || '',
+      code: finalCode,
+      signal,
+      success,
+      envData,
+    });
+  }
+
+  private logGracefulReason(code: number, analysis: ExitCodeAnalysis): void {
+    if (this.isJson) return;
+    if (analysis.isGrepNoMatch) console.error(`\nℹ️  No matches found (exit code ${code}).`);
+    else if (analysis.isDiffFound) console.error(`\nℹ️  Differences found (exit code ${code}).`);
+    else if (analysis.isOutdatedInfo) console.error(`\nℹ️  Outdated packages found (exit code ${code}).`);
+  }
+
+  private async finishJsonMode(computedCode: number | null, signal: NodeJS.Signals | null, envData: Record<string, unknown> | null): Promise<never> {
+    const analysis = (computedCode !== null && computedCode !== 0)
+      ? analyzeExitCode1(this.payload, computedCode, this.ioController?.stdoutTail || '', this.ioController?.stderrTail || '')
+      : null;
+    const finalCode = analysis !== null && isGracefulExitAnalysis(analysis) ? 0 : computedCode;
+
+    if (finalCode !== 0) {
+      await this.dispatchWebhook(this.payload.onFailure, finalCode, signal, false, envData);
+    } else {
+      await this.dispatchWebhook(this.payload.onSuccess, finalCode, signal, true, envData);
+    }
+    console.log(JSON.stringify({
+      status: finalCode === 0 ? 'success' : 'error',
+      code: finalCode,
+      signal,
+      stdout: this.ioController?.stdoutTail || '',
+      stderr: this.ioController?.stderrTail || '',
+      envData,
+    }));
+    process.exit(finalCode === 0 ? 0 : (finalCode ?? 1));
+  }
+
+  private async finishTextMode(code: number | null, signal: NodeJS.Signals | null, envData: Record<string, unknown> | null, isDaemon: boolean): Promise<never> {
+    if (code === 0) {
+      if (!this.isJson) console.error(`\n✅ Command succeeded${isDaemon ? ' (background process detached)' : ''}.`);
+      await this.dispatchWebhook(this.payload.onSuccess, 0, signal, true, envData);
+      process.exit(0);
+    }
+
+    if (code === null) {
+      await this.dispatchWebhook(this.payload.onFailure, code, signal, false, envData);
+      if (signal && !this.isJson) console.error(`\n${this.timedOut ? 'ℹ️' : '❌'} Command was terminated by signal ${signal}`);
+      process.exit(1);
+    }
+
+    const analysis = analyzeExitCode1(this.payload, code, this.ioController?.stdoutTail || '', this.ioController?.stderrTail || '');
+    if (isGracefulExitAnalysis(analysis)) {
+      this.logGracefulReason(code, analysis);
+      await this.dispatchWebhook(this.payload.onSuccess, 0, signal, true, envData);
+      process.exit(0);
+    }
+
+    await this.dispatchWebhook(this.payload.onFailure, code, signal, false, envData);
+    const suppressRedundantExit = this.payload.type === 'command' && typeof this.payload.command === 'string' &&
+      ['pnpm', 'npm', 'bun', 'yarn', 'node'].includes(this.payload.command);
+    setLastStderrTail(this.ioController?.stderrTail || '');
+    if (!this.isJson && !suppressRedundantExit) console.error(`\n❌ Command exited with code ${code}`);
+    if (process.platform === 'win32' && BUILT_INS.includes(this.cmd.toLowerCase()) && !this.isJson) {
+      console.error(`\n   💡 AGENT HINT: '${this.cmd}' is a shell built-in, not an executable file. It should be routed through a system shell.\n${AUTONOMOUS_HEALING_MSG}`);
+    }
+    process.exit(code);
+  }
+
+  private handleFinish(code: number | null, signal: NodeJS.Signals | null, isDaemon: boolean) {
+    if (this.isFinished) return;
+    this.isFinished = true;
+    this.clearActiveTimersAndHandlers();
+    if (code === 255 && path.basename(this.cmd).toLowerCase() === 'wsl.exe' && !this.hasRetriedWsl && !signal) {
+      this.retryWslLaunch();
       return;
     }
-
     this.cleanupTempScript();
-    if (this.ioController) {
-      this.ioController.flushAll();
-    }
-
+    this.ioController?.flushAll();
     const finalizeFinish = async () => {
-      let computedCode = code;
       const envData = this.ioController && typeof this.ioController.getParsedEnvelope === 'function' ? this.ioController.getParsedEnvelope() : null;
-      if (envData) {
-         const status = envData.status;
-         const exitCode = envData.exit_code;
-         if (status === 'error' || (typeof exitCode === 'number' && exitCode !== 0)) {
-             computedCode = typeof exitCode === 'number' ? exitCode : 1;
-         } else if (status === 'success') {
-             computedCode = 0;
-         }
-      }
-      code = computedCode;
-
-      const { isGrepNoMatch: isGrep, isGrepMatchesFound: isGrepMatches, isDiffFound: isDiff, isOutdatedInfo: isOutdated, isLsNoMatch: isLs, isRmNoMatch: isRm, isFindNoMatch: isFind } = (code !== null && code !== 0) ? analyzeExitCode1(this.payload, code, this.ioController?.stdoutTail || '', this.ioController?.stderrTail || '') : { isGrepNoMatch: false, isGrepMatchesFound: false, isDiffFound: false, isOutdatedInfo: false, isLsNoMatch: false, isRmNoMatch: false, isFindNoMatch: false };
-      const isGracefulExit = isGrep || isGrepMatches || isDiff || isOutdated || isLs || isRm || isFind;
-      const telemetryCode = isGracefulExit ? 0 : code;
-      
+      const computedCode = this.computeFinalCode(code, signal, envData);
+      const analysis = (computedCode !== null && computedCode !== 0)
+        ? analyzeExitCode1(this.payload, computedCode, this.ioController?.stdoutTail || '', this.ioController?.stderrTail || '')
+        : null;
+      const telemetryCode = analysis !== null && isGracefulExitAnalysis(analysis) ? 0 : computedCode;
       await sendDatadogTelemetry(
-        this.payload,
-        this.cwd,
-        'agent_exec.command.count',
-        telemetryCode === 0 ? 'success' : 'error',
-        code,
-        this.ioController?.stdoutTail || '',
-        this.ioController?.stderrTail || ''
+        this.payload, this.cwd, 'agent_exec.command.count',
+        telemetryCode === 0 ? 'success' : 'error', computedCode,
+        this.ioController?.stdoutTail || '', this.ioController?.stderrTail || '',
       );
-
-      if (this.isJson) {
-         const { isGrepNoMatch, isGrepMatchesFound, isDiffFound, isOutdatedInfo, isLsNoMatch, isRmNoMatch, isFindNoMatch } = (computedCode !== null && computedCode !== 0) ? analyzeExitCode1(this.payload, computedCode, this.ioController?.stdoutTail || '', this.ioController?.stderrTail || '') : { isGrepNoMatch: false, isGrepMatchesFound: false, isDiffFound: false, isOutdatedInfo: false, isLsNoMatch: false, isRmNoMatch: false, isFindNoMatch: false };
-         const isGraceful = isGrepNoMatch || isGrepMatchesFound || isDiffFound || isOutdatedInfo || isLsNoMatch || isRmNoMatch || isFindNoMatch;
-         const finalCode = isGraceful ? 0 : computedCode;
-
-         if (this.payload.onFailure && finalCode !== 0) {
-            await sendWebhook(this.payload, this.payload.onFailure, {
-              stdout: this.ioController?.stdoutTail || '',
-              stderr: this.ioController?.stderrTail || '',
-              code: finalCode,
-              signal,
-              success: false,
-              envData
-            });
-         }
-         if (this.payload.onSuccess && finalCode === 0) {
-            await sendWebhook(this.payload, this.payload.onSuccess, {
-              stdout: this.ioController?.stdoutTail || '',
-              stderr: this.ioController?.stderrTail || '',
-              code: finalCode,
-              signal,
-              success: true,
-              envData
-            });
-         }
-         console.log(JSON.stringify({
-           status: finalCode === 0 ? "success" : "error",
-           code: finalCode,
-           signal,
-           stdout: this.ioController?.stdoutTail || '',
-           stderr: this.ioController?.stderrTail || '',
-           envData
-         }));
-         process.exit(finalCode === 0 ? 0 : (finalCode ?? 1));
-      }
-
-      if (code !== 0) {
-        if (this.payload.onFailure) {
-          await sendWebhook(this.payload, this.payload.onFailure, {
-            stdout: this.ioController?.stdoutTail || '',
-            stderr: this.ioController?.stderrTail || '',
-            code,
-            signal,
-            success: false,
-            envData
-          });
-        }
-        if (code === null && signal) { if (!this.isJson) console.error(`\n${this.timedOut ? 'ℹ️' : '❌'} Command was terminated by signal ${signal}`);
-          process.exit(1);
-        } else if (code !== null) {
-          const { isGrepNoMatch, isGrepMatchesFound, isDiffFound, isOutdatedInfo, isLsNoMatch, isRmNoMatch, isFindNoMatch } = analyzeExitCode1(this.payload, code, this.ioController?.stdoutTail || '', this.ioController?.stderrTail || '');
-          
-          if (isGrepNoMatch) { if (!this.isJson) console.error(`\nℹ️  No matches found (exit code ${code}).`);
-            process.exit(0);
-          } else if (isGrepMatchesFound) { if (!this.isJson) console.error(`\nℹ️  Matches found (exit code ${code} from non-fatal traversal warnings suppressed).`);
-            process.exit(0);
-          } else if (isDiffFound) { if (!this.isJson) console.error(`\nℹ️  Differences found (exit code ${code}).`);
-            process.exit(0);
-          } else if (isOutdatedInfo) { if (!this.isJson) console.error(`\nℹ️  Outdated packages found (exit code ${code}).`);
-            process.exit(0);
-          } else if (isLsNoMatch) { if (!this.isJson) console.error(`\nℹ️  No matching files found (exit code ${code}).`);
-            process.exit(0);
-          } else if (isFindNoMatch) { if (!this.isJson) console.error(`\nℹ️  No matching files or directories found (exit code ${code}).`);
-            process.exit(0);
-          } else if (isRmNoMatch) { if (!this.isJson) console.error(`\nℹ️  Target file or directory already removed (exit code ${code}).`);
-            process.exit(0);
-          } else {
-            let suppressRedundantExit = false;
-            if (this.payload.type === 'command' && typeof this.payload.command === 'string') {
-                if (['pnpm', 'npm', 'bun', 'yarn', 'node'].includes(this.payload.command)) {
-                    suppressRedundantExit = true;
-                }
-            }
-            setLastStderrTail(this.ioController?.stderrTail || '');
-            if (!this.isJson && !suppressRedundantExit) console.error(`\n❌ Command exited with code ${code}`);
-            if (process.platform === 'win32') {
-                if (BUILT_INS.includes(this.cmd.toLowerCase())) { if (!this.isJson) console.error(`\n   💡 AGENT HINT: '${this.cmd}' is a shell built-in, not an executable file. It should be routed through a system shell.\n${AUTONOMOUS_HEALING_MSG}`);
-                }
-            }
-            process.exit(code);
-          }
-        }
-      } if (!this.isJson) console.error(`\n✅ Command succeeded${isDaemon ? ' (background process detached)' : ''}.`);
-      if (this.payload.onSuccess) {
-        await sendWebhook(this.payload, this.payload.onSuccess, {
-          stdout: this.ioController?.stdoutTail || '',
-          stderr: this.ioController?.stderrTail || '',
-          code: computedCode,
-          signal,
-          success: computedCode === 0,
-          envData
-        });
-      }
-      process.exit(0);
+      if (this.isJson) return this.finishJsonMode(computedCode, signal, envData);
+      return this.finishTextMode(computedCode, signal, envData, isDaemon);
     };
-    
-    if (this.ioController) {
-      return this.ioController.closeFileStreams().then(finalizeFinish);
-    } else {
-      return finalizeFinish();
-    }
+    if (this.ioController) return this.ioController.closeFileStreams().then(finalizeFinish);
+    return finalizeFinish();
   }
 }

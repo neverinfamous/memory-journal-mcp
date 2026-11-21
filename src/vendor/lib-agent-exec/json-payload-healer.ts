@@ -69,14 +69,21 @@ function healHexEscape(match: string, hex: string): string {
 
 // [INVARIANT]: Never synthesize NUL bytes: '\0' and '\x00' are left for the invalid-backslash pass, which keeps them
 // as literal backslash sequences (PayloadSchema rejects NULs).
+function escapeStrayBackslashes(input: string): string {
+  return input.replace(/\\(["\\/bfnrt]|u[0-9a-fA-F]{4})|\\/g, (match, validEscape) => (
+    validEscape !== undefined ? match : '\\\\'
+  ));
+}
+
 function healJsonStringInner(inner: string): string {
-  return inner
-    .replace(/\r\n/g, '\\n')
-    .replace(/\n/g, '\\n')
-    .replace(/\r/g, '\\n')
-    .replace(/\t/g, '\\t')
-    .replace(/\\x([0-9a-fA-F]{2})/g, healHexEscape)
-    .replace(/\\(?!["\\/bfnrt]|u[0-9a-fA-F]{4})/g, () => '\\\\');
+  return escapeStrayBackslashes(
+    inner
+      .replace(/\r\n/g, '\\n')
+      .replace(/\n/g, '\\n')
+      .replace(/\r/g, '\\n')
+      .replace(/\t/g, '\\t')
+      .replace(/\\x([0-9a-fA-F]{2})/g, healHexEscape)
+  );
 }
 
 function healQuotedJsonStrings(source: string): string {
@@ -92,10 +99,9 @@ function tryHealedQuotedStringsWithoutTrailingCommas(trimmed: string): unknown |
 }
 
 function tryHealLooseEscapes(trimmed: string): unknown | undefined {
-  const healedEscapes = trimmed
-    .replace(/\\x([0-9a-fA-F]{2})/g, healHexEscape)
-    .replace(/\\(?!["\\/bfnrt]|u[0-9a-fA-F]{4})/g, () => '\\\\')
-    .replace(/,\s*([}\]])/g, '$1');
+  const healedEscapes = escapeStrayBackslashes(
+    trimmed.replace(/\\x([0-9a-fA-F]{2})/g, healHexEscape)
+  ).replace(/,\s*([}\]])/g, '$1');
   return tryParse(healedEscapes);
 }
 

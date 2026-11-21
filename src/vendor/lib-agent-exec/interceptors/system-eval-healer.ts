@@ -199,11 +199,26 @@ function unbundleQuotedSearchFlags(payload: EvalPayload): void {
   });
 }
 
+function hasFileOrPathLikeWord(words: readonly string[], cwd?: string): boolean {
+  const baseCwd = cwd !== undefined && cwd.length > 0 ? path.resolve(cwd) : process.cwd();
+  return words.some((word) => {
+    if (word.includes('/') || word.includes('\\')) return true;
+    if (/\.(?:[cm]?[jt]sx?|py|go|rs|java|json|md|txt|ya?ml|sql|ps1|sh|css|html|xml|log|toml|ini|lock)$/i.test(word)) return true;
+    try {
+      return fs.statSync(path.resolve(baseCwd, word), { throwIfNoEntry: false }) !== undefined;
+    } catch {
+      return false;
+    }
+  });
+}
+
 function healUnquotedRgPattern(payload: EvalPayload): void {
   const rgUnquotedMatch = payload.code.match(/^rg\s+((?:-[^\s]+\s+)*)((?:[a-zA-Z0-9_][a-zA-Z0-9_.-]*\s+){2,})(\/[^\s]+|[a-zA-Z]:[^\s]+|\.[^\s]+|[^\s]+\.[a-zA-Z0-9]+)$/);
   if (rgUnquotedMatch === null || rgUnquotedMatch[2] === undefined || rgUnquotedMatch[3] === undefined) return;
+  const wordTokens = rgUnquotedMatch[2].trim().split(/\s+/);
+  if (hasFileOrPathLikeWord(wordTokens, payload.cwd)) return;
   const flags = rgUnquotedMatch[1] ?? '';
-  const pattern = rgUnquotedMatch[2].trim();
+  const pattern = wordTokens.join(' ');
   const targetPath = rgUnquotedMatch[3].trim();
   console.error(`\n   🛠️ AUTONOMOUS HEALING: Unquoted search pattern in eval 'rg' detected. Recombining into single quoted pattern... (Frictionless Recovery)\x1b[0m`);
   payload.code = `rg ${flags}"${pattern}" ${targetPath}`;

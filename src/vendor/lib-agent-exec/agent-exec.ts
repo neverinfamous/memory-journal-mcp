@@ -1,17 +1,16 @@
 // @ts-nocheck
 import fs from 'node:fs';
 import path from 'node:path';
-import { fileURLToPath, pathToFileURL } from 'node:url';
+import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
 import { match, P } from 'ts-pattern';
 import { executeCommand } from './execution-engine.js';
-import { buildCommand, customInterceptors } from './command-builder.js';
-import { buildEnvironment } from './environment.js';
+import { buildCommand } from './command-builder.js';
 import { PayloadSchema, agentExecCliArgsSchema, normalizeTarget } from './schema.js';
 import { showHelp, showUsageError } from './help.js';
-import { convertToWindowsPath } from './command-utils.js';
 import { decodePayloadBuffer } from './utils.js';
 import { AGENT_EXEC_README_URL } from './interceptors/utils.js';
+import { loadWorkspacePlugins, mergeFinalEnvironment, resolveAndValidateCwd } from './cli-loader.js';
 
 const DEFAULT_MAX_PAYLOAD_SIZE = 10 * 1024 * 1024;
 let payloadPath: string;
@@ -22,16 +21,35 @@ const isJson = process.argv.includes('--json');
 
 function fatalError(msg: string, details?: string[]): never {
   if (isJson) {
-    console.log(JSON.stringify({ status: "error", message: msg, details }));
+    console.log(JSON.stringify({ status: 'error', message: msg, details }));
   } else {
     console.error(`❌ Error: ${msg}`);
     if (details) {
-      for (const d of details) {
-        console.error(`  - ${d}`);
-      }
+      for (const d of details) console.error(`  - ${d}`);
     }
   }
   process.exit(1);
+}
+
+function readPayloadInput(rawArg: string): string {
+  const absPayloadPath = path.resolve(rawArg);
+  if (!fs.existsSync(absPayloadPath)) {
+    if (rawArg.startsWith('base64:')) return Buffer.from(rawArg.slice(7), 'base64').toString('utf8');
+    if (rawArg.trim().startsWith('{')) return rawArg;
+    if (!positionals[0]) fatalError('Missing payload JSON file path or raw command.');
+    console.error(`\n   💡 AGENT HINT: You passed a raw command directly to agent-exec.ts instead of a payload file.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Auto-wrapping command into JSON payload... (Frictionless Recovery)\x1b[0m`);
+    return JSON.stringify({ type: 'command', target: 'windows', command: positionals[0], args: positionals.slice(1) });
+  }
+  let payloadBuf: Buffer;
+  try {
+    payloadBuf = fs.readFileSync(absPayloadPath);
+  } catch (err) {
+    fatalError(`Payload path must be a regular file. ${err instanceof Error ? err.message : String(err)}`);
+  }
+  const envSize = process.env['AGENT_EXEC_MAX_PAYLOAD_SIZE'] ? Number.parseInt(process.env['AGENT_EXEC_MAX_PAYLOAD_SIZE'], 10) : NaN;
+  const maxPayloadSize = !Number.isNaN(envSize) && envSize > 0 ? envSize : DEFAULT_MAX_PAYLOAD_SIZE;
+  if (payloadBuf.length > maxPayloadSize) fatalError(`Payload file exceeds ${maxPayloadSize} bytes limit.`);
+  return decodePayloadBuffer(payloadBuf);
 }
 
 try {
@@ -46,46 +64,30 @@ try {
 
   let values: Record<string, string | boolean | string[] | undefined>;
   try {
-    const parsed = parseArgs({
-      args: process.argv.slice(2),
-      options,
-      strict: true,
-      allowPositionals: true
-    });
+    const parsed = parseArgs({ args: process.argv.slice(2), options, strict: true, allowPositionals: true });
     values = parsed.values;
     positionals = parsed.positionals;
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);
     if (msg.includes('Unknown option')) {
-       fatalError(`\n   \x1b[38;5;208m🛠️ AUTONOMOUS HEALING: You passed a CLI flag to 'agent-exec.ts' (${msg}).\n   'agent-exec.ts' ONLY accepts a JSON payload file. Put your command and arguments INSIDE the JSON payload file.\n   Ref: [AGENT_README.md](${AGENT_EXEC_README_URL})\x1b[0m`);
+      fatalError(`\n   \x1b[38;5;208m🛠️ AUTONOMOUS HEALING: You passed a CLI flag to 'agent-exec.ts' (${msg}).\n   'agent-exec.ts' ONLY accepts a JSON payload file. Put your command and arguments INSIDE the JSON payload file.\n   Ref: [AGENT_README.md](${AGENT_EXEC_README_URL})\x1b[0m`);
     }
     throw err;
   }
-  targetOverride = typeof values.target === 'string' ? values.target : undefined;
-  
-  
+  targetOverride = typeof values['target'] === 'string' ? values['target'] : undefined;
 
-  const parsedArgs = agentExecCliArgsSchema.parse({
-    ...values,
-    payloadPath: values.payloadPath ?? positionals[0]
-  });
-
+  const parsedArgs = agentExecCliArgsSchema.parse({ ...values, payloadPath: values['payloadPath'] ?? positionals[0] });
   const result = match(parsedArgs)
-    .with({ help: true }, (args) => showHelp(!!args.json))
+    .with({ help: true }, (args) => showHelp(Boolean(args.json)))
     .with({ payloadPath: P.string }, (args) => {
-      let interceptors: string[] = [];
-      if (Array.isArray(args.interceptors)) {
-        interceptors = args.interceptors;
-      } else if (typeof args.interceptors === 'string') {
-        interceptors = [args.interceptors];
-      }
-      if (typeof args.plugin === 'string') {
-        interceptors.push(args.plugin);
-      }
+      const interceptors: string[] = Array.isArray(args.interceptors)
+        ? [...args.interceptors]
+        : (typeof args.interceptors === 'string' ? [args.interceptors] : []);
+      if (typeof args.plugin === 'string') interceptors.push(args.plugin);
       return { path: args.payloadPath, interceptors };
     })
     .otherwise(() => showUsageError('Missing payload JSON file path.', isJson));
-    
+
   payloadPath = result.path;
   interceptorsPaths = result.interceptors;
 } catch (err: unknown) {
@@ -94,77 +96,15 @@ try {
 
 try {
   const scriptDir = path.dirname(fileURLToPath(import.meta.url));
-  const resolvedCwdRoot = path.resolve(process.cwd());
-  const resolvedScriptRoot = path.resolve(scriptDir);
-  for (const interceptorsPath of interceptorsPaths) {
-    const resolvedPath = path.resolve(interceptorsPath);
-    const inCwd = resolvedPath === resolvedCwdRoot || resolvedPath.startsWith(resolvedCwdRoot + path.sep);
-    const inScriptDir = resolvedPath === resolvedScriptRoot || resolvedPath.startsWith(resolvedScriptRoot + path.sep);
-    if (!inCwd && !inScriptDir) {
-      fatalError(`Interceptor plugin must be loaded from within the workspace: ${resolvedPath}`);
-    }
-    const plugin: unknown = await import(pathToFileURL(resolvedPath).href);
-    if (plugin !== null && typeof plugin === 'object') {
-      const mod = plugin as { default?: unknown; interceptors?: unknown };
-      const candidates = [mod.interceptors, mod.default];
-      for (const candidate of candidates) {
-        if (Array.isArray(candidate)) {
-          for (const fn of candidate) {
-            if (typeof fn === 'function') {
-              customInterceptors.push(fn as (typeof customInterceptors)[number]);
-            }
-          }
-        } else if (typeof candidate === 'function') {
-          customInterceptors.push(candidate as (typeof customInterceptors)[number]);
-        }
-      }
-    }
-  }
+  await loadWorkspacePlugins(interceptorsPaths, [process.cwd(), scriptDir], (resolvedPath) => {
+    fatalError(`Interceptor plugin must be loaded from within the workspace: ${resolvedPath}`);
+  });
 
-  let payloadStr: string;
-  const absPayloadPath = path.resolve(payloadPath);
-  
-  if (!fs.existsSync(absPayloadPath)) {
-    if (payloadPath.startsWith('base64:')) {
-      payloadStr = Buffer.from(payloadPath.slice(7), 'base64').toString('utf8');
-    } else if (payloadPath.trim().startsWith('{')) {
-      payloadStr = payloadPath;
-    } else {
-      if (!positionals[0]) {
-        fatalError('Missing payload JSON file path or raw command.');
-      }
-      console.error(`\n   💡 AGENT HINT: You passed a raw command directly to agent-exec.ts instead of a payload file.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Auto-wrapping command into JSON payload... (Frictionless Recovery)\x1b[0m`);
-      const payload = {
-        type: "command",
-        target: "windows",
-        command: positionals[0],
-        args: positionals.slice(1)
-      };
-      payloadStr = JSON.stringify(payload);
-    }
-  } else {
-    let payloadBuf;
-    try {
-      payloadBuf = fs.readFileSync(absPayloadPath);
-    } catch (err) {
-      fatalError(`Payload path must be a regular file. ${err instanceof Error ? err.message : String(err)}`);
-    }
-    const envSize = process.env.AGENT_EXEC_MAX_PAYLOAD_SIZE ? parseInt(process.env.AGENT_EXEC_MAX_PAYLOAD_SIZE, 10) : NaN;
-    const maxPayloadSize = !Number.isNaN(envSize) && envSize > 0 ? envSize : DEFAULT_MAX_PAYLOAD_SIZE;
-    if (payloadBuf.length > maxPayloadSize) {
-      fatalError(`Payload file exceeds ${maxPayloadSize} bytes limit.`);
-    }
-    payloadStr = decodePayloadBuffer(payloadBuf);
-  }
-
-  const rawPayload = JSON.parse(payloadStr);
-
+  const payloadStr = readPayloadInput(payloadPath);
+  const rawPayload: unknown = JSON.parse(payloadStr);
   const parseResult = PayloadSchema.safeParse(rawPayload);
   if (!parseResult.success) {
-    const details = parseResult.error.issues.map(err => {
-      const pathStr = err.path.length > 0 ? err.path.join('.') : 'root';
-      return `${pathStr}: ${err.message}`;
-    });
+    const details = parseResult.error.issues.map(err => `${err.path.length > 0 ? err.path.join('.') : 'root'}: ${err.message}`);
     fatalError('Payload schema validation failed.', details);
   }
 
@@ -174,45 +114,16 @@ try {
     if (!normalized) fatalError(`Invalid --target value: '${targetOverride}'. Must be 'windows', 'wsl2', or an alias (wsl, linux, ubuntu, native, win, pwsh, cmd, bash).`);
     payload.target = normalized;
   }
-  
+
   if (payload.keepPayload !== true) {
     try { fs.unlinkSync(payloadPath); } catch { /* ignore */ }
   }
-  if (payload.cwd !== undefined && typeof payload.cwd === 'string') {
-    const unquotedCwd = payload.cwd.trim().replace(/^['"]|['"]$/g, '');
-    if (/^\/?mnt\/[a-zA-Z](?:\/.*)?$/i.test(unquotedCwd)) {
-      const converted = convertToWindowsPath(unquotedCwd);
-      console.error(`\n   💡 AGENT HINT: The provided cwd '${payload.cwd}' is a WSL mount path.`);
-      console.error(`\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Auto-converting WSL mount cwd to Windows path... (Frictionless Recovery)\x1b[0m`);
-      payload.cwd = converted;
-    }
-  }
 
-  const isWslTarget = payload.target === 'wsl2';
-  const isPosixInternalCwd = isWslTarget && payload.cwd !== undefined && typeof payload.cwd === 'string' && (payload.cwd.startsWith('/') || payload.cwd.startsWith('~'));
-  const cwd = payload.cwd !== undefined && payload.cwd.length > 0 ? (isPosixInternalCwd ? process.cwd() : path.resolve(payload.cwd)) : process.cwd();
-  
-  if (!isPosixInternalCwd && (!fs.existsSync(cwd) || !fs.statSync(cwd).isDirectory())) {
-    fatalError(`The provided cwd '${cwd}' does not exist or is not a directory.`);
-  }
-
+  const cwd = resolveAndValidateCwd(payload, (badCwd) => fatalError(`The provided cwd '${badCwd}' does not exist or is not a directory.`));
   const { cmd, args, tempScriptPath, envOverrides, resolvedCwd } = buildCommand(payload, cwd, isJson);
-  const effectiveCwd = resolvedCwd ?? cwd;
-  
-  const env = buildEnvironment(payload.env);
-  
-  const finalEnv = { ...env };
-  for (const [k, v] of Object.entries(envOverrides)) {
-    let targetKey = k;
-    if (process.platform === 'win32') {
-      const existingKey = Object.keys(finalEnv).find(key => key.toUpperCase() === k.toUpperCase());
-      if (existingKey) targetKey = existingKey;
-    }
-    finalEnv[targetKey] = v;
-  }
+  const finalEnv = mergeFinalEnvironment(payload.env, envOverrides);
 
-  await executeCommand(payload, effectiveCwd, cmd, args, finalEnv, tempScriptPath, isJson || !!payload.expectJsonEnvelope);
-
+  await executeCommand(payload, resolvedCwd ?? cwd, cmd, args, finalEnv, tempScriptPath, isJson || Boolean(payload.expectJsonEnvelope));
 } catch (err) {
   if (err instanceof SyntaxError) {
     fatalError(`Invalid JSON in payload file. ${err.message}`);

@@ -46,9 +46,13 @@ function handleCatArm(ctx: ExecutionContext, cmd: string, hasStdin: boolean, act
     console.error(`\n   💡 AGENT HINT: 'cat' called without file arguments and no stdin. It will hang indefinitely.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Execution blocked. Provide a file argument or use view_file.\x1b[0m`);
     process.exit(1);
   }
-  emitInterceptBanner(`\n   💡 AGENT INTERCEPT: 'cat' file inspection command detected. Switching execution target to WSL2... (Frictionless Recovery)`);
-  ctx.payload.target = 'wsl2';
-  ctx.args = ctx.args.map(arg => convertToWslPath(arg));
+  if (process.platform === 'win32' && ctx.payload.target !== 'wsl2') {
+    emitInterceptBanner(`\n   💡 AGENT INTERCEPT: 'cat' file inspection command detected. Switching execution target to WSL2... (Frictionless Recovery)`);
+    ctx.payload.target = 'wsl2';
+  }
+  if (ctx.payload.target === 'wsl2') {
+    ctx.args = ctx.args.map(arg => convertToWslPath(arg));
+  }
 }
 
 function handleGrepArm(
@@ -76,14 +80,16 @@ function handleGrepArm(
 }
 
 function handleCurlArm(ctx: ExecutionContext, cmdBasename: string): void {
-  if (ctx.payload.target !== 'wsl2') {
+  if (process.platform === 'win32' && ctx.payload.target !== 'wsl2') {
     emitInterceptBanner(`\n   💡 AGENT INTERCEPT: '${cmdBasename}' network command detected. Switching execution target to WSL2... (Frictionless Recovery)`);
     ctx.payload.target = 'wsl2';
   }
   if (['invoke-webrequest', 'iwr'].includes(cmdBasename.toLowerCase()) && ctx.payload.type === 'command') {
     ctx.payload.command = 'curl';
   }
-  ctx.args = ctx.args.map(arg => convertToWslPath(arg));
+  if (ctx.payload.target === 'wsl2') {
+    ctx.args = ctx.args.map(arg => convertToWslPath(arg));
+  }
 }
 
 function handleJqArm(ctx: ExecutionContext, cmd: string): void {
@@ -99,8 +105,9 @@ function handleJqArm(ctx: ExecutionContext, cmd: string): void {
 
 function routeWindowsJq(ctx: ExecutionContext): void {
   const jqPosArgs = getPositionalArgs('jq', ctx.args);
-  const hasFromFile = ctx.args.some(arg => arg === '-f' || arg === '--from-file');
-  const jqFileArgs = hasFromFile ? jqPosArgs : jqPosArgs.slice(1);
+  const inlineFromFiles = ctx.args.filter(arg => arg.startsWith('--from-file=')).map(arg => arg.slice('--from-file='.length));
+  const hasFromFile = ctx.args.some(arg => arg === '-f' || arg === '--from-file') || inlineFromFiles.length > 0;
+  const jqFileArgs = hasFromFile ? [...jqPosArgs, ...inlineFromFiles] : jqPosArgs.slice(1);
   const targetsLinuxOnlyPath = jqFileArgs.some(arg =>
     arg.startsWith('/') && !arg.startsWith('//') && !/^\/mnt\/[a-zA-Z](?:\/|$)/.test(arg),
   );
@@ -120,14 +127,16 @@ function routeWindowsJq(ctx: ExecutionContext): void {
 }
 
 function handlePosixToolArm(ctx: ExecutionContext, cmdBasename: string): void {
-  if (ctx.payload.target !== 'wsl2') {
+  if (process.platform === 'win32' && ctx.payload.target !== 'wsl2') {
     emitInterceptBanner(`\n   💡 AGENT INTERCEPT: '${cmdBasename}' natively fails, lacks features, or is not installed on Windows. Switching execution target to WSL2... (Frictionless Recovery)`);
     ctx.payload.target = 'wsl2';
   }
   if (['find', 'find.exe'].includes(cmdBasename.toLowerCase())) {
     handleFindInterception(ctx);
   }
-  ctx.args = ctx.args.map(arg => convertToWslPath(arg));
+  if (ctx.payload.target === 'wsl2') {
+    ctx.args = ctx.args.map(arg => convertToWslPath(arg));
+  }
 }
 
 function handleRgArm(ctx: ExecutionContext, cmd: string, hasStdin: boolean): void {
@@ -136,6 +145,7 @@ function handleRgArm(ctx: ExecutionContext, cmd: string, hasStdin: boolean): voi
 }
 
 function handlePwshArm(ctx: ExecutionContext, cmdBasename: string, matchedArgs: string[]): void {
+  if (ctx.payload.target === 'wsl2') return;
   const scriptFlagIdx = matchedArgs.findIndex(arg => PWSH_SCRIPT_FLAGS.includes(arg.toLowerCase()));
   const searchArgs = scriptFlagIdx === -1 ? matchedArgs : matchedArgs.slice(0, scriptFlagIdx);
   if (!searchArgs.some(arg => arg.toLowerCase() === '-noninteractive')) {

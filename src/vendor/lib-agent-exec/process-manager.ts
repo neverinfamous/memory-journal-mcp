@@ -127,12 +127,26 @@ function killWindowsTree(child: ChildProcess, pid: number, parentGone: boolean):
   } catch { /* ignore */ }
 }
 
-function killUnixTree(child: ChildProcess, pid: number, parentGone: boolean): void {
-  const signal = parentGone ? 'SIGKILL' : 'SIGTERM';
+function killUnixTree(child: ChildProcess, pid: number, force = true): void {
+  const signal = force ? 'SIGKILL' : 'SIGTERM';
+  let killedGroup = false;
   try {
     process.kill(-pid, signal);
-  } catch { /* ignore */ }
-  if (parentGone) return;
+    killedGroup = true;
+  } catch {
+    // Fallback to direct pid when process is not a process group leader
+  }
+  if (!killedGroup) {
+    try {
+      process.kill(pid, signal);
+    } catch { /* ignore */ }
+  }
+  if (force) {
+    try {
+      child.kill('SIGKILL');
+    } catch { /* ignore */ }
+    return;
+  }
   setTimeout(() => {
     try {
       process.kill(-pid, 'SIGKILL');
@@ -143,10 +157,10 @@ function killUnixTree(child: ChildProcess, pid: number, parentGone: boolean): vo
   } catch { /* ignore */ }
 }
 
-export function killProcessTree(child: ChildProcess): void {
+export function killProcessTree(child: ChildProcess, force = true): void {
   if (!child.pid) return;
   const pid = child.pid;
-  const parentGone = child.killed || child.exitCode !== null || child.signalCode !== null;
+  const parentGone = force || child.killed || child.exitCode !== null || child.signalCode !== null;
   for (const hook of processManagerHooks) {
     if (hook.onKill) {
       try { hook.onKill(pid); } catch { /* ignore */ }

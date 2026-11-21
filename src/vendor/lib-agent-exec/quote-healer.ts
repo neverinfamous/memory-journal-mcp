@@ -1,4 +1,7 @@
 // @ts-nocheck
+import fs from 'node:fs';
+import path from 'node:path';
+
 const SQL_SELECT_KEYWORDS = new Set([
   'SELECT', 'DISTINCT', 'ALL', 'AS', 'FROM', 'INTO', 'CASE', 'WHEN',
   'THEN', 'ELSE', 'END', 'CAST', 'NOT', 'NULL', 'AND', 'OR', 'IS', 'IN',
@@ -45,7 +48,7 @@ function strippedPathSeparators(s: string): string {
   );
 }
 
-function isPathWithTrailingSlash(s: string): boolean {
+function isPathWithTrailingSlash(s: string, cwd?: string): boolean {
   if (/[|<>"`']/.test(s) || s.includes('===') || s.includes('!==')) {
     return false;
   }
@@ -59,11 +62,26 @@ function isPathWithTrailingSlash(s: string): boolean {
       return true;
     }
   }
+  if ((s.endsWith('\\') || s.endsWith('/')) && withoutTrailing.length > 0 && !s.startsWith('-')) {
+    if (!/[*?[\]()]/.test(withoutTrailing)) {
+      try {
+        const candidate = path.resolve(cwd ?? process.cwd(), withoutTrailing);
+        if (fs.statSync(candidate).isDirectory()) {
+          return true;
+        }
+      } catch {
+        // Ignore missing/inaccessible candidate paths
+      }
+    }
+  }
   return false;
 }
 
-function isPureWordWithTrailingSlash(s: string): boolean {
+function isPureWordWithTrailingSlash(s: string, cwd?: string): boolean {
   if (!endsWithUnescapedBackslash(s) || s.startsWith('-') || s.includes('/')) {
+    return false;
+  }
+  if (isPathWithTrailingSlash(s, cwd)) {
     return false;
   }
   // Avoid treating Windows paths (e.g. C:\..., .\..., ..\..., or paths with directory separators) as fragmented words
@@ -75,9 +93,9 @@ function isPureWordWithTrailingSlash(s: string): boolean {
 }
 
 function quoteKind(current: string): QuoteKind | null {
-  const isEscapedDouble = current.startsWith('\\"') && !current.slice(2).endsWith('\\"');
-  const isPlainDouble = current.startsWith('"') && !current.slice(1).endsWith('"');
-  const isSingle = current.startsWith("'") && !current.slice(1).endsWith("'");
+  const isEscapedDouble = current.length > 2 && current.startsWith('\\"') && !current.slice(2).endsWith('\\"');
+  const isPlainDouble = current.length > 1 && current.startsWith('"') && !current.slice(1).endsWith('"');
+  const isSingle = current.length > 1 && current.startsWith("'") && !current.slice(1).endsWith("'");
   if (isEscapedDouble) return 'escaped-double';
   if (isPlainDouble) return 'plain-double';
   if (isSingle) return 'single';
@@ -133,11 +151,17 @@ function captureInnerSplit(next: string, matchedType: FragmentKind, pattern: Reg
   return { matchedType, internalWord: matched[1], internalRest: matched[2] };
 }
 
-function matchNextFragment(next: string): FragmentBody | null {
-  if (isPureWordWithTrailingSlash(next)) {
+function matchNextFragment(next: string, cwd?: string): FragmentBody | null {
+  if (isPureWordWithTrailingSlash(next, cwd)) {
     return { matchedType: 'pure-slash', internalWord: '', internalRest: '' };
   }
-  if (next.endsWith('\\)')) {
+  if (endsWithUnescapedBackslash(next) && !isPathWithTrailingSlash(next, cwd) && /^([^\\]+)\\(.+)$/.test(next)) {
+    return captureInnerSplit(next, 'multi-quote', /^([^\\]+)\\(.+)$/);
+  }
+  if (!isPathWithTrailingSlash(next, cwd) && /^([^\\]+)\\(\).*|[:;,\]].*)$/.test(next)) {
+    return captureInnerSplit(next, 'internal-close', /^([^\\]+)\\(\).*|[:;,\]].*)$/);
+  }
+  if (next.endsWith('\\)') && endsWithUnescapedBackslash(next.slice(0, -1))) {
     return { matchedType: 'escaped-paren', internalWord: '', internalRest: '' };
   }
   if (next.endsWith('/)')) {
@@ -154,20 +178,14 @@ function matchNextFragment(next: string): FragmentBody | null {
       internalRest: next.slice(slashSpaceIdx + 1),
     };
   }
-  if (endsWithUnescapedBackslash(next) && !isPathWithTrailingSlash(next) && /^([^\\]+)\\(.*)$/.test(next)) {
-    return captureInnerSplit(next, 'multi-quote', /^([^\\]+)\\(.*)$/);
-  }
-  if (!isPathWithTrailingSlash(next) && /^([^\\]+)\\(\).*|[:;,\]].*)$/.test(next)) {
-    return captureInnerSplit(next, 'internal-close', /^([^\\]+)\\(\).*|[:;,\]].*)$/);
-  }
   return null;
 }
 
-function findFragmentEnd(currentArgs: readonly string[], start: number): FragmentMatch | null {
+function findFragmentEnd(currentArgs: readonly string[], start: number, cwd?: string): FragmentMatch | null {
   for (let j = start + 1; j < currentArgs.length; j++) {
     const next = currentArgs[j];
     if (next === undefined || next.startsWith('-')) break;
-    const matched = matchNextFragment(next);
+    const matched = matchNextFragment(next, cwd);
     if (matched !== null) return { endIdx: j, ...matched };
   }
   return null;
@@ -252,22 +270,22 @@ function reassembleFragment(first: string, rawMiddle: string[], lastArg: string,
   return `${first}"${healedTokens.join(' ')}"`;
 }
 
-function isFragmentStart(current: string | undefined): current is string {
+function isFragmentStart(current: string | undefined, cwd?: string): current is string {
   return current !== undefined
     && !current.startsWith('-')
     && endsWithUnescapedBackslash(current)
-    && !isPathWithTrailingSlash(current);
+    && !isPathWithTrailingSlash(current, cwd);
 }
 
-function healBackslashFragments(currentArgs: string[]): void {
+function healBackslashFragments(currentArgs: string[], cwd?: string): void {
   let i = 0;
   while (i < currentArgs.length) {
     const current = currentArgs[i];
-    if (!isFragmentStart(current)) {
+    if (!isFragmentStart(current, cwd)) {
       i++;
       continue;
     }
-    const match = findFragmentEnd(currentArgs, i);
+    const match = findFragmentEnd(currentArgs, i, cwd);
     const lastArg = match === null ? undefined : currentArgs[match.endIdx];
     if (match === null || lastArg === undefined) {
       i++;
@@ -281,16 +299,16 @@ function healBackslashFragments(currentArgs: string[]): void {
     );
     currentArgs.splice(i, match.endIdx - i + 1, reassembled);
     // If reassembled still ends with an unescaped backslash (e.g. chained quotes), do not advance i
-    if (endsWithUnescapedBackslash(reassembled) && !isPathWithTrailingSlash(reassembled)) {
+    if (endsWithUnescapedBackslash(reassembled) && !isPathWithTrailingSlash(reassembled, cwd)) {
       continue;
     }
     i++;
   }
 }
 
-export function healFragmentedQuotes(args: string[]): string[] {
+export function healFragmentedQuotes(args: string[], cwd?: string): string[] {
   const currentArgs = [...args];
   mergeSplitQuotes(currentArgs);
-  healBackslashFragments(currentArgs);
+  healBackslashFragments(currentArgs, cwd);
   return currentArgs;
 }

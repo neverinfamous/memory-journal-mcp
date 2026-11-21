@@ -1,5 +1,6 @@
 // @ts-nocheck
 import type { ExecPayload } from '../schema.js';
+import { isGrepTargetExplicitlyIncluded } from './grep-exclusions.js';
 import { splitFirstShellSegment } from './utils.js';
 import { GREP_EXCLUDE_DIRS, isLikelyDirectoryArg } from './search-interceptor.js';
 
@@ -103,7 +104,9 @@ function injectEvalGrepRecursive(segment: string, nonFlagTokens: string[], isDir
 
 function injectBroadGrepGuards(payload: EvalPayload, segment: string, nonFlagTokens: string[]): string {
   if (!isRecursiveBroadGrep(segment, nonFlagTokens)) return segment;
-  let updated = injectMissingExcludeDirs(segment);
+  const hasPatternFlag = /(?:^|\s)(?:-e\b|--regexp\b|-f\b|--file\b)/.test(segment);
+  const targetPaths = hasPatternFlag ? nonFlagTokens : nonFlagTokens.slice(1);
+  let updated = injectMissingExcludeDirs(segment, targetPaths);
   if (!updated.includes('--binary-files=')) {
     updated = updated.replace(/^(grep|egrep)\b/i, '$1 --binary-files=without-match');
   }
@@ -125,11 +128,13 @@ function isBroadGrepPath(clean: string): boolean {
   return /^[a-zA-Z]:/.test(clean);
 }
 
-function injectMissingExcludeDirs(segment: string): string {
+function injectMissingExcludeDirs(segment: string, targetPaths: readonly string[]): string {
   const missingExcludes = GREP_EXCLUDE_DIRS.filter(
-    dir => !segment.includes(`--exclude-dir=${dir}`) && !segment.includes(`--exclude-dir ${dir}`),
+    dir => !isGrepTargetExplicitlyIncluded(targetPaths, dir)
+      && !segment.includes(`--exclude-dir=${dir}`)
+      && !segment.includes(`--exclude-dir ${dir}`),
   );
-  if (missingExcludes.length === 0 || segment.includes('--exclude-dir=')) return segment;
+  if (missingExcludes.length === 0) return segment;
   console.error(
     `\n   🛠️ AUTONOMOUS HEALING: Recursive grep on mounted Windows filesystem detected. Auto-injecting --exclude-dir for node_modules, .git, and dist (and artifact/cache dirs) to prevent timeouts... (Frictionless Recovery)\x1b[0m`,
   );

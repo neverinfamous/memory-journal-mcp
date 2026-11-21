@@ -3,30 +3,30 @@ import path from 'node:path';
 import { ExecutionContext } from './types.js';
 import { applyEarlyGitGuards, applyEditorGitHeals, applyInteractiveGitBlocks } from './git-guards.js';
 
-export function gitInterceptor(ctx: ExecutionContext): void {
-  const { cmdBasename, args, payload } = ctx;
-  const gitCmds = ['git', 'git.exe'];
-  if (!gitCmds.includes(cmdBasename) || payload.type !== 'command') return;
+const GIT_VALUE_FLAGS = new Set([
+  '-c',
+  '--git-dir',
+  '--work-tree',
+  '--namespace',
+  '--exec-path',
+  '--config-env',
+  '--super-prefix',
+]);
 
-  const rawCwd = ctx.payload.cwd ? path.resolve(ctx.payload.cwd) : process.cwd();
-  let targetCwd = rawCwd;
+function applyGitCFlags(args: string[], initialCwd: string): { targetCwd: string; explicitCwd: string | undefined } {
+  let targetCwd = initialCwd;
   let explicitCwd: string | undefined;
-
-  const knownGitCmds = ['add', 'am', 'archive', 'bisect', 'branch', 'bundle', 'checkout', 'cherry-pick', 'citool', 'clean', 'clone', 'commit', 'describe', 'diff', 'fetch', 'format-patch', 'gc', 'gitk', 'grep', 'gui', 'init', 'log', 'merge', 'mv', 'notes', 'pull', 'push', 'range-diff', 'rebase', 'reset', 'restore', 'revert', 'rm', 'shortlog', 'show', 'sparse-checkout', 'stash', 'status', 'submodule', 'switch', 'tag', 'worktree', 'config', 'difftool', 'mergetool', 'remote', 'blame', 'reflog'];
-
   // -C <path> is a top-level git flag and MUST appear before the git subcommand
   let i = 0;
   while (i < args.length) {
     const a = args[i];
+    if (a === '--') break;
     if (a === '-C') {
-      if (i + 1 < args.length) {
-        const candidate = args[i + 1];
-        if (!/^\d+$/.test(candidate)) {
-          targetCwd = path.isAbsolute(candidate) ? candidate : path.resolve(targetCwd, candidate);
-          explicitCwd = targetCwd;
-          args.splice(i, 2);
-          continue;
-        }
+      if (i + 1 < args.length && !/^\d+$/.test(args[i + 1])) {
+        targetCwd = path.isAbsolute(args[i + 1]) ? args[i + 1] : path.resolve(targetCwd, args[i + 1]);
+        explicitCwd = targetCwd;
+        args.splice(i, 2);
+        continue;
       }
       i++;
     } else if (a.startsWith('-C') && a.length > 2) {
@@ -38,7 +38,7 @@ export function gitInterceptor(ctx: ExecutionContext): void {
         continue;
       }
       i++;
-    } else if (a === '-c' || a === '--git-dir' || a === '--work-tree' || a === '--namespace' || a === '--exec-path') {
+    } else if (GIT_VALUE_FLAGS.has(a)) {
       i += 2;
     } else if (a.startsWith('-')) {
       i++;
@@ -46,6 +46,38 @@ export function gitInterceptor(ctx: ExecutionContext): void {
       break;
     }
   }
+  return { targetCwd, explicitCwd };
+}
+
+function findGitSubcommand(args: readonly string[]): string | undefined {
+  let i = 0;
+  while (i < args.length) {
+    const a = args[i];
+    if (a === '--') {
+      i++;
+      return i < args.length ? args[i] : undefined;
+    }
+    if (a === '-C' || GIT_VALUE_FLAGS.has(a)) {
+      i += 2;
+      continue;
+    }
+    if (a.startsWith('-')) {
+      i++;
+      continue;
+    }
+    return a;
+  }
+  return undefined;
+}
+
+export function gitInterceptor(ctx: ExecutionContext): void {
+  const { cmdBasename, args, payload } = ctx;
+  const gitCmds = ['git', 'git.exe'];
+  if (!gitCmds.includes(cmdBasename) || payload.type !== 'command') return;
+
+  const fallbackCwd = typeof ctx.cwd === 'string' && ctx.cwd.length > 0 ? path.resolve(ctx.cwd) : process.cwd();
+  const rawCwd = ctx.payload.cwd ? path.resolve(ctx.payload.cwd) : fallbackCwd;
+  const { targetCwd, explicitCwd } = applyGitCFlags(args, rawCwd);
 
   if (explicitCwd !== undefined) {
     ctx.payload.cwd = targetCwd;
@@ -54,7 +86,7 @@ export function gitInterceptor(ctx: ExecutionContext): void {
   if (!args.includes('--no-pager')) {
     args.unshift('--no-pager');
   }
-  const gitSubCmd = args.find(a => knownGitCmds.includes(a)) || args.filter(a => !a.startsWith('-'))[0];
+  const gitSubCmd = findGitSubcommand(args);
   const scope = { cmd: gitSubCmd, args, ctx, targetCwd, rawCwd, explicitCwd };
   if (applyEarlyGitGuards(scope)) return;
   if (applyInteractiveGitBlocks(scope)) return;

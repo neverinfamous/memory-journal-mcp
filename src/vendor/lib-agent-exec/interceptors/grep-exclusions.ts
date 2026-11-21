@@ -30,6 +30,14 @@ export const GREP_EXCLUDE_DIRS = [
   'releases',
 ];
 
+export function isGrepTargetExplicitlyIncluded(targetPaths: readonly string[], dir: string): boolean {
+  const dirLower = dir.toLowerCase();
+  return targetPaths.some((target) => {
+    const clean = target.trim().replace(/^['"`]|['"`]$/g, '').replace(/\\/g, '/').toLowerCase();
+    return clean.split('/').filter(Boolean).includes(dirLower);
+  });
+}
+
 function hasExcludeDir(args: string[], dir: string): boolean {
   return args.some((arg) => arg === `--exclude-dir=${dir}` || arg === `'--exclude-dir=${dir}'` || arg === `"--exclude-dir=${dir}"`);
 }
@@ -38,8 +46,10 @@ function hasExcludePattern(args: string[], pattern: string): boolean {
   return args.some((arg) => arg === `--exclude=${pattern}` || arg === `'--exclude=${pattern}'` || arg === `"--exclude=${pattern}"`);
 }
 
-export function injectRecursiveGrepExclusions(args: string[]): void {
-  const missingExcludes = GREP_EXCLUDE_DIRS.filter((dir) => !hasExcludeDir(args, dir));
+export function injectRecursiveGrepExclusions(args: string[], targetPaths: readonly string[] = []): void {
+  const missingExcludes = GREP_EXCLUDE_DIRS.filter(
+    (dir) => !isGrepTargetExplicitlyIncluded(targetPaths, dir) && !hasExcludeDir(args, dir),
+  );
   if (missingExcludes.length > 0) {
     console.error(
       `\n   🛠️ AUTONOMOUS HEALING: Recursive grep on mounted Windows filesystem detected. Auto-injecting --exclude-dir for node_modules, .git, and dist (and artifact/cache dirs) to prevent timeouts... (Frictionless Recovery)`

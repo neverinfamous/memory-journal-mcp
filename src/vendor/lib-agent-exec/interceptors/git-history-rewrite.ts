@@ -17,8 +17,8 @@ interface FlagRule {
 const PAIRED_FLAGS: readonly FlagRule[] = [
   { names: ['-S'], dest: '--pickaxe', attachedPrefix: '-S' },
   { names: ['-G'], dest: '--patch-search', attachedPrefix: '-G' },
-  { names: ['--grep', '-g'], dest: '--grep', equalsPrefix: '--grep=' },
-  { names: ['--author', '-a'], dest: '--author', equalsPrefix: '--author=' },
+  { names: ['--grep'], dest: '--grep', equalsPrefix: '--grep=' },
+  { names: ['--author'], dest: '--author', equalsPrefix: '--author=' },
   { names: ['--since'], dest: '--since', equalsPrefix: '--since=' },
   { names: ['--after'], dest: '--since', equalsPrefix: '--after=' },
   { names: ['--until'], dest: '--until', equalsPrefix: '--until=' },
@@ -28,7 +28,7 @@ const PAIRED_FLAGS: readonly FlagRule[] = [
 ];
 
 const VALUE_FLAGS = [
-  '-n', '--max-count', '--skip', '--author', '-a', '--committer', '--grep', '-g',
+  '-n', '--max-count', '--skip', '--author', '--committer', '--grep',
   '--since', '--after', '--until', '--before', '-S', '--pickaxe', '-G', '--patch-search',
   '-L', '--format', '--pretty', '-U', '--diff-context', '--diff-filter',
 ];
@@ -64,11 +64,18 @@ function cwdDiffers(targetCwd: string, explicitCwd: string | undefined): boolean
   return explicitCwd !== undefined || path.resolve(targetCwd) !== path.resolve(process.cwd());
 }
 
+function syncGitCommandPayload(ctx: ExecutionContext): void {
+  if (ctx.payload.type !== 'command') return;
+  ctx.payload.command = ctx.cmdBasename;
+  ctx.payload.args = ctx.args;
+}
+
 function rewriteStatus(ctx: ExecutionContext, scriptToInvoke: string, targetCwd: string, explicitCwd: string | undefined): void {
   console.error(`\n   🛠️ AUTONOMOUS HEALING: Transparently rewriting 'git status' to '${scriptToInvoke} --uncommitted --stats'... (Frictionless Recovery)`);
   ctx.cmdBasename = 'bun';
   ctx.args = [scriptToInvoke, '--uncommitted', '--stats'];
   if (cwdDiffers(targetCwd, explicitCwd)) ctx.args.push('--cwd', targetCwd);
+  syncGitCommandPayload(ctx);
 }
 
 function seedHistoryArgs(ctx: ExecutionContext, cmd: string, scriptToInvoke: string, targetCwd: string, explicitCwd: string | undefined): void {
@@ -78,6 +85,7 @@ function seedHistoryArgs(ctx: ExecutionContext, cmd: string, scriptToInvoke: str
   if (cwdDiffers(targetCwd, explicitCwd)) ctx.args.push('--cwd', targetCwd);
   if (cmd === 'show') ctx.args.push('--stats');
   if (cmd === 'diff') ctx.args.push('--stats', '--include-patch');
+  syncGitCommandPayload(ctx);
 }
 
 function applyHistoryLimit(ctx: ExecutionContext, args: string[], cmd: string): void {

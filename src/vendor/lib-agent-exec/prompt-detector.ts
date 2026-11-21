@@ -17,7 +17,7 @@ export function checkPrompt(tail: string): boolean {
   
   const lower = recentTail.toLowerCase();
   
-  if (!/[?:>#$%✔…█▓░=[\]|]/.test(lower) && !/(?:enter|press|hit|type|choose|select|provide|input|password|passphrase|username|login|email|token|y\/n|yes|no|editor|vi|nano|vim|emacs|notepad|code|wait|continue|abort|quit|exit|override|overwrite|replace|sure|accept|proceed|progress|done|receiving|extracting|downloading|uploading|resolving|\b[yn]\b)/.test(lower)) {
+  if (!/[?:>#$%✔…█▓░=[\]|)]/.test(lower) && !lower.includes('...') && !/(?:enter|press|hit|type|choose|select|provide|input|password|passphrase|username|login|email|token|y\/n|yes|no|editor|vi|nano|vim|emacs|notepad|code|wait|continue|abort|quit|exit|override|overwrite|replace|sure|accept|proceed|progress|done|receiving|extracting|downloading|uploading|resolving|\b[yn]\b)/.test(lower)) {
     return false;
   }
   

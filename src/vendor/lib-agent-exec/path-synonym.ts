@@ -49,7 +49,9 @@ export function resolvePathWithDirectorySynonyms(resolvedPath: string, allowDire
       current = nextPath;
       continue;
     }
-    const hit = resolveSegmentSynonyms(current, DIRECTORY_SYNONYMS[seg.toLowerCase()] ?? [], segments.slice(idx + 1), allowDirectories);
+    const lowerSeg = seg.toLowerCase();
+    const synonyms = Object.hasOwn(DIRECTORY_SYNONYMS, lowerSeg) ? DIRECTORY_SYNONYMS[lowerSeg] ?? [] : [];
+    const hit = resolveSegmentSynonyms(current, synonyms, segments.slice(idx + 1), allowDirectories);
     if (hit !== null) return hit;
     break;
   }

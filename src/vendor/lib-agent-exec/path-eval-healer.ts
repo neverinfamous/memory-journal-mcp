@@ -63,26 +63,43 @@ function healEvalFileTools(code: string, cwd: string, target: HealTarget | undef
 }
 
 function healEvalSearchTools(code: string, cwd: string, target: HealTarget | undefined): string {
-  const searchMatchRegex = /\b(grep|egrep|fgrep|rg)\s+((?:-[^\s"'`;&|]+\s+)*)(?:(-e\s+(?:"[^"]*"|'[^']*'|[^\s]+)\s+)|(?:("[^"]*"|'[^']*'|[^\s]+)\s+))([^\s"'`;&|]+)/g;
-  return code.replace(searchMatchRegex, (fullMatch: string, cmdWord: string, flagsPart: string, optE: string | undefined, optPattern: string | undefined, targetPath: string) => {
+  const searchMatchRegex = /(?:^|(?<=[;&|\n]))\s*(grep|egrep|fgrep|rg)\s+((?:-[^\s"'`;&|]+\s+)*)(?:(-e\s+(?:"[^"]*"|'[^']*'|[^\s]+)\s+)|(?:("[^"]*"|'[^']*'|[^\s]+)\s+))([^\s"'`;&|]+)/g;
+  const spans = buildNonCodeSpans(code);
+  return code.replace(searchMatchRegex, (fullMatch: string, cmdWord: string, flagsPart: string, optE: string | undefined, optPattern: string | undefined, targetPath: string, offset: number) => {
+    if (isIndexInSpans(spans, offset)) return fullMatch;
+    const prefixWs = /^\s*/.exec(fullMatch)?.[0] ?? '';
     const patternPart = (optE ?? optPattern ?? '').trim();
     const cleanTargetPath = targetPath.replace(/[\\/]+$/, '');
     if (path.extname(cleanTargetPath).length === 0 && !cleanTargetPath.includes('/') && !cleanTargetPath.includes('\\')) return fullMatch;
     const healed = healSingleEvalPath(targetPath, true, cwd, target);
     if (healed === null) return fullMatch;
     logPathHeal(`Search path '${targetPath}' in eval code not found on disk, but found at '${healed}'.`, `Auto-correcting search path in eval command to '${healed}'... (Frictionless Recovery)`);
-    return `${cmdWord} ${flagsPart}${patternPart} ${healed}`;
+    return `${prefixWs}${cmdWord} ${flagsPart}${patternPart} ${healed}`;
   });
 }
 
+function isLikelyTypeScriptTypeOrJs(code: string, offset: number, cmdlet: string, afterMatch: string): boolean {
+  if (cmdlet.toLowerCase() !== 'type') return false;
+  const before = code.slice(Math.max(0, offset - 32), offset);
+  if (/\b(?:export|import|declare)\s+$/.test(before)) return true;
+  if (/^[ \t]*(?:[=:<{]|extends\b)/.test(afterMatch)) return true;
+  return /\b(?:const|let|var|function|import|export|interface)\b/.test(code) || /=>/.test(code);
+}
+
 function healEvalPowerShell(code: string, cwd: string, target: HealTarget | undefined): string {
-  const psCmdletRegex = /\b(Get-Content|gc|type|Get-ChildItem|gci)\s+((?:-[^\s"'`;&|]+\s+)*)([^\s"'`;&|]+)/gi;
-  return code.replace(psCmdletRegex, (fullMatch: string, cmdlet: string, flagsPart: string, filePath: string) => {
+  if (target === 'wsl2') return code;
+  const psCmdletRegex = /(?:^|(?<=[;&|\n]))\s*(Get-Content|gc|type|Get-ChildItem|gci)\s+((?:-[^\s"'`;&|]+\s+)*)([^\s"'`;&|]+)/gi;
+  const spans = buildNonCodeSpans(code);
+  return code.replace(psCmdletRegex, (fullMatch: string, cmdlet: string, flagsPart: string, filePath: string, offset: number) => {
+    if (isIndexInSpans(spans, offset)) return fullMatch;
+    const afterMatch = code.slice(offset + fullMatch.length);
+    if (isLikelyTypeScriptTypeOrJs(code, offset, cmdlet, afterMatch)) return fullMatch;
+    const prefixWs = /^\s*/.exec(fullMatch)?.[0] ?? '';
     const allowDirs = /Get-ChildItem|gci/i.test(cmdlet);
     const healed = healSingleEvalPath(filePath, allowDirs, cwd, target);
     if (healed === null) return fullMatch;
     logPathHeal(`Path '${filePath}' in eval code not found on disk, but found at '${healed}'.`, `Auto-correcting eval command to '${cmdlet} ${flagsPart}${healed}'... (Frictionless Recovery)`);
-    return `${cmdlet} ${flagsPart}${healed}`;
+    return `${prefixWs}${cmdlet} ${flagsPart}${healed}`;
   });
 }
 
@@ -101,7 +118,10 @@ function healRunnerToken(token: string, runnerCmd: string, cwd: string, target: 
 
 function healEvalRunners(code: string, cwd: string, target: HealTarget | undefined): string {
   const runnerRegex = /(?:^|(?<=[;&|\n]))\s*(bun|node|tsx|ts-node|python|python3)\b([^;&|\n]*)/gi;
-  return code.replace(runnerRegex, (fullMatch: string, runnerCmd: string, restArgs: string) => {
+  const spans = buildNonCodeSpans(code);
+  return code.replace(runnerRegex, (fullMatch: string, runnerCmd: string, restArgs: string, offset: number) => {
+    if (isIndexInSpans(spans, offset)) return fullMatch;
+    const prefixWs = /^\s*/.exec(fullMatch)?.[0] ?? '';
     const tokens = restArgs.match(TOKEN_RE) ?? [];
     let modified = false;
     const healedTokens = tokens.map((token) => {
@@ -111,7 +131,7 @@ function healEvalRunners(code: string, cwd: string, target: HealTarget | undefin
       return healed;
     });
     if (!modified) return fullMatch;
-    return `${runnerCmd}${healedTokens.join('')}`;
+    return `${prefixWs}${runnerCmd}${healedTokens.join('')}`;
   });
 }
 

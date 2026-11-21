@@ -1,33 +1,20 @@
 // @ts-nocheck
-import crypto from 'node:crypto';
 import fs from 'node:fs';
-import os from 'node:os';
 import path from 'node:path';
 import { match, P } from 'ts-pattern';
 import { execFileSync, spawnSync } from 'node:child_process';
 import { ExecutionContext } from './types.js';
-import { getPositionalArgs, convertToWslPath } from '../command-utils.js';
 import { AGENT_EXEC_README_URL } from './utils.js';
+import { sanitizeJqInvocation } from './jq-sanitizer.js';
 
 /** [INVARIANT]: Keep in sync with commit.ts stale-lock threshold (5 minutes). */
 export const STALE_INDEX_LOCK_MS = 5 * 60 * 1000;
 
-const AGENTS_PATH_RE = /(?:^|[\\/])\.agents(?:[\\/]|$)/;
+const AGENTS_PATH_RE = process.platform === 'win32'
+  ? /(?:^|[\\/])\.agents(?:[\\/]|$)/i
+  : /(?:^|[\\/])\.agents(?:[\\/]|$)/;
 const PRIVATE_PATH_RE = /(?:^|[\\/])\.agents[\\/](?:scratch|cache)(?:[\\/]|$)|issues\.jsonl$/i;
 const GIT_ADD_FORCE_RE = /^-[nvfipeuAN]*f[nvfipeuAN]*$/;
-
-const sanitizedJqTempFiles = new Set<string>();
-let jqExitCleanupRegistered = false;
-function registerJqTempFile(filePath: string): void {
-  sanitizedJqTempFiles.add(filePath);
-  if (jqExitCleanupRegistered) return;
-  jqExitCleanupRegistered = true;
-  process.on('exit', () => {
-    for (const p of sanitizedJqTempFiles) {
-      try { if (fs.statSync(p, { throwIfNoEntry: false }) !== undefined) fs.unlinkSync(p); } catch { /* ignore */ }
-    }
-  });
-}
 
 export interface GitIgnoreProbe {
   ignored: boolean;
@@ -233,31 +220,66 @@ function healGitAddForceFlag(ctx: ExecutionContext, gitCwd: string, addIdx: numb
     paths.push(a);
   }
 
-  let needsForce = false;
+  let hasNonAgentsPath = false;
+  let anyIgnoredAgents = false;
   for (const p of paths) {
     const isPrivate = PRIVATE_PATH_RE.test(p);
-    const isAgents = AGENTS_PATH_RE.test(p) || p === '.agents';
-    if (!isPrivate && !isAgents) continue;
-
-    const probe = probeGitIgnore(gitCwd, p);
-    const wholesale = isAgents && probe.ignored && isWholesaleAgentsIgnore(probe.pattern);
-    if ((isPrivate || wholesale) && (hasForce || probe.ignored)) {
-      const reason = isPrivate
-        ? 'scratch/cache directories and *issues.jsonl logs are private runtime state'
-        : `this repo ignores '.agents/' wholesale (${probe.pattern ?? '.agents/'}), so its agent tooling must stay out of git`;
-      console.error(`\n   💡 AGENT HINT: Refusing to ${hasForce ? 'force-add' : 'add'} '${p}': ${reason}.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Execution blocked. Remove '${p}' from 'git add' (and drop -f). Stage explicit tracked paths only. Ref: [AGENT_README.md](${AGENT_EXEC_README_URL})\x1b[0m`);
+    if (isPrivate) {
+      console.error(`\n   💡 AGENT HINT: Refusing to ${hasForce ? 'force-add' : 'add'} '${p}': scratch/cache directories and *issues.jsonl logs are private runtime state.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Execution blocked. Remove '${p}' from 'git add' (and drop -f). Stage explicit tracked paths only. Ref: [AGENT_README.md](${AGENT_EXEC_README_URL})\x1b[0m`);
       process.exit(1);
       return;
     }
-    if (probe.ignored && !hasForce) {
-      needsForce = true;
+    const isAgents = AGENTS_PATH_RE.test(p) || p.toLowerCase() === '.agents';
+    if (!isAgents) {
+      hasNonAgentsPath = true;
+      continue;
+    }
+
+    const probe = probeGitIgnore(gitCwd, p);
+    if (probe.ignored && isWholesaleAgentsIgnore(probe.pattern)) {
+      console.error(`\n   💡 AGENT HINT: Refusing to ${hasForce ? 'force-add' : 'add'} '${p}': this repo ignores '.agents/' wholesale (${probe.pattern ?? '.agents/'}), so its agent tooling must stay out of git.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Execution blocked. Remove '${p}' from 'git add' (and drop -f). Stage explicit tracked paths only. Ref: [AGENT_README.md](${AGENT_EXEC_README_URL})\x1b[0m`);
+      process.exit(1);
+      return;
+    }
+    if (probe.ignored) {
+      anyIgnoredAgents = true;
     }
   }
 
-  if (needsForce) {
+  if (paths.length > 0 && !hasForce && !hasNonAgentsPath && anyIgnoredAgents) {
     console.error(`\n   🛠️ AUTONOMOUS HEALING: Injecting '-f' to 'git add' for '.agents' path(s) that git check-ignore reports as ignored... (Frictionless Recovery)\x1b[0m`);
     ctx.args.splice(addIdx + 1, 0, '-f');
     syncPayloadArgs(ctx);
+  }
+}
+
+function healGitMutatingCommand(ctx: ExecutionContext, matchedArgs: readonly string[]): void {
+  const { gitCwd, subcmdIndex, subcmd } = parseGitInvocation(ctx);
+  const lockPath = path.join(gitCwd, '.git', 'index.lock');
+  const lockStats = fs.statSync(lockPath, { throwIfNoEntry: false });
+  if (lockStats !== undefined && Date.now() - lockStats.mtimeMs > STALE_INDEX_LOCK_MS) {
+    try {
+      console.error(`\n   🛠️ AUTONOMOUS HEALING: Detected stale '.git/index.lock' (age: ${Math.round((Date.now() - lockStats.mtimeMs) / 1000)}s). Removing lock to prevent exit 128... (Frictionless Recovery)\x1b[0m`);
+      fs.unlinkSync(lockPath);
+    } catch {
+      // ignore
+    }
+  }
+  if (ctx.payload.target !== 'wsl2') {
+    if (subcmd === 'rm') {
+      healGitRmStagedDeletions(ctx, gitCwd, subcmdIndex);
+    } else if (subcmd === 'add') {
+      const rewrittenToNoop = healGitAddStagedDeletions(ctx, gitCwd, subcmdIndex);
+      if (!rewrittenToNoop) healGitAddForceFlag(ctx, gitCwd, subcmdIndex);
+    }
+  }
+  if (subcmd === 'branch' && matchedArgs.includes('-r')) {
+    console.error(`\n   💡 AGENT HINT: 'git branch -r' may return stale deleted branches.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Synchronously running 'git fetch -p' to prune the cache before executing branch listing.\x1b[0m`);
+    try {
+      execFileSync('git', ['fetch', '-p'], { cwd: gitCwd, stdio: 'ignore', timeout: 60000, windowsHide: true });
+    } catch {
+      // ignore
+    }
   }
 }
 
@@ -278,7 +300,7 @@ export function runMutatingInterceptors(
       }
     })
     .with({ cmd: P.union('ping', 'ping.exe') }, ({ args: matchedArgs }) => {
-      if (process.platform === 'win32' || cmd === 'ping.exe') {
+      if ((process.platform === 'win32' && ctx.payload.target !== 'wsl2') || cmd === 'ping.exe') {
         if (matchedArgs.includes('-t')) {
           console.error(`\n   💡 AGENT HINT: 'ping -t' runs indefinitely. Stripping '-t'.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Execution blocked. Fix parameters or invoke the appropriate native tool (logged for CMS-03). Ref: [AGENT_README.md](${AGENT_EXEC_README_URL})\x1b[0m`);
           for (let i = ctx.args.length - 1; i >= 0; i--) {
@@ -300,7 +322,7 @@ export function runMutatingInterceptors(
       }
     })
     .with({ cmd: P.union('sudo', 'sudo.exe') }, ({ args: matchedArgs }) => {
-      if (process.platform !== 'win32' && !matchedArgs.includes('-n') && !matchedArgs.includes('--non-interactive')) {
+      if ((process.platform !== 'win32' || ctx.payload.target === 'wsl2') && !matchedArgs.includes('-n') && !matchedArgs.includes('--non-interactive')) {
         console.error(`\n   🛠️ AUTONOMOUS HEALING: Automatically injecting '-n' (non-interactive) into sudo command to prevent password prompt hanging.... (Frictionless Recovery)`);
         ctx.args.unshift('-n');
       }
@@ -318,129 +340,10 @@ export function runMutatingInterceptors(
       }
     })
     .with({ cmd: P.union('git', 'git.exe') }, ({ args: matchedArgs }) => {
-      const { gitCwd, subcmdIndex, subcmd } = parseGitInvocation(ctx);
-      const lockPath = path.join(gitCwd, '.git', 'index.lock');
-      const lockStats = fs.statSync(lockPath, { throwIfNoEntry: false });
-      if (lockStats !== undefined && Date.now() - lockStats.mtimeMs > STALE_INDEX_LOCK_MS) {
-        try {
-          console.error(`\n   🛠️ AUTONOMOUS HEALING: Detected stale '.git/index.lock' (age: ${Math.round((Date.now() - lockStats.mtimeMs) / 1000)}s). Removing lock to prevent exit 128... (Frictionless Recovery)\x1b[0m`);
-          fs.unlinkSync(lockPath);
-        } catch {
-          // ignore
-        }
-      }
-      if (ctx.payload.target !== 'wsl2') {
-        if (subcmd === 'rm') {
-          healGitRmStagedDeletions(ctx, gitCwd, subcmdIndex);
-        } else if (subcmd === 'add') {
-          const rewrittenToNoop = healGitAddStagedDeletions(ctx, gitCwd, subcmdIndex);
-          if (!rewrittenToNoop) {
-            healGitAddForceFlag(ctx, gitCwd, subcmdIndex);
-          }
-        }
-      }
-      if (subcmd === 'branch' && matchedArgs.includes('-r')) {
-        console.error(`\n   💡 AGENT HINT: 'git branch -r' may return stale deleted branches.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Synchronously running 'git fetch -p' to prune the cache before executing branch listing.\x1b[0m`);
-        try {
-          execFileSync('git', ['fetch', '-p'], { cwd: gitCwd, stdio: 'ignore', timeout: 60000, windowsHide: true });
-        } catch {
-          // ignore
-        }
-      }
+      healGitMutatingCommand(ctx, matchedArgs);
     })
     .with({ cmd: P.union('jq', 'jq.exe') }, ({ args: matchedArgs }) => {
-      const hasStdin = ctx.payload.stdin !== undefined && ctx.payload.stdin.length > 0;
-      if (hasStdin && getPositionalArgs('jq', matchedArgs).length === 0) {
-        console.error(`\n   💡 AGENT HINT: 'jq' requires a filter argument when reading from stdin.`);
-        console.error(`\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Auto-injecting '.' filter... (Frictionless Recovery)\x1b[0m`);
-        ctx.args.push('.');
-      }
-      if (hasStdin && typeof ctx.payload.stdin === 'string') {
-        let stdin = ctx.payload.stdin;
-        // Check for XML/untrusted wrapper tags like <database_output>...</database_output> or <output>...</output>
-        const tagMatch = stdin.match(/<([a-zA-Z0-9_-]+_output|output)>([\s\S]*?)<\/\1>/i);
-        if (tagMatch !== null && tagMatch[2] !== undefined) {
-          console.error(`\n   🛠️ AUTONOMOUS HEALING: Stripped untrusted wrapper tags (<${tagMatch[1]}>) from jq stdin... (Frictionless Recovery)\x1b[0m`);
-          stdin = tagMatch[2].trim();
-        } else {
-          // Check for markdown code fences
-          const fenceMatch = stdin.match(/```(?:json)?\s*([\s\S]*?)\s*```/i);
-          if (fenceMatch !== null && fenceMatch[1] !== undefined) {
-            console.error(`\n   🛠️ AUTONOMOUS HEALING: Stripped markdown code fences from jq stdin... (Frictionless Recovery)\x1b[0m`);
-            stdin = fenceMatch[1].trim();
-          } else if (stdin.includes('[WARNING:') || stdin.includes('<database_output>')) {
-            const cleaned = stdin
-              .replace(/\[WARNING:[^\]]*\]/gi, '')
-              .replace(/<database_output>/gi, '')
-              .replace(/<\/database_output>/gi, '')
-              .trim();
-            if (cleaned !== stdin) {
-              console.error(`\n   🛠️ AUTONOMOUS HEALING: Stripped warning preambles from jq stdin... (Frictionless Recovery)\x1b[0m`);
-              stdin = cleaned;
-            }
-          }
-        }
-        ctx.payload.stdin = stdin;
-      }
-
-      const cwd = ctx.payload.cwd !== undefined && ctx.payload.cwd.length > 0
-        ? path.resolve(ctx.payload.cwd)
-        : process.cwd();
-      const posArgs = getPositionalArgs('jq', ctx.args);
-      const hasFilterFile = ctx.args.some(a => a === '-f' || a === '--from-file');
-      const fileArgCandidates = hasFilterFile ? posArgs : posArgs.slice(1);
-
-      for (const fileArg of fileArgCandidates) {
-        if (!fileArg || fileArg.startsWith('-')) continue;
-        const rawFile = fileArg.replace(/^['"]|['"]$/g, '');
-        const isWslPath = rawFile.startsWith('/mnt/');
-        const wslNormalized = isWslPath
-          ? rawFile.replace(/^\/mnt\/([a-zA-Z])\/(.*)$/, (_, drive, rest) => `${drive.toUpperCase()}:/${rest}`)
-          : rawFile;
-        const resolvedFile = path.isAbsolute(wslNormalized) ? path.normalize(wslNormalized) : path.resolve(cwd, wslNormalized);
-
-        if (fs.existsSync(resolvedFile)) {
-          try {
-            const rawContent = fs.readFileSync(resolvedFile, 'utf8');
-            let cleaned = rawContent;
-            const tagMatch = rawContent.match(/<([a-zA-Z0-9_-]+_output|output)>([\s\S]*?)<\/\1>/i);
-            if (tagMatch !== null && tagMatch[2] !== undefined) {
-              cleaned = tagMatch[2].trim();
-            } else {
-              const fenceMatch = rawContent.match(/```(?:json)?\s*([\s\S]*?)\s*```/i);
-              if (fenceMatch !== null && fenceMatch[1] !== undefined) {
-                cleaned = fenceMatch[1].trim();
-              } else if (rawContent.includes('[WARNING:') || rawContent.includes('<database_output>')) {
-                cleaned = rawContent
-                  .replace(/\[WARNING:[^\]]*\]/gi, '')
-                  .replace(/<database_output>/gi, '')
-                  .replace(/<\/database_output>/gi, '')
-                  .trim();
-              }
-            }
-
-            if (cleaned !== rawContent) {
-              console.error(`\n   🛠️ AUTONOMOUS HEALING: Stripped untrusted wrapper tags / warning preambles from jq input file '${fileArg}'... (Frictionless Recovery)\x1b[0m`);
-              const tmpSanitized = path.join(os.tmpdir(), `.agent_sanitized_jq_${crypto.randomUUID()}_${path.basename(resolvedFile)}`);
-              fs.writeFileSync(tmpSanitized, cleaned, { encoding: 'utf8', mode: 0o600 });
-              registerJqTempFile(tmpSanitized);
-              const newFileArg = isWslPath ? convertToWslPath(tmpSanitized) : tmpSanitized;
-              const idx = ctx.args.indexOf(fileArg);
-              if (idx !== -1) {
-                ctx.args[idx] = newFileArg;
-              }
-              if ('args' in ctx.payload && Array.isArray(ctx.payload.args)) {
-                const pIdx = ctx.payload.args.indexOf(fileArg);
-                if (pIdx !== -1) {
-                  ctx.payload.args[pIdx] = newFileArg;
-                }
-              }
-            }
-          } catch {
-            // ignore read error
-          }
-        }
-      }
+      sanitizeJqInvocation(ctx, matchedArgs);
     })
     .otherwise(() => {});
 }

@@ -1,120 +1,66 @@
 // @ts-nocheck
-import fs from 'fs';
-import path from 'path';
+import path from 'node:path';
+import { AUTONOMOUS_HEALING_MSG } from '../utils.js';
+import { ExecutionContext } from './types.js';
+import { getPkgNonFlagArgs } from './utils.js';
+import { rewriteJsPackageManager, stripScopedInteractiveFlags } from './package-manager-js-rewrites.js';
+import { applyPackageManagerTimeouts } from './package-manager-timeouts.js';
 import {
-  AUTONOMOUS_HEALING_MSG,
-  emitInterceptBanner,
-  resolveAgentScriptFallback,
-  tryAccelerateCompiledCommitScript,
-} from '../utils.js';
-import { ExecutionContext, AGENT_NATIVE_TOOLS, ECOSYSTEM_MCP_TOOLS } from './types.js';
-import { getPkgNonFlagArgs, stripInlineCodeArgs } from './utils.js';
-import { handleRipgrepInterception } from './search-interceptor.js';
-import { getUnderlyingPackageScript } from '../command-utils.js';
-import { configureCwdModuleResolution, rewriteInlineScriptToTempFile } from '../inline-script-healer.js';
+  healMissingAgentScriptArgs,
+  rewriteToolBinary,
+  rewriteTsxInvocation,
+  splitJoinedTestTargetArgs,
+  translateNativeOrDlxTool,
+  tryAccelerateCommitForPm,
+} from './package-manager-tool-rewrites.js';
 
-function healMissingAgentScriptArgs(
-  args: string[],
-  projectDir: string,
-  payload: ExecutionContext['payload']
-): void {
-  if (args.some((a) => path.basename(a).toLowerCase() === 'agent-exec.ts')) return;
-  let mutated = false;
-  for (let i = 0; i < args.length; i++) {
-    const rawArg = args[i];
-    if (rawArg === undefined) continue;
-    if (rawArg === '--') break;
-    if (rawArg.startsWith('-')) continue;
-    const resolved = resolveAgentScriptFallback(rawArg, projectDir);
-    if (resolved !== null) {
-      console.error(`\n   🛠️ AUTONOMOUS HEALING: Resolved missing '${rawArg}' to '${resolved}'... (Frictionless Recovery)`);
-      args[i] = resolved;
-      mutated = true;
-      break;
-    }
-    if (/\.(?:ts|js|mjs|cjs)$/i.test(rawArg)) break;
-  }
-  if (mutated && 'command' in payload) {
-    payload.args = args;
-  }
-}
+const ALL_JS_PM_CMDS = new Set([
+  'npm', 'npm.cmd', 'npm.exe', 'pnpm', 'pnpm.cmd', 'pnpm.exe',
+  'yarn', 'yarn.cmd', 'yarn.exe', 'bun', 'bun.cmd', 'bun.exe',
+  'npx', 'npx.cmd', 'npx.exe', 'pnpx', 'pnpx.cmd', 'pnpx.exe',
+  'bunx', 'bunx.cmd', 'bunx.exe',
+]);
+const CORE_JS_PM_CMDS = new Set([
+  'npm', 'npm.cmd', 'npm.exe', 'pnpm', 'pnpm.cmd', 'pnpm.exe',
+  'yarn', 'yarn.cmd', 'yarn.exe', 'bun', 'bun.cmd', 'bun.exe',
+]);
+const RUNNER_CMDS = new Set([
+  'npx', 'npx.cmd', 'npx.exe', 'pnpx', 'pnpx.cmd', 'pnpx.exe',
+  'bunx', 'bunx.cmd', 'bunx.exe',
+]);
 
-export function packageManagerInterceptor(ctx: ExecutionContext): void {
-  let { cmdBasename } = ctx;
-  const { envOverrides } = ctx;
-  let { args } = ctx;
-  if (!args) args = [];
-
-  const projectDir = ctx.payload.cwd !== undefined && ctx.payload.cwd.length > 0
-    ? path.resolve(ctx.payload.cwd)
-    : (ctx.cwd !== undefined && ctx.cwd.length > 0 ? path.resolve(ctx.cwd) : process.cwd());
-
-  if (['npm', 'npm.cmd', 'npm.exe', 'pnpm', 'pnpm.cmd', 'pnpm.exe', 'yarn', 'yarn.cmd', 'yarn.exe', 'bun', 'bun.cmd', 'bun.exe', 'npx', 'npx.cmd', 'npx.exe', 'pnpx', 'pnpx.cmd', 'pnpx.exe', 'bunx', 'bunx.cmd', 'bunx.exe'].includes(cmdBasename)) {
-    healMissingAgentScriptArgs(args, projectDir, ctx.payload);
-    if (!cmdBasename.startsWith('bun')) {
-      const accelerated = tryAccelerateCompiledCommitScript(args, projectDir, ctx.payload.target);
-      if (accelerated !== null) {
-        const nodeCmd = process.platform === 'win32' ? 'node.exe' : 'node';
-        ctx.cmdBasename = nodeCmd;
-        args.splice(0, args.length, accelerated.compiledPath, ...accelerated.remainingArgs);
-        ctx.args = args;
-        if ('command' in ctx.payload) {
-          ctx.payload.command = nodeCmd;
-          ctx.payload.args = args;
-        }
-        emitInterceptBanner(`\n   💡 AGENT INTERCEPT: Disabling stall interceptors and extending timeout for deterministic workflow script to prevent false positive aborts.`);
-        ctx.payload.bypassInterceptors = true;
-        if (ctx.payload.timeoutMs === undefined || ctx.payload.timeoutMs < 240000) {
-          ctx.payload.timeoutMs = 240000;
-        }
-        return;
-      }
-    }
-  }
-
-  if (args.includes('--help') || args.includes('-h')) return;
-
+function applySystemPackageFlags(cmdBasename: string, args: string[], envOverrides: Record<string, string>): void {
   if (['apt', 'apt-get'].includes(cmdBasename)) {
     envOverrides['DEBIAN_FRONTEND'] = 'noninteractive';
     if (!args.includes('-y') && !args.includes('--yes')) {
       console.error(`\n   🛠️ AUTONOMOUS HEALING: Automatically injecting '-y' into apt/apt-get command to prevent prompt hanging.... (Frictionless Recovery)`);
       args.unshift('-y');
     }
+    return;
   }
-
-  if (['apk'].includes(cmdBasename)) {
-    if (args.includes('add') || args.includes('del')) {
-       if (!args.includes('--no-interactive')) {
-         console.error(`\n   🛠️ AUTONOMOUS HEALING: Automatically injecting '--no-interactive' into apk command.... (Frictionless Recovery)`);
-         args.push('--no-interactive');
-       }
-    }
+  if (cmdBasename === 'apk' && (args.includes('add') || args.includes('del')) && !args.includes('--no-interactive')) {
+    console.error(`\n   🛠️ AUTONOMOUS HEALING: Automatically injecting '--no-interactive' into apk command.... (Frictionless Recovery)`);
+    args.push('--no-interactive');
+    return;
   }
-
-  if (['pacman', 'pacman.exe'].includes(cmdBasename)) {
-    if (!args.includes('--noconfirm')) {
-      console.error(`\n   🛠️ AUTONOMOUS HEALING: Automatically injecting '--noconfirm' into pacman command.... (Frictionless Recovery)`);
-      args.push('--noconfirm');
-    }
+  if (['pacman', 'pacman.exe'].includes(cmdBasename) && !args.includes('--noconfirm')) {
+    console.error(`\n   🛠️ AUTONOMOUS HEALING: Automatically injecting '--noconfirm' into pacman command.... (Frictionless Recovery)`);
+    args.push('--noconfirm');
+    return;
   }
-
-  if (['yum', 'dnf'].includes(cmdBasename)) {
-    if (!args.includes('-y')) {
-      console.error(`\n   🛠️ AUTONOMOUS HEALING: Automatically injecting '-y' into ${cmdBasename} command.... (Frictionless Recovery)`);
+  if (['yum', 'dnf'].includes(cmdBasename) && !args.includes('-y')) {
+    console.error(`\n   🛠️ AUTONOMOUS HEALING: Automatically injecting '-y' into ${cmdBasename} command.... (Frictionless Recovery)`);
+    args.push('-y');
+    return;
+  }
+  if (['conda', 'conda.exe', 'mamba', 'mamba.exe'].includes(cmdBasename) && !args.includes('-y') && !args.includes('--yes')) {
+    const subCmd = getPkgNonFlagArgs(args)[0];
+    if (subCmd && ['install', 'create', 'update', 'upgrade', 'remove', 'uninstall'].includes(subCmd)) {
+      console.error(`\n   🛠️ AUTONOMOUS HEALING: Automatically injecting '-y' into ${cmdBasename} ${subCmd} command to prevent prompt hanging.... (Frictionless Recovery)`);
       args.push('-y');
     }
+    return;
   }
-
-  if (['conda', 'conda.exe', 'mamba', 'mamba.exe'].includes(cmdBasename)) {
-    if (!args.includes('-y') && !args.includes('--yes')) {
-      const subCmd = getPkgNonFlagArgs(args)[0];
-      if (['install', 'create', 'update', 'upgrade', 'remove', 'uninstall'].includes(subCmd)) {
-        console.error(`\n   🛠️ AUTONOMOUS HEALING: Automatically injecting '-y' into ${cmdBasename} ${subCmd} command to prevent prompt hanging.... (Frictionless Recovery)`);
-        args.push('-y');
-      }
-    }
-  }
-
   const mIndex = args.indexOf('-m');
   const isPythonPip = ['python', 'python.exe', 'python3', 'python3.exe'].includes(cmdBasename) && mIndex !== -1 && args[mIndex + 1] === 'pip';
   if (['pip', 'pip3', 'pip.exe', 'pip3.exe'].includes(cmdBasename) || isPythonPip) {
@@ -125,495 +71,128 @@ export function packageManagerInterceptor(ctx: ExecutionContext): void {
       args.push('-y');
     }
   }
+}
 
-  if (['npm', 'npm.cmd', 'npm.exe', 'pnpm', 'pnpm.cmd', 'pnpm.exe', 'yarn', 'yarn.cmd', 'yarn.exe', 'bun', 'bun.cmd', 'bun.exe'].includes(cmdBasename)) {
-    // [INVARIANT]: Detect both modern text lockfile ('bun.lock') and legacy binary lockfile ('bun.lockb').
-    const isBunProject = fs.existsSync(path.join(projectDir, 'bun.lock')) || fs.existsSync(path.join(projectDir, 'bun.lockb'));
-    const isNpm = cmdBasename.startsWith('npm');
-    const isYarn = cmdBasename.startsWith('yarn');
-    const isPnpm = cmdBasename.startsWith('pnpm');
-
-    if (!isBunProject && (isNpm || isYarn)) {
-      const nonFlagArgs = args.filter(a => !a.startsWith('-'));
-      const subCmd = nonFlagArgs[0];
-      let rewriteToPnpm = false;
-
-      if (isNpm) {
-        if (subCmd === 'install' && nonFlagArgs.length === 1) {
-          rewriteToPnpm = true;
-        } else if (subCmd === 'install' && nonFlagArgs.length > 1) {
-          rewriteToPnpm = true;
-          args[args.indexOf('install')] = 'add';
-        } else if (subCmd === 'uninstall' && nonFlagArgs.length > 1) {
-          rewriteToPnpm = true;
-          args[args.indexOf('uninstall')] = 'remove';
-        } else if (['run', 'test', 'start'].includes(subCmd)) {
-          rewriteToPnpm = true;
-        } else if (subCmd === 'ci') {
-          rewriteToPnpm = true;
-          args[args.indexOf('ci')] = 'install';
-          if (!args.includes('--frozen-lockfile')) args.push('--frozen-lockfile');
-        }
-      } else if (isYarn) {
-        if (!subCmd && args.length === 0) {
-          rewriteToPnpm = true;
-          args.push('install');
-        } else if (['add', 'remove'].includes(subCmd) && nonFlagArgs.length > 1) {
-          rewriteToPnpm = true;
-        }
-      }
-
-      if (rewriteToPnpm) {
-        console.error(`\n   🛠️ AUTONOMOUS HEALING: Transparently rewriting '${`${cmdBasename} ${subCmd || ''}`.trim()}' to pnpm... (Frictionless Recovery)`);
-        cmdBasename = process.platform === 'win32' ? 'pnpm.cmd' : 'pnpm';
-        ctx.cmdBasename = cmdBasename;
-        if ('command' in ctx.payload) {
-           ctx.payload.command = cmdBasename;
-        }
-      }
-    } else if (isBunProject && (isNpm || isYarn || isPnpm)) {
-      const nonFlagArgs = args.filter(a => !a.startsWith('-'));
-      const subCmd = nonFlagArgs[0];
-      console.error(`\n   🛠️ AUTONOMOUS HEALING: Bun project detected. Transparently rewriting '${`${cmdBasename} ${subCmd || ''}`.trim()}' to bun... (Frictionless Recovery)`);
-      if (isNpm && subCmd === 'uninstall') args[args.indexOf('uninstall')] = 'remove';
-      if (isNpm && subCmd === 'ci') { args[args.indexOf('ci')] = 'install'; if (!args.includes('--frozen-lockfile')) args.push('--frozen-lockfile'); }
-      if (isYarn && !subCmd && args.length === 0) args.push('install');
-      cmdBasename = process.platform === 'win32' ? 'bun.exe' : 'bun';
-      ctx.cmdBasename = cmdBasename;
-      if ('command' in ctx.payload) ctx.payload.command = cmdBasename;
-    }
-
-    envOverrides['CI'] = '1';
-    envOverrides['PNPM_INTERACTIVE'] = 'false';
-
-    const isYarnOrPnpm = isYarn || isPnpm || cmdBasename.includes('yarn') || cmdBasename.includes('pnpm');
-    if (args.includes('--interactive') || (isYarnOrPnpm && args.includes('-i'))) {
-      console.error(`\n   🛠️ AUTONOMOUS HEALING: Stripping interactive flag from ${cmdBasename} command... (Frictionless Recovery)`);
-      for (let i = args.length - 1; i >= 0; i--) {
-        if (args[i] === '--interactive' || (isYarnOrPnpm && args[i] === '-i')) args.splice(i, 1);
-      }
-    }
-    const subCmd = getPkgNonFlagArgs(args)[0];
-    if (subCmd && (AGENT_NATIVE_TOOLS as readonly string[]).includes(subCmd)) {
-      if (subCmd === 'grep_search') {
-        const sIdx = args.findIndex(a => ['-s', '--symbol', '--pattern', '--searchpattern', '--search-pattern', '--targetcontent', '--target-content', '--content'].includes(a.toLowerCase()));
-        const pIdx = args.findIndex(a => ['-p', '--path', '-d', '--dir', '--searchpath', '--search-path'].includes(a.toLowerCase()));
-        const subCmdIdx = args.indexOf(subCmd);
-        const argsAfterSubCmd = args.slice(subCmdIdx + 1);
-        const nonFlagAfterSubCmd: string[] = [];
-        for (let i = 0; i < argsAfterSubCmd.length; i++) {
-          const a = argsAfterSubCmd[i];
-          if (['-s', '--symbol', '--pattern', '-p', '--path', '-d', '--dir', '--searchpath', '--search-path', '--searchpattern', '--search-pattern', '--targetcontent', '--target-content', '--content'].includes(a.toLowerCase())) {
-            i++;
-            continue;
-          }
-          if (!a.startsWith('-')) {
-            nonFlagAfterSubCmd.push(a);
-          }
-        }
-        const pattern = sIdx !== -1 && sIdx + 1 < args.length ? (args[sIdx + 1] ?? '') : (nonFlagAfterSubCmd[0] ?? '');
-        const searchPath = pIdx !== -1 && pIdx + 1 < args.length ? (args[pIdx + 1] ?? '.') : (nonFlagAfterSubCmd[1] ?? '.');
-        const isPathLike = (s: string): boolean => {
-          if (!s || s.length === 0) return false;
-          const clean = s.trim();
-          if (clean === '.' || clean === '..' || clean.startsWith('./') || clean.startsWith('../') || clean.endsWith('/') || clean.endsWith('\\')) return true;
-          if (clean.includes('/') || clean.includes('\\') || /^[a-zA-Z]:/.test(clean)) return true;
-          try {
-            const cwd = ctx.payload.cwd !== undefined && ctx.payload.cwd.length > 0 ? path.resolve(ctx.payload.cwd) : process.cwd();
-            return fs.existsSync(path.resolve(cwd, clean)) && fs.statSync(path.resolve(cwd, clean)).isDirectory();
-          } catch {
-            return false;
-          }
-        };
-        let finalPattern = pattern;
-        let finalPath = searchPath;
-        if (isPathLike(finalPattern) && !isPathLike(finalPath) && finalPath.length > 0) {
-          const tmp = finalPattern;
-          finalPattern = finalPath;
-          finalPath = tmp;
-        }
-        if (finalPattern.length > 0) {
-          console.error(`\n   💡 AGENT HINT: '${subCmd}' is an agent-native tool, NOT a package manager script.`);
-          console.error(`\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Auto-translating '${cmdBasename} ${subCmd}' to ripgrep (rg)... (Frictionless Recovery)\x1b[0m`);
-          ctx.cmdBasename = 'rg';
-          const rgFlags = ['-n'];
-          if (args.some(a => a === '-i' || a === '-ri' || a === '-ir' || a === '--case-insensitive' || (a.startsWith('-') && !a.startsWith('--') && a.includes('i')))) {
-            rgFlags.push('-i');
-          }
-          if (args.some(a => a === '-w' || a === '--word-regexp')) {
-            rgFlags.push('-w');
-          }
-          if (!args.some(a => a === '-e' || a === '--regexp')) {
-            rgFlags.push('-F');
-          }
-          ctx.args = [...rgFlags, finalPattern, finalPath];
-          if ('command' in ctx.payload) {
-            ctx.payload.command = 'rg';
-            ctx.payload.args = ctx.args;
-          }
-          handleRipgrepInterception(ctx, false);
-          return;
-        }
-      }
-      if (subCmd === 'list_dir') {
-        const subCmdIdx = args.indexOf(subCmd);
-        const pathArg = args.slice(subCmdIdx + 1).find(a => !a.startsWith('-')) ?? '.';
-        console.error(`\n   💡 AGENT HINT: 'list_dir' is an agent-native tool, NOT a package manager script.`);
-        console.error(`\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Auto-translating '${cmdBasename} ${subCmd}' to ls... (Frictionless Recovery)\x1b[0m`);
-        ctx.cmdBasename = 'ls';
-        ctx.args = [pathArg];
-        ctx.payload.target = 'wsl2';
-        if ('command' in ctx.payload) {
-          ctx.payload.command = 'ls';
-          ctx.payload.args = ctx.args;
-        }
-        return;
-      }
-      if (subCmd === 'view_file') {
-        const subCmdIdx = args.indexOf(subCmd);
-        const fileArg = args.slice(subCmdIdx + 1).find(a => !a.startsWith('-'));
-        if (fileArg) {
-          console.error(`\n   💡 AGENT HINT: 'view_file' is an agent-native tool, NOT a package manager script.`);
-          console.error(`\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Auto-translating '${cmdBasename} ${subCmd}' to cat... (Frictionless Recovery)\x1b[0m`);
-          ctx.cmdBasename = 'cat';
-          ctx.args = [fileArg];
-          ctx.payload.target = 'wsl2';
-          if ('command' in ctx.payload) {
-            ctx.payload.command = 'cat';
-            ctx.payload.args = ctx.args;
-          }
-          return;
-        }
-      }
-      console.error(`\n   💡 AGENT HINT: '${subCmd}' is an agent-native tool, NOT a package manager script or CLI binary. Please invoke the '${subCmd}' tool directly instead of executing '${cmdBasename} ${subCmd}'.\n${AUTONOMOUS_HEALING_MSG}`);
-      process.exit(1);
-    }
-    if (subCmd && (ECOSYSTEM_MCP_TOOLS as readonly string[]).includes(subCmd)) {
-      console.error(`\n   💡 AGENT HINT: '${subCmd}' is an MCP tool, NOT a package manager script or CLI binary. Please call the '${subCmd}' MCP tool via call_mcp_tool instead of executing '${cmdBasename} ${subCmd}'.\n${AUTONOMOUS_HEALING_MSG}`);
-      process.exit(1);
-    }
-    if (subCmd === 'upgrade-interactive') {
-      console.error(`\n   💡 AGENT HINT: 'yarn upgrade-interactive' is a TUI tool and will hang. Use 'yarn upgrade' instead.\n${AUTONOMOUS_HEALING_MSG}`);
-      process.exit(1);
-    }
-    if (subCmd === 'dlx' || subCmd === 'x') {
-      const subCmdIdx = args.indexOf(subCmd);
-      const afterSubCmd = args.slice(subCmdIdx + 1);
-      const targetPkgIdx = afterSubCmd.findIndex(a => !a.startsWith('-'));
-      const targetPkg = targetPkgIdx !== -1 ? afterSubCmd[targetPkgIdx] : undefined;
-      if (targetPkg === 'rg' || targetPkg === 'ripgrep') {
-        console.error(`\n   🛠️ AUTONOMOUS HEALING: Auto-translating '${cmdBasename} ${subCmd} ${targetPkg}' to native ripgrep (rg)... (Frictionless Recovery)\x1b[0m`);
-        ctx.cmdBasename = 'rg';
-        const absoluteTargetIdx = subCmdIdx + 1 + targetPkgIdx;
-        ctx.args = args.filter((a, idx) => idx !== subCmdIdx && idx !== absoluteTargetIdx && a !== '-y' && a !== '--yes');
-        if ('command' in ctx.payload) {
-          ctx.payload.command = 'rg';
-          ctx.payload.args = ctx.args;
-        }
-        handleRipgrepInterception(ctx, false);
-        return;
-      }
-      if (targetPkg === 'fd' || targetPkg === 'fdfind') {
-        console.error(`\n   🛠️ AUTONOMOUS HEALING: Auto-translating '${cmdBasename} ${subCmd} ${targetPkg}' to native fd... (Frictionless Recovery)\x1b[0m`);
-        ctx.cmdBasename = 'fd';
-        const absoluteTargetIdx = subCmdIdx + 1 + targetPkgIdx;
-        ctx.args = args.filter((a, idx) => idx !== subCmdIdx && idx !== absoluteTargetIdx && a !== '-y' && a !== '--yes');
-        ctx.payload.target = 'wsl2';
-        if ('command' in ctx.payload) {
-          ctx.payload.command = 'fd';
-          ctx.payload.args = ctx.args;
-        }
-        return;
-      }
-    }
-    if (['init', 'create', 'dlx', 'x'].includes(subCmd) && !args.includes('-y') && !args.includes('--yes')) {
-      console.error(`\n   🛠️ AUTONOMOUS HEALING: Automatically injecting '-y' into ${cmdBasename} ${subCmd} command to prevent prompt hanging.... (Frictionless Recovery)`);
-      if (subCmd === 'dlx' || subCmd === 'x') {
-         args.splice(args.indexOf(subCmd) + 1, 0, '-y');
-      } else {
-         args.push('-y');
-      }
-    }
-    if (['install', 'add', 'update', 'upgrade'].includes(subCmd)) {
-      if (!args.includes('--no-fund') && cmdBasename.startsWith('npm')) args.push('--no-fund');
-      if (!args.includes('--no-audit') && cmdBasename.startsWith('npm')) args.push('--no-audit');
-    }
-    const isNestedAgentExec = args.some(a => path.basename(a).toLowerCase() === 'agent-exec.ts');
-    if (isNestedAgentExec) {
-      return;
-    }
-    const isTestSubCmd = (subCmd && /^(?:vitest|jest|pytest|playwright|cypress|test(?::.*|-.*)?|coverage(?::.*)?)$/i.test(subCmd)) ||
-      args.some(a => /^(?:vitest|jest|pytest|playwright|cypress)$/i.test(a));
-    if (isTestSubCmd) {
-      let didSplitJoinedTestArgs = false;
-      const expandedArgs: string[] = [];
-      for (const a of args) {
-        if (!a.startsWith('-') && a.includes(' ')) {
-          const parts = a.trim().split(/\s+/);
-          const allTestTargets = parts.length > 1 && parts.every(p =>
-            /\.(?:test|spec)\.[a-zA-Z0-9]+$/i.test(p) ||
-            /(?:^|[/\\])(?:tests?|__tests__)(?:[/\\][^\s.]*)?$/i.test(p)
-          );
-          if (allTestTargets) {
-            expandedArgs.push(...parts);
-            didSplitJoinedTestArgs = true;
-            continue;
-          }
-        }
-        expandedArgs.push(a);
-      }
-      if (didSplitJoinedTestArgs) {
-        console.error(`\n   🛠️ AUTONOMOUS HEALING: Detected space-separated test file paths in a single argument. Splitting into individual arguments... (Frictionless Recovery)`);
-        args.splice(0, args.length, ...expandedArgs);
-        if ('command' in ctx.payload) {
-          ctx.payload.args = args;
-        }
-      }
-      if (cmdBasename.startsWith('bun')) {
-        for (let i = 0; i < args.length; i++) {
-          const arg = args[i];
-          if (arg !== undefined && /^\.[a-zA-Z0-9_].*[/\\]/.test(arg)) {
-            args[i] = `./${arg.replace(/\\/g, '/')}`;
-          }
-        }
-        if ('command' in ctx.payload) {
-          ctx.payload.args = args;
-        }
-      }
-    }
-    const nonFlagArgs = getPkgNonFlagArgs(args);
-    const tsxBin = (subCmd === 'tsx' || subCmd === 'ts-node')
-      ? subCmd
-      : ((subCmd === 'exec' || subCmd === 'run') && (nonFlagArgs[1] === 'tsx' || nonFlagArgs[1] === 'ts-node') ? nonFlagArgs[1] : undefined);
-    if (tsxBin !== undefined) {
-      const tsxIdx = args.indexOf(tsxBin);
-      if (tsxIdx !== -1) {
-        const rewritten = rewriteInlineScriptToTempFile({
-          interpreterName: tsxBin,
-          args,
-          envOverrides,
-          cwd: projectDir,
-          ...(ctx.payload.target !== undefined ? { target: ctx.payload.target } : {}),
-          ...(ctx.payload.env !== undefined ? { payloadEnv: ctx.payload.env } : {}),
-          startIdx: tsxIdx + 1,
-        });
-        if (rewritten !== null && 'command' in ctx.payload) {
-          ctx.payload.args = ctx.args;
-        } else if (rewritten === null && args.some((a) => /[\\/]\.gemini[\\/][^\\/]+[\\/]brain[\\/]/i.test(a))) {
-          configureCwdModuleResolution(envOverrides, projectDir, tsxBin, ctx.payload.target, ctx.payload.env);
-        }
-      }
-    }
-    const subCmdLower = subCmd !== undefined ? subCmd.toLowerCase() : (isYarn ? 'install' : '');
-    // [INTENT]: Bypass IOController prompt-stall aborts and grant >=300s timeout during dependency resolution/installation across pnpm, npm, yarn, and bun.
-    const isPackageResolution = ['install', 'i', 'ci', 'add', 'update', 'up', 'dedupe'].includes(subCmdLower);
-    const targetScript = (subCmd === 'run' || subCmd === 'exec') ? nonFlagArgs[1] : subCmd;
-    const underlyingScript = getUnderlyingPackageScript(cmdBasename, args, ctx.payload.cwd);
-    const nonInlineArgs = stripInlineCodeArgs(cmdBasename, args);
-    const isKnownDeterministic = nonInlineArgs.some(a => /(?:commit\.(?:ts|js)|get-git-history-json\.ts|backup-conversations\.ts)/i.test(a));
-    const isBackupConversations = nonInlineArgs.some(a => /backup-conversations\.ts/i.test(a));
-    const isPlaywright = !isPackageResolution && !isKnownDeterministic && Boolean(
-      (targetScript && /(?:playwright|cypress|\be2e\b|test:e2e|test-e2e)/i.test(targetScript)) ||
-      nonInlineArgs.some(a => /(?:playwright|cypress|\be2e\b|test:e2e|test-e2e)/i.test(a)) ||
-      (underlyingScript && /(?:playwright|cypress|\be2e\b)/i.test(underlyingScript))
-    );
-    const isCoverage = !isPackageResolution && !isKnownDeterministic && Boolean(
-      (targetScript && /(?:coverage|test:coverage)/i.test(targetScript)) ||
-      nonInlineArgs.some(a => /(?:coverage|--coverage|test:coverage)/i.test(a)) ||
-      (underlyingScript && /(?:coverage|--coverage)/i.test(underlyingScript))
-    );
-    const isLongRunningQualityCheck = !isPackageResolution && Boolean(
-      isPlaywright ||
-      isCoverage ||
-      isKnownDeterministic ||
-      (targetScript && (
-        targetScript.startsWith('test') ||
-        ['lint', 'typecheck', 'check', 'build'].includes(targetScript) ||
-        targetScript.includes('test') ||
-        targetScript.includes('lint') ||
-        targetScript.includes('typecheck')
-      )) ||
-      nonInlineArgs.some(a => /(?:vitest|jest|playwright|cypress|test|lint|typecheck|tsc)/i.test(a)) ||
-      (underlyingScript && /(?:vitest|jest|playwright|cypress|eslint|tsc|typecheck|test)/i.test(underlyingScript))
-    );
-    if (isPackageResolution) {
-      emitInterceptBanner(`\n   💡 AGENT INTERCEPT: Disabling stall interceptors and extending timeout for package installation/resolution command to prevent false positive aborts.`);
-      ctx.payload.bypassInterceptors = true;
-      if (ctx.payload.timeoutMs === undefined || ctx.payload.timeoutMs < 300000) {
-        ctx.payload.timeoutMs = 300000;
-      }
-    } else if (isPlaywright) {
-      emitInterceptBanner(`\n   💡 AGENT INTERCEPT: Disabling stall interceptors and extending timeout for Playwright/E2E test to prevent false positive aborts.`);
-      ctx.payload.bypassInterceptors = true;
-      if (ctx.payload.timeoutMs === undefined || ctx.payload.timeoutMs < 600000) {
-        ctx.payload.timeoutMs = 600000;
-      }
-    } else if (isKnownDeterministic) {
-      emitInterceptBanner(`\n   💡 AGENT INTERCEPT: Disabling stall interceptors and extending timeout for deterministic workflow script to prevent false positive aborts.`);
-      ctx.payload.bypassInterceptors = true;
-      const detTimeout = ctx.payload.target === 'wsl2' ? 90000 : (isBackupConversations ? 1500000 : 240000);
-      if (ctx.payload.timeoutMs === undefined || ctx.payload.timeoutMs < detTimeout) {
-        ctx.payload.timeoutMs = detTimeout;
-      }
-    } else if (isLongRunningQualityCheck) {
-      emitInterceptBanner(`\n   💡 AGENT INTERCEPT: Disabling stall interceptors and extending timeout for quality command to prevent false positive aborts.`);
-      ctx.payload.bypassInterceptors = true;
-      const testFiles = nonInlineArgs.filter(a => /\.(?:test|spec)\.[a-zA-Z0-9]+$/i.test(a));
-      const testDirs = nonInlineArgs.filter(a => !a.startsWith('-') && !['run', 'exec', 'test', 'vitest', 'jest', 'pytest', 'playwright', 'cypress', 'coverage'].includes(a.toLowerCase()) && /(?:^|[/\\])(?:tests?|__tests__)(?:[/\\][^\s.]*)?$/i.test(a) && !/\.[a-zA-Z0-9_-]+$/i.test(a));
-      const isMultiTest = testFiles.length > 1;
-      const isTestDir = testDirs.length > 0;
-      const isLargeTestBatch = testDirs.length > 1 || (testDirs.length >= 1 && testFiles.length + testDirs.length > 1) || testFiles.length >= 5;
-      const isTestRunner = /(?:vitest|jest|pytest|playwright|cypress)/i.test(cmdBasename) ||
-        nonInlineArgs.some(a => /(?:vitest|jest|pytest|playwright|cypress|^test(?::.*|-.*)?$|^coverage(?::.*)?$)/i.test(a)) ||
-        Boolean(targetScript && (targetScript.startsWith('test') || targetScript.includes('coverage'))) ||
-        Boolean(underlyingScript && /(?:vitest|jest|pytest|playwright|cypress)/i.test(underlyingScript));
-      const isFullSuite = isTestRunner && testFiles.length === 0 && !isTestDir;
-      const targetFiles = nonInlineArgs.filter(a => !a.startsWith('-') && /\.(?:ts|js|tsx|jsx|json|mjs|cjs)$/i.test(a));
-      const hasTargetFiles = targetFiles.length > 0;
-      const isMultiFileLint = targetFiles.length > 1;
-      const hasLargeFile = targetFiles.some(a => /(?:api\.ts|codemode|bundle|generated)/i.test(a));
-      const isLintOrCheck = /(?:lint|check)/i.test(cmdBasename) ||
-        nonInlineArgs.some(a => /(?:lint|check)/i.test(a)) ||
-        Boolean(targetScript && /(?:lint|check)/i.test(targetScript)) ||
-        Boolean(underlyingScript && /(?:lint|check)/i.test(underlyingScript));
-      const isFullLintOrCheck = isLintOrCheck && !hasTargetFiles;
-      const isIsolatedFullSuite = isFullSuite && Boolean(
-        args.includes('--isolate') ||
-        (underlyingScript && /--isolate\b/.test(underlyingScript))
-      );
-      const targetTimeout = ctx.payload.target === 'wsl2'
-        ? (isFullLintOrCheck || hasLargeFile || isIsolatedFullSuite ? 360000 : (isCoverage || isLargeTestBatch ? 300000 : (isMultiTest || isTestDir || isFullSuite ? 180000 : 90000)))
-        : (isFullLintOrCheck || hasLargeFile || isIsolatedFullSuite || isCoverage || isFullSuite ? 600000 : (isLargeTestBatch ? 480000 : (isTestDir ? 360000 : (isMultiTest || isMultiFileLint ? 300000 : 240000))));
-      if (ctx.payload.timeoutMs === undefined || ctx.payload.timeoutMs < targetTimeout) {
-        ctx.payload.timeoutMs = targetTimeout;
-      }
-    }
-    if (['login', 'adduser', 'publish'].includes(subCmd)) {
-      if (subCmd === 'publish' && process.env.NPM_TOKEN) {
-         // allow if token exists
-      } else {
-         console.error(`\n   💡 AGENT HINT: '${cmdBasename} ${subCmd}' may be highly interactive (e.g., OTP prompts, auth) and will hang. Please configure token-based authentication non-interactively.\n${AUTONOMOUS_HEALING_MSG}`);
-         process.exit(1);
-      }
+function normalizeBunTestDotSlashPaths(ctx: ExecutionContext, cmdBasename: string, args: string[]): void {
+  if (!cmdBasename.startsWith('bun')) return;
+  for (let i = 0; i < args.length; i++) {
+    const arg = args[i];
+    if (arg !== undefined && /^\.[a-zA-Z0-9_].*[/\\]/.test(arg)) {
+      args[i] = `./${arg.replace(/\\/g, '/')}`;
     }
   }
+  if ('command' in ctx.payload) ctx.payload.args = args;
+}
 
-  if (['npx', 'npx.cmd', 'npx.exe', 'pnpx', 'pnpx.cmd', 'pnpx.exe', 'bunx', 'bunx.cmd', 'bunx.exe'].includes(cmdBasename)) {
-    const firstNonFlagIdx = args.findIndex(a => !a.startsWith('-'));
-    const runnerTarget = firstNonFlagIdx !== -1 ? args[firstNonFlagIdx] : undefined;
-    if (runnerTarget === 'rg' || runnerTarget === 'ripgrep') {
-      console.error(`\n   🛠️ AUTONOMOUS HEALING: Auto-translating '${cmdBasename} ${runnerTarget}' to native ripgrep (rg)... (Frictionless Recovery)\x1b[0m`);
-      ctx.cmdBasename = 'rg';
-      ctx.args = args.filter((a, idx) => idx !== firstNonFlagIdx && a !== '-y' && a !== '--yes');
-      if ('command' in ctx.payload) {
-        ctx.payload.command = 'rg';
-        ctx.payload.args = ctx.args;
-      }
-      handleRipgrepInterception(ctx, false);
-      return;
+function handleCoreJsPm(ctx: ExecutionContext, rawCmd: string, args: string[], projectDir: string): void {
+  const { cmdBasename, isYarn, isPnpm } = rewriteJsPackageManager(ctx, rawCmd, args, projectDir);
+  ctx.envOverrides['CI'] = '1';
+  ctx.envOverrides['PNPM_INTERACTIVE'] = 'false';
+
+  const isYarnOrPnpm = isYarn || isPnpm || cmdBasename.includes('yarn') || cmdBasename.includes('pnpm');
+  stripScopedInteractiveFlags(args, cmdBasename, isYarnOrPnpm);
+
+  const nonFlagArgs = getPkgNonFlagArgs(args);
+  const subCmd = nonFlagArgs[0];
+  if (translateNativeOrDlxTool(ctx, cmdBasename, args, subCmd)) return;
+
+  if (subCmd === 'upgrade-interactive') {
+    console.error(`\n   💡 AGENT HINT: 'yarn upgrade-interactive' is a TUI tool and will hang. Use 'yarn upgrade' instead.\n${AUTONOMOUS_HEALING_MSG}`);
+    process.exit(1);
+  }
+  if (subCmd !== undefined && ['init', 'create', 'dlx', 'x'].includes(subCmd) && !args.includes('-y') && !args.includes('--yes')) {
+    console.error(`\n   🛠️ AUTONOMOUS HEALING: Automatically injecting '-y' into ${cmdBasename} ${subCmd} command to prevent prompt hanging.... (Frictionless Recovery)`);
+    if (subCmd === 'dlx' || subCmd === 'x') args.splice(args.indexOf(subCmd) + 1, 0, '-y');
+    else args.push('-y');
+  }
+  if (subCmd !== undefined && ['install', 'add', 'update', 'upgrade'].includes(subCmd) && cmdBasename.startsWith('npm')) {
+    if (!args.includes('--no-fund')) args.push('--no-fund');
+    if (!args.includes('--no-audit')) args.push('--no-audit');
+  }
+  if (args.some(a => path.basename(a).toLowerCase() === 'agent-exec.ts')) return;
+
+  const isTestSubCmd = (subCmd && /^(?:vitest|jest|pytest|playwright|cypress|test(?::.*|-.*)?|coverage(?::.*)?)$/i.test(subCmd)) ||
+    args.some(a => /^(?:vitest|jest|pytest|playwright|cypress)$/i.test(a));
+  if (isTestSubCmd) {
+    splitJoinedTestTargetArgs(ctx, args);
+    normalizeBunTestDotSlashPaths(ctx, cmdBasename, args);
+  }
+
+  const tsxBin = (subCmd === 'tsx' || subCmd === 'ts-node')
+    ? subCmd
+    : ((subCmd === 'exec' || subCmd === 'run') && (nonFlagArgs[1] === 'tsx' || nonFlagArgs[1] === 'ts-node') ? nonFlagArgs[1] : undefined);
+  if (tsxBin !== undefined) {
+    const tsxIdx = args.indexOf(tsxBin);
+    if (tsxIdx !== -1) rewriteTsxInvocation(ctx, tsxBin, args, tsxIdx + 1, projectDir);
+  }
+
+  const subCmdLower = subCmd !== undefined ? subCmd.toLowerCase() : (isYarn ? 'install' : '');
+  const isPackageResolution = ['install', 'i', 'ci', 'add', 'update', 'up', 'dedupe'].includes(subCmdLower);
+  const targetScript = (subCmd === 'run' || subCmd === 'exec') ? nonFlagArgs[1] : subCmd;
+  applyPackageManagerTimeouts(ctx, cmdBasename, args, isPackageResolution, targetScript);
+
+  if (subCmd !== undefined && ['login', 'adduser', 'publish'].includes(subCmd)) {
+    if (!(subCmd === 'publish' && process.env['NPM_TOKEN'])) {
+      console.error(`\n   💡 AGENT HINT: '${cmdBasename} ${subCmd}' may be highly interactive (e.g., OTP prompts, auth) and will hang. Please configure token-based authentication non-interactively.\n${AUTONOMOUS_HEALING_MSG}`);
+      process.exit(1);
     }
-    if (runnerTarget === 'fd' || runnerTarget === 'fdfind') {
-      console.error(`\n   🛠️ AUTONOMOUS HEALING: Auto-translating '${cmdBasename} ${runnerTarget}' to native fd... (Frictionless Recovery)\x1b[0m`);
-      ctx.cmdBasename = 'fd';
-      ctx.args = args.filter((a, idx) => idx !== firstNonFlagIdx && a !== '-y' && a !== '--yes');
-      ctx.payload.target = 'wsl2';
-      if ('command' in ctx.payload) {
-        ctx.payload.command = 'fd';
-        ctx.payload.args = ctx.args;
-      }
-      return;
-    }
-    if (cmdBasename.startsWith('npx') && args[0] === 'tsx') {
-      console.error(`\n   🛠️ AUTONOMOUS HEALING: Transparently rewriting 'npx tsx' to 'pnpm exec tsx' to prevent interactive installation prompts... (Frictionless Recovery)\x1b[0m`);
-      ctx.cmdBasename = process.platform === 'win32' ? 'pnpm.cmd' : 'pnpm';
-      if ('command' in ctx.payload) {
-         ctx.payload.command = ctx.cmdBasename;
-      }
-      args.unshift('exec');
-      const rewritten = rewriteInlineScriptToTempFile({
-        interpreterName: 'tsx',
-        args,
-        envOverrides,
-        cwd: projectDir,
-        ...(ctx.payload.target !== undefined ? { target: ctx.payload.target } : {}),
-        ...(ctx.payload.env !== undefined ? { payloadEnv: ctx.payload.env } : {}),
-        startIdx: args.indexOf('tsx') + 1,
-      });
-      if (rewritten !== null && 'command' in ctx.payload) {
-        ctx.payload.args = ctx.args;
-      } else if (rewritten === null && args.some((a) => /[\\/]\.gemini[\\/][^\\/]+[\\/]brain[\\/]/i.test(a))) {
-        configureCwdModuleResolution(envOverrides, projectDir, 'tsx', ctx.payload.target, ctx.payload.env);
-      }
-    } else {
-      envOverrides['CI'] = '1';
-      if (args.some(a => /^(?:vitest|jest|pytest|playwright|cypress)$/i.test(a))) {
-        let didSplitJoinedTestArgs = false;
-        const expandedArgs: string[] = [];
-        for (const a of args) {
-          if (!a.startsWith('-') && a.includes(' ')) {
-            const parts = a.trim().split(/\s+/);
-            const allTestTargets = parts.length > 1 && parts.every(p =>
-              /\.(?:test|spec)\.[a-zA-Z0-9]+$/i.test(p) ||
-              /(?:^|[/\\])(?:tests?|__tests__)(?:[/\\][^\s.]*)?$/i.test(p)
-            );
-            if (allTestTargets) {
-              expandedArgs.push(...parts);
-              didSplitJoinedTestArgs = true;
-              continue;
-            }
-          }
-          expandedArgs.push(a);
-        }
-        if (didSplitJoinedTestArgs) {
-          console.error(`\n   🛠️ AUTONOMOUS HEALING: Detected space-separated test file paths in a single argument. Splitting into individual arguments... (Frictionless Recovery)`);
-          args.splice(0, args.length, ...expandedArgs);
-          if ('command' in ctx.payload) {
-            ctx.payload.args = args;
-          }
-        }
-      }
-      const runnerNonInlineArgs = stripInlineCodeArgs(cmdBasename, args);
-      const isKnownDeterministic = runnerNonInlineArgs.some(a => /(?:commit\.(?:ts|js)|get-git-history-json\.ts|backup-conversations\.ts)/i.test(a));
-      const isBackupConversations = runnerNonInlineArgs.some(a => /backup-conversations\.ts/i.test(a));
-      const isPlaywright = !isKnownDeterministic && runnerNonInlineArgs.some(a => /(?:playwright|cypress|\be2e\b|test:e2e|test-e2e)/i.test(a));
-      const isCoverage = !isKnownDeterministic && runnerNonInlineArgs.some(a => /(?:coverage|--coverage|test:coverage)/i.test(a));
-      const isRunnerQuality = isKnownDeterministic || runnerNonInlineArgs.some(a => /(?:vitest|jest|playwright|cypress|test|lint|typecheck|tsc)/i.test(a));
-      if (isPlaywright) {
-        emitInterceptBanner(`\n   💡 AGENT INTERCEPT: Disabling stall interceptors and extending timeout for Playwright/E2E test to prevent false positive aborts.`);
-        ctx.payload.bypassInterceptors = true;
-        if (ctx.payload.timeoutMs === undefined || ctx.payload.timeoutMs < 600000) {
-          ctx.payload.timeoutMs = 600000;
-        }
-      } else if (isRunnerQuality) {
-        emitInterceptBanner(`\n   💡 AGENT INTERCEPT: Disabling stall interceptors and extending timeout for ${isKnownDeterministic ? 'deterministic workflow script' : 'quality command'} to prevent false positive aborts.`);
-        ctx.payload.bypassInterceptors = true;
-        const testFiles = runnerNonInlineArgs.filter(a => /\.(?:test|spec)\.[a-zA-Z0-9]+$/i.test(a));
-        const testDirs = runnerNonInlineArgs.filter(a => !a.startsWith('-') && !['run', 'exec', 'test', 'vitest', 'jest', 'pytest', 'playwright', 'cypress', 'coverage'].includes(a.toLowerCase()) && /(?:^|[/\\])(?:tests?|__tests__)(?:[/\\][^\s.]*)?$/i.test(a) && !/\.[a-zA-Z0-9_-]+$/i.test(a));
-        const isMultiTest = testFiles.length > 1;
-        const isTestDir = testDirs.length > 0;
-        const isLargeTestBatch = testDirs.length > 1 || (testDirs.length >= 1 && testFiles.length + testDirs.length > 1) || testFiles.length >= 5;
-        const isTestRunner = /(?:vitest|jest|pytest|playwright|cypress)/i.test(cmdBasename) ||
-          args.some(a => /(?:vitest|jest|pytest|playwright|cypress|^test(?::.*|-.*)?$|^coverage(?::.*)?$)/i.test(a));
-        const isFullSuite = isTestRunner && testFiles.length === 0 && !isTestDir;
-        const runnerTimeout = ctx.payload.target === 'wsl2'
-          ? (isCoverage || isLargeTestBatch ? 300000 : (isMultiTest || isTestDir || isFullSuite ? 180000 : 90000))
-          : (isBackupConversations ? 1500000 : (isCoverage || isFullSuite ? 600000 : (isLargeTestBatch ? 480000 : (isTestDir ? 360000 : (isMultiTest ? 300000 : 240000)))));
-        if (ctx.payload.timeoutMs === undefined || ctx.payload.timeoutMs < runnerTimeout) {
-          ctx.payload.timeoutMs = runnerTimeout;
-        }
-      }
-      if (!args.includes('-y') && !args.includes('--yes')) {
-        console.error(`\n   🛠️ AUTONOMOUS HEALING: Automatically injecting '-y' into ${cmdBasename} command to prevent installation prompts from hanging.... (Frictionless Recovery)`);
-        args.unshift('-y');
-      }
-    }
+  }
+}
+
+function handleRunnerPm(ctx: ExecutionContext, cmdBasename: string, args: string[], projectDir: string): void {
+  const firstNonFlagIdx = args.findIndex(a => !a.startsWith('-'));
+  const runnerTarget = firstNonFlagIdx !== -1 ? args[firstNonFlagIdx] : undefined;
+  if (runnerTarget === 'rg' || runnerTarget === 'ripgrep' || runnerTarget === 'fd' || runnerTarget === 'fdfind') {
+    rewriteToolBinary(ctx, cmdBasename, args, runnerTarget, firstNonFlagIdx);
+    return;
+  }
+  if (cmdBasename.startsWith('npx') && args[0] === 'tsx') {
+    console.error(`\n   🛠️ AUTONOMOUS HEALING: Transparently rewriting 'npx tsx' to 'pnpm exec tsx' to prevent interactive installation prompts... (Frictionless Recovery)\x1b[0m`);
+    ctx.cmdBasename = process.platform === 'win32' && ctx.payload.target !== 'wsl2' ? 'pnpm.cmd' : 'pnpm';
+    if ('command' in ctx.payload) ctx.payload.command = ctx.cmdBasename;
+    args.unshift('exec');
+    rewriteTsxInvocation(ctx, 'tsx', args, args.indexOf('tsx') + 1, projectDir);
+    return;
+  }
+  ctx.envOverrides['CI'] = '1';
+  if (args.some(a => /^(?:vitest|jest|pytest|playwright|cypress)$/i.test(a))) {
+    splitJoinedTestTargetArgs(ctx, args);
+  }
+  applyPackageManagerTimeouts(ctx, cmdBasename, args, false, undefined);
+  if (!args.includes('-y') && !args.includes('--yes')) {
+    console.error(`\n   🛠️ AUTONOMOUS HEALING: Automatically injecting '-y' into ${cmdBasename} command to prevent installation prompts from hanging.... (Frictionless Recovery)`);
+    args.unshift('-y');
+  }
+}
+
+export function packageManagerInterceptor(ctx: ExecutionContext): void {
+  const { cmdBasename, envOverrides } = ctx;
+  let { args } = ctx;
+  if (!args) args = [];
+
+  const projectDir = ctx.payload.cwd !== undefined && ctx.payload.cwd.length > 0
+    ? path.resolve(ctx.payload.cwd)
+    : (ctx.cwd !== undefined && ctx.cwd.length > 0 ? path.resolve(ctx.cwd) : process.cwd());
+
+  if (ALL_JS_PM_CMDS.has(cmdBasename)) {
+    healMissingAgentScriptArgs(args, projectDir, ctx.payload);
+    if (tryAccelerateCommitForPm(ctx, cmdBasename, args, projectDir)) return;
+  }
+
+  if (args.includes('--help') || args.includes('-h')) return;
+
+  applySystemPackageFlags(cmdBasename, args, envOverrides);
+
+  if (CORE_JS_PM_CMDS.has(cmdBasename)) {
+    handleCoreJsPm(ctx, cmdBasename, args, projectDir);
+  } else if (RUNNER_CMDS.has(cmdBasename)) {
+    handleRunnerPm(ctx, cmdBasename, args, projectDir);
   }
 
   if (['corepack', 'corepack.cmd', 'corepack.exe'].includes(cmdBasename)) {
     envOverrides['COREPACK_ENABLE_DOWNLOAD_PROMPT'] = '0';
     envOverrides['COREPACK_ENABLE_STRICT'] = '0';
   }
-
   if (['uv', 'uv.exe', 'uvx', 'uvx.exe'].includes(cmdBasename)) {
     envOverrides['UV_NO_PROGRESS'] = '1';
   }

@@ -56,7 +56,7 @@ function normalizeBundledGrepParserArgs(args: string[]): string[] {
 
 function isCaseInsensitiveFlag(arg: string, lower: string): boolean {
   if (lower === '-i' || lower === '-ri' || lower === '-ir' || lower === '--case-insensitive') return true;
-  return arg.startsWith('-') && !arg.startsWith('--') && arg.includes('i');
+  return arg.length <= 5 && /^-[a-zA-Z]+$/.test(arg) && !arg.startsWith('--') && arg.includes('i');
 }
 
 function consumeRegexFlag(state: GrepScanState, args: string[], index: number, lower: string): number {
@@ -77,12 +77,20 @@ function consumeValueInto(state: GrepScanState, args: string[], index: number, f
 }
 
 function assignAmbiguousPValue(state: GrepScanState, args: string[], value: string): void {
-  const hasDirFlag = args.some((arg) => GREP_DIR_FLAGS_FOR_P.includes(arg.toLowerCase()));
+  const hasDirFlag = args.some((arg) => {
+    const eq = arg.indexOf('=');
+    const key = (eq === -1 ? arg : arg.slice(0, eq)).toLowerCase();
+    return GREP_DIR_FLAGS_FOR_P.includes(key);
+  });
   if (hasDirFlag || state.searchPath.length > 0) {
     state.pattern = value;
     return;
   }
-  const hasPatternFlag = args.some((arg) => GREP_PATTERN_FLAGS_FOR_P.includes(arg.toLowerCase()));
+  const hasPatternFlag = args.some((arg) => {
+    const eq = arg.indexOf('=');
+    const key = (eq === -1 ? arg : arg.slice(0, eq)).toLowerCase();
+    return GREP_PATTERN_FLAGS_FOR_P.includes(key);
+  });
   if (hasPatternFlag || state.pattern.length > 0) {
     state.searchPath = value;
     return;
@@ -96,8 +104,25 @@ function consumeAmbiguousP(state: GrepScanState, args: string[], index: number):
   return index + 1;
 }
 
-// [INVARIANT]: Value-taking flags read the original args array at the normalized-loop index. The caller for-loop increments again, matching `args[++i]` plus `continue`.
 function applyGrepSearchFlag(state: GrepScanState, args: string[], index: number, arg: string): number {
+  const eqIdx = arg.indexOf('=');
+  if (eqIdx > 0 && arg.startsWith('-')) {
+    const flagKey = arg.slice(0, eqIdx).toLowerCase();
+    const flagVal = arg.slice(eqIdx + 1);
+    if (flagKey === '-e' || flagKey === '--regexp') {
+      state.isRegex = true;
+      state.pattern = flagVal;
+      return index;
+    }
+    if (GREP_PATTERN_VALUE_FLAGS.includes(flagKey)) {
+      state.pattern = flagVal;
+      return index;
+    }
+    if (GREP_DIR_VALUE_FLAGS.includes(flagKey)) {
+      state.searchPath = flagVal;
+      return index;
+    }
+  }
   const lower = arg.toLowerCase();
   if (isCaseInsensitiveFlag(arg, lower)) {
     state.isCaseInsensitive = true;
@@ -128,12 +153,16 @@ function applyPositionalGrepArgs(state: GrepScanState): void {
   if (state.searchPath.length === 0 && first !== undefined) state.searchPath = first;
 }
 
-function scanGrepSearchFlags(args: string[], normalizedArgs: string[]): GrepScanState {
+function scanGrepSearchFlags(normalizedArgs: string[]): GrepScanState {
   const state = createGrepScanState();
   for (let i = 0; i < normalizedArgs.length; i++) {
     const arg = normalizedArgs[i];
     if (arg === undefined) continue;
-    i = applyGrepSearchFlag(state, args, i, arg);
+    if (arg === '--') {
+      state.nonFlagArgs.push(...normalizedArgs.slice(i + 1));
+      break;
+    }
+    i = applyGrepSearchFlag(state, normalizedArgs, i, arg);
   }
   applyPositionalGrepArgs(state);
   return state;
@@ -169,7 +198,7 @@ function realignPatternAndSearchPath(pattern: string, searchPath: string): { pat
 }
 
 export function parseGrepSearchArgs(args: string[]): ParsedGrepSearchArgs {
-  const state = scanGrepSearchFlags(args, normalizeBundledGrepParserArgs(args));
+  const state = scanGrepSearchFlags(normalizeBundledGrepParserArgs(args));
   const aligned = realignPatternAndSearchPath(state.pattern, state.searchPath);
   return {
     pattern: aligned.pattern,
