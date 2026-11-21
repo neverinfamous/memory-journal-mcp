@@ -267,7 +267,8 @@ function isRegisteredToolBlocked(
     toolName: string | undefined,
     allTools: ToolRegistration[],
     allToolNames: Set<string>,
-    config: ToolHandlerConfig
+    config: ToolHandlerConfig,
+    readOnlyHints?: ReadonlyMap<string, boolean | undefined>
 ): boolean {
     if (toolName === undefined || !allToolNames.has(toolName)) return false
     const auth = getAuthContext()
@@ -280,10 +281,13 @@ function isRegisteredToolBlocked(
         filterCfg !== null &&
         config.codemodeInternalFullAccess !== true
     ) {
-        const reg = allTools.find((t) => t.name === toolName)
+        const readOnlyHint =
+            readOnlyHints !== undefined
+                ? readOnlyHints.get(toolName)
+                : allTools.find((t) => t.name === toolName)?.annotations?.readOnlyHint
         if (
             filterCfg.enabledTools.has(toolName) &&
-            isToolVisibleForFilter(toolName, reg?.annotations?.readOnlyHint, filterCfg.raw)
+            isToolVisibleForFilter(toolName, readOnlyHint, filterCfg.raw)
         ) {
             return false
         }
@@ -308,23 +312,20 @@ async function executeInterceptedToolCall(
     allTools: ToolRegistration[],
     allToolNames: Set<string>,
     customToolHandlerConfig: ToolHandlerConfig,
-    syncedState?: SyncedCallConfigState
+    syncedState?: SyncedCallConfigState,
+    readOnlyHints?: ReadonlyMap<string, boolean | undefined>
 ): Promise<unknown> {
     try {
         const params = hasToolCallRequestShape(request) ? request.params : undefined
         const healingEnabled =
             options.agentHealing !== false && customToolHandlerConfig.agentHealing !== false
-        const liveBriefing = resolveAndSyncLiveBriefing(
-            context,
-            options,
-            customToolHandlerConfig,
-            syncedState
-        )
+        const liveBriefing = resolveAndSyncLiveBriefing(context, options, customToolHandlerConfig, syncedState)
 
         const limitErr = checkCallElementLimit(params?.arguments, options.maxToolInputElements)
         if (limitErr !== undefined) return limitErr
 
-        if (isRegisteredToolBlocked(params?.name, allTools, allToolNames, customToolHandlerConfig)) {
+        const preHealName = params?.name
+        if (isRegisteredToolBlocked(preHealName, allTools, allToolNames, customToolHandlerConfig, readOnlyHints)) {
             return await originalHandler(request, extra)
         }
 
@@ -333,7 +334,10 @@ async function executeInterceptedToolCall(
             if (healError !== undefined) return healError
         }
 
-        if (isRegisteredToolBlocked(params?.name, allTools, allToolNames, customToolHandlerConfig)) {
+        if (
+            params?.name !== preHealName &&
+            isRegisteredToolBlocked(params?.name, allTools, allToolNames, customToolHandlerConfig, readOnlyHints)
+        ) {
             return await originalHandler(request, extra)
         }
 
@@ -382,7 +386,8 @@ export function attachCallToolInterceptor(
     prompts: PromptDefinition[],
     allTools: ToolRegistration[],
     allToolNames: Set<string>,
-    customToolHandlerConfig: ToolHandlerConfig
+    customToolHandlerConfig: ToolHandlerConfig,
+    readOnlyHints?: ReadonlyMap<string, boolean | undefined>
 ): void {
     const originalHandler = requestHandlers?.get('tools/call')
     if (originalHandler === undefined || requestHandlers === undefined) return
@@ -406,7 +411,8 @@ export function attachCallToolInterceptor(
             allTools,
             allToolNames,
             customToolHandlerConfig,
-            syncedState
+            syncedState,
+            readOnlyHints
         )
     )
 }

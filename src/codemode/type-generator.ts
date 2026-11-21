@@ -4,7 +4,7 @@ function formatLiteralValue(val: unknown): string {
     return typeof val === 'string' ? `'${val}'` : String(val)
 }
 
-function isSchemaOptional(schema: unknown, seen = new WeakSet()): boolean {
+function isSchemaOptional(schema: unknown, seen?: WeakSet<object>): boolean {
     if (
         schema instanceof z.ZodOptional ||
         schema instanceof z.ZodDefault ||
@@ -16,12 +16,13 @@ function isSchemaOptional(schema: unknown, seen = new WeakSet()): boolean {
         return false
     }
     if (schema instanceof z.ZodLazy) {
-        if (seen.has(schema)) return false
-        seen.add(schema)
+        const activeSeen = seen ?? new WeakSet()
+        if (activeSeen.has(schema)) return false
+        activeSeen.add(schema)
         try {
-            return isSchemaOptional(schema.unwrap(), seen)
+            return isSchemaOptional(schema.unwrap(), activeSeen)
         } finally {
-            seen.delete(schema)
+            activeSeen.delete(schema)
         }
     }
     if (
@@ -122,7 +123,7 @@ export function getZodTypeString(schema: unknown, seen = new WeakSet()): string 
     if (schema instanceof z.ZodObject) {
         const shape = schema.shape as Record<string, unknown>
         const props = Object.entries(shape).map(([k, v]) => {
-            const isOptional = isSchemaOptional(v, new WeakSet())
+            const isOptional = isSchemaOptional(v)
             return `${k}${isOptional ? '?' : ''}: ${getZodTypeString(v, seen)}`
         })
         return `{ ${props.join(', ')} }`

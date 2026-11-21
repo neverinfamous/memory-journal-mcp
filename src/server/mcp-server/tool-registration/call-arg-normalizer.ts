@@ -17,7 +17,10 @@ import {
 } from '../../../utils/workspace-resolver.js'
 import type { ServerOptions } from '../types.js'
 import { formatTokenEstimatedError, type ToolCallParams } from './call-interceptor-helpers.js'
-import { resolveMcpCreateWorkspaceScope } from './create-scope-interceptor.js'
+import {
+    isCreateWorkspaceScopeTool,
+    resolveMcpCreateWorkspaceScope,
+} from './create-scope-interceptor.js'
 import type { resolveActiveBriefingConfig } from './register-tools-helpers.js'
 import { ALREADY_HEALED_ARGS } from './healed-args-marker.js'
 
@@ -300,7 +303,11 @@ export function applyCreateWorkspaceScope(
     liveBriefing: BriefingConfig,
     runtime: ServerRuntime
 ): void {
-    if (reqParams === undefined || !isPlainRecord(reqParams.arguments)) {
+    if (
+        reqParams === undefined ||
+        !isCreateWorkspaceScopeTool(reqParams.name) ||
+        !isPlainRecord(reqParams.arguments)
+    ) {
         return
     }
     resolveMcpCreateWorkspaceScope(reqParams.name, reqParams.arguments, {
@@ -371,21 +378,12 @@ export function healIncomingToolCallParams(
     ) {
         params.arguments = {}
     }
-    const healerOptions: ServerOptions = { ...options }
-    if (liveBriefing.projectRegistry !== undefined) {
-        healerOptions.projectRegistry = liveBriefing.projectRegistry
-    } else {
-        delete healerOptions.projectRegistry
-    }
-    if (liveBriefing.defaultProjectNumber !== undefined) {
-        healerOptions.defaultProjectNumber = liveBriefing.defaultProjectNumber
-    } else {
-        delete healerOptions.defaultProjectNumber
-    }
-    if (liveBriefing.defaultWorkspaceId !== undefined) {
-        healerOptions.defaultWorkspaceId = liveBriefing.defaultWorkspaceId
-    } else {
-        delete healerOptions.defaultWorkspaceId
+    const healerOptions: ServerOptions = {
+        transport: options.transport,
+        dbPath: options.dbPath,
+        ...(liveBriefing.projectRegistry !== undefined
+            ? { projectRegistry: liveBriefing.projectRegistry }
+            : {}),
     }
 
     if (Array.isArray(params.arguments)) {

@@ -28,20 +28,25 @@ function remapGitParamAliases(methodName: string, obj: Record<string, unknown>):
     }
 }
 
+const GIT_METHODS: ReadonlySet<string> = new Set([
+    'get_commit_history',
+    'getCommitHistory',
+    'search_commits',
+    'searchCommits',
+    'get_release_info',
+    'getReleaseInfo',
+    'get_unreleased_commits',
+    'getUnreleasedCommits',
+    'analyze_commit_patterns',
+    'analyzeCommitPatterns',
+])
+
 export function applyGitInterceptions(
     methodName: string,
     args: unknown[]
 ): { args: unknown[] } | { error: Record<string, unknown> } | null {
-    const gitMethods = [
-        'get_commit_history', 'getCommitHistory',
-        'search_commits', 'searchCommits',
-        'get_release_info', 'getReleaseInfo',
-        'get_unreleased_commits', 'getUnreleasedCommits',
-        'analyze_commit_patterns', 'analyzeCommitPatterns',
-    ]
-
     if (
-        gitMethods.includes(methodName) &&
+        GIT_METHODS.has(methodName) &&
         args.length === 1 &&
         typeof args[0] === 'object' &&
         args[0] !== null &&

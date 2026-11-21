@@ -85,11 +85,55 @@ function buildRpcOverrides(req: RpcRequest): RpcExecutionOverrides | undefined {
     return hasOverride ? overrides : undefined
 }
 
+export interface CachedAllowedMethods {
+    methodList: Record<string, string[]>
+    methodListKey: string
+    methodSets: Record<string, ReadonlySet<string>>
+}
+
+const ALLOWED_METHODS_CACHE = new WeakMap<Record<string, unknown>, CachedAllowedMethods>()
+
+export function getAllowedMethodMetadata(apiBindings: Record<string, unknown>): CachedAllowedMethods {
+    const cached = ALLOWED_METHODS_CACHE.get(apiBindings)
+    if (cached !== undefined) return cached
+    const methodList: Record<string, string[]> = {}
+    const methodSets: Record<string, ReadonlySet<string>> = Object.create(null) as Record<
+        string,
+        ReadonlySet<string>
+    >
+    const topLevel: string[] = []
+    for (const [key, value] of Object.entries(apiBindings)) {
+        if (typeof value === 'function') {
+            topLevel.push(key)
+        } else if (typeof value === 'object' && value !== null) {
+            const methods: string[] = []
+            for (const [methodName, methodValue] of Object.entries(value)) {
+                if (typeof methodValue === 'function') methods.push(methodName)
+            }
+            if (methods.length > 0) {
+                methodList[key] = methods
+                methodSets[key] = new Set(methods)
+            }
+        }
+    }
+    if (topLevel.length > 0) {
+        methodList['_topLevel'] = topLevel
+        methodSets['_topLevel'] = new Set(topLevel)
+    }
+    const entry: CachedAllowedMethods = {
+        methodList,
+        methodListKey: JSON.stringify(methodList),
+        methodSets,
+    }
+    ALLOWED_METHODS_CACHE.set(apiBindings, entry)
+    return entry
+}
+
 export async function handleRpcRequest(
     req: RpcRequest,
     apiBindings: Record<string, unknown>,
     hostPort: MessagePort,
-    methodList: Record<string, string[]>
+    methodList: Record<string, string[] | ReadonlySet<string>>
 ): Promise<void> {
     if (typeof req !== 'object' || req === null || typeof req.id !== 'number') {
         return
@@ -106,7 +150,13 @@ export async function handleRpcRequest(
         const allowedMethods = Object.hasOwn(methodList, req.group)
             ? methodList[req.group]
             : undefined
-        if (!allowedMethods?.includes(req.method)) {
+        const isAllowed =
+            allowedMethods === undefined
+                ? false
+                : Array.isArray(allowedMethods)
+                  ? allowedMethods.includes(req.method)
+                  : allowedMethods.has(req.method)
+        if (!isAllowed) {
             response.error = `Unauthorized method invocation: ${req.group}.${req.method}`
             safePostRpcResponse(hostPort, response)
             return

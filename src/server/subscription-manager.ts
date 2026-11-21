@@ -135,6 +135,7 @@ export class SubscriptionManager {
      * Notifies all subscribed clients that a resource has changed (coalesced per microtask).
      */
     public notifyResourceUpdated(uri: string): Promise<void> {
+        if (this.subscriptions.size === 0) return Promise.resolve()
         this.pendingNotificationUris.add(uri)
         return new Promise<void>((resolve, reject) => {
             this.pendingNotificationWaiters.push({ resolve, reject })

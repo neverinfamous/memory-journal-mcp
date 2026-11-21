@@ -155,10 +155,6 @@ export async function rotateAuditLogFiles(
     maxArchives: number
 ): Promise<number | null> {
     try {
-        if (await isUnsafeSymlinkOrSpecialFile(logPath)) {
-            logger.error('Refusing to rotate symlink or non-regular audit log file', { module: 'Audit' })
-            return null
-        }
         const info = await lstat(logPath).catch((err: unknown) => {
             if (nodeErrorCode(err) !== 'ENOENT') {
                 const message = err instanceof Error ? err.message : String(err)

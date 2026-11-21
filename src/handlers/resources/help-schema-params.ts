@@ -335,9 +335,18 @@ function extractParametersImpl(inputSchema: unknown, depth: number): ParameterIn
     return extractShapeParameters(rawShape as Record<string, unknown>)
 }
 
+const EXTRACTED_PARAMETERS_CACHE = new WeakMap<object, ParameterInfo[]>()
+
 /**
  * Extract parameter info from a Zod schema's shape (including ZodIntersection and ZodLazy).
  */
 export function extractParameters(inputSchema: unknown): ParameterInfo[] {
+    if (typeof inputSchema === 'object' && inputSchema !== null) {
+        const cached = EXTRACTED_PARAMETERS_CACHE.get(inputSchema)
+        if (cached !== undefined) return cached
+        const computed = extractParametersImpl(inputSchema, 0)
+        EXTRACTED_PARAMETERS_CACHE.set(inputSchema, computed)
+        return computed
+    }
     return extractParametersImpl(inputSchema, 0)
 }

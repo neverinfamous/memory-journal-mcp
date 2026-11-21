@@ -19,7 +19,7 @@ import {
 import { buildSandboxBindingsMap } from './sandbox-bindings.js'
 import { wireCrossGroupAliasesHelper } from './cross-group-aliases.js'
 
-const TOOL_SCHEMA_STRING_CACHE = new WeakMap<ToolDefinition, string>()
+const TOOL_SCHEMA_STRING_CACHE = new WeakMap<object, string>()
 const TOOL_INSTANCE_IDS = new WeakMap<ToolDefinition, number>()
 const SANDBOX_SCHEMAS_CACHE = new Map<string, Record<string, Record<string, string>>>()
 const MAX_SANDBOX_SCHEMAS_CACHE = 16
@@ -115,10 +115,14 @@ export class JournalApi {
     }
 
     private getToolSchemaString(tool: ToolDefinition): string {
-        let typeStr = TOOL_SCHEMA_STRING_CACHE.get(tool)
+        const schemaKey =
+            typeof tool.inputSchema === 'object' && tool.inputSchema !== null
+                ? tool.inputSchema
+                : tool
+        let typeStr = TOOL_SCHEMA_STRING_CACHE.get(schemaKey)
         if (typeStr === undefined) {
             typeStr = getZodTypeString(tool.inputSchema)
-            TOOL_SCHEMA_STRING_CACHE.set(tool, typeStr)
+            TOOL_SCHEMA_STRING_CACHE.set(schemaKey, typeStr)
         }
         return typeStr
     }

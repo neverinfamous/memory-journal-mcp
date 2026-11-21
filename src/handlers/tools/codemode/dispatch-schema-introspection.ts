@@ -120,7 +120,7 @@ function checkDefAcceptsKey(
 }
 
 const MAX_CACHED_SCHEMA_KEYS = 512
-const SCHEMA_KEY_CACHE = new WeakMap<object, Set<string>>()
+const SCHEMA_KEY_CACHE = new WeakMap<object, Map<string, boolean>>()
 
 function computeSchemaAcceptsKey(
     schema: unknown,
@@ -173,16 +173,15 @@ export function checkSchemaAcceptsKey(
     }
     if (!isRecord(schema)) return false
     let cache = SCHEMA_KEY_CACHE.get(schema)
-    if (cache?.has(key) === true) return true
+    const cached = cache?.get(key)
+    if (cached !== undefined) return cached
     const accepted = computeSchemaAcceptsKey(schema, key, new Set<unknown>())
-    if (accepted) {
-        if (cache === undefined) {
-            cache = new Set<string>()
-            SCHEMA_KEY_CACHE.set(schema, cache)
-        }
-        if (cache.size < MAX_CACHED_SCHEMA_KEYS) {
-            cache.add(key)
-        }
+    if (cache === undefined) {
+        cache = new Map<string, boolean>()
+        SCHEMA_KEY_CACHE.set(schema, cache)
+    }
+    if (cache.size < MAX_CACHED_SCHEMA_KEYS) {
+        cache.set(key, accepted)
     }
     return accepted
 }

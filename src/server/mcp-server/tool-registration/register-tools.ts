@@ -433,7 +433,7 @@ export function createServerInstance(
 
     const requestHandlers = getRequestHandlers(server.server)
     attachListToolsInterceptor(requestHandlers, configManager, allToolNames, readOnlyHints)
-    attachCallToolInterceptor(requestHandlers, context, options, prompts, allTools, allToolNames, customToolHandlerConfig)
+    attachCallToolInterceptor(requestHandlers, context, options, prompts, allTools, allToolNames, customToolHandlerConfig, readOnlyHints)
     attachStdioCloseCleanup(server)
     return server
 }

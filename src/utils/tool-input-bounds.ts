@@ -3,6 +3,8 @@
  * direct tool dispatchers without creating module cycles.
  */
 
+import * as utilTypes from 'node:util/types'
+
 /**
  * Default maximum number of array elements and object properties allowed across a
  * single tool input payload before Zod validation runs.
@@ -38,7 +40,7 @@ const byteLengthDescriptors = [
 ] as const
 
 function tryReadTypedArrayLength(cur: object): number | null {
-    if (typedArrayLengthDesc === undefined) return null
+    if (!utilTypes.isTypedArray(cur) || typedArrayLengthDesc === undefined) return null
     try {
         const len: unknown = typedArrayLengthDesc.get?.call(cur)
         return typeof len === 'number' ? safeNonNegativeInt(len) : null
@@ -53,6 +55,7 @@ function safeNonNegativeInt(value: unknown): number {
 }
 
 function tryReadBoxedStringLength(cur: object): number | null {
+    if (!utilTypes.isStringObject(cur)) return null
     try {
         const primitive = String.prototype.valueOf.call(cur)
         return typeof primitive === 'string' ? primitive.length : null
@@ -62,6 +65,7 @@ function tryReadBoxedStringLength(cur: object): number | null {
 }
 
 function tryReadByteBufferLength(cur: object): number | null {
+    if (!utilTypes.isDataView(cur) && !utilTypes.isAnyArrayBuffer(cur)) return null
     for (const desc of byteLengthDescriptors) {
         if (desc === undefined) continue
         try {
@@ -75,7 +79,7 @@ function tryReadByteBufferLength(cur: object): number | null {
 }
 
 function tryReadAuthenticMap(cur: object): { size: number; entries: IterableIterator<[unknown, unknown]> } | null {
-    if (mapSizeDesc === undefined) return null
+    if (!utilTypes.isMap(cur) || mapSizeDesc === undefined) return null
     try {
         const rawSize: unknown = mapSizeDesc.get?.call(cur)
         if (typeof rawSize !== 'number') return null
@@ -86,7 +90,7 @@ function tryReadAuthenticMap(cur: object): { size: number; entries: IterableIter
 }
 
 function tryReadAuthenticSet(cur: object): { size: number; values: IterableIterator<unknown> } | null {
-    if (setSizeDesc === undefined) return null
+    if (!utilTypes.isSet(cur) || setSizeDesc === undefined) return null
     try {
         const rawSize: unknown = setSizeDesc.get?.call(cur)
         if (typeof rawSize !== 'number') return null
@@ -131,6 +135,21 @@ function visitInputContainerNode(
     ancestors: object[],
     active: WeakSet<object>
 ): boolean {
+    if (Array.isArray(cur)) {
+        const arrLen = safeNonNegativeInt(cur.length)
+        state.count += 1 + arrLen
+        if (state.count > maxElements) return true
+        pushObjectChildren(cur, stack, ancestors, active)
+        state.count += pushOwnObjectKeys(cur, stack, arrLen)
+        if (state.count > maxElements) return true
+        const arr = cur as readonly unknown[]
+        for (let i = 0; i < arrLen; i++) {
+            if (!Object.hasOwn(arr, i)) continue
+            const item = arr[i]
+            if (item !== null && typeof item === 'object') stack.push(item)
+        }
+        return false
+    }
     const boxedStrLen = tryReadBoxedStringLength(cur)
     if (boxedStrLen !== null) {
         state.count += 1 + boxedStrLen
@@ -154,21 +173,6 @@ function visitInputContainerNode(
         pushObjectChildren(cur, stack, ancestors, active)
         state.count += pushOwnObjectKeys(cur, stack)
         return state.count > maxElements
-    }
-    if (Array.isArray(cur)) {
-        const arrLen = safeNonNegativeInt(cur.length)
-        state.count += 1 + arrLen
-        if (state.count > maxElements) return true
-        pushObjectChildren(cur, stack, ancestors, active)
-        state.count += pushOwnObjectKeys(cur, stack, arrLen)
-        if (state.count > maxElements) return true
-        const arr = cur as readonly unknown[]
-        for (let i = 0; i < arrLen; i++) {
-            if (!Object.hasOwn(arr, i)) continue
-            const item = arr[i]
-            if (item !== null && typeof item === 'object') stack.push(item)
-        }
-        return false
     }
     const mapData = tryReadAuthenticMap(cur)
     if (mapData !== null) {

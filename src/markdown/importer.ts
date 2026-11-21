@@ -24,11 +24,13 @@ import {
     sanitizeAuthor,
 } from '../utils/security-utils.js'
 import {
+    createImportBatchAuthorCache,
     indexImportedEntries,
     prefetchImportedEntriesById,
     readMarkdownFilesParallel,
-    resolveCanonicalImportAuthor,
+    resolveCanonicalImportAuthorCached,
     validateImportedFileEntry,
+    type ImportBatchAuthorCache,
     type ImportedVectorItem,
 } from './importer-scope.js'
 
@@ -227,6 +229,7 @@ function runDryRunImportValidation(
     db: IDatabaseAdapter,
     options: ImportOptions,
     prefetchedById: ReturnType<typeof prefetchImportedEntriesById>,
+    batchAuthorCache: ImportBatchAuthorCache,
     result: ImportResult
 ): void {
     const inBatchScopes = new Map<number, { workspaceId: string; projectNumber?: number | null }>()
@@ -238,7 +241,8 @@ function runDryRunImportValidation(
             file,
             db,
             options,
-            prefetchedById
+            prefetchedById,
+            batchAuthorCache
         )
         if (existing) {
             result.updated++
@@ -265,18 +269,10 @@ function runDryRunImportValidation(
     validateDryRunRelationships(db, pendingLinks, inBatchScopes, result)
 }
 
-function upsertParsedFile(
-    file: ParsedFile,
-    db: IDatabaseAdapter,
-    options: ImportOptions,
-    result: ImportResult,
-    prefetchedById?: ReturnType<typeof prefetchImportedEntriesById>
-): { entry: JournalEntry; entryId: number; workspaceId: string | undefined; projectNumber: number | undefined } {
-    const { body, metadata } = file
-    const { author } = options
-    const { effectiveWsId, effectiveProjNum, rawEntryType, significanceType, existing } =
-        validateImportedFileEntry(file, db, options, prefetchedById)
-    const mappedAnchors = metadata.anchors?.map((anchor) => {
+function mapImportedAnchors(
+    anchors: FrontmatterAnchor[] | undefined
+): { anchorPath: string; anchorType: string; status?: string }[] | undefined {
+    return anchors?.map((anchor) => {
         if (typeof anchor === 'string') {
             return {
                 anchorPath: anchor,
@@ -289,6 +285,21 @@ function upsertParsedFile(
             ...(anchor.status !== undefined ? { status: anchor.status } : {}),
         }
     })
+}
+
+function upsertParsedFile(
+    file: ParsedFile,
+    db: IDatabaseAdapter,
+    options: ImportOptions,
+    result: ImportResult,
+    prefetchedById?: ReturnType<typeof prefetchImportedEntriesById>,
+    batchAuthorCache?: ImportBatchAuthorCache
+): { entry: JournalEntry; entryId: number; workspaceId: string | undefined; projectNumber: number | undefined } {
+    const { body, metadata } = file
+    const { author } = options
+    const { effectiveWsId, effectiveProjNum, rawEntryType, significanceType, existing } =
+        validateImportedFileEntry(file, db, options, prefetchedById, batchAuthorCache)
+    const mappedAnchors = mapImportedAnchors(metadata.anchors)
 
     if (existing && metadata.mj_id !== undefined) {
         const updated = db.updateEntry(metadata.mj_id, {
@@ -313,7 +324,12 @@ function upsertParsedFile(
         }
     }
 
-    const canonicalOptionAuthor = resolveCanonicalImportAuthor(db, author, effectiveWsId)
+    const canonicalOptionAuthor = resolveCanonicalImportAuthorCached(
+        db,
+        author,
+        effectiveWsId,
+        batchAuthorCache
+    )
     const sanitizedMetadataAuthor =
         metadata.author !== undefined ? sanitizeAuthor(metadata.author) : undefined
     const resolvedAuthor =
@@ -368,10 +384,11 @@ export async function processImportBatch(
 
     const vectorQueue: ImportedVectorItem[] = []
     const prefetchedById = prefetchImportedEntriesById(db, files)
+    const batchAuthorCache = createImportBatchAuthorCache(db, files, options)
 
     db.executeInTransaction(() => {
         if (dry_run) {
-            runDryRunImportValidation(files, db, options, prefetchedById, result)
+            runDryRunImportValidation(files, db, options, prefetchedById, batchAuthorCache, result)
             return
         }
 
@@ -390,7 +407,8 @@ export async function processImportBatch(
                 db,
                 options,
                 result,
-                prefetchedById
+                prefetchedById,
+                batchAuthorCache
             )
             if (metadata.mj_id !== undefined) {
                 idRemap.set(metadata.mj_id, entryId)

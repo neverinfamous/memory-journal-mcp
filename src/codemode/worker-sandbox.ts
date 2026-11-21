@@ -15,7 +15,7 @@ import {
     type SandboxResult,
     type RpcRequest,
 } from './types.js'
-import { handleRpcRequest } from './worker-rpc-handler.js'
+import { getAllowedMethodMetadata, handleRpcRequest } from './worker-rpc-handler.js'
 import { parseByteSizeValue } from './shared-context-parsers.js'
 import { sanitizeErrorForLogging } from '../utils/security-utils.js'
 
@@ -46,27 +46,6 @@ function getWorkerScriptPath(): string {
 // =============================================================================
 // Worker Sandbox
 // =============================================================================
-
-/**
- * Worker-thread sandbox for secure code execution.
- * Maintains a persistent worker thread internally.
- */
-function buildAllowedMethodList(apiBindings: Record<string, unknown>): Record<string, string[]> {
-    const methodList: Record<string, string[]> = {}
-    const topLevel: string[] = []
-    for (const [key, value] of Object.entries(apiBindings)) {
-        if (typeof value === 'function') {
-            topLevel.push(key)
-        } else if (typeof value === 'object' && value !== null) {
-            const methods = Object.entries(value)
-                .filter(([, methodValue]) => typeof methodValue === 'function')
-                .map(([methodName]) => methodName)
-            if (methods.length > 0) methodList[key] = methods
-        }
-    }
-    if (topLevel.length > 0) methodList['_topLevel'] = topLevel
-    return methodList
-}
 
 function resolveEffectiveMaxResultSize(override?: number): number {
     let maxResultSize = override
@@ -381,8 +360,7 @@ export class WorkerSandbox {
         const startRss = process.memoryUsage.rss()
 
         return await new Promise<SandboxResult>((resolve) => {
-            const methodList = buildAllowedMethodList(apiBindings)
-            const methodListKey = JSON.stringify(methodList)
+            const { methodList, methodListKey, methodSets } = getAllowedMethodMetadata(apiBindings)
             const { port1: hostPort, port2: workerPort } = new MessageChannel()
             const timedOutId = this.executionId
             const timeoutHandle = setTimeout(() => {
@@ -393,7 +371,7 @@ export class WorkerSandbox {
             this.currentExecution = { resolve, hostPort, startTime, startRss, timeoutHandle }
 
             hostPort.on('message', (msg: RpcRequest) => {
-                void handleRpcRequest(msg, apiBindings, hostPort, methodList).catch((err: unknown) => {
+                void handleRpcRequest(msg, apiBindings, hostPort, methodSets).catch((err: unknown) => {
                     try {
                         hostPort.postMessage({
                             id: typeof msg?.id === 'number' ? msg.id : 0,

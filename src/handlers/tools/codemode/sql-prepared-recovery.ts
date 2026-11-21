@@ -2,10 +2,13 @@
  * Prepared statement recovery helpers split out of `sql-recovery.ts`.
  */
 
-import * as vm from 'node:vm'
 import { parseSqlStatement } from '../../../codemode/sql-positional-binder.js'
 import { stripCommentsAndStrings } from '../../../codemode/security-stripper.js'
-import { buildNonCodeSpans, isOffsetInNonCodeSpan } from './code-healer-rewrites.js'
+import {
+    buildNonCodeSpans,
+    isOffsetInNonCodeSpan,
+    isValidJsScript,
+} from './code-healer-rewrites.js'
 
 const UNPARSEABLE_ARG = Symbol('UNPARSEABLE_ARG')
 
@@ -130,12 +133,7 @@ function parsePreparedStatementArgs(rawArgs: string): unknown[] | null {
 }
 
 function hasValidJsSyntax(src: string): boolean {
-    try {
-        new vm.Script(`"use strict";\n(async () => {\n${src}\n})()`)
-        return true
-    } catch {
-        return false
-    }
+    return isValidJsScript(`"use strict";\n(async () => {\n${src}\n})()`)
 }
 
 /**

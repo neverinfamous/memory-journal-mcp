@@ -8,9 +8,8 @@ import type { IDatabaseAdapter } from '../database/core/interfaces.js'
 import type { VectorSearchManager } from '../vector/vector-search-manager/index.js'
 import type { EntryType, JournalEntry, SignificanceType } from '../types/index.js'
 import { ENTRY_TYPES, SIGNIFICANCE_TYPES } from '../types/index.js'
-import { PermissionError, ValidationError } from '../types/errors.js'
+import { ValidationError } from '../types/errors.js'
 import { logger } from '../utils/logger.js'
-import { sanitizeAuthor } from '../utils/security-utils.js'
 import {
     MAX_CONTENT_LENGTH,
     normalizeSignificanceValue,
@@ -148,50 +147,20 @@ export function resolveImportedFileContext(
     }
 }
 
-export function resolveCanonicalImportAuthor(
-    db: IDatabaseAdapter,
-    author: string | undefined,
-    workspaceId?: string
-): string | undefined {
-    if (author === undefined) return undefined
-    const sanitized = sanitizeAuthor(author).trim()
-    if (sanitized === '') return undefined
-    if (typeof db.resolveAuthor !== 'function') return sanitized
-    const resolved =
-        workspaceId !== undefined
-            ? db.resolveAuthor(sanitized, workspaceId)
-            : db.resolveAuthor(sanitized)
-    return sanitizeAuthor(resolved)
-}
+import {
+    assertImportAuthorOwnership,
+    createImportBatchAuthorCache,
+    resolveCanonicalImportAuthor,
+    resolveCanonicalImportAuthorCached,
+    type ImportBatchAuthorCache,
+} from './importer-author.js'
 
-export function assertImportAuthorOwnership(
-    db: IDatabaseAdapter,
-    entryId: number,
-    author: string | undefined,
-    workspaceId?: string,
-    options?: Pick<ImportOptions, 'enforceStrictTeamOwnership' | 'allowAdminAuthorOverride'>
-): void {
-    if (author === undefined || typeof db.getAuthorsForEntries !== 'function') return
-    if (options?.allowAdminAuthorOverride === true) return
-    const effectiveAuthor = resolveCanonicalImportAuthor(db, author, workspaceId) ?? author
-    const existingAuthor = db.getAuthorsForEntries([entryId]).get(entryId)
-    if (existingAuthor === null) {
-        if (options?.enforceStrictTeamOwnership === true) {
-            throw new PermissionError(
-                `Permission denied: cannot overwrite entry ${String(entryId)} with no recorded author during non-admin team import by '${effectiveAuthor}'`
-            )
-        }
-        return
-    }
-    if (existingAuthor !== undefined) {
-        const canonicalExisting =
-            resolveCanonicalImportAuthor(db, existingAuthor, workspaceId) ?? existingAuthor
-        if (canonicalExisting.toLowerCase() !== effectiveAuthor.toLowerCase()) {
-            throw new PermissionError(
-                `Permission denied: cannot overwrite entry ${String(entryId)} owned by '${existingAuthor}' during import by '${effectiveAuthor}'`
-            )
-        }
-    }
+export {
+    assertImportAuthorOwnership,
+    createImportBatchAuthorCache,
+    resolveCanonicalImportAuthor,
+    resolveCanonicalImportAuthorCached,
+    type ImportBatchAuthorCache,
 }
 
 /** Fetch all referenced entries by ID once and apply workspace visibility matching crud-read. */
@@ -367,7 +336,8 @@ export function validateImportedFileEntry(
     file: ParsedFile,
     db: IDatabaseAdapter,
     options: ImportOptions,
-    prefetchedById?: ReturnType<typeof prefetchImportedEntriesById>
+    prefetchedById?: ReturnType<typeof prefetchImportedEntriesById>,
+    batchAuthorCache?: ImportBatchAuthorCache
 ): {
     effectiveWsId: string | undefined
     effectiveProjNum: number | undefined
@@ -403,7 +373,7 @@ export function validateImportedFileEntry(
                 `Entry ${String(metadata.mj_id)} belongs to project #${String(existing.projectNumber ?? 'none')}, not project #${String(effectiveProjNum)}.`
             )
         }
-        assertImportAuthorOwnership(db, metadata.mj_id, options.author, effectiveWsId, options)
+        assertImportAuthorOwnership(db, metadata.mj_id, options.author, effectiveWsId, options, batchAuthorCache)
     }
     return { effectiveWsId, effectiveProjNum, rawEntryType, significanceType, existing }
 }

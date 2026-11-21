@@ -130,10 +130,10 @@ function appendTagMembership(
     params: unknown[],
     tags: string[] | undefined,
     negated: boolean
-): void {
-    if (tags === undefined || tags.length === 0) return
+): string[] {
+    if (tags === undefined || tags.length === 0) return []
     const expanded = expandTagFilterValues(tags)
-    if (expanded.length === 0) return
+    if (expanded.length === 0) return []
     const membership = chunkedInPredicate(
         expanded,
         (placeholders) => entryTagExistsSql(placeholders, negated),
@@ -141,6 +141,7 @@ function appendTagMembership(
     )
     conditions.push(membership.sql)
     params.push(...membership.params)
+    return expanded
 }
 
 function appendFilterConditions(
@@ -173,12 +174,9 @@ function appendFilterConditions(
         params.push(options.workflowRunId)
     }
     appendTagMembership(conditions, params, options?.tags, false)
-    appendTagMembership(conditions, params, options?.excludeTags, true)
+    const expandedExcludedTags = appendTagMembership(conditions, params, options?.excludeTags, true)
     // [INVARIANT] M1 read-side fallback: untagged legacy session-commits rows are also excluded.
-    if (
-        options?.excludeTags !== undefined &&
-        excludesCommitNarrative(expandTagFilterValues(options.excludeTags))
-    ) {
+    if (expandedExcludedTags.length > 0 && excludesCommitNarrative(expandedExcludedTags)) {
         conditions.push(legacyCommitExclusionSql('e'))
     }
     if (options?.entryType !== undefined) {

@@ -1,6 +1,6 @@
 import { isRecord } from './shared-utils.js'
 
-const GITHUB_METHODS = [
+const GITHUB_METHODS: ReadonlySet<string> = new Set([
     'get_github_issues',
     'getGithubIssues',
     'get_github_prs',
@@ -37,9 +37,9 @@ const GITHUB_METHODS = [
     'getRepoInsights',
     'get_copilot_reviews',
     'getCopilotReviews',
-]
+])
 
-const BACKUP_METHODS = [
+const BACKUP_METHODS: ReadonlySet<string> = new Set([
     'backup_journal',
     'backupJournal',
     'team_backup',
@@ -56,19 +56,28 @@ const BACKUP_METHODS = [
     'cleanupBackups',
     'team_cleanup_backups',
     'teamCleanupBackups',
-]
+])
+
+const SINGULAR_MILESTONE_METHODS: ReadonlySet<string> = new Set([
+    'get_github_milestone',
+    'getGithubMilestone',
+    'update_github_milestone',
+    'updateGithubMilestone',
+    'delete_github_milestone',
+    'deleteGithubMilestone',
+])
 
 export function applyGithubAndBackupInterceptions(
     methodName: string,
     args: unknown[]
 ): { args: unknown[] } | { error: Record<string, unknown> } {
-    if (GITHUB_METHODS.includes(methodName) && args.length === 1 && isRecord(args[0])) {
+    if (GITHUB_METHODS.has(methodName) && args.length === 1 && isRecord(args[0])) {
         const ghRes = applyGithubInterceptions(methodName, args[0])
         if ('error' in ghRes) return ghRes
         args[0] = ghRes.obj
     }
 
-    if (BACKUP_METHODS.includes(methodName) && args.length === 1 && isRecord(args[0])) {
+    if (BACKUP_METHODS.has(methodName) && args.length === 1 && isRecord(args[0])) {
         const bkRes = applyBackupInterceptions(methodName, args[0])
         if ('error' in bkRes) return bkRes
         args[0] = bkRes.obj
@@ -167,16 +176,8 @@ function mapKanbanAndMilestoneKeepAliases(methodName: string, obj: Record<string
             delete obj['keep']
         }
     }
-    const singularMilestoneMethods = new Set([
-        'get_github_milestone',
-        'getGithubMilestone',
-        'update_github_milestone',
-        'updateGithubMilestone',
-        'delete_github_milestone',
-        'deleteGithubMilestone',
-    ])
     if (
-        singularMilestoneMethods.has(methodName) &&
+        SINGULAR_MILESTONE_METHODS.has(methodName) &&
         obj['keep'] !== undefined &&
         obj['milestone_number'] === undefined
     ) {

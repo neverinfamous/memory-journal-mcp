@@ -67,33 +67,42 @@ function resolveRealTargetPath(targetInput: string): string {
 
     // 2. Resolve realpath iteratively by stepping up the tree until an existing directory is found.
     // This prevents symlink traversal bypasses where the final node does not exist but a parent is a symlink pointing outside.
+    const root = pathMod.parse(resolved).root
     let currentDir = resolved
     let existingRealPath = ''
 
-    while (currentDir !== pathMod.parse(currentDir).root) {
+    while (currentDir !== root) {
+        let stat: fs.Stats | undefined
         try {
-            const stat = fs.lstatSync(currentDir)
-            if (stat.isSymbolicLink() && !fs.existsSync(currentDir)) {
-                throw new PathTraversalError(
-                    `Dangling symbolic link cannot be verified inside sandbox boundaries: ${currentDir}`
-                )
-            }
-        } catch (err: unknown) {
-            if (err instanceof PathTraversalError) {
-                throw err
-            }
+            stat = fs.lstatSync(currentDir, { throwIfNoEntry: false })
+        } catch {
+            // Inaccessible segment (e.g., EACCES/ENOTDIR); step up to parent
+            stat = undefined
         }
-        if (fs.existsSync(currentDir)) {
-            existingRealPath = fs.realpathSync.native(currentDir)
-            break
+        if (stat !== undefined) {
+            try {
+                existingRealPath = fs.realpathSync.native(currentDir)
+                break
+            } catch (err: unknown) {
+                if (stat.isSymbolicLink()) {
+                    throw new PathTraversalError(
+                        `Dangling symbolic link cannot be verified inside sandbox boundaries: ${currentDir}`
+                    )
+                }
+                const code =
+                    typeof err === 'object' && err !== null && 'code' in err
+                        ? (err as { code?: unknown }).code
+                        : undefined
+                if (code !== 'ENOENT') throw err
+            }
         }
         currentDir = pathMod.dirname(currentDir)
     }
 
     if (!existingRealPath) {
-        if (fs.existsSync(currentDir)) {
+        try {
             existingRealPath = fs.realpathSync.native(currentDir) // root resolution
-        } else {
+        } catch {
             existingRealPath = currentDir
         }
     }

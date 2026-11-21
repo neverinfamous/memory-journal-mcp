@@ -263,7 +263,7 @@ export function createEmptyFallback(): unknown {
     })
 }
 
-const CONTEXT_COLLECTION_NAMES = [
+const CONTEXT_COLLECTION_NAMES: ReadonlySet<string> = new Set([
     'entries',
     'results',
     'projects',
@@ -297,7 +297,7 @@ const CONTEXT_COLLECTION_NAMES = [
     'data',
     'map',
     'list',
-]
+])
 
 function stringifyContextTarget(target: Record<string, unknown>): string {
     try {
@@ -366,7 +366,7 @@ function resolveContextProxyProp(target: Record<string, unknown>, prop: string |
     if (prop === 'executeSystemPrompt' || prop === 'getPrompt' || prop === 'executePrompt') {
         return createPromptBlockedFn(prop)
     }
-    if (CONTEXT_COLLECTION_NAMES.includes(prop)) {
+    if (CONTEXT_COLLECTION_NAMES.has(prop)) {
         return createEmptyFallback()
     }
     return target[prop]

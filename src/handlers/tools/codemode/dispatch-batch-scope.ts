@@ -176,6 +176,7 @@ function verifyBatchWildcardMoveProjects(
     if (typeof targetDb?.getEntryById !== 'function') return undefined
 
     const parentWs = typeof parentWorkspaceId === 'string' ? parentWorkspaceId.trim() : undefined
+    const wildcardIds: number[] = []
     for (const item of nextItems) {
         if (!isRecord(item)) continue
         const targetWs = trimmedStringField(item, 'target_workspace_id')
@@ -185,8 +186,17 @@ function verifyBatchWildcardMoveProjects(
         const isWildcardSource =
             itemWs === '*' ||
             (itemWs === undefined && (parentWs === '*' || (parentWs === undefined && workspaceId === '*')))
-        if (!isWildcardSource) continue
-        const sourceEntry = targetDb.getEntryById(entryId, '*')
+        if (isWildcardSource) wildcardIds.push(entryId)
+    }
+    if (wildcardIds.length === 0) return undefined
+
+    const prefetched =
+        typeof targetDb.getEntriesByIds === 'function'
+            ? targetDb.getEntriesByIds(wildcardIds, '*')
+            : undefined
+    for (const entryId of wildcardIds) {
+        const sourceEntry =
+            prefetched !== undefined ? prefetched.get(entryId) : targetDb.getEntryById(entryId, '*')
         if (sourceEntry !== null && sourceEntry !== undefined && sourceEntry.projectNumber !== projectId) {
             return {
                 errorResult: {

@@ -53,38 +53,18 @@ function getTypeCounts(
     dateParams: unknown[]
 ): { totalEntries: number; entriesByType: Record<string, number> } {
     const entriesByType = Object.create(null) as Record<string, number>
-    let totalEntries: number
+    let totalEntries = 0
 
-    if (dateParams.length > 0) {
-        const countRow = db
-            .prepare(
-                `SELECT COUNT(*) as count FROM memory_journal WHERE deleted_at IS NULL${dateFilter}`
-            )
-            .get(...dateParams) as { count: number }
-        totalEntries = countRow.count
-
-        const typeRows = db
-            .prepare(
-                `SELECT entry_type, COUNT(*) as count FROM memory_journal WHERE deleted_at IS NULL${dateFilter} GROUP BY entry_type`
-            )
-            .all(...dateParams) as { entry_type: string; count: number }[]
-        for (const row of typeRows) {
-            entriesByType[row.entry_type] = row.count
-        }
-    } else {
-        const countRow = db
-            .prepare('SELECT COUNT(*) as count FROM memory_journal WHERE deleted_at IS NULL')
-            .get() as { count: number }
-        totalEntries = countRow.count
-
-        const typeRows = db
-            .prepare(
-                `SELECT entry_type, COUNT(*) as count FROM memory_journal WHERE deleted_at IS NULL GROUP BY entry_type`
-            )
-            .all() as { entry_type: string; count: number }[]
-        for (const row of typeRows) {
-            entriesByType[row.entry_type] = row.count
-        }
+    const sql =
+        dateParams.length > 0
+            ? `SELECT entry_type, COUNT(*) as count FROM memory_journal WHERE deleted_at IS NULL${dateFilter} GROUP BY entry_type`
+            : `SELECT entry_type, COUNT(*) as count FROM memory_journal WHERE deleted_at IS NULL GROUP BY entry_type`
+    const typeRows = (
+        dateParams.length > 0 ? db.prepare(sql).all(...dateParams) : db.prepare(sql).all()
+    ) as { entry_type: string; count: number }[]
+    for (const row of typeRows) {
+        entriesByType[row.entry_type] = row.count
+        totalEntries += row.count
     }
     return { totalEntries, entriesByType }
 }
@@ -127,13 +107,6 @@ function getRelationshipCounts(
         : ''
     const peerScopeClause = `${peerWsClause}${peerProjClause}`
     const activePeerFilter = `EXISTS (SELECT 1 FROM memory_journal p WHERE p.id = r.to_entry_id AND r.to_entry_id != r.from_entry_id AND p.deleted_at IS NULL${peerScopeClause})`
-    const relCountRow = db
-        .prepare(
-            `SELECT COUNT(*) as count FROM relationships r JOIN memory_journal m ON r.from_entry_id = m.id WHERE m.deleted_at IS NULL${dateFilter} AND ${activePeerFilter}`
-        )
-        .get(...dateParams) as {
-        count: number
-    }
     const relTypeRows = db
         .prepare(
             `
@@ -148,6 +121,10 @@ function getRelationshipCounts(
         relationship_type: string
         count: number
     }[]
+    let totalRelationships = 0
+    for (const row of relTypeRows) {
+        totalRelationships += row.count
+    }
 
     const linkedEntriesRow = db
         .prepare(
@@ -169,7 +146,7 @@ function getRelationshipCounts(
         .get(...dateParams) as { count: number }
 
     return {
-        totalRelationships: relCountRow.count,
+        totalRelationships,
         linkedCount: linkedEntriesRow.count,
         relTypeRows,
     }

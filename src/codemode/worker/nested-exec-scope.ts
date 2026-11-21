@@ -3,12 +3,13 @@
  * Worker-thread safe (no host DB or config-file imports).
  */
 
-import * as vm from 'node:vm'
+import type * as vm from 'node:vm'
 import type { ProjectRegistryEntry } from '../../types/index.js'
 import { transformAutoReturn } from '../auto-return.js'
 import { readProjectRegistryPayload } from '../normalizers/generic-field-aliases.js'
 import { validateSandboxCode } from '../security.js'
 import { hasUnbalancedClosingDelimiter, stripCommentsAndStrings } from '../security-stripper.js'
+import { getOrCompileVmScript } from './script-and-metadata-cache.js'
 import {
     dispatchSynthesizedNestedEntry,
     extractNestedAutoVersion,
@@ -382,7 +383,9 @@ export function createSandboxExecutor(options: SandboxExecutorOptions): (arg: un
             return runIsolatedNestedCode(wrapped, effectiveReadonly, effectiveDryRun, effectiveUseTestDb, isolation)
         }
         return await raceWithSandboxTimeout(
-            Promise.resolve(vm.runInContext(wrapped, vmContextRef.current, { timeout: timeoutMs })),
+            Promise.resolve(
+                getOrCompileVmScript(wrapped).runInContext(vmContextRef.current, { timeout: timeoutMs })
+            ),
             timeoutMs,
             activeTimers
         )

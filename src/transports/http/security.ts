@@ -183,12 +183,13 @@ export function setCorsHeaders(req: Request, res: Response, config: HttpTranspor
 
     const isWildcard = corsOrigins.includes('*')
     const origin = req.headers.origin
+    let whitelist: Record<string, true> | undefined
 
     if (isWildcard) {
         res.setHeader('Access-Control-Allow-Origin', '*')
     } else if (origin) {
-        // Build whitelist record — CodeQL recognizes `origin in whitelist` as a sanitizer
-        const whitelist = Object.create(null) as Record<string, true>
+        // Build whitelist record once — CodeQL recognizes `origin in whitelist` as a sanitizer
+        whitelist = Object.create(null) as Record<string, true>
         for (const allowed of corsOrigins) {
             whitelist[allowed] = true
         }
@@ -210,9 +211,7 @@ export function setCorsHeaders(req: Request, res: Response, config: HttpTranspor
     res.setHeader('Access-Control-Expose-Headers', 'mcp-session-id')
     res.setHeader('Access-Control-Max-Age', String(CORS_PREFLIGHT_MAX_AGE_SECONDS))
 
-    if (origin && !isWildcard) {
-        const whitelist = Object.create(null) as Record<string, true>
-        for (const allowed of corsOrigins) whitelist[allowed] = true
+    if (origin && !isWildcard && whitelist !== undefined) {
         if (!(origin in whitelist)) {
             // Self-origin fallback removed to prevent host header injection
             return false

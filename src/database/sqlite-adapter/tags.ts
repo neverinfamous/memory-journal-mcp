@@ -58,15 +58,13 @@ export class TagsManager {
             const uniqueTags = Array.from(new Set(tagNames.filter((t) => t.length > 0)))
             if (uniqueTags.length === 0) return
 
-            const CHUNK_SIZE = 500
-            const tagIds: number[] = []
-            for (let i = 0; i < uniqueTags.length; i += CHUNK_SIZE) {
-                const tagChunk = uniqueTags.slice(i, i + CHUNK_SIZE)
-                const insertPlaceholders = tagChunk.map(() => '(?, 0)').join(', ')
-                db.prepare(
-                    `INSERT OR IGNORE INTO tags (name, usage_count) VALUES ${insertPlaceholders}`
-                ).run(...tagChunk)
+            const insertTagStmt = db.prepare(
+                'INSERT OR IGNORE INTO tags (name, usage_count) VALUES (?, 0)'
+            )
+            for (const tag of uniqueTags) {
+                insertTagStmt.run(tag)
             }
+            const tagIds: number[] = []
             for (const { placeholders, params } of bucketInParams(uniqueTags)) {
                 const rows = db
                     .prepare(`SELECT id FROM tags WHERE name IN (${placeholders})`)
@@ -270,15 +268,12 @@ export class TagsManager {
         const newEntryIds = entryIds.filter((id) => !existingEntryIds.has(id))
         if (newEntryIds.length === 0) return 0
 
-        const CHUNK_SIZE = 250
+        const insertLinkStmt = db.prepare(
+            'INSERT OR IGNORE INTO entry_tags (entry_id, tag_id) VALUES (?, ?)'
+        )
         let insertedCount = 0
-        for (let i = 0; i < newEntryIds.length; i += CHUNK_SIZE) {
-            const chunk = newEntryIds.slice(i, i + CHUNK_SIZE)
-            const placeholders = chunk.map(() => '(?, ?)').join(', ')
-            const params = chunk.flatMap((entryId) => [entryId, targetTagId])
-            insertedCount += db
-                .prepare(`INSERT OR IGNORE INTO entry_tags (entry_id, tag_id) VALUES ${placeholders}`)
-                .run(...params).changes
+        for (const entryId of newEntryIds) {
+            insertedCount += insertLinkStmt.run(entryId, targetTagId).changes
         }
         if (insertedCount > 0) {
             db.prepare('UPDATE tags SET usage_count = usage_count + ? WHERE id = ?').run(
@@ -304,7 +299,7 @@ export class TagsManager {
     }
 
     /** Ensure target tag exists after scope checks succeed and purge orphaned `entry_tags` links. */
-    private ensureTargetTagId(sourceTagId: number, targetTag: string): number {
+    private ensureTargetTagId(_sourceTagId: number, targetTag: string): number {
         const db = this.db
         db.prepare('INSERT OR IGNORE INTO tags (name, usage_count) VALUES (?, 0)').run(targetTag)
         const targetRow = db.prepare('SELECT id FROM tags WHERE name = ?').get(targetTag) as
@@ -313,12 +308,10 @@ export class TagsManager {
         if (!targetRow) throw new QueryError(`Failed to get or create target tag: ${targetTag}`)
         const targetTagId = targetRow.id
 
-        // Clean orphaned entry_tags (entries permanently deleted but links remain)
-        for (const tagId of [sourceTagId, targetTagId]) {
-            db.prepare(
-                `DELETE FROM entry_tags WHERE tag_id = ? AND entry_id NOT IN (SELECT id FROM memory_journal)`
-            ).run(tagId)
-        }
+        // Clean orphaned entry_tags for targetTagId (sourceTagId was already cleaned in resolveSourceTagId)
+        db.prepare(
+            `DELETE FROM entry_tags WHERE tag_id = ? AND entry_id NOT IN (SELECT id FROM memory_journal)`
+        ).run(targetTagId)
         return targetTagId
     }
 
@@ -350,16 +343,13 @@ export class TagsManager {
                     ? ` AND entry_id IN (SELECT id FROM memory_journal WHERE ${scopeConds.join(' AND ')})`
                     : ''
 
-            const CHUNK_SIZE = 490
             let totalDeleted = 0
-            for (let i = 0; i < entryIds.length; i += CHUNK_SIZE) {
-                const chunk = entryIds.slice(i, i + CHUNK_SIZE)
-                const idPlaceholders = chunk.map(() => '?').join(', ')
+            for (const { placeholders, params } of bucketInParams(entryIds)) {
                 const delResult = db
                     .prepare(
-                        `DELETE FROM entry_tags WHERE tag_id = ? AND entry_id IN (${idPlaceholders})${projectClause}`
+                        `DELETE FROM entry_tags WHERE tag_id = ? AND entry_id IN (${placeholders})${projectClause}`
                     )
-                    .run(sourceTagId, ...chunk, ...scopeParams)
+                    .run(sourceTagId, ...params, ...scopeParams)
                 totalDeleted += delResult.changes
             }
             db.prepare('UPDATE tags SET usage_count = MAX(0, usage_count - ?) WHERE id = ?').run(

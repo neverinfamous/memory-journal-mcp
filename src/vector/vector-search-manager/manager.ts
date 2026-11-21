@@ -301,6 +301,9 @@ export class VectorSearchManager {
         projectNumber?: number
     ): Promise<VectorCandidate[]> {
         await this.initialize()
+        if (typeof this.dbAdapter?.hasVectors === 'function' && !this.dbAdapter.hasVectors()) {
+            return []
+        }
 
         try {
             const queryEmbedding = await this.generateEmbedding(query)
@@ -330,6 +333,9 @@ export class VectorSearchManager {
         projectNumber?: number
     ): Promise<SemanticSearchResult[]> {
         await this.initialize()
+        if (typeof this.dbAdapter?.hasVectors === 'function' && !this.dbAdapter.hasVectors()) {
+            return []
+        }
 
         try {
             const queryEmbedding = await this.generateEmbedding(query)

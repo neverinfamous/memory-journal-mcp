@@ -116,12 +116,16 @@ export function queryActiveThreads(
     const recentWs = scoped ? ' AND workspace_id = ?' : ''
     const hubWs = scoped ? ' AND m.workspace_id = ?' : ''
     const peerWs = scoped ? ' AND p.workspace_id = ?' : ''
-    const params: unknown[] = scoped ? [ws, sinceIso, ws, ws, limit] : [sinceIso, limit]
+    const sinceFloor = sinceIso.slice(0, 10)
+    const params: unknown[] = scoped
+        ? [ws, sinceFloor, sinceIso, ws, ws, limit]
+        : [sinceFloor, sinceIso, limit]
     const rows = db
         .prepare(
-            `WITH recent AS (
+            `WITH recent AS MATERIALIZED (
                  SELECT id FROM memory_journal
-                 WHERE deleted_at IS NULL${recentWs} AND julianday(timestamp) >= julianday(?)
+                 WHERE deleted_at IS NULL${recentWs}
+                   AND timestamp >= ? AND julianday(timestamp) >= julianday(?)
              ),
              edges AS (
                  SELECT from_entry_id AS hub, to_entry_id AS peer FROM relationships WHERE from_entry_id != to_entry_id
@@ -160,14 +164,16 @@ export function queryRecentLinkageStats(
 ): RecentLinkageStats {
     const { scoped, id: ws } = scopeOf(workspaceId)
     const entryWs = scoped ? ' AND e.workspace_id = ?' : ''
-    // Bind order: linkedPredicate peer workspace (x2), outer workspace, window start.
-    const params: unknown[] = scoped ? [ws, ws, ws, sinceIso] : [sinceIso]
+    const sinceFloor = sinceIso.slice(0, 10)
+    // Bind order: linkedPredicate peer workspace (x2), outer workspace, coarse floor, window start.
+    const params: unknown[] = scoped ? [ws, ws, ws, sinceFloor, sinceIso] : [sinceFloor, sinceIso]
     const row = db
         .prepare(
             `SELECT COUNT(*) AS recent,
                     COALESCE(SUM(CASE WHEN ${linkedPredicate('e', scoped)} THEN 0 ELSE 1 END), 0) AS unlinked
              FROM memory_journal e
-             WHERE e.deleted_at IS NULL${entryWs} AND julianday(e.timestamp) >= julianday(?)`
+             WHERE e.deleted_at IS NULL${entryWs}
+               AND e.timestamp >= ? AND julianday(e.timestamp) >= julianday(?)`
         )
         .get(...params) as { recent: number; unlinked: number } | undefined
     return { recentEntries: row?.recent ?? 0, unlinkedEntries: row?.unlinked ?? 0 }
@@ -221,11 +227,13 @@ export function queryRecentNeighborhood(
     const { scoped, id: ws } = scopeOf(workspaceId)
     const recentWs = scoped ? ' AND workspace_id = ?' : ''
     const endpointWs = scoped ? ' AND mf.workspace_id = ? AND mt.workspace_id = ?' : ''
+    const sinceFloor = sinceIso.slice(0, 10)
     const edgeRows = db
         .prepare(
-            `WITH recent AS (
+            `WITH recent AS MATERIALIZED (
                  SELECT id FROM memory_journal
-                 WHERE deleted_at IS NULL${recentWs} AND julianday(timestamp) >= julianday(?)
+                 WHERE deleted_at IS NULL${recentWs}
+                   AND timestamp >= ? AND julianday(timestamp) >= julianday(?)
              )
              SELECT r.from_entry_id AS from_id, r.to_entry_id AS to_id, r.relationship_type AS type
              FROM relationships r
@@ -236,7 +244,7 @@ export function queryRecentNeighborhood(
              ORDER BY r.id DESC
              LIMIT ?`
         )
-        .all(...(scoped ? [ws, sinceIso, ws, ws, edgeLimit] : [sinceIso, edgeLimit])) as {
+        .all(...(scoped ? [ws, sinceFloor, sinceIso, ws, ws, edgeLimit] : [sinceFloor, sinceIso, edgeLimit])) as {
         from_id: number
         to_id: number
         type: string
@@ -270,17 +278,24 @@ export function queryRecentNeighborhood(
     const unlinkedRows = db
         .prepare(
             `SELECT e.id AS id FROM memory_journal e
-             WHERE e.deleted_at IS NULL${entryWs} AND julianday(e.timestamp) >= julianday(?)
+             WHERE e.deleted_at IS NULL${entryWs}
+               AND e.timestamp >= ? AND julianday(e.timestamp) >= julianday(?)
                AND NOT ${linkedPredicate('e', scoped)}
              ORDER BY e.id DESC`
         )
-        .all(...(scoped ? [ws, sinceIso, ws, ws] : [sinceIso])) as { id: number }[]
-    const stats = queryRecentLinkageStats(db, sinceIso, workspaceId)
+        .all(...(scoped ? [ws, sinceFloor, sinceIso, ws, ws] : [sinceFloor, sinceIso])) as { id: number }[]
+    const countRow = db
+        .prepare(
+            `SELECT COUNT(*) AS recent FROM memory_journal e
+             WHERE e.deleted_at IS NULL${entryWs}
+               AND e.timestamp >= ? AND julianday(e.timestamp) >= julianday(?)`
+        )
+        .get(...(scoped ? [ws, sinceFloor, sinceIso] : [sinceFloor, sinceIso])) as { recent: number } | undefined
     return {
         nodes,
         edges,
         unlinkedIds: unlinkedRows.map((r) => r.id),
-        recentEntries: stats.recentEntries,
+        recentEntries: countRow?.recent ?? 0,
     }
 }
 

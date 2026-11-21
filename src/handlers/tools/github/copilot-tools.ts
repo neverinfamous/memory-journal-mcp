@@ -16,6 +16,15 @@ import { ensureBlockFenced, ensureInlineFenced } from './fencing-helpers.js'
 // Tool Definitions
 // ============================================================================
 
+const GetCopilotReviewsStrictSchema = z
+    .object({
+        pr_number: z.number().int().positive(),
+        owner: z.string().optional(),
+        repo: z.string().optional(),
+        ...githubScopeParseFields,
+    })
+    .strict()
+
 export function getCopilotReviewTools(context: ToolContext): ToolDefinition[] {
     return [
         {
@@ -39,15 +48,7 @@ export function getCopilotReviewTools(context: ToolContext): ToolDefinition[] {
             },
             handler: async (params: unknown) => {
                 try {
-                    const input = z
-                        .object({
-                            pr_number: z.number().int().positive(),
-                            owner: z.string().optional(),
-                            repo: z.string().optional(),
-                            ...githubScopeParseFields,
-                        })
-                        .strict()
-                        .parse(params)
+                    const input = GetCopilotReviewsStrictSchema.parse(params)
 
                     const resolved = await resolveOwnerRepo(context, input)
                     if ('error' in resolved) return resolved.response

@@ -93,7 +93,10 @@ function generateRequestId(): string {
     return `aud-${ts}-${rand}`
 }
 
-function inspectToolResult(result: unknown): {
+function inspectToolResult(
+    result: unknown,
+    computeTokens = true
+): {
     success: boolean
     error?: string
     tokenEstimate?: number
@@ -116,10 +119,12 @@ function inspectToolResult(result: unknown): {
     }
 
     // Compute token estimate from result (uses WeakMap cache when metrics interceptor already computed it)
-    if (typeof result === 'object' && result !== null) {
-        tokenEstimate = estimatePayloadTokens(result)
-    } else if (typeof result === 'string') {
-        tokenEstimate = estimateTokens(result, 'prose')
+    if (computeTokens) {
+        if (typeof result === 'object' && result !== null) {
+            tokenEstimate = estimatePayloadTokens(result)
+        } else if (typeof result === 'string') {
+            tokenEstimate = estimateTokens(result, 'prose')
+        }
     }
 
     return {
@@ -353,7 +358,7 @@ export async function auditOperation<T>(
 
     try {
         const result = await fn()
-        const inspected = inspectToolResult(result)
+        const inspected = inspectToolResult(result, false)
         success = inspected.success
         if (inspected.error !== undefined) error = inspected.error
         tokenEstimate = estimateOperationResultTokens(result, name)

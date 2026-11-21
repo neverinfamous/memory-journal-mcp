@@ -1,5 +1,6 @@
 import { test, beforeAll, afterAll } from 'vitest'
 import { DatabaseAdapter } from '../../src/database/sqlite-adapter/index.js'
+import { logger, type LogLevel } from '../../src/utils/logger.js'
 import * as fs from 'node:fs'
 import * as os from 'node:os'
 import * as path from 'node:path'
@@ -35,6 +36,7 @@ beforeAll(async () => {
     delete process.env['MJ_DB_ENCRYPTION_KEY']
     delete process.env['DB_ENCRYPTION_KEY']
     process.env['LOG_LEVEL'] = 'error'
+    logger.setLevel('error')
 
     readDb = new DatabaseAdapter(readDbPath)
     writeDb = new DatabaseAdapter(writeDbPath)
@@ -51,9 +53,7 @@ beforeAll(async () => {
                     workspaceId: ws,
                     projectNumber: 1,
                     content: `Initial data entry ${i} for benchmarking read operations. This is some dummy content to make the entry a bit larger. ${Math.random().toString(36).substring(7)}`,
-                    entryType: (i % 2 === 0 ? 'personal_reflection' : 'decision') as
-                        | 'personal_reflection'
-                        | 'decision',
+                    entryType: i % 2 === 0 ? 'personal_reflection' : 'project_decision',
                     tags: [`tag-${i % 10}`],
                     isPersonal: i % 3 === 0,
                     ...(withGraph
@@ -109,6 +109,7 @@ afterAll(() => {
     if (savedDbEncKey !== undefined) process.env['DB_ENCRYPTION_KEY'] = savedDbEncKey
     if (savedLogLevel !== undefined) process.env['LOG_LEVEL'] = savedLogLevel
     else delete process.env['LOG_LEVEL']
+    logger.setLevel((savedLogLevel ?? 'info') as LogLevel)
 })
 
 test('getRecentEntries (limit 50)', async ({ bench }) => {
@@ -148,7 +149,7 @@ test('createEntry', async ({ bench }) => {
             workspaceId: 'default',
             projectNumber: 1,
             content: 'Benchmark test entry content that represents a typical journal entry size.',
-            entryType: 'decision',
+            entryType: 'project_decision',
             tags: ['benchmark', 'test'],
         })
     }).run()

@@ -206,11 +206,18 @@ export function applyImportedRelationshipBatch(
 
 function collectExistingDryRunPairs(
     db: IDatabaseAdapter,
-    pending: PendingRelationshipLink
+    pending: PendingRelationshipLink,
+    prefetchedRels?: ReadonlyMap<number, { fromEntryId: number; toEntryId: number; relationshipType: string }[]>
 ): Set<string> {
     const seenPairs = new Set<string>()
-    if (pending.entryId > 0 && typeof db.getRelationships === 'function') {
-        for (const existing of db.getRelationships(pending.entryId, pending.workspaceId)) {
+    if (pending.entryId > 0) {
+        const existingList =
+            prefetchedRels !== undefined
+                ? (prefetchedRels.get(pending.entryId) ?? [])
+                : typeof db.getRelationships === 'function'
+                  ? db.getRelationships(pending.entryId, pending.workspaceId)
+                  : []
+        for (const existing of existingList) {
             if (existing.fromEntryId === pending.entryId) {
                 seenPairs.add(`${existing.relationshipType}:${String(existing.toEntryId)}`)
             }
@@ -236,12 +243,13 @@ function evaluateDryRunPendingItem(
     pending: PendingRelationshipLink,
     inBatchScopes: ReadonlyMap<number, { workspaceId: string; projectNumber?: number | null }>,
     targetsMap: ReadonlyMap<number, JournalEntry> | undefined,
+    prefetchedRels: ReadonlyMap<number, { fromEntryId: number; toEntryId: number; relationshipType: string }[]> | undefined,
     result: ImportedRelationshipBatchResult
 ): void {
     if (pending.relationships === undefined || pending.relationships.length === 0) return
     const rejectedSet = new Set<string>()
     const missingTargetsSet = new Set<number>()
-    const seenPairs = collectExistingDryRunPairs(db, pending)
+    const seenPairs = collectExistingDryRunPairs(db, pending, prefetchedRels)
     for (const rel of pending.relationships) {
         if (!isRelationshipType(rel.type)) {
             rejectedSet.add(rel.type)
@@ -298,14 +306,45 @@ export function validateDryRunRelationships(
             externalPending.push({ ...pending, relationships: filtered })
         }
     }
-    const { prefetchedTargetsByWs } = prefetchBatchRelationshipContext(
+    const { prefetchedTargetsByWs, prefetchedRelsByWs } = prefetchBatchRelationshipContext(
         db,
         externalPending,
         new Map()
     )
+    if (typeof db.getRelationshipsForEntries === 'function') {
+        const missingIdsByWs = new Map<string, Set<number>>()
+        for (const pending of pendingLinks) {
+            if (pending.entryId <= 0 || pending.relationships === undefined || pending.relationships.length === 0) continue
+            const wsKey = pending.workspaceId ?? DEFAULT_WS_SENTINEL
+            if (prefetchedRelsByWs.get(wsKey)?.has(pending.entryId)) continue
+            let idSet = missingIdsByWs.get(wsKey)
+            if (!idSet) {
+                idSet = new Set<number>()
+                missingIdsByWs.set(wsKey, idSet)
+            }
+            idSet.add(pending.entryId)
+        }
+        for (const [wsKey, idSet] of missingIdsByWs) {
+            const wsArg = wsKey === DEFAULT_WS_SENTINEL ? undefined : wsKey
+            const fetched = db.getRelationshipsForEntries([...idSet], wsArg)
+            const existingMap = prefetchedRelsByWs.get(wsKey)
+            if (existingMap) {
+                for (const [k, v] of fetched) existingMap.set(k, v)
+            } else {
+                prefetchedRelsByWs.set(wsKey, fetched)
+            }
+        }
+    }
 
     for (const pending of pendingLinks) {
         const wsKey = pending.workspaceId ?? DEFAULT_WS_SENTINEL
-        evaluateDryRunPendingItem(db, pending, inBatchScopes, prefetchedTargetsByWs.get(wsKey), result)
+        evaluateDryRunPendingItem(
+            db,
+            pending,
+            inBatchScopes,
+            prefetchedTargetsByWs.get(wsKey),
+            prefetchedRelsByWs.get(wsKey),
+            result
+        )
     }
 }

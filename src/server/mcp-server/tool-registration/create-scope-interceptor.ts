@@ -147,6 +147,14 @@ function resolveBatchCreateScope(
     }
 }
 
+export function isCreateWorkspaceScopeTool(toolName: string | undefined): boolean {
+    return (
+        toolName === 'create_entry' ||
+        toolName === 'batch_create_entries' ||
+        (toolName !== undefined && DUMMY_CREATE_SCOPE_SET.has(toolName))
+    )
+}
+
 export function resolveMcpCreateWorkspaceScope(
     toolName: string | undefined,
     toolArgs: Record<string, unknown>,

@@ -94,9 +94,11 @@ function parseGitCommitLines(
     }
 }
 
+let briefingTimeFormatter: Intl.DateTimeFormat | undefined
+
 export function formatBriefingLocalTime(now = new Date()): string {
     try {
-        const formatter = new Intl.DateTimeFormat('en-US', {
+        briefingTimeFormatter ??= new Intl.DateTimeFormat('en-US', {
             year: 'numeric',
             month: '2-digit',
             day: '2-digit',
@@ -105,7 +107,7 @@ export function formatBriefingLocalTime(now = new Date()): string {
             hour12: false,
             timeZoneName: 'short',
         })
-        const parts = formatter.formatToParts(now)
+        const parts = briefingTimeFormatter.formatToParts(now)
         const get = (type: string): string => parts.find((p) => p.type === type)?.value ?? ''
         return `${get('year')}-${get('month')}-${get('day')} ${get('hour')}:${get('minute')} ${get('timeZoneName')}`
     } catch {

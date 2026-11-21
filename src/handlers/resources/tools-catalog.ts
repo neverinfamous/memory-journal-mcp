@@ -4,6 +4,13 @@ import { TOOL_GROUPS } from '../../filtering/tool-constants.js'
 import { getAllToolNames, isToolVisibleForFilter } from '../../filtering/tool-filter.js'
 
 const CANONICAL_TOOL_NAMES = new Set(getAllToolNames())
+const TOOL_GROUP_BY_NAME: ReadonlyMap<string, string> = (() => {
+    const map = new Map<string, string>()
+    for (const [groupName, names] of Object.entries(TOOL_GROUPS)) {
+        for (const name of names) map.set(name, groupName)
+    }
+    return map
+})()
 
 export function getToolsCatalogResourceDefinitions(): InternalResourceDef[] {
     return [
@@ -42,13 +49,9 @@ export function getToolsCatalogResourceDefinitions(): InternalResourceDef[] {
                 
                 // [INTENT] Group by the canonical TOOL_GROUPS membership (M8); icon titles are
                 // display metadata and drift from group names.
-                const groupOf = new Map<string, string>()
-                for (const [groupName, names] of Object.entries(TOOL_GROUPS)) {
-                    for (const name of names) groupOf.set(name, groupName)
-                }
                 const toolsByGroup = new Map<string, typeof allTools>()
                 for (const tool of allTools) {
-                    const group = groupOf.get(tool.name) ?? 'other'
+                    const group = TOOL_GROUP_BY_NAME.get(tool.name) ?? 'other'
                     let list = toolsByGroup.get(group)
                     if (list === undefined) {
                         list = []

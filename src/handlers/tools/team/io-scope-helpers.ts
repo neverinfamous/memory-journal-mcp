@@ -211,6 +211,52 @@ export function resolveTeamImportScope(
     return { wsId, projectNumber, lockedWsId }
 }
 
+type ExternalReadOutcome =
+    | { status: 'parsed'; file: ParsedFile }
+    | { status: 'skipped' }
+    | { status: 'error'; file: string; error: string }
+
+async function readAndConvertSingleExternalFile(
+    sourceDir: string,
+    filename: string,
+    allowedRoots: string[],
+    sourceFormat: Parameters<typeof convertFile>[2],
+    defaultEntryType: EntryType | undefined
+): Promise<ExternalReadOutcome> {
+    let handle
+    try {
+        const filepath = path.join(sourceDir, filename)
+        assertSafeFilePath(filepath, allowedRoots)
+        handle = await fs.open(filepath, fsConstants.O_RDONLY | fsConstants.O_NOFOLLOW)
+        const stats = await handle.stat()
+        if (!stats.isFile()) {
+            throw new Error(`Refusing to import non-regular file: ${filename}`)
+        }
+        if (stats.size > MAX_IMPORT_FILE_BYTES) {
+            throw new Error(
+                `File exceeds maximum size limit of ${String(MAX_IMPORT_FILE_BYTES / (1024 * 1024))}MB (${stats.size} bytes)`
+            )
+        }
+        const content = await handle.readFile('utf-8')
+        const converted = convertFile(content, filename, sourceFormat, defaultEntryType)
+        if (converted.body.trim()) {
+            return {
+                status: 'parsed',
+                file: { filename, body: converted.body, metadata: converted.metadata },
+            }
+        }
+        return { status: 'skipped' }
+    } catch (err) {
+        return {
+            status: 'error',
+            file: filename,
+            error: err instanceof Error ? err.message : String(err),
+        }
+    } finally {
+        if (handle) await handle.close()
+    }
+}
+
 export async function readAndConvertExternalMarkdownFiles(
     sourceDir: string,
     limit: number,
@@ -238,40 +284,24 @@ export async function readAndConvertExternalMarkdownFiles(
     const parsedFiles: ParsedFile[] = []
     const errors: { file: string; error: string }[] = []
     let skipped = 0
-
-    for (const filename of mdFiles) {
-        let handle
-        try {
-            const filepath = path.join(sourceDir, filename)
-            assertSafeFilePath(filepath, allowedRoots)
-            handle = await fs.open(filepath, fsConstants.O_RDONLY | fsConstants.O_NOFOLLOW)
-            const stats = await handle.stat()
-            if (!stats.isFile()) {
-                throw new Error(`Refusing to import non-regular file: ${filename}`)
-            }
-            if (stats.size > MAX_IMPORT_FILE_BYTES) {
-                throw new Error(
-                    `File exceeds maximum size limit of ${String(MAX_IMPORT_FILE_BYTES / (1024 * 1024))}MB (${stats.size} bytes)`
-                )
-            }
-            const content = await handle.readFile('utf-8')
-            const converted = convertFile(content, filename, sourceFormat, defaultEntryType)
-            if (converted.body.trim()) {
-                parsedFiles.push({
+    const READ_CONCURRENCY = 16
+    for (let i = 0; i < mdFiles.length; i += READ_CONCURRENCY) {
+        const chunk = mdFiles.slice(i, i + READ_CONCURRENCY)
+        const outcomes = await Promise.all(
+            chunk.map((filename) =>
+                readAndConvertSingleExternalFile(
+                    sourceDir,
                     filename,
-                    body: converted.body,
-                    metadata: converted.metadata,
-                })
-            } else {
-                skipped++
-            }
-        } catch (err) {
-            errors.push({
-                file: filename,
-                error: err instanceof Error ? err.message : String(err),
-            })
-        } finally {
-            if (handle) await handle.close()
+                    allowedRoots,
+                    sourceFormat,
+                    defaultEntryType
+                )
+            )
+        )
+        for (const outcome of outcomes) {
+            if (outcome.status === 'parsed') parsedFiles.push(outcome.file)
+            else if (outcome.status === 'skipped') skipped++
+            else errors.push({ file: outcome.file, error: outcome.error })
         }
     }
 

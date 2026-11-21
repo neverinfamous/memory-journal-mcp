@@ -111,6 +111,23 @@ function projectIdFromDefaults(
     return undefined
 }
 
+const DERIVED_GITHUB_CONTEXTS = new WeakMap<ToolContext, WeakMap<object, ToolContext>>()
+
+function withInjectedGithubContext(context: ToolContext, injectedGithub: NonNullable<ToolContext['github']>): ToolContext {
+    if (context.github === injectedGithub) return context
+    let byGithub = DERIVED_GITHUB_CONTEXTS.get(context)
+    if (byGithub === undefined) {
+        byGithub = new WeakMap<object, ToolContext>()
+        DERIVED_GITHUB_CONTEXTS.set(context, byGithub)
+    }
+    let derived = byGithub.get(injectedGithub)
+    if (derived === undefined) {
+        derived = { ...context, github: injectedGithub }
+        byGithub.set(injectedGithub, derived)
+    }
+    return derived
+}
+
 async function injectRepoGithub(
     context: ToolContext,
     repo: string | undefined,
@@ -129,7 +146,7 @@ async function injectRepoGithub(
             process.env['GITHUB_TOKEN']
         )
         await injectedGithub.getRepoInfo()
-        return { ...context, github: injectedGithub }
+        return withInjectedGithubContext(context, injectedGithub)
     } catch (error) {
         return githubInjectError(
             sanitizeErrorForLogging(
@@ -176,7 +193,7 @@ function injectProjectGithub(
             sessionContext.config?.runtime,
             process.env['GITHUB_TOKEN']
         )
-        return { ...sessionContext, github: injectedGithub }
+        return withInjectedGithubContext(sessionContext, injectedGithub)
     } catch (error) {
         return githubInjectError(
             sanitizeErrorForLogging(

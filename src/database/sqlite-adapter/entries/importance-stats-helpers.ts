@@ -11,11 +11,11 @@ export interface ImportanceStats {
 
 function loadRelStatsChunk(
     db: EntriesSharedContext['db'],
+    marks: string,
     bucket: number[],
     relData: Map<number, ImportanceStats>,
     scopedPeerWorkspace: boolean
 ): void {
-    const marks = bucket.map(() => '?').join(', ')
     const fromJoin = scopedPeerWorkspace
         ? 'JOIN memory_journal self_e ON self_e.id = r.from_entry_id JOIN memory_journal peer ON peer.id = r.to_entry_id AND peer.deleted_at IS NULL AND peer.workspace_id = self_e.workspace_id AND r.from_entry_id != r.to_entry_id'
         : 'JOIN memory_journal peer ON peer.id = r.to_entry_id AND peer.deleted_at IS NULL AND r.from_entry_id != r.to_entry_id'
@@ -55,10 +55,10 @@ function loadRelStatsChunk(
 
 function loadAnchorStatsChunk(
     db: EntriesSharedContext['db'],
+    marks: string,
     bucket: number[],
     relData: Map<number, ImportanceStats>
 ): void {
-    const marks = bucket.map(() => '?').join(', ')
     const anchorSql = `
         SELECT entry_id,
                MIN(CASE status WHEN 'invalidated' THEN 1 WHEN 'stale' THEN 2 ELSE 3 END) AS worst_status_rank
@@ -90,11 +90,11 @@ export function loadImportanceStats(
     for (const id of validIds) {
         relData.set(id, { relCount: 0, causalCount: 0, worstStatusRank: 3 })
     }
-    for (const { params } of bucketInParams(validIds, DUAL_IN_PARAM_BUCKETS)) {
-        loadRelStatsChunk(db, params, relData, scopedPeerWorkspace)
+    for (const { placeholders, params } of bucketInParams(validIds, DUAL_IN_PARAM_BUCKETS)) {
+        loadRelStatsChunk(db, placeholders, params, relData, scopedPeerWorkspace)
     }
-    for (const { params } of bucketInParams(validIds)) {
-        loadAnchorStatsChunk(db, params, relData)
+    for (const { placeholders, params } of bucketInParams(validIds)) {
+        loadAnchorStatsChunk(db, placeholders, params, relData)
     }
     return relData
 }

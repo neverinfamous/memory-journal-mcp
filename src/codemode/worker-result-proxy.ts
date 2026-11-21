@@ -149,13 +149,22 @@ function createFailedResultProxy(result: object): unknown {
 }
 
 function createArrayResultProxy(arr: unknown[]): unknown {
+    const boundMethods = new Map<PropertyKey, unknown>()
     return new Proxy(arr, {
         ownKeys: (target) => Reflect.ownKeys(target),
         getOwnPropertyDescriptor: (target, prop) => Reflect.getOwnPropertyDescriptor(target, prop),
         get(target, prop, receiver): unknown {
             if (prop in target) {
                 const val: unknown = Reflect.get(target, prop, receiver)
-                return typeof val === 'function' ? (val as (...args: unknown[]) => unknown).bind(target) : val
+                if (typeof val === 'function') {
+                    let bound = boundMethods.get(prop)
+                    if (bound === undefined) {
+                        bound = (val as (...args: unknown[]) => unknown).bind(target)
+                        boundMethods.set(prop, bound)
+                    }
+                    return bound
+                }
+                return val
             }
             if (prop === 'success') return true
             if (typeof prop === 'string' && ARRAY_SELF_ALIASES.has(prop)) return receiver as unknown

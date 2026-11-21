@@ -174,10 +174,14 @@ export async function loadActivePr(
 
     const includeCopilot = options?.includeCopilot ?? true
     const includeCi = options?.includeCi ?? true
-    const review = includeCopilot
-        ? await readReviewSummary(github, owner, repo, activePrData.number)
-        : { reviewStatus: undefined, commentCount: 0 }
-    const ciStatus = includeCi ? await readPullRequestCi(github, owner, repo, activePrData.headRef) : undefined
+    const [review, ciStatus] = await Promise.all([
+        includeCopilot
+            ? readReviewSummary(github, owner, repo, activePrData.number)
+            : Promise.resolve({ reviewStatus: undefined, commentCount: 0 }),
+        includeCi
+            ? readPullRequestCi(github, owner, repo, activePrData.headRef)
+            : Promise.resolve(undefined),
+    ])
     return {
         number: activePrData.number,
         title: markUntrustedContentInline(activePrData.title),

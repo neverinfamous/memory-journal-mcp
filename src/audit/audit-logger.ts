@@ -22,6 +22,7 @@ import { dirname } from 'node:path'
 import type { AuditConfig, AuditEntry, AuditSearchFilters } from './types.js'
 import { logger } from '../utils/logger.js'
 import { getRequestContext } from '../utils/request-context.js'
+import { appendRegularFileNoFollow } from './audit-file-helpers.js'
 import {
     nodeErrorCode,
     rotateAuditLogFiles,
@@ -267,7 +268,6 @@ export class AuditLogger {
                         process.stderr.write(payload)
                     } else {
                         await this.ensureDirectory()
-                        const { appendRegularFileNoFollow } = await import('./audit-file-helpers.js')
                         await appendRegularFileNoFollow(this.config.logPath, payload)
                         if (this.approxSizeBytes !== null) {
                             this.approxSizeBytes += Buffer.byteLength(payload, 'utf-8')

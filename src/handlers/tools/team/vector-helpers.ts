@@ -245,6 +245,14 @@ export async function executeTeamSemanticSearch(
     }
 }
 
+const TeamRebuildVectorIndexSchema = z
+    .object({
+        workspace_id: z.string().max(255).optional(),
+        project_number: StrictProjectNumberSchema.optional(),
+        session_id: z.string().optional(),
+    })
+    .strict()
+
 export async function executeTeamRebuildVectorIndex(
     context: ToolContext,
     params: unknown
@@ -253,14 +261,7 @@ export async function executeTeamRebuildVectorIndex(
         const { teamDb, teamVectorManager, progress } = context
         if (!teamDb) return { ...TEAM_DB_ERROR_RESPONSE }
 
-        const parsed = z
-            .object({
-                workspace_id: z.string().max(255).optional(),
-                project_number: StrictProjectNumberSchema.optional(),
-                session_id: z.string().optional(),
-            })
-            .strict()
-            .parse(params ?? {})
+        const parsed = TeamRebuildVectorIndexSchema.parse(params ?? {})
         if (!teamVectorManager) {
             return {
                 success: false,

@@ -106,7 +106,8 @@ export function naturalLanguageEntry(
     codeToExec: string
 ): { title: string; content: string; entry_type: string } | undefined {
     const trimmed = codeToExec.trim()
-    if (isSyntacticallyValidJs(trimmed)) return undefined
+    const looksLikeCode = /[{}()=]/.test(trimmed)
+    if (looksLikeCode) return undefined
     const isNaturalPrompt =
         /^(?:write|document|create|include|record|summary|log|add|added|note|task|fix|implement)\b/i.test(
             trimmed
@@ -114,13 +115,10 @@ export function naturalLanguageEntry(
         !/\b(const|let|var|function|return|await|async|for|if|try|while|switch|throw|class|import|export)\b|\bmj\./.test(
             trimmed
         )
-    const looksLikeCode = /[{}()=]/.test(trimmed)
-    if (
-        looksLikeCode ||
-        !(isNaturalPrompt || /^(?:create|add|new|record|log)?\s*entry\b/i.test(trimmed))
-    ) {
+    if (!(isNaturalPrompt || /^(?:create|add|new|record|log)?\s*entry\b/i.test(trimmed))) {
         return undefined
     }
+    if (isSyntacticallyValidJs(trimmed)) return undefined
     const firstLine = (trimmed.split('\n')[0] ?? '')
         .replace(/^(?:create|add|new|record|log|insert)?\s*entry\s*(?:for|:)?\s*/i, '')
         .replace(/[:.]+$/, '')
