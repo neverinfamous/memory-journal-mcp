@@ -301,7 +301,7 @@ const SORT_BY_ALIAS_MAP: Record<string, 'timestamp' | 'importance'> = {
 export function normalizeEntrySortByValue(raw: unknown): 'timestamp' | 'importance' | undefined {
     if (typeof raw !== 'string') return undefined
     const cleaned = raw.trim().toLowerCase().replace(/_(?:asc|desc)$/i, '')
-    return SORT_BY_ALIAS_MAP[cleaned]
+    return Object.hasOwn(SORT_BY_ALIAS_MAP, cleaned) ? SORT_BY_ALIAS_MAP[cleaned] : undefined
 }
 
 /** Normalise common `sort_by` aliases (`date`, `created_at`, `score`, `relevance`) to `'timestamp' | 'importance'`. */

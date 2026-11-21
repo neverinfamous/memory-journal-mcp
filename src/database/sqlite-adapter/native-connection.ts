@@ -23,10 +23,10 @@ import {
  * Hoisted to module scope to avoid recompilation on every exec() call.
  */
 const IS_MUTATION_RE =
-    /^\s*(INSERT|UPDATE|DELETE|CREATE|DROP|ALTER|PRAGMA (?!table_info|foreign_key_list|index_info|index_list|journal_mode|synchronous|temp_store|integrity_check))./i
+    /^\s*(INSERT|UPDATE|DELETE|CREATE|DROP|ALTER|PRAGMA (?!table_info|foreign_key_list|foreign_key_check|index_info|index_list|journal_mode|synchronous|temp_store|integrity_check|quick_check|table_list|wal_checkpoint))./i
 
 const ALLOWED_PRAGMAS_RE =
-    /^\s*(?:wal_checkpoint(?:\s*\(\s*(?:PASSIVE|FULL|RESTART|TRUNCATE)\s*\))?|integrity_check|quick_check|foreign_keys(?:\s*=\s*(?:ON|OFF|1|0))?|journal_mode(?:\s*=\s*(?:WAL|DELETE|TRUNCATE|PERSIST|MEMORY|OFF))?|synchronous(?:\s*=\s*(?:OFF|NORMAL|FULL|EXTRA|0|1|2|3))?|temp_store(?:\s*=\s*(?:DEFAULT|FILE|MEMORY|0|1|2))?|busy_timeout(?:\s*=\s*\d+)?|optimize|table_info\s*\(\s*[a-zA-Z_][a-zA-Z0-9_]*\s*\)|index_list\s*\(\s*[a-zA-Z_][a-zA-Z0-9_]*\s*\)|index_info\s*\(\s*[a-zA-Z_][a-zA-Z0-9_]*\s*\)|foreign_key_list\s*\(\s*[a-zA-Z_][a-zA-Z0-9_]*\s*\))\s*$/i
+    /^\s*(?:wal_checkpoint(?:\s*\(\s*(?:PASSIVE|FULL|RESTART|TRUNCATE)\s*\))?|integrity_check|quick_check|foreign_key_check|foreign_keys(?:\s*=\s*(?:ON|OFF|1|0))?|journal_mode(?:\s*=\s*(?:WAL|DELETE|TRUNCATE|PERSIST|MEMORY|OFF))?|synchronous(?:\s*=\s*(?:OFF|NORMAL|FULL|EXTRA|0|1|2|3))?|temp_store(?:\s*=\s*(?:DEFAULT|FILE|MEMORY|0|1|2))?|busy_timeout(?:\s*=\s*\d+)?|optimize|table_info\s*\(\s*[a-zA-Z_][a-zA-Z0-9_]*\s*\)|index_list\s*\(\s*[a-zA-Z_][a-zA-Z0-9_]*\s*\)|index_info\s*\(\s*[a-zA-Z_][a-zA-Z0-9_]*\s*\)|foreign_key_list\s*\(\s*[a-zA-Z_][a-zA-Z0-9_]*\s*\))\s*$/i
 
 /** Delay before the deferred FTS5 rebuild starts, so server startup is not blocked. */
 const FTS_REBUILD_DEFER_MS = 5000
@@ -357,7 +357,21 @@ export class NativeConnectionManager implements IDatabaseConnection {
     }
 
     closeDbBeforeRestore(): void {
-        this.close()
+        if (this.ftsRebuildTimer !== null) {
+            clearTimeout(this.ftsRebuildTimer)
+            this.ftsRebuildTimer = null
+        }
+        if (this.db !== null) {
+            try {
+                this.db.close()
+            } catch (closeErr: unknown) {
+                logger.debug('Database close before restore encountered error', {
+                    module: 'NativeConnectionManager',
+                    error: closeErr instanceof Error ? closeErr.message : String(closeErr),
+                })
+            }
+            this.db = null
+        }
         this.initialized = false
     }
 

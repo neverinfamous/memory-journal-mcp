@@ -28,7 +28,7 @@ import {
 
 // Statements that must NOT be prefixed with `return`
 const NON_RETURNABLE =
-    /^\s*(?:return|throw|const |let |var |if\b|else\b|for\b|while\b|do\b|switch\b|try\b|catch\b|finally\b|class |function |\/\/|\/\*|\{|\})/
+    /^\s*(?:return|throw|const\b|let\b|var\b|if\b|else\b|for\b|while\b|do\b|switch\b|try\b|catch\b|finally\b|class\b|function\b|\/\/|\/\*|\{|\})/
 const CONTINUATION_START = /^(?:\.(?!\.\.)|\?\.|&&|\|\||\?\?|[?:,])/
 const CONTINUATION_PREV_TOKENS = new Set([
     '=', ',', '.', '?.', '=>', '?', ':', '+', '-', '*', '/', '%', '**',

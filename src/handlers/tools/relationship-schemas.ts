@@ -19,11 +19,7 @@ function coerceRelaxed(v: number | string | undefined): number | undefined {
 
 function coerceCanonicalId(v: number | string | undefined): number | undefined {
     if (v === undefined || (typeof v === 'string' && v.trim() === '')) return undefined
-    const parsed = parsePositiveProjectNumber(v)
-    if (parsed === undefined) {
-        throw new Error(`Invalid id '${String(v)}'. Expected a canonical positive integer.`)
-    }
-    return parsed
+    return parsePositiveProjectNumber(v) ?? Number.NaN
 }
 
 // ============================================================================
@@ -32,8 +28,8 @@ function coerceCanonicalId(v: number | string | undefined): number | undefined {
 
 /** Strict schema — used inside handler for structured Zod errors */
 export const LinkEntriesSchema = z.object({
-    from_entry_id: z.number(),
-    to_entry_id: z.number(),
+    from_entry_id: z.number().int().positive(),
+    to_entry_id: z.number().int().positive(),
     relationship_type: z
         .enum([
             'evolves_from',
@@ -94,6 +90,8 @@ export const LinkEntriesSchemaMcp = z
 export const VisualizeInputSchema = z.object({
     entry_id: z
         .number()
+        .int()
+        .positive()
         .optional()
         .describe('Specific entry ID to visualize (shows connected entries)'),
     tags: z.array(z.string()).optional().describe('Filter entries by tags'),

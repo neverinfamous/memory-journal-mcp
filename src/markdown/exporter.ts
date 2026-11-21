@@ -195,7 +195,13 @@ async function writeExportFile(
         return { error: errMessage }
     } finally {
         if (handle !== undefined) {
-            await handle.close()
+            await Promise.resolve(handle.close()).catch((closeErr: unknown) => {
+                logger.debug('Failed to close export file handle', {
+                    module: 'Exporter',
+                    filepath,
+                    error: closeErr instanceof Error ? closeErr.message : String(closeErr),
+                })
+            })
         }
     }
 }

@@ -46,7 +46,7 @@ function detectRecoverableEntryCall(
         /\b(?:updateEntry|teamUpdateEntry|update_entry|team_update_entry)\b/i.test(strippedCode)
     const isLegacyUpdateAlias = !isStrictUpdate && /\bupdateMemory\b/i.test(strippedCode)
     const isUpdate =
-        isStrictUpdate || (isLegacyUpdateAlias && /\b(?:entry_id|id)\s*:\s*\d+/i.test(strippedCode))
+        isStrictUpdate || (isLegacyUpdateAlias && /\b(?:entry_id|id)\s*:\s*-?\d+/i.test(strippedCode))
     const isTeamCall =
         /\b(?:teamCreateEntry|teamUpdateEntry|team_create_entry|team_update_entry)\b/i.test(
             strippedCode
@@ -183,10 +183,58 @@ function stripJsCommentsPreservingStrings(code: string): string {
     return out.join('')
 }
 
-function populateRecoveredEntryMetadata(payload: Record<string, unknown>, rawScanCode: string): void {
-    const scanCode = stripJsCommentsPreservingStrings(rawScanCode)
+function findBalancedDelimitedBlockEnd(
+    code: string,
+    openIdx: number,
+    openChar: string,
+    closeChar: string
+): number {
+    let depth = 1
+    let j = openIdx + 1
+    let quote: string | null = null
+    let escaped = false
+    while (j < code.length && depth > 0) {
+        const ch = code[j] ?? ''
+        if (quote !== null) {
+            if (escaped) escaped = false
+            else if (ch === '\\') escaped = true
+            else if (ch === quote) quote = null
+        } else if (ch === "'" || ch === '"' || ch === '`') {
+            quote = ch
+        } else if (ch === openChar) {
+            depth++
+        } else if (ch === closeChar) {
+            depth--
+        }
+        j++
+    }
+    return j
+}
+
+function stripNestedPropBlocks(code: string): string {
+    const out: string[] = []
+    let i = 0
+    const propRe = /\b(?:auto_context|relationships|anchors)\s*:\s*([{[])/iy
+    while (i < code.length) {
+        propRe.lastIndex = i
+        const m = propRe.exec(code)
+        if (m?.[1] !== undefined) {
+            const openChar = m[1]
+            const closeChar = openChar === '{' ? '}' : ']'
+            const endIdx = findBalancedDelimitedBlockEnd(code, i + m[0].length - 1, openChar, closeChar)
+            out.push(`${openChar}${closeChar}`)
+            i = endIdx
+            continue
+        }
+        out.push(code[i] ?? '')
+        i++
+    }
+    return out.join('')
+}
+
+function populateRecoveredEntryMetadata(payload: Record<string, unknown>, scanCode: string): void {
     const projectMatch =
-        /\b(?:project_number|projectNumber|project_id|projectId|project_name|projectName|project)\s*:\s*(?:(\d+)|(['"`])([^'"`]+)\2)/i.exec(
+        /\b(?:project_number|projectNumber|project_id|projectId|project_name|projectName|project)\s*:\s*(?:(-?\d+(?:\.\d+)?)|(['"`])([^'"`]+)\2)/i.exec(
             scanCode
         )
     const workspaceMatch = /\b(?:workspace_id|workspaceId|workspace)\s*:\s*(['"`])([^'"`]+)\1/i.exec(scanCode)
@@ -197,13 +245,26 @@ function populateRecoveredEntryMetadata(payload: Record<string, unknown>, rawSca
     const sigMatch = /\b(?:significance_type|significanceType)\s*:\s*(['"`])([^'"`]+)\1/i.exec(scanCode)
     const isPersonalMatch = /\b(?:is_personal|isPersonal)\s*:\s*(true|false)\b/i.exec(scanCode)
     const shareTeamMatch = /\b(?:share_with_team|shareWithTeam)\s*:\s*(true|false)\b/i.exec(scanCode)
-    const entryIdMatch = /\b(?:entry_id|id)\s*:\s*(\d+)/i.exec(scanCode)
+    const topLevelScanCode = stripNestedPropBlocks(scanCode)
+    const entryIdMatch = /\b(?:entry_id|id)\s*:\s*(-?\d+(?:\.\d+)?)/i.exec(topLevelScanCode)
 
-    const eid = entryIdMatch?.[1] !== undefined ? parseCanonicalPositiveInt(entryIdMatch[1]) : undefined
-    if (eid !== undefined) payload['entry_id'] = eid
+    if (entryIdMatch?.[1] !== undefined) {
+        const eid = parseCanonicalPositiveInt(entryIdMatch[1])
+        if (eid !== undefined) {
+            payload['entry_id'] = eid
+        } else {
+            const numEid = Number(entryIdMatch[1])
+            payload['entry_id'] = Number.isFinite(numEid) ? numEid : entryIdMatch[1]
+        }
+    }
     if (projectMatch?.[1] !== undefined) {
         const parsedProj = parsePositiveProjectNumber(projectMatch[1])
-        payload['project_number'] = parsedProj ?? projectMatch[1]
+        if (parsedProj !== undefined) {
+            payload['project_number'] = parsedProj
+        } else {
+            const numProj = Number(projectMatch[1])
+            payload['project_number'] = Number.isFinite(numProj) ? numProj : projectMatch[1]
+        }
     } else if (projectMatch?.[3] !== undefined && projectMatch[3].trim() !== '') {
         payload['project_number'] = projectMatch[3].trim()
     }
@@ -263,14 +324,15 @@ export function extractAndRecoverEntryCode(code: string): string | null {
     const extracted = extractRecoveredEntryContentAndTitle(code)
     if (extracted === null) return null
 
-    const typeMatch = /\b(?:entry_type|type)\s*:\s*(['"])([^'"]+)\1/i.exec(extracted.scanCode)
+    const cleanScanCode = stripJsCommentsPreservingStrings(extracted.scanCode)
+    const typeMatch = /\b(?:entry_type|type)\s*:\s*(['"])([^'"]+)\1/i.exec(cleanScanCode)
     const payload: Record<string, unknown> = {
         content: extracted.content,
         entry_type: typeMatch?.[2] ?? 'technical_note',
     }
     if (extracted.title !== undefined && extracted.title !== '') payload['title'] = extracted.title
 
-    populateRecoveredEntryMetadata(payload, extracted.scanCode)
+    populateRecoveredEntryMetadata(payload, cleanScanCode)
 
     const fnName = detected.isUpdate
         ? detected.isTeamCall ? 'mj.team.teamUpdateEntry' : 'mj.updateEntry'

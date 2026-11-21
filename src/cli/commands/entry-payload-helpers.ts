@@ -189,9 +189,12 @@ export function parseRelationshipArray(
             )
         }
         const rawRelType = pickRecordField(rec, RELATIONSHIP_TYPE_KEYS)
+        const trimmedRelType = typeof rawRelType === 'string' ? rawRelType.trim().toLowerCase() : ''
         const normalizedRelType =
             typeof rawRelType === 'string'
-                ? (CLI_RELATION_TYPE_ALIASES[rawRelType.trim().toLowerCase()] ?? rawRelType.trim())
+                ? Object.hasOwn(CLI_RELATION_TYPE_ALIASES, trimmedRelType)
+                    ? CLI_RELATION_TYPE_ALIASES[trimmedRelType]
+                    : rawRelType.trim()
                 : rawRelType
         const relType = relationTypeSchema.safeParse(normalizedRelType)
         if (!relType.success) {

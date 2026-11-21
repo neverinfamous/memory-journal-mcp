@@ -387,7 +387,11 @@ export function healIncomingToolCallParams(
     }
 
     if (Array.isArray(params.arguments)) {
-        const errResp = runArgInterceptionForCall(params, params.arguments)
+        const errResp = runArgInterceptionForCall(
+            params,
+            params.arguments,
+            liveBriefing.projectRegistry
+        )
         if (errResp !== undefined) return errResp
     }
     normalizeAndAliasToolCall(params, healerOptions)

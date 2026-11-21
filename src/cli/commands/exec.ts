@@ -133,7 +133,7 @@ function buildExecToolConfig(
     const customToolHandlerConfig: ToolHandlerConfig = {
         defaultProjectNumber: resolvedDefaultProj,
         defaultWorkspaceId:
-            options.workspace ?? serverOptions.defaultWorkspaceId ?? briefingConfig.defaultWorkspaceId,
+            execWorkspaceId ?? serverOptions.defaultWorkspaceId ?? briefingConfig.defaultWorkspaceId,
         projectRegistry: effectiveRegistry,
         additionalTeamDbs: serverOptions.additionalTeamDbs,
         allowedIoRoots: context.allowedIoRoots,

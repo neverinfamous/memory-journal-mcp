@@ -83,9 +83,11 @@ export async function installHttpAuthentication(
 
     if (oauthConfig !== null) {
         const { oauthIssuer, oauthAudience } = oauthConfig
+        const explicitJwksUri = config.oauthJwksUri?.trim()
         const jwksUri =
-            config.oauthJwksUri ??
-            (await discoverJwksUri(oauthIssuer, config.allowPlaintextLoopbackOAuth))
+            explicitJwksUri !== undefined && explicitJwksUri !== ''
+                ? explicitJwksUri
+                : await discoverJwksUri(oauthIssuer, config.allowPlaintextLoopbackOAuth)
 
         const tokenValidator = createTokenValidator({
             jwksUri,

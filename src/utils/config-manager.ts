@@ -311,14 +311,18 @@ export class ConfigManager extends EventEmitter {
         if (this.closed || !this.configFilePath) return
 
         try {
+            let pendingRename = false
             this.watcher = fs.watch(this.configFilePath, { persistent: false }, (eventType) => {
                 if ((eventType === 'change' || eventType === 'rename') && !this.isWriting && !this.closed) {
+                    if (eventType === 'rename') pendingRename = true
                     if (this.debounceTimer !== undefined) clearTimeout(this.debounceTimer)
                     this.debounceTimer = setTimeout(() => {
                         if (this.closed) return
+                        const shouldRewatch = pendingRename
+                        pendingRename = false
                         try {
                             if (
-                                eventType === 'rename' &&
+                                shouldRewatch &&
                                 this.watcher !== undefined &&
                                 this.configFilePath !== undefined &&
                                 fs.existsSync(this.configFilePath)

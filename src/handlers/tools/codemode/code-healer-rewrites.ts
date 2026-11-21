@@ -366,7 +366,7 @@ export function rewriteModuleImportsAndExports(src: string): string {
         )
     }
     executionCode = replaceOutsideNonCode(executionCode, /export\s+default\s+/g, () => '')
-    executionCode = replaceOutsideNonCode(executionCode, /\btools\./g, () => 'mj.')
+    executionCode = replaceOutsideNonCode(executionCode, /(?<![.\w$])tools\./g, () => 'mj.')
     executionCode = replaceOutsideNonCode(
         executionCode,
         /(?:const|let|var)\s+(\{[^}\n]{0,300}\}|[\w$]+)\s*=\s*(?:await\s+)?import\s*\(\s*['"]([^'"\n]{1,300})['"]\s*\);?/g,

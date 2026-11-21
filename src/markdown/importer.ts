@@ -23,6 +23,7 @@ import {
     assertSafeDirectoryPath,
     sanitizeAuthor,
 } from '../utils/security-utils.js'
+import { logger } from '../utils/logger.js'
 import {
     createImportBatchAuthorCache,
     indexImportedEntries,
@@ -158,7 +159,13 @@ async function readAndParseMarkdownFile(
         return { parsed: { filename, body, metadata } }
     } finally {
         if (handle) {
-            await handle.close()
+            await Promise.resolve(handle.close()).catch((closeErr: unknown) => {
+                logger.debug('Failed to close import file handle', {
+                    module: 'Importer',
+                    filename,
+                    error: closeErr instanceof Error ? closeErr.message : String(closeErr),
+                })
+            })
         }
     }
 }

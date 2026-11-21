@@ -62,7 +62,7 @@ function renderMermaid(graph: RelationshipGraph): string {
     } else {
         mermaidLines.push(...graph.nodes.map(renderMermaidNode), '')
         for (const edge of graph.edges) {
-            const arrow = REL_SYMBOLS[edge.type] ?? '-->'
+            const arrow = Object.hasOwn(REL_SYMBOLS, edge.type) ? REL_SYMBOLS[edge.type] : '-->'
             mermaidLines.push(`    E${String(edge.from)} ${arrow}|${edge.type}| E${String(edge.to)}`)
         }
         mermaidLines.push('', ...graph.nodes.map(renderMermaidStyle))

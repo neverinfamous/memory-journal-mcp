@@ -121,8 +121,7 @@ export function estimatePayloadTokens(payload: unknown): number {
         }
     }
     try {
-        const serialized = JSON.stringify(payload, bigintReplacer)
-        if (typeof serialized !== 'string') return 0
+        const serialized = safeJsonStringify(payload, 32, false)
         const est = estimateTokens(serialized, 'json')
         if (typeof payload === 'object') {
             payloadTokenCache.set(payload, est)
@@ -142,6 +141,39 @@ export function bigintReplacer(_key: string, value: unknown): unknown {
     return typeof value === 'bigint' ? value.toString() : value
 }
 
+/** Cycle-safe, depth-bounded, bigint-coercing JSON serializer with optional `toJSON()` fallback. */
+export function safeJsonStringify(
+    payload: unknown,
+    maxDepth = 32,
+    fallbackOnError = true
+): string {
+    const ancestors: object[] = []
+    const replacer = function (this: unknown, _key: string, value: unknown): unknown {
+        if (typeof value === 'bigint') return value.toString()
+        if (typeof value !== 'object' || value === null) return value
+        if (typeof this === 'object' && this !== null) {
+            while (ancestors.length > 0 && ancestors.at(-1) !== this) {
+                ancestors.pop()
+            }
+        }
+        if (ancestors.includes(value)) return '[Circular]'
+        if (ancestors.length >= maxDepth) return '[Truncated]'
+        ancestors.push(value)
+        return value
+    }
+    try {
+        const json = JSON.stringify(payload, replacer)
+        return typeof json === 'string' ? json : 'null'
+    } catch (err) {
+        if (!fallbackOnError) throw err
+        logger.debug('Payload JSON serialization fell back after error', {
+            module: 'token-estimator',
+            error: err instanceof Error ? err.message : String(err),
+        })
+        return JSON.stringify({ _serializationError: 'unserializable payload' })
+    }
+}
+
 /** Invalidate cached serialized JSON when a post-handler transform mutates `payload`. */
 export function invalidateSerializedPayload(payload: unknown): void {
     if (typeof payload === 'object' && payload !== null) {
@@ -156,13 +188,11 @@ export function getSerializedPayloadJson(payload: unknown): string {
     if (typeof payload === 'object' && payload !== null) {
         const cached = serializedPayloadCache.get(payload)
         if (cached !== undefined) return cached
-        const json = JSON.stringify(payload, bigintReplacer)
-        if (typeof json === 'string') {
-            serializedPayloadCache.set(payload, json)
-            return json
-        }
+        const json = safeJsonStringify(payload, 32, false)
+        serializedPayloadCache.set(payload, json)
+        return json
     }
-    return JSON.stringify(payload, bigintReplacer) ?? 'null'
+    return safeJsonStringify(payload, 32, false)
 }
 
 // ============================================================================

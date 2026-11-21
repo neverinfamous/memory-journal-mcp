@@ -11,6 +11,7 @@ import { MemoryJournalMcpError } from '../types/errors.js'
 import type { ErrorResponse } from '../types/error-types.js'
 import { matchSuggestion } from './errors/suggestions.js'
 import { SENSITIVE_KEY_RE, sanitizeErrorForLogging } from './security-utils.js'
+import { isCrossRealmDate, isCrossRealmError, tryResolveToJson } from './sanitize-value-helpers.js'
 
 const MAX_ERROR_DETAILS_SCRUB_DEPTH = 6
 export const HOST_FILESYSTEM_PATH_RE =
@@ -23,7 +24,7 @@ function scrubObjectRecord(
 ): Record<string, unknown> {
     const out: Record<string, unknown> = {}
     Object.setPrototypeOf(out, null)
-    if (value instanceof Error) {
+    if (isCrossRealmError(value)) {
         out['name'] = sanitizeErrorForLogging(value.name)
         out['message'] = sanitizeErrorMessageForResponse(value.message)
     }
@@ -43,7 +44,7 @@ function scrubDetailsValue(value: unknown, depth: number, seen: WeakSet<object>)
     }
     if (typeof value === 'bigint') return value.toString()
     if (value === null || typeof value !== 'object') return value
-    if (value instanceof Date) {
+    if (isCrossRealmDate(value)) {
         return Number.isNaN(value.getTime()) ? 'Invalid Date' : value.toISOString()
     }
     if (value instanceof URL) {
@@ -55,6 +56,10 @@ function scrubDetailsValue(value: unknown, depth: number, seen: WeakSet<object>)
     try {
         if (Array.isArray(value)) {
             return value.map((item) => scrubDetailsValue(item, depth + 1, seen))
+        }
+        if (!isCrossRealmError(value)) {
+            const jsonRes = tryResolveToJson(value)
+            if (jsonRes.resolved) return scrubDetailsValue(jsonRes.value, depth + 1, seen)
         }
         return scrubObjectRecord(value, depth, seen)
     } finally {
@@ -92,12 +97,13 @@ function formatUnknownHandlerError(err: unknown): ErrorResponse {
     ) {
         extractedMessage = err.message
     }
-    const message = err instanceof Error ? err.message : (extractedMessage ?? String(err))
+    const isErr = isCrossRealmError(err)
+    const message = isErr ? err.message : (extractedMessage ?? String(err))
     const matched = matchSuggestion(message)
     const sanitizedMessage = sanitizeErrorMessageForResponse(message)
 
     const isAutonomousHealing = message.includes('🛠️ AUTONOMOUS HEALING:')
-    const isRuntimeError = err instanceof Error || extractedMessage !== undefined
+    const isRuntimeError = isErr || extractedMessage !== undefined
     const displayError =
         isAutonomousHealing || isRuntimeError || matched !== undefined
             ? sanitizedMessage
@@ -182,8 +188,10 @@ export function formatHandlerError(err: unknown): ErrorResponse {
             category: 'internal',
             recoverable: false,
             aggregated_errors: err.errors.map((e: unknown) => ({
-                message: sanitizeErrorMessageForResponse(e instanceof Error ? e.message : String(e)),
-                ...(e instanceof Error && e.name ? { name: sanitizeErrorForLogging(e.name) } : {}),
+                message: sanitizeErrorMessageForResponse(
+                    isCrossRealmError(e) ? e.message : String(e)
+                ),
+                ...(isCrossRealmError(e) && e.name ? { name: sanitizeErrorForLogging(e.name) } : {}),
             })),
         }
     }

@@ -16,6 +16,7 @@ import {
     stripBalancedOuterParens,
 } from '../../../codemode/sql-literal-scope.js'
 import { cleanSqlText, parseSqlStatement } from '../../../codemode/sql-positional-binder.js'
+import { hasMultipleTopLevelSqlStatements } from '../../../codemode/sql-placeholder-helpers.js'
 import {
     parseCanonicalPositiveInt,
     parsePositiveProjectNumber,
@@ -61,6 +62,7 @@ function parseCleanRecoverableSql(code: string): string | null {
         return null
     }
     const cleanSql = cleanSqlText(trimmed)
+    if (hasMultipleTopLevelSqlStatements(cleanSql)) return null
     const isSql =
         /^(?:SELECT|INSERT|UPDATE|DELETE|PRAGMA|SHOW|DESCRIBE|EXPLAIN|WITH|SCHEMA|TABLES)\b/i.test(cleanSql) ||
         /^(?:\.schema|\.tables|\\d|\\dt)/i.test(cleanSql)

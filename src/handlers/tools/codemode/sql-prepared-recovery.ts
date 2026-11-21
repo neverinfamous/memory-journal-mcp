@@ -118,7 +118,6 @@ function isUnknownArray(val: unknown): val is unknown[] {
 }
 
 function parsePreparedStatementArgs(rawArgs: string): unknown[] | null {
-    if (rawArgs.length > 50_000) return []
     try {
         const parsed: unknown = JSON.parse(`[${rawArgs}]`)
         if (isUnknownArray(parsed)) return parsed
@@ -130,10 +129,6 @@ function parsePreparedStatementArgs(rawArgs: string): unknown[] | null {
     const parsed = tokens.map(parseSingleArgToken)
     if (parsed.some((item) => item === UNPARSEABLE_ARG)) return null
     return parsed
-}
-
-function hasValidJsSyntax(src: string): boolean {
-    return isValidJsScript(`"use strict";\n(async () => {\n${src}\n})()`)
 }
 
 /**
@@ -156,6 +151,9 @@ function scanBalancedQuotedString(
         if (ch === '\\') {
             i += 2
             continue
+        }
+        if (quote === '`' && ch === '$' && code[i + 1] === '{') {
+            return null
         }
         if (ch === quote) {
             return { value: code.slice(openQuoteIdx + 1, i), closeQuoteIdx: i }
@@ -233,6 +231,7 @@ function extractPreparedRunArgsAt(
         if (callArgs === null) return null
         const afterCall = code.slice(callArgs.afterCloseIdx)
         if (!/^(?:\s*;|\s*\r?\n|\s*$)/.test(afterCall)) return null
+        if (!isTrivialTrailingTail(afterCall)) return null
         return { rawSql: prep.sql, rawRunArgs: callArgs.body }
     }
 
@@ -252,9 +251,18 @@ function extractPreparedRunArgsAt(
         if (callArgs === null) continue
         const afterCall = code.slice(callArgs.afterCloseIdx)
         if (!/^(?:\s*;|\s*\r?\n|\s*$)/.test(afterCall)) continue
+        if (!isTrivialTrailingTail(afterCall)) continue
         return { rawSql: prep.sql, rawRunArgs: callArgs.body }
     }
     return null
+}
+
+function isTrivialTrailingTail(afterCall: string): boolean {
+    const strippedTail = stripCommentsAndStrings(afterCall).replace(/^\s*;?\s*/, '').trim()
+    if (strippedTail === '') return true
+    return /^(?:db\.close\s*\(\s*\)\s*;?\s*)?(?:return(?:\s+(?:[\w$]+|""|''|``))?\s*;?\s*)?$/.test(
+        strippedTail
+    )
 }
 
 function extractPreparedSqlAndRunArgs(
@@ -285,9 +293,10 @@ export function extractAndRecoverPreparedStatementCode(code: string): string | n
         return null
     }
     const stripped = stripCommentsAndStrings(code)
-    if (!stripped.includes('.prepare(')) return null
-    if (!/\.(?:run|get|all)\s*\(/.test(stripped)) return null
-    if (hasValidJsSyntax(code) && REAL_MJ_API_CALL_RE.test(stripped)) {
+    const prepareCount = (stripped.match(/\.prepare\s*\(/g) ?? []).length
+    const execCount = (stripped.match(/\.(?:run|get|all)\s*\(/g) ?? []).length
+    if (prepareCount !== 1 || execCount !== 1) return null
+    if (isValidJsScript(code) && REAL_MJ_API_CALL_RE.test(stripped)) {
         return null
     }
 

@@ -111,10 +111,23 @@ function recoverSearchCall(target: Record<string, unknown>, original: Record<str
     return `return await mj.search.searchEntries(${JSON.stringify(searchParams)});`
 }
 
-function readEntryId(target: Record<string, unknown>): number | undefined {
-    const fromEntry = parsePositiveProjectNumber(target['entry_id'])
-    if (fromEntry !== undefined) return fromEntry
-    return parsePositiveProjectNumber(target['id'])
+function readEntryIdField(target: Record<string, unknown>): {
+    entryId: number | undefined
+    invalidExplicitEntryId: number | string | undefined
+} {
+    const raw = target['entry_id'] ?? target['id']
+    if (raw === undefined || raw === null || (typeof raw === 'string' && raw.trim() === '')) {
+        return { entryId: undefined, invalidExplicitEntryId: undefined }
+    }
+    const parsed = parsePositiveProjectNumber(raw)
+    if (parsed !== undefined) return { entryId: parsed, invalidExplicitEntryId: undefined }
+    if (typeof raw === 'number') {
+        return { entryId: undefined, invalidExplicitEntryId: Number.isFinite(raw) ? raw : String(raw) }
+    }
+    if (typeof raw === 'string' && /^(?:-?\d+(?:\.\d+)?|NaN|Infinity|-Infinity)$/i.test(raw.trim())) {
+        return { entryId: undefined, invalidExplicitEntryId: raw.trim() }
+    }
+    return { entryId: undefined, invalidExplicitEntryId: undefined }
 }
 
 function readOperation(target: Record<string, unknown>): string {
@@ -128,18 +141,19 @@ function recoverEntryMutation(
     original: Record<string, unknown>,
     target: Record<string, unknown>,
 ): string | null {
-    const entryId = readEntryId(target)
+    const { entryId, invalidExplicitEntryId } = readEntryIdField(target)
+    const explicitIdForMutation = entryId ?? invalidExplicitEntryId
     const op = readOperation(target)
-    if ((op === 'delete' || op === 'delete_entry') && entryId !== undefined) {
-        const deleteParams: Record<string, unknown> = { entry_id: entryId }
+    if ((op === 'delete' || op === 'delete_entry') && explicitIdForMutation !== undefined) {
+        const deleteParams: Record<string, unknown> = { entry_id: explicitIdForMutation }
         const scope = resolveCompatibleInheritedScope(target, original)
         if (scope.workspaceId !== undefined) deleteParams['workspace_id'] = scope.workspaceId
         if (scope.projectNumber !== undefined) deleteParams['project_number'] = scope.projectNumber
         return `return await mj.admin.deleteEntry(${JSON.stringify(deleteParams)});`
     }
     const signals = readPayloadSignals(target, op)
-    if (!hasJournalFields(signals) && entryId !== undefined) {
-        return formatGetEntryById(entryId, target, original)
+    if (!hasJournalFields(signals) && explicitIdForMutation !== undefined) {
+        return formatGetEntryById(explicitIdForMutation, target, original)
     }
     if (!hasJournalFields(signals)) return null
 
@@ -156,11 +170,11 @@ function recoverEntryMutation(
         op === 'update_entry' ||
         op === 'update' ||
         op === 'team_update_entry' ||
-        (entryId !== undefined && !signals.hasOp)
+        (explicitIdForMutation !== undefined && !signals.hasOp)
     const content = entryParams['content']
     if (!isUpdate && (typeof content !== 'string' || content.trim() === '')) return null
     if (isUpdate) {
-        if (entryId !== undefined) entryParams['entry_id'] = entryId
+        if (explicitIdForMutation !== undefined) entryParams['entry_id'] = explicitIdForMutation
         const updateFn = isTeamOp ? 'mj.team.teamUpdateEntry' : 'mj.admin.updateEntry'
         return `return await ${updateFn}(${JSON.stringify(entryParams)});`
     }
@@ -169,7 +183,7 @@ function recoverEntryMutation(
 }
 
 function formatGetEntryById(
-    entryId: number,
+    entryId: number | string,
     target: Record<string, unknown>,
     original: Record<string, unknown>,
 ): string {
@@ -178,7 +192,7 @@ function formatGetEntryById(
     if (scope.workspaceId !== undefined) params['workspace_id'] = scope.workspaceId
     if (scope.projectNumber !== undefined) params['project_number'] = scope.projectNumber
     if (scope.workspaceId === undefined && scope.projectNumber === undefined) {
-        return `return await mj.core.getEntryById({ entry_id: ${entryId} });`
+        return `return await mj.core.getEntryById({ entry_id: ${JSON.stringify(entryId)} });`
     }
     return `return await mj.core.getEntryById(${JSON.stringify(params)});`
 }

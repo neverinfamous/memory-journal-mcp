@@ -319,12 +319,16 @@ function resolvePayloadRelationships(
     relatedIds: number[]
     anchors?: { anchor_path: string; anchor_type: string }[]
 } {
-    const relationships =
-        metadata['relationships'] !== undefined &&
-        metadata['relationships'] !== null &&
-        Array.isArray(metadata['relationships'])
-            ? relationshipsFromMetadata(metadata['relationships'])
-            : parseRelationships(options.relationships, options.relFile)
+    const rawMetaRels = metadata['relationships']
+    if (rawMetaRels !== undefined && rawMetaRels !== null && !Array.isArray(rawMetaRels)) {
+        throw new ValidationError('Invalid metadata.relationships: expected an array.')
+    }
+    const hasCliRels = options.relationships !== undefined || options.relFile !== undefined
+    const relationships = hasCliRels
+        ? parseRelationships(options.relationships, options.relFile)
+        : Array.isArray(rawMetaRels)
+          ? relationshipsFromMetadata(rawMetaRels)
+          : []
 
     let relatedIds = parseRelatedTo(options.relatedTo)
     if (metadata['related_to'] !== undefined && metadata['related_to'] !== null) {

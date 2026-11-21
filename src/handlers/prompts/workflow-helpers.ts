@@ -290,7 +290,8 @@ At the top of your markdown file, include a YAML frontmatter block with the foll
 ---
 type: "project_decision" # canonical entry_type, e.g. project_decision, bug_fix, milestone, technical_note, feature_implementation (do NOT use "retrospective")
 tags: ["domain-tag", "another-tag"]
-project: <Integer ID or repository name - OPTIONAL, auto-resolved from active workspace>
+workspace: <Repository name - OPTIONAL, auto-resolved from active workspace>
+project: <Positive integer ID - OPTIONAL, auto-resolved from active workspace>
 impact: <Decimal score analyzing blast radius (e.g., 0.9+ for core architecture, 0.1 for docs)>
 trust: <Decimal score analyzing testing rigor. 0.3-0.5 for unverified, 0.8-1.0 if rigorously tested>
 validation_status: "passed" # or "none", or "failed"

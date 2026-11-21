@@ -82,7 +82,7 @@ export function formatCiDisplay(opts: BriefingUserMessageOptions): string {
                 unknown: '❓',
             }
             ciDisplay = ws.runs
-                .map((r) => `${icons[r.conclusion] ?? '❓'} ${r.url && SAFE_GITHUB_URL_RE.test(r.url) ? `[${r.name}](${r.url})` : r.name}`)
+                .map((r) => `${Object.hasOwn(icons, r.conclusion) ? icons[r.conclusion] : '❓'} ${r.url && SAFE_GITHUB_URL_RE.test(r.url) ? `[${r.name}](${r.url})` : r.name}`)
                 .join(' · ')
         } else {
             ciDisplay = formatWorkflowCounts(ws, opts.ciStatus)

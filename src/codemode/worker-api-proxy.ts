@@ -184,9 +184,9 @@ function computeGroupNamespaceProperty(
         if (snakeKey in target) return Reflect.get(target, snakeKey) as unknown
     }
 
-    const aliases = METHOD_ALIASES[group]
+    const aliases = Object.hasOwn(METHOD_ALIASES, group) ? METHOD_ALIASES[group] : undefined
     let resolvedKey = key
-    const aliasTarget = aliases?.[key]
+    const aliasTarget = aliases !== undefined && Object.hasOwn(aliases, key) ? aliases[key] : undefined
     if (aliasTarget !== undefined) {
         const canonicalCamel = aliasTarget
         const canonicalSnake = canonicalCamel.replace(/[A-Z]/g, (l) => `_${l.toLowerCase()}`)

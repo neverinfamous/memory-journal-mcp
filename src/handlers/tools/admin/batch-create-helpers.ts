@@ -57,7 +57,7 @@ function resolveBatchEntryScope(
         resolved.projectNumber ?? (e.workspace_id === undefined ? requestedProject : undefined)
 
     if (pNumber === undefined || pNumber <= 0) {
-        throw new Error(
+        throw new ValidationError(
             `project_number is required. Batch entry must be assigned to a valid project (failed to resolve project_number for workspace '${wsId}'). To find your project_number, read memory://agent-context/<repo> via read_resource, call mj.core.listProjects(), or check memory://briefing/<project-name>.`
         )
     }

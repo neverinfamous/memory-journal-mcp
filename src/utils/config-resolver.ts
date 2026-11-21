@@ -281,7 +281,9 @@ export class ConfigResolver {
             if (normalized === 'false' || normalized === '0') return false
             throw new ConfigurationError(`Invalid boolean configuration value for ${cliKey}: '${val}'`)
         }
-        return Boolean(val)
+        throw new ConfigurationError(
+            `Invalid boolean configuration value for ${cliKey}: expected boolean or boolean string, got ${typeof val}`
+        )
     }
 
     /**

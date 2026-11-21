@@ -5,7 +5,7 @@ import { sendProgress } from '../../utils/progress-utils.js'
 import { fenceNonCanonicalRefOrKey } from '../../utils/security-utils.js'
 import { resolveGitWorkingDir, runCheckEntryStaleness } from './git-staleness.js'
 import { ErrorFieldsMixin } from './error-fields-mixin.js'
-import { relaxedNumber } from './schemas.js'
+import { relaxedNumber, StrictProjectNumberSchema } from './schemas.js'
 import {
     GitAnalyzePatternsOptionsSchema,
     GitHistoryOptionsSchema,
@@ -152,7 +152,19 @@ export function getGitTools(context: ToolContext): ToolDefinition[] {
             annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
             handler: async (params?: unknown) => {
                 try {
-                    const input = GitUnreleasedOptionsSchema.parse(params ?? {})
+                    const parsedMcp = GitUnreleasedOptionsSchema.parse(params ?? {})
+                    const maxCount =
+                        parsedMcp.maxCount !== undefined
+                            ? z.number().int().positive().max(5000).parse(parsedMcp.maxCount)
+                            : undefined
+                    const projectNumber = StrictProjectNumberSchema.optional().parse(
+                        parsedMcp.project_number
+                    )
+                    const input = {
+                        ...parsedMcp,
+                        maxCount,
+                        project_number: projectNumber,
+                    }
                     const cwd = resolveGitWorkingDir(input, context.config)
                     await sendProgress(context.progress, 0, 1, 'Fetching unreleased commits...')
                     const rawChangelog = await getUnreleasedChangelog(cwd, {
@@ -186,7 +198,11 @@ export function getGitTools(context: ToolContext): ToolDefinition[] {
             annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
             handler: async (params: unknown) => {
                 try {
-                    const input = GitAnalyzePatternsOptionsSchema.parse(params ?? {})
+                    const parsedMcp = GitAnalyzePatternsOptionsSchema.parse(params ?? {})
+                    const projectNumber = StrictProjectNumberSchema.optional().parse(
+                        parsedMcp.project_number
+                    )
+                    const input = { ...parsedMcp, project_number: projectNumber }
                     const cwd = resolveGitWorkingDir(input, context.config)
                     const progress = context.progress
                     await sendProgress(progress, 0, 2, 'Fetching commits for analysis...')

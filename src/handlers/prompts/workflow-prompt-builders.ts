@@ -26,7 +26,8 @@ At the top of your markdown file, include a YAML frontmatter block with the foll
 ---
 type: "retrospective"
 tags: ["session-summary", "your-tag-1", "your-tag-2"]
-project: <Integer ID or repository name - OPTIONAL, auto-resolved from active workspace>
+workspace: <Repository name - OPTIONAL, auto-resolved from active workspace>
+project: <Positive integer ID - OPTIONAL, auto-resolved from active workspace>
 impact: <Decimal score analyzing blast radius (e.g., 0.9+ for core architecture, 0.1 for docs)>
 trust: <Decimal score analyzing testing rigor. 0.3-0.5 for unverified, 0.8-1.0 if rigorously tested>
 validation_status: "passed" # or "none", or "failed"

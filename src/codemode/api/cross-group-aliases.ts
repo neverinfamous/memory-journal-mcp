@@ -4,8 +4,14 @@
 
 import type { ProjectRegistryEntry, ToolDefinition } from '../../types/index.js'
 import { ValidationError } from '../../types/errors.js'
-import { resolveProjectContext } from '../../utils/workspace-resolver.js'
-import { activeProjectRegistry, pairStoredScope } from '../../utils/write-scope.js'
+import {
+    findCanonicalRegistryKey,
+    resolveProjectContext,
+} from '../../utils/workspace-resolver.js'
+import {
+    activeProjectRegistry,
+    pairStoredScope,
+} from '../../utils/write-scope.js'
 import { isRecord } from '../normalizers/shared-utils.js'
 import { readProjectRegistryPayload } from '../normalizers/generic-field-aliases.js'
 import type { GroupApiRecord, ProjectRegistryProvider } from './types.js'
@@ -25,18 +31,27 @@ export interface CrossGroupAliasesContext {
     getToolDefinition?(methodName: string): ToolDefinition | undefined
 }
 
-function parseEntryProjectNumber(rec: Record<string, unknown>): number | undefined {
+function parseEntryProjectNumber(
+    rec: Record<string, unknown>,
+    registry?: Record<string, ProjectRegistryEntry>
+): number | undefined {
     if (typeof rec['project_number'] === 'string') {
         const cleaned = rec['project_number'].trim()
         const pMatch = /^p-?([1-9]\d*)$/i.exec(cleaned)
         const candidate = pMatch?.[1] ?? cleaned
         const parsed = /^[1-9]\d*$/.test(candidate) ? Number(candidate) : Number.NaN
-        if (!Number.isSafeInteger(parsed) || parsed <= 0 || String(parsed) !== candidate) {
-            throw new ValidationError(
-                `Invalid project_number '${rec['project_number']}'. Expected a positive integer.`
-            )
+        if (Number.isSafeInteger(parsed) && parsed > 0 && String(parsed) === candidate) {
+            rec['project_number'] = parsed
+        } else {
+            const regKey = findCanonicalRegistryKey(cleaned, registry)
+            const regProj = regKey !== undefined ? registry?.[regKey]?.project_number : undefined
+            if (typeof regProj !== 'number' || !Number.isSafeInteger(regProj) || regProj <= 0) {
+                throw new ValidationError(
+                    `Invalid project_number '${rec['project_number']}'. Expected a positive integer.`
+                )
+            }
+            rec['project_number'] = regProj
         }
-        rec['project_number'] = parsed
     }
     if (typeof rec['project_number'] === 'number') return rec['project_number']
     return typeof rec['projectNumber'] === 'number' ? rec['projectNumber'] : undefined
@@ -67,19 +82,22 @@ export function enrichEntryRecord(
     ) {
         rec['project_number'] = fallbackProj
     }
-    const projNum = parseEntryProjectNumber(rec)
-    const currentWs = rec['workspace_id'] ?? rec['workspaceId']
+    const currentWsRaw = rec['workspace_id'] ?? rec['workspaceId']
     const hasExplicitWs =
-        typeof currentWs === 'string' && currentWs.trim() !== '' && currentWs.trim() !== '*'
+        typeof currentWsRaw === 'string' && currentWsRaw.trim() !== '' && currentWsRaw.trim() !== '*'
+    const needsRegistry = typeof rec['project_number'] === 'string' || hasExplicitWs
+    const providerRegistry = !needsRegistry
+        ? undefined
+        : preloadedRegistry !== undefined
+          ? (preloadedRegistry ?? undefined)
+          : readProjectRegistryPayload(registryProvider?.())
+    const activeReg = activeProjectRegistry(providerRegistry)
+    const projNum = parseEntryProjectNumber(rec, activeReg)
     // [INVARIANT] No content/tag/CWD guessing: defer project-only workspace resolution
     // to `secure-dispatcher` so session scope pair-checking runs first.
     if (!hasExplicitWs) return
 
-    const trimmedWs = currentWs.trim()
-    const providerRegistry =
-        preloadedRegistry !== undefined
-            ? (preloadedRegistry ?? undefined)
-            : readProjectRegistryPayload(registryProvider?.())
+    const trimmedWs = currentWsRaw.trim()
     const resolved = resolveProjectContext(
         {
             workspace_id: trimmedWs,
@@ -88,7 +106,7 @@ export function enrichEntryRecord(
         providerRegistry !== undefined ? { projectRegistry: providerRegistry } : undefined
     )
     if (projNum !== undefined) {
-        pairStoredScope(trimmedWs, projNum, activeProjectRegistry(providerRegistry))
+        pairStoredScope(trimmedWs, projNum, activeReg)
     } else if (
         trimmedWs.toLowerCase() !== 'default' &&
         rec['project_number'] === undefined &&

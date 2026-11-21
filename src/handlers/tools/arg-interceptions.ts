@@ -387,7 +387,7 @@ export function throwToolNotFoundError(name: string): never {
         get_project: 'mj.admin.getProject',
         getProject: 'mj.admin.getProject',
     }
-    const hintMethod = CORE_CODEMODE_HINTS[name]
+    const hintMethod = Object.hasOwn(CORE_CODEMODE_HINTS, name) ? CORE_CODEMODE_HINTS[name] : undefined
     if (hintMethod !== undefined) {
         throw new ResourceNotFoundError(
             'Tool',

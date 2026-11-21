@@ -319,8 +319,8 @@ function createContextGetFn(
             return Promise.resolve(wrapResult(target))
         }
         const snakeKey = key.replace(/([a-z0-9])([A-Z])/g, '$1_$2').toLowerCase()
-        if (key in target) return Promise.resolve(wrapResult(target[key]))
-        if (snakeKey !== key && snakeKey in target) {
+        if (Object.hasOwn(target, key)) return Promise.resolve(wrapResult(target[key]))
+        if (snakeKey !== key && Object.hasOwn(target, snakeKey)) {
             return Promise.resolve(wrapResult(target[snakeKey]))
         }
         return Promise.resolve(
@@ -360,11 +360,11 @@ function resolveContextProxyProp(target: Record<string, unknown>, prop: string |
     if (prop === 'get' || prop === 'getContext' || prop === 'get_context') {
         return createContextGetFn(target)
     }
-    if (prop in target) return target[prop]
+    if (Object.hasOwn(target, prop)) return target[prop]
     // [INVARIANT]: Outer MCP parameter normalization converts camelCase keys inside `context`
     // into snake_case; fall back transparently so `context.myKey` resolves `target.my_key`.
     const snakeProp = prop.replace(/([a-z0-9])([A-Z])/g, '$1_$2').toLowerCase()
-    if (snakeProp !== prop && snakeProp in target) {
+    if (snakeProp !== prop && Object.hasOwn(target, snakeProp)) {
         return target[snakeProp]
     }
     if (prop === 'executeSystemPrompt' || prop === 'getPrompt' || prop === 'executePrompt') {
@@ -373,7 +373,7 @@ function resolveContextProxyProp(target: Record<string, unknown>, prop: string |
     if (CONTEXT_COLLECTION_NAMES.has(prop)) {
         return createEmptyFallback()
     }
-    return target[prop]
+    return undefined
 }
 
 /**

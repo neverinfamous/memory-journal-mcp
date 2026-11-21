@@ -73,10 +73,10 @@ export interface ParseResult {
 // ============================================================================
 
 const FrontmatterAnchorSchema = z.union([
-    z.string().max(500),
+    z.string().trim().min(1).max(500),
     z
         .object({
-            anchor_path: z.string().min(1).max(500),
+            anchor_path: z.string().trim().min(1).max(500),
             anchor_type: z.string().min(1).max(50).optional(),
             status: z.enum(['pending', 'valid', 'stale', 'invalidated', 'unresolvable']).optional(),
         })

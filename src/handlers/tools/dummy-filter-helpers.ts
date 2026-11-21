@@ -123,36 +123,13 @@ export function resolveDummyTargetInfo(name: string): DummyTargetInfo | undefine
     return undefined
 }
 
-const RAW_FILTER_TOKENS_CACHE = new WeakMap<
-    ToolFilterConfig,
-    { raw: string; tokens: ReadonlySet<string> }
->()
-
-function getRawFilterTokens(filterConfig: ToolFilterConfig): ReadonlySet<string> {
-    const cached = RAW_FILTER_TOKENS_CACHE.get(filterConfig)
-    if (cached?.raw === filterConfig.raw) {
-        return cached.tokens
-    }
-    const tokens = new Set<string>()
-    for (const part of filterConfig.raw.toLowerCase().split(/[\s,]+/)) {
-        if (part.length > 0) tokens.add(part)
-    }
-    RAW_FILTER_TOKENS_CACHE.set(filterConfig, { raw: filterConfig.raw, tokens })
-    return tokens
-}
-
 export function isTargetExcludedByRules(
     tokensToMatch: readonly string[],
     filterConfig: ToolFilterConfig
 ): boolean {
-    const rawTokens = getRawFilterTokens(filterConfig)
     const lowered = new Set<string>()
     for (const token of tokensToMatch) {
-        const lower = token.toLowerCase()
-        lowered.add(lower)
-        if (rawTokens.has(`-${lower}`) && !rawTokens.has(`+${lower}`)) {
-            return true
-        }
+        lowered.add(token.toLowerCase())
     }
 
     let excluded = false

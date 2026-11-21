@@ -183,10 +183,10 @@ function verifyBatchWildcardMoveProjects(
         const entryId = item['entry_id']
         if (targetWs === undefined || typeof entryId !== 'number') continue
         const itemWs = trimmedStringField(item, 'workspace_id')
-        const isWildcardSource =
-            itemWs === '*' ||
-            (itemWs === undefined && (parentWs === '*' || (parentWs === undefined && workspaceId === '*')))
-        if (isWildcardSource) wildcardIds.push(entryId)
+        const effectiveSourceWs = itemWs ?? parentWs ?? workspaceId
+        if (effectiveSourceWs === '*' || ctx.isDefaultWorkspaceName(effectiveSourceWs)) {
+            wildcardIds.push(entryId)
+        }
     }
     if (wildcardIds.length === 0) return undefined
 

@@ -69,6 +69,9 @@ export async function searchAuditFileBackward(
     remainingLimit: number,
     results: AuditEntry[]
 ): Promise<{ skippedLines: number; limitReached: boolean }> {
+    if (remainingLimit <= 0) {
+        return { skippedLines: 0, limitReached: true }
+    }
     if (await isUnsafeSymlinkOrSpecialFile(filePath)) {
         return { skippedLines: 0, limitReached: false }
     }

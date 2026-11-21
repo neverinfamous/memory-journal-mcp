@@ -31,7 +31,10 @@ export function coerceAnchorStatusAlias(
     raw: unknown
 ): 'pending' | 'valid' | 'stale' | 'invalidated' | 'unresolvable' | undefined {
     if (typeof raw !== 'string') return undefined
-    return ANCHOR_STATUS_ALIAS_MAP[raw.trim().toLowerCase()]
+    const normalized = raw.trim().toLowerCase()
+    return Object.hasOwn(ANCHOR_STATUS_ALIAS_MAP, normalized)
+        ? ANCHOR_STATUS_ALIAS_MAP[normalized]
+        : undefined
 }
 
 function normalizeAnchorContainer(obj: Record<string, unknown>): boolean {

@@ -28,7 +28,7 @@ const TeamMemberOutputSchema = z.object({
 const authorAliases = ['path', 'target', 'user', 'name', 'account', 'username', 'member'];
 const roleAliases = ['keep', 'mode', 'type', 'level', 'permission'];
 
-const preprocessMember = (val: unknown): unknown => {
+const preprocessMemberBase = (val: unknown, rejectWorkspaceId: boolean): unknown => {
     if (typeof val === 'object' && val !== null) {
         const obj = { ...(val as Record<string, unknown>) };
         let modified = false;
@@ -49,7 +49,7 @@ const preprocessMember = (val: unknown): unknown => {
                 break;
             }
         }
-        if ('workspace_id' in obj) {
+        if (rejectWorkspaceId && 'workspace_id' in obj) {
             throw new ValidationError(
                 'workspace_id is not accepted. Team membership is global and has no workspace column.',
                 { field: 'workspace_id' }
@@ -59,6 +59,9 @@ const preprocessMember = (val: unknown): unknown => {
     }
     return val;
 };
+
+const preprocessMember = (val: unknown): unknown => preprocessMemberBase(val, true);
+const preprocessMemberMcp = (val: unknown): unknown => preprocessMemberBase(val, false);
 
 function sanitizeMemberRecord<
     T extends { author: string; displayName?: string | null; addedBy?: string | null },
@@ -90,14 +93,14 @@ const TeamAddMemberSchema = z.preprocess(
 )
 
 const TeamAddMemberSchemaMcp = z.preprocess(
-    preprocessMember,
+    preprocessMemberMcp,
     z
         .object({
             author: z.string().optional().describe('The author ID/username to add'),
             role: z.string().optional().describe('The role to assign (admin, member, viewer)'),
             display_name: z.string().optional().describe('Optional display name'),
         })
-        .strict()
+        .loose()
 )
 
 const TeamRemoveMemberSchema = z.preprocess(
@@ -110,12 +113,12 @@ const TeamRemoveMemberSchema = z.preprocess(
 )
 
 const TeamRemoveMemberSchemaMcp = z.preprocess(
-    preprocessMember,
+    preprocessMemberMcp,
     z
         .object({
             author: z.string().optional().describe('The author ID/username to remove'),
         })
-        .strict()
+        .loose()
 )
 
 const TeamUpdateMemberRoleSchema = z.preprocess(
@@ -129,13 +132,13 @@ const TeamUpdateMemberRoleSchema = z.preprocess(
 )
 
 const TeamUpdateMemberRoleSchemaMcp = z.preprocess(
-    preprocessMember,
+    preprocessMemberMcp,
     z
         .object({
             author: z.string().optional().describe('The author ID/username to update'),
             role: z.string().optional().describe('The new role to assign (admin, member, viewer)'),
         })
-        .strict()
+        .loose()
 )
 
 const TeamGetMemberSchema = z.preprocess(
@@ -148,12 +151,12 @@ const TeamGetMemberSchema = z.preprocess(
 )
 
 const TeamGetMemberSchemaMcp = z.preprocess(
-    preprocessMember,
+    preprocessMemberMcp,
     z
         .object({
             author: z.string().optional().describe('The author ID/username to fetch'),
         })
-        .strict()
+        .loose()
 )
 
 // ============================================================================

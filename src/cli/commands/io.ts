@@ -120,7 +120,11 @@ export async function exportMarkdownAction(options: z.infer<typeof exportMarkdow
         }))
 
         const result = await exportEntriesToMarkdown(exportable, resolvedDir, db, [resolvedDir])
-        writeCliResult(result, options.json, 'Markdown export finished.')
+        writeCliResult(
+            result,
+            options.json,
+            result.success ? 'Markdown export finished.' : 'Markdown export failed.'
+        )
         if (!result.success) {
             process.exitCode = 1
         }
@@ -301,7 +305,11 @@ export async function importMarkdownAction(options: z.infer<typeof importMarkdow
             [resolvedDir]
         )
 
-        writeCliResult(result, options.json, 'Markdown import finished.')
+        writeCliResult(
+            result,
+            options.json,
+            result.success ? 'Markdown import finished.' : 'Markdown import failed.'
+        )
         if (!result.success) {
             process.exitCode = 1
         }
@@ -344,7 +352,11 @@ export async function importExternalAction(options: z.infer<typeof importExterna
             result.success = false
             result.errors.push(...errors)
         }
-        writeCliResult(result, options.json, 'External import finished.')
+        writeCliResult(
+            result,
+            options.json,
+            result.success ? 'External import finished.' : 'External import failed.'
+        )
         if (!result.success) {
             process.exitCode = 1
         }

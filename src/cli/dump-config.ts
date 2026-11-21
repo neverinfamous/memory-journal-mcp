@@ -76,7 +76,10 @@ export function redactConfig(config: unknown): unknown {
 }
 
 /** Write the redacted configuration to stdout and exit successfully. */
-export function dumpConfigAndExit(config: unknown): never {
+export function dumpConfigAndExit(config: unknown, opts?: { exit?: (code: number) => never }): never {
     process.stdout.write(JSON.stringify(redactConfig(config), null, 2) + '\n')
+    if (opts?.exit !== undefined) {
+        opts.exit(0)
+    }
     process.exit(0)
 }

@@ -240,7 +240,7 @@ export async function runSemanticSearch(
     const { db, teamDb, vectorManager, teamVectorManager } = context
     if (!vectorManager) return { page: [], degraded: true }
 
-    const needed = input.limit + cursorOffset(input.cursor)
+    const needed = input.limit + cursorOffset(input.cursor) + 1
     const postFiltersActive = hasSemanticPostFilters(input)
     const rerankByImportance = input.sort_by === 'blended' || input.sort_by === 'importance'
     const targetCount = rerankByImportance ? Math.min(needed * 2, 500) : needed

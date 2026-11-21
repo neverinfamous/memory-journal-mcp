@@ -73,26 +73,33 @@ export async function assertIncomingBackupIntact(backupPath: string): Promise<vo
     }
 }
 
-/** Truncate the WAL. Throws when readers keep the checkpoint busy so a later file copy cannot drop frames. */
+/** Truncate the WAL. Throws unless the driver explicitly confirms `busy === 0`. */
 export function assertWalCheckpointComplete(ctx: IDatabaseConnection): void {
     try {
+        let firstRow: unknown
         if (typeof ctx.getNativeDb === 'function') {
             const ckpt: unknown = ctx.getNativeDb().pragma('wal_checkpoint(TRUNCATE)')
-            const firstRow: unknown = Array.isArray(ckpt) ? ckpt[0] : undefined
-            const busy =
-                typeof firstRow === 'object' &&
-                firstRow !== null &&
-                'busy' in firstRow &&
-                typeof firstRow.busy === 'number'
-                    ? firstRow.busy
-                    : 0
-            if (busy !== 0) {
-                throw new Error(
-                    `WAL checkpoint incomplete (busy=${String(busy)}), backup aborted to prevent stale data`
-                )
-            }
+            firstRow = Array.isArray(ckpt) ? ckpt[0] : undefined
         } else {
-            ctx.pragma('wal_checkpoint(TRUNCATE)')
+            const results = ctx.exec('PRAGMA wal_checkpoint(TRUNCATE)')
+            const cols = results[0]?.columns
+            const row = results[0]?.values[0]
+            const busyIdx = cols !== undefined ? cols.indexOf('busy') : -1
+            if (busyIdx >= 0 && row !== undefined) {
+                firstRow = { busy: row[busyIdx] }
+            }
+        }
+        const busy =
+            typeof firstRow === 'object' &&
+            firstRow !== null &&
+            'busy' in firstRow &&
+            typeof firstRow.busy === 'number'
+                ? firstRow.busy
+                : undefined
+        if (busy !== 0) {
+            throw new Error(
+                `WAL checkpoint incomplete (busy=${String(busy)}), backup aborted to prevent stale data`
+            )
         }
     } catch (checkpointErr) {
         const err =

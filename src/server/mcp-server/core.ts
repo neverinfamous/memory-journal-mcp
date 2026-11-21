@@ -14,7 +14,11 @@ import { startMetricsServer } from '../../observability/metrics-server.js'
 import { logger } from '../../utils/logger.js'
 import { flushAgentIssues } from '../../utils/issue-logger.js'
 import type { ServerRuntime } from '../../utils/maintenance-lock.js'
-import { buildBaseToolConfig, closeServerResources } from './core-helpers.js'
+import {
+    awaitPendingVectorInit,
+    buildBaseToolConfig,
+    closeServerResources,
+} from './core-helpers.js'
 import { closeCrossTeamAdapters } from '../../handlers/tools/search/cross-team.js'
 import { resolveActiveBriefingConfig } from './tool-registration/register-tools-helpers.js'
 import {
@@ -113,6 +117,7 @@ async function cleanupFailedStartup(params: {
     }
     await runtime.auditLogger?.close().catch(() => undefined)
     await flushAgentIssues().catch(() => undefined)
+    await awaitPendingVectorInit(runtime)
     closeDatabases()
 }
 
@@ -148,38 +153,39 @@ export async function createServer(options: ServerOptions): Promise<void> {
         activeMetricsPath,
     } = context
 
-    const { baseConfig, customToolHandlerConfig } = buildServerToolConfigs(context, options)
-    const { allTools, allToolNames } = loadAndValidateTools(context, customToolHandlerConfig)
-
-    const resources = getResources()
-    const prompts = getPrompts()
-
-    registerConfigChangeListener({
-        configManager,
-        options,
-        allowedIoRoots,
-        baseConfig,
-        customToolHandlerConfig,
-    })
-
-    const getServerInstance = (): McpServer =>
-        createServerInstance(
-            context,
-            options,
-            prompts as PromptDefinition[],
-            resources as ResourceDefinition[],
-            allTools,
-            allToolNames,
-            customToolHandlerConfig
-        )
-
-    const shutdownMetrics = startConfiguredMetricsServer(runtime, options)
     const closeDatabases = (): void => {
         closeServerResources([db, testDb, teamDb, testTeamDb])
         closeCrossTeamAdapters()
     }
+    let shutdownMetrics: (() => Promise<void>) | undefined
 
     try {
+        const { baseConfig, customToolHandlerConfig } = buildServerToolConfigs(context, options)
+        const { allTools, allToolNames } = loadAndValidateTools(context, customToolHandlerConfig)
+
+        const resources = getResources()
+        const prompts = getPrompts()
+
+        registerConfigChangeListener({
+            configManager,
+            options,
+            allowedIoRoots,
+            baseConfig,
+            customToolHandlerConfig,
+        })
+
+        const getServerInstance = (): McpServer =>
+            createServerInstance(
+                context,
+                options,
+                prompts as PromptDefinition[],
+                resources as ResourceDefinition[],
+                allTools,
+                allToolNames,
+                customToolHandlerConfig
+            )
+
+        shutdownMetrics = startConfiguredMetricsServer(runtime, options)
         await startSelectedTransport({
             options,
             getServerInstance,

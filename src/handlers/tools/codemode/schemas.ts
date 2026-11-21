@@ -141,6 +141,7 @@ export const ExecuteCodeSchemaMcp = z.object({
         ),
     workspace_id: z
         .string()
+        .max(255)
         .optional()
         .describe(
             'Target workspace ID to isolate data. If omitted, uses defaultWorkspaceId if configured.'

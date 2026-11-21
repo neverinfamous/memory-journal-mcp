@@ -378,6 +378,7 @@ export class AuditLogger {
 
         const results: AuditEntry[] = []
         const limit = filters.limit ?? 100
+        if (limit <= 0) return []
         let skippedLines = 0
 
         // Search current log first, then older rotated logs .1 through .5

@@ -3,6 +3,7 @@ import * as fsPromises from 'node:fs/promises'
 import * as path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { SENSITIVE_KEY_RE, sanitizeErrorForLogging } from './security-utils.js'
+import { isCrossRealmDate, isCrossRealmError, tryResolveToJson } from './sanitize-value-helpers.js'
 
 const SENSITIVE_CLI_FLAG_RE =
     /^--(?:[a-z0-9_-]+[-_])?(?:auth[-_]?token|token|secret|password|passwd|passphrase|api[-_]?key|apikey|webhook[-_]?auth|encryption[-_]?key|private[-_]?key|key)(?:=(.*))?$/i
@@ -71,17 +72,21 @@ export function sanitizeIssueInput(
     if (typeof value === 'string') return scrubAndTruncateIssueString(value)
     if (typeof value === 'bigint') return value.toString()
     if (typeof value !== 'object') return value
-    if (value instanceof Date) {
+    if (isCrossRealmDate(value)) {
         return Number.isNaN(value.getTime()) ? 'Invalid Date' : value.toISOString()
     }
     if (value instanceof URL) return scrubAndTruncateIssueString(value.href)
-    if (value instanceof Error) return scrubAndTruncateIssueString(`${value.name}: ${value.message}`)
+    if (isCrossRealmError(value)) return scrubAndTruncateIssueString(`${value.name}: ${value.message}`)
     if (seen.has(value)) return '[Circular]'
     budget.count++
     seen.add(value)
     try {
         if (Array.isArray(value)) {
             return sanitizeCliArgList(value, depth, seen, budget)
+        }
+        const jsonRes = tryResolveToJson(value)
+        if (jsonRes.resolved) {
+            return sanitizeIssueInput(jsonRes.value, depth + 1, seen, budget)
         }
         const clean: Record<string, unknown> = {}
         const entries = Object.entries(value as Record<string, unknown>)

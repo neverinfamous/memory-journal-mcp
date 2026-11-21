@@ -5,9 +5,11 @@ import { fileURLToPath } from 'node:url'
 
 const testOutputDir = join(process.cwd(), '.test-output')
 const healthStatusFile = join(testOutputDir, 'health-status.json')
+const normPath = (p: string): string =>
+    process.platform === 'win32' ? resolve(p).toLowerCase() : resolve(p)
 const isMain =
     process.argv[1] !== undefined &&
-    resolve(process.argv[1]) === resolve(fileURLToPath(import.meta.url))
+    normPath(process.argv[1]) === normPath(fileURLToPath(import.meta.url))
 
 export const IGNORE_DIR_REGEX =
     /(?:^|[/\\])(\.git|vendor|third_party|node_modules|dist|coverage|build|\.next|out|\.wrangler|\.turbo|\.output|\.svelte-kit|\.test-output)(?:[/\\]|$)/

@@ -23,6 +23,7 @@ describe('utilities coverage', () => {
                 close: vi.fn().mockResolvedValue(undefined),
             }
             vi.spyOn(fs.promises, 'open').mockResolvedValue(fileMock as any)
+            vi.spyOn(fs.promises, 'stat').mockResolvedValue({ mtimeMs: 1234, size: 100 } as never)
 
             const dummyAllowedContext = {
                 briefingConfig: { allowedIoRoots: [process.cwd()] },

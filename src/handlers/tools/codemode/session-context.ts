@@ -19,16 +19,18 @@ export function lookupRegistryEntry(
     key: string
 ): { path?: string; project_number?: number } | undefined {
     if (!registry) return undefined
-    const direct = registry[key]
-    if (direct) return direct
+    const direct = Object.hasOwn(registry, key) ? registry[key] : undefined
+    if (direct !== undefined) return direct
     const canonical = findCanonicalRegistryKey(key, registry)
-    if (canonical !== undefined && registry[canonical] !== undefined) return registry[canonical]
+    if (canonical !== undefined && Object.hasOwn(registry, canonical)) return registry[canonical]
     if (/[/\\]/.test(key)) {
         const repoName = key.split(/[/\\]/).filter(Boolean).pop()
         if (repoName !== undefined && repoName !== '') {
-            if (registry[repoName] !== undefined) return registry[repoName]
+            if (Object.hasOwn(registry, repoName)) return registry[repoName]
             const repoCanonical = findCanonicalRegistryKey(repoName, registry)
-            if (repoCanonical !== undefined) return registry[repoCanonical]
+            if (repoCanonical !== undefined && Object.hasOwn(registry, repoCanonical)) {
+                return registry[repoCanonical]
+            }
         }
     }
     return undefined
@@ -333,6 +335,8 @@ function resolveSessionWorkspaceAndProjectPair(
     const effectiveProjectInput =
         numericProjectId ??
         (rawProjectInput === undefined &&
+        !validated.explicitWorkspace &&
+        !isWildcardWorkspace &&
         configuredDefaultWs?.toLowerCase() === 'default' &&
         sessionWs === undefined
             ? sessionCtx.projectNumber

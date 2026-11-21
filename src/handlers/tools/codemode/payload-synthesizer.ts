@@ -72,7 +72,9 @@ function readCandidateRecord(input: ExecuteCodeInput, params: unknown): Record<s
     return pHasAction ? pObj : undefined
 }
 
-function recoverCodeFromParamsRecord(params: Record<string, unknown>): string | undefined {
+function recoverCodeFromParamsRecord(
+    params: Record<string, unknown>
+): { code: string; synthesized: boolean } | undefined {
     const entryObj = isRecord(params['entry']) ? params['entry'] : params
     const learnedVal = getNonEmptyString(entryObj, params, [
         'learned_context', 'learnedContext', 'lesson', 'learning', 'insight',
@@ -132,12 +134,12 @@ function recoverCodeFromParamsRecord(params: Record<string, unknown>): string | 
         const valStatus = getNonEmptyString(entryObj, params, ['validation_status', 'validationStatus', 'validation'])
         if (valStatus !== undefined) payload['validation_status'] = valStatus
         appendSharedEntryFlags(payload, entryObj, params)
-        return `return await mj.createEntry(${JSON.stringify(payload)});`
+        return { code: `return await mj.createEntry(${JSON.stringify(payload)});`, synthesized: true }
     }
 
     for (const [k, v] of Object.entries(params)) {
         if (typeof v === 'string' && v.trim().length > 0 && !NON_CODE_PARAM_KEYS.has(k)) {
-            return v
+            return { code: v, synthesized: false }
         }
     }
     return undefined
@@ -266,7 +268,11 @@ export function resolveExecutionPayload(
     }
 
     if (healingEnabled && (executionCode === undefined || executionCode === '') && isRecord(params)) {
-        executionCode = recoverCodeFromParamsRecord(params)
+        const recovered = recoverCodeFromParamsRecord(params)
+        if (recovered !== undefined) {
+            executionCode = recovered.code
+            if (recovered.synthesized) recoveredJs = true
+        }
     }
 
     // [H7] A non-empty payload/entry that cannot be recovered must fail, not report sandbox status.

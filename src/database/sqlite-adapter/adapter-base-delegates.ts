@@ -51,6 +51,7 @@ export class AdapterBaseDelegates {
 
     applyTeamSchema(): void {
         this.connection.applyTeamSchema()
+        this.membersMgr.invalidateCache()
     }
 
     flushSave(): void {

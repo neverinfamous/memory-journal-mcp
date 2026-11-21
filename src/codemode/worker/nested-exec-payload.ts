@@ -4,6 +4,8 @@
  */
 
 import * as vm from 'node:vm'
+import type { SandboxResult } from '../types.js'
+import { serializeAndEnforceEgress } from './result-compactor.js'
 import {
     normalizeUserContextPayload,
     parseByteSizeValue,
@@ -368,4 +370,20 @@ export async function raceWithSandboxTimeout<T>(
             activeTimers?.delete(handle)
         }
     }
+}
+
+/** Enforces sandbox egress byte limits on nested `executeCode` shortcut return values. */
+export function enforceNestedResultLimit(rawResult: unknown, maxResultSize: number | undefined): unknown {
+    if (rawResult === undefined) return rawResult
+    const effectiveLimit = maxResultSize ?? 100 * 1024
+    const wrapper: SandboxResult = {
+        success: true,
+        result: rawResult,
+        metrics: { wallTimeMs: 0, cpuTimeMs: 0, memoryUsedMb: 0 },
+    }
+    serializeAndEnforceEgress(wrapper, effectiveLimit)
+    if (!wrapper.success) {
+        throw new Error(wrapper.error ?? 'Nested execution output limit exceeded')
+    }
+    return wrapper.result
 }

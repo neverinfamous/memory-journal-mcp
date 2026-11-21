@@ -8,7 +8,7 @@ export const ENTRY_TABLE_NAMES = new Set([
 
 const SQL_LITERAL_PATTERN = /'(?:\\.|''|[^'\\])*'|"(?:\\.|""|[^"\\])*"/g
 
-function advanceQuotedChar(sql: string, i: number, quote: string): { nextIndex: number; closed: boolean } {
+export function advanceQuotedChar(sql: string, i: number, quote: string): { nextIndex: number; closed: boolean } {
     const ch = sql[i] ?? ''
     if (ch === '\\' && i + 1 < sql.length) {
         return { nextIndex: i + 1, closed: false }

@@ -4,12 +4,13 @@
  */
 
 import type * as vm from 'node:vm'
-import type { RpcRequest, SandboxResult } from '../types.js'
-import { serializeAndEnforceEgress } from './result-compactor.js'
+import type { RpcRequest } from '../types.js'
 import type { NestedExecIsolationOverrides, RunIsolatedNestedFn } from './nested-exec-scope.js'
-import { raceWithSandboxTimeout } from './nested-exec-payload.js'
+import { enforceNestedResultLimit, raceWithSandboxTimeout } from './nested-exec-payload.js'
 import type { ExecutionLifecycleState } from './sandbox-globals.js'
 import { getOrCompileVmScript } from './script-and-metadata-cache.js'
+
+export { enforceNestedResultLimit }
 
 export type RpcCallFn = (group: string, method: string, args: unknown[]) => Promise<unknown>
 export type SendRpcRequestFn = (payload: Omit<RpcRequest, 'id'>) => Promise<unknown>
@@ -101,21 +102,6 @@ export function mergeNestedExecutionContext(
         merged['sessionId'] = sessionId
     }
     return merged
-}
-
-export function enforceNestedResultLimit(rawResult: unknown, maxResultSize: number | undefined): unknown {
-    if (rawResult === undefined) return rawResult
-    const effectiveLimit = maxResultSize ?? 100 * 1024
-    const wrapper: SandboxResult = {
-        success: true,
-        result: rawResult,
-        metrics: { wallTimeMs: 0, cpuTimeMs: 0, memoryUsedMb: 0 },
-    }
-    serializeAndEnforceEgress(wrapper, effectiveLimit)
-    if (!wrapper.success) {
-        throw new Error(wrapper.error ?? 'Nested execution output limit exceeded')
-    }
-    return wrapper.result
 }
 
 function buildNestedVmContextOptions(

@@ -6,27 +6,16 @@ import { parseCanonicalPositiveInt, parsePositiveProjectNumber } from '../../uti
 function coerceRelaxed(v: number | string | undefined): number | undefined {
     if (v === undefined) return undefined
     if (typeof v === 'number') {
-        if (!Number.isSafeInteger(v) || v <= 0) {
-            throw new Error(`Invalid numeric parameter '${String(v)}'. Expected a positive integer.`)
-        }
-        return v
+        return Number.isSafeInteger(v) && v > 0 ? v : Number.NaN
     }
     const trimmed = v.trim()
     if (trimmed === '') return undefined
-    const parsed = parseCanonicalPositiveInt(trimmed)
-    if (parsed === undefined) {
-        throw new Error(`Invalid numeric parameter '${v}'. Expected a canonical positive integer.`)
-    }
-    return parsed
+    return parseCanonicalPositiveInt(trimmed) ?? Number.NaN
 }
 
 function coerceCanonicalProject(v: number | string | undefined): number | undefined {
     if (v === undefined || (typeof v === 'string' && v.trim() === '')) return undefined
-    const parsed = parsePositiveProjectNumber(v)
-    if (parsed === undefined) {
-        throw new Error(`Invalid project_number '${String(v)}'. Expected a canonical positive integer.`)
-    }
-    return parsed
+    return parsePositiveProjectNumber(v) ?? Number.NaN
 }
 
 export const GitHistoryOptionsSchema = z.object({
@@ -154,18 +143,11 @@ export const GitUnreleasedOptionsSchema = z
         project_number: relaxedNumber().optional().describe('Target GitHub project number'),
         cwd: z.string().optional().describe('Working directory path for git operations'),
     })
-    .transform((d) => {
-        const rawMax = coerceRelaxed(d.maxCount ?? d.max_count ?? d.limit)
-        const parsedMax =
-            rawMax !== undefined
-                ? z.number().int().positive().max(5000).parse(rawMax)
-                : undefined
-        return {
-            ...d,
-            maxCount: parsedMax,
-            project_number: coerceCanonicalProject(d.project_number),
-        }
-    })
+    .transform((d) => ({
+        ...d,
+        maxCount: coerceRelaxed(d.maxCount ?? d.max_count ?? d.limit),
+        project_number: coerceCanonicalProject(d.project_number),
+    }))
 
 export const GitAnalyzePatternsOptionsSchema = z.object({
     maxCount: relaxedNumber().optional().describe('Maximum number of commits to analyze. Default: 50'),

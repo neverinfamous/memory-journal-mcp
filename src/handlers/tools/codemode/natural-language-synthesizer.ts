@@ -116,7 +116,8 @@ export function parseProjectNumberField(
         primary['project'] ??
         secondary['project']
     if (typeof raw === 'number') {
-        return Number.isSafeInteger(raw) && raw > 0 ? raw : undefined
+        if (Number.isSafeInteger(raw) && raw > 0) return raw
+        return Number.isFinite(raw) ? raw : String(raw)
     }
     if (typeof raw === 'string' && raw.trim() !== '') {
         const trimmed = raw.trim()
@@ -194,16 +195,20 @@ function collectTags(
     return tagsVal
 }
 
-function parsePositiveEntryId(entryObj: Record<string, unknown>, rawObj: Record<string, unknown>): number | undefined {
+function parsePositiveEntryId(entryObj: Record<string, unknown>, rawObj: Record<string, unknown>): number | string | undefined {
     const rawEntryId = entryObj['entry_id'] ?? rawObj['entry_id'] ?? entryObj['id'] ?? rawObj['id']
     if (typeof rawEntryId === 'number') {
-        return Number.isSafeInteger(rawEntryId) && rawEntryId > 0 ? rawEntryId : undefined
+        if (Number.isSafeInteger(rawEntryId) && rawEntryId > 0) return rawEntryId
+        return Number.isFinite(rawEntryId) ? rawEntryId : String(rawEntryId)
     }
     if (typeof rawEntryId === 'string') {
         const trimmed = rawEntryId.trim()
         if (/^[1-9]\d*$/.test(trimmed)) {
             const parsed = Number(trimmed)
-            return Number.isSafeInteger(parsed) && String(parsed) === trimmed ? parsed : undefined
+            return Number.isSafeInteger(parsed) && String(parsed) === trimmed ? parsed : trimmed
+        }
+        if (/^(?:-?\d+(?:\.\d+)?|0|NaN|Infinity|-Infinity)$/i.test(trimmed)) {
+            return trimmed
         }
     }
     return undefined
@@ -284,7 +289,14 @@ export function synthesizeNaturalLanguageOrEntryPayload(executionCode: string, i
         const val = input[key]
         return typeof val === 'string' && val.trim().length > 0
     })
-    const isExplicitJsCode = hasExplicitCode && !isNaturalLanguagePrompt(executionCode)
+    const looksLikeJsStatement =
+        (/\bmj\s*\./.test(executionCode) ||
+            /^\s*(?:return|const|let|var|await|async|for|while|if|try|function)\b/.test(
+                executionCode
+            )) &&
+        isValidJsScript(executionCode)
+    const isExplicitJsCode =
+        (hasExplicitCode || looksLikeJsStatement) && !isNaturalLanguagePrompt(executionCode)
     const looksLikeSqlQuery =
         /^(?:SELECT|INSERT|UPDATE|DELETE|PRAGMA|SHOW|DESCRIBE|EXPLAIN|WITH|SCHEMA|TABLES)\b/i.test(
             executionCode.trim()

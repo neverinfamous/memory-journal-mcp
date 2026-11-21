@@ -7,6 +7,7 @@
  */
 
 import { sanitizeErrorForLogging, SENSITIVE_KEY_RE } from './security-utils.js'
+import { isCrossRealmDate, isCrossRealmError, tryResolveToJson } from './sanitize-value-helpers.js'
 
 type LogLevel = 'debug' | 'info' | 'notice' | 'warning' | 'error' | 'critical'
 
@@ -27,8 +28,8 @@ const LOG_LEVELS: Record<LogLevel, number> = {
 }
 
 function sanitizeLogValue(value: unknown, seen = new WeakSet(), depth = 0): unknown {
-    if (value instanceof Error) return sanitizeErrorForLogging(`${value.name}: ${value.message}`)
-    if (value instanceof Date) return Number.isNaN(value.getTime()) ? 'Invalid Date' : value.toISOString()
+    if (isCrossRealmError(value)) return sanitizeErrorForLogging(`${value.name}: ${value.message}`)
+    if (isCrossRealmDate(value)) return Number.isNaN(value.getTime()) ? 'Invalid Date' : value.toISOString()
     if (value instanceof URL) return sanitizeErrorForLogging(value.toString())
     if (typeof value === 'string') return sanitizeErrorForLogging(value)
     if (typeof value === 'bigint') return value.toString()
@@ -39,6 +40,10 @@ function sanitizeLogValue(value: unknown, seen = new WeakSet(), depth = 0): unkn
     try {
         if (Array.isArray(value)) {
             return value.map((item) => sanitizeLogValue(item, seen, depth + 1))
+        }
+        const jsonRes = tryResolveToJson(value)
+        if (jsonRes.resolved) {
+            return sanitizeLogValue(jsonRes.value, seen, depth + 1)
         }
         const out: Record<string, unknown> = {}
         for (const [k, v] of Object.entries(value)) {
@@ -87,13 +92,15 @@ class Logger {
 
         // Sanitize error and string fields recursively to prevent token/secret leakage in nested log contexts
         const sanitizedExtras: Record<string, unknown> = {}
+        const rootSeen = new WeakSet()
+        if (context !== undefined) rootSeen.add(context)
         for (const [k, v] of Object.entries(extras)) {
             if (k === '__proto__' || k === 'constructor' || k === 'prototype') continue
             const safeKey = sanitizeErrorForLogging(k)
             sanitizedExtras[safeKey] =
                 SENSITIVE_KEY_RE.test(k) && v !== undefined && v !== null && v !== ''
                     ? '[REDACTED]'
-                    : sanitizeLogValue(v)
+                    : sanitizeLogValue(v, rootSeen, 0)
         }
 
         if (Object.keys(sanitizedExtras).length > 0) {

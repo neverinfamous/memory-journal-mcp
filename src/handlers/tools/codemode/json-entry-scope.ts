@@ -21,7 +21,8 @@ export function readProjectNumber(target: Record<string, unknown>): number | str
         target['projectName'] ??
         target['project']
     if (typeof raw === 'number') {
-        return Number.isSafeInteger(raw) && raw > 0 ? raw : undefined
+        if (Number.isSafeInteger(raw) && raw > 0) return raw
+        return Number.isFinite(raw) ? raw : String(raw)
     }
     if (typeof raw === 'string' && raw.trim() !== '') {
         const trimmed = raw.trim()

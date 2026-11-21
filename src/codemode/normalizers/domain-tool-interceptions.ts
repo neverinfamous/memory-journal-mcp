@@ -306,7 +306,17 @@ function applyAuditMergeTestGetByIdInterceptions(
         const obj = { ...args[0] }
         args[0] = obj
         if (obj['source_tags'] !== undefined && obj['source_tag'] === undefined) {
-            obj['source_tag'] = Array.isArray(obj['source_tags']) ? obj['source_tags'][0] : obj['source_tags']
+            if (Array.isArray(obj['source_tags'])) {
+                if (obj['source_tags'].length > 1) {
+                    return validationErr(
+                        'merge_tags only accepts a single source_tag, not multiple source_tags.',
+                        'Provide a single tag string for source_tag. To merge multiple tags, call this tool multiple times.'
+                    )
+                }
+                obj['source_tag'] = obj['source_tags'][0]
+            } else {
+                obj['source_tag'] = obj['source_tags']
+            }
             delete obj['source_tags']
         }
         remapKeys(obj, ['old_tag', 'from'], 'source_tag')

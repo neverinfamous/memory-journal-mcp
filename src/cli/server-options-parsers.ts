@@ -155,13 +155,17 @@ export function parseImportanceThresholdOption(
     name: string,
     fallback: number
 ): number {
-    if (val === undefined || val === null || val === '') return fallback
-    const num =
-        typeof val === 'number'
-            ? val
-            : typeof val === 'string'
-              ? Number(val.trim())
-              : Number.NaN
+    if (val === undefined || val === null) return fallback
+    let num: number
+    if (typeof val === 'number') {
+        num = val
+    } else if (typeof val === 'string') {
+        const trimmed = val.trim()
+        if (trimmed === '') return fallback
+        num = /^-?(?:\d+(?:\.\d+)?|\.\d+)$/.test(trimmed) ? Number(trimmed) : Number.NaN
+    } else {
+        num = Number.NaN
+    }
     if (!Number.isFinite(num) || num < 0 || num > 1) {
         const display =
             typeof val === 'string' || typeof val === 'number' || typeof val === 'boolean'

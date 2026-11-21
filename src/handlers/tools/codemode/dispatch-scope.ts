@@ -325,12 +325,13 @@ function verifyWildcardUpdateSourceProject(
     workspaceId: string | undefined,
     projectId: number | string | undefined
 ): Record<string, unknown> | undefined {
+    const effectiveWs =
+        typeof paramsObj['workspace_id'] === 'string' ? paramsObj['workspace_id'].trim() : workspaceId
     if (
         tool.name !== 'update_entry' ||
         !flags.hasCrossWorkspaceTarget ||
         typeof projectId !== 'number' ||
-        (paramsObj['workspace_id'] !== '*' &&
-            !(paramsObj['workspace_id'] === undefined && workspaceId === '*'))
+        (effectiveWs !== '*' && !isDefaultWorkspaceName(effectiveWs))
     ) {
         return undefined
     }

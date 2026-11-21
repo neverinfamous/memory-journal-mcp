@@ -126,7 +126,7 @@ export async function prefetchBatchCommitFiles(
         const validShas = extractValidAutoCommitShas(item.autoContext)
         if (validShas.length === 0) continue
         const canonicalKey = findCanonicalRegistryKey(item.workspaceId, registry) ?? item.workspaceId
-        const repoPath = registry[canonicalKey]?.path
+        const repoPath = Object.hasOwn(registry, canonicalKey) ? registry[canonicalKey]?.path : undefined
         if (repoPath === undefined || repoPath.length === 0) continue
         let set = shasByRepo.get(repoPath)
         if (set === undefined) {
@@ -205,7 +205,10 @@ export async function resolveEntryAnchors(
     try {
         const registry = context.config?.projectRegistry ?? loadProjectRegistryFromConfig()
         const canonicalKey = findCanonicalRegistryKey(workspaceId, registry) ?? workspaceId
-        const repoPath = registry !== undefined ? registry[canonicalKey]?.path : undefined
+        const repoPath =
+            registry !== undefined && Object.hasOwn(registry, canonicalKey)
+                ? registry[canonicalKey]?.path
+                : undefined
         if (repoPath === undefined || repoPath.length === 0) return undefined
 
         if (prefetchedRepoFilesBySha !== undefined) {

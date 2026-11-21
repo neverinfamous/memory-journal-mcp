@@ -8,7 +8,7 @@
 
 import type { RequestContext } from '../utils/request-context.js'
 import { getActiveSessionProject } from '../utils/workspace-resolver.js'
-import { estimateTokens } from '../observability/token-estimator.js'
+import { estimateTokens, safeJsonStringify } from '../observability/token-estimator.js'
 import { logger } from '../utils/logger.js'
 import { parseCanonicalPositiveInt, parsePositiveProjectNumber } from '../utils/safe-positive-int.js'
 import { sanitizeErrorForLogging } from '../utils/security-utils.js'
@@ -365,7 +365,7 @@ export function estimateOperationResultTokens(result: unknown, name: string): nu
         const fastTokens = estimateEnvelopeTextTokens(result)
         if (fastTokens !== undefined) return fastTokens
         try {
-            return estimateTokens(JSON.stringify(result), 'json')
+            return estimateTokens(safeJsonStringify(result), 'json')
         } catch (serializeError) {
             // Serialization failure must not block execution
             logger.debug('Token estimate skipped: result is not serializable', {

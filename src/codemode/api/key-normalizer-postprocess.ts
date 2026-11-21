@@ -241,7 +241,12 @@ export function postProcessNormalizedKeys(result: Record<string, unknown>, metho
     if (methodLower === undefined || !GIT_COMMIT_METHODS.has(methodLower)) {
         healSortByField(result)
     }
-    if ('tag' in result && !('tags' in result)) {
+    if (
+        'tag' in result &&
+        !('tags' in result) &&
+        methodLower !== 'teamvisualizerelationships' &&
+        methodLower !== 'team_visualize_relationships'
+    ) {
         const tagVal = result['tag']
         result['tags'] = Array.isArray(tagVal) ? tagVal : [tagVal]
         delete result['tag']

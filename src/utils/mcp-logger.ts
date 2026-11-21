@@ -8,6 +8,7 @@
 
 import { type McpServer } from '@modelcontextprotocol/server'
 import { sanitizeErrorForLogging, SENSITIVE_KEY_RE } from './security-utils.js'
+import { isCrossRealmDate, isCrossRealmError, tryResolveToJson } from './sanitize-value-helpers.js'
 import { onLogLevelChange } from './logger.js'
 
 /**
@@ -116,7 +117,7 @@ export class McpLogger {
         depth = 0,
         seen = new WeakSet()
     ): unknown {
-        if (value instanceof Error) {
+        if (isCrossRealmError(value)) {
             return sanitizeErrorForLogging(`${value.name}: ${value.message}`).replace(
                 /[\r\n]+/g,
                 ' '
@@ -128,7 +129,7 @@ export class McpLogger {
         if (typeof value === 'bigint') {
             return value.toString()
         }
-        if (value instanceof Date) {
+        if (isCrossRealmDate(value)) {
             return Number.isNaN(value.getTime()) ? 'Invalid Date' : value.toISOString()
         }
         if (value instanceof URL) {
@@ -147,6 +148,10 @@ export class McpLogger {
         try {
             if (Array.isArray(value)) {
                 return value.map((item) => this.sanitizeValue(item, depth + 1, seen))
+            }
+            const jsonRes = tryResolveToJson(value)
+            if (jsonRes.resolved) {
+                return this.sanitizeValue(jsonRes.value, depth + 1, seen)
             }
             const sanitized: Record<string, unknown> = {}
             Object.setPrototypeOf(sanitized, null)

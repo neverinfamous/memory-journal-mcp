@@ -156,7 +156,12 @@ export function applyProjectNameAlias(
         obj['project_number'] = num
         return 'applied'
     }
-    if (typeof rawVal !== 'string' || rawVal.trim() === '') return 'applied'
+    if (typeof rawVal === 'string' && rawVal.trim() === '') return 'applied'
+    if (typeof rawVal !== 'string') {
+        return {
+            conflict: `Invalid project alias '${formatScalarOrJson(rawVal)}'. Expected a positive integer or registered project name.`,
+        }
+    }
     const name = rawVal.trim()
     const registry = resolveEffectiveProjectRegistry()
     const matchedKey = matchRegistryKeyOrLeaf(name, registry)
@@ -173,7 +178,11 @@ export function applyProjectNameAlias(
     }
     if (matchedKey === undefined || registry === undefined) return 'unregistered'
     const projectNumber = registry[matchedKey]?.project_number
-    if (existingProj !== undefined && projectNumber !== undefined && Number(existingProj) !== projectNumber) {
+    if (
+        existingProj !== undefined &&
+        projectNumber !== undefined &&
+        canonicalAliasProject(existingProj) !== projectNumber
+    ) {
         return {
             conflict: `Project alias '${name}' (project #${String(projectNumber)}) conflicts with project_number '${formatScalarOrJson(existingProj)}'`,
         }

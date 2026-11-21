@@ -147,11 +147,11 @@ export const rulesResource: InternalResourceDef = {
             const cached = cachedRulesMap.get(rulesPath)
             if (cached && Date.now() - cached.timestamp < RULES_CACHE_TTL_MS) {
                 const stat = await fs.promises.stat(rulesPath).catch(() => null)
-                if (stat === null || stat.mtimeMs === cached.mtimeMs) {
+                if (stat !== null && stat.mtimeMs === cached.mtimeMs) {
                     return {
                         data: cached.content,
                         annotations: {
-                            lastModified: new Date(stat?.mtimeMs ?? cached.mtimeMs).toISOString(),
+                            lastModified: new Date(stat.mtimeMs).toISOString(),
                         },
                     }
                 }

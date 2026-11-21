@@ -12,6 +12,7 @@ import { hasUnbalancedClosingDelimiter, stripCommentsAndStrings } from '../secur
 import { getOrCompileVmScript } from './script-and-metadata-cache.js'
 import {
     dispatchSynthesizedNestedEntry,
+    enforceNestedResultLimit,
     extractNestedAutoVersion,
     extractNestedContextRecord,
     extractNestedMaxResultSize,
@@ -297,7 +298,9 @@ async function tryDispatchNestedShortcut(
         const scoped = mergeNestedSynthesizedScope(arg, argRec, narrowed, pinnedWorkspace, pinnedProjectNumber)
         return {
             handled: true,
-            value: dispatchSynthesizedNestedEntry(scoped, effectiveReadonly, effectiveDryRun, effectiveUseTestDb, invokeCreate),
+            value: await Promise.resolve(
+                dispatchSynthesizedNestedEntry(scoped, effectiveReadonly, effectiveDryRun, effectiveUseTestDb, invokeCreate)
+            ),
         }
     }
     if (codeToExec === '') {
@@ -309,11 +312,48 @@ async function tryDispatchNestedShortcut(
             const scoped = mergeNestedSynthesizedScope(natural, argRec, narrowed, pinnedWorkspace, pinnedProjectNumber)
             return {
                 handled: true,
-                value: dispatchSynthesizedNestedEntry(scoped, effectiveReadonly, effectiveDryRun, effectiveUseTestDb, invokeCreate),
+                value: await Promise.resolve(
+                    dispatchSynthesizedNestedEntry(scoped, effectiveReadonly, effectiveDryRun, effectiveUseTestDb, invokeCreate)
+                ),
             }
         }
     }
     return { handled: false, codeToExec, isQueryOnlyArg }
+}
+
+function validateAndWrapNestedCode(
+    codeToExec: string,
+    isQueryOnlyArg: boolean
+): { ok: true; wrapped: string } | { ok: false; errorResult: Record<string, unknown> } {
+    const transformedCode = transformAutoReturn(codeToExec)
+    const validation = validateSandboxCode(transformedCode)
+    if (!validation.valid) {
+        return {
+            ok: false,
+            errorResult: { success: false, error: validation.errors.join('; '), code: 'SECURITY_VIOLATION' },
+        }
+    }
+    if (hasUnbalancedClosingDelimiter(validation.strippedCode ?? stripCommentsAndStrings(transformedCode))) {
+        return {
+            ok: false,
+            errorResult: {
+                success: false,
+                error: 'Security validation failed: unbalanced closing delimiter',
+                code: 'SECURITY_VIOLATION',
+            },
+        }
+    }
+    if (isQueryOnlyArg && !/^(?:return\s+|await\s+mj\.)/.test(codeToExec.trim())) {
+        return {
+            ok: false,
+            errorResult: {
+                success: false,
+                error: 'Nested executeCode query could not be executed as a read-only search.',
+                code: 'VALIDATION_ERROR',
+            },
+        }
+    }
+    return { ok: true, wrapped: `"use strict";\n(async () => {\n${transformedCode}\n})()` }
 }
 
 /**
@@ -355,40 +395,33 @@ export function createSandboxExecutor(options: SandboxExecutorOptions): (arg: un
             return { success: false, error: 'Code exceeds maximum length of 51200 bytes', code: 'SECURITY_VIOLATION' }
         }
         const narrowed = resolveNestedNarrowedScope(argRec, pinnedWorkspace, pinnedProjectNumber, projectRegistryRaw)
-        const shortcut = await tryDispatchNestedShortcut({
-            arg, argRec, rawNestedCode, narrowed, pinnedWorkspace, pinnedProjectNumber,
-            effectiveReadonly, effectiveDryRun, effectiveUseTestDb, shimMj,
-        })
-        if (shortcut.handled) return shortcut.value
+        const isolation = buildIsolationOverrides(argRec, timeoutMs, maxResultSize, narrowed)
+        const shortcutTimeoutMs = isolation?.timeoutMs ?? timeoutMs
+        const shortcutMaxResult = isolation?.maxResultSize ?? maxResultSize
+        const shortcut = await raceWithSandboxTimeout(
+            tryDispatchNestedShortcut({
+                arg, argRec, rawNestedCode, narrowed, pinnedWorkspace, pinnedProjectNumber,
+                effectiveReadonly, effectiveDryRun, effectiveUseTestDb, shimMj,
+            }),
+            shortcutTimeoutMs,
+            activeTimers
+        )
+        if (shortcut.handled) return enforceNestedResultLimit(shortcut.value, shortcutMaxResult)
 
-        const { codeToExec, isQueryOnlyArg } = shortcut
-        const transformedCode = transformAutoReturn(codeToExec)
-        const validation = validateSandboxCode(transformedCode)
-        if (!validation.valid) return { success: false, error: validation.errors.join('; '), code: 'SECURITY_VIOLATION' }
-        if (
-            hasUnbalancedClosingDelimiter(
-                validation.strippedCode ?? stripCommentsAndStrings(transformedCode)
-            )
-        ) {
-            return { success: false, error: 'Security validation failed: unbalanced closing delimiter', code: 'SECURITY_VIOLATION' }
-        }
-        if (isQueryOnlyArg && !/^(?:return\s+|await\s+mj\.)/.test(codeToExec.trim())) {
-            return { success: false, error: 'Nested executeCode query could not be executed as a read-only search.', code: 'VALIDATION_ERROR' }
-        }
+        const compiled = validateAndWrapNestedCode(shortcut.codeToExec, shortcut.isQueryOnlyArg)
+        if (!compiled.ok) return compiled.errorResult
         if (vmContextRef.current === undefined) return { success: false, error: 'No code was executed', code: 'VALIDATION_ERROR' }
 
-        const wrapped = `"use strict";\n(async () => {\n${transformedCode}\n})()`
-        const isolation = buildIsolationOverrides(argRec, timeoutMs, maxResultSize, narrowed)
         const escalates =
             (effectiveReadonly && readonlyMode !== true) ||
             (effectiveDryRun && dryRunMode !== true) ||
             (effectiveUseTestDb && useTestDbMode !== true)
         if (escalates || isolation !== undefined) {
-            return runIsolatedNestedCode(wrapped, effectiveReadonly, effectiveDryRun, effectiveUseTestDb, isolation)
+            return runIsolatedNestedCode(compiled.wrapped, effectiveReadonly, effectiveDryRun, effectiveUseTestDb, isolation)
         }
         return await raceWithSandboxTimeout(
             Promise.resolve(
-                getOrCompileVmScript(wrapped).runInContext(vmContextRef.current, { timeout: timeoutMs })
+                getOrCompileVmScript(compiled.wrapped).runInContext(vmContextRef.current, { timeout: timeoutMs })
             ),
             timeoutMs,
             activeTimers

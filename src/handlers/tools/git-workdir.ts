@@ -122,7 +122,12 @@ export function resolveExplicitGitTarget(
     if (target !== undefined && target !== '') {
         if (registry) {
             const canonicalKey = findCanonicalRegistryKey(target, registry)
-            const entry = canonicalKey !== undefined ? registry[canonicalKey] : registry[target]
+            const entry =
+                canonicalKey !== undefined && Object.hasOwn(registry, canonicalKey)
+                    ? registry[canonicalKey]
+                    : Object.hasOwn(registry, target)
+                      ? registry[target]
+                      : undefined
             if (entry?.path !== undefined && entry.path !== '' && fs.existsSync(entry.path)) {
                 return entry.path
             }

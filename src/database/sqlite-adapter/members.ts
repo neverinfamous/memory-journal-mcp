@@ -5,10 +5,22 @@ import type { IDatabaseConnection, TeamMember, TeamRole } from '../core/interfac
 
 export class MembersManager {
     private db: IDatabaseConnection
-    private rbacActiveCache: boolean | null = null
+    private rbacActiveCache: { active: boolean; dataVersion: number } | null = null
 
     constructor(db: IDatabaseConnection) {
         this.db = db
+    }
+
+    private readDataVersion(
+        nativeDb: NonNullable<ReturnType<NonNullable<IDatabaseConnection['getNativeDb']>>>
+    ): number | null {
+        if (typeof nativeDb.pragma !== 'function') return null
+        try {
+            const dv: unknown = nativeDb.pragma('data_version', { simple: true })
+            return typeof dv === 'number' && Number.isSafeInteger(dv) ? dv : null
+        } catch {
+            return null
+        }
     }
 
     /**
@@ -54,7 +66,7 @@ export class MembersManager {
                 )
             }
 
-            this.rbacActiveCache = true
+            this.invalidateCache()
 
             const member = this.getMember(author)
             if (!member) {
@@ -77,7 +89,7 @@ export class MembersManager {
                     .prepare(`DELETE FROM team_members WHERE author = ? COLLATE NOCASE`)
                     .run(author)
                 if (info.changes === 0) return false
-                this.rbacActiveCache = null
+                this.invalidateCache()
                 return true
             }
             const existing = this.getMember(author)
@@ -86,7 +98,7 @@ export class MembersManager {
             }
 
             this.db.run(`DELETE FROM team_members WHERE author = ? COLLATE NOCASE`, [author])
-            this.rbacActiveCache = null
+            this.invalidateCache()
             return true
         } catch (error) {
             if (error instanceof Error) {
@@ -198,11 +210,35 @@ export class MembersManager {
     }
 
     isRbacActive(): boolean {
-        if (this.rbacActiveCache !== null) {
-            return this.rbacActiveCache
+        const nativeDb = this.db.getNativeDb?.()
+        const dv = nativeDb !== undefined ? this.readDataVersion(nativeDb) : null
+        if (dv !== null && this.rbacActiveCache !== null && this.rbacActiveCache.dataVersion === dv) {
+            return this.rbacActiveCache.active
         }
-        const isActive = this.getMemberCount() > 0
-        this.rbacActiveCache = isActive
+        let count: number
+        try {
+            const sql = `SELECT COUNT(*) as count FROM team_members`
+            if (nativeDb !== undefined) {
+                const row = nativeDb.prepare(sql).get() as { count?: unknown } | undefined
+                count = typeof row?.count === 'number' ? row.count : 0
+            } else {
+                const results = this.db.exec(sql)
+                const row = getSingleRow(results)
+                count = typeof row?.['count'] === 'number' ? row['count'] : 0
+            }
+        } catch (error) {
+            if (isMissingTableError(error)) {
+                return false
+            }
+            if (error instanceof Error) {
+                throw new QueryError(`Failed to count team members: ${error.message}`)
+            }
+            throw error
+        }
+        const isActive = count > 0
+        if (dv !== null) {
+            this.rbacActiveCache = { active: isActive, dataVersion: dv }
+        }
         return isActive
     }
 

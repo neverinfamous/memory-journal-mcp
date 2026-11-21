@@ -149,7 +149,7 @@ function buildRelationshipMermaid(
     }
     mermaidLines.push('')
     for (const edge of results.edges) {
-        const arrow = MERMAID_REL_SYMBOLS[edge.type] ?? '-->'
+        const arrow = Object.hasOwn(MERMAID_REL_SYMBOLS, edge.type) ? MERMAID_REL_SYMBOLS[edge.type] : '-->'
         const safeEdgeType = edge.type.replace(/[\r\n`|]+/g, '_')
         mermaidLines.push(`    E${String(edge.from)} ${arrow}|${safeEdgeType}| E${String(edge.to)}`)
     }

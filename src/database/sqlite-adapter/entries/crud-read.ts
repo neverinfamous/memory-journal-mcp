@@ -171,7 +171,7 @@ export function getDeletedEntries(
     }
 
     const stmt = db.prepare(
-        `SELECT ${ENTRY_COLUMNS} FROM memory_journal WHERE deleted_at IS NOT NULL${scopeFilter} ORDER BY deleted_at DESC LIMIT ? OFFSET ?`
+        `SELECT ${ENTRY_COLUMNS} FROM memory_journal WHERE deleted_at IS NOT NULL${scopeFilter} ORDER BY deleted_at DESC, id DESC LIMIT ? OFFSET ?`
     )
     const rows = stmt.all(...scopeParams, limit, offset)
     const entries = rowsToEntries(tagsMgr, rows)

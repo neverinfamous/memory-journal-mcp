@@ -49,7 +49,7 @@ export async function getCliCommandDb(
 
     // [INVARIANT] `--dump-config` is answered before any database is opened (H13).
     if (options['dumpConfig'] === true) {
-        dumpConfigAndExit(serverOptions)
+        dumpConfigAndExit(serverOptions, { exit: failExit })
     }
 
     const explicitTeamDbSource =

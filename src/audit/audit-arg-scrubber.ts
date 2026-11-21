@@ -1,4 +1,9 @@
 import { SENSITIVE_KEY_RE, sanitizeErrorForLogging } from '../utils/security-utils.js'
+import {
+    isCrossRealmDate,
+    isCrossRealmError,
+    tryResolveToJson,
+} from '../utils/sanitize-value-helpers.js'
 
 const MAX_SCRUB_DEPTH = 6
 const MAX_AUDIT_ARRAY_ITEMS = 50
@@ -84,9 +89,9 @@ export function scrubAuditArgValue(
     budget.count++
 
     if (ArrayBuffer.isView(val)) return `[Binary: ${String(val.byteLength)} bytes]`
-    if (val instanceof Date) return Number.isNaN(val.getTime()) ? 'Invalid Date' : val.toISOString()
+    if (isCrossRealmDate(val)) return Number.isNaN(val.getTime()) ? 'Invalid Date' : val.toISOString()
     if (val instanceof URL) return scrubAndTruncateAuditString(val.href, 2048)
-    if (val instanceof Error) {
+    if (isCrossRealmError(val)) {
         return scrubAndTruncateAuditString(`${val.name}: ${val.message}`, 2048)
     }
 
@@ -105,6 +110,10 @@ export function scrubAuditArgValue(
                 out.push(`...[+${String(val.length - MAX_AUDIT_ARRAY_ITEMS)} more]`)
             }
             return out
+        }
+        const jsonRes = tryResolveToJson(val)
+        if (jsonRes.resolved) {
+            return scrubAuditArgValue(jsonRes.value, depth + 1, seen, budget)
         }
         return scrubAuditObject(val, depth, seen, budget)
     } finally {

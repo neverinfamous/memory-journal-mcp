@@ -22,6 +22,11 @@ import type {
 } from '../handlers/resources/shared.js'
 import { ASSISTANT_FOCUSED } from '../utils/resource-annotations.js'
 import { SENSITIVE_KEY_RE, sanitizeErrorForLogging } from '../utils/security-utils.js'
+import {
+    isCrossRealmDate,
+    isCrossRealmError,
+    tryResolveToJson,
+} from '../utils/sanitize-value-helpers.js'
 import { sliceUntrustedInline } from '../handlers/resources/uri-and-fencing.js'
 import { ValidationError } from '../types/errors.js'
 import { parseCanonicalPositiveInt } from '../utils/safe-positive-int.js'
@@ -147,6 +152,30 @@ const MAX_AUDIT_EGRESS_ARRAY_ITEMS = 50
 const MAX_AUDIT_EGRESS_OBJECT_KEYS = 50
 const MAX_AUDIT_EGRESS_TOTAL_NODES = 250
 
+function sanitizeAuditMapNode(
+    value: Map<unknown, unknown>,
+    depth: number,
+    seen: WeakSet<object>,
+    budget: { count: number }
+): Record<string, unknown> {
+    const out: Record<string, unknown> = {}
+    Object.setPrototypeOf(out, null)
+    let count = 0
+    for (const [mk, mv] of value.entries()) {
+        if (count++ >= MAX_AUDIT_EGRESS_OBJECT_KEYS || budget.count >= MAX_AUDIT_EGRESS_TOTAL_NODES) {
+            out['_truncatedKeys'] = Math.max(0, value.size - (count - 1))
+            break
+        }
+        const rawKey = String(mk)
+        const safeKey = fenceNonCanonicalAuditId(rawKey)
+        out[safeKey] =
+            SENSITIVE_KEY_RE.test(rawKey) || SENSITIVE_KEY_RE.test(safeKey)
+                ? '[REDACTED]'
+                : sanitizeAuditArgNode(mv, depth + 1, seen, budget)
+    }
+    return out
+}
+
 function sanitizeAuditArgNode(
     value: unknown,
     depth: number,
@@ -163,13 +192,13 @@ function sanitizeAuditArgNode(
     budget.count++
 
     if (ArrayBuffer.isView(value)) return `[Binary: ${String(value.byteLength)} bytes]`
-    if (value instanceof Date) {
+    if (isCrossRealmDate(value)) {
         return Number.isNaN(value.getTime()) ? 'Invalid Date' : value.toISOString()
     }
     if (value instanceof URL) {
         return sliceUntrustedInline(sanitizeErrorForLogging(value.href), 2048, '...')
     }
-    if (value instanceof Error) {
+    if (isCrossRealmError(value)) {
         return sliceUntrustedInline(sanitizeErrorForLogging(`${value.name}: ${value.message}`), 2048, '...')
     }
 
@@ -179,22 +208,7 @@ function sanitizeAuditArgNode(
             return sanitizeAuditArgNode(Array.from(value.values()), depth, seen, budget)
         }
         if (value instanceof Map) {
-            const out: Record<string, unknown> = {}
-            Object.setPrototypeOf(out, null)
-            let count = 0
-            for (const [mk, mv] of value.entries()) {
-                if (count++ >= MAX_AUDIT_EGRESS_OBJECT_KEYS || budget.count >= MAX_AUDIT_EGRESS_TOTAL_NODES) {
-                    out['_truncatedKeys'] = Math.max(0, value.size - (count - 1))
-                    break
-                }
-                const rawKey = String(mk)
-                const safeKey = fenceNonCanonicalAuditId(rawKey)
-                out[safeKey] =
-                    SENSITIVE_KEY_RE.test(rawKey) || SENSITIVE_KEY_RE.test(safeKey)
-                        ? '[REDACTED]'
-                        : sanitizeAuditArgNode(mv, depth + 1, seen, budget)
-            }
-            return out
+            return sanitizeAuditMapNode(value, depth, seen, budget)
         }
         if (Array.isArray(value)) {
             const sliced = value.slice(0, MAX_AUDIT_EGRESS_ARRAY_ITEMS)
@@ -203,6 +217,10 @@ function sanitizeAuditArgNode(
                 out.push(`...[+${String(value.length - MAX_AUDIT_EGRESS_ARRAY_ITEMS)} more]`)
             }
             return out
+        }
+        const jsonRes = tryResolveToJson(value)
+        if (jsonRes.resolved) {
+            return sanitizeAuditArgNode(jsonRes.value, depth + 1, seen, budget)
         }
         const entries = Object.entries(value as Record<string, unknown>)
         const out: Record<string, unknown> = {}

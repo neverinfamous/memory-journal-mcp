@@ -57,7 +57,7 @@ export const MarkAnchorsStaleSchema = z.preprocess(
             updates: z
                 .array(
                     z.object({
-                        id: z.number(),
+                        id: z.number().int().positive(),
                         status: z.enum(['pending', 'valid', 'stale', 'invalidated', 'unresolvable']),
                     })
                 )

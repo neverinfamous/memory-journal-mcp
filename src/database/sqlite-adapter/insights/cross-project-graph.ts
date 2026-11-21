@@ -375,7 +375,7 @@ export function getRecentGraphRelationships(
         CROSS JOIN memory_journal e1 ON r.from_entry_id = e1.id
         CROSS JOIN memory_journal e2 ON r.to_entry_id = e2.id
         WHERE e1.deleted_at IS NULL AND e2.deleted_at IS NULL AND r.from_entry_id != r.to_entry_id${wsFilter}
-        ORDER BY r.created_at DESC
+        ORDER BY r.created_at DESC, r.id DESC
         LIMIT ?
     `
         )

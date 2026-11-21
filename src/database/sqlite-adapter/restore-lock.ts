@@ -4,7 +4,9 @@ import { randomUUID } from 'node:crypto'
 import { logger } from '../../utils/logger.js'
 
 function writeLockFile(lockFile: string, nonce: string): void {
-    fs.writeFileSync(lockFile, JSON.stringify({ pid: process.pid, timestamp: Date.now(), nonce }))
+    fs.writeFileSync(lockFile, JSON.stringify({ pid: process.pid, timestamp: Date.now(), nonce }), {
+        flag: 'wx',
+    })
 }
 
 function hasErrorCode(err: unknown, code: string): boolean {
@@ -149,7 +151,7 @@ function isLockStale(lockDir: string, lockFile: string, runtime: unknown): LockS
 }
 
 function lockRecordChanged(expected: LockRecord | null, observed: LockRecord | null): boolean {
-    if (observed === null) return false
+    if (observed === null) return expected !== null
     if (expected === null) return true
     return expected.holdingPid !== observed.holdingPid || expected.nonce !== observed.nonce
 }
