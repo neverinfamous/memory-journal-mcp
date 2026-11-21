@@ -1,4 +1,5 @@
 import type { IDatabaseAdapter } from '../../database/core/interfaces.js'
+import { parseDigestSnapshot } from '../../database/sqlite-adapter/entries/digest.js'
 import { ICON_PROMPT } from '../../constants/icons.js'
 import type { InternalPromptDef } from './index.js'
 import { resourceWorkspace, sliceUntrustedInline, type BriefingConfig } from '../resources/shared.js'
@@ -11,34 +12,30 @@ export function buildDigestSignalForPrompt(db: IDatabaseAdapter, workspaceId?: s
     const snapshot = db.getLatestAnalyticsSnapshot?.('digest', workspaceId)
     if (!snapshot) return ''
 
-    const data = snapshot.data
+    const parsed = parseDigestSnapshot(snapshot.data)
+    if (parsed === null) return ''
     const lines: string[] = ['[Analytics Context]']
 
     // Activity trend
-    const growth = data['activityGrowthPercent'] as number | null | undefined
-    const currentEntries = data['currentPeriodEntries'] as number | undefined
-    if (growth !== null && growth !== undefined) {
+    const growth = parsed.activityGrowthPercent
+    if (growth !== null) {
         const sign = growth >= 0 ? '+' : ''
         lines.push(
-            `Activity: ${sign}${String(growth)}% vs. last period (${String(currentEntries)} entries)`
+            `Activity: ${sign}${String(growth)}% vs. last period (${String(parsed.currentPeriodEntries)} entries)`
         )
     }
 
     // Significance spike
-    const sigMultiplier = data['significanceMultiplier'] as number | null | undefined
-    const sigCount = data['currentPeriodSignificant'] as number | undefined
-    if (sigMultiplier !== null && sigMultiplier !== undefined && sigMultiplier > 1.5) {
+    const sigMultiplier = parsed.significanceMultiplier
+    if (sigMultiplier !== null && sigMultiplier > 1.5) {
         lines.push(
-            `Significance: ${String(sigCount)} significant entries (${String(sigMultiplier)}× historical avg)`
+            `Significance: ${String(parsed.currentPeriodSignificant)} significant entries (${String(sigMultiplier)}× historical avg)`
         )
     }
 
     // Stale projects
-    const stale = data['staleProjects'] as
-        | { projectNumber: number; daysSilent: number }[]
-        | undefined
-    if (stale && stale.length > 0) {
-        const staleStr = stale
+    if (parsed.staleProjects.length > 0) {
+        const staleStr = parsed.staleProjects
             .map((p) => `P${String(p.projectNumber)} (${String(p.daysSilent)}d silent)`)
             .join(', ')
         lines.push(`⚠ Stale: ${staleStr}`)

@@ -23,7 +23,7 @@ export interface BuildSandboxGlobalsOptions {
     safeFsShim: SafeFsShim
     frozenContext: Record<string, unknown>
     executeCodeFn: (arg: unknown) => Promise<unknown>
-    updateMemoryFn: (arg: unknown) => unknown
+    updateMemoryFn: (...args: unknown[]) => unknown
     activeTimers?: Set<NodeJS.Timeout>
     executionLifecycle?: ExecutionLifecycleState
 }

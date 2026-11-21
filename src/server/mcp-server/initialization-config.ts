@@ -87,7 +87,7 @@ export async function initConfigAndStartupJobs(params: {
     options: ServerOptions
     db: IDatabaseAdapter
     runtime: ServerRuntime
-}): Promise<{ configManager: ConfigManager }> {
+}): Promise<{ configManager: ConfigManager; effectiveOptions: ServerOptions }> {
     const { options, db, runtime } = params
     const filterConfig = resolveToolFilterConfig(options)
     const configManager = createServerConfigManager(options, filterConfig)
@@ -111,7 +111,7 @@ export async function initConfigAndStartupJobs(params: {
     const effectiveOptions = resolveEffectiveServerOptions(options, loadedBriefing)
     seedInitialDigest(db, effectiveOptions)
 
-    return { configManager }
+    return { configManager, effectiveOptions }
 }
 
 export function resolveFinalAllowedIoRoots(options: ServerOptions): string[] {

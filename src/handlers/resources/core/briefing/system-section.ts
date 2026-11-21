@@ -192,7 +192,7 @@ async function readReadmeBadgeChunkAsync(root: string): Promise<string> {
         const { bytesRead } = await handle.read(buf, 0, 2048, 0)
         return buf.toString('utf-8', 0, bytesRead)
     } finally {
-        await handle.close()
+        await Promise.resolve(handle.close()).catch(() => undefined)
     }
 }
 

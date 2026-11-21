@@ -371,7 +371,11 @@ function applyTeamMemberAndAliasInterceptions(
     ) {
         const obj = { ...args[0] }
         args[0] = obj
-        remapKeys(obj, ['path', 'target', 'user', 'name', 'account', 'username', 'member'], 'author')
+        remapKeys(
+            obj,
+            ['path', 'target', 'target_user', 'user', 'name', 'account', 'username', 'member'],
+            'author'
+        )
         remapKeys(obj, ['keep', 'mode', 'type', 'level', 'permission'], 'role')
     } else if (
         [

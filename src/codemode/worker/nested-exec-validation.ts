@@ -5,6 +5,7 @@
 
 import type { ProjectRegistryEntry } from '../../types/index.js'
 import { readProjectRegistryPayload } from '../normalizers/generic-field-aliases.js'
+import { parseStringContextPayload } from '../shared-context-parsers.js'
 
 export function isPlainRecord(val: unknown): val is Record<string, unknown> {
     return typeof val === 'object' && val !== null && !Array.isArray(val)
@@ -56,7 +57,12 @@ function collectNestedScopeRecords(argRec: Record<string, unknown>): Record<stri
     const records: Record<string, unknown>[] = [argRec]
     for (const key of NESTED_SCOPE_KEYS) {
         const nested = argRec[key]
-        if (isPlainRecord(nested)) records.push(nested)
+        if (isPlainRecord(nested)) {
+            records.push(nested)
+        } else if (key === 'context' && typeof nested === 'string') {
+            const parsed = parseStringContextPayload(nested)
+            if (isPlainRecord(parsed)) records.push(parsed)
+        }
     }
     return records
 }

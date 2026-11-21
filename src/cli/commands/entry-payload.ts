@@ -340,6 +340,17 @@ function resolvePayloadRelationships(
     return { relationships, relatedIds }
 }
 
+const ANCHOR_PATH_KEYS = [
+    'anchor_path', 'anchorPath', 'path', 'file', 'file_path', 'filepath',
+    'filePath', 'value', 'target', 'uri', 'location',
+] as const
+
+function normalizeEntryAnchor(rawPath: string, rawType?: unknown): { anchor_path: string; anchor_type: string } {
+    const normalizedPath = rawPath.trim().replace(/\\/g, '/')
+    const customType = typeof rawType === 'string' && rawType.trim().length > 0 ? rawType.trim() : undefined
+    return { anchor_path: normalizedPath, anchor_type: customType ?? (normalizedPath.includes('#') ? 'symbol' : 'file') }
+}
+
 function parseMetadataAnchors(
     raw: unknown
 ): { anchor_path: string; anchor_type: string }[] | undefined {
@@ -347,39 +358,16 @@ function parseMetadataAnchors(
     const parsed: { anchor_path: string; anchor_type: string }[] = []
     for (const item of raw) {
         if (typeof item === 'string') {
-            const trimmed = item.trim()
-            if (trimmed.length > 0) {
-                parsed.push({ anchor_path: trimmed, anchor_type: 'file' })
-            }
+            if (item.trim().length > 0) parsed.push(normalizeEntryAnchor(item))
         } else if (typeof item === 'object' && item !== null && !Array.isArray(item)) {
             const parsedRec = UNKNOWN_RECORD_SCHEMA.safeParse(item)
             if (!parsedRec.success) continue
             const rec = parsedRec.data
-            const pathRaw =
-                rec['anchor_path'] ??
-                rec['anchorPath'] ??
-                rec['path'] ??
-                rec['file'] ??
-                rec['file_path'] ??
-                rec['filepath'] ??
-                rec['filePath'] ??
-                rec['value'] ??
-                rec['target'] ??
-                rec['uri'] ??
-                rec['location']
+            const pathRaw = ANCHOR_PATH_KEYS.map((k) => rec[k]).find(
+                (v): v is string => typeof v === 'string' && v.trim().length > 0
+            )
             const typeRaw = rec['anchor_type'] ?? rec['anchorType'] ?? rec['type']
-            if (typeof pathRaw === 'string' && pathRaw.trim().length > 0) {
-                const normalizedPath = pathRaw.trim().replace(/\\/g, '/')
-                parsed.push({
-                    anchor_path: normalizedPath,
-                    anchor_type:
-                        typeof typeRaw === 'string' && typeRaw.trim().length > 0
-                            ? typeRaw.trim()
-                            : normalizedPath.includes('#')
-                              ? 'symbol'
-                              : 'file',
-                })
-            }
+            if (pathRaw !== undefined) parsed.push(normalizeEntryAnchor(pathRaw, typeRaw))
         }
     }
     return parsed.length > 0 ? parsed : undefined

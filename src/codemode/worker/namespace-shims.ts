@@ -79,39 +79,51 @@ function isTargetLike(val: unknown): val is object {
     return (typeof val === 'object' && val !== null) || typeof val === 'function'
 }
 
+function isEntryIdAndPatchArgs(args: unknown[]): boolean {
+    if (args.length < 2) return false
+    const first = args[0]
+    const second = args[1]
+    const validId =
+        (typeof first === 'number' && Number.isSafeInteger(first) && first > 0) ||
+        (typeof first === 'string' && /^[1-9]\d*$/.test(first.trim()))
+    return validId && typeof second === 'object' && second !== null && !Array.isArray(second)
+}
+
 /**
  * Creates the `updateMemory` / `setMemory` / `updateJournal` smart router function.
  */
 export function createUpdateMemoryFn(
     shimMj: Record<string, unknown>
-): (arg: unknown) => unknown {
-    const updateMemoryFn = (arg: unknown): unknown => {
-        if (typeof arg === 'object' && arg !== null && !Array.isArray(arg)) {
-            const entryId =
-                (Reflect.get(arg, 'entry_id') as unknown) ??
+): (...args: unknown[]) => unknown {
+    const updateMemoryFn = (...args: unknown[]): unknown => {
+        const arg = args[0]
+        const hasObjectEntryId =
+            typeof arg === 'object' &&
+            arg !== null &&
+            !Array.isArray(arg) &&
+            ((Reflect.get(arg, 'entry_id') as unknown) ??
                 (Reflect.get(arg, 'id') as unknown) ??
-                (Reflect.get(arg, 'entryId') as unknown)
-            if (entryId !== undefined && entryId !== null) {
-                const adminGroup = shimMj['admin']
-                const coreGroup = shimMj['core']
-                const fn =
-                    (isTargetLike(adminGroup)
-                        ? ((Reflect.get(adminGroup, 'updateEntry') as unknown) ??
-                          (Reflect.get(adminGroup, 'update_entry') as unknown))
-                        : undefined) ??
-                    (isTargetLike(coreGroup)
-                        ? (Reflect.get(coreGroup, 'updateEntry') as unknown)
-                        : undefined)
-                if (typeof fn === 'function') {
-                    return (fn as (a: unknown) => unknown)(arg)
-                }
+                (Reflect.get(arg, 'entryId') as unknown)) != null
+        if (hasObjectEntryId || isEntryIdAndPatchArgs(args)) {
+            const adminGroup = shimMj['admin']
+            const coreGroup = shimMj['core']
+            const fn =
+                (isTargetLike(adminGroup)
+                    ? ((Reflect.get(adminGroup, 'updateEntry') as unknown) ??
+                      (Reflect.get(adminGroup, 'update_entry') as unknown))
+                    : undefined) ??
+                (isTargetLike(coreGroup)
+                    ? (Reflect.get(coreGroup, 'updateEntry') as unknown)
+                    : undefined)
+            if (typeof fn === 'function') {
+                return (fn as (...a: unknown[]) => unknown)(...args)
             }
         }
         const coreGroup = shimMj['core']
         if (isTargetLike(coreGroup)) {
             const createFn = Reflect.get(coreGroup, 'createEntry') as unknown
             if (typeof createFn === 'function') {
-                return (createFn as (a: unknown) => unknown)(arg)
+                return (createFn as (...a: unknown[]) => unknown)(...args)
             }
         }
         return undefined

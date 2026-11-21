@@ -152,7 +152,7 @@ export async function searchSingleFileAsync(
             scanContentLines(filePath, content, matcher, results, maxResults, isRegex)
         }
     } finally {
-        await handle?.close()
+        if (handle !== undefined) await Promise.resolve(handle.close()).catch(() => undefined)
     }
     return results
 }
@@ -182,7 +182,7 @@ async function readAndScanFileAsync(
             error: err instanceof Error ? err.message : String(err),
         })
     } finally {
-        await handle?.close()
+        if (handle !== undefined) await Promise.resolve(handle.close()).catch(() => undefined)
     }
 }
 

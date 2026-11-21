@@ -227,7 +227,7 @@ async function readAndConvertSingleExternalFile(
     try {
         const filepath = path.join(sourceDir, filename)
         assertSafeFilePath(filepath, allowedRoots)
-        handle = await fs.open(filepath, fsConstants.O_RDONLY | fsConstants.O_NOFOLLOW)
+        handle = await fs.open(filepath, fsConstants.O_RDONLY | (fsConstants.O_NOFOLLOW ?? 0))
         const stats = await handle.stat()
         if (!stats.isFile()) {
             throw new Error(`Refusing to import non-regular file: ${filename}`)
@@ -253,7 +253,7 @@ async function readAndConvertSingleExternalFile(
             error: err instanceof Error ? err.message : String(err),
         }
     } finally {
-        if (handle) await handle.close()
+        if (handle) await Promise.resolve(handle.close()).catch(() => undefined)
     }
 }
 

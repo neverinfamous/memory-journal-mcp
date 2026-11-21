@@ -82,8 +82,13 @@ function writeLockFileGuarded(lockDir: string, lockFile: string, nonce: string):
     try {
         writeLockFile(lockFile, nonce)
     } catch (writeErr: unknown) {
+        // [INVARIANT] Never delete lockDir on EEXIST: a stalled creator that lost an orphan-reclaim
+        // race would otherwise wipe the winning contender's live lockDir + lock.json.
+        if (hasErrorCode(writeErr, 'EEXIST')) {
+            throwContendedLockError(lockDir, writeErr)
+        }
         try {
-            fs.rmSync(lockDir, { recursive: true, force: true })
+            fs.rmdirSync(lockDir)
         } catch {
             // Best-effort cleanup of empty lock directory
         }

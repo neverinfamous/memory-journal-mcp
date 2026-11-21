@@ -48,7 +48,7 @@ async function readSingleExternalFile(
             error: err instanceof Error ? err.message : String(err),
         }
     } finally {
-        if (handle) await handle.close()
+        if (handle) await Promise.resolve(handle.close()).catch(() => undefined)
     }
 }
 

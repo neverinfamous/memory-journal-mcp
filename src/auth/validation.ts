@@ -127,10 +127,17 @@ function resolveTargetRequiredScope(
     capabilities?: AccessCapabilities
 ): string {
     if (targetType === 'tool') {
-        if (capabilities?.requiresAdminScope === true) return SCOPES.ADMIN
+        const mapScope = getRequiredScope(targetName)
+        if (
+            capabilities?.requiresAdminScope === true ||
+            mapScope === SCOPES.ADMIN ||
+            mapScope === SCOPES.FULL
+        ) {
+            return mapScope === SCOPES.FULL ? SCOPES.FULL : SCOPES.ADMIN
+        }
         if (capabilities?.requiresTeamScope === true) return SCOPES.TEAM
         if (capabilities?.requiresAuditScope === true) return SCOPES.AUDIT
-        return getRequiredScope(targetName)
+        return mapScope
     }
     if (classification.isAdmin) return SCOPES.ADMIN
     if (classification.isAudit) return SCOPES.AUDIT

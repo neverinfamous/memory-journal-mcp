@@ -344,20 +344,20 @@ describe('pass 39 code quality', () => {
             readRes('memory://agent-context/memory-journal-mcp'),
             readRes('memory://agent-context-other'),
         ]).then(([r1, r2]) => {
-            expect((r1 as { error: string }).error).toContain('mj.admin.getConfig()')
-            expect((r2 as { error: string }).error).not.toContain('mj.admin.getConfig()')
+            expect((r1 as { error: string }).error).toContain('mj.admin.listProjects()')
+            expect((r2 as { error: string }).error).not.toContain('mj.admin.listProjects()')
         })
     })
 
     it('AP1-AP7: updates code-quality audit prompt to pass39 with portable guidance', () => {
-        expect(AUDIT_PROMPT_REVISION).toBe('2026-11-21-audit-pass65')
+        expect(AUDIT_PROMPT_REVISION).toBe('2026-11-21-audit-pass66')
         const def = getCodeQualityAuditPromptDefinition()
         const rendered = def.handler({ target: 'my-target' }, {
             searchByDateRange: () => [],
             getEntriesByIds: () => new Map(),
         } as never) as { messages: { content: { text: string } }[] }
         const text = rendered.messages[0]?.content.text ?? ''
-        expect(text).toContain('Prompt revision: 2026-11-21-audit-pass65')
+        expect(text).toContain('Prompt revision: 2026-11-21-audit-pass66')
         expect(text).toContain('generalPurpose')
         expect(text).toContain('PRAGMA foreign_key_check')
         expect(text).toContain('Promise.allSettled')

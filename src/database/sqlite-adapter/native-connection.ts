@@ -72,9 +72,11 @@ export class NativeConnectionManager implements IDatabaseConnection {
             await fs.promises.mkdir(dir, { recursive: true })
         }
 
+        let initDb: Database | undefined
         try {
-            this.db = new DatabaseAdapter(this.dbPath)
-            const db = this.db
+            const db = new DatabaseAdapter(this.dbPath)
+            initDb = db
+            this.db = db
 
             // Decrypt if key is provided (must be done before any other PRAGMAs or queries)
             applySqlCipherKey(db, true)
@@ -83,8 +85,10 @@ export class NativeConnectionManager implements IDatabaseConnection {
             installStatementCache(db)
 
             // Load sqlite-vec extension for vector search
-            const loaded = await loadVecExtensionOnDb(db, () => this.db !== null)
-            if (!loaded) return
+            const loaded = await loadVecExtensionOnDb(db, () => this.db === db)
+            if (!loaded || this.db !== db) {
+                throw new ConnectionError('Database closed during initialization.')
+            }
 
             // Run schema migrations (creates memory_journal and other core tables versioned)
             this.migrateSchema()
@@ -109,9 +113,9 @@ export class NativeConnectionManager implements IDatabaseConnection {
                 clearTimeout(this.ftsRebuildTimer)
                 this.ftsRebuildTimer = null
             }
-            if (this.db !== null) {
+            if (initDb !== undefined && this.db === initDb) {
                 try {
-                    this.db.close()
+                    initDb.close()
                 } catch (closeErr: unknown) {
                     logger.debug('Cleanup close after failed initialization logged error', {
                         module: 'NativeConnectionManager',
@@ -119,6 +123,9 @@ export class NativeConnectionManager implements IDatabaseConnection {
                     })
                 }
                 this.db = null
+                this.initialized = false
+            } else if (this.db === null) {
+                this.initialized = false
             }
             logger.error('Failed to initialize native database', {
                 module: 'NativeConnectionManager',
@@ -319,6 +326,7 @@ export class NativeConnectionManager implements IDatabaseConnection {
             }
             this.db = null
         }
+        this.initializingPromise = null
         this.initialized = false
         logger.info('Native database closed', { module: 'NativeConnectionManager' })
     }
@@ -372,6 +380,7 @@ export class NativeConnectionManager implements IDatabaseConnection {
             }
             this.db = null
         }
+        this.initializingPromise = null
         this.initialized = false
     }
 

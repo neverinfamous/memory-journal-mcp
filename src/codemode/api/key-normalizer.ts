@@ -124,6 +124,14 @@ function toSnakeCaseKey(key: string): string {
     return converted
 }
 
+function isExactMethod(methodLower: string | undefined, names: readonly string[]): boolean {
+    return methodLower !== undefined && names.includes(methodLower)
+}
+
+const EXPORT_MARKDOWN_METHODS = ['export_markdown', 'exportmarkdown', 'team_export_markdown', 'teamexportmarkdown']
+const IMPORT_EXTERNAL_METHODS = ['import_external', 'importexternal', 'team_import_external', 'teamimportexternal']
+const IMPORT_MARKDOWN_METHODS = ['import_markdown', 'importmarkdown', 'team_import_markdown', 'teamimportmarkdown']
+
 /** camelCase → snake_case plus context-aware renames (id, link params, type, filename, target_user). */
 function resolveBaseSnakeKey(key: string, ctx: KeyContext): string {
     const { obj, result, methodLower, isLinkMethod } = ctx
@@ -181,7 +189,9 @@ function resolveBaseSnakeKey(key: string, ctx: KeyContext): string {
     } else if (
         snakeKey === 'filename' &&
         !hasDefinedKey(obj, 'source_dir') &&
-        !hasDefinedKey(result, 'source_dir')
+        !hasDefinedKey(result, 'source_dir') &&
+        (isExactMethod(methodLower, IMPORT_MARKDOWN_METHODS) ||
+            isExactMethod(methodLower, IMPORT_EXTERNAL_METHODS))
     ) {
         if (hasDefinedKey(obj, 'project_number') || hasDefinedKey(obj, 'tags') || hasDefinedKey(obj, 'dry_run')) {
             snakeKey = 'source_dir'
@@ -209,14 +219,6 @@ function entryAliasReplacement(value: unknown, methodName: string | undefined): 
     if (!numeric || contentMethod) return 'content'
     return undefined
 }
-
-function isExactMethod(methodLower: string | undefined, names: readonly string[]): boolean {
-    return methodLower !== undefined && names.includes(methodLower)
-}
-
-const EXPORT_MARKDOWN_METHODS = ['export_markdown', 'exportmarkdown', 'team_export_markdown', 'teamexportmarkdown']
-const IMPORT_EXTERNAL_METHODS = ['import_external', 'importexternal', 'team_import_external', 'teamimportexternal']
-const IMPORT_MARKDOWN_METHODS = ['import_markdown', 'importmarkdown', 'team_import_markdown', 'teamimportmarkdown']
 
 function pathAliasReplacement(methodLower: string | undefined): string | undefined {
     if (isExactMethod(methodLower, EXPORT_MARKDOWN_METHODS)) return 'output_dir'

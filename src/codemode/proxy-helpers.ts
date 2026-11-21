@@ -102,8 +102,8 @@ const RESOURCE_SUGGESTIONS: Record<string, string> = {
     'memory://tags': 'mj.core.listTags()',
     'memory://significant': 'mj.search.searchEntries({ sort_by: "importance" })',
     'memory://insights': 'mj.analytics.getCrossProjectInsights()',
-    'memory://agent-context': 'mj.admin.getConfig()',
-    'memory://agent-id': 'mj.admin.getConfig()',
+    'memory://agent-context': 'mj.analytics.getStatistics() or mj.admin.listProjects()',
+    'memory://agent-id': 'mj.analytics.getStatistics() or mj.admin.listProjects()',
 }
 
 /**

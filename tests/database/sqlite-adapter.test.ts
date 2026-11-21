@@ -710,7 +710,7 @@ describe('DatabaseAdapter', () => {
     // ========================================================================
 
     describe('backup edge cases', () => {
-        it('should return empty array when backups directory does not exist', () => {
+        it('should return empty array when backups directory does not exist', async () => {
             const fs = require('node:fs')
             const isolatedDir = './test-server/test-isolation-dir'
             if (!fs.existsSync(isolatedDir)) {
@@ -719,7 +719,7 @@ describe('DatabaseAdapter', () => {
 
             // Use a fresh adapter in a unique directory so its 'backups' dir doesn't exist
             const tempDb = new DatabaseAdapter(`${isolatedDir}/test-no-backups.db`)
-            tempDb.initialize()
+            await tempDb.initialize()
 
             const backups = tempDb.listBackups()
             expect(backups).toEqual([])

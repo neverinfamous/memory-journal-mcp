@@ -18,14 +18,14 @@ function resolveLifecyclePruneScope(
             ...(explicitProj !== undefined ? { projectNumber: explicitProj } : {}),
         }
     }
-    const targetWs =
-        explicitWs !== undefined && explicitWs !== ''
-            ? explicitWs
-            : explicitProj === undefined
-              ? config?.defaultWorkspaceId
-              : undefined
+    const hasExplicitWs = explicitWs !== undefined && explicitWs !== ''
+    const targetWs = hasExplicitWs
+        ? explicitWs
+        : explicitProj === undefined
+          ? config?.defaultWorkspaceId
+          : undefined
     const targetProj =
-        explicitProj ?? (explicitWs === undefined ? config?.defaultProjectNumber : undefined)
+        explicitProj ?? (!hasExplicitWs ? config?.defaultProjectNumber : undefined)
     return resolveAutoPruneScope(targetWs, targetProj, config?.projectRegistry, {
         runtime: config?.runtime,
     })

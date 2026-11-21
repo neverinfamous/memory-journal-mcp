@@ -178,10 +178,22 @@ function formatTeamVisualizePayload(
         input.relationship_type !== undefined
             ? rawEdges.filter((e) => e.type === input.relationship_type)
             : rawEdges
+    let filteredNodes = rawNodes
+    if (input.relationship_type !== undefined) {
+        const connectedIds = new Set<number>()
+        for (const e of edges) {
+            connectedIds.add(e.from)
+            connectedIds.add(e.to)
+        }
+        if (input.entry_id !== undefined) {
+            connectedIds.add(input.entry_id)
+        }
+        filteredNodes = rawNodes.filter((n) => connectedIds.has(n.id))
+    }
     const omitContent = !input.include_content
     const nodes = omitContent
-        ? rawNodes.map((n) => ({ id: n.id, label: `#${String(n.id)}` }))
-        : rawNodes
+        ? filteredNodes.map((n) => ({ id: n.id, label: `#${String(n.id)}` }))
+        : filteredNodes
     const format = input.format
     let mermaid: string | undefined
     if (format !== 'edges') {

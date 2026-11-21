@@ -317,7 +317,7 @@ export class AuditLogger {
         this.closed = true
 
         if (this.flushTimer) {
-            clearInterval(this.flushTimer)
+            clearTimeout(this.flushTimer)
             this.flushTimer = null
         }
 

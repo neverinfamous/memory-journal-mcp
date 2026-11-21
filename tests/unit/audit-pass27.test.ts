@@ -214,8 +214,11 @@ describe('Pass 27 Audit Regressions', () => {
                 'mj_execute_code',
                 { code: `return await mj.executeCode({ code: 'return 1', workspace_id: 'other-repo' })`, workspace_id: 'memory-journal-mcp', project_number: 5, timeout_ms: 15000 },
                 db, undefined, undefined, cfg
-            ) as { success: boolean; result?: { success?: boolean; error?: string } }
+            ) as { success: boolean; error?: string; result?: { success?: boolean; error?: string } }
             expect(nestedDenied.success === false || nestedDenied.result?.success === false).toBe(true)
+            const deniedErr = nestedDenied.result?.error ?? nestedDenied.error ?? ''
+            expect(deniedErr).not.toMatch(/SyntaxError/i)
+            expect(deniedErr).toMatch(/workspace|scope|denied|mismatch|pinned/i)
         }, 20000)
     })
 
@@ -438,7 +441,7 @@ describe('Pass 27 Audit Regressions', () => {
             const codeModeRes = await callTool('mj_execute_code', { code: 'return { cfg: await mj.getConfig() }', workspace_id: 'memory-journal-mcp', project_number: 5, timeout_ms: 15000 }, db, undefined, undefined, { runtime: new ServerRuntime(), codemodeEnabled: true, projectRegistry: TEST_REGISTRY }) as { success: boolean; result?: { cfg?: unknown } }
             expect([codeModeRes.success, codeModeRes.result?.cfg !== 'memory://internal', typeof codeModeRes.result?.cfg]).toEqual([true, true, 'object'])
 
-            expect(AUDIT_PROMPT_REVISION).toBe('2026-11-21-audit-pass65')
+            expect(AUDIT_PROMPT_REVISION).toBe('2026-11-21-audit-pass66')
             db.createEntry({ content: 'Prior pass note', tags: ['audit-pass-27'], workspaceId: 'memory-journal-mcp' })
             expect(buildPriorAuditSection(db, 'audit-pass-27', 'Prior', { ...DEFAULT_BRIEFING_CONFIG, defaultWorkspaceId: 'memory-journal-mcp' })).toContain('fallback/session workspace')
         }, 20000)

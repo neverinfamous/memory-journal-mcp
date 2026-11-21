@@ -120,17 +120,19 @@ const STATS_METHOD_KEYS = new Set([
 function createStatementMethodHandler(
     dbProp: string,
     shimMj: Record<string, unknown>
-): ((sql?: string) => unknown) | undefined {
+): ((sql?: string, ...args: unknown[]) => unknown) | undefined {
     if (dbProp === 'prepare' || dbProp === 'stmt' || dbProp === 'statement') {
         return (sql?: string) =>
             createPreparedStatementShim(typeof sql === 'string' ? sql : '', shimMj)
     }
     if (dbProp === 'exec' || dbProp === 'query' || dbProp === 'raw') {
         const methodKey = dbProp === 'exec' ? 'run' : 'all'
-        return (sql?: string) => {
+        return (sql?: string, ...args: unknown[]) => {
             const stmt = createPreparedStatementShim(typeof sql === 'string' ? sql : '', shimMj)
             const fn = stmt[methodKey]
-            return typeof fn === 'function' ? (fn as () => unknown)() : undefined
+            return typeof fn === 'function'
+                ? (fn as (...a: unknown[]) => unknown)(...args)
+                : undefined
         }
     }
     return undefined

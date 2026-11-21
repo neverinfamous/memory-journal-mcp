@@ -219,11 +219,9 @@ function parseUpdateSetLiterals(cleanSql: string, setFields: Record<string, unkn
         const eq = assignment.indexOf('=')
         if (eq < 0) return false
         const col = normalizeSqlColumn(assignment.slice(0, eq))
+        if (!bindSetColumnNameCheck(col)) return false
         const rhs = assignment.slice(eq + 1).trim()
-        if (rhs === '?' || NAMED_PLACEHOLDER_RE.test(rhs)) {
-            if (!bindSetColumnNameCheck(col)) return false
-            continue
-        }
+        if (rhs === '?' || NAMED_PLACEHOLDER_RE.test(rhs)) continue
         const literal = parseLiteral(rhs)
         if (literal === UNPARSEABLE || !assignColumn(setFields, col, literal)) return false
     }
@@ -247,6 +245,7 @@ function parseUpdate(cleanSql: string, args: unknown[]): ParsedSql {
 
     const bindRes = bindPlaceholders(cleanSql, args, (ph, val) => {
         if (ph.column === undefined) return false
+        if (!ph.inWhere && !bindSetColumnNameCheck(ph.column)) return false
         return assignColumn(ph.inWhere ? where : setFields, ph.column, val)
     })
     if (!bindRes.ok || !parseUpdateSetLiterals(cleanSql, setFields)) return UNMAPPED
@@ -359,8 +358,6 @@ function parseInsert(cleanSql: string, args: unknown[]): ParsedSql {
 
 function bindSetColumnNameCheck(column: string): boolean {
     return (
-        column === 'id' ||
-        column === 'entry_id' ||
         column === 'project_number' ||
         column === 'project_id' ||
         column === 'workspace_id' ||

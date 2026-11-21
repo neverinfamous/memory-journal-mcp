@@ -276,6 +276,11 @@ export function getTeamIoTools(context: ToolContext): ToolDefinition[] {
                         return missingTeamIoProjectNumberError(input.workspace_id)
                     }
 
+                    const authorCtx = resolveTeamImportContextAuthor(context, wsId)
+                    if ('errorResponse' in authorCtx) {
+                        return authorCtx.errorResponse
+                    }
+
                     const allowedRoots = context.config?.allowedIoRoots ?? []
                     const progress = context.progress
                     await sendProgress(progress, 0, 3, 'Reading files...')
@@ -290,10 +295,6 @@ export function getTeamIoTools(context: ToolContext): ToolDefinition[] {
                     )
 
                     await sendProgress(progress, 2, 3, 'Importing entries...')
-                    const authorCtx = resolveTeamImportContextAuthor(context, wsId)
-                    if ('errorResponse' in authorCtx) {
-                        return authorCtx.errorResponse
-                    }
                     const result = await processImportBatch(
                         parsedFiles,
                         teamDb,

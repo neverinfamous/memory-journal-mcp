@@ -249,25 +249,18 @@ export class WorkerSandbox {
 
     private terminateTimedOutExecution(timedOutId: number): void {
         const worker = this.worker
-        if (worker === null) {
+        // [INVARIANT] Detach the dying worker immediately so a queued RESULT/exit from the timed-out
+        // execution cannot clear isBusy and expose a terminating worker to the next pooled execute().
+        this.worker = null
+        this.resetSentMetadata()
+        if (this.currentExecution !== null && this.executionId === timedOutId) {
             this.handleWorkerDeath('Code execution timed out')
-            return
         }
-        worker.terminate().then(
-            () => {
-                if (this.currentExecution !== null && this.executionId === timedOutId) {
-                    this.handleWorkerDeath('Code execution timed out')
-                }
-            },
-            (err: unknown) => {
-                const detail = sanitizeErrorForLogging(err instanceof Error ? err.message : String(err))
-                if (this.executionId === timedOutId) {
-                    this.handleWorkerDeath(
-                        `Code execution timed out and the worker could not be terminated: ${detail}`
-                    )
-                }
-            }
-        )
+        if (worker === null) return
+        worker.terminate().catch((err: unknown) => {
+            const detail = sanitizeErrorForLogging(err instanceof Error ? err.message : String(err))
+            process.stderr.write(`Code mode worker terminate failed: ${detail}\n`)
+        })
     }
 
     private dispatchWorkerMessage(params: WorkerDispatchParams): void {

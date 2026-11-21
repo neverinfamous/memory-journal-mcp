@@ -98,11 +98,12 @@ export async function searchAuditFileBackward(
         while (pos > 0) {
             const readLen = Math.min(AUDIT_SEARCH_CHUNK_BYTES, pos)
             const startOffset = pos - readLen
-            await fh.read(buf, 0, readLen, startOffset)
-            const decoded = decodeReversedAuditChunk(buf.subarray(0, readLen), trailingBytes, startOffset)
+            const { bytesRead } = await fh.read(buf, 0, readLen, startOffset)
+            pos = startOffset
+            if (bytesRead === 0) continue
+            const decoded = decodeReversedAuditChunk(buf.subarray(0, bytesRead), trailingBytes, startOffset)
             trailingBytes = decoded.trailingBytes
             skippedLines += decoded.overflowSkipped
-            pos = startOffset
             if (decoded.chunkText === undefined) continue
 
             const lines = decoded.chunkText.split('\n')
@@ -121,7 +122,7 @@ export async function searchAuditFileBackward(
         }
         return { skippedLines, limitReached: false }
     } finally {
-        await fh.close()
+        await Promise.resolve(fh.close()).catch(() => undefined)
     }
 }
 

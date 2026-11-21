@@ -67,11 +67,7 @@ function saveConfig(
     change?: RegistryKeyChange,
     inMemoryRegistry?: RegistryMap
 ): void {
-    if (
-        change !== undefined &&
-        typeof diskConfig['defaultWorkspaceId'] === 'string' &&
-        diskConfig['defaultWorkspaceId'] === change.from
-    ) {
+    if (change !== undefined) {
         applyDefaultsChange(diskConfig, change)
     }
     writeProjectRegistryFile(getRegistryConfigPath(context), diskConfig)
@@ -85,11 +81,19 @@ function saveConfig(
     }
     const runtime = context.config.runtime
     const activeSession = getActiveSessionProject(runtime)
-    if (change !== undefined && activeSession.workspaceId === change.from) {
+    const sessionMatchesWs =
+        change !== undefined &&
+        activeSession.workspaceId?.toLowerCase() === change.from.toLowerCase()
+    const sessionMatchesProj =
+        activeSession.workspaceId === undefined &&
+        change?.previousProjectNumber !== undefined &&
+        activeSession.projectNumber === change.previousProjectNumber
+    if (change !== undefined && (sessionMatchesWs || sessionMatchesProj)) {
         if (change.to !== undefined) {
             const nextProj =
                 change.projectNumber !== undefined ? change.projectNumber : activeSession.projectNumber
-            setActiveSessionProject(change.to, nextProj ?? null, runtime)
+            const nextWs = sessionMatchesWs ? change.to : activeSession.workspaceId
+            setActiveSessionProject(nextWs, nextProj ?? null, runtime)
         } else {
             clearActiveSessionProject(runtime)
         }
@@ -257,6 +261,7 @@ function handleUpdateProject(
     }
 
     const { targetName, resolvedName, coercedUpdateNum } = validation
+    const previousProjNum = mergedRegistry[resolvedName]?.project_number
     const project: ProjectRegistryEntry = {
         ...(mergedRegistry[resolvedName] ?? { path: '' }),
         ...(parsed.absolute_path !== undefined ? { path: parsed.absolute_path } : {}),
@@ -275,6 +280,9 @@ function handleUpdateProject(
             ? {
                   from: resolvedName,
                   to: targetName,
+                  ...(typeof previousProjNum === 'number'
+                      ? { previousProjectNumber: previousProjNum }
+                      : {}),
                   ...(coercedUpdateNum !== undefined ? { projectNumber: coercedUpdateNum } : {}),
               }
             : undefined
@@ -305,13 +313,19 @@ function handleDeleteProject(params: unknown, context: ToolContext): Record<stri
         return { success: false, error: `🛠️ AUTONOMOUS HEALING: Project not found: '${parsed.name}'` }
     }
 
+    const previousProjNum = mergedRegistry[resolvedName]?.project_number
     const nextDiskRegistry = omitRegistryKey(diskRegistry, resolvedName)
     diskConfig['projectRegistry'] = nextDiskRegistry
     const nextLiveRegistry = omitRegistryKey(liveRegistry, resolvedName)
     saveConfig(
         diskConfig,
         context,
-        { from: resolvedName },
+        {
+            from: resolvedName,
+            ...(typeof previousProjNum === 'number'
+                ? { previousProjectNumber: previousProjNum }
+                : {}),
+        },
         { ...nextLiveRegistry, ...nextDiskRegistry }
     )
     return { success: true, message: `Project '${resolvedName}' deleted.` }

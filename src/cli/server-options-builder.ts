@@ -207,7 +207,12 @@ function applyEnvironmentOverrides(
 }
 
 function buildAuditConfigOption(resolver: ConfigResolver, catchConfig: CatchConfig): AuditConfig | undefined {
-    const auditLogPath = catchConfig(() => resolver.resolve<string>('auditLog', 'AUDIT_LOG_PATH'), undefined)
+    const auditLogPath = catchConfig(
+        () =>
+            resolver.resolve<string>('auditLog', 'AUDIT_LOG_PATH') ??
+            resolver.resolve<string>('auditLog', 'MEMORY_JOURNAL_AUDIT_LOG'),
+        undefined
+    )
     if (!auditLogPath) return undefined
     return {
         enabled: true,

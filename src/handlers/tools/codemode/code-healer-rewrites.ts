@@ -44,7 +44,7 @@ interface LexicalScanState {
     isEscaped: boolean
     prevToken: string
     lineOnlyWsOrComments: boolean
-    abortToCode: boolean
+    abortState: 'code' | 'regex' | null
 }
 
 function isLineBreakChar(ch: string): boolean {
@@ -80,7 +80,7 @@ function stepCodeLexicalChar(
     if (ch === '/' && code[i + 1] !== '/' && code[i + 1] !== '*' && canStartRegexLiteral(scan.prevToken, delim)) {
         const endRegex = skipRegexLiteralBody(code, i + 1)
         if (limit < code.length && endRegex > limit) {
-            scan.abortToCode = true
+            scan.abortState = 'regex'
             return i
         }
         spans?.push([i, endRegex])
@@ -137,7 +137,7 @@ function stepCodeLexicalChar(
 function scanLexicalSpans(
     code: string,
     stopAtOffset?: number
-): { stateAtOffset: 'code' | 'string' | 'comment'; spans: NonCodeSpan[] } {
+): { stateAtOffset: 'code' | 'string' | 'comment' | 'regex'; spans: NonCodeSpan[] } {
     const limit = stopAtOffset ?? code.length
     const spans: NonCodeSpan[] = []
     const delim = createDelimiterState()
@@ -147,7 +147,7 @@ function scanLexicalSpans(
         isEscaped: false,
         prevToken: '',
         lineOnlyWsOrComments: true,
-        abortToCode: false,
+        abortState: null,
     }
 
     for (let i = 0; i < limit; i++) {
@@ -191,7 +191,7 @@ function scanLexicalSpans(
             delim,
             stopAtOffset === undefined ? spans : undefined
         )
-        if (scan.abortToCode) return { stateAtOffset: 'code', spans }
+        if (scan.abortState !== null) return { stateAtOffset: scan.abortState, spans }
     }
     if (stopAtOffset === undefined && scan.inString !== null && scan.spanStart >= 0) {
         spans.push([scan.spanStart, limit])

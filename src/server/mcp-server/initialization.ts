@@ -258,35 +258,52 @@ async function setupCoreDatabasesAndAudit(options: ServerOptions, runtime: Serve
     activeMetricsPath: string | undefined
 }> {
     const { dbPath, testDbPath } = options
-    const primaryDb = await DatabaseAdapterFactory.create(dbPath, options)
-    await primaryDb.initialize()
-    logger.info('Database initialized', { module: 'McpServer', dbPath })
-
+    let primaryDb: IDatabaseAdapter | undefined
     let testDb: IDatabaseAdapter | undefined
-    if (testDbPath) {
-        testDb = await DatabaseAdapterFactory.create(testDbPath, options, {
-            backupsDir: resolveIsolatedBackupsDir(testDbPath, 'test'),
-        })
-        await testDb.initialize()
-        logger.info('Test database initialized', { module: 'McpServer', testDbPath })
-    }
+    try {
+        primaryDb = await DatabaseAdapterFactory.create(dbPath, options)
+        await primaryDb.initialize()
+        logger.info('Database initialized', { module: 'McpServer', dbPath })
 
-    const db = DatabaseAdapterProxy.create(primaryDb, testDb)
-    if (options.auditConfig?.enabled) {
-        runtime.auditLogger = new AuditLogger(options.auditConfig)
-        runtime.auditInterceptor = createAuditInterceptor(runtime.auditLogger, runtime)
-        logger.info('Audit logging enabled', {
-            module: 'McpServer',
-            path: options.auditConfig.logPath,
-            redact: options.auditConfig.redact,
-            auditReads: options.auditConfig.auditReads,
-        })
-    }
+        if (testDbPath) {
+            testDb = await DatabaseAdapterFactory.create(testDbPath, options, {
+                backupsDir: resolveIsolatedBackupsDir(testDbPath, 'test'),
+            })
+            await testDb.initialize()
+            logger.info('Test database initialized', { module: 'McpServer', testDbPath })
+        }
 
-    const activeMetricsPath = options.persistMetrics
-        ? await configureMetricsPersistence(runtime, options, dbPath)
-        : undefined
-    return { primaryDb, testDb, db, activeMetricsPath }
+        const db = DatabaseAdapterProxy.create(primaryDb, testDb)
+        if (options.auditConfig?.enabled) {
+            runtime.auditLogger = new AuditLogger(options.auditConfig)
+            runtime.auditInterceptor = createAuditInterceptor(runtime.auditLogger, runtime)
+            logger.info('Audit logging enabled', {
+                module: 'McpServer',
+                path: options.auditConfig.logPath,
+                redact: options.auditConfig.redact,
+                auditReads: options.auditConfig.auditReads,
+            })
+        }
+
+        const activeMetricsPath = options.persistMetrics
+            ? await configureMetricsPersistence(runtime, options, dbPath)
+            : undefined
+        return { primaryDb, testDb, db, activeMetricsPath }
+    } catch (error: unknown) {
+        if (runtime.auditLogger !== null) {
+            await runtime.auditLogger.close().catch(() => undefined)
+        }
+        for (const adapter of [testDb, primaryDb]) {
+            if (adapter !== undefined) {
+                try {
+                    adapter.close()
+                } catch {
+                    // Ignore cleanup errors during aborted core DB startup
+                }
+            }
+        }
+        throw error
+    }
 }
 
 export async function initializeDependencies(options: ServerOptions): Promise<ServerContext> {
@@ -321,7 +338,7 @@ export async function initializeDependencies(options: ServerOptions): Promise<Se
         const configAndJobs = await initConfigAndStartupJobs({ options, db, runtime })
         configManager = configAndJobs.configManager
 
-        const github = await initializeGitHubIntegration(options, runtime)
+        const github = await initializeGitHubIntegration(configAndJobs.effectiveOptions, runtime)
 
         const allowedIoRoots = resolveFinalAllowedIoRoots(options)
         const skillCatalog = await loadBundledSkillCatalog()

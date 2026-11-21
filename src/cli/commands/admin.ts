@@ -114,14 +114,14 @@ function resolveCliPruneScope(
             ...(requestedProject !== undefined ? { projectNumber: requestedProject } : {}),
         }
     }
-    const targetWs =
-        requestedWs !== undefined && requestedWs !== ''
-            ? requestedWs
-            : requestedProject === undefined
-              ? serverOptions.defaultWorkspaceId
-              : undefined
+    const hasExplicitWs = requestedWs !== undefined && requestedWs !== ''
+    const targetWs = hasExplicitWs
+        ? requestedWs
+        : requestedProject === undefined
+          ? serverOptions.defaultWorkspaceId
+          : undefined
     const targetProj =
-        requestedProject ?? (requestedWs === undefined ? serverOptions.defaultProjectNumber : undefined)
+        requestedProject ?? (!hasExplicitWs ? serverOptions.defaultProjectNumber : undefined)
     return resolveAutoPruneScope(targetWs, targetProj, serverOptions.projectRegistry)
 }
 
@@ -295,7 +295,7 @@ export async function auditAction(options: z.infer<typeof auditSchema>, command:
                 status: statusFilter,
             })
         } finally {
-            await logger.close()
+            await Promise.resolve(logger.close()).catch(() => undefined)
         }
 
         writeCliResult(result, options.json, `Audit entries matched: ${String(result.length)}`)
@@ -316,15 +316,14 @@ export async function rebuildIndexAction(options: z.infer<typeof rebuildIndexSch
             )
         }
         const requestedProj = options.defaultProject
-        const targetWs =
-            explicitWs !== undefined && explicitWs !== ''
-                ? explicitWs
-                : requestedProj === undefined
-                  ? serverOptions.defaultWorkspaceId
-                  : undefined
+        const hasExplicitWs = explicitWs !== undefined && explicitWs !== ''
+        const targetWs = hasExplicitWs
+            ? explicitWs
+            : requestedProj === undefined
+              ? serverOptions.defaultWorkspaceId
+              : undefined
         const targetProj =
-            requestedProj ??
-            (explicitWs === undefined ? serverOptions.defaultProjectNumber : undefined)
+            requestedProj ?? (!hasExplicitWs ? serverOptions.defaultProjectNumber : undefined)
         const rebuildScope = resolveAutoPruneScope(
             targetWs,
             targetProj,

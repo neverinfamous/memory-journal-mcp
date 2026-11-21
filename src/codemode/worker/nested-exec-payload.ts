@@ -227,8 +227,13 @@ export function extractNestedSessionId(
     if (argRec === undefined) return undefined
     const raw = argRec['session_id'] ?? argRec['sessionId']
     if (typeof raw === 'string' && raw.trim() !== '') return raw.trim()
-    const ctx = argRec['context']
-    if (isNestedPlainRecord(ctx)) {
+    const rawCtx = argRec['context']
+    const ctx = isNestedPlainRecord(rawCtx)
+        ? rawCtx
+        : typeof rawCtx === 'string'
+          ? parseStringContextPayload(rawCtx)
+          : undefined
+    if (ctx !== undefined) {
         const ctxRaw = ctx['session_id'] ?? ctx['sessionId']
         if (typeof ctxRaw === 'string' && ctxRaw.trim() !== '') return ctxRaw.trim()
     }

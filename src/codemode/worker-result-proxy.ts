@@ -324,10 +324,25 @@ function resolveArrayForwarding(
     return resolveArrayMethodForwarding(targetRecord, prop)
 }
 
+function isInternalSlotBuiltin(val: unknown): boolean {
+    return (
+        val instanceof Date ||
+        val instanceof RegExp ||
+        val instanceof Map ||
+        val instanceof Set ||
+        val instanceof URL ||
+        val instanceof Error ||
+        val instanceof ArrayBuffer ||
+        ArrayBuffer.isView(val)
+    )
+}
+
 function resolveWrappedObjectProp(target: object, prop: string | symbol, receiver: unknown): unknown {
     if (prop in target) {
         const val: unknown = Reflect.get(target, prop)
-        return val !== null && typeof val === 'object' && !Array.isArray(val) ? wrapResult(val) : val
+        return val !== null && typeof val === 'object' && !Array.isArray(val) && !isInternalSlotBuiltin(val)
+            ? wrapResult(val)
+            : val
     }
     if (!isObject(target)) return undefined
 
@@ -369,7 +384,12 @@ export function unwrapResultProxy(val: unknown): unknown {
  * Wrap an API result with smart proxy behavior for improved DX.
  */
 export function wrapResult(result: unknown): unknown {
-    if (result === null || result === undefined || typeof result !== 'object') {
+    if (
+        result === null ||
+        result === undefined ||
+        typeof result !== 'object' ||
+        isInternalSlotBuiltin(result)
+    ) {
         return result
     }
     if (RAW_TARGET_BY_PROXY.has(result)) {

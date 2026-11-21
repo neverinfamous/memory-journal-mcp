@@ -83,13 +83,21 @@ export const SearchAuditLogSchemaMcp = z.preprocess(
     })
 )
 
+function coerceNonNegativeDecimal(v: unknown): unknown {
+    if (typeof v !== 'string') return v
+    const trimmed = v.trim()
+    if (!/^(?:0|[1-9]\d*)(?:\.\d+)?$/.test(trimmed)) return v
+    const parsed = Number(trimmed)
+    return Number.isFinite(parsed) ? parsed : v
+}
+
 export const RunAutoPruneSchema = z
     .object({
         dry_run: z.boolean().optional().default(false),
-        archive_older_than_days: z.number().min(0).optional(),
-        prune_older_than_days: z.number().min(0).optional(),
-        hard_delete_older_than_days: z.number().min(0).optional(),
-        importance_threshold: z.number().min(0).max(1).optional(),
+        archive_older_than_days: z.preprocess(coerceNonNegativeDecimal, z.number().min(0)).optional(),
+        prune_older_than_days: z.preprocess(coerceNonNegativeDecimal, z.number().min(0)).optional(),
+        hard_delete_older_than_days: z.preprocess(coerceNonNegativeDecimal, z.number().min(0)).optional(),
+        importance_threshold: z.preprocess(coerceNonNegativeDecimal, z.number().min(0).max(1)).optional(),
         workspace_id: z.string().max(255).optional(),
         project_number: z
             .preprocess((v) => {

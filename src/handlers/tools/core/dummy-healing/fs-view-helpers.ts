@@ -97,7 +97,7 @@ export async function readSafeViewFile(
             recoverable: true,
         }
     } finally {
-        await handle.close()
+        await Promise.resolve(handle.close()).catch(() => undefined)
     }
 }
 

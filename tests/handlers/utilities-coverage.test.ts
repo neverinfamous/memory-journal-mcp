@@ -42,7 +42,7 @@ describe('utilities coverage', () => {
             // 3. Error handling (cache expired)
             time += 10 * 60 * 1000
             fileMock.readFile.mockRejectedValue('String error read')
-            await expect(rulesResource.handler('mem', dummyAllowedContext)).rejects.toThrow('String error read')
+            await expect(rulesResource.handler('mem', dummyAllowedContext)).rejects.toThrow('Could not read rules file')
         } finally {
             if (previousRulesFilePath === undefined) {
                 delete process.env['RULES_FILE_PATH']

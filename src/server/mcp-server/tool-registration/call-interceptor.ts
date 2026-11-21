@@ -276,11 +276,7 @@ function isRegisteredToolBlocked(
         return true
     }
     const filterCfg = config.filterConfig
-    if (
-        filterCfg !== undefined &&
-        filterCfg !== null &&
-        config.codemodeInternalFullAccess !== true
-    ) {
+    if (filterCfg !== undefined && filterCfg !== null) {
         const readOnlyHint =
             readOnlyHints !== undefined
                 ? readOnlyHints.get(toolName)
@@ -293,7 +289,12 @@ function isRegisteredToolBlocked(
         }
         if (
             DUMMY_HEALING_TOOL_NAMES.has(toolName) &&
-            isDummyToolAllowedByFilter(toolName, filterCfg, config.agentHealing !== false, false)
+            isDummyToolAllowedByFilter(
+                toolName,
+                filterCfg,
+                config.agentHealing !== false,
+                config.codemodeInternalFullAccess === true
+            )
         ) {
             return false
         }

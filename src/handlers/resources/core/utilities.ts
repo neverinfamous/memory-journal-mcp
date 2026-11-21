@@ -26,6 +26,7 @@ import {
     assertSafeFilePath,
     assertSafeDirectoryPath,
 } from '../../../utils/security-utils.js'
+import { logger } from '../../../utils/logger.js'
 
 export const recentResource: InternalResourceDef = {
     uri: 'memory://recent',
@@ -178,7 +179,7 @@ export const rulesResource: InternalResourceDef = {
                     if (firstKey) cachedRulesMap.delete(firstKey)
                 }
             } finally {
-                await file.close()
+                await Promise.resolve(file.close()).catch(() => undefined)
             }
 
             const cachedData = cachedRulesMap.get(rulesPath)
@@ -192,7 +193,11 @@ export const rulesResource: InternalResourceDef = {
             }
         } catch (err) {
             const message = err instanceof Error ? err.message : String(err)
-            throw new ProtocolError(ProtocolErrorCode.InternalError, `Could not read rules file: ${message}`)
+            logger.warning('Could not read rules file', {
+                module: 'UtilitiesResource',
+                error: message,
+            })
+            throw new ProtocolError(ProtocolErrorCode.InternalError, 'Could not read rules file')
         }
     },
 }
@@ -286,7 +291,7 @@ async function readSingleSkillEntry(
             if (!stats.isFile() || stats.size > 1024 * 1024) return null
             content = await handle.readFile({ encoding: 'utf8' })
         } finally {
-            await handle.close()
+            await Promise.resolve(handle.close()).catch(() => undefined)
         }
         const bodyContent = content.replace(/^---\r?\n[\s\S]*?\r?\n---\r?\n?/, '')
         const lines = bodyContent.split('\n')
@@ -334,7 +339,11 @@ function validateUserSkillsDir(userSkillsDir: string, allowedIoRoots: string[]):
         const expandedRoots = [...allowedIoRoots, userSkillsDir]
         assertSafeDirectoryPath(userSkillsDir, expandedRoots)
         if (!fs.existsSync(userSkillsDir)) {
-            throw new Error(`Configured SKILLS_DIR_PATH does not exist: ${userSkillsDir}`)
+            logger.warning('Configured SKILLS_DIR_PATH does not exist', {
+                module: 'UtilitiesResource',
+                path: userSkillsDir,
+            })
+            throw new Error('Configured SKILLS_DIR_PATH does not exist')
         }
     } catch (err) {
         throw new ProtocolError(
@@ -415,10 +424,11 @@ async function handleSkillsResource(
         return buildSkillsPayloadResult(skills)
     } catch (err) {
         const message = err instanceof Error ? err.message : String(err)
-        throw new ProtocolError(
-            ProtocolErrorCode.InternalError,
-            `Could not scan skills directory: ${message}`
-        )
+        logger.warning('Could not scan skills directory', {
+            module: 'UtilitiesResource',
+            error: message,
+        })
+        throw new ProtocolError(ProtocolErrorCode.InternalError, 'Could not scan skills directory')
     }
 }
 

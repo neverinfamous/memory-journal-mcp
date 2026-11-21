@@ -234,6 +234,7 @@ export function extractAuditScopeFromArgs(
     let workspaceId: string | undefined
     let projectNumber: number | undefined
     let explicitWildcardWorkspace = false
+    let explicitZeroProject = false
 
     if (typeof args === 'object' && args !== null) {
         const record = args as Record<string, unknown>
@@ -247,8 +248,12 @@ export function extractAuditScopeFromArgs(
             }
         }
         const rawProj = record['project_number'] ?? record['projectNumber']
-        const parsedProject = parsePositiveProjectNumber(rawProj)
-        if (parsedProject !== undefined) projectNumber = parsedProject
+        if (rawProj === 0 || (typeof rawProj === 'string' && rawProj.trim() === '0')) {
+            explicitZeroProject = true
+        } else {
+            const parsedProject = parsePositiveProjectNumber(rawProj)
+            if (parsedProject !== undefined) projectNumber = parsedProject
+        }
     }
 
     return applyActiveSessionScopeFallback(
@@ -258,7 +263,8 @@ export function extractAuditScopeFromArgs(
         },
         reqCtx,
         explicitWildcardWorkspace,
-        runtime
+        runtime,
+        explicitZeroProject
     )
 }
 

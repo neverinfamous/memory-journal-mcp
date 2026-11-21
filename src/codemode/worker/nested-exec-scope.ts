@@ -9,6 +9,7 @@ import { transformAutoReturn } from '../auto-return.js'
 import { readProjectRegistryPayload } from '../normalizers/generic-field-aliases.js'
 import { validateSandboxCode } from '../security.js'
 import { hasUnbalancedClosingDelimiter, stripCommentsAndStrings } from '../security-stripper.js'
+import { parseStringContextPayload } from '../shared-context-parsers.js'
 import { getOrCompileVmScript } from './script-and-metadata-cache.js'
 import {
     dispatchSynthesizedNestedEntry,
@@ -118,7 +119,12 @@ function resolveNestedNarrowedScope(
         return {}
     }
     const registry = readProjectRegistryPayload(projectRegistryRaw)
-    const ctxRec = isPlainRecord(argRec['context']) ? argRec['context'] : undefined
+    const rawCtx = argRec['context']
+    const ctxRec = isPlainRecord(rawCtx)
+        ? rawCtx
+        : typeof rawCtx === 'string'
+          ? parseStringContextPayload(rawCtx)
+          : undefined
     const sources = ctxRec !== undefined ? [argRec, ctxRec] : [argRec]
     let workspaceId =
         pinnedWorkspace === undefined ? readNarrowedWorkspace(sources, registry) : undefined

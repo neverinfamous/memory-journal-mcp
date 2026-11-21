@@ -18,6 +18,7 @@ export type RegistryMap = Record<string, ProjectRegistryEntry>
 export interface RegistryKeyChange {
     from: string
     to?: string
+    previousProjectNumber?: number
     projectNumber?: number | null
 }
 
@@ -26,16 +27,27 @@ export function applyDefaultsChange(
     target: { defaultWorkspaceId?: string; defaultProjectNumber?: number },
     change: RegistryKeyChange | undefined
 ): void {
-    if (change === undefined || target.defaultWorkspaceId !== change.from) return
+    if (change === undefined) return
+    const matchesWs =
+        typeof target.defaultWorkspaceId === 'string' &&
+        target.defaultWorkspaceId.toLowerCase() === change.from.toLowerCase()
+    const matchesProj =
+        change.previousProjectNumber !== undefined &&
+        target.defaultProjectNumber === change.previousProjectNumber
+    if (!matchesWs && !matchesProj) return
     if (change.to !== undefined) {
-        target.defaultWorkspaceId = change.to
+        if (matchesWs) {
+            target.defaultWorkspaceId = change.to
+        }
         if (typeof change.projectNumber === 'number') {
             target.defaultProjectNumber = change.projectNumber
         } else if (change.projectNumber === null) {
             delete target.defaultProjectNumber
         }
     } else {
-        delete target.defaultWorkspaceId
+        if (matchesWs) {
+            delete target.defaultWorkspaceId
+        }
         delete target.defaultProjectNumber
     }
 }
@@ -122,10 +134,10 @@ function resolveLiveRegistry(
     if (fromBriefing !== undefined) return fromBriefing
 
     const fromConfig = readRegistryObject(context.config?.projectRegistry)
-    if (fromConfig !== undefined && Object.keys(fromConfig).length > 0) return fromConfig
+    if (fromConfig !== undefined) return fromConfig
 
     const disk = readRegistryObject(loadDiskConfig()['projectRegistry'])
-    return disk ?? fromConfig ?? {}
+    return disk ?? {}
 }
 
 function formatListItems(registry: RawRegistry): Record<string, unknown>[] {

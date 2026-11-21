@@ -261,14 +261,14 @@ function loadExportAnchors(
                 if (
                     a.anchorType === 'file' &&
                     !a.anchorPath.includes('#') &&
-                    (a.status === undefined || a.status === 'pending')
+                    (typeof a.status !== 'string' || a.status === 'pending')
                 ) {
                     return a.anchorPath
                 }
                 return {
                     anchor_path: a.anchorPath,
                     anchor_type: a.anchorType,
-                    ...(a.status !== undefined ? { status: a.status } : {}),
+                    ...(typeof a.status === 'string' ? { status: a.status } : {}),
                 }
             })
             if (serializedAnchors.length === 0) continue

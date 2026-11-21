@@ -53,31 +53,83 @@ function stripLeadingShimAssignments(src: string): string {
     return rest
 }
 
+const NESTED_EXEC_PREFIX_RE =
+    /^(?:(?:const|let|var)\s+[\w$]+\s*=\s*)?(?:return\s+)?(?:await\s+)?(?:(?:__mcp|mcp|mj|tools)\.)*(?:mj_)?(?:execute_code|executeCode|execute)\s*\(\s*/i
+const NESTED_EXEC_OBJ_PROP_RE = /^\s*(?:code|script)\s*:\s*/i
+const NESTED_EXEC_SUFFIX_RE = /^\s*;?(?:\s*return\s+[\w$]+;?)?\s*$/
+
+/**
+ * [INVARIANT] Unwrap only single-argument `executeCode(<literal>)` or single-property
+ * `executeCode({ code|script: <literal> })` calls with no sibling options (e.g. `readonly`,
+ * `workspace_id`) and no trailing statements so nested isolation bounds cannot be bypassed.
+ */
+function extractSingleExecuteCodeStringArg(stripped: string): string | null {
+    const prefix = NESTED_EXEC_PREFIX_RE.exec(stripped)
+    if (prefix === null) return null
+    let pos = prefix[0].length
+    let inObject = false
+    if (stripped[pos] === '{') {
+        inObject = true
+        const propMatch = NESTED_EXEC_OBJ_PROP_RE.exec(stripped.slice(pos + 1))
+        if (propMatch === null) return null
+        pos += 1 + propMatch[0].length
+    }
+    const quote = stripped[pos]
+    if (quote !== "'" && quote !== '"' && quote !== '`') return null
+    const chars: string[] = []
+    let i = pos + 1
+    let escaped = false
+    for (; i < stripped.length; i++) {
+        const ch = stripped[i] ?? ''
+        if (escaped) {
+            chars.push(ch === quote ? quote : `\\${ch}`)
+            escaped = false
+            continue
+        }
+        if (ch === '\\') {
+            escaped = true
+            continue
+        }
+        if (quote === '`' && ch === '$' && stripped[i + 1] === '{') return null
+        if (ch === quote) break
+        chars.push(ch)
+    }
+    if (i >= stripped.length || stripped[i] !== quote) return null
+    let after = i + 1
+    while (after < stripped.length && /\s/.test(stripped[after] ?? '')) after++
+    if (inObject) {
+        if (stripped[after] === ',') {
+            after++
+            while (after < stripped.length && /\s/.test(stripped[after] ?? '')) after++
+        }
+        if (stripped[after] !== '}') return null
+        after++
+        while (after < stripped.length && /\s/.test(stripped[after] ?? '')) after++
+    }
+    if (stripped[after] !== ')') return null
+    return NESTED_EXEC_SUFFIX_RE.test(stripped.slice(after + 1)) ? chars.join('') : null
+}
+
 function unwrapNestedExecuteCode(src: string): string {
     const current = src.trim()
     const stripped = stripLeadingShimAssignments(current)
-    const nestedMatch =
-        /^(?:(?:const|let|var)\s+[\w$]+\s*=\s*)?(?:return\s+)?(?:await\s+)?(?:(?:__mcp|mcp|mj|tools)\.)*(?:mj_)?(?:execute_code|executeCode|execute)\s*\(\s*(?:\{\s*(?:code|script)\s*:\s*)?([`'"])([\s\S]*?)\1\s*(?:\}\s*)?\)\s*;?(?:\s*return\s+[\w$]+;?)?$/i.exec(
-            stripped
-        )
-    if (nestedMatch?.[2] !== undefined) {
-        const inner = nestedMatch[2].trim()
-        if (isValidJsScript(inner) && !/^[A-Za-z_$][\w$]*$/.test(inner)) {
-            return inner
-        }
-        const isNatural =
-            /^(?:write|document|create|include|record|summary|log|add|added|note|task|fix|implement)\b/i.test(inner) &&
-            !/\b(const|let|var|function|return|await|import|export|mj\.)\b/.test(inner)
-        if (isNatural || /^(?:create|add|new|record|log)?\s*entry\b/i.test(inner)) {
-            const firstLine = (inner.split('\n')[0] ?? '')
-                .slice(0, 200)
-                .replace(/^(?:create|add|new|record|log|insert)?\s*entry\s*(?:for|:)?\s*/i, '')
-                .replace(/[:.]+$/, '')
-                .trim()
-            const title = firstLine.length > 0 && firstLine.length < 80 ? firstLine : 'Journal Entry'
-            return `return await mj.core.createEntry({\n  title: ${JSON.stringify(title)},\n  content: ${JSON.stringify(inner)},\n  entry_type: "technical_note"\n});`
-        }
+    const rawInner = extractSingleExecuteCodeStringArg(stripped)
+    if (rawInner === null) return current
+    const inner = rawInner.trim()
+    if (isValidJsScript(inner) && !/^[A-Za-z_$][\w$]*$/.test(inner)) {
         return inner
+    }
+    const isNatural =
+        /^(?:write|document|create|include|record|summary|log|add|added|note|task|fix|implement)\b/i.test(inner) &&
+        !/\b(const|let|var|function|return|await|import|export|mj\.)\b/.test(inner)
+    if (isNatural || /^(?:create|add|new|record|log)?\s*entry\b/i.test(inner)) {
+        const firstLine = (inner.split('\n')[0] ?? '')
+            .slice(0, 200)
+            .replace(/^(?:create|add|new|record|log|insert)?\s*entry\s*(?:for|:)?\s*/i, '')
+            .replace(/[:.]+$/, '')
+            .trim()
+        const title = firstLine.length > 0 && firstLine.length < 80 ? firstLine : 'Journal Entry'
+        return `return await mj.core.createEntry({\n  title: ${JSON.stringify(title)},\n  content: ${JSON.stringify(inner)},\n  entry_type: "technical_note"\n});`
     }
     return current
 }

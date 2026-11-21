@@ -149,20 +149,24 @@ function resolveNodeAndSqlShims(
     if (prop === 'query' || prop === 'raw') {
         return {
             matched: true,
-            value: (sql?: string) => {
+            value: (sql?: string, ...args: unknown[]) => {
                 const stmt = createPreparedStatementShim(typeof sql === 'string' ? sql : '', shimMj)
                 const allFn = stmt['all']
-                return typeof allFn === 'function' ? (allFn as () => unknown)() : undefined
+                return typeof allFn === 'function'
+                    ? (allFn as (...a: unknown[]) => unknown)(...args)
+                    : undefined
             },
         }
     }
     if (prop === 'exec') {
         return {
             matched: true,
-            value: (sql?: string) => {
+            value: (sql?: string, ...args: unknown[]) => {
                 const stmt = createPreparedStatementShim(typeof sql === 'string' ? sql : '', shimMj)
                 const runFn = stmt['run']
-                return typeof runFn === 'function' ? (runFn as () => unknown)() : undefined
+                return typeof runFn === 'function'
+                    ? (runFn as (...a: unknown[]) => unknown)(...args)
+                    : undefined
             },
         }
     }

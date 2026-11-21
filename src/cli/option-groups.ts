@@ -15,6 +15,10 @@ export function addCoreOptions(command: Command): Command {
                 'Maximum number of array/object elements allowed in tool input arguments (default: 25000, 0 = disabled, env: MAX_TOOL_INPUT_ELEMENTS)'
             )
             .option(
+                '--agent-healing',
+                'Enable autonomous MCP tool and parameter healing/interception, overriding env/config (env: MCP_AGENT_HEALING)'
+            )
+            .option(
                 '--no-agent-healing',
                 'Disable autonomous MCP tool and parameter healing/interception (env: MCP_AGENT_HEALING=false)'
             )
@@ -124,6 +128,10 @@ export function addAuditOptions(command: Command): Command {
             .option(
                 '--audit-log <path>',
                 'Enable audit logging to the specified JSONL file path, or "stderr" for container mode (env: AUDIT_LOG_PATH)'
+            )
+            .option(
+                '--audit-redact',
+                'Redact tool arguments from audit entries, overriding env/config (env: AUDIT_REDACT)'
             )
             .option(
                 '--no-audit-redact',

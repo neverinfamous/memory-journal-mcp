@@ -332,16 +332,26 @@ function buildDbAndModuleAliasShims(
 
 function buildMemoryActionAliasShims(
     shimMj: Record<string, unknown>,
-    updateMemoryFn: (arg: unknown) => unknown
+    updateMemoryFn: (...args: unknown[]) => unknown
 ): Record<string, unknown> {
     const processOpFn = createProcessOperationFn(shimMj)
-    const saveMemoryFn = (arg?: unknown): unknown =>
-        arg !== undefined && arg !== null
-            ? updateMemoryFn(arg)
+    const saveMemoryFn = (...args: unknown[]): unknown =>
+        args[0] !== undefined && args[0] !== null
+            ? updateMemoryFn(...args)
             : Promise.resolve({ success: false, code: 'VALIDATION_ERROR', error: 'saveMemory requires a payload' })
-    const updateConfigFn = (arg: unknown): unknown =>
-        (getGroupMethod(shimMj, 'admin', 'update_configuration') ??
-            getGroupMethod(shimMj, 'admin', 'updateConfiguration'))?.(arg)
+    const updateConfigFn = (...args: unknown[]): unknown => {
+        const adminGroup = shimMj['admin']
+        const isGroupObj =
+            (typeof adminGroup === 'object' && adminGroup !== null) || typeof adminGroup === 'function'
+        const preferred =
+            isGroupObj && 'update_configuration' in adminGroup
+                ? 'update_configuration'
+                : 'updateConfiguration'
+        return (
+            getGroupMethod(shimMj, 'admin', preferred) ??
+            getGroupMethod(shimMj, 'admin', 'update_configuration')
+        )?.(...args)
+    }
     return {
         process_operation: processOpFn,
         processOperation: processOpFn,
@@ -376,7 +386,7 @@ function buildMemoryActionAliasShims(
 export function buildMemoryAndFactoryShims(
     shimMj: Record<string, unknown>,
     safeFsShim: SafeFsShim,
-    updateMemoryFn: (arg: unknown) => unknown
+    updateMemoryFn: (...args: unknown[]) => unknown
 ): Record<string, unknown> {
     const sharedCallableShim = createCallableShim(shimMj)
     const callableShim = (): object => sharedCallableShim
@@ -393,7 +403,7 @@ export function buildMemoryAndFactoryShims(
 
     for (const [mappingAliases, group, method] of DELEGATING_TOOL_MAPPINGS) {
         const delegated = wrapDelegatingTool(
-            (arg: unknown): unknown => getGroupMethod(shimMj, group, method)?.(arg),
+            (...args: unknown[]): unknown => getGroupMethod(shimMj, group, method)?.(...args),
             () => getGroupMethod(shimMj, group, method)
         )
         for (const alias of mappingAliases) {
@@ -401,7 +411,8 @@ export function buildMemoryAndFactoryShims(
         }
     }
 
-    const directCreateFn = (arg: unknown): unknown => getGroupMethod(shimMj, 'core', 'createEntry')?.(arg)
+    const directCreateFn = (...args: unknown[]): unknown =>
+        getGroupMethod(shimMj, 'core', 'createEntry')?.(...args)
     for (const name of DIRECT_CREATE_ENTRY_SHIMS) {
         aliases[name] = directCreateFn
     }

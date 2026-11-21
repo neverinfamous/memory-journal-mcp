@@ -127,7 +127,7 @@ async function readAndParseMarkdownFile(
         const filepath = join(sourceDir, filename)
         assertSafeChildFile(sourceDir, filename, filepath)
         try {
-            handle = await open(filepath, constants.O_RDONLY | constants.O_NOFOLLOW)
+            handle = await open(filepath, constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0))
         } catch (err: unknown) {
             const code =
                 err instanceof Error && 'code' in err
