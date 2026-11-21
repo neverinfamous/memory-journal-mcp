@@ -102,6 +102,11 @@ function buildBriefingConfigOptions(
             if (envVal !== undefined && envVal.trim() !== '') {
                 return resolver.resolveInt('briefingPrCount', 'BRIEFING_PR_COUNT') ?? 0
             }
+            // [INVARIANT] Primary file key `briefingPrs` beats legacy `briefingPrCount`, matching hot-reload
+            // (`readBriefingConfigEntry`). `briefingPrs` has a Commander default, so probe the file explicitly.
+            if (resolver.hasConfigFileKey('briefingPrs')) {
+                return resolver.resolveInt('briefingPrs') ?? 0
+            }
             return (
                 resolver.resolveInt('briefingPrCount') ??
                 resolver.resolveInt('briefingPrs', 'BRIEFING_PR_COUNT') ??
@@ -122,6 +127,7 @@ function buildBriefingConfigOptions(
         workflowStatusBreakdown: catchConfig(() => resolver.resolveBool('briefingWorkflowStatus', 'BRIEFING_WORKFLOW_STATUS') ?? false, false),
         copilotReviews: catchConfig(() => resolver.resolveBool('briefingCopilot', 'BRIEFING_COPILOT_REVIEWS') ?? false, false),
         graphPivots: catchConfig(() => resolver.resolveBool('briefingGraph', 'BRIEFING_GRAPH') ?? true, true),
+        insights: catchConfig(() => resolver.resolveBool('briefingInsights', 'BRIEFING_INSIGHTS') ?? true, true),
         workflowSummary: catchConfig(() => resolver.resolve<string>('workflowSummary', 'MEMORY_JOURNAL_WORKFLOW_SUMMARY'), undefined),
         defaultProjectNumber,
         defaultWorkspaceId,

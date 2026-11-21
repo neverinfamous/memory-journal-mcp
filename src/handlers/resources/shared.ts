@@ -248,6 +248,12 @@ export interface BriefingConfig {
      * Disable with `--no-briefing-graph`, `BRIEFING_GRAPH=false`, or config `briefingGraph: false`.
      */
     graphPivots?: boolean
+    /**
+     * Insights row (default: true): GitHub repo stats/traffic and the analytics digest.
+     * `false` hides the row AND skips its GitHub API calls and digest query
+     * (`--no-briefing-insights`, `BRIEFING_INSIGHTS=false`, config `briefingInsights: false`).
+     */
+    insights?: boolean
 }
 
 /** Default briefing configuration — preserves pre-existing behavior */
@@ -265,6 +271,7 @@ export const DEFAULT_BRIEFING_CONFIG: BriefingConfig = {
     copilotReviews: false,
     briefingImportanceThreshold: 0.3,
     graphPivots: true,
+    insights: true,
 }
 
 /**

@@ -459,6 +459,34 @@ describe('buildGitHubSection', () => {
         expect(result!.activePr!.ciSuppressed).toBe(true)
     })
 
+    it('skips getRepoStats/getTrafficData and omits insights when insights is false', async () => {
+        const github = createMockGitHub()
+        const result = await buildGitHubSection(github as never, defaultConfig({ insights: false }) as never)
+
+        expect(github.getRepoStats).not.toHaveBeenCalled()
+        expect(github.getTrafficData).not.toHaveBeenCalled()
+        expect(result!.insights).toBeUndefined()
+    })
+
+    it('skips getMilestones when milestoneCount is 0', async () => {
+        const github = createMockGitHub()
+        const result = await buildGitHubSection(github as never, defaultConfig({ milestoneCount: 0 }) as never)
+
+        expect(github.getMilestones).not.toHaveBeenCalled()
+        expect(result!.milestones).toEqual([])
+    })
+
+    it('keeps the PRs row when only the issues fetch fails', async () => {
+        const github = createMockGitHub({
+            getIssues: vi.fn().mockRejectedValue(new Error('issues 502')),
+        })
+        const result = await buildGitHubSection(github as never, defaultConfig() as never)
+
+        expect(result!.openIssues).toBe(0)
+        expect(result!.openPRs).toBe(1)
+        expect(result!.openPrList?.[0]?.number).toBe(10)
+    })
+
     // ========================================================================
     // Top-level error
     // ========================================================================

@@ -17,6 +17,7 @@ import type { ToolFilterConfig } from '../../../../filtering/tool-filter.js'
 import { logger } from '../../../../utils/logger.js'
 import { sliceUntrustedInline } from '../../fencing-helpers.js'
 import type { ResourceContext } from '../../shared.js'
+import { extractPreview } from './preview-helpers.js'
 
 /** Recency window (days) for active threads and the unlinked rate. */
 export const GRAPH_PIVOT_WINDOW_DAYS = 14
@@ -56,18 +57,14 @@ export function resolveBriefingToolNaming(filterConfig: ToolFilterConfig | null 
     return enabled.has('mj_execute_code') ? 'codemode' : 'direct'
 }
 
+/** Unfenced first meaningful line of an entry, clipped for labels (shared preview rules). */
+export function previewLabelText(content: string): string {
+    return extractPreview(content, THREAD_PREVIEW_LENGTH, { firstLineOnly: true })
+}
+
 /** First meaningful line of an entry, clipped to a short fenced label. */
 export function previewLabel(content: string): string {
-    const firstLine =
-        content
-            .split(/\r?\n/)
-            .map((l) => l.replace(/^#+\s*/, '').replace(/^[-*]\s+/, '').trim())
-            .find((l) => l.length > 0) ?? ''
-    const clipped =
-        firstLine.length > THREAD_PREVIEW_LENGTH
-            ? `${firstLine.slice(0, THREAD_PREVIEW_LENGTH).trimEnd()}…`
-            : firstLine
-    return sliceUntrustedInline(clipped, THREAD_PREVIEW_LENGTH + 1)
+    return sliceUntrustedInline(previewLabelText(content), THREAD_PREVIEW_LENGTH + 1)
 }
 
 /**

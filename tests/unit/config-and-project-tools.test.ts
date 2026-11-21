@@ -293,6 +293,40 @@ describe('ConfigManager & Configuration Tools', () => {
             expect(mgr.getConfig().briefingConfig.entryCount).toBe(8)
             expect(mgr.getConfig().briefingConfig.copilotReviews).toBe(true)
         })
+
+        it('should update briefing_commits, briefing_importance_threshold, briefing_graph and briefing_insights', async () => {
+            const mgr = new ConfigManager({
+                rawToolFilter: 'starter',
+                toolFilterConfig: null,
+                briefingConfig: { ...DEFAULT_BRIEFING_CONFIG },
+            })
+            const config: ToolHandlerConfig = { runtime: { configManager: mgr } as never }
+
+            const res = await handleUpdateConfiguration(
+                {
+                    briefing_commits: 0,
+                    briefing_importance_threshold: 0.6,
+                    briefing_graph: false,
+                    briefing_insights: false,
+                },
+                config
+            )
+            expect(res.updated).toEqual([
+                'briefing_commits',
+                'briefing_importance_threshold',
+                'briefing_graph',
+                'briefing_insights',
+            ])
+            const bc = mgr.getConfig().briefingConfig
+            expect(bc.commitCount).toBe(0)
+            expect(bc.briefingImportanceThreshold).toBe(0.6)
+            expect(bc.graphPivots).toBe(false)
+            expect(bc.insights).toBe(false)
+        })
+
+        it('should reject out-of-range briefing_importance_threshold', () => {
+            expect(() => updateConfigurationSchema.parse({ briefing_importance_threshold: 1.5 })).toThrow()
+        })
     })
 
     describe('Project Registry Admin Tools (project-tools.ts)', () => {

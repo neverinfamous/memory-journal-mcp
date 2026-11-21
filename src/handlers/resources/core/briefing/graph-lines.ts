@@ -7,7 +7,12 @@
  */
 
 import type { GraphSummary } from './context-section.js'
-import type { BriefingGraphPivots, BriefingToolNaming } from './graph-pivots-section.js'
+import {
+    isRecentUnlinkedAlert,
+    type BriefingGraphPivots,
+    type BriefingToolNaming,
+} from './graph-pivots-section.js'
+import { fenceUntrustedList } from '../../fencing-helpers.js'
 
 export interface GraphLineOptions {
     graphPivots?: BriefingGraphPivots
@@ -17,7 +22,11 @@ export interface GraphLineOptions {
 }
 
 const escapeCell = (text: string): string =>
-    text.replace(/\r?\n/g, ' ').replace(/\\/g, '\\\\').replace(/\|/g, '\\|')
+    text
+        .replace(/[\r\n\u2028\u2029]+/g, ' ')
+        .replace(/\p{Cc}/gu, '')
+        .replace(/\\/g, '\\\\')
+        .replace(/\|/g, '\\|')
 
 function causalText(graphSummary: GraphSummary): string {
     return (
@@ -29,9 +38,9 @@ function causalText(graphSummary: GraphSummary): string {
 }
 
 function hubsText(graphSummary: GraphSummary): string {
-    return graphSummary.topHubs
-        .map((h) => `#${String(h.id)}${h.preview ? ` ${h.preview}` : ''}`.trim())
-        .join(', ')
+    return fenceUntrustedList(
+        graphSummary.topHubs.map((h) => `#${String(h.id)}${h.preview ? ` ${h.preview}` : ''}`.trim())
+    )
 }
 
 function expandHint(toolNaming: BriefingToolNaming | undefined): string {
@@ -64,7 +73,8 @@ export function buildGraphLines(
         headParts.push(`🔗 density ${escapeCell(String(opts.relationshipDensity))}`)
     }
     if (pivots.recentEntries > 0) {
-        const warn = pivots.unlinkedEntries / pivots.recentEntries > 0.3 ? ' ⚠️' : ''
+        // [INVARIANT] Same threshold as the Journal Health alert (≥5 samples, >30% unlinked).
+        const warn = isRecentUnlinkedAlert(pivots) ? ' ⚠️' : ''
         headParts.push(
             `Unlinked (${String(pivots.windowDays)}d): ${String(pivots.unlinkedEntries)}/${String(pivots.recentEntries)}${warn}`
         )
@@ -72,9 +82,9 @@ export function buildGraphLines(
     const lines = [headParts.join(' · ')]
 
     if (pivots.activeThreads.length > 0) {
-        const threads = pivots.activeThreads
-            .map((t) => `#${String(t.id)} (${t.type}) ${t.preview} ↔${String(t.links)}`)
-            .join(', ')
+        const threads = fenceUntrustedList(
+            pivots.activeThreads.map((t) => `#${String(t.id)} (${t.type}) ${t.preview} ↔${String(t.links)}`)
+        )
         lines.push(`Active threads (${String(pivots.windowDays)}d): ${escapeCell(threads)}`)
     } else if (graphSummary.topHubs.length > 0) {
         lines.push(`Hubs (all-time): ${escapeCell(hubsText(graphSummary))}`)
@@ -83,7 +93,7 @@ export function buildGraphLines(
     lines.push(`Causal: ${escapeCell(causalText(graphSummary))}`)
     const neighborhood =
         opts.workspaceId !== undefined && opts.workspaceId !== '' && opts.workspaceId !== '*'
-            ? ` · Neighborhood: \`memory://graph/${escapeCell(opts.workspaceId)}\``
+            ? ` · Neighborhood: \`memory://graph/${opts.workspaceId.replace(/[^A-Za-z0-9._\-/*@]/g, '_').slice(0, 128)}\``
             : ' · Neighborhood: `memory://graph`'
     lines.push(`Expand: ${expandHint(opts.toolNaming)}${neighborhood}`)
     return [lines.join('<br>')]

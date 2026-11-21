@@ -13,6 +13,7 @@ import {
     type BriefingToolNaming,
 } from './graph-pivots-section.js'
 import { fenceNonCanonicalRefOrKey } from '../../../../utils/security-utils.js'
+import { fenceUntrustedList } from '../../fencing-helpers.js'
 
 export interface BriefingUserMessageOptions {
     repoName: string
@@ -48,6 +49,9 @@ const escapeContent = (text: string): string =>
 const escapeCell = (text: string): string =>
     escapeContent(text).replace(/\\/g, '\\\\').replace(/\|/g, '\\|')
 
+/** [BOUNDARY] Only render workflow links that point at github.com without markdown-breaking chars. */
+const SAFE_GITHUB_URL_RE = /^https:\/\/github\.com\/[^\s()<>[\]]+$/
+
 /** Compute a short relative-age string (e.g. '3d ago', '5h ago') from an ISO timestamp */
 const relativeAge = (isoTimestamp: string): string | null => {
     try {
@@ -78,7 +82,7 @@ export function formatCiDisplay(opts: BriefingUserMessageOptions): string {
                 unknown: '❓',
             }
             ciDisplay = ws.runs
-                .map((r) => `${icons[r.conclusion] ?? '❓'} ${r.url ? `[${r.name}](${r.url})` : r.name}`)
+                .map((r) => `${icons[r.conclusion] ?? '❓'} ${r.url && SAFE_GITHUB_URL_RE.test(r.url) ? `[${r.name}](${r.url})` : r.name}`)
                 .join(' · ')
         } else {
             ciDisplay = formatWorkflowCounts(ws, opts.ciStatus)
@@ -109,7 +113,7 @@ function formatWorkflowCounts(
 export function buildGithubParts(opts: BriefingUserMessageOptions, ciDisplay: string): string[] {
     const suppressCi = opts.ciSuppressed === true || opts.github?.ciSuppressed === true
     const githubParts = [
-        `**${escapeCell(opts.repoName)}**`,
+        `**${escapeCell(fenceNonCanonicalRefOrKey(opts.repoName))}**`,
         escapeCell(fenceNonCanonicalRefOrKey(opts.branchName)),
         ...(suppressCi ? [] : [escapeCell(ciDisplay)]),
     ]
@@ -131,7 +135,7 @@ export function buildTrackingParts(github: BriefingGitHub | null): string[] {
 
 function appendIssueTracking(github: BriefingGitHub, trackingParts: string[]): void {
     if (github.openIssueList && github.openIssueList.length > 0) {
-        const titles = github.openIssueList.map((i) => `#${String(i.number)} ${i.title}`).join(' · ')
+        const titles = fenceUntrustedList(github.openIssueList.map((i) => `#${String(i.number)} ${i.title}`))
         trackingParts.push(`Issues: ${String(github.openIssues)} open: ${escapeCell(titles)}`)
         return
     }
@@ -171,7 +175,7 @@ function appendPullRequestTracking(github: BriefingGitHub, trackingParts: string
         if (s.closed > 0) parts.push(`${String(s.closed)} closed`)
         const summaryText = parts.join(', ') || '0'
         if (github.openPrList && github.openPrList.length > 0) {
-            const titles = github.openPrList.map((p) => `#${String(p.number)} ${p.title}`).join(' · ')
+            const titles = fenceUntrustedList(github.openPrList.map((p) => `#${String(p.number)} ${p.title}`))
             trackingParts.push(`PRs: ${summaryText}: ${escapeCell(titles)}`)
         } else {
             trackingParts.push(`PRs: ${summaryText}`)
@@ -179,7 +183,7 @@ function appendPullRequestTracking(github: BriefingGitHub, trackingParts: string
         return
     }
     if (github.openPrList && github.openPrList.length > 0) {
-        const titles = github.openPrList.map((p) => `#${String(p.number)} ${p.title}`).join(' · ')
+        const titles = fenceUntrustedList(github.openPrList.map((p) => `#${String(p.number)} ${p.title}`))
         trackingParts.push(`PRs: ${String(github.openPRs)} open: ${escapeCell(titles)}`)
         return
     }
@@ -203,7 +207,8 @@ function appendMilestoneTracking(github: BriefingGitHub, trackingParts: string[]
 export function buildJournalParts(opts: BriefingUserMessageOptions): string[] {
     const journalLine1 = [`${String(opts.totalEntries)} entries`]
     if (opts.workspaceId) {
-        journalLine1.push(`Workspace: **${escapeCell(opts.workspaceId)}**`)
+        // [BOUNDARY] No-registry mode echoes the raw URI segment; constrain before rendering.
+        journalLine1.push(`Workspace: **${opts.workspaceId.replace(/[^A-Za-z0-9._\-/*@]/g, '_').slice(0, 128)}**`)
     }
     if (opts.teamTotalEntries !== undefined) {
         journalLine1.push(`Team: ${String(opts.teamTotalEntries)}`)
@@ -212,33 +217,25 @@ export function buildJournalParts(opts: BriefingUserMessageOptions): string[] {
     const journalParts = [journalLine1.join(' · ')]
     const latestPreviews = opts.latestPreviews
     const summaryPreviews = opts.summaryPreviews
+    // [INTENT] One fence per row segment: list items share a single untrusted wrapper.
     if (latestPreviews.length > 0) {
-        journalParts.push(`Latest: ${escapeCell(latestPreviews[0] ?? '')}`)
-        for (let i = 1; i < latestPreviews.length; i++) {
-            journalParts.push(`Entry: ${escapeCell(latestPreviews[i] ?? '')}`)
-        }
+        journalParts.push(`Latest: ${escapeCell(fenceUntrustedList(latestPreviews))}`)
     } else if (opts.entriesSuppressed !== true && (!summaryPreviews || summaryPreviews.length === 0)) {
         journalParts.push('Latest: No entries yet')
     }
     if (summaryPreviews && summaryPreviews.length > 0) {
+        // The Graph row's Expand line already names the expansion tool when pivots are on.
         const summaryHint =
-            opts.toolNaming === 'direct'
-                ? '`get_entry_by_id`'
-                : '`mj.core.getEntryById` via `mj_execute_code`'
-        for (const s of summaryPreviews) {
-            const cleaned = s.replace(/#+\s/g, '').replace(/\*\*/g, '').replace(/[-*]\s/g, '• ')
-            journalParts.push(
-                `Summary: ${escapeCell(cleaned)} (Use ${summaryHint} to view full entry)`,
-            )
-        }
+            opts.graphPivots !== undefined
+                ? ''
+                : opts.toolNaming === 'direct'
+                  ? ' (view: `get_entry_by_id`)'
+                  : ' (view: `mj.core.getEntryById`)'
+        journalParts.push(`Summary: ${escapeCell(fenceUntrustedList(summaryPreviews))}${summaryHint}`)
     }
     if (opts.teamLatestPreviews && opts.teamLatestPreviews.length > 0) {
         const teamHint = opts.toolNaming === 'direct' ? '`team_get_entry_by_id`' : '`mj.team.teamGetEntryById`'
-        for (const teamEntry of opts.teamLatestPreviews) {
-            journalParts.push(
-                `Team: ${escapeCell(teamEntry)} (Use ${teamHint} to view full team entry)`,
-            )
-        }
+        journalParts.push(`Team: ${escapeCell(fenceUntrustedList(opts.teamLatestPreviews))} (view: ${teamHint})`)
     }
     return journalParts
 }
@@ -315,54 +312,30 @@ export function buildGitHistoryLines(opts: BriefingUserMessageOptions): string[]
     const stats = opts.gitHistory.stats
     if (stats) {
         gitHistoryLines.push(
-            `**Velocity (Last ${stats.total}):** ${stats.highImpact} High Impact | ${stats.lowImpact} Low Impact | Avg Conf: ${stats.avgConfidence.toFixed(2)}`,
+            `Velocity (${String(stats.total)}): ${String(stats.highImpact)} high · ${String(stats.lowImpact)} low · conf ${stats.avgConfidence.toFixed(2)}`,
         )
     }
 
-    const rawRepo = opts.github?.repo
-    const repoPathUrl =
-        typeof rawRepo === 'string' && /^[A-Za-z0-9._-]+\/[A-Za-z0-9._-]+$/.test(rawRepo)
-            ? `https://github.com/${rawRepo}/commit/`
-            : null
+    // [INTENT] No commit hyperlinks or tool tip: agents can derive URLs from the GitHub row, and
+    // ~75 chars/commit of URL carried little signal. All commit lines share one untrusted fence.
     const commitRefs = opts.graphPivots?.commitRefs
-    const shortCommits = opts.gitHistory.commits
-        .map((c) => formatCommitLine(c, repoPathUrl, commitRefs?.[c.hash]))
-        .join('<br>')
-    gitHistoryLines.push(`**Recent Changes:**<br>${shortCommits}`)
-    const historyHint =
-        opts.toolNaming === 'codemode'
-            ? '`mj.git.getCommitHistory` or `mj.git.searchCommits`'
-            : '`get_commit_history` or `search_commits`'
-    gitHistoryLines.push(
-        `💡 **Tip:** Use ${historyHint} for deep Git history analysis instead of raw git commands.`,
-    )
+    const commitLines = opts.gitHistory.commits.map((c) => formatCommitLine(c, commitRefs?.[c.hash]))
+    gitHistoryLines.push(`Recent: ${escapeCell(fenceUntrustedList(commitLines))}`)
     return gitHistoryLines
 }
 
-function formatCommitLine(
-    c: GitHistorySummary['commits'][number],
-    repoPathUrl: string | null,
-    entryRef?: number,
-): string {
-    const safeHash = escapeCell(fenceNonCanonicalRefOrKey(c.hash))
-    const isValidHexSha = /^[0-9a-f]{4,64}$/i.test(c.hash)
-    const shaText =
-        c.isPushed && repoPathUrl !== null && isValidHexSha
-            ? `[\`${safeHash}\`](${repoPathUrl}${c.hash})`
-            : `\`${safeHash}\``
+function formatCommitLine(c: GitHistorySummary['commits'][number], entryRef?: number): string {
     const metaParts: string[] = []
-    if (c.type) metaParts.push(escapeCell(fenceNonCanonicalRefOrKey(c.type)))
-    if (c.size) metaParts.push(escapeCell(fenceNonCanonicalRefOrKey(c.size)))
+    if (c.type) metaParts.push(c.type)
+    if (c.size) metaParts.push(c.size)
     if (c.significance !== undefined) metaParts.push(`Sig:${c.significance}`)
     if (c.confidence !== undefined) metaParts.push(`Conf:${c.confidence}`)
     if (c.isBreaking) metaParts.push('🚨')
     const metaStr = metaParts.length > 0 ? ` [${metaParts.join('|')}]` : ''
     const issuesStr =
-        c.associatedIssues && c.associatedIssues.length > 0
-            ? ` (${c.associatedIssues.map((i) => escapeCell(i)).join(', ')})`
-            : ''
+        c.associatedIssues && c.associatedIssues.length > 0 ? ` (${c.associatedIssues.join(', ')})` : ''
     const refStr = entryRef !== undefined ? ` →#${String(entryRef)}` : ''
-    return `${shaText}${metaStr} ${escapeCell(c.message)}${issuesStr}${refStr}`
+    return `${c.hash}${metaStr} ${c.message}${issuesStr}${refStr}`
 }
 
 export function buildFlagsAlert(opts: BriefingUserMessageOptions): string {
@@ -373,7 +346,7 @@ export function buildFlagsAlert(opts: BriefingUserMessageOptions): string {
         // [INTENT] Recency-scoped: the all-time ratio is diluted by historical bulk-linking.
         if (isRecentUnlinkedAlert(pivots)) {
             const linkHint = opts.toolNaming === 'codemode' ? '`mj.relationships.linkEntries`' : '`link_entries`'
-            flagsAlert += `⚠️ **Journal Health:** ${String(pivots.unlinkedEntries)}/${String(pivots.recentEntries)} entries from the last ${String(pivots.windowDays)} days are unlinked (⚪) and at risk of auto-prune. Link them via \`relationships\` on create or ${linkHint}.\n\n`
+            flagsAlert += `⚠️ **Journal Health:** ${String(pivots.unlinkedEntries)}/${String(pivots.recentEntries)} entries (${String(pivots.windowDays)}d) unlinked ⚪, at risk of auto-prune. Link via \`relationships\` on create or ${linkHint}.\n\n`
         }
     } else if (graphSummary?.orphanRatio !== undefined && graphSummary.orphanRatio > 0.2) {
         const orphanPct = Math.round(graphSummary.orphanRatio * 100)

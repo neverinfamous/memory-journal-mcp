@@ -46,11 +46,7 @@ export function resolveProjectRoot(startPath?: string): string {
     )
 }
 
-function parseGitCommitLines(
-    out: string,
-    unpushedHashes: Set<string>,
-    commitCount: number
-): GitHistorySummary {
+function parseGitCommitLines(out: string, commitCount: number): GitHistorySummary {
     const lines = out
         .split('\n')
         .map((l) => l.trim())
@@ -79,7 +75,6 @@ function parseGitCommitLines(
             ...(commitType !== undefined ? { type: commitType } : {}),
             isBreaking,
             message: markUntrustedContentInline(subject),
-            isPushed: !unpushedHashes.has(hash),
         }
     })
 
@@ -115,37 +110,23 @@ export function formatBriefingLocalTime(now = new Date()): string {
     }
 }
 
-/** Async parallel git log + unpushed hash fetch for briefing system summary. */
+/**
+ * Async git log for the briefing system summary.
+ * [INTENT] Single subprocess: the briefing no longer renders commit hyperlinks, so the
+ * `@{u}..HEAD` push-state probe (and its 404-link failure mode) is gone.
+ */
 export async function fetchGitHistoryFromRepoAsync(
     root: string,
     commitCount: number
 ): Promise<GitHistorySummary> {
     const fetchLimit = Math.max(1, commitCount)
-    const [logSettled, unpushedSettled] = await Promise.allSettled([
-        execFileAsync('git', ['log', '-n', String(fetchLimit), '--format=%h|%s|%cr'], {
-            cwd: root,
-            encoding: 'utf-8',
-            timeout: 3000,
-            windowsHide: true,
-        }),
-        execFileAsync('git', ['log', '@{u}..HEAD', '--format=%h'], {
-            cwd: root,
-            encoding: 'utf-8',
-            timeout: 3000,
-            windowsHide: true,
-        }),
-    ])
-    if (logSettled.status === 'rejected') {
-        throw logSettled.reason
-    }
-    const unpushedHashes = new Set<string>()
-    if (unpushedSettled.status === 'fulfilled') {
-        unpushedSettled.value.stdout
-            .split('\n')
-            .filter(Boolean)
-            .forEach((h) => unpushedHashes.add(h.trim()))
-    }
-    return parseGitCommitLines(logSettled.value.stdout, unpushedHashes, commitCount)
+    const { stdout } = await execFileAsync('git', ['log', '-n', String(fetchLimit), '--format=%h|%s|%cr'], {
+        cwd: root,
+        encoding: 'utf-8',
+        timeout: 3000,
+        windowsHide: true,
+    })
+    return parseGitCommitLines(stdout, commitCount)
 }
 
 /** Async non-blocking repository indicator probe for briefing system summary. */

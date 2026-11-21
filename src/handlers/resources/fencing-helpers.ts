@@ -30,6 +30,20 @@ export function sliceUntrustedInline(value: string, maxLen: number, suffix = '')
     return markUntrustedContentInline(truncated)
 }
 
+/** Separator between items sharing one inline fence (cannot collide with markdown table syntax). */
+export const UNTRUSTED_LIST_SEPARATOR = ' ¦ '
+
+/**
+ * Join list items (which may already carry their own inline fences) under ONE inline fence.
+ * [INVARIANT] `markUntrustedContentInline` strips every nested literal/encoded wrapper and
+ * re-escapes `& < >`, so per-item escaping is preserved while saving ~53 chars per extra item.
+ */
+export function fenceUntrustedList(items: readonly string[], separator = UNTRUSTED_LIST_SEPARATOR): string {
+    const nonEmpty = items.filter((item) => item.trim() !== '')
+    if (nonEmpty.length === 0) return ''
+    return markUntrustedContentInline(nonEmpty.join(separator))
+}
+
 /** Extract base URI without query parameters or fragments for matching. */
 export function getBaseUri(uri: string): string {
     // Handle memory:// URIs specially since URL parser treats the path as host

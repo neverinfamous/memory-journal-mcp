@@ -24,17 +24,21 @@ import {
     getGitHubIntegration,
 } from '../../src/github/github-integration/index.js'
 
-vi.mock('../../src/handlers/resources/core/briefing/context-section.js', () => ({
-    buildJournalContext: vi.fn().mockReturnValue({
+vi.mock('../../src/handlers/resources/core/briefing/context-section.js', () => {
+    const journal = {
         totalEntries: 0,
         latestEntries: [],
         sessionSummaries: [{ id: 1, type: 'summary', preview: 'test' }],
-    }),
-    buildTeamContext: vi.fn().mockReturnValue(null),
+    }
+    return {
+        buildJournalContext: vi.fn().mockReturnValue(journal),
+        safeBuildJournalContext: vi.fn().mockReturnValue(journal),
+        buildTeamContext: vi.fn().mockReturnValue(null),
 
-    buildFlagsContext: vi.fn().mockReturnValue(undefined),
-    buildGraphContext: vi.fn().mockReturnValue(undefined),
-}))
+        buildFlagsContext: vi.fn().mockReturnValue(undefined),
+        buildGraphContext: vi.fn().mockReturnValue(undefined),
+    }
+})
 
 vi.mock('../../src/handlers/resources/core/briefing/user-message.js', () => ({
     formatUserMessage: vi.fn().mockReturnValue(''),

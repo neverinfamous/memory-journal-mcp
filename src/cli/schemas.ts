@@ -157,6 +157,7 @@ export const briefingOptionsSchema = z.object({
     briefingWorkflowStatus: z.boolean().optional(),
     briefingCopilot: z.boolean().optional(),
     briefingGraph: z.boolean().optional(),
+    briefingInsights: z.boolean().optional(),
     workflowSummary: z.string().optional()
 })
 

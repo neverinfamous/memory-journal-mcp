@@ -235,7 +235,7 @@ Add this to your `~/.cursor/mcp.json`, Claude Desktop config, or equivalent:
 The `memory://briefing` resource is dynamically assembled at each session start, automatically providing ambient context like test health, workspace paths, unreleased changes, and git status. Control what your agent sees by tuning three dimensions via environment variables:
 
 - **Focus** — `MEMORY_JOURNAL_MCP_TOOL_FILTER` (CLI: `--tool-filter`, config file key: `"toolFilter"`): `full` (default), `starter`, `essential`, `readonly`, or `codemode`
-- **Journal Content** — `BRIEFING_ENTRY_COUNT`, `BRIEFING_SUMMARY_COUNT`, `BRIEFING_COMMIT_COUNT`, `BRIEFING_IMPORTANCE_THRESHOLD`, `BRIEFING_INCLUDE_TEAM`, `BRIEFING_GRAPH`
+- **Journal Content** — `BRIEFING_ENTRY_COUNT`, `BRIEFING_SUMMARY_COUNT`, `BRIEFING_COMMIT_COUNT`, `BRIEFING_IMPORTANCE_THRESHOLD`, `BRIEFING_INCLUDE_TEAM`, `BRIEFING_GRAPH`, `BRIEFING_INSIGHTS`
 - **GitHub Enrichment** — `BRIEFING_ISSUE_COUNT`, `BRIEFING_PR_COUNT`, `BRIEFING_PR_STATUS`, `BRIEFING_MILESTONE_COUNT`, `BRIEFING_WORKFLOW_COUNT`, `BRIEFING_WORKFLOW_STATUS`, `BRIEFING_COPILOT_REVIEWS`
 
 Set `RULES_FILE_PATH` and `SKILLS_DIR_PATH` to surface agent rules and skills as companion resources. In multi-repo setups, agents read `memory://briefing/{+repo}` for repo-scoped context.

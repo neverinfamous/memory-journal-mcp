@@ -49,7 +49,6 @@ export interface GitHistorySummary {
         confidence?: number | string;
         isBreaking?: boolean;
         message: string; 
-        isPushed?: boolean;
         associatedIssues?: string[];
     }[]
 }
@@ -116,6 +115,8 @@ interface TtlCacheEntry<T> {
 }
 
 const CACHE_TTL_MS = 60_000
+/** [INVARIANT] Bound per-repo TTL caches; oldest insertion is evicted first. */
+const CACHE_MAX_ENTRIES = 32
 const cachedGitHistory = new Map<string, TtlCacheEntry<GitHistorySummary | null>>()
 const cachedTestHealth = new Map<string, TtlCacheEntry<TestHealth | null>>()
 
@@ -130,6 +131,12 @@ function getCached<T>(map: Map<string, TtlCacheEntry<T>>, key: string): { hit: t
 }
 
 function setCached<T>(map: Map<string, TtlCacheEntry<T>>, key: string, value: T): T {
+    map.delete(key)
+    while (map.size >= CACHE_MAX_ENTRIES) {
+        const oldest = map.keys().next()
+        if (oldest.done === true) break
+        map.delete(oldest.value)
+    }
     map.set(key, { value, expiresAt: Date.now() + CACHE_TTL_MS })
     return value
 }

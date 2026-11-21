@@ -38,6 +38,7 @@ export type BriefingConfigurableKey =
     | 'copilotReviews'
     | 'briefingImportanceThreshold'
     | 'graphPivots'
+    | 'insights'
 
 export type BriefingValueKind = 'number' | 'boolean' | 'unit'
 
@@ -67,6 +68,7 @@ export const BRIEFING_CONFIG_KEY_MAP: Readonly<
     briefingCopilot: { target: 'copilotReviews', kind: 'boolean' },
     briefingImportanceThreshold: { target: 'briefingImportanceThreshold', kind: 'unit' },
     briefingGraph: { target: 'graphPivots', kind: 'boolean' },
+    briefingInsights: { target: 'insights', kind: 'boolean' },
 }
 
 /** Look up a briefing config entry by primary file key (`briefingPrs`) before legacy aliases (`briefingPrCount`). */

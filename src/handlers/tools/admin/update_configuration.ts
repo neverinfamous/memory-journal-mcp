@@ -89,6 +89,12 @@ export const updateConfigurationSchema = z.preprocess(
                 .optional()
                 .describe('A comma-separated list of tool groups to enable, or "all"'),
             briefing_entries: z.number().int().min(0).max(100).optional(),
+            briefing_commits: z.number().int().min(0).max(100).optional(),
+            briefing_importance_threshold: z.number().min(0).max(1).optional(),
+            briefing_insights: z
+                .boolean()
+                .optional()
+                .describe('Show the Insights row (GitHub repo stats/traffic + analytics digest); false skips those calls'),
             briefing_summaries: z.number().int().min(0).max(100).optional(),
             briefing_include_team: z.boolean().optional(),
             briefing_issues: z.number().int().min(0).max(100).optional(),
@@ -120,6 +126,12 @@ export const updateConfigurationSchemaMcp = z.preprocess(
                 .optional()
                 .describe('A comma-separated list of tool groups to enable, or "all"'),
             briefing_entries: relaxedNumber().optional(),
+            briefing_commits: relaxedNumber().optional(),
+            briefing_importance_threshold: relaxedNumber().optional(),
+            briefing_insights: z
+                .boolean()
+                .optional()
+                .describe('Show the Insights row (GitHub repo stats/traffic + analytics digest); false skips those calls'),
             briefing_summaries: relaxedNumber().optional(),
             briefing_include_team: z.boolean().optional(),
             briefing_issues: relaxedNumber().optional(),
@@ -143,6 +155,26 @@ export const updateConfigurationSchemaMcp = z.preprocess(
 )
 
 export type UpdateConfigurationArgs = z.infer<typeof updateConfigurationSchema>
+
+type BriefingArgKey = Extract<keyof UpdateConfigurationArgs, `briefing_${string}`>
+
+/** [INVARIANT] One row per `briefing_*` arg; keep in parity with `BRIEFING_CONFIG_KEY_MAP`. */
+const BRIEFING_ARG_TARGETS: readonly (readonly [BriefingArgKey, BriefingConfigurableKey])[] = [
+    ['briefing_commits', 'commitCount'],
+    ['briefing_entries', 'entryCount'],
+    ['briefing_summaries', 'summaryCount'],
+    ['briefing_include_team', 'includeTeam'],
+    ['briefing_issues', 'issueCount'],
+    ['briefing_prs', 'prCount'],
+    ['briefing_pr_status', 'prStatusBreakdown'],
+    ['briefing_milestones', 'milestoneCount'],
+    ['briefing_workflows', 'workflowCount'],
+    ['briefing_workflow_status', 'workflowStatusBreakdown'],
+    ['briefing_copilot', 'copilotReviews'],
+    ['briefing_importance_threshold', 'briefingImportanceThreshold'],
+    ['briefing_graph', 'graphPivots'],
+    ['briefing_insights', 'insights'],
+]
 
 type StoredBriefingConfig = NonNullable<
     Parameters<ConfigManager['updateConfig']>[0]['briefingConfig']
@@ -292,21 +324,15 @@ export function handleUpdateConfiguration(
     }
 
     const currentBriefingConfig = configManager.getConfig().briefingConfig
-    let bcChanged = false
     const newBc = { ...currentBriefingConfig }
-
-    if (args.briefing_entries !== undefined) { newBc.entryCount = args.briefing_entries; bcChanged = true; updatedKeys.push('briefing_entries'); mutatedBriefingKeys.push('entryCount'); }
-    if (args.briefing_summaries !== undefined) { newBc.summaryCount = args.briefing_summaries; bcChanged = true; updatedKeys.push('briefing_summaries'); mutatedBriefingKeys.push('summaryCount'); }
-    if (args.briefing_include_team !== undefined) { newBc.includeTeam = args.briefing_include_team; bcChanged = true; updatedKeys.push('briefing_include_team'); mutatedBriefingKeys.push('includeTeam'); }
-    if (args.briefing_issues !== undefined) { newBc.issueCount = args.briefing_issues; bcChanged = true; updatedKeys.push('briefing_issues'); mutatedBriefingKeys.push('issueCount'); }
-    if (args.briefing_prs !== undefined) { newBc.prCount = args.briefing_prs; bcChanged = true; updatedKeys.push('briefing_prs'); mutatedBriefingKeys.push('prCount'); }
-    if (args.briefing_pr_status !== undefined) { newBc.prStatusBreakdown = args.briefing_pr_status; bcChanged = true; updatedKeys.push('briefing_pr_status'); mutatedBriefingKeys.push('prStatusBreakdown'); }
-    if (args.briefing_milestones !== undefined) { newBc.milestoneCount = args.briefing_milestones; bcChanged = true; updatedKeys.push('briefing_milestones'); mutatedBriefingKeys.push('milestoneCount'); }
-    if (args.briefing_workflows !== undefined) { newBc.workflowCount = args.briefing_workflows; bcChanged = true; updatedKeys.push('briefing_workflows'); mutatedBriefingKeys.push('workflowCount'); }
-    if (args.briefing_workflow_status !== undefined) { newBc.workflowStatusBreakdown = args.briefing_workflow_status; bcChanged = true; updatedKeys.push('briefing_workflow_status'); mutatedBriefingKeys.push('workflowStatusBreakdown'); }
-    if (args.briefing_copilot !== undefined) { newBc.copilotReviews = args.briefing_copilot; bcChanged = true; updatedKeys.push('briefing_copilot'); mutatedBriefingKeys.push('copilotReviews'); }
-    if (args.briefing_graph !== undefined) { newBc.graphPivots = args.briefing_graph; bcChanged = true; updatedKeys.push('briefing_graph'); mutatedBriefingKeys.push('graphPivots'); }
-
+    for (const [argKey, target] of BRIEFING_ARG_TARGETS) {
+        const value = args[argKey]
+        if (value === undefined) continue
+        Object.assign(newBc, { [target]: value })
+        updatedKeys.push(argKey)
+        mutatedBriefingKeys.push(target)
+    }
+    let bcChanged = mutatedBriefingKeys.length > 0
     if (mutatedBriefingKeys.length > 0) {
         mutatedFields.briefingKeys = mutatedBriefingKeys
     }

@@ -301,6 +301,17 @@ export class ConfigResolver {
     }
 
     /**
+     * True when the loaded config file defines `key` with a non-null value (ignores CLI/env/defaults).
+     */
+    public hasConfigFileKey(key: string): boolean {
+        return (
+            Object.hasOwn(this.configFileOptions, key) &&
+            this.configFileOptions[key] !== undefined &&
+            this.configFileOptions[key] !== null
+        )
+    }
+
+    /**
      * Checks whether the given CLI key was explicitly passed on the command line (not default/env/config).
      */
     public isCliProvided(cliKey: string): boolean {

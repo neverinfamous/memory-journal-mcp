@@ -176,7 +176,8 @@ export async function fetchIssuesAndPrs(
             ? Math.max(20, config.prCount)
             : config.prCount
 
-        const [issues, prs] = await Promise.all([
+        // [INTENT] allSettled: an issues failure must not blank the PRs row (and vice versa).
+        const [issuesSettled, prsSettled] = await Promise.allSettled([
             includeIssues
                 ? github.getIssues(owner, repo, 'open', config.issueCount)
                 : Promise.resolve([]),
@@ -184,6 +185,9 @@ export async function fetchIssuesAndPrs(
                 ? github.getPullRequests(owner, repo, prState, prLimit)
                 : Promise.resolve([]),
         ])
+        const issues = issuesSettled.status === 'fulfilled' ? issuesSettled.value : []
+        const prs = prsSettled.status === 'fulfilled' ? prsSettled.value : []
+        const partialFailure = issuesSettled.status === 'rejected' || prsSettled.status === 'rejected'
 
         const openIssues = issues.length > 0 ? issues.length : 0
         const openIssueList =
@@ -209,7 +213,14 @@ export async function fetchIssuesAndPrs(
                   }))
                 : undefined
 
-        return { openIssues, openPRs, openIssueList, openPrList, allPrs: prs }
+        return {
+            openIssues,
+            openPRs,
+            openIssueList,
+            openPrList,
+            ...(prsSettled.status === 'fulfilled' ? { allPrs: prs } : {}),
+            ...(partialFailure ? { degraded: true } : {}),
+        }
     } catch (error) {
         logger.debug('Failed to fetch issues and PRs', {
             module: 'BRIEFING',
@@ -278,13 +289,17 @@ export async function fetchInsights(
     degraded?: boolean | undefined
 }> {
     try {
-        const [repoStats, trafficResult] = await Promise.all([
-            github.getRepoStats(owner, repo),
+        const [repoStatsResult, trafficResult] = await Promise.all([
+            github
+                .getRepoStats(owner, repo)
+                .then((data) => ({ ok: true as const, data }))
+                .catch((error: unknown) => ({ ok: false as const, error })),
             github
                 .getTrafficData(owner, repo)
                 .then((data) => ({ ok: true as const, data }))
                 .catch((error: unknown) => ({ ok: false as const, error })),
         ])
+        const repoStats = repoStatsResult.ok ? repoStatsResult.data : null
         if (!repoStats) return { degraded: true }
 
         const result: NonNullable<BriefingGitHub['insights']> = {
@@ -353,11 +368,14 @@ export async function fetchCopilotReviews(
                 ? await prefetchedPrsPromise.catch(() => undefined)
                 : undefined
         const recentPrs = prefetchedPrs ?? (await github.getPullRequests(owner, repo, 'all', 10))
-        const summaries = await Promise.all(
+        const settled = await Promise.allSettled(
             recentPrs.slice(0, 5).map((pr) => github.getCopilotReviewSummary(owner, repo, pr.number))
         )
+        const summaries = settled.flatMap((s) => (s.status === 'fulfilled' ? [s.value] : []))
         const aggregated = aggregateCopilotReviewSummaries(summaries)
-        return aggregated.reviewed > 0 ? { reviews: aggregated } : undefined
+        const partial = summaries.length < settled.length
+        if (aggregated.reviewed === 0) return partial ? { degraded: true } : undefined
+        return { reviews: aggregated, ...(partial ? { degraded: true } : {}) }
     } catch (error) {
         logger.debug('Failed to fetch Copilot reviews', {
             module: 'BRIEFING',

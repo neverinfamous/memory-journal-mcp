@@ -119,7 +119,9 @@ async function collectGitHubBriefingData(
         fetchCiStatus(repoGithub, owner, repo, config),
         issuesAndPrsPromise,
         fetchMilestones(repoGithub, owner, repo, config.milestoneCount ?? 3),
-        fetchInsights(repoGithub, owner, repo),
+        config.insights !== false
+            ? fetchInsights(repoGithub, owner, repo)
+            : Promise.resolve({}),
         config.copilotReviews
             ? fetchCopilotReviews(
                   repoGithub,

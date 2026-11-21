@@ -370,10 +370,30 @@ describe('formatUserMessage', () => {
         })
 
         expect(result).toContain('**Git History**')
-        expect(result).toContain('`abc1234`')
-        expect(result).toContain('`def5678`')
-        expect(result).toContain('`get_commit_history`')
-        expect(result).toContain('`search_commits`')
+        // One shared untrusted fence, no hyperlinks, no tool tip (token budget)
+        expect(result).toContain('Recent: <untrusted_remote_content>abc1234 feat: add stuff ¦ def5678 fix: annoying bug</untrusted_remote_content>')
+        expect(result.match(/<untrusted_remote_content>/g)?.length ?? 0).toBeGreaterThan(0)
+        expect(result).not.toContain('https://github.com/')
+        expect(result).not.toContain('`get_commit_history`')
+        expect(result).not.toContain('💡')
+    })
+
+    it('should render shared-fence journal rows and drop the summary hint when graph pivots are on', () => {
+        const result = formatUserMessage({
+            ...baseOpts(),
+            latestPreviews: ['#1 (note): <untrusted_remote_content>first</untrusted_remote_content>', '#2 (note): <untrusted_remote_content>a &amp; b</untrusted_remote_content>'],
+            summaryPreviews: ['#3 (retrospective): <untrusted_remote_content>did - x</untrusted_remote_content>'],
+            graphSummary: { totalRelationships: 5, causalMetrics: {}, topHubs: [] } as never,
+            graphPivots: { windowDays: 14, degrees: {}, commitRefs: {}, activeThreads: [], recentEntries: 2, unlinkedEntries: 1 },
+        })
+        expect(result).toContain('Latest: <untrusted_remote_content>#1 (note): first ¦ #2 (note): a &amp; b</untrusted_remote_content>')
+        expect(result).not.toContain('Entry:')
+        // Post-fence rewriting of untrusted text is gone
+        expect(result).toContain('did - x')
+        expect(result).not.toContain('getEntryById')
+        // 1/2 unlinked is below the ≥5-sample alert threshold: no ⚠️ on the row
+        expect(result).toContain('Unlinked (14d): 1/2')
+        expect(result).not.toContain('⚠️')
     })
 
     it('should surface dirty localGitStatus in GitHub row when worktree is not clean', () => {

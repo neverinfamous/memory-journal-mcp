@@ -34,6 +34,7 @@ function buildDefaultBriefingBaseline(): BriefingBaselineMap {
         copilotReviews: DEFAULT_BRIEFING_CONFIG.copilotReviews ?? false,
         briefingImportanceThreshold: DEFAULT_BRIEFING_CONFIG.briefingImportanceThreshold ?? 0.3,
         graphPivots: DEFAULT_BRIEFING_CONFIG.graphPivots ?? true,
+        insights: DEFAULT_BRIEFING_CONFIG.insights ?? true,
     }
 }
 

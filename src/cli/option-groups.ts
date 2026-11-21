@@ -270,6 +270,10 @@ export function addBriefingOptions(command: Command): Command {
                 'Disable graph/git pivots in briefing: entry link degree, commit→entry refs, active threads (env: BRIEFING_GRAPH=false)'
             )
             .option(
+                '--no-briefing-insights',
+                'Hide the briefing Insights row and skip its GitHub repo stats/traffic calls and analytics digest (env: BRIEFING_INSIGHTS=false)'
+            )
+            .option(
                 '--workflow-summary <text>',
                 'Workflow summary for memory://workflows resource (env: MEMORY_JOURNAL_WORKFLOW_SUMMARY)'
             )

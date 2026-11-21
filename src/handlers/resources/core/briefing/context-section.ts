@@ -8,6 +8,8 @@
 import { sliceUntrustedInline, type BriefingConfig, type ResourceContext } from '../../shared.js'
 import type { JournalEntry } from '../../../../types/index.js'
 import type { MirrorCandidate } from '../../../../utils/team-mirror.js'
+import { extractPreview } from './preview-helpers.js'
+import { logger } from '../../../../utils/logger.js'
 
 export {
     buildGraphContext,
@@ -23,48 +25,9 @@ export {
 /** Content preview length for briefing entry summaries */
 const PREVIEW_LENGTH = 120
 
-const PREVIEW_FENCE_WRAPPER_RE =
-    /^<untrusted_remote_content>\r?\n?([\s\S]*?)\r?\n?<\/untrusted_remote_content>$/i
-
+/** Unfenced multi-line preview (markers stripped, CMS-04 headings skipped, home paths redacted). */
 export function cleanPreview(content: string | undefined | null, length: number): string {
-    if (!content) return ''
-    const fencedMatch = PREVIEW_FENCE_WRAPPER_RE.exec(content.trim())
-    const unwrapped =
-        fencedMatch?.[1] !== undefined
-            ? fencedMatch[1]
-                  .replaceAll('&lt;', '<')
-                  .replaceAll('&gt;', '>')
-                  .replaceAll('&amp;', '&')
-            : content
-
-    // Path Truncation and Noise Reduction
-    const cleaned = unwrapped
-        .replace(/## Accomplished - /g, '')
-        .replace(/## Accomplished\n?/g, '')
-        // Windows paths
-        .replace(/C:\\Users\\[^\\]+\\.gemini\\antigravity(?:-ide)?\\brain/gi, '<appDataDir>\\brain')
-        .replace(/C:\\Users\\[^\\]+\\Desktop/gi, '<desktop>')
-        // Linux/Mac paths
-        .replace(/\/home\/[^/]+\/\.gemini\/antigravity(?:-ide)?\/brain/g, '<appDataDir>/brain')
-        .replace(/\/home\/[^/]+\/Desktop/g, '<desktop>')
-        .replace(/\/Users\/[^/]+\/\.gemini\/antigravity(?:-ide)?\/brain/g, '<appDataDir>/brain')
-        .replace(/\/Users\/[^/]+\/Desktop/g, '<desktop>')
-        .replace(/\r?\n/g, ' ')
-        .trim()
-
-    if (cleaned.length <= length) return cleaned
-
-    // First try to truncate at the last full sentence or bullet point within the length limit
-    const truncated = cleaned.slice(0, length)
-    const sentenceBoundaryMatch = /.*[.?!](?=\s|$)/.exec(truncated)
-    if (sentenceBoundaryMatch && sentenceBoundaryMatch[0].length > length * 0.4) {
-        return sentenceBoundaryMatch[0]
-    }
-
-    // Fallback: Truncate at a word boundary to avoid cutting mid-word
-    const lastSpace = truncated.lastIndexOf(' ')
-    const boundary = lastSpace > length * 0.6 ? lastSpace : length
-    return cleaned.slice(0, boundary) + '…'
+    return extractPreview(content, length)
 }
 
 export interface JournalContext {
@@ -179,15 +142,42 @@ function formatSummaryEntries(
     summaryEntries: JournalEntry[]
 ): { id: number; timestamp: string; type: string; preview: string }[] {
     return summaryEntries.map((entry: JournalEntry) => {
-        const titleLine =
-            entry.content.split(/\r?\n/)[0]?.replace(/^#+\s*(?:Session Summary:\s*)?/, '') ?? ''
+        // [INTENT] First meaningful line: an H1 title, else the first Accomplished bullet (never a bare CMS-04 heading).
+        const titleLine = extractPreview(entry.content, PREVIEW_LENGTH, { firstLineOnly: true })
         return {
             id: entry.id,
             timestamp: entry.timestamp,
             type: entry.entryType,
-            preview: sliceUntrustedInline(cleanPreview(titleLine, PREVIEW_LENGTH), PREVIEW_LENGTH + 1),
+            preview: sliceUntrustedInline(titleLine, PREVIEW_LENGTH + 1),
         }
     })
+}
+
+/**
+ * [BOUNDARY] SQLite failures degrade the Journal row instead of failing the whole briefing.
+ */
+export function safeBuildJournalContext(
+    context: ResourceContext,
+    config: BriefingConfig,
+    projectNumber?: number | null,
+    activeWorkspaceId?: string
+): JournalContext {
+    try {
+        return buildJournalContext(context, config, projectNumber, activeWorkspaceId)
+    } catch (error) {
+        logger.warning('Briefing journal context failed (degraded)', {
+            module: 'BRIEFING',
+            operation: 'journal-context',
+            error: error instanceof Error ? error.message : String(error),
+        })
+        return {
+            totalEntries: 0,
+            latestEntries: [],
+            lastModified: new Date().toISOString(),
+            workspaceId: activeWorkspaceId || config.defaultWorkspaceId || 'default',
+            mirrorCandidates: [],
+        }
+    }
 }
 
 export function buildJournalContext(

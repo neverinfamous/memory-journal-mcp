@@ -30,9 +30,10 @@ import {
 import type { InternalResourceDef, ResourceContext, ResourceResult } from '../../shared.js'
 import { buildGitHubSection } from './github-section.js'
 import {
-    buildJournalContext,
+    safeBuildJournalContext,
     buildTeamContext,
     buildGraphContext,
+    type JournalContext,
 } from './context-section.js'
 import { formatUserMessage } from './user-message.js'
 import { buildInsightsSection } from './insights-section.js'
@@ -292,13 +293,13 @@ function renderBriefingUserMessage(params: {
     config: typeof DEFAULT_BRIEFING_CONFIG
     activeGithub: ResourceContext['github']
     activeWorkspaceId: string | undefined
-    journal: ReturnType<typeof buildJournalContext>
+    journal: JournalContext
     github: Awaited<ReturnType<typeof buildGitHubSection>>
     system: Awaited<ReturnType<typeof buildBriefingSystemSummary>>
     team: ReturnType<typeof buildTeamContext>
 }): string {
     const { context, config, activeGithub, activeWorkspaceId, journal, github, system, team } = params
-    const insights = buildInsightsSection(context, activeWorkspaceId)
+    const insights = config.insights !== false ? buildInsightsSection(context, activeWorkspaceId) : null
     const graphPivots =
         config.graphPivots !== false
             ? buildGraphPivots(
@@ -377,7 +378,7 @@ export async function buildBriefingData(
         }
     }
 
-    const journal = buildJournalContext(context, config, activeProjectNumber, activeWorkspaceId)
+    const journalWorkspaceId = activeWorkspaceId || config.defaultWorkspaceId || 'default'
     const suppressSystemCwd =
         targetRepo !== undefined ||
         (activeWorkspaceId !== undefined &&
@@ -388,7 +389,8 @@ export async function buildBriefingData(
                 config.defaultWorkspaceId?.toLowerCase() === 'default'))
     const systemRepoPath = activeRepoPath ?? (suppressSystemCwd ? null : undefined)
 
-    const [github, system] = await Promise.all([
+    // [INTENT] Start network/git work first so the synchronous SQLite journal queries overlap it.
+    const settledPromise = Promise.allSettled([
         buildGitHubSection(
             activeGithub,
             config,
@@ -400,10 +402,15 @@ export async function buildBriefingData(
             context.filterConfig,
             systemRepoPath,
             context.resourceCount,
-            journal.workspaceId,
+            journalWorkspaceId,
             { lite: true }
         ),
     ])
+    const journal = safeBuildJournalContext(context, config, activeProjectNumber, activeWorkspaceId)
+    const [githubSettled, systemSettled] = await settledPromise
+    const github = githubSettled.status === 'fulfilled' ? githubSettled.value : null
+    if (systemSettled.status === 'rejected') throw systemSettled.reason
+    const system = systemSettled.value
     const team = config.includeTeam
         ? buildTeamContext(
               context,

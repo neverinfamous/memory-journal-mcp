@@ -13,7 +13,8 @@ import {
 } from '../shared.js'
 import { withPriority, ASSISTANT_FOCUSED } from '../../../utils/resource-annotations.js'
 import { parseCanonicalPositiveInt } from '../../../utils/safe-positive-int.js'
-import { previewLabel } from './briefing/graph-pivots-section.js'
+import { previewLabelText, resolveBriefingToolNaming } from './briefing/graph-pivots-section.js'
+import { fenceUntrustedList } from '../fencing-helpers.js'
 import { fenceNonCanonicalRefOrKey } from '../../../utils/security-utils.js'
 
 function formatDefaultAgentContext(
@@ -66,12 +67,14 @@ function handleAgentContextResource(uri: string, context: ResourceContext): Reso
     // registry context (H1): report it as unresolved instead.
     if (repo !== undefined && namedRepo === undefined) {
         const safeRepo = fenceNonCanonicalRefOrKey(repo, true)
+        const listHint =
+            resolveBriefingToolNaming(context?.filterConfig) === 'codemode' ? 'mj.admin.listProjects' : 'list_projects'
         return {
             data: [
                 `Project: ${safeRepo}`,
                 'Project Number: unresolved',
                 'Workspace ID: unresolved',
-                `Instructions: '${safeRepo}' is not a registered project. Use list_projects (or the project registry) to find the correct repo, then re-read memory://agent-context/{repo}.`,
+                `Instructions: '${safeRepo}' is not a registered project. Use ${listHint} (or the project registry) to find the correct repo, then re-read memory://agent-context/{repo}.`,
             ].join('\n'),
         }
     }
@@ -128,8 +131,8 @@ function buildSessionEntryLines(uri: string, context: ResourceContext, workspace
     }
     const entries = context.db.getEntriesBySession(sessionId, SESSION_ENTRY_LIMIT, workspaceId)
     if (entries.length === 0) return ['Session Entries: none yet (no entries written with this session_id)']
-    const items = entries.map((e) => `#${String(e.id)} (${e.entryType}) ${previewLabel(e.content)}`)
-    return [`Session Entries (newest first; link targets): ${items.join(' · ')}`]
+    const items = entries.map((e) => `#${String(e.id)} (${e.entryType}) ${previewLabelText(e.content)}`)
+    return [`Session Entries (newest first; link targets): ${fenceUntrustedList(items)}`]
 }
 
 export function getAgentContextResource(): InternalResourceDef {
