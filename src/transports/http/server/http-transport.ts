@@ -386,18 +386,24 @@ export class HttpTransport {
             }
         }
 
+        this.sseTransports.clear()
+        this.rateLimitMap.clear()
+
         if (this.httpServer !== null) {
             const server = this.httpServer
-            await new Promise<void>((resolve, reject) => {
-                server.close((err) => {
-                    if (err) reject(err)
-                    else resolve()
+            this.httpServer = null
+            if (server.listening) {
+                await new Promise<void>((resolve, reject) => {
+                    server.close((err) => {
+                        if (err) reject(err)
+                        else resolve()
+                    })
+                    // Drop lingering keep-alive sockets so close() cannot hang shutdown
+                    if (typeof server.closeAllConnections === 'function') {
+                        server.closeAllConnections()
+                    }
                 })
-                // Drop lingering keep-alive sockets so close() cannot hang shutdown
-                if (typeof server.closeAllConnections === 'function') {
-                    server.closeAllConnections()
-                }
-            })
+            }
         }
 
         logger.info('Shutdown complete', { module: 'HTTP' })

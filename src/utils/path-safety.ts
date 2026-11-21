@@ -124,7 +124,8 @@ function resolveAllowedRoots(rawRoots: string[]): string[] {
             'No allowed input/output roots configured for sandbox boundary. Please configure ALLOWED_IO_ROOTS env variable or pass --allowed-io-roots with absolute paths (e.g. C:\\my\\path) to enable filesystem operations.'
         )
     }
-    const cacheKey = rawRoots.join('\0')
+    const hasRelative = rawRoots.some((r) => !selectPathModule(r).isAbsolute(r))
+    const cacheKey = hasRelative ? `${process.cwd()}\0${rawRoots.join('\0')}` : rawRoots.join('\0')
     const now = Date.now()
     const cached = allowedRootsCache.get(cacheKey)
     if (cached && cached.expiresAt > now) {

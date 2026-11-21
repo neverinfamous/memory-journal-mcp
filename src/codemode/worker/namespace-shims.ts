@@ -7,14 +7,17 @@ import { wrapResult } from '../worker-result-proxy.js'
 import { JOURNAL_TABLES, getSchemaHelp, listJournalTables } from '../api/schema-help.js'
 import { IMMUTABLE_PROXY_TRAPS } from './result-proxy-aliases.js'
 
-export const DB_TO_JOURNAL: Record<string, [string, string]> = {
-    count: ['analytics', 'getStatistics'],
-    analyze: ['analytics', 'getStatistics'],
-    exists: ['core', 'getEntryById'],
-    upsert: ['core', 'createEntry'],
-    batchInsert: ['core', 'createEntry'],
-    readQuery: ['core', 'readQuery'],
-}
+export const DB_TO_JOURNAL: Record<string, [string, string]> = Object.assign(
+    Object.create(null) as Record<string, [string, string]>,
+    {
+        count: ['analytics', 'getStatistics'],
+        analyze: ['analytics', 'getStatistics'],
+        exists: ['core', 'getEntryById'],
+        upsert: ['core', 'createEntry'],
+        batchInsert: ['core', 'createEntry'],
+        readQuery: ['core', 'readQuery'],
+    }
+)
 
 const DB_MAINTENANCE_CALLS = new Set(['vacuum', 'integrityCheck'])
 const SCHEMA_OPS_NOT_RUN = new Set(['listTables', 'describeTable'])
@@ -230,7 +233,7 @@ export function createEmptyFallback(): unknown {
         forEach: () => undefined,
         get: () => undefined,
         has: () => false,
-        set: () => fallback,
+        set: () => proxy,
         delete: () => false,
         clear: () => undefined,
         size: 0,
@@ -253,7 +256,7 @@ export function createEmptyFallback(): unknown {
         flat: () => [],
         flatMap: () => [],
     }
-    return new Proxy(fallback, {
+    const proxy: unknown = new Proxy(fallback, {
         ...IMMUTABLE_PROXY_TRAPS,
         get(t, p): unknown {
             if (p in t) return t[p]
@@ -261,6 +264,7 @@ export function createEmptyFallback(): unknown {
             return undefined
         },
     })
+    return proxy
 }
 
 const CONTEXT_COLLECTION_NAMES: ReadonlySet<string> = new Set([

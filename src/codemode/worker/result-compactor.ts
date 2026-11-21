@@ -5,7 +5,7 @@
 
 import type { SandboxResult } from '../types.js'
 import { unwrapResultProxy } from '../worker-result-proxy.js'
-import { safeFormatSandboxError } from './script-and-metadata-cache.js'
+import { isCrossRealmError, safeFormatSandboxError } from './script-and-metadata-cache.js'
 
 const MAX_COMPACTION_DEPTH = 6
 const MAX_COMPACTION_NODES = 2_000
@@ -129,10 +129,10 @@ export function compactOversizedResult(
                 return compactOversizedResult(converted, limitBytes, depth + 1, seen, budget)
             }
         }
-        if (val instanceof Error) {
+        if (isCrossRealmError(val)) {
             const errObj: Record<string, unknown> = {
-                name: val.name,
-                message: val.message,
+                name: typeof val.name === 'string' ? val.name : 'Error',
+                message: typeof val.message === 'string' ? val.message : String(val.message),
             }
             for (const k of Object.keys(val)) {
                 if (k === '__proto__' || k === 'constructor' || k === 'prototype') continue

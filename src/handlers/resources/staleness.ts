@@ -15,13 +15,26 @@ import { formatHandlerError } from '../../utils/error-helpers.js'
 import { loadProjectRegistryFromConfig } from '../../utils/workspace-resolver.js'
 import { workspacesForProject } from '../../utils/write-scope.js'
 
-const emptyStringToUndefined = (val: unknown): unknown =>
-    typeof val === 'string' && val.trim() === '' ? undefined : val
+const positiveFiniteEnvNumber = (defaultVal: number): z.ZodType<number> =>
+    z.preprocess((val: unknown) => {
+        if (val === undefined || val === null) return undefined
+        if (typeof val === 'number') return val
+        if (typeof val === 'string') {
+            const trimmed = val.trim()
+            if (trimmed === '') return undefined
+            if (/^(?:0\.\d+|[1-9]\d*(?:\.\d+)?)$/.test(trimmed)) {
+                const parsed = Number(trimmed)
+                if (Number.isFinite(parsed) && parsed > 0) return parsed
+            }
+            return NaN
+        }
+        return val
+    }, z.number().positive().default(defaultVal))
 
 const EnvConfig = z.object({
-    STALENESS_ACTIVE_HOURS: z.preprocess(emptyStringToUndefined, z.coerce.number().default(24)),
-    STALENESS_RECENT_DAYS: z.preprocess(emptyStringToUndefined, z.coerce.number().default(7)),
-    STALENESS_STALE_DAYS: z.preprocess(emptyStringToUndefined, z.coerce.number().default(30)),
+    STALENESS_ACTIVE_HOURS: positiveFiniteEnvNumber(24),
+    STALENESS_RECENT_DAYS: positiveFiniteEnvNumber(7),
+    STALENESS_STALE_DAYS: positiveFiniteEnvNumber(30),
 })
 
 interface StalenessEnv {

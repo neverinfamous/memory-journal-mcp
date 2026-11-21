@@ -1,6 +1,7 @@
 import * as fs from 'node:fs'
 import * as os from 'node:os'
 import * as path from 'node:path'
+import { CANONICAL_SERVER_ENV_KEYS } from '../server-options-groups.js'
 
 const DEFAULT_PROJECT_CONFIG_PATH = path.resolve(
     os.homedir(),
@@ -9,27 +10,7 @@ const DEFAULT_PROJECT_CONFIG_PATH = path.resolve(
     'memory-journal.config.json'
 )
 
-const AMBIENT_PROJECT_CONFIG_ENV_KEYS = [
-    'MEMORY_JOURNAL_CONFIG',
-    'DB_PATH',
-    'TEAM_DB_PATH',
-    'DEFAULT_WORKSPACE_ID',
-    'DEFAULT_PROJECT_NUMBER',
-    'PROJECT_REGISTRY',
-    'GITHUB_TOKEN',
-    'BRIEFING_GITHUB_ENABLED',
-    'BRIEFING_TEAM_ENABLED',
-    'LOG_LEVEL',
-    'IMPORTANCE_THRESHOLD',
-    'ALLOWED_IO_ROOTS',
-    'TOOL_FILTER',
-    'READ_ONLY',
-    'AUTO_PRUNE',
-    'EMBEDDING_MODEL',
-    'ADDITIONAL_TEAM_DBS',
-    'TEAM_ADMIN',
-    'TEAM_DEFAULT_ROLE',
-] as const
+const AMBIENT_PROJECT_CONFIG_ENV_KEYS = CANONICAL_SERVER_ENV_KEYS
 
 export function resolveProjectConfigPath(options?: Record<string, unknown>): string {
     const rawOpt = options?.['config']

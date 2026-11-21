@@ -85,18 +85,18 @@ function inferLogseqEntryMetadata(
     hasDoneTasks: boolean,
     mjMeta: FrontmatterData
 ): void {
-    if (defaultEntryType) return
     const posixFile = filename.replace(/\\/g, '/')
     const baseFilename = posix.basename(posixFile)
     const journalMatch = /\b(\d{4}_\d{2}_\d{2})\b/.exec(baseFilename)
+    if (journalMatch?.[1] && !mjMeta.timestamp) {
+        const formatted = formatToISODate(`${journalMatch[1].replace(/_/g, '-')}T12:00:00Z`)
+        if (formatted !== undefined) {
+            mjMeta.timestamp = formatted
+        }
+    }
+    if (defaultEntryType) return
     if (journalMatch || /(?:^|\/)journals\//i.test(posixFile)) {
         mjMeta.entry_type = 'standup'
-        if (journalMatch?.[1] && !mjMeta.timestamp) {
-            const formatted = formatToISODate(`${journalMatch[1].replace(/_/g, '-')}T12:00:00Z`)
-            if (formatted !== undefined) {
-                mjMeta.timestamp = formatted
-            }
-        }
     } else if (hasDoneTasks && !hasTasks) {
         mjMeta.entry_type = 'feature_implementation'
     } else if (hasTasks) {

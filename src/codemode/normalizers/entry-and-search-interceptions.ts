@@ -152,7 +152,9 @@ function normalizeTwoArgUpdateEntry(
             }
             return { args: [{ entry_id: parsed, ...args[1] }] }
         }
-        if (Number.isSafeInteger(args[0])) return { args: [{ entry_id: args[0], ...args[1] }] }
+        if (Number.isSafeInteger(args[0]) && args[0] > 0) {
+            return { args: [{ entry_id: args[0], ...args[1] }] }
+        }
         return validationError(
             `${methodName} requires a finite safe integer entry_id.`,
             'Provide a positive integer ID.'

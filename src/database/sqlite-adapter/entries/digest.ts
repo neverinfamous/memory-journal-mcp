@@ -352,7 +352,7 @@ export function getLatestAnalyticsSnapshot(
         db,
         `SELECT id, created_at, data FROM analytics_snapshots
          WHERE snapshot_type = ?
-         ORDER BY created_at DESC
+         ORDER BY created_at DESC, id DESC
          LIMIT 1`,
         workspaceSnapshotType(type, workspaceId)
     )
@@ -377,7 +377,7 @@ export function getAnalyticsSnapshots(
         db,
         `SELECT id, created_at, data FROM analytics_snapshots
          WHERE snapshot_type = ?
-         ORDER BY created_at DESC
+         ORDER BY created_at DESC, id DESC
          LIMIT ?`,
         workspaceSnapshotType(type, workspaceId),
         limit

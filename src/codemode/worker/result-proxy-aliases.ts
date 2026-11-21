@@ -162,7 +162,7 @@ function resolveCollectionAndGraphAliasProp(
     if (prop === 'revisions' && 'history' in targetRecord && Array.isArray(targetRecord['history'])) {
         const revisions = targetRecord['history'].filter(isObject).map(
             (h) =>
-                new Proxy(h, {
+                new Proxy(Object.isFrozen(h) ? { ...h } : h, {
                     ...IMMUTABLE_PROXY_TRAPS,
                     get(t: Record<string, unknown>, p: string | symbol): unknown {
                         if (p === 'revisionNumber') return t['revisionId']

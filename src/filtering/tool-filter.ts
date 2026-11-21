@@ -386,7 +386,11 @@ export function isFilterEffectivelyReadOnly(filterConfig: ToolFilterConfig): boo
             explicitCodemode = true
         } else if (
             r.type === 'exclude' &&
-            (r.target === 'codemode' || r.target === 'mj_execute_code')
+            (r.target === 'codemode' ||
+                r.target === 'mj_execute_code' ||
+                r.target === 'starter' ||
+                r.target === 'essential' ||
+                r.target === 'full')
         ) {
             explicitCodemode = false
         }

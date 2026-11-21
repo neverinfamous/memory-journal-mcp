@@ -219,7 +219,8 @@ async function executeAuditedTool<T>(
     auditReads: boolean,
     toolName: string,
     args: unknown,
-    fn: () => Promise<T>
+    fn: () => Promise<T>,
+    runtime?: object | null
 ): Promise<T> {
     const scope = getRequiredScope(toolName)
     const isReadScope = scope === 'read'
@@ -243,7 +244,7 @@ async function executeAuditedTool<T>(
     const user = authCtx?.authenticated === true ? (authCtx.claims?.sub ?? null) : null
     const scopes = getGrantedAuthScopes(authCtx)
     const sessionId = reqCtx?.sessionId
-    const scopeMeta = extractAuditScopeFromArgs(args, reqCtx)
+    const scopeMeta = extractAuditScopeFromArgs(args, reqCtx, runtime)
     const requestId = generateRequestId()
     const start = performance.now()
     let success = false
@@ -292,12 +293,15 @@ async function executeAuditedTool<T>(
  *
  * @param auditLogger  The JSONL audit logger
  */
-export function createAuditInterceptor(auditLogger: AuditLogger): AuditInterceptor {
+export function createAuditInterceptor(
+    auditLogger: AuditLogger,
+    runtime?: object | null
+): AuditInterceptor {
     const auditReads = auditLogger.config.auditReads
 
     return {
         around<T>(toolName: string, args: unknown, fn: () => Promise<T>): Promise<T> {
-            return executeAuditedTool(auditLogger, auditReads, toolName, args, fn)
+            return executeAuditedTool(auditLogger, auditReads, toolName, args, fn, runtime)
         },
     }
 }
@@ -307,6 +311,7 @@ export interface AuditOperationOptions {
     resourceUri?: string | undefined
     workspaceId?: string | undefined
     projectNumber?: number | undefined
+    runtime?: object | null | undefined
     capabilities?:
         | {
               requiresTeamScope?: boolean
@@ -355,7 +360,7 @@ export async function auditOperation<T>(
     const user = authCtx?.authenticated === true ? (authCtx.claims?.sub ?? null) : null
     const scopes = getGrantedAuthScopes(authCtx)
     const sessionId = reqCtx?.sessionId
-    const uriScope = extractAuditScopeFromUri(target, reqCtx)
+    const uriScope = extractAuditScopeFromUri(target, reqCtx, options?.runtime)
     const workspaceId = options?.workspaceId ?? uriScope.workspaceId
     const projectNumber = options?.projectNumber ?? uriScope.projectNumber
     const category = resolveAuditOperationCategory(target, options?.capabilities)

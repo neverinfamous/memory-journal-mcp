@@ -3,7 +3,7 @@ import { type EntriesSharedContext } from '../shared.js'
 import { isFts5QueryError, sanitizeFtsQuery } from './fts-sanitizer.js'
 import { effectiveWorkspace } from '../../../workspace-scope.js'
 import { sanitizeSearchQuery } from '../../../../utils/security-utils.js'
-import { chunkedInPredicate } from '../../row-helpers.js'
+import { chunkedInPredicate, DUAL_IN_PARAM_BUCKETS } from '../../row-helpers.js'
 import { expandTagFilterValues } from '../../tags.js'
 import {
     excludesCommitNarrative,
@@ -103,14 +103,40 @@ export function getSearchFacets(
     return fallbackToLike ? { ...result, degraded: true } : result
 }
 
-function buildFtsFacetTagClauses(expandedFilterTags: string[]): {
+function buildFtsFacetTagClauses(
+    expandedFilterTags: string[],
+    baseParamCount: number
+): {
+    filterTagsCte: string
+    filterTagsParams: unknown[]
     tagFilterSql: string
     tagFilterParams: unknown[]
     typeFilterSql: string
     typeFilterParams: unknown[]
 } {
     if (expandedFilterTags.length === 0) {
-        return { tagFilterSql: '', tagFilterParams: [], typeFilterSql: '', typeFilterParams: [] }
+        return {
+            filterTagsCte: '',
+            filterTagsParams: [],
+            tagFilterSql: '',
+            tagFilterParams: [],
+            typeFilterSql: '',
+            typeFilterParams: [],
+        }
+    }
+    // [INVARIANT] M3: Keep combined multi-CTE binds safely <= 500 when excludeTags + tags are large.
+    const paddedTagBinds =
+        DUAL_IN_PARAM_BUCKETS.find((b) => b >= expandedFilterTags.length) ?? 240
+    if (expandedFilterTags.length > 240 || baseParamCount + paddedTagBinds * 2 > 480) {
+        return {
+            filterTagsCte: 'filter_tags AS MATERIALIZED (SELECT value AS name FROM json_each(?)),\n        ',
+            filterTagsParams: [JSON.stringify(expandedFilterTags)],
+            tagFilterSql: 'WHERE LOWER(t.name) IN (SELECT name FROM filter_tags)',
+            tagFilterParams: [],
+            typeFilterSql:
+                'WHERE EXISTS (SELECT 1 FROM entry_tags et_f JOIN tags t_f ON et_f.tag_id = t_f.id WHERE et_f.entry_id = b.id AND LOWER(t_f.name) IN (SELECT name FROM filter_tags))',
+            typeFilterParams: [],
+        }
     }
     const tagPred = chunkedInPredicate(
         expandedFilterTags,
@@ -124,6 +150,8 @@ function buildFtsFacetTagClauses(expandedFilterTags: string[]): {
         'OR'
     )
     return {
+        filterTagsCte: '',
+        filterTagsParams: [],
         tagFilterSql: `WHERE ${tagPred.sql}`,
         tagFilterParams: tagPred.params,
         typeFilterSql: `WHERE ${typePred.sql}`,
@@ -138,10 +166,16 @@ function executeMaterializedFtsFacetQuery(
     expandedFilterTags: string[]
 ): { tagsRows: { name: string; cnt: number }[]; entryTypesRows: { name: string; cnt: number }[] } {
     const baseWhere = baseConditions.length > 0 ? `WHERE ${baseConditions.join(' AND ')}` : ''
-    const { tagFilterSql, tagFilterParams, typeFilterSql, typeFilterParams } =
-        buildFtsFacetTagClauses(expandedFilterTags)
+    const {
+        filterTagsCte,
+        filterTagsParams,
+        tagFilterSql,
+        tagFilterParams,
+        typeFilterSql,
+        typeFilterParams,
+    } = buildFtsFacetTagClauses(expandedFilterTags, baseParams.length)
     const sql = `
-        WITH fts_base AS MATERIALIZED (
+        WITH ${filterTagsCte}fts_base AS MATERIALIZED (
             SELECT e.id, e.entry_type
             FROM fts_content fts
             CROSS JOIN memory_journal e ON e.id = fts.rowid
@@ -166,7 +200,9 @@ function executeMaterializedFtsFacetQuery(
         SELECT kind, name, cnt FROM type_facets
         ORDER BY kind ASC, cnt DESC
     `
-    const rows = db.prepare(sql).all(...baseParams, ...tagFilterParams, ...typeFilterParams) as {
+    const rows = db
+        .prepare(sql)
+        .all(...filterTagsParams, ...baseParams, ...tagFilterParams, ...typeFilterParams) as {
         kind: string
         name: string
         cnt: number

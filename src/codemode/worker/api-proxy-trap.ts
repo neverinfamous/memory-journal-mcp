@@ -72,10 +72,11 @@ function resolveDynamicMethodAlias(ctx: ApiRootTrapContext, prop: string): unkno
 
     for (const [g, groupAliases] of Object.entries(METHOD_ALIASES)) {
         if (g === 'team' && !isExplicitTeamProp) continue
-        if (groupAliases?.[prop] !== undefined) {
+        if (groupAliases !== undefined && Object.hasOwn(groupAliases, prop)) {
             const canonicalCamel = groupAliases[prop]
+            if (canonicalCamel === undefined) continue
             const canonicalSnake = canonicalCamel.replace(/[A-Z]/g, (l) => `_${l.toLowerCase()}`)
-            if (ctx.methods[g]?.includes(canonicalSnake)) {
+            if (Object.hasOwn(ctx.methods, g) && ctx.methods[g]?.includes(canonicalSnake) === true) {
                 return ctx.createMethodProxyFn(g, canonicalSnake)
             }
         }
@@ -130,7 +131,7 @@ export function createApiRootGetTrap(
 ): (target: Record<string, unknown>, prop: string | symbol) => unknown {
     return (target, prop): unknown => {
         if (typeof prop === 'symbol') return undefined
-        if (prop in target) return target[prop]
+        if (Object.hasOwn(target, prop)) return target[prop]
         const staticHit = resolveStaticRootAlias(target, prop)
         if (staticHit.hit) return staticHit.value
         if (FACTORY_METHOD_NAMES.has(prop)) return createFactoryFnProxy(ctx.api)

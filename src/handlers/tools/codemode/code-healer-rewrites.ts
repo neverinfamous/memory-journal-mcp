@@ -67,7 +67,8 @@ function stepCodeLexicalChar(
     i: number,
     limit: number,
     scan: LexicalScanState,
-    delim: ReturnType<typeof createDelimiterState>
+    delim: ReturnType<typeof createDelimiterState>,
+    spans?: NonCodeSpan[]
 ): number {
     const ch = code[i] ?? ''
     if (ch === "'" || ch === '"' || ch === '`') {
@@ -82,6 +83,7 @@ function stepCodeLexicalChar(
             scan.abortToCode = true
             return i
         }
+        spans?.push([i, endRegex])
         scan.prevToken = '/'
         delim.canAsiRegex = false
         scan.lineOnlyWsOrComments = false
@@ -181,7 +183,14 @@ function scanLexicalSpans(
             i = comment.next - 1
             continue
         }
-        i = stepCodeLexicalChar(code, i, limit, scan, delim)
+        i = stepCodeLexicalChar(
+            code,
+            i,
+            limit,
+            scan,
+            delim,
+            stopAtOffset === undefined ? spans : undefined
+        )
         if (scan.abortToCode) return { stateAtOffset: 'code', spans }
     }
     if (stopAtOffset === undefined && scan.inString !== null && scan.spanStart >= 0) {

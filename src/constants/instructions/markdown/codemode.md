@@ -52,7 +52,7 @@ In Code Mode (`mj_execute_code`), you do NOT have native MCP tool schemas. You m
 - `importExternal(params)`
 
 ### `mj.admin`
-- `updateConfiguration(params)`
+- `updateConfiguration(params)` *(host MCP tool `update_configuration` only by default; stripped inside `mj_execute_code` unless `--codemode-internal-full-access` is set)*
 - `registerProject(params)`
 - `updateProject(params)`
 - `deleteProject(params)`

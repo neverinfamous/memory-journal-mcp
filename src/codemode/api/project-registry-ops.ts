@@ -128,7 +128,7 @@ async function recordProjectInitEntry(
         }
     }
     try {
-        await createEntryFn({
+        const res: unknown = await createEntryFn({
             entryType: 'project_decision',
             significanceType: 'architecture',
             content: `Initialized project ${name}`,
@@ -139,6 +139,21 @@ async function recordProjectInitEntry(
             impactScore: 0.8,
             autoContext: JSON.stringify({ action: 'register_project', target: name }),
         })
+        if (isRecord(res) && res['success'] === false) {
+            const dbInitError =
+                typeof res['error'] === 'string' && res['error'] !== ''
+                    ? res['error']
+                    : 'createEntry returned failure'
+            mcpLogger.warning('codemode', 'Project initialization entry failed', {
+                project: name,
+                error: dbInitError,
+            })
+            return {
+                success: true,
+                warning: dbInitError,
+                message: `Project '${name}' registered, but the initialization journal entry failed: ${dbInitError}`,
+            }
+        }
         return { success: true, message: `Project '${name}' successfully registered.` }
     } catch (err) {
         const dbInitError = registryError(err)

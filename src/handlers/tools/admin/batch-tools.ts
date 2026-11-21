@@ -3,6 +3,7 @@ import { formatHandlerError } from '../../../utils/error-helpers.js'
 import { collectIndexWorkspaces, indexBatchEntries } from '../batch-indexing.js'
 import { sendProgress } from '../../../utils/progress-utils.js'
 import { linkRequestedRelationships } from '../relationship-linking.js'
+import { applyAutoLinksForEntry } from '../core/create-entry-helpers.js'
 import { assertCanonicalFallbackToolAllowed } from '../team/helpers.js'
 import { prepareBatchCreateInputs, shareBatchEntriesWithTeam } from './batch-create-helpers.js'
 import { executeBatchUpdateEntries } from './batch-update-helpers.js'
@@ -17,6 +18,36 @@ import {
     BatchDeleteEntriesSchemaMcp,
     BatchDeleteEntriesOutputSchema,
 } from './schemas.js'
+
+async function applyBatchAutoLinks(
+    context: ToolContext,
+    input: ReturnType<typeof BatchCreateEntriesSchema.parse>,
+    prepared: Awaited<ReturnType<typeof prepareBatchCreateInputs>>,
+    results: ReturnType<ToolContext['db']['createEntries']>['created'],
+    createdIndexes: number[],
+    relationshipWarnings: string[]
+): Promise<void> {
+    for (let i = 0; i < results.length; i++) {
+        const createdEntry = results[i]
+        const sourceIndex = createdIndexes[i]
+        if (!createdEntry || sourceIndex === undefined) continue
+        const rawEntry = input.entries[sourceIndex]
+        if (rawEntry?.auto_link !== true) continue
+        const prep = prepared[sourceIndex]?.input
+        await applyAutoLinksForEntry({
+            db: context.db,
+            vectorManager: context.vectorManager,
+            createdEntry,
+            wsId: prep?.workspaceId ?? 'default',
+            projectNumber: prep?.projectNumber,
+            sessionId: rawEntry.session_id,
+            relationshipWarnings,
+            tags: rawEntry.tags,
+            hasExplicitRelationships:
+                rawEntry.relationships !== undefined && rawEntry.relationships.length > 0,
+        })
+    }
+}
 
 async function linkBatchEntries(
     context: ToolContext,
@@ -89,6 +120,7 @@ async function linkBatchEntries(
     } else {
         runLinkLoop()
     }
+    await applyBatchAutoLinks(context, input, prepared, results, createdIndexes, relationshipWarnings)
     return relationshipWarnings
 }
 

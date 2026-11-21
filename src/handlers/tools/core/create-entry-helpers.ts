@@ -1,5 +1,7 @@
 import type { z } from 'zod'
 import type { CreateEntryInput, JournalEntry, ToolContext } from '../../../types/index.js'
+import type { IDatabaseAdapter } from '../../../database/core/interfaces.js'
+import type { VectorSearchManager } from '../../../vector/vector-search-manager/index.js'
 import { AuthorizationError, PermissionError } from '../../../types/errors.js'
 import { enforceAccessBoundary } from '../../../auth/validation.js'
 import { sendProgress, type ProgressContext } from '../../../utils/progress-utils.js'
@@ -306,6 +308,82 @@ export function tryResolveEntryResourceUri(
     })()
 }
 
+function applyDeterministicAutoLinkCandidates(params: {
+    db: IDatabaseAdapter
+    createdEntryId: number
+    candidateSuggestions: Awaited<ReturnType<typeof computeSuggestedLinks>>
+    wsId: string
+    projectNumber: number | undefined
+    relationshipWarnings: string[]
+}): number {
+    const { db, createdEntryId, candidateSuggestions, wsId, projectNumber, relationshipWarnings } =
+        params
+    const autoTargets = candidateSuggestions
+        .filter((s) => s.reason === 'same-session' || s.reason === 'shared-anchor')
+        .slice(0, 2)
+    if (autoTargets.length > 0) {
+        relationshipWarnings.push(
+            ...linkRequestedRelationships(
+                db,
+                createdEntryId,
+                autoTargets.map((t) => ({ targetId: t.targetId, relationType: t.relationType })),
+                wsId,
+                projectNumber
+            )
+        )
+    }
+    return autoTargets.length
+}
+
+export interface ApplyAutoLinksParams {
+    db: IDatabaseAdapter
+    vectorManager?: VectorSearchManager | undefined
+    createdEntry: JournalEntry
+    wsId: string
+    projectNumber: number | undefined
+    sessionId: string | undefined
+    relationshipWarnings: string[]
+    tags?: readonly string[] | undefined
+    hasExplicitRelationships?: boolean
+}
+
+/**
+ * Deterministic same-session / shared-anchor auto-linking for `auto_link: true` entries
+ * across batch and team entry-creation handlers.
+ */
+export async function applyAutoLinksForEntry(params: ApplyAutoLinksParams): Promise<number> {
+    const {
+        db,
+        vectorManager,
+        createdEntry,
+        wsId,
+        projectNumber,
+        sessionId,
+        relationshipWarnings,
+        tags,
+        hasExplicitRelationships = false,
+    } = params
+    if (hasExplicitRelationships || tags?.includes('commit-narrative') === true) {
+        return 0
+    }
+    const candidates = await computeSuggestedLinks({
+        db,
+        vectorManager,
+        entry: createdEntry,
+        workspaceId: wsId,
+        projectNumber,
+        sessionId,
+    })
+    return applyDeterministicAutoLinkCandidates({
+        db,
+        createdEntryId: createdEntry.id,
+        candidateSuggestions: candidates,
+        wsId,
+        projectNumber,
+        relationshipWarnings,
+    })
+}
+
 /**
  * Compute heuristic link suggestions and apply `auto_link` relationships for `create_entry`,
  * extracted so `executeCreateEntry` stays under the 80-line function budget (Appendix B).
@@ -331,22 +409,16 @@ export async function resolveAndApplyCreateLinks(params: {
                   sessionId: input.session_id,
               })
             : []
-    const autoTargets =
+    const linked =
         input.auto_link === true
-            ? candidateSuggestions
-                  .filter((s) => s.reason === 'same-session' || s.reason === 'shared-anchor')
-                  .slice(0, 2)
-            : []
-    if (autoTargets.length > 0) {
-        relationshipWarnings.push(
-            ...linkRequestedRelationships(
-                context.db,
-                createdEntry.id,
-                autoTargets.map((t) => ({ targetId: t.targetId, relationType: t.relationType })),
-                wsId,
-                projectNumber
-            )
-        )
-    }
-    return autoTargets.length > 0 ? [] : candidateSuggestions
+            ? applyDeterministicAutoLinkCandidates({
+                  db: context.db,
+                  createdEntryId: createdEntry.id,
+                  candidateSuggestions,
+                  wsId,
+                  projectNumber,
+                  relationshipWarnings,
+              })
+            : 0
+    return linked > 0 ? [] : candidateSuggestions
 }

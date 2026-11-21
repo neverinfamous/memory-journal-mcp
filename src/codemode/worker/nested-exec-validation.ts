@@ -209,6 +209,22 @@ function hasRegistryProjectOwnerConflict(
         : null
 }
 
+function formatInvalidProjectCandidate(rawProj: unknown): string {
+    if (
+        typeof rawProj === 'bigint' ||
+        typeof rawProj === 'string' ||
+        typeof rawProj === 'number' ||
+        typeof rawProj === 'boolean'
+    ) {
+        return String(rawProj)
+    }
+    try {
+        return JSON.stringify(rawProj) ?? 'invalid'
+    } catch {
+        return typeof rawProj
+    }
+}
+
 function validateProjectNumberAliases(
     records: Record<string, unknown>[],
     pinnedWorkspace: string | undefined,
@@ -224,13 +240,7 @@ function validateProjectNumberAliases(
             if (key === 'project' && isProjectStringValue(rawProj)) continue
             const parsedProj = parseProjectNumberCandidate(rawProj, registry)
             if (parsedProj === null) {
-                const projDesc =
-                    typeof rawProj === 'string' ||
-                    typeof rawProj === 'number' ||
-                    typeof rawProj === 'boolean'
-                        ? String(rawProj)
-                        : (JSON.stringify(rawProj) ?? 'invalid')
-                return { error: `Invalid project_number '${projDesc}' in nested executeCode` }
+                return { error: `Invalid project_number '${formatInvalidProjectCandidate(rawProj)}' in nested executeCode` }
             }
             const conflict = hasRegistryProjectOwnerConflict(
                 parsedProj,

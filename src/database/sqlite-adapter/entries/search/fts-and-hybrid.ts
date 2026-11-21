@@ -6,7 +6,7 @@ import { buildVocabulary, expandFuzzyQuery } from '../fuzzy-matcher.js'
 import { encodeCursor } from './cursor.js'
 import { isFts5QueryError, sanitizeFtsQuery } from './fts-sanitizer.js'
 import { effectiveWorkspace } from '../../../workspace-scope.js'
-import { bucketInParams } from '../../row-helpers.js'
+import { bucketInParams, SCOPED_IN_PARAM_BUCKETS } from '../../row-helpers.js'
 import {
     buildSearchQuery,
     readSearchPosition,
@@ -33,7 +33,7 @@ function fetchPostLimitSnippets(
     if (entryIds.length === 0) return snippetMap
     const sanitized = sanitizeFtsQuery(queryStr)
     if (sanitized === '') return snippetMap
-    for (const { placeholders, params } of bucketInParams(entryIds)) {
+    for (const { placeholders, params } of bucketInParams(entryIds, SCOPED_IN_PARAM_BUCKETS)) {
         const rows = db
             .prepare(
                 `SELECT rowid AS id, snippet(fts_content, 0, '«', '»', '…', 64) AS highlight_snippet
@@ -181,8 +181,16 @@ export function searchEntries(
     const runQuery = (useFts: boolean): SearchPage =>
         executeSearchQuery(context, queryStr, options, useFts, offset, hasKeyset, keysetT, keysetId)
 
-    // Try FTS5 first for relevance-ranked results, fall back to LIKE on syntax error or 0 hits
+    // Try FTS5 first for relevance-ranked results, fall back to LIKE on empty/syntax error or 0 hits
     if (queryStr.length > 0) {
+        if (sanitizeFtsQuery(queryStr) === '') {
+            const likeFallback = runQuery(false)
+            if (likeFallback.entries.length > 0) {
+                return { ...likeFallback, degraded: true }
+            }
+            const fuzzy = applyFuzzyFallback(context, db, queryStr, options, likeFallback)
+            return fuzzy ? { ...fuzzy, degraded: true } : { ...likeFallback, degraded: true }
+        }
         try {
             const result = runQuery(true)
             if (result.entries.length > 0) {

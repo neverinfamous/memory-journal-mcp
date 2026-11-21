@@ -9,6 +9,20 @@ import * as vm from 'node:vm'
 import type { MessagePort } from 'node:worker_threads'
 import type { SandboxResult } from '../types.js'
 
+const nativeErrorIsError = Reflect.get(Error, 'isError') as
+    | ((value: unknown) => value is Error)
+    | undefined
+
+/**
+ * Cross-realm `Error` guard using ES2025 `Error.isError` when available (avoiding deprecated
+ * `util.types.isNativeError`) with `instanceof Error` fallback on older runtimes.
+ */
+export function isCrossRealmError(value: unknown): value is Error {
+    return typeof nativeErrorIsError === 'function'
+        ? nativeErrorIsError(value)
+        : value instanceof Error
+}
+
 export interface ExecuteWorkerMessage {
     type: 'EXECUTE'
     id: number
@@ -47,7 +61,7 @@ function boundErrorText(text: string): string {
  * and caps error/stack payload sizes prior to structured-clone egress.
  */
 export function safeFormatSandboxError(reason: unknown): { message: string; stack?: string } {
-    if (reason instanceof Error) {
+    if (isCrossRealmError(reason)) {
         let message: string
         try {
             message = typeof reason.message === 'string' ? reason.message : String(reason.message)
@@ -108,8 +122,9 @@ let cachedMethodList: Record<string, string[]> = Object.freeze({})
 let cachedSchemaList: Record<string, Record<string, string>> | undefined
 
 function freezeMethodList(raw: Record<string, string[]>): Record<string, string[]> {
-    const frozen: Record<string, string[]> = {}
-    for (const [group, methods] of Object.entries(raw)) {
+    const frozen = Object.create(null) as Record<string, string[]>
+    for (const group of Object.keys(raw)) {
+        const methods = Reflect.get(raw, group)
         const copy: string[] = Array.isArray(methods) ? [...methods] : []
         Object.freeze(copy)
         frozen[group] = copy
@@ -121,9 +136,17 @@ function freezeSchemaList(
     raw: Record<string, Record<string, string>> | undefined
 ): Record<string, Record<string, string>> | undefined {
     if (raw === undefined) return undefined
-    const frozen: Record<string, Record<string, string>> = {}
-    for (const [group, schemas] of Object.entries(raw)) {
-        frozen[group] = Object.freeze({ ...schemas })
+    const frozen = Object.create(null) as Record<string, Record<string, string>>
+    for (const group of Object.keys(raw)) {
+        const schemas = Reflect.get(raw, group)
+        const groupFrozen = Object.create(null) as Record<string, string>
+        if (schemas !== null && schemas !== undefined && typeof schemas === 'object') {
+            for (const key of Object.keys(schemas)) {
+                const desc = Reflect.get(schemas, key)
+                if (typeof desc === 'string') groupFrozen[key] = desc
+            }
+        }
+        frozen[group] = Object.freeze(groupFrozen)
     }
     return Object.freeze(frozen)
 }

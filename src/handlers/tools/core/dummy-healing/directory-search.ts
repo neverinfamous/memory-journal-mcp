@@ -52,6 +52,35 @@ function buildMatcher(query: string, options: SearchDirectoryOptions): RegExp {
     return new RegExp(query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), flags)
 }
 
+function matchesWildcardPattern(text: string, pattern: string): boolean {
+    let ti = 0
+    let pi = 0
+    let starIdx = -1
+    let matchIdx = 0
+
+    while (ti < text.length) {
+        if (pi < pattern.length && pattern[pi] === text[ti]) {
+            ti++
+            pi++
+        } else if (pi < pattern.length && pattern[pi] === '*') {
+            starIdx = pi
+            matchIdx = ti
+            pi++
+        } else if (starIdx !== -1) {
+            pi = starIdx + 1
+            matchIdx++
+            ti = matchIdx
+        } else {
+            return false
+        }
+    }
+
+    while (pi < pattern.length && pattern[pi] === '*') {
+        pi++
+    }
+    return pi === pattern.length
+}
+
 function compileFilePatternMatcher(filePattern?: string): ((entryName: string) => boolean) | null {
     if (filePattern === undefined || filePattern.length === 0) return null
     if (filePattern.length > MAX_USER_REGEX_LENGTH) {
@@ -73,9 +102,7 @@ function compileFilePatternMatcher(filePattern?: string): ((entryName: string) =
     if (!pattern.includes('*')) {
         return (entryName: string) => entryName.toLowerCase() === pattern
     }
-    const expression = `^${pattern.replace(/[.+?^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '.*')}$`
-    const compiled = new RegExp(expression)
-    return (entryName: string) => compiled.test(entryName.toLowerCase())
+    return (entryName: string) => matchesWildcardPattern(entryName.toLowerCase(), pattern)
 }
 
 function scanContentLines(

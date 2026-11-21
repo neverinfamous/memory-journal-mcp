@@ -269,14 +269,37 @@ export interface CommitInvocation {
   args: string[];
 }
 
+function hasNewerTsInDir(dirPath: string, targetMtimeMs: number): boolean {
+  const dirStat = fs.lstatSync(dirPath, { throwIfNoEntry: false });
+  if (!dirStat || dirStat.isSymbolicLink() || !dirStat.isDirectory()) return false;
+  for (const entry of fs.readdirSync(dirPath, { withFileTypes: true })) {
+    if (entry.isSymbolicLink()) continue;
+    const fullPath = path.join(dirPath, entry.name);
+    if (entry.isDirectory()) {
+      if (hasNewerTsInDir(fullPath, targetMtimeMs)) return true;
+    } else if (entry.isFile() && entry.name.endsWith(".ts")) {
+      const st = fs.lstatSync(fullPath, { throwIfNoEntry: false });
+      if (st && st.mtimeMs > targetMtimeMs) return true;
+    }
+  }
+  return false;
+}
+
 function isCompiledCommitFresh(rootDir: string): boolean {
   const compiledCommit = path.join(rootDir, "dist", "vendor", "commit", "commit.js");
   const compiledStat = fs.statSync(compiledCommit, { throwIfNoEntry: false });
-  if (!compiledStat) return false;
+  if (!compiledStat || !compiledStat.isFile()) return false;
 
   const commitScript = path.join(rootDir, "scripts", "commit.ts");
   const sourceStat = fs.statSync(commitScript, { throwIfNoEntry: false });
-  return !sourceStat || compiledStat.mtimeMs >= sourceStat.mtimeMs;
+  if (sourceStat && sourceStat.mtimeMs > compiledStat.mtimeMs) return false;
+
+  for (const lib of ["commit", "lib-git-history", "lib-agent-exec"]) {
+    if (hasNewerTsInDir(path.join(rootDir, "src", "vendor", lib), compiledStat.mtimeMs)) {
+      return false;
+    }
+  }
+  return true;
 }
 
 export function buildCommitInvocation(
@@ -329,7 +352,7 @@ function autoCommitDirtyBadgeFiles(filesToUpdate: readonly string[], updatedFile
         }
       }
     } catch (error) {
-      console.error("git status failed for badge files:", error instanceof Error ? error.message : error);
+      console.error("git ls-files failed for badge files:", error instanceof Error ? error.message : error);
     }
   }
 

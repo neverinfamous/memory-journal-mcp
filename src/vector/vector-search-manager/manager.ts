@@ -378,7 +378,7 @@ export class VectorSearchManager {
             const targetWs = effectiveWorkspace(workspaceId)
             return await searchSimilarEntriesById(
                 this.dbAdapter,
-                (text) => this.generateEmbedding(text),
+                (text) => this.generateEmbedding(text, { bypassQueryCache: true }),
                 entryId,
                 limit,
                 threshold,

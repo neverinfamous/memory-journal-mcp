@@ -16,6 +16,7 @@ import { activeProjectRegistry, pairStoredScope } from '../../../../utils/write-
 import { sendProgress } from '../../../../utils/progress-utils.js'
 import { collectIndexWorkspaces, indexBatchEntries } from '../../batch-indexing.js'
 import { linkRequestedRelationships } from '../../relationship-linking.js'
+import { applyAutoLinksForEntry } from '../../core/create-entry-helpers.js'
 import { resolveWriteWorkspaceId } from '../../write-workspace.js'
 import { assertCanonicalFallbackToolAllowed, triggerTeamNotifications } from '../helpers.js'
 import type { TeamBatchCreateEntriesSchema } from '../schemas.js'
@@ -204,6 +205,37 @@ function assertTeamBatchCreateLinksAllowed(
     }
 }
 
+async function applyTeamBatchAutoLinks(
+    context: ToolContext,
+    teamDb: TeamDbInstance,
+    results: ReturnType<TeamDbInstance['createEntries']>['created'],
+    createdSourceIndices: number[],
+    rawEntries: TeamBatchCreateItem[],
+    inputs: Parameters<TeamDbInstance['createEntries']>[0],
+    relationshipWarnings: string[]
+): Promise<void> {
+    let linked = 0
+    for (let i = 0; i < results.length; i++) {
+        const createdEntry = results[i]
+        const sourceIdx = createdSourceIndices[i] ?? i
+        const rawEntry = rawEntries[sourceIdx]
+        if (!createdEntry || rawEntry?.auto_link !== true) continue
+        linked += await applyAutoLinksForEntry({
+            db: teamDb,
+            vectorManager: context.teamVectorManager,
+            createdEntry,
+            wsId: inputs[sourceIdx]?.workspaceId ?? 'default',
+            projectNumber: inputs[sourceIdx]?.projectNumber,
+            sessionId: rawEntry.session_id,
+            relationshipWarnings,
+            tags: rawEntry.tags,
+            hasExplicitRelationships:
+                rawEntry.relationships !== undefined && rawEntry.relationships.length > 0,
+        })
+    }
+    if (linked > 0) teamDb.flushSave()
+}
+
 /** Validate and execute `team_batch_create_entries` with shallow control flow. */
 export async function executeTeamBatchCreate(
     context: ToolContext,
@@ -221,13 +253,16 @@ export async function executeTeamBatchCreate(
     const createdSourceIndices = inputs.flatMap((_, idx) => (failedIndices.has(idx) ? [] : [idx]))
 
     const relationshipWarnings = runTeamBatchTx(teamDb, () =>
-        linkBatchCreatedRelationships(
-            teamDb,
-            results,
-            createdSourceIndices,
-            input.entries,
-            inputs
-        )
+        linkBatchCreatedRelationships(teamDb, results, createdSourceIndices, input.entries, inputs)
+    )
+    await applyTeamBatchAutoLinks(
+        context,
+        teamDb,
+        results,
+        createdSourceIndices,
+        input.entries,
+        inputs,
+        relationshipWarnings
     )
     const entries = results.map((r, i) => {
         const rawAuthor = inputs[createdSourceIndices[i] ?? i]?.author

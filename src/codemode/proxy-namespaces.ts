@@ -19,9 +19,6 @@ function unavailableTool(tool: string): Promise<unknown> {
                 success: false,
                 error: `Tool '${tool}' is not available in this sandbox.`,
                 code: 'TOOL_DISABLED',
-                projects: {},
-                items: [],
-                data: [],
                 _healing_note: `🛠️ AUTONOMOUS HEALING: 'mj.projects' requires '${tool}' to be enabled in the active tool filter.`,
             })
         ),

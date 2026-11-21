@@ -82,8 +82,23 @@ export const databaseOptionsSchema = z.object({
     teamAdmin: z.string().optional()
 })
 
+export const safeCoerceDefaultProject = z.preprocess((val) => {
+    if (val === undefined || val === null || val === '') return undefined
+    if (typeof val === 'number') {
+        return Number.isSafeInteger(val) && val > 0 ? val : val
+    }
+    if (typeof val === 'string') {
+        const trimmed = val.trim()
+        if (!/^p?[1-9]\d*$/i.test(trimmed)) return val
+        const digits = trimmed.replace(/^p/i, '')
+        const parsed = Number(digits)
+        return Number.isSafeInteger(parsed) && String(parsed) === digits ? parsed : val
+    }
+    return val
+}, z.number().int().positive().optional())
+
 export const workspaceOptionsSchema = z.object({
-    defaultProject: safeCoerceNumber,
+    defaultProject: safeCoerceDefaultProject,
     defaultWorkspaceId: z.string().optional(),
     workspace: z.string().optional()
 })

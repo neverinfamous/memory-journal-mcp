@@ -180,7 +180,7 @@ export class TokenValidator {
                             : input instanceof URL
                               ? input.href
                               : input.url
-                    if (urlStr === this.jwksUri) {
+                    if (urlStr === this.jwksUrl.href || urlStr === this.jwksUri) {
                         this.preloadedJwksResponse = null
                         return cached
                     }

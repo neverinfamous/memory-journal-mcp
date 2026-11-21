@@ -4,8 +4,8 @@ import { ResourceNotFoundError, QueryError, ValidationError } from '../../types/
 import type { Tag } from '../../types/index.js'
 import type { NativeConnectionManager } from './native-connection.js'
 import { effectiveWorkspace } from '../workspace-scope.js'
-import { TAG_ALIASES } from '../../codemode/normalizers/shared-utils.js'
-import { bucketInParams } from './row-helpers.js'
+import { TAG_ALIASES } from '../../types/entities.js'
+import { bucketInParams, SCOPED_IN_PARAM_BUCKETS } from './row-helpers.js'
 
 const hasDeletedAtCache = new WeakMap<Database, boolean>()
 
@@ -344,7 +344,7 @@ export class TagsManager {
                     : ''
 
             let totalDeleted = 0
-            for (const { placeholders, params } of bucketInParams(entryIds)) {
+            for (const { placeholders, params } of bucketInParams(entryIds, SCOPED_IN_PARAM_BUCKETS)) {
                 const delResult = db
                     .prepare(
                         `DELETE FROM entry_tags WHERE tag_id = ? AND entry_id IN (${placeholders})${projectClause}`

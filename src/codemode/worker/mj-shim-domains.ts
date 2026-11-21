@@ -166,22 +166,25 @@ const PROJECT_LIST_PROPS = new Set([
     'list', 'listProjects', 'list_projects', 'getAll', 'all', 'getProjects', 'get_projects',
 ])
 
-const DISABLED_PROJECT_PROP_MAP: Record<string, string> = {
-    get: 'get_project',
-    getProject: 'get_project',
-    get_project: 'get_project',
-    find: 'get_project',
-    register: 'register_project',
-    registerProject: 'register_project',
-    register_project: 'register_project',
-    update: 'update_project',
-    updateProject: 'update_project',
-    update_project: 'update_project',
-    delete: 'delete_project',
-    deleteProject: 'delete_project',
-    delete_project: 'delete_project',
-    remove: 'delete_project',
-}
+const DISABLED_PROJECT_PROP_MAP: Record<string, string> = Object.assign(
+    Object.create(null) as Record<string, string>,
+    {
+        get: 'get_project',
+        getProject: 'get_project',
+        get_project: 'get_project',
+        find: 'get_project',
+        register: 'register_project',
+        registerProject: 'register_project',
+        register_project: 'register_project',
+        update: 'update_project',
+        updateProject: 'update_project',
+        update_project: 'update_project',
+        delete: 'delete_project',
+        deleteProject: 'delete_project',
+        delete_project: 'delete_project',
+        remove: 'delete_project',
+    }
+)
 
 function resolveProjectDomainProp(
     p: string | symbol,

@@ -38,7 +38,7 @@ export function runWithRpcExecutionOverrides<T>(
     }
     if (parent?.autoVersion === false || overrides.autoVersion === false) {
         merged.autoVersion = false
-    } else if (overrides.autoVersion === true) {
+    } else if (overrides.autoVersion === true || parent?.autoVersion === true) {
         merged.autoVersion = true
     }
     const parentSess = parent?.sessionId?.trim()

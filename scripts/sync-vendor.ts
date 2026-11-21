@@ -3,8 +3,26 @@ import { readFileSync, writeFileSync, cpSync, mkdirSync, existsSync, readdirSync
 import { join, dirname, resolve, relative, isAbsolute, sep } from 'path';
 import { execFileSync } from 'child_process';
 import { builtinModules } from 'module';
+import ts from 'typescript';
 import { z } from 'zod';
 import { hasHostScriptReferences, neutralizeVendoredDoc } from './vendor-doc-neutralizer.js';
+
+function collectModuleSpecifiers(source: string): string[] {
+  const sf = ts.createSourceFile('vendor.ts', source, ts.ScriptTarget.Latest, false, ts.ScriptKind.TS);
+  const specifiers: string[] = [];
+  const visit = (node: ts.Node): void => {
+    if (
+      (ts.isImportDeclaration(node) || ts.isExportDeclaration(node)) &&
+      node.moduleSpecifier !== undefined &&
+      ts.isStringLiteral(node.moduleSpecifier)
+    ) {
+      specifiers.push(node.moduleSpecifier.text);
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(sf);
+  return specifiers;
+}
 
 /**
  * Extract third-party package names imported by a TypeScript source file.
@@ -12,10 +30,7 @@ import { hasHostScriptReferences, neutralizeVendoredDoc } from './vendor-doc-neu
  */
 function extractPackageImports(source: string): Set<string> {
   const packages = new Set<string>();
-  const pattern = /(?:^|\n)\s*(?:import|export)\s+(?:[^'"\n;]*?\s+from\s+)?['"]([^'"]+)['"]/g;
-  for (const match of source.matchAll(pattern)) {
-    const specifier = match[1];
-    if (specifier === undefined) continue;
+  for (const specifier of collectModuleSpecifiers(source)) {
     if (specifier.startsWith('.') || specifier.startsWith('/')) continue;
     if (specifier.startsWith('node:') || specifier.startsWith('bun:')) continue;
     const parts = specifier.split('/');
@@ -30,12 +45,7 @@ function extractPackageImports(source: string): Set<string> {
  * Extract relative import specifiers (e.g. './command-utils.js') from a TypeScript source file.
  */
 function extractRelativeImports(source: string): string[] {
-  const specifiers: string[] = [];
-  const pattern = /(?:^|\n)\s*(?:import|export)\s+(?:[^'"\n;]*?\s+from\s+)?['"](\.[^'"]*)['"]/g;
-  for (const match of source.matchAll(pattern)) {
-    if (match[1] !== undefined) specifiers.push(match[1]);
-  }
-  return specifiers;
+  return collectModuleSpecifiers(source).filter((specifier) => specifier.startsWith('.'));
 }
 
 function resolveUpstreamRoot(cwd: string, explicit?: string): string {

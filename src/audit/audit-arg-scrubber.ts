@@ -55,7 +55,7 @@ function scrubAuditMap(
     let count = 0
     for (const [mk, mv] of val.entries()) {
         if (count++ >= MAX_AUDIT_OBJECT_KEYS || budget.count >= MAX_AUDIT_TOTAL_NODES) {
-            entries['_truncatedKeys'] = Math.max(0, val.size - MAX_AUDIT_OBJECT_KEYS)
+            entries['_truncatedKeys'] = Math.max(0, val.size - (count - 1))
             break
         }
         const rawKey = String(mk)

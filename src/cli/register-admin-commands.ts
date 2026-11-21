@@ -31,8 +31,8 @@ export function registerProjectCommands(program: Command): void {
     const projectListCmd = projectCmd
         .command('list')
         .description('List all registered projects')
-        .option('--json', 'Output as JSON')
     addCoreOptions(projectListCmd)
+    addOutputOptions(projectListCmd)
     projectListCmd.action(
         lazyAction(async () => (await import('./commands/project.js')).projectListAction)
     )

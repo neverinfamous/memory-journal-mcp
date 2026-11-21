@@ -14,6 +14,7 @@ import { auditOperation } from '../audit/interceptor.js'
 import { enforceAccessBoundary } from '../auth/validation.js'
 import { ConfigurationError } from '../types/errors.js'
 import type { ServerRuntime } from '../utils/maintenance-lock.js'
+import { getBaseUri } from '../handlers/resources/fencing-helpers.js'
 import type { ResourceDefinition, ResourceReadHandler } from './registration.js'
 
 const pendingResourceReadUriStorage = new AsyncLocalStorage<URL>()
@@ -69,7 +70,12 @@ export function createAuditedResourceCallback(
                 runtime.maintenanceManager.withActiveJob(() =>
                     handleResourceRead(effectiveUri, mimeType)
                 ),
-            { forceAudit, resourceUri: effectiveUri.href, capabilities: resDef.capabilities }
+            {
+                forceAudit,
+                resourceUri: effectiveUri.href,
+                capabilities: resDef.capabilities,
+                runtime,
+            }
         )
     }
 }
@@ -104,17 +110,15 @@ export function attachResourceQueryHandler(server: McpServer): void {
         } catch {
             return originalHandler(request, extra)
         }
-        if (parsedUri.search === '' && parsedUri.hash === '') {
+        if (!rawUri.includes('?') && !rawUri.includes('#')) {
             return originalHandler(request, extra)
         }
-        const baseUri = new URL(parsedUri.href)
-        baseUri.search = ''
-        baseUri.hash = ''
+        const strippedUri = getBaseUri(rawUri)
         const sanitizedRequest = {
             ...request,
             params: {
                 ...request['params'],
-                uri: baseUri.toString(),
+                uri: strippedUri,
             },
         }
         return pendingResourceReadUriStorage.run(parsedUri, () =>

@@ -1,8 +1,7 @@
-import type { Command } from 'commander'
 import * as path from 'node:path'
 import { z } from 'zod'
 import type { AuditConfig } from '../audit/index.js'
-import type { ConfigResolver } from '../utils/config-resolver.js'
+import type { CliCommandLike, ConfigResolver } from '../utils/config-resolver.js'
 import { defaultDbPath } from './default-paths.js'
 import { activeProjectRegistry, pairStoredScope } from '../utils/write-scope.js'
 import { logger } from '../utils/logger.js'
@@ -186,9 +185,9 @@ function applyEnvironmentOverrides(
         process.env['CODE_MODE_MAX_RESULT_SIZE'] = String(codemodeMaxResultSize)
     }
 
-    const metricsPort = catchConfig(() => resolver.resolve<string>('metricsPort', 'MJ_METRICS_PORT'), undefined)
-    if (metricsPort) {
-        process.env['MJ_METRICS_PORT'] = metricsPort
+    const metricsPort = catchConfig(() => resolver.resolve<string | number>('metricsPort', 'MJ_METRICS_PORT'), undefined)
+    if (metricsPort !== undefined && String(metricsPort).trim() !== '') {
+        process.env['MJ_METRICS_PORT'] = String(metricsPort).trim()
     }
 
     const authScopes = catchConfig(() => resolver.resolve<string>('authScopes', 'MCP_AUTH_SCOPES'), undefined)
@@ -323,7 +322,7 @@ function buildLifecycleOptionsGroup(resolver: ConfigResolver, catchConfig: Catch
 
 function resolveConfiguredDefaultScope(
     resolver: ConfigResolver,
-    command: Command,
+    command: CliCommandLike,
     catchConfig: CatchConfig,
     projectRegistry: ServerOptions['projectRegistry']
 ): { defaultWorkspaceId: string | undefined; defaultProjectNumber: number | undefined } {
@@ -373,7 +372,7 @@ function resolveConfiguredDefaultScope(
 export function buildServerOptions(
     resolver: ConfigResolver,
     options: Record<string, unknown> & { team?: boolean },
-    command: Command,
+    command: CliCommandLike,
     configErrors: string[]
 ): { serverOptions: ServerOptions; transport: string; db: string | undefined; teamDb?: string; host?: string } {
     const catchConfig: CatchConfig = <T>(fn: () => T, fallback: T): T => {

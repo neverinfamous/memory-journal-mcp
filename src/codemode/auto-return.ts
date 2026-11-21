@@ -28,7 +28,14 @@ import {
 
 // Statements that must NOT be prefixed with `return`
 const NON_RETURNABLE =
-    /^\s*(return|throw|const |let |var |if\b|else\b|for\b|while\b|do\b|switch\b|try\b|catch\b|finally\b|class |function |\/\/|\/\*|\{|\})/
+    /^\s*(?:return|throw|const |let |var |if\b|else\b|for\b|while\b|do\b|switch\b|try\b|catch\b|finally\b|class |function |\/\/|\/\*|\{|\})/
+const CONTINUATION_START = /^(?:\.(?!\.\.)|\?\.|&&|\|\||\?\?|[?:,])/
+const CONTINUATION_PREV_TOKENS = new Set([
+    '=', ',', '.', '?.', '=>', '?', ':', '+', '-', '*', '/', '%', '**',
+    '+=', '-=', '*=', '/=', '%=', '??=', '&&=', '||=', '&&', '||', '??',
+    '&', '|', '^', '==', '!=', '===', '!==', '<', '>', '<=', '>=', '<<', '>>', '>>>',
+    'in', 'instanceof', 'return', 'await', 'throw', 'typeof', 'void', 'delete', 'new', 'case', 'extends', 'of',
+])
 
 /**
  * Transform user code so the last expression statement gets an
@@ -76,84 +83,143 @@ function isBoundaryIdentStart(trimmed: string, i: number, ch: string): boolean {
     return cp > 0x7f && /[\p{ID_Start}\p{ID_Continue}$_]/u.test(String.fromCodePoint(cp))
 }
 
+function nextNonWsStartsContinuation(trimmed: string, start: number): boolean {
+    let lineOnlyWs = false
+    for (let j = start; j < trimmed.length; j++) {
+        const ch = trimmed[j] ?? ''
+        if (isJsLineTerminator(ch)) {
+            lineOnlyWs = true
+            continue
+        }
+        if (/\s/.test(ch)) continue
+        const comment = skipLineOrBlockComment(trimmed, j, lineOnlyWs)
+        if (comment !== null) {
+            if (comment.hasNewline === true) lineOnlyWs = true
+            j = comment.next - 1
+            continue
+        }
+        const next = trimmed[j + 1] ?? ''
+        if (ch === '.' && !(next === '.' && trimmed[j + 2] === '.')) return true
+        if (ch === '?' && (next === '.' || next === '?')) return true
+        if (ch === '&' && next === '&') return true
+        if (ch === '|' && next === '|') return true
+        return ch === '?' || ch === ':'
+    }
+    return false
+}
+
+interface BoundaryScanState {
+    inString: string | null
+    isEscaped: boolean
+    lastBoundary: number
+    depth: number
+    prevToken: string
+    lineOnlyWsOrComments: boolean
+    readonly delim: ReturnType<typeof createDelimiterState>
+}
+
+function stepBoundaryPunctuationOrWs(
+    trimmed: string,
+    i: number,
+    ch: string,
+    s: BoundaryScanState
+): void {
+    const closingInterp =
+        ch === '}' && s.delim.templateBraces.length > 0 && s.delim.templateBraces.at(-1) === 0
+    if (closingInterp) {
+        s.delim.templateBraces.pop()
+        s.inString = '`'
+        s.isEscaped = false
+        s.lineOnlyWsOrComments = false
+        return
+    }
+    if (ch === '{' || ch === '[' || ch === '(') s.depth++
+    else if (ch === '}' || ch === ']' || ch === ')') s.depth--
+    if (s.depth === 0 && s.delim.templateBraces.length === 0) {
+        if (
+            ch === ';' ||
+            (isJsLineTerminator(ch) &&
+                !CONTINUATION_PREV_TOKENS.has(s.prevToken) &&
+                !nextNonWsStartsContinuation(trimmed, i + 1))
+        ) {
+            s.lastBoundary = i
+        }
+    }
+    if (isJsLineTerminator(ch)) {
+        s.lineOnlyWsOrComments = true
+        markLineTerminator(s.delim)
+    } else if (!/\s/.test(ch)) {
+        s.prevToken = trackPunctuationToken(ch, s.prevToken, s.delim)
+        s.lineOnlyWsOrComments = false
+    }
+}
+
 function findLastStatementBoundary(trimmed: string): number {
-    let inString: string | null = null
-    let isEscaped = false
-    let lastBoundary = -1
-    let depth = 0
-    let prevToken = ''
-    let lineOnlyWsOrComments = true
-    const state = createDelimiterState()
+    const s: BoundaryScanState = {
+        inString: null,
+        isEscaped: false,
+        lastBoundary: -1,
+        depth: 0,
+        prevToken: '',
+        lineOnlyWsOrComments: true,
+        delim: createDelimiterState(),
+    }
 
     for (let i = 0; i < trimmed.length; i++) {
         const ch = trimmed[i] ?? ''
-        if (inString !== null) {
-            const step = scanStringStep(trimmed, i, inString, isEscaped, state)
-            inString = step.inString
-            isEscaped = step.isEscaped
+        if (s.inString !== null) {
+            const step = scanStringStep(trimmed, i, s.inString, s.isEscaped, s.delim)
+            s.inString = step.inString
+            s.isEscaped = step.isEscaped
             if (step.prevToken !== undefined) {
-                prevToken = step.prevToken
-                state.canAsiRegex = false
+                s.prevToken = step.prevToken
+                s.delim.canAsiRegex = false
             }
-            lineOnlyWsOrComments = false
+            s.lineOnlyWsOrComments = false
             i = step.next - 1
             continue
         }
-        const comment = skipLineOrBlockComment(trimmed, i, lineOnlyWsOrComments)
+        const comment = skipLineOrBlockComment(trimmed, i, s.lineOnlyWsOrComments)
         if (comment !== null) {
             if (comment.hasNewline === true) {
-                lineOnlyWsOrComments = true
-                markLineTerminator(state)
+                s.lineOnlyWsOrComments = true
+                markLineTerminator(s.delim)
             }
             if (comment.next === trimmed.length && findNextJsLineTerminator(trimmed, i) === -1) break
             i = comment.next - 1
             continue
         }
         if (ch === "'" || ch === '"' || ch === '`') {
-            inString = ch
-            lineOnlyWsOrComments = false
-        } else if (ch === '/' && trimmed[i + 1] !== '/' && trimmed[i + 1] !== '*' && canStartRegexLiteral(prevToken, state)) {
+            s.inString = ch
+            s.lineOnlyWsOrComments = false
+        } else if (
+            ch === '/' &&
+            trimmed[i + 1] !== '/' &&
+            trimmed[i + 1] !== '*' &&
+            canStartRegexLiteral(s.prevToken, s.delim)
+        ) {
             i = skipRegexLiteralBody(trimmed, i + 1) - 1
-            prevToken = '/'
-            state.canAsiRegex = false
-            lineOnlyWsOrComments = false
+            s.prevToken = '/'
+            s.delim.canAsiRegex = false
+            s.lineOnlyWsOrComments = false
         } else if (ch === '.' && trimmed[i + 1] === '.' && trimmed[i + 2] === '.') {
-            prevToken = trackPunctuationToken('...', prevToken, state)
-            lineOnlyWsOrComments = false
+            s.prevToken = trackPunctuationToken('...', s.prevToken, s.delim)
+            s.lineOnlyWsOrComments = false
             i += 2
         } else if (isTwoCharBoundaryOperator(trimmed, i, ch)) {
-            prevToken = trackTwoCharOperatorToken(ch + (trimmed[i + 1] ?? ''), prevToken, state)
-            lineOnlyWsOrComments = false
+            s.prevToken = trackTwoCharOperatorToken(ch + (trimmed[i + 1] ?? ''), s.prevToken, s.delim)
+            s.lineOnlyWsOrComments = false
             i++
         } else if (isBoundaryIdentStart(trimmed, i, ch)) {
             const ident = scanIdentifierWord(trimmed, i)
-            prevToken = trackIdentifierToken(ident.word, prevToken, state)
-            lineOnlyWsOrComments = false
+            s.prevToken = trackIdentifierToken(ident.word, s.prevToken, s.delim)
+            s.lineOnlyWsOrComments = false
             i = ident.next - 1
         } else {
-            const closingInterp = ch === '}' && state.templateBraces.length > 0 && state.templateBraces.at(-1) === 0
-            if (closingInterp) {
-                state.templateBraces.pop()
-                inString = '`'
-                isEscaped = false
-                lineOnlyWsOrComments = false
-                continue
-            }
-            if (ch === '{' || ch === '[' || ch === '(') depth++
-            else if (ch === '}' || ch === ']' || ch === ')') depth--
-            if (depth === 0 && state.templateBraces.length === 0 && (ch === ';' || isJsLineTerminator(ch))) {
-                lastBoundary = i
-            }
-            if (isJsLineTerminator(ch)) {
-                lineOnlyWsOrComments = true
-                markLineTerminator(state)
-            } else if (!/\s/.test(ch)) {
-                prevToken = trackPunctuationToken(ch, prevToken, state)
-                lineOnlyWsOrComments = false
-            }
+            stepBoundaryPunctuationOrWs(trimmed, i, ch, s)
         }
     }
-    return lastBoundary
+    return s.lastBoundary
 }
 
 export function transformAutoReturn(code: string): string {
@@ -167,7 +233,7 @@ export function transformAutoReturn(code: string): string {
 
     const lastBoundary = findLastStatementBoundary(trimmed)
     const lastStmt = (lastBoundary >= 0 ? trimmed.slice(lastBoundary + 1) : trimmed).trim()
-    if (!lastStmt || NON_RETURNABLE.test(lastStmt)) return code
+    if (!lastStmt || NON_RETURNABLE.test(lastStmt) || CONTINUATION_START.test(lastStmt)) return code
 
     return lastBoundary >= 0
         ? `${trimmed.slice(0, lastBoundary + 1)}\nreturn ${lastStmt}`

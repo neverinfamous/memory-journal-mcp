@@ -201,26 +201,26 @@ function rewriteSandboxNodeAndContextCalls(src: string): string {
     let executionCode = unwrapNestedExecuteCode(src)
     executionCode = replaceOutsideNonCode(
         executionCode,
-        /(?:fs|fs\.promises)\.readFileSync\s*\([^()\n]{0,1000}\)/g,
+        /(?<![.\w$])(?:fs|fs\.promises)\.readFileSync\s*\([^()\n]{0,1000}\)/g,
         () => '(typeof context !== "undefined" && context.content ? context.content : "")'
     )
     executionCode = replaceOutsideNonCode(
         executionCode,
-        /(?:fs|fs\.promises)\.readFile\s*\([^()\n]{0,1000}\)/g,
+        /(?<![.\w$])(?:fs|fs\.promises)\.readFile\s*\([^()\n]{0,1000}\)/g,
         () =>
             'Promise.resolve(typeof context !== "undefined" && context.content ? context.content : "")'
     )
     executionCode = replaceOutsideNonCode(
         executionCode,
-        /\bfs\.(existsSync|statSync|stat|lstatSync)\s*\(/g,
+        /(?<![.\w$])fs\.(existsSync|statSync|stat|lstatSync)\s*\(/g,
         (_match, method: string) => `__safeFs.${method}(`
     )
     executionCode = replaceOutsideNonCode(
         executionCode,
-        /process\.env\.([a-zA-Z0-9_]+)/g,
+        /(?<![.\w$])process\.env\.([a-zA-Z0-9_]+)/g,
         () => 'undefined'
     )
-    executionCode = replaceOutsideNonCode(executionCode, /process\.env\b/g, () => '{}')
+    executionCode = replaceOutsideNonCode(executionCode, /(?<![.\w$])process\.env\b/g, () => '{}')
     if (
         executionCode.includes('`') ||
         executionCode.includes("'") ||

@@ -134,6 +134,19 @@ function evictOldestIdleSessionIfFull(
     evictSessionIfIdle(state, oldestSid, oldestTime)
 }
 
+function closeUninitializedSession(
+    server: { close(): Promise<unknown> },
+    transport: { sessionId?: string | undefined }
+): void {
+    if (transport.sessionId === undefined) {
+        server.close().catch((closeErr: unknown) => {
+            logger.error('Error closing uninitialized session server', {
+                error: String(closeErr),
+            })
+        })
+    }
+}
+
 function connectTransportToServer(
     state: McpRouteState,
     sessionId: string,
@@ -181,10 +194,10 @@ function connectTransportToServer(
             transport
                 .handleRequest(req, res, req.body)
                 .then(() => {
-                    if (transport.sessionId === undefined) void server.close()
+                    closeUninitializedSession(server, transport)
                 })
                 .catch((err: unknown) => {
-                    if (transport.sessionId === undefined) void server.close()
+                    closeUninitializedSession(server, transport)
                     logger.error('Error handling transport request', {
                         error: String(err),
                         ...(err instanceof Error && err.stack !== undefined ? { stack: err.stack } : {}),

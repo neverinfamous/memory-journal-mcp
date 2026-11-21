@@ -181,8 +181,49 @@ interface TeamAutoRouteOptions {
     snakeMethod: string
     teamFn: GroupApiRecord[string] | undefined
     suggestionHint: string
+    allowPositionalEntryId?: boolean
     buildTeamArgs: (args: Record<string, unknown>) => Record<string, unknown>
     copyFnSchema: (source: unknown, wrapper: (...args: unknown[]) => unknown) => void
+}
+
+function normalizeAutoRouteArg(
+    args: unknown[],
+    allowPositionalEntryId: boolean
+): Record<string, unknown> | null {
+    const firstArg = args[0]
+    if (allowPositionalEntryId && (typeof firstArg === 'number' || typeof firstArg === 'string')) {
+        const extra = isRecord(args[1]) ? args[1] : undefined
+        const entryId = firstArg
+        return {
+            ...(extra ?? {}),
+            entry_id: entryId,
+            ...(extra?.['workspaceId'] !== undefined && extra['workspace_id'] === undefined
+                ? { workspace_id: extra['workspaceId'] }
+                : {}),
+            ...(extra?.['projectNumber'] !== undefined && extra['project_number'] === undefined
+                ? { project_number: extra['projectNumber'] }
+                : {}),
+            ...(extra?.['includeRelationships'] !== undefined &&
+            extra['include_relationships'] === undefined
+                ? { include_relationships: extra['includeRelationships'] }
+                : {}),
+        }
+    }
+    if (!isRecord(firstArg)) return null
+    const entryId = firstArg['entry_id'] ?? firstArg['entryId'] ?? firstArg['id']
+    const workspaceId = firstArg['workspace_id'] ?? firstArg['workspaceId']
+    const projectNumber = firstArg['project_number'] ?? firstArg['projectNumber']
+    const includeRelationships =
+        firstArg['include_relationships'] ?? firstArg['includeRelationships']
+    return {
+        ...firstArg,
+        ...(entryId !== undefined ? { entry_id: entryId } : {}),
+        ...(workspaceId !== undefined ? { workspace_id: workspaceId } : {}),
+        ...(projectNumber !== undefined ? { project_number: projectNumber } : {}),
+        ...(includeRelationships !== undefined
+            ? { include_relationships: includeRelationships }
+            : {}),
+    }
 }
 
 function wrapTeamAutoRoute(opts: TeamAutoRouteOptions): void {
@@ -191,8 +232,8 @@ function wrapTeamAutoRoute(opts: TeamAutoRouteOptions): void {
     if (typeof primaryFn !== 'function' || typeof teamFn !== 'function') return
 
     const wrapped = async (...args: unknown[]): Promise<unknown> => {
-        const firstArg = args[0]
-        if (!isRecord(firstArg) || firstArg['source'] !== undefined) {
+        const normalized = normalizeAutoRouteArg(args, opts.allowPositionalEntryId === true)
+        if (normalized === null || normalized['source'] !== undefined) {
             return await primaryFn(...args)
         }
         const res = await runWithSilentTeamProbe(() => primaryFn(...args))
@@ -203,7 +244,7 @@ function wrapTeamAutoRoute(opts: TeamAutoRouteOptions): void {
             typeof res['suggestion'] === 'string' &&
             res['suggestion'].includes(opts.suggestionHint)
         ) {
-            const teamRes = await teamFn(opts.buildTeamArgs(firstArg))
+            const teamRes = await teamFn(opts.buildTeamArgs(normalized))
             if (isRecord(teamRes) && teamRes['success'] !== false) {
                 return { ...teamRes, _healed: { routedTo: 'team' } }
             }
@@ -225,6 +266,7 @@ function wireSilentTeamFallbackRouting(deps: ProjectAndTeamAliasDeps): void {
         snakeMethod: 'get_entry_by_id',
         teamFn: team['teamGetEntryById'],
         suggestionHint: 'team_get_entry_by_id',
+        allowPositionalEntryId: true,
         copyFnSchema,
         buildTeamArgs: (p) => ({
             entry_id: p['entry_id'],
@@ -241,6 +283,7 @@ function wireSilentTeamFallbackRouting(deps: ProjectAndTeamAliasDeps): void {
         snakeMethod: 'visualize_relationships',
         teamFn: team['teamVisualizeRelationships'],
         suggestionHint: 'team_visualize_relationships',
+        allowPositionalEntryId: true,
         copyFnSchema,
         buildTeamArgs: (p) => {
             const tagsVal = p['tags']

@@ -52,10 +52,12 @@ export function resolveCanonicalImportAuthorCached(
     cache?: ImportBatchAuthorCache
 ): string | undefined {
     if (author === undefined) return undefined
-    if (cache === undefined) return resolveCanonicalImportAuthor(db, author, workspaceId)
-    const key = `${workspaceId ?? ''}\0${author}`
+    const normalized = sanitizeAuthor(author).trim()
+    if (normalized === '') return undefined
+    if (cache === undefined) return resolveCanonicalImportAuthor(db, normalized, workspaceId)
+    const key = `${workspaceId ?? ''}\0${normalized.toLowerCase()}`
     if (cache.canonicalAuthors.has(key)) return cache.canonicalAuthors.get(key)
-    const resolved = resolveCanonicalImportAuthor(db, author, workspaceId)
+    const resolved = resolveCanonicalImportAuthor(db, normalized, workspaceId)
     cache.canonicalAuthors.set(key, resolved)
     return resolved
 }
@@ -85,11 +87,14 @@ export function assertImportAuthorOwnership(
         return
     }
     if (existingAuthor !== undefined) {
+        const sanitizedExisting = sanitizeAuthor(existingAuthor).trim()
         const canonicalExisting =
-            batchAuthorCache?.authorsById !== undefined
-                ? existingAuthor
-                : (resolveCanonicalImportAuthorCached(db, existingAuthor, workspaceId, batchAuthorCache) ??
-                  existingAuthor)
+            resolveCanonicalImportAuthorCached(
+                db,
+                sanitizedExisting,
+                workspaceId,
+                batchAuthorCache
+            ) ?? sanitizedExisting
         if (canonicalExisting.toLowerCase() !== effectiveAuthor.toLowerCase()) {
             throw new PermissionError(
                 `Permission denied: cannot overwrite entry ${String(entryId)} owned by '${existingAuthor}' during import by '${effectiveAuthor}'`

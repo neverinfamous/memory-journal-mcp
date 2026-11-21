@@ -216,8 +216,8 @@ export class AliasManager {
             for (const { placeholders, params: chunk } of bucketInParams(rawAuthors, SCOPED_IN_PARAM_BUCKETS)) {
                 // NULL sorts first in ASC so concrete workspace rows overwrite global aliases in the loop below.
                 const sql = scoped
-                    ? `SELECT alias, canonical_author FROM author_aliases WHERE alias IN (${placeholders}) COLLATE NOCASE AND (workspace_id IS NULL OR workspace_id = ?) ORDER BY workspace_id ASC`
-                    : `SELECT alias, canonical_author FROM author_aliases WHERE alias IN (${placeholders}) COLLATE NOCASE ORDER BY workspace_id ASC`
+                    ? `SELECT alias, canonical_author FROM author_aliases WHERE alias COLLATE NOCASE IN (${placeholders}) AND (workspace_id IS NULL OR workspace_id = ?) ORDER BY workspace_id ASC`
+                    : `SELECT alias, canonical_author FROM author_aliases WHERE alias COLLATE NOCASE IN (${placeholders}) ORDER BY workspace_id ASC`
                 const params = scoped ? [...chunk, scopeId] : chunk
                 if (nativeDb !== undefined) {
                     const rows = nativeDb.prepare(sql).all(...params) as {

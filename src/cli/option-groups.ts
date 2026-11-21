@@ -195,104 +195,44 @@ export function addPruningOptions(command: Command): Command {
     })
 }
 
+type BriefingOptionSpec = readonly [string, string] | readonly [string, string, string]
+
+const BRIEFING_OPTION_SPECS: readonly BriefingOptionSpec[] = [
+    ['--briefing-importance-threshold <threshold>', 'Minimum importance score (0.0 to 1.0) for an entry to be included in the briefing (env: BRIEFING_IMPORTANCE_THRESHOLD)'],
+    ['--briefing-pr-count <count>', 'Number of PRs to include in briefing (env: BRIEFING_PR_COUNT)'],
+    ['--briefing-entries <count>', 'Number of journal entries in briefing (env: BRIEFING_ENTRY_COUNT)', '3'],
+    ['--briefing-commits <count>', 'Number of commits to include in briefing (env: BRIEFING_COMMIT_COUNT)', '3'],
+    ['--briefing-summaries <count>', 'Number of session summaries to show in briefing (env: BRIEFING_SUMMARY_COUNT)', '1'],
+    ['--briefing-include-team', 'Include team DB entries in briefing (env: BRIEFING_INCLUDE_TEAM)'],
+    ['--no-briefing-include-team', 'Force-exclude team DB entries from briefing, overriding env/config (env: BRIEFING_INCLUDE_TEAM=false)'],
+    ['--briefing-issues <count>', 'Number of issues to list in briefing; 0 = hide (env: BRIEFING_ISSUE_COUNT)', '0'],
+    ['--briefing-prs <count>', 'Number of PRs to list in briefing; 0 = hide (env: BRIEFING_PR_COUNT)', '0'],
+    ['--briefing-pr-status', 'Show PR status breakdown in briefing (env: BRIEFING_PR_STATUS)'],
+    ['--no-briefing-pr-status', 'Force-hide PR status breakdown in briefing, overriding env/config (env: BRIEFING_PR_STATUS=false)'],
+    ['--briefing-milestones <count>', 'Number of milestones to list in briefing; 0 = hide (env: BRIEFING_MILESTONE_COUNT)', '3'],
+    ['--rules-file <path>', 'Path to user rules file for awareness in briefing (env: RULES_FILE_PATH)'],
+    ['--skills-dir <path>', 'Path to skills directory for awareness in briefing (env: SKILLS_DIR_PATH)'],
+    ['--briefing-workflows <count>', 'Number of workflow runs to list in briefing; 0 = hide (env: BRIEFING_WORKFLOW_COUNT)', '0'],
+    ['--briefing-workflow-status', 'Show workflow run status breakdown in briefing (env: BRIEFING_WORKFLOW_STATUS)'],
+    ['--no-briefing-workflow-status', 'Force-hide workflow run status breakdown in briefing, overriding env/config (env: BRIEFING_WORKFLOW_STATUS=false)'],
+    ['--briefing-copilot', 'Aggregate Copilot review state across recent PRs in briefing (env: BRIEFING_COPILOT or BRIEFING_COPILOT_REVIEWS)'],
+    ['--no-briefing-copilot', 'Force-hide Copilot review aggregation in briefing, overriding env/config (env: BRIEFING_COPILOT=false)'],
+    ['--briefing-graph', 'Include graph/git pivots in briefing (env: BRIEFING_GRAPH)'],
+    ['--no-briefing-graph', 'Disable graph/git pivots in briefing: entry link degree, commit→entry refs, active threads (env: BRIEFING_GRAPH=false)'],
+    ['--briefing-insights', 'Show the briefing Insights row (env: BRIEFING_INSIGHTS)'],
+    ['--no-briefing-insights', 'Hide the briefing Insights row and skip its GitHub repo stats/traffic calls and analytics digest (env: BRIEFING_INSIGHTS=false)'],
+    ['--workflow-summary <text>', 'Workflow summary for memory://workflows resource (env: MEMORY_JOURNAL_WORKFLOW_SUMMARY)'],
+]
+
 export function addBriefingOptions(command: Command): Command {
     return withGroup(command, 'Briefing Options', (cmd) => {
-        cmd
-            .option(
-                '--briefing-importance-threshold <threshold>',
-                'Minimum importance score (0.0 to 1.0) for an entry to be included in the briefing (env: BRIEFING_IMPORTANCE_THRESHOLD)'
-            )
-            .option(
-                '--briefing-pr-count <count>',
-                'Number of PRs to include in briefing (env: BRIEFING_PR_COUNT)'
-            )
-            .option(
-                '--briefing-entries <count>',
-                'Number of journal entries in briefing (env: BRIEFING_ENTRY_COUNT)',
-                '3'
-            )
-            .option(
-                '--briefing-commits <count>',
-                'Number of commits to include in briefing (env: BRIEFING_COMMIT_COUNT)',
-                '3'
-            )
-            .option(
-                '--briefing-summaries <count>',
-                'Number of session summaries to show in briefing (env: BRIEFING_SUMMARY_COUNT)',
-                '1'
-            )
-            .option(
-                '--briefing-include-team',
-                'Include team DB entries in briefing (env: BRIEFING_INCLUDE_TEAM)'
-            )
-            .option(
-                '--no-briefing-include-team',
-                'Force-exclude team DB entries from briefing, overriding env/config (env: BRIEFING_INCLUDE_TEAM=false)'
-            )
-            .option(
-                '--briefing-issues <count>',
-                'Number of issues to list in briefing; 0 = hide (env: BRIEFING_ISSUE_COUNT)',
-                '0'
-            )
-            .option(
-                '--briefing-prs <count>',
-                'Number of PRs to list in briefing; 0 = hide (env: BRIEFING_PR_COUNT)',
-                '0'
-            )
-            .option(
-                '--briefing-pr-status',
-                'Show PR status breakdown in briefing (env: BRIEFING_PR_STATUS)'
-            )
-            .option(
-                '--no-briefing-pr-status',
-                'Force-hide PR status breakdown in briefing, overriding env/config (env: BRIEFING_PR_STATUS=false)'
-            )
-            .option(
-                '--briefing-milestones <count>',
-                'Number of milestones to list in briefing; 0 = hide (env: BRIEFING_MILESTONE_COUNT)',
-                '3'
-            )
-            .option(
-                '--rules-file <path>',
-                'Path to user rules file for awareness in briefing (env: RULES_FILE_PATH)'
-            )
-            .option(
-                '--skills-dir <path>',
-                'Path to skills directory for awareness in briefing (env: SKILLS_DIR_PATH)'
-            )
-            .option(
-                '--briefing-workflows <count>',
-                'Number of workflow runs to list in briefing; 0 = hide (env: BRIEFING_WORKFLOW_COUNT)',
-                '0'
-            )
-            .option(
-                '--briefing-workflow-status',
-                'Show workflow run status breakdown in briefing (env: BRIEFING_WORKFLOW_STATUS)'
-            )
-            .option(
-                '--no-briefing-workflow-status',
-                'Force-hide workflow run status breakdown in briefing, overriding env/config (env: BRIEFING_WORKFLOW_STATUS=false)'
-            )
-            .option(
-                '--briefing-copilot',
-                'Aggregate Copilot review state across recent PRs in briefing (env: BRIEFING_COPILOT or BRIEFING_COPILOT_REVIEWS)'
-            )
-            .option(
-                '--no-briefing-copilot',
-                'Force-hide Copilot review aggregation in briefing, overriding env/config (env: BRIEFING_COPILOT=false)'
-            )
-            .option(
-                '--no-briefing-graph',
-                'Disable graph/git pivots in briefing: entry link degree, commit→entry refs, active threads (env: BRIEFING_GRAPH=false)'
-            )
-            .option(
-                '--no-briefing-insights',
-                'Hide the briefing Insights row and skip its GitHub repo stats/traffic calls and analytics digest (env: BRIEFING_INSIGHTS=false)'
-            )
-            .option(
-                '--workflow-summary <text>',
-                'Workflow summary for memory://workflows resource (env: MEMORY_JOURNAL_WORKFLOW_SUMMARY)'
-            )
+        for (const spec of BRIEFING_OPTION_SPECS) {
+            if (spec.length === 3) {
+                cmd.option(spec[0], spec[1], spec[2])
+            } else {
+                cmd.option(spec[0], spec[1])
+            }
+        }
     })
 }
 

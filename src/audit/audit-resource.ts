@@ -29,11 +29,14 @@ import type { AuditLogger } from './audit-logger.js'
 import type { AuditEntry } from './types.js'
 import { extractAuditScopeFromUri, matchesAuditFilters } from './audit-query-helpers.js'
 
-function parseAuditResourceQueryScope(uri: string): {
+function parseAuditResourceQueryScope(
+    uri: string,
+    runtime?: object | null
+): {
     workspaceId?: string
     projectNumber?: number
 } {
-    const scopeFilter = extractAuditScopeFromUri(uri)
+    const scopeFilter = extractAuditScopeFromUri(uri, undefined, runtime)
     let explicitZeroProject = false
     try {
         const parsed = new URL(uri)
@@ -65,8 +68,12 @@ function parseAuditResourceQueryScope(uri: string): {
     }
 }
 
-async function fetchAuditEntries(auditLogger: AuditLogger, uri: string): Promise<AuditEntry[]> {
-    const scopeFilter = parseAuditResourceQueryScope(uri)
+async function fetchAuditEntries(
+    auditLogger: AuditLogger,
+    uri: string,
+    runtime?: object | null
+): Promise<AuditEntry[]> {
+    const scopeFilter = parseAuditResourceQueryScope(uri, runtime)
     const hasScopeFilter =
         scopeFilter.workspaceId !== undefined || scopeFilter.projectNumber !== undefined
     if (!hasScopeFilter) {
@@ -177,7 +184,7 @@ function sanitizeAuditArgNode(
             let count = 0
             for (const [mk, mv] of value.entries()) {
                 if (count++ >= MAX_AUDIT_EGRESS_OBJECT_KEYS || budget.count >= MAX_AUDIT_EGRESS_TOTAL_NODES) {
-                    out['_truncatedKeys'] = Math.max(0, value.size - MAX_AUDIT_EGRESS_OBJECT_KEYS)
+                    out['_truncatedKeys'] = Math.max(0, value.size - (count - 1))
                     break
                 }
                 const rawKey = String(mk)
@@ -299,7 +306,8 @@ function formatAuditEntryYaml(e: AuditEntry, preSanitized = false): string {
 
 async function handleAuditResourceRead(
     uri: string,
-    getLogger: () => AuditLogger | null
+    getLogger: () => AuditLogger | null,
+    runtime?: object | null
 ): Promise<ResourceResult> {
     const lastModified = new Date().toISOString()
     const auditLogger = getLogger()
@@ -313,7 +321,7 @@ async function handleAuditResourceRead(
         }
     }
 
-    const entries = await fetchAuditEntries(auditLogger, uri)
+    const entries = await fetchAuditEntries(auditLogger, uri, runtime)
     if (entries.length === 0) {
         const note =
             typeof auditLogger.isStderrOnly === 'function' && auditLogger.isStderrOnly()
@@ -374,7 +382,7 @@ export function getAuditResourceDef(getLogger: () => AuditLogger | null): Intern
         capabilities: {
             requiresAuditScope: true,
         },
-        handler: (uri: string, _context: ResourceContext): Promise<ResourceResult> =>
-            handleAuditResourceRead(uri, getLogger),
+        handler: (uri: string, context: ResourceContext): Promise<ResourceResult> =>
+            handleAuditResourceRead(uri, getLogger, context.runtime),
     }
 }

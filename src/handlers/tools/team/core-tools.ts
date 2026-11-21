@@ -38,6 +38,7 @@ import {
 } from './schemas.js'
 import { relaxedNumber, StrictProjectNumberSchema } from '../schemas.js'
 import { linkRequestedRelationships } from '../relationship-linking.js'
+import { applyAutoLinksForEntry } from '../core/create-entry-helpers.js'
 
 const TeamListTagsSchemaMcp = z.object({
     project_number: relaxedNumber()
@@ -181,6 +182,20 @@ async function executeTeamCreateEntry(
         wsId,
         projectNumber
     )
+    if (input.auto_link === true) {
+        await applyAutoLinksForEntry({
+            db: teamDb,
+            vectorManager: context.teamVectorManager,
+            createdEntry: entry,
+            wsId,
+            projectNumber,
+            sessionId: input.session_id,
+            relationshipWarnings,
+            tags: input.tags,
+            hasExplicitRelationships:
+                input.relationships !== undefined && input.relationships.length > 0,
+        })
+    }
     teamDb.flushSave()
     const indexStatus = await autoIndexEntry(context.teamVectorManager, teamDb, entry, wsId)
     triggerTeamNotifications(context)

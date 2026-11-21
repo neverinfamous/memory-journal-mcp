@@ -24,6 +24,7 @@ import { isToolVisibleForFilter } from '../../../filtering/tool-filter.js'
 import { enforceAccessBoundary } from '../../../auth/validation.js'
 import type { ToolFilterConfig, ToolRegistration, ToolHandlerConfig, ToolContext } from '../../../types/index.js'
 import type { PromptDefinition } from '../../registration.js'
+import { formatHandlerError } from '../../../utils/error-helpers.js'
 import { formatToolFailure } from './register-tools-helpers.js'
 import {
     formatSuccessPayload,
@@ -142,7 +143,7 @@ export async function runFallbackWithInterceptors(
         enforceFallbackAccessTargets(requestedTool, runtime, accessTargets)
     } catch (error: unknown) {
         if (error instanceof PermissionError || error instanceof AuthorizationError) {
-            return formatTokenEstimatedError({ ...error.toResponse() }, true)
+            return formatTokenEstimatedError({ ...formatHandlerError(error) }, true)
         }
         return formatTokenEstimatedError(formatToolFailure(error, requestedTool, toolArgs), true)
     }
@@ -164,7 +165,7 @@ export async function runFallbackWithInterceptors(
         )
     } catch (error: unknown) {
         if (error instanceof PermissionError || error instanceof AuthorizationError) {
-            return formatTokenEstimatedError({ ...error.toResponse() }, true)
+            return formatTokenEstimatedError({ ...formatHandlerError(error) }, true)
         }
         return formatTokenEstimatedError(formatToolFailure(error, requestedTool, toolArgs), true)
     }

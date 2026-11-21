@@ -160,7 +160,12 @@ export class WorkerSandbox {
                         // [H1] Evict and terminate tainted worker when unhandled async rejection/exception fired.
                         this.worker = null
                         this.resetSentMetadata()
-                        void spawnedWorker.terminate()
+                        spawnedWorker.terminate().catch((err: unknown) => {
+                            const detail = sanitizeErrorForLogging(
+                                err instanceof Error ? err.message : String(err)
+                            )
+                            process.stderr.write(`Code mode worker terminate failed: ${detail}\n`)
+                        })
                     } else {
                         this.worker.unref()
                     }

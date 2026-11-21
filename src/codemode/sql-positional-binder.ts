@@ -149,13 +149,14 @@ function assignColumn(payload: Record<string, unknown>, column: string, val: unk
             }
             return false
         case 'entry_type':
-        case 'type':
-            if (typeof val === 'string') payload['entry_type'] = val
-            return true
+        case 'type': {
+            if (typeof val !== 'string') return false
+            payload['entry_type'] = val; return true
+        }
         case 'tags': {
             const tags = toTags(val)
-            if (tags !== undefined) payload['tags'] = tags
-            return true
+            if (tags === undefined) return false
+            payload['tags'] = tags; return true
         }
         case 'is_personal':
             payload['is_personal'] = val === true || val === 1 || val === '1' || val === 'true'

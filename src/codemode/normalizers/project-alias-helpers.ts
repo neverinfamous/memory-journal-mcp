@@ -97,9 +97,19 @@ export function aliasValidationError(error: string): { error: Record<string, unk
 export type ProjectNameAliasResult = 'applied' | 'unregistered' | { conflict: string }
 
 function formatScalarOrJson(val: unknown): string {
-    return typeof val === 'string' || typeof val === 'number' || typeof val === 'boolean'
-        ? String(val)
-        : (JSON.stringify(val) ?? typeof val)
+    if (
+        typeof val === 'string' ||
+        typeof val === 'number' ||
+        typeof val === 'boolean' ||
+        typeof val === 'bigint'
+    ) {
+        return String(val)
+    }
+    try {
+        return JSON.stringify(val) ?? typeof val
+    } catch {
+        return typeof val
+    }
 }
 
 function canonicalAliasProject(rawVal: unknown): number | undefined {

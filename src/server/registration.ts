@@ -225,7 +225,8 @@ export function registerPrompts(
                     {
                         forceAudit,
                         capabilities: promptDef.capabilities,
-                        ...extractAuditScopeFromArgs(providedArgs),
+                        runtime,
+                        ...extractAuditScopeFromArgs(providedArgs, undefined, runtime),
                     }
                 )
             }

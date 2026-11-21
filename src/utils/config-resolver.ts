@@ -1,10 +1,15 @@
 import * as path from 'node:path'
 import * as os from 'node:os'
 import { parse as parseYaml } from 'yaml'
-import type { Command } from 'commander'
 import { logger } from './logger.js'
 import { ConfigurationError } from '../types/errors.js'
 import { readSafeRegularConfigTextSync } from './config-file-safety.js'
+
+/** Minimal Commander-compatible interface needed by ConfigResolver and CLI helpers. */
+export interface CliCommandLike {
+    name(): string
+    getOptionValueSource(key: string): string | undefined
+}
 
 export class ConfigResolver {
     private configFileOptions: Record<string, unknown> = {}
@@ -12,7 +17,7 @@ export class ConfigResolver {
 
 
     constructor(
-        private command: Command,
+        private command: CliCommandLike,
         private cliOptions: Record<string, unknown>,
         configPathOverride?: string
     ) {
@@ -287,17 +292,31 @@ export class ConfigResolver {
         envKey?: string
     ): string[] | undefined {
         const val = this.resolve<unknown>(cliKey, envKey)
-        if (val === undefined || val === '') return undefined
+        if (val === undefined || val === null) return undefined
 
         if (Array.isArray(val)) {
-            return val.map(String).map(s => s.trim()).filter(Boolean)
-        }
-        
-        if (typeof val === 'string') {
-            return val.split(',').map(s => s.trim()).filter(Boolean)
+            const items: string[] = []
+            for (const item of val) {
+                if (item === undefined || item === null) continue
+                if (typeof item !== 'string' && typeof item !== 'number' && typeof item !== 'boolean') {
+                    throw new ConfigurationError(
+                        `Invalid string-array element for ${cliKey}: expected string, got ${typeof item}`
+                    )
+                }
+                const trimmed = String(item).trim()
+                if (trimmed !== '') items.push(trimmed)
+            }
+            return items.length > 0 ? items : undefined
         }
 
-        return [typeof val === 'string' || typeof val === 'number' || typeof val === 'boolean' ? String(val) : JSON.stringify(val)]
+        if (typeof val === 'string') {
+            const parts = val.split(',').map((s) => s.trim()).filter(Boolean)
+            return parts.length > 0 ? parts : undefined
+        }
+
+        throw new ConfigurationError(
+            `Invalid string-array configuration for ${cliKey}: expected array or comma-separated string, got ${typeof val}`
+        )
     }
 
     /**

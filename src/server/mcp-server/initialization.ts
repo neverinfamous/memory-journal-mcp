@@ -274,7 +274,7 @@ async function setupCoreDatabasesAndAudit(options: ServerOptions, runtime: Serve
     const db = DatabaseAdapterProxy.create(primaryDb, testDb)
     if (options.auditConfig?.enabled) {
         runtime.auditLogger = new AuditLogger(options.auditConfig)
-        runtime.auditInterceptor = createAuditInterceptor(runtime.auditLogger)
+        runtime.auditInterceptor = createAuditInterceptor(runtime.auditLogger, runtime)
         logger.info('Audit logging enabled', {
             module: 'McpServer',
             path: options.auditConfig.logPath,

@@ -194,21 +194,29 @@ export function resolveResourceAuditCategory(uriOrName: string): AuditCategory {
 function applyActiveSessionScopeFallback(
     scope: AuditScopeMetadata,
     reqCtx?: RequestContext,
-    explicitWildcardWorkspace = false
+    explicitWildcardWorkspace = false,
+    runtime?: object | null,
+    suppressSessionFallback = false
 ): AuditScopeMetadata {
     if (explicitWildcardWorkspace) {
         return {
             ...(scope.projectNumber !== undefined ? { projectNumber: scope.projectNumber } : {}),
         }
     }
-    const sessionProj = reqCtx?.ephemeralSessionProject ?? getActiveSessionProject()
+    const sessionProj = reqCtx?.ephemeralSessionProject ?? getActiveSessionProject(runtime)
+    const canFallbackWorkspace =
+        !suppressSessionFallback &&
+        (scope.projectNumber === undefined || scope.projectNumber === sessionProj.projectNumber)
     const workspaceId =
         scope.workspaceId ??
-        (sessionProj.workspaceId !== undefined && sessionProj.workspaceId.length > 0
+        (canFallbackWorkspace &&
+        sessionProj.workspaceId !== undefined &&
+        sessionProj.workspaceId.length > 0
             ? sessionProj.workspaceId
             : undefined)
     const canFallbackProject =
-        scope.workspaceId === undefined || scope.workspaceId === sessionProj.workspaceId
+        !suppressSessionFallback &&
+        (scope.workspaceId === undefined || scope.workspaceId === sessionProj.workspaceId)
     const projectNumber =
         scope.projectNumber ?? (canFallbackProject ? sessionProj.projectNumber : undefined)
     return {
@@ -220,7 +228,8 @@ function applyActiveSessionScopeFallback(
 /** Extract optional workspaceId / projectNumber from tool arguments and active request context. */
 export function extractAuditScopeFromArgs(
     args: unknown,
-    reqCtx?: RequestContext
+    reqCtx?: RequestContext,
+    runtime?: object | null
 ): AuditScopeMetadata {
     let workspaceId: string | undefined
     let projectNumber: number | undefined
@@ -248,18 +257,21 @@ export function extractAuditScopeFromArgs(
             ...(projectNumber !== undefined ? { projectNumber } : {}),
         },
         reqCtx,
-        explicitWildcardWorkspace
+        explicitWildcardWorkspace,
+        runtime
     )
 }
 
 /** Extract optional workspace_id / project_number query params or URI path repo from a memory:// URI. */
 export function extractAuditScopeFromUri(
     uri: string,
-    reqCtx?: RequestContext
+    reqCtx?: RequestContext,
+    runtime?: object | null
 ): AuditScopeMetadata {
     let workspaceId: string | undefined
     let projectNumber: number | undefined
     let explicitWildcardWorkspace = false
+    let explicitZeroProject = false
 
     try {
         const parsed = new URL(uri)
@@ -274,8 +286,12 @@ export function extractAuditScopeFromUri(
         }
         const projParam = parsed.searchParams.get('project_number')
         if (projParam !== null) {
-            const n = parseCanonicalPositiveInt(projParam)
-            if (n !== undefined) projectNumber = n
+            if (projParam.trim() === '0') {
+                explicitZeroProject = true
+            } else {
+                const n = parseCanonicalPositiveInt(projParam)
+                if (n !== undefined) projectNumber = n
+            }
         }
         if (
             workspaceId === undefined &&
@@ -299,7 +315,9 @@ export function extractAuditScopeFromUri(
             ...(projectNumber !== undefined ? { projectNumber } : {}),
         },
         reqCtx,
-        explicitWildcardWorkspace
+        explicitWildcardWorkspace,
+        runtime,
+        explicitZeroProject
     )
 }
 
