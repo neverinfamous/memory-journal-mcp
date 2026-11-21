@@ -1,10 +1,15 @@
-import { parseArgs } from 'util';
-import { readFileSync, writeFileSync, cpSync, mkdirSync, existsSync, readdirSync, lstatSync } from 'fs';
-import { join, dirname, resolve, relative, isAbsolute, sep } from 'path';
-import { execFileSync } from 'child_process';
-import { builtinModules } from 'module';
+import { parseArgs } from 'node:util';
+import { readFileSync, mkdirSync, existsSync, readdirSync, lstatSync } from 'node:fs';
+import { join, dirname, resolve, relative, isAbsolute, sep } from 'node:path';
+import { execFileSync } from 'node:child_process';
+import { builtinModules } from 'node:module';
 import ts from 'typescript';
 import { z } from 'zod';
+import {
+  acquireSyncVendorLock,
+  assertSafeSyncWorktree,
+  writeBufferAtomicIfChanged,
+} from './sync-vendor-guards.js';
 import { hasHostScriptReferences, neutralizeVendoredDoc } from './vendor-doc-neutralizer.js';
 
 function collectModuleSpecifiers(source: string): string[] {
@@ -245,7 +250,7 @@ function findNonNeutralVendorDocs(cwd: string, libsToSync: string[], manifest: V
   return offenders;
 }
 
-function reportAndExitOnVendorIssues(
+function assertNoVendorIssues(
   unresolved: Map<string, Set<string>>,
   missing: Map<string, Set<string>>,
   upstreamDeps: Record<string, string>
@@ -265,45 +270,122 @@ function reportAndExitOnVendorIssues(
     console.error(`\nAdd them, e.g.: pnpm add -D ${[...missing.keys()].map((pkg) => (upstreamDeps[pkg] !== undefined ? `${pkg}@${upstreamDeps[pkg]}` : pkg)).join(' ')}`);
   }
   if (unresolved.size > 0 || missing.size > 0) {
-    process.exit(1);
+    throw new Error('Vendor library validation failed.');
   }
 }
 
 function commitStagedVendorWrites(
   vendorJsonPath: string,
+  prevManifest: VendorManifest,
+  libsToSync: readonly string[],
   staged: ReturnType<typeof stageVendorWrites>
 ): void {
   const createdDirs = new Set<string>();
+  let writtenCount = 0;
+  let unchangedCount = 0;
   for (const item of staged.writes) {
     const dir = dirname(item.destFile);
     if (!createdDirs.has(dir)) {
       mkdirSync(dir, { recursive: true });
       createdDirs.add(dir);
     }
-    if (item.kind === 'copy') cpSync(item.srcFile, item.destFile);
-    else writeFileSync(item.destFile, item.content);
+    const nextContent = item.kind === 'copy' ? readFileSync(item.srcFile) : Buffer.from(item.content, 'utf8');
+    if (writeBufferAtomicIfChanged(item.destFile, nextContent)) writtenCount++;
+    else unchangedCount++;
   }
-  writeFileSync(vendorJsonPath, JSON.stringify(staged.nextManifest, null, 2) + '\n');
-  console.log(`\nSynced ${String(staged.writes.length)} file(s) and updated VENDOR.json`);
+  const commitChanged = libsToSync.some(
+    (lib) => prevManifest.libs[lib]?.syncedFromCommit !== staged.nextManifest.libs[lib]?.syncedFromCommit
+  );
+  const manifestUpdated =
+    (writtenCount > 0 || commitChanged) &&
+    writeBufferAtomicIfChanged(vendorJsonPath, Buffer.from(JSON.stringify(staged.nextManifest, null, 2) + '\n', 'utf8'));
+  console.log(
+    `\nSynced ${String(writtenCount)} changed file(s), ${String(unchangedCount)} unchanged, VENDOR.json ${manifestUpdated ? 'updated' : 'unchanged'}`
+  );
 }
 
-function runVendorSelfTests(cwd: string): void {
+function runVendorSelfTests(cwd: string, rawLib?: string): void {
   console.log('\nRunning tests...');
-  execFileSync(
-    process.execPath,
-    [join(cwd, 'node_modules', 'tsx', 'dist', 'cli.mjs'), join(cwd, 'scripts', 'sync-vendor.ts'), '--check'],
-    { stdio: 'inherit', shell: false }
+  const checkArgs = [join(cwd, 'node_modules', 'tsx', 'dist', 'cli.mjs'), join(cwd, 'scripts', 'sync-vendor.ts'), '--check'];
+  if (rawLib !== undefined) checkArgs.push('--lib', rawLib);
+  execFileSync(process.execPath, checkArgs, { stdio: 'inherit', shell: false });
+  const testFiles =
+    rawLib === 'lib-agent-exec'
+      ? ['tests/unit/vendor-doc-neutralizer.test.ts']
+      : ['tests/unit/git-tools.test.ts', 'tests/unit/vendor-doc-neutralizer.test.ts'];
+  execFileSync(process.execPath, [join(cwd, 'node_modules', 'vitest', 'vitest.mjs'), 'run', ...testFiles], {
+    stdio: 'inherit',
+    shell: false,
+  });
+}
+
+function resolveSelectedLibs(vendorData: VendorManifest, rawLib?: string): string[] {
+  const available = Object.keys(vendorData.libs);
+  if (rawLib === undefined) return available;
+  if (!available.includes(rawLib)) throw new Error(`Library ${rawLib} not found in VENDOR.json`);
+  return [rawLib];
+}
+
+function validateAndAssertLibraries(
+  cwd: string,
+  libsToSync: string[],
+  manifest: VendorManifest,
+  upstreamRoot: string | undefined,
+  staged?: ReturnType<typeof stageVendorWrites>
+): void {
+  const declared = readDeclaredPackages(cwd);
+  const upstreamDeps = readUpstreamDepRanges(upstreamRoot);
+  const { unresolved, missing } = validateVendorLibraries(
+    cwd,
+    libsToSync,
+    manifest,
+    declared,
+    staged?.stagedTsSources,
+    staged?.stagedPaths
   );
-  execFileSync(
-    process.execPath,
-    [
-      join(cwd, 'node_modules', 'vitest', 'vitest.mjs'),
-      'run',
-      'tests/unit/git-tools.test.ts',
-      'tests/unit/vendor-doc-neutralizer.test.ts',
-    ],
-    { stdio: 'inherit', shell: false }
-  );
+  assertNoVendorIssues(unresolved, missing, upstreamDeps);
+}
+
+function runCheckMode(cwd: string, vendorJsonPath: string, rawLib?: string, rawUpstream?: string): void {
+  const vendorData = VendorManifestSchema.parse(JSON.parse(readFileSync(vendorJsonPath, 'utf8')));
+  const libsToSync = resolveSelectedLibs(vendorData, rawLib);
+  let upstreamRoot: string | undefined;
+  try {
+    upstreamRoot = resolveUpstreamRoot(cwd, rawUpstream);
+  } catch {
+    upstreamRoot = undefined;
+  }
+  validateAndAssertLibraries(cwd, libsToSync, vendorData, upstreamRoot);
+
+  // [INVARIANT] Synced docs are neutralized at stage time; --check guards against hand-copied upstream READMEs.
+  const nonNeutralDocs = findNonNeutralVendorDocs(cwd, libsToSync, vendorData);
+  if (nonNeutralDocs.length > 0) {
+    console.error('\nVendored docs still reference host-only `.agents/scripts` wrappers (re-run `pnpm run sync:vendor`):');
+    for (const doc of nonNeutralDocs) console.error(`  - ${doc}`);
+    throw new Error('Non-neutral vendored docs found.');
+  }
+}
+
+function runWriteMode(
+  cwd: string,
+  vendorJsonPath: string,
+  rawLib: string | undefined,
+  rawUpstream: string | undefined,
+  allowDirty: boolean
+): void {
+  const releaseLock = acquireSyncVendorLock(cwd, rawLib !== undefined ? [rawLib] : ['*']);
+  try {
+    const vendorData = VendorManifestSchema.parse(JSON.parse(readFileSync(vendorJsonPath, 'utf8')));
+    const libsToSync = resolveSelectedLibs(vendorData, rawLib);
+    assertSafeSyncWorktree(cwd, libsToSync, allowDirty);
+    const upstreamRoot = resolveUpstreamRoot(cwd, rawUpstream);
+    const headSha = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: upstreamRoot, encoding: 'utf8', windowsHide: true }).trim();
+    const staged = stageVendorWrites(cwd, upstreamRoot, headSha, libsToSync, vendorData);
+    validateAndAssertLibraries(cwd, libsToSync, staged.nextManifest, upstreamRoot, staged);
+    commitStagedVendorWrites(vendorJsonPath, vendorData, libsToSync, staged);
+  } finally {
+    releaseLock();
+  }
 }
 
 function runSyncVendor(): void {
@@ -313,70 +395,22 @@ function runSyncVendor(): void {
       'upstream-root': { type: 'string' },
       test: { type: 'boolean', default: false },
       check: { type: 'boolean', default: false },
+      'allow-dirty': { type: 'boolean', default: false },
     },
   });
-
   const cwd = process.cwd();
   const vendorJsonPath = join(cwd, 'src', 'vendor', 'VENDOR.json');
-  const vendorData = VendorManifestSchema.parse(JSON.parse(readFileSync(vendorJsonPath, 'utf8')));
-
-  let upstreamRoot: string | undefined;
-  let headSha: string | undefined;
-  try {
-    const rawUpstream = typeof args.values['upstream-root'] === 'string' ? args.values['upstream-root'] : undefined;
-    upstreamRoot = resolveUpstreamRoot(cwd, rawUpstream);
-    if (!args.values.check) {
-      headSha = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: upstreamRoot, encoding: 'utf8' }).trim();
-    }
-  } catch (err: unknown) {
-    if (!args.values.check) throw err;
-  }
-
-  let libsToSync = Object.keys(vendorData.libs);
   const rawLib = typeof args.values.lib === 'string' ? args.values.lib : undefined;
-  if (rawLib !== undefined) {
-    if (!libsToSync.includes(rawLib)) {
-      console.error(`Library ${rawLib} not found in VENDOR.json`);
-      process.exit(1);
-    }
-    libsToSync = [rawLib];
-  }
+  const rawUpstream = typeof args.values['upstream-root'] === 'string' ? args.values['upstream-root'] : undefined;
 
-  const staged = !args.values.check
-    ? (() => {
-        if (upstreamRoot === undefined || headSha === undefined) {
-          throw new Error('Upstream repository resolution is required when syncing vendor files.');
-        }
-        return stageVendorWrites(cwd, upstreamRoot, headSha, libsToSync, vendorData);
-      })()
-    : undefined;
-
-  const declared = readDeclaredPackages(cwd);
-  const upstreamDeps = readUpstreamDepRanges(upstreamRoot);
-  const { unresolved, missing } = validateVendorLibraries(
-    cwd,
-    libsToSync,
-    staged?.nextManifest ?? vendorData,
-    declared,
-    staged?.stagedTsSources,
-    staged?.stagedPaths
-  );
-
-  reportAndExitOnVendorIssues(unresolved, missing, upstreamDeps);
-  if (staged === undefined) {
-    // [INVARIANT] Synced docs are neutralized at stage time; --check guards against hand-copied upstream READMEs.
-    const nonNeutralDocs = findNonNeutralVendorDocs(cwd, libsToSync, vendorData);
-    if (nonNeutralDocs.length > 0) {
-      console.error('\nVendored docs still reference host-only `.agents/scripts` wrappers (re-run `pnpm run sync:vendor`):');
-      for (const doc of nonNeutralDocs) console.error(`  - ${doc}`);
-      process.exit(1);
-    }
+  if (args.values.check) {
+    runCheckMode(cwd, vendorJsonPath, rawLib, rawUpstream);
   } else {
-    commitStagedVendorWrites(vendorJsonPath, staged);
+    runWriteMode(cwd, vendorJsonPath, rawLib, rawUpstream, args.values['allow-dirty']);
   }
 
   if (args.values.test) {
-    runVendorSelfTests(cwd);
+    runVendorSelfTests(cwd, rawLib);
   }
 }
 
