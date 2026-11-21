@@ -130,3 +130,21 @@ export function preprocessTeamLinkEntries(val: unknown): unknown {
     if (description !== undefined) normalized['description'] = description
     return normalized
 }
+
+/** Preprocessor for TeamVisualizeRelationshipsSchema: coerces and clamps `limit` (1-500) while preserving unknown keys for `.strict()`. */
+export function preprocessTeamVisualizeRelationships(val: unknown): unknown {
+    if (typeof val !== 'object' || val === null || Array.isArray(val)) return val
+    const obj = val as Record<string, unknown>
+    const rawLimit = obj['limit']
+    if (rawLimit === undefined) return val
+
+    if (typeof rawLimit === 'string') {
+        const parsed = parseCanonicalPositiveInt(rawLimit.trim())
+        if (parsed === undefined) return val
+        return { ...obj, limit: Math.min(parsed, 500) }
+    }
+    if (typeof rawLimit === 'number' && Number.isSafeInteger(rawLimit) && rawLimit >= 1) {
+        return rawLimit > 500 ? { ...obj, limit: 500 } : val
+    }
+    return val
+}

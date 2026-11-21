@@ -3,7 +3,7 @@
 - **Commit Discovery**: Use `get_commit_history` to fetch sequential commit logs (or `get_commit_history({ uncommitted: true, path? })` for structured working-tree status/diffstat without raw `git status`) and `search_commits({ query })` to search commit **messages** by regular expression (does not filter by author). Pass `summary: true` to skip per-file diffstat computation on large batches.
 - **Release Tracking**: Use `get_release_info({ ref })` to summarize the 10 commits at `ref` and `get_unreleased_commits({ maxCount?, summary? })` (`default: 100`, `max: 5000`) to list commits since the latest SemVer tag.
 - **Commit Analytics**: Use `analyze_commit_patterns({ maxCount })` (or `max_count`, default `50`) for author and entry-type breakdowns across recent commits.
-- **Anchor Staleness Checks**: `check_entry_staleness({ entry_id?, workspace_id?, project_number? })` verifies `entry_anchors` against current git history (mutates staleness status; requires a registered `projectRegistry` entry `path` matching the target workspace — does not accept `repo` or `cwd`).
+- **Anchor Staleness Checks**: `check_entry_staleness({ entry_id?, workspace_id?, project_number?, session_id? })` verifies `entry_anchors` against current git history (mutates staleness status; requires a registered `projectRegistry` entry `path` matching the target workspace — does not accept `repo` or `cwd`; optional `session_id` filters recent entries only when passed explicitly and is not auto-inherited from top-level `mj_execute_code` `session_id`).
 - **Code Mode**: These tools are exposed under the `mj.git.*` namespace (e.g., `mj.git.getCommitHistory()`).
 
 ## Available Tools

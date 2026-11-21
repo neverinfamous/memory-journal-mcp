@@ -229,7 +229,7 @@ export function executeTeamVisualizeRelationships(
     params: unknown,
     extra?: TeamVisualizeExtraOptions
 ): Record<string, unknown> {
-    const { entry_id, tag, depth, project_number, workspace_id } =
+    const { entry_id, tag, depth, limit, project_number, workspace_id } =
         TeamVisualizeRelationshipsSchema.parse(params)
     const effectiveTags =
         extra?.tags !== undefined && extra.tags.length > 0
@@ -257,7 +257,7 @@ export function executeTeamVisualizeRelationships(
         entry_id,
         effectiveTags,
         depth,
-        extra?.limit
+        extra?.limit ?? limit
     )
     if ('errorResponse' in collected) return collected.errorResponse
     const { wsId, entryIds } = collected

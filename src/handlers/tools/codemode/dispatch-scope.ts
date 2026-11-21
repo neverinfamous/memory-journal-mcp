@@ -109,6 +109,16 @@ const SESSION_INHERITANCE_EXCLUDED_TOOLS = new Set([
     'update_configuration',
 ])
 
+// [INVARIANT] Do not auto-inject top-level Code Mode `session_id` into tools where
+// `session_id` acts as a narrow query filter (`check_entry_staleness`) or overwrites
+// historical entry ownership (`update_entry`, `team_update_entry`). Explicit inner
+// `session_id` values remain honored, and request-context telemetry still carries `sessionId`.
+const SKIP_AUTO_SESSION_ID_TOOLS = new Set<string>([
+    'check_entry_staleness',
+    'update_entry',
+    'team_update_entry',
+])
+
 function applyTargetWorkspaceScope(
     tool: ToolDefinition,
     paramsObj: Record<string, unknown>,
@@ -297,6 +307,7 @@ function applyRootSessionInheritance(
         paramsObj['workspace_id'] = workspaceId
     }
     if (
+        !SKIP_AUTO_SESSION_ID_TOOLS.has(tool.name) &&
         ctx.sessionId !== undefined &&
         ctx.sessionId !== '' &&
         paramsObj['session_id'] === undefined &&

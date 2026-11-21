@@ -143,9 +143,13 @@ export class QueryError extends MemoryJournalMcpError {
  */
 export class ValidationError extends MemoryJournalMcpError {
     constructor(message: string, details?: Record<string, unknown>) {
+        const explicitSuggestion =
+            typeof details?.['suggestion'] === 'string' && details['suggestion'].trim() !== ''
+                ? details['suggestion']
+                : undefined
         super(message, 'VALIDATION_ERROR', 'validation', {
-            suggestion: 'Check input parameters against the tool schema',
-            hasExplicitSuggestion: false,
+            suggestion: explicitSuggestion ?? 'Check input parameters against the tool schema',
+            hasExplicitSuggestion: explicitSuggestion !== undefined,
             recoverable: false,
             details,
         })

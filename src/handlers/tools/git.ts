@@ -255,7 +255,12 @@ export function getGitTools(context: ToolContext): ToolDefinition[] {
                 workspaceId: z.string().optional().describe('Workspace identifier alias'),
                 project_number: relaxedNumber().optional().describe('Numeric project identifier'),
                 projectNumber: relaxedNumber().optional().describe('Numeric project identifier alias'),
-                session_id: z.string().optional().describe('Optional agent session identifier'),
+                session_id: z
+                    .string()
+                    .optional()
+                    .describe(
+                        'Optional session filter (when explicitly passed without entry_id, limits recent-entry staleness scan to that session; not auto-inherited from top-level mj_execute_code session_id).'
+                    ),
             }),
             outputSchema: z.object({
                 success: z.boolean().optional(),

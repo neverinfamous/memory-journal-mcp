@@ -13,6 +13,7 @@ import {
     preprocessSemanticSearchQuery,
     normalizeTeamLinkRelationshipType,
     preprocessTeamLinkEntries,
+    preprocessTeamVisualizeRelationships,
 } from './search-preprocessors.js'
 
 /** team_get_statistics — strict */
@@ -105,28 +106,37 @@ export const TeamLinkEntriesSchemaMcp = z.preprocess(
 )
 
 /** team_visualize_relationships — strict */
-export const TeamVisualizeRelationshipsSchema = z
-    .object({
-        entry_id: z.number().int().positive().optional(),
-        tag: z.string().optional(),
-        depth: z.number().int().min(1).max(5).optional().default(2),
-        project_number: StrictProjectNumberSchema.optional(),
-        workspace_id: z
-            .string()
-            .max(255)
-            .optional()
-            .describe(
-                'Optional workspace isolation identifier (e.g. "alpha"). Do not use numeric project IDs or "workspace" as the key.'
-            ),
-        session_id: z.string().optional(),
-    })
-    .strict()
+export const TeamVisualizeRelationshipsSchema = z.preprocess(
+    preprocessTeamVisualizeRelationships,
+    z
+        .object({
+            entry_id: z.number().int().positive().optional(),
+            tag: z.string().optional(),
+            depth: z.number().int().min(1).max(5).optional().default(2),
+            limit: z.number().int().min(1).max(500).optional(),
+            project_number: StrictProjectNumberSchema.optional(),
+            workspace_id: z
+                .string()
+                .max(255)
+                .optional()
+                .describe(
+                    'Optional workspace isolation identifier (e.g. "alpha"). Do not use numeric project IDs or "workspace" as the key.'
+                ),
+            session_id: z.string().optional(),
+        })
+        .strict()
+)
 
 /** team_visualize_relationships — relaxed */
 export const TeamVisualizeRelationshipsSchemaMcp = z.object({
     entry_id: relaxedNumber().optional(),
     tag: z.string().optional(),
     depth: relaxedNumber().optional().default(2),
+    limit: relaxedNumber()
+        .optional()
+        .describe(
+            'Maximum entries to include (1-500). Defaults when omitted: unbounded for entry_id traversal, 50 for tag, 20 for recent entries. Values > 500 are clamped to 500.'
+        ),
     project_number: relaxedNumber().optional(),
     workspace_id: z
         .string()

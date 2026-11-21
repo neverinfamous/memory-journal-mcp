@@ -138,7 +138,8 @@ function buildSearchEntriesContext(
     const hasFilters = hasSearchEntriesFilter(input)
     if (query === '' && !hasFilters) {
         throw new ValidationError('Search requires either a query string or at least one filter', {
-            suggestion: 'Provide a search query or use get_recent_entries instead',
+            suggestion:
+                '🛠️ AUTONOMOUS HEALING: Provide a search query or filter, or use get_recent_entries (mj.core.getRecentEntries) to list recent entries for a workspace without a query.',
         })
     }
     const { resolvedMode, isAuto } = resolveSearchMode(input.mode, query)
