@@ -17,13 +17,31 @@ const memoryJournalConfigSchema = z.object({
 
 export type ProjectRegistry = Record<string, z.infer<typeof projectRegistryEntrySchema>>;
 
+export interface NormalizedRegistryEntry {
+  workspaceId: string;
+  normalizedPath: string;
+  projectNumber: number;
+}
+
 interface CachedConfigEntry {
   mtimeMs: number;
   size: number;
   projectRegistry: ProjectRegistry | undefined;
+  normalizedEntries: readonly NormalizedRegistryEntry[] | undefined;
 }
 
+const MAX_CONFIG_CACHE_ENTRIES = 16;
 const configCache = new Map<string, CachedConfigEntry>();
+const WIN32_DRIVE_PATH_RE = /^[a-zA-Z]:[\\/]/;
+
+export function normalizeRegistryPath(targetPath: string): string {
+  const isWinSyntax = process.platform === 'win32' || WIN32_DRIVE_PATH_RE.test(targetPath);
+  const resolved = WIN32_DRIVE_PATH_RE.test(targetPath)
+    ? path.win32.resolve(targetPath)
+    : path.resolve(targetPath);
+  const slashed = resolved.replace(/\\/g, '/').replace(/\/+$/, '');
+  return isWinSyntax ? slashed.toLowerCase() : slashed;
+}
 
 const packageJsonNameSchema = z.object({
   name: z.string().optional(),
@@ -42,11 +60,7 @@ export function getDefaultConfigPath(): string {
   return path.join(os.homedir(), '.gemini', 'config', 'memory-journal.config.json');
 }
 
-/**
- * [INTENT]: Memoized config loader keyed by `(effectiveConfigPath, mtimeMs, size)` so a single
- * commit does not repeatedly read, JSON.parse, and Zod-validate `memory-journal.config.json`.
- */
-export function readMemoryJournalRegistry(configPath?: string): ProjectRegistry | undefined {
+function readCachedConfigEntry(configPath?: string): CachedConfigEntry | undefined {
   const effectiveConfigPath =
     configPath !== undefined && configPath.length > 0
       ? path.resolve(configPath)
@@ -60,7 +74,7 @@ export function readMemoryJournalRegistry(configPath?: string): ProjectRegistry 
 
   const cached = configCache.get(effectiveConfigPath);
   if (cached !== undefined && cached.mtimeMs === stats.mtimeMs && cached.size === stats.size) {
-    return cached.projectRegistry;
+    return cached;
   }
 
   try {
@@ -68,15 +82,48 @@ export function readMemoryJournalRegistry(configPath?: string): ProjectRegistry 
     const parsedJson: unknown = JSON.parse(rawContent);
     const parsedConfig = memoryJournalConfigSchema.safeParse(parsedJson);
     const projectRegistry = parsedConfig.success ? parsedConfig.data.projectRegistry : undefined;
-    configCache.set(effectiveConfigPath, {
+    const normalizedEntries =
+      projectRegistry !== undefined
+        ? Object.entries(projectRegistry).map(([workspaceId, entry]) => ({
+            workspaceId,
+            normalizedPath: normalizeRegistryPath(entry.path),
+            projectNumber: entry.project_number,
+          }))
+        : undefined;
+    if (configCache.size >= MAX_CONFIG_CACHE_ENTRIES && !configCache.has(effectiveConfigPath)) {
+      const oldestKey = configCache.keys().next().value;
+      if (oldestKey !== undefined) {
+        configCache.delete(oldestKey);
+      }
+    }
+    const entry: CachedConfigEntry = {
       mtimeMs: stats.mtimeMs,
       size: stats.size,
       projectRegistry,
-    });
-    return projectRegistry;
-  } catch {
+      normalizedEntries,
+    };
+    configCache.set(effectiveConfigPath, entry);
+    return entry;
+  } catch (err: unknown) {
+    console.warn(
+      `⚠️ Failed to parse memory-journal config at ${effectiveConfigPath}: ${err instanceof Error ? err.message : String(err)}`
+    );
     return undefined;
   }
+}
+
+/**
+ * [INTENT]: Memoized config loader keyed by `(effectiveConfigPath, mtimeMs, size)` so a single
+ * commit does not repeatedly read, JSON.parse, and Zod-validate `memory-journal.config.json`.
+ */
+export function readMemoryJournalRegistry(configPath?: string): ProjectRegistry | undefined {
+  return readCachedConfigEntry(configPath)?.projectRegistry;
+}
+
+export function readNormalizedMemoryJournalRegistry(
+  configPath?: string
+): readonly NormalizedRegistryEntry[] | undefined {
+  return readCachedConfigEntry(configPath)?.normalizedEntries;
 }
 
 function isFile(filePath: string): boolean {

@@ -504,6 +504,52 @@ describe('CLI Entry & Exec Commands', () => {
                 }
             }
         })
+
+        it('createEntryFromFileInProcess returns exit code 1 when relationship linking fails', async () => {
+            const mdFile = path.join(tmpDir, 'in-process-bad-link.md')
+            fs.writeFileSync(
+                mdFile,
+                [
+                    '---',
+                    'type: "technical_note"',
+                    'tags: ["commit-narrative"]',
+                    'workspace_id: "memory-journal-mcp"',
+                    'project: 5',
+                    'related_to: [999999]',
+                    '---',
+                    'fix(cli): propagate non-zero exit code when relationship link fails',
+                ].join('\n'),
+                'utf-8'
+            )
+
+            const savedConfigEnv = process.env['MEMORY_JOURNAL_CONFIG']
+            const savedExitCode = process.exitCode
+            const cfgFile = path.join(tmpDir, 'in-process-bad-link-config.json')
+            fs.writeFileSync(
+                cfgFile,
+                JSON.stringify({
+                    db: dbPath,
+                    projectRegistry: {
+                        'memory-journal-mcp': { path: tmpDir, project_number: 5 },
+                    },
+                }),
+                'utf-8'
+            )
+            process.env['MEMORY_JOURNAL_CONFIG'] = cfgFile
+            try {
+                stderrOutput = []
+                const code = await createEntryFromFileInProcess({ file: mdFile })
+                expect(code).toBe(1)
+                expect(stderrOutput.join('')).toContain('linking to #999999 failed')
+            } finally {
+                process.exitCode = savedExitCode
+                if (savedConfigEnv !== undefined) {
+                    process.env['MEMORY_JOURNAL_CONFIG'] = savedConfigEnv
+                } else {
+                    delete process.env['MEMORY_JOURNAL_CONFIG']
+                }
+            }
+        })
     })
 
     describe('execAction (src/cli/commands/exec.ts)', () => {

@@ -6,7 +6,7 @@ import { AuthorizationError, ValidationError } from '../../types/errors.js'
 import { CliExitError, enforceCliTeamRbac } from './db-helper.js'
 import { canonicalizeTeamAuthor } from '../../handlers/tools/team/rbac.js'
 import { resolveEntryAnchors } from '../../handlers/tools/core/staleness-tools.js'
-import { resolveTeamCreateAuthor } from '../../handlers/tools/team/admin-tools/batch-create-helpers.js'
+import { resolveTeamCreateAuthor } from '../../handlers/tools/team/admin-tools/create-author-helper.js'
 import { checkSingleTeamOwnership } from '../../handlers/tools/team/admin-tools/batch-delete-helpers.js'
 import { linkRequestedRelationships } from '../../handlers/tools/relationship-linking.js'
 import { createEntryOptionsSchema, updateEntryOptionsSchema } from '../schemas.js'
@@ -271,6 +271,9 @@ async function runCreateEntry(
         const linkFailures = linkCliEntryRelationships(db, newEntry.id, payload, resolvedWs)
         db.flushSave()
         writeCliEntryResult(newEntry, linkFailures, options.json, 'created')
+        if (linkFailures.length > 0) {
+            exitCode = 1
+        }
     } catch (e) {
         exitCode = handleCliEntryError(e, 'create')
     } finally {

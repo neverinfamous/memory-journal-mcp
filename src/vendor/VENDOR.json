@@ -37,6 +37,7 @@
         "process-controller.ts",
         "help.ts",
         "utils.ts",
+        "commit-script-resolver.ts",
         "webhook-template.ts",
         "command-utils.ts",
         "eval-healer.ts",
@@ -58,8 +59,8 @@
         "interceptors/system-interceptor.ts",
         "AGENT_README.md"
       ],
-      "syncedAt": "2026-11-21T00:30:06.936Z",
-      "syncedFromCommit": "7c33974b1114bda77c4c93555ba816a11d7bf4bb"
+      "syncedAt": "2026-11-21T01:20:05.404Z",
+      "syncedFromCommit": "09d98783156b0f00093dca3af7e47f422863fd37"
     },
     "commit": {
       "source": ".agents/scripts",
@@ -69,8 +70,8 @@
         "commit-journal.ts",
         "commit-journal-bridge.ts"
       ],
-      "syncedAt": "2026-11-21T00:30:06.936Z",
-      "syncedFromCommit": "7c33974b1114bda77c4c93555ba816a11d7bf4bb"
+      "syncedAt": "2026-11-21T01:19:54.611Z",
+      "syncedFromCommit": "09d98783156b0f00093dca3af7e47f422863fd37"
     }
   }
 }

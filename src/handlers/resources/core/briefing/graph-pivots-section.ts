@@ -15,7 +15,8 @@
 import { isoDaysAgo } from '../../../../database/sqlite-adapter/graph-pivots.js'
 import type { ToolFilterConfig } from '../../../../filtering/tool-filter.js'
 import { logger } from '../../../../utils/logger.js'
-import { sliceUntrustedInline, type ResourceContext } from '../../shared.js'
+import { sliceUntrustedInline } from '../../fencing-helpers.js'
+import type { ResourceContext } from '../../shared.js'
 
 /** Recency window (days) for active threads and the unlinked rate. */
 export const GRAPH_PIVOT_WINDOW_DAYS = 14

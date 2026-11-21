@@ -1,15 +1,17 @@
 // @ts-nocheck
 import { execFileSync } from 'node:child_process';
+import crypto from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import {
+  normalizeRegistryPath,
   persistJournalEntryFile,
-  readMemoryJournalRegistry,
+  readNormalizedMemoryJournalRegistry,
   resolveInProcessEntryModule,
   resolveMemoryJournalCli,
   tryCreateJournalEntryInProcess,
-  type ProjectRegistry,
+  type NormalizedRegistryEntry,
 } from './commit-journal-bridge.js';
 
 export {
@@ -39,7 +41,6 @@ export const TYPE_TO_CATEGORY: Record<string, CommitCategory> = {
 
 const HISTORY_CATEGORY_REGEX = /^([A-Za-z]+):\s*([\s\S]+)$/;
 const JOURNAL_PREFIX = 'journal-';
-const WIN32_DRIVE_PATH_RE = /^[a-zA-Z]:[\\/]/;
 
 export interface CommitRelationSpec {
   targetId: number;
@@ -75,40 +76,33 @@ export function isValidCategory(cat: string): cat is CommitCategory {
   return VALID_CATEGORY_SET.has(cat);
 }
 
-function normalizeRegistryPath(targetPath: string): string {
-  const isWinSyntax = process.platform === 'win32' || WIN32_DRIVE_PATH_RE.test(targetPath);
-  const resolved = WIN32_DRIVE_PATH_RE.test(targetPath)
-    ? path.win32.resolve(targetPath)
-    : path.resolve(targetPath);
-  const slashed = resolved.replace(/\\/g, '/').replace(/\/+$/, '');
-  return isWinSyntax ? slashed.toLowerCase() : slashed;
-}
-
 function findLongestRegistryPathMatch(
-  registry: ProjectRegistry,
+  entries: readonly NormalizedRegistryEntry[],
   normalizedCwd: string
 ): { workspaceId: string; projectNumber: number; matchLen: number } | undefined {
   let best: { workspaceId: string; projectNumber: number; matchLen: number } | undefined;
-  for (const [workspaceName, entry] of Object.entries(registry)) {
-    const normalizedEntryPath = normalizeRegistryPath(entry.path);
+  for (const entry of entries) {
     const isMatch =
-      normalizedCwd === normalizedEntryPath ||
-      normalizedCwd.startsWith(`${normalizedEntryPath}/`);
-    if (isMatch && (best === undefined || normalizedEntryPath.length > best.matchLen)) {
+      normalizedCwd === entry.normalizedPath ||
+      normalizedCwd.startsWith(`${entry.normalizedPath}/`);
+    if (isMatch && (best === undefined || entry.normalizedPath.length > best.matchLen)) {
       best = {
-        workspaceId: workspaceName,
-        projectNumber: entry.project_number,
-        matchLen: normalizedEntryPath.length,
+        workspaceId: entry.workspaceId,
+        projectNumber: entry.projectNumber,
+        matchLen: entry.normalizedPath.length,
       };
     }
   }
   return best;
 }
 
-function findWorkspaceByProjectNumber(registry: ProjectRegistry, projectNumber: number): string | undefined {
-  for (const [workspaceName, entry] of Object.entries(registry)) {
-    if (entry.project_number === projectNumber) {
-      return workspaceName;
+function findWorkspaceByProjectNumber(
+  entries: readonly NormalizedRegistryEntry[],
+  projectNumber: number
+): string | undefined {
+  for (const entry of entries) {
+    if (entry.projectNumber === projectNumber) {
+      return entry.workspaceId;
     }
   }
   return undefined;
@@ -125,18 +119,17 @@ export function resolveJournalTarget(
     result.projectNumber = explicitProjectNumber;
   }
 
-  const registry = readMemoryJournalRegistry(configPath);
-  if (registry === undefined) {
+  const entries = readNormalizedMemoryJournalRegistry(configPath);
+  if (entries === undefined) {
     return result;
   }
 
-  const bestPathMatch = findLongestRegistryPathMatch(registry, normalizeRegistryPath(cwd));
+  const bestPathMatch = findLongestRegistryPathMatch(entries, normalizeRegistryPath(cwd));
   if (explicitProjectNumber !== undefined) {
     if (bestPathMatch !== undefined && bestPathMatch.projectNumber === explicitProjectNumber) {
       result.workspaceId = bestPathMatch.workspaceId;
     } else {
-      result.workspaceId =
-        findWorkspaceByProjectNumber(registry, explicitProjectNumber) ?? bestPathMatch?.workspaceId;
+      result.workspaceId = findWorkspaceByProjectNumber(entries, explicitProjectNumber);
     }
   } else if (bestPathMatch !== undefined) {
     result.workspaceId = bestPathMatch.workspaceId;
@@ -177,7 +170,8 @@ export function generateHistoryEntry(
   args: CommitJournalArgs,
   type: string,
   historyContent: string,
-  cwd?: string
+  cwd?: string,
+  resolvedTarget?: ResolvedJournalTarget
 ): string {
   const parsedCategory = parseCategory(historyContent, type);
   const category = args.category ?? parsedCategory.category;
@@ -209,6 +203,7 @@ export function generateHistoryEntry(
     body += `\nHistory-Journal: true`;
     const journalProject =
       args['journal-project'] ??
+      resolvedTarget?.projectNumber ??
       (cwd !== undefined ? resolveJournalTarget(cwd).projectNumber : undefined);
     if (journalProject !== undefined) {
       body += `\nHistory-Journal-Project: ${journalProject}`;
@@ -245,9 +240,10 @@ export function buildCommitJournalContent(
   historyContent: string,
   cwd: string,
   configPath?: string,
-  committedFiles?: readonly string[]
+  committedFiles?: readonly string[],
+  resolvedTarget?: ResolvedJournalTarget
 ): string {
-  const resolved = resolveJournalTarget(cwd, args['journal-project'], configPath);
+  const resolved = resolvedTarget ?? resolveJournalTarget(cwd, args['journal-project'], configPath);
   const mergedTags = Array.from(new Set(['commit-narrative', ...(args.tags ?? [])]));
   const changedFiles =
     committedFiles !== undefined && committedFiles.length > 0
@@ -303,7 +299,8 @@ export async function createJournalEntry(
   registerTempFile: (filepath: string) => void,
   cleanupTempFile: (filepath: string) => void,
   formatError: (error: unknown) => string,
-  committedFiles?: readonly string[]
+  committedFiles?: readonly string[],
+  resolvedTarget?: ResolvedJournalTarget
 ): Promise<void> {
   if (!args.journal) {
     return;
@@ -318,9 +315,10 @@ export async function createJournalEntry(
       historyContent,
       cwd,
       undefined,
-      committedFiles
+      committedFiles,
+      resolvedTarget
     );
-    const journalFile = path.join(os.tmpdir(), `${JOURNAL_PREFIX}${sha}.md`);
+    const journalFile = path.join(os.tmpdir(), `${JOURNAL_PREFIX}${sha.slice(0, 12)}-${crypto.randomUUID()}.md`);
     registerTempFile(journalFile);
     fs.writeFileSync(journalFile, journalContent, { mode: 0o600 });
 

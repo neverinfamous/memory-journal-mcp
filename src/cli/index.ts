@@ -239,9 +239,11 @@ program
     .allowUnknownOption(true)
     .allowExcessArguments(true)
     .helpOption(false)
-    .action(async () => {
+    .action(async (commitArgs: string[]) => {
         const { main } = await import('../vendor/commit/commit.js')
-        await main(process.argv.slice(3))
+        const rawTail = process.argv.slice(2)
+        const commitIdx = rawTail.indexOf('commit')
+        await main(commitIdx !== -1 ? rawTail.slice(commitIdx + 1) : commitArgs)
     })
 
 void program.parseAsync(normalizeCliArgv(process.argv)).catch((err: unknown) => {

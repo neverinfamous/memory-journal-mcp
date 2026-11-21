@@ -1,9 +1,9 @@
 import type { Command } from 'commander'
-import { DEFAULT_AUDIT_LOG_MAX_SIZE_BYTES } from '../audit/index.js'
+import { DEFAULT_AUDIT_LOG_MAX_SIZE_BYTES } from '../audit/types.js'
+import { defaultDbPath, defaultTeamDbPath } from './default-paths.js'
 import { withGroup } from './program.js'
 
-export const defaultDbPath = './memory_journal.db'
-export const defaultTeamDbPath = undefined
+export { defaultDbPath, defaultTeamDbPath }
 export function addCoreOptions(command: Command): Command {
     return withGroup(command, 'Core Options', (cmd) => {
         cmd

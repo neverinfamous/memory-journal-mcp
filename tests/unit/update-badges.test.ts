@@ -61,6 +61,25 @@ describe('update-badges script helpers', () => {
             expect(inv.args[1]).toBe('--msg')
             expect(inv.args[2]).toBe('chore(docs): update test badges')
         })
+
+        it('falls back to tsx + scripts/commit.ts when compiled bundle is older than source', () => {
+            const compiledCommit = path.join(tempDir, 'dist', 'vendor', 'commit', 'commit.js')
+            const commitScript = path.join(tempDir, 'scripts', 'commit.ts')
+            fs.mkdirSync(path.dirname(compiledCommit), { recursive: true })
+            fs.mkdirSync(path.dirname(commitScript), { recursive: true })
+            fs.writeFileSync(compiledCommit, 'export {}\n', 'utf-8')
+            fs.writeFileSync(commitScript, 'export {}\n', 'utf-8')
+
+            const oldDate = new Date(Date.now() - 60_000)
+            const newDate = new Date()
+            fs.utimesSync(compiledCommit, oldDate, oldDate)
+            fs.utimesSync(commitScript, newDate, newDate)
+
+            const inv = buildCommitInvocation(tempDir, ['README.md'])
+            expect(inv.command).toBe(process.execPath)
+            expect(inv.args[0]).toBe(path.join(tempDir, 'node_modules', 'tsx', 'dist', 'cli.mjs'))
+            expect(inv.args[1]).toBe(commitScript)
+        })
     })
 
     describe('countE2eSpecFiles & isPartialPlaywrightRun', () => {

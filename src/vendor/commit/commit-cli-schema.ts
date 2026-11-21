@@ -95,6 +95,26 @@ const KEYWORD_RULES: ReadonlyArray<{ type: string; re: RegExp }> = [
 const CANONICAL_POSITIVE_INT_RE = /^[1-9]\d*$/;
 const SPACE_CONVENTIONAL_RE = /^([A-Za-z0-9_-]+)(?:\s*\(\s*([^)]+?)\s*\))?\s*(!)?[\s:]+(.+)$/;
 
+function parseCanonicalPositiveInt(val: unknown): unknown {
+  if (val === undefined) return undefined;
+  if (typeof val === 'number') {
+    return Number.isSafeInteger(val) && val >= 1 ? val : Number.NaN;
+  }
+  if (typeof val === 'string') {
+    const trimmed = val.trim();
+    if (!CANONICAL_POSITIVE_INT_RE.test(trimmed)) return Number.NaN;
+    const parsed = Number(trimmed);
+    return Number.isSafeInteger(parsed) && String(parsed) === trimmed ? parsed : Number.NaN;
+  }
+  return Number.NaN;
+}
+
+function parseStrictScoreNumber(val: unknown): unknown {
+  if (val === undefined) return undefined;
+  if (typeof val === 'string' && val.trim() === '') return Number.NaN;
+  return Number(val);
+}
+
 function matchKeywordPrefix(firstLine: string): string {
   for (const rule of KEYWORD_RULES) {
     if (rule.re.test(firstLine)) {
@@ -183,9 +203,9 @@ export const cliSchema = z.object({
   'history-file': z.string().max(4096).optional(),
   'no-history': z.boolean().default(false),
   help: z.boolean().default(false),
-  impact: z.preprocess((val) => (val === undefined ? undefined : Number(val)), z.number().min(0.0).max(1.0)),
-  trust: z.preprocess((val) => (val === undefined ? undefined : Number(val)), z.number().min(0.0).max(1.0)).optional(),
-  confidence: z.preprocess((val) => (val === undefined ? undefined : Number(val)), z.number().min(0.0).max(1.0)),
+  impact: z.preprocess(parseStrictScoreNumber, z.number().min(0.0).max(1.0)),
+  trust: z.preprocess(parseStrictScoreNumber, z.number().min(0.0).max(1.0)).optional(),
+  confidence: z.preprocess(parseStrictScoreNumber, z.number().min(0.0).max(1.0)),
   validation: z.preprocess((val) => {
     if (val === undefined) return undefined;
     if (typeof val === 'string') {
@@ -224,7 +244,10 @@ export const cliSchema = z.object({
   cwd: z.string().max(4096).optional(),
   add: z.array(z.string().max(4096)).optional(),
   journal: z.boolean().default(false),
-  'journal-project': z.coerce.number().int().finite().positive().optional(),
+  'journal-project': z.preprocess(
+    parseCanonicalPositiveInt,
+    z.number().int().positive().refine((n) => Number.isSafeInteger(n), { message: 'Project number must be a safe positive integer.' }).optional()
+  ),
   'session-id': z.string().trim().min(1).max(256).optional(),
   tags: z.preprocess((val) => {
     if (val === undefined) return undefined;
@@ -244,9 +267,7 @@ export const cliSchema = z.object({
   relate: z.preprocess(
     normalizeRelateSpecs,
     z.array(z.object({
-      targetId: z.number().int().positive().refine((n) => Number.isSafeInteger(n), {
-        message: 'Entry ID must be a safe positive integer.',
-      }),
+      targetId: z.number().int().positive().refine((n) => Number.isSafeInteger(n), { message: 'Entry ID must be a safe positive integer.' }),
       relationType: z.enum(CANONICAL_RELATION_TYPES),
     })).optional()
   ),
@@ -363,17 +384,17 @@ function mergeAliasFlagsAndPositionals(
   return mergedValues;
 }
 
-function formatZodValidationIssue(
+export function formatZodValidationIssue(
   err: z.ZodIssue,
   mergedValues: ReturnType<typeof mergeAliasFlagsAndPositionals>
 ): string {
   return match(err)
-    .with({ code: 'too_small', type: 'string' }, (e) => `Too small: expected string length to be ${e.inclusive ? '>=' : '>'}${e.minimum}`)
-    .with({ code: 'too_small', type: 'array' }, (e) => `Too small: expected array length to be ${e.inclusive ? '>=' : '>'}${e.minimum}`)
-    .with({ code: 'too_small', type: 'number' }, (e) => `Too small: expected number to be ${e.inclusive ? '>=' : '>'}${e.minimum}`)
-    .with({ code: 'too_big', type: 'string' }, (e) => `Too big: expected string length to be ${e.inclusive ? '<=' : '<'}${e.maximum}`)
-    .with({ code: 'too_big', type: 'array' }, (e) => `Too big: expected array length to be ${e.inclusive ? '<=' : '<'}${e.maximum}`)
-    .with({ code: 'too_big', type: 'number' }, (e) => `Too big: expected number to be ${e.inclusive ? '<=' : '<'}${e.maximum}`)
+    .with({ code: 'too_small', origin: 'string' }, (e) => `Too small: expected string length to be ${e.inclusive ? '>=' : '>'}${e.minimum}`)
+    .with({ code: 'too_small', origin: 'array' }, (e) => `Too small: expected array length to be ${e.inclusive ? '>=' : '>'}${e.minimum}`)
+    .with({ code: 'too_small', origin: P.union('number', 'int') }, (e) => `Too small: expected number to be ${e.inclusive ? '>=' : '>'}${e.minimum}`)
+    .with({ code: 'too_big', origin: 'string' }, (e) => `Too big: expected string length to be ${e.inclusive ? '<=' : '<'}${e.maximum}`)
+    .with({ code: 'too_big', origin: 'array' }, (e) => `Too big: expected array length to be ${e.inclusive ? '<=' : '<'}${e.maximum}`)
+    .with({ code: 'too_big', origin: P.union('number', 'int') }, (e) => `Too big: expected number to be ${e.inclusive ? '<=' : '<'}${e.maximum}`)
     .with({ code: 'unrecognized_keys' }, (e) => `Unrecognized keys: ${e.keys.join(', ')}`)
     .with({ code: P.string, path: ['validation'] }, () => {
       const states = VALIDATION_STATES.map((v) => `'--validation ${v}'`).join(', ');

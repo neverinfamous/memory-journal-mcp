@@ -2,7 +2,7 @@
 import path from 'node:path';
 import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { AUTONOMOUS_HEALING_MSG, findEcosystemScript } from '../utils.js';
+import { AUTONOMOUS_HEALING_MSG, findEcosystemScript, resolveFreshCompiledCommitBundle } from '../utils.js';
 import { match, P } from 'ts-pattern';
 import { ExecutionContext } from './types.js';
 
@@ -92,13 +92,20 @@ export function gitInterceptor(ctx: ExecutionContext): void {
       { cmd: 'commit' },
       ({ args, ctx }) => {
         const cwd = ctx.payload.cwd || process.cwd();
+        const localAgentPath = path.join(targetCwd, '.agents', 'scripts', 'commit.ts');
+        const localScriptsPath = path.join(targetCwd, 'scripts', 'commit.ts');
+        const localAgentCommit = fs.existsSync(localAgentPath);
+        const localScriptsCommit = fs.existsSync(localScriptsPath);
+        const sameAsProcessCwd = path.resolve(targetCwd) === path.resolve(process.cwd());
         const fallbackCommitScript = path.resolve(__dirname, '../../commit.ts');
-        const resolvedCommitScript = findEcosystemScript(targetCwd, 'commit.ts') || findEcosystemScript(rawCwd, 'commit.ts') || findEcosystemScript(cwd, 'commit.ts') || (fs.existsSync(fallbackCommitScript) ? fallbackCommitScript : null);
-        const localAgentCommit = fs.existsSync(path.join(targetCwd, '.agents', 'scripts', 'commit.ts'));
-        const localScriptsCommit = fs.existsSync(path.join(targetCwd, 'scripts', 'commit.ts'));
-        const commitScriptCandidate = (path.resolve(targetCwd) === path.resolve(process.cwd()) && (localAgentCommit || localScriptsCommit))
-          ? (localAgentCommit ? '.\\.agents\\scripts\\commit.ts' : '.\\scripts\\commit.ts')
-          : resolvedCommitScript;
+        const commitScriptCandidate = localAgentCommit
+          ? (sameAsProcessCwd ? './.agents/scripts/commit.ts' : localAgentPath)
+          : localScriptsCommit
+            ? (sameAsProcessCwd ? './scripts/commit.ts' : localScriptsPath)
+            : (findEcosystemScript(targetCwd, 'commit.ts') ||
+                findEcosystemScript(rawCwd, 'commit.ts') ||
+                findEcosystemScript(cwd, 'commit.ts') ||
+                (fs.existsSync(fallbackCommitScript) ? fallbackCommitScript : null));
         const hasWrapper = commitScriptCandidate !== null;
         
         let message: string | undefined;
@@ -134,8 +141,17 @@ export function gitInterceptor(ctx: ExecutionContext): void {
           if (hasWrapper && commitScriptCandidate) {
             console.error(`\n   💡 AGENT HINT: 'git commit' is intercepted for safety.`);
             console.error(`   🛠️ AUTONOMOUS HEALING: Transparently rewriting to '${commitScriptCandidate}' with default scores... (Frictionless Recovery)`);
-            ctx.cmdBasename = 'bun';
-            ctx.args = [commitScriptCandidate, '--msg', message, '--impact', '0.5', '--confidence', '0.5', '--validation', 'passed'];
+            const compiledCommit =
+              ctx.payload.target !== 'wsl2'
+                ? resolveFreshCompiledCommitBundle(commitScriptCandidate, targetCwd)
+                : null;
+            if (compiledCommit !== null) {
+              ctx.cmdBasename = process.platform === 'win32' ? 'node.exe' : 'node';
+              ctx.args = [compiledCommit, '--msg', message, '--impact', '0.5', '--confidence', '0.5', '--validation', 'passed'];
+            } else {
+              ctx.cmdBasename = 'bun';
+              ctx.args = [commitScriptCandidate, '--msg', message, '--impact', '0.5', '--confidence', '0.5', '--validation', 'passed'];
+            }
             if (explicitCwd !== undefined || path.resolve(targetCwd) !== path.resolve(process.cwd())) {
               ctx.args.push('--cwd', targetCwd);
             }

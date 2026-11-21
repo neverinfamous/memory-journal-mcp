@@ -347,7 +347,9 @@ function parseMetadataAnchors(
                 parsed.push({ anchor_path: trimmed, anchor_type: 'file' })
             }
         } else if (typeof item === 'object' && item !== null && !Array.isArray(item)) {
-            const rec = item as Record<string, unknown>
+            const parsedRec = z.record(z.string(), z.unknown()).safeParse(item)
+            if (!parsedRec.success) continue
+            const rec = parsedRec.data
             const pathRaw =
                 rec['anchor_path'] ??
                 rec['anchorPath'] ??

@@ -128,10 +128,11 @@ export function isPartialPlaywrightRun(
   pw: { suites?: readonly unknown[] | undefined },
   rootDir: string,
   argv: readonly string[] = process.argv,
+  totalSpecsOverride?: number,
 ): boolean {
   if (argv.includes("--allow-partial")) return false;
   if (pw.suites === undefined) return false;
-  const totalSpecs = countE2eSpecFiles(path.join(rootDir, "tests", "e2e"));
+  const totalSpecs = totalSpecsOverride ?? countE2eSpecFiles(path.join(rootDir, "tests", "e2e"));
   return totalSpecs > 0 && pw.suites.length < totalSpecs;
 }
 
@@ -170,8 +171,11 @@ export function loadBadgeMetrics(options: LoadBadgeMetricsOptions = {}): BadgeMe
       const pw = PlaywrightResultsSchema.parse(
         JSON.parse(fs.readFileSync(playwrightPath, "utf-8"))
       );
-      if (isPartialPlaywrightRun(pw, rootDir, argv)) {
-        const totalSpecs = countE2eSpecFiles(path.join(rootDir, "tests", "e2e"));
+      const totalSpecs =
+        !argv.includes("--allow-partial") && pw.suites !== undefined
+          ? countE2eSpecFiles(path.join(rootDir, "tests", "e2e"))
+          : 0;
+      if (isPartialPlaywrightRun(pw, rootDir, argv, totalSpecs)) {
         const executedSpecs = pw.suites?.length ?? 0;
         console.warn(
           `Skipping E2E badge update: partial Playwright run (${String(executedSpecs)}/${String(totalSpecs)} specs). Pass --allow-partial to override.`
@@ -265,6 +269,16 @@ export interface CommitInvocation {
   args: string[];
 }
 
+function isCompiledCommitFresh(rootDir: string): boolean {
+  const compiledCommit = path.join(rootDir, "dist", "vendor", "commit", "commit.js");
+  const compiledStat = fs.statSync(compiledCommit, { throwIfNoEntry: false });
+  if (!compiledStat) return false;
+
+  const commitScript = path.join(rootDir, "scripts", "commit.ts");
+  const sourceStat = fs.statSync(commitScript, { throwIfNoEntry: false });
+  return !sourceStat || compiledStat.mtimeMs >= sourceStat.mtimeMs;
+}
+
 export function buildCommitInvocation(
   rootDir: string,
   dirtyFiles: readonly string[],
@@ -272,7 +286,7 @@ export function buildCommitInvocation(
   const compiledCommit = path.join(rootDir, "dist", "vendor", "commit", "commit.js");
   const tsxCli = path.join(rootDir, "node_modules", "tsx", "dist", "cli.mjs");
   const commitScript = path.join(rootDir, "scripts", "commit.ts");
-  const scriptEntryArgs = fs.existsSync(compiledCommit)
+  const scriptEntryArgs = isCompiledCommitFresh(rootDir)
     ? [compiledCommit]
     : [tsxCli, commitScript];
   return {
@@ -298,19 +312,30 @@ function autoCommitDirtyBadgeFiles(filesToUpdate: readonly string[], updatedFile
   if (ghActions !== undefined && ghActions.length > 0) return;
   const commitScript = path.join(ROOT_DIR, "scripts", "commit.ts");
   if (!fs.existsSync(commitScript)) return;
-  const dirtyFiles = filesToUpdate.filter((file) => {
-    if (updatedFiles.includes(file)) return true;
+
+  const remaining = filesToUpdate.filter((file) => !updatedFiles.includes(file));
+  const gitModified = new Set<string>();
+  if (remaining.length > 0) {
     try {
-      const diff = execFileSync("git", ["ls-files", "-m", "--", file], {
+      const diff = execFileSync("git", ["ls-files", "-m", "--", ...remaining], {
         cwd: ROOT_DIR,
         encoding: "utf-8",
+        windowsHide: true,
       }).trim();
-      return diff.length > 0;
+      for (const line of diff.split(/\r?\n/)) {
+        const trimmed = line.trim();
+        if (trimmed.length > 0) {
+          gitModified.add(trimmed.replace(/\\/g, "/"));
+        }
+      }
     } catch (error) {
-      console.error(`git status failed for ${file}:`, error instanceof Error ? error.message : error);
-      return false;
+      console.error("git status failed for badge files:", error instanceof Error ? error.message : error);
     }
-  });
+  }
+
+  const dirtyFiles = filesToUpdate.filter(
+    (file) => updatedFiles.includes(file) || gitModified.has(file.replace(/\\/g, "/"))
+  );
 
   if (dirtyFiles.length === 0) return;
   console.log(`\nAuto-committing badge updates for: ${dirtyFiles.join(", ")}`);
@@ -325,6 +350,7 @@ function autoCommitDirtyBadgeFiles(filesToUpdate: readonly string[], updatedFile
     execFileSync(inv.command, inv.args, {
       stdio: "inherit",
       cwd: ROOT_DIR,
+      windowsHide: true,
     });
     console.log("Successfully auto-committed badge updates.");
   } catch (err: unknown) {

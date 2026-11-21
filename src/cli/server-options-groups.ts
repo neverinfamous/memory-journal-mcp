@@ -1,6 +1,6 @@
 import type { ConfigResolver } from '../utils/config-resolver.js'
 import { isPlaceholderAuthToken } from '../utils/security-utils.js'
-import { defaultDbPath, defaultTeamDbPath } from './option-groups.js'
+import { defaultDbPath, defaultTeamDbPath } from './default-paths.js'
 
 export type CatchConfig = <T>(fn: () => T, fallback: T) => T
 

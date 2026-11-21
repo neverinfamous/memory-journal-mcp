@@ -7,6 +7,7 @@ import crypto from 'node:crypto';
 import {
   generateHistoryEntry,
   createJournalEntry,
+  resolveJournalTarget,
 } from './commit-journal.js';
 import {
   CANONICAL_RELATION_TYPES,
@@ -79,7 +80,7 @@ export function findAlreadyStagedDeletions(cwd: string, targetPaths: readonly st
 
     const cachedDelRes = spawnSync(
       'git',
-      ['diff', '--cached', '--name-only', '--diff-filter=D', '-z', '--', ...unindexedTargets.map((m) => m.relPosix)],
+      ['diff', '--cached', '--relative', '--name-only', '--diff-filter=D', '-z', '--', ...unindexedTargets.map((m) => m.relPosix)],
       {
         cwd,
         encoding: 'utf8',
@@ -157,7 +158,7 @@ function stageExplicitFiles(cwd: string, filesToAdd: readonly string[]): void {
   }
   if (pathsToStage.length > 0) {
     try {
-      execFileSync('git', ['add', ...pathsToStage], { stdio: 'inherit', cwd, windowsHide: true });
+      execFileSync('git', ['add', '--', ...pathsToStage], { stdio: 'inherit', cwd, windowsHide: true });
     } catch (e) {
       fatalError(`Error adding files: ${getErrorMessage(e)}`);
     }
@@ -299,6 +300,49 @@ function executeCommit(header: string, body: string, cwd?: string, onlyFiles?: s
 
 let didRunCliMain = false;
 
+function resolveExplicitAddPaths(cwd: string, rawAdd: readonly string[]): string[] {
+  return rawAdd.flatMap((p) => {
+    const resolved = path.resolve(cwd, p);
+    if (fs.statSync(resolved, { throwIfNoEntry: false }) === undefined && p.includes(' ')) {
+      if (findAlreadyStagedDeletions(cwd, [p]).has(p)) {
+        return resolved;
+      }
+      console.warn(`⚠️ AUTONOMOUS HEALING: Path '${p}' not found and contains spaces. Splitting by space to recover hallucinated --add list.`);
+      return p.split(' ').filter(Boolean).map((sp) => path.resolve(cwd, sp));
+    }
+    return resolved;
+  });
+}
+
+function resolveHistoryContent(args: ReturnType<typeof parseArguments>, cwd: string): string {
+  let historyContent = args.history ? args.history.replace(/^\uFEFF/, '').replace(/\r\n/g, '\n') : '';
+  const historyFile = args['history-file'];
+  if (historyFile !== undefined && historyFile.length > 0) {
+    const candidateCwdPath = path.resolve(cwd, historyFile);
+    const resolvedPath =
+      fs.statSync(candidateCwdPath, { throwIfNoEntry: false }) !== undefined
+        ? candidateCwdPath
+        : path.resolve(historyFile);
+    const resolvedExists =
+      resolvedPath === candidateCwdPath || fs.statSync(resolvedPath, { throwIfNoEntry: false }) !== undefined;
+    if (!resolvedExists) {
+      console.warn(`⚠️ AUTONOMOUS HEALING: History file '${historyFile}' not found. Defaulting to --no-history.`);
+      args['no-history'] = true;
+    } else {
+      try {
+        historyContent = fs.readFileSync(resolvedPath, 'utf-8').replace(/^\uFEFF/, '').replace(/\r\n/g, '\n');
+      } catch (e) {
+        fatalError(`Error reading history file: ${getErrorMessage(e)}`);
+      }
+    }
+  }
+  if (!historyContent && !args['no-history']) {
+    console.warn("⚠️ AUTONOMOUS HEALING: Missing history flag detected. Defaulting to --no-history.");
+    args['no-history'] = true;
+  }
+  return historyContent;
+}
+
 export async function main(rawArgv?: readonly string[]): Promise<void> {
   didRunCliMain = true;
   try {
@@ -315,46 +359,17 @@ export async function main(rawArgv?: readonly string[]): Promise<void> {
     }
 
     if (args.add) {
-      args.add = args.add.flatMap((p) => {
-        const resolved = path.resolve(cwd, p);
-        if (fs.statSync(resolved, { throwIfNoEntry: false }) === undefined && p.includes(' ')) {
-          console.warn(`⚠️ AUTONOMOUS HEALING: Path '${p}' not found and contains spaces. Splitting by space to recover hallucinated --add list.`);
-          return p.split(' ').filter(Boolean).map((sp) => path.resolve(cwd, sp));
-        }
-        return resolved;
-      });
+      args.add = resolveExplicitAddPaths(cwd, args.add);
     }
 
     const firstLine = args.msg.trim().split('\n')[0];
     const commitMatch = firstLine.match(CONVENTIONAL_COMMIT_REGEX);
     const type = commitMatch ? commitMatch[1] : 'chore';
     const stagedFiles = ensureStagedFiles(cwd, args.add);
+    const historyContent = resolveHistoryContent(args, cwd);
 
-    let historyContent = args.history ? args.history.replace(/^\uFEFF/, '').replace(/\r\n/g, '\n') : '';
-    if (args['history-file']) {
-      const candidateCwdPath = path.resolve(cwd, args['history-file']);
-      const resolvedPath =
-        fs.statSync(candidateCwdPath, { throwIfNoEntry: false }) !== undefined
-          ? candidateCwdPath
-          : path.resolve(args['history-file']);
-      if (fs.statSync(resolvedPath, { throwIfNoEntry: false }) === undefined) {
-        console.warn(`⚠️ AUTONOMOUS HEALING: History file '${args['history-file']}' not found. Defaulting to --no-history.`);
-        args['no-history'] = true;
-      } else {
-        try {
-          historyContent = fs.readFileSync(resolvedPath, 'utf-8').replace(/^\uFEFF/, '').replace(/\r\n/g, '\n');
-        } catch (e) {
-          fatalError(`Error reading history file: ${getErrorMessage(e)}`);
-        }
-      }
-    }
-
-    if (!historyContent && !args['no-history']) {
-      console.warn("⚠️ AUTONOMOUS HEALING: Missing history flag detected. Defaulting to --no-history.");
-      args['no-history'] = true;
-    }
-
-    const body = generateHistoryEntry(args, type, historyContent, cwd);
+    const resolvedJournalTarget = args.journal ? resolveJournalTarget(cwd, args['journal-project']) : undefined;
+    const body = generateHistoryEntry(args, type, historyContent, cwd, resolvedJournalTarget);
     const sha = executeCommit(args.msg, body, cwd, args.add);
     await createJournalEntry(
       sha,
@@ -365,7 +380,8 @@ export async function main(rawArgv?: readonly string[]): Promise<void> {
       (filepath) => { tempFilesToCleanup.add(filepath); },
       cleanupTempFile,
       getErrorMessage,
-      stagedFiles.length > 0 ? stagedFiles : undefined
+      stagedFiles.length > 0 ? stagedFiles : undefined,
+      resolvedJournalTarget
     );
 
   } catch (error) {

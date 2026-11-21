@@ -139,13 +139,10 @@ export function resolveNativeBinary(name: string): string | null {
     const candidates = hasExt ? [name] : exts.map(ext => `${name}${ext}`);
     for (const candidate of candidates) {
       const full = path.join(dir, candidate);
-      try {
-        if (fs.statSync(full).isFile()) {
-          resolved = full;
-          break outer;
-        }
-      } catch {
-        // not present in this PATH entry
+      const st = fs.statSync(full, { throwIfNoEntry: false });
+      if (st !== undefined && st.isFile()) {
+        resolved = full;
+        break outer;
       }
     }
   }
@@ -294,138 +291,11 @@ export function findEcosystemScript(startDir: string, scriptName: string): strin
   return null;
 }
 
-const AGENT_SCRIPT_REF_RE = /^(?:(?:\.[\\/])?\.agents|.*[\\/]\.agents)[\\/]scripts[\\/]([a-zA-Z0-9_.-]+\.(?:ts|js|mjs))$/;
-
-export function resolveAgentScriptFallback(rawArg: string, projectDir: string): string | null {
-  const matchResult = rawArg.match(AGENT_SCRIPT_REF_RE);
-  if (matchResult === null) return null;
-
-  if (fs.existsSync(path.resolve(projectDir, rawArg))) {
-    return null;
-  }
-
-  const scriptName = matchResult[1];
-  if (scriptName === undefined) return null;
-
-  const localScriptPath = path.join(projectDir, 'scripts', scriptName);
-  if (fs.existsSync(localScriptPath)) {
-    return `scripts/${scriptName}`;
-  }
-
-  const bundledScriptsDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-  const bundledCandidate = path.join(bundledScriptsDir, scriptName);
-  if (fs.existsSync(bundledCandidate)) {
-    return bundledCandidate;
-  }
-
-  return null;
-}
-
-/**
- * [INTENT]: Resolve a fresh precompiled `dist/vendor/commit/commit.js` bundle for `scripts/commit.ts`
- * so `pnpm [exec] tsx scripts/commit.ts` bypasses `pwsh` + `pnpm.cmd` + `tsx` compilation overhead.
- */
-export function resolveFreshCompiledCommitBundle(
-  rawScriptArg: string,
-  projectDir: string
-): string | null {
-  if (!/(?:^|[/\\])commit\.ts$/i.test(rawScriptArg)) {
-    return null;
-  }
-  const absScript = path.resolve(projectDir, rawScriptArg);
-  const scriptDir = path.dirname(absScript);
-  const repoRoot =
-    path.basename(scriptDir).toLowerCase() === 'scripts'
-      ? path.dirname(scriptDir)
-      : projectDir;
-  const compiledPath = path.join(repoRoot, 'dist', 'vendor', 'commit', 'commit.js');
-  try {
-    const compiledStats = fs.statSync(compiledPath, { throwIfNoEntry: false });
-    if (compiledStats === undefined || !compiledStats.isFile()) {
-      return null;
-    }
-    const compiledMtime = compiledStats.mtimeMs;
-    const sourceCandidates: string[] = [
-      absScript,
-      path.join(repoRoot, 'scripts', 'commit.ts'),
-    ];
-    const vendorCommitDir = path.join(repoRoot, 'src', 'vendor', 'commit');
-    if (fs.statSync(vendorCommitDir, { throwIfNoEntry: false })?.isDirectory()) {
-      for (const file of fs.readdirSync(vendorCommitDir)) {
-        if (file.endsWith('.ts')) {
-          sourceCandidates.push(path.join(vendorCommitDir, file));
-        }
-      }
-    }
-    for (const candidate of sourceCandidates) {
-      const candidateStats = fs.statSync(candidate, { throwIfNoEntry: false });
-      if (candidateStats !== undefined && candidateStats.mtimeMs > compiledMtime) {
-        return null;
-      }
-    }
-    return compiledPath;
-  } catch {
-    return null;
-  }
-}
-
-export function tryAccelerateCompiledCommitScript(
-  args: string[],
-  projectDir: string,
-  target?: string
-): { compiledPath: string; remainingArgs: string[] } | null {
-  if (target === 'wsl2') return null;
-  if (args[0] === 'commit' || (args[0] === 'run' && args[1] === 'commit')) {
-    const flagStart = args[0] === 'run' ? 2 : 1;
-    const pkgPath = path.join(projectDir, 'package.json');
-    if (fs.existsSync(pkgPath)) {
-      try {
-        const rawPkg: unknown = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
-        if (
-          rawPkg !== null &&
-          typeof rawPkg === 'object' &&
-          'scripts' in rawPkg &&
-          rawPkg.scripts !== null &&
-          typeof rawPkg.scripts === 'object' &&
-          'commit' in rawPkg.scripts &&
-          typeof rawPkg.scripts.commit === 'string' &&
-          /\btsx\s+(?:\.[\\/])?scripts[\\/]commit\.ts\b/i.test(rawPkg.scripts.commit)
-        ) {
-          const compiledPath = resolveFreshCompiledCommitBundle('scripts/commit.ts', projectDir);
-          if (compiledPath !== null) {
-            const rem = args.slice(flagStart);
-            return {
-              compiledPath,
-              remainingArgs: rem[0] === '--' ? rem.slice(1) : rem,
-            };
-          }
-        }
-      } catch {
-        // ignore malformed package.json
-      }
-    }
-  }
-  let tsxIdx = -1;
-  if (args[0] === 'tsx' && args[1] !== undefined && !args[1].startsWith('-')) {
-    tsxIdx = 0;
-  } else if (
-    (args[0] === 'exec' || args[0] === 'run') &&
-    args[1] === 'tsx' &&
-    args[2] !== undefined &&
-    !args[2].startsWith('-')
-  ) {
-    tsxIdx = 1;
-  }
-  if (tsxIdx === -1) return null;
-  const scriptCandidate = args[tsxIdx + 1];
-  if (scriptCandidate === undefined) return null;
-  const compiledPath = resolveFreshCompiledCommitBundle(scriptCandidate, projectDir);
-  if (compiledPath === null) return null;
-  return {
-    compiledPath,
-    remainingArgs: args.slice(tsxIdx + 2),
-  };
-}
+export {
+  resolveAgentScriptFallback,
+  resolveFreshCompiledCommitBundle,
+  tryAccelerateCompiledCommitScript,
+} from './commit-script-resolver.js';
 
 export async function sendDatadogTelemetry(
   payload: ExecPayload,
