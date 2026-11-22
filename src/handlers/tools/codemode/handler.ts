@@ -154,7 +154,7 @@ function resolveCodeModeRunOptions(input: ExecuteCodeInput): {
         sessionId,
         timeoutMs: input.timeout ?? input.timeout_ms ?? input.timeoutMs,
         readonlyRequested: input.readonly === true || input.read_only === true || input.readOnly === true,
-        isDryRun: input.dry_run || input.dryRun === true,
+        isDryRun: input.dry_run,
         useTestDb: input.use_test_db === true || input.useTestDb === true,
     }
 }

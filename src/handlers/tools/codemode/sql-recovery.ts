@@ -138,6 +138,7 @@ function hasUnsupportedSpecialTableWhere(sqlWhere: string, allowedCols: readonly
     const clauses = splitTopLevelSqlAndClauses(sqlWhere)
     if (clauses.length === 0) return false
     const allowedSet = new Set(allowedCols.map((c) => c.toLowerCase()))
+    const seenCols = new Set<string>()
     for (const rawClause of clauses) {
         const clause = stripBalancedOuterParens(rawClause)
         if (clause === '') return true
@@ -147,9 +148,16 @@ function hasUnsupportedSpecialTableWhere(sqlWhere: string, allowedCols: readonly
             )
         if (match?.[1] === undefined || match[2] === undefined) return true
         const col = match[1].toLowerCase()
-        if (!allowedSet.has(col) || !isValidSpecialWhereRhs(col, match[2])) {
+        const canonicalCol =
+            col === 'id' || col === 'entry_id'
+                ? 'id'
+                : col === 'project_number' || col === 'project_id'
+                  ? 'project_number'
+                  : col
+        if (!allowedSet.has(col) || seenCols.has(canonicalCol) || !isValidSpecialWhereRhs(col, match[2])) {
             return true
         }
+        seenCols.add(canonicalCol)
     }
     return false
 }

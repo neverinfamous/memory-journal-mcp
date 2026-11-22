@@ -161,11 +161,14 @@ function buildBriefingConfigOptions(
     }
 }
 
-function applyEnvironmentOverrides(
+function resolveEnvironmentOverrides(
     resolver: ConfigResolver,
-    options: Record<string, unknown>,
     catchConfig: CatchConfig
-): void {
+): {
+    envUpdates: Record<string, string>
+    logLevel: ReturnType<typeof parseLogLevelOption> | undefined
+} {
+    const envUpdates: Record<string, string> = {}
     const codemodeMaxResultSize = catchConfig(() => {
         const raw = resolver.resolve<string | number>(
             'codemodeMaxResultSize',
@@ -183,28 +186,30 @@ function applyEnvironmentOverrides(
         return Math.min(parsed, 50 * 1024 * 1024)
     }, undefined)
     if (codemodeMaxResultSize !== undefined) {
-        process.env['CODE_MODE_MAX_RESULT_SIZE'] = String(codemodeMaxResultSize)
+        envUpdates['CODE_MODE_MAX_RESULT_SIZE'] = String(codemodeMaxResultSize)
     }
 
-    const metricsPort = catchConfig(() => resolver.resolve<string | number>('metricsPort', 'MJ_METRICS_PORT'), undefined)
+    const metricsPort = catchConfig(
+        () => resolver.resolve<string | number>('metricsPort', 'MJ_METRICS_PORT'),
+        undefined
+    )
     if (metricsPort !== undefined && String(metricsPort).trim() !== '') {
-        process.env['MJ_METRICS_PORT'] = String(metricsPort).trim()
+        envUpdates['MJ_METRICS_PORT'] = String(metricsPort).trim()
     }
 
-    const authScopes = catchConfig(() => resolver.resolve<string>('authScopes', 'MCP_AUTH_SCOPES'), undefined)
+    const authScopes = catchConfig(
+        () => resolver.resolve<string>('authScopes', 'MCP_AUTH_SCOPES'),
+        undefined
+    )
     if (authScopes !== undefined && authScopes.trim() !== '') {
-        process.env['MCP_AUTH_SCOPES'] = authScopes.trim()
+        envUpdates['MCP_AUTH_SCOPES'] = authScopes.trim()
     }
 
-    if (options['dumpConfig'] !== true) {
-        const logLevel = catchConfig(
-            () => parseLogLevelOption(resolver.resolve<string>('logLevel', 'LOG_LEVEL')),
-            undefined
-        )
-        if (logLevel !== undefined) {
-            logger.setLevel(logLevel)
-        }
-    }
+    const logLevel = catchConfig(
+        () => parseLogLevelOption(resolver.resolve<string>('logLevel', 'LOG_LEVEL')),
+        undefined
+    )
+    return { envUpdates, logLevel }
 }
 
 function buildAuditConfigOption(resolver: ConfigResolver, catchConfig: CatchConfig): AuditConfig | undefined {
@@ -380,7 +385,7 @@ export function buildServerOptions(
     const host = catchConfig(() => resolver.resolve<string>('serverHost', 'MCP_HOST') ?? process.env['HOST'] ?? undefined, undefined)
     const transport = resolveTransportOption(resolver, catchConfig)
     const { db, testDb, teamDb, testTeamDb } = resolveDatabasePaths(resolver, catchConfig)
-    applyEnvironmentOverrides(resolver, options, catchConfig)
+    const { envUpdates, logLevel } = resolveEnvironmentOverrides(resolver, catchConfig)
     const instructionLevel = resolveInstructionLevelOption(resolver, catchConfig)
     const projectRegistry = catchConfig(() => parseProjectRegistryOption(resolver.resolve<unknown>('projectRegistry', 'PROJECT_REGISTRY')), undefined)
     const { defaultWorkspaceId, defaultProjectNumber } = resolveConfiguredDefaultScope(
@@ -424,6 +429,15 @@ export function buildServerOptions(
         agentHealing: catchConfig(() => resolver.resolveBool('agentHealing', 'MCP_AGENT_HEALING') ?? true, true),
         ...buildOAuthOptionsGroup(resolver, catchConfig),
         ...buildLifecycleOptionsGroup(resolver, catchConfig),
+    }
+
+    if (options['dumpConfig'] !== true && configErrors.length === 0) {
+        for (const [envKey, envVal] of Object.entries(envUpdates)) {
+            process.env[envKey] = envVal
+        }
+        if (logLevel !== undefined) {
+            logger.setLevel(logLevel)
+        }
     }
 
     return { serverOptions, transport, db, teamDb, host }

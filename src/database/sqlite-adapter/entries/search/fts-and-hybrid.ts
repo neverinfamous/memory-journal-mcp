@@ -83,7 +83,10 @@ function executeSearchQuery(
                 nextCursor = encodeCursor({ t: last.timestamp, id: last.id })
             }
         } else {
-            nextCursor = encodeCursor({ offset: offset + limit })
+            nextCursor = encodeCursor({
+                offset: offset + limit,
+                ...(!useFts && queryStr.length > 0 ? { degraded: true as const } : {}),
+            })
         }
     }
 
@@ -176,7 +179,7 @@ export function searchEntries(
         )
     }
 
-    const { offset, hasKeyset, keysetT, keysetId } = readSearchPosition(options)
+    const { offset, hasKeyset, keysetT, keysetId, degradedCursor } = readSearchPosition(options)
 
     const runQuery = (useFts: boolean): SearchPage =>
         executeSearchQuery(context, queryStr, options, useFts, offset, hasKeyset, keysetT, keysetId)
@@ -185,11 +188,15 @@ export function searchEntries(
     if (queryStr.length > 0) {
         if (sanitizeFtsQuery(queryStr) === '') {
             const likeFallback = runQuery(false)
-            if (likeFallback.entries.length > 0) {
+            if (likeFallback.entries.length > 0 || offset > 0 || hasKeyset) {
                 return { ...likeFallback, degraded: true }
             }
             const fuzzy = applyFuzzyFallback(context, db, queryStr, options, likeFallback)
             return fuzzy ? { ...fuzzy, degraded: true } : { ...likeFallback, degraded: true }
+        }
+        if (degradedCursor) {
+            const degradedPage = runQuery(false)
+            return { ...degradedPage, degraded: true }
         }
         try {
             const result = runQuery(true)

@@ -1,5 +1,6 @@
 import type { ToolHandlerConfig } from '../types/index.js'
 import { ValidationError } from '../types/errors.js'
+import { isForbiddenProjectKey } from './workspace-registry-match.js'
 import {
     findCanonicalRegistryKey,
     loadProjectRegistryFromConfig,
@@ -111,8 +112,8 @@ export function resolveAutoPruneScope(
 ): { workspaceId: string; projectNumber?: number } {
     const effectiveRegistry = projectRegistry ?? loadProjectRegistryFromConfig()
     const trimmedWs = defaultWorkspaceId?.trim()
-    if (trimmedWs === '*') {
-        throw new ValidationError("Auto-prune defaultWorkspaceId cannot be '*'")
+    if (trimmedWs !== undefined && trimmedWs !== '' && isForbiddenProjectKey(trimmedWs)) {
+        throw new ValidationError(`Invalid auto-prune defaultWorkspaceId '${trimmedWs}'`)
     }
     const concreteDefaultWs =
         trimmedWs !== undefined && trimmedWs !== '' ? trimmedWs : undefined

@@ -23,14 +23,14 @@ function firstDefinedEntry(
 
 function normalizeRootBatchAliases(obj: Record<string, unknown>): void {
     if (
-        !('workspace_id' in obj) &&
+        obj['workspace_id'] === undefined &&
         typeof obj['workspace'] === 'string' &&
         obj['workspace'].trim() !== ''
     ) {
         obj['workspace_id'] = obj['workspace'].trim()
         Reflect.deleteProperty(obj, 'workspace')
     }
-    if (!('project_number' in obj)) {
+    if (obj['project_number'] === undefined) {
         for (const alias of ['project', 'project_id', 'projectId'] as const) {
             if (obj[alias] !== undefined) {
                 obj['project_number'] = obj[alias]
@@ -88,7 +88,7 @@ export function preprocessBatchCreateEntries(val: unknown): unknown {
     if (typeof val === 'object' && val !== null) {
         const obj = { ...(val as Record<string, unknown>) }
         normalizeRootBatchAliases(obj)
-        if (!('entries' in obj) && Array.isArray(obj['items'])) {
+        if (obj['entries'] === undefined && Array.isArray(obj['items'])) {
             obj['entries'] = obj['items']
             Reflect.deleteProperty(obj, 'items')
         }
@@ -132,7 +132,7 @@ export function preprocessBatchUpdates(val: unknown, propagateRootProject = true
         const newUpdates = updatesArr.map((u: unknown) => {
             if (typeof u === 'object' && u !== null) {
                 const uObj = { ...(u as Record<string, unknown>) }
-                if ('id' in uObj && !('entry_id' in uObj)) {
+                if (uObj['id'] !== undefined && uObj['entry_id'] === undefined) {
                     uObj['entry_id'] = uObj['id']
                     Reflect.deleteProperty(uObj, 'id')
                 }
@@ -167,7 +167,7 @@ export function preprocessBatchDeleteIds(val: unknown): unknown {
         const obj = { ...(val as Record<string, unknown>) }
         normalizeRootBatchAliases(obj)
         for (const aliasKey of ['ids', 'id', 'items', 'entries'] as const) {
-            if (aliasKey in obj && !('entry_ids' in obj)) {
+            if (obj[aliasKey] !== undefined && obj['entry_ids'] === undefined) {
                 const raw = obj[aliasKey]
                 obj['entry_ids'] = Array.isArray(raw) ? raw : [raw]
                 Reflect.deleteProperty(obj, aliasKey)

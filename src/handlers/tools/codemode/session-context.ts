@@ -233,9 +233,10 @@ function validateExplicitRepoAndWorkspaceInput(
             : rawRepoTrimmed
     if (hasExplicitRepo && effectiveRegistry !== undefined) {
         repoRegistryKey =
+            findCanonicalRegistryKey(rawRepoTrimmed, effectiveRegistry) ??
             (repoLeaf !== undefined && repoLeaf !== ''
                 ? findCanonicalRegistryKey(repoLeaf, effectiveRegistry)
-                : undefined) ?? findCanonicalRegistryKey(rawRepoTrimmed, effectiveRegistry)
+                : undefined)
     }
 
     if (hasExplicitConcreteWs && hasExplicitRepo) {

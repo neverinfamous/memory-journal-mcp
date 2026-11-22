@@ -13,7 +13,7 @@ import { CloseGitHubIssueWithEntryOutputSchema } from './schemas.js'
 import { unwrapFencedRemoteText } from './fencing-helpers.js'
 import { resolveOwnerRepo, resolveProjectNumber } from './helpers.js'
 import { moveIssueToDone, type KanbanMoveResult } from './close-issue-kanban.js'
-import { resolveIssueEntryScope } from './create-issue-tool.js'
+import { resolveIssueEntryScope, scopeMismatchResponse } from './create-issue-tool.js'
 
 const CloseIssueHandlerInputSchema = z
     .object({
@@ -285,6 +285,11 @@ export function getCloseGitHubIssueTool(context: ToolContext): ToolDefinition {
         handler: async (params: unknown) => {
             try {
                 const input = CloseIssueHandlerInputSchema.parse(params)
+                if (input.workspace_id?.trim() === '*') {
+                    return scopeMismatchResponse(
+                        "workspace_id '*' is a read-only wildcard and cannot be used to close issues and create journal entries."
+                    )
+                }
 
                 const resolved = await resolveOwnerRepo(context, input)
                 if ('error' in resolved) return resolved.response

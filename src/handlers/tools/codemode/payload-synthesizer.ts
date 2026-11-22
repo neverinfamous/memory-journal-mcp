@@ -346,9 +346,12 @@ function synthesizeContextEntryCall(
     }
     if (explicitType !== undefined) entryPayload['entry_type'] = explicitType
     else if (!isUpdate) entryPayload['entry_type'] = 'technical_note'
-    if (Array.isArray(ctxVal['tags'])) {
-        const cleanTags = ctxVal['tags'].filter((t): t is string => typeof t === 'string')
-        if (cleanTags.length > 0 || !isUpdate) entryPayload['tags'] = cleanTags
+    const rawTagsVal = ctxVal['tags'] !== undefined ? ctxVal['tags'] : outerFallback['tags']
+    if (Array.isArray(rawTagsVal)) {
+        const cleanTags = rawTagsVal.filter((t): t is string => typeof t === 'string')
+        if (cleanTags.length > 0 || isUpdate || rawTagsVal === ctxVal['tags']) {
+            entryPayload['tags'] = cleanTags
+        }
     }
     if (numericEntryId !== undefined) entryPayload['entry_id'] = numericEntryId
     if (wsVal !== undefined) entryPayload['workspace_id'] = wsVal

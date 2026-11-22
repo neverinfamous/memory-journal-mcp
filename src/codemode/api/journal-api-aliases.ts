@@ -212,11 +212,12 @@ function normalizeAutoRouteArg(
     if (allowPositionalEntryId && (typeof firstArg === 'number' || typeof firstArg === 'string')) {
         const extra = isRecord(args[1]) ? args[1] : undefined
         const entryId = firstArg
+        const workspaceExtra = extra?.['workspace_id'] ?? extra?.['workspaceId'] ?? extra?.['workspace']
         return {
             ...(extra ?? {}),
             entry_id: entryId,
-            ...(extra?.['workspaceId'] !== undefined && extra['workspace_id'] === undefined
-                ? { workspace_id: extra['workspaceId'] }
+            ...(workspaceExtra !== undefined && extra?.['workspace_id'] === undefined
+                ? { workspace_id: workspaceExtra }
                 : {}),
             ...(extra?.['projectNumber'] !== undefined && extra['project_number'] === undefined
                 ? { project_number: extra['projectNumber'] }
@@ -229,7 +230,7 @@ function normalizeAutoRouteArg(
     }
     if (!isRecord(firstArg)) return null
     const entryId = firstArg['entry_id'] ?? firstArg['entryId'] ?? firstArg['id']
-    const workspaceId = firstArg['workspace_id'] ?? firstArg['workspaceId']
+    const workspaceId = firstArg['workspace_id'] ?? firstArg['workspaceId'] ?? firstArg['workspace']
     const projectNumber = firstArg['project_number'] ?? firstArg['projectNumber']
     const includeRelationships =
         firstArg['include_relationships'] ?? firstArg['includeRelationships']

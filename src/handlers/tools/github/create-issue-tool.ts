@@ -24,7 +24,7 @@ const CreateIssueHandlerInputSchema = z.preprocess(
         if (typeof val !== 'object' || val === null || Array.isArray(val)) return val
         const obj = { ...(val as Record<string, unknown>) }
         if ('journal_content' in obj) {
-            if (!('entry_content' in obj) && obj['journal_content'] !== undefined) {
+            if (obj['entry_content'] === undefined && obj['journal_content'] !== undefined) {
                 obj['entry_content'] = obj['journal_content']
             }
             Reflect.deleteProperty(obj, 'journal_content')

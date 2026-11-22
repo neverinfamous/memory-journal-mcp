@@ -115,14 +115,16 @@ export function extractMetadataContextAliases(
         obj['projectId'] === undefined &&
         !hasTopProjectAlias
     ) {
-        obj['project_number'] =
+        const hoistedProj =
             firstDefined(metadata, ['project_number', 'projectNumber']) ??
             firstDefined(context, ['project_number', 'projectNumber'])
+        if (hoistedProj !== undefined) obj['project_number'] = hoistedProj
     }
     if (obj['session_id'] === undefined && obj['sessionId'] === undefined) {
-        obj['session_id'] =
+        const hoistedSess =
             firstDefined(metadata, ['session_id', 'sessionId']) ??
             firstDefined(context, ['session_id', 'sessionId'])
+        if (hoistedSess !== undefined) obj['session_id'] = hoistedSess
     }
     if (
         obj['type'] === undefined &&
@@ -130,11 +132,15 @@ export function extractMetadataContextAliases(
         obj['entryType'] === undefined &&
         obj['category'] === undefined
     ) {
-        obj['type'] =
+        const hoistedType =
             firstDefined(metadata, ['type', 'entry_type', 'category']) ??
             firstDefined(context, ['type', 'entry_type', 'category'])
+        if (hoistedType !== undefined) obj['type'] = hoistedType
     }
-    obj['tags'] ??= firstDefined(metadata, ['tags']) ?? firstDefined(context, ['tags'])
+    if (obj['tags'] === undefined) {
+        const hoistedTags = firstDefined(metadata, ['tags']) ?? firstDefined(context, ['tags'])
+        if (hoistedTags !== undefined) obj['tags'] = hoistedTags
+    }
     const hasTopWorkspaceAlias =
         obj['workspace_id'] !== undefined ||
         obj['workspaceId'] !== undefined ||
@@ -248,6 +254,11 @@ export function coerceNumericStringIds(
             }
             obj[key] = parsed
         } else if (key === 'project_number' || key === 'projectNumber') {
+            if (methodName !== undefined && PROJECT_REGISTRY_METHOD_NAMES.has(methodName)) {
+                return aliasValidationError(
+                    `project_number '${strVal}' is not a canonical positive integer`,
+                )
+            }
             const preserved = obj[key]
             Reflect.deleteProperty(obj, key)
             if (applyProjectNameAlias(strVal, obj) !== 'applied') {

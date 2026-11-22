@@ -30,13 +30,14 @@ export function getGrantedAuthScopes(
 }
 
 function isTeamResourceUri(normalizedTarget: string): boolean {
+    const lowerTarget = normalizedTarget.toLowerCase()
     return (
-        normalizedTarget === 'memory://team' ||
-        normalizedTarget.startsWith('memory://team/') ||
-        normalizedTarget.startsWith('memory://team?') ||
-        normalizedTarget === 'memory://insights/team-collaboration' ||
-        normalizedTarget.startsWith('memory://insights/team-collaboration/') ||
-        normalizedTarget.startsWith('memory://insights/team-collaboration?')
+        lowerTarget === 'memory://team' ||
+        lowerTarget.startsWith('memory://team/') ||
+        lowerTarget.startsWith('memory://team?') ||
+        lowerTarget === 'memory://insights/team-collaboration' ||
+        lowerTarget.startsWith('memory://insights/team-collaboration/') ||
+        lowerTarget.startsWith('memory://insights/team-collaboration?')
     )
 }
 
@@ -59,13 +60,14 @@ function isTeamToolOrPromptName(targetName: string): boolean {
 }
 
 function isAuditResourceUri(normalizedTarget: string): boolean {
+    const lowerTarget = normalizedTarget.toLowerCase()
     return (
-        normalizedTarget === 'memory://audit' ||
-        normalizedTarget.startsWith('memory://audit/') ||
-        normalizedTarget.startsWith('memory://audit?') ||
-        normalizedTarget === 'memory://metrics/users' ||
-        normalizedTarget.startsWith('memory://metrics/users/') ||
-        normalizedTarget.startsWith('memory://metrics/users?')
+        lowerTarget === 'memory://audit' ||
+        lowerTarget.startsWith('memory://audit/') ||
+        lowerTarget.startsWith('memory://audit?') ||
+        lowerTarget === 'memory://metrics/users' ||
+        lowerTarget.startsWith('memory://metrics/users/') ||
+        lowerTarget.startsWith('memory://metrics/users?')
     )
 }
 

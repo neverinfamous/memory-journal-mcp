@@ -5,7 +5,7 @@ import type { Tag } from '../../types/index.js'
 import type { NativeConnectionManager } from './native-connection.js'
 import { effectiveWorkspace } from '../workspace-scope.js'
 import { TAG_ALIASES } from '../../types/entities.js'
-import { bucketInParams, SCOPED_IN_PARAM_BUCKETS } from './row-helpers.js'
+import { bucketInParams, runImmediateWriteTx, SCOPED_IN_PARAM_BUCKETS } from './row-helpers.js'
 
 const hasDeletedAtCache = new WeakMap<Database, boolean>()
 
@@ -196,7 +196,7 @@ export class TagsManager {
         const scopedWorkspace = scopeId === '*' ? undefined : scopeId
         const scopedProject = projectNumber
 
-        const mergeOp = this.db.transaction(() => {
+        const result = runImmediateWriteTx(this.db, () => {
             const sourceTagId = this.resolveSourceTagId(sourceTag)
             const entryIds = this.selectSourceTagEntryIds(
                 sourceTagId,
@@ -219,8 +219,6 @@ export class TagsManager {
             )
             return { entriesUpdated, sourceDeleted }
         })
-
-        const result = mergeOp()
 
         this.ctx.scheduleSave()
         logger.info('Tags merged', {

@@ -46,7 +46,7 @@ export function healTagListField(obj: Record<string, unknown>, fieldKey: string)
 
 export function normalizeTagsField(obj: Record<string, unknown>): boolean {
     let modified = false
-    if ('tag' in obj && !('tags' in obj)) {
+    if (obj['tag'] !== undefined && obj['tags'] === undefined) {
         obj['tags'] = obj['tag']
         delete obj['tag']
         modified = true
@@ -93,7 +93,7 @@ export function unpackFilterContainers(obj: Record<string, unknown>): boolean {
         modified = true
         if (typeof val !== 'object' || val === null || Array.isArray(val)) continue
         for (const [k, v] of Object.entries(val as Record<string, unknown>)) {
-            if (!(k in obj) && v !== undefined) obj[k] = v
+            if (obj[k] === undefined && v !== undefined) obj[k] = v
         }
     }
     return modified

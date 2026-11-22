@@ -324,7 +324,7 @@ function resolveGetPromptTarget(
                 ? toolArgs['prompt_name'].trim()
                 : undefined
     const normalizedTarget = rawPromptName
-        ?.replace(/^mj_/, '')
+        ?.replace(/^mj[_-]/i, '')
         .replace(/_/g, '-')
         .replace(/([a-z])([A-Z])/g, '$1-$2')
         .toLowerCase()
@@ -342,7 +342,7 @@ function isResourceFallbackTool(requestedTool: string): boolean {
     return (
         matchesExactName(requestedTool, DUMMY_RESOURCE_TOOL_NAMES) ||
         requestedTool === 'mjReadResource' ||
-        requestedTool.startsWith('memory://')
+        /^memory:\/\//i.test(requestedTool)
     )
 }
 
@@ -368,7 +368,7 @@ export function resolvePromptOrResourceAccessTargets(
         const rawUri =
             extractedUri !== undefined && extractedUri !== ''
                 ? extractedUri
-                : requestedTool.startsWith('memory://')
+                : /^memory:\/\//i.test(requestedTool)
                   ? requestedTool
                   : 'memory://briefing'
         return [

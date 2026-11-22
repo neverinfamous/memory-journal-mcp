@@ -1,8 +1,8 @@
-import { constants } from 'node:fs'
+import { constants, realpathSync } from 'node:fs'
 import * as fs from 'node:fs/promises'
 import * as path from 'node:path'
 import { convertFile, type ParsedFile } from '../../markdown/index.js'
-import { assertSafeFilePath } from '../../utils/security-utils.js'
+import { assertSafeDirectoryPath, assertSafeFilePath } from '../../utils/security-utils.js'
 
 const MAX_IMPORT_FILE_SIZE_BYTES = 5 * 1024 * 1024
 const MAX_DIRECTORY_SCAN_ENTRIES = 10_000
@@ -61,9 +61,12 @@ export async function collectExternalMarkdownFiles(
     format: ExternalImportFormat,
     limit = DEFAULT_EXTERNAL_IMPORT_LIMIT
 ): Promise<{ parsedFiles: ParsedFile[]; errors: { file: string; error: string }[] }> {
+    const pinnedDir = realpathSync.native(resolvedDir)
+    const allowedRoots = [pinnedDir]
+    assertSafeDirectoryPath(pinnedDir, allowedRoots)
     const allMdFiles: string[] = []
     let scannedEntries = 0
-    const dir = await fs.opendir(resolvedDir)
+    const dir = await fs.opendir(pinnedDir)
     try {
         for await (const dirent of dir) {
             if (++scannedEntries > MAX_DIRECTORY_SCAN_ENTRIES) break
@@ -82,12 +85,12 @@ export async function collectExternalMarkdownFiles(
 
     const parsedFiles: ParsedFile[] = []
     const errors: { file: string; error: string }[] = []
-    const allowedRoots = [resolvedDir]
 
     for (let i = 0; i < mdFiles.length; i += READ_CONCURRENCY) {
+        assertSafeDirectoryPath(realpathSync.native(pinnedDir), allowedRoots)
         const batch = mdFiles.slice(i, i + READ_CONCURRENCY)
         const settled = await Promise.all(
-            batch.map((filename) => readSingleExternalFile(resolvedDir, filename, format, allowedRoots))
+            batch.map((filename) => readSingleExternalFile(pinnedDir, filename, format, allowedRoots))
         )
         for (let j = 0; j < settled.length; j++) {
             const outcome = settled[j]

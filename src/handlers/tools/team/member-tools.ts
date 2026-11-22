@@ -34,7 +34,7 @@ const preprocessMemberBase = (val: unknown, rejectWorkspaceId: boolean): unknown
         let modified = false;
 
         for (const key of authorAliases) {
-            if (key in obj && !('author' in obj)) {
+            if (obj[key] !== undefined && obj['author'] === undefined) {
                 obj['author'] = obj[key];
                 Reflect.deleteProperty(obj, key);
                 modified = true;
@@ -42,14 +42,14 @@ const preprocessMemberBase = (val: unknown, rejectWorkspaceId: boolean): unknown
             }
         }
         for (const key of roleAliases) {
-            if (key in obj && !('role' in obj)) {
+            if (obj[key] !== undefined && obj['role'] === undefined) {
                 obj['role'] = obj[key];
                 Reflect.deleteProperty(obj, key);
                 modified = true;
                 break;
             }
         }
-        if (rejectWorkspaceId && 'workspace_id' in obj) {
+        if (rejectWorkspaceId && obj['workspace_id'] !== undefined) {
             throw new ValidationError(
                 'workspace_id is not accepted. Team membership is global and has no workspace column.',
                 { field: 'workspace_id' }

@@ -1,4 +1,5 @@
 import { logger } from '../../utils/logger.js'
+import { sanitizeDefaultWorkspaceId } from '../../utils/workspace-registry-match.js'
 import { globalSubscriptionManager } from '../subscription-manager.js'
 import { disposeCodemodeResources } from '../../handlers/tools/codemode/singleton-state.js'
 import type { HttpTransportConfig } from '../../transports/http/index.js'
@@ -21,7 +22,7 @@ export function buildBaseToolConfig(
 ): ToolHandlerConfig {
     return {
         defaultProjectNumber: options.defaultProjectNumber,
-        defaultWorkspaceId: options.defaultWorkspaceId,
+        defaultWorkspaceId: sanitizeDefaultWorkspaceId(options.defaultWorkspaceId),
         projectRegistry: options.projectRegistry,
         additionalTeamDbs: options.additionalTeamDbs,
 

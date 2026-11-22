@@ -80,6 +80,7 @@ export class BackupManager {
                   .replace(/\.+$/g, '')
                   .slice(0, MAX_BACKUP_NAME_LENGTH)
                   .replace(/\.+$/g, '')
+                  .trim()
             : ''
         if (rawSanitized.length > 0 && WIN_RESERVED_BACKUP_RE.test(rawSanitized)) {
             throw new PathTraversalError(backupName ?? rawSanitized)
@@ -164,7 +165,11 @@ export class BackupManager {
             }
         }
 
-        backups.sort((a, b) => (b.createdAt > a.createdAt ? 1 : b.createdAt < a.createdAt ? -1 : 0))
+        backups.sort(
+            (a, b) =>
+                (b.createdAt > a.createdAt ? 1 : b.createdAt < a.createdAt ? -1 : 0) ||
+                (b.filename > a.filename ? 1 : b.filename < a.filename ? -1 : 0)
+        )
         this.cachedBackupsDir = backupsDir
         this.cachedBackupsDirMtimeNs = dirStats.mtimeNs
         this.cachedBackupsEntryNamesKey = entryNamesKey

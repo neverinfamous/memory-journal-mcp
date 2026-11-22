@@ -4,6 +4,7 @@ import { getRequiredScope } from '../../auth/scope-map.js'
 import { resolveEnvAuthScopes } from '../../auth/scopes.js'
 import { getResources } from '../../handlers/resources/index.js'
 import { getPrompts } from '../../handlers/prompts/index.js'
+import { sanitizeDefaultWorkspaceId } from '../../utils/workspace-registry-match.js'
 import type { ToolHandlerConfig } from '../../types/index.js'
 import type { PromptDefinition, ResourceDefinition } from '../registration.js'
 
@@ -86,11 +87,9 @@ function buildServerToolConfigs(
     ) {
         baseConfig.defaultProjectNumber = baseConfig.briefingConfig.defaultProjectNumber
     }
-    if (
-        baseConfig.defaultWorkspaceId === undefined &&
-        baseConfig.briefingConfig.defaultWorkspaceId !== undefined
-    ) {
-        baseConfig.defaultWorkspaceId = baseConfig.briefingConfig.defaultWorkspaceId
+    if (baseConfig.defaultWorkspaceId === undefined) {
+        const sanitized = sanitizeDefaultWorkspaceId(baseConfig.briefingConfig.defaultWorkspaceId)
+        if (sanitized !== undefined) baseConfig.defaultWorkspaceId = sanitized
     }
     if (
         baseConfig.projectRegistry === undefined &&

@@ -214,7 +214,7 @@ export function createSystemDatabaseDomainProxy(
     const getStatsFn =
         getGroupProp(target, 'analytics', 'getStatistics') ??
         getGroupProp(target, 'analytics', 'get_statistics')
-    const dbShim: Record<string, unknown> = {
+    const dbShim = Object.assign(Object.create(null) as Record<string, unknown>, {
         ping: () => Promise.resolve({ success: true, status: 'pong' }),
         version: () =>
             Promise.resolve({
@@ -222,13 +222,15 @@ export function createSystemDatabaseDomainProxy(
                 version: PACKAGE_VERSION,
                 name: 'memory-journal-mcp',
             }),
+    })
+    if (typeof getStatsFn === 'function') {
+        for (const k of STATS_METHOD_KEYS) dbShim[k] = getStatsFn
     }
-    for (const k of STATS_METHOD_KEYS) dbShim[k] = getStatsFn
     return new Proxy(dbShim, {
         ...IMMUTABLE_PROXY_TRAPS,
         get(t, p): unknown {
             if (typeof p === 'symbol' || p === 'then') return undefined
-            if (typeof p === 'string' && p in t) return t[p]
+            if (typeof p === 'string' && Object.hasOwn(t, p)) return t[p]
             return (..._args: unknown[]) =>
                 Promise.resolve({
                     success: false,

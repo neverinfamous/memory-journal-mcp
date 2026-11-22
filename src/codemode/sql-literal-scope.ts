@@ -328,6 +328,7 @@ export function isSupportedWhereClause(
     if (clauses.length === 0) return false
     const allowPlaceholder = options?.allowPlaceholder === true
     const allowSelect = options?.allowSelectContentEquality === true
+    const seenCols = new Set<string>()
 
     for (const rawClause of clauses) {
         const clause = stripBalancedOuterParens(rawClause)
@@ -338,6 +339,14 @@ export function isSupportedWhereClause(
         const eqMatch = SQL_EQ_PREDICATE_RE.exec(clause)
         if (eqMatch?.[1] === undefined || eqMatch[2] === undefined) return false
         const col = eqMatch[1].toLowerCase()
+        const canonicalCol =
+            col === 'id' || col === 'entry_id'
+                ? 'id'
+                : col === 'project_number' || col === 'project_id'
+                  ? 'project_number'
+                  : col
+        if (seenCols.has(canonicalCol)) return false
+        seenCols.add(canonicalCol)
         const rhs = eqMatch[2].trim()
 
         if (col === 'id' || col === 'entry_id') {

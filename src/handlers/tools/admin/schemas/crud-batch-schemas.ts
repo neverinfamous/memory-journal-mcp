@@ -30,12 +30,12 @@ function preprocessUpdateEntry(val: unknown): unknown {
     if (typeof healedVal === 'object' && healedVal !== null) {
         const obj = { ...(healedVal as Record<string, unknown>) }
         let modified = false
-        if ('id' in obj && !('entry_id' in obj)) {
+        if (obj['id'] !== undefined && obj['entry_id'] === undefined) {
             obj['entry_id'] = obj['id']
             delete obj['id']
             modified = true
         }
-        if ('text' in obj && !('content' in obj)) {
+        if (obj['text'] !== undefined && obj['content'] === undefined) {
             obj['content'] = obj['text']
             delete obj['text']
             modified = true
@@ -193,7 +193,7 @@ export const DeleteEntrySchema = z.preprocess(
     (val: unknown) => {
         if (typeof val === 'object' && val !== null) {
             const obj = { ...(val as Record<string, unknown>) }
-            if ('id' in obj && !('entry_id' in obj)) {
+            if (obj['id'] !== undefined && obj['entry_id'] === undefined) {
                 obj['entry_id'] = obj['id']
                 delete obj['id']
                 return obj
@@ -221,7 +221,7 @@ export const DeleteEntrySchemaMcp = z.preprocess(
         if (typeof val === 'object' && val !== null) {
             const obj = { ...(val as Record<string, unknown>) }
             let modified = false
-            if ('id' in obj && !('entry_id' in obj)) {
+            if (obj['id'] !== undefined && obj['entry_id'] === undefined) {
                 obj['entry_id'] = obj['id']
                 delete obj['id']
                 modified = true

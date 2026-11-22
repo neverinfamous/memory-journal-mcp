@@ -325,7 +325,40 @@ function extendSchemaWithUseTestDb(rawSchema: unknown): unknown {
         )
     } else if (rawSchema instanceof z.ZodPipe && rawSchema.in instanceof z.ZodObject) {
         const extendedIn: z.ZodType = rawSchema.in.extend(USE_TEST_DB_EXTEND_SHAPE)
-        extended = z.pipe(extendedIn, rawSchema.out)
+        const origOut = rawSchema.out as z.ZodType
+        const preserveTestDbOut = z.unknown().transform((val: unknown, ctx) => {
+            const hasTestDb =
+                typeof val === 'object' &&
+                val !== null &&
+                !Array.isArray(val) &&
+                Object.hasOwn(val, 'use_test_db')
+            const testDbVal: unknown = hasTestDb
+                ? (val as Record<string, unknown>)['use_test_db']
+                : undefined
+            const parsed = origOut.safeParse(val)
+            if (!parsed.success) {
+                for (const issue of parsed.error.issues) {
+                    ctx.addIssue({
+                        code: 'custom',
+                        path: issue.path,
+                        message: issue.message,
+                    })
+                }
+                return z.NEVER
+            }
+            if (
+                hasTestDb &&
+                testDbVal !== undefined &&
+                typeof parsed.data === 'object' &&
+                parsed.data !== null &&
+                !Array.isArray(parsed.data) &&
+                !Object.hasOwn(parsed.data, 'use_test_db')
+            ) {
+                return { ...(parsed.data as Record<string, unknown>), use_test_db: testDbVal }
+            }
+            return parsed.data
+        })
+        extended = z.pipe(extendedIn, preserveTestDbOut)
     }
     if (extended !== rawSchema && extended instanceof z.ZodType) {
         EXTENDED_TEST_DB_SCHEMA_CACHE.set(rawSchema, extended)

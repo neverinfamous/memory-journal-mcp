@@ -284,6 +284,11 @@ function parseInsert(cleanSql: string, args: unknown[]): ParsedSql {
 }
 
 function parseWhereOnly(cleanSql: string, args: unknown[], action: 'delete' | 'get_by_id'): ParsedSql {
+    if (action === 'get_by_id') {
+        const fromIdx = cleanSql.search(/\bFROM\b/i)
+        const selectSlice = fromIdx >= 0 ? cleanSql.slice(0, fromIdx) : cleanSql
+        if (/\b(?:COUNT|SUM|AVG|MIN|MAX)\s*\(/i.test(selectSlice)) return UNMAPPED
+    }
     const tableName = extractFromTableName(cleanSql)
     if (tableName === undefined || !ENTRY_TABLE_NAMES.has(tableName)) return UNMAPPED
     if (hasUnsupportedWherePredicate(cleanSql)) return UNMAPPED

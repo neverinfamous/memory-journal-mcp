@@ -58,20 +58,32 @@ export async function getDb(
 }
 
 async function readPipedStdinWithTimeout(): Promise<string> {
+    const chunks: Buffer[] = []
     let hasInput = false
     let timeoutId: ReturnType<typeof setTimeout> | undefined
-    const readPromise = (async (): Promise<string> => {
-        let stdinStr = ''
-        for await (const chunk of process.stdin) {
-            hasInput = true
-            stdinStr += chunk
+    return await new Promise<string>((resolve, reject) => {
+        const cleanup = (): void => {
+            if (timeoutId !== undefined) clearTimeout(timeoutId)
+            process.stdin.off('data', onData)
+            process.stdin.off('end', onEnd)
+            process.stdin.off('error', onError)
+            process.stdin.pause()
         }
-        return stdinStr
-    })()
-    readPromise.catch(() => undefined)
-    const timeoutPromise = new Promise<never>((_resolve, reject) => {
+        const onData = (chunk: string | Buffer): void => {
+            hasInput = true
+            chunks.push(typeof chunk === 'string' ? Buffer.from(chunk, 'utf8') : chunk)
+        }
+        const onEnd = (): void => {
+            cleanup()
+            resolve(Buffer.concat(chunks).toString('utf8'))
+        }
+        const onError = (err: Error): void => {
+            cleanup()
+            reject(err)
+        }
         timeoutId = setTimeout(() => {
             if (!hasInput) {
+                cleanup()
                 process.stderr.write(
                     'Error: Timed out waiting for stdin. You must provide --file or --content when running in a non-interactive shell.\n'
                 )
@@ -79,12 +91,11 @@ async function readPipedStdinWithTimeout(): Promise<string> {
             }
         }, STDIN_TIMEOUT_MS)
         timeoutId.unref()
+        process.stdin.on('data', onData)
+        process.stdin.once('end', onEnd)
+        process.stdin.once('error', onError)
+        process.stdin.resume()
     })
-    try {
-        return await Promise.race([readPromise, timeoutPromise])
-    } finally {
-        if (timeoutId !== undefined) clearTimeout(timeoutId)
-    }
 }
 
 export async function parseContent(options: HealedEntryOptions): Promise<string> {

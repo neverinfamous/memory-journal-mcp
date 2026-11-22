@@ -96,25 +96,33 @@ export function readWorkspaceField(primary: Record<string, unknown>, secondary: 
     )
 }
 
+function firstNonBlankAlias(
+    primary: Record<string, unknown>,
+    secondary: Record<string, unknown>,
+    keys: readonly string[]
+): unknown {
+    for (const src of [primary, secondary]) {
+        for (const k of keys) {
+            const v = src[k]
+            if (v !== undefined && !(typeof v === 'string' && v.trim() === '')) return v
+        }
+    }
+    return undefined
+}
+
 export function parseProjectNumberField(
     primary: Record<string, unknown>,
     secondary: Record<string, unknown>
 ): number | string | undefined {
     const raw =
-        primary['project_number'] ??
-        primary['projectNumber'] ??
-        primary['project_id'] ??
-        primary['projectId'] ??
-        primary['project_name'] ??
-        primary['projectName'] ??
-        secondary['project_number'] ??
-        secondary['projectNumber'] ??
-        secondary['project_id'] ??
-        secondary['projectId'] ??
-        secondary['project_name'] ??
-        secondary['projectName'] ??
-        primary['project'] ??
-        secondary['project']
+        firstNonBlankAlias(primary, secondary, [
+            'project_number',
+            'projectNumber',
+            'project_id',
+            'projectId',
+            'project_name',
+            'projectName',
+        ]) ?? firstNonBlankAlias(primary, secondary, ['project'])
     if (typeof raw === 'number') {
         if (Number.isSafeInteger(raw) && raw > 0) return raw
         return Number.isFinite(raw) ? raw : String(raw)
@@ -219,7 +227,9 @@ export function parsePositiveEntryId(
     rawObj: Record<string, unknown>
 ): number | string | undefined {
     const rawEntryId =
-        entryObj['entry_id'] ?? rawObj['entry_id'] ?? entryObj['entryId'] ?? rawObj['entryId'] ?? entryObj['id'] ?? rawObj['id']
+        firstNonBlankAlias(entryObj, rawObj, ['entry_id']) ??
+        firstNonBlankAlias(entryObj, rawObj, ['entryId']) ??
+        firstNonBlankAlias(entryObj, rawObj, ['id'])
     if (typeof rawEntryId === 'number') {
         if (Number.isSafeInteger(rawEntryId) && rawEntryId > 0) return rawEntryId
         return Number.isFinite(rawEntryId) ? rawEntryId : String(rawEntryId)

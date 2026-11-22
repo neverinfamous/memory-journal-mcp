@@ -240,7 +240,7 @@ function pushUniqueRelationship(
 export function healRelationshipFields(obj: Record<string, unknown>): boolean {
     let modified = false
 
-    if ('relationship' in obj && !('relationships' in obj)) {
+    if (obj['relationship'] !== undefined && obj['relationships'] === undefined) {
         obj['relationships'] = Array.isArray(obj['relationship']) ? obj['relationship'] : [obj['relationship']]
         Reflect.deleteProperty(obj, 'relationship')
         modified = true

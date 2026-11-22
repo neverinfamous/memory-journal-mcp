@@ -28,7 +28,7 @@ export interface AuditScopeMetadata {
 const SENSITIVE_AUDIT_URI_RE =
     /^memory:\/\/(?:team|audit|metrics\/users|insights\/team-collaboration)(?:\/|$|\?|#)/i
 const SCHEMELESS_SENSITIVE_PATH_RE =
-    /^(?:team|audit|metrics\/users|insights\/team-collaboration)(?:\/|$|\?|#)/i
+    /^(?:team|audit)(?:[/?#]|$)|^(?:metrics|insights)[/?#]/i
 
 export const AUDIT_URI_KEYS = [
     'uri', 'Uri', '_uri', 'resourceUri', 'resource_uri', 'url', 'Url', 'resource',
@@ -104,14 +104,14 @@ export function matchesAuditFilters(entry: AuditEntry, filters: AuditSearchFilte
 /** Normalize resource URI targets (stripping fragments, canonicalizing dot segments/percent encoding, and adding `memory://` for scheme-less paths). */
 export function normalizeAuditResourceUri(raw: string): string {
     const trimmed = raw.trim()
-    if (!trimmed.includes('://') && !trimmed.includes('%') && !SCHEMELESS_SENSITIVE_PATH_RE.test(trimmed)) {
-        return trimmed
+    if (!trimmed.includes('://')) {
+        const decodedSep = trimmed.replace(/%(?:2f|5c)/gi, '/')
+        if (SCHEMELESS_SENSITIVE_PATH_RE.test(decodedSep)) {
+            return canonicalizeMemoryResourceUri(`memory://${decodedSep}`)
+        }
+        if (!trimmed.includes('%')) return trimmed
     }
-    const withScheme =
-        !trimmed.includes('://') && SCHEMELESS_SENSITIVE_PATH_RE.test(trimmed)
-            ? `memory://${trimmed}`
-            : trimmed
-    return canonicalizeMemoryResourceUri(withScheme)
+    return canonicalizeMemoryResourceUri(trimmed)
 }
 
 function checkUriKeyTarget(trimmed: string): string | undefined {
@@ -136,12 +136,11 @@ export function extractSensitiveTargetFromArgs(toolName: string, args: unknown):
         if (typeof val !== 'string') continue
         const trimmed = val.trim()
         if (trimmed === '') continue
-        if (key === 'name') {
-            trimmedName = trimmed
-            if (!trimmed.includes('://') && !SCHEMELESS_SENSITIVE_PATH_RE.test(trimmed)) continue
-        } else if (key === 'Name') {
-            trimmedCapName = trimmed
-            if (!trimmed.includes('://') && !SCHEMELESS_SENSITIVE_PATH_RE.test(trimmed)) continue
+        if (key === 'name' || key === 'Name') {
+            if (key === 'name') trimmedName = trimmed
+            else trimmedCapName = trimmed
+            const decodedCandidate = trimmed.replace(/%(?:2f|5c)/gi, '/')
+            if (!trimmed.includes('://') && !SCHEMELESS_SENSITIVE_PATH_RE.test(decodedCandidate)) continue
         } else if (
             (key === 'ServerName' || key === 'server_name') &&
             (trimmed === 'memory-journal-mcp' || trimmed === 'memory-journal')
@@ -225,11 +224,12 @@ function applyActiveSessionScopeFallback(
     }
 }
 
-/** Extract optional workspaceId / projectNumber from tool arguments and active request context. */
+/** Extract optional workspaceId / projectNumber from tool arguments and optional active session context. */
 export function extractAuditScopeFromArgs(
     args: unknown,
     reqCtx?: RequestContext,
-    runtime?: object | null
+    runtime?: object | null,
+    skipSessionFallback = false
 ): AuditScopeMetadata {
     let workspaceId: string | undefined
     let projectNumber: number | undefined
@@ -238,16 +238,17 @@ export function extractAuditScopeFromArgs(
 
     if (typeof args === 'object' && args !== null) {
         const record = args as Record<string, unknown>
-        const rawWs = record['workspace_id'] ?? record['workspaceId'] ?? record['workspace']
-        if (typeof rawWs === 'string') {
+        const rawWs = [record['workspace_id'], record['workspaceId'], record['workspace']].find(
+            (v): v is string => typeof v === 'string' && v.trim() !== ''
+        )
+        if (rawWs !== undefined) {
             const trimmedWs = rawWs.trim()
-            if (trimmedWs === '*') {
-                explicitWildcardWorkspace = true
-            } else if (trimmedWs.length > 0) {
-                workspaceId = sanitizeErrorForLogging(trimmedWs).slice(0, 255)
-            }
+            if (trimmedWs === '*') explicitWildcardWorkspace = true
+            else workspaceId = sanitizeErrorForLogging(trimmedWs).slice(0, 255)
         }
-        const rawProj = record['project_number'] ?? record['projectNumber']
+        const rawProj = [record['project_number'], record['projectNumber']].find(
+            (v) => v !== undefined && !(typeof v === 'string' && v.trim() === '')
+        )
         if (rawProj === 0 || (typeof rawProj === 'string' && rawProj.trim() === '0')) {
             explicitZeroProject = true
         } else {
@@ -256,10 +257,12 @@ export function extractAuditScopeFromArgs(
         }
     }
 
-    return applyActiveSessionScopeFallback(
-        { ...(workspaceId !== undefined ? { workspaceId } : {}), ...(projectNumber !== undefined ? { projectNumber } : {}) },
-        reqCtx, explicitWildcardWorkspace, runtime, explicitZeroProject
-    )
+    const baseScope: AuditScopeMetadata = {
+        ...(workspaceId !== undefined ? { workspaceId } : {}),
+        ...(projectNumber !== undefined ? { projectNumber } : {}),
+    }
+    if (skipSessionFallback) return baseScope
+    return applyActiveSessionScopeFallback(baseScope, reqCtx, explicitWildcardWorkspace, runtime, explicitZeroProject)
 }
 
 /** Extract optional workspace_id / project_number query params or URI path repo from a memory:// URI. */

@@ -22,7 +22,7 @@ export const ExportEntriesSchema = z.preprocess(
             const obj = { ...(val as Record<string, unknown>) };
             let modified = false;
 
-            if ('type' in obj && !('format' in obj)) {
+            if (obj['type'] !== undefined && obj['format'] === undefined) {
                 obj['format'] = obj['type'];
                 delete obj['type'];
                 modified = true;
@@ -56,7 +56,7 @@ export const ExportEntriesSchemaMcp = z.preprocess(
             const obj = { ...(val as Record<string, unknown>) };
             let modified = false;
 
-            if ('type' in obj && !('format' in obj)) {
+            if (obj['type'] !== undefined && obj['format'] === undefined) {
                 obj['format'] = obj['type'];
                 delete obj['type'];
                 modified = true;
@@ -108,9 +108,9 @@ export const ExportMarkdownSchema = z.preprocess(
             const obj = { ...(val as Record<string, unknown>) };
             let modified = false;
 
-            if (!('output_dir' in obj)) {
+            if (obj['output_dir'] === undefined) {
                 for (const key of ['path', 'filepath', 'target_dir', 'dir']) {
-                    if (key in obj) {
+                    if (obj[key] !== undefined) {
                         obj['output_dir'] = obj[key];
                         Reflect.deleteProperty(obj, key);
                         modified = true;
@@ -143,9 +143,9 @@ export const ExportMarkdownSchemaMcp = z.preprocess(
             const obj = { ...(val as Record<string, unknown>) };
             let modified = false;
 
-            if (!('output_dir' in obj)) {
+            if (obj['output_dir'] === undefined) {
                 for (const key of ['path', 'filepath', 'target_dir', 'dir']) {
-                    if (key in obj) {
+                    if (obj[key] !== undefined) {
                         obj['output_dir'] = obj[key];
                         Reflect.deleteProperty(obj, key);
                         modified = true;
@@ -195,9 +195,9 @@ export const ImportMarkdownSchema = z.preprocess(
             const obj = { ...(val as Record<string, unknown>) };
             let modified = false;
 
-            if (!('source_dir' in obj)) {
+            if (obj['source_dir'] === undefined) {
                 for (const key of ['path', 'filepath', 'target_dir', 'dir']) {
-                    if (key in obj) {
+                    if (obj[key] !== undefined) {
                         obj['source_dir'] = obj[key];
                         Reflect.deleteProperty(obj, key);
                         modified = true;
@@ -227,9 +227,9 @@ export const ImportMarkdownSchemaMcp = z.preprocess(
             const obj = { ...(val as Record<string, unknown>) };
             let modified = false;
 
-            if (!('source_dir' in obj)) {
+            if (obj['source_dir'] === undefined) {
                 for (const key of ['path', 'filepath', 'target_dir', 'dir']) {
-                    if (key in obj) {
+                    if (obj[key] !== undefined) {
                         obj['source_dir'] = obj[key];
                         Reflect.deleteProperty(obj, key);
                         modified = true;
@@ -290,9 +290,9 @@ export const ImportExternalSchema = z.preprocess(
             const obj = { ...(val as Record<string, unknown>) };
             let modified = false;
 
-            if (!('source_dir' in obj)) {
+            if (obj['source_dir'] === undefined) {
                 for (const key of ['path', 'filepath', 'target_dir', 'dir']) {
-                    if (key in obj) {
+                    if (obj[key] !== undefined) {
                         obj['source_dir'] = obj[key];
                         Reflect.deleteProperty(obj, key);
                         modified = true;
@@ -300,7 +300,7 @@ export const ImportExternalSchema = z.preprocess(
                     }
                 }
             }
-            if ('source' in obj && !('source_format' in obj)) {
+            if (obj['source'] !== undefined && obj['source_format'] === undefined) {
                 obj['source_format'] = obj['source'];
                 delete obj['source'];
                 modified = true;
@@ -329,9 +329,9 @@ export const ImportExternalSchemaMcp = z.preprocess(
             const obj = { ...(val as Record<string, unknown>) };
             let modified = false;
 
-            if (!('source_dir' in obj)) {
+            if (obj['source_dir'] === undefined) {
                 for (const key of ['path', 'filepath', 'target_dir', 'dir']) {
-                    if (key in obj) {
+                    if (obj[key] !== undefined) {
                         obj['source_dir'] = obj[key];
                         Reflect.deleteProperty(obj, key);
                         modified = true;
@@ -339,7 +339,7 @@ export const ImportExternalSchemaMcp = z.preprocess(
                     }
                 }
             }
-            if ('source' in obj && !('source_format' in obj)) {
+            if (obj['source'] !== undefined && obj['source_format'] === undefined) {
                 obj['source_format'] = obj['source'];
                 delete obj['source'];
                 modified = true;

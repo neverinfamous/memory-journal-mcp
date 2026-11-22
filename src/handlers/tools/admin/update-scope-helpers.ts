@@ -81,7 +81,7 @@ function validateUpdateProjectScope(
         : {}
 }
 
-function sameMoveWorkspace(
+export function sameMoveWorkspace(
     destWs: string,
     existingWs: string | undefined,
     registry: ReturnType<typeof activeProjectRegistry>

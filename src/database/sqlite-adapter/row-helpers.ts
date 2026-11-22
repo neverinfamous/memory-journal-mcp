@@ -1,9 +1,17 @@
+import type { Database } from 'better-sqlite3'
+
 /**
  * Shared SQLite Row Mapping Helpers
  *
  * Extracts the first row from an IDatabaseConnection query result array into
  * a column-keyed record for adapter submodules.
  */
+
+/** Acquire `BEGIN IMMEDIATE` for top-level write transactions so WAL writers honor `busy_timeout`, keeping savepoints when nested. */
+export function runImmediateWriteTx<T>(db: Database, fn: () => T): T {
+    const tx = db.transaction(fn)
+    return !db.inTransaction && typeof tx.immediate === 'function' ? tx.immediate() : tx()
+}
 
 export interface SqliteQueryResult {
     columns: string[]

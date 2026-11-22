@@ -163,6 +163,8 @@ interface ShortcutDispatchInput {
     effectiveDryRun: boolean
     effectiveUseTestDb: boolean
     shimMj: Record<string, unknown>
+    runIsolatedNestedCode: RunIsolatedNestedFn
+    isolation: NestedExecIsolationOverrides | undefined
 }
 
 const MAX_SNAPSHOT_DEPTH = 12
@@ -231,6 +233,42 @@ function snapshotUntrustedArg(arg: unknown): {
     return { safeArg: snap, argRec: snap }
 }
 
+function dispatchNestedEntryPayload(
+    payload: unknown,
+    opts: Pick<
+        ShortcutDispatchInput,
+        | 'shimMj'
+        | 'runIsolatedNestedCode'
+        | 'isolation'
+        | 'effectiveReadonly'
+        | 'effectiveDryRun'
+        | 'effectiveUseTestDb'
+    >
+): unknown {
+    const isUpdate = hasExplicitNestedEntryId(payload)
+    if (isUpdate && opts.isolation?.autoVersion === false) {
+        return opts.runIsolatedNestedCode(
+            'return await mj.admin.updateEntry(context.synthPayload)',
+            opts.effectiveReadonly,
+            opts.effectiveDryRun,
+            opts.effectiveUseTestDb,
+            {
+                ...opts.isolation,
+                contextObj: {
+                    ...(opts.isolation.contextObj ?? {}),
+                    synthPayload: payload,
+                },
+            }
+        )
+    }
+    return invokeShimGroupMethod(
+        opts.shimMj,
+        isUpdate ? 'admin' : 'core',
+        isUpdate ? 'updateEntry' : 'createEntry',
+        payload
+    )
+}
+
 async function tryDispatchNestedShortcut(
     input: ShortcutDispatchInput
 ): Promise<{ handled: true; value: unknown } | { handled: false; codeToExec: string; isQueryOnlyArg: boolean }> {
@@ -264,13 +302,7 @@ async function tryDispatchNestedShortcut(
         typeof argRec['query'] === 'string' &&
         argRec['query'].trim() !== ''
     const codeToExec = rawNestedCode
-    const dispatchEntry = (payload: unknown): unknown =>
-        invokeShimGroupMethod(
-            shimMj,
-            hasExplicitNestedEntryId(payload) ? 'admin' : 'core',
-            hasExplicitNestedEntryId(payload) ? 'updateEntry' : 'createEntry',
-            payload
-        )
+    const dispatchEntry = (payload: unknown): unknown => dispatchNestedEntryPayload(payload, input)
     if (codeToExec === null) {
         const scoped = mergeNestedSynthesizedScope(arg, argRec, narrowed, pinnedWorkspace, pinnedProjectNumber)
         return {
@@ -388,6 +420,7 @@ export function createSandboxExecutor(options: SandboxExecutorOptions): (...args
             tryDispatchNestedShortcut({
                 arg, argRec, rawNestedCode, narrowed, pinnedWorkspace, pinnedProjectNumber,
                 effectiveReadonly, effectiveDryRun, effectiveUseTestDb, shimMj,
+                runIsolatedNestedCode, isolation,
             }),
             shortcutTimeoutMs,
             activeTimers

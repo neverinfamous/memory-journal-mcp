@@ -39,6 +39,12 @@ export function isForbiddenProjectKey(key: string): boolean {
     return trimmed === '' || trimmed === '*' || FORBIDDEN_PROJECT_KEYS.has(trimmed)
 }
 
+/** Trim and reject forbidden (`''`, `'*'`, prototype-pollution) default workspace IDs. */
+export function sanitizeDefaultWorkspaceId(raw: string | undefined): string | undefined {
+    const trimmed = raw?.trim()
+    return trimmed !== undefined && !isForbiddenProjectKey(trimmed) ? trimmed : undefined
+}
+
 export const PROJECT_KEYWORD_ALIASES: Record<string, string[]> = {
     'db-mcp': [
         'sqlite',

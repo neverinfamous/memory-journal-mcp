@@ -228,7 +228,7 @@ function findBalancedDelimitedBlockEnd(
 function stripNestedPropBlocks(code: string): string {
     const out: string[] = []
     let i = 0
-    const propRe = /\b(?:auto_context|relationships|anchors)\s*:\s*([{[])/iy
+    const propRe = /\b(?:auto_context|autoContext|relationships|anchors)\s*:\s*([{[])/iy
     while (i < code.length) {
         propRe.lastIndex = i
         const m = propRe.exec(code)

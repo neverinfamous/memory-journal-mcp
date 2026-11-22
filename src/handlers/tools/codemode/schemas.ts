@@ -34,6 +34,12 @@ export const VERSION_AWARE_TOOL_NAMES = new Set([
 
 export const ExecuteCodeSchema = z.preprocess((val) => {
     if (typeof val === 'string') return { code: val }
+    if (typeof val === 'object' && val !== null && !Array.isArray(val)) {
+        const record = val as Record<string, unknown>
+        if (record['dry_run'] === undefined && record['dryRun'] !== undefined) {
+            return { ...record, dry_run: record['dryRun'] }
+        }
+    }
     return val
 }, z.object({
     code: z.string().optional(),

@@ -8,11 +8,15 @@ export type SortBy = 'timestamp' | 'importance' | 'blended'
 // Cursor Pagination Helpers
 // ============================================================================
 
-export function encodeCursor(payload: { t: string; id: number } | { offset: number }): string {
+export function encodeCursor(
+    payload: { t: string; id: number } | { offset: number; degraded?: true }
+): string {
     return Buffer.from(JSON.stringify(payload)).toString('base64')
 }
 
-export function decodeCursor(cursor: string): { t: string; id: number } | { offset: number } | null {
+export function decodeCursor(
+    cursor: string
+): { t: string; id: number } | { offset: number; degraded?: true } | null {
     try {
         const decoded = Buffer.from(cursor, 'base64').toString('utf8')
         const parsed: unknown = JSON.parse(decoded)
@@ -24,7 +28,9 @@ export function decodeCursor(cursor: string): { t: string; id: number } | { offs
             parsed.offset >= 0 &&
             parsed.offset <= Number.MAX_SAFE_INTEGER - 10000
         ) {
-            return { offset: parsed.offset }
+            return 'degraded' in parsed && parsed.degraded === true
+                ? { offset: parsed.offset, degraded: true }
+                : { offset: parsed.offset }
         }
         if (
             't' in parsed &&

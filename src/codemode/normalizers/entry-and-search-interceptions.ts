@@ -88,7 +88,8 @@ function applySearchQueryInterception(
 
 function applyExactMatchSearchInterception(
     methodName: string,
-    obj: Record<string, unknown>
+    obj: Record<string, unknown>,
+    options?: { deferTeamProjectCheck?: boolean }
 ): { obj: Record<string, unknown> } | { error: Record<string, unknown> } {
     if ('exact_match' in obj) {
         const isFuzzy = obj['exact_match'] === false
@@ -103,7 +104,13 @@ function applyExactMatchSearchInterception(
         obj['end_date'] = new Date().toISOString().split('T')[0]
     }
 
+    const hasConcreteWorkspace =
+        typeof obj['workspace_id'] === 'string' &&
+        obj['workspace_id'].trim() !== '' &&
+        obj['workspace_id'].trim() !== '*'
     if (
+        options?.deferTeamProjectCheck !== true &&
+        !hasConcreteWorkspace &&
         (methodName === 'team_search' || methodName === 'teamSearch' || methodName === 'team_search_by_date_range' || methodName === 'teamSearchByDateRange') &&
         obj['project_number'] == null
     ) {
@@ -168,7 +175,8 @@ function normalizeTwoArgUpdateEntry(
 
 export function applyEntryAndSearchInterceptions(
     methodName: string,
-    args: unknown[]
+    args: unknown[],
+    options?: { deferTeamProjectCheck?: boolean }
 ): { args: unknown[] } | { error: Record<string, unknown> } {
     if (SEARCH_METHODS.has(methodName) && args.length === 1 && isRecord(args[0])) {
         const searchRes = applySearchQueryInterception(methodName, { ...args[0] })
@@ -177,7 +185,7 @@ export function applyEntryAndSearchInterceptions(
     }
 
     if (EXACT_MATCH_SEARCH_METHODS.has(methodName) && args.length === 1 && isRecord(args[0])) {
-        const exactRes = applyExactMatchSearchInterception(methodName, { ...args[0] })
+        const exactRes = applyExactMatchSearchInterception(methodName, { ...args[0] }, options)
         if ('error' in exactRes) return exactRes
         args[0] = exactRes.obj
     }

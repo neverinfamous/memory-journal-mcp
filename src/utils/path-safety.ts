@@ -194,7 +194,7 @@ export function hasTrailingDotOrSpaceSegment(targetPath: string): boolean {
         const seg = segments[i]
         if (seg === undefined || seg === '' || seg === '.' || seg === '..') continue
         if (i === 0 && /^[A-Za-z]:$/.test(seg)) continue
-        if (/[. ]$/.test(seg)) return true
+        if (/[.\s]$/.test(seg)) return true
     }
     return false
 }

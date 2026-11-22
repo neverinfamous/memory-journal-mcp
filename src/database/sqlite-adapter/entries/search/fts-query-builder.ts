@@ -45,6 +45,7 @@ export interface SearchPosition {
     hasKeyset: boolean
     keysetT: string
     keysetId: number
+    degradedCursor: boolean
 }
 
 export function readSearchPosition(options?: { cursor?: string; offset?: number }): SearchPosition {
@@ -52,6 +53,7 @@ export function readSearchPosition(options?: { cursor?: string; offset?: number 
     let keysetT = ''
     let keysetId = 0
     let hasKeyset = false
+    let degradedCursor = false
     if (options?.cursor !== undefined && options.cursor !== '') {
         const decoded = decodeCursor(options.cursor)
         if (decoded === null) {
@@ -64,9 +66,10 @@ export function readSearchPosition(options?: { cursor?: string; offset?: number 
             keysetId = decoded.id
         } else {
             offset = decoded.offset
+            degradedCursor = decoded.degraded === true
         }
     }
-    return { offset, hasKeyset, keysetT, keysetId }
+    return { offset, hasKeyset, keysetT, keysetId, degradedCursor }
 }
 
 function buildBaseSelect(

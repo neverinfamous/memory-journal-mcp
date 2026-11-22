@@ -351,7 +351,9 @@ export function buildApiProxy(
     const invokeRpc = (g: string, m: string, args: unknown[]): Promise<unknown> => {
         try {
             const canonicalMethod = METHOD_ALIASES[g]?.[m] ?? m
-            const intercept = applyArgInterceptions(canonicalMethod, args)
+            const intercept = applyArgInterceptions(canonicalMethod, args, {
+                deferTeamProjectCheck: true,
+            })
             if ('error' in intercept) {
                 return wrapPromise(Promise.resolve(wrapResult(intercept.error)), m)
             }

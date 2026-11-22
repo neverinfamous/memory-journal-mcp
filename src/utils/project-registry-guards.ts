@@ -58,7 +58,7 @@ function isSystemOrRootDirectory(
     for (const candidate of [forwardResolved, forwardRaw, driveStripped]) {
         const trimmedSegs = candidate
             .split('/')
-            .map((s, i) => (i === 0 && /^[a-z]:$/.test(s) ? s : s.replace(/[. ]+$/, '')))
+            .map((s, i) => (i === 0 && /^[a-z]:$/.test(s) ? s : s.replace(/[.\s]+$/, '')))
             .join('/')
         for (const variant of trimmedSegs !== candidate ? [candidate, trimmedSegs] : [candidate]) {
             if (variant === '' || SYSTEM_DIR_EXACT.has(variant)) {
@@ -104,7 +104,7 @@ function hasUnsafeExistingAncestor(
  * filesystem roots, OS system directories, symlinks/non-directory ancestors, and `allowedRoots` escapes.
  */
 export function isValidProjectPath(p: string, allowedRoots?: string[]): boolean {
-    if (p === '' || p.includes('\0') || /^[\\/]{2}/.test(p.trimStart())) {
+    if (p === '' || /[\0\r\n\t]/.test(p) || /^[\\/]{2}/.test(p.trimStart())) {
         return false
     }
     if (

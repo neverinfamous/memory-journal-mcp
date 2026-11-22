@@ -228,6 +228,33 @@ export function enforceEntryOwnership(
 }
 
 /**
+ * Enforces Team RBAC for a single tool invocation using its metadata and target workspaces.
+ *
+ * @throws {AuthorizationError} if the caller lacks the required role for any target workspace.
+ */
+export function enforceTeamToolRbac(
+    context: ToolContext,
+    tool: ToolDefinition,
+    params: unknown,
+    defaultRequiredRole: TeamRole = 'member'
+): void {
+    let requiredRole: TeamRole = defaultRequiredRole
+    if (tool.capabilities?.requiresAdminScope) {
+        requiredRole = 'admin'
+    } else if (tool.annotations.readOnlyHint) {
+        requiredRole = 'viewer'
+    }
+    const author = getCallerIdentity()
+    if (GLOBAL_TEAM_TOOLS.has(tool.name)) {
+        enforceTeamRbac(context, author, requiredRole, '*')
+        return
+    }
+    for (const ws of collectAllTargetWorkspaces(params, context.config)) {
+        enforceTeamRbac(context, author, requiredRole, ws)
+    }
+}
+
+/**
  * Wraps tool handlers to enforce Team RBAC automatically.
  * Automatically infers 'viewer' for read-only tools, and uses defaultRequiredRole for others.
  * Tools explicitly requiring admin scope will demand 'admin'.
@@ -235,30 +262,10 @@ export function enforceEntryOwnership(
 export function wrapWithRbac(context: ToolContext, tools: ToolDefinition[], defaultRequiredRole: TeamRole = 'member'): ToolDefinition[] {
     return tools.map(tool => {
         const originalHandler = tool.handler
-        
-        let requiredRole: TeamRole = defaultRequiredRole
-        if (tool.capabilities?.requiresAdminScope) {
-            requiredRole = 'admin'
-        } else if (tool.annotations.readOnlyHint) {
-            requiredRole = 'viewer'
-        }
-
         tool.handler = async (params: unknown) => {
             try {
-                // Determine caller identity
-                const author = getCallerIdentity()
-                const isGlobal = GLOBAL_TEAM_TOOLS.has(tool.name)
-                if (isGlobal) {
-                    enforceTeamRbac(context, author, requiredRole, '*')
-                } else {
-                    for (const ws of collectAllTargetWorkspaces(params, context.config)) {
-                        enforceTeamRbac(context, author, requiredRole, ws)
-                    }
-                }
-
-                // Execute original handler
-                const result = await originalHandler(params)
-                return result
+                enforceTeamToolRbac(context, tool, params, defaultRequiredRole)
+                return await originalHandler(params)
             } catch (err) {
                 return formatHandlerError(err)
             }

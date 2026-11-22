@@ -6,6 +6,7 @@
 import type { GitHubIntegration } from '../../../github/github-integration/index.js'
 import { sanitizeErrorMessageForResponse } from '../../../utils/error-helpers.js'
 import { fenceUntrustedInline } from '../../../handlers/resources/uri-and-fencing.js'
+import { fenceKanbanStatus } from './fencing-helpers.js'
 
 export interface IssueProjectResult {
     projectNumber: number
@@ -33,7 +34,7 @@ async function applyInitialStatus(
             .map((o) => fenceUntrustedInline(o.name))
             .join(', ')
         return {
-            status: initialStatus,
+            status: fenceKanbanStatus(initialStatus),
             set: false,
             error: `Status "${safeStatus}" not found. Available: ${available}`,
         }
@@ -45,10 +46,10 @@ async function applyInitialStatus(
         statusOption.id
     )
     if (moveResult.success) {
-        return { status: statusOption.name, set: true }
+        return { status: fenceKanbanStatus(statusOption.name), set: true }
     }
     return {
-        status: initialStatus,
+        status: fenceKanbanStatus(initialStatus),
         set: false,
         error:
             moveResult.error !== undefined

@@ -7,18 +7,20 @@ import { RelationshipOutputSchema, relaxedNumber, StrictProjectNumberSchema } fr
 import { ErrorFieldsMixin } from './error-fields-mixin.js'
 import { parsePositiveProjectNumber } from '../../utils/safe-positive-int.js'
 
-/** Coerce relaxedNumber string input to number; blank -> undefined, malformed/unsafe -> NaN (rejected downstream). */
+/** Coerce relaxedNumber string input to number; `""` -> undefined, whitespace-only/malformed/unsafe -> NaN (rejected downstream). */
 function coerceRelaxed(v: number | string | undefined): number | undefined {
     if (v === undefined || typeof v === 'number') return v
+    if (v === '') return undefined
     const trimmed = v.trim()
-    if (trimmed === '') return undefined
+    if (trimmed === '') return Number.NaN
     if (!/^-?(?:0|[1-9]\d*)$/.test(trimmed)) return Number.NaN
     const parsed = Number(trimmed)
     return Number.isSafeInteger(parsed) && String(parsed) === trimmed ? parsed : Number.NaN
 }
 
 function coerceCanonicalId(v: number | string | undefined): number | undefined {
-    if (v === undefined || (typeof v === 'string' && v.trim() === '')) return undefined
+    if (v === undefined || v === '') return undefined
+    if (typeof v === 'string' && v.trim() === '') return Number.NaN
     return parsePositiveProjectNumber(v) ?? Number.NaN
 }
 
@@ -78,6 +80,7 @@ export const LinkEntriesSchemaMcp = z
                     ? 'blocked_by'
                     : rawRel
         return {
+            ...data,
             from_entry_id: coerceCanonicalId(data.from_entry_id ?? data.from_id ?? data.from ?? data.source_id),
             to_entry_id: coerceCanonicalId(data.to_entry_id ?? data.to_id ?? data.to ?? data.target_id),
             relationship_type: normalizedRel,
@@ -169,7 +172,7 @@ export const VisualizeInputSchemaMcp = z.object({
         const queryVal = data.q ?? data.text ?? data.message ?? data.description;
         if (queryVal) extractedTags = [queryVal];
     }
-    const rawLimit = data.keep ?? data.limit
+    const rawLimit = data.limit ?? data.keep
     const numLimit = coerceRelaxed(rawLimit)
     const clampedLimit =
         numLimit === undefined
@@ -181,7 +184,7 @@ export const VisualizeInputSchemaMcp = z.object({
         ...data,
         entry_id: coerceCanonicalId(data.entry_id ?? data.id),
         relationship_type: data.relationship_type ?? data.type ?? data.rel,
-        depth: coerceRelaxed(data.path ?? data.depth),
+        depth: coerceRelaxed(data.depth ?? data.path),
         project_number: coerceCanonicalId(data.project_number),
         limit: clampedLimit,
         tags: extractedTags,

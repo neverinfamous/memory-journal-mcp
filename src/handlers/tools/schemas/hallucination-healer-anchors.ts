@@ -41,7 +41,7 @@ function normalizeAnchorContainer(obj: Record<string, unknown>): boolean {
     let modified = false
     for (const aliasKey of ['anchor', 'file_anchors', 'fileAnchors'] as const) {
         if (aliasKey in obj) {
-            if (!('anchors' in obj) && obj[aliasKey] !== undefined) {
+            if (obj['anchors'] === undefined && obj[aliasKey] !== undefined) {
                 obj['anchors'] = obj[aliasKey]
             }
             Reflect.deleteProperty(obj, aliasKey)

@@ -135,14 +135,14 @@ async function executeImportExternal(
     const rejectedExternal = wildcardWriteRejection(input.workspace_id)
     if (rejectedExternal !== undefined) return rejectedExternal
     const { wsId, effectiveProjectNum } = resolveImportScope(input, context.config)
+    if (effectiveProjectNum !== undefined && effectiveProjectNum <= 0) {
+        throw new ValidationError('project_number must be a positive integer')
+    }
     const allowedRoots = context.config?.allowedIoRoots ?? []
 
     await sendProgress(progress, 0, 3, 'Reading files...')
     await sendProgress(progress, 1, 3, 'Converting external formats...')
     const { parsedFiles, errors, emptySkipped } = await readAndConvertExternalFiles(input, allowedRoots)
-    if (effectiveProjectNum !== undefined && effectiveProjectNum <= 0) {
-        throw new ValidationError('project_number must be a positive integer')
-    }
 
     await sendProgress(progress, 2, 3, 'Importing entries...')
     const result = await processImportBatch(

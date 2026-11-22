@@ -217,12 +217,21 @@ function findNextCodePrepareIdx(
     return -1
 }
 
+const PREPARED_PREFIX_CONTROL_FLOW_RE =
+    /\b(?:if|else|for|while|do|switch|case|return|throw|try|catch|finally|function|class)\b|=>|&&|\|\||\?\?|[?{}]/
+
+function hasControlFlowBeforePrepare(code: string, prepIdx: number): boolean {
+    if (prepIdx <= 0) return false
+    return PREPARED_PREFIX_CONTROL_FLOW_RE.test(stripCommentsAndStrings(code.slice(0, prepIdx)))
+}
+
 function extractPreparedRunArgsAt(
     code: string,
     spans: ReturnType<typeof buildNonCodeSpans>,
     prepIdx: number,
     prep: { sql: string; afterPrepareCloseIdx: number }
 ): { rawSql: string; rawRunArgs: string } | null {
+    if (hasControlFlowBeforePrepare(code, prepIdx)) return null
     const tail = code.slice(prep.afterPrepareCloseIdx)
     const chainedExec = /^\s*\.(?:run|get|all)\s*\(/.exec(tail)
     if (chainedExec !== null) {

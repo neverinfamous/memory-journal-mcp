@@ -126,7 +126,13 @@ export class LegacySSEServerTransport implements Transport {
         }
 
         const body = req.body as unknown
-        if (body === undefined || body === null || typeof body !== 'object') {
+        if (
+            body === undefined ||
+            body === null ||
+            typeof body !== 'object' ||
+            Array.isArray(body) ||
+            typeof Reflect.get(body, 'jsonrpc') !== 'string'
+        ) {
             res.status(400).json({ error: 'Invalid JSON body' })
             return
         }

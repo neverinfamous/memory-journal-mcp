@@ -244,9 +244,9 @@ export class NativeConnectionManager implements IDatabaseConnection {
     }
 
     applyTeamSchema(): void {
-        this.teamSchemaApplied = true
         const db = this.ensureDb()
         MigrationManager.applyTeamMigrations(db)
+        this.teamSchemaApplied = true
     }
 
 

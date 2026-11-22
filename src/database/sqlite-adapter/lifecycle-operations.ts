@@ -1,6 +1,6 @@
 import type { NativeConnectionManager } from './native-connection.js'
 import { isMissingTableError } from './schema-errors.js'
-import { bucketInParams, SCOPED_IN_PARAM_BUCKETS } from './row-helpers.js'
+import { bucketInParams, runImmediateWriteTx, SCOPED_IN_PARAM_BUCKETS } from './row-helpers.js'
 import {
     buildCandidateQueries,
     type CandidateQueries,
@@ -158,21 +158,22 @@ function runLifecycleTx(
 ): LifecycleResult {
     const deletedAt = new Date().toISOString()
 
-    const runTx = db.transaction((): LifecycleResult => {
-        const hardDeletedCount =
-            options.hardDeleteOlderThanDays > 0
-                ? executeHardDeleteStep(db, queries.hardDelete)
-                : 0
-        const prunedCount =
-            options.pruneOlderThanDays > 0
-                ? executePruneStep(db, queries.prune, queries.cte, queries.cteParams, deletedAt)
-                : 0
-        const archivedCount =
-            options.archiveOlderThanDays > 0
-                ? executeArchiveStep(db, queries.archive, queries.cte, queries.cteParams)
-                : 0
-        return { archivedCount, prunedCount, hardDeletedCount }
-    })
+    const runTx = (): LifecycleResult =>
+        runImmediateWriteTx(db, (): LifecycleResult => {
+            const hardDeletedCount =
+                options.hardDeleteOlderThanDays > 0
+                    ? executeHardDeleteStep(db, queries.hardDelete)
+                    : 0
+            const prunedCount =
+                options.pruneOlderThanDays > 0
+                    ? executePruneStep(db, queries.prune, queries.cte, queries.cteParams, deletedAt)
+                    : 0
+            const archivedCount =
+                options.archiveOlderThanDays > 0
+                    ? executeArchiveStep(db, queries.archive, queries.cte, queries.cteParams)
+                    : 0
+            return { archivedCount, prunedCount, hardDeletedCount }
+        })
 
     try {
         return runTx()

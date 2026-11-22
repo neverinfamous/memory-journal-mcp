@@ -17,6 +17,7 @@ import { HealthOperations } from './health-operations.js'
 import { LifecycleOperations } from './lifecycle-operations.js'
 import { InsightsOperations } from './insights-operations.js'
 import { VectorOperations } from './vector-operations.js'
+import { runImmediateWriteTx } from './row-helpers.js'
 
 export class AdapterBaseDelegates {
     protected connection: NativeConnectionManager
@@ -71,7 +72,7 @@ export class AdapterBaseDelegates {
     }
 
     executeInTransaction<T>(cb: () => T): T {
-        return this.connection.getNativeDb().transaction(cb)()
+        return runImmediateWriteTx(this.connection.getNativeDb(), cb)
     }
 
     // Team Membership (RBAC)

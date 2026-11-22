@@ -17,8 +17,8 @@ const createAliasPreprocessor =
 
         if (target === 'add' || target === 'remove') {
             for (const key of aliasNames) {
-                if (key in obj) {
-                    if (!('alias' in obj)) obj['alias'] = obj[key]
+                if (obj[key] !== undefined) {
+                    if (obj['alias'] === undefined) obj['alias'] = obj[key]
                     Reflect.deleteProperty(obj, key)
                     modified = true
                     break
@@ -27,8 +27,8 @@ const createAliasPreprocessor =
         }
         if (target === 'add' || target === 'list' || target === 'consolidate') {
             for (const key of canonicalNames) {
-                if (key in obj) {
-                    if (!('canonical_author' in obj)) obj['canonical_author'] = obj[key]
+                if (obj[key] !== undefined) {
+                    if (obj['canonical_author'] === undefined) obj['canonical_author'] = obj[key]
                     Reflect.deleteProperty(obj, key)
                     modified = true
                     break
@@ -36,20 +36,22 @@ const createAliasPreprocessor =
             }
         }
         for (const key of searchNames) {
-            if (!(key in obj)) continue
+            if (obj[key] === undefined) continue
             const targetKey =
                 target === 'resolve'
                     ? 'author'
                     : target === 'remove'
                       ? 'alias'
                       : 'canonical_author'
-            if (!(targetKey in obj)) obj[targetKey] = obj[key]
+            if (obj[targetKey] === undefined) obj[targetKey] = obj[key]
             Reflect.deleteProperty(obj, key)
             modified = true
             break
         }
         if ((target === 'add' || target === 'list' || target === 'consolidate') && 'author' in obj) {
-            if (!('canonical_author' in obj)) obj['canonical_author'] = obj['author']
+            if (obj['canonical_author'] === undefined && obj['author'] !== undefined) {
+                obj['canonical_author'] = obj['author']
+            }
             Reflect.deleteProperty(obj, 'author')
             modified = true
         }

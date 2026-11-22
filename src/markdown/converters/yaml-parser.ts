@@ -53,22 +53,22 @@ function assignFrontmatterKey(
 function extractFrontmatterHeaderBounds(
     content: string
 ): { fmLines: string[]; body: string } | null {
-    const firstNl = content.indexOf('\n')
+    const normalized = content.replace(/\r\n?/g, '\n')
+    const firstNl = normalized.indexOf('\n')
     if (firstNl === -1) return null
-    const firstLine = content.slice(0, firstNl).replace(/\r$/, '').trim()
+    const firstLine = normalized.slice(0, firstNl).trim()
     if (firstLine !== '---') return null
 
     const fmLines: string[] = []
     let pos = firstNl + 1
-    while (pos < content.length && fmLines.length < MAX_FRONTMATTER_LINES && pos <= MAX_FRONTMATTER_CONTENT_LENGTH) {
-        const nextNl = content.indexOf('\n', pos)
-        const rawLine = nextNl === -1 ? content.slice(pos) : content.slice(pos, nextNl)
-        const cleanLine = rawLine.replace(/\r$/, '')
+    while (pos < normalized.length && fmLines.length < MAX_FRONTMATTER_LINES && pos <= MAX_FRONTMATTER_CONTENT_LENGTH) {
+        const nextNl = normalized.indexOf('\n', pos)
+        const cleanLine = nextNl === -1 ? normalized.slice(pos) : normalized.slice(pos, nextNl)
         if (cleanLine.trim() === '---') {
-            const bodyStart = nextNl === -1 ? content.length : nextNl + 1
+            const bodyStart = nextNl === -1 ? normalized.length : nextNl + 1
             return {
                 fmLines,
-                body: content.slice(bodyStart).replace(/^\r?\n/, ''),
+                body: normalized.slice(bodyStart).replace(/^\n/, ''),
             }
         }
         fmLines.push(cleanLine)
@@ -146,8 +146,8 @@ export function parseYamlFrontmatter(content: string): YamlParseResult {
 
 function stripQuotes(str: string): string {
     if (
-        (str.startsWith('"') && str.endsWith('"')) ||
-        (str.startsWith("'") && str.endsWith("'"))
+        str.length >= 2 &&
+        ((str.startsWith('"') && str.endsWith('"')) || (str.startsWith("'") && str.endsWith("'")))
     ) {
         return str.substring(1, str.length - 1)
     }

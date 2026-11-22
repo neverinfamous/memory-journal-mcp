@@ -3,7 +3,7 @@ import { ValidationError } from '../../../types/errors.js'
 import type { CreateEntryInput } from '../../core/interfaces.js'
 import type { EntriesSharedContext } from './shared.js'
 import { effectiveWorkspace } from '../../workspace-scope.js'
-import { bucketInParams, SCOPED_IN_PARAM_BUCKETS } from '../row-helpers.js'
+import { bucketInParams, runImmediateWriteTx, SCOPED_IN_PARAM_BUCKETS } from '../row-helpers.js'
 import { insertAnchors } from './anchors.js'
 import { getEntryById, getEntriesByIds } from './crud-read.js'
 import { normalizeTag, performUpdateEntry } from './crud-update.js'
@@ -36,7 +36,7 @@ function runBatchTransaction(
     body: () => void
 ): { key: number; error: Error } | null {
     try {
-        db.transaction(body)()
+        runImmediateWriteTx(db, body)
         return null
     } catch (err: unknown) {
         if (err instanceof BatchTransactionError) {
@@ -339,18 +339,16 @@ export function deleteEntries(
     const deleted: number[] = []
     const errors: { id: number; error: Error }[] = []
 
-    const txn = db.transaction(() => {
-        const existingIds = findExistingIdsForDelete(db, uniqueIds, permanent, scopeId)
-        notFound = uniqueIds.filter((id) => !existingIds.has(id))
-        const toDelete = uniqueIds.filter((id) => existingIds.has(id))
-        if (toDelete.length === 0) return
-
-        executeChunkedDelete(db, toDelete, permanent, scopeId)
-        deleted.push(...toDelete)
-    })
-
     try {
-        txn()
+        runImmediateWriteTx(db, () => {
+            const existingIds = findExistingIdsForDelete(db, uniqueIds, permanent, scopeId)
+            notFound = uniqueIds.filter((id) => !existingIds.has(id))
+            const toDelete = uniqueIds.filter((id) => existingIds.has(id))
+            if (toDelete.length === 0) return
+
+            executeChunkedDelete(db, toDelete, permanent, scopeId)
+            deleted.push(...toDelete)
+        })
     } catch (err: unknown) {
         // Only plain DB errors can surface here (no per-item BatchTransactionError is thrown).
         errors.push({ id: -1, error: toError(err) })

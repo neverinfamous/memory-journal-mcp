@@ -312,12 +312,17 @@ export function resolveToolCallAuditScope(
         return uriScope
     }
     const rec = args as Record<string, unknown>
-    const hasExplicitWs =
-        typeof (rec['workspace_id'] ?? rec['workspaceId'] ?? rec['workspace']) === 'string' &&
-        String(rec['workspace_id'] ?? rec['workspaceId'] ?? rec['workspace']).trim() !== ''
-    const hasExplicitProj = (rec['project_number'] ?? rec['projectNumber']) !== undefined
+    const rawWsArg = [rec['workspace_id'], rec['workspaceId'], rec['workspace']].find(
+        (v): v is string => typeof v === 'string' && v.trim() !== ''
+    )
+    const hasExplicitWs = rawWsArg !== undefined
+    const hasExplicitWildcard = rawWsArg?.trim() === '*'
+    const rawProjArg = [rec['project_number'], rec['projectNumber']].find(
+        (v) => v !== undefined && !(typeof v === 'string' && v.trim() === '')
+    )
+    const hasExplicitProj = rawProjArg !== undefined
     if (!hasExplicitWs && !hasExplicitProj) return uriScope
-    const argScope = extractAuditScopeFromArgs(args, reqCtx, runtime)
+    const argScope = extractAuditScopeFromArgs(args, reqCtx, runtime, true)
     return {
         ...(hasExplicitWs
             ? argScope.workspaceId !== undefined
@@ -330,7 +335,7 @@ export function resolveToolCallAuditScope(
             ? argScope.projectNumber !== undefined
                 ? { projectNumber: argScope.projectNumber }
                 : {}
-            : uriScope.projectNumber !== undefined
+            : !hasExplicitWildcard && uriScope.projectNumber !== undefined
               ? { projectNumber: uriScope.projectNumber }
               : {}),
     }

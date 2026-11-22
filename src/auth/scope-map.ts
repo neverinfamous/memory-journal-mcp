@@ -123,7 +123,13 @@ export function canonicalizeMemoryResourceUri(rawUri: string): string {
         } catch {
             // Keep raw pathname if percent-encoding is malformed
         }
-        const normalizedHost = decodeURIComponent(parsed.hostname).toLowerCase()
+        let decodedHost = parsed.hostname
+        try {
+            decodedHost = decodeURIComponent(parsed.hostname)
+        } catch {
+            // Keep raw hostname if percent-encoding is malformed
+        }
+        const normalizedHost = decodedHost.toLowerCase()
         const normalizedSegments: string[] = []
         for (const seg of decodedPath.split('/')) {
             if (seg === '' || seg === '.') continue
@@ -151,7 +157,7 @@ export function normalizePromptAliasForScope(name: string): string {
 
 /** Resource URIs that require a non-READ scope. */
 function scopeForResourceUri(uri: string): StandardScope {
-    const baseUri = canonicalizeMemoryResourceUri(uri)
+    const baseUri = canonicalizeMemoryResourceUri(uri).toLowerCase()
     if (
         baseUri === 'memory://team' ||
         baseUri.startsWith('memory://team/') ||

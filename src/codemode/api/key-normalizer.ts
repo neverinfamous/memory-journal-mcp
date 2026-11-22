@@ -49,15 +49,21 @@ function healArchitectureAndDecisionType(
  * Convert camelCase object keys to snake_case and apply context-aware alias mapping.
  */
 export function convertKeysToSnakeCase(obj: Record<string, unknown>, methodName?: string): Record<string, unknown> {
-    if ('entry' in obj && isRecord(obj['entry'])) {
-        const nested = obj['entry']
-        const cloned = { ...obj }
-        delete cloned['entry']
+    const unwrapNestedRecord = (container: Record<string, unknown>, containerKey: 'entry' | 'filter'): Record<string, unknown> => {
+        const nested = container[containerKey]
+        if (!isRecord(nested)) return container
+        const cloned = { ...container }
+        Reflect.deleteProperty(cloned, containerKey)
         for (const [k, v] of Object.entries(nested)) {
-            if (!(k in cloned) && v !== undefined) cloned[k] = v
+            if (FORBIDDEN_KEYS.has(k)) continue
+            if ((!Object.hasOwn(cloned, k) || cloned[k] === undefined) && v !== undefined) {
+                cloned[k] = v
+            }
         }
-        obj = cloned
+        return cloned
     }
+    if (isRecord(obj['entry'])) obj = unwrapNestedRecord(obj, 'entry')
+    if (isRecord(obj['filter'])) obj = unwrapNestedRecord(obj, 'filter')
 
     const methodLower = methodName?.toLowerCase()
     const isLinkMethod = methodName !== undefined && hasMethodToken(methodName, 'link')
@@ -277,7 +283,7 @@ function resolveContentLikeKey(startKey: string, ctx: KeyContext): string {
     if (CONTENT_LIKE_KEYS.has(snakeKey)) {
         if (isGithubTool) {
             if (snakeKey === 'name') {
-                if (!('title' in obj) && !('title' in result)) snakeKey = 'title'
+                if (!hasDefinedKey(obj, 'title') && !hasDefinedKey(result, 'title')) snakeKey = 'title'
             } else if (
                 snakeKey === 'description' &&
                 methodName !== undefined &&
@@ -289,8 +295,8 @@ function resolveContentLikeKey(startKey: string, ctx: KeyContext): string {
                 hasMethodToken(methodName, 'close') &&
                 (snakeKey === 'message' || snakeKey === 'msg' || snakeKey === 'content')
             ) {
-                if (!('comment' in obj) && !('comment' in result)) snakeKey = 'comment'
-            } else if (!('body' in obj) && !('body' in result) && snakeKey !== 'comment') {
+                if (!hasDefinedKey(obj, 'comment') && !hasDefinedKey(result, 'comment')) snakeKey = 'comment'
+            } else if (!hasDefinedKey(obj, 'body') && !hasDefinedKey(result, 'body') && snakeKey !== 'comment') {
                 snakeKey = 'body'
             }
         } else if (
@@ -301,7 +307,7 @@ function resolveContentLikeKey(startKey: string, ctx: KeyContext): string {
         ) {
             // [H6] Only entry mutations redirect name/message/... into `content`; project,
             // milestone, member, or config mutations keep their own `name`/`description` keys.
-            if (!('content' in obj) && !('content' in result)) {
+            if (!hasDefinedKey(obj, 'content') && !hasDefinedKey(result, 'content')) {
                 snakeKey = 'content'
             } else if (snakeKey === 'name' || snakeKey === 'heading' || snakeKey === 'subject') {
                 snakeKey = 'title'

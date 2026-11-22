@@ -278,8 +278,9 @@ export function getProjectReadTools(
                 idempotentHint: true,
                 openWorldHint: false,
             },
-            handler: (): Promise<Record<string, unknown>> => {
+            handler: (params: unknown): Promise<Record<string, unknown>> => {
                 try {
+                    ListProjectsSchemaMcp.parse(params ?? {})
                     const registry = resolveLiveRegistry(context, deps.loadConfig)
                     const items = formatListItems(registry)
                     return Promise.resolve({ success: true, projects: registry, items, data: items })

@@ -72,7 +72,9 @@ function healMetadataAndContextFields(obj: Record<string, unknown>): boolean {
 
     for (const extraKey of ['date', 'created_at', 'updated_at', 'type', 'status']) {
         if (extraKey in obj && extraKey !== 'entry_type') {
-            if (extraKey === 'type' && !('entry_type' in obj)) obj['entry_type'] = obj['type']
+            if (extraKey === 'type' && obj['entry_type'] === undefined && obj['type'] !== undefined) {
+                obj['entry_type'] = obj['type']
+            }
             Reflect.deleteProperty(obj, extraKey)
             modified = true
         }

@@ -32,10 +32,13 @@ const NON_RETURNABLE =
 const CONTINUATION_START =
     /^(?:\.(?!\.\.)|\?\.|&&|\|\||\?\?|[?:,*%<>]|==|!=|&|\||\^|(?:in|instanceof)(?![A-Za-z0-9_$]))/
 const CONTINUATION_PREV_TOKENS = new Set([
-    '=', ',', '.', '?.', '=>', '?', ':', '+', '-', '*', '/', '%', '**',
+    '=', ',', '.', '?.', '=>', '?', ':', '+', '-', '*', '/', '%', '**', '!', '~',
     '+=', '-=', '*=', '/=', '%=', '??=', '&&=', '||=', '&&', '||', '??',
     '&', '|', '^', '==', '!=', '===', '!==', '<', '>', '<=', '>=', '<<', '>>', '>>>',
     'in', 'instanceof', 'return', 'await', 'throw', 'typeof', 'void', 'delete', 'new', 'case', 'extends', 'of',
+])
+const STMT_START_PREV_TOKENS = new Set([
+    '', ';', ':label', '{', '}block', ')ctrl', 'else', 'do', 'try', 'finally', 'export', 'break', 'continue', 'debugger',
 ])
 
 /**
@@ -84,7 +87,11 @@ function isBoundaryIdentStart(trimmed: string, i: number, ch: string): boolean {
     return cp > 0x7f && /[\p{ID_Start}\p{ID_Continue}$_]/u.test(String.fromCodePoint(cp))
 }
 
-function nextNonWsStartsContinuation(trimmed: string, start: number): boolean {
+function nextNonWsStartsContinuation(
+    trimmed: string,
+    start: number,
+    allowCallOrIndex = false
+): boolean {
     let lineOnlyWs = false
     for (let j = start; j < trimmed.length; j++) {
         const ch = trimmed[j] ?? ''
@@ -99,6 +106,7 @@ function nextNonWsStartsContinuation(trimmed: string, start: number): boolean {
             j = comment.next - 1
             continue
         }
+        if (allowCallOrIndex && (ch === '(' || ch === '[' || ch === '`')) return true
         const next = trimmed[j + 1] ?? ''
         if (ch === '.' && !(next === '.' && trimmed[j + 2] === '.')) return true
         if (ch === '?' && (next === '.' || next === '?')) return true
@@ -149,11 +157,12 @@ function stepBoundaryPunctuationOrWs(
     if (ch === '{' || ch === '[' || ch === '(') s.depth++
     else if (ch === '}' || ch === ']' || ch === ')') s.depth--
     if (s.depth === 0 && s.delim.templateBraces.length === 0) {
+        const allowCallOrIndex = !STMT_START_PREV_TOKENS.has(s.prevToken) && !s.delim.canAsiRegex
         if (
             ch === ';' ||
             (isJsLineTerminator(ch) &&
                 !CONTINUATION_PREV_TOKENS.has(s.prevToken) &&
-                !nextNonWsStartsContinuation(trimmed, i + 1))
+                !nextNonWsStartsContinuation(trimmed, i + 1, allowCallOrIndex))
         ) {
             s.lastBoundary = i
         }
@@ -195,12 +204,13 @@ function findLastStatementBoundary(trimmed: string): number {
         const comment = skipLineOrBlockComment(trimmed, i, s.lineOnlyWsOrComments)
         if (comment !== null) {
             if (comment.hasNewline === true) {
+                const allowCallOrIndex = !STMT_START_PREV_TOKENS.has(s.prevToken) && !s.delim.canAsiRegex
                 if (
                     comment.next < trimmed.length &&
                     s.depth === 0 &&
                     s.delim.templateBraces.length === 0 &&
                     !CONTINUATION_PREV_TOKENS.has(s.prevToken) &&
-                    !nextNonWsStartsContinuation(trimmed, comment.next)
+                    !nextNonWsStartsContinuation(trimmed, comment.next, allowCallOrIndex)
                 ) {
                     s.lastBoundary = comment.next - 1
                 }

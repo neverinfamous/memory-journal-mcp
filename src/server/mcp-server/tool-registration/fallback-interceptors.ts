@@ -57,7 +57,7 @@ export function resolveKnownFallbackAuditName(
             ? matchingPrompt.name
             : 'get_prompt'
     }
-    if (requestedTool.startsWith('memory://')) {
+    if (/^memory:\/\//i.test(requestedTool)) {
         return requestedTool
     }
     if (DUMMY_HEALING_TOOL_NAMES.has(requestedTool)) {
@@ -153,7 +153,7 @@ export async function runFallbackWithInterceptors(
         formatted = await fallback()
         return structuredContentObject(formatted) ?? formatted
     }
-    const metricToolName = requestedTool.startsWith('memory://') ? 'read_resource' : requestedTool
+    const metricToolName = /^memory:\/\//i.test(requestedTool) ? 'read_resource' : requestedTool
     const metricsWrapped = wrapWithMetrics(metricToolName, inner, runtime.metrics)
     const interceptor = runtime.auditInterceptor
 

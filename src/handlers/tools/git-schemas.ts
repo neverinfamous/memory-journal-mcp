@@ -8,13 +8,15 @@ function coerceRelaxed(v: number | string | undefined): number | undefined {
     if (typeof v === 'number') {
         return Number.isSafeInteger(v) && v > 0 ? v : Number.NaN
     }
+    if (v === '') return undefined
     const trimmed = v.trim()
-    if (trimmed === '') return undefined
+    if (trimmed === '') return Number.NaN
     return parseCanonicalPositiveInt(trimmed) ?? Number.NaN
 }
 
 function coerceCanonicalProject(v: number | string | undefined): number | undefined {
-    if (v === undefined || (typeof v === 'string' && v.trim() === '')) return undefined
+    if (v === undefined || v === '') return undefined
+    if (typeof v === 'string' && v.trim() === '') return Number.NaN
     return parsePositiveProjectNumber(v) ?? Number.NaN
 }
 

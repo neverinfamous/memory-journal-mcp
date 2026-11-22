@@ -365,7 +365,7 @@ export class ConfigManager extends EventEmitter {
             const fileFilter =
                 typeof rawFilter === 'string' && rawFilter.trim() !== '' ? rawFilter : undefined
             if (fileFilter !== undefined) {
-                updates.rawToolFilter = fileFilter
+                if (fileFilter !== this.config.rawToolFilter) updates.rawToolFilter = fileFilter
                 this.toolFilterFromFile = true
             } else if (this.toolFilterFromFile) {
                 updates.rawToolFilter = this.cliEnvBaseline.rawToolFilter
@@ -382,17 +382,14 @@ export class ConfigManager extends EventEmitter {
         parsed: Record<string, unknown>,
         updates: Partial<DynamicConfig>
     ): void {
-        if (
-            'codemodeInternalFullAccess' in parsed &&
-            parsed['codemodeInternalFullAccess'] !== null &&
-            parsed['codemodeInternalFullAccess'] !== undefined
-        ) {
-            const requested =
-                typeof parsed['codemodeInternalFullAccess'] === 'boolean'
-                    ? parsed['codemodeInternalFullAccess']
-                    : undefined
+        const rawVal = parsed['codemodeInternalFullAccess']
+        if ('codemodeInternalFullAccess' in parsed && rawVal !== null && rawVal !== undefined) {
+            const requested = typeof rawVal === 'boolean' ? rawVal : undefined
             if (requested !== undefined) this.codemodeFromFile = true
-            if (requested === false || (requested === true && this.initialCodemodeFullAccess)) {
+            if (
+                (requested === false || (requested === true && this.initialCodemodeFullAccess)) &&
+                requested !== this.config.codemodeInternalFullAccess
+            ) {
                 updates.codemodeInternalFullAccess = requested
             }
         } else {

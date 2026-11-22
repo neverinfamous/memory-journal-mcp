@@ -137,25 +137,62 @@ function readOperation(target: Record<string, unknown>): string {
     return ''
 }
 
+const SUPPORTED_READ_BY_ID_OPS = new Set(['', 'get', 'read', 'get_entry', 'get_entry_by_id', 'team_get_entry_by_id'])
+const SUPPORTED_ENTRY_MUTATION_OPS = new Set([
+    'create_entry',
+    'add_entry',
+    'create',
+    'update_entry',
+    'update',
+    'team_create_entry',
+    'team_update_entry',
+])
+
+function formatScopedMutationOp(
+    fnPath: string,
+    entryId: number | string,
+    target: Record<string, unknown>,
+    original: Record<string, unknown>
+): string {
+    const params: Record<string, unknown> = { entry_id: entryId }
+    const scope = resolveCompatibleInheritedScope(target, original)
+    if (scope.workspaceId !== undefined) params['workspace_id'] = scope.workspaceId
+    if (scope.projectNumber !== undefined) params['project_number'] = scope.projectNumber
+    if (fnPath === 'mj.core.getEntryById' && scope.workspaceId === undefined && scope.projectNumber === undefined) {
+        return `return await mj.core.getEntryById({ entry_id: ${JSON.stringify(entryId)} });`
+    }
+    return `return await ${fnPath}(${JSON.stringify(params)});`
+}
+
 function recoverEntryMutation(
     original: Record<string, unknown>,
     target: Record<string, unknown>,
 ): string | null {
     const { entryId, invalidExplicitEntryId } = readEntryIdField(target)
     const explicitIdForMutation = entryId ?? invalidExplicitEntryId
-    const op = readOperation(target)
-    if ((op === 'delete' || op === 'delete_entry') && explicitIdForMutation !== undefined) {
-        const deleteParams: Record<string, unknown> = { entry_id: explicitIdForMutation }
-        const scope = resolveCompatibleInheritedScope(target, original)
-        if (scope.workspaceId !== undefined) deleteParams['workspace_id'] = scope.workspaceId
-        if (scope.projectNumber !== undefined) deleteParams['project_number'] = scope.projectNumber
-        return `return await mj.admin.deleteEntry(${JSON.stringify(deleteParams)});`
+    const op = readOperation(target).trim().toLowerCase()
+    if (explicitIdForMutation !== undefined) {
+        if (op === 'delete' || op === 'delete_entry') {
+            return formatScopedMutationOp('mj.admin.deleteEntry', explicitIdForMutation, target, original)
+        }
+        if (op === 'team_delete_entry') {
+            return formatScopedMutationOp('mj.team.teamDeleteEntry', explicitIdForMutation, target, original)
+        }
+        if (op === 'restore' || op === 'restore_entry') {
+            return formatScopedMutationOp('mj.admin.restoreEntry', explicitIdForMutation, target, original)
+        }
+        if (op === 'team_restore_entry') {
+            return formatScopedMutationOp('mj.team.teamRestoreEntry', explicitIdForMutation, target, original)
+        }
     }
     const signals = readPayloadSignals(target, op)
     if (!hasJournalFields(signals) && explicitIdForMutation !== undefined) {
-        return formatGetEntryById(explicitIdForMutation, target, original)
+        if (!SUPPORTED_READ_BY_ID_OPS.has(op)) return null
+        const readFn = op === 'team_get_entry_by_id' ? 'mj.team.teamGetEntryById' : 'mj.core.getEntryById'
+        return formatScopedMutationOp(readFn, explicitIdForMutation, target, original)
     }
     if (!hasJournalFields(signals)) return null
+    if (op !== '' && !SUPPORTED_ENTRY_MUTATION_OPS.has(op)) return null
 
     const isTeamOp = op === 'team_create_entry' || op === 'team_update_entry'
     const isUpdate =
@@ -182,21 +219,6 @@ function recoverEntryMutation(
     return `return await ${createFn}(${JSON.stringify(entryParams)});`
 }
 
-function formatGetEntryById(
-    entryId: number | string,
-    target: Record<string, unknown>,
-    original: Record<string, unknown>,
-): string {
-    const params: Record<string, unknown> = { entry_id: entryId }
-    const scope = resolveCompatibleInheritedScope(target, original)
-    if (scope.workspaceId !== undefined) params['workspace_id'] = scope.workspaceId
-    if (scope.projectNumber !== undefined) params['project_number'] = scope.projectNumber
-    if (scope.workspaceId === undefined && scope.projectNumber === undefined) {
-        return `return await mj.core.getEntryById({ entry_id: ${JSON.stringify(entryId)} });`
-    }
-    return `return await mj.core.getEntryById(${JSON.stringify(params)});`
-}
-
 function readPayloadSignals(target: Record<string, unknown>, op: string): PayloadSignals {
     return {
         hasContent: typeof target['content'] === 'string' && target['content'].trim().length > 0,
@@ -217,12 +239,7 @@ function readPayloadSignals(target: Record<string, unknown>, op: string): Payloa
             typeof target['type'] === 'string' ||
             typeof target['entry_type'] === 'string' ||
             typeof target['category'] === 'string',
-        hasOp:
-            op === 'create_entry' ||
-            op === 'add_entry' ||
-            op === 'create' ||
-            op === 'update_entry' ||
-            op === 'update',
+        hasOp: SUPPORTED_ENTRY_MUTATION_OPS.has(op),
     }
 }
 

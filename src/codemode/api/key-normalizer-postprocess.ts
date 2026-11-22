@@ -223,7 +223,7 @@ function flattenFilterObject(result: Record<string, unknown>): void {
     for (const [k, v] of Object.entries(filterObj)) {
         if (FORBIDDEN_DYNAMIC_KEYS.has(k)) continue
         let snakeK = k.replace(/[A-Z]/g, (letter) => `_${letter.toLowerCase()}`)
-        if (snakeK === 'id' && !Object.hasOwn(filterObj, 'entry_id') && !Object.hasOwn(filterObj, 'entryId')) {
+        if (snakeK === 'id' && filterObj['entry_id'] === undefined && filterObj['entryId'] === undefined) {
             snakeK = 'entry_id'
         }
         if (snakeK === 'project' || snakeK === 'project_id' || snakeK === 'proj') {
@@ -248,8 +248,8 @@ export function postProcessNormalizedKeys(result: Record<string, unknown>, metho
         healSortByField(result)
     }
     if (
-        'tag' in result &&
-        !('tags' in result) &&
+        result['tag'] !== undefined &&
+        result['tags'] === undefined &&
         methodLower !== 'teamvisualizerelationships' &&
         methodLower !== 'team_visualize_relationships'
     ) {

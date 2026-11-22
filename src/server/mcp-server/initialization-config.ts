@@ -6,7 +6,7 @@ import type { IDatabaseAdapter } from '../../database/core/interfaces.js'
 import { DEFAULT_BRIEFING_CONFIG } from '../../handlers/resources/shared.js'
 import { ConfigManager } from '../../utils/config-manager.js'
 import { logger } from '../../utils/logger.js'
-import { isForbiddenProjectKey } from '../../utils/project-registry-guards.js'
+import { sanitizeDefaultWorkspaceId } from '../../utils/workspace-registry-match.js'
 import type { ServerRuntime } from '../../utils/maintenance-lock.js'
 import {
     resolveToolFilterConfig,
@@ -22,14 +22,8 @@ function createServerConfigManager(
     const rawToolFilter =
         options.toolFilter ?? process.env['MEMORY_JOURNAL_MCP_TOOL_FILTER']
 
-    const rawDefaultWs = options.defaultWorkspaceId?.trim()
-    const validDefaultWs =
-        rawDefaultWs !== undefined && !isForbiddenProjectKey(rawDefaultWs)
-            ? rawDefaultWs
-            : undefined
-    const rawBcWs = options.briefingConfig?.defaultWorkspaceId?.trim()
-    const validBcWs =
-        rawBcWs !== undefined && !isForbiddenProjectKey(rawBcWs) ? rawBcWs : undefined
+    const validDefaultWs = sanitizeDefaultWorkspaceId(options.defaultWorkspaceId)
+    const validBcWs = sanitizeDefaultWorkspaceId(options.briefingConfig?.defaultWorkspaceId)
     const resolvedDefaultWs = validBcWs ?? validDefaultWs
 
     const cliEnvBaseline = {
@@ -71,7 +65,8 @@ function resolveEffectiveServerOptions(
     loadedBriefing: ReturnType<ConfigManager['getConfig']>['briefingConfig']
 ): ServerOptions {
     const effectiveDefaultWorkspaceId =
-        options.defaultWorkspaceId ?? loadedBriefing.defaultWorkspaceId
+        sanitizeDefaultWorkspaceId(options.defaultWorkspaceId) ??
+        sanitizeDefaultWorkspaceId(loadedBriefing.defaultWorkspaceId)
     const effectiveDefaultProjectNumber =
         options.defaultProjectNumber ?? loadedBriefing.defaultProjectNumber
     const effectiveProjectRegistry = options.projectRegistry ?? loadedBriefing.projectRegistry

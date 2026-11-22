@@ -4,7 +4,7 @@ import { sendProgress } from '../../../utils/progress-utils.js'
 import { activeProjectRegistry, pairStoredScope } from '../../../utils/write-scope.js'
 import { resolveWriteWorkspaceId } from '../write-workspace.js'
 import type { BatchDeleteEntriesSchema } from './schemas.js'
-import { canonicalTargetWorkspace } from './update-scope-helpers.js'
+import { canonicalTargetWorkspace, sameMoveWorkspace } from './update-scope-helpers.js'
 
 type BatchDeleteInput = z.infer<typeof BatchDeleteEntriesSchema>
 
@@ -47,6 +47,53 @@ export function vectorWarningField(warnings: string[]): { warning?: string } {
     return warnings.length > 0 ? { warning: warnings.join('; ') } : {}
 }
 
+interface MoveTargetMismatchInput {
+    entry_id: number
+    workspace_id?: string | undefined
+    project_number?: number | null | undefined
+    target_workspace_id: string
+}
+
+function isMoveTargetProjectMismatch(
+    u: MoveTargetMismatchInput,
+    rootWorkspaceId: string | undefined,
+    rootProjectNumber: number | undefined,
+    config: ToolContext['config'],
+    registry: ReturnType<typeof activeProjectRegistry>,
+    resolveEntry: (entryId: number) => JournalEntry | null | undefined
+): boolean {
+    const sourceWs = u.workspace_id ?? rootWorkspaceId
+    const entry = resolveEntry(u.entry_id)
+    const isWildcardSource = sourceWs === '*'
+    const isDefaultSource =
+        sourceWs?.toLowerCase() === 'default' ||
+        (sourceWs === undefined && entry?.workspaceId?.toLowerCase() === 'default')
+    if (rootProjectNumber !== undefined) return entry?.projectNumber !== rootProjectNumber
+    if (typeof u.project_number !== 'number') return false
+    if (isWildcardSource) return entry?.projectNumber !== u.project_number
+
+    const targetCanonical = canonicalTargetWorkspace(u.target_workspace_id, config)
+    if (isDefaultSource) {
+        const targetRegProj =
+            targetCanonical !== undefined && registry !== undefined
+                ? registry[targetCanonical]?.project_number
+                : undefined
+        if (targetRegProj === undefined || u.project_number !== targetRegProj) {
+            return entry?.projectNumber !== u.project_number
+        }
+        return false
+    }
+    return (
+        targetCanonical !== undefined &&
+        sameMoveWorkspace(targetCanonical, entry?.workspaceId, registry) &&
+        entry?.projectNumber !== null &&
+        entry?.projectNumber !== undefined &&
+        entry.projectNumber > 0 &&
+        entry.projectNumber !== u.project_number &&
+        (entry.workspaceId ?? '').toLowerCase() !== 'default'
+    )
+}
+
 /**
  * [INVARIANT] C2: `workspace_id: '*'` updates scoped by project_number may only touch
  * entries owned by that project; concrete-workspace updates reject conflicting existing projects
@@ -80,37 +127,14 @@ export function findWildcardProjectMismatches(
     return updates
         .filter((u) => {
             if (u.target_workspace_id !== undefined) {
-                const sourceWs = u.workspace_id ?? rootWorkspaceId
-                const entry = resolveEntry(u.entry_id)
-                const isWildcardSource = sourceWs === '*'
-                const isDefaultSource =
-                    sourceWs?.toLowerCase() === 'default' ||
-                    (sourceWs === undefined && entry?.workspaceId?.toLowerCase() === 'default')
-                if (rootProjectNumber !== undefined) {
-                    return entry?.projectNumber !== rootProjectNumber
-                }
-                if (
-                    isWildcardSource &&
-                    rootProjectNumber === undefined &&
-                    typeof u.project_number === 'number'
-                ) {
-                    return entry?.projectNumber !== u.project_number
-                }
-                if (
-                    isDefaultSource &&
-                    rootProjectNumber === undefined &&
-                    typeof u.project_number === 'number'
-                ) {
-                    const targetCanonical = canonicalTargetWorkspace(u.target_workspace_id, config)
-                    const targetRegProj =
-                        targetCanonical !== undefined && registry !== undefined
-                            ? registry[targetCanonical]?.project_number
-                            : undefined
-                    if (targetRegProj === undefined || u.project_number !== targetRegProj) {
-                        return entry?.projectNumber !== u.project_number
-                    }
-                }
-                return false
+                return isMoveTargetProjectMismatch(
+                    { ...u, target_workspace_id: u.target_workspace_id },
+                    rootWorkspaceId,
+                    rootProjectNumber,
+                    config,
+                    registry,
+                    resolveEntry
+                )
             }
             const ws = u.workspace_id ?? rootWorkspaceId
             const pn = u.project_number !== undefined ? u.project_number : rootProjectNumber

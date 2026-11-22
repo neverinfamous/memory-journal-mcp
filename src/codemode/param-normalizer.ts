@@ -12,7 +12,8 @@ export { isRecord }
 
 export function applyArgInterceptions(
     methodName: string,
-    args: unknown[]
+    args: unknown[],
+    options?: { deferTeamProjectCheck?: boolean }
 ): { args: unknown[] } | { error: Record<string, unknown> } {
     const gitIntercept = applyGitInterceptions(methodName, args)
     if (gitIntercept) return gitIntercept
@@ -28,7 +29,7 @@ export function applyArgInterceptions(
     currentArgs = domainRes.args
 
     // 3. Entry creation/update, single-ID, batch, search, and session-summary healing
-    const entrySearchRes = applyEntryAndSearchInterceptions(methodName, currentArgs)
+    const entrySearchRes = applyEntryAndSearchInterceptions(methodName, currentArgs, options)
     if ('error' in entrySearchRes) return entrySearchRes
 
     return entrySearchRes

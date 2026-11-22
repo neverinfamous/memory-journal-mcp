@@ -21,7 +21,7 @@ function normalizeRestoreEntryParams(val: unknown): unknown {
     if (typeof val !== 'object' || val === null || Array.isArray(val)) return val
     const obj = { ...(val as Record<string, unknown>) }
     if ('id' in obj) {
-        if (!('entry_id' in obj)) {
+        if (obj['entry_id'] === undefined) {
             obj['entry_id'] = obj['id']
         }
         Reflect.deleteProperty(obj, 'id')
@@ -53,7 +53,7 @@ export function createRestoreEntryTool(context: ToolContext): ToolDefinition {
             (val: unknown) => {
                 if (typeof val === 'object' && val !== null) {
                     const obj = val as Record<string, unknown>
-                    if ('id' in obj && !('entry_id' in obj)) {
+                    if (obj['id'] !== undefined && obj['entry_id'] === undefined) {
                         return { ...obj, entry_id: obj['id'] }
                     }
                 }

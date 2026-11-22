@@ -215,7 +215,11 @@ export function queryEntryIdsByCommitShas(
              )
              SELECT s.value AS wanted, MIN(ctx.id) AS entry_id
              FROM ctx, json_each(ctx.auto_context, '$.commits') j, json_each(?) s
-             WHERE j.type = 'text' AND substr(lower(j.value), 1, length(s.value)) = s.value
+             WHERE j.type = 'text' AND length(j.value) >= 7
+               AND (
+                   substr(lower(j.value), 1, length(s.value)) = s.value
+                   OR (length(j.value) < length(s.value) AND substr(s.value, 1, length(j.value)) = lower(j.value))
+               )
              GROUP BY s.value`
         )
         .all(...params) as { wanted: string; entry_id: number }[]

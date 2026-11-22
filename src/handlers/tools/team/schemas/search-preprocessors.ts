@@ -39,7 +39,7 @@ export function preprocessTeamSearchQuery(val: unknown): unknown {
     const obj: Record<string, unknown> = Object.fromEntries(Object.entries(healed))
     let modified = false
     for (const key of TEAM_SEARCH_QUERY_ALIASES) {
-        if (key in obj && !('query' in obj)) {
+        if (obj[key] !== undefined && obj['query'] === undefined) {
             obj['query'] = obj[key]
             Reflect.deleteProperty(obj, key)
             modified = true
@@ -55,12 +55,12 @@ export function preprocessDateRange(val: unknown): unknown {
     if (typeof healed !== 'object' || healed === null || Array.isArray(healed)) return healed
     const obj: Record<string, unknown> = Object.fromEntries(Object.entries(healed))
     let modified = false
-    if ('start' in obj && !('start_date' in obj)) {
+    if (obj['start'] !== undefined && obj['start_date'] === undefined) {
         obj['start_date'] = obj['start']
         Reflect.deleteProperty(obj, 'start')
         modified = true
     }
-    if ('end' in obj && !('end_date' in obj)) {
+    if (obj['end'] !== undefined && obj['end_date'] === undefined) {
         obj['end_date'] = obj['end']
         Reflect.deleteProperty(obj, 'end')
         modified = true
@@ -75,7 +75,7 @@ export function preprocessSemanticSearchQuery(val: unknown): unknown {
     const obj: Record<string, unknown> = Object.fromEntries(Object.entries(healed))
     let modified = false
     for (const key of TEAM_SEMANTIC_QUERY_ALIASES) {
-        if (key in obj && !('query' in obj)) {
+        if (obj[key] !== undefined && obj['query'] === undefined) {
             obj['query'] = obj[key]
             Reflect.deleteProperty(obj, key)
             modified = true

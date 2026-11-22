@@ -61,8 +61,9 @@ export function getDiagnosticTools(context: ToolContext): ToolDefinition[] {
                 idempotentHint: true,
                 openWorldHint: false,
             },
-            handler: async () => {
+            handler: async (params: unknown) => {
                 try {
+                    z.object({}).strict().parse(params ?? {})
                     const progress = context.progress
                     await sendProgress(progress, 0, 3, 'Starting operation...')
                     await sleep(PROGRESS_DEMO_STEP_DELAY_MS)

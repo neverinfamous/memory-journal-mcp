@@ -8,6 +8,8 @@ import { injectProjectNames } from '../index.js'
 import { VERSION_AWARE_TOOL_NAMES } from './schemas.js'
 import { wrapWithMetrics } from '../../../observability/index.js'
 import { enforceAccessBoundary } from '../../../auth/validation.js'
+import { formatHandlerError } from '../../../utils/error-helpers.js'
+import { enforceTeamToolRbac } from '../team/rbac.js'
 import { globalSubscriptionManager } from '../../../server/subscription-manager.js'
 import { logger } from '../../../utils/logger.js'
 import { activeProjectRegistry, uniqueWorkspaceForProject } from '../../../utils/write-scope.js'
@@ -190,7 +192,20 @@ async function executeDispatcherCall(
         const modeBlockErr = checkDispatcherModeBlock(tool, sessionContext, rpcOverrides?.readonly)
         if (modeBlockErr !== undefined) return modeBlockErr
 
-        const finalParams = applyAutoVersion(tool, normalizedParams, effectiveAutoVersion, sessionContext)
+        if (tool.group === 'team') {
+            try {
+                enforceTeamToolRbac(sessionContext, tool, normalizedParams)
+            } catch (err) {
+                return formatHandlerError(err)
+            }
+        }
+
+        const isSim =
+            tool.annotations?.readOnlyHint !== true &&
+            (dryRun || rpcOverrides?.dryRun === true || isSimulation === true)
+        const finalParams = isSim
+            ? normalizedParams
+            : applyAutoVersion(tool, normalizedParams, effectiveAutoVersion, sessionContext)
         if (tool.annotations?.readOnlyHint !== true && (dryRun || rpcOverrides?.dryRun === true)) {
             return {
                 success: true,
