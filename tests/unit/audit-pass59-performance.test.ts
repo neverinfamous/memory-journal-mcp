@@ -310,7 +310,7 @@ describe('Pass 59 Adversarial Performance Audit Regressions', () => {
     })
 
     it('AP1–AP7: embeds Pass 59 portable performance gates while preserving contract tokens', () => {
-        expect(AUDIT_PROMPT_REVISION).toBe('2026-11-21-audit-pass66')
+        expect(AUDIT_PROMPT_REVISION).toBe('2026-11-21-audit-pass67')
         const def = getPerformanceAuditPromptDefinition()
         const rendered = def.handler({ target: 'memory-journal-mcp' }, {
             searchEntries: () => ({ entries: [] }),
@@ -318,7 +318,7 @@ describe('Pass 59 Adversarial Performance Audit Regressions', () => {
         } as unknown as IDatabaseAdapter)
         const text = rendered.messages.map((m) => m.content.text).join('\n')
 
-        expect(text).toContain('Prompt revision: 2026-11-21-audit-pass66')
+        expect(text).toContain('Prompt revision: 2026-11-21-audit-pass67')
         expect(text).toContain('skewed multi-workspace datasets with distinct timestamps')
         expect(text).toContain('defer `COUNT(*)` total-vector bounds')
         expect(text).toContain('per-request auth/RBAC/filter query counts')

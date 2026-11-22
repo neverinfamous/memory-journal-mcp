@@ -182,11 +182,20 @@ describe('Pass 33 Quality, Schema, Search, Storage & Prompt Regressions (M1-M12,
         expect(hosts).toContain('localhost')
         expect(hosts).toContain('example.com:8443')
 
-        const backupRes = (await runWithAuthContext(
-            { authenticated: true, claims: { sub: 'admin', scopes: [SCOPES.READ, SCOPES.WRITE, SCOPES.ADMIN] } },
-            () => callTool('cleanup_backups', { keep_count: 100 }, db, undefined, undefined, { runtime: new ServerRuntime() })
-        )) as Record<string, unknown>
-        expect(backupRes['success']).toBe(true)
+        const fileDb = new DatabaseAdapter(path.join(tmpDir, 'pass33-backup.db'))
+        await fileDb.initialize()
+        try {
+            const backupRes = (await runWithAuthContext(
+                { authenticated: true, claims: { sub: 'admin', scopes: [SCOPES.READ, SCOPES.WRITE, SCOPES.ADMIN] } },
+                () =>
+                    callTool('cleanup_backups', { keep_count: 100 }, fileDb, undefined, undefined, {
+                        runtime: new ServerRuntime(),
+                    })
+            )) as Record<string, unknown>
+            expect(backupRes['success']).toBe(true)
+        } finally {
+            fileDb.close()
+        }
     })
 
     it('L1-L8: OAuth protected-resource path, leadingMethodVerb, and AP1-AP6 prompt hardening', async () => {
@@ -200,12 +209,12 @@ describe('Pass 33 Quality, Schema, Search, Storage & Prompt Regressions (M1-M12,
         expect(next).toHaveBeenCalled()
 
         expect(getRequiredScope('get_recent_entries', 'tool')).toBe(SCOPES.READ)
-        expect(AUDIT_PROMPT_REVISION).toBe('2026-11-21-audit-pass66')
+        expect(AUDIT_PROMPT_REVISION).toBe('2026-11-21-audit-pass67')
 
         const qualityPrompt = getCodeQualityAuditPromptDefinition()
         const renderedQuality = await qualityPrompt.handler({ target: 'memory-journal-mcp' }, db)
         const qText = renderedQuality.messages.map((m) => m.content.text).join('\n')
-        expect(qText).toContain('2026-11-21-audit-pass66')
+        expect(qText).toContain('2026-11-21-audit-pass67')
         expect(qText).toContain("'skills'")
         expect(qText).toContain('path.win32')
         expect(qText).toContain('finally { Remove-Item')

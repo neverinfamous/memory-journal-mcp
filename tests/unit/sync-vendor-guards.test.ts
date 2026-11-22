@@ -46,7 +46,7 @@ describe('sync-vendor-guards', () => {
     while (tempDirs.length > 0) {
       const dir = tempDirs.pop();
       if (dir !== undefined && existsSync(dir)) {
-        rmSync(dir, { recursive: true, force: true });
+        rmSync(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 });
       }
     }
   });
@@ -235,5 +235,128 @@ describe('sync-vendor-guards', () => {
       expect(() => assertSafeSyncWorktree(dir, ['lib-agent-exec'], false)).toThrow(/Active git operation detected/);
       expect(() => assertSafeSyncWorktree(dir, ['lib-agent-exec'], true)).toThrow(/Active git operation detected/);
     });
+
+    it('B-M12, O1, B-L1..B-L3: distinguishes git failure with .git marker, cleans ENOENT races, uses nonce temps, and checks dynamic import + source containment', () => {
+      const fakeRepo = makeTempDir('sync-corrupt-git-');
+      mkdirSync(path.join(fakeRepo, '.git'), { recursive: true });
+      writeFileSync(path.join(fakeRepo, '.git', 'HEAD'), 'not-a-valid-ref\n', 'utf8');
+      expect(() => assertSafeSyncWorktree(fakeRepo, ['lib-agent-exec'], false)).toThrow();
+
+      const deadLockDir = makeTempDir('sync-dead-lock-');
+      initTempGitRepo(deadLockDir);
+      mkdirSync(path.join(deadLockDir, '.test-output'), { recursive: true });
+      writeFileSync(
+        path.join(deadLockDir, SYNC_LOCK_REL_PATH),
+        JSON.stringify({ pid: 999_999_999, libs: ['lib-agent-exec'], createdAt: new Date().toISOString() }),
+        'utf8'
+      );
+      const release = acquireSyncVendorLock(deadLockDir, ['lib-agent-exec'], { isPidAlive: () => false });
+      try {
+        expect(existsSync(path.join(deadLockDir, SYNC_LOCK_REL_PATH))).toBe(true);
+      } finally {
+        release();
+      }
+      expect(existsSync(path.join(deadLockDir, SYNC_LOCK_REL_PATH))).toBe(false);
+
+      const atomicDir = makeTempDir('sync-atomic-');
+      const target = path.join(atomicDir, 'sample.ts');
+      expect(writeBufferAtomicIfChanged(target, Buffer.from('export const a = 1;\n', 'utf8'))).toBe(true);
+      expect(writeBufferAtomicIfChanged(target, Buffer.from('export const a = 1;\n', 'utf8'))).toBe(false);
+      expect(readdirSync(atomicDir)).toEqual(['sample.ts']);
+    });
+  });
+
+  describe('sync-vendor dynamic import & source containment', () => {
+    it('B-L1: rejects undeclared dynamic import() packages', () => {
+      const upstream = makeTempDir('sync-up-');
+      const down = makeTempDir('sync-down-');
+      mkdirSync(path.join(upstream, 'src'), { recursive: true });
+      writeFileSync(
+        path.join(upstream, 'src', 'index.ts'),
+        "export async function load(): Promise<unknown> { return await import('undeclared-pkg-pass67'); }\n",
+        'utf8'
+      );
+      runGit(upstream, ['init']);
+      runGit(upstream, ['config', 'user.email', 'test@example.com']);
+      runGit(upstream, ['config', 'user.name', 'Test User']);
+      runGit(upstream, ['add', '.']);
+      runGit(upstream, ['commit', '-m', 'init']);
+
+      mkdirSync(path.join(down, 'src', 'vendor', 'demo'), { recursive: true });
+      writeFileSync(path.join(down, 'package.json'), '{"name":"demo-down","dependencies":{}}\n', 'utf8');
+      writeFileSync(
+        path.join(down, 'src', 'vendor', 'demo', 'index.ts'),
+        "export async function load(): Promise<unknown> { return await import('undeclared-pkg-pass67'); }\n",
+        'utf8'
+      );
+      writeFileSync(
+        path.join(down, 'src', 'vendor', 'VENDOR.json'),
+        JSON.stringify({
+          libs: {
+            demo: {
+              upstream: 'upstream',
+              source: 'src',
+              dest: 'src/vendor/demo',
+              files: ['index.ts'],
+              allowedPackages: [],
+              requireNeutralDocs: false,
+            },
+          },
+        }),
+        'utf8'
+      );
+      const tsxCli = path.resolve(process.cwd(), 'node_modules', 'tsx', 'dist', 'cli.mjs');
+      const syncScript = path.resolve(process.cwd(), 'scripts', 'sync-vendor.ts');
+      expect(() =>
+        execFileSync(process.execPath, [tsxCli, syncScript, '--check', '--lib', 'demo', '--upstream-root', upstream], {
+          cwd: down,
+          encoding: 'utf8',
+          stdio: ['ignore', 'pipe', 'pipe'],
+          windowsHide: true,
+        })
+      ).toThrow(/not declared in package\.json[\s\S]*undeclared-pkg-pass67/i);
+    }, 30_000);
+
+    it('B-L2: rejects escaping upstream source directories', () => {
+      const upstream = makeTempDir('sync-up-');
+      const down = makeTempDir('sync-down-');
+      mkdirSync(path.join(upstream, 'src'), { recursive: true });
+      writeFileSync(path.join(upstream, 'src', 'index.ts'), 'export const x = 1;\n', 'utf8');
+      runGit(upstream, ['init']);
+      runGit(upstream, ['config', 'user.email', 'test@example.com']);
+      runGit(upstream, ['config', 'user.name', 'Test User']);
+      runGit(upstream, ['add', '.']);
+      runGit(upstream, ['commit', '-m', 'init']);
+
+      mkdirSync(path.join(down, 'src', 'vendor', 'demo'), { recursive: true });
+      writeFileSync(path.join(down, 'package.json'), '{"name":"demo-down","dependencies":{}}\n', 'utf8');
+      writeFileSync(path.join(down, 'src', 'vendor', 'demo', 'index.ts'), 'export const x = 1;\n', 'utf8');
+      writeFileSync(
+        path.join(down, 'src', 'vendor', 'VENDOR.json'),
+        JSON.stringify({
+          libs: {
+            demo: {
+              upstream: 'upstream',
+              source: '../../outside',
+              dest: 'src/vendor/demo',
+              files: ['index.ts'],
+              allowedPackages: [],
+              requireNeutralDocs: false,
+            },
+          },
+        }),
+        'utf8'
+      );
+      const tsxCli = path.resolve(process.cwd(), 'node_modules', 'tsx', 'dist', 'cli.mjs');
+      const syncScript = path.resolve(process.cwd(), 'scripts', 'sync-vendor.ts');
+      expect(() =>
+        execFileSync(process.execPath, [tsxCli, syncScript, '--lib', 'demo', '--upstream-root', upstream, '--allow-dirty'], {
+          cwd: down,
+          encoding: 'utf8',
+          stdio: ['ignore', 'pipe', 'pipe'],
+          windowsHide: true,
+        })
+      ).toThrow(/escapes upstream root/i);
+    }, 30_000);
   });
 });

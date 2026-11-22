@@ -3,6 +3,19 @@ import * as path from 'node:path'
 import { randomUUID } from 'node:crypto'
 import { logger } from '../../utils/logger.js'
 
+const activeInProcessLocks = new Map<string, string>()
+
+export function getActiveInProcessRestoreToken(lockDir: string): string | undefined {
+    return activeInProcessLocks.get(path.resolve(lockDir))
+}
+
+export function clearActiveInProcessRestoreLock(lockDir: string, expectedToken?: string): void {
+    const resolved = path.resolve(lockDir)
+    if (expectedToken === undefined || activeInProcessLocks.get(resolved) === expectedToken) {
+        activeInProcessLocks.delete(resolved)
+    }
+}
+
 function writeLockFile(lockFile: string, nonce: string): void {
     fs.writeFileSync(lockFile, JSON.stringify({ pid: process.pid, timestamp: Date.now(), nonce }), {
         flag: 'wx',
@@ -49,13 +62,16 @@ function parseLockContent(lockContent: string): {
 function isHoldingPidStale(
     holdingPid: number,
     lockDir: string,
-    _runtime: unknown
+    _runtime: unknown,
+    observedNonce?: string
 ): boolean {
     // [INVARIANT] A live holder keeps the lock even when the timestamp is old.
-    // Age alone is not a crash signal; only ESRCH means the holder is gone.
-    // Restore turns maintenance on before taking this directory, and the
-    // maintenance lock is exclusive. A lock file still owned by this process is leftover.
+    // Same-PID contention with a tracked active nonce is NOT stale and blocks concurrent in-process restores.
     if (holdingPid === process.pid) {
+        const activeToken = activeInProcessLocks.get(path.resolve(lockDir))
+        if (activeToken !== undefined && observedNonce !== undefined && activeToken === observedNonce) {
+            return false
+        }
         logger.warning('Found stale database restore lock (current process)', {
             path: lockDir,
             module: 'SqliteAdapter',
@@ -81,6 +97,7 @@ function isHoldingPidStale(
 function writeLockFileGuarded(lockDir: string, lockFile: string, nonce: string): void {
     try {
         writeLockFile(lockFile, nonce)
+        activeInProcessLocks.set(path.resolve(lockDir), nonce)
     } catch (writeErr: unknown) {
         // [INVARIANT] Never delete lockDir on EEXIST: a stalled creator that lost an orphan-reclaim
         // race would otherwise wipe the winning contender's live lockDir + lock.json.
@@ -146,7 +163,7 @@ function isLockStale(lockDir: string, lockFile: string, runtime: unknown): LockS
         if (observed?.holdingPid === undefined || Number.isNaN(observed.holdingPid)) {
             return { stale: false, observed }
         }
-        return { stale: isHoldingPidStale(observed.holdingPid, lockDir, runtime), observed }
+        return { stale: isHoldingPidStale(observed.holdingPid, lockDir, runtime, observed.nonce), observed }
     } catch (readErr: unknown) {
         // Only treat a missing lock.json as orphaned after a creation grace window so a contender
         // between mkdirSync(lockDir) and writeLockFile(lockFile) is never falsely reclaimed.
@@ -252,7 +269,7 @@ function reclaimAndRetryLockDir(
 }
 
 /** Acquire the OS lock directory for restore, reclaiming it if the existing lock is stale. */
-export function acquireRestoreLock(lockDir: string, lockFile: string, runtime: unknown): void {
+export function acquireRestoreLock(lockDir: string, lockFile: string, runtime: unknown): string {
     const nonce = randomUUID()
     fs.mkdirSync(path.dirname(lockDir), { recursive: true })
     try {
@@ -264,4 +281,5 @@ export function acquireRestoreLock(lockDir: string, lockFile: string, runtime: u
         }
         reclaimAndRetryLockDir(lockDir, lockFile, nonce, runtime, lockError)
     }
+    return nonce
 }

@@ -32,6 +32,7 @@ function sanitizeLogValue(value: unknown, seen = new WeakSet(), depth = 0): unkn
     if (isCrossRealmDate(value)) return Number.isNaN(value.getTime()) ? 'Invalid Date' : value.toISOString()
     if (value instanceof URL) return sanitizeErrorForLogging(value.toString())
     if (typeof value === 'string') return sanitizeErrorForLogging(value)
+    if (typeof value === 'function') return '[Function]'
     if (typeof value === 'bigint') return value.toString()
     if (typeof value !== 'object' || value === null) return value
     if (depth > 6) return '[Truncated]'
@@ -47,7 +48,7 @@ function sanitizeLogValue(value: unknown, seen = new WeakSet(), depth = 0): unkn
         }
         const out: Record<string, unknown> = {}
         for (const [k, v] of Object.entries(value)) {
-            if (k === '__proto__' || k === 'constructor' || k === 'prototype') continue
+            if (k === '__proto__' || k === 'constructor' || k === 'prototype' || k === 'toJSON' || typeof v === 'function') continue
             const safeKey = sanitizeErrorForLogging(k)
             out[safeKey] =
                 SENSITIVE_KEY_RE.test(k) && v !== undefined && v !== null && v !== ''

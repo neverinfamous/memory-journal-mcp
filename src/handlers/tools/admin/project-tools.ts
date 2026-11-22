@@ -156,13 +156,25 @@ function handleRegisterProject(
         : Object.hasOwn(mergedRegistry, cleanName)
           ? mergedRegistry[cleanName]
           : undefined
+    const previousProjNum = existing?.project_number
+    const keyChange: RegistryKeyChange | undefined =
+        existing !== undefined && coercedNum !== undefined && coercedNum !== previousProjNum
+            ? {
+                  from: cleanName,
+                  to: cleanName,
+                  ...(typeof previousProjNum === 'number'
+                      ? { previousProjectNumber: previousProjNum }
+                      : {}),
+                  projectNumber: coercedNum,
+              }
+            : undefined
     const projectRef: ProjectRegistryEntry = {
         ...(existing ?? { path: parsed.absolute_path }),
         path: parsed.absolute_path,
         ...(coercedNum !== undefined ? { project_number: coercedNum } : {}),
     }
     diskRegistry[cleanName] = projectRef
-    saveConfig(diskConfig, context, undefined, { ...liveRegistry, ...diskRegistry })
+    saveConfig(diskConfig, context, keyChange, { ...liveRegistry, ...diskRegistry })
 
     return {
         success: true,

@@ -22,6 +22,15 @@ function collectModuleSpecifiers(source: string): string[] {
       ts.isStringLiteral(node.moduleSpecifier)
     ) {
       specifiers.push(node.moduleSpecifier.text);
+    } else if (
+      ts.isCallExpression(node) &&
+      node.expression.kind === ts.SyntaxKind.ImportKeyword &&
+      node.arguments.length >= 1
+    ) {
+      const firstArg = node.arguments[0];
+      if (firstArg !== undefined && ts.isStringLiteral(firstArg)) {
+        specifiers.push(firstArg.text);
+      }
     }
     ts.forEachChild(node, visit);
   };
@@ -153,7 +162,12 @@ function stageVendorWrites(
     const libConfig = nextManifest.libs[lib];
     if (libConfig === undefined) continue;
     const vendorRoot = resolve(join(cwd, 'src', 'vendor'));
-    const sourceDir = resolve(join(upstreamRoot, libConfig.source));
+    const upstreamResolved = resolve(upstreamRoot);
+    const sourceDir = resolve(join(upstreamResolved, libConfig.source));
+    const sourceDirRel = relative(upstreamResolved, sourceDir);
+    if (sourceDirRel === '..' || sourceDirRel.startsWith('..' + sep) || isAbsolute(sourceDirRel)) {
+      throw new Error(`Vendor library source path escapes upstream root: ${lib}`);
+    }
     const destDir = resolve(join(vendorRoot, lib));
     const destDirRel = relative(vendorRoot, destDir);
     if (destDirRel === '..' || destDirRel.startsWith('..' + sep) || isAbsolute(destDirRel)) {

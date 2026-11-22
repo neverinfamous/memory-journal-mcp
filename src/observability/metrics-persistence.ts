@@ -64,6 +64,6 @@ export async function readMetricsSnapshotFile(filePath: string): Promise<string 
         }
         return await handle.readFile({ encoding: 'utf8' })
     } finally {
-        await handle.close()
+        await handle.close().catch(() => undefined)
     }
 }

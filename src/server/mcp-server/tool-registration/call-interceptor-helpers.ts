@@ -316,16 +316,18 @@ function resolveGetPromptTarget(
     prompts: PromptDefinition[]
 ): { targetName: string; capabilities: PromptDefinition['capabilities'] } {
     const rawPromptName =
-        typeof toolArgs['name'] === 'string'
-            ? toolArgs['name']
-            : typeof toolArgs['prompt_name'] === 'string'
-              ? toolArgs['prompt_name']
-              : typeof toolArgs['promptName'] === 'string'
-                ? toolArgs['promptName']
-                : typeof toolArgs['prompt'] === 'string'
-                  ? toolArgs['prompt']
-                  : undefined
-    const normalizedTarget = rawPromptName?.replace(/^mj_/, '').replace(/_/g, '-')
+        typeof toolArgs['name'] === 'string' && toolArgs['name'].trim() !== ''
+            ? toolArgs['name'].trim()
+            : typeof toolArgs['prompt'] === 'string' && toolArgs['prompt'].trim() !== ''
+              ? toolArgs['prompt'].trim()
+              : typeof toolArgs['prompt_name'] === 'string' && toolArgs['prompt_name'].trim() !== ''
+                ? toolArgs['prompt_name'].trim()
+                : undefined
+    const normalizedTarget = rawPromptName
+        ?.replace(/^mj_/, '')
+        .replace(/_/g, '-')
+        .replace(/([a-z])([A-Z])/g, '$1-$2')
+        .toLowerCase()
     const targetPrompt =
         rawPromptName !== undefined
             ? prompts.find((p) => p.name === rawPromptName || p.name === normalizedTarget)
@@ -362,9 +364,13 @@ export function resolvePromptOrResourceAccessTargets(
         ]
     }
     if (isResourceFallbackTool(requestedTool)) {
+        const extractedUri = extractUriFromArgs(toolArgs)
         const rawUri =
-            extractUriFromArgs(toolArgs) ??
-            (requestedTool.startsWith('memory://') ? requestedTool : 'memory://briefing')
+            extractedUri !== undefined && extractedUri !== ''
+                ? extractedUri
+                : requestedTool.startsWith('memory://')
+                  ? requestedTool
+                  : 'memory://briefing'
         return [
             { targetName: 'read_resource', targetType: 'tool' },
             { targetName: getBaseUri(rawUri), targetType: 'resource' },

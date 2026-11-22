@@ -5,6 +5,7 @@
 
 import type { GitHubIntegration } from '../../../github/github-integration/index.js'
 import { sanitizeErrorMessageForResponse } from '../../../utils/error-helpers.js'
+import { fenceUntrustedInline } from '../../../handlers/resources/uri-and-fencing.js'
 
 export interface IssueProjectResult {
     projectNumber: number
@@ -27,10 +28,14 @@ async function applyInitialStatus(
         (opt) => opt.name.toLowerCase() === initialStatus.toLowerCase()
     )
     if (!statusOption) {
+        const safeStatus = fenceUntrustedInline(initialStatus)
+        const available = board.statusOptions
+            .map((o) => fenceUntrustedInline(o.name))
+            .join(', ')
         return {
             status: initialStatus,
             set: false,
-            error: `Status "${initialStatus}" not found. Available: ${board.statusOptions.map((o) => o.name).join(', ')}`,
+            error: `Status "${safeStatus}" not found. Available: ${available}`,
         }
     }
     const moveResult = await github.moveProjectItem(

@@ -372,7 +372,6 @@ function resolveContextProxyProp(target: Record<string, unknown>, prop: string |
     if (prop === 'get' || prop === 'getContext' || prop === 'get_context') {
         return createContextGetFn(target)
     }
-    if (Object.hasOwn(target, prop)) return target[prop]
     // [INVARIANT]: Outer MCP parameter normalization converts camelCase keys inside `context`
     // into snake_case; fall back transparently so `context.myKey` resolves `target.my_key`.
     const snakeProp = prop.replace(/([a-z0-9])([A-Z])/g, '$1_$2').toLowerCase()
@@ -392,8 +391,12 @@ function resolveContextProxyProp(target: Record<string, unknown>, prop: string |
  * Builds the frozen `context` global proxy for the sandbox.
  */
 export function createContextProxy(contextObj?: Record<string, unknown>): Record<string, unknown> {
-    const contextProxy = new Proxy(contextObj ?? {}, {
-        get: (target, prop): unknown => resolveContextProxyProp(target, prop),
+    const target = contextObj !== undefined ? Object.freeze({ ...contextObj }) : Object.freeze({})
+    return new Proxy(target, {
+        get: (t, prop): unknown => resolveContextProxyProp(t, prop),
+        set: () => false,
+        defineProperty: () => false,
+        deleteProperty: () => false,
+        setPrototypeOf: () => false,
     })
-    return Object.freeze(contextProxy)
 }

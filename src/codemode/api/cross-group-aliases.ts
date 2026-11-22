@@ -195,6 +195,11 @@ export function wireCrossGroupAliasesHelper(ctx: CrossGroupAliasesContext): void
             return res
         }
         ctx.copyFnSchema(semanticFn, wrappedSemanticFn)
+        for (const group of [ctx.search, ctx.core]) {
+            for (const key of Object.keys(group)) {
+                if (group[key] === semanticFn) group[key] = wrappedSemanticFn
+            }
+        }
         ctx.search['semanticSearch'] = wrappedSemanticFn
         ctx.core['semanticSearch'] = wrappedSemanticFn
     }

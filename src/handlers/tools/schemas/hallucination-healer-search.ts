@@ -187,6 +187,8 @@ export function healSearchPayload(val: unknown): unknown {
     const obj = { ...(val as Record<string, unknown>) }
     let modified = false
 
+    if (unpackFilterContainers(obj)) modified = true
+
     for (const badKey of Object.keys(obj)) {
         if (!Object.hasOwn(SEARCH_KEY_ALIAS_MAP, badKey)) continue
         const goodKey = SEARCH_KEY_ALIAS_MAP[badKey]
@@ -201,8 +203,6 @@ export function healSearchPayload(val: unknown): unknown {
         Reflect.deleteProperty(obj, badKey)
         modified = true
     }
-
-    if (unpackFilterContainers(obj)) modified = true
     if (coerceEntryIdField(obj)) modified = true
     if (normalizeTagsField(obj)) modified = true
     if (healTagListField(obj, 'exclude_tags')) modified = true

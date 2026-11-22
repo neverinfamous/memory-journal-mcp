@@ -283,36 +283,13 @@ function validateExplicitRepoAndWorkspaceInput(
     }
 }
 
-function resolveSessionWorkspaceAndProjectPair(
+function resolveConfiguredOrSessionFallback(
     context: ToolContext,
-    input: ExecuteCodeInput,
-    effectiveRegistry: ProjectRegistry,
-    validated: ValidatedSessionInput
-):
-    | { projectId: number | string | undefined; numericProjectId: number | undefined; workspaceId: string }
-    | { errorResponse: Record<string, unknown> } {
-    const rawWorkspaceInput = input.workspace_id ?? input.workspaceId
-    const rawProjectInput = input.project_number ?? input.projectNumber
-    const explicitDefaultWithoutProject =
-        validated.rawWsTrimmed?.toLowerCase() === 'default' && rawProjectInput === undefined
-    let projectId = explicitDefaultWithoutProject
-        ? undefined
-        : resolveSessionProjectId(context, input, effectiveRegistry)
-    if (
-        rawProjectInput !== undefined &&
-        (typeof projectId !== 'number' || !Number.isSafeInteger(projectId) || projectId <= 0)
-    ) {
-        return githubInjectError(
-            `Invalid project_number '${String(rawProjectInput)}'. Expected a positive integer or registered project name.`
-        )
-    }
-
-    const isWildcardWorkspace = validated.rawWsTrimmed === '*'
-    let numericProjectId = typeof projectId === 'number' ? projectId : undefined
-    // [C3] Session scope is never guessed from keywords inside the submitted code.
-    const fallbackRepoWs =
-        validated.repoRegistryKey ??
-        (validated.repoLeaf !== undefined && validated.repoLeaf !== '' ? validated.repoLeaf : undefined)
+    rawProjectInput: unknown,
+    explicitWorkspace: boolean,
+    isWildcardWorkspace: boolean,
+    numericProjectId: number | undefined
+): { fallbackConfiguredWs: string | undefined; effectiveProjectInput: number | undefined } {
     const configuredDefaultWsRaw = context.config?.defaultWorkspaceId?.trim()
     const configuredDefaultWs =
         configuredDefaultWsRaw !== undefined && configuredDefaultWsRaw !== '' && configuredDefaultWsRaw !== '*'
@@ -335,12 +312,56 @@ function resolveSessionWorkspaceAndProjectPair(
     const effectiveProjectInput =
         numericProjectId ??
         (rawProjectInput === undefined &&
-        !validated.explicitWorkspace &&
+        !explicitWorkspace &&
         !isWildcardWorkspace &&
         configuredDefaultWs?.toLowerCase() === 'default' &&
         sessionWs === undefined
             ? sessionCtx.projectNumber
             : undefined)
+    return { fallbackConfiguredWs, effectiveProjectInput }
+}
+
+function resolveSessionWorkspaceAndProjectPair(
+    context: ToolContext,
+    input: ExecuteCodeInput,
+    effectiveRegistry: ProjectRegistry,
+    validated: ValidatedSessionInput
+):
+    | { projectId: number | string | undefined; numericProjectId: number | undefined; workspaceId: string }
+    | { errorResponse: Record<string, unknown> } {
+    const rawWorkspaceInputRaw = input.workspace_id ?? input.workspaceId
+    const rawWorkspaceInput =
+        typeof rawWorkspaceInputRaw === 'string' && rawWorkspaceInputRaw.trim() !== ''
+            ? rawWorkspaceInputRaw.trim()
+            : undefined
+    const rawProjectInput = input.project_number ?? input.projectNumber
+    const explicitDefaultWithoutProject =
+        validated.rawWsTrimmed?.toLowerCase() === 'default' && rawProjectInput === undefined
+    let projectId = explicitDefaultWithoutProject
+        ? undefined
+        : resolveSessionProjectId(context, input, effectiveRegistry)
+    if (
+        rawProjectInput !== undefined &&
+        (typeof projectId !== 'number' || !Number.isSafeInteger(projectId) || projectId <= 0)
+    ) {
+        return githubInjectError(
+            `Invalid project_number '${String(rawProjectInput)}'. Expected a positive integer or registered project name.`
+        )
+    }
+
+    const isWildcardWorkspace = validated.rawWsTrimmed === '*'
+    let numericProjectId = typeof projectId === 'number' ? projectId : undefined
+    // [C3] Session scope is never guessed from keywords inside the submitted code.
+    const fallbackRepoWs =
+        validated.repoRegistryKey ??
+        (validated.repoLeaf !== undefined && validated.repoLeaf !== '' ? validated.repoLeaf : undefined)
+    const { fallbackConfiguredWs, effectiveProjectInput } = resolveConfiguredOrSessionFallback(
+        context,
+        rawProjectInput,
+        validated.explicitWorkspace,
+        isWildcardWorkspace,
+        numericProjectId
+    )
 
     const resolvedContext = resolveProjectContext(
         {

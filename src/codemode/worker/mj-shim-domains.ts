@@ -117,19 +117,22 @@ export function createEntriesDomainProxy(target: Record<string, unknown>): unkno
 export function createGetReadFindInterceptor(
     target: Record<string, unknown>,
     shimMj: Record<string, unknown>
-): (arg?: unknown) => unknown {
+): (...args: unknown[]) => unknown {
     const getFn = getGroupProp(target, 'core', 'get_entry_by_id') ?? getGroupProp(target, 'core', 'getEntryById')
     const searchFn = getGroupProp(target, 'search', 'search_entries') ?? getGroupProp(target, 'search', 'searchEntries')
-    return (arg?: unknown): unknown => {
+    return (...args: unknown[]): unknown => {
+        const [arg, ...rest] = args
         if (arg === undefined) return Promise.resolve(shimMj)
         if (typeof arg === 'number' || typeof arg === 'string') {
             const parsedId = parsePositiveProjectNumber(arg)
             if (parsedId !== undefined) {
-                return typeof getFn === 'function' ? (getFn as (a: unknown) => unknown)({ entry_id: parsedId }) : undefined
+                return typeof getFn === 'function'
+                    ? (getFn as (...a: unknown[]) => unknown)({ entry_id: parsedId }, ...rest)
+                    : undefined
             }
             if (typeof arg === 'string') {
                 return typeof searchFn === 'function'
-                    ? (searchFn as (a: unknown) => unknown)({ query: arg })
+                    ? (searchFn as (...a: unknown[]) => unknown)({ query: arg }, ...rest)
                     : Promise.resolve({
                           success: false,
                           code: 'VALIDATION_ERROR',
@@ -139,13 +142,13 @@ export function createGetReadFindInterceptor(
         }
         if (arg !== null && typeof arg === 'object') {
             if ('entry_id' in arg || 'id' in arg) {
-                return typeof getFn === 'function' ? (getFn as (a: unknown) => unknown)(arg) : undefined
+                return typeof getFn === 'function' ? (getFn as (...a: unknown[]) => unknown)(...args) : undefined
             }
             if ('query' in arg || 'tags' in arg || 'search' in arg || 'text' in arg || 'q' in arg) {
-                return typeof searchFn === 'function' ? (searchFn as (a: unknown) => unknown)(arg) : undefined
+                return typeof searchFn === 'function' ? (searchFn as (...a: unknown[]) => unknown)(...args) : undefined
             }
         }
-        return typeof getFn === 'function' ? (getFn as (a: unknown) => unknown)(arg) : undefined
+        return typeof getFn === 'function' ? (getFn as (...a: unknown[]) => unknown)(...args) : undefined
     }
 }
 

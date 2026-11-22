@@ -366,7 +366,7 @@ function validateAndWrapNestedCode(
  * Builds the sandboxed nested `executeCode` dispatcher enforcing pinned scope,
  * readonly/dryRun/useTestDb invariants, and code-security checks before `vm.runInContext`.
  */
-export function createSandboxExecutor(options: SandboxExecutorOptions): (arg: unknown) => Promise<unknown> {
+export function createSandboxExecutor(options: SandboxExecutorOptions): (...args: unknown[]) => Promise<unknown> {
     const {
         shimMj, vmContextRef, timeoutMs, maxResultSize, readonlyMode, dryRunMode, useTestDbMode,
         pinnedWorkspaceRaw, pinnedProjectRaw, projectRegistryRaw, runIsolatedNestedCode, activeTimers,
@@ -380,13 +380,22 @@ export function createSandboxExecutor(options: SandboxExecutorOptions): (arg: un
             ? pinnedProjectRaw
             : undefined
 
-    return async (rawArg: unknown): Promise<unknown> => {
+    return async (...rawArgs: unknown[]): Promise<unknown> => {
+        const rawFirst = rawArgs[0]
+        const rawOpts = rawArgs.length > 1 ? rawArgs[1] : undefined
         let arg: unknown
         let argRec: Record<string, unknown> | undefined
         try {
-            const snapped = snapshotUntrustedArg(rawArg)
+            const snapped = snapshotUntrustedArg(rawFirst)
             arg = snapped.safeArg
             argRec = snapped.argRec
+            if (typeof arg === 'string' && rawOpts !== undefined) {
+                const snappedOpts = snapshotUntrustedArg(rawOpts)
+                if (snappedOpts.argRec !== undefined) {
+                    argRec = Object.assign(Object.create(null) as Record<string, unknown>, snappedOpts.argRec, { code: arg })
+                    arg = argRec
+                }
+            }
         } catch {
             return { success: false, error: 'Nested executeCode argument snapshot failed', code: 'VALIDATION_ERROR' }
         }

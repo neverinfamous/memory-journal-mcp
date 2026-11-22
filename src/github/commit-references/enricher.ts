@@ -43,7 +43,9 @@ async function resolveCommitRefs(
                     refCache.set(key, pending)
                 }
                 const [resolved] = await pending
-                return resolved ? { ...resolved, type: resolved.type } : { ...ref, type: 'unknown' as const }
+                return resolved
+                    ? { ...resolved, ...ref }
+                    : { ...ref, type: 'unknown' as const }
             })
         )
     } else {

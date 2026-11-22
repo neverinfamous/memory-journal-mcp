@@ -23,7 +23,7 @@ import {
     createSystemProxy,
     createContextNamespaceProxy,
 } from './proxy-namespaces.js'
-import { createApiRootGetTrap } from './worker/api-proxy-trap.js'
+import { createApiRootGetTrap, resolveFallbackSchema } from './worker/api-proxy-trap.js'
 
 function getPropOrSnake(obj: unknown, snake: string, camel: string): unknown {
     if ((typeof obj === 'object' && obj !== null) || typeof obj === 'function') {
@@ -45,54 +45,6 @@ interface GroupProxyContext {
         methodName: string,
         schemaFallbackKey?: string
     ) => (...args: unknown[]) => Promise<unknown>
-}
-
-function resolveFallbackSchema(
-    schemas: Record<string, Record<string, string>> | undefined,
-    group: string,
-    key: string,
-    resolvedKey: string
-): string | undefined {
-    if (schemas === undefined) return undefined
-    const groupSchemas = Object.hasOwn(schemas, group) ? schemas[group] : undefined
-    if (groupSchemas !== undefined) {
-        if (Object.hasOwn(groupSchemas, key) && groupSchemas[key] !== undefined) {
-            return groupSchemas[key]
-        }
-        if (Object.hasOwn(groupSchemas, resolvedKey) && groupSchemas[resolvedKey] !== undefined) {
-            return groupSchemas[resolvedKey]
-        }
-    }
-    const snakeKey = /[A-Z]/.test(resolvedKey)
-        ? resolvedKey.replace(/[A-Z]/g, (letter) => `_${letter.toLowerCase()}`)
-        : resolvedKey
-    if (
-        groupSchemas !== undefined &&
-        Object.hasOwn(groupSchemas, snakeKey) &&
-        groupSchemas[snakeKey] !== undefined
-    ) {
-        return groupSchemas[snakeKey]
-    }
-
-    for (const gName of Object.keys(schemas)) {
-        if (gName === '_topLevel') continue
-        const gMap = schemas[gName]
-        if (gMap === undefined) continue
-        const teamSnake = `team_${snakeKey}`
-        const found =
-            (Object.hasOwn(gMap, key) ? gMap[key] : undefined) ??
-            (Object.hasOwn(gMap, resolvedKey) ? gMap[resolvedKey] : undefined) ??
-            (Object.hasOwn(gMap, snakeKey) ? gMap[snakeKey] : undefined) ??
-            (Object.hasOwn(gMap, teamSnake) ? gMap[teamSnake] : undefined)
-        if (found !== undefined) return found
-    }
-    const topSchemas = Object.hasOwn(schemas, '_topLevel') ? schemas['_topLevel'] : undefined
-    if (topSchemas === undefined) return undefined
-    return (
-        (Object.hasOwn(topSchemas, key) ? topSchemas[key] : undefined) ??
-        (Object.hasOwn(topSchemas, resolvedKey) ? topSchemas[resolvedKey] : undefined) ??
-        (Object.hasOwn(topSchemas, snakeKey) ? topSchemas[snakeKey] : undefined)
-    )
 }
 
 function resolveCoreGroupRedirect(
@@ -364,6 +316,16 @@ function attachVirtualNamespaces(
     api['openDatabase'] = () => api
 }
 
+function formatRpcExecutionError(err: unknown): Record<string, unknown> {
+    return {
+        success: false,
+        error: err instanceof Error ? err.message : String(err),
+        code: 'EXECUTION_ERROR',
+        category: 'execution',
+        recoverable: true,
+    }
+}
+
 /**
  * Build the mj.* API proxy from method and schema lists.
  */
@@ -384,21 +346,19 @@ export function buildApiProxy(
     }
 
     const safeRpcCall = (group: string, method: string, args: unknown[]): Promise<unknown> =>
-        rpcCall(group, method, args).catch((err: unknown) => ({
-            success: false,
-            error: err instanceof Error ? err.message : String(err),
-            code: 'EXECUTION_ERROR',
-            category: 'execution',
-            recoverable: true,
-        }))
+        rpcCall(group, method, args).catch(formatRpcExecutionError)
 
     const invokeRpc = (g: string, m: string, args: unknown[]): Promise<unknown> => {
-        const canonicalMethod = METHOD_ALIASES[g]?.[m] ?? m
-        const intercept = applyArgInterceptions(canonicalMethod, args)
-        if ('error' in intercept) {
-            return wrapPromise(Promise.resolve(wrapResult(intercept.error)), m)
+        try {
+            const canonicalMethod = METHOD_ALIASES[g]?.[m] ?? m
+            const intercept = applyArgInterceptions(canonicalMethod, args)
+            if ('error' in intercept) {
+                return wrapPromise(Promise.resolve(wrapResult(intercept.error)), m)
+            }
+            return wrapPromise(safeRpcCall(g, m, intercept.args).then(wrapResult), m)
+        } catch (err: unknown) {
+            return wrapPromise(Promise.resolve(wrapResult(formatRpcExecutionError(err))), m)
         }
-        return wrapPromise(safeRpcCall(g, m, intercept.args).then(wrapResult), m)
     }
 
     const createMethodProxyFn = (

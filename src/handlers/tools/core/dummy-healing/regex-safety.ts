@@ -110,9 +110,32 @@ function readQuantifierAt(pattern: string, pos: number): QuantifierReadResult | 
     return { end, repeating: maxVal > 1, nullable: minVal === 0 }
 }
 
+const UNIVERSAL_WILDCARD_CLASSES = new Set([
+    '[\\s\\S]',
+    '[\\S\\s]',
+    '[\\d\\D]',
+    '[\\D\\d]',
+    '[\\w\\W]',
+    '[\\W\\w]',
+])
+
+function isUniversalWildcardAtom(token: string): boolean {
+    return token === '.' || UNIVERSAL_WILDCARD_CLASSES.has(token)
+}
+
 function areAtomsProvablyDisjoint(a: string, b: string): boolean {
-    if (a === b || a === '.' || b === '.') return false
+    if (isUniversalWildcardAtom(a) || isUniversalWildcardAtom(b)) return false
+    const aNorm = /^[A-Za-z]$/.test(a) ? a.toLowerCase() : a
+    const bNorm = /^[A-Za-z]$/.test(b) ? b.toLowerCase() : b
+    if (aNorm === bNorm) return false
     if (isDisjointShorthandPair(a, b)) return true
+    const nonWsClassRe = /^\[[A-Za-z0-9_-]+\]$/
+    if (
+        (a === '\\s' && nonWsClassRe.test(b)) ||
+        (b === '\\s' && nonWsClassRe.test(a))
+    ) {
+        return true
+    }
     const aIsLiteral = a.length === 1 && a !== '[' && a !== '\\'
     const bIsLiteral = b.length === 1 && b !== '[' && b !== '\\'
     return aIsLiteral && bIsLiteral
@@ -135,45 +158,113 @@ function readAtomToken(pattern: string, i: number): { token: string; next: numbe
     return { token: ch, next: i + 1 }
 }
 
-/** Reject ungrouped overlapping/adjacent quantifiers and excessive wildcard/unbounded quantifier chains. */
+interface QuantGroupFrame {
+    entryPrev: string | null
+    hasAlternation: boolean
+    zeroWidth: boolean
+    singleAtom: string | null
+    tokenCount: number
+    hasInnerQuant: boolean
+    branchEnds: (string | null)[]
+}
+
+function mergeGroupEndAtoms(atoms: (string | null)[]): string | null {
+    const nonNull = atoms.filter((a): a is string => a !== null)
+    if (nonNull.length === 0) return null
+    const first = nonNull[0] ?? null
+    if (nonNull.every((a) => !areAtomsProvablyDisjoint(first ?? '', a))) {
+        return nonNull.find((a) => isUniversalWildcardAtom(a)) ?? first
+    }
+    // Multiple distinct quantified branches (e.g. (a+|b+)): treat as wildcard if followed by repeating atom that overlaps any branch.
+    return '.'
+}
+
+function groupPrefixSkipLength(pattern: string, idx: number): { skip: number; zeroWidth: boolean } {
+    if (pattern[idx + 1] !== '?') return { skip: 1, zeroWidth: false }
+    if (pattern.startsWith('(?<=', idx) || pattern.startsWith('(?<!', idx)) return { skip: 4, zeroWidth: true }
+    if (pattern.startsWith('(?!', idx)) return { skip: 3, zeroWidth: true }
+    if (pattern.startsWith('(?:', idx) || pattern.startsWith('(?=', idx)) return { skip: 3, zeroWidth: false }
+    return { skip: 1, zeroWidth: false }
+}
+
+interface QuantScannerState {
+    repeatingCount: number
+    wildcardCount: number
+    prevQuantAtom: string | null
+    groupStack: QuantGroupFrame[]
+}
+
+function stepClosingParenGroup(pattern: string, i: number, state: QuantScannerState): { nextIdx: number; unsafe: boolean } {
+    const popped = state.groupStack.pop()
+    const groupQuant = readQuantifierAt(pattern, i + 1)
+    if (popped === undefined || popped.zeroWidth) {
+        state.prevQuantAtom = null
+        return { nextIdx: groupQuant !== null ? groupQuant.end : i + 1, unsafe: false }
+    }
+    if (groupQuant !== null && groupQuant.repeating && popped.tokenCount === 1 && popped.singleAtom !== null) {
+        state.repeatingCount++
+        if (isUniversalWildcardAtom(popped.singleAtom)) state.wildcardCount++
+        if (state.repeatingCount > MAX_UNBOUNDED_QUANTIFIERS || state.wildcardCount > MAX_UNBOUNDED_WILDCARDS) {
+            return { nextIdx: pattern.length, unsafe: true }
+        }
+        if (popped.entryPrev !== null && !areAtomsProvablyDisjoint(popped.entryPrev, popped.singleAtom)) {
+            return { nextIdx: pattern.length, unsafe: true }
+        }
+        state.prevQuantAtom = !groupQuant.nullable || popped.entryPrev === null ? popped.singleAtom : popped.entryPrev
+        return { nextIdx: groupQuant.end, unsafe: false }
+    }
+    if (popped.hasAlternation) {
+        popped.branchEnds.push(state.prevQuantAtom)
+        state.prevQuantAtom = mergeGroupEndAtoms(popped.branchEnds)
+    }
+    return { nextIdx: groupQuant !== null ? groupQuant.end : i + 1, unsafe: false }
+}
+
+/** Reject ungrouped overlapping/adjacent quantifiers, group-boundary chains, and excessive wildcards. */
 function hasUnsafeUngroupedQuantifiers(pattern: string): boolean {
-    let repeatingCount = 0
-    let wildcardCount = 0
-    let prevQuantAtom: string | null = null
+    const state: QuantScannerState = { repeatingCount: 0, wildcardCount: 0, prevQuantAtom: null, groupStack: [] }
     let i = 0
     while (i < pattern.length) {
         const ch = pattern[i] ?? ''
-        if (ch === '(' || ch === ')' || ch === '|' || ch === '^' || ch === '$') {
-            prevQuantAtom = null
-            i++
-            continue
+        if (ch === '^' || ch === '$') { state.prevQuantAtom = null; i++; continue }
+        if (ch === '(') {
+            const prefix = groupPrefixSkipLength(pattern, i)
+            state.groupStack.push({
+                entryPrev: state.prevQuantAtom, hasAlternation: false, zeroWidth: prefix.zeroWidth,
+                singleAtom: null, tokenCount: 0, hasInnerQuant: false, branchEnds: [],
+            })
+            if (prefix.zeroWidth) state.prevQuantAtom = null
+            i += prefix.skip; continue
+        }
+        if (ch === '|') {
+            const top = state.groupStack.at(-1)
+            if (top !== undefined) {
+                top.hasAlternation = true; top.branchEnds.push(state.prevQuantAtom)
+                state.prevQuantAtom = top.zeroWidth ? null : top.entryPrev
+            } else { state.prevQuantAtom = null }
+            i++; continue
+        }
+        if (ch === ')') {
+            const step = stepClosingParenGroup(pattern, i, state)
+            if (step.unsafe) return true
+            i = step.nextIdx; continue
         }
         const { token, next } = readAtomToken(pattern, i)
-        if (token === '\\b' || token === '\\B') {
-            i = next
-            continue
+        if (token === '\\b' || token === '\\B') { i = next; continue }
+        const topFrame = state.groupStack.at(-1)
+        if (topFrame !== undefined) {
+            topFrame.tokenCount++
+            topFrame.singleAtom = topFrame.tokenCount === 1 ? token : null
         }
         const quant = readQuantifierAt(pattern, next)
-        if (quant === null) {
-            prevQuantAtom = null
-            i = next
-            continue
-        }
-        if (!quant.repeating) {
-            i = quant.end
-            continue
-        }
-        repeatingCount++
-        if (token === '.') wildcardCount++
-        if (repeatingCount > MAX_UNBOUNDED_QUANTIFIERS || wildcardCount > MAX_UNBOUNDED_WILDCARDS) {
-            return true
-        }
-        if (prevQuantAtom !== null && !areAtomsProvablyDisjoint(prevQuantAtom, token)) {
-            return true
-        }
-        if (!quant.nullable || prevQuantAtom === null) {
-            prevQuantAtom = token
-        }
+        if (quant === null) { state.prevQuantAtom = null; i = next; continue }
+        if (topFrame !== undefined) topFrame.hasInnerQuant = true
+        if (!quant.repeating) { i = quant.end; continue }
+        state.repeatingCount++
+        if (isUniversalWildcardAtom(token)) state.wildcardCount++
+        if (state.repeatingCount > MAX_UNBOUNDED_QUANTIFIERS || state.wildcardCount > MAX_UNBOUNDED_WILDCARDS) return true
+        if (state.prevQuantAtom !== null && !areAtomsProvablyDisjoint(state.prevQuantAtom, token)) return true
+        if (!quant.nullable || state.prevQuantAtom === null) state.prevQuantAtom = token
         i = quant.end
     }
     return false

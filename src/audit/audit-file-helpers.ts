@@ -149,7 +149,7 @@ export async function appendRegularFileNoFollow(filePath: string, payload: strin
             await fh.chmod(0o600).catch(() => undefined)
         }
     } finally {
-        await fh.close()
+        await fh.close().catch(() => undefined)
     }
 }
 
@@ -214,7 +214,7 @@ export async function rotateAuditLogFiles(
                     await archiveFh.chmod(0o600).catch(() => undefined)
                 }
             } finally {
-                await archiveFh.close()
+                await archiveFh.close().catch(() => undefined)
             }
         }
         return 0

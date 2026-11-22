@@ -82,7 +82,7 @@ export function extractUriFromArgs(args: Record<string, unknown>): string | unde
         )
         uri = isRootResource ? `memory://${candidateUri}` : `memory://briefing/${candidateUri}`
     }
-    return uri
+    return uri !== undefined && uri !== '' ? uri : undefined
 }
 
 export async function tryHandleResourceUriFallback(

@@ -6,9 +6,8 @@
  * relationship linking, and dry-run mode.
  */
 
-import { opendir, open } from 'node:fs/promises'
-import { join } from 'node:path'
-import { constants } from 'node:fs'
+import { opendir } from 'node:fs/promises'
+import { realpathSync } from 'node:fs'
 import type { IDatabaseAdapter } from '../database/core/interfaces.js'
 import type { VectorSearchManager } from '../vector/vector-search-manager/index.js'
 import type { JournalEntry, ToolHandlerConfig } from '../types/index.js'
@@ -17,13 +16,12 @@ import {
     validateDryRunRelationships,
     type PendingRelationshipLink,
 } from './import-relationships.js'
-import { parseFrontmatter, type FrontmatterAnchor } from './frontmatter.js'
+import { type FrontmatterAnchor } from './frontmatter.js'
+import { readAndParseMarkdownFile } from './import-file-reader.js'
 import {
-    assertSafeChildFile,
     assertSafeDirectoryPath,
     sanitizeAuthor,
 } from '../utils/security-utils.js'
-import { logger } from '../utils/logger.js'
 import {
     createImportBatchAuthorCache,
     indexImportedEntries,
@@ -34,9 +32,6 @@ import {
     type ImportBatchAuthorCache,
     type ImportedVectorItem,
 } from './importer-scope.js'
-
-/** Maximum size (5 MB) permitted for a single markdown file during import. */
-const MAX_IMPORT_FILE_SIZE_BYTES = 5 * 1024 * 1024
 
 // ============================================================================
 // Types
@@ -80,26 +75,6 @@ export interface ImportResult {
 // Importer
 // ============================================================================
 
-/**
- * Import markdown files from a directory into the journal database.
- *
- * Upsert semantics:
- * - If frontmatter has `mj_id` AND entry exists → UPDATE
- * - If frontmatter has `mj_id` BUT entry not found → CREATE (DB assigns ID)
- * - If no `mj_id` in frontmatter → CREATE
- *
- * Post-import processing:
- * - Tags included in createEntry/updateEntry calls
- * - Relationship linking where targets exist
- * - Vector re-indexing (fire-and-forget)
- *
- * @param sourceDir - Directory containing `.md` files
- * @param db - Database adapter for entry operations
- * @param options - Import options (dry_run, limit, author)
- * @param vectorManager - Optional vector search manager for re-indexing
- * @returns Import result with counts and errors
- */
-
 export interface ParsedFile {
     filename: string
     body: string
@@ -118,58 +93,6 @@ export interface ParsedFile {
 }
 const NUMERIC_FILENAME_COLLATOR = new Intl.Collator(undefined, { numeric: true })
 
-async function readAndParseMarkdownFile(
-    sourceDir: string,
-    filename: string
-): Promise<{ parsed?: ParsedFile; skipped?: boolean }> {
-    let handle
-    try {
-        const filepath = join(sourceDir, filename)
-        assertSafeChildFile(sourceDir, filename, filepath)
-        try {
-            handle = await open(filepath, constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0))
-        } catch (err: unknown) {
-            const code =
-                err instanceof Error && 'code' in err
-                    ? (err as { code?: string }).code
-                    : undefined
-            if (code === 'ELOOP') {
-                throw new Error(`Refusing to read symlink during import: ${filename}`, {
-                    cause: err,
-                })
-            }
-            throw err
-        }
-
-        const stats = await handle.stat()
-        if (!stats.isFile()) {
-            throw new Error(`Refusing to import non-regular file: ${filename}`)
-        }
-        if (stats.size > MAX_IMPORT_FILE_SIZE_BYTES) {
-            throw new Error(
-                `File exceeds maximum size limit of 5MB (${String(stats.size)} bytes)`
-            )
-        }
-
-        const content = await handle.readFile('utf-8')
-        const { metadata, body } = parseFrontmatter(content)
-        if (!body.trim()) {
-            return { skipped: true }
-        }
-        return { parsed: { filename, body, metadata } }
-    } finally {
-        if (handle) {
-            await Promise.resolve(handle.close()).catch((closeErr: unknown) => {
-                logger.debug('Failed to close import file handle', {
-                    module: 'Importer',
-                    filename,
-                    error: closeErr instanceof Error ? closeErr.message : String(closeErr),
-                })
-            })
-        }
-    }
-}
-
 export async function importMarkdownEntries(
     sourceDir: string,
     db: IDatabaseAdapter,
@@ -180,11 +103,13 @@ export async function importMarkdownEntries(
     const { dry_run = false, limit = 100 } = options
 
     assertSafeDirectoryPath(sourceDir, allowedRoots)
+    const pinnedSourceDir = realpathSync.native(sourceDir)
+    assertSafeDirectoryPath(pinnedSourceDir, allowedRoots)
 
     const allMdFiles: string[] = []
     const MAX_IMPORT_DIR_ENTRIES = 10_000
     let scannedEntries = 0
-    const dir = await opendir(sourceDir)
+    const dir = await opendir(pinnedSourceDir)
     for await (const dirent of dir) {
         if (++scannedEntries > MAX_IMPORT_DIR_ENTRIES) break
         if (dirent.isFile() && /\.md$/i.test(dirent.name)) {
@@ -212,9 +137,9 @@ export async function importMarkdownEntries(
         errors: readErrors,
     } = await readMarkdownFilesParallel(
         mdFiles,
-        (filename) => readAndParseMarkdownFile(sourceDir, filename),
+        (filename) => readAndParseMarkdownFile(pinnedSourceDir, filename),
         (chunkIndex) => {
-            if (chunkIndex > 0) assertSafeDirectoryPath(sourceDir, allowedRoots)
+            if (chunkIndex > 0) assertSafeDirectoryPath(pinnedSourceDir, allowedRoots)
         }
     )
     result.skipped += readSkipped

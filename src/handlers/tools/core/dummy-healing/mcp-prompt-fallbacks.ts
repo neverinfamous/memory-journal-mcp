@@ -96,11 +96,11 @@ export async function handleGetPrompt(
             : {}
     const explicitPromptName =
         typeof rawArgs['name'] === 'string' && rawArgs['name'].trim() !== ''
-            ? rawArgs['name']
+            ? rawArgs['name'].trim()
             : typeof rawArgs['prompt'] === 'string' && rawArgs['prompt'].trim() !== ''
-              ? rawArgs['prompt']
+              ? rawArgs['prompt'].trim()
               : typeof rawArgs['prompt_name'] === 'string' && rawArgs['prompt_name'].trim() !== ''
-                ? rawArgs['prompt_name']
+                ? rawArgs['prompt_name'].trim()
                 : undefined
     if (explicitPromptName === undefined && Object.keys(rawArgs).length > 0) {
         return {

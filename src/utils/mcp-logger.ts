@@ -135,6 +135,9 @@ export class McpLogger {
         if (value instanceof URL) {
             return sanitizeErrorForLogging(value.toString())
         }
+        if (typeof value === 'function') {
+            return '[Function]'
+        }
         if (value === null || typeof value !== 'object') {
             return value
         }
@@ -156,7 +159,7 @@ export class McpLogger {
             const sanitized: Record<string, unknown> = {}
             Object.setPrototypeOf(sanitized, null)
             for (const [k, v] of Object.entries(value)) {
-                if (k === '__proto__' || k === 'constructor' || k === 'prototype') continue
+                if (k === '__proto__' || k === 'constructor' || k === 'prototype' || k === 'toJSON' || typeof v === 'function') continue
                 const safeKey = sanitizeErrorForLogging(k)
                 sanitized[safeKey] =
                     SENSITIVE_KEY_RE.test(k) && v !== undefined && v !== null && v !== ''

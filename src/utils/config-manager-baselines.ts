@@ -1,4 +1,5 @@
 import { DEFAULT_BRIEFING_CONFIG } from '../handlers/resources/shared.js'
+import { isForbiddenProjectKey } from './project-registry-guards.js'
 import {
     readBriefingConfigEntry,
     type BriefingBaselineMap,
@@ -86,8 +87,7 @@ export function buildFileCliEnvBaseline(
             : undefined
     const fileWsId =
         typeof initialFile['defaultWorkspaceId'] === 'string' &&
-        initialFile['defaultWorkspaceId'].trim() !== '' &&
-        initialFile['defaultWorkspaceId'].trim() !== '*'
+        !isForbiddenProjectKey(initialFile['defaultWorkspaceId'])
             ? initialFile['defaultWorkspaceId'].trim()
             : undefined
     const wsCameFromFile =

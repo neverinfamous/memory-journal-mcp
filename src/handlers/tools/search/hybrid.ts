@@ -328,7 +328,12 @@ function assembleHybridCandidates(
             )
         )
         cursor = end
-        if (accumulated.length >= options.limit) break
+        if (accumulated.length >= options.limit) {
+            const uniqueCount = canQueryTeam
+                ? collapseTeamMirrors(attachTeamMirrorOrigins(teamDb, accumulated)).length
+                : accumulated.length
+            if (uniqueCount >= options.limit) break
+        }
         chunkSize = Math.max(chunkSize * 2, 64)
     }
 

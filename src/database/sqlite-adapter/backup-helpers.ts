@@ -8,6 +8,10 @@ import type { IDatabaseConnection } from '../core/interfaces.js'
 import { applySqlCipherKey, hasSqlCipherKey } from './sqlcipher-key.js'
 import { loadVecExtensionOnDb } from './connection-pragmas.js'
 import {
+    clearActiveInProcessRestoreLock,
+    getActiveInProcessRestoreToken,
+} from './restore-lock.js'
+import {
     assertBackupHeaderAndCipherFormat,
     assertHasMemoryJournalTable,
     assertSafeBackupSchemaPreIntegrity,
@@ -251,16 +255,54 @@ export function countActiveEntries(ctx: IDatabaseConnection): number {
     return typeof raw === 'bigint' ? Number(raw) : 0
 }
 
-/** Release the OS restore lock directory on a best-effort basis. */
-export function releaseRestoreLock(lockDir: string, lockFile: string): void {
+function readDiskRestoreLockInfo(lockFile: string): { pid?: number | undefined; nonce?: string | undefined } | null {
     try {
-        fs.unlinkSync(lockFile)
-        fs.rmdirSync(lockDir)
+        const raw = fs.readFileSync(lockFile, 'utf-8').trim()
+        if (!raw) return null
+        const parsed: unknown = JSON.parse(raw)
+        if (typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed)) {
+            const record = parsed as { pid?: unknown; nonce?: unknown }
+            return {
+                pid: typeof record.pid === 'number' ? record.pid : undefined,
+                nonce: typeof record.nonce === 'string' ? record.nonce : undefined,
+            }
+        }
+        return null
+    } catch {
+        return null
+    }
+}
+
+/** Release the OS restore lock directory only when held by this caller/token (best-effort). */
+export function releaseRestoreLock(lockDir: string, lockFile: string, expectedToken?: string): void {
+    const tokenToMatch = expectedToken ?? getActiveInProcessRestoreToken(lockDir)
+    try {
+        const diskInfo = readDiskRestoreLockInfo(lockFile)
+        if (diskInfo !== null) {
+            if (tokenToMatch !== undefined && diskInfo.nonce !== undefined && diskInfo.nonce !== tokenToMatch) {
+                return
+            }
+            if (diskInfo.pid !== undefined && diskInfo.pid !== process.pid) {
+                return
+            }
+        }
+        try {
+            fs.unlinkSync(lockFile)
+        } catch (unlinkErr: unknown) {
+            if (!hasErrorCode(unlinkErr, 'ENOENT')) throw unlinkErr
+        }
+        try {
+            fs.rmdirSync(lockDir)
+        } catch (rmdirErr: unknown) {
+            if (!hasErrorCode(rmdirErr, 'ENOENT')) throw rmdirErr
+        }
     } catch (err: unknown) {
         logger.warning('Failed to release OS lock directory during restore', {
             path: lockDir,
             error: err instanceof Error ? err.message : String(err),
         })
+    } finally {
+        clearActiveInProcessRestoreLock(lockDir, tokenToMatch)
     }
 }
 

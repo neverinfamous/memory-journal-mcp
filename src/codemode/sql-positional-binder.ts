@@ -32,6 +32,14 @@ import {
     type SqlRecordBindIndex,
 } from './sql-placeholder-helpers.js'
 import { parsePositiveProjectNumber } from '../utils/safe-positive-int.js'
+import {
+    assignColumn,
+    bindSetColumnNameCheck,
+    mergeUnusedRecordBinds,
+    parseLiteral,
+    type SqlLockedScope,
+    UNPARSEABLE,
+} from './sql-record-bind-helpers.js'
 
 export interface ParsedSql {
     action: 'create' | 'update' | 'delete' | 'get_by_id' | 'unmapped' | 'other'
@@ -39,114 +47,9 @@ export interface ParsedSql {
 }
 
 const UNMAPPED: ParsedSql = { action: 'unmapped', params: {} }
-const UNPARSEABLE = Symbol('unparseable')
 const CLAUSE_ID_LITERAL =
     /^(?:[`"']?[a-zA-Z_][\w]*[`"']?\.)?[`"']?(?:id|entry_id)[`"']?\s*=\s*(\d+)$/i
 const NAMED_PLACEHOLDER_RE = /^[@:$][A-Za-z_][\w]*$/
-
-function toPositiveInt(val: unknown): number | undefined {
-    return parsePositiveProjectNumber(val)
-}
-
-function toTags(val: unknown): string[] | undefined {
-    if (Array.isArray(val)) return val.map(String)
-    if (typeof val !== 'string') return undefined
-    const trimmed = val.trim()
-    if (trimmed.startsWith('[') && trimmed.endsWith(']')) {
-        try {
-            const parsed: unknown = JSON.parse(trimmed)
-            if (Array.isArray(parsed)) return parsed.map(String)
-        } catch {
-            // Not JSON: fall through to comma-separated parsing.
-        }
-    }
-    return trimmed === '' ? [] : trimmed.split(',').map((t) => t.trim()).filter((t) => t !== '')
-}
-
-/** Assigns a bound value to its canonical journal field; returns false when the column is unknown. */
-function assignColumn(payload: Record<string, unknown>, column: string, val: unknown): boolean {
-    switch (column) {
-        case 'id':
-        case 'entry_id': {
-            const id = toPositiveInt(val)
-            if (id !== undefined) payload['entry_id'] = id
-            return id !== undefined
-        }
-        case 'project_number':
-        case 'project_id': {
-            if (val === null) {
-                payload['project_number'] = null
-                return true
-            }
-            const pn = toPositiveInt(val)
-            if (pn !== undefined) payload['project_number'] = pn
-            return pn !== undefined
-        }
-        case 'workspace_id':
-            if (typeof val === 'string' && val.trim() !== '') {
-                payload['workspace_id'] = val.trim()
-                return true
-            }
-            return false
-        case 'significance_type':
-            if (val === null || typeof val === 'string') {
-                payload['significance_type'] = val
-                return true
-            }
-            return false
-        case 'content':
-        case 'title':
-            if (typeof val === 'string') {
-                payload[column] = val
-                return true
-            }
-            return false
-        case 'entry_type':
-        case 'type': {
-            if (typeof val !== 'string') return false
-            payload['entry_type'] = val; return true
-        }
-        case 'tags': {
-            const tags = toTags(val)
-            if (tags === undefined) return false
-            payload['tags'] = tags; return true
-        }
-        case 'is_personal':
-            payload['is_personal'] = val === true || val === 1 || val === '1' || val === 'true'
-            return true
-        default:
-            return false
-    }
-}
-
-function mergeUnusedRecordBinds(
-    payload: Record<string, unknown>,
-    bindIndex: SqlRecordBindIndex,
-    consumedIds: ReadonlySet<number>
-): boolean {
-    for (const { snakeCol, value } of bindIndex.unconsumedEntries(consumedIds)) {
-        if (!assignColumn(payload, snakeCol, value)) return false
-    }
-    return true
-}
-
-function parseLiteral(raw: string): unknown {
-    const trimmed = raw.trim()
-    if (/^null$/i.test(trimmed)) return null
-    if (/^true$/i.test(trimmed)) return true
-    if (/^false$/i.test(trimmed)) return false
-    if (/^-?\d+(?:\.\d+)?$/.test(trimmed)) return Number(trimmed)
-    if (
-        trimmed.length >= 2 &&
-        ((trimmed.startsWith("'") && trimmed.endsWith("'")) ||
-            (trimmed.startsWith('"') && trimmed.endsWith('"')))
-    ) {
-        const inner = trimmed.slice(1, -1)
-        const doubled = trimmed.startsWith("'") ? inner.replace(/''/g, "'") : inner.replace(/""/g, '"')
-        return doubled.replace(/\\(['"\\])/g, '$1')
-    }
-    return UNPARSEABLE
-}
 
 interface PlaceholderBindResult {
     ok: boolean
@@ -255,19 +158,32 @@ function parseUpdate(cleanSql: string, args: unknown[]): ParsedSql {
         payload['target_workspace_id'] ??= payload['workspace_id']
         Reflect.deleteProperty(payload, 'workspace_id')
     }
-    if (!mergeUnusedRecordBinds(payload, bindRes.bindIndex, bindRes.consumedIds)) return UNMAPPED
     const whereLiteralScope = scopeFromSqlLiterals(whereClause)
+    const boundWhereWs =
+        typeof where['workspace_id'] === 'string'
+            ? where['workspace_id']
+            : typeof whereLiteralScope['workspace_id'] === 'string'
+              ? whereLiteralScope['workspace_id']
+              : undefined
     const whereProj =
-        typeof where['project_number'] === 'number'
-            ? where['project_number']
+        where['project_number'] !== undefined
+            ? (where['project_number'] as number | null)
             : typeof whereLiteralScope['project_number'] === 'number'
               ? whereLiteralScope['project_number']
               : undefined
-    if (
-        setFields['project_number'] !== undefined &&
-        whereProj !== undefined &&
-        Number(setFields['project_number']) !== whereProj
-    ) {
+    const setProj = setFields['project_number'] as number | null | undefined
+    if (setProj !== undefined && whereProj !== undefined && Number(setProj) !== whereProj) {
+        return UNMAPPED
+    }
+    const lockedScope: SqlLockedScope = {
+        workspaceId: boundWhereWs,
+        targetWorkspaceId:
+            typeof payload['target_workspace_id'] === 'string'
+                ? payload['target_workspace_id']
+                : undefined,
+        projectNumber: whereProj ?? setProj,
+    }
+    if (!mergeUnusedRecordBinds(payload, bindRes.bindIndex, bindRes.consumedIds, lockedScope)) {
         return UNMAPPED
     }
     if (where['entry_id'] !== undefined) payload['entry_id'] = where['entry_id']
@@ -343,8 +259,22 @@ function parseInsert(cleanSql: string, args: unknown[]): ParsedSql {
     } else if (positional.length > 0) {
         return UNMAPPED
     }
-    if (!mergeUnusedRecordBinds(payload, bindIndex, consumedIds)) return UNMAPPED
     const literalScope = scopeFromInsertLiterals(cleanSql)
+    const lockedScope: SqlLockedScope = {
+        workspaceId:
+            typeof payload['workspace_id'] === 'string'
+                ? payload['workspace_id']
+                : typeof literalScope['workspace_id'] === 'string'
+                  ? literalScope['workspace_id']
+                  : undefined,
+        projectNumber:
+            payload['project_number'] !== undefined
+                ? (payload['project_number'] as number | null)
+                : typeof literalScope['project_number'] === 'number'
+                  ? literalScope['project_number']
+                  : undefined,
+    }
+    if (!mergeUnusedRecordBinds(payload, bindIndex, consumedIds, lockedScope)) return UNMAPPED
     if (payload['workspace_id'] === undefined && typeof literalScope['workspace_id'] === 'string') {
         payload['workspace_id'] = literalScope['workspace_id']
     }
@@ -354,21 +284,6 @@ function parseInsert(cleanSql: string, args: unknown[]): ParsedSql {
     if (typeof payload['content'] !== 'string' || payload['content'] === '') return UNMAPPED
     payload['entry_type'] ??= 'technical_note'
     return { action: 'create', params: payload }
-}
-
-function bindSetColumnNameCheck(column: string): boolean {
-    return (
-        column === 'project_number' ||
-        column === 'project_id' ||
-        column === 'workspace_id' ||
-        column === 'significance_type' ||
-        column === 'content' ||
-        column === 'title' ||
-        column === 'entry_type' ||
-        column === 'type' ||
-        column === 'tags' ||
-        column === 'is_personal'
-    )
 }
 
 function parseWhereOnly(cleanSql: string, args: unknown[], action: 'delete' | 'get_by_id'): ParsedSql {
@@ -388,10 +303,27 @@ function parseWhereOnly(cleanSql: string, args: unknown[], action: 'delete' | 'g
         return assignColumn(payload, ph.column, val)
     })
     if (!bindRes.ok) return UNMAPPED
+    const literalScope = scopeFromSqlLiterals(whereClause)
+    const lockedScope: SqlLockedScope = {
+        workspaceId:
+            typeof payload['workspace_id'] === 'string'
+                ? payload['workspace_id']
+                : typeof literalScope['workspace_id'] === 'string'
+                  ? literalScope['workspace_id']
+                  : undefined,
+        projectNumber:
+            payload['project_number'] !== undefined
+                ? (payload['project_number'] as number | null)
+                : typeof literalScope['project_number'] === 'number'
+                  ? literalScope['project_number']
+                  : undefined,
+    }
     const records: Record<string, unknown> = {}
-    if (!mergeUnusedRecordBinds(records, bindRes.bindIndex, bindRes.consumedIds)) return UNMAPPED
-    if (records['workspace_id'] !== undefined) payload['workspace_id'] = records['workspace_id']
-    if (records['project_number'] !== undefined) payload['project_number'] = records['project_number']
+    if (!mergeUnusedRecordBinds(records, bindRes.bindIndex, bindRes.consumedIds, lockedScope)) {
+        return UNMAPPED
+    }
+    if (records['workspace_id'] !== undefined) payload['workspace_id'] ??= records['workspace_id']
+    if (records['project_number'] !== undefined) payload['project_number'] ??= records['project_number']
     if (records['entry_id'] !== undefined) payload['entry_id'] ??= records['entry_id']
     applyWhereScope(payload, cleanSql)
     if (payload['entry_id'] === undefined) return UNMAPPED

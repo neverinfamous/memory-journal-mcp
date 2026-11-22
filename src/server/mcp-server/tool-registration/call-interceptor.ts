@@ -327,7 +327,8 @@ async function executeInterceptedToolCall(
 
         const preHealName = params?.name
         if (isRegisteredToolBlocked(preHealName, allTools, allToolNames, customToolHandlerConfig, readOnlyHints)) {
-            return await originalHandler(request, extra)
+            const blockedRes = await originalHandler(request, extra)
+            return toValidationFailureResponse(blockedRes, params) ?? blockedRes
         }
 
         if (params !== undefined && healingEnabled) {
@@ -339,7 +340,8 @@ async function executeInterceptedToolCall(
             params?.name !== preHealName &&
             isRegisteredToolBlocked(params?.name, allTools, allToolNames, customToolHandlerConfig, readOnlyHints)
         ) {
-            return await originalHandler(request, extra)
+            const blockedRes = await originalHandler(request, extra)
+            return toValidationFailureResponse(blockedRes, params) ?? blockedRes
         }
 
         applyCreateWorkspaceScope(params, customToolHandlerConfig, liveBriefing, context.runtime)

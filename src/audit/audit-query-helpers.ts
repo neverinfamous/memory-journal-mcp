@@ -269,6 +269,60 @@ export function extractAuditScopeFromArgs(
 }
 
 /** Extract optional workspace_id / project_number query params or URI path repo from a memory:// URI. */
+function extractRepoPathFromResourceUrl(parsed: URL): string | undefined {
+    const host = parsed.hostname
+    const stripped = parsed.pathname.replace(/^\/+/, '').trim()
+    if (stripped.length === 0) return undefined
+    if (host === 'briefing' || host === 'agent-context' || host === 'agent-id' || host === 'graph') {
+        return stripped
+    }
+    if (host === 'actions' && stripped.startsWith('recent/')) {
+        const repo = stripped.slice('recent/'.length).trim()
+        return repo.length > 0 ? repo : undefined
+    }
+    if (host === 'github') {
+        for (const prefix of ['status/', 'milestones/']) {
+            if (stripped.startsWith(prefix)) {
+                const repo = stripped.slice(prefix.length).trim()
+                return repo.length > 0 ? repo : undefined
+            }
+        }
+    }
+    if (host === 'milestones' || host === 'kanban') {
+        const lastSlash = stripped.lastIndexOf('/')
+        if (lastSlash > 0 && /^\d+$/.test(stripped.slice(lastSlash + 1))) {
+            const repo = stripped.slice(0, lastSlash).trim()
+            return repo.length > 0 ? repo : undefined
+        }
+    }
+    return undefined
+}
+
+function extractProjectNumberFromResourceUrl(parsed: URL): number | undefined {
+    const host = parsed.hostname
+    const segments = parsed.pathname.replace(/^\/+/, '').trim().split('/').filter(Boolean)
+    const first = segments[0]
+    if (first === undefined) return undefined
+    if (host === 'projects' && segments.length === 2 && segments[1] === 'timeline') {
+        return parseCanonicalPositiveInt(first)
+    }
+    if (
+        host === 'commits' &&
+        (segments.length === 1 ||
+            (segments.length === 2 && (segments[1] === 'by-issue' || segments[1] === 'by-pr')))
+    ) {
+        return parseCanonicalPositiveInt(first)
+    }
+    if (host === 'staleness' && segments.length === 1) {
+        return parseCanonicalPositiveInt(first)
+    }
+    if (host === 'kanban') {
+        const lastSegment = segments[segments.length - 1]
+        if (lastSegment !== undefined) return parseCanonicalPositiveInt(lastSegment)
+    }
+    return undefined
+}
+
 export function extractAuditScopeFromUri(
     uri: string,
     reqCtx?: RequestContext,
@@ -299,17 +353,14 @@ export function extractAuditScopeFromUri(
                 if (n !== undefined) projectNumber = n
             }
         }
-        if (
-            workspaceId === undefined &&
-            !explicitWildcardWorkspace &&
-            (parsed.hostname === 'briefing' ||
-                parsed.hostname === 'agent-context' ||
-                parsed.hostname === 'agent-id')
-        ) {
-            const rawRepo = parsed.pathname.replace(/^\/+/, '').trim()
-            if (rawRepo.length > 0) {
+        if (workspaceId === undefined && !explicitWildcardWorkspace) {
+            const rawRepo = extractRepoPathFromResourceUrl(parsed)
+            if (rawRepo !== undefined) {
                 workspaceId = sanitizeErrorForLogging(decodeURIComponent(rawRepo)).slice(0, 255)
             }
+        }
+        if (projectNumber === undefined && !explicitZeroProject) {
+            projectNumber = extractProjectNumberFromResourceUrl(parsed)
         }
     } catch {
         // Ignore malformed URI strings during audit extraction

@@ -1,5 +1,6 @@
 import { execFileSync } from 'node:child_process';
-import { lstatSync, mkdirSync, readFileSync, renameSync, unlinkSync, writeFileSync } from 'node:fs';
+import { randomBytes } from 'node:crypto';
+import { existsSync, lstatSync, mkdirSync, readFileSync, renameSync, unlinkSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { z } from 'zod';
 
@@ -8,7 +9,6 @@ export const SYNC_LOCK_REL_PATH = join('.test-output', 'sync-vendor.lock');
 
 const MAX_FOREIGN_PREVIEW = 10;
 const GIT_STATUS_MAX_BUFFER = 10 * 1024 * 1024;
-let tempWriteCounter = 0;
 
 export const SyncLockRecordSchema = z.object({
   pid: z.number().int().positive().refine((n) => Number.isSafeInteger(n), 'Invalid lock PID'),
@@ -111,7 +111,14 @@ function inspectAndClearStaleLock(lockPath: string, isPidAlive: (pid: number) =>
       `Another sync-vendor process (PID ${String(record.pid)}, libs: [${record.libs.join(', ')}], created: ${record.createdAt}) holds ${lockPath}.`
     );
   }
-  if (readFileSync(lockPath, 'utf8') !== existingRaw) {
+  let currentRaw: string;
+  try {
+    currentRaw = readFileSync(lockPath, 'utf8');
+  } catch (err: unknown) {
+    if (getErrCode(err) === 'ENOENT') return;
+    throw err;
+  }
+  if (currentRaw !== existingRaw) {
     throw new Error(`Concurrent lock modification detected at ${lockPath}; retry after active sync finishes.`);
   }
   unlinkIgnoreEnoent(lockPath);
@@ -157,6 +164,16 @@ export function acquireSyncVendorLock(
   };
 }
 
+function hasGitMarkerUpTree(startDir: string): boolean {
+  let current = resolve(startDir);
+  while (true) {
+    if (existsSync(join(current, '.git'))) return true;
+    const parent = dirname(current);
+    if (parent === current) return false;
+    current = parent;
+  }
+}
+
 /**
  * Refuse vendor writes while `.git/index.lock` is active or when uncommitted changes
  * touch files outside `src/vendor/VENDOR.json` and `src/vendor/<libsToSync>/`.
@@ -165,10 +182,25 @@ export function assertSafeSyncWorktree(cwd: string, libsToSync: readonly string[
   let gitDirRaw: string;
   try {
     gitDirRaw = execFileSync('git', ['rev-parse', '--git-dir'], {
-      cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'], windowsHide: true,
+      cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true,
     }).trim();
-  } catch {
-    return;
+  } catch (err: unknown) {
+    const status = typeof err === 'object' && err !== null && 'status' in err ? err.status : undefined;
+    const stderrText =
+      typeof err === 'object' && err !== null && 'stderr' in err && err.stderr !== undefined
+        ? String(err.stderr)
+        : '';
+    if (
+      status === 128 &&
+      /not a git repository/i.test(stderrText) &&
+      !hasGitMarkerUpTree(cwd)
+    ) {
+      return;
+    }
+    throw new Error(
+      `Failed to verify git worktree safety at ${cwd}: ${err instanceof Error ? err.message : String(err)}`,
+      { cause: err }
+    );
   }
   if (gitDirRaw === '') return;
 
@@ -205,12 +237,14 @@ export function writeBufferAtomicIfChanged(destFile: string, nextContent: Buffer
     mkdirSync(dirname(destFile), { recursive: true });
   }
 
-  const tmpPath = `${destFile}.sync-tmp-${String(process.pid)}-${String(++tempWriteCounter)}`;
+  const tmpPath = `${destFile}.sync-tmp-${String(process.pid)}-${randomBytes(6).toString('hex')}`;
+  let wroteTemp = false;
   try {
     writeFileSync(tmpPath, nextContent, { flag: 'wx' });
+    wroteTemp = true;
     renameSync(tmpPath, destFile);
   } catch (err: unknown) {
-    unlinkIgnoreEnoent(tmpPath);
+    if (wroteTemp) unlinkIgnoreEnoent(tmpPath);
     throw err;
   }
   return true;

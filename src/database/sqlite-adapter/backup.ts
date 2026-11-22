@@ -102,6 +102,9 @@ export class BackupManager {
     }
 
     listBackups(): BackupEntry[] {
+        if (this.ctx.getDbPath?.() === ':memory:') {
+            return []
+        }
         const backupsDir = this.ctx.getBackupsDir()
         const dirStats = fs.statSync(backupsDir, { bigint: true, throwIfNoEntry: false })
         if (dirStats === undefined) {
@@ -195,6 +198,9 @@ export class BackupManager {
         if (keepCount < 1 || Number.isNaN(keepCount)) {
             throw new ValidationError('keepCount must be at least 1')
         }
+        if (this.ctx.getDbPath?.() === ':memory:') {
+            throw new ValidationError('Cannot prune backups for an in-memory database')
+        }
 
         const backupsDir = this.ctx.getBackupsDir()
         this.sweepStaleTempFiles(backupsDir)
@@ -255,7 +261,7 @@ export class BackupManager {
 
         const lockDir = `${this.ctx.getDbPath()}.lock.d`
         const lockFile = path.join(lockDir, 'lock.json')
-        acquireRestoreLock(lockDir, lockFile, runtime)
+        const lockToken = acquireRestoreLock(lockDir, lockFile, runtime)
 
         const stagedTempPath = `${this.ctx.getDbPath()}.restore_tmp_${randomUUID()}`
         try {
@@ -281,7 +287,7 @@ export class BackupManager {
             await unlinkBestEffort(stagedTempPath)
             throw err
         } finally {
-            releaseRestoreLock(lockDir, lockFile)
+            releaseRestoreLock(lockDir, lockFile, lockToken)
         }
     }
 

@@ -213,8 +213,8 @@ export function loadBadgeMetrics(options: LoadBadgeMetricsOptions = {}): BadgeMe
   };
 }
 
-function updateBadgeTargetFile(file: string, metrics: BadgeMetrics): boolean {
-  const filePath = path.join(ROOT_DIR, file);
+function updateBadgeTargetFile(file: string, metrics: BadgeMetrics, rootDir: string = ROOT_DIR): boolean {
+  const filePath = path.join(rootDir, file);
   try {
     let content = fs.readFileSync(filePath, "utf-8");
     const originalNormalized = content.replace(/\r\n/g, "\n");
@@ -330,10 +330,14 @@ export function buildCommitInvocation(
   };
 }
 
-function autoCommitDirtyBadgeFiles(filesToUpdate: readonly string[], updatedFiles: readonly string[]): void {
+function autoCommitDirtyBadgeFiles(
+  filesToUpdate: readonly string[],
+  updatedFiles: readonly string[],
+  rootDir: string = ROOT_DIR,
+): void {
   const ghActions = process.env['GITHUB_ACTIONS'];
   if (ghActions !== undefined && ghActions.length > 0) return;
-  const commitScript = path.join(ROOT_DIR, "scripts", "commit.ts");
+  const commitScript = path.join(rootDir, "scripts", "commit.ts");
   if (!fs.existsSync(commitScript)) return;
 
   const remaining = filesToUpdate.filter((file) => !updatedFiles.includes(file));
@@ -341,7 +345,7 @@ function autoCommitDirtyBadgeFiles(filesToUpdate: readonly string[], updatedFile
   if (remaining.length > 0) {
     try {
       const diff = execFileSync("git", ["ls-files", "-m", "--", ...remaining], {
-        cwd: ROOT_DIR,
+        cwd: rootDir,
         encoding: "utf-8",
         windowsHide: true,
       }).trim();
@@ -362,7 +366,7 @@ function autoCommitDirtyBadgeFiles(filesToUpdate: readonly string[], updatedFile
 
   if (dirtyFiles.length === 0) return;
   console.log(`\nAuto-committing badge updates for: ${dirtyFiles.join(", ")}`);
-  const inv = buildCommitInvocation(ROOT_DIR, dirtyFiles);
+  const inv = buildCommitInvocation(rootDir, dirtyFiles);
   const entryScript = inv.args[0] ?? "";
   if (!fs.existsSync(entryScript)) {
     console.error(`Failed to auto-commit badge updates: commit entrypoint not found at ${entryScript}`);
@@ -372,7 +376,7 @@ function autoCommitDirtyBadgeFiles(filesToUpdate: readonly string[], updatedFile
   try {
     execFileSync(inv.command, inv.args, {
       stdio: "inherit",
-      cwd: ROOT_DIR,
+      cwd: rootDir,
       windowsHide: true,
     });
     console.log("Successfully auto-committed badge updates.");
@@ -382,11 +386,15 @@ function autoCommitDirtyBadgeFiles(filesToUpdate: readonly string[], updatedFile
   }
 }
 
-export function updateBadges(): void {
-  const metrics = loadBadgeMetrics();
+export function updateBadges(options: { rootDir?: string } = {}): void {
+  const rootDir = options.rootDir ?? ROOT_DIR;
+  const metrics = loadBadgeMetrics({ rootDir });
   const filesToUpdate = ["README.md", "DOCKER_README.md"];
-  const updatedFiles = filesToUpdate.filter((file) => updateBadgeTargetFile(file, metrics));
-  autoCommitDirtyBadgeFiles(filesToUpdate, updatedFiles);
+  const updatedFiles = filesToUpdate.filter((file) =>
+    updateBadgeTargetFile(file, metrics, rootDir)
+  );
+  if (process.exitCode === 1) return;
+  autoCommitDirtyBadgeFiles(filesToUpdate, updatedFiles, rootDir);
 }
 
 function normalizePathForCompare(p: string): string {

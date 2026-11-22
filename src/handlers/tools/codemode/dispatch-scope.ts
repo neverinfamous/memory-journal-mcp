@@ -413,10 +413,15 @@ export async function normalizeDispatchParams(
         ) {
             paramsObj['project_number'] = projectId
         }
+        const effectiveBatchSessionId =
+            typeof paramsObj['session_id'] === 'string' && paramsObj['session_id'].trim() !== ''
+                ? paramsObj['session_id'].trim()
+                : ctx.sessionId
         const batchError = normalizeBatchDispatchItems(batchArrayKey, paramsObj, reg, {
             projectId,
             workspaceId,
             explicitWorkspace,
+            sessionId: effectiveBatchSessionId,
             toolName: tool.name,
             sessionContext,
             isDefaultWorkspaceName,

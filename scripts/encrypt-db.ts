@@ -74,14 +74,17 @@ function removeIfExists(filePath: string): void {
     }
 }
 
+let renamedToOut = false
 try {
     // [INVARIANT] Fold pending WAL frames into the main file first; copying only the .db would silently drop them.
     const source = new Database(inPath, { fileMustExist: true })
     try {
         source.pragma('busy_timeout = 5000')
         const ckpt = source.pragma('wal_checkpoint(TRUNCATE)') as Array<{ busy?: number }>
-        if (Array.isArray(ckpt) && (ckpt[0]?.busy ?? 0) !== 0) {
-            throw new Error('Source database has active WAL locks (wal_checkpoint busy != 0); retry when idle.')
+        if (!Array.isArray(ckpt) || ckpt.length === 0 || ckpt[0]?.busy !== 0) {
+            throw new Error(
+                'Source database has active WAL locks (wal_checkpoint failed or busy != 0); retry when idle.'
+            )
         }
     } finally {
         source.close()
@@ -134,6 +137,7 @@ try {
     }
 
     fs.renameSync(tmpPath, outPath)
+    renamedToOut = true
     try {
         fs.chmodSync(outPath, 0o600)
     } catch {
@@ -148,6 +152,8 @@ try {
     removeIfExists(tmpPath)
     removeIfExists(`${tmpPath}-wal`)
     removeIfExists(`${tmpPath}-shm`)
-    removeIfExists(outPath)
+    if (renamedToOut) {
+        removeIfExists(outPath)
+    }
     process.exit(1)
 }

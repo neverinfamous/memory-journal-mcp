@@ -167,6 +167,7 @@ function sanitizeAuditMapNode(
             break
         }
         const rawKey = String(mk)
+        if (rawKey === 'toJSON' || typeof mv === 'function') continue
         const safeKey = fenceNonCanonicalAuditId(rawKey)
         out[safeKey] =
             SENSITIVE_KEY_RE.test(rawKey) || SENSITIVE_KEY_RE.test(safeKey)
@@ -185,6 +186,7 @@ function sanitizeAuditArgNode(
     if (typeof value === 'string') {
         return sliceUntrustedInline(sanitizeErrorForLogging(value), 2048, '...')
     }
+    if (typeof value === 'function') return '[Function]'
     if (typeof value === 'bigint') return value.toString()
     if (value === null || typeof value !== 'object') return value
     if (seen.has(value)) return '[Circular]'
@@ -230,6 +232,9 @@ function sanitizeAuditArgNode(
             const pair = entries[i]
             if (pair === undefined) continue
             const [k, v] = pair
+            if (k === '__proto__' || k === 'constructor' || k === 'prototype' || k === 'toJSON' || typeof v === 'function') {
+                continue
+            }
             const safeKey = fenceNonCanonicalAuditId(k)
             out[safeKey] =
                 SENSITIVE_KEY_RE.test(k) || SENSITIVE_KEY_RE.test(safeKey)
@@ -248,9 +253,18 @@ function sanitizeAuditArgNode(
 /** Fence untrusted non-canonical audit fields and scrub secret tokens before MCP egress. */
 export function sanitizeAuditEntryForEgress(e: AuditEntry): AuditEntry {
     const isPlainArgs = typeof e.args === 'object' && e.args !== null && !Array.isArray(e.args)
-    const cleanArgs = isPlainArgs
-        ? (sanitizeAuditArgNode(e.args, 0, new WeakSet(), { count: 0 }) as Record<string, unknown>)
-        : undefined
+    let cleanArgs: Record<string, unknown> | undefined
+    if (isPlainArgs) {
+        const sanitized = sanitizeAuditArgNode(e.args, 0, new WeakSet(), { count: 0 })
+        if (typeof sanitized === 'object' && sanitized !== null && !Array.isArray(sanitized)) {
+            cleanArgs = sanitized as Record<string, unknown>
+        } else {
+            const wrapped: Record<string, unknown> = {}
+            Object.setPrototypeOf(wrapped, null)
+            wrapped['value'] = sanitized
+            cleanArgs = wrapped
+        }
+    }
     const rawSuccess: unknown = e.success
     const safeTimestamp =
         typeof e.timestamp === 'string'

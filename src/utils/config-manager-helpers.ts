@@ -159,7 +159,7 @@ export function seedInitialBriefingScopeFromFile(
     const registry = activeProjectRegistry(bc.projectRegistry)
     const rawFileWs = initialFile['defaultWorkspaceId']
     const fileWs =
-        typeof rawFileWs === 'string' && rawFileWs.trim() !== '' && rawFileWs.trim() !== '*'
+        typeof rawFileWs === 'string' && !isForbiddenProjectKey(rawFileWs)
             ? rawFileWs.trim()
             : undefined
     const rawFileProj = initialFile['defaultProjectNumber']

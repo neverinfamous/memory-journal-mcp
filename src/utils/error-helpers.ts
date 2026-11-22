@@ -22,6 +22,19 @@ function scrubObjectRecord(
     depth: number,
     seen: WeakSet<object>
 ): Record<string, unknown> {
+    if (depth === 0 && !isCrossRealmError(value)) {
+        const jsonRes = tryResolveToJson(value)
+        if (jsonRes.resolved) {
+            const inner = scrubDetailsValue(jsonRes.value, depth + 1, seen)
+            if (typeof inner === 'object' && inner !== null && !Array.isArray(inner)) {
+                return inner as Record<string, unknown>
+            }
+            const wrapped: Record<string, unknown> = {}
+            Object.setPrototypeOf(wrapped, null)
+            wrapped['value'] = inner
+            return wrapped
+        }
+    }
     const out: Record<string, unknown> = {}
     Object.setPrototypeOf(out, null)
     if (isCrossRealmError(value)) {
@@ -29,6 +42,9 @@ function scrubObjectRecord(
         out['message'] = sanitizeErrorMessageForResponse(value.message)
     }
     for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
+        if (k === '__proto__' || k === 'constructor' || k === 'prototype' || k === 'toJSON' || typeof v === 'function') {
+            continue
+        }
         const safeKey = sanitizeErrorForLogging(k)
         out[safeKey] =
             SENSITIVE_KEY_RE.test(k) || SENSITIVE_KEY_RE.test(safeKey)
@@ -42,6 +58,7 @@ function scrubDetailsValue(value: unknown, depth: number, seen: WeakSet<object>)
     if (typeof value === 'string') {
         return sanitizeErrorForLogging(value).replace(HOST_FILESYSTEM_PATH_RE, '<sanitized_path>')
     }
+    if (typeof value === 'function') return '[Function]'
     if (typeof value === 'bigint') return value.toString()
     if (value === null || typeof value !== 'object') return value
     if (isCrossRealmDate(value)) {

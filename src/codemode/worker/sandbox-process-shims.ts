@@ -13,7 +13,7 @@ export const FACTORY_SHIM_NAMES = [
     'createService', 'create_service', 'getJournal', 'get_journal',
     'createJournal', 'create_journal', 'loadJournal', 'load_journal',
     'loadMemory', 'load_memory', 'load', 'init', 'initialize',
-    'connect', 'open', 'start', 'create',
+    'connect', 'open', 'start',
 ] as const
 
 export const DIRECT_CREATE_ENTRY_SHIMS = [

@@ -20,6 +20,17 @@ vi.mock('node:fs/promises', () => ({
     }),
 }))
 
+vi.mock('node:fs', async (importOriginal) => {
+    const actual = await importOriginal<typeof import('node:fs')>()
+    const realpathSync = Object.assign(
+        (...args: Parameters<typeof actual.realpathSync>) => actual.realpathSync(...args),
+        {
+            native: vi.fn((p: Parameters<typeof actual.realpathSync.native>[0]) => String(p)),
+        }
+    )
+    return { ...actual, realpathSync }
+})
+
 vi.mock('../../src/utils/security-utils.js', async (importOriginal) => {
     const actual = await importOriginal<typeof import('../../src/utils/security-utils.js')>()
     return {

@@ -70,7 +70,7 @@ const FACTORY_SHIM_PROPS = new Set<string>([
     'getService', 'get_service', 'createService', 'create_service',
     'createJournal', 'create_journal', 'open', 'start', 'getDatabase', 'get_database',
     'getDb', 'get_db', 'connectToDatabase', 'connect_to_database',
-    'openDatabase', 'open_database', 'create',
+    'openDatabase', 'open_database',
 ])
 
 const LIFECYCLE_PROPS = new Set<string>([
@@ -94,8 +94,8 @@ function getGroupProp(target: Record<string, unknown>, group: string, prop: stri
 export interface CreateShimMjOptions {
     mjApi: Record<string, unknown>
     safeFsShim: SafeFsShim
-    executeCodeFnRef: { current?: (arg: unknown) => Promise<unknown> }
-    getUpdateMemoryFn: () => (arg: unknown) => unknown
+    executeCodeFnRef: { current?: (...args: unknown[]) => Promise<unknown> }
+    getUpdateMemoryFn: () => (...args: unknown[]) => unknown
 }
 
 type ShimMatch = { matched: true; value: unknown } | { matched: false }
@@ -213,8 +213,8 @@ function resolveCoreAndMetaShimProp(
     if (typeof prop === 'string' && EXECUTE_CODE_PROPS.has(prop)) {
         return {
             matched: true,
-            value: (arg: unknown) => {
-                if (executeCodeFnRef.current !== undefined) return executeCodeFnRef.current(arg)
+            value: (...args: unknown[]) => {
+                if (executeCodeFnRef.current !== undefined) return executeCodeFnRef.current(...args)
                 return Promise.resolve({
                     success: false,
                     error: 'Code execution is not available in this sandbox',
@@ -251,9 +251,9 @@ function resolveCoreAndMetaShimProp(
     if (prop === 'saveMemory' || prop === 'save_memory') {
         return {
             matched: true,
-            value: (arg?: unknown): unknown =>
-                arg !== undefined && arg !== null
-                    ? getUpdateMemoryFn()(arg)
+            value: (...args: unknown[]): unknown =>
+                args[0] !== undefined && args[0] !== null
+                    ? getUpdateMemoryFn()(...args)
                     : Promise.resolve({ success: false, code: 'VALIDATION_ERROR', error: 'saveMemory requires a payload' }),
         }
     }

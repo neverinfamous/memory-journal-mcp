@@ -24,8 +24,22 @@ export interface ProjectAndTeamAliasDeps {
     copyFnSchema: (source: unknown, wrapper: (...args: unknown[]) => unknown) => void
 }
 
+function replaceAliasedFn(
+    groups: readonly GroupApiRecord[],
+    originalFn: unknown,
+    wrappedFn: (...args: unknown[]) => Promise<unknown>
+): void {
+    for (const group of groups) {
+        for (const key of Object.keys(group)) {
+            if (group[key] === originalFn) {
+                group[key] = wrappedFn
+            }
+        }
+    }
+}
+
 function wireProjectMutationWrappers(deps: ProjectAndTeamAliasDeps): void {
-    const { core, admin, hasDispatcher, copyFnSchema } = deps
+    const { core, search, admin, hasDispatcher, copyFnSchema } = deps
 
     const existingRegisterProject = admin['registerProject']
     const existingUpdateProject = admin['updateProject']
@@ -47,6 +61,7 @@ function wireProjectMutationWrappers(deps: ProjectAndTeamAliasDeps): void {
         }
         copyFnSchema(existingRegisterProject, wrappedRegister)
         admin['registerProject'] = wrappedRegister
+        replaceAliasedFn([admin, core, search], existingRegisterProject, wrappedRegister)
     }
     if (typeof existingUpdateProject === 'function') {
         const fallbackUpdate = hasDispatcher ? undefined : createUpdateProjectFn()
@@ -65,6 +80,7 @@ function wireProjectMutationWrappers(deps: ProjectAndTeamAliasDeps): void {
         }
         copyFnSchema(existingUpdateProject, wrappedUpdate)
         admin['updateProject'] = wrappedUpdate
+        replaceAliasedFn([admin, core, search], existingUpdateProject, wrappedUpdate)
     }
     if (typeof existingDeleteProject === 'function') {
         const fallbackDelete = hasDispatcher ? undefined : createDeleteProjectFn()
@@ -76,6 +92,7 @@ function wireProjectMutationWrappers(deps: ProjectAndTeamAliasDeps): void {
         }
         copyFnSchema(existingDeleteProject, wrappedDelete)
         admin['deleteProject'] = wrappedDelete
+        replaceAliasedFn([admin, core, search], existingDeleteProject, wrappedDelete)
     }
 }
 
@@ -177,6 +194,7 @@ function wireProjectQueryAndTeamAliases(deps: ProjectAndTeamAliasDeps): void {
 
 interface TeamAutoRouteOptions {
     primaryGroup: GroupApiRecord
+    aliasGroups?: readonly GroupApiRecord[]
     primaryMethod: string
     snakeMethod: string
     teamFn: GroupApiRecord[string] | undefined
@@ -256,12 +274,14 @@ function wrapTeamAutoRoute(opts: TeamAutoRouteOptions): void {
     if (opts.primaryGroup[opts.snakeMethod] !== undefined) {
         opts.primaryGroup[opts.snakeMethod] = wrapped
     }
+    replaceAliasedFn([opts.primaryGroup, ...(opts.aliasGroups ?? [])], primaryFn, wrapped)
 }
 
 function wireSilentTeamFallbackRouting(deps: ProjectAndTeamAliasDeps): void {
-    const { core, relationships, team, copyFnSchema } = deps
+    const { core, search, admin, relationships, team, copyFnSchema } = deps
     wrapTeamAutoRoute({
         primaryGroup: core,
+        aliasGroups: [search, admin, relationships],
         primaryMethod: 'getEntryById',
         snakeMethod: 'get_entry_by_id',
         teamFn: team['teamGetEntryById'],
@@ -279,6 +299,7 @@ function wireSilentTeamFallbackRouting(deps: ProjectAndTeamAliasDeps): void {
     })
     wrapTeamAutoRoute({
         primaryGroup: relationships,
+        aliasGroups: [core, search, admin],
         primaryMethod: 'visualizeRelationships',
         snakeMethod: 'visualize_relationships',
         teamFn: team['teamVisualizeRelationships'],

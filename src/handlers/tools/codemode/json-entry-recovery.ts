@@ -63,6 +63,44 @@ function unescapeQuotes(value: string): string {
 const MAX_FUZZY_ENTRY_RECOVERY_LENGTH = 32_768
 const MAX_ENTRY_FIELD_CANDIDATES = 16
 
+function extractContentField(
+    code: string
+): { content: string; match: RegExpExecArray } | null {
+    const backtickMatch =
+        /\bcontent\s*:\s*`([\s\S]*?)`(?=\s*(?:,\s*[a-zA-Z_$][\w$]*\s*:|,\s*\}|\}|\)))/i.exec(
+            code
+        )
+    if (backtickMatch?.[1] !== undefined) return { content: backtickMatch[1], match: backtickMatch }
+    const singleMatch =
+        /\bcontent\s*:\s*'([\s\S]*?)'(?=\s*(?:,\s*[a-zA-Z_$][\w$]*\s*:|,\s*\}|\}|\)))/i.exec(
+            code
+        )
+    if (singleMatch?.[1] !== undefined) return { content: singleMatch[1], match: singleMatch }
+    const doubleMatch =
+        /\bcontent\s*:\s*"([\s\S]*?)"(?=\s*(?:,\s*[a-zA-Z_$][\w$]*\s*:|,\s*\}|\}|\)))/i.exec(
+            code
+        )
+    if (doubleMatch?.[1] !== undefined) return { content: doubleMatch[1], match: doubleMatch }
+    // Require matching closing quote before `,`/`}`/`)`, or an explicit next-property / `}` boundary so unclosed parenthetical prose like `(see note)` is not truncated at `)`.
+    const fallbackMatch =
+        /\bcontent\s*:\s*([`'"])([\s\S]*?)(?:\1(?=\s*(?:,|\}|\)))|(?=\s*,\s*[a-zA-Z_$][\w$]*\s*:|,\s*\}|\}))/i.exec(
+            code
+        )
+    if (fallbackMatch?.[2] !== undefined) return { content: fallbackMatch[2], match: fallbackMatch }
+    const altBacktick = /\bcontent\s*:\s*`([\s\S]*?)`(?=,\s*[\w$]+\s*:|\s*\})/i.exec(code)
+    if (altBacktick?.[1] !== undefined) return { content: altBacktick[1], match: altBacktick }
+    const descMatch =
+        /\b(?:description|summary)\s*:\s*(['"`])([\s\S]*?)\1(?=\s*(?:,\s*[a-zA-Z_$][\w$]*\s*:|,\s*\}|\}|\)))/i.exec(
+            code
+        )
+    if (descMatch?.[2] !== undefined) return { content: descMatch[2], match: descMatch }
+    return null
+}
+
+function removeMatchSpan(text: string, match: RegExpExecArray): string {
+    return `${text.slice(0, match.index)}${text.slice(match.index + match[0].length)}`
+}
+
 function extractRecoveredEntryContentAndTitle(
     code: string
 ): { content: string; title: string | undefined; scanCode: string } | null {
@@ -70,36 +108,12 @@ function extractRecoveredEntryContentAndTitle(
     if (fieldCandidates !== null && fieldCandidates.length > MAX_ENTRY_FIELD_CANDIDATES) {
         return null
     }
-    const backtickMatch =
-        /\bcontent\s*:\s*`([\s\S]*?)`(?=\s*(?:,\s*[a-zA-Z_$][\w$]*\s*:|,\s*\}|\}|\)))/i.exec(
-            code
-        )
-    const singleMatch =
-        /\bcontent\s*:\s*'([\s\S]*?)'(?=\s*(?:,\s*[a-zA-Z_$][\w$]*\s*:|,\s*\}|\}|\)))/i.exec(
-            code
-        )
-    const doubleMatch =
-        /\bcontent\s*:\s*"([\s\S]*?)"(?=\s*(?:,\s*[a-zA-Z_$][\w$]*\s*:|,\s*\}|\}|\)))/i.exec(
-            code
-        )
-    // Require matching closing quote before `,`/`}`/`)`, or an explicit next-property / `}` boundary so unclosed parenthetical prose like `(see note)` is not truncated at `)`.
-    const fallbackMatch =
-        /\bcontent\s*:\s*([`'"])([\s\S]*?)(?:\1(?=\s*(?:,|\}|\)))|(?=\s*,\s*[a-zA-Z_$][\w$]*\s*:|,\s*\}|\}))/i.exec(
-            code
-        )
+    const extractedContent = extractContentField(code)
+    if (extractedContent === null || extractedContent.content === '') return null
 
-    let content: string | undefined =
-        backtickMatch?.[1] ?? singleMatch?.[1] ?? doubleMatch?.[1] ?? fallbackMatch?.[2]
-    content ??= /\bcontent\s*:\s*`([\s\S]*?)`(?=,\s*[\w$]+\s*:|\s*\})/i.exec(code)?.[1]
-    content ??=
-        /\b(?:description|summary)\s*:\s*(['"`])([\s\S]*?)\1(?=\s*(?:,\s*[a-zA-Z_$][\w$]*\s*:|,\s*\}|\}|\)))/i.exec(
-            code
-        )?.[2]
-    if (content === undefined || content === '') return null
-
-    // [C4] Field regexes scan the code with content and title literals removed, so `project: 5` or
-    // `workspace_id: 'x'` text quoted inside content or title can never re-scope the write.
-    const scanWithTitle = code.split(content).join('')
+    // [C4] Field regexes scan the code with content and title match spans removed by exact index,
+    // so `content: 'default', workspace_id: 'default'` never erases `workspace_id`.
+    const scanWithTitle = removeMatchSpan(code, extractedContent.match)
     const titleCandidates = scanWithTitle.match(/\btitle\s*:/gi)
     const titleMatch =
         titleCandidates !== null && titleCandidates.length > MAX_ENTRY_FIELD_CANDIDATES
@@ -108,10 +122,10 @@ function extractRecoveredEntryContentAndTitle(
                   scanWithTitle
               ) ?? /\btitle\s*:\s*(['"])([^'"]+)\1/i.exec(scanWithTitle)
     const scanCode =
-        titleMatch?.[0] !== undefined ? scanWithTitle.split(titleMatch[0]).join('') : scanWithTitle
+        titleMatch !== null ? removeMatchSpan(scanWithTitle, titleMatch) : scanWithTitle
 
     return {
-        content: unescapeQuotes(content),
+        content: unescapeQuotes(extractedContent.content),
         title: titleMatch?.[2] !== undefined ? unescapeQuotes(titleMatch[2]) : undefined,
         scanCode,
     }
@@ -324,10 +338,11 @@ export function extractAndRecoverEntryCode(code: string): string | null {
     const detected = detectRecoverableEntryCall(code)
     if (detected === null) return null
 
-    const extracted = extractRecoveredEntryContentAndTitle(code)
+    const commentFreeCode = stripJsCommentsPreservingStrings(code)
+    const extracted = extractRecoveredEntryContentAndTitle(commentFreeCode)
     if (extracted === null) return null
 
-    const cleanScanCode = stripJsCommentsPreservingStrings(extracted.scanCode)
+    const cleanScanCode = extracted.scanCode
     const typeMatch = /\b(?:entry_type|type)\s*:\s*(['"])([^'"]+)\1/i.exec(cleanScanCode)
     const payload: Record<string, unknown> = {
         content: extracted.content,

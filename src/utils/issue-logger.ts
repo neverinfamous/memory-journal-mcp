@@ -70,6 +70,7 @@ export function sanitizeIssueInput(
     if (value === null || value === undefined) return value
     if (depth > 8 || budget.count >= MAX_ISSUE_TOTAL_NODES) return '[Truncated]'
     if (typeof value === 'string') return scrubAndTruncateIssueString(value)
+    if (typeof value === 'function') return '[Function]'
     if (typeof value === 'bigint') return value.toString()
     if (typeof value !== 'object') return value
     if (isCrossRealmDate(value)) {
@@ -95,7 +96,7 @@ export function sanitizeIssueInput(
             const pair = entries[i]
             if (pair === undefined) continue
             const [k, v] = pair
-            if (k === '__proto__' || k === 'constructor' || k === 'prototype') continue
+            if (k === '__proto__' || k === 'constructor' || k === 'prototype' || k === 'toJSON' || typeof v === 'function') continue
             const safeKey = scrubAndTruncateIssueString(k, 256)
             if (SENSITIVE_KEY_RE.test(k) || SENSITIVE_KEY_RE.test(safeKey)) {
                 clean[safeKey] = '[REDACTED]'
@@ -200,7 +201,7 @@ async function drainIssueQueue(): Promise<void> {
             await fh.writeFile(batch, 'utf8')
             await fh.chmod(0o600).catch(() => undefined)
         } finally {
-            await fh.close()
+            await fh.close().catch(() => undefined)
         }
     } catch (e) {
         // Fail silently so we don't crash the main process if logging fails

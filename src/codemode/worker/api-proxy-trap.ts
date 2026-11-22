@@ -126,6 +126,54 @@ function resolveReadonlyOrUnknownRoot(ctx: ApiRootTrapContext, prop: string): un
     return createUnknownGroupRejectionProxy(prop, reason)
 }
 
+export function resolveFallbackSchema(
+    schemas: Record<string, Record<string, string>> | undefined,
+    group: string,
+    key: string,
+    resolvedKey: string
+): string | undefined {
+    if (schemas === undefined) return undefined
+    const groupSchemas = Object.hasOwn(schemas, group) ? schemas[group] : undefined
+    if (groupSchemas !== undefined) {
+        if (Object.hasOwn(groupSchemas, key) && groupSchemas[key] !== undefined) {
+            return groupSchemas[key]
+        }
+        if (Object.hasOwn(groupSchemas, resolvedKey) && groupSchemas[resolvedKey] !== undefined) {
+            return groupSchemas[resolvedKey]
+        }
+    }
+    const snakeKey = /[A-Z]/.test(resolvedKey)
+        ? resolvedKey.replace(/[A-Z]/g, (letter) => `_${letter.toLowerCase()}`)
+        : resolvedKey
+    if (
+        groupSchemas !== undefined &&
+        Object.hasOwn(groupSchemas, snakeKey) &&
+        groupSchemas[snakeKey] !== undefined
+    ) {
+        return groupSchemas[snakeKey]
+    }
+
+    for (const gName of Object.keys(schemas)) {
+        if (gName === '_topLevel') continue
+        const gMap = schemas[gName]
+        if (gMap === undefined) continue
+        const teamSnake = `team_${snakeKey}`
+        const found =
+            (Object.hasOwn(gMap, key) ? gMap[key] : undefined) ??
+            (Object.hasOwn(gMap, resolvedKey) ? gMap[resolvedKey] : undefined) ??
+            (Object.hasOwn(gMap, snakeKey) ? gMap[snakeKey] : undefined) ??
+            (Object.hasOwn(gMap, teamSnake) ? gMap[teamSnake] : undefined)
+        if (found !== undefined) return found
+    }
+    const topSchemas = Object.hasOwn(schemas, '_topLevel') ? schemas['_topLevel'] : undefined
+    if (topSchemas === undefined) return undefined
+    return (
+        (Object.hasOwn(topSchemas, key) ? topSchemas[key] : undefined) ??
+        (Object.hasOwn(topSchemas, resolvedKey) ? topSchemas[resolvedKey] : undefined) ??
+        (Object.hasOwn(topSchemas, snakeKey) ? topSchemas[snakeKey] : undefined)
+    )
+}
+
 export function createApiRootGetTrap(
     ctx: ApiRootTrapContext
 ): (target: Record<string, unknown>, prop: string | symbol) => unknown {

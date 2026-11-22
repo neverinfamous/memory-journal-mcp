@@ -12,6 +12,7 @@ export interface BatchScopeHelpersContext {
     projectId: number | string | undefined
     workspaceId: string | undefined
     explicitWorkspace?: boolean | undefined
+    sessionId?: string | undefined
     toolName?: string | undefined
     sessionContext?: ToolContext | undefined
     isDefaultWorkspaceName: (value: unknown) => boolean
@@ -161,6 +162,14 @@ function applyBatchItemSessionDefaults(
                 callerItemWs.toLowerCase() === workspaceId.toLowerCase()))
     ) {
         nextItem['project_number'] = projectId
+    }
+    if (
+        batchArrayKey === 'entries' &&
+        ctx.sessionId !== undefined &&
+        ctx.sessionId !== '' &&
+        trimmedStringField(nextItem, 'session_id') === undefined
+    ) {
+        nextItem['session_id'] = ctx.sessionId
     }
 }
 

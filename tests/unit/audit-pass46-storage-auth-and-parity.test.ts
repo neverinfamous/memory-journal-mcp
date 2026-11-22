@@ -358,6 +358,6 @@ describe('Pass 46 Storage, Auth, Filter Parity & Transport Regressions', () => {
         const dockerfile = fs.readFileSync(path.resolve('Dockerfile'), 'utf-8')
         expect(dockerfile).toContain('ARG SQLITE_VEC_SHA256=')
         expect(dockerfile).toContain('rm -rf /usr/local/lib/node_modules/npm')
-        expect(AUDIT_PROMPT_REVISION).toBe('2026-11-21-audit-pass66')
+        expect(AUDIT_PROMPT_REVISION).toBe('2026-11-21-audit-pass67')
     })
 })

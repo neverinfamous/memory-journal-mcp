@@ -291,15 +291,8 @@ function synthesizeFallbackAnchorContent(obj: Record<string, unknown>): boolean 
     return true
 }
 
-/**
- * Shared preprocessor to heal common LLM hallucinations in payloads before Zod validation.
- */
-export function healAgentHallucinations(val: unknown): unknown {
-    if (typeof val !== 'object' || val === null || Array.isArray(val)) return val
-
-    const obj = { ...(val as Record<string, unknown>) }
+function remapAgentKeyAliases(obj: Record<string, unknown>): boolean {
     let modified = false
-
     for (const [badKey, goodKey] of Object.entries(KEY_ALIAS_MAP)) {
         if (badKey in obj) {
             const isScopeAlias =
@@ -317,9 +310,25 @@ export function healAgentHallucinations(val: unknown): unknown {
             modified = true
         }
     }
+    return modified
+}
 
+/**
+ * Shared preprocessor to heal common LLM hallucinations in payloads before Zod validation.
+ */
+export function healAgentHallucinations(val: unknown): unknown {
+    if (typeof val !== 'object' || val === null || Array.isArray(val)) return val
+
+    const obj = { ...(val as Record<string, unknown>) }
+    let modified = false
+
+    if (remapAgentKeyAliases(obj)) modified = true
+    if (healNestedContainersAndEntryIds(obj)) {
+        modified = true
+        // Re-run alias normalization after unwrapping `entry` / `filters` containers.
+        remapAgentKeyAliases(obj)
+    }
     if (healValidationAndScoreFields(obj)) modified = true
-    if (healNestedContainersAndEntryIds(obj)) modified = true
 
     for (const key of CONTENT_ALIASES) {
         if (key in obj && !('content' in obj)) {

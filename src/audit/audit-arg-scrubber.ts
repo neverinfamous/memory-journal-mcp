@@ -37,6 +37,9 @@ function scrubAuditObject(
         const pair = entries[i]
         if (pair === undefined) continue
         const [k, v] = pair
+        if (k === '__proto__' || k === 'constructor' || k === 'prototype' || k === 'toJSON' || typeof v === 'function') {
+            continue
+        }
         const safeKey = scrubAndTruncateAuditString(k, 256)
         out[safeKey] =
             SENSITIVE_KEY_RE.test(k) || SENSITIVE_KEY_RE.test(safeKey)
@@ -64,6 +67,7 @@ function scrubAuditMap(
             break
         }
         const rawKey = String(mk)
+        if (rawKey === 'toJSON' || typeof mv === 'function') continue
         const keyStr = scrubAndTruncateAuditString(rawKey, 256)
         entries[keyStr] =
             SENSITIVE_KEY_RE.test(rawKey) || SENSITIVE_KEY_RE.test(keyStr)
@@ -82,6 +86,7 @@ export function scrubAuditArgValue(
     if (typeof val === 'string') {
         return scrubAndTruncateAuditString(val, 2048)
     }
+    if (typeof val === 'function') return '[Function]'
     if (typeof val === 'bigint') return val.toString()
     if (val === null || typeof val !== 'object') return val
     if (seen.has(val)) return '[Circular]'
@@ -124,8 +129,20 @@ export function scrubAuditArgValue(
 export function scrubAuditArgs(args: unknown): Record<string, unknown> | undefined {
     if (typeof args !== 'object' || args === null || Array.isArray(args)) return undefined
     const seen = new WeakSet([args])
+    const budget = { count: 1 }
     try {
-        return scrubAuditObject(args, 0, seen, { count: 1 })
+        const jsonRes = tryResolveToJson(args)
+        if (jsonRes.resolved) {
+            const resolved = scrubAuditArgValue(jsonRes.value, 1, seen, budget)
+            if (typeof resolved === 'object' && resolved !== null && !Array.isArray(resolved)) {
+                return resolved as Record<string, unknown>
+            }
+            const wrapped: Record<string, unknown> = {}
+            Object.setPrototypeOf(wrapped, null)
+            wrapped['value'] = resolved
+            return wrapped
+        }
+        return scrubAuditObject(args, 0, seen, budget)
     } finally {
         seen.delete(args)
     }
