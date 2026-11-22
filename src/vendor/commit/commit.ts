@@ -20,6 +20,7 @@ import {
 import {
   abortIfScratchPaths,
   findAlreadyStagedDeletions,
+  findScratchInDirOrGlobTargets,
   findTrackedIndexPaths,
   getValidatedRepoRelPath,
   isAlreadyStagedDeletion,
@@ -100,6 +101,8 @@ function stageExplicitFiles(
   }
   if (scratchToStage.length > 0) abortIfScratchPaths(scratchToStage);
   if (pathsToStage.length > 0) {
+    const nestedScratch = findScratchInDirOrGlobTargets(cwd, pathsToStage);
+    if (nestedScratch.length > 0) abortIfScratchPaths(nestedScratch);
     try {
       execFileSync('git', ['add', '--', ...pathsToStage], { stdio: 'inherit', cwd, windowsHide: true });
     } catch (e) {

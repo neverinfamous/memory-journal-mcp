@@ -107,11 +107,20 @@ export function formatZodValidationIssue(
       () => 'Invalid entry ID in --relate. Expected a positive integer entry ID (e.g. 14653:evolves_from).'
     )
     .with(
-      { code: 'invalid_type', received: P.union('nan', 'NaN') },
+      { code: 'invalid_type', message: P.when((m: string) => /received nan\b/i.test(m)) },
       (e) => `Invalid data type for --${String(e.path[0])}. Expected a number, but received a non-numeric value.`
     )
-    .with({ code: 'invalid_type', path: ['impact'] }, () => `Missing required flag. You MUST append an impact score (e.g. '--impact 0.5').`)
-    .with({ code: 'invalid_type', path: ['confidence'] }, () => `Missing required flag. You MUST append a confidence score (e.g. '--confidence 1.0').`)
-    .with({ code: 'invalid_type' }, () => `Missing required flag.`)
+    .with(
+      { code: 'invalid_type', path: ['impact'], message: P.when((m: string) => /received undefined\b/i.test(m)) },
+      () => `Missing required flag. You MUST append an impact score (e.g. '--impact 0.5').`
+    )
+    .with(
+      { code: 'invalid_type', path: ['confidence'], message: P.when((m: string) => /received undefined\b/i.test(m)) },
+      () => `Missing required flag. You MUST append a confidence score (e.g. '--confidence 1.0').`
+    )
+    .with(
+      { code: 'invalid_type', message: P.when((m: string) => /received undefined\b/i.test(m)) },
+      () => `Missing required flag.`
+    )
     .otherwise((e) => e.message);
 }

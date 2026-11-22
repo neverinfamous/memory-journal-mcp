@@ -60,7 +60,7 @@ export function resolveGitDir(cwd: string): string | null {
 
 export function resolveRepoRootForGuard(cwd: string, resolvedGitDir: string | null): string {
   if (resolvedGitDir !== null) {
-    if (path.basename(resolvedGitDir).toLowerCase() === '.git') {
+    if (!hasGitDirEnvOverride() && path.basename(resolvedGitDir).toLowerCase() === '.git') {
       return path.dirname(resolvedGitDir);
     }
     try {
@@ -186,4 +186,48 @@ export function findTrackedIndexPaths(
  */
 export function isAlreadyStagedDeletion(cwd: string, targetPath: string): boolean {
   return findAlreadyStagedDeletions(cwd, [targetPath]).has(targetPath);
+}
+
+const GLOB_META_RE = /[*?[\]]/;
+
+/**
+ * [INTENT]: Pre-stage scan for directory or glob `--add` targets so untracked/modified
+ * scratch files nested under `--add sub` or `--add .` abort BEFORE mutating `.git/index`.
+ */
+export function findScratchInDirOrGlobTargets(cwd: string, targetPaths: readonly string[]): string[] {
+  const targets: string[] = [];
+  for (const p of targetPaths) {
+    if (GLOB_META_RE.test(p)) {
+      targets.push(p);
+      continue;
+    }
+    const st = fs.statSync(path.resolve(cwd, p), { throwIfNoEntry: false });
+    if (st !== undefined && st.isDirectory()) targets.push(p);
+  }
+  if (targets.length === 0) return [];
+  const res = spawnSync('git', ['status', '-z', '-uall', '--', ...targets], {
+    cwd,
+    encoding: 'utf8',
+    timeout: 10000,
+    windowsHide: true,
+  });
+  if (res.status !== 0 || typeof res.stdout !== 'string') return [];
+  const parts = res.stdout.split('\0');
+  const scratchHits: string[] = [];
+  let i = 0;
+  while (i < parts.length) {
+    const part = parts[i];
+    if (!part) {
+      i++;
+      continue;
+    }
+    const indexStatus = part[0];
+    const workTreeStatus = part[1];
+    const filepath = part.substring(3);
+    if (indexStatus !== 'D' && workTreeStatus !== 'D' && isScratchRepoPath(filepath)) {
+      scratchHits.push(filepath);
+    }
+    i += indexStatus === 'R' || indexStatus === 'C' || workTreeStatus === 'R' || workTreeStatus === 'C' ? 2 : 1;
+  }
+  return scratchHits;
 }

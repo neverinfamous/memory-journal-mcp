@@ -30,10 +30,15 @@ function extractValidAutoCommitShas(autoContext: string | undefined): string[] {
         if (parsed === null || typeof parsed !== 'object') return []
         const commitsVal = 'commits' in parsed ? parsed.commits : undefined
         if (!Array.isArray(commitsVal) || commitsVal.length === 0) return []
-        return commitsVal
-            .filter((s): s is string => typeof s === 'string' && SHA_REGEX.test(s.trim()))
-            .map((s) => s.trim())
-            .slice(0, 10)
+        const seen = new Set<string>()
+        for (const item of commitsVal) {
+            if (typeof item !== 'string') continue
+            const trimmed = item.trim()
+            if (!SHA_REGEX.test(trimmed)) continue
+            seen.add(trimmed.toLowerCase())
+            if (seen.size >= 10) break
+        }
+        return Array.from(seen)
     } catch {
         return []
     }
@@ -141,15 +146,22 @@ export async function prefetchBatchCommitFiles(
     for (let i = 0; i < repoJobs.length; i += GIT_SHOW_BATCH_CONCURRENCY) {
         const chunk = repoJobs.slice(i, i + GIT_SHOW_BATCH_CONCURRENCY)
         const outcomes = await Promise.allSettled(
-            chunk.map(async ([repoPath, shaSet]) => ({
-                repoPath,
-                filesBySha: await fetchRepoCommitFilesBatch(repoPath, Array.from(shaSet)),
-            }))
+            chunk.map(async ([repoPath, shaSet]) => {
+                const attemptedShas = Array.from(shaSet)
+                return {
+                    repoPath,
+                    attemptedShas,
+                    filesBySha: await fetchRepoCommitFilesBatch(repoPath, attemptedShas),
+                }
+            })
         )
         for (const outcome of outcomes) {
             if (outcome.status !== 'fulfilled') continue
-            for (const [shaLower, files] of outcome.value.filesBySha) {
-                result.set(`${outcome.value.repoPath}\0${shaLower}`, files)
+            for (const shaLower of outcome.value.attemptedShas) {
+                result.set(
+                    `${outcome.value.repoPath}\0${shaLower}`,
+                    outcome.value.filesBySha.get(shaLower) ?? []
+                )
             }
         }
     }

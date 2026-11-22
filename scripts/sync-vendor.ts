@@ -39,27 +39,25 @@ function collectModuleSpecifiers(source: string): string[] {
 }
 
 /**
- * Extract third-party package names imported by a TypeScript source file.
- * Relative paths, node builtins, `node:` and `bun:` specifiers are ignored.
+ * Extract relative and third-party package specifiers from a single TypeScript AST parse.
  */
-function extractPackageImports(source: string): Set<string> {
+function classifyVendorSpecifiers(source: string): { relative: string[]; packages: Set<string> } {
+  const relativeSpecifiers: string[] = [];
   const packages = new Set<string>();
   for (const specifier of collectModuleSpecifiers(source)) {
-    if (specifier.startsWith('.') || specifier.startsWith('/')) continue;
-    if (specifier.startsWith('node:') || specifier.startsWith('bun:')) continue;
+    if (specifier.startsWith('.')) {
+      relativeSpecifiers.push(specifier);
+      continue;
+    }
+    if (specifier.startsWith('/') || specifier.startsWith('node:') || specifier.startsWith('bun:')) {
+      continue;
+    }
     const parts = specifier.split('/');
     const name = specifier.startsWith('@') ? parts.slice(0, 2).join('/') : (parts[0] ?? specifier);
     if (builtinModules.includes(name)) continue;
     packages.add(name);
   }
-  return packages;
-}
-
-/**
- * Extract relative import specifiers (e.g. './command-utils.js') from a TypeScript source file.
- */
-function extractRelativeImports(source: string): string[] {
-  return collectModuleSpecifiers(source).filter((specifier) => specifier.startsWith('.'));
+  return { relative: relativeSpecifiers, packages };
 }
 
 function resolveUpstreamRoot(cwd: string, explicit?: string): string {
@@ -227,7 +225,8 @@ function validateVendorLibraries(
       if (!file.endsWith('.ts')) continue;
       const filePath = resolve(join(cwd, 'src', 'vendor', lib, file));
       const source = stagedTsSources?.get(filePath) ?? readFileSync(filePath, 'utf8');
-      for (const specifier of extractRelativeImports(source)) {
+      const { relative: relativeSpecifiers, packages } = classifyVendorSpecifiers(source);
+      for (const specifier of relativeSpecifiers) {
         const target = resolve(dirname(filePath), specifier.replace(/\.js$/, '.ts'));
         if ((stagedPaths?.has(target) ?? false) || existsSync(target)) continue;
         const normalizedSpecifier = specifier.replace(/\\/g, '/');
@@ -236,7 +235,7 @@ function validateVendorLibraries(
         users.add(`${lib}/${normalizedFile}`);
         unresolved.set(`${lib}/${normalizedSpecifier}`, users);
       }
-      for (const pkg of extractPackageImports(source)) {
+      for (const pkg of packages) {
         if (declared.has(pkg)) continue;
         const users = missing.get(pkg) ?? new Set<string>();
         users.add(`${lib}/${file}`);

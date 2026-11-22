@@ -24,18 +24,18 @@ export function applyCliEntryFlagAliases(
     restArgs: unknown[] = []
 ): void {
     if (
-        options.workspace !== undefined &&
-        options.workspaceId === undefined &&
-        options.workspace.trim() !== ''
-    ) {
-        options.workspaceId = options.workspace
-    }
-    if (
         options.workspace_id !== undefined &&
         options.workspaceId === undefined &&
         options.workspace_id.trim() !== ''
     ) {
         options.workspaceId = options.workspace_id
+    }
+    if (
+        options.workspace !== undefined &&
+        options.workspaceId === undefined &&
+        options.workspace.trim() !== ''
+    ) {
+        options.workspaceId = options.workspace
     }
     if (options.tag !== undefined && options.tags === undefined) options.tags = options.tag
     if (options.contentFile !== undefined && options.file === undefined) {

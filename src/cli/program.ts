@@ -178,36 +178,66 @@ const COMMIT_VALUE_FLAGS = [
     '--relate',
 ] as const
 
+function getDefaultSubcommand(cmd: Command): Command | undefined {
+    const desc = Object.getOwnPropertyDescriptor(cmd, '_defaultCommandName')
+    const defaultName = typeof desc?.value === 'string' ? desc.value : undefined
+    if (defaultName === undefined) return undefined
+    return cmd.commands.find((c) => c.name() === defaultName)
+}
+
+function addCommandValueFlags(cmd: Command, targetSet: Set<string>): void {
+    for (const opt of cmd.options) {
+        if (opt.required || opt.optional) {
+            if (opt.short !== undefined) targetSet.add(opt.short)
+            if (opt.long !== undefined) targetSet.add(opt.long)
+        }
+    }
+}
+
 function collectValueTakingFlags(argv: readonly string[], rootProgram?: Command): Set<string> {
     if (rootProgram === undefined) return FALLBACK_VALUE_FLAGS
     const flags = new Set<string>()
-    const addCmdOpts = (cmd: Command): void => {
-        for (const opt of cmd.options) {
-            if (opt.required || opt.optional) {
-                if (opt.short !== undefined) flags.add(opt.short)
-                if (opt.long !== undefined) flags.add(opt.long)
-            }
-        }
-    }
+    const defaultFlags = new Set<string>()
     let currentCmd: Command = rootProgram
-    addCmdOpts(currentCmd)
+    addCommandValueFlags(currentCmd, flags)
+    const refreshDefaultFlags = (cmd: Command): void => {
+        defaultFlags.clear()
+        const def = getDefaultSubcommand(cmd)
+        if (def !== undefined) addCommandValueFlags(def, defaultFlags)
+    }
+    refreshDefaultFlags(currentCmd)
+
+    let expectValue = false
     for (let i = 2; i < argv.length; i++) {
         const tok = argv[i]
-        if (tok === undefined || tok === '--') break
-        if (tok.startsWith('-')) continue
+        if (tok === undefined) break
+        if (expectValue) {
+            expectValue = false
+            continue
+        }
+        if (tok === '--') break
+        if (tok.startsWith('-')) {
+            const eqIdx = tok.indexOf('=')
+            const rawFlag = eqIdx === -1 ? tok : tok.slice(0, eqIdx)
+            const normFlag = rawFlag.startsWith('--') ? rawFlag.replace(/_/g, '-') : rawFlag
+            if (eqIdx === -1 && (flags.has(normFlag) || defaultFlags.has(normFlag))) {
+                expectValue = true
+            }
+            continue
+        }
         const sub = currentCmd.commands.find(
             (c) => c.name() === tok || c.aliases().includes(tok)
         )
         if (sub !== undefined) {
             currentCmd = sub
-            addCmdOpts(currentCmd)
+            addCommandValueFlags(currentCmd, flags)
             if (sub.name() === 'commit') {
-                for (const f of COMMIT_VALUE_FLAGS) {
-                    flags.add(f)
-                }
+                for (const f of COMMIT_VALUE_FLAGS) flags.add(f)
             }
+            refreshDefaultFlags(currentCmd)
         }
     }
+    for (const f of defaultFlags) flags.add(f)
     return flags
 }
 

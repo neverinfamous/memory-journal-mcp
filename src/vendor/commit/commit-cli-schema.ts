@@ -77,18 +77,18 @@ const VALIDATION_FAILED_ALIASES: ReadonlySet<string> = new Set(['fail', 'no', 'f
 const VALIDATION_NONE_ALIASES: ReadonlySet<string> = new Set(['skip', 'skipped', 'not-run', 'na', 'n_a', 'none']);
 
 const KEYWORD_RULES: ReadonlyArray<{ type: string; re: RegExp }> = [
-  { type: 'fix', re: /^fix\b\s*/i },
-  { type: 'fix', re: /^resolve\b\s*/i },
-  { type: 'fix', re: /^patch\b\s*/i },
-  { type: 'feat', re: /^add\b\s*/i },
-  { type: 'feat', re: /^implement\b\s*/i },
-  { type: 'feat', re: /^introduce\b\s*/i },
-  { type: 'docs', re: /^doc\b\s*/i },
-  { type: 'docs', re: /^readme\b\s*/i },
-  { type: 'test', re: /^test\b\s*/i },
-  { type: 'test', re: /^spec\b\s*/i },
-  { type: 'refactor', re: /^refactor\b\s*/i },
-  { type: 'refactor', re: /^restructure\b\s*/i },
+  { type: 'fix', re: /^fix(?:\s+|$)/i },
+  { type: 'fix', re: /^resolve(?:\s+|$)/i },
+  { type: 'fix', re: /^patch(?:\s+|$)/i },
+  { type: 'feat', re: /^add(?:\s+|$)/i },
+  { type: 'feat', re: /^implement(?:\s+|$)/i },
+  { type: 'feat', re: /^introduce(?:\s+|$)/i },
+  { type: 'docs', re: /^doc(?:\s+|$)/i },
+  { type: 'docs', re: /^readme(?:\s+|$)/i },
+  { type: 'test', re: /^test(?:\s+|$)/i },
+  { type: 'test', re: /^spec(?:\s+|$)/i },
+  { type: 'refactor', re: /^refactor(?:\s+|$)/i },
+  { type: 'refactor', re: /^restructure(?:\s+|$)/i },
 ];
 
 const CANONICAL_POSITIVE_INT_RE = /^[1-9]\d*$/;

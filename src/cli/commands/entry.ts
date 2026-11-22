@@ -59,20 +59,13 @@ function handleCliEntryError(e: unknown, actionLabel: 'create' | 'update'): numb
 
 async function loadCliEntryContentAndPayload(
     options: HealedEntryOptions,
-    config: ToolHandlerConfig,
-    fallbackContent?: string,
-    fallbackWorkspaceId?: string
+    config: ToolHandlerConfig
 ): Promise<{
     content: string
     metadata: Record<string, unknown>
     payload: EntryPayload
 }> {
-    const rawContent =
-        options.file === undefined &&
-        options.content === undefined &&
-        fallbackContent !== undefined
-            ? fallbackContent
-            : await parseContent(options)
+    const rawContent = await parseContent(options)
     const { frontmatter, body } = parseFrontmatter(rawContent)
     let content = body
 
@@ -82,13 +75,7 @@ async function loadCliEntryContentAndPayload(
     }
 
     const metadata = { ...frontmatter, ...parseMetadata(options.metadata) }
-    const payload = buildEntryPayload(
-        options,
-        metadata,
-        config,
-        content,
-        fallbackWorkspaceId
-    )
+    const payload = buildEntryPayload(options, metadata, config, content)
     return { content, metadata, payload }
 }
 
