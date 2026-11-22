@@ -1,27 +1,40 @@
 // @ts-nocheck
 import { Database } from 'bun:sqlite';
 import { mkdirSync } from 'node:fs';
-import { dirname, join } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 import { z } from 'zod';
 import { entrySchema, commitSizeSchema, type CommitEntry } from './schema.js';
 
 let db: Database | null = null;
 let currentDbPath: string | null = null;
+let cachedInsertTx: ((commits: CommitEntry[]) => void) | null = null;
+let cachedInsertTxDb: Database | null = null;
+let cachedInsertStmt: ReturnType<Database['prepare']> | null = null;
 
 // Cached prepared statements keyed by query string to avoid re-preparing on every call (bounded)
 const MAX_STMT_CACHE_SIZE = 32;
 const stmtCache = new Map<string, ReturnType<Database['prepare']>>();
 
+function finalizeStatement(stmt: ReturnType<Database['prepare']>): void {
+  try { stmt.finalize(); } catch { /* ignore already finalized */ }
+}
+
 function getOrPrepare(database: Database, query: string): ReturnType<Database['prepare']> {
   let stmt = stmtCache.get(query);
-  if (!stmt) {
-    if (stmtCache.size >= MAX_STMT_CACHE_SIZE) {
-      const oldestKey = stmtCache.keys().next().value;
-      if (oldestKey !== undefined) stmtCache.delete(oldestKey);
-    }
-    stmt = database.prepare(query);
+  if (stmt) {
+    stmtCache.delete(query);
     stmtCache.set(query, stmt);
+    return stmt;
   }
+  if (stmtCache.size >= MAX_STMT_CACHE_SIZE) {
+    const oldest = stmtCache.entries().next().value;
+    if (oldest !== undefined) {
+      stmtCache.delete(oldest[0]);
+      finalizeStatement(oldest[1]);
+    }
+  }
+  stmt = database.prepare(query);
+  stmtCache.set(query, stmt);
   return stmt;
 }
 
@@ -100,7 +113,13 @@ const MIGRATION_COLUMNS: ReadonlyArray<readonly [string, string]> = [
 ];
 
 function ensureCacheSchemaColumns(database: Database): void {
-  const existingRows = database.prepare('PRAGMA table_info(commits);').all() as Array<{ name?: unknown }>;
+  const infoStmt = database.prepare('PRAGMA table_info(commits);');
+  let existingRows: Array<{ name?: unknown }>;
+  try {
+    existingRows = infoStmt.all() as Array<{ name?: unknown }>;
+  } finally {
+    finalizeStatement(infoStmt);
+  }
   const existingCols = new Set(existingRows.map((r) => (typeof r.name === 'string' ? r.name : '')));
   for (const [colName, colType] of MIGRATION_COLUMNS) {
     if (!existingCols.has(colName)) {
@@ -123,23 +142,23 @@ function hydrateCachedRow(rawRow: unknown): CommitEntry | null {
     refs: safeParseJSON(row.refs, 'refs', hash),
     tags: safeParseJSON(row.tags, 'tags', hash),
     author: row.author,
-    email: row.email || undefined,
-    committer: row.committer || undefined,
-    committerEmail: row.committerEmail || undefined,
-    committerDate: row.committerDate || undefined,
+    email: row.email ?? undefined,
+    committer: row.committer ?? undefined,
+    committerEmail: row.committerEmail ?? undefined,
+    committerDate: row.committerDate ?? undefined,
     date: row.date,
-    type: row.type || undefined,
-    scope: row.scope || undefined,
+    type: row.type ?? undefined,
+    scope: row.scope ?? undefined,
     isBreaking: row.isBreaking === 1 ? true : undefined,
-    breakingChangeDescription: row.breakingChangeDescription || undefined,
+    breakingChangeDescription: row.breakingChangeDescription ?? undefined,
     isRevert: row.isRevert === 1 ? true : undefined,
-    revertedCommit: row.revertedCommit || undefined,
+    revertedCommit: row.revertedCommit ?? undefined,
     isRebased: row.isRebased === 1 ? true : undefined,
     subject: row.subject,
-    cleanSubject: row.cleanSubject || undefined,
-    body: row.body || undefined,
+    cleanSubject: row.cleanSubject ?? undefined,
+    body: row.body ?? undefined,
     isBodyTruncated: row.isBodyTruncated === 1 ? true : undefined,
-    size: row.size || undefined,
+    size: row.size ?? undefined,
     files: safeParseJSON(row.files, 'files', hash),
     fileCount: row.fileCount !== null ? row.fileCount : undefined,
     isFilesTruncated: row.isFilesTruncated === 1 ? true : undefined,
@@ -147,13 +166,13 @@ function hydrateCachedRow(rawRow: unknown): CommitEntry | null {
     totalDeletions: row.totalDeletions !== null ? row.totalDeletions : undefined,
     metadata: safeParseJSON(row.metadata, 'metadata', hash),
     trailersObj: safeParseJSON(row.trailersObj, 'trailersObj', hash),
-    patch: row.patch || undefined,
+    patch: row.patch ?? undefined,
     isPatchTruncated: row.isPatchTruncated === 1 ? true : undefined,
     references: safeParseJSON(row.references, 'references', hash),
     coAuthors: safeParseJSON(row.coAuthors, 'coAuthors', hash),
     reviewers: safeParseJSON(row.reviewers, 'reviewers', hash),
     associatedIssues: safeParseJSON(row.associatedIssues, 'associatedIssues', hash),
-    slackId: row.slackId || undefined,
+    slackId: row.slackId ?? undefined,
     validationErrors: safeParseJSON(row.validationErrors, 'validationErrors', hash),
     isCorrupted: row.isCorrupted === 1 ? true : undefined
   };
@@ -181,55 +200,81 @@ const CREATE_COMMITS_TABLE_SQL = `
   ) STRICT
 `;
 
+function isErrnoException(e: unknown): e is NodeJS.ErrnoException {
+  return e instanceof Error && 'code' in e;
+}
+
+function initializeSchema(nextDb: Database): void {
+  nextDb.exec('PRAGMA journal_mode = WAL; PRAGMA synchronous = NORMAL; PRAGMA temp_store = MEMORY; PRAGMA busy_timeout = 5000; PRAGMA foreign_keys = ON;');
+  nextDb.exec('BEGIN IMMEDIATE;');
+  try {
+    nextDb.exec(CREATE_COMMITS_TABLE_SQL);
+    ensureCacheSchemaColumns(nextDb);
+    nextDb.exec('CREATE INDEX IF NOT EXISTS idx_commits_author ON commits(author);');
+    nextDb.exec('DROP INDEX IF EXISTS idx_commits_type;');
+    nextDb.exec('CREATE INDEX IF NOT EXISTS idx_commits_type_scope ON commits(type, scope);');
+    nextDb.exec('CREATE INDEX IF NOT EXISTS idx_commits_scope ON commits(scope);');
+    nextDb.exec('CREATE INDEX IF NOT EXISTS idx_commits_isBreaking ON commits(isBreaking);');
+    nextDb.exec('COMMIT;');
+  } catch (err: unknown) {
+    try { nextDb.exec('ROLLBACK;'); } catch { /* ignore */ }
+    throw err;
+  }
+}
+
 export function initCache(dbPath?: string): Database {
-  const targetPath = dbPath || join(process.cwd(), '.agents', 'cache', 'git-history.db');
+  const rawPath = dbPath || join(process.cwd(), '.agents', 'cache', 'git-history.db');
+  const isMemory = rawPath === ':memory:';
+  const targetPath = isMemory ? ':memory:' : resolve(rawPath);
+
   if (db) {
     if (targetPath === currentDbPath) {
       return db;
     }
-    try { db.exec('PRAGMA optimize;'); } catch { /* ignore */ }
-    db.close();
-    db = null;
-    currentDbPath = null;
-    cachedInsertTx = null;
-    cachedInsertTxDb = null;
-    stmtCache.clear();
+    closeCache();
   }
-  
+
+  if (!isMemory) {
+    try {
+      mkdirSync(dirname(targetPath), { recursive: true });
+    } catch (err: unknown) {
+      if (!isErrnoException(err) || err.code !== 'EEXIST') throw err;
+    }
+  }
+
+  const nextDb = new Database(targetPath);
   try {
-    mkdirSync(dirname(targetPath), { recursive: true });
+    initializeSchema(nextDb);
   } catch (err: unknown) {
-    const isErrnoException = (e: unknown): e is NodeJS.ErrnoException => e instanceof Error && 'code' in e;
-    if (isErrnoException(err) && err.code !== 'EEXIST') throw err;
+    try { nextDb.close(); } catch { /* ignore */ }
+    throw err;
   }
-  
-  db = new Database(targetPath);
+
+  db = nextDb;
   currentDbPath = targetPath;
-  
-  db.exec('PRAGMA journal_mode = WAL; PRAGMA synchronous = NORMAL; PRAGMA temp_store = MEMORY; PRAGMA busy_timeout = 5000; PRAGMA foreign_keys = ON;');
-  db.exec(CREATE_COMMITS_TABLE_SQL);
-  ensureCacheSchemaColumns(db);
-  
-  db.exec('CREATE INDEX IF NOT EXISTS idx_commits_author ON commits(author);');
-  db.exec('DROP INDEX IF EXISTS idx_commits_type;');
-  db.exec('CREATE INDEX IF NOT EXISTS idx_commits_type_scope ON commits(type, scope);');
-  db.exec('CREATE INDEX IF NOT EXISTS idx_commits_scope ON commits(scope);');
-  db.exec('CREATE INDEX IF NOT EXISTS idx_commits_isBreaking ON commits(isBreaking);');
-  
-  return db;
+  return nextDb;
 }
 
-let cachedInsertTx: ((commits: CommitEntry[]) => void) | null = null;
-let cachedInsertTxDb: Database | null = null;
-
 export function closeCache(): void {
-  if (db) {
-    try { db.exec('PRAGMA optimize;'); } catch { /* ignore */ }
-    db.close();
+  if (!db) return;
+  const activeDb = db;
+  try {
+    if (cachedInsertStmt) {
+      finalizeStatement(cachedInsertStmt);
+      cachedInsertStmt = null;
+    }
+    for (const stmt of stmtCache.values()) {
+      finalizeStatement(stmt);
+    }
+    stmtCache.clear();
+    try { activeDb.exec('PRAGMA optimize;'); } catch { /* ignore */ }
+    activeDb.close();
+  } finally {
     db = null;
     currentDbPath = null;
     cachedInsertTx = null;
     cachedInsertTxDb = null;
+    cachedInsertStmt = null;
     stmtCache.clear();
   }
 }
@@ -238,7 +283,9 @@ export function insertCommits(batch: CommitEntry[]): void {
   if (batch.length === 0) return;
   const currentDb = db || initCache();
   if (!cachedInsertTx || cachedInsertTxDb !== currentDb) {
-    const insert = getOrPrepare(currentDb, INSERT_COMMIT_SQL);
+    if (cachedInsertStmt) finalizeStatement(cachedInsertStmt);
+    const insert = currentDb.prepare(INSERT_COMMIT_SQL);
+    cachedInsertStmt = insert;
     cachedInsertTx = currentDb.transaction((commits: CommitEntry[]) => {
       for (const c of commits) {
         insert.run({
@@ -247,23 +294,23 @@ export function insertCommits(batch: CommitEntry[]): void {
           $refs: c.refs ? JSON.stringify(c.refs) : null,
           $tags: c.tags ? JSON.stringify(c.tags) : null,
           $author: c.author,
-          $email: c.email || null,
-          $committer: c.committer || null,
-          $committerEmail: c.committerEmail || null,
-          $committerDate: c.committerDate || null,
+          $email: c.email ?? null,
+          $committer: c.committer ?? null,
+          $committerEmail: c.committerEmail ?? null,
+          $committerDate: c.committerDate ?? null,
           $date: c.date,
-          $type: c.type || null,
-          $scope: c.scope || null,
+          $type: c.type ?? null,
+          $scope: c.scope ?? null,
           $isBreaking: c.isBreaking ? 1 : 0,
-          $breakingChangeDescription: c.breakingChangeDescription || null,
+          $breakingChangeDescription: c.breakingChangeDescription ?? null,
           $isRevert: c.isRevert ? 1 : 0,
-          $revertedCommit: c.revertedCommit || null,
+          $revertedCommit: c.revertedCommit ?? null,
           $isRebased: c.isRebased ? 1 : 0,
           $subject: c.subject,
-          $cleanSubject: c.cleanSubject || null,
-          $body: c.body || null,
+          $cleanSubject: c.cleanSubject ?? null,
+          $body: c.body ?? null,
           $isBodyTruncated: c.isBodyTruncated ? 1 : 0,
-          $size: c.size || null,
+          $size: c.size ?? null,
           $files: c.files ? JSON.stringify(c.files) : null,
           $fileCount: c.fileCount ?? null,
           $isFilesTruncated: c.isFilesTruncated ? 1 : 0,
@@ -271,18 +318,18 @@ export function insertCommits(batch: CommitEntry[]): void {
           $totalDeletions: c.totalDeletions ?? null,
           $metadata: c.metadata ? JSON.stringify(c.metadata) : null,
           $trailersObj: c.trailersObj ? JSON.stringify(c.trailersObj) : null,
-          $patch: c.patch || null,
+          $patch: c.patch ?? null,
           $isPatchTruncated: c.isPatchTruncated ? 1 : 0,
           $references: c.references ? JSON.stringify(c.references) : null,
           $coAuthors: c.coAuthors ? JSON.stringify(c.coAuthors) : null,
           $reviewers: c.reviewers ? JSON.stringify(c.reviewers) : null,
           $associatedIssues: c.associatedIssues ? JSON.stringify(c.associatedIssues) : null,
-          $slackId: c.slackId || null,
+          $slackId: c.slackId ?? null,
           $validationErrors: c.validationErrors ? JSON.stringify(c.validationErrors) : null,
           $isCorrupted: c.isCorrupted ? 1 : 0
         });
       }
-    });
+    }).immediate;
     cachedInsertTxDb = currentDb;
   }
   cachedInsertTx(batch);

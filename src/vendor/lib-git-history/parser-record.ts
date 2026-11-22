@@ -1,7 +1,7 @@
 // @ts-nocheck
 import type { CliArgs } from './cli.js';
 import { FIELD_SEPARATOR } from './git-runner.js';
-import { extractIssues, truncateSafely, flattenString } from './parser-utils.js';
+import { extractIssues, truncateSafely, flattenString, expandIssueTrackerUrl } from './parser-utils.js';
 import { evaluateNumericFilter } from './parser-metadata.js';
 import { parseTrailersBlock } from './parser-trailers.js';
 import {
@@ -249,12 +249,7 @@ function matchesRecordFilters(
 function applyIssueTrackerUrls(issuesMap: Map<string, string | null>, tracker: string | undefined): void {
   if (!tracker) return;
   for (const [issue, action] of Array.from(issuesMap.entries())) {
-    let finalIssue = issue;
-    if (issue.startsWith('#')) {
-      finalIssue = tracker + issue.slice(1);
-    } else if (!issue.startsWith('http')) {
-      finalIssue = tracker.endsWith('/') ? tracker + issue : tracker + '/' + issue;
-    }
+    const finalIssue = expandIssueTrackerUrl(issue, tracker);
     if (finalIssue !== issue) {
       issuesMap.delete(issue);
       issuesMap.set(finalIssue, action);

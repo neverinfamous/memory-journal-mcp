@@ -9,6 +9,7 @@
         "git-numstat.ts",
         "git-patch.ts",
         "git-runner.ts",
+        "git-stream-buffers.ts",
         "parser-batch.ts",
         "parser-metadata.ts",
         "parser-record.ts",
@@ -19,8 +20,8 @@
         "uncommitted.ts",
         "AGENT_README.md"
       ],
-      "syncedAt": "2026-11-21T08:40:06.059Z",
-      "syncedFromCommit": "57044c274ea8e1b615fd9512d60b7bf2eb18a606"
+      "syncedAt": "2026-11-22T22:00:28.791Z",
+      "syncedFromCommit": "ec7308d4addb58a0fc8cd9ea28f8947d80900853"
     },
     "lib-agent-exec": {
       "source": ".agents/scripts/lib-agent-exec",

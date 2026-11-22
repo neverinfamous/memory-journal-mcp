@@ -3,6 +3,13 @@ import { spawn, execFileSync } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import type { CliArgs } from './cli.js';
 import { GIT_TIMEOUT_MS, GIT_CMD_MAX_BUFFER, GIT_STREAM_BUFFER_DEFAULT, GIT_IDLE_TIMEOUT_MS, GIT_ABSOLUTE_TIMEOUT_MS, MAX_STDERR_LENGTH, SIGPIPE_EXIT_CODE } from './constants.js';
+import {
+  drainTextBuffer,
+  hasCrossChunkBoundary,
+  drainBinaryChunks,
+  type TextStreamState,
+  type BinaryStreamState,
+} from './git-stream-buffers.js';
 
 interface ErrnoException extends Error {
   code?: string;
@@ -36,14 +43,23 @@ function attachStderrCollector(proc: ReturnType<typeof spawn>) {
     else if (!hasTruncatedErr) { errChunks.push('\n...[stderr truncated]'); hasTruncatedErr = true; }
   });
   // [INTENT]: In Bun on Windows, ChildProcess `'close'` can fire before `proc.stderr` flushes its final events.
-  const hasStderrOnce = proc.stderr !== null && proc.stderr !== undefined && typeof proc.stderr.once === 'function';
+  const stderrStream = proc.stderr;
+  const hasStderrOnce = stderrStream !== null && stderrStream !== undefined && typeof stderrStream.once === 'function';
   let stderrEnded = !hasStderrOnce;
   const stderrSettled = hasStderrOnce
     ? new Promise<void>((resolveStderr) => {
-        const finish = () => { if (!stderrEnded) { stderrEnded = true; resolveStderr(); } };
-        proc.stderr?.once('end', finish);
-        proc.stderr?.once('close', finish);
-        proc.stderr?.once('error', finish);
+        const finish = () => {
+          if (!stderrEnded) {
+            stderrEnded = true;
+            stderrStream.removeListener?.('end', finish);
+            stderrStream.removeListener?.('close', finish);
+            stderrStream.removeListener?.('error', finish);
+            resolveStderr();
+          }
+        };
+        stderrStream.once('end', finish);
+        stderrStream.once('close', finish);
+        stderrStream.once('error', finish);
       })
     : Promise.resolve();
   return { getErrText: () => errChunks.join(''), isStderrEnded: () => stderrEnded, stderrSettled };
@@ -179,7 +195,7 @@ export function getGitTagRange(cwd: string = process.cwd()): { range: string; is
 }
 
 export function buildGitBaseArgs(args: CliArgs, targetRange: string | undefined): string[] {
-  if (targetRange && targetRange.startsWith('-')) {
+  if (targetRange && targetRange.trim().startsWith('-')) {
     throw new Error(`Invalid target range: ${targetRange}. Range must not start with '-'.`);
   }
   const gitArgs: string[] = [];
@@ -225,8 +241,9 @@ export function buildGitBaseArgs(args: CliArgs, targetRange: string | undefined)
     gitArgs.push('--all');
   } else if (!targetRange || targetRange === 'HEAD') {
     const format = args.format?.replace(/^["']|["']$/g, '');
-    if (args.limit === undefined && !hasTsFilters && !hasNativeFilters && !args.reverse && (!format || format === 'json')) gitArgs.push('-n', '100');
-    else if ((hasTsFilters || (args.limit === undefined && format && format !== 'json')) && !args.reverse) gitArgs.push('-n', '50000');
+    const isJsonFormat = !format || format === 'json' || format === 'json-array';
+    if (args.limit === undefined && !hasTsFilters && !hasNativeFilters && !args.reverse && isJsonFormat) gitArgs.push('-n', '100');
+    else if ((hasTsFilters || (args.limit === undefined && !isJsonFormat)) && !args.reverse) gitArgs.push('-n', '50000');
     gitArgs.push('HEAD');
   } else {
     gitArgs.push(targetRange);
@@ -238,57 +255,6 @@ export function buildGitBaseArgs(args: CliArgs, targetRange: string | undefined)
 
   if (args.path) gitArgs.push('--full-diff', '--', args.path);
   return gitArgs;
-}
-
-interface TextStreamState {
-  buffer: string;
-  searchOffset: number;
-  droppingMassiveCommit: boolean;
-}
-
-function drainTextBuffer(state: TextStreamState, chunkLen: number, maxBufferLimit: number): string[] {
-  const records: string[] = [];
-  if (state.droppingMassiveCommit) {
-    const nextBoundary = state.buffer.indexOf(RECORD_SEPARATOR);
-    if (nextBoundary === -1) {
-      state.buffer = state.buffer.length > RECORD_SEPARATOR.length ? (' ' + state.buffer.slice(-(RECORD_SEPARATOR.length - 1))).slice(1) : state.buffer;
-      state.searchOffset = 0;
-      return records;
-    }
-    state.droppingMassiveCommit = false;
-    state.buffer = (' ' + state.buffer.slice(nextBoundary + RECORD_SEPARATOR.length)).slice(1);
-    state.searchOffset = 0;
-  }
-
-  let lastSlice = 0;
-  let sepIdx: number;
-  while ((sepIdx = state.buffer.indexOf(RECORD_SEPARATOR, state.searchOffset)) !== -1) {
-    const record = state.buffer.slice(lastSlice, sepIdx);
-    if (record.trim()) {
-      if (record.length >= maxBufferLimit) {
-        console.warn(`Warning: Git record exceeded ${Math.round(maxBufferLimit / 1024 / 1024)}MB. Dropping massive commit.`);
-      } else {
-        records.push(record);
-      }
-    }
-    lastSlice = sepIdx + RECORD_SEPARATOR.length;
-    state.searchOffset = lastSlice;
-  }
-
-  if (lastSlice > 0) {
-    state.buffer = (' ' + state.buffer.slice(lastSlice)).slice(1);
-    state.searchOffset = Math.max(0, state.searchOffset - lastSlice);
-  } else {
-    state.searchOffset = Math.max(0, state.buffer.length - chunkLen - RECORD_SEPARATOR.length);
-  }
-
-  if (state.buffer.length > maxBufferLimit) {
-    console.warn(`Warning: Git record buffer exceeded ${Math.round(maxBufferLimit / 1024 / 1024)}MB. Dropping massive commit to prevent memory exhaustion.`);
-    state.buffer = state.buffer.length > RECORD_SEPARATOR.length ? (' ' + state.buffer.slice(-(RECORD_SEPARATOR.length - 1))).slice(1) : state.buffer;
-    state.searchOffset = 0;
-    state.droppingMassiveCommit = true;
-  }
-  return records;
 }
 
 function spawnGitWithEnoentGuard(args: string[], cwd: string, signal: AbortSignal): ReturnType<typeof spawn> {
@@ -327,7 +293,7 @@ export async function* streamGitRecords(args: string[], cwd: string = process.cw
         resetTimeout();
         const textChunk = typeof chunk === 'string' ? chunk : String(chunk);
         state.buffer += textChunk;
-        for (const rec of drainTextBuffer(state, textChunk.length, maxBufferLimit)) {
+        for (const rec of drainTextBuffer(state, textChunk.length, maxBufferLimit, RECORD_SEPARATOR)) {
           yield rec;
         }
       }
@@ -347,41 +313,20 @@ export async function* streamGitRecords(args: string[], cwd: string = process.cw
   }
 }
 
-function hasCrossChunkBoundary(chunks: Buffer[], buf: Buffer, boundary: Buffer): boolean {
-  const needed = boundary.length - 1;
-  let gathered = 0;
-  const tailChunks: Buffer[] = [];
-  for (let i = chunks.length - 2; i >= 0 && gathered < needed; i--) {
-    const c = chunks[i];
-    if (!c) continue;
-    const take = Math.min(c.length, needed - gathered);
-    tailChunks.unshift(c.subarray(c.length - take));
-    gathered += take;
+function writeStdinShas(stdin: NonNullable<ReturnType<typeof spawn>['stdin']>, stdinShas: string): void {
+  stdin.on('error', (err: unknown) => {
+    if (err instanceof Error && (!('code' in err) || (err.code !== 'EPIPE' && err.code !== 'EOF'))) {
+      console.error('stdin error:', err.message);
+    }
+  });
+  try {
+    stdin.write(stdinShas);
+    stdin.end();
+  } catch (err: unknown) {
+    if (!isErrnoException(err) || (err.code !== 'EPIPE' && err.code !== 'EOF')) {
+      console.error('stdin error:', err instanceof Error ? err.message : String(err));
+    }
   }
-  const headSlice = buf.subarray(0, Math.min(buf.length, needed));
-  tailChunks.push(headSlice);
-  return Buffer.concat(tailChunks, gathered + headSlice.length).indexOf(boundary) !== -1;
-}
-
-function drainBinaryChunks(
-  chunks: Buffer[],
-  chunksLength: number,
-  boundary: Buffer,
-  maxBufferLimit: number,
-): { emitted: Buffer[]; nextChunks: Buffer[]; nextLength: number } {
-  const emitted: Buffer[] = [];
-  let pendingBuffer = Buffer.concat(chunks, chunksLength);
-  let nextIdx = pendingBuffer.indexOf(boundary);
-  while (nextIdx !== -1) {
-    if (nextIdx > 0) emitted.push(pendingBuffer.subarray(0, nextIdx));
-    pendingBuffer = pendingBuffer.subarray(nextIdx + boundary.length);
-    nextIdx = pendingBuffer.indexOf(boundary);
-  }
-  if (pendingBuffer.length > maxBufferLimit) {
-    console.warn(`Warning: Git binary buffer exceeded ${Math.round(maxBufferLimit / 1024 / 1024)}MB. Dropping buffer to prevent memory exhaustion.`);
-    return { emitted, nextChunks: [], nextLength: 0 };
-  }
-  return { emitted, nextChunks: pendingBuffer.length > 0 ? [pendingBuffer] : [], nextLength: pendingBuffer.length };
 }
 
 export async function* spawnGitBinaryStream(
@@ -400,41 +345,40 @@ export async function* spawnGitBinaryStream(
     throw new Error('Missing stdio');
   }
 
-  if (stdinShas) {
-    proc.stdin.on('error', (err: unknown) => {
-      if (err instanceof Error && (!('code' in err) || (err.code !== 'EPIPE' && err.code !== 'EOF'))) {
-        console.error('stdin error:', err.message);
-      }
-    });
-    try {
-      proc.stdin.write(stdinShas);
-      proc.stdin.end();
-    } catch { /* ignore synchronous EPIPE */ }
-  }
+  if (stdinShas) writeStdinShas(proc.stdin, stdinShas);
 
-  const { resetTimeout, processComplete, cleanup } = setupGitProcessLifecycle(proc, ac, 'spawnGitBinaryStream');
+  const { resetTimeout, processComplete, getStreamError, cleanup } = setupGitProcessLifecycle(proc, ac, 'spawnGitBinaryStream');
+  const state: BinaryStreamState = { chunks: [], chunksLength: 0, droppingMassiveRecord: false };
+  const boundary = Buffer.from(boundaryStr);
 
   try {
-    let chunks: Buffer[] = [];
-    let chunksLength = 0;
-    const boundary = Buffer.from(boundaryStr);
+    try {
+      for await (const chunk of proc.stdout) {
+        const streamError = getStreamError();
+        if (streamError) throw streamError;
+        resetTimeout();
+        const buf = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+        state.chunks.push(buf);
+        state.chunksLength += buf.length;
 
-    for await (const chunk of proc.stdout) {
-      resetTimeout();
-      const buf = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
-      chunks.push(buf);
-      chunksLength += buf.length;
-
-      const hasBoundary = buf.indexOf(boundary) !== -1 || (chunksLength > buf.length && hasCrossChunkBoundary(chunks, buf, boundary));
-      if (hasBoundary || chunksLength >= maxBufferLimit) {
-        const drained = drainBinaryChunks(chunks, chunksLength, boundary, maxBufferLimit);
-        for (const rec of drained.emitted) yield rec;
-        chunks = drained.nextChunks;
-        chunksLength = drained.nextLength;
+        const hasBoundary = buf.indexOf(boundary) !== -1 || (state.chunksLength > buf.length && hasCrossChunkBoundary(state.chunks, buf, boundary));
+        if (hasBoundary || state.chunksLength >= maxBufferLimit) {
+          yield* drainBinaryChunks(state, boundary, maxBufferLimit);
+        }
+      }
+    } catch (err: unknown) {
+      const streamError = getStreamError();
+      if (streamError) throw streamError;
+      if (err instanceof Error && err.message === 'Premature close') {
+        await processComplete;
+      } else {
+        throw err;
       }
     }
     await processComplete;
-    if (chunksLength > 0) yield Buffer.concat(chunks, chunksLength);
+    if (!state.droppingMassiveRecord && state.chunksLength > 0) {
+      yield Buffer.concat(state.chunks, state.chunksLength);
+    }
   } finally {
     cleanup();
   }

@@ -13,23 +13,27 @@ const SIZE_S_THRESHOLD = 50;
 const SIZE_M_THRESHOLD = 250;
 const SIZE_L_THRESHOLD = 1000;
 
+const FORBIDDEN_KEYS = new Set(['__proto__', 'constructor', 'prototype']);
+
 function parseWithFallbacks(entryObj: Record<string, unknown>, sha: string, subject: string, date: string, authorName: string): CommitEntry | null {
   const parseResult = entrySchema.safeParse(entryObj);
   if (parseResult.success) return parseResult.data;
 
   const coercedObj: Record<string, unknown> = { ...entryObj };
   for (const issue of parseResult.error.issues) {
-    if (issue.path.length === 1) {
-      delete coercedObj[String(issue.path[0])];
-    } else if (issue.path.length === 2 && issue.path[0] === 'metadata') {
+    const topKey = issue.path.length > 0 ? String(issue.path[0]) : '';
+    if (!topKey || FORBIDDEN_KEYS.has(topKey)) continue;
+    if (topKey === 'metadata' && issue.path.length >= 2) {
+      const subKey = String(issue.path[1]);
+      if (FORBIDDEN_KEYS.has(subKey)) continue;
       const rawMeta = coercedObj['metadata'];
-      const meta: Record<string, unknown> = typeof rawMeta === 'object' && rawMeta !== null 
-        ? { ...rawMeta } 
+      const meta: Record<string, unknown> = typeof rawMeta === 'object' && rawMeta !== null
+        ? { ...rawMeta }
         : {};
-      delete meta[String(issue.path[1])];
+      delete meta[subKey];
       coercedObj['metadata'] = meta;
-    } else if (issue.path[0] === 'files') {
-      delete coercedObj['files'];
+    } else {
+      delete coercedObj[topKey];
     }
   }
   const retryResult = entrySchema.safeParse(coercedObj);
@@ -172,9 +176,9 @@ function buildCommitEntryObject(
   const size = computeCommitSize(nonNoiseInsertions + nonNoiseDeletions, trueFileCount);
   const isRebased = detectIsRebased(b);
   const slackId =
-    b.authorEmail && slackMap[b.authorEmail]
+    b.authorEmail && Object.hasOwn(slackMap, b.authorEmail)
       ? slackMap[b.authorEmail]
-      : b.authorName && slackMap[b.authorName]
+      : b.authorName && Object.hasOwn(slackMap, b.authorName)
         ? slackMap[b.authorName]
         : undefined;
 

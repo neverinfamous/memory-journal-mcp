@@ -55,19 +55,25 @@ export const CLI_OPTIONS = {
     cwd: { type: 'string' },
   } as const;
 
+const STRING_CLI_OPTIONS = new Set<string>(
+  Object.entries(CLI_OPTIONS)
+    .filter(([, def]) => def.type === 'string')
+    .map(([key]) => key),
+);
+
 export function parseArguments(): CliArgs {
   try {
     const rawArgs = process.argv.slice(2);
     const args: string[] = [];
     for (let i = 0; i < rawArgs.length; i++) {
       const curr = rawArgs[i];
+      if (curr === '--') {
+        args.push(...rawArgs.slice(i));
+        break;
+      }
       const next = rawArgs[i + 1];
-      if (
-        next &&
-        curr.startsWith('--') &&
-        !curr.includes('=') &&
-        /^-?\d+(?:\.\d+)?$/.test(next)
-      ) {
+      const optName = curr.startsWith('--') && !curr.includes('=') ? curr.slice(2) : '';
+      if (next && optName !== '' && STRING_CLI_OPTIONS.has(optName) && /^-?\d+(?:\.\d+)?$/.test(next)) {
         args.push(`${curr}=${next}`);
         i++;
       } else {
@@ -131,7 +137,7 @@ ${pc.bold('Search Options:')}
 
 ${pc.bold('Content & Formatting Options:')}
   --uncommitted            Output the current uncommitted working tree state instead of history
-  -f, --format <fmt>       Output format: json (default), markdown, slack, or custom script path
+  -f, --format <fmt>       Output format: json (default), json-array, markdown, slack, or custom script path
   --summary                Output summary metadata only (omits bodies, files, patches)
   --stats                  Output summary metadata plus file stats (omits bodies, patches)
   --no-body                Omit commit bodies from output

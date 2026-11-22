@@ -112,6 +112,20 @@ describe('Git Tools Handler', () => {
         expect(res.commits[0]?.scope).toBe('core')
     })
 
+    it('get_commit_history passes %(trailers:unfold,separator=%x1C) so multi-trailer commits parse cleanly', async () => {
+        const tools = getGitTools(context)
+        const tool = tools.find((t) => t.name === 'get_commit_history')!
+        const res = (await tool.handler({ maxCount: 5 })) as { success: boolean }
+
+        expect(res.success).toBe(true)
+        expect(mockStreamGitRecords).toHaveBeenCalledWith(
+            expect.arrayContaining([
+                expect.stringContaining('%(trailers:unfold,separator=%x1C)'),
+            ]),
+            expect.any(String)
+        )
+    })
+
     it('search_commits should search commit history by query', async () => {
         const tools = getGitTools(context)
         const tool = tools.find((t) => t.name === 'search_commits')!

@@ -16,7 +16,7 @@ function getParsedNumericFilter(filterString: string): ParsedNumericFilter | nul
   const cached = NUMERIC_FILTER_CACHE.get(filterString);
   if (cached !== undefined) return cached;
 
-  const normalizedFilter = filterString.toLowerCase()
+  const normalizedFilter = filterString.trim().toLowerCase()
     .replace(/\bhigh\b/g, String(IMPACT_HIGH))
     .replace(/\bmedium\b/g, String(IMPACT_MEDIUM))
     .replace(/\blow\b/g, String(IMPACT_LOW));
@@ -51,17 +51,21 @@ export function evaluateNumericFilter(filterString: string, recordValue: number 
   }
 }
 
+const FINITE_DECIMAL_RE = /^[+-]?(?:\d+\.?\d*|\.\d+)(?:e[+-]?\d+)?$/i;
+const finiteNumberSchema = z.union([
+  z.number().finite(),
+  z.string().trim().regex(FINITE_DECIMAL_RE).transform(Number).refine(Number.isFinite),
+]);
+
 const numericSchema = z.union([
-  z.object({ status: z.literal('success'), data: z.number() }).transform(v => v.data),
-  z.object({ status: z.literal('success'), data: z.string().transform(Number) }).transform(v => v.data),
-  z.object({ data: z.number() }).transform(v => v.data),
-  z.object({ data: z.string().transform(Number) }).transform(v => v.data),
-  z.object({ status: z.literal('success'), data: z.object({ trust: z.coerce.number() }) }).transform(v => v.data.trust),
-  z.object({ status: z.literal('success'), data: z.object({ impact: z.coerce.number() }) }).transform(v => v.data.impact),
-  z.object({ status: z.literal('success'), data: z.object({ confidence: z.coerce.number() }) }).transform(v => v.data.confidence),
-  z.object({ trust: z.coerce.number() }).transform(v => v.trust),
-  z.object({ impact: z.coerce.number() }).transform(v => v.impact),
-  z.object({ confidence: z.coerce.number() }).transform(v => v.confidence)
+  z.object({ status: z.literal('success'), data: finiteNumberSchema }).transform(v => v.data),
+  z.object({ data: finiteNumberSchema }).transform(v => v.data),
+  z.object({ status: z.literal('success'), data: z.object({ trust: finiteNumberSchema }) }).transform(v => v.data.trust),
+  z.object({ status: z.literal('success'), data: z.object({ impact: finiteNumberSchema }) }).transform(v => v.data.impact),
+  z.object({ status: z.literal('success'), data: z.object({ confidence: finiteNumberSchema }) }).transform(v => v.data.confidence),
+  z.object({ trust: finiteNumberSchema }).transform(v => v.trust),
+  z.object({ impact: finiteNumberSchema }).transform(v => v.impact),
+  z.object({ confidence: finiteNumberSchema }).transform(v => v.confidence),
 ]);
 
 const extractMatch = (s: string, regex: RegExp) => {
@@ -79,17 +83,20 @@ export function extractNumericMetadata(val: string): number | string | undefined
     case 'low': return IMPACT_LOW;
     case 'nan':
     case 'infinity':
+    case '+infinity':
     case '-infinity': return undefined;
     default: break;
   }
 
-  const n = Number(trimmed);
-  if (!Number.isNaN(n) && trimmed !== '') return n;
+  if (trimmed !== '') {
+    const n = Number(trimmed);
+    if (!Number.isNaN(n)) return Number.isFinite(n) ? n : undefined;
+  }
 
   const jsonCandidate = trimmed.startsWith('{') ? trimmed : `{${trimmed}}`;
 
   try {
-    const parsed = JSON.parse(jsonCandidate);
+    const parsed: unknown = JSON.parse(jsonCandidate);
     const zodResult = numericSchema.safeParse(parsed);
     if (zodResult.success && !Number.isNaN(zodResult.data) && Number.isFinite(zodResult.data)) {
       return zodResult.data;

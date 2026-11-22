@@ -70,22 +70,40 @@ export const entrySchema = z.object({
 export type CommitEntry = z.infer<typeof entrySchema>;
 export type FileStatus = z.infer<typeof fileStatusSchema>;
 
+const NON_NEGATIVE_INT_RE = /^\d+$/;
+
+const nonNegativeIntArgSchema = z.preprocess((val: unknown) => {
+  if (val === undefined) return undefined;
+  if (typeof val === 'number') return Number.isSafeInteger(val) && val >= 0 ? val : Number.NaN;
+  if (typeof val === 'string') {
+    const trimmed = val.trim();
+    if (!NON_NEGATIVE_INT_RE.test(trimmed)) return Number.NaN;
+    const parsed = Number(trimmed);
+    return Number.isSafeInteger(parsed) ? parsed : Number.NaN;
+  }
+  return Number.NaN;
+}, z.number().int().min(0).optional());
+
+const nonBlankStringSchema = z.string().refine((s) => s.trim().length > 0, {
+  message: 'Flag value must not be blank',
+}).optional();
+
 export const cliArgsSchema = z.object({
-  limit: z.coerce.number().int().min(0).optional(),
-  path: z.string().optional(),
+  limit: nonNegativeIntArgSchema,
+  path: nonBlankStringSchema,
   author: z.string().optional(),
   search: z.string().optional(),
   grep: z.string().optional(),
-  range: z.string().optional(),
+  range: nonBlankStringSchema,
   since: z.string().optional(),
   until: z.string().optional(),
   'first-parent': z.boolean().optional(),
   help: z.boolean().optional(),
   'include-merges': z.boolean().optional(),
   'include-patch': z.boolean().optional(),
-  'diff-context': z.coerce.number().int().min(0).optional(),
-  'max-body-length': z.coerce.number().int().min(0).optional(),
-  'max-patch-length': z.coerce.number().int().min(0).optional(),
+  'diff-context': nonNegativeIntArgSchema,
+  'max-body-length': nonNegativeIntArgSchema,
+  'max-patch-length': nonNegativeIntArgSchema,
   category: z.string().optional(),
   type: z.string().optional(),
   breaking: z.boolean().optional(),
@@ -93,7 +111,7 @@ export const cliArgsSchema = z.object({
   confidence: z.string().optional(),
   jsonl: z.boolean().optional(),
   'changelog-only': z.boolean().optional(),
-  format: z.string().optional(),
+  format: nonBlankStringSchema,
   summary: z.boolean().optional(),
   stats: z.boolean().optional(),
   all: z.boolean().optional(),
@@ -105,12 +123,12 @@ export const cliArgsSchema = z.object({
   'issue-tracker': z.string().optional(),
   'issue-pattern': z.string().optional(),
   cache: z.boolean().optional(),
-  mailmap: z.string().optional(),
-  'slack-map': z.string().optional(),
+  mailmap: nonBlankStringSchema,
+  'slack-map': nonBlankStringSchema,
   'package-version': z.boolean().optional(),
-  'stream-to-file': z.string().optional(),
+  'stream-to-file': nonBlankStringSchema,
   uncommitted: z.boolean().optional(),
-  cwd: z.string().optional(),
+  cwd: nonBlankStringSchema,
 });
 
 export type CliArgs = z.infer<typeof cliArgsSchema>;

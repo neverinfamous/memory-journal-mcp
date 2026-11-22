@@ -3,7 +3,7 @@
 import { spawnGitBinaryStream, PATCH_BOUNDARY_STR } from './git-runner.js';
 import type { CliArgs } from './cli.js';
 import { DEFAULT_MAX_PATCH_LEN, GIT_EXCLUDE_PATTERNS, GIT_STREAM_BUFFER_DEFAULT } from './constants.js';
-import { extractShaFromBuffer } from './parser-utils.js';
+import { extractShaFromBuffer, truncateSafely } from './parser-utils.js';
 
 const DIFF_HEADER_NL = Buffer.from('\ndiff --git ');
 const DIFF_HEADER_START = Buffer.from('diff --git ');
@@ -16,6 +16,7 @@ function truncateOversizedPatch(
   const processedDiffs: string[] = [];
   let searchStart = startOffset;
   let truncated = false;
+  let remainingBudget = maxPatchLen;
 
   const firstDiff = recordBuf.indexOf(DIFF_HEADER_START, searchStart);
   if (firstDiff !== -1 && firstDiff - searchStart < 10) {
@@ -23,18 +24,26 @@ function truncateOversizedPatch(
   }
 
   while (searchStart < recordBuf.length) {
+    if (remainingBudget <= 0) {
+      truncated = true;
+      processedDiffs.push('...[remaining file patches truncated due to length]');
+      break;
+    }
+
     const nextDiff = recordBuf.indexOf(DIFF_HEADER_NL, searchStart + 1);
     const diffEnd = nextDiff !== -1 ? nextDiff : recordBuf.length;
 
-    const diffLen = diffEnd - searchStart;
-    if (diffLen > maxPatchLen) {
+    const maxBytes = remainingBudget * 4 + 64;
+    const decodeEnd = diffEnd - searchStart > maxBytes ? searchStart + maxBytes : diffEnd;
+    const diffText = recordBuf.toString('utf-8', searchStart, decodeEnd).trim();
+
+    if (decodeEnd < diffEnd || diffText.length > remainingBudget) {
       truncated = true;
-      processedDiffs.push(
-        recordBuf.toString('utf-8', searchStart, searchStart + maxPatchLen).trim() +
-          '\n...[patch truncated due to length]',
-      );
-    } else {
-      processedDiffs.push(recordBuf.toString('utf-8', searchStart, diffEnd).trim());
+      processedDiffs.push(truncateSafely(diffText, remainingBudget, '\n...[patch truncated due to length]'));
+      remainingBudget = 0;
+    } else if (diffText.length > 0) {
+      processedDiffs.push(diffText);
+      remainingBudget -= diffText.length;
     }
 
     if (nextDiff === -1) break;

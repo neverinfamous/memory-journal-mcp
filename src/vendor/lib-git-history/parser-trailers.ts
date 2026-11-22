@@ -170,7 +170,7 @@ export function parseTrailersBlock(rawTrailers: string, sha: string): ParsedTrai
       const colonIdx = t.indexOf(':');
       const keyRaw = colonIdx === -1 ? t.trim() : t.slice(0, colonIdx).trim();
       const key = keyRaw.toLowerCase().replace(/\s+/g, '-');
-      if (key === '__proto__' || key === 'constructor' || key === 'prototype') continue;
+      if (!keyRaw || key === '__proto__' || key === 'constructor' || key === 'prototype') continue;
       const rawVal = colonIdx === -1 ? '' : t.slice(colonIdx + 1).trim();
       let val = rawVal.includes('\n') ? rawVal.replace(REGEX_TRAILER_CONTINUATION, '\n') : rawVal;
       if (val.includes('\u200B')) val = val.replace(REGEX_ZERO_WIDTH_SPACE, '');
