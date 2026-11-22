@@ -39,6 +39,7 @@ describe('Pass 20 prompt isolation fixes', () => {
             'adversarial-audit-performance',
             'adversarial-audit-seo',
             'adversarial-audit-skill',
+            'adversarial-build-skill',
             'adversarial-audit-workflow',
         ])
     })

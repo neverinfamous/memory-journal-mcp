@@ -181,6 +181,12 @@ These prompts execute deep, parallelized audits using subagents.
   - `target` (optional) - The skill to audit.
   - `copilot` (optional) - Opt-in to external GitHub Copilot CLI validation (`true` | `false`, default: `false`).
 
+### `adversarial-build-skill`
+**Description**: Author, refine, and trigger-tune an agent skill (frontmatter, progressive disclosure, negative triggers, trigger evals, validation). Companion to `adversarial-audit-skill`.
+- **Arguments**:
+  - `target` (optional) - The skill path to refine, or the name and purpose of a new skill.
+  - `copilot` (optional) - Opt-in to external GitHub Copilot CLI validation (`true` | `false`, default: `false`).
+
 ### `adversarial-audit-workflow`
 **Description**: Audit an agent workflow configuration.
 - **Arguments**:

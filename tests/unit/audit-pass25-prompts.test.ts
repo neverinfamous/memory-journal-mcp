@@ -123,9 +123,9 @@ describe('Pass 25 Prompt Hardening & Attribution', () => {
 
     it('includes portable cross-host subagent guidance in sibling audit prompts', async () => {
         const defs = getAdversarialPromptDefinitions().filter((d) =>
-            ['adversarial-audit-seo', 'adversarial-audit-skill', 'adversarial-audit-workflow'].includes(d.name)
+            ['adversarial-audit-seo', 'adversarial-audit-skill', 'adversarial-build-skill', 'adversarial-audit-workflow'].includes(d.name)
         )
-        expect(defs).toHaveLength(3)
+        expect(defs).toHaveLength(4)
         for (const def of defs) {
             const text = getPromptText(await def.handler({}, db))
             expect(text).toContain("that host's read-only subagent tool")

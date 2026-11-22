@@ -81,6 +81,7 @@ describe('Prompt Handlers - Coverage', () => {
                 'adversarial-audit-performance',
                 'adversarial-audit-seo',
                 'adversarial-audit-skill',
+                'adversarial-build-skill',
                 'adversarial-audit-workflow',
             ]
 
@@ -119,6 +120,7 @@ describe('Prompt Handlers - Coverage', () => {
                     name === 'adversarial-audit-performance' ||
                     name === 'adversarial-audit-seo' ||
                     name === 'adversarial-audit-skill' ||
+                    name === 'adversarial-build-skill' ||
                     name === 'adversarial-audit-workflow'
                 ) {
                     expect(defaultText).toContain('generalPurpose')
