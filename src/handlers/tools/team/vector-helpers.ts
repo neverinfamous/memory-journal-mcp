@@ -16,7 +16,7 @@ import { resolveWriteWorkspaceId } from '../write-workspace.js'
 import type { SemanticSearchResult } from '../../../vector/vector-search-manager/index.js'
 import { passMetadataFilters } from '../search/helpers.js'
 import { progressiveSearchVectorResults } from '../search/semantic-candidate-hydration.js'
-import { StrictProjectNumberSchema } from '../schemas.js'
+import { coerceIntString, StrictProjectNumberSchema } from '../schemas.js'
 import {
     TEAM_DB_ERROR_RESPONSE,
     batchFetchAuthors,
@@ -278,7 +278,7 @@ export async function executeTeamSemanticSearch(
 const TeamRebuildVectorIndexSchema = z
     .object({
         workspace_id: z.string().max(255).optional(),
-        project_number: StrictProjectNumberSchema.optional(),
+        project_number: z.preprocess(coerceIntString, StrictProjectNumberSchema).optional(),
         session_id: z.string().optional(),
     })
     .strict()

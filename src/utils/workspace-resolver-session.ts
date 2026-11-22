@@ -40,7 +40,10 @@ function computeNextSessionEntry(
     // the previous workspace's project number attached; setting only a new project number
     // must not retain a stale workspace from a different project.
     const switchedWorkspace =
-        validWs !== undefined && prev?.workspaceId !== undefined && prev.workspaceId !== validWs
+        validWs !== undefined &&
+        ((prev?.workspaceId !== undefined &&
+            prev.workspaceId.toLowerCase() !== validWs.toLowerCase()) ||
+            (prev?.workspaceId === undefined && prev?.projectNumber !== undefined))
     const dropPrevWorkspace = validWs === undefined && validProj !== undefined
     const dropPrevProject = clearProject || switchedWorkspace
     const nextWs = validWs ?? (!dropPrevWorkspace ? prev?.workspaceId : undefined)
@@ -65,10 +68,9 @@ export function setActiveSessionProject(
 ): void {
     if (runtime === null) return
 
+    const trimmedWs = typeof workspaceId === 'string' ? workspaceId.trim() : undefined
     const validWs =
-        workspaceId !== undefined && workspaceId !== '' && workspaceId !== '*'
-            ? workspaceId
-            : undefined
+        trimmedWs !== undefined && trimmedWs !== '' && trimmedWs !== '*' ? trimmedWs : undefined
     const clearProject = projectNumber === null
     const validProj =
         typeof projectNumber === 'number' &&

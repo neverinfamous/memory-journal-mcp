@@ -288,7 +288,8 @@ function resolveConfiguredOrSessionFallback(
     rawProjectInput: unknown,
     explicitWorkspace: boolean,
     isWildcardWorkspace: boolean,
-    numericProjectId: number | undefined
+    numericProjectId: number | undefined,
+    effectiveRegistry: ProjectRegistry
 ): { fallbackConfiguredWs: string | undefined; effectiveProjectInput: number | undefined } {
     const configuredDefaultWsRaw = context.config?.defaultWorkspaceId?.trim()
     const configuredDefaultWs =
@@ -303,19 +304,37 @@ function resolveConfiguredOrSessionFallback(
             ? sessionCtx.workspaceId.trim()
             : undefined
     const hasActiveSessionScope = sessionWs !== undefined || sessionCtx.projectNumber !== undefined
-    const fallbackConfiguredWs =
-        rawProjectInput === undefined && configuredDefaultWs !== undefined
-            ? configuredDefaultWs.toLowerCase() === 'default' && hasActiveSessionScope
-                ? sessionWs
-                : configuredDefaultWs
-            : undefined
+    const isSessionDefaultOrOmitted = sessionWs === undefined || sessionWs.toLowerCase() === 'default'
+    const claimedByRegisteredWs =
+        sessionCtx.projectNumber !== undefined &&
+        effectiveRegistry !== undefined &&
+        Object.entries(effectiveRegistry).some(
+            ([k, v]) => k.toLowerCase() !== 'default' && v.project_number === sessionCtx.projectNumber
+        )
+    const useSessionDefaultScope =
+        rawProjectInput === undefined &&
+        !explicitWorkspace &&
+        !isWildcardWorkspace &&
+        configuredDefaultWs?.toLowerCase() === 'default' &&
+        isSessionDefaultOrOmitted &&
+        sessionCtx.projectNumber !== undefined
+    let fallbackConfiguredWs: string | undefined
+    if (rawProjectInput === undefined && configuredDefaultWs !== undefined) {
+        if (useSessionDefaultScope && claimedByRegisteredWs) {
+            fallbackConfiguredWs = undefined
+        } else if (configuredDefaultWs.toLowerCase() === 'default' && hasActiveSessionScope) {
+            fallbackConfiguredWs = sessionWs
+        } else {
+            fallbackConfiguredWs = configuredDefaultWs
+        }
+    }
     const effectiveProjectInput =
         numericProjectId ??
         (rawProjectInput === undefined &&
         !explicitWorkspace &&
         !isWildcardWorkspace &&
         configuredDefaultWs?.toLowerCase() === 'default' &&
-        sessionWs === undefined
+        isSessionDefaultOrOmitted
             ? sessionCtx.projectNumber
             : undefined)
     return { fallbackConfiguredWs, effectiveProjectInput }
@@ -360,7 +379,8 @@ function resolveSessionWorkspaceAndProjectPair(
         rawProjectInput,
         validated.explicitWorkspace,
         isWildcardWorkspace,
-        numericProjectId
+        numericProjectId,
+        effectiveRegistry
     )
 
     const resolvedContext = resolveProjectContext(

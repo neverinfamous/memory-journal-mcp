@@ -246,6 +246,35 @@ function stripNestedPropBlocks(code: string): string {
     return out.join('')
 }
 
+function populateRecoveredArrayAndContextFields(
+    payload: Record<string, unknown>,
+    scanCode: string
+): void {
+    for (const [key, pattern] of ARRAY_FIELD_RES) {
+        const rawArr = pattern.exec(scanCode)?.[1]
+        if (rawArr === undefined) continue
+        const parsed = parseRelaxedJsonArray(rawArr)
+        if (parsed !== undefined) payload[key] = parsed
+    }
+
+    const rawTags = /\btags\s*:\s*\[([\s\S]*?)\]/i.exec(scanCode)?.[1]
+    if (rawTags !== undefined) {
+        payload['tags'] = rawTags.split(',').map((s) => s.trim().replace(/^['"]|['"]$/g, '')).filter(Boolean)
+    }
+
+    const autoContextCandidates = scanCode.match(/\bauto_context\s*:/gi)
+    const rawAutoContext =
+        autoContextCandidates !== null && autoContextCandidates.length > MAX_ENTRY_FIELD_CANDIDATES
+            ? undefined
+            : /\bauto_context\s*:\s*(\{[\s\S]*?\})(?=[ \t\r]*,\s*\n|[ \t\r]*\n\s*\})/i.exec(
+                  scanCode
+              )?.[1]
+    if (rawAutoContext !== undefined) {
+        const parsedAutoContext = parseRelaxedAutoContext(rawAutoContext)
+        if (parsedAutoContext !== undefined) payload['auto_context'] = parsedAutoContext
+    }
+}
+
 function populateRecoveredEntryMetadata(payload: Record<string, unknown>, scanCode: string): void {
     const topLevelScanCode = stripNestedPropBlocks(scanCode)
     const projectMatch =
@@ -254,6 +283,8 @@ function populateRecoveredEntryMetadata(payload: Record<string, unknown>, scanCo
         )
     const workspaceMatch =
         /\b(?:workspace_id|workspaceId|workspace)\s*:\s*(['"`])([^'"`]+)\1/i.exec(topLevelScanCode)
+    const targetWorkspaceMatch =
+        /\b(?:target_workspace_id|targetWorkspaceId)\s*:\s*(['"`])([^'"`]+)\1/i.exec(topLevelScanCode)
     const sessionMatch = /\b(?:session_id|sessionId)\s*:\s*(['"`])([^'"`]+)\1/i.exec(topLevelScanCode)
     const impactMatch = /\b(?:impact_score|impactScore|impact)\s*:\s*([0-9.]+)/i.exec(topLevelScanCode)
     const trustMatch = /\b(?:trust_score|trustScore|trust)\s*:\s*([0-9.]+)/i.exec(topLevelScanCode)
@@ -286,6 +317,9 @@ function populateRecoveredEntryMetadata(payload: Record<string, unknown>, scanCo
         payload['project_number'] = projectMatch[3].trim()
     }
     if (workspaceMatch?.[2] !== undefined) payload['workspace_id'] = workspaceMatch[2]
+    if (targetWorkspaceMatch?.[2] !== undefined && targetWorkspaceMatch[2].trim() !== '') {
+        payload['target_workspace_id'] = targetWorkspaceMatch[2].trim()
+    }
     if (sessionMatch?.[2] !== undefined) payload['session_id'] = sessionMatch[2]
     if (impactMatch?.[1] !== undefined) {
         const parsedImpact = Number(impactMatch[1])
@@ -300,29 +334,7 @@ function populateRecoveredEntryMetadata(payload: Record<string, unknown>, scanCo
     if (isPersonalMatch?.[1] !== undefined) payload['is_personal'] = isPersonalMatch[1].toLowerCase() === 'true'
     if (shareTeamMatch?.[1] !== undefined) payload['share_with_team'] = shareTeamMatch[1].toLowerCase() === 'true'
 
-    for (const [key, pattern] of ARRAY_FIELD_RES) {
-        const rawArr = pattern.exec(scanCode)?.[1]
-        if (rawArr === undefined) continue
-        const parsed = parseRelaxedJsonArray(rawArr)
-        if (parsed !== undefined) payload[key] = parsed
-    }
-
-    const rawTags = /\btags\s*:\s*\[([\s\S]*?)\]/i.exec(scanCode)?.[1]
-    if (rawTags !== undefined) {
-        payload['tags'] = rawTags.split(',').map((s) => s.trim().replace(/^['"]|['"]$/g, '')).filter(Boolean)
-    }
-
-    const autoContextCandidates = scanCode.match(/\bauto_context\s*:/gi)
-    const rawAutoContext =
-        autoContextCandidates !== null && autoContextCandidates.length > MAX_ENTRY_FIELD_CANDIDATES
-            ? undefined
-            : /\bauto_context\s*:\s*(\{[\s\S]*?\})(?=[ \t\r]*,\s*\n|[ \t\r]*\n\s*\})/i.exec(
-                  scanCode
-              )?.[1]
-    if (rawAutoContext !== undefined) {
-        const parsedAutoContext = parseRelaxedAutoContext(rawAutoContext)
-        if (parsedAutoContext !== undefined) payload['auto_context'] = parsedAutoContext
-    }
+    populateRecoveredArrayAndContextFields(payload, scanCode)
 }
 
 /**

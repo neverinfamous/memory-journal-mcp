@@ -3,6 +3,8 @@ import {
     ENTRY_TYPES,
     RelationshipOutputSchema,
     relaxedNumber,
+    coerceFiniteNumberString,
+    coerceIntString,
     DATE_FORMAT_REGEX,
     DATE_FORMAT_MESSAGE,
     StrictProjectNumberSchema,
@@ -20,7 +22,7 @@ import {
 export const TeamGetStatisticsSchema = z
     .object({
         group_by: z.enum(['day', 'week', 'month']).optional().default('week'),
-        project_number: StrictProjectNumberSchema.optional(),
+        project_number: z.preprocess(coerceIntString, StrictProjectNumberSchema).optional(),
         workspace_id: z
             .string()
             .max(255)
@@ -69,7 +71,7 @@ export const TeamLinkEntriesSchema = z.preprocess(
                     .default('references')
             ),
             description: z.string().optional(),
-            project_number: StrictProjectNumberSchema.optional(),
+            project_number: z.preprocess(coerceIntString, StrictProjectNumberSchema).optional(),
             workspace_id: z.string().optional(),
             session_id: z.string().optional(),
         })
@@ -110,11 +112,11 @@ export const TeamVisualizeRelationshipsSchema = z.preprocess(
     preprocessTeamVisualizeRelationships,
     z
         .object({
-            entry_id: z.number().int().positive().optional(),
+            entry_id: z.preprocess(coerceIntString, z.number().int().positive()).optional(),
             tag: z.string().optional(),
-            depth: z.number().int().min(1).max(5).optional().default(2),
-            limit: z.number().int().min(1).max(500).optional(),
-            project_number: StrictProjectNumberSchema.optional(),
+            depth: z.preprocess(coerceIntString, z.number().int().min(1).max(5)).optional().default(2),
+            limit: z.preprocess(coerceIntString, z.number().int().min(1).max(500)).optional(),
+            project_number: z.preprocess(coerceIntString, StrictProjectNumberSchema).optional(),
             workspace_id: z
                 .string()
                 .max(255)
@@ -201,9 +203,12 @@ export const TeamSemanticSearchSchema = z.preprocess(
     z
         .object({
             query: z.string().optional(),
-            entry_id: z.number().int().positive().optional().describe('Find entries related to this entry ID'),
-            limit: z.number().int().min(1).max(500).optional().default(10),
-            similarity_threshold: z.number().optional().default(0.25),
+            entry_id: z
+                .preprocess(coerceIntString, z.number().int().positive())
+                .optional()
+                .describe('Find entries related to this entry ID'),
+            limit: z.preprocess(coerceIntString, z.number().int().min(1).max(500)).optional().default(10),
+            similarity_threshold: z.preprocess(coerceFiniteNumberString, z.number()).optional().default(0.25),
             tags: z.array(z.string()).optional(),
             exclude_tags: z.array(z.string()).optional(),
             entry_type: z.enum(ENTRY_TYPES).optional(),
@@ -214,14 +219,18 @@ export const TeamSemanticSearchSchema = z.preprocess(
                 .optional()
                 .default(true)
                 .describe('Include hint when no results found (default: true)'),
-            project_number: StrictProjectNumberSchema.optional(),
+            project_number: z.preprocess(coerceIntString, StrictProjectNumberSchema).optional(),
             workspace_id: z.string().max(255).optional(),
-            issue_number: z.number().int().positive().optional().describe('Filter results by GitHub issue number'),
-            pr_number: z.number().int().positive().optional().describe('Filter results by GitHub PR number'),
+            issue_number: z
+                .preprocess(coerceIntString, z.number().int().positive())
+                .optional()
+                .describe('Filter results by GitHub issue number'),
+            pr_number: z
+                .preprocess(coerceIntString, z.number().int().positive())
+                .optional()
+                .describe('Filter results by GitHub PR number'),
             workflow_run_id: z
-                .number()
-                .int()
-                .positive()
+                .preprocess(coerceIntString, z.number().int().positive())
                 .optional()
                 .describe('Filter results by GitHub Actions workflow run ID'),
             include_archived: z.boolean().optional().default(false),
@@ -268,8 +277,8 @@ export const TeamSemanticSearchSchemaMcp = z.preprocess(
 /** team_add_to_vector_index — strict */
 export const TeamAddToVectorIndexSchema = z
     .object({
-        entry_id: z.number().int().positive(),
-        project_number: StrictProjectNumberSchema.optional(),
+        entry_id: z.preprocess(coerceIntString, z.number().int().positive()),
+        project_number: z.preprocess(coerceIntString, StrictProjectNumberSchema).optional(),
         workspace_id: z.string().max(255).optional(),
         session_id: z.string().optional(),
     })
@@ -311,6 +320,7 @@ export const TeamVectorStatsOutputSchema = z
         itemCount: z.number().nullable().optional(),
         modelName: z.string().optional(),
         dimensions: z.number().optional(),
+        scopeNote: z.string().optional(),
         success: z.boolean().optional(),
     })
     .extend(ErrorFieldsMixin.shape)
@@ -347,9 +357,17 @@ export const TeamCrossProjectInsightsSchema = z
             .regex(DATE_FORMAT_REGEX, DATE_FORMAT_MESSAGE)
             .optional()
             .describe('End date (YYYY-MM-DD)'),
-        min_entries: z.number().int().min(0).optional().default(3).describe('Minimum entries to include project'),
-        limit: z.number().int().min(1).max(500).optional().default(100).describe('Max projects to return'),
-        project_number: StrictProjectNumberSchema.optional(),
+        min_entries: z
+            .preprocess(coerceIntString, z.number().int().min(0))
+            .optional()
+            .default(3)
+            .describe('Minimum entries to include project'),
+        limit: z
+            .preprocess(coerceIntString, z.number().int().min(1).max(500))
+            .optional()
+            .default(100)
+            .describe('Max projects to return'),
+        project_number: z.preprocess(coerceIntString, StrictProjectNumberSchema).optional(),
         workspace_id: z
             .string()
             .max(255)

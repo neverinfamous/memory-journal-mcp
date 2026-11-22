@@ -37,18 +37,42 @@ export {
 export const relaxedNumber = (): z.ZodUnion<[z.ZodNumber, z.ZodString]> =>
     z.union([z.number(), z.string()])
 
+/** Non-throwing numeric string preprocessor for strict float/finite handler schemas. */
+export function coerceFiniteNumberString(val: unknown): unknown {
+    if (typeof val !== 'string') return val
+    const trimmed = val.trim()
+    if (trimmed === '' || trimmed === '-0' || !/^-?(?:0|[1-9]\d*)(?:\.\d+)?$/.test(trimmed)) {
+        return val
+    }
+    const n = Number(trimmed)
+    return Number.isFinite(n) ? n : val
+}
+
+/** Non-throwing integer string preprocessor for strict integer handler schemas. */
+export function coerceIntString(val: unknown): unknown {
+    if (typeof val !== 'string') return val
+    const trimmed = val.trim()
+    if (!/^(?:0|-?[1-9]\d*)$/.test(trimmed)) return val
+    const n = Number(trimmed)
+    return Number.isSafeInteger(n) && String(n) === trimmed ? n : val
+}
+
 /**
  * Strict schema for project_number validation.
  */
 export const StrictProjectNumberSchema = z
-    .number({
-        message:
-            'Missing project_number. You MUST provide a valid project_number (e.g., 1) to associate this action with a specific project context.',
-    })
-    .int({
-        message: 'Invalid project_number. Expected a positive integer (e.g., 1).',
-    })
-    .positive({
-        message: 'Invalid project_number. Expected a positive integer (e.g., 1).',
-    })
+    .preprocess(
+        coerceIntString,
+        z
+            .number({
+                message:
+                    'Missing project_number. You MUST provide a valid project_number (e.g., 1) to associate this action with a specific project context.',
+            })
+            .int({
+                message: 'Invalid project_number. Expected a positive integer (e.g., 1).',
+            })
+            .positive({
+                message: 'Invalid project_number. Expected a positive integer (e.g., 1).',
+            })
+    )
     .optional()

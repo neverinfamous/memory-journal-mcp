@@ -149,11 +149,11 @@ export async function getUnreleasedChangelog(
             options?.maxCount !== undefined
                 ? Math.min(Math.max(1, options.maxCount), UNRELEASED_MAX_COMMITS)
                 : NO_TAG_FALLBACK_MAX_COMMITS
-        const commits = await fetchCommits({ maxCount: fallbackCap, ...summaryOpt }, cwd)
+        const commits = await fetchCommits({ maxCount: fallbackCap + 1, ...summaryOpt }, cwd)
         return {
             latestTag: null,
             commits: commits.slice(0, fallbackCap),
-            truncated: commits.length >= fallbackCap,
+            truncated: commits.length > fallbackCap,
         }
     }
     const effectiveMax =
@@ -161,13 +161,13 @@ export async function getUnreleasedChangelog(
             ? Math.min(Math.max(1, options.maxCount), UNRELEASED_MAX_COMMITS)
             : DEFAULT_UNRELEASED_MAX_COMMITS
     const commits = await fetchCommits(
-        { ref: `${latestTag}..HEAD`, maxCount: effectiveMax, ...summaryOpt },
+        { ref: `${latestTag}..HEAD`, maxCount: effectiveMax + 1, ...summaryOpt },
         cwd
     )
     return {
         latestTag,
         commits: commits.slice(0, effectiveMax),
-        truncated: commits.length >= effectiveMax,
+        truncated: commits.length > effectiveMax,
     }
 }
 

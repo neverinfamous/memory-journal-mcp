@@ -296,7 +296,8 @@ export function resolveExecutionPayload(
     if (executionCode === undefined || executionCode.trim() === '') {
         if (!healingEnabled) return validationFailure('Missing required parameter: code')
         const recovered = recoverFromContextField(
-            input.context ?? (isRecord(params) ? params['context'] : undefined)
+            input.context ?? (isRecord(params) ? params['context'] : undefined),
+            isRecord(params) ? params : undefined
         )
         if (typeof recovered === 'object') return recovered
         executionCode = recovered
@@ -317,7 +318,8 @@ function oversizedContextFailure(): { earlyReturn: Record<string, unknown> } {
 }
 
 function recoverFromContextField(
-    ctxVal: unknown
+    ctxVal: unknown,
+    outerParams?: Record<string, unknown>
 ): string | { earlyReturn: Record<string, unknown> } | undefined {
     if (typeof ctxVal === 'string' && ctxVal.trim().length > 0) {
         return Buffer.byteLength(ctxVal, 'utf-8') <= MAX_RECOVERED_CONTEXT_CODE_BYTES
@@ -335,8 +337,9 @@ function recoverFromContextField(
                 ? ctxVal['script']
                 : oversizedContextFailure()
         }
-        const wsVal = readWorkspaceField(ctxVal, {})
-        const projVal = parseProjectNumberField(ctxVal, {})
+        const outerFallback = outerParams ?? {}
+        const wsVal = readWorkspaceField(ctxVal, outerFallback)
+        const projVal = parseProjectNumberField(ctxVal, outerFallback)
         if (typeof ctxVal['query'] === 'string' && ctxVal['query'].trim().length > 0) {
             if (Buffer.byteLength(ctxVal['query'], 'utf-8') > MAX_RECOVERED_CONTEXT_CODE_BYTES) {
                 return oversizedContextFailure()
@@ -355,7 +358,7 @@ function recoverFromContextField(
                 : typeof ctxVal['instructions'] === 'string'
                   ? ctxVal['instructions']
                   : undefined
-        if (rawBody !== undefined) {
+        if (rawBody !== undefined && rawBody.trim().length > 0) {
             if (Buffer.byteLength(rawBody, 'utf-8') > MAX_RECOVERED_CONTEXT_CODE_BYTES) {
                 return oversizedContextFailure()
             }

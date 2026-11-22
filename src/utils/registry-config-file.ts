@@ -122,6 +122,7 @@ export function writeProjectRegistryFile(configPath: string, config: Record<stri
     try {
         fs.writeFileSync(tmpPath, serialized, { encoding: 'utf-8', flag: 'wx', mode: 0o600 })
         fs.chmodSync(tmpPath, 0o600)
+        registryFileCache.delete(resolved)
         fs.renameSync(tmpPath, resolved)
         try {
             const stat = fs.statSync(resolved)

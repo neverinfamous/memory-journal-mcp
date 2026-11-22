@@ -96,7 +96,7 @@ let cachedParsedScopes: string[] | undefined
 function resolveBearerDefaultScopes(): string[] {
     const envScopes = process.env['MCP_AUTH_SCOPES']
     if (cachedParsedScopes !== undefined && cachedScopeEnv === envScopes) {
-        return cachedParsedScopes
+        return [...cachedParsedScopes]
     }
     const parsedScopes = envScopes
         ? envScopes
@@ -114,8 +114,8 @@ function resolveBearerDefaultScopes(): string[] {
         defaultScopes = ['read']
     }
     cachedScopeEnv = envScopes
-    cachedParsedScopes = defaultScopes
-    return defaultScopes
+    cachedParsedScopes = [...defaultScopes]
+    return [...defaultScopes]
 }
 
 function isValidBearerTokenDigest(

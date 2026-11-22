@@ -321,14 +321,14 @@ export function resolveEffectiveRpcScope(
         ? overrideWs
         : derivedOverrideWs ?? workspaceId
     if (
-        !outerCanNarrow &&
-        projectId === undefined &&
-        typeof rpcOverrides?.projectNumber === 'number' &&
+        typeof effectiveProjectId === 'number' &&
         typeof effectiveWorkspaceId === 'string' &&
-        effectiveWorkspaceId !== '*'
+        effectiveWorkspaceId !== '*' &&
+        ((!outerCanNarrow && projectId === undefined && rpcOverrides?.projectNumber !== undefined) ||
+            (outerCanNarrow && hasConcreteOverrideWs && typeof projectId === 'number'))
     ) {
         try {
-            pairStoredScope(effectiveWorkspaceId, rpcOverrides.projectNumber, registry)
+            pairStoredScope(effectiveWorkspaceId, effectiveProjectId, registry)
         } catch (err) {
             return { errorResult: validationErrResult(err instanceof Error ? err.message : String(err)) }
         }

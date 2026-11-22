@@ -31,7 +31,7 @@ function resolveBatchEntryScope(
     context: ToolContext,
     rootWorkspaceId?: string
 ): ResolvedBatchScope {
-    if (e.workspace_id?.trim() === '*') {
+    if (e.workspace_id?.trim() === '*' || rootWorkspaceId?.trim() === '*') {
         throw new ValidationError(
             "workspace_id '*' is a read-only wildcard and cannot be used for write operations. Specify a concrete workspace_id or project_number."
         )
@@ -45,7 +45,7 @@ function resolveBatchEntryScope(
         e.project_number ?? (!itemNamesOtherWorkspace ? rootProjectNumber : undefined)
     const resolved = resolveProjectContext(
         {
-            workspace_id: e.workspace_id,
+            workspace_id: e.workspace_id ?? rootWorkspaceId,
             project_number: requestedProject,
         },
         context.config
@@ -54,7 +54,8 @@ function resolveBatchEntryScope(
     // [INVARIANT] C3: only fall back to the requested (root) project when the item did not
     // name its own workspace; never pair a foreign project with an explicit workspace/'default'.
     const pNumber =
-        resolved.projectNumber ?? (e.workspace_id === undefined ? requestedProject : undefined)
+        resolved.projectNumber ??
+        (e.workspace_id === undefined && rootWorkspaceId === undefined ? requestedProject : undefined)
 
     if (pNumber === undefined || pNumber <= 0) {
         throw new ValidationError(

@@ -22,6 +22,7 @@ import {
     splitTopLevelSqlAndClauses,
     stripBalancedOuterParens,
 } from './sql-literal-scope.js'
+import { hasUnsupportedSqlTrailingClause } from './sql-clause-validator.js'
 import {
     createSqlRecordBindIndex,
     hasMultipleTopLevelSqlStatements,
@@ -177,10 +178,6 @@ function parseUpdate(cleanSql: string, args: unknown[]): ParsedSql {
     }
     const lockedScope: SqlLockedScope = {
         workspaceId: boundWhereWs,
-        targetWorkspaceId:
-            typeof payload['target_workspace_id'] === 'string'
-                ? payload['target_workspace_id']
-                : undefined,
         projectNumber: whereProj ?? setProj,
     }
     if (!mergeUnusedRecordBinds(payload, bindRes.bindIndex, bindRes.consumedIds, lockedScope)) {
@@ -359,9 +356,21 @@ export function cleanSqlText(sql: string): string {
 export function parseSqlStatement(sql: string, args: unknown[]): ParsedSql {
     const cleanSql = cleanSqlText(sql)
     if (hasMultipleTopLevelSqlStatements(cleanSql)) return UNMAPPED
-    if (/^UPDATE\b/i.test(cleanSql)) return parseUpdate(cleanSql, args)
+    if (/^UPDATE\b/i.test(cleanSql)) {
+        return hasUnsupportedSqlTrailingClause(cleanSql, 'mutation')
+            ? UNMAPPED
+            : parseUpdate(cleanSql, args)
+    }
     if (/^INSERT\b/i.test(cleanSql)) return parseInsert(cleanSql, args)
-    if (/^DELETE\b/i.test(cleanSql)) return parseWhereOnly(cleanSql, args, 'delete')
-    if (/^SELECT\b/i.test(cleanSql)) return parseWhereOnly(cleanSql, args, 'get_by_id')
+    if (/^DELETE\b/i.test(cleanSql)) {
+        return hasUnsupportedSqlTrailingClause(cleanSql, 'mutation')
+            ? UNMAPPED
+            : parseWhereOnly(cleanSql, args, 'delete')
+    }
+    if (/^SELECT\b/i.test(cleanSql)) {
+        return hasUnsupportedSqlTrailingClause(cleanSql, 'select')
+            ? UNMAPPED
+            : parseWhereOnly(cleanSql, args, 'get_by_id')
+    }
     return { action: 'other', params: {} }
 }

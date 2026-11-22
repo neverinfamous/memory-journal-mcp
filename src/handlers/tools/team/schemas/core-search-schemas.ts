@@ -9,6 +9,8 @@ import {
     SIGNIFICANCE_TYPES,
     MAX_CONTENT_LENGTH,
     MAX_QUERY_LIMIT,
+    coerceFiniteNumberString,
+    coerceIntString,
     relaxedNumber,
     DATE_FORMAT_REGEX,
     DATE_FORMAT_MESSAGE,
@@ -49,22 +51,22 @@ export const TeamCreateEntrySchema = z.preprocess(
             entry_type: z.enum(ENTRY_TYPES).optional().default('personal_reflection'),
             tags: z.array(z.string()).optional().default([]),
             significance_type: z.enum(SIGNIFICANCE_TYPES).optional(),
-            project_number: StrictProjectNumberSchema.optional(),
+            project_number: z.preprocess(coerceIntString, StrictProjectNumberSchema).optional(),
             workspace_id: z.string().min(1, 'workspace_id (repository name) is required').max(255).optional(),
             project_owner: z.string().optional(),
-            issue_number: z.number().int().positive().optional(),
+            issue_number: z.preprocess(coerceIntString, z.number().int().positive()).optional(),
             issue_url: z.string().optional(),
-            pr_number: z.number().int().positive().optional(),
+            pr_number: z.preprocess(coerceIntString, z.number().int().positive()).optional(),
             pr_url: z.string().optional(),
             pr_status: z.enum(['draft', 'open', 'merged', 'closed']).optional(),
-            workflow_run_id: z.number().int().positive().optional(),
+            workflow_run_id: z.preprocess(coerceIntString, z.number().int().positive()).optional(),
             workflow_name: z.string().optional(),
             workflow_status: z.enum(['queued', 'in_progress', 'completed']).optional(),
             author: z.string().max(100).optional(),
             auto_link: z.boolean().optional(),
             auto_context: z.string().optional(),
-            impact_score: z.number().min(0).max(1).optional(),
-            trust_score: z.number().min(0).max(1).optional(),
+            impact_score: z.preprocess(coerceFiniteNumberString, z.number().min(0).max(1)).optional(),
+            trust_score: z.preprocess(coerceFiniteNumberString, z.number().min(0).max(1)).optional(),
             validation_status: z.enum(['passed', 'none', 'failed']).optional(),
             session_id: z.string().optional(),
             anchors: z
@@ -268,10 +270,10 @@ export const TeamGetRecentSchema = z.preprocess(
     preprocessTeamSortByOnly,
     z
         .object({
-            limit: z.number().int().min(1).max(500).optional().default(10),
+            limit: z.preprocess(coerceIntString, z.number().int().min(1).max(500)).optional().default(10),
             cursor: z.string().optional().describe('Cursor for pagination'),
-            offset: z.number().int().min(0).optional().default(0),
-            project_number: StrictProjectNumberSchema.optional(),
+            offset: z.preprocess(coerceIntString, z.number().int().min(0)).optional().default(0),
+            project_number: z.preprocess(coerceIntString, StrictProjectNumberSchema).optional(),
             workspace_id: z.string().max(255).optional(),
             sort_by: z.enum(['timestamp', 'importance', 'blended']).optional().default('timestamp').describe(SORT_BY_DESC),
             include_archived: z.boolean().optional().default(false),
@@ -303,9 +305,9 @@ export const TeamSearchSchema = z.preprocess(
             tags: z.array(z.string()).optional(),
             exclude_tags: z.array(z.string()).optional().describe('Exclude entries having any of these tags'),
             entry_type: z.enum(ENTRY_TYPES).optional(),
-            project_number: StrictProjectNumberSchema.optional(),
+            project_number: z.preprocess(coerceIntString, StrictProjectNumberSchema).optional(),
             workspace_id: z.string().max(255).optional(),
-            limit: z.number().int().min(1).max(500).optional().default(10),
+            limit: z.preprocess(coerceIntString, z.number().int().min(1).max(500)).optional().default(10),
             sort_by: z.enum(['timestamp', 'importance', 'blended']).optional().default('timestamp').describe(SORT_BY_DESC),
             include_archived: z.boolean().optional().default(false),
             fuzzy_match: z.boolean().optional().default(false),
@@ -336,9 +338,9 @@ export const TeamSearchSchemaMcp = z.preprocess(
 /** team_list_deleted_entries — strict */
 export const TeamListDeletedEntriesSchema = z
     .object({
-        limit: z.number().int().min(1).max(MAX_QUERY_LIMIT).optional().default(50),
-        offset: z.number().int().min(0).optional().default(0),
-        project_number: StrictProjectNumberSchema.optional(),
+        limit: z.preprocess(coerceIntString, z.number().int().min(1).max(MAX_QUERY_LIMIT)).optional().default(50),
+        offset: z.preprocess(coerceIntString, z.number().int().min(0)).optional().default(0),
+        project_number: z.preprocess(coerceIntString, StrictProjectNumberSchema).optional(),
         workspace_id: z.string().max(255).optional(),
     })
     .strict()
@@ -354,9 +356,9 @@ export const TeamListDeletedEntriesSchemaMcp = z.object({
 /** team_get_entry_by_id — strict */
 export const TeamGetEntryByIdSchema = z
     .object({
-        entry_id: z.number().int().positive(),
+        entry_id: z.preprocess(coerceIntString, z.number().int().positive()),
         include_relationships: z.boolean().optional().default(true),
-        project_number: StrictProjectNumberSchema.optional(),
+        project_number: z.preprocess(coerceIntString, StrictProjectNumberSchema).optional(),
         workspace_id: z.string().max(255).optional(),
     })
     .strict()
@@ -380,9 +382,9 @@ export const TeamSearchByDateRangeSchema = z.preprocess(
             entry_type: z.enum(ENTRY_TYPES).optional(),
             tags: z.array(z.string()).optional(),
             exclude_tags: z.array(z.string()).optional().describe('Exclude entries having any of these tags'),
-            project_number: StrictProjectNumberSchema.optional(),
+            project_number: z.preprocess(coerceIntString, StrictProjectNumberSchema).optional(),
             workspace_id: z.string().max(255).optional(),
-            limit: z.number().int().min(1).max(500).optional().default(50),
+            limit: z.preprocess(coerceIntString, z.number().int().min(1).max(500)).optional().default(50),
             sort_by: z.enum(['timestamp', 'importance', 'blended']).optional().default('timestamp').describe(SORT_BY_DESC),
             include_archived: z.boolean().optional().default(false),
         })

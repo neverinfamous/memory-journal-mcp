@@ -72,8 +72,9 @@ function compactOversizedObject(
     for (let i = 0; i < maxKeys; i++) {
         const k = keys[i]
         if (k === undefined) continue
-        if (k === '__proto__' || k === 'constructor' || k === 'prototype') continue
+        if (k === '__proto__' || k === 'constructor' || k === 'prototype' || k === 'toJSON') continue
         const v: unknown = Reflect.get(val, k)
+        if (typeof v === 'function') continue
         if (typeof v === 'string' && v.length > TRUNCATED_STRING_THRESHOLD_CHARS) {
             consumeCompactionBudget(budget)
             compactedObj[k] =
@@ -135,8 +136,10 @@ export function compactOversizedResult(
                 message: typeof val.message === 'string' ? val.message : String(val.message),
             }
             for (const k of Object.keys(val)) {
-                if (k === '__proto__' || k === 'constructor' || k === 'prototype') continue
-                errObj[k] = Reflect.get(val, k)
+                if (k === '__proto__' || k === 'constructor' || k === 'prototype' || k === 'toJSON') continue
+                const errProp: unknown = Reflect.get(val, k)
+                if (typeof errProp === 'function') continue
+                errObj[k] = errProp
             }
             return compactOversizedObject(errObj, limitBytes, depth, seen, budget)
         }

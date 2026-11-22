@@ -353,6 +353,10 @@ function copyOptionalEntryFields(
 ): void {
     const wsId = readWorkspaceId(target)
     if (wsId !== undefined) entryParams['workspace_id'] = wsId
+    const targetWs = target['target_workspace_id'] ?? target['targetWorkspaceId']
+    if (typeof targetWs === 'string' && targetWs.trim() !== '') {
+        entryParams['target_workspace_id'] = targetWs.trim()
+    }
     const sessId = target['session_id'] ?? target['sessionId']
     if (typeof sessId === 'string') entryParams['session_id'] = sessId
     const projNum = readProjectNumber(target)

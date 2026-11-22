@@ -2,7 +2,7 @@ import { z } from 'zod'
 import type { ToolDefinition, ToolContext } from '../../../types/index.js'
 import { formatHandlerError } from '../../../utils/error-helpers.js'
 import { ErrorFieldsMixin } from '../error-fields-mixin.js'
-import { MAX_QUERY_LIMIT, relaxedNumber, StrictProjectNumberSchema } from '../schemas.js'
+import { coerceIntString, MAX_QUERY_LIMIT, relaxedNumber, StrictProjectNumberSchema } from '../schemas.js'
 import { coerceAnchorStatusAlias } from '../schemas/hallucination-healer-fields.js'
 import { activeProjectRegistry, alignedProjectFilter } from '../../../utils/write-scope.js'
 import { resolveWriteWorkspaceId } from '../write-workspace.js'
@@ -57,7 +57,7 @@ export const MarkAnchorsStaleSchema = z.preprocess(
             updates: z
                 .array(
                     z.object({
-                        id: z.number().int().positive(),
+                        id: z.preprocess(coerceIntString, z.number().int().positive()),
                         status: z.enum(['pending', 'valid', 'stale', 'invalidated', 'unresolvable']),
                     })
                 )

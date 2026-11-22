@@ -8,7 +8,7 @@ import { z } from 'zod'
 import type { ToolDefinition, ToolContext } from '../../types/index.js'
 import { formatHandlerError } from '../../utils/error-helpers.js'
 import { sendProgress } from '../../utils/progress-utils.js'
-import { relaxedNumber } from './schemas.js'
+import { coerceIntString, relaxedNumber } from './schemas.js'
 import { ErrorFieldsMixin } from './error-fields-mixin.js'
 import { logger } from '../../utils/logger.js'
 import * as path from 'node:path'
@@ -174,7 +174,9 @@ const RestoreBackupSchemaMcp = z.object({
 const CleanupBackupsSchemaMcp = z.object({
     keep_count: relaxedNumber().default(5).describe('Number of most recent backups to keep (default: 5). Anti-Hallucination Hint: You can pass a string or number, or use positional args: mj.backup.cleanupBackups(5).'),
 }).strict()
-const CleanupBackupsSchema = z.object({ keep_count: relaxedNumber().default(5) }).strict()
+const CleanupBackupsSchema = z
+    .object({ keep_count: z.preprocess(coerceIntString, z.number().int().positive()).default(5) })
+    .strict()
 
 async function executeRestoreBackup(
     params: unknown,
@@ -349,22 +351,7 @@ export function getBackupTools(context: ToolContext): ToolDefinition[] {
             handler: (params: unknown) => {
                 try {
                     const { keep_count } = CleanupBackupsSchema.parse(params)
-
-                    const trimmedKeep = typeof keep_count === 'string' ? keep_count.trim() : keep_count
-                    const keepCountNum =
-                        typeof trimmedKeep === 'string' && /^[1-9]\d*$/.test(trimmedKeep)
-                            ? Number(trimmedKeep)
-                            : trimmedKeep
-                    if (
-                        typeof keepCountNum !== 'number' ||
-                        !Number.isSafeInteger(keepCountNum) ||
-                        keepCountNum < 1 ||
-                        (typeof trimmedKeep === 'string' && String(keepCountNum) !== trimmedKeep)
-                    ) {
-                        throw new ValidationError('keep_count must be a positive integer')
-                    }
-
-                    const result = db.deleteOldBackups(keepCountNum)
+                    const result = db.deleteOldBackups(keep_count)
                     const hasFailed = result.failed !== undefined && result.failed.length > 0
                     const allFailed = result.deleted.length === 0 && hasFailed
 

@@ -15,7 +15,7 @@ import {
     mergeAndDedup,
     type EntryWithSource,
 } from './helpers.js'
-import { Buffer } from 'buffer'
+import { Buffer } from 'node:buffer'
 
 // Helper for compound cursor encoding/decoding
 export function encodeCompoundCursor(personalCursor?: string, teamCursor?: string): string {

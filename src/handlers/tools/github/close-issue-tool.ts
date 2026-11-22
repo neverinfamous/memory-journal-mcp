@@ -8,7 +8,7 @@ import { ValidationError } from '../../../types/errors.js'
 import { formatHandlerError } from '../../../utils/error-helpers.js'
 import { autoIndexEntry } from '../../../utils/vector-index-helpers.js'
 import { fenceUntrustedInline } from '../../resources/shared.js'
-import { relaxedNumber, StrictProjectNumberSchema } from '../schemas.js'
+import { coerceIntString, relaxedNumber, StrictProjectNumberSchema } from '../schemas.js'
 import { CloseGitHubIssueWithEntryOutputSchema } from './schemas.js'
 import { unwrapFencedRemoteText } from './fencing-helpers.js'
 import { resolveOwnerRepo, resolveProjectNumber } from './helpers.js'
@@ -17,11 +17,11 @@ import { resolveIssueEntryScope } from './create-issue-tool.js'
 
 const CloseIssueHandlerInputSchema = z
     .object({
-        issue_number: z.number().int().positive(),
+        issue_number: z.preprocess(coerceIntString, z.number().int().positive()),
         resolution_notes: z.string().optional(),
         comment: z.string().optional(),
         move_to_done: z.boolean().optional().default(false),
-        project_number: StrictProjectNumberSchema,
+        project_number: z.preprocess(coerceIntString, StrictProjectNumberSchema),
         workspace_id: z.string().max(255).optional(),
         owner: z.string().optional(),
         repo: z.string().optional(),

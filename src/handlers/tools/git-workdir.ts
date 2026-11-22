@@ -218,6 +218,23 @@ export function resolveGitWorkingDir(input: GitWorkingDirInput, config?: ToolHan
         }
         if (registry && (pNum !== undefined || target !== undefined)) {
             const cwdMatch = findMatchedRegistryKey(registry, input.cwd)
+            if (cwdMatch === undefined) {
+                const targetReg = target !== undefined ? findMatchedRegistryKey(registry, target) : undefined
+                if (targetReg !== undefined) {
+                    throw new ValidationError(
+                        `cwd '${input.cwd}' is not registered for workspace '${targetReg}'.`
+                    )
+                }
+                const matchedByProj =
+                    pNum !== undefined
+                        ? Object.entries(registry).find(([, cfg]) => cfg?.project_number === pNum)?.[0]
+                        : undefined
+                if (matchedByProj !== undefined) {
+                    throw new ValidationError(
+                        `cwd '${input.cwd}' is not registered for project_number ${String(pNum)} (expected workspace '${matchedByProj}').`
+                    )
+                }
+            }
             if (pNum !== undefined && cwdMatch !== undefined) {
                 const regProj = registry[cwdMatch]?.project_number
                 if (regProj !== undefined && regProj !== pNum) {

@@ -4,7 +4,7 @@ import { formatHandlerError } from '../../../utils/error-helpers.js'
 import { autoIndexEntry } from '../../../utils/vector-index-helpers.js'
 import { resolveWorkspaceId } from '../../../utils/workspace-resolver.js'
 import { ErrorFieldsMixin } from '../error-fields-mixin.js'
-import { relaxedNumber } from '../schemas.js'
+import { coerceIntString, relaxedNumber } from '../schemas.js'
 
 /**
  * [INVARIANT] When a caller supplies project_number, the target entry must belong to that
@@ -33,8 +33,8 @@ const RestoreEntryStrictSchema = z.preprocess(
     normalizeRestoreEntryParams,
     z
         .object({
-            entry_id: z.number().int().positive(),
-            project_number: z.number().int().positive().optional(),
+            entry_id: z.preprocess(coerceIntString, z.number().int().positive()),
+            project_number: z.preprocess(coerceIntString, z.number().int().positive()).optional(),
             workspace_id: z.string().max(255).optional(),
         })
         .strict()

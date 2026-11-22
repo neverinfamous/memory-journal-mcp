@@ -6,6 +6,7 @@ import { z } from 'zod'
 import type { KanbanBoard, ToolContext } from '../../../types/index.js'
 import { formatHandlerError } from '../../../utils/error-helpers.js'
 import { fenceUntrustedInline } from '../../resources/shared.js'
+import { coerceIntString } from '../schemas.js'
 import {
     githubScopeParseFields,
     resolveOwner,
@@ -56,7 +57,7 @@ const MoveKanbanItemSchema = z
 const AddKanbanItemSchema = z
     .object({
         project_number: githubScopeParseFields.project_number,
-        issue_number: z.number().int().positive(),
+        issue_number: z.preprocess(coerceIntString, z.number().int().positive()),
         owner: z.string().optional(),
         repo: z.string().optional(),
         workspace_id: githubScopeParseFields.workspace_id,

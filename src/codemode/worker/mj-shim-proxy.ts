@@ -104,7 +104,8 @@ function resolveFsPathAndUtilShims(prop: string | symbol, safeFsShim: SafeFsShim
     if (prop === 'fs' || prop === '__safeFs' || prop === 'safeFs') return { matched: true, value: safeFsShim }
     if (prop === 'path' || prop === '__path') return { matched: true, value: pathShim }
     if (prop === 'existsSync') return { matched: true, value: safeFsShim.existsSync }
-    if (prop === 'readFileSync' || prop === 'readFile') return { matched: true, value: safeFsShim.readFileSync }
+    if (prop === 'readFileSync') return { matched: true, value: safeFsShim.readFileSync }
+    if (prop === 'readFile') return { matched: true, value: safeFsShim.readFile }
     if (prop === 'writeFileSync') return { matched: true, value: safeFsShim.writeFileSync }
     if (prop === 'writeFile') return { matched: true, value: safeFsShim.writeFile }
     if (prop === 'mkdirSync') return { matched: true, value: safeFsShim.mkdirSync }

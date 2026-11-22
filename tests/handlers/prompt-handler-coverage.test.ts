@@ -101,7 +101,7 @@ describe('Prompt Handlers - Coverage', () => {
                     expect(defaultText).toContain('code-quality-audit')
                     expect(defaultText).toContain('param-normalizer.ts')
                     expect(defaultText).toContain('SCAN_OK scanned=')
-                    expect(defaultText).toContain('Prompt revision: 2026-11-21-audit-pass67')
+                    expect(defaultText).toContain('Prompt revision: 2026-11-21-audit-pass68')
                     expect(defaultText).toContain('Present the plan as markdown in the chat.')
                     expect(defaultText).toContain('Do not add an audit plan file to the repository.')
                     expect(defaultText).not.toContain('docs/audits/')

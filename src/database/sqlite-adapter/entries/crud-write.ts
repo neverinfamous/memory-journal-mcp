@@ -1,4 +1,5 @@
 import type { JournalEntry } from '../../../types/index.js'
+import { ValidationError } from '../../../types/errors.js'
 import type { CreateEntryInput } from '../../core/interfaces.js'
 import type { EntriesSharedContext } from './shared.js'
 import { effectiveWorkspace } from '../../workspace-scope.js'
@@ -47,7 +48,7 @@ function runBatchTransaction(
 
 export function validateEntryInput(input: CreateEntryInput): { normalizedTimestamp: string } {
     if (input.workspaceId?.trim() === '*') {
-        throw new Error(
+        throw new ValidationError(
             "workspace_id '*' is a read-only cross-workspace selector and cannot be used to create an entry. Pass a specific workspace_id."
         )
     }
@@ -55,12 +56,12 @@ export function validateEntryInput(input: CreateEntryInput): { normalizedTimesta
         input.projectNumber !== undefined &&
         (!Number.isSafeInteger(input.projectNumber) || input.projectNumber <= 0)
     ) {
-        throw new Error('project_number must be a positive integer.')
+        throw new ValidationError('project_number must be a positive integer.')
     }
-    const rawTimestamp = input.timestamp ?? new Date().toISOString()
+    const rawTimestamp = (input.timestamp ?? new Date().toISOString()).trim()
 
     // Reject calendar rollovers (e.g. 2026-02-31) and normalize broad ISO-8601 inputs to UTC ISO.
-    const ymdMatch = /^(\d{4})-(\d{2})-(\d{2})(?:$|T)/.exec(rawTimestamp)
+    const ymdMatch = /^(\d{4})-(\d{2})-(\d{2})(?:$|[Tt ])/.exec(rawTimestamp)
     if (ymdMatch !== null) {
         const year = Number(ymdMatch[1])
         const month = Number(ymdMatch[2])
@@ -71,16 +72,18 @@ export function validateEntryInput(input: CreateEntryInput): { normalizedTimesta
             probe.getUTCMonth() !== month - 1 ||
             probe.getUTCDate() !== day
         ) {
-            throw new Error(
+            throw new ValidationError(
                 `Invalid timestamp format: ${rawTimestamp}. Expected a valid ISO 8601 date or timestamp.`
             )
         }
     }
 
-    const candidate = rawTimestamp.includes('T') ? rawTimestamp : `${rawTimestamp}T00:00:00.000Z`
+    const candidate = /^\d{4}-\d{2}-\d{2}$/.test(rawTimestamp)
+        ? `${rawTimestamp}T00:00:00.000Z`
+        : rawTimestamp
     const parsedTimestamp = new Date(candidate)
     if (Number.isNaN(parsedTimestamp.getTime())) {
-        throw new Error(
+        throw new ValidationError(
             `Invalid timestamp format: ${rawTimestamp}. Expected an ISO 8601 date or timestamp.`
         )
     }

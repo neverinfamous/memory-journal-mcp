@@ -441,7 +441,7 @@ describe('Pass 27 Audit Regressions', () => {
             const codeModeRes = await callTool('mj_execute_code', { code: 'return { cfg: await mj.getConfig() }', workspace_id: 'memory-journal-mcp', project_number: 5, timeout_ms: 15000 }, db, undefined, undefined, { runtime: new ServerRuntime(), codemodeEnabled: true, projectRegistry: TEST_REGISTRY }) as { success: boolean; result?: { cfg?: unknown } }
             expect([codeModeRes.success, codeModeRes.result?.cfg !== 'memory://internal', typeof codeModeRes.result?.cfg]).toEqual([true, true, 'object'])
 
-            expect(AUDIT_PROMPT_REVISION).toBe('2026-11-21-audit-pass67')
+            expect(AUDIT_PROMPT_REVISION).toBe('2026-11-21-audit-pass68')
             db.createEntry({ content: 'Prior pass note', tags: ['audit-pass-27'], workspaceId: 'memory-journal-mcp' })
             expect(buildPriorAuditSection(db, 'audit-pass-27', 'Prior', { ...DEFAULT_BRIEFING_CONFIG, defaultWorkspaceId: 'memory-journal-mcp' })).toContain('fallback/session workspace')
         }, 20000)

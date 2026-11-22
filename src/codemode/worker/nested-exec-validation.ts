@@ -335,6 +335,28 @@ export function validateNestedExecScope(
             effectiveWs = unpinned.inferredWorkspace
             effectiveCanon = findRegistryKey(unpinned.inferredWorkspace, registry) ?? unpinned.inferredWorkspace
         }
+        if (
+            pinnedProjectNumber !== undefined &&
+            effectiveWs !== undefined &&
+            effectiveCanon !== undefined &&
+            effectiveCanon !== '*' &&
+            effectiveCanon.toLowerCase() !== 'default'
+        ) {
+            const regProj = registry?.[effectiveCanon]?.project_number
+            if (regProj !== undefined && regProj !== pinnedProjectNumber) {
+                return {
+                    error: `Workspace '${effectiveWs}' (project_number ${String(regProj)}) conflicts with pinned session project_number ${String(pinnedProjectNumber)}`,
+                }
+            }
+            const conflict = hasRegistryProjectOwnerConflict(
+                pinnedProjectNumber,
+                effectiveWs,
+                undefined,
+                effectiveCanon.toLowerCase(),
+                registry
+            )
+            if (conflict !== null) return { error: conflict }
+        }
     }
 
     return validateProjectNumberAliases(

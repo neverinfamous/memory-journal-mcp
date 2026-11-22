@@ -5,7 +5,7 @@ import {
     RebuildVectorIndexOutputSchema,
     AddToVectorIndexOutputSchema,
 } from './schemas.js'
-import { relaxedNumber, StrictProjectNumberSchema } from '../schemas.js'
+import { coerceIntString, relaxedNumber, StrictProjectNumberSchema } from '../schemas.js'
 import { logger } from '../../../utils/logger.js'
 import { resolveWorkspaceId } from '../../../utils/workspace-resolver.js'
 import {
@@ -40,8 +40,8 @@ export const AddToVectorIndexSchema = z.preprocess(
     preprocessVectorEntryId,
     z
         .object({
-            entry_id: z.number().int().positive(),
-            project_number: z.number().int().positive().optional(),
+            entry_id: z.preprocess(coerceIntString, z.number().int().positive()),
+            project_number: z.preprocess(coerceIntString, z.number().int().positive()).optional(),
             workspace_id: z.string().max(255).optional(),
         })
         .strict()
@@ -73,7 +73,7 @@ export function getVectorTools(context: ToolContext): ToolDefinition[] {
                 try {
                     const parsed = z
                         .object({
-                            project_number: StrictProjectNumberSchema.optional(),
+                            project_number: z.preprocess(coerceIntString, StrictProjectNumberSchema).optional(),
                             workspace_id: z.string().max(255).optional(),
                             session_id: z.string().optional(),
                         })

@@ -140,7 +140,7 @@ function checkUnassignedEntries(): void {
             console.error(`\n❌ Workspace Isolation Validation Failed!`)
             console.error(`Found ${rows.length} unassigned or 'default' workspace entries in database '${dbPath}':\n`)
             for (const row of rows) {
-                console.error(`- Entry #${row.id}: [Type: ${row.entry_type}, Workspace: '${row.workspace_id}', Project: #${row.project_number}] (${row.timestamp})`)
+                console.error(`- Entry #${String(row.id)}: [Type: ${row.entry_type}, Workspace: '${row.workspace_id}', Project: #${String(row.project_number ?? 'null')}] (${row.timestamp})`)
             }
             console.error(`\n💡 All journal entries must be explicitly bound to a valid workspace and project number. Read resource memory://agent-context/{repo} to retrieve your project number.`)
             process.exitCode = 1
@@ -149,7 +149,7 @@ function checkUnassignedEntries(): void {
 
         console.log(`✅ Workspace Isolation Check Passed: 0 unassigned or 'default' workspace entries found.`)
     } catch (err) {
-        const msg = err instanceof Error ? err.message : String(err)
+        const msg = sanitizeScriptError(err, rawKey)
         if (isStrict || Boolean(rawKey)) {
             console.error(`❌ Unassigned entry check failed on '${dbPath}': ${msg}`)
             process.exitCode = 1

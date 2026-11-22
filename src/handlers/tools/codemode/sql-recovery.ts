@@ -16,6 +16,7 @@ import {
     stripBalancedOuterParens,
 } from '../../../codemode/sql-literal-scope.js'
 import { cleanSqlText, parseSqlStatement } from '../../../codemode/sql-positional-binder.js'
+import { hasUnsupportedSqlTrailingClause } from '../../../codemode/sql-clause-validator.js'
 import { hasMultipleTopLevelSqlStatements } from '../../../codemode/sql-placeholder-helpers.js'
 import {
     parseCanonicalPositiveInt,
@@ -71,6 +72,12 @@ function parseCleanRecoverableSql(code: string): string | null {
         /^(?:PRAGMA|SHOW|DESCRIBE|EXPLAIN|SCHEMA|TABLES)\b/i.test(cleanSql) ||
         /^(?:\.schema|\.tables|\\d|\\dt)/i.test(cleanSql)
     ) {
+        return null
+    }
+    if (/^SELECT\b/i.test(cleanSql) && hasUnsupportedSqlTrailingClause(cleanSql, 'select')) {
+        return null
+    }
+    if (/^(?:UPDATE|DELETE)\b/i.test(cleanSql) && hasUnsupportedSqlTrailingClause(cleanSql, 'mutation')) {
         return null
     }
     return cleanSql

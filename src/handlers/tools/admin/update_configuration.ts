@@ -13,7 +13,7 @@ import {
 import { activeProjectRegistry, exactRegistryKey, pairStoredScope } from '../../../utils/write-scope.js'
 import { ValidationError } from '../../../types/errors.js'
 import { isForbiddenProjectKey } from '../../../utils/project-registry-guards.js'
-import { relaxedNumber } from '../schemas.js'
+import { coerceFiniteNumberString, coerceIntString, relaxedNumber } from '../schemas.js'
 
 function normalizeConfigProjectNumber(obj: Record<string, unknown>): void {
     const raw = obj['project_number']
@@ -88,27 +88,29 @@ export const updateConfigurationSchema = z.preprocess(
                 .string()
                 .optional()
                 .describe('A comma-separated list of tool groups to enable, or "all"'),
-            briefing_entries: z.number().int().min(0).max(100).optional(),
-            briefing_commits: z.number().int().min(0).max(100).optional(),
-            briefing_importance_threshold: z.number().min(0).max(1).optional(),
+            briefing_entries: z.preprocess(coerceIntString, z.number().int().min(0).max(100)).optional(),
+            briefing_commits: z.preprocess(coerceIntString, z.number().int().min(0).max(100)).optional(),
+            briefing_importance_threshold: z
+                .preprocess(coerceFiniteNumberString, z.number().min(0).max(1))
+                .optional(),
             briefing_insights: z
                 .boolean()
                 .optional()
                 .describe('Show the Insights row (GitHub repo stats/traffic + analytics digest); false skips those calls'),
-            briefing_summaries: z.number().int().min(0).max(100).optional(),
+            briefing_summaries: z.preprocess(coerceIntString, z.number().int().min(0).max(100)).optional(),
             briefing_include_team: z.boolean().optional(),
-            briefing_issues: z.number().int().min(0).max(100).optional(),
-            briefing_prs: z.number().int().min(0).max(100).optional(),
+            briefing_issues: z.preprocess(coerceIntString, z.number().int().min(0).max(100)).optional(),
+            briefing_prs: z.preprocess(coerceIntString, z.number().int().min(0).max(100)).optional(),
             briefing_pr_status: z.boolean().optional(),
-            briefing_milestones: z.number().int().min(0).max(100).optional(),
-            briefing_workflows: z.number().int().min(0).max(100).optional(),
+            briefing_milestones: z.preprocess(coerceIntString, z.number().int().min(0).max(100)).optional(),
+            briefing_workflows: z.preprocess(coerceIntString, z.number().int().min(0).max(100)).optional(),
             briefing_workflow_status: z.boolean().optional(),
             briefing_copilot: z.boolean().optional(),
             briefing_graph: z
                 .boolean()
                 .optional()
                 .describe('Show graph/git pivots (entry link degree, commit→entry refs, active threads) in the briefing'),
-            project_number: z.number().int().positive().optional(),
+            project_number: z.preprocess(coerceIntString, z.number().int().positive()).optional(),
             workspace_id: z.string().max(255).optional(),
         })
         .strict()

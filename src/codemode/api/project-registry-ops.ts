@@ -424,6 +424,6 @@ export function createGetProjectFn(
         } catch (err) {
             throw new Error(`Project lookup failed: ${registryError(err)}`, { cause: err })
         }
-        throw new Error(`Project not found: ${JSON.stringify(params)}`)
+        throw new Error(`Project not found: ${JSON.stringify(typeof params === 'string' || typeof params === 'number' ? params : '[object]')}`)
     }
 }

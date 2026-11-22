@@ -9,7 +9,7 @@ import { findCanonicalRegistryKey } from '../../../utils/workspace-resolver.js'
 import { markUntrustedContentInline } from '../../../utils/security-utils.js'
 import { getRpcExecutionOverrides } from '../../../codemode/rpc-context.js'
 import { z } from 'zod'
-import { relaxedNumber, StrictProjectNumberSchema } from '../schemas.js'
+import { coerceIntString, relaxedNumber, StrictProjectNumberSchema } from '../schemas.js'
 import {
     githubScopeValidationError,
     isValidGitHubRepoSlug,
@@ -38,7 +38,7 @@ export const githubScopeInputFields = {
 
 export const githubScopeParseFields = {
     workspace_id: z.string().max(255).optional(),
-    project_number: StrictProjectNumberSchema.optional(),
+    project_number: z.preprocess(coerceIntString, StrictProjectNumberSchema).optional(),
 }
 
 function githubUnavailableResponse(): { error: true; response: Record<string, unknown> } {

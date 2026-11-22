@@ -185,6 +185,13 @@ function isSingleSlashRepoSlug(value: string): boolean {
     return parts.length === 2 && parts[0] !== '' && parts[1] !== ''
 }
 
+function safeRegistryLookup(
+    registry: Record<string, { path?: string; project_number?: number }>,
+    key: string
+): { path?: string; project_number?: number } | undefined {
+    return Object.hasOwn(registry, key) && !FORBIDDEN_KEYS.has(key) ? registry[key] : undefined
+}
+
 function resolveRegistryCandidate(
     strVal: string,
     registry: Record<string, { path?: string; project_number?: number }>
@@ -193,14 +200,17 @@ function resolveRegistryCandidate(
     if (isSingleSlashRepoSlug(trimmedPath)) {
         const directSlugKey = findCanonicalRegistryKey(trimmedPath, registry)
         const canonicalKey = directSlugKey ?? trimmedPath
-        return { canonicalKey, entry: registry[canonicalKey] }
+        return { canonicalKey, entry: safeRegistryLookup(registry, canonicalKey) }
     }
     const candidate =
         trimmedPath.includes('/') || trimmedPath.includes('\\')
             ? (trimmedPath.split(/[\\/]/).pop() ?? strVal)
             : trimmedPath || strVal
     const canonicalKey = findCanonicalRegistryKey(candidate, registry) ?? candidate
-    return { canonicalKey, entry: registry[canonicalKey] ?? registry[strVal] }
+    return {
+        canonicalKey,
+        entry: safeRegistryLookup(registry, canonicalKey) ?? safeRegistryLookup(registry, strVal),
+    }
 }
 
 function resolveProjectNumberFromHint(

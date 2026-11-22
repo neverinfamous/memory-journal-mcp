@@ -257,14 +257,8 @@ export function extractAuditScopeFromArgs(
     }
 
     return applyActiveSessionScopeFallback(
-        {
-            ...(workspaceId !== undefined ? { workspaceId } : {}),
-            ...(projectNumber !== undefined ? { projectNumber } : {}),
-        },
-        reqCtx,
-        explicitWildcardWorkspace,
-        runtime,
-        explicitZeroProject
+        { ...(workspaceId !== undefined ? { workspaceId } : {}), ...(projectNumber !== undefined ? { projectNumber } : {}) },
+        reqCtx, explicitWildcardWorkspace, runtime, explicitZeroProject
     )
 }
 
@@ -356,7 +350,13 @@ export function extractAuditScopeFromUri(
         if (workspaceId === undefined && !explicitWildcardWorkspace) {
             const rawRepo = extractRepoPathFromResourceUrl(parsed)
             if (rawRepo !== undefined) {
-                workspaceId = sanitizeErrorForLogging(decodeURIComponent(rawRepo)).slice(0, 255)
+                let decodedRepo = rawRepo
+                try {
+                    decodedRepo = decodeURIComponent(rawRepo)
+                } catch {
+                    decodedRepo = rawRepo
+                }
+                workspaceId = sanitizeErrorForLogging(decodedRepo).slice(0, 255)
             }
         }
         if (projectNumber === undefined && !explicitZeroProject) {
@@ -367,14 +367,8 @@ export function extractAuditScopeFromUri(
     }
 
     return applyActiveSessionScopeFallback(
-        {
-            ...(workspaceId !== undefined ? { workspaceId } : {}),
-            ...(projectNumber !== undefined ? { projectNumber } : {}),
-        },
-        reqCtx,
-        explicitWildcardWorkspace,
-        runtime,
-        explicitZeroProject
+        { ...(workspaceId !== undefined ? { workspaceId } : {}), ...(projectNumber !== undefined ? { projectNumber } : {}) },
+        reqCtx, explicitWildcardWorkspace, runtime, explicitZeroProject
     )
 }
 

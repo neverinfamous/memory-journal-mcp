@@ -10,6 +10,7 @@ import { loadVecExtensionOnDb } from './connection-pragmas.js'
 import {
     clearActiveInProcessRestoreLock,
     getActiveInProcessRestoreToken,
+    readDiskRestoreLockInfo,
 } from './restore-lock.js'
 import {
     assertBackupHeaderAndCipherFormat,
@@ -255,37 +256,18 @@ export function countActiveEntries(ctx: IDatabaseConnection): number {
     return typeof raw === 'bigint' ? Number(raw) : 0
 }
 
-function readDiskRestoreLockInfo(lockFile: string): { pid?: number | undefined; nonce?: string | undefined } | null {
-    try {
-        const raw = fs.readFileSync(lockFile, 'utf-8').trim()
-        if (!raw) return null
-        const parsed: unknown = JSON.parse(raw)
-        if (typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed)) {
-            const record = parsed as { pid?: unknown; nonce?: unknown }
-            return {
-                pid: typeof record.pid === 'number' ? record.pid : undefined,
-                nonce: typeof record.nonce === 'string' ? record.nonce : undefined,
-            }
-        }
-        return null
-    } catch {
-        return null
-    }
-}
-
 /** Release the OS restore lock directory only when held by this caller/token (best-effort). */
 export function releaseRestoreLock(lockDir: string, lockFile: string, expectedToken?: string): void {
     const tokenToMatch = expectedToken ?? getActiveInProcessRestoreToken(lockDir)
+    const diskInfo = readDiskRestoreLockInfo(lockFile)
+    if (
+        diskInfo?.pid !== process.pid ||
+        tokenToMatch === undefined ||
+        diskInfo.nonce !== tokenToMatch
+    ) {
+        return
+    }
     try {
-        const diskInfo = readDiskRestoreLockInfo(lockFile)
-        if (diskInfo !== null) {
-            if (tokenToMatch !== undefined && diskInfo.nonce !== undefined && diskInfo.nonce !== tokenToMatch) {
-                return
-            }
-            if (diskInfo.pid !== undefined && diskInfo.pid !== process.pid) {
-                return
-            }
-        }
         try {
             fs.unlinkSync(lockFile)
         } catch (unlinkErr: unknown) {

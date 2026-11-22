@@ -184,6 +184,15 @@ function groupPrefixSkipLength(pattern: string, idx: number): { skip: number; ze
     if (pattern.startsWith('(?<=', idx) || pattern.startsWith('(?<!', idx)) return { skip: 4, zeroWidth: true }
     if (pattern.startsWith('(?!', idx)) return { skip: 3, zeroWidth: true }
     if (pattern.startsWith('(?:', idx) || pattern.startsWith('(?=', idx)) return { skip: 3, zeroWidth: false }
+    if (pattern.startsWith('(?<', idx)) {
+        const closeAngle = pattern.indexOf('>', idx + 3)
+        if (closeAngle > idx + 3) {
+            const nameSlice = pattern.slice(idx + 3, closeAngle)
+            if (!/[()[\]\\]/.test(nameSlice)) {
+                return { skip: closeAngle - idx + 1, zeroWidth: false }
+            }
+        }
+    }
     return { skip: 1, zeroWidth: false }
 }
 
@@ -213,9 +222,21 @@ function stepClosingParenGroup(pattern: string, i: number, state: QuantScannerSt
         state.prevQuantAtom = !groupQuant.nullable || popped.entryPrev === null ? popped.singleAtom : popped.entryPrev
         return { nextIdx: groupQuant.end, unsafe: false }
     }
+    if (groupQuant?.repeating === true) {
+        state.repeatingCount++
+        if (state.repeatingCount > MAX_UNBOUNDED_QUANTIFIERS) {
+            return { nextIdx: pattern.length, unsafe: true }
+        }
+    }
     if (popped.hasAlternation) {
         popped.branchEnds.push(state.prevQuantAtom)
-        state.prevQuantAtom = mergeGroupEndAtoms(popped.branchEnds)
+        const mergedEnd = mergeGroupEndAtoms(popped.branchEnds)
+        state.prevQuantAtom =
+            groupQuant?.nullable === true && popped.entryPrev !== null && mergedEnd === null
+                ? popped.entryPrev
+                : mergedEnd
+    } else if (groupQuant?.nullable === true && state.prevQuantAtom === null && popped.entryPrev !== null) {
+        state.prevQuantAtom = popped.entryPrev
     }
     return { nextIdx: groupQuant !== null ? groupQuant.end : i + 1, unsafe: false }
 }

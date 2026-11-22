@@ -3,6 +3,8 @@ import {
     ENTRY_TYPES,
     SIGNIFICANCE_TYPES,
     EntryOutputSchema,
+    coerceFiniteNumberString,
+    coerceIntString,
     relaxedNumber,
     MAX_BATCH_SIZE,
     MAX_CONTENT_LENGTH,
@@ -50,7 +52,7 @@ export const UpdateEntrySchema = z.preprocess(
     preprocessUpdateEntry,
     z
         .object({
-            entry_id: z.number().int().positive(),
+            entry_id: z.preprocess(coerceIntString, z.number().int().positive()),
             content: z
                 .string()
                 .min(1)
@@ -76,18 +78,18 @@ export const UpdateEntrySchema = z.preprocess(
             is_personal: z.boolean().optional(),
             tags: z.array(z.string()).optional(),
             significance_type: z.enum(SIGNIFICANCE_TYPES).nullable().optional(),
-            project_number: z.number().int().positive().nullable().optional(),
+            project_number: z.preprocess(coerceIntString, z.number().int().positive()).nullable().optional(),
             project_owner: z.string().nullable().optional(),
-            issue_number: z.number().int().positive().nullable().optional(),
+            issue_number: z.preprocess(coerceIntString, z.number().int().positive()).nullable().optional(),
             issue_url: z.string().nullable().optional(),
-            pr_number: z.number().int().positive().nullable().optional(),
+            pr_number: z.preprocess(coerceIntString, z.number().int().positive()).nullable().optional(),
             pr_url: z.string().nullable().optional(),
             pr_status: z.enum(['draft', 'open', 'merged', 'closed']).nullable().optional(),
-            workflow_run_id: z.number().int().positive().nullable().optional(),
+            workflow_run_id: z.preprocess(coerceIntString, z.number().int().positive()).nullable().optional(),
             workflow_name: z.string().nullable().optional(),
             workflow_status: z.enum(['queued', 'in_progress', 'completed']).nullable().optional(),
             is_archived: z.boolean().optional(),
-            expected_version: z.number().int().positive().optional(),
+            expected_version: z.preprocess(coerceIntString, z.number().int().positive()).optional(),
             auto_context: z.string().nullable().optional(),
             workspace_id: z.string().max(255).optional(),
             target_workspace_id: z
@@ -95,8 +97,8 @@ export const UpdateEntrySchema = z.preprocess(
                 .max(255)
                 .optional()
                 .describe('Target workspace to move entry into (e.g. "mysql-mcp")'),
-            impact_score: z.number().min(0).max(1).optional(),
-            trust_score: z.number().min(0).max(1).optional(),
+            impact_score: z.preprocess(coerceFiniteNumberString, z.number().min(0).max(1)).optional(),
+            trust_score: z.preprocess(coerceFiniteNumberString, z.number().min(0).max(1)).optional(),
             validation_status: z.enum(['passed', 'none', 'failed']).optional(),
             session_id: z.string().nullable().optional(),
         })
@@ -201,10 +203,13 @@ export const DeleteEntrySchema = z.preprocess(
     },
     z
         .object({
-            entry_id: z.number().int().positive(),
+            entry_id: z.preprocess(coerceIntString, z.number().int().positive()),
             permanent: z.boolean().optional().default(false),
-            project_number: z.number().int().positive().optional(),
-            expected_version: z.number().int().positive().optional().describe('REQUIRED for concurrency safety'),
+            project_number: z.preprocess(coerceIntString, z.number().int().positive()).optional(),
+            expected_version: z
+                .preprocess(coerceIntString, z.number().int().positive())
+                .optional()
+                .describe('REQUIRED for concurrency safety'),
             workspace_id: z.string().max(255).optional(),
         })
         .strict()
@@ -256,7 +261,7 @@ export const BatchCreateEntriesSchema = z.preprocess(
         .object({
             entries: z.array(CreateEntrySchema).min(1).max(MAX_BATCH_SIZE),
             auto_index: z.boolean().optional().default(true),
-            project_number: StrictProjectNumberSchema.optional(),
+            project_number: z.preprocess(coerceIntString, StrictProjectNumberSchema).optional(),
             workspace_id: z.string().max(255).optional(),
         })
         .strict()
@@ -282,7 +287,7 @@ export const BatchUpdateEntriesSchema = z.preprocess(
         .object({
             updates: z.array(UpdateEntrySchema).min(1).max(MAX_BATCH_SIZE),
             auto_index: z.boolean().optional().default(true),
-            project_number: StrictProjectNumberSchema.optional(),
+            project_number: z.preprocess(coerceIntString, StrictProjectNumberSchema).optional(),
             workspace_id: z.string().max(255).optional(),
         })
         .strict()
@@ -308,7 +313,7 @@ export const BatchDeleteEntriesSchema = z.preprocess(
         .object({
             entry_ids: z.array(z.number().int().positive()).min(1).max(MAX_BATCH_SIZE),
             permanent: z.boolean().optional().default(false),
-            project_number: z.number().int().positive().optional(),
+            project_number: z.preprocess(coerceIntString, z.number().int().positive()).optional(),
             workspace_id: z.string().max(255).optional(),
         })
         .strict()

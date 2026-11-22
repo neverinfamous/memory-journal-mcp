@@ -7,7 +7,7 @@ import type { ToolDefinition, ToolContext } from '../../../types/index.js'
 import { formatHandlerError } from '../../../utils/error-helpers.js'
 import { autoIndexEntry } from '../../../utils/vector-index-helpers.js'
 import { fenceUntrustedInline } from '../../resources/shared.js'
-import { relaxedNumber, StrictProjectNumberSchema } from '../schemas.js'
+import { coerceIntString, relaxedNumber, StrictProjectNumberSchema } from '../schemas.js'
 import { CreateGitHubIssueWithEntryOutputSchema } from './schemas.js'
 import { resolveOwnerRepo } from './helpers.js'
 import { addIssueToProject, type IssueProjectResult } from './create-issue-project.js'
@@ -37,8 +37,8 @@ const CreateIssueHandlerInputSchema = z.preprocess(
             body: z.string().optional(),
             labels: z.array(z.string()).optional(),
             assignees: z.array(z.string()).optional(),
-            milestone_number: z.number().int().positive().optional(),
-            project_number: StrictProjectNumberSchema,
+            milestone_number: z.preprocess(coerceIntString, z.number().int().positive()).optional(),
+            project_number: z.preprocess(coerceIntString, StrictProjectNumberSchema),
             workspace_id: z.string().max(255).optional(),
             initial_status: z.string().optional(),
             owner: z.string().optional(),

@@ -25,7 +25,7 @@ function fenceMilestone<
             : {}),
     }
 }
-import { relaxedNumber } from '../schemas.js'
+import { coerceIntString, relaxedNumber } from '../schemas.js'
 import {
     GitHubMilestonesListOutputSchema,
     GitHubMilestoneResultOutputSchema,
@@ -44,7 +44,7 @@ const MilestonesListSchemaMcp = z.object({
 })
 const MilestonesListSchema = z.object({
     state: z.enum(['open', 'closed', 'all']).optional().default('open'),
-    limit: z.number().int().min(1).max(100).optional().default(20),
+    limit: z.preprocess(coerceIntString, z.number().int().min(1).max(100)).optional().default(20),
     owner: z.string().optional(),
     repo: z.string().optional(),
     ...githubScopeParseFields,
@@ -56,7 +56,7 @@ const MilestoneGetSchemaMcp = z.object({
     repo: z.string().optional().describe('LEAVE EMPTY to auto-detect from git'),
 })
 const MilestoneGetSchema = z.object({
-    milestone_number: z.number().int().positive(),
+    milestone_number: z.preprocess(coerceIntString, z.number().int().positive()),
     owner: z.string().optional(),
     repo: z.string().optional(),
     ...githubScopeParseFields,
@@ -88,7 +88,7 @@ const MilestoneUpdateSchemaMcp = z.object({
     repo: z.string().optional().describe('LEAVE EMPTY to auto-detect'),
 })
 const MilestoneUpdateSchema = z.object({
-    milestone_number: z.number().int().positive(),
+    milestone_number: z.preprocess(coerceIntString, z.number().int().positive()),
     title: z.string().optional(),
     description: z.string().optional(),
     due_on: z.string().nullable().optional(),
@@ -105,7 +105,7 @@ const MilestoneDeleteSchemaMcp = z.object({
     repo: z.string().optional().describe('LEAVE EMPTY to auto-detect'),
 })
 const MilestoneDeleteSchema = z.object({
-    milestone_number: z.number().int().positive(),
+    milestone_number: z.preprocess(coerceIntString, z.number().int().positive()),
     confirm: z.literal(true),
     owner: z.string().optional(),
     repo: z.string().optional(),

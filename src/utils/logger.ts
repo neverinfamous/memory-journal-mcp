@@ -30,8 +30,8 @@ const LOG_LEVELS: Record<LogLevel, number> = {
 function sanitizeLogValue(value: unknown, seen = new WeakSet(), depth = 0): unknown {
     if (isCrossRealmError(value)) return sanitizeErrorForLogging(`${value.name}: ${value.message}`)
     if (isCrossRealmDate(value)) return Number.isNaN(value.getTime()) ? 'Invalid Date' : value.toISOString()
-    if (value instanceof URL) return sanitizeErrorForLogging(value.toString())
-    if (typeof value === 'string') return sanitizeErrorForLogging(value)
+    if (value instanceof URL) return sanitizeErrorForLogging(value.toString()).replace(/[\r\n]+/g, ' ')
+    if (typeof value === 'string') return sanitizeErrorForLogging(value).replace(/[\r\n]+/g, ' ')
     if (typeof value === 'function') return '[Function]'
     if (typeof value === 'bigint') return value.toString()
     if (typeof value !== 'object' || value === null) return value
@@ -49,7 +49,7 @@ function sanitizeLogValue(value: unknown, seen = new WeakSet(), depth = 0): unkn
         const out: Record<string, unknown> = {}
         for (const [k, v] of Object.entries(value)) {
             if (k === '__proto__' || k === 'constructor' || k === 'prototype' || k === 'toJSON' || typeof v === 'function') continue
-            const safeKey = sanitizeErrorForLogging(k)
+            const safeKey = sanitizeErrorForLogging(k).replace(/[\r\n]+/g, ' ')
             out[safeKey] =
                 SENSITIVE_KEY_RE.test(k) && v !== undefined && v !== null && v !== ''
                     ? '[REDACTED]'
@@ -81,8 +81,12 @@ class Logger {
         const timestamp = new Date().toISOString()
         const levelUpper = level.toUpperCase().padEnd(8)
 
-        const mod = context?.module ? `[${context.module.replace(/\n|\r/g, '')}]` : ''
-        const op = context?.operation ? `[${context.operation.replace(/\n|\r/g, '')}]` : ''
+        const mod = context?.module
+            ? `[${sanitizeErrorForLogging(context.module).replace(/\n|\r/g, '')}]`
+            : ''
+        const op = context?.operation
+            ? `[${sanitizeErrorForLogging(context.operation).replace(/\n|\r/g, '')}]`
+            : ''
 
         let line = `[${timestamp}] [${levelUpper}] ${mod}${op} ${safeMessage}`
 

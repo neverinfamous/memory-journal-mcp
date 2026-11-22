@@ -8,7 +8,7 @@ import { z } from 'zod'
 import type { ToolDefinition, ToolContext } from '../../../types/index.js'
 import { formatHandlerError } from '../../../utils/error-helpers.js'
 import { CopilotReviewsOutputSchema } from './schemas.js'
-import { relaxedNumber } from '../schemas.js'
+import { coerceIntString, relaxedNumber } from '../schemas.js'
 import { githubScopeInputFields, githubScopeParseFields, resolveOwnerRepo } from './helpers.js'
 import { ensureBlockFenced, ensureInlineFenced } from './fencing-helpers.js'
 
@@ -18,7 +18,7 @@ import { ensureBlockFenced, ensureInlineFenced } from './fencing-helpers.js'
 
 const GetCopilotReviewsStrictSchema = z
     .object({
-        pr_number: z.number().int().positive(),
+        pr_number: z.preprocess(coerceIntString, z.number().int().positive()),
         owner: z.string().optional(),
         repo: z.string().optional(),
         ...githubScopeParseFields,

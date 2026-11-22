@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { relaxedNumber, StrictProjectNumberSchema } from '../../schemas.js'
+import { coerceIntString, relaxedNumber, StrictProjectNumberSchema } from '../../schemas.js'
 import { ErrorFieldsMixin } from '../../error-fields-mixin.js'
 
 export const TeamProjectSummaryOutputSchema = z
@@ -50,10 +50,7 @@ export const TeamCollaborationMatrixSchema = z
             .default('month')
             .describe('Time granularity for the activity heatmap'),
         limit: z
-            .number()
-            .int()
-            .min(1)
-            .max(100)
+            .preprocess(coerceIntString, z.number().int().min(1).max(100))
             .optional()
             .default(20)
             .describe('Max authors to include'),

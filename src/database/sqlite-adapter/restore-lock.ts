@@ -5,14 +5,40 @@ import { logger } from '../../utils/logger.js'
 
 const activeInProcessLocks = new Map<string, string>()
 
+function normalizeLockDirKey(lockDir: string): string {
+    const resolved = path.resolve(lockDir)
+    return process.platform === 'win32' ? resolved.toLowerCase() : resolved
+}
+
+/** Read pid/nonce metadata from an OS restore lock file on disk, or null if absent/invalid. */
+export function readDiskRestoreLockInfo(
+    lockFile: string
+): { pid?: number | undefined; nonce?: string | undefined } | null {
+    try {
+        const raw = fs.readFileSync(lockFile, 'utf-8').trim()
+        if (!raw) return null
+        const parsed: unknown = JSON.parse(raw)
+        if (typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed)) {
+            const record = parsed as { pid?: unknown; nonce?: unknown }
+            return {
+                pid: typeof record.pid === 'number' ? record.pid : undefined,
+                nonce: typeof record.nonce === 'string' ? record.nonce : undefined,
+            }
+        }
+        return null
+    } catch {
+        return null
+    }
+}
+
 export function getActiveInProcessRestoreToken(lockDir: string): string | undefined {
-    return activeInProcessLocks.get(path.resolve(lockDir))
+    return activeInProcessLocks.get(normalizeLockDirKey(lockDir))
 }
 
 export function clearActiveInProcessRestoreLock(lockDir: string, expectedToken?: string): void {
-    const resolved = path.resolve(lockDir)
-    if (expectedToken === undefined || activeInProcessLocks.get(resolved) === expectedToken) {
-        activeInProcessLocks.delete(resolved)
+    const key = normalizeLockDirKey(lockDir)
+    if (expectedToken === undefined || activeInProcessLocks.get(key) === expectedToken) {
+        activeInProcessLocks.delete(key)
     }
 }
 
@@ -68,7 +94,7 @@ function isHoldingPidStale(
     // [INVARIANT] A live holder keeps the lock even when the timestamp is old.
     // Same-PID contention with a tracked active nonce is NOT stale and blocks concurrent in-process restores.
     if (holdingPid === process.pid) {
-        const activeToken = activeInProcessLocks.get(path.resolve(lockDir))
+        const activeToken = activeInProcessLocks.get(normalizeLockDirKey(lockDir))
         if (activeToken !== undefined && observedNonce !== undefined && activeToken === observedNonce) {
             return false
         }
@@ -97,7 +123,7 @@ function isHoldingPidStale(
 function writeLockFileGuarded(lockDir: string, lockFile: string, nonce: string): void {
     try {
         writeLockFile(lockFile, nonce)
-        activeInProcessLocks.set(path.resolve(lockDir), nonce)
+        activeInProcessLocks.set(normalizeLockDirKey(lockDir), nonce)
     } catch (writeErr: unknown) {
         // [INVARIANT] Never delete lockDir on EEXIST: a stalled creator that lost an orphan-reclaim
         // race would otherwise wipe the winning contender's live lockDir + lock.json.

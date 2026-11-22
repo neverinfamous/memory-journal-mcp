@@ -7,8 +7,7 @@
 import { z } from 'zod'
 import type { ToolDefinition, ToolContext } from '../../../types/index.js'
 import { formatHandlerError } from '../../../utils/error-helpers.js'
-import { relaxedNumber } from '../schemas.js'
-import { MAX_QUERY_LIMIT } from '../schemas.js'
+import { coerceIntString, relaxedNumber, MAX_QUERY_LIMIT } from '../schemas.js'
 import {
     GitHubIssuesListOutputSchema,
     GitHubIssueResultOutputSchema,
@@ -33,11 +32,11 @@ import { createGitHubContextTool } from './context-tool.js'
 
 const GetGitHubIssueInputSchema = z
     .object({
-        issue_number: z.number().int().positive(),
+        issue_number: z.preprocess(coerceIntString, z.number().int().positive()),
         owner: z.string().optional(),
         repo: z.string().optional(),
         ...githubScopeParseFields,
-        truncate_body: z.number().int().min(0).max(100000).optional().default(800),
+        truncate_body: z.preprocess(coerceIntString, z.number().int().min(0).max(100000)).optional().default(800),
         include_comments: z.boolean().optional().default(false),
     })
     .strict()
@@ -141,7 +140,7 @@ const GetGitHubListInputSchema = z.object({
     repo: z.string().optional(),
     ...githubScopeParseFields,
     state: z.enum(['open', 'closed', 'all']).optional().default('open'),
-    limit: z.number().int().min(1).max(MAX_QUERY_LIMIT).optional().default(20),
+    limit: z.preprocess(coerceIntString, z.number().int().min(1).max(MAX_QUERY_LIMIT)).optional().default(20),
 }).strict()
 const GetGitHubIssueSchemaMcp = z.object({
     ...githubScopeInputFields,
@@ -159,11 +158,11 @@ const GetGitHubPrSchemaMcp = z.object({
     truncate_body: relaxedNumber().optional().default(800).describe('Max characters for body text (0 = full body, default 800). Reduces token usage.'),
 })
 const GetGitHubPrInputSchema = z.object({
-    pr_number: z.number().int().positive(),
+    pr_number: z.preprocess(coerceIntString, z.number().int().positive()),
     owner: z.string().optional(),
     repo: z.string().optional(),
     ...githubScopeParseFields,
-    truncate_body: z.number().int().min(0).max(100000).optional().default(800),
+    truncate_body: z.preprocess(coerceIntString, z.number().int().min(0).max(100000)).optional().default(800),
 }).strict()
 
 // ============================================================================

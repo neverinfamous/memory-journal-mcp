@@ -250,6 +250,7 @@ function buildSynthesizedEntryPayload(
         entryObj['impactScore'] ?? rawObj['impactScore']
     )
     const validVal = normalizeValidation(getNonEmptyString(entryObj, rawObj, ['validation_status', 'validation', 'validationStatus']))
+    const targetWsVal = getNonEmptyString(entryObj, rawObj, ['target_workspace_id', 'targetWorkspaceId'])
     const numericEntryId = parsePositiveEntryId(entryObj, rawObj)
 
     const extraContext: Record<string, unknown> = {}
@@ -262,6 +263,7 @@ function buildSynthesizedEntryPayload(
     if (numericEntryId !== undefined) payload['entry_id'] = numericEntryId
     if (projVal !== undefined) payload['project_number'] = projVal
     if (wsVal !== undefined) payload['workspace_id'] = wsVal
+    if (targetWsVal !== undefined) payload['target_workspace_id'] = targetWsVal
     if (sessVal !== undefined) payload['session_id'] = sessVal
     if (trustVal !== undefined) payload['trust_score'] = trustVal
     if (impactVal !== undefined) payload['impact_score'] = impactVal

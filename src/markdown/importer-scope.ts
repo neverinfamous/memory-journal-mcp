@@ -319,7 +319,8 @@ function toSignificanceType(value: string | undefined): SignificanceType | undef
 
 function validateImportTimestamp(timestamp: string | undefined): void {
     if (timestamp === undefined) return
-    const ymdMatch = /^(\d{4})-(\d{2})-(\d{2})(?:$|T)/.exec(timestamp)
+    const trimmed = timestamp.trim()
+    const ymdMatch = /^(\d{4})-(\d{2})-(\d{2})(?:$|[Tt ])/.exec(trimmed)
     if (ymdMatch !== null) {
         const y = Number(ymdMatch[1])
         const m = Number(ymdMatch[2])
@@ -329,7 +330,7 @@ function validateImportTimestamp(timestamp: string | undefined): void {
             throw new ValidationError(`Invalid timestamp format: ${timestamp}. Expected a valid ISO 8601 date or timestamp.`)
         }
     }
-    const candidate = timestamp.includes('T') ? timestamp : `${timestamp}T00:00:00.000Z`
+    const candidate = /^\d{4}-\d{2}-\d{2}$/.test(trimmed) ? `${trimmed}T00:00:00.000Z` : trimmed
     if (Number.isNaN(new Date(candidate).getTime())) {
         throw new ValidationError(`Invalid timestamp format: ${timestamp}. Expected an ISO 8601 date or timestamp.`)
     }

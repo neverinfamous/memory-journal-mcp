@@ -4,7 +4,7 @@
  */
 
 import * as fs from 'node:fs/promises'
-import { constants as fsConstants } from 'node:fs'
+import { constants as fsConstants, realpathSync } from 'node:fs'
 import * as path from 'node:path'
 import { z } from 'zod'
 import type { EntryType, JournalEntry, ToolContext } from '../../../types/index.js'
@@ -25,6 +25,7 @@ import { convertFile, exportEntriesToMarkdown } from '../../../markdown/index.js
 import type { ExportableEntry, ParsedFile, SourceFormat } from '../../../markdown/index.js'
 import { MAX_IMPORT_FILE_BYTES } from '../io/tools.js'
 import {
+    coerceIntString,
     DATE_FORMAT_MESSAGE,
     DATE_FORMAT_REGEX,
     DATE_MAX_SENTINEL,
@@ -40,7 +41,7 @@ export const TeamExportMarkdownSchema = z
         end_date: z.string().regex(DATE_FORMAT_REGEX, DATE_FORMAT_MESSAGE).optional(),
         tags: z.array(z.string()).optional(),
         project_number: StrictProjectNumberSchema.optional(),
-        limit: z.number().int().min(1).max(500).optional().default(100),
+        limit: z.preprocess(coerceIntString, z.number().int().min(1).max(500)).optional().default(100),
         workspace_id: z.string().max(255).optional(),
     })
     .strict()
@@ -266,16 +267,23 @@ export async function readAndConvertExternalMarkdownFiles(
     progress: ToolContext['progress']
 ): Promise<{ parsedFiles: ParsedFile[]; errors: { file: string; error: string }[]; skipped: number }> {
     assertSafeDirectoryPath(sourceDir, allowedRoots)
+    const pinnedSourceDir = realpathSync.native(sourceDir)
     const MAX_DIRECTORY_SCAN_ENTRIES = 10_000
     const allMdFiles: string[] = []
     let scannedEntries = 0
-    const dir = await fs.opendir(sourceDir)
-    for await (const dirent of dir) {
-        if (++scannedEntries > MAX_DIRECTORY_SCAN_ENTRIES) break
-        if (dirent.isFile() && dirent.name.endsWith('.md')) {
-            allMdFiles.push(dirent.name)
-            if (allMdFiles.length >= MAX_DIRECTORY_SCAN_ENTRIES) break
+    const dir = await fs.opendir(pinnedSourceDir)
+    try {
+        for await (const dirent of dir) {
+            if (++scannedEntries > MAX_DIRECTORY_SCAN_ENTRIES) break
+            if (dirent.isFile() && !dirent.isSymbolicLink() && dirent.name.endsWith('.md')) {
+                allMdFiles.push(dirent.name)
+                if (allMdFiles.length >= MAX_DIRECTORY_SCAN_ENTRIES) break
+            }
         }
+    } finally {
+        await dir.close().catch(() => {
+            // Directory stream may already be closed after iteration.
+        })
     }
     allMdFiles.sort((a, b) => a.localeCompare(b))
     const mdFiles = allMdFiles.slice(0, limit)
@@ -286,13 +294,16 @@ export async function readAndConvertExternalMarkdownFiles(
     let skipped = 0
     const READ_CONCURRENCY = 16
     for (let i = 0; i < mdFiles.length; i += READ_CONCURRENCY) {
+        if (realpathSync.native(pinnedSourceDir) !== pinnedSourceDir) {
+            throw new Error('Source directory realpath changed during import scan.')
+        }
         const chunk = mdFiles.slice(i, i + READ_CONCURRENCY)
         const outcomes = await Promise.all(
             chunk.map((filename) =>
                 readAndConvertSingleExternalFile(
-                    sourceDir,
+                    pinnedSourceDir,
                     filename,
-                    allowedRoots,
+                    [pinnedSourceDir],
                     sourceFormat,
                     defaultEntryType
                 )

@@ -65,16 +65,20 @@ async function readAndConvertExternalFiles(
 }> {
     const fs = await import('node:fs/promises')
     const path = await import('node:path')
-    const { constants } = await import('node:fs')
+    const { constants, realpathSync } = await import('node:fs')
     const { assertSafeDirectoryPath, assertSafeFilePath } = await import(
         '../../../utils/security-utils.js'
     )
 
     assertSafeDirectoryPath(input.source_dir, allowedRoots)
+    const pinnedSourceDir = realpathSync.native(input.source_dir)
+    assertSafeDirectoryPath(pinnedSourceDir, allowedRoots)
+    const pinnedInput = { ...input, source_dir: pinnedSourceDir }
+    const scopedRoots = [pinnedSourceDir]
     const MAX_DIRECTORY_SCAN_ENTRIES = 10_000
     const allMdFiles: string[] = []
     let scannedEntries = 0
-    const dir = await fs.opendir(input.source_dir)
+    const dir = await fs.opendir(pinnedSourceDir)
     for await (const dirent of dir) {
         if (++scannedEntries > MAX_DIRECTORY_SCAN_ENTRIES) break
         if (dirent.isFile() && dirent.name.endsWith('.md')) {
@@ -92,6 +96,7 @@ async function readAndConvertExternalFiles(
     const openFlags = constants.O_RDONLY | constants.O_NOFOLLOW
 
     for (let i = 0; i < mdFiles.length; i += READ_CONCURRENCY) {
+        assertSafeDirectoryPath(pinnedSourceDir, allowedRoots)
         const chunk = mdFiles.slice(i, i + READ_CONCURRENCY)
         const outcomes = await Promise.all(
             chunk.map((filename) =>
@@ -100,8 +105,8 @@ async function readAndConvertExternalFiles(
                     path,
                     openFlags,
                     assertSafeFilePath,
-                    input,
-                    allowedRoots,
+                    pinnedInput,
+                    scopedRoots,
                     filename
                 )
             )

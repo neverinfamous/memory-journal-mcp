@@ -8,7 +8,7 @@ import { isRecord } from '../../../codemode/normalizers/shared-utils.js'
 import { activeProjectRegistry, pairStoredScope } from '../../../utils/write-scope.js'
 import { parseCanonicalPositiveInt } from '../../../utils/safe-positive-int.js'
 import { lookupRegistryEntry } from './session-context.js'
-import { normalizeBatchDispatchItems } from './dispatch-batch-scope.js'
+import { normalizeBatchDispatchItems, parseCanonicalMoveEntryId } from './dispatch-batch-scope.js'
 import { checkSchemaAcceptsKey } from './dispatch-schema-introspection.js'
 import { autoPopulateGithubUrls } from './dispatch-github-urls.js'
 import { deepCamelToSnake } from './dispatch-key-normalizer.js'
@@ -335,11 +335,20 @@ function verifyWildcardUpdateSourceProject(
     ) {
         return undefined
     }
-    const rawEntryId = paramsObj['entry_id']
-    if (typeof rawEntryId !== 'number' || typeof sessionContext.db?.getEntryById !== 'function') {
+    const parsedEntryId = parseCanonicalMoveEntryId(paramsObj)
+    if (parsedEntryId === undefined) {
+        return {
+            success: false,
+            error: 'Cross-workspace move from wildcard/default source requires a valid positive integer entry_id.',
+            code: 'VALIDATION_ERROR',
+            category: 'validation',
+            recoverable: true,
+        }
+    }
+    if (typeof sessionContext.db?.getEntryById !== 'function') {
         return undefined
     }
-    const sourceEntry = sessionContext.db.getEntryById(rawEntryId, '*')
+    const sourceEntry = sessionContext.db.getEntryById(parsedEntryId, '*')
     const sourceProject = sourceEntry?.projectNumber
     if (
         sourceProject !== null &&
@@ -349,7 +358,7 @@ function verifyWildcardUpdateSourceProject(
     ) {
         return {
             success: false,
-            error: `Entry ${String(rawEntryId)} not found`,
+            error: `Entry ${String(parsedEntryId)} not found`,
             code: 'RESOURCE_NOT_FOUND',
             category: 'resource',
             suggestion:
@@ -408,8 +417,7 @@ export async function normalizeDispatchParams(
             (tool.name === 'batch_update_entries' || tool.name === 'team_batch_update_entries') &&
             paramsObj['project_number'] === undefined &&
             typeof projectId === 'number' &&
-            (paramsObj['workspace_id'] === '*' ||
-                (paramsObj['workspace_id'] === undefined && workspaceId === '*'))
+            (paramsObj['workspace_id'] === '*' || (paramsObj['workspace_id'] === undefined && workspaceId === '*'))
         ) {
             paramsObj['project_number'] = projectId
         }
@@ -418,24 +426,14 @@ export async function normalizeDispatchParams(
                 ? paramsObj['session_id'].trim()
                 : ctx.sessionId
         const batchError = normalizeBatchDispatchItems(batchArrayKey, paramsObj, reg, {
-            projectId,
-            workspaceId,
-            explicitWorkspace,
-            sessionId: effectiveBatchSessionId,
-            toolName: tool.name,
-            sessionContext,
-            isDefaultWorkspaceName,
-            coerceProjectNumberField,
+            projectId, workspaceId, explicitWorkspace, sessionId: effectiveBatchSessionId,
+            toolName: tool.name, sessionContext, isDefaultWorkspaceName, coerceProjectNumberField,
         })
         if (batchError !== undefined) return batchError
     } else {
         applyRootSessionInheritance(tool, paramsObj, ctx, flags, reg)
     }
-
-    if (
-        checkSchemaAcceptsKey(tool.inputSchema, 'issue_url') ||
-        checkSchemaAcceptsKey(tool.inputSchema, 'pr_url')
-    ) {
+    if (checkSchemaAcceptsKey(tool.inputSchema, 'issue_url') || checkSchemaAcceptsKey(tool.inputSchema, 'pr_url')) {
         await autoPopulateGithubUrls(paramsObj, sessionContext, workspaceId, projectId)
     }
     return { params: paramsObj }

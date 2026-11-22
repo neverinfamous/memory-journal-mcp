@@ -44,7 +44,8 @@ function normalizeRootBatchAliases(obj: Record<string, unknown>): void {
 export function inheritRootBatchScope(
     itemObj: Record<string, unknown>,
     rootObj: Record<string, unknown>,
-    inheritProject: boolean
+    inheritProject: boolean,
+    inheritWorkspaceOnItemProject = false
 ): void {
     const rootWs = firstDefinedEntry(rootObj, WORKSPACE_ALIAS_KEYS)
     const rootProj = firstDefinedEntry(rootObj, PROJECT_ALIAS_KEYS)
@@ -75,7 +76,7 @@ export function inheritRootBatchScope(
     ) {
         itemObj[rootProj.key] = rootProj.value
     }
-    if (itemWs === undefined && itemProj === undefined && rootWs !== undefined) {
+    if (itemWs === undefined && (inheritWorkspaceOnItemProject || itemProj === undefined) && rootWs !== undefined) {
         itemObj[rootWs.key] = rootWs.value
     }
 }
@@ -95,7 +96,7 @@ export function preprocessBatchCreateEntries(val: unknown): unknown {
             obj['entries'] = obj['entries'].map((e: unknown) => {
                 if (typeof e === 'object' && e !== null) {
                     const eObj = { ...(e as Record<string, unknown>) }
-                    inheritRootBatchScope(eObj, obj, true)
+                    inheritRootBatchScope(eObj, obj, true, true)
                     return eObj
                 }
                 return e

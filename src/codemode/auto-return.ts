@@ -29,7 +29,8 @@ import {
 // Statements that must NOT be prefixed with `return`
 const NON_RETURNABLE =
     /^\s*(?:return\b|throw\b|const\b|let\b|var\b|if\b|else\b|for\b|while\b|do\b|switch\b|try\b|catch\b|finally\b|class\b|function\b|\/\/|\/\*|\{|\})/
-const CONTINUATION_START = /^(?:\.(?!\.\.)|\?\.|&&|\|\||\?\?|[?:,])/
+const CONTINUATION_START =
+    /^(?:\.(?!\.\.)|\?\.|&&|\|\||\?\?|[?:,*%<>]|==|!=|&|\||\^|(?:in|instanceof)(?![A-Za-z0-9_$]))/
 const CONTINUATION_PREV_TOKENS = new Set([
     '=', ',', '.', '?.', '=>', '?', ':', '+', '-', '*', '/', '%', '**',
     '+=', '-=', '*=', '/=', '%=', '??=', '&&=', '||=', '&&', '||', '??',
@@ -101,8 +102,20 @@ function nextNonWsStartsContinuation(trimmed: string, start: number): boolean {
         const next = trimmed[j + 1] ?? ''
         if (ch === '.' && !(next === '.' && trimmed[j + 2] === '.')) return true
         if (ch === '?' && (next === '.' || next === '?')) return true
-        if (ch === '&' && next === '&') return true
-        if (ch === '|' && next === '|') return true
+        if (ch === '&' || ch === '|' || ch === '^' || ch === '*' || ch === '%' || ch === '<' || ch === '>') {
+            return true
+        }
+        if (ch === '/' && next !== '/' && next !== '*') return true
+        if ((ch === '+' && next !== '+') || (ch === '-' && next !== '-')) return true
+        if ((ch === '=' || ch === '!') && next === '=') return true
+        if (trimmed.startsWith('in', j)) {
+            const afterIn = trimmed[j + 2]
+            if (afterIn === undefined || !/[A-Za-z0-9_$]/.test(afterIn)) return true
+        }
+        if (trimmed.startsWith('instanceof', j)) {
+            const afterInst = trimmed[j + 10]
+            if (afterInst === undefined || !/[A-Za-z0-9_$]/.test(afterInst)) return true
+        }
         return ch === '?' || ch === ':'
     }
     return false

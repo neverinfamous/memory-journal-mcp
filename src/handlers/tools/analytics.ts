@@ -14,6 +14,7 @@ import {
     DATE_FORMAT_REGEX,
     DATE_FORMAT_MESSAGE,
     TagOutputSchema,
+    coerceIntString,
     relaxedNumber,
 } from './schemas.js'
 import { ErrorFieldsMixin } from './error-fields-mixin.js'
@@ -265,7 +266,11 @@ const CrossProjectInsightsInputSchema = z.object({
         .regex(DATE_FORMAT_REGEX, DATE_FORMAT_MESSAGE)
         .optional()
         .describe('End date (YYYY-MM-DD)'),
-    min_entries: z.number().int().min(1).optional().default(3).describe('Minimum entries to include project'),
+    min_entries: z
+        .preprocess(coerceIntString, z.number().int().min(1))
+        .optional()
+        .default(3)
+        .describe('Minimum entries to include project'),
     workspace_id: z.string().max(255).optional(),
     project_number: z.unknown().optional(), // Allow injected project_number
 }).strict()

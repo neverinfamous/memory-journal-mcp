@@ -360,7 +360,10 @@ export async function auditOperation<T>(
     const user = authCtx?.authenticated === true ? (authCtx.claims?.sub ?? null) : null
     const scopes = getGrantedAuthScopes(authCtx)
     const sessionId = reqCtx?.sessionId
-    const uriScope = extractAuditScopeFromUri(target, reqCtx, options?.runtime)
+    const uriScope =
+        operationType === 'prompt'
+            ? {}
+            : extractAuditScopeFromUri(target, reqCtx, options?.runtime)
     const workspaceId = options?.workspaceId ?? uriScope.workspaceId
     const projectNumber = options?.projectNumber ?? uriScope.projectNumber
     const category = resolveAuditOperationCategory(target, options?.capabilities)

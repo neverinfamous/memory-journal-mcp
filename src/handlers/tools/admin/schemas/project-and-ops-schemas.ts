@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { relaxedNumber } from '../../schemas.js'
+import { coerceIntString, relaxedNumber } from '../../schemas.js'
 import { ErrorFieldsMixin } from '../../error-fields-mixin.js'
 
 function preprocessSearchAuditLog(val: unknown): unknown {
@@ -57,8 +57,8 @@ export const SearchAuditLogSchema = z.preprocess(
                 .optional(),
             status: z.boolean().optional(),
             category: z.enum(['read', 'write', 'admin', 'team', 'audit']).optional(),
-            limit: z.number().int().min(1).max(1000).optional().default(100),
-            project_number: z.number().int().positive().optional(),
+            limit: z.preprocess(coerceIntString, z.number().int().min(1).max(1000)).optional().default(100),
+            project_number: z.preprocess(coerceIntString, z.number().int().positive()).optional(),
             workspace_id: z.string().max(255).optional(),
         })
         .strict()

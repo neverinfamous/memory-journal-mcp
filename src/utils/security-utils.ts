@@ -111,27 +111,32 @@ export function assertNoPathTraversal(filename: string): void {
 export const SENSITIVE_KEY_RE =
     /(?:token|secret|password|passwd|passphrase|authorization|auth[-_]?header|api[-_]?key|apikey|encryption[-_]?key|webhook(?:[-_]?(?:auth|url))?|private[-_]?key|client[-_]?secret|credential|cookie|bearer|^key$)/i
 
-const TOKEN_PATTERNS = [
+const TOKEN_PATTERNS: readonly { pattern: RegExp; replacement: string }[] = [
     // GitHub personal access tokens (classic and fine-grained)
-    /gh[pousr]_[A-Za-z0-9_]{36,}/g,
-    /github_pat_[A-Za-z0-9_]{82,}/g,
+    { pattern: /gh[pousr]_[A-Za-z0-9_]{36,}/g, replacement: '[REDACTED]' },
+    { pattern: /github_pat_[A-Za-z0-9_]{82,}/g, replacement: '[REDACTED]' },
     // JWT Tokens
-    /eyJ[a-zA-Z0-9_-]{2,}\.eyJ[a-zA-Z0-9_-]{2,}\.[a-zA-Z0-9_-]{2,}/g,
+    { pattern: /eyJ[a-zA-Z0-9_-]{2,}\.eyJ[a-zA-Z0-9_-]{2,}\.[a-zA-Z0-9_-]{2,}/g, replacement: '[REDACTED]' },
     // Slack tokens
-    /xox[baprs]-[A-Za-z0-9-]+/g,
+    { pattern: /xox[baprs]-[A-Za-z0-9-]+/g, replacement: '[REDACTED]' },
     // AWS API Keys
-    /(?:AKIA|ABIA|ACCA|ASIA)[0-9A-Z]{16}/g,
+    { pattern: /(?:AKIA|ABIA|ACCA|ASIA)[0-9A-Z]{16}/g, replacement: '[REDACTED]' },
+    // Authorization headers & Bearer/Basic tokens BEFORE CLI secret-flag pattern
+    { pattern: /Authorization:(?:\s+(?:token|Bearer|Basic))?\s+["']?[A-Za-z0-9._~+/#=-]+["']?/gi, replacement: '[REDACTED]' },
+    { pattern: /Bearer\s+["']?[A-Za-z0-9._~+/#=-]+["']?/gi, replacement: '[REDACTED]' },
+    { pattern: /Basic\s+["']?[A-Za-z0-9._~+/#=-]+["']?/gi, replacement: '[REDACTED]' },
     // CLI secret flags (--auth-token, --github-token, --oauth-client-secret, --token, --secret, --password, --passphrase, --api-key, --webhook-auth, --encryption-key, --key)
-    /(?<![A-Za-z0-9_-])(--(?:(?:[a-z0-9]{1,32}[-_]){0,4}(?:auth[-_]?token|token|secret|password|passphrase|api[-_]?key|webhook[-_]?auth|encryption[-_]?key|private[-_]?key)|key)(?:=|\s+))("(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|[^\s"']+)/gi,
+    {
+        pattern: /(?<![A-Za-z0-9_-])(--(?:(?:[a-z0-9]{1,32}[-_]){0,4}(?:auth[-_]?token|token|secret|password|passphrase|api[-_]?key|webhook[-_]?auth|encryption[-_]?key|private[-_]?key)|key)(?:=|\s+))("(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|[^\s"']+)/gi,
+        replacement: '$1[REDACTED]',
+    },
     // SQLCipher key/rekey pragmas (handles escaped '' / \' within single quotes and "" / \" within double quotes)
-    /(pragma\s+(?:re)?key\s*=\s*)(?:"x'[^']*'"|x'[^']*'|'(?:\\.|[^'\\]|'')*'|"(?:\\.|[^"\\]|"")*")/gi,
+    {
+        pattern: /(pragma\s+(?:re)?key\s*=\s*)(?:"x'[^']*'"|x'[^']*'|'(?:\\.|[^'\\]|'')*'|"(?:\\.|[^"\\]|"")*")/gi,
+        replacement: "$1'[REDACTED]'",
+    },
     // URL embedded credentials
-    /(https?:\/\/[^/\s:@]+:)[^/\s@]+(@)/gi,
-    // Authorization headers in error dumps (catch-all for token, Bearer, Basic)
-    /Authorization:(?:\s+(?:token|Bearer|Basic))?\s+["']?[A-Za-z0-9._~+/#=-]+["']?/gi,
-    // Generic token patterns standalone
-    /Bearer\s+["']?[A-Za-z0-9._~+/#=-]+["']?/gi,
-    /Basic\s+["']?[A-Za-z0-9._~+/#=-]+["']?/gi,
+    { pattern: /(https?:\/\/[^/\s:@]+:)[^/\s@]+(@)/gi, replacement: '$1[REDACTED]$2' },
 ] as const
 
 const POTENTIAL_SECRET_RE =
@@ -156,19 +161,9 @@ export function isPlaceholderAuthToken(token: string | undefined | null): boolea
 export function sanitizeErrorForLogging(message: string): string {
     if (!POTENTIAL_SECRET_RE.test(message)) return message
     let sanitized = message
-    for (let i = 0; i < TOKEN_PATTERNS.length; i++) {
-        const pattern = TOKEN_PATTERNS[i]
-        if (pattern === undefined) continue
-        pattern.lastIndex = 0
-        if (i === 5) {
-            sanitized = sanitized.replace(pattern, '$1[REDACTED]')
-        } else if (i === 6) {
-            sanitized = sanitized.replace(pattern, "$1'[REDACTED]'")
-        } else if (i === 7) {
-            sanitized = sanitized.replace(pattern, '$1[REDACTED]$2')
-        } else {
-            sanitized = sanitized.replace(pattern, '[REDACTED]')
-        }
+    for (const rule of TOKEN_PATTERNS) {
+        rule.pattern.lastIndex = 0
+        sanitized = sanitized.replace(rule.pattern, rule.replacement)
     }
     return sanitized
 }

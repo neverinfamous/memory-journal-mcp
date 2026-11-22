@@ -198,7 +198,7 @@ function resolveProjectDomainProp(
     if (typeof p === 'symbol' || p === 'then') return undefined
     const createFn =
         getGroupProp(target, 'core', 'create_entry') ?? getGroupProp(target, 'core', 'createEntry')
-    if (p === 'entries') return { create: createFn, add: createFn }
+    if (p === 'entries') return Object.freeze({ create: createFn, add: createFn })
     const listProjectsFn =
         getGroupProp(target, 'admin', 'listProjects') ??
         getGroupProp(target, 'admin', 'list_projects') ??

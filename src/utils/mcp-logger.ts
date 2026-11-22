@@ -133,7 +133,7 @@ export class McpLogger {
             return Number.isNaN(value.getTime()) ? 'Invalid Date' : value.toISOString()
         }
         if (value instanceof URL) {
-            return sanitizeErrorForLogging(value.toString())
+            return sanitizeErrorForLogging(value.toString()).replace(/[\r\n]+/g, ' ')
         }
         if (typeof value === 'function') {
             return '[Function]'
@@ -160,7 +160,7 @@ export class McpLogger {
             Object.setPrototypeOf(sanitized, null)
             for (const [k, v] of Object.entries(value)) {
                 if (k === '__proto__' || k === 'constructor' || k === 'prototype' || k === 'toJSON' || typeof v === 'function') continue
-                const safeKey = sanitizeErrorForLogging(k)
+                const safeKey = sanitizeErrorForLogging(k).replace(/[\r\n]+/g, ' ')
                 sanitized[safeKey] =
                     SENSITIVE_KEY_RE.test(k) && v !== undefined && v !== null && v !== ''
                         ? '[REDACTED]'
@@ -173,11 +173,12 @@ export class McpLogger {
     }
 
     private sanitizeData(data: LogData): LogData {
+        const { message: rawMessage, ...restData } = data
         const cleanedMessage =
-            typeof data.message === 'string'
-                ? sanitizeErrorForLogging(data.message).replace(/[\r\n]+/g, ' ')
+            typeof rawMessage === 'string'
+                ? sanitizeErrorForLogging(rawMessage).replace(/[\r\n]+/g, ' ')
                 : ''
-        const rest = this.sanitizeValue(data) as Record<string, unknown>
+        const rest = this.sanitizeValue(restData) as Record<string, unknown>
         return { ...rest, message: cleanedMessage }
     }
 

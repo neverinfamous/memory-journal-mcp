@@ -12,6 +12,7 @@ import {
     DATE_FORMAT_REGEX,
     DATE_FORMAT_MESSAGE,
     EntryOutputSchema,
+    coerceIntString,
     relaxedNumber,
     StrictProjectNumberSchema,
 } from '../schemas.js'
@@ -44,12 +45,12 @@ export const CrossTeamSearchSchema = z.preprocess(
         .describe('Specific team DB labels to search. Omit to search all configured DBs.'),
     tags: z.array(z.string()).optional(),
     exclude_tags: z.array(z.string()).optional(),
-    project_number: StrictProjectNumberSchema.optional(),
+    project_number: z.preprocess(coerceIntString, StrictProjectNumberSchema).optional(),
     workspace_id: z.string().max(255).optional().describe('Optional workspace isolation identifier (e.g. "alpha"). Do not use numeric project IDs or "workspace" as the key.'),
     entry_type: z.enum(ENTRY_TYPES).optional(),
     start_date: z.string().regex(DATE_FORMAT_REGEX, DATE_FORMAT_MESSAGE).optional(),
     end_date: z.string().regex(DATE_FORMAT_REGEX, DATE_FORMAT_MESSAGE).optional(),
-    limit: z.number().int().min(1).max(500).optional().default(20),
+    limit: z.preprocess(coerceIntString, z.number().int().min(1).max(500)).optional().default(20),
     sort_by: z
         .enum(['timestamp', 'importance'])
         .optional()

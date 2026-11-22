@@ -207,7 +207,7 @@ export function getGitTools(context: ToolContext): ToolDefinition[] {
                     const progress = context.progress
                     await sendProgress(progress, 0, 2, 'Fetching commits for analysis...')
                     const max = z.number().int().positive().max(10000).parse(input.maxCount)
-                    const commits = await fetchCommits({ maxCount: Number.isNaN(max) ? 50 : max }, cwd)
+                    const commits = await fetchCommits({ maxCount: max }, cwd)
                     await sendProgress(progress, 1, 2, 'Analyzing commits...')
 
                     const analysis = {

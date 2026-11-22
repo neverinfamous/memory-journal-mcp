@@ -161,9 +161,9 @@ export function parseZodErrorsFromMessage(rawText: string, prefixToRemove?: stri
     let errorMessage =
         prefixToRemove !== undefined ? rawText.replace(prefixToRemove, '') : rawText
     try {
-        const parts = rawText.split(': [')
-        if (parts.length > 1 && parts[1] !== undefined) {
-            const parsed: unknown = JSON.parse('[' + parts[1])
+        const jsonIdx = rawText.lastIndexOf(': [')
+        if (jsonIdx !== -1) {
+            const parsed: unknown = JSON.parse(rawText.slice(jsonIdx + 2))
             if (Array.isArray(parsed)) {
                 errorMessage = parsed
                     .map((item) => {

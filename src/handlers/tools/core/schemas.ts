@@ -8,6 +8,8 @@ import {
     RelationshipOutputSchema,
     ImportanceBreakdownSchema,
     MAX_CONTENT_LENGTH,
+    coerceFiniteNumberString,
+    coerceIntString,
     relaxedNumber,
     healAgentHallucinations,
     StrictProjectNumberSchema,
@@ -32,18 +34,18 @@ export const CreateEntrySchema = z.preprocess(
         is_personal: z.boolean().optional().default(true),
         significance_type: z.enum(SIGNIFICANCE_TYPES).optional(),
         workspace_id: z.string().min(1, 'workspace_id (repository name) is required').max(255).optional(),
-        project_number: StrictProjectNumberSchema.optional(),
+        project_number: z.preprocess(coerceIntString, StrictProjectNumberSchema).optional(),
         project_owner: z.string().optional(),
-        issue_number: z.number().int().positive().optional(),
+        issue_number: z.preprocess(coerceIntString, z.number().int().positive()).optional(),
         issue_url: z.string().optional(),
-        pr_number: z.number().int().positive().optional(),
+        pr_number: z.preprocess(coerceIntString, z.number().int().positive()).optional(),
         pr_url: z.string().optional(),
         pr_status: z.enum(['draft', 'open', 'merged', 'closed']).optional(),
-        workflow_run_id: z.number().int().positive().optional(),
+        workflow_run_id: z.preprocess(coerceIntString, z.number().int().positive()).optional(),
         workflow_name: z.string().optional(),
         workflow_status: z.enum(['queued', 'in_progress', 'completed']).optional(),
-        impact_score: z.number().min(0).max(1).optional(),
-        trust_score: z.number().min(0).max(1).optional(),
+        impact_score: z.preprocess(coerceFiniteNumberString, z.number().min(0).max(1)).optional(),
+        trust_score: z.preprocess(coerceFiniteNumberString, z.number().min(0).max(1)).optional(),
         validation_status: z.enum(['passed', 'none', 'failed']).optional(),
         anchors: z.array(z.object({
             anchor_path: z.string(),
@@ -244,9 +246,9 @@ function preprocessGetEntryById(val: unknown): unknown {
 export const GetEntryByIdSchema = z.preprocess(
     preprocessGetEntryById,
     z.object({
-        entry_id: z.number().int(),
+        entry_id: z.preprocess(coerceIntString, z.number().int()),
         include_relationships: z.boolean().optional().default(true),
-        project_number: StrictProjectNumberSchema.optional(),
+        project_number: z.preprocess(coerceIntString, StrictProjectNumberSchema).optional(),
         workspace_id: z.string().max(255).optional(),
         source: z.enum(['personal', 'team']).optional(),
     })
@@ -295,8 +297,8 @@ function preprocessSortByOnly(val: unknown): unknown {
 export const GetRecentEntriesSchema = z.preprocess(
     preprocessSortByOnly,
     z.object({
-        limit: z.number().int().min(1).max(MAX_SEARCH_LIMIT).optional().default(10),
-        project_number: StrictProjectNumberSchema.optional(),
+        limit: z.preprocess(coerceIntString, z.number().int().min(1).max(MAX_SEARCH_LIMIT)).optional().default(10),
+        project_number: z.preprocess(coerceIntString, StrictProjectNumberSchema).optional(),
         workspace_id: z.string().max(255).optional(),
         is_personal: z.boolean().optional(),
         sort_by: z
@@ -305,7 +307,7 @@ export const GetRecentEntriesSchema = z.preprocess(
             .default('timestamp')
             .describe('Sort results by timestamp (default) or importance score'),
         cursor: z.string().optional(),
-        offset: z.number().int().min(0).optional().default(0),
+        offset: z.preprocess(coerceIntString, z.number().int().min(0)).optional().default(0),
         include_archived: z.boolean().optional().default(false),
     })
 )
@@ -336,8 +338,8 @@ export const GetRecentEntriesSchemaMcp = z.preprocess(
 // ============================================================================
 
 export const GetEntryHistorySchema = z.object({
-    entry_id: z.number().int(),
-    project_number: StrictProjectNumberSchema.optional(),
+    entry_id: z.preprocess(coerceIntString, z.number().int()),
+    project_number: z.preprocess(coerceIntString, StrictProjectNumberSchema).optional(),
     workspace_id: z.string().max(255).optional(),
 })
 
@@ -392,7 +394,7 @@ export const GetRecentEntriesOutputSchema = z
     .extend(ErrorFieldsMixin.shape)
 
 export const ListTagsSchema = z.object({
-    project_number: StrictProjectNumberSchema.optional(),
+    project_number: z.preprocess(coerceIntString, StrictProjectNumberSchema).optional(),
     workspace_id: z.string().max(255).optional(),
 })
 

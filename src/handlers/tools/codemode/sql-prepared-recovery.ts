@@ -246,6 +246,11 @@ function extractPreparedRunArgsAt(
         if (m[1] !== stmtVar || m.index === undefined) continue
         const matchStart = prep.afterPrepareCloseIdx + m.index
         if (isOffsetInNonCodeSpan(spans, matchStart)) continue
+        const between = stripCommentsAndStrings(code.slice(prep.afterPrepareCloseIdx, matchStart)).replace(
+            /[\s;]/g,
+            ''
+        )
+        if (between !== '') return null
         const openParenIdx = matchStart + m[0].length - 1
         const callArgs = scanSimpleParenBody(code, openParenIdx)
         if (callArgs === null) continue

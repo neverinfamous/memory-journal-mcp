@@ -27,13 +27,16 @@ export class LegacySSEServerTransport implements Transport {
     }
 
     close(): Promise<void> {
-        if (this.res) {
-            this.res.end()
+        try {
+            if (this.res) {
+                this.res.end()
+            }
+        } finally {
             this.res = null
+            const onclose = this.onclose
+            this.onclose = undefined
+            onclose?.()
         }
-        const onclose = this.onclose
-        this.onclose = undefined
-        onclose?.()
         return Promise.resolve()
     }
 

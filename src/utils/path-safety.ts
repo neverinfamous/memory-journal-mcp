@@ -377,6 +377,8 @@ export function assertSafeChildFile(rawDir: string, rawBase: string, filePath?: 
         throw new PathTraversalError(`Malformed URL-encoding in file name: ${rawBase}`)
     }
     if (
+        rawBase === '' ||
+        decodedBase === '' ||
         /[\\/:]/.test(rawBase) ||
         /[\\/:]/.test(decodedBase) ||
         decodedBase === '..' ||
@@ -413,7 +415,7 @@ export function assertSafeChildFile(rawDir: string, rawBase: string, filePath?: 
  * percent-decoded paths) to prevent any file-level traversal tricks.
  */
 export function assertSafeFilePath(filePath: string, providedRoots: string[]): void {
-    if (WIN_DRIVE_RELATIVE_RE.test(filePath.trimStart())) {
+    if (filePath.trim() === '' || WIN_DRIVE_RELATIVE_RE.test(filePath.trimStart())) {
         throw new PathTraversalError(filePath)
     }
     const pathMod: typeof path = WIN_DRIVE_PATH_RE.test(filePath) ? path.win32 : path

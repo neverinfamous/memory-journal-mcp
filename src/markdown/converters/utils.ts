@@ -49,7 +49,7 @@ export function formatToISODate(dateStr: string): string | undefined {
     const trimmed = dateStr.trim()
     if (trimmed === '') return undefined
 
-    const ymdMatch = /^(\d{4})-(\d{2})-(\d{2})(?:$|T)/.exec(trimmed)
+    const ymdMatch = /^(\d{4})-(\d{2})-(\d{2})(?:$|[Tt ])/.exec(trimmed)
     if (ymdMatch !== null) {
         const year = Number(ymdMatch[1])
         const month = Number(ymdMatch[2])

@@ -4,6 +4,8 @@ import {
     DATE_FORMAT_REGEX,
     DATE_FORMAT_MESSAGE,
     EntryOutputSchema,
+    coerceFiniteNumberString,
+    coerceIntString,
     relaxedNumber,
     MAX_QUERY_LIMIT,
     healSearchPayload,
@@ -30,14 +32,14 @@ export const SearchEntriesSchema = z.preprocess(
         .describe(
             'Search strategy: auto (default, heuristic-based), fts (FTS5 keyword), semantic (vector), hybrid (RRF fusion of FTS5+vector)'
         ),
-    limit: z.number().int().min(1).max(MAX_QUERY_LIMIT).optional().default(10),
+    limit: z.preprocess(coerceIntString, z.number().int().min(1).max(MAX_QUERY_LIMIT)).optional().default(10),
     workspace_id: z.string().max(255).optional(),
     is_personal: z.boolean().optional(),
-    project_number: z.number().int().min(0).optional(),
-    issue_number: z.number().int().positive().optional(),
-    pr_number: z.number().int().positive().optional(),
+    project_number: z.preprocess(coerceIntString, z.number().int().min(0)).optional(),
+    issue_number: z.preprocess(coerceIntString, z.number().int().positive()).optional(),
+    pr_number: z.preprocess(coerceIntString, z.number().int().positive()).optional(),
     pr_status: z.enum(['draft', 'open', 'merged', 'closed']).optional(),
-    workflow_run_id: z.number().int().positive().optional(),
+    workflow_run_id: z.preprocess(coerceIntString, z.number().int().positive()).optional(),
     tags: z.array(z.string()).optional(),
     exclude_tags: z
         .array(z.string())
@@ -59,8 +61,16 @@ export const SearchEntriesSchema = z.preprocess(
     include_archived: z.boolean().optional().default(false),
     include_facets: z.boolean().optional().default(false).describe('Include facet distributions (tags, entry types) for the search results'),
     include_highlights: z.boolean().optional().default(false).describe('Include snippets with matched terms highlighted (only applies to fts mode)'),
-    fts_weight: z.number().optional().default(1.0).describe('Weight multiplier for FTS5 results in hybrid search (default: 1.0)'),
-    semantic_weight: z.number().optional().default(1.0).describe('Weight multiplier for semantic results in hybrid search (default: 1.0)'),
+    fts_weight: z
+        .preprocess(coerceFiniteNumberString, z.number())
+        .optional()
+        .default(1.0)
+        .describe('Weight multiplier for FTS5 results in hybrid search (default: 1.0)'),
+    semantic_weight: z
+        .preprocess(coerceFiniteNumberString, z.number())
+        .optional()
+        .default(1.0)
+        .describe('Weight multiplier for semantic results in hybrid search (default: 1.0)'),
     fuzzy_match: z.boolean().optional().default(false).describe('If true and no exact FTS5 results found, returns typo-tolerant suggestions (fts mode only)'),
     auto_correct: z.boolean().optional().default(false).describe('If true and fuzzy_match=true, automatically runs a new search with the best suggestion if distance <= 1'),
     exact_match: z.boolean().optional().describe('Legacy hallucinated alias. Maps exact_match: false to fuzzy_match: true'),
@@ -129,11 +139,11 @@ export const SearchByDateRangeSchema = z.preprocess(
         .describe('Exclude entries having any of these tags'),
     workspace_id: z.string().max(255).optional(),
     is_personal: z.boolean().optional(),
-    project_number: z.number().int().min(0).optional(),
-    issue_number: z.number().int().positive().optional(),
-    pr_number: z.number().int().positive().optional(),
-    workflow_run_id: z.number().int().positive().optional(),
-    limit: z.number().int().min(1).max(MAX_QUERY_LIMIT).optional().default(500),
+    project_number: z.preprocess(coerceIntString, z.number().int().min(0)).optional(),
+    issue_number: z.preprocess(coerceIntString, z.number().int().positive()).optional(),
+    pr_number: z.preprocess(coerceIntString, z.number().int().positive()).optional(),
+    workflow_run_id: z.preprocess(coerceIntString, z.number().int().positive()).optional(),
+    limit: z.preprocess(coerceIntString, z.number().int().min(1).max(MAX_QUERY_LIMIT)).optional().default(500),
     sort_by: z
         .enum(['timestamp', 'importance'])
         .optional()
@@ -191,21 +201,31 @@ export const SemanticSearchSchema = z.preprocess(
     z.object({
     query: z.string().max(250).optional().describe('The search query string (use `query`, not `q`)'),
     entry_id: z
-        .number()
-        .int()
-        .positive()
+        .preprocess(coerceIntString, z.number().int().positive())
         .optional()
         .describe(
             'Find entries related to this entry ID (uses existing embedding, skips re-embedding)'
         ),
-    limit: z.number().int().min(1).max(MAX_QUERY_LIMIT).optional().default(10),
-    similarity_threshold: z.number().optional().default(0.25),
+    limit: z.preprocess(coerceIntString, z.number().int().min(1).max(MAX_QUERY_LIMIT)).optional().default(10),
+    similarity_threshold: z.preprocess(coerceFiniteNumberString, z.number()).optional().default(0.25),
     workspace_id: z.string().max(255).optional(),
     is_personal: z.boolean().optional(),
-    project_number: z.number().int().min(0).optional().describe('Filter results by project number'),
-    issue_number: z.number().int().positive().optional().describe('Filter results by GitHub issue number'),
-    pr_number: z.number().int().positive().optional().describe('Filter results by GitHub PR number'),
-    workflow_run_id: z.number().int().positive().optional().describe('Filter results by GitHub Actions workflow run ID'),
+    project_number: z
+        .preprocess(coerceIntString, z.number().int().min(0))
+        .optional()
+        .describe('Filter results by project number'),
+    issue_number: z
+        .preprocess(coerceIntString, z.number().int().positive())
+        .optional()
+        .describe('Filter results by GitHub issue number'),
+    pr_number: z
+        .preprocess(coerceIntString, z.number().int().positive())
+        .optional()
+        .describe('Filter results by GitHub PR number'),
+    workflow_run_id: z
+        .preprocess(coerceIntString, z.number().int().positive())
+        .optional()
+        .describe('Filter results by GitHub Actions workflow run ID'),
     tags: z.array(z.string()).optional().describe('Filter results by tags'),
     exclude_tags: z
         .array(z.string())

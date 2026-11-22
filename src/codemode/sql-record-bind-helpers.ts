@@ -11,7 +11,6 @@ export const UNPARSEABLE = Symbol('unparseable')
 
 export interface SqlLockedScope {
     workspaceId?: string | undefined
-    targetWorkspaceId?: string | undefined
     projectNumber?: number | null | undefined
 }
 

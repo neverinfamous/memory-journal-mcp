@@ -173,6 +173,21 @@ function applyBatchItemSessionDefaults(
     }
 }
 
+export function parseCanonicalMoveEntryId(record: Record<string, unknown>): number | undefined {
+    const raw = record['entry_id'] ?? record['entryId'] ?? record['id']
+    if (typeof raw === 'number') {
+        return Number.isSafeInteger(raw) && raw > 0 ? raw : undefined
+    }
+    if (typeof raw !== 'string') return undefined
+    const trimmed = raw.trim()
+    const stripped = trimmed.startsWith('#') ? trimmed.slice(1).trim() : trimmed
+    if (!/^[1-9]\d*$/.test(stripped)) return undefined
+    const parsed = Number(stripped)
+    return Number.isSafeInteger(parsed) && parsed > 0 && String(parsed) === stripped
+        ? parsed
+        : undefined
+}
+
 function verifyBatchWildcardMoveProjects(
     batchArrayKey: 'entries' | 'updates',
     nextItems: readonly unknown[],
@@ -189,11 +204,22 @@ function verifyBatchWildcardMoveProjects(
     for (const item of nextItems) {
         if (!isRecord(item)) continue
         const targetWs = trimmedStringField(item, 'target_workspace_id')
-        const entryId = item['entry_id']
-        if (targetWs === undefined || typeof entryId !== 'number') continue
+        if (targetWs === undefined) continue
         const itemWs = trimmedStringField(item, 'workspace_id')
         const effectiveSourceWs = itemWs ?? parentWs ?? workspaceId
         if (effectiveSourceWs === '*' || ctx.isDefaultWorkspaceName(effectiveSourceWs)) {
+            const entryId = parseCanonicalMoveEntryId(item)
+            if (entryId === undefined) {
+                return {
+                    errorResult: {
+                        success: false,
+                        error: 'Cross-workspace batch move from wildcard/default source requires a valid positive integer entry_id.',
+                        code: 'VALIDATION_ERROR',
+                        category: 'validation',
+                        recoverable: true,
+                    },
+                }
+            }
             wildcardIds.push(entryId)
         }
     }

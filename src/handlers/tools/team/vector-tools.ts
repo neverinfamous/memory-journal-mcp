@@ -8,7 +8,7 @@
 import { z } from 'zod'
 import type { ToolDefinition, ToolContext } from '../../../types/index.js'
 import { formatHandlerError } from '../../../utils/error-helpers.js'
-import { relaxedNumber } from '../schemas.js'
+import { coerceIntString, relaxedNumber } from '../schemas.js'
 import { TEAM_DB_ERROR_RESPONSE } from './helpers.js'
 import {
     TeamSemanticSearchSchemaMcp,
@@ -23,6 +23,14 @@ import {
     executeTeamRebuildVectorIndex,
     executeTeamSemanticSearch,
 } from './vector-helpers.js'
+
+const TeamVectorStatsStrictSchema = z
+    .object({
+        workspace_id: z.string().max(255).optional(),
+        project_number: z.preprocess(coerceIntString, z.number().int().positive()).optional(),
+        session_id: z.string().optional(),
+    })
+    .strict()
 
 export function getTeamVectorTools(context: ToolContext): ToolDefinition[] {
     const { teamDb, teamVectorManager } = context
@@ -58,8 +66,13 @@ export function getTeamVectorTools(context: ToolContext): ToolDefinition[] {
                 idempotentHint: true,
                 openWorldHint: false,
             },
-            handler: (_params: unknown) => {
+            handler: (params: unknown) => {
                 try {
+                    const parsed = TeamVectorStatsStrictSchema.parse(params ?? {})
+                    const hasScope =
+                        parsed.workspace_id !== undefined ||
+                        parsed.project_number !== undefined ||
+                        parsed.session_id !== undefined
                     if (!teamDb) {
                         return { success: false, available: false, error: TEAM_DB_ERROR_RESPONSE.error }
                     }
@@ -75,9 +88,12 @@ export function getTeamVectorTools(context: ToolContext): ToolDefinition[] {
                         itemCount: stats.itemCount,
                         modelName: stats.modelName,
                         dimensions: stats.dimensions,
+                        ...(hasScope
+                            ? { scopeNote: 'Database-wide team vector index statistics' }
+                            : {}),
                     }
                 } catch (err) {
-                    return formatHandlerError(err)
+                    return { ...formatHandlerError(err), available: false }
                 }
             },
         },
