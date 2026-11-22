@@ -9,7 +9,11 @@ import {
     getCallerIdentity,
 } from '../../handlers/tools/team/rbac.js'
 import { assertSafeDirectoryPath, assertSafeFilePath } from '../../utils/security-utils.js'
-import { resolveCliQueryScope } from '../../utils/workspace-resolver.js'
+import {
+    findCanonicalRegistryKey,
+    loadProjectRegistryFromConfig,
+    resolveCliQueryScope,
+} from '../../utils/workspace-resolver.js'
 import { CliExitError, getCliCommandDb } from './db-core.js'
 
 export { CliExitError, getCliCommandDb }
@@ -43,7 +47,7 @@ export function enforceCliTeamReadScope(
         }
         if (workspaceId !== '*') {
             throw new ValidationError(
-                "Missing project_number for --team read on shared/unregistered workspace. Pass --default-project (or --project) or register the workspace in projectRegistry."
+                'Missing project_number for --team read on shared/unregistered workspace. Pass --default-project or register the workspace in projectRegistry.'
             )
         }
         return
@@ -66,6 +70,23 @@ export function resolveCliReadScope(
         serverOptions
     )
     if (options.team === true) {
+        if (scope.projectNumber === undefined && scope.workspaceId !== '*') {
+            const registry = serverOptions.projectRegistry ?? loadProjectRegistryFromConfig()
+            const canonicalKey = findCanonicalRegistryKey(scope.workspaceId, registry)
+            const regProject =
+                canonicalKey !== undefined &&
+                registry !== undefined &&
+                Object.hasOwn(registry, canonicalKey)
+                    ? registry[canonicalKey]?.project_number
+                    : undefined
+            if (
+                typeof regProject === 'number' &&
+                Number.isSafeInteger(regProject) &&
+                regProject >= 1
+            ) {
+                scope.projectNumber = regProject
+            }
+        }
         enforceCliTeamReadScope(db, serverOptions, scope.workspaceId, scope.projectNumber)
     }
     return scope

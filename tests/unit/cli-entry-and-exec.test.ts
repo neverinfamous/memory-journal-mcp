@@ -38,6 +38,7 @@ import {
     projectDeleteAction,
 } from '../../src/cli/commands/project.js'
 import { DatabaseAdapter } from '../../src/database/sqlite-adapter/index.js'
+import { resolveCliReadScope } from '../../src/cli/commands/db-helper.js'
 
 describe('CLI Entry & Exec Commands', () => {
     let tmpDir: string
@@ -791,6 +792,47 @@ describe('CLI Entry & Exec Commands', () => {
             expect(() =>
                 projectDeleteAction('nonexistent', { config: cfgFile }, dummyCmd)
             ).toThrow('PROCESS_EXIT_1')
+        })
+
+        it('B-M1 & B-M2: resolveCliReadScope resolves registered project_number on --team reads and parseFrontmatter uses lazy matching before --- HR', async () => {
+            const memDb = new DatabaseAdapter(':memory:')
+            await memDb.initialize()
+            try {
+                const serverOpts = {
+                    projectRegistry: {
+                        'memory-journal-mcp': { path: process.cwd(), project_number: 5 },
+                    },
+                }
+                const resolved = resolveCliReadScope(memDb, serverOpts as never, {
+                    team: true,
+                    workspace: 'memory-journal-mcp',
+                })
+                expect(resolved).toEqual({ workspaceId: 'memory-journal-mcp', projectNumber: 5 })
+
+                expect(() =>
+                    resolveCliReadScope(memDb, serverOpts as never, {
+                        team: true,
+                        workspace: 'unregistered-ws',
+                    })
+                ).toThrow(/Missing project_number for --team read/i)
+            } finally {
+                memDb.close()
+            }
+
+            expect(parseFrontmatter('---\n---\nSection 1\n---\nSection 2')).toEqual({
+                frontmatter: {},
+                body: 'Section 1\n---\nSection 2',
+            })
+            expect(
+                parseFrontmatter('---\n---\nworkspace_id: spoofed\n---\nSection 2')
+            ).toEqual({
+                frontmatter: {},
+                body: 'workspace_id: spoofed\n---\nSection 2',
+            })
+            expect(parseFrontmatter('---\ntags: [a]\n---\nBody\n---\nMore')).toEqual({
+                frontmatter: { tags: ['a'] },
+                body: 'Body\n---\nMore',
+            })
         })
     })
 })

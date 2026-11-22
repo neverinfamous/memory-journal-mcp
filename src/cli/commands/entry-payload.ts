@@ -150,7 +150,7 @@ export async function parseContent(options: HealedEntryOptions): Promise<string>
     throw new CliExitError(1)
 }
 
-const FRONTMATTER_RE = /^---\r?\n(?:([\s\S]*?)\r?\n)?---(?:\r?\n|$)/
+const FRONTMATTER_RE = /^---\r?\n(?:([\s\S]*?)\r?\n)??---(?:\r?\n|$)/
 
 export function parseFrontmatter(rawContent: string): {
     frontmatter: Record<string, unknown>
