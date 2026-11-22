@@ -19,14 +19,21 @@ import {
 } from './commit-cli-schema.js';
 import {
   abortIfScratchPaths,
+  anyPathTargetsDir,
+  findAlreadyStagedDeletionMap,
   findAlreadyStagedDeletions,
   findScratchInDirOrGlobTargets,
+  findTrackedIndexPathMap,
   findTrackedIndexPaths,
+  findUnmergedPaths,
   getValidatedRepoRelPath,
+  hasGitDirEnvOverride,
   isAlreadyStagedDeletion,
-  isSameResolvedPath,
+  isGlobTarget,
   isScratchRepoPath,
+  normalizeAddPathForGit,
   normalizeRelGitPath,
+  resolveCanonicalPath,
   resolveGitDir,
   resolveRepoRootForGuard,
 } from './commit-git-paths.js';
@@ -55,10 +62,12 @@ function healStaleIndexLock(resolvedGitDir: string): void {
 function assertNoMergeRebaseConflict(resolvedGitDir: string): void {
   if (
     fs.statSync(path.join(resolvedGitDir, 'MERGE_HEAD'), { throwIfNoEntry: false }) !== undefined ||
+    fs.statSync(path.join(resolvedGitDir, 'CHERRY_PICK_HEAD'), { throwIfNoEntry: false }) !== undefined ||
+    fs.statSync(path.join(resolvedGitDir, 'REVERT_HEAD'), { throwIfNoEntry: false }) !== undefined ||
     fs.statSync(path.join(resolvedGitDir, 'rebase-merge'), { throwIfNoEntry: false }) !== undefined ||
     fs.statSync(path.join(resolvedGitDir, 'rebase-apply'), { throwIfNoEntry: false }) !== undefined
   ) {
-    fatalError('Repository is in a merge/rebase state. Resolve conflicts first.');
+    fatalError('Repository is in a merge/rebase/cherry-pick/revert conflict state. Resolve conflicts first.');
   }
 }
 
@@ -94,15 +103,30 @@ function stageExplicitFiles(
   if (pathsToStage.length < filesToAdd.length) {
     console.warn('⚠️ AUTONOMOUS HEALING: Skipping git add for already-staged deletion(s) (preserving staged removal for commit).');
   }
-  const scratchToStage: string[] = [];
+  const candidateScratch: Array<{ raw: string; rel: string; missingOnDisk: boolean }> = [];
   for (const p of pathsToStage) {
     const rel = resolveScratchCandidateRelPath(cwd, repoRoot, p);
-    if (rel !== null && isScratchRepoPath(rel)) scratchToStage.push(rel);
+    if (rel !== null && isScratchRepoPath(rel)) {
+      const missingOnDisk = fs.lstatSync(path.resolve(cwd, p), { throwIfNoEntry: false }) === undefined;
+      candidateScratch.push({ raw: p, rel, missingOnDisk });
+    }
   }
-  if (scratchToStage.length > 0) abortIfScratchPaths(scratchToStage);
+  if (candidateScratch.length > 0) {
+    const missingCandidates = candidateScratch.filter((c) => c.missingOnDisk).map((c) => c.raw);
+    const trackedDeletions =
+      missingCandidates.length > 0 ? findTrackedIndexPaths(cwd, missingCandidates, resolvedGitDir) : new Set<string>();
+    const scratchToStage = candidateScratch
+      .filter((c) => !c.missingOnDisk || !trackedDeletions.has(c.raw))
+      .map((c) => c.rel);
+    if (scratchToStage.length > 0) abortIfScratchPaths(scratchToStage);
+  }
   if (pathsToStage.length > 0) {
     const nestedScratch = findScratchInDirOrGlobTargets(cwd, pathsToStage);
     if (nestedScratch.length > 0) abortIfScratchPaths(nestedScratch);
+    const unmergedPaths = findUnmergedPaths(repoRoot);
+    if (unmergedPaths.length > 0) {
+      fatalError(`Unmerged conflict path(s) detected in index (${unmergedPaths.join(', ')}). Resolve conflicts before committing.`);
+    }
     try {
       execFileSync('git', ['add', '--', ...pathsToStage], { stdio: 'inherit', cwd, windowsHide: true });
     } catch (e) {
@@ -168,7 +192,7 @@ function ensureStagedFiles(
   let status: string;
   try {
     const statusArgs = ['status', '-z'];
-    if (filesToAdd && filesToAdd.length > 0 && !filesToAdd.some((f) => isSameResolvedPath(path.resolve(cwd, f), repoRoot))) {
+    if (filesToAdd && filesToAdd.length > 0 && !anyPathTargetsDir(cwd, filesToAdd, repoRoot)) {
       statusArgs.push('-uno', '--', ...filesToAdd);
     }
     status = execFileSync('git', statusArgs, { encoding: 'utf-8', cwd, windowsHide: true });
@@ -230,7 +254,7 @@ function executeCommit(
     const commitArgs = ['commit', '-q', '-F', msgFile];
     const absCwd = path.resolve(cwd ?? process.cwd());
     const isolationRoot = repoRoot ?? absCwd;
-    if (onlyFiles && onlyFiles.length > 0 && !onlyFiles.some((f) => isSameResolvedPath(path.resolve(absCwd, f), isolationRoot))) {
+    if (onlyFiles && onlyFiles.length > 0 && !anyPathTargetsDir(absCwd, onlyFiles, isolationRoot)) {
       commitArgs.push('--only', '--', ...onlyFiles);
     }
     execFileSync('git', commitArgs, { stdio: 'inherit', cwd, windowsHide: true });
@@ -250,49 +274,52 @@ let didRunCliMain = false;
 function resolveExplicitAddPaths(
   cwd: string,
   rawAdd: readonly string[],
-  resolvedGitDir?: string | null
+  repoRoot: string,
+  resolvedGitDir?: string | null,
+  allowSpaceSplit = true
 ): { paths: string[]; knownStagedDeletions: Set<string>; checkedNotStagedDeletions: Set<string> } {
-  const classified: Array<{ kind: 'direct' | 'spaced-missing'; raw: string; resolved: string }> = [];
-  const spacedMissing: string[] = [];
+  const classified: Array<{ isMissing: boolean; hasSpace: boolean; raw: string; resolved: string }> = [];
+  const missingRaw: string[] = [];
 
   for (const p of rawAdd) {
-    if (p.trim().length === 0) {
-      fatalError('File path for --add cannot be empty.');
-    }
-    const resolved = path.resolve(cwd, p);
-    if (p.includes(' ') && fs.statSync(resolved, { throwIfNoEntry: false }) === undefined) {
-      classified.push({ kind: 'spaced-missing', raw: p, resolved });
-      spacedMissing.push(p);
-    } else {
-      classified.push({ kind: 'direct', raw: p, resolved });
-    }
+    if (p.trim().length === 0) fatalError('File path for --add cannot be empty.');
+    const resolved = normalizeAddPathForGit(cwd, repoRoot, p);
+    const isMissing = !isGlobTarget(p) && fs.lstatSync(resolved, { throwIfNoEntry: false }) === undefined;
+    classified.push({ isMissing, hasSpace: allowSpaceSplit && p.includes(' '), raw: p, resolved });
+    if (isMissing) missingRaw.push(p);
   }
 
-  const spacedStagedDeletions =
-    spacedMissing.length > 0 ? findAlreadyStagedDeletions(cwd, spacedMissing, resolvedGitDir) : new Set<string>();
-  const remainingSpaced = spacedMissing.filter((p) => !spacedStagedDeletions.has(p));
-  const trackedUnstagedSpaced =
-    remainingSpaced.length > 0 ? findTrackedIndexPaths(cwd, remainingSpaced, resolvedGitDir) : new Set<string>();
+  const stagedDelMap =
+    missingRaw.length > 0 ? findAlreadyStagedDeletionMap(cwd, missingRaw, resolvedGitDir) : new Map<string, string>();
+  const remainingMissing = missingRaw.filter((p) => !stagedDelMap.has(p));
+  const needTrackedQuery = process.platform === 'win32' ? remainingMissing : remainingMissing.filter((p) => p.includes(' '));
+  const trackedIndexMap =
+    needTrackedQuery.length > 0 ? findTrackedIndexPathMap(cwd, needTrackedQuery, resolvedGitDir) : new Map<string, string>();
+
   const paths: string[] = [];
   const knownStagedDeletions = new Set<string>();
   const checkedNotStagedDeletions = new Set<string>();
-
+  const splitTokens: string[] = [];
   for (const item of classified) {
-    if (item.kind === 'spaced-missing' && !spacedStagedDeletions.has(item.raw) && !trackedUnstagedSpaced.has(item.raw)) {
+    const stagedCanonical = stagedDelMap.get(item.raw);
+    const trackedCanonical = trackedIndexMap.get(item.raw);
+    if (item.isMissing && item.hasSpace && stagedCanonical === undefined && trackedCanonical === undefined) {
       console.warn(`⚠️ AUTONOMOUS HEALING: Path '${item.raw}' not found and contains spaces. Splitting by space to recover hallucinated --add list.`);
-      for (const sp of item.raw.split(/\s+/).filter(Boolean)) {
-        paths.push(path.resolve(cwd, sp));
-      }
+      for (const sp of item.raw.split(/\s+/).filter(Boolean)) splitTokens.push(sp);
       continue;
     }
-    if (item.kind === 'spaced-missing') {
-      if (spacedStagedDeletions.has(item.raw)) {
-        knownStagedDeletions.add(item.resolved);
-      } else {
-        checkedNotStagedDeletions.add(item.resolved);
-      }
+    const finalPath = stagedCanonical ?? trackedCanonical ?? item.resolved;
+    if (item.isMissing) {
+      if (stagedCanonical !== undefined) knownStagedDeletions.add(finalPath);
+      else checkedNotStagedDeletions.add(finalPath);
     }
-    paths.push(item.resolved);
+    paths.push(finalPath);
+  }
+  if (splitTokens.length > 0) {
+    const splitRes = resolveExplicitAddPaths(cwd, splitTokens, repoRoot, resolvedGitDir, false);
+    paths.push(...splitRes.paths);
+    for (const p of splitRes.knownStagedDeletions) knownStagedDeletions.add(p);
+    for (const p of splitRes.checkedNotStagedDeletions) checkedNotStagedDeletions.add(p);
   }
   return { paths, knownStagedDeletions, checkedNotStagedDeletions };
 }
@@ -302,14 +329,13 @@ function resolveHistoryContent(args: ReturnType<typeof parseArguments>, cwd: str
   const historyFile = args['history-file'];
   if (historyFile !== undefined && historyFile.length > 0) {
     const candidateCwdPath = path.resolve(cwd, historyFile);
-    const resolvedPath =
-      fs.statSync(candidateCwdPath, { throwIfNoEntry: false }) !== undefined
-        ? candidateCwdPath
-        : path.resolve(historyFile);
-    const resolvedExists =
-      resolvedPath === candidateCwdPath || fs.statSync(resolvedPath, { throwIfNoEntry: false }) !== undefined;
-    if (!resolvedExists) {
+    const candidateExists = fs.statSync(candidateCwdPath, { throwIfNoEntry: false }) !== undefined;
+    const fallbackPath = path.resolve(historyFile);
+    const fallbackExists = !candidateExists && fallbackPath !== candidateCwdPath && fs.statSync(fallbackPath, { throwIfNoEntry: false }) !== undefined;
+    const resolvedPath = candidateExists ? candidateCwdPath : fallbackPath;
+    if (!candidateExists && !fallbackExists) {
       console.warn(`⚠️ AUTONOMOUS HEALING: History file '${historyFile}' not found. Defaulting to --no-history.`);
+      historyContent = '';
       args['no-history'] = true;
     } else {
       try {
@@ -344,13 +370,21 @@ export async function main(rawArgv?: readonly string[]): Promise<void> {
       cwd = targetCwd;
     }
 
+    const hasGitEnvOverride = hasGitDirEnvOverride();
+    if (!hasGitEnvOverride) {
+      cwd = resolveCanonicalPath(cwd) ?? cwd;
+    }
+
     const resolvedGitDir = resolveGitDir(cwd);
     const repoRoot = resolveRepoRootForGuard(cwd, resolvedGitDir);
+    if (hasGitEnvOverride) {
+      cwd = normalizeAddPathForGit(cwd, repoRoot, '.');
+    }
 
     let knownStagedDeletions: Set<string> | undefined;
     let checkedNotStagedDeletions: Set<string> | undefined;
     if (args.add) {
-      const resolvedAdd = resolveExplicitAddPaths(cwd, args.add, resolvedGitDir);
+      const resolvedAdd = resolveExplicitAddPaths(cwd, args.add, repoRoot, resolvedGitDir);
       args.add = resolvedAdd.paths;
       knownStagedDeletions = resolvedAdd.knownStagedDeletions;
       checkedNotStagedDeletions = resolvedAdd.checkedNotStagedDeletions;
