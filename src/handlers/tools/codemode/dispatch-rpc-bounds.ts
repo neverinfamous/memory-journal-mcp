@@ -324,8 +324,7 @@ export function resolveEffectiveRpcScope(
         typeof effectiveProjectId === 'number' &&
         typeof effectiveWorkspaceId === 'string' &&
         effectiveWorkspaceId !== '*' &&
-        ((!outerCanNarrow && projectId === undefined && rpcOverrides?.projectNumber !== undefined) ||
-            (outerCanNarrow && hasConcreteOverrideWs && typeof projectId === 'number'))
+        (rpcOverrides?.projectNumber !== undefined || hasConcreteOverrideWs)
     ) {
         try {
             pairStoredScope(effectiveWorkspaceId, effectiveProjectId, registry)

@@ -237,29 +237,51 @@ const MEMORY_URI_ROOT_PREFIXES = new Set([
     'briefing', 'agent-context', 'agent-id', 'graph', 'actions', 'github', 'milestones', 'kanban',
     'projects', 'commits', 'staleness', 'team', 'insights', 'metrics', 'help', 'recent',
     'significant', 'tags', 'statistics', 'rules', 'workflows', 'audit', 'health', 'search', 'entries',
+    'tools', 'issues', 'prs', 'skills', 'instructions', 'journal', 'status', 'server',
 ])
 
-function canonicalizeMemorySchemeUri(raw: string): string | undefined {
+let dynamicMemoryUriRootsResolver: (() => ReadonlySet<string>) | undefined
+const resourceFallbackToolNames = new Set<string>(['read_resource'])
+
+/** Register live resource root prefixes and fallback resource tool names for scheme-less audit URI resolution. */
+export function registerDynamicMemoryUriRoots(
+    resolver: () => ReadonlySet<string>,
+    toolNames?: Iterable<string>
+): void {
+    dynamicMemoryUriRootsResolver = resolver
+    if (toolNames !== undefined) {
+        for (const name of toolNames) resourceFallbackToolNames.add(name)
+    }
+}
+
+function canonicalizeMemorySchemeUri(raw: string, allowBareBriefing = false): string | undefined {
     const trimmed = raw.trim()
+    if (trimmed === '') return undefined
     if (/^memory:\/\//i.test(trimmed)) {
         return `memory://${trimmed.slice('memory://'.length)}`
     }
     if (!trimmed.includes('://')) {
         const root = trimmed.split(/[/?#]/, 1)[0]?.toLowerCase() ?? ''
-        if (root !== '' && MEMORY_URI_ROOT_PREFIXES.has(root)) {
+        const isKnownRoot =
+            root !== '' &&
+            (MEMORY_URI_ROOT_PREFIXES.has(root) || dynamicMemoryUriRootsResolver?.().has(root) === true)
+        if (isKnownRoot) {
             return `memory://${trimmed}`
+        }
+        if (allowBareBriefing && root !== '') {
+            return `memory://briefing/${trimmed}`
         }
     }
     return undefined
 }
 
-function findMemoryUriInArgs(args: unknown): string | undefined {
+function findMemoryUriInArgs(args: unknown, allowBareBriefing = false): string | undefined {
     if (typeof args !== 'object' || args === null || Array.isArray(args)) return undefined
     const rec = args as Record<string, unknown>
     for (const key of AUDIT_URI_KEYS) {
         const val = rec[key]
         if (typeof val !== 'string') continue
-        const normalized = canonicalizeMemorySchemeUri(val)
+        const normalized = canonicalizeMemorySchemeUri(val, allowBareBriefing)
         if (normalized !== undefined) return normalized
     }
     return undefined
@@ -273,13 +295,14 @@ export function resolveToolCallAuditScope(
     reqCtx: ReturnType<typeof getRequestContext>,
     runtime?: object | null
 ): AuditScopeMetadata {
+    const allowBareBriefing = resourceFallbackToolNames.has(toolName)
     const uriTarget =
         sensitiveTarget !== undefined && /^memory:\/\//i.test(sensitiveTarget)
             ? `memory://${sensitiveTarget.slice('memory://'.length)}`
             : /^memory:\/\//i.test(toolName)
               ? `memory://${toolName.slice('memory://'.length)}`
               : canTargetResource
-                ? findMemoryUriInArgs(args)
+                ? findMemoryUriInArgs(args, allowBareBriefing)
                 : undefined
     if (uriTarget === undefined) {
         return extractAuditScopeFromArgs(args, reqCtx, runtime)

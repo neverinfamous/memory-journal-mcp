@@ -9,7 +9,11 @@ import {
 import { sanitizeSearchQuery } from '../../../../utils/security-utils.js'
 import { decodeCursor, type SortBy } from './cursor.js'
 import { sanitizeFtsQuery } from './fts-sanitizer.js'
-import { effectiveWorkspace } from '../../../workspace-scope.js'
+import {
+    effectiveWorkspace,
+    normalizeDateRangeStart,
+    normalizeDateRangeEnd,
+} from '../../../workspace-scope.js'
 import { chunkedInPredicate } from '../../row-helpers.js'
 import { expandTagFilterValues } from '../../tags.js'
 import {
@@ -184,16 +188,12 @@ function appendFilterConditions(
         params.push(options.entryType)
     }
     if (options?.startDate !== undefined && options.startDate.length > 0) {
-        let start = options.startDate
-        if (!start.includes('T')) start += 'T00:00:00.000Z'
         conditions.push(`e.timestamp >= ?`)
-        params.push(start)
+        params.push(normalizeDateRangeStart(options.startDate))
     }
     if (options?.endDate !== undefined && options.endDate.length > 0) {
-        let end = options.endDate
-        if (!end.includes('T')) end += 'T23:59:59.999Z'
         conditions.push(`e.timestamp <= ?`)
-        params.push(end)
+        params.push(normalizeDateRangeEnd(options.endDate))
     }
 }
 

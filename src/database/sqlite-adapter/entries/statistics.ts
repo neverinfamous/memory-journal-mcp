@@ -1,5 +1,9 @@
 import type { EntriesSharedContext } from './shared.js'
-import { effectiveWorkspace } from '../../workspace-scope.js'
+import {
+    effectiveWorkspace,
+    normalizeDateRangeStart,
+    normalizeDateRangeEnd,
+} from '../../workspace-scope.js'
 import { validateDateFormatPattern } from '../../../utils/security-utils.js'
 import { logger } from '../../../utils/logger.js'
 
@@ -33,16 +37,12 @@ function buildDateFilter(
     }
 
     if (startDate) {
-        let start = startDate
-        if (!start.includes('T')) start += 'T00:00:00.000Z'
         dateFilter += ' AND timestamp >= ?'
-        dateParams.push(start)
+        dateParams.push(normalizeDateRangeStart(startDate))
     }
     if (endDate) {
-        let end = endDate
-        if (!end.includes('T')) end += 'T23:59:59.999Z'
         dateFilter += ' AND timestamp <= ?'
-        dateParams.push(end)
+        dateParams.push(normalizeDateRangeEnd(endDate))
     }
     return { dateFilter, dateParams }
 }

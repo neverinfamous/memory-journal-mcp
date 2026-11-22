@@ -40,6 +40,13 @@ export const TeamExportEntriesSchemaMcp = z.object({
         ),
 })
 
+/** team_backup — relaxed */
+export const TeamBackupSchemaMcp = z.object({
+    name: z.string().optional().describe('Optional custom backup filename stem'),
+    project_number: relaxedNumber().optional().describe('Ignored (database-wide backup).'),
+    workspace_id: z.string().optional().describe('Ignored (database-wide backup).'),
+})
+
 /** team_backup — strict */
 export const TeamBackupSchema = z
     .object({
@@ -67,6 +74,7 @@ export const TeamBackupOutputSchema = z
         filename: z.string().optional(),
         path: z.string().optional(),
         sizeBytes: z.number().optional(),
+        scopeNote: z.string().optional(),
         error: z.string().optional(),
     })
     .extend(ErrorFieldsMixin.shape)

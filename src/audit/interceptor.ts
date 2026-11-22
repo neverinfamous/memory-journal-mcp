@@ -226,7 +226,7 @@ async function executeAuditedTool<T>(
     const isReadScope = scope === 'read'
     const canTargetSensitiveResourceOrPrompt =
         isReadScope &&
-        (toolName.startsWith('memory://') ||
+        (/^memory:\/\//i.test(toolName) ||
             toolName === 'read_resource' ||
             toolName === 'get_prompt' ||
             getToolGroup(toolName) === undefined)

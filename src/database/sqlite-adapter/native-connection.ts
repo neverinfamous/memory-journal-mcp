@@ -216,6 +216,7 @@ export class NativeConnectionManager implements IDatabaseConnection {
     private scheduleFtsRebuild(rebuildReason: string): void {
         const deferMs =
             process.env['NODE_ENV'] === 'test' ? FTS_REBUILD_DEFER_TEST_MS : FTS_REBUILD_DEFER_MS
+        if (this.ftsRebuildTimer !== null) clearTimeout(this.ftsRebuildTimer)
         this.ftsRebuildTimer = setTimeout(() => {
             this.ftsRebuildTimer = null
             if (this.db === null) return
@@ -272,7 +273,7 @@ export class NativeConnectionManager implements IDatabaseConnection {
         }
 
         // Use pre-compiled regex to detect true mutations that should return an empty set
-        const isMutation = IS_MUTATION_RE.test(sql)
+        const isMutation = IS_MUTATION_RE.test(strippedSql)
 
         const stmt = db.prepare(sql)
 

@@ -133,9 +133,9 @@ export function convertLogseq(
             processedLines.push(line)
             continue
         }
-        const fenceMatch = /^(`{3,}|~{3,})/.exec(trimmedLine)
-        if (fenceMatch?.[1] !== undefined) {
-            const marker = fenceMatch[1]
+        const fenceMatch = /^(?:(`{3,})[^`]*$|(~{3,}))/.exec(trimmedLine)
+        const marker = fenceMatch?.[1] ?? fenceMatch?.[2]
+        if (marker !== undefined) {
             openFence = { marker: marker[0] ?? '`', minLen: marker.length }
             processedLines.push(line)
             continue

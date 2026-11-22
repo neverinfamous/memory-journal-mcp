@@ -1,6 +1,26 @@
 import Database from 'better-sqlite3'
 import { resolve } from 'node:path'
 
+const ORPHAN_ENTRIES_SQL = `
+    SELECT
+        id,
+        entry_type,
+        workspace_id,
+        project_number,
+        substr(content, 1, 50) as content_preview,
+        timestamp,
+        is_personal
+    FROM memory_journal
+    WHERE deleted_at IS NULL
+      AND (
+           project_number IS NULL
+           OR project_number <= 0
+           OR workspace_id IS NULL
+           OR TRIM(workspace_id) = ''
+           OR workspace_id = 'default'
+      )
+`
+
 function checkOrphans() {
     const defaultDbPath = resolve(process.cwd(), 'data', 'memory_journal.db')
     const dbPath = process.argv[2] ?? process.env['DB_PATH'] ?? defaultDbPath
@@ -33,26 +53,7 @@ function checkOrphans() {
             return
         }
 
-        const rows = db
-            .prepare(
-                `
-            SELECT 
-                id, 
-                entry_type, 
-                workspace_id,
-                project_number,
-                substr(content, 1, 50) as content_preview, 
-                timestamp, 
-                is_personal 
-            FROM memory_journal 
-            WHERE project_number IS NULL
-               OR project_number <= 0
-               OR workspace_id IS NULL
-               OR TRIM(workspace_id) = ''
-               OR workspace_id = 'default'
-        `
-            )
-            .all()
+        const rows = db.prepare(ORPHAN_ENTRIES_SQL).all()
 
         if (rows.length === 0) {
             console.log('\n✅ No orphaned entries found (project_number is strictly enforced).')

@@ -10,6 +10,7 @@ import { resolveProjectContext } from '../../../utils/workspace-resolver.js'
 import { activeProjectRegistry, pairStoredScope } from '../../../utils/write-scope.js'
 import { resolveWriteWorkspaceId } from '../write-workspace.js'
 import { projectOwnershipMismatch } from './restore-entry-tool.js'
+import { exactRegistryKey } from '../../../utils/workspace-registry-match.js'
 import type { UpdateEntrySchema } from './schemas.js'
 
 export type UpdateEntryParsed = z.infer<typeof UpdateEntrySchema>
@@ -80,6 +81,18 @@ function validateUpdateProjectScope(
         : {}
 }
 
+function sameMoveWorkspace(
+    destWs: string,
+    existingWs: string | undefined,
+    registry: ReturnType<typeof activeProjectRegistry>
+): boolean {
+    if (existingWs === undefined) return false
+    const isReg =
+        exactRegistryKey(destWs, registry) !== undefined ||
+        exactRegistryKey(existingWs, registry) !== undefined
+    return isReg ? destWs.toLowerCase() === existingWs.toLowerCase() : destWs === existingWs
+}
+
 function resolveMoveUpdateScope(
     input: UpdateEntryParsed,
     targetWorkspaceId: string,
@@ -118,24 +131,29 @@ function resolveMoveUpdateScope(
         }
     }
 
-    const baseTarget = resolveProjectContext({ workspace_id: targetWorkspaceId }, config)
-    let targetResolved = baseTarget
-    if (typeof input.project_number === 'number' && !isWildcardOrDefaultSource) {
-        const matchesTarget =
-            baseTarget.projectNumber === undefined || baseTarget.projectNumber === input.project_number
-        const matchesSourceEntry = scoped?.projectNumber === input.project_number
-        if (!matchesTarget && !matchesSourceEntry) {
-            targetResolved = resolveProjectContext(
-                { workspace_id: targetWorkspaceId, project_number: input.project_number },
-                config
-            )
-        }
-    } else if (typeof input.project_number === 'number' && baseTarget.projectNumber === undefined) {
-        targetResolved = resolveProjectContext(
-            { workspace_id: targetWorkspaceId, project_number: input.project_number },
-            config
-        )
+    const registry = activeProjectRegistry(config?.projectRegistry)
+    if (
+        !isWildcardOrDefaultSource &&
+        typeof input.project_number === 'number' &&
+        sameMoveWorkspace(targetWorkspaceId, scoped?.workspaceId, registry) &&
+        scoped?.projectNumber !== null &&
+        scoped?.projectNumber !== undefined &&
+        scoped.projectNumber > 0 &&
+        scoped.projectNumber !== input.project_number &&
+        (scoped.workspaceId ?? '').toLowerCase() !== 'default'
+    ) {
+        return { errorResponse: notFoundErrorResponse(input.entry_id) }
     }
+
+    const targetResolved = resolveProjectContext(
+        {
+            workspace_id: targetWorkspaceId,
+            ...(typeof input.project_number === 'number'
+                ? { project_number: input.project_number }
+                : {}),
+        },
+        config
+    )
 
     let wsId: string
     if (trimmedInputWs === '*') {

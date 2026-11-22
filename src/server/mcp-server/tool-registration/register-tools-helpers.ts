@@ -177,7 +177,9 @@ export function resolveActiveBriefingConfig(
         canonicalConfigWs === undefined ||
         canonicalConfigWs.toLowerCase() === canonicalWs?.toLowerCase()
     const registryProject =
-        canonicalWs !== undefined ? resolvedRegistry?.[canonicalWs]?.project_number : undefined
+        canonicalWs !== undefined && resolvedRegistry !== undefined && Object.hasOwn(resolvedRegistry, canonicalWs)
+            ? resolvedRegistry[canonicalWs]?.project_number
+            : undefined
     const applicableDefaultProj = briefingDefaultApplies
         ? briefingConfig.defaultProjectNumber
         : undefined

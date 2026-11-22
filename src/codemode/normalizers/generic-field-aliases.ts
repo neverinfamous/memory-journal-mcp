@@ -106,17 +106,41 @@ export function extractMetadataContextAliases(
     const metadata = isRecord(obj['metadata']) ? obj['metadata'] : undefined
     const context = isRecord(obj['context']) ? obj['context'] : undefined
     if (metadata === undefined && context === undefined) return
-    obj['project_number'] ??=
-        firstDefined(metadata, ['project_number', 'projectNumber']) ??
-        firstDefined(context, ['project_number', 'projectNumber'])
-    obj['session_id'] ??=
-        firstDefined(metadata, ['session_id', 'sessionId']) ??
-        firstDefined(context, ['session_id', 'sessionId'])
-    obj['type'] ??=
-        firstDefined(metadata, ['type', 'entry_type', 'category']) ??
-        firstDefined(context, ['type', 'entry_type', 'category'])
+    const hasTopProjectAlias =
+        obj['project'] !== undefined || obj['project_name'] !== undefined || obj['projectName'] !== undefined
+    if (
+        obj['project_number'] === undefined &&
+        obj['projectNumber'] === undefined &&
+        obj['project_id'] === undefined &&
+        obj['projectId'] === undefined &&
+        !hasTopProjectAlias
+    ) {
+        obj['project_number'] =
+            firstDefined(metadata, ['project_number', 'projectNumber']) ??
+            firstDefined(context, ['project_number', 'projectNumber'])
+    }
+    if (obj['session_id'] === undefined && obj['sessionId'] === undefined) {
+        obj['session_id'] =
+            firstDefined(metadata, ['session_id', 'sessionId']) ??
+            firstDefined(context, ['session_id', 'sessionId'])
+    }
+    if (
+        obj['type'] === undefined &&
+        obj['entry_type'] === undefined &&
+        obj['entryType'] === undefined &&
+        obj['category'] === undefined
+    ) {
+        obj['type'] =
+            firstDefined(metadata, ['type', 'entry_type', 'category']) ??
+            firstDefined(context, ['type', 'entry_type', 'category'])
+    }
     obj['tags'] ??= firstDefined(metadata, ['tags']) ?? firstDefined(context, ['tags'])
-    if (allowWorkspaceHoist && obj['workspace_id'] === undefined) {
+    const hasTopWorkspaceAlias =
+        obj['workspace_id'] !== undefined ||
+        obj['workspaceId'] !== undefined ||
+        obj['workspace'] !== undefined ||
+        hasTopProjectAlias
+    if (allowWorkspaceHoist && !hasTopWorkspaceAlias) {
         const hoistedWs =
             firstDefined(metadata, ['workspace_id', 'workspaceId']) ??
             firstDefined(context, ['workspace_id', 'workspaceId'])

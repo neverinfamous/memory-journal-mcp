@@ -265,6 +265,7 @@ export function releaseRestoreLock(lockDir: string, lockFile: string, expectedTo
         tokenToMatch === undefined ||
         diskInfo.nonce !== tokenToMatch
     ) {
+        if (expectedToken !== undefined) clearActiveInProcessRestoreLock(lockDir, expectedToken)
         return
     }
     try {

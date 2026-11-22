@@ -164,7 +164,15 @@ async function rotateIssueLogIfNeeded(logFile: string): Promise<boolean> {
             if ((await isUnsafeIssueFile(oldArchive)) || (await isUnsafeIssueFile(newArchive))) {
                 return false
             }
-            await fsPromises.rename(oldArchive, newArchive).catch(() => undefined)
+            try {
+                await fsPromises.rename(oldArchive, newArchive)
+            } catch (renameErr: unknown) {
+                const code =
+                    renameErr instanceof Error && 'code' in renameErr
+                        ? (renameErr as NodeJS.ErrnoException).code
+                        : undefined
+                if (code !== 'ENOENT') return false
+            }
         }
         const firstArchive = `${logFile}.1`
         if (await isUnsafeIssueFile(firstArchive)) return false

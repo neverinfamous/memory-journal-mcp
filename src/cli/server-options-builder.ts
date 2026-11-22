@@ -4,6 +4,7 @@ import type { AuditConfig } from '../audit/index.js'
 import type { CliCommandLike, ConfigResolver } from '../utils/config-resolver.js'
 import { defaultDbPath } from './default-paths.js'
 import { activeProjectRegistry, pairStoredScope } from '../utils/write-scope.js'
+import { isForbiddenProjectKey } from '../utils/project-registry-guards.js'
 import { logger } from '../utils/logger.js'
 import { parsePositiveProjectNumber } from '../utils/safe-positive-int.js'
 import { parseByteSizeValue } from '../codemode/shared-context-parsers.js'
@@ -17,6 +18,7 @@ import {
     parseProjectRegistryOption,
     resolveUnconflictedDefaultProject,
     resolveUnconflictedDefaultWorkspace,
+    resolveTransportOption,
 } from './server-options-parsers.js'
 
 import {
@@ -27,7 +29,6 @@ import {
 
 export { assertAdditionalTeamDbIsNotSymlink }
 
-const transportSchema = z.enum(['stdio', 'http'])
 const teamDefaultRoleSchema = z.enum(['admin', 'member', 'viewer', 'denied'])
 type TeamDefaultRole = z.infer<typeof teamDefaultRoleSchema>
 
@@ -68,9 +69,9 @@ function resolveDefaultWorkspaceIdOption(
         }
         const defWs = resolver.resolve<string>('defaultWorkspaceId', 'DEFAULT_WORKSPACE_ID')
         const trimmedDefWs = defWs !== undefined ? defWs.trim() : undefined
-        if (trimmedDefWs === '*') {
+        if (trimmedDefWs === '*' || (trimmedDefWs !== undefined && trimmedDefWs !== '' && isForbiddenProjectKey(trimmedDefWs))) {
             throw new Error(
-                "Invalid defaultWorkspaceId '*': default workspace cannot be a wildcard."
+                `Invalid defaultWorkspaceId '${trimmedDefWs}': cannot be '*' or a reserved key.`
             )
         }
         return trimmedDefWs !== undefined && trimmedDefWs !== '' ? trimmedDefWs : undefined
@@ -221,19 +222,6 @@ function buildAuditConfigOption(resolver: ConfigResolver, catchConfig: CatchConf
         auditReads: catchConfig(() => resolver.resolveBool('auditReads', 'AUDIT_READS') ?? false, false),
         maxSizeBytes: catchConfig(() => resolver.resolveInt('auditLogMaxSize', 'AUDIT_LOG_MAX_SIZE', 1024) ?? 10485760, 10485760),
     }
-}
-
-function resolveTransportOption(resolver: ConfigResolver, catchConfig: CatchConfig): 'stdio' | 'http' {
-    return catchConfig((): 'stdio' | 'http' => {
-        if (resolver.resolveBool('http')) return 'http'
-        if (resolver.resolveBool('stdio')) return 'stdio'
-        const raw = resolver.resolve<string>('transport', 'TRANSPORT') ?? 'stdio'
-        const parsed = transportSchema.safeParse(raw)
-        if (!parsed.success) {
-            throw new Error(`Invalid transport '${raw}'. Use 'stdio' or 'http'.`)
-        }
-        return parsed.data
-    }, 'stdio')
 }
 
 function resolveInstructionLevelOption(

@@ -288,8 +288,9 @@ export function getBackupTools(context: ToolContext): ToolDefinition[] {
                 idempotentHint: true,
                 openWorldHint: false,
             },
-            handler: (_params: unknown) => {
+            handler: (params: unknown) => {
                 try {
+                    ListBackupsSchemaMcp.parse(params ?? {})
                     const backups = db.listBackups()
                     const maskedBackups = backups.map((b) => ({
                         ...b,

@@ -10,7 +10,12 @@ import { formatHandlerError } from '../../../utils/error-helpers.js'
 import { sendProgress } from '../../../utils/progress-utils.js'
 import { TEAM_DB_ERROR_RESPONSE } from './helpers.js'
 import { relaxedNumber, StrictProjectNumberSchema } from '../schemas.js'
-import { TeamBackupSchema, TeamBackupOutputSchema, TeamBackupsListOutputSchema } from './schemas.js'
+import {
+    TeamBackupSchema,
+    TeamBackupSchemaMcp,
+    TeamBackupOutputSchema,
+    TeamBackupsListOutputSchema,
+} from './schemas.js'
 import * as path from 'node:path'
 
 // ============================================================================
@@ -33,7 +38,7 @@ export function getTeamBackupTools(context: ToolContext): ToolDefinition[] {
             title: 'Backup Team Database',
             description: 'Create a timestamped backup of the team database. Requires TEAM_DB_PATH.',
             group: 'team',
-            inputSchema: TeamBackupSchema,
+            inputSchema: TeamBackupSchemaMcp,
             outputSchema: TeamBackupOutputSchema,
             annotations: {
                 readOnlyHint: false,
@@ -50,7 +55,7 @@ export function getTeamBackupTools(context: ToolContext): ToolDefinition[] {
                         return { ...TEAM_DB_ERROR_RESPONSE }
                     }
 
-                    const input = TeamBackupSchema.parse(params)
+                    const input = TeamBackupSchema.parse(params ?? {})
                     const progress = context.progress
 
                     await sendProgress(progress, 0, 2, 'Creating team backup...')
@@ -78,6 +83,9 @@ export function getTeamBackupTools(context: ToolContext): ToolDefinition[] {
                         filename: result.filename,
                         path: path.basename(result.path),
                         sizeBytes: result.sizeBytes,
+                        ...(input.project_number !== undefined || input.workspace_id !== undefined
+                            ? { scopeNote: 'Database-wide team backup' }
+                            : {}),
                     }
                 } catch (err) {
                     return formatHandlerError(err)

@@ -159,6 +159,8 @@ const TeamGetMemberSchemaMcp = z.preprocess(
         .loose()
 )
 
+const TeamListMembersSchema = z.object({}).strict()
+
 // ============================================================================
 // Tool Definitions
 // ============================================================================
@@ -323,7 +325,7 @@ export function getTeamMemberTools(context: ToolContext): ToolDefinition[] {
             title: 'List Team Members',
             description: 'List all registered team members and their roles. Requires TEAM_DB_PATH.',
             group: 'team',
-            inputSchema: z.object({}).strict(),
+            inputSchema: TeamListMembersSchema,
             outputSchema: z.object({
                 success: z.boolean(),
                 members: z.array(TeamMemberOutputSchema).optional(),
@@ -336,10 +338,11 @@ export function getTeamMemberTools(context: ToolContext): ToolDefinition[] {
                 idempotentHint: true,
                 openWorldHint: false,
             },
-            handler: (_params: unknown) => {
+            handler: (params: unknown) => {
                 try {
                     if (!teamDb) return { ...TEAM_DB_ERROR_RESPONSE }
                     if (teamDb.listTeamMembers === undefined) return { success: false, error: 'Unsupported' }
+                    TeamListMembersSchema.parse(params ?? {})
 
                     const members = teamDb.listTeamMembers().map(sanitizeMemberRecord)
                     return { success: true, members, count: members.length }

@@ -392,3 +392,50 @@ export function enforceNestedResultLimit(rawResult: unknown, maxResultSize: numb
     }
     return wrapper.result
 }
+
+/** True when a nested entry shortcut payload targets an existing entry for update. */
+export function hasExplicitNestedEntryId(payload: unknown): boolean {
+    if (!isNestedPlainRecord(payload)) return false
+    const idVal = payload['entry_id'] ?? payload['entryId'] ?? payload['id']
+    return idVal !== undefined && idVal !== null
+}
+
+const NESTED_OPT_CONFLICT_GROUPS: readonly (readonly string[])[] = [
+    ['workspace_id', 'workspaceId'],
+    ['project_number', 'projectNumber'],
+    ['readonly', 'read_only', 'readOnly'],
+    ['dry_run', 'dryRun'],
+    ['use_test_db', 'useTestDb'],
+]
+
+function firstDefinedGroupVal(rec: Record<string, unknown>, keys: readonly string[]): unknown {
+    for (const k of keys) {
+        if (rec[k] !== undefined) return rec[k]
+    }
+    return undefined
+}
+
+/** Merge two-arg nested `executeCode(payload, options)` objects while failing closed on conflicting scope or mode flags. */
+export function mergeNestedArgAndOptions(
+    argRec: Record<string, unknown>,
+    optsRec: Record<string, unknown>
+): { merged: Record<string, unknown> } | { error: string } {
+    for (const group of NESTED_OPT_CONFLICT_GROUPS) {
+        const left = firstDefinedGroupVal(argRec, group)
+        const right = firstDefinedGroupVal(optsRec, group)
+        if (left === undefined || right === undefined) continue
+        const differs =
+            typeof left === 'string' && typeof right === 'string'
+                ? left.trim().toLowerCase() !== right.trim().toLowerCase()
+                : left !== right
+        if (differs) {
+            return { error: `Conflicting nested executeCode '${group[0]}' between argument and options.` }
+        }
+    }
+    const merged = Object.assign(Object.create(null) as Record<string, unknown>, argRec)
+    for (const k of Object.keys(optsRec)) {
+        if (k === '__proto__' || k === 'constructor' || k === 'prototype') continue
+        if (merged[k] === undefined && optsRec[k] !== undefined) merged[k] = optsRec[k]
+    }
+    return { merged }
+}

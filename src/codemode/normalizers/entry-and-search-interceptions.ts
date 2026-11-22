@@ -129,7 +129,10 @@ function normalizeTwoArgUpdateEntry(
     args: unknown[]
 ): { args: unknown[] } | { error: Record<string, unknown> } {
     if (
-        (methodName === 'update_entry' || methodName === 'updateEntry') &&
+        (methodName === 'update_entry' ||
+            methodName === 'updateEntry' ||
+            methodName === 'team_update_entry' ||
+            methodName === 'teamUpdateEntry') &&
         args.length === 2 &&
         (typeof args[0] === 'number' || typeof args[0] === 'string') &&
         isRecord(args[1])

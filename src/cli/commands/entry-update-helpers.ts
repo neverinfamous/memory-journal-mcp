@@ -199,10 +199,16 @@ export function assertCliUpdateProjectOwnership(
     config: ToolHandlerConfig,
     isTeam = false
 ): void {
-    if (trimmedTargetWs !== undefined) return
+    const registry = activeProjectRegistry(config.projectRegistry)
+    if (
+        trimmedTargetWs !== undefined &&
+        (existingEntry?.workspaceId === undefined ||
+            !sameCliWorkspaceScope(existingEntry.workspaceId, trimmedTargetWs, registry))
+    ) {
+        return
+    }
     if (payload.hasExplicitProject !== true || payload.projectNumber === undefined) return
 
-    const registry = activeProjectRegistry(config.projectRegistry)
     const effectiveWs = existingEntry?.workspaceId ?? payload.workspaceId
     pairStoredScope(effectiveWs, payload.projectNumber, registry)
 

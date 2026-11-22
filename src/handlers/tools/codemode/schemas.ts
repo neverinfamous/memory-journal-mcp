@@ -131,7 +131,6 @@ export const ExecuteCodeSchemaMcp = z.object({
     auto_version: z
         .boolean()
         .optional()
-        .default(true)
         .describe('Automatically inject expected_version for optimistic concurrency on updates/deletes'),
     project_number: relaxedNumber().optional()
         .describe(
@@ -163,7 +162,6 @@ export const ExecuteCodeSchemaMcp = z.object({
     dry_run: z
         .boolean()
         .optional()
-        .default(false)
         .describe(
             'If true, state-modifying API calls (create_entry, update_entry, etc.) will be skipped, returning simulated success.'
         ),

@@ -272,7 +272,7 @@ describe('Pass 52 Adversarial Code-Quality Regressions', () => {
     })
 
     it('AP1–AP3: bumps AUDIT_PROMPT_REVISION to 2026-11-20-audit-pass52 and includes Pass 52 guidance', () => {
-        expect(AUDIT_PROMPT_REVISION).toBe('2026-11-22-audit-pass71')
+        expect(AUDIT_PROMPT_REVISION).toBe('2026-11-22-audit-pass72')
         const def = getCodeQualityAuditPromptDefinition()
         const mockDb = {
             searchEntries: vi.fn().mockReturnValue([]),
@@ -281,7 +281,7 @@ describe('Pass 52 Adversarial Code-Quality Regressions', () => {
         } as unknown as IDatabaseAdapter
         const rendered = def.handler({ target: 'memory-journal-mcp' }, mockDb)
         const text = rendered.messages[0]?.content.text ?? ''
-        expect(text).toContain('Prompt revision: 2026-11-22-audit-pass71')
+        expect(text).toContain('Prompt revision: 2026-11-22-audit-pass72')
         expect(text).toContain('leading `-` signs in ID-coercion healers')
         expect(text).toContain('full backslash-run parity')
         expect(text).toContain('collaboration/impact analytics')

@@ -218,7 +218,7 @@ export const GetProjectSchemaMcp = z.preprocess(
     (val: unknown) => {
         if (typeof val === 'object' && val !== null) {
             const obj: Record<string, unknown> = { ...val }
-            if (!('name' in obj)) {
+            if (obj['name'] === undefined) {
                 if ('project_name' in obj && typeof obj['project_name'] === 'string') {
                     obj['name'] = obj['project_name']
                 } else if ('project' in obj && typeof obj['project'] === 'string') {

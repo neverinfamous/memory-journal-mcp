@@ -57,8 +57,9 @@ export function getMiscSearchTools(context: ToolContext): ToolDefinition[] {
             inputSchema: EmptyStrictSchema,
             outputSchema: VectorStatsOutputSchema,
             annotations: READ_ONLY_ANNOTATIONS,
-            handler: (_params: unknown) => {
+            handler: (params: unknown) => {
                 try {
+                    EmptyStrictSchema.parse(params ?? {})
                     if (!vectorManager) {
                         return {
                             success: false,

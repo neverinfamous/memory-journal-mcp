@@ -206,6 +206,13 @@ function hasRegistryProjectOwnerConflict(
     }
     let hasOwner = false
     for (const [ownerKey, entry] of Object.entries(registry)) {
+        if (
+            ownerKey.toLowerCase() === canonPinnedLower &&
+            entry.project_number !== undefined &&
+            entry.project_number !== parsedProj
+        ) {
+            return `project_number ${String(parsedProj)} conflicts with pinned session workspace '${pinnedWorkspace}'`
+        }
         if (entry.project_number !== parsedProj) continue
         hasOwner = true
         if (ownerKey.toLowerCase() === canonPinnedLower) return null
@@ -365,4 +372,41 @@ export function validateNestedExecScope(
         effectiveCanon,
         registry
     )
+}
+
+export function readNarrowedWorkspace(
+    sources: Record<string, unknown>[],
+    registry: Record<string, ProjectRegistryEntry> | undefined
+): string | undefined {
+    for (const src of sources) {
+        for (const key of ['workspace_id', 'workspaceId', 'workspace'] as const) {
+            const raw = src[key]
+            if (typeof raw === 'string' && raw.trim() !== '' && raw.trim() !== '*') {
+                return findRegistryKey(raw.trim(), registry) ?? raw.trim()
+            }
+        }
+        for (const key of ['repo', 'repo_name', 'repoName', 'repository'] as const) {
+            const raw = src[key]
+            if (typeof raw !== 'string' || raw.trim() === '') continue
+            const trimmed = raw.trim()
+            const slug = trimmed.split(/[/\\]/).filter(Boolean).pop() ?? trimmed
+            const matched = findRegistryKey(trimmed, registry) ?? findRegistryKey(slug, registry)
+            if (matched !== undefined) return matched
+        }
+    }
+    return undefined
+}
+
+export function uniqueWorkspaceForProjectNum(
+    projectNum: number,
+    registry: Record<string, ProjectRegistryEntry> | undefined
+): string | undefined {
+    if (registry === undefined) return undefined
+    let matched: string | undefined
+    for (const [key, entry] of Object.entries(registry)) {
+        if (entry.project_number !== projectNum) continue
+        if (matched !== undefined) return undefined
+        matched = key
+    }
+    return matched
 }

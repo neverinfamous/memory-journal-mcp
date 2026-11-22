@@ -223,8 +223,7 @@ export function buildInitialBaselines(
     const fileWsId =
         initialFile !== null &&
         typeof initialFile['defaultWorkspaceId'] === 'string' &&
-        initialFile['defaultWorkspaceId'].trim() !== '' &&
-        initialFile['defaultWorkspaceId'].trim() !== '*'
+        !isForbiddenProjectKey(initialFile['defaultWorkspaceId'])
             ? initialFile['defaultWorkspaceId'].trim()
             : undefined
     const defaultWorkspaceIdFromFile =

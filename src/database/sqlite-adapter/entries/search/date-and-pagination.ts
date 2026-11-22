@@ -8,7 +8,11 @@ import {
 } from '../shared.js'
 import { buildImportanceSqlExpression, buildImportanceCte } from '../importance.js'
 import { encodeCursor, decodeCursor, type SortBy } from './cursor.js'
-import { effectiveWorkspace } from '../../../workspace-scope.js'
+import {
+    effectiveWorkspace,
+    normalizeDateRangeStart,
+    normalizeDateRangeEnd,
+} from '../../../workspace-scope.js'
 import { chunkedInPredicate } from '../../row-helpers.js'
 import { expandTagFilterValues } from '../../tags.js'
 import {
@@ -219,10 +223,8 @@ function buildDateRangeQuery(
     const params: unknown[] = []
 
     if (startDate.length > 0) {
-        let start = startDate
-        if (!start.includes('T')) start += 'T00:00:00.000Z'
         conditions.push('e.timestamp >= ?')
-        params.push(start)
+        params.push(normalizeDateRangeStart(startDate))
     }
 
     const targetWs = effectiveWorkspace(options?.workspaceId)
@@ -235,9 +237,7 @@ function buildDateRangeQuery(
     }
     if (endDate.length > 0) {
         conditions.push('e.timestamp <= ?')
-        let end = endDate
-        if (!end.includes('T')) end += 'T23:59:59.999Z'
-        params.push(end)
+        params.push(normalizeDateRangeEnd(endDate))
     }
 
     const useImportance = options?.sortBy === 'importance' || options?.sortBy === 'blended'

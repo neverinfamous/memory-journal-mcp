@@ -35,7 +35,7 @@ function preprocessUpdateConfig(val: unknown): unknown {
         }
 
         if ('filter' in obj) {
-            if (!('tool_filter' in obj)) {
+            if (obj['tool_filter'] === undefined) {
                 obj['tool_filter'] = obj['filter']
             }
             delete obj['filter']

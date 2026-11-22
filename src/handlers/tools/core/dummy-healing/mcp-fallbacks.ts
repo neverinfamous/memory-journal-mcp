@@ -19,6 +19,7 @@ import { getGitTools } from '../../git.js'
 import { readResource, getResources } from '../../../resources/index.js'
 import { ErrorFieldsMixin } from '../../error-fields-mixin.js'
 import { isDummyToolAllowedByFilter } from '../../dummy-filter-helpers.js'
+import { registerDynamicMemoryUriRoots } from '../../../../audit/audit-file-helpers.js'
 import { handlePrompt, handleListPrompts, handleGetPrompt } from './mcp-prompt-fallbacks.js'
 import {
     DUMMY_RESOURCE_TOOL_NAMES,
@@ -51,6 +52,8 @@ function getMemoryRootPrefixes(): ReadonlySet<string> {
     cachedMemoryRootPrefixes = prefixes
     return prefixes
 }
+
+registerDynamicMemoryUriRoots(getMemoryRootPrefixes, DUMMY_RESOURCE_TOOL_NAMES)
 
 export function extractUriFromArgs(args: Record<string, unknown>): string | undefined {
     let uri: string | undefined

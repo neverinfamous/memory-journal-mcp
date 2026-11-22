@@ -133,18 +133,90 @@ function formatProgramHelp(cmd: Command, helper: Help): string {
     return formatTextHelp(cmd, helper)
 }
 
+const FALLBACK_VALUE_FLAGS = new Set([
+    '--query',
+    '-q',
+    '--content',
+    '-c',
+    '--type',
+    '-t',
+    '--tags',
+    '--workspace',
+    '--workspace-id',
+    '--target-workspace',
+    '--project-number',
+    '--project',
+    '--session-id',
+    '--msg',
+    '--name',
+    '--config',
+    '--db',
+    '--team-db',
+    '--transport',
+    '--host',
+    '--port',
+])
+
+function collectValueTakingFlags(argv: readonly string[], rootProgram?: Command): Set<string> {
+    if (rootProgram === undefined) return FALLBACK_VALUE_FLAGS
+    const flags = new Set<string>()
+    const addCmdOpts = (cmd: Command): void => {
+        for (const opt of cmd.options) {
+            if (opt.required || opt.optional) {
+                if (opt.short !== undefined) flags.add(opt.short)
+                if (opt.long !== undefined) flags.add(opt.long)
+            }
+        }
+    }
+    let currentCmd: Command = rootProgram
+    addCmdOpts(currentCmd)
+    for (let i = 2; i < argv.length; i++) {
+        const tok = argv[i]
+        if (tok === undefined || tok === '--') break
+        if (tok.startsWith('-')) continue
+        const sub = currentCmd.commands.find(
+            (c) => c.name() === tok || c.aliases().includes(tok)
+        )
+        if (sub !== undefined) {
+            currentCmd = sub
+            addCmdOpts(currentCmd)
+            if (sub.name() === 'commit') {
+                for (const f of ['--msg', '-m', '--cwd', '--add', '--relate', '--impact', '--confidence', '--validation', '--journal-project', '--session-id', '--files']) {
+                    flags.add(f)
+                }
+            }
+        }
+    }
+    return flags
+}
+
 /** Auto-heal snake_case flag names to kebab-case while preserving flag values and post-'--' arguments. */
-export function normalizeCliArgv(argv: readonly string[]): string[] {
+export function normalizeCliArgv(argv: readonly string[], rootProgram?: Command): string[] {
+    const valueFlags = collectValueTakingFlags(argv, rootProgram)
     let pastDoubleDash = false
+    let expectValue = false
     return argv.map((arg) => {
         if (arg === '--') {
             pastDoubleDash = true
+            expectValue = false
             return arg
         }
-        if (!pastDoubleDash && arg.startsWith('--') && arg.includes('_')) {
+        if (pastDoubleDash) return arg
+        if (expectValue) {
+            expectValue = false
+            return arg
+        }
+        if (arg.startsWith('--')) {
             const eqIdx = arg.indexOf('=')
-            if (eqIdx === -1) return arg.replace(/_/g, '-')
-            return arg.slice(0, eqIdx).replace(/_/g, '-') + arg.slice(eqIdx)
+            const normalizedFlag =
+                eqIdx === -1 ? arg.replace(/_/g, '-') : arg.slice(0, eqIdx).replace(/_/g, '-')
+            if (eqIdx === -1 && valueFlags.has(normalizedFlag)) {
+                expectValue = true
+            }
+            return eqIdx === -1 ? normalizedFlag : normalizedFlag + arg.slice(eqIdx)
+        }
+        if (/^-[^-]$/.test(arg) && valueFlags.has(arg)) {
+            expectValue = true
         }
         return arg
     })

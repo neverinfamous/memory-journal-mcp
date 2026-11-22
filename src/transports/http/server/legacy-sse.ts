@@ -12,6 +12,7 @@ import { logger } from '../../../utils/logger.js'
  */
 export class LegacySSEServerTransport implements Transport {
     private res: Response | null = null
+    private detachStreamListeners?: () => void
     public sessionId: string
     public onclose?: () => void
     public onerror?: (error: Error) => void
@@ -32,7 +33,10 @@ export class LegacySSEServerTransport implements Transport {
                 this.res.end()
             }
         } finally {
+            this.detachStreamListeners?.()
+            this.detachStreamListeners = undefined
             this.res = null
+            this.onerror = undefined
             const onclose = this.onclose
             this.onclose = undefined
             onclose?.()
@@ -90,13 +94,21 @@ export class LegacySSEServerTransport implements Transport {
                 logger.error('Error closing Legacy SSE transport', { error: String(closeErr) })
             })
         }
+        const onClose = (): void => onStreamAbort()
+        const onError = (err: Error): void => onStreamAbort(err)
         if (typeof req.on === 'function') {
-            req.on('close', () => onStreamAbort())
-            req.on('error', onStreamAbort)
+            req.on('close', onClose)
+            req.on('error', onError)
         }
         if (typeof res.on === 'function') {
-            res.on('close', () => onStreamAbort())
-            res.on('error', onStreamAbort)
+            res.on('close', onClose)
+            res.on('error', onError)
+        }
+        this.detachStreamListeners = (): void => {
+            req.off?.('close', onClose)
+            req.off?.('error', onError)
+            res.off?.('close', onClose)
+            res.off?.('error', onError)
         }
     }
 

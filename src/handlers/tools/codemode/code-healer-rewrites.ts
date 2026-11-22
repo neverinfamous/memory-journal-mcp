@@ -378,12 +378,12 @@ function rewriteDefaultExportFunction(src: string): string {
 /** Rewrite top-level ESM/CommonJS module statements outside string literals and comments into `mj` bindings. */
 export function rewriteModuleImportsAndExports(src: string): string {
     let executionCode = src
-    const exportDefaultCount = executionCode.match(/\bexport\s+default\b/g)?.length ?? 0
-    if (
-        exportDefaultCount === 1 &&
-        executionCode.includes('{') &&
-        executionCode.includes('}')
-    ) {
+    const spans = buildNonCodeSpans(executionCode)
+    let exportDefaultCount = 0
+    for (const m of executionCode.matchAll(/\bexport\s+default\b/g)) {
+        if (!isOffsetInNonCodeSpan(spans, m.index)) exportDefaultCount++
+    }
+    if (exportDefaultCount === 1 && executionCode.includes('{') && executionCode.includes('}')) {
         executionCode = rewriteDefaultExportFunction(executionCode)
     }
     executionCode = replaceOutsideNonCode(executionCode, /export\s+default\s+/g, () => '')

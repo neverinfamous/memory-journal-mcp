@@ -193,7 +193,7 @@ export function searchEntries(
         }
         try {
             const result = runQuery(true)
-            if (result.entries.length > 0) {
+            if (result.entries.length > 0 || offset > 0 || hasKeyset) {
                 return result
             }
             const likeFallback = runQuery(false)

@@ -400,7 +400,7 @@ export function wrapResult(result: unknown): unknown {
         return cached
     }
 
-    const targetObj: object = Object.isFrozen(result)
+    const targetObj: object = !Object.isExtensible(result)
         ? Array.isArray(result)
             ? [...(result as unknown[])]
             : { ...(result as Record<string, unknown>) }

@@ -25,6 +25,7 @@ import { HOST_FILESYSTEM_PATH_RE } from '../../../utils/error-helpers.js'
 import { sanitizeErrorForLogging } from '../../../utils/security-utils.js'
 import { resolveMcpCreateWorkspaceScope } from './create-scope-interceptor.js'
 import { isForbiddenProjectKey } from '../../../utils/project-registry-guards.js'
+import { findCanonicalRegistryKey } from '../../../utils/workspace-registry-match.js'
 import {
     parseCanonicalPositiveInt,
     parsePositiveProjectNumber,
@@ -215,22 +216,21 @@ export function resolveSingleProjectFromRegistry(
         parsePositiveProjectNumber(toolArgs['project_number']) ??
         parsePositiveProjectNumber(toolArgs['id'])
 
-    if (
-        nameArg !== undefined &&
-        !isForbiddenProjectKey(nameArg) &&
-        Object.hasOwn(reg, nameArg) &&
-        reg[nameArg] !== undefined
-    ) {
-        const info = reg[nameArg]
+    const canonName =
+        nameArg !== undefined && !isForbiddenProjectKey(nameArg)
+            ? findCanonicalRegistryKey(nameArg, reg)
+            : undefined
+    if (canonName !== undefined && Object.hasOwn(reg, canonName) && reg[canonName] !== undefined) {
+        const info = reg[canonName]
         return {
             success: true,
             project: {
-                name: nameArg,
+                name: canonName,
                 id: info.project_number,
                 project_number: info.project_number,
                 ...info,
             },
-            _healing_note: `🛠️ AUTONOMOUS HEALING: '${requestedTool}' was called as an MCP tool. Returned registered project '${nameArg}' from projectRegistry successfully.`,
+            _healing_note: `🛠️ AUTONOMOUS HEALING: '${requestedTool}' was called as an MCP tool. Returned registered project '${canonName}' from projectRegistry successfully.`,
         }
     }
 

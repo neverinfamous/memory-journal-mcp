@@ -242,6 +242,7 @@ function flattenFilterObject(result: Record<string, unknown>): void {
 
 /** Apply post-conversion normalization for anchors, tags, relationships, commits, and filters. */
 export function postProcessNormalizedKeys(result: Record<string, unknown>, methodLower?: string): void {
+    flattenFilterObject(result)
     healAnchorsField(result)
     if (methodLower === undefined || !GIT_COMMIT_METHODS.has(methodLower)) {
         healSortByField(result)
@@ -281,5 +282,4 @@ export function postProcessNormalizedKeys(result: Record<string, unknown>, metho
 
     propagateBatchProjectNumber(result)
     healSessionAndCommitMetadata(result)
-    flattenFilterObject(result)
 }

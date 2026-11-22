@@ -5,7 +5,7 @@ export const MAX_CONVERTER_TAG_LENGTH = 100
 
 export function addBoundedTag(mergedTags: Set<string>, rawTag: string): void {
     if (mergedTags.size >= MAX_CONVERTER_TAGS) return
-    const normalized = rawTag.trim().slice(0, MAX_CONVERTER_TAG_LENGTH)
+    const normalized = rawTag.trim().toLowerCase().slice(0, MAX_CONVERTER_TAG_LENGTH)
     if (normalized !== '') {
         mergedTags.add(normalized)
     }
@@ -79,7 +79,7 @@ export function getFirstString(yamlMeta: Record<string, unknown>, keys: string[]
     return undefined
 }
 
-const FENCE_OPEN_RE = /^[ ]{0,3}(`{3,}|~{3,})/
+const FENCE_OPEN_RE = /^[ ]{0,3}(?:(`{3,})[^`]*$|(~{3,}))/
 
 export function isClosingCodeFence(trimmedLine: string, fenceChar: string, fenceLen: number): boolean {
     let idx = 0
@@ -111,13 +111,14 @@ export function transformOutsideCodeFences(
         const trimmed = line.replace(/\r$/, '')
         if (activeFenceChar === null) {
             const openMatch = FENCE_OPEN_RE.exec(trimmed)
-            if (openMatch?.[1] !== undefined) {
+            const fenceMarker = openMatch?.[1] ?? openMatch?.[2]
+            if (fenceMarker !== undefined) {
                 if (proseLines.length > 0) {
                     out.push(transform(proseLines.join('\n')))
                     proseLines = []
                 }
-                activeFenceChar = openMatch[1][0] ?? '`'
-                activeFenceLen = openMatch[1].length
+                activeFenceChar = fenceMarker[0] ?? '`'
+                activeFenceLen = fenceMarker.length
                 out.push(line)
                 continue
             }

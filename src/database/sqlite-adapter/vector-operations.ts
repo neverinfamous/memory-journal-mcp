@@ -66,7 +66,6 @@ export class VectorOperations {
         const scopeId = effectiveWorkspace(workspaceId)
         const wsScoped = scopeId !== '*'
         const pnScoped = projectNumber !== undefined
-        const scoped = wsScoped || pnScoped
 
         const clauses = ['v.embedding MATCH ?', 'v.k = ?', 'mj.deleted_at IS NULL']
         if (wsScoped) clauses.push('mj.workspace_id = ?')
@@ -98,7 +97,7 @@ export class VectorOperations {
             throw error
         }
 
-        if (!scoped || rows.length >= limit || k >= VECTOR_KNN_MAX_K) {
+        if (rows.length >= limit || k >= VECTOR_KNN_MAX_K) {
             return rows
         }
 

@@ -131,7 +131,10 @@ export function resolveAutoPruneScope(
     )
     const canonicalWs =
         findCanonicalRegistryKey(resolved.workspaceId, effectiveRegistry) ?? resolved.workspaceId
-    const regProj = effectiveRegistry?.[canonicalWs]?.project_number
+    const regProj =
+        effectiveRegistry !== undefined && Object.hasOwn(effectiveRegistry, canonicalWs)
+            ? effectiveRegistry[canonicalWs]?.project_number
+            : undefined
     const projectNumber = resolved.projectNumber ?? regProj
     return {
         workspaceId: canonicalWs,

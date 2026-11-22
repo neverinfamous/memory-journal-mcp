@@ -1,5 +1,9 @@
 import type { NativeConnectionManager } from '../native-connection.js'
-import { effectiveWorkspace } from '../../workspace-scope.js'
+import {
+    effectiveWorkspace,
+    normalizeDateRangeStart,
+    normalizeDateRangeEnd,
+} from '../../workspace-scope.js'
 import { bucketInParams } from '../row-helpers.js'
 
 export { visualizeRelationships, getRecentGraphRelationships } from './cross-project-graph.js'
@@ -40,15 +44,13 @@ function buildInsightsFilterState(options: InsightsOptions): {
     let startBound: string | undefined
     let endBound: string | undefined
     if (options.startDate !== undefined && options.startDate.length > 0) {
-        let start = options.startDate
-        if (!start.includes('T')) start += 'T00:00:00.000Z'
+        const start = normalizeDateRangeStart(options.startDate)
         where += ' AND timestamp >= ?'
         sqlParams.push(start)
         startBound = start
     }
     if (options.endDate !== undefined && options.endDate.length > 0) {
-        let end = options.endDate
-        if (!end.includes('T')) end += 'T23:59:59.999Z'
+        const end = normalizeDateRangeEnd(options.endDate)
         where += ' AND timestamp <= ?'
         sqlParams.push(end)
         endBound = end

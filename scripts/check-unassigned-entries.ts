@@ -123,11 +123,14 @@ function checkUnassignedEntries(): void {
         const rows = db.prepare(`
             SELECT id, entry_type, workspace_id, project_number, timestamp 
             FROM memory_journal 
-            WHERE workspace_id = 'default' 
-               OR workspace_id IS NULL 
-               OR TRIM(workspace_id) = '' 
-               OR project_number <= 0 
-               OR project_number IS NULL
+            WHERE deleted_at IS NULL
+              AND (
+                   workspace_id = 'default' 
+                   OR workspace_id IS NULL 
+                   OR TRIM(workspace_id) = '' 
+                   OR project_number <= 0 
+                   OR project_number IS NULL
+              )
         `).all() as Array<{
             id: number
             entry_type: string

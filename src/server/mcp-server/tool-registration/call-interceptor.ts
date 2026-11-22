@@ -61,7 +61,7 @@ async function tryAutonomousUnknownToolFallback(
         fallbackConfig,
         currentConfig,
         options,
-        resolveActiveBriefingConfig(currentConfig.briefingConfig, allowedIoRoots)
+        resolveActiveBriefingConfig(currentConfig.briefingConfig, allowedIoRoots, runtime)
     )
     const toolContext: ToolContext = {
         db,

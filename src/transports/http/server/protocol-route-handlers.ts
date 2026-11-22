@@ -36,17 +36,20 @@ export interface McpRouteState {
     sessionLastActivity: Map<string, number>
 }
 
-export function extractSessionId(req: Request): string | undefined {
-    const candidate = req.query?.['sessionId'] ?? req.headers?.['mcp-session-id']
-    if (typeof candidate === 'string') {
-        const trimmed = candidate.trim()
+function firstNonBlankToken(raw: unknown): string | undefined {
+    if (typeof raw === 'string') {
+        const trimmed = raw.trim()
         return trimmed.length > 0 ? trimmed : undefined
     }
-    if (Array.isArray(candidate) && typeof candidate[0] === 'string') {
-        const trimmed = candidate[0].trim()
+    if (Array.isArray(raw) && typeof raw[0] === 'string') {
+        const trimmed = raw[0].trim()
         return trimmed.length > 0 ? trimmed : undefined
     }
     return undefined
+}
+
+export function extractSessionId(req: Request): string | undefined {
+    return firstNonBlankToken(req.query?.['sessionId']) ?? firstNonBlankToken(req.headers?.['mcp-session-id'])
 }
 
 export function assertHttpBindIsSafe(

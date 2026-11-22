@@ -70,60 +70,47 @@ function detectAppliedVersions(
     return versions
 }
 
+function runInImmediateTx(db: Database, fn: () => void): void {
+    if (db.inTransaction) {
+        fn()
+    } else {
+        db.transaction(fn).immediate()
+    }
+}
+
 /**
  * Detects pre-migration-framework databases, analyzes their schema,
  * and seeds the schema_migrations table so they are retrofitted safely.
  */
 function retrofitPreMigrationDb(db: Database): void {
-    // 1. Check if memory_journal exists
-    const tableCheck = db
-        .prepare(`SELECT name FROM sqlite_master WHERE type='table' AND name='memory_journal'`)
-        .get() as { name: string } | undefined
+    runInImmediateTx(db, () => {
+        if (!tableExists(db, 'memory_journal') || tableExists(db, 'schema_migrations')) {
+            return
+        }
 
-    if (!tableCheck) {
-        // New database, no retrofitting needed
-        return
-    }
+        logger.info('Pre-migration database detected. Retrofitting schema migrations tracking...', {
+            module: 'MigrationManager',
+        })
 
-    // 2. Check if schema_migrations already exists
-    const migTableCheck = db
-        .prepare(`SELECT name FROM sqlite_master WHERE type='table' AND name='schema_migrations'`)
-        .get() as { name: string } | undefined
+        ensureMigrationsTable(db)
 
-    if (migTableCheck) {
-        // Already has migration framework
-        return
-    }
+        const tableInfo = db.prepare('PRAGMA table_info(memory_journal)').all() as {
+            name: string
+        }[]
+        const columns = new Set(tableInfo.map((row) => row.name))
+        const retrofittedVersions = detectAppliedVersions(db, columns)
 
-    logger.info('Pre-migration database detected. Retrofitting schema migrations tracking...', {
-        module: 'MigrationManager',
-    })
-
-    // Create the migrations table
-    ensureMigrationsTable(db)
-
-    // Inspect existing database schema to determine applied steps
-    const tableInfo = db.prepare('PRAGMA table_info(memory_journal)').all() as {
-        name: string
-    }[]
-    const columns = new Set(tableInfo.map((row) => row.name))
-
-    const retrofittedVersions = detectAppliedVersions(db, columns)
-
-    // Insert into schema_migrations
-    const insertStmt = db.prepare(
-        'INSERT INTO schema_migrations (version, name) VALUES (?, ?)'
-    )
-
-    db.transaction(() => {
+        const insertStmt = db.prepare(
+            'INSERT INTO schema_migrations (version, name) VALUES (?, ?)'
+        )
         for (const v of retrofittedVersions) {
             insertStmt.run(v.version, v.name)
         }
-    })()
 
-    logger.info('Database retrofitted successfully', {
-        module: 'MigrationManager',
-        versions: retrofittedVersions.map((v) => v.version),
+        logger.info('Database retrofitted successfully', {
+            module: 'MigrationManager',
+            versions: retrofittedVersions.map((v) => v.version),
+        })
     })
 }
 
@@ -134,22 +121,16 @@ export const MigrationManager = {
      * @param isTeam Whether the database is a team database
      */
     runMigrations(db: Database, isTeam = false): void {
-        // Retrofit pre-existing databases before running new migrations
-        retrofitPreMigrationDb(db)
+        runInImmediateTx(db, () => {
+            retrofitPreMigrationDb(db)
+            ensureMigrationsTable(db)
 
-        // Ensure migrations table exists
-        ensureMigrationsTable(db)
+            const rows = db.prepare('SELECT version FROM schema_migrations').all() as {
+                version: number
+            }[]
+            const applied = new Set(rows.map((row) => row.version))
 
-        // Query applied migrations
-        const rows = db.prepare('SELECT version FROM schema_migrations').all() as {
-            version: number
-        }[]
-        const applied = new Set(rows.map((row) => row.version))
-
-        // Run migrations inside a transaction
-        db.transaction(() => {
             for (const migration of MIGRATIONS) {
-                // Team-only migrations (author, origin_personal_id) are skipped for personal databases.
                 if (TEAM_ONLY_MIGRATION_VERSIONS.has(migration.version) && !isTeam) {
                     continue
                 }
@@ -171,7 +152,7 @@ export const MigrationManager = {
                     })
                 }
             }
-        })()
+        })
     },
 
     /**

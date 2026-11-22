@@ -195,6 +195,15 @@ function findLastStatementBoundary(trimmed: string): number {
         const comment = skipLineOrBlockComment(trimmed, i, s.lineOnlyWsOrComments)
         if (comment !== null) {
             if (comment.hasNewline === true) {
+                if (
+                    comment.next < trimmed.length &&
+                    s.depth === 0 &&
+                    s.delim.templateBraces.length === 0 &&
+                    !CONTINUATION_PREV_TOKENS.has(s.prevToken) &&
+                    !nextNonWsStartsContinuation(trimmed, comment.next)
+                ) {
+                    s.lastBoundary = comment.next - 1
+                }
                 s.lineOnlyWsOrComments = true
                 markLineTerminator(s.delim)
             }

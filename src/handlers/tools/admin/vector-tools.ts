@@ -16,7 +16,7 @@ import {
 const preprocessVectorEntryId = (val: unknown): unknown => {
     if (typeof val === 'object' && val !== null) {
         const obj = { ...(val as Record<string, unknown>) }
-        if ('id' in obj && !('entry_id' in obj)) {
+        if ('id' in obj && obj['entry_id'] === undefined) {
             obj['entry_id'] = obj['id']
             delete obj['id']
             return obj

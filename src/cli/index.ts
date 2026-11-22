@@ -241,7 +241,7 @@ program
     .helpOption(false)
     .action(async (commitArgs: string[]) => {
         const { main } = await import('../vendor/commit/commit.js')
-        const rawTail = normalizeCliArgv(process.argv).slice(2)
+        const rawTail = normalizeCliArgv(process.argv, program).slice(2)
         const valueTakingGlobalFlags = new Set<string>()
         for (const opt of program.options) {
             if (opt.required || opt.optional) {
@@ -264,7 +264,7 @@ program
         await main(commitIdx !== -1 ? rawTail.slice(commitIdx + 1) : commitArgs)
     })
 
-void program.parseAsync(normalizeCliArgv(process.argv)).catch((err: unknown) => {
+void program.parseAsync(normalizeCliArgv(process.argv, program)).catch((err: unknown) => {
     process.stderr.write(`\x1b[31mError:\x1b[0m ${formatCliError(err)}\n`)
     process.exitCode = 1
 })

@@ -6,6 +6,7 @@ import type { IDatabaseAdapter } from '../../database/core/interfaces.js'
 import { DEFAULT_BRIEFING_CONFIG } from '../../handlers/resources/shared.js'
 import { ConfigManager } from '../../utils/config-manager.js'
 import { logger } from '../../utils/logger.js'
+import { isForbiddenProjectKey } from '../../utils/project-registry-guards.js'
 import type { ServerRuntime } from '../../utils/maintenance-lock.js'
 import {
     resolveToolFilterConfig,
@@ -21,11 +22,19 @@ function createServerConfigManager(
     const rawToolFilter =
         options.toolFilter ?? process.env['MEMORY_JOURNAL_MCP_TOOL_FILTER']
 
+    const rawDefaultWs = options.defaultWorkspaceId?.trim()
+    const validDefaultWs =
+        rawDefaultWs !== undefined && !isForbiddenProjectKey(rawDefaultWs)
+            ? rawDefaultWs
+            : undefined
+    const rawBcWs = options.briefingConfig?.defaultWorkspaceId?.trim()
+    const validBcWs =
+        rawBcWs !== undefined && !isForbiddenProjectKey(rawBcWs) ? rawBcWs : undefined
+    const resolvedDefaultWs = validBcWs ?? validDefaultWs
+
     const cliEnvBaseline = {
         ...(rawToolFilter !== undefined ? { rawToolFilter } : {}),
-        ...(options.defaultWorkspaceId !== undefined
-            ? { defaultWorkspaceId: options.defaultWorkspaceId }
-            : {}),
+        ...(validDefaultWs !== undefined ? { defaultWorkspaceId: validDefaultWs } : {}),
         ...(options.defaultProjectNumber !== undefined
             ? { defaultProjectNumber: options.defaultProjectNumber }
             : {}),
@@ -40,10 +49,7 @@ function createServerConfigManager(
             toolFilterConfig: filterConfig,
             briefingConfig: {
                 ...(options.briefingConfig ?? DEFAULT_BRIEFING_CONFIG),
-                ...(options.defaultWorkspaceId !== undefined &&
-                options.briefingConfig?.defaultWorkspaceId === undefined
-                    ? { defaultWorkspaceId: options.defaultWorkspaceId }
-                    : {}),
+                defaultWorkspaceId: resolvedDefaultWs,
                 ...(options.defaultProjectNumber !== undefined &&
                 options.briefingConfig?.defaultProjectNumber === undefined
                     ? { defaultProjectNumber: options.defaultProjectNumber }

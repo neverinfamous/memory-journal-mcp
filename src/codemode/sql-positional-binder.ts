@@ -246,15 +246,14 @@ function parseInsert(cleanSql: string, args: unknown[]): ParsedSql {
     const openVals = valuesIdx >= 0 ? cleanSql.indexOf('(', valuesIdx + 6) : -1
     const colGroup = openCols >= 0 ? extractParenGroup(head, openCols) : null
     const valGroup = openVals >= 0 ? extractParenGroup(cleanSql, openVals) : null
-    if (colGroup !== null && valGroup !== null) {
-        const trailing = cleanSql.slice(valGroup.endIdx + 1).replace(/;\s*$/, '').trim()
-        if (trailing !== '' && !/^RETURNING\b/i.test(trailing)) return UNMAPPED
-        const columns = colGroup.inner.split(',').map(normalizeSqlColumn)
-        const values = splitSqlValueList(valGroup.inner)
-        if (!bindInsertColumns(payload, columns, values, positional, bindIndex, consumedIds)) {
-            return UNMAPPED
-        }
-    } else if (positional.length > 0) {
+    if (colGroup === null || valGroup === null) {
+        return UNMAPPED
+    }
+    const trailing = cleanSql.slice(valGroup.endIdx + 1).replace(/;\s*$/, '').trim()
+    if (trailing !== '' && !/^RETURNING\b/i.test(trailing)) return UNMAPPED
+    const columns = colGroup.inner.split(',').map(normalizeSqlColumn)
+    const values = splitSqlValueList(valGroup.inner)
+    if (!bindInsertColumns(payload, columns, values, positional, bindIndex, consumedIds)) {
         return UNMAPPED
     }
     const literalScope = scopeFromInsertLiterals(cleanSql)

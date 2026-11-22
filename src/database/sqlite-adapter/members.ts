@@ -74,6 +74,7 @@ export class MembersManager {
             }
             return member
         } catch (error) {
+            if (error instanceof QueryError) throw error
             if (error instanceof Error) {
                 throw new QueryError(`Failed to add team member: ${error.message}`)
             }

@@ -54,18 +54,27 @@ function stripLeadingShimAssignments(src: string): string {
 }
 
 const NESTED_EXEC_PREFIX_RE =
-    /^(?:(?:const|let|var)\s+[\w$]+\s*=\s*)?(?:return\s+)?(?:await\s+)?(?:(?:__mcp|mcp|mj|tools)\.)*(?:mj_)?(?:execute_code|executeCode|execute)\s*\(\s*/i
+    /^(?:(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*=\s*)?(?:return\s+)?(?:await\s+)?(?:(?:__mcp|mcp|mj|tools)\.)*(?:mj_)?(?:execute_code|executeCode|execute)\s*\(\s*/i
 const NESTED_EXEC_OBJ_PROP_RE = /^\s*(?:code|script)\s*:\s*/i
-const NESTED_EXEC_SUFFIX_RE = /^\s*;?(?:\s*return\s+[\w$]+;?)?\s*$/
+const NESTED_EXEC_TRAILING_EMPTY_RE = /^\s*;?\s*$/
+const NESTED_EXEC_TRAILING_RETURN_RE = /^\s*;?\s*return\s+([A-Za-z_$][\w$]*)\s*;?\s*$/
+
+const JS_ESCAPE_CHAR_MAP: Record<string, string> = {
+    n: '\n',
+    r: '\r',
+    t: '\t',
+}
 
 /**
  * [INVARIANT] Unwrap only single-argument `executeCode(<literal>)` or single-property
  * `executeCode({ code|script: <literal> })` calls with no sibling options (e.g. `readonly`,
- * `workspace_id`) and no trailing statements so nested isolation bounds cannot be bypassed.
+ * `workspace_id`) and no trailing statements (other than returning the assigned result variable)
+ * so nested isolation bounds cannot be bypassed.
  */
 function extractSingleExecuteCodeStringArg(stripped: string): string | null {
     const prefix = NESTED_EXEC_PREFIX_RE.exec(stripped)
     if (prefix === null) return null
+    const assignedVar = prefix[1]
     let pos = prefix[0].length
     let inObject = false
     if (stripped[pos] === '{') {
@@ -82,7 +91,7 @@ function extractSingleExecuteCodeStringArg(stripped: string): string | null {
     for (; i < stripped.length; i++) {
         const ch = stripped[i] ?? ''
         if (escaped) {
-            chars.push(ch === quote || ch === '\\' ? ch : `\\${ch}`)
+            chars.push(ch === quote || ch === '\\' ? ch : (JS_ESCAPE_CHAR_MAP[ch] ?? `\\${ch}`))
             escaped = false
             continue
         }
@@ -107,7 +116,10 @@ function extractSingleExecuteCodeStringArg(stripped: string): string | null {
         while (after < stripped.length && /\s/.test(stripped[after] ?? '')) after++
     }
     if (stripped[after] !== ')') return null
-    return NESTED_EXEC_SUFFIX_RE.test(stripped.slice(after + 1)) ? chars.join('') : null
+    const trailing = stripped.slice(after + 1)
+    if (NESTED_EXEC_TRAILING_EMPTY_RE.test(trailing)) return chars.join('')
+    const retMatch = NESTED_EXEC_TRAILING_RETURN_RE.exec(trailing)
+    return retMatch?.[1] !== undefined && retMatch[1] === assignedVar ? chars.join('') : null
 }
 
 function unwrapNestedExecuteCode(src: string): string {

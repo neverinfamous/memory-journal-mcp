@@ -211,6 +211,23 @@ function createEgressReplacer(
                 if (bytes > egressLimit) throw new Error(`EgressLimitExceeded:${bytes}`)
                 return '[Circular]'
             }
+            if (isCrossRealmError(value)) {
+                const errName = typeof value.name === 'string' ? value.name : 'Error'
+                const errMsg = typeof value.message === 'string' ? value.message : String(value.message)
+                bytes += errName.length + errMsg.length + 24
+                if (bytes > egressLimit) throw new Error(`EgressLimitExceeded:${bytes}`)
+                const plainErr: Record<string, unknown> = { name: errName, message: errMsg }
+                for (const k of Object.keys(value)) {
+                    if (k === '__proto__' || k === 'constructor' || k === 'prototype' || k === 'toJSON') continue
+                    const errProp: unknown = Reflect.get(value, k)
+                    if (typeof errProp === 'function') continue
+                    plainErr[k] = errProp
+                }
+                ancestors.push(value, plainErr)
+                ancestorSet.add(value)
+                ancestorSet.add(plainErr)
+                return plainErr
+            }
             ancestors.push(value)
             ancestorSet.add(value)
             bytes += 5

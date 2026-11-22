@@ -5,6 +5,7 @@ import { logger } from './logger.js'
 import { RegistryConfigError } from './registry-config-file.js'
 import { parseToolFilter } from '../filtering/tool-filter.js'
 import { activeProjectRegistry, pairStoredScope } from './write-scope.js'
+import { isForbiddenProjectKey } from './project-registry-guards.js'
 import {
     applyReloadedBriefingScope,
     BRIEFING_CONFIG_KEY_MAP,
@@ -129,10 +130,13 @@ export class ConfigManager extends EventEmitter {
     public seedMissingScopeDefaults(defaults: ConfigCliEnvBaseline): void {
         if (this.configFilePath !== undefined) return
         const currentBc = this.config.briefingConfig
+        const rawWs = defaults.defaultWorkspaceId?.trim()
+        const validWs =
+            rawWs !== undefined && !isForbiddenProjectKey(rawWs) ? rawWs : undefined
         const setProject =
             currentBc.defaultProjectNumber === undefined && defaults.defaultProjectNumber !== undefined
         const setWorkspace =
-            currentBc.defaultWorkspaceId === undefined && defaults.defaultWorkspaceId !== undefined
+            currentBc.defaultWorkspaceId === undefined && validWs !== undefined
         const setRegistry =
             currentBc.projectRegistry === undefined && defaults.projectRegistry !== undefined
         if (!setProject && !setWorkspace && !setRegistry) return
@@ -143,8 +147,8 @@ export class ConfigManager extends EventEmitter {
             this.cliEnvBaseline.defaultProjectNumber ??= defaults.defaultProjectNumber
         }
         if (setWorkspace) {
-            bc.defaultWorkspaceId = defaults.defaultWorkspaceId
-            this.cliEnvBaseline.defaultWorkspaceId ??= defaults.defaultWorkspaceId
+            bc.defaultWorkspaceId = validWs
+            this.cliEnvBaseline.defaultWorkspaceId ??= validWs
         }
         if (setRegistry) {
             bc.projectRegistry = defaults.projectRegistry

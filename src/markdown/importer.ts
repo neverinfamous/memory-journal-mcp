@@ -277,7 +277,7 @@ function upsertParsedFile(
         batchAuthorCache
     )
     const sanitizedMetadataAuthor =
-        metadata.author !== undefined ? sanitizeAuthor(metadata.author) : undefined
+        metadata.author !== undefined ? sanitizeAuthor(metadata.author).trim() : undefined
     const resolvedAuthor =
         canonicalOptionAuthor ??
         (sanitizedMetadataAuthor !== undefined && sanitizedMetadataAuthor.length > 0

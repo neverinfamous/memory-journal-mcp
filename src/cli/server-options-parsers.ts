@@ -2,6 +2,8 @@ import * as path from 'node:path'
 import * as fs from 'node:fs'
 import { z } from 'zod'
 import type { ProjectRegistryEntry } from '../types/index.js'
+import type { ConfigResolver } from '../utils/config-resolver.js'
+import type { CatchConfig } from './server-options-groups.js'
 import {
     findCaseInsensitiveKeyConflict,
     findProjectNumberConflict,
@@ -255,4 +257,30 @@ export function resolveUnconflictedDefaultWorkspace(
     }
     const collidesOther = entries.some(([, entry]) => entry.project_number === defaultProjectNumber)
     return collidesOther ? undefined : defaultWorkspaceId
+}
+
+const transportSchema = z.enum(['stdio', 'http'])
+
+/** Resolve CLI/env/config transport precedence with explicit CLI and `TRANSPORT` env priority over config booleans. */
+export function resolveTransportOption(resolver: ConfigResolver, catchConfig: CatchConfig): 'stdio' | 'http' {
+    return catchConfig((): 'stdio' | 'http' => {
+        if (resolver.isCliProvided('http') && resolver.resolveBool('http') === true) return 'http'
+        if (resolver.isCliProvided('stdio') && resolver.resolveBool('stdio') === true) return 'stdio'
+        const envTransport = process.env['TRANSPORT']?.trim()
+        const raw = resolver.isCliProvided('transport')
+            ? resolver.resolve<string>('transport')
+            : envTransport !== undefined && envTransport !== ''
+              ? envTransport
+              : undefined
+        if (raw === undefined) {
+            if (resolver.resolveBool('http')) return 'http'
+            if (resolver.resolveBool('stdio')) return 'stdio'
+        }
+        const cand = raw ?? resolver.resolve<string>('transport', 'TRANSPORT') ?? 'stdio'
+        const parsed = transportSchema.safeParse(cand)
+        if (!parsed.success) {
+            throw new Error(`Invalid transport '${cand}'. Use 'stdio' or 'http'.`)
+        }
+        return parsed.data
+    }, 'stdio')
 }

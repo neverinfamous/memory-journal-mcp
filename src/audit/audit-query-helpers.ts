@@ -121,7 +121,7 @@ function checkUriKeyTarget(trimmed: string): string | undefined {
 
 /** Extract a sensitive resource URI or team/admin prompt target from tool arguments, if present. */
 export function extractSensitiveTargetFromArgs(toolName: string, args: unknown): string | undefined {
-    if (toolName.startsWith('memory://')) {
+    if (/^memory:\/\//i.test(toolName)) {
         const hit = checkUriKeyTarget(toolName)
         if (hit !== undefined) return hit
     }

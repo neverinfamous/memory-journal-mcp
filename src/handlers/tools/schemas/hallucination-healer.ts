@@ -28,6 +28,7 @@ import {
     mapKnownEntryTypeAlias,
     unpackFilterContainers,
     coerceEntryIdField,
+    parseHealedEntryIdString,
     healSearchPayload,
 } from './hallucination-healer-search.js'
 import { logger } from '../../../utils/logger.js'
@@ -204,7 +205,7 @@ function healNestedContainersAndEntryIds(obj: Record<string, unknown>): boolean 
         const nested = obj['entry'] as Record<string, unknown>
         Reflect.deleteProperty(obj, 'entry')
         for (const [k, v] of Object.entries(nested)) {
-            if (!(k in obj) && v !== undefined) obj[k] = v
+            if (obj[k] === undefined && v !== undefined) obj[k] = v
         }
         modified = true
     }
@@ -221,7 +222,7 @@ function healNestedContainersAndEntryIds(obj: Record<string, unknown>): boolean 
                 !('entry_type' in obj) &&
                 !('title' in obj))
         ) {
-            if (!('entry_id' in obj)) {
+            if (obj['entry_id'] === undefined) {
                 const parsed = parsePositiveProjectNumber(typeof entryVal === 'string' ? entryVal.trim() : entryVal)
                 if (parsed !== undefined) {
                     obj['entry_id'] = parsed
@@ -239,11 +240,8 @@ function healNestedContainersAndEntryIds(obj: Record<string, unknown>): boolean 
         let idsChanged = false
         const healedIds = obj['entry_ids'].map((id: unknown) => {
             if (typeof id === 'string') {
-                const raw = id.trim()
-                if (raw.startsWith('-')) return id
-                const cleaned = raw.replace(/^[^0-9]+/, '')
-                const parsed = parsePositiveProjectNumber(cleaned)
-                if (parsed !== undefined && /^[1-9]\d*$/.test(cleaned)) {
+                const parsed = parseHealedEntryIdString(id)
+                if (parsed !== undefined) {
                     idsChanged = true
                     return parsed
                 }
@@ -305,7 +303,7 @@ function remapAgentKeyAliases(obj: Record<string, unknown>): boolean {
             ) {
                 continue
             }
-            if (!(goodKey in obj) && obj[badKey] !== undefined) obj[goodKey] = obj[badKey]
+            if (obj[goodKey] === undefined && obj[badKey] !== undefined) obj[goodKey] = obj[badKey]
             Reflect.deleteProperty(obj, badKey)
             modified = true
         }
@@ -331,7 +329,7 @@ export function healAgentHallucinations(val: unknown): unknown {
     if (healValidationAndScoreFields(obj)) modified = true
 
     for (const key of CONTENT_ALIASES) {
-        if (key in obj && !('content' in obj)) {
+        if (key in obj && obj['content'] === undefined) {
             obj['content'] = obj[key]
             Reflect.deleteProperty(obj, key)
             modified = true

@@ -154,9 +154,9 @@ export function createProcessOperationFn(shimMj: Record<string, unknown>): (arg:
  */
 // eslint-disable-next-line no-control-regex
 const CONTROL_CHAR_SEP_RE = /[\u0000-\u001F\u007F-\u009F\u2028\u2029]+/g
-const SHIM_NOOP = (): void => {
+const SHIM_NOOP = Object.freeze((): void => {
     /* no-op */
-}
+})
 
 function formatSandboxCallbackError(callbackError: unknown): string {
     const msg = safeFormatSandboxError(callbackError).message
@@ -183,15 +183,15 @@ export function createDisabledSpawnShim(
                 )
             }
         }
-        return {
+        return Object.freeze({
             on: SHIM_NOOP,
-            stdout: { on: SHIM_NOOP },
-            stderr: { on: SHIM_NOOP },
-            kill: () => false,
+            stdout: Object.freeze({ on: SHIM_NOOP }),
+            stderr: Object.freeze({ on: SHIM_NOOP }),
+            kill: Object.freeze(() => false),
             status: 1,
-            output: ['', '', `${label} is disabled in the sandbox`],
+            output: Object.freeze(['', '', `${label} is disabled in the sandbox`]),
             error: new Error(`${label} is disabled in the sandbox`),
-        }
+        })
     }
 }
 

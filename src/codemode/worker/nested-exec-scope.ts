@@ -4,7 +4,6 @@
  */
 
 import type * as vm from 'node:vm'
-import type { ProjectRegistryEntry } from '../../types/index.js'
 import { transformAutoReturn } from '../auto-return.js'
 import { readProjectRegistryPayload } from '../normalizers/generic-field-aliases.js'
 import { validateSandboxCode } from '../security.js'
@@ -19,7 +18,9 @@ import {
     extractNestedMaxResultSize,
     extractNestedSessionId,
     extractNestedTimeoutMs,
+    hasExplicitNestedEntryId,
     invokeShimGroupMethod,
+    mergeNestedArgAndOptions,
     mergeNestedSynthesizedScope,
     naturalLanguageEntry,
     raceWithSandboxTimeout,
@@ -27,10 +28,11 @@ import {
     readNestedQuerySearch,
 } from './nested-exec-payload.js'
 import {
-    findRegistryKey,
     isPlainRecord,
     isProjectStringValue,
     parseProjectNumberCandidate,
+    readNarrowedWorkspace,
+    uniqueWorkspaceForProjectNum,
     validateNestedExecScope,
 } from './nested-exec-validation.js'
 
@@ -67,43 +69,6 @@ export interface SandboxExecutorOptions {
     projectRegistryRaw: unknown
     runIsolatedNestedCode: RunIsolatedNestedFn
     activeTimers?: Set<NodeJS.Timeout>
-}
-
-function readNarrowedWorkspace(
-    sources: Record<string, unknown>[],
-    registry: Record<string, ProjectRegistryEntry> | undefined
-): string | undefined {
-    for (const src of sources) {
-        for (const key of ['workspace_id', 'workspaceId', 'workspace'] as const) {
-            const raw = src[key]
-            if (typeof raw === 'string' && raw.trim() !== '' && raw.trim() !== '*') {
-                return findRegistryKey(raw.trim(), registry) ?? raw.trim()
-            }
-        }
-        for (const key of ['repo', 'repo_name', 'repoName', 'repository'] as const) {
-            const raw = src[key]
-            if (typeof raw !== 'string' || raw.trim() === '') continue
-            const trimmed = raw.trim()
-            const slug = trimmed.split(/[/\\]/).filter(Boolean).pop() ?? trimmed
-            const matched = findRegistryKey(trimmed, registry) ?? findRegistryKey(slug, registry)
-            if (matched !== undefined) return matched
-        }
-    }
-    return undefined
-}
-
-function uniqueWorkspaceForProjectNum(
-    projectNum: number,
-    registry: Record<string, ProjectRegistryEntry> | undefined
-): string | undefined {
-    if (registry === undefined) return undefined
-    let matched: string | undefined
-    for (const [key, entry] of Object.entries(registry)) {
-        if (entry.project_number !== projectNum) continue
-        if (matched !== undefined) return undefined
-        matched = key
-    }
-    return matched
 }
 
 function resolveNestedNarrowedScope(
@@ -299,13 +264,19 @@ async function tryDispatchNestedShortcut(
         typeof argRec['query'] === 'string' &&
         argRec['query'].trim() !== ''
     const codeToExec = rawNestedCode
-    const invokeCreate = (payload: unknown): unknown => invokeShimGroupMethod(shimMj, 'core', 'createEntry', payload)
+    const dispatchEntry = (payload: unknown): unknown =>
+        invokeShimGroupMethod(
+            shimMj,
+            hasExplicitNestedEntryId(payload) ? 'admin' : 'core',
+            hasExplicitNestedEntryId(payload) ? 'updateEntry' : 'createEntry',
+            payload
+        )
     if (codeToExec === null) {
         const scoped = mergeNestedSynthesizedScope(arg, argRec, narrowed, pinnedWorkspace, pinnedProjectNumber)
         return {
             handled: true,
             value: await Promise.resolve(
-                dispatchSynthesizedNestedEntry(scoped, effectiveReadonly, effectiveDryRun, effectiveUseTestDb, invokeCreate)
+                dispatchSynthesizedNestedEntry(scoped, effectiveReadonly, effectiveDryRun, effectiveUseTestDb, dispatchEntry)
             ),
         }
     }
@@ -319,7 +290,7 @@ async function tryDispatchNestedShortcut(
             return {
                 handled: true,
                 value: await Promise.resolve(
-                    dispatchSynthesizedNestedEntry(scoped, effectiveReadonly, effectiveDryRun, effectiveUseTestDb, invokeCreate)
+                    dispatchSynthesizedNestedEntry(scoped, effectiveReadonly, effectiveDryRun, effectiveUseTestDb, dispatchEntry)
                 ),
             }
         }
@@ -381,20 +352,20 @@ export function createSandboxExecutor(options: SandboxExecutorOptions): (...args
             : undefined
 
     return async (...rawArgs: unknown[]): Promise<unknown> => {
-        const rawFirst = rawArgs[0]
-        const rawOpts = rawArgs.length > 1 ? rawArgs[1] : undefined
         let arg: unknown
         let argRec: Record<string, unknown> | undefined
         try {
-            const snapped = snapshotUntrustedArg(rawFirst)
+            const snapped = snapshotUntrustedArg(rawArgs[0])
             arg = snapped.safeArg
             argRec = snapped.argRec
-            if (typeof arg === 'string' && rawOpts !== undefined) {
-                const snappedOpts = snapshotUntrustedArg(rawOpts)
-                if (snappedOpts.argRec !== undefined) {
-                    argRec = Object.assign(Object.create(null) as Record<string, unknown>, snappedOpts.argRec, { code: arg })
-                    arg = argRec
-                }
+            const snappedOpts = rawArgs.length > 1 && rawArgs[1] !== undefined ? snapshotUntrustedArg(rawArgs[1]) : undefined
+            if (typeof arg === 'string' && snappedOpts?.argRec !== undefined) {
+                argRec = Object.assign(Object.create(null) as Record<string, unknown>, snappedOpts.argRec, { code: arg })
+                arg = argRec
+            } else if (argRec !== undefined && snappedOpts?.argRec !== undefined) {
+                const res = mergeNestedArgAndOptions(argRec, snappedOpts.argRec)
+                if ('error' in res) return { success: false, error: res.error, code: 'VALIDATION_ERROR' }
+                arg = argRec = res.merged
             }
         } catch {
             return { success: false, error: 'Nested executeCode argument snapshot failed', code: 'VALIDATION_ERROR' }

@@ -142,6 +142,8 @@ export function buildFileCliEnvBaseline(
 
 /** Build the CLI/env baseline when no startup config file existed. */
 export function buildFallbackCliEnvBaseline(initialConfig: DynamicConfig): ConfigCliEnvBaseline {
+    const rawWs = initialConfig.briefingConfig.defaultWorkspaceId?.trim()
+    const validWs = rawWs !== undefined && !isForbiddenProjectKey(rawWs) ? rawWs : undefined
     return {
         ...(initialConfig.rawToolFilter !== undefined
             ? { rawToolFilter: initialConfig.rawToolFilter }
@@ -149,9 +151,7 @@ export function buildFallbackCliEnvBaseline(initialConfig: DynamicConfig): Confi
         ...(initialConfig.briefingConfig.defaultProjectNumber !== undefined
             ? { defaultProjectNumber: initialConfig.briefingConfig.defaultProjectNumber }
             : {}),
-        ...(initialConfig.briefingConfig.defaultWorkspaceId !== undefined
-            ? { defaultWorkspaceId: initialConfig.briefingConfig.defaultWorkspaceId }
-            : {}),
+        ...(validWs !== undefined ? { defaultWorkspaceId: validWs } : {}),
         ...(initialConfig.briefingConfig.projectRegistry !== undefined
             ? { projectRegistry: initialConfig.briefingConfig.projectRegistry }
             : {}),
