@@ -191,8 +191,9 @@ describe('Git Tools Handler', () => {
 
         expect(res.success).toBe(true)
         expect(res.changelog.commits).toHaveLength(2)
+        expect(res.changelog.truncated).toBe(false)
         expect(mockBuildGitBaseArgs).toHaveBeenCalledWith(
-            expect.objectContaining({ limit: 25, summary: true }),
+            expect.objectContaining({ limit: 26, summary: true }),
             expect.any(String)
         )
     })

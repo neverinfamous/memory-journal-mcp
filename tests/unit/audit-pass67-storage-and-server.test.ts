@@ -348,11 +348,11 @@ describe('Pass 67 Audit — Storage, Locks, Scrubbers, Search, Interceptors, Scr
             expect(seeded.briefingConfig.defaultWorkspaceId).toBeUndefined()
 
             // AP1..AP4: Pass 67 prompt revision and embedded detector rules
-            expect(AUDIT_PROMPT_REVISION).toBe('2026-11-22-audit-pass72')
+            expect(AUDIT_PROMPT_REVISION).toBe('2026-11-22-audit-pass73')
             const cqText =
                 getCodeQualityAuditPromptDefinition().handler({ target: 'src', copilot: 'false' }, db)
                     .messages[0]?.content.text ?? ''
-            expect(cqText).toContain('Prompt revision: 2026-11-22-audit-pass72')
+            expect(cqText).toContain('Prompt revision: 2026-11-22-audit-pass73')
             expect(cqText).toContain('explore')
             expect(cqText).toContain('generalPurpose')
             expect(cqText).toContain('code-quality-audit')

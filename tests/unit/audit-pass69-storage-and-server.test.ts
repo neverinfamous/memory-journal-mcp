@@ -196,7 +196,7 @@ describe('Pass 69 Audit — URIs, Normalizers, Audit Scope, Schemas, Loggers & P
         expect(gitStatus.error).toBeDefined()
         expect(gitStatus.error).not.toContain('ghp_secretToken1234567890')
 
-        expect(AUDIT_PROMPT_REVISION).toBe('2026-11-22-audit-pass72')
+        expect(AUDIT_PROMPT_REVISION).toBe('2026-11-22-audit-pass73')
         const promptDb = new DatabaseAdapter(':memory:')
         await promptDb.initialize()
         let cqText: string
@@ -209,7 +209,7 @@ describe('Pass 69 Audit — URIs, Normalizers, Audit Scope, Schemas, Loggers & P
         } finally {
             promptDb.close()
         }
-        expect(cqText).toContain('Prompt revision: 2026-11-22-audit-pass72')
+        expect(cqText).toContain('Prompt revision: 2026-11-22-audit-pass73')
         expect(cqText).toContain('project-registry admin tools')
         expect(cqText).toContain('extractAuditScopeFromUri')
         expect(cqText).toContain('entryPrev')

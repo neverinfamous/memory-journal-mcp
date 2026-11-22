@@ -24,8 +24,11 @@ import {
     buildEntryPayload,
     createEntryAction,
     createEntryFromFileInProcess,
+    parseContent,
+    parseFrontmatter,
     updateEntryAction,
 } from '../../src/cli/commands/entry.js'
+import { ValidationError } from '../../src/types/errors.js'
 import { execAction } from '../../src/cli/commands/exec.js'
 import { getSandboxPool } from '../../src/handlers/tools/codemode/singleton-state.js'
 import {
@@ -613,6 +616,34 @@ describe('CLI Entry & Exec Commands', () => {
             expect(code).toBe(1)
             expect(exitSpy).not.toHaveBeenCalled()
             expect(stderrOutput.join('')).toContain('non-empty --file path')
+        })
+
+        it('parses BOM/mixed-CRLF/EOF frontmatter, preserves non-blank workspace_id/project aliases, and fails fast on blank --file in parseContent (Q-M5, Q-M6, Q-M7)', async () => {
+            // Q-M5: UTF-8 BOM + mixed CRLF/LF + EOF ---
+            const bomParsed = parseFrontmatter('\uFEFF---\nworkspace_id: "adamic"\nproject: 16\n---\nHello')
+            expect(bomParsed.frontmatter).toEqual({ workspace_id: 'adamic', project: 16 })
+            expect(bomParsed.body).toBe('Hello')
+
+            const mixedParsed = parseFrontmatter('---\r\nworkspace_id: "adamic"\r\n---\nBody line')
+            expect(mixedParsed.frontmatter).toEqual({ workspace_id: 'adamic' })
+            expect(mixedParsed.body).toBe('Body line')
+
+            const eofParsed = parseFrontmatter('---\nworkspace_id: "adamic"\n---')
+            expect(eofParsed.frontmatter).toEqual({ workspace_id: 'adamic' })
+            expect(eofParsed.body).toBe('')
+
+            // Q-M6: Empty string workspace / project must not shadow non-blank aliases
+            const aliasPayload = buildEntryPayload(
+                { project: '' as unknown as number },
+                { workspace: '', workspace_id: 'custom-unreg-ws', project: 999 },
+                { projectRegistry: {} }
+            )
+            expect(aliasPayload.workspaceId).toBe('custom-unreg-ws')
+            expect(aliasPayload.projectNumber).toBe(999)
+
+            // Q-M7: Blank --file in parseContent fails fast with ValidationError without waiting for stdin
+            await expect(parseContent({ file: '' })).rejects.toThrow(ValidationError)
+            await expect(parseContent({ file: '   ' })).rejects.toThrow(ValidationError)
         })
     })
 

@@ -264,29 +264,47 @@ function parseStrictPositiveProjectNumber(raw: unknown): number | undefined {
     return parsed
 }
 
+export function firstNonBlankString(...values: readonly unknown[]): string | undefined {
+    for (const val of values) {
+        if (typeof val === 'string' && val.trim().length > 0) {
+            return val.trim()
+        }
+    }
+    return undefined
+}
+
+function firstDefinedProjectRaw(...values: readonly unknown[]): unknown {
+    for (const val of values) {
+        if (val === undefined || val === null) continue
+        if (typeof val === 'string' && val.trim().length === 0) continue
+        return val
+    }
+    return undefined
+}
+
 export function resolveExplicitProjectAndWorkspace(
     options: HealedEntryOptions,
     metadata: Record<string, unknown>
 ): { explicitProjectNum: number | undefined; explicitWorkspaceId: string | undefined } {
-    const projectRaw =
-        options.project ??
-        options.projectNumber ??
-        options.project_number ??
-        metadata['project'] ??
-        metadata['projectNumber'] ??
+    const projectRaw = firstDefinedProjectRaw(
+        options.project,
+        options.projectNumber,
+        options.project_number,
+        metadata['project'],
+        metadata['projectNumber'],
         metadata['project_number']
+    )
     const explicitProjectNum = parseStrictPositiveProjectNumber(projectRaw)
 
     const optsRec = UNKNOWN_RECORD_SCHEMA.parse(options)
-    const rawWs =
-        optsRec['workspaceId'] ??
-        optsRec['workspace_id'] ??
-        optsRec['workspace'] ??
-        metadata['workspace'] ??
-        metadata['workspaceId'] ??
-        metadata['workspace_id']
-    const explicitWorkspaceId =
-        typeof rawWs === 'string' && rawWs.trim() !== '' ? rawWs.trim() : undefined
+    const explicitWorkspaceId = firstNonBlankString(
+        optsRec['workspaceId'],
+        optsRec['workspace_id'],
+        optsRec['workspace'],
+        metadata['workspace_id'],
+        metadata['workspaceId'],
+        metadata['workspace']
+    )
     if (explicitWorkspaceId === '*') {
         throw new ValidationError(
             "Workspace '*' cannot be used for entry writes. Pass a concrete workspace.",

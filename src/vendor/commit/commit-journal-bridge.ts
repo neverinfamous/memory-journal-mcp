@@ -213,6 +213,7 @@ function isMemoryJournalPackageDir(dirPath: string): boolean {
       parsedPkg.data.name !== undefined &&
       MEMORY_JOURNAL_PACKAGE_NAMES.has(parsedPkg.data.name);
   } catch {
+    packageDirCache.delete(pkgPath);
     return false;
   }
   if (packageDirCache.size >= MAX_PKG_CACHE_ENTRIES && !packageDirCache.has(pkgPath)) {

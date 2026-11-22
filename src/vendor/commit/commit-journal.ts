@@ -293,7 +293,7 @@ export function buildCommitJournalContent(
   frontmatterLines.push(`  commits: [${JSON.stringify(sha)}]`);
   frontmatterLines.push('---');
 
-  const journalBody = historyContent.length > 0 ? historyContent : header;
+  const journalBody = historyContent.trim().length > 0 ? historyContent : header;
   return `${frontmatterLines.join('\n')}\n${journalBody}\n\nCommit: ${sha}`;
 }
 

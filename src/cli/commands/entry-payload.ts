@@ -93,7 +93,10 @@ export async function parseContent(options: HealedEntryOptions): Promise<string>
     const file = normalizedOptions.file
     const contentStr = normalizedOptions.content
 
-    if (file) {
+    if (file !== undefined) {
+        if (file.trim().length === 0) {
+            throw new ValidationError('Must provide a non-empty --file path.')
+        }
         return readFileSync(file, 'utf-8')
     }
     if (contentStr !== undefined) {
@@ -147,40 +150,26 @@ export async function parseContent(options: HealedEntryOptions): Promise<string>
     throw new CliExitError(1)
 }
 
+const FRONTMATTER_RE = /^---\r?\n(?:([\s\S]*?)\r?\n)?---(?:\r?\n|$)/
+
 export function parseFrontmatter(rawContent: string): {
     frontmatter: Record<string, unknown>
     body: string
 } {
-    if (rawContent.startsWith('---\n') || rawContent.startsWith('---\r\n')) {
-        const endOfFrontmatter = rawContent.indexOf('\n---\n', 3)
-        const endOfFrontmatterWindows = rawContent.indexOf('\r\n---\r\n', 4)
-
-        let endIdx = -1
-        let skip = 5
-        if (
-            endOfFrontmatter !== -1 &&
-            (endOfFrontmatterWindows === -1 || endOfFrontmatter < endOfFrontmatterWindows)
-        ) {
-            endIdx = endOfFrontmatter
-            skip = 5
-        } else if (endOfFrontmatterWindows !== -1) {
-            endIdx = endOfFrontmatterWindows
-            skip = 7
-        }
-
-        if (endIdx !== -1) {
-            const yamlStr = rawContent.slice(rawContent.indexOf('\n') + 1, endIdx)
-            const body = rawContent.slice(endIdx + skip).trimStart()
-            try {
-                const parsed: unknown = yaml.parse(yamlStr)
-                const parsedRec = UNKNOWN_RECORD_SCHEMA.safeParse(parsed)
-                return { frontmatter: parsedRec.success ? parsedRec.data : {}, body }
-            } catch (err) {
-                logger.debug('Frontmatter YAML parse failed; treating as body content', {
-                    module: 'CLIEntryPayload',
-                    error: err instanceof Error ? err.message : String(err),
-                })
-            }
+    const content = rawContent.startsWith('\uFEFF') ? rawContent.slice(1) : rawContent
+    const match = FRONTMATTER_RE.exec(content)
+    if (match !== null) {
+        const yamlStr = match[1] ?? ''
+        const body = content.slice(match[0].length).trimStart()
+        try {
+            const parsed: unknown = yaml.parse(yamlStr)
+            const parsedRec = UNKNOWN_RECORD_SCHEMA.safeParse(parsed)
+            return { frontmatter: parsedRec.success ? parsedRec.data : {}, body }
+        } catch (err) {
+            logger.debug('Frontmatter YAML parse failed; treating as body content', {
+                module: 'CLIEntryPayload',
+                error: err instanceof Error ? err.message : String(err),
+            })
         }
     }
     return { frontmatter: {}, body: rawContent }
@@ -363,9 +352,14 @@ function parseMetadataAnchors(
             const parsedRec = UNKNOWN_RECORD_SCHEMA.safeParse(item)
             if (!parsedRec.success) continue
             const rec = parsedRec.data
-            const pathRaw = ANCHOR_PATH_KEYS.map((k) => rec[k]).find(
-                (v): v is string => typeof v === 'string' && v.trim().length > 0
-            )
+            let pathRaw: string | undefined
+            for (const k of ANCHOR_PATH_KEYS) {
+                const v = rec[k]
+                if (typeof v === 'string' && v.trim().length > 0) {
+                    pathRaw = v
+                    break
+                }
+            }
             const typeRaw = rec['anchor_type'] ?? rec['anchorType'] ?? rec['type']
             if (pathRaw !== undefined) parsed.push(normalizeEntryAnchor(pathRaw, typeRaw))
         }

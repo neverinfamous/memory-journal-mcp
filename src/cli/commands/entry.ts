@@ -22,6 +22,7 @@ import {
 } from './entry-payload.js'
 import {
     applyCliEntryFlagAliases,
+    firstNonBlankString,
     type HealedEntryOptions,
 } from './entry-payload-helpers.js'
 import {
@@ -316,19 +317,17 @@ function buildUpdatedEntryPayload(
         content = `# ${options.title}\n\n${content}`
     }
     const metadata = { ...frontmatter, ...parseMetadata(options.metadata) }
-    const metaWs =
-        typeof metadata['workspace_id'] === 'string'
-            ? metadata['workspace_id'].trim()
-            : typeof metadata['workspace'] === 'string'
-              ? metadata['workspace'].trim()
-              : undefined
-    if (metaWs === '*') {
+    const metaSourceWs = firstNonBlankString(
+        metadata['workspace_id'],
+        metadata['workspaceId'],
+        metadata['workspace']
+    )
+    if (metaSourceWs === '*') {
         throw new ValidationError(
             "workspace_id '*' cannot be used to update an entry. Pass a concrete workspace.",
             { workspaceId: '*' }
         )
     }
-    const metaSourceWs = metaWs !== undefined && metaWs !== '' ? metaWs : undefined
     const effectiveOptions =
         trimmedTargetWs !== undefined
             ? {

@@ -157,6 +157,27 @@ const FALLBACK_VALUE_FLAGS = new Set([
     '--port',
 ])
 
+const COMMIT_VALUE_FLAGS = [
+    '--msg',
+    '-m',
+    '--message',
+    '--history',
+    '--history-file',
+    '--impact',
+    '--trust',
+    '--confidence',
+    '--validation',
+    '--significance',
+    '--category',
+    '--cwd',
+    '--add',
+    '--journal-project',
+    '--session-id',
+    '--tags',
+    '--tag',
+    '--relate',
+] as const
+
 function collectValueTakingFlags(argv: readonly string[], rootProgram?: Command): Set<string> {
     if (rootProgram === undefined) return FALLBACK_VALUE_FLAGS
     const flags = new Set<string>()
@@ -181,7 +202,7 @@ function collectValueTakingFlags(argv: readonly string[], rootProgram?: Command)
             currentCmd = sub
             addCmdOpts(currentCmd)
             if (sub.name() === 'commit') {
-                for (const f of ['--msg', '-m', '--cwd', '--add', '--relate', '--impact', '--confidence', '--validation', '--journal-project', '--session-id', '--files']) {
+                for (const f of COMMIT_VALUE_FLAGS) {
                     flags.add(f)
                 }
             }
@@ -196,14 +217,13 @@ export function normalizeCliArgv(argv: readonly string[], rootProgram?: Command)
     let pastDoubleDash = false
     let expectValue = false
     return argv.map((arg) => {
-        if (arg === '--') {
-            pastDoubleDash = true
-            expectValue = false
-            return arg
-        }
         if (pastDoubleDash) return arg
         if (expectValue) {
             expectValue = false
+            return arg
+        }
+        if (arg === '--') {
+            pastDoubleDash = true
             return arg
         }
         if (arg.startsWith('--')) {

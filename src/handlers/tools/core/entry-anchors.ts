@@ -80,6 +80,7 @@ async function fetchRepoCommitFilesBatch(
         )
         return parseGitShowPerCommitFiles(stdout, shas)
     } catch {
+        if (shas.length <= 1) return new Map()
         const mapped = new Map<string, string[]>()
         for (let i = 0; i < shas.length; i += GIT_SHOW_BATCH_CONCURRENCY) {
             const chunk = shas.slice(i, i + GIT_SHOW_BATCH_CONCURRENCY)

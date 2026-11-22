@@ -286,20 +286,22 @@ function hasNewerTsInDir(dirPath: string, targetMtimeMs: number): boolean {
 }
 
 function isCompiledCommitFresh(rootDir: string): boolean {
-  const compiledCommit = path.join(rootDir, "dist", "vendor", "commit", "commit.js");
-  const compiledStat = fs.statSync(compiledCommit, { throwIfNoEntry: false });
-  if (!compiledStat || !compiledStat.isFile()) return false;
+  try {
+    const compiledCommit = path.join(rootDir, "dist", "vendor", "commit", "commit.js");
+    const compiledStat = fs.statSync(compiledCommit, { throwIfNoEntry: false });
+    if (!compiledStat || !compiledStat.isFile()) return false;
 
-  const commitScript = path.join(rootDir, "scripts", "commit.ts");
-  const sourceStat = fs.statSync(commitScript, { throwIfNoEntry: false });
-  if (sourceStat && sourceStat.mtimeMs > compiledStat.mtimeMs) return false;
+    const commitScript = path.join(rootDir, "scripts", "commit.ts");
+    const sourceStat = fs.statSync(commitScript, { throwIfNoEntry: false });
+    if (sourceStat && sourceStat.mtimeMs > compiledStat.mtimeMs) return false;
 
-  for (const lib of ["commit"]) {
-    if (hasNewerTsInDir(path.join(rootDir, "src", "vendor", lib), compiledStat.mtimeMs)) {
+    if (hasNewerTsInDir(path.join(rootDir, "src", "vendor", "commit"), compiledStat.mtimeMs)) {
       return false;
     }
+    return true;
+  } catch {
+    return false;
   }
-  return true;
 }
 
 export function buildCommitInvocation(
@@ -393,7 +395,7 @@ export function updateBadges(options: { rootDir?: string } = {}): void {
   const updatedFiles = filesToUpdate.filter((file) =>
     updateBadgeTargetFile(file, metrics, rootDir)
   );
-  if (process.exitCode === 1) return;
+  if (process.exitCode !== undefined && process.exitCode !== 0) return;
   autoCommitDirtyBadgeFiles(filesToUpdate, updatedFiles, rootDir);
 }
 

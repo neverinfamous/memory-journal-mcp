@@ -59,8 +59,22 @@ export function resolveGitDir(cwd: string): string | null {
 }
 
 export function resolveRepoRootForGuard(cwd: string, resolvedGitDir: string | null): string {
-  if (resolvedGitDir !== null && path.basename(resolvedGitDir).toLowerCase() === '.git') {
-    return path.dirname(resolvedGitDir);
+  if (resolvedGitDir !== null) {
+    if (path.basename(resolvedGitDir).toLowerCase() === '.git') {
+      return path.dirname(resolvedGitDir);
+    }
+    try {
+      const topLevel = execFileSync('git', ['rev-parse', '--show-toplevel'], {
+        encoding: 'utf-8',
+        cwd,
+        windowsHide: true,
+      }).trim();
+      if (topLevel.length > 0) {
+        return path.resolve(topLevel);
+      }
+    } catch {
+      return cwd;
+    }
   }
   return cwd;
 }
@@ -106,27 +120,65 @@ function queryMatchingGitRelPaths(
   return matched;
 }
 
+function resolveTargetsForGitQuery(
+  cwd: string,
+  targetPaths: readonly string[],
+  onlyMissing: boolean,
+  resolvedGitDir?: string | null
+): { queryCwd: string; candidates: Array<{ original: string; relPosix: string }> } {
+  const filtered: string[] = [];
+  const cwdCandidates: Array<{ original: string; relPosix: string }> = [];
+  let hasEscapedTarget = false;
+  for (const targetPath of targetPaths) {
+    if (onlyMissing && fs.statSync(path.resolve(cwd, targetPath), { throwIfNoEntry: false }) !== undefined) {
+      continue;
+    }
+    filtered.push(targetPath);
+    const relPosix = getValidatedRepoRelPath(cwd, targetPath);
+    if (relPosix !== null) {
+      cwdCandidates.push({ original: targetPath, relPosix });
+    } else {
+      hasEscapedTarget = true;
+    }
+  }
+  if (!hasEscapedTarget) {
+    return { queryCwd: cwd, candidates: cwdCandidates };
+  }
+  const gitDir = resolvedGitDir !== undefined ? resolvedGitDir : resolveGitDir(cwd);
+  const repoRoot = resolveRepoRootForGuard(cwd, gitDir);
+  if (isSameResolvedPath(repoRoot, cwd)) {
+    return { queryCwd: cwd, candidates: cwdCandidates };
+  }
+  const repoCandidates: Array<{ original: string; relPosix: string }> = [];
+  for (const targetPath of filtered) {
+    const relPosix = getValidatedRepoRelPath(repoRoot, path.resolve(cwd, targetPath));
+    if (relPosix !== null) {
+      repoCandidates.push({ original: targetPath, relPosix });
+    }
+  }
+  return { queryCwd: repoRoot, candidates: repoCandidates };
+}
+
 /**
  * [INTENT]: Batched single-subprocess detector for `--add` paths that are missing on disk and
  * already staged as deletions (`D  <path>`) in `.git/index`, preventing `git add` exit 128.
  */
-export function findAlreadyStagedDeletions(cwd: string, targetPaths: readonly string[]): Set<string> {
-  const missingTargets: Array<{ original: string; relPosix: string }> = [];
-  for (const targetPath of targetPaths) {
-    if (fs.statSync(path.resolve(cwd, targetPath), { throwIfNoEntry: false }) !== undefined) continue;
-    const relPosix = getValidatedRepoRelPath(cwd, targetPath);
-    if (relPosix !== null) missingTargets.push({ original: targetPath, relPosix });
-  }
-  return queryMatchingGitRelPaths(cwd, missingTargets, ['diff', '--cached', '--relative', '--name-only', '--diff-filter=D', '-z']);
+export function findAlreadyStagedDeletions(
+  cwd: string,
+  targetPaths: readonly string[],
+  resolvedGitDir?: string | null
+): Set<string> {
+  const { queryCwd, candidates } = resolveTargetsForGitQuery(cwd, targetPaths, true, resolvedGitDir);
+  return queryMatchingGitRelPaths(queryCwd, candidates, ['diff', '--cached', '--relative', '--name-only', '--diff-filter=D', '-z']);
 }
 
-export function findTrackedIndexPaths(cwd: string, targetPaths: readonly string[]): Set<string> {
-  const candidates: Array<{ original: string; relPosix: string }> = [];
-  for (const targetPath of targetPaths) {
-    const relPosix = getValidatedRepoRelPath(cwd, targetPath);
-    if (relPosix !== null) candidates.push({ original: targetPath, relPosix });
-  }
-  return queryMatchingGitRelPaths(cwd, candidates, ['ls-files', '-z']);
+export function findTrackedIndexPaths(
+  cwd: string,
+  targetPaths: readonly string[],
+  resolvedGitDir?: string | null
+): Set<string> {
+  const { queryCwd, candidates } = resolveTargetsForGitQuery(cwd, targetPaths, false, resolvedGitDir);
+  return queryMatchingGitRelPaths(queryCwd, candidates, ['ls-files', '-z']);
 }
 
 /**

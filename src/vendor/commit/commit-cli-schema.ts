@@ -272,9 +272,12 @@ export const cliSchema = z.object({
   tags: z.preprocess((val) => {
     if (val === undefined) return undefined;
     const rawItems = Array.isArray(val) ? val : [val];
-    const normalized: string[] = [];
+    const normalized: unknown[] = [];
     for (const item of rawItems) {
-      if (typeof item !== 'string') continue;
+      if (typeof item !== 'string') {
+        normalized.push(item);
+        continue;
+      }
       const trimmed = item.trim();
       const inner = trimmed.startsWith('[') && trimmed.endsWith(']') ? trimmed.slice(1, -1) : trimmed;
       for (const token of inner.split(',')) {
