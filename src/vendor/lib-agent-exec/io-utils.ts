@@ -2,7 +2,7 @@
 import { Writable } from 'node:stream';
 import { ExecPayload, JsonEnvelopeSchema } from './schema.js';
 import { renderWebhookTemplate } from './webhook-template.js';
-import { recordAgentIssue } from './utils.js';
+import { recordAgentIssue, validateWebhookUrl } from './utils.js';
 
 export const WEBHOOK_FLUSH_INTERVAL_MS = 100;
 export const TAIL_MAX_LENGTH = 2048;
@@ -37,12 +37,13 @@ export function pauseStreamUntilDrained(
   source: NodeJS.ReadableStream | null | undefined,
   targets: Writable[],
 ): void {
-  if (!source || targets.length === 0 || ('isPaused' in source && typeof source.isPaused === 'function' && source.isPaused())) {
+  const activeTargets = targets.filter((t) => !t.destroyed && !t.writableEnded);
+  if (!source || activeTargets.length === 0 || ('isPaused' in source && typeof source.isPaused === 'function' && source.isPaused())) {
     return;
   }
   source.pause();
-  let drainCount = targets.length;
-  targets.forEach((target) => {
+  let drainCount = activeTargets.length;
+  activeTargets.forEach((target) => {
     let handled = false;
     const resumeIfDone = () => {
       if (handled) return;
@@ -85,9 +86,12 @@ export function extractEnvelope(tail: string): EnvelopeMatch | null {
   for (let i = 0; i < tail.length; i++) {
     const char = tail[i];
     if (escape) { escape = false; continue; }
-    if (char === '\\') { escape = true; continue; }
-    if (char === '"') { inString = !inString; continue; }
-    if (inString) continue;
+    if (inString) {
+      if (char === '\\') escape = true;
+      else if (char === '"') inString = false;
+      continue;
+    }
+    if (braceCount > 0 && char === '"') { inString = true; continue; }
 
     if (char === '{') {
       if (braceCount === 0) startIdx = i;
@@ -136,17 +140,28 @@ function dispatchWebhookChunk(
       { stdout: chunkStr, stderr: chunkStr, success: true, code: null, signal: null },
     );
   }
-  const fetchOptions: RequestInit = { method, headers };
+  const fetchOptions: RequestInit = { method, headers, redirect: 'error' };
   if (method !== 'GET') fetchOptions.body = bodyPayload;
   const timeoutMs = payload.webhookTimeoutMs ?? 5000;
   if (timeoutMs > 0) fetchOptions.signal = AbortSignal.timeout(timeoutMs);
 
-  const req = fetch(filePath, fetchOptions)
-    .then((res) => res.arrayBuffer())
+  const validated = validateWebhookUrl(filePath);
+  if (validated === null) {
+    recordAgentIssue('WEBHOOK_DELIVERY_FAILED', 'Invalid or unsafe webhook stream URL', payload, { targetUrl: filePath, method });
+    return Promise.resolve();
+  }
+  const req = fetch(validated.href, fetchOptions)
+    .then(async (res) => {
+      const body = await res.arrayBuffer();
+      if (!res.ok) {
+        recordAgentIssue('WEBHOOK_DELIVERY_FAILED', `Webhook stream returned HTTP ${res.status}`, payload, { targetUrl: filePath, method });
+      }
+      return body;
+    })
     .then(() => {})
     .catch((err: unknown) => {
       const msg = err instanceof Error ? err.message : String(err);
-      recordAgentIssue('WEBHOOK_DELIVERY_FAILED', `Webhook stream request failed: ${msg}`, { targetUrl: filePath, method });
+      recordAgentIssue('WEBHOOK_DELIVERY_FAILED', `Webhook stream request failed: ${msg}`, payload, { targetUrl: filePath, method });
     });
   inFlightReqs.add(req);
   req.finally(() => inFlightReqs.delete(req));
@@ -180,8 +195,8 @@ export function createWebhookStream(filePath: string, payload: ExecPayload): Wri
       callback();
     },
     final(callback) {
+      clearFlushTimer();
       const finish = () => {
-        clearFlushTimer();
         if (buffer.length > 0) {
           const data = Buffer.concat(buffer);
           buffer = [];
@@ -199,4 +214,46 @@ export function createWebhookStream(filePath: string, payload: ExecPayload): Wri
       callback(err);
     },
   });
+}
+
+export async function closeStreamsWithTimeout(streams: readonly (Writable | undefined)[], timeoutMs: number): Promise<void> {
+  const active = streams.filter((s): s is Writable => s !== undefined && !s.destroyed && !s.writableFinished);
+  if (active.length === 0) return;
+  const closePromises = active.map((stream) => (
+    new Promise<void>((resolve) => {
+      const done = () => {
+        stream.off('finish', done);
+        stream.off('error', done);
+        stream.off('close', done);
+        resolve();
+      };
+      stream.once('finish', done);
+      stream.once('error', done);
+      stream.once('close', done);
+      stream.end();
+    })
+  ));
+  let timeoutId: NodeJS.Timeout | undefined;
+  let timedOut = false;
+  try {
+    await Promise.race([
+      Promise.all(closePromises),
+      new Promise<void>((resolve) => { timeoutId = setTimeout(() => { timedOut = true; resolve(); }, timeoutMs); }),
+    ]);
+  } finally {
+    if (timeoutId !== undefined) clearTimeout(timeoutId);
+    if (timedOut) {
+      for (const s of active) {
+        if (!s.destroyed && !s.writableFinished) destroyStreamSafely(s);
+      }
+    }
+  }
+}
+
+function destroyStreamSafely(stream: Writable): void {
+  try {
+    stream.destroy();
+  } catch {
+    // ignore
+  }
 }

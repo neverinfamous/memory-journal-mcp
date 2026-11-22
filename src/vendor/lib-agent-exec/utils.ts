@@ -7,23 +7,29 @@ import { fileURLToPath } from 'node:url';
 import os from 'node:os';
 import dotenv from 'dotenv';
 
-const SECRET_FIELD_RE = /(?:token|secret|passw(?:or)?d|credential|api[_-]?key|private[_-]?key|(?:^|[-_])key$|^auth$|^authorization$|(?:^|[-_])auth(?:[-_]|$)|^stdin$|^cookie$|^set[-_]?cookie$|^x-(?:auth|api|key|token|secret))/i;
+const SECRET_FIELD_RE = /(?:token|secret|passw(?:or)?d|passphrase|credential|api[_-]?key|private[_-]?key|(?:^|[-_])key$|^auth$|(?:proxy[-_])?authorization$|(?:^|[-_])auth(?:[-_]|$)|^stdin$|^cookie$|^set[-_]?cookie$|^x-(?:auth|api|key|token|secret))/i;
 const MAX_LOGGED_STRING = 2000;
 
-const URL_CREDENTIAL_RE = /(https?:\/\/)([^:@\s/]+):([^@\s/]+)@/gi;
-const BEARER_RE = /\b(Bearer|Basic)\s+[A-Za-z0-9._\-+/=]+/gi;
-const TELEMETRY_SECRET_RE = /((?:token|secret|passw(?:or)?d|credential|api[-_]?key|authorization|private[-_]?key|cookie|set[-_]?cookie|x-(?:auth|api|key|token|secret)[^\s:=]*)\s*[:=]\s*(?:(?:Bearer|Basic)\s+)?)(['"]?)[^\s'"]+/gi;
+const URL_CREDENTIAL_RE = /([a-z][a-z0-9+.-]*:\/\/)([^:@\s/]+):([^@\s/]+)@|([a-z][a-z0-9+.-]*:\/\/)([^:@\s/]+)@/gi;
+const BEARER_RE = /\b(Bearer|Basic|Token|ApiKey|Digest|AWS4-HMAC-SHA256)\s+[A-Za-z0-9._\-+/=,]+/gi;
+const COOKIE_HEADER_RE = /\b((?:Set-)?Cookie\s*[:=]\s*)(?:"[^"]*"|'[^']*'|[^\r\n]+)/gi;
+const TELEMETRY_SECRET_RE = /((?:token|secret|passw(?:or)?d|passphrase|credential|api[-_]?key|(?:proxy[-_])?authorization|private[-_]?key|x-(?:auth|api|key|token|secret)[^\s:=\\]*)(?:\\?['"])?\s*[:=]\s*(?:(?:Bearer|Basic|Token|ApiKey|Digest|AWS4-HMAC-SHA256)\s+)?)(?:(\\"|")((?:[^"\\]|\\.)*)(?:\2|$)|(\\'|')((?:[^'\\]|\\.)*)(?:\4|$)|([^\s'",}\]]+))/gi;
 
 function truncateForLog(value: string): string {
   return value.length > MAX_LOGGED_STRING ? `${value.substring(0, MAX_LOGGED_STRING)}... [truncated]` : value;
 }
 
 export function redactTelemetryText(value: string): string {
-  const text = truncateForLog(value);
-  return text
-    .replace(URL_CREDENTIAL_RE, '$1$2:[REDACTED]@')
+  const redacted = value
+    .replace(URL_CREDENTIAL_RE, (_m, s1?: string, u1?: string, _p1?: string, s2?: string) => (
+      s1 !== undefined ? `${s1}${u1 ?? ''}:[REDACTED]@` : `${s2 ?? ''}[REDACTED]@`
+    ))
+    .replace(COOKIE_HEADER_RE, '$1[REDACTED]')
     .replace(BEARER_RE, '$1 [REDACTED]')
-    .replace(TELEMETRY_SECRET_RE, '$1$2[REDACTED]');
+    .replace(TELEMETRY_SECRET_RE, (_m, prefix: string, dq?: string, _dv?: string, sq?: string) => (
+      dq !== undefined ? `${prefix}${dq}[REDACTED]${dq}` : (sq !== undefined ? `${prefix}${sq}[REDACTED]${sq}` : `${prefix}[REDACTED]`)
+    ));
+  return truncateForLog(redacted);
 }
 
 /**
@@ -31,10 +37,14 @@ export function redactTelemetryText(value: string): string {
  * [INVARIANT]: Never writes values of secret-like keys (env tokens, API keys) or secret strings to disk.
  */
 export function redactPayloadForLog(value: unknown, depth = 0): unknown {
-  if (typeof value === 'string') {
-    return redactTelemetryText(value);
-  }
+  if (typeof value === 'string') return redactTelemetryText(value);
+  if (typeof value === 'bigint') return String(value);
   if (value === null || typeof value !== 'object') return value;
+  if (value instanceof Date) return Number.isNaN(value.getTime()) ? 'Invalid Date' : value.toISOString();
+  if (value instanceof URL) return redactTelemetryText(value.href);
+  if (Error.isError(value) || value instanceof Error) {
+    return { name: value.name, message: redactTelemetryText(value.message) };
+  }
   if (depth > 6) return '[depth-limit]';
   if (Array.isArray(value)) {
     return value.slice(0, 200).map(v => redactPayloadForLog(v, depth + 1));
@@ -101,7 +111,7 @@ export function recordAgentIssue(issueType: string, message: string, payload?: u
     const filename = fileURLToPath(import.meta.url);
     let targetDir = path.join(path.dirname(filename), '..', '..');
 
-    if (payload && typeof payload === 'object' && 'cwd' in payload && typeof payload.cwd === 'string') {
+    if (payload !== null && payload !== undefined && typeof payload === 'object' && 'cwd' in payload && typeof payload.cwd === 'string') {
       const root = findEcosystemRoot(payload.cwd);
       if (root) {
         targetDir = path.join(root, '.agents');
@@ -114,12 +124,15 @@ export function recordAgentIssue(issueType: string, message: string, payload?: u
 
     const safeMessage = redactTelemetryText(message);
     const timestamp = new Date().toISOString();
-    const record: Record<string, unknown> = { timestamp, issueType, message: safeMessage, payload: safePayload };
+    const record: Record<string, unknown> = {
+      ...(safeExtra !== null && typeof safeExtra === 'object' ? safeExtra : {}),
+      timestamp,
+      issueType,
+      message: safeMessage,
+      payload: safePayload,
+    };
     if (internalStallBypass) {
       record.internalStallBypass = true;
-    }
-    if (safeExtra !== null && typeof safeExtra === 'object') {
-      Object.assign(record, safeExtra);
     }
     const entry = JSON.stringify(record) + '\n';
     
@@ -156,10 +169,14 @@ export function resolveNativeBinary(name: string): string | null {
     const candidates = hasExt ? [name] : exts.map(ext => `${name}${ext}`);
     for (const candidate of candidates) {
       const full = path.join(dir, candidate);
-      const st = fs.statSync(full, { throwIfNoEntry: false });
-      if (st !== undefined && st.isFile()) {
-        resolved = full;
-        break outer;
+      try {
+        const st = fs.statSync(full, { throwIfNoEntry: false });
+        if (st !== undefined && st.isFile()) {
+          resolved = full;
+          break outer;
+        }
+      } catch {
+        // Ignore inaccessible PATH entries (e.g., restricted Windows AppExecLinks).
       }
     }
   }
@@ -224,8 +241,38 @@ export function replaceIntegrationContext(str: string, payload: ExecPayload): st
     }
     return typeof current === 'object' 
       ? JSON.stringify(current) 
-      : (typeof current === 'string' ? JSON.stringify(current).slice(1, -1) : String(current));
+      : String(current);
   });
+}
+
+const METADATA_HOSTS: ReadonlySet<string> = new Set([
+  '169.254.169.254',
+  '169.254.170.2',
+  'fd00:ec2::254',
+  'metadata.google.internal',
+  'metadata.goog',
+  'metadata.azure.internal',
+]);
+
+export function validateWebhookUrl(rawUrl: string): URL | null {
+  try {
+    const parsed = new URL(rawUrl);
+    const proto = parsed.protocol.toLowerCase();
+    if (proto !== 'http:' && proto !== 'https:') return null;
+    const host = parsed.hostname.toLowerCase().replace(/^\[|\]$/g, '');
+    if (host.length === 0) return null;
+    if (
+      METADATA_HOSTS.has(host) ||
+      host.startsWith('169.254.') ||
+      host.startsWith('::ffff:169.254.') ||
+      /^fe[89ab][0-9a-f]:/i.test(host)
+    ) {
+      return null;
+    }
+    return parsed;
+  } catch {
+    return null;
+  }
 }
 
 export async function sendWebhook(
@@ -250,7 +297,6 @@ export async function sendWebhook(
       stdout: vars.stdout, 
       stderr: vars.stderr 
     });
-    body = replaceIntegrationContext(body, payload);
   }
 
   const urlArray = Array.isArray(urls) ? urls : [urls];
@@ -258,17 +304,18 @@ export async function sendWebhook(
     const targetUrl = replaceIntegrationContext(u, payload);
     const method = payload.webhookMethod || 'POST';
     const timeoutMs = payload.webhookTimeoutMs ?? 5000;
+    const validatedUrl = validateWebhookUrl(targetUrl);
 
-    if (!targetUrl.startsWith('http://') && !targetUrl.startsWith('https://')) {
-      console.error(`❌ Webhook Error: Invalid or unsafe target URL for webhook. Only http/https allowed.`);
+    if (validatedUrl === null) {
+      console.error(`❌ Webhook Error: Invalid or unsafe target URL for webhook. Only http/https non-metadata endpoints allowed.`);
     } else {
-      const fetchOptions: RequestInit = { method, headers };
+      const fetchOptions: RequestInit = { method, headers, redirect: 'error' };
       if (timeoutMs > 0) {
         fetchOptions.signal = AbortSignal.timeout(timeoutMs);
       }
-      if (method !== 'GET') fetchOptions.body = body;
+      if (method.toUpperCase() !== 'GET' && method.toUpperCase() !== 'HEAD') fetchOptions.body = body;
       try { 
-        await fetch(targetUrl, fetchOptions).then(async res => {
+        await fetch(validatedUrl.href, fetchOptions).then(async res => {
           if (!res.ok) {
             console.error(`❌ Webhook Error: HTTP ${res.status} ${res.statusText}`);
           }

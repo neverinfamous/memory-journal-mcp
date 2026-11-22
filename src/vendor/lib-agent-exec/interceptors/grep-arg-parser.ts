@@ -1,7 +1,8 @@
 // @ts-nocheck
 import fs from 'node:fs';
+import path from 'node:path';
 import { tokenizeArgs } from '../command-utils.js';
-import { hasUriOrNonDriveColon, isSecondExistingTargetOnly } from './search-path-utils.js';
+import { hasBackslashRegexEscape, hasUriOrNonDriveColon, isSecondExistingTargetOnly } from './search-path-utils.js';
 
 export interface ParsedGrepSearchArgs {
   pattern: string;
@@ -61,16 +62,18 @@ function isCaseInsensitiveFlag(arg: string, lower: string): boolean {
 
 function consumeRegexFlag(state: GrepScanState, args: string[], index: number, lower: string): number {
   state.isRegex = true;
-  if (lower !== '--is-regex' && index + 1 < args.length && !args[index + 1].startsWith('-')) {
-    state.pattern = args[index + 1];
+  const nextArg = args[index + 1];
+  if (lower !== '--is-regex' && nextArg !== undefined && !nextArg.startsWith('-')) {
+    state.pattern = nextArg;
     return index + 1;
   }
   return index;
 }
 
 function consumeValueInto(state: GrepScanState, args: string[], index: number, field: 'pattern' | 'searchPath'): number {
-  if (index + 1 < args.length) {
-    state[field] = args[index + 1];
+  const nextArg = args[index + 1];
+  if (nextArg !== undefined) {
+    state[field] = nextArg;
     return index + 1;
   }
   return index;
@@ -99,8 +102,9 @@ function assignAmbiguousPValue(state: GrepScanState, args: string[], value: stri
 }
 
 function consumeAmbiguousP(state: GrepScanState, args: string[], index: number): number {
-  if (index + 1 >= args.length) return index;
-  assignAmbiguousPValue(state, args, args[index + 1]);
+  const nextArg = args[index + 1];
+  if (nextArg === undefined) return index;
+  assignAmbiguousPValue(state, args, nextArg);
   return index + 1;
 }
 
@@ -168,11 +172,12 @@ function scanGrepSearchFlags(normalizedArgs: string[]): GrepScanState {
   return state;
 }
 
-function isGrepParsePathLike(value: string): boolean {
+function isGrepParsePathLike(value: string, cwd?: string): boolean {
   if (!value || value.length === 0) return false;
   const clean = value.trim();
   if (hasUriOrNonDriveColon(clean)) return false;
-  if (/[()*+?[\]^$|{}]/.test(clean) || /\\[bBwWdDsSnrtv0()[\]{}.*+?^$|\-.]/.test(clean) || clean.includes('|')) {
+  if (/^[a-zA-Z]:[/\\]/.test(clean)) return true;
+  if (/[()*+?[\]^$|{}]/.test(clean) || hasBackslashRegexEscape(clean) || clean.includes('|')) {
     return false;
   }
   if (clean === '.' || clean === '..' || clean.startsWith('./') || clean.startsWith('../') || clean.endsWith('/') || clean.endsWith('\\')) {
@@ -180,26 +185,28 @@ function isGrepParsePathLike(value: string): boolean {
   }
   if (clean.includes('/') || clean.includes('\\') || /^[a-zA-Z]:/.test(clean)) return true;
   try {
-    return fs.existsSync(clean) && fs.statSync(clean).isDirectory();
+    const baseDir = cwd !== undefined && cwd.length > 0 ? path.resolve(cwd) : process.cwd();
+    const st = fs.statSync(path.resolve(baseDir, clean), { throwIfNoEntry: false });
+    return st !== undefined && st.isDirectory();
   } catch {
     return false;
   }
 }
 
-function realignPatternAndSearchPath(pattern: string, searchPath: string): { pattern: string; searchPath: string } {
-  if (!isGrepParsePathLike(pattern) || isSecondExistingTargetOnly(pattern, searchPath)) {
+function realignPatternAndSearchPath(pattern: string, searchPath: string, cwd?: string): { pattern: string; searchPath: string } {
+  if (!isGrepParsePathLike(pattern, cwd) || isSecondExistingTargetOnly(pattern, searchPath, cwd)) {
     return { pattern, searchPath };
   }
-  if (!isGrepParsePathLike(searchPath) && searchPath.length > 0) {
+  if (!isGrepParsePathLike(searchPath, cwd) && searchPath.length > 0) {
     return { pattern: searchPath, searchPath: pattern };
   }
   if (searchPath.length === 0) return { pattern: '', searchPath: pattern };
   return { pattern, searchPath };
 }
 
-export function parseGrepSearchArgs(args: string[]): ParsedGrepSearchArgs {
+export function parseGrepSearchArgs(args: string[], cwd?: string): ParsedGrepSearchArgs {
   const state = scanGrepSearchFlags(normalizeBundledGrepParserArgs(args));
-  const aligned = realignPatternAndSearchPath(state.pattern, state.searchPath);
+  const aligned = realignPatternAndSearchPath(state.pattern, state.searchPath, cwd);
   return {
     pattern: aligned.pattern,
     searchPath: aligned.searchPath.length === 0 ? '.' : aligned.searchPath,

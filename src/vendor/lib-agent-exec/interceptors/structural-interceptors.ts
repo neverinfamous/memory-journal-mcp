@@ -2,13 +2,20 @@
 import { match, P } from 'ts-pattern';
 import { ExecutionContext, AGENT_NATIVE_TOOLS, ECOSYSTEM_MCP_TOOLS } from './types.js';
 import { convertToWslPath, findPatternExprIndex } from '../command-utils.js';
-import { AGENT_EXEC_README_URL, getUnquoted } from './utils.js';
+import { AGENT_EXEC_README_URL, getUnquoted, hasPreDoubleDashHelpOrVersion, hasTailFollowFlag } from './utils.js';
 import { handleRipgrepInterception, parseGrepSearchArgs } from './search-interceptor.js';
 
-function tryRewriteWslPwshToBash(ctx: ExecutionContext, originalCmd: string, hasInlineCmd: boolean, innerCmdStr: string): boolean {
-  const isPwsh = ['pwsh', 'pwsh.exe', 'powershell', 'powershell.exe'].includes(originalCmd.toLowerCase());
-  if (!isPwsh || ctx.payload.target !== 'wsl2' || ctx.payload.type !== 'command' || !hasInlineCmd) return false;
-  console.error(`\n   🛠️ AUTONOMOUS HEALING: Rewriting WSL2-targeted '${originalCmd}' inline command to 'bash -c'... (Frictionless Recovery)\x1b[0m`);
+const EMBEDDED_WIN_SHELL_CMDS = new Set(['pwsh', 'pwsh.exe', 'powershell', 'powershell.exe', 'cmd', 'cmd.exe']);
+
+function rewriteInlineShellToBashIfNeeded(
+  ctx: ExecutionContext,
+  originalCmd: string,
+  inlineFlag: string,
+  innerCmdStr: string,
+): boolean {
+  const isWinShell = EMBEDDED_WIN_SHELL_CMDS.has(originalCmd.toLowerCase());
+  if (!isWinShell || ctx.payload.type !== 'command') return false;
+  if (['-ec', '-encodedcommand', '-en'].includes(inlineFlag)) return false;
   ctx.cmdBasename = 'bash';
   ctx.args = ['-c', innerCmdStr];
   ctx.payload.command = 'bash';
@@ -16,10 +23,25 @@ function tryRewriteWslPwshToBash(ctx: ExecutionContext, originalCmd: string, has
   return true;
 }
 
+function tryRewriteWslPwshToBash(
+  ctx: ExecutionContext,
+  originalCmd: string,
+  hasInlineCmd: boolean,
+  inlineFlag: string,
+  innerCmdStr: string,
+): boolean {
+  if (ctx.payload.target !== 'wsl2' || !hasInlineCmd) return false;
+  if (!rewriteInlineShellToBashIfNeeded(ctx, originalCmd, inlineFlag, innerCmdStr)) return false;
+  console.error(`\n   🛠️ AUTONOMOUS HEALING: Rewriting WSL2-targeted '${originalCmd}' inline command to 'bash -c'... (Frictionless Recovery)\x1b[0m`);
+  return true;
+}
+
 function isAwkSedJqSafeWithoutMorePositionals(cmd: string, args: readonly string[], positionalArgs: readonly string[]): boolean {
-  const hasExprOrFileFlag = args.some(
-    a => a === '-e' || (a.startsWith('-e') && !a.startsWith('--')) ||
-      a === '--expression' || a.startsWith('--expression=') ||
+  const ddIdx = args.indexOf('--');
+  const flags = ddIdx === -1 ? args : args.slice(0, ddIdx);
+  const isSedOrAwk = cmd === 'sed' || cmd === 'sed.exe' || cmd === 'awk' || cmd === 'gawk';
+  const hasExprOrFileFlag = flags.some(
+    a => (isSedOrAwk && (a === '-e' || (a.startsWith('-e') && !a.startsWith('--')) || a === '--expression' || a.startsWith('--expression='))) ||
       a === '-f' || (a.startsWith('-f') && !a.startsWith('--')) ||
       a === '--file' || a.startsWith('--file=') ||
       a === '--from-file' || a.startsWith('--from-file=') ||
@@ -27,10 +49,68 @@ function isAwkSedJqSafeWithoutMorePositionals(cmd: string, args: readonly string
   );
   if (hasExprOrFileFlag && positionalArgs.length >= 1) return true;
   return match(cmd)
-    .with(P.union('jq', 'jq.exe', 'yq', 'yq.exe'), () => args.includes('-n') || args.includes('--null-input') || args.includes('--help'))
-    .with(P.union('sed', 'sed.exe'), () => args.includes('-h') || args.includes('--help'))
-    .with(P.union('awk', 'gawk'), () => args.includes('-V') || args.includes('--version') || args.includes('-W') || args.includes('--help') || args.some(a => a.includes('BEGIN')))
+    .with(P.union('jq', 'jq.exe', 'yq', 'yq.exe'), () => flags.some(a => /^-[a-zA-Z]*n[a-zA-Z]*$/.test(a) || a === '--null-input' || a === '--help' || a === '-h' || a === '--version' || a === '-V'))
+    .with(P.union('sed', 'sed.exe'), () => flags.includes('-h') || flags.includes('--help') || flags.includes('--version') || flags.includes('-V'))
+    .with(P.union('awk', 'gawk'), () => flags.includes('-V') || flags.includes('--version') || flags.includes('-W') || flags.includes('--help') || args.some(a => a.includes('BEGIN')))
     .otherwise(() => false);
+}
+
+const CLAUSE_WRAPPER_CMDS = new Set(['if', 'then', 'elif', 'else', 'do', 'while', 'until', 'time', 'command', 'builtin', 'nohup', 'exec', 'sudo', 'env']);
+
+function parseClauseHeads(stripped: string): Array<{ head: string; argCount: number }> {
+  const results: Array<{ head: string; argCount: number }> = [];
+  for (const rawClause of stripped.split(/[;\n|&]+/)) {
+    const cleaned = rawClause.replace(/^[\s({!]+/, '').trim();
+    if (cleaned.length === 0) continue;
+    const parts = cleaned.split(/\s+/).filter(Boolean);
+    let idx = 0;
+    while (idx < parts.length) {
+      const tok = parts[idx] ?? '';
+      if (/^[a-z_][a-z0-9_]*=/.test(tok) || CLAUSE_WRAPPER_CMDS.has(tok) || (idx > 0 && tok.startsWith('-'))) {
+        idx++;
+        continue;
+      }
+      break;
+    }
+    const rawHead = parts[idx];
+    if (rawHead === undefined || rawHead.length === 0) continue;
+    const head = rawHead.replace(/^.*[/\\]/, '');
+    const restArgs = parts.slice(idx + 1).filter(t => !t.startsWith('-') && !/[><]/.test(t));
+    results.push({ head, argCount: restArgs.length });
+  }
+  return results;
+}
+
+function unwrapWslExecToInnerCommand(ctx: ExecutionContext, args: readonly string[]): boolean {
+  if (ctx.payload.type !== 'command') return false;
+  const execIdx = args.findIndex(a => a === '-e' || a === '--exec');
+  if (execIdx === -1 || execIdx + 1 >= args.length) return false;
+  const innerCmd = args[execIdx + 1];
+  if (innerCmd === undefined || innerCmd.length === 0) return false;
+  const normalized = innerCmd.replace(/^.*[/\\]/, '');
+  ctx.cmdBasename = normalized;
+  ctx.args = args.slice(execIdx + 2);
+  ctx.payload.command = normalized;
+  ctx.payload.args = ctx.args;
+  return true;
+}
+
+function switchEmbeddedShellToWsl(
+  ctx: ExecutionContext,
+  originalCmd: string,
+  inlineFlag: string,
+  innerCmdStr: string,
+  reason: string,
+  args: readonly string[],
+): void {
+  ctx.payload.target = 'wsl2';
+  const lowerOrig = originalCmd.toLowerCase();
+  if ((lowerOrig === 'wsl' || lowerOrig === 'wsl.exe') && (inlineFlag === '-e' || inlineFlag === '--exec')) {
+    unwrapWslExecToInnerCommand(ctx, args);
+  } else {
+    rewriteInlineShellToBashIfNeeded(ctx, originalCmd, inlineFlag, innerCmdStr);
+  }
+  console.error(`\n   🛠️ AUTONOMOUS HEALING: ${reason} Switching execution target to WSL2... (Frictionless Recovery)\x1b[0m`);
 }
 
 function rewriteEmbeddedShellTargetToWsl(
@@ -44,35 +124,40 @@ function rewriteEmbeddedShellTargetToWsl(
   const payload = ctx.payload;
   if (payload.target === 'wsl2') return;
   const stripped = getUnquoted(innerCmdStr).toLowerCase();
-  const tokens = stripped.split(/[\s;|{>&<]+/).filter(Boolean);
+  const clauses = parseClauseHeads(stripped);
+  const heads = clauses.map(c => c.head);
+  const isPwshOrigin = ['pwsh', 'pwsh.exe', 'powershell', 'powershell.exe'].includes(originalCmd.toLowerCase());
 
-  if (tokens.some(t => ['curl', 'wget', 'invoke-webrequest', 'iwr'].includes(t))) {
-    console.error(`\n   🛠️ AUTONOMOUS HEALING: Network request command in shell string detected. Switching execution target to WSL2... (Frictionless Recovery)\x1b[0m`);
-    payload.target = 'wsl2';
+  const networkHeads = isPwshOrigin ? ['curl', 'wget'] : ['curl', 'wget', 'invoke-webrequest', 'iwr'];
+  if (heads.some(t => networkHeads.includes(t))) {
+    switchEmbeddedShellToWsl(ctx, originalCmd, inlineFlag, innerCmdStr, 'Network request command in shell string detected.', args);
     return;
   }
-  if (tokens.some(t => ['grep', 'grep.exe', 'egrep', 'egrep.exe', 'fgrep', 'fgrep.exe', 'select-string', 'select-string.exe'].includes(t))) {
-    console.error(`\n   🛠️ AUTONOMOUS HEALING: Search command in shell string detected. Switching execution target to WSL2... (Frictionless Recovery)\x1b[0m`);
-    payload.target = 'wsl2';
+  const searchHeads = isPwshOrigin
+    ? ['grep', 'grep.exe', 'egrep', 'egrep.exe', 'fgrep', 'fgrep.exe']
+    : ['grep', 'grep.exe', 'egrep', 'egrep.exe', 'fgrep', 'fgrep.exe', 'select-string', 'select-string.exe'];
+  if (heads.some(t => searchHeads.includes(t))) {
+    switchEmbeddedShellToWsl(ctx, originalCmd, inlineFlag, innerCmdStr, 'Search command in shell string detected.', args);
     return;
   }
-  const viewCmdStr = tokens.find(t => ['cat', 'cat.exe', 'head', 'head.exe', 'tail', 'tail.exe', 'wc', 'wc.exe', 'more'].includes(t));
-  const isMultiFilePwshCat = (viewCmdStr === 'cat' || viewCmdStr === 'cat.exe') &&
-    ['pwsh', 'pwsh.exe', 'powershell', 'powershell.exe'].includes(originalCmd.toLowerCase()) &&
-    tokens.filter(t => t !== viewCmdStr && !t.startsWith('-')).length > 1;
-  if (viewCmdStr && !isMultiFilePwshCat) {
-    console.error(`\n   🛠️ AUTONOMOUS HEALING: File view command in shell string detected. Switching execution target to WSL2... (Frictionless Recovery)\x1b[0m`);
-    payload.target = 'wsl2';
+  const viewClause = clauses.find(c => ['cat', 'cat.exe', 'head', 'head.exe', 'tail', 'tail.exe', 'wc', 'wc.exe', 'more'].includes(c.head));
+  const isMultiFilePwshCat = viewClause !== undefined &&
+    (viewClause.head === 'cat' || viewClause.head === 'cat.exe') &&
+    isPwshOrigin &&
+    viewClause.argCount > 1;
+  if (viewClause !== undefined && !isMultiFilePwshCat) {
+    switchEmbeddedShellToWsl(ctx, originalCmd, inlineFlag, innerCmdStr, 'File view command in shell string detected.', args);
     return;
   }
-  if (tokens.some(t => ['rm', 'rm.exe', 'cp', 'cp.exe', 'mv', 'mv.exe', 'mkdir', 'touch', 'chmod', 'diff'].includes(t))) {
-    console.error(`\n   🛠️ AUTONOMOUS HEALING: File operation command in shell string detected. Switching execution target to WSL2... (Frictionless Recovery)\x1b[0m`);
-    payload.target = 'wsl2';
+  if (heads.some(t => ['rm', 'rm.exe', 'cp', 'cp.exe', 'mv', 'mv.exe', 'mkdir', 'touch', 'chmod', 'diff'].includes(t))) {
+    switchEmbeddedShellToWsl(ctx, originalCmd, inlineFlag, innerCmdStr, 'File operation command in shell string detected.', args);
     return;
   }
-  if (tokens.some(t => ['ls', 'ls.exe', 'dir', 'dir.exe', 'get-childitem', 'get-childitem.exe', 'gci', 'tree', 'tree.com'].includes(t))) {
-    console.error(`\n   🛠️ AUTONOMOUS HEALING: Directory list command in shell string detected. Switching execution target to WSL2... (Frictionless Recovery)\x1b[0m`);
-    payload.target = 'wsl2';
+  const dirHeads = isPwshOrigin
+    ? ['ls', 'ls.exe', 'dir', 'dir.exe', 'tree', 'tree.com']
+    : ['ls', 'ls.exe', 'dir', 'dir.exe', 'get-childitem', 'get-childitem.exe', 'gci', 'tree', 'tree.com'];
+  if (heads.some(t => dirHeads.includes(t))) {
+    switchEmbeddedShellToWsl(ctx, originalCmd, inlineFlag, innerCmdStr, 'Directory list command in shell string detected.', args);
     return;
   }
 
@@ -89,10 +174,8 @@ function rewriteEmbeddedShellTargetToWsl(
 function translateNativeToolInvocation(ctx: ExecutionContext, originalCmd: string, cmdBasename: string, args: string[]): void {
   const toolName = originalCmd.toLowerCase().replace(/\.exe$/, '');
   if (toolName === 'grep_search') {
-    const { pattern, searchPath, isCaseInsensitive, isWord, isRegex } = parseGrepSearchArgs(args);
+    const { pattern, searchPath, isCaseInsensitive, isWord, isRegex } = parseGrepSearchArgs(args, ctx.payload.cwd ?? ctx.cwd);
     if (pattern.length > 0) {
-      console.error(`\n   💡 AGENT HINT: 'grep_search' executed directly as CLI command.`);
-      console.error(`\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Auto-translating 'grep_search' to ripgrep (rg)... (Frictionless Recovery)\x1b[0m`);
       ctx.cmdBasename = 'rg';
       const rgFlags = ['-n'];
       if (isCaseInsensitive) rgFlags.push('-i');
@@ -100,38 +183,40 @@ function translateNativeToolInvocation(ctx: ExecutionContext, originalCmd: strin
       if (!isRegex) rgFlags.push('-F');
       ctx.args = [...rgFlags, pattern, searchPath];
       if ('command' in ctx.payload) { ctx.payload.command = 'rg'; ctx.payload.args = ctx.args; }
+      console.error(`\n   💡 AGENT HINT: 'grep_search' executed directly as CLI command.`);
+      console.error(`\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Auto-translating 'grep_search' to ripgrep (rg)... (Frictionless Recovery)\x1b[0m`);
       handleRipgrepInterception(ctx, false);
       return;
     }
     if (searchPath.length > 0) {
-      console.error(`\n   💡 AGENT HINT: 'grep_search' executed directly as CLI command without search pattern.`);
-      console.error(`\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Auto-translating 'grep_search' to ripgrep (rg) --files... (Frictionless Recovery)\x1b[0m`);
       ctx.cmdBasename = 'rg';
       ctx.args = ['--files', searchPath];
       if ('command' in ctx.payload) { ctx.payload.command = 'rg'; ctx.payload.args = ctx.args; }
+      console.error(`\n   💡 AGENT HINT: 'grep_search' executed directly as CLI command without search pattern.`);
+      console.error(`\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Auto-translating 'grep_search' to ripgrep (rg) --files... (Frictionless Recovery)\x1b[0m`);
       handleRipgrepInterception(ctx, false);
       return;
     }
   }
   if (toolName === 'list_dir') {
     const pathArg = args.find(a => !a.startsWith('-')) ?? '.';
-    console.error(`\n   💡 AGENT HINT: 'list_dir' executed directly as CLI command.`);
-    console.error(`\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Auto-translating 'list_dir' to ls... (Frictionless Recovery)\x1b[0m`);
     ctx.cmdBasename = 'ls';
     ctx.args = [pathArg];
     ctx.payload.target = 'wsl2';
     if ('command' in ctx.payload) { ctx.payload.command = 'ls'; ctx.payload.args = ctx.args; }
+    console.error(`\n   💡 AGENT HINT: 'list_dir' executed directly as CLI command.`);
+    console.error(`\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Auto-translating 'list_dir' to ls... (Frictionless Recovery)\x1b[0m`);
     return;
   }
   if (toolName === 'view_file' || toolName === 'read_file') {
     const fileArg = args.find(a => !a.startsWith('-'));
     if (fileArg) {
-      console.error(`\n   💡 AGENT HINT: '${toolName}' executed directly as CLI command.`);
-      console.error(`\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Auto-translating '${toolName}' to cat... (Frictionless Recovery)\x1b[0m`);
       ctx.cmdBasename = 'cat';
       ctx.args = [fileArg];
       ctx.payload.target = 'wsl2';
       if ('command' in ctx.payload) { ctx.payload.command = 'cat'; ctx.payload.args = ctx.args; }
+      console.error(`\n   💡 AGENT HINT: '${toolName}' executed directly as CLI command.`);
+      console.error(`\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Auto-translating '${toolName}' to cat... (Frictionless Recovery)\x1b[0m`);
       return;
     }
   }
@@ -150,7 +235,18 @@ interface StructuralDerived {
   innerCmdStr: string;
   positionalArgs: string[];
   hasStdin: boolean;
-  shells: readonly string[];
+  shells?: readonly string[];
+}
+
+function hasPwshNonImplicitFlag(args: readonly string[]): boolean {
+  for (let i = 0; i < args.length; i++) {
+    const arg = args[i];
+    if (arg === undefined) continue;
+    const lower = arg.toLowerCase();
+    if (['-file', '-help', '-version', '-?', '/?'].includes(lower)) return true;
+    if (lower === '-f' && i + 1 < args.length) return true;
+  }
+  return false;
 }
 
 function guardShellAndInteractiveTools(ctx: ExecutionContext, derived: StructuralDerived): boolean {
@@ -161,7 +257,7 @@ function guardShellAndInteractiveTools(ctx: ExecutionContext, derived: Structura
       console.error(`\n   💡 AGENT HINT: Inline '-EncodedCommand' shell wrappers are blocked by agent-exec to prevent bypasses.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Execution blocked. Fix parameters or invoke the appropriate native tool (logged for CMS-03). Ref: [AGENT_README.md](${AGENT_EXEC_README_URL})\x1b[0m`);
       process.exit(1);
     })
-    .with({ isCommand: true, originalCmd: P.union('pwsh', 'pwsh.exe', 'powershell', 'powershell.exe'), hasInlineCmd: false, args: P.when((a: string[]) => a.length > 0 && !a.some(arg => ['-file', '-help', '-version', '-?', '/?'].includes(arg.toLowerCase()))) }, () => {
+    .with({ isCommand: true, originalCmd: P.union('pwsh', 'pwsh.exe', 'powershell', 'powershell.exe'), hasInlineCmd: false, args: P.when((a: string[]) => a.length > 0 && !hasPwshNonImplicitFlag(a)) }, () => {
       console.error(`\n   💡 AGENT HINT: You attempted to run an inline shell command implicitly via powershell.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Execution blocked. Fix parameters or invoke the appropriate native tool (logged for CMS-03). Ref: [AGENT_README.md](${AGENT_EXEC_README_URL})\x1b[0m`);
       console.error(`   This bypasses the agent-exec robustness interceptors and risks hanging the process.`);
       console.error(`   Please use the proper execution payloads ('command', 'eval', or 'script') or native tools.`);
@@ -199,14 +295,14 @@ function guardShellAndInteractiveTools(ctx: ExecutionContext, derived: Structura
       process.exit(1);
     })
     .with({ cmd: P.union('tail', 'tail.exe') }, () => {
-      if (args.includes('-f') || args.includes('--follow') || args.some(a => a.startsWith('--follow='))) {
+      if (hasTailFollowFlag(args)) {
         console.error(`\n   💡 AGENT HINT: 'tail -f' runs indefinitely. Blocking execution to prevent agent hanging.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Execution blocked. Fix parameters or invoke the appropriate native tool (logged for CMS-03). Ref: [AGENT_README.md](${AGENT_EXEC_README_URL})\x1b[0m`);
         process.exit(1);
       }
       return true;
     })
     .with({ cmd: P.union('journalctl', 'journalctl.exe') }, () => {
-      if (args.some(a => a === '-f' || a === '--follow' || /^-[exqrkaobml]*f[exqrkaobml]*$/i.test(a))) {
+      if (args.some(a => a === '-f' || a === '--follow' || /^-[exqrkaobml]*f[exqrkaobml]*$/.test(a))) {
         console.error(`\n   💡 AGENT HINT: 'journalctl -f' runs indefinitely. Blocking execution.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Execution blocked. Fix parameters or invoke the appropriate native tool (logged for CMS-03). Ref: [AGENT_README.md](${AGENT_EXEC_README_URL})\x1b[0m`);
         process.exit(1);
       }
@@ -219,6 +315,7 @@ function guardStdinAndRoutingTools(ctx: ExecutionContext, derived: StructuralDer
   const { cmd, cmdBasename, originalCmd, args, isCommand, positionalArgs, hasStdin } = derived;
   match({ cmd, originalCmd, isCommand, positionalArgs, args, hasStdin, isWin32: process.platform === 'win32', payload: ctx.payload })
     .with({ isCommand: true, hasStdin: false, cmd: P.union('cat', 'cat.exe', 'wc', 'wc.exe', 'head', 'head.exe', 'tail', 'tail.exe', 'sort', 'sort.exe', 'uniq', 'uniq.exe', 'tee', 'tee.exe', 'find', 'find.exe', 'findstr', 'findstr.exe', 'gpg', 'gpg.exe'), positionalArgs: P.when(pa => pa.length === 0) }, () => {
+      if (hasPreDoubleDashHelpOrVersion(args)) return;
       console.error(`\n   💡 AGENT HINT: '${cmd.replace(/\.exe$/, '')}' called without file arguments and no stdin. It will hang indefinitely.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Execution blocked. Fix parameters or invoke the appropriate native tool (logged for CMS-03). Ref: [AGENT_README.md](${AGENT_EXEC_README_URL})\x1b[0m`);
       process.exit(1);
     })
@@ -228,19 +325,18 @@ function guardStdinAndRoutingTools(ctx: ExecutionContext, derived: StructuralDer
     })
     .with({ isCommand: true, hasStdin: false, cmd: P.union('awk', 'gawk', 'sed', 'sed.exe', 'jq', 'jq.exe', 'yq', 'yq.exe'), positionalArgs: P.when(pa => pa.length <= 1) }, () => {
       if (!isAwkSedJqSafeWithoutMorePositionals(cmd, args, positionalArgs)) {
-        ctx.args = ctx.args.map(a => a.startsWith('C:\\') ? `/mnt/c/${a.slice(3).replace(/\\/g, '/')}` : a);
         console.error(`\n   💡 AGENT HINT: '${cmd.replace(/\.exe$/, '')}' called without file arguments and no stdin. It will hang indefinitely.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Execution blocked. Fix parameters or invoke the appropriate native tool (logged for CMS-03). Ref: [AGENT_README.md](${AGENT_EXEC_README_URL})\x1b[0m`);
         process.exit(1);
       }
     })
-    .with({ isCommand: true, originalCmd: P.union('curl', 'wget', 'invoke-webrequest', 'iwr'), payload: P.when((p: unknown) => typeof p === 'object' && p !== null && !('target' in p && p.target === 'wsl2')) }, () => {
-      console.error(`\n   🛠️ AUTONOMOUS HEALING: Network request command '${originalCmd}' detected. Switching execution target to WSL2... (Frictionless Recovery)\x1b[0m`);
+    .with({ isCommand: true, isWin32: true, originalCmd: P.union('curl', 'wget', 'invoke-webrequest', 'iwr'), payload: P.when((p: unknown) => typeof p === 'object' && p !== null && !('target' in p && p.target === 'wsl2')) }, () => {
       ctx.payload.target = 'wsl2';
       ctx.args = ctx.args.map(a => convertToWslPath(a));
+      if (ctx.payload.type === 'command') ctx.payload.args = ctx.args;
+      console.error(`\n   🛠️ AUTONOMOUS HEALING: Network request command '${originalCmd}' detected. Switching execution target to WSL2... (Frictionless Recovery)\x1b[0m`);
     })
     .with({ isCommand: true, hasStdin: false, cmd: P.union('grep', 'grep.exe', 'egrep', 'fgrep') }, () => {
-      if (!args) ctx.args = [];
-      if (ctx.args.some(a => ['--help', '-h', '--version', '-V'].includes(a))) return;
+      if (hasPreDoubleDashHelpOrVersion(ctx.args)) return;
       const hasPattern = ctx.args.some(
         a => a === '-e' || (a.startsWith('-e') && !a.startsWith('--')) ||
           a === '--regexp' || a.startsWith('--regexp=') ||
@@ -251,23 +347,33 @@ function guardStdinAndRoutingTools(ctx: ExecutionContext, derived: StructuralDer
         console.error(`\n   💡 AGENT HINT: '${cmd.replace(/\.exe$/, '')}' called without file arguments and no recursive flag. It will hang indefinitely.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Execution blocked. Fix parameters or use grep_search.\x1b[0m`);
         process.exit(1);
       }
+      if (process.platform === 'win32' && ctx.payload.target !== 'wsl2') {
+        ctx.payload.target = 'wsl2';
+        const patternIdx = findPatternExprIndex(originalCmd, ctx.args);
+        ctx.args = ctx.args.map((a, idx) => idx === patternIdx ? a : convertToWslPath(a));
+        if (ctx.payload.type === 'command') ctx.payload.args = ctx.args;
+        console.error(`\n   🛠️ AUTONOMOUS HEALING: Search command '${originalCmd}' detected. Switching execution target to WSL2... (Frictionless Recovery)\x1b[0m`);
+      }
     })
-    .with({ isCommand: true, originalCmd: P.union('grep', 'grep.exe', 'egrep', 'egrep.exe', 'fgrep', 'fgrep.exe', 'select-string', 'select-string.exe'), payload: P.when((p: unknown) => typeof p === 'object' && p !== null && !('target' in p && p.target === 'wsl2')) }, () => {
-      if (args && (args.includes('--help') || args.includes('-h'))) return;
-      console.error(`\n   🛠️ AUTONOMOUS HEALING: Search command '${originalCmd}' detected. Switching execution target to WSL2... (Frictionless Recovery)\x1b[0m`);
+    .with({ isCommand: true, isWin32: true, originalCmd: P.union('grep', 'grep.exe', 'egrep', 'egrep.exe', 'fgrep', 'fgrep.exe', 'select-string', 'select-string.exe'), payload: P.when((p: unknown) => typeof p === 'object' && p !== null && !('target' in p && p.target === 'wsl2')) }, () => {
+      if (args.includes('--help')) return;
       ctx.payload.target = 'wsl2';
       const patternIdx = findPatternExprIndex(originalCmd, ctx.args);
       ctx.args = ctx.args.map((a, idx) => idx === patternIdx ? a : convertToWslPath(a));
+      if (ctx.payload.type === 'command') ctx.payload.args = ctx.args;
+      console.error(`\n   🛠️ AUTONOMOUS HEALING: Search command '${originalCmd}' detected. Switching execution target to WSL2... (Frictionless Recovery)\x1b[0m`);
     })
-    .with({ isCommand: true, originalCmd: P.union('ls', 'ls.exe', 'dir', 'dir.exe', 'get-childitem', 'get-childitem.exe', 'gci', 'tree', 'tree.com'), payload: P.when((p: unknown) => typeof p !== 'object' ? false : p !== null && !('target' in p && p.target === 'wsl2')) }, () => {
-      console.error(`\n   🛠️ AUTONOMOUS HEALING: Directory listing command '${originalCmd}' detected. Switching execution target to WSL2... (Frictionless Recovery)\x1b[0m`);
+    .with({ isCommand: true, isWin32: true, originalCmd: P.union('ls', 'ls.exe', 'dir', 'dir.exe', 'get-childitem', 'get-childitem.exe', 'gci', 'tree', 'tree.com'), payload: P.when((p: unknown) => typeof p !== 'object' ? false : p !== null && !('target' in p && p.target === 'wsl2')) }, () => {
       ctx.payload.target = 'wsl2';
       ctx.args = ctx.args.map(a => a.toLowerCase() === '-recurse' ? '-R' : convertToWslPath(a));
+      if (ctx.payload.type === 'command') ctx.payload.args = ctx.args;
+      console.error(`\n   🛠️ AUTONOMOUS HEALING: Directory listing command '${originalCmd}' detected. Switching execution target to WSL2... (Frictionless Recovery)\x1b[0m`);
     })
     .with({ isCommand: true, originalCmd: P.union('rm', 'rm.exe', 'rmdir', 'rmdir.exe'), isWin32: true, payload: P.when((p: unknown) => typeof p === 'object' && p !== null && !('target' in p && p.target === 'wsl2')) }, () => {
-      console.error(`\n   🛠️ AUTONOMOUS HEALING: File removal command '${originalCmd}' detected on Windows. Switching execution target to WSL2... (Frictionless Recovery)\x1b[0m`);
       ctx.payload.target = 'wsl2';
       ctx.args = ctx.args.map(a => convertToWslPath(a));
+      if (ctx.payload.type === 'command') ctx.payload.args = ctx.args;
+      console.error(`\n   🛠️ AUTONOMOUS HEALING: File removal command '${originalCmd}' detected on Windows. Switching execution target to WSL2... (Frictionless Recovery)\x1b[0m`);
     })
     .with({ originalCmd: P.when((c: string) => (AGENT_NATIVE_TOOLS as readonly string[]).includes(c.toLowerCase().replace(/\.exe$/, ''))) }, () => {
       translateNativeToolInvocation(ctx, originalCmd, cmdBasename, args);
@@ -280,7 +386,7 @@ function guardStdinAndRoutingTools(ctx: ExecutionContext, derived: StructuralDer
 }
 
 export function runStructuralInterceptors(ctx: ExecutionContext, derived: StructuralDerived): void {
-  if (tryRewriteWslPwshToBash(ctx, derived.originalCmd, derived.hasInlineCmd, derived.innerCmdStr)) return;
+  if (tryRewriteWslPwshToBash(ctx, derived.originalCmd, derived.hasInlineCmd, derived.inlineFlag, derived.innerCmdStr)) return;
   if (guardShellAndInteractiveTools(ctx, derived)) return;
   guardStdinAndRoutingTools(ctx, derived);
 }

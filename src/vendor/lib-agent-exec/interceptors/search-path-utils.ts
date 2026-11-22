@@ -87,7 +87,13 @@ export function isSecondExistingTargetOnly(first: string, second: string, cwd?: 
     const baseDir = cwd !== undefined && cwd.length > 0 ? path.resolve(cwd) : process.cwd();
     const resolvedFirst = path.resolve(baseDir, first);
     const resolvedSecond = path.resolve(baseDir, second);
-    return !fs.existsSync(resolvedFirst) && fs.existsSync(resolvedSecond);
+    if (!fs.existsSync(resolvedSecond)) return false;
+    if (!fs.existsSync(resolvedFirst)) return true;
+    return first !== '.'
+      && first !== '..'
+      && !first.includes('/')
+      && !first.includes('\\')
+      && fs.statSync(resolvedSecond).isFile();
   } catch {
     return false;
   }
@@ -157,7 +163,7 @@ function rejectsDirectoryCandidate(arg: string): boolean {
 }
 
 // [INTENT]: Distinguishes directory targets from patterns and single-file paths in rg/grep interceptors.
-// [INVARIANT]: Must NOT assume arbitrary POSIX paths without trailing '/' (e.g., '/var/log/syslog', '/etc/os-release', '/proc/cpuinfo') are directories on Windows hosts, and must NOT misclassify Windows backslash paths (e.g., 'C:\Users\...\Desktop\...\src' containing '\D' and '\s') as regex escapes.
+// [INVARIANT]: Must NOT assume arbitrary POSIX paths without trailing '/' (e.g., '/var/log/syslog', '/etc/os-release', '/proc/cpuinfo') are directories on Windows hosts, and must NOT misclassify Windows backslash paths (e.g., 'D:\Docs\project\src' containing '\D' and '\s') as regex escapes.
 export function isLikelyDirectoryArg(arg: string, cwd?: string): boolean {
   if (rejectsDirectoryCandidate(arg)) return false;
 
@@ -167,9 +173,6 @@ export function isLikelyDirectoryArg(arg: string, cwd?: string): boolean {
   if (isRelativeOrTrailingSepDirectory(arg)) return true;
   if (process.platform === 'win32' && /^\/mnt\/[a-zA-Z](?:\/|$)/.test(arg)) return isWin32MntDirectory(arg);
   if (arg.startsWith('/')) return isPosixAbsoluteDirectory(arg);
-
-  const existingAgain = resolveExistingDirectory(arg, cwd);
-  if (existingAgain !== undefined) return existingAgain;
   if (/^[a-zA-Z]:[/\\]/.test(arg)) return lacksFileExtension(arg);
   if (hasNonRelativeBackslashEscape(arg)) return false;
   if (/\.[a-zA-Z0-9]{1,6}$/.test(arg)) return false;

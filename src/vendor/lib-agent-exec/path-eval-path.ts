@@ -14,8 +14,6 @@ import {
 import { findNeighborFilePath } from './path-neighbor.js';
 import { resolveBuildSrcSwap, resolvePathWithDirectorySynonyms } from './path-synonym.js';
 
-const POSIX_ROOT = /^\/(?:proc|sys|dev|etc|tmp|var|usr|bin|sbin|root|home)(?:[/\\]|$)/;
-
 type HealTarget = 'windows' | 'wsl2';
 
 interface EvalPathContext {
@@ -29,7 +27,7 @@ interface EvalPathContext {
 }
 
 export function isPosixSystemPath(rawPath: string): boolean {
-  return POSIX_ROOT.test(rawPath);
+  return rawPath.startsWith('/') && !/^\/mnt\/[a-zA-Z](?:\/|$)/i.test(rawPath);
 }
 
 function cleanRaw(raw: string): string {
@@ -69,6 +67,7 @@ function healEvalBarrel(ctx: EvalPathContext): string | null {
   const extMatch = ctx.rawFilePath.match(/\.(?:ts|js|tsx|jsx|mjs|cjs)$/i);
   if (extMatch === null) return null;
   const withoutExt = ctx.rawFilePath.slice(0, -extMatch[0].length);
+  if (withoutExt.length === 0 || /[\\/]$/.test(withoutExt)) return null;
   const normalizedWithoutExt = ctx.isWslPath ? normalizeMntPath(withoutExt) : withoutExt;
   const resolvedWithoutExt = path.isAbsolute(normalizedWithoutExt) ? path.normalize(normalizedWithoutExt) : path.resolve(ctx.cwd, normalizedWithoutExt);
   if (!isDirectoryPath(resolvedWithoutExt)) return null;
@@ -106,19 +105,31 @@ function healEvalNeighbor(ctx: EvalPathContext): string | null {
     ?? resolveBuildSrcSwap(ctx.resolvedPath, ctx.allowDirs)
     ?? findNeighborFilePath(ctx.resolvedPath, ctx.allowDirs);
   if (neighborFile === null) return null;
-  const asWsl = ctx.rawFilePath.startsWith('/mnt/') || (ctx.target === 'wsl2' && ctx.isWindowsDrivePath);
+  const asWsl = ctx.rawFilePath.startsWith('/mnt/')
+    || (ctx.target === 'wsl2' && (ctx.isWindowsDrivePath || ctx.rawFilePath.includes('\\')));
   return formatHealedPath(ctx.rawFilePath, neighborFile, ctx.cwd, asWsl);
 }
 
 function healEvalWslFallback(ctx: EvalPathContext): string | null {
-  if (ctx.target === 'wsl2' && (ctx.isWindowsDrivePath || ctx.rawFilePath.includes('\\'))) return convertToWslPath(ctx.resolvedPath);
+  if (ctx.target === 'wsl2' && ctx.isWindowsDrivePath && !/[$`{}|;&<>\n\r]|\\[$()*?&!`]/.test(ctx.rawFilePath)) {
+    return convertToWslPath(ctx.resolvedPath);
+  }
   return null;
 }
 
 export function healSingleEvalPath(filePath: string, allowDirs: boolean, cwd: string, target?: HealTarget): string | null {
-  if (filePath.startsWith('-') || filePath.startsWith('$')) return null;
   const rawFilePath = filePath.replace(/^['"]|['"]$/g, '');
-  if (rawFilePath.includes('*') || rawFilePath.includes('?') || isPosixSystemPath(rawFilePath)) return null;
+  if (
+    rawFilePath.length === 0 ||
+    rawFilePath.startsWith('-') ||
+    rawFilePath.startsWith('~') ||
+    rawFilePath.includes('$') ||
+    rawFilePath.includes('*') ||
+    rawFilePath.includes('?') ||
+    isPosixSystemPath(rawFilePath)
+  ) {
+    return null;
+  }
   const ctx = buildEvalPathContext(rawFilePath, cwd, target, allowDirs);
   const existing = healExistingEvalPath(ctx);
   if (existing !== undefined) return existing;

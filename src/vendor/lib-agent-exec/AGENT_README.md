@@ -11,7 +11,7 @@ You no longer need to manually craft JSON payloads for most standard commands! T
 You only need to manually pass a JSON payload (as described below) if you are executing complex scripts or raw `eval` code snippets that are not natively intercepted. By pairing this deterministic execution with a deterministic repository model (`lib-git-history`), we eliminate the two largest sources of friction in agentic workflows.
 
 > [!TIP]
-> **CLI Manual**: You can dynamically view the comprehensive CLI manual and pipeline usage guide by running the host's `agent-exec.ts --help` wrapper (append `--json` for structured JSON output). CLI flags include `--cwd <dir>` (contained via realpath resolution), `--timeout <ms>` (blank values are ignored safely), `--plugin <path>`, and `--interceptors <path>` to load workspace interceptor plugins at runtime.
+> **CLI Manual**: You can dynamically view the comprehensive CLI manual and pipeline usage guide by running the host's `agent-exec.ts --help` wrapper (append `--json` for structured JSON output). CLI flags include `--cwd <dir>`, `--timeout <ms>` / `--timeoutMs <ms>` (blank values are rejected), `--plugin <path>`, and `--interceptors <path>` (both realpath-contained within workspace roots) to load workspace interceptor plugins at runtime.
 
 ## ⚠️ The `&&` Pipeline Chaining Rule & WSL2 Linux Support
 
@@ -22,12 +22,12 @@ You only need to manually pass a JSON payload (as described below) if you are ex
 > 1. For native Windows command separation, **MUST** use semicolons (`;`).
 > 2. Whenever you must chain complex commands natively or utilize robust Unix pipelines, pass an inline raw JSON string with `"target": "wsl2"` directly to `agent-exec.ts` (no scratch JSON file needed). This routes the command into Linux/bash, supporting `&&`, `||`, `|`, and POSIX shell features.
 
-## 🐳 Docker CLI & WSL Containers (No Docker Desktop)
+## 🐳 Docker CLI & Native WSL2 Engine (No Docker Desktop)
 
-We use **WSL Containers for Windows** natively with the Docker CLI, and **do NOT have Docker Desktop installed**. 
-- The native Windows `docker` CLI communicates directly with the Docker engine running inside WSL (or via native WSL Containers / `wslc`).
+We use **native WSL2 `docker-ce` + Compose v5** inside WSL2 (`docker-interceptor`), and **do NOT have Docker Desktop installed**.
+- When neither the Windows `docker_engine` named pipe nor `DOCKER_HOST` is present, the interceptor automatically routes `docker` / `docker compose` commands to native WSL2 `docker-ce`.
 - When executing container orchestration natively on Windows, remember that paths passed to volume mounts might require `wslpath` translation or UNC paths (`\\wsl.localhost\...`) depending on the execution context.
-- When running `docker` or `wslc` commands, the proxy interceptors automatically strip interactive TTY flags (`-t`, `--tty`, `-i`) and prevent hanging TUI apps.
+- When running `docker` commands, the proxy interceptors automatically strip interactive TTY flags (`-t`, `--tty`, `-i`) and prevent hanging TUI apps.
 
 ## 🧹 Scratch Workspace Protocol
 
@@ -47,7 +47,7 @@ If you are a **human user** attempting to run interactive commands natively in y
    *Example*: `gh auth login --agent-bypass`
 2. **Native Passthrough Alias**: Prepend `native` to any command.
    *Example*: `native gh auth login`
-3. **Interactive Session Toggle (Current Shell Only)**: In a persistent PowerShell session, run `Disable-AgentExec` / `Enable-AgentExec` (sets `$env:AGENT_EXEC_BYPASS` for that shell session). Note that single-command agent shells start cleanly without cross-process bypass files.
+3. **Interactive Session Toggle (Current Shell Only)**: In a persistent PowerShell session, run `Disable-AgentExec` / `Enable-AgentExec` (sets `$global:AgentExecBypass` for that shell session). Note that single-command agent shells start cleanly without cross-process bypass files.
 
 ## Payload Schemas
 
@@ -76,7 +76,7 @@ Used for executing standard CLI binaries.
   "stallTimeoutMs": 10000, // Optional
   "expectJsonEnvelope": false, // Optional
   "integrationContext": { "key": "value" }, // Optional (arbitrary context object passed to interceptors)
-  "templateOverride": "C:\\path\\to\\custom-template.hbs", // Optional (custom format/output template override)
+  "templateOverride": "docker exec app {{code}}", // Optional (custom CLI command-wrapper template string containing {{code}})
   "onSuccess": ["http://localhost:9999/success"], // Optional (string or array of strings)
   "onFailure": "http://localhost:9999/fail", // Optional (string or array of strings)
   "webhookMethod": "POST", // Optional (GET, POST, PUT, PATCH, DELETE)
@@ -147,11 +147,12 @@ To ensure non-interactive reliability, `agent-exec.ts` actively intercepts and m
 - **Telemetry Secret Redaction & Quoting**: `redactPayloadForLog` / `redactTelemetryText` redact URL credentials, `Bearer`/`Basic` tokens, `cookie`/`set-cookie`/`x-*`/key/token/secret headers and fields before writing `.agents/agent-exec-issues.jsonl` or Datadog logs; `formatForCmdExe` doubles trailing backslashes before closing quotes; and `escapePwshSingleQuoted` escapes PowerShell single quotes cleanly.
 - **TTY Flag Stripping**: Docker TTY flags (`-t`, `--tty`) and interactive flags (`-i`) are automatically stripped (while skipping value-flag operands like `-w /work`).
 - **PowerShell Padding**: If `pwsh` is called, `-NonInteractive -NoProfile` flags are forcefully injected.
-- **Indefinite Blocking Prevention**: Utilities that inherently run indefinitely like `watch`, `tail -f`, and `docker logs -f` are blocked entirely.
+- **Indefinite Blocking Prevention**: Utilities that inherently run indefinitely like `watch` and `tail -f` are blocked entirely, while `docker logs -f` / `docker compose logs -f` transparently auto-heal by stripping `-f`/`--follow` and injecting `--tail` bounds when omitted.
 - **TUI & Interactive App Blocking**: TUI apps (`vim`, `nano`, `less`, etc.) are blocked natively, wrapped via `wsl`, or launched inside containers via `docker exec`/`docker run` to prevent the agent from hanging.
 - **Interactive REPL Blocks**: Attempting to launch `node`, `python`, or `bash` without arguments or a script file will be intercepted and terminated immediately to prevent hanging.
 - **Shell Wrapper Blocking**: Wrapping standard tools (`git`, `docker`, `gh`, `npm`, `npx`, `bunx`, etc.) inside inline shell invocations (e.g., `pwsh -c "git log"`) bypasses the interceptor pipeline and is strictly blocked across native commands, `eval` snippets, and `script` payloads. Invoke the tool directly via a `command` payload, or write the raw script commands without an inline shell wrapper.
 - **Prompt Detection & Stall Prevention**: Deep heuristic regexes detect unexpected interactive prompts (including standard package manager queries, `inquirer.js` progress flows, editor blocks like `Waiting for Emacs...`, standard TTY forced shells like `bash$`, `sh$`, and `bash-5.1$`, `title:`, `body:`, and `y/n` confirmations) and terminate the process to prevent indefinite hanging. Long-running quality gates (`lint`, `typecheck`, `test`, `build`) and package installation/resolution commands (`install`, `ci`, `add`, `update`, `dedupe` across `pnpm`, `npm`, `yarn`, and `bun`) automatically receive extended timeouts and internal runtime stall-bypass exemptions.
+- **Per-Repo Validation Lock Queue (`validation-lock.ts`)**: Heavy repo-wide or shared-artifact validation commands (`build`, `tsup`, `typecheck`/`tsc`, `playwright`/`test:e2e`, `check`, and repo-wide `lint` or `test`/`bench`) automatically acquire an atomic per-repository lock file under the OS temp directory (reclaiming dead-PID or expired locks) so concurrent agents queue cleanly rather than racing on `dist/`, `.tsbuildinfo`, or E2E ports. Targeted file checks (`eslint <files>` and `vitest`/`bun test <files>`) stay lock-free; set `AGENT_EXEC_VALIDATION_LOCK=0` to opt out.
 - **Git Interception**: History/inspection commands (`git log`, `git shortlog`, `git show`, `git diff`, `git status`) are transparently rewritten to `get-git-history-json.ts` (Frictionless Recovery), while raw `git commit` without `-m`, `--amend`, interactive patching (`-p`), and interactive rebasing (`-i`) are blocked in favor of the deterministic wrappers (the host's `get-git-history-json.ts` wrapper and `pnpm exec tsx scripts/commit.ts`), and already-staged deletions (`D <path>`) in `git rm`, `git add [-u]`, and `commit.ts --add` are healed idempotently without exit-128 pathspec errors. Additionally, `resolveAgentScriptFallback` transparently resolves missing `.agents/scripts/<name>` calls to repo-local `scripts/<name>` (such as `scripts/commit.ts`) or upstream `.agents/scripts/<name>`. In `commit.ts`, you MUST explicitly pass `--impact <0.0-1.0>`, `--confidence <0.0-1.0>`, and `--validation <passed|none|failed>` (they are strictly required and never defaulted). `commit.ts` also supports **Autonomous Healing** (auto-corrects conventional commit message formatting, maps deprecated `--trust` to `--confidence`, normalizes `--relate` aliases `resolves`/`depends_on`/`relates_to`, auto-enables `--journal` when `--journal-project` is provided, emits `auto_link: true` unless `--no-auto-link` is passed, supports `--dry-run-links`, auto-resolves `workspace_id` and `project_number` from `memory-journal.config.json`, supports `--session-id`, and auto-recovers `--add` paths containing spaces).
 - **Quote Stripping**: Spurious quotes around arguments are stripped since the shell execution is bypassed.
 

@@ -28,12 +28,17 @@ interface ScriptFlags {
   hasMountedSearch: boolean;
 }
 
-export function extendPayloadTimeouts(derived: SystemCommandDerived): void {
+function applyMinTimeoutFloor(current: number | undefined, floor: number): number {
+  if (current === 0) return 0;
+  return Math.max(current ?? floor, floor);
+}
+
+export function extendPayloadTimeouts(derived: SystemCommandDerived, baseCwd?: string): void {
   if (derived.payload.target === 'wsl2') {
     const defaultWslTimeout = derived.payload.type === 'command'
-      ? wslCommandTimeout(derived)
+      ? wslCommandTimeout(derived, baseCwd)
       : wslNonCommandTimeout(derived.payload);
-    derived.payload.timeoutMs = Math.max(derived.payload.timeoutMs || defaultWslTimeout, defaultWslTimeout);
+    derived.payload.timeoutMs = applyMinTimeoutFloor(derived.payload.timeoutMs, defaultWslTimeout);
     return;
   }
   if (derived.payload.type === 'eval' || derived.payload.type === 'script') {
@@ -41,7 +46,7 @@ export function extendPayloadTimeouts(derived: SystemCommandDerived): void {
     return;
   }
   if (derived.payload.type === 'command') {
-    applyWindowsCommandTimeout(derived);
+    applyWindowsCommandTimeout(derived, baseCwd);
   }
 }
 
@@ -50,9 +55,10 @@ function wslNonCommandTimeout(payload: ExecPayload): number {
   return wslScriptTimeout(payload);
 }
 
-function wslCommandTimeout(derived: SystemCommandDerived): number {
+function wslCommandTimeout(derived: SystemCommandDerived, baseCwd?: string): number {
   const { payload, cmdBasename, args } = derived;
-  const underlyingScript = getUnderlyingPackageScript(cmdBasename, args, payload.cwd);
+  const effectiveCwd = payload.cwd !== undefined && payload.cwd.length > 0 ? payload.cwd : baseCwd;
+  const underlyingScript = getUnderlyingPackageScript(cmdBasename, args, effectiveCwd);
   const isNestedAgentExec = nestedAgentExec(args);
   maybeSplitJoinedTestArgs(cmdBasename, args, underlyingScript, payload, isNestedAgentExec);
   const profile = wslCommandProfile(cmdBasename, args, underlyingScript, isNestedAgentExec);
@@ -118,9 +124,10 @@ function applyWindowsScriptTimeout(payload: ExecPayload): void {
   assignBannerTimeout(payload, qualityTimeout, `\n   💡 AGENT INTERCEPT: Detected quality check or deterministic script in Windows eval payload. Auto-extending timeout to ${qualityTimeout / 1000}s...`);
 }
 
-function applyWindowsCommandTimeout(derived: SystemCommandDerived): void {
+function applyWindowsCommandTimeout(derived: SystemCommandDerived, baseCwd?: string): void {
   const { payload, cmdBasename, args } = derived;
-  const underlyingScript = getUnderlyingPackageScript(cmdBasename, args, payload.cwd);
+  const effectiveCwd = payload.cwd !== undefined && payload.cwd.length > 0 ? payload.cwd : baseCwd;
+  const underlyingScript = getUnderlyingPackageScript(cmdBasename, args, effectiveCwd);
   const isNestedAgentExec = nestedAgentExec(args);
   maybeSplitJoinedTestArgs(cmdBasename, args, underlyingScript, payload, isNestedAgentExec);
   const profile = windowsCommandProfile(cmdBasename, args, underlyingScript, isNestedAgentExec);
@@ -128,19 +135,19 @@ function applyWindowsCommandTimeout(derived: SystemCommandDerived): void {
     if (profile.isInfraOrchestration) {
       emitInterceptBanner(`\n   💡 AGENT INTERCEPT: Detected ecosystem orchestration script ('recreate-ecosystem'). Auto-extending timeout to 600s...`);
     }
-    payload.timeoutMs = Math.max(payload.timeoutMs || 600000, 600000);
+    payload.timeoutMs = applyMinTimeoutFloor(payload.timeoutMs, 600000);
     payload.bypassInterceptors = true;
     return;
   }
   if (profile.isKnownDeterministic) {
     const detTimeout = profile.isBackupConversations ? 1500000 : 240000;
-    payload.timeoutMs = Math.max(payload.timeoutMs || detTimeout, detTimeout);
+    payload.timeoutMs = applyMinTimeoutFloor(payload.timeoutMs, detTimeout);
     payload.bypassInterceptors = true;
     return;
   }
   if (!profile.isQuality) return;
   const winTimeout = windowsQualityTimeout(cmdBasename, args, profile.nonInlineArgs, underlyingScript, profile.isCoverage);
-  payload.timeoutMs = Math.max(payload.timeoutMs || winTimeout, winTimeout);
+  payload.timeoutMs = applyMinTimeoutFloor(payload.timeoutMs, winTimeout);
   payload.bypassInterceptors = true;
 }
 
@@ -157,7 +164,7 @@ function scriptFlags(payload: ExecPayload): ScriptFlags {
   const isDocker = !isInlineShellHallucination && Boolean(codeOrScript && (((/(?:docker|docker-compose|podman)/i.test(codeOrScript) && /\b(?:build|scout|pull|push|up|down|restart|recreate|load|save|import|export|prune)\b|Health\.Status/i.test(codeOrScript)) || /recreate-ecosystem/i.test(codeOrScript))));
   const isChainedQuality = !isInlineShellHallucination && isEval && Boolean(codeOrScript && /(?:typecheck|tsc|lint|check|build|test).*(?:&&|;).*(?:typecheck|tsc|lint|check|build|test)/i.test(codeOrScript));
   const hasQualityCheck = !isInlineShellHallucination && isEval && Boolean(codeOrScript && /(?:(?:bun|pnpm|npm|yarn|npx|bunx|pnpx)\s+(?:run\s+)?(?:typecheck|tsc|lint|check|build|test)\b|\b(?:vitest|jest|tsc|eslint)\b)/i.test(codeOrScript));
-  const hasMountedSearch = !isInlineShellHallucination && Boolean(codeOrScript && /(?:find|grep|rg|ls|tree)\b/i.test(codeOrScript));
+  const hasMountedSearch = !isInlineShellHallucination && Boolean(codeOrScript && /\b(?:find|grep|rg|ls|tree)\b/i.test(codeOrScript));
   return {
     isInlineShellHallucination,
     isKnownDeterministic,
@@ -180,7 +187,7 @@ function codeOrScriptOf(payload: ExecPayload): string {
 }
 
 function bannerTimeout(payload: ExecPayload, timeout: number, banner: string): number {
-  if (payload.timeoutMs === undefined || payload.timeoutMs < timeout) {
+  if (payload.timeoutMs !== 0 && (payload.timeoutMs === undefined || payload.timeoutMs < timeout)) {
     emitInterceptBanner(banner);
   }
   payload.bypassInterceptors = true;
@@ -188,16 +195,16 @@ function bannerTimeout(payload: ExecPayload, timeout: number, banner: string): n
 }
 
 function searchBannerTimeout(payload: ExecPayload, timeout: number, banner: string): number {
-  if (payload.timeoutMs === undefined || payload.timeoutMs < timeout) {
+  if (payload.timeoutMs !== 0 && (payload.timeoutMs === undefined || payload.timeoutMs < timeout)) {
     emitInterceptBanner(banner);
   }
   return timeout;
 }
 
 function assignBannerTimeout(payload: ExecPayload, timeout: number, banner: string): void {
-  if (payload.timeoutMs === undefined || payload.timeoutMs < timeout) {
+  if (payload.timeoutMs !== 0 && (payload.timeoutMs === undefined || payload.timeoutMs < timeout)) {
     emitInterceptBanner(banner);
   }
-  payload.timeoutMs = Math.max(payload.timeoutMs || timeout, timeout);
+  payload.timeoutMs = applyMinTimeoutFloor(payload.timeoutMs, timeout);
   payload.bypassInterceptors = true;
 }

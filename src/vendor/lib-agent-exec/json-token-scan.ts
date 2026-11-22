@@ -43,7 +43,8 @@ function appendEscapedChar(state: ScanState, source: string, ch: string): void {
     return;
   }
   if (ch === 'x' && /^[0-9a-fA-F]{2}/.test(source.slice(state.index + 1, state.index + 3))) {
-    state.out = state.out.slice(0, -1) + '\\u00' + source.slice(state.index + 1, state.index + 3);
+    const hex = source.slice(state.index + 1, state.index + 3);
+    state.out = state.out.slice(0, -1) + (hex === '00' ? '\\\\x00' : `\\u00${hex}`);
     state.index += 2;
     return;
   }
@@ -76,6 +77,35 @@ function appendPlainStringChar(state: ScanState, ch: string): void {
   state.out += ch;
 }
 
+export function stripTrailingCommasOutsideStrings(source: string): string {
+  let out = '';
+  let quote: '"' | "'" | null = null;
+  let escaped = false;
+  for (let i = 0; i < source.length; i++) {
+    const ch = source[i];
+    if (ch === undefined) continue;
+    if (quote !== null) {
+      out += ch;
+      if (escaped) escaped = false;
+      else if (ch === '\\') escaped = true;
+      else if (ch === quote) quote = null;
+      continue;
+    }
+    if (ch === '"' || ch === "'") {
+      quote = ch;
+      out += ch;
+      continue;
+    }
+    if (ch === ',') {
+      let j = i + 1;
+      while (j < source.length && /\s/.test(source[j] ?? '')) j++;
+      if (source[j] === '}' || source[j] === ']') continue;
+    }
+    out += ch;
+  }
+  return out;
+}
+
 function scanTokenAwareJson(source: string): string {
   const state: ScanState = { out: '', inString: false, isEscaped: false, index: 0 };
   for (; state.index < source.length; state.index++) {
@@ -94,7 +124,7 @@ function scanTokenAwareJson(source: string): string {
   if (state.isEscaped) {
     state.out = state.out.slice(0, -1) + '\\\\';
   }
-  return state.out.replace(/,\s*([}\]])/g, '$1');
+  return stripTrailingCommasOutsideStrings(state.out);
 }
 
 export function tryTokenAwareJson(trimmed: string): unknown | undefined {

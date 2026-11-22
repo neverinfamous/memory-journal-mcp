@@ -6,6 +6,8 @@ import { IOController } from './io-controller.js';
 import { killProcessTree } from './process-manager.js';
 import { ExecPayload } from './schema.js';
 import { sendWebhook, sendDatadogTelemetry, BUILT_INS, AUTONOMOUS_HEALING_MSG, setLastStderrTail } from './utils.js';
+import { analyzeExitCode1, isGracefulExitAnalysis, type ExitCodeAnalysis } from './exit-code-policy.js';
+export { analyzeExitCode1 };
 
 const TIMEOUT_EXIT_FORCE_MS = 5000;
 const STREAM_DAEMON_CHECK_MS = 100;
@@ -17,8 +19,6 @@ const FORCE_KILL_DELAY_MS = 2000;
 function isErrnoException(e: Error): e is NodeJS.ErrnoException {
   return 'code' in e || 'syscall' in e;
 }
-import { analyzeExitCode1, isGracefulExitAnalysis, type ExitCodeAnalysis } from './exit-code-policy.js';
-export { analyzeExitCode1 };
 
 export class ProcessController {
   private child?: ChildProcess;
@@ -26,10 +26,12 @@ export class ProcessController {
 
   private isFinished = false;
   private timedOut = false;
+  private abortedInternally = false;
   private hasRetriedWsl = false;
   private timeoutTimer: NodeJS.Timeout | null = null;
   private forceKillTimer: NodeJS.Timeout | null = null;
   private daemonCheckInterval: NodeJS.Timeout | null = null;
+  private retryTimer: NodeJS.Timeout | null = null;
   private cleanupProcessHandlers: (() => void)[] = [];
 
   constructor(
@@ -39,7 +41,8 @@ export class ProcessController {
     private args: string[],
     private env: Record<string, string | undefined>,
     private tempScriptPath: string | null,
-    private isJson: boolean = false
+    private isJson: boolean = false,
+    private timeoutOverrideMs?: number
   ) {}
 
   public start() {
@@ -49,6 +52,8 @@ export class ProcessController {
       this.setupEventHandlers();
       this.setupTimeouts();
     } catch (err) {
+      if (this.child && !this.isFinished) killProcessTree(this.child);
+      this.clearActiveTimersAndHandlers();
       this.cleanupTempScript();
       if (err instanceof Error) {
         if (isErrnoException(err) && (err.code || err.syscall === 'uv_spawn')) {
@@ -101,11 +106,13 @@ export class ProcessController {
     this.cleanupProcessHandlers = [];
     if (this.timeoutTimer) { clearTimeout(this.timeoutTimer); this.timeoutTimer = null; }
     if (this.forceKillTimer) { clearTimeout(this.forceKillTimer); this.forceKillTimer = null; }
+    if (this.retryTimer) { clearTimeout(this.retryTimer); this.retryTimer = null; }
     if (this.daemonCheckInterval) { clearInterval(this.daemonCheckInterval); this.daemonCheckInterval = null; }
   }
 
   private handleStall(reason: string) {
     console.error(`\n❌ ${reason} Forcing termination...`);
+    this.abortedInternally = true;
     this.ioController?.destroyStreams();
     if (this.child) killProcessTree(this.child);
     this.handleFinish(1, null, false);
@@ -113,6 +120,7 @@ export class ProcessController {
 
   private handleMaxBuffer(reason: string) {
     if (!this.isJson) console.error(`\n❌ ${reason}`);
+    this.abortedInternally = true;
     this.ioController?.destroyStreams();
     if (this.child) killProcessTree(this.child);
     this.handleFinish(1, null, false);
@@ -130,13 +138,19 @@ export class ProcessController {
     this.cleanupProcessHandlers.push(() => process.off('exit', onExit));
 
     const crashShutdown = (label: string, err: unknown) => {
+      if (this.isFinished) return;
+      this.isFinished = true;
+      this.abortedInternally = true;
+      this.clearActiveTimersAndHandlers();
       if (!this.isJson) console.error(`❌ ${label}:`, err);
+      if (typeof this.ioController?.flushAll === 'function') this.ioController.flushAll();
+      if (typeof this.ioController?.destroyStreams === 'function') this.ioController.destroyStreams();
+      if (this.child) killProcessTree(this.child);
       this.cleanupTempScript();
       const finish = () => {
-        if (this.child) killProcessTree(this.child);
         process.exit(1);
       };
-      if (this.ioController) this.ioController.closeFileStreams().then(finish);
+      if (this.ioController) this.ioController.closeFileStreams().then(finish, finish);
       else finish();
     };
     const onUncaught = (err: Error) => crashShutdown('Uncaught Exception in agent-exec', err);
@@ -183,7 +197,7 @@ export class ProcessController {
         return;
       }
       const lastDataTime = this.ioController?.lastDataTime ?? exitTime;
-      const timeSinceData = Date.now() - lastDataTime;
+      const timeSinceData = Date.now() - Math.max(lastDataTime, exitTime);
       const timeSinceExit = Date.now() - exitTime;
 
       if (timeSinceData <= DAEMON_DATA_STALL_MS && timeSinceExit <= DAEMON_EXIT_STALL_MS) return;
@@ -237,9 +251,12 @@ export class ProcessController {
   }
 
   private onChildError(error: unknown) {
+    if (this.isFinished) return;
+    this.abortedInternally = true;
     this.isFinished = true;
     this.clearActiveTimersAndHandlers();
     this.cleanupTempScript();
+    this.ioController?.flushAll();
 
     const handleError = () => {
       const msg = error instanceof Error ? error.message : String(error);
@@ -252,14 +269,14 @@ export class ProcessController {
     };
 
     if (this.ioController) {
-      this.ioController.closeFileStreams().then(handleError);
+      this.ioController.closeFileStreams().then(handleError, handleError);
     } else {
       handleError();
     }
   }
 
   private setupTimeouts() {
-    const timeoutMs = this.payload.timeoutMs ?? DEFAULT_TIMEOUT_MS;
+    const timeoutMs = this.timeoutOverrideMs ?? this.payload.timeoutMs ?? DEFAULT_TIMEOUT_MS;
     if (timeoutMs <= 0) return;
 
     this.timeoutTimer = setTimeout(() => {
@@ -299,14 +316,17 @@ export class ProcessController {
 
     const scheduleRetry = () => {
       this.isFinished = false;
-      setTimeout(() => {
+      this.retryTimer = setTimeout(() => {
+        this.retryTimer = null;
         try {
           this.spawnChild();
           this.setupIOController();
           this.setupEventHandlers();
           this.setupTimeouts();
         } catch (retryErr: unknown) {
+          if (this.child) killProcessTree(this.child);
           if (!this.isJson) console.error('❌ WSL retry spawn failed:', retryErr);
+          this.abortedInternally = true;
           this.handleFinish(1, null, false);
         }
       }, 500);
@@ -320,33 +340,26 @@ export class ProcessController {
   }
 
   private computeFinalCode(code: number | null, signal: NodeJS.Signals | null, envData: Record<string, unknown> | null): number | null {
+    if (this.timedOut || this.abortedInternally) {
+      return typeof code === 'number' && code !== 0 ? code : 1;
+    }
     if (envData === null) return code;
     const status = envData.status;
     const exitCode = envData.exit_code;
     if (status === 'error' || (typeof exitCode === 'number' && exitCode !== 0)) {
-      return typeof exitCode === 'number' ? exitCode : 1;
+      return typeof exitCode === 'number' && exitCode !== 0 ? exitCode : 1;
     }
-    if (status === 'success' && !this.timedOut && signal === null) {
+    if (status === 'success' && signal === null) {
       return 0;
     }
     return code;
   }
 
-  private async dispatchWebhook(
-    target: string | string[] | undefined,
-    finalCode: number | null,
-    signal: NodeJS.Signals | null,
-    success: boolean,
-    envData: Record<string, unknown> | null,
-  ): Promise<void> {
+  private async dispatchWebhook(target: string | string[] | undefined, finalCode: number | null, signal: NodeJS.Signals | null, success: boolean, envData: Record<string, unknown> | null): Promise<void> {
     if (!target) return;
     await sendWebhook(this.payload, target, {
-      stdout: this.ioController?.stdoutTail || '',
-      stderr: this.ioController?.stderrTail || '',
-      code: finalCode,
-      signal,
-      success,
-      envData,
+      stdout: this.ioController?.stdoutTail || '', stderr: this.ioController?.stderrTail || '',
+      code: finalCode, signal, success, envData,
     });
   }
 
@@ -357,51 +370,34 @@ export class ProcessController {
     else if (analysis.isOutdatedInfo) console.error(`\nℹ️  Outdated packages found (exit code ${code}).`);
   }
 
-  private async finishJsonMode(computedCode: number | null, signal: NodeJS.Signals | null, envData: Record<string, unknown> | null): Promise<never> {
-    const analysis = (computedCode !== null && computedCode !== 0)
-      ? analyzeExitCode1(this.payload, computedCode, this.ioController?.stdoutTail || '', this.ioController?.stderrTail || '')
-      : null;
+  private async finishJsonMode(computedCode: number | null, signal: NodeJS.Signals | null, envData: Record<string, unknown> | null, analysis: ExitCodeAnalysis | null): Promise<never> {
     const finalCode = analysis !== null && isGracefulExitAnalysis(analysis) ? 0 : computedCode;
-
-    if (finalCode !== 0) {
-      await this.dispatchWebhook(this.payload.onFailure, finalCode, signal, false, envData);
-    } else {
-      await this.dispatchWebhook(this.payload.onSuccess, finalCode, signal, true, envData);
-    }
-    console.log(JSON.stringify({
-      status: finalCode === 0 ? 'success' : 'error',
-      code: finalCode,
-      signal,
-      stdout: this.ioController?.stdoutTail || '',
-      stderr: this.ioController?.stderrTail || '',
-      envData,
-    }));
+    await this.dispatchWebhook(finalCode !== 0 ? this.payload.onFailure : this.payload.onSuccess, finalCode, signal, finalCode === 0, envData);
+    console.log(JSON.stringify({ status: finalCode === 0 ? 'success' : 'error', code: finalCode, signal, stdout: this.ioController?.stdoutTail || '', stderr: this.ioController?.stderrTail || '', envData }));
     process.exit(finalCode === 0 ? 0 : (finalCode ?? 1));
   }
 
-  private async finishTextMode(code: number | null, signal: NodeJS.Signals | null, envData: Record<string, unknown> | null, isDaemon: boolean): Promise<never> {
+  private async finishTextMode(code: number | null, signal: NodeJS.Signals | null, envData: Record<string, unknown> | null, isDaemon: boolean, analysis: ExitCodeAnalysis | null): Promise<never> {
     if (code === 0) {
       if (!this.isJson) console.error(`\n✅ Command succeeded${isDaemon ? ' (background process detached)' : ''}.`);
       await this.dispatchWebhook(this.payload.onSuccess, 0, signal, true, envData);
       process.exit(0);
     }
-
     if (code === null) {
       await this.dispatchWebhook(this.payload.onFailure, code, signal, false, envData);
       if (signal && !this.isJson) console.error(`\n${this.timedOut ? 'ℹ️' : '❌'} Command was terminated by signal ${signal}`);
       process.exit(1);
     }
-
-    const analysis = analyzeExitCode1(this.payload, code, this.ioController?.stdoutTail || '', this.ioController?.stderrTail || '');
-    if (isGracefulExitAnalysis(analysis)) {
+    if (analysis !== null && isGracefulExitAnalysis(analysis)) {
       this.logGracefulReason(code, analysis);
       await this.dispatchWebhook(this.payload.onSuccess, 0, signal, true, envData);
       process.exit(0);
     }
-
     await this.dispatchWebhook(this.payload.onFailure, code, signal, false, envData);
-    const suppressRedundantExit = this.payload.type === 'command' && typeof this.payload.command === 'string' &&
-      ['pnpm', 'npm', 'bun', 'yarn', 'node'].includes(this.payload.command);
+    const rawCmdBase = this.payload.type === 'command' && typeof this.payload.command === 'string'
+      ? path.basename(this.payload.command).replace(/\.(cmd|exe)$/i, '').toLowerCase()
+      : '';
+    const suppressRedundantExit = ['pnpm', 'npm', 'bun', 'yarn', 'node'].includes(rawCmdBase);
     setLastStderrTail(this.ioController?.stderrTail || '');
     if (!this.isJson && !suppressRedundantExit) console.error(`\n❌ Command exited with code ${code}`);
     if (process.platform === 'win32' && BUILT_INS.includes(this.cmd.toLowerCase()) && !this.isJson) {
@@ -414,7 +410,7 @@ export class ProcessController {
     if (this.isFinished) return;
     this.isFinished = true;
     this.clearActiveTimersAndHandlers();
-    if (code === 255 && path.basename(this.cmd).toLowerCase() === 'wsl.exe' && !this.hasRetriedWsl && !signal) {
+    if (code === 255 && path.basename(this.cmd).toLowerCase() === 'wsl.exe' && !this.hasRetriedWsl && !signal && !this.timedOut && !this.abortedInternally) {
       this.retryWslLaunch();
       return;
     }
@@ -423,7 +419,7 @@ export class ProcessController {
     const finalizeFinish = async () => {
       const envData = this.ioController && typeof this.ioController.getParsedEnvelope === 'function' ? this.ioController.getParsedEnvelope() : null;
       const computedCode = this.computeFinalCode(code, signal, envData);
-      const analysis = (computedCode !== null && computedCode !== 0)
+      const analysis = (!this.timedOut && !this.abortedInternally && signal === null && envData?.status !== 'error' && computedCode === 1)
         ? analyzeExitCode1(this.payload, computedCode, this.ioController?.stdoutTail || '', this.ioController?.stderrTail || '')
         : null;
       const telemetryCode = analysis !== null && isGracefulExitAnalysis(analysis) ? 0 : computedCode;
@@ -432,10 +428,15 @@ export class ProcessController {
         telemetryCode === 0 ? 'success' : 'error', computedCode,
         this.ioController?.stdoutTail || '', this.ioController?.stderrTail || '',
       );
-      if (this.isJson) return this.finishJsonMode(computedCode, signal, envData);
-      return this.finishTextMode(computedCode, signal, envData, isDaemon);
+      if (this.isJson) return this.finishJsonMode(computedCode, signal, envData, analysis);
+      return this.finishTextMode(computedCode, signal, envData, isDaemon, analysis);
     };
-    if (this.ioController) return this.ioController.closeFileStreams().then(finalizeFinish);
-    return finalizeFinish();
+    const finishPromise = this.ioController
+      ? this.ioController.closeFileStreams().then(finalizeFinish, finalizeFinish)
+      : finalizeFinish();
+    return finishPromise.catch((err: unknown) => {
+      if (!this.isJson) console.error('❌ Finalization error:', err);
+      process.exit(1);
+    });
   }
 }

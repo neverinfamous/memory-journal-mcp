@@ -4,7 +4,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const AGENT_SCRIPT_REF_RE = /^(?:(?:\.[\\/])?\.agents|.*[\\/]\.agents)[\\/]scripts[\\/]([a-zA-Z0-9_.-]+\.(?:ts|js|mjs))$/;
-const TSX_COMMIT_SCRIPT_RE = /\b(?:tsx(?:\s+[^\s;|&]+)*|cli\.mjs)\s+['"]?(?:\.[\\/])?scripts[\\/]commit\.ts['"]?(?:\s|$|;|&|\|)/i;
+const TSX_COMMIT_SCRIPT_RE = /^(?:pnpm(?:\s+exec)?\s+|bun(?:x)?\s+|npx\s+|node\s+\S*?)?\b(?:tsx|cli\.mjs)\s+['"]?(?:\.[\\/])?scripts[\\/]commit\.ts['"]?\s*$/i;
 
 export function resolveAgentScriptFallback(rawArg: string, projectDir: string): string | null {
   const matchResult = rawArg.match(AGENT_SCRIPT_REF_RE);
@@ -22,10 +22,31 @@ export function resolveAgentScriptFallback(rawArg: string, projectDir: string): 
     return `scripts/${scriptName}`;
   }
 
+  let ancestorDir = path.dirname(path.resolve(projectDir));
+  while (true) {
+    const ancestorCandidate = path.join(ancestorDir, 'scripts', scriptName);
+    if (fs.statSync(ancestorCandidate, { throwIfNoEntry: false }) !== undefined) {
+      return ancestorCandidate;
+    }
+    const parent = path.dirname(ancestorDir);
+    if (parent === ancestorDir) break;
+    ancestorDir = parent;
+  }
+
   const bundledScriptsDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-  const bundledCandidate = path.join(bundledScriptsDir, scriptName);
-  if (fs.statSync(bundledCandidate, { throwIfNoEntry: false }) !== undefined) {
-    return bundledCandidate;
+  const bundledCandidates = [
+    path.join(bundledScriptsDir, scriptName),
+    ...(scriptName === 'commit.ts'
+      ? [
+          path.join(bundledScriptsDir, 'commit', 'commit.ts'),
+          path.join(bundledScriptsDir, 'commit', 'commit.js'),
+        ]
+      : []),
+  ];
+  for (const bundledCandidate of bundledCandidates) {
+    if (fs.statSync(bundledCandidate, { throwIfNoEntry: false }) !== undefined) {
+      return bundledCandidate;
+    }
   }
 
   return null;
@@ -64,6 +85,14 @@ export function resolveFreshCompiledCommitBundle(
     path.basename(scriptDir).toLowerCase() === 'scripts'
       ? path.dirname(scriptDir)
       : projectDir;
+  const norm = (p: string) => (process.platform === 'win32' ? p.toLowerCase() : p);
+  const validTargets = new Set([
+    norm(path.join(repoRoot, 'scripts', 'commit.ts')),
+    norm(path.join(repoRoot, 'src', 'vendor', 'commit', 'commit.ts')),
+  ]);
+  if (!validTargets.has(norm(absScript))) {
+    return null;
+  }
   const compiledPath = path.join(repoRoot, 'dist', 'vendor', 'commit', 'commit.js');
   try {
     const compiledStats = fs.statSync(compiledPath, { throwIfNoEntry: false });
@@ -71,10 +100,14 @@ export function resolveFreshCompiledCommitBundle(
       return null;
     }
     const compiledMtime = compiledStats.mtimeMs;
-    const directCandidates = [absScript, path.join(repoRoot, 'scripts', 'commit.ts')];
-    for (const candidate of directCandidates) {
-      const candidateStats = fs.statSync(candidate, { throwIfNoEntry: false });
-      if (candidateStats !== undefined && candidateStats.mtimeMs > compiledMtime) {
+    const targetStats = fs.statSync(absScript, { throwIfNoEntry: false });
+    if (targetStats === undefined || !targetStats.isFile() || targetStats.mtimeMs > compiledMtime) {
+      return null;
+    }
+    const scriptsCommit = path.join(repoRoot, 'scripts', 'commit.ts');
+    if (norm(absScript) !== norm(scriptsCommit)) {
+      const scriptsCommitStats = fs.statSync(scriptsCommit, { throwIfNoEntry: false });
+      if (scriptsCommitStats !== undefined && scriptsCommitStats.mtimeMs > compiledMtime) {
         return null;
       }
     }

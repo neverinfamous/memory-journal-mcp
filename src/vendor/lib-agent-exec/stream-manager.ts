@@ -12,7 +12,7 @@ const ANSI_REGEX_H = new RegExp(`${ESC}\\[H`, 'g');
 const LONG_CSI_REGEX = new RegExp(`[${ESC}${CSI}]\\[[\\x30-\\x3F]*[\\x20-\\x2F]*[\\x40-\\x7E]`, 'g');
 const OSC_REGEX = new RegExp(`[${ESC}${CSI}]][^\\x07${ESC}]*(?:\\x07|${ESC}\\\\)`, 'g');
 const COMPLETE_OSC_REGEX = new RegExp(`^[${ESC}${CSI}]][^${BEL}${ESC}]*(?:${BEL}|${ESC}\\\\)`);
-const COMPLETE_CSI_REGEX = new RegExp(`^(?:[${ESC}${CSI}]\\[|${CSI})[()#;?]*[\\x30-\\x3F]*[\\x20-\\x2F]*[\\x40-\\x7E]`);
+const COMPLETE_CSI_REGEX = new RegExp(`^(?:[${ESC}${CSI}]\\[|${CSI})[()#]*[\\x30-\\x3F]*[\\x20-\\x2F]*[\\x40-\\x7E]`);
 const DCS_START_REGEX = new RegExp(`^[${ESC}${CSI}][PX^_]`);
 const DCS_COMPLETE_REGEX = new RegExp(`^[${ESC}${CSI}][PX^_].*?(?:${ESC}\\\\|\\x07)`, 's');
 
@@ -110,9 +110,9 @@ export class StreamManager {
     const isOsc = potentialSeq.startsWith('\u001b]') || potentialSeq.startsWith('\u009b]');
     const isCsi = potentialSeq.startsWith('\u001b[') || potentialSeq.startsWith('\u009b[');
     const incomplete =
-      (isOsc && !COMPLETE_OSC_REGEX.test(potentialSeq) && potentialSeq.length < MAX_ANSI_SEQ_LENGTH_OSC) ||
-      (isCsi && !COMPLETE_CSI_REGEX.test(potentialSeq) && potentialSeq.length < MAX_ANSI_SEQ_LENGTH_CSI) ||
-      (DCS_START_REGEX.test(potentialSeq) && !DCS_COMPLETE_REGEX.test(potentialSeq) && potentialSeq.length < MAX_ANSI_SEQ_LENGTH_OSC) ||
+      (isOsc && potentialSeq.length < MAX_ANSI_SEQ_LENGTH_OSC && !COMPLETE_OSC_REGEX.test(potentialSeq)) ||
+      (isCsi && potentialSeq.length < MAX_ANSI_SEQ_LENGTH_CSI && !COMPLETE_CSI_REGEX.test(potentialSeq)) ||
+      (potentialSeq.length < MAX_ANSI_SEQ_LENGTH_OSC && DCS_START_REGEX.test(potentialSeq) && !DCS_COMPLETE_REGEX.test(potentialSeq)) ||
       (!isOsc && !isCsi && !DCS_START_REGEX.test(potentialSeq) && potentialSeq.length < 3);
 
     if (incomplete) {
@@ -230,7 +230,7 @@ export class StreamManager {
     const targetStream = isErr ? this.errStream : this.outStream;
     const stdStream = isErr ? process.stderr : process.stdout;
 
-    if (targetStream && !targetStream.destroyed) {
+    if (targetStream && !targetStream.destroyed && !targetStream.writableEnded) {
       const canWrite = targetStream.write(str);
       if (!canWrite) streamsToDrain.push(targetStream);
     }

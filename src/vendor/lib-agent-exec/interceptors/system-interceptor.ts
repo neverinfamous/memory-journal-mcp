@@ -20,13 +20,14 @@ function syncDerivedArgs(ctx: ExecutionContext, derived: ReturnType<typeof build
 }
 
 export function systemInterceptor(ctx: ExecutionContext): void {
+  const resolvedCwd = ctx.cwd !== undefined && ctx.cwd.length > 0 ? ctx.cwd : undefined;
   healFragmentedQuoteArgs(ctx);
   unwrapPackageRunnerShell(ctx);
-  healEvalPayload(ctx.payload);
+  healEvalPayload(ctx.payload, resolvedCwd);
 
   const derived = buildSystemCommandContext(ctx);
-  if (routeEmbeddedShellTools(derived.payload)) return;
-  extendPayloadTimeouts(derived);
+  if (routeEmbeddedShellTools(derived.payload, resolvedCwd)) return;
+  extendPayloadTimeouts(derived, resolvedCwd);
 
   healPathHallucinations(ctx);
   syncDerivedArgs(ctx, derived);
@@ -39,7 +40,7 @@ export function systemInterceptor(ctx: ExecutionContext): void {
 
   blockUnsafePipes(derived);
 
-  const inline = resolveInlineCommand(derived.args);
+  const inline = resolveInlineCommand(derived.args, derived.cmdBasename);
   runStructuralInterceptors(ctx, {
     cmd: derived.cmd,
     cmdBasename: derived.cmdBasename,

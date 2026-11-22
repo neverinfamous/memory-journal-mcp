@@ -40,14 +40,37 @@ const TEXT_DATA_PREFIXES: readonly string[] = [
   'msg=', 'history=', 'summary=', 'reason=', 'prompt=', 'subject=',
 ];
 
+const PM_DELEGATE_VALUE_FLAGS = new Set(['-C', '--dir', '--cwd', '--prefix', '--filter', '-F', '-p', '--package']);
+const PM_DELEGATE_SUBCMDS = new Set(['exec', 'x', 'dlx', 'run']);
+
+function resolvePkgDelegatedTool(args: readonly string[]): string | undefined {
+  let sawSub = false;
+  for (let i = 0; i < args.length; i++) {
+    const a = args[i];
+    if (a === undefined || a === '--') break;
+    if (PM_DELEGATE_VALUE_FLAGS.has(a)) { i++; continue; }
+    if (a.startsWith('-')) continue;
+    const low = a.toLowerCase();
+    if (!sawSub && PM_DELEGATE_SUBCMDS.has(low)) { sawSub = true; continue; }
+    return low;
+  }
+  return undefined;
+}
+
+function isGitPatternOperand(derived: SystemCommandDerived): boolean {
+  if (derived.cmd !== 'git' && derived.cmd !== 'git.exe') return false;
+  const sub = derived.args.find(a => !a.startsWith('-'))?.toLowerCase();
+  return sub === 'grep' || sub === 'log' || sub === 'diff';
+}
+
 export function blockUnsafePipes(derived: SystemCommandDerived): void {
   const cmdLower = derived.cmdBasename.toLowerCase();
   const isPkgMgr = PKG_MANAGERS.includes(cmdLower);
-  const pkgSubcommand = isPkgMgr ? derived.args.find(arg => !arg.startsWith('-'))?.toLowerCase() : undefined;
+  const pkgSubcommand = isPkgMgr ? resolvePkgDelegatedTool(derived.args) : undefined;
   const isInvokingPatternTool = pkgSubcommand !== undefined && PATTERN_TOOLS.includes(pkgSubcommand);
   const shouldCheckPipes = match(derived.payload)
     .with({ type: 'command', target: 'wsl2' }, () => false)
-    .with({ type: 'command' }, () => !PATTERN_TOOLS.includes(derived.cmd) && !isInvokingPatternTool)
+    .with({ type: 'command' }, () => !PATTERN_TOOLS.includes(derived.cmd) && !isInvokingPatternTool && !isGitPatternOperand(derived))
     .otherwise(() => false);
   if (!shouldCheckPipes) return;
   const isShell = SHELL_CMDS.includes(cmdLower);

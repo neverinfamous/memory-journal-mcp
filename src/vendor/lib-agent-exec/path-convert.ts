@@ -5,40 +5,47 @@ import path from 'node:path';
 export function formatForCmdExe(args: string[]): string[] {
   if (args[0]?.toLowerCase() !== '/c') return args;
   const originalCmdAndArgs = args.slice(1);
-  const commandLine = originalCmdAndArgs.map(arg => {
+  for (const arg of originalCmdAndArgs) {
+    if (arg.includes('\n') || arg.includes('\r')) {
+      throw new Error('cmd.exe arguments must not contain newline or carriage return characters.');
+    }
+  }
+  const crtJoined = originalCmdAndArgs.map(arg => {
     let crtArg = arg;
-    if (/[ \t\n\v"]/.test(arg) || arg.length === 0) {
+    if (/[ \t\v"]/.test(arg) || arg.length === 0) {
       // CRT argv quoting doubles backslashes only when they precede a quote (including the closing quote).
       crtArg = arg.replace(/(\\+)(")/g, '$1$1$2'); // codeql[js/incomplete-sanitization]
       crtArg = crtArg.replace(/"/g, '\\"');
       crtArg = crtArg.replace(/(\\+)$/, '$1$1');
       crtArg = `"${crtArg}"`;
     }
-    let cmdArg = '';
-    let inQuotes = false;
-    for (let i = 0; i < crtArg.length; i++) {
-      const char = crtArg[i];
-      if (char === '"') {
-        inQuotes = !inQuotes;
-        cmdArg += char;
-      } else if (!inQuotes && /[&|<>^]/.test(char)) {
-        cmdArg += '^' + char;
-      } else {
-        cmdArg += char;
-      }
-    }
-    return cmdArg;
+    return crtArg;
   }).join(' ');
+  let commandLine = '';
+  let inQuotes = false;
+  for (let i = 0; i < crtJoined.length; i++) {
+    const char = crtJoined[i];
+    if (char === '"') {
+      inQuotes = !inQuotes;
+      commandLine += char;
+    } else if (char === '%') {
+      commandLine += inQuotes ? '"^%"' : '^%';
+    } else if (!inQuotes && /[&|<>^]/.test(char)) {
+      commandLine += '^' + char;
+    } else {
+      commandLine += char;
+    }
+  }
   return ['/d', '/s', '/c', `"${commandLine}"`];
 }
 
 export function convertToWslPath(winPath: string): string {
-  if (winPath.startsWith('^') || winPath.startsWith('$')) {
-    return winPath;
-  }
-
   if (!winPath || typeof winPath !== 'string') {
     return winPath ?? '';
+  }
+
+  if (winPath.startsWith('^') || winPath.startsWith('$')) {
+    return winPath;
   }
 
   const transform = (p: string) => {
@@ -76,7 +83,7 @@ export function convertToWslPath(winPath: string): string {
       return `${prefix}${transform(value)}`;
     }
     if (value.includes('\\')) {
-      if (/[{}`;|"'<>:]/.test(value)) return winPath;
+      if (/[{}`;|"'<>:$()*?&!`]/.test(value) || /\\[$()*?&!`]/.test(value)) return winPath;
       if (value.includes(' ') && !fs.existsSync(value.trim())) return winPath;
       if (value.trim().endsWith('\\') && !fs.existsSync(value.trim())) return winPath;
       if (prefix.endsWith(':') && !/^[a-zA-Z]:[/\\]/.test(value.trim())) return winPath;
@@ -85,7 +92,7 @@ export function convertToWslPath(winPath: string): string {
   }
 
   if (!winPath.startsWith('-') && winPath.includes('\\')) {
-    if (/[{}`;|"'<>:]/.test(winPath)) return winPath;
+    if (/[{}`;|"'<>:$()*?&!`]/.test(winPath) || /\\[$()*?&!`]/.test(winPath)) return winPath;
     if (winPath.includes(' ') && !fs.existsSync(winPath)) return winPath;
     if (winPath.endsWith('\\') && !fs.existsSync(winPath)) return winPath;
     return winPath.replace(/\\/g, '/');

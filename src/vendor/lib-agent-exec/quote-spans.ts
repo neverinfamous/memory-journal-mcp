@@ -10,22 +10,37 @@ export interface NonCodeSpanOptions {
   includeRegexLiterals?: boolean;
 }
 
-function skipWhitespaceBackwards(source: string, idx: number): string {
+function skipWhitespaceBackwardsIndex(source: string, idx: number): number {
   for (let i = idx - 1; i >= 0; i--) {
     const ch = source[i];
-    if (ch !== ' ' && ch !== '\t' && ch !== '\r' && ch !== '\n') return ch ?? '';
+    if (ch !== ' ' && ch !== '\t' && ch !== '\r' && ch !== '\n') return i;
   }
-  return '';
+  return -1;
 }
 
 function looksLikeRegexStart(source: string, index: number): boolean {
-  const prev = skipWhitespaceBackwards(source, index);
-  if (prev === '' || '(=,[!&|?:;~^+-*%/{(\n'.includes(prev)) {
-    if (prev === ')') return false;
-    return true;
+  const prevIdx = skipWhitespaceBackwardsIndex(source, index);
+  const prev = prevIdx >= 0 ? (source[prevIdx] ?? '') : '';
+  if (prev === '+' || prev === '-') {
+    const beforePrev = prevIdx > 0 ? source[prevIdx - 1] : '';
+    return beforePrev !== prev;
   }
+  if (prev === '' || '(=,[!&|?:;~^*/{(\n'.includes(prev)) return true;
   const before = source.slice(Math.max(0, index - 16), index).trimEnd();
   return /\b(?:return|throw|case|in|of|typeof|instanceof|void|delete|await|yield)$/.test(before);
+}
+
+function hasClosingRegexSlashOnLine(source: string, start: number): boolean {
+  let inClass = false;
+  for (let i = start; i < source.length; i++) {
+    const ch = source[i];
+    if (ch === '\n' || ch === '\r') return false;
+    if (ch === '\\') { i += 1; continue; }
+    if (ch === '[' && !inClass) { inClass = true; continue; }
+    if (ch === ']' && inClass) { inClass = false; continue; }
+    if (ch === '/' && !inClass) return true;
+  }
+  return false;
 }
 
 function closeRegexLiteral(source: string, index: number): number {
@@ -90,6 +105,13 @@ function closeTemplateExpr(source: string, index: number): number {
       const endBlock = source.indexOf('*/', i + 2);
       i = endBlock === -1 ? source.length : endBlock + 2;
       continue;
+    }
+    if (ch === '/' && looksLikeRegexStart(source, i)) {
+      const regexEnd = closeRegexLiteral(source, i + 1);
+      if (regexEnd > i + 1) {
+        i = regexEnd;
+        continue;
+      }
     }
     if (ch === "'" || ch === '"') {
       i = closeQuote(source, i + 1, ch);
@@ -200,12 +222,18 @@ function isLineCommentBefore(prefix: string): boolean {
   return false;
 }
 
+function extractReplaceOffset(args: readonly unknown[]): unknown {
+  return typeof args[args.length - 1] === 'object' && args[args.length - 1] !== null
+    ? args[args.length - 3]
+    : args[args.length - 2];
+}
+
 /** [INTENT]: WSL drive-letter conversion must rewrite quoted JS paths and still leave // comments alone. */
 export function replaceOutsideLineComments(source: string, pattern: RegExp, replacer: (match: string) => string): string {
   const flags = pattern.flags.includes('g') ? pattern.flags : `${pattern.flags}g`;
   const globalPattern = new RegExp(pattern.source, flags);
   return source.replace(globalPattern, (match: string, ...args: unknown[]) => {
-    const offset = args[args.length - 2];
+    const offset = extractReplaceOffset(args);
     if (typeof offset !== 'number') return replacer(match);
     const lineStart = source.lastIndexOf('\n', offset - 1) + 1;
     if (isLineCommentBefore(source.slice(lineStart, offset))) return match;
@@ -213,13 +241,102 @@ export function replaceOutsideLineComments(source: string, pattern: RegExp, repl
   });
 }
 
-export function replaceOutsideQuotes(source: string, pattern: RegExp, replacer: (match: string) => string): string {
+export function replaceOutsideQuotes(
+  source: string,
+  pattern: RegExp,
+  replacer: (match: string) => string,
+  options?: NonCodeSpanOptions,
+): string {
   const flags = pattern.flags.includes('g') ? pattern.flags : `${pattern.flags}g`;
   const globalPattern = new RegExp(pattern.source, flags);
-  const spans = buildNonCodeSpans(source);
+  const spans = buildNonCodeSpans(source, options);
   return source.replace(globalPattern, (match: string, ...args: unknown[]) => {
-    const offset = args[args.length - 2];
+    const offset = extractReplaceOffset(args);
     if (typeof offset === 'number' && isIndexInSpans(spans, offset)) return match;
     return replacer(match);
   });
+}
+
+export interface CodeScanState {
+  inSingle: boolean;
+  inDouble: boolean;
+  inBacktick: boolean;
+  inLineComment: boolean;
+  inBlockComment: boolean;
+  inRegex: boolean;
+  inRegexClass: boolean;
+  templateExprDepths: number[];
+}
+
+export function createCodeScanState(): CodeScanState {
+  return {
+    inSingle: false,
+    inDouble: false,
+    inBacktick: false,
+    inLineComment: false,
+    inBlockComment: false,
+    inRegex: false,
+    inRegexClass: false,
+    templateExprDepths: [],
+  };
+}
+
+// [INTENT]: Shared single-character string/comment/regex/template-expr scanner so nested heuristics skip literals and comments.
+export function stepCodeScanState(code: string, i: number, state: CodeScanState): number | null {
+  const ch = code[i];
+  const next = code[i + 1];
+  if (state.inLineComment) { if (ch === '\n') state.inLineComment = false; return i; }
+  if (state.inBlockComment) {
+    if (ch === '*' && next === '/') { state.inBlockComment = false; return i + 1; }
+    return i;
+  }
+  if (state.inRegex) {
+    if (ch === '\\') return i + 1;
+    if (ch === '\n' || ch === '\r') { state.inRegex = false; state.inRegexClass = false; return i; }
+    if (ch === '[' && !state.inRegexClass) { state.inRegexClass = true; return i; }
+    if (ch === ']' && state.inRegexClass) { state.inRegexClass = false; return i; }
+    if (ch === '/' && !state.inRegexClass) { state.inRegex = false; return i; }
+    return i;
+  }
+  if (state.inSingle) {
+    if (ch === '\\') return i + 1;
+    if (ch === "'") state.inSingle = false;
+    return i;
+  }
+  if (state.inDouble) {
+    if (ch === '\\') return i + 1;
+    if (ch === '"') state.inDouble = false;
+    return i;
+  }
+  if (state.inBacktick) {
+    if (ch === '\\') return i + 1;
+    if (ch === '$' && next === '{') {
+      state.inBacktick = false;
+      state.templateExprDepths.push(1);
+      return i + 1;
+    }
+    if (ch === '`') state.inBacktick = false;
+    return i;
+  }
+  if (state.templateExprDepths.length > 0) {
+    if (ch === '{') {
+      const topIdx = state.templateExprDepths.length - 1;
+      state.templateExprDepths[topIdx] = (state.templateExprDepths[topIdx] ?? 0) + 1;
+    } else if (ch === '}') {
+      const top = (state.templateExprDepths[state.templateExprDepths.length - 1] ?? 1) - 1;
+      if (top <= 0) {
+        state.templateExprDepths.pop();
+        state.inBacktick = true;
+        return i;
+      }
+      state.templateExprDepths[state.templateExprDepths.length - 1] = top;
+    }
+  }
+  if (ch === '/' && next === '/') { state.inLineComment = true; return i + 1; }
+  if (ch === '/' && next === '*') { state.inBlockComment = true; return i + 1; }
+  if (ch === '/' && looksLikeRegexStart(code, i) && hasClosingRegexSlashOnLine(code, i + 1)) { state.inRegex = true; return i; }
+  if (ch === "'") { state.inSingle = true; return i; }
+  if (ch === '"') { state.inDouble = true; return i; }
+  if (ch === '`') { state.inBacktick = true; return i; }
+  return null;
 }

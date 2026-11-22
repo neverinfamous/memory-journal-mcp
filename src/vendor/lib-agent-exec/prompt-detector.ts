@@ -46,12 +46,12 @@ export function checkPrompt(tail: string): boolean {
     .when(l => /press enter to .*?\s*$/i.test(l) || /^(?:hint:\s*)?waiting for (?:your editor|vi|nano|vim|emacs|notepad|code)/i.test(l), () => true)
     
     // Y/N and Multiple Choice
-    .when(l => /\(?(?:yes|y)\s*\/\s*(?:no|n)\)?\s*[?:]?\s*$/i.test(l) || /(?:enter|select|choose) .*:/i.test(l), () => true)
+    .when(l => /\(?(?:yes|y)\s*\/\s*(?:no|n)\)?\s*[?:]?\s*$/i.test(l) || /(?:^|\n)[ \t]*(?:enter|select|choose) [^:\n]*:\s*$/i.test(l), () => true)
     .when(l => /\[y\]\s*yes.*\[n\]\s*no/i.test(l) || /\(default is ".*"\):/i.test(l), () => true)
     .when(l => /Overwrite .*?\? \(y\/n(?:\[n\])?\)/i.test(l) || /(?:overwrite|replace|override)\s*\??\s*$/i.test(l), () => true)
     .when(l => /terminate batch job \(y\/n\)?/i.test(l), () => true)
-    .when(l => /\([yY].*?\/.*?[nN].*?\)\s*[?:]?\s*$/i.test(l) || /\[[yY].*?\/.*?[nN].*?\]\s*[?:]?\s*$/i.test(l), () => true)
-    .when(l => /\[[YyNnSsAaLl](?:es|o|ll)?\](?:[ \t]*\w+){0,3}(?:[ \t]*\[[YyNnSsAaLl](?:es|o|ll)?\](?:[ \t]*\w+){0,3}){0,5}[ \t]*(?:\(default is ".*?"\))?[ \t:]*$/i.test(l), () => true)
+    .when(l => /\((?:yes|y)\s*\/\s*(?:no|n)\)\s*[?:]?\s*$/i.test(l) || /\[(?:yes|y)\s*\/\s*(?:no|n)\]\s*[?:]?\s*$/i.test(l), () => true)
+    .when(l => /\[[YyNn](?:\/[YyNnAaQqSsLl])+\][ \t:]*$/i.test(l) || /\[[YyNnSsAaLl](?:es|o|ll)?\](?:[ \t]*\w+){0,3}(?:[ \t]*\[[YyNnSsAaLl](?:es|o|ll)?\](?:[ \t]*\w+){0,3}){0,5}[ \t]*(?:\(default is ".*?"\))?[ \t:]*$/i.test(l), () => true)
     .when(l => /\[[Yy]\/[Nn]\]\s*$/i.test(l) || /\([Yy]\/[Nn]\)\s*$/i.test(l) || /\(yes\/no\)\s*\??\s*$/i.test(l), () => true)
     
     // Auth and Inputs
@@ -63,7 +63,7 @@ export function checkPrompt(tail: string): boolean {
     .when(l => /(?:one-time password|otp|2fa|two.factor).*:\s*$/i.test(l), () => true)
     .when(l => /password for '.*?':\s*$/i.test(l), () => true)
     .when(l => /(?:enter|provide|type|input|select|choose)[ \t]+(?:your[ \t]+)?(?:name|option|value|choice|path|directory|file|url|key)[ \t]*[:>?][ \t]*$/i.test(l), () => true)
-    .when(l => /(?:package name|version|description|entry point|test command|git repository|keywords|license|is this ok\?)[ \t]*[:?]?[ \t]*(?:\(.*?\))?[ \t]*[:?]?[ \t]*$/i.test(l), () => true)
+    .when(l => /^\s*(?:package name|version|description|entry point|test command|git repository|keywords|license)[ \t]*(?::[ \t]*(?:\([^)\r\n]*\))?|\([^)\r\n]*\)[ \t]*:)[ \t]*$/im.test(l) || /^\s*is this ok\?[ \t]*(?:\([^)\r\n]*\))?[ \t]*$/im.test(l), () => true)
     
     // Pagers
     .when(l => /more\s*\(\d+%\)/i.test(l), () => true)

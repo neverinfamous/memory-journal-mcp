@@ -34,27 +34,34 @@ export function unwrapPackageRunnerShell(ctx: ExecutionContext): void {
 }
 
 function rebindPackageRunnerToShell(ctx: ExecutionContext, possibleShell: string, runIdx: number): void {
-  console.error(`\n   💡 AGENT HINT: Shell '${possibleShell}' invoked through package runner '${ctx.cmdBasename}'.`);
-  console.error(`\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Unwrapping package runner to execute shell directly with safety interceptors... (Frictionless Recovery)\x1b[0m`);
+  const originalRunner = ctx.cmdBasename;
   ctx.cmdBasename = possibleShell;
   if (ctx.payload.type === 'command') {
     ctx.payload.command = possibleShell;
   }
   ctx.args = ctx.args.slice(runIdx + 1);
+  if (ctx.payload.type === 'command') {
+    ctx.payload.args = ctx.args;
+  }
+  console.error(`\n   💡 AGENT HINT: Shell '${possibleShell}' invoked through package runner '${originalRunner}'.`);
+  console.error(`\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Unwrapping package runner to execute shell directly with safety interceptors... (Frictionless Recovery)\x1b[0m`);
 }
 
 function extendNestedAgentExec(ctx: ExecutionContext): void {
   ctx.payload.bypassInterceptors = true;
+  const baseCwd = ctx.payload.cwd !== undefined && ctx.payload.cwd.length > 0 && !ctx.payload.cwd.startsWith('/')
+    ? ctx.payload.cwd
+    : (ctx.cwd !== undefined && ctx.cwd.length > 0 ? ctx.cwd : process.cwd());
   let nestedTimeout = 180000;
   for (const arg of ctx.args) {
-    nestedTimeout = Math.max(nestedTimeout, timeoutFloorForArg(arg));
+    nestedTimeout = Math.max(nestedTimeout, timeoutFloorForArg(arg, baseCwd));
   }
-  ctx.payload.timeoutMs = Math.max(ctx.payload.timeoutMs || nestedTimeout, nestedTimeout);
+  ctx.payload.timeoutMs = ctx.payload.timeoutMs === 0 ? 0 : Math.max(ctx.payload.timeoutMs ?? nestedTimeout, nestedTimeout);
 }
 
-function timeoutFloorForArg(arg: unknown): number {
+function timeoutFloorForArg(arg: unknown, baseCwd: string): number {
   if (typeof arg !== 'string') return 0;
-  return Math.max(readLooseTimeout(arg), readFlagTimeout(arg), keywordFloor(arg), timeoutFloorForJsonFile(arg));
+  return Math.max(readLooseTimeout(arg), readFlagTimeout(arg), keywordFloor(arg), timeoutFloorForJsonFile(arg, baseCwd));
 }
 
 function readLooseTimeout(text: string): number {
@@ -74,7 +81,7 @@ function parsedTimeout(match: RegExpMatchArray | null): number {
   if (match === null || match[1] === undefined) return 0;
   const parsed = parseInt(match[1], 10);
   if (Number.isNaN(parsed)) return 0;
-  return parsed;
+  return Math.min(parsed, 2_147_483_647);
 }
 
 function keywordFloor(text: string): number {
@@ -91,10 +98,13 @@ function keywordFloor(text: string): number {
   return floor;
 }
 
-function timeoutFloorForJsonFile(filePath: string): number {
-  if (!filePath.endsWith('.json') || !fs.existsSync(filePath)) return 0;
+function timeoutFloorForJsonFile(filePath: string, baseCwd: string): number {
+  if (!filePath.endsWith('.json')) return 0;
   try {
-    const fileContent = fs.readFileSync(filePath, 'utf8');
+    const resolved = path.resolve(baseCwd, filePath);
+    const st = fs.statSync(resolved, { throwIfNoEntry: false });
+    if (st === undefined || !st.isFile()) return 0;
+    const fileContent = fs.readFileSync(resolved, 'utf8');
     return Math.max(readTimeoutMsField(fileContent), keywordFloor(fileContent));
   } catch {
     return 0;

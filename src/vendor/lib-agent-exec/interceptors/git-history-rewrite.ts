@@ -24,7 +24,7 @@ const PAIRED_FLAGS: readonly FlagRule[] = [
   { names: ['--until'], dest: '--until', equalsPrefix: '--until=' },
   { names: ['--before'], dest: '--until', equalsPrefix: '--before=' },
   { names: ['--diff-filter'], dest: '--diff-filter', equalsPrefix: '--diff-filter=' },
-  { names: ['-U', '--diff-context'], dest: '--diff-context', attachedPrefix: '-U' },
+  { names: ['-U', '--diff-context'], dest: '--diff-context', equalsPrefix: '--diff-context=', attachedPrefix: '-U' },
 ];
 
 const VALUE_FLAGS = [
@@ -52,16 +52,71 @@ function isKnownGitPath(argStr: string, targetCwd: string, cwd: string): boolean
   return false;
 }
 
-function shouldLeaveNative(cmd: string, args: string[], ctx: ExecutionContext): boolean {
+function hasMultiplePathArgsWithoutDash(
+  args: readonly string[],
+  cmd: string,
+  startIdx: number,
+  knownPath: (value: string) => boolean,
+): boolean {
+  let pathCount = 0;
+  for (let i = startIdx + 1; i < args.length; i++) {
+    const arg = args[i];
+    if (arg === undefined) continue;
+    if (arg === '--') return args.slice(i + 1).length > 1;
+    if (arg.startsWith('-')) {
+      if (PAIRED_FLAGS.some(rule => rule.names.includes(arg)) || VALUE_FLAGS.includes(arg)) i += 1;
+      continue;
+    }
+    if (classifyPositional(arg, cmd, knownPath) === 'path') {
+      pathCount += 1;
+      if (pathCount >= 2) return true;
+    }
+  }
+  return false;
+}
+
+const CUSTOM_TREE_FLAGS: ReadonlySet<string> = new Set(['--git-dir', '--work-tree', '--namespace', '--bare']);
+
+function hasCustomGitTreeFlags(args: readonly string[], subIdx: number): boolean {
+  const limit = subIdx === -1 ? args.length : subIdx;
+  for (let i = 0; i < limit; i++) {
+    const arg = args[i];
+    if (arg === undefined || arg === '--') break;
+    if (
+      CUSTOM_TREE_FLAGS.has(arg) ||
+      arg.startsWith('--git-dir=') ||
+      arg.startsWith('--work-tree=') ||
+      arg.startsWith('--namespace=')
+    ) {
+      return true;
+    }
+    if (GLOBAL_VALUE_FLAGS.has(arg)) i += 1;
+  }
+  return false;
+}
+
+function shouldLeaveNative(cmd: string, args: string[], ctx: ExecutionContext, knownPath: (value: string) => boolean): boolean {
+  if (ctx.payload.target === 'wsl2') return true;
+  const subIdx = findGitSubcommandIndex(args, cmd);
+  if (hasCustomGitTreeFlags(args, subIdx)) return true;
   if (cmd === 'show') {
-    const isBlob = args.some((arg) => !arg.startsWith('-') && arg !== 'show' && arg !== '--no-pager' && arg.includes(':') && !/^[a-zA-Z]:[\\/]/.test(arg));
+    const showArgs = subIdx !== -1 ? args.slice(subIdx + 1) : args;
+    const isBlob = showArgs.some((arg) => !arg.startsWith('-') && arg !== '--no-pager' && arg.includes(':') && !/^[a-zA-Z]:[\\/]/.test(arg));
     if (isBlob) return true;
   }
-  return cmd === 'status' && ctx.payload.target === 'wsl2';
+  if (['diff', 'log', 'show', 'shortlog'].includes(cmd)) {
+    const ddIdx = args.indexOf('--');
+    if (ddIdx !== -1 && args.slice(ddIdx + 1).length > 1) return true;
+    if (subIdx !== -1 && hasMultiplePathArgsWithoutDash(args, cmd, subIdx, knownPath)) return true;
+  }
+  return false;
 }
 
 function cwdDiffers(targetCwd: string, explicitCwd: string | undefined): boolean {
-  return explicitCwd !== undefined || path.resolve(targetCwd) !== path.resolve(process.cwd());
+  if (explicitCwd !== undefined) return true;
+  const a = path.resolve(targetCwd);
+  const b = path.resolve(process.cwd());
+  return process.platform === 'win32' ? a.toLowerCase() !== b.toLowerCase() : a !== b;
 }
 
 function syncGitCommandPayload(ctx: ExecutionContext): void {
@@ -71,15 +126,14 @@ function syncGitCommandPayload(ctx: ExecutionContext): void {
 }
 
 function rewriteStatus(ctx: ExecutionContext, scriptToInvoke: string, targetCwd: string, explicitCwd: string | undefined): void {
-  console.error(`\n   🛠️ AUTONOMOUS HEALING: Transparently rewriting 'git status' to '${scriptToInvoke} --uncommitted --stats'... (Frictionless Recovery)`);
   ctx.cmdBasename = 'bun';
   ctx.args = [scriptToInvoke, '--uncommitted', '--stats'];
   if (cwdDiffers(targetCwd, explicitCwd)) ctx.args.push('--cwd', targetCwd);
   syncGitCommandPayload(ctx);
+  console.error(`\n   🛠️ AUTONOMOUS HEALING: Transparently rewriting 'git status' to '${scriptToInvoke} --uncommitted --stats'... (Frictionless Recovery)`);
 }
 
 function seedHistoryArgs(ctx: ExecutionContext, cmd: string, scriptToInvoke: string, targetCwd: string, explicitCwd: string | undefined): void {
-  console.error(`\n   🛠️ AUTONOMOUS HEALING: Transparently rewriting 'git ${cmd}' to '${scriptToInvoke}' to prevent text dumps... (Frictionless Recovery)`);
   ctx.cmdBasename = 'bun';
   ctx.args = [scriptToInvoke];
   if (cwdDiffers(targetCwd, explicitCwd)) ctx.args.push('--cwd', targetCwd);
@@ -88,17 +142,46 @@ function seedHistoryArgs(ctx: ExecutionContext, cmd: string, scriptToInvoke: str
   syncGitCommandPayload(ctx);
 }
 
-function applyHistoryLimit(ctx: ExecutionContext, args: string[], cmd: string): void {
-  let limit = '10';
-  let hasExplicitLimit = false;
-  const nIndex = args.indexOf('-n');
-  if (nIndex !== -1 && nIndex + 1 < args.length) {
-    limit = args[nIndex + 1];
-    hasExplicitLimit = true;
+const GLOBAL_VALUE_FLAGS: ReadonlySet<string> = new Set([
+  '-c', '-C', '--git-dir', '--work-tree', '--namespace', '--exec-path', '--config-env', '--super-prefix',
+]);
+
+function findGitSubcommandIndex(args: readonly string[], cmd: string): number {
+  for (let i = 0; i < args.length; i++) {
+    const arg = args[i];
+    if (arg === undefined || arg === '--') break;
+    if (GLOBAL_VALUE_FLAGS.has(arg)) {
+      i += 1;
+      continue;
+    }
+    if (arg.startsWith('-')) continue;
+    if (arg === cmd) return i;
   }
-  for (const arg of args) {
-    if (/^-\d+$/.test(arg)) {
-      limit = arg.substring(1);
+  return -1;
+}
+
+function applyHistoryLimit(ctx: ExecutionContext, args: string[], cmd: string, startIdx: number): void {
+  let limit = cmd === 'show' ? '1' : '10';
+  let hasExplicitLimit = false;
+  for (let i = startIdx; i < args.length; i++) {
+    const arg = args[i];
+    if (arg === undefined || arg === '--') break;
+    if (arg === '-n' || arg === '--max-count') {
+      const next = args[i + 1];
+      if (next !== undefined && /^\d+$/.test(next)) {
+        limit = next;
+        hasExplicitLimit = true;
+        i += 1;
+      }
+      continue;
+    }
+    if (VALUE_FLAGS.includes(arg)) {
+      i += 1;
+      continue;
+    }
+    const attached = /^-n(\d+)$/.exec(arg) ?? /^--max-count=(\d+)$/.exec(arg) ?? /^-(\d+)$/.exec(arg);
+    if (attached !== null && attached[1] !== undefined) {
+      limit = attached[1];
       hasExplicitLimit = true;
     }
   }
@@ -137,16 +220,23 @@ function consumePairedFlag(args: string[], index: number, out: string[]): number
   return undefined;
 }
 
-function classifyPositional(arg: string, cmd: string, rangeArg: string | undefined, knownPath: (value: string) => boolean): 'range' | 'path' | 'skip' {
+function classifyPositional(arg: string, cmd: string, knownPath: (value: string) => boolean): 'range' | 'path' | 'skip' {
   if (arg.startsWith('-') || arg === cmd || arg === '--no-pager') return 'skip';
-  if (arg.includes('..') || knownPath(arg)) return arg.includes('..') ? 'range' : 'path';
-  return rangeArg !== undefined ? 'path' : 'range';
+  if (/(?:^|[\\/])\.\.(?:[\\/]|$)/.test(arg) || /^\.\.?$/.test(arg)) return 'path';
+  if (arg.includes('..')) return 'range';
+  return knownPath(arg) ? 'path' : 'range';
 }
 
-function forwardHistoryArgs(ctx: ExecutionContext, args: string[], cmd: string, knownPath: (value: string) => boolean): { rangeArg?: string; pathArg?: string } {
+function forwardHistoryArgs(
+  ctx: ExecutionContext,
+  args: string[],
+  cmd: string,
+  knownPath: (value: string) => boolean,
+  startIdx: number,
+): { rangeArg?: string; pathArg?: string } {
   let rangeArg: string | undefined;
   let pathArg: string | undefined;
-  for (let i = 0; i < args.length; i++) {
+  for (let i = startIdx; i < args.length; i++) {
     const arg = args[i];
     if (arg === undefined) continue;
     if (arg === '--') {
@@ -167,9 +257,14 @@ function forwardHistoryArgs(ctx: ExecutionContext, args: string[], cmd: string, 
       i += 1;
       continue;
     }
-    const kind = classifyPositional(arg, cmd, rangeArg, knownPath);
-    if (kind === 'range') rangeArg = arg;
-    if (kind === 'path') pathArg = arg;
+    const kind = classifyPositional(arg, cmd, knownPath);
+    if (kind === 'range') {
+      if (rangeArg === undefined) rangeArg = arg;
+      else if (cmd === 'diff' && !rangeArg.includes('..') && !arg.includes('..')) rangeArg = `${rangeArg}..${arg}`;
+      else if (pathArg === undefined) pathArg = arg;
+    } else if (kind === 'path') {
+      pathArg = arg;
+    }
   }
   const forwarded: { rangeArg?: string; pathArg?: string } = {};
   if (rangeArg !== undefined) forwarded.rangeArg = rangeArg;
@@ -179,14 +274,29 @@ function forwardHistoryArgs(ctx: ExecutionContext, args: string[], cmd: string, 
 
 function injectDiffPathSeparator(ctx: ExecutionContext, cmd: string, knownPath: (value: string) => boolean): void {
   if (cmd !== 'diff' || ctx.args.includes('--')) return;
-  const nonFlagArgs = ctx.args.filter((arg) => !arg.startsWith('-') && arg !== 'diff' && arg !== '--no-pager');
-  if (nonFlagArgs.length < 2) return;
-  const lastArg = nonFlagArgs[nonFlagArgs.length - 1];
-  if (lastArg === undefined || !knownPath(lastArg)) return;
-  const lastIdx = ctx.args.lastIndexOf(lastArg);
-  if (lastIdx === -1) return;
+  const diffIdx = ctx.args.indexOf('diff');
+  const startIdx = diffIdx !== -1 ? diffIdx + 1 : 0;
+  const posItems: Array<{ idx: number; arg: string }> = [];
+  for (let i = startIdx; i < ctx.args.length; i++) {
+    const arg = ctx.args[i];
+    if (arg === undefined) continue;
+    if (VALUE_FLAGS.includes(arg)) { i++; continue; }
+    if (arg.startsWith('-') || arg === '--no-pager') continue;
+    posItems.push({ idx: i, arg });
+  }
+  if (posItems.length < 2) return;
+  let firstTrailingPathPos = posItems.length;
+  while (firstTrailingPathPos > 0) {
+    const item = posItems[firstTrailingPathPos - 1];
+    if (item === undefined || !knownPath(item.arg)) break;
+    firstTrailingPathPos--;
+  }
+  if (firstTrailingPathPos === posItems.length || firstTrailingPathPos === 0) return;
+  const insertAt = posItems[firstTrailingPathPos]?.idx;
+  if (insertAt === undefined) return;
+  ctx.args.splice(insertAt, 0, '--');
+  if (ctx.payload.type === 'command') ctx.payload.args = ctx.args;
   console.error(`\n   🛠️ AUTONOMOUS HEALING: Auto-injecting '--' before file path in 'git diff' to prevent ambiguous argument error... (Frictionless Recovery)`);
-  ctx.args.splice(lastIdx, 0, '--');
 }
 
 export function rewriteGitInspection(
@@ -201,21 +311,26 @@ export function rewriteGitInspection(
   const cwd = ctx.payload.cwd || process.cwd();
   const scriptCandidate = resolveHistoryScript(targetCwd, rawCwd, cwd);
   const knownPath = (argStr: string) => isKnownGitPath(argStr, targetCwd, cwd);
+  const subcmdIdx = findGitSubcommandIndex(args, cmd);
+  if (hasCustomGitTreeFlags(args, subcmdIdx)) return;
   if (scriptCandidate === null) {
     injectDiffPathSeparator(ctx, cmd, knownPath);
     return;
   }
-  if (shouldLeaveNative(cmd, args, ctx)) return;
+  if (shouldLeaveNative(cmd, args, ctx, knownPath)) return;
   ctx.payload.target = 'windows';
   if (cmd === 'status') {
     rewriteStatus(ctx, scriptCandidate, targetCwd, explicitCwd);
     return;
   }
   seedHistoryArgs(ctx, cmd, scriptCandidate, targetCwd, explicitCwd);
-  applyHistoryLimit(ctx, args, cmd);
+  const startIdx = subcmdIdx !== -1 ? subcmdIdx + 1 : 0;
+  applyHistoryLimit(ctx, args, cmd, startIdx);
   applyPatchFlag(ctx, args);
-  const forwarded = forwardHistoryArgs(ctx, args, cmd, knownPath);
+  const forwarded = forwardHistoryArgs(ctx, args, cmd, knownPath, startIdx);
   if (cmd === 'diff' && forwarded.rangeArg === undefined) ctx.args.push('--uncommitted');
   if (forwarded.rangeArg !== undefined) ctx.args.push('--range', forwarded.rangeArg);
   if (forwarded.pathArg !== undefined) ctx.args.push('--path', forwarded.pathArg);
+  syncGitCommandPayload(ctx);
+  console.error(`\n   🛠️ AUTONOMOUS HEALING: Transparently rewriting 'git ${cmd}' to '${scriptCandidate}' to prevent text dumps... (Frictionless Recovery)`);
 }

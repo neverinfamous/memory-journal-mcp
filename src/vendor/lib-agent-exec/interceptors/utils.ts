@@ -69,8 +69,33 @@ export function splitFirstShellSegment(code: string): { firstSegment: string; re
   return { firstSegment: code, remainder: '' };
 }
 
-const SCRIPT_INTERPRETERS = new Set(['node', 'bun', 'tsx', 'ts-node', 'python', 'python3']);
-const INLINE_EVAL_FLAGS = new Set(['-e', '--eval', '-p', '--print', '-c', '--command']);
+const JS_INTERPRETERS = new Set(['node', 'bun', 'tsx', 'ts-node']);
+const PY_INTERPRETERS = new Set(['python', 'python3']);
+const JS_INLINE_EVAL_FLAGS = new Set(['-e', '--eval', '-p', '--print']);
+const PY_INLINE_EVAL_FLAGS = new Set(['-c', '--command']);
+const TAIL_VALUE_FLAGS = new Set(['-n', '--lines', '-c', '--bytes', '-s', '--sleep-interval', '--pid', '--max-unchanged-stats']);
+
+export function hasPreDoubleDashHelpOrVersion(args: readonly string[]): boolean {
+  for (const a of args) {
+    if (a === '--') break;
+    if (a === '--help' || a === '--version' || a === '-V') return true;
+  }
+  return false;
+}
+
+export function hasTailFollowFlag(args: readonly string[]): boolean {
+  for (let i = 0; i < args.length; i++) {
+    const a = args[i];
+    if (a === undefined || a === '--') break;
+    if (TAIL_VALUE_FLAGS.has(a)) {
+      i++;
+      continue;
+    }
+    if (a === '-f' || a === '-F' || a === '--follow' || a.startsWith('--follow=')) return true;
+    if (/^-[a-zA-Z]*[fF][a-zA-Z]*$/.test(a)) return true;
+  }
+  return false;
+}
 
 /**
  * [INTENT]: Exclude inline code bodies (`-e "..."`, `--eval=...`) and rewritten temp script paths from
@@ -78,26 +103,27 @@ const INLINE_EVAL_FLAGS = new Set(['-e', '--eval', '-p', '--print', '-c', '--com
  */
 export function stripInlineCodeArgs(cmdBasename: string, args: readonly string[]): string[] {
   const base = cmdBasename.replace(/\.(?:exe|cmd|bat|com|ps1)$/i, '').toLowerCase();
-  let sawInterpreter = SCRIPT_INTERPRETERS.has(base);
+  let activeInterp: 'js' | 'py' | null = JS_INTERPRETERS.has(base) ? 'js' : (PY_INTERPRETERS.has(base) ? 'py' : null);
   const filtered: string[] = [];
 
   for (let i = 0; i < args.length; i++) {
     const a = args[i];
     if (a === undefined) continue;
     const baseName = a.replace(/^.*[\\/]/, '').replace(/\.(?:exe|cmd|bat)$/i, '').toLowerCase();
-    if (!a.startsWith('-') && SCRIPT_INTERPRETERS.has(baseName)) {
-      sawInterpreter = true;
+    if (!a.startsWith('-') && (JS_INTERPRETERS.has(baseName) || PY_INTERPRETERS.has(baseName))) {
+      activeInterp = JS_INTERPRETERS.has(baseName) ? 'js' : 'py';
       filtered.push(a);
       continue;
     }
-    if (sawInterpreter) {
+    if (activeInterp !== null) {
       const lower = a.toLowerCase();
-      if (INLINE_EVAL_FLAGS.has(lower)) {
+      const flags = activeInterp === 'js' ? JS_INLINE_EVAL_FLAGS : PY_INLINE_EVAL_FLAGS;
+      if (flags.has(lower)) {
         filtered.push(a);
         i++;
         continue;
       }
-      if ([...INLINE_EVAL_FLAGS].some(flag => lower.startsWith(`${flag}=`))) {
+      if ([...flags].some(flag => lower.startsWith(`${flag}=`))) {
         continue;
       }
     }
@@ -110,7 +136,23 @@ export function stripInlineCodeArgs(cmdBasename: string, args: readonly string[]
   return filtered;
 }
 
-const PKG_VALUE_FLAGS = new Set(['--dir', '-C', '--cwd', '--prefix', '--filter', '--config', '-c']);
+const PKG_VALUE_FLAGS = new Set(['--dir', '-C', '--cwd', '--prefix', '--filter', '-F', '--config', '-c']);
+
+/** [INTENT]: Return the array index of the first non-flag package-manager subcommand (or `-1` if absent), skipping value-taking flags. */
+export function findFirstPkgSubcmdIndex(args: readonly string[]): number {
+  for (let i = 0; i < args.length; i++) {
+    const a = args[i];
+    if (a === undefined) continue;
+    if (a === '--') break;
+    if (PKG_VALUE_FLAGS.has(a)) {
+      i++;
+      continue;
+    }
+    if (a.startsWith('-')) continue;
+    return i;
+  }
+  return -1;
+}
 
 /** [INTENT]: Return positional package-manager args while skipping value-taking flags (`--dir <path>`, `--filter <pkg>`). */
 export function getPkgNonFlagArgs(args: readonly string[]): string[] {

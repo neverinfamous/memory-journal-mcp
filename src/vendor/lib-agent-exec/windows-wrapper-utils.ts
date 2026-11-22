@@ -76,14 +76,18 @@ function collectGlobCandidateIndices(args: readonly string[], patternExprIdx: nu
   return globIdxs;
 }
 
-function rewriteWindowsFindWrapper(cmd: string, args: string[]): { cmd: string; args: string[] } {
-  if (cmd !== 'find' && cmd !== 'find.exe') return { cmd, args };
+function rewriteWindowsFindWrapper(cmd: string, args: string[], payload: ExecPayload): { cmd: string; args: string[] } {
+  const base = path.basename(cmd).toLowerCase();
+  if (base !== 'find' && base !== 'find.exe') return { cmd, args };
   const isUnixFind = args.some(
     a => a.startsWith('-name') || a.startsWith('-type') || a.startsWith('-exec') || a.startsWith('-mtime') || a === '.' || a === '..',
   );
   if (!isUnixFind) return { cmd, args };
   const originalArgs = args.map(a => escapeUnixArg(a, false)).join(' ');
   console.error(`\n   💡 AGENT HINT: Detected Unix-style 'find' command. Forwarding to 'sh -c' to bypass Windows find.exe limits.`);
+  if (process.platform === 'win32' && payload.target !== 'wsl2') {
+    payload.target = 'wsl2';
+  }
   return { cmd: 'sh', args: ['-c', `find ${originalArgs}`] };
 }
 
@@ -117,8 +121,9 @@ export function handleWindowsUnixCommandWrappers(
   cmd: string,
   args: string[],
   payload: ExecPayload,
+  baseCwd?: string,
 ): { cmd: string; args: string[] } {
-  const findAdjusted = rewriteWindowsFindWrapper(cmd, args);
+  const findAdjusted = rewriteWindowsFindWrapper(cmd, args, payload);
   const resolvedCmd = findAdjusted.cmd;
   let resolvedArgs = findAdjusted.args;
 
@@ -129,7 +134,11 @@ export function handleWindowsUnixCommandWrappers(
   const globIdxs = collectGlobCandidateIndices(resolvedArgs, patternExprIdx);
   if (globIdxs.length === 0) return { cmd: resolvedCmd, args: resolvedArgs };
 
-  const globCwd = payload.cwd !== undefined && payload.cwd.length > 0 ? path.resolve(payload.cwd) : process.cwd();
+  const rawCwd = baseCwd !== undefined && baseCwd.length > 0 ? baseCwd : payload.cwd;
+  const normalizedCwd = rawCwd !== undefined && rawCwd.length > 0
+    ? (process.platform === 'win32' && /^\/mnt\/[a-zA-Z](?:\/|$)/.test(rawCwd) ? convertToWindowsPath(rawCwd) : rawCwd)
+    : undefined;
+  const globCwd = normalizedCwd !== undefined && normalizedCwd.length > 0 ? path.resolve(normalizedCwd) : process.cwd();
   const canExpandInProcess = (cmdBasenameForGlob === 'rg' || cmdBasenameForGlob === 'grep') && fs.existsSync(globCwd);
   if (!canExpandInProcess) {
     return wrapUnixGlobThroughShell(cmdBasenameForGlob, resolvedArgs, patternExprIdx, payload);

@@ -1,6 +1,7 @@
 // @ts-nocheck
 import fs from 'node:fs';
 import path from 'node:path';
+import { convertToWindowsPath } from '../command-utils.js';
 import { isJavaScriptOrTypeScriptCode, isPythonCode } from '../eval-healer.js';
 import { buildNonCodeSpans } from '../quote-spans.js';
 import { DOCKER_VALUE_FLAGS } from './docker-tty-repl-guard.js';
@@ -39,7 +40,7 @@ function isJsTsPayload(payload: ExecutionContext['payload']): boolean {
 }
 
 function stripCommentAndQuoteSpansForShellScan(body: string, includeRegexLiterals: boolean = false): string {
-  const spans = buildNonCodeSpans(body, { includeHashComments: true, includeRegexLiterals });
+  const spans = buildNonCodeSpans(body, { includeHashComments: true, includeSlashComments: includeRegexLiterals, includeRegexLiterals });
   if (spans.length === 0) return body;
   let result = '';
   let last = 0;
@@ -102,48 +103,117 @@ function extractDockerContainerBody(cmdArgs: readonly string[]): string | null {
   return [containerCmd, ...containerCmdArgs].join(' ');
 }
 
+const WRAPPER_VALUE_FLAGS_BY_CMD: Readonly<Record<string, ReadonlySet<string>>> = {
+  sudo: new Set(['-u', '--user', '-g', '--group', '-h', '--host', '-p', '--prompt', '-r', '--role', '-t', '--type', '-C', '--close-from', '-D', '--chdir', '-T', '--command-timeout', '-U', '--other-user']),
+  env: new Set(['-u', '--unset', '-C', '--chdir', '-S', '--split-string', '--argv0']),
+  su: new Set(['-c', '--command', '-s', '--shell', '-g', '--group', '-G', '--supp-group', '-w', '--whitelist-environment']),
+  doas: new Set(['-u', '-C']),
+  time: new Set(['-o', '--output', '-f', '--format']),
+  timeout: new Set(['-k', '--kill-after', '-s', '--signal']),
+  stdbuf: new Set(['-i', '--input', '-o', '--output', '-e', '--error']),
+};
+const PM_WRAPPER_VALUE_FLAGS = new Set(['-C', '--dir', '--cwd', '--prefix', '--filter', '-F', '-p', '--package', '-c', '--call', '--userconfig']);
+
+function findPwshCommandFlagIndex(args: readonly string[]): number {
+  for (let i = 0; i < args.length; i++) {
+    const low = (args[i] ?? '').toLowerCase();
+    if (low === '--' || low === '-file' || low === '-f' || low === '-encodedcommand' || low === '-ec' || low === '-en') return -1;
+    if (low === '-c' || low === '-command') return i;
+  }
+  return -1;
+}
+
+function findPosixShellCIndex(args: readonly string[]): number {
+  for (let i = 0; i < args.length; i++) {
+    const a = args[i] ?? '';
+    if (a === '--') return -1;
+    if (a === '-o' || a === '+o') { i++; continue; }
+    if (a === '-c' || (/^-[a-zA-Z]+$/.test(a) && a.includes('c'))) return i;
+    if (!a.startsWith('-') && !a.startsWith('+')) return -1;
+  }
+  return -1;
+}
+
+function extractScriptFileBody(payload: Extract<ExecutionContext['payload'], { type: 'script' }>, fallbackCwd?: string): string | null {
+  try {
+    const rawCwd = payload.cwd !== undefined && payload.cwd.length > 0
+      ? (process.platform === 'win32' && /^\/?mnt\/[a-zA-Z](?:\/|$)/i.test(payload.cwd) ? convertToWindowsPath(payload.cwd) : payload.cwd)
+      : undefined;
+    const baseCwd = rawCwd !== undefined
+      ? path.resolve(rawCwd)
+      : (fallbackCwd !== undefined && fallbackCwd.length > 0 ? path.resolve(fallbackCwd) : process.cwd());
+    const rawScript = process.platform === 'win32' && /^\/?mnt\/[a-zA-Z](?:\/|$)/i.test(payload.scriptPath)
+      ? convertToWindowsPath(payload.scriptPath)
+      : payload.scriptPath;
+    const resolved = path.resolve(baseCwd, rawScript);
+    const stat = fs.statSync(resolved, { throwIfNoEntry: false });
+    return stat !== undefined && stat.isFile() && stat.size <= 512 * 1024 ? fs.readFileSync(resolved, 'utf8') : null;
+  } catch {
+    return null;
+  }
+}
+
+function extractWrapperScriptBody(baseNoExt: string, args: readonly string[]): string | null {
+  if (baseNoExt === 'wsl') {
+    const eIdx = args.findIndex(a => a === '-e' || a === '--exec');
+    if (eIdx !== -1 && eIdx + 1 < args.length) return args.slice(eIdx + 1).join(' ');
+    const WSL_VALUE_FLAGS = new Set(['-d', '--distribution', '-u', '--user', '--cd', '--shell-type']);
+    for (let i = 0; i < args.length; i++) {
+      const a = args[i];
+      if (a === undefined) continue;
+      if (a === '--') return i + 1 < args.length ? args.slice(i + 1).join(' ') : null;
+      if (WSL_VALUE_FLAGS.has(a)) { i++; continue; }
+      if (!a.startsWith('-')) return args.slice(i).join(' ');
+    }
+    return null;
+  }
+  if (['npx', 'pnpx', 'bunx', 'yarn'].includes(baseNoExt)) {
+    for (let i = 0; i < args.length; i++) {
+      const a = args[i];
+      if (a === undefined) continue;
+      if (a === '--') return i + 1 < args.length ? args.slice(i + 1).join(' ') : null;
+      if (PM_WRAPPER_VALUE_FLAGS.has(a)) { i++; continue; }
+      if (!a.startsWith('-')) return args.slice(i).join(' ');
+    }
+    return null;
+  }
+  if (Object.hasOwn(WRAPPER_VALUE_FLAGS_BY_CMD, baseNoExt)) {
+    const valueFlags = WRAPPER_VALUE_FLAGS_BY_CMD[baseNoExt];
+    const isTimeout = baseNoExt === 'timeout';
+    let skippedTimeoutDuration = false;
+    for (let i = 0; i < args.length; i++) {
+      const a = args[i];
+      if (a === undefined) continue;
+      if (a === '--') return i + 1 < args.length ? args.slice(i + 1).join(' ') : null;
+      if (valueFlags !== undefined && valueFlags.has(a)) { i++; continue; }
+      if (baseNoExt === 'sudo' && (a === '-i' || a === '-s' || a === '--login' || a === '--shell')) return 'bash';
+      if (a.startsWith('-') || a.includes('=')) continue;
+      if (isTimeout && !skippedTimeoutDuration) { skippedTimeoutDuration = true; continue; }
+      return args.slice(i).join(' ');
+    }
+  }
+  return null;
+}
+
 export function extractRawScriptBody(ctx: ExecutionContext): string | null {
   const { payload, cmdBasename, args } = ctx;
   if (payload.type === 'eval') return payload.code;
-  if (payload.type === 'script') {
-    try {
-      const baseCwd = payload.cwd !== undefined && payload.cwd.length > 0
-        ? path.resolve(payload.cwd)
-        : (ctx.cwd !== undefined && ctx.cwd.length > 0 ? path.resolve(ctx.cwd) : process.cwd());
-      return fs.readFileSync(path.resolve(baseCwd, payload.scriptPath), 'utf8');
-    } catch {
-      return null;
-    }
-  }
-  const lowerCmd = cmdBasename.toLowerCase();
-  if (['pwsh', 'pwsh.exe', 'powershell', 'powershell.exe'].includes(lowerCmd)) {
-    const idx = args.findIndex(a => a.toLowerCase() === '-c' || a.toLowerCase() === '-command');
+  if (payload.type === 'script') return extractScriptFileBody(payload, ctx.cwd);
+  const baseNoExt = cmdBasename.toLowerCase().replace(/\.(?:exe|cmd|bat)$/, '');
+  if (baseNoExt === 'pwsh' || baseNoExt === 'powershell') {
+    const idx = findPwshCommandFlagIndex(args);
     return idx !== -1 && idx + 1 < args.length ? args.slice(idx + 1).join(' ').replace(/^['"]|['"]$/g, '').trim() : null;
   }
-  if (['sh', 'sh.exe', 'bash', 'bash.exe', 'zsh', 'zsh.exe'].includes(lowerCmd)) {
-    const idx = args.findIndex(a => a === '-c');
+  if (baseNoExt === 'sh' || baseNoExt === 'bash' || baseNoExt === 'zsh') {
+    const idx = findPosixShellCIndex(args);
     return idx !== -1 && idx + 1 < args.length ? (args[idx + 1] ?? null) : null;
   }
-  if (['cmd', 'cmd.exe'].includes(lowerCmd)) {
+  if (baseNoExt === 'cmd') {
     const idx = args.findIndex(a => a.toLowerCase() === '/c');
     return idx !== -1 && idx + 1 < args.length ? args.slice(idx + 1).join(' ') : null;
   }
-  if (['wsl', 'wsl.exe'].includes(lowerCmd)) {
-    const eIdx = args.findIndex(a => a === '-e' || a === '--exec');
-    return eIdx !== -1 && eIdx + 1 < args.length ? args.slice(eIdx + 1).join(' ') : args.filter(a => !a.startsWith('-')).join(' ');
-  }
-  if (['npx', 'npx.exe', 'npx.cmd', 'pnpx', 'pnpx.exe', 'pnpx.cmd', 'bunx', 'bunx.exe', 'bunx.cmd', 'yarn', 'yarn.exe', 'yarn.cmd'].includes(lowerCmd)) {
-    const idx = args.findIndex(a => !a.startsWith('-'));
-    return idx !== -1 ? args.slice(idx).join(' ') : null;
-  }
-  if (['env', 'env.exe', 'sudo', 'sudo.exe', 'su', 'su.exe', 'doas', 'doas.exe', 'time', 'time.exe', 'timeout', 'timeout.exe', 'stdbuf', 'stdbuf.exe'].includes(lowerCmd)) {
-    const idx = args.findIndex(a => !a.startsWith('-') && !a.includes('='));
-    return idx !== -1 ? args.slice(idx).join(' ') : null;
-  }
-  if (['docker', 'docker.exe', 'docker.bat', 'docker-compose', 'docker-compose.exe', 'docker-compose.bat'].includes(lowerCmd)) {
-    return extractDockerContainerBody(args);
-  }
-  return null;
+  if (['docker', 'docker-compose'].includes(baseNoExt)) return extractDockerContainerBody(args);
+  return extractWrapperScriptBody(baseNoExt, args);
 }
 
 function isBlockedReplInBody(body: string): boolean {

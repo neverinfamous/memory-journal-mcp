@@ -1,5 +1,6 @@
 // @ts-nocheck
 import path from 'node:path';
+import { convertToWindowsPath } from '../command-utils.js';
 import { configureCwdModuleResolution, rewriteInlineScriptToTempFile } from '../inline-script-healer.js';
 import type { ExecutionContext } from './types.js';
 
@@ -31,8 +32,18 @@ export function rewriteInlineInterpreterScripts(ctx: ExecutionContext, isCommand
   configureCwdModuleResolution(ctx.envOverrides, cwd, interpreterName, ctx.payload.target, ctx.payload.env);
 }
 
+function normalizeHostMntPath(raw: string): string {
+  return process.platform === 'win32' && /^\/?mnt\/[a-zA-Z](?:\/|$)/i.test(raw) ? convertToWindowsPath(raw) : raw;
+}
+
 function resolveInlineCwd(ctx: ExecutionContext): string {
-  if (ctx.payload.cwd !== undefined && ctx.payload.cwd.length > 0) return path.resolve(ctx.payload.cwd);
-  if (ctx.cwd !== undefined && ctx.cwd.length > 0) return path.resolve(ctx.cwd);
+  const payloadCwd = ctx.payload.cwd?.trim();
+  const isNonHostPosix = process.platform === 'win32'
+    && payloadCwd !== undefined
+    && ((payloadCwd.startsWith('/') && !/^\/mnt\/[a-zA-Z](?:\/|$)/.test(payloadCwd)) || payloadCwd.startsWith('~'));
+  if (!isNonHostPosix && payloadCwd !== undefined && payloadCwd.length > 0) {
+    return path.resolve(normalizeHostMntPath(payloadCwd));
+  }
+  if (ctx.cwd !== undefined && ctx.cwd.length > 0) return path.resolve(normalizeHostMntPath(ctx.cwd));
   return process.cwd();
 }

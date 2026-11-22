@@ -1,13 +1,14 @@
 // @ts-nocheck
 import fs from 'node:fs';
 import path from 'node:path';
+import { convertToWindowsPath } from './path-convert.js';
 
 const SQL_SELECT_KEYWORDS = new Set([
   'SELECT', 'DISTINCT', 'ALL', 'AS', 'FROM', 'INTO', 'CASE', 'WHEN',
   'THEN', 'ELSE', 'END', 'CAST', 'NOT', 'NULL', 'AND', 'OR', 'IS', 'IN',
 ]);
 
-type FragmentKind = 'pure-slash' | 'multi-quote' | 'escaped-paren' | 'slash-paren' | 'leading-slash' | 'internal-slash' | 'internal-close' | 'generic';
+type FragmentKind = 'pure-slash' | 'multi-quote' | 'escaped-paren' | 'slash-paren' | 'leading-slash' | 'internal-slash' | 'internal-close';
 
 interface FragmentBody {
   matchedType: FragmentKind;
@@ -63,15 +64,16 @@ function isPathWithTrailingSlash(s: string, cwd?: string): boolean {
     }
   }
   if ((s.endsWith('\\') || s.endsWith('/')) && withoutTrailing.length > 0 && !s.startsWith('-')) {
-    if (!/[*?[\]()]/.test(withoutTrailing)) {
-      try {
-        const candidate = path.resolve(cwd ?? process.cwd(), withoutTrailing);
-        if (fs.statSync(candidate).isDirectory()) {
-          return true;
-        }
-      } catch {
-        // Ignore missing/inaccessible candidate paths
+    const baseCwd = cwd !== undefined && cwd.length > 0
+      ? (/^\/mnt\/[a-zA-Z](?:\/|$)/.test(cwd) ? convertToWindowsPath(cwd) : cwd)
+      : process.cwd();
+    try {
+      const candidate = path.resolve(baseCwd, withoutTrailing);
+      if (fs.statSync(candidate).isDirectory()) {
+        return true;
       }
+    } catch {
+      // Ignore missing/inaccessible candidate paths
     }
   }
   return false;
@@ -92,20 +94,54 @@ function isPureWordWithTrailingSlash(s: string, cwd?: string): boolean {
   return !strippedPathSeparators(s).includes('\\');
 }
 
+function countUnescapedQuotes(s: string, target: '"' | "'"): number {
+  let count = 0;
+  for (let i = 0; i < s.length; i++) {
+    if (target === '"' && s[i] === '\\') {
+      i++;
+      continue;
+    }
+    if (s[i] === target) count++;
+  }
+  return count;
+}
+
+function countEscapedDoubleQuotes(s: string): number {
+  let count = 0;
+  for (let i = 0; i < s.length - 1; i++) {
+    if (s[i] === '\\' && s[i + 1] === '"') {
+      count++;
+      i++;
+    } else if (s[i] === '\\') {
+      i++;
+    }
+  }
+  return count;
+}
+
 function quoteKind(current: string): QuoteKind | null {
-  const isEscapedDouble = current.length > 2 && current.startsWith('\\"') && !current.slice(2).endsWith('\\"');
-  const isPlainDouble = current.length > 1 && current.startsWith('"') && !current.slice(1).endsWith('"');
-  const isSingle = current.length > 1 && current.startsWith("'") && !current.slice(1).endsWith("'");
-  if (isEscapedDouble) return 'escaped-double';
-  if (isPlainDouble) return 'plain-double';
-  if (isSingle) return 'single';
+  if (current.length > 2 && current.startsWith('\\"') && countEscapedDoubleQuotes(current) % 2 === 1) {
+    return 'escaped-double';
+  }
+  if (current.length > 1 && current.startsWith('"') && countUnescapedQuotes(current, '"') % 2 === 1) {
+    return 'plain-double';
+  }
+  if (current.length > 1 && current.startsWith("'") && countUnescapedQuotes(current, "'") % 2 === 1) {
+    return 'single';
+  }
   return null;
 }
 
 function quoteCloses(kind: QuoteKind, next: string): boolean {
-  if (kind === 'escaped-double') return next.endsWith('\\"') || next.endsWith('"');
-  if (kind === 'plain-double') return next.endsWith('"') || next.endsWith('\\"');
-  return next.endsWith("'");
+  if (kind === 'escaped-double') {
+    return (next.endsWith('\\"') && countEscapedDoubleQuotes(next) % 2 === 1)
+      || (next.endsWith('"') && !next.endsWith('\\"') && countUnescapedQuotes(next, '"') % 2 === 1);
+  }
+  if (kind === 'plain-double') {
+    return (next.endsWith('"') && countUnescapedQuotes(next, '"') % 2 === 1)
+      || (next.endsWith('\\"') && countEscapedDoubleQuotes(next) % 2 === 1);
+  }
+  return next.endsWith("'") && countUnescapedQuotes(next, "'") % 2 === 1;
 }
 
 function findClosingQuoteIndex(args: readonly string[], start: number, kind: QuoteKind): number {
@@ -266,13 +302,13 @@ function reassembleKnownFragment(first: string, rawMiddle: string[], lastArg: st
 function reassembleFragment(first: string, rawMiddle: string[], lastArg: string, match: FragmentMatch): string {
   const known = reassembleKnownFragment(first, rawMiddle, lastArg, match);
   if (known !== null) return known;
-  const healedTokens = healSqlTokenList([...rawMiddle, lastArg]);
-  return `${first}"${healedTokens.join(' ')}"`;
+  return `${first}"${[...rawMiddle, lastArg].join(' ')}"`;
 }
 
 function isFragmentStart(current: string | undefined, cwd?: string): current is string {
   return current !== undefined
     && !current.startsWith('-')
+    && !/^[A-Za-z0-9_.-]+(?:\\[A-Za-z0-9_.-]+)*\\$/.test(current)
     && endsWithUnescapedBackslash(current)
     && !isPathWithTrailingSlash(current, cwd);
 }

@@ -1,11 +1,13 @@
 // @ts-nocheck
 import { match, P } from 'ts-pattern';
 import { convertToWindowsPath, convertToWslPath, getPositionalArgs } from '../command-utils.js';
+import { collectWslPathExemptIndices } from '../wsl-command-wrapper.js';
 import { emitInterceptBanner, resolveNativeBinary } from '../utils.js';
 import { handleGrepInterception, handleRipgrepInterception, handleFindInterception } from './search-interceptor.js';
 import type { SystemCommandDerived } from './system-command-context.js';
 import { handleListArm } from './system-list-arm.js';
 import type { ExecutionContext } from './types.js';
+import { hasPreDoubleDashHelpOrVersion } from './utils.js';
 
 const WRAPPER_SHELLS = ['sh', 'bash', 'pwsh', 'powershell', 'cmd'];
 const PWSH_SCRIPT_FLAGS = ['-c', '-command', '/c', '-ec', '-encodedcommand', '-en', '-file', '-f'];
@@ -14,6 +16,10 @@ export function runSystemCommandArms(ctx: ExecutionContext, derived: SystemComma
   const { cmd, originalCmd, isCommand, hasStdin, embeddedArgs, cmdBasename } = derived;
   match({ ...ctx, positionalArgs: activePositionalArgs, hasStdin, cmd, isCommand, isWin32: process.platform === 'win32', originalCmd })
     .with({ originalCmd: P.union('cat', 'cat.exe', 'get-content') }, () => {
+      if (originalCmd === 'get-content') {
+        ctx.cmdBasename = 'cat';
+        if (ctx.payload.type === 'command') ctx.payload.command = 'cat';
+      }
       handleCatArm(ctx, cmd, hasStdin, activePositionalArgs);
     })
     .with({ originalCmd: P.union('grep', 'grep.exe', 'egrep', 'egrep.exe', 'fgrep', 'fgrep.exe', 'select-string', 'select-string.exe') }, () => {
@@ -42,6 +48,7 @@ export function runSystemCommandArms(ctx: ExecutionContext, derived: SystemComma
 
 function handleCatArm(ctx: ExecutionContext, cmd: string, hasStdin: boolean, activePositionalArgs: string[]): void {
   if (WRAPPER_SHELLS.includes(cmd)) return;
+  if (hasPreDoubleDashHelpOrVersion(ctx.args)) return;
   if (!hasStdin && activePositionalArgs.length === 0) {
     console.error(`\n   💡 AGENT HINT: 'cat' called without file arguments and no stdin. It will hang indefinitely.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Execution blocked. Provide a file argument or use view_file.\x1b[0m`);
     process.exit(1);
@@ -92,6 +99,16 @@ function handleCurlArm(ctx: ExecutionContext, cmdBasename: string): void {
   }
 }
 
+function syncCtxPayloadArgs(ctx: ExecutionContext): void {
+  if (ctx.payload.type === 'command') ctx.payload.args = ctx.args;
+}
+
+function convertWslCommandArgs(ctx: ExecutionContext, cmdBasename: string): void {
+  const exempt = collectWslPathExemptIndices(cmdBasename, ctx.args);
+  ctx.args = ctx.args.map((arg, idx) => (exempt.has(idx) ? arg : convertToWslPath(arg)));
+  syncCtxPayloadArgs(ctx);
+}
+
 function handleJqArm(ctx: ExecutionContext, cmd: string): void {
   if (WRAPPER_SHELLS.includes(cmd)) return;
   if (process.platform === 'win32' && ctx.payload.target !== 'wsl2') {
@@ -99,43 +116,72 @@ function handleJqArm(ctx: ExecutionContext, cmd: string): void {
     return;
   }
   if (ctx.payload.target === 'wsl2') {
-    ctx.args = ctx.args.map(arg => convertToWslPath(arg));
+    convertWslCommandArgs(ctx, ctx.cmdBasename);
   }
+}
+
+function collectJqExternalFiles(args: readonly string[], posArgs: readonly string[]): string[] {
+  const files: string[] = [];
+  let hasFromFile = false;
+  for (let i = 0; i < args.length; i++) {
+    const a = args[i];
+    if (a === undefined || a === '--') break;
+    if (a === '-f' || a === '--from-file') {
+      hasFromFile = true;
+      const next = args[i + 1];
+      if (next !== undefined) files.push(next);
+      i++;
+    } else if (a.startsWith('--from-file=')) {
+      hasFromFile = true;
+      files.push(a.slice('--from-file='.length));
+    } else if (a === '--rawfile' || a === '--slurpfile') {
+      const pathVal = args[i + 2];
+      if (pathVal !== undefined) files.push(pathVal);
+      i += 2;
+    }
+  }
+  return [...(hasFromFile ? posArgs : posArgs.slice(1)), ...files];
 }
 
 function routeWindowsJq(ctx: ExecutionContext): void {
   const jqPosArgs = getPositionalArgs('jq', ctx.args);
-  const inlineFromFiles = ctx.args.filter(arg => arg.startsWith('--from-file=')).map(arg => arg.slice('--from-file='.length));
-  const hasFromFile = ctx.args.some(arg => arg === '-f' || arg === '--from-file') || inlineFromFiles.length > 0;
-  const jqFileArgs = hasFromFile ? [...jqPosArgs, ...inlineFromFiles] : jqPosArgs.slice(1);
+  const jqFileArgs = collectJqExternalFiles(ctx.args, jqPosArgs);
   const targetsLinuxOnlyPath = jqFileArgs.some(arg =>
     arg.startsWith('/') && !arg.startsWith('//') && !/^\/mnt\/[a-zA-Z](?:\/|$)/.test(arg),
   );
   if (resolveNativeBinary('jq') === null) {
-    emitInterceptBanner(`\n   💡 AGENT INTERCEPT: No native 'jq' binary on PATH. Switching execution target to WSL2... (Frictionless Recovery)`);
     ctx.payload.target = 'wsl2';
-    ctx.args = ctx.args.map(arg => convertToWslPath(arg));
+    convertWslCommandArgs(ctx, ctx.cmdBasename);
+    emitInterceptBanner(`\n   💡 AGENT INTERCEPT: No native 'jq' binary on PATH. Switching execution target to WSL2... (Frictionless Recovery)`);
     return;
   }
   if (targetsLinuxOnlyPath) {
-    emitInterceptBanner(`\n   💡 AGENT INTERCEPT: 'jq' targets a Linux-only POSIX path. Switching execution target to WSL2... (Frictionless Recovery)`);
     ctx.payload.target = 'wsl2';
-    ctx.args = ctx.args.map(arg => convertToWslPath(arg));
+    convertWslCommandArgs(ctx, ctx.cmdBasename);
+    emitInterceptBanner(`\n   💡 AGENT INTERCEPT: 'jq' targets a Linux-only POSIX path. Switching execution target to WSL2... (Frictionless Recovery)`);
     return;
   }
-  ctx.args = ctx.args.map(arg => /^\/mnt\/[a-zA-Z](?:\/|$)/.test(arg) ? convertToWindowsPath(arg) : arg);
+  const exempt = collectWslPathExemptIndices(ctx.cmdBasename, ctx.args);
+  ctx.args = ctx.args.map((arg, idx) => {
+    if (!exempt.has(idx) && arg.startsWith('--from-file=')) {
+      const val = arg.slice('--from-file='.length);
+      return /^\/mnt\/[a-zA-Z](?:\/|$)/.test(val) ? `--from-file=${convertToWindowsPath(val)}` : arg;
+    }
+    return !exempt.has(idx) && /^\/mnt\/[a-zA-Z](?:\/|$)/.test(arg) ? convertToWindowsPath(arg) : arg;
+  });
+  syncCtxPayloadArgs(ctx);
 }
 
 function handlePosixToolArm(ctx: ExecutionContext, cmdBasename: string): void {
   if (process.platform === 'win32' && ctx.payload.target !== 'wsl2') {
-    emitInterceptBanner(`\n   💡 AGENT INTERCEPT: '${cmdBasename}' natively fails, lacks features, or is not installed on Windows. Switching execution target to WSL2... (Frictionless Recovery)`);
     ctx.payload.target = 'wsl2';
+    emitInterceptBanner(`\n   💡 AGENT INTERCEPT: '${cmdBasename}' natively fails, lacks features, or is not installed on Windows. Switching execution target to WSL2... (Frictionless Recovery)`);
   }
   if (['find', 'find.exe'].includes(cmdBasename.toLowerCase())) {
     handleFindInterception(ctx);
   }
   if (ctx.payload.target === 'wsl2') {
-    ctx.args = ctx.args.map(arg => convertToWslPath(arg));
+    convertWslCommandArgs(ctx, cmdBasename);
   }
 }
 
@@ -148,11 +194,12 @@ function handlePwshArm(ctx: ExecutionContext, cmdBasename: string, matchedArgs: 
   if (ctx.payload.target === 'wsl2') return;
   const scriptFlagIdx = matchedArgs.findIndex(arg => PWSH_SCRIPT_FLAGS.includes(arg.toLowerCase()));
   const searchArgs = scriptFlagIdx === -1 ? matchedArgs : matchedArgs.slice(0, scriptFlagIdx);
-  if (!searchArgs.some(arg => arg.toLowerCase() === '-noninteractive')) {
+  const needsNonInteractive = !searchArgs.some(arg => arg.toLowerCase() === '-noninteractive');
+  const needsNoProfile = !searchArgs.some(arg => arg.toLowerCase() === '-noprofile');
+  if (needsNonInteractive) ctx.args.unshift('-NonInteractive');
+  if (needsNoProfile) ctx.args.unshift('-NoProfile');
+  if (needsNonInteractive || needsNoProfile) syncCtxPayloadArgs(ctx);
+  if (needsNonInteractive) {
     console.error(`\n   🛠️ AUTONOMOUS HEALING: Automatically injecting '-NonInteractive' into ${cmdBasename} command to prevent hanging.... (Frictionless Recovery)`);
-    ctx.args.unshift('-NonInteractive');
-  }
-  if (!searchArgs.some(arg => arg.toLowerCase() === '-noprofile')) {
-    ctx.args.unshift('-NoProfile');
   }
 }

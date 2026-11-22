@@ -4,12 +4,13 @@ import path from 'node:path';
 import {
   CANDIDATE_EXTENSIONS,
   isDirectoryPath,
+  isFilePath,
   isFileSystemRoot,
   isIgnoredEntryName,
   isRepositoryRoot,
   normalizedEntryKey,
 } from './path-healer.js';
-import { getFileCandidates } from './path-neighbor-candidates.js';
+import { extensionAccepted, getFileCandidates } from './path-neighbor-candidates.js';
 
 const PREFERRED_DIRS: ReadonlySet<string> = new Set(['tools', 'src', 'handlers', 'lib']);
 const TRIAL_EXTS = ['.ts', '.js', '.mjs', '.tsx', '.jsx', '.json'] as const;
@@ -95,8 +96,7 @@ function matchMissingParent(parentIsRoot: boolean, parentDir: string, grandparen
 }
 
 function existingAllowedPath(candidate: string, allowDirectories: boolean): string | null {
-  if (!fs.existsSync(candidate)) return null;
-  if (allowDirectories || !fs.statSync(candidate).isDirectory()) return candidate;
+  if (isFilePath(candidate) || (allowDirectories && isDirectoryPath(candidate))) return candidate;
   return null;
 }
 
@@ -162,7 +162,7 @@ function pushShallowFile(matches: string[], fullPath: string, entryName: string,
   const baseNoExt = normalizedEntryKey(path.parse(entryName).name);
   const targetNoExt = normalizedEntryKey(path.parse(filename).name);
   const targetExt = path.extname(filename);
-  const matchesStem = targetExt.length > 0 && baseNoExt === targetNoExt;
+  const matchesStem = targetExt.length > 0 && baseNoExt === targetNoExt && extensionAccepted(entryName, filename);
   const loweredName = entryName.toLowerCase();
   const loweredFile = filename.toLowerCase();
   const matchesExt = targetExt.length === 0 && CANDIDATE_EXTENSIONS.some((ext) => loweredName === `${loweredFile}${ext}`);

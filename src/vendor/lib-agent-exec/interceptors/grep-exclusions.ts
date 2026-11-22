@@ -46,14 +46,15 @@ function hasExcludePattern(args: string[], pattern: string): boolean {
   return args.some((arg) => arg === `--exclude=${pattern}` || arg === `'--exclude=${pattern}'` || arg === `"--exclude=${pattern}"`);
 }
 
-export function injectRecursiveGrepExclusions(args: string[], targetPaths: readonly string[] = []): void {
+export function injectRecursiveGrepExclusions(
+  args: string[],
+  targetPaths: readonly string[] = [],
+  onSync?: () => void,
+): void {
   const missingExcludes = GREP_EXCLUDE_DIRS.filter(
     (dir) => !isGrepTargetExplicitlyIncluded(targetPaths, dir) && !hasExcludeDir(args, dir),
   );
   if (missingExcludes.length > 0) {
-    console.error(
-      `\n   🛠️ AUTONOMOUS HEALING: Recursive grep on mounted Windows filesystem detected. Auto-injecting --exclude-dir for node_modules, .git, and dist (and artifact/cache dirs) to prevent timeouts... (Frictionless Recovery)`
-    );
     args.unshift(...missingExcludes.map((dir) => `--exclude-dir=${dir}`));
   }
   if (!args.some((arg) => arg.startsWith('--binary-files='))) {
@@ -62,5 +63,11 @@ export function injectRecursiveGrepExclusions(args: string[], targetPaths: reado
   const binaryPatterns = ['*.db', '*.sqlite', '*.sqlite3', '*.lock'];
   for (const pat of binaryPatterns) {
     if (!hasExcludePattern(args, pat)) args.unshift(`--exclude=${pat}`);
+  }
+  if (missingExcludes.length > 0) {
+    onSync?.();
+    console.error(
+      `\n   🛠️ AUTONOMOUS HEALING: Recursive grep on mounted Windows filesystem detected. Auto-injecting --exclude-dir for node_modules, .git, and dist (and artifact/cache dirs) to prevent timeouts... (Frictionless Recovery)`
+    );
   }
 }

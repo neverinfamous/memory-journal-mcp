@@ -44,10 +44,15 @@ export function normalizeTarget(raw: string): "windows" | "wsl2" | null {
   return result.success ? result.data : null;
 }
 
+const envKeySchema = safeString.min(1, 'env key must not be empty').refine(
+  val => !/[=\r\n\0]/.test(val),
+  'env variable name must not contain = or control characters',
+);
+
 const basePayloadSchema = z.object({
   args: safeStringArray.optional(),
-  cwd: safeString.max(1024).optional(),
-  env: z.record(safeString, z.union([z.string(), z.number(), z.boolean()]).transform(String).pipe(safeString)).optional(),
+  cwd: safeString.max(1024).refine(val => val.trim().length > 0, "cwd must not be empty").optional(),
+  env: z.record(envKeySchema, z.union([z.string(), z.number(), z.boolean()]).transform(String).pipe(safeString)).optional(),
   integrationContext: z.record(z.string(), z.unknown()).optional(),
   templateOverride: safeString.max(1024).optional(),
   target: targetNormalizeSchema.optional(),
@@ -138,21 +143,49 @@ function tryTranslateSearchPayload(obj: Record<string, unknown>): void {
     const hasRegexKey = Object.hasOwn(obj, 'regex') || Object.hasOwn(obj, 'isRegex');
     if (hasRegexKey && !isTruthyFlag(obj.regex) && !isTruthyFlag(obj.isRegex)) rgArgs.push('-F');
     if (isTruthyFlag(obj.word) || isTruthyFlag(obj.isWord)) rgArgs.push('-w');
-    rgArgs.push(patternVal, pathVal);
-    console.error(`\n   💡 AGENT HINT: Search parameters passed directly as JSON payload.`);
-    console.error(`\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Auto-translating search payload to ripgrep (rg) command... (Frictionless Recovery)\x1b[0m`);
+    rgArgs.push('--', patternVal, pathVal);
     obj.type = 'command';
     obj.command = 'rg';
     obj.target = 'wsl2';
     obj.args = rgArgs;
+    console.error(`\n   💡 AGENT HINT: Search parameters passed directly as JSON payload.`);
+    console.error(`\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Auto-translating search payload to ripgrep (rg) command... (Frictionless Recovery)\x1b[0m`);
   }
   for (const sk of SEARCH_KEYS_TO_CLEAN) {
     if (Object.hasOwn(obj, sk) && !KNOWN_PAYLOAD_KEYS.has(sk)) delete obj[sk];
   }
 }
 
+export function tokenizeCommandLine(input: string): string[] {
+  const parts: string[] = [];
+  let current = '';
+  let quote: '"' | "'" | null = null;
+  let escaped = false;
+  let hasToken = false;
+  for (let i = 0; i < input.length; i++) {
+    const ch = input[i];
+    if (ch === undefined) continue;
+    if (escaped) { current += ch; escaped = false; hasToken = true; continue; }
+    if (ch === '\\' && quote !== "'" && input[i + 1] === '"') { escaped = true; continue; }
+    if ((ch === '"' || ch === "'") && quote === null) { quote = ch; hasToken = true; continue; }
+    if (ch === quote) { quote = null; continue; }
+    if (/\s/.test(ch) && quote === null) {
+      if (hasToken) { parts.push(current); current = ''; hasToken = false; }
+      continue;
+    }
+    current += ch;
+    hasToken = true;
+  }
+  if (hasToken) parts.push(current);
+  return parts;
+}
+
+function isUnsetField(obj: Record<string, unknown>, key: string): boolean {
+  return !Object.hasOwn(obj, key) || obj[key] === undefined;
+}
+
 function moveSynonymKey(obj: Record<string, unknown>, from: string, to: string): void {
-  if (Object.hasOwn(obj, from) && !Object.hasOwn(obj, to) && typeof obj[from] === 'string') {
+  if (Object.hasOwn(obj, from) && isUnsetField(obj, to) && typeof obj[from] === 'string') {
     obj[to] = obj[from];
     delete obj[from];
   }
@@ -163,20 +196,19 @@ function normalizeFieldSynonyms(obj: Record<string, unknown>): void {
   moveSynonymKey(obj, 'script_path', 'scriptPath');
   moveSynonymKey(obj, 'script_file', 'scriptPath');
   moveSynonymKey(obj, 'scriptFile', 'scriptPath');
-  if (Object.hasOwn(obj, 'command_line') && !Object.hasOwn(obj, 'command') && typeof obj.command_line === 'string') {
+  if (Object.hasOwn(obj, 'command_line') && isUnsetField(obj, 'command') && typeof obj.command_line === 'string') {
     const trimmed = obj.command_line.trim();
-    if (!Object.hasOwn(obj, 'args') && /\s+/.test(trimmed)) {
-      const parts = trimmed.split(/\s+/);
-      obj.command = parts[0] ?? trimmed;
-      obj.args = parts.slice(1);
-    } else {
-      obj.command = trimmed;
+    const parts = tokenizeCommandLine(trimmed);
+    obj.command = parts[0] ?? trimmed;
+    if (parts.length > 1) {
+      const existingArgs = Array.isArray(obj.args) ? obj.args : [];
+      obj.args = [...parts.slice(1), ...existingArgs];
     }
     delete obj.command_line;
   }
   moveSynonymKey(obj, 'script_code', 'code');
   moveSynonymKey(obj, 'scriptCode', 'code');
-  if (Object.hasOwn(obj, 'script') && !Object.hasOwn(obj, 'scriptPath') && !Object.hasOwn(obj, 'code') && typeof obj.script === 'string') {
+  if (Object.hasOwn(obj, 'script') && isUnsetField(obj, 'scriptPath') && isUnsetField(obj, 'code') && typeof obj.script === 'string') {
     if (obj.script.includes('\n') || obj.script.includes(';')) obj.code = obj.script;
     else obj.scriptPath = obj.script;
     delete obj.script;
@@ -210,12 +242,12 @@ function resolveExplicitTypeString(obj: Record<string, unknown>, rawType: string
   }
   if (EVAL_TYPE_SYNONYMS.includes(normalizedType)) { obj.type = 'eval'; return; }
   if (KNOWN_INTERPRETERS.includes(normalizedType)) {
-    if (!Object.hasOwn(obj, 'interpreter')) obj.interpreter = normalizedType;
+    if (isUnsetField(obj, 'interpreter')) obj.interpreter = normalizedType;
     if (typeof obj.code === 'string') obj.type = 'eval';
     else if (typeof obj.scriptPath === 'string') obj.type = 'script';
     else {
       obj.type = 'command';
-      if (!Object.hasOwn(obj, 'command')) obj.command = normalizedType;
+      if (isUnsetField(obj, 'command')) obj.command = normalizedType;
     }
     return;
   }
@@ -266,24 +298,27 @@ export const PayloadSchema = z.preprocess((val) => {
 
 export type ExecPayload = z.infer<typeof rawPayloadUnion>;
 
+const NON_BLANK_CLI_STRING = safeString.refine(val => val.trim().length > 0, "value must not be empty");
+const NON_BLANK_CLI_PATH = safeString.max(1024).refine(val => val.trim().length > 0, "value must not be empty");
+
 export const agentExecCliArgsSchema = z.object({
-  interceptors: z.union([z.string().max(1024), z.array(z.string().max(1024)).max(100)]).optional(),
-  plugin: z.string().max(1024).optional(),
+  interceptors: z.union([NON_BLANK_CLI_PATH, z.array(NON_BLANK_CLI_PATH).max(100)]).optional(),
+  plugin: NON_BLANK_CLI_PATH.optional(),
   help: z.boolean().optional(),
   version: z.boolean().optional(),
   json: z.boolean().optional(),
-  payload: z.string().optional(),
-  base64: z.string().optional(),
-  payloadPath: z.string().max(1024).optional(),
-  target: z.string().max(1024).optional(),
-  cwd: z.string().max(1024).optional(),
+  payload: NON_BLANK_CLI_STRING.optional(),
+  base64: NON_BLANK_CLI_STRING.optional(),
+  payloadPath: NON_BLANK_CLI_PATH.optional(),
+  target: safeString.max(1024).optional(),
+  cwd: safeString.max(1024).refine(val => val.trim().length > 0, "cwd must not be empty").optional(),
   timeout: z.union([z.string(), z.number()]).optional(),
   timeoutMs: z.union([z.string(), z.number()]).optional(),
-});
+}).strict();
 
 export type AgentExecCliArgs = z.infer<typeof agentExecCliArgsSchema>;
 
-export const JsonEnvelopeSchema = z.object({
+export const JsonEnvelopeSchema = z.looseObject({
   status: z.union([z.literal("success"), z.literal("error")]),
   exit_code: z.number().int().optional(),
-}).passthrough();
+});

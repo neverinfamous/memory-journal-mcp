@@ -45,9 +45,9 @@ export function maybeSplitJoinedTestArgs(
   if (isNestedAgentExec || !isJoinedTestSplitTarget(cmdBasename, args, underlyingScript)) return;
   const expandedArgs = expandJoinedTestArgs(args);
   if (expandedArgs === null) return;
-  console.error(`\n   🛠️ AUTONOMOUS HEALING: Detected space-separated test file paths in a single argument. Splitting into individual arguments... (Frictionless Recovery)`);
   args.splice(0, args.length, ...expandedArgs);
-  payload.args = args;
+  if ('args' in payload) payload.args = args;
+  console.error(`\n   🛠️ AUTONOMOUS HEALING: Detected space-separated test file paths in a single argument. Splitting into individual arguments... (Frictionless Recovery)`);
 }
 
 export function nestedAgentExec(args: string[]): boolean {
@@ -62,14 +62,14 @@ export function wslCommandProfile(
 ): WslCommandProfile {
   const isWslNonRunnerCli = NON_RUNNER_CLIS.includes(cmdBasename.toLowerCase().replace(/\.(?:exe|cmd|bat)$/i, ''));
   const isKnownDeterministic = knownDeterministic(cmdBasename, args, isWslNonRunnerCli);
-  const nonInlineArgs = args ? stripInlineCodeArgs(cmdBasename, args) : [];
+  const nonInlineArgs = stripInlineCodeArgs(cmdBasename, args);
   const isDockerScout = /(?:docker|docker-compose|podman)/i.test(cmdBasename) && nonInlineArgs.some(arg => /scout/i.test(arg));
   const isInfraOrchestration = infraOrchestration(cmdBasename, nonInlineArgs, underlyingScript, isKnownDeterministic, isWslNonRunnerCli);
   const isDockerBuild = !isDockerScout && ((/(?:docker|docker-compose|podman)/i.test(cmdBasename) && nonInlineArgs.some(arg => /^(?:build|pull|push|up|down|restart|recreate|load|save|import|export|prune)$/i.test(arg))) || isInfraOrchestration);
   const isPlaywright = !isKnownDeterministic && !isWslNonRunnerCli && playwrightSignal(cmdBasename, nonInlineArgs, underlyingScript);
   const isCoverage = !isKnownDeterministic && !isWslNonRunnerCli && coverageSignal(cmdBasename, nonInlineArgs, underlyingScript);
   const isQuality = !isNestedAgentExec && !isKnownDeterministic && !isWslNonRunnerCli && !isDockerScout && !isDockerBuild && qualitySignal(cmdBasename, nonInlineArgs, underlyingScript);
-  const isSearch = /(?:find|grep|rg|ls|tree)\b/i.test(cmdBasename) || nonInlineArgs.some(arg => /(?:find|grep|rg|ls|tree)\b/i.test(arg));
+  const isSearch = /\b(?:find|grep|rg|ls|tree)\b/i.test(cmdBasename) || nonInlineArgs.some(arg => /\b(?:find|grep|rg|ls|tree)\b/i.test(arg));
   return { isDockerScout, isPlaywright, isDockerBuild, isKnownDeterministic, isQuality, isSearch, isCoverage, nonInlineArgs };
 }
 
@@ -81,8 +81,8 @@ export function windowsCommandProfile(
 ): WindowsCommandProfile {
   const isWinNonRunnerCli = NON_RUNNER_CLIS.includes(cmdBasename.toLowerCase().replace(/\.(?:exe|cmd|bat)$/i, ''));
   const isKnownDeterministic = knownDeterministic(cmdBasename, args, isWinNonRunnerCli);
-  const isBackupConversations = /backup-conversations\.ts/i.test(cmdBasename) || Boolean(args && args.some(arg => /backup-conversations\.ts/i.test(arg)));
-  const nonInlineArgs = args ? stripInlineCodeArgs(cmdBasename, args) : [];
+  const isBackupConversations = /backup-conversations\.ts/i.test(cmdBasename) || args.some(arg => /backup-conversations\.ts/i.test(arg));
+  const nonInlineArgs = stripInlineCodeArgs(cmdBasename, args);
   const isInfraOrchestration = infraOrchestration(cmdBasename, nonInlineArgs, underlyingScript, isKnownDeterministic, isWinNonRunnerCli);
   const isDocker = (/(?:docker|docker-compose|podman)/i.test(cmdBasename) && nonInlineArgs.some(arg => /^(?:build|scout|pull|push|up|down|restart|recreate|load|save|import|export|prune)$/i.test(arg))) || isInfraOrchestration;
   const isPlaywright = !isKnownDeterministic && !isWinNonRunnerCli && playwrightSignal(cmdBasename, nonInlineArgs, underlyingScript);
@@ -91,10 +91,16 @@ export function windowsCommandProfile(
   return { isPlaywright, isDocker, isInfraOrchestration, isKnownDeterministic, isBackupConversations, isQuality, isCoverage, nonInlineArgs };
 }
 
-export function wslQualityTimeout(cmdBasename: string, nonInlineArgs: string[], underlyingScript: string, isCoverage: boolean): number {
+export function wslQualityTimeout(
+  cmdBasename: string,
+  nonInlineArgs: string[],
+  underlyingScript: string,
+  isCoverage: boolean,
+  isBuildCommand = false,
+): number {
   const gate = qualityGate(cmdBasename, nonInlineArgs, underlyingScript);
   const isLargeTestBatch = gate.testDirs.length > 1 || (gate.testDirs.length >= 1 && gate.testFiles.length + gate.testDirs.length > 1) || gate.testFiles.length >= 5;
-  if (gate.isFullLintOrCheck || gate.hasLargeFile) return 360000;
+  if (gate.isFullLintOrCheck || gate.hasLargeFile || isBuildCommand) return 360000;
   if (isCoverage || isLargeTestBatch) return 300000;
   if (gate.testFiles.length > 1 || gate.testDirs.length > 0 || gate.isFullSuite) return 180000;
   return 90000;
@@ -106,11 +112,12 @@ export function windowsQualityTimeout(
   nonInlineArgs: string[],
   underlyingScript: string,
   isCoverage: boolean,
+  isBuildCommand = false,
 ): number {
   const gate = qualityGate(cmdBasename, nonInlineArgs, underlyingScript);
   const isLargeTestBatch = gate.testDirs.length > 1 || (gate.testDirs.length >= 1 && gate.testFiles.length + gate.testDirs.length > 1) || gate.testFiles.length >= 5;
   const isIsolatedFullSuite = gate.isFullSuite && (args.includes('--isolate') || /--isolate\b/.test(underlyingScript));
-  if (gate.isFullLintOrCheck || gate.hasLargeFile || isIsolatedFullSuite || isCoverage || gate.isFullSuite) return 600000;
+  if (gate.isFullLintOrCheck || gate.hasLargeFile || isIsolatedFullSuite || isCoverage || gate.isFullSuite || isBuildCommand) return 600000;
   if (isLargeTestBatch) return 480000;
   if (gate.testDirs.length > 0) return 360000;
   if (gate.testFiles.length > 1 || gate.targetFiles.length > 1) return 300000;
@@ -120,7 +127,7 @@ export function windowsQualityTimeout(
 function knownDeterministic(cmdBasename: string, args: string[], isNonRunnerCli: boolean): boolean {
   if (isNonRunnerCli) return false;
   if (/(?:commit\.(?:ts|js)|get-git-history-json\.ts|backup-conversations\.ts)/i.test(cmdBasename)) return true;
-  return Boolean(args && args.some(arg => /(?:commit\.(?:ts|js)|get-git-history-json\.ts|backup-conversations\.ts)/i.test(arg)));
+  return args.some(arg => /(?:commit\.(?:ts|js)|get-git-history-json\.ts|backup-conversations\.ts)/i.test(arg));
 }
 
 function infraOrchestration(

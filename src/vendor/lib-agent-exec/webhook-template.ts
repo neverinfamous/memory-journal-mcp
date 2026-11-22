@@ -16,28 +16,22 @@ function safeGet(obj: unknown, path: string): unknown {
   return current;
 }
 
-const CONTEXT_PLACEHOLDER_RE = /\{\{integrationContext(?:\.([a-zA-Z0-9_.]+))?\}\}/g;
+const COMBINED_PLACEHOLDER_RE = /\{\{integrationContext(?:\.([a-zA-Z0-9_.]+))?\}\}|\{\{(stdout|stderr|code|signal|success|envelope\.data|envelope\.status)\}\}/g;
 const EXACT_CONTEXT_PLACEHOLDER_RE = /^\{\{integrationContext(?:\.([a-zA-Z0-9_.]+))?\}\}$/;
-const VAR_PLACEHOLDER_RE = /\{\{(stdout|stderr|code|signal|success|envelope\.data|envelope\.status)\}\}/g;
 
 function formatJsonStringFragment(value: string, escapeForRawJson: boolean): string {
   return escapeForRawJson ? JSON.stringify(value).slice(1, -1) : value;
 }
 
-function replaceContextPlaceholders(
-  input: string,
-  integrationContext: unknown,
-  escapeForRawJson: boolean,
-): string {
-  if (integrationContext === undefined) return input;
-  return input.replace(CONTEXT_PLACEHOLDER_RE, (match, pathStr) => {
-    const current = safeGet(integrationContext, typeof pathStr === 'string' ? pathStr : '');
-    if (current === undefined) return match;
-    if (typeof current === 'object') return JSON.stringify(current);
-    return typeof current === 'string'
-      ? formatJsonStringFragment(current, escapeForRawJson)
-      : String(current);
-  });
+function resolveContextToken(match: string, pathStr: string | undefined, integrationContext: unknown, escapeForRawJson: boolean): string {
+  if (integrationContext === undefined) return match;
+  const current = safeGet(integrationContext, typeof pathStr === 'string' ? pathStr : '');
+  if (current === undefined) return match;
+  if (typeof current === 'object') {
+    const serialized = JSON.stringify(current);
+    return escapeForRawJson ? formatJsonStringFragment(serialized, true) : serialized;
+  }
+  return typeof current === 'string' ? formatJsonStringFragment(current, escapeForRawJson) : String(current);
 }
 
 function resolveVarPlaceholder(key: string, vars: Record<string, unknown>, escapeForRawJson: boolean): string | null {
@@ -45,7 +39,7 @@ function resolveVarPlaceholder(key: string, vars: Record<string, unknown>, escap
   if (key === 'stderr') return formatJsonStringFragment(String(vars['stderr'] ?? ''), escapeForRawJson);
   if (key === 'code') return String(vars['code'] ?? 'null');
   if (key === 'signal') return String(vars['signal'] ?? 'null');
-  if (key === 'success') return vars['success'] ? 'true' : 'false';
+  if (key === 'success') return vars['success'] === true ? 'true' : 'false';
   if (key === 'envelope.data') {
     const data = safeGet(vars['envData'], 'data');
     if (data === undefined) return 'null';
@@ -59,10 +53,15 @@ function resolveVarPlaceholder(key: string, vars: Record<string, unknown>, escap
   return null;
 }
 
-function replaceVarPlaceholders(input: string, vars: Record<string, unknown>, escapeForRawJson: boolean): string {
-  return input.replace(VAR_PLACEHOLDER_RE, (match, key) => {
-    if (typeof key !== 'string') return match;
-    return resolveVarPlaceholder(key, vars, escapeForRawJson) ?? match;
+function replaceAllPlaceholdersSinglePass(
+  input: string,
+  integrationContext: unknown,
+  vars: Record<string, unknown>,
+  escapeForRawJson: boolean,
+): string {
+  return input.replace(COMBINED_PLACEHOLDER_RE, (match, ctxPath?: string, varKey?: string) => {
+    if (varKey !== undefined) return resolveVarPlaceholder(varKey, vars, escapeForRawJson) ?? match;
+    return resolveContextToken(match, ctxPath, integrationContext, escapeForRawJson);
   });
 }
 
@@ -82,8 +81,7 @@ function substituteTemplateString(node: string, integrationContext: unknown, var
       if (current !== undefined && current !== node) return current;
     }
   }
-  const withContext = replaceContextPlaceholders(node, integrationContext, false);
-  return replaceVarPlaceholders(withContext, vars, false);
+  return replaceAllPlaceholdersSinglePass(node, integrationContext, vars, false);
 }
 
 function walkTemplateNode(node: unknown, integrationContext: unknown, vars: Record<string, unknown>): unknown {
@@ -100,8 +98,7 @@ function walkTemplateNode(node: unknown, integrationContext: unknown, vars: Reco
 }
 
 function renderFallbackTemplate(templateStr: string, integrationContext: unknown, vars: Record<string, unknown>): string {
-  const withContext = replaceContextPlaceholders(templateStr, integrationContext, true);
-  return replaceVarPlaceholders(withContext, vars, true);
+  return replaceAllPlaceholdersSinglePass(templateStr, integrationContext, vars, true);
 }
 
 export function renderWebhookTemplate(templateStr: string, integrationContext: unknown, vars: Record<string, unknown>): string {

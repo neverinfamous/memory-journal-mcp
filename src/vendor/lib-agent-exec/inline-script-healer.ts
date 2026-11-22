@@ -88,7 +88,10 @@ function tryHealStringRawAt(code: string, idx: number): { startIdx: number; endI
   const endIdx = findStringRawEndIdx(code, startIdx);
   if (endIdx <= startIdx) return null;
   const rawBody = code.slice(startIdx, endIdx).replace(/`/g, '\\`').replace(/\$\{/g, '\\${');
-  return { startIdx, endIdx, literal: `\`${rawBody}\`` };
+  let trailingSlashes = 0;
+  for (let k = rawBody.length - 1; k >= 0 && rawBody[k] === '\\'; k--) trailingSlashes++;
+  const safeBody = trailingSlashes % 2 === 1 ? `${rawBody.slice(0, -1)}\${'\\\\'}` : rawBody;
+  return { startIdx, endIdx, literal: `\`${safeBody}\`` };
 }
 
 // [INTENT]: Restores backtick template literals on String.raw`...` path expressions stripped by PowerShell double-quoting (e.g. String.rawC:\path\file -> String.raw`C:\path\file`).
@@ -146,6 +149,17 @@ export function buildCwdNodeModulePaths(cwd: string, existingNodePath?: string):
   return paths.join(path.delimiter);
 }
 
+function readEnvCaseInsensitive(source: Record<string, string | undefined> | undefined, key: string): string | undefined {
+  if (source === undefined) return undefined;
+  if (source[key] !== undefined) return source[key];
+  if (process.platform !== 'win32') return undefined;
+  const upper = key.toUpperCase();
+  for (const [k, v] of Object.entries(source)) {
+    if (k.toUpperCase() === upper && v !== undefined) return v;
+  }
+  return undefined;
+}
+
 // [SIDE-EFFECT]: Populates NODE_PATH (and Node's synchronous registerHooks preload for ESM/relative specifiers) so temp scripts in os.tmpdir() resolve workspace packages cleanly.
 export function configureCwdModuleResolution(
   envOverrides: Record<string, string>,
@@ -158,14 +172,21 @@ export function configureCwdModuleResolution(
     return;
   }
 
-  const baseNodePath = envOverrides['NODE_PATH'] ?? payloadEnv?.['NODE_PATH'] ?? process.env['NODE_PATH'];
+  const baseNodePath =
+    readEnvCaseInsensitive(envOverrides, 'NODE_PATH') ??
+    readEnvCaseInsensitive(payloadEnv, 'NODE_PATH') ??
+    readEnvCaseInsensitive(process.env, 'NODE_PATH');
   envOverrides['NODE_PATH'] = buildCwdNodeModulePaths(cwd, baseNodePath);
 
   if (['node', 'tsx', 'ts-node'].includes(interpreterName.toLowerCase()) && fs.existsSync(RESOLVER_MODULE_PATH)) {
     envOverrides['AGENT_EXEC_INLINE_CWD'] = path.resolve(cwd);
     const resolverUrl = pathToFileURL(RESOLVER_MODULE_PATH).href;
     const importFlag = `--import=${resolverUrl}`;
-    const baseNodeOptions = envOverrides['NODE_OPTIONS'] ?? payloadEnv?.['NODE_OPTIONS'] ?? process.env['NODE_OPTIONS'] ?? '';
+    const baseNodeOptions =
+      readEnvCaseInsensitive(envOverrides, 'NODE_OPTIONS') ??
+      readEnvCaseInsensitive(payloadEnv, 'NODE_OPTIONS') ??
+      readEnvCaseInsensitive(process.env, 'NODE_OPTIONS') ??
+      '';
     if (!baseNodeOptions.includes(resolverUrl)) {
       const trimmed = baseNodeOptions.trim();
       envOverrides['NODE_OPTIONS'] = trimmed.length > 0 ? `${trimmed} ${importFlag}` : importFlag;
@@ -175,17 +196,17 @@ export function configureCwdModuleResolution(
 
 export function getInlineScriptDetails(interpreter: string, args: readonly string[]): InlineScriptDetails | null {
   const lower = interpreter.toLowerCase();
-  const allowed = INTERPRETER_INLINE_FLAGS[lower];
+  const allowed = Object.hasOwn(INTERPRETER_INLINE_FLAGS, lower) ? INTERPRETER_INLINE_FLAGS[lower] : undefined;
   if (allowed === undefined || args.length === 0) {
     return null;
   }
-  const valueFlags = INTERPRETER_VALUE_FLAGS[lower] ?? [];
+  const valueFlags = Object.hasOwn(INTERPRETER_VALUE_FLAGS, lower) ? (INTERPRETER_VALUE_FLAGS[lower] ?? []) : [];
   let inputType: 'module' | 'commonjs' | null = null;
   const stripIndices: number[] = [];
 
   for (let i = 0; i < args.length; i++) {
     const arg = args[i];
-    if (arg === undefined) continue;
+    if (arg === undefined || arg === '--') return null;
 
     if (allowed.includes(arg)) {
       const scriptContent = args[i + 1];
@@ -224,16 +245,38 @@ export function getInlineScriptDetails(interpreter: string, args: readonly strin
       return null;
     }
 
-    if (arg.startsWith('./') || arg.startsWith('.\\')) {
-      return null;
-    }
-
     if (valueFlags.includes(arg) && i + 1 < args.length) {
       i++;
     }
   }
 
   return null;
+}
+
+function prependPythonSysPath(scriptContent: string): string {
+  const lines = scriptContent.split('\n');
+  let insertIdx = 0;
+  let inFutureParens = false;
+  while (insertIdx < lines.length) {
+    const trimmed = (lines[insertIdx] ?? '').trim();
+    if (inFutureParens) {
+      if (trimmed.includes(')')) inFutureParens = false;
+      insertIdx++;
+      continue;
+    }
+    if (trimmed.length === 0 || trimmed.startsWith('#')) {
+      insertIdx++;
+      continue;
+    }
+    if (/^from\s+__future__\s+import\b/.test(trimmed)) {
+      if (trimmed.includes('(') && !trimmed.includes(')')) inFutureParens = true;
+      insertIdx++;
+      continue;
+    }
+    break;
+  }
+  const injectLine = "import sys; sys.path.insert(0, '')";
+  return [...lines.slice(0, insertIdx), injectLine, ...lines.slice(insertIdx)].join('\n');
 }
 
 export function rewriteInlineScriptToTempFile(params: {
@@ -268,10 +311,10 @@ export function rewriteInlineScriptToTempFile(params: {
 
   const skipValidFileRewrite = target !== 'wsl2' && ['node', 'tsx', 'ts-node'].includes(interpreterName);
   let fileContent = interpreterName.startsWith('python')
-    ? `import sys; sys.path.insert(0, '')\n${scriptContent}`
+    ? prependPythonSysPath(scriptContent)
     : healStrippedStringRawLiterals(
         healStrippedSqlTemplateLiterals(
-          healEvalCodePathHallucinations(scriptContent, cwd, target, { skipValidFileRewrite })
+          healEvalCodePathHallucinations(scriptContent, cwd, target, { skipValidFileRewrite, interpreter: interpreterName })
         )
       );
 

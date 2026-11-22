@@ -10,7 +10,9 @@ import {
   tryAccelerateCompiledCommitScript,
 } from '../utils.js';
 import { handleRipgrepInterception } from './search-interceptor.js';
+import { resolvePackageProjectDir } from './package-manager-js-rewrites.js';
 import { AGENT_NATIVE_TOOLS, ECOSYSTEM_MCP_TOOLS, type ExecutionContext } from './types.js';
+import { findFirstPkgSubcmdIndex } from './utils.js';
 
 export function healMissingAgentScriptArgs(
   args: string[],
@@ -18,21 +20,19 @@ export function healMissingAgentScriptArgs(
   payload: ExecutionContext['payload'],
 ): void {
   if (args.some((a) => path.basename(a).toLowerCase() === 'agent-exec.ts')) return;
-  let mutated = false;
   for (let i = 0; i < args.length; i++) {
     const rawArg = args[i];
     if (rawArg === undefined || rawArg === '--') break;
     if (rawArg.startsWith('-')) continue;
     const resolved = resolveAgentScriptFallback(rawArg, projectDir);
     if (resolved !== null) {
-      console.error(`\n   🛠️ AUTONOMOUS HEALING: Resolved missing '${rawArg}' to '${resolved}'... (Frictionless Recovery)`);
       args[i] = resolved;
-      mutated = true;
+      if ('command' in payload) payload.args = args;
+      console.error(`\n   🛠️ AUTONOMOUS HEALING: Resolved missing '${rawArg}' to '${resolved}'... (Frictionless Recovery)`);
       break;
     }
     if (/\.(?:ts|js|mjs|cjs)$/i.test(rawArg)) break;
   }
-  if (mutated && 'command' in payload) payload.args = args;
 }
 
 export function tryAccelerateCommitForPm(
@@ -52,9 +52,11 @@ export function tryAccelerateCommitForPm(
     ctx.payload.command = nodeCmd;
     ctx.payload.args = args;
   }
-  emitInterceptBanner(`\n   💡 AGENT INTERCEPT: Disabling stall interceptors and extending timeout for deterministic workflow script to prevent false positive aborts.`);
   ctx.payload.bypassInterceptors = true;
-  if (ctx.payload.timeoutMs === undefined || ctx.payload.timeoutMs < 240000) ctx.payload.timeoutMs = 240000;
+  if (ctx.payload.timeoutMs !== 0 && (ctx.payload.timeoutMs === undefined || ctx.payload.timeoutMs < 240000)) {
+    ctx.payload.timeoutMs = 240000;
+  }
+  emitInterceptBanner(`\n   💡 AGENT INTERCEPT: Disabling stall interceptors and extending timeout for deterministic workflow script to prevent false positive aborts.`);
   return true;
 }
 
@@ -64,7 +66,11 @@ function isExternalTsScriptArg(arg: string, projectDir: string): boolean {
   const normProj = process.platform === 'win32' ? projectDir.toLowerCase() : projectDir;
   const normArg = process.platform === 'win32' ? resolvedArg.toLowerCase() : resolvedArg;
   const rel = path.relative(normProj, normArg);
-  return rel.startsWith('..') || path.isAbsolute(rel) || resolvedArg.startsWith(os.tmpdir());
+  const outsideProj = rel === '..' || rel.startsWith(`..${path.sep}`) || path.isAbsolute(rel);
+  const normTmp = process.platform === 'win32' ? os.tmpdir().toLowerCase() : os.tmpdir();
+  const relTmp = path.relative(normTmp, normArg);
+  const inTmp = relTmp === '' || (relTmp !== '..' && !relTmp.startsWith(`..${path.sep}`) && !path.isAbsolute(relTmp));
+  return outsideProj || inTmp;
 }
 
 export function rewriteTsxInvocation(
@@ -109,9 +115,24 @@ export function splitJoinedTestTargetArgs(ctx: ExecutionContext, args: string[])
     expandedArgs.push(a);
   }
   if (!didSplit) return;
-  console.error(`\n   🛠️ AUTONOMOUS HEALING: Detected space-separated test file paths in a single argument. Splitting into individual arguments... (Frictionless Recovery)`);
   args.splice(0, args.length, ...expandedArgs);
   if ('command' in ctx.payload) ctx.payload.args = args;
+  console.error(`\n   🛠️ AUTONOMOUS HEALING: Detected space-separated test file paths in a single argument. Splitting into individual arguments... (Frictionless Recovery)`);
+}
+
+const DLX_PREFIX_VALUE_FLAGS = new Set([
+  '-p', '--package', '-c', '--call', '--userconfig', '--cwd', '--dir', '-C', '--prefix', '--filter', '-F',
+]);
+
+function findDlxTargetIndex(args: readonly string[], startIdx: number): number {
+  for (let i = startIdx; i < args.length; i++) {
+    const a = args[i];
+    if (a === undefined || a === '--') break;
+    if (DLX_PREFIX_VALUE_FLAGS.has(a)) { i++; continue; }
+    if (a.startsWith('-')) continue;
+    return i;
+  }
+  return -1;
 }
 
 export function translateNativeOrDlxTool(
@@ -128,12 +149,11 @@ export function translateNativeOrDlxTool(
     process.exit(1);
   }
   if (subCmd === 'dlx' || subCmd === 'x') {
-    const subCmdIdx = args.indexOf(subCmd);
-    const afterSubCmd = args.slice(subCmdIdx + 1);
-    const targetPkgIdx = afterSubCmd.findIndex(a => !a.startsWith('-'));
-    const targetPkg = targetPkgIdx !== -1 ? afterSubCmd[targetPkgIdx] : undefined;
+    const subCmdIdx = findFirstPkgSubcmdIndex(args);
+    const targetIdx = subCmdIdx !== -1 ? findDlxTargetIndex(args, subCmdIdx + 1) : -1;
+    const targetPkg = targetIdx !== -1 ? args[targetIdx] : undefined;
     if (targetPkg === 'rg' || targetPkg === 'ripgrep' || targetPkg === 'fd' || targetPkg === 'fdfind') {
-      return rewriteToolBinary(ctx, `${cmdBasename} ${subCmd}`, args, targetPkg, subCmdIdx + 1 + targetPkgIdx, [subCmdIdx]);
+      return rewriteToolBinary(ctx, `${cmdBasename} ${subCmd}`, args, targetPkg, targetIdx);
     }
   }
   return false;
@@ -145,20 +165,29 @@ export function rewriteToolBinary(
   args: string[],
   targetPkg: string,
   targetIdx: number,
-  extraRemoveIdxs: readonly number[] = [],
 ): boolean {
   const isRg = targetPkg === 'rg' || targetPkg === 'ripgrep';
   const mappedCmd = isRg ? 'rg' : 'fd';
-  console.error(`\n   🛠️ AUTONOMOUS HEALING: Auto-translating '${label} ${targetPkg}' to native ${isRg ? 'ripgrep (rg)' : 'fd'}... (Frictionless Recovery)\x1b[0m`);
+  const rawPayloadCwd = ctx.payload.cwd;
+  const isPosixWsl = ctx.payload.target === 'wsl2'
+    && typeof rawPayloadCwd === 'string'
+    && (rawPayloadCwd.startsWith('/') || rawPayloadCwd.startsWith('~'));
+  const baseDir = rawPayloadCwd !== undefined && rawPayloadCwd.length > 0
+    ? (isPosixWsl ? rawPayloadCwd : path.resolve(rawPayloadCwd))
+    : (ctx.cwd !== undefined && ctx.cwd.length > 0 ? path.resolve(ctx.cwd) : process.cwd());
+  const prefixDir = resolvePackageProjectDir(args.slice(0, targetIdx), baseDir);
+  if (prefixDir !== baseDir) {
+    ctx.payload.cwd = prefixDir;
+  }
   ctx.cmdBasename = mappedCmd;
-  const removeSet = new Set([targetIdx, ...extraRemoveIdxs]);
-  ctx.args = args.filter((a, idx) => !removeSet.has(idx) && a !== '-y' && a !== '--yes');
+  ctx.args = args.slice(targetIdx + 1);
   if (!isRg) ctx.payload.target = 'wsl2';
   if ('command' in ctx.payload) {
     ctx.payload.command = mappedCmd;
     ctx.payload.args = ctx.args;
   }
-  if (isRg) handleRipgrepInterception(ctx, false);
+  console.error(`\n   🛠️ AUTONOMOUS HEALING: Auto-translating '${label} ${targetPkg}' to native ${isRg ? 'ripgrep (rg)' : 'fd'}... (Frictionless Recovery)\x1b[0m`);
+  if (isRg) handleRipgrepInterception(ctx, Boolean(ctx.payload.stdin));
   return true;
 }
 
@@ -174,23 +203,23 @@ function handleAgentNativeToolSubcmd(
   }
   if (subCmd === 'list_dir') {
     const pathArg = args.slice(args.indexOf(subCmd) + 1).find(a => !a.startsWith('-')) ?? '.';
-    console.error(`\n   💡 AGENT HINT: 'list_dir' is an agent-native tool, NOT a package manager script.`);
-    console.error(`\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Auto-translating '${cmdBasename} ${subCmd}' to ls... (Frictionless Recovery)\x1b[0m`);
     ctx.cmdBasename = 'ls';
     ctx.args = [pathArg];
     ctx.payload.target = 'wsl2';
     if ('command' in ctx.payload) { ctx.payload.command = 'ls'; ctx.payload.args = ctx.args; }
+    console.error(`\n   💡 AGENT HINT: 'list_dir' is an agent-native tool, NOT a package manager script.`);
+    console.error(`\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Auto-translating '${cmdBasename} ${subCmd}' to ls... (Frictionless Recovery)\x1b[0m`);
     return true;
   }
   if (subCmd === 'view_file') {
     const fileArg = args.slice(args.indexOf(subCmd) + 1).find(a => !a.startsWith('-'));
     if (fileArg) {
-      console.error(`\n   💡 AGENT HINT: 'view_file' is an agent-native tool, NOT a package manager script.`);
-      console.error(`\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Auto-translating '${cmdBasename} ${subCmd}' to cat... (Frictionless Recovery)\x1b[0m`);
       ctx.cmdBasename = 'cat';
       ctx.args = [fileArg];
       ctx.payload.target = 'wsl2';
       if ('command' in ctx.payload) { ctx.payload.command = 'cat'; ctx.payload.args = ctx.args; }
+      console.error(`\n   💡 AGENT HINT: 'view_file' is an agent-native tool, NOT a package manager script.`);
+      console.error(`\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Auto-translating '${cmdBasename} ${subCmd}' to cat... (Frictionless Recovery)\x1b[0m`);
       return true;
     }
   }
@@ -219,8 +248,6 @@ function translateGrepSearch(ctx: ExecutionContext, cmdBasename: string, args: s
     console.error(`\n   💡 AGENT HINT: '${subCmd}' is an agent-native tool, NOT a package manager script or CLI binary. Please invoke the '${subCmd}' tool directly instead of executing '${cmdBasename} ${subCmd}'.\n${AUTONOMOUS_HEALING_MSG}`);
     process.exit(1);
   }
-  console.error(`\n   💡 AGENT HINT: '${subCmd}' is an agent-native tool, NOT a package manager script.`);
-  console.error(`\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Auto-translating '${cmdBasename} ${subCmd}' to ripgrep (rg)... (Frictionless Recovery)\x1b[0m`);
   ctx.cmdBasename = 'rg';
   const rgFlags = ['-n'];
   if (args.some(a => a === '-i' || a === '-ri' || a === '-ir' || a === '--case-insensitive' || (a.startsWith('-') && !a.startsWith('--') && a.includes('i')))) rgFlags.push('-i');
@@ -228,7 +255,9 @@ function translateGrepSearch(ctx: ExecutionContext, cmdBasename: string, args: s
   if (!args.some(a => a === '-e' || a === '--regexp')) rgFlags.push('-F');
   ctx.args = [...rgFlags, finalPattern, finalPath];
   if ('command' in ctx.payload) { ctx.payload.command = 'rg'; ctx.payload.args = ctx.args; }
-  handleRipgrepInterception(ctx, false);
+  console.error(`\n   💡 AGENT HINT: '${subCmd}' is an agent-native tool, NOT a package manager script.`);
+  console.error(`\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Auto-translating '${cmdBasename} ${subCmd}' to ripgrep (rg)... (Frictionless Recovery)\x1b[0m`);
+  handleRipgrepInterception(ctx, Boolean(ctx.payload.stdin));
 }
 
 function isLikelyPathArg(s: string, payloadCwd?: string): boolean {
@@ -238,7 +267,7 @@ function isLikelyPathArg(s: string, payloadCwd?: string): boolean {
   if (clean.includes('/') || clean.includes('\\') || /^[a-zA-Z]:/.test(clean)) return true;
   try {
     const cwd = payloadCwd !== undefined && payloadCwd.length > 0 ? path.resolve(payloadCwd) : process.cwd();
-    return fs.existsSync(path.resolve(cwd, clean)) && fs.statSync(path.resolve(cwd, clean)).isDirectory();
+    return fs.statSync(path.resolve(cwd, clean), { throwIfNoEntry: false })?.isDirectory() === true;
   } catch {
     return false;
   }

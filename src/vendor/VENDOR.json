@@ -45,6 +45,7 @@
         "interceptors/docker-tty-repl-guard.ts",
         "interceptors/find-interceptor.ts",
         "interceptors/git-commit-rewrite.ts",
+        "interceptors/git-add-guards.ts",
         "interceptors/git-guards.ts",
         "interceptors/git-history-rewrite.ts",
         "interceptors/git-interceptor.ts",
@@ -106,12 +107,13 @@
         "schema.ts",
         "stream-manager.ts",
         "utils.ts",
+        "validation-lock.ts",
         "webhook-template.ts",
         "windows-wrapper-utils.ts",
         "wsl-command-wrapper.ts"
       ],
-      "syncedAt": "2026-11-21T23:15:32.740Z",
-      "syncedFromCommit": "2f530ba45c7a33f4bd5bd4ee2bf43718803d5b89"
+      "syncedAt": "2026-11-22T19:13:59.720Z",
+      "syncedFromCommit": "40b33d9486929a5348d6479079c0fc5b5c782f7b"
     },
     "commit": {
       "source": ".agents/scripts",

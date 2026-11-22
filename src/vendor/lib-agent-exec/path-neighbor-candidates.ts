@@ -8,6 +8,8 @@ import {
   CANDIDATE_EXTENSION_SET,
   DIRECTORY_SYNONYMS,
   FILE_STEM_SYNONYMS,
+  JS_MODULE_EXTS,
+  TS_MODULE_EXTS,
   altModuleExtensions,
   isDirectoryPath,
   isFilePath,
@@ -31,10 +33,10 @@ function pushBarrelMatch(results: string[], dirPath: string, allowDirs: boolean,
   }
   for (const barrel of BARREL_CANDIDATES) {
     const barrelFile = path.join(dirPath, barrel);
-    if (!fs.existsSync(barrelFile)) continue;
-    if (rejectDirectoryBarrel && fs.statSync(barrelFile).isDirectory()) continue;
-    results.push(barrelFile);
-    return;
+    if (rejectDirectoryBarrel ? isFilePath(barrelFile) : (isFilePath(barrelFile) || isDirectoryPath(barrelFile))) {
+      results.push(barrelFile);
+      return;
+    }
   }
 }
 
@@ -122,24 +124,16 @@ function collectSwappedExtensions(dir: string, base: string, results: string[]):
   for (const ext of alts) pushFile(results, path.join(dir, `${stem}${ext}`));
 }
 
-function extensionAccepted(entryName: string, base: string): boolean {
+export function extensionAccepted(entryName: string, base: string): boolean {
   const entryExt = path.extname(entryName).toLowerCase();
   const baseExt = path.extname(base).toLowerCase();
   if (baseExt.length === 0) return CANDIDATE_EXTENSION_SET.has(entryExt);
   if (entryExt === baseExt) return true;
-  const baseIsJs = JS_MODULE_EXTS_HAS(baseExt);
-  const entryIsJs = JS_MODULE_EXTS_HAS(entryExt);
-  const baseIsTs = TS_MODULE_EXTS_HAS(baseExt);
-  const entryIsTs = TS_MODULE_EXTS_HAS(entryExt);
+  const baseIsJs = JS_MODULE_EXTS.has(baseExt);
+  const entryIsJs = JS_MODULE_EXTS.has(entryExt);
+  const baseIsTs = TS_MODULE_EXTS.has(baseExt);
+  const entryIsTs = TS_MODULE_EXTS.has(entryExt);
   return (baseIsJs && entryIsTs) || (baseIsTs && entryIsJs);
-}
-
-function JS_MODULE_EXTS_HAS(ext: string): boolean {
-  return ext === '.js' || ext === '.mjs' || ext === '.cjs';
-}
-
-function TS_MODULE_EXTS_HAS(ext: string): boolean {
-  return ext === '.ts' || ext === '.tsx' || ext === '.mts' || ext === '.cts';
 }
 
 function namesMatchNormalized(entryName: string, normBase: string): boolean {
@@ -170,7 +164,8 @@ function collectNormalizedCandidates(dir: string, base: string, allowDirs: boole
 
 function collectDirectorySynonyms(dir: string, base: string, allowDirs: boolean, results: string[]): void {
   if (!allowDirs || results.length > 0) return;
-  const synonyms = DIRECTORY_SYNONYMS[base.toLowerCase()] ?? [];
+  const dirKey = base.toLowerCase();
+  const synonyms = Object.hasOwn(DIRECTORY_SYNONYMS, dirKey) ? (DIRECTORY_SYNONYMS[dirKey] ?? []) : [];
   for (const syn of synonyms) {
     const synPath = path.join(dir, syn);
     if (isDirectoryPath(synPath)) results.push(synPath);
@@ -196,7 +191,8 @@ function pushStemSynonym(results: string[], dir: string, syn: string, ext: strin
 function collectStemSynonyms(dir: string, base: string, results: string[]): void {
   if (results.length > 0) return;
   const parsedBase = path.parse(base);
-  const stemSynonyms = FILE_STEM_SYNONYMS[parsedBase.name.toLowerCase()] ?? [];
+  const stemKey = parsedBase.name.toLowerCase();
+  const stemSynonyms = Object.hasOwn(FILE_STEM_SYNONYMS, stemKey) ? (FILE_STEM_SYNONYMS[stemKey] ?? []) : [];
   for (const syn of stemSynonyms) pushStemSynonym(results, dir, syn, parsedBase.ext.toLowerCase());
 }
 
@@ -210,7 +206,7 @@ function collectModularDirectory(dir: string, base: string, allowDirs: boolean, 
 export function getFileCandidates(dir: string, base: string, allowDirs = false, allowCompoundParts = true): string[] {
   if (!isDirectoryPath(dir)) return [];
   const exact = path.join(dir, base);
-  if (fs.existsSync(exact) && (allowDirs || !fs.statSync(exact).isDirectory())) return [exact];
+  if (isFilePath(exact) || (allowDirs && isDirectoryPath(exact))) return [exact];
   const results: string[] = [];
   collectModifierCandidates(dir, base, allowDirs, results);
   collectPrefixCandidates(dir, base, results);

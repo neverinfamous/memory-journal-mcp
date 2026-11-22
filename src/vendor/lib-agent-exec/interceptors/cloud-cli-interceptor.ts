@@ -9,7 +9,25 @@ const CLOUD_VALUE_FLAGS = new Set([
 const GCLOUD_VALUE_FLAGS = new Set([
   '--project', '--configuration', '--account', '--impersonate-service-account', '--format', '--verbosity', '--billing-project',
 ]);
-const GH_VALUE_FLAGS = new Set(['-R', '--repo', '--hostname']);
+const GH_VALUE_FLAGS = new Set([
+  '-R', '--repo', '--hostname',
+  '-r', '--repos', '-v', '--visibility', '-a', '--app',
+  '-e', '--env', '-o', '--org', '-D', '--dir', '-p', '--pattern',
+  '-n', '--name', '-j', '--job', '-b', '--branch', '-d', '--desc', '--description',
+  '-c', '--color',
+]);
+const TF_VALUE_FLAGS = new Set([
+  '-chdir', '-var', '-var-file', '-target', '-replace', '-state', '-state-out', '-backup', '-lock-timeout', '-parallelism',
+]);
+
+function unescapeJqQuotes(raw: string): string {
+  return raw.replace(/(\\*)\\"/g, (fullMatch, slashes: string) => (slashes.length % 2 === 0 ? `${slashes}"` : fullMatch));
+}
+
+function exitBlocked(hint: string): never {
+  console.error(`\n   💡 AGENT HINT: ${hint}\n${AUTONOMOUS_HEALING_MSG}`);
+  process.exit(1);
+}
 
 function collectSubcommands(args: readonly string[], valueFlags: ReadonlySet<string>): string[] {
   const pos: string[] = [];
@@ -31,47 +49,45 @@ function collectSubcommands(args: readonly string[], valueFlags: ReadonlySet<str
   return pos;
 }
 
-function handleCloudAndPackageAuth(cmdBasename: string, args: string[]): void {
-  const cloudCliCmds = [
-    'wrangler', 'vercel', 'netlify', 'firebase', 'heroku', 'supabase', 'stripe', 'fly', 'flyctl', 'expo', 'eas',
-    'wrangler.cmd', 'vercel.cmd', 'netlify.cmd', 'firebase.cmd', 'heroku.cmd', 'supabase.cmd',
-    'stripe.exe', 'fly.exe', 'flyctl.exe', 'expo.cmd', 'eas.cmd',
-  ];
-  const cloudPos = collectSubcommands(args, CLOUD_VALUE_FLAGS);
-  if (cloudCliCmds.includes(cmdBasename)) {
+const CLOUD_CLI_CMDS = new Set([
+  'wrangler', 'vercel', 'netlify', 'firebase', 'heroku', 'supabase', 'stripe', 'fly', 'flyctl', 'expo', 'eas',
+  'wrangler.cmd', 'vercel.cmd', 'netlify.cmd', 'firebase.cmd', 'heroku.cmd', 'supabase.cmd',
+  'stripe.exe', 'fly.exe', 'flyctl.exe', 'expo.cmd', 'eas.cmd',
+]);
+const TRACKER_CMDS = new Set(['jira', 'jira.exe', 'jira.cmd', 'linear', 'linear.exe', 'linear.cmd', 'slack', 'slack.exe', 'slack.cmd']);
+
+function handleCloudAndPackageAuth(cmdBasename: string, args: string[], onSync?: () => void): void {
+  if (CLOUD_CLI_CMDS.has(cmdBasename)) {
+    const cloudPos = collectSubcommands(args, CLOUD_VALUE_FLAGS);
     if (cloudPos[0] === 'login' || (cloudPos[0] === 'auth' && cloudPos[1] === 'login')) {
-      console.error(`\n   💡 AGENT HINT: '${cmdBasename} login' is highly interactive and will hang. Use API tokens via environment variables instead.\n${AUTONOMOUS_HEALING_MSG}`);
-      process.exit(1);
+      exitBlocked(`'${cmdBasename} login' is highly interactive and will hang. Use API tokens via environment variables instead.`);
     }
     const subCmd = cloudPos[0] ?? '';
     if (['init', 'create'].includes(subCmd) && !args.includes('-y') && !args.includes('--yes')) {
-      console.error(`\n   🛠️ AUTONOMOUS HEALING: '${cmdBasename} ${subCmd}' is highly interactive. Automatically injecting '-y' to prevent hanging... (Frictionless Recovery)`);
       args.push('-y');
+      onSync?.();
+      console.error(`\n   🛠️ AUTONOMOUS HEALING: '${cmdBasename} ${subCmd}' is highly interactive. Automatically injecting '-y' to prevent hanging... (Frictionless Recovery)`);
     }
   }
 
-  const trackerCmds = ['jira', 'jira.exe', 'jira.cmd', 'linear', 'linear.exe', 'linear.cmd', 'slack', 'slack.exe', 'slack.cmd'];
-  if (trackerCmds.includes(cmdBasename)) {
+  if (TRACKER_CMDS.has(cmdBasename)) {
     const trackerPos = collectSubcommands(args, CLOUD_VALUE_FLAGS);
     if ((trackerPos[0] === 'login' || trackerPos[0] === 'auth') && !args.includes('--token')) {
-      console.error(`\n   💡 AGENT HINT: '${cmdBasename} login/auth' is interactive. Blocking execution. Use '--token' to bypass.\n${AUTONOMOUS_HEALING_MSG}`);
-      process.exit(1);
+      exitBlocked(`'${cmdBasename} login/auth' is interactive. Blocking execution. Use '--token' to bypass.`);
     }
   }
 
   if (['cargo', 'cargo.exe'].includes(cmdBasename)) {
     const cargoPos = collectSubcommands(args, new Set(['--manifest-path', '--target-dir', '--package', '-p', '--features', '--bin']));
     if (cargoPos[0] === 'login' || cargoPos[0] === 'publish') {
-      console.error(`\n   💡 AGENT HINT: 'cargo login/publish' is interactive. Blocking execution.\n${AUTONOMOUS_HEALING_MSG}`);
-      process.exit(1);
+      exitBlocked(`'cargo login/publish' is interactive. Blocking execution.`);
     }
   }
 
   if (['aws', 'aws.exe', 'aws.cmd'].includes(cmdBasename)) {
     const awsPos = collectSubcommands(args, new Set(['--profile', '--region', '--output', '--endpoint-url']));
     if (awsPos[0] === 'configure') {
-      console.error(`\n   💡 AGENT HINT: 'aws configure' is interactive. Use environment variables instead.\n${AUTONOMOUS_HEALING_MSG}`);
-      process.exit(1);
+      exitBlocked(`'aws configure' is interactive. Use environment variables instead.`);
     }
   }
 
@@ -79,22 +95,46 @@ function handleCloudAndPackageAuth(cmdBasename: string, args: string[]): void {
     const gPos = collectSubcommands(args, GCLOUD_VALUE_FLAGS);
     const isInteractiveAuth = gPos[0] === 'auth' && (gPos[1] === 'login' || (gPos[1] === 'application-default' && gPos[2] !== 'print-access-token'));
     if (isInteractiveAuth) {
-      console.error(`\n   💡 AGENT HINT: 'gcloud auth login' / 'application-default' is interactive. Use service accounts instead.\n${AUTONOMOUS_HEALING_MSG}`);
-      process.exit(1);
+      exitBlocked(`'gcloud auth login' / 'application-default' is interactive. Use service accounts instead.`);
     }
   }
 
   if (['terraform', 'terraform.exe', 'tofu', 'tofu.exe'].includes(cmdBasename)) {
-    const tfPos = collectSubcommands(args, new Set(['-chdir']));
+    const tfPos = collectSubcommands(args, TF_VALUE_FLAGS);
     const subCmd = tfPos[0] ?? '';
-    if (['apply', 'destroy'].includes(subCmd) && !args.includes('-auto-approve')) {
+    const hasPlanFile = subCmd === 'apply' && tfPos.length > 1;
+    if (['apply', 'destroy'].includes(subCmd) && !hasPlanFile && !args.includes('-auto-approve')) {
+      let subIdx = -1;
+      for (let k = 0; k < args.length; k++) {
+        const a = args[k];
+        if (a === undefined || a === '--') break;
+        if (TF_VALUE_FLAGS.has(a)) { k++; continue; }
+        if (!a.startsWith('-')) { subIdx = k; break; }
+      }
+      args.splice(subIdx !== -1 ? subIdx + 1 : args.length, 0, '-auto-approve');
+      onSync?.();
       console.error(`\n   🛠️ AUTONOMOUS HEALING: Automatically injecting '-auto-approve' into ${cmdBasename} ${subCmd} to prevent prompt hanging... (Frictionless Recovery)`);
-      args.push('-auto-approve');
     }
   }
 }
 
-function normalizeGhJsonAndJqArgs(args: string[]): void {
+const GH_LOWERCASE_JSON_FIELDS = new Set([
+  'additions', 'assignees', 'assets', 'author', 'body', 'closed', 'comments', 'commits',
+  'conclusion', 'created', 'deletions', 'description', 'digest', 'email', 'environment',
+  'event', 'files', 'id', 'jobs', 'labels', 'language', 'languages', 'license', 'lines',
+  'login', 'merged', 'milestone', 'name', 'number', 'owner', 'parent', 'path', 'project',
+  'reactions', 'ref', 'repository', 'reviews', 'sha', 'size', 'state', 'status', 'tag',
+  'title', 'topics', 'type', 'updated', 'url', 'user', 'value', 'values', 'version',
+  'visibility', 'watchers', 'workflow',
+]);
+
+function isLikelyGhJsonFieldToken(tok: string): boolean {
+  if (!/^[a-zA-Z][a-zA-Z0-9_]*$/.test(tok)) return false;
+  return /[A-Z]/.test(tok) || GH_LOWERCASE_JSON_FIELDS.has(tok);
+}
+
+function normalizeGhJsonAndJqArgs(args: string[], onSync?: () => void): void {
+  const isSearchCmd = args.find(a => !a.startsWith('-')) === 'search';
   for (let i = 0; i < args.length; i++) {
     const currentArg = args[i];
     if (currentArg === undefined) continue;
@@ -104,7 +144,9 @@ function normalizeGhJsonAndJqArgs(args: string[]): void {
       let sawCommaToken = false;
       while (j < args.length) {
         const tok = args[j];
-        if (tok === undefined || tok.startsWith('-') || /^\d+$/.test(tok) || /^https?:\/\//i.test(tok)) break;
+        if (tok === undefined || !/^[a-zA-Z][a-zA-Z0-9_]*(?:(?:\s*,\s*|\s+)[a-zA-Z][a-zA-Z0-9_]*)*,?$/.test(tok)) break;
+        const prevTok = fields[fields.length - 1];
+        if (prevTok !== undefined && !prevTok.endsWith(',') && (isSearchCmd || !isLikelyGhJsonFieldToken(tok))) break;
         fields.push(tok);
         j++;
         if (tok.includes(',')) sawCommaToken = true;
@@ -114,30 +156,38 @@ function normalizeGhJsonAndJqArgs(args: string[]): void {
         const rawJoined = fields.join(',');
         const normalized = rawJoined.trim().split(/[\s,]+/).filter(Boolean).join(',');
         if (fields.length > 1 || rawJoined !== normalized) {
-          console.error(`\n   🛠️ AUTONOMOUS HEALING: Normalizing gh --json fields from '${fields.join(' ')}' to '${normalized}'... (Frictionless Recovery)`);
           args.splice(i + 1, fields.length, normalized);
+          onSync?.();
+          console.error(`\n   🛠️ AUTONOMOUS HEALING: Normalizing gh --json fields from '${fields.join(' ')}' to '${normalized}'... (Frictionless Recovery)`);
         }
       }
     } else if (currentArg.startsWith('--json=')) {
       const jsonVal = currentArg.slice('--json='.length);
       if (jsonVal.includes(' ') || jsonVal.includes(', ')) {
         const normalized = jsonVal.trim().split(/[\s,]+/).filter(Boolean).join(',');
-        console.error(`\n   🛠️ AUTONOMOUS HEALING: Normalizing gh --json fields from '${jsonVal}' to '${normalized}'... (Frictionless Recovery)`);
         args[i] = `--json=${normalized}`;
+        onSync?.();
+        console.error(`\n   🛠️ AUTONOMOUS HEALING: Normalizing gh --json fields from '${jsonVal}' to '${normalized}'... (Frictionless Recovery)`);
       }
     } else if (currentArg === '--jq' && i + 1 < args.length) {
       const jqArg = args[i + 1];
       if (jqArg !== undefined && jqArg.includes('\\"')) {
-        const normalized = jqArg.replace(/\\"/g, '"');
-        console.error(`\n   🛠️ AUTONOMOUS HEALING: Healing escaped quotes in gh --jq expression from '${jqArg}' to '${normalized}'... (Frictionless Recovery)`);
-        args[i + 1] = normalized;
+        const normalized = unescapeJqQuotes(jqArg);
+        if (normalized !== jqArg) {
+          args[i + 1] = normalized;
+          onSync?.();
+          console.error(`\n   🛠️ AUTONOMOUS HEALING: Healing escaped quotes in gh --jq expression from '${jqArg}' to '${normalized}'... (Frictionless Recovery)`);
+        }
       }
     } else if (currentArg.startsWith('--jq=')) {
       const jqVal = currentArg.slice('--jq='.length);
       if (jqVal.includes('\\"')) {
-        const normalized = jqVal.replace(/\\"/g, '"');
-        console.error(`\n   🛠️ AUTONOMOUS HEALING: Healing escaped quotes in gh --jq expression from '${jqVal}' to '${normalized}'... (Frictionless Recovery)`);
-        args[i] = `--jq=${normalized}`;
+        const normalized = unescapeJqQuotes(jqVal);
+        if (normalized !== jqVal) {
+          args[i] = `--jq=${normalized}`;
+          onSync?.();
+          console.error(`\n   🛠️ AUTONOMOUS HEALING: Healing escaped quotes in gh --jq expression from '${jqVal}' to '${normalized}'... (Frictionless Recovery)`);
+        }
       }
     }
   }
@@ -238,6 +288,7 @@ function handleGhEditAndRunGuards(
   posArgs: readonly string[],
   stdin: string | undefined,
   hasFlagWithPrefix: (flags: readonly string[]) => boolean,
+  onSync?: () => void,
 ): boolean {
   return match([subCmd1, subCmd2])
     .with(['run', 'view'], () => {
@@ -245,9 +296,10 @@ function handleGhEditAndRunGuards(
         console.error(`\n   💡 AGENT HINT: If the job is still in progress, 'gh run view --log' will fail with code 1. Do NOT poll in a tight loop. Instead, use your 'schedule' tool to set a 60-second timer to wait asynchronously.\n`);
         process.exit(1);
       }
-      if (!args.includes('--json') && !args.includes('--log-failed') && !args.includes('--exit-status') && !args.some(a => a === '-v' || a.startsWith('--verbose'))) {
-        console.error(`\n   🛠️ AUTONOMOUS HEALING: Automatically injecting '--json' into gh run view command to output structured data... (Frictionless Recovery)`);
+      if (!args.some((a) => a === '--json' || a.startsWith('--json=')) && !args.includes('--log-failed') && !args.includes('--exit-status') && !args.some(a => a === '-v' || a.startsWith('--verbose'))) {
         args.push('--json', 'databaseId,name,status,conclusion,url');
+        onSync?.();
+        console.error(`\n   🛠️ AUTONOMOUS HEALING: Automatically injecting '--json' into gh run view command to output structured data... (Frictionless Recovery)`);
       }
       return true;
     })
@@ -263,16 +315,21 @@ function handleGhEditAndRunGuards(
       return true;
     })
     .with(['run', P.union('rerun', 'download')], ([, action]) => {
-      if (args.length <= 2) exitBlockedGh(`'gh run ${action}' is interactive without a run ID. Blocking execution.`);
+      const nonInteractiveByFlag = action === 'download'
+        ? hasFlagWithPrefix(['-n', '--name', '-p', '--pattern'])
+        : hasFlagWithPrefix(['-j', '--job']);
+      if (!nonInteractiveByFlag && posArgs.length <= 2) {
+        exitBlockedGh(`'gh run ${action}' is interactive without a run ID. Blocking execution.`);
+      }
       return true;
     })
     .with(['issue', 'transfer'], () => {
-      if (args.length <= 3) exitBlockedGh(`'gh issue transfer' is interactive without issue and repo args. Blocking execution.`);
+      if (posArgs.length <= 3) exitBlockedGh(`'gh issue transfer' is interactive without issue and repo args. Blocking execution.`);
       return true;
     })
     .with(['codespace', 'ssh'], () => exitBlockedGh(`'gh codespace ssh' runs an interactive shell. Blocking execution.`))
     .with(['gist', 'create'], () => {
-      if (args.length <= 2 && !stdin) exitBlockedGh(`'gh gist create' is interactive without files or stdin. Blocking execution.`);
+      if (posArgs.length <= 2 && (stdin === undefined || stdin.length === 0)) exitBlockedGh(`'gh gist create' is interactive without files or stdin. Blocking execution.`);
       return true;
     })
     .otherwise(() => false);
@@ -283,6 +340,7 @@ function handleGhReadJsonGuards(
   subCmd2: string | undefined,
   args: string[],
   posArgs: readonly string[],
+  onSync?: () => void,
 ): void {
   match([subCmd1, subCmd2])
     .with(['pr', 'checkout'], () => {
@@ -296,13 +354,14 @@ function handleGhReadJsonGuards(
     })
     .with([P.union('pr', 'issue', 'repo', 'run', 'release'), P.union('list', 'status', 'view')], () => {
       if (!args.some(a => a === '--json' || a.startsWith('--json='))) {
-        console.error(`\n   🛠️ AUTONOMOUS HEALING: Automatically injecting '--json' into gh command to output structured data... (Frictionless Recovery)`);
         let jsonFields = 'url';
         if (subCmd1 === 'pr' || subCmd1 === 'issue') jsonFields = 'number,title,state,url';
         if (subCmd1 === 'repo') jsonFields = 'name,owner,url';
         if (subCmd1 === 'run') jsonFields = 'databaseId,name,status,conclusion,url';
         if (subCmd1 === 'release') jsonFields = 'tagName,name,createdAt,isDraft,isPrerelease';
         args.push('--json', jsonFields);
+        onSync?.();
+        console.error(`\n   🛠️ AUTONOMOUS HEALING: Automatically injecting '--json' into gh command to output structured data... (Frictionless Recovery)`);
       }
     })
     .with(['search', P._], () => {
@@ -313,47 +372,52 @@ function handleGhReadJsonGuards(
     .otherwise(() => {});
 }
 
-function handleGhCommandGuards(args: string[], posArgs: string[], stdin: string | undefined): void {
+function handleGhCommandGuards(args: string[], posArgs: string[], stdin: string | undefined, onSync?: () => void): void {
   const subCmd1 = posArgs[0];
   const subCmd2 = posArgs[1];
   const hasFlagWithPrefix = (flags: readonly string[]): boolean =>
     args.some(a => flags.includes(a) || flags.some(f => a.startsWith(`${f}=`)));
   if (handleGhPrAndRepoCreateGuards(subCmd1, subCmd2, args, hasFlagWithPrefix)) return;
   if (handleGhReleaseRepoSecretGuards(subCmd1, subCmd2, args, posArgs, stdin, hasFlagWithPrefix)) return;
-  if (handleGhEditAndRunGuards(subCmd1, subCmd2, args, posArgs, stdin, hasFlagWithPrefix)) return;
-  handleGhReadJsonGuards(subCmd1, subCmd2, args, posArgs);
+  if (handleGhEditAndRunGuards(subCmd1, subCmd2, args, posArgs, stdin, hasFlagWithPrefix, onSync)) return;
+  handleGhReadJsonGuards(subCmd1, subCmd2, args, posArgs, onSync);
+}
+
+function sliceBeforeDoubleDash(args: readonly string[]): readonly string[] {
+  const ddIdx = args.indexOf('--');
+  return ddIdx === -1 ? args : args.slice(0, ddIdx);
+}
+
+function hasAnyFlagOrPrefix(flags: readonly string[], names: readonly string[]): boolean {
+  return flags.some(a => names.some(f => a === f || a.startsWith(`${f}=`)));
 }
 
 function handleInfraAuthGuards(cmdBasename: string, args: readonly string[], envOverrides: Record<string, string>): void {
   if (['az', 'az.cmd', 'az.exe'].includes(cmdBasename)) {
     envOverrides['AZURE_CORE_NO_COLOR'] = '1';
     envOverrides['AZURE_CORE_COLLECT_TELEMETRY'] = '0';
-    const azPos = collectSubcommands(args, new Set(['--subscription', '--output', '-o', '--query']));
-    const subCmd = azPos[0];
-    if (subCmd === 'interactive') {
-      console.error(`\n   💡 AGENT HINT: 'az interactive' opens an interactive shell and will hang. Blocking execution.\n${AUTONOMOUS_HEALING_MSG}`);
-      process.exit(1);
-    }
+    const subCmd = collectSubcommands(args, new Set(['--subscription', '--output', '-o', '--query']))[0];
+    if (subCmd === 'interactive') exitBlocked(`'az interactive' opens an interactive shell and will hang. Blocking execution.`);
     if (subCmd === 'login') {
-      const hasServicePrincipal = args.includes('--service-principal') || args.includes('--identity') || args.includes('--managed-identity');
-      if (!hasServicePrincipal) {
-        console.error(`\n   💡 AGENT HINT: 'az login' without --service-principal/--identity is interactive. Blocking execution.\n${AUTONOMOUS_HEALING_MSG}`);
-        process.exit(1);
+      const loginFlags = sliceBeforeDoubleDash(args);
+      if (!loginFlags.some(a => ['--service-principal', '--identity', '--managed-identity', '-i'].includes(a))) {
+        exitBlocked(`'az login' without --service-principal/--identity is interactive. Blocking execution.`);
       }
     }
   }
 
   if (['ansible-vault', 'ansible-vault.exe'].includes(cmdBasename)) {
-    if (args.includes('--ask-vault-pass')) {
-      console.error(`\n   💡 AGENT HINT: 'ansible-vault --ask-vault-pass' prompts interactively for a password. Use '--vault-password-file' or '--vault-id'.\n${AUTONOMOUS_HEALING_MSG}`);
-      process.exit(1);
+    const avFlags = sliceBeforeDoubleDash(args);
+    if (avFlags.includes('--version')) return;
+    if (avFlags.some(a => a === '--ask-vault-pass' || a === '--ask-vault-password' || a === '-J')) {
+      exitBlocked(`'ansible-vault --ask-vault-pass/-J' prompts interactively for a password. Use '--vault-password-file' or '--vault-id'.`);
     }
-    const hasPasswordSource = args.some(
-      a => a === '--vault-password-file' || a.startsWith('--vault-password-file=') || a === '--vault-id' || a.startsWith('--vault-id='),
-    );
-    if (!hasPasswordSource) {
-      console.error(`\n   💡 AGENT HINT: 'ansible-vault' without --vault-password-file or --vault-id will prompt for a password. Blocking execution.\n${AUTONOMOUS_HEALING_MSG}`);
-      process.exit(1);
+    if (!hasAnyFlagOrPrefix(avFlags, ['--vault-password-file', '--vault-id'])) {
+      exitBlocked(`'ansible-vault' without --vault-password-file or --vault-id will prompt for a password. Blocking execution.`);
+    }
+    const avPos = collectSubcommands(args, new Set(['--vault-password-file', '--vault-id', '--new-vault-password-file', '--new-vault-id', '--output']));
+    if (avPos[0] === 'rekey' && !hasAnyFlagOrPrefix(avFlags, ['--new-vault-password-file', '--new-vault-id'])) {
+      exitBlocked(`'ansible-vault rekey' without --new-vault-password-file or --new-vault-id will prompt for the new password. Blocking execution.`);
     }
   }
 }
@@ -361,8 +425,9 @@ function handleInfraAuthGuards(cmdBasename: string, args: readonly string[], env
 export function cloudCliInterceptor({ cmdBasename, args, envOverrides, payload }: ExecutionContext): void {
   const safeArgs = args;
   if (safeArgs.includes('--help') || safeArgs.includes('-h')) return;
+  const syncArgs = (): void => { if (payload.type === 'command') payload.args = safeArgs; };
 
-  handleCloudAndPackageAuth(cmdBasename, safeArgs);
+  handleCloudAndPackageAuth(cmdBasename, safeArgs, syncArgs);
 
   const ghCmds = ['gh', 'gh.exe', 'gh.cmd'];
   if (ghCmds.includes(cmdBasename) && payload.type === 'command') {
@@ -370,13 +435,10 @@ export function cloudCliInterceptor({ cmdBasename, args, envOverrides, payload }
     envOverrides['GH_NO_UPDATE_NOTIFIER'] = '1';
     envOverrides['NO_COLOR'] = '1';
     envOverrides['GH_PAGER'] = '';
-    if (safeArgs.includes('--web')) {
-      console.error(`\n   💡 AGENT HINT: 'gh ... --web' attempts to open a browser window and will hang indefinitely. Blocking execution.\n${AUTONOMOUS_HEALING_MSG}`);
-      process.exit(1);
-    }
-    normalizeGhJsonAndJqArgs(safeArgs);
+    if (safeArgs.includes('--web')) exitBlocked(`'gh ... --web' attempts to open a browser window and will hang indefinitely. Blocking execution.`);
+    normalizeGhJsonAndJqArgs(safeArgs, syncArgs);
     const posArgs = collectSubcommands(safeArgs, GH_VALUE_FLAGS);
-    handleGhCommandGuards(safeArgs, posArgs, payload.stdin);
+    handleGhCommandGuards(safeArgs, posArgs, payload.stdin, syncArgs);
   }
 
   handleInfraAuthGuards(cmdBasename, safeArgs, envOverrides);

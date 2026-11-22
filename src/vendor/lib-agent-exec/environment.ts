@@ -165,7 +165,7 @@ export function buildEnvironment(payloadEnv?: Record<string, string | number | b
   if (payloadEnv) {
     for (const [key, value] of Object.entries(payloadEnv)) {
       if (IMMUTABLE_ENV_OVERRIDES.has(key.toUpperCase())) {
-        recordAgentIssue('IMMUTABLE_ENV_OVERRIDE', `Agent attempted to override immutable env var: ${key}`, { key, value });
+        recordAgentIssue('IMMUTABLE_ENV_OVERRIDE', `Agent attempted to override immutable env var: ${key}`, { envVar: key });
         console.error(`\n   💡 AGENT HINT: The environment variable '${key}' is immutable to prevent hanging and cannot be overridden.`);
         continue;
       }

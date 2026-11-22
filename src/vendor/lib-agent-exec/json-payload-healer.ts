@@ -1,6 +1,6 @@
 // @ts-nocheck
 import { tryPowershellObject } from './json-powershell-object.js';
-import { tryTokenAwareJson } from './json-token-scan.js';
+import { tryTokenAwareJson, stripTrailingCommasOutsideStrings } from './json-token-scan.js';
 
 const KNOWN_PAYLOAD_KEYS = [
   'type', 'command', 'args', 'cwd', 'env', 'stdin', 'stdoutFile', 'stderrFile',
@@ -42,24 +42,77 @@ function tryUnescapeQuotes(trimmed: string): unknown | undefined {
   return tryParse(trimmed.replace(/\\"/g, '"'));
 }
 
-// [INVARIANT]: Key quoting and single-quote repair run on the comma-stripped candidate.
+function scanQuotedString(source: string, start: number, quote: string): { chunk: string; nextIdx: number } {
+  let i = start + 1;
+  while (i < source.length) {
+    const ch = source[i];
+    if (ch === '\\' && i + 1 < source.length) {
+      i += 2;
+      continue;
+    }
+    if (ch === quote) {
+      return { chunk: source.slice(start, i + 1), nextIdx: i };
+    }
+    i += 1;
+  }
+  return { chunk: source.slice(start), nextIdx: source.length - 1 };
+}
+
+// [INVARIANT]: Only quote bare JS object keys outside quoted strings so embedded TS/Python syntax in `code` stays intact.
+function quoteUnquotedObjectKeys(source: string): string {
+  let out = '';
+  let expectKey = false;
+  for (let i = 0; i < source.length; i++) {
+    const ch = source[i];
+    if (ch === undefined) continue;
+    if (ch === '"' || ch === "'") {
+      const scanned = scanQuotedString(source, i, ch);
+      out += scanned.chunk;
+      i = scanned.nextIdx;
+      expectKey = false;
+      continue;
+    }
+    if (ch === '{' || ch === ',') {
+      expectKey = true;
+      out += ch;
+      continue;
+    }
+    if (/\s/.test(ch)) {
+      out += ch;
+      continue;
+    }
+    if (expectKey) {
+      const rest = source.slice(i);
+      const keyMatch = /^([a-zA-Z0-9_]+)(\s*:)/.exec(rest);
+      if (keyMatch?.[1] !== undefined && keyMatch[2] !== undefined) {
+        out += `"${keyMatch[1]}"${keyMatch[2]}`;
+        i += keyMatch[0].length - 1;
+        expectKey = false;
+        continue;
+      }
+      expectKey = false;
+    }
+    out += ch;
+  }
+  return out;
+}
+
+function convertSingleQuotedTokens(source: string): string {
+  return stripTrailingCommasOutsideStrings(
+    source.replace(/"([^"\\]*(?:\\.[^"\\]*)*)"|'([^'\\]*(?:\\.[^'\\]*)*)'/g, (match: string, _dq: string | undefined, sq: string | undefined) => (
+      sq === undefined ? match : JSON.stringify(sq.replace(/\\'/g, "'"))
+    ))
+  );
+}
+
+// [INVARIANT]: Each repair strategy derives from the immutable comma-stripped string rather than mutating shared state across strategies.
 function createRepairChain(trimmed: string): RepairChain {
-  let candidate = trimmed;
+  const commaStripped = stripTrailingCommasOutsideStrings(trimmed);
+  const keyQuoted = quoteUnquotedObjectKeys(commaStripped);
   return {
-    withoutTrailingCommas: () => {
-      candidate = candidate.replace(/,\s*([}\]])/g, '$1');
-      return tryParse(candidate);
-    },
-    withQuotedKeys: () => {
-      candidate = candidate.replace(/([{,]\s*)([a-zA-Z0-9_]+)\s*:/g, '$1"$2":');
-      return tryParse(candidate);
-    },
-    withSingleQuotes: () => {
-      const singleToDouble = candidate
-        .replace(/'([^'\\]*(?:\\.[^'\\]*)*)'/g, (_match, inner: string) => JSON.stringify(inner))
-        .replace(/,\s*([}\]])/g, '$1');
-      return tryParse(singleToDouble);
-    },
+    withoutTrailingCommas: () => tryParse(commaStripped),
+    withQuotedKeys: () => tryParse(keyQuoted),
+    withSingleQuotes: () => tryParse(convertSingleQuotedTokens(keyQuoted)) ?? tryParse(convertSingleQuotedTokens(commaStripped)),
   };
 }
 
@@ -95,13 +148,13 @@ function tryHealedQuotedStrings(trimmed: string): unknown | undefined {
 }
 
 function tryHealedQuotedStringsWithoutTrailingCommas(trimmed: string): unknown | undefined {
-  return tryParse(healQuotedJsonStrings(trimmed).replace(/,\s*([}\]])/g, '$1'));
+  return tryParse(stripTrailingCommasOutsideStrings(healQuotedJsonStrings(trimmed)));
 }
 
 function tryHealLooseEscapes(trimmed: string): unknown | undefined {
-  const healedEscapes = escapeStrayBackslashes(
-    trimmed.replace(/\\x([0-9a-fA-F]{2})/g, healHexEscape)
-  ).replace(/,\s*([}\]])/g, '$1');
+  const healedEscapes = stripTrailingCommasOutsideStrings(
+    escapeStrayBackslashes(trimmed.replace(/\\x([0-9a-fA-F]{2})/g, healHexEscape))
+  );
   return tryParse(healedEscapes);
 }
 

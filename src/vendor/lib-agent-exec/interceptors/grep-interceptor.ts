@@ -1,7 +1,7 @@
 // @ts-nocheck
 import fs from 'node:fs';
 import path from 'node:path';
-import { convertToWslPath, findPatternExprIndex, getPositionalArgs } from '../command-utils.js';
+import { convertToWslPath, findPatternExprIndex, FLAGS_WITH_ARG_BY_TOOL, getPositionalArgs } from '../command-utils.js';
 import { emitInterceptBanner } from '../utils.js';
 import { injectRecursiveGrepExclusions } from './grep-exclusions.js';
 import { unbundleSearchCommandArgs } from './search-flag-unpack.js';
@@ -29,17 +29,61 @@ function routeGrepToWsl(ctx: ExecutionContext, hasStdin: boolean): void {
   }
 }
 
-function hasGrepHelpOrVersion(args: string[]): boolean {
-  return args.some((arg) => arg === '-h' || arg === '--help' || arg === '-V' || arg === '--version');
+function collectGrepPositionalIndices(cmdBasename: string, args: readonly string[]): number[] {
+  const base = path.basename(cmdBasename).toLowerCase().replace(/\.exe$/, '');
+  const valueFlags = new Set(FLAGS_WITH_ARG_BY_TOOL[base] ?? FLAGS_WITH_ARG_BY_TOOL['grep'] ?? []);
+  const indices: number[] = [];
+  let seenDoubleDash = false;
+  for (let i = 0; i < args.length; i++) {
+    const arg = args[i];
+    if (arg === undefined) continue;
+    if (!seenDoubleDash && arg === '--') { seenDoubleDash = true; continue; }
+    if (!seenDoubleDash && valueFlags.has(arg)) { i++; continue; }
+    if (!seenDoubleDash && arg.startsWith('-')) continue;
+    indices.push(i);
+  }
+  return indices;
 }
 
-function hasGrepPatternFlag(args: string[]): boolean {
-  return args.some((arg) =>
-    arg === '-e' || (arg.startsWith('-e') && !arg.startsWith('--')) ||
-    arg === '--regexp' || arg.startsWith('--regexp=') ||
-    arg === '-f' || (arg.startsWith('-f') && !arg.startsWith('--')) ||
-    arg === '--file' || arg.startsWith('--file=')
-  );
+function hasGrepHelpOrVersion(args: readonly string[], cmdBasename: string): boolean {
+  const base = path.basename(cmdBasename).toLowerCase().replace(/\.exe$/, '');
+  const valueFlags = new Set(FLAGS_WITH_ARG_BY_TOOL[base] ?? FLAGS_WITH_ARG_BY_TOOL['grep'] ?? []);
+  for (let i = 0; i < args.length; i++) {
+    const arg = args[i];
+    if (arg === undefined || arg === '--') break;
+    if (arg === '--help' || arg === '-V' || arg === '--version') return true;
+    if (valueFlags.has(arg)) i++;
+  }
+  return false;
+}
+
+function hasGrepPatternFlag(args: readonly string[], cmdBasename: string): boolean {
+  const base = path.basename(cmdBasename).toLowerCase().replace(/\.exe$/, '');
+  const valueFlags = new Set(FLAGS_WITH_ARG_BY_TOOL[base] ?? FLAGS_WITH_ARG_BY_TOOL['grep'] ?? []);
+  for (let i = 0; i < args.length; i++) {
+    const arg = args[i];
+    if (arg === undefined || arg === '--') break;
+    if (
+      arg === '-e' || (arg.startsWith('-e') && !arg.startsWith('--')) ||
+      arg === '--regexp' || arg.startsWith('--regexp=') ||
+      arg === '-f' || (arg.startsWith('-f') && !arg.startsWith('--')) ||
+      arg === '--file' || arg.startsWith('--file=')
+    ) {
+      return true;
+    }
+    if (valueFlags.has(arg)) i++;
+  }
+  return false;
+}
+
+function replacePositionalSlice(ctx: ExecutionContext, replaceCount: number, combinedPattern: string): void {
+  const posIndices = collectGrepPositionalIndices(ctx.cmdBasename, ctx.args).slice(0, replaceCount);
+  const firstIdx = posIndices[0];
+  if (firstIdx === undefined) return;
+  const removeSet = new Set(posIndices.slice(1));
+  ctx.args = ctx.args
+    .map((arg, idx) => (idx === firstIdx ? combinedPattern : arg))
+    .filter((_arg, idx) => !removeSet.has(idx));
 }
 
 function recombineGrepStdinPattern(
@@ -49,17 +93,10 @@ function recombineGrepStdinPattern(
   positionalArgs: string[],
 ): string[] {
   if (!hasStdin || hasPatternFlag || positionalArgs.length <= 1) return positionalArgs;
-  console.error(`\n   🛠️ AUTONOMOUS HEALING: Grep with stdin detected multiple positional arguments. Recombining into single pattern to prevent file target misinterpretation... (Frictionless Recovery)`);
   const combinedPattern = positionalArgs.join(' ');
-  let replaced = false;
-  ctx.args = ctx.args.filter((arg) => {
-    if (!positionalArgs.includes(arg)) return true;
-    if (!replaced) {
-      replaced = true;
-      return true;
-    }
-    return false;
-  }).map((arg) => positionalArgs.includes(arg) ? combinedPattern : arg);
+  replacePositionalSlice(ctx, positionalArgs.length, combinedPattern);
+  if (ctx.payload.type === 'command') ctx.payload.args = ctx.args;
+  console.error(`\n   🛠️ AUTONOMOUS HEALING: Grep with stdin detected multiple positional arguments. Recombining into single pattern to prevent file target misinterpretation... (Frictionless Recovery)`);
   return [combinedPattern];
 }
 
@@ -102,17 +139,9 @@ function recombineGrepMultiwordPattern(
   if (intermediateArgs.some((arg) => isGrepPathLike(arg, cwd))) return positionalArgs;
   const patternParts = positionalArgs.slice(0, -1);
   const combinedPattern = patternParts.join(' ');
+  replacePositionalSlice(ctx, patternParts.length, combinedPattern);
+  if (ctx.payload.type === 'command') ctx.payload.args = ctx.args;
   console.error(`\n   🛠️ AUTONOMOUS HEALING: Detected unquoted multi-word search pattern in '${ctx.cmdBasename}'. Recombining into a single pattern... (Frictionless Recovery)\x1b[0m`);
-  let replaced = false;
-  const first = patternParts[0];
-  ctx.args = ctx.args.filter((arg) => {
-    if (!patternParts.includes(arg)) return true;
-    if (!replaced && arg === first) {
-      replaced = true;
-      return true;
-    }
-    return false;
-  }).map((arg) => arg === first ? combinedPattern : arg);
   return getPositionalArgs(ctx.cmdBasename, ctx.args);
 }
 
@@ -129,13 +158,16 @@ function swapGrepReversedArgs(
   const cwd = ctx.payload.cwd ?? ctx.cwd;
   if (!isLikelyDirectoryArg(first, cwd) || isLikelyDirectoryArg(second, cwd)) return positionalArgs;
   if (isSecondExistingTargetOnly(first, second, cwd)) return positionalArgs;
-  console.error(`\n   🛠️ AUTONOMOUS HEALING: Detected reversed arguments in '${ctx.cmdBasename}' (directory before pattern). Swapping arguments to place pattern first... (Frictionless Recovery)\x1b[0m`);
-  const idx0 = ctx.args.indexOf(first);
-  const idx1 = ctx.args.indexOf(second);
-  if (idx0 === -1 || idx1 === -1) return positionalArgs;
+  const posIndices = collectGrepPositionalIndices(ctx.cmdBasename, ctx.args);
+  const idx0 = posIndices[0];
+  const idx1 = posIndices[1];
+  if (idx0 === undefined || idx1 === undefined) return positionalArgs;
   const tmp = ctx.args[idx0];
+  if (tmp === undefined || ctx.args[idx1] === undefined) return positionalArgs;
   ctx.args[idx0] = ctx.args[idx1];
   ctx.args[idx1] = tmp;
+  if (ctx.payload.type === 'command') ctx.payload.args = ctx.args;
+  console.error(`\n   🛠️ AUTONOMOUS HEALING: Detected reversed arguments in '${ctx.cmdBasename}' (directory before pattern). Swapping arguments to place pattern first... (Frictionless Recovery)\x1b[0m`);
   return [second, first];
 }
 
@@ -145,28 +177,38 @@ function blockEmptyGrep(ctx: ExecutionContext, hasStdin: boolean, hasPatternFlag
   process.exit(1);
 }
 
-function detectGrepRecursive(args: string[]): boolean {
-  return args.some((arg) =>
-    arg === '-r' || arg === '-R' || arg === '--recursive'
-    || (arg.startsWith('-') && !arg.startsWith('--') && !arg.startsWith('-e') && !arg.startsWith('-f') && (arg.includes('r') || arg.includes('R')))
-  );
+function detectGrepRecursive(args: readonly string[], cmdBasename: string): boolean {
+  const base = path.basename(cmdBasename).toLowerCase().replace(/\.exe$/, '');
+  const valueFlags = new Set(FLAGS_WITH_ARG_BY_TOOL[base] ?? FLAGS_WITH_ARG_BY_TOOL['grep'] ?? []);
+  for (let i = 0; i < args.length; i++) {
+    const arg = args[i];
+    if (arg === undefined || arg === '--') break;
+    if (arg === '-r' || arg === '-R' || arg === '--recursive') return true;
+    if (valueFlags.has(arg)) { i++; continue; }
+    if (arg.startsWith('-') && !arg.startsWith('--') && !arg.startsWith('-e') && !arg.startsWith('-f') && (arg.includes('r') || arg.includes('R'))) {
+      return true;
+    }
+  }
+  return false;
 }
 
 function grepCommandName(ctx: ExecutionContext): string {
   return ctx.cmdBasename.replace(/\.exe$/, '');
 }
 
-function injectGrepMissingTarget(ctx: ExecutionContext, isRecursive: boolean): boolean {
+function injectGrepMissingTarget(ctx: ExecutionContext, isRecursive: boolean, hasDotTarget: boolean): boolean {
   if (!isRecursive) {
-    console.error(`\n   💡 AGENT HINT: '${grepCommandName(ctx)}' called without file arguments and no recursive flag.`);
-    console.error(`\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Auto-injecting '-r' and '.' to search current directory recursively... (Frictionless Recovery)\x1b[0m`);
     ctx.args.unshift('-r');
     ctx.args.push('.');
+    if (ctx.payload.type === 'command') ctx.payload.args = ctx.args;
+    console.error(`\n   💡 AGENT HINT: '${grepCommandName(ctx)}' called without file arguments and no recursive flag.`);
+    console.error(`\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Auto-injecting '-r' and '.' to search current directory recursively... (Frictionless Recovery)\x1b[0m`);
     return true;
   }
-  if (!ctx.args.includes('.')) {
-    emitInterceptBanner(`\n   💡 AGENT INTERCEPT: Recursive '${grepCommandName(ctx)}' missing target directory argument. Auto-appending '.' as target directory... (Frictionless Recovery)`);
+  if (!hasDotTarget) {
     ctx.args.push('.');
+    if (ctx.payload.type === 'command') ctx.payload.args = ctx.args;
+    emitInterceptBanner(`\n   💡 AGENT INTERCEPT: Recursive '${grepCommandName(ctx)}' missing target directory argument. Auto-appending '.' as target directory... (Frictionless Recovery)`);
   }
   return isRecursive;
 }
@@ -177,40 +219,54 @@ function ensureGrepRecursiveSearch(
   hasPatternFlag: boolean,
   positionalArgs: string[],
 ): boolean {
-  const isRecursive = detectGrepRecursive(ctx.args);
+  const isRecursive = detectGrepRecursive(ctx.args, ctx.cmdBasename);
   if (hasStdin) return isRecursive;
   const targetFileArgs = hasPatternFlag ? positionalArgs : positionalArgs.slice(1);
-  if (targetFileArgs.length === 0) return injectGrepMissingTarget(ctx, isRecursive);
+  if (targetFileArgs.length === 0) return injectGrepMissingTarget(ctx, isRecursive, targetFileArgs.includes('.'));
   const cwd = ctx.payload.cwd ?? ctx.cwd;
   if (isRecursive || !targetFileArgs.some((arg) => isLikelyDirectoryArg(arg, cwd))) return isRecursive;
+  ctx.args.unshift('-r');
+  if (ctx.payload.type === 'command') ctx.payload.args = ctx.args;
   console.error(`\n   💡 AGENT HINT: '${grepCommandName(ctx)}' called with a directory target without recursive flag.`);
   console.error(`\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Auto-injecting '-r' to search directory recursively... (Frictionless Recovery)\x1b[0m`);
-  ctx.args.unshift('-r');
   return true;
 }
 
 function convertGrepPathsForWsl(ctx: ExecutionContext): void {
   if (ctx.payload.target !== 'wsl2') return;
   const patternIdx = findPatternExprIndex(ctx.cmdBasename, ctx.args);
-  ctx.args = ctx.args.map((arg, idx) => idx === patternIdx ? arg : convertToWslPath(arg));
+  const exempt = new Set<number>();
+  if (patternIdx !== -1) exempt.add(patternIdx);
+  for (let i = 0; i < ctx.args.length; i++) {
+    const arg = ctx.args[i];
+    if (arg === undefined || arg === '--') break;
+    if ((arg === '-e' || arg === '--regexp') && i + 1 < ctx.args.length) {
+      exempt.add(i + 1);
+      i++;
+    } else if ((arg.startsWith('-e') && arg.length > 2 && !arg.startsWith('--')) || arg.startsWith('--regexp=')) {
+      exempt.add(i);
+    }
+  }
+  ctx.args = ctx.args.map((arg, idx) => exempt.has(idx) ? arg : convertToWslPath(arg));
 }
 
 function applyRecursiveGrepGuards(ctx: ExecutionContext, isRecursive: boolean, targetPaths: readonly string[]): void {
   if (!isRecursive) return;
-  injectRecursiveGrepExclusions(ctx.args, targetPaths);
+  const syncArgs = (): void => { if (ctx.payload.type === 'command') ctx.payload.args = ctx.args; };
+  injectRecursiveGrepExclusions(ctx.args, targetPaths, syncArgs);
   if (!ctx.args.includes('-s') && !ctx.args.includes('--no-messages')) ctx.args.unshift('-s');
-  if (ctx.payload.target === 'wsl2' && (ctx.payload.timeoutMs === undefined || ctx.payload.timeoutMs <= 30000)) {
-    console.error(`\n   🛠️ AUTONOMOUS HEALING: Recursive grep on mounted filesystem detected. Auto-extending timeout to 60000ms to prevent premature aborts... (Frictionless Recovery)\x1b[0m`);
+  if (ctx.payload.target === 'wsl2' && (ctx.payload.timeoutMs === undefined || (ctx.payload.timeoutMs > 0 && ctx.payload.timeoutMs <= 30000))) {
     ctx.payload.timeoutMs = 60000;
+    syncArgs();
+    console.error(`\n   🛠️ AUTONOMOUS HEALING: Recursive grep on mounted filesystem detected. Auto-extending timeout to 60000ms to prevent premature aborts... (Frictionless Recovery)\x1b[0m`);
   }
 }
 
 export function handleGrepInterception(ctx: ExecutionContext, hasStdin: boolean): void {
-  if (!ctx.args) ctx.args = [];
   unbundleSearchCommandArgs(ctx);
   routeGrepToWsl(ctx, hasStdin);
-  if (hasGrepHelpOrVersion(ctx.args)) return;
-  const hasPatternFlag = hasGrepPatternFlag(ctx.args);
+  if (hasGrepHelpOrVersion(ctx.args, ctx.cmdBasename)) return;
+  const hasPatternFlag = hasGrepPatternFlag(ctx.args, ctx.cmdBasename);
   let positionalArgs = getPositionalArgs(ctx.cmdBasename, ctx.args);
   positionalArgs = recombineGrepStdinPattern(ctx, hasStdin, hasPatternFlag, positionalArgs);
   positionalArgs = recombineGrepMultiwordPattern(ctx, hasStdin, hasPatternFlag, positionalArgs);
@@ -219,5 +275,5 @@ export function handleGrepInterception(ctx: ExecutionContext, hasStdin: boolean)
   const isRecursive = ensureGrepRecursiveSearch(ctx, hasStdin, hasPatternFlag, positionalArgs);
   convertGrepPathsForWsl(ctx);
   const targetPaths = hasPatternFlag ? positionalArgs : positionalArgs.slice(1);
-  applyRecursiveGrepGuards(ctx, isRecursive, targetPaths);
+  applyRecursiveGrepGuards(ctx, !hasStdin && isRecursive, targetPaths);
 }

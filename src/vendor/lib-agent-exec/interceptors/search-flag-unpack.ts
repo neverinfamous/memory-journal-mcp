@@ -1,13 +1,13 @@
 // @ts-nocheck
-import { tokenizeArgs } from '../command-utils.js';
+import { RG_VALUE_FLAGS, tokenizeArgs } from '../command-utils.js';
 import { ExecutionContext } from './types.js';
 
 const BUNDLED_SHORT_FLAG = /^-[a-zA-Z0-9]+$/;
 const BUNDLED_LONG_FLAG = /^--[a-zA-Z0-9-]+$/;
 const SEARCH_VALUE_FLAGS = new Set([
-  '-e', '--regexp', '-f', '--file', '-g', '--glob', '--iglob', '-t', '--type', '-T', '--type-not',
-  '-E', '--encoding', '-r', '--replace', '-A', '-B', '-C', '-m', '-M', '-j', '--ignore-file',
-  '--max-count', '--max-depth', '--max-columns', '--exclude', '--exclude-dir', '--include',
+  ...RG_VALUE_FLAGS,
+  '--exclude', '--exclude-dir', '--exclude-from', '--include', '--include-from', '--label',
+  '-d', '-D', '--directories', '--devices',
 ]);
 
 function unpackBundledArg(arg: string): string[] | undefined {
@@ -45,8 +45,8 @@ export function unbundleSearchCommandArgs(ctx: ExecutionContext): boolean {
     unpackedArgs.push(arg);
   }
   if (!unbundledFlags) return false;
-  console.error(`\n   🛠️ AUTONOMOUS HEALING: Detected bundled search flags and pattern in a single argument. Unpacking arguments... (Frictionless Recovery)\x1b[0m`);
   ctx.args = unpackedArgs;
   if (ctx.payload.type === 'command') ctx.payload.args = ctx.args;
+  console.error(`\n   🛠️ AUTONOMOUS HEALING: Detected bundled search flags and pattern in a single argument. Unpacking arguments... (Frictionless Recovery)\x1b[0m`);
   return true;
 }

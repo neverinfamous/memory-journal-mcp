@@ -1,5 +1,8 @@
 // @ts-nocheck
 import { ProcessController } from './process-controller.js';
+import { isPidAlive } from './process-manager.js';
+import { resolvePackageProjectDir } from './interceptors/package-manager-js-rewrites.js';
+import { acquireValidationLock, classifyValidationCommand } from './validation-lock.js';
 import { ExecPayload } from './schema.js';
 
 import fs from 'node:fs';
@@ -9,16 +12,20 @@ import path from 'node:path';
 
 const WSL_LOCK_DIR = path.join(os.tmpdir(), 'agent-exec-wsl-lock');
 
-function isPidAlive(pid: number): boolean {
+function parsePositiveSafeInt(raw: string): number | null {
+  const trimmed = raw.trim();
+  if (!/^[1-9]\d*$/.test(trimmed)) return null;
+  const parsed = Number(trimmed);
+  return Number.isSafeInteger(parsed) ? parsed : null;
+}
+
+function pruneExpiredMutexDir(mutexPath: string): void {
   try {
-    process.kill(pid, 0);
-    return true;
-  } catch (err: unknown) {
-    if (typeof err === 'object' && err !== null && 'code' in err) {
-      return err.code === 'EPERM';
+    const st = fs.statSync(mutexPath, { throwIfNoEntry: false });
+    if (st !== undefined && Date.now() - st.mtimeMs > 15000) {
+      fs.rmdirSync(mutexPath);
     }
-    return false;
-  }
+  } catch { /* ignore */ }
 }
 
 async function tryAcquireMutex(mutexPath: string, deadlineMs: number): Promise<boolean> {
@@ -26,12 +33,10 @@ async function tryAcquireMutex(mutexPath: string, deadlineMs: number): Promise<b
     try {
       fs.mkdirSync(mutexPath); // Atomic operation
       return true;
-    } catch {
-      try {
-        if (Date.now() - fs.statSync(mutexPath).mtimeMs > 15000) {
-          fs.rmdirSync(mutexPath);
-        }
-      } catch { /* ignore */ }
+    } catch (err: unknown) {
+      const code = err !== null && typeof err === 'object' && 'code' in err ? err.code : undefined;
+      if (code !== undefined && code !== 'EEXIST') return false;
+      pruneExpiredMutexDir(mutexPath);
       await new Promise(r => setTimeout(r, 20 + Math.random() * 50));
     }
   }
@@ -46,8 +51,8 @@ function isLockFileStale(lPath: string, nowMs: number): boolean {
   const content = fs.readFileSync(lPath, 'utf8').trim();
   const mtimeMs = fs.statSync(lPath).mtimeMs;
   const ageMs = nowMs - mtimeMs;
-  const lockPid = Number.parseInt(content, 10);
-  if (!Number.isNaN(lockPid) && lockPid > 0) {
+  const lockPid = parsePositiveSafeInt(content);
+  if (lockPid !== null) {
     return !isPidAlive(lockPid) || ageMs > 7_200_000;
   }
   return ageMs > 10_000;
@@ -71,8 +76,13 @@ function countActiveAndPruneStaleLocks(): number {
 }
 
 export async function acquireWslLock(maxConcurrent = 4, timeoutMs = 30000): Promise<string> {
-  if (!fs.existsSync(WSL_LOCK_DIR)) {
-    try { fs.mkdirSync(WSL_LOCK_DIR, { recursive: true }); } catch { /* ignore */ }
+  try {
+    if (!fs.existsSync(WSL_LOCK_DIR)) {
+      fs.mkdirSync(WSL_LOCK_DIR, { recursive: true });
+    }
+  } catch (err: unknown) {
+    console.error(`⚠️ WSL lock dir creation failed: ${err instanceof Error ? err.message : String(err)}`);
+    return '';
   }
 
   const mutexPath = path.join(WSL_LOCK_DIR, 'mutex.dir');
@@ -82,19 +92,101 @@ export async function acquireWslLock(maxConcurrent = 4, timeoutMs = 30000): Prom
   while (Date.now() < deadlineMs) {
     const acquiredMutex = await tryAcquireMutex(mutexPath, deadlineMs);
     if (!acquiredMutex) break;
+    let writeFailed = false;
     try {
       const activeLockCount = countActiveAndPruneStaleLocks();
       if (activeLockCount < maxConcurrent) {
         fs.writeFileSync(lockFile, process.pid.toString(), { encoding: 'utf8', mode: 0o600 });
         return lockFile;
       }
-    } catch { /* ignore */ } finally {
+    } catch (err: unknown) {
+      writeFailed = true;
+      console.error(`⚠️ WSL lock file write failed: ${err instanceof Error ? err.message : String(err)}`);
+    } finally {
       releaseMutexDir(mutexPath);
     }
+    if (writeFailed) break;
     await new Promise(resolve => setTimeout(resolve, 100 + Math.random() * 100));
   }
-  // If we timeout, proceed without writing an overflow lock file so activeLockCount is not poisoned for subsequent callers
+  // If we timeout or cannot persist a lock file, proceed without poisoning activeLockCount
   return '';
+}
+
+function registerProcessCleanup(cleanupFn: () => void): void {
+  let done = false;
+  const releaseAll = () => {
+    if (done) return;
+    done = true;
+    try { cleanupFn(); } catch { /* ignore */ }
+    process.off('exit', releaseAll);
+    process.off('SIGINT', onSigint);
+    process.off('SIGTERM', onSigterm);
+    process.off('uncaughtException', onUncaught);
+  };
+  const onSignal = (sig: NodeJS.Signals) => {
+    releaseAll();
+    if (process.listenerCount(sig) === 0) process.kill(process.pid, sig);
+  };
+  const onSigint = () => onSignal('SIGINT');
+  const onSigterm = () => onSignal('SIGTERM');
+  const onUncaught = () => { releaseAll(); };
+  process.once('exit', releaseAll);
+  process.once('SIGINT', onSigint);
+  process.once('SIGTERM', onSigterm);
+  process.once('uncaughtException', onUncaught);
+}
+
+function deductTimeout(baseTimeoutMs: number | undefined, elapsedMs: number): number | undefined {
+  if (baseTimeoutMs === undefined || baseTimeoutMs <= 0) return undefined;
+  const floor = Math.min(5000, baseTimeoutMs);
+  return Math.max(floor, baseTimeoutMs - elapsedMs);
+}
+
+async function acquireExecutionLocks(
+  payload: ExecPayload,
+  cwd: string,
+  cmd: string,
+  args: string[],
+  env: Record<string, string | undefined>,
+  isJson: boolean,
+): Promise<number | undefined> {
+  let effectiveTimeoutMs: number | undefined;
+  if (payload.target === 'wsl2') {
+    const parsedConcurrency = parsePositiveSafeInt(process.env['AGENT_WSL_CONCURRENCY'] ?? '');
+    const maxConcurrency = parsedConcurrency ?? 4;
+    const lockWaitMs = payload.timeoutMs !== undefined && payload.timeoutMs > 0
+      ? Math.min(Math.max(1000, Math.floor(payload.timeoutMs * 0.5)), 45000)
+      : 30000;
+    const lockStartMs = Date.now();
+    const lockFile = await acquireWslLock(maxConcurrency, lockWaitMs);
+    effectiveTimeoutMs = deductTimeout(payload.timeoutMs, Date.now() - lockStartMs);
+    if (lockFile.length > 0) {
+      registerProcessCleanup(() => { if (fs.existsSync(lockFile)) fs.unlinkSync(lockFile); });
+    }
+  }
+
+  const logicalCmd = payload.type === 'command' ? payload.command : cmd;
+  const logicalArgs = payload.type === 'command' ? (payload.args ?? []) : args;
+  const classification = classifyValidationCommand(logicalCmd, logicalArgs);
+  if (classification !== null) {
+    const projectDir = resolvePackageProjectDir(logicalArgs, cwd);
+    const baseTimeout = effectiveTimeoutMs ?? payload.timeoutMs;
+    const customWaitMs = parsePositiveSafeInt(env['AGENT_EXEC_VALIDATION_LOCK_TIMEOUT_MS'] ?? process.env['AGENT_EXEC_VALIDATION_LOCK_TIMEOUT_MS'] ?? '');
+    const defaultWaitMs = baseTimeout !== undefined && baseTimeout > 0
+      ? Math.min(Math.max(15_000, Math.floor(baseTimeout * 0.5)), 120_000)
+      : 90_000;
+    const lockStartMs = Date.now();
+    const handle = await acquireValidationLock({
+      projectDir,
+      classification,
+      timeoutMs: customWaitMs ?? defaultWaitMs,
+      isJson,
+      env,
+    });
+    effectiveTimeoutMs = deductTimeout(baseTimeout, Date.now() - lockStartMs) ?? effectiveTimeoutMs;
+    if (handle !== null) registerProcessCleanup(handle.release);
+  }
+  return effectiveTimeoutMs;
 }
 
 export async function executeCommand(
@@ -110,42 +202,15 @@ export async function executeCommand(
     const hasUuid = args.some(a => typeof a === 'string' && a.startsWith('AGENT_EXEC_WSL_UUID='));
     if (!hasUuid) {
       if (isJson) {
-         console.log(JSON.stringify({ status: "error", message: `Execution Error: Target is 'wsl2', but AGENT_EXEC_WSL_UUID was not found in the execution arguments. You MUST route WSL2 execution through 'buildCommand' to prevent zombie processes.` }));
+        console.log(JSON.stringify({ status: "error", message: `Execution Error: Target is 'wsl2', but AGENT_EXEC_WSL_UUID was not found in the execution arguments. You MUST route WSL2 execution through 'buildCommand' to prevent zombie processes.` }));
       } else {
-         console.error(`❌ Execution Error: Target is 'wsl2', but AGENT_EXEC_WSL_UUID was not found in the execution arguments. You MUST route WSL2 execution through 'buildCommand' to prevent zombie processes.`);
+        console.error(`❌ Execution Error: Target is 'wsl2', but AGENT_EXEC_WSL_UUID was not found in the execution arguments. You MUST route WSL2 execution through 'buildCommand' to prevent zombie processes.`);
       }
       process.exit(1);
     }
   }
 
-  if (payload.target === 'wsl2') {
-    const rawConcurrency = process.env['AGENT_WSL_CONCURRENCY'] ?? '';
-    const parsedConcurrency = Number.parseInt(rawConcurrency, 10);
-    const maxConcurrency = Number.isFinite(parsedConcurrency) && parsedConcurrency > 0 ? parsedConcurrency : 4;
-    const lockWaitMs = payload.timeoutMs !== undefined && payload.timeoutMs > 30000
-      ? Math.min(Math.floor(payload.timeoutMs * 0.5), 45000)
-      : 30000;
-    const lockStartMs = Date.now();
-    const lockFile = await acquireWslLock(maxConcurrency, lockWaitMs);
-    if (payload.timeoutMs !== undefined && payload.timeoutMs > 0) {
-      const elapsedLockMs = Date.now() - lockStartMs;
-      payload.timeoutMs = Math.max(5000, payload.timeoutMs - elapsedLockMs);
-    }
-    
-    if (lockFile.length > 0) {
-      const releaseLock = () => {
-        try { if (fs.existsSync(lockFile)) fs.unlinkSync(lockFile); } catch { /* ignore */ }
-        process.off('exit', releaseLock);
-        process.off('SIGINT', releaseLock);
-        process.off('SIGTERM', releaseLock);
-        process.off('uncaughtException', releaseLock);
-      };
-      process.once('exit', releaseLock);
-      process.once('SIGINT', releaseLock);
-      process.once('SIGTERM', releaseLock);
-      process.once('uncaughtException', releaseLock);
-    }
-  }
+  const effectiveTimeoutMs = await acquireExecutionLocks(payload, cwd, cmd, args, env, isJson);
 
   const controller = new ProcessController(
     payload,
@@ -154,8 +219,9 @@ export async function executeCommand(
     args,
     env,
     tempScriptPath || null,
-    isJson
+    isJson,
+    effectiveTimeoutMs,
   );
-  
+
   controller.start();
 }

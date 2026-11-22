@@ -59,28 +59,108 @@ function splitUnquotedTokens(segment: string): string[] {
   return tokens;
 }
 
-function extractFinalShellSegment(rawScript: string): string {
+const BENIGN_AND_SETUP_RE = /^(?:cd|export|shopt|mkdir|true)\b/;
+
+function splitUnquotedOperators(segment: string, op: '||' | '&&' | '|'): string[] {
+  const parts: string[] = [];
   let quote: '"' | "'" | null = null;
   let escape = false;
   let start = 0;
-  for (let i = 0; i < rawScript.length; i++) {
-    const ch = rawScript[i];
-    const next = rawScript[i + 1];
+  for (let i = 0; i < segment.length; i++) {
+    const ch = segment[i];
     if (escape) { escape = false; continue; }
     if (ch === '\\' && quote !== "'") { escape = true; continue; }
     if ((ch === '"' || ch === "'") && quote === null) { quote = ch; continue; }
     if (ch === quote) { quote = null; continue; }
     if (quote !== null) continue;
-    if ((ch === '&' && next === '&') || (ch === '|' && next === '|')) {
-      i++;
-      if (rawScript.slice(i + 1).trim().length > 0) start = i + 1;
-      continue;
-    }
-    if (ch === '|' || ch === ';' || ch === '\n') {
-      if (rawScript.slice(i + 1).trim().length > 0) start = i + 1;
+    if (segment.startsWith(op, i)) {
+      if (op === '|' && segment[i + 1] === '|') { i++; continue; }
+      parts.push(segment.slice(start, i));
+      i += op.length - 1;
+      start = i + 1;
     }
   }
-  return rawScript.slice(start).trim();
+  parts.push(segment.slice(start));
+  return parts;
+}
+
+function stripUnquotedHashComments(rawScript: string): string {
+  let out = '';
+  let quote: '"' | "'" | null = null;
+  let escape = false;
+  for (let i = 0; i < rawScript.length; i++) {
+    const ch = rawScript[i];
+    if (ch === undefined) continue;
+    if (escape) { out += ch; escape = false; continue; }
+    if (ch === '\\' && quote !== "'") { out += ch; escape = true; continue; }
+    if ((ch === '"' || ch === "'") && quote === null) { quote = ch; out += ch; continue; }
+    if (ch === quote) { quote = null; out += ch; continue; }
+    if (quote === null && ch === '#') {
+      const prev = i === 0 ? '\n' : (rawScript[i - 1] ?? '');
+      if (i === 0 || /[\s;|&()]/.test(prev)) {
+        while (i < rawScript.length && rawScript[i] !== '\n') i++;
+        if (rawScript[i] === '\n') out += '\n';
+        continue;
+      }
+    }
+    out += ch;
+  }
+  return out;
+}
+
+const PRIOR_EARLY_EXIT_RE = /\b(?:set\s+(?:-[a-zA-Z]*[eu]|-o\s+(?:errexit|pipefail|nounset))|exit|return)\b|\$ErrorActionPreference\s*=\s*['"]?Stop['"]?/i;
+
+function splitUnquotedStatements(rawScript: string): string[] {
+  const commentFree = stripUnquotedHashComments(rawScript);
+  const stmts: string[] = [];
+  let quote: '"' | "'" | null = null;
+  let escape = false;
+  let start = 0;
+  for (let i = 0; i < commentFree.length; i++) {
+    const ch = commentFree[i];
+    if (escape) { escape = false; continue; }
+    if (ch === '\\' && quote !== "'") { escape = true; continue; }
+    if ((ch === '"' || ch === "'") && quote === null) { quote = ch; continue; }
+    if (ch === quote) { quote = null; continue; }
+    if (quote !== null) continue;
+    if (ch === ';' || ch === '\n') {
+      const piece = commentFree.slice(start, i).trim();
+      if (piece.length > 0) stmts.push(piece);
+      start = i + 1;
+    }
+  }
+  const last = commentFree.slice(start).trim();
+  if (last.length > 0) stmts.push(last);
+  return stmts;
+}
+
+function extractFinalShellSegment(rawScript: string): string {
+  const stmts = splitUnquotedStatements(rawScript);
+  if (stmts.length > 1 && stmts.slice(0, -1).some(stmt => PRIOR_EARLY_EXIT_RE.test(stmt))) {
+    return '';
+  }
+  const lastStmt = stmts[stmts.length - 1] ?? '';
+  if (lastStmt.length === 0) return '';
+  const orParts = splitUnquotedOperators(lastStmt, '||');
+  const activeBranch = (orParts[orParts.length - 1] ?? '').trim();
+  const andParts = splitUnquotedOperators(activeBranch, '&&');
+  for (let i = 0; i < andParts.length - 1; i++) {
+    const prefix = (andParts[i] ?? '').trim();
+    if (PRIOR_EARLY_EXIT_RE.test(prefix) || !BENIGN_AND_SETUP_RE.test(prefix)) return '';
+  }
+  const finalChain = (andParts[andParts.length - 1] ?? '').trim();
+  const pipeParts = splitUnquotedOperators(finalChain, '|');
+  return (pipeParts[pipeParts.length - 1] ?? '').trim();
+}
+
+function hasWrapperStrictShellFlags(preFlagArgs: readonly string[]): boolean {
+  for (let i = 0; i < preFlagArgs.length; i++) {
+    const a = preFlagArgs[i];
+    if (a === undefined || a === '--') break;
+    if (a === '-o' && /^(?:errexit|pipefail|nounset)$/i.test(preFlagArgs[i + 1] ?? '')) return true;
+    if (/^-[a-zA-Z]*[eu]/.test(a)) return true;
+  }
+  return false;
 }
 
 function extractGitSubcommand(args: readonly string[]): string | null {
@@ -109,7 +189,9 @@ function extractFinalTokensFromPayload(payload: ExecPayload): { tool: string; ar
   const cmd = commandBasename(payload.command);
   const args = payload.args ?? [];
   if (WRAPPER_BASENAMES.has(cmd)) {
-    const cIdx = args.findIndex((a) => a === '-c' || a === '-lc' || a === '/c' || a.toLowerCase() === '-command');
+    const cIdx = args.findIndex((a) => a === '-c' || a === '-lc' || /^-[a-zA-Z]*c$/.test(a) || a === '/c' || a.toLowerCase() === '-command');
+    const preArgs = cIdx !== -1 ? args.slice(0, cIdx + 1) : args;
+    if (hasWrapperStrictShellFlags(preArgs)) return null;
     const scriptText = cIdx !== -1 ? (args[cIdx + 1] ?? '') : args.filter(a => !a.startsWith('-')).join(' ');
     const tokens = splitUnquotedTokens(extractFinalShellSegment(scriptText));
     if (tokens.length === 0) return null;
@@ -119,16 +201,27 @@ function extractFinalTokensFromPayload(payload: ExecPayload): { tool: string; ar
   return { tool: cmd, args };
 }
 
+const NPM_PNPM_GLOBAL_VALUE_FLAGS = new Set([
+  '-C', '--dir', '--prefix', '--filter', '-F',
+  '--loglevel', '--registry', '--config', '--userconfig', '--globalconfig', '--cache', '--store-dir', '--reporter',
+]);
+
+function stderrHasShellOrFsError(stderr: string): boolean {
+  return stderr.includes('fatal:') || stderr.includes('mkdir:') ||
+    stderr.includes('Permission denied') || stderr.includes('No such file or directory') || stderr.includes('cd:');
+}
+
 function stderrBlocksGrep(stderr: string): boolean {
-  return stderr.includes('fatal:') || stderr.includes('grep:');
+  return stderrHasShellOrFsError(stderr) || stderr.includes('grep:');
 }
 
 function stderrBlocksDiff(stderr: string): boolean {
-  return stderr.includes('No such file or directory') || stderr.includes('diff:');
+  return stderrHasShellOrFsError(stderr) || stderr.includes('diff:');
 }
 
 function stderrBlocksOutdated(stderr: string): boolean {
-  return stderr.includes('ERR_PNPM') || stderr.includes('npm ERR!') || stderr.includes('error:') || stderr.includes('Error:');
+  return stderrHasShellOrFsError(stderr) || stderr.includes('ERR_PNPM') || stderr.includes('npm ERR!') || stderr.includes('npm error ') ||
+    stderr.includes('error:') || stderr.includes('Error:');
 }
 
 function matchesGrep(target: { tool: string; args: string[] } | null): boolean {
@@ -147,9 +240,18 @@ function matchesDiff(target: { tool: string; args: string[] } | null): boolean {
 
 function matchesOutdated(target: { tool: string; args: string[] } | null): boolean {
   if (target === null || !OUTDATED_BASENAMES.has(target.tool)) return false;
-  const positionals = target.args.filter((arg) => !arg.startsWith('-')).map((arg) => arg.toLowerCase());
-  const sub = positionals.find((arg) => arg !== 'run' && arg !== 'exec' && arg !== 'x' && arg !== 'dlx');
-  return sub === 'outdated';
+  const isNpm = /^npm(?:\.cmd|\.exe)?$/i.test(target.tool);
+  for (let i = 0; i < target.args.length; i++) {
+    const arg = target.args[i];
+    if (arg === undefined || arg === '--') return false;
+    if (NPM_PNPM_GLOBAL_VALUE_FLAGS.has(arg) || (isNpm && (arg === '-w' || arg === '--workspace'))) {
+      i++;
+      continue;
+    }
+    if (arg.startsWith('-')) continue;
+    return arg.toLowerCase() === 'outdated';
+  }
+  return false;
 }
 
 export function isGracefulExitAnalysis(analysis: ExitCodeAnalysis): boolean {

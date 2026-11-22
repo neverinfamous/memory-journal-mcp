@@ -63,16 +63,43 @@ export function buildSystemCommandContext(ctx: ExecutionContext): SystemCommandD
   return { cmdBasename, payload, args, isCommand, embeddedArgs, positionalArgs, hasStdin, cmd, originalCmd };
 }
 
-export function resolveInlineCommand(args: string[]): InlineCommand {
-  const inlineIdx = args.findIndex(arg => INLINE_FLAGS.includes(arg.toLowerCase()));
+const PWSH_INLINE_FLAGS = new Set(['-c', '-command', '-ec', '-encodedcommand', '-en']);
+const POSIX_SHELL_NAMES = new Set(['bash', 'bash.exe', 'sh', 'sh.exe', 'zsh', 'zsh.exe']);
+const PWSH_SHELL_NAMES = new Set(['pwsh', 'pwsh.exe', 'powershell', 'powershell.exe']);
+
+export function resolveInlineCommand(args: string[], cmdBasename = ''): InlineCommand {
+  const lowerCmd = cmdBasename.toLowerCase();
+  const isPosixShell = POSIX_SHELL_NAMES.has(lowerCmd);
+  const isPwshShell = PWSH_SHELL_NAMES.has(lowerCmd);
+  const isCmdShell = lowerCmd === 'cmd' || lowerCmd === 'cmd.exe';
+  let inlineIdx = -1;
+  for (let i = 0; i < args.length; i++) {
+    const low = (args[i] ?? '').toLowerCase();
+    if (low === '--') break;
+    if (isPosixShell && (low === '-o' || low === '+o')) { i++; continue; }
+    if (isPwshShell && (low === '-file' || low === '-f')) break;
+    const isMatch = isPosixShell
+      ? (low === '-c' || (/^-[a-z]+$/.test(low) && low.includes('c')))
+      : isPwshShell
+        ? PWSH_INLINE_FLAGS.has(low)
+        : isCmdShell
+          ? low === '/c'
+          : INLINE_FLAGS.includes(low);
+    if (isMatch) { inlineIdx = i; break; }
+    if (!low.startsWith('-') && !(isCmdShell && low.startsWith('/')) && !(isPosixShell && low.startsWith('+'))) {
+      break;
+    }
+  }
   if (inlineIdx === -1) {
     return { hasInlineCmd: false, inlineFlag: '', innerCmdStr: '' };
   }
   const flagArg = args[inlineIdx];
-  const nextArg = args[inlineIdx + 1];
+  const restArgs = args.slice(inlineIdx + 1).filter(a => a.length > 0);
+  const inlineFlag = flagArg !== undefined ? flagArg.toLowerCase() : '';
+  const innerCmdStr = restArgs.length > 1 ? restArgs.join(' ') : (restArgs[0] ?? '');
   return {
     hasInlineCmd: true,
-    inlineFlag: flagArg !== undefined ? flagArg.toLowerCase() : '',
-    innerCmdStr: nextArg !== undefined && nextArg.length > 0 ? nextArg : '',
+    inlineFlag,
+    innerCmdStr,
   };
 }

@@ -182,8 +182,10 @@ export function tryPowershellObject(trimmed: string, knownKeys: readonly string[
   try {
     const pairs = scanPowershellPairs(trimmed.slice(1, -1).trim(), knownKeys);
     if (!hasPayloadIdentity(pairs)) return undefined;
+    const FORBIDDEN_KEYS = new Set(['__proto__', 'constructor', 'prototype']);
     const result: Record<string, unknown> = {};
     for (const pair of pairs) {
+      if (FORBIDDEN_KEYS.has(pair.key)) continue;
       result[pair.key] = coercePowershellValue(pair.rawVal);
     }
     return result;

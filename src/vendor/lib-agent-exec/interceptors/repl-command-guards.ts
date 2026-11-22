@@ -10,7 +10,7 @@ import {
   TUI_COMMANDS,
 } from './repl-tui-constants.js';
 import type { ExecutionContext } from './types.js';
-import { AGENT_EXEC_README_URL } from './utils.js';
+import { AGENT_EXEC_README_URL, hasTailFollowFlag } from './utils.js';
 
 const REPL_COMMAND_SET: ReadonlySet<string> = new Set(REPL_COMMANDS);
 const TUI_COMMAND_SET: ReadonlySet<string> = new Set(TUI_COMMANDS);
@@ -22,25 +22,84 @@ function blockExecution(hint: string, details: readonly string[] = []): never {
   process.exit(1);
 }
 
+const DB_CLIENTS: ReadonlySet<string> = new Set([
+  'mysql', 'mysql.exe', 'psql', 'psql.exe', 'sqlite3', 'sqlite3.exe', 'sqlite', 'sqlite.exe',
+  'redis-cli', 'redis-cli.exe', 'mongo', 'mongo.exe', 'mongosh', 'mongosh.exe',
+]);
+const SSH_TELNET_CLIENTS: ReadonlySet<string> = new Set(['ssh', 'ssh.exe', 'sftp', 'sftp.exe', 'ftp', 'ftp.exe', 'telnet', 'telnet.exe']);
+const NON_V_DB_CLIENTS: ReadonlySet<string> = new Set([
+  'mysql', 'mysql.exe', 'psql', 'psql.exe', 'sqlite3', 'sqlite3.exe', 'sqlite', 'sqlite.exe',
+  'mongo', 'mongo.exe', 'mongosh', 'mongosh.exe',
+]);
+const HELP_VER_VALUE_FLAGS: ReadonlySet<string> = new Set([
+  ...NODE_VALUE_FLAGS, ...SSH_VALUE_FLAGS, ...REDIS_OPTION_WITH_ARG,
+  '-c', '--command', '-e', '--eval', '--execute', '-f', '--file', '-p', '--port',
+  '-u', '--user', '-U', '-d', '--dbname', '-D', '--database', '--host',
+]);
+
 function isHelpOrVersion(cmdBasename: string, args: readonly string[]): boolean {
   const lowerCmd = cmdBasename.toLowerCase();
-  const vMeansVersion = !['python', 'python.exe', 'python.cmd', 'python3', 'python3.exe', 'bash', 'bash.exe', 'sh', 'sh.exe', 'zsh', 'zsh.exe'].includes(lowerCmd);
-  return args.some((arg) => {
+  const isDb = DB_CLIENTS.has(lowerCmd);
+  const vMeansVersion = !['python', 'python.exe', 'python.cmd', 'python3', 'python3.exe', 'bash', 'bash.exe', 'sh', 'sh.exe', 'zsh', 'zsh.exe'].includes(lowerCmd)
+    && !SSH_TELNET_CLIENTS.has(lowerCmd)
+    && !NON_V_DB_CLIENTS.has(lowerCmd);
+  for (let i = 0; i < args.length; i++) {
+    const arg = args[i];
+    if (arg === undefined || arg === '--') break;
     const lower = arg.toLowerCase();
-    return ['--version', '-version', '--help', '-help', '-?', '/?'].includes(lower) ||
-      ['-V', '-VV', '-h'].includes(arg) ||
-      (lower === '-v' && vMeansVersion);
-  });
+    if (['--version', '-version', '--help', '-help', '-?', '/?'].includes(lower) || ['-V', '-VV'].includes(arg)) return true;
+    if (arg === '-h' && !isDb) return true;
+    if (lower === '-v' && vMeansVersion) return true;
+    if (HELP_VER_VALUE_FLAGS.has(arg) || (isDb && arg === '-h') || ((lowerCmd === 'psql' || lowerCmd === 'psql.exe') && arg === '-v')) i++;
+  }
+  return false;
+}
+
+const SQLITE_VALUE_FLAGS = new Set(['-separator', '-nullvalue', '-newline', '-init', '-cmd']);
+
+function matchesFlagWithOptionalEqOrPrefix(arg: string, exactFlags: readonly string[], allowShortPrefix = false): boolean {
+  for (const flag of exactFlags) {
+    if (arg === flag || arg.startsWith(`${flag}=`)) return true;
+    if (allowShortPrefix && flag.length === 2 && flag.startsWith('-') && !flag.startsWith('--') && arg.startsWith(flag) && arg.length > 2) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function countSqlitePositionals(args: readonly string[]): number {
+  let count = 0;
+  let seenDoubleDash = false;
+  for (let i = 0; i < args.length; i++) {
+    const a = args[i];
+    if (a === undefined) continue;
+    if (!seenDoubleDash && a === '--') { seenDoubleDash = true; continue; }
+    if (!seenDoubleDash && a.startsWith('-')) {
+      if (SQLITE_VALUE_FLAGS.has(a)) i++;
+      continue;
+    }
+    count++;
+  }
+  return count;
 }
 
 function isDbNonInteractive(cmd: string, args: readonly string[]): boolean {
-  if (args.some(arg => ['-c', '--command', '-e', '--execute', '--eval'].includes(arg))) return true;
-  if (args.some(arg => arg === '-f' || arg === '--file' || arg.startsWith('--file='))) return true;
-  if (['sqlite3', 'sqlite3.exe', 'sqlite', 'sqlite.exe'].includes(cmd)) {
-    if (args.some(arg => arg === '-cmd' || arg === '-batch' || arg === '--batch')) return true;
-    return args.filter(arg => !arg.startsWith('-')).length >= 2;
+  const base = cmd.replace(/\.exe$/, '');
+  if (base === 'sqlite3' || base === 'sqlite') {
+    if (args.some(arg => matchesFlagWithOptionalEqOrPrefix(arg, ['-cmd', '-batch', '--batch'], false))) return true;
+    return countSqlitePositionals(args) >= 2;
   }
-  if (['redis-cli', 'redis-cli.exe'].includes(cmd)) {
+  if (base === 'psql') {
+    return args.some(arg => matchesFlagWithOptionalEqOrPrefix(arg, ['-c', '--command', '-f', '--file'], true));
+  }
+  if (base === 'mysql') {
+    return args.some(arg => matchesFlagWithOptionalEqOrPrefix(arg, ['-e', '--execute'], true));
+  }
+  if (base === 'mongo' || base === 'mongosh') {
+    return args.some(arg => matchesFlagWithOptionalEqOrPrefix(arg, ['--eval', '-f', '--file'], false));
+  }
+  if (base === 'redis-cli') {
+    if (args.some(arg => matchesFlagWithOptionalEqOrPrefix(arg, ['--eval'], false))) return true;
     const nonOptionArgs: string[] = [];
     for (let i = 0; i < args.length; i++) {
       const curr = args[i];
@@ -57,11 +116,15 @@ function isDbNonInteractive(cmd: string, args: readonly string[]): boolean {
 }
 
 function hasNodeDebuggerArg(args: readonly string[]): boolean {
-  if (args.some(arg => arg.startsWith('--inspect'))) return true;
   for (let i = 0; i < args.length; i++) {
     const arg = args[i];
     if (arg === undefined || arg === '--') return false;
     if (arg === '-e' || arg === '--eval' || arg === '-p' || arg === '--print') return false;
+    if (
+      arg === '--inspect' || arg.startsWith('--inspect=') ||
+      arg === '--inspect-brk' || arg.startsWith('--inspect-brk=') ||
+      arg === '--inspect-wait' || arg.startsWith('--inspect-wait=')
+    ) return true;
     if (arg.startsWith('-')) {
       if (NODE_VALUE_FLAGS.has(arg)) i++;
       continue;
@@ -89,15 +152,28 @@ function collectSshPositionals(args: readonly string[]): string[] {
   return positionals;
 }
 
+const SKIP_INTERACTIVE_STRIP_SET: ReadonlySet<string> = new Set([
+  ...SSH_CLIENT_SET, 'perl', 'perl.exe', 'perl.cmd', 'redis-cli', 'redis-cli.exe',
+]);
+const INTERP_VALUE_FLAGS_STRIP: ReadonlySet<string> = new Set([
+  ...NODE_VALUE_FLAGS, '-W', '-X',
+]);
+
 function stripNonSshInteractiveFlags(cmdBasename: string, args: string[]): void {
   const lower = cmdBasename.toLowerCase();
-  if (SSH_CLIENT_SET.has(lower)) return;
+  if (SKIP_INTERACTIVE_STRIP_SET.has(lower)) return;
   const usesPosixShortFlags = !['pwsh', 'pwsh.exe', 'powershell', 'powershell.exe', 'cmd', 'cmd.exe'].includes(lower);
-  const isInteractiveTarget = ['docker', 'docker.exe', 'podman', 'podman.exe', 'kubectl', 'kubectl.exe', 'bash', 'bash.exe', 'sh', 'sh.exe', 'zsh', 'zsh.exe', 'python', 'python.exe', 'python.cmd', 'python3', 'python3.exe'].includes(lower);
+  const isInteractiveTarget = ['bash', 'bash.exe', 'sh', 'sh.exe', 'zsh', 'zsh.exe', 'python', 'python.exe', 'python.cmd', 'python3', 'python3.exe'].includes(lower);
 
   let stripped = false;
   const newArgs: string[] = [];
-  for (const arg of args) {
+  for (let i = 0; i < args.length; i++) {
+    const arg = args[i];
+    if (arg === undefined) continue;
+    if (arg === '--' || ['-c', '-e', '-m', '--command', '--eval'].includes(arg.toLowerCase()) || !arg.startsWith('-')) {
+      newArgs.push(...args.slice(i));
+      break;
+    }
     if (arg === '-i' || arg === '--interactive' || (lower === 'php' && arg === '-a')) {
       stripped = true;
       continue;
@@ -109,6 +185,10 @@ function stripNonSshInteractiveFlags(cmdBasename: string, args: string[]): void 
       continue;
     }
     newArgs.push(arg);
+    if (!arg.startsWith('-') || !INTERP_VALUE_FLAGS_STRIP.has(arg) || i + 1 >= args.length) continue;
+    const valArg = args[i + 1];
+    if (valArg !== undefined) newArgs.push(valArg);
+    i++;
   }
   if (stripped) {
     console.error(`\n   💡 AGENT HINT: Stripping interactive/TTY flags from ${cmdBasename} to prevent hanging... (Frictionless Recovery)`);
@@ -132,6 +212,7 @@ function getReplBlockReason(cmdBasename: string, args: readonly string[]): strin
     .with({ lower: P.union('pwsh', 'pwsh.exe', 'powershell', 'powershell.exe'), args: P.when(a => !helpOrVer && a.every(arg => arg.startsWith('-')) && !a.some(arg => ['-c', '-command', '-file'].includes(arg.toLowerCase()))) }, () => 'with only flags and no script execution flags')
     .with({ lower: P.union('ruby', 'ruby.exe', 'ruby.cmd', 'perl', 'perl.exe', 'perl.cmd'), args: P.when(a => !helpOrVer && a.every(arg => arg.startsWith('-')) && !a.some(arg => arg === '-e' || arg === '-E')) }, () => 'with only flags and no script execution flags')
     .with({ lower: P.union('php', 'php.exe'), args: P.when(a => !helpOrVer && a.every(arg => arg.startsWith('-')) && !a.some(arg => arg === '-r')) }, () => 'with only flags and no script execution flags')
+    .with({ lower: P.union('cmd', 'cmd.exe'), args: P.when(a => !helpOrVer && a.some(arg => arg.toLowerCase() === '/k')) }, () => 'with interactive /k switch')
     .with({ lower: P.union('cmd', 'cmd.exe'), args: P.when(a => !helpOrVer && a.every(arg => arg.startsWith('/')) && !a.some(arg => arg.toLowerCase() === '/c')) }, () => 'with only flags and no script execution flags')
     .otherwise(() => null);
 }
@@ -162,7 +243,7 @@ function checkPriorityWatchAndShellGuards(ctx: ExecutionContext): void {
     if (badSub !== undefined) blockExecution(`'pm2 ${badSub}' is interactive/runs indefinitely. Blocking execution.`);
   }
   if (['watch', 'watch.exe'].includes(lower)) blockExecution(`'watch' runs indefinitely. Blocking execution.`);
-  if (['tail', 'tail.exe'].includes(lower) && (args.includes('-f') || args.includes('--follow'))) {
+  if (['tail', 'tail.exe'].includes(lower) && hasTailFollowFlag(args)) {
     blockExecution(`'tail -f' runs indefinitely. Blocking execution.`);
   }
   if (['pwsh', 'pwsh.exe', 'powershell', 'powershell.exe'].includes(lower)) {
@@ -209,9 +290,13 @@ export function encodeInlinePwshInvocation(ctx: ExecutionContext): void {
   if (payload.type !== 'command' || payload.target === 'wsl2') return;
   if (!['pwsh', 'pwsh.exe', 'powershell', 'powershell.exe'].includes(cmdBasename.toLowerCase())) return;
 
-  const cIndex = args.findIndex(a => a.toLowerCase() === '-c' || a.toLowerCase() === '-command');
+  let cIndex = -1;
+  for (let i = 0; i < args.length; i++) {
+    const low = (args[i] ?? '').toLowerCase();
+    if (low === '--' || low === '-file' || low === '-f' || low === '-encodedcommand' || low === '-ec' || low === '-en') break;
+    if (low === '-c' || low === '-command') { cIndex = i; break; }
+  }
   if (cIndex !== -1 && cIndex + 1 < args.length) {
-    console.error(`\n   🛠️ AUTONOMOUS HEALING: Intercepted inline PowerShell command. Converting to Base64 -EncodedCommand to prevent quote parsing failures... (Frictionless Recovery)`);
     const scriptArgs = args.slice(cIndex + 1);
     const safeArgs = scriptArgs.map((a) => {
       if (!/[ \t]/.test(a)) return a;
@@ -223,6 +308,8 @@ export function encodeInlinePwshInvocation(ctx: ExecutionContext): void {
     const scriptContent = `[Console]::OutputEncoding = [System.Text.Encoding]::UTF8;\n$OutputEncoding = [System.Text.Encoding]::UTF8;\n$ErrorActionPreference = 'Stop';\n$ProgressPreference = 'SilentlyContinue';\n$ConfirmPreference = 'None';\n` + scriptBody;
     const encoded = Buffer.from(scriptContent, 'utf16le').toString('base64');
     args.splice(cIndex, args.length - cIndex, '-EncodedCommand', encoded);
+    payload.args = args;
+    console.error(`\n   🛠️ AUTONOMOUS HEALING: Intercepted inline PowerShell command. Converting to Base64 -EncodedCommand to prevent quote parsing failures... (Frictionless Recovery)`);
   }
 
   const lowerArgs = args.map(a => a.toLowerCase());

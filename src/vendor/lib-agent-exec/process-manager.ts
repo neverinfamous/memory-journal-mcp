@@ -3,17 +3,19 @@ import { ChildProcess, spawnSync } from 'node:child_process';
 
 export const processManagerHooks: { onKill?: (pid: number) => void }[] = [];
 
-function isPidStillRunning(pid: number): boolean {
+export function isPidAlive(pid: number): boolean {
   try {
     process.kill(pid, 0);
     return true;
   } catch (err: unknown) {
     if (typeof err === 'object' && err !== null && 'code' in err) {
-      return (err as { code?: string }).code === 'EPERM';
+      return err.code === 'EPERM';
     }
     return false;
   }
 }
+
+const isPidStillRunning = isPidAlive;
 
 /**
  * [INTENT]: Enumerate Windows parent->children PID edges via CIM (`Win32_Process`) when `taskkill /T` fails
@@ -151,21 +153,21 @@ function killUnixTree(child: ChildProcess, pid: number, force = true): void {
     try {
       process.kill(-pid, 'SIGKILL');
     } catch { /* ignore */ }
+    try {
+      child.kill('SIGKILL');
+    } catch { /* ignore */ }
   }, 5000).unref();
-  try {
-    child.kill('SIGKILL');
-  } catch { /* ignore */ }
 }
 
 export function killProcessTree(child: ChildProcess, force = true): void {
   if (!child.pid) return;
   const pid = child.pid;
-  const parentGone = force || child.killed || child.exitCode !== null || child.signalCode !== null;
+  const parentGone = child.killed || child.exitCode !== null || child.signalCode !== null;
   for (const hook of processManagerHooks) {
     if (hook.onKill) {
       try { hook.onKill(pid); } catch { /* ignore */ }
     }
   }
   if (process.platform === 'win32') killWindowsTree(child, pid, parentGone);
-  else killUnixTree(child, pid, parentGone);
+  else killUnixTree(child, pid, force);
 }

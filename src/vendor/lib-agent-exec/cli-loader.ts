@@ -15,7 +15,7 @@ export function isPathContainedInRoot(candidatePath: string, rootPath: string): 
     const realRoot = process.platform === 'win32' ? realRootRaw.toLowerCase() : realRootRaw;
     const realCandidate = process.platform === 'win32' ? realCandidateRaw.toLowerCase() : realCandidateRaw;
     const rel = path.relative(realRoot, realCandidate);
-    return rel === '' || (!rel.startsWith('..') && !path.isAbsolute(rel));
+    return rel === '' || (rel !== '..' && !rel.startsWith(`..${path.sep}`) && !rel.startsWith('../') && !path.isAbsolute(rel));
   } catch {
     return false;
   }
@@ -23,8 +23,9 @@ export function isPathContainedInRoot(candidatePath: string, rootPath: string): 
 
 function registerPluginExports(plugin: unknown): void {
   if (plugin === null || typeof plugin !== 'object') return;
-  const mod = plugin as { default?: unknown; interceptors?: unknown };
-  for (const candidate of [mod.interceptors, mod.default]) {
+  const interceptorsExport = 'interceptors' in plugin ? plugin.interceptors : undefined;
+  const defaultExport = 'default' in plugin ? plugin.default : undefined;
+  for (const candidate of [interceptorsExport, defaultExport]) {
     if (typeof candidate === 'function') {
       customInterceptors.push(candidate as (ctx: ExecutionContext) => void);
       continue;
@@ -40,6 +41,7 @@ export async function loadWorkspacePlugins(
   pluginPaths: readonly string[],
   allowedRoots: readonly string[],
   onContainmentError: (absPluginPath: string) => never,
+  onLoadError?: (absPluginPath: string, err: unknown) => never,
 ): Promise<void> {
   for (const pluginPath of pluginPaths) {
     const absPluginPath = path.resolve(pluginPath);
@@ -49,42 +51,138 @@ export async function loadWorkspacePlugins(
     try {
       const plugin: unknown = await import(pathToFileURL(absPluginPath).href);
       registerPluginExports(plugin);
-    } catch (err) {
-      console.error(`❌ Error: Failed to load plugin at ${pluginPath}`);
-      console.error(err instanceof Error ? err.message : String(err));
+    } catch (err: unknown) {
+      if (onLoadError) {
+        onLoadError(absPluginPath, err);
+      }
+      throw err instanceof Error ? err : new Error(String(err));
     }
   }
 }
 
+const MAX_TIMEOUT_MS = 2_147_483_647;
+const CLI_VALUE_FLAGS = new Set([
+  '-p', '--payload', '--base64', '--payloadPath', '-t', '--target',
+  '--cwd', '--timeout', '--timeoutMs', '--interceptors', '--plugin',
+]);
+
+export function hasTopLevelCliFlag(
+  argv: readonly string[],
+  predicate: (token: string) => boolean,
+): boolean {
+  for (let i = 0; i < argv.length; i++) {
+    const tok = argv[i];
+    if (tok === undefined || tok === '--') break;
+    if (predicate(tok)) return true;
+    if (CLI_VALUE_FLAGS.has(tok)) {
+      i += 1;
+      continue;
+    }
+    if (tok.startsWith('-')) continue;
+    break;
+  }
+  return false;
+}
+
+export function findFirstTopLevelPositionalIndex(argv: readonly string[]): number {
+  for (let i = 0; i < argv.length; i++) {
+    const tok = argv[i];
+    if (tok === undefined) continue;
+    if (tok === '--') return i + 1 < argv.length ? i + 1 : -1;
+    if (CLI_VALUE_FLAGS.has(tok)) {
+      i += 1;
+      continue;
+    }
+    if (tok.startsWith('-')) continue;
+    return i;
+  }
+  return -1;
+}
+
+export function splitRawCommandInvocation(rawArgv: readonly string[]): {
+  flagArgs: string[];
+  rawPositionals: string[] | null;
+} {
+  for (let i = 0; i < rawArgv.length; i++) {
+    const tok = rawArgv[i];
+    if (tok === undefined) continue;
+    if (tok === '--') {
+      return {
+        flagArgs: rawArgv.slice(0, i),
+        rawPositionals: rawArgv.slice(i + 1),
+      };
+    }
+    if (CLI_VALUE_FLAGS.has(tok)) {
+      i += 1;
+      continue;
+    }
+    if (tok.startsWith('-')) continue;
+    break;
+  }
+  const firstPosIdx = findFirstTopLevelPositionalIndex(rawArgv);
+  if (firstPosIdx === -1) return { flagArgs: [...rawArgv], rawPositionals: null };
+  const firstPos = (rawArgv[firstPosIdx] ?? '').trim();
+  const isJsonOrFile =
+    firstPos.startsWith('{') ||
+    firstPos.startsWith("'{") ||
+    firstPos.startsWith('"{') ||
+    firstPos.startsWith("'{\\") ||
+    firstPos.startsWith('base64:') ||
+    firstPos.startsWith('```') ||
+    path.extname(firstPos).toLowerCase() === '.json';
+  const hasExplicitSourceFlag = rawArgv.slice(0, firstPosIdx).some((tok) =>
+    ['-p', '--payload', '--base64', '--payloadPath'].includes(tok) ||
+    tok.startsWith('--payload=') ||
+    tok.startsWith('--base64=') ||
+    tok.startsWith('--payloadPath=')
+  );
+  if (!isJsonOrFile && !hasExplicitSourceFlag) {
+    return {
+      flagArgs: rawArgv.slice(0, firstPosIdx),
+      rawPositionals: rawArgv.slice(firstPosIdx),
+    };
+  }
+  return { flagArgs: [...rawArgv], rawPositionals: null };
+}
+
 export function parseTimeoutOverride(cliTimeout: string | number | undefined): number | undefined {
   if (cliTimeout === undefined) return undefined;
-  if (typeof cliTimeout === 'string' && cliTimeout.trim() === '') return undefined;
-  const numTimeout = Number(cliTimeout);
-  if (!Number.isFinite(numTimeout) || numTimeout < 0) return undefined;
-  return numTimeout;
+  let numTimeout: number;
+  if (typeof cliTimeout === 'number') {
+    numTimeout = cliTimeout;
+  } else {
+    const trimmed = cliTimeout.trim();
+    if (!/^(?:0|[1-9]\d*)$/.test(trimmed)) return undefined;
+    numTimeout = Number(trimmed);
+  }
+  if (!Number.isSafeInteger(numTimeout) || numTimeout < 0) return undefined;
+  return Math.min(numTimeout, MAX_TIMEOUT_MS);
 }
 
 export function resolveAndValidateCwd(payload: ExecPayload, onInvalidCwd: (cwd: string) => never): string {
   if (payload.cwd !== undefined && typeof payload.cwd === 'string') {
     const unquotedCwd = payload.cwd.trim().replace(/^['"]|['"]$/g, '');
-    if (/^\/?mnt\/[a-zA-Z](?:\/.*)?$/i.test(unquotedCwd)) {
+    if (process.platform === 'win32' && /^\/?mnt\/[a-zA-Z](?:\/.*)?$/i.test(unquotedCwd)) {
+      const origCwd = payload.cwd;
       const converted = convertToWindowsPath(unquotedCwd);
-      console.error(`\n   💡 AGENT HINT: Provided cwd '${payload.cwd}' is a WSL mount path.`);
-      console.error(`\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Auto-converting WSL cwd to Windows path... (Frictionless Recovery)\x1b[0m`);
       payload.cwd = converted;
+      console.error(`\n   💡 AGENT HINT: Provided cwd '${origCwd}' is a WSL mount path.`);
+      console.error(`\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Auto-converting WSL cwd to Windows path... (Frictionless Recovery)\x1b[0m`);
     }
   }
 
   const isWslTarget = payload.target === 'wsl2';
-  const isPosixInternalCwd = isWslTarget && payload.cwd !== undefined && typeof payload.cwd === 'string' &&
-    (payload.cwd.startsWith('/') || payload.cwd.startsWith('~'));
-  const cwd = payload.cwd !== undefined && payload.cwd.length > 0
-    ? (isPosixInternalCwd ? process.cwd() : path.resolve(payload.cwd))
+  const trimmedCwd = typeof payload.cwd === 'string' ? payload.cwd.trim().replace(/^['"]|['"]$/g, '') : undefined;
+  const isPosixInternalCwd = isWslTarget && trimmedCwd !== undefined && trimmedCwd.length > 0 &&
+    ((trimmedCwd.startsWith('/') && !/^\/mnt\/[a-zA-Z](?:\/|$)/i.test(trimmedCwd)) || trimmedCwd.startsWith('~'));
+  const cwd = trimmedCwd !== undefined && trimmedCwd.length > 0
+    ? (isPosixInternalCwd ? process.cwd() : path.resolve(trimmedCwd))
     : process.cwd();
 
   if (!isPosixInternalCwd && cwd.length < 260) {
     try {
-      if (!fs.existsSync(cwd) || !fs.statSync(cwd).isDirectory()) {
+      const st = fs.statSync(cwd, { throwIfNoEntry: false });
+      if (st === undefined || !st.isDirectory()) {
         onInvalidCwd(cwd);
       }
     } catch {
@@ -110,7 +208,7 @@ export function mergeFinalEnvironment(
   for (const [k, v] of Object.entries(envOverrides)) {
     const normalized = process.platform === 'win32' ? k.toUpperCase() : k;
     const isExplicitPayload = explicitKeys.has(normalized) && !IMMUTABLE_ENV_OVERRIDES.has(k.toUpperCase());
-    if (isExplicitPayload && k.toUpperCase() !== 'NODE_OPTIONS') {
+    if (isExplicitPayload && k.toUpperCase() !== 'NODE_OPTIONS' && k.toUpperCase() !== 'NODE_PATH') {
       continue;
     }
     let targetKey = k;

@@ -121,16 +121,25 @@ export function isIgnoredEntryName(name: string, skipSkills = false): boolean {
 }
 
 export function isDirectoryPath(dir: string): boolean {
-  return fs.existsSync(dir) && fs.statSync(dir).isDirectory();
+  try {
+    return fs.statSync(dir, { throwIfNoEntry: false })?.isDirectory() === true;
+  } catch {
+    return false;
+  }
 }
 
 export function isFilePath(filePath: string): boolean {
-  return fs.existsSync(filePath) && !fs.statSync(filePath).isDirectory();
+  try {
+    const st = fs.statSync(filePath, { throwIfNoEntry: false });
+    return st !== undefined && !st.isDirectory();
+  } catch {
+    return false;
+  }
 }
 
 export function normalizeMntPath(raw: string): string {
   if (!raw.startsWith('/mnt/')) return raw;
-  return raw.replace(/^\/mnt\/([a-zA-Z])\/(.*)$/, (_match: string, drive: string, rest: string) => `${drive.toUpperCase()}:/${rest}`);
+  return raw.replace(/^\/mnt\/([a-zA-Z])(?:\/(.*))?$/, (_match: string, drive: string, rest?: string) => `${drive.toUpperCase()}:/${rest ?? ''}`);
 }
 
 export function preserveQuotes(original: string, updated: string): string {

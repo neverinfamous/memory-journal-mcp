@@ -1,63 +1,10 @@
 // @ts-nocheck
 import path from 'node:path';
 import { isPwsh, isCmd } from './command-utils.js';
+import { buildNonCodeSpans, createCodeScanState, isIndexInSpans, stepCodeScanState, type CodeScanState } from './quote-spans.js';
 import type { ExecPayload } from './schema.js';
 
-export interface CodeScanState {
-  inSingle: boolean;
-  inDouble: boolean;
-  inBacktick: boolean;
-  inLineComment: boolean;
-  inBlockComment: boolean;
-}
-
-export function createCodeScanState(): CodeScanState {
-  return { inSingle: false, inDouble: false, inBacktick: false, inLineComment: false, inBlockComment: false };
-}
-
-// [INTENT]: Shared single-character string/comment scanner for eval/inline code rewriters so nested heuristics skip literals and comments.
-export function stepCodeScanState(code: string, i: number, state: CodeScanState): number | null {
-  const ch = code[i];
-  const next = code[i + 1];
-  if (state.inLineComment) {
-    if (ch === '\n') state.inLineComment = false;
-    return i;
-  }
-  if (state.inBlockComment) {
-    if (ch === '*' && next === '/') {
-      state.inBlockComment = false;
-      return i + 1;
-    }
-    return i;
-  }
-  if (state.inSingle) {
-    if (ch === '\\') return i + 1;
-    if (ch === "'") state.inSingle = false;
-    return i;
-  }
-  if (state.inDouble) {
-    if (ch === '\\') return i + 1;
-    if (ch === '"') state.inDouble = false;
-    return i;
-  }
-  if (state.inBacktick) {
-    if (ch === '\\') return i + 1;
-    if (ch === '`') state.inBacktick = false;
-    return i;
-  }
-  if (ch === '/' && next === '/') {
-    state.inLineComment = true;
-    return i + 1;
-  }
-  if (ch === '/' && next === '*') {
-    state.inBlockComment = true;
-    return i + 1;
-  }
-  if (ch === "'") { state.inSingle = true; return i; }
-  if (ch === '"') { state.inDouble = true; return i; }
-  if (ch === '`') { state.inBacktick = true; return i; }
-  return null;
-}
+export { createCodeScanState, stepCodeScanState, type CodeScanState };
 
 export interface EvalExecutionTarget {
   effectiveInterpreter: string;
@@ -76,9 +23,11 @@ export function isJavaScriptOrTypeScriptCode(code: string): boolean {
   if (/^(?:import\s|export\s|console\.(?:log|error|warn|info|dir|trace)\b|const\s|let\s|var\s|async\s+function|function\*?\s|process\.(?:exit|env|cwd|version|argv)\b|require\s*\()/.test(trimmed)) {
     return true;
   }
-  // Characteristic JS constructs anywhere in snippet
-  if (/\b(?:console\.(?:log|error|warn|info|dir|trace)\s*\(|require\s*\(['"][^'"]+['"]\)|JSON\.(?:stringify|parse)\s*\(|process\.(?:exit|env|cwd|version)\b)/.test(code)) {
-    return true;
+  // Characteristic JS constructs outside strings/comments
+  const spans = buildNonCodeSpans(code, { includeHashComments: true });
+  const jsRe = /\b(?:console\.(?:log|error|warn|info|dir|trace)\s*\(|require\s*\(['"][^'"]+['"]\)|JSON\.(?:stringify|parse)\s*\(|process\.(?:exit|env|cwd|version)\b)/g;
+  for (const m of code.matchAll(jsRe)) {
+    if (m.index !== undefined && !isIndexInSpans(spans, m.index)) return true;
   }
   return false;
 }
@@ -86,7 +35,7 @@ export function isJavaScriptOrTypeScriptCode(code: string): boolean {
 export function isShellCommandScript(code: string): boolean {
   const trimmed = code.trim();
   const lines = trimmed.split('\n').map(l => l.trim()).filter(l => l.length > 0 && !l.startsWith('//') && !l.startsWith('/*'));
-  const shellCommands = /^(?:echo\s|cat\s|rm\s|mkdir\s|touch\s|cd\s|ls\s|dir\s|git\s|apt\s|apt-get\s|pnpm\s|npm\s|yarn\s|bun\s|node\s|python\s|python3\s|which\s|where\s|curl\s|wget\s|chmod\s|chown\s|source\s|export\s+[A-Za-z_][A-Za-z0-9_]*=)/;
+  const shellCommands = /^(?:echo|cat|rm|mkdir|touch|cd|ls|dir|git|apt|apt-get|pnpm|npm|yarn|bun|node|python|python3|which|where|curl|wget|chmod|chown|source|rg|grep|egrep|fgrep|find|sed|awk|gawk|jq|printf|docker|gh|kubectl)\s|^(?:export\s+[A-Za-z_][A-Za-z0-9_]*=)/;
   if (lines.some(line => shellCommands.test(line))) return true;
   if (isJavaScriptOrTypeScriptCode(code) || isPythonCode(code) || isPowerShellCode(code)) return false;
   if (/\b(?:type|interface|enum|class)\s+[A-Z]/.test(trimmed) || /=>/.test(trimmed)) return false;
@@ -103,13 +52,14 @@ export function isPythonCode(code: string): boolean {
 }
 
 export function isPowerShellCode(code: string): boolean {
-  const trimmed = code.trim();
-  const psCmdletRegex = /\b(?:Get|Set|New|Remove|Start|Stop|Restart|Select|Test|Invoke|Clear|Copy|Move|Write|Add|Enter|Exit|Find|Format|Measure|Read|Reset|Resume|Search|Show|Split|Switch|Wait)-(?:[A-Za-z]+)\b/;
-  if (psCmdletRegex.test(trimmed)) {
-    return true;
+  const spans = buildNonCodeSpans(code, { includeHashComments: true, includeSlashComments: true, includeRegexLiterals: false });
+  const psCmdletRegex = /(?:^|[;\n|&({])\s*(?:Get|Set|New|Remove|Start|Stop|Restart|Select|Test|Invoke|Clear|Copy|Move|Write|Add|Enter|Exit|Find|Format|Measure|Read|Reset|Resume|Search|Show|Split|Switch|Wait)-(?:[A-Za-z]+)\b/g;
+  for (const m of code.matchAll(psCmdletRegex)) {
+    if (m.index !== undefined && !isIndexInSpans(spans, m.index)) return true;
   }
-  if (/\$(?:PSScriptRoot|PSVersionTable|LASTEXITCODE|ErrorActionPreference|ProgressPreference)\b/i.test(trimmed)) {
-    return true;
+  const psVarRegex = /\$(?:PSScriptRoot|PSVersionTable|LASTEXITCODE|ErrorActionPreference|ProgressPreference)\b/gi;
+  for (const m of code.matchAll(psVarRegex)) {
+    if (m.index !== undefined && !isIndexInSpans(spans, m.index)) return true;
   }
   return false;
 }
@@ -136,42 +86,82 @@ export function hasTopLevelReturn(code: string): boolean {
     }
 
     if (depth === 0 && (i === 0 || /[\s;]/.test(code[i - 1] ?? '')) && code.startsWith('return', i)) {
-      if (/[\s;({'"`]/.test(code[i + 6] ?? '')) return true;
+      const nextCh = code[i + 6];
+      if (nextCh === undefined || /[\s;({['"`!~+-]/.test(nextCh)) return true;
     }
   }
   return false;
 }
 
-function isHoistedImport(trimmed: string): boolean {
-  if (/^import\s+['"][^'"]+['"];?$/.test(trimmed)) return true;
-  if (!trimmed.startsWith('import ')) return false;
-  const marker = ' from ';
-  const fromAt = trimmed.lastIndexOf(marker);
-  if (fromAt < 0) return false;
-  const specifier = trimmed.slice(fromAt + marker.length).trim();
-  if (!/^['"][^'"]+['"];?$/.test(specifier)) return false;
-  const clause = trimmed.slice('import'.length, fromAt);
-  if (!/^\s+\S/.test(clause)) return false;
-  return !/[();]/.test(clause);
+function findStaticImportEnd(code: string, start: number): number | null {
+  const prev = start === 0 ? '\n' : (code[start - 1] ?? '');
+  if (start > 0 && !/[\s;]/.test(prev)) return null;
+  const nextCh = code[start + 6] ?? '';
+  if (!/[\s{'*]/.test(nextCh)) return null;
+  const trimmedAfter = code.slice(start + 6).trimStart();
+  if (trimmedAfter.startsWith('(') || trimmedAfter.startsWith('.')) return null;
+
+  const scan = createCodeScanState();
+  let brace = 0, paren = 0, bracket = 0;
+  let sawSpec = false;
+  let inSpec = false;
+  for (let j = start + 6; j < code.length; j++) {
+    const wasStr = scan.inSingle || scan.inDouble;
+    const wasLineComment = scan.inLineComment;
+    const skip = stepCodeScanState(code, j, scan);
+    if (!wasStr && (scan.inSingle || scan.inDouble) && brace === 0 && paren === 0 && bracket === 0) inSpec = true;
+    if (skip !== null) {
+      if (inSpec && !scan.inSingle && !scan.inDouble) { sawSpec = true; inSpec = false; }
+      j = skip;
+      if (wasLineComment && !scan.inLineComment && code[j] === '\n' && brace === 0 && paren === 0 && bracket === 0 && sawSpec) {
+        if (!/^(?:with|assert)\s*\{/.test(code.slice(j + 1).trimStart())) return j;
+      }
+      continue;
+    }
+    const ch = code[j];
+    if (ch === '{') brace++;
+    else if (ch === '}' && brace > 0) brace--;
+    else if (ch === '(') paren++;
+    else if (ch === ')' && paren > 0) paren--;
+    else if (ch === '[') bracket++;
+    else if (ch === ']' && bracket > 0) bracket--;
+    if (brace === 0 && paren === 0 && bracket === 0 && sawSpec) {
+      if (ch === ';') return j + 1;
+      if (ch === '\n' && !/^(?:with|assert)\s*\{/.test(code.slice(j + 1).trimStart())) return j;
+    }
+  }
+  return sawSpec ? code.length : null;
 }
 
 export function wrapCodeInAsyncIife(code: string): string {
-  const lines = code.split('\n');
-  const importLines: string[] = [];
-  const bodyLines: string[] = [];
+  const spans = buildNonCodeSpans(code);
+  const importChunks: string[] = [];
+  const bodyParts: string[] = [];
+  let cursor = 0;
+  let braceDepth = 0;
 
-  for (const line of lines) {
-    const trimmed = line.trim();
-    if (isHoistedImport(trimmed)) {
-      importLines.push(line);
-    } else {
-      bodyLines.push(line);
-    }
+  for (let i = 0; i < code.length; i++) {
+    if (isIndexInSpans(spans, i)) continue;
+    const ch = code[i];
+    if (ch === '{') { braceDepth++; continue; }
+    if (ch === '}') { if (braceDepth > 0) braceDepth--; continue; }
+    if (braceDepth !== 0 || !code.startsWith('import', i)) continue;
+    const end = findStaticImportEnd(code, i);
+    if (end === null) continue;
+    const lineStart = code.lastIndexOf('\n', i - 1) + 1;
+    const chunkStart = /^[ \t]*$/.test(code.slice(lineStart, i)) ? lineStart : i;
+    if (chunkStart > cursor) bodyParts.push(code.slice(cursor, chunkStart));
+    importChunks.push(code.slice(chunkStart, end).trim());
+    let nextCursor = end;
+    if (code[nextCursor] === '\r') nextCursor++;
+    if (code[nextCursor] === '\n') nextCursor++;
+    cursor = nextCursor;
+    i = nextCursor - 1;
   }
+  if (cursor < code.length) bodyParts.push(code.slice(cursor));
 
-  const imports = importLines.length > 0 ? `${importLines.join('\n')}\n\n` : '';
-  const body = bodyLines.join('\n');
-
+  const imports = importChunks.length > 0 ? `${importChunks.join('\n')}\n\n` : '';
+  const body = bodyParts.join('');
   return `${imports}(async () => {\n${body}\n})().then(res => {\n  if (res !== undefined) console.log(typeof res === 'object' ? JSON.stringify(res, null, 2) : res);\n}).catch(err => {\n  console.error(err);\n  process.exit(1);\n});`;
 }
 
@@ -271,6 +261,8 @@ function tryHealSqlCallAt(code: string, dotIdx: number): HealedSqlCall | null {
   const firstChar = candidateStart[0];
   if (firstChar === undefined || firstChar === "'" || firstChar === '"' || firstChar === '`') return null;
   if (!UNQUOTED_SQL_START_REGEX.test(candidateStart)) return null;
+  const afterKw = candidateStart.replace(/^[A-Za-z]+\s+/, '');
+  if (/^(?:as|satisfies|in|instanceof)\b|^[,)=:?;+-]/i.test(afterKw)) return null;
   const closeParenIdx = findMatchingSqlCloseParen(code, openParenIdx + 1);
   if (closeParenIdx === -1) return null;
   const rawBody = code.slice(openParenIdx + 1, closeParenIdx)
@@ -358,26 +350,29 @@ export function resolveEvalExecutionTarget(
   const isShell = SHELL_INTERPRETERS.has(currentInterp);
 
   if (isShell) {
-    if (isPowerShellCode(p.code) && (p.target === 'wsl2' || currentInterp === 'bash' || currentInterp === 'sh')) {
+    if (!isShellCommandScript(p.code) && isPowerShellCode(p.code) && (p.target === 'wsl2' || currentInterp === 'bash' || currentInterp === 'sh')) {
       const orig = effectiveInterpreter ?? (p.target === 'wsl2' ? 'bash' : 'bun');
+      effectiveInterpreter = 'pwsh';
+      p.interpreter = 'pwsh';
+      p.target = 'windows';
       console.error(`\n   💡 AGENT HINT: PowerShell cmdlet/code detected in eval payload with shell interpreter '${orig}'.`);
       console.error(`\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Automatically switching interpreter to 'pwsh' and target to 'windows'... (Frictionless Recovery)\x1b[0m`);
-      effectiveInterpreter = 'pwsh';
-      p.target = 'windows';
-    } else if (!isShellCommandScript(p.code) && (isJavaScriptOrTypeScriptCode(p.code) || hasTopLevelReturn(p.code))) {
+    } else if (!isShellCommandScript(p.code) && !isPowerShellCode(p.code) && !(p.target !== 'wsl2' && isPwsh(p.interpreter ?? '')) && (isJavaScriptOrTypeScriptCode(p.code) || hasTopLevelReturn(p.code))) {
       const orig = effectiveInterpreter ?? (p.target === 'wsl2' ? 'bash' : 'bun');
       const needsWindowsTarget = p.target === 'wsl2' && (/\bbetter-sqlite3\b|[a-zA-Z]:[/\\]/.test(p.code));
-      console.error(`\n   💡 AGENT HINT: JavaScript/TypeScript code detected in eval payload with shell interpreter '${orig}'.`);
-      console.error(`\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Automatically switching interpreter to 'bun'${needsWindowsTarget ? " and target to 'windows'" : ''}... (Frictionless Recovery)\x1b[0m`);
       effectiveInterpreter = 'bun';
+      p.interpreter = 'bun';
       if (needsWindowsTarget) {
         p.target = 'windows';
       }
+      console.error(`\n   💡 AGENT HINT: JavaScript/TypeScript code detected in eval payload with shell interpreter '${orig}'.`);
+      console.error(`\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Automatically switching interpreter to 'bun'${needsWindowsTarget ? " and target to 'windows'" : ''}... (Frictionless Recovery)\x1b[0m`);
     } else if (!isShellCommandScript(p.code) && isPythonCode(p.code)) {
       const orig = effectiveInterpreter ?? (p.target === 'wsl2' ? 'bash' : 'bun');
+      effectiveInterpreter = 'python';
+      p.interpreter = 'python';
       console.error(`\n   💡 AGENT HINT: Python code detected in eval payload with shell interpreter '${orig}'.`);
       console.error(`\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Automatically switching interpreter to 'python'... (Frictionless Recovery)\x1b[0m`);
-      effectiveInterpreter = 'python';
     }
   }
 

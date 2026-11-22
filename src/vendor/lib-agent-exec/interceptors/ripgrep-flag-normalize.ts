@@ -1,21 +1,16 @@
 // @ts-nocheck
-import { healFragmentedQuotes } from '../command-utils.js';
+import { RG_VALUE_FLAGS as RG_VALUE_FLAGS_LIST, healFragmentedQuotes } from '../command-utils.js';
 import { unbundleSearchCommandArgs } from './search-flag-unpack.js';
 import { ExecutionContext } from './types.js';
 
-const RG_KNOWN_ENCODINGS = new Set([
+export const RG_KNOWN_ENCODINGS = new Set([
   'utf8', 'utf16', 'utf16le', 'utf16be', 'ascii', 'usascii', 'latin1',
   'windows1252', 'cp1252', 'iso88591', 'gbk', 'eucjp', 'shiftjis', 'none', 'auto',
 ]);
 
-const RG_VALUE_FLAGS = new Set([
-  '-A', '-B', '-C', '-m', '-M', '-e', '-f', '-g', '-t', '-T', '-j', '-E',
-  '--after-context', '--before-context', '--context', '--max-count', '--max-columns', '--max-depth',
-  '--regexp', '--file', '--glob', '--iglob', '--type', '--type-not', '--replace', '--threads',
-  '--encoding', '--ignore-file', '--max-filesize', '--sort', '--sortr', '--color', '--colors', '--engine',
-]);
+const RG_VALUE_FLAGS = new Set<string>(RG_VALUE_FLAGS_LIST);
 
-function isKnownRgEncoding(value: string): boolean {
+export function isKnownRgEncoding(value: string): boolean {
   return RG_KNOWN_ENCODINGS.has(value.trim().toLowerCase().replace(/[-_]/g, ''));
 }
 
@@ -28,7 +23,12 @@ function countRgNonValuePositionals(args: readonly string[]): { count: number; h
     if (arg === undefined) continue;
     if (!sawEndOfFlags && arg === '--') { sawEndOfFlags = true; continue; }
     if (!sawEndOfFlags && arg.startsWith('-')) {
-      if (arg === '-e' || arg.startsWith('--regexp') || arg === '-f' || arg.startsWith('--file')) {
+      if (
+        arg === '-e' || (arg.startsWith('-e') && !arg.startsWith('--')) ||
+        arg === '--regexp' || arg.startsWith('--regexp=') ||
+        arg === '-f' || (arg.startsWith('-f') && !arg.startsWith('--')) ||
+        arg === '--file' || arg.startsWith('--file=')
+      ) {
         hasPatternFlag = true;
       }
       if (RG_VALUE_FLAGS.has(arg) || arg === '-r') i++;
@@ -52,8 +52,9 @@ function shouldKeepBareRipgrepR(args: readonly string[], idx: number): boolean {
   if (nextArg === undefined) return false;
   if (nextArg === '') return true;
   if (nextArg.startsWith('-')) return false;
+  if (/\$(?:\d+|\{|[A-Za-z_]|&)/.test(nextArg)) return true;
   const { count, hasPatternFlag } = countRgNonValuePositionals(args);
-  return hasPatternFlag ? count >= 2 : count >= 3;
+  return hasPatternFlag ? count >= 1 : count >= 2;
 }
 
 function stripRipgrepRecursiveFlags(args: string[]): { args: string[]; stripped: boolean } {
@@ -65,6 +66,15 @@ function stripRipgrepRecursiveFlags(args: string[]): { args: string[]; stripped:
     if (arg === '--') {
       cleaned.push(...args.slice(idx));
       break;
+    }
+    if (arg === '-r') {
+      if (shouldKeepBareRipgrepR(args, idx)) {
+        cleaned.push('-r', args[idx + 1] ?? '');
+        idx++;
+      } else {
+        stripped = true;
+      }
+      continue;
     }
     if (RG_VALUE_FLAGS.has(arg) && idx + 1 < args.length) {
       cleaned.push(arg, args[idx + 1] ?? '');
@@ -79,16 +89,7 @@ function stripRipgrepRecursiveFlags(args: string[]): { args: string[]; stripped:
       cleaned.push(arg);
       continue;
     }
-    if (arg === '-r') {
-      if (shouldKeepBareRipgrepR(args, idx)) {
-        cleaned.push('-r', args[idx + 1] ?? '');
-        idx++;
-      } else {
-        stripped = true;
-      }
-      continue;
-    }
-    if (/^-[a-zA-Z0-9]+$/.test(arg) && (arg.includes('R') || arg.includes('r'))) {
+    if (!/^-(?:t|T|e|f|g|E|m|M|A|B|C|j).+/.test(arg) && /^-[a-zA-Z0-9]+$/.test(arg) && (arg.includes('R') || arg.includes('r'))) {
       stripped = true;
       const withoutR = arg.replace(/[Rr]/g, '');
       if (withoutR !== '-') cleaned.push(withoutR);
@@ -101,7 +102,8 @@ function stripRipgrepRecursiveFlags(args: string[]): { args: string[]; stripped:
 
 interface FlagStep {
   handled: boolean;
-  converted: boolean;
+  convertedGlob: boolean;
+  convertedExtReason: 'strip' | 'pattern' | null;
   pushed: string[];
   extra: number;
 }
@@ -112,58 +114,60 @@ function negatedGlob(pattern: string): string {
 
 function translateExtendedRegex(args: string[], index: number): FlagStep {
   if (index + 1 >= args.length) {
-    console.error(`\n   🛠️ AUTONOMOUS HEALING: Detected grep-style '-E' (extended regex) flag in 'rg'. Stripping '-E' as ripgrep uses extended regex by default... (Frictionless Recovery)\x1b[0m`);
-    return { handled: true, converted: true, pushed: [], extra: 0 };
+    return { handled: true, convertedGlob: false, convertedExtReason: 'strip', pushed: [], extra: 0 };
   }
   const nextArg = args[index + 1];
+  if (nextArg !== undefined && nextArg.startsWith('-')) {
+    return { handled: true, convertedGlob: false, convertedExtReason: 'strip', pushed: [], extra: 0 };
+  }
   if (nextArg !== undefined && !isKnownRgEncoding(nextArg)) {
-    console.error(`\n   🛠️ AUTONOMOUS HEALING: Detected grep-style '-E' (extended regex) flag in 'rg'. Rewriting to '-e' to treat as regex pattern instead of encoding... (Frictionless Recovery)\x1b[0m`);
-    return { handled: true, converted: true, pushed: ['-e', nextArg], extra: 1 };
+    return { handled: true, convertedGlob: false, convertedExtReason: 'pattern', pushed: ['-e', nextArg], extra: 1 };
   }
   if (nextArg !== undefined) {
-    return { handled: true, converted: false, pushed: ['-E', nextArg], extra: 1 };
+    return { handled: true, convertedGlob: false, convertedExtReason: null, pushed: ['-E', nextArg], extra: 1 };
   }
-  return { handled: false, converted: false, pushed: [], extra: 0 };
+  return { handled: false, convertedGlob: false, convertedExtReason: null, pushed: [], extra: 0 };
 }
 
 function translateGrepStyleArg(args: string[], index: number, arg: string): FlagStep {
-  const untouched: FlagStep = { handled: false, converted: false, pushed: [], extra: 0 };
+  const untouched: FlagStep = { handled: false, convertedGlob: false, convertedExtReason: null, pushed: [], extra: 0 };
   if (RG_VALUE_FLAGS.has(arg) && arg !== '-E' && index + 1 < args.length) {
-    return { handled: true, converted: false, pushed: [arg, args[index + 1] ?? ''], extra: 1 };
+    return { handled: true, convertedGlob: false, convertedExtReason: null, pushed: [arg, args[index + 1] ?? ''], extra: 1 };
   }
   if (arg === '-E') return translateExtendedRegex(args, index);
   if (arg === '--include' && index + 1 < args.length) {
     const nextArg = args[index + 1];
     if (nextArg === undefined) return untouched;
-    return { handled: true, converted: true, pushed: ['-g', nextArg], extra: 1 };
+    return { handled: true, convertedGlob: true, convertedExtReason: null, pushed: ['-g', nextArg], extra: 1 };
   }
   if (arg.startsWith('--include=')) {
-    return { handled: true, converted: true, pushed: [`-g=${arg.slice('--include='.length)}`], extra: 0 };
+    return { handled: true, convertedGlob: true, convertedExtReason: null, pushed: [`-g=${arg.slice('--include='.length)}`], extra: 0 };
   }
   if (arg === '--exclude' && index + 1 < args.length) {
     const pattern = args[index + 1];
     if (pattern === undefined) return untouched;
-    return { handled: true, converted: true, pushed: ['-g', negatedGlob(pattern)], extra: 1 };
+    return { handled: true, convertedGlob: true, convertedExtReason: null, pushed: ['-g', negatedGlob(pattern)], extra: 1 };
   }
   if (arg.startsWith('--exclude=')) {
     const pattern = arg.slice('--exclude='.length);
-    return { handled: true, converted: true, pushed: [`-g=${negatedGlob(pattern)}`], extra: 0 };
+    return { handled: true, convertedGlob: true, convertedExtReason: null, pushed: [`-g=${negatedGlob(pattern)}`], extra: 0 };
   }
   if (arg === '--exclude-dir' && index + 1 < args.length) {
     const dir = args[index + 1];
     if (dir === undefined) return untouched;
-    return { handled: true, converted: true, pushed: ['-g', `!${dir}/**`], extra: 1 };
+    return { handled: true, convertedGlob: true, convertedExtReason: null, pushed: ['-g', `!${dir}/**`], extra: 1 };
   }
   if (arg.startsWith('--exclude-dir=')) {
     const dir = arg.slice('--exclude-dir='.length);
-    return { handled: true, converted: true, pushed: [`-g=!${dir}/**`], extra: 0 };
+    return { handled: true, convertedGlob: true, convertedExtReason: null, pushed: [`-g=!${dir}/**`], extra: 0 };
   }
   return untouched;
 }
 
-function normalizeRipgrepGrepStyleFlags(args: string[]): { args: string[]; converted: boolean } {
+function normalizeRipgrepGrepStyleFlags(args: string[]): { args: string[]; convertedGlob: boolean; extReasons: Array<'strip' | 'pattern'> } {
   const healedArgs: string[] = [];
-  let converted = false;
+  let convertedGlob = false;
+  const extReasons: Array<'strip' | 'pattern'> = [];
   for (let i = 0; i < args.length; i++) {
     const arg = args[i];
     if (arg === undefined) continue;
@@ -176,23 +180,32 @@ function normalizeRipgrepGrepStyleFlags(args: string[]): { args: string[]; conve
       healedArgs.push(arg);
       continue;
     }
-    if (step.converted) converted = true;
+    if (step.convertedGlob) convertedGlob = true;
+    if (step.convertedExtReason !== null) extReasons.push(step.convertedExtReason);
     healedArgs.push(...step.pushed);
     i += step.extra;
   }
-  return { args: healedArgs, converted };
+  return { args: healedArgs, convertedGlob, extReasons };
 }
 
 export function normalizeRipgrepInvocation(ctx: ExecutionContext): boolean {
   const unbundledFlags = unbundleSearchCommandArgs(ctx);
   reassembleRipgrepQuotes(ctx);
   const stripped = stripRipgrepRecursiveFlags(ctx.args);
+  const healed = normalizeRipgrepGrepStyleFlags(stripped.args);
+  ctx.args = healed.args;
+  if (ctx.payload.type === 'command') ctx.payload.args = ctx.args;
   if (stripped.stripped) {
     console.error(`\n   🛠️ AUTONOMOUS HEALING: 'rg' searches recursively by default. Stripping redundant recursive flag (-r/-R) to prevent argument parsing errors... (Frictionless Recovery)`);
   }
-  const healed = normalizeRipgrepGrepStyleFlags(stripped.args);
-  ctx.args = healed.args;
-  if (healed.converted) {
+  for (const reason of healed.extReasons) {
+    if (reason === 'strip') {
+      console.error(`\n   🛠️ AUTONOMOUS HEALING: Detected grep-style '-E' (extended regex) flag in 'rg'. Stripping '-E' as ripgrep uses extended regex by default... (Frictionless Recovery)\x1b[0m`);
+    } else {
+      console.error(`\n   🛠️ AUTONOMOUS HEALING: Detected grep-style '-E' (extended regex) flag in 'rg'. Rewriting to '-e' to treat as regex pattern instead of encoding... (Frictionless Recovery)\x1b[0m`);
+    }
+  }
+  if (healed.convertedGlob) {
     console.error(`\n   🛠️ AUTONOMOUS HEALING: 'rg' does not accept grep-style '--include/--exclude'. Normalizing to ripgrep '-g' (glob) flags... (Frictionless Recovery)`);
   }
   return unbundledFlags;

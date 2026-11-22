@@ -6,6 +6,7 @@ import path from 'node:path';
 import { match } from 'ts-pattern';
 import {
   applyTemplateOverride,
+  convertToWindowsPath,
   convertToWslPath,
   isCmd,
   isPwsh,
@@ -21,7 +22,7 @@ import {
   healStrippedStringRawLiterals,
 } from './inline-script-healer.js';
 import { healEvalCodePathHallucinations } from './path-healer.js';
-import { buildNonCodeSpans, isIndexInSpans, replaceOutsideLineComments, replaceOutsideQuotes } from './quote-spans.js';
+import { buildNonCodeSpans, isIndexInSpans, replaceOutsideQuotes } from './quote-spans.js';
 import type { ExecPayload } from './schema.js';
 import { resolveAgentScriptFallback } from './utils.js';
 
@@ -36,13 +37,36 @@ const SCRIPT_INTERPRETER_ALIASES: Readonly<Record<string, string>> = {
   typescript: 'bun',
   js: 'node',
   javascript: 'node',
+  nodejs: 'node',
   py: 'python',
   ps1: 'pwsh',
   sh: 'bash',
 };
 
+const tempPayloadScripts = new Set<string>();
+let tempCleanupRegistered = false;
+
+function trackTempPayloadScript(filePath: string): void {
+  tempPayloadScripts.add(filePath);
+  if (tempCleanupRegistered) return;
+  tempCleanupRegistered = true;
+  process.once('exit', () => {
+    for (const p of tempPayloadScripts) {
+      try {
+        if (fs.existsSync(p)) fs.unlinkSync(p);
+      } catch {
+        // Ignore best-effort exit cleanup failure
+      }
+    }
+    tempPayloadScripts.clear();
+  });
+}
+
 function resolveInterpreterAlias(rawInterpreter: string): string {
-  return SCRIPT_INTERPRETER_ALIASES[rawInterpreter.toLowerCase()] ?? rawInterpreter;
+  const key = rawInterpreter.toLowerCase();
+  return Object.hasOwn(SCRIPT_INTERPRETER_ALIASES, key)
+    ? (SCRIPT_INTERPRETER_ALIASES[key] ?? rawInterpreter)
+    : rawInterpreter;
 }
 
 function inferScriptInterpreter(scriptFile: string): string {
@@ -76,24 +100,33 @@ export function buildScriptPayload(
   exitWithError: (message: string) => never,
 ): BuiltPayloadCommand {
   let tempScriptPath: string | null = null;
-  let scriptFile = path.resolve(cwd, p.scriptPath);
-  if (!fs.existsSync(scriptFile)) {
-    const fallbackScript = resolveAgentScriptFallback(p.scriptPath, cwd);
+  const isPosixInternalScript = process.platform === 'win32' && p.target === 'wsl2'
+    && (/^\/(?!mnt\/[a-zA-Z](?:\/|$))/i.test(p.scriptPath) || p.scriptPath.startsWith('~/'));
+  const rawScriptPath = process.platform === 'win32' && /^\/?mnt\/[a-zA-Z](?:\/|$)/i.test(p.scriptPath)
+    ? convertToWindowsPath(p.scriptPath)
+    : p.scriptPath;
+  let scriptFile = isPosixInternalScript ? p.scriptPath : path.resolve(cwd, rawScriptPath);
+  if (!isPosixInternalScript && !fs.existsSync(scriptFile)) {
+    const fallbackScript = resolveAgentScriptFallback(rawScriptPath, cwd);
     if (fallbackScript !== null) {
-      console.error(`\n   🛠️ AUTONOMOUS HEALING: Resolved missing '${p.scriptPath}' to '${fallbackScript}'... (Frictionless Recovery)`);
+      const origScriptPath = p.scriptPath;
       scriptFile = path.resolve(cwd, fallbackScript);
+      p.scriptPath = scriptFile;
+      console.error(`\n   🛠️ AUTONOMOUS HEALING: Resolved missing '${origScriptPath}' to '${fallbackScript}'... (Frictionless Recovery)`);
     }
   }
-  if (!fs.existsSync(scriptFile) || !fs.statSync(scriptFile).isFile()) {
+  if (!isPosixInternalScript && (!fs.existsSync(scriptFile) || !fs.statSync(scriptFile).isFile())) {
     exitWithError(`The script file '${scriptFile}' does not exist or is not a file.`);
   }
 
   let localCmd = p.interpreter ? resolveInterpreterAlias(p.interpreter) : inferScriptInterpreter(scriptFile);
-  if (p.target === 'wsl2' && ['bash', 'sh'].includes(localCmd.toLowerCase())) {
+  const localCmdBase = path.basename(localCmd).toLowerCase().replace(/\.exe$/i, '');
+  if (!isPosixInternalScript && p.target === 'wsl2' && ['bash', 'sh'].includes(localCmdBase)) {
     const content = fs.readFileSync(scriptFile, 'utf-8');
     if (content.includes('\r\n')) {
       tempScriptPath = path.join(os.tmpdir(), `agent-exec-wsl-${crypto.randomUUID()}.sh`);
       fs.writeFileSync(tempScriptPath, content.replace(/\r\n/g, '\n'), { encoding: 'utf-8', mode: 0o600 });
+      trackTempPayloadScript(tempScriptPath);
       scriptFile = tempScriptPath;
     }
   }
@@ -112,6 +145,7 @@ function rewriteShCommentsOutsideHeredocsAndQuotes(code: string): string {
   const lines = code.split('\n');
   let offset = 0;
   let activeHeredocEnd: string | null = null;
+  let activeStripTabs = false;
   const rewrittenLines: string[] = [];
 
   for (const line of lines) {
@@ -120,7 +154,11 @@ function rewriteShCommentsOutsideHeredocsAndQuotes(code: string): string {
 
     if (activeHeredocEnd !== null) {
       rewrittenLines.push(line);
-      if (line.trim() === activeHeredocEnd) activeHeredocEnd = null;
+      const normalizedLine = activeStripTabs ? line.replace(/^\t+/, '') : line;
+      if (normalizedLine === activeHeredocEnd) {
+        activeHeredocEnd = null;
+        activeStripTabs = false;
+      }
       continue;
     }
 
@@ -132,11 +170,11 @@ function rewriteShCommentsOutsideHeredocsAndQuotes(code: string): string {
       rewrittenLines.push(line);
     }
 
-    if (!insideSpan) {
-      const heredocMatch = line.match(/<<-?\s*(['"]?)([A-Za-z_][A-Za-z0-9_]*)\1/);
-      if (heredocMatch?.[2] !== undefined) {
-        activeHeredocEnd = heredocMatch[2];
-      }
+    const heredocMatch = line.match(/(<<-?)\s*\\?(['"]?)([A-Za-z_][A-Za-z0-9_]*)\2/);
+    const heredocOffset = heredocMatch?.index;
+    if (heredocMatch?.[3] !== undefined && heredocOffset !== undefined && !isIndexInSpans(spans, lineStart + heredocOffset)) {
+      activeStripTabs = heredocMatch[1] === '<<-';
+      activeHeredocEnd = heredocMatch[3];
     }
   }
   return rewrittenLines.join('\n');
@@ -155,17 +193,42 @@ function prepareEvalCodeContent(
       ? p.templateOverride.replace('{{code}}', () => p.code)
       : `${p.templateOverride}\n${p.code}`;
   }
-  const skipValidFileRewrite = p.target !== 'wsl2' && ['node', 'tsx', 'ts-node'].includes(effectiveInterpreter.toLowerCase());
-  if (callerBypassedInterceptors || Boolean(p.templateOverride)) {
-    codeToExecute = healEvalCodePathHallucinations(codeToExecute, cwd, p.target, { skipValidFileRewrite });
+  const skipValidFileRewrite = p.target !== 'wsl2' && ['node', 'nodejs', 'js', 'javascript', 'tsx', 'ts-node'].includes(effectiveInterpreter.toLowerCase());
+  if (!callerBypassedInterceptors && Boolean(p.templateOverride)) {
+    codeToExecute = healEvalCodePathHallucinations(codeToExecute, cwd, p.target, { skipValidFileRewrite, interpreter: effectiveInterpreter });
   }
   if (ext === '.ps1') {
     return `[Console]::OutputEncoding = [System.Text.Encoding]::UTF8;\n$OutputEncoding = [System.Text.Encoding]::UTF8;\n$ErrorActionPreference = 'Stop';\n$ProgressPreference = 'SilentlyContinue';\n$ConfirmPreference = 'None';\n${codeToExecute}`;
   }
   if (p.target === 'wsl2') {
     codeToExecute = codeToExecute.replace(/\r\n/g, '\n');
-    codeToExecute = replaceOutsideLineComments(codeToExecute, /\b([a-zA-Z]):[/\\]+[^\s"'`;&|)]*/g, m => convertToWslPath(m));
-    codeToExecute = replaceOutsideQuotes(codeToExecute, /(^|[\s"'`=])(?:\.{1,2}|[a-zA-Z0-9_.-]+)\\[a-zA-Z0-9_.\-\\/]+/g, m => m.replace(/\\/g, '/'));
+    const isShOrPy = ext === '.sh' || ext === '.py';
+    const isJsOrTs = ext === '.js' || ext === '.ts';
+    const spans = buildNonCodeSpans(codeToExecute, {
+      includeHashComments: isShOrPy,
+      includeSlashComments: true,
+      includeRegexLiterals: isJsOrTs,
+    });
+    codeToExecute = codeToExecute.replace(/\b([a-zA-Z]):\\[^\s"'`;&|)]*/g, (m, _d: string, offset: number) => {
+      const span = spans.find((s) => offset >= s.start && offset < s.end);
+      if (span !== undefined && (codeToExecute[span.start] === '#' || codeToExecute[span.start] === '/')) return m;
+      return convertToWslPath(m);
+    });
+    codeToExecute = codeToExecute.replace(/(?<![${a-zA-Z0-9_:])\b([a-zA-Z]):\/+[^\s"'`;&|)]*/g, (m, _d: string, offset: number) => {
+      const span = spans.find((s) => offset >= s.start && offset < s.end);
+      if (span !== undefined && (codeToExecute[span.start] === '#' || codeToExecute[span.start] === '/')) return m;
+      return convertToWslPath(m);
+    });
+    codeToExecute = replaceOutsideQuotes(
+      codeToExecute,
+      /(^|[\s"'`=])(?:\.{1,2}|[a-zA-Z0-9_.-]+)\\[a-zA-Z0-9_.\-\\/]+/g,
+      (m) => {
+        const core = m.trimStart();
+        if (!fs.existsSync(path.resolve(cwd, core)) && /^[a-zA-Z0-9_-]+\\[.-][a-zA-Z0-9_.-]*$/.test(core)) return m;
+        return m.replace(/\\/g, '/');
+      },
+      { includeHashComments: isShOrPy, includeRegexLiterals: isJsOrTs },
+    );
     if (ext === '.sh') {
       codeToExecute = rewriteShCommentsOutsideHeredocsAndQuotes(codeToExecute);
     }
@@ -194,25 +257,43 @@ export function buildEvalPayload(
     fs.mkdirSync(scratchDir, { recursive: true });
   }
   const { effectiveInterpreter, ext } = resolveEvalExecutionTarget(p);
+  let effectiveEvalCwd = cwd;
+  if (p.target === 'windows' && typeof p.cwd === 'string' && p.cwd.length > 0) {
+    const rawWinCwd = process.platform === 'win32' && /^\/?mnt\/[a-zA-Z](?:\/|$)/i.test(p.cwd)
+      ? convertToWindowsPath(p.cwd)
+      : p.cwd;
+    if (path.resolve(rawWinCwd) !== cwd) {
+      const candidateWinCwd = path.resolve(rawWinCwd);
+      const st = fs.statSync(candidateWinCwd, { throwIfNoEntry: false });
+      if (st === undefined || !st.isDirectory()) {
+        exitWithError(`Resolved Windows cwd '${candidateWinCwd}' for eval target does not exist or is not a directory.`);
+      }
+      effectiveEvalCwd = candidateWinCwd;
+    }
+  }
   const scriptFilePath = path.join(scratchDir, `agent-eval-${uniqueId}${ext}`);
   try {
-    const codeToExecute = prepareEvalCodeContent(p, cwd, effectiveInterpreter, ext, callerBypassedInterceptors);
+    const codeToExecute = prepareEvalCodeContent(p, effectiveEvalCwd, effectiveInterpreter, ext, callerBypassedInterceptors);
     fs.writeFileSync(scriptFilePath, codeToExecute, { encoding: 'utf-8', mode: 0o600 });
+    trackTempPayloadScript(scriptFilePath);
   } catch (err) {
     exitWithError(`Failed to write eval code to temporary file ${scriptFilePath}: ${err instanceof Error ? err.message : String(err)}`);
   }
 
   const localCmd = resolveInterpreterAlias(effectiveInterpreter);
-  if (['node', 'bun', 'tsx', 'ts-node'].includes(localCmd.toLowerCase())) {
-    configureCwdModuleResolution(envOverrides, cwd, localCmd.toLowerCase(), p.target, p.env);
+  const normalizedLocal = path.basename(localCmd).toLowerCase().replace(/\.exe$/i, '');
+  const runtimeKey = normalizedLocal === 'nodejs' ? 'node' : normalizedLocal;
+  if (['node', 'bun', 'tsx', 'ts-node'].includes(runtimeKey)) {
+    configureCwdModuleResolution(envOverrides, effectiveEvalCwd, runtimeKey, p.target, p.env);
   }
   const normalizedTemp = scriptFilePath.replace(/\\/g, '/');
   let localArgs: string[];
   if (isPwsh(localCmd) || isCmd(localCmd)) {
     localArgs = formatScriptArgs(localCmd, scriptFilePath, p.args);
   } else if (process.platform === 'win32' && ['bash', 'sh', 'zsh'].includes(localCmd.toLowerCase())) {
-    const wslTemp = normalizedTemp.replace(/^([a-zA-Z]):\//, (_m, drive: string) => `/mnt/${drive.toLowerCase()}/`);
-    localArgs = [wslTemp, ...(p.args ?? [])];
+    const prefix = p.target === 'wsl2' ? '/mnt/' : '/';
+    const unixTemp = normalizedTemp.replace(/^([a-zA-Z]):\//, (_m, drive: string) => `${prefix}${drive.toLowerCase()}/`);
+    localArgs = [unixTemp, ...(p.args ?? [])];
   } else {
     localArgs = [normalizedTemp, ...(p.args ?? [])];
   }
