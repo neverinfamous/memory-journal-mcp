@@ -7,6 +7,10 @@ import { formatCliError, writeCliResult } from './cli-output.js'
 export const searchSchema = searchOptionsSchema
 
 export async function searchAction(query: string | undefined, options: z.infer<typeof searchSchema>, command: Command): Promise<void> {
+    if (options.dumpConfig === true) {
+        await getDb(options, command)
+        return
+    }
     const finalQuery = query ?? options.query ?? options.term ?? options.keyword;
     if (!finalQuery) {
         process.stderr.write("🛠️ AUTONOMOUS HEALING: Missing search query. You must provide a query as a positional argument (e.g. `mj search \"query\"`) or via a flag (e.g. `mj search --query \"query\"`).\n");

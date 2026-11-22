@@ -46,7 +46,7 @@ function detectRecoverableEntryCall(
         /\b(?:updateEntry|teamUpdateEntry|update_entry|team_update_entry)\b/i.test(strippedCode)
     const isLegacyUpdateAlias = !isStrictUpdate && /\bupdateMemory\b/i.test(strippedCode)
     const isUpdate =
-        isStrictUpdate || (isLegacyUpdateAlias && /\b(?:entry_id|id)\s*:\s*-?\d+/i.test(strippedCode))
+        isStrictUpdate || (isLegacyUpdateAlias && /\b(?:entry_id|entryId|id)\s*:\s*-?\d+/i.test(strippedCode))
     const isTeamCall =
         /\b(?:teamCreateEntry|teamUpdateEntry|team_create_entry|team_update_entry)\b/i.test(
             strippedCode
@@ -299,7 +299,7 @@ function populateRecoveredEntryMetadata(
         /\b(?:significance_type|significanceType)\s*:\s*(['"`])([^'"`]+)\1/i.exec(topLevelScanCode)
     const isPersonalMatch = /\b(?:is_personal|isPersonal)\s*:\s*(true|false)\b/i.exec(topLevelScanCode)
     const shareTeamMatch = /\b(?:share_with_team|shareWithTeam)\s*:\s*(true|false)\b/i.exec(topLevelScanCode)
-    const entryIdMatch = /\b(?:entry_id|id)\s*:\s*(-?\d+(?:\.\d+)?)/i.exec(topLevelScanCode)
+    const entryIdMatch = /\b(?:entry_id|entryId|id)\s*:\s*(-?\d+(?:\.\d+)?)/i.exec(topLevelScanCode)
 
     if (entryIdMatch?.[1] !== undefined) {
         const eid = parseCanonicalPositiveInt(entryIdMatch[1])

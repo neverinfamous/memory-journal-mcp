@@ -119,8 +119,10 @@ export function writeProjectRegistryFile(configPath: string, config: Record<stri
         ? (stringifyYaml as (value: unknown) => string)(config)
         : JSON.stringify(config, null, 4)
     const tmpPath = `${resolved}.${String(process.pid)}.${randomBytes(8).toString('hex')}.tmp`
+    let wroteTemp = false
     try {
         fs.writeFileSync(tmpPath, serialized, { encoding: 'utf-8', flag: 'wx', mode: 0o600 })
+        wroteTemp = true
         fs.chmodSync(tmpPath, 0o600)
         registryFileCache.delete(resolved)
         fs.renameSync(tmpPath, resolved)
@@ -134,10 +136,12 @@ export function writeProjectRegistryFile(configPath: string, config: Record<stri
             // Cache remains cleared if post-rename stat fails.
         }
     } catch (writeErr) {
-        try {
-            fs.rmSync(tmpPath, { force: true })
-        } catch {
-            // [SIDE-EFFECT] Best-effort temp cleanup; rethrow original write error below.
+        if (wroteTemp) {
+            try {
+                fs.rmSync(tmpPath, { force: true })
+            } catch {
+                // [SIDE-EFFECT] Best-effort temp cleanup; rethrow original write error below.
+            }
         }
         throw writeErr
     }

@@ -201,7 +201,13 @@ function interceptRecordSingleId(
             'Use a batch method (e.g. batch_delete_entries) or pass { entry_id: number }'
         )
     }
-    const idVal = obj['entry_id'] ?? obj['entryId'] ?? obj['id'] ?? obj['path'] ?? obj['keep']
+    const isUpdateEntryMethod = ['update_entry', 'updateEntry', 'team_update_entry', 'teamUpdateEntry'].includes(
+        methodName
+    )
+    const hasExplicitId =
+        obj['entry_id'] !== undefined || obj['entryId'] !== undefined || obj['id'] !== undefined
+    const idVal =
+        obj['entry_id'] ?? obj['entryId'] ?? obj['id'] ?? (isUpdateEntryMethod ? undefined : obj['path'] ?? obj['keep'])
     if (idVal === undefined) {
         if (
             (methodName === 'get_entry_by_id' || methodName === 'getEntryById') &&
@@ -212,10 +218,12 @@ function interceptRecordSingleId(
         }
         return validationError(`${methodName} requires an 'entry_id' parameter.`, 'Provide { entry_id: number, ... } as the argument')
     }
-    for (const k of ['path', 'keep']) {
-        if (obj[k] !== undefined && obj['entry_id'] === undefined) {
-            obj['entry_id'] = obj[k]
-            Reflect.deleteProperty(obj, k)
+    if (!isUpdateEntryMethod && !hasExplicitId) {
+        for (const k of ['path', 'keep']) {
+            if (obj[k] !== undefined && obj['entry_id'] === undefined) {
+                obj['entry_id'] = obj[k]
+                Reflect.deleteProperty(obj, k)
+            }
         }
     }
     if (

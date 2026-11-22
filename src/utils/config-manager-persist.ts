@@ -75,15 +75,19 @@ export function writeTempAndRenameConfig(
 ): void {
     assertSafeConfigWriteTargetSync(targetPath)
     const tmpPath = `${targetPath}.${String(process.pid)}.${randomBytes(8).toString('hex')}.tmp`
+    let wroteTemp = false
     try {
         fs.writeFileSync(tmpPath, serialized, { encoding: 'utf-8', flag: 'wx', mode: 0o600 })
+        wroteTemp = true
         fs.chmodSync(tmpPath, 0o600)
         fs.renameSync(tmpPath, targetPath)
     } catch (writeErr: unknown) {
-        try {
-            fs.rmSync(tmpPath, { force: true })
-        } catch {
-            // [SIDE-EFFECT] Best-effort temp cleanup; the original error is reported below.
+        if (wroteTemp) {
+            try {
+                fs.rmSync(tmpPath, { force: true })
+            } catch {
+                // [SIDE-EFFECT] Best-effort temp cleanup; the original error is reported below.
+            }
         }
         throw writeErr
     }

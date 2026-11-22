@@ -230,7 +230,12 @@ function flattenFilterObject(result: Record<string, unknown>): void {
             snakeK = 'project_number'
         }
         if (FORBIDDEN_DYNAMIC_KEYS.has(snakeK)) continue
-        if (!Object.hasOwn(result, snakeK)) result[snakeK] = v
+        if (k !== snakeK && Object.hasOwn(filterObj, snakeK) && filterObj[snakeK] !== undefined) {
+            continue
+        }
+        if (!Object.hasOwn(result, snakeK) || (result[snakeK] === undefined && v !== undefined)) {
+            result[snakeK] = v
+        }
     }
     delete result['filter']
 }

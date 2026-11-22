@@ -8,6 +8,7 @@ import { applySqlCipherKey } from './sqlcipher-key.js'
 import { ConnectionError } from '../../types/errors.js'
 import { MigrationManager } from '../migrations/migration-manager.js'
 import type { IDatabaseConnection, QueryResult } from '../core/interfaces.js'
+import { scanSqlQuotedSpan, stripSqlComments } from './backup-ddl-validators.js'
 import {
     applyNativePragmas,
     installStatementCache,
@@ -34,6 +35,23 @@ const FTS_REBUILD_DEFER_MS = 5000
 /** Shortened FTS5 rebuild delay used when NODE_ENV is 'test'. */
 const FTS_REBUILD_DEFER_TEST_MS = 10
 
+
+function stripSqlStringsAndComments(sql: string): string {
+    const noComments = stripSqlComments(sql)
+    let out = ''
+    let i = 0
+    while (i < noComments.length) {
+        const ch = noComments[i] ?? ''
+        if (ch === "'" || ch === '"' || ch === '`' || ch === '[') {
+            i = scanSqlQuotedSpan(noComments, i, ch)
+            out += ' '
+            continue
+        }
+        out += ch
+        i++
+    }
+    return out
+}
 
 export class NativeConnectionManager implements IDatabaseConnection {
     private db: Database | null = null
@@ -239,9 +257,8 @@ export class NativeConnectionManager implements IDatabaseConnection {
     exec(sql: string, params?: unknown[]): QueryResult[] {
         const db = this.ensureDb()
 
-        // Strip string literals to safely check for multiple statements
-        // SQLite uses single quotes for strings and double quotes for identifiers
-        const strippedSql = sql.replace(/'[^']*'/g, '').replace(/"[^"]*"/g, '')
+        // Strip SQL comments and string/identifier literals safely before checking for multiple statements
+        const strippedSql = stripSqlStringsAndComments(sql)
         const statements = strippedSql
             .split(';')
             .map((s) => s.trim())

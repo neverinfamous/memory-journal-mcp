@@ -264,7 +264,7 @@ export function extractAuditScopeFromArgs(
 
 /** Extract optional workspace_id / project_number query params or URI path repo from a memory:// URI. */
 function extractRepoPathFromResourceUrl(parsed: URL): string | undefined {
-    const host = parsed.hostname
+    const host = parsed.hostname.toLowerCase()
     const stripped = parsed.pathname.replace(/^\/+/, '').trim()
     if (stripped.length === 0) return undefined
     if (host === 'briefing' || host === 'agent-context' || host === 'agent-id' || host === 'graph') {
@@ -293,7 +293,7 @@ function extractRepoPathFromResourceUrl(parsed: URL): string | undefined {
 }
 
 function extractProjectNumberFromResourceUrl(parsed: URL): number | undefined {
-    const host = parsed.hostname
+    const host = parsed.hostname.toLowerCase()
     const segments = parsed.pathname.replace(/^\/+/, '').trim().split('/').filter(Boolean)
     const first = segments[0]
     if (first === undefined) return undefined

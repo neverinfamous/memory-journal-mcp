@@ -27,15 +27,31 @@ const NON_CODE_METADATA_KEYS = new Set([
     'workspace_id',
     'workspaceId',
     'workspace',
-    'expected_version',
-    'auto_version',
+    'target_workspace_id',
+    'targetWorkspaceId',
+    'entry_id',
+    'entryId',
+    'id',
     'project_number',
     'projectNumber',
+    'project_id',
+    'projectId',
+    'project_name',
+    'projectName',
+    'project',
+    'expected_version',
+    'auto_version',
+    'autoVersion',
     'query',
     'search',
     'q',
     'term',
     'keyword',
+    'category',
+    'topic',
+    'mode',
+    'limit',
+    'offset',
     'context',
     'session_id',
     'sessionId',
@@ -54,6 +70,10 @@ const NON_CODE_METADATA_KEYS = new Set([
     'dry_run',
     'dryRun',
     'use_test_db',
+    'useTestDb',
+    'owner',
+    'cwd',
+    'branch',
     'group_name',
     'groupName',
     'entry_type',
@@ -85,6 +105,17 @@ const ENTRY_CONTENT_ALIAS_KEYS = [
     'insight',
     'knowledge',
 ] as const
+
+function findFallbackCodeString(obj: Record<string, unknown>): string | undefined {
+    for (const [k, v] of Object.entries(obj)) {
+        if (typeof v !== 'string' || NON_CODE_METADATA_KEYS.has(k)) continue
+        const trimmed = v.trim()
+        if (trimmed.length > 0 && (trimmed.split(/\s+/).length >= 2 || /[(.=[\];{}`'"]/.test(trimmed))) {
+            return v
+        }
+    }
+    return undefined
+}
 
 /**
  * Normalizes alternative Code Mode execution payload aliases into `code` while
@@ -138,12 +169,8 @@ export function normalizeExecuteCodeAliases(obj: Record<string, unknown>): void 
         else if (obj['action'] !== undefined || obj['task'] !== undefined || obj['notes'] !== undefined || obj['changes'] !== undefined) {
             obj['code'] = JSON.stringify(obj)
         } else {
-            for (const [k, v] of Object.entries(obj)) {
-                if (typeof v === 'string' && v.trim().length > 0 && !NON_CODE_METADATA_KEYS.has(k)) {
-                    obj['code'] = v
-                    break
-                }
-            }
+            const fallbackCode = findFallbackCodeString(obj)
+            if (fallbackCode !== undefined) obj['code'] = fallbackCode
         }
     }
 }

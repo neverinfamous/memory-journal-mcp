@@ -15,6 +15,7 @@ export {
     resolveEffectiveProjectRegistry,
     setActiveProjectRegistry,
     setFallbackProjectRegistryLoader,
+    setScopedProjectRegistryReader,
 } from './project-alias-helpers.js'
 
 const NUMERIC_ID_KEYS = [

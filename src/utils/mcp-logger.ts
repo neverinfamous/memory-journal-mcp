@@ -193,8 +193,14 @@ export class McpLogger {
             typeof rawMessage === 'string'
                 ? sanitizeErrorForLogging(rawMessage).replace(/[\r\n]+/g, ' ')
                 : ''
-        const rest = this.sanitizePlainRecord(restData)
-        return { ...rest, message: cleanedMessage }
+        const rootSeen = new WeakSet()
+        rootSeen.add(data)
+        try {
+            const rest = this.sanitizePlainRecord(restData, 0, rootSeen)
+            return { ...rest, message: cleanedMessage }
+        } finally {
+            rootSeen.delete(data)
+        }
     }
 
     /**

@@ -138,8 +138,8 @@ export function passMetadataFilters(
         return false
     if (options.entryType && entry.entryType !== options.entryType) return false
     if (options.startDate || options.endDate) {
-        const tIdx = entry.timestamp.indexOf('T')
-        const entryDate = tIdx === -1 ? entry.timestamp : entry.timestamp.slice(0, tIdx)
+        const sepIdx = entry.timestamp.search(/[Tt ]/)
+        const entryDate = sepIdx === -1 ? entry.timestamp : entry.timestamp.slice(0, sepIdx)
         if (options.startDate && entryDate < options.startDate) return false
         if (options.endDate && entryDate > options.endDate) return false
     }

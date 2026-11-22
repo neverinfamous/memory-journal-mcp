@@ -15,6 +15,7 @@ import { isRecord } from './shared-utils.js'
 
 let activeProjectRegistry: Record<string, ProjectRegistryEntry> | undefined
 let activeProjectRegistryBound = false
+let scopedRegistryReader: (() => ActiveRegistrySnapshot | undefined) | undefined
 let fallbackRegistryLoader: (() => Record<string, ProjectRegistryEntry> | undefined) | undefined
 
 export interface ActiveRegistrySnapshot {
@@ -29,6 +30,12 @@ export function setActiveProjectRegistry(
     activeProjectRegistryBound = registry !== undefined
 }
 
+export function setScopedProjectRegistryReader(
+    reader: (() => ActiveRegistrySnapshot | undefined) | undefined
+): void {
+    scopedRegistryReader = reader
+}
+
 export function captureActiveProjectRegistryState(): ActiveRegistrySnapshot {
     return { registry: activeProjectRegistry, bound: activeProjectRegistryBound }
 }
@@ -39,7 +46,7 @@ export function restoreActiveProjectRegistryState(snapshot: ActiveRegistrySnapsh
 }
 
 export function hasActiveProjectRegistry(): boolean {
-    return activeProjectRegistryBound
+    return scopedRegistryReader?.()?.bound === true || activeProjectRegistryBound
 }
 
 export function setFallbackProjectRegistryLoader(
@@ -51,10 +58,14 @@ export function setFallbackProjectRegistryLoader(
 export function resolveEffectiveProjectRegistry():
     | Record<string, ProjectRegistryEntry>
     | undefined {
+    const scoped = scopedRegistryReader?.()
+    if (scoped?.bound === true) return scoped.registry
     return activeProjectRegistryBound ? activeProjectRegistry : fallbackRegistryLoader?.()
 }
 
 export function getActiveProjectRegistry(): Record<string, ProjectRegistryEntry> | undefined {
+    const scoped = scopedRegistryReader?.()
+    if (scoped?.bound === true) return scoped.registry
     return activeProjectRegistry
 }
 

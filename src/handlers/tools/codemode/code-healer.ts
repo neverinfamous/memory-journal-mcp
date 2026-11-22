@@ -82,7 +82,7 @@ function extractSingleExecuteCodeStringArg(stripped: string): string | null {
     for (; i < stripped.length; i++) {
         const ch = stripped[i] ?? ''
         if (escaped) {
-            chars.push(ch === quote ? quote : `\\${ch}`)
+            chars.push(ch === quote || ch === '\\' ? ch : `\\${ch}`)
             escaped = false
             continue
         }

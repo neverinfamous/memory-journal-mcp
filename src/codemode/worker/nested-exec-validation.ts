@@ -339,8 +339,7 @@ export function validateNestedExecScope(
             pinnedProjectNumber !== undefined &&
             effectiveWs !== undefined &&
             effectiveCanon !== undefined &&
-            effectiveCanon !== '*' &&
-            effectiveCanon.toLowerCase() !== 'default'
+            effectiveCanon !== '*'
         ) {
             const regProj = registry?.[effectiveCanon]?.project_number
             if (regProj !== undefined && regProj !== pinnedProjectNumber) {

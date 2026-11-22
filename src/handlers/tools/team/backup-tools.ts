@@ -17,6 +17,13 @@ import * as path from 'node:path'
 // Tool Definitions
 // ============================================================================
 
+const TeamListBackupsStrictSchema = z
+    .object({
+        project_number: StrictProjectNumberSchema.optional(),
+        workspace_id: z.string().max(255).optional(),
+    })
+    .strict()
+
 export function getTeamBackupTools(context: ToolContext): ToolDefinition[] {
     const { teamDb } = context
 
@@ -102,12 +109,7 @@ export function getTeamBackupTools(context: ToolContext): ToolDefinition[] {
                         return { ...TEAM_DB_ERROR_RESPONSE }
                     }
 
-                    z.object({
-                        project_number: StrictProjectNumberSchema.optional(),
-                        workspace_id: z.string().max(255).optional(),
-                    })
-                        .strict()
-                        .parse(params ?? {})
+                    const parsed = TeamListBackupsStrictSchema.parse(params ?? {})
 
                     const backups = teamDb.listBackups()
                     const maskedBackups = backups.map((b) => ({
@@ -120,6 +122,9 @@ export function getTeamBackupTools(context: ToolContext): ToolDefinition[] {
                         backups: maskedBackups,
                         total: backups.length,
                         backupsDirectory: path.basename(teamDb.getBackupsDir()),
+                        ...(parsed.project_number !== undefined || parsed.workspace_id !== undefined
+                            ? { scopeNote: 'Database-wide team backups' }
+                            : {}),
                         hint:
                             backups.length === 0
                                 ? 'No team backups found. Use team_backup to create one.'

@@ -115,7 +115,7 @@ function readEntryIdField(target: Record<string, unknown>): {
     entryId: number | undefined
     invalidExplicitEntryId: number | string | undefined
 } {
-    const raw = target['entry_id'] ?? target['id']
+    const raw = target['entry_id'] ?? target['entryId'] ?? target['id']
     if (raw === undefined || raw === null || (typeof raw === 'string' && raw.trim() === '')) {
         return { entryId: undefined, invalidExplicitEntryId: undefined }
     }

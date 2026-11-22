@@ -121,6 +121,40 @@ function runInAdjustedRequestContext(
     )
 }
 
+function assertToolAccessAndMaintenance(tool: ToolDefinition, sessionContext: ToolContext): void {
+    const runtime = sessionContext.config?.runtime
+    enforceAccessBoundary(tool.name, 'tool', tool.capabilities, runtime?.auditLogger)
+    if (tool.name !== 'restore_backup') {
+        runtime?.maintenanceManager.assertNotInMaintenanceMode()
+    }
+}
+
+function checkDispatcherModeBlock(
+    tool: ToolDefinition,
+    sessionContext: ToolContext,
+    readonlyOverride: boolean | undefined
+): Record<string, unknown> | undefined {
+    if (tool.name === 'update_configuration' && sessionContext.config?.codemodeInternalFullAccess !== true) {
+        return {
+            success: false,
+            error: "Operation 'update_configuration' is blocked inside Code Mode unless --codemode-internal-full-access is enabled.",
+            code: 'PERMISSION_DENIED',
+            category: 'authorization',
+            recoverable: false,
+        }
+    }
+    if (readonlyOverride === true && tool.annotations?.readOnlyHint !== true) {
+        return {
+            success: false,
+            error: `🛠️ AUTONOMOUS HEALING: Operation '${tool.name}' is blocked in readonly mode. Read operations only.`,
+            code: 'PERMISSION_DENIED',
+            category: 'auth',
+            recoverable: true,
+        }
+    }
+    return undefined
+}
+
 async function executeDispatcherCall(
     tool: ToolDefinition,
     toolParams: unknown,
@@ -138,6 +172,7 @@ async function executeDispatcherCall(
 
     const effectiveAutoVersion = rpcOverrides?.autoVersion === false ? false : autoVersion
     const executeWithScope = async (): Promise<unknown> => {
+        assertToolAccessAndMaintenance(tool, sessionContext)
         const normalized = await normalizeDispatchParams(tool, cleanToolParams, {
             sessionContext,
             projectId: scopeRes.effectiveProjectId,
@@ -152,28 +187,8 @@ async function executeDispatcherCall(
         const normalizedParams = normalized.params
         const boundsErr = validateRpcOverrideBounds(tool, normalizedParams, rpcOverrides, reg)
         if (boundsErr !== undefined) return boundsErr
-        if (
-            tool.name === 'update_configuration' &&
-            sessionContext.config?.codemodeInternalFullAccess !== true
-        ) {
-            return {
-                success: false,
-                error: "Operation 'update_configuration' is blocked inside Code Mode unless --codemode-internal-full-access is enabled.",
-                code: 'PERMISSION_DENIED',
-                category: 'authorization',
-                recoverable: false,
-            }
-        }
-
-        if (rpcOverrides?.readonly === true && tool.annotations?.readOnlyHint !== true) {
-            return {
-                success: false,
-                error: `🛠️ AUTONOMOUS HEALING: Operation '${tool.name}' is blocked in readonly mode. Read operations only.`,
-                code: 'PERMISSION_DENIED',
-                category: 'auth',
-                recoverable: true,
-            }
-        }
+        const modeBlockErr = checkDispatcherModeBlock(tool, sessionContext, rpcOverrides?.readonly)
+        if (modeBlockErr !== undefined) return modeBlockErr
 
         const finalParams = applyAutoVersion(tool, normalizedParams, effectiveAutoVersion, sessionContext)
         if (tool.annotations?.readOnlyHint !== true && (dryRun || rpcOverrides?.dryRun === true)) {
@@ -280,12 +295,7 @@ async function invokeToolWithGuards(
     finalParams: unknown,
     sessionContext: ToolContext
 ): Promise<unknown> {
-    // Critical C-3 Fix: Enforce OAuth access boundary, metrics collection, audit logging, and resource notifications
     const runtime = sessionContext.config?.runtime
-    enforceAccessBoundary(tool.name, 'tool', tool.capabilities, runtime?.auditLogger)
-    if (tool.name !== 'restore_backup') {
-        runtime?.maintenanceManager.assertNotInMaintenanceMode()
-    }
 
     const argsRecord = isRecord(finalParams) ? finalParams : {}
     const rawInvoke = (a: Record<string, unknown>): Promise<unknown> => Promise.resolve(tool.handler(a))

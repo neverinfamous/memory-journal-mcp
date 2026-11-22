@@ -86,6 +86,7 @@ export const TeamBackupsListOutputSchema = z
             .optional(),
         total: z.number().optional(),
         backupsDirectory: z.string().optional(),
+        scopeNote: z.string().optional(),
         hint: z.string().optional(),
         error: z.string().optional(),
     })

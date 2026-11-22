@@ -149,6 +149,7 @@ function parseUpdate(cleanSql: string, args: unknown[]): ParsedSql {
 
     const bindRes = bindPlaceholders(cleanSql, args, (ph, val) => {
         if (ph.column === undefined) return false
+        if (ph.inWhere && val === null) return false
         if (!ph.inWhere && !bindSetColumnNameCheck(ph.column)) return false
         return assignColumn(ph.inWhere ? where : setFields, ph.column, val)
     })
@@ -296,7 +297,7 @@ function parseWhereOnly(cleanSql: string, args: unknown[], action: 'delete' | 'g
     const id = literalEntryId(cleanSql)
     if (id !== undefined) payload['entry_id'] = id
     const bindRes = bindPlaceholders(cleanSql, args, (ph, val) => {
-        if (ph.column === undefined || !ph.inWhere) return false
+        if (ph.column === undefined || !ph.inWhere || val === null) return false
         return assignColumn(payload, ph.column, val)
     })
     if (!bindRes.ok) return UNMAPPED

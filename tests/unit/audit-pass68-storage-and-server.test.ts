@@ -378,7 +378,7 @@ describe('Pass 68 Audit — Storage, Locks, Schemas, Transport, Workdir & Prompt
         expect(overCap.commits.length).toBe(2)
         expect(overCap.truncated).toBe(true)
 
-        expect(AUDIT_PROMPT_REVISION).toBe('2026-11-21-audit-pass70')
+        expect(AUDIT_PROMPT_REVISION).toBe('2026-11-22-audit-pass71')
         const promptDb = new DatabaseAdapter(':memory:')
         await promptDb.initialize()
         let cqText: string
@@ -391,7 +391,7 @@ describe('Pass 68 Audit — Storage, Locks, Schemas, Transport, Workdir & Prompt
         } finally {
             promptDb.close()
         }
-        expect(cqText).toContain('Prompt revision: 2026-11-21-audit-pass70')
+        expect(cqText).toContain('Prompt revision: 2026-11-22-audit-pass71')
         expect(cqText).toContain('normalizeLockDirKey')
         expect(cqText).toContain('releaseRestoreLock')
         expect(cqText).toContain('realpathSync.native')

@@ -15,13 +15,18 @@ import { invalidateSerializedPayload, wrapWithMetrics } from '../../observabilit
 import { requestContextStorage, getRequestContext } from '../../utils/request-context.js'
 import { applyArgInterceptions as applyCodeModeArgInterceptions } from '../../codemode/param-normalizer.js'
 import {
-    getActiveProjectRegistry,
-    setActiveProjectRegistry,
     setFallbackProjectRegistryLoader,
+    setScopedProjectRegistryReader,
 } from '../../codemode/normalizers/generic-field-aliases.js'
 import { loadProjectRegistryFromConfig } from '../../utils/workspace-resolver.js'
 
 setFallbackProjectRegistryLoader(loadProjectRegistryFromConfig)
+setScopedProjectRegistryReader(() => {
+    const reqCtx = getRequestContext()
+    return reqCtx?.hasProjectRegistry === true
+        ? { bound: true, registry: reqCtx.projectRegistry }
+        : undefined
+})
 
 function stripMarkerArray(items: unknown[]): unknown[] {
     let changed = false
@@ -276,30 +281,28 @@ export function wrapToolHandlerWithInterceptors(
             : metricsWrapped
 
     return async (args: Record<string, unknown>): Promise<unknown> => {
-        const prevRegistry = getActiveProjectRegistry()
         const hasScopedRegistry = config?.projectRegistry !== undefined
-        if (hasScopedRegistry) {
-            setActiveProjectRegistry(config.projectRegistry)
+        let cleanArgs = args
+        let useTest = false
+        if ('use_test_db' in args) {
+            cleanArgs = { ...args }
+            useTest = cleanArgs['use_test_db'] === true
+            delete cleanArgs['use_test_db']
         }
-        try {
-            if ('use_test_db' in args) {
-                const cleanArgs = { ...args }
-                const useTest = cleanArgs['use_test_db'] === true
-                delete cleanArgs['use_test_db']
-                if (useTest) {
-                    const existing = getRequestContext()
-                    return await requestContextStorage.run({ ...existing, useTestDb: true }, () =>
-                        baseHandler(cleanArgs)
-                    )
-                }
-                return await baseHandler(cleanArgs)
-            }
-            return await baseHandler(args)
-        } finally {
-            if (hasScopedRegistry) {
-                setActiveProjectRegistry(prevRegistry)
-            }
+        if (useTest || hasScopedRegistry) {
+            const existing = getRequestContext()
+            return await requestContextStorage.run(
+                {
+                    ...existing,
+                    ...(useTest ? { useTestDb: true } : {}),
+                    ...(hasScopedRegistry
+                        ? { hasProjectRegistry: true, projectRegistry: config.projectRegistry }
+                        : {}),
+                },
+                () => baseHandler(cleanArgs)
+            )
         }
+        return await baseHandler(cleanArgs)
     }
 }
 

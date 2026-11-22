@@ -30,15 +30,19 @@ export const CODE_ALIAS_KEYS = [
 
 /** [M10] Scope/metadata keys never mistaken for executable code. */
 const NON_CODE_PARAM_KEYS = new Set([
-    'repo', 'repo_name', 'repoName', 'repository', 'workspace_id', 'workspaceId', 'workspace', 'expected_version',
-    'auto_version', 'project_number', 'projectNumber', 'readonly', 'session_id', 'sessionId',
-    'context', 'timeout', 'timeout_ms', 'timeoutMs', 'max_result_size', 'maxResultSize',
-    'max_result_size_bytes', 'maxResultSizeBytes', 'max_result_size_kb', 'maxResultSizeKb',
-    'dry_run', 'dryRun', 'use_test_db', 'group_name', 'groupName', 'entry_type', 'entryType',
-    'type', 'significance_type', 'significanceType', 'validation_status', 'validationStatus',
-    'title', 'tags', 'author', 'is_personal', 'isPersonal', 'share_with_team', 'shareWithTeam',
-    'learned_context', 'learnedContext', 'lesson', 'learning', 'insight', 'knowledge', 'rule',
-    'takeaway', 'finding', 'discovery', 'search', 'q', 'term', 'keyword',
+    'repo', 'repo_name', 'repoName', 'repository', 'workspace_id', 'workspaceId', 'workspace',
+    'target_workspace_id', 'targetWorkspaceId', 'entry_id', 'entryId', 'id', 'expected_version',
+    'auto_version', 'autoVersion', 'project_number', 'projectNumber', 'project_id', 'projectId',
+    'project_name', 'projectName', 'project', 'readonly', 'readOnly', 'read_only', 'session_id',
+    'sessionId', 'context', 'timeout', 'timeout_ms', 'timeoutMs', 'max_result_size',
+    'maxResultSize', 'max_result_size_bytes', 'maxResultSizeBytes', 'max_result_size_kb',
+    'maxResultSizeKb', 'dry_run', 'dryRun', 'use_test_db', 'useTestDb', 'owner', 'cwd', 'branch',
+    'group_name', 'groupName', 'entry_type', 'entryType', 'type', 'significance_type',
+    'significanceType', 'validation_status', 'validationStatus', 'title', 'tags', 'author',
+    'is_personal', 'isPersonal', 'share_with_team', 'shareWithTeam', 'learned_context',
+    'learnedContext', 'lesson', 'learning', 'insight', 'knowledge', 'rule', 'takeaway',
+    'finding', 'discovery', 'search', 'q', 'term', 'keyword', 'category', 'topic', 'mode',
+    'limit', 'offset',
 ])
 
 function extractInitialExecutionCode(
@@ -93,7 +97,9 @@ function recoverCodeFromParamsRecord(
         const groupNameVal = getNonEmptyString(entryObj, params, ['group_name', 'groupName'])
         const baseTags = Array.isArray(entryObj['tags'])
             ? entryObj['tags'].filter((t): t is string => typeof t === 'string')
-            : []
+            : Array.isArray(params['tags'])
+              ? params['tags'].filter((t): t is string => typeof t === 'string')
+              : []
         const tags =
             groupNameVal !== undefined && !baseTags.includes(groupNameVal)
                 ? [...baseTags, groupNameVal]
@@ -138,8 +144,11 @@ function recoverCodeFromParamsRecord(
     }
 
     for (const [k, v] of Object.entries(params)) {
-        if (typeof v === 'string' && v.trim().length > 0 && !NON_CODE_PARAM_KEYS.has(k)) {
-            return { code: v, synthesized: false }
+        if (typeof v === 'string' && !NON_CODE_PARAM_KEYS.has(k)) {
+            const trimmed = v.trim()
+            if (trimmed.length > 0 && (trimmed.split(/\s+/).length >= 2 || /[(.=[\];{}`'"]/.test(trimmed))) {
+                return { code: v, synthesized: false }
+            }
         }
     }
     return undefined

@@ -25,12 +25,20 @@ export const DEFAULT_QUERY_LIMIT = 100
  *
  * Usage: `z.preprocess(coerceNumber, z.number().optional())`
  */
+const CANONICAL_DECIMAL_NUMBER_RE = /^-?(?:0|[1-9]\d*)(?:\.\d+)?$/
+const CANONICAL_NON_NEG_INT_RE = /^(?:0|[1-9]\d*)$/
+
 export function coerceNumber(val: unknown): unknown {
     if (typeof val === 'number') return Number.isFinite(val) ? val : undefined
     if (typeof val === 'string') {
         // [INVARIANT] Empty/whitespace strings mean "not provided", never Number('') === 0.
-        if (val.trim() === '') return undefined
-        const n = Number(val)
+        const trimmed = val.trim()
+        if (trimmed === '' || !CANONICAL_DECIMAL_NUMBER_RE.test(trimmed)) return undefined
+        const n = Number(trimmed)
+        if (!trimmed.includes('.')) {
+            if (trimmed === '-0') return 0
+            return Number.isSafeInteger(n) && String(n) === trimmed ? n : undefined
+        }
         return Number.isFinite(n) ? n : undefined
     }
     return undefined
@@ -64,12 +72,21 @@ export function coerceLimit(
     raw: unknown,
     defaultLimit: number = DEFAULT_QUERY_LIMIT
 ): number | null {
-    if (raw === undefined || raw === null) return defaultLimit
-    if (typeof raw === 'string' && raw.trim() === '') return defaultLimit
-    const num = Number(raw)
-    if (!Number.isFinite(num)) return defaultLimit
-    if (num === 0) return null
-    return num > 0 ? Math.floor(num) : defaultLimit
+    if (typeof raw === 'number') {
+        if (!Number.isFinite(raw) || raw < 0) return defaultLimit
+        if (raw === 0) return null
+        if (raw < 1) return defaultLimit
+        const floored = Math.floor(raw)
+        return Number.isSafeInteger(floored) ? floored : defaultLimit
+    }
+    if (typeof raw === 'string') {
+        const trimmed = raw.trim()
+        if (!CANONICAL_NON_NEG_INT_RE.test(trimmed)) return defaultLimit
+        const num = Number(trimmed)
+        if (!Number.isSafeInteger(num) || String(num) !== trimmed) return defaultLimit
+        return num === 0 ? null : num
+    }
+    return defaultLimit
 }
 
 /**

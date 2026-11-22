@@ -242,6 +242,14 @@ export function resolveGitWorkingDir(input: GitWorkingDirInput, config?: ToolHan
                         `project_number ${String(pNum)} does not match registered project ${String(regProj)} for workspace '${cwdMatch}'.`
                     )
                 }
+                const ownerWs = Object.entries(registry).find(
+                    ([k, cfg]) => k.toLowerCase() !== cwdMatch.toLowerCase() && cfg?.project_number === pNum
+                )?.[0]
+                if (ownerWs !== undefined) {
+                    throw new ValidationError(
+                        `project_number ${String(pNum)} belongs to workspace '${ownerWs}', not '${cwdMatch}'.`
+                    )
+                }
             }
             if (target !== undefined && cwdMatch !== undefined) {
                 const targetMatch = findMatchedRegistryKey(registry, target) ?? target

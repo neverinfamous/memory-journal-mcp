@@ -26,13 +26,17 @@ async function assertSafeMetricsTarget(filePath: string, allowMissing: boolean):
 export async function writeMetricsSnapshotFile(filePath: string, state: string): Promise<void> {
     await assertSafeMetricsTarget(filePath, true)
     const tmpPath = `${filePath}.${String(process.pid)}.${String(Date.now())}.${randomUUID().slice(0, 8)}.tmp`
+    let wroteTemp = false
     try {
         await fs.mkdir(dirname(filePath), { recursive: true, mode: 0o700 })
         await fs.writeFile(tmpPath, state, { encoding: 'utf8', mode: 0o600, flag: 'wx' })
+        wroteTemp = true
         await fs.chmod(tmpPath, 0o600)
         await fs.rename(tmpPath, filePath)
     } catch (error) {
-        await fs.rm(tmpPath, { force: true }).catch(() => undefined)
+        if (wroteTemp) {
+            await fs.rm(tmpPath, { force: true }).catch(() => undefined)
+        }
         throw error
     }
 }

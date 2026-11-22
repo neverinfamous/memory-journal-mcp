@@ -334,7 +334,7 @@ function resolveConfiguredOrSessionFallback(
         !explicitWorkspace &&
         !isWildcardWorkspace &&
         configuredDefaultWs?.toLowerCase() === 'default' &&
-        isSessionDefaultOrOmitted
+        (isSessionDefaultOrOmitted || (hasActiveSessionScope && !claimedByRegisteredWs))
             ? sessionCtx.projectNumber
             : undefined)
     return { fallbackConfiguredWs, effectiveProjectInput }

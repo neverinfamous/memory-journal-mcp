@@ -42,6 +42,7 @@ export class TokenValidator {
     private jwks: jose.JWTVerifyGetKey | null = null
     private jwksExpiry = 0
     private preloadedJwksResponse: Response | null = null
+    private preloadedJwksExpiry = 0
 
     constructor(config: TokenValidatorConfig) {
         this.jwksUri = config.jwksUri
@@ -163,6 +164,10 @@ export class TokenValidator {
         if (this.jwks && Date.now() < this.jwksExpiry) {
             return this.jwks
         }
+        if (this.preloadedJwksResponse !== null && Date.now() >= this.preloadedJwksExpiry) {
+            this.preloadedJwksResponse = null
+            this.preloadedJwksExpiry = 0
+        }
 
         logger.info(`Fetching JWKS from: ${this.jwksHost || '[configured]'}`, {
             module: 'AUTH',
@@ -174,15 +179,21 @@ export class TokenValidator {
             const jwksFetch: typeof fetch = async (input, init) => {
                 const cached = this.preloadedJwksResponse
                 if (cached !== null) {
-                    const urlStr =
-                        typeof input === 'string'
-                            ? input
-                            : input instanceof URL
-                              ? input.href
-                              : input.url
-                    if (urlStr === this.jwksUrl.href || urlStr === this.jwksUri) {
+                    if (Date.now() >= this.preloadedJwksExpiry) {
                         this.preloadedJwksResponse = null
-                        return cached
+                        this.preloadedJwksExpiry = 0
+                    } else {
+                        const urlStr =
+                            typeof input === 'string'
+                                ? input
+                                : input instanceof URL
+                                  ? input.href
+                                  : input.url
+                        if (urlStr === this.jwksUrl.href || urlStr === this.jwksUri) {
+                            this.preloadedJwksResponse = null
+                            this.preloadedJwksExpiry = 0
+                            return cached
+                        }
                     }
                 }
                 return pinnedFetch(input, init)
@@ -403,6 +414,7 @@ export class TokenValidator {
                 signal: AbortSignal.timeout(10000),
                 redirect: 'error',
             })
+            this.preloadedJwksExpiry = Date.now() + this.jwksCacheTtl * 1000
             this.getJwks()
         } catch (error) {
             const cause = error instanceof Error ? error : new Error(String(error))

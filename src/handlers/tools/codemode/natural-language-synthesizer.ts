@@ -218,7 +218,8 @@ export function parsePositiveEntryId(
     entryObj: Record<string, unknown>,
     rawObj: Record<string, unknown>
 ): number | string | undefined {
-    const rawEntryId = entryObj['entry_id'] ?? rawObj['entry_id'] ?? entryObj['id'] ?? rawObj['id']
+    const rawEntryId =
+        entryObj['entry_id'] ?? rawObj['entry_id'] ?? entryObj['entryId'] ?? rawObj['entryId'] ?? entryObj['id'] ?? rawObj['id']
     if (typeof rawEntryId === 'number') {
         if (Number.isSafeInteger(rawEntryId) && rawEntryId > 0) return rawEntryId
         return Number.isFinite(rawEntryId) ? rawEntryId : String(rawEntryId)
