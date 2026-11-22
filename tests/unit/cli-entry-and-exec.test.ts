@@ -621,16 +621,16 @@ describe('CLI Entry & Exec Commands', () => {
 
         it('parses BOM/mixed-CRLF/EOF frontmatter, preserves non-blank workspace_id/project aliases, and fails fast on blank --file in parseContent (Q-M5, Q-M6, Q-M7)', async () => {
             // Q-M5: UTF-8 BOM + mixed CRLF/LF + EOF ---
-            const bomParsed = parseFrontmatter('\uFEFF---\nworkspace_id: "adamic"\nproject: 16\n---\nHello')
-            expect(bomParsed.frontmatter).toEqual({ workspace_id: 'adamic', project: 16 })
+            const bomParsed = parseFrontmatter('\uFEFF---\nworkspace_id: "sample-repo"\nproject: 16\n---\nHello')
+            expect(bomParsed.frontmatter).toEqual({ workspace_id: 'sample-repo', project: 16 })
             expect(bomParsed.body).toBe('Hello')
 
-            const mixedParsed = parseFrontmatter('---\r\nworkspace_id: "adamic"\r\n---\nBody line')
-            expect(mixedParsed.frontmatter).toEqual({ workspace_id: 'adamic' })
+            const mixedParsed = parseFrontmatter('---\r\nworkspace_id: "sample-repo"\r\n---\nBody line')
+            expect(mixedParsed.frontmatter).toEqual({ workspace_id: 'sample-repo' })
             expect(mixedParsed.body).toBe('Body line')
 
-            const eofParsed = parseFrontmatter('---\nworkspace_id: "adamic"\n---')
-            expect(eofParsed.frontmatter).toEqual({ workspace_id: 'adamic' })
+            const eofParsed = parseFrontmatter('---\nworkspace_id: "sample-repo"\n---')
+            expect(eofParsed.frontmatter).toEqual({ workspace_id: 'sample-repo' })
             expect(eofParsed.body).toBe('')
 
             // Q-M6: Empty string workspace / project must not shadow non-blank aliases
@@ -833,6 +833,105 @@ describe('CLI Entry & Exec Commands', () => {
                 frontmatter: { tags: ['a'] },
                 body: 'Body\n---\nMore',
             })
+        })
+
+        it('B-M1: entry update preserves persisted project_number when linking relationships in shared/unregistered workspaces', async () => {
+            const cfgFile = path.join(tmpDir, 'mj-config.json')
+            fs.writeFileSync(cfgFile, JSON.stringify({ projectRegistry: {} }), 'utf-8')
+
+            const seedDb = new DatabaseAdapter(dbPath)
+            await seedDb.initialize()
+            try {
+                const e1 = seedDb.createEntry({
+                    content: 'Project 7 source entry',
+                    entryType: 'technical_note',
+                    workspaceId: 'shared-ws',
+                    projectNumber: 7,
+                })
+                const e2 = seedDb.createEntry({
+                    content: 'Project 8 target entry',
+                    entryType: 'technical_note',
+                    workspaceId: 'shared-ws',
+                    projectNumber: 8,
+                })
+                const e3 = seedDb.createEntry({
+                    content: 'Project 7 matching entry',
+                    entryType: 'technical_note',
+                    workspaceId: 'shared-ws',
+                    projectNumber: 7,
+                })
+                expect(e1.id).toBe(1)
+                expect(e2.id).toBe(2)
+                expect(e3.id).toBe(3)
+                seedDb.flushSave()
+            } finally {
+                seedDb.close()
+            }
+
+            const prevExitCode = process.exitCode
+            try {
+                // Omitting --project leaves payload.projectNumber undefined; update must still enforce row #1's persisted projectNumber (7)
+                stdoutOutput = []
+                process.exitCode = undefined
+                await updateEntryAction(
+                    {
+                        db: dbPath,
+                        config: cfgFile,
+                        id: 1,
+                        expectedVersion: 1,
+                        workspace: 'shared-ws',
+                        relatedTo: '2',
+                        json: true,
+                    },
+                    dummyCmd
+                )
+                const crossProjectResult = JSON.parse(stdoutOutput.join('')) as {
+                    status: string
+                    entryPersisted?: boolean
+                    linkFailures?: { target_id: number; error: string }[]
+                }
+                expect(process.exitCode).toBe(1)
+                expect(crossProjectResult.status).toBe('partial')
+                expect(crossProjectResult.entryPersisted).toBe(true)
+                expect(crossProjectResult.linkFailures).toHaveLength(1)
+                expect(crossProjectResult.linkFailures?.[0]?.target_id).toBe(2)
+                expect(crossProjectResult.linkFailures?.[0]?.error).toContain('project #8')
+                expect(crossProjectResult.linkFailures?.[0]?.error).toContain('project #7')
+
+                // Same-project link (#1 -> #3, both project #7) succeeds
+                stdoutOutput = []
+                process.exitCode = undefined
+                await updateEntryAction(
+                    {
+                        db: dbPath,
+                        config: cfgFile,
+                        id: 1,
+                        expectedVersion: 2,
+                        workspace: 'shared-ws',
+                        relatedTo: '3',
+                        json: true,
+                    },
+                    dummyCmd
+                )
+                const sameProjectResult = JSON.parse(stdoutOutput.join('')) as {
+                    status: string
+                    version: number
+                }
+                expect(process.exitCode).toBeUndefined()
+                expect(sameProjectResult.status).toBe('success')
+                expect(sameProjectResult.version).toBe(3)
+            } finally {
+                process.exitCode = prevExitCode
+            }
+
+            const verifyDb = new DatabaseAdapter(dbPath)
+            await verifyDb.initialize()
+            try {
+                const rels = verifyDb.getRelationships(1, 'shared-ws')
+                expect(rels.map((r) => r.toEntryId)).toEqual([3])
+            } finally {
+                verifyDb.close()
+            }
         })
     })
 })

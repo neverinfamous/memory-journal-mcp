@@ -79,11 +79,14 @@ async function loadCliEntryContentAndPayload(
     return { content, metadata, payload }
 }
 
+const LINK_WARNING_RE = /-> #(\d+) was not created: ([\s\S]+)$/
+
 function linkCliEntryRelationships(
     db: IDatabaseAdapter,
     entryId: number,
     payload: EntryPayload,
-    workspaceId: string | undefined
+    workspaceId: string | undefined,
+    projectNumber: number | undefined
 ): { target_id: number; error: string }[] {
     const linkRequests: { targetId: number; relationType: RelationshipType }[] = [
         ...payload.relatedIds.map((targetId) => ({ targetId, relationType: 'references' as const })),
@@ -98,10 +101,10 @@ function linkCliEntryRelationships(
         entryId,
         linkRequests,
         workspaceId,
-        payload.projectNumber
+        projectNumber
     )
     return warnings.map((msg, idx) => {
-        const match = /-> #(\d+) was not created: (.+)$/.exec(msg)
+        const match = LINK_WARNING_RE.exec(msg)
         return {
             target_id:
                 match?.[1] !== undefined
@@ -248,7 +251,17 @@ async function runCreateEntry(
             autoLink: payload.autoLink,
             isTeam: options.team,
         })
-        const linkFailures = linkCliEntryRelationships(db, newEntry.id, payload, resolvedWs)
+        const effectiveProjectNumber =
+            typeof newEntry.projectNumber === 'number' && newEntry.projectNumber > 0
+                ? newEntry.projectNumber
+                : payload.projectNumber
+        const linkFailures = linkCliEntryRelationships(
+            db,
+            newEntry.id,
+            payload,
+            resolvedWs,
+            effectiveProjectNumber
+        )
         db.flushSave()
         writeCliEntryResult(newEntry, linkFailures, options.json, 'created', !inProcess)
         if (linkFailures.length > 0) {
@@ -407,7 +420,17 @@ export async function updateEntryAction(...args: unknown[]): Promise<void> {
             process.stderr.write(`Error: Entry #${entryId} not found or version mismatch.\n`)
             throw new CliExitError(1)
         }
-        const linkFailures = linkCliEntryRelationships(db, entryId, payload, result.workspaceId ?? payload.workspaceId)
+        const effectiveProjectNumber =
+            typeof result.projectNumber === 'number' && result.projectNumber > 0
+                ? result.projectNumber
+                : payload.projectNumber
+        const linkFailures = linkCliEntryRelationships(
+            db,
+            entryId,
+            payload,
+            result.workspaceId ?? payload.workspaceId,
+            effectiveProjectNumber
+        )
         db.flushSave()
         writeCliEntryResult(result, linkFailures, options.json, 'updated')
     } catch (e) {

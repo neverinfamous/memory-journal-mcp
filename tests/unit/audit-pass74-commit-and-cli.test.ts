@@ -42,14 +42,14 @@ describe('audit pass74 negative anchor caching, default-command argv normalizati
         const context = {
             config: {
                 projectRegistry: {
-                    adamic: { path: os.tmpdir(), project_number: 16 },
+                    'sample-repo': { path: os.tmpdir(), project_number: 16 },
                 },
             },
         } as never
 
         const items = Array.from({ length: 5 }, () => ({
             autoContext: JSON.stringify({ commits: ['deadbeef1234', 'DEADBEEF1234'] }),
-            workspaceId: 'adamic',
+            workspaceId: 'sample-repo',
         }))
 
         const prefetched = await prefetchBatchCommitFiles(items, context)
