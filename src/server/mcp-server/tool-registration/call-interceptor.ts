@@ -15,7 +15,7 @@ import {
     toValidationFailureResponse,
     tryPromptAndResourceFallbacks,
 } from './call-interceptor-helpers.js'
-import { resolveEffectiveMaxToolInputElements } from './register-tools.js'
+import { resolveEffectiveMaxToolInputElements } from '../../../utils/tool-input-bounds.js'
 import {
     applyCreateWorkspaceScope,
     healIncomingToolCallParams,

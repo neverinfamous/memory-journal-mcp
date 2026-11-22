@@ -1,13 +1,31 @@
 import { DEFAULT_BRIEFING_CONFIG } from '../handlers/resources/shared.js'
 import { isForbiddenProjectKey } from './project-registry-guards.js'
-import {
-    readBriefingConfigEntry,
-    type BriefingBaselineMap,
-    type BriefingConfigurableKey,
-    type BriefingValueKind,
-    type ConfigCliEnvBaseline,
-    type DynamicConfig,
+import type {
+    BriefingBaselineMap,
+    BriefingConfigurableKey,
+    BriefingValueKind,
+    ConfigCliEnvBaseline,
+    DynamicConfig,
 } from './config-manager-helpers.js'
+
+/** Look up a briefing config entry by primary file key (`briefingPrs`) before legacy aliases (`briefingPrCount`). */
+export function readBriefingConfigEntry(
+    obj: Record<string, unknown>,
+    primaryKey: string,
+    aliases?: readonly string[]
+): { key: string; value: unknown } | undefined {
+    if (primaryKey in obj && obj[primaryKey] !== undefined && obj[primaryKey] !== null) {
+        return { key: primaryKey, value: obj[primaryKey] }
+    }
+    if (aliases !== undefined) {
+        for (const alias of aliases) {
+            if (alias in obj && obj[alias] !== undefined && obj[alias] !== null) {
+                return { key: alias, value: obj[alias] }
+            }
+        }
+    }
+    return undefined
+}
 
 export type BriefingKeyMapping = Readonly<
     Record<

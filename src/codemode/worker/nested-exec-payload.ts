@@ -72,7 +72,7 @@ const DANGEROUS_NESTED_QUERY_TOKEN_RE =
  */
 export function readNestedQuerySearch(
     arg: unknown
-): { query: string; workspace_id?: string; project_number?: number; limit?: number } | undefined {
+): { query: string; workspace_id?: string; project_number?: number; limit?: unknown } | undefined {
     if (typeof arg !== 'object' || arg === null || Array.isArray(arg)) return undefined
     const codeProp = Reflect.get(arg, 'code') as unknown
     const scriptProp = Reflect.get(arg, 'script') as unknown
@@ -88,7 +88,7 @@ export function readNestedQuerySearch(
         return undefined
     }
 
-    const searchPayload: { query: string; workspace_id?: string; project_number?: number; limit?: number } = {
+    const searchPayload: { query: string; workspace_id?: string; project_number?: number; limit?: unknown } = {
         query: queryProp,
     }
     const wsProp = (Reflect.get(arg, 'workspace_id') ?? Reflect.get(arg, 'workspaceId')) as unknown
@@ -100,7 +100,7 @@ export function readNestedQuerySearch(
         searchPayload.project_number = projProp
     }
     const limitProp = Reflect.get(arg, 'limit') as unknown
-    if (typeof limitProp === 'number' && Number.isSafeInteger(limitProp) && limitProp > 0) {
+    if (limitProp !== undefined) {
         searchPayload.limit = limitProp
     }
     return searchPayload

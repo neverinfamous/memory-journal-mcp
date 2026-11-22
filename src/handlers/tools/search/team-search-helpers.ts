@@ -124,7 +124,7 @@ export function passMetadataFilters(
     if (
         options.workspaceId !== undefined &&
         options.workspaceId !== '*' &&
-        entry.workspaceId !== options.workspaceId
+        (entry.workspaceId ?? 'default') !== options.workspaceId
     ) {
         return false
     }

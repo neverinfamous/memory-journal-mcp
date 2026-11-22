@@ -22,12 +22,12 @@ import { dirname } from 'node:path'
 import type { AuditConfig, AuditEntry, AuditSearchFilters } from './types.js'
 import { logger } from '../utils/logger.js'
 import { getRequestContext } from '../utils/request-context.js'
-import { appendRegularFileNoFollow } from './audit-file-helpers.js'
 import {
+    appendRegularFileNoFollow,
     nodeErrorCode,
     rotateAuditLogFiles,
     searchAuditFileBackward,
-} from './audit-query-helpers.js'
+} from './audit-file-helpers.js'
 
 // ============================================================================
 // Constants

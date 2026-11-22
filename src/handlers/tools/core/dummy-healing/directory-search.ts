@@ -219,22 +219,28 @@ export async function searchDirectoryAsync(
             return
         }
         const subdirs: string[] = []
-        for await (const entry of dirHandle) {
-            if (
-                ++state.dirents > MAX_SEARCH_DIRENTS ||
-                state.files >= MAX_SEARCH_FILES ||
-                results.length >= maxResults
-            ) {
-                break
+        try {
+            for await (const entry of dirHandle) {
+                if (
+                    ++state.dirents > MAX_SEARCH_DIRENTS ||
+                    state.files >= MAX_SEARCH_FILES ||
+                    results.length >= maxResults
+                ) {
+                    break
+                }
+                if (entry.isSymbolicLink()) continue
+                const fullPath = path.join(currentDir, entry.name)
+                if (entry.isDirectory()) {
+                    if (!IGNORED_DIRS.has(entry.name)) subdirs.push(fullPath)
+                } else if (entry.isFile() && (fileMatcher === null || fileMatcher(entry.name))) {
+                    if (++state.files > MAX_SEARCH_FILES) break
+                    await readAndScanFileAsync(fullPath, matcher, results, maxResults, isRegex)
+                }
             }
-            if (entry.isSymbolicLink()) continue
-            const fullPath = path.join(currentDir, entry.name)
-            if (entry.isDirectory()) {
-                if (!IGNORED_DIRS.has(entry.name)) subdirs.push(fullPath)
-            } else if (entry.isFile() && (fileMatcher === null || fileMatcher(entry.name))) {
-                if (++state.files > MAX_SEARCH_FILES) break
-                await readAndScanFileAsync(fullPath, matcher, results, maxResults, isRegex)
-            }
+        } finally {
+            await dirHandle.close().catch(() => {
+                // Directory stream may already be closed after iteration.
+            })
         }
         for (const sub of subdirs) {
             if (results.length >= maxResults || state.dirents >= MAX_SEARCH_DIRENTS || state.files >= MAX_SEARCH_FILES) {

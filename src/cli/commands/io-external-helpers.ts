@@ -64,12 +64,18 @@ export async function collectExternalMarkdownFiles(
     const allMdFiles: string[] = []
     let scannedEntries = 0
     const dir = await fs.opendir(resolvedDir)
-    for await (const dirent of dir) {
-        if (++scannedEntries > MAX_DIRECTORY_SCAN_ENTRIES) break
-        if (dirent.isFile() && dirent.name.endsWith('.md')) {
-            allMdFiles.push(dirent.name)
-            if (allMdFiles.length >= MAX_DIRECTORY_SCAN_ENTRIES) break
+    try {
+        for await (const dirent of dir) {
+            if (++scannedEntries > MAX_DIRECTORY_SCAN_ENTRIES) break
+            if (dirent.isFile() && dirent.name.endsWith('.md')) {
+                allMdFiles.push(dirent.name)
+                if (allMdFiles.length >= MAX_DIRECTORY_SCAN_ENTRIES) break
+            }
         }
+    } finally {
+        await dir.close().catch(() => {
+            // Directory stream may already be closed after iteration.
+        })
     }
     allMdFiles.sort((a, b) => a.localeCompare(b))
     const mdFiles = allMdFiles.slice(0, limit)

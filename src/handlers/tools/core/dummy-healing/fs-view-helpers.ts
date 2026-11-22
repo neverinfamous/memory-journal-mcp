@@ -111,12 +111,18 @@ export async function listBoundedDirectoryEntries(
     const dir = await fs.promises.opendir(dirToRead)
     const entries: { name: string; isDirectory: boolean; isFile: boolean }[] = []
     let scanned = 0
-    for await (const d of dir) {
-        if (++scanned > maxEntries) break
-        entries.push({
-            name: d.name,
-            isDirectory: d.isDirectory(),
-            isFile: d.isFile(),
+    try {
+        for await (const d of dir) {
+            if (++scanned > maxEntries) break
+            entries.push({
+                name: d.name,
+                isDirectory: d.isDirectory(),
+                isFile: d.isFile(),
+            })
+        }
+    } finally {
+        await dir.close().catch(() => {
+            // Directory stream may already be closed after iteration.
         })
     }
     return entries

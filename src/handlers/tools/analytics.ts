@@ -243,7 +243,7 @@ function omitNonStrictStatisticsKeys(params: unknown): unknown {
 
 /** Relaxed schema — passed to SDK inputSchema so Zod errors reach the handler */
 const GetStatisticsSchemaMcp = z.object({
-    group_by: z.string().optional().default('week'),
+    group_by: z.string().optional(),
     start_date: z.string().optional(),
     end_date: z.string().optional(),
     project_breakdown: z.boolean().optional().default(false).describe('Set to true to return multi-project entry breakdown across all registered projects (workspace_id: "*").'),

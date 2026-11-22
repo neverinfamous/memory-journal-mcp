@@ -33,15 +33,22 @@ function renderMermaidNode(node: GraphNode): string {
     const rawContent =
         typeof node.metadata?.['content'] === 'string' ? node.metadata['content'] : ''
     if (rawContent === '') {
-        const safeLabel = node.label.replace(/"/g, "'").substring(0, 50)
+        const safeLabel = node.label
+            .slice(0, 50)
+            .replace(/[\r\n`]+/g, ' ')
+            .replace(/"/g, "'")
+            .replace(/\[/g, '(')
+            .replace(/\]/g, ')')
         return `    E${String(node.id)}["#${String(node.id)}: ${safeLabel}"]`
     }
-    let contentPreview = rawContent.slice(0, MERMAID_CONTENT_PREVIEW_LENGTH).replace(/\n/g, ' ')
+    let contentPreview = rawContent
+        .slice(0, MERMAID_CONTENT_PREVIEW_LENGTH)
+        .replace(/[\r\n`]+/g, ' ')
     if (rawContent.length > MERMAID_CONTENT_PREVIEW_LENGTH) {
         contentPreview += '...'
     }
     contentPreview = contentPreview.replace(/"/g, "'").replace(/\[/g, '(').replace(/\]/g, ')')
-    const entryTypeShort = node.group.slice(0, 20)
+    const entryTypeShort = node.group.slice(0, 20).replace(/[\r\n`"]+/g, ' ')
     return `    E${String(node.id)}["#${String(node.id)}: ${contentPreview}<br/>${entryTypeShort}"]`
 }
 
@@ -63,7 +70,8 @@ function renderMermaid(graph: RelationshipGraph): string {
         mermaidLines.push(...graph.nodes.map(renderMermaidNode), '')
         for (const edge of graph.edges) {
             const arrow = Object.hasOwn(REL_SYMBOLS, edge.type) ? REL_SYMBOLS[edge.type] : '-->'
-            mermaidLines.push(`    E${String(edge.from)} ${arrow}|${edge.type}| E${String(edge.to)}`)
+            const safeEdgeType = edge.type.replace(/[\r\n`|]+/g, '_')
+            mermaidLines.push(`    E${String(edge.from)} ${arrow}|${safeEdgeType}| E${String(edge.to)}`)
         }
         mermaidLines.push('', ...graph.nodes.map(renderMermaidStyle))
     }

@@ -13,6 +13,7 @@ import {
     parsePositiveEntryId,
     parseProjectNumberField,
     readWorkspaceField,
+    resolveCompatibleInheritedScope,
     synthesizeNaturalLanguageOrEntryPayload,
     type ExecuteCodeInput,
 } from './natural-language-synthesizer.js'
@@ -120,18 +121,8 @@ function recoverCodeFromParamsRecord(
         }
         if (!isUpdate || hasExplicitTags || finalTags.length > 0) payload['tags'] = finalTags
         if (numericEntryId !== undefined) payload['entry_id'] = numericEntryId
-        const entryWs = readWorkspaceField(entryObj, {})
-        const outerWs = entryObj !== params ? readWorkspaceField(params, {}) : undefined
-        const entryProj = parseProjectNumberField(entryObj, {})
-        const outerProj = entryObj !== params ? parseProjectNumberField(params, {}) : undefined
-        const wsDiffersFromOuter =
-            entryWs !== undefined &&
-            (outerWs !== undefined
-                ? entryWs.trim().toLowerCase() !== outerWs.trim().toLowerCase()
-                : entryWs.trim().toLowerCase() === 'default')
-        const projVal = entryProj ?? (!wsDiffersFromOuter ? outerProj : undefined)
+        const { projVal, wsVal } = resolveCompatibleInheritedScope(entryObj, params)
         if (projVal !== undefined) payload['project_number'] = projVal
-        const wsVal = entryWs ?? (entryProj === undefined ? outerWs : undefined)
         if (wsVal !== undefined) payload['workspace_id'] = wsVal
         const sessVal = getNonEmptyString(entryObj, params, ['session_id', 'sessionId'])
         if (sessVal !== undefined) payload['session_id'] = sessVal
@@ -326,6 +317,41 @@ function oversizedContextFailure(): { earlyReturn: Record<string, unknown> } {
     )
 }
 
+function synthesizeContextEntryCall(
+    ctxVal: Record<string, unknown>,
+    outerFallback: Record<string, unknown>,
+    rawBody: string,
+    wsVal: string | undefined,
+    projVal: number | string | undefined
+): string | { earlyReturn: Record<string, unknown> } {
+    if (Buffer.byteLength(rawBody, 'utf-8') > MAX_RECOVERED_CONTEXT_CODE_BYTES) {
+        return oversizedContextFailure()
+    }
+    const numericEntryId = parsePositiveEntryId(ctxVal, outerFallback)
+    const isUpdate = numericEntryId !== undefined
+    const explicitTitle = getNonEmptyString(ctxVal, {}, ['title'])
+    const explicitType = getNonEmptyString(ctxVal, {}, ['type', 'entry_type', 'category'])
+    const entryPayload: Record<string, unknown> = { content: rawBody }
+    if (!isUpdate || explicitTitle !== undefined) {
+        entryPayload['title'] = explicitTitle ?? 'Journal Entry'
+    }
+    if (explicitType !== undefined) entryPayload['entry_type'] = explicitType
+    else if (!isUpdate) entryPayload['entry_type'] = 'technical_note'
+    if (Array.isArray(ctxVal['tags'])) {
+        const cleanTags = ctxVal['tags'].filter((t): t is string => typeof t === 'string')
+        if (cleanTags.length > 0 || !isUpdate) entryPayload['tags'] = cleanTags
+    }
+    if (numericEntryId !== undefined) entryPayload['entry_id'] = numericEntryId
+    if (wsVal !== undefined) entryPayload['workspace_id'] = wsVal
+    if (projVal !== undefined) entryPayload['project_number'] = projVal
+    appendSharedEntryFlags(entryPayload, ctxVal, outerFallback)
+    const fnName = isUpdate ? 'mj.updateEntry' : 'mj.createEntry'
+    const synthesized = `return await ${fnName}(${JSON.stringify(entryPayload)});`
+    return Buffer.byteLength(synthesized, 'utf-8') <= MAX_RECOVERED_CONTEXT_CODE_BYTES
+        ? synthesized
+        : oversizedContextFailure()
+}
+
 function recoverFromContextField(
     ctxVal: unknown,
     outerParams?: Record<string, unknown>
@@ -347,8 +373,7 @@ function recoverFromContextField(
                 : oversizedContextFailure()
         }
         const outerFallback = outerParams ?? {}
-        const wsVal = readWorkspaceField(ctxVal, outerFallback)
-        const projVal = parseProjectNumberField(ctxVal, outerFallback)
+        const { wsVal, projVal } = resolveCompatibleInheritedScope(ctxVal, outerFallback)
         if (typeof ctxVal['query'] === 'string' && ctxVal['query'].trim().length > 0) {
             if (Buffer.byteLength(ctxVal['query'], 'utf-8') > MAX_RECOVERED_CONTEXT_CODE_BYTES) {
                 return oversizedContextFailure()
@@ -368,20 +393,7 @@ function recoverFromContextField(
                   ? ctxVal['instructions']
                   : undefined
         if (rawBody !== undefined && rawBody.trim().length > 0) {
-            if (Buffer.byteLength(rawBody, 'utf-8') > MAX_RECOVERED_CONTEXT_CODE_BYTES) {
-                return oversizedContextFailure()
-            }
-            const entryPayload: Record<string, unknown> = {
-                title: typeof ctxVal['title'] === 'string' ? ctxVal['title'] : 'Journal Entry',
-                content: rawBody,
-                entry_type: typeof ctxVal['type'] === 'string' ? ctxVal['type'] : 'technical_note',
-            }
-            if (wsVal !== undefined) entryPayload['workspace_id'] = wsVal
-            if (projVal !== undefined) entryPayload['project_number'] = projVal
-            const synthesized = `return await mj.createEntry(${JSON.stringify(entryPayload)});`
-            return Buffer.byteLength(synthesized, 'utf-8') <= MAX_RECOVERED_CONTEXT_CODE_BYTES
-                ? synthesized
-                : oversizedContextFailure()
+            return synthesizeContextEntryCall(ctxVal, outerFallback, rawBody, wsVal, projVal)
         }
     }
     return undefined

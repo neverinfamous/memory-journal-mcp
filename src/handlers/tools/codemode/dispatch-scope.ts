@@ -238,6 +238,15 @@ function resolveRootScopePairing(
     return { callerPassedProjectOnly, hasCrossWorkspaceTarget }
 }
 
+function repoMatchesSessionWs(hint: string, wsId: string): boolean {
+    const h = hint.toLowerCase()
+    const w = wsId.toLowerCase()
+    if (h === w) return true
+    const slug = (s: string): boolean => s.includes('/') && !s.includes('\\') && !/^[a-z]:/i.test(s) && !s.startsWith('/')
+    if (slug(h) && w.includes('/')) return false
+    return h.split(/[/\\]/).filter(Boolean).pop() === w.split(/[/\\]/).filter(Boolean).pop()
+}
+
 function applyRootSessionInheritance(
     tool: ToolDefinition,
     paramsObj: Record<string, unknown>,
@@ -260,10 +269,7 @@ function applyRootSessionInheritance(
         ((repoReg?.project_number !== undefined &&
             typeof projectId === 'number' &&
             repoReg.project_number !== projectId) ||
-            (typeof workspaceId === 'string' &&
-                workspaceId !== '*' &&
-                callerRepoHint.split(/[/\\]/).filter(Boolean).pop()?.toLowerCase() !==
-                    workspaceId.toLowerCase()))
+            (typeof workspaceId === 'string' && workspaceId !== '*' && !repoMatchesSessionWs(callerRepoHint, workspaceId)))
     if (
         repoTargetsForeignProject &&
         paramsObj['project_number'] === undefined &&

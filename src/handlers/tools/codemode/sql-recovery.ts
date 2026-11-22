@@ -111,10 +111,27 @@ function extractTopLevelLimit(cleanSql: string): number | undefined {
 }
 
 function specialWhereAllowedCols(table: string): readonly string[] {
+    if (
+        table === 'projects' ||
+        table === 'project_registry' ||
+        table === 'team_members' ||
+        table === 'members'
+    ) {
+        return []
+    }
     if (table === 'relationships' || table === 'entry_relationships' || table === 'links') {
         return ['workspace_id', 'project_number', 'project_id', 'id', 'entry_id']
     }
     return ['workspace_id', 'project_number', 'project_id']
+}
+
+function isValidSpecialWhereRhs(col: string, rhs: string): boolean {
+    if (col === 'workspace_id') {
+        const val = unquoteSqlString(rhs)
+        return val !== null && val.trim() !== ''
+    }
+    const raw = (unquoteSqlString(rhs) ?? rhs).trim()
+    return parseCanonicalPositiveInt(raw) !== undefined
 }
 
 function hasUnsupportedSpecialTableWhere(sqlWhere: string, allowedCols: readonly string[]): boolean {
@@ -125,10 +142,12 @@ function hasUnsupportedSpecialTableWhere(sqlWhere: string, allowedCols: readonly
         const clause = stripBalancedOuterParens(rawClause)
         if (clause === '') return true
         const match =
-            /^(?:[`"']?[a-zA-Z_][\w]*[`"']?\.)?[`"']?([a-zA-Z_][\w]*)[`"']?\s*=\s*(?:'(?:\\.|''|[^'\\])*'|"(?:\\.|""|[^"\\])*"|\d+)$/i.exec(
+            /^(?:[`"']?[a-zA-Z_][\w]*[`"']?\.)?[`"']?([a-zA-Z_][\w]*)[`"']?\s*=\s*('(?:\\.|''|[^'\\])*'|"(?:\\.|""|[^"\\])*"|\d+)$/i.exec(
                 clause
             )
-        if (match?.[1] === undefined || !allowedSet.has(match[1].toLowerCase())) {
+        if (match?.[1] === undefined || match[2] === undefined) return true
+        const col = match[1].toLowerCase()
+        if (!allowedSet.has(col) || !isValidSpecialWhereRhs(col, match[2])) {
             return true
         }
     }

@@ -8,7 +8,10 @@ import {
     buildFallbackCliEnvBaseline,
     buildFileCliEnvBaseline,
     collectBriefingBaselines,
+    readBriefingConfigEntry,
 } from './config-manager-baselines.js'
+
+export { readBriefingConfigEntry }
 
 export interface DynamicConfig {
     rawToolFilter: string | undefined
@@ -69,25 +72,6 @@ export const BRIEFING_CONFIG_KEY_MAP: Readonly<
     briefingImportanceThreshold: { target: 'briefingImportanceThreshold', kind: 'unit' },
     briefingGraph: { target: 'graphPivots', kind: 'boolean' },
     briefingInsights: { target: 'insights', kind: 'boolean' },
-}
-
-/** Look up a briefing config entry by primary file key (`briefingPrs`) before legacy aliases (`briefingPrCount`). */
-export function readBriefingConfigEntry(
-    obj: Record<string, unknown>,
-    primaryKey: string,
-    aliases?: readonly string[]
-): { key: string; value: unknown } | undefined {
-    if (primaryKey in obj && obj[primaryKey] !== undefined && obj[primaryKey] !== null) {
-        return { key: primaryKey, value: obj[primaryKey] }
-    }
-    if (aliases !== undefined) {
-        for (const alias of aliases) {
-            if (alias in obj && obj[alias] !== undefined && obj[alias] !== null) {
-                return { key: alias, value: obj[alias] }
-            }
-        }
-    }
-    return undefined
 }
 
 export interface InitialBaselinesResult {

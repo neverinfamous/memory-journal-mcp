@@ -130,6 +130,25 @@ export function parseProjectNumberField(
     return undefined
 }
 
+/** Resolve workspace/project scope from a primary entry/context bag while preventing outer project inheritance across mismatched explicit workspaces. */
+export function resolveCompatibleInheritedScope(
+    primary: Record<string, unknown>,
+    secondary: Record<string, unknown>
+): { projVal: number | string | undefined; wsVal: string | undefined } {
+    const entryWs = readWorkspaceField(primary, {})
+    const outerWs = readWorkspaceField(secondary, {})
+    const entryProj = parseProjectNumberField(primary, {})
+    const outerProj = parseProjectNumberField(secondary, {})
+    const wsDiffersFromOuter =
+        entryWs !== undefined &&
+        (outerWs !== undefined
+            ? entryWs.trim().toLowerCase() !== outerWs.trim().toLowerCase()
+            : entryWs.trim().toLowerCase() === 'default')
+    const projVal = entryProj ?? (!wsDiffersFromOuter ? outerProj : undefined)
+    const wsVal = entryWs ?? (entryProj === undefined ? outerWs : undefined)
+    return { projVal, wsVal }
+}
+
 function normalizeUnitScore(raw: unknown): number | undefined {
     if (raw === undefined || raw === null) return undefined
     const num = Number(raw)
@@ -234,17 +253,10 @@ function buildSynthesizedEntryPayload(
     const tagsVal = collectTags(entryObj, rawObj, groupNameVal, learnedVal)
     const hasExplicitTags = entryObj['tags'] !== undefined || rawObj['tags'] !== undefined
 
-    const entryWs = !isFlatCall ? readWorkspaceField(entryObj, {}) : undefined
-    const outerWs = readWorkspaceField(rawObj, {})
-    const entryProj = !isFlatCall ? parseProjectNumberField(entryObj, {}) : undefined
-    const outerProj = parseProjectNumberField(rawObj, {})
-    const wsDiffersFromOuter =
-        entryWs !== undefined &&
-        (outerWs !== undefined
-            ? entryWs.trim().toLowerCase() !== outerWs.trim().toLowerCase()
-            : entryWs.trim().toLowerCase() === 'default')
-    const projVal = entryProj ?? (!wsDiffersFromOuter ? outerProj : undefined)
-    const wsVal = entryWs ?? (entryProj === undefined ? outerWs : undefined)
+    const { projVal, wsVal } = resolveCompatibleInheritedScope(
+        isFlatCall ? {} : entryObj,
+        rawObj
+    )
     const sessVal = getNonEmptyString(entryObj, rawObj, ['session_id', 'sessionId'])
     const trustVal = normalizeUnitScore(
         entryObj['trust'] ?? rawObj['trust'] ?? entryObj['trust_score'] ?? rawObj['trust_score'] ??
@@ -339,6 +351,8 @@ export function appendSharedEntryFlags(
 ): void {
     const sigType = getNonEmptyString(entryObj, secondaryObj, ['significance_type', 'significanceType'])
     if (sigType !== undefined) payload['significance_type'] = sigType
+    const targetWs = getNonEmptyString(entryObj, secondaryObj, ['target_workspace_id', 'targetWorkspaceId'])
+    if (targetWs !== undefined) payload['target_workspace_id'] = targetWs
     const isPersonal =
         entryObj['is_personal'] ?? entryObj['isPersonal'] ?? secondaryObj['is_personal'] ?? secondaryObj['isPersonal']
     if (typeof isPersonal === 'boolean') payload['is_personal'] = isPersonal

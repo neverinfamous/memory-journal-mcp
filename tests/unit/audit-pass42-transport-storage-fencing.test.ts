@@ -41,10 +41,10 @@ import { logger } from '../../src/utils/logger.js'
 import { McpLogger } from '../../src/utils/mcp-logger.js'
 import { redactConfig } from '../../src/cli/dump-config.js'
 import { ServerRuntime } from '../../src/utils/maintenance-lock.js'
+import { searchAuditFileBackward } from '../../src/audit/audit-file-helpers.js'
 import {
     isSensitiveAuditTarget,
     resolveResourceAuditCategory,
-    searchAuditFileBackward,
 } from '../../src/audit/audit-query-helpers.js'
 import { sanitizeAuditEntryForEgress } from '../../src/audit/audit-resource.js'
 import { DatabaseAdapter } from '../../src/database/sqlite-adapter/index.js'
@@ -353,11 +353,11 @@ describe('Pass 42 Security Audit — Transport, SSRF, Storage, Audit & Fencing',
         expect(linkImportedRelationships(mockRelDb as never, 1, [{ type: 'references', target_id: -5 }], undefined, new Map()).missingTargets).toEqual([-5])
         expect(transformOutsideCodeFences('prose `x`\n```\nkeep\n```\nend', (s) => s.toUpperCase())).toContain('PROSE')
 
-        expect(AUDIT_PROMPT_REVISION).toBe('2026-11-21-audit-pass69')
+        expect(AUDIT_PROMPT_REVISION).toBe('2026-11-21-audit-pass70')
         const secDef = getSecurityAuditPromptDefinition()
         const rendered = await Promise.resolve(
             secDef.handler({ target: 'memory-journal-mcp' }, { searchByDateRange: () => ({ entries: [] }) } as never)
         )
-        expect(rendered.messages[0]?.content.text).toContain('Prompt revision: 2026-11-21-audit-pass69')
+        expect(rendered.messages[0]?.content.text).toContain('Prompt revision: 2026-11-21-audit-pass70')
     })
 })
