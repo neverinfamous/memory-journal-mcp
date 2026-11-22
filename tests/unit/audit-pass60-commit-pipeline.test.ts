@@ -118,7 +118,7 @@ describe('Pass 60 Audit Prompts, Entry Bundle Purity & Strict Score Parsing', ()
     })
 
     it('AP1–AP3: bumps AUDIT_PROMPT_REVISION to pass60 and includes Pass 60 intra-repo chunk & exit-boundary checks', async () => {
-        expect(AUDIT_PROMPT_REVISION).toBe('2026-11-21-audit-pass68')
+        expect(AUDIT_PROMPT_REVISION).toBe('2026-11-21-audit-pass69')
 
         const dbPath = path.join(
             os.tmpdir(),
@@ -133,7 +133,7 @@ describe('Pass 60 Audit Prompts, Entry Bundle Purity & Strict Score Parsing', ()
                 adapter
             )
             const perfText = perfRes.messages[0]?.content.text ?? ''
-            expect(perfText).toContain('Prompt revision: 2026-11-21-audit-pass68')
+            expect(perfText).toContain('Prompt revision: 2026-11-21-audit-pass69')
             expect(perfText).toContain('intra-repo chunk composition')
             expect(perfText).toContain('statSync')
             expect(perfText).toContain('explore')
@@ -145,7 +145,7 @@ describe('Pass 60 Audit Prompts, Entry Bundle Purity & Strict Score Parsing', ()
                 adapter
             )
             const cqText = cqRes.messages[0]?.content.text ?? ''
-            expect(cqText).toContain('Prompt revision: 2026-11-21-audit-pass68')
+            expect(cqText).toContain('Prompt revision: 2026-11-21-audit-pass69')
             expect(cqText).toContain('path.resolve(cwd, "")')
             expect(cqText).toContain("process.on('exit', ...)")
             expect(cqText).toContain('auxiliary automation scripts')

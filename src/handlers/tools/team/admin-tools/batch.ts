@@ -107,6 +107,9 @@ async function executeTeamBatchUpdate(
         ...errors.map((e) => new Error(`Team entry ${e.id} failed to update: ${e.error.message}`)),
         ...indexErrors,
     ]
+    if (entries.length > 0) {
+        triggerTeamNotifications(context)
+    }
     if (allErrors.length > 0) {
         throw new AggregateError(
             allErrors,
@@ -114,7 +117,6 @@ async function executeTeamBatchUpdate(
         )
     }
 
-    triggerTeamNotifications(context)
     const failedUpdateVectors = indexStatuses.filter((s) => s === 'failed').length
     return {
         success: true,

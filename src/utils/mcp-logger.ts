@@ -156,20 +156,35 @@ export class McpLogger {
             if (jsonRes.resolved) {
                 return this.sanitizeValue(jsonRes.value, depth + 1, seen)
             }
-            const sanitized: Record<string, unknown> = {}
-            Object.setPrototypeOf(sanitized, null)
-            for (const [k, v] of Object.entries(value)) {
-                if (k === '__proto__' || k === 'constructor' || k === 'prototype' || k === 'toJSON' || typeof v === 'function') continue
-                const safeKey = sanitizeErrorForLogging(k).replace(/[\r\n]+/g, ' ')
-                sanitized[safeKey] =
-                    SENSITIVE_KEY_RE.test(k) && v !== undefined && v !== null && v !== ''
-                        ? '[REDACTED]'
-                        : this.sanitizeValue(v, depth + 1, seen)
-            }
-            return sanitized
+            return this.sanitizePlainRecord(value as Record<string, unknown>, depth, seen)
         } finally {
             seen.delete(value)
         }
+    }
+
+    private sanitizePlainRecord(
+        record: Record<string, unknown>,
+        depth = 0,
+        seen = new WeakSet()
+    ): Record<string, unknown> {
+        const sanitized = Object.create(null) as Record<string, unknown>
+        for (const [k, v] of Object.entries(record)) {
+            if (
+                k === '__proto__' ||
+                k === 'constructor' ||
+                k === 'prototype' ||
+                k === 'toJSON' ||
+                typeof v === 'function'
+            ) {
+                continue
+            }
+            const safeKey = sanitizeErrorForLogging(k).replace(/[\r\n]+/g, ' ')
+            sanitized[safeKey] =
+                SENSITIVE_KEY_RE.test(k) && v !== undefined && v !== null && v !== ''
+                    ? '[REDACTED]'
+                    : this.sanitizeValue(v, depth + 1, seen)
+        }
+        return sanitized
     }
 
     private sanitizeData(data: LogData): LogData {
@@ -178,7 +193,7 @@ export class McpLogger {
             typeof rawMessage === 'string'
                 ? sanitizeErrorForLogging(rawMessage).replace(/[\r\n]+/g, ' ')
                 : ''
-        const rest = this.sanitizeValue(restData) as Record<string, unknown>
+        const rest = this.sanitizePlainRecord(restData)
         return { ...rest, message: cleanedMessage }
     }
 

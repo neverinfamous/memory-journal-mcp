@@ -27,13 +27,13 @@ import { scrubAuditArgs } from './audit-arg-scrubber.js'
 import { estimateTokens, estimatePayloadTokens } from '../observability/token-estimator.js'
 import {
     estimateOperationResultTokens,
-    extractAuditScopeFromArgs,
     extractAuditScopeFromUri,
     extractSensitiveTargetFromArgs,
     isSensitiveAuditTarget,
     resolveResourceAuditCategory,
     type AuditScopeMetadata,
 } from './audit-query-helpers.js'
+import { resolveToolCallAuditScope } from './audit-file-helpers.js'
 
 // ============================================================================
 // Types
@@ -244,7 +244,14 @@ async function executeAuditedTool<T>(
     const user = authCtx?.authenticated === true ? (authCtx.claims?.sub ?? null) : null
     const scopes = getGrantedAuthScopes(authCtx)
     const sessionId = reqCtx?.sessionId
-    const scopeMeta = extractAuditScopeFromArgs(args, reqCtx, runtime)
+    const scopeMeta = resolveToolCallAuditScope(
+        toolName,
+        args,
+        canTargetSensitiveResourceOrPrompt,
+        sensitiveTarget,
+        reqCtx,
+        runtime
+    )
     const requestId = generateRequestId()
     const start = performance.now()
     let success = false

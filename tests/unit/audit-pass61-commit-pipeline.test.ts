@@ -36,7 +36,7 @@ describe('Pass 61 Commit Pipeline Prompts & NUL-Delimited Anchor Extraction', ()
     })
 
     it('AP1–AP2: bumps AUDIT_PROMPT_REVISION to pass61 and includes POSIX --, --root/-z, and trailer newline checks', async () => {
-        expect(AUDIT_PROMPT_REVISION).toBe('2026-11-21-audit-pass68')
+        expect(AUDIT_PROMPT_REVISION).toBe('2026-11-21-audit-pass69')
 
         const dbPath = path.join(
             os.tmpdir(),
@@ -50,7 +50,7 @@ describe('Pass 61 Commit Pipeline Prompts & NUL-Delimited Anchor Extraction', ()
                 adapter
             )
             const cqText = cqRes.messages[0]?.content.text ?? ''
-            expect(cqText).toContain('Prompt revision: 2026-11-21-audit-pass68')
+            expect(cqText).toContain('Prompt revision: 2026-11-21-audit-pass69')
             expect(cqText).toContain('POSIX `--` end-of-options')
             expect(cqText).toContain('`--root`')
             expect(cqText).toContain('core.quotePath=true')

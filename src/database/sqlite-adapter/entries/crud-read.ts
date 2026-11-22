@@ -56,21 +56,7 @@ function fetchEntriesByIds(
 
     if (rows.length === 0) return result
 
-    const entries = rows.map((r) => {
-        const p = r as Partial<JournalEntry>
-        return {
-            ...p,
-            isPersonal: Boolean(p.isPersonal),
-            isArchived: Boolean(p.isArchived),
-            tags: [],
-        } as JournalEntry
-    })
-
-    const entryIds = entries.map((e) => e.id)
-    const tagsMap = tagsMgr.batchGetTagsForEntries(entryIds)
-
-    for (const entry of entries) {
-        entry.tags = tagsMap.get(entry.id) ?? []
+    for (const entry of rowsToEntries(tagsMgr, rows)) {
         result.set(entry.id, entry)
     }
 

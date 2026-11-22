@@ -339,6 +339,42 @@ export function replaceOutsideNonCode(
     })
 }
 
+function findMatchingBraceEnd(
+    src: string,
+    openIdx: number,
+    spans: readonly NonCodeSpan[]
+): number {
+    let depth = 0
+    for (let i = openIdx; i < src.length; i++) {
+        if (isOffsetInNonCodeSpan(spans, i)) continue
+        const ch = src[i]
+        if (ch === '{') depth++
+        else if (ch === '}') {
+            depth--
+            if (depth === 0) return i
+        }
+    }
+    return -1
+}
+
+function rewriteDefaultExportFunction(src: string): string {
+    const spans = buildNonCodeSpans(src)
+    const headerRe = /export\s+default\s+(?:async\s+)?function(?:\s+[\w$]+)?\s*\(([^()\n]{0,500})\)\s*\{/g
+    let m: RegExpExecArray | null
+    while ((m = headerRe.exec(src)) !== null) {
+        if (isOffsetInNonCodeSpan(spans, m.index)) continue
+        const openBraceIdx = m.index + m[0].length - 1
+        const closeBraceIdx = findMatchingBraceEnd(src, openBraceIdx, spans)
+        if (closeBraceIdx === -1) return src
+        const p = (m[1] ?? '').trim()
+        const body = src.slice(openBraceIdx + 1, closeBraceIdx)
+        const invocationArg = p ? 'mj' : ''
+        const rewritten = `(async (${p}) => { ${body} })(${invocationArg})`
+        return src.slice(0, m.index) + rewritten + src.slice(closeBraceIdx + 1)
+    }
+    return src
+}
+
 /** Rewrite top-level ESM/CommonJS module statements outside string literals and comments into `mj` bindings. */
 export function rewriteModuleImportsAndExports(src: string): string {
     let executionCode = src
@@ -348,22 +384,7 @@ export function rewriteModuleImportsAndExports(src: string): string {
         executionCode.includes('{') &&
         executionCode.includes('}')
     ) {
-        executionCode = replaceOutsideNonCode(
-            executionCode,
-            /export\s+default\s+async\s+function(?:\s+[\w$]+)?\s*\(([^()\n]{0,500})\)\s*\{([\s\S]*)\}/g,
-            (_match: string, param: string, body: string): string => {
-                const p = param.trim()
-                return `(async (${p ? `${p} = mj` : ''}) => { ${body} })()`
-            }
-        )
-        executionCode = replaceOutsideNonCode(
-            executionCode,
-            /export\s+default\s+function(?:\s+[\w$]+)?\s*\(([^()\n]{0,500})\)\s*\{([\s\S]*)\}/g,
-            (_match: string, param: string, body: string): string => {
-                const p = param.trim()
-                return `(async (${p ? `${p} = mj` : ''}) => { ${body} })()`
-            }
-        )
+        executionCode = rewriteDefaultExportFunction(executionCode)
     }
     executionCode = replaceOutsideNonCode(executionCode, /export\s+default\s+/g, () => '')
     executionCode = replaceOutsideNonCode(executionCode, /(?<![.\w$])tools\./g, () => 'mj.')

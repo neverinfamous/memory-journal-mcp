@@ -152,8 +152,8 @@ function createVmExecutionContext(options: VmExecutionContextOptions): vm.Contex
     Object.freeze(mjApi)
 
     const safeFsShim = createSafeFsShim(contextObj)
-    const executeCodeFnRef: { current?: (arg: unknown) => Promise<unknown> } = {}
-    const updateMemoryFnHolder: { current?: (arg: unknown) => unknown } = {}
+    const executeCodeFnRef: { current?: (...args: unknown[]) => Promise<unknown> } = {}
+    const updateMemoryFnHolder: { current?: (...args: unknown[]) => unknown } = {}
 
     const shimMj = createShimMjProxy({
         mjApi,

@@ -290,6 +290,14 @@ function applyToolNameAlias(reqParams: ToolCallParams, toolArgs: Record<string, 
     }
 }
 
+const PROJECT_REGISTRY_TOOL_NAMES = new Set([
+    'get_project',
+    'list_projects',
+    'register_project',
+    'update_project',
+    'delete_project',
+])
+
 export function normalizeAndAliasToolCall(
     reqParams: ToolCallParams,
     options: ServerOptions
@@ -303,8 +311,10 @@ export function normalizeAndAliasToolCall(
         return
     }
     reqParams.arguments = normalized
-    resolveProjectNumberFromHint(reqParams.arguments, options)
     applyToolNameAlias(reqParams, reqParams.arguments)
+    if (!PROJECT_REGISTRY_TOOL_NAMES.has(reqParams.name ?? '')) {
+        resolveProjectNumberFromHint(reqParams.arguments, options)
+    }
 }
 
 export function applyCreateWorkspaceScope(

@@ -110,12 +110,16 @@ export async function importMarkdownEntries(
     const MAX_IMPORT_DIR_ENTRIES = 10_000
     let scannedEntries = 0
     const dir = await opendir(pinnedSourceDir)
-    for await (const dirent of dir) {
-        if (++scannedEntries > MAX_IMPORT_DIR_ENTRIES) break
-        if (dirent.isFile() && /\.md$/i.test(dirent.name)) {
-            allMdFiles.push(dirent.name)
-            if (allMdFiles.length >= MAX_IMPORT_DIR_ENTRIES) break
+    try {
+        for await (const dirent of dir) {
+            if (++scannedEntries > MAX_IMPORT_DIR_ENTRIES) break
+            if (dirent.isFile() && /\.md$/i.test(dirent.name)) {
+                allMdFiles.push(dirent.name)
+                if (allMdFiles.length >= MAX_IMPORT_DIR_ENTRIES) break
+            }
         }
+    } finally {
+        await dir.close().catch(() => undefined)
     }
     allMdFiles.sort((a, b) => NUMERIC_FILENAME_COLLATOR.compare(a, b))
     const mdFiles = allMdFiles.slice(0, Math.max(0, limit))
@@ -139,7 +143,12 @@ export async function importMarkdownEntries(
         mdFiles,
         (filename) => readAndParseMarkdownFile(pinnedSourceDir, filename),
         (chunkIndex) => {
-            if (chunkIndex > 0) assertSafeDirectoryPath(pinnedSourceDir, allowedRoots)
+            if (chunkIndex > 0) {
+                assertSafeDirectoryPath(pinnedSourceDir, allowedRoots)
+                if (realpathSync.native(pinnedSourceDir) !== pinnedSourceDir) {
+                    throw new Error(`Import directory symlink changed during batch: ${pinnedSourceDir}`)
+                }
+            }
         }
     )
     result.skipped += readSkipped

@@ -142,7 +142,7 @@ export function resolveCandidates(
     targetWs: string,
     projectNumber?: number
 ): SemanticSearchResult[] {
-    if (candidates.length === 0) {
+    if (candidates.length === 0 || limit <= 0) {
         return []
     }
 

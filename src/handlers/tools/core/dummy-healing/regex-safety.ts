@@ -182,8 +182,8 @@ function mergeGroupEndAtoms(atoms: (string | null)[]): string | null {
 function groupPrefixSkipLength(pattern: string, idx: number): { skip: number; zeroWidth: boolean } {
     if (pattern[idx + 1] !== '?') return { skip: 1, zeroWidth: false }
     if (pattern.startsWith('(?<=', idx) || pattern.startsWith('(?<!', idx)) return { skip: 4, zeroWidth: true }
-    if (pattern.startsWith('(?!', idx)) return { skip: 3, zeroWidth: true }
-    if (pattern.startsWith('(?:', idx) || pattern.startsWith('(?=', idx)) return { skip: 3, zeroWidth: false }
+    if (pattern.startsWith('(?!', idx) || pattern.startsWith('(?=', idx)) return { skip: 3, zeroWidth: true }
+    if (pattern.startsWith('(?:', idx)) return { skip: 3, zeroWidth: false }
     if (pattern.startsWith('(?<', idx)) {
         const closeAngle = pattern.indexOf('>', idx + 3)
         if (closeAngle > idx + 3) {
@@ -206,8 +206,15 @@ interface QuantScannerState {
 function stepClosingParenGroup(pattern: string, i: number, state: QuantScannerState): { nextIdx: number; unsafe: boolean } {
     const popped = state.groupStack.pop()
     const groupQuant = readQuantifierAt(pattern, i + 1)
-    if (popped === undefined || popped.zeroWidth) {
+    if (popped === undefined) {
         state.prevQuantAtom = null
+        return { nextIdx: groupQuant !== null ? groupQuant.end : i + 1, unsafe: false }
+    }
+    if (popped.zeroWidth) {
+        if (groupQuant?.repeating === true) {
+            return { nextIdx: pattern.length, unsafe: true }
+        }
+        state.prevQuantAtom = popped.entryPrev
         return { nextIdx: groupQuant !== null ? groupQuant.end : i + 1, unsafe: false }
     }
     if (groupQuant !== null && groupQuant.repeating && popped.tokenCount === 1 && popped.singleAtom !== null) {

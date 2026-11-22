@@ -29,60 +29,49 @@ import {
     DUMMY_GET_PROMPT_TOOL_NAMES,
     DUMMY_SERVER_INFO_TOOL_NAMES,
     DUMMY_ADAPTER_TOOL_NAMES,
+    DUMMY_URI_CANDIDATE_KEYS,
 } from './alias-catalog.js'
 
 export { handlePrompt, handleListPrompts, handleGetPrompt }
 
 const FLEXIBLE_PASSTHROUGH_SCHEMA = z.looseObject({ ...ErrorFieldsMixin.shape })
 
-const URI_CANDIDATE_KEYS = [
-    'resourceUri', 'resource_uri', 'resource', 'Resource',
-    'url', 'Url', 'path', 'Path', 'name', 'Name',
-    'target', 'Target', 'ServerName', 'server_name',
-] as const
+let cachedMemoryRootPrefixes: ReadonlySet<string> | null = null
 
-const MEMORY_ROOT_PREFIXES = [
-    'briefing', 'recent', 'agent-context', 'agent-id', 'entries', 'projects',
-    'github', 'kanban', 'graph', 'statistics', 'insights', 'metrics',
-    'instructions', 'audit', 'workflows', 'help', 'health', 'team', 'git', 'tools',
-] as const
-
-export function extractUriFromArgs(args: Record<string, unknown>): string | undefined {
-    let uri =
-        typeof args['uri'] === 'string'
-            ? args['uri'].trim()
-            : typeof args['Uri'] === 'string'
-              ? args['Uri'].trim()
-              : typeof args['_uri'] === 'string'
-                ? args['_uri'].trim()
-                : undefined
-    if (uri === undefined || uri === '') {
-        for (const key of URI_CANDIDATE_KEYS) {
-            const rawVal = args[key]
-            if (typeof rawVal === 'string' && rawVal.trim() !== '') {
-                const val = rawVal.trim()
-                if (
-                    (key === 'ServerName' || key === 'server_name') &&
-                    (val === 'memory-journal-mcp' || val === 'memory-journal')
-                ) {
-                    continue
-                }
-                uri = val
-                break
-            }
+function getMemoryRootPrefixes(): ReadonlySet<string> {
+    if (cachedMemoryRootPrefixes !== null) return cachedMemoryRootPrefixes
+    const prefixes = new Set<string>()
+    for (const r of getResources()) {
+        const uri = 'uri' in r && typeof r.uri === 'string' ? r.uri : undefined
+        if (uri?.startsWith('memory://')) {
+            const root = uri.slice('memory://'.length).split(/[/?#{]/, 1)[0]?.toLowerCase()
+            if (root !== undefined && root !== '') prefixes.add(root)
         }
     }
-    if (uri !== undefined && uri !== '' && !uri.includes('://')) {
-        const candidateUri = uri
-        const isRootResource = MEMORY_ROOT_PREFIXES.some(
-            (prefix) =>
-                candidateUri === prefix ||
-                candidateUri.startsWith(`${prefix}/`) ||
-                candidateUri.startsWith(`${prefix}?`)
-        )
-        uri = isRootResource ? `memory://${candidateUri}` : `memory://briefing/${candidateUri}`
+    cachedMemoryRootPrefixes = prefixes
+    return prefixes
+}
+
+export function extractUriFromArgs(args: Record<string, unknown>): string | undefined {
+    let uri: string | undefined
+    for (const key of DUMMY_URI_CANDIDATE_KEYS) {
+        const rawVal = args[key]
+        if (typeof rawVal !== 'string') continue
+        const val = rawVal.trim()
+        if (val === '') continue
+        if ((key === 'ServerName' || key === 'server_name') && (val === 'memory-journal-mcp' || val === 'memory-journal')) continue
+        uri = val
+        break
     }
-    return uri !== undefined && uri !== '' ? uri : undefined
+    if (uri !== undefined && !uri.includes('://')) {
+        const candidateUri = uri
+        const firstSeg = candidateUri.split(/[/?#]/, 1)[0]?.toLowerCase() ?? ''
+        const isRootResource = firstSeg !== '' && getMemoryRootPrefixes().has(firstSeg)
+        uri = isRootResource
+            ? `memory://${firstSeg}${candidateUri.slice(firstSeg.length)}`
+            : `memory://briefing/${candidateUri}`
+    }
+    return uri
 }
 
 export async function tryHandleResourceUriFallback(

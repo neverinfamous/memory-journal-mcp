@@ -3,9 +3,9 @@ import type { ToolDefinition, ToolContext } from '../../../types/index.js'
 import { formatHandlerError } from '../../../utils/error-helpers.js'
 import { resolveWorkspaceId } from '../../../utils/workspace-resolver.js'
 import { activeProjectRegistry, alignedProjectFilter } from '../../../utils/write-scope.js'
-import { coerceNumber } from '../../../utils/query-helpers.js'
 import { parsePositiveProjectNumber } from '../../../utils/safe-positive-int.js'
 import { VectorStatsOutputSchema } from './schemas.js'
+import { coerceIntString } from '../schemas/constants-and-primitives.js'
 import { EntriesListOutputSchema, MAX_QUERY_LIMIT, relaxedNumber } from '../schemas.js'
 
 function preprocessProjectNumber(val: unknown): unknown {
@@ -28,10 +28,10 @@ const ListDeletedEntriesMcpSchema = z.object({
 const ListDeletedEntriesStrictSchema = z
     .object({
         limit: z.preprocess(
-            coerceNumber,
+            coerceIntString,
             z.number().int().min(1).max(MAX_QUERY_LIMIT).optional().default(50)
         ),
-        offset: z.preprocess(coerceNumber, z.number().int().min(0).optional().default(0)),
+        offset: z.preprocess(coerceIntString, z.number().int().min(0).optional().default(0)),
         workspace_id: z.string().max(255).optional(),
         workspaceId: z.string().max(255).optional(),
         project_number: z.preprocess(preprocessProjectNumber, z.number().int().positive().optional()),

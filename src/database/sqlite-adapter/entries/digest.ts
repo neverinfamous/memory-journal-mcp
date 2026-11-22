@@ -252,7 +252,7 @@ function computeTopImportance(db: Database, s: DigestScope): TopImportanceEntry[
         LEFT JOIN rel_stats rs ON e.id = rs.entry_id
         LEFT JOIN anchor_stats ans ON e.id = ans.entry_id
         WHERE e.deleted_at IS NULL${s.filterE}
-        ORDER BY importance_score DESC
+        ORDER BY importance_score DESC, e.id DESC
         LIMIT ?`,
         ...s.params,
         PREVIEW_LENGTH,

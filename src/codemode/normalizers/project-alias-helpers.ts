@@ -197,8 +197,15 @@ export function applyProjectNameAlias(
     return 'applied'
 }
 
+export const PROJECT_REGISTRY_METHOD_NAMES = new Set([
+    'get_project', 'getProject', 'list_projects', 'listProjects',
+    'register_project', 'registerProject', 'update_project', 'updateProject',
+    'delete_project', 'deleteProject',
+])
+
 export function normalizeProjectAliases(
-    obj: Record<string, unknown>
+    obj: Record<string, unknown>,
+    allowProjectAlias = true
 ): { error: Record<string, unknown> } | undefined {
     if (obj['workspace_id'] === undefined) {
         if (typeof obj['workspaceId'] === 'string') {
@@ -215,6 +222,7 @@ export function normalizeProjectAliases(
         obj['project_number'] = obj['projectNumber']
     }
     Reflect.deleteProperty(obj, 'projectNumber')
+    if (!allowProjectAlias) return undefined
     for (const projAlias of ['project_name', 'projectName', 'project'] as const) {
         if (obj[projAlias] === undefined) continue
         const res = applyProjectNameAlias(obj[projAlias], obj)

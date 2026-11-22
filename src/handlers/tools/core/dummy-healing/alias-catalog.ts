@@ -332,6 +332,12 @@ const LIST_PROJECTS_ALIASES = new Set([
     'projects_all',
 ])
 
+export const DUMMY_URI_CANDIDATE_KEYS = [
+    'uri', 'Uri', '_uri', 'resourceUri', 'resource_uri', 'resource', 'Resource',
+    'url', 'Url', 'path', 'Path', 'name', 'Name',
+    'target', 'Target', 'ServerName', 'server_name',
+] as const
+
 export function projectAliasTarget(name: string): 'get_project' | 'list_projects' | undefined {
     const tokens = methodTokens(name)
     let start = 0

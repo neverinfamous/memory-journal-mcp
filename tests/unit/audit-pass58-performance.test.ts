@@ -193,14 +193,14 @@ describe('Pass 58 Adversarial Performance Audit Regressions', () => {
     })
 
     it('AP1–AP6: bumps AUDIT_PROMPT_REVISION to 2026-11-20-audit-pass58 and includes Pass 58 guidance', () => {
-        expect(AUDIT_PROMPT_REVISION).toBe('2026-11-21-audit-pass68')
+        expect(AUDIT_PROMPT_REVISION).toBe('2026-11-21-audit-pass69')
         const def = getPerformanceAuditPromptDefinition()
         const rendered = def.handler({ target: 'memory-journal-mcp' }, {
             searchEntries: () => ({ entries: [], totalCount: 0 }),
             searchByDateRange: () => [],
         } as unknown as IDatabaseAdapter)
         const text = rendered.messages[0]?.content.text ?? ''
-        expect(text).toContain('Prompt revision: 2026-11-21-audit-pass68')
+        expect(text).toContain('Prompt revision: 2026-11-21-audit-pass69')
         expect(text).toContain('AS MATERIALIZED')
         expect(text).toContain('node:util/types')
         expect(text).toContain('Map<string, boolean>')

@@ -10,6 +10,7 @@ import { extractAndRecoverJsonCode, extractAndRecoverRecordCode } from './json-e
 import {
     appendSharedEntryFlags,
     getNonEmptyString,
+    parsePositiveEntryId,
     parseProjectNumberField,
     readWorkspaceField,
     synthesizeNaturalLanguageOrEntryPayload,
@@ -86,6 +87,8 @@ function recoverCodeFromParamsRecord(
         (k) => typeof entryObj[k] === 'string'
     )
     if (contentVal !== undefined || hasEntryMeta) {
+        const numericEntryId = parsePositiveEntryId(entryObj, params)
+        const isUpdate = numericEntryId !== undefined
         const groupNameVal = getNonEmptyString(entryObj, params, ['group_name', 'groupName'])
         const baseTags = Array.isArray(entryObj['tags'])
             ? entryObj['tags'].filter((t): t is string => typeof t === 'string')
@@ -104,14 +107,19 @@ function recoverCodeFromParamsRecord(
                 : learnedVal !== undefined
                   ? 'Learned Context'
                   : 'Journal Entry'
-        const payload: Record<string, unknown> = {
-            title: typeof entryObj['title'] === 'string' ? entryObj['title'] : defaultTitle,
-            content: contentVal ?? '',
-            entry_type:
-                getNonEmptyString(entryObj, params, ['type', 'entry_type', 'category']) ??
-                (learnedVal !== undefined ? 'personal_reflection' : 'technical_note'),
-            tags: finalTags,
+        const explicitTitle = getNonEmptyString(entryObj, params, ['title'])
+        const explicitType = getNonEmptyString(entryObj, params, ['type', 'entry_type', 'category'])
+        const hasExplicitTags = entryObj['tags'] !== undefined || params['tags'] !== undefined
+        const payload: Record<string, unknown> = {}
+        if (!isUpdate || explicitTitle !== undefined) payload['title'] = explicitTitle ?? defaultTitle
+        if (!isUpdate || contentVal !== undefined) payload['content'] = contentVal ?? ''
+        if (explicitType !== undefined) {
+            payload['entry_type'] = explicitType
+        } else if (!isUpdate) {
+            payload['entry_type'] = learnedVal !== undefined ? 'personal_reflection' : 'technical_note'
         }
+        if (!isUpdate || hasExplicitTags || finalTags.length > 0) payload['tags'] = finalTags
+        if (numericEntryId !== undefined) payload['entry_id'] = numericEntryId
         const entryWs = readWorkspaceField(entryObj, {})
         const outerWs = entryObj !== params ? readWorkspaceField(params, {}) : undefined
         const entryProj = parseProjectNumberField(entryObj, {})
@@ -134,7 +142,8 @@ function recoverCodeFromParamsRecord(
         const valStatus = getNonEmptyString(entryObj, params, ['validation_status', 'validationStatus', 'validation'])
         if (valStatus !== undefined) payload['validation_status'] = valStatus
         appendSharedEntryFlags(payload, entryObj, params)
-        return { code: `return await mj.createEntry(${JSON.stringify(payload)});`, synthesized: true }
+        const fnName = isUpdate ? 'mj.updateEntry' : 'mj.createEntry'
+        return { code: `return await ${fnName}(${JSON.stringify(payload)});`, synthesized: true }
     }
 
     for (const [k, v] of Object.entries(params)) {

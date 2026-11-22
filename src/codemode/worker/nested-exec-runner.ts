@@ -158,7 +158,7 @@ function buildNestedVmContextOptions(
             useTestDbMode: nestedUseTestDb,
             parentRpcOverrides: rpcOverrides,
             pinnedWorkspaceRaw: nextWs ?? options.pinnedWorkspaceRaw,
-            pinnedProjectRaw: nextProj ?? options.pinnedProjectRaw,
+            pinnedProjectRaw: nextProj,
             projectRegistryRaw: options.projectRegistryRaw,
             activeTimers: options.activeTimers,
             ...(options.executionLifecycle !== undefined
@@ -181,7 +181,7 @@ export function createIsolatedNestedRunner(
             : undefined
     const outerProj =
         typeof options.pinnedProjectRaw === 'number' &&
-        Number.isInteger(options.pinnedProjectRaw) &&
+        Number.isSafeInteger(options.pinnedProjectRaw) &&
         options.pinnedProjectRaw > 0
             ? options.pinnedProjectRaw
             : undefined

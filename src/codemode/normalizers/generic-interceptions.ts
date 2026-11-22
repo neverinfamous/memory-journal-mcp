@@ -12,6 +12,7 @@ import {
 } from './generic-field-aliases.js'
 import { synthesizeEntryMutationFields } from './entry-mutation-synthesis.js'
 import { DUMMY_SQL_EXECUTION_TOOL_NAMES } from '../../handlers/tools/core/dummy-healing/alias-catalog.js'
+import { PROJECT_REGISTRY_METHOD_NAMES } from './project-alias-helpers.js'
 
 const EXECUTE_METHODS = new Set([
     'execute', 'execute_code', 'executeCode', 'mj_execute_code', 'mjExecuteCode', 'mysql_execute_code', 'mysqlExecuteCode',
@@ -226,7 +227,10 @@ export function applyGenericInterceptions(
     cleanSdkMetadataKeys(obj)
     normalizeSearchGrepAliases(methodName, obj)
     if (!EXECUTE_METHODS.has(methodName)) {
-        const allowWorkspaceHoist = !GIT_METHODS.has(methodName) && !GITHUB_METHOD_RE.test(methodName)
+        const allowWorkspaceHoist =
+            !GIT_METHODS.has(methodName) &&
+            !GITHUB_METHOD_RE.test(methodName) &&
+            !PROJECT_REGISTRY_METHOD_NAMES.has(methodName)
         extractMetadataContextAliases(obj, allowWorkspaceHoist)
     }
 

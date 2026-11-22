@@ -1,4 +1,5 @@
 import { logger } from '../../utils/logger.js'
+import { sanitizeErrorMessageForResponse } from '../../utils/error-helpers.js'
 import type { GitHubClient } from './client.js'
 import type { RepoInfo, LocalGitStatus } from './types.js'
 import type { GitHubWorkflowRun } from '../../types/index.js'
@@ -186,7 +187,9 @@ export class RepositoryManager {
                 modified: 0,
                 untracked: 0,
                 isClean: false,
-                error: error instanceof Error ? error.message : String(error),
+                error: sanitizeErrorMessageForResponse(
+                    error instanceof Error ? error.message : String(error)
+                ),
             }
         }
     }

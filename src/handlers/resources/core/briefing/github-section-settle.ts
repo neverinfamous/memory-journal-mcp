@@ -299,9 +299,8 @@ function summarizePrStates(
     openPrList: { state: string }[],
     openPRs: number,
 ): { open: number; merged: number; closed: number } {
-    const openListed = openPrList.filter((pr) => pr.state === 'OPEN').length
     return {
-        open: openListed + (openPRs - (openListed ?? 0)),
+        open: openPRs,
         merged: openPrList.filter((pr) => pr.state === 'MERGED').length,
         closed: openPrList.filter((pr) => pr.state === 'CLOSED').length,
     }

@@ -2,6 +2,7 @@ import { hasMethodToken } from '../method-tokens.js'
 import { parseCanonicalPositiveInt } from '../../utils/safe-positive-int.js'
 import { isRecord } from './shared-utils.js'
 import {
+    PROJECT_REGISTRY_METHOD_NAMES,
     aliasValidationError,
     applyProjectNameAlias,
     normalizeProjectAliases,
@@ -247,7 +248,10 @@ export function normalizeGenericFieldAliases(
     renameSimpleFieldAliases(obj, methodName)
     renameScoreAliases(obj)
     normalizeValidationStatusAlias(obj)
-    return normalizeProjectAliases(obj)
+    return normalizeProjectAliases(
+        obj,
+        methodName === undefined || !PROJECT_REGISTRY_METHOD_NAMES.has(methodName)
+    )
 }
 
 function renameSimpleFieldAliases(obj: Record<string, unknown>, methodName?: string): void {

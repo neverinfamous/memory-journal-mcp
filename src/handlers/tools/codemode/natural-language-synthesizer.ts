@@ -195,7 +195,10 @@ function collectTags(
     return tagsVal
 }
 
-function parsePositiveEntryId(entryObj: Record<string, unknown>, rawObj: Record<string, unknown>): number | string | undefined {
+export function parsePositiveEntryId(
+    entryObj: Record<string, unknown>,
+    rawObj: Record<string, unknown>
+): number | string | undefined {
     const rawEntryId = entryObj['entry_id'] ?? rawObj['entry_id'] ?? entryObj['id'] ?? rawObj['id']
     if (typeof rawEntryId === 'number') {
         if (Number.isSafeInteger(rawEntryId) && rawEntryId > 0) return rawEntryId
@@ -221,13 +224,15 @@ function buildSynthesizedEntryPayload(
     isFlatCall: boolean,
     learnedVal: string | undefined
 ): string {
+    const numericEntryId = parsePositiveEntryId(entryObj, rawObj)
+    const isUpdate = numericEntryId !== undefined
     const groupNameVal = getNonEmptyString(entryObj, rawObj, ['group_name', 'groupName'])
     const rawContent = getNonEmptyString(entryObj, rawObj, ['content', 'body']) ?? learnedVal ?? executionCode
+    const explicitTitle = getNonEmptyString(entryObj, rawObj, ['title'])
     const titleVal = resolveTitle(entryObj, rawObj, executionCode, groupNameVal, learnedVal)
-    const typeVal =
-        getNonEmptyString(entryObj, rawObj, ['type', 'entry_type', 'category']) ??
-        (learnedVal !== undefined ? 'personal_reflection' : 'technical_note')
+    const explicitType = getNonEmptyString(entryObj, rawObj, ['type', 'entry_type', 'category'])
     const tagsVal = collectTags(entryObj, rawObj, groupNameVal, learnedVal)
+    const hasExplicitTags = entryObj['tags'] !== undefined || rawObj['tags'] !== undefined
 
     const entryWs = !isFlatCall ? readWorkspaceField(entryObj, {}) : undefined
     const outerWs = readWorkspaceField(rawObj, {})
@@ -249,9 +254,8 @@ function buildSynthesizedEntryPayload(
         entryObj['impact'] ?? rawObj['impact'] ?? entryObj['impact_score'] ?? rawObj['impact_score'] ??
         entryObj['impactScore'] ?? rawObj['impactScore']
     )
-    const validVal = normalizeValidation(getNonEmptyString(entryObj, rawObj, ['validation_status', 'validation', 'validationStatus']))
+    const valStatus = normalizeValidation(getNonEmptyString(entryObj, rawObj, ['validation_status', 'validation', 'validationStatus']))
     const targetWsVal = getNonEmptyString(entryObj, rawObj, ['target_workspace_id', 'targetWorkspaceId'])
-    const numericEntryId = parsePositiveEntryId(entryObj, rawObj)
 
     const extraContext: Record<string, unknown> = {}
     for (const k of ['component', 'changes', 'pr_link', 'pr_url', 'issue_link', 'issue_url', 'details', 'notes', 'learned_context', 'group_name']) {
@@ -259,7 +263,14 @@ function buildSynthesizedEntryPayload(
         else if (rawObj[k] !== undefined) extraContext[k] = rawObj[k]
     }
 
-    const payload: Record<string, unknown> = { title: titleVal, content: rawContent, entry_type: typeVal, tags: tagsVal }
+    const payload: Record<string, unknown> = { content: rawContent }
+    if (!isUpdate || explicitTitle !== undefined) payload['title'] = titleVal
+    if (explicitType !== undefined) {
+        payload['entry_type'] = explicitType
+    } else if (!isUpdate) {
+        payload['entry_type'] = learnedVal !== undefined ? 'personal_reflection' : 'technical_note'
+    }
+    if (!isUpdate || hasExplicitTags || tagsVal.length > 0) payload['tags'] = tagsVal
     if (numericEntryId !== undefined) payload['entry_id'] = numericEntryId
     if (projVal !== undefined) payload['project_number'] = projVal
     if (wsVal !== undefined) payload['workspace_id'] = wsVal
@@ -267,10 +278,10 @@ function buildSynthesizedEntryPayload(
     if (sessVal !== undefined) payload['session_id'] = sessVal
     if (trustVal !== undefined) payload['trust_score'] = trustVal
     if (impactVal !== undefined) payload['impact_score'] = impactVal
-    if (validVal !== undefined) payload['validation_status'] = validVal
+    if (valStatus !== undefined) payload['validation_status'] = valStatus
     if (Object.keys(extraContext).length > 0) payload['auto_context'] = extraContext
 
-    const fnName = numericEntryId !== undefined ? 'mj.updateEntry' : 'mj.createEntry'
+    const fnName = isUpdate ? 'mj.updateEntry' : 'mj.createEntry'
     appendSharedEntryFlags(payload, entryObj, rawObj)
     return `return await ${fnName}(${JSON.stringify(payload)});`
 }

@@ -30,7 +30,7 @@ const SENSITIVE_AUDIT_URI_RE =
 const SCHEMELESS_SENSITIVE_PATH_RE =
     /^(?:team|audit|metrics\/users|insights\/team-collaboration)(?:\/|$|\?|#)/i
 
-const AUDIT_URI_KEYS = [
+export const AUDIT_URI_KEYS = [
     'uri', 'Uri', '_uri', 'resourceUri', 'resource_uri', 'url', 'Url', 'resource',
     'Resource', 'path', 'Path', 'target', 'Target', 'name', 'Name', 'ServerName', 'server_name',
 ] as const

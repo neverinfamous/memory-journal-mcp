@@ -157,7 +157,13 @@ function recoverEntryMutation(
     }
     if (!hasJournalFields(signals)) return null
 
-    const entryParams = buildEntryParams(target, signals)
+    const isTeamOp = op === 'team_create_entry' || op === 'team_update_entry'
+    const isUpdate =
+        op === 'update_entry' ||
+        op === 'update' ||
+        op === 'team_update_entry' ||
+        (explicitIdForMutation !== undefined && !signals.hasOp)
+    const entryParams = buildEntryParams(target, signals, isUpdate)
     const scope = resolveCompatibleInheritedScope(target, original, true)
     if (entryParams['workspace_id'] === undefined && scope.workspaceId !== undefined) {
         entryParams['workspace_id'] = scope.workspaceId
@@ -165,12 +171,6 @@ function recoverEntryMutation(
     if (entryParams['project_number'] === undefined && scope.projectNumber !== undefined) {
         entryParams['project_number'] = scope.projectNumber
     }
-    const isTeamOp = op === 'team_create_entry' || op === 'team_update_entry'
-    const isUpdate =
-        op === 'update_entry' ||
-        op === 'update' ||
-        op === 'team_update_entry' ||
-        (explicitIdForMutation !== undefined && !signals.hasOp)
     const content = entryParams['content']
     if (!isUpdate && (typeof content !== 'string' || content.trim() === '')) return null
     if (isUpdate) {
@@ -243,12 +243,21 @@ function hasJournalFields(signals: PayloadSignals): boolean {
 function buildEntryParams(
     target: Record<string, unknown>,
     signals: PayloadSignals,
+    isUpdate = false,
 ): Record<string, unknown> {
-    const entryParams: Record<string, unknown> = {
-        title: resolveTitle(target, signals),
-        content: collectContent(target, signals),
-        entry_type: resolveEntryType(target),
-        tags: collectTags(target),
+    const entryParams: Record<string, unknown> = {}
+    if (!isUpdate || signals.hasTitle || signals.hasTask || signals.hasSummary) {
+        entryParams['title'] = resolveTitle(target, signals)
+    }
+    const collectedContent = collectContent(target, signals)
+    if (!isUpdate || collectedContent !== '') {
+        entryParams['content'] = collectedContent
+    }
+    if (!isUpdate || signals.hasType) {
+        entryParams['entry_type'] = resolveEntryType(target)
+    }
+    if (!isUpdate || target['tags'] !== undefined) {
+        entryParams['tags'] = collectTags(target)
     }
     const autoContext = collectAutoContext(target)
     if (Object.keys(autoContext).length > 0) entryParams['auto_context'] = autoContext

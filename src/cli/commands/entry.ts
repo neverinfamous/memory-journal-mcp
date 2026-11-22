@@ -357,13 +357,14 @@ async function enforceCliUpdateTeamPermissions(
     config: ToolHandlerConfig,
     entryId: number,
     existingEntry: ReturnType<IDatabaseAdapter['getEntryById']>,
-    trimmedTargetWs: string | undefined
+    trimmedTargetWs: string | undefined,
+    rawWorkspaceOpt: string | undefined
 ): Promise<void> {
     const [{ enforceCliTeamRbac }, { checkSingleTeamOwnership }] = await Promise.all([
         import('./db-helper.js'),
         import('../../handlers/tools/team/admin-tools/batch-delete-helpers.js'),
     ])
-    enforceCliTeamRbac(db, config, 'member', existingEntry?.workspaceId ?? trimmedTargetWs)
+    enforceCliTeamRbac(db, config, 'member', existingEntry?.workspaceId ?? trimmedTargetWs ?? rawWorkspaceOpt)
     if (
         trimmedTargetWs !== undefined &&
         existingEntry?.workspaceId !== undefined &&
@@ -372,16 +373,8 @@ async function enforceCliUpdateTeamPermissions(
         enforceCliTeamRbac(db, config, 'member', trimmedTargetWs)
     }
     if (existingEntry !== null && existingEntry !== undefined) {
-        const denied = checkSingleTeamOwnership(
-            db,
-            { db, teamDb: db, config },
-            entryId,
-            'modify',
-            existingEntry.workspaceId
-        )
-        if (denied !== null) {
-            throw new AuthorizationError(String(denied['error']))
-        }
+        const denied = checkSingleTeamOwnership(db, { db, teamDb: db, config }, entryId, 'modify', existingEntry.workspaceId)
+        if (denied !== null) throw new AuthorizationError(String(denied['error']))
     }
 }
 
@@ -392,11 +385,10 @@ export async function updateEntryAction(...args: unknown[]): Promise<void> {
     const { db, config } = await getDb(options, command)
     let exitCode: number | undefined
     try {
-        const { entryId, version, rawWorkspaceOpt, trimmedTargetWs } =
-            validateCliUpdateArgsAndTarget(options)
+        const { entryId, version, rawWorkspaceOpt, trimmedTargetWs } = validateCliUpdateArgsAndTarget(options)
         const existingEntry = db.getEntryById(entryId, '*')
         if (options.team === true) {
-            await enforceCliUpdateTeamPermissions(db, config, entryId, existingEntry, trimmedTargetWs)
+            await enforceCliUpdateTeamPermissions(db, config, entryId, existingEntry, trimmedTargetWs, rawWorkspaceOpt)
         }
         const rawContent =
             options.file === undefined &&

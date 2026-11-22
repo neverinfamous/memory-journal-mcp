@@ -96,12 +96,20 @@ class Logger {
         delete extras['operation']
 
         // Sanitize error and string fields recursively to prevent token/secret leakage in nested log contexts
-        const sanitizedExtras: Record<string, unknown> = {}
+        const sanitizedExtras = Object.create(null) as Record<string, unknown>
         const rootSeen = new WeakSet()
         if (context !== undefined) rootSeen.add(context)
         for (const [k, v] of Object.entries(extras)) {
-            if (k === '__proto__' || k === 'constructor' || k === 'prototype') continue
-            const safeKey = sanitizeErrorForLogging(k)
+            if (
+                k === '__proto__' ||
+                k === 'constructor' ||
+                k === 'prototype' ||
+                k === 'toJSON' ||
+                typeof v === 'function'
+            ) {
+                continue
+            }
+            const safeKey = sanitizeErrorForLogging(k).replace(/[\r\n]+/g, ' ')
             sanitizedExtras[safeKey] =
                 SENSITIVE_KEY_RE.test(k) && v !== undefined && v !== null && v !== ''
                     ? '[REDACTED]'

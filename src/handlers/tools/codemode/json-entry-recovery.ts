@@ -248,7 +248,8 @@ function stripNestedPropBlocks(code: string): string {
 
 function populateRecoveredArrayAndContextFields(
     payload: Record<string, unknown>,
-    scanCode: string
+    scanCode: string,
+    topLevelScanCode: string
 ): void {
     for (const [key, pattern] of ARRAY_FIELD_RES) {
         const rawArr = pattern.exec(scanCode)?.[1]
@@ -257,7 +258,7 @@ function populateRecoveredArrayAndContextFields(
         if (parsed !== undefined) payload[key] = parsed
     }
 
-    const rawTags = /\btags\s*:\s*\[([\s\S]*?)\]/i.exec(scanCode)?.[1]
+    const rawTags = /\btags\s*:\s*\[([\s\S]*?)\]/i.exec(topLevelScanCode)?.[1]
     if (rawTags !== undefined) {
         payload['tags'] = rawTags.split(',').map((s) => s.trim().replace(/^['"]|['"]$/g, '')).filter(Boolean)
     }
@@ -275,8 +276,12 @@ function populateRecoveredArrayAndContextFields(
     }
 }
 
-function populateRecoveredEntryMetadata(payload: Record<string, unknown>, scanCode: string): void {
-    const topLevelScanCode = stripNestedPropBlocks(scanCode)
+function populateRecoveredEntryMetadata(
+    payload: Record<string, unknown>,
+    scanCode: string,
+    preStrippedTopLevel?: string
+): void {
+    const topLevelScanCode = preStrippedTopLevel ?? stripNestedPropBlocks(scanCode)
     const projectMatch =
         /\b(?:project_number|projectNumber|project_id|projectId|project_name|projectName|project)\s*:\s*(?:(-?\d+(?:\.\d+)?)|(['"`])([^'"`]+)\2)/i.exec(
             topLevelScanCode
@@ -334,7 +339,7 @@ function populateRecoveredEntryMetadata(payload: Record<string, unknown>, scanCo
     if (isPersonalMatch?.[1] !== undefined) payload['is_personal'] = isPersonalMatch[1].toLowerCase() === 'true'
     if (shareTeamMatch?.[1] !== undefined) payload['share_with_team'] = shareTeamMatch[1].toLowerCase() === 'true'
 
-    populateRecoveredArrayAndContextFields(payload, scanCode)
+    populateRecoveredArrayAndContextFields(payload, scanCode, topLevelScanCode)
 }
 
 /**
@@ -355,14 +360,19 @@ export function extractAndRecoverEntryCode(code: string): string | null {
     if (extracted === null) return null
 
     const cleanScanCode = extracted.scanCode
-    const typeMatch = /\b(?:entry_type|type)\s*:\s*(['"])([^'"]+)\1/i.exec(cleanScanCode)
+    const topLevelScanCode = stripNestedPropBlocks(cleanScanCode)
+    const typeMatch = /\b(?:entry_type|type)\s*:\s*(['"])([^'"]+)\1/i.exec(topLevelScanCode)
     const payload: Record<string, unknown> = {
         content: extracted.content,
-        entry_type: typeMatch?.[2] ?? 'technical_note',
+    }
+    if (typeMatch?.[2] !== undefined) {
+        payload['entry_type'] = typeMatch[2]
+    } else if (!detected.isUpdate) {
+        payload['entry_type'] = 'technical_note'
     }
     if (extracted.title !== undefined && extracted.title !== '') payload['title'] = extracted.title
 
-    populateRecoveredEntryMetadata(payload, cleanScanCode)
+    populateRecoveredEntryMetadata(payload, cleanScanCode, topLevelScanCode)
 
     const fnName = detected.isUpdate
         ? detected.isTeamCall ? 'mj.team.teamUpdateEntry' : 'mj.updateEntry'

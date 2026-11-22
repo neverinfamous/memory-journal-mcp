@@ -169,10 +169,18 @@ function connectTransportToServer(
 
     activeServers.add(server)
     globalSubscriptionManager.registerServer(sessionId, server)
-    const originalClose = server.close.bind(server)
-    server.close = async () => {
+    const cleanupSessionServer = (): void => {
         activeServers.delete(server)
         forgetSession(state, sessionId)
+    }
+    const prevInnerOnClose = server.server.onclose
+    server.server.onclose = () => {
+        cleanupSessionServer()
+        prevInnerOnClose?.()
+    }
+    const originalClose = server.close.bind(server)
+    server.close = async () => {
+        cleanupSessionServer()
         return originalClose()
     }
 

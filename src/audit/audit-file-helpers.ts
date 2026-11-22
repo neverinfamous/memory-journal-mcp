@@ -6,8 +6,16 @@
 import { constants as fsConstants } from 'node:fs'
 import { lstat, open, rename } from 'node:fs/promises'
 import { logger } from '../utils/logger.js'
+import type { getRequestContext } from '../utils/request-context.js'
 import type { AuditEntry, AuditSearchFilters } from './types.js'
-import { matchesAuditFilters, parseAuditLine } from './audit-query-helpers.js'
+import {
+    AUDIT_URI_KEYS,
+    extractAuditScopeFromArgs,
+    extractAuditScopeFromUri,
+    matchesAuditFilters,
+    parseAuditLine,
+    type AuditScopeMetadata,
+} from './audit-query-helpers.js'
 
 const AUDIT_SEARCH_CHUNK_BYTES = 65_536
 
@@ -222,5 +230,65 @@ export async function rotateAuditLogFiles(
         const message = err instanceof Error ? err.message : String(err)
         logger.error(`Rotate failed: ${message}`, { module: 'Audit' })
         return null
+    }
+}
+
+function findMemoryUriInArgs(args: unknown): string | undefined {
+    if (typeof args !== 'object' || args === null || Array.isArray(args)) return undefined
+    const rec = args as Record<string, unknown>
+    for (const key of AUDIT_URI_KEYS) {
+        const val = rec[key]
+        if (typeof val !== 'string') continue
+        const trimmed = val.trim()
+        if (trimmed.startsWith('memory://')) return trimmed
+    }
+    return undefined
+}
+
+export function resolveToolCallAuditScope(
+    toolName: string,
+    args: unknown,
+    canTargetResource: boolean,
+    sensitiveTarget: string | undefined,
+    reqCtx: ReturnType<typeof getRequestContext>,
+    runtime?: object | null
+): AuditScopeMetadata {
+    const uriTarget =
+        sensitiveTarget?.startsWith('memory://') === true
+            ? sensitiveTarget
+            : toolName.startsWith('memory://')
+              ? toolName
+              : canTargetResource
+                ? findMemoryUriInArgs(args)
+                : undefined
+    if (uriTarget === undefined) {
+        return extractAuditScopeFromArgs(args, reqCtx, runtime)
+    }
+    const uriScope = extractAuditScopeFromUri(uriTarget, reqCtx, runtime)
+    if (typeof args !== 'object' || args === null || Array.isArray(args)) {
+        return uriScope
+    }
+    const rec = args as Record<string, unknown>
+    const hasExplicitWs =
+        typeof (rec['workspace_id'] ?? rec['workspaceId'] ?? rec['workspace']) === 'string' &&
+        String(rec['workspace_id'] ?? rec['workspaceId'] ?? rec['workspace']).trim() !== ''
+    const hasExplicitProj = (rec['project_number'] ?? rec['projectNumber']) !== undefined
+    if (!hasExplicitWs && !hasExplicitProj) return uriScope
+    const argScope = extractAuditScopeFromArgs(args, reqCtx, runtime)
+    return {
+        ...(hasExplicitWs
+            ? argScope.workspaceId !== undefined
+                ? { workspaceId: argScope.workspaceId }
+                : {}
+            : uriScope.workspaceId !== undefined
+              ? { workspaceId: uriScope.workspaceId }
+              : {}),
+        ...(hasExplicitProj
+            ? argScope.projectNumber !== undefined
+                ? { projectNumber: argScope.projectNumber }
+                : {}
+            : uriScope.projectNumber !== undefined
+              ? { projectNumber: uriScope.projectNumber }
+              : {}),
     }
 }
