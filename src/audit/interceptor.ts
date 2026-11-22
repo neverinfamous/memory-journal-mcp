@@ -26,6 +26,7 @@ import { sanitizeErrorForLogging } from '../utils/security-utils.js'
 import { scrubAuditArgs } from './audit-arg-scrubber.js'
 import { estimateTokens, estimatePayloadTokens } from '../observability/token-estimator.js'
 import {
+    applyActiveSessionScopeFallback,
     estimateOperationResultTokens,
     extractAuditScopeFromUri,
     extractSensitiveTargetFromArgs,
@@ -338,6 +339,39 @@ function resolveAuditOperationCategory(
     return resolveResourceAuditCategory(target)
 }
 
+function resolveAuditOperationScope(
+    target: string,
+    operationType: 'resource' | 'prompt',
+    reqCtx: ReturnType<typeof getRequestContext>,
+    options?: AuditOperationOptions
+): AuditScopeMetadata {
+    if (operationType === 'prompt') {
+        return {
+            ...(options?.workspaceId !== undefined ? { workspaceId: options.workspaceId } : {}),
+            ...(options?.projectNumber !== undefined ? { projectNumber: options.projectNumber } : {}),
+        }
+    }
+    const uriScope = extractAuditScopeFromUri(target, reqCtx, options?.runtime, true)
+    const uriWildcard = /[?&]workspace_id=\*(?:&|#|$)/i.test(target)
+    const uriInvalidProj =
+        uriScope.projectNumber === undefined && /[?&]project_number=/i.test(target)
+    const merged: AuditScopeMetadata = {
+        ...(options?.workspaceId !== undefined || uriScope.workspaceId !== undefined
+            ? { workspaceId: options?.workspaceId ?? uriScope.workspaceId }
+            : {}),
+        ...(options?.projectNumber !== undefined || uriScope.projectNumber !== undefined
+            ? { projectNumber: options?.projectNumber ?? uriScope.projectNumber }
+            : {}),
+    }
+    const wildcardWs =
+        options?.workspaceId !== undefined ? options.workspaceId.trim() === '*' : uriWildcard
+    const suppressFallback =
+        options?.projectNumber === undefined &&
+        options?.workspaceId?.trim() !== '*' &&
+        uriInvalidProj
+    return applyActiveSessionScopeFallback(merged, reqCtx, wildcardWs, options?.runtime, suppressFallback)
+}
+
 /**
  * Execute an operation with audit logging.
  * Intended for resources and prompts which operate outside the standard tool interceptor.
@@ -367,12 +401,9 @@ export async function auditOperation<T>(
     const user = authCtx?.authenticated === true ? (authCtx.claims?.sub ?? null) : null
     const scopes = getGrantedAuthScopes(authCtx)
     const sessionId = reqCtx?.sessionId
-    const uriScope =
-        operationType === 'prompt'
-            ? {}
-            : extractAuditScopeFromUri(target, reqCtx, options?.runtime)
-    const workspaceId = options?.workspaceId ?? uriScope.workspaceId
-    const projectNumber = options?.projectNumber ?? uriScope.projectNumber
+    const effectiveScope = resolveAuditOperationScope(target, operationType, reqCtx, options)
+    const workspaceId = effectiveScope.workspaceId
+    const projectNumber = effectiveScope.projectNumber
     const category = resolveAuditOperationCategory(target, options?.capabilities)
 
     const requestId = generateRequestId()

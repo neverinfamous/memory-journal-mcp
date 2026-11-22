@@ -7,6 +7,7 @@
  */
 
 import {
+    IMMUTABLE_PROXY_TRAPS,
     resolvePaginationAndStatsProp,
     resolveWrappedAliasProp,
 } from './worker/result-proxy-aliases.js'
@@ -125,12 +126,7 @@ function createFailedResultProxy(result: object): unknown {
     return new Proxy(result, {
         ownKeys: (target) => Reflect.ownKeys(target),
         getOwnPropertyDescriptor: (target, prop) => Reflect.getOwnPropertyDescriptor(target, prop),
-        isExtensible: () => true,
-        preventExtensions: () => false,
-        defineProperty: () => false,
-        set: () => false,
-        deleteProperty: () => false,
-        setPrototypeOf: () => false,
+        ...IMMUTABLE_PROXY_TRAPS,
         get(target, prop): unknown {
             const errVal: unknown = Reflect.get(target, 'error')
             const codeVal: unknown = Reflect.get(target, 'code')
@@ -164,7 +160,15 @@ function createArrayResultProxy(arr: unknown[]): unknown {
     return new Proxy(arr, {
         ownKeys: (target) => Reflect.ownKeys(target),
         getOwnPropertyDescriptor: (target, prop) => Reflect.getOwnPropertyDescriptor(target, prop),
+        ...IMMUTABLE_PROXY_TRAPS,
         get(target, prop, receiver): unknown {
+            if (typeof prop === 'string' && MUTATOR_ARRAY_METHODS.has(prop)) {
+                return () => {
+                    throw new TypeError(
+                        `🛠️ AUTONOMOUS HEALING: [VALIDATION_ERROR] CodeMode Proxy Error: Array mutator method '${prop}' is not allowed on API results. Modifying local arrays does not update the server state. You MUST use the appropriate API tool (e.g., mj.core.updateEntry, mj.admin.batchUpdateEntries) to persist changes.`
+                    )
+                }
+            }
             if (prop in target) {
                 const val: unknown = Reflect.get(target, prop, receiver)
                 if (typeof val === 'function') {
@@ -419,6 +423,7 @@ export function wrapResult(result: unknown): unknown {
         new Proxy(targetObj, {
             ownKeys: (target) => Reflect.ownKeys(target),
             getOwnPropertyDescriptor: (target, prop) => Reflect.getOwnPropertyDescriptor(target, prop),
+            ...IMMUTABLE_PROXY_TRAPS,
             get: (target, prop, receiver): unknown => resolveWrappedObjectProp(target, prop, receiver),
         })
     )

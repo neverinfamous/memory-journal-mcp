@@ -78,7 +78,7 @@ export class RepositoryManager {
 
         try {
             const url = new URL(remoteUrl)
-            if (url.hostname === 'github.com') {
+            if (url.hostname === 'github.com' || url.hostname === 'www.github.com') {
                 const path = url.pathname.replace(/\.git$/i, '').replace(/^\//, '')
                 const parts = path.split('/')
                 if (parts.length >= 2) {

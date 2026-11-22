@@ -1,5 +1,6 @@
 import { randomBytes } from 'node:crypto'
 import * as fs from 'node:fs'
+import * as os from 'node:os'
 import * as path from 'node:path'
 import { parse as parseYaml, stringify as stringifyYaml } from 'yaml'
 import { assertSafeConfigWriteTargetSync, readSafeRegularConfigTextSync } from './config-file-safety.js'
@@ -187,4 +188,17 @@ export function readProjectRegistryFile(configPath: string): {
     const registryClone: Record<string, unknown> = { ...existing }
     cloned['projectRegistry'] = registryClone
     return { config: cloned, registry: registryClone }
+}
+
+/** Resolve the authoritative project-registry config file path from ConfigManager, env override, or default location. */
+export function resolveRegistryConfigPath(configuredPath?: string): string {
+    const trimmed = configuredPath?.trim()
+    if (trimmed !== undefined && trimmed !== '') {
+        return path.resolve(trimmed)
+    }
+    const envPath = process.env['MEMORY_JOURNAL_CONFIG']?.trim()
+    if (envPath !== undefined && envPath !== '') {
+        return path.resolve(envPath)
+    }
+    return path.resolve(os.homedir(), '.gemini', 'config', 'memory-journal.config.json')
 }

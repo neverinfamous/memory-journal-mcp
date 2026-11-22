@@ -10,7 +10,12 @@ import type { ToolGroup } from '../../types/filtering.js'
 import type { ProgressContext } from '../../utils/progress-utils.js'
 import { METHOD_ALIASES } from '../api-constants.js'
 import { getZodTypeString } from '../type-generator.js'
-import type { ToolDispatcher, GroupApiRecord, ProjectRegistryProvider } from './types.js'
+import type {
+    ToolDispatcher,
+    GroupApiRecord,
+    ProjectRegistryProvider,
+    RegistryOpsConfig,
+} from './types.js'
 import { createGroupApi, toolNameToMethodName } from './group-factory.js'
 import {
     buildSandboxSchemasMap,
@@ -62,11 +67,18 @@ export class JournalApi {
     private readonly groupApiMap: Record<string, GroupApiRecord>
 
     private readonly registryProvider: ProjectRegistryProvider | undefined
+    private readonly registryOpsConfig: RegistryOpsConfig | undefined
     private readonly hasDispatcher: boolean
     private readonly fnSchemas = new WeakMap<object, string>()
 
-    constructor(tools: ToolDefinition[], dispatcher?: ToolDispatcher, registryProvider?: ProjectRegistryProvider) {
+    constructor(
+        tools: ToolDefinition[],
+        dispatcher?: ToolDispatcher,
+        registryProvider?: ProjectRegistryProvider,
+        registryOpsConfig?: RegistryOpsConfig
+    ) {
         this.registryProvider = registryProvider
+        this.registryOpsConfig = registryOpsConfig
         this.hasDispatcher = dispatcher !== undefined
         this.toolsKey = computeToolsCacheKey(tools)
         this.toolsByGroup = new Map()
@@ -161,6 +173,7 @@ export class JournalApi {
             team: this.team,
             hasDispatcher: this.hasDispatcher,
             registryProvider: this.registryProvider,
+            ...(this.registryOpsConfig !== undefined ? { registryOpsConfig: this.registryOpsConfig } : {}),
             copyFnSchema: (source, wrapper) => this.copyFnSchema(source, wrapper),
         })
     }
@@ -238,7 +251,8 @@ export function getCachedSandboxSchemas(
 export function createJournalApi(
     tools: ToolDefinition[],
     dispatcher?: ToolDispatcher,
-    registryProvider?: ProjectRegistryProvider
+    registryProvider?: ProjectRegistryProvider,
+    registryOpsConfig?: RegistryOpsConfig
 ): JournalApi {
-    return new JournalApi(tools, dispatcher, registryProvider)
+    return new JournalApi(tools, dispatcher, registryProvider, registryOpsConfig)
 }

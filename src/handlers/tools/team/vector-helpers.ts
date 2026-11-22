@@ -315,7 +315,9 @@ export async function executeTeamRebuildVectorIndex(
                 ...(projectNumber !== undefined ? { projectNumber } : {}),
             })
         if (!success && firstError !== undefined && firstError !== '') {
-            logger.warning(`Team vector index rebuild had errors: ${firstError}`)
+            logger.warning(`Team vector index rebuild had errors: ${firstError}`, {
+                ...(parsed.session_id !== undefined ? { sessionId: parsed.session_id } : {}),
+            })
         }
         const partial = failed > 0 && indexed > 0
 

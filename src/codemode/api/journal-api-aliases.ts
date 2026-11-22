@@ -1,6 +1,6 @@
 import type { ToolDefinition } from '../../types/index.js'
 import { METHOD_ALIASES } from '../api-constants.js'
-import type { GroupApiRecord, ProjectRegistryProvider } from './types.js'
+import type { GroupApiRecord, ProjectRegistryProvider, RegistryOpsConfig } from './types.js'
 import { toolNameToMethodName } from './group-factory.js'
 import { isRecord } from '../normalizers/shared-utils.js'
 import { runWithSilentTeamProbe } from '../rpc-context.js'
@@ -21,6 +21,7 @@ export interface ProjectAndTeamAliasDeps {
     team: GroupApiRecord
     hasDispatcher: boolean
     registryProvider: ProjectRegistryProvider | undefined
+    registryOpsConfig?: RegistryOpsConfig
     copyFnSchema: (source: unknown, wrapper: (...args: unknown[]) => unknown) => void
 }
 
@@ -39,14 +40,16 @@ function replaceAliasedFn(
 }
 
 function wireProjectMutationWrappers(deps: ProjectAndTeamAliasDeps): void {
-    const { core, search, admin, hasDispatcher, copyFnSchema } = deps
+    const { core, search, admin, hasDispatcher, registryOpsConfig, copyFnSchema } = deps
 
     const existingRegisterProject = admin['registerProject']
     const existingUpdateProject = admin['updateProject']
     const existingDeleteProject = admin['deleteProject']
 
     if (typeof existingRegisterProject === 'function') {
-        const fallbackRegister = hasDispatcher ? undefined : createRegisterProjectFn(core)
+        const fallbackRegister = hasDispatcher
+            ? undefined
+            : createRegisterProjectFn(core, undefined, registryOpsConfig)
         const wrappedRegister = async (...args: unknown[]): Promise<unknown> => {
             if (isRecord(args[0])) return await existingRegisterProject(args[0])
             if (typeof args[0] === 'string') {
@@ -64,7 +67,9 @@ function wireProjectMutationWrappers(deps: ProjectAndTeamAliasDeps): void {
         replaceAliasedFn([admin, core, search], existingRegisterProject, wrappedRegister)
     }
     if (typeof existingUpdateProject === 'function') {
-        const fallbackUpdate = hasDispatcher ? undefined : createUpdateProjectFn()
+        const fallbackUpdate = hasDispatcher
+            ? undefined
+            : createUpdateProjectFn(undefined, registryOpsConfig)
         const wrappedUpdate = async (...args: unknown[]): Promise<unknown> => {
             if (isRecord(args[0])) return await existingUpdateProject(args[0])
             if (typeof args[0] === 'string') {
@@ -83,7 +88,9 @@ function wireProjectMutationWrappers(deps: ProjectAndTeamAliasDeps): void {
         replaceAliasedFn([admin, core, search], existingUpdateProject, wrappedUpdate)
     }
     if (typeof existingDeleteProject === 'function') {
-        const fallbackDelete = hasDispatcher ? undefined : createDeleteProjectFn()
+        const fallbackDelete = hasDispatcher
+            ? undefined
+            : createDeleteProjectFn(registryOpsConfig)
         const wrappedDelete = async (...args: unknown[]): Promise<unknown> => {
             if (isRecord(args[0])) return await existingDeleteProject(args[0])
             if (typeof args[0] === 'string') return await existingDeleteProject({ name: args[0] })
@@ -125,10 +132,10 @@ function resolveGetConfigFn(
 }
 
 function wireProjectQueryAndTeamAliases(deps: ProjectAndTeamAliasDeps): void {
-    const { core, search, admin, team, hasDispatcher, registryProvider, copyFnSchema } = deps
+    const { core, search, admin, team, hasDispatcher, registryProvider, registryOpsConfig, copyFnSchema } = deps
     const existingListProjects = admin['listProjects']
     const existingGetProject = admin['getProject']
-    const fallbackListProjectsFn = createListProjectsFn(registryProvider)
+    const fallbackListProjectsFn = createListProjectsFn(registryProvider, registryOpsConfig)
 
     let listProjectsFn: (...args: unknown[]) => Promise<unknown>
     if (hasDispatcher) {

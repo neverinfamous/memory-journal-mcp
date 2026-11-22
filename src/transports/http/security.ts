@@ -300,6 +300,11 @@ function validateOAuthEndpointUrl(
         logError(errorMsg, { module: 'HTTP', operation: 'oauth-config' })
         throw new Error(errorMsg)
     }
+    if (parsed.username !== '' || parsed.password !== '') {
+        const errorMsg = `FATAL: OAuth ${label} must not include embedded credentials.`
+        logError(errorMsg, { module: 'HTTP', operation: 'oauth-config' })
+        throw new Error(errorMsg)
+    }
     if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') {
         const errorMsg = `FATAL: OAuth ${label} uses unsupported protocol '${parsed.protocol}'.`
         logError(errorMsg, { module: 'HTTP', operation: 'oauth-config' })

@@ -11,7 +11,7 @@ function canonicalizeEntryType(obj: Record<string, unknown>): void {
 }
 
 /** Synthesize structured entry fields (title, description, context, findings, etc.) into `content`. */
-export function synthesizeEntryMutationFields(obj: Record<string, unknown>): void {
+export function synthesizeEntryMutationFields(obj: Record<string, unknown>, isUpdate = false): void {
     canonicalizeEntryType(obj)
     const contentParts: string[] = []
 
@@ -27,10 +27,19 @@ export function synthesizeEntryMutationFields(obj: Record<string, unknown>): voi
         }
     }
 
-    consumeGroup(['title', 'heading', 'subject', 'name'], (v) => {
-        const s = safeString(v)
-        return s !== '' ? `# ${s}` : ''
-    })
+    if (isUpdate) {
+        if (obj['title'] === undefined) {
+            const altTitle = obj['heading'] ?? obj['subject']
+            if (altTitle !== undefined) obj['title'] = altTitle
+        }
+        Reflect.deleteProperty(obj, 'heading')
+        Reflect.deleteProperty(obj, 'subject')
+    } else {
+        consumeGroup(['title', 'heading', 'subject', 'name'], (v) => {
+            const s = safeString(v)
+            return s !== '' ? `# ${s}` : ''
+        })
+    }
     consumeGroup(['description', 'details', 'summary', 'notes', 'text', 'message'], safeString)
     consumeGroup(['context'], (v) => {
         const s = safeString(v)

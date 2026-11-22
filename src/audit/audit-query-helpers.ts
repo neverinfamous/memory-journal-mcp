@@ -190,7 +190,7 @@ export function resolveResourceAuditCategory(uriOrName: string): AuditCategory {
     return resolveSensitiveCategoryFromNormalized(normalizeAuditResourceUri(uriOrName), uriOrName)
 }
 
-function applyActiveSessionScopeFallback(
+export function applyActiveSessionScopeFallback(
     scope: AuditScopeMetadata,
     reqCtx?: RequestContext,
     explicitWildcardWorkspace = false,
@@ -249,12 +249,9 @@ export function extractAuditScopeFromArgs(
         const rawProj = [record['project_number'], record['projectNumber']].find(
             (v) => v !== undefined && !(typeof v === 'string' && v.trim() === '')
         )
-        if (rawProj === 0 || (typeof rawProj === 'string' && rawProj.trim() === '0')) {
-            explicitZeroProject = true
-        } else {
-            const parsedProject = parsePositiveProjectNumber(rawProj)
-            if (parsedProject !== undefined) projectNumber = parsedProject
-        }
+        const parsedProject = parsePositiveProjectNumber(rawProj)
+        if (parsedProject !== undefined) projectNumber = parsedProject
+        else if (rawProj !== undefined) explicitZeroProject = true
     }
 
     const baseScope: AuditScopeMetadata = {
@@ -323,7 +320,8 @@ function extractProjectNumberFromResourceUrl(parsed: URL): number | undefined {
 export function extractAuditScopeFromUri(
     uri: string,
     reqCtx?: RequestContext,
-    runtime?: object | null
+    runtime?: object | null,
+    skipSessionFallback = false
 ): AuditScopeMetadata {
     let workspaceId: string | undefined
     let projectNumber: number | undefined
@@ -342,13 +340,10 @@ export function extractAuditScopeFromUri(
             }
         }
         const projParam = parsed.searchParams.get('project_number')
-        if (projParam !== null) {
-            if (projParam.trim() === '0') {
-                explicitZeroProject = true
-            } else {
-                const n = parseCanonicalPositiveInt(projParam)
-                if (n !== undefined) projectNumber = n
-            }
+        if (projParam !== null && projParam.trim() !== '') {
+            const n = parseCanonicalPositiveInt(projParam)
+            if (n !== undefined) projectNumber = n
+            else explicitZeroProject = true
         }
         if (workspaceId === undefined && !explicitWildcardWorkspace) {
             const rawRepo = extractRepoPathFromResourceUrl(parsed)
@@ -369,9 +364,17 @@ export function extractAuditScopeFromUri(
         // Ignore malformed URI strings during audit extraction
     }
 
+    const baseScope: AuditScopeMetadata = {
+        ...(workspaceId !== undefined ? { workspaceId } : {}),
+        ...(projectNumber !== undefined ? { projectNumber } : {}),
+    }
+    if (skipSessionFallback) return baseScope
     return applyActiveSessionScopeFallback(
-        { ...(workspaceId !== undefined ? { workspaceId } : {}), ...(projectNumber !== undefined ? { projectNumber } : {}) },
-        reqCtx, explicitWildcardWorkspace, runtime, explicitZeroProject
+        baseScope,
+        reqCtx,
+        explicitWildcardWorkspace,
+        runtime,
+        explicitZeroProject
     )
 }
 

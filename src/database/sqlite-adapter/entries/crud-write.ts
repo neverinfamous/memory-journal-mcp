@@ -114,7 +114,7 @@ function insertEntryRow(context: EntriesSharedContext, input: CreateEntryInput):
         return insertId
     }
 
-    return db.inTransaction ? doInsert() : db.transaction(doInsert)()
+    return runImmediateWriteTx(db, doInsert)
 }
 
 export function createEntry(context: EntriesSharedContext, input: CreateEntryInput): JournalEntry {

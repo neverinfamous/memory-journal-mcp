@@ -10,6 +10,7 @@ import type { getRequestContext } from '../utils/request-context.js'
 import type { AuditEntry, AuditSearchFilters } from './types.js'
 import {
     AUDIT_URI_KEYS,
+    applyActiveSessionScopeFallback,
     extractAuditScopeFromArgs,
     extractAuditScopeFromUri,
     matchesAuditFilters,
@@ -307,11 +308,17 @@ export function resolveToolCallAuditScope(
     if (uriTarget === undefined) {
         return extractAuditScopeFromArgs(args, reqCtx, runtime)
     }
-    const uriScope = extractAuditScopeFromUri(uriTarget, reqCtx, runtime)
-    if (typeof args !== 'object' || args === null || Array.isArray(args)) {
-        return uriScope
+    const uriScope = extractAuditScopeFromUri(uriTarget, reqCtx, runtime, true)
+    const uriWildcard = /[?&]workspace_id=\*(?:&|#|$)/i.test(uriTarget)
+    const uriInvalidProj =
+        uriScope.projectNumber === undefined && /[?&]project_number=/i.test(uriTarget)
+    const rec =
+        typeof args === 'object' && args !== null && !Array.isArray(args)
+            ? (args as Record<string, unknown>)
+            : undefined
+    if (rec === undefined) {
+        return applyActiveSessionScopeFallback(uriScope, reqCtx, uriWildcard, runtime, uriInvalidProj)
     }
-    const rec = args as Record<string, unknown>
     const rawWsArg = [rec['workspace_id'], rec['workspaceId'], rec['workspace']].find(
         (v): v is string => typeof v === 'string' && v.trim() !== ''
     )
@@ -321,9 +328,11 @@ export function resolveToolCallAuditScope(
         (v) => v !== undefined && !(typeof v === 'string' && v.trim() === '')
     )
     const hasExplicitProj = rawProjArg !== undefined
-    if (!hasExplicitWs && !hasExplicitProj) return uriScope
+    if (!hasExplicitWs && !hasExplicitProj) {
+        return applyActiveSessionScopeFallback(uriScope, reqCtx, uriWildcard, runtime, uriInvalidProj)
+    }
     const argScope = extractAuditScopeFromArgs(args, reqCtx, runtime, true)
-    return {
+    const mergedScope: AuditScopeMetadata = {
         ...(hasExplicitWs
             ? argScope.workspaceId !== undefined
                 ? { workspaceId: argScope.workspaceId }
@@ -339,4 +348,7 @@ export function resolveToolCallAuditScope(
               ? { projectNumber: uriScope.projectNumber }
               : {}),
     }
+    const suppressProj = hasExplicitProj ? argScope.projectNumber === undefined : uriInvalidProj
+    const wildcardWs = hasExplicitWs ? hasExplicitWildcard : uriWildcard
+    return applyActiveSessionScopeFallback(mergedScope, reqCtx, wildcardWs, runtime, suppressProj)
 }

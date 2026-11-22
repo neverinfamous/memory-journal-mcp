@@ -250,7 +250,7 @@ describe('Pass 56 Code Quality Audit Regressions', () => {
     })
 
     it('AP1–AP2: bumps AUDIT_PROMPT_REVISION to 2026-11-20-audit-pass57 and includes Pass 56 invariants', () => {
-        expect(AUDIT_PROMPT_REVISION).toBe('2026-11-22-audit-pass75')
+        expect(AUDIT_PROMPT_REVISION).toBe('2026-11-22-audit-pass76')
         const def = getCodeQualityAuditPromptDefinition()
         const mockDb = {
             searchEntries: vi.fn(() => []),
@@ -259,7 +259,7 @@ describe('Pass 56 Code Quality Audit Regressions', () => {
         } as unknown as IDatabaseAdapter
         const rendered = def.handler({ target: 'memory-journal-mcp' }, mockDb)
         const text = rendered.messages[0]?.content.text ?? ''
-        expect(text).toContain('Prompt revision: 2026-11-22-audit-pass75')
+        expect(text).toContain('Prompt revision: 2026-11-22-audit-pass76')
         expect(text).toContain('escapeDelimiterChar')
         expect(text).toContain('root-seeded active-ancestor-only cycle tracking')
         expect(text).toContain('String(error)')

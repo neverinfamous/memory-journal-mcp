@@ -12,6 +12,7 @@ import { IMMUTABLE_PROXY_TRAPS } from './worker/result-proxy-aliases.js'
  */
 export function wrapPromise(promise: Promise<unknown>, methodName: string): Promise<unknown> {
     return new Proxy(promise, {
+        ...IMMUTABLE_PROXY_TRAPS,
         get(target, prop): unknown {
             if (prop === 'then') return target.then.bind(target)
             if (prop === 'catch') return target.catch.bind(target)

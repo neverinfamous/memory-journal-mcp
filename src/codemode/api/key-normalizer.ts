@@ -265,12 +265,19 @@ function resolveAliasedKey(startKey: string, value: unknown, ctx: KeyContext): s
         if (pathKey !== undefined) return pathKey
         return startKey
     }
-    const contentKeys = startKey === 'text' || startKey === 'body' || startKey === 'note' || startKey === 'title'
-    const isEntryMutation =
+    const isCreateEntry =
         methodName !== undefined &&
-        (hasMethodToken(methodName, 'create') || hasMethodToken(methodName, 'update')) &&
+        hasMethodToken(methodName, 'create') &&
         (hasMethodToken(methodName, 'entry') || hasMethodToken(methodName, 'entries'))
-    if (contentKeys && methodName !== undefined && !(isGithubTool || isEntryMutation)) {
+    const isUpdateEntry =
+        methodName !== undefined &&
+        hasMethodToken(methodName, 'update') &&
+        (hasMethodToken(methodName, 'entry') || hasMethodToken(methodName, 'entries'))
+    if (startKey === 'title' && isUpdateEntry) {
+        return startKey
+    }
+    const contentKeys = startKey === 'text' || startKey === 'body' || startKey === 'note' || startKey === 'title'
+    if (contentKeys && methodName !== undefined && !(isGithubTool || isCreateEntry || isUpdateEntry)) {
         return startKey
     }
     return alias
@@ -281,6 +288,12 @@ function resolveContentLikeKey(startKey: string, ctx: KeyContext): string {
     const { obj, result, methodName, isGithubTool } = ctx
     let snakeKey = startKey
     if (CONTENT_LIKE_KEYS.has(snakeKey)) {
+        const isEntryOp =
+            methodName !== undefined &&
+            (hasMethodToken(methodName, 'entry') || hasMethodToken(methodName, 'entries')) &&
+            !hasMethodToken(methodName, 'link')
+        const isCreateEntry = isEntryOp && hasMethodToken(methodName, 'create')
+        const isUpdateEntry = isEntryOp && hasMethodToken(methodName, 'update')
         if (isGithubTool) {
             if (snakeKey === 'name') {
                 if (!hasDefinedKey(obj, 'title') && !hasDefinedKey(result, 'title')) snakeKey = 'title'
@@ -299,13 +312,10 @@ function resolveContentLikeKey(startKey: string, ctx: KeyContext): string {
             } else if (!hasDefinedKey(obj, 'body') && !hasDefinedKey(result, 'body') && snakeKey !== 'comment') {
                 snakeKey = 'body'
             }
-        } else if (
-            methodName !== undefined &&
-            (hasMethodToken(methodName, 'create') || hasMethodToken(methodName, 'update')) &&
-            (hasMethodToken(methodName, 'entry') || hasMethodToken(methodName, 'entries')) &&
-            !hasMethodToken(methodName, 'link')
-        ) {
-            // [H6] Only entry mutations redirect name/message/... into `content`; project,
+        } else if (isUpdateEntry && (snakeKey === 'name' || snakeKey === 'heading' || snakeKey === 'subject')) {
+            if (!hasDefinedKey(obj, 'title') && !hasDefinedKey(result, 'title')) snakeKey = 'title'
+        } else if (isCreateEntry || isUpdateEntry) {
+            // [H6] Only entry mutations redirect message/description/... into `content`; project,
             // milestone, member, or config mutations keep their own `name`/`description` keys.
             if (!hasDefinedKey(obj, 'content') && !hasDefinedKey(result, 'content')) {
                 snakeKey = 'content'

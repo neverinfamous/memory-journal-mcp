@@ -7,6 +7,7 @@
 import { parsePositiveProjectNumber } from '../../utils/safe-positive-int.js'
 import { wrapResult } from '../worker-result-proxy.js'
 import { wrapPromise } from '../proxy-helpers.js'
+import { IMMUTABLE_PROXY_TRAPS } from './result-proxy-aliases.js'
 import { createCallableShim } from './namespace-shims.js'
 export {
     createAdaptersShim,
@@ -105,12 +106,7 @@ export function createEntriesDomainProxy(target: Record<string, unknown>): unkno
             }
             return Reflect.get(targetFn, p, receiver) as unknown
         },
-        isExtensible: () => true,
-        preventExtensions: () => false,
-        set: () => false,
-        defineProperty: () => false,
-        deleteProperty: () => false,
-        setPrototypeOf: () => false,
+        ...IMMUTABLE_PROXY_TRAPS,
     })
 }
 
@@ -211,7 +207,7 @@ function resolveProjectDomainProp(
         getGroupProp(target, 'analytics', 'get_cross_project_insights') ??
         getGroupProp(target, 'analytics', 'getCrossProjectInsights')
     if (p === 'insights' && typeof insightsFn === 'function') {
-        return (...args: unknown[]): unknown => (insightsFn as (...a: unknown[]) => unknown)(...args)
+        return insightsFn
     }
     const baseProjectsProxy = target['projects']
     if (
@@ -251,12 +247,7 @@ export function createShimProjectsDomain(
         get(_t, p): unknown {
             return resolveProjectDomainProp(p, target, shimMj, projectsFn)
         },
-        isExtensible: () => true,
-        preventExtensions: () => false,
-        set: () => false,
-        defineProperty: () => false,
-        deleteProperty: () => false,
-        setPrototypeOf: () => false,
+        ...IMMUTABLE_PROXY_TRAPS,
     })
 }
 
@@ -320,12 +311,28 @@ function readAppendMetadata(value: unknown): Record<string, unknown> | undefined
     return record
 }
 
+const APPEND_META_FIELDS = [
+    'entry_type',
+    'title',
+    'session_id',
+    'significance_type',
+    'impact_score',
+    'trust_score',
+    'validation_status',
+    'anchors',
+    'relationships',
+] as const
+
 export function createAppendInterceptor(
     target: Record<string, unknown>
-): ((arg1: unknown, arg2: unknown, arg3: unknown) => unknown) | undefined {
+): ((arg1: unknown, arg2?: unknown, arg3?: unknown) => unknown) | undefined {
     const createEntry = getGroupProp(target, 'core', 'createEntry')
     if (typeof createEntry !== 'function') return undefined
-    return (arg1: unknown, arg2: unknown, arg3: unknown): unknown => {
+    const callCreate = createEntry as (args: unknown) => unknown
+    return (arg1: unknown, arg2?: unknown, arg3?: unknown): unknown => {
+        if (readAppendMetadata(arg1) !== undefined) return callCreate(arg1)
+        if (typeof arg1 === 'string' && arg2 === undefined && arg3 === undefined) return callCreate(arg1)
+
         const tags = Array.isArray(arg1) ? arg1 : [typeof arg1 === 'string' ? arg1 : 'test']
         const content = typeof arg2 === 'string' ? arg2 : arg2 !== null && arg2 !== undefined ? JSON.stringify(arg2) : ''
         const metadata = readAppendMetadata(arg3)
@@ -343,8 +350,13 @@ export function createAppendInterceptor(
             ) {
                 payload['project_number'] = projNum
             }
+            for (const field of APPEND_META_FIELDS) {
+                if (metadata[field] !== undefined && payload[field] === undefined) {
+                    payload[field] = metadata[field]
+                }
+            }
         }
 
-        return (createEntry as (args: unknown) => unknown)(payload)
+        return callCreate(payload)
     }
 }

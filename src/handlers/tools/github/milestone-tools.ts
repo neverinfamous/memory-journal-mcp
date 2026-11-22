@@ -69,10 +69,15 @@ const MilestoneCreateSchemaMcp = z.object({
     owner: z.string().optional().describe('LEAVE EMPTY to auto-detect'),
     repo: z.string().optional().describe('LEAVE EMPTY to auto-detect'),
 })
+const DATE_FORMAT_REGEX = /^\d{4}-\d{2}-\d{2}$/
+const ISO_DATETIME_REGEX = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$/
+const isValidDueOn = (val: string): boolean => val === '' || DATE_FORMAT_REGEX.test(val) || ISO_DATETIME_REGEX.test(val)
+const DUE_ON_MESSAGE = 'due_on must be YYYY-MM-DD or an ISO-8601 timestamp'
+
 const MilestoneCreateSchema = z.object({
     title: z.string().min(1),
     description: z.string().optional(),
-    due_on: z.string().nullable().optional(),
+    due_on: z.string().refine(isValidDueOn, DUE_ON_MESSAGE).nullable().optional(),
     owner: z.string().optional(),
     repo: z.string().optional(),
     ...githubScopeParseFields,
@@ -91,7 +96,7 @@ const MilestoneUpdateSchema = z.object({
     milestone_number: z.preprocess(coerceIntString, z.number().int().positive()),
     title: z.string().optional(),
     description: z.string().optional(),
-    due_on: z.string().nullable().optional(),
+    due_on: z.string().refine(isValidDueOn, DUE_ON_MESSAGE).nullable().optional(),
     state: z.enum(['open', 'closed']).optional(),
     owner: z.string().optional(),
     repo: z.string().optional(),

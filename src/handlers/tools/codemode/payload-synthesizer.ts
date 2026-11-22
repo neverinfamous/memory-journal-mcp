@@ -4,6 +4,7 @@
  * sandbox context construction lives in `sandbox-user-context.ts`.
  */
 
+import { appendOptionalQuerySearchFields } from '../../../codemode/shared-context-parsers.js'
 import { isRecord } from '../../../codemode/normalizers/shared-utils.js'
 import { healCodeModeScript } from './code-healer.js'
 import { extractAndRecoverJsonCode, extractAndRecoverRecordCode } from './json-entry-recovery.js'
@@ -208,7 +209,7 @@ function buildQuerySearch(query: string, input: ExecuteCodeInput, params: unknow
     if (wsVal !== undefined) searchPayload['workspace_id'] = wsVal
     const projVal = parseProjectNumberField(rawObj, {})
     if (projVal !== undefined) searchPayload['project_number'] = projVal
-    if (typeof input['limit'] === 'number') searchPayload['limit'] = input['limit']
+    appendOptionalQuerySearchFields(searchPayload, rawObj, input['limit'])
     return `return await mj.search.searchEntries(${JSON.stringify(searchPayload)});`
 }
 
@@ -393,6 +394,7 @@ function recoverFromContextField(
             const searchPayload: Record<string, unknown> = { query: ctxVal['query'] }
             if (wsVal !== undefined) searchPayload['workspace_id'] = wsVal
             if (projVal !== undefined) searchPayload['project_number'] = projVal
+            appendOptionalQuerySearchFields(searchPayload, ctxVal, outerFallback['limit'])
             const synthesized = `return await mj.searchEntries(${JSON.stringify(searchPayload)});`
             return Buffer.byteLength(synthesized, 'utf-8') <= MAX_RECOVERED_CONTEXT_CODE_BYTES
                 ? synthesized

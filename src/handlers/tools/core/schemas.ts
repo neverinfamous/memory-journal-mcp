@@ -338,7 +338,7 @@ export const GetRecentEntriesSchemaMcp = z.preprocess(
 // ============================================================================
 
 export const GetEntryHistorySchema = z.object({
-    entry_id: z.preprocess(coerceIntString, z.number().int()),
+    entry_id: z.preprocess(coerceIntString, z.number().int().positive()),
     project_number: z.preprocess(coerceIntString, StrictProjectNumberSchema).optional(),
     workspace_id: z.string().max(255).optional(),
 })

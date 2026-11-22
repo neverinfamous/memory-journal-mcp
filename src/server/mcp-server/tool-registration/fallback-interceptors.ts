@@ -1,4 +1,5 @@
 import { wrapWithMetrics } from '../../../observability/index.js'
+import { loadProjectRegistryFromConfig } from '../../../utils/workspace-resolver.js'
 import type { ServerRuntime } from '../../../utils/maintenance-lock.js'
 import { ADMIN_PROMPT_NAMES, TEAM_PROMPT_NAMES } from '../../../auth/scope-map.js'
 import { AuthorizationError, PermissionError } from '../../../types/errors.js'
@@ -226,14 +227,16 @@ export async function dispatchKnownGroupFallbackTools(
     ) {
         const target = requestedTool === 'projects' ? 'list_projects' : projectAliasTarget(requestedTool)
         if (target !== undefined) {
+            const registry =
+                fallbackConfig.projectRegistry ?? loadProjectRegistryFromConfig() ?? {}
             if (target === 'get_project') {
                 return formatSuccessPayload(
-                    resolveSingleProjectFromRegistry(fallbackConfig.projectRegistry, toolArgs, requestedTool)
+                    resolveSingleProjectFromRegistry(registry, toolArgs, requestedTool)
                 )
             }
             return formatSuccessPayload({
                 success: true,
-                projects: fallbackConfig.projectRegistry ?? {},
+                projects: registry,
                 _healing_note: `🛠️ AUTONOMOUS HEALING: '${requestedTool}' was called as an MCP tool. Returned registered projects from projectRegistry successfully.`,
             })
         }

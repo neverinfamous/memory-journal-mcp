@@ -7,6 +7,7 @@ import * as vm from 'node:vm'
 import type { SandboxResult } from '../types.js'
 import { serializeAndEnforceEgress } from './result-compactor.js'
 import {
+    appendOptionalQuerySearchFields,
     normalizeUserContextPayload,
     parseByteSizeValue,
     parseStringContextPayload,
@@ -72,7 +73,7 @@ const DANGEROUS_NESTED_QUERY_TOKEN_RE =
  */
 export function readNestedQuerySearch(
     arg: unknown
-): { query: string; workspace_id?: string; project_number?: number; limit?: unknown } | undefined {
+): ({ query: string; workspace_id?: string; project_number?: number; limit?: unknown } & Record<string, unknown>) | undefined {
     if (typeof arg !== 'object' || arg === null || Array.isArray(arg)) return undefined
     const codeProp = Reflect.get(arg, 'code') as unknown
     const scriptProp = Reflect.get(arg, 'script') as unknown
@@ -88,7 +89,7 @@ export function readNestedQuerySearch(
         return undefined
     }
 
-    const searchPayload: { query: string; workspace_id?: string; project_number?: number; limit?: unknown } = {
+    const searchPayload: { query: string; workspace_id?: string; project_number?: number; limit?: unknown } & Record<string, unknown> = {
         query: queryProp,
     }
     const wsProp = (Reflect.get(arg, 'workspace_id') ?? Reflect.get(arg, 'workspaceId')) as unknown
@@ -99,10 +100,7 @@ export function readNestedQuerySearch(
     if (typeof projProp === 'number' && Number.isSafeInteger(projProp) && projProp > 0) {
         searchPayload.project_number = projProp
     }
-    const limitProp = Reflect.get(arg, 'limit') as unknown
-    if (limitProp !== undefined) {
-        searchPayload.limit = limitProp
-    }
+    appendOptionalQuerySearchFields(searchPayload, arg as Record<string, unknown>)
     return searchPayload
 }
 

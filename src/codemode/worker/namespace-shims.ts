@@ -5,7 +5,7 @@
 
 import { wrapResult } from '../worker-result-proxy.js'
 import { JOURNAL_TABLES, getSchemaHelp, listJournalTables } from '../api/schema-help.js'
-import { IMMUTABLE_PROXY_TRAPS } from './result-proxy-aliases.js'
+import { IMMUTABLE_PROXY_TRAPS, READONLY_MUTATION_TRAPS } from './result-proxy-aliases.js'
 
 export const DB_TO_JOURNAL: Record<string, [string, string]> = Object.assign(
     Object.create(null) as Record<string, [string, string]>,
@@ -387,16 +387,33 @@ function resolveContextProxyProp(target: Record<string, unknown>, prop: string |
     return undefined
 }
 
+function deepFreezeContextClone(value: unknown, seen = new WeakMap<object, unknown>()): unknown {
+    if (value === null || typeof value !== 'object') return value
+    if (seen.has(value)) return seen.get(value)
+    if (Array.isArray(value)) {
+        const clone: unknown[] = []
+        seen.set(value, clone)
+        for (const item of value) clone.push(deepFreezeContextClone(item, seen))
+        return Object.freeze(clone)
+    }
+    const clone = Object.create(null) as Record<string, unknown>
+    seen.set(value, clone)
+    for (const k of Object.keys(value)) {
+        clone[k] = deepFreezeContextClone(Reflect.get(value, k), seen)
+    }
+    return Object.freeze(clone)
+}
+
 /**
  * Builds the frozen `context` global proxy for the sandbox.
  */
 export function createContextProxy(contextObj?: Record<string, unknown>): Record<string, unknown> {
-    const target = contextObj !== undefined ? Object.freeze({ ...contextObj }) : Object.freeze({})
+    const target =
+        contextObj !== undefined
+            ? (deepFreezeContextClone(contextObj) as Record<string, unknown>)
+            : Object.freeze({})
     return new Proxy(target, {
         get: (t, prop): unknown => resolveContextProxyProp(t, prop),
-        set: () => false,
-        defineProperty: () => false,
-        deleteProperty: () => false,
-        setPrototypeOf: () => false,
+        ...READONLY_MUTATION_TRAPS,
     })
 }

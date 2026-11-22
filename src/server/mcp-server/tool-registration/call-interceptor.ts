@@ -119,7 +119,7 @@ function buildToolNotFoundErrorPayload(
 
 function resolveBlockedShimResponse(
     requestedTool: string,
-    matchingPrompt: PromptDefinition | undefined,
+    promptTargetName: string | undefined,
     context: ServerContext
 ): unknown {
     const liveConfig = context.configManager.getConfig()
@@ -129,7 +129,7 @@ function resolveBlockedShimResponse(
         activeFilter === undefined ||
         !isAutonomousShimBlockedByFilter(
             requestedTool,
-            matchingPrompt?.name,
+            promptTargetName,
             activeFilter,
             liveConfig.codemodeInternalFullAccess === true
         )
@@ -172,14 +172,16 @@ async function handleUnknownTool(
     if (healingEnabled) {
         const auditTargetName = resolveKnownFallbackAuditName(requestedTool, matchingPrompt)
         if (auditTargetName !== undefined) {
-            const blockedResponse = resolveBlockedShimResponse(requestedTool, matchingPrompt, context)
-            if (blockedResponse !== undefined) return blockedResponse
             const accessTargets = resolvePromptOrResourceAccessTargets(
                 requestedTool,
                 toolArgs,
                 matchingPrompt,
                 prompts
             )
+            const promptTargetName =
+                matchingPrompt?.name ?? accessTargets?.find((t) => t.targetType === 'prompt')?.targetName
+            const blockedResponse = resolveBlockedShimResponse(requestedTool, promptTargetName, context)
+            if (blockedResponse !== undefined) return blockedResponse
             const fallbackResponse = await runFallbackWithInterceptors(
                 auditTargetName,
                 toolArgs,

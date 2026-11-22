@@ -212,12 +212,18 @@ function rewriteEntryTypes(db: Database, rewrites: readonly EntryTypeRewrite[]):
  * Returns the pre-apply plan so callers can log counts.
  */
 export function applyLegacyCommitNormalization(db: Database): LegacyCommitNormalizationReport {
-    const { report, untaggedIds } = buildPlan(db)
+    let report: LegacyCommitNormalizationReport | undefined
     const run = (): void => {
-        tagCommitRows(db, untaggedIds)
-        rewriteEntryTypes(db, report.entryTypeRewrites)
+        const plan = buildPlan(db)
+        report = plan.report
+        tagCommitRows(db, plan.untaggedIds)
+        rewriteEntryTypes(db, plan.report.entryTypeRewrites)
     }
-    if (db.inTransaction) run()
-    else db.transaction(run)()
+    const tx = db.transaction(run)
+    if (!db.inTransaction && typeof tx.immediate === 'function') tx.immediate()
+    else run()
+    if (report === undefined) {
+        throw new Error('Legacy commit normalization transaction did not produce a report')
+    }
     return report
 }

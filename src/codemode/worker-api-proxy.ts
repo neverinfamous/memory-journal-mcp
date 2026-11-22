@@ -24,6 +24,7 @@ import {
     createContextNamespaceProxy,
 } from './proxy-namespaces.js'
 import { createApiRootGetTrap, resolveFallbackSchema } from './worker/api-proxy-trap.js'
+import { READONLY_MUTATION_TRAPS } from './worker/result-proxy-aliases.js'
 
 function getPropOrSnake(obj: unknown, snake: string, camel: string): unknown {
     if ((typeof obj === 'object' && obj !== null) || typeof obj === 'function') {
@@ -393,8 +394,10 @@ export function buildApiProxy(
     }
 
     attachVirtualNamespaces(api, methods, safeRpcCall, invokeRpc, contextObj)
+    Object.freeze(api)
 
     return new Proxy(api, {
+        ...READONLY_MUTATION_TRAPS,
         get: createApiRootGetTrap({
             api, methods, schemas, readonlyMode, createMethodProxyFn, resolveFallbackSchema,
         }),

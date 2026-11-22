@@ -266,7 +266,7 @@ function buildEntryParams(
     if (!isUpdate || signals.hasTitle || signals.hasTask || signals.hasSummary) {
         entryParams['title'] = resolveTitle(target, signals)
     }
-    const collectedContent = collectContent(target, signals)
+    const collectedContent = collectContent(target, signals, isUpdate)
     if (!isUpdate || collectedContent !== '') {
         entryParams['content'] = collectedContent
     }
@@ -282,7 +282,7 @@ function buildEntryParams(
     return entryParams
 }
 
-function collectContent(target: Record<string, unknown>, signals: PayloadSignals): string {
+function collectContent(target: Record<string, unknown>, signals: PayloadSignals, isUpdate = false): string {
     const contentSections: string[] = []
     if (signals.hasContent) contentSections.push(String(target['content']).trim())
     if (signals.hasNotes) contentSections.push(String(target['notes']).trim())
@@ -300,7 +300,7 @@ function collectContent(target: Record<string, unknown>, signals: PayloadSignals
     if (signals.hasStatus) contentSections.push(`**Status:** ${String(target['status']).trim()}`)
 
     let finalContent = contentSections.filter(Boolean).join('\n\n')
-    if (finalContent === '' && (signals.hasTask || signals.hasTitle)) {
+    if (!isUpdate && finalContent === '' && (signals.hasTask || signals.hasTitle)) {
         finalContent = String(target['task'] ?? target['title'])
     }
     return finalContent

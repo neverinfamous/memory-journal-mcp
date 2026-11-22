@@ -95,30 +95,27 @@ function resolveDefaultBriefingProject(params: {
         )
     }
 
-    const candidateProj = applicableDefaultProj ?? registryProject ?? sessionCtx.projectNumber
-    const projClaimedElsewhere =
-        canonicalConfigWs === undefined &&
-        candidateProj !== undefined &&
+    const sessionMatchesWs =
+        sessionCtx.workspaceId === undefined ||
+        canonicalWs === undefined ||
+        sessionCtx.workspaceId.toLowerCase() === canonicalWs.toLowerCase()
+    const candidateProj =
+        applicableDefaultProj ?? registryProject ?? (sessionMatchesWs ? sessionCtx.projectNumber : undefined)
+    const claimedElsewhere =
         canonicalWs !== undefined &&
+        candidateProj !== undefined &&
         resolvedRegistry !== undefined &&
         Object.entries(resolvedRegistry).some(
-            ([k, v]) =>
-                v.project_number === candidateProj && k.toLowerCase() !== canonicalWs.toLowerCase()
+            ([k, v]) => v.project_number === candidateProj && k.toLowerCase() !== canonicalWs.toLowerCase()
         )
-    if (projClaimedElsewhere) return registryProject
+    if (canonicalConfigWs === undefined && claimedElsewhere) return registryProject
 
     if (
         canonicalConfigWs !== undefined &&
         registryProject === undefined &&
         sessionCtx.projectNumber !== undefined &&
         candidateProj === sessionCtx.projectNumber &&
-        resolvedRegistry !== undefined &&
-        Object.entries(resolvedRegistry).some(
-            ([k, v]) =>
-                v.project_number === candidateProj &&
-                canonicalWs !== undefined &&
-                k.toLowerCase() !== canonicalWs.toLowerCase()
-        )
+        claimedElsewhere
     ) {
         return undefined
     }

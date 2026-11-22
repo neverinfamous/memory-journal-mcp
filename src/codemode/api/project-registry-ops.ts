@@ -2,10 +2,13 @@
  * Project registry operations and configuration helpers for JournalApi.
  */
 
-import * as os from 'node:os'
 import * as path from 'node:path'
 import { isRecord, safeString } from '../normalizers/shared-utils.js'
-import { readProjectRegistryFile, writeProjectRegistryFile } from '../../utils/registry-config-file.js'
+import {
+    readProjectRegistryFile,
+    resolveRegistryConfigPath,
+    writeProjectRegistryFile,
+} from '../../utils/registry-config-file.js'
 import { mcpLogger } from '../../utils/mcp-logger.js'
 import {
     findCaseInsensitiveKeyConflict,
@@ -16,21 +19,19 @@ import {
 import { parsePositiveProjectNumber } from '../../utils/safe-positive-int.js'
 import { sanitizeErrorForLogging } from '../../utils/security-utils.js'
 import { findCanonicalRegistryKey } from '../../utils/workspace-registry-match.js'
-import { parseProjectRegistry, type GroupApiRecord, type ProjectRegistryProvider } from './types.js'
+import {
+    parseProjectRegistry,
+    type GroupApiRecord,
+    type ProjectRegistryProvider,
+    type RegistryOpsConfig,
+} from './types.js'
 
-function getConfigPath(): string {
-    return (
-        process.env['MEMORY_JOURNAL_CONFIG'] ??
-        path.resolve(os.homedir(), '.gemini', 'config', 'memory-journal.config.json')
-    )
-}
-
-function readRegistryConfig(): {
+function readRegistryConfig(configOpts?: RegistryOpsConfig): {
     configPath: string
     config: Record<string, unknown>
     registry: Record<string, unknown>
 } {
-    const configPath = getConfigPath()
+    const configPath = resolveRegistryConfigPath(configOpts?.getConfigFilePath?.())
     const { config, registry } = readProjectRegistryFile(configPath)
     return { configPath, config, registry }
 }
@@ -171,7 +172,8 @@ async function recordProjectInitEntry(
 
 export function createRegisterProjectFn(
     coreApi: GroupApiRecord,
-    allowedIoRoots?: string[]
+    allowedIoRoots?: string[],
+    configOpts?: RegistryOpsConfig
 ): (...args: unknown[]) => Promise<{ success: boolean; message?: string; warning?: string; error?: string }> {
     return async (...args: unknown[]): Promise<{ success: boolean; message?: string; warning?: string; error?: string }> => {
         const name = safeString(args[0] ?? '').trim()
@@ -196,7 +198,7 @@ export function createRegisterProjectFn(
         let config: Record<string, unknown>
         let registry: Record<string, unknown>
         try {
-            const loaded = readRegistryConfig()
+            const loaded = readRegistryConfig(configOpts)
             configPath = loaded.configPath
             config = loaded.config
             registry = loaded.registry
@@ -214,6 +216,7 @@ export function createRegisterProjectFn(
         registry[name] = entry
         try {
             saveRegistryConfig(configPath, config)
+            configOpts?.onRegistryUpdate?.({ ...registry })
         } catch (err) {
             return { success: false, error: registryError(err) }
         }
@@ -222,7 +225,10 @@ export function createRegisterProjectFn(
     }
 }
 
-export function createUpdateProjectFn(allowedIoRoots?: string[]): (...args: unknown[]) => Promise<{
+export function createUpdateProjectFn(
+    allowedIoRoots?: string[],
+    configOpts?: RegistryOpsConfig
+): (...args: unknown[]) => Promise<{
     success: boolean
     message?: string
     error?: string
@@ -252,7 +258,7 @@ export function createUpdateProjectFn(allowedIoRoots?: string[]): (...args: unkn
         let config: Record<string, unknown>
         let registry: Record<string, unknown>
         try {
-            const loaded = readRegistryConfig()
+            const loaded = readRegistryConfig(configOpts)
             configPath = loaded.configPath
             config = loaded.config
             registry = loaded.registry
@@ -278,9 +284,11 @@ export function createUpdateProjectFn(allowedIoRoots?: string[]): (...args: unkn
         if (projectNumber !== undefined) updatedProject['project_number'] = projectNumber
 
         const rest = Object.fromEntries(Object.entries(registry).filter(([key]) => key !== existingKey))
-        config['projectRegistry'] = { ...rest, [targetName]: updatedProject }
+        const nextRegistry = { ...rest, [targetName]: updatedProject }
+        config['projectRegistry'] = nextRegistry
         try {
             saveRegistryConfig(configPath, config)
+            configOpts?.onRegistryUpdate?.(nextRegistry)
         } catch (err) {
             return Promise.resolve({ success: false, error: registryError(err) })
         }
@@ -289,7 +297,7 @@ export function createUpdateProjectFn(allowedIoRoots?: string[]): (...args: unkn
     }
 }
 
-export function createDeleteProjectFn(): (...args: unknown[]) => Promise<{
+export function createDeleteProjectFn(configOpts?: RegistryOpsConfig): (...args: unknown[]) => Promise<{
     success: boolean
     message?: string
     error?: string
@@ -303,7 +311,7 @@ export function createDeleteProjectFn(): (...args: unknown[]) => Promise<{
         let config: Record<string, unknown>
         let registry: Record<string, unknown>
         try {
-            const loaded = readRegistryConfig()
+            const loaded = readRegistryConfig(configOpts)
             configPath = loaded.configPath
             config = loaded.config
             registry = loaded.registry
@@ -318,11 +326,13 @@ export function createDeleteProjectFn(): (...args: unknown[]) => Promise<{
             return Promise.resolve({ success: false, error: `🛠️ AUTONOMOUS HEALING: Project not found: '${name}'` })
         }
 
-        config['projectRegistry'] = Object.fromEntries(
+        const nextRegistry = Object.fromEntries(
             Object.entries(registry).filter(([key]) => key !== existingKey)
         )
+        config['projectRegistry'] = nextRegistry
         try {
             saveRegistryConfig(configPath, config)
+            configOpts?.onRegistryUpdate?.(nextRegistry)
         } catch (err) {
             return Promise.resolve({ success: false, error: registryError(err) })
         }
@@ -331,7 +341,10 @@ export function createDeleteProjectFn(): (...args: unknown[]) => Promise<{
     }
 }
 
-export function createListProjectsFn(provider?: ProjectRegistryProvider): () => Promise<unknown> {
+export function createListProjectsFn(
+    provider?: ProjectRegistryProvider,
+    configOpts?: RegistryOpsConfig
+): () => Promise<unknown> {
     return (): Promise<unknown> => {
         if (provider !== undefined) {
             const live = resolveRegistry(provider)
@@ -339,7 +352,7 @@ export function createListProjectsFn(provider?: ProjectRegistryProvider): () => 
         }
 
         try {
-            const { registry: reg } = readRegistryConfig()
+            const { registry: reg } = readRegistryConfig(configOpts)
             const entries = Object.entries(reg)
             if (entries.length > 0) {
                 return Promise.resolve(

@@ -188,8 +188,15 @@ function normalizePostGenericFields(methodName: string, obj: Record<string, unkn
         }
     }
 
-    if (CREATE_ENTRY_METHODS.has(methodName) || methodName === 'update_entry' || methodName === 'updateEntry') {
-        synthesizeEntryMutationFields(obj)
+    if (CREATE_ENTRY_METHODS.has(methodName)) {
+        synthesizeEntryMutationFields(obj, false)
+    } else if (
+        methodName === 'update_entry' ||
+        methodName === 'updateEntry' ||
+        methodName === 'team_update_entry' ||
+        methodName === 'teamUpdateEntry'
+    ) {
+        synthesizeEntryMutationFields(obj, true)
     }
     if (obj['search'] !== undefined && obj['query'] === undefined) {
         obj['query'] = obj['search']

@@ -15,7 +15,7 @@ import { resolveEntryAnchors } from '../core/staleness-tools.js'
 import { autoIndexEntry } from '../../../utils/vector-index-helpers.js'
 import { encodeCursor } from '../../../database/sqlite-adapter/entries/search/cursor.js'
 import { resolveWorkspaceId, resolveProjectContext } from '../../../utils/workspace-resolver.js'
-import { activeProjectRegistry, alignedProjectFilter, pairStoredScope } from '../../../utils/write-scope.js'
+import { activeProjectRegistry, pairStoredScope } from '../../../utils/write-scope.js'
 import {
     TEAM_DB_ERROR_RESPONSE,
     assertCanonicalFallbackToolAllowed,
@@ -387,11 +387,13 @@ export function getTeamCoreTools(context: ToolContext): ToolDefinition[] {
                     const registry = activeProjectRegistry(context.config?.projectRegistry)
                     const hasActiveRegistry =
                         registry !== undefined && Object.keys(registry).length > 0
-                    const resolvedProject = alignedProjectFilter(
-                        wsId,
-                        input.project_number,
-                        registry
-                    )
+                    const resolvedProject =
+                        resolveTeamProjectNumber(
+                            context,
+                            wsId,
+                            input.project_number,
+                            input.workspace_id
+                        ) ?? undefined
                     if ((wsId === '*' || hasActiveRegistry) && resolvedProject === undefined) {
                         return missingTeamProjectNumberError(
                             'Missing project_number. Specify a concrete project_number or registered workspace.'

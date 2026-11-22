@@ -57,6 +57,9 @@ export class TokenValidator {
 
         const issuerUrl = new URL(this.issuer)
         this.jwksUrl = new URL(this.jwksUri)
+        if (issuerUrl.username !== '' || issuerUrl.password !== '' || this.jwksUrl.username !== '' || this.jwksUrl.password !== '') {
+            throw new Error('Security Violation: Issuer and JWKS URLs must not include embedded credentials')
+        }
         this.jwksHost = this.jwksUrl.hostname
 
         const isLoopback = (host: string): boolean =>

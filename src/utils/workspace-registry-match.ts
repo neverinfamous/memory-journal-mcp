@@ -360,7 +360,13 @@ export function workspaceForProject(
 }
 
 function suppliedProject(projectNumber: number | null | undefined): number | undefined {
-    if (typeof projectNumber !== 'number' || !Number.isFinite(projectNumber)) return undefined
+    if (
+        typeof projectNumber !== 'number' ||
+        !Number.isSafeInteger(projectNumber) ||
+        projectNumber < 0
+    ) {
+        return undefined
+    }
     return projectNumber
 }
 
@@ -394,14 +400,9 @@ export function pairStoredScope(
     }
 
     const pairedProject = supplied ?? registryProject
-    const trimmedWs = workspaceId !== undefined ? workspaceId.trim() : undefined
-    const finiteFallback =
-        typeof projectNumber === 'number' && Number.isFinite(projectNumber)
-            ? projectNumber
-            : undefined
     return {
-        workspaceId: key ?? trimmedWs,
-        projectNumber: pairedProject ?? finiteFallback,
+        workspaceId: key ?? concrete,
+        projectNumber: pairedProject,
     }
 }
 

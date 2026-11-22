@@ -19,13 +19,26 @@ const isObject = (val: unknown): val is Record<string, unknown> =>
 const hasNumberId = (val: unknown): val is { id: number } =>
     isObject(val) && typeof val['id'] === 'number'
 
+/**
+ * Mutation-blocking proxy traps without `isExtensible`/`preventExtensions`/`defineProperty` overrides,
+ * safe when `target` is already `Object.freeze()`d and callers invoke `Object.freeze(proxy)`
+ * (which re-checks existing descriptors via `[[DefineOwnProperty]]`).
+ */
+export const READONLY_MUTATION_TRAPS = {
+    set: (): boolean => false,
+    deleteProperty: (): boolean => false,
+    setPrototypeOf: (): boolean => false,
+} as const
+
+/**
+ * Shared immutable proxy traps blocking extensibility changes, property mutations, and prototype changes
+ * for extensible proxy targets.
+ */
 export const IMMUTABLE_PROXY_TRAPS = {
     isExtensible: (): boolean => true,
     preventExtensions: (): boolean => false,
-    set: (): boolean => false,
     defineProperty: (): boolean => false,
-    deleteProperty: (): boolean => false,
-    setPrototypeOf: (): boolean => false,
+    ...READONLY_MUTATION_TRAPS,
 } as const
 
 export type AliasMatch = { matched: true; value: unknown } | { matched: false }

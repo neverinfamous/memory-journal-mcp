@@ -9,6 +9,32 @@ import { resolveWriteWorkspaceId } from '../write-workspace.js'
 
 export { prefetchBatchCommitFiles, resolveEntryAnchors } from './entry-anchors.js'
 
+function normalizeAnchorUpdateItem(rawItem: unknown): unknown {
+    if (typeof rawItem !== 'object' || rawItem === null || Array.isArray(rawItem)) {
+        return rawItem
+    }
+    const item = { ...(rawItem as Record<string, unknown>) }
+    // [INVARIANT] M2: only anchor-ID aliases map to entry_anchors.id. entry_id/entryId are
+    // journal entry IDs and are left unmapped so the schema rejects them (missing `id`).
+    const rawId = item['id'] ?? item['anchor_id'] ?? item['anchorId']
+    if (typeof rawId === 'string') {
+        const trimmedId = rawId.trim()
+        const parsed = /^[1-9]\d*$/.test(trimmedId) ? Number(trimmedId) : Number.NaN
+        if (Number.isSafeInteger(parsed) && String(parsed) === trimmedId) {
+            item['id'] = parsed
+        }
+    } else if (typeof rawId === 'number' && !Number.isNaN(rawId)) {
+        item['id'] = rawId
+    }
+    delete item['anchor_id']
+    delete item['anchorId']
+    const mappedStatus = coerceAnchorStatusAlias(item['status'])
+    if (mappedStatus !== undefined) {
+        item['status'] = mappedStatus
+    }
+    return item
+}
+
 function preprocessMarkAnchorsStale(val: unknown): unknown {
     if (typeof val !== 'object' || val === null || Array.isArray(val)) return val
     const obj = { ...(val as Record<string, unknown>) }
@@ -17,35 +43,7 @@ function preprocessMarkAnchorsStale(val: unknown): unknown {
         delete obj['anchors']
     }
     if (Array.isArray(obj['updates'])) {
-        obj['updates'] = obj['updates'].map((rawItem: unknown) => {
-            if (typeof rawItem !== 'object' || rawItem === null || Array.isArray(rawItem)) {
-                return rawItem
-            }
-            const item = { ...(rawItem as Record<string, unknown>) }
-            // [INVARIANT] M2: only anchor-ID aliases map to entry_anchors.id. entry_id/entryId are
-            // journal entry IDs and are left unmapped so the schema rejects them (missing `id`).
-            const rawId = item['id'] ?? item['anchor_id'] ?? item['anchorId']
-            if (rawId !== undefined) {
-                if (typeof rawId === 'string') {
-                    const trimmedId = rawId.trim()
-                    if (/^[1-9]\d*$/.test(trimmedId)) {
-                        const parsed = Number(trimmedId)
-                        if (Number.isSafeInteger(parsed) && String(parsed) === trimmedId) {
-                            item['id'] = parsed
-                        }
-                    }
-                } else if (typeof rawId === 'number' && !Number.isNaN(rawId)) {
-                    item['id'] = rawId
-                }
-            }
-            delete item['anchor_id']
-            delete item['anchorId']
-            const mappedStatus = coerceAnchorStatusAlias(item['status'])
-            if (mappedStatus !== undefined) {
-                item['status'] = mappedStatus
-            }
-            return item
-        })
+        obj['updates'] = obj['updates'].map(normalizeAnchorUpdateItem)
     }
     return obj
 }

@@ -145,11 +145,10 @@ export const VisualizeInputSchemaMcp = z.object({
         .describe('Filter to show only this relationship type (e.g., blocked_by, implements)'),
     type: z.string().optional(),
     rel: z.string().optional(),
-    depth: relaxedNumber().optional().default(2).describe('Relationship traversal depth'),
+    depth: relaxedNumber().optional().describe('Relationship traversal depth'),
     path: relaxedNumber().optional(),
     limit: relaxedNumber()
         .optional()
-        .default(20)
         .describe(
             'Maximum entries to include (1-500, default: 20). Anti-Hallucination Hint: Values > 500 will be auto-clamped to 500.'
         ),
@@ -184,7 +183,7 @@ export const VisualizeInputSchemaMcp = z.object({
         ...data,
         entry_id: coerceCanonicalId(data.entry_id ?? data.id),
         relationship_type: data.relationship_type ?? data.type ?? data.rel,
-        depth: coerceRelaxed(data.depth ?? data.path),
+        depth: coerceRelaxed(data.depth ?? data.path) ?? 2,
         project_number: coerceCanonicalId(data.project_number),
         limit: clampedLimit,
         tags: extractedTags,

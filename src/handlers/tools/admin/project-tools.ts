@@ -16,8 +16,6 @@ import {
     type RegistryKeyChange,
     type RegistryMap,
 } from './project-read-tools.js'
-import path from 'node:path'
-import os from 'node:os'
 import {
     findCaseInsensitiveKeyConflict,
     findProjectNumberConflict,
@@ -28,6 +26,7 @@ import { parsePositiveProjectNumber } from '../../../utils/safe-positive-int.js'
 import { findCanonicalRegistryKey } from '../../../utils/workspace-resolver.js'
 import {
     readProjectRegistryFile,
+    resolveRegistryConfigPath,
     writeProjectRegistryFile,
 } from '../../../utils/registry-config-file.js'
 import {
@@ -40,13 +39,7 @@ function getRegistryConfigPath(context?: ToolContext): string {
     const configManager = context?.config?.runtime?.configManager
     const fromManager =
         configManager instanceof ConfigManager ? configManager.getConfigFilePath() : undefined
-    if (fromManager !== undefined && fromManager !== '') {
-        return path.resolve(fromManager)
-    }
-    return (
-        process.env['MEMORY_JOURNAL_CONFIG'] ??
-        path.resolve(os.homedir(), '.gemini', 'config', 'memory-journal.config.json')
-    )
+    return resolveRegistryConfigPath(fromManager)
 }
 
 function loadConfig(context?: ToolContext): Record<string, unknown> {

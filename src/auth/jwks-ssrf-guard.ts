@@ -88,6 +88,9 @@ export async function assertSafeJwksUri(
     jwksUri: string
 ): Promise<ResolvedPublicAddress[] | undefined> {
     const jwksParsed = new URL(jwksUri)
+    if (jwksParsed.username !== '' || jwksParsed.password !== '') {
+        throw new ConfigurationError('SSRF Protection: JWKS URI must not include embedded credentials')
+    }
     if (jwksParsed.protocol !== 'http:' && jwksParsed.protocol !== 'https:') {
         throw new ConfigurationError(
             `SSRF Protection: Disallowed JWKS URI protocol: ${jwksParsed.protocol}`

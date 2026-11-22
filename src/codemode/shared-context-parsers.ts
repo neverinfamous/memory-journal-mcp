@@ -49,6 +49,38 @@ export function parseStringContextPayload(raw: string): Record<string, unknown> 
     }
 }
 
+const OPTIONAL_QUERY_SEARCH_FIELDS = [
+    'tags',
+    'exclude_tags',
+    'mode',
+    'entry_type',
+    'significance_type',
+    'start_date',
+    'end_date',
+    'sort_by',
+    'sort_order',
+    'is_personal',
+    'offset',
+    'use_semantic',
+] as const
+
+/** Forwards supported `searchEntries` filters and explicit `limit` onto a synthesized query payload. */
+export function appendOptionalQuerySearchFields(
+    searchPayload: Record<string, unknown>,
+    source: Record<string, unknown>,
+    fallbackLimit?: unknown
+): void {
+    const rawLimit = source['limit'] !== undefined ? source['limit'] : fallbackLimit
+    if (rawLimit !== undefined) {
+        searchPayload['limit'] = rawLimit
+    }
+    for (const key of OPTIONAL_QUERY_SEARCH_FIELDS) {
+        if (source[key] !== undefined && searchPayload[key] === undefined) {
+            searchPayload[key] = source[key]
+        }
+    }
+}
+
 /** Normalizes arbitrary `context` values into a mutable plain record wrapper. */
 export function normalizeUserContextPayload(context: unknown): Record<string, unknown> {
     if (context === undefined || context === null) return {}

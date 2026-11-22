@@ -21,6 +21,12 @@ export type GroupApiRecord = Record<string, (...args: unknown[]) => Promise<unkn
 /** Supplies the live project registry from server config (ToolContext / ConfigManager). */
 export type ProjectRegistryProvider = () => unknown
 
+/** Optional host config-path reader and in-memory registry sync callback for project-registry mutations. */
+export interface RegistryOpsConfig {
+    getConfigFilePath?: () => string | undefined
+    onRegistryUpdate?: (nextRegistry: Record<string, unknown>) => void
+}
+
 /**
  * Normalise a registry map (object or JSON string) into an array of `{ name, ...info }`.
  * [BOUNDARY] When `source` is omitted the startup-mirrored PROJECT_REGISTRY env value is used;

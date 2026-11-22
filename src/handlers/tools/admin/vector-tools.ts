@@ -105,7 +105,9 @@ export function getVectorTools(context: ToolContext): ToolDefinition[] {
                         await vectorManager.rebuildIndex(context.progress, rebuildOpts)
 
                     if (!success && firstError) {
-                        logger.warning(`Vector index rebuild had errors: ${firstError}`)
+                        logger.warning(`Vector index rebuild had errors: ${firstError}`, {
+                            ...(parsed.session_id !== undefined ? { sessionId: parsed.session_id } : {}),
+                        })
                     }
 
                     const isPartial = failed > 0 && indexed > 0

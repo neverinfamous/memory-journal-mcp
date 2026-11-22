@@ -104,10 +104,7 @@ function propagateBatchProjectNumber(result: Record<string, unknown>): void {
             const itemTargetWs =
                 typeof rawItemTargetWs === 'string' ? rawItemTargetWs.trim() : undefined
             const itemRepoRaw = typeof rawItemRepo === 'string' ? rawItemRepo.trim() : undefined
-            const itemRepo =
-                itemRepoRaw !== undefined && itemRepoRaw !== ''
-                    ? (itemRepoRaw.split(/[/\\]/).filter(Boolean).pop() ?? itemRepoRaw)
-                    : undefined
+            const itemRepo = itemRepoRaw !== undefined && itemRepoRaw !== '' ? itemRepoRaw : undefined
             const itemPn =
                 item['project_number'] ??
                 item['projectNumber'] ??

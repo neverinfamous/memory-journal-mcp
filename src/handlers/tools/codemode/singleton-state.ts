@@ -1,9 +1,11 @@
-import type { ToolDefinition, ToolContext } from '../../../types/index.js'
+import type { ToolDefinition, ToolContext, ProjectRegistryEntry } from '../../../types/index.js'
 import type { ToolFilterConfig } from '../../../types/filtering.js'
 import { createSandboxPool, type ISandboxPool } from '../../../codemode/sandbox-factory.js'
 import { CodeModeSecurityManager } from '../../../codemode/security.js'
 import { createJournalApi, getCachedSandboxSchemas, type JournalApi } from '../../../codemode/api/journal-api.js'
+import type { RegistryOpsConfig } from '../../../codemode/api/types.js'
 import { isFilterEffectivelyReadOnly, isToolVisibleForFilter } from '../../../filtering/tool-filter.js'
+import { ConfigManager } from '../../../utils/config-manager.js'
 import { activeProjectRegistry } from '../../../utils/write-scope.js'
 import { createContextualSecureDispatcher } from './secure-dispatcher.js'
 import { getCodemodeInvocationState } from './invocation-store.js'
@@ -135,6 +137,29 @@ function buildFilteredTools(
  * session context and active filter/readonly configuration so WorkerSandbox RPC
  * method metadata and schema caches remain warm across invocations.
  */
+function buildRegistryOpsConfig(context: ToolContext): RegistryOpsConfig {
+    const cfgMgr = context.config?.runtime?.configManager
+    return {
+        getConfigFilePath: (): string | undefined =>
+            cfgMgr instanceof ConfigManager ? cfgMgr.getConfigFilePath() : undefined,
+        onRegistryUpdate: (nextRegistry: Record<string, unknown>): void => {
+            if (context.config === undefined) return
+            const typed = nextRegistry as Record<string, ProjectRegistryEntry>
+            context.config.projectRegistry = typed
+            if (context.config.briefingConfig !== undefined) {
+                context.config.briefingConfig.projectRegistry = typed
+            }
+            if (cfgMgr instanceof ConfigManager) {
+                const briefingConfig = {
+                    ...cfgMgr.getConfig().briefingConfig,
+                    projectRegistry: typed,
+                }
+                cfgMgr.updateConfig({ briefingConfig }, false)
+            }
+        },
+    }
+}
+
 export function getOrCreateCodemodeBundle(
     sessionContext: ToolContext,
     context: ToolContext,
@@ -170,10 +195,14 @@ export function getOrCreateCodemodeBundle(
 
     const filtered = buildFilteredTools(sessionContext, context, readonlyRequested)
     const contextualDispatcher = createContextualSecureDispatcher(filtered.tools)
-    const journalApi = createJournalApi(filtered.tools, contextualDispatcher, () =>
-        activeProjectRegistry(
-            getCodemodeInvocationState()?.projectRegistry ?? context.config?.projectRegistry
-        )
+    const journalApi = createJournalApi(
+        filtered.tools,
+        contextualDispatcher,
+        () =>
+            activeProjectRegistry(
+                getCodemodeInvocationState()?.projectRegistry ?? context.config?.projectRegistry
+            ),
+        buildRegistryOpsConfig(context)
     )
     const apiBindings = journalApi.createSandboxBindings(
         () => getCodemodeInvocationState()?.sessionContext.progress

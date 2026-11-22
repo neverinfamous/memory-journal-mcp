@@ -8,7 +8,7 @@ import type { ToolDefinition, ToolContext } from '../../../types/index.js'
 import { ValidationError } from '../../../types/errors.js'
 import { formatHandlerError } from '../../../utils/error-helpers.js'
 import { resolveWorkspaceId } from '../../../utils/workspace-resolver.js'
-import { activeProjectRegistry, alignedProjectFilter } from '../../../utils/write-scope.js'
+import { activeProjectRegistry } from '../../../utils/write-scope.js'
 import { logger } from '../../../utils/logger.js'
 import { sanitizeAuthor } from '../../../utils/security-utils.js'
 import {
@@ -137,7 +137,7 @@ export function getTeamAnalyticsTools(context: ToolContext): ToolDefinition[] {
                     const registry = activeProjectRegistry(context.config?.projectRegistry)
                     const hasActiveRegistry =
                         registry !== undefined && Object.keys(registry).length > 0
-                    const alignedProject = alignedProjectFilter(wsId, input.project_number, registry)
+                    const alignedProject = resolveTeamProjectNumber(context, wsId, input.project_number, input.workspace_id) ?? undefined
                     if ((wsId === '*' || hasActiveRegistry) && alignedProject === undefined) {
                         return missingTeamProjectNumberError(
                             'Missing project_number. Cross-tenant cross-project insights without project_number are not allowed.'
