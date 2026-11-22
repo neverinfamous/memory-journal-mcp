@@ -162,24 +162,23 @@ ${markUntrustedContent(params.deletedSnippet)}
    - **Layer 6**: Native tools first, verify apparent line-shift type errors with \`pnpm run typecheck\`, and never pass \`-CommandType Application\` to \`Get-Command\` under PowerShell proxy functions.
 4. Check and update \`memory-journal-mcp\` documentation as needed and appropriate when schemas, tools, Code Mode aliases, CLI flags, prompts, or supervisor rules change (\`AGENT_README.md\`, \`README.md\`, \`DOCKER_README.md\` strictly \`< 25,000\` chars, \`SECURITY.md\`, bundled \`skills/memory-journal-mcp/SKILL.md\`, \`src/constants/instructions/markdown/*.md\` compiled via \`pnpm run generate:instructions\`, \`test-server/code-map.md\` via \`pnpm run generate:code-map\`, \`test-server/tool-reference.md\`, \`test-server/prompts-reference.md\`, and affected wiki pages including \`Automations.md\`).
 
-### Phase C — Batched Adaptation & Dirty-Tree Conditional Single-Pass Validation Gate
+### Phase C — Batched Adaptation & Targeted Single-Pass Validation Gate
 > [!IMPORTANT]
 > **LOAD OPTIMIZATION INVARIANT (DIRTY-TREE CONDITIONAL SINGLE-PASS VALIDATION GATE)**:
-> Full-suite validation (\`lint\`, \`typecheck\`, \`build\`, \`vitest\`, \`playwright\`) is resource-intensive and MUST ONLY run when repository files were actually modified by this \`CMS-04\` run.
+> Full-suite validation is reserved for interactive audits, \`prepublishOnly\`, and CI. Automated \`CMS-04\` runs MUST skip validation when clean/docs-only and run **targeted-only** checks when code or instructions changed.
 > **CONCURRENT-AGENT ISOLATION & HITL GUARDRAIL**: Capture a pre-flight baseline of uncommitted files (using Code Mode \`mj.git.getCommitHistory({ uncommitted: true })\`, or explicit \`git diff --name-only\` checks in standalone hosts) and active \`vitest\`/\`playwright\`/\`tsc\` processes before editing. Never overwrite or stage foreign WIP files from another active session, and do NOT modify executable source code or global environment files without explicit user approval unless running in an explicitly approved autonomous maintenance session.
 
 1. Record the pre-flight baseline of already-uncommitted files, then apply all approved code, schema, prompt, or documentation fixes in a single cohesive batch without touching foreign WIP files.
 2. Re-check working tree status against the pre-flight baseline (\`mj.git.getCommitHistory({ uncommitted: true })\`, or standalone Git diff/status excluding pre-existing WIP).
 3. **If \`0\` files were modified/added by this \`CMS-04\` run**:
-   - **SKIP** \`pnpm run lint\`, \`pnpm run typecheck\`, \`pnpm run build\`, \`pnpm exec vitest run\`, and \`pnpm exec playwright test\` completely! Proceed directly to step 5 / Phase D.
+   - **SKIP** \`lint\`, \`typecheck\`, \`build\`, \`pnpm exec vitest run\`, and \`pnpm exec playwright test\` completely! Proceed directly to step 5 / Phase D.
 4. **If \`>= 1\` files were modified by this \`CMS-04\` run**:
-   - Terminate stalled audit subagents (\`manage_subagents\` \`Action: 'kill'\` with explicit IDs) and verify no competing \`vitest\`, \`playwright\`, or \`tsc\` process is active.
-   - If foreign baseline WIP test files are present, run \`pnpm run lint\`, \`pnpm run typecheck\`, \`pnpm run build\`, and targeted \`pnpm exec vitest run\` / \`pnpm exec playwright test\` on specs touched by \`CMS-04\` (skipping \`pretest:e2e\` and \`update-badges.ts\` to protect concurrent work); otherwise run the 5-stage validation gate **strictly sequentially once** (never concurrently):
-     1. \`pnpm run lint\`
+   - **Docs/markdown-only edits** (no \`src/\`, \`scripts/\`, or \`tests/\` code touched): skip \`build\`/\`vitest\`/\`playwright\` completely and commit explicit paths with \`--validation none\`.
+   - **Code, test, or instruction edits**: terminate stalled audit subagents (\`manage_subagents\` \`Action: 'kill'\` with explicit IDs), verify no competing \`vitest\`, \`playwright\`, or \`tsc\` process is active, and run the **Targeted Single-Pass Gate strictly sequentially once** (never concurrently; never run full test suites, \`pnpm run test:e2e\`, \`pretest:e2e\`, or \`update-badges.ts\`):
+     1. Targeted \`pnpm exec eslint <modified-files>\`
      2. \`pnpm run typecheck\`
-     3. \`pnpm run build\`
-     4. \`pnpm exec vitest run\`
-     5. \`pnpm exec playwright test\`
+     3. Targeted \`pnpm exec vitest run <affected-test-files>\`
+     4. **ONLY when runtime \`src/\` or markdown instructions changed**: \`pnpm run build\`, then \`PLAYWRIGHT_WORKERS=1 pnpm exec playwright test <affected-e2e-specs>\`
    - Commit **ONLY explicit paths modified by this \`CMS-04\` run** (never \`git add .\` or \`--add .\`) via \`commit.ts\` (\`--add <changed_files>\`) in hook-guarded workspaces, or explicit \`git commit -m "fix(cms): <summary>" -- <changed_files>\` in standalone hosts.
 5. If any wiki pages (e.g., \`Automations.md\`, \`Prompts.md\`, \`Tools.md\`) or client automation configs (\`AGENTS.md\`, \`sidecars/\`) were improved, commit those explicit changes separately in their respective repositories.
 
