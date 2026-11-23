@@ -132,4 +132,29 @@ describe('Briefing Insights Section', () => {
         expect(res?.topImportance[0]?.preview).not.toContain('alice')
         expect(res?.topImportance[0]?.preview).toContain('&lt;desktop&gt;')
     })
+
+    it('normalizes empty/whitespace workspaceId cache keys and omits topImportance when includeTopImportance is false', () => {
+        const mockSnapshot: DigestSnapshot = {
+            computedAt: '2026-04-11T12:00:00Z',
+            currentPeriodEntries: 4,
+            previousPeriodEntries: 2,
+            activityGrowthPercent: 100,
+            currentPeriodSignificant: 1,
+            historicalAvgSignificant: 1,
+            significanceMultiplier: 1.0,
+            staleProjects: [],
+            currentRelDensity: 0,
+            previousRelDensity: 0,
+            topImportanceEntries: [{ id: 1, score: 0.9, preview: 'Top entry' }],
+        }
+        const computeDigest = vi.fn().mockReturnValue(mockSnapshot)
+        const context: ResourceContext = { db: { computeDigest } as never }
+
+        const first = buildInsightsSection(context, '   ', { includeTopImportance: false })
+        const second = buildInsightsSection(context, '')
+        expect(computeDigest).toHaveBeenCalledTimes(1)
+        expect(computeDigest).toHaveBeenCalledWith('default')
+        expect(first?.topImportance).toEqual([])
+        expect(second?.topImportance).toHaveLength(1)
+    })
 })

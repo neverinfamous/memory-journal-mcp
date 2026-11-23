@@ -285,10 +285,13 @@ export function reloadBriefingConfigKeys(
         const match = readBriefingConfigEntry(parsed, key, mapping.aliases)
         if (match === undefined) {
             lastFileBriefingValues?.delete(mapping.target)
-            const baselineVal = initialBriefingBaseline[mapping.target]
-            if (bc[mapping.target] !== baselineVal) {
-                Object.assign(bc, { [mapping.target]: baselineVal })
-                bcChanged = true
+            if (briefingKeysFromFile === undefined || briefingKeysFromFile.has(mapping.target)) {
+                briefingKeysFromFile?.delete(mapping.target)
+                const baselineVal = initialBriefingBaseline[mapping.target]
+                if (bc[mapping.target] !== baselineVal) {
+                    Object.assign(bc, { [mapping.target]: baselineVal })
+                    bcChanged = true
+                }
             }
             continue
         }
@@ -310,13 +313,8 @@ export function reloadBriefingConfigKeys(
         const prevFileVal = lastFileBriefingValues?.get(mapping.target)
         lastFileBriefingValues?.set(mapping.target, typedVal)
         // [INVARIANT] Editing an unrelated key in config.json must not clobber a startup CLI/env
-        // briefing override whose underlying file entry did not change.
-        if (
-            briefingKeysFromFile !== undefined &&
-            !briefingKeysFromFile.has(mapping.target) &&
-            prevFileVal !== undefined &&
-            prevFileVal === typedVal
-        ) {
+        // or in-memory briefing override whose underlying file entry did not change.
+        if (prevFileVal !== undefined && prevFileVal === typedVal) {
             continue
         }
         if (bc[mapping.target] !== typedVal) {

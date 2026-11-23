@@ -209,11 +209,14 @@ function handleProjectStalenessResource(uri: string, context: ResourceContext): 
             context.briefingConfig?.projectRegistry ?? loadProjectRegistryFromConfig() ?? {}
         const matchingWorkspaces = workspacesForProject(projectNumber, registry)
         if (matchingWorkspaces.length > 1) {
+            const fencedWorkspaces = matchingWorkspaces
+                .map((ws) => fenceNonCanonicalRefOrKey(ws))
+                .join(', ')
             return {
                 data: {
                     project_number: projectNumber,
                     status: 'ambiguous',
-                    error: `Project number ${String(projectNumber)} is registered to multiple workspaces (${matchingWorkspaces.join(', ')})`,
+                    error: `Project number ${String(projectNumber)} is registered to multiple workspaces (${fencedWorkspaces})`,
                     hint: 'Ensure each workspace has a unique project_number in PROJECT_REGISTRY.',
                 },
             }

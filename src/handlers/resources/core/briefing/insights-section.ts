@@ -113,7 +113,11 @@ export function resolveCachedOrLiveDigest(
     workspaceId?: string,
     options?: { allowRawPersisted?: boolean }
 ): { snapshot: unknown; source: 'computed' | 'persisted'; computedAt?: string } | null {
-    const effectiveWorkspace = workspaceId ?? resourceWorkspace(context)
+    const trimmedWorkspace = workspaceId?.trim()
+    const effectiveWorkspace =
+        trimmedWorkspace !== undefined && trimmedWorkspace !== ''
+            ? trimmedWorkspace
+            : resourceWorkspace(context)
     const dbObj: unknown = context.db
     const dbCacheKey = typeof dbObj === 'object' && dbObj !== null ? dbObj : undefined
     const byWs = dbCacheKey !== undefined ? liveDigestCache.get(dbCacheKey) : undefined
@@ -168,17 +172,21 @@ export function resolveCachedOrLiveDigest(
  */
 export function buildInsightsSection(
     context: ResourceContext,
-    workspaceId?: string
+    workspaceId?: string,
+    options?: { includeTopImportance?: boolean }
 ): BriefingInsights | null {
     const resolved = resolveCachedOrLiveDigest(context, workspaceId)
     if (!resolved) return null
-    return formatDigest(resolved.snapshot)
+    return formatDigest(resolved.snapshot, options?.includeTopImportance !== false)
 }
 
 /**
  * Format a DigestSnapshot into a compact BriefingInsights payload.
  */
-function formatDigest(snapshot: DigestSnapshot): BriefingInsights {
+function formatDigest(
+    snapshot: DigestSnapshot,
+    includeTopImportance = true
+): BriefingInsights {
     // Activity trend
     let activityTrend: string
     if (snapshot.activityGrowthPercent !== null) {
@@ -205,11 +213,13 @@ function formatDigest(snapshot: DigestSnapshot): BriefingInsights {
             projectNumber: p.projectNumber,
             daysSilent: p.daysSilent,
         })),
-        topImportance: snapshot.topImportanceEntries.map((e) => ({
-            id: e.id,
-            score: e.score,
-            preview: sliceUntrustedInline(extractPreview(e.preview, 80), 81),
-        })),
+        topImportance: includeTopImportance
+            ? snapshot.topImportanceEntries.map((e) => ({
+                  id: e.id,
+                  score: e.score,
+                  preview: sliceUntrustedInline(extractPreview(e.preview, 80), 81),
+              }))
+            : [],
         ...(snapshot.currentRelDensity > 0
             ? { relationshipDensity: snapshot.currentRelDensity }
             : {}),

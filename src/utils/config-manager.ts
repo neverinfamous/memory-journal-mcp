@@ -202,6 +202,13 @@ export class ConfigManager extends EventEmitter {
         const persistError = persist && this.configFilePath ? this.persistToFile() : undefined
         if (persistError !== undefined && prevProvenance !== undefined) {
             this.restoreProvenance(prevProvenance)
+        } else if (persist && this.configFilePath && persistError === undefined) {
+            for (const key of this.briefingKeysFromFile) {
+                const persistedVal = nextConfig.briefingConfig[key]
+                if (persistedVal !== undefined) {
+                    this.lastFileBriefingValues.set(key, persistedVal)
+                }
+            }
         }
 
         this.emit('changed', this.config)

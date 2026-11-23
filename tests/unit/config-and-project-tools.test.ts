@@ -410,6 +410,65 @@ describe('ConfigManager & Configuration Tools', () => {
             expect(mgr.getConfig().briefingConfig.commitCount).toBe(2)
             mgr.close()
         })
+
+        it('preserves in-memory briefing overrides for both absent and file-originated keys across unrelated config.json edits', () => {
+            const cfgFile = path.join(tmpDir, 'in-memory-overrides.json')
+            fs.writeFileSync(cfgFile, JSON.stringify({ toolFilter: 'starter', briefingEntries: 5 }), 'utf8')
+            const mgr = new ConfigManager(
+                {
+                    rawToolFilter: 'starter',
+                    toolFilterConfig: null,
+                    briefingConfig: { ...DEFAULT_BRIEFING_CONFIG, entryCount: 5 },
+                },
+                cfgFile
+            )
+            try {
+                // Apply in-memory overrides: entryCount (file-originated) and graphPivots (absent from file)
+                mgr.updateConfig(
+                    {
+                        briefingConfig: {
+                            ...mgr.getConfig().briefingConfig,
+                            entryCount: 9,
+                            graphPivots: false,
+                        },
+                    },
+                    false
+                )
+
+                // Edit unrelated key in config.json; briefingEntries remains 5 and briefingGraph stays absent
+                fs.writeFileSync(cfgFile, JSON.stringify({ toolFilter: 'full', briefingEntries: 5 }), 'utf8')
+                ;(mgr as unknown as { reloadFromFile: () => void }).reloadFromFile()
+
+                expect(mgr.getConfig().rawToolFilter).toBe('full')
+                expect(mgr.getConfig().briefingConfig.entryCount).toBe(9)
+                expect(mgr.getConfig().briefingConfig.graphPivots).toBe(false)
+
+                // Explicit file change to briefingEntries itself still takes effect
+                fs.writeFileSync(cfgFile, JSON.stringify({ toolFilter: 'full', briefingEntries: 7 }), 'utf8')
+                ;(mgr as unknown as { reloadFromFile: () => void }).reloadFromFile()
+                expect(mgr.getConfig().briefingConfig.entryCount).toBe(7)
+
+                // Removing file-originated briefingEntries reverts it to default baseline (3), while absent-key graphPivots stays false
+                fs.writeFileSync(cfgFile, JSON.stringify({ toolFilter: 'full' }), 'utf8')
+                ;(mgr as unknown as { reloadFromFile: () => void }).reloadFromFile()
+                expect(mgr.getConfig().briefingConfig.entryCount).toBe(3)
+                expect(mgr.getConfig().briefingConfig.graphPivots).toBe(false)
+
+                // Persisting a change updates lastFileBriefingValues so reverting back to prior file value reloads
+                mgr.updateConfig(
+                    {
+                        briefingConfig: { ...mgr.getConfig().briefingConfig, entryCount: 12 },
+                    },
+                    true,
+                    { mutatedFields: { briefingKeys: ['entryCount'] } }
+                )
+                fs.writeFileSync(cfgFile, JSON.stringify({ toolFilter: 'full', briefingEntries: 7 }), 'utf8')
+                ;(mgr as unknown as { reloadFromFile: () => void }).reloadFromFile()
+                expect(mgr.getConfig().briefingConfig.entryCount).toBe(7)
+            } finally {
+                mgr.close()
+            }
+        })
     })
 
     describe('Project Registry Admin Tools (project-tools.ts)', () => {

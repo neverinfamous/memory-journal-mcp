@@ -34,9 +34,12 @@ function parsePinSessionOption(uri: string): boolean {
     return new URLSearchParams(rawQuery).get('pin_session')?.trim().toLowerCase() !== 'false'
 }
 
-/** Quote YAML 1.2 reserved leading indicator (`@`) on sanitized identifiers. */
+const YAML_RESERVED_SCALAR_RE =
+    /^(?:$|@.*|-.*|\.\.\.|~|true|false|null|[+-]?\.inf|\.nan|[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?|0x[0-9a-f]+|0o[0-7]+)$/i
+
+/** Quote YAML 1.2 reserved scalars, leading indicators (`@`, `-`), markers (`...`), and numeric literals. */
 function formatYamlIdentifier(value: string): string {
-    return value.startsWith('@') ? JSON.stringify(value) : value
+    return YAML_RESERVED_SCALAR_RE.test(value) ? JSON.stringify(value) : value
 }
 
 function formatDefaultAgentContext(

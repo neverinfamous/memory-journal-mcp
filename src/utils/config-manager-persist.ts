@@ -36,8 +36,8 @@ export function applyPersistableConfigKeys(
         if (!provenance.briefingKeys.has(mapping.target)) continue
         const val = config.briefingConfig[mapping.target]
         if (val === undefined) continue
-        const existingAlias = mapping.aliases?.find((alias) => alias in parsed)
-        if (existingAlias !== undefined && !(fileKey in parsed)) {
+        const existingAlias = mapping.aliases?.find((alias) => Object.hasOwn(parsed, alias))
+        if (existingAlias !== undefined && !Object.hasOwn(parsed, fileKey)) {
             parsed[existingAlias] = val
         } else {
             parsed[fileKey] = val

@@ -34,28 +34,31 @@ const LEADING_MARKER_RES: readonly RegExp[] = [
 /** Abbreviations and numbered-list prefixes that end in `.` without ending a sentence. */
 const NON_SENTENCE_END_RE = /(?:^|[\s(])(?:e\.g|i\.e|vs|etc|cf|al|dr|mr|mrs|ms|jr|sr|no|fig|eq|ref|v\d+|\d+)\.$/i
 
+const WIN_BRAIN_PATH_RE =
+    /[A-Za-z]:(?:\\{1,2}|\/)Users(?:\\{1,2}|\/)[^\\/\r\n<>`"')\].,:;]+(?:\.[^\\/\r\n<>`"')\].,:;]+)*(?:\\{1,2}|\/)\.gemini(?:\\{1,2}|\/)antigravity(?:-ide)?(?:\\{1,2}|\/)brain/gi
+const POSIX_BRAIN_PATH_RE =
+    /(?<![\w.])(?:\/mnt\/[A-Za-z])?\/(?:home|Users)\/[^/\r\n<>`"')\].,:;]+(?:\.[^/\r\n<>`"')\].,:;]+)*\/\.gemini\/antigravity(?:-ide)?\/brain/gi
+const WIN_DESKTOP_PATH_RE =
+    /[A-Za-z]:(?:\\{1,2}|\/)Users(?:\\{1,2}|\/)[^\\/\r\n<>`"')\].,:;]+(?:\.[^\\/\r\n<>`"')\].,:;]+)*(?:\\{1,2}|\/)Desktop/gi
+const POSIX_DESKTOP_PATH_RE =
+    /(?<![\w.])(?:\/mnt\/[A-Za-z])?\/(?:home|Users)\/[^/\r\n<>`"')\].,:;]+(?:\.[^/\r\n<>`"')\].,:;]+)*\/Desktop/gi
+const WIN_HOME_PATH_RE =
+    /[A-Za-z]:(?:\\{1,2}|\/)Users(?:\\{1,2}|\/)[^\\/\s<>`"')\].,:;]+(?:\.[^\\/\s<>`"')\].,:;]+)*/gi
+const WSL_HOME_PATH_RE =
+    /(?<![\w.~])\/mnt\/[A-Za-z]\/Users\/[^/\s<>`"')\].,:;]+(?:\.[^/\s<>`"')\].,:;]+)*/gi
+const POSIX_HOME_PATH_RE =
+    /(?<![\w.~])\/(?:home|Users)\/[^/\s<>`"')\].,:;]+(?:\.[^/\s<>`"')\].,:;]+)*/g
+
 /** Collapse machine-local home directories (Windows, JSON-escaped Windows, WSL2, POSIX). */
 export function redactHomePaths(text: string): string {
     return text
-        .replace(
-            /[A-Za-z]:(?:\\{1,2}|\/)Users(?:\\{1,2}|\/)[^\\/\r\n<>`"')\].,:;]+(?:\\{1,2}|\/)\.gemini(?:\\{1,2}|\/)antigravity(?:-ide)?(?:\\{1,2}|\/)brain/gi,
-            '<appDataDir>/brain'
-        )
-        .replace(
-            /(?<![\w.])(?:\/mnt\/[A-Za-z])?\/(?:home|Users)\/[^/\r\n<>`"')\].,:;]+\/\.gemini\/antigravity(?:-ide)?\/brain/gi,
-            '<appDataDir>/brain'
-        )
-        .replace(
-            /[A-Za-z]:(?:\\{1,2}|\/)Users(?:\\{1,2}|\/)[^\\/\r\n<>`"')\].,:;]+(?:\\{1,2}|\/)Desktop/gi,
-            '<desktop>'
-        )
-        .replace(
-            /(?<![\w.])(?:\/mnt\/[A-Za-z])?\/(?:home|Users)\/[^/\r\n<>`"')\].,:;]+\/Desktop/gi,
-            '<desktop>'
-        )
-        .replace(/[A-Za-z]:(?:\\{1,2}|\/)Users(?:\\{1,2}|\/)[^\\/\s<>`"')\].,:;]+/gi, '~')
-        .replace(/(?<![\w.~])\/mnt\/[A-Za-z]\/Users\/[^/\s<>`"')\].,:;]+/gi, '~')
-        .replace(/(?<![\w.~])\/(?:home|Users)\/[^/\s<>`"')\].,:;]+/g, '~')
+        .replace(WIN_BRAIN_PATH_RE, '<appDataDir>/brain')
+        .replace(POSIX_BRAIN_PATH_RE, '<appDataDir>/brain')
+        .replace(WIN_DESKTOP_PATH_RE, '<desktop>')
+        .replace(POSIX_DESKTOP_PATH_RE, '<desktop>')
+        .replace(WIN_HOME_PATH_RE, '~')
+        .replace(WSL_HOME_PATH_RE, '~')
+        .replace(POSIX_HOME_PATH_RE, '~')
 }
 
 function unwrapSinglePreviewFence(trimmed: string): string | null {
@@ -196,7 +199,7 @@ const TERSE_FIRST_LINE_MAX = 20
 
 /**
  * Unfenced preview text. `firstLineOnly` returns the first meaningful line (labels),
- * joining the second line with ` — ` when the first line is a terse heading (`< 20` chars);
+ * joining the second line with ` — ` when the first line is a single-word terse heading (`< 20` chars);
  * otherwise meaningful lines are joined with spaces (Journal rows).
  */
 export function extractPreview(

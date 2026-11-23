@@ -86,16 +86,15 @@ export function formatCiDisplay(opts: BriefingUserMessageOptions): string {
                 cancelled: '⛔',
                 unknown: '❓',
             }
-            ciDisplay = ws.runs
-                .map((r) => {
-                    const icon = Object.hasOwn(icons, r.conclusion) ? icons[r.conclusion] : '❓'
-                    const display =
-                        r.url && SAFE_GITHUB_URL_RE.test(r.url)
-                            ? `[${escapeLinkLabel(r.name)}](${r.url})`
-                            : r.name
-                    return `${icon} ${display}`
-                })
-                .join(' · ')
+            const runItems = ws.runs.map((r) => {
+                const icon = Object.hasOwn(icons, r.conclusion) ? icons[r.conclusion] : '❓'
+                const display =
+                    r.url && SAFE_GITHUB_URL_RE.test(r.url)
+                        ? `[${escapeLinkLabel(r.name)}](${r.url})`
+                        : r.name
+                return `${icon} ${display}`
+            })
+            ciDisplay = fenceUntrustedList(runItems, ' · ')
         } else {
             ciDisplay = formatWorkflowCounts(ws, opts.ciStatus)
         }
@@ -333,7 +332,13 @@ export function buildGitHistoryLines(opts: BriefingUserMessageOptions): string[]
     // [INTENT] No commit hyperlinks or tool tip: agents can derive URLs from the GitHub row, and
     // ~75 chars/commit of URL carried little signal. All commit lines share one untrusted fence.
     const commitRefs = opts.graphPivots?.commitRefs
-    const commitLines = opts.gitHistory.commits.map((c) => formatCommitLine(c, commitRefs?.[c.hash]))
+    const commitLines = opts.gitHistory.commits.map((c) => {
+        const entryRef =
+            commitRefs !== undefined && Object.hasOwn(commitRefs, c.hash)
+                ? commitRefs[c.hash]
+                : undefined
+        return formatCommitLine(c, entryRef)
+    })
     gitHistoryLines.push(`Recent: ${escapeCell(fenceUntrustedList(commitLines))}`)
     return gitHistoryLines
 }

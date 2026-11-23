@@ -121,14 +121,13 @@ function renderBriefingUserMessage(params: {
     context: ResourceContext
     config: typeof DEFAULT_BRIEFING_CONFIG
     activeGithub: ResourceContext['github']
-    activeWorkspaceId: string | undefined
     journal: JournalContext
     github: Awaited<ReturnType<typeof buildGitHubSection>>
     system: SystemContext
     team: ReturnType<typeof buildTeamContext>
+    insights: ReturnType<typeof buildInsightsSection>
 }): string {
-    const { context, config, activeGithub, activeWorkspaceId, journal, github, system, team } = params
-    const insights = config.insights !== false ? buildInsightsSection(context, activeWorkspaceId) : null
+    const { context, config, activeGithub, journal, github, system, team, insights } = params
     const graphPivots =
         config.graphPivots !== false
             ? buildGraphPivots(
@@ -205,6 +204,21 @@ function buildUnresolvedRepoBriefing(context: ResourceContext, unresolvedRepo: s
     }
 }
 
+function settleBriefingGitHubSection(
+    githubSettled: PromiseSettledResult<Awaited<ReturnType<typeof buildGitHubSection>>>
+): Awaited<ReturnType<typeof buildGitHubSection>> {
+    if (githubSettled.status === 'fulfilled') return githubSettled.value
+    logger.warning('Briefing GitHub section failed (degraded)', {
+        module: 'BRIEFING',
+        operation: 'github-section',
+        error:
+            githubSettled.reason instanceof Error
+                ? githubSettled.reason.message
+                : String(githubSettled.reason),
+    })
+    return null
+}
+
 function settleBriefingSystemSection(
     systemSettled: PromiseSettledResult<SystemContext>,
     config: typeof DEFAULT_BRIEFING_CONFIG,
@@ -264,9 +278,6 @@ export async function buildBriefingData(
         ),
     ])
     const journal = safeBuildJournalContext(context, config, activeProjectNumber, activeWorkspaceId)
-    const [githubSettled, systemSettled] = await settledPromise
-    const github = githubSettled.status === 'fulfilled' ? githubSettled.value : null
-    const system = settleBriefingSystemSection(systemSettled, config, journalWorkspaceId)
     const team = config.includeTeam
         ? buildTeamContext(
               context,
@@ -276,15 +287,22 @@ export async function buildBriefingData(
               journal.mirrorCandidates
           )
         : undefined
+    const insights =
+        config.insights !== false
+            ? buildInsightsSection(context, activeWorkspaceId, { includeTopImportance: false })
+            : null
+    const [githubSettled, systemSettled] = await settledPromise
+    const github = settleBriefingGitHubSection(githubSettled)
+    const system = settleBriefingSystemSection(systemSettled, config, journalWorkspaceId)
     const userMessage = renderBriefingUserMessage({
         context,
         config,
         activeGithub,
-        activeWorkspaceId,
         journal,
         github,
         system,
         team,
+        insights,
     })
 
     return {

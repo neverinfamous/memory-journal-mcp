@@ -16,7 +16,7 @@ import {
     previewLabel,
     previewLabelText,
 } from '../../src/handlers/resources/core/briefing/graph-pivots-section.js'
-import { fenceUntrustedList } from '../../src/handlers/resources/fencing-helpers.js'
+import { fenceUntrustedList, sliceUntrustedInline } from '../../src/handlers/resources/fencing-helpers.js'
 
 const SUMMARY = '## Accomplished\n- Shipped graph pivots\n- Fixed tests\n\n## Unfinished / Blocked\n- None\n\n## Context for Next Session\n- n/a\n\n## Commits\n- abc'
 
@@ -120,6 +120,27 @@ describe('redactHomePaths', () => {
     it('leaves non-home paths alone and redacts graph labels too', () => {
         expect(redactHomePaths('src/home/view.ts')).toBe('src/home/view.ts')
         expect(previewLabelText('Edited C:\\Users\\alice\\code\\x.ts')).toBe('Edited ~\\code\\x.ts')
+    })
+
+    it('redacts dotted usernames while preserving trailing sentence punctuation', () => {
+        expect(redactHomePaths('C:\\Users\\alice.smith\\Desktop\\repo')).toBe('<desktop>\\repo')
+        expect(redactHomePaths('C:\\Users\\alice.smith\\.gemini\\antigravity\\brain\\id')).toBe(
+            '<appDataDir>/brain\\id'
+        )
+        expect(redactHomePaths('/mnt/c/Users/alice.smith/Desktop/repo')).toBe('<desktop>/repo')
+        expect(redactHomePaths('/home/bob.jones/projects/a')).toBe('~/projects/a')
+        expect(redactHomePaths('See C:\\Users\\alice.smith.')).toBe('See ~.')
+    })
+})
+
+describe('sliceUntrustedInline', () => {
+    it('does not split UTF-16 surrogate pairs when truncating', () => {
+        const out = sliceUntrustedInline(`${'a'.repeat(29)}🚀`, 30, '…')
+        expect(out).toBe(`<untrusted_remote_content>${'a'.repeat(29)}…</untrusted_remote_content>`)
+        for (let i = 0; i < out.length; i++) {
+            const code = out.charCodeAt(i)
+            expect(code >= 0xd800 && code <= 0xdbff).toBe(false)
+        }
     })
 })
 

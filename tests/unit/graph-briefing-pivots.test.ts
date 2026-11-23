@@ -216,6 +216,8 @@ describe('Graph & Briefing Integration (G1-G9)', () => {
             ['abcdef1']
         )
         expect(pivots).toBeDefined()
+        expect(Object.getPrototypeOf(pivots?.degrees)).toBeNull()
+        expect(Object.getPrototypeOf(pivots?.commitRefs)).toBeNull()
         expect(pivots?.commitRefs['abcdef1']).toBe(first)
 
         const naming = resolveBriefingToolNaming({
@@ -604,5 +606,54 @@ describe('Graph & Briefing Integration (G1-G9)', () => {
         expect(parsedScoped['Project']).toBe('@org/pkg')
         expect(parsedScoped['Workspace ID']).toBe('@org/pkg')
         expect(parsedScoped['Project Number']).toBe(42)
+    })
+
+    it('resolves exact Default registry key before lowercase default in memory://graph and quotes YAML 1.2 reserved scalars in agent-context', async () => {
+        const defaultCapId = db.createEntry({
+            content: 'Capital Default hub',
+            workspaceId: 'Default',
+            entryType: 'technical_note',
+        }).id
+        const defaultCapPeer = db.createEntry({
+            content: 'Capital Default peer',
+            workspaceId: 'Default',
+            entryType: 'technical_note',
+        }).id
+        db.linkEntries(defaultCapId, defaultCapPeer, 'references', undefined, 'Default')
+
+        const mixedCaseConfig: BriefingConfig = {
+            ...briefingConfig,
+            projectRegistry: {
+                Default: { path: '/tmp/cap-default', project_number: 99 },
+            },
+        }
+        const graphCap = await readResource(
+            'memory://graph/Default',
+            db,
+            undefined,
+            undefined,
+            undefined,
+            teamDb,
+            mixedCaseConfig,
+            runtime
+        )
+        expect(String(graphCap.data)).toContain('# Graph neighborhood · Default')
+        expect(String(graphCap.data)).toContain(`#${String(defaultCapId)} -references-> #${String(defaultCapPeer)}`)
+
+        for (const scalarRepo of ['true', 'null', '123', '---', '-dash', '0x1f', 'my.repo']) {
+            const ctxOut = await readResource(
+                `memory://agent-context/${encodeURIComponent(scalarRepo)}?pin_session=false`,
+                db,
+                undefined,
+                undefined,
+                undefined,
+                teamDb,
+                { ...briefingConfig, projectRegistry: {} },
+                runtime
+            )
+            const parsed = parseYaml(String(ctxOut.data)) as Record<string, unknown>
+            expect(parsed['Project']).toBe(scalarRepo)
+            expect(parsed['Workspace ID']).toBe(scalarRepo)
+        }
     })
 })

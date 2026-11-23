@@ -125,5 +125,23 @@ describe('Staleness Resources', () => {
             const result = handler('memory://staleness/abc', context) as any
             expect(result.data.error).toBe('Project number must be a valid integer')
         })
+
+        it('fences non-canonical workspace names in ambiguous project errors', () => {
+            const context = {
+                briefingConfig: {
+                    projectRegistry: {
+                        'ws<evil>': { path: '/tmp/a', project_number: 7 },
+                        'ws-two': { path: '/tmp/b', project_number: 7 },
+                    },
+                },
+            } as unknown as ResourceContext
+            const definitions = getStalenessResourceDefinitions()
+            const handler = definitions.find(d => d.uri === 'memory://staleness/{project_number}')!.handler
+
+            const result = handler('memory://staleness/7', context) as any
+            expect(result.data.status).toBe('ambiguous')
+            expect(result.data.error).toContain('<untrusted_remote_content>ws&lt;evil&gt;</untrusted_remote_content>')
+            expect(result.data.error).toContain('ws-two')
+        })
     })
 })

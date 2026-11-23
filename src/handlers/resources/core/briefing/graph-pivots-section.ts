@@ -97,15 +97,17 @@ function safeLoadDegrees(
     entryIds: readonly number[],
     ws: string
 ): { degrees: Record<number, number>; ok: boolean } {
-    if (typeof db.getRelationshipDegrees !== 'function') return { degrees: {}, ok: false }
+    if (typeof db.getRelationshipDegrees !== 'function') {
+        return { degrees: Object.create(null) as Record<number, number>, ok: false }
+    }
     try {
         const degreeMap = db.getRelationshipDegrees(entryIds, ws)
-        const degrees: Record<number, number> = {}
+        const degrees = Object.create(null) as Record<number, number>
         for (const [id, degree] of degreeMap) degrees[id] = degree
         return { degrees, ok: true }
     } catch (error) {
         logPivotSubqueryError('graph-pivots-degrees', error)
-        return { degrees: {}, ok: false }
+        return { degrees: Object.create(null) as Record<number, number>, ok: false }
     }
 }
 
@@ -114,7 +116,7 @@ function safeLoadCommitRefs(
     commitHashes: readonly string[],
     ws: string
 ): Record<string, number> {
-    const commitRefs: Record<string, number> = {}
+    const commitRefs = Object.create(null) as Record<string, number>
     if (commitHashes.length === 0 || typeof db.getEntryIdsByCommitShas !== 'function') {
         return commitRefs
     }

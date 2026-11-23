@@ -26,7 +26,15 @@ export function sliceUntrustedInline(value: string, maxLen: number, suffix = '')
     const cleanRaw = raw
         .replace(/[\r\n\u2028\u2029]+/g, ' ')
         .replace(/\p{Cc}/gu, (ch) => (ch === '\t' ? ch : ''))
-    const truncated = cleanRaw.length > maxLen ? `${cleanRaw.slice(0, maxLen)}${suffix}` : cleanRaw
+    let sliceEnd = maxLen
+    if (cleanRaw.length > maxLen && maxLen > 0) {
+        const lastCode = cleanRaw.charCodeAt(maxLen - 1)
+        const nextCode = cleanRaw.charCodeAt(maxLen)
+        if (lastCode >= 0xd800 && lastCode <= 0xdbff && nextCode >= 0xdc00 && nextCode <= 0xdfff) {
+            sliceEnd = maxLen - 1
+        }
+    }
+    const truncated = cleanRaw.length > maxLen ? `${cleanRaw.slice(0, sliceEnd)}${suffix}` : cleanRaw
     return markUntrustedContentInline(truncated)
 }
 

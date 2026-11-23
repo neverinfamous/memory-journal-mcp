@@ -56,7 +56,6 @@ function resolveGraphWorkspace(
             "Wildcard '*' is not supported for memory://graph/{+repo}. Specify a concrete repository name."
         )
     }
-    if (trimmed.toLowerCase() === 'default') return { ws: 'default' }
     const registry = context.briefingConfig?.projectRegistry ?? loadProjectRegistryFromConfig()
     const hasRegistry = registry !== undefined && Object.keys(registry).length > 0
     const numericTarget = /^#?(\d+)$/.exec(trimmed)
@@ -66,6 +65,7 @@ function resolveGraphWorkspace(
         exactRegistryKey(trimmed, registry) ??
         (parsedNum !== undefined ? uniqueWorkspaceForProject(parsedNum, registry) : undefined)
     if (matched !== undefined) return { ws: matched }
+    if (trimmed.toLowerCase() === 'default') return { ws: 'default' }
     const configuredDefaultWs = context.briefingConfig?.defaultWorkspaceId?.trim()
     if (configuredDefaultWs?.toLowerCase() === trimmed.toLowerCase()) {
         return { ws: configuredDefaultWs }

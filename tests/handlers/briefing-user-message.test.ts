@@ -81,6 +81,8 @@ describe('formatUserMessage', () => {
 
         expect(result).toContain('✅ CI')
         expect(result).toContain('❌ CodeQL')
+        const githubLine = result.split('\n').find((l) => l.includes('**GitHub**')) ?? ''
+        expect(githubLine.match(/<untrusted_remote_content>/g)).toHaveLength(1)
     })
 
     it('should display CI counts when no individual runs', () => {
@@ -561,8 +563,12 @@ describe('formatUserMessage', () => {
         })
 
         expect(result).not.toContain('](https://evil.example)')
-        expect(result).toContain('[CI&#93;(https://evil.example)&#91;ok](https://github.com/org/repo/actions/runs/1)')
+        expect(result).toContain(
+            '[CI&amp;#93;(https://evil.example)&amp;#91;ok](https://github.com/org/repo/actions/runs/1)'
+        )
         expect(result).not.toContain('onclick=alert')
+        const githubLine = result.split('\n').find((l) => l.includes('**GitHub**')) ?? ''
+        expect(githubLine.match(/<untrusted_remote_content>/g)).toHaveLength(1)
     })
 
     it('suppresses Dirty badge when localGitStatus has error or degraded', () => {
@@ -664,5 +670,25 @@ describe('formatUserMessage', () => {
         expect(result).not.toContain('optimize-journal')
         expect(result).toContain('Workspace: **ws_evil**')
         expect(result).not.toContain('ws*evil')
+    })
+
+    it('does not resolve Object.prototype properties as commit entry references', () => {
+        const result = formatUserMessage({
+            ...baseOpts(),
+            graphPivots: {
+                windowDays: 14,
+                degrees: {},
+                commitRefs: {},
+                activeThreads: [],
+                recentEntries: 1,
+                unlinkedEntries: 0,
+            },
+            gitHistory: {
+                commits: [{ hash: 'toString', message: 'feat: proto check' }],
+            },
+        })
+
+        expect(result).toContain('toString feat: proto check')
+        expect(result).not.toContain('→#')
     })
 })

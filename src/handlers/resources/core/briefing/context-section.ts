@@ -211,10 +211,11 @@ export function buildJournalContext(
     activeWorkspaceId?: string
 ): JournalContext {
     const targetWs = activeWorkspaceId || config.defaultWorkspaceId || 'default'
+    const importanceThreshold = config.briefingImportanceThreshold ?? 0.3
     const filterImportant = createImportanceFilter(
         context,
         targetWs,
-        config.briefingImportanceThreshold ?? 0.3
+        importanceThreshold
     )
 
     const finalSummaryEntries = fetchBriefingSummaries(
@@ -228,12 +229,16 @@ export function buildJournalContext(
         finalSummaryEntries.length > 0 ? formatSummaryEntries(finalSummaryEntries) : undefined
     const latestSessionSummary = sessionSummaries?.[0]
 
-    // Fetch a larger buffer to account for entries that might get deduplicated out or filtered by importance
+    // Fetch a larger buffer only when importance filtering needs candidates beyond the display cap
+    const recentLimit =
+        importanceThreshold > 0
+            ? Math.max(100, config.entryCount * 10)
+            : Math.max(config.entryCount + (config.summaryCount ?? 1), 10)
     const rawRecentEntries =
         config.entryCount > 0
             ? extractEntries(
                   context.db.searchEntries('', {
-                      limit: Math.max(100, config.entryCount * 10),
+                      limit: recentLimit,
                       workspaceId: targetWs,
                       ...(typeof projectNumber === 'number' ? { projectNumber } : {}),
                       sortBy: 'timestamp',
