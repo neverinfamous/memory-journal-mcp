@@ -239,13 +239,17 @@ export async function executeTeamBatchDelete(
     })
     if ('errorResponse' in filtered) return filtered.errorResponse
 
-    const { deleted, notFound: deleteNotFound, errors } = teamDb.deleteEntries(
+    const { deleted, notFound: deleteNotFound, errors, warning: deleteWarning } = teamDb.deleteEntries(
         filtered.validIds,
         input.permanent,
         wsId
     )
     await sendProgress(context.progress, 1, 2, `Deleted ${String(deleted.length)} team entries...`)
-    const vectorWarnings = await cleanupDeletedVectors(context, teamDb, deleted)
+    const vectorWarnings =
+        typeof teamDb.deleteVectors === 'function'
+            ? (await sendProgress(context.progress, 2, 2, 'Team batch delete complete'),
+              deleteWarning !== undefined ? [deleteWarning] : [])
+            : await cleanupDeletedVectors(context, teamDb, deleted)
 
     if (deleted.length > 0) {
         triggerTeamNotifications(context)

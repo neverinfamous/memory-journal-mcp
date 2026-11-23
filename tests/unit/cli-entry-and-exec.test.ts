@@ -1003,5 +1003,76 @@ describe('CLI Entry & Exec Commands', () => {
                 assertSafeCliOutputFile('\\\\nonexistent-smb\\share\\out.json', '--out')
             ).rejects.toThrow(/Unsafe --out/)
         })
+
+        it('maps --summary to title without clobbering content, propagates root --json, and enforces 1..50000 content bounds (M1, M2, M3)', async () => {
+            const { applyCliEntryFlagAliases, CLI_MAX_CONTENT_LENGTH, validateCliEntryContent } =
+                await import('../../src/cli/commands/entry-payload-helpers.js')
+            const { createProgram, withValidation } = await import('../../src/cli/program.js')
+            const { outputOptionsSchema } = await import('../../src/cli/schemas.js')
+
+            // M1: --summary acts strictly as --title alias without setting options.content
+            const summaryOpts: Record<string, unknown> = { summary: 'Release Notes' }
+            applyCliEntryFlagAliases(summaryOpts as never)
+            expect(summaryOpts['title']).toBe('Release Notes')
+            expect(summaryOpts['content']).toBeUndefined()
+
+            // M2: root --json before subcommand propagates via withValidation when subcommand accepts --json
+            const prog = createProgram()
+            prog.option('--json', 'JSON output')
+            let receivedJson: boolean | undefined
+            const subCmd = prog
+                .command('probe')
+                .option('--json', 'Subcommand JSON output')
+                .action(
+                    withValidation(outputOptionsSchema, (opts: { json?: boolean }) => {
+                        receivedJson = opts.json
+                    })
+                )
+            await prog.parseAsync(['node', 'cli.js', '--json', 'probe'])
+            expect(subCmd.name()).toBe('probe')
+            expect(receivedJson).toBe(true)
+
+            // M3: direct bounds validator + CLI entry create/update reject empty and >50,000-char content
+            expect(() => validateCliEntryContent('')).toThrow(ValidationError)
+            expect(() => validateCliEntryContent('   \n\t  ')).toThrow(ValidationError)
+            expect(() => validateCliEntryContent('x'.repeat(CLI_MAX_CONTENT_LENGTH + 1))).toThrow(
+                ValidationError
+            )
+
+            await expect(
+                createEntryAction(
+                    {
+                        db: dbPath,
+                        workspace: 'cli-bounds-ws',
+                        project: 5,
+                        content: '',
+                    },
+                    dummyCmd
+                )
+            ).rejects.toThrow('PROCESS_EXIT_1')
+            expect(stderrOutput.join('')).toContain('cannot be empty')
+
+            await createEntryAction(
+                {
+                    db: dbPath,
+                    workspace: 'cli-bounds-ws',
+                    project: 5,
+                    content: 'Valid seed entry',
+                },
+                dummyCmd
+            )
+            await expect(
+                updateEntryAction(
+                    {
+                        db: dbPath,
+                        id: 1,
+                        expectedVersion: 1,
+                        content: 'x'.repeat(CLI_MAX_CONTENT_LENGTH + 1),
+                    } as never,
+                    dummyCmd
+                )
+            ).rejects.toThrow('PROCESS_EXIT_1')
+            expect(stderrOutput.join('')).toContain('exceeds maximum length')
+        })
     })
 })

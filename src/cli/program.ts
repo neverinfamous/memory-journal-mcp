@@ -286,13 +286,34 @@ export function addAgentInstructions(command: Command, text: string): void {
     commandAiInstructions.set(command, text);
 }
 
+function mergeGlobalJsonOption(command: Command, rawOptions: unknown): unknown {
+    if (
+        command.name() === 'serve' ||
+        rawOptions === null ||
+        typeof rawOptions !== 'object' ||
+        Array.isArray(rawOptions)
+    ) {
+        return rawOptions;
+    }
+    const acceptsJson = command.options.some((opt) => opt.attributeName() === 'json');
+    if (!acceptsJson || typeof command.optsWithGlobals !== 'function') {
+        return rawOptions;
+    }
+    const globals = command.optsWithGlobals<{ json?: unknown }>();
+    if (globals.json !== true || ('json' in rawOptions && rawOptions.json !== undefined)) {
+        return rawOptions;
+    }
+    return { ...rawOptions, json: true };
+}
+
 export function withValidation<T, A extends unknown[]>(schema: ZodType<T>, action: (...args: A) => void | Promise<void>) {
     return async (...args: A) => {
         const command = args[args.length - 1] as Command;
         // Commander's action handler args: (arg1, arg2, ..., options, command)
         const rawOptions = args.length > 1 ? args[args.length - 2] : {};
+        const effectiveRawOptions = mergeGlobalJsonOption(command, rawOptions);
         try {
-            const validOptions = schema.parse(rawOptions);
+            const validOptions = schema.parse(effectiveRawOptions);
             const newArgs = [...args];
             // Replace rawOptions with validOptions in the args array
             if (newArgs.length > 1) {
@@ -309,7 +330,7 @@ export function withValidation<T, A extends unknown[]>(schema: ZodType<T>, actio
                 logAgentIssue({
                     source: 'CLI',
                     action: command.name(),
-                    input: rawOptions,
+                    input: effectiveRawOptions,
                     error: `Validation Error: ${errorMessages}`
                 });
 

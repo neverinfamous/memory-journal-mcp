@@ -40,6 +40,10 @@ serveCmd.action(withValidation(serverOptionsSchema, async (argsArray: string[], 
         process.stderr.write(`🛠️ AUTONOMOUS HEALING: The 'serve' command does not take arguments. You passed: ${argsArray.join(' ')}. If you are trying to search or run prompts, use the MCP client or the 'search' CLI command.\n`);
         process.exit(1);
     }
+    if (program.opts<{ json?: unknown }>().json === true) {
+        program.outputHelp();
+        return;
+    }
     const { serveAction } = await import('./commands/serve.js');
     await serveAction(options, cmd);
 }))

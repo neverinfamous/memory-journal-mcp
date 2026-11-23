@@ -7,6 +7,7 @@ import {
     countE2eSpecFiles,
     isPartialPlaywrightRun,
     loadBadgeMetrics,
+    updateBadgeTargetFile,
 } from '../../scripts/update-badges.js'
 
 function writeJson(filePath: string, data: unknown): void {
@@ -252,6 +253,42 @@ describe('update-badges script helpers', () => {
             expect(metrics.hasE2e).toBe(true)
             expect(metrics.e2ePassing).toBe(15)
             expect(metrics.e2eSkipped).toBe(1)
+        })
+    })
+
+    describe('updateBadgeTargetFile', () => {
+        it('skips missing files gracefully and refuses symlinked targets (L8)', () => {
+            createSpecFiles(tempDir, ['a.spec.ts'])
+            writeJson(path.join(tempDir, '.test-output/coverage/coverage-summary.json'), {
+                total: { lines: { pct: 90 } },
+            })
+            const metrics = loadBadgeMetrics({ rootDir: tempDir, argv: ['--coverage-only'] })
+            expect(updateBadgeTargetFile('MISSING.md', metrics, tempDir)).toBe(false)
+
+            const externalTarget = path.join(tempDir, 'outside.md')
+            const symlinkPath = path.join(tempDir, 'README.md')
+            fs.writeFileSync(
+                externalTarget,
+                '![Coverage](https://img.shields.io/badge/Coverage-10%25-red.svg)\n',
+                'utf-8'
+            )
+            let linked = false
+            try {
+                fs.symlinkSync(externalTarget, symlinkPath, 'file')
+                linked = true
+            } catch {
+                // Developer Mode disabled
+            }
+            if (linked) {
+                const prevCode = process.exitCode
+                try {
+                    expect(updateBadgeTargetFile('README.md', metrics, tempDir)).toBe(false)
+                    expect(process.exitCode).toBe(1)
+                    expect(fs.readFileSync(externalTarget, 'utf-8')).toContain('Coverage-10%25')
+                } finally {
+                    process.exitCode = prevCode
+                }
+            }
         })
     })
 })

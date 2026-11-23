@@ -23,6 +23,7 @@ import {
 import {
     applyCliEntryFlagAliases,
     firstNonBlankString,
+    validateCliEntryContent,
     type HealedEntryOptions,
 } from './entry-payload-helpers.js'
 import {
@@ -73,6 +74,7 @@ async function loadCliEntryContentAndPayload(
     if (title && !content.startsWith('# ')) {
         content = `# ${title}\n\n${content}`
     }
+    validateCliEntryContent(content)
 
     const metadata = { ...frontmatter, ...parseMetadata(options.metadata) }
     const payload = buildEntryPayload(options, metadata, config, content)
@@ -317,6 +319,7 @@ function buildUpdatedEntryPayload(
     if (options.title && !content.startsWith('# ')) {
         content = `# ${options.title}\n\n${content}`
     }
+    validateCliEntryContent(content)
     const metadata = { ...frontmatter, ...parseMetadata(options.metadata) }
     const metaSourceWs = firstNonBlankString(
         metadata['workspace_id'],

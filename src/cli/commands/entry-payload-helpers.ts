@@ -17,6 +17,21 @@ const TAG_SPLIT_RE = /[,\s]+/
 const PROJECT_PREFIX_RE = /^p/i
 const PREFIXED_POSITIVE_INT_RE = /^p?[1-9]\d*$/i
 
+export const CLI_MAX_CONTENT_LENGTH = 50_000
+
+/** Enforce 1..50,000 non-empty content bounds matching MCP Create/UpdateEntrySchema. */
+export function validateCliEntryContent(content: string): void {
+    if (content.trim().length === 0) {
+        throw new ValidationError('Entry content cannot be empty.', { minLength: 1 })
+    }
+    if (content.length > CLI_MAX_CONTENT_LENGTH) {
+        throw new ValidationError(
+            `Entry content exceeds maximum length of ${String(CLI_MAX_CONTENT_LENGTH)} characters.`,
+            { maxLength: CLI_MAX_CONTENT_LENGTH, actualLength: content.length }
+        )
+    }
+}
+
 export type HealedEntryOptions = z.infer<typeof createEntryOptionsSchema> & {
     tag?: string
     contentFile?: string
@@ -83,13 +98,7 @@ export function applyCliEntryFlagAliases(
     ) {
         options.content = options.description
     }
-    if (
-        options.summary !== undefined &&
-        options.content === undefined &&
-        options.file === undefined
-    ) {
-        options.content = options.summary
-    } else if (options.summary !== undefined && options.title === undefined) {
+    if (options.summary !== undefined && options.title === undefined) {
         options.title = options.summary
     }
 }

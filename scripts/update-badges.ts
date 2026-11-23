@@ -227,8 +227,18 @@ export function loadBadgeMetrics(options: LoadBadgeMetricsOptions = {}): BadgeMe
   };
 }
 
-function updateBadgeTargetFile(file: string, metrics: BadgeMetrics, rootDir: string = ROOT_DIR): boolean {
+export function updateBadgeTargetFile(file: string, metrics: BadgeMetrics, rootDir: string = ROOT_DIR): boolean {
   const filePath = path.join(rootDir, file);
+  const fileStat = fs.lstatSync(filePath, { throwIfNoEntry: false });
+  if (fileStat === undefined) {
+    console.warn(`Skipped updating ${file}: File not found.`);
+    return false;
+  }
+  if (fileStat.isSymbolicLink() || !fileStat.isFile()) {
+    console.error(`Failed updating ${file}: target is a symlink or non-regular file.`);
+    process.exitCode = 1;
+    return false;
+  }
   try {
     let content = fs.readFileSync(filePath, "utf-8");
     const originalNormalized = content.replace(CRLF_RE, "\n");
