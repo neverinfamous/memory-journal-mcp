@@ -316,7 +316,7 @@ function detectBodyBreaking(
 
 export function parseGitRecord(commitBlock: string, args: CliArgs, inlineNumstatMode = false): RawCommitBatchItem | null {
   const parts = extractRecordParts(commitBlock);
-  if (!parts || parts.length < 12) return null;
+  if (!parts) return null;
 
   const subject = normalizeSubject(parts[8]);
   const convMatch = stripLeadingEmojiAndShortcode(subject).match(REGEX_CONVENTIONAL_COMMIT);

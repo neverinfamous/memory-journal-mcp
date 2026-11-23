@@ -416,5 +416,60 @@ describe('Git Tools Handler', () => {
             expect(res.error).toContain('No anchor check ran')
             expect(res.skippedWorkspaces).toEqual(['alpha', 'beta'])
         })
+
+        it('uses single-pass --raw --numstat without summary: true when prefetching >= 4 live anchors', async () => {
+            const futureDate = new Date(Date.now() + 60_000).toISOString()
+            mockProcessBatch.mockResolvedValue([
+                {
+                    commit: 'abcdef123456',
+                    author: 'Alice',
+                    email: 'alice@example.com',
+                    date: futureDate,
+                    subject: 'fix: update package.json',
+                    cleanSubject: 'update package.json',
+                    files: [{ status: 'M', file: 'package.json', insertions: 1, deletions: 0 }],
+                },
+            ])
+
+            const entry = db.createEntry({ content: 'Entry with four live file anchors' })
+            const nativeDb = (
+                db as unknown as { connection: { getNativeDb: () => never } }
+            ).connection.getNativeDb()
+            insertAnchors({ db: nativeDb } as never, entry.id, [
+                { anchorPath: 'package.json', anchorType: 'file' },
+                { anchorPath: 'README.md', anchorType: 'file' },
+                { anchorPath: 'AGENT_README.md', anchorType: 'file' },
+                { anchorPath: 'tsconfig.json', anchorType: 'file' },
+            ])
+
+            context.config = {
+                defaultWorkspaceId: 'default',
+                projectRegistry: {
+                    default: { path: process.cwd() },
+                },
+            }
+            const tools = getGitTools(context)
+            const tool = tools.find((t) => t.name === 'check_entry_staleness')
+            if (tool === undefined) throw new Error('check_entry_staleness missing')
+            const res = (await tool.handler({ entryId: entry.id })) as {
+                success: boolean
+                results: { path: string; newStatus: string; commitsSince: number }[]
+            }
+
+            expect(res.success).toBe(true)
+            expect(mockStreamGitRecords).toHaveBeenCalledWith(
+                expect.arrayContaining(['--raw', '--numstat']),
+                expect.any(String)
+            )
+            expect(mockProcessBatch).toHaveBeenCalledWith(
+                expect.any(Array),
+                expect.not.objectContaining({ summary: true }),
+                [],
+                expect.any(String)
+            )
+            const pkgRow = res.results.find((r) => r.path === 'package.json')
+            expect(pkgRow?.newStatus).toBe('stale')
+            expect(pkgRow?.commitsSince).toBe(1)
+        })
     })
 })

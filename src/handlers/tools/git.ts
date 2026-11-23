@@ -306,7 +306,7 @@ export function getGitTools(context: ToolContext): ToolDefinition[] {
                         fetchCommits({ path: anchorPath, since, maxCount, summary: true }, cwd).then(
                             (c) => c.length
                         ),
-                    (since, cwd, maxCount) => fetchCommits({ since, maxCount, summary: true }, cwd)
+                    (since, cwd, maxCount) => fetchCommits({ since, maxCount }, cwd)
                 ),
         }
     ]

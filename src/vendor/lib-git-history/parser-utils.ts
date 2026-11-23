@@ -119,7 +119,8 @@ export function expandIssueTrackerUrl(issue: string, tracker: string): string {
 export function resolveIssueTrackerUrl(issue: string, repoHost: string, repoPath: string, args: CliArgs): string | null {
   if (issue.startsWith('http://') || issue.startsWith('https://')) return issue;
   if (args['issue-tracker']) {
-    return expandIssueTrackerUrl(issue, args['issue-tracker']);
+    const expanded = expandIssueTrackerUrl(issue, args['issue-tracker']);
+    if (expanded !== issue) return expanded;
   }
 
   if (issue.startsWith('#')) {
