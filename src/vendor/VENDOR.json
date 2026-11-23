@@ -124,10 +124,12 @@
         "commit-cli-schema.ts",
         "commit-cli-help.ts",
         "commit-journal.ts",
-        "commit-journal-bridge.ts"
+        "commit-journal-bridge.ts",
+        "commit-journal-config.ts",
+        "commit-security.ts"
       ],
-      "syncedAt": "2026-11-22T18:37:43.989Z",
-      "syncedFromCommit": "1bb1065f61706056899e234e26b9104e148cff77"
+      "syncedAt": "2026-11-23T20:50:50.138Z",
+      "syncedFromCommit": "98ad3acc18239e464595f6f18014c200464124ca"
     }
   }
 }

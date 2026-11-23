@@ -3,6 +3,7 @@ import { execFileSync, spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fatalError } from './commit-cli-schema.js';
+import { isSensitiveRepoPath } from './commit-security.js';
 
 const SCRATCH_SEGMENT_RE = /(?:^|\/)scratch(?:\/|$)/;
 const SCRATCH_FILE_RE = /(?:^|\/)[^/]*scratch\.[cm]?[jt]s$/;
@@ -87,27 +88,34 @@ export function getValidatedRepoRelPath(baseDir: string, targetPath: string): st
   return null;
 }
 
-function resolveWindowsDiskCasing(absPath: string, normRoot: string): string {
+function resolveWindowsDiskCasing(absPath: string, normRoot: string, precomputedCanonRoot?: string | null): string {
   if (process.platform !== 'win32') return absPath;
   const st = fs.lstatSync(absPath, { throwIfNoEntry: false });
   if (st === undefined || st.isSymbolicLink()) return absPath;
   const realAbs = tryRealpath(absPath);
   if (realAbs === null) return absPath;
   if (foldPathForCompare(realAbs) === foldPathForCompare(absPath)) return realAbs;
-  const canonRoot = resolveCanonicalPath(normRoot);
+  const canonRoot = precomputedCanonRoot !== undefined ? precomputedCanonRoot : resolveCanonicalPath(normRoot);
   if (canonRoot === null) return absPath;
   const rel = computeValidatedRel(canonRoot, realAbs);
   return rel !== null ? path.resolve(normRoot, rel) : absPath;
 }
 
-export function normalizeAddPathForGit(cwd: string, repoRoot: string, rawPath: string): string {
+export function normalizeAddPathForGit(
+  cwd: string,
+  repoRoot: string,
+  rawPath: string,
+  precomputedCanonRoot?: string | null
+): string {
   const abs = path.resolve(cwd, rawPath);
   const normRoot = path.resolve(repoRoot);
   if (foldPathForCompare(abs) === foldPathForCompare(normRoot)) return normRoot;
-  if (isStrictlyUnderLexicalDir(normRoot, abs)) return resolveWindowsDiskCasing(abs, normRoot);
+  if (isStrictlyUnderLexicalDir(normRoot, abs)) return resolveWindowsDiskCasing(abs, normRoot, precomputedCanonRoot);
   if (isSameResolvedPath(abs, normRoot)) return normRoot;
   const relFromRoot = getValidatedRepoRelPath(normRoot, abs);
-  return relFromRoot !== null ? resolveWindowsDiskCasing(path.resolve(normRoot, relFromRoot), normRoot) : abs;
+  return relFromRoot !== null
+    ? resolveWindowsDiskCasing(path.resolve(normRoot, relFromRoot), normRoot, precomputedCanonRoot)
+    : abs;
 }
 
 export function anyPathTargetsDir(baseDir: string, paths: readonly string[], targetDir: string): boolean {
@@ -383,9 +391,13 @@ export function findScratchInDirOrGlobTargets(cwd: string, targetPaths: readonly
     cwd,
     encoding: 'utf8',
     timeout: 10000,
+    maxBuffer: 16 * 1024 * 1024,
     windowsHide: true,
   });
-  if (res.status !== 0 || typeof res.stdout !== 'string') return [];
+  if (res.error !== undefined || res.status !== 0 || typeof res.stdout !== 'string') {
+    const detail = res.error?.message || (typeof res.stderr === 'string' ? res.stderr.trim() : '') || `exit ${String(res.status)}`;
+    throw new Error(`Failed pre-stage status check in '${cwd}': ${detail}`);
+  }
   const parts = res.stdout.split('\0');
   const scratchHits: string[] = [];
   let i = 0;
@@ -398,7 +410,7 @@ export function findScratchInDirOrGlobTargets(cwd: string, targetPaths: readonly
     const indexStatus = part[0];
     const workTreeStatus = part[1];
     const filepath = part.substring(3);
-    if (indexStatus !== 'D' && workTreeStatus !== 'D' && isScratchRepoPath(filepath)) {
+    if (indexStatus !== 'D' && workTreeStatus !== 'D' && (isScratchRepoPath(filepath) || isSensitiveRepoPath(filepath))) {
       scratchHits.push(filepath);
     }
     i += indexStatus === 'R' || indexStatus === 'C' || workTreeStatus === 'R' || workTreeStatus === 'C' ? 2 : 1;
@@ -415,9 +427,14 @@ export function findUnmergedPaths(cwd: string): string[] {
     cwd,
     encoding: 'utf8',
     timeout: 10000,
+    maxBuffer: 16 * 1024 * 1024,
     windowsHide: true,
   });
-  if (res.status !== 0 || typeof res.stdout !== 'string' || res.stdout.length === 0) return [];
+  if (res.error !== undefined || res.status !== 0 || typeof res.stdout !== 'string') {
+    const detail = res.error?.message || (typeof res.stderr === 'string' ? res.stderr.trim() : '') || `exit ${String(res.status)}`;
+    throw new Error(`Failed unmerged index check in '${cwd}': ${detail}`);
+  }
+  if (res.stdout.length === 0) return [];
   const unmerged = new Set<string>();
   for (const record of res.stdout.split('\0')) {
     if (!record) continue;

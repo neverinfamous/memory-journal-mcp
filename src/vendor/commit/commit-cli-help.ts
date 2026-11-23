@@ -2,11 +2,45 @@
 import { z } from 'zod';
 import { match, P } from 'ts-pattern';
 import { VALID_CATEGORIES } from './commit-journal.js';
+import { redactSensitiveText } from './commit-security.js';
 
 export const VALIDATION_STATES = ['passed', 'none', 'failed'] as const;
+export const CANONICAL_POSITIVE_INT_RE = /^[1-9]\d*$/;
+const CANONICAL_DECIMAL_RE = /^-?(?:\d+(?:\.\d+)?|\.\d+)$/;
+
+export function normalizeLineEndings(text: string): string {
+  return text.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+}
+
+export function parseCanonicalPositiveInt(val: unknown): unknown {
+  if (val === undefined) return undefined;
+  if (typeof val === 'number') {
+    return Number.isSafeInteger(val) && val >= 1 ? val : Number.NaN;
+  }
+  if (typeof val === 'string') {
+    const trimmed = val.trim();
+    if (!CANONICAL_POSITIVE_INT_RE.test(trimmed)) return Number.NaN;
+    const parsed = Number(trimmed);
+    return Number.isSafeInteger(parsed) && String(parsed) === trimmed ? parsed : Number.NaN;
+  }
+  return Number.NaN;
+}
+
+export function parseStrictScoreNumber(val: unknown): unknown {
+  if (val === undefined) return undefined;
+  if (typeof val === 'number') {
+    return Number.isFinite(val) ? val : Number.NaN;
+  }
+  if (typeof val === 'string') {
+    const trimmed = val.trim();
+    if (!CANONICAL_DECIMAL_RE.test(trimmed)) return Number.NaN;
+    return Number(trimmed);
+  }
+  return Number.NaN;
+}
 
 export function fatalError(msg: string): never {
-  console.error(`❌ ${msg}`);
+  console.error(`❌ ${redactSensitiveText(msg)}`);
   process.exit(1);
 }
 
@@ -16,9 +50,9 @@ export function getErrorMessage(error: unknown): string {
     if ('stderr' in error && error.stderr !== null && error.stderr !== undefined) {
       msg += '\nSTDERR:\n' + String(error.stderr);
     }
-    return msg;
+    return redactSensitiveText(msg);
   }
-  return String(error);
+  return redactSensitiveText(String(error));
 }
 
 export function showHelpAndExit(): never {

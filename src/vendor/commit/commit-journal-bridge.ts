@@ -1,56 +1,29 @@
 // @ts-nocheck
-import { execFileSync } from 'node:child_process';
+import { execFileSync, spawnSync } from 'node:child_process';
 import fs from 'node:fs';
-import os from 'node:os';
 import path from 'node:path';
-import { pathToFileURL } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { z } from 'zod';
+import {
+  getDefaultConfigPath,
+  normalizeRegistryPath,
+  readMemoryJournalRegistry,
+  readNormalizedMemoryJournalRegistry,
+  type NormalizedRegistryEntry,
+  type ProjectRegistry,
+  type ProjectRegistryEntry,
+} from './commit-journal-config.js';
+import { redactSensitiveText } from './commit-security.js';
 
-const FORBIDDEN_REGISTRY_KEYS: ReadonlySet<string> = new Set([
-  '__proto__',
-  'constructor',
-  'prototype',
-  '*',
-]);
-
-const projectRegistryEntrySchema = z.object({
-  path: z.string().trim().min(1),
-  project_number: z
-    .number()
-    .int()
-    .positive()
-    .refine((n) => Number.isSafeInteger(n))
-    .optional(),
-});
-
-export type ProjectRegistryEntry = z.infer<typeof projectRegistryEntrySchema>;
-export type ProjectRegistry = Record<string, ProjectRegistryEntry>;
-
-export interface NormalizedRegistryEntry {
-  workspaceId: string;
-  normalizedPath: string;
-  projectNumber?: number;
-}
-
-interface CachedConfigEntry {
-  mtimeMs: number;
-  size: number;
-  projectRegistry: ProjectRegistry | undefined;
-  normalizedEntries: readonly NormalizedRegistryEntry[] | undefined;
-}
-
-const MAX_CONFIG_CACHE_ENTRIES = 16;
-const configCache = new Map<string, CachedConfigEntry>();
-const WIN32_DRIVE_PATH_RE = /^[a-zA-Z]:[\\/]/;
-
-export function normalizeRegistryPath(targetPath: string): string {
-  const isWinSyntax = process.platform === 'win32' || WIN32_DRIVE_PATH_RE.test(targetPath);
-  const resolved = WIN32_DRIVE_PATH_RE.test(targetPath)
-    ? path.win32.resolve(targetPath)
-    : path.resolve(targetPath);
-  const slashed = resolved.replace(/\\/g, '/').replace(/\/+$/, '');
-  return isWinSyntax ? slashed.toLowerCase() : slashed;
-}
+export {
+  getDefaultConfigPath,
+  normalizeRegistryPath,
+  readMemoryJournalRegistry,
+  readNormalizedMemoryJournalRegistry,
+  type NormalizedRegistryEntry,
+  type ProjectRegistry,
+  type ProjectRegistryEntry,
+};
 
 const packageJsonNameSchema = z.object({
   name: z.string().optional(),
@@ -61,113 +34,9 @@ const MEMORY_JOURNAL_PACKAGE_NAMES: ReadonlySet<string> = new Set([
   '@neverinfamous/memory-journal-mcp',
 ]);
 
-export function getDefaultConfigPath(): string {
-  const envConfig = process.env['MEMORY_JOURNAL_CONFIG'];
-  if (envConfig !== undefined && envConfig.trim().length > 0) {
-    return path.resolve(envConfig.trim());
-  }
-  return path.join(os.homedir(), '.gemini', 'config', 'memory-journal.config.json');
-}
-
-function sanitizeProjectRegistry(raw: unknown, configPath: string): ProjectRegistry | undefined {
-  if (raw === undefined) return undefined;
-  if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) {
-    console.warn(`⚠️ Ignoring malformed projectRegistry in ${configPath}: expected a JSON object.`);
-    return undefined;
-  }
-  const clean = Object.create(null) as ProjectRegistry;
-  const skippedKeys: string[] = [];
-  for (const [workspaceId, value] of Object.entries(raw)) {
-    if (workspaceId.trim().length === 0 || FORBIDDEN_REGISTRY_KEYS.has(workspaceId)) {
-      skippedKeys.push(workspaceId);
-      continue;
-    }
-    const parsed = projectRegistryEntrySchema.safeParse(value);
-    if (parsed.success) {
-      clean[workspaceId] = parsed.data;
-    } else {
-      skippedKeys.push(workspaceId);
-    }
-  }
-  if (skippedKeys.length > 0) {
-    console.warn(`⚠️ Skipped malformed projectRegistry entry(s) in ${configPath}: ${skippedKeys.join(', ')}`);
-  }
-  return Object.keys(clean).length > 0 ? clean : undefined;
-}
-
-function readCachedConfigEntry(configPath?: string): CachedConfigEntry | undefined {
-  const effectiveConfigPath =
-    configPath !== undefined && configPath.length > 0
-      ? path.resolve(configPath)
-      : getDefaultConfigPath();
-
-  const stats = fs.statSync(effectiveConfigPath, { throwIfNoEntry: false });
-  if (stats === undefined || !stats.isFile()) {
-    configCache.delete(effectiveConfigPath);
-    return undefined;
-  }
-
-  const cached = configCache.get(effectiveConfigPath);
-  if (cached !== undefined && cached.mtimeMs === stats.mtimeMs && cached.size === stats.size) {
-    return cached;
-  }
-
-  try {
-    const rawContent = fs.readFileSync(effectiveConfigPath, 'utf-8');
-    const parsedJson: unknown = JSON.parse(rawContent);
-    const rawRegistry =
-      parsedJson !== null && typeof parsedJson === 'object' && !Array.isArray(parsedJson) && 'projectRegistry' in parsedJson
-        ? parsedJson.projectRegistry
-        : undefined;
-    const projectRegistry = sanitizeProjectRegistry(rawRegistry, effectiveConfigPath);
-    const normalizedEntries =
-      projectRegistry !== undefined
-        ? Object.entries(projectRegistry).map(([workspaceId, entry]) => ({
-            workspaceId,
-            normalizedPath: normalizeRegistryPath(entry.path),
-            ...(entry.project_number !== undefined ? { projectNumber: entry.project_number } : {}),
-          }))
-        : undefined;
-    if (configCache.size >= MAX_CONFIG_CACHE_ENTRIES && !configCache.has(effectiveConfigPath)) {
-      const oldestKey = configCache.keys().next().value;
-      if (oldestKey !== undefined) {
-        configCache.delete(oldestKey);
-      }
-    }
-    const entry: CachedConfigEntry = {
-      mtimeMs: stats.mtimeMs,
-      size: stats.size,
-      projectRegistry,
-      normalizedEntries,
-    };
-    configCache.set(effectiveConfigPath, entry);
-    return entry;
-  } catch (err: unknown) {
-    configCache.delete(effectiveConfigPath);
-    console.warn(
-      `⚠️ Failed to parse memory-journal config at ${effectiveConfigPath}: ${err instanceof Error ? err.message : String(err)}`
-    );
-    return undefined;
-  }
-}
-
-/**
- * [INTENT]: Memoized config loader keyed by `(effectiveConfigPath, mtimeMs, size)` so a single
- * commit does not repeatedly read, JSON.parse, and Zod-validate `memory-journal.config.json`.
- */
-export function readMemoryJournalRegistry(configPath?: string): ProjectRegistry | undefined {
-  return readCachedConfigEntry(configPath)?.projectRegistry;
-}
-
-export function readNormalizedMemoryJournalRegistry(
-  configPath?: string
-): readonly NormalizedRegistryEntry[] | undefined {
-  return readCachedConfigEntry(configPath)?.normalizedEntries;
-}
-
-function isFile(filePath: string): boolean {
-  const stats = fs.statSync(filePath, { throwIfNoEntry: false });
-  return stats !== undefined && stats.isFile();
+function isRegularNonSymlinkFile(filePath: string): boolean {
+  const stats = fs.lstatSync(filePath, { throwIfNoEntry: false });
+  return stats !== undefined && !stats.isSymbolicLink() && stats.isFile();
 }
 
 interface CachedPackageCheck {
@@ -187,15 +56,18 @@ const MEMORY_JOURNAL_CLI_SEGMENTS: readonly (readonly string[])[] = [
 function findCliInNodeModules(nodeModulesDir: string): string | null {
   for (const segments of MEMORY_JOURNAL_CLI_SEGMENTS) {
     const candidate = path.join(nodeModulesDir, ...segments);
-    if (isFile(candidate)) return candidate;
+    const pkgDir = path.dirname(path.dirname(candidate));
+    if (isRegularNonSymlinkFile(candidate) && isMemoryJournalPackageDir(pkgDir)) {
+      return candidate;
+    }
   }
   return null;
 }
 
 function isMemoryJournalPackageDir(dirPath: string): boolean {
   const pkgPath = path.join(dirPath, 'package.json');
-  const stats = fs.statSync(pkgPath, { throwIfNoEntry: false });
-  if (stats === undefined || !stats.isFile()) {
+  const stats = fs.lstatSync(pkgPath, { throwIfNoEntry: false });
+  if (stats === undefined || stats.isSymbolicLink() || !stats.isFile()) {
     packageDirCache.delete(pkgPath);
     return false;
   }
@@ -235,7 +107,42 @@ function resolveRegistryMemoryJournalCli(configPath?: string): string | null {
   }
   const mjDir = path.resolve(mjEntry.path);
   const cliPath = path.join(mjDir, 'dist', 'cli.js');
-  return isFile(cliPath) && isMemoryJournalPackageDir(mjDir) ? cliPath : null;
+  return isRegularNonSymlinkFile(cliPath) && isMemoryJournalPackageDir(mjDir) ? cliPath : null;
+}
+
+function resolveSelfPackagedCli(): string | null {
+  const selfDir = path.dirname(fileURLToPath(import.meta.url));
+  const candidates = [
+    { pkgDir: path.resolve(selfDir, '..', '..', '..'), cliPath: path.resolve(selfDir, '..', '..', 'cli.js') },
+    { pkgDir: path.resolve(selfDir, '..', '..', '..'), cliPath: path.resolve(selfDir, '..', '..', '..', 'dist', 'cli.js') },
+  ];
+  for (const c of candidates) {
+    if (isRegularNonSymlinkFile(c.cliPath) && isMemoryJournalPackageDir(c.pkgDir)) {
+      return c.cliPath;
+    }
+  }
+  return null;
+}
+
+function findCliInGlobalStores(): string | null {
+  const appData = process.env['APPDATA'];
+  if (appData !== undefined && appData.length > 0 && path.isAbsolute(appData)) {
+    const appDataCli = findCliInNodeModules(path.join(appData, 'npm', 'node_modules'));
+    if (appDataCli !== null) return appDataCli;
+  }
+  const pnpmHome = process.env['PNPM_HOME'];
+  if (pnpmHome !== undefined && pnpmHome.length > 0 && path.isAbsolute(pnpmHome)) {
+    for (const nm of [path.join(pnpmHome, 'global', '5', 'node_modules'), path.join(pnpmHome, 'node_modules')]) {
+      const hit = findCliInNodeModules(nm);
+      if (hit !== null) return hit;
+    }
+  }
+  const localAppData = process.env['LOCALAPPDATA'];
+  if (localAppData !== undefined && localAppData.length > 0 && path.isAbsolute(localAppData)) {
+    const pnpmLocalCli = findCliInNodeModules(path.join(localAppData, 'pnpm', 'global', '5', 'node_modules'));
+    if (pnpmLocalCli !== null) return pnpmLocalCli;
+  }
+  return null;
 }
 
 function resolvePathEnvMemoryJournalCli(): string | null {
@@ -243,7 +150,7 @@ function resolvePathEnvMemoryJournalCli(): string | null {
   if (rawPath.length === 0) return null;
   for (const rawDir of rawPath.split(path.delimiter)) {
     const dir = rawDir.trim().replace(/^"|"$/g, '');
-    if (dir.length === 0) continue;
+    if (dir.length === 0 || !path.isAbsolute(dir)) continue;
     const parent = path.dirname(dir);
     const direct = findCliInNodeModules(path.join(dir, 'node_modules'));
     if (direct !== null) return direct;
@@ -255,36 +162,52 @@ function resolvePathEnvMemoryJournalCli(): string | null {
   return null;
 }
 
+function resolveWin32PathBinary(): string | null {
+  if (process.platform !== 'win32') return null;
+  const rawPath = process.env['PATH'] ?? '';
+  if (rawPath.length === 0) return null;
+  const dirs = rawPath.split(path.delimiter).map((d) => d.trim().replace(/^"|"$/g, '')).filter((d) => d.length > 0 && path.isAbsolute(d));
+  for (const dir of dirs) {
+    for (const ext of ['.exe', '.cmd', '.bat']) {
+      const candidate = path.join(dir, `memory-journal-mcp${ext}`);
+      if (isRegularNonSymlinkFile(candidate)) return candidate;
+    }
+  }
+  return null;
+}
+
 /**
- * [INTENT]: Short-circuiting CLI resolver that avoids scanning `PATH` when `cwd`, sibling
- * `../memory-journal-mcp`, or `projectRegistry['memory-journal-mcp']` already provides `dist/cli.js`.
+ * [INTENT]: Trusted-first CLI resolver prioritizing `projectRegistry['memory-journal-mcp']` and
+ * vendored self-package roots ahead of `cwd`/sibling/global-store/absolute-`PATH` probing to block untrusted repo hijacking.
  */
 export function resolveMemoryJournalCli(
   cwd: string,
   configPath?: string
 ): { command: string; prefixArgs: string[] } {
-  const localCli = path.join(cwd, 'dist', 'cli.js');
-  if (isFile(localCli) && isMemoryJournalPackageDir(cwd)) {
-    return { command: 'node', prefixArgs: [localCli] };
-  }
-
-  const siblingMjDir = path.resolve(cwd, '..', 'memory-journal-mcp');
-  const siblingCli = path.join(siblingMjDir, 'dist', 'cli.js');
-  if (isFile(siblingCli) && isMemoryJournalPackageDir(siblingMjDir)) {
-    return { command: 'node', prefixArgs: [siblingCli] };
-  }
-
   const registryCli = resolveRegistryMemoryJournalCli(configPath);
   if (registryCli !== null) {
     return { command: 'node', prefixArgs: [registryCli] };
   }
 
-  const appData = process.env['APPDATA'];
-  if (appData !== undefined && appData.length > 0) {
-    const appDataCli = findCliInNodeModules(path.join(appData, 'npm', 'node_modules'));
-    if (appDataCli !== null) {
-      return { command: 'node', prefixArgs: [appDataCli] };
-    }
+  const selfCli = resolveSelfPackagedCli();
+  if (selfCli !== null) {
+    return { command: 'node', prefixArgs: [selfCli] };
+  }
+
+  const localCli = path.join(cwd, 'dist', 'cli.js');
+  if (isRegularNonSymlinkFile(localCli) && isMemoryJournalPackageDir(cwd)) {
+    return { command: 'node', prefixArgs: [localCli] };
+  }
+
+  const siblingMjDir = path.resolve(cwd, '..', 'memory-journal-mcp');
+  const siblingCli = path.join(siblingMjDir, 'dist', 'cli.js');
+  if (isRegularNonSymlinkFile(siblingCli) && isMemoryJournalPackageDir(siblingMjDir)) {
+    return { command: 'node', prefixArgs: [siblingCli] };
+  }
+
+  const globalCli = findCliInGlobalStores();
+  if (globalCli !== null) {
+    return { command: 'node', prefixArgs: [globalCli] };
   }
 
   const pathCli = resolvePathEnvMemoryJournalCli();
@@ -292,7 +215,30 @@ export function resolveMemoryJournalCli(
     return { command: 'node', prefixArgs: [pathCli] };
   }
 
+  const winBin = resolveWin32PathBinary();
+  if (winBin !== null) {
+    return { command: winBin, prefixArgs: [] };
+  }
+
   return { command: 'memory-journal-mcp', prefixArgs: [] };
+}
+
+function tryRealpath(p: string): string | null {
+  try {
+    return fs.realpathSync.native(p);
+  } catch {
+    return null;
+  }
+}
+
+function isContainedInRealDir(targetPath: string, baseDir: string): boolean {
+  const realBase = tryRealpath(baseDir);
+  const realTarget = tryRealpath(targetPath);
+  if (realBase === null || realTarget === null) return false;
+  const foldBase = process.platform === 'win32' ? realBase.toLowerCase() : realBase;
+  const foldTarget = process.platform === 'win32' ? realTarget.toLowerCase() : realTarget;
+  const rel = path.relative(foldBase, foldTarget);
+  return rel !== '' && rel !== '..' && !rel.startsWith(`..${path.sep}`) && !path.isAbsolute(rel);
 }
 
 export function resolveInProcessEntryModule(
@@ -306,7 +252,9 @@ export function resolveInProcessEntryModule(
     return null;
   }
   const candidate = path.join(path.dirname(cliScriptPath), 'cli', 'commands', 'entry.js');
-  return isFile(candidate) ? candidate : null;
+  return isRegularNonSymlinkFile(candidate) && isContainedInRealDir(candidate, path.dirname(cliScriptPath))
+    ? candidate
+    : null;
 }
 
 type InProcessEntryCreator = (options: {
@@ -332,10 +280,16 @@ export async function tryCreateJournalEntryInProcess(
   if (typeof process.versions['bun'] !== 'undefined') {
     return false;
   }
+  if (!isRegularNonSymlinkFile(entryModulePath)) {
+    return false;
+  }
   let mod: unknown;
   try {
     mod = await import(pathToFileURL(entryModulePath).href);
-  } catch {
+  } catch (err: unknown) {
+    console.warn(
+      `⚠️ In-process entry module load failed (${path.basename(entryModulePath)}); falling back to CLI subprocess: ${redactSensitiveText(err instanceof Error ? err.message : String(err))}`
+    );
     return false;
   }
   const createInProcess = getInProcessEntryCreator(mod);
@@ -376,27 +330,52 @@ export async function tryCreateJournalEntryInProcess(
   }
 }
 
+const CMD_META_RE = /[\s&|<>^()%!;,=\r\n]/;
+
+function buildWinCmdExeLine(command: string, cliArgs: readonly string[]): string {
+  const tokens = [command, ...cliArgs];
+  for (const raw of tokens) {
+    if (raw.includes('"') || raw.includes('\0') || raw.includes('\r') || raw.includes('\n')) {
+      throw new Error('Unsafe quote or control character in Windows CLI argument.');
+    }
+  }
+  const crtJoined = tokens.map((raw) => {
+    if (raw.length === 0) return '""';
+    if (!CMD_META_RE.test(raw)) return raw;
+    return `"${raw.replace(/(\\+)$/, '$1$1')}"`;
+  }).join(' ');
+  let cmdLine = '';
+  let inQuotes = false;
+  for (let i = 0; i < crtJoined.length; i++) {
+    const ch = crtJoined[i] ?? '';
+    if (ch === '"') { inQuotes = !inQuotes; cmdLine += ch; }
+    else if (ch === '%') { cmdLine += inQuotes ? '"^%"' : '^%'; }
+    else if (!inQuotes && /[&|<>^();!]/.test(ch)) { cmdLine += `^${ch}`; }
+    else { cmdLine += ch; }
+  }
+  return `"${cmdLine}"`;
+}
+
 export async function persistJournalEntryFile(
   journalFile: string,
   cwd: string,
   dryRunLinks?: boolean
 ): Promise<void> {
   const resolvedCli = resolveMemoryJournalCli(cwd);
-  const inProcessModule = resolveInProcessEntryModule(resolvedCli);
-  const ranInProcess =
-    inProcessModule !== null
-      ? await tryCreateJournalEntryInProcess(inProcessModule, journalFile, cwd, dryRunLinks)
-      : false;
+  const inProcessModule = typeof process.versions['bun'] === 'undefined' ? resolveInProcessEntryModule(resolvedCli) : null;
+  const ranInProcess = inProcessModule !== null ? await tryCreateJournalEntryInProcess(inProcessModule, journalFile, cwd, dryRunLinks) : false;
   if (!ranInProcess) {
-    const cliArgs = [...resolvedCli.prefixArgs, 'entry', 'create', '--file', journalFile];
-    if (dryRunLinks === true) {
-      cliArgs.push('--dry-run-links');
+    const cliArgs = [...resolvedCli.prefixArgs, 'entry', 'create', '--file', journalFile, ...(dryRunLinks === true ? ['--dry-run-links'] : [])];
+    if (process.platform === 'win32' && /\.(?:cmd|bat)$/i.test(resolvedCli.command)) {
+      const rawComSpec = process.env['ComSpec']?.trim();
+      const cmdExe = rawComSpec !== undefined && rawComSpec.length > 0 ? rawComSpec : 'cmd.exe';
+      const res = spawnSync(cmdExe, ['/d', '/v:off', '/s', '/c', buildWinCmdExeLine(resolvedCli.command, cliArgs)], {
+        stdio: 'inherit', shell: false, windowsVerbatimArguments: true, windowsHide: true, cwd,
+      });
+      if (res.error !== undefined) throw res.error;
+      if (res.status !== 0) throw new Error(`Windows batch runner exited with status ${String(res.status)}`);
+      return;
     }
-    execFileSync(resolvedCli.command, cliArgs, {
-      stdio: 'inherit',
-      shell: false,
-      windowsHide: true,
-      cwd,
-    });
+    execFileSync(resolvedCli.command, cliArgs, { stdio: 'inherit', shell: false, windowsHide: true, cwd });
   }
 }

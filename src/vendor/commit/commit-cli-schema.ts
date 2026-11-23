@@ -9,12 +9,17 @@ import {
   isValidCategory,
 } from './commit-journal.js';
 import {
+  CANONICAL_POSITIVE_INT_RE,
   VALIDATION_STATES,
   fatalError,
   getErrorMessage,
+  normalizeLineEndings,
+  parseCanonicalPositiveInt,
+  parseStrictScoreNumber,
   showHelpAndExit,
   formatZodValidationIssue,
 } from './commit-cli-help.js';
+import { hasDisallowedControlChars } from './commit-security.js';
 
 export { VALIDATION_STATES, fatalError, getErrorMessage, formatZodValidationIssue };
 
@@ -91,36 +96,15 @@ const KEYWORD_RULES: ReadonlyArray<{ type: string; re: RegExp }> = [
   { type: 'refactor', re: /^restructure(?:\s+|$)/i },
 ];
 
-const CANONICAL_POSITIVE_INT_RE = /^[1-9]\d*$/;
-const CANONICAL_DECIMAL_RE = /^-?(?:\d+(?:\.\d+)?|\.\d+)$/;
-const SPACE_CONVENTIONAL_RE = /^([A-Za-z0-9_-]+)(?:\s*\(\s*([^)]+?)\s*\))?\s*(!)?[\s:]+(.+)$/;
+const SPACE_CONVENTIONAL_RE = /^([A-Za-z0-9_-]+)(?:\s*\(\s*([^)\s][^)]*?)\s*\))?\s*(!)?[\s:]+(.+)$/;
+const EMPTY_CONVENTIONAL_SUBJECT_RE = /^[a-zA-Z0-9_-]+(?:\([^)]*\))?!?:$/;
+const SINGLE_LINE_BREAK_RE = /[\r\n]/;
+const TAG_OUTER_QUOTES_RE = /^['"]|['"]$/g;
+const BULLET_PREFIX_RE = /^-\s/;
 
-function parseCanonicalPositiveInt(val: unknown): unknown {
-  if (val === undefined) return undefined;
-  if (typeof val === 'number') {
-    return Number.isSafeInteger(val) && val >= 1 ? val : Number.NaN;
-  }
-  if (typeof val === 'string') {
-    const trimmed = val.trim();
-    if (!CANONICAL_POSITIVE_INT_RE.test(trimmed)) return Number.NaN;
-    const parsed = Number(trimmed);
-    return Number.isSafeInteger(parsed) && String(parsed) === trimmed ? parsed : Number.NaN;
-  }
-  return Number.NaN;
-}
-
-function parseStrictScoreNumber(val: unknown): unknown {
-  if (val === undefined) return undefined;
-  if (typeof val === 'number') {
-    return Number.isFinite(val) ? val : Number.NaN;
-  }
-  if (typeof val === 'string') {
-    const trimmed = val.trim();
-    if (!CANONICAL_DECIMAL_RE.test(trimmed)) return Number.NaN;
-    return Number(trimmed);
-  }
-  return Number.NaN;
-}
+const MAX_MSG_BYTES = 32_768;
+const MAX_HISTORY_BYTES = 65_536;
+const MAX_ARRAY_ITEMS = 500;
 
 function matchKeywordPrefix(firstLine: string): string {
   for (const rule of KEYWORD_RULES) {
@@ -133,15 +117,15 @@ function matchKeywordPrefix(firstLine: string): string {
   return `chore: ${firstLine}`;
 }
 
-const EMPTY_CONVENTIONAL_SUBJECT_RE = /^[a-zA-Z0-9_-]+(?:\([^)]*\))?!?:$/;
-
 function normalizeCommitMsg(val: unknown): unknown {
   if (typeof val !== 'string') return val;
-  const normalized = val.replace(/\r\n/g, '\n');
+  if (val.length > MAX_MSG_BYTES || hasDisallowedControlChars(val)) return val;
+  const normalized = normalizeLineEndings(val);
   const trimmed = normalized.trim();
   const lines = trimmed.split('\n');
   let firstLine = (lines[0] ?? '').trim();
   if (firstLine.length === 0) return '';
+  if (firstLine.length > 512) return normalized;
   if (EMPTY_CONVENTIONAL_SUBJECT_RE.test(firstLine)) return trimmed;
   let corrected = false;
 
@@ -175,6 +159,7 @@ function normalizeCommitMsg(val: unknown): unknown {
 function normalizeRelateSpecs(val: unknown): unknown {
   if (val === undefined) return undefined;
   const rawItems = Array.isArray(val) ? val : [val];
+  if (rawItems.length > MAX_ARRAY_ITEMS) return rawItems;
   const specs: unknown[] = [];
   for (const item of rawItems) {
     if (typeof item !== 'string') {
@@ -182,6 +167,10 @@ function normalizeRelateSpecs(val: unknown): unknown {
       continue;
     }
     for (const token of item.split(',')) {
+      if (specs.length >= MAX_ARRAY_ITEMS) {
+        specs.push({ targetId: Number.NaN, relationType: 'references' });
+        return specs;
+      }
       const clean = token.trim();
       if (clean.length === 0) continue;
       const colonIdx = clean.indexOf(':');
@@ -205,17 +194,24 @@ export const cliSchema = z.object({
   msg: z.preprocess(
     normalizeCommitMsg,
     z.string({ message: 'Missing Commit Message! You must provide a commit message using `--msg "..."` or as the first positional argument.' })
+      .max(MAX_MSG_BYTES, `Commit message exceeds maximum size of ${String(MAX_MSG_BYTES)} characters.`)
+      .refine((val) => !hasDisallowedControlChars(val), { message: 'Commit message contains disallowed control characters or NUL bytes.' })
       .refine((val) => val.trim().split('\n')[0].length <= 200, { message: 'Too big: expected commit subject (first line) to be <=200 characters' })
       .refine((val) => {
         const firstLine = (val.trim().split('\n')[0] ?? '').trim();
         return CONVENTIONAL_COMMIT_REGEX.test(firstLine);
       }, { message: "must follow conventional commit format (e.g., 'feat(core): subject' or 'feat!: breaking')." })
   ),
-  history: z.string().optional(),
-  'history-file': z.string().max(4096).optional(),
+  history: z.string()
+    .max(MAX_HISTORY_BYTES, `History text exceeds maximum size of ${String(MAX_HISTORY_BYTES)} characters.`)
+    .refine((val) => !hasDisallowedControlChars(val), { message: 'History text contains disallowed control characters or NUL bytes.' })
+    .transform((val) => normalizeLineEndings(val))
+    .optional(),
+  'history-file': z.string().trim().min(1, 'File path for --history-file cannot be empty.').max(4096).optional(),
   'no-history': z.boolean().default(false),
   help: z.boolean().default(false),
   impact: z.preprocess(parseStrictScoreNumber, z.number().min(0.0).max(1.0)),
+  // [INTENT]: Kept in cliSchema for usability SSoT extraction parity (`verify-ssot.ts`); runtime CLI normalizes `--trust` to `--confidence` before parsing.
   trust: z.preprocess(parseStrictScoreNumber, z.number().min(0.0).max(1.0)).optional(),
   confidence: z.preprocess(parseStrictScoreNumber, z.number().min(0.0).max(1.0)),
   validation: z.preprocess((val) => {
@@ -238,8 +234,8 @@ export const cliSchema = z.object({
     return val;
   }, z.enum(VALIDATION_STATES)),
   significance: z.string().trim().min(1, 'Significance cannot be empty.').max(100).refine(
-    (s) => !/[\r\n]/.test(s),
-    { message: 'Significance must be a single-line value without newlines.' }
+    (s) => !SINGLE_LINE_BREAK_RE.test(s) && !hasDisallowedControlChars(s),
+    { message: 'Significance must be a single-line value without newlines or control characters.' }
   ).optional(),
   category: z.preprocess(
     (val) => {
@@ -262,37 +258,50 @@ export const cliSchema = z.object({
     z.string().max(4096).refine((s) => s.trim().length > 0, {
       message: 'File path for --add cannot be empty.',
     })
-  ).optional(),
+  ).max(MAX_ARRAY_ITEMS, `Too many --add paths (max ${String(MAX_ARRAY_ITEMS)}).`).optional(),
   journal: z.boolean().default(false),
   'journal-project': z.preprocess(
     parseCanonicalPositiveInt,
     z.number().int().positive().refine((n) => Number.isSafeInteger(n), { message: 'Project number must be a safe positive integer.' }).optional()
   ),
-  'session-id': z.string().trim().min(1).max(256).optional(),
+  'session-id': z.string().trim().min(1).max(256).refine(
+    (s) => !SINGLE_LINE_BREAK_RE.test(s) && !hasDisallowedControlChars(s),
+    { message: 'Session ID must not contain newlines or control characters.' }
+  ).optional(),
   tags: z.preprocess((val) => {
     if (val === undefined) return undefined;
     const rawItems = Array.isArray(val) ? val : [val];
+    if (rawItems.length > MAX_ARRAY_ITEMS) return rawItems;
     const normalized: unknown[] = [];
     for (const item of rawItems) {
       if (typeof item !== 'string') {
         normalized.push(item);
+        if (normalized.length > MAX_ARRAY_ITEMS) return normalized;
         continue;
       }
       const trimmed = item.trim();
       const inner = trimmed.startsWith('[') && trimmed.endsWith(']') ? trimmed.slice(1, -1) : trimmed;
       for (const token of inner.split(',')) {
-        const clean = token.trim().replace(/^['"]|['"]$/g, '').trim();
-        if (clean.length > 0) normalized.push(clean);
+        const clean = token.trim().replace(TAG_OUTER_QUOTES_RE, '').trim();
+        if (clean.length > 0) {
+          normalized.push(clean);
+          if (normalized.length > MAX_ARRAY_ITEMS) return normalized;
+        }
       }
     }
     return normalized;
-  }, z.array(z.string().min(1).max(128)).min(1, 'At least one non-empty tag is required for --tags.').optional()),
+  }, z.array(
+    z.string().min(1).max(128).refine(
+      (s) => !SINGLE_LINE_BREAK_RE.test(s) && !hasDisallowedControlChars(s),
+      { message: 'Tags must not contain newlines or control characters.' }
+    )
+  ).min(1, 'At least one non-empty tag is required for --tags.').max(MAX_ARRAY_ITEMS, `Too many --tags entries (max ${String(MAX_ARRAY_ITEMS)}).`).optional()),
   relate: z.preprocess(
     normalizeRelateSpecs,
     z.array(z.object({
       targetId: z.number().int().positive().refine((n) => Number.isSafeInteger(n), { message: 'Entry ID must be a safe positive integer.' }),
       relationType: z.enum(CANONICAL_RELATION_TYPES),
-    })).min(1, 'At least one valid entry ID is required for --relate.').optional()
+    })).min(1, 'At least one valid entry ID is required for --relate.').max(MAX_ARRAY_ITEMS, `Too many --relate specs (max ${String(MAX_ARRAY_ITEMS)}).`).optional()
   ),
   'no-auto-link': z.boolean().default(false),
   'dry-run-links': z.boolean().default(false),
@@ -307,14 +316,29 @@ export const cliSchema = z.object({
 export type CliArgs = z.infer<typeof cliSchema>;
 
 function normalizeNegativeAndBulletArgs(rawArgs: string[]): void {
-  for (let i = 0; i < rawArgs.length - 1; i++) {
+  for (let i = 0; i < rawArgs.length; i++) {
     const currentArg = rawArgs[i];
-    if (currentArg === '--') {
+    if (currentArg === undefined || currentArg === '--') {
       break;
     }
     const nextArg = rawArgs[i + 1];
+    if (currentArg === '--history') {
+      const nextFlagName = nextArg !== undefined && nextArg.startsWith('--')
+        ? (nextArg.slice(2).split('=')[0] ?? '')
+        : '';
+      const isNextKnownFlag = nextArg === '--' || nextArg === '-m' || (nextFlagName.length > 0 && Object.hasOwn(CLI_OPTIONS, nextFlagName));
+      if (nextArg === undefined || isNextKnownFlag) {
+        console.warn("⚠️ AUTONOMOUS HEALING: Bare '--history' passed without text; ignoring bare flag (pass '--history \"summary\"' or '--no-history').");
+        rawArgs.splice(i, 1);
+        i--;
+        continue;
+      }
+    }
+    if (nextArg === undefined) {
+      continue;
+    }
     const isNegativeNumericValue = nextArg.startsWith('-') && !Number.isNaN(Number(nextArg));
-    if (currentArg === '-m' && (/^-\s/.test(nextArg) || isNegativeNumericValue)) {
+    if (currentArg === '-m' && (BULLET_PREFIX_RE.test(nextArg) || isNegativeNumericValue)) {
       rawArgs[i] = `--msg=${nextArg}`;
       rawArgs.splice(i + 1, 1);
       continue;
@@ -324,7 +348,7 @@ function normalizeNegativeAndBulletArgs(rawArgs: string[]): void {
     }
     const isMarkdownBulletHistoryOrMsg =
       (currentArg === '--history' || currentArg === '--msg' || currentArg === '--message') &&
-      /^-\s/.test(nextArg);
+      BULLET_PREFIX_RE.test(nextArg);
     const isNegForStringFlag = isNegativeNumericValue && STRING_CLI_FLAGS.has(currentArg.slice(2));
     if (isNegForStringFlag || isMarkdownBulletHistoryOrMsg) {
       rawArgs[i] = `${currentArg}=${nextArg}`;

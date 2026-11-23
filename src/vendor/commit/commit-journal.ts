@@ -1,9 +1,6 @@
 // @ts-nocheck
 import { execFileSync } from 'node:child_process';
-import crypto from 'node:crypto';
 import fs from 'node:fs';
-import os from 'node:os';
-import path from 'node:path';
 import {
   normalizeRegistryPath,
   persistJournalEntryFile,
@@ -13,6 +10,7 @@ import {
   tryCreateJournalEntryInProcess,
   type NormalizedRegistryEntry,
 } from './commit-journal-bridge.js';
+import { cleanupPrivateTempDir, createPrivateTempFile, redactSensitiveText } from './commit-security.js';
 
 export {
   resolveInProcessEntryModule,
@@ -108,6 +106,12 @@ function findWorkspaceByProjectNumber(
   return undefined;
 }
 
+const BOM_RE = /^\uFEFF/;
+const CRLF_RE = /\r\n/g;
+const CR_RE = /\r/g;
+const LINE_BREAK_RE = /[\r\n]/g;
+const COMMIT_SHA_RE = /^[0-9a-f]{7,40}$/i;
+
 // [INTENT]: Resolves deterministic workspace_id and project_number from memory-journal.config.json projectRegistry so commit.ts --journal never falls back to keyword-alias matching.
 export function resolveJournalTarget(
   cwd: string,
@@ -128,6 +132,13 @@ export function resolveJournalTarget(
   if (explicitProjectNumber !== undefined) {
     if (bestPathMatch !== undefined && bestPathMatch.projectNumber === explicitProjectNumber) {
       result.workspaceId = bestPathMatch.workspaceId;
+    } else if (bestPathMatch !== undefined) {
+      const registeredLabel = bestPathMatch.projectNumber !== undefined
+        ? `#${String(bestPathMatch.projectNumber)}`
+        : 'unassigned project';
+      console.warn(
+        `⚠️ AUTONOMOUS HEALING: --journal-project ${String(explicitProjectNumber)} conflicts with registered workspace '${bestPathMatch.workspaceId}' (${registeredLabel}). Keeping workspace_id unset for fail-closed handling.`
+      );
     } else {
       result.workspaceId = findWorkspaceByProjectNumber(entries, explicitProjectNumber);
     }
@@ -142,7 +153,7 @@ export function resolveJournalTarget(
 }
 
 export function parseCategory(history: string, type: string): { category: string; entry: string } {
-  const cleanHistory = history.replace(/^\uFEFF/, '').replace(/\r\n/g, '\n');
+  const cleanHistory = history.replace(BOM_RE, '').replace(CRLF_RE, '\n').replace(CR_RE, '\n');
   const categoryMatch = cleanHistory.match(HISTORY_CATEGORY_REGEX);
 
   if (categoryMatch !== null) {
@@ -184,7 +195,9 @@ export function generateHistoryEntry(
 
   if (entry.length > 0) {
     entry = entry
-      .replace(/\r\n/g, '\n')
+      .replace(/\0/g, '')
+      .replace(CRLF_RE, '\n')
+      .replace(CR_RE, '\n')
       .split('\n')
       .map(line => line.trim() === '' ? '\u200B' : line)
       .join('\n')
@@ -198,7 +211,10 @@ export function generateHistoryEntry(
   }
 
   if (args.significance !== undefined && args.significance.length > 0) {
-    body += `\nHistory-Significance: ${args.significance}`;
+    const safeSig = args.significance.replace(/\0/g, '').replace(LINE_BREAK_RE, ' ').trim();
+    if (safeSig.length > 0) {
+      body += `\nHistory-Significance: ${safeSig}`;
+    }
   }
   body += `\nHistory-Impact: ${args.impact}`;
   body += `\nHistory-Confidence: ${args.confidence}`;
@@ -221,7 +237,7 @@ export function generateHistoryEntry(
 }
 
 export function extractCommittedFiles(sha: string, cwd: string, limit = 25): string[] {
-  if (!/^[0-9a-f]{7,40}$/i.test(sha) || fs.statSync(cwd, { throwIfNoEntry: false }) === undefined) {
+  if (!COMMIT_SHA_RE.test(sha) || fs.statSync(cwd, { throwIfNoEntry: false }) === undefined) {
     return [];
   }
   try {
@@ -235,7 +251,8 @@ export function extractCommittedFiles(sha: string, cwd: string, limit = 25): str
       .map((line) => line.trim())
       .filter((line) => line.length > 0)
       .slice(0, limit);
-  } catch {
+  } catch (err: unknown) {
+    console.warn(`⚠️ Failed to extract committed files for ${sha.slice(0, 7)}: ${redactSensitiveText(err instanceof Error ? err.message : String(err))}`);
     return [];
   }
 }
@@ -283,7 +300,7 @@ export function buildCommitJournalContent(
 
   frontmatterLines.push(`impact: ${args.impact}`);
   frontmatterLines.push(`trust: ${args.confidence}`);
-  frontmatterLines.push(`validation_status: "${args.validation}"`);
+  frontmatterLines.push(`validation_status: ${JSON.stringify(args.validation)}`);
   if (args['no-auto-link'] !== true) {
     frontmatterLines.push('auto_link: true');
   }
@@ -303,8 +320,8 @@ export async function createJournalEntry(
   args: CommitJournalArgs,
   historyContent: string,
   cwd: string,
-  registerTempFile: (filepath: string) => void,
-  cleanupTempFile: (filepath: string) => void,
+  _registerTempFile: (filepath: string) => void,
+  _cleanupTempFile: (filepath: string) => void,
   formatError: (error: unknown) => string,
   committedFiles?: readonly string[],
   resolvedTarget?: ResolvedJournalTarget
@@ -336,14 +353,16 @@ export async function createJournalEntry(
       committedFiles,
       resolvedTarget
     );
-    const journalFile = path.join(os.tmpdir(), `${JOURNAL_PREFIX}${sha.slice(0, 12)}-${crypto.randomUUID()}.md`);
-    registerTempFile(journalFile);
-    fs.writeFileSync(journalFile, journalContent, { mode: 0o600 });
+    const { dirPath: journalDir, filePath: journalFile } = createPrivateTempFile(
+      JOURNAL_PREFIX,
+      `${sha.slice(0, 12)}.md`,
+      journalContent
+    );
 
     try {
       await persistJournalEntryFile(journalFile, cwd, args['dry-run-links']);
     } finally {
-      cleanupTempFile(journalFile);
+      cleanupPrivateTempDir(journalDir);
     }
   } catch (e: unknown) {
     console.error(`\n⚠️ Failed to create journal entry: ${formatError(e)}`);
