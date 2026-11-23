@@ -35,7 +35,7 @@
 | **Knowledge & Search** | Find entries instantly using hybrid search and visualize relationships with Mermaid graphs. Auto-prune low-value entries to maintain search relevance. |
 | **Code Mode** | Execute multi-step operations efficiently in a secure sandbox to drastically reduce token usage. |
 | **Team Collaboration** | Share databases across teams with cross-project insights and role-based access control. |
-| **Multi-Tenant Workspaces** | Isolate project journals on a single SQLite database via `workspace_id`, with automatic resolution from `PROJECT_REGISTRY`, tags, or working directory. |
+| **Multi-Tenant Workspaces** | Isolate project journals on a single SQLite database via `workspace_id`, with automatic resolution from `PROJECT_REGISTRY` or working directory. |
 | **Data & Architecture** | Export schemas safely, sync Markdown directories, secure data with encryption and automated backups, and handle errors effectively. |
 | **Agent Collaboration** | Share context between agents, suggest reusable rules, and automate tasks like issue triage and PR reviews. |
 
@@ -232,7 +232,7 @@ Add this to your `~/.cursor/mcp.json`, Claude Desktop config, or equivalent:
 
 ### 📋 Customizing the Session Briefing
 
-The `memory://briefing` resource is dynamically assembled at each session start, automatically providing ambient context like test health, workspace paths, unreleased changes, and git status. Control what your agent sees by tuning three dimensions via environment variables:
+The `memory://briefing` resource is dynamically assembled at session start with live Git/CI status, tracking, journal previews, 14-day graph pivots, and recent commits. Tune three dimensions via environment variables:
 
 - **Focus** — `MEMORY_JOURNAL_MCP_TOOL_FILTER` (CLI: `--tool-filter`, config file key: `"toolFilter"`): `full` (default), `starter`, `essential`, `readonly`, or `codemode`
 - **Journal Content** — `BRIEFING_ENTRY_COUNT`, `BRIEFING_SUMMARY_COUNT`, `BRIEFING_COMMIT_COUNT`, `BRIEFING_IMPORTANCE_THRESHOLD`, `BRIEFING_INCLUDE_TEAM`, `BRIEFING_GRAPH`, `BRIEFING_INSIGHTS`

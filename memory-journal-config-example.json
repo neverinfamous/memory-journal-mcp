@@ -42,6 +42,7 @@
   "briefingWorkflowStatus": false,
   "briefingCopilot": false,
   "briefingGraph": true,
+  "briefingInsights": true,
   "rulesFile": "/path/to/AGENTS.md",
   "skillsDir": "/path/to/skills",
   "workflowSummary": "/bump-deploy: version bump + PR deploy | /update-deps: dependency + CVE updates",

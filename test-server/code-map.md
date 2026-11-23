@@ -185,8 +185,8 @@ src/
 │   ├── core/
 │   │   ├── interfaces.ts                 # IDatabaseAdapter interface (database contract)
 │   │   └── DatabaseAdapterProxy.ts       # Adapter instrumentation/scoping proxy
-│   ├── migrations/                       # Versioned database migrations (001-016)
-│   │   ├── 001-init.ts ... 016-fts-soft-delete-triggers.ts
+│   ├── migrations/                       # Versioned database migrations (001-022)
+│   │   ├── 001-init.ts ... 022-add-autocontext-index.ts
 │   │   ├── migration.ts                  # Migration interface contract
 │   │   ├── migration-list.ts             # Sequential migration chain array registry
 │   │   └── migration-manager.ts          # Transactional runner & self-healing legacy retrofitting
@@ -415,9 +415,11 @@ src/
     ├── resources/                        # Resource handlers
     │   ├── index.ts                      # Resource registration barrel
     │   ├── shared.ts                     # Shared resource helpers (formatters, entry rendering, BriefingConfig)
+    │   ├── fencing-helpers.ts            # Shared cell/link escaping, identifier sanitization, list fencing
     │   ├── staleness.ts                  # Staleness detection resources (memory://staleness)
     │   ├── github.ts                     # GitHub static resources (status, milestones)
     │   ├── graph.ts                      # Graph resources (recent relationships, actions narrative)
+    │   ├── graph-neighborhood.ts         # 14-day graph neighborhood Markdown builder (memory://graph/{+repo})
     │   ├── insights.ts                   # Insights resources (digest, team-collaboration)
     │   ├── team.ts                       # Team resources (recent, statistics)
     │   ├── help.ts                       # Dynamic help resources (memory://help, memory://help/{group}) with codemode rewriting
@@ -433,13 +435,18 @@ src/
     │       ├── utilities.ts              # memory://recent, memory://significant, memory://rules, memory://workflows, memory://skills
     │       └── briefing/
     │           ├── index.ts              # memory://briefing resource (assembles sections)
+    │           ├── scope-resolver.ts     # Workspace, project & repo scope resolution for briefing
     │           ├── context-section.ts    # Journal context section (entry count, recent entries)
-    │           ├── system-section.ts     # System section (server config, registry, workspace context)
+    │           ├── preview-helpers.ts    # Entry preview extraction & path redaction helpers
+    │           ├── graph-pivots-section.ts # Cross-source graph pivots & mixed-preset tool hints
+    │           ├── graph-lines.ts        # Graph row formatter (hubs, recency-weighted active threads, 14d linkage)
+    │           ├── system-section.ts     # System section (server config, registry, workspace context, git history)
+    │           ├── system-section-helpers.ts # Git history log parsing & unreleased commit helpers
     │           ├── insights-section.ts   # Insights section (digest summary, orphan stats, graph hubs)
     │           ├── github-section.ts     # GitHub context section (repo, CI, issues, PRs, milestones)
     │           ├── github-section-settle.ts # Bounded async settlement helpers for GitHub briefing data
     │           ├── github-repo-and-kanban.ts # Repo & Kanban board briefing section builders
-    │           ├── user-message.ts       # User message section (rules, skills awareness)
+    │           ├── user-message.ts       # User message Markdown table assembler
     │           └── user-message-sections.ts # Sub-section formatters for user briefing message
     │
     └── prompts/                          # Prompt handlers
@@ -521,7 +528,7 @@ Each file below registers tools with `group` labels. The `index.ts` barrel compo
 | `memory://actions/recent/{+repo}` | Recent Actions (Dynamic) |
 | `memory://agent-context` | Agent Context (alias) |
 | `memory://agent-context/{+repo}` | Agent Context |
-| `memory://agent-id` | Agent Context (alias) |
+| `memory://agent-id` | Agent ID (alias) |
 | `memory://agent-id/{+repo}` | Agent ID Context (alias) |
 | `memory://audit` | Audit Log |
 | `memory://briefing` | Initial Briefing |
@@ -579,15 +586,20 @@ The `memory://briefing` resource is modular — each section is a separate file:
 
 | File                         | Section                                                                                              |
 | ---------------------------- | ---------------------------------------------------------------------------------------------------- |
-| `index.ts`                   | Assembles all sections, respects instruction level                                                   |
-| `context-section.ts`         | Journal context (entry count, recent entries, team DB)                                               |
-| `insights-section.ts`        | Insights section (digest summary, orphan stats, graph hubs)                                          |
-| `github-section.ts`          | GitHub context (repo, CI, issues, PRs, milestones)                                                   |
+| `index.ts`                   | Assembles all sections, coordinates concurrent fetches and graceful degradation                      |
+| `scope-resolver.ts`          | Workspace/project/repo scope resolution, `?pin_session=false`, fail-closed unresolved handling       |
+| `context-section.ts`         | Journal context (entry count, recent entries, summaries, importance filtering, team DB)              |
+| `preview-helpers.ts`         | Entry preview extraction, path redaction, and safe truncation helpers                                |
+| `graph-pivots-section.ts`    | Cross-source graph pivots (degrees, active threads, commit refs) and mixed-preset tool hints         |
+| `graph-lines.ts`             | Graph row formatter (total links, hubs, recency-weighted active threads, 14d linkage)                |
+| `insights-section.ts`        | Insights section (digest summary, orphan stats, graph hubs, LRU live digest cache)                   |
+| `github-section.ts`          | GitHub context (repo, CI, issues, PRs, milestones, Copilot reviews)                                  |
 | `github-section-settle.ts`   | Bounded async settlement helpers for GitHub briefing calls                                           |
 | `github-repo-and-kanban.ts`  | Repository info & Kanban board section builders                                                      |
-| `user-message.ts`            | User message (rules file, skills directory awareness)                                                |
+| `user-message.ts`            | User message Markdown table assembler                                                                |
 | `user-message-sections.ts`   | Sub-section formatters for user briefing messages                                                    |
-| `system-section.ts`          | System context (version, tool/resource/prompt counts, test health, unreleased summary, localTime)    |
+| `system-section.ts`          | System context (version, tool/resource/prompt counts, git history, LRU caches)                       |
+| `system-section-helpers.ts`  | Git history log parsing & unreleased commit helpers                                                  |
 
 ---
 
@@ -603,6 +615,7 @@ The `memory://briefing` resource is modular — each section is a separate file:
 | `adversarial-audit-seo` | Adversarial SEO audit (technical, semantic HTML, ARIA, structured data, Core Web... |
 | `adversarial-audit-skill` | Multi-pass adversarial skill audit (research, evaluate triggers, stress-test) Op... |
 | `adversarial-audit-workflow` | Multi-pass adversarial workflow audit (clarity, safety gates, loop prevention) O... |
+| `adversarial-build-skill` | Adversarial skill authoring and trigger-tuning workflow (frontmatter, progressiv... |
 | `adversarial-plan-review` | Bootstrap an adversarial planning workflow with structured review dimensions, sc... |
 | `cms-rem-supervisor` | REM Meta-Cognitive Supervisor & Self-Adaptation workflow (CMS-04). Audits recent... |
 | `code-review-prep` | Prepare a code review checklist and focus areas for a PR |
@@ -668,7 +681,7 @@ catch (error) {
 
 | What                               | Where                                  | Notes                                                                                                                                                                                                                                                                    |
 | ---------------------------------- | -------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Server instructions (agent prompt) | `src/constants/server-instructions.ts` | Filter-aware composable segments; `HELP_CONTENT` map + `generateInstructions()` (`essential`, `standard`, `full`, optional `enabledGroups`)                                                                                                                              |
+| Server instructions (agent prompt) | `src/constants/server-instructions.ts` | Filter-aware composable segments; `HELP_CONTENT` map + `generateStandardInstructions()` (`essential`, `detailed`, `full`, optional `enabledGroups`)                                                                                                                      |
 | Tool filter logic                  | `src/filtering/tool-filter.ts`         | `ToolFilter` class — shortcuts, groups, tool-level whitelist/blacklist + `getEnabledGroups()` for instruction section gating                                                                                                                                             |
 | Tool group icon mapping            | `src/constants/icons.ts`               | CDN SVG URLs per tool group (used in `tools/list` responses)                                                                                                                                                                                                             |
 | Resource annotation presets        | `src/utils/resource-annotations.ts`    | Centralized presets (`HIGH_PRIORITY`, `MEDIUM_PRIORITY`, `LOW_PRIORITY`, `ASSISTANT_FOCUSED`) + helpers (`withPriority`, `withAutoRead`, `withSessionInit`)                                                                                                              |
@@ -729,13 +742,13 @@ Every tool has **two** schemas — one relaxed (SDK-facing) and one strict (hand
 
 1. **SDK-facing `inputSchema`**: Every field MUST be `.optional()`. NO `.min(1)`, NO bare `z.string()` or `z.number()` without `.optional()`. NO `z.literal(true)` without `.optional()`.
 2. **Handler-internal schema** (inside `try`): Use full strict validation — `.min(1)`, required fields, `.literal(true)`, etc. Errors are caught by `formatHandlerError()`.
-3. **`mcp-server.ts` also applies `.partial().passthrough()`** at registration time as a safety net, but this does NOT remove `.min()` constraints — it only makes fields optional.
+3. **Registration also applies `.partial().loose()`** at registration time as a safety net, but this does NOT remove `.min()` constraints — it only makes fields optional.
 4. **When adding a new tool**: Follow this pattern. If the E2E zod-sweep test fails, the fix is in your `inputSchema`, not the client.
 
 ### What NOT To Do
 
 - ❌ **Do NOT blame AntiGravity or the MCP client** — the client sends what the schema allows. If validation fails at the SDK level, it's our schema's fault.
-- ❌ **Do NOT add `.partial()` or `.passthrough()` to fix individual tools** — the registration layer already handles this. Fix the `inputSchema` field definitions instead.
+- ❌ **Do NOT add `.partial()` or `.loose()` to fix individual tools** — the registration layer already handles this. Fix the `inputSchema` field definitions instead.
 - ❌ **Do NOT use `z.string().min(1)` in `inputSchema`** — empty string `""` will trigger SDK-level rejection before your handler runs.
 - ❌ **Do NOT assume esbuild tree-shaking removed your code** — if a `-32602` occurs, check the actual schema definition first.
 - ❌ **Do NOT revert test assertions** from `not.toContain('-32602')` to `toContain('-32602')` — the test is correct; fix the schema.

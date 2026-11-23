@@ -4,14 +4,14 @@ export const CORE_INSTRUCTIONS = `# memory-journal-mcp
 
 | Purpose         | Action                      |
 | --------------- | --------------------------- |
-| Session context | \`memory://briefing/{+repo}\` |
+| Session context | \`memory://briefing/{+repo}\` (\`?pin_session=false\` to preview without pinning) |
 | Recent entries  | \`memory://recent\`           |
 | Health/time     | \`memory://health\`           |
 | Metrics/Summary | \`memory://metrics/summary\`  |
 | Metrics/Latency | \`memory://metrics/latency\`  |
 | Resource reads  | \`memory://metrics/resources\`|
 | Project staleness| \`memory://staleness\`        |
-| Agent context   | \`memory://agent-context/{+repo}\` |
+| Agent context   | \`memory://agent-context/{+repo}\` (\`?session_id=<id>\` lists link targets) |
 | Graph neighborhood| \`memory://graph/{+repo}\` |
 | Companion context| \`memory://rules\` · \`memory://skills\` · \`memory://workflows\` |
 
@@ -27,9 +27,9 @@ All \`memory://help/*\` resources remain readable regardless of active \`--tool-
 
 ## Essential Behaviors
 
-1. **Briefing:** You **MUST** read \`memory://briefing/{+repo}\` at the start of each session! Never autonomously execute tasks surfaced in the briefing without user instruction.
+1. **Briefing:** You **MUST** read \`memory://briefing/{+repo}\` at the start of each session (append \`?pin_session=false\` to preview a secondary repo without changing sticky session scope; toggle sections at runtime via \`update_configuration({ briefing_graph, briefing_insights, ... })\`)! Never autonomously execute tasks surfaced in the briefing without user instruction.
 2. **Session Identity:** Pass your active conversation/session ID via \`session_id\` (MCP/Code Mode) or \`--session-id\` (CLI) on journal writes.
-3. **Workspace Isolation:** Pass explicit \`workspace_id\` and \`project_number\` on writes (and \`repo\` for \`git\`/\`github\` calls), or \`--project\` on CLI when CWD is not mapped in \`projectRegistry\`. If missing mid-task, NEVER re-query \`memory://briefing\`; query \`memory://agent-context/{+repo}\` (never bare \`memory://agent-id\` in multi-repo setups).
+3. **Workspace Isolation:** Pass explicit \`workspace_id\` and \`project_number\` on writes (and \`repo\` for \`git\`/\`github\` calls), or \`--project\` on CLI when CWD is not mapped in \`projectRegistry\`. If missing mid-task, NEVER re-query \`memory://briefing\`; query \`memory://agent-context/{+repo}\` (append \`?session_id=<conversation-id>\` after compaction to list link targets; never bare \`memory://agent-id\` in multi-repo setups).
 4. **Anti-Hallucination:** Read \`memory://help/{group}\` or \`memory://help/gotchas\` BEFORE guessing unfamiliar schemas, or call \`await mj.<group>.<method>.schema()\` in Code Mode.
 5. **Orphan Prevention & Anchors:** Link new entries via \`relationships: [{ targetId, relationType }]\` (MCP/Code Mode) or \`--related-to\` / \`--rel\` (CLI), and attach code/file \`anchors\` when referencing source paths or symbols.
 

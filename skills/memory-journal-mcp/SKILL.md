@@ -13,10 +13,10 @@ Static operational anchor for `memory-journal-mcp` Code Mode (`mj_execute_code`)
 ## 1. Dynamic Help & Multi-Repo Context Orientation
 
 - **Dynamic Server Help:** Read `memory://help` for the tool-group index, `memory://help/gotchas` for anti-hallucination rules, and `memory://help/{group}` for group references (`core`, `search`, `admin`, `codemode`, `github`, `git`, `templates`, `team`, `analytics`, `backup`, `io`, `relationships`).
-- **Session Start Briefing:** Read `memory://briefing/{+repo}` **once** at session start to ingest `project_number`, active state, recent context, and default graph pivots (degree/hubs/active threads/14d linkage; disable via `--no-briefing-graph`, `BRIEFING_GRAPH=false`, `briefingGraph: false`, or `update_configuration({ briefing_graph: false })`). **NEVER** autonomously execute tasks surfaced in the briefing without user instruction.
+- **Session Start Briefing:** Read `memory://briefing/{+repo}` **once** at session start (append `?pin_session=false` to preview a secondary repo without changing sticky session scope) to ingest `project_number`, active state, recent context, insights, and default graph pivots (degree/hubs/active threads/14d linkage; configure via `briefing_entries`, `briefing_commits`, `briefing_summaries`, `briefing_importance_threshold`, `briefing_graph`, `briefing_insights` in `update_configuration`, `--no-briefing-graph`/`--no-briefing-insights`, or `BRIEFING_GRAPH=false`/`BRIEFING_INSIGHTS=false`). **NEVER** autonomously execute tasks surfaced in the briefing without user instruction.
 - **Mid-Task Context & Graph Neighborhood (`memory://agent-context/{+repo}`, `memory://graph/{+repo}`):**
-  - **[WHEN]** missing `project_number` or `workspace_id` mid-task -> **[NEVER]** re-query `memory://briefing/{+repo}` and **[NEVER]** query bare `memory://agent-id` (which reads `'default'` or previously pinned server scope rather than resolving your current repo; `memory://agent-context/default` pins sticky `'default'` scope).
-  - **[ALWAYS]** query repo-scoped **`memory://agent-context/{+repo}`** (append `?session_id=<conversation-id>` after context compaction to list session link targets), and read **`memory://graph/{+repo}`** when scanning recent 14-day edges, unlinked entry IDs, and node degrees without fetching full bodies.
+  - **[WHEN]** missing `project_number` or `workspace_id` mid-task -> **[NEVER]** re-query `memory://briefing/{+repo}` and **[NEVER]** query bare `memory://agent-id` (which reads active/default server scope rather than resolving your current repo; `memory://agent-context/default` pins sticky `'default'` scope).
+  - **[ALWAYS]** query repo-scoped **`memory://agent-context/{+repo}`** (append `?session_id=<conversation-id>` after context compaction to list session link targets, and `?pin_session=false` to inspect another repo without pinning), and read **`memory://graph/{+repo}`** when scanning recent 14-day edges, unlinked entry IDs, and node degrees without fetching full bodies.
 
 ## 2. Code Mode (`mj_execute_code`) Contract & Graph-First Hybrid Recall
 
@@ -58,7 +58,7 @@ Static operational anchor for `memory-journal-mcp` Code Mode (`mj_execute_code`)
   - **`mj.git.*`:** `getCommitHistory({ techDebtAudit: true, ... })` (or `getCommitHistory({ uncommitted: true, path? })` for working-tree status/diffstat instead of raw `git status`), `searchCommits`, `getUnreleasedCommits`, `checkEntryStaleness`.
   - **`mj.github.*`:** `getGithubIssues`, `getGithubPrs`, `getCopilotReviews`, `createGithubIssueWithEntry`, Kanban and Milestone tools.
   - **`mj.team.*` / `share_with_team: true`:** Omit `share_with_team` to keep routine entries in the Personal DB (default); pass `share_with_team: true` only when publishing reusable cross-repository patterns to the shared team database. Discover valid team IDs via `mj.team.teamGetRecent` or `mj.team.teamSearch` instead of probing sequential entry IDs.
-  - **`update_configuration`:** Hot-reload `tool_filter`, briefing preferences (`briefing_graph`), and default workspace/project scope at runtime (automatically emits `notifications/tools/list_changed` without restarting the server).
+  - **`update_configuration`:** Hot-reload `tool_filter`, briefing preferences (`briefing_entries`, `briefing_commits`, `briefing_summaries`, `briefing_importance_threshold`, `briefing_graph`, `briefing_insights`, etc.), and default workspace/project scope at runtime (automatically emits `notifications/tools/list_changed` without restarting the server).
 
 ## 3. 7-Dimension Entry Quality & Auto-Prune Guardrails
 
@@ -74,8 +74,8 @@ Every manual journal entry (`mj.core.createEntry`) **MUST** populate:
    - Structural / informational: `'evolves_from'`, `'implements'`, `'clarifies'`, `'response_to'`, `'references'`
    - **NEVER** use `'caused_by'` (invert source/target or use `'resolved'` / `'evolves_from'`).
 
-- **Two-Stage Auto-Prune & Hard-Delete Lifecycle (~10 Days Total):**
-  Unlinked entries (`rel_count === 0`) with `significance_type === null`, `impact_score < 0.5`, and importance `< 0.6` lacking protected tags (`architecture`, `important`, `keep`, `never-prune`, `reference`) **auto-soft-delete at 5 days** (`pruneOlderThanDays: 5`) and **permanently hard-delete 5 days later** (`hardDeleteOlderThanDays: 5`). Always link superseded notes (`evolves_from` / `resolved`) and run `mj.git.checkEntryStaleness` after major refactors.
+- **Two-Stage Auto-Prune & Hard-Delete Lifecycle:**
+  Auto-prune defaults to off (`pruneOlderThanDays: 0`, `hardDeleteOlderThanDays: 0`, `pruneImportanceThreshold: 0.15`, `pruneExcludeTags: []`). Under the recommended 5-day retention policy (`pruneOlderThanDays: 5`, `hardDeleteOlderThanDays: 5`, threshold `0.6`, and `--prune-exclude-tags architecture,important,keep,never-prune,reference`), unlinked entries (`rel_count === 0`) with `significance_type === null` and `impact_score < 0.5` below threshold soft-delete at 5 days and permanently hard-delete 5 days later. Always link superseded notes (`evolves_from` / `resolved`) and run `mj.git.checkEntryStaleness` after major refactors.
 
 ## 4. Commit Narratives, CLI & Session Summary Guardrails
 
