@@ -1,8 +1,10 @@
 /**
  * Payload Contract Tests: Team Isolation
  *
- * Validates that Team DB mutation tools strictly enforce project_number
- * parameter to prevent cross-tenant data leakage, while read/search tools remain permissive.
+ * Validates that Team DB search tools strictly enforce project_number
+ * on global (`workspace_id: '*'`) and unregistered-workspace queries
+ * to prevent cross-tenant data leakage (even when the server configures
+ * DEFAULT_PROJECT_NUMBER and a registered `default` workspace).
  */
 
 import { test, expect } from './test-fixture.js'
@@ -25,6 +27,7 @@ test.describe('Payload Contracts: Team Isolation', () => {
     test('team_search MUST return validation error without project_number for global search', async () => {
         const payload = await callToolAndParse(client, 'team_search', {
             query: 'test',
+            workspace_id: '*',
         })
 
         expect(payload.success).toBe(false)
@@ -35,11 +38,31 @@ test.describe('Payload Contracts: Team Isolation', () => {
         const payload = await callToolAndParse(client, 'team_search_by_date_range', {
             start_date: '2020-01-01',
             end_date: '2030-12-31',
+            workspace_id: '*',
         })
 
         expect(payload.success).toBe(false)
         expect(payload.code).toBe('VALIDATION_ERROR')
     })
 
+    test('team_search MUST return validation error without project_number for unregistered workspace', async () => {
+        const payload = await callToolAndParse(client, 'team_search', {
+            query: 'test',
+            workspace_id: 'unregistered-tenant',
+        })
 
+        expect(payload.success).toBe(false)
+        expect(payload.code).toBe('VALIDATION_ERROR')
+    })
+
+    test('team_search_by_date_range MUST return validation error without project_number for unregistered workspace', async () => {
+        const payload = await callToolAndParse(client, 'team_search_by_date_range', {
+            start_date: '2020-01-01',
+            end_date: '2030-12-31',
+            workspace_id: 'unregistered-tenant',
+        })
+
+        expect(payload.success).toBe(false)
+        expect(payload.code).toBe('VALIDATION_ERROR')
+    })
 })

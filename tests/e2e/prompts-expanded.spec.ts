@@ -89,9 +89,9 @@ test.describe('E2E Prompts: Expanded Coverage', () => {
         expectValidPrompt(response)
     })
 
-    test('listPrompts returns all 31 registered prompts', async () => {
+    test('listPrompts returns all 32 registered prompts', async () => {
         const { prompts } = await client.listPrompts()
-        expect(prompts).toHaveLength(31)
+        expect(prompts).toHaveLength(32)
     })
 
     test('every registered prompt resolves non-empty user text messages', async () => {
