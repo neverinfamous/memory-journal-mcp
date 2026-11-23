@@ -233,7 +233,9 @@ export class ConfigResolver {
     }
 
     /**
-     * Helper to resolve an optional numeric value
+     * Helper to resolve an optional numeric value.
+     * [INVARIANT] Explicit blank CLI flags or config-file strings throw `ConfigurationError`
+     * instead of silently falling back to defaults.
      */
     public resolveInt(
         cliKey: string,
@@ -242,7 +244,13 @@ export class ConfigResolver {
         max?: number
     ): number | undefined {
         const val = this.resolve<unknown>(cliKey, envKey)
-        if (val === undefined || val === null || (typeof val === 'string' && val.trim() === '')) {
+        if (val === undefined || val === null) {
+            return undefined
+        }
+        if (typeof val === 'string' && val.trim() === '') {
+            if (this.isCliProvided(cliKey) || this.hasConfigFileKey(cliKey)) {
+                throw new ConfigurationError(`Invalid blank numeric configuration for ${cliKey}`)
+            }
             return undefined
         }
         return this._parseNumeric(val, cliKey, min, max, false)
@@ -258,7 +266,13 @@ export class ConfigResolver {
         max?: number
     ): number | undefined {
         const val = this.resolve<unknown>(cliKey, envKey)
-        if (val === undefined || val === null || (typeof val === 'string' && val.trim() === '')) {
+        if (val === undefined || val === null) {
+            return undefined
+        }
+        if (typeof val === 'string' && val.trim() === '') {
+            if (this.isCliProvided(cliKey) || this.hasConfigFileKey(cliKey)) {
+                throw new ConfigurationError(`Invalid blank numeric configuration for ${cliKey}`)
+            }
             return undefined
         }
         return this._parseNumeric(val, cliKey, min, max, true)

@@ -25,8 +25,37 @@ import { ProtocolError, ProtocolErrorCode } from '@modelcontextprotocol/server'
 import {
     assertSafeFilePath,
     assertSafeDirectoryPath,
+    fenceNonCanonicalRefOrKey,
 } from '../../../utils/security-utils.js'
 import { logger } from '../../../utils/logger.js'
+
+const READ_NOFOLLOW_FLAGS = fs.constants.O_RDONLY | (fs.constants.O_NOFOLLOW ?? 0)
+
+/**
+ * [BOUNDARY] Reject symlinked operator paths (or symlinked parent directories) unless
+ * their resolved target stays within explicitly configured `allowedRoots`.
+ */
+function assertOperatorPathNotSymlinkEscape(
+    targetPath: string,
+    allowedRoots: readonly string[],
+    isDirectory: boolean
+): void {
+    const checkLink = (p: string): boolean => {
+        const st = fs.lstatSync(p, { throwIfNoEntry: false })
+        return st?.isSymbolicLink() === true
+    }
+    const targetIsLink = checkLink(targetPath)
+    const parentIsLink = !isDirectory && checkLink(path.dirname(targetPath))
+    if (!targetIsLink && !parentIsLink) return
+    if (allowedRoots.length === 0) {
+        throw new Error('Symlinked target or parent directory is not permitted')
+    }
+    if (isDirectory) {
+        assertSafeDirectoryPath(targetPath, [...allowedRoots])
+    } else {
+        assertSafeFilePath(targetPath, [...allowedRoots])
+    }
+}
 
 export const recentResource: InternalResourceDef = {
     uri: 'memory://recent',
@@ -118,6 +147,47 @@ interface CachedRuleEntry {
 const cachedRulesMap = new Map<string, CachedRuleEntry>()
 const RULES_CACHE_TTL_MS = 5 * 60 * 1000 // 5 minutes
 
+async function readRulesFileContent(rulesPath: string): Promise<ResourceResult> {
+    const cached = cachedRulesMap.get(rulesPath)
+    if (cached && Date.now() - cached.timestamp < RULES_CACHE_TTL_MS) {
+        const stat = await fs.promises.stat(rulesPath).catch(() => null)
+        if (stat !== null && stat.mtimeMs === cached.mtimeMs) {
+            return {
+                data: cached.content,
+                annotations: { lastModified: new Date(stat.mtimeMs).toISOString() },
+            }
+        }
+    }
+
+    const file = await fs.promises.open(rulesPath, READ_NOFOLLOW_FLAGS)
+    try {
+        const stat = await file.stat()
+        if (typeof stat.isFile === 'function' && !stat.isFile()) {
+            throw new Error('Rules path is not a regular file')
+        }
+        if (stat.size > 1024 * 1024) {
+            throw new Error('Rules file exceeds 1MB limit')
+        }
+        const content = await file.readFile('utf8')
+        const mtimeMs = typeof stat.mtimeMs === 'number' ? stat.mtimeMs : Date.now()
+        cachedRulesMap.set(rulesPath, { content, timestamp: Date.now(), mtimeMs })
+        if (cachedRulesMap.size > 100) {
+            const firstKey = cachedRulesMap.keys().next().value
+            if (firstKey) cachedRulesMap.delete(firstKey)
+        }
+    } finally {
+        await Promise.resolve(file.close()).catch(() => undefined)
+    }
+
+    const cachedData = cachedRulesMap.get(rulesPath)
+    return {
+        data: cachedData ? cachedData.content : '',
+        annotations: {
+            lastModified: new Date(cachedData ? cachedData.mtimeMs : Date.now()).toISOString(),
+        },
+    }
+}
+
 export const rulesResource: InternalResourceDef = {
     uri: 'memory://rules',
     name: 'Rules File',
@@ -129,73 +199,32 @@ export const rulesResource: InternalResourceDef = {
     handler: async (_uri: string, context: ResourceContext): Promise<ResourceResult> => {
         const rulesPath = context.briefingConfig?.rulesFilePath ?? process.env['RULES_FILE_PATH']
         if (!rulesPath) {
-            throw new ProtocolError(ProtocolErrorCode.InternalError, 
+            throw new ProtocolError(
+                ProtocolErrorCode.InternalError,
                 'RULES_FILE_PATH is not configured. Set this env var to serve rules content.'
             )
         }
         try {
             const allowedRoots = context.briefingConfig?.allowedIoRoots ?? []
-            // Add explicitly configured rules directory to allowed roots for this check
-            const expandedRoots = [...allowedRoots, path.dirname(rulesPath)]
-            assertSafeFilePath(rulesPath, expandedRoots)
+            assertOperatorPathNotSymlinkEscape(rulesPath, allowedRoots, false)
+            assertSafeFilePath(rulesPath, [...allowedRoots, path.dirname(rulesPath)])
         } catch (err) {
-            throw new ProtocolError(ProtocolErrorCode.InvalidParams, 
-                err instanceof Error ? err.message : String(err)
+            logger.warning('Configured RULES_FILE_PATH failed path safety validation', {
+                module: 'UtilitiesResource',
+                error: err instanceof Error ? err.message : String(err),
+            })
+            throw new ProtocolError(
+                ProtocolErrorCode.InvalidParams,
+                'Configured RULES_FILE_PATH failed path safety validation.'
             )
         }
 
         try {
-            const cached = cachedRulesMap.get(rulesPath)
-            if (cached && Date.now() - cached.timestamp < RULES_CACHE_TTL_MS) {
-                const stat = await fs.promises.stat(rulesPath).catch(() => null)
-                if (stat !== null && stat.mtimeMs === cached.mtimeMs) {
-                    return {
-                        data: cached.content,
-                        annotations: {
-                            lastModified: new Date(stat.mtimeMs).toISOString(),
-                        },
-                    }
-                }
-            }
-
-            const file = await fs.promises.open(rulesPath, 'r')
-            try {
-                const stat = await file.stat()
-                if (stat.size > 1024 * 1024) {
-                    throw new Error('Rules file exceeds 1MB limit')
-                }
-                const content = await file.readFile('utf8')
-                const mtimeMs = typeof stat.mtimeMs === 'number' ? stat.mtimeMs : Date.now()
-
-                cachedRulesMap.set(rulesPath, {
-                    content,
-                    timestamp: Date.now(),
-                    mtimeMs,
-                })
-
-                // Bounded cache
-                if (cachedRulesMap.size > 100) {
-                    const firstKey = cachedRulesMap.keys().next().value
-                    if (firstKey) cachedRulesMap.delete(firstKey)
-                }
-            } finally {
-                await Promise.resolve(file.close()).catch(() => undefined)
-            }
-
-            const cachedData = cachedRulesMap.get(rulesPath)
-            return {
-                data: cachedData ? cachedData.content : '',
-                annotations: {
-                    lastModified: new Date(
-                        cachedData ? cachedData.mtimeMs : Date.now()
-                    ).toISOString(),
-                },
-            }
+            return await readRulesFileContent(rulesPath)
         } catch (err) {
-            const message = err instanceof Error ? err.message : String(err)
             logger.warning('Could not read rules file', {
                 module: 'UtilitiesResource',
-                error: message,
+                error: err instanceof Error ? err.message : String(err),
             })
             throw new ProtocolError(ProtocolErrorCode.InternalError, 'Could not read rules file')
         }
@@ -206,7 +235,8 @@ export const workflowsResource: InternalResourceDef = {
     uri: 'memory://workflows',
     name: 'Workflows',
     title: 'Agent Workflow Summaries',
-    description: 'Summary of available agent workflows from the configured workflow directory',
+    description:
+        'Configured agent workflow summary string (from --workflow-summary, workflowSummary, or MEMORY_JOURNAL_WORKFLOW_SUMMARY)',
     mimeType: 'application/json',
     icons: [ICON_BRIEFING],
     annotations: withPriority(0.6, ASSISTANT_FOCUSED),
@@ -284,7 +314,7 @@ async function readSingleSkillEntry(
     const skillMdPath = path.join(dir, skillName, 'SKILL.md')
     try {
         assertSafeFilePath(skillMdPath, [dir])
-        const handle = await fs.promises.open(skillMdPath, 'r')
+        const handle = await fs.promises.open(skillMdPath, READ_NOFOLLOW_FLAGS)
         let content: string
         try {
             const stats = await handle.stat()
@@ -300,7 +330,12 @@ async function readSingleSkillEntry(
         )
         const excerpt = excerptLine ? sliceUntrustedInline(excerptLine.trim(), 160) : ''
         return { name: skillName, path: skillMdPath, excerpt, source }
-    } catch {
+    } catch (err) {
+        logger.debug('Skipped unreadable skill entry', {
+            module: 'UtilitiesResource',
+            skillName,
+            error: err instanceof Error ? err.message : String(err),
+        })
         return null
     }
 }
@@ -333,22 +368,29 @@ async function scanSkillsDir(
     return skills
 }
 
-function validateUserSkillsDir(userSkillsDir: string, allowedIoRoots: string[]): void {
+async function validateUserSkillsDir(userSkillsDir: string, allowedIoRoots: string[]): Promise<void> {
     try {
-        // Add explicitly configured skills directory to allowed roots for this check
+        assertOperatorPathNotSymlinkEscape(userSkillsDir, allowedIoRoots, true)
         const expandedRoots = [...allowedIoRoots, userSkillsDir]
         assertSafeDirectoryPath(userSkillsDir, expandedRoots)
-        if (!fs.existsSync(userSkillsDir)) {
-            logger.warning('Configured SKILLS_DIR_PATH does not exist', {
-                module: 'UtilitiesResource',
-                path: userSkillsDir,
-            })
-            throw new Error('Configured SKILLS_DIR_PATH does not exist')
-        }
     } catch (err) {
+        logger.warning('Configured SKILLS_DIR_PATH failed validation', {
+            module: 'UtilitiesResource',
+            error: err instanceof Error ? err.message : String(err),
+        })
         throw new ProtocolError(
             ProtocolErrorCode.InvalidParams,
-            err instanceof Error ? err.message : String(err)
+            'Configured SKILLS_DIR_PATH failed path safety validation.'
+        )
+    }
+    const stat = await fs.promises.stat(userSkillsDir).catch(() => null)
+    if (stat?.isDirectory() !== true) {
+        logger.warning('Configured SKILLS_DIR_PATH does not exist', {
+            module: 'UtilitiesResource',
+        })
+        throw new ProtocolError(
+            ProtocolErrorCode.InvalidParams,
+            'Configured SKILLS_DIR_PATH does not exist.'
         )
     }
 }
@@ -358,9 +400,9 @@ function buildSkillsPayloadResult(
 ): ResourceResult {
     const payloadData = {
         configured: true,
-        // Prevent path disclosure of host directories
+        // Prevent path disclosure of host directories; fence non-canonical directory names.
         skills: skills.map((s) => ({
-            name: s.name,
+            name: fenceNonCanonicalRefOrKey(s.name),
             excerpt: s.excerpt,
             source: s.source,
         })),
@@ -380,7 +422,7 @@ async function handleSkillsResource(
     const hasAnySource = !!userSkillsDir || !!shippedSkillsDir
 
     if (userSkillsDir) {
-        validateUserSkillsDir(userSkillsDir, context.briefingConfig?.allowedIoRoots ?? [])
+        await validateUserSkillsDir(userSkillsDir, context.briefingConfig?.allowedIoRoots ?? [])
     }
 
     if (!hasAnySource) {

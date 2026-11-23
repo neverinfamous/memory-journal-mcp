@@ -1,3 +1,5 @@
+import type { BriefingConfig } from '../handlers/resources/shared.js'
+import type { BriefingConfigurableKey } from '../utils/config-manager-helpers.js'
 import type { ConfigResolver } from '../utils/config-resolver.js'
 import { isPlaceholderAuthToken } from '../utils/security-utils.js'
 import { defaultDbPath, defaultTeamDbPath } from './default-paths.js'
@@ -213,4 +215,47 @@ export function buildOAuthOptionsGroup(resolver: ConfigResolver, catchConfig: Ca
         trustProxy: catchConfig(() => resolver.resolveBool('trustProxy', 'TRUST_PROXY') ?? false, false),
         publicOrigin: catchConfig(() => resolver.resolve<string>('publicOrigin', 'PUBLIC_ORIGIN'), undefined),
     }
+}
+
+const BRIEFING_CLI_ENV_SOURCES: readonly {
+    target: BriefingConfigurableKey
+    cliKeys: readonly string[]
+    envKeys: readonly string[]
+}[] = [
+    { target: 'commitCount', cliKeys: ['briefingCommits'], envKeys: ['BRIEFING_COMMIT_COUNT'] },
+    { target: 'entryCount', cliKeys: ['briefingEntries'], envKeys: ['BRIEFING_ENTRY_COUNT'] },
+    { target: 'summaryCount', cliKeys: ['briefingSummaries'], envKeys: ['BRIEFING_SUMMARY_COUNT'] },
+    { target: 'includeTeam', cliKeys: ['briefingIncludeTeam'], envKeys: ['BRIEFING_INCLUDE_TEAM'] },
+    { target: 'issueCount', cliKeys: ['briefingIssues'], envKeys: ['BRIEFING_ISSUE_COUNT'] },
+    { target: 'prCount', cliKeys: ['briefingPrs', 'briefingPrCount'], envKeys: ['BRIEFING_PR_COUNT'] },
+    { target: 'prStatusBreakdown', cliKeys: ['briefingPrStatus'], envKeys: ['BRIEFING_PR_STATUS'] },
+    { target: 'milestoneCount', cliKeys: ['briefingMilestones'], envKeys: ['BRIEFING_MILESTONE_COUNT'] },
+    { target: 'workflowCount', cliKeys: ['briefingWorkflows'], envKeys: ['BRIEFING_WORKFLOW_COUNT'] },
+    { target: 'workflowStatusBreakdown', cliKeys: ['briefingWorkflowStatus'], envKeys: ['BRIEFING_WORKFLOW_STATUS'] },
+    { target: 'copilotReviews', cliKeys: ['briefingCopilot'], envKeys: ['BRIEFING_COPILOT_REVIEWS', 'BRIEFING_COPILOT'] },
+    { target: 'briefingImportanceThreshold', cliKeys: ['briefingImportanceThreshold'], envKeys: ['BRIEFING_IMPORTANCE_THRESHOLD'] },
+    { target: 'graphPivots', cliKeys: ['briefingGraph'], envKeys: ['BRIEFING_GRAPH'] },
+    { target: 'insights', cliKeys: ['briefingInsights'], envKeys: ['BRIEFING_INSIGHTS'] },
+]
+
+export function collectCliEnvBriefingOverrides(
+    resolver: ConfigResolver,
+    briefingConfig: BriefingConfig
+): Partial<Record<BriefingConfigurableKey, number | boolean>> | undefined {
+    const overrides: Partial<Record<BriefingConfigurableKey, number | boolean>> = {}
+    let hasAny = false
+    for (const { target, cliKeys, envKeys } of BRIEFING_CLI_ENV_SOURCES) {
+        const fromCli = cliKeys.some((k) => resolver.isCliProvided(k))
+        const fromEnv = envKeys.some((k) => {
+            const raw = process.env[k]
+            return raw !== undefined && raw.trim() !== ''
+        })
+        if (!fromCli && !fromEnv) continue
+        const val = briefingConfig[target]
+        if (typeof val === 'number' || typeof val === 'boolean') {
+            overrides[target] = val
+            hasAny = true
+        }
+    }
+    return hasAny ? overrides : undefined
 }

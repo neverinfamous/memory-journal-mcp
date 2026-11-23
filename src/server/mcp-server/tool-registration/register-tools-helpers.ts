@@ -277,12 +277,19 @@ export function syncLiveHandlerConfig(
     }
 }
 
+function normalizeRfc3339(ts: string): string {
+    if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}(?:\.\d+)?$/.test(ts)) {
+        return `${ts.replace(' ', 'T')}Z`
+    }
+    return ts
+}
+
 /**
  * Create the MCP resource read callback bound to live config and runtime metrics.
  */
 export function createResourceReadHandler(
     context: ServerContext,
-    _options: ServerOptions
+    options: ServerOptions
 ): (
     uri: URL,
     mimeType: string
@@ -298,11 +305,15 @@ export function createResourceReadHandler(
         context
     return async (uri: URL, mimeType: string) => {
         const currentConfig = configManager.getConfig()
-        const activeBriefingConfig = resolveActiveBriefingConfig(
+        const baseBriefing = resolveActiveBriefingConfig(
             currentConfig.briefingConfig,
             allowedIoRoots,
             runtime
         )
+        const activeBriefingConfig =
+            options.instructionLevel !== undefined
+                ? { ...baseBriefing, instructionLevel: options.instructionLevel }
+                : baseBriefing
 
         try {
             const result = await readResource(
@@ -322,14 +333,23 @@ export function createResourceReadHandler(
                 typeof result.data === 'string'
                     ? result.data
                     : getSerializedPayloadJson(result.data)
+            const normalizedAnnotations =
+                result.annotations !== undefined
+                    ? {
+                          ...result.annotations,
+                          ...(result.annotations.lastModified !== undefined
+                              ? { lastModified: normalizeRfc3339(result.annotations.lastModified) }
+                              : {}),
+                      }
+                    : undefined
             return {
                 contents: [
                     {
                         uri: uri.href,
                         mimeType,
                         text: dataStr,
-                        ...(result.annotations !== undefined
-                            ? { annotations: result.annotations }
+                        ...(normalizedAnnotations !== undefined
+                            ? { annotations: normalizedAnnotations }
                             : {}),
                     },
                 ],

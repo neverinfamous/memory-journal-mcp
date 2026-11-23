@@ -20,7 +20,7 @@ import type { ToolContext, ToolDefinition } from '../../src/types/index.js'
 
 const TEST_REGISTRY = {
     'memory-journal-mcp': { path: process.cwd(), project_number: 5 },
-    adamic: { path: process.cwd(), project_number: 16 },
+    companion: { path: process.cwd(), project_number: 16 },
 }
 
 describe('Pass 67 Audit — Code Mode Recovery, SQL Binds, Proxies, Shims & Regex Safety', () => {
@@ -52,12 +52,12 @@ describe('Pass 67 Audit — Code Mode Recovery, SQL Binds, Proxies, Shims & Rege
         const commentedCode = [
             '// content: "commented-out"',
             '/* workspace_id: "evil-repo" */',
-            'mj.core.createEntry({ content: "See https://example.com/a//b for details", workspace_id: "adamic", tags: ["default"] })',
+            'mj.core.createEntry({ content: "See https://example.com/a//b for details", workspace_id: "companion", tags: ["default"] })',
         ].join('\n')
         const urlRecovered = extractAndRecoverEntryCode(commentedCode)
         expect(urlRecovered).not.toBeNull()
         expect(urlRecovered).toContain('https://example.com/a//b')
-        expect(urlRecovered).toContain('"workspace_id":"adamic"')
+        expect(urlRecovered).toContain('"workspace_id":"companion"')
         expect(urlRecovered).not.toContain('commented-out')
         expect(urlRecovered).not.toContain('evil-repo')
     })
@@ -184,7 +184,7 @@ describe('Pass 67 Audit — Code Mode Recovery, SQL Binds, Proxies, Shims & Rege
                 db,
                 runtime: new ServerRuntime(),
                 config: {
-                    defaultWorkspaceId: 'adamic',
+                    defaultWorkspaceId: 'companion',
                     projectRegistry: TEST_REGISTRY,
                 },
             }
@@ -194,7 +194,7 @@ describe('Pass 67 Audit — Code Mode Recovery, SQL Binds, Proxies, Shims & Rege
             })
             expect('errorResponse' in resolved).toBe(false)
             if (!('errorResponse' in resolved)) {
-                expect(resolved.workspaceId).toBe('adamic')
+                expect(resolved.workspaceId).toBe('companion')
                 expect(resolved.numericProjectId).toBe(16)
             }
         } finally {
@@ -327,7 +327,7 @@ describe('Pass 67 Audit — Code Mode Recovery, SQL Binds, Proxies, Shims & Rege
     })
 
     it('B-L8: createContextProxy freezes a shallow copy and rejects property mutations', () => {
-        const backing = { repo: 'adamic', my_key: 42 }
+        const backing = { repo: 'companion', my_key: 42 }
         const proxy = createContextProxy(backing)
 
         expect(Object.isFrozen(proxy)).toBe(true)

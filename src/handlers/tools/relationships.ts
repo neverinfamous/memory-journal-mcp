@@ -15,6 +15,7 @@ import { enforceAccessBoundary } from '../../auth/validation.js'
 import { TEAM_DB_ERROR_RESPONSE, assertCanonicalFallbackToolAllowed } from './team/helpers.js'
 import { enforceTeamRbac, getCallerIdentity } from './team/rbac.js'
 import { executeTeamVisualizeRelationships } from './team/relationship-tools.js'
+import { extractPreview, redactHomePaths } from '../resources/core/briefing/preview-helpers.js'
 import {
     LinkEntriesSchema,
     LinkEntriesSchemaMcp,
@@ -139,11 +140,12 @@ function buildRelationshipMermaid(
     for (const node of results.nodes) {
         const rawContent = node.metadata?.['content']
         const content = typeof rawContent === 'string' ? rawContent : ''
-        let contentPreview = content
-            .slice(0, MERMAID_CONTENT_PREVIEW_LENGTH)
+        const extracted = extractPreview(content, MERMAID_CONTENT_PREVIEW_LENGTH, { firstLineOnly: true })
+        const contentPreview = extracted
             .replace(/[\r\n`]+/g, ' ')
-        if (content.length > MERMAID_CONTENT_PREVIEW_LENGTH) contentPreview += '...'
-        contentPreview = contentPreview.replace(/"/g, "'").replace(/\[/g, '(').replace(/\]/g, ')')
+            .replace(/"/g, "'")
+            .replace(/\[/g, '(')
+            .replace(/\]/g, ')')
         const entryTypeShort = (node.group || '').slice(0, 20).replace(/[\r\n`"]+/g, ' ')
         mermaidLines.push(`    E${node.id}["#${node.id}: ${contentPreview}<br/>${entryTypeShort}"]`)
     }
@@ -352,10 +354,15 @@ function compactNodeContent(
 ): ReturnType<ToolContext['db']['visualizeRelationships']>['nodes'] {
     return nodes.map((node) => {
         const raw = node.metadata?.['content']
-        if (typeof raw !== 'string' || raw.length <= NODE_CONTENT_PREVIEW_LENGTH) return node
+        if (typeof raw !== 'string') return node
+        const compacted =
+            raw.length <= NODE_CONTENT_PREVIEW_LENGTH
+                ? redactHomePaths(raw)
+                : extractPreview(raw, NODE_CONTENT_PREVIEW_LENGTH)
+        if (compacted === raw) return node
         return {
             ...node,
-            metadata: { ...node.metadata, content: `${raw.slice(0, NODE_CONTENT_PREVIEW_LENGTH)}…` },
+            metadata: { ...node.metadata, content: compacted },
         }
     })
 }

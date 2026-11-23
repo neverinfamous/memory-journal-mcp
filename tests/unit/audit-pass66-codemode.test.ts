@@ -24,7 +24,7 @@ import { ServerRuntime } from '../../src/utils/maintenance-lock.js'
 
 const TEST_REGISTRY = {
     'memory-journal-mcp': { path: process.cwd(), project_number: 5 },
-    adamic: { path: process.cwd(), project_number: 16 },
+    companion: { path: process.cwd(), project_number: 16 },
     'other-repo': { path: process.cwd(), project_number: 99 },
 }
 
@@ -54,8 +54,8 @@ describe('Pass 66 Audit — Code Mode Sandbox, Worker, Healers & Normalizers', (
         expect(healedBypass).toContain('mj.executeCode(')
         expect(healedBypass).toContain('workspace_id: "other-repo"')
 
-        const validMultiOpt = `return await mj.executeCode({ code: "return 1", workspace_id: "adamic" })`
-        expect(healCodeModeScript(validMultiOpt)).toContain('workspace_id: "adamic"')
+        const validMultiOpt = `return await mj.executeCode({ code: "return 1", workspace_id: "companion" })`
+        expect(healCodeModeScript(validMultiOpt)).toContain('workspace_id: "companion"')
 
         const sequential = `await mj.executeCode("return 1"); await mj.executeCode("return 2")`
         expect(healCodeModeScript(sequential)).toContain('executeCode("return 2")')
@@ -99,12 +99,12 @@ describe('Pass 66 Audit — Code Mode Sandbox, Worker, Healers & Normalizers', (
             const updateConfigStub = vi.fn().mockResolvedValue({ success: true })
 
             const res = await sandbox.execute(
-                `await createEntry("note", { workspace_id: "adamic", project_number: 16 });
-                 await updateEntry(42, { content: "new", workspace_id: "adamic" });
-                 await deleteEntry(42, { workspace_id: "adamic", permanent: true });
-                 await saveMemory("saved", { workspace_id: "adamic" });
-                 await updateMemory(42, { content: "patched", workspace_id: "adamic" });
-                 await updateConfiguration({ workspace_id: "adamic" }, { preserve: true });
+                `await createEntry("note", { workspace_id: "companion", project_number: 16 });
+                 await updateEntry(42, { content: "new", workspace_id: "companion" });
+                 await deleteEntry(42, { workspace_id: "companion", permanent: true });
+                 await saveMemory("saved", { workspace_id: "companion" });
+                 await updateMemory(42, { content: "patched", workspace_id: "companion" });
+                 await updateConfiguration({ workspace_id: "companion" }, { preserve: true });
                  return { ok: true };`,
                 {
                     core: { createEntry: createStub },
@@ -122,28 +122,28 @@ describe('Pass 66 Audit — Code Mode Sandbox, Worker, Healers & Normalizers', (
             expect(res.success).toBe(true)
             expect(createStub).toHaveBeenNthCalledWith(1, {
                 content: 'note',
-                workspace_id: 'adamic',
+                workspace_id: 'companion',
                 project_number: 16,
             })
             expect(createStub).toHaveBeenNthCalledWith(2, {
                 content: 'saved',
-                workspace_id: 'adamic',
+                workspace_id: 'companion',
             })
             expect(updateStub).toHaveBeenNthCalledWith(1, {
                 entry_id: 42,
                 content: 'new',
-                workspace_id: 'adamic',
+                workspace_id: 'companion',
             })
             expect(updateStub).toHaveBeenNthCalledWith(2, {
                 entry_id: 42,
                 content: 'patched',
-                workspace_id: 'adamic',
+                workspace_id: 'companion',
             })
             expect(deleteStub).toHaveBeenCalledWith(42, {
-                workspace_id: 'adamic',
+                workspace_id: 'companion',
                 permanent: true,
             })
-            expect(updateConfigStub).toHaveBeenCalledWith({ workspace_id: 'adamic' }, { preserve: true })
+            expect(updateConfigStub).toHaveBeenCalledWith({ workspace_id: 'companion' }, { preserve: true })
         } finally {
             sandbox.dispose()
         }
@@ -220,10 +220,10 @@ describe('Pass 66 Audit — Code Mode Sandbox, Worker, Healers & Normalizers', (
         })
         await exec({
             code: 'return 1',
-            context: JSON.stringify({ workspace_id: 'adamic', project_number: 16 }),
+            context: JSON.stringify({ workspace_id: 'companion', project_number: 16 }),
         })
         expect(capturedIsolation).toMatchObject({
-            workspaceId: 'adamic',
+            workspaceId: 'companion',
             projectNumber: 16,
         })
     })

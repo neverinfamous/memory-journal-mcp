@@ -100,4 +100,36 @@ describe('Briefing Insights Section', () => {
         expect(result?.activityTrend).toBe('-50% vs. last period (5 entries)') // sign = '' since it's < 0
         expect(result?.significanceSpike).toBeNull()
     })
+
+    it('redacts home paths in topImportance previews and degrades gracefully when persisted lookup throws', () => {
+        const throwingCtx: ResourceContext = {
+            db: {
+                getLatestAnalyticsSnapshot: vi.fn(() => {
+                    throw new Error('corrupt snapshot')
+                }),
+            } as never,
+        }
+        expect(buildInsightsSection(throwingCtx)).toBeNull()
+
+        const pathSnapshot: DigestSnapshot = {
+            computedAt: '2026-04-11T12:00:00Z',
+            currentPeriodEntries: 2,
+            previousPeriodEntries: 1,
+            activityGrowthPercent: 100,
+            currentPeriodSignificant: 0,
+            historicalAvgSignificant: 0,
+            significanceMultiplier: null,
+            staleProjects: [],
+            currentRelDensity: 0,
+            previousRelDensity: 0,
+            topImportanceEntries: [
+                { id: 7, score: 0.9, preview: 'Edited C:\\Users\\alice\\Desktop\\secret\\file.ts' },
+            ],
+        }
+        const res = buildInsightsSection({
+            db: { computeDigest: vi.fn().mockReturnValue(pathSnapshot) } as never,
+        })
+        expect(res?.topImportance[0]?.preview).not.toContain('alice')
+        expect(res?.topImportance[0]?.preview).toContain('&lt;desktop&gt;')
+    })
 })

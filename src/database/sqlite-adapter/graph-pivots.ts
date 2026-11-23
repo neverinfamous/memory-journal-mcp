@@ -102,54 +102,68 @@ export function queryRelationshipDegrees(
 }
 
 /**
- * Hubs of recent activity: entries (of any age) ranked by how many of their links
- * touch an entry created on/after `sinceIso`. Requires >= 2 such links so single
- * commit→note pairs don't crowd out real threads.
+ * Recency-weighted hubs of active work: scores entries by deduplicated `(hub, peer)` links
+ * created on/after `sinceIso` (scanning covering `idx_relationships_created_at`) with a 3-day
+ * hyperbolic half-life. Inbound links carry full weight; outbound links only count when the
+ * peer itself is recent and are soft-capped so one-shot consolidation/NREM rollups never drown
+ * out active multi-entry threads.
  */
 export function queryActiveThreads(
     db: Database,
     sinceIso: string,
     limit: number,
-    workspaceId?: string
+    workspaceId?: string,
+    nowIso: string = new Date().toISOString()
 ): ActiveThreadRow[] {
     const { scoped, id: ws } = scopeOf(workspaceId)
-    const recentWs = scoped ? ' AND workspace_id = ?' : ''
-    const hubWs = scoped ? ' AND m.workspace_id = ?' : ''
-    const peerWs = scoped ? ' AND p.workspace_id = ?' : ''
+    const fromWs = scoped ? ' AND mf.workspace_id = ?' : ''
+    const toWs = scoped ? ' AND mt.workspace_id = ?' : ''
     const sinceFloor = sinceIso.slice(0, 10)
     const params: unknown[] = scoped
-        ? [ws, sinceFloor, sinceIso, ws, ws, limit]
-        : [sinceFloor, sinceIso, limit]
+        ? [sinceFloor, sinceIso, ws, ws, nowIso, nowIso, sinceFloor, sinceIso, limit]
+        : [sinceFloor, sinceIso, nowIso, nowIso, sinceFloor, sinceIso, limit]
     const rows = db
         .prepare(
-            `WITH recent AS MATERIALIZED (
-                 SELECT id FROM memory_journal
-                 WHERE deleted_at IS NULL${recentWs}
-                   AND timestamp >= ? AND julianday(timestamp) >= julianday(?)
+            `WITH recent_edges AS MATERIALIZED (
+                 SELECT r.from_entry_id, r.to_entry_id, r.created_at
+                 FROM relationships r
+                 WHERE r.created_at >= ? AND julianday(r.created_at) >= julianday(?)
+                   AND r.from_entry_id != r.to_entry_id
              ),
-             recent_rels AS MATERIALIZED (
-                 SELECT r.id, r.from_entry_id, r.to_entry_id
-                 FROM recent rec
-                 CROSS JOIN relationships r ON r.from_entry_id = rec.id
-                 WHERE r.from_entry_id != r.to_entry_id
-                 UNION
-                 SELECT r.id, r.from_entry_id, r.to_entry_id
-                 FROM recent rec
-                 CROSS JOIN relationships r ON r.to_entry_id = rec.id
-                 WHERE r.from_entry_id != r.to_entry_id
+             scoped_edges AS MATERIALIZED (
+                 SELECT re.from_entry_id, re.to_entry_id, re.created_at, mt.timestamp AS to_ts
+                 FROM recent_edges re
+                 CROSS JOIN memory_journal mf ON mf.id = re.from_entry_id AND mf.deleted_at IS NULL${fromWs}
+                 CROSS JOIN memory_journal mt ON mt.id = re.to_entry_id AND mt.deleted_at IS NULL${toWs}
              ),
-             edges AS (
-                 SELECT from_entry_id AS hub, to_entry_id AS peer FROM recent_rels
+             hub_peers AS (
+                 SELECT to_entry_id AS hub, from_entry_id AS peer,
+                        MAX(1.0 / (1.0 + MAX(0.0, julianday(?) - julianday(created_at)) / 3.0)) AS weight,
+                        1 AS is_inbound
+                 FROM scoped_edges
+                 GROUP BY to_entry_id, from_entry_id
                  UNION ALL
-                 SELECT to_entry_id AS hub, from_entry_id AS peer FROM recent_rels
+                 SELECT from_entry_id AS hub, to_entry_id AS peer,
+                        MAX(0.5 / (1.0 + MAX(0.0, julianday(?) - julianday(created_at)) / 3.0)) AS weight,
+                        0 AS is_inbound
+                 FROM scoped_edges
+                 WHERE to_ts >= ? AND julianday(to_ts) >= julianday(?)
+                 GROUP BY from_entry_id, to_entry_id
+             ),
+             dedup_peers AS (
+                 SELECT hub, peer, MAX(weight) AS peer_weight, MAX(is_inbound) AS has_inbound
+                 FROM hub_peers
+                 GROUP BY hub, peer
              )
-             SELECT e.hub AS entry_id, m.entry_type AS entry_type, m.content AS content, COUNT(*) AS recent_links
-             FROM edges e
-             CROSS JOIN memory_journal m ON m.id = e.hub AND m.deleted_at IS NULL${hubWs}
-             CROSS JOIN memory_journal p ON p.id = e.peer AND p.deleted_at IS NULL${peerWs}
-             GROUP BY e.hub
+             SELECT dp.hub AS entry_id, m.entry_type AS entry_type, m.content AS content,
+                    COUNT(*) AS recent_links,
+                    SUM(CASE WHEN dp.has_inbound = 1 THEN dp.peer_weight ELSE 0.0 END)
+                      + MIN(1.5, SUM(CASE WHEN dp.has_inbound = 0 THEN dp.peer_weight ELSE 0.0 END)) AS activity_score
+             FROM dedup_peers dp
+             CROSS JOIN memory_journal m ON m.id = dp.hub
+             GROUP BY dp.hub
              HAVING COUNT(*) >= 2
-             ORDER BY recent_links DESC, e.hub DESC
+             ORDER BY activity_score DESC, recent_links DESC, dp.hub DESC
              LIMIT ?`
         )
         .all(...params) as {
@@ -215,10 +229,10 @@ export function queryEntryIdsByCommitShas(
              )
              SELECT s.value AS wanted, MIN(ctx.id) AS entry_id
              FROM ctx, json_each(ctx.auto_context, '$.commits') j, json_each(?) s
-             WHERE j.type = 'text' AND length(j.value) >= 7
+             WHERE j.type = 'text' AND length(trim(j.value)) >= 7
                AND (
-                   substr(lower(j.value), 1, length(s.value)) = s.value
-                   OR (length(j.value) < length(s.value) AND substr(s.value, 1, length(j.value)) = lower(j.value))
+                   substr(lower(trim(j.value)), 1, length(s.value)) = s.value
+                   OR (length(trim(j.value)) < length(s.value) AND substr(s.value, 1, length(trim(j.value))) = lower(trim(j.value)))
                )
              GROUP BY s.value`
         )

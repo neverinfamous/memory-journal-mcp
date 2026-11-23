@@ -16,6 +16,7 @@ import { enforceTeamResourceRbac } from './team.js'
 import { ProtocolError, ProtocolErrorCode } from '@modelcontextprotocol/server'
 import { injectTokenEstimate } from '../../observability/token-estimator.js'
 import { resolveCachedOrLiveDigest } from './core/briefing/insights-section.js'
+import { extractPreview } from './core/briefing/preview-helpers.js'
 
 const DIGEST_PREVIEW_LIMIT = 200
 
@@ -38,7 +39,10 @@ function sanitizeDigestSnapshot(snapshot: unknown): unknown {
             if (typeof preview !== 'string') return item
             return {
                 ...item,
-                preview: sliceUntrustedInline(preview, DIGEST_PREVIEW_LIMIT, '...'),
+                preview: sliceUntrustedInline(
+                    extractPreview(preview, DIGEST_PREVIEW_LIMIT),
+                    DIGEST_PREVIEW_LIMIT + 1
+                ),
             }
         }),
     }

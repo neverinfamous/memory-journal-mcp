@@ -202,6 +202,24 @@ function unescapeFenceEntities(value: string): string {
     return value.replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&')
 }
 
+/**
+ * [BOUNDARY] Strip literal and entity-encoded `<untrusted_remote_content>` tags in a bounded
+ * fixed-point loop so split/nested tags cannot reconstruct themselves, while forbidding the
+ * encoded-tag pattern from crossing `¦` list separators, newlines, or other entities.
+ */
+function stripNestedFenceTags(value: string): string {
+    let current = value
+    for (let pass = 0; pass < 8; pass++) {
+        const stripped = current.replace(
+            /&lt;\/?untrusted_remote_content[^&¦\r\n<>]*&gt;|<\/?untrusted_remote_content[^<>¦\r\n]*>/gi,
+            ''
+        )
+        if (stripped === current) break
+        current = stripped
+    }
+    return current
+}
+
 export function markUntrustedContent(content: string | undefined | null): string {
     if (!content) return ''
     let trimmed = stripUntrustedControlChars(content).trim()
@@ -210,12 +228,7 @@ export function markUntrustedContent(content: string | undefined | null): string
 
     // Strip any existing literal or entity-encoded tags to prevent breakout/nesting, then normalize
     // entities so repeated calls stay idempotent without growing `&amp;lt;`.
-    trimmed = unescapeFenceEntities(
-        trimmed.replace(
-            /&lt;\/?untrusted_remote_content[^&]*&gt;|<\/?untrusted_remote_content[^<>]*>/gi,
-            ''
-        )
-    ).trim()
+    trimmed = stripNestedFenceTags(unescapeFenceEntities(stripNestedFenceTags(trimmed))).trim()
     if (!trimmed) return ''
     // Escape HTML entities to prevent prompt injection (& first so &lt; cannot be unescaped)
     trimmed = trimmed.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
@@ -269,12 +282,7 @@ export function markUntrustedContentInline(content: string | undefined | null): 
     if (isAlreadyInlineFencedUntrustedContent(cleaned)) return cleaned
 
     // Strip existing literal or entity-encoded wrappers to normalize for inline layout
-    cleaned = unescapeFenceEntities(
-        cleaned.replace(
-            /&lt;\/?untrusted_remote_content[^&]*&gt;|<\/?untrusted_remote_content[^<>]*>/gi,
-            ''
-        )
-    )
+    cleaned = stripNestedFenceTags(unescapeFenceEntities(stripNestedFenceTags(cleaned)))
     // Escape HTML entities to prevent prompt injection (& first so &lt; cannot be unescaped)
     cleaned = cleaned.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
 

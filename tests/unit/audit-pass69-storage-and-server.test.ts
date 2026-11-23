@@ -25,7 +25,7 @@ const SAVED_ENV_KEYS = ['MJ_DB_ENCRYPTION_KEY', 'DB_ENCRYPTION_KEY'] as const
 
 const TEST_REGISTRY = {
     'memory-journal-mcp': { path: process.cwd(), project_number: 5 },
-    adamic: { path: process.cwd(), project_number: 16 },
+    companion: { path: process.cwd(), project_number: 16 },
 }
 
 function requireTool(tools: ToolDefinition[], name: string): ToolDefinition {
@@ -80,7 +80,7 @@ describe('Pass 69 Audit — URIs, Normalizers, Audit Scope, Schemas, Loggers & P
     it('TB2-M1: project-registry admin tools skip workspace_id stamping across call-arg-normalizer and param-normalizer', () => {
         const reqParams: { name?: string; arguments?: Record<string, unknown> } = {
             name: 'get_project',
-            arguments: { project: 'adamic' },
+            arguments: { project: 'companion' },
         }
         normalizeAndAliasToolCall(reqParams, {
             projectRegistry: TEST_REGISTRY,
@@ -94,7 +94,7 @@ describe('Pass 69 Audit — URIs, Normalizers, Audit Scope, Schemas, Loggers & P
             const firstArg = intercepted.args[0] as Record<string, unknown>
             expect(firstArg['workspace_id']).toBeUndefined()
             const parsed = GetProjectSchemaMcp.parse(firstArg)
-            expect(parsed.name).toBe('adamic')
+            expect(parsed.name).toBe('companion')
         }
     })
 
@@ -115,7 +115,7 @@ describe('Pass 69 Audit — URIs, Normalizers, Audit Scope, Schemas, Loggers & P
             const interceptor = createAuditInterceptor(auditLogger, runtime)
             await interceptor.around(
                 'read_resource',
-                { uri: 'memory://briefing/adamic?project_number=0' },
+                { uri: 'memory://briefing/companion?project_number=0' },
                 () => Promise.resolve({ success: true })
             )
             await interceptor.around(
@@ -125,7 +125,7 @@ describe('Pass 69 Audit — URIs, Normalizers, Audit Scope, Schemas, Loggers & P
             )
 
             const rows = await auditLogger.recent(10)
-            const suppressed = rows.find((r) => r.workspaceId === 'adamic')
+            const suppressed = rows.find((r) => r.workspaceId === 'companion')
             expect(suppressed).toBeDefined()
             expect(suppressed?.projectNumber).toBeUndefined()
 

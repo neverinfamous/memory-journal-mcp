@@ -57,18 +57,21 @@ function buildDefaultBriefingBaseline(): BriefingBaselineMap {
     }
 }
 
-/** Collect initial briefing key baselines and track which briefing keys came from the startup file. */
+/** Collect initial briefing key baselines, file provenance, and initial valid file values. */
 export function collectBriefingBaselines(
     initialConfig: DynamicConfig,
     initialFile: Record<string, unknown> | null,
     keyMap: BriefingKeyMapping,
-    isValidValue: (value: unknown, kind: BriefingValueKind) => boolean
+    isValidValue: (value: unknown, kind: BriefingValueKind) => boolean,
+    explicitBriefingOverrides?: Partial<Record<BriefingConfigurableKey, number | boolean>>
 ): {
     initialBriefingBaseline: BriefingBaselineMap
     briefingKeysFromFile: Set<BriefingConfigurableKey>
+    lastFileBriefingValues: Map<BriefingConfigurableKey, number | boolean>
 } {
     const initialBriefingBaseline: BriefingBaselineMap = { ...buildDefaultBriefingBaseline() }
     const briefingKeysFromFile = new Set<BriefingConfigurableKey>()
+    const lastFileBriefingValues = new Map<BriefingConfigurableKey, number | boolean>()
 
     for (const [fileKey, { target, kind, aliases }] of Object.entries(keyMap)) {
         const match =
@@ -76,16 +79,22 @@ export function collectBriefingBaselines(
                 ? readBriefingConfigEntry(initialFile, fileKey, aliases)
                 : undefined
         const hasFileVal = match !== undefined && isValidValue(match.value, kind)
+        if (hasFileVal) {
+            lastFileBriefingValues.set(target, match.value as number | boolean)
+        }
+        const explicitOverride = explicitBriefingOverrides?.[target]
         const curVal = initialConfig.briefingConfig[target]
-        const fromFile = hasFileVal && match.value === curVal
+        const fromFile = explicitOverride === undefined && hasFileVal && match.value === curVal
         if (fromFile) {
             briefingKeysFromFile.add(target)
-        } else if (curVal !== undefined) {
+        } else if (explicitOverride !== undefined && isValidValue(explicitOverride, kind)) {
+            initialBriefingBaseline[target] = explicitOverride
+        } else if (curVal !== undefined && isValidValue(curVal, kind)) {
             initialBriefingBaseline[target] = curVal
         }
     }
 
-    return { initialBriefingBaseline, briefingKeysFromFile }
+    return { initialBriefingBaseline, briefingKeysFromFile, lastFileBriefingValues }
 }
 
 /** Compute the CLI/env baseline when a startup config file was present. */

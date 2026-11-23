@@ -25,6 +25,7 @@ export interface ConfigCliEnvBaseline {
     defaultProjectNumber?: number | undefined
     defaultWorkspaceId?: string | undefined
     projectRegistry?: BriefingConfig['projectRegistry'] | undefined
+    briefingOverrides?: Partial<Record<BriefingConfigurableKey, number | boolean>> | undefined
 }
 
 export type BriefingConfigurableKey =
@@ -80,6 +81,7 @@ export interface InitialBaselinesResult {
     codemodeBaseline: boolean | undefined
     initialBriefingBaseline: BriefingBaselineMap
     briefingKeysFromFile: Set<BriefingConfigurableKey>
+    lastFileBriefingValues: Map<BriefingConfigurableKey, number | boolean>
     codemodeFromFile: boolean
     defaultWorkspaceIdFromFile: boolean
     defaultProjectNumberFromFile: boolean
@@ -97,6 +99,8 @@ export interface UpdateConfigOptions {
     mutatedFields?: MutatedConfigFields
 }
 
+const MAX_BRIEFING_CONFIG_COUNT = 100
+
 export function isValidBriefingConfigValue(
     value: unknown,
     kind: BriefingValueKind
@@ -105,7 +109,12 @@ export function isValidBriefingConfigValue(
     if (kind === 'unit') {
         return typeof value === 'number' && Number.isFinite(value) && value >= 0 && value <= 1
     }
-    return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0
+    return (
+        typeof value === 'number' &&
+        Number.isSafeInteger(value) &&
+        value >= 0 &&
+        value <= MAX_BRIEFING_CONFIG_COUNT
+    )
 }
 
 /**
@@ -188,12 +197,14 @@ export function buildInitialBaselines(
     initialFile: Record<string, unknown> | null,
     explicitCliEnvBaseline?: ConfigCliEnvBaseline
 ): InitialBaselinesResult {
-    const { initialBriefingBaseline, briefingKeysFromFile } = collectBriefingBaselines(
-        initialConfig,
-        initialFile,
-        BRIEFING_CONFIG_KEY_MAP,
-        isValidBriefingConfigValue
-    )
+    const { initialBriefingBaseline, briefingKeysFromFile, lastFileBriefingValues } =
+        collectBriefingBaselines(
+            initialConfig,
+            initialFile,
+            BRIEFING_CONFIG_KEY_MAP,
+            isValidBriefingConfigValue,
+            explicitCliEnvBaseline?.briefingOverrides
+        )
 
     const hasFileCodemode =
         initialFile !== null &&
@@ -250,6 +261,7 @@ export function buildInitialBaselines(
         codemodeBaseline,
         initialBriefingBaseline,
         briefingKeysFromFile,
+        lastFileBriefingValues,
         codemodeFromFile,
         defaultWorkspaceIdFromFile,
         defaultProjectNumberFromFile,
@@ -259,12 +271,15 @@ export function buildInitialBaselines(
 export function reloadBriefingConfigKeys(
     parsed: Record<string, unknown>,
     bc: BriefingConfig,
-    initialBriefingBaseline: BriefingBaselineMap
+    initialBriefingBaseline: BriefingBaselineMap,
+    briefingKeysFromFile?: Set<BriefingConfigurableKey>,
+    lastFileBriefingValues?: Map<BriefingConfigurableKey, number | boolean>
 ): boolean {
     let bcChanged = false
     for (const [key, mapping] of Object.entries(BRIEFING_CONFIG_KEY_MAP)) {
         const match = readBriefingConfigEntry(parsed, key, mapping.aliases)
         if (match === undefined) {
+            lastFileBriefingValues?.delete(mapping.target)
             const baselineVal = initialBriefingBaseline[mapping.target]
             if (bc[mapping.target] !== baselineVal) {
                 Object.assign(bc, { [mapping.target]: baselineVal })
@@ -279,17 +294,31 @@ export function reloadBriefingConfigKeys(
                 key: match.key,
                 expected:
                     mapping.kind === 'number'
-                        ? 'non-negative integer'
+                        ? 'integer in [0, 100]'
                         : mapping.kind === 'unit'
                           ? 'number in [0, 1]'
                           : mapping.kind,
             })
             continue
         }
-        if (bc[mapping.target] !== value) {
-            Object.assign(bc, { [mapping.target]: value })
+        const typedVal = value as number | boolean
+        const prevFileVal = lastFileBriefingValues?.get(mapping.target)
+        lastFileBriefingValues?.set(mapping.target, typedVal)
+        // [INVARIANT] Editing an unrelated key in config.json must not clobber a startup CLI/env
+        // briefing override whose underlying file entry did not change.
+        if (
+            briefingKeysFromFile !== undefined &&
+            !briefingKeysFromFile.has(mapping.target) &&
+            prevFileVal !== undefined &&
+            prevFileVal === typedVal
+        ) {
+            continue
+        }
+        if (bc[mapping.target] !== typedVal) {
+            Object.assign(bc, { [mapping.target]: typedVal })
             bcChanged = true
         }
+        briefingKeysFromFile?.add(mapping.target)
     }
     return bcChanged
 }

@@ -30,7 +30,7 @@ import type { ToolContext, ToolDefinition, ToolHandlerConfig } from '../../src/t
 
 const TEST_REGISTRY: NonNullable<ToolHandlerConfig['projectRegistry']> = {
     'memory-journal-mcp': { path: process.cwd(), project_number: 5 },
-    adamic: { path: process.cwd(), project_number: 16 },
+    companion: { path: process.cwd(), project_number: 16 },
 }
 
 function createConfig(): ToolHandlerConfig {
@@ -113,7 +113,7 @@ describe('CMS-04 REM Healing (2026-11-21)', () => {
             const teamUpdateOmitted = extractNormalizedParams(
                 await normalizeDispatchParams(
                     teamUpdateTool,
-                    { entry_id: 1, workspace_id: 'adamic', project_number: 16, tags: ['calibrated'] },
+                    { entry_id: 1, workspace_id: 'companion', project_number: 16, tags: ['calibrated'] },
                     dispatchCtx
                 )
             )
@@ -252,21 +252,21 @@ describe('CMS-04 REM Healing (2026-11-21)', () => {
             const e1 = teamDb.createEntry({
                 content: 'Team node 1',
                 entryType: 'technical_note',
-                workspaceId: 'adamic',
+                workspaceId: 'companion',
                 projectNumber: 16,
                 tags: ['graph-limit'],
             })
             const e2 = teamDb.createEntry({
                 content: 'Team node 2',
                 entryType: 'technical_note',
-                workspaceId: 'adamic',
+                workspaceId: 'companion',
                 projectNumber: 16,
                 tags: ['graph-limit'],
             })
             const e3 = teamDb.createEntry({
                 content: 'Team node 3',
                 entryType: 'technical_note',
-                workspaceId: 'adamic',
+                workspaceId: 'companion',
                 projectNumber: 16,
                 tags: ['graph-limit'],
             })
@@ -275,7 +275,7 @@ describe('CMS-04 REM Healing (2026-11-21)', () => {
 
             const recentLimited = (await callTool(
                 'team_visualize_relationships',
-                { workspace_id: 'adamic', project_number: 16, limit: 2 },
+                { workspace_id: 'companion', project_number: 16, limit: 2 },
                 personalDb,
                 undefined,
                 undefined,
@@ -288,7 +288,7 @@ describe('CMS-04 REM Healing (2026-11-21)', () => {
 
             const tagLimited = (await callTool(
                 'team_visualize_relationships',
-                { workspace_id: 'adamic', project_number: 16, tag: 'graph-limit', limit: 2 },
+                { workspace_id: 'companion', project_number: 16, tag: 'graph-limit', limit: 2 },
                 personalDb,
                 undefined,
                 undefined,
@@ -301,7 +301,7 @@ describe('CMS-04 REM Healing (2026-11-21)', () => {
 
             const neighborhoodLimited = (await callTool(
                 'team_visualize_relationships',
-                { workspace_id: 'adamic', project_number: 16, entry_id: e1.id, depth: 2, limit: 2 },
+                { workspace_id: 'companion', project_number: 16, entry_id: e1.id, depth: 2, limit: 2 },
                 personalDb,
                 undefined,
                 undefined,
@@ -315,7 +315,7 @@ describe('CMS-04 REM Healing (2026-11-21)', () => {
 
             const neighborhoodUnbounded = (await callTool(
                 'team_visualize_relationships',
-                { workspace_id: 'adamic', project_number: 16, entry_id: e1.id, depth: 2 },
+                { workspace_id: 'companion', project_number: 16, entry_id: e1.id, depth: 2 },
                 personalDb,
                 undefined,
                 undefined,

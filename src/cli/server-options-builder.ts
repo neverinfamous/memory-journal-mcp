@@ -23,6 +23,7 @@ import {
 
 import {
     buildOAuthOptionsGroup,
+    collectCliEnvBriefingOverrides,
     resolveDatabasePaths,
     type CatchConfig,
 } from './server-options-groups.js'
@@ -89,6 +90,30 @@ function resolveCopilotEnvKey(): string {
     return aligned !== undefined && aligned.trim() !== '' ? 'BRIEFING_COPILOT' : 'BRIEFING_COPILOT_REVIEWS'
 }
 
+const MAX_BRIEFING_COUNT = 100
+
+function resolveBriefingPrCount(resolver: ConfigResolver): number {
+    // [INVARIANT] Primary `briefingPrs` beats legacy `briefingPrCount` on CLI and config file.
+    if (resolver.isCliProvided('briefingPrs')) {
+        return resolver.resolveInt('briefingPrs', undefined, 0, MAX_BRIEFING_COUNT) ?? 0
+    }
+    if (resolver.isCliProvided('briefingPrCount')) {
+        return resolver.resolveInt('briefingPrCount', undefined, 0, MAX_BRIEFING_COUNT) ?? 0
+    }
+    const envVal = process.env['BRIEFING_PR_COUNT']
+    if (envVal !== undefined && envVal.trim() !== '') {
+        return resolver.resolveInt('briefingPrCount', 'BRIEFING_PR_COUNT', 0, MAX_BRIEFING_COUNT) ?? 0
+    }
+    if (resolver.hasConfigFileKey('briefingPrs')) {
+        return resolver.resolveInt('briefingPrs', undefined, 0, MAX_BRIEFING_COUNT) ?? 0
+    }
+    return (
+        resolver.resolveInt('briefingPrCount', undefined, 0, MAX_BRIEFING_COUNT) ??
+        resolver.resolveInt('briefingPrs', 'BRIEFING_PR_COUNT', 0, MAX_BRIEFING_COUNT) ??
+        0
+    )
+}
+
 function buildBriefingConfigOptions(
     resolver: ConfigResolver,
     catchConfig: CatchConfig,
@@ -96,36 +121,18 @@ function buildBriefingConfigOptions(
     defaultWorkspaceId: string | undefined,
     projectRegistry: ServerOptions['projectRegistry']
 ): NonNullable<ServerOptions['briefingConfig']> {
+    const rejectBlankThreshold =
+        resolver.isCliProvided('briefingImportanceThreshold') ||
+        resolver.hasConfigFileKey('briefingImportanceThreshold')
     return {
-        commitCount: catchConfig(() => resolver.resolveInt('briefingCommits', 'BRIEFING_COMMIT_COUNT') ?? 3, 3),
-        entryCount: catchConfig(() => resolver.resolveInt('briefingEntries', 'BRIEFING_ENTRY_COUNT') ?? 3, 3),
-        summaryCount: catchConfig(() => resolver.resolveInt('briefingSummaries', 'BRIEFING_SUMMARY_COUNT') ?? 1, 1),
+        commitCount: catchConfig(() => resolver.resolveInt('briefingCommits', 'BRIEFING_COMMIT_COUNT', 0, MAX_BRIEFING_COUNT) ?? 3, 3),
+        entryCount: catchConfig(() => resolver.resolveInt('briefingEntries', 'BRIEFING_ENTRY_COUNT', 0, MAX_BRIEFING_COUNT) ?? 3, 3),
+        summaryCount: catchConfig(() => resolver.resolveInt('briefingSummaries', 'BRIEFING_SUMMARY_COUNT', 0, MAX_BRIEFING_COUNT) ?? 1, 1),
         includeTeam: catchConfig(() => resolver.resolveBool('briefingIncludeTeam', 'BRIEFING_INCLUDE_TEAM') ?? false, false),
-        issueCount: catchConfig(() => resolver.resolveInt('briefingIssues', 'BRIEFING_ISSUE_COUNT') ?? 0, 0),
-        prCount: catchConfig(() => {
-            if (resolver.isCliProvided('briefingPrCount')) {
-                return resolver.resolveInt('briefingPrCount') ?? 0
-            }
-            if (resolver.isCliProvided('briefingPrs')) {
-                return resolver.resolveInt('briefingPrs') ?? 0
-            }
-            const envVal = process.env['BRIEFING_PR_COUNT']
-            if (envVal !== undefined && envVal.trim() !== '') {
-                return resolver.resolveInt('briefingPrCount', 'BRIEFING_PR_COUNT') ?? 0
-            }
-            // [INVARIANT] Primary file key `briefingPrs` beats legacy `briefingPrCount`, matching hot-reload
-            // (`readBriefingConfigEntry`). `briefingPrs` has a Commander default, so probe the file explicitly.
-            if (resolver.hasConfigFileKey('briefingPrs')) {
-                return resolver.resolveInt('briefingPrs') ?? 0
-            }
-            return (
-                resolver.resolveInt('briefingPrCount') ??
-                resolver.resolveInt('briefingPrs', 'BRIEFING_PR_COUNT') ??
-                0
-            )
-        }, 0),
+        issueCount: catchConfig(() => resolver.resolveInt('briefingIssues', 'BRIEFING_ISSUE_COUNT', 0, MAX_BRIEFING_COUNT) ?? 0, 0),
+        prCount: catchConfig(() => resolveBriefingPrCount(resolver), 0),
         prStatusBreakdown: catchConfig(() => resolver.resolveBool('briefingPrStatus', 'BRIEFING_PR_STATUS') ?? false, false),
-        milestoneCount: catchConfig(() => resolver.resolveInt('briefingMilestones', 'BRIEFING_MILESTONE_COUNT') ?? 3, 3),
+        milestoneCount: catchConfig(() => resolver.resolveInt('briefingMilestones', 'BRIEFING_MILESTONE_COUNT', 0, MAX_BRIEFING_COUNT) ?? 3, 3),
         rulesFilePath: catchConfig(() => {
             const val = resolver.resolve<string>('rulesFile', 'RULES_FILE_PATH')
             return val ? path.resolve(process.cwd(), val) : undefined
@@ -134,7 +141,7 @@ function buildBriefingConfigOptions(
             const val = resolver.resolve<string>('skillsDir', 'SKILLS_DIR_PATH')
             return val ? path.resolve(process.cwd(), val) : undefined
         }, undefined),
-        workflowCount: catchConfig(() => resolver.resolveInt('briefingWorkflows', 'BRIEFING_WORKFLOW_COUNT') ?? 0, 0),
+        workflowCount: catchConfig(() => resolver.resolveInt('briefingWorkflows', 'BRIEFING_WORKFLOW_COUNT', 0, MAX_BRIEFING_COUNT) ?? 0, 0),
         workflowStatusBreakdown: catchConfig(() => resolver.resolveBool('briefingWorkflowStatus', 'BRIEFING_WORKFLOW_STATUS') ?? false, false),
         copilotReviews: catchConfig(
             () => resolver.resolveBool('briefingCopilot', resolveCopilotEnvKey()) ?? false,
@@ -154,7 +161,8 @@ function buildBriefingConfigOptions(
                         'BRIEFING_IMPORTANCE_THRESHOLD'
                     ),
                     'briefingImportanceThreshold',
-                    0.3
+                    0.3,
+                    { rejectBlank: rejectBlankThreshold }
                 ),
             0.3
         ),
@@ -395,6 +403,14 @@ export function buildServerOptions(
         projectRegistry
     )
 
+    const briefingConfig = buildBriefingConfigOptions(
+        resolver,
+        catchConfig,
+        defaultProjectNumber,
+        defaultWorkspaceId,
+        projectRegistry
+    )
+    const briefingOverrides = collectCliEnvBriefingOverrides(resolver, briefingConfig)
     const serverOptions: ServerOptions = {
         transport,
         port: catchConfig(() => resolver.resolveInt('port', 'PORT', 1, 65535) ?? 3000, 3000),
@@ -414,13 +430,8 @@ export function buildServerOptions(
         projectRegistry,
         additionalTeamDbs: catchConfig(() => parseAdditionalTeamDbsOption(resolver.resolve<unknown>('additionalTeamDbs', 'ADDITIONAL_TEAM_DBS')), undefined),
         allowedIoRoots: catchConfig(() => parseAllowedIoRootsOption(resolver.resolve<unknown>('allowedIoRoots', 'ALLOWED_IO_ROOTS')), undefined),
-        briefingConfig: buildBriefingConfigOptions(
-            resolver,
-            catchConfig,
-            defaultProjectNumber,
-            defaultWorkspaceId,
-            projectRegistry
-        ),
+        briefingConfig,
+        ...(briefingOverrides !== undefined ? { briefingOverrides } : {}),
         auditConfig: buildAuditConfigOption(resolver, catchConfig),
         embeddingModel: catchConfig(() => resolver.resolve<string>('embeddingModel', 'EMBEDDING_MODEL'), undefined),
         ...(instructionLevel !== undefined ? { instructionLevel } : {}),

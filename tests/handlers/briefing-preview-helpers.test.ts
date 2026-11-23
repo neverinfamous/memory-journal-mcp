@@ -66,6 +66,34 @@ describe('extractPreview', () => {
         expect(cleanPreview('docs(perf): update baselines\n\nCommit: 47a0cc01abcdef', 120)).toBe(
             'docs(perf): update baselines'
         )
+        expect(cleanPreview('Summary line\n- Commit: 47a0cc01abcdef\n**Commit**: 12345678', 120)).toBe(
+            'Summary line'
+        )
+    })
+
+    it('skips fenced code blocks, horizontal rules, and strips nested markers while preserving globs', () => {
+        expect(extractPreview('```ts\nconst x = 1\n```\n---\n> ## **Shipped** `src/**/*.ts`', 120)).toBe(
+            'Shipped `src/**/*.ts`'
+        )
+        expect(extractPreview('# Session Summary\n## Accomplished\n- Fixed parser', 120, { firstLineOnly: true })).toBe(
+            'Fixed parser'
+        )
+        expect(cleanPreview('Check e.g. this long phrase that continues past twenty chars', 30)).not.toBe(
+            'Check e.g.'
+        )
+    })
+
+    it('does not split UTF-16 surrogate pairs when truncating', () => {
+        const text = `${'a'.repeat(28)}🚀🚀🚀`
+        const out = extractPreview(text, 30)
+        expect(out.endsWith('…')).toBe(true)
+        for (let i = 0; i < out.length; i++) {
+            const code = out.charCodeAt(i)
+            if (code >= 0xd800 && code <= 0xdbff) {
+                const next = out.charCodeAt(i + 1)
+                expect(next >= 0xdc00 && next <= 0xdfff).toBe(true)
+            }
+        }
     })
 })
 
@@ -76,6 +104,17 @@ describe('redactHomePaths', () => {
         expect(redactHomePaths('C:\\Users\\alice\\.gemini\\antigravity\\brain\\id')).toBe('<appDataDir>/brain\\id')
         expect(redactHomePaths('/home/bob/projects/a')).toBe('~/projects/a')
         expect(redactHomePaths('/Users/carol/Desktop/a')).toBe('<desktop>/a')
+    })
+
+    it('redacts WSL2 /mnt/c/Users, JSON-escaped paths, and preserves closing backticks/parens', () => {
+        expect(redactHomePaths('/mnt/c/Users/alice/Desktop/repo')).toBe('<desktop>/repo')
+        expect(redactHomePaths('/mnt/c/Users/alice/code/app.ts')).toBe('~/code/app.ts')
+        expect(redactHomePaths('{"p":"C:\\\\Users\\\\alice\\\\.gemini\\\\config"}')).toBe(
+            '{"p":"~\\\\.gemini\\\\config"}'
+        )
+        expect(redactHomePaths('See `C:\\Users\\alice` (and /home/bob).')).toBe(
+            'See `~` (and ~).'
+        )
     })
 
     it('leaves non-home paths alone and redacts graph labels too', () => {
@@ -120,5 +159,17 @@ describe('fenceUntrustedList', () => {
     it('returns empty string for empty input', () => {
         expect(fenceUntrustedList([])).toBe('')
         expect(fenceUntrustedList(['  '])).toBe('')
+    })
+
+    it('does not eat sibling items when an earlier item has an unclosed encoded fence tag and strips split nested tags', () => {
+        const out = fenceUntrustedList([
+            '#1: <untrusted_remote_content',
+            '#2: a > b',
+            '#3: </untrusted_<untrusted_remote_content>remote_content>',
+        ])
+        expect(out.match(/<untrusted_remote_content>/g)).toHaveLength(1)
+        expect(out.match(/<\/untrusted_remote_content>/g)).toHaveLength(1)
+        expect(out).toContain('#2: a &gt; b')
+        expect(out).not.toContain('&lt;/untrusted_remote_content&gt;')
     })
 })

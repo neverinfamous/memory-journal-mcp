@@ -11,6 +11,7 @@ import {
     BRIEFING_CONFIG_KEY_MAP,
     buildInitialBaselines,
     isValidBriefingConfigValue,
+    readBriefingConfigEntry,
     seedInitialBriefingScopeFromFile,
     reloadBriefingConfigKeys,
     type BriefingBaselineMap,
@@ -20,7 +21,6 @@ import {
     type MutatedConfigFields,
     type UpdateConfigOptions,
 } from './config-manager-helpers.js'
-import { syncBriefingProvenanceFromFile } from './config-manager-baselines.js'
 import { readSafeRegularConfigTextSync } from './config-file-safety.js'
 import {
     applyPersistableConfigKeys,
@@ -56,6 +56,7 @@ export class ConfigManager extends EventEmitter {
     private defaultWorkspaceIdFromFile = false
     private defaultProjectNumberFromFile = false
     private readonly briefingKeysFromFile: Set<BriefingConfigurableKey>
+    private readonly lastFileBriefingValues: Map<BriefingConfigurableKey, number | boolean>
 
     constructor(
         initialConfig: DynamicConfig,
@@ -78,6 +79,7 @@ export class ConfigManager extends EventEmitter {
         this.codemodeBaseline = baselines.codemodeBaseline
         this.initialBriefingBaseline = baselines.initialBriefingBaseline
         this.briefingKeysFromFile = new Set(baselines.briefingKeysFromFile)
+        this.lastFileBriefingValues = new Map(baselines.lastFileBriefingValues)
         this.codemodeFromFile = baselines.codemodeFromFile
         this.defaultWorkspaceIdFromFile = baselines.defaultWorkspaceIdFromFile
         this.defaultProjectNumberFromFile = baselines.defaultProjectNumberFromFile
@@ -414,14 +416,20 @@ export class ConfigManager extends EventEmitter {
             this.applyReloadedCodemode(parsed, updates)
 
             const bc = { ...this.config.briefingConfig }
-            const bcKeyChanged = reloadBriefingConfigKeys(parsed, bc, this.initialBriefingBaseline)
-            const scopeOutcome = applyReloadedBriefingScope(parsed, bc, this.cliEnvBaseline)
-            syncBriefingProvenanceFromFile(
+            const bcKeyChanged = reloadBriefingConfigKeys(
                 parsed,
+                bc,
+                this.initialBriefingBaseline,
                 this.briefingKeysFromFile,
-                BRIEFING_CONFIG_KEY_MAP,
-                isValidBriefingConfigValue
+                this.lastFileBriefingValues
             )
+            const scopeOutcome = applyReloadedBriefingScope(parsed, bc, this.cliEnvBaseline)
+            for (const [fileKey, { target, kind, aliases }] of Object.entries(BRIEFING_CONFIG_KEY_MAP)) {
+                const match = readBriefingConfigEntry(parsed, fileKey, aliases)
+                if (match === undefined || !isValidBriefingConfigValue(match.value, kind)) {
+                    this.briefingKeysFromFile.delete(target)
+                }
+            }
             if (scopeOutcome.scopeAccepted) {
                 this.defaultWorkspaceIdFromFile = scopeOutcome.defaultWorkspaceIdFromFile
                 this.defaultProjectNumberFromFile = scopeOutcome.defaultProjectNumberFromFile

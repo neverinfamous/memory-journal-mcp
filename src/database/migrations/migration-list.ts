@@ -19,6 +19,7 @@ import { Migration018AddProjectAndPruneDuplicateIndexes } from './018-add-projec
 import { Migration019NormalizeLegacyCommitEntries } from './019-normalize-legacy-commit-entries.js'
 import { Migration020AddTeamOriginPersonalId } from './020-add-team-origin-personal-id.js'
 import { Migration021AddEntityLookupAndPruneAliasIndex } from './021-add-entity-lookup-and-prune-alias-index.js'
+import { Migration022AddAutoContextIndex } from './022-add-autocontext-index.js'
 import type { Migration } from './migration.js'
 
 export const MIGRATIONS: Migration[] = [
@@ -43,4 +44,5 @@ export const MIGRATIONS: Migration[] = [
     Migration019NormalizeLegacyCommitEntries,
     Migration020AddTeamOriginPersonalId,
     Migration021AddEntityLookupAndPruneAliasIndex,
+    Migration022AddAutoContextIndex,
 ]

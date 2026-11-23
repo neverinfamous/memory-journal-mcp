@@ -100,6 +100,9 @@ function createImportanceFilter(
     targetWs: string,
     threshold: number
 ): (entries: JournalEntry[]) => JournalEntry[] {
+    if (threshold <= 0) {
+        return (entries: JournalEntry[]): JournalEntry[] => entries
+    }
     const importanceScoreCache = new Map<number, number>()
     return (entries: JournalEntry[]): JournalEntry[] => {
         if (entries.length === 0) return []
@@ -136,6 +139,27 @@ function createImportanceFilter(
             return score >= threshold
         })
     }
+}
+
+function collectMirrorCandidates(
+    includeTeam: boolean,
+    finalSummaryEntries: readonly JournalEntry[],
+    rawRecentEntries: readonly JournalEntry[]
+): MirrorCandidate[] {
+    if (!includeTeam) return []
+    const seenMirrorIds = new Set<number>()
+    const mirrorCandidates: MirrorCandidate[] = []
+    for (const e of [...finalSummaryEntries, ...rawRecentEntries]) {
+        if (seenMirrorIds.has(e.id)) continue
+        seenMirrorIds.add(e.id)
+        mirrorCandidates.push({
+            id: e.id,
+            content: e.content,
+            timestamp: e.timestamp,
+            ...(e.workspaceId !== undefined ? { workspaceId: e.workspaceId } : {}),
+        })
+    }
+    return mirrorCandidates
 }
 
 function formatSummaryEntries(
@@ -237,18 +261,11 @@ export function buildJournalContext(
 
     const totalEntries = context.db.getActiveEntryCount(targetWs)
     const lastModified = recentEntries[0]?.timestamp ?? new Date().toISOString()
-    const seenMirrorIds = new Set<number>()
-    const mirrorCandidates: MirrorCandidate[] = []
-    for (const e of [...finalSummaryEntries, ...rawRecentEntries]) {
-        if (seenMirrorIds.has(e.id)) continue
-        seenMirrorIds.add(e.id)
-        mirrorCandidates.push({
-            id: e.id,
-            content: e.content,
-            timestamp: e.timestamp,
-            ...(e.workspaceId !== undefined ? { workspaceId: e.workspaceId } : {}),
-        })
-    }
+    const mirrorCandidates = collectMirrorCandidates(
+        config.includeTeam,
+        finalSummaryEntries,
+        rawRecentEntries
+    )
 
     return {
         totalEntries,

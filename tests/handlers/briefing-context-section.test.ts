@@ -286,6 +286,17 @@ describe('buildTeamContext', () => {
         expect(result!.teamInfo.latestPreview).toContain('\u2026')
         expect(result!.teamLatestEntries![0]!.preview).toContain('\u2026')
     })
+
+    it('skips importance hydration when briefingImportanceThreshold is 0', () => {
+        const calculateImportance = vi.fn().mockReturnValue({ score: 0.9 })
+        const db = createMockDb({ calculateImportance })
+        const context = { db } as never
+        const config = createMockConfig({ briefingImportanceThreshold: 0 })
+
+        const result = buildJournalContext(context, config as never, undefined, 'ws')
+        expect(result.latestEntries.length).toBeGreaterThan(0)
+        expect(calculateImportance).not.toHaveBeenCalled()
+    })
 })
 
 

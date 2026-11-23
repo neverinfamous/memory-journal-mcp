@@ -155,7 +155,8 @@ export function parseAllowedIoRootsOption(raw: unknown): string[] | undefined {
 export function parseImportanceThresholdOption(
     val: unknown,
     name: string,
-    fallback: number
+    fallback: number,
+    options?: { rejectBlank?: boolean }
 ): number {
     if (val === undefined || val === null) return fallback
     let num: number
@@ -163,8 +164,19 @@ export function parseImportanceThresholdOption(
         num = val
     } else if (typeof val === 'string') {
         const trimmed = val.trim()
-        if (trimmed === '') return fallback
-        num = /^-?(?:\d+(?:\.\d+)?|\.\d+)$/.test(trimmed) ? Number(trimmed) : Number.NaN
+        if (trimmed === '') {
+            if (options?.rejectBlank === true) {
+                throw new Error(
+                    `Invalid ${name} ''. Expected a finite number between 0 and 1.`
+                )
+            }
+            return fallback
+        }
+        // [INVARIANT] Match `coerceFiniteNumberString` canonical decimal syntax (reject `.5`, `00.5`, `-0`).
+        num =
+            trimmed !== '-0' && /^-?(?:0|[1-9]\d*)(?:\.\d+)?$/.test(trimmed)
+                ? Number(trimmed)
+                : Number.NaN
     } else {
         num = Number.NaN
     }

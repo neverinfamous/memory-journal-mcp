@@ -4,11 +4,13 @@
 
 import type { GitHubIntegration } from '../../../../github/github-integration/index.js'
 import type { BriefingConfig } from '../../shared.js'
-import { resolveGitHubRepo, isResourceError, milestoneCompletionPct } from '../../shared.js'
+import { resolveGitHubRepo, isResourceError, milestoneCompletionPct, sliceUntrustedInline } from '../../shared.js'
 import { logger } from '../../../../utils/logger.js'
-import { markUntrustedContentInline } from '../../../../utils/security-utils.js'
 import type { ServerRuntime } from '../../../../utils/maintenance-lock.js'
 import type { BriefingGitHub } from './github-section.js'
+
+const MAX_BRIEFING_TITLE_LEN = 120
+const MAX_WORKFLOW_NAME_LEN = 80
 
 export interface WorkflowRunLike {
     name: string
@@ -89,7 +91,7 @@ function buildWorkflowSummary(
         ...(config.workflowCount > 0
             ? {
                   runs: runs.slice(0, config.workflowCount).map((r) => ({
-                      name: markUntrustedContentInline(r.name),
+                      name: sliceUntrustedInline(r.name, MAX_WORKFLOW_NAME_LEN, '…'),
                       conclusion:
                           r.status !== 'completed' ? 'pending' : (r.conclusion ?? 'unknown'),
                       ...(r.url !== undefined ? { url: r.url } : {}),
@@ -135,7 +137,9 @@ export async function fetchCiStatus(
 
         return {
             status,
-            ciName: latestRun?.name ? markUntrustedContentInline(latestRun.name) : undefined,
+            ciName: latestRun?.name
+                ? sliceUntrustedInline(latestRun.name, MAX_WORKFLOW_NAME_LEN, '…')
+                : undefined,
             ciUpdatedAt: latestRun?.updatedAt,
             workflowSummary,
             runs,
@@ -148,6 +152,15 @@ export async function fetchCiStatus(
         })
         return { status: 'unknown', degraded: true }
     }
+}
+
+function logSettledRejection(operation: string, settled: PromiseSettledResult<unknown>): void {
+    if (settled.status !== 'rejected') return
+    logger.debug(`Briefing ${operation} fetch failed (partial degradation)`, {
+        module: 'BRIEFING',
+        operation,
+        error: settled.reason instanceof Error ? settled.reason.message : String(settled.reason),
+    })
 }
 
 export async function fetchIssuesAndPrs(
@@ -185,6 +198,8 @@ export async function fetchIssuesAndPrs(
                 ? github.getPullRequests(owner, repo, prState, prLimit)
                 : Promise.resolve([]),
         ])
+        logSettledRejection('issues', issuesSettled)
+        logSettledRejection('prs', prsSettled)
         const issues = issuesSettled.status === 'fulfilled' ? issuesSettled.value : []
         const prs = prsSettled.status === 'fulfilled' ? prsSettled.value : []
         const partialFailure = issuesSettled.status === 'rejected' || prsSettled.status === 'rejected'
@@ -194,21 +209,17 @@ export async function fetchIssuesAndPrs(
             config.issueCount > 0 && issues.length > 0
                 ? issues.slice(0, config.issueCount).map((i) => ({
                       number: i.number,
-                      title: markUntrustedContentInline(i.title),
+                      title: sliceUntrustedInline(i.title, MAX_BRIEFING_TITLE_LEN, '…'),
                   }))
                 : undefined
-
         const openPRs = config.prStatusBreakdown
             ? prs.filter((p) => p.state === 'OPEN').length
-            : prs.length > 0
-              ? prs.length
-              : 0
-
+            : prs.length
         const openPrList =
             config.prCount > 0 && prs.length > 0
                 ? prs.slice(0, config.prCount).map((p) => ({
                       number: p.number,
-                      title: markUntrustedContentInline(p.title),
+                      title: sliceUntrustedInline(p.title, MAX_BRIEFING_TITLE_LEN, '…'),
                       state: p.state,
                   }))
                 : undefined
@@ -264,7 +275,7 @@ export async function fetchMilestones(
             items: activeMilestones.map((m) => {
                 const pct = milestoneCompletionPct(m.openIssues, m.closedIssues)
                 return {
-                    title: markUntrustedContentInline(m.title),
+                    title: sliceUntrustedInline(m.title, MAX_BRIEFING_TITLE_LEN, '…'),
                     progress: `${String(pct)}%`,
                     dueOn: m.dueOn,
                 }
@@ -371,6 +382,7 @@ export async function fetchCopilotReviews(
         const settled = await Promise.allSettled(
             recentPrs.slice(0, 5).map((pr) => github.getCopilotReviewSummary(owner, repo, pr.number))
         )
+        for (const outcome of settled) logSettledRejection('copilot-review-pr', outcome)
         const summaries = settled.flatMap((s) => (s.status === 'fulfilled' ? [s.value] : []))
         const aggregated = aggregateCopilotReviewSummaries(summaries)
         const partial = summaries.length < settled.length

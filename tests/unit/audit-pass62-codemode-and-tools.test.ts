@@ -51,7 +51,7 @@ import type { ToolContext } from '../../src/types/index.js'
 
 const TEST_REGISTRY = {
     'memory-journal-mcp': { path: process.cwd(), project_number: 5 },
-    adamic: { path: path.resolve(process.cwd(), '..', 'adamic'), project_number: 16 },
+    companion: { path: path.resolve(process.cwd(), '..', 'companion'), project_number: 16 },
 }
 
 describe('Pass 62 Code-Quality Audit — Code Mode, Scope, Schemas, Tools & CLI', () => {
@@ -74,11 +74,11 @@ describe('Pass 62 Code-Quality Audit — Code Mode, Scope, Schemas, Tools & CLI'
 
         const parsed = parseSqlStatement(
             'UPDATE memory_journal SET content = :content, workspace_id = @workspace_id WHERE id = :id',
-            [{ content: 'updated', workspace_id: 'adamic', id: 7 }]
+            [{ content: 'updated', workspace_id: 'companion', id: 7 }]
         )
         expect(parsed.params['entry_id']).toBe(7)
         expect(parsed.params['content']).toBe('updated')
-        expect(parsed.params['target_workspace_id']).toBe('adamic')
+        expect(parsed.params['target_workspace_id']).toBe('companion')
         expect(parsed.params['workspace_id']).toBeUndefined()
 
         expect(
@@ -119,7 +119,7 @@ describe('Pass 62 Code-Quality Audit — Code Mode, Scope, Schemas, Tools & CLI'
         expect(parseProjectNumberField({ project_number: -5 }, {})).toBe(-5)
         expect(ExecuteCodeSchemaMcp.safeParse({ code: '1', workspace_id: 'a'.repeat(256) }).success).toBe(false)
 
-        const enriched: Record<string, unknown> = { project_number: 'adamic', content: 'hi' }
+        const enriched: Record<string, unknown> = { project_number: 'companion', content: 'hi' }
         enrichEntryRecord(enriched, () => TEST_REGISTRY)
         expect(enriched['project_number']).toBe(16)
 
@@ -166,14 +166,14 @@ describe('Pass 62 Code-Quality Audit — Code Mode, Scope, Schemas, Tools & CLI'
 
         const moveRes = await normalizeDispatchParams(
             { name: 'update_entry', inputSchema: {} } as never,
-            { entry_id: 1, workspace_id: 'default', target_workspace_id: 'adamic', project_number: 16 },
+            { entry_id: 1, workspace_id: 'default', target_workspace_id: 'companion', project_number: 16 },
             { sessionContext, projectId: 16, workspaceId: 'default', explicitWorkspace: true }
         )
         expect('errorResult' in moveRes).toBe(true)
 
         const batchMoveRes = normalizeBatchDispatchItems(
             'updates',
-            { updates: [{ id: 1, entry_id: 1, content: 'moved', target_workspace_id: 'adamic' }] },
+            { updates: [{ id: 1, entry_id: 1, content: 'moved', target_workspace_id: 'companion' }] },
             TEST_REGISTRY,
             {
                 projectId: 16,
@@ -193,11 +193,11 @@ describe('Pass 62 Code-Quality Audit — Code Mode, Scope, Schemas, Tools & CLI'
                 runtime: savedRuntime,
                 config: { projectRegistry: TEST_REGISTRY },
             } as unknown as ToolContext,
-            { code: '1', workspace_id: 'adamic' }
+            { code: '1', workspace_id: 'companion' }
         )
         expect('errorResponse' in scopedCtx).toBe(false)
         if (!('errorResponse' in scopedCtx)) {
-            expect(scopedCtx.workspaceId).toBe('adamic')
+            expect(scopedCtx.workspaceId).toBe('companion')
             expect(scopedCtx.numericProjectId).toBe(16)
         }
     })

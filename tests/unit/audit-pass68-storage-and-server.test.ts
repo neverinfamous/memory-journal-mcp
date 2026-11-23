@@ -46,7 +46,7 @@ const SAVED_ENV_KEYS = ['MJ_DB_ENCRYPTION_KEY', 'DB_ENCRYPTION_KEY'] as const
 
 const TEST_REGISTRY = {
     'memory-journal-mcp': { path: process.cwd(), project_number: 5 },
-    adamic: { path: process.cwd(), project_number: 16 },
+    companion: { path: process.cwd(), project_number: 16 },
 }
 
 function requireTool(tools: ToolDefinition[], name: string): ToolDefinition {
@@ -129,9 +129,9 @@ describe('Pass 68 Audit — Storage, Locks, Schemas, Transport, Workdir & Prompt
 
         const runtime = new ServerRuntime()
         setActiveSessionProject(undefined, 5, runtime)
-        setActiveSessionProject('  adamic  ', undefined, runtime)
+        setActiveSessionProject('  companion  ', undefined, runtime)
         const sessionState = getActiveSessionProject(runtime)
-        expect(sessionState.workspaceId).toBe('adamic')
+        expect(sessionState.workspaceId).toBe('companion')
         expect(sessionState.projectNumber).toBeUndefined()
 
         const transport = new LegacySSEServerTransport('/messages', 'sess-p68')
@@ -182,7 +182,7 @@ describe('Pass 68 Audit — Storage, Locks, Schemas, Transport, Workdir & Prompt
         const db = new DatabaseAdapter(':memory:')
         await db.initialize()
         try {
-            const importOpts = { workspaceId: 'adamic', project_number: 16 }
+            const importOpts = { workspaceId: 'companion', project_number: 16 }
             expect(() =>
                 validateImportedFileEntry(
                     {
@@ -218,7 +218,7 @@ describe('Pass 68 Audit — Storage, Locks, Schemas, Transport, Workdir & Prompt
             ).toThrow(/ISO 8601/)
             const created = db.createEntry({
                 content: 'valid date format',
-                workspaceId: 'adamic',
+                workspaceId: 'companion',
                 projectNumber: 16,
                 timestamp: '2026-11-21',
             })
@@ -226,7 +226,7 @@ describe('Pass 68 Audit — Storage, Locks, Schemas, Transport, Workdir & Prompt
             expect(() =>
                 db.createEntry({
                     content: 'bad separator',
-                    workspaceId: 'adamic',
+                    workspaceId: 'companion',
                     projectNumber: 16,
                     timestamp: '2026-11-21X12:00:00',
                 })
@@ -314,18 +314,18 @@ describe('Pass 68 Audit — Storage, Locks, Schemas, Transport, Workdir & Prompt
         expect(unscopedStats['success']).toBe(true)
         expect('scopeNote' in unscopedStats).toBe(false)
 
-        const scopedStats = statsTool.handler({ workspace_id: 'adamic' }) as Record<string, unknown>
+        const scopedStats = statsTool.handler({ workspace_id: 'companion' }) as Record<string, unknown>
         expect(scopedStats['success']).toBe(true)
         expect(scopedStats['scopeNote']).toBe('Database-wide team vector index statistics')
 
         const unregisteredDir = makeTempDir('mj-p68-unreg-', true)
         expect(() =>
             resolveGitWorkingDir(
-                { cwd: unregisteredDir, workspace_id: 'adamic', project_number: 16 },
+                { cwd: unregisteredDir, workspace_id: 'companion', project_number: 16 },
                 {
                     allowedIoRoots: [unregisteredDir],
                     projectRegistry: {
-                        adamic: { path: path.join(os.tmpdir(), 'some-other-repo'), project_number: 16 },
+                        companion: { path: path.join(os.tmpdir(), 'some-other-repo'), project_number: 16 },
                     },
                 }
             )

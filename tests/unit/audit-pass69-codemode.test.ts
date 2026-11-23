@@ -134,7 +134,7 @@ describe('Pass 69 Audit — Code Mode Rewrites, Recovery Synthesizers, ReDoS & W
                 readonlyMode: true,
                 dryRunMode: false,
                 useTestDbMode: false,
-                pinnedWorkspaceRaw: 'adamic',
+                pinnedWorkspaceRaw: 'companion',
                 pinnedProjectRaw: Number.MAX_SAFE_INTEGER + 1,
                 activeTimers: new Set(),
             },
@@ -149,7 +149,7 @@ describe('Pass 69 Audit — Code Mode Rewrites, Recovery Synthesizers, ReDoS & W
         )
         await runner('const x = 1;', true, false, false)
         expect(captured.length).toBe(1)
-        expect(captured[0]?.workspaceId).toBe('adamic')
+        expect(captured[0]?.workspaceId).toBe('companion')
         expect(captured[0]?.projectNumber).toBeUndefined()
     })
 })

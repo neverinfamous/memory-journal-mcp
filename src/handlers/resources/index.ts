@@ -34,7 +34,8 @@ import {
     type ResourceContext,
     type ResourceResult,
 } from './shared.js'
-import { ResourceNotFoundError, ValidationError } from '../../types/errors.js'
+import { ProtocolError, ProtocolErrorCode } from '@modelcontextprotocol/server'
+import { ResourceNotFoundError } from '../../types/errors.js'
 import { getAuditResourceDef } from '../../audit/index.js'
 
 const templateRegexCache = new Map<string, RegExp>()
@@ -85,6 +86,7 @@ export function getResources(): object[] {
     cachedPublicResources = all.map((r) => ({
         uri: r.uri,
         name: r.name,
+        ...(r.title !== undefined ? { title: r.title } : {}),
         description: r.description,
         mimeType: r.mimeType,
         annotations: r.annotations,
@@ -120,7 +122,10 @@ export async function readResource(
     runtime?: ServerRuntime
 ): Promise<{ data: unknown; annotations?: { lastModified?: string } }> {
     if (Buffer.byteLength(uri, 'utf8') > 8192) {
-        throw new ValidationError('Resource URI exceeds maximum length of 8192 bytes')
+        throw new ProtocolError(
+            ProtocolErrorCode.InvalidParams,
+            'Resource URI exceeds maximum length of 8192 bytes'
+        )
     }
     const { all: resources, exactMap, templates } = getAllResourceDefinitions(runtime)
     const context = {
@@ -205,10 +210,14 @@ function generateResourceAliases(resources: InternalResourceDef[]): InternalReso
             return false
         })
         if (canonical !== undefined) {
+            const aliasName =
+                aliasUri === 'memory://agent-id'
+                    ? 'Agent ID (alias)'
+                    : `${canonical.name} (alias)`
             aliases.push({
                 ...canonical,
                 uri: aliasUri,
-                name: `${canonical.name} (alias)`,
+                name: aliasName,
                 // Delegate to canonical handler with caller's URI so bare aliases resolve context without forcing `/default` (H17)
                 handler: (uri, context) => canonical.handler(uri, context),
             })
@@ -264,7 +273,10 @@ export function validateResourceSubscription(
     briefingConfig?: BriefingConfig
 ): void {
     if (Buffer.byteLength(uri, 'utf8') > 8192) {
-        throw new ValidationError('Resource URI exceeds maximum length of 8192 bytes')
+        throw new ProtocolError(
+            ProtocolErrorCode.InvalidParams,
+            'Resource URI exceeds maximum length of 8192 bytes'
+        )
     }
     const { exactMap, templates } = getAllResourceDefinitions(runtime)
     const baseUri = getBaseUri(uri)

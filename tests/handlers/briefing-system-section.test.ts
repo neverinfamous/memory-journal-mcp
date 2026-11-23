@@ -9,6 +9,7 @@ import { describe, it, expect, vi } from 'vitest'
 import {
     parseTestHealth,
     buildBriefingSystemSummary,
+    parseGitCommitLines,
 } from '../../src/handlers/resources/core/briefing/system-section.js'
 
 
@@ -142,5 +143,15 @@ describe('buildBriefingSystemSummary', () => {
         )
 
         expect(result.gitHistory).toBeNull()
+    })
+
+    it('parseGitCommitLines caps commit subjects at 120 chars and preserves short hashes', () => {
+        const longSubject = `feat: ${'x'.repeat(200)}`
+        const summary = parseGitCommitLines(`abcdef12|${longSubject}|2026-11-22\n12345678|fix: small|2026-11-22`, 5)
+        expect(summary.commits).toHaveLength(2)
+        expect(summary.commits[0]?.hash).toBe('abcdef12')
+        expect(summary.commits[0]?.message.length).toBeLessThanOrEqual(180)
+        expect(summary.commits[0]?.message).not.toContain('x'.repeat(150))
+        expect(summary.commits[1]?.hash).toBe('12345678')
     })
 })

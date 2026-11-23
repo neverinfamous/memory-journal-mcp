@@ -1,4 +1,5 @@
 import type { BriefingConfig } from '../../handlers/resources/shared.js'
+import type { BriefingConfigurableKey } from '../../utils/config-manager-helpers.js'
 import type { ProjectRegistryEntry } from '../../types/index.js'
 import type { AuditConfig } from '../../audit/index.js'
 
@@ -32,6 +33,8 @@ export interface ServerOptions {
     publicOrigin?: string
     // Briefing configuration
     briefingConfig?: BriefingConfig
+    // Briefing keys explicitly supplied via CLI flags or env vars (for hot-reload baseline preservation)
+    briefingOverrides?: Partial<Record<BriefingConfigurableKey, number | boolean>>
     // Project Registry
     projectRegistry?: Record<string, ProjectRegistryEntry>
     // Additional team database mappings (label -> path)

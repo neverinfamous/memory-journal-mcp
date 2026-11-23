@@ -38,6 +38,9 @@ export function formatUserMessage(opts: BriefingUserMessageOptions): string {
         graphLines: buildGraphLines(opts.graphSummary, {
             ...(opts.graphPivots !== undefined ? { graphPivots: opts.graphPivots } : {}),
             ...(opts.toolNaming !== undefined ? { toolNaming: opts.toolNaming } : {}),
+            ...(opts.toolHints?.expand !== undefined
+                ? { expandToolHint: opts.toolHints.expand }
+                : {}),
             ...(opts.workspaceId !== undefined ? { workspaceId: opts.workspaceId } : {}),
             ...(opts.analyticsInsights?.relationshipDensity !== undefined
                 ? { relationshipDensity: opts.analyticsInsights.relationshipDensity }

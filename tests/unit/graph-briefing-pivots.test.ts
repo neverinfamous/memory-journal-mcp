@@ -9,6 +9,8 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import * as fs from 'node:fs'
 import * as os from 'node:os'
 import * as path from 'node:path'
+import { parse as parseYaml } from 'yaml'
+import { ProtocolError } from '@modelcontextprotocol/server'
 import { DatabaseAdapter } from '../../src/database/sqlite-adapter/index.js'
 import { callTool } from '../../src/handlers/tools/index.js'
 import { readResource } from '../../src/handlers/resources/index.js'
@@ -19,6 +21,7 @@ import {
 import {
     buildGraphPivots,
     resolveBriefingToolNaming,
+    resolveToolHintName,
 } from '../../src/handlers/resources/core/briefing/graph-pivots-section.js'
 import { previewDraftSuggestedLinks } from '../../src/handlers/tools/core/link-suggestions.js'
 import { ServerRuntime } from '../../src/utils/maintenance-lock.js'
@@ -420,5 +423,136 @@ describe('Graph & Briefing Integration (G1-G9)', () => {
                 (s) => isRecord(s) && s['targetId'] === prior && s['reason'] === 'same-session'
             )
         ).toBe(true)
+    })
+
+    it('ranks fresh inbound-convergent active threads above bulk outbound consolidation hubs pointing to old entries and displays (+N)', async () => {
+        const rawDb = (
+            db as unknown as {
+                connection: {
+                    getNativeDb: () => {
+                        prepare: (sql: string) => { run: (...args: unknown[]) => void }
+                    }
+                }
+            }
+        ).connection.getNativeDb()
+        const oldTs = '2026-01-01T00:00:00.000Z'
+        const oldTargets: number[] = []
+        for (let i = 0; i < 6; i++) {
+            const id = await seedEntry(`Historical note ${String(i)}`)
+            rawDb.prepare('UPDATE memory_journal SET timestamp = ? WHERE id = ?').run(oldTs, id)
+            oldTargets.push(id)
+        }
+        const consolidationHub = await seedEntry('Bulk consolidation summary')
+        for (const target of oldTargets) {
+            db.linkEntries(consolidationHub, target, 'evolves_from', undefined, 'test-ws')
+        }
+
+        const freshThread = await seedEntry('Active architecture refactor thread')
+        const follower1 = await seedEntry('Follow-up fix 1')
+        const follower2 = await seedEntry('Follow-up fix 2')
+        db.linkEntries(follower1, freshThread, 'resolved', undefined, 'test-ws')
+        db.linkEntries(follower2, freshThread, 'implements', undefined, 'test-ws')
+
+        const res = await readResource(
+            'memory://briefing/test-ws',
+            db,
+            undefined,
+            undefined,
+            undefined,
+            teamDb,
+            briefingConfig,
+            runtime
+        )
+        const md = String(res.data)
+        const activeLine = md.split('\n').find((l) => l.includes('Active threads (14d):')) ?? ''
+        expect(activeLine).toContain(
+            `#${String(freshThread)} (technical_note) Active architecture refactor thread (+2)`
+        )
+        expect(activeLine).not.toContain(`#${String(consolidationHub)}`)
+    })
+
+    it('resolves mixed-preset tool hints accurately and suppresses write footers in readonly mode', async () => {
+        const starterFilter = {
+            raw: 'starter',
+            rules: [],
+            enabledTools: new Set(['create_entry', 'get_entry_by_id', 'mj_execute_code']),
+        }
+        expect(resolveToolHintName(starterFilter, 'get_entry_by_id', 'mj.core.getEntryById')).toBe(
+            'get_entry_by_id'
+        )
+        expect(
+            resolveToolHintName(
+                starterFilter,
+                'visualize_relationships',
+                'mj.relationships.visualizeRelationships({ entry_id, depth: 2 })'
+            )
+        ).toBe('mj.relationships.visualizeRelationships({ entry_id, depth: 2 })')
+
+        const readonlyFilter = {
+            raw: 'readonly',
+            rules: [],
+            enabledTools: new Set(['get_entry_by_id', 'visualize_relationships']),
+        }
+        await seedEntry('Orphan note for readonly graph')
+        const graphRes = await readResource(
+            'memory://graph/test-ws',
+            db,
+            undefined,
+            readonlyFilter,
+            undefined,
+            teamDb,
+            briefingConfig,
+            runtime
+        )
+        const graphMd = String(graphRes.data)
+        expect(graphMd).not.toContain('Link: `')
+        expect(graphMd).toContain('Expand: `visualize_relationships`')
+    })
+
+    it('enforces agent-context parity (#N, ?pin_session=false, valid YAML, degrees, wildcard InvalidParams) and unresolved briefing list_projects hint', async () => {
+        const e1 = await seedEntry('YAML: tricky #value "quoted" entry', { session_id: 'sess-yaml' })
+        const e2 = await seedEntry('Linked peer entry', { session_id: 'sess-yaml' })
+        db.linkEntries(e1, e2, 'references', undefined, 'test-ws')
+
+        // Wildcard rejected with ProtocolError(InvalidParams) across briefing, graph, and agent-context
+        await expect(
+            readResource('memory://briefing/*', db, undefined, undefined, undefined, teamDb, briefingConfig, runtime)
+        ).rejects.toThrow(ProtocolError)
+        await expect(
+            readResource('memory://graph/*', db, undefined, undefined, undefined, teamDb, briefingConfig, runtime)
+        ).rejects.toThrow(ProtocolError)
+        await expect(
+            readResource('memory://agent-context/*', db, undefined, undefined, undefined, teamDb, briefingConfig, runtime)
+        ).rejects.toThrow(ProtocolError)
+
+        // Numeric #5 lookup + ?pin_session=false + ?session_id= produces parseable YAML with degrees
+        const ctxRes = await readResource(
+            'memory://agent-context/%235?session_id=sess-yaml&pin_session=false',
+            db,
+            undefined,
+            undefined,
+            undefined,
+            teamDb,
+            briefingConfig,
+            runtime
+        )
+        const ctxYaml = String(ctxRes.data)
+        expect(ctxYaml).toContain('↔1')
+        const parsed = parseYaml(ctxYaml) as Record<string, unknown>
+        expect(parsed['Workspace ID']).toBe('test-ws')
+        expect(parsed['Project Number']).toBe(5)
+
+        // Unresolved repo in briefing surfaces list_projects guidance
+        const unresolved = await readResource(
+            'memory://briefing/unknown-repo-xyz',
+            db,
+            undefined,
+            undefined,
+            undefined,
+            teamDb,
+            briefingConfig,
+            runtime
+        )
+        expect(String(unresolved.data)).toContain('list_projects')
     })
 })

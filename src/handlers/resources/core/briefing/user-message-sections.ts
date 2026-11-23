@@ -13,7 +13,12 @@ import {
     type BriefingToolNaming,
 } from './graph-pivots-section.js'
 import { fenceNonCanonicalRefOrKey } from '../../../../utils/security-utils.js'
-import { fenceUntrustedList } from '../../fencing-helpers.js'
+import {
+    escapeCell,
+    escapeLinkLabel,
+    fenceUntrustedList,
+    sanitizeDisplayIdentifier,
+} from '../../fencing-helpers.js'
 
 export interface BriefingUserMessageOptions {
     repoName: string
@@ -31,8 +36,15 @@ export interface BriefingUserMessageOptions {
     graphSummary?: GraphSummary
     /** Cross-source pivots (degree, commit refs, active threads); absent when disabled */
     graphPivots?: BriefingGraphPivots
-    /** Operation naming for hints; `codemode` emits `mj.*` APIs (default: legacy mixed hints) */
+    /** Operation naming for hints; `codemode` emits `mj.*` APIs (default: direct) */
     toolNaming?: BriefingToolNaming
+    /** Per-tool hint overrides for mixed presets (`starter`/`essential`/`readonly`). */
+    toolHints?: {
+        expand?: string
+        link?: string
+        summary?: string
+        team?: string
+    }
     gitHistory?: GitHistorySummary | null
     isReadonly?: boolean
     teamConfigured?: boolean
@@ -42,15 +54,8 @@ export interface BriefingUserMessageOptions {
     workspaceId?: string
 }
 
-const escapeContent = (text: string): string =>
-    text.replace(/[\r\n\u2028\u2029]+/g, ' ').replace(/\p{Cc}/gu, '')
-
-/** Escape pipe characters for use inside markdown table cells */
-const escapeCell = (text: string): string =>
-    escapeContent(text).replace(/\\/g, '\\\\').replace(/\|/g, '\\|')
-
-/** [BOUNDARY] Only render workflow links that point at github.com without markdown-breaking chars. */
-const SAFE_GITHUB_URL_RE = /^https:\/\/github\.com\/[^\s()<>[\]]+$/
+/** [BOUNDARY] Only render workflow links that point at github.com without markdown/control chars. */
+const SAFE_GITHUB_URL_RE = /^https:\/\/github\.com\/[^\s()<>[\]|\\'"\p{Cc}]+$/u
 
 /** Compute a short relative-age string (e.g. '3d ago', '5h ago') from an ISO timestamp */
 const relativeAge = (isoTimestamp: string): string | null => {
@@ -82,7 +87,14 @@ export function formatCiDisplay(opts: BriefingUserMessageOptions): string {
                 unknown: '❓',
             }
             ciDisplay = ws.runs
-                .map((r) => `${Object.hasOwn(icons, r.conclusion) ? icons[r.conclusion] : '❓'} ${r.url && SAFE_GITHUB_URL_RE.test(r.url) ? `[${r.name}](${r.url})` : r.name}`)
+                .map((r) => {
+                    const icon = Object.hasOwn(icons, r.conclusion) ? icons[r.conclusion] : '❓'
+                    const display =
+                        r.url && SAFE_GITHUB_URL_RE.test(r.url)
+                            ? `[${escapeLinkLabel(r.name)}](${r.url})`
+                            : r.name
+                    return `${icon} ${display}`
+                })
                 .join(' · ')
         } else {
             ciDisplay = formatWorkflowCounts(ws, opts.ciStatus)
@@ -118,7 +130,12 @@ export function buildGithubParts(opts: BriefingUserMessageOptions, ciDisplay: st
         ...(suppressCi ? [] : [escapeCell(ciDisplay)]),
     ]
     const local = opts.github?.localGitStatus
-    if (local && !local.isClean) {
+    if (
+        local &&
+        !local.isClean &&
+        (local.error === undefined || local.error === '') &&
+        local.degraded !== true
+    ) {
         githubParts.push(`Dirty (${String(local.modified)}M, ${String(local.untracked)}U)`)
     }
     return githubParts
@@ -129,6 +146,12 @@ export function buildTrackingParts(github: BriefingGitHub | null): string[] {
     if (!github) return trackingParts
     if (github.issuesSuppressed !== true) appendIssueTracking(github, trackingParts)
     if (github.prsSuppressed !== true) appendPullRequestTracking(github, trackingParts)
+    if (github.copilotReviews) {
+        const cr = github.copilotReviews
+        trackingParts.push(
+            `GH Copilot Reviews: ${String(cr.reviewed)} reviewed · ${String(cr.approved)} approved${cr.changesRequested > 0 ? ` · ${String(cr.changesRequested)} changes requested` : ''}${cr.totalComments > 0 ? ` (${String(cr.totalComments)} comments)` : ''}`
+        )
+    }
     appendMilestoneTracking(github, trackingParts)
     return trackingParts
 }
@@ -192,23 +215,18 @@ function appendPullRequestTracking(github: BriefingGitHub, trackingParts: string
 
 function appendMilestoneTracking(github: BriefingGitHub, trackingParts: string[]): void {
     if (github.milestones.length === 0) return
-    trackingParts.push(
-        `MS: ${escapeCell(
-            github.milestones
-                .map(
-                    (m) =>
-                        `${m.title} (${m.progress}${m.progress === '100%' ? ' ✅' : ''}${m.dueOn ? `, due ${m.dueOn.split('T')[0] ?? ''}` : ''})`,
-                )
-                .join(', '),
-        )}`,
+    const items = github.milestones.map(
+        (m) =>
+            `${m.title} (${m.progress}${m.progress === '100%' ? ' ✅' : ''}${m.dueOn ? `, due ${m.dueOn.split('T')[0] ?? ''}` : ''})`,
     )
+    trackingParts.push(`MS: ${escapeCell(fenceUntrustedList(items))}`)
 }
 
 export function buildJournalParts(opts: BriefingUserMessageOptions): string[] {
     const journalLine1 = [`${String(opts.totalEntries)} entries`]
     if (opts.workspaceId) {
         // [BOUNDARY] No-registry mode echoes the raw URI segment; constrain before rendering.
-        journalLine1.push(`Workspace: **${opts.workspaceId.replace(/[^A-Za-z0-9._\-/*@]/g, '_').slice(0, 128)}**`)
+        journalLine1.push(`Workspace: **${sanitizeDisplayIdentifier(opts.workspaceId)}**`)
     }
     if (opts.teamTotalEntries !== undefined) {
         journalLine1.push(`Team: ${String(opts.teamTotalEntries)}`)
@@ -225,17 +243,19 @@ export function buildJournalParts(opts: BriefingUserMessageOptions): string[] {
     }
     if (summaryPreviews && summaryPreviews.length > 0) {
         // The Graph row's Expand line already names the expansion tool when pivots are on.
-        const summaryHint =
-            opts.graphPivots !== undefined
-                ? ''
-                : opts.toolNaming === 'direct'
-                  ? ' (view: `get_entry_by_id`)'
-                  : ' (view: `mj.core.getEntryById`)'
+        const summaryTool =
+            opts.toolHints?.summary ??
+            (opts.toolNaming === 'codemode' ? 'mj.core.getEntryById' : 'get_entry_by_id')
+        const summaryHint = opts.graphPivots !== undefined ? '' : ` (view: \`${summaryTool}\`)`
         journalParts.push(`Summary: ${escapeCell(fenceUntrustedList(summaryPreviews))}${summaryHint}`)
     }
     if (opts.teamLatestPreviews && opts.teamLatestPreviews.length > 0) {
-        const teamHint = opts.toolNaming === 'direct' ? '`team_get_entry_by_id`' : '`mj.team.teamGetEntryById`'
-        journalParts.push(`Team: ${escapeCell(fenceUntrustedList(opts.teamLatestPreviews))} (view: ${teamHint})`)
+        const teamTool =
+            opts.toolHints?.team ??
+            (opts.toolNaming === 'codemode' ? 'mj.team.teamGetEntryById' : 'team_get_entry_by_id')
+        journalParts.push(
+            `Team: ${escapeCell(fenceUntrustedList(opts.teamLatestPreviews))} (view: \`${teamTool}\`)`
+        )
     }
     return journalParts
 }
@@ -279,12 +299,6 @@ function appendRepoInsights(github: BriefingGitHub | null, insightsLines: string
             insightsLines.push(`${parts.join(' · ')}${trafficNote}`)
         }
     }
-    if (github?.copilotReviews) {
-        const cr = github.copilotReviews
-        insightsLines.push(
-            `GH Copilot Reviews: ${String(cr.reviewed)} reviewed · ${String(cr.approved)} approved${cr.changesRequested > 0 ? ` · ${String(cr.changesRequested)} changes requested` : ''}${cr.totalComments > 0 ? ` (${String(cr.totalComments)} comments)` : ''}`,
-        )
-    }
 }
 
 function appendAnalyticsInsights(
@@ -312,7 +326,7 @@ export function buildGitHistoryLines(opts: BriefingUserMessageOptions): string[]
     const stats = opts.gitHistory.stats
     if (stats) {
         gitHistoryLines.push(
-            `Velocity (${String(stats.total)}): ${String(stats.highImpact)} high · ${String(stats.lowImpact)} low · conf ${stats.avgConfidence.toFixed(2)}`,
+            `Velocity (${String(stats.total)}): ${String(stats.highImpact)} high · ${String(stats.lowImpact)} low`,
         )
     }
 
@@ -345,12 +359,17 @@ export function buildFlagsAlert(opts: BriefingUserMessageOptions): string {
     if (pivots !== undefined) {
         // [INTENT] Recency-scoped: the all-time ratio is diluted by historical bulk-linking.
         if (isRecentUnlinkedAlert(pivots)) {
-            const linkHint = opts.toolNaming === 'codemode' ? '`mj.relationships.linkEntries`' : '`link_entries`'
-            flagsAlert += `⚠️ **Journal Health:** ${String(pivots.unlinkedEntries)}/${String(pivots.recentEntries)} entries (${String(pivots.windowDays)}d) unlinked ⚪, at risk of auto-prune. Link via \`relationships\` on create or ${linkHint}.\n\n`
+            const actionHint =
+                opts.isReadonly === true
+                    ? ''
+                    : ` Link via \`relationships\` on create or \`${opts.toolHints?.link ?? (opts.toolNaming === 'codemode' ? 'mj.relationships.linkEntries' : 'link_entries')}\`.`
+            flagsAlert += `⚠️ **Journal Health:** ${String(pivots.unlinkedEntries)}/${String(pivots.recentEntries)} entries (${String(pivots.windowDays)}d) unlinked ⚪, at risk of auto-prune.${actionHint}\n\n`
         }
     } else if (graphSummary?.orphanRatio !== undefined && graphSummary.orphanRatio > 0.2) {
         const orphanPct = Math.round(graphSummary.orphanRatio * 100)
-        flagsAlert += `⚠️ **Journal Health:** ${orphanPct}% of entries are orphaned (0 relationships). Consider running \`optimize-journal\`.\n\n`
+        const actionHint =
+            opts.isReadonly === true ? '' : ' Consider running `optimize-journal`.'
+        flagsAlert += `⚠️ **Journal Health:** ${orphanPct}% of entries are orphaned (0 relationships).${actionHint}\n\n`
     }
     if (opts.deprecationWarnings && opts.deprecationWarnings.length > 0) {
         flagsAlert += `⚠️ **Deprecation Warning(s):**\n${opts.deprecationWarnings.map((w) => `🚩 ${w}`).join('\n')}\n\n`

@@ -287,18 +287,18 @@ describe('Pass 67 Audit — Storage, Locks, Scrubbers, Search, Interceptors, Scr
         )
         expect(emptyUriTargets?.[1]?.targetName).toBe('memory://team/recent')
 
-        expect(extractAuditScopeFromUri('memory://graph/adamic')).toEqual({ workspaceId: 'adamic' })
-        expect(extractAuditScopeFromUri('memory://actions/recent/adamic')).toEqual({
-            workspaceId: 'adamic',
+        expect(extractAuditScopeFromUri('memory://graph/companion')).toEqual({ workspaceId: 'companion' })
+        expect(extractAuditScopeFromUri('memory://actions/recent/companion')).toEqual({
+            workspaceId: 'companion',
         })
-        expect(extractAuditScopeFromUri('memory://github/status/adamic')).toEqual({
-            workspaceId: 'adamic',
+        expect(extractAuditScopeFromUri('memory://github/status/companion')).toEqual({
+            workspaceId: 'companion',
         })
-        expect(extractAuditScopeFromUri('memory://milestones/adamic/4')).toEqual({
-            workspaceId: 'adamic',
+        expect(extractAuditScopeFromUri('memory://milestones/companion/4')).toEqual({
+            workspaceId: 'companion',
         })
-        expect(extractAuditScopeFromUri('memory://kanban/adamic/16')).toEqual({
-            workspaceId: 'adamic',
+        expect(extractAuditScopeFromUri('memory://kanban/companion/16')).toEqual({
+            workspaceId: 'companion',
             projectNumber: 16,
         })
         expect(extractAuditScopeFromUri('memory://projects/16/timeline')).toEqual({

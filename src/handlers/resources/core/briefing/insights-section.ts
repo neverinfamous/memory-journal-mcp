@@ -11,6 +11,7 @@ import {
 } from '../../../../database/sqlite-adapter/entries/digest.js'
 import type { ResourceContext } from '../../shared.js'
 import { resourceWorkspace, sliceUntrustedInline } from '../../shared.js'
+import { extractPreview } from './preview-helpers.js'
 import { logger } from '../../../../utils/logger.js'
 
 /** Compact insights payload for the briefing JSON */
@@ -41,7 +42,8 @@ function writeLiveDigestCache(
     existingByWs: Map<string, { snapshot: DigestSnapshot; expiresAt: number }> | undefined,
     effectiveWorkspace: string,
     snapshot: DigestSnapshot,
-    expiresAt: number
+    expiresAt: number,
+    now: number
 ): void {
     if (dbCacheKey === undefined) return
     let wsMap = existingByWs
@@ -49,9 +51,16 @@ function writeLiveDigestCache(
         wsMap = new Map()
         liveDigestCache.set(dbCacheKey, wsMap)
     }
-    if (wsMap.size >= MAX_DIGEST_CACHE_WORKSPACES && !wsMap.has(effectiveWorkspace)) {
-        const oldest = wsMap.keys().next().value
-        if (oldest !== undefined) wsMap.delete(oldest)
+    wsMap.delete(effectiveWorkspace)
+    if (wsMap.size >= MAX_DIGEST_CACHE_WORKSPACES) {
+        for (const [k, v] of wsMap) {
+            if (now >= v.expiresAt) wsMap.delete(k)
+        }
+        while (wsMap.size >= MAX_DIGEST_CACHE_WORKSPACES) {
+            const oldest = wsMap.keys().next().value
+            if (oldest === undefined) break
+            wsMap.delete(oldest)
+        }
     }
     wsMap.set(effectiveWorkspace, { snapshot, expiresAt })
 }
@@ -61,16 +70,29 @@ function resolvePersistedDigest(
     effectiveWorkspace: string,
     allowRawPersisted: boolean
 ): { snapshot: unknown; source: 'persisted'; computedAt?: string } | null {
-    const dbSnapshot = context.db?.getLatestAnalyticsSnapshot?.('digest', effectiveWorkspace)
-    if (!dbSnapshot) return null
-    const parsed = parseDigestSnapshot(dbSnapshot.data)
-    if (parsed !== null) {
-        return { snapshot: parsed, source: 'persisted', computedAt: dbSnapshot.createdAt }
+    try {
+        const dbSnapshot = context.db?.getLatestAnalyticsSnapshot?.('digest', effectiveWorkspace)
+        if (!dbSnapshot) return null
+        const parsed = parseDigestSnapshot(dbSnapshot.data)
+        if (parsed !== null) {
+            return { snapshot: parsed, source: 'persisted', computedAt: dbSnapshot.createdAt }
+        }
+        if (allowRawPersisted && dbSnapshot.data !== undefined && dbSnapshot.data !== null) {
+            return {
+                snapshot: dbSnapshot.data,
+                source: 'persisted',
+                computedAt: dbSnapshot.createdAt,
+            }
+        }
+        return null
+    } catch (error) {
+        logger.debug('Failed to read persisted digest snapshot (non-critical)', {
+            module: 'BRIEFING',
+            operation: 'insights-persisted-read',
+            error: error instanceof Error ? error.message : String(error),
+        })
+        return null
     }
-    if (allowRawPersisted && dbSnapshot.data !== undefined && dbSnapshot.data !== null) {
-        return { snapshot: dbSnapshot.data, source: 'persisted', computedAt: dbSnapshot.createdAt }
-    }
-    return null
 }
 
 /**
@@ -97,14 +119,27 @@ export function resolveCachedOrLiveDigest(
     const byWs = dbCacheKey !== undefined ? liveDigestCache.get(dbCacheKey) : undefined
     const cachedDigest = byWs?.get(effectiveWorkspace)
     const now = Date.now()
-    if (cachedDigest !== undefined && now < cachedDigest.expiresAt) {
-        return { snapshot: cachedDigest.snapshot, source: 'computed' }
+    if (cachedDigest !== undefined) {
+        if (now < cachedDigest.expiresAt) {
+            // [INTENT] Refresh insertion order for true LRU eviction.
+            byWs?.delete(effectiveWorkspace)
+            byWs?.set(effectiveWorkspace, cachedDigest)
+            return { snapshot: cachedDigest.snapshot, source: 'computed' }
+        }
+        byWs?.delete(effectiveWorkspace)
     }
 
     try {
         const liveDigest = context.db?.computeDigest?.(effectiveWorkspace)
         if (liveDigest !== undefined) {
-            writeLiveDigestCache(dbCacheKey, byWs, effectiveWorkspace, liveDigest, now + LIVE_DIGEST_TTL_MS)
+            writeLiveDigestCache(
+                dbCacheKey,
+                byWs,
+                effectiveWorkspace,
+                liveDigest,
+                now + LIVE_DIGEST_TTL_MS,
+                now
+            )
             logger.debug('Live digest computed for briefing', {
                 module: 'BRIEFING',
                 operation: 'insights-live-compute',
@@ -173,7 +208,7 @@ function formatDigest(snapshot: DigestSnapshot): BriefingInsights {
         topImportance: snapshot.topImportanceEntries.map((e) => ({
             id: e.id,
             score: e.score,
-            preview: sliceUntrustedInline(e.preview, 80, '...'),
+            preview: sliceUntrustedInline(extractPreview(e.preview, 80), 81),
         })),
         ...(snapshot.currentRelDensity > 0
             ? { relationshipDensity: snapshot.currentRelDensity }

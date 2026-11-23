@@ -219,9 +219,9 @@ export interface BriefingConfig {
     prStatusBreakdown: boolean
     /** Number of milestones to list in briefing; 0 = hide (default: 3) */
     milestoneCount?: number
-    /** Path to the user's rules file (e.g., .gemini/GEMINI.md) for awareness in briefing */
+    /** Path to the user's rules file (served via memory://rules) */
     rulesFilePath?: string
-    /** Path to the user's skills directory for awareness in briefing */
+    /** Path to the user's skills directory (served via memory://skills) */
     skillsDirPath?: string
     /** Number of recent workflow runs to list; 0 = hide unless workflowStatusBreakdown is true (default: 0) */
     workflowCount: number
@@ -254,6 +254,8 @@ export interface BriefingConfig {
      * (`--no-briefing-insights`, `BRIEFING_INSIGHTS=false`, config `briefingInsights: false`).
      */
     insights?: boolean
+    /** Server instruction verbosity level forwarded to `memory://instructions`. */
+    instructionLevel?: 'essential' | 'detailed' | 'full'
 }
 
 /** Default briefing configuration — preserves pre-existing behavior */

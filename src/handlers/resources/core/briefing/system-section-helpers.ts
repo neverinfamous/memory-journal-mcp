@@ -14,8 +14,11 @@ import { promisify } from 'node:util'
 
 const execFileAsync = promisify(execFile)
 
-import { fenceNonCanonicalRefOrKey, markUntrustedContentInline } from '../../../../utils/security-utils.js'
+import { fenceNonCanonicalRefOrKey } from '../../../../utils/security-utils.js'
+import { sliceUntrustedInline } from '../../fencing-helpers.js'
 import type { GitHistorySummary } from './system-section.js'
+
+const MAX_COMMIT_SUBJECT_LEN = 120
 
 /** Walk upward from `startDir` looking for a directory containing `package.json`. */
 function findPackageJsonRoot(startDir: string): string | undefined {
@@ -46,7 +49,7 @@ export function resolveProjectRoot(startPath?: string): string {
     )
 }
 
-function parseGitCommitLines(out: string, commitCount: number): GitHistorySummary {
+export function parseGitCommitLines(out: string, commitCount: number): GitHistorySummary {
     const lines = out
         .split('\n')
         .map((l) => l.trim())
@@ -74,7 +77,7 @@ function parseGitCommitLines(out: string, commitCount: number): GitHistorySummar
             hash,
             ...(commitType !== undefined ? { type: commitType } : {}),
             isBreaking,
-            message: markUntrustedContentInline(subject),
+            message: sliceUntrustedInline(subject, MAX_COMMIT_SUBJECT_LEN, '…'),
         }
     })
 
@@ -120,12 +123,16 @@ export async function fetchGitHistoryFromRepoAsync(
     commitCount: number
 ): Promise<GitHistorySummary> {
     const fetchLimit = Math.max(1, commitCount)
-    const { stdout } = await execFileAsync('git', ['log', '-n', String(fetchLimit), '--format=%h|%s|%cr'], {
-        cwd: root,
-        encoding: 'utf-8',
-        timeout: 3000,
-        windowsHide: true,
-    })
+    const { stdout } = await execFileAsync(
+        'git',
+        ['log', '-n', String(fetchLimit), '--abbrev=8', '--format=%h|%s|%cr'],
+        {
+            cwd: root,
+            encoding: 'utf-8',
+            timeout: 3000,
+            windowsHide: true,
+        }
+    )
     return parseGitCommitLines(stdout, commitCount)
 }
 

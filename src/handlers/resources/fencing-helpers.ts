@@ -30,6 +30,28 @@ export function sliceUntrustedInline(value: string, maxLen: number, suffix = '')
     return markUntrustedContentInline(truncated)
 }
 
+/** Escape newlines, control chars, backslashes, and pipes for markdown table cells. */
+export function escapeCell(text: string): string {
+    return text
+        .replace(/[\r\n\u2028\u2029]+/g, ' ')
+        .replace(/\p{Cc}/gu, '')
+        .replace(/\\/g, '\\\\')
+        .replace(/\|/g, '\\|')
+}
+
+/** Escape square brackets inside markdown link labels as HTML entities so `escapeCell` cannot double-escape them. */
+export function escapeLinkLabel(text: string): string {
+    return text.replace(/\[/g, '&#91;').replace(/\]/g, '&#93;')
+}
+
+/**
+ * Constrain echoed URI/workspace identifiers before rendering in markdown/YAML headers.
+ * Strips `*` (preventing `**bold**` breakout) and caps length at `maxLen` (default 128).
+ */
+export function sanitizeDisplayIdentifier(value: string, maxLen = 128): string {
+    return value.replace(/[^A-Za-z0-9._\-/@]/g, '_').slice(0, maxLen)
+}
+
 /** Separator between items sharing one inline fence (cannot collide with markdown table syntax). */
 export const UNTRUSTED_LIST_SEPARATOR = ' ¦ '
 
@@ -41,7 +63,8 @@ export const UNTRUSTED_LIST_SEPARATOR = ' ¦ '
 export function fenceUntrustedList(items: readonly string[], separator = UNTRUSTED_LIST_SEPARATOR): string {
     const nonEmpty = items.filter((item) => item.trim() !== '')
     if (nonEmpty.length === 0) return ''
-    return markUntrustedContentInline(nonEmpty.join(separator))
+    const fenced = markUntrustedContentInline(nonEmpty.join(separator))
+    return fenced === '<untrusted_remote_content></untrusted_remote_content>' ? '' : fenced
 }
 
 /** Extract base URI without query parameters or fragments for matching. */

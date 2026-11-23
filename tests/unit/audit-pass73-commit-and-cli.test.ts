@@ -80,11 +80,11 @@ describe('audit pass73 commit CLI, anchor batching, and prompt invariants', () =
         const result = await resolveEntryAnchors(
             undefined,
             JSON.stringify({ commits: ['deadbeef1234'] }),
-            'adamic',
+            'companion',
             {
                 config: {
                     projectRegistry: {
-                        adamic: { path: os.tmpdir(), project_number: 16 },
+                        companion: { path: os.tmpdir(), project_number: 16 },
                     },
                 },
             } as never

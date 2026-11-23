@@ -35,6 +35,9 @@ function createServerConfigManager(
         ...(options.projectRegistry !== undefined
             ? { projectRegistry: options.projectRegistry }
             : {}),
+        ...(options.briefingOverrides !== undefined
+            ? { briefingOverrides: options.briefingOverrides }
+            : {}),
     }
 
     return new ConfigManager(
@@ -44,6 +47,9 @@ function createServerConfigManager(
             briefingConfig: {
                 ...(options.briefingConfig ?? DEFAULT_BRIEFING_CONFIG),
                 defaultWorkspaceId: resolvedDefaultWs,
+                ...(options.instructionLevel !== undefined
+                    ? { instructionLevel: options.instructionLevel }
+                    : {}),
                 ...(options.defaultProjectNumber !== undefined &&
                 options.briefingConfig?.defaultProjectNumber === undefined
                     ? { defaultProjectNumber: options.defaultProjectNumber }

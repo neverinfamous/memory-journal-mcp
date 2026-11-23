@@ -5,7 +5,7 @@
 import type { GitHubIntegration } from '../../../../github/github-integration/index.js'
 import type { LocalGitStatus } from '../../../../github/github-integration/types.js'
 import type { BriefingConfig } from '../../shared.js'
-import { markUntrustedContentInline } from '../../../../utils/security-utils.js'
+import { sliceUntrustedInline } from '../../shared.js'
 import { logger } from '../../../../utils/logger.js'
 import type { CiResult } from './github-repo-and-kanban.js'
 import type { BriefingGitHub } from './github-section.js'
@@ -194,7 +194,7 @@ export async function loadActivePr(
     ])
     return {
         number: activePrData.number,
-        title: markUntrustedContentInline(activePrData.title),
+        title: sliceUntrustedInline(activePrData.title, 120, '…'),
         url: activePrData.url,
         state: activePrData.state,
         reviewStatus: review.reviewStatus,

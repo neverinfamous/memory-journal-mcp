@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { ICON_CLOCK } from '../../constants/icons.js'
 import { withPriority, ASSISTANT_FOCUSED } from '../../utils/resource-annotations.js'
 import type {
     InternalResourceDef,
@@ -11,6 +12,8 @@ import {
     sliceUntrustedInline,
     withResourceTokenMeta,
 } from './shared.js'
+import { extractPreview } from './core/briefing/preview-helpers.js'
+import { fenceNonCanonicalRefOrKey } from '../../utils/security-utils.js'
 import { formatHandlerError } from '../../utils/error-helpers.js'
 import { loadProjectRegistryFromConfig } from '../../utils/workspace-resolver.js'
 import { workspacesForProject } from '../../utils/write-scope.js'
@@ -71,10 +74,23 @@ function calculateStaleness(
 interface StalenessProject {
     name: string
     project_number: number
-    path: string
     last_entry_date: string | null
     last_entry_id: number | null
     last_entry_type: string | null
+}
+
+function findLatestByProjectCaseInsensitive(
+    latestByProject: Map<string, { id: number; timestamp: string; entryType: string }>,
+    name: string,
+    projectNumber: number
+): { id: number; timestamp: string; entryType: string } | undefined {
+    const exact = latestByProject.get(`${name}:${String(projectNumber)}`)
+    if (exact !== undefined) return exact
+    const targetLower = `${name.toLowerCase()}:${String(projectNumber)}`
+    for (const [k, v] of latestByProject) {
+        if (k.toLowerCase() === targetLower) return v
+    }
+    return undefined
 }
 
 function handleStalenessOverviewResource(_uri: string, context: ResourceContext): ResourceResult {
@@ -100,7 +116,7 @@ function handleStalenessOverviewResource(_uri: string, context: ResourceContext)
             }
             const latestEntry =
                 latestByProject !== undefined
-                    ? latestByProject.get(`${name}:${String(entry.project_number)}`)
+                    ? findLatestByProjectCaseInsensitive(latestByProject, name, entry.project_number)
                     : context.db.searchEntries('', {
                           projectNumber: entry.project_number,
                           workspaceId: name,
@@ -109,10 +125,10 @@ function handleStalenessOverviewResource(_uri: string, context: ResourceContext)
                       }).entries[0]
             const status = calculateStaleness(latestEntry?.timestamp, thresholds, now)
             const list = result[status] ?? []
+            // [INVARIANT] Omit raw host `entry.path` to prevent filesystem layout disclosure.
             list.push({
-                name,
+                name: fenceNonCanonicalRefOrKey(name),
                 project_number: entry.project_number,
-                path: entry.path,
                 last_entry_date: latestEntry?.timestamp ?? null,
                 last_entry_id: latestEntry?.id ?? null,
                 last_entry_type: latestEntry?.entryType ?? null,
@@ -226,9 +242,11 @@ function handleProjectStalenessResource(uri: string, context: ResourceContext): 
             workspaceId: resolvedWorkspace,
         })
         const tagsBreakdown = Object.create(null) as Record<string, number>
-        for (const tag of facets.tags) tagsBreakdown[tag.name] = tag.count
+        for (const tag of facets.tags) tagsBreakdown[fenceNonCanonicalRefOrKey(tag.name)] = tag.count
         const typeBreakdown = Object.create(null) as Record<string, number>
-        for (const type of facets.entryTypes) typeBreakdown[type.name] = type.count
+        for (const type of facets.entryTypes) {
+            typeBreakdown[fenceNonCanonicalRefOrKey(type.name)] = type.count
+        }
 
         const newEntriesLast7Days = countRecentWeekEntries(
             context.db,
@@ -243,7 +261,7 @@ function handleProjectStalenessResource(uri: string, context: ResourceContext): 
                 id: e.id,
                 timestamp: e.timestamp,
                 type: e.entryType,
-                preview: sliceUntrustedInline(e.content, 100, '...'),
+                preview: sliceUntrustedInline(extractPreview(e.content, 100), 101),
             })),
             tag_breakdown: tagsBreakdown,
             type_breakdown: typeBreakdown,
@@ -263,6 +281,7 @@ export function getStalenessResourceDefinitions(): InternalResourceDef[] {
             title: 'Project Staleness Overview',
             description: 'Overview of project staleness based on recent journal entries.',
             mimeType: 'application/json',
+            icons: [ICON_CLOCK],
             annotations: withPriority(0.6, ASSISTANT_FOCUSED),
             handler: handleStalenessOverviewResource,
         },
@@ -272,6 +291,7 @@ export function getStalenessResourceDefinitions(): InternalResourceDef[] {
             title: 'Project Staleness Detailed Breakdown',
             description: 'Detailed staleness breakdown for a single project.',
             mimeType: 'application/json',
+            icons: [ICON_CLOCK],
             annotations: withPriority(0.6, ASSISTANT_FOCUSED),
             handler: handleProjectStalenessResource,
         },

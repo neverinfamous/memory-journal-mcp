@@ -36,7 +36,7 @@ import { ConfigurationError, PermissionError } from '../../src/types/errors.js'
 
 const TEMP_REGISTRY = {
     'memory-journal-mcp': { path: process.cwd(), project_number: 5 },
-    adamic: { path: path.resolve(process.cwd(), '..', 'adamic'), project_number: 16 },
+    companion: { path: path.resolve(process.cwd(), '..', 'companion'), project_number: 16 },
 }
 
 describe('Pass 60 Code-Quality Audit Remediations (H1–H2, M2–M4, M9–M11, L3, L6–L8, O6–O13, AP1–AP4)', () => {

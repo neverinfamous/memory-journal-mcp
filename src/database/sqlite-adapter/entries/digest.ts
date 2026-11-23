@@ -357,10 +357,19 @@ export function getLatestAnalyticsSnapshot(
         workspaceSnapshotType(type, workspaceId)
     )
     if (!row) return null
+    let parsed: unknown
+    try {
+        parsed = JSON.parse(row['data'] as string)
+    } catch {
+        return null
+    }
+    if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
+        return null
+    }
     return {
         id: row['id'] as number,
         createdAt: row['created_at'] as string,
-        data: JSON.parse(row['data'] as string) as Record<string, unknown>,
+        data: parsed as Record<string, unknown>,
     }
 }
 

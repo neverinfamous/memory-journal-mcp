@@ -8,6 +8,7 @@
  */
 
 import { AsyncLocalStorage } from 'node:async_hooks'
+import { ProtocolError, ProtocolErrorCode } from '@modelcontextprotocol/server'
 import type { McpServer } from '@modelcontextprotocol/server'
 
 import { auditOperation } from '../audit/interceptor.js'
@@ -102,7 +103,10 @@ export function attachResourceQueryHandler(server: McpServer): void {
             return originalHandler(request, extra)
         }
         if (Buffer.byteLength(rawUri, 'utf8') > 8_192) {
-            throw new ConfigurationError('Resource URI exceeds maximum allowed length (8192 bytes)')
+            throw new ProtocolError(
+                ProtocolErrorCode.InvalidParams,
+                'Resource URI exceeds maximum allowed length (8192 bytes)'
+            )
         }
         let parsedUri: URL
         try {

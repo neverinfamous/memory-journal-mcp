@@ -12,21 +12,20 @@ import {
     type BriefingGraphPivots,
     type BriefingToolNaming,
 } from './graph-pivots-section.js'
-import { fenceUntrustedList } from '../../fencing-helpers.js'
+import {
+    escapeCell,
+    fenceUntrustedList,
+    sanitizeDisplayIdentifier,
+} from '../../fencing-helpers.js'
 
 export interface GraphLineOptions {
     graphPivots?: BriefingGraphPivots
     toolNaming?: BriefingToolNaming
+    /** Pre-resolved expansion hint (overrides `toolNaming` for mixed presets like `starter`). */
+    expandToolHint?: string
     workspaceId?: string
     relationshipDensity?: number
 }
-
-const escapeCell = (text: string): string =>
-    text
-        .replace(/[\r\n\u2028\u2029]+/g, ' ')
-        .replace(/\p{Cc}/gu, '')
-        .replace(/\\/g, '\\\\')
-        .replace(/\|/g, '\\|')
 
 function causalText(graphSummary: GraphSummary): string {
     return (
@@ -43,8 +42,9 @@ function hubsText(graphSummary: GraphSummary): string {
     )
 }
 
-function expandHint(toolNaming: BriefingToolNaming | undefined): string {
-    return toolNaming === 'codemode'
+function expandHint(opts: GraphLineOptions): string {
+    if (opts.expandToolHint !== undefined) return `\`${opts.expandToolHint}\``
+    return opts.toolNaming === 'codemode'
         ? '`mj.relationships.visualizeRelationships({ entry_id, depth: 2 })`'
         : '`visualize_relationships`'
 }
@@ -53,15 +53,18 @@ export function buildGraphLines(
     graphSummary: GraphSummary | undefined,
     opts: GraphLineOptions = {}
 ): string[] {
-    if (!graphSummary || graphSummary.totalRelationships === 0) return []
     const pivots = opts.graphPivots
+    const hasRecentUnlinkedPivot = pivots !== undefined && pivots.unlinkedEntries > 0
+    if (!graphSummary || (graphSummary.totalRelationships === 0 && !hasRecentUnlinkedPivot)) {
+        return []
+    }
     const orphanAlert =
         pivots === undefined && graphSummary.orphanRatio !== undefined && graphSummary.orphanRatio > 0.2
             ? '🔴 '
             : ''
 
     if (pivots === undefined) {
-        let graphText = `${orphanAlert}${String(graphSummary.totalRelationships)} relationships<br>Causal: ${escapeCell(causalText(graphSummary))} (use ${expandHint(opts.toolNaming)})`
+        let graphText = `${orphanAlert}${String(graphSummary.totalRelationships)} relationships<br>Causal: ${escapeCell(causalText(graphSummary))} (use ${expandHint(opts)})`
         if (graphSummary.topHubs.length > 0) {
             graphText += `<br>Context Hubs: ${escapeCell(hubsText(graphSummary))}`
         }
@@ -82,8 +85,9 @@ export function buildGraphLines(
     const lines = [headParts.join(' · ')]
 
     if (pivots.activeThreads.length > 0) {
+        // [INTENT] `(+N)` marks recent-window links distinctly from all-time `↔N` entry degrees.
         const threads = fenceUntrustedList(
-            pivots.activeThreads.map((t) => `#${String(t.id)} (${t.type}) ${t.preview} ↔${String(t.links)}`)
+            pivots.activeThreads.map((t) => `#${String(t.id)} (${t.type}) ${t.preview} (+${String(t.links)})`)
         )
         lines.push(`Active threads (${String(pivots.windowDays)}d): ${escapeCell(threads)}`)
     } else if (graphSummary.topHubs.length > 0) {
@@ -93,8 +97,8 @@ export function buildGraphLines(
     lines.push(`Causal: ${escapeCell(causalText(graphSummary))}`)
     const neighborhood =
         opts.workspaceId !== undefined && opts.workspaceId !== '' && opts.workspaceId !== '*'
-            ? ` · Neighborhood: \`memory://graph/${opts.workspaceId.replace(/[^A-Za-z0-9._\-/*@]/g, '_').slice(0, 128)}\``
+            ? ` · Neighborhood: \`memory://graph/${sanitizeDisplayIdentifier(opts.workspaceId)}\``
             : ' · Neighborhood: `memory://graph`'
-    lines.push(`Expand: ${expandHint(opts.toolNaming)}${neighborhood}`)
+    lines.push(`Expand: ${expandHint(opts)}${neighborhood}`)
     return [lines.join('<br>')]
 }

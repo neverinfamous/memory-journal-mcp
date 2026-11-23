@@ -19,6 +19,7 @@ vi.mock('../../src/git/index.js', () => ({
 
 import { dynamicBriefingResource } from '../../src/handlers/resources/core/briefing/index.js'
 import { buildGitHubSection } from '../../src/handlers/resources/core/briefing/github-section.js'
+import { buildTeamContext } from '../../src/handlers/resources/core/briefing/context-section.js'
 import {
     GitHubIntegration,
     getGitHubIntegration,
@@ -88,5 +89,25 @@ describe('Briefing Resources', () => {
         expect((result as any).data).toBeDefined()
         expect(getGitHubIntegration).not.toHaveBeenCalled()
         expect(buildGitHubSection).toHaveBeenCalledWith(undefined, expect.anything(), undefined)
+    })
+
+    it('skips team context when includeTeam is false and skips insights when insights is false', async () => {
+        const computeDigest = vi.fn()
+        const result = await dynamicBriefingResource.handler('memory://briefing/test-repo', {
+            db: { computeDigest },
+            teamDb: {},
+            runtime: { type: 'stdio' },
+            briefingConfig: {
+                includeTeam: false,
+                insights: false,
+                projectRegistry: {
+                    'test-repo': { path: '/tmp/test', project_number: 5 },
+                },
+            },
+        } as any)
+
+        expect((result as any).data).toBeDefined()
+        expect(buildTeamContext).not.toHaveBeenCalled()
+        expect(computeDigest).not.toHaveBeenCalled()
     })
 })

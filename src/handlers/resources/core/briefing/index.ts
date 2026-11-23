@@ -12,21 +12,13 @@ import {
     withAutoRead,
     ASSISTANT_FOCUSED,
 } from '../../../../utils/resource-annotations.js'
-import { getGitHubIntegration } from '../../../../github/github-integration/index.js'
-import {
-    findCanonicalRegistryKey,
-    loadProjectRegistryFromConfig,
-    setActiveSessionProject,
-} from '../../../../utils/workspace-resolver.js'
-import { parseCanonicalPositiveInt } from '../../../../utils/safe-positive-int.js'
-import { ValidationError } from '../../../../types/errors.js'
-import { exactRegistryKey, uniqueWorkspaceForProject } from '../../../../utils/write-scope.js'
 import {
     DEFAULT_BRIEFING_CONFIG,
     getBaseUri,
-    resourceWorkspace,
     safeDecodeUriSegment,
 } from '../../shared.js'
+import { sanitizeDisplayIdentifier } from '../../fencing-helpers.js'
+import { logger } from '../../../../utils/logger.js'
 import type { InternalResourceDef, ResourceContext, ResourceResult } from '../../shared.js'
 import { buildGitHubSection } from './github-section.js'
 import {
@@ -37,19 +29,21 @@ import {
 } from './context-section.js'
 import { formatUserMessage } from './user-message.js'
 import { buildInsightsSection } from './insights-section.js'
-import { buildBriefingSystemSummary } from './system-section.js'
+import { buildBriefingSystemSummary, type SystemContext } from './system-section.js'
 import {
     buildGraphPivots,
     degreeSuffix,
     resolveBriefingToolNaming,
+    resolveToolHintName,
 } from './graph-pivots-section.js'
+import { resolveBriefingScope } from './scope-resolver.js'
 
 function parsePinSessionOption(uri: string): boolean {
     const queryIdx = uri.indexOf('?')
     if (queryIdx === -1) return true
     const hashIdx = uri.indexOf('#', queryIdx)
     const rawQuery = hashIdx === -1 ? uri.slice(queryIdx + 1) : uri.slice(queryIdx + 1, hashIdx)
-    return new URLSearchParams(rawQuery).get('pin_session') !== 'false'
+    return new URLSearchParams(rawQuery).get('pin_session')?.trim().toLowerCase() !== 'false'
 }
 
 export const briefingResource: InternalResourceDef = {
@@ -83,208 +77,43 @@ export const dynamicBriefingResource: InternalResourceDef = {
     },
 }
 
-interface BriefingScopeResolution {
-    registry: ReturnType<typeof loadProjectRegistryFromConfig>
-    hasRegistry: boolean
-    activeGithub: ResourceContext['github']
-    activeRepoPath: string | undefined
-    activeWorkspaceId: string | undefined
-    activeProjectNumber: number | undefined
-    unresolvedRepo?: string
-}
-
-function resolveDefaultBriefingScope(
-    context: ResourceContext,
+function buildFallbackSystemContext(
     config: typeof DEFAULT_BRIEFING_CONFIG,
-    registry: ReturnType<typeof loadProjectRegistryFromConfig>,
-    activeWorkspaceId: string | undefined,
-    initialProjectNumber: number | undefined
-): Pick<BriefingScopeResolution, 'activeWorkspaceId' | 'activeProjectNumber' | 'activeRepoPath' | 'activeGithub'> {
-    const hasRegistry = registry !== undefined && Object.keys(registry).length > 0
-    if (activeWorkspaceId && activeWorkspaceId !== 'default' && activeWorkspaceId !== '*') {
-        const canonicalKey = findCanonicalRegistryKey(activeWorkspaceId, registry) ?? activeWorkspaceId
-        const registryEntry = registry?.[canonicalKey]
-        const repoPath = registryEntry?.path
-        const hasRepoPath = repoPath !== undefined && repoPath.trim() !== ''
-        const matchesDefaultWs = config.defaultWorkspaceId?.toLowerCase() === canonicalKey.toLowerCase()
-        const resolvedProj =
-            registryEntry?.project_number ?? (matchesDefaultWs ? initialProjectNumber : undefined)
-        return {
-            activeWorkspaceId: canonicalKey,
-            activeRepoPath: hasRepoPath ? repoPath : undefined,
-            activeGithub: hasRepoPath ? getGitHubIntegration(repoPath, context.runtime) : undefined,
-            activeProjectNumber: resolvedProj,
-        }
-    }
-
-    if (activeWorkspaceId === 'default') {
-        const defaultEntry = registry?.['default']
-        const defaultPath = defaultEntry?.path
-        const hasDefaultPath = defaultPath !== undefined && defaultPath.trim() !== ''
-        return {
-            activeWorkspaceId: 'default',
-            activeRepoPath: hasDefaultPath ? defaultPath : undefined,
-            activeGithub: hasDefaultPath
-                ? getGitHubIntegration(defaultPath, context.runtime)
-                : hasRegistry || config.defaultWorkspaceId?.toLowerCase() === 'default'
-                  ? undefined
-                  : context.github,
-            activeProjectNumber:
-                defaultEntry?.project_number ??
-                (config.defaultWorkspaceId?.toLowerCase() === 'default'
-                    ? config.defaultProjectNumber
-                    : undefined),
-        }
-    }
-
+    workspaceId: string
+): SystemContext {
     return {
-        activeWorkspaceId,
-        activeProjectNumber: initialProjectNumber,
-        activeRepoPath: undefined,
-        activeGithub: context.github,
+        version: '',
+        toolCount: 0,
+        resourceCount: 0,
+        promptCount: 0,
+        localTime: '',
+        gitHistory: null,
+        testHealth: null,
+        filterSummary: null,
+        isReadonly: false,
+        ioRootCount: config.allowedIoRoots?.length ?? 0,
+        hasCodeMap: false,
+        lastReleaseDaysAgo: null,
+        localCheck: null,
+        workspaceId,
     }
 }
 
-function resolveRegisteredBriefingScope(
-    context: ResourceContext,
-    registry: ReturnType<typeof loadProjectRegistryFromConfig>,
-    hasRegistry: boolean,
-    resolvedRepo: string,
-    pinSession: boolean
-): BriefingScopeResolution {
-    const registryEntry = registry?.[resolvedRepo]
-    const repoPath = registryEntry?.path
-    const hasRepoPath = repoPath !== undefined && repoPath.trim() !== ''
-    const activeProjectNumber = registryEntry?.project_number
-    if (registryEntry && pinSession) {
-        setActiveSessionProject(resolvedRepo, activeProjectNumber ?? null, context.runtime)
-    }
+function buildBriefingToolHints(filterConfig: ResourceContext['filterConfig']): {
+    expand: string
+    link: string
+    summary: string
+    team: string
+} {
     return {
-        registry,
-        hasRegistry,
-        activeWorkspaceId: resolvedRepo,
-        activeRepoPath: hasRepoPath ? repoPath : undefined,
-        activeGithub: hasRepoPath ? getGitHubIntegration(repoPath, context.runtime) : undefined,
-        activeProjectNumber,
-    }
-}
-
-function resolveNamedDefaultBriefingScope(
-    context: ResourceContext,
-    config: typeof DEFAULT_BRIEFING_CONFIG,
-    registry: ReturnType<typeof loadProjectRegistryFromConfig>,
-    hasRegistry: boolean,
-    pinSession: boolean
-): BriefingScopeResolution {
-    const defaultEntry = registry?.['default']
-    const registeredDefault =
-        defaultEntry?.project_number ??
-        (config.defaultWorkspaceId?.trim().toLowerCase() === 'default'
-            ? config.defaultProjectNumber
-            : undefined)
-    const defaultPath = defaultEntry?.path
-    const hasDefaultPath = defaultPath !== undefined && defaultPath.trim() !== ''
-    if (pinSession) {
-        setActiveSessionProject('default', registeredDefault ?? null, context.runtime)
-    }
-    return {
-        registry,
-        hasRegistry,
-        activeWorkspaceId: 'default',
-        activeProjectNumber: registeredDefault,
-        activeRepoPath: hasDefaultPath ? defaultPath : undefined,
-        activeGithub: hasDefaultPath ? getGitHubIntegration(defaultPath, context.runtime) : undefined,
-    }
-}
-
-function resolveExplicitBriefingTarget(
-    context: ResourceContext,
-    config: typeof DEFAULT_BRIEFING_CONFIG,
-    registry: ReturnType<typeof loadProjectRegistryFromConfig>,
-    hasRegistry: boolean,
-    targetRepo: string,
-    options?: { pinSession?: boolean }
-): BriefingScopeResolution {
-    if (targetRepo.trim() === '*') {
-        throw new ValidationError(
-            "Wildcard '*' is not supported for memory://briefing/{+repo}. Specify a concrete repository name."
-        )
-    }
-    const numericTarget = /^#?(\d+)$/.exec(targetRepo)
-    const parsedTarget =
-        numericTarget?.[1] !== undefined ? parseCanonicalPositiveInt(numericTarget[1]) : undefined
-    const numericWorkspace =
-        parsedTarget !== undefined ? uniqueWorkspaceForProject(parsedTarget, registry) : undefined
-    const resolvedRepo = exactRegistryKey(targetRepo, registry) ?? numericWorkspace
-    if (resolvedRepo !== undefined) {
-        return resolveRegisteredBriefingScope(context, registry, hasRegistry, resolvedRepo, options?.pinSession !== false)
-    }
-    if (targetRepo.trim().toLowerCase() === 'default') {
-        return resolveNamedDefaultBriefingScope(context, config, registry, hasRegistry, options?.pinSession !== false)
-    }
-    const configuredDefaultWs = config.defaultWorkspaceId?.trim()
-    if (configuredDefaultWs?.toLowerCase() === targetRepo.trim().toLowerCase()) {
-        return {
-            registry,
-            hasRegistry,
-            activeWorkspaceId: configuredDefaultWs,
-            activeProjectNumber: config.defaultProjectNumber,
-            activeRepoPath: undefined,
-            activeGithub: undefined,
-        }
-    }
-    if (hasRegistry) {
-        return {
-            registry,
-            hasRegistry,
-            activeWorkspaceId: undefined,
-            activeProjectNumber: undefined,
-            activeRepoPath: undefined,
-            activeGithub: undefined,
-            unresolvedRepo: targetRepo.trim(),
-        }
-    }
-    return {
-        registry,
-        hasRegistry,
-        activeWorkspaceId: targetRepo,
-        activeProjectNumber: undefined,
-        activeRepoPath: undefined,
-        activeGithub: undefined,
-    }
-}
-
-function resolveBriefingScope(
-    context: ResourceContext,
-    config: typeof DEFAULT_BRIEFING_CONFIG,
-    targetRepo: string | undefined,
-    options?: { pinSession?: boolean }
-): BriefingScopeResolution {
-    const registry = config.projectRegistry ?? loadProjectRegistryFromConfig()
-    const hasRegistry = registry !== undefined && Object.keys(registry).length > 0
-    if (targetRepo) {
-        return resolveExplicitBriefingTarget(context, config, registry, hasRegistry, targetRepo, options)
-    }
-    const initialWorkspaceId = resourceWorkspace({
-        briefingConfig: config,
-        ...(context.runtime !== undefined ? { runtime: context.runtime } : {}),
-    })
-    const initialProjectNumber =
-        (config.defaultWorkspaceId === undefined && initialWorkspaceId !== 'default') ||
-        (initialWorkspaceId !== undefined &&
-            config.defaultWorkspaceId?.toLowerCase() === initialWorkspaceId.toLowerCase())
-            ? config.defaultProjectNumber
-            : undefined
-    return {
-        registry,
-        hasRegistry,
-        ...resolveDefaultBriefingScope(
-            context,
-            config,
-            registry,
-            initialWorkspaceId,
-            initialProjectNumber
+        expand: resolveToolHintName(
+            filterConfig,
+            'visualize_relationships',
+            'mj.relationships.visualizeRelationships({ entry_id, depth: 2 })'
         ),
+        link: resolveToolHintName(filterConfig, 'link_entries', 'mj.relationships.linkEntries'),
+        summary: resolveToolHintName(filterConfig, 'get_entry_by_id', 'mj.core.getEntryById'),
+        team: resolveToolHintName(filterConfig, 'team_get_entry_by_id', 'mj.team.teamGetEntryById'),
     }
 }
 
@@ -295,7 +124,7 @@ function renderBriefingUserMessage(params: {
     activeWorkspaceId: string | undefined
     journal: JournalContext
     github: Awaited<ReturnType<typeof buildGitHubSection>>
-    system: Awaited<ReturnType<typeof buildBriefingSystemSummary>>
+    system: SystemContext
     team: ReturnType<typeof buildTeamContext>
 }): string {
     const { context, config, activeGithub, activeWorkspaceId, journal, github, system, team } = params
@@ -317,6 +146,7 @@ function renderBriefingUserMessage(params: {
         includeOrphanRatio: graphPivots === undefined,
     })
     const toolNaming = resolveBriefingToolNaming(context.filterConfig)
+    const toolHints = buildBriefingToolHints(context.filterConfig)
     const latestPreviews = journal.latestEntries.map(
         (e) => `#${e.id} (${e.type})${degreeSuffix(graphPivots, e.id)}: ${e.preview}`
     )
@@ -352,6 +182,7 @@ function renderBriefingUserMessage(params: {
         graphSummary: graphStats,
         ...(graphPivots !== undefined ? { graphPivots } : {}),
         toolNaming,
+        toolHints,
         gitHistory: system.gitHistory ?? undefined,
         isReadonly: system.isReadonly,
         teamConfigured: !!context.teamDb,
@@ -372,13 +203,18 @@ export async function buildBriefingData(
         resolveBriefingScope(context, config, targetRepo, options)
 
     if (unresolvedRepo !== undefined) {
-        const safeRepo = unresolvedRepo.replace(/[^A-Za-z0-9._\-/*@]/g, '_').slice(0, 128)
+        const safeRepo = sanitizeDisplayIdentifier(unresolvedRepo)
+        const listHint = resolveToolHintName(
+            context.filterConfig,
+            'list_projects',
+            'mj.admin.listProjects'
+        )
         return {
-            data: `# Briefing · ${safeRepo}\n\nWorkspace \`${safeRepo}\` is not a registered project in \`projectRegistry\`. Use a registered repository name or \`memory://briefing/default\`.`,
+            data: `# Briefing · ${safeRepo}\n\nWorkspace \`${safeRepo}\` is not a registered project in \`projectRegistry\`. Use \`${listHint}\` (or the project registry) to find a registered repository name, or read \`memory://briefing/default\`.`,
         }
     }
 
-    const journalWorkspaceId = activeWorkspaceId || config.defaultWorkspaceId || 'default'
+    const journalWorkspaceId = activeWorkspaceId || config.defaultWorkspaceId?.trim() || 'default'
     const suppressSystemCwd =
         targetRepo !== undefined ||
         (activeWorkspaceId !== undefined &&
@@ -386,7 +222,7 @@ export async function buildBriefingData(
             activeRepoPath === undefined &&
             (activeWorkspaceId !== 'default' ||
                 hasRegistry ||
-                config.defaultWorkspaceId?.toLowerCase() === 'default'))
+                config.defaultWorkspaceId?.trim().toLowerCase() === 'default'))
     const systemRepoPath = activeRepoPath ?? (suppressSystemCwd ? null : undefined)
 
     // [INTENT] Start network/git work first so the synchronous SQLite journal queries overlap it.
@@ -409,8 +245,20 @@ export async function buildBriefingData(
     const journal = safeBuildJournalContext(context, config, activeProjectNumber, activeWorkspaceId)
     const [githubSettled, systemSettled] = await settledPromise
     const github = githubSettled.status === 'fulfilled' ? githubSettled.value : null
-    if (systemSettled.status === 'rejected') throw systemSettled.reason
-    const system = systemSettled.value
+    let system: SystemContext
+    if (systemSettled.status === 'fulfilled') {
+        system = systemSettled.value
+    } else {
+        logger.warning('Briefing system section failed (degraded)', {
+            module: 'BRIEFING',
+            operation: 'system-section',
+            error:
+                systemSettled.reason instanceof Error
+                    ? systemSettled.reason.message
+                    : String(systemSettled.reason),
+        })
+        system = buildFallbackSystemContext(config, journalWorkspaceId)
+    }
     const team = config.includeTeam
         ? buildTeamContext(
               context,

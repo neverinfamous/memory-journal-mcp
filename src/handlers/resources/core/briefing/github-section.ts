@@ -76,6 +76,7 @@ export interface BriefingGitHub {
               modified: number
               untracked: number
               isClean: boolean
+              error?: string | undefined
               degraded?: boolean | undefined
           }
         | undefined

@@ -17,12 +17,18 @@ const ENV_KEYS = [
     'BRIEFING_PR_STATUS',
     'BRIEFING_WORKFLOW_STATUS',
     'BRIEFING_INCLUDE_TEAM',
+    'BRIEFING_GRAPH',
+    'BRIEFING_INSIGHTS',
+    'BRIEFING_PR_COUNT',
 ] as const
 
-function resolveBriefing(
+function resolveBriefingWithErrors(
     argv: string[],
     fileConfig: Record<string, unknown> = {}
-): NonNullable<ReturnType<typeof buildServerOptions>['serverOptions']['briefingConfig']> {
+): {
+    bc: NonNullable<ReturnType<typeof buildServerOptions>['serverOptions']['briefingConfig']>
+    errors: string[]
+} {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'mj-briefing-neg-'))
     const file = path.join(dir, 'cfg.json')
     try {
@@ -36,13 +42,21 @@ function resolveBriefing(
             cmd,
             errors
         )
-        expect(errors.filter((e) => e.toLowerCase().includes('briefing'))).toEqual([])
         const bc = options.serverOptions.briefingConfig
         if (bc === undefined) throw new Error('briefingConfig missing')
-        return bc
+        return { bc, errors }
     } finally {
         fs.rmSync(dir, { recursive: true, force: true })
     }
+}
+
+function resolveBriefing(
+    argv: string[],
+    fileConfig: Record<string, unknown> = {}
+): NonNullable<ReturnType<typeof buildServerOptions>['serverOptions']['briefingConfig']> {
+    const { bc, errors } = resolveBriefingWithErrors(argv, fileConfig)
+    expect(errors.filter((e) => e.toLowerCase().includes('briefing'))).toEqual([])
+    return bc
 }
 
 describe('briefing boolean negations and env alias', () => {
@@ -109,6 +123,35 @@ describe('briefing boolean negations and env alias', () => {
         process.env['BRIEFING_COPILOT_REVIEWS'] = 'true'
         expect(resolveBriefing([]).copilotReviews).toBe(true)
     })
+
+    it('supports positive and negative --briefing-graph / --briefing-insights overrides and CLI briefingPrs precedence', () => {
+        process.env['BRIEFING_GRAPH'] = 'false'
+        process.env['BRIEFING_INSIGHTS'] = 'false'
+        const reEnabled = resolveBriefing(['--briefing-graph', '--briefing-insights'])
+        expect(reEnabled.graphPivots).toBe(true)
+        expect(reEnabled.insights).toBe(true)
+
+        const disabled = resolveBriefing(['--no-briefing-graph', '--no-briefing-insights'], {
+            briefingGraph: true,
+            briefingInsights: true,
+        })
+        expect(disabled.graphPivots).toBe(false)
+        expect(disabled.insights).toBe(false)
+
+        const prPrecedence = resolveBriefing(['--briefing-prs', '7', '--briefing-pr-count', '2'])
+        expect(prPrecedence.prCount).toBe(7)
+    })
+
+    it('rejects out-of-range (>100), negative, and explicit blank briefing numeric values', () => {
+        const tooHigh = resolveBriefingWithErrors(['--briefing-entries', '101'])
+        expect(tooHigh.errors.some((e) => e.includes('briefingEntries'))).toBe(true)
+
+        const negative = resolveBriefingWithErrors(['--briefing-commits', '-1'])
+        expect(negative.errors.some((e) => e.includes('briefingCommits'))).toBe(true)
+
+        const blankThreshold = resolveBriefingWithErrors(['--briefing-importance-threshold', '   '])
+        expect(blankThreshold.errors.some((e) => e.includes('briefingImportanceThreshold'))).toBe(true)
+    })
 })
 
 describe('buildTeamContext with briefingEntries: 0', () => {
@@ -128,11 +171,9 @@ describe('buildTeamContext with briefingEntries: 0', () => {
         } as never
 
         const result = buildTeamContext(context, config, 5, 'ws')
-        // Either scoped team access is unavailable in this mock (undefined) or the entry query is skipped.
         expect(searchEntries).not.toHaveBeenCalled()
-        if (result !== undefined) {
-            expect(result.teamInfo.totalEntries).toBe(42)
-            expect(result.teamLatestEntries).toEqual([])
-        }
+        expect(result).toBeDefined()
+        expect(result?.teamInfo.totalEntries).toBe(42)
+        expect(result?.teamLatestEntries).toEqual([])
     })
 })

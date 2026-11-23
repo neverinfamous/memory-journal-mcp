@@ -25,9 +25,12 @@ import type { BriefingConfig } from '../../shared.js'
 import {
     fetchGitHistoryFromRepoAsync,
     formatBriefingLocalTime,
+    parseGitCommitLines,
     readRepoIndicatorsAsync,
     resolveProjectRoot,
 } from './system-section-helpers.js'
+
+export { parseGitCommitLines }
 
 
 // ============================================================================
@@ -115,10 +118,15 @@ interface TtlCacheEntry<T> {
 }
 
 const CACHE_TTL_MS = 60_000
-/** [INVARIANT] Bound per-repo TTL caches; oldest insertion is evicted first. */
+/** [INVARIANT] Bound per-repo TTL caches; least-recently-used entry is evicted first. */
 const CACHE_MAX_ENTRIES = 32
 const cachedGitHistory = new Map<string, TtlCacheEntry<GitHistorySummary | null>>()
 const cachedTestHealth = new Map<string, TtlCacheEntry<TestHealth | null>>()
+
+function normalizeCacheRoot(root: string): string {
+    const resolved = path.resolve(root)
+    return process.platform === 'win32' ? resolved.toLowerCase() : resolved
+}
 
 function getCached<T>(map: Map<string, TtlCacheEntry<T>>, key: string): { hit: true; value: T } | { hit: false } {
     const entry = map.get(key)
@@ -127,17 +135,26 @@ function getCached<T>(map: Map<string, TtlCacheEntry<T>>, key: string): { hit: t
         map.delete(key)
         return { hit: false }
     }
+    // [INTENT] Refresh insertion order for true LRU eviction.
+    map.delete(key)
+    map.set(key, entry)
     return { hit: true, value: entry.value }
 }
 
 function setCached<T>(map: Map<string, TtlCacheEntry<T>>, key: string, value: T): T {
+    const now = Date.now()
     map.delete(key)
-    while (map.size >= CACHE_MAX_ENTRIES) {
-        const oldest = map.keys().next()
-        if (oldest.done === true) break
-        map.delete(oldest.value)
+    if (map.size >= CACHE_MAX_ENTRIES) {
+        for (const [k, v] of map) {
+            if (now > v.expiresAt) map.delete(k)
+        }
+        while (map.size >= CACHE_MAX_ENTRIES) {
+            const oldest = map.keys().next()
+            if (oldest.done === true) break
+            map.delete(oldest.value)
+        }
     }
-    map.set(key, { value, expiresAt: Date.now() + CACHE_TTL_MS })
+    map.set(key, { value, expiresAt: now + CACHE_TTL_MS })
     return value
 }
 
@@ -165,7 +182,7 @@ async function loadCachedGitHistoryAsync(
 ): Promise<GitHistorySummary | null> {
     if (commitCount <= 0 || targetPath === null) return null
     const root = targetPath || resolveProjectRoot()
-    const cacheKey = `${root}::${String(commitCount)}`
+    const cacheKey = `${normalizeCacheRoot(root)}::${String(commitCount)}`
     const cached = getCached(cachedGitHistory, cacheKey)
     if (cached.hit) return cached.value
     try {
@@ -199,7 +216,8 @@ async function readReadmeBadgeChunkAsync(root: string): Promise<string> {
 async function loadCachedTestHealthAsync(targetPath?: string | null): Promise<TestHealth | null> {
     if (targetPath === null) return null
     const root = targetPath || resolveProjectRoot()
-    const cached = getCached(cachedTestHealth, root)
+    const cacheKey = normalizeCacheRoot(root)
+    const cached = getCached(cachedTestHealth, cacheKey)
     if (cached.hit) return cached.value
     try {
         const raw = await fsPromises
@@ -219,11 +237,11 @@ async function loadCachedTestHealthAsync(targetPath?: string | null): Promise<Te
             } catch {
                 // Ignore error if README.md is missing
             }
-            return setCached(cachedTestHealth, root, { unitTests, e2eTests, coverage })
+            return setCached(cachedTestHealth, cacheKey, { unitTests, e2eTests, coverage })
         }
-        return setCached(cachedTestHealth, root, parseTestHealth(await readReadmeBadgeChunkAsync(root)))
+        return setCached(cachedTestHealth, cacheKey, parseTestHealth(await readReadmeBadgeChunkAsync(root)))
     } catch {
-        return setCached(cachedTestHealth, root, null)
+        return setCached(cachedTestHealth, cacheKey, null)
     }
 }
 
@@ -232,16 +250,17 @@ async function loadCachedLastReleaseDaysAgoAsync(
 ): Promise<number | null> {
     if (targetPath === null) return null
     const root = targetPath || resolveProjectRoot()
-    const cached = getCached(cachedLastReleaseDaysAgo, root)
+    const cacheKey = normalizeCacheRoot(root)
+    const cached = getCached(cachedLastReleaseDaysAgo, cacheKey)
     if (cached.hit) return cached.value
     try {
         const content = await fsPromises
             .readFile(path.join(root, 'CHANGELOG.md'), 'utf-8')
             .catch(() => null)
         const age = content !== null ? parseLastReleaseAge(content) : null
-        return setCached(cachedLastReleaseDaysAgo, root, age)
+        return setCached(cachedLastReleaseDaysAgo, cacheKey, age)
     } catch {
-        return setCached(cachedLastReleaseDaysAgo, root, null)
+        return setCached(cachedLastReleaseDaysAgo, cacheKey, null)
     }
 }
 

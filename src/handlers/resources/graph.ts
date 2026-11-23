@@ -3,11 +3,11 @@
  *
  * Resources:
  * - memory://graph, memory://graph/{+repo} — compact recent relationship neighborhood
- *   (edge list + node labels + unlinked ids; no full content). Query: `?days=14&limit=40`.
+ *   (edge list + node labels + unlinked ids; no full content). Query: `?days=14&limit=15`.
  * - memory://actions/recent, memory://actions/recent/{+repo} — recent workflow runs
  */
 
-import { ICON_GITHUB } from '../../constants/icons.js'
+import { ICON_GITHUB, ICON_RELATIONSHIPS } from '../../constants/icons.js'
 // removed ENTRY_COLUMNS
 import { ASSISTANT_FOCUSED, withPriority } from '../../utils/resource-annotations.js'
 import type { InternalResourceDef, ResourceContext, ResourceResult } from './shared.js'
@@ -23,6 +23,7 @@ import { markUntrustedContentInline } from '../../utils/security-utils.js'
 import { sanitizeErrorMessageForResponse } from '../../utils/error-helpers.js'
 import { ProtocolError, ProtocolErrorCode } from '@modelcontextprotocol/server'
 import { buildGraphNeighborhoodMarkdown } from './graph-neighborhood.js'
+import { sanitizeDisplayIdentifier } from './fencing-helpers.js'
 
 /** memory://graph resources (static + dynamic repo template). */
 export function getGraphNeighborhoodResourceDefinitions(): InternalResourceDef[] {
@@ -33,6 +34,7 @@ export function getGraphNeighborhoodResourceDefinitions(): InternalResourceDef[]
     }
     const base = {
         mimeType: 'text/markdown',
+        icons: [ICON_RELATIONSHIPS],
         annotations: withPriority(0.6, ASSISTANT_FOCUSED),
         handler,
     }
@@ -98,7 +100,10 @@ export function getGraphResourceDefinitions(): InternalResourceDef[] {
                         const data = { entries, count: entries.length, source: 'github_api' }
                         return { data: withResourceTokenMeta(data) }
                     } else if (targetRepo) {
-                        throw new ProtocolError(ProtocolErrorCode.InternalError,  `Repository not found or GitHub integration unavailable for: ${targetRepo}`)
+                        throw new ProtocolError(
+                            ProtocolErrorCode.InvalidParams,
+                            `Repository not found or GitHub integration unavailable for: ${sanitizeDisplayIdentifier(targetRepo)}`
+                        )
                     }
                 } catch (error) {
                     if (error instanceof ProtocolError) throw error;

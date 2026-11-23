@@ -149,5 +149,9 @@ test.describe('Resources: Briefing Environment Configurations', () => {
         // Assert team block is populated
         expect(contentText).toMatch(/Team: \d+/)
         expect(contentText).toContain('entries')
+        // Assert BRIEFING_ENTRY_COUNT=2 caps displayed entries to the 2 most recent
+        expect(contentText).toContain('Briefing test code 3')
+        expect(contentText).toContain('Briefing test code 2')
+        expect(contentText).not.toContain('Briefing test code 1')
     })
 })

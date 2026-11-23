@@ -31,9 +31,17 @@ import {
 export interface ResourceDefinition {
     uri: string
     name: string
+    title?: string
     description?: string
     mimeType?: string
     icons?: { src: string; mimeType?: string; sizes?: string[] }[]
+    annotations?: {
+        audience?: ('user' | 'assistant')[]
+        priority?: number
+        lastModified?: string
+        autoRead?: boolean
+        sessionInit?: boolean
+    }
     capabilities?: {
         requiresTeamScope?: boolean
         requiresAdminScope?: boolean
@@ -102,6 +110,49 @@ function getCachedPromptArgsSchema(
     return cached
 }
 
+interface ResourceRegistrationMeta {
+    title?: string
+    description: string
+    mimeType: string
+    icons?: ResourceDefinition['icons']
+    annotations?: {
+        audience?: ('user' | 'assistant')[]
+        priority?: number
+        lastModified?: string
+    }
+    _meta?: Record<string, unknown>
+}
+
+function buildResourceRegistrationMeta(
+    resDef: ResourceDefinition,
+    mimeType: string
+): ResourceRegistrationMeta {
+    const rawAnn = resDef.annotations
+    const specAnnotations: {
+        audience?: ('user' | 'assistant')[]
+        priority?: number
+        lastModified?: string
+    } = {}
+    if (rawAnn?.audience !== undefined) specAnnotations.audience = rawAnn.audience
+    if (rawAnn?.priority !== undefined) specAnnotations.priority = rawAnn.priority
+    if (rawAnn?.lastModified !== undefined) specAnnotations.lastModified = rawAnn.lastModified
+    const hasSpecAnnotations = Object.keys(specAnnotations).length > 0
+
+    const customMeta: Record<string, unknown> = {}
+    if (rawAnn?.autoRead !== undefined) customMeta['autoRead'] = rawAnn.autoRead
+    if (rawAnn?.sessionInit !== undefined) customMeta['sessionInit'] = rawAnn.sessionInit
+    const hasCustomMeta = Object.keys(customMeta).length > 0
+
+    return {
+        ...(resDef.title !== undefined ? { title: resDef.title } : {}),
+        description: resDef.description ?? '',
+        mimeType,
+        ...(resDef.icons ? { icons: resDef.icons } : {}),
+        ...(hasSpecAnnotations ? { annotations: specAnnotations } : {}),
+        ...(hasCustomMeta ? { _meta: customMeta } : {}),
+    }
+}
+
 /**
  * Register all resources with the MCP server.
  *
@@ -116,11 +167,7 @@ export function registerResources(
 ): void {
     for (const resDef of resources) {
         const mimeType = resDef.mimeType ?? 'application/json'
-        const meta = {
-            description: resDef.description ?? '',
-            mimeType,
-            ...(resDef.icons ? { icons: resDef.icons } : {}),
-        }
+        const meta = buildResourceRegistrationMeta(resDef, mimeType)
         const readCallback = createAuditedResourceCallback(
             resDef,
             mimeType,

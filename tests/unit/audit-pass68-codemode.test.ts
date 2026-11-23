@@ -32,7 +32,7 @@ import type { ToolContext, ToolDefinition } from '../../src/types/index.js'
 
 const TEST_REGISTRY = {
     'memory-journal-mcp': { path: process.cwd(), project_number: 5 },
-    adamic: { path: process.cwd(), project_number: 16 },
+    companion: { path: process.cwd(), project_number: 16 },
 }
 
 describe('Pass 68 Audit — Code Mode Recovery, SQL Guards, Proxies, Auto-Return & Regex Safety', () => {
@@ -91,7 +91,7 @@ describe('Pass 68 Audit — Code Mode Recovery, SQL Guards, Proxies, Auto-Return
                 context,
                 omittedRootBatch.workspace_id
             )
-            expect(prepared[0]?.input.workspaceId).toBe('adamic')
+            expect(prepared[0]?.input.workspaceId).toBe('companion')
             expect(prepared[0]?.input.projectNumber).toBe(16)
 
             const mismatchedRootBatch = BatchCreateEntriesSchema.parse({
@@ -140,7 +140,7 @@ describe('Pass 68 Audit — Code Mode Recovery, SQL Guards, Proxies, Auto-Return
             }
             const batchErr = normalizeBatchDispatchItems(
                 'updates',
-                { updates: [{ id: 'not-a-number', content: 'moved', target_workspace_id: 'adamic' }] },
+                { updates: [{ id: 'not-a-number', content: 'moved', target_workspace_id: 'companion' }] },
                 TEST_REGISTRY,
                 {
                     projectId: 5,
@@ -163,7 +163,7 @@ describe('Pass 68 Audit — Code Mode Recovery, SQL Guards, Proxies, Auto-Return
             }
             const singleMoveErr = await normalizeDispatchParams(
                 fakeUpdateTool,
-                { entry_id: 'bad-id', workspace_id: '*', target_workspace_id: 'adamic' },
+                { entry_id: 'bad-id', workspace_id: '*', target_workspace_id: 'companion' },
                 { sessionContext, projectId: 5, workspaceId: '*', explicitWorkspace: true }
             )
             expect('errorResult' in singleMoveErr).toBe(true)
@@ -190,7 +190,7 @@ describe('Pass 68 Audit — Code Mode Recovery, SQL Guards, Proxies, Auto-Return
         expect(hasUnsupportedSqlTrailingClause('SELECT id FROM memory_journal UNION SELECT id FROM tags', 'select')).toBe(true)
         expect(hasUnsupportedSqlTrailingClause('SELECT a.id FROM memory_journal a JOIN tags b ON a.id = b.id', 'select')).toBe(true)
         expect(hasUnsupportedSqlTrailingClause('SELECT id FROM memory_journal GROUP BY entry_type HAVING COUNT(*) > 1', 'select')).toBe(true)
-        expect(hasUnsupportedSqlTrailingClause('SELECT * FROM memory_journal WHERE workspace_id = "adamic" ORDER BY id DESC LIMIT 10', 'select')).toBe(false)
+        expect(hasUnsupportedSqlTrailingClause('SELECT * FROM memory_journal WHERE workspace_id = "companion" ORDER BY id DESC LIMIT 10', 'select')).toBe(false)
         expect(hasUnsupportedSqlTrailingClause('DELETE FROM memory_journal WHERE id = 1 LIMIT 1', 'mutation')).toBe(true)
 
         expect(extractAndRecoverSqlCode('WITH cte AS (SELECT id FROM memory_journal) SELECT * FROM cte')).toBeNull()
@@ -200,7 +200,7 @@ describe('Pass 68 Audit — Code Mode Recovery, SQL Guards, Proxies, Auto-Return
         ).toBe('unmapped')
 
         const validSelect = parseSqlStatement(
-            "SELECT * FROM memory_journal WHERE id = 42 AND workspace_id = 'adamic' LIMIT 5",
+            "SELECT * FROM memory_journal WHERE id = 42 AND workspace_id = 'companion' LIMIT 5",
             []
         )
         expect(validSelect.action).toBe('get_by_id')
@@ -242,13 +242,13 @@ describe('Pass 68 Audit — Code Mode Recovery, SQL Guards, Proxies, Auto-Return
 
         const scopeMismatch = resolveEffectiveRpcScope(
             { workspaceId: '*', projectId: 5 },
-            { workspaceId: 'adamic' },
+            { workspaceId: 'companion' },
             TEST_REGISTRY
         )
         expect('errorResult' in scopeMismatch).toBe(true)
 
         const nestedConflict = validateNestedExecScope(
-            { workspace_id: 'adamic' },
+            { workspace_id: 'companion' },
             undefined,
             5,
             TEST_REGISTRY
@@ -272,26 +272,26 @@ describe('Pass 68 Audit — Code Mode Recovery, SQL Guards, Proxies, Auto-Return
         expect(compacted['helperFn']).toBeUndefined()
 
         const recRecovered = extractAndRecoverEntryCode(
-            "mj.core.updateEntry({ entry_id: 10, workspace_id: '*', target_workspace_id: 'adamic', content: 'moved' })"
+            "mj.core.updateEntry({ entry_id: 10, workspace_id: '*', target_workspace_id: 'companion', content: 'moved' })"
         )
-        expect(recRecovered).toContain('"target_workspace_id":"adamic"')
+        expect(recRecovered).toContain('"target_workspace_id":"companion"')
 
         const jsonRecovered = recoverStructuredJsonCode(
             JSON.stringify({
                 entry_id: 11,
                 workspace_id: '*',
-                targetWorkspaceId: 'adamic',
+                targetWorkspaceId: 'companion',
                 content: 'json moved',
             })
         )
-        expect(jsonRecovered).toContain('"target_workspace_id":"adamic"')
+        expect(jsonRecovered).toContain('"target_workspace_id":"companion"')
 
         const nlRecovered = synthesizeNaturalLanguageOrEntryPayload(
             'move this entry cleanly',
-            { code: 'move this entry cleanly', workspace_id: '*', target_workspace_id: 'adamic' },
-            { target_workspace_id: 'adamic', content: 'moved' }
+            { code: 'move this entry cleanly', workspace_id: '*', target_workspace_id: 'companion' },
+            { target_workspace_id: 'companion', content: 'moved' }
         )
-        expect(nlRecovered).toContain('"target_workspace_id":"adamic"')
+        expect(nlRecovered).toContain('"target_workspace_id":"companion"')
 
         const entriesProxy = createEntriesDomainProxy({
             core: {
@@ -373,13 +373,13 @@ describe('Pass 68 Audit — Code Mode Recovery, SQL Guards, Proxies, Auto-Return
 
         const ctxQuery = resolveExecutionPayload(
             { context: { query: 'auth bug' } },
-            { workspace_id: 'adamic', project_number: 16, context: { query: 'auth bug' } },
+            { workspace_id: 'companion', project_number: 16, context: { query: 'auth bug' } },
             true,
             Date.now()
         )
         expect('executionCode' in ctxQuery).toBe(true)
         if ('executionCode' in ctxQuery) {
-            expect(ctxQuery.executionCode).toContain('"workspace_id":"adamic"')
+            expect(ctxQuery.executionCode).toContain('"workspace_id":"companion"')
             expect(ctxQuery.executionCode).toContain('"project_number":16')
         }
 

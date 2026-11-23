@@ -219,6 +219,54 @@ describe('ConfigManager & Configuration Tools', () => {
             expect(mgr2.getConfig().rawToolFilter).toBe('core')
             mgr2.close()
         })
+
+        it('preserves startup CLI/env briefing overrides when unrelated config keys change and ignores >100 reload values', () => {
+            const cfgPath = path.join(tmpDir, 'briefing-reload.json')
+            fs.writeFileSync(
+                cfgPath,
+                JSON.stringify({ toolFilter: 'starter', briefingEntries: 4, briefingCommits: 5 }),
+                'utf-8'
+            )
+            const mgr = new ConfigManager(
+                {
+                    rawToolFilter: 'starter',
+                    toolFilterConfig: null,
+                    briefingConfig: {
+                        ...DEFAULT_BRIEFING_CONFIG,
+                        entryCount: 9,
+                        commitCount: 5,
+                    },
+                },
+                cfgPath,
+                { briefingOverrides: { entryCount: 9, commitCount: 5 } }
+            )
+            try {
+                // Edit only toolFilter in config.json; unchanged briefingEntries=4 must not clobber CLI/env entryCount=9
+                fs.writeFileSync(
+                    cfgPath,
+                    JSON.stringify({ toolFilter: 'full', briefingEntries: 4, briefingCommits: 5 }),
+                    'utf-8'
+                )
+                ;(mgr as unknown as { reloadFromFile: () => void }).reloadFromFile()
+                expect(mgr.getConfig().rawToolFilter).toBe('full')
+                expect(mgr.getConfig().briefingConfig.entryCount).toBe(9)
+                expect(mgr.getConfig().briefingConfig.commitCount).toBe(5)
+
+                // Out-of-range (>100) value on hot-reload is ignored
+                fs.writeFileSync(
+                    cfgPath,
+                    JSON.stringify({ toolFilter: 'full', briefingEntries: 500 }),
+                    'utf-8'
+                )
+                ;(mgr as unknown as { reloadFromFile: () => void }).reloadFromFile()
+                expect(mgr.getConfig().briefingConfig.entryCount).toBe(9)
+
+                // Removing briefingCommits from file reverts to CLI/env override (5), not default (3)
+                expect(mgr.getConfig().briefingConfig.commitCount).toBe(5)
+            } finally {
+                mgr.close()
+            }
+        })
     })
 
     describe('update_configuration Tool & Schema', () => {

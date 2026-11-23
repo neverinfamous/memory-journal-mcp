@@ -41,7 +41,7 @@ import { buildCommitInvocation } from '../../scripts/update-badges.js'
 
 const REGISTRY_FIXTURE = {
     'memory-journal-mcp': { path: process.cwd(), project_number: 5 },
-    adamic: { path: path.resolve(process.cwd(), '..', 'adamic'), project_number: 16 },
+    companion: { path: path.resolve(process.cwd(), '..', 'companion'), project_number: 16 },
 }
 
 describe('Pass 60 Code Mode, CLI, Worker & Script Remediations (M1, M5–M8, M12, L1–L2, L4–L5, O1–O5, O14–O17)', () => {
@@ -212,14 +212,14 @@ describe('Pass 60 Code Mode, CLI, Worker & Script Remediations (M1, M5–M8, M12
             const headSha = execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim()
             const moveRegistry = {
                 'memory-journal-mcp': { path: dir, project_number: 5 },
-                adamic: { path: process.cwd(), project_number: 16 },
+                companion: { path: process.cwd(), project_number: 16 },
             }
             const updates = await prepareCliEntryUpdate({
                 entryId: created.id,
                 version: 1,
                 existingEntry: created,
                 rawWorkspaceOpt: 'memory-journal-mcp',
-                trimmedTargetWs: 'adamic',
+                trimmedTargetWs: 'companion',
                 metaSourceWs: undefined,
                 content: 'Moved entry',
                 payload: {
@@ -231,7 +231,7 @@ describe('Pass 60 Code Mode, CLI, Worker & Script Remediations (M1, M5–M8, M12
                 db: adapter,
                 isTeam: false,
             })
-            expect(updates.targetWorkspaceId).toBe('adamic')
+            expect(updates.targetWorkspaceId).toBe('companion')
             expect(updates.anchors?.length ?? 0).toBeGreaterThan(0)
         } finally {
             adapter.close()
@@ -285,7 +285,7 @@ describe('Pass 60 Code Mode, CLI, Worker & Script Remediations (M1, M5–M8, M12
     })
 
     it('O14–O17: BigInt scope errors, autoVersion inheritance, frozen revisions proxy, SQL & negative single IDs', async () => {
-        const nestedErr = validateNestedExecScope({ project_number: 1n }, 'adamic', 16, REGISTRY_FIXTURE)
+        const nestedErr = validateNestedExecScope({ project_number: 1n }, 'companion', 16, REGISTRY_FIXTURE)
         expect(nestedErr?.error).toContain('Invalid project_number')
         const aliasConflict = applyProjectNameAlias('1', { project_number: 2n })
         expect(typeof aliasConflict === 'object' && 'conflict' in aliasConflict).toBe(true)

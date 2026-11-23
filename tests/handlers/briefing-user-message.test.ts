@@ -321,7 +321,8 @@ describe('formatUserMessage', () => {
             },
         })
 
-        expect(result).toContain('**Insights**')
+        expect(result).toContain('**Tracking**')
+        expect(result).not.toContain('**Insights**')
         expect(result).toContain('5 reviewed')
         expect(result).toContain('3 approved')
         expect(result).toContain('1 changes requested')
@@ -347,7 +348,8 @@ describe('formatUserMessage', () => {
             },
         })
 
-        expect(result).toContain('**Insights**')
+        expect(result).toContain('**Tracking**')
+        expect(result).not.toContain('**Insights**')
         expect(result).not.toContain('changes requested')
         expect(result).not.toContain('comments')
     })
@@ -525,5 +527,142 @@ describe('formatUserMessage', () => {
 
         expect(result).toContain('42 entries')
         expect(result).not.toContain('Latest: No entries yet')
+    })
+
+    it('neutralizes markdown link breakout in workflow run names and unsafe GitHub URLs', () => {
+        const result = formatUserMessage({
+            ...baseOpts(),
+            github: {
+                repo: 'org/repo',
+                branch: 'main',
+                ci: 'passing',
+                openIssues: 0,
+                openPRs: 0,
+                milestones: [],
+                workflowSummary: {
+                    passing: 2,
+                    failing: 0,
+                    pending: 0,
+                    cancelled: 0,
+                    runs: [
+                        {
+                            name: 'CI](https://evil.example)[ok',
+                            conclusion: 'success',
+                            url: 'https://github.com/org/repo/actions/runs/1',
+                        },
+                        {
+                            name: 'UnsafeUrl',
+                            conclusion: 'success',
+                            url: 'https://github.com/org/repo/actions/runs/2"onclick=alert(1)',
+                        },
+                    ],
+                },
+            },
+        })
+
+        expect(result).not.toContain('](https://evil.example)')
+        expect(result).toContain('[CI&#93;(https://evil.example)&#91;ok](https://github.com/org/repo/actions/runs/1)')
+        expect(result).not.toContain('onclick=alert')
+    })
+
+    it('suppresses Dirty badge when localGitStatus has error or degraded', () => {
+        const withError = formatUserMessage({
+            ...baseOpts(),
+            github: {
+                repo: 'org/repo',
+                branch: 'main',
+                ci: 'passing',
+                openIssues: 0,
+                openPRs: 0,
+                milestones: [],
+                localGitStatus: {
+                    modified: 0,
+                    untracked: 0,
+                    isClean: false,
+                    error: 'git failed',
+                },
+            },
+        })
+        const withDegraded = formatUserMessage({
+            ...baseOpts(),
+            github: {
+                repo: 'org/repo',
+                branch: 'main',
+                ci: 'passing',
+                openIssues: 0,
+                openPRs: 0,
+                milestones: [],
+                localGitStatus: {
+                    modified: 0,
+                    untracked: 0,
+                    isClean: false,
+                    degraded: true,
+                },
+            },
+        })
+        expect(withError).not.toContain('Dirty')
+        expect(withDegraded).not.toContain('Dirty')
+    })
+
+    it('fences milestones under a single untrusted wrapper and omits hardcoded conf 1.00 from velocity', () => {
+        const result = formatUserMessage({
+            ...baseOpts(),
+            github: {
+                repo: 'org/repo',
+                branch: 'main',
+                ci: 'passing',
+                openIssues: 0,
+                openPRs: 0,
+                milestones: [
+                    { title: 'v1.0', progress: '2/4 (50%)', dueOn: '2026-12-01' },
+                    { title: 'v2.0', progress: '0/3 (0%)', dueOn: null },
+                ],
+            },
+            gitHistory: {
+                stats: { total: 5, highImpact: 2, lowImpact: 1, avgConfidence: 1.0 },
+                commits: [{ hash: 'abc12345', message: 'feat: test commit' }],
+            },
+        })
+
+        const trackingLine = result.split('\n').find((l) => l.includes('**Tracking**')) ?? ''
+        expect(trackingLine.match(/<untrusted_remote_content>/g)).toHaveLength(1)
+        expect(trackingLine).toContain('v1.0 (2/4 (50%), due 2026-12-01) ¦ v2.0 (0/3 (0%))')
+        expect(result).toContain('Velocity (5): 2 high · 1 low')
+        expect(result).not.toContain('conf 1.00')
+    })
+
+    it('suppresses write hints in readonly mode and strips asterisks from workspace display identifiers', () => {
+        const result = formatUserMessage({
+            ...baseOpts(),
+            isReadonly: true,
+            workspaceId: 'ws*evil',
+            totalEntries: 20,
+            graphSummary: { totalRelationships: 0, density: 0, causalMetrics: {}, topHubs: [] },
+            graphPivots: {
+                windowDays: 14,
+                degrees: {},
+                commitRefs: {},
+                activeThreads: [],
+                recentEntries: 10,
+                unlinkedEntries: 8,
+            },
+            analyticsInsights: {
+                activityTrend: '10 entries',
+                significanceSpike: null,
+                staleProjects: [],
+                topImportance: [],
+                orphanRatio: 0.5,
+                orphanCount: 10,
+                totalEntries: 20,
+            },
+        })
+
+        expect(result).toContain('**Graph**')
+        expect(result).toContain('Unlinked (14d): 8/10 ⚠️')
+        expect(result).not.toContain('link_entries')
+        expect(result).not.toContain('mj.relationships.linkEntries')
+        expect(result).not.toContain('optimize-journal')
+        expect(result).toContain('Workspace: **ws_evil**')
+        expect(result).not.toContain('ws*evil')
     })
 })
