@@ -63,4 +63,3 @@ Pick the lightest flag that satisfies your task (cost increases top to bottom):
 ## 📖 Related Context & Usability Testing
 
 - **Committing**: Use `pnpm exec tsx scripts/commit.ts` with explicit `--add <path>` flags (never raw `git commit`). Do not hand-edit generated changelogs.
-- **Usability / Fuzzing Suite**: When changing parsing contracts, verify against `skills/lib-agent-exec/references/usability-audit.md` / the host's `usability/coordinator-workflow.md`. Auto-generated `test-usability-*.md` files are regenerated via the host's `usability/scripts/generate-tests.ts` wrapper.

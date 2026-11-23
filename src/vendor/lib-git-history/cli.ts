@@ -147,7 +147,7 @@ ${pc.bold('Content & Formatting Options:')}
   --no-body                Omit commit bodies from output
   --include-patch          Include full patch diff strings in output
   --jsonl                  Output as JSON Lines format
-  -U, --diff-context <n>   Lines of context for diffs (default: 3)
+  -U, --diff-context <n>   Lines of context for diffs (default: 1 for history, 3 for uncommitted)
   --max-body-length <n>    Truncate commit bodies over this length
   --max-patch-length <n>   Truncate patches over this length
 

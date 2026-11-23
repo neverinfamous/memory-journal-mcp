@@ -93,13 +93,13 @@ const MIGRATION_COLUMNS: ReadonlyArray<readonly [string, string]> = [
 
 function ensureCacheSchemaColumns(database: Database): void {
   const infoStmt = database.prepare('PRAGMA table_info(commits);');
-  let existingRows: Array<{ name?: unknown }>;
+  let existingRows: unknown[];
   try {
-    existingRows = infoStmt.all() as Array<{ name?: unknown }>;
+    existingRows = infoStmt.all() as unknown[];
   } finally {
     finalizeStatement(infoStmt);
   }
-  const existingCols = new Set(existingRows.map((r) => (typeof r.name === 'string' ? r.name : '')));
+  const existingCols = new Set(existingRows.map((r) => (isRecord(r) && typeof r['name'] === 'string' ? r['name'] : '')));
   for (const [colName, colType] of MIGRATION_COLUMNS) {
     if (!existingCols.has(colName)) {
       database.exec(`ALTER TABLE commits ADD COLUMN ${colName} ${colType};`);
@@ -386,7 +386,9 @@ export function insertCommits(batch: CommitEntry[]): void {
   cachedInsertTx(batch);
 }
 
-export function queryCommits(filters: Partial<CommitEntry> = {}): CommitEntry[] {
+export type QueryCommitsFilter = Pick<Partial<CommitEntry>, 'commit' | 'author' | 'type' | 'scope' | 'isBreaking'>;
+
+export function queryCommits(filters: QueryCommitsFilter = {}): CommitEntry[] {
   const currentDb = db || initCache();
   let query = 'SELECT * FROM commits';
   const conditions: string[] = [];

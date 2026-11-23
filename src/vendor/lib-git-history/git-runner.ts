@@ -224,7 +224,7 @@ export function buildGitBaseArgs(args: CliArgs, targetRange: string | undefined)
   if (args.author || args.search || args.grep || args['patch-search'] || args.pickaxe) {
     if (!gitArgs.includes('-i')) gitArgs.push('-i');
   }
-  if (args.grep || args['patch-search'] || args.pickaxe) {
+  if (args.grep) {
     if (!gitArgs.includes('-E')) gitArgs.push('-E');
   }
   if (args.since) gitArgs.push(`--since=${args.since}`);

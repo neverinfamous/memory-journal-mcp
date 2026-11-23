@@ -85,7 +85,11 @@ export async function getPatchMap(lockedArgs: string[], args: CliArgs, stdinShas
     if (!hash) continue;
     const patchByteLen = recordBuf.length - (hashEnd + 1);
     if (patchByteLen > maxPatchLen) {
-      map.set(hash, truncateOversizedPatch(recordBuf, hashEnd + 1, maxPatchLen));
+      if (maxPatchLen === 0 && recordBuf.toString('utf-8', hashEnd + 1).trim().length === 0) {
+        map.set(hash, { patch: '', truncated: false });
+      } else {
+        map.set(hash, truncateOversizedPatch(recordBuf, hashEnd + 1, maxPatchLen));
+      }
     } else {
       map.set(hash, { patch: recordBuf.toString('utf-8', hashEnd + 1).trim(), truncated: false });
     }
