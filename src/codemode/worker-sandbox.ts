@@ -382,35 +382,45 @@ export class WorkerSandbox {
         const startRss = process.memoryUsage.rss()
 
         return await new Promise<SandboxResult>((resolve) => {
-            const { methodList, methodListKey, methodSets } = getAllowedMethodMetadata(apiBindings)
-            const { port1: hostPort, port2: workerPort } = new MessageChannel()
-            const timedOutId = this.executionId
-            const timeoutHandle = setTimeout(() => {
-                this.terminateTimedOutExecution(timedOutId)
-            }, effectiveTimeout)
-            timeoutHandle.unref()
+            let timeoutHandle: NodeJS.Timeout | undefined
+            let hostPort: MessageChannel['port1'] | undefined
+            let workerPort: MessageChannel['port2'] | undefined
+            try {
+                const { methodList, methodListKey, methodSets } =
+                    getAllowedMethodMetadata(apiBindings)
+                const ch = new MessageChannel()
+                hostPort = ch.port1
+                workerPort = ch.port2
+                const timedOutId = this.executionId
+                timeoutHandle = setTimeout(() => {
+                    this.terminateTimedOutExecution(timedOutId)
+                }, effectiveTimeout)
+                timeoutHandle.unref()
 
-            this.currentExecution = { resolve, hostPort, startTime, startRss, timeoutHandle }
-            this.attachHostRpcHandler(hostPort, apiBindings, methodSets, modeFlags?.maxToolInputElements)
-            this.worker?.ref()
+                this.currentExecution = { resolve, hostPort, startTime, startRss, timeoutHandle }
+                this.attachHostRpcHandler(hostPort, apiBindings, methodSets, modeFlags?.maxToolInputElements)
+                this.worker?.ref()
 
-            this.dispatchWorkerMessage({
-                code,
-                methodList,
-                methodListKey,
-                schemas,
-                effectiveTimeout,
-                maxResultSize: resolveEffectiveMaxResultSize(maxResultSizeOverride),
-                workerPort,
-                hostPort,
-                timeoutHandle,
-                contextObj,
-                readonlyMode,
-                dryRunMode: modeFlags?.dryRunMode,
-                useTestDbMode: modeFlags?.useTestDbMode,
-                startTime,
-                resolve,
-            })
+                this.dispatchWorkerMessage({
+                    code, methodList, methodListKey, schemas, effectiveTimeout,
+                    maxResultSize: resolveEffectiveMaxResultSize(maxResultSizeOverride),
+                    workerPort, hostPort, timeoutHandle, contextObj, readonlyMode,
+                    dryRunMode: modeFlags?.dryRunMode, useTestDbMode: modeFlags?.useTestDbMode,
+                    startTime, resolve,
+                })
+            } catch (setupError) {
+                if (timeoutHandle !== undefined) clearTimeout(timeoutHandle)
+                hostPort?.close()
+                workerPort?.close()
+                this.worker?.unref()
+                this.isBusy = false
+                this.currentExecution = null
+                resolve({
+                    success: false,
+                    error: setupError instanceof Error ? setupError.message : String(setupError),
+                    metrics: { wallTimeMs: 0, cpuTimeMs: 0, memoryUsedMb: 0 },
+                })
+            }
         })
     }
 }

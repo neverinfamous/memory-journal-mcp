@@ -4,8 +4,12 @@ import {
     DUMMY_GET_PROMPT_TOOL_NAMES,
     DUMMY_GREP_SEARCH_TOOL_NAMES,
 } from '../../../handlers/tools/core/dummy-healing.js'
-import { applyArgInterceptions } from '../../../codemode/param-normalizer.js'
-import { setActiveProjectRegistry } from '../../../codemode/normalizers/generic-field-aliases.js'
+import { applyArgInterceptions } from '../../../handlers/tools/arg-interceptions.js'
+import {
+    captureActiveProjectRegistryState,
+    restoreActiveProjectRegistryState,
+    setActiveProjectRegistry,
+} from '../../../codemode/normalizers/project-alias-helpers.js'
 import type { BriefingConfig } from '../../../handlers/resources/shared.js'
 import type { ToolHandlerConfig } from '../../../types/index.js'
 import { logAgentIssue } from '../../../utils/issue-logger.js'
@@ -354,12 +358,13 @@ function runArgInterceptionForCall(
     const toolName = params.name
     if (toolName === undefined || toolName === '') return undefined
 
+    const prevRegistryState = captureActiveProjectRegistryState()
     setActiveProjectRegistry(projectRegistry)
     let intercept: ReturnType<typeof applyArgInterceptions>
     try {
         intercept = applyArgInterceptions(toolName, [inputArg])
     } finally {
-        setActiveProjectRegistry(undefined)
+        restoreActiveProjectRegistryState(prevRegistryState)
     }
 
     if ('error' in intercept) {

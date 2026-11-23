@@ -1,7 +1,7 @@
 import type { Anchor, AnchorStatus } from '../../../types/index.js'
 import type { EntriesSharedContext } from './shared.js'
 import { effectiveWorkspace } from '../../workspace-scope.js'
-import { bucketInParams, SCOPED_IN_PARAM_BUCKETS } from '../row-helpers.js'
+import { bucketInParams, runImmediateWriteTx, SCOPED_IN_PARAM_BUCKETS } from '../row-helpers.js'
 
 export function getAnchorsByEntryIds(
     context: EntriesSharedContext,
@@ -48,17 +48,11 @@ export function insertAnchors(
         VALUES (?, ?, ?, ?, NULL)
     `)
 
-    const runInserts = (): void => {
+    runImmediateWriteTx(db, () => {
         for (const a of anchors) {
             stmt.run(entryId, a.anchorPath, a.anchorType, a.status ?? 'pending')
         }
-    }
-
-    if (db.inTransaction) {
-        runInserts()
-    } else {
-        db.transaction(runInserts)()
-    }
+    })
 }
 
 export function getAnchorsByEntryId(

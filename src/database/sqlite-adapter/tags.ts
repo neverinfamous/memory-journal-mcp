@@ -91,11 +91,7 @@ export class TagsManager {
             }
         }
 
-        if (this.db.inTransaction) {
-            runLink()
-        } else {
-            this.db.transaction(runLink)()
-        }
+        runImmediateWriteTx(this.db, runLink)
     }
 
     getTagsForEntry(entryId: number): string[] {

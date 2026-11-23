@@ -5,7 +5,7 @@ import type { IDatabaseConnection, TeamMember, TeamRole } from '../core/interfac
 
 export class MembersManager {
     private db: IDatabaseConnection
-    private rbacActiveCache: { active: boolean; dataVersion: number } | null = null
+    private rbacActiveCache: { db: object; active: boolean; dataVersion: number } | null = null
 
     constructor(db: IDatabaseConnection) {
         this.db = db
@@ -243,7 +243,13 @@ export class MembersManager {
     isRbacActive(): boolean {
         const nativeDb = this.db.getNativeDb?.()
         const dv = nativeDb !== undefined ? this.readDataVersion(nativeDb) : null
-        if (dv !== null && this.rbacActiveCache !== null && this.rbacActiveCache.dataVersion === dv) {
+        if (
+            dv !== null &&
+            nativeDb !== undefined &&
+            this.rbacActiveCache !== null &&
+            this.rbacActiveCache.db === nativeDb &&
+            this.rbacActiveCache.dataVersion === dv
+        ) {
             return this.rbacActiveCache.active
         }
         let count: number
@@ -267,8 +273,8 @@ export class MembersManager {
             throw error
         }
         const isActive = count > 0
-        if (dv !== null) {
-            this.rbacActiveCache = { active: isActive, dataVersion: dv }
+        if (dv !== null && nativeDb !== undefined) {
+            this.rbacActiveCache = { db: nativeDb, active: isActive, dataVersion: dv }
         }
         return isActive
     }

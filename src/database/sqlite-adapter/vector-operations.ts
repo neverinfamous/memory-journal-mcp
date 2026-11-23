@@ -1,7 +1,7 @@
 import type { NativeConnectionManager } from './native-connection.js'
 import { effectiveWorkspace } from '../workspace-scope.js'
 import { isMissingTableError } from './schema-errors.js'
-import { bucketInParams } from './row-helpers.js'
+import { bucketInParams, runImmediateWriteTx } from './row-helpers.js'
 
 /** Initial KNN over-fetch factor applied before the workspace filter. */
 const VECTOR_KNN_OVERFETCH = 4
@@ -34,10 +34,10 @@ export class VectorOperations {
         const insertStmt = db.prepare(
             'INSERT INTO vec_embeddings(entry_id, embedding) VALUES (?, ?)'
         )
-        db.transaction(() => {
+        runImmediateWriteTx(db, () => {
             deleteStmt.run(bigId)
             insertStmt.run(bigId, embedding)
-        })()
+        })
     }
 
     upsertVectors(vectors: { entryId: number; embedding: Float32Array }[]): void {
@@ -47,13 +47,13 @@ export class VectorOperations {
             'INSERT INTO vec_embeddings(entry_id, embedding) VALUES (?, ?)'
         )
 
-        db.transaction(() => {
+        runImmediateWriteTx(db, () => {
             for (const vec of vectors) {
                 const bigId = BigInt(vec.entryId)
                 deleteStmt.run(bigId)
                 insertStmt.run(bigId, vec.embedding)
             }
-        })()
+        })
     }
 
     searchVectors(

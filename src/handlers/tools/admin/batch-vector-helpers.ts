@@ -81,7 +81,12 @@ function isMoveTargetProjectMismatch(
         if (targetRegProj === undefined || u.project_number !== targetRegProj) {
             return entry?.projectNumber !== u.project_number
         }
-        return false
+        return (
+            entry?.projectNumber !== null &&
+            entry?.projectNumber !== undefined &&
+            entry.projectNumber > 0 &&
+            entry.projectNumber !== u.project_number
+        )
     }
     return (
         targetCanonical !== undefined &&
@@ -92,6 +97,24 @@ function isMoveTargetProjectMismatch(
         entry.projectNumber !== u.project_number &&
         (entry.workspaceId ?? '').toLowerCase() !== 'default'
     )
+}
+
+/**
+ * Inherit root `project_number` for a batch update item only when the item omits
+ * `workspace_id` or names the same concrete workspace (excluding `'default'`).
+ */
+export function inheritBatchProjectNumber(
+    itemWorkspaceId: string | undefined,
+    itemProjectNumber: number | null | undefined,
+    rootWorkspaceId: string | undefined,
+    rootProjectNumber: number | undefined
+): number | null | undefined {
+    if (itemProjectNumber !== undefined) return itemProjectNumber
+    if (rootProjectNumber === undefined) return undefined
+    if (itemWorkspaceId === undefined) return rootProjectNumber
+    const normItem = itemWorkspaceId.trim().toLowerCase()
+    if (normItem === 'default' || rootWorkspaceId === undefined) return undefined
+    return normItem === rootWorkspaceId.trim().toLowerCase() ? rootProjectNumber : undefined
 }
 
 /**
@@ -137,7 +160,12 @@ export function findWildcardProjectMismatches(
                 )
             }
             const ws = u.workspace_id ?? rootWorkspaceId
-            const pn = u.project_number !== undefined ? u.project_number : rootProjectNumber
+            const pn = inheritBatchProjectNumber(
+                u.workspace_id,
+                u.project_number,
+                rootWorkspaceId,
+                rootProjectNumber
+            )
             if (pn === undefined || pn === null) return false
             const entry = resolveEntry(u.entry_id)
             if (entry === null || entry === undefined) return ws === '*'

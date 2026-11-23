@@ -126,10 +126,16 @@ function readEntryIdField(target: Record<string, unknown>): {
     if (typeof raw === 'number') {
         return { entryId: undefined, invalidExplicitEntryId: Number.isFinite(raw) ? raw : String(raw) }
     }
-    if (typeof raw === 'string' && /^(?:-?\d+(?:\.\d+)?|NaN|Infinity|-Infinity)$/i.test(raw.trim())) {
+    if (typeof raw === 'string') {
         return { entryId: undefined, invalidExplicitEntryId: raw.trim() }
     }
-    return { entryId: undefined, invalidExplicitEntryId: undefined }
+    const invalidExplicitEntryId =
+        typeof raw === 'boolean'
+            ? String(raw)
+            : typeof raw === 'object'
+              ? (JSON.stringify(raw) ?? 'invalid')
+              : 'invalid'
+    return { entryId: undefined, invalidExplicitEntryId }
 }
 
 function readOperation(target: Record<string, unknown>): string {

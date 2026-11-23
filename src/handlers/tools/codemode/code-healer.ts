@@ -5,6 +5,7 @@
 import { extractAndRecoverJsonCode } from './json-entry-recovery.js'
 import { extractAndRecoverSqlCode, extractAndRecoverPreparedStatementCode } from './sql-recovery.js'
 import {
+    buildNonCodeSpans,
     escapeDelimiterChar,
     isInsideStringLiteral,
     isInsideStringOrComment,
@@ -151,13 +152,48 @@ const ACCIDENTAL_TAGGED_TEMPLATE_RE =
 const MAX_DELIMITER_HEAL_CANDIDATES = 16
 
 function hasAccidentalTaggedTemplateBackticks(src: string): boolean {
-    return ACCIDENTAL_TAGGED_TEMPLATE_RE.test(src)
+    if (!ACCIDENTAL_TAGGED_TEMPLATE_RE.test(src)) return false
+    const spans = buildNonCodeSpans(src)
+    const parts: string[] = []
+    let pos = 0
+    for (const [start, end] of spans) {
+        if (start > pos) parts.push(src.slice(pos, start))
+        const first = src[start]
+        if (first === '`' || (first === '}' && src[end - 1] === '`')) {
+            parts.push(src.slice(start, end))
+        } else {
+            parts.push(' ')
+        }
+        pos = end
+    }
+    if (pos < src.length) parts.push(src.slice(pos))
+    return ACCIDENTAL_TAGGED_TEMPLATE_RE.test(parts.join(''))
 }
 
 function shouldLeaveValidSnippetUntouched(snippet: string, isExpression: boolean): boolean {
     if (hasAccidentalTaggedTemplateBackticks(snippet)) return false
     const wrapped = isExpression ? `(${snippet})` : snippet
     return isValidJsScript(wrapped)
+}
+
+function healQuotedPropMatch(match: string, prefix: string, content: string, delim: "'" | '"'): string {
+    if (shouldLeaveValidSnippetUntouched(`{ ${match} }`, true)) return match
+    return content.includes('\n')
+        ? `${prefix}\`${escapeTemplateInterpolation(content)}\``
+        : `${prefix}${delim}${escapeDelimiterChar(content, delim)}${delim}`
+}
+
+function healQuotedCallArgMatch(
+    match: string,
+    prefix: string,
+    content: string,
+    delim: "'" | '"',
+    statementKeywordsOrBraces: RegExp
+): string {
+    if (statementKeywordsOrBraces.test(content)) return match
+    if (!hasAccidentalTaggedTemplateBackticks(match) && isValidJsScript(`${match})`)) return match
+    if (content.includes('\n')) return `${prefix}\`${escapeTemplateInterpolation(content)}\``
+    return `${prefix}${delim}${escapeDelimiterChar(content, delim)}${delim}`
 }
 
 const DELIMITER_HEAL_KEYWORD_RE =
@@ -202,14 +238,12 @@ function applyTemplateAndQuoteDelimiterHealing(
     executionCode = replaceOutsideNonCode(
         executionCode,
         /(\b(?:content|title|text|description|message|instructions|body|notes|details|resolution_notes|query|script|comment|summary|heading)\s*:\s*)'([\s\S]*?)'(?=\s*(?:,\s*[a-zA-Z_$][\w$]*\s*:|,\s*\}|\}|\)))/g,
-        (_match: string, prefix: string, content: string): string =>
-            content.includes('\n') ? `${prefix}\`${escapeTemplateInterpolation(content)}\`` : `${prefix}'${escapeDelimiterChar(content, "'")}'`
+        (match: string, prefix: string, content: string): string => healQuotedPropMatch(match, prefix, content, "'")
     )
     executionCode = replaceOutsideNonCode(
         executionCode,
         /(\b(?:content|title|text|description|message|instructions|body|notes|details|resolution_notes|query|script|comment|summary|heading)\s*:\s*)"([\s\S]*?)"(?=\s*(?:,\s*[a-zA-Z_$][\w$]*\s*:|,\s*\}|\}|\)))/g,
-        (_match: string, prefix: string, content: string): string =>
-            content.includes('\n') ? `${prefix}\`${escapeTemplateInterpolation(content)}\`` : `${prefix}"${escapeDelimiterChar(content, '"')}"`
+        (match: string, prefix: string, content: string): string => healQuotedPropMatch(match, prefix, content, '"')
     )
 
     executionCode = replaceOutsideNonCode(
@@ -224,21 +258,15 @@ function applyTemplateAndQuoteDelimiterHealing(
     executionCode = replaceOutsideNonCode(
         executionCode,
         /(\b(?:mj\.)?(?:core\.|team\.|admin\.|search\.|io\.|github\.|git\.|backup\.)?(?:createEntry|teamCreateEntry|appendEntry|updateEntry|teamUpdateEntry|searchEntries|teamSearch)\s*\(\s*)'([\s\S]*?)'(?=\s*(?:,\s*|\)))/g,
-        (match: string, prefix: string, content: string): string => {
-            if (statementKeywordsOrBraces.test(content)) return match
-            if (content.includes('\n')) return `${prefix}\`${escapeTemplateInterpolation(content)}\``
-            return `${prefix}'${escapeDelimiterChar(content, "'")}'`
-        }
+        (match: string, prefix: string, content: string): string =>
+            healQuotedCallArgMatch(match, prefix, content, "'", statementKeywordsOrBraces)
     )
 
     executionCode = replaceOutsideNonCode(
         executionCode,
         /(\b(?:mj\.)?(?:core\.|team\.|admin\.|search\.|io\.|github\.|git\.|backup\.)?(?:createEntry|teamCreateEntry|appendEntry|updateEntry|teamUpdateEntry|searchEntries|teamSearch)\s*\(\s*)"([\s\S]*?)"(?=\s*(?:,\s*|\)))/g,
-        (match: string, prefix: string, content: string): string => {
-            if (statementKeywordsOrBraces.test(content)) return match
-            if (content.includes('\n')) return `${prefix}\`${escapeTemplateInterpolation(content)}\``
-            return `${prefix}"${escapeDelimiterChar(content, '"')}"`
-        }
+        (match: string, prefix: string, content: string): string =>
+            healQuotedCallArgMatch(match, prefix, content, '"', statementKeywordsOrBraces)
     )
 
     executionCode = replaceOutsideNonCode(

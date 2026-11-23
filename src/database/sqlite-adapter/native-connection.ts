@@ -17,7 +17,7 @@ import {
     runOptimizeAndCheckpointBeforeClose,
     runPassiveCheckpoint,
 } from './connection-pragmas.js'
-
+import { runImmediateWriteTx } from './row-helpers.js'
 
 /**
  * Pre-compiled regex to detect SQL mutation statements.
@@ -160,7 +160,7 @@ export class NativeConnectionManager implements IDatabaseConnection {
         MigrationManager.runMigrations(db, this.teamSchemaApplied)
 
         // 2. Perform post-migration checks and updates
-        db.transaction(() => {
+        runImmediateWriteTx(db, () => {
             db.prepare('UPDATE tags SET usage_count = 0 WHERE usage_count IS NULL').run()
 
             // Populate FTS5 index for existing databases that were created before FTS5 was added.
@@ -206,7 +206,7 @@ export class NativeConnectionManager implements IDatabaseConnection {
             if (needsRebuild) {
                 this.scheduleFtsRebuild(rebuildReason)
             }
-        })()
+        })
     }
 
     /**
@@ -223,12 +223,12 @@ export class NativeConnectionManager implements IDatabaseConnection {
             const db = this.db
             try {
                 // In-process rebuild on the existing (keyed, busy_timeout-configured) connection (live entries only)
-                db.transaction(() => {
+                runImmediateWriteTx(db, () => {
                     db.exec("INSERT INTO fts_content(fts_content) VALUES ('delete-all')")
                     db.exec(
                         'INSERT INTO fts_content(rowid, content) SELECT id, content FROM memory_journal WHERE deleted_at IS NULL'
                     )
-                })()
+                })
                 logger.info(`Deferred FTS5 rebuild completed (${rebuildReason})`, {
                     module: 'NativeConnectionManager',
                     dbPath: this.dbPath,

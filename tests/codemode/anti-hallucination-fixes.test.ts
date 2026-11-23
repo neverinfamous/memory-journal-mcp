@@ -72,10 +72,11 @@ describe('Anti-Hallucination Fixes', () => {
             const rawResult = { success: true, entries: [{ id: 1 }, { id: 2 }], count: 2 }
             const wrapped = wrapResult(rawResult) as Record<string, unknown> & { slice: (start?: number, end?: number) => unknown }
 
-            expect(wrapped.data).toBe(rawResult.entries)
-            expect(wrapped.items).toBe(rawResult.entries)
-            expect(wrapped.rows).toBe(rawResult.entries)
-            expect((wrapped.result as any).entries).toBe(rawResult.entries)
+            expect(wrapped.data).toEqual(rawResult.entries)
+            expect(wrapped.data).toBe(wrapped.entries)
+            expect(wrapped.items).toBe(wrapped.entries)
+            expect(wrapped.rows).toBe(wrapped.entries)
+            expect((wrapped.result as Record<string, unknown>)['entries']).toBe(wrapped.entries)
         })
 
         it('should allow calling array methods via result proxy when accessed via alias', () => {

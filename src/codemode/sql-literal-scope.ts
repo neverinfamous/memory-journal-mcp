@@ -7,6 +7,11 @@ export const ENTRY_TABLE_NAMES = new Set([
 ])
 
 const SQL_LITERAL_PATTERN = /'(?:\\.|''|[^'\\])*'|"(?:\\.|""|[^"\\])*"/g
+const SINGLE_SQL_STRING_LITERAL_RE = /^(?:'(?:\\.|''|[^'\\])*'|"(?:\\.|""|[^"\\])*")$/
+
+export function isSingleSqlStringLiteral(raw: string): boolean {
+    return SINGLE_SQL_STRING_LITERAL_RE.test(raw.trim())
+}
 
 export function advanceQuotedChar(sql: string, i: number, quote: string): { nextIndex: number; closed: boolean } {
     const ch = sql[i] ?? ''
@@ -245,21 +250,15 @@ export function scopeFromInsertLiterals(cleanSql: string): Record<string, unknow
         const column = rawCol?.replace(/^[a-zA-Z_][\w]*\./, '')
         const raw = values[i]
         if (column === undefined || raw === undefined || raw === '?') continue
-        if (
-            column === 'workspace_id' &&
-            raw.length >= 2 &&
-            ((raw.startsWith("'") && raw.endsWith("'")) || (raw.startsWith('"') && raw.endsWith('"')))
-        ) {
-            const ws = unquoteSqlLiteral(raw).trim()
+        if (column === 'workspace_id' && isSingleSqlStringLiteral(raw)) {
+            const ws = unquoteSqlLiteral(raw.trim()).trim()
             if (ws !== '') scope['workspace_id'] = ws
         }
         if (column === 'project_number' || column === 'project_id') {
-            const unquoted =
-                raw.length >= 2 &&
-                ((raw.startsWith("'") && raw.endsWith("'")) ||
-                    (raw.startsWith('"') && raw.endsWith('"')))
-                    ? unquoteSqlLiteral(raw).trim()
-                    : raw.trim()
+            const trimmedRaw = raw.trim()
+            const unquoted = isSingleSqlStringLiteral(trimmedRaw)
+                ? unquoteSqlLiteral(trimmedRaw).trim()
+                : trimmedRaw
             if (/^[1-9]\d*$/.test(unquoted)) {
                 const parsed = Number(unquoted)
                 if (Number.isSafeInteger(parsed) && String(parsed) === unquoted) {
@@ -358,12 +357,7 @@ export function isSupportedWhereClause(
         }
         if (col === 'project_number' || col === 'project_id') {
             if (allowPlaceholder && isSqlBindPlaceholder(rhs)) continue
-            const unquoted =
-                rhs.length >= 2 &&
-                ((rhs.startsWith("'") && rhs.endsWith("'")) ||
-                    (rhs.startsWith('"') && rhs.endsWith('"')))
-                    ? unquoteSqlLiteral(rhs).trim()
-                    : rhs
+            const unquoted = isSingleSqlStringLiteral(rhs) ? unquoteSqlLiteral(rhs).trim() : rhs
             if (!/^[1-9]\d*$/.test(unquoted)) return false
             const n = Number(unquoted)
             if (!Number.isSafeInteger(n) || n <= 0 || String(n) !== unquoted) return false
@@ -371,13 +365,7 @@ export function isSupportedWhereClause(
         }
         if (col === 'workspace_id') {
             if (allowPlaceholder && isSqlBindPlaceholder(rhs)) continue
-            if (
-                rhs.length >= 2 &&
-                ((rhs.startsWith("'") && rhs.endsWith("'")) ||
-                    (rhs.startsWith('"') && rhs.endsWith('"')))
-            ) {
-                if (unquoteSqlLiteral(rhs).trim() !== '') continue
-            }
+            if (isSingleSqlStringLiteral(rhs) && unquoteSqlLiteral(rhs).trim() !== '') continue
             return false
         }
         return false

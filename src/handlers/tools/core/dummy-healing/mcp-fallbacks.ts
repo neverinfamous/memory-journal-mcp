@@ -119,7 +119,11 @@ export async function tryHandleResourceUriFallback(
             },
         }
     }
-    return { handled: true, result: await handleReadResource(params, toolName, context) }
+    const forwardParams: Record<string, unknown> =
+        typeof params === 'object' && params !== null && !Array.isArray(params)
+            ? { ...(params as Record<string, unknown>), uri: trimmed }
+            : { uri: trimmed }
+    return { handled: true, result: await handleReadResource(forwardParams, toolName, context) }
 }
 
 export async function handleReadResource(

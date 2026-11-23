@@ -132,7 +132,11 @@ export function writeProjectRegistryFile(configPath: string, config: Record<stri
             if (registryFileCache.size >= REGISTRY_FILE_CACHE_MAX) {
                 registryFileCache.clear()
             }
-            registryFileCache.set(resolved, { mtimeMs: stat.mtimeMs, size: stat.size, parsed: config })
+            registryFileCache.set(resolved, {
+                mtimeMs: stat.mtimeMs,
+                size: stat.size,
+                parsed: structuredClone(config),
+            })
         } catch {
             // Cache remains cleared if post-rename stat fails.
         }

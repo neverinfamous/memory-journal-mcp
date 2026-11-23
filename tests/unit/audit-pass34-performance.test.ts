@@ -36,12 +36,12 @@ describe('Pass 34 Performance Audit Fixes & Prompt Revision', () => {
     })
 
     it('bumps AUDIT_PROMPT_REVISION to current pass and renders AP1-AP7 guidance cleanly', async () => {
-        expect(AUDIT_PROMPT_REVISION).toBe('2026-11-23-audit-pass77')
+        expect(AUDIT_PROMPT_REVISION).toBe('2026-11-23-audit-pass78')
         const def = getPerformanceAuditPromptDefinition()
         const rendered = await Promise.resolve(def.handler({ target: 'memory-journal-mcp' }, db))
         const text = rendered.messages.map((m) => m.content.text).join('\n')
 
-        expect(text).toContain('Prompt revision: 2026-11-23-audit-pass77')
+        expect(text).toContain('Prompt revision: 2026-11-23-audit-pass78')
         expect(text).toContain('BigInt')
         expect(text).toContain('CROSS JOIN')
         expect(text).toContain('<= 500')

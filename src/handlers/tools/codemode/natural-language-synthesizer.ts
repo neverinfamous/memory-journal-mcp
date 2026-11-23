@@ -240,9 +240,11 @@ export function parsePositiveEntryId(
             const parsed = Number(trimmed)
             return Number.isSafeInteger(parsed) && String(parsed) === trimmed ? parsed : trimmed
         }
-        if (/^(?:-?\d+(?:\.\d+)?|0|NaN|Infinity|-Infinity)$/i.test(trimmed)) {
-            return trimmed
-        }
+        if (trimmed !== '') return trimmed
+    }
+    if (typeof rawEntryId === 'boolean') return String(rawEntryId)
+    if (rawEntryId !== undefined && rawEntryId !== null) {
+        return typeof rawEntryId === 'object' ? (JSON.stringify(rawEntryId) ?? 'invalid') : 'invalid'
     }
     return undefined
 }

@@ -246,6 +246,7 @@ function validateProjectNumberAliases(
     registry: Record<string, ProjectRegistryEntry> | undefined
 ): { error: string } | null {
     const canonPinnedLower = canonPinned?.toLowerCase()
+    let seenProj: number | undefined
     for (const rec of records) {
         for (const key of NESTED_PROJ_ALIAS_KEYS) {
             const rawProj = rec[key]
@@ -255,6 +256,10 @@ function validateProjectNumberAliases(
             if (parsedProj === null) {
                 return { error: `Invalid project_number '${formatInvalidProjectCandidate(rawProj)}' in nested executeCode` }
             }
+            if (seenProj !== undefined && parsedProj !== seenProj) {
+                return { error: `Conflicting project_number ${parsedProj} vs ${seenProj} in nested executeCode` }
+            }
+            seenProj = parsedProj
             const conflict = hasRegistryProjectOwnerConflict(
                 parsedProj,
                 pinnedWorkspace,
@@ -379,11 +384,16 @@ export function readNarrowedWorkspace(
     registry: Record<string, ProjectRegistryEntry> | undefined
 ): string | undefined {
     for (const src of sources) {
-        for (const key of ['workspace_id', 'workspaceId', 'workspace'] as const) {
+        for (const key of ['workspace_id', 'workspaceId', 'workspace', 'project_name', 'projectName'] as const) {
             const raw = src[key]
             if (typeof raw === 'string' && raw.trim() !== '' && raw.trim() !== '*') {
                 return findRegistryKey(raw.trim(), registry) ?? raw.trim()
             }
+        }
+        const rawProject = src['project']
+        if (isProjectStringValue(rawProject) && rawProject.trim() !== '*') {
+            const trimmed = rawProject.trim()
+            return findRegistryKey(trimmed, registry) ?? trimmed
         }
         for (const key of ['repo', 'repo_name', 'repoName', 'repository'] as const) {
             const raw = src[key]

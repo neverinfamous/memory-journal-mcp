@@ -320,7 +320,7 @@ export function healIncludeArchivedField(obj: Record<string, unknown>): boolean 
     let modified = false
     for (const aliasKey of ['is_archived', 'isArchived', 'archived', 'includeArchived'] as const) {
         if (aliasKey in obj) {
-            if (!('include_archived' in obj) && typeof obj[aliasKey] === 'boolean') {
+            if (obj['include_archived'] === undefined && typeof obj[aliasKey] === 'boolean') {
                 obj['include_archived'] = obj[aliasKey]
             }
             Reflect.deleteProperty(obj, aliasKey)

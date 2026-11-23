@@ -77,8 +77,8 @@ export class BackupManager {
                   .replace(/\0/g, '')
                   .replace(/[/\\:*?"<>|%]/g, '_')
                   .replace(/\.{2,}/g, '')
-                  .replace(/\.+$/g, '')
                   .slice(0, MAX_BACKUP_NAME_LENGTH)
+                  .trim()
                   .replace(/\.+$/g, '')
                   .trim()
             : ''

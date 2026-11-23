@@ -101,7 +101,8 @@ export function transformOutsideCodeFences(
     markdown: string,
     transform: (segment: string) => string
 ): string {
-    const lines = markdown.replace(/\r\n?/g, '\n').split('\n')
+    const cleanMarkdown = markdown.charCodeAt(0) === 0xfeff ? markdown.slice(1) : markdown
+    const lines = cleanMarkdown.replace(/\r\n?/g, '\n').split('\n')
     const out: string[] = []
     let proseLines: string[] = []
     let activeFenceChar: string | null = null

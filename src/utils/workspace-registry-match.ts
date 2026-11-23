@@ -376,6 +376,11 @@ export function pairStoredScope(
     registry: ProjectRegistry | undefined
 ): { workspaceId: string | undefined; projectNumber: number | null | undefined } {
     const concrete = persistedWorkspace(workspaceId)
+    if (concrete !== undefined && FORBIDDEN_PROJECT_KEYS.has(concrete)) {
+        throw new ValidationError(`Invalid workspace_id '${concrete}'.`, {
+            workspaceId: concrete,
+        })
+    }
     const key = concrete !== undefined ? exactRegistryKey(concrete, registry) : undefined
     const registryProject = key !== undefined ? registry?.[key]?.project_number : undefined
     const supplied = suppliedProject(projectNumber)

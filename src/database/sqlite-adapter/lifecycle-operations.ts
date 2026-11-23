@@ -142,12 +142,12 @@ function isFtsCorruptError(error: unknown): boolean {
 }
 
 function rebuildFtsContentIndex(db: NativeDb): void {
-    db.transaction(() => {
+    runImmediateWriteTx(db, () => {
         db.exec("INSERT INTO fts_content(fts_content) VALUES ('delete-all')")
         db.exec(
             'INSERT INTO fts_content(rowid, content) SELECT id, content FROM memory_journal WHERE deleted_at IS NULL'
         )
-    })()
+    })
 }
 
 /** Run the hard-delete / prune / archive mutations in a transaction, retrying once after an FTS rebuild. */

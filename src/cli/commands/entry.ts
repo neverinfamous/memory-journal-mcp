@@ -389,6 +389,10 @@ export async function updateEntryAction(...args: unknown[]): Promise<void> {
         if (options.team === true) {
             await enforceCliUpdateTeamPermissions(db, config, entryId, existingEntry, trimmedTargetWs, rawWorkspaceOpt)
         }
+        if (existingEntry === null) {
+            process.stderr.write(`Error: Entry #${entryId} not found or version mismatch.\n`)
+            throw new CliExitError(1)
+        }
         const rawContent =
             options.file === undefined &&
             options.content === undefined &&

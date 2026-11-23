@@ -58,6 +58,8 @@ const NON_CODE_METADATA_KEYS = new Set([
     'timeout',
     'timeout_ms',
     'timeoutMs',
+    'max_bytes',
+    'maxBytes',
     'max_result_size',
     'maxResultSize',
     'max_result_size_bytes',
@@ -96,6 +98,10 @@ const NON_CODE_METADATA_KEYS = new Set([
     'learning',
     'insight',
     'knowledge',
+    'rule',
+    'takeaway',
+    'finding',
+    'discovery',
 ])
 
 const ENTRY_CONTENT_ALIAS_KEYS = [

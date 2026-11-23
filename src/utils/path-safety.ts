@@ -184,8 +184,7 @@ const WIN_RESERVED_DEVICE_RE =
 const WIN_DRIVE_RELATIVE_RE = /^[A-Za-z]:(?![\\/])/
 
 export function hasUnsafeAdsColon(dirPath: string): boolean {
-    const trimmed = dirPath.trimStart()
-    return WIN_DRIVE_RELATIVE_RE.test(trimmed) || trimmed.replace(/^[A-Za-z]:(?=[\\/])/, '').includes(':')
+    return WIN_DRIVE_RELATIVE_RE.test(dirPath.trimStart()) || dirPath.replace(/^[A-Za-z]:(?=[\\/])/, '').includes(':')
 }
 
 export function hasTrailingDotOrSpaceSegment(targetPath: string): boolean {

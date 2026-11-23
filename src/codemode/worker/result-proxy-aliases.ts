@@ -97,7 +97,11 @@ export function resolvePaginationAndStatsProp(
     return { matched: false }
 }
 
-function resolveProjectAliasProp(targetRecord: Record<string, unknown>, prop: string | symbol): AliasMatch {
+function resolveProjectAliasProp(
+    targetRecord: Record<string, unknown>,
+    prop: string | symbol,
+    wrapResultFn: (val: unknown) => unknown
+): AliasMatch {
     const projObj = targetRecord['project']
     if (!isObject(projObj)) return { matched: false }
     if (prop === 'project_number' && ('project_number' in projObj || 'id' in projObj)) {
@@ -107,7 +111,11 @@ function resolveProjectAliasProp(targetRecord: Record<string, unknown>, prop: st
         return { matched: true, value: projObj['name'] }
     }
     if (typeof prop === 'string' && prop in projObj) {
-        return { matched: true, value: projObj[prop] }
+        const val = projObj[prop]
+        return {
+            matched: true,
+            value: val !== null && typeof val === 'object' ? wrapResultFn(val) : val,
+        }
     }
     return { matched: false }
 }
@@ -134,7 +142,7 @@ function resolveEntryAndChangelogAliasProp(
         }
     }
 
-    const projMatch = resolveProjectAliasProp(targetRecord, prop)
+    const projMatch = resolveProjectAliasProp(targetRecord, prop, wrapResultFn)
     if (projMatch.matched) return projMatch
 
     const changelogObj = targetRecord['changelog']
@@ -178,10 +186,14 @@ function resolveCollectionAndGraphAliasProp(
             (h) =>
                 new Proxy(!Object.isExtensible(h) ? { ...h } : h, {
                     ...IMMUTABLE_PROXY_TRAPS,
+                    has(t: Record<string, unknown>, p: string | symbol): boolean {
+                        return p === 'revisionNumber' || p === 'contentSnapshot' || p in t
+                    },
                     get(t: Record<string, unknown>, p: string | symbol): unknown {
                         if (p === 'revisionNumber') return t['revisionId']
                         if (p === 'contentSnapshot') return t['content']
-                        return Reflect.get(t, p) as unknown
+                        const val: unknown = Reflect.get(t, p)
+                        return val !== null && typeof val === 'object' ? wrapResultFn(val) : val
                     },
                 })
         )

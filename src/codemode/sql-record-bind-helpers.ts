@@ -5,6 +5,7 @@
  */
 
 import type { SqlRecordBindIndex } from './sql-placeholder-helpers.js'
+import { isSingleSqlStringLiteral } from './sql-literal-scope.js'
 import { parsePositiveProjectNumber } from '../utils/safe-positive-int.js'
 
 export const UNPARSEABLE = Symbol('unparseable')
@@ -39,11 +40,7 @@ export function parseLiteral(raw: string): unknown {
     if (/^true$/i.test(trimmed)) return true
     if (/^false$/i.test(trimmed)) return false
     if (/^-?\d+(?:\.\d+)?$/.test(trimmed)) return Number(trimmed)
-    if (
-        trimmed.length >= 2 &&
-        ((trimmed.startsWith("'") && trimmed.endsWith("'")) ||
-            (trimmed.startsWith('"') && trimmed.endsWith('"')))
-    ) {
+    if (isSingleSqlStringLiteral(trimmed)) {
         const inner = trimmed.slice(1, -1)
         const doubled = trimmed.startsWith("'") ? inner.replace(/''/g, "'") : inner.replace(/""/g, '"')
         return doubled.replace(/\\(['"\\])/g, '$1')

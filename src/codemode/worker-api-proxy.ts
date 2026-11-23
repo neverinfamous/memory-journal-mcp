@@ -218,6 +218,15 @@ function createGroupNamespaceProxy(ctx: GroupProxyContext): object {
     })
 
     const ownKeyList = Array.from(new Set<string | symbol>([...Reflect.ownKeys(groupCallable), ...domainMethods]))
+    const resolveGroupMember = (target: object, prop: string): unknown => {
+        if (resolvedCache.has(prop)) return resolvedCache.get(prop)
+        if (methodSet.has(prop)) {
+            const fn = createMethodProxyFn(group, prop)
+            resolvedCache.set(prop, fn)
+            return fn
+        }
+        return resolveGroupNamespaceProperty(ctx, target, prop, resolvedCache)
+    }
 
     return new Proxy(groupCallable, {
         ownKeys: () => ownKeyList,
@@ -233,7 +242,7 @@ function createGroupNamespaceProxy(ctx: GroupProxyContext): object {
                     enumerable: true,
                     configurable: true,
                     writable: false,
-                    value: resolveGroupNamespaceProperty(ctx, target, prop, resolvedCache),
+                    value: resolveGroupMember(target, prop),
                 }
             }
             return targetDesc
@@ -255,14 +264,7 @@ function createGroupNamespaceProxy(ctx: GroupProxyContext): object {
         get(target: object, prop: string | symbol): unknown {
             if (prop === LAZY_GROUP_METHOD_NAMES) return frozenMethods
             if (typeof prop === 'symbol') return undefined
-            const cached = resolvedCache.get(prop)
-            if (cached !== undefined || resolvedCache.has(prop)) return cached
-            if (methodSet.has(prop)) {
-                const fn = createMethodProxyFn(group, prop)
-                resolvedCache.set(prop, fn)
-                return fn
-            }
-            return resolveGroupNamespaceProperty(ctx, target, prop, resolvedCache)
+            return resolveGroupMember(target, prop)
         },
         isExtensible: () => true,
         preventExtensions: () => false,

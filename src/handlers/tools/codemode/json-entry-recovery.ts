@@ -228,12 +228,18 @@ function findBalancedDelimitedBlockEnd(
 function stripNestedPropBlocks(code: string): string {
     const out: string[] = []
     let i = 0
-    const propRe = /\b(?:auto_context|autoContext|relationships|anchors)\s*:\s*([{[])/iy
+    const propRe = /\b(?:auto_context|autoContext|relationships|anchors)\s*:\s*(?:JSON\.stringify\s*(\()|([{[]))/iy
     while (i < code.length) {
         propRe.lastIndex = i
         const m = propRe.exec(code)
         if (m?.[1] !== undefined) {
-            const openChar = m[1]
+            const endIdx = findBalancedDelimitedBlockEnd(code, i + m[0].length - 1, '(', ')')
+            out.push('""')
+            i = endIdx
+            continue
+        }
+        if (m?.[2] !== undefined) {
+            const openChar = m[2]
             const closeChar = openChar === '{' ? '}' : ']'
             const endIdx = findBalancedDelimitedBlockEnd(code, i + m[0].length - 1, openChar, closeChar)
             out.push(`${openChar}${closeChar}`)

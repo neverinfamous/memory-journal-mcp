@@ -54,9 +54,16 @@ export function convertKeysToSnakeCase(obj: Record<string, unknown>, methodName?
         if (!isRecord(nested)) return container
         const cloned = { ...container }
         Reflect.deleteProperty(cloned, containerKey)
+        const outerSnakeKeys = new Set<string>()
+        for (const [existingKey, existingVal] of Object.entries(cloned)) {
+            if (existingVal !== undefined) outerSnakeKeys.add(toSnakeCaseKey(existingKey))
+        }
         for (const [k, v] of Object.entries(nested)) {
-            if (FORBIDDEN_KEYS.has(k)) continue
-            if ((!Object.hasOwn(cloned, k) || cloned[k] === undefined) && v !== undefined) {
+            if (FORBIDDEN_KEYS.has(k) || v === undefined) continue
+            const snakeK = toSnakeCaseKey(k)
+            if (outerSnakeKeys.has(snakeK)) continue
+            if (k !== snakeK && Object.hasOwn(nested, snakeK) && nested[snakeK] !== undefined) continue
+            if (!Object.hasOwn(cloned, k) || cloned[k] === undefined) {
                 cloned[k] = v
             }
         }

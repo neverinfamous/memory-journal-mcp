@@ -107,9 +107,17 @@ function isHoldingPidStale(
     try {
         process.kill(holdingPid, 0)
     } catch (e: unknown) {
-        // ESRCH means the process does not exist
+        // ESRCH means the process does not exist; EPERM proves another user's/elevated PID is alive.
         if (hasErrorCode(e, 'ESRCH')) {
             return true
+        }
+        if (hasErrorCode(e, 'EPERM')) {
+            logger.debug('Restore lock holder PID exists under another privilege context', {
+                holdingPid,
+                path: lockDir,
+                module: 'SqliteAdapter',
+            })
+            return false
         }
         logger.error('Failed to probe restore lock holder', {
             error: e instanceof Error ? e.message : String(e),
@@ -227,7 +235,15 @@ function clearStaleLock(
         fs.renameSync(lockDir, staleDir)
         const movedLockFile = path.join(staleDir, path.basename(lockFile))
         const movedRecord = parseLockRecord(movedLockFile)
-        if (lockRecordChanged(expected, movedRecord) && !isLockStale(lockDir, movedLockFile, runtime).stale) {
+        let movedStillLive = false
+        if (lockRecordChanged(expected, movedRecord)) {
+            try {
+                movedStillLive = !isLockStale(lockDir, movedLockFile, runtime).stale
+            } catch {
+                movedStillLive = true
+            }
+        }
+        if (movedStillLive) {
             try {
                 fs.renameSync(staleDir, lockDir)
             } catch {

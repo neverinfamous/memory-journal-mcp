@@ -24,7 +24,7 @@ describe('Pass 63 Commit Pipeline Prompts (AP1–AP2)', () => {
     })
 
     it('AP1–AP2: bumps AUDIT_PROMPT_REVISION to pass63 and includes bundle freshness scope and CLI alias prototype guards', async () => {
-        expect(AUDIT_PROMPT_REVISION).toBe('2026-11-23-audit-pass77')
+        expect(AUDIT_PROMPT_REVISION).toBe('2026-11-23-audit-pass78')
 
         const dbPath = path.join(
             os.tmpdir(),
@@ -38,7 +38,7 @@ describe('Pass 63 Commit Pipeline Prompts (AP1–AP2)', () => {
                 adapter
             )
             const perfText = perfRes.messages[0]?.content.text ?? ''
-            expect(perfText).toContain('Prompt revision: 2026-11-23-audit-pass77')
+            expect(perfText).toContain('Prompt revision: 2026-11-23-audit-pass78')
             expect(perfText).toContain('precompiled-bundle `mtimeMs` freshness guards')
             expect(perfText).toContain('explore')
             expect(perfText).toContain('generalPurpose')
@@ -49,7 +49,7 @@ describe('Pass 63 Commit Pipeline Prompts (AP1–AP2)', () => {
                 adapter
             )
             const cqText = cqRes.messages[0]?.content.text ?? ''
-            expect(cqText).toContain('Prompt revision: 2026-11-23-audit-pass77')
+            expect(cqText).toContain('Prompt revision: 2026-11-23-audit-pass78')
             expect(cqText).toContain('CLI alias/category fallback tables')
             expect(cqText).toContain('`constructor`')
             expect(cqText).toContain('explore')

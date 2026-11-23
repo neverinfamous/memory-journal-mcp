@@ -1,7 +1,7 @@
 import { QueryError, ValidationError } from '../../types/errors.js'
 import { effectiveWorkspace } from '../workspace-scope.js'
 import { isMissingTableError } from './schema-errors.js'
-import { bucketInParams, getSingleRow, SCOPED_IN_PARAM_BUCKETS } from './row-helpers.js'
+import { bucketInParams, getSingleRow, runImmediateWriteTx, SCOPED_IN_PARAM_BUCKETS } from './row-helpers.js'
 import type { IDatabaseConnection, AuthorAlias } from '../core/interfaces.js'
 
 export class AliasManager {
@@ -293,7 +293,10 @@ export class AliasManager {
             ]
             const nativeDb = this.db.getNativeDb?.()
             if (nativeDb !== undefined) {
-                return nativeDb.transaction(() => nativeDb.prepare(updateSql).run(...updateParams).changes)()
+                return runImmediateWriteTx(
+                    nativeDb,
+                    () => nativeDb.prepare(updateSql).run(...updateParams).changes
+                )
             }
 
             const countParams: unknown[] = [

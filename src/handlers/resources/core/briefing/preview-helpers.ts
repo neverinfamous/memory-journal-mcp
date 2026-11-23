@@ -13,10 +13,10 @@ const INLINE_FENCE_TAG_RE = /<\/?untrusted_remote_content>/gi
 
 /** CMS-04 session-summary H2 headings and standalone `# Session Summary` carry no signal alone. */
 const CMS_HEADING_RE =
-    /^#{1,6}\s*(?:[^\w#]*\s*)?(?:Session Summary(?:\s*:\s*(?:Accomplished|Unfinished\s*\/\s*Blocked|Context for Next Session|Commits))?|Accomplished|Unfinished\s*\/\s*Blocked|Context for Next Session|Commits)\s*:?\s*$/i
+    /^#{1,6}[^\w#]*(?:Session Summary(?:\s*:\s*(?:Accomplished|Unfinished\s*\/\s*Blocked|Context for Next Session|Commits))?|Accomplished|Unfinished\s*\/\s*Blocked|Context for Next Session|Commits)\s*(?::\s*)?$/i
 /** Inline legacy form `## Accomplished - did X`. */
 const CMS_INLINE_HEADING_RE =
-    /^#{1,6}\s*(?:[^\w#]*\s*)?(?:Accomplished|Unfinished\s*\/\s*Blocked|Context for Next Session|Commits)\s*[-:–—]\s*/i
+    /^#{1,6}[^\w#]*(?:Accomplished|Unfinished\s*\/\s*Blocked|Context for Next Session|Commits)\s*[-:–—]\s*/i
 /** Commit-narrative trailer lines (`Commit: <sha>`, `**Commit**: <sha>`) duplicate `→#id`. */
 const COMMIT_TRAILER_RE = /^(?:\*\*)?Commit:?(?:\*\*)?:?\s*`?[0-9a-f]{7,40}`?\s*$/i
 /** CommonMark code fence openers (` ``` ` with no backticks in info string, or `~~~`) and horizontal rules. */
@@ -109,8 +109,7 @@ function stripLeadingMarkers(line: string): string {
     return out
 }
 
-function stripLineMarkers(line: string): string {
-    const stripped = stripLeadingMarkers(line)
+function stripBoldAndSummaryPrefix(stripped: string): string {
     // [INVARIANT] Strip paired `**bold**` markers without mangling globs (`src/**/*.ts`) or `2**3`.
     return stripped
         .replace(/\*\*([^*\r\n]+?)\*\*/g, '$1')
@@ -152,7 +151,7 @@ export function previewLines(content: string | null | undefined): string[] {
         }
         const strippedLeading = stripLeadingMarkers(trimmed)
         if (COMMIT_TRAILER_RE.test(strippedLeading)) continue
-        const line = stripLineMarkers(trimmed)
+        const line = stripBoldAndSummaryPrefix(strippedLeading)
         if (line.length > 0) lines.push(line)
     }
     return lines

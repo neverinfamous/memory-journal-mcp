@@ -326,8 +326,8 @@ function renameScoreAliases(obj: Record<string, unknown>): void {
             if (obj[targetKey] === undefined) {
                 const rawScore = obj[aliasKey]
                 obj[targetKey] =
-                    typeof rawScore === 'string' && rawScore.trim() !== ''
-                        ? Number(rawScore)
+                    typeof rawScore === 'string' && /^\d+(?:\.\d+)?$/.test(rawScore.trim())
+                        ? Number(rawScore.trim())
                         : rawScore
             }
             Reflect.deleteProperty(obj, aliasKey)

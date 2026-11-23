@@ -9,7 +9,12 @@ import { relaxedNumber } from '../schemas.js'
 const POSITIVE_TIMEOUT = z.preprocess((val) => {
     if (val === undefined || val === null) return undefined
     if (typeof val === 'string' && val.trim() === '') return undefined
-    const num = typeof val === 'number' ? val : typeof val === 'string' ? Number(val.trim()) : Number.NaN
+    const num =
+        typeof val === 'number'
+            ? val
+            : typeof val === 'string' && /^\d+(?:\.\d+)?$/.test(val.trim())
+              ? Number(val.trim())
+              : Number.NaN
     return Number.isFinite(num) && num > 0 ? num : undefined
 }, z.number().positive().optional())
 

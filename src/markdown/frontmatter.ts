@@ -155,9 +155,10 @@ export function serializeFrontmatter(data: FrontmatterData | null | undefined): 
  * @throws Error if frontmatter is malformed or fails validation
  */
 export function parseFrontmatter(content: string): ParseResult {
-    const normalized = content.includes('\r')
-        ? content.replace(/\r\n/g, '\n').replace(/\r/g, '\n')
-        : content
+    const withoutBom = content.charCodeAt(0) === 0xfeff ? content.slice(1) : content
+    const normalized = withoutBom.includes('\r')
+        ? withoutBom.replace(/\r\n/g, '\n').replace(/\r/g, '\n')
+        : withoutBom
     const firstNl = normalized.indexOf('\n')
     const firstLine = (firstNl === -1 ? normalized : normalized.slice(0, firstNl)).trim()
 

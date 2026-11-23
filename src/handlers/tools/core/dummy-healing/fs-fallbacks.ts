@@ -262,7 +262,7 @@ export async function handleViewFile(
             recoverable: true,
         }
     }
-    const uriRoute = await tryHandleResourceUriFallback(targetPath, params, toolName, context)
+    const uriRoute = await tryHandleResourceUriFallback(targetPath, rawArgs, toolName, context)
     if (uriRoute.handled) return uriRoute.result
 
     const resolved = path.resolve(targetPath.trim())

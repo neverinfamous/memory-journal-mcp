@@ -9,6 +9,7 @@ import {
     extractTopLevelWhereClause,
     findTopLevelSqlKeyword,
     hasUnsupportedWherePredicate,
+    isSingleSqlStringLiteral,
     isSupportedWhereClause,
     scopeFromSqlLiterals,
     splitSqlValueList,
@@ -48,9 +49,8 @@ const CLAUSE_LIKE_REGEX =
 
 function unquoteSqlString(raw: string): string | null {
     const trimmed = raw.trim()
-    if (trimmed.length < 2) return null
+    if (!isSingleSqlStringLiteral(trimmed)) return null
     const quote = trimmed[0]
-    if ((quote !== "'" && quote !== '"') || !trimmed.endsWith(quote)) return null
     const inner = trimmed.slice(1, -1)
     const doubled = quote === "'" ? inner.replace(/''/g, "'") : inner.replace(/""/g, '"')
     return doubled.replace(/\\(['"\\])/g, '$1')

@@ -311,6 +311,7 @@ function wireSilentTeamFallbackRouting(deps: ProjectAndTeamAliasDeps): void {
             ...(p['include_relationships'] !== undefined
                 ? { include_relationships: p['include_relationships'] }
                 : {}),
+            ...(p['session_id'] !== undefined ? { session_id: p['session_id'] } : {}),
             ...(p['workspace_id'] !== undefined ? { workspace_id: p['workspace_id'] } : {}),
             ...(p['project_number'] !== undefined ? { project_number: p['project_number'] } : {}),
         }),
@@ -336,6 +337,8 @@ function wireSilentTeamFallbackRouting(deps: ProjectAndTeamAliasDeps): void {
                 ...(p['entry_id'] !== undefined ? { entry_id: p['entry_id'] } : {}),
                 ...(firstTag !== undefined ? { tag: firstTag } : {}),
                 ...(p['depth'] !== undefined ? { depth: p['depth'] } : {}),
+                ...(p['limit'] !== undefined ? { limit: p['limit'] } : {}),
+                ...(p['session_id'] !== undefined ? { session_id: p['session_id'] } : {}),
                 ...(p['workspace_id'] !== undefined ? { workspace_id: p['workspace_id'] } : {}),
                 ...(p['project_number'] !== undefined ? { project_number: p['project_number'] } : {}),
             }

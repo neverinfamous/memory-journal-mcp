@@ -27,6 +27,7 @@ import {
     prefetchTeamEntriesMap,
     validateTeamEntryWorkspaceScope,
 } from './batch-prefetch-helpers.js'
+import { inheritBatchProjectNumber } from '../../admin/batch-vector-helpers.js'
 import { missingProjectNumberResponse, type TeamDbInstance } from './batch-delete-helpers.js'
 
 type TeamBatchUpdateInput = z.infer<typeof TeamBatchUpdateEntriesSchema>['updates'][number]
@@ -105,7 +106,13 @@ function validateSingleTeamBatchUpdate(
     | { status: 'error'; errorResponse: Record<string, unknown> } {
     const { teamDb, rootWorkspaceId, rootProjectNumber, context, currentUser, preFetchedAuthors, prefetchedEntries, resolveRole, rbacActive } = shared
     const explicitWs = u.workspace_id ?? rootWorkspaceId
-    const explicitPn = u.project_number ?? rootProjectNumber
+    const explicitPn =
+        inheritBatchProjectNumber(
+            u.workspace_id,
+            u.project_number,
+            rootWorkspaceId,
+            rootProjectNumber
+        ) ?? undefined
     // [INVARIANT] Never infer an existing entry's workspace from content/tags; explicit 'default' is preserved and '*' rejected.
     const wsId = resolveWriteWorkspaceId(explicitWs, explicitPn, context.config)
     const rawExisting =
@@ -187,7 +194,13 @@ export function buildValidatedTeamBatchUpdates(
     const authorPairs: { author: string | null | undefined; workspaceId?: string }[] = []
     for (const u of rawUpdates) {
         const explicitWs = u.workspace_id ?? rootWorkspaceId
-        const explicitPn = u.project_number ?? rootProjectNumber
+        const explicitPn =
+            inheritBatchProjectNumber(
+                u.workspace_id,
+                u.project_number,
+                rootWorkspaceId,
+                rootProjectNumber
+            ) ?? undefined
         const wsId = resolveWriteWorkspaceId(explicitWs, explicitPn, context.config)
         const rawExisting = prefetchedEntries !== null ? prefetchedEntries.get(u.entry_id) : undefined
         const existing =

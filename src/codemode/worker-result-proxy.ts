@@ -179,7 +179,9 @@ function createArrayResultProxy(arr: unknown[]): unknown {
                     }
                     return bound
                 }
-                return val
+                return val !== null && typeof val === 'object' && !isInternalSlotBuiltin(val)
+                    ? wrapResult(val)
+                    : val
             }
             if (prop === 'success') return true
             if (typeof prop === 'string' && ARRAY_SELF_ALIASES.has(prop)) return receiver as unknown
@@ -266,17 +268,21 @@ function resolveLengthOrIndexAccess(
 
     if (typeof prop === 'string' && DIGITS_RE.test(prop)) {
         const idx = parseInt(prop, 10)
+        const maybeWrap = (val: unknown): unknown =>
+            val !== null && typeof val === 'object' && !isInternalSlotBuiltin(val) ? wrapResult(val) : val
         if ('project' in targetRecord && isObject(targetRecord['project']) && idx === 0) {
-            return { matched: true, value: targetRecord['project'] }
+            return { matched: true, value: maybeWrap(targetRecord['project']) }
         }
         const primaryArr = findPrimaryArray(targetRecord)
         if (primaryArr !== undefined) {
-            return { matched: true, value: primaryArr[idx] }
+            return { matched: true, value: maybeWrap(primaryArr[idx]) }
         }
         if ('projects' in targetRecord && isObject(targetRecord['projects'])) {
-            return { matched: true, value: dictToItems(targetRecord['projects'])[idx] }
+            return { matched: true, value: maybeWrap(dictToItems(targetRecord['projects'])[idx]) }
         }
-        if (isDictLike(targetRecord)) return { matched: true, value: dictToItems(targetRecord)[idx] }
+        if (isDictLike(targetRecord)) {
+            return { matched: true, value: maybeWrap(dictToItems(targetRecord)[idx]) }
+        }
     }
     return { matched: false }
 }

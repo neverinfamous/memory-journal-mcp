@@ -313,12 +313,24 @@ function readAppendMetadata(value: unknown): Record<string, unknown> | undefined
 
 const APPEND_META_FIELDS = [
     'entry_type',
+    'entryType',
     'title',
     'session_id',
+    'sessionId',
     'significance_type',
+    'significanceType',
     'impact_score',
+    'impactScore',
     'trust_score',
+    'trustScore',
     'validation_status',
+    'validationStatus',
+    'auto_context',
+    'autoContext',
+    'is_personal',
+    'isPersonal',
+    'project_name',
+    'projectName',
     'anchors',
     'relationships',
 ] as const
@@ -332,6 +344,10 @@ export function createAppendInterceptor(
     return (arg1: unknown, arg2?: unknown, arg3?: unknown): unknown => {
         if (readAppendMetadata(arg1) !== undefined) return callCreate(arg1)
         if (typeof arg1 === 'string' && arg2 === undefined && arg3 === undefined) return callCreate(arg1)
+        if (typeof arg1 === 'string' && arg3 === undefined) {
+            const twoArgMeta = readAppendMetadata(arg2)
+            if (twoArgMeta !== undefined) return callCreate({ ...twoArgMeta, content: arg1 })
+        }
 
         const tags = Array.isArray(arg1) ? arg1 : [typeof arg1 === 'string' ? arg1 : 'test']
         const content = typeof arg2 === 'string' ? arg2 : arg2 !== null && arg2 !== undefined ? JSON.stringify(arg2) : ''

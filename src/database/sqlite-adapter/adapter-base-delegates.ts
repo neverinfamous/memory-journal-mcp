@@ -60,6 +60,7 @@ export class AdapterBaseDelegates {
     }
 
     close(): void {
+        this.membersMgr.invalidateCache()
         this.connection.close()
     }
 

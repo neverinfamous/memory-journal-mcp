@@ -53,15 +53,10 @@ function resolveBatchCreateItemScope(
 ): void {
     if (typeof entry !== 'object' || entry === null || Array.isArray(entry)) return
     const item = entry as Record<string, unknown>
-    const itemWs =
-        typeof item['workspace_id'] === 'string' && item['workspace_id'].trim() !== ''
-            ? item['workspace_id'].trim()
-            : undefined
-    const itemProj = parsePositiveProjectNumber(item['project_number'])
-
-    if (itemWs !== undefined) {
+    if (item['workspace_id'] !== undefined) {
         return
     }
+    const itemProj = parsePositiveProjectNumber(item['project_number'])
 
     const candidateProj = itemProj ?? rootProj
     if (rawRootWs !== undefined && candidateProj !== undefined) {
@@ -108,6 +103,9 @@ function resolveBatchCreateScope(
         typeof toolArgs['workspace_id'] === 'string' && toolArgs['workspace_id'].trim() !== ''
             ? toolArgs['workspace_id'].trim()
             : undefined
+    if (toolArgs['workspace_id'] !== undefined && rawRootWs === undefined) {
+        return
+    }
     if (rawRootWs === '*') {
         applyWildcardRootToBatch(entries)
         return

@@ -4,7 +4,7 @@ import { sendProgress } from '../../../utils/progress-utils.js'
 import { resolveProjectContext } from '../../../utils/workspace-resolver.js'
 import { collectIndexWorkspaces, indexBatchEntries } from '../batch-indexing.js'
 import { resolveWriteWorkspaceId } from '../write-workspace.js'
-import { findWildcardProjectMismatches } from './batch-vector-helpers.js'
+import { findWildcardProjectMismatches, inheritBatchProjectNumber } from './batch-vector-helpers.js'
 import { canonicalTargetWorkspace } from './core-tools.js'
 import { BatchUpdateEntriesSchema } from './schemas.js'
 
@@ -19,7 +19,12 @@ function resolveBatchUpdateItemScope(
 ): { resolvedWs: string; projectNumberForUpdate: number | null | undefined; targetWorkspaceId: string | undefined } {
     const { db, config } = context
     const explicitWs = u.workspace_id ?? input.workspace_id
-    const explicitPn = u.project_number !== undefined ? u.project_number : input.project_number
+    const explicitPn = inheritBatchProjectNumber(
+        u.workspace_id,
+        u.project_number,
+        input.workspace_id,
+        input.project_number
+    )
     const targetWorkspaceId = canonicalTargetWorkspace(u.target_workspace_id, config)
 
     const lookupEntryWorkspace = (): string | undefined => {
