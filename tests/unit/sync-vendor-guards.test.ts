@@ -16,21 +16,34 @@ function runGit(cwd: string, args: string[]): string {
   return execFileSync('git', args, {
     cwd,
     encoding: 'utf8',
+    env: {
+      ...process.env,
+      GIT_CONFIG_NOSYSTEM: '1',
+      GIT_CONFIG_GLOBAL: process.platform === 'win32' ? 'NUL' : '/dev/null',
+      GIT_TERMINAL_PROMPT: '0',
+    },
     stdio: ['ignore', 'pipe', 'pipe'],
     windowsHide: true,
   });
 }
 
+function initAndCommitTempGitRepo(rootDir: string, message: string): void {
+  runGit(rootDir, ['init', '--quiet']);
+  runGit(rootDir, ['add', '.']);
+  runGit(rootDir, [
+    '-c', 'user.email=test@example.com',
+    '-c', 'user.name=Test User',
+    '-c', 'commit.gpgsign=false',
+    'commit', '--quiet', '--no-verify', '-m', message,
+  ]);
+}
+
 function initTempGitRepo(rootDir: string): void {
-  runGit(rootDir, ['init']);
-  runGit(rootDir, ['config', 'user.email', 'test@example.com']);
-  runGit(rootDir, ['config', 'user.name', 'Test User']);
   writeFileSync(path.join(rootDir, 'README.md'), '# temp\n', 'utf8');
   mkdirSync(path.join(rootDir, 'src', 'vendor', 'lib-agent-exec'), { recursive: true });
   writeFileSync(path.join(rootDir, 'src', 'vendor', 'VENDOR.json'), '{}\n', 'utf8');
   writeFileSync(path.join(rootDir, 'src', 'vendor', 'lib-agent-exec', 'utils.ts'), 'export {}\n', 'utf8');
-  runGit(rootDir, ['add', '.']);
-  runGit(rootDir, ['commit', '-m', 'chore: init']);
+  initAndCommitTempGitRepo(rootDir, 'chore: init');
 }
 
 describe('sync-vendor-guards', () => {
@@ -203,7 +216,7 @@ describe('sync-vendor-guards', () => {
     it('passes in non-git temp directories', () => {
       const dir = makeTempDir('sync-nongit-');
       expect(() => assertSafeSyncWorktree(dir, ['lib-agent-exec'], false)).not.toThrow();
-    });
+    }, 30_000);
 
     it('allows clean repos and in-scope vendor edits while blocking foreign dirty files', () => {
       const dir = makeTempDir('sync-git-');
@@ -225,7 +238,7 @@ describe('sync-vendor-guards', () => {
       mkdirSync(path.join(dir, 'src', 'vendor', 'commit'), { recursive: true });
       writeFileSync(path.join(dir, 'src', 'vendor', 'commit', 'commit.ts'), '// dirty\n', 'utf8');
       expect(() => assertSafeSyncWorktree(dir, ['lib-agent-exec'], false)).toThrow(/src\/vendor\/commit\/commit\.ts/);
-    });
+    }, 30_000);
 
     it('always blocks when .git/index.lock exists even if allowDirty is true', () => {
       const dir = makeTempDir('sync-git-lock-');
@@ -234,7 +247,7 @@ describe('sync-vendor-guards', () => {
 
       expect(() => assertSafeSyncWorktree(dir, ['lib-agent-exec'], false)).toThrow(/Active git operation detected/);
       expect(() => assertSafeSyncWorktree(dir, ['lib-agent-exec'], true)).toThrow(/Active git operation detected/);
-    });
+    }, 30_000);
 
     it('B-M12, O1, B-L1..B-L3: distinguishes git failure with .git marker, cleans ENOENT races, uses nonce temps, and checks dynamic import + source containment', () => {
       const fakeRepo = makeTempDir('sync-corrupt-git-');
@@ -263,7 +276,7 @@ describe('sync-vendor-guards', () => {
       expect(writeBufferAtomicIfChanged(target, Buffer.from('export const a = 1;\n', 'utf8'))).toBe(true);
       expect(writeBufferAtomicIfChanged(target, Buffer.from('export const a = 1;\n', 'utf8'))).toBe(false);
       expect(readdirSync(atomicDir)).toEqual(['sample.ts']);
-    });
+    }, 30_000);
   });
 
   describe('sync-vendor dynamic import & source containment', () => {
@@ -276,11 +289,7 @@ describe('sync-vendor-guards', () => {
         "export async function load(): Promise<unknown> { return await import('undeclared-pkg-pass67'); }\n",
         'utf8'
       );
-      runGit(upstream, ['init']);
-      runGit(upstream, ['config', 'user.email', 'test@example.com']);
-      runGit(upstream, ['config', 'user.name', 'Test User']);
-      runGit(upstream, ['add', '.']);
-      runGit(upstream, ['commit', '-m', 'init']);
+      initAndCommitTempGitRepo(upstream, 'init');
 
       mkdirSync(path.join(down, 'src', 'vendor', 'demo'), { recursive: true });
       writeFileSync(path.join(down, 'package.json'), '{"name":"demo-down","dependencies":{}}\n', 'utf8');
@@ -322,11 +331,7 @@ describe('sync-vendor-guards', () => {
       const down = makeTempDir('sync-down-');
       mkdirSync(path.join(upstream, 'src'), { recursive: true });
       writeFileSync(path.join(upstream, 'src', 'index.ts'), 'export const x = 1;\n', 'utf8');
-      runGit(upstream, ['init']);
-      runGit(upstream, ['config', 'user.email', 'test@example.com']);
-      runGit(upstream, ['config', 'user.name', 'Test User']);
-      runGit(upstream, ['add', '.']);
-      runGit(upstream, ['commit', '-m', 'init']);
+      initAndCommitTempGitRepo(upstream, 'init');
 
       mkdirSync(path.join(down, 'src', 'vendor', 'demo'), { recursive: true });
       writeFileSync(path.join(down, 'package.json'), '{"name":"demo-down","dependencies":{}}\n', 'utf8');
