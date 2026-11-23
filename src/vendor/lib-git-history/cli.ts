@@ -60,6 +60,7 @@ const STRING_CLI_OPTIONS = new Set<string>(
     .filter(([, def]) => def.type === 'string')
     .map(([key]) => key),
 );
+const NUMERIC_ARG_REGEX = /^-?\d+(?:\.\d+)?$/;
 
 export function parseArguments(): CliArgs {
   try {
@@ -73,7 +74,7 @@ export function parseArguments(): CliArgs {
       }
       const next = rawArgs[i + 1];
       const optName = curr.startsWith('--') && !curr.includes('=') ? curr.slice(2) : '';
-      if (next && optName !== '' && STRING_CLI_OPTIONS.has(optName) && /^-?\d+(?:\.\d+)?$/.test(next)) {
+      if (next && optName !== '' && STRING_CLI_OPTIONS.has(optName) && NUMERIC_ARG_REGEX.test(next)) {
         args.push(`${curr}=${next}`);
         i++;
       } else {

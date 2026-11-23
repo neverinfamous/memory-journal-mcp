@@ -4,10 +4,54 @@ import { spawnGitBinaryStream, NUMSTAT_BOUNDARY_STR } from './git-runner.js';
 import { extractShaFromBuffer } from './parser-utils.js';
 import { CHAR_NEWLINE, CHAR_NULL, GIT_STREAM_BUFFER_DEFAULT } from './constants.js';
 
-type NumstatEntry = { insertions: number; deletions: number; path: string; isBinary?: boolean };
+export type NumstatEntry = { insertions: number; deletions: number; path: string; isBinary?: boolean };
+export type NumstatCommitMap = Map<string, NumstatEntry>;
+export const NUMSTAT_MAPS_WITH_ALIASES = new WeakSet<NumstatCommitMap>();
 
-function parseNumstatRecord(recordBuf: Buffer, shaEnd: number): Map<string, NumstatEntry> {
-  const currentMap = new Map<string, NumstatEntry>();
+const LEADING_CR_LF_RE = /^[\r\n]+/;
+
+export function parseNumstatLineIntoMap(
+  rawLine: string,
+  readNextPart: () => string | null,
+  currentMap: NumstatCommitMap,
+): void {
+  const firstCode = rawLine.charCodeAt(0);
+  const firstStr = firstCode === 10 || firstCode === 13 ? rawLine.replace(LEADING_CR_LF_RE, '') : rawLine;
+  if (!firstStr) return;
+
+  const tab1 = firstStr.indexOf('\t');
+  if (tab1 === -1) return;
+  const tab2 = firstStr.indexOf('\t', tab1 + 1);
+  if (tab2 === -1) return;
+
+  const p0 = firstStr.slice(0, tab1);
+  const p1 = firstStr.slice(tab1 + 1, tab2);
+  const isBinary = p0 === '-' || p1 === '-';
+  const ins = isBinary ? 0 : Math.min(parseInt(p0, 10) || 0, Number.MAX_SAFE_INTEGER);
+  const del = isBinary ? 0 : Math.min(parseInt(p1, 10) || 0, Number.MAX_SAFE_INTEGER);
+
+  let oldPath: string | undefined;
+  let newPath: string;
+  if (tab2 + 1 < firstStr.length) {
+    newPath = firstStr.slice(tab2 + 1);
+  } else {
+    oldPath = readNextPart() ?? '';
+    newPath = readNextPart() ?? '';
+  }
+
+  if (!newPath) newPath = 'unknown_path_due_to_malformed_buffer';
+  const stats: NumstatEntry = isBinary
+    ? { insertions: ins, deletions: del, path: newPath, isBinary: true }
+    : { insertions: ins, deletions: del, path: newPath };
+  currentMap.set(newPath, stats);
+  if (oldPath) {
+    currentMap.set(oldPath, stats);
+    NUMSTAT_MAPS_WITH_ALIASES.add(currentMap);
+  }
+}
+
+function parseNumstatRecord(recordBuf: Buffer, shaEnd: number): NumstatCommitMap {
+  const currentMap: NumstatCommitMap = new Map();
   let i = shaEnd;
   if (i < recordBuf.length && (recordBuf[i] === CHAR_NEWLINE || recordBuf[i] === CHAR_NULL)) i++;
 
@@ -25,32 +69,7 @@ function parseNumstatRecord(recordBuf: Buffer, shaEnd: number): Map<string, Nums
       i++;
       continue;
     }
-
-    const firstStr = readUntilNul().replace(/^[\r\n]+/, '');
-    if (!firstStr) continue;
-
-    const parts = firstStr.split('\t');
-    if (parts.length < 2) continue;
-
-    const p0 = parts[0] ?? '';
-    const p1 = parts[1] ?? '';
-    const isBinary = p0 === '-' || p1 === '-';
-    const ins = Math.min(parseInt(p0, 10) || 0, Number.MAX_SAFE_INTEGER);
-    const del = Math.min(parseInt(p1, 10) || 0, Number.MAX_SAFE_INTEGER);
-
-    let oldPath: string | undefined;
-    let newPath: string;
-    if (parts.length > 2 && parts[2] !== '') {
-      newPath = parts.slice(2).join('\t');
-    } else {
-      oldPath = readUntilNul();
-      newPath = readUntilNul();
-    }
-
-    if (!newPath) newPath = 'unknown_path_due_to_malformed_buffer';
-    const stats: NumstatEntry = { insertions: ins, deletions: del, path: newPath, ...(isBinary ? { isBinary: true } : {}) };
-    currentMap.set(newPath, stats);
-    if (oldPath) currentMap.set(oldPath, stats);
+    parseNumstatLineIntoMap(readUntilNul(), readUntilNul, currentMap);
   }
 
   return currentMap;
@@ -61,7 +80,7 @@ export async function getNumstatMap(lockedArgs: string[], stdinShas?: string, cw
   if (stdinShas) numstatArgs.push('--stdin', '--no-walk');
   numstatArgs.push(...lockedArgs);
 
-  const map = new Map<string, Map<string, NumstatEntry>>();
+  const map = new Map<string, NumstatCommitMap>();
   for await (const recordBuf of spawnGitBinaryStream(numstatArgs, NUMSTAT_BOUNDARY_STR, stdinShas, GIT_STREAM_BUFFER_DEFAULT, cwd)) {
     const { sha: currentSha, shaEnd } = extractShaFromBuffer(recordBuf);
     if (!currentSha) continue;

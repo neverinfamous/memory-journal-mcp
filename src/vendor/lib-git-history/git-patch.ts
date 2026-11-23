@@ -18,9 +18,10 @@ function truncateOversizedPatch(
   let truncated = false;
   let remainingBudget = maxPatchLen;
 
-  const firstDiff = recordBuf.indexOf(DIFF_HEADER_START, searchStart);
-  if (firstDiff !== -1 && firstDiff - searchStart < 10) {
-    searchStart = firstDiff;
+  const probeEnd = Math.min(recordBuf.length, searchStart + 10 + DIFF_HEADER_START.length);
+  const firstDiff = recordBuf.subarray(searchStart, probeEnd).indexOf(DIFF_HEADER_START);
+  if (firstDiff !== -1 && firstDiff < 10) {
+    searchStart += firstDiff;
   }
 
   while (searchStart < recordBuf.length) {
@@ -53,8 +54,17 @@ function truncateOversizedPatch(
   return { patch: processedDiffs.filter(Boolean).join('\n'), truncated };
 }
 
+export function wantsPatchOutput(args: CliArgs): boolean {
+  return Boolean(
+    (args['include-patch'] || args['diff-context'] !== undefined) &&
+    !args.summary &&
+    !args['no-body'] &&
+    !args.stats,
+  );
+}
+
 export async function getPatchMap(lockedArgs: string[], args: CliArgs, stdinShas?: string, cwd: string = process.cwd()) {
-  if (!args['include-patch'] && args['diff-context'] === undefined) return new Map();
+  if (!wantsPatchOutput(args)) return new Map();
   const patchBaseArgs = [...lockedArgs];
   const excludes = GIT_EXCLUDE_PATTERNS;
   if (patchBaseArgs.includes('--')) {

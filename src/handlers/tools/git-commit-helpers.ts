@@ -12,7 +12,11 @@ import {
     buildGitBaseArgs,
     streamGitRecords,
 } from '../../vendor/lib-git-history/git-runner.js'
-import { parseGitRecord, processBatch } from '../../vendor/lib-git-history/parser.js'
+import {
+    parseGitRecord,
+    processBatch,
+    type RawCommitBatchItem,
+} from '../../vendor/lib-git-history/parser.js'
 import type { CliArgs } from '../../vendor/lib-git-history/cli.js'
 import type { CommitEntry } from '../../vendor/lib-git-history/schema.js'
 import { getUncommittedStateAsync } from '../../vendor/lib-git-history/uncommitted.js'
@@ -40,6 +44,69 @@ function ensureBlockFenced(value: string): string {
     return isAlreadyFencedUntrustedContent(value) ? value : markUntrustedContent(value)
 }
 
+function parseNumericMeta(value: unknown, fallback: number): number {
+    if (typeof value === 'number') return Number.isFinite(value) ? value : fallback
+    if (typeof value === 'string') {
+        const parsed = parseFloat(value)
+        return Number.isFinite(parsed) ? parsed : fallback
+    }
+    return fallback
+}
+
+function isRealRawBatchItem(item: unknown): item is RawCommitBatchItem {
+    return (
+        typeof item === 'object' &&
+        item !== null &&
+        'sha' in item &&
+        typeof item.sha === 'string' &&
+        'metadataObj' in item &&
+        typeof item.metadataObj === 'object' &&
+        item.metadataObj !== null
+    )
+}
+
+function filterSortRawBatch(
+    batch: RawCommitBatchItem[],
+    input: FetchCommitsInput
+): RawCommitBatchItem[] {
+    let processed = batch
+    if (input.scope !== undefined) {
+        processed = processed.filter((b) => b.scope === input.scope)
+    }
+    if (input.techDebtAudit === true) {
+        processed = processed.filter((b) => {
+            const meta = b.metadataObj
+            const impact = parseNumericMeta(
+                Object.hasOwn(meta, 'impact') ? meta['impact'] : undefined,
+                0
+            )
+            const trust = parseNumericMeta(
+                Object.hasOwn(meta, 'trust') ? meta['trust'] : undefined,
+                1
+            )
+            const validation = Object.hasOwn(meta, 'validation') ? meta['validation'] : undefined
+            return impact >= 0.5 && (trust < 0.8 || validation === 'none')
+        })
+    }
+    if (input.sortBy === 'impact') {
+        if (processed === batch) {
+            processed = [...batch]
+        }
+        processed.sort((a, b) => {
+            const impactA = parseNumericMeta(
+                Object.hasOwn(a.metadataObj, 'impact') ? a.metadataObj['impact'] : undefined,
+                0
+            )
+            const impactB = parseNumericMeta(
+                Object.hasOwn(b.metadataObj, 'impact') ? b.metadataObj['impact'] : undefined,
+                0
+            )
+            return impactB - impactA
+        })
+    }
+    return processed
+}
+
 function applyCommitFilterSort(commits: CommitEntry[], input: FetchCommitsInput): CommitEntry[] {
     let processed = commits
     if (input.scope !== undefined) {
@@ -48,25 +115,18 @@ function applyCommitFilterSort(commits: CommitEntry[], input: FetchCommitsInput)
     if (input.techDebtAudit === true) {
         processed = processed.filter((c) => {
             const meta = c.metadata
-            const impact =
-                typeof meta?.impact === 'number'
-                    ? meta.impact
-                    : parseFloat(meta?.impact ?? '0')
-            const trust =
-                typeof meta?.trust === 'number' ? meta.trust : parseFloat(meta?.trust ?? '1')
+            const impact = parseNumericMeta(meta?.impact, 0)
+            const trust = parseNumericMeta(meta?.trust, 1)
             return impact >= 0.5 && (trust < 0.8 || meta?.validation === 'none')
         })
     }
     if (input.sortBy === 'impact') {
+        if (processed === commits) {
+            processed = [...commits]
+        }
         processed.sort((a, b) => {
-            const impactA =
-                typeof a.metadata?.impact === 'number'
-                    ? a.metadata.impact
-                    : parseFloat(a.metadata?.impact ?? '0')
-            const impactB =
-                typeof b.metadata?.impact === 'number'
-                    ? b.metadata.impact
-                    : parseFloat(b.metadata?.impact ?? '0')
+            const impactA = parseNumericMeta(a.metadata?.impact, 0)
+            const impactB = parseNumericMeta(b.metadata?.impact, 0)
             return impactB - impactA
         })
     }
@@ -82,7 +142,9 @@ export async function fetchCommits(
         input.sortBy === 'impact' ||
         input.techDebtAudit === true ||
         input.scope !== undefined
-    const fetchLimit = needsPostProcessing ? 500 : (input.maxCount ?? 50)
+    const maxCount = input.maxCount ?? 50
+    const fetchLimit = needsPostProcessing ? 500 : maxCount
+    const useInlineNumstat = input.summary !== true
     const cliArgs: CliArgs = {
         limit: fetchLimit,
         path: input.path,
@@ -96,16 +158,16 @@ export async function fetchCommits(
     }
     const gitArgs = [
         'log',
-        '--name-status',
+        ...(useInlineNumstat ? ['--raw', '--numstat'] : ['--name-status']),
         '-z',
         `--format=${RECORD_SEPARATOR}%H${FIELD_SEPARATOR}%D${FIELD_SEPARATOR}%aN${FIELD_SEPARATOR}%aE${FIELD_SEPARATOR}%aI${FIELD_SEPARATOR}%cN${FIELD_SEPARATOR}%cE${FIELD_SEPARATOR}%cI${FIELD_SEPARATOR}%s${FIELD_SEPARATOR}%b${FIELD_SEPARATOR}%(trailers:unfold,only)${FIELD_SEPARATOR}%(trailers:unfold,separator=%x1C)${FIELD_SEPARATOR}%P`,
         ...buildGitBaseArgs(cliArgs, refName),
     ]
 
-    const batch = []
+    const batch: RawCommitBatchItem[] = []
     try {
         for await (const record of streamGitRecords(gitArgs, cwd)) {
-            const parsed = parseGitRecord(record, cliArgs)
+            const parsed = parseGitRecord(record, cliArgs, useInlineNumstat)
             if (parsed) batch.push(parsed)
         }
     } catch (err) {
@@ -125,9 +187,17 @@ export async function fetchCommits(
         throw err
     }
 
-    const commits = await processBatch(batch, cliArgs, [], cwd)
-    const processed = applyCommitFilterSort(commits, input)
-    return needsPostProcessing ? processed.slice(0, input.maxCount ?? 50) : processed
+    const canPreFilter =
+        needsPostProcessing && batch.length > 0 && batch.every(isRealRawBatchItem)
+    const batchToProcess = canPreFilter
+        ? filterSortRawBatch(batch, input).slice(0, maxCount)
+        : batch
+
+    const commits = await processBatch(batchToProcess, cliArgs, [], cwd)
+    if (canPreFilter || !needsPostProcessing) {
+        return commits
+    }
+    return applyCommitFilterSort(commits, input).slice(0, maxCount)
 }
 
 /** Upper bound on commits returned by get_unreleased_commits when requested explicitly. */

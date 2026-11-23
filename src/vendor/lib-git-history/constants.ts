@@ -26,7 +26,8 @@ export const CHAR_NEWLINE = 0x0A;
 export const CHAR_NULL = 0x00;
 
 export const REGEX_FILE_STATUS = /^[A-Z][A-Z\d]*$/;
-export const REGEX_CONVENTIONAL_COMMIT = /^([a-zA-Z0-9_-]+)(?:\(([^)]+)\))?(!)?:\s*(.*)$/;
+// [INVARIANT]: Disjoint `(\S.*|)` tail prevents `\s*` vs `.*` O(N^2) backtracking on subjects containing bare `\r`/`\u2028`/`\u2029`.
+export const REGEX_CONVENTIONAL_COMMIT = /^([a-zA-Z0-9_-]+)(?:\(([^)]+)\))?(!)?:\s*(\S.*|)$/;
 export const REGEX_VALIDATION_TRAILER = /^(validation|history-validation|changelog-validation)(-status)?$/;
 export const REGEX_REFERENCE_TRAILER = /^(acked-by|bug|cc|closes|depends-on|fixes|refs|references|related-to|reported-by|resolves|see-also|signed-off-by|tested-by)$/;
 export const REGEX_BREAKING_CHANGE = /(?:^|\n)BREAKING[\s-]CHANGES?:?[ \t]*\n?([\s\S]*?)(?:\n\n|$)/i;

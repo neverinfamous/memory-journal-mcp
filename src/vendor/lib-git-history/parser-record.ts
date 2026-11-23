@@ -1,8 +1,9 @@
 // @ts-nocheck
 import type { CliArgs } from './cli.js';
 import { FIELD_SEPARATOR } from './git-runner.js';
-import { extractIssues, truncateSafely, flattenString, expandIssueTrackerUrl } from './parser-utils.js';
-import { evaluateNumericFilter } from './parser-metadata.js';
+import { parseNumstatLineIntoMap, type NumstatCommitMap } from './git-numstat.js';
+import { extractIssues, truncateSafely, flattenString, expandIssueTrackerUrl, hasOwnKeys } from './parser-utils.js';
+import { CHANGELOG_TYPES, getParsedCliFilters, matchesTrailerFilters } from './parser-metadata.js';
 import { parseTrailersBlock } from './parser-trailers.js';
 import {
   MAX_BODY_LENGTH,
@@ -19,33 +20,20 @@ import {
   REGEX_REVERT_COMMIT,
 } from './constants.js';
 
-interface ParsedCliFilters {
-  allowedCategories?: Set<string>;
-  allowedTypes?: Set<string>;
-}
-
-const CLI_FILTER_CACHE = new WeakMap<CliArgs, ParsedCliFilters>();
-const CHANGELOG_TYPES = new Set(['feat', 'fix', 'perf', 'revert']);
 const REGEX_TRAILING_DIGITS = /(\d{1,3})$/;
 const REGEX_DIGITS_GLOBAL = /\d+/g;
 const REGEX_BREAKING_FALLBACK = /^BREAKING[\s-]CHANGES?(?::|$)/im;
 const REGEX_REVERT_SUBJECT = /^revert:? /i;
 const REGEX_LEADING_EMOJI = /^[\s\p{Emoji_Presentation}\p{Extended_Pictographic}]+/u;
 const REGEX_LEADING_SHORTCODE = /^:\w+:\s*/;
-
-function getParsedCliFilters(args: CliArgs): ParsedCliFilters {
-  let cached = CLI_FILTER_CACHE.get(args);
-  if (cached) return cached;
-  cached = {};
-  if (args.category) {
-    cached.allowedCategories = new Set(args.category.split(',').map(c => c.trim().toLowerCase()));
-  }
-  if (args.type) {
-    cached.allowedTypes = new Set(args.type.split(',').map(t => t.trim().toLowerCase()));
-  }
-  CLI_FILTER_CACHE.set(args, cached);
-  return cached;
-}
+const REGEX_LEADING_CR_LF = /^[\r\n]+/;
+const REGEX_LEADING_CR = /^\r+/;
+const REGEX_CR_LF = /\r\n/g;
+const REGEX_CR_OPT_LF = /\r\n?/g;
+const REGEX_CR = /\r/g;
+const REGEX_HEAD_REF = /^HEAD -> /;
+const REGEX_TAG_PREFIX = /^tag:\s*/;
+const REGEX_WHITESPACE_SPLIT = /\s+/;
 
 export type RawCommitBatchItem = {
   sha: string; parents: string[]; refs: string[]; tags: string[]; authorName: string; authorEmail: string; date: string;
@@ -55,6 +43,7 @@ export type RawCommitBatchItem = {
   rawFiles: Array<{ status: string; file: string; oldFile?: string; similarityScore?: number }>; metadataObj: Record<string, unknown>; trailersObj?: Record<string, string>; references: string[];
   coAuthors: string[]; reviewers: string[]; issuesMap: Map<string, string | null>;
   trueFileCount: number;
+  inlineNumstats?: NumstatCommitMap;
 };
 
 function extractRecordParts(commitBlock: string): string[] | null {
@@ -96,16 +85,26 @@ function extractRecordParts(commitBlock: string): string[] | null {
 
 type RawFileItem = { status: string; file: string; oldFile?: string; similarityScore?: number };
 
+function statusConsumesOldFile(statusRaw: string, isCombined: boolean): boolean {
+  if (isCombined) return false;
+  if (statusRaw.length === 1) return statusRaw === 'R' || statusRaw === 'C';
+  const digitsMatch = statusRaw.match(REGEX_TRAILING_DIGITS);
+  const status = digitsMatch && digitsMatch[1] ? statusRaw.slice(0, -digitsMatch[1].length) : statusRaw;
+  const statusLetters = status.length === 1 ? status : status.replace(REGEX_DIGITS_GLOBAL, '');
+  return statusLetters.length === 1 && (statusLetters === 'R' || statusLetters === 'C');
+}
+
 function parseSingleFileStatus(
   statusRaw: string,
   getNextFilePart: () => string | null,
+  isCombined = false,
 ): RawFileItem | null {
   let status = statusRaw;
   let similarityScore: number | undefined;
   let hasOldFile: boolean;
 
   if (statusRaw.length === 1) {
-    hasOldFile = statusRaw === 'R' || statusRaw === 'C';
+    hasOldFile = !isCombined && (statusRaw === 'R' || statusRaw === 'C');
   } else {
     const digitsMatch = statusRaw.match(REGEX_TRAILING_DIGITS);
     if (digitsMatch && digitsMatch[1]) {
@@ -113,20 +112,20 @@ function parseSingleFileStatus(
       status = statusRaw.slice(0, -digitsMatch[1].length);
     }
     const statusLetters = status.length === 1 ? status : status.replace(REGEX_DIGITS_GLOBAL, '');
-    hasOldFile = statusLetters.length === 1 && (statusLetters === 'R' || statusLetters === 'C');
+    hasOldFile = !isCombined && statusLetters.length === 1 && (statusLetters === 'R' || statusLetters === 'C');
   }
 
   const oldFile = hasOldFile ? (getNextFilePart() || undefined) : undefined;
   const file = getNextFilePart();
   if (!file) return null;
 
-  const flatOldFile = oldFile ? flattenString(oldFile) : undefined;
-  return {
+  const item: RawFileItem = {
     status: status.length === 1 ? status : flattenString(status),
     file: flattenString(file),
-    ...(flatOldFile ? { oldFile: flatOldFile } : {}),
-    ...(similarityScore !== undefined ? { similarityScore } : {}),
   };
+  if (oldFile) item.oldFile = flattenString(oldFile);
+  if (similarityScore !== undefined) item.similarityScore = similarityScore;
+  return item;
 }
 
 function isValidFileStatus(statusRaw: string): boolean {
@@ -137,8 +136,32 @@ function isValidFileStatus(statusRaw: string): boolean {
   return statusRaw.length <= 20 && REGEX_FILE_STATUS.test(statusRaw);
 }
 
-function parseFilesBlock(filesBlock: string, sha: string): { rawFiles: RawFileItem[]; trueFileCount: number } {
+function consumeFileStatusToken(
+  statusRaw: string,
+  isCombined: boolean,
+  getNextFilePart: () => string | null,
+  rawFiles: RawFileItem[],
+  countOnly: boolean,
+): boolean {
+  if (countOnly || rawFiles.length >= MAX_PARSED_FILES) {
+    if (statusConsumesOldFile(statusRaw, isCombined)) getNextFilePart();
+    const skippedFile = getNextFilePart();
+    return Boolean(skippedFile);
+  }
+  const parsedFile = parseSingleFileStatus(statusRaw, getNextFilePart, isCombined);
+  if (!parsedFile) return false;
+  rawFiles.push(parsedFile);
+  return true;
+}
+
+function parseFilesBlock(
+  filesBlock: string,
+  sha: string,
+  inlineNumstatMode: boolean,
+  countOnly = false,
+): { rawFiles: RawFileItem[]; trueFileCount: number; inlineNumstats?: NumstatCommitMap } {
   const rawFiles: RawFileItem[] = [];
+  const inlineNumstats: NumstatCommitMap | undefined = inlineNumstatMode ? new Map() : undefined;
   let trueFileCount = 0;
   let fileBlockIdx = 0;
 
@@ -155,60 +178,77 @@ function parseFilesBlock(filesBlock: string, sha: string): { rawFiles: RawFileIt
     return part;
   };
 
-  let firstStatus = getNextFilePart();
-  if (firstStatus === null) return { rawFiles, trueFileCount };
-  firstStatus = firstStatus.replace(/^[\r\n]+/, '');
-  if (!firstStatus && fileBlockIdx >= filesBlock.length) return { rawFiles, trueFileCount };
+  let firstToken = getNextFilePart();
+  if (firstToken === null) return { rawFiles, trueFileCount, ...(inlineNumstats ? { inlineNumstats } : {}) };
+  const firstCode = firstToken.charCodeAt(0);
+  if (firstCode === 10 || firstCode === 13) firstToken = firstToken.replace(REGEX_LEADING_CR_LF, '');
+  if (!firstToken && fileBlockIdx >= filesBlock.length) {
+    return { rawFiles, trueFileCount, ...(inlineNumstats ? { inlineNumstats } : {}) };
+  }
 
-  let statusRaw: string | null = firstStatus;
+  const hasCR = filesBlock.includes('\r');
+  let token: string | null = firstToken;
   let iterations = 0;
   let emptyCount = 0;
-  while (statusRaw !== null && iterations < MAX_STATUS_ITERATIONS) {
+  while (token !== null && iterations < MAX_STATUS_ITERATIONS) {
     iterations++;
-    if (statusRaw.includes('\r')) statusRaw = statusRaw.replace(/\r/g, '');
-    if (statusRaw === '') {
+    if (hasCR && token.includes('\r')) token = token.replace(REGEX_CR, '');
+    if (token === '') {
       emptyCount++;
       if (emptyCount > MAX_EMPTY_STATUS_COUNT) break;
-      statusRaw = getNextFilePart();
+      token = getNextFilePart();
       continue;
     }
     emptyCount = 0;
-    if (!isValidFileStatus(statusRaw)) {
-      console.warn(`[lib-git-history] Warning: Desynced or invalid file status "${statusRaw}" in commit ${sha}. Stopping file parsing for this commit.`);
+
+    if (token.charCodeAt(0) === 58) {
+      // [INTENT]: Parse `git log --raw -z` entry (`:<modes> <shas> <status>` or `::<modes> <shas> <combinedStatus>`).
+      const isCombined = token.charCodeAt(1) === 58;
+      const lastSpace = token.lastIndexOf(' ');
+      const statusRaw = lastSpace !== -1 ? token.slice(lastSpace + 1) : '';
+      if (!isValidFileStatus(statusRaw)) {
+        console.warn(`[lib-git-history] Warning: Desynced or invalid raw file status "${statusRaw}" in commit ${sha}. Stopping file parsing for this commit.`);
+        break;
+      }
+      if (consumeFileStatusToken(statusRaw, isCombined, getNextFilePart, rawFiles, countOnly)) trueFileCount++;
+    } else if (inlineNumstats !== undefined && token.includes('\t')) {
+      parseNumstatLineIntoMap(token, getNextFilePart, inlineNumstats);
+    } else if (isValidFileStatus(token)) {
+      if (consumeFileStatusToken(token, false, getNextFilePart, rawFiles, countOnly)) trueFileCount++;
+    } else {
+      console.warn(`[lib-git-history] Warning: Desynced or invalid file status "${token}" in commit ${sha}. Stopping file parsing for this commit.`);
       break;
     }
-    const parsedFile = parseSingleFileStatus(statusRaw, getNextFilePart);
-    if (parsedFile) {
-      trueFileCount++;
-      if (rawFiles.length < MAX_PARSED_FILES) rawFiles.push(parsedFile);
-    }
-    statusRaw = getNextFilePart();
+    token = getNextFilePart();
   }
-  return { rawFiles, trueFileCount };
+  return { rawFiles, trueFileCount, ...(inlineNumstats ? { inlineNumstats } : {}) };
 }
 
 function parseParentsAndFiles(parentsAndFiles: string): { parentsRaw: string; filesBlock: string } {
-  const firstNewline = parentsAndFiles.indexOf('\n');
-  const firstNul = parentsAndFiles.indexOf('\0');
-  if (firstNewline !== -1 && (firstNul === -1 || firstNewline < firstNul)) {
-    return {
-      parentsRaw: parentsAndFiles.slice(0, firstNewline).trim(),
-      filesBlock: parentsAndFiles.slice(firstNewline + 1).replace(/^\r+/, ''),
-    };
-  }
-  if (firstNul !== -1) {
-    return {
-      parentsRaw: parentsAndFiles.slice(0, firstNul).trim(),
-      filesBlock: parentsAndFiles.slice(firstNul + 1),
-    };
+  const len = parentsAndFiles.length;
+  for (let i = 0; i < len; i++) {
+    const code = parentsAndFiles.charCodeAt(i);
+    if (code === 10) {
+      const rawFilesBlock = parentsAndFiles.slice(i + 1);
+      return {
+        parentsRaw: parentsAndFiles.slice(0, i).trim(),
+        filesBlock: rawFilesBlock.charCodeAt(0) === 13 ? rawFilesBlock.replace(REGEX_LEADING_CR, '') : rawFilesBlock,
+      };
+    }
+    if (code === 0) {
+      return {
+        parentsRaw: parentsAndFiles.slice(0, i).trim(),
+        filesBlock: parentsAndFiles.slice(i + 1),
+      };
+    }
   }
   return { parentsRaw: parentsAndFiles.trim(), filesBlock: '' };
 }
 
 function stripExactTrailerBlock(body: string, exactTrailerBlock: string): string {
   if (!exactTrailerBlock) return body;
-  const normalizedBody = body.replace(/\r\n?/g, '\n');
-  const trailerTrimmed = exactTrailerBlock.replace(/\r\n?/g, '\n').trim();
+  const normalizedBody = body.includes('\r') ? body.replace(REGEX_CR_OPT_LF, '\n') : body;
+  const trailerTrimmed = (exactTrailerBlock.includes('\r') ? exactTrailerBlock.replace(REGEX_CR_OPT_LF, '\n') : exactTrailerBlock).trim();
   if (trailerTrimmed.length === 0) return body;
   const trimmedBody = normalizedBody.trimEnd();
   if (trimmedBody.endsWith(trailerTrimmed)) {
@@ -217,37 +257,8 @@ function stripExactTrailerBlock(body: string, exactTrailerBlock: string): string
   return body;
 }
 
-function matchesRecordFilters(
-  args: CliArgs,
-  categories: string[],
-  entriesParsed: string[],
-  type: string | undefined,
-  isBreaking: boolean,
-  metadataObj: Record<string, unknown>,
-): boolean {
-  const parsedFilters = getParsedCliFilters(args);
-  if (parsedFilters.allowedCategories) {
-    const filterCategories = categories.length > 0 ? categories : (type ? [type.charAt(0).toUpperCase() + type.slice(1)] : ['Uncategorized']);
-    if (!filterCategories.some((c) => parsedFilters.allowedCategories?.has(c.toLowerCase()))) return false;
-  }
-  if (parsedFilters.allowedTypes) {
-    if (!type || !parsedFilters.allowedTypes.has(type.toLowerCase())) return false;
-  }
-  if (args.breaking && !isBreaking) return false;
-  if (args['changelog-only'] && entriesParsed.length === 0 && !(CHANGELOG_TYPES.has(type || '') || isBreaking)) return false;
-  if (args['impact']) {
-    const rawImpact = metadataObj['impact'];
-    if (!evaluateNumericFilter(args['impact'], typeof rawImpact === 'number' ? rawImpact : undefined)) return false;
-  }
-  if (args['confidence']) {
-    const rawConfidence = metadataObj['confidence'];
-    if (!evaluateNumericFilter(args['confidence'], typeof rawConfidence === 'number' ? rawConfidence : undefined)) return false;
-  }
-  return true;
-}
-
 function applyIssueTrackerUrls(issuesMap: Map<string, string | null>, tracker: string | undefined): void {
-  if (!tracker) return;
+  if (!tracker || issuesMap.size === 0) return;
   for (const [issue, action] of Array.from(issuesMap.entries())) {
     const finalIssue = expandIssueTrackerUrl(issue, tracker);
     if (finalIssue !== issue) {
@@ -257,19 +268,24 @@ function applyIssueTrackerUrls(issuesMap: Map<string, string | null>, tracker: s
   }
 }
 
-function normalizeSubjectAndBody(rawSubject: string, bodyParts: string[]): { subject: string; body: string } {
-  let subject = rawSubject.trim().replace(/\r\n/g, '\n').replace(/\n$/, '');
+function normalizeSubject(rawSubject: string): string {
+  let subject = rawSubject.trim();
+  if (subject.includes('\r')) subject = subject.replace(REGEX_CR_LF, '\n');
   if (subject.length > MAX_SUBJECT_LENGTH) {
     subject = truncateSafely(subject, MAX_SUBJECT_LENGTH, '...[subject truncated]');
   }
-  let body = bodyParts.join(FIELD_SEPARATOR).replace(/\r\n/g, '\n');
+  return subject;
+}
+
+function normalizeBody(rawBody: string): string {
+  let body = rawBody.includes('\r') ? rawBody.replace(REGEX_CR_LF, '\n') : rawBody;
   if (body.length > MAX_BODY_LENGTH) {
     body = truncateSafely(body, MAX_BODY_LENGTH, '\n\n...[body truncated to prevent memory exhaustion]');
   }
-  const hasBOM = body.startsWith('\uFEFF');
+  const hasBOM = body.charCodeAt(0) === 0xFEFF;
   body = body.trim();
-  if (hasBOM && !body.startsWith('\uFEFF')) body = '\uFEFF' + body;
-  return { subject, body };
+  if (hasBOM && body.charCodeAt(0) !== 0xFEFF) body = '\uFEFF' + body;
+  return body;
 }
 
 function stripLeadingEmojiAndShortcode(subject: string): string {
@@ -284,66 +300,70 @@ function detectBodyBreaking(
   initialIsBreaking: boolean,
   initialDesc: string | undefined,
 ): { isBreaking: boolean; breakingChangeDescription: string | undefined } {
-  if (body.length === 0) return { isBreaking: initialIsBreaking, breakingChangeDescription: initialDesc };
+  if (body.length < 15 || (initialIsBreaking && initialDesc !== undefined)) {
+    return { isBreaking: initialIsBreaking, breakingChangeDescription: initialDesc };
+  }
   const bcMatch = body.match(REGEX_BREAKING_CHANGE);
   if (bcMatch !== null) {
     return { isBreaking: true, breakingChangeDescription: initialDesc || bcMatch[1].trim() };
   }
-  if (!initialIsBreaking && REGEX_BREAKING_FALLBACK.test(body)) {
+  // [INTENT]: `REGEX_BREAKING_CHANGE` covers all LF-only breaking lines; fallback is only needed for bare `\r` line breaks.
+  if (!initialIsBreaking && body.includes('\r') && REGEX_BREAKING_FALLBACK.test(body)) {
     return { isBreaking: true, breakingChangeDescription: initialDesc };
   }
   return { isBreaking: initialIsBreaking, breakingChangeDescription: initialDesc };
 }
 
-export function parseGitRecord(commitBlock: string, args: CliArgs): RawCommitBatchItem | null {
+export function parseGitRecord(commitBlock: string, args: CliArgs, inlineNumstatMode = false): RawCommitBatchItem | null {
   const parts = extractRecordParts(commitBlock);
   if (!parts || parts.length < 12) return null;
 
-  const sha = parts[0].trim();
-  const refsRaw = parts[1].trim();
-  const authorName = parts[2].trim();
-  const authorEmail = parts[3].trim();
-  const date = parts[4].trim();
-  const committerName = parts[5].trim();
-  const committerEmail = parts[6].trim();
-  const committerDate = parts[7].trim();
-  const bodyEndIdx = parts.length - 3;
-  const normalized = normalizeSubjectAndBody(parts[8], parts.slice(9, bodyEndIdx));
-  const subject = normalized.subject;
-  let body = normalized.body;
-
-  const exactTrailerBlock = (parts[bodyEndIdx] ?? '').trim();
-  const rawTrailers = (parts[bodyEndIdx + 1] ?? '').trim();
-  const { parentsRaw, filesBlock } = parseParentsAndFiles(parts[bodyEndIdx + 2] ?? '');
-  const { rawFiles, trueFileCount } = parseFilesBlock(filesBlock, sha);
-
+  const subject = normalizeSubject(parts[8]);
   const convMatch = stripLeadingEmojiAndShortcode(subject).match(REGEX_CONVENTIONAL_COMMIT);
   const type = convMatch ? convMatch[1] : undefined;
-  const scope = convMatch ? convMatch[2] : undefined;
-  const cleanSubject = convMatch ? convMatch[4].trim() : subject;
+  const parsedFilters = getParsedCliFilters(args);
+  if (parsedFilters.allowedTypes && (!type || !parsedFilters.allowedTypes.has(type.toLowerCase()))) {
+    return null;
+  }
 
+  const sha = parts[0].trim();
+  const bodyEndIdx = parts.length - 3;
+  const rawTrailers = (parts[bodyEndIdx + 1] ?? '').trim();
   const trailers = parseTrailersBlock(rawTrailers, sha);
-  body = stripExactTrailerBlock(body, exactTrailerBlock);
+  // [INTENT]: Evaluate trailer-only filters before normalizing bodies or scanning for BREAKING CHANGE footers.
+  if (!matchesTrailerFilters(args, trailers.categories, type, trailers.metadataObj)) {
+    return null;
+  }
+
+  const rawBody = bodyEndIdx === 10 ? parts[9] : parts.slice(9, bodyEndIdx).join(FIELD_SEPARATOR);
+  const initialBody = normalizeBody(rawBody);
+  const exactTrailerBlock = (parts[bodyEndIdx] ?? '').trim();
+  const body = stripExactTrailerBlock(initialBody, exactTrailerBlock);
   const { isBreaking, breakingChangeDescription } = detectBodyBreaking(
     body,
     Boolean(convMatch?.[3]) || trailers.isBreaking,
     trailers.breakingChangeDescription,
   );
 
-  if (trailers.categories.length > 0) trailers.metadataObj['category'] = trailers.categories;
-  if (trailers.entriesParsed.length > 0) trailers.metadataObj['entry'] = trailers.entriesParsed;
-  if (Object.keys(trailers.customTrailers).length > 0) trailers.metadataObj['customTrailers'] = trailers.customTrailers;
-
-  if (!matchesRecordFilters(args, trailers.categories, trailers.entriesParsed, type, isBreaking, trailers.metadataObj)) {
+  if (args.breaking && !isBreaking) return null;
+  if (args['changelog-only'] && trailers.entriesParsed.length === 0 && !(CHANGELOG_TYPES.has(type || '') || isBreaking)) {
     return null;
   }
 
-  const refs = refsRaw ? refsRaw.split(', ').map((r) => r.trim().replace(/^HEAD -> /, '')).filter(Boolean) : [];
-  const tags = refs.filter((r) => r.startsWith('tag: ')).map((r) => r.replace(/^tag:\s*/, ''));
-  const parents = parentsRaw ? parentsRaw.split(/\s+/).filter(Boolean) : [];
+  if (trailers.categories.length > 0) trailers.metadataObj['category'] = trailers.categories;
+  if (trailers.entriesParsed.length > 0) trailers.metadataObj['entry'] = trailers.entriesParsed;
+  if (hasOwnKeys(trailers.customTrailers)) trailers.metadataObj['customTrailers'] = trailers.customTrailers;
+
+  const { parentsRaw, filesBlock } = parseParentsAndFiles(parts[bodyEndIdx + 2] ?? '');
+  const { rawFiles, trueFileCount, inlineNumstats } = parseFilesBlock(filesBlock, sha, inlineNumstatMode, Boolean(args.summary));
+
+  const refsRaw = parts[1].trim();
+  const refs = refsRaw ? refsRaw.split(', ').map((r) => flattenString(r.trim().replace(REGEX_HEAD_REF, ''))).filter(Boolean) : [];
+  const tags = refs.length > 0 ? refs.filter((r) => r.startsWith('tag: ')).map((r) => flattenString(r.replace(REGEX_TAG_PREFIX, ''))) : [];
+  const parents = !parentsRaw ? [] : !parentsRaw.includes(' ') ? [flattenString(parentsRaw)] : parentsRaw.split(REGEX_WHITESPACE_SPLIT).filter(Boolean).map(flattenString);
 
   const revertMatch = body.includes('This reverts commit ') ? body.match(REGEX_REVERT_COMMIT) : null;
-  const isRevert = REGEX_REVERT_SUBJECT.test(subject) || Boolean(revertMatch);
+  const isRevert = ((subject.charCodeAt(0) | 32) === 114 && REGEX_REVERT_SUBJECT.test(subject)) || Boolean(revertMatch);
   const revertedCommit = revertMatch ? revertMatch[1] : undefined;
 
   const issuesMap = new Map<string, string | null>();
@@ -351,11 +371,13 @@ export function parseGitRecord(commitBlock: string, args: CliArgs): RawCommitBat
   extractIssues(body, issuesMap, args['issue-pattern']);
   applyIssueTrackerUrls(issuesMap, args['issue-tracker']);
 
+  const scope = convMatch ? convMatch[2] : undefined;
+  const cleanSubject = convMatch ? convMatch[4].trim() : subject;
   return {
     sha: flattenString(sha), parents, refs, tags,
-    authorName: flattenString(authorName), authorEmail: flattenString(authorEmail),
-    date: flattenString(date), committerName: flattenString(committerName),
-    committerEmail: flattenString(committerEmail), committerDate: flattenString(committerDate),
+    authorName: flattenString(parts[2].trim()), authorEmail: flattenString(parts[3].trim()),
+    date: flattenString(parts[4].trim()), committerName: flattenString(parts[5].trim()),
+    committerEmail: flattenString(parts[6].trim()), committerDate: flattenString(parts[7].trim()),
     subject: flattenString(subject), body, cleanSubject: flattenString(cleanSubject),
     type: type ? flattenString(type) : undefined, scope: scope ? flattenString(scope) : undefined,
     isBreaking, isRevert,
@@ -364,5 +386,6 @@ export function parseGitRecord(commitBlock: string, args: CliArgs): RawCommitBat
     rawFiles, metadataObj: trailers.metadataObj, trailersObj: trailers.trailersObj,
     references: trailers.references, coAuthors: trailers.coAuthors, reviewers: trailers.reviewers,
     issuesMap, trueFileCount,
+    ...(inlineNumstats !== undefined ? { inlineNumstats } : {}),
   };
 }

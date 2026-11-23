@@ -15,7 +15,8 @@ export function flattenString(str: string): string {
 
 export function extractShaFromBuffer(recordBuf: Buffer): { sha: string; shaEnd: number } {
   let shaEnd = recordBuf.indexOf(0x0A);
-  const nullIdx = recordBuf.indexOf(0x00);
+  // [INTENT]: Bound the NUL probe to bytes preceding `\n` so text patch buffers (up to 100MB) are never scanned end-to-end.
+  const nullIdx = shaEnd !== -1 ? recordBuf.subarray(0, shaEnd).indexOf(0x00) : recordBuf.indexOf(0x00);
   if (shaEnd === -1 || (nullIdx !== -1 && nullIdx < shaEnd)) shaEnd = nullIdx;
   if (shaEnd === -1) shaEnd = recordBuf.length;
   return { sha: recordBuf.toString('utf-8', 0, shaEnd).trim(), shaEnd };
@@ -60,28 +61,51 @@ export function getSlackMap(args: CliArgs, cwd: string = process.cwd()): Record<
   return safeMap;
 }
 
+export function hasOwnKeys(obj: Record<string, unknown>): boolean {
+  for (const k in obj) {
+    if (Object.prototype.hasOwnProperty.call(obj, k)) return true;
+  }
+  return false;
+}
+
+const TRACKER_RULES_CACHE = new Map<string, Array<readonly [string, string]>>();
+const MAX_TRACKER_RULES_CACHE = 32;
+const PLACEHOLDER_ID_RE = /\{id\}/g;
+const PLACEHOLDER_EMPTY_RE = /\{\}/g;
+
+function getParsedTrackerRules(tracker: string): Array<readonly [string, string]> {
+  const cached = TRACKER_RULES_CACHE.get(tracker);
+  if (cached !== undefined) return cached;
+  const rules: Array<readonly [string, string]> = [];
+  for (const p of tracker.split(',')) {
+    const eqIdx = p.indexOf('=');
+    if (eqIdx !== -1) {
+      const prefix = p.slice(0, eqIdx).trim();
+      const tpl = p.slice(eqIdx + 1).trim();
+      if (tpl) rules.push([prefix, tpl] as const);
+    }
+  }
+  if (TRACKER_RULES_CACHE.size >= MAX_TRACKER_RULES_CACHE) TRACKER_RULES_CACHE.clear();
+  TRACKER_RULES_CACHE.set(tracker, rules);
+  return rules;
+}
+
 export function expandIssueTrackerUrl(issue: string, tracker: string): string {
   if (issue.startsWith('http://') || issue.startsWith('https://')) return issue;
   let urlTemplate = tracker;
 
   if (urlTemplate.includes(',')) {
-    const parts = urlTemplate.split(',');
-    for (const p of parts) {
-      const eqIdx = p.indexOf('=');
-      if (eqIdx !== -1) {
-        const prefix = p.slice(0, eqIdx).trim();
-        const tpl = p.slice(eqIdx + 1).trim();
-        if (tpl && issue.startsWith(prefix)) {
-          urlTemplate = tpl;
-          break;
-        }
+    for (const [prefix, tpl] of getParsedTrackerRules(urlTemplate)) {
+      if (issue.startsWith(prefix)) {
+        urlTemplate = tpl;
+        break;
       }
     }
   }
 
   const cleanIssue = issue.startsWith('#') ? issue.slice(1) : issue;
   if (urlTemplate.includes('{id}') || urlTemplate.includes('{}')) {
-    return urlTemplate.replace(/\{id\}/g, cleanIssue).replace(/\{\}/g, issue);
+    return urlTemplate.replace(PLACEHOLDER_ID_RE, cleanIssue).replace(PLACEHOLDER_EMPTY_RE, issue);
   }
   if (issue.startsWith('#')) {
     return urlTemplate + cleanIssue;
@@ -101,37 +125,58 @@ export function resolveIssueTrackerUrl(issue: string, repoHost: string, repoPath
     return `https://${repoHost}/${repoPath}/issues/${num}`;
   }
   if (issue.includes('#')) {
-    const [repo, num] = issue.split('#');
-    return `https://github.com/${repo}/issues/${num}`;
+    const hashIdx = issue.indexOf('#');
+    return `https://github.com/${issue.slice(0, hashIdx)}/issues/${issue.slice(hashIdx + 1)}`;
   }
   return null;
 }
 
-const NOISE_FILE_PATTERNS = [
-  '(^|\\/)(package-lock\\.json|pnpm-lock\\.yaml|yarn\\.lock|bun\\.lock|bun\\.lockb|uv\\.lock|Cargo\\.lock|Gemfile\\.lock|poetry\\.lock|go\\.sum|CHANGELOG\\.md|test-server\\/tool-reference\\.md|test-server\\/code-map\\.md|\\.pnp\\.[^/]+|\\.eslintrc\\.[^/]+|prettier\\.config\\.[^/]+|tsconfig(\\.[^/]+)?\\.json|jest\\.config\\.[^/]+|vite\\.config\\.[^/]+|\\.gitignore|\\.gitattributes|flake\\.lock|deno\\.lock|mix\\.lock|Podfile\\.lock|Cartfile\\.resolved)$',
-  '(^|\\/)\\.?dist\\/',
-  '(^|\\/)\\.?build\\/',
-  '(^|\\/)\\.?coverage\\/',
-  '(^|\\/)\\.yarn\\/',
-  '(^|\\/)vendor\\/',
-  '(^|\\/)__snapshots__\\/',
-  '\\.snap$',
-  '(^|\\/)\\.DS_Store',
-  '(^|\\/)\\.vercel\\/',
-  '(^|\\/)\\.next\\/',
-  '(^|\\/)\\.nuxt\\/',
-  '(^|\\/)\\.husky\\/'
-];
-const NOISE_FILE_REGEX = new RegExp(NOISE_FILE_PATTERNS.join('|'), 'i');
+const NOISE_BASENAMES: ReadonlySet<string> = new Set([
+  'package-lock.json', 'pnpm-lock.yaml', 'yarn.lock', 'bun.lock', 'bun.lockb',
+  'uv.lock', 'cargo.lock', 'gemfile.lock', 'poetry.lock', 'go.sum', 'changelog.md',
+  '.gitignore', '.gitattributes', 'flake.lock', 'deno.lock', 'mix.lock', 'podfile.lock', 'cartfile.resolved',
+  'tsconfig.json',
+]);
+const NOISE_DIRS: ReadonlySet<string> = new Set([
+  'dist', '.dist', 'build', '.build', 'coverage', '.coverage', '.yarn',
+  'vendor', '__snapshots__', '.vercel', '.next', '.nuxt', '.husky',
+]);
 
-export const isNoiseFile = (file: string) => NOISE_FILE_REGEX.test(file);
+export function isNoiseFile(file: string): boolean {
+  const lower = file.toLowerCase();
+  let segStart = 0;
+  let prevSeg = '';
+  let slash = lower.indexOf('/');
+  while (slash !== -1) {
+    const seg = lower.slice(segStart, slash);
+    if (NOISE_DIRS.has(seg)) return true;
+    prevSeg = seg;
+    segStart = slash + 1;
+    slash = lower.indexOf('/', segStart);
+  }
+  const base = segStart === 0 ? lower : lower.slice(segStart);
+  if (NOISE_BASENAMES.has(base)) return true;
+  if (base.endsWith('.snap') || base.startsWith('.ds_store')) return true;
+  if (prevSeg === 'test-server' && (base === 'tool-reference.md' || base === 'code-map.md')) return true;
+  const c0 = base.charCodeAt(0);
+  if (c0 === 46) {
+    return (base.startsWith('.pnp.') && base.length > 5) || (base.startsWith('.eslintrc.') && base.length > 10);
+  }
+  if (c0 === 116) return base.startsWith('tsconfig.') && base.endsWith('.json');
+  if (c0 === 112) return base.startsWith('prettier.config.') && base.length > 16;
+  if (c0 === 106) return base.startsWith('jest.config.') && base.length > 12;
+  if (c0 === 118) return base.startsWith('vite.config.') && base.length > 12;
+  return false;
+}
 
-const ACTION_REGEX = /(?:^|[^\w])(fixes|fix|closes|close|resolves|resolve|addresses|address|implements|related to|see also)?[\s:-]{0,10}(?:([@\w.-]+\/[\w.-]+)?#(\d+)|([A-Z][A-Z0-9_]+-\d+))\b/ig;
-const URL_REGEX = /(?:^|[^\w])(fixes|fix|closes|close|resolves|resolve|addresses|address|implements|related to|see also)?[\s:-]{0,10}https?:\/\/(?:[a-zA-Z0-9.-]+\.)?(github\.com|gitlab\.com|bitbucket\.org|atlassian\.net|linear\.app|slack\.com|notion\.so)\/([A-Za-z0-9_./-]*[A-Za-z0-9_/-])/ig;
-const SIMPLE_LIST_REGEX = /^\s*(?:and|&|,|or|\()?\s*$/i;
+const TRAILING_ACTION_REGEX = /(?:^|[^\w])(fixes|fix|closes|close|resolves|resolve|addresses|address|implements|related to|see also)[\s:-]{0,10}$/i;
+const URL_TOKEN_REGEX = /https?:\/\/(?:[a-zA-Z0-9.-]+\.)?(github\.com|gitlab\.com|bitbucket\.org|atlassian\.net|linear\.app|slack\.com|notion\.so)\/([A-Za-z0-9_./-]*[A-Za-z0-9_/-])/ig;
+// [INVARIANT]: Non-overlapping whitespace group prevents O(N^2) backtracking on whitespace-padded gaps.
+const SIMPLE_LIST_REGEX = /^\s*(?:(?:and|&|,|or|\()\s*)?$/i;
 const SENTENCE_BREAK_REGEX = /[.;\n]/;
-const WHITESPACE_SPLIT_REGEX = /\s+/;
-const IGNORED_ISSUE_PREFIX_REGEX = /^(UTF|ISO|SHA|RFC|CVE|MAC|IP|IPV4|IPV6|X86|AMD64)-/;
+const IGNORED_ISSUE_PREFIXES: ReadonlySet<string> = new Set([
+  'UTF', 'ISO', 'SHA', 'RFC', 'CVE', 'MAC', 'IP', 'IPV4', 'IPV6', 'X86', 'AMD64',
+]);
 const GIT_HOST_PATH_REGEX = /^(?:([\w.-]+\/[\w.-]+)\/)?(?:-\/)?(?:issues|pull|merge_requests|pull-requests)\/([A-Z0-9_.-]+)/i;
 const ATLASSIAN_PATH_REGEX = /browse\/([A-Z0-9_.-]+)/i;
 const LINEAR_PATH_REGEX = /issue\/([A-Z0-9_.-]+)/i;
@@ -140,6 +185,22 @@ const CUSTOM_ISSUE_REGEX_CACHE = new Map<string, RegExp | null>();
 const MAX_CUSTOM_REGEX_CACHE = 32;
 const MAX_CUSTOM_ISSUE_PATTERN_LENGTH = 500;
 
+const isWordChar = (c: number): boolean => (c >= 48 && c <= 57) || (c >= 65 && c <= 90) || (c >= 97 && c <= 122) || c === 95;
+const isDigitChar = (c: number): boolean => c >= 48 && c <= 57;
+const isAlphaChar = (c: number): boolean => (c >= 65 && c <= 90) || (c >= 97 && c <= 122);
+const isRepoNameChar = (c: number): boolean => isWordChar(c) || c === 46 || c === 45;
+const isWhitespaceCode = (c: number): boolean => c === 32 || c === 9 || c === 10 || c === 13 || c === 11 || c === 12;
+
+function hasMoreThanTwoWords(str: string): boolean {
+  let words = 0;
+  let inWord = false;
+  for (let i = 0; i < str.length; i++) {
+    if (isWhitespaceCode(str.charCodeAt(i))) { inWord = false; continue; }
+    if (!inWord) { inWord = true; if (++words > 2) return true; }
+  }
+  return false;
+}
+
 function getCustomIssueRegex(issuePattern: string): RegExp | null {
   const cached = CUSTOM_ISSUE_REGEX_CACHE.get(issuePattern);
   if (cached !== undefined) return cached;
@@ -147,33 +208,28 @@ function getCustomIssueRegex(issuePattern: string): RegExp | null {
   if (issuePattern.length > MAX_CUSTOM_ISSUE_PATTERN_LENGTH) {
     console.warn(`[lib-git-history] Warning: issue-pattern exceeds max length (${MAX_CUSTOM_ISSUE_PATTERN_LENGTH} chars); ignoring.`);
   } else {
-    try {
-      compiled = new RegExp(`(?:^|[^\\w])(fixes|fix|closes|close|resolves|resolve|addresses|address|implements|related to|see also)?[\\s:-]{0,10}(?:${issuePattern})\\b`, 'ig');
-    } catch (err: unknown) {
-      console.warn(`[lib-git-history] Warning: Invalid issue-pattern regex '${issuePattern}': ${err instanceof Error ? err.message : String(err)}`);
-    }
+    try { compiled = new RegExp(`(?:^|[^\\w])(${issuePattern})\\b`, 'ig'); }
+    catch (err: unknown) { console.warn(`[lib-git-history] Warning: Invalid issue-pattern regex '${issuePattern}': ${err instanceof Error ? err.message : String(err)}`); }
   }
-  if (CUSTOM_ISSUE_REGEX_CACHE.size >= MAX_CUSTOM_REGEX_CACHE) {
-    CUSTOM_ISSUE_REGEX_CACHE.clear();
-  }
+  if (CUSTOM_ISSUE_REGEX_CACHE.size >= MAX_CUSTOM_REGEX_CACHE) CUSTOM_ISSUE_REGEX_CACHE.clear();
   CUSTOM_ISSUE_REGEX_CACHE.set(issuePattern, compiled);
   return compiled;
 }
 
-function resolveMatchAction(
-  safeText: string,
-  matchIndex: number,
-  capturedAction: string | undefined,
-  lastAction: string | null,
-  lastIndex: number,
-): string | null {
-  const textBetween = safeText.slice(lastIndex, matchIndex);
-  const isSimpleList = SIMPLE_LIST_REGEX.test(textBetween);
-  let effectiveLast = lastAction;
-  if (!isSimpleList && (SENTENCE_BREAK_REGEX.test(textBetween) || textBetween.trim().split(WHITESPACE_SPLIT_REGEX).length > 2)) {
-    effectiveLast = null;
-  }
-  return capturedAction ? capturedAction.toLowerCase() : effectiveLast;
+const isTrailingDelimCode = (c: number): boolean => isWhitespaceCode(c) || c === 58 || c === 45;
+
+function resolvePrecedingAction(safeText: string, lastIndex: number, tokenStart: number, lastAction: string | null): string | null {
+  const tailStart = tokenStart - lastIndex > 32 ? tokenStart - 32 : lastIndex;
+  const actionMatch = safeText.slice(tailStart, tokenStart).match(TRAILING_ACTION_REGEX);
+  if (actionMatch && actionMatch[1]) return actionMatch[1].toLowerCase();
+  if (lastAction === null) return null;
+  let trimmedEnd = tokenStart;
+  const minEnd = Math.max(lastIndex, tokenStart - 10);
+  while (trimmedEnd > minEnd && isTrailingDelimCode(safeText.charCodeAt(trimmedEnd - 1))) trimmedEnd--;
+  const trimmedBetween = safeText.slice(lastIndex, trimmedEnd);
+  if (SIMPLE_LIST_REGEX.test(trimmedBetween)) return lastAction;
+  if (SENTENCE_BREAK_REGEX.test(trimmedBetween) || hasMoreThanTwoWords(trimmedBetween)) return null;
+  return lastAction;
 }
 
 function recordIssueMatch(issuesMap: Map<string, string | null>, issue: string | undefined, action: string | null): void {
@@ -182,30 +238,94 @@ function recordIssueMatch(issuesMap: Map<string, string | null>, issue: string |
   }
 }
 
+interface IssueTokenHit {
+  start: number;
+  end: number;
+  issue: string;
+}
+
+function parseHashTokenAt(safeText: string, hashIdx: number): IssueTokenHit | null {
+  const len = safeText.length;
+  if (hashIdx + 1 >= len || !isDigitChar(safeText.charCodeAt(hashIdx + 1))) return null;
+  let numEnd = hashIdx + 2;
+  while (numEnd < len && isDigitChar(safeText.charCodeAt(numEnd))) numEnd++;
+  if (numEnd < len && isWordChar(safeText.charCodeAt(numEnd))) return null;
+
+  let cur = hashIdx - 1;
+  while (cur >= 0 && isRepoNameChar(safeText.charCodeAt(cur))) cur--;
+  if (cur >= 1 && cur < hashIdx - 1 && safeText.charCodeAt(cur) === 47) {
+    let ownerStart = cur - 1;
+    while (ownerStart >= 0) {
+      const code = safeText.charCodeAt(ownerStart);
+      if (!isRepoNameChar(code) && code !== 64) break;
+      ownerStart--;
+    }
+    ownerStart++;
+    if (ownerStart < cur && (ownerStart === 0 || !isWordChar(safeText.charCodeAt(ownerStart - 1)))) {
+      let repo = safeText.slice(ownerStart, hashIdx);
+      if (repo.endsWith('.git')) repo = repo.slice(0, -4);
+      return { start: ownerStart, end: numEnd, issue: `${repo}#${safeText.slice(hashIdx + 1, numEnd)}` };
+    }
+  }
+
+  if (hashIdx > 0 && isWordChar(safeText.charCodeAt(hashIdx - 1))) return null;
+  return { start: hashIdx, end: numEnd, issue: safeText.slice(hashIdx, numEnd) };
+}
+
+function parseJiraTokenAt(safeText: string, dashIdx: number): IssueTokenHit | null {
+  const len = safeText.length;
+  if (dashIdx + 1 >= len || !isDigitChar(safeText.charCodeAt(dashIdx + 1))) return null;
+  let numEnd = dashIdx + 2;
+  while (numEnd < len && isDigitChar(safeText.charCodeAt(numEnd))) numEnd++;
+  if (numEnd < len && isWordChar(safeText.charCodeAt(numEnd))) return null;
+
+  let wordStart = dashIdx - 1;
+  while (wordStart >= 0 && isWordChar(safeText.charCodeAt(wordStart))) wordStart--;
+  wordStart++;
+  if (dashIdx - wordStart < 2 || !isAlphaChar(safeText.charCodeAt(wordStart))) return null;
+  if (wordStart > 0 && safeText.charCodeAt(wordStart - 1) === 47) return null;
+
+  const prefix = safeText.slice(wordStart, dashIdx).toUpperCase();
+  if (IGNORED_ISSUE_PREFIXES.has(prefix)) return null;
+  return { start: wordStart, end: numEnd, issue: safeText.slice(wordStart, numEnd) };
+}
+
 function extractActionIssues(safeText: string, issuesMap: Map<string, string | null>): void {
-  if (!safeText.includes('#') && !safeText.includes('-')) return;
-  ACTION_REGEX.lastIndex = 0;
-  let m: RegExpExecArray | null;
+  let hashIdx = safeText.indexOf('#');
+  let dashIdx = safeText.indexOf('-');
+  if (hashIdx === -1 && dashIdx === -1) return;
+
+  let hits: IssueTokenHit[] | null = null;
+  let hasBoth = false;
+  while (hashIdx !== -1) {
+    const hit = parseHashTokenAt(safeText, hashIdx);
+    if (hit) {
+      if (hits === null) hits = [hit];
+      else hits.push(hit);
+    }
+    hashIdx = safeText.indexOf('#', hashIdx + 1);
+  }
+  const hashCount = hits !== null ? hits.length : 0;
+  while (dashIdx !== -1) {
+    const hit = parseJiraTokenAt(safeText, dashIdx);
+    if (hit) {
+      if (hits === null) hits = [hit];
+      else hits.push(hit);
+      if (hashCount > 0) hasBoth = true;
+    }
+    dashIdx = safeText.indexOf('-', dashIdx + 1);
+  }
+  if (hits === null) return;
+  if (hasBoth) hits.sort((a, b) => a.start - b.start || b.end - a.end);
+
   let lastAction: string | null = null;
   let lastIndex = 0;
-
-  while ((m = ACTION_REGEX.exec(safeText)) !== null) {
-    if (m.index === ACTION_REGEX.lastIndex) ACTION_REGEX.lastIndex++;
-    const action = resolveMatchAction(safeText, m.index, m[1], lastAction, lastIndex);
-    lastAction = m[1] ? m[1].toLowerCase() : action;
-    lastIndex = ACTION_REGEX.lastIndex;
-
-    let issue = '';
-    if (m[3]) {
-      let repo = m[2];
-      if (repo && repo.endsWith('.git')) repo = repo.slice(0, -4);
-      issue = repo ? `${repo}#${m[3]}` : `#${m[3]}`;
-    } else if (m[4]) {
-      if (!IGNORED_ISSUE_PREFIX_REGEX.test(m[4].toUpperCase()) && safeText[m.index] !== '/') {
-        issue = m[4];
-      }
-    }
-    recordIssueMatch(issuesMap, issue, action);
+  for (const hit of hits) {
+    if (hit.start < lastIndex) continue;
+    const action = resolvePrecedingAction(safeText, lastIndex, hit.start, lastAction);
+    lastAction = action;
+    lastIndex = hit.end;
+    recordIssueMatch(issuesMap, hit.issue, action);
   }
 }
 
@@ -227,20 +347,19 @@ function extractUrlIssueId(domain: string | undefined, fullPath: string | undefi
 }
 
 function extractUrlIssues(safeText: string, issuesMap: Map<string, string | null>): void {
-  if (!safeText.includes('http://') && !safeText.includes('https://') && !safeText.includes('HTTP://') && !safeText.includes('HTTPS://')) {
-    return;
-  }
-  URL_REGEX.lastIndex = 0;
+  if (!safeText.includes('://')) return;
+  URL_TOKEN_REGEX.lastIndex = 0;
   let m: RegExpExecArray | null;
   let lastAction: string | null = null;
   let lastIndex = 0;
 
-  while ((m = URL_REGEX.exec(safeText)) !== null) {
-    if (m.index === URL_REGEX.lastIndex) URL_REGEX.lastIndex++;
-    const action = resolveMatchAction(safeText, m.index, m[1], lastAction, lastIndex);
-    lastAction = m[1] ? m[1].toLowerCase() : action;
-    lastIndex = URL_REGEX.lastIndex;
-    recordIssueMatch(issuesMap, extractUrlIssueId(m[2], m[3]), action);
+  while ((m = URL_TOKEN_REGEX.exec(safeText)) !== null) {
+    if (m.index === URL_TOKEN_REGEX.lastIndex) URL_TOKEN_REGEX.lastIndex++;
+    if (m.index > 0 && isWordChar(safeText.charCodeAt(m.index - 1))) continue;
+    const action = resolvePrecedingAction(safeText, lastIndex, m.index, lastAction);
+    lastAction = action;
+    lastIndex = URL_TOKEN_REGEX.lastIndex;
+    recordIssueMatch(issuesMap, extractUrlIssueId(m[1], m[2]), action);
   }
 }
 
@@ -254,17 +373,12 @@ function extractCustomPatternIssues(safeText: string, issuesMap: Map<string, str
 
   while ((customMatch = customRegex.exec(safeText)) !== null) {
     if (customMatch.index === customRegex.lastIndex) customRegex.lastIndex++;
-    const action = resolveMatchAction(safeText, customMatch.index, customMatch[1], lastAction, lastIndex);
-    lastAction = customMatch[1] ? customMatch[1].toLowerCase() : action;
+    const matchedToken = customMatch[1] ?? '';
+    const tokenStart = customMatch.index + (customMatch[0].length - matchedToken.length);
+    const action = resolvePrecedingAction(safeText, lastIndex, tokenStart, lastAction);
+    lastAction = action;
     lastIndex = customRegex.lastIndex;
-
-    let potentialIssue = customMatch[2];
-    if (!potentialIssue) {
-      const fullMatch = customMatch[0];
-      const actionPart = customMatch[1] ? fullMatch.slice(0, fullMatch.indexOf(customMatch[1]) + customMatch[1].length) : '';
-      potentialIssue = fullMatch.slice(actionPart.length).replace(/^[\s:-]+/, '');
-    }
-    recordIssueMatch(issuesMap, potentialIssue, action);
+    recordIssueMatch(issuesMap, customMatch[2] || matchedToken, action);
   }
 }
 
@@ -276,59 +390,27 @@ export const extractIssues = (text: string, issuesMap: Map<string, string | null
   if (issuePattern) extractCustomPatternIssues(safeText, issuesMap, issuePattern);
 };
 
-const EXT_TO_LANGUAGE: Readonly<Record<string, string>> = {
-  ts: 'TypeScript',
-  tsx: 'TypeScript',
-  mts: 'TypeScript',
-  cts: 'TypeScript',
-  js: 'JavaScript',
-  jsx: 'JavaScript',
-  mjs: 'JavaScript',
-  cjs: 'JavaScript',
-  py: 'Python',
-  go: 'Go',
-  rs: 'Rust',
-  md: 'Markdown',
-  json: 'JSON',
-  jsonc: 'JSON',
-  yml: 'YAML',
-  yaml: 'YAML',
-  css: 'CSS',
-  scss: 'Sass',
-  sass: 'Sass',
-  html: 'HTML',
-  htm: 'HTML',
-  sh: 'Shell',
-  bash: 'Shell',
-  zsh: 'Shell',
-  rb: 'Ruby',
-  java: 'Java',
-  c: 'C',
-  h: 'C++',
-  cpp: 'C++',
-  hpp: 'C++',
-  cc: 'C++',
-  cs: 'C#',
-  php: 'PHP',
-  sql: 'SQL',
-  vue: 'Vue',
-  svelte: 'Svelte',
-  toml: 'TOML',
-  xml: 'XML',
-  swift: 'Swift',
-  kt: 'Kotlin',
-  kts: 'Kotlin',
-  dart: 'Dart',
-  ex: 'Elixir',
-  exs: 'Elixir',
-};
+const EXT_TO_LANGUAGE: Readonly<Record<string, string>> = Object.assign(Object.create(null) as Record<string, string>, {
+  ts: 'TypeScript', tsx: 'TypeScript', mts: 'TypeScript', cts: 'TypeScript',
+  js: 'JavaScript', jsx: 'JavaScript', mjs: 'JavaScript', cjs: 'JavaScript',
+  py: 'Python', go: 'Go', rs: 'Rust', md: 'Markdown', json: 'JSON', jsonc: 'JSON',
+  yml: 'YAML', yaml: 'YAML', css: 'CSS', scss: 'Sass', sass: 'Sass', html: 'HTML', htm: 'HTML',
+  sh: 'Shell', bash: 'Shell', zsh: 'Shell', rb: 'Ruby', java: 'Java',
+  c: 'C', h: 'C++', cpp: 'C++', hpp: 'C++', cc: 'C++', cs: 'C#', php: 'PHP', sql: 'SQL',
+  vue: 'Vue', svelte: 'Svelte', toml: 'TOML', xml: 'XML', swift: 'Swift',
+  kt: 'Kotlin', kts: 'Kotlin', dart: 'Dart', ex: 'Elixir', exs: 'Elixir',
+});
 
 export const getLanguage = (file: string): string | undefined => {
-  const baseStart = Math.max(file.lastIndexOf('/'), file.lastIndexOf('\\')) + 1;
   const dotIdx = file.lastIndexOf('.');
+  if (dotIdx <= 0) return undefined;
+  const baseStart = Math.max(file.lastIndexOf('/'), file.lastIndexOf('\\')) + 1;
   if (dotIdx <= baseStart) return undefined;
-  const ext = file.slice(dotIdx + 1).toLowerCase();
-  return Object.prototype.hasOwnProperty.call(EXT_TO_LANGUAGE, ext) ? EXT_TO_LANGUAGE[ext] : undefined;
+  const rawExt = file.slice(dotIdx + 1);
+  const direct = EXT_TO_LANGUAGE[rawExt];
+  if (direct !== undefined) return direct;
+  const lower = rawExt.toLowerCase();
+  return lower === rawExt ? undefined : EXT_TO_LANGUAGE[lower];
 };
 
 export function iterateChangelog(
