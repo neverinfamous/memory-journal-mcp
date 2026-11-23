@@ -555,4 +555,54 @@ describe('Graph & Briefing Integration (G1-G9)', () => {
         )
         expect(String(unresolved.data)).toContain('list_projects')
     })
+
+    it('ignores query-like substrings inside #fragments and quotes @-prefixed YAML workspaces', async () => {
+        // Fragment-before-query should NOT be treated as ?days=90 on memory://graph
+        const graphFrag = await readResource(
+            'memory://graph/test-ws#section?days=90',
+            db,
+            undefined,
+            undefined,
+            undefined,
+            teamDb,
+            briefingConfig,
+            runtime
+        )
+        expect(String(graphFrag.data)).toContain('last 14d')
+
+        // Fragment-before-query should NOT be treated as ?session_id= on memory://agent-context
+        const ctxFrag = await readResource(
+            'memory://agent-context/test-ws#frag?session_id=sess-ignored',
+            db,
+            undefined,
+            undefined,
+            undefined,
+            teamDb,
+            briefingConfig,
+            runtime
+        )
+        expect(String(ctxFrag.data)).not.toContain('Session Entries:')
+
+        // Scoped @org/pkg workspace must produce valid parseable YAML
+        const scopedConfig: BriefingConfig = {
+            ...briefingConfig,
+            projectRegistry: {
+                '@org/pkg': { path: '/tmp/org-pkg', project_number: 42 },
+            },
+        }
+        const scopedCtx = await readResource(
+            'memory://agent-context/@org/pkg?pin_session=false',
+            db,
+            undefined,
+            undefined,
+            undefined,
+            teamDb,
+            scopedConfig,
+            runtime
+        )
+        const parsedScoped = parseYaml(String(scopedCtx.data)) as Record<string, unknown>
+        expect(parsedScoped['Project']).toBe('@org/pkg')
+        expect(parsedScoped['Workspace ID']).toBe('@org/pkg')
+        expect(parsedScoped['Project Number']).toBe(42)
+    })
 })

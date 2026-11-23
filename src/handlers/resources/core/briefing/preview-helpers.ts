@@ -191,8 +191,12 @@ export function clipPreview(text: string, length: number): string {
     return `${text.slice(0, safeSliceEnd(text, boundary)).trimEnd()}…`
 }
 
+/** Threshold below which a terse first line joins the next line in `firstLineOnly` mode. */
+const TERSE_FIRST_LINE_MAX = 20
+
 /**
- * Unfenced preview text. `firstLineOnly` returns the first meaningful line (labels);
+ * Unfenced preview text. `firstLineOnly` returns the first meaningful line (labels),
+ * joining the second line with ` — ` when the first line is a terse heading (`< 20` chars);
  * otherwise meaningful lines are joined with spaces (Journal rows).
  */
 export function extractPreview(
@@ -202,6 +206,16 @@ export function extractPreview(
 ): string {
     const lines = previewLines(content)
     if (lines.length === 0) return ''
-    const text = options.firstLineOnly === true ? (lines[0] ?? '') : lines.join(' ')
+    let text: string
+    if (options.firstLineOnly === true) {
+        const first = lines[0] ?? ''
+        const second = lines[1]
+        text =
+            !/\s/.test(first) && first.length < TERSE_FIRST_LINE_MAX && second !== undefined
+                ? `${first} — ${second}`
+                : first
+    } else {
+        text = lines.join(' ')
+    }
     return clipPreview(text, length)
 }

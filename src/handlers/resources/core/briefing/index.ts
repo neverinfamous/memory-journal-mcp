@@ -39,11 +39,11 @@ import {
 import { resolveBriefingScope } from './scope-resolver.js'
 
 function parsePinSessionOption(uri: string): boolean {
-    const queryIdx = uri.indexOf('?')
+    const hashIdx = uri.indexOf('#')
+    const withoutHash = hashIdx === -1 ? uri : uri.slice(0, hashIdx)
+    const queryIdx = withoutHash.indexOf('?')
     if (queryIdx === -1) return true
-    const hashIdx = uri.indexOf('#', queryIdx)
-    const rawQuery = hashIdx === -1 ? uri.slice(queryIdx + 1) : uri.slice(queryIdx + 1, hashIdx)
-    return new URLSearchParams(rawQuery).get('pin_session')?.trim().toLowerCase() !== 'false'
+    return new URLSearchParams(withoutHash.slice(queryIdx + 1)).get('pin_session')?.trim().toLowerCase() !== 'false'
 }
 
 export const briefingResource: InternalResourceDef = {

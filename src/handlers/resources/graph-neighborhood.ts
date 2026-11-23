@@ -33,10 +33,11 @@ const MAX_EDGE_LIMIT = 100
 const MAX_UNLINKED_IDS = 20
 
 function readIntParam(uri: string, key: string, fallback: number, min: number, max: number): number {
-    const queryIdx = uri.indexOf('?')
+    const hashIdx = uri.indexOf('#')
+    const withoutHash = hashIdx === -1 ? uri : uri.slice(0, hashIdx)
+    const queryIdx = withoutHash.indexOf('?')
     if (queryIdx === -1) return fallback
-    const hashIdx = uri.indexOf('#', queryIdx)
-    const raw = new URLSearchParams(hashIdx === -1 ? uri.slice(queryIdx + 1) : uri.slice(queryIdx + 1, hashIdx)).get(key)
+    const raw = new URLSearchParams(withoutHash.slice(queryIdx + 1)).get(key)
     if (raw === null) return fallback
     const parsed = parseCanonicalPositiveInt(raw)
     if (parsed === undefined) return fallback

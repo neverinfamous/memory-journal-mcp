@@ -21,12 +21,22 @@ import { parseCanonicalPositiveInt } from '../../../utils/safe-positive-int.js'
 import { previewLabelText, resolveToolHintName } from './briefing/graph-pivots-section.js'
 import { fenceUntrustedList, sanitizeDisplayIdentifier } from '../fencing-helpers.js'
 
+function extractQueryString(uri: string): string | undefined {
+    const hashIdx = uri.indexOf('#')
+    const withoutHash = hashIdx === -1 ? uri : uri.slice(0, hashIdx)
+    const queryIdx = withoutHash.indexOf('?')
+    return queryIdx === -1 ? undefined : withoutHash.slice(queryIdx + 1)
+}
+
 function parsePinSessionOption(uri: string): boolean {
-    const queryIdx = uri.indexOf('?')
-    if (queryIdx === -1) return true
-    const hashIdx = uri.indexOf('#', queryIdx)
-    const rawQuery = hashIdx === -1 ? uri.slice(queryIdx + 1) : uri.slice(queryIdx + 1, hashIdx)
+    const rawQuery = extractQueryString(uri)
+    if (rawQuery === undefined) return true
     return new URLSearchParams(rawQuery).get('pin_session')?.trim().toLowerCase() !== 'false'
+}
+
+/** Quote YAML 1.2 reserved leading indicator (`@`) on sanitized identifiers. */
+function formatYamlIdentifier(value: string): string {
+    return value.startsWith('@') ? JSON.stringify(value) : value
 }
 
 function formatDefaultAgentContext(
@@ -126,7 +136,7 @@ function handleAgentContextResource(uri: string, context: ResourceContext): Reso
             const instructionsText = `'${safeRepo}' is not a registered project. Use ${listHint} (or the project registry) to find the correct repo, then re-read memory://agent-context/{repo}.`
             return {
                 data: [
-                    `Project: ${safeRepo}`,
+                    `Project: ${formatYamlIdentifier(safeRepo)}`,
                     'Project Number: unresolved',
                     'Workspace ID: unresolved',
                     `Instructions: ${JSON.stringify(instructionsText)}`,
@@ -158,11 +168,12 @@ function handleAgentContextResource(uri: string, context: ResourceContext): Reso
     }
 
     const safeWorkspace = sanitizeDisplayIdentifier(workspaceId)
+    const yamlWorkspace = formatYamlIdentifier(safeWorkspace)
     return {
         data: [
-            `Project: ${safeWorkspace}`,
+            `Project: ${yamlWorkspace}`,
             `Project Number: ${projectNumber !== undefined && projectNumber > 0 ? String(projectNumber) : 'unresolved'}`,
-            `Workspace ID: ${safeWorkspace}`,
+            `Workspace ID: ${yamlWorkspace}`,
             'Instructions: Use your Conversation ID as the session_id for all tool calls.',
             ...buildSessionEntryLines(uri, context, workspaceId),
         ].join('\n'),
@@ -177,14 +188,9 @@ const SESSION_ENTRY_LIMIT = 10
  * cannot link new entries to them. `?session_id=<id>` lists them (newest first) with link degrees.
  */
 function buildSessionEntryLines(uri: string, context: ResourceContext, workspaceId: string): string[] {
-    const queryIdx = uri.indexOf('?')
-    if (queryIdx === -1) return []
-    const hashIdx = uri.indexOf('#', queryIdx)
-    const sessionId = new URLSearchParams(
-        hashIdx === -1 ? uri.slice(queryIdx + 1) : uri.slice(queryIdx + 1, hashIdx)
-    )
-        .get('session_id')
-        ?.trim()
+    const rawQuery = extractQueryString(uri)
+    if (rawQuery === undefined) return []
+    const sessionId = new URLSearchParams(rawQuery).get('session_id')?.trim()
     const db = context?.db
     if (
         sessionId === undefined ||

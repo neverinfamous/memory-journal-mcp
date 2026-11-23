@@ -192,15 +192,47 @@ export class ConfigManager extends EventEmitter {
             }
             nextConfig = { ...nextConfig, briefingConfig: nextBc }
         }
+        const prevProvenance =
+            persist && this.configFilePath ? this.snapshotProvenance() : undefined
         if (persist) {
             this.recordPersistableMutations(prevConfig, newConfig, nextConfig, options)
         }
         this.config = nextConfig
 
         const persistError = persist && this.configFilePath ? this.persistToFile() : undefined
+        if (persistError !== undefined && prevProvenance !== undefined) {
+            this.restoreProvenance(prevProvenance)
+        }
 
         this.emit('changed', this.config)
         return persistError
+    }
+
+    private snapshotProvenance(): {
+        toolFilterFromFile: boolean
+        codemodeFromFile: boolean
+        defaultWorkspaceIdFromFile: boolean
+        defaultProjectNumberFromFile: boolean
+        briefingKeysFromFile: Set<BriefingConfigurableKey>
+    } {
+        return {
+            toolFilterFromFile: this.toolFilterFromFile,
+            codemodeFromFile: this.codemodeFromFile,
+            defaultWorkspaceIdFromFile: this.defaultWorkspaceIdFromFile,
+            defaultProjectNumberFromFile: this.defaultProjectNumberFromFile,
+            briefingKeysFromFile: new Set(this.briefingKeysFromFile),
+        }
+    }
+
+    private restoreProvenance(snapshot: ReturnType<ConfigManager['snapshotProvenance']>): void {
+        this.toolFilterFromFile = snapshot.toolFilterFromFile
+        this.codemodeFromFile = snapshot.codemodeFromFile
+        this.defaultWorkspaceIdFromFile = snapshot.defaultWorkspaceIdFromFile
+        this.defaultProjectNumberFromFile = snapshot.defaultProjectNumberFromFile
+        this.briefingKeysFromFile.clear()
+        for (const key of snapshot.briefingKeysFromFile) {
+            this.briefingKeysFromFile.add(key)
+        }
     }
 
     private recordPersistableMutations(

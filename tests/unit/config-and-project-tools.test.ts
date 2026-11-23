@@ -375,6 +375,41 @@ describe('ConfigManager & Configuration Tools', () => {
         it('should reject out-of-range briefing_importance_threshold', () => {
             expect(() => updateConfigurationSchema.parse({ briefing_importance_threshold: 1.5 })).toThrow()
         })
+
+        it('should roll back file provenance when persistToFile fails so unrelated reloads do not clobber in-memory updates', () => {
+            const cfgFile = path.join(tmpDir, 'provenance-rollback.json')
+            fs.writeFileSync(cfgFile, JSON.stringify({ briefingCommits: 8, briefingEntries: 4 }), 'utf8')
+            const mgr = new ConfigManager(
+                {
+                    rawToolFilter: 'starter',
+                    toolFilterConfig: null,
+                    briefingConfig: { ...DEFAULT_BRIEFING_CONFIG, commitCount: 8, entryCount: 4 },
+                },
+                cfgFile,
+                undefined,
+                { commitCount: 8 }
+            )
+            // Corrupt file temporarily so persistToFile fails
+            fs.writeFileSync(cfgFile, '{ invalid json', 'utf8')
+            const persistErr = mgr.updateConfig(
+                {
+                    briefingConfig: { ...mgr.getConfig().briefingConfig, commitCount: 2 },
+                },
+                true,
+                { mutatedFields: { briefingKeys: ['commitCount'] } }
+            )
+            expect(persistErr).toBeDefined()
+            expect(mgr.getConfig().briefingConfig.commitCount).toBe(2)
+
+            // Restore valid file with an unrelated change (briefingEntries: 6) while briefingCommits stays 8
+            fs.writeFileSync(cfgFile, JSON.stringify({ briefingCommits: 8, briefingEntries: 6 }), 'utf8')
+            ;(mgr as unknown as { reloadFromFile: () => void }).reloadFromFile()
+
+            // Unrelated change applies, while in-memory commitCount: 2 is preserved (not clobbered by stale 8)
+            expect(mgr.getConfig().briefingConfig.entryCount).toBe(6)
+            expect(mgr.getConfig().briefingConfig.commitCount).toBe(2)
+            mgr.close()
+        })
     })
 
     describe('Project Registry Admin Tools (project-tools.ts)', () => {

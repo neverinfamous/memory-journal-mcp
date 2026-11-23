@@ -173,3 +173,26 @@ describe('fenceUntrustedList', () => {
         expect(out).not.toContain('&lt;/untrusted_remote_content&gt;')
     })
 })
+
+describe('extractPreview firstLineOnly terse heading fallback', () => {
+    it('joins a terse heading (<20 chars) with the following line in firstLineOnly mode', () => {
+        const out = extractPreview('# Performance\n\nReduced hot-path allocations by 40%.', 80, {
+            firstLineOnly: true,
+        })
+        expect(out).toBe('Performance — Reduced hot-path allocations by 40%.')
+    })
+
+    it('keeps a single-line terse entry unchanged when only a commit trailer follows', () => {
+        const out = extractPreview('Performance\n\nCommit: c07448cbce3307ed1230850da510bff8f5b55850', 80, {
+            firstLineOnly: true,
+        })
+        expect(out).toBe('Performance')
+    })
+
+    it('keeps a descriptive first line (>=20 chars) without joining line 2 in firstLineOnly mode', () => {
+        const out = extractPreview('Implemented recency-weighted pivots\nSecond line details here', 80, {
+            firstLineOnly: true,
+        })
+        expect(out).toBe('Implemented recency-weighted pivots')
+    })
+})

@@ -14,12 +14,12 @@ export function readBriefingConfigEntry(
     primaryKey: string,
     aliases?: readonly string[]
 ): { key: string; value: unknown } | undefined {
-    if (primaryKey in obj && obj[primaryKey] !== undefined && obj[primaryKey] !== null) {
+    if (Object.hasOwn(obj, primaryKey) && obj[primaryKey] !== undefined && obj[primaryKey] !== null) {
         return { key: primaryKey, value: obj[primaryKey] }
     }
     if (aliases !== undefined) {
         for (const alias of aliases) {
-            if (alias in obj && obj[alias] !== undefined && obj[alias] !== null) {
+            if (Object.hasOwn(obj, alias) && obj[alias] !== undefined && obj[alias] !== null) {
                 return { key: alias, value: obj[alias] }
             }
         }
