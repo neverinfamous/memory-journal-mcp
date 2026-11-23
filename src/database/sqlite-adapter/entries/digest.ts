@@ -10,6 +10,7 @@ import { z } from 'zod'
 import { buildImportanceSqlExpression, buildImportanceCte } from './importance.js'
 import { queryRow, queryRows } from './shared.js'
 import { effectiveWorkspace } from '../../workspace-scope.js'
+import { logger } from '../../../utils/logger.js'
 
 // ============================================================================
 // Types
@@ -340,6 +341,28 @@ export function saveAnalyticsSnapshot(
     return Number(result.lastInsertRowid)
 }
 
+function parseSnapshotData(raw: unknown, id: unknown): Record<string, unknown> | null {
+    let parsed: unknown
+    try {
+        parsed = JSON.parse(String(raw))
+    } catch (error: unknown) {
+        logger.warning('Skipping corrupt analytics snapshot row', {
+            module: 'Digest',
+            snapshotId: id,
+            error: error instanceof Error ? error.message : String(error),
+        })
+        return null
+    }
+    if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
+        logger.warning('Skipping non-object analytics snapshot row', {
+            module: 'Digest',
+            snapshotId: id,
+        })
+        return null
+    }
+    return parsed as Record<string, unknown>
+}
+
 /**
  * Get the latest analytics snapshot of a given type.
  */
@@ -357,19 +380,12 @@ export function getLatestAnalyticsSnapshot(
         workspaceSnapshotType(type, workspaceId)
     )
     if (!row) return null
-    let parsed: unknown
-    try {
-        parsed = JSON.parse(row['data'] as string)
-    } catch {
-        return null
-    }
-    if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
-        return null
-    }
+    const data = parseSnapshotData(row['data'], row['id'])
+    if (data === null) return null
     return {
         id: row['id'] as number,
         createdAt: row['created_at'] as string,
-        data: parsed as Record<string, unknown>,
+        data,
     }
 }
 
@@ -391,9 +407,15 @@ export function getAnalyticsSnapshots(
         workspaceSnapshotType(type, workspaceId),
         limit
     )
-    return rows.map((r) => ({
-        id: r['id'] as number,
-        createdAt: r['created_at'] as string,
-        data: JSON.parse(r['data'] as string) as Record<string, unknown>,
-    }))
+    const snapshots: { id: number; createdAt: string; data: Record<string, unknown> }[] = []
+    for (const r of rows) {
+        const data = parseSnapshotData(r['data'], r['id'])
+        if (data === null) continue
+        snapshots.push({
+            id: r['id'] as number,
+            createdAt: r['created_at'] as string,
+            data,
+        })
+    }
+    return snapshots
 }

@@ -248,7 +248,7 @@ function dispatchNestedEntryPayload(
     const isUpdate = hasExplicitNestedEntryId(payload)
     if (isUpdate && opts.isolation?.autoVersion === false) {
         return opts.runIsolatedNestedCode(
-            'return await mj.admin.updateEntry(context.synthPayload)',
+            '"use strict";\n(async () => {\nreturn await mj.admin.updateEntry(context.synthPayload)\n})()',
             opts.effectiveReadonly,
             opts.effectiveDryRun,
             opts.effectiveUseTestDb,

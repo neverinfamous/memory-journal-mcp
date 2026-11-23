@@ -200,7 +200,7 @@ export class BackupManager {
     }
 
     deleteOldBackups(keepCount: number): { deleted: string[]; failed: string[]; kept: number } {
-        if (keepCount < 1 || Number.isNaN(keepCount)) {
+        if (!Number.isSafeInteger(keepCount) || keepCount < 1) {
             throw new ValidationError('keepCount must be at least 1')
         }
         if (this.ctx.getDbPath?.() === ':memory:') {

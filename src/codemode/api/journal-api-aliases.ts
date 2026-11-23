@@ -53,6 +53,9 @@ function wireProjectMutationWrappers(deps: ProjectAndTeamAliasDeps): void {
         const wrappedRegister = async (...args: unknown[]): Promise<unknown> => {
             if (isRecord(args[0])) return await existingRegisterProject(args[0])
             if (typeof args[0] === 'string') {
+                if (isRecord(args[1])) {
+                    return await existingRegisterProject({ ...args[1], name: args[0] })
+                }
                 return await existingRegisterProject({
                     name: args[0],
                     absolute_path: typeof args[1] === 'string' ? args[1] : '',
@@ -73,6 +76,9 @@ function wireProjectMutationWrappers(deps: ProjectAndTeamAliasDeps): void {
         const wrappedUpdate = async (...args: unknown[]): Promise<unknown> => {
             if (isRecord(args[0])) return await existingUpdateProject(args[0])
             if (typeof args[0] === 'string') {
+                if (isRecord(args[1])) {
+                    return await existingUpdateProject({ ...args[1], name: args[0] })
+                }
                 return await existingUpdateProject({
                     name: args[0],
                     ...(typeof args[1] === 'string' && args[1] !== '' ? { new_name: args[1] } : {}),
@@ -270,7 +276,11 @@ function wrapTeamAutoRoute(opts: TeamAutoRouteOptions): void {
             typeof res['suggestion'] === 'string' &&
             res['suggestion'].includes(opts.suggestionHint)
         ) {
-            const teamRes = await teamFn(opts.buildTeamArgs(normalized))
+            const rawUseTestDb = normalized['use_test_db'] ?? normalized['useTestDb']
+            const teamRes = await teamFn({
+                ...opts.buildTeamArgs(normalized),
+                ...(typeof rawUseTestDb === 'boolean' ? { use_test_db: rawUseTestDb } : {}),
+            })
             if (isRecord(teamRes) && teamRes['success'] !== false) {
                 return { ...teamRes, _healed: { routedTo: 'team' } }
             }

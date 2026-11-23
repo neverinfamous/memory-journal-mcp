@@ -175,6 +175,9 @@ async function executeDispatcherCall(
     const effectiveAutoVersion = rpcOverrides?.autoVersion === false ? false : autoVersion
     const executeWithScope = async (): Promise<unknown> => {
         assertToolAccessAndMaintenance(tool, sessionContext)
+        const modeBlockErr = checkDispatcherModeBlock(tool, sessionContext, rpcOverrides?.readonly)
+        if (modeBlockErr !== undefined) return modeBlockErr
+
         const normalized = await normalizeDispatchParams(tool, cleanToolParams, {
             sessionContext,
             projectId: scopeRes.effectiveProjectId,
@@ -184,13 +187,12 @@ async function executeDispatcherCall(
                 : {}),
             ...(scopeRes.effectiveSessionId !== undefined ? { sessionId: scopeRes.effectiveSessionId } : {}),
             ...(rpcOverrides?.projectNumber !== undefined ? { rpcPinnedProject: true } : {}),
+            deferSideEffects: true,
         })
         if ('errorResult' in normalized) return normalized.errorResult
         const normalizedParams = normalized.params
         const boundsErr = validateRpcOverrideBounds(tool, normalizedParams, rpcOverrides, reg)
         if (boundsErr !== undefined) return boundsErr
-        const modeBlockErr = checkDispatcherModeBlock(tool, sessionContext, rpcOverrides?.readonly)
-        if (modeBlockErr !== undefined) return modeBlockErr
 
         if (tool.group === 'team') {
             try {
@@ -198,6 +200,10 @@ async function executeDispatcherCall(
             } catch (err) {
                 return formatHandlerError(err)
             }
+        }
+        if (normalized.postRbacCheck !== undefined) {
+            const postErr = await normalized.postRbacCheck()
+            if (postErr !== undefined) return postErr
         }
 
         const isSim =

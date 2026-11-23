@@ -129,7 +129,7 @@ function resolveEntryAndChangelogAliasProp(
             const val = entryObj[prop]
             return {
                 matched: true,
-                value: val !== null && typeof val === 'object' && !Array.isArray(val) ? wrapResultFn(val) : val,
+                value: val !== null && typeof val === 'object' ? wrapResultFn(val) : val,
             }
         }
     }
@@ -149,7 +149,7 @@ function resolveEntryAndChangelogAliasProp(
             const val = changelogObj[prop]
             return {
                 matched: true,
-                value: val !== null && typeof val === 'object' && !Array.isArray(val) ? wrapResultFn(val) : val,
+                value: val !== null && typeof val === 'object' ? wrapResultFn(val) : val,
             }
         }
     }
@@ -158,16 +158,17 @@ function resolveEntryAndChangelogAliasProp(
 
 function resolveCollectionAndGraphAliasProp(
     targetRecord: Record<string, unknown>,
-    prop: string | symbol
+    prop: string | symbol,
+    wrapResultFn: (val: unknown) => unknown
 ): AliasMatch {
     if (prop === 'entryIds' && 'entries' in targetRecord && Array.isArray(targetRecord['entries'])) {
-        return { matched: true, value: targetRecord['entries'].filter(hasNumberId).map((e) => e.id) }
+        return { matched: true, value: wrapResultFn(targetRecord['entries'].filter(hasNumberId).map((e) => e.id)) }
     }
     if (prop === 'entryIds' && 'updated' in targetRecord && Array.isArray(targetRecord['updated'])) {
-        return { matched: true, value: targetRecord['updated'].filter(hasNumberId).map((e) => e.id) }
+        return { matched: true, value: wrapResultFn(targetRecord['updated'].filter(hasNumberId).map((e) => e.id)) }
     }
     if (prop === 'deletedIds' && 'deleted' in targetRecord && Array.isArray(targetRecord['deleted'])) {
-        return { matched: true, value: targetRecord['deleted'] }
+        return { matched: true, value: wrapResultFn(targetRecord['deleted']) }
     }
     if (prop === 'deletedCount' && 'count' in targetRecord && typeof targetRecord['count'] === 'number') {
         return { matched: true, value: targetRecord['count'] }
@@ -184,7 +185,7 @@ function resolveCollectionAndGraphAliasProp(
                     },
                 })
         )
-        return { matched: true, value: revisions }
+        return { matched: true, value: wrapResultFn(revisions) }
     }
     if (prop === 'relationships' && 'edges' in targetRecord && Array.isArray(targetRecord['edges'])) {
         const relationships = targetRecord['edges'].filter(isObject).map((edge) => ({
@@ -198,7 +199,7 @@ function resolveCollectionAndGraphAliasProp(
             to: edge['to'],
             type: edge['type'],
         }))
-        return { matched: true, value: relationships }
+        return { matched: true, value: wrapResultFn(relationships) }
     }
     return { matched: false }
 }
@@ -210,5 +211,23 @@ export function resolveWrappedAliasProp(
 ): AliasMatch {
     const entryOrChangelog = resolveEntryAndChangelogAliasProp(targetRecord, prop, wrapResultFn)
     if (entryOrChangelog.matched) return entryOrChangelog
-    return resolveCollectionAndGraphAliasProp(targetRecord, prop)
+    return resolveCollectionAndGraphAliasProp(targetRecord, prop, wrapResultFn)
+}
+
+/** Deep-clone and freeze plain objects/arrays with cycle memoization so context bags cannot mutate across calls. */
+export function deepFreezeContextClone(value: unknown, seen = new WeakMap<object, unknown>()): unknown {
+    if (value === null || typeof value !== 'object') return value
+    if (seen.has(value)) return seen.get(value)
+    if (Array.isArray(value)) {
+        const clone: unknown[] = []
+        seen.set(value, clone)
+        for (const item of value) clone.push(deepFreezeContextClone(item, seen))
+        return Object.freeze(clone)
+    }
+    const clone = Object.create(null) as Record<string, unknown>
+    seen.set(value, clone)
+    for (const k of Object.keys(value)) {
+        clone[k] = deepFreezeContextClone(Reflect.get(value, k), seen)
+    }
+    return Object.freeze(clone)
 }

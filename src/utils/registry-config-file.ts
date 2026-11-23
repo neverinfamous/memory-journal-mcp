@@ -190,6 +190,11 @@ export function readProjectRegistryFile(configPath: string): {
     return { config: cloned, registry: registryClone }
 }
 
+/** Clear cached parsed config state for `configPath` ahead of atomic writes. */
+export function invalidateRegistryFileCache(configPath: string): void {
+    registryFileCache.delete(path.resolve(configPath))
+}
+
 /** Resolve the authoritative project-registry config file path from ConfigManager, env override, or default location. */
 export function resolveRegistryConfigPath(configuredPath?: string): string {
     const trimmed = configuredPath?.trim()

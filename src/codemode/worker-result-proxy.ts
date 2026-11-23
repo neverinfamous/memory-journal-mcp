@@ -233,7 +233,7 @@ function resolveIteratorOrListAlias(
 
     if (typeof prop === 'string' && RESULT_LIST_ALIASES.has(prop)) {
         const primaryArr = findPrimaryArray(targetRecord)
-        if (primaryArr !== undefined) return { matched: true, value: primaryArr }
+        if (primaryArr !== undefined) return { matched: true, value: wrapResult(primaryArr) }
         if ('projects' in targetRecord && isObject(targetRecord['projects'])) {
             return { matched: true, value: wrapResult(dictToItems(targetRecord['projects'])) }
         }
@@ -344,7 +344,7 @@ function isInternalSlotBuiltin(val: unknown): boolean {
 function resolveWrappedObjectProp(target: object, prop: string | symbol, receiver: unknown): unknown {
     if (prop in target) {
         const val: unknown = Reflect.get(target, prop)
-        return val !== null && typeof val === 'object' && !Array.isArray(val) && !isInternalSlotBuiltin(val)
+        return val !== null && typeof val === 'object' && !isInternalSlotBuiltin(val)
             ? wrapResult(val)
             : val
     }

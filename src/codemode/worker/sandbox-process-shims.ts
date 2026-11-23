@@ -209,7 +209,8 @@ export function createChildProcessShims(): Record<string, unknown> {
             output: ['', '', 'spawnSync is disabled in the sandbox'],
             error: new Error('spawnSync is disabled in the sandbox'),
         }),
-        exec: (_cmd: unknown, cb?: unknown) => {
+        exec: (_cmd: unknown, cbOrOptions?: unknown, maybeCb?: unknown) => {
+            const cb = typeof cbOrOptions === 'function' ? cbOrOptions : maybeCb
             if (typeof cb === 'function') {
                 try {
                     ;(cb as (...args: unknown[]) => unknown)(

@@ -3,6 +3,7 @@ import * as os from 'node:os'
 import * as path from 'node:path'
 import { logger } from './logger.js'
 import { readCachedConfigObject } from './registry-config-file.js'
+import { isForbiddenProjectKey } from './project-registry-guards.js'
 import {
     PROJECT_KEYWORD_ALIASES,
     findCanonicalRegistryKey,
@@ -46,7 +47,7 @@ function isValidLoadedRegistryEntry(
     key: string,
     val: unknown
 ): val is ProjectRegistryEntry {
-    if (key.trim() === '' || key === '*' || key === '__proto__' || key === 'constructor' || key === 'prototype') {
+    if (isForbiddenProjectKey(key)) {
         return false
     }
     if (typeof val !== 'object' || val === null || Array.isArray(val)) return false

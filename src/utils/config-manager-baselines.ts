@@ -166,20 +166,3 @@ export function buildFallbackCliEnvBaseline(initialConfig: DynamicConfig): Confi
             : {}),
     }
 }
-
-/** Update briefing provenance flags from a freshly reloaded config object. */
-export function syncBriefingProvenanceFromFile(
-    parsed: Record<string, unknown>,
-    briefingKeysFromFile: Set<BriefingConfigurableKey>,
-    keyMap: BriefingKeyMapping,
-    isValidValue: (value: unknown, kind: BriefingValueKind) => boolean
-): void {
-    for (const [fileKey, { target, kind, aliases }] of Object.entries(keyMap)) {
-        const match = readBriefingConfigEntry(parsed, fileKey, aliases)
-        if (match !== undefined && isValidValue(match.value, kind)) {
-            briefingKeysFromFile.add(target)
-        } else {
-            briefingKeysFromFile.delete(target)
-        }
-    }
-}

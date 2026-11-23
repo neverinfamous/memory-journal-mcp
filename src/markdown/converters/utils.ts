@@ -101,14 +101,14 @@ export function transformOutsideCodeFences(
     markdown: string,
     transform: (segment: string) => string
 ): string {
-    const lines = markdown.split('\n')
+    const lines = markdown.replace(/\r\n?/g, '\n').split('\n')
     const out: string[] = []
     let proseLines: string[] = []
     let activeFenceChar: string | null = null
     let activeFenceLen = 0
 
     for (const line of lines) {
-        const trimmed = line.replace(/\r$/, '')
+        const trimmed = line
         if (activeFenceChar === null) {
             const openMatch = FENCE_OPEN_RE.exec(trimmed)
             const fenceMarker = openMatch?.[1] ?? openMatch?.[2]

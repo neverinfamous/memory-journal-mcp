@@ -3,6 +3,7 @@
  * Split out of extractAndRecoverJsonCode so each step stays under 80 lines.
  */
 
+import { appendOptionalQuerySearchFields } from '../../../codemode/shared-context-parsers.js'
 import { isRecord } from '../../../codemode/normalizers/shared-utils.js'
 import { parsePositiveProjectNumber } from '../../../utils/safe-positive-int.js'
 import {
@@ -104,7 +105,8 @@ function recoverSearchCall(target: Record<string, unknown>, original: Record<str
               ? target['search']
               : ''
     const searchParams: Record<string, unknown> = { query: queryStr }
-    if (typeof target['limit'] === 'number') searchParams['limit'] = target['limit']
+    const mergedQuerySource: Record<string, unknown> = { ...original, ...target }
+    appendOptionalQuerySearchFields(searchParams, mergedQuerySource, mergedQuerySource['limit'])
     const scope = resolveCompatibleInheritedScope(target, original)
     if (scope.projectNumber !== undefined) searchParams['project_number'] = scope.projectNumber
     if (scope.workspaceId !== undefined) searchParams['workspace_id'] = scope.workspaceId

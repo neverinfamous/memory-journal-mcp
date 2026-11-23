@@ -213,7 +213,7 @@ function resolveProjectMatch(
             },
         }
     }
-    if (!projectInfo && (nameProjNum !== undefined || parsedProjNum !== undefined)) {
+    if (!projectInfo && nameProjNum !== undefined) {
         if (nameProjNum !== undefined && parsedProjNum !== undefined && nameProjNum !== parsedProjNum) {
             return {
                 error: {

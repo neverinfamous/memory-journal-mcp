@@ -1,10 +1,19 @@
+import { z } from 'zod'
 import type { BriefingConfig } from '../handlers/resources/shared.js'
-import type { BriefingConfigurableKey } from '../utils/config-manager-helpers.js'
-import type { ConfigResolver } from '../utils/config-resolver.js'
+import type { ServerOptions } from '../server/mcp-server/types.js'
+import type {
+    BriefingConfigurableKey,
+    ConfigCliEnvBaseline,
+} from '../utils/config-manager-helpers.js'
+import type { CliCommandLike, ConfigResolver } from '../utils/config-resolver.js'
 import { isPlaceholderAuthToken } from '../utils/security-utils.js'
 import { defaultDbPath, defaultTeamDbPath } from './default-paths.js'
+import { parseImportanceThresholdOption } from './server-options-parsers.js'
 
 export type CatchConfig = <T>(fn: () => T, fallback: T) => T
+
+const teamDefaultRoleSchema = z.enum(['admin', 'member', 'viewer', 'denied'])
+export type TeamDefaultRole = z.infer<typeof teamDefaultRoleSchema>
 
 /** Canonical environment variable keys read across CLI server/admin option builders (`L5`). */
 export const CANONICAL_SERVER_ENV_KEYS = [
@@ -258,4 +267,152 @@ export function collectCliEnvBriefingOverrides(
         }
     }
     return hasAny ? overrides : undefined
+}
+
+export function resolveInstructionLevelOption(
+    resolver: ConfigResolver,
+    catchConfig: CatchConfig
+): 'essential' | 'detailed' | 'full' | undefined {
+    return catchConfig((): 'essential' | 'detailed' | 'full' | undefined => {
+        const raw = resolver.resolve<unknown>('instructionLevel', 'INSTRUCTION_LEVEL')
+        if (raw === undefined || raw === null) return undefined
+        if (typeof raw !== 'string') {
+            throw new Error(`Invalid --instruction-level: expected string, got ${typeof raw}. Use essential, detailed, or full.`)
+        }
+        const trimmed = raw.trim()
+        if (trimmed === '') return undefined
+        if (trimmed === 'essential' || trimmed === 'detailed' || trimmed === 'full') return trimmed
+        throw new Error(`Invalid --instruction-level '${raw}'. Use essential, detailed, or full.`)
+    }, undefined)
+}
+
+export function resolveTeamDefaultRoleOption(
+    resolver: ConfigResolver,
+    catchConfig: CatchConfig
+): TeamDefaultRole {
+    return catchConfig((): TeamDefaultRole => {
+        const raw = resolver.resolve<string>('teamDefaultRole', 'TEAM_DEFAULT_ROLE') ?? 'denied'
+        const parsed = teamDefaultRoleSchema.safeParse(raw)
+        if (!parsed.success) {
+            throw new Error(`Invalid team default role '${raw}'. Use admin, member, viewer, or denied.`)
+        }
+        return parsed.data
+    }, 'denied')
+}
+
+export function resolvePruneImportanceThresholdOption(
+    resolver: ConfigResolver,
+    catchConfig: CatchConfig
+): number {
+    return catchConfig(
+        () =>
+            parseImportanceThresholdOption(
+                resolver.resolve<unknown>('pruneImportanceThreshold', 'PRUNE_IMPORTANCE_THRESHOLD'),
+                'pruneImportanceThreshold',
+                0.15
+            ),
+        0.15
+    )
+}
+
+export function resolveMetricsExportOption(
+    resolver: ConfigResolver,
+    catchConfig: CatchConfig
+): 'prometheus' | undefined {
+    return catchConfig<'prometheus' | undefined>(() => {
+        const raw = resolver.resolve<string>('metricsExport', 'METRICS_EXPORT')
+        if (raw) {
+            if (raw !== 'prometheus') throw new Error(`Unsupported metrics export format: ${raw}`)
+            return 'prometheus'
+        }
+        return undefined
+    }, undefined)
+}
+
+export function resolveMaxToolInputElementsOption(
+    resolver: ConfigResolver,
+    catchConfig: CatchConfig
+): number | undefined {
+    return catchConfig(() => {
+        const raw = resolver.resolve<unknown>('maxToolInputElements', 'MAX_TOOL_INPUT_ELEMENTS')
+        if (raw === undefined || raw === null || raw === '') return undefined
+        if (raw === Infinity || (typeof raw === 'string' && raw.trim().toLowerCase() === 'infinity')) {
+            return Infinity
+        }
+        return resolver.resolveInt('maxToolInputElements', 'MAX_TOOL_INPUT_ELEMENTS', 0)
+    }, undefined)
+}
+
+export function buildLifecycleOptionsGroup(resolver: ConfigResolver, catchConfig: CatchConfig): {
+    archiveOlderThanDays: number
+    pruneOlderThanDays: number
+    hardDeleteOlderThanDays: number
+    pruneImportanceThreshold: number
+    pruneDryRun: boolean
+    pruneExcludeTags: string[] | undefined
+    metricsExport: ServerOptions['metricsExport']
+    persistMetrics: boolean
+    metricsPath: string | undefined
+    metricsPort: number | undefined
+} {
+    return {
+        archiveOlderThanDays: catchConfig(() => resolver.resolveNumber('archiveOlderThanDays', 'ARCHIVE_OLDER_THAN_DAYS', 0) ?? 0, 0),
+        pruneOlderThanDays: catchConfig(() => resolver.resolveNumber('pruneOlderThanDays', 'PRUNE_OLDER_THAN_DAYS', 0) ?? 0, 0),
+        hardDeleteOlderThanDays: catchConfig(() => resolver.resolveNumber('hardDeleteOlderThanDays', 'HARD_DELETE_OLDER_THAN_DAYS', 0) ?? 0, 0),
+        pruneImportanceThreshold: resolvePruneImportanceThresholdOption(resolver, catchConfig),
+        pruneDryRun: catchConfig(() => resolver.resolveBool('pruneDryRun', 'PRUNE_DRY_RUN') ?? false, false),
+        pruneExcludeTags: catchConfig(() => resolver.resolveStringArray('pruneExcludeTags', 'PRUNE_EXCLUDE_TAGS'), undefined),
+        metricsExport: resolveMetricsExportOption(resolver, catchConfig),
+        persistMetrics: catchConfig(() => resolver.resolveBool('persistMetrics', 'PERSIST_METRICS') ?? false, false),
+        metricsPath: catchConfig(() => resolver.resolve<string>('metricsPath', 'METRICS_PATH'), undefined),
+        metricsPort: catchConfig(() => resolver.resolveInt('metricsPort', 'MJ_METRICS_PORT', 0, 65535), undefined),
+    }
+}
+
+export function collectCliEnvServerBaseline(
+    resolver: ConfigResolver,
+    command: CliCommandLike,
+    resolved: {
+        toolFilter: string | undefined
+        defaultWorkspaceId: string | undefined
+        defaultProjectNumber: number | undefined
+        projectRegistry: ServerOptions['projectRegistry']
+        briefingOverrides: Partial<Record<BriefingConfigurableKey, number | boolean>> | undefined
+    }
+): ConfigCliEnvBaseline {
+    const commandName = command.name()
+    const allowWorkspaceAsDefault = commandName === 'serve' || commandName === 'memory-journal-mcp'
+    const hasNonBlankEnv = (key: string): boolean => {
+        const v = process.env[key]
+        return v !== undefined && v.trim() !== ''
+    }
+    const toolFilterFromCliOrEnv =
+        resolver.isCliProvided('toolFilter') || hasNonBlankEnv('MEMORY_JOURNAL_MCP_TOOL_FILTER')
+    const wsFromCliOrEnv =
+        resolver.isCliProvided('defaultWorkspaceId') ||
+        (allowWorkspaceAsDefault && resolver.isCliProvided('workspace')) ||
+        hasNonBlankEnv('DEFAULT_WORKSPACE_ID')
+    const projFromCliOrEnv =
+        resolver.isCliProvided('defaultProject') ||
+        resolver.isCliProvided('defaultProjectNumber') ||
+        hasNonBlankEnv('DEFAULT_PROJECT_NUMBER')
+    const regFromCliOrEnv =
+        resolver.isCliProvided('projectRegistry') || hasNonBlankEnv('PROJECT_REGISTRY')
+    return {
+        ...(toolFilterFromCliOrEnv && resolved.toolFilter !== undefined
+            ? { rawToolFilter: resolved.toolFilter }
+            : {}),
+        ...(wsFromCliOrEnv && resolved.defaultWorkspaceId !== undefined
+            ? { defaultWorkspaceId: resolved.defaultWorkspaceId }
+            : {}),
+        ...(projFromCliOrEnv && resolved.defaultProjectNumber !== undefined
+            ? { defaultProjectNumber: resolved.defaultProjectNumber }
+            : {}),
+        ...(regFromCliOrEnv && resolved.projectRegistry !== undefined
+            ? { projectRegistry: resolved.projectRegistry }
+            : {}),
+        ...(resolved.briefingOverrides !== undefined
+            ? { briefingOverrides: resolved.briefingOverrides }
+            : {}),
+    }
 }

@@ -1,6 +1,6 @@
 import { QueryError } from '../../types/errors.js'
 import { isMissingTableError } from './schema-errors.js'
-import { getSingleRow } from './row-helpers.js'
+import { getSingleRow, runImmediateWriteTx } from './row-helpers.js'
 import type { IDatabaseConnection, TeamMember, TeamRole } from '../core/interfaces.js'
 
 export class MembersManager {
@@ -40,30 +40,60 @@ export class MembersManager {
 
     addMember(author: string, role: TeamRole, addedBy?: string, displayName?: string): TeamMember {
         try {
-            if (!this.isRbacActive() && role !== 'admin') {
-                throw new QueryError(
-                    `First team member must be bootstrapped with the 'admin' role (received '${role}')`
-                )
-            }
-            const existing = this.getMember(author)
-            if (existing) {
-                throw new QueryError(`Failed to add team member: Member already exists (${author})`)
-            }
-
             const nativeDb = this.db.getNativeDb?.()
-            if (nativeDb !== undefined) {
-                nativeDb
-                    .prepare(
-                        `INSERT INTO team_members (author, role, added_by, display_name)
-                         VALUES (?, ?, ?, ?)`
-                    )
-                    .run(author, role, addedBy ?? null, displayName ?? null)
+            if (nativeDb !== undefined && typeof nativeDb.transaction === 'function') {
+                runImmediateWriteTx(nativeDb, () => {
+                    const countRow = nativeDb
+                        .prepare(`SELECT COUNT(*) as count FROM team_members`)
+                        .get() as { count?: unknown } | undefined
+                    const isActive =
+                        typeof countRow?.count === 'number' && countRow.count > 0
+                    if (!isActive && role !== 'admin') {
+                        throw new QueryError(
+                            `First team member must be bootstrapped with the 'admin' role (received '${role}')`
+                        )
+                    }
+                    const existing = nativeDb
+                        .prepare(`SELECT id FROM team_members WHERE author = ? COLLATE NOCASE`)
+                        .get(author) as { id?: unknown } | undefined
+                    if (existing !== undefined) {
+                        throw new QueryError(
+                            `Failed to add team member: Member already exists (${author})`
+                        )
+                    }
+                    nativeDb
+                        .prepare(
+                            `INSERT INTO team_members (author, role, added_by, display_name)
+                             VALUES (?, ?, ?, ?)`
+                        )
+                        .run(author, role, addedBy ?? null, displayName ?? null)
+                })
             } else {
-                this.db.run(
-                    `INSERT INTO team_members (author, role, added_by, display_name)
-                     VALUES (?, ?, ?, ?)`,
-                    [author, role, addedBy ?? null, displayName ?? null]
-                )
+                if (!this.isRbacActive() && role !== 'admin') {
+                    throw new QueryError(
+                        `First team member must be bootstrapped with the 'admin' role (received '${role}')`
+                    )
+                }
+                const existing = this.getMember(author)
+                if (existing) {
+                    throw new QueryError(
+                        `Failed to add team member: Member already exists (${author})`
+                    )
+                }
+                if (nativeDb !== undefined) {
+                    nativeDb
+                        .prepare(
+                            `INSERT INTO team_members (author, role, added_by, display_name)
+                             VALUES (?, ?, ?, ?)`
+                        )
+                        .run(author, role, addedBy ?? null, displayName ?? null)
+                } else {
+                    this.db.run(
+                        `INSERT INTO team_members (author, role, added_by, display_name)
+                         VALUES (?, ?, ?, ?)`,
+                        [author, role, addedBy ?? null, displayName ?? null]
+                    )
+                }
             }
 
             this.invalidateCache()

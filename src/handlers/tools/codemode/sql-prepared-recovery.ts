@@ -84,12 +84,12 @@ function parseSingleArgToken(rawToken: string): unknown {
     if (trimmed === 'true') return true
     if (trimmed === 'false') return false
     if (/^-?\d+(?:\.\d+)?$/.test(trimmed)) return Number(trimmed)
-    if (
-        (trimmed.startsWith('"') && trimmed.endsWith('"')) ||
-        (trimmed.startsWith("'") && trimmed.endsWith("'")) ||
-        (trimmed.startsWith('`') && trimmed.endsWith('`') && !trimmed.includes('${'))
-    ) {
-        return unescapeStringLiteral(trimmed.slice(1, -1))
+    if (trimmed.startsWith('"') || trimmed.startsWith("'") || trimmed.startsWith('`')) {
+        const quoted = scanBalancedQuotedString(trimmed, 0)
+        if (quoted?.closeQuoteIdx !== trimmed.length - 1) {
+            return UNPARSEABLE_ARG
+        }
+        return unescapeStringLiteral(quoted.value)
     }
     if (trimmed.startsWith('JSON.stringify(') && trimmed.endsWith(')')) {
         try {
@@ -201,7 +201,7 @@ function extractPrepareSqlAt(
     let j = quoted.closeQuoteIdx + 1
     while (j < code.length && /\s/.test(code[j] ?? '')) j++
     if (code[j] !== ')') return null
-    return { sql: quoted.value.trim(), afterPrepareCloseIdx: j + 1 }
+    return { sql: unescapeStringLiteral(quoted.value).trim(), afterPrepareCloseIdx: j + 1 }
 }
 
 function findNextCodePrepareIdx(

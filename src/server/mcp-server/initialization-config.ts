@@ -26,19 +26,30 @@ function createServerConfigManager(
     const validBcWs = sanitizeDefaultWorkspaceId(options.briefingConfig?.defaultWorkspaceId)
     const resolvedDefaultWs = validBcWs ?? validDefaultWs
 
-    const cliEnvBaseline = {
-        ...(rawToolFilter !== undefined ? { rawToolFilter } : {}),
-        ...(validDefaultWs !== undefined ? { defaultWorkspaceId: validDefaultWs } : {}),
-        ...(options.defaultProjectNumber !== undefined
-            ? { defaultProjectNumber: options.defaultProjectNumber }
-            : {}),
-        ...(options.projectRegistry !== undefined
-            ? { projectRegistry: options.projectRegistry }
-            : {}),
-        ...(options.briefingOverrides !== undefined
-            ? { briefingOverrides: options.briefingOverrides }
-            : {}),
-    }
+    const explicitCliEnvBaseline =
+        options.cliEnvBaseline !== undefined
+            ? {
+                  ...options.cliEnvBaseline,
+                  ...(options.briefingOverrides !== undefined &&
+                  options.cliEnvBaseline.briefingOverrides === undefined
+                      ? { briefingOverrides: options.briefingOverrides }
+                      : {}),
+              }
+            : options.configFilePath === undefined
+              ? {
+                    ...(rawToolFilter !== undefined ? { rawToolFilter } : {}),
+                    ...(validDefaultWs !== undefined ? { defaultWorkspaceId: validDefaultWs } : {}),
+                    ...(options.defaultProjectNumber !== undefined
+                        ? { defaultProjectNumber: options.defaultProjectNumber }
+                        : {}),
+                    ...(options.projectRegistry !== undefined
+                        ? { projectRegistry: options.projectRegistry }
+                        : {}),
+                    ...(options.briefingOverrides !== undefined
+                        ? { briefingOverrides: options.briefingOverrides }
+                        : {}),
+                }
+              : undefined
 
     return new ConfigManager(
         {
@@ -62,7 +73,8 @@ function createServerConfigManager(
             codemodeInternalFullAccess: options.codemodeInternalFullAccess,
         },
         options.configFilePath,
-        cliEnvBaseline
+        explicitCliEnvBaseline,
+        options.briefingOverrides
     )
 }
 

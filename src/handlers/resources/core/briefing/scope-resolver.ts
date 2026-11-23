@@ -16,6 +16,7 @@ import { parseCanonicalPositiveInt } from '../../../../utils/safe-positive-int.j
 import { exactRegistryKey, uniqueWorkspaceForProject } from '../../../../utils/write-scope.js'
 import {
     type DEFAULT_BRIEFING_CONFIG,
+    resourceProjectNumber,
     resourceWorkspace,
     type ResourceContext,
 } from '../../shared.js'
@@ -34,27 +35,32 @@ function resolveDefaultBriefingScope(
     context: ResourceContext,
     config: typeof DEFAULT_BRIEFING_CONFIG,
     registry: ReturnType<typeof loadProjectRegistryFromConfig>,
-    activeWorkspaceId: string | undefined,
-    initialProjectNumber: number | undefined
+    activeWorkspaceId: string
 ): Pick<
     BriefingScopeResolution,
     'activeWorkspaceId' | 'activeProjectNumber' | 'activeRepoPath' | 'activeGithub'
 > {
     const hasRegistry = registry !== undefined && Object.keys(registry).length > 0
-    if (activeWorkspaceId && activeWorkspaceId !== 'default' && activeWorkspaceId !== '*') {
+    const trimmedDefaultWs = config.defaultWorkspaceId?.trim()
+    const runtimeProp = context.runtime !== undefined ? { runtime: context.runtime } : {}
+    if (activeWorkspaceId !== 'default' && activeWorkspaceId !== '*') {
         const canonicalKey = findCanonicalRegistryKey(activeWorkspaceId, registry) ?? activeWorkspaceId
         const registryEntry = registry?.[canonicalKey]
         const repoPath = registryEntry?.path
         const hasRepoPath = repoPath !== undefined && repoPath.trim() !== ''
-        const matchesDefaultWs =
-            config.defaultWorkspaceId?.trim().toLowerCase() === canonicalKey.toLowerCase()
-        const resolvedProj =
-            registryEntry?.project_number ?? (matchesDefaultWs ? initialProjectNumber : undefined)
+        const matchesDefaultWs = trimmedDefaultWs?.toLowerCase() === canonicalKey.toLowerCase()
+        const scopedConfig =
+            trimmedDefaultWs === undefined || matchesDefaultWs
+                ? config
+                : { ...config, defaultProjectNumber: undefined }
         return {
             activeWorkspaceId: canonicalKey,
             activeRepoPath: hasRepoPath ? repoPath : undefined,
             activeGithub: hasRepoPath ? getGitHubIntegration(repoPath, context.runtime) : undefined,
-            activeProjectNumber: resolvedProj,
+            activeProjectNumber: resourceProjectNumber(
+                { briefingConfig: scopedConfig, ...runtimeProp },
+                canonicalKey
+            ),
         }
     }
 
@@ -62,7 +68,10 @@ function resolveDefaultBriefingScope(
         const defaultEntry = registry?.['default']
         const defaultPath = defaultEntry?.path
         const hasDefaultPath = defaultPath !== undefined && defaultPath.trim() !== ''
-        const defaultWsIsDefault = config.defaultWorkspaceId?.trim().toLowerCase() === 'default'
+        const defaultWsIsDefault = trimmedDefaultWs?.toLowerCase() === 'default'
+        const scopedConfig = defaultWsIsDefault
+            ? config
+            : { ...config, defaultProjectNumber: undefined }
         return {
             activeWorkspaceId: 'default',
             activeRepoPath: hasDefaultPath ? defaultPath : undefined,
@@ -71,15 +80,16 @@ function resolveDefaultBriefingScope(
                 : hasRegistry || defaultWsIsDefault
                   ? undefined
                   : context.github,
-            activeProjectNumber:
-                defaultEntry?.project_number ??
-                (defaultWsIsDefault ? config.defaultProjectNumber : undefined),
+            activeProjectNumber: resourceProjectNumber(
+                { briefingConfig: scopedConfig, ...runtimeProp },
+                'default'
+            ),
         }
     }
 
     return {
         activeWorkspaceId,
-        activeProjectNumber: initialProjectNumber,
+        activeProjectNumber: undefined,
         activeRepoPath: undefined,
         activeGithub: context.github,
     }
@@ -178,6 +188,13 @@ function resolveExplicitBriefingTarget(
     }
     const configuredDefaultWs = config.defaultWorkspaceId?.trim()
     if (configuredDefaultWs?.toLowerCase() === trimmed.toLowerCase()) {
+        if (options?.pinSession !== false) {
+            setActiveSessionProject(
+                configuredDefaultWs,
+                config.defaultProjectNumber ?? null,
+                context.runtime
+            )
+        }
         return {
             registry,
             hasRegistry,
@@ -198,6 +215,9 @@ function resolveExplicitBriefingTarget(
             unresolvedRepo: trimmed,
         }
     }
+    if (options?.pinSession !== false) {
+        setActiveSessionProject(trimmed, null, context.runtime)
+    }
     return {
         registry,
         hasRegistry,
@@ -216,13 +236,14 @@ export function resolveBriefingScope(
 ): BriefingScopeResolution {
     const registry = config.projectRegistry ?? loadProjectRegistryFromConfig()
     const hasRegistry = registry !== undefined && Object.keys(registry).length > 0
-    if (targetRepo) {
+    const trimmedTarget = targetRepo?.trim()
+    if (trimmedTarget !== undefined && trimmedTarget !== '') {
         return resolveExplicitBriefingTarget(
             context,
             config,
             registry,
             hasRegistry,
-            targetRepo,
+            trimmedTarget,
             options
         )
     }
@@ -230,13 +251,6 @@ export function resolveBriefingScope(
         briefingConfig: config,
         ...(context.runtime !== undefined ? { runtime: context.runtime } : {}),
     })
-    const trimmedDefaultWs = config.defaultWorkspaceId?.trim()
-    const initialProjectNumber =
-        (trimmedDefaultWs === undefined && initialWorkspaceId !== 'default') ||
-        (initialWorkspaceId !== undefined &&
-            trimmedDefaultWs?.toLowerCase() === initialWorkspaceId.toLowerCase())
-            ? config.defaultProjectNumber
-            : undefined
     return {
         registry,
         hasRegistry,
@@ -244,8 +258,7 @@ export function resolveBriefingScope(
             context,
             config,
             registry,
-            initialWorkspaceId,
-            initialProjectNumber
+            initialWorkspaceId
         ),
     }
 }

@@ -227,7 +227,7 @@ function clearStaleLock(
         fs.renameSync(lockDir, staleDir)
         const movedLockFile = path.join(staleDir, path.basename(lockFile))
         const movedRecord = parseLockRecord(movedLockFile)
-        if (lockRecordChanged(expected, movedRecord) && !isLockStale(staleDir, movedLockFile, runtime).stale) {
+        if (lockRecordChanged(expected, movedRecord) && !isLockStale(lockDir, movedLockFile, runtime).stale) {
             try {
                 fs.renameSync(staleDir, lockDir)
             } catch {

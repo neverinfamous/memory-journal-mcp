@@ -215,7 +215,8 @@ export function applyActiveSessionScopeFallback(
             : undefined)
     const canFallbackProject =
         !suppressSessionFallback &&
-        (scope.workspaceId === undefined || scope.workspaceId === sessionProj.workspaceId)
+        (scope.workspaceId === undefined ||
+            scope.workspaceId.toLowerCase() === sessionProj.workspaceId?.toLowerCase())
     const projectNumber =
         scope.projectNumber ?? (canFallbackProject ? sessionProj.projectNumber : undefined)
     return {
@@ -317,33 +318,31 @@ function extractProjectNumberFromResourceUrl(parsed: URL): number | undefined {
     return undefined
 }
 
-export function extractAuditScopeFromUri(
-    uri: string,
-    reqCtx?: RequestContext,
-    runtime?: object | null,
-    skipSessionFallback = false
-): AuditScopeMetadata {
+export interface UriAuditScopeDetails {
+    scope: AuditScopeMetadata
+    explicitWildcardWorkspace: boolean
+    explicitInvalidProject: boolean
+}
+
+export function extractAuditScopeFromUriDetails(uri: string): UriAuditScopeDetails {
     let workspaceId: string | undefined
     let projectNumber: number | undefined
     let explicitWildcardWorkspace = false
-    let explicitZeroProject = false
+    let explicitInvalidProject = false
 
     try {
         const parsed = new URL(uri)
         const wsParam = parsed.searchParams.get('workspace_id')
         if (wsParam !== null) {
             const trimmedWs = wsParam.trim()
-            if (trimmedWs === '*') {
-                explicitWildcardWorkspace = true
-            } else if (trimmedWs.length > 0) {
-                workspaceId = sanitizeErrorForLogging(trimmedWs).slice(0, 255)
-            }
+            if (trimmedWs === '*') explicitWildcardWorkspace = true
+            else if (trimmedWs.length > 0) workspaceId = sanitizeErrorForLogging(trimmedWs).slice(0, 255)
         }
         const projParam = parsed.searchParams.get('project_number')
         if (projParam !== null && projParam.trim() !== '') {
             const n = parseCanonicalPositiveInt(projParam)
             if (n !== undefined) projectNumber = n
-            else explicitZeroProject = true
+            else explicitInvalidProject = true
         }
         if (workspaceId === undefined && !explicitWildcardWorkspace) {
             const rawRepo = extractRepoPathFromResourceUrl(parsed)
@@ -354,28 +353,48 @@ export function extractAuditScopeFromUri(
                 } catch {
                     decodedRepo = rawRepo
                 }
-                workspaceId = sanitizeErrorForLogging(decodedRepo).slice(0, 255)
+                if (decodedRepo.trim() === '*') explicitWildcardWorkspace = true
+                else workspaceId = sanitizeErrorForLogging(decodedRepo).slice(0, 255)
             }
         }
-        if (projectNumber === undefined && !explicitZeroProject) {
+        if (projectNumber === undefined && !explicitInvalidProject) {
             projectNumber = extractProjectNumberFromResourceUrl(parsed)
         }
     } catch {
         // Ignore malformed URI strings during audit extraction
     }
 
-    const baseScope: AuditScopeMetadata = {
-        ...(workspaceId !== undefined ? { workspaceId } : {}),
-        ...(projectNumber !== undefined ? { projectNumber } : {}),
-    }
-    if (skipSessionFallback) return baseScope
-    return applyActiveSessionScopeFallback(
-        baseScope,
-        reqCtx,
+    return {
+        scope: {
+            ...(workspaceId !== undefined ? { workspaceId } : {}),
+            ...(projectNumber !== undefined ? { projectNumber } : {}),
+        },
         explicitWildcardWorkspace,
+        explicitInvalidProject,
+    }
+}
+
+export function extractAuditScopeFromUri(
+    uri: string,
+    reqCtx?: RequestContext,
+    runtime?: object | null,
+    skipSessionFallback = false
+): AuditScopeMetadata {
+    const details = extractAuditScopeFromUriDetails(uri)
+    if (skipSessionFallback) return details.scope
+    return applyActiveSessionScopeFallback(
+        details.scope,
+        reqCtx,
+        details.explicitWildcardWorkspace,
         runtime,
-        explicitZeroProject
+        details.explicitInvalidProject
     )
+}
+
+function extractRecordText(val: unknown): string | undefined {
+    return typeof val === 'object' && val !== null && typeof (val as { text?: unknown }).text === 'string'
+        ? (val as { text: string }).text
+        : undefined
 }
 
 function estimateEnvelopeTextTokens(result: unknown): number | undefined {
@@ -384,15 +403,9 @@ function estimateEnvelopeTextTokens(result: unknown): number | undefined {
     if (Array.isArray(rec['contents'])) {
         let total = 0
         for (const item of rec['contents']) {
-            if (
-                typeof item === 'object' &&
-                item !== null &&
-                typeof (item as { text?: unknown }).text === 'string'
-            ) {
-                total += estimateTokens((item as { text: string }).text, 'json')
-            } else {
-                return undefined
-            }
+            const text = extractRecordText(item)
+            if (text === undefined) return undefined
+            total += estimateTokens(text, 'json')
         }
         return total
     }
@@ -401,15 +414,9 @@ function estimateEnvelopeTextTokens(result: unknown): number | undefined {
         for (const msg of rec['messages']) {
             const content =
                 typeof msg === 'object' && msg !== null ? (msg as { content?: unknown }).content : undefined
-            if (
-                typeof content === 'object' &&
-                content !== null &&
-                typeof (content as { text?: unknown }).text === 'string'
-            ) {
-                total += estimateTokens((content as { text: string }).text, 'prose')
-            } else {
-                return undefined
-            }
+            const text = extractRecordText(content)
+            if (text === undefined) return undefined
+            total += estimateTokens(text, 'prose')
         }
         return total
     }
@@ -424,20 +431,13 @@ export function estimateOperationResultTokens(result: unknown, name: string): nu
         try {
             return estimateTokens(safeJsonStringify(result), 'json')
         } catch (serializeError) {
-            // Serialization failure must not block execution
             logger.debug('Token estimate skipped: result is not serializable', {
                 module: 'Audit',
                 tool: name,
-                error:
-                    serializeError instanceof Error
-                        ? serializeError.message
-                        : String(serializeError),
+                error: serializeError instanceof Error ? serializeError.message : String(serializeError),
             })
             return undefined
         }
     }
-    if (typeof result === 'string') {
-        return estimateTokens(result, 'prose')
-    }
-    return undefined
+    return typeof result === 'string' ? estimateTokens(result, 'prose') : undefined
 }

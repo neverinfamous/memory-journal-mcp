@@ -404,9 +404,6 @@ export async function rollbackFailedRestore(
     ctx.closeDbBeforeRestore()
 
     const rollbackSuccess = await tryRollbackCopy(ctx, oldDbBackupPath)
-    if (rollbackSuccess) {
-        await unlinkBestEffort(oldDbBackupPath)
-    }
     await unlinkBestEffort(tempDbPath)
 
     if (!rollbackSuccess) {
@@ -425,5 +422,6 @@ export async function rollbackFailedRestore(
     }
 
     await ctx.initialize()
+    await unlinkBestEffort(oldDbBackupPath)
     throw error
 }

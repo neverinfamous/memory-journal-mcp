@@ -3,7 +3,7 @@ import type { Relationship, RelationshipType } from '../../types/index.js'
 import { ResourceNotFoundError } from '../../types/errors.js'
 import type { NativeConnectionManager } from './native-connection.js'
 import { effectiveWorkspace } from '../workspace-scope.js'
-import { bucketInParams, DUAL_IN_PARAM_BUCKETS } from './row-helpers.js'
+import { bucketInParams, DUAL_IN_PARAM_BUCKETS, runImmediateWriteTx } from './row-helpers.js'
 import {
     queryActiveThreads,
     queryEntriesSharingAnchors,
@@ -40,30 +40,36 @@ export class RelationshipsManager {
         // Omitted workspace stays unscoped so both endpoints must share one workspace. '*' stays unscoped.
         const scopeId = workspaceId === undefined ? undefined : effectiveWorkspace(workspaceId)
         const scoped = scopeId !== undefined && scopeId !== '*'
-        const wsStmt = db.prepare(
-            `SELECT workspace_id FROM memory_journal WHERE id = ? AND deleted_at IS NULL${scoped ? ' AND workspace_id = ?' : ''}`
-        )
-        const getWs = (entryId: number): { workspace_id: string } | undefined =>
-            (scoped ? wsStmt.get(entryId, scopeId) : wsStmt.get(entryId)) as
-                | { workspace_id: string }
-                | undefined
-        const fromRow = getWs(fromEntryId)
-        if (!fromRow) {
-            throw new ResourceNotFoundError('Entry', String(fromEntryId))
-        }
-        const toRow = getWs(toEntryId)
-        if (!toRow || (workspaceId === undefined && fromRow.workspace_id !== toRow.workspace_id)) {
-            throw new ResourceNotFoundError('Entry', String(toEntryId))
-        }
-
-        const result = db
-            .prepare(
-                `INSERT INTO relationships (from_entry_id, to_entry_id, relationship_type, description)
-                 VALUES (?, ?, ?, ?)`
+        const performInsert = (): number => {
+            const wsStmt = db.prepare(
+                `SELECT workspace_id FROM memory_journal WHERE id = ? AND deleted_at IS NULL${scoped ? ' AND workspace_id = ?' : ''}`
             )
-            .run(fromEntryId, toEntryId, relationshipType, description ?? null)
+            const getWs = (entryId: number): { workspace_id: string } | undefined =>
+                (scoped ? wsStmt.get(entryId, scopeId) : wsStmt.get(entryId)) as
+                    | { workspace_id: string }
+                    | undefined
+            const fromRow = getWs(fromEntryId)
+            if (!fromRow) {
+                throw new ResourceNotFoundError('Entry', String(fromEntryId))
+            }
+            const toRow = getWs(toEntryId)
+            if (!toRow || (workspaceId === undefined && fromRow.workspace_id !== toRow.workspace_id)) {
+                throw new ResourceNotFoundError('Entry', String(toEntryId))
+            }
 
-        const id = result.lastInsertRowid as number
+            const result = db
+                .prepare(
+                    `INSERT INTO relationships (from_entry_id, to_entry_id, relationship_type, description)
+                     VALUES (?, ?, ?, ?)`
+                )
+                .run(fromEntryId, toEntryId, relationshipType, description ?? null)
+
+            return result.lastInsertRowid as number
+        }
+        const id =
+            typeof db.transaction === 'function'
+                ? runImmediateWriteTx(db, performInsert)
+                : performInsert()
 
         this.ctx.scheduleSave()
 

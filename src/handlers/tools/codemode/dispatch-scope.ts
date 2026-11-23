@@ -8,7 +8,10 @@ import { isRecord } from '../../../codemode/normalizers/shared-utils.js'
 import { activeProjectRegistry, pairStoredScope } from '../../../utils/write-scope.js'
 import { parseCanonicalPositiveInt } from '../../../utils/safe-positive-int.js'
 import { lookupRegistryEntry } from './session-context.js'
-import { normalizeBatchDispatchItems, parseCanonicalMoveEntryId } from './dispatch-batch-scope.js'
+import {
+    buildPostRbacSideEffects,
+    prepareBatchDispatch,
+} from './dispatch-batch-scope.js'
 import { checkSchemaAcceptsKey } from './dispatch-schema-introspection.js'
 import { autoPopulateGithubUrls } from './dispatch-github-urls.js'
 import { deepCamelToSnake } from './dispatch-key-normalizer.js'
@@ -22,6 +25,7 @@ export interface DispatchParamContext {
     explicitWorkspace?: boolean
     sessionId?: string | undefined
     rpcPinnedProject?: boolean | undefined
+    deferSideEffects?: boolean | undefined
 }
 
 export function isDefaultWorkspaceName(value: unknown): boolean {
@@ -80,8 +84,11 @@ function normalizeWorkspaceStringField(paramsObj: Record<string, unknown>): void
         }
         delete paramsObj['workspaceId']
     }
-    if (paramsObj['workspace'] !== undefined && paramsObj['workspace_id'] === undefined) {
-        paramsObj['workspace_id'] = paramsObj['workspace']
+    if (paramsObj['workspace'] !== undefined) {
+        if (paramsObj['workspace_id'] === undefined) {
+            paramsObj['workspace_id'] = paramsObj['workspace']
+        }
+        delete paramsObj['workspace']
     }
     if (typeof paramsObj['workspace_id'] === 'number') {
         paramsObj['workspace_id'] = String(paramsObj['workspace_id'])
@@ -323,63 +330,14 @@ function applyRootSessionInheritance(
     }
 }
 
-function verifyWildcardUpdateSourceProject(
-    tool: ToolDefinition,
-    paramsObj: Record<string, unknown>,
-    flags: RootScopeFlags,
-    sessionContext: ToolContext,
-    workspaceId: string | undefined,
-    projectId: number | string | undefined
-): Record<string, unknown> | undefined {
-    const effectiveWs =
-        typeof paramsObj['workspace_id'] === 'string' ? paramsObj['workspace_id'].trim() : workspaceId
-    if (
-        tool.name !== 'update_entry' ||
-        !flags.hasCrossWorkspaceTarget ||
-        typeof projectId !== 'number' ||
-        (effectiveWs !== '*' && !isDefaultWorkspaceName(effectiveWs))
-    ) {
-        return undefined
-    }
-    const parsedEntryId = parseCanonicalMoveEntryId(paramsObj)
-    if (parsedEntryId === undefined) {
-        return {
-            success: false,
-            error: 'Cross-workspace move from wildcard/default source requires a valid positive integer entry_id.',
-            code: 'VALIDATION_ERROR',
-            category: 'validation',
-            recoverable: true,
-        }
-    }
-    if (typeof sessionContext.db?.getEntryById !== 'function') {
-        return undefined
-    }
-    const sourceEntry = sessionContext.db.getEntryById(parsedEntryId, '*')
-    const sourceProject = sourceEntry?.projectNumber
-    if (
-        sourceProject !== null &&
-        sourceProject !== undefined &&
-        sourceProject > 0 &&
-        sourceProject !== projectId
-    ) {
-        return {
-            success: false,
-            error: `Entry ${String(parsedEntryId)} not found`,
-            code: 'RESOURCE_NOT_FOUND',
-            category: 'resource',
-            suggestion:
-                "🛠️ AUTONOMOUS HEALING: Cross-workspace moves from another project are blocked when mj_execute_code pins a different top-level project_number. Re-run mj_execute_code with workspace_id: '*' (omitting top-level project_number) and call mj.admin.updateEntry({ entry_id, workspace_id: '*', target_workspace_id }) without inner project_number.",
-            recoverable: true,
-        }
-    }
-    return undefined
-}
-
 export async function normalizeDispatchParams(
     tool: ToolDefinition,
     toolParams: unknown,
     ctx: DispatchParamContext
-): Promise<{ params: unknown } | { errorResult: Record<string, unknown> }> {
+): Promise<
+    | { params: unknown; postRbacCheck?: () => Promise<Record<string, unknown> | undefined> }
+    | { errorResult: Record<string, unknown> }
+> {
     const { sessionContext, projectId, workspaceId, explicitWorkspace } = ctx
     const finalParams = deepCamelToSnake(toolParams, 0, (key) => checkSchemaAcceptsKey(tool.inputSchema, key))
     if (!isRecord(finalParams)) return { params: finalParams }
@@ -406,41 +364,38 @@ export async function normalizeDispatchParams(
     }
 
     const flags = resolveRootScopePairing(tool, paramsObj, reg, ctx, aliasDerivedWs)
-    const sourceErr = verifyWildcardUpdateSourceProject(tool, paramsObj, flags, sessionContext, workspaceId, projectId)
-    if (sourceErr !== undefined) return { errorResult: sourceErr }
-
-    const batchArrayKey =
-        (tool.name === 'batch_create_entries' || tool.name === 'team_batch_create_entries') &&
-        Array.isArray(paramsObj['entries'])
-            ? 'entries'
-            : (tool.name === 'batch_update_entries' || tool.name === 'team_batch_update_entries') &&
-                Array.isArray(paramsObj['updates'])
-              ? 'updates'
-              : undefined
-
-    if (batchArrayKey !== undefined) {
-        if (
-            (tool.name === 'batch_update_entries' || tool.name === 'team_batch_update_entries') &&
-            paramsObj['project_number'] === undefined &&
-            typeof projectId === 'number' &&
-            (paramsObj['workspace_id'] === '*' || (paramsObj['workspace_id'] === undefined && workspaceId === '*'))
-        ) {
-            paramsObj['project_number'] = projectId
-        }
-        const effectiveBatchSessionId =
-            typeof paramsObj['session_id'] === 'string' && paramsObj['session_id'].trim() !== ''
-                ? paramsObj['session_id'].trim()
-                : ctx.sessionId
-        const batchError = normalizeBatchDispatchItems(batchArrayKey, paramsObj, reg, {
-            projectId, workspaceId, explicitWorkspace, sessionId: effectiveBatchSessionId,
-            toolName: tool.name, sessionContext, isDefaultWorkspaceName, coerceProjectNumberField,
-        })
-        if (batchError !== undefined) return batchError
-    } else {
+    const parentWorkspaceId = paramsObj['workspace_id']
+    const batchPrep = prepareBatchDispatch(tool, paramsObj, reg, {
+        projectId,
+        workspaceId,
+        explicitWorkspace,
+        sessionId: ctx.sessionId,
+        sessionContext,
+        isDefaultWorkspaceName,
+        coerceProjectNumberField,
+    })
+    if ('errorResult' in batchPrep) return batchPrep
+    if (batchPrep.batchArrayKey === undefined) {
         applyRootSessionInheritance(tool, paramsObj, ctx, flags, reg)
     }
-    if (checkSchemaAcceptsKey(tool.inputSchema, 'issue_url') || checkSchemaAcceptsKey(tool.inputSchema, 'pr_url')) {
-        await autoPopulateGithubUrls(paramsObj, sessionContext, workspaceId, projectId)
-    }
-    return { params: paramsObj }
+
+    const postRbacCheck = buildPostRbacSideEffects({
+        tool,
+        paramsObj,
+        hasCrossWorkspaceTarget: flags.hasCrossWorkspaceTarget,
+        batchArrayKey: batchPrep.batchArrayKey,
+        parentWorkspaceId,
+        batchCtx: batchPrep.batchCtx,
+        sessionContext,
+        workspaceId,
+        projectId,
+        isDefaultWorkspaceName,
+        acceptsGithubUrls:
+            checkSchemaAcceptsKey(tool.inputSchema, 'issue_url') ||
+            checkSchemaAcceptsKey(tool.inputSchema, 'pr_url'),
+        autoPopulateGithubUrls,
+    })
+    if (ctx.deferSideEffects === true) return { params: paramsObj, postRbacCheck }
+    const postErr = await postRbacCheck()
+    return postErr !== undefined ? { errorResult: postErr } : { params: paramsObj }
 }

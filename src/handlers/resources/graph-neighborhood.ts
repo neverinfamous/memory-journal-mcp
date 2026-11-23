@@ -37,8 +37,10 @@ function readIntParam(uri: string, key: string, fallback: number, min: number, m
     if (queryIdx === -1) return fallback
     const hashIdx = uri.indexOf('#', queryIdx)
     const raw = new URLSearchParams(hashIdx === -1 ? uri.slice(queryIdx + 1) : uri.slice(queryIdx + 1, hashIdx)).get(key)
-    if (raw === null || !/^\d+$/.test(raw.trim())) return fallback
-    return Math.min(max, Math.max(min, Number.parseInt(raw.trim(), 10)))
+    if (raw === null) return fallback
+    const parsed = parseCanonicalPositiveInt(raw)
+    if (parsed === undefined) return fallback
+    return Math.min(max, Math.max(min, parsed))
 }
 
 function resolveGraphWorkspace(

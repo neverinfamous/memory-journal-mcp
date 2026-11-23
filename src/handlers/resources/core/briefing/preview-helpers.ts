@@ -6,8 +6,9 @@
  * stripping, CMS-04 heading skipping and home-path redaction. Callers fence the result.
  */
 
-const PREVIEW_FENCE_WRAPPER_RE =
-    /^<untrusted_remote_content>\r?\n?([\s\S]*?)\r?\n?<\/untrusted_remote_content>$/i
+const PREVIEW_FENCE_OPEN_RE = /^<untrusted_remote_content>\r?\n?/i
+const PREVIEW_FENCE_CLOSE_RE = /\r?\n?<\/untrusted_remote_content>$/i
+const CLOSING_FENCE_TAG_RE = /<\/untrusted_remote_content>/i
 const INLINE_FENCE_TAG_RE = /<\/?untrusted_remote_content>/gi
 
 /** CMS-04 session-summary H2 headings and standalone `# Session Summary` carry no signal alone. */
@@ -18,8 +19,8 @@ const CMS_INLINE_HEADING_RE =
     /^#{1,6}\s*(?:[^\w#]*\s*)?(?:Accomplished|Unfinished\s*\/\s*Blocked|Context for Next Session|Commits)\s*[-:–—]\s*/i
 /** Commit-narrative trailer lines (`Commit: <sha>`, `**Commit**: <sha>`) duplicate `→#id`. */
 const COMMIT_TRAILER_RE = /^(?:\*\*)?Commit:?(?:\*\*)?:?\s*`?[0-9a-f]{7,40}`?\s*$/i
-/** Code fence openers/closers and markdown horizontal rules carry no summary signal. */
-const CODE_FENCE_LINE_RE = /^(?:`{3,}|~{3,})/
+/** CommonMark code fence openers (` ``` ` with no backticks in info string, or `~~~`) and horizontal rules. */
+const CODE_FENCE_OPEN_RE = /^[ ]{0,3}(?:(`{3,})[^`]*$|(~{3,}))/
 const HORIZONTAL_RULE_RE = /^[-*_]{3,}\s*$/
 
 const LEADING_MARKER_RES: readonly RegExp[] = [
@@ -57,19 +58,44 @@ export function redactHomePaths(text: string): string {
         .replace(/(?<![\w.~])\/(?:home|Users)\/[^/\s<>`"')\].,:;]+/g, '~')
 }
 
+function unwrapSinglePreviewFence(trimmed: string): string | null {
+    const openMatch = PREVIEW_FENCE_OPEN_RE.exec(trimmed)
+    const closeMatch = PREVIEW_FENCE_CLOSE_RE.exec(trimmed)
+    if (openMatch === null || closeMatch === null) return null
+    const closeStart = trimmed.length - closeMatch[0].length
+    if (closeStart < openMatch[0].length) return null
+    const inner = trimmed.slice(openMatch[0].length, closeStart)
+    if (CLOSING_FENCE_TAG_RE.test(inner)) return null
+    return inner.replaceAll('&lt;', '<').replaceAll('&gt;', '>').replaceAll('&amp;', '&')
+}
+
 function unwrapFence(content: string): string {
-    const trimmed = content.trim()
-    const fencedMatch = PREVIEW_FENCE_WRAPPER_RE.exec(trimmed)
-    const raw =
-        fencedMatch?.[1] ??
-        (INLINE_FENCE_TAG_RE.test(trimmed)
-            ? trimmed.replace(INLINE_FENCE_TAG_RE, '')
-            : content)
-    INLINE_FENCE_TAG_RE.lastIndex = 0
-    if (fencedMatch?.[1] !== undefined) {
-        return raw.replaceAll('&lt;', '<').replaceAll('&gt;', '>').replaceAll('&amp;', '&')
+    let current = content
+    for (let pass = 0; pass < 8; pass++) {
+        const trimmed = current.trim()
+        const unwrapped = unwrapSinglePreviewFence(trimmed)
+        const next =
+            unwrapped ??
+            (INLINE_FENCE_TAG_RE.test(trimmed)
+                ? trimmed.replace(INLINE_FENCE_TAG_RE, '')
+                : current)
+        INLINE_FENCE_TAG_RE.lastIndex = 0
+        if (next === current) break
+        current = next
     }
-    return raw
+    return current
+}
+
+function isClosingCodeFence(line: string, fenceChar: string, fenceLen: number): boolean {
+    let idx = 0
+    while (idx < 3 && line[idx] === ' ') idx++
+    let count = 0
+    while (line[idx] === fenceChar) {
+        count++
+        idx++
+    }
+    if (count < fenceLen) return false
+    return line.slice(idx).trim() === ''
 }
 
 function stripLeadingMarkers(line: string): string {
@@ -96,15 +122,27 @@ function stripLineMarkers(line: string): string {
 export function previewLines(content: string | null | undefined): string[] {
     if (content === null || content === undefined || content === '') return []
     const lines: string[] = []
-    let inCodeFence = false
+    let openFenceChar: string | null = null
+    let openFenceLen = 0
     for (const raw of redactHomePaths(unwrapFence(content)).split(/\r?\n/)) {
-        const trimmed = raw.trim()
-        if (CODE_FENCE_LINE_RE.test(trimmed)) {
-            inCodeFence = !inCodeFence
+        const lineNoCr = raw.replace(/\r$/, '')
+        if (openFenceChar === null) {
+            const openMatch = CODE_FENCE_OPEN_RE.exec(lineNoCr)
+            const fenceMarker = openMatch?.[1] ?? openMatch?.[2]
+            if (fenceMarker !== undefined) {
+                openFenceChar = fenceMarker[0] ?? '`'
+                openFenceLen = fenceMarker.length
+                continue
+            }
+        } else {
+            if (isClosingCodeFence(lineNoCr, openFenceChar, openFenceLen)) {
+                openFenceChar = null
+                openFenceLen = 0
+            }
             continue
         }
+        const trimmed = raw.trim()
         if (
-            inCodeFence ||
             trimmed === '' ||
             HORIZONTAL_RULE_RE.test(trimmed) ||
             CMS_HEADING_RE.test(trimmed) ||

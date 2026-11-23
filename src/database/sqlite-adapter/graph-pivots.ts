@@ -108,6 +108,11 @@ export function queryRelationshipDegrees(
  * peer itself is recent and are soft-capped so one-shot consolidation/NREM rollups never drown
  * out active multi-entry threads.
  */
+function utcDateFloor(iso: string): string {
+    const ms = Date.parse(iso)
+    return Number.isFinite(ms) ? new Date(ms).toISOString().slice(0, 10) : iso.slice(0, 10)
+}
+
 export function queryActiveThreads(
     db: Database,
     sinceIso: string,
@@ -118,7 +123,7 @@ export function queryActiveThreads(
     const { scoped, id: ws } = scopeOf(workspaceId)
     const fromWs = scoped ? ' AND mf.workspace_id = ?' : ''
     const toWs = scoped ? ' AND mt.workspace_id = ?' : ''
-    const sinceFloor = sinceIso.slice(0, 10)
+    const sinceFloor = utcDateFloor(sinceIso)
     const params: unknown[] = scoped
         ? [sinceFloor, sinceIso, ws, ws, nowIso, nowIso, sinceFloor, sinceIso, limit]
         : [sinceFloor, sinceIso, nowIso, nowIso, sinceFloor, sinceIso, limit]
@@ -188,7 +193,7 @@ export function queryRecentLinkageStats(
 ): RecentLinkageStats {
     const { scoped, id: ws } = scopeOf(workspaceId)
     const entryWs = scoped ? ' AND e.workspace_id = ?' : ''
-    const sinceFloor = sinceIso.slice(0, 10)
+    const sinceFloor = utcDateFloor(sinceIso)
     // Bind order: linkedPredicate peer workspace (x2), outer workspace, coarse floor, window start.
     const params: unknown[] = scoped ? [ws, ws, ws, sinceFloor, sinceIso] : [sinceFloor, sinceIso]
     const row = db
@@ -281,7 +286,7 @@ export function queryRecentNeighborhood(
     const { scoped, id: ws } = scopeOf(workspaceId)
     const recentWs = scoped ? ' AND workspace_id = ?' : ''
     const endpointWs = scoped ? ' WHERE mf.workspace_id = ? AND mt.workspace_id = ?' : ''
-    const sinceFloor = sinceIso.slice(0, 10)
+    const sinceFloor = utcDateFloor(sinceIso)
     const edgeRows = db
         .prepare(
             `WITH recent AS MATERIALIZED (
@@ -351,15 +356,25 @@ export function queryEntriesSharingAnchors(
     workspaceId?: string,
     projectNumber?: number
 ): { entryId: number; entryType: string; content: string; sharedAnchors: number }[] {
+    if (
+        projectNumber !== undefined &&
+        (!Number.isSafeInteger(projectNumber) || projectNumber <= 0)
+    ) {
+        return []
+    }
     const { scoped, id: ws } = scopeOf(workspaceId)
+    const hasProj = projectNumber !== undefined
     const entryWs = scoped ? ' AND m.workspace_id = ?' : ''
     const mineWs = scoped ? ' AND me.workspace_id = ?' : ''
-    const projClause = projectNumber !== undefined ? ' AND m.project_number = ?' : ''
+    const mineProj = hasProj ? ' AND me.project_number = ?' : ''
+    const projClause = hasProj ? ' AND m.project_number = ?' : ''
     const params: unknown[] = [
-        ...(scoped ? [ws, ws] : []),
+        ...(scoped ? [ws] : []),
+        ...(hasProj ? [projectNumber] : []),
+        ...(scoped ? [ws] : []),
         entryId,
         sinceIso,
-        ...(projectNumber !== undefined ? [projectNumber] : []),
+        ...(hasProj ? [projectNumber] : []),
         limit,
     ]
     const rows = db
@@ -367,7 +382,7 @@ export function queryEntriesSharingAnchors(
             `SELECT m.id AS entry_id, m.entry_type AS entry_type, m.content AS content,
                     COUNT(DISTINCT other.anchor_path) AS shared
              FROM entry_anchors mine
-             JOIN memory_journal me ON me.id = mine.entry_id AND me.deleted_at IS NULL${mineWs}
+             JOIN memory_journal me ON me.id = mine.entry_id AND me.deleted_at IS NULL${mineWs}${mineProj}
              JOIN entry_anchors other ON other.anchor_path = mine.anchor_path AND other.entry_id != mine.entry_id
              JOIN memory_journal m ON m.id = other.entry_id AND m.deleted_at IS NULL${entryWs}
              WHERE mine.entry_id = ? AND julianday(m.timestamp) >= julianday(?)${projClause}

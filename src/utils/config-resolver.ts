@@ -286,8 +286,14 @@ export class ConfigResolver {
         envKey?: string
     ): boolean | undefined {
         const val = this.resolve<unknown>(cliKey, envKey)
-        if (val === undefined || val === null || (typeof val === 'string' && val.trim() === '')) return undefined
-        
+        if (val === undefined || val === null) return undefined
+        if (typeof val === 'string' && val.trim() === '') {
+            if (this.isCliProvided(cliKey) || this.hasConfigFileKey(cliKey)) {
+                throw new ConfigurationError(`Invalid blank boolean configuration for ${cliKey}`)
+            }
+            return undefined
+        }
+
         if (typeof val === 'boolean') return val
         if (typeof val === 'string') {
             const normalized = val.trim().toLowerCase()

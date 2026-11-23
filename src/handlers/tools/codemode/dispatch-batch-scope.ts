@@ -2,7 +2,7 @@
  * Per-item batch parameter normalization helpers for Code Mode dispatch scope enforcement.
  */
 
-import type { ToolContext } from '../../../types/index.js'
+import type { ToolDefinition, ToolContext } from '../../../types/index.js'
 import { ValidationError } from '../../../types/errors.js'
 import { isRecord } from '../../../codemode/normalizers/shared-utils.js'
 import { pairStoredScope } from '../../../utils/write-scope.js'
@@ -15,6 +15,7 @@ export interface BatchScopeHelpersContext {
     sessionId?: string | undefined
     toolName?: string | undefined
     sessionContext?: ToolContext | undefined
+    deferWildcardCheck?: boolean | undefined
     isDefaultWorkspaceName: (value: unknown) => boolean
     coerceProjectNumberField: (
         obj: Record<string, unknown>,
@@ -188,7 +189,7 @@ export function parseCanonicalMoveEntryId(record: Record<string, unknown>): numb
         : undefined
 }
 
-function verifyBatchWildcardMoveProjects(
+export function verifyBatchWildcardMoveProjects(
     batchArrayKey: 'entries' | 'updates',
     nextItems: readonly unknown[],
     parentWorkspaceId: unknown,
@@ -247,6 +248,59 @@ function verifyBatchWildcardMoveProjects(
     return undefined
 }
 
+export function verifyWildcardUpdateSourceProject(
+    tool: ToolDefinition,
+    paramsObj: Record<string, unknown>,
+    hasCrossWorkspaceTarget: boolean,
+    sessionContext: ToolContext,
+    workspaceId: string | undefined,
+    projectId: number | string | undefined,
+    isDefaultWorkspaceNameFn: (value: unknown) => boolean
+): Record<string, unknown> | undefined {
+    const effectiveWs =
+        typeof paramsObj['workspace_id'] === 'string' ? paramsObj['workspace_id'].trim() : workspaceId
+    if (
+        tool.name !== 'update_entry' ||
+        !hasCrossWorkspaceTarget ||
+        typeof projectId !== 'number' ||
+        (effectiveWs !== '*' && !isDefaultWorkspaceNameFn(effectiveWs))
+    ) {
+        return undefined
+    }
+    const parsedEntryId = parseCanonicalMoveEntryId(paramsObj)
+    if (parsedEntryId === undefined) {
+        return {
+            success: false,
+            error: 'Cross-workspace move from wildcard/default source requires a valid positive integer entry_id.',
+            code: 'VALIDATION_ERROR',
+            category: 'validation',
+            recoverable: true,
+        }
+    }
+    if (typeof sessionContext.db?.getEntryById !== 'function') {
+        return undefined
+    }
+    const sourceEntry = sessionContext.db.getEntryById(parsedEntryId, '*')
+    const sourceProject = sourceEntry?.projectNumber
+    if (
+        sourceProject !== null &&
+        sourceProject !== undefined &&
+        sourceProject > 0 &&
+        sourceProject !== projectId
+    ) {
+        return {
+            success: false,
+            error: `Entry ${String(parsedEntryId)} not found`,
+            code: 'RESOURCE_NOT_FOUND',
+            category: 'resource',
+            suggestion:
+                "🛠️ AUTONOMOUS HEALING: Cross-workspace moves from another project are blocked when mj_execute_code pins a different top-level project_number. Re-run mj_execute_code with workspace_id: '*' (omitting top-level project_number) and call mj.admin.updateEntry({ entry_id, workspace_id: '*', target_workspace_id }) without inner project_number.",
+            recoverable: true,
+        }
+    }
+    return undefined
+}
+
 export function normalizeBatchDispatchItems(
     batchArrayKey: 'entries' | 'updates',
     paramsObj: Record<string, unknown>,
@@ -290,8 +344,92 @@ export function normalizeBatchDispatchItems(
         )
         nextItems.push(nextItem)
     }
-    const wildcardErr = verifyBatchWildcardMoveProjects(batchArrayKey, nextItems, parentWorkspaceId, ctx)
-    if (wildcardErr !== undefined) return wildcardErr
+    if (ctx.deferWildcardCheck !== true) {
+        const wildcardErr = verifyBatchWildcardMoveProjects(batchArrayKey, nextItems, parentWorkspaceId, ctx)
+        if (wildcardErr !== undefined) return wildcardErr
+    }
     paramsObj[batchArrayKey] = nextItems
     return undefined
+}
+
+export function buildPostRbacSideEffects(opts: {
+    tool: ToolDefinition
+    paramsObj: Record<string, unknown>
+    hasCrossWorkspaceTarget: boolean
+    batchArrayKey: 'entries' | 'updates' | undefined
+    parentWorkspaceId: unknown
+    batchCtx: BatchScopeHelpersContext | undefined
+    sessionContext: ToolContext
+    workspaceId: string | undefined
+    projectId: number | string | undefined
+    isDefaultWorkspaceName: (value: unknown) => boolean
+    acceptsGithubUrls: boolean
+    autoPopulateGithubUrls: (
+        paramsObj: Record<string, unknown>,
+        sessionContext: ToolContext,
+        workspaceId: string | undefined,
+        projectId: number | string | undefined
+    ) => Promise<void>
+}): () => Promise<Record<string, unknown> | undefined> {
+    const {
+        tool, paramsObj, hasCrossWorkspaceTarget, batchArrayKey, parentWorkspaceId, batchCtx,
+        sessionContext, workspaceId, projectId, isDefaultWorkspaceName, acceptsGithubUrls, autoPopulateGithubUrls,
+    } = opts
+    return async (): Promise<Record<string, unknown> | undefined> => {
+        const sourceErr = verifyWildcardUpdateSourceProject(
+            tool, paramsObj, hasCrossWorkspaceTarget, sessionContext, workspaceId, projectId, isDefaultWorkspaceName
+        )
+        if (sourceErr !== undefined) return sourceErr
+        if (batchArrayKey !== undefined && batchCtx !== undefined) {
+            const batchItems = Array.isArray(paramsObj[batchArrayKey]) ? paramsObj[batchArrayKey] : []
+            const wildcardErr = verifyBatchWildcardMoveProjects(batchArrayKey, batchItems, parentWorkspaceId, batchCtx)
+            if (wildcardErr !== undefined) return wildcardErr.errorResult
+        }
+        if (acceptsGithubUrls) {
+            await autoPopulateGithubUrls(paramsObj, sessionContext, workspaceId, projectId)
+        }
+        return undefined
+    }
+}
+
+export function prepareBatchDispatch(
+    tool: ToolDefinition,
+    paramsObj: Record<string, unknown>,
+    reg: NonNullable<ToolContext['config']>['projectRegistry'],
+    baseCtx: Omit<BatchScopeHelpersContext, 'sessionId' | 'toolName' | 'deferWildcardCheck'> & {
+        sessionId: string | undefined
+    }
+):
+    | { batchArrayKey?: 'entries' | 'updates'; batchCtx?: BatchScopeHelpersContext }
+    | { errorResult: Record<string, unknown> } {
+    const batchArrayKey =
+        (tool.name === 'batch_create_entries' || tool.name === 'team_batch_create_entries') &&
+        Array.isArray(paramsObj['entries'])
+            ? 'entries'
+            : (tool.name === 'batch_update_entries' || tool.name === 'team_batch_update_entries') &&
+                Array.isArray(paramsObj['updates'])
+              ? 'updates'
+              : undefined
+    if (batchArrayKey === undefined) return {}
+    if (
+        (tool.name === 'batch_update_entries' || tool.name === 'team_batch_update_entries') &&
+        paramsObj['project_number'] === undefined &&
+        typeof baseCtx.projectId === 'number' &&
+        (paramsObj['workspace_id'] === '*' || (paramsObj['workspace_id'] === undefined && baseCtx.workspaceId === '*'))
+    ) {
+        paramsObj['project_number'] = baseCtx.projectId
+    }
+    const effectiveBatchSessionId =
+        typeof paramsObj['session_id'] === 'string' && paramsObj['session_id'].trim() !== ''
+            ? paramsObj['session_id'].trim()
+            : baseCtx.sessionId
+    const batchCtx: BatchScopeHelpersContext = {
+        ...baseCtx,
+        sessionId: effectiveBatchSessionId,
+        toolName: tool.name,
+        deferWildcardCheck: true,
+    }
+    const batchError = normalizeBatchDispatchItems(batchArrayKey, paramsObj, reg, batchCtx)
+    if (batchError !== undefined) return batchError
+    return { batchArrayKey, batchCtx }
 }

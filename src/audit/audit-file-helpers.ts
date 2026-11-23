@@ -12,7 +12,7 @@ import {
     AUDIT_URI_KEYS,
     applyActiveSessionScopeFallback,
     extractAuditScopeFromArgs,
-    extractAuditScopeFromUri,
+    extractAuditScopeFromUriDetails,
     matchesAuditFilters,
     parseAuditLine,
     type AuditScopeMetadata,
@@ -308,10 +308,10 @@ export function resolveToolCallAuditScope(
     if (uriTarget === undefined) {
         return extractAuditScopeFromArgs(args, reqCtx, runtime)
     }
-    const uriScope = extractAuditScopeFromUri(uriTarget, reqCtx, runtime, true)
-    const uriWildcard = /[?&]workspace_id=\*(?:&|#|$)/i.test(uriTarget)
-    const uriInvalidProj =
-        uriScope.projectNumber === undefined && /[?&]project_number=/i.test(uriTarget)
+    const uriDetails = extractAuditScopeFromUriDetails(uriTarget)
+    const uriScope = uriDetails.scope
+    const uriWildcard = uriDetails.explicitWildcardWorkspace
+    const uriInvalidProj = uriDetails.explicitInvalidProject
     const rec =
         typeof args === 'object' && args !== null && !Array.isArray(args)
             ? (args as Record<string, unknown>)

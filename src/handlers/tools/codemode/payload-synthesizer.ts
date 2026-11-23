@@ -26,7 +26,7 @@ export const CODE_ALIAS_KEYS = [
     'code', 'script', 'source', 'query', 'content', 'text', 'body', 'js', 'javascript',
     'payload', 'executionCode', 'input', 'command', 'expression', 'fn', 'exec', 'eval',
     'code_snippet', 'raw_code', 'statement', 'statements', 'codeBlock', 'code_block',
-    'script_content', 'js_code', 'code_string', 'action', 'task', 'instruction', 'instructions',
+    'script_content', 'js_code', 'code_string', 'instruction', 'instructions',
 ] as const
 
 /** [M10] Scope/metadata keys never mistaken for executable code. */

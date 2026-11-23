@@ -44,19 +44,6 @@ function applyWildcardRootToBatch(entries: unknown[]): void {
     }
 }
 
-function tryPairItemExplicitWorkspace(
-    itemWs: string,
-    itemProj: number | undefined,
-    registry: ReturnType<typeof activeProjectRegistry>
-): void {
-    if (itemWs === '*' || itemProj === undefined) return
-    try {
-        pairStoredScope(itemWs, itemProj, registry)
-    } catch {
-        // Defer mismatched item (workspace_id, project_number) error to the handler.
-    }
-}
-
 function resolveBatchCreateItemScope(
     entry: unknown,
     rawRootWs: string | undefined,
@@ -73,7 +60,6 @@ function resolveBatchCreateItemScope(
     const itemProj = parsePositiveProjectNumber(item['project_number'])
 
     if (itemWs !== undefined) {
-        tryPairItemExplicitWorkspace(itemWs, itemProj, registry)
         return
     }
 

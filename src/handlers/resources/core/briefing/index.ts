@@ -193,6 +193,35 @@ function renderBriefingUserMessage(params: {
     })
 }
 
+function buildUnresolvedRepoBriefing(context: ResourceContext, unresolvedRepo: string): ResourceResult {
+    const safeRepo = sanitizeDisplayIdentifier(unresolvedRepo)
+    const listHint = resolveToolHintName(
+        context.filterConfig,
+        'list_projects',
+        'mj.admin.listProjects'
+    )
+    return {
+        data: `# Briefing · ${safeRepo}\n\nWorkspace \`${safeRepo}\` is not a registered project in \`projectRegistry\`. Use \`${listHint}\` (or the project registry) to find a registered repository name, or read \`memory://briefing/default\`.`,
+    }
+}
+
+function settleBriefingSystemSection(
+    systemSettled: PromiseSettledResult<SystemContext>,
+    config: typeof DEFAULT_BRIEFING_CONFIG,
+    journalWorkspaceId: string
+): SystemContext {
+    if (systemSettled.status === 'fulfilled') return systemSettled.value
+    logger.warning('Briefing system section failed (degraded)', {
+        module: 'BRIEFING',
+        operation: 'system-section',
+        error:
+            systemSettled.reason instanceof Error
+                ? systemSettled.reason.message
+                : String(systemSettled.reason),
+    })
+    return buildFallbackSystemContext(config, journalWorkspaceId)
+}
+
 export async function buildBriefingData(
     context: ResourceContext,
     targetRepo?: string,
@@ -203,15 +232,7 @@ export async function buildBriefingData(
         resolveBriefingScope(context, config, targetRepo, options)
 
     if (unresolvedRepo !== undefined) {
-        const safeRepo = sanitizeDisplayIdentifier(unresolvedRepo)
-        const listHint = resolveToolHintName(
-            context.filterConfig,
-            'list_projects',
-            'mj.admin.listProjects'
-        )
-        return {
-            data: `# Briefing · ${safeRepo}\n\nWorkspace \`${safeRepo}\` is not a registered project in \`projectRegistry\`. Use \`${listHint}\` (or the project registry) to find a registered repository name, or read \`memory://briefing/default\`.`,
-        }
+        return buildUnresolvedRepoBriefing(context, unresolvedRepo)
     }
 
     const journalWorkspaceId = activeWorkspaceId || config.defaultWorkspaceId?.trim() || 'default'
@@ -245,20 +266,7 @@ export async function buildBriefingData(
     const journal = safeBuildJournalContext(context, config, activeProjectNumber, activeWorkspaceId)
     const [githubSettled, systemSettled] = await settledPromise
     const github = githubSettled.status === 'fulfilled' ? githubSettled.value : null
-    let system: SystemContext
-    if (systemSettled.status === 'fulfilled') {
-        system = systemSettled.value
-    } else {
-        logger.warning('Briefing system section failed (degraded)', {
-            module: 'BRIEFING',
-            operation: 'system-section',
-            error:
-                systemSettled.reason instanceof Error
-                    ? systemSettled.reason.message
-                    : String(systemSettled.reason),
-        })
-        system = buildFallbackSystemContext(config, journalWorkspaceId)
-    }
+    const system = settleBriefingSystemSection(systemSettled, config, journalWorkspaceId)
     const team = config.includeTeam
         ? buildTeamContext(
               context,

@@ -141,6 +141,10 @@ function unpackLocalGit(
         reasons.push(`Local Git Status fetch failed: ${String(result.reason)}`)
         return { modified: 0, untracked: 0, isClean: false, degraded: true }
     }
+    if (result.value.error !== undefined && result.value.error !== '') {
+        reasons.push(`Local Git Status degraded: ${result.value.error}`)
+        return { ...result.value, degraded: true }
+    }
     return result.value
 }
 

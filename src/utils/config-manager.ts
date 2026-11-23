@@ -2,7 +2,6 @@ import * as fs from 'node:fs'
 import { EventEmitter } from 'node:events'
 import { parse as parseYaml } from 'yaml'
 import { logger } from './logger.js'
-import { RegistryConfigError } from './registry-config-file.js'
 import { parseToolFilter } from '../filtering/tool-filter.js'
 import { activeProjectRegistry, pairStoredScope } from './write-scope.js'
 import { isForbiddenProjectKey } from './project-registry-guards.js'
@@ -24,6 +23,7 @@ import {
 import { readSafeRegularConfigTextSync } from './config-file-safety.js'
 import {
     applyPersistableConfigKeys,
+    parseRawConfigObjectFromFile,
     serializeConfigObject,
     writeTempAndRenameConfig,
 } from './config-manager-persist.js'
@@ -61,7 +61,8 @@ export class ConfigManager extends EventEmitter {
     constructor(
         initialConfig: DynamicConfig,
         configFilePath?: string,
-        cliEnvBaseline?: ConfigCliEnvBaseline
+        cliEnvBaseline?: ConfigCliEnvBaseline,
+        explicitBriefingOverrides?: Partial<Record<BriefingConfigurableKey, number | boolean>>
     ) {
         super()
         this.initialCodemodeFullAccess = Boolean(initialConfig.codemodeInternalFullAccess)
@@ -73,7 +74,12 @@ export class ConfigManager extends EventEmitter {
                 : null
         const effectiveInitial = seedInitialBriefingScopeFromFile(initialConfig, initialFile)
         this.config = { ...effectiveInitial }
-        const baselines = buildInitialBaselines(effectiveInitial, initialFile, cliEnvBaseline)
+        const baselines = buildInitialBaselines(
+            effectiveInitial,
+            initialFile,
+            cliEnvBaseline,
+            explicitBriefingOverrides
+        )
         this.cliEnvBaseline = baselines.cliEnvBaseline
         this.toolFilterFromFile = baselines.toolFilterFromFile
         this.codemodeBaseline = baselines.codemodeBaseline
@@ -96,16 +102,7 @@ export class ConfigManager extends EventEmitter {
     private readRawConfigObject(): Record<string, unknown> | null {
         if (!this.configFilePath) return null
         try {
-            const loaded = readSafeRegularConfigTextSync(this.configFilePath)
-            if (loaded === undefined) return null
-            const content = loaded.content
-            const raw: unknown = this.isYamlConfigPath()
-                ? (parseYaml as (text: string) => unknown)(content)
-                : JSON.parse(content)
-            if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) {
-                return null
-            }
-            return raw as Record<string, unknown>
+            return parseRawConfigObjectFromFile(this.configFilePath, this.isYamlConfigPath())
         } catch (err: unknown) {
             const message = err instanceof Error ? err.message : String(err)
             logger.error('Configuration file could not be parsed', {
@@ -113,7 +110,7 @@ export class ConfigManager extends EventEmitter {
                 path: this.configFilePath,
                 error: message,
             })
-            throw new RegistryConfigError(`Configuration file could not be parsed: ${message}`)
+            throw err
         }
     }
 

@@ -1,5 +1,4 @@
 import * as path from 'node:path'
-import { z } from 'zod'
 import type { AuditConfig } from '../audit/index.js'
 import type { CliCommandLike, ConfigResolver } from '../utils/config-resolver.js'
 import { defaultDbPath } from './default-paths.js'
@@ -15,23 +14,25 @@ import {
     parseAllowedIoRootsOption,
     parseImportanceThresholdOption,
     parseLogLevelOption,
-    parseProjectRegistryOption,
     resolveUnconflictedDefaultProject,
     resolveUnconflictedDefaultWorkspace,
     resolveTransportOption,
+    validateProjectRegistryObject,
 } from './server-options-parsers.js'
 
 import {
+    buildLifecycleOptionsGroup,
     buildOAuthOptionsGroup,
     collectCliEnvBriefingOverrides,
+    collectCliEnvServerBaseline,
     resolveDatabasePaths,
+    resolveInstructionLevelOption,
+    resolveMaxToolInputElementsOption,
+    resolveTeamDefaultRoleOption,
     type CatchConfig,
 } from './server-options-groups.js'
 
 export { assertAdditionalTeamDbIsNotSymlink }
-
-const teamDefaultRoleSchema = z.enum(['admin', 'member', 'viewer', 'denied'])
-type TeamDefaultRole = z.infer<typeof teamDefaultRoleSchema>
 
 function resolveDefaultProjectNumberOption(
     resolver: ConfigResolver,
@@ -61,22 +62,51 @@ function resolveDefaultWorkspaceIdOption(
 ): string | undefined {
     return catchConfig(() => {
         if (allowWorkspaceAsDefault) {
-            const ws = resolver.resolve<string>('workspace')
-            const trimmedWs = ws !== undefined ? ws.trim() : undefined
+            const ws = resolver.resolve<unknown>('workspace')
+            if (ws !== undefined && ws !== null && typeof ws !== 'string') {
+                throw new Error(`Invalid workspace: expected string, got ${typeof ws}.`)
+            }
+            const trimmedWs = typeof ws === 'string' ? ws.trim() : undefined
             if (trimmedWs === '*') {
                 throw new Error("Invalid workspace '*': default workspace cannot be a wildcard.")
             }
             if (trimmedWs !== undefined && trimmedWs !== '') return trimmedWs
         }
-        const defWs = resolver.resolve<string>('defaultWorkspaceId', 'DEFAULT_WORKSPACE_ID')
-        const trimmedDefWs = defWs !== undefined ? defWs.trim() : undefined
-        if (trimmedDefWs === '*' || (trimmedDefWs !== undefined && trimmedDefWs !== '' && isForbiddenProjectKey(trimmedDefWs))) {
+        const defWs = resolver.resolve<unknown>('defaultWorkspaceId', 'DEFAULT_WORKSPACE_ID')
+        if (defWs !== undefined && defWs !== null && typeof defWs !== 'string') {
+            throw new Error(`Invalid defaultWorkspaceId: expected string, got ${typeof defWs}.`)
+        }
+        const trimmedDefWs = typeof defWs === 'string' ? defWs.trim() : undefined
+        if (
+            trimmedDefWs === '*' ||
+            (trimmedDefWs !== undefined && trimmedDefWs !== '' && isForbiddenProjectKey(trimmedDefWs))
+        ) {
             throw new Error(
                 `Invalid defaultWorkspaceId '${trimmedDefWs}': cannot be '*' or a reserved key.`
             )
         }
         return trimmedDefWs !== undefined && trimmedDefWs !== '' ? trimmedDefWs : undefined
     }, undefined)
+}
+
+function resolveOptionalPathOption(
+    resolver: ConfigResolver,
+    cliKey: string,
+    envKey: string
+): string | undefined {
+    const val = resolver.resolve<unknown>(cliKey, envKey)
+    if (val === undefined || val === null) return undefined
+    if (typeof val !== 'string') {
+        throw new Error(`Invalid ${cliKey}: expected string, got ${typeof val}`)
+    }
+    const trimmed = val.trim()
+    if (trimmed === '') {
+        if (resolver.isCliProvided(cliKey) || resolver.hasConfigFileKey(cliKey)) {
+            throw new Error(`Invalid blank ${cliKey} path.`)
+        }
+        return undefined
+    }
+    return path.resolve(process.cwd(), trimmed)
 }
 
 /**
@@ -133,14 +163,8 @@ function buildBriefingConfigOptions(
         prCount: catchConfig(() => resolveBriefingPrCount(resolver), 0),
         prStatusBreakdown: catchConfig(() => resolver.resolveBool('briefingPrStatus', 'BRIEFING_PR_STATUS') ?? false, false),
         milestoneCount: catchConfig(() => resolver.resolveInt('briefingMilestones', 'BRIEFING_MILESTONE_COUNT', 0, MAX_BRIEFING_COUNT) ?? 3, 3),
-        rulesFilePath: catchConfig(() => {
-            const val = resolver.resolve<string>('rulesFile', 'RULES_FILE_PATH')
-            return val ? path.resolve(process.cwd(), val) : undefined
-        }, undefined),
-        skillsDirPath: catchConfig(() => {
-            const val = resolver.resolve<string>('skillsDir', 'SKILLS_DIR_PATH')
-            return val ? path.resolve(process.cwd(), val) : undefined
-        }, undefined),
+        rulesFilePath: catchConfig(() => resolveOptionalPathOption(resolver, 'rulesFile', 'RULES_FILE_PATH'), undefined),
+        skillsDirPath: catchConfig(() => resolveOptionalPathOption(resolver, 'skillsDir', 'SKILLS_DIR_PATH'), undefined),
         workflowCount: catchConfig(() => resolver.resolveInt('briefingWorkflows', 'BRIEFING_WORKFLOW_COUNT', 0, MAX_BRIEFING_COUNT) ?? 0, 0),
         workflowStatusBreakdown: catchConfig(() => resolver.resolveBool('briefingWorkflowStatus', 'BRIEFING_WORKFLOW_STATUS') ?? false, false),
         copilotReviews: catchConfig(
@@ -205,16 +229,20 @@ function resolveEnvironmentOverrides(
         envUpdates['MJ_METRICS_PORT'] = String(metricsPort).trim()
     }
 
-    const authScopes = catchConfig(
-        () => resolver.resolve<string>('authScopes', 'MCP_AUTH_SCOPES'),
-        undefined
-    )
+    const authScopes = catchConfig(() => {
+        const val = resolver.resolve<unknown>('authScopes', 'MCP_AUTH_SCOPES')
+        if (val === undefined || val === null) return undefined
+        if (typeof val !== 'string') {
+            throw new Error(`Invalid authScopes: expected string, got ${typeof val}`)
+        }
+        return val
+    }, undefined)
     if (authScopes !== undefined && authScopes.trim() !== '') {
         envUpdates['MCP_AUTH_SCOPES'] = authScopes.trim()
     }
 
     const logLevel = catchConfig(
-        () => parseLogLevelOption(resolver.resolve<string>('logLevel', 'LOG_LEVEL')),
+        () => parseLogLevelOption(resolver.resolve<unknown>('logLevel', 'LOG_LEVEL')),
         undefined
     )
     return { envUpdates, logLevel }
@@ -234,95 +262,6 @@ function buildAuditConfigOption(resolver: ConfigResolver, catchConfig: CatchConf
         redact: catchConfig(() => resolver.resolveBool('auditRedact', 'AUDIT_REDACT') ?? true, true),
         auditReads: catchConfig(() => resolver.resolveBool('auditReads', 'AUDIT_READS') ?? false, false),
         maxSizeBytes: catchConfig(() => resolver.resolveInt('auditLogMaxSize', 'AUDIT_LOG_MAX_SIZE', 1024) ?? 10485760, 10485760),
-    }
-}
-
-function resolveInstructionLevelOption(
-    resolver: ConfigResolver,
-    catchConfig: CatchConfig
-): 'essential' | 'detailed' | 'full' | undefined {
-    return catchConfig((): 'essential' | 'detailed' | 'full' | undefined => {
-        const raw = resolver.resolve<string>('instructionLevel', 'INSTRUCTION_LEVEL')
-        if (raw === undefined || raw.trim() === '') return undefined
-        if (raw === 'essential' || raw === 'detailed' || raw === 'full') return raw
-        throw new Error(`Invalid --instruction-level '${raw}'. Use essential, detailed, or full.`)
-    }, undefined)
-}
-
-function resolveTeamDefaultRoleOption(resolver: ConfigResolver, catchConfig: CatchConfig): TeamDefaultRole {
-    return catchConfig((): TeamDefaultRole => {
-        const raw = resolver.resolve<string>('teamDefaultRole', 'TEAM_DEFAULT_ROLE') ?? 'denied'
-        const parsed = teamDefaultRoleSchema.safeParse(raw)
-        if (!parsed.success) {
-            throw new Error(`Invalid team default role '${raw}'. Use admin, member, viewer, or denied.`)
-        }
-        return parsed.data
-    }, 'denied')
-}
-
-function resolvePruneImportanceThresholdOption(resolver: ConfigResolver, catchConfig: CatchConfig): number {
-    return catchConfig(
-        () =>
-            parseImportanceThresholdOption(
-                resolver.resolve<unknown>('pruneImportanceThreshold', 'PRUNE_IMPORTANCE_THRESHOLD'),
-                'pruneImportanceThreshold',
-                0.15
-            ),
-        0.15
-    )
-}
-
-function resolveMetricsExportOption(
-    resolver: ConfigResolver,
-    catchConfig: CatchConfig
-): 'prometheus' | undefined {
-    return catchConfig<'prometheus' | undefined>(() => {
-        const raw = resolver.resolve<string>('metricsExport', 'METRICS_EXPORT')
-        if (raw) {
-            if (raw !== 'prometheus') throw new Error(`Unsupported metrics export format: ${raw}`)
-            return 'prometheus'
-        }
-        return undefined
-    }, undefined)
-}
-
-function resolveMaxToolInputElementsOption(
-    resolver: ConfigResolver,
-    catchConfig: CatchConfig
-): number | undefined {
-    return catchConfig(() => {
-        const raw = resolver.resolve<unknown>('maxToolInputElements', 'MAX_TOOL_INPUT_ELEMENTS')
-        if (raw === undefined || raw === null || raw === '') return undefined
-        if (raw === Infinity || (typeof raw === 'string' && raw.trim().toLowerCase() === 'infinity')) {
-            return Infinity
-        }
-        return resolver.resolveInt('maxToolInputElements', 'MAX_TOOL_INPUT_ELEMENTS', 0)
-    }, undefined)
-}
-
-function buildLifecycleOptionsGroup(resolver: ConfigResolver, catchConfig: CatchConfig): {
-    archiveOlderThanDays: number
-    pruneOlderThanDays: number
-    hardDeleteOlderThanDays: number
-    pruneImportanceThreshold: number
-    pruneDryRun: boolean
-    pruneExcludeTags: string[] | undefined
-    metricsExport: ServerOptions['metricsExport']
-    persistMetrics: boolean
-    metricsPath: string | undefined
-    metricsPort: number | undefined
-} {
-    return {
-        archiveOlderThanDays: catchConfig(() => resolver.resolveNumber('archiveOlderThanDays', 'ARCHIVE_OLDER_THAN_DAYS', 0) ?? 0, 0),
-        pruneOlderThanDays: catchConfig(() => resolver.resolveNumber('pruneOlderThanDays', 'PRUNE_OLDER_THAN_DAYS', 0) ?? 0, 0),
-        hardDeleteOlderThanDays: catchConfig(() => resolver.resolveNumber('hardDeleteOlderThanDays', 'HARD_DELETE_OLDER_THAN_DAYS', 0) ?? 0, 0),
-        pruneImportanceThreshold: resolvePruneImportanceThresholdOption(resolver, catchConfig),
-        pruneDryRun: catchConfig(() => resolver.resolveBool('pruneDryRun', 'PRUNE_DRY_RUN') ?? false, false),
-        pruneExcludeTags: catchConfig(() => resolver.resolveStringArray('pruneExcludeTags', 'PRUNE_EXCLUDE_TAGS'), undefined),
-        metricsExport: resolveMetricsExportOption(resolver, catchConfig),
-        persistMetrics: catchConfig(() => resolver.resolveBool('persistMetrics', 'PERSIST_METRICS') ?? false, false),
-        metricsPath: catchConfig(() => resolver.resolve<string>('metricsPath', 'METRICS_PATH'), undefined),
-        metricsPort: catchConfig(() => resolver.resolveInt('metricsPort', 'MJ_METRICS_PORT', 0, 65535), undefined),
     }
 }
 
@@ -375,6 +314,62 @@ function resolveConfiguredDefaultScope(
     return { defaultWorkspaceId, defaultProjectNumber }
 }
 
+function assembleServerOptions(params: {
+    resolver: ConfigResolver
+    catchConfig: CatchConfig
+    transport: 'stdio' | 'http'
+    host: string | undefined
+    db: string | undefined
+    testDb: string | undefined
+    teamDb: string | undefined
+    testTeamDb: string | undefined
+    instructionLevel: 'essential' | 'detailed' | 'full' | undefined
+    projectRegistry: ServerOptions['projectRegistry']
+    defaultWorkspaceId: string | undefined
+    defaultProjectNumber: number | undefined
+    toolFilter: string | undefined
+    briefingConfig: NonNullable<ServerOptions['briefingConfig']>
+    briefingOverrides: ServerOptions['briefingOverrides']
+    cliEnvBaseline: NonNullable<ServerOptions['cliEnvBaseline']>
+}): ServerOptions {
+    const {
+        resolver, catchConfig, transport, host, db, testDb, teamDb, testTeamDb,
+        instructionLevel, projectRegistry, defaultWorkspaceId, defaultProjectNumber,
+        toolFilter, briefingConfig, briefingOverrides, cliEnvBaseline,
+    } = params
+    return {
+        transport,
+        port: catchConfig(() => resolver.resolveInt('port', 'PORT', 1, 65535) ?? 3000, 3000),
+        host,
+        statelessHttp: catchConfig(() => resolver.resolveBool('stateless', 'STATELESS') ?? false, false),
+        dbPath: db ?? defaultDbPath,
+        testDbPath: testDb,
+        teamDbPath: teamDb,
+        testTeamDbPath: testTeamDb,
+        teamDefaultRole: resolveTeamDefaultRoleOption(resolver, catchConfig),
+        teamAdmin: catchConfig(() => resolver.resolve<string>('teamAdmin', 'TEAM_ADMIN'), undefined),
+        toolFilter,
+        defaultProjectNumber,
+        defaultWorkspaceId,
+        autoRebuildIndex: catchConfig(() => resolver.resolveBool('autoRebuildIndex', 'AUTO_REBUILD_INDEX') ?? false, false),
+        codemodeInternalFullAccess: catchConfig(() => resolver.resolveBool('codemodeInternalFullAccess', 'CODEMODE_INTERNAL_FULL_ACCESS') ?? false, false),
+        projectRegistry,
+        additionalTeamDbs: catchConfig(() => parseAdditionalTeamDbsOption(resolver.resolve<unknown>('additionalTeamDbs', 'ADDITIONAL_TEAM_DBS')), undefined),
+        allowedIoRoots: catchConfig(() => parseAllowedIoRootsOption(resolver.resolve<unknown>('allowedIoRoots', 'ALLOWED_IO_ROOTS')), undefined),
+        briefingConfig,
+        ...(briefingOverrides !== undefined ? { briefingOverrides } : {}),
+        cliEnvBaseline,
+        auditConfig: buildAuditConfigOption(resolver, catchConfig),
+        embeddingModel: catchConfig(() => resolver.resolve<string>('embeddingModel', 'EMBEDDING_MODEL'), undefined),
+        ...(instructionLevel !== undefined ? { instructionLevel } : {}),
+        configFilePath: catchConfig(() => resolver.loadedConfigPath, undefined),
+        maxToolInputElements: resolveMaxToolInputElementsOption(resolver, catchConfig),
+        agentHealing: catchConfig(() => resolver.resolveBool('agentHealing', 'MCP_AGENT_HEALING') ?? true, true),
+        ...buildOAuthOptionsGroup(resolver, catchConfig),
+        ...buildLifecycleOptionsGroup(resolver, catchConfig),
+    }
+}
+
 export function buildServerOptions(
     resolver: ConfigResolver,
     options: Record<string, unknown> & { team?: boolean },
@@ -395,61 +390,29 @@ export function buildServerOptions(
     const { db, testDb, teamDb, testTeamDb } = resolveDatabasePaths(resolver, catchConfig)
     const { envUpdates, logLevel } = resolveEnvironmentOverrides(resolver, catchConfig)
     const instructionLevel = resolveInstructionLevelOption(resolver, catchConfig)
-    const projectRegistry = catchConfig(() => parseProjectRegistryOption(resolver.resolve<unknown>('projectRegistry', 'PROJECT_REGISTRY')), undefined)
-    const { defaultWorkspaceId, defaultProjectNumber } = resolveConfiguredDefaultScope(
-        resolver,
-        command,
-        catchConfig,
-        projectRegistry
-    )
-
-    const briefingConfig = buildBriefingConfigOptions(
-        resolver,
-        catchConfig,
-        defaultProjectNumber,
-        defaultWorkspaceId,
-        projectRegistry
-    )
+    const projectRegistry = catchConfig(() => {
+        const reg = validateProjectRegistryObject(resolver.resolve<unknown>('projectRegistry', 'PROJECT_REGISTRY'))
+        if (reg !== undefined) envUpdates['PROJECT_REGISTRY'] = JSON.stringify(reg)
+        return reg
+    }, undefined)
+    const { defaultWorkspaceId, defaultProjectNumber } = resolveConfiguredDefaultScope(resolver, command, catchConfig, projectRegistry)
+    const toolFilter = catchConfig(() => resolver.resolve<string>('toolFilter', 'MEMORY_JOURNAL_MCP_TOOL_FILTER'), undefined)
+    const briefingConfig = buildBriefingConfigOptions(resolver, catchConfig, defaultProjectNumber, defaultWorkspaceId, projectRegistry)
     const briefingOverrides = collectCliEnvBriefingOverrides(resolver, briefingConfig)
-    const serverOptions: ServerOptions = {
-        transport,
-        port: catchConfig(() => resolver.resolveInt('port', 'PORT', 1, 65535) ?? 3000, 3000),
-        host,
-        statelessHttp: catchConfig(() => resolver.resolveBool('stateless', 'STATELESS') ?? false, false),
-        dbPath: db ?? defaultDbPath,
-        testDbPath: testDb,
-        teamDbPath: teamDb,
-        testTeamDbPath: testTeamDb,
-        teamDefaultRole: resolveTeamDefaultRoleOption(resolver, catchConfig),
-        teamAdmin: catchConfig(() => resolver.resolve<string>('teamAdmin', 'TEAM_ADMIN'), undefined),
-        toolFilter: catchConfig(() => resolver.resolve<string>('toolFilter', 'MEMORY_JOURNAL_MCP_TOOL_FILTER'), undefined),
-        defaultProjectNumber,
-        defaultWorkspaceId,
-        autoRebuildIndex: catchConfig(() => resolver.resolveBool('autoRebuildIndex', 'AUTO_REBUILD_INDEX') ?? false, false),
-        codemodeInternalFullAccess: catchConfig(() => resolver.resolveBool('codemodeInternalFullAccess', 'CODEMODE_INTERNAL_FULL_ACCESS') ?? false, false),
-        projectRegistry,
-        additionalTeamDbs: catchConfig(() => parseAdditionalTeamDbsOption(resolver.resolve<unknown>('additionalTeamDbs', 'ADDITIONAL_TEAM_DBS')), undefined),
-        allowedIoRoots: catchConfig(() => parseAllowedIoRootsOption(resolver.resolve<unknown>('allowedIoRoots', 'ALLOWED_IO_ROOTS')), undefined),
-        briefingConfig,
-        ...(briefingOverrides !== undefined ? { briefingOverrides } : {}),
-        auditConfig: buildAuditConfigOption(resolver, catchConfig),
-        embeddingModel: catchConfig(() => resolver.resolve<string>('embeddingModel', 'EMBEDDING_MODEL'), undefined),
-        ...(instructionLevel !== undefined ? { instructionLevel } : {}),
-        configFilePath: catchConfig(() => resolver.loadedConfigPath, undefined),
-        maxToolInputElements: resolveMaxToolInputElementsOption(resolver, catchConfig),
-        agentHealing: catchConfig(() => resolver.resolveBool('agentHealing', 'MCP_AGENT_HEALING') ?? true, true),
-        ...buildOAuthOptionsGroup(resolver, catchConfig),
-        ...buildLifecycleOptionsGroup(resolver, catchConfig),
-    }
+    const cliEnvBaseline = collectCliEnvServerBaseline(resolver, command, {
+        toolFilter, defaultWorkspaceId, defaultProjectNumber, projectRegistry, briefingOverrides,
+    })
+    const serverOptions = assembleServerOptions({
+        resolver, catchConfig, transport, host, db, testDb, teamDb, testTeamDb,
+        instructionLevel, projectRegistry, defaultWorkspaceId, defaultProjectNumber,
+        toolFilter, briefingConfig, briefingOverrides, cliEnvBaseline,
+    })
 
     if (options['dumpConfig'] !== true && configErrors.length === 0) {
         for (const [envKey, envVal] of Object.entries(envUpdates)) {
             process.env[envKey] = envVal
         }
-        if (logLevel !== undefined) {
-            logger.setLevel(logLevel)
-        }
+        if (logLevel !== undefined) logger.setLevel(logLevel)
     }
-
     return { serverOptions, transport, db, teamDb, host }
 }

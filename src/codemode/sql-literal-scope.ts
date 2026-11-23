@@ -177,7 +177,7 @@ export function splitSqlValueList(raw: string): string[] {
             if (step.closed) quote = null
             continue
         }
-        if (ch === '"' || ch === "'") {
+        if (ch === '"' || ch === "'" || ch === '`') {
             quote = ch
             current += ch
         } else if (ch === '(') {

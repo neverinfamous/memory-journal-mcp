@@ -151,8 +151,8 @@ export function normalizeExecuteCodeAliases(obj: Record<string, unknown>): void 
         obj['script'] ?? obj['js'] ?? obj['javascript'] ?? obj['command'] ?? obj['executionCode'] ?? obj['content'] ??
         obj['eval'] ?? obj['source'] ?? obj['body'] ?? obj['expression'] ?? obj['fn'] ?? obj['exec'] ??
         obj['code_snippet'] ?? obj['raw_code'] ?? obj['statement'] ?? obj['statements'] ?? obj['codeBlock'] ??
-        obj['code_block'] ?? obj['script_content'] ?? obj['js_code'] ?? obj['code_string'] ?? obj['action'] ??
-        obj['task'] ?? obj['instruction'] ?? obj['instructions'] ?? obj['input'] ?? obj['payload'] ?? obj['text']
+        obj['code_block'] ?? obj['script_content'] ?? obj['js_code'] ?? obj['code_string'] ??
+        obj['instruction'] ?? obj['instructions'] ?? obj['input'] ?? obj['payload'] ?? obj['text']
 
     if (typeof codeAlias === 'string') obj['code'] = codeAlias
     else {

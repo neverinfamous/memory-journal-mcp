@@ -28,7 +28,7 @@ import { estimateTokens, estimatePayloadTokens } from '../observability/token-es
 import {
     applyActiveSessionScopeFallback,
     estimateOperationResultTokens,
-    extractAuditScopeFromUri,
+    extractAuditScopeFromUriDetails,
     extractSensitiveTargetFromArgs,
     isSensitiveAuditTarget,
     resolveResourceAuditCategory,
@@ -351,10 +351,10 @@ function resolveAuditOperationScope(
             ...(options?.projectNumber !== undefined ? { projectNumber: options.projectNumber } : {}),
         }
     }
-    const uriScope = extractAuditScopeFromUri(target, reqCtx, options?.runtime, true)
-    const uriWildcard = /[?&]workspace_id=\*(?:&|#|$)/i.test(target)
-    const uriInvalidProj =
-        uriScope.projectNumber === undefined && /[?&]project_number=/i.test(target)
+    const uriDetails = extractAuditScopeFromUriDetails(target)
+    const uriScope = uriDetails.scope
+    const uriWildcard = uriDetails.explicitWildcardWorkspace
+    const uriInvalidProj = uriDetails.explicitInvalidProject
     const merged: AuditScopeMetadata = {
         ...(options?.workspaceId !== undefined || uriScope.workspaceId !== undefined
             ? { workspaceId: options?.workspaceId ?? uriScope.workspaceId }

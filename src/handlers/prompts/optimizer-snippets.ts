@@ -240,7 +240,7 @@ return { processed, unassignedCount: unassigned.length, unassigned };
 \`\`\`
 
 ### 2. Inspect Full Relationship Graph Structure for a Project Domain
-(Prefer reading \`memory://graph/{repo}\` first for pre-rendered Mermaid topology; use this script for structured JSON edges.)
+(Prefer reading \`memory://graph/{repo}\` first for the compact Markdown recent neighborhood; use this script for structured JSON edges.)
 \`\`\`javascript
 const graph = await mj.relationships.visualizeRelationships({
   workspace_id: '*',
