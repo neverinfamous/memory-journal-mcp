@@ -46,7 +46,7 @@ import { resolveAuthenticatedAuthor } from '../../src/utils/security-utils.js'
 import { ConfigManager } from '../../src/utils/config-manager.js'
 import { ServerRuntime } from '../../src/utils/maintenance-lock.js'
 import { alignedProjectFilter } from '../../src/utils/workspace-registry-match.js'
-import { ValidationError } from '../../src/types/errors.js'
+import { ProtocolError } from '@modelcontextprotocol/server'
 import type { CommitEntry } from '../../src/vendor/lib-git-history/schema.js'
 import type { ProjectRegistryEntry, ToolRegistration } from '../../src/types/index.js'
 
@@ -365,7 +365,7 @@ describe('Pass 47 Security Audit — Storage, Filter & Egress Parity', () => {
 
             expect(() =>
                 validateResourceSubscription(`memory://${'a'.repeat(8200)}`)
-            ).toThrow(ValidationError)
+            ).toThrow(ProtocolError)
             const teamDb = new DatabaseAdapter(':memory:')
             await teamDb.initialize()
             try {

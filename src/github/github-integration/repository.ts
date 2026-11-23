@@ -172,17 +172,17 @@ export class RepositoryManager {
             }
 
             const trackedChanges = new Set<string>([
-                ...status.modified,
-                ...status.created,
-                ...status.deleted,
-                ...status.staged,
-                ...status.conflicted,
-                ...status.renamed.map((r) => r.to),
+                ...(status.modified ?? []),
+                ...(status.created ?? []),
+                ...(status.deleted ?? []),
+                ...(status.staged ?? []),
+                ...(status.conflicted ?? []),
+                ...(status.renamed ?? []).map((r) => r.to),
             ])
             return {
                 branch: status.current || null,
                 modified: trackedChanges.size,
-                untracked: status.not_added.length,
+                untracked: status.not_added?.length ?? 0,
                 isClean: status.isClean(),
                 resolvedIssues,
             }

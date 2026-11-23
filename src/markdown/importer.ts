@@ -119,7 +119,9 @@ export async function importMarkdownEntries(
             }
         }
     } finally {
-        await dir.close().catch(() => undefined)
+        if (typeof dir.close === 'function') {
+            await dir.close().catch(() => undefined)
+        }
     }
     allMdFiles.sort((a, b) => NUMERIC_FILENAME_COLLATOR.compare(a, b))
     const mdFiles = allMdFiles.slice(0, Math.max(0, limit))
