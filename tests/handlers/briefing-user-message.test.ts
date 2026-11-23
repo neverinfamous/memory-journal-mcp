@@ -563,8 +563,10 @@ describe('formatUserMessage', () => {
         })
 
         expect(result).not.toContain('](https://evil.example)')
+        expect(result).not.toContain('&amp;#91;')
+        expect(result).not.toContain('&amp;#93;')
         expect(result).toContain(
-            '[CI&amp;#93;(https://evil.example)&amp;#91;ok](https://github.com/org/repo/actions/runs/1)'
+            '[CI)(https://evil.example)(ok](https://github.com/org/repo/actions/runs/1)'
         )
         expect(result).not.toContain('onclick=alert')
         const githubLine = result.split('\n').find((l) => l.includes('**GitHub**')) ?? ''

@@ -9,8 +9,6 @@ import {
     applyReloadedBriefingScope,
     BRIEFING_CONFIG_KEY_MAP,
     buildInitialBaselines,
-    isValidBriefingConfigValue,
-    readBriefingConfigEntry,
     seedInitialBriefingScopeFromFile,
     reloadBriefingConfigKeys,
     type BriefingBaselineMap,
@@ -460,12 +458,6 @@ export class ConfigManager extends EventEmitter {
                 this.lastFileBriefingValues
             )
             const scopeOutcome = applyReloadedBriefingScope(parsed, bc, this.cliEnvBaseline)
-            for (const [fileKey, { target, kind, aliases }] of Object.entries(BRIEFING_CONFIG_KEY_MAP)) {
-                const match = readBriefingConfigEntry(parsed, fileKey, aliases)
-                if (match === undefined || !isValidBriefingConfigValue(match.value, kind)) {
-                    this.briefingKeysFromFile.delete(target)
-                }
-            }
             if (scopeOutcome.scopeAccepted) {
                 this.defaultWorkspaceIdFromFile = scopeOutcome.defaultWorkspaceIdFromFile
                 this.defaultProjectNumberFromFile = scopeOutcome.defaultProjectNumberFromFile

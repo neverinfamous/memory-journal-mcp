@@ -465,6 +465,15 @@ describe('ConfigManager & Configuration Tools', () => {
                 fs.writeFileSync(cfgFile, JSON.stringify({ toolFilter: 'full', briefingEntries: 7 }), 'utf8')
                 ;(mgr as unknown as { reloadFromFile: () => void }).reloadFromFile()
                 expect(mgr.getConfig().briefingConfig.entryCount).toBe(7)
+
+                // A transient invalid file edit preserves briefingKeysFromFile provenance so removing the key later reverts to baseline
+                fs.writeFileSync(cfgFile, JSON.stringify({ toolFilter: 'full', briefingEntries: 999 }), 'utf8')
+                ;(mgr as unknown as { reloadFromFile: () => void }).reloadFromFile()
+                expect(mgr.getConfig().briefingConfig.entryCount).toBe(7)
+
+                fs.writeFileSync(cfgFile, JSON.stringify({ toolFilter: 'full' }), 'utf8')
+                ;(mgr as unknown as { reloadFromFile: () => void }).reloadFromFile()
+                expect(mgr.getConfig().briefingConfig.entryCount).toBe(3)
             } finally {
                 mgr.close()
             }

@@ -106,6 +106,24 @@ function resolveExplicitTarget(
     return { workspaceId: trimmed }
 }
 
+function formatUnresolvedAgentContext(trimmedRepo: string, context: ResourceContext): ResourceResult {
+    const safeRepo = sanitizeDisplayIdentifier(trimmedRepo)
+    const listHint = resolveToolHintName(
+        context?.filterConfig,
+        'list_projects',
+        'mj.admin.listProjects'
+    )
+    const instructionsText = `'${safeRepo}' is not a registered project. Use ${listHint} (or the project registry) to find the correct repo, then re-read memory://agent-context/{repo}.`
+    return {
+        data: [
+            `Project: ${formatYamlIdentifier(safeRepo)}`,
+            'Project Number: unresolved',
+            'Workspace ID: unresolved',
+            `Instructions: ${JSON.stringify(instructionsText)}`,
+        ].join('\n'),
+    }
+}
+
 function handleAgentContextResource(uri: string, context: ResourceContext): ResourceResult {
     const config = context?.briefingConfig
     const fallbackRegistry = config?.projectRegistry ?? loadProjectRegistryFromConfig()
@@ -114,7 +132,10 @@ function handleAgentContextResource(uri: string, context: ResourceContext): Reso
     const match = /^memory:\/\/(?:agent-context|agent-id)(?:\/(.+))?$/.exec(getBaseUri(uri))
     const rawRepo = match?.[1] !== undefined ? safeDecodeUriSegment(match[1]) : undefined
     const trimmedRepo = rawRepo?.trim()
-    if (trimmedRepo?.toLowerCase() === 'default') {
+    if (
+        trimmedRepo?.toLowerCase() === 'default' &&
+        exactRegistryKey(trimmedRepo, fallbackRegistry) === undefined
+    ) {
         return formatDefaultAgentContext(
             uri,
             context,
@@ -130,25 +151,11 @@ function handleAgentContextResource(uri: string, context: ResourceContext): Reso
     if (trimmedRepo !== undefined && trimmedRepo !== '') {
         const target = resolveExplicitTarget(trimmedRepo, config, fallbackRegistry)
         if (target.unresolvedRepo !== undefined) {
-            const safeRepo = sanitizeDisplayIdentifier(target.unresolvedRepo)
-            const listHint = resolveToolHintName(
-                context?.filterConfig,
-                'list_projects',
-                'mj.admin.listProjects'
-            )
-            const instructionsText = `'${safeRepo}' is not a registered project. Use ${listHint} (or the project registry) to find the correct repo, then re-read memory://agent-context/{repo}.`
-            return {
-                data: [
-                    `Project: ${formatYamlIdentifier(safeRepo)}`,
-                    'Project Number: unresolved',
-                    'Workspace ID: unresolved',
-                    `Instructions: ${JSON.stringify(instructionsText)}`,
-                ].join('\n'),
-            }
+            return formatUnresolvedAgentContext(target.unresolvedRepo, context)
         }
         workspaceId = target.workspaceId ?? 'default'
         projectNumber = target.projectNumber
-        if (pinSession && workspaceId !== 'default') {
+        if (pinSession) {
             setActiveSessionProject(
                 workspaceId,
                 projectNumber !== undefined && projectNumber > 0 ? projectNumber : null,

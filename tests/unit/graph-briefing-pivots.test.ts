@@ -25,6 +25,7 @@ import {
 } from '../../src/handlers/resources/core/briefing/graph-pivots-section.js'
 import { previewDraftSuggestedLinks } from '../../src/handlers/tools/core/link-suggestions.js'
 import { ServerRuntime } from '../../src/utils/maintenance-lock.js'
+import { getActiveSessionProject } from '../../src/utils/workspace-resolver.js'
 import type { ToolHandlerConfig } from '../../src/types/index.js'
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -639,6 +640,47 @@ describe('Graph & Briefing Integration (G1-G9)', () => {
         )
         expect(String(graphCap.data)).toContain('# Graph neighborhood · Default')
         expect(String(graphCap.data)).toContain(`#${String(defaultCapId)} -references-> #${String(defaultCapPeer)}`)
+
+        const capCtx = await readResource(
+            'memory://agent-context/Default',
+            db,
+            undefined,
+            undefined,
+            undefined,
+            teamDb,
+            mixedCaseConfig,
+            runtime
+        )
+        const parsedCapCtx = parseYaml(String(capCtx.data)) as Record<string, unknown>
+        expect(parsedCapCtx['Project']).toBe('Default')
+        expect(parsedCapCtx['Workspace ID']).toBe('Default')
+        expect(parsedCapCtx['Project Number']).toBe(99)
+        expect(getActiveSessionProject(runtime)).toEqual({ workspaceId: 'Default', projectNumber: 99 })
+
+        const lowerDefaultRuntime = new ServerRuntime()
+        const lowerDefaultConfig: BriefingConfig = {
+            ...briefingConfig,
+            projectRegistry: {
+                default: { path: '/tmp/lower-default', project_number: 5 },
+            },
+        }
+        const lowerCtx = await readResource(
+            'memory://agent-context/%235',
+            db,
+            undefined,
+            undefined,
+            undefined,
+            teamDb,
+            lowerDefaultConfig,
+            lowerDefaultRuntime
+        )
+        const parsedLowerCtx = parseYaml(String(lowerCtx.data)) as Record<string, unknown>
+        expect(parsedLowerCtx['Workspace ID']).toBe('default')
+        expect(parsedLowerCtx['Project Number']).toBe(5)
+        expect(getActiveSessionProject(lowerDefaultRuntime)).toEqual({
+            workspaceId: 'default',
+            projectNumber: 5,
+        })
 
         for (const scalarRepo of ['true', 'null', '123', '---', '-dash', '0x1f', 'my.repo']) {
             const ctxOut = await readResource(

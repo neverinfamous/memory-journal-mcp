@@ -85,4 +85,17 @@ describe('server-instructions generation', () => {
         expect(text).not.toContain('view_file')
         expect(text).not.toContain('grep_search')
     })
+
+    it('cleans Latest entry snapshot via extractPreview (strips CMS-04 headings and redacts home paths)', () => {
+        const text = generateStandardInstructions(new Set(['create_entry']), [], {
+            id: 42,
+            timestamp: '2026-11-23T12:00:00Z',
+            entryType: 'retrospective',
+            content: '## Accomplished\n- Updated `/home/alice/repo/src/app.ts` cleanly.',
+        })
+        expect(text).toContain('**Latest**: #42')
+        expect(text).not.toContain('## Accomplished')
+        expect(text).not.toContain('/home/alice')
+        expect(text).toContain('~/repo/src/app.ts')
+    })
 })

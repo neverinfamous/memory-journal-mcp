@@ -366,5 +366,34 @@ describe('Team Relationship Tool Handlers', () => {
             expect(result.success).toBe(false)
             expect(result.error).toContain('Team database not configured')
         })
+
+        it('should normalize team mermaid node labels with extractPreview (CMS-04 headings, markers, path redaction)', async () => {
+            const pathEntry = teamDb.createEntry({
+                content: '## Accomplished\n- **Fixed** bug in C:\\Users\\alice\\Desktop\\secret\\app.ts',
+                projectNumber: 1,
+                entryType: 'technical_note',
+            })
+            const result = (await callTool(
+                'team_visualize_relationships',
+                {
+                    project_number: 1,
+                    entry_id: pathEntry.id,
+                },
+                personalDb,
+                undefined,
+                undefined,
+                undefined,
+                undefined,
+                teamDb
+            )) as { success: boolean; mermaid?: string; nodes?: { id: number; label: string }[] }
+
+            expect(result.success).toBe(true)
+            const node = result.nodes?.find((n) => n.id === pathEntry.id)
+            expect(node?.label).toBeDefined()
+            expect(node?.label).not.toContain('## Accomplished')
+            expect(node?.label).not.toContain('alice')
+            expect(node?.label).toContain('Fixed bug')
+            expect(result.mermaid).not.toContain('alice')
+        })
     })
 })

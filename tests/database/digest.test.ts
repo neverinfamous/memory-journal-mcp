@@ -82,6 +82,34 @@ describe('Digest Analytics', () => {
             expect(digest.topImportanceEntries[0]?.id).toBeDefined()
             expect(digest.topImportanceEntries[0]?.score).toBeDefined()
         })
+
+        it('extracts normalized previews past an 80-char CMS-04 heading and code block preamble', () => {
+            const preambleEntry = adapter.createEntry({
+                content: [
+                    '## Accomplished',
+                    '```ts',
+                    'const verboseSetupValue = "123456789012345678901234567890123456789012345678901234567890";',
+                    '```',
+                    '- Hardened /home/alice/Desktop/project/auth.ts session check.',
+                ].join('\n'),
+                projectNumber: 202,
+                significanceType: 'architecture',
+            })
+            const peerEntry = adapter.createEntry({
+                content: 'Peer architecture entry',
+                projectNumber: 202,
+            })
+            adapter.linkEntries(preambleEntry.id, peerEntry.id, 'references')
+
+            const digest = computeDigest(db)
+            const hit = digest.topImportanceEntries.find((e) => e.id === preambleEntry.id)
+            expect(hit).toBeDefined()
+            expect(hit?.preview).not.toBe('')
+            expect(hit?.preview).not.toContain('## Accomplished')
+            expect(hit?.preview).not.toContain('verboseSetupValue')
+            expect(hit?.preview).not.toContain('alice')
+            expect(hit?.preview).toContain('Hardened <desktop>/project/auth.ts session check.')
+        })
     })
 
     describe('Snapshot Persistence', () => {

@@ -47,9 +47,9 @@ export function escapeCell(text: string): string {
         .replace(/\|/g, '\\|')
 }
 
-/** Escape square brackets inside markdown link labels as HTML entities so `escapeCell` cannot double-escape them. */
+/** Replace square brackets inside markdown link labels with parentheses so `escapeCell` cannot double-escape and `markUntrustedContentInline` does not double-encode `&`. */
 export function escapeLinkLabel(text: string): string {
-    return text.replace(/\[/g, '&#91;').replace(/\]/g, '&#93;')
+    return text.replace(/\[/g, '(').replace(/\]/g, ')')
 }
 
 /**

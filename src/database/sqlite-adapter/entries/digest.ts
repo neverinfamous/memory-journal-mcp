@@ -11,6 +11,7 @@ import { buildImportanceSqlExpression, buildImportanceCte } from './importance.j
 import { queryRow, queryRows } from './shared.js'
 import { effectiveWorkspace } from '../../workspace-scope.js'
 import { logger } from '../../../utils/logger.js'
+import { extractPreview } from '../../../handlers/resources/core/briefing/preview-helpers.js'
 
 // ============================================================================
 // Types
@@ -85,8 +86,10 @@ export function parseDigestSnapshot(data: unknown): DigestSnapshot | null {
 
 /** Days after which a project is considered stale */
 const STALE_PROJECT_THRESHOLD_DAYS = 14
+/** Max SQL characters fetched for top-importance entry preview extraction */
+const PREVIEW_SQL_LENGTH = 500
 /** Max preview characters for top-importance entries */
-const PREVIEW_LENGTH = 80
+const PREVIEW_LENGTH = 200
 /** Number of top-importance entries to surface */
 const TOP_IMPORTANCE_COUNT = 3
 
@@ -256,14 +259,14 @@ function computeTopImportance(db: Database, s: DigestScope): TopImportanceEntry[
         ORDER BY importance_score DESC, e.id DESC
         LIMIT ?`,
         ...s.params,
-        PREVIEW_LENGTH,
+        PREVIEW_SQL_LENGTH,
         ...s.params,
         TOP_IMPORTANCE_COUNT
     )
     return topRows.map((r) => ({
         id: r['id'] as number,
         score: Math.round((r['importance_score'] as number) * 100) / 100,
-        preview: r['preview'] as string,
+        preview: extractPreview(r['preview'] as string, PREVIEW_LENGTH),
     }))
 }
 

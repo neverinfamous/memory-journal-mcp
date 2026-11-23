@@ -11,6 +11,7 @@ import { formatHandlerError } from '../../../utils/error-helpers.js'
 import { ValidationError } from '../../../types/errors.js'
 import { resolveWorkspaceId } from '../../../utils/workspace-resolver.js'
 import { resolveWriteWorkspaceId } from '../write-workspace.js'
+import { extractPreview } from '../../resources/core/briefing/preview-helpers.js'
 import { TEAM_DB_ERROR_RESPONSE, triggerTeamNotifications, resolveTeamProjectNumber, missingTeamProjectNumberError } from './helpers.js'
 import {
     canRealignOrphanedRegisteredProject,
@@ -384,9 +385,11 @@ export function buildRelationshipGraph(
                 ? rawEntry
                 : null
         if (entry) {
-            let label = entry.content.substring(0, 40).replace(/[\r\n`]+/g, ' ')
-            if (entry.content.length > 40) label += '...'
-            label = label.replace(/"/g, "'").replace(/\[/g, '(').replace(/\]/g, ')')
+            const label = extractPreview(entry.content, 40, { firstLineOnly: true })
+                .replace(/[\r\n`]+/g, ' ')
+                .replace(/"/g, "'")
+                .replace(/\[/g, '(')
+                .replace(/\]/g, ')')
             nodes.set(eid, label)
         }
 
