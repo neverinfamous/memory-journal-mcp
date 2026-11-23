@@ -24,47 +24,10 @@ import {
 
 export type TeamDbInstance = NonNullable<ToolContext['teamDb']>
 export { buildValidatedTeamBatchUpdates } from './batch-update-validation.js'
-
-/**
- * Enforce single-entry team ownership and return the fetched author alongside any PERMISSION_DENIED response.
- */
-export function checkSingleTeamOwnershipWithAuthor(
-    teamDb: TeamDbInstance,
-    context: ToolContext,
-    entryId: number,
-    action: 'modify' | 'delete' | 'restore',
-    workspaceId?: string
-): { denied: Record<string, unknown> | null; author: string | null } {
-    const author = fetchAuthor(teamDb, entryId)
-    const currentUser = resolveAuthenticatedAuthor()
-    const rbacActive = teamDb.isTeamRbacActive?.() ?? false
-    const defaultRole = context.config?.teamDefaultRole ?? 'denied'
-    const callerRole = rbacActive ? resolveScopedTeamRole(teamDb, currentUser, defaultRole, workspaceId) : null
-    try {
-        enforceEntryOwnership(currentUser, author, callerRole, teamDb, workspaceId, rbacActive)
-        return { denied: null, author }
-    } catch (err) {
-        if (!(err instanceof AuthorizationError)) throw err
-        const actionVerb = action === 'modify' ? 'update' : action
-        return {
-            denied: buildTeamPermissionDeniedError(err, author, action, 'this team entry', actionVerb),
-            author,
-        }
-    }
-}
-
-/**
- * Enforce single-entry team ownership. Returns a PERMISSION_DENIED response or null when allowed.
- */
-export function checkSingleTeamOwnership(
-    teamDb: TeamDbInstance,
-    context: ToolContext,
-    entryId: number,
-    action: 'modify' | 'delete' | 'restore',
-    workspaceId?: string
-): Record<string, unknown> | null {
-    return checkSingleTeamOwnershipWithAuthor(teamDb, context, entryId, action, workspaceId).denied
-}
+export {
+    checkSingleTeamOwnership,
+    checkSingleTeamOwnershipWithAuthor,
+} from './ownership-helper.js'
 
 export function missingProjectNumberResponse(
     error = 'Missing project_number. You MUST provide a valid project_number (e.g., 1) or configure DEFAULT_PROJECT_NUMBER on the server.'

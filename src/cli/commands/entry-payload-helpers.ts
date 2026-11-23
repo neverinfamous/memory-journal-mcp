@@ -1,4 +1,3 @@
-import { readFileSync } from 'node:fs'
 import { z } from 'zod'
 import type { EntryType, RelationshipType, SignificanceType } from '../../types/index.js'
 import { ENTRY_TYPES, RELATIONSHIP_TYPES, SIGNIFICANCE_TYPES } from '../../types/entities.js'
@@ -11,6 +10,12 @@ import {
 } from '../../handlers/tools/schemas/constants-and-primitives.js'
 import type { createEntryOptionsSchema } from '../schemas.js'
 import { parsePositiveProjectNumber } from '../../utils/safe-positive-int.js'
+import { readBoundedCliInputFile } from './cli-input-reader.js'
+
+const POSITIVE_INT_RE = /^[1-9]\d*$/
+const TAG_SPLIT_RE = /[,\s]+/
+const PROJECT_PREFIX_RE = /^p/i
+const PREFIXED_POSITIVE_INT_RE = /^p?[1-9]\d*$/i
 
 export type HealedEntryOptions = z.infer<typeof createEntryOptionsSchema> & {
     tag?: string
@@ -128,7 +133,7 @@ export function resolveAutoContext(
     let autoContextStr = autoContext
     if (autoContextFile) {
         try {
-            autoContextStr = readFileSync(autoContextFile, 'utf-8')
+            autoContextStr = readBoundedCliInputFile(autoContextFile, '--auto-context-file')
         } catch (e) {
             throw new Error(
                 `Failed to read --auto-context-file: ${e instanceof Error ? e.message : String(e)}`,
@@ -176,7 +181,7 @@ export function parseRelationshipArray(
         const targetId =
             typeof rawTarget === 'number'
                 ? rawTarget
-                : trimmedTarget !== undefined && /^[1-9]\d*$/.test(trimmedTarget)
+                : trimmedTarget !== undefined && POSITIVE_INT_RE.test(trimmedTarget)
                   ? Number(trimmedTarget)
                   : Number.NaN
         if (
@@ -241,7 +246,7 @@ export function resolveEntryTypeAndTags(
     let tags: string[] | undefined
     if (tagsStr !== undefined) {
         tags = tagsStr
-            .split(/[,\s]+/)
+            .split(TAG_SPLIT_RE)
             .map((t) => t.trim())
             .filter(Boolean)
     } else if (metadata['tags'] !== undefined && metadata['tags'] !== null) {
@@ -256,9 +261,9 @@ function parseStrictPositiveProjectNumber(raw: unknown): number | undefined {
         throw new Error('Invalid project number. Expected a positive integer.')
     }
     if (typeof raw === 'string' && raw.trim() === '') return undefined
-    const canonicalSource = typeof raw === 'string' ? raw.trim().replace(/^p/i, '') : raw
+    const canonicalSource = typeof raw === 'string' ? raw.trim().replace(PROJECT_PREFIX_RE, '') : raw
     const parsed = parsePositiveProjectNumber(canonicalSource)
-    if (parsed === undefined || (typeof raw === 'string' && !/^p?[1-9]\d*$/i.test(raw.trim()))) {
+    if (parsed === undefined || (typeof raw === 'string' && !PREFIXED_POSITIVE_INT_RE.test(raw.trim()))) {
         throw new Error(`Invalid project number '${String(raw)}'. Expected a positive integer.`)
     }
     return parsed

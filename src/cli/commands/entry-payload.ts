@@ -1,4 +1,3 @@
-import { readFileSync } from 'node:fs'
 import type { IDatabaseAdapter } from '../../database/core/interfaces.js'
 import type {
     EntryType,
@@ -13,6 +12,7 @@ import { ValidationError } from '../../types/errors.js'
 import { logger } from '../../utils/logger.js'
 import * as yaml from 'yaml'
 import type { BaseEntryOptionsSchema } from '../schemas.js'
+import { readBoundedCliInputFile, readPipedStdinWithTimeout } from './cli-input-reader.js'
 import { CliExitError, getCliCommandDb } from './db-core.js'
 import {
     UNKNOWN_RECORD_SCHEMA,
@@ -26,8 +26,8 @@ import {
     type HealedEntryOptions,
 } from './entry-payload-helpers.js'
 
-/** How long to wait for piped stdin before failing a non-interactive create. */
-const STDIN_TIMEOUT_MS = 3000
+const MAX_FRONTMATTER_BYTES = 64 * 1024
+const POSITIVE_INT_RE = /^[1-9]\d*$/
 
 export interface EntryPayload {
     entryType: EntryType | undefined
@@ -57,47 +57,6 @@ export async function getDb(
     return { db, config: serverOptions }
 }
 
-async function readPipedStdinWithTimeout(): Promise<string> {
-    const chunks: Buffer[] = []
-    let hasInput = false
-    let timeoutId: ReturnType<typeof setTimeout> | undefined
-    return await new Promise<string>((resolve, reject) => {
-        const cleanup = (): void => {
-            if (timeoutId !== undefined) clearTimeout(timeoutId)
-            process.stdin.off('data', onData)
-            process.stdin.off('end', onEnd)
-            process.stdin.off('error', onError)
-            process.stdin.pause()
-        }
-        const onData = (chunk: string | Buffer): void => {
-            hasInput = true
-            chunks.push(typeof chunk === 'string' ? Buffer.from(chunk, 'utf8') : chunk)
-        }
-        const onEnd = (): void => {
-            cleanup()
-            resolve(Buffer.concat(chunks).toString('utf8'))
-        }
-        const onError = (err: Error): void => {
-            cleanup()
-            reject(err)
-        }
-        timeoutId = setTimeout(() => {
-            if (!hasInput) {
-                cleanup()
-                process.stderr.write(
-                    'Error: Timed out waiting for stdin. You must provide --file or --content when running in a non-interactive shell.\n'
-                )
-                reject(new CliExitError(1))
-            }
-        }, STDIN_TIMEOUT_MS)
-        timeoutId.unref()
-        process.stdin.on('data', onData)
-        process.stdin.once('end', onEnd)
-        process.stdin.once('error', onError)
-        process.stdin.resume()
-    })
-}
-
 export async function parseContent(options: HealedEntryOptions): Promise<string> {
     const normalizedOptions: HealedEntryOptions = { ...options }
     applyCliEntryFlagAliases(normalizedOptions)
@@ -105,10 +64,7 @@ export async function parseContent(options: HealedEntryOptions): Promise<string>
     const contentStr = normalizedOptions.content
 
     if (file !== undefined) {
-        if (file.trim().length === 0) {
-            throw new ValidationError('Must provide a non-empty --file path.')
-        }
-        return readFileSync(file, 'utf-8')
+        return readBoundedCliInputFile(file, '--file')
     }
     if (contentStr !== undefined) {
         return contentStr
@@ -161,27 +117,62 @@ export async function parseContent(options: HealedEntryOptions): Promise<string>
     throw new CliExitError(1)
 }
 
-const FRONTMATTER_RE = /^---\r?\n(?:([\s\S]*?)\r?\n)??---(?:\r?\n|$)/
+function findFrontmatterClose(content: string, openLen: number): { yamlEnd: number; endOffset: number } | null {
+    const emptyCloseEnd = openLen + 3
+    if (content.startsWith('---', openLen)) {
+        const nextChar = content[emptyCloseEnd]
+        const crlfFollow = nextChar === '\r' && content[emptyCloseEnd + 1] === '\n'
+        if (emptyCloseEnd === content.length || nextChar === '\n' || crlfFollow) {
+            const endOffset = emptyCloseEnd === content.length ? emptyCloseEnd : crlfFollow ? emptyCloseEnd + 2 : emptyCloseEnd + 1
+            return { yamlEnd: openLen, endOffset }
+        }
+    }
+    let searchFrom = openLen
+    while (searchFrom < content.length) {
+        const nlIdx = content.indexOf('\n---', searchFrom)
+        if (nlIdx === -1) return null
+        const afterDashes = nlIdx + 4
+        const nextChar = content[afterDashes]
+        const crlfFollow = nextChar === '\r' && content[afterDashes + 1] === '\n'
+        if (afterDashes === content.length || nextChar === '\n' || crlfFollow) {
+            const endOffset = afterDashes === content.length ? afterDashes : crlfFollow ? afterDashes + 2 : afterDashes + 1
+            const yamlEnd = nlIdx > openLen && content[nlIdx - 1] === '\r' ? nlIdx - 1 : nlIdx
+            return { yamlEnd, endOffset }
+        }
+        searchFrom = nlIdx + 4
+    }
+    return null
+}
 
 export function parseFrontmatter(rawContent: string): {
     frontmatter: Record<string, unknown>
     body: string
 } {
     const content = rawContent.startsWith('\uFEFF') ? rawContent.slice(1) : rawContent
-    const match = FRONTMATTER_RE.exec(content)
-    if (match !== null) {
-        const yamlStr = match[1] ?? ''
-        const body = content.slice(match[0].length).trimStart()
-        try {
-            const parsed: unknown = yaml.parse(yamlStr)
-            const parsedRec = UNKNOWN_RECORD_SCHEMA.safeParse(parsed)
-            return { frontmatter: parsedRec.success ? parsedRec.data : {}, body }
-        } catch (err) {
-            logger.debug('Frontmatter YAML parse failed; treating as body content', {
-                module: 'CLIEntryPayload',
-                error: err instanceof Error ? err.message : String(err),
-            })
-        }
+    const openLen = content.startsWith('---\r\n') ? 5 : content.startsWith('---\n') ? 4 : 0
+    if (openLen === 0) {
+        return { frontmatter: {}, body: rawContent }
+    }
+    const closed = findFrontmatterClose(content, openLen)
+    if (closed === null) {
+        return { frontmatter: {}, body: rawContent }
+    }
+    const yamlStr = content.slice(openLen, closed.yamlEnd)
+    if (Buffer.byteLength(yamlStr, 'utf8') > MAX_FRONTMATTER_BYTES) {
+        throw new ValidationError(
+            `Frontmatter exceeds maximum size of ${String(MAX_FRONTMATTER_BYTES)} bytes.`
+        )
+    }
+    const body = content.slice(closed.endOffset).trimStart()
+    try {
+        const parsed: unknown = yaml.parse(yamlStr, { maxAliasCount: 25 })
+        const parsedRec = UNKNOWN_RECORD_SCHEMA.safeParse(parsed)
+        return { frontmatter: parsedRec.success ? parsedRec.data : {}, body }
+    } catch (err) {
+        logger.debug('Frontmatter YAML parse failed; treating as body content', {
+            module: 'CLIEntryPayload',
+            error: err instanceof Error ? err.message : String(err),
+        })
     }
     return { frontmatter: {}, body: rawContent }
 }
@@ -193,7 +184,7 @@ export function parseRelatedTo(relatedToStr: unknown): number[] {
         .map((s) => s.trim())
         .filter(Boolean)
         .map((token) => {
-            if (!/^[1-9]\d*$/.test(token)) {
+            if (!POSITIVE_INT_RE.test(token)) {
                 throw new ValidationError(
                     `Invalid --related-to entry ID '${token}'. Expected positive integers separated by commas.`
                 )
@@ -216,7 +207,7 @@ export function parseRelationships(
     const source = typeof relFileStr === 'string' ? '--rel-file' : '--relationships'
     if (typeof relFileStr === 'string') {
         try {
-            str = readFileSync(relFileStr, 'utf-8')
+            str = readBoundedCliInputFile(relFileStr, '--rel-file')
         } catch (e) {
             throw new Error(
                 `Failed to read --rel-file: ${e instanceof Error ? e.message : String(e)}`,
@@ -245,7 +236,7 @@ export function parseMetadata(metadataFile: unknown): Record<string, unknown> {
     if (typeof metadataFile !== 'string') return {}
     let parsed: unknown
     try {
-        const str = readFileSync(metadataFile, 'utf-8')
+        const str = readBoundedCliInputFile(metadataFile, '--metadata')
         parsed = JSON.parse(str)
     } catch (e) {
         throw new Error(
@@ -299,7 +290,7 @@ function parseMetadataRelatedTo(raw: unknown): number[] {
                 `Invalid metadata related_to entry '${String(item)}': expected a positive integer.`
             )
         }
-        if (typeof item === 'string' && /^[1-9]\d*$/.test(item)) {
+        if (typeof item === 'string' && POSITIVE_INT_RE.test(item)) {
             const parsed = Number(item)
             if (Number.isSafeInteger(parsed) && parsed > 0) {
                 return parsed

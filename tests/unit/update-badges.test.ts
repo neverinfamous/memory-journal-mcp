@@ -127,6 +127,57 @@ describe('update-badges script helpers', () => {
             expect(inv.command).toBe(process.execPath)
             expect(inv.args[0]).toBe(compiledCommit)
         })
+
+        it('falls back to tsx + scripts/commit.ts when compiled bundle is a symlink (PERF-M3)', () => {
+            const compiledCommit = path.join(tempDir, 'dist', 'vendor', 'commit', 'commit.js')
+            const commitScript = path.join(tempDir, 'scripts', 'commit.ts')
+            const outsideTarget = path.join(tempDir, 'outside.js')
+            fs.mkdirSync(path.dirname(compiledCommit), { recursive: true })
+            fs.mkdirSync(path.dirname(commitScript), { recursive: true })
+            fs.writeFileSync(commitScript, 'export {}\n', 'utf-8')
+            fs.writeFileSync(outsideTarget, 'export {}\n', 'utf-8')
+            let linked = false
+            try {
+                fs.symlinkSync(outsideTarget, compiledCommit, 'file')
+                linked = true
+            } catch {
+                // Symlink creation may require Developer Mode
+            }
+            if (linked) {
+                const inv = buildCommitInvocation(tempDir, ['README.md'])
+                expect(inv.args[0]).toBe(path.join(tempDir, 'node_modules', 'tsx', 'dist', 'cli.mjs'))
+                expect(inv.args[1]).toBe(commitScript)
+            }
+        })
+
+        it('falls back to tsx + scripts/commit.ts when src/vendor/commit contains a symlinked .ts file', () => {
+            const compiledCommit = path.join(tempDir, 'dist', 'vendor', 'commit', 'commit.js')
+            const commitScript = path.join(tempDir, 'scripts', 'commit.ts')
+            const vendorLink = path.join(tempDir, 'src', 'vendor', 'commit', 'commit-journal.ts')
+            const outsideTs = path.join(tempDir, 'outside.ts')
+            fs.mkdirSync(path.dirname(compiledCommit), { recursive: true })
+            fs.mkdirSync(path.dirname(commitScript), { recursive: true })
+            fs.mkdirSync(path.dirname(vendorLink), { recursive: true })
+            fs.writeFileSync(compiledCommit, 'export {}\n', 'utf-8')
+            fs.writeFileSync(commitScript, 'export {}\n', 'utf-8')
+            fs.writeFileSync(outsideTs, 'export {}\n', 'utf-8')
+            const oldDate = new Date(Date.now() - 60_000)
+            fs.utimesSync(commitScript, oldDate, oldDate)
+            fs.utimesSync(outsideTs, oldDate, oldDate)
+
+            let linked = false
+            try {
+                fs.symlinkSync(outsideTs, vendorLink, 'file')
+                linked = true
+            } catch {
+                // Symlink creation may require Developer Mode
+            }
+            if (linked) {
+                const inv = buildCommitInvocation(tempDir, ['README.md'])
+                expect(inv.args[0]).toBe(path.join(tempDir, 'node_modules', 'tsx', 'dist', 'cli.mjs'))
+                expect(inv.args[1]).toBe(commitScript)
+            }
+        })
     })
 
     describe('countE2eSpecFiles & isPartialPlaywrightRun', () => {

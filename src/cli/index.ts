@@ -233,6 +233,7 @@ sessionCmd.action(withValidation(searchOptionsSchema, async (args: string[], opt
 }))
 
 // Setup 'commit' command delegating directly to the vendored commit wrapper
+let normalizedArgv: string[] = process.argv
 program
     .command('commit [args...]')
     .description('Stage files, enforce commit safety/trailers, and optionally record a Memory Journal entry')
@@ -241,7 +242,7 @@ program
     .helpOption(false)
     .action(async (commitArgs: string[]) => {
         const { main } = await import('../vendor/commit/commit.js')
-        const rawTail = normalizeCliArgv(process.argv, program).slice(2)
+        const rawTail = normalizedArgv.slice(2)
         const valueTakingGlobalFlags = new Set<string>()
         for (const opt of program.options) {
             if (opt.required || opt.optional) {
@@ -264,7 +265,9 @@ program
         await main(commitIdx !== -1 ? rawTail.slice(commitIdx + 1) : commitArgs)
     })
 
-void program.parseAsync(normalizeCliArgv(process.argv, program)).catch((err: unknown) => {
+normalizedArgv = normalizeCliArgv(process.argv, program)
+
+void program.parseAsync(normalizedArgv).catch((err: unknown) => {
     process.stderr.write(`\x1b[31mError:\x1b[0m ${formatCliError(err)}\n`)
     process.exitCode = 1
 })

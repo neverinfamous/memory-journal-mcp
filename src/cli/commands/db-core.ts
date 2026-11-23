@@ -2,6 +2,7 @@ import { DatabaseAdapterFactory } from '../../database/adapter-factory.js'
 import type { IDatabaseAdapter } from '../../database/core/interfaces.js'
 import type { ServerOptions } from '../../server/mcp-server/types.js'
 import { type CliCommandLike, ConfigResolver } from '../../utils/config-resolver.js'
+import { sanitizeErrorForLogging } from '../../utils/security-utils.js'
 import { buildServerOptions } from '../server-options-builder.js'
 import { dumpConfigAndExit } from '../dump-config.js'
 
@@ -35,7 +36,8 @@ export async function getCliCommandDb(
     try {
         resolver = new ConfigResolver(command, options, configPath)
     } catch (err) {
-        configErrors.push(err instanceof Error ? err.message : String(err))
+        const rawErr = err instanceof Error ? err.message : String(err)
+        configErrors.push(sanitizeErrorForLogging(rawErr))
         resolver = new ConfigResolver(command, {}, undefined)
     }
 
@@ -43,7 +45,7 @@ export async function getCliCommandDb(
 
     if (configErrors.length > 0) {
         process.stderr.write('Startup Configuration Errors:\n')
-        configErrors.forEach((err) => process.stderr.write(` - ${err}\n`))
+        configErrors.forEach((err) => process.stderr.write(` - ${sanitizeErrorForLogging(err)}\n`))
         failExit(1)
     }
 

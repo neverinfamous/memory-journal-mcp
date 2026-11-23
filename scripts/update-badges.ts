@@ -8,6 +8,13 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const ROOT_DIR = path.resolve(__dirname, "..");
 
+const LICENSE_ANCHOR_RE = /(\[!\[License: MIT\].*?\))/
+const SPEC_FILE_EXT_RE = /\.(spec|test)\.(?:[cm]?[jt]sx?)$/i
+const COVERAGE_BADGE_RE = /!\[Coverage\]\(https:\/\/img\.shields\.io\/badge\/Coverage-[0-9.]+[^)]*\.svg\)/g
+const E2E_BADGE_RE = /!\[E2E\]\(https:\/\/img\.shields\.io\/badge\/E2E-[^)]+\)/g
+const CRLF_RE = /\r\n/g
+const LINE_SPLIT_RE = /\r?\n/
+
 function getBadgeColor(percentage: number): string {
   if (percentage >= 95) return "brightgreen";
   if (percentage >= 85) return "green";
@@ -30,10 +37,9 @@ function applyCoverageBadge(
     console.log(`Updated coverage badge in ${file} to ${linesPct}%`);
     return { content: content.replace(covRegex, newCovBadge), changed: true };
   }
-  const licenseRegex = /(\[!\[License: MIT\].*?\))/;
-  if (licenseRegex.test(content)) {
+  if (LICENSE_ANCHOR_RE.test(content)) {
     console.log(`Inserted coverage badge in ${file} to ${linesPct}%`);
-    return { content: content.replace(licenseRegex, `$1 ${newCovBadge}`), changed: true };
+    return { content: content.replace(LICENSE_ANCHOR_RE, `$1 ${newCovBadge}`), changed: true };
   }
   console.warn(`Could not find anchor to insert coverage badge in ${file}`);
   if (process.env['GITHUB_ACTIONS'] || process.argv.includes("--strict")) {
@@ -61,10 +67,9 @@ function applyE2eBadge(
     console.log(`Inserted E2E badge in ${file}`);
     return { content: content.replace(newCovBadge, `${newCovBadge} ${newE2eBadge}`), changed: true };
   }
-  const licenseRegex = /(\[!\[License: MIT\].*?\))/;
-  if (licenseRegex.test(content)) {
+  if (LICENSE_ANCHOR_RE.test(content)) {
     console.log(`Inserted E2E badge in ${file}`);
-    return { content: content.replace(licenseRegex, `$1 ${newE2eBadge}`), changed: true };
+    return { content: content.replace(LICENSE_ANCHOR_RE, `$1 ${newE2eBadge}`), changed: true };
   }
   return { content, changed: false };
 }
@@ -104,7 +109,8 @@ export interface LoadBadgeMetricsOptions {
 }
 
 export function countE2eSpecFiles(e2eDir: string): number {
-  if (!fs.existsSync(e2eDir)) return 0;
+  const rootStat = fs.lstatSync(e2eDir, { throwIfNoEntry: false });
+  if (rootStat === undefined || !rootStat.isDirectory()) return 0;
   let count = 0;
   const stack: string[] = [e2eDir];
   while (stack.length > 0) {
@@ -116,7 +122,7 @@ export function countE2eSpecFiles(e2eDir: string): number {
       const fullPath = path.join(current, entry.name);
       if (entry.isDirectory()) {
         stack.push(fullPath);
-      } else if (entry.isFile() && /\.(spec|test)\.(?:[cm]?[jt]sx?)$/i.test(entry.name)) {
+      } else if (entry.isFile() && SPEC_FILE_EXT_RE.test(entry.name)) {
         count += 1;
       }
     }
@@ -136,6 +142,16 @@ export function isPartialPlaywrightRun(
   return totalSpecs > 0 && pw.suites.length < totalSpecs;
 }
 
+function readOptionalJsonFile(filePath: string): string | null {
+  try {
+    return fs.readFileSync(filePath, "utf-8");
+  } catch (err: unknown) {
+    const code = typeof err === "object" && err !== null && "code" in err ? err.code : undefined;
+    if (code === "ENOENT") return null;
+    throw err;
+  }
+}
+
 export function loadBadgeMetrics(options: LoadBadgeMetricsOptions = {}): BadgeMetrics {
   const rootDir = options.rootDir ?? ROOT_DIR;
   const argv = options.argv ?? process.argv;
@@ -151,10 +167,9 @@ export function loadBadgeMetrics(options: LoadBadgeMetricsOptions = {}): BadgeMe
   let coverageColor = "red";
   let hasCoverage = false;
   if (includeCoverage) {
-    if (fs.existsSync(summaryPath)) {
-      const summary = CoverageSummarySchema.parse(
-        JSON.parse(fs.readFileSync(summaryPath, "utf-8"))
-      );
+    const rawSummary = readOptionalJsonFile(summaryPath);
+    if (rawSummary !== null) {
+      const summary = CoverageSummarySchema.parse(JSON.parse(rawSummary));
       linesPct = summary.total.lines.pct;
       coverageColor = getBadgeColor(linesPct);
       hasCoverage = true;
@@ -167,10 +182,9 @@ export function loadBadgeMetrics(options: LoadBadgeMetricsOptions = {}): BadgeMe
   let e2eSkipped = 0;
   let hasE2e = false;
   if (includeE2e) {
-    if (fs.existsSync(playwrightPath)) {
-      const pw = PlaywrightResultsSchema.parse(
-        JSON.parse(fs.readFileSync(playwrightPath, "utf-8"))
-      );
+    const rawPw = readOptionalJsonFile(playwrightPath);
+    if (rawPw !== null) {
+      const pw = PlaywrightResultsSchema.parse(JSON.parse(rawPw));
       const totalSpecs =
         !argv.includes("--allow-partial") && pw.suites !== undefined
           ? countE2eSpecFiles(path.join(rootDir, "tests", "e2e"))
@@ -206,9 +220,9 @@ export function loadBadgeMetrics(options: LoadBadgeMetricsOptions = {}): BadgeMe
     e2ePassing,
     e2eSkipped,
     hasE2e,
-    covRegex: /!\[Coverage\]\(https:\/\/img\.shields\.io\/badge\/Coverage-[0-9.]+[^)]*\.svg\)/g,
+    covRegex: COVERAGE_BADGE_RE,
     newCovBadge: `![Coverage](https://img.shields.io/badge/Coverage-${String(linesPct)}%25-${coverageColor}.svg)`,
-    e2eRegex: /!\[E2E\]\(https:\/\/img\.shields\.io\/badge\/E2E-[^)]+\)/g,
+    e2eRegex: E2E_BADGE_RE,
     newE2eBadge: `![E2E](https://img.shields.io/badge/E2E-${String(e2ePassing)}%20passing%20%C2%B7%20${String(e2eSkipped)}%20skipped-blue.svg)`,
   };
 }
@@ -217,7 +231,7 @@ function updateBadgeTargetFile(file: string, metrics: BadgeMetrics, rootDir: str
   const filePath = path.join(rootDir, file);
   try {
     let content = fs.readFileSync(filePath, "utf-8");
-    const originalNormalized = content.replace(/\r\n/g, "\n");
+    const originalNormalized = content.replace(CRLF_RE, "\n");
     let changed = false;
 
     if (metrics.hasCoverage) {
@@ -245,7 +259,7 @@ function updateBadgeTargetFile(file: string, metrics: BadgeMetrics, rootDir: str
       return false;
     }
 
-    const finalContent = content.replace(/\r\n/g, "\n");
+    const finalContent = content.replace(CRLF_RE, "\n");
     if (finalContent !== originalNormalized) {
       fs.writeFileSync(filePath, finalContent, "utf-8");
       return true;
@@ -271,9 +285,10 @@ export interface CommitInvocation {
 
 function hasNewerTsInDir(dirPath: string, targetMtimeMs: number): boolean {
   const dirStat = fs.lstatSync(dirPath, { throwIfNoEntry: false });
-  if (!dirStat || dirStat.isSymbolicLink() || !dirStat.isDirectory()) return false;
+  if (!dirStat) return false;
+  if (dirStat.isSymbolicLink() || !dirStat.isDirectory()) return true;
   for (const entry of fs.readdirSync(dirPath, { withFileTypes: true })) {
-    if (entry.isSymbolicLink()) continue;
+    if (entry.isSymbolicLink()) return true;
     const fullPath = path.join(dirPath, entry.name);
     if (entry.isDirectory()) {
       if (hasNewerTsInDir(fullPath, targetMtimeMs)) return true;
@@ -285,15 +300,31 @@ function hasNewerTsInDir(dirPath: string, targetMtimeMs: number): boolean {
   return false;
 }
 
+function isContainedInRealRoot(targetPath: string, realRoot: string): boolean {
+  try {
+    const realTarget = fs.realpathSync.native(targetPath);
+    const normRoot = process.platform === "win32" ? realRoot.toLowerCase() : realRoot;
+    const normTarget = process.platform === "win32" ? realTarget.toLowerCase() : realTarget;
+    const rel = path.relative(normRoot, normTarget);
+    return rel === "" || (rel !== ".." && !rel.startsWith(`..${path.sep}`) && !path.isAbsolute(rel));
+  } catch {
+    return false;
+  }
+}
+
 function isCompiledCommitFresh(rootDir: string): boolean {
   try {
+    const realRoot = fs.realpathSync.native(rootDir);
     const compiledCommit = path.join(rootDir, "dist", "vendor", "commit", "commit.js");
-    const compiledStat = fs.statSync(compiledCommit, { throwIfNoEntry: false });
-    if (!compiledStat || !compiledStat.isFile()) return false;
+    const compiledStat = fs.lstatSync(compiledCommit, { throwIfNoEntry: false });
+    if (!compiledStat || compiledStat.isSymbolicLink() || !compiledStat.isFile()) return false;
+    if (!isContainedInRealRoot(compiledCommit, realRoot)) return false;
 
     const commitScript = path.join(rootDir, "scripts", "commit.ts");
-    const sourceStat = fs.statSync(commitScript, { throwIfNoEntry: false });
-    if (sourceStat && sourceStat.mtimeMs > compiledStat.mtimeMs) return false;
+    const sourceStat = fs.lstatSync(commitScript, { throwIfNoEntry: false });
+    if (sourceStat && (sourceStat.isSymbolicLink() || sourceStat.mtimeMs > compiledStat.mtimeMs)) {
+      return false;
+    }
 
     if (hasNewerTsInDir(path.join(rootDir, "src", "vendor", "commit"), compiledStat.mtimeMs)) {
       return false;
@@ -340,7 +371,8 @@ function autoCommitDirtyBadgeFiles(
   const ghActions = process.env['GITHUB_ACTIONS'];
   if (ghActions !== undefined && ghActions.length > 0) return;
   const commitScript = path.join(rootDir, "scripts", "commit.ts");
-  if (!fs.existsSync(commitScript)) return;
+  const commitScriptStat = fs.lstatSync(commitScript, { throwIfNoEntry: false });
+  if (commitScriptStat === undefined || commitScriptStat.isSymbolicLink() || !commitScriptStat.isFile()) return;
 
   const remaining = filesToUpdate.filter((file) => !updatedFiles.includes(file));
   const gitModified = new Set<string>();
@@ -351,7 +383,7 @@ function autoCommitDirtyBadgeFiles(
         encoding: "utf-8",
         windowsHide: true,
       }).trim();
-      for (const line of diff.split(/\r?\n/)) {
+      for (const line of diff.split(LINE_SPLIT_RE)) {
         const trimmed = line.trim();
         if (trimmed.length > 0) {
           gitModified.add(trimmed.replace(/\\/g, "/"));
@@ -370,7 +402,8 @@ function autoCommitDirtyBadgeFiles(
   console.log(`\nAuto-committing badge updates for: ${dirtyFiles.join(", ")}`);
   const inv = buildCommitInvocation(rootDir, dirtyFiles);
   const entryScript = inv.args[0] ?? "";
-  if (!fs.existsSync(entryScript)) {
+  const entryStat = fs.lstatSync(entryScript, { throwIfNoEntry: false });
+  if (entryStat === undefined || entryStat.isSymbolicLink() || !entryStat.isFile()) {
     console.error(`Failed to auto-commit badge updates: commit entrypoint not found at ${entryScript}`);
     process.exit(1);
   }

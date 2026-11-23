@@ -153,7 +153,8 @@ const CLI_CREATE_SCOPE_SCHEMA = z.object({
         .min(
             1,
             'workspace_id (repository name) is required. It could not be auto-resolved from project_number or current directory.'
-        ),
+        )
+        .max(255, 'workspace_id must be 255 characters or fewer.'),
     project_number: z
         .number({
             message: 'project_number is required. Entries must be assigned to a valid project.',
@@ -361,7 +362,7 @@ async function enforceCliUpdateTeamPermissions(
 ): Promise<void> {
     const [{ enforceCliTeamRbac }, { checkSingleTeamOwnership }] = await Promise.all([
         import('./db-helper.js'),
-        import('../../handlers/tools/team/admin-tools/batch-delete-helpers.js'),
+        import('../../handlers/tools/team/admin-tools/ownership-helper.js'),
     ])
     enforceCliTeamRbac(db, config, 'member', existingEntry?.workspaceId ?? trimmedTargetWs ?? rawWorkspaceOpt)
     if (

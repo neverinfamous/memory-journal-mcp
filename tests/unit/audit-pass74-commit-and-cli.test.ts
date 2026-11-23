@@ -1,6 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { Command } from 'commander'
+import * as fs from 'node:fs'
 import * as os from 'node:os'
+import * as path from 'node:path'
 
 const { execFileSpy } = vi.hoisted(() => {
     const spy = vi.fn(
@@ -109,6 +111,15 @@ describe('audit pass74 negative anchor caching, default-command argv normalizati
             '--journal-project',
             '5',
         ])
+
+        const cliIndexSrc = fs.readFileSync(
+            path.resolve(process.cwd(), 'src/cli/index.ts'),
+            'utf8'
+        )
+        const commitRegPos = cliIndexSrc.indexOf(".command('commit [args...]')")
+        const normCallPos = cliIndexSrc.indexOf('normalizeCliArgv(process.argv, program)')
+        expect(commitRegPos).toBeGreaterThan(-1)
+        expect(normCallPos).toBeGreaterThan(commitRegPos)
     })
 
     it('B-L3: applyCliEntryFlagAliases prefers workspace_id ahead of workspace', () => {

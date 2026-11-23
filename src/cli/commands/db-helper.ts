@@ -9,6 +9,7 @@ import {
     getCallerIdentity,
 } from '../../handlers/tools/team/rbac.js'
 import { assertSafeDirectoryPath, assertSafeFilePath } from '../../utils/security-utils.js'
+import { assertSyntacticallySafeCliPath } from './cli-input-reader.js'
 import {
     findCanonicalRegistryKey,
     loadProjectRegistryFromConfig,
@@ -122,7 +123,9 @@ export async function assertSafeCliDir(dir: string | undefined, label: string): 
     if (dir.includes('\0')) {
         throw new Error('Invalid directory path: null bytes are not allowed')
     }
-    const resolvedDir = path.resolve(dir.trim())
+    const trimmed = dir.trim()
+    assertSyntacticallySafeCliPath(trimmed, '--dir')
+    const resolvedDir = path.resolve(trimmed)
     await assertNonSymlinkCliAncestors(resolvedDir)
     assertSafeDirectoryPath(resolvedDir, [resolvedDir])
     return resolvedDir
@@ -140,6 +143,7 @@ export async function assertSafeCliOutputFile(
     if (trimmed === '') {
         throw new Error(`${flagName} path cannot be empty`)
     }
+    assertSyntacticallySafeCliPath(trimmed, flagName)
     const resolvedPath = path.resolve(trimmed)
     const destDir = path.dirname(resolvedPath)
     await assertNonSymlinkCliAncestors(destDir)

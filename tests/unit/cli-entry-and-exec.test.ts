@@ -933,5 +933,75 @@ describe('CLI Entry & Exec Commands', () => {
                 verifyDb.close()
             }
         })
+
+        it('rejects oversized/symlink/Win32-unsafe CLI input files, limits frontmatter size/aliases, and sanitizes config errors (SEC-H7, SEC-M4, SEC-M5)', async () => {
+            const { readBoundedCliInputFile } = await import('../../src/cli/commands/cli-input-reader.js')
+            const { getCliCommandDb } = await import('../../src/cli/commands/db-core.js')
+
+            expect(() => readBoundedCliInputFile('   ', '--file')).toThrow(/non-empty/)
+            expect(() => readBoundedCliInputFile('\\\\server\\share\\file.md', '--file')).toThrow(/Unsafe --file/)
+            expect(() => readBoundedCliInputFile('C:\\temp\\bad.md:stream', '--file')).toThrow(/Unsafe --file/)
+            expect(() => readBoundedCliInputFile('CON.txt', '--file')).toThrow(/Unsafe --file/)
+
+            const bigFile = path.join(tmpDir, 'too-big.md')
+            fs.writeFileSync(bigFile, 'x'.repeat(2048), 'utf-8')
+            expect(() => readBoundedCliInputFile(bigFile, '--file', 1024)).toThrow(/exceeds maximum/)
+
+            const targetFile = path.join(tmpDir, 'real.md')
+            const symFile = path.join(tmpDir, 'link.md')
+            fs.writeFileSync(targetFile, 'hello\n', 'utf-8')
+            let linked = false
+            try {
+                fs.symlinkSync(targetFile, symFile, 'file')
+                linked = true
+            } catch {
+                // Developer Mode disabled
+            }
+            if (linked) {
+                expect(() => readBoundedCliInputFile(symFile, '--file')).toThrow(/non-symlink/)
+                await expect(parseContent({ file: symFile })).rejects.toThrow(/non-symlink/)
+            }
+
+            // SEC-M4: oversized frontmatter (> 64 KiB) throws ValidationError
+            const hugeFm = `---\ntitle: "${'a'.repeat(70_000)}"\n---\nBody`
+            expect(() => parseFrontmatter(hugeFm)).toThrow(/maximum size/i)
+
+            // SEC-M4: CLI_CREATE_SCOPE_SCHEMA rejects >255-char workspace_id
+            await expect(
+                createEntryAction(
+                    {
+                        db: dbPath,
+                        workspace: 'w'.repeat(260),
+                        project: 5,
+                        content: 'Overlong workspace',
+                    },
+                    dummyCmd
+                )
+            ).rejects.toThrow('PROCESS_EXIT_1')
+
+            // SEC-M5: getCliCommandDb redacts bearer/secrets in startup configuration errors
+            const badConfigCmd = new Command('serve')
+            await expect(
+                getCliCommandDb(
+                    { config: path.join(tmpDir, 'missing.json'), authToken: 'Bearer secret_leak_tok' } as never,
+                    badConfigCmd,
+                    { throwOnExit: true }
+                ).catch((e: unknown) => {
+                    expect(stderrOutput.join('')).not.toContain('secret_leak_tok')
+                    throw e
+                })
+            ).rejects.toBeDefined()
+
+            // Pass 2: assertSafeCliDir and assertSafeCliOutputFile reject UNC/ADS/device paths before lstat
+            const { assertSafeCliDir, assertSafeCliOutputFile } = await import(
+                '../../src/cli/commands/db-helper.js'
+            )
+            await expect(assertSafeCliDir('\\\\nonexistent-smb\\share\\dir', 'export')).rejects.toThrow(
+                /Unsafe --dir/
+            )
+            await expect(
+                assertSafeCliOutputFile('\\\\nonexistent-smb\\share\\out.json', '--out')
+            ).rejects.toThrow(/Unsafe --out/)
+        })
     })
 })
