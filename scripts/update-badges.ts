@@ -388,25 +388,17 @@ function autoCommitDirtyBadgeFiles(
   const gitModified = new Set<string>();
   if (remaining.length > 0) {
     try {
-      const diff = execFileSync("git", ["ls-files", "-m", "--", ...remaining], {
-        cwd: rootDir,
-        encoding: "utf-8",
-        windowsHide: true,
-      }).trim();
+      const diff = execFileSync("git", ["ls-files", "-m", "--", ...remaining], { cwd: rootDir, encoding: "utf-8", windowsHide: true }).trim();
       for (const line of diff.split(LINE_SPLIT_RE)) {
         const trimmed = line.trim();
-        if (trimmed.length > 0) {
-          gitModified.add(trimmed.replace(/\\/g, "/"));
-        }
+        if (trimmed.length > 0) gitModified.add(trimmed.replace(/\\/g, "/"));
       }
     } catch (error) {
       console.error("git ls-files failed for badge files:", error instanceof Error ? error.message : error);
     }
   }
 
-  const dirtyFiles = filesToUpdate.filter(
-    (file) => updatedFiles.includes(file) || gitModified.has(file.replace(/\\/g, "/"))
-  );
+  const dirtyFiles = filesToUpdate.filter((file) => updatedFiles.includes(file) || gitModified.has(file.replace(/\\/g, "/")));
 
   if (dirtyFiles.length === 0) return;
   console.log(`\nAuto-committing badge updates for: ${dirtyFiles.join(", ")}`);
@@ -419,11 +411,7 @@ function autoCommitDirtyBadgeFiles(
   }
 
   try {
-    execFileSync(inv.command, inv.args, {
-      stdio: "inherit",
-      cwd: rootDir,
-      windowsHide: true,
-    });
+    execFileSync(inv.command, inv.args, { stdio: "inherit", cwd: rootDir, windowsHide: true });
     console.log("Successfully auto-committed badge updates.");
   } catch (err: unknown) {
     console.error("Failed to auto-commit badge updates:", err instanceof Error ? err.message : String(err));
@@ -435,22 +423,16 @@ export function updateBadges(options: { rootDir?: string } = {}): void {
   const rootDir = options.rootDir ?? ROOT_DIR;
   const metrics = loadBadgeMetrics({ rootDir });
   const filesToUpdate = ["README.md", "DOCKER_README.md"];
-  const updatedFiles = filesToUpdate.filter((file) =>
-    updateBadgeTargetFile(file, metrics, rootDir)
-  );
+  const updatedFiles = filesToUpdate.filter((file) => updateBadgeTargetFile(file, metrics, rootDir));
   if (process.exitCode !== undefined && process.exitCode !== 0) return;
   autoCommitDirtyBadgeFiles(filesToUpdate, updatedFiles, rootDir);
-}
-
-function normalizePathForCompare(p: string): string {
-  const resolved = path.resolve(p);
-  return process.platform === "win32" ? resolved.toLowerCase() : resolved;
 }
 
 function isMainModule(): boolean {
   const entry = process.argv[1];
   if (entry === undefined || entry.length === 0) return false;
-  return normalizePathForCompare(entry) === normalizePathForCompare(__filename);
+  const norm = (p: string): string => (process.platform === "win32" ? path.resolve(p).toLowerCase() : path.resolve(p));
+  return norm(entry) === norm(__filename);
 }
 
 if (isMainModule()) {

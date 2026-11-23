@@ -170,7 +170,7 @@ async function resolveCliCreateScopeAndAuthor(
     payload: EntryPayload,
     db: IDatabaseAdapter,
     config: ToolHandlerConfig
-): Promise<{ resolvedWs: string | undefined; resolvedAuthor: string | undefined }> {
+): Promise<{ resolvedWs: string; resolvedAuthor: string | undefined }> {
     let resolvedWs = payload.workspaceId?.trim()
     // [INVARIANT] `*` is an admin read override and can never be a write target (H4).
     if (resolvedWs === '*') {
@@ -182,20 +182,23 @@ async function resolveCliCreateScopeAndAuthor(
     if (resolvedWs === undefined || resolvedWs === '' || resolvedWs.toLowerCase() === 'test') {
         resolvedWs = undefined
     }
-    CLI_CREATE_SCOPE_SCHEMA.parse({ workspace_id: resolvedWs, project_number: payload.projectNumber })
+    const parsedScope = CLI_CREATE_SCOPE_SCHEMA.parse({
+        workspace_id: resolvedWs,
+        project_number: payload.projectNumber,
+    })
     let resolvedAuthor: string | undefined
     if (options.team === true) {
         const [{ resolveTeamCreateAuthor }, { canonicalizeTeamAuthor }] = await Promise.all([
             import('../../handlers/tools/team/admin-tools/create-author-helper.js'),
             import('../../handlers/tools/team/rbac.js'),
         ])
-        const authorResult = resolveTeamCreateAuthor(undefined, db, config, resolvedWs)
+        const authorResult = resolveTeamCreateAuthor(undefined, db, config, parsedScope.workspace_id)
         if ('errorResponse' in authorResult) {
             throw new AuthorizationError(String(authorResult.errorResponse['error']))
         }
-        resolvedAuthor = canonicalizeTeamAuthor(db, authorResult.author, resolvedWs)
+        resolvedAuthor = canonicalizeTeamAuthor(db, authorResult.author, parsedScope.workspace_id)
     }
-    return { resolvedWs, resolvedAuthor }
+    return { resolvedWs: parsedScope.workspace_id, resolvedAuthor }
 }
 
 async function runCreateEntry(
@@ -212,12 +215,17 @@ async function runCreateEntry(
         const { config } = loaded
         const { content, payload } = await loadCliEntryContentAndPayload(options, config)
         const { resolvedWs, resolvedAuthor } = await resolveCliCreateScopeAndAuthor(options, payload, db, config)
-        const resolvedAnchors = await resolveEntryAnchors(payload.anchors, payload.autoContextStr, resolvedWs ?? 'default', { db, config })
+        const resolvedAnchors = await resolveEntryAnchors(
+            payload.anchors,
+            payload.autoContextStr,
+            resolvedWs,
+            { db, config }
+        )
 
         if (options.dryRunLinks === true) {
             handleCliDryRunLinks({
                 db,
-                workspaceId: resolvedWs ?? 'default',
+                workspaceId: resolvedWs,
                 projectNumber: payload.projectNumber,
                 sessionId: payload.sessionId,
                 anchors: resolvedAnchors,
@@ -244,32 +252,18 @@ async function runCreateEntry(
                 : {}),
         })
         await autoPopulateCliSuggestedLinks({
-            db,
-            entry: newEntry,
-            workspaceId: resolvedWs ?? 'default',
-            projectNumber: payload.projectNumber,
-            sessionId: payload.sessionId,
-            relationships: payload.relationships,
-            relatedIds: payload.relatedIds,
-            autoLink: payload.autoLink,
-            isTeam: options.team,
+            db, entry: newEntry, workspaceId: resolvedWs, projectNumber: payload.projectNumber,
+            sessionId: payload.sessionId, relationships: payload.relationships,
+            relatedIds: payload.relatedIds, autoLink: payload.autoLink, isTeam: options.team,
         })
         const effectiveProjectNumber =
             typeof newEntry.projectNumber === 'number' && newEntry.projectNumber > 0
                 ? newEntry.projectNumber
                 : payload.projectNumber
-        const linkFailures = linkCliEntryRelationships(
-            db,
-            newEntry.id,
-            payload,
-            resolvedWs,
-            effectiveProjectNumber
-        )
+        const linkFailures = linkCliEntryRelationships(db, newEntry.id, payload, resolvedWs, effectiveProjectNumber)
         db.flushSave()
         writeCliEntryResult(newEntry, linkFailures, options.json, 'created', !inProcess)
-        if (linkFailures.length > 0) {
-            exitCode = 1
-        }
+        if (linkFailures.length > 0) exitCode = 1
     } catch (e) {
         exitCode = handleCliEntryError(e, 'create')
     } finally {
