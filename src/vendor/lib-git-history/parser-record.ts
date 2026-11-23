@@ -346,7 +346,7 @@ export function parseGitRecord(commitBlock: string, args: CliArgs, inlineNumstat
   );
 
   if (args.breaking && !isBreaking) return null;
-  if (args['changelog-only'] && trailers.entriesParsed.length === 0 && !(CHANGELOG_TYPES.has(type || '') || isBreaking)) {
+  if (args['changelog-only'] && trailers.entriesParsed.length === 0 && !(CHANGELOG_TYPES.has((type ?? '').toLowerCase()) || isBreaking)) {
     return null;
   }
 

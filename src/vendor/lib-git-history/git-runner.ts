@@ -248,7 +248,7 @@ export function buildGitBaseArgs(args: CliArgs, targetRange: string | undefined)
   const hasTsFilters = args.category || args.type || args.breaking || args['changelog-only'] || args.impact || args.confidence;
   const hasNativeFilters = args.author || args.search || args.grep || args['patch-search'] || args.pickaxe || args.path || args.since || args.until || args['diff-filter'];
 
-  if (args.all) {
+  if (args.all && (!targetRange || targetRange === 'HEAD')) {
     gitArgs.push('--all');
   } else if (!targetRange || targetRange === 'HEAD') {
     const format = args.format?.replace(/^["']|["']$/g, '');

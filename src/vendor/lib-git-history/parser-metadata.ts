@@ -76,7 +76,7 @@ export function matchesCommitEntryFilters(entry: FilterableCommitEntry, args: Cl
   const isBreaking = Boolean(entry.isBreaking);
   if (args.breaking && !isBreaking) return false;
   const hasEntry = Boolean(meta?.entry && meta.entry.length > 0);
-  if (args['changelog-only'] && !hasEntry && !(CHANGELOG_TYPES.has(entry.type || '') || isBreaking)) {
+  if (args['changelog-only'] && !hasEntry && !(CHANGELOG_TYPES.has((entry.type ?? '').toLowerCase()) || isBreaking)) {
     return false;
   }
   return true;
@@ -96,7 +96,7 @@ export function matchesRawRecordFilters(
   if (args.breaking && !raw.isBreaking) return false;
   const rawEntries = raw.metadataObj['entry'];
   const hasEntry = Array.isArray(rawEntries) && rawEntries.length > 0;
-  if (args['changelog-only'] && !hasEntry && !(CHANGELOG_TYPES.has(raw.type || '') || raw.isBreaking)) {
+  if (args['changelog-only'] && !hasEntry && !(CHANGELOG_TYPES.has((raw.type ?? '').toLowerCase()) || raw.isBreaking)) {
     return false;
   }
   return true;

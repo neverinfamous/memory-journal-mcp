@@ -190,6 +190,7 @@ function parseUncommittedNumstat(numstat: string): Map<string, UncommittedNumsta
 
 interface ParsedStatusEntry {
   mappedStatus: string;
+  isUntracked: boolean;
   file: string;
   oldFile?: string;
 }
@@ -208,11 +209,12 @@ function parseStatusEntries(nameStatus: string): ParsedStatusEntry[] {
       i++;
       oldFile = parts[i];
     }
+    const isUntracked = xy === '??';
     let mappedStatus = xy;
-    if (xy === '??') mappedStatus = 'U';
+    if (isUntracked) mappedStatus = 'U';
     else if (xy[0] !== ' ' && xy[0] !== '?') mappedStatus = xy[0] ?? xy;
     else if (xy[1] !== ' ') mappedStatus = xy[1] ?? xy;
-    entries.push(oldFile ? { mappedStatus, file, oldFile } : { mappedStatus, file });
+    entries.push(oldFile ? { mappedStatus, isUntracked, file, oldFile } : { mappedStatus, isUntracked, file });
   }
   return entries;
 }
@@ -225,9 +227,9 @@ function buildFilesFromEntries(
   const files: FileStatus[] = [];
   let totalInsertions = 0;
   let totalDeletions = 0;
-  for (const { mappedStatus, file, oldFile } of entries) {
+  for (const { mappedStatus, isUntracked, file, oldFile } of entries) {
     const stats = numstatsMap.get(file) ?? {
-      insertions: mappedStatus === 'U' ? (untrackedCounts.get(file) ?? 0) : 0,
+      insertions: isUntracked ? (untrackedCounts.get(file) ?? 0) : 0,
       deletions: 0,
     };
     const flatFile = flattenString(file);
@@ -258,7 +260,7 @@ function parseUncommittedFiles(
   const resolvedCwd = path.resolve(cwd);
   const untrackedCounts = new Map<string, number>();
   for (const e of entries) {
-    if (e.mappedStatus === 'U' && !numstatsMap.has(e.file)) {
+    if (e.isUntracked && !numstatsMap.has(e.file)) {
       untrackedCounts.set(e.file, countUntrackedLines(resolvedCwd, e.file));
     }
   }
@@ -275,7 +277,7 @@ async function parseUncommittedFilesAsync(
   const resolvedCwd = path.resolve(cwd);
   const untrackedFiles: string[] = [];
   for (const e of entries) {
-    if (e.mappedStatus === 'U' && !numstatsMap.has(e.file)) untrackedFiles.push(e.file);
+    if (e.isUntracked && !numstatsMap.has(e.file)) untrackedFiles.push(e.file);
   }
   const untrackedCounts = new Map<string, number>();
   for (let i = 0; i < untrackedFiles.length; i += UNTRACKED_ASYNC_CONCURRENCY) {
@@ -323,7 +325,7 @@ function finalizeUncommittedEntry(
     date: new Date().toISOString(),
     subject: 'Uncommitted Changes',
     cleanSubject: 'Uncommitted Changes',
-    files: filesResult.files.length > 0 ? filesResult.files : undefined,
+    ...(filesResult.files.length > 0 ? { files: filesResult.files } : {}),
     fileCount: filesResult.files.length,
     totalInsertions: filesResult.totalInsertions,
     totalDeletions: filesResult.totalDeletions,
@@ -343,6 +345,8 @@ function runSyncDiffWithUnbornFallback(
   if (isUnbornHeadError(errText)) {
     const fallback = spawnSync('git', cachedArgs, execOpts);
     if (!fallback.error && fallback.status === 0) return fallback.stdout;
+    const fbErr = typeof fallback.stderr === 'string' ? fallback.stderr : '';
+    console.warn(`[lib-git-history] Warning: git diff --cached failed: ${fbErr || fallback.error?.message || `exit ${fallback.status}`}`);
   } else {
     console.warn(`[lib-git-history] Warning: git diff failed: ${errText || res.error?.message || `exit ${res.status}`}`);
   }
@@ -409,16 +413,13 @@ export async function getUncommittedStateAsync(args: CliArgs, cwd: string = proc
   const [statusRes, numstatRes, patchRes, configRes] = await Promise.allSettled([
     runGit(['--no-optional-locks', '--no-pager', 'status', '-z', '--porcelain', untrackedFlag, ...pathFilter]),
     skipDiffs ? Promise.resolve('') : runGit(['--no-optional-locks', '--no-pager', 'diff', '--numstat', '-z', 'HEAD', ...pathFilter]),
-    wantPatch
-      ? runGit(['--no-optional-locks', '--no-pager', 'diff', ...diffContextArg, 'HEAD', ...pathFilter])
-      : Promise.resolve<string | undefined>(undefined),
+    wantPatch ? runGit(['--no-optional-locks', '--no-pager', 'diff', ...diffContextArg, 'HEAD', ...pathFilter]) : Promise.resolve<string | undefined>(undefined),
     runGit(['config', '--get-regexp', '^user\\.(name|email)$']),
   ]);
+  if (statusRes.status === 'rejected') throw formatGitStatusFailure(statusRes.reason);
 
-  if (statusRes.status === 'rejected') {
-    throw formatGitStatusFailure(statusRes.reason);
-  }
-
+  const warnDiff = (op: string, r: unknown): void =>
+    console.warn(`[lib-git-history] Warning: ${op} failed: ${extractSettledRejectionText(r).trim()}`);
   const needsNumstatFallback = !skipDiffs && numstatRes.status === 'rejected' && isUnbornHeadError(extractSettledRejectionText(numstatRes.reason));
   const needsPatchFallback = wantPatch && patchRes.status === 'rejected' && isUnbornHeadError(extractSettledRejectionText(patchRes.reason));
   let numstat = numstatRes.status === 'fulfilled' ? numstatRes.value : '';
@@ -429,16 +430,17 @@ export async function getUncommittedStateAsync(args: CliArgs, cwd: string = proc
       needsNumstatFallback ? runGit(['--no-optional-locks', '--no-pager', 'diff', '--cached', '--numstat', '-z', ...pathFilter]) : Promise.resolve(numstat),
       needsPatchFallback ? runGit(['--no-optional-locks', '--no-pager', 'diff', '--cached', ...diffContextArg, ...pathFilter]) : Promise.resolve(patch),
     ]);
-    if (needsNumstatFallback && cachedNumstat.status === 'fulfilled') numstat = cachedNumstat.value;
-    if (needsPatchFallback && cachedPatch.status === 'fulfilled') patch = cachedPatch.value;
-  } else {
-    if (!skipDiffs && numstatRes.status === 'rejected') {
-      console.warn(`[lib-git-history] Warning: git diff --numstat failed: ${extractSettledRejectionText(numstatRes.reason).trim()}`);
+    if (needsNumstatFallback) {
+      if (cachedNumstat.status === 'fulfilled') numstat = cachedNumstat.value;
+      else warnDiff('git diff --cached --numstat', cachedNumstat.reason);
     }
-    if (wantPatch && patchRes.status === 'rejected') {
-      console.warn(`[lib-git-history] Warning: git diff patch failed: ${extractSettledRejectionText(patchRes.reason).trim()}`);
+    if (needsPatchFallback) {
+      if (cachedPatch.status === 'fulfilled') patch = cachedPatch.value;
+      else warnDiff('git diff --cached patch', cachedPatch.reason);
     }
   }
+  if (!skipDiffs && !needsNumstatFallback && numstatRes.status === 'rejected') warnDiff('git diff --numstat', numstatRes.reason);
+  if (wantPatch && !needsPatchFallback && patchRes.status === 'rejected') warnDiff('git diff patch', patchRes.reason);
 
   const userConfigRaw = configRes.status === 'fulfilled' ? configRes.value : '';
   const filesResult = skipDiffs

@@ -90,7 +90,10 @@ export function parseArguments(): CliArgs {
     // Remove aliases to ensure a single source of truth in the returned object
     delete values.before;
     delete values.after;
-    
+    if (typeof values.format === 'string') {
+      values.format = values.format.replace(/^["']|["']$/g, '');
+    }
+
     return cliArgsSchema.parse(values);
   } catch (err: unknown) {
     console.error(JSON.stringify({

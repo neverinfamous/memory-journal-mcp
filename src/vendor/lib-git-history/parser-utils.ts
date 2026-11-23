@@ -95,12 +95,15 @@ export function expandIssueTrackerUrl(issue: string, tracker: string): string {
   let urlTemplate = tracker;
 
   if (urlTemplate.includes(',')) {
+    let matched = false;
     for (const [prefix, tpl] of getParsedTrackerRules(urlTemplate)) {
       if (issue.startsWith(prefix)) {
         urlTemplate = tpl;
+        matched = true;
         break;
       }
     }
+    if (!matched) return issue;
   }
 
   const cleanIssue = issue.startsWith('#') ? issue.slice(1) : issue;
@@ -143,7 +146,7 @@ const NOISE_DIRS: ReadonlySet<string> = new Set([
 ]);
 
 export function isNoiseFile(file: string): boolean {
-  const lower = file.toLowerCase();
+  const lower = (file.includes('\\') ? file.replace(/\\/g, '/') : file).toLowerCase();
   let segStart = 0;
   let prevSeg = '';
   let slash = lower.indexOf('/');
