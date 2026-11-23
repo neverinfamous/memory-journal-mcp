@@ -148,20 +148,20 @@ memory-journal-mcp/
 │   ├── audit/ (8 files)                     # AuditInterceptor and JSONL audit log writers
 │   ├── auth/ (15 files)                     # OAuth 2.1, JWKS, and scope validation middleware
 │   ├── cli/ (30 files)                      # CLI option parsing, config loading, and admin subcommands
-│   ├── codemode/ (70 files)                 # V8 isolate Code Mode sandbox and mj.* API bridges
+│   ├── codemode/ (71 files)                 # V8 isolate Code Mode sandbox and mj.* API bridges
 │   ├── constants/ (32 files)                # Markdown SSoT and generated server instruction modules
-│   ├── database/ (83 files)                 # SQLite (better-sqlite3/FTS5) & Team DB schema/adapters
+│   ├── database/ (84 files)                 # SQLite (better-sqlite3/FTS5) & Team DB schema/adapters
 │   ├── filtering/ (3 files)                 # Dynamic tool-group filter parser and presets
 │   ├── github/ (14 files)                   # GitHub Issues, PRs, Actions, and Projects v2 client
-│   ├── handlers/ (224 files)                # MCP tools, resources, prompts, schemas, and healers
-│   ├── markdown/ (13 files)                 # Markdown journal export/import formatters
+│   ├── handlers/ (226 files)                # MCP tools, resources, prompts, schemas, and healers
+│   ├── markdown/ (14 files)                 # Markdown journal export/import formatters
 │   ├── observability/ (8 files)             # OpenTelemetry metrics, server (:9465), and trace helpers
-│   ├── server/ (24 files)                   # MCP server factory, briefing, and capability wiring
+│   ├── server/ (25 files)                   # MCP server factory, briefing, and capability wiring
 │   ├── transports/ (12 files)               # stdio, Streamable HTTP, and Legacy SSE transports
 │   ├── types/ (8 files)                     # Core journal, relationship, and protocol TypeScript types
-│   ├── utils/ (35 files)                    # Security, error formatting, token estimation, and path helpers
+│   ├── utils/ (36 files)                    # Security, error formatting, token estimation, and path helpers
 │   ├── vector/ (8 files)                    # Embedding provider and hybrid vector similarity index
-│   ├── vendor/ (106 files)                  # Vendored commit/exec/git-history tooling (managed by sync-vendor)
+│   ├── vendor/ (109 files)                  # Vendored commit/exec/git-history tooling (managed by sync-vendor)
 │   ├── index.ts                             # CLI and server startup entrypoint
 │   └── version.ts                           # Runtime package.json version loader
 ├── test-server/                             # Manual QA coordinators, Docker infra, and code maps
@@ -191,7 +191,7 @@ memory-journal-mcp/
 │   ├── security/ (3 files)                  # Injection, path traversal, and SSRF guard tests
 │   ├── server/ (8 files)                    # Server wiring, briefing, and startup tests
 │   ├── transports/ (6 files)                # HTTP/SSE/stdio transport tests
-│   ├── unit/ (110 files)                    # Focused unit tests including vendor-doc-neutralizer
+│   ├── unit/ (131 files)                    # Focused unit tests including vendor-doc-neutralizer
 │   ├── utils/ (12 files)                    # Utility and validation tests
 │   ├── vector/ (5 files)                    # Embedding and vector search tests
 │   ├── build-externals.test.ts              # Built dist/ externals verification test
