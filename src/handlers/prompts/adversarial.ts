@@ -185,7 +185,8 @@ ${buildStandardAuditClosing(copilotInstruction, priorAuditSection)}`,
 
 const skillAudit = buildAuditPromptDefinition({
     name: 'adversarial-audit-skill',
-    description: 'Multi-pass adversarial skill audit (research, evaluate triggers, stress-test) Optional parameters: target, copilot, workspace_id, project_number',
+    description:
+        'Multi-pass closed-loop adversarial skill audit (research, evaluate triggers, stress-test, self-improve AP*/SK*). Optional parameters: target, copilot, workspace_id, project_number',
     tag: 'skill-audit',
     heading: 'Prior skill audits',
     copilotCommand: (t) =>
@@ -198,9 +199,13 @@ ${buildSubagentProtocolGuidance()}
 2. **Gap Analysis**: Compare the subagent research findings against the current skill's contents to identify missing context, outdated information, or new version features.
 3. **Structural Evaluation**: Evaluate the agent skill for trigger reliability, safety gates, and markdown frontmatter compliance.
 4. **External Validation (Copilot — Opt-In)**: ${copilotInstruction}
-5. **Presentation**: Present findings table incorporating Copilot structural findings (if applicable) and the new research gaps.
-6. HITL Approval: Await approval before applying fixes. Diagnostic scans are part of the audit. Do not edit project files until the user approves the plan.
-7. Commit with the target repository's own commit helper when one exists. Discover that helper. Do not invent a script path. Do not add an audit plan file to the repository.
+5. **Closed-Loop Self-Improvement (\`AP1\`–\`APn\` & \`SK1\`–\`SKn\`)**: Reflect on every pass across (a) newly discovered Agent Skills (\`agentskills.io\`) or harness frontmatter, trigger-eval, or security-gate criteria, (b) false-positive traps or ambiguous grading rules encountered during the audit, and (c) research, subagent, or validation friction. Include a concise **Self-Improvement Proposals** table in the report (or explicitly state \`None needed\` when clean):
+   - **\`AP1\`–\`APn\` (\`adversarial-audit-skill\` & companion \`adversarial-build-skill\`)**: Concise, net-compact, strictly portable refinements (no machine-local paths or host-specific tool names; prune stale guidance; note \`AUDIT_PROMPT_REVISION\` and prompt-coverage test updates whenever applied).
+   - **\`SK1\`–\`SKn\` (Skill Authoring & Validation Tooling)**: Portable improvements to the target repository's skill-builder reference, skill manifest, or automated skill validator when recurring structural, link, or trigger-eval gaps appear.
+6. **Presentation**: Present the findings table (incorporating Copilot structural findings if applicable and new research gaps) alongside the **\`AP*\` / \`SK*\` Self-Improvement Proposals** table.
+7. **HITL Approval**: Await approval before applying fixes to the target skill or approved \`AP*\`/\`SK*\` self-improvements. Diagnostic scans are part of the audit. Do not edit project files until the user approves the plan.
+8. **Post-Approval Verification**: Apply approved target-skill fixes and approved \`AP*\`/\`SK*\` refinements sequentially, run the target repository's own skill validator/linter and prompt-coverage tests, and rebuild/refresh the targeted MCP server if prompt handlers changed.
+9. **Commit**: Commit with the target repository's own commit helper when one exists. Discover that helper. Do not invent a script path. Do not add an audit plan file to the repository.
 **Rule**: If you don't make changes, do not commit.
 
 ${priorAuditSection}`,
