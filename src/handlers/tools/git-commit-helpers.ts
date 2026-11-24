@@ -23,15 +23,15 @@ import { getUncommittedStateAsync } from '../../vendor/lib-git-history/uncommitt
 import { readLatestGitTag } from './git-staleness.js'
 
 export interface FetchCommitsInput {
-    maxCount?: number
-    path?: string
-    since?: string
-    query?: string
-    ref?: string
-    sortBy?: 'date' | 'impact'
-    scope?: string
-    techDebtAudit?: boolean
-    summary?: boolean
+    maxCount?: number | undefined
+    path?: string | undefined
+    since?: string | undefined
+    query?: string | undefined
+    ref?: string | undefined
+    sortBy?: 'date' | 'impact' | undefined
+    scope?: string | undefined
+    techDebtAudit?: boolean | undefined
+    summary?: boolean | undefined
 }
 
 function ensureInlineFenced(value: string): string {

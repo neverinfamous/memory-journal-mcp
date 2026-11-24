@@ -101,6 +101,8 @@ function summarizeCiWorkflows(workflowRuns: GitHubWorkflowRun[]): {
                 case 'cancelled':
                     ciStatus = 'cancelled'
                     break
+                case 'skipped':
+                case null:
                 default:
                     ciStatus = 'unknown'
             }
@@ -231,7 +233,7 @@ function buildMilestoneSummary(
         state: string
         openIssues: number
         closedIssues: number
-        dueOn?: string | null
+        dueOn?: string | null | undefined
     }[]
 ): {
     openCount: number
@@ -242,7 +244,7 @@ function buildMilestoneSummary(
         openIssues: number
         closedIssues: number
         completionPercentage: number
-        dueOn?: string | null
+        dueOn?: string | null | undefined
     }[]
 } | null {
     if (repoContextResult.status !== 'fulfilled') return null

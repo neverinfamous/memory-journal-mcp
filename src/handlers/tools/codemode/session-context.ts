@@ -18,7 +18,7 @@ type ProjectRegistry = NonNullable<ToolContext['config']>['projectRegistry']
 export function lookupRegistryEntry(
     registry: ProjectRegistry,
     key: string
-): { path?: string; project_number?: number } | undefined {
+): { path?: string | undefined; project_number?: number | undefined } | undefined {
     if (!registry) return undefined
     const direct = Object.hasOwn(registry, key) ? registry[key] : undefined
     if (direct !== undefined) return direct

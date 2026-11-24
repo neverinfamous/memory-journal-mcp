@@ -55,6 +55,8 @@ function classifyRunConclusion(conclusion: string | null | undefined): CiResult[
             return 'failing'
         case 'cancelled':
             return 'cancelled'
+        case null:
+        case undefined:
         default:
             return 'unknown'
     }
@@ -174,7 +176,13 @@ export async function fetchIssuesAndPrs(
     openIssueList?: { number: number; title: string }[] | undefined
     openPrList?: { number: number; title: string; state: string }[] | undefined
     allPrs?:
-        | { number: number; title: string; url: string; state: string; headRef?: string }[]
+        | {
+              number: number
+              title: string
+              url: string
+              state: string
+              headRef?: string | undefined
+          }[]
         | undefined
     degraded?: boolean | undefined
 }> {
@@ -368,7 +376,14 @@ export async function fetchCopilotReviews(
     owner: string,
     repo: string,
     prefetchedPrsPromise?: Promise<
-        { number: number; title: string; url: string; state: string; headRef?: string }[] | undefined
+        | {
+              number: number
+              title: string
+              url: string
+              state: string
+              headRef?: string | undefined
+          }[]
+        | undefined
     >
 ): Promise<
     { reviews?: BriefingGitHub['copilotReviews'] | undefined; degraded?: boolean | undefined } | undefined

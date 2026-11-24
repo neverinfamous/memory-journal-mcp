@@ -77,7 +77,7 @@ function resolveExplicitTarget(
     rawRepo: string,
     config: ResourceContext['briefingConfig'],
     registry: ReturnType<typeof loadProjectRegistryFromConfig>
-): { workspaceId?: string; projectNumber?: number; unresolvedRepo?: string } {
+): { workspaceId?: string | undefined; projectNumber?: number | undefined; unresolvedRepo?: string | undefined } {
     const trimmed = rawRepo.trim()
     if (trimmed === '*') {
         throw new ProtocolError(

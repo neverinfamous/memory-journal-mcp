@@ -17,14 +17,14 @@ export type RegistryMap = Record<string, ProjectRegistryEntry>
 
 export interface RegistryKeyChange {
     from: string
-    to?: string
-    previousProjectNumber?: number
-    projectNumber?: number | null
+    to?: string | undefined
+    previousProjectNumber?: number | undefined
+    projectNumber?: number | null | undefined
 }
 
 /** Rewrites/clears session defaults that pointed at a renamed/deleted project. */
 export function applyDefaultsChange(
-    target: { defaultWorkspaceId?: string; defaultProjectNumber?: number },
+    target: { defaultWorkspaceId?: string | undefined; defaultProjectNumber?: number | undefined },
     change: RegistryKeyChange | undefined
 ): void {
     if (change === undefined) return

@@ -12,17 +12,17 @@ export interface VectorSearchRow {
 }
 
 export interface SearchVectorsOptions {
-    workspaceId?: string
-    projectNumber?: number
+    workspaceId?: string | undefined
+    projectNumber?: number | undefined
 }
 
 export interface CrossProjectInsightsOptions {
-    startDate?: string
-    endDate?: string
+    startDate?: string | undefined
+    endDate?: string | undefined
     minEntries: number
     inactiveThresholdDays: number
-    workspaceId?: string
-    projectNumber?: number
+    workspaceId?: string | undefined
+    projectNumber?: number | undefined
 }
 
 export interface CrossProjectInsightsResult {
@@ -31,13 +31,13 @@ export interface CrossProjectInsightsResult {
 }
 
 export interface VisualizeRelationshipsOptions {
-    entryId?: number
-    tags?: string[]
-    relationshipType?: string
+    entryId?: number | undefined
+    tags?: string[] | undefined
+    relationshipType?: string | undefined
     depth: number
     limit: number
-    workspaceId?: string
-    projectNumber?: number
+    workspaceId?: string | undefined
+    projectNumber?: number | undefined
 }
 
 export interface VisualizeRelationshipsResult {
@@ -45,7 +45,7 @@ export interface VisualizeRelationshipsResult {
         id: string | number
         label: string
         group: string
-        metadata?: Record<string, unknown>
+        metadata?: Record<string, unknown> | undefined
     }[]
     edges: { from: string | number; to: string | number; label: string; type: string }[]
 }
@@ -53,8 +53,8 @@ export interface VisualizeRelationshipsResult {
 export interface TeamCollaborationMatrixOptions {
     period: string
     limit: number
-    workspaceId?: string
-    projectNumber?: number
+    workspaceId?: string | undefined
+    projectNumber?: number | undefined
 }
 
 export interface TeamCollaborationMatrixResult {
@@ -119,10 +119,10 @@ export interface DataLifecycleOptions {
     pruneOlderThanDays: number
     hardDeleteOlderThanDays: number
     importanceThreshold: number
-    dryRun?: boolean
-    excludeTags?: string[]
-    workspaceId?: string
-    projectNumber?: number
+    dryRun?: boolean | undefined
+    excludeTags?: string[] | undefined
+    workspaceId?: string | undefined
+    projectNumber?: number | undefined
 }
 
 export interface DataLifecycleResult {

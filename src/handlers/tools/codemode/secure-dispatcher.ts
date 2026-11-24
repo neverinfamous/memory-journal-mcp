@@ -59,11 +59,11 @@ export interface SecureDispatcherOptions {
     sessionContext: ToolContext
     projectId: number | string | undefined
     workspaceId: string | undefined
-    explicitWorkspace?: boolean
+    explicitWorkspace?: boolean | undefined
     sessionId?: string | undefined
     autoVersion: boolean
     dryRun: boolean
-    onMutatingDispatch?: () => void
+    onMutatingDispatch?: (() => void) | undefined
 }
 
 function extractTestDbOverride(toolParams: unknown): {

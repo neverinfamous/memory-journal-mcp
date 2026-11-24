@@ -120,7 +120,7 @@ export async function readResource(
     teamDb?: IDatabaseAdapter,
     briefingConfig?: BriefingConfig,
     runtime?: ServerRuntime
-): Promise<{ data: unknown; annotations?: { lastModified?: string } }> {
+): Promise<{ data: unknown; annotations?: { lastModified?: string | undefined } | undefined }> {
     if (Buffer.byteLength(uri, 'utf8') > 8192) {
         throw new ProtocolError(
             ProtocolErrorCode.InvalidParams,

@@ -22,22 +22,22 @@ import {
 } from '../../../../utils/legacy-commit-narrative.js'
 
 export interface SearchQueryOptions {
-    limit?: number
-    isPersonal?: boolean
-    projectNumber?: number
-    issueNumber?: number
-    prNumber?: number
-    prStatus?: string
-    workflowRunId?: number
-    tags?: string[]
-    excludeTags?: string[]
-    entryType?: EntryType
-    startDate?: string
-    endDate?: string
-    sortBy?: SortBy
-    includeArchived?: boolean
-    includeHighlights?: boolean
-    workspaceId?: string
+    limit?: number | undefined
+    isPersonal?: boolean | undefined
+    projectNumber?: number | undefined
+    issueNumber?: number | undefined
+    prNumber?: number | undefined
+    prStatus?: string | undefined
+    workflowRunId?: number | undefined
+    tags?: string[] | undefined
+    excludeTags?: string[] | undefined
+    entryType?: EntryType | undefined
+    startDate?: string | undefined
+    endDate?: string | undefined
+    sortBy?: SortBy | undefined
+    includeArchived?: boolean | undefined
+    includeHighlights?: boolean | undefined
+    workspaceId?: string | undefined
 }
 
 export interface SearchPosition {
@@ -48,7 +48,10 @@ export interface SearchPosition {
     degradedCursor: boolean
 }
 
-export function readSearchPosition(options?: { cursor?: string; offset?: number }): SearchPosition {
+export function readSearchPosition(options?: {
+    cursor?: string | undefined
+    offset?: number | undefined
+}): SearchPosition {
     let offset = options?.offset ?? 0
     let keysetT = ''
     let keysetId = 0

@@ -199,7 +199,7 @@ export function matchesExactName(name: string, list: string[]): boolean {
 }
 
 export function resolveSingleProjectFromRegistry(
-    registry: Record<string, { path: string; project_number?: number }> | undefined,
+    registry: Record<string, { path: string; project_number?: number | undefined } | undefined> | undefined,
     toolArgs: Record<string, unknown>,
     requestedTool: string
 ): Record<string, unknown> {
@@ -238,9 +238,10 @@ export function resolveSingleProjectFromRegistry(
         numArg ??
         (nameArg !== undefined ? parseCanonicalPositiveInt(nameArg) : undefined)
     if (numericTarget !== undefined) {
-        const matches = Object.entries(reg).filter(
-            ([, pData]) => pData.project_number === numericTarget
-        )
+        const matches = Object.entries(reg).flatMap(([pName, pData]) => {
+            if (pData === undefined) return []
+            return pData.project_number === numericTarget ? ([[pName, pData]] as const) : []
+        })
         if (matches.length > 1) {
             return {
                 success: false,

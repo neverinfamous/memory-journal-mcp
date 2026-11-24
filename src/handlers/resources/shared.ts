@@ -208,7 +208,7 @@ export interface BriefingConfig {
     /** Number of recent journal entries to include (default: 3) */
     entryCount: number
     /** Number of recent session summaries to display (default: 1) */
-    summaryCount?: number
+    summaryCount?: number | undefined
     /** Include team DB entries in briefing preview (default: false) */
     includeTeam: boolean
     /** Number of open issues to list with titles; 0 = hide (default: 0) */
@@ -218,11 +218,11 @@ export interface BriefingConfig {
     /** Show PR status breakdown (open/merged/closed) instead of simple count (default: false) */
     prStatusBreakdown: boolean
     /** Number of milestones to list in briefing; 0 = hide (default: 3) */
-    milestoneCount?: number
+    milestoneCount?: number | undefined
     /** Path to the user's rules file (served via memory://rules) */
-    rulesFilePath?: string
+    rulesFilePath?: string | undefined
     /** Path to the user's skills directory (served via memory://skills) */
-    skillsDirPath?: string
+    skillsDirPath?: string | undefined
     /** Number of recent workflow runs to list; 0 = hide unless workflowStatusBreakdown is true (default: 0) */
     workflowCount: number
     /** Show workflow run status breakdown (passing/failing/pending) (default: false) */
@@ -230,32 +230,32 @@ export interface BriefingConfig {
     /** Aggregate Copilot review state across recent PRs in briefing (default: false) */
     copilotReviews: boolean
     /** Workflow summary string for the memory://workflows resource (env: MEMORY_JOURNAL_WORKFLOW_SUMMARY) */
-    workflowSummary?: string
+    workflowSummary?: string | undefined
     /** Default GitHub Project number for Kanban resources and issue tools (env: DEFAULT_PROJECT_NUMBER) */
-    defaultProjectNumber?: number
+    defaultProjectNumber?: number | undefined
     /** Default workspace ID for isolating journal entries */
-    defaultWorkspaceId?: string
+    defaultWorkspaceId?: string | undefined
     /** Project registry mapping dynamic repo IDs to local paths and kanban boards */
-    projectRegistry?: Record<string, ProjectRegistryEntry>
+    projectRegistry?: Record<string, ProjectRegistryEntry> | undefined
 
     /** Allowlisted directory roots for strict filesystem jailing of agent read access */
-    allowedIoRoots?: string[]
+    allowedIoRoots?: string[] | undefined
     /** Minimum significance score for entries to be included in the briefing (default: 0.3) */
-    briefingImportanceThreshold?: number
+    briefingImportanceThreshold?: number | undefined
     /**
      * Graph & git pivots in the briefing (default: true): per-entry link degree (`↔N` / `⚪`),
      * commit→entry refs (`→#id`), recency-scoped active threads and 14-day unlinked rate.
      * Disable with `--no-briefing-graph`, `BRIEFING_GRAPH=false`, or config `briefingGraph: false`.
      */
-    graphPivots?: boolean
+    graphPivots?: boolean | undefined
     /**
      * Insights row (default: true): GitHub repo stats/traffic and the analytics digest.
      * `false` hides the row AND skips its GitHub API calls and digest query
      * (`--no-briefing-insights`, `BRIEFING_INSIGHTS=false`, config `briefingInsights: false`).
      */
-    insights?: boolean
+    insights?: boolean | undefined
     /** Server instruction verbosity level forwarded to `memory://instructions`. */
-    instructionLevel?: 'essential' | 'detailed' | 'full'
+    instructionLevel?: 'essential' | 'detailed' | 'full' | undefined
 }
 
 /** Default briefing configuration — preserves pre-existing behavior */
@@ -285,8 +285,8 @@ export const DEFAULT_BRIEFING_CONFIG: BriefingConfig = {
  * context (H1); session is consulted before cwd.
  */
 export function resourceWorkspace(context: {
-    briefingConfig?: Partial<BriefingConfig>
-    runtime?: ServerRuntime | object | null
+    briefingConfig?: Partial<BriefingConfig> | undefined
+    runtime?: ServerRuntime | object | null | undefined
 }): string {
     const cfg = context.briefingConfig
     const registry = cfg?.projectRegistry ?? loadProjectRegistryFromConfig()
@@ -336,8 +336,8 @@ export function resourceWorkspace(context: {
  */
 export function resourceProjectNumber(
     context: {
-        briefingConfig?: Partial<BriefingConfig>
-        runtime?: ServerRuntime | object | null
+        briefingConfig?: Partial<BriefingConfig> | undefined
+        runtime?: ServerRuntime | object | null | undefined
     },
     wsId: string
 ): number | undefined {
@@ -382,13 +382,13 @@ export function resourceProjectNumber(
 
 export interface ResourceContext {
     db: IDatabaseAdapter
-    teamDb?: IDatabaseAdapter
-    vectorManager?: VectorSearchManager
-    filterConfig?: ToolFilterConfig | null
-    github?: GitHubIntegration | null
-    briefingConfig?: BriefingConfig
-    runtime?: ServerRuntime
-    resourceCount?: number
+    teamDb?: IDatabaseAdapter | undefined
+    vectorManager?: VectorSearchManager | undefined
+    filterConfig?: ToolFilterConfig | null | undefined
+    github?: GitHubIntegration | null | undefined
+    briefingConfig?: BriefingConfig | undefined
+    runtime?: ServerRuntime | undefined
+    resourceCount?: number | undefined
 }
 
 /**
@@ -397,8 +397,8 @@ export interface ResourceContext {
 export interface ResourceResult {
     data: unknown
     annotations?: {
-        lastModified?: string // ISO 8601 timestamp
-    }
+        lastModified?: string | undefined // ISO 8601 timestamp
+    } | undefined
 }
 
 /**

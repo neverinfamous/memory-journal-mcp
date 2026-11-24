@@ -67,77 +67,77 @@ export interface HttpTransportConfig {
     stateless: boolean
 
     /** Bearer token for authentication (optional) */
-    authToken?: string
+    authToken?: string | undefined
 
     /**
      * Allowed CORS origins. Defaults to `[]` (no origins allowed — strict by default).
      * To allow all origins, pass `["*"]`. For production, list explicit origins.
      * Note: `corsAllowCredentials` cannot be combined with the `"*"` wildcard.
      */
-    corsOrigins?: string[]
+    corsOrigins?: string[] | undefined
 
     /** Allow credentials in CORS requests (default: false) */
-    corsAllowCredentials?: boolean
+    corsAllowCredentials?: boolean | undefined
 
     /**
      * Trust proxy headers for client IP extraction (default: false).
      * When enabled, uses the leftmost IP from X-Forwarded-For for rate limiting.
      * Only enable when running behind a trusted reverse proxy.
      */
-    trustProxy?: boolean
+    trustProxy?: boolean | undefined
 
     /**
      * Enable HTTP Strict Transport Security header (default: false).
      * Should only be enabled when running behind HTTPS.
      */
-    enableHSTS?: boolean
+    enableHSTS?: boolean | undefined
 
     /** HSTS max-age in seconds (default: 31536000 = 1 year) */
-    hstsMaxAge?: number
+    hstsMaxAge?: number | undefined
 
     /** Enable rate limiting (default: true) */
-    enableRateLimit?: boolean
+    enableRateLimit?: boolean | undefined
 
     /** Rate limit window in milliseconds (default: 60000 = 1 minute) */
-    rateLimitWindowMs?: number
+    rateLimitWindowMs?: number | undefined
 
     /** Maximum requests per window per IP (default: 100) */
-    rateLimitMaxRequests?: number
+    rateLimitMaxRequests?: number | undefined
 
     /** Maximum request body size in bytes (default: 1MB) */
-    maxBodySize?: number
+    maxBodySize?: number | undefined
 
     // =================
     // OAuth 2.1 Config
     // =================
 
     /** Enable OAuth 2.1 authentication (default: false) */
-    oauthEnabled?: boolean
+    oauthEnabled?: boolean | undefined
 
     /** OAuth issuer URL (authorization server) */
-    oauthIssuer?: string
+    oauthIssuer?: string | undefined
 
     /** Expected OAuth audience (client ID) */
-    oauthAudience?: string
+    oauthAudience?: string | undefined
 
     /** JWKS URI for key discovery (auto-discovered if not set) */
-    oauthJwksUri?: string
+    oauthJwksUri?: string | undefined
 
     /** Clock tolerance in seconds for token validation (default: 60) */
-    oauthClockTolerance?: number
+    oauthClockTolerance?: number | undefined
 
     /**
      * The public resource origin for OAuth RFC 9728 metadata (e.g. "https://example.com").
      * If omitted, falls back to the dynamic http://${host}:${port}.
      */
-    publicOrigin?: string
+    publicOrigin?: string | undefined
 
     /**
      * Explicit flag to allow plaintext (http://) loopback URLs for OAuth operations.
      * Prevents accidental deployment of insecure issuers.
      */
-    allowPlaintextLoopbackOAuth?: boolean
+    allowPlaintextLoopbackOAuth?: boolean | undefined
 
     /** Metrics export format. When set to 'prometheus', exposes GET /metrics endpoint. */
-    metricsExport?: 'prometheus'
+    metricsExport?: 'prometheus' | undefined
 }

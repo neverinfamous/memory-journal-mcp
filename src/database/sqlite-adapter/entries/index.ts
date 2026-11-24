@@ -170,7 +170,7 @@ export class EntriesManager {
         return deleteEntries(this.sharedContext, ids, permanent, workspaceId)
     }
 
-    getRecentEntries(limit = 10, isPersonal?: boolean, sortBy?: SortBy, cursor?: string, includeArchived?: boolean, workspaceId?: string, projectNumber?: number, offset?: number): { entries: JournalEntry[]; nextCursor?: string } {
+    getRecentEntries(limit = 10, isPersonal?: boolean, sortBy?: SortBy, cursor?: string, includeArchived?: boolean, workspaceId?: string, projectNumber?: number, offset?: number): { entries: JournalEntry[]; nextCursor?: string | undefined } {
         if (isPersonal !== undefined) {
             return searchEntries(this.sharedContext, '', { limit, isPersonal, sortBy, cursor, includeArchived, workspaceId, projectNumber, offset })
         }
@@ -222,7 +222,7 @@ export class EntriesManager {
             workspaceId?: string
             offset?: number
         }
-    ): { entries: JournalEntry[]; nextCursor?: string; degraded?: boolean; highlights?: { id: number; snippet: string }[]; suggestions?: string[]; correctedQuery?: string } {
+    ): { entries: JournalEntry[]; nextCursor?: string | undefined; degraded?: boolean | undefined; highlights?: { id: number; snippet: string }[] | undefined; suggestions?: string[] | undefined; correctedQuery?: string | undefined } {
         return searchEntries(this.sharedContext, queryStr, options)
     }
 

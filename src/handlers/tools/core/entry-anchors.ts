@@ -172,7 +172,7 @@ function collectPrefetchedAnchors(
     prefetchedRepoFilesBySha: ReadonlyMap<string, string[]>,
     repoPath: string,
     validShas: string[]
-): { allHit: boolean; anchors?: { anchorPath: string; anchorType: string }[] } {
+): { allHit: boolean; anchors?: { anchorPath: string; anchorType: string }[] | undefined } {
     const prefetchedSet = new Set<string>()
     for (const sha of validShas) {
         const hit = prefetchedRepoFilesBySha.get(`${repoPath}\0${sha.toLowerCase()}`)

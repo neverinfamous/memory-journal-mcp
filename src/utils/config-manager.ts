@@ -41,7 +41,7 @@ export class ConfigManager extends EventEmitter {
     private readonly initialBriefingBaseline: BriefingBaselineMap
     private configFilePath?: string | undefined
     private watcher: fs.FSWatcher | undefined
-    private debounceTimer?: ReturnType<typeof setTimeout>
+    private debounceTimer?: ReturnType<typeof setTimeout> | undefined
     private isWriting = false
     private suppressSelfWatchUntil = 0
     private closed = false

@@ -24,34 +24,34 @@ export interface BriefingUserMessageOptions {
     repoName: string
     branchName: string
     ciStatus: string
-    ciSuppressed?: boolean
-    entriesSuppressed?: boolean
+    ciSuppressed?: boolean | undefined
+    entriesSuppressed?: boolean | undefined
     totalEntries: number
     latestPreviews: string[]
-    teamLatestPreviews?: string[]
-    summaryPreviews?: string[] | null
+    teamLatestPreviews?: string[] | undefined
+    summaryPreviews?: string[] | null | undefined
     github: BriefingGitHub | null
-    teamTotalEntries?: number
-    analyticsInsights?: BriefingInsights
-    graphSummary?: GraphSummary
+    teamTotalEntries?: number | undefined
+    analyticsInsights?: BriefingInsights | undefined
+    graphSummary?: GraphSummary | undefined
     /** Cross-source pivots (degree, commit refs, active threads); absent when disabled */
-    graphPivots?: BriefingGraphPivots
+    graphPivots?: BriefingGraphPivots | undefined
     /** Operation naming for hints; `codemode` emits `mj.*` APIs (default: direct) */
-    toolNaming?: BriefingToolNaming
+    toolNaming?: BriefingToolNaming | undefined
     /** Per-tool hint overrides for mixed presets (`starter`/`essential`/`readonly`). */
     toolHints?: {
-        expand?: string
-        link?: string
-        summary?: string
-        team?: string
-    }
-    gitHistory?: GitHistorySummary | null
-    isReadonly?: boolean
-    teamConfigured?: boolean
-    githubConfigured?: boolean
-    ioRootCount?: number
-    deprecationWarnings?: string[]
-    workspaceId?: string
+        expand?: string | undefined
+        link?: string | undefined
+        summary?: string | undefined
+        team?: string | undefined
+    } | undefined
+    gitHistory?: GitHistorySummary | null | undefined
+    isReadonly?: boolean | undefined
+    teamConfigured?: boolean | undefined
+    githubConfigured?: boolean | undefined
+    ioRootCount?: number | undefined
+    deprecationWarnings?: string[] | undefined
+    workspaceId?: string | undefined
 }
 
 /** [BOUNDARY] Only render workflow links that point at github.com without markdown/control chars. */

@@ -20,8 +20,8 @@ export interface SearchQueryRow {
 
 interface SearchPage {
     entries: JournalEntry[]
-    nextCursor?: string
-    highlights?: { id: number; snippet: string }[]
+    nextCursor?: string | undefined
+    highlights?: { id: number; snippet: string }[] | undefined
 }
 
 function fetchPostLimitSnippets(
@@ -123,10 +123,10 @@ export function extractSnippet(row: unknown): { id: number; snippet: string } {
 }
 
 interface SearchCallOptions extends SearchQueryOptions {
-    cursor?: string
-    fuzzy_match?: boolean
-    auto_correct?: boolean
-    offset?: number
+    cursor?: string | undefined
+    fuzzy_match?: boolean | undefined
+    auto_correct?: boolean | undefined
+    offset?: number | undefined
 }
 
 function applyFuzzyFallback(
@@ -137,9 +137,9 @@ function applyFuzzyFallback(
     result: SearchPage
 ):
     | (SearchPage & {
-          degraded?: boolean
-          suggestions?: string[]
-          correctedQuery?: string
+          degraded?: boolean | undefined
+          suggestions?: string[] | undefined
+          correctedQuery?: string | undefined
       })
     | undefined {
     if (result.entries.length !== 0 || options?.fuzzy_match !== true) return undefined
@@ -165,11 +165,11 @@ export function searchEntries(
     options?: SearchCallOptions
 ): {
     entries: JournalEntry[]
-    nextCursor?: string
-    degraded?: boolean
-    highlights?: { id: number; snippet: string }[]
-    suggestions?: string[]
-    correctedQuery?: string
+    nextCursor?: string | undefined
+    degraded?: boolean | undefined
+    highlights?: { id: number; snippet: string }[] | undefined
+    suggestions?: string[] | undefined
+    correctedQuery?: string | undefined
 } {
     const { db } = context
 

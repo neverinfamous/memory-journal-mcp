@@ -190,16 +190,16 @@ function isSingleSlashRepoSlug(value: string): boolean {
 }
 
 function safeRegistryLookup(
-    registry: Record<string, { path?: string; project_number?: number }>,
+    registry: Record<string, { path?: string | undefined; project_number?: number | undefined } | undefined>,
     key: string
-): { path?: string; project_number?: number } | undefined {
+): { path?: string | undefined; project_number?: number | undefined } | undefined {
     return Object.hasOwn(registry, key) && !FORBIDDEN_KEYS.has(key) ? registry[key] : undefined
 }
 
 function resolveRegistryCandidate(
     strVal: string,
-    registry: Record<string, { path?: string; project_number?: number }>
-): { canonicalKey: string; entry: { path?: string; project_number?: number } | undefined } {
+    registry: Record<string, { path?: string | undefined; project_number?: number | undefined } | undefined>
+): { canonicalKey: string; entry: { path?: string | undefined; project_number?: number | undefined } | undefined } {
     const trimmedPath = strVal.trim().replace(/[\\/]+$/, '')
     if (isSingleSlashRepoSlug(trimmedPath)) {
         const directSlugKey = findCanonicalRegistryKey(trimmedPath, registry)

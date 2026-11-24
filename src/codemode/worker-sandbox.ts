@@ -278,10 +278,10 @@ export class WorkerSandbox {
                 rpcPort: MessagePort
                 contextObj: Record<string, unknown> | undefined
                 readonlyMode: boolean | undefined
-                dryRunMode?: boolean
-                useTestDbMode?: boolean
-                methodList?: Record<string, string[]>
-                schemaList?: Record<string, Record<string, string>>
+                dryRunMode?: boolean | undefined
+                useTestDbMode?: boolean | undefined
+                methodList?: Record<string, string[]> | undefined
+                schemaList?: Record<string, Record<string, string>> | undefined
             } = {
                 type: 'EXECUTE',
                 id: this.executionId,

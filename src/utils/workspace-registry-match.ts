@@ -9,11 +9,11 @@ import { ValidationError } from '../types/errors.js'
  */
 
 export interface ResolutionInput {
-    workspace_id?: string
-    project_number?: number
-    content?: string
-    tags?: string[]
-    preferCwdOverKeywords?: boolean
+    workspace_id?: string | undefined
+    project_number?: number | undefined
+    content?: string | undefined
+    tags?: string[] | undefined
+    preferCwdOverKeywords?: boolean | undefined
 }
 
 export interface ResolvedContext {
@@ -22,8 +22,8 @@ export interface ResolvedContext {
 }
 
 export interface RegistryEntry {
-    path?: string
-    project_number?: number
+    path?: string | undefined
+    project_number?: number | undefined
 }
 
 export type ProjectRegistry = Record<string, Pick<ProjectRegistryEntry, 'project_number'>>
@@ -83,7 +83,7 @@ export const PROJECT_KEYWORD_ALIASES: Record<string, string[]> = {
 
 function matchKeyCaseInsensitive(
     candidate: string,
-    registry: Record<string, RegistryEntry>
+    registry: Record<string, RegistryEntry | undefined>
 ): string | undefined {
     const candidateLower = candidate.toLowerCase()
     const keys = Object.keys(registry)
@@ -100,7 +100,7 @@ function matchKeyCaseInsensitive(
 
 function matchAliasInTable(
     tokenLower: string,
-    registry: Record<string, RegistryEntry>
+    registry: Record<string, RegistryEntry | undefined>
 ): string | undefined {
     for (const [canonicalKey, aliases] of Object.entries(PROJECT_KEYWORD_ALIASES)) {
         if (aliases.some((a) => a.toLowerCase() === tokenLower)) {
@@ -113,8 +113,8 @@ function matchAliasInTable(
 
 export function findCanonicalRegistryKey(
     aliasOrKey: string,
-    registry?: Record<string, RegistryEntry>,
-    options?: { allowKeywordAliases?: boolean }
+    registry?: Record<string, RegistryEntry | undefined>,
+    options?: { allowKeywordAliases?: boolean | undefined }
 ): string | undefined {
     const lower = aliasOrKey.toLowerCase().trim()
     if (registry === undefined || lower === '') return undefined

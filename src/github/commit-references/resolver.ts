@@ -6,12 +6,12 @@ export type ReferenceType = 'issue' | 'pull_request' | 'unknown'
 
 export interface ResolvedReference extends CommitReference {
     type: ReferenceType
-    title?: string
-    state?: string
+    title?: string | undefined
+    state?: string | undefined
     milestone?: {
         number: number
         title: string
-    }
+    } | undefined
 }
 
 export async function resolveReferences(

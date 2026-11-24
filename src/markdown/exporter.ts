@@ -27,10 +27,10 @@ export interface ExportableEntry {
     entryType: string
     timestamp: string
     tags: string[]
-    significance?: string
-    author?: string
-    workspaceId?: string
-    projectNumber?: number
+    significance?: string | undefined
+    author?: string | undefined
+    workspaceId?: string | undefined
+    projectNumber?: number | undefined
 }
 
 /** Result of an export operation */

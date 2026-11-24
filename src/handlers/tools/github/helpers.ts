@@ -302,7 +302,12 @@ export async function resolveOwner(
  */
 export async function resolveOwnerRepo(
     context: ToolContext,
-    input: { owner?: string; repo?: string; project_number?: number; workspace_id?: string },
+    input: {
+        owner?: string | undefined
+        repo?: string | undefined
+        project_number?: number | undefined
+        workspace_id?: string | undefined
+    },
     entityLabel?: string
 ): Promise<
     | {

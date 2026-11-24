@@ -57,61 +57,61 @@ export interface AuthorizationServerMetadata {
     issuer: string
 
     /** Authorization endpoint URL */
-    authorization_endpoint?: string
+    authorization_endpoint?: string | undefined
 
     /** Token endpoint URL */
     token_endpoint: string
 
     /** JWKS URI */
-    jwks_uri?: string
+    jwks_uri?: string | undefined
 
     /** Registration endpoint (RFC 7591) */
-    registration_endpoint?: string
+    registration_endpoint?: string | undefined
 
     /** Scopes supported */
-    scopes_supported?: string[]
+    scopes_supported?: string[] | undefined
 
     /** Response types supported */
-    response_types_supported?: string[]
+    response_types_supported?: string[] | undefined
 
     /** Response modes supported */
-    response_modes_supported?: string[]
+    response_modes_supported?: string[] | undefined
 
     /** Grant types supported */
-    grant_types_supported?: string[]
+    grant_types_supported?: string[] | undefined
 
     /** Token endpoint auth methods supported */
-    token_endpoint_auth_methods_supported?: string[]
+    token_endpoint_auth_methods_supported?: string[] | undefined
 
     /** Token endpoint auth signing algorithms */
-    token_endpoint_auth_signing_alg_values_supported?: string[]
+    token_endpoint_auth_signing_alg_values_supported?: string[] | undefined
 
     /** Service documentation URL */
-    service_documentation?: string
+    service_documentation?: string | undefined
 
     /** UI locales supported */
-    ui_locales_supported?: string[]
+    ui_locales_supported?: string[] | undefined
 
     /** OP policy URI */
-    op_policy_uri?: string
+    op_policy_uri?: string | undefined
 
     /** OP terms of service URI */
-    op_tos_uri?: string
+    op_tos_uri?: string | undefined
 
     /** Revocation endpoint */
-    revocation_endpoint?: string
+    revocation_endpoint?: string | undefined
 
     /** Revocation endpoint auth methods */
-    revocation_endpoint_auth_methods_supported?: string[]
+    revocation_endpoint_auth_methods_supported?: string[] | undefined
 
     /** Introspection endpoint */
-    introspection_endpoint?: string
+    introspection_endpoint?: string | undefined
 
     /** Introspection endpoint auth methods */
-    introspection_endpoint_auth_methods_supported?: string[]
+    introspection_endpoint_auth_methods_supported?: string[] | undefined
 
     /** Code challenge methods supported (PKCE) */
-    code_challenge_methods_supported?: string[]
+    code_challenge_methods_supported?: string[] | undefined
 }
 
 // =============================================================================

@@ -11,13 +11,13 @@ import {
 } from '../../utils/workspace-resolver.js'
 
 export interface GitWorkingDirInput {
-    cwd?: string
-    repo?: string
-    repo_name?: string
-    workspace_id?: string
-    workspaceId?: string
-    project_number?: number | string
-    path?: string
+    cwd?: string | undefined
+    repo?: string | undefined
+    repo_name?: string | undefined
+    workspace_id?: string | undefined
+    workspaceId?: string | undefined
+    project_number?: number | string | undefined
+    path?: string | undefined
 }
 
 function hasGitAncestor(dir: string): boolean {

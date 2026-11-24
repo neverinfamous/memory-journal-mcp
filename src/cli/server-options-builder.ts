@@ -392,10 +392,16 @@ function assembleServerOptions(params: {
 
 export function buildServerOptions(
     resolver: ConfigResolver,
-    options: Record<string, unknown> & { team?: boolean },
+    options: Record<string, unknown> & { team?: boolean | undefined },
     command: CliCommandLike,
     configErrors: string[]
-): { serverOptions: ServerOptions; transport: string; db: string | undefined; teamDb?: string; host?: string } {
+): {
+    serverOptions: ServerOptions
+    transport: string
+    db: string | undefined
+    teamDb?: string | undefined
+    host?: string | undefined
+} {
     const catchConfig: CatchConfig = <T>(fn: () => T, fallback: T): T => {
         try {
             return fn()

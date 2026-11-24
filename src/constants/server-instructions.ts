@@ -118,7 +118,7 @@ export function generateStandardInstructions(
     prompts: PromptDefinition[],
     latestEntry?: LatestEntrySnapshot,
     enabledGroups?: Set<ToolGroup>,
-    config?: { defaultWorkspaceId?: string; instructionLevel?: InstructionLevel }
+    config?: { defaultWorkspaceId?: string | undefined; instructionLevel?: InstructionLevel | undefined }
 ): string {
     const level = config?.instructionLevel ?? 'detailed'
     // Derive enabled groups from enabled tools if not provided (backward compat)
@@ -173,7 +173,7 @@ export function generateCodeModeInstructions(
     prompts: PromptDefinition[],
     latestEntry?: LatestEntrySnapshot,
     enabledGroups?: Set<ToolGroup>,
-    config?: { defaultWorkspaceId?: string; instructionLevel?: InstructionLevel }
+    config?: { defaultWorkspaceId?: string | undefined; instructionLevel?: InstructionLevel | undefined }
 ): string {
     const resolvedGroups = enabledGroups ?? getEnabledGroups(enabledTools)
     const standard = generateStandardInstructions(

@@ -16,7 +16,13 @@ interface IssuesAndPrs {
     openIssueList?: { number: number; title: string }[] | undefined
     openPrList?: { number: number; title: string; state: string }[] | undefined
     allPrs?:
-        | { number: number; title: string; url: string; state: string; headRef?: string }[]
+        | {
+              number: number
+              title: string
+              url: string
+              state: string
+              headRef?: string | undefined
+          }[]
         | undefined
     degraded?: boolean | undefined
 }

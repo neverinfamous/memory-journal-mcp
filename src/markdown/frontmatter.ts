@@ -43,23 +43,23 @@ export type FrontmatterAnchor =
     | string
     | {
           anchor_path: string
-          anchor_type?: string
-          status?: FrontmatterAnchorStatus
+          anchor_type?: string | undefined
+          status?: FrontmatterAnchorStatus | undefined
       }
 
 /** Parsed frontmatter data structure */
 export interface FrontmatterData {
-    mj_id?: number
-    entry_type?: string
-    author?: string
-    tags?: string[]
-    timestamp?: string
-    significance?: string
-    workspace_id?: string
-    project_number?: number
-    relationships?: { type: string; target_id: number }[]
-    anchors?: FrontmatterAnchor[]
-    source?: string
+    mj_id?: number | undefined
+    entry_type?: string | undefined
+    author?: string | undefined
+    tags?: string[] | undefined
+    timestamp?: string | undefined
+    significance?: string | undefined
+    workspace_id?: string | undefined
+    project_number?: number | undefined
+    relationships?: { type: string; target_id: number }[] | undefined
+    anchors?: FrontmatterAnchor[] | undefined
+    source?: string | undefined
 }
 
 /** Result of parsing a frontmattered markdown file */

@@ -83,7 +83,7 @@ export interface SystemContext {
     /** Status of the local lint/tsc check, if available */
     localCheck: boolean | null
     /** The active workspace ID if configured */
-    workspaceId?: string
+    workspaceId?: string | undefined
 }
 
 // ============================================================================

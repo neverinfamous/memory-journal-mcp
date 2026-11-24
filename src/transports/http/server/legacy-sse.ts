@@ -12,11 +12,11 @@ import { logger } from '../../../utils/logger.js'
  */
 export class LegacySSEServerTransport implements Transport {
     private res: Response | null = null
-    private detachStreamListeners?: () => void
+    private detachStreamListeners?: (() => void) | undefined
     public sessionId: string
-    public onclose?: () => void
-    public onerror?: (error: Error) => void
-    public onmessage?: Transport['onmessage']
+    public onclose?: (() => void) | undefined
+    public onerror?: ((error: Error) => void) | undefined
+    public onmessage?: Transport['onmessage'] | undefined
 
     constructor(private messagesEndpoint: string, sessionId?: string) {
         this.sessionId = sessionId ?? randomUUID()

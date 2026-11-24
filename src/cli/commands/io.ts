@@ -216,7 +216,7 @@ function resolveDefaultImportScope(
 }
 
 export function resolveImportWriteScope(
-    options: { dir?: string; workspace?: string; defaultProject?: number },
+    options: { dir?: string | undefined; workspace?: string | undefined; defaultProject?: number | undefined },
     serverOptions: ToolHandlerConfig
 ): { workspaceId: string | undefined; projectNumber: number | undefined } {
     if (options.dir === undefined || options.dir === '') {

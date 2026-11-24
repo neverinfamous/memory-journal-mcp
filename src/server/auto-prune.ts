@@ -56,13 +56,13 @@ export interface AutoPruneOptions {
     /** Importance score threshold — entries scoring below this are archived/pruned */
     importanceThreshold: number
     /** If true, return candidates but do not soft-delete or create backups */
-    dryRun?: boolean
+    dryRun?: boolean | undefined
     /** Tags to exclude from auto-prune */
-    excludeTags?: string[]
+    excludeTags?: string[] | undefined
     /** Optional workspace ID to scope auto-prune when configured */
-    workspaceId?: string
+    workspaceId?: string | undefined
     /** When set, only rows with this project number are eligible. */
-    projectNumber?: number
+    projectNumber?: number | undefined
 }
 
 export interface AutoPruneResult {

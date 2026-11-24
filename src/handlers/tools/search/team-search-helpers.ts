@@ -28,23 +28,23 @@ export interface EntryWithSource {
 }
 
 export interface ISearchFilters {
-    limit?: number
-    isPersonal?: boolean
-    projectNumber?: number
-    issueNumber?: number
-    prNumber?: number
-    prStatus?: string
-    workflowRunId?: number
-    tags?: string[]
-    excludeTags?: string[]
-    entryType?: string
-    startDate?: string
-    endDate?: string
-    includeTeam?: boolean
-    includeArchived?: boolean
-    workspaceId?: string
-    similarityThreshold?: number
-    enforceSimilarityThreshold?: boolean
+    limit?: number | undefined
+    isPersonal?: boolean | undefined
+    projectNumber?: number | undefined
+    issueNumber?: number | undefined
+    prNumber?: number | undefined
+    prStatus?: string | undefined
+    workflowRunId?: number | undefined
+    tags?: string[] | undefined
+    excludeTags?: string[] | undefined
+    entryType?: string | undefined
+    startDate?: string | undefined
+    endDate?: string | undefined
+    includeTeam?: boolean | undefined
+    includeArchived?: boolean | undefined
+    workspaceId?: string | undefined
+    similarityThreshold?: number | undefined
+    enforceSimilarityThreshold?: boolean | undefined
     config?: ToolHandlerConfig | undefined
 }
 
@@ -67,7 +67,7 @@ export function isTeamFilterAllowed(
     config:
         | {
               filterConfig?: ToolHandlerConfig['filterConfig']
-              codemodeInternalFullAccess?: boolean
+              codemodeInternalFullAccess?: boolean | undefined
           }
         | undefined,
     allowCodemodeProxy = false

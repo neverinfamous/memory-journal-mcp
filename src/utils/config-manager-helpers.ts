@@ -168,7 +168,9 @@ export function seedInitialBriefingScopeFromFile(
     if (bc.defaultWorkspaceId === undefined && fileWs !== undefined) {
         try {
             const paired = pairStoredScope(fileWs, bc.defaultProjectNumber, registry)
-            bc.defaultWorkspaceId = paired.workspaceId
+            if (paired.workspaceId !== undefined) {
+                bc.defaultWorkspaceId = paired.workspaceId
+            }
             if (bc.defaultProjectNumber === undefined && typeof paired.projectNumber === 'number') {
                 bc.defaultProjectNumber = paired.projectNumber
             }

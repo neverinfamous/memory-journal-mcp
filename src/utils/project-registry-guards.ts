@@ -175,7 +175,7 @@ export function isValidProjectPath(p: string, allowedRoots?: string[]): boolean 
  * (excluding `ignoreExactKey` when updating an entry in place).
  */
 export function findCaseInsensitiveKeyConflict(
-    registry: Record<string, { path?: string; project_number?: number } | undefined>,
+    registry: Record<string, { path?: string | undefined; project_number?: number | undefined } | undefined>,
     candidateName: string,
     ignoreExactKey?: string
 ): string | undefined {
@@ -194,7 +194,7 @@ export function findCaseInsensitiveKeyConflict(
  * (excluding any keys in `ignoreKeys`).
  */
 export function findProjectNumberConflict(
-    registry: Record<string, { path?: string; project_number?: number } | undefined>,
+    registry: Record<string, { path?: string | undefined; project_number?: number | undefined } | undefined>,
     projectNumber: number,
     ignoreKeys: readonly string[] = []
 ): string | undefined {

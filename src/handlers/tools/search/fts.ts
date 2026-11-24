@@ -25,36 +25,36 @@ export function encodeCompoundCursor(personalCursor?: string, teamCursor?: strin
 
 interface FtsSearchOptions {
     limit: number
-    cursor?: string
-    isPersonal?: boolean
-    projectNumber?: number
-    issueNumber?: number
-    prNumber?: number
-    prStatus?: string
-    workflowRunId?: number
-    tags?: string[]
-    excludeTags?: string[]
-    entryType?: EntryType
-    startDate?: string
-    endDate?: string
-    sortBy?: 'timestamp' | 'importance' | 'blended'
-    includeTeam?: boolean
-    includeArchived?: boolean
-    includeHighlights?: boolean
-    fuzzy_match?: boolean
-    auto_correct?: boolean
-    workspaceId?: string
+    cursor?: string | undefined
+    isPersonal?: boolean | undefined
+    projectNumber?: number | undefined
+    issueNumber?: number | undefined
+    prNumber?: number | undefined
+    prStatus?: string | undefined
+    workflowRunId?: number | undefined
+    tags?: string[] | undefined
+    excludeTags?: string[] | undefined
+    entryType?: EntryType | undefined
+    startDate?: string | undefined
+    endDate?: string | undefined
+    sortBy?: 'timestamp' | 'importance' | 'blended' | undefined
+    includeTeam?: boolean | undefined
+    includeArchived?: boolean | undefined
+    includeHighlights?: boolean | undefined
+    fuzzy_match?: boolean | undefined
+    auto_correct?: boolean | undefined
+    workspaceId?: string | undefined
     config?: ToolHandlerConfig | undefined
 }
 
 export interface FtsSearchResponse {
     entries: EntryWithSource[]
     count: number
-    degraded?: boolean
-    nextCursor?: string
-    highlights?: { id: number; snippet: string }[]
-    suggestions?: string[]
-    correctedQuery?: string
+    degraded?: boolean | undefined
+    nextCursor?: string | undefined
+    highlights?: { id: number; snippet: string }[] | undefined
+    suggestions?: string[] | undefined
+    correctedQuery?: string | undefined
 }
 
 export function decodeCompoundCursor(cursor: string): { p?: string; t?: string } | null {
@@ -142,7 +142,7 @@ function querySingleFtsStore(
     options: FtsSearchOptions
 ): ReturnType<IDatabaseAdapter['searchEntries']> {
     if (exhausted) {
-        return { entries: [], nextCursor: undefined }
+        return { entries: [] }
     }
     const recentSortBy = options.sortBy === 'blended' ? 'importance' : options.sortBy
     if (!query && !hasFilters) {
@@ -282,7 +282,7 @@ export function ftsSearch(
         return mergeFtsStoreResults(personalResult, teamResult, options, cursors, query, teamDb)
     }
 
-    const isPersonalDegraded = 'degraded' in personalResult && personalResult.degraded === true
+    const isPersonalDegraded = 'degraded' in personalResult && personalResult.degraded
     return {
         entries: personalResult.entries.map((e) => ({ ...e, source: 'personal' as const })),
         count: personalResult.entries.length,

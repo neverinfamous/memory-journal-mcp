@@ -16,19 +16,19 @@ import {
 } from '../../../../utils/legacy-commit-narrative.js'
 
 export interface SearchFacetOptions {
-    isPersonal?: boolean
-    projectNumber?: number
-    issueNumber?: number
-    prNumber?: number
-    prStatus?: string
-    workflowRunId?: number
-    tags?: string[]
-    excludeTags?: string[]
-    entryType?: EntryType
-    startDate?: string
-    endDate?: string
-    includeArchived?: boolean
-    workspaceId?: string
+    isPersonal?: boolean | undefined
+    projectNumber?: number | undefined
+    issueNumber?: number | undefined
+    prNumber?: number | undefined
+    prStatus?: string | undefined
+    workflowRunId?: number | undefined
+    tags?: string[] | undefined
+    excludeTags?: string[] | undefined
+    entryType?: EntryType | undefined
+    startDate?: string | undefined
+    endDate?: string | undefined
+    includeArchived?: boolean | undefined
+    workspaceId?: string | undefined
 }
 
 export function getSearchFacets(

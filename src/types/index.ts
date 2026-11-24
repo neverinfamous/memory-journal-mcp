@@ -162,17 +162,17 @@ export interface ToolDefinition {
 export interface ToolRegistration {
     name: string
     /** Human-readable display title (MCP 2025-11-25) */
-    title?: string
+    title?: string | undefined
     description: string
     inputSchema: unknown
     outputSchema?: unknown
     annotations: ToolAnnotations
-    icons?: { iconUrl: string; title: string; description: string }
+    icons?: { iconUrl: string; title: string; description: string } | undefined
 }
 
 export interface ProjectRegistryEntry {
     path: string
-    project_number?: number
+    project_number?: number | undefined
 }
 
 /**
@@ -184,65 +184,65 @@ import type { BriefingConfig } from '../handlers/resources/shared.js'
 
 export interface ToolHandlerConfig {
     /** Default GitHub Project number for auto-assignment */
-    defaultProjectNumber?: number
+    defaultProjectNumber?: number | undefined
     /** Default workspace ID for isolating journal entries */
-    defaultWorkspaceId?: string
+    defaultWorkspaceId?: string | undefined
     /** Project registry mapping dynamic repo IDs to local paths and kanban boards */
-    projectRegistry?: Record<string, ProjectRegistryEntry>
+    projectRegistry?: Record<string, ProjectRegistryEntry> | undefined
     /** Additional team database mappings (label -> path) for cross-team discovery */
-    additionalTeamDbs?: Record<string, string>
+    additionalTeamDbs?: Record<string, string> | undefined
 
     /** Allowlisted roots for file IO */
-    allowedIoRoots?: string[]
+    allowedIoRoots?: string[] | undefined
     /**
      * SEC-1.1: Central dispatch function for Code Mode.
      * Routes sandbox tool calls through callTool() so OAuth scope checks,
      * maintenance-mode guards, and audit interception apply to inner calls.
      * When absent, Code Mode falls back to calling raw tool handlers directly.
      */
-    dispatch?: (name: string, args: Record<string, unknown>) => Promise<unknown>
+    dispatch?: ((name: string, args: Record<string, unknown>) => Promise<unknown>) | undefined
     /**
      * SEC-1.2: Active tool filter for Code Mode universe scoping.
      * When set, Code Mode only exposes tools that are in filterConfig.enabledTools,
      * ensuring operators' --tool-filter restrictions are enforced inside the sandbox.
      */
-    filterConfig?: ToolFilterConfig | null
+    filterConfig?: ToolFilterConfig | null | undefined
     /**
      * Server runtime context for tracking instance-bound globals (Audit logger, Maintenance Lock).
      */
     /** Server auth configuration passed down for strict security gates */
-    authEnabled?: boolean
-    oauthEnabled?: boolean
-    codemodeEnabled?: boolean
-    codemodeInternalFullAccess?: boolean
+    authEnabled?: boolean | undefined
+    oauthEnabled?: boolean | undefined
+    codemodeEnabled?: boolean | undefined
+    codemodeInternalFullAccess?: boolean | undefined
     /** Enable autonomous MCP tool and parameter healing/interception (default: true) */
-    agentHealing?: boolean
+    agentHealing?: boolean | undefined
     /** Default role for un-registered authors (default: denied) */
-    teamDefaultRole?: 'admin' | 'member' | 'viewer' | 'denied'
+    teamDefaultRole?: 'admin' | 'member' | 'viewer' | 'denied' | undefined
     /** Admin author to bootstrap if team_members table is empty */
-    teamAdmin?: string
+    teamAdmin?: string | undefined
     /**
      * Server runtime context for tracking instance-bound globals (Audit logger, Maintenance Lock).
      */
-    runtime?: ServerRuntime
+    runtime?: ServerRuntime | undefined
     /**
      * Optional subscription manager for triggering real-time MCP notifications.
      */
-    subscriptionManager?: SubscriptionManager
+    subscriptionManager?: SubscriptionManager | undefined
     /** Optional briefing configuration for Code Mode dynamic resolution. */
-    briefingConfig?: BriefingConfig
+    briefingConfig?: BriefingConfig | undefined
     /** Server-configured auto-prune archive age threshold (days) */
-    archiveOlderThanDays?: number
+    archiveOlderThanDays?: number | undefined
     /** Server-configured auto-prune soft-delete age threshold (days) */
-    pruneOlderThanDays?: number
+    pruneOlderThanDays?: number | undefined
     /** Server-configured auto-prune hard-delete age threshold (days) */
-    hardDeleteOlderThanDays?: number
+    hardDeleteOlderThanDays?: number | undefined
     /** Server-configured auto-prune importance threshold (0.0-1.0) */
-    pruneImportanceThreshold?: number
+    pruneImportanceThreshold?: number | undefined
     /** Tags skipped by archive, soft-delete, and hard-delete */
-    pruneExcludeTags?: string[]
+    pruneExcludeTags?: string[] | undefined
     /** Maximum number of array elements and object properties allowed across a tool input payload */
-    maxToolInputElements?: number
+    maxToolInputElements?: number | undefined
 }
 
 /**
@@ -252,19 +252,19 @@ export interface ToolContext {
     /** Database adapter */
     db: IDatabaseAdapter
     /** Team database adapter (optional, requires TEAM_DB_PATH) */
-    teamDb?: IDatabaseAdapter
+    teamDb?: IDatabaseAdapter | undefined
     /** Vector search manager (optional) */
-    vectorManager?: VectorSearchManager
+    vectorManager?: VectorSearchManager | undefined
     /** Team vector search manager (optional, bound to team DB) */
-    teamVectorManager?: VectorSearchManager
+    teamVectorManager?: VectorSearchManager | undefined
     /** GitHub integration (optional) */
-    github?: GitHubIntegration
+    github?: GitHubIntegration | undefined
     /** Handler configuration */
-    config?: ToolHandlerConfig
+    config?: ToolHandlerConfig | undefined
     /** Progress reporting context */
-    progress?: ProgressContext
+    progress?: ProgressContext | undefined
     /** Authentication context injected by transport */
-    auth?: { sub?: string; subject?: string; scopes?: string[] }
+    auth?: { sub?: string | undefined; subject?: string | undefined; scopes?: string[] | undefined } | undefined
 }
 
 /**

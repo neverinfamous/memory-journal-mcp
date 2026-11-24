@@ -62,7 +62,7 @@ export function enforceCliTeamReadScope(
 export function resolveCliReadScope(
     db: IDatabaseAdapter,
     serverOptions: ServerOptions,
-    options: { workspace?: string; defaultProject?: number; team?: boolean }
+    options: { workspace?: string | undefined; defaultProject?: number | undefined; team?: boolean | undefined }
 ): { workspaceId: string; projectNumber?: number } {
     if (options.workspace?.trim() === '') {
         throw new ValidationError("Invalid --workspace '': expected a non-empty workspace identifier.")

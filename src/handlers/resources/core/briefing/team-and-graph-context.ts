@@ -27,7 +27,7 @@ const TEAM_PREVIEW_LENGTH = 60
 
 export interface TeamContext {
     teamInfo: { totalEntries: number; latestPreview: string | null }
-    teamLatestEntries?: { id: number; timestamp: string; type: string; preview: string }[]
+    teamLatestEntries?: { id: number; timestamp: string; type: string; preview: string }[] | undefined
 }
 
 function fetchDistinctTeamBriefingEntries(
@@ -206,8 +206,8 @@ export interface GraphSummary {
     density: number
     causalMetrics: Record<string, number>
     topHubs: { id: number; preview: string; count: number }[]
-    orphanRatio?: number
-    degraded?: boolean
+    orphanRatio?: number | undefined
+    degraded?: boolean | undefined
 }
 
 export function buildGraphContext(

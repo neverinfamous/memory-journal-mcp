@@ -3,6 +3,11 @@ import globals from 'globals'
 import tseslint from 'typescript-eslint'
 
 export default tseslint.config(
+    {
+        linterOptions: {
+            reportUnusedDisableDirectives: 'error',
+        },
+    },
     { ignores: ['dist', 'node_modules', '**/__tests__/**', 'src/vendor/**', 'examples'] },
     // Main source configuration
     {
@@ -102,9 +107,65 @@ export default tseslint.config(
                 {
                     prefer: 'type-imports',
                     fixStyle: 'inline-type-imports',
+                    disallowTypeAnnotations: true,
                 },
             ],
             '@typescript-eslint/consistent-type-exports': 'error',
+            '@typescript-eslint/ban-ts-comment': [
+                'error',
+                {
+                    'ts-expect-error': true,
+                    'ts-ignore': true,
+                    'ts-nocheck': true,
+                    'ts-check': false,
+                },
+            ],
+            '@typescript-eslint/switch-exhaustiveness-check': 'error',
+            'no-restricted-syntax': [
+                'error',
+                {
+                    selector: 'TSEnumDeclaration',
+                    message:
+                        'Use string literal unions or `as const` objects instead of TypeScript enums.',
+                },
+                {
+                    selector: "CallExpression[callee.object.name='z'][callee.property.name='any']",
+                    message: 'Avoid z.any(); use z.unknown() or an explicit schema.',
+                },
+            ],
+            'no-restricted-imports': [
+                'error',
+                {
+                    paths: [
+                        {
+                            name: 'child_process',
+                            importNames: ['exec', 'execSync'],
+                            message:
+                                'Use execFile/execFileSync with shell: false and windowsHide: true.',
+                        },
+                        {
+                            name: 'node:child_process',
+                            importNames: ['exec', 'execSync'],
+                            message:
+                                'Use execFile/execFileSync with shell: false and windowsHide: true.',
+                        },
+                    ],
+                },
+            ],
+            'no-empty': 'error',
+            'no-eval': 'error',
+            'no-implied-eval': 'error',
+            'no-new-func': 'error',
+            'no-proto': 'error',
+            'no-script-url': 'error',
+            'no-extend-native': 'error',
+            eqeqeq: ['error', 'always', { null: 'ignore' }],
+            'prefer-object-has-own': 'error',
+            'max-lines': ['error', { max: 500, skipBlankLines: false, skipComments: false }],
+            'max-depth': ['warn', 4],
+            'max-lines-per-function': ['warn', { max: 80, skipBlankLines: true, skipComments: true }],
+            'no-await-in-loop': 'warn',
+            '@typescript-eslint/no-unsafe-type-assertion': 'warn',
             '@typescript-eslint/no-misused-spread': 'off',
             // Prevent console.log() which writes to stdout and corrupts MCP stdio transport
             // Only stderr output (error, warn) is safe for MCP servers

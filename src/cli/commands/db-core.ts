@@ -18,9 +18,12 @@ export class CliExitError extends Error {
 }
 
 export async function getCliCommandDb(
-    options: Record<string, unknown> & { config?: string; team?: boolean },
+    options: Record<string, unknown> & {
+        config?: string | undefined
+        team?: boolean | undefined
+    },
     command: CliCommandLike,
-    opts?: { throwOnExit?: boolean }
+    opts?: { throwOnExit?: boolean | undefined }
 ): Promise<{ db: IDatabaseAdapter; serverOptions: ServerOptions }> {
     const failExit = (code: number): never => {
         if (opts?.throwOnExit === true) {

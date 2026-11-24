@@ -48,7 +48,7 @@ export class VectorSearchManager {
     private initializationPromise: Promise<void> | null = null
     private ready = false
 
-    constructor(dbAdapter: IDatabaseAdapter, options?: { modelName?: string }) {
+    constructor(dbAdapter: IDatabaseAdapter, options?: { modelName?: string | undefined }) {
         this.dbAdapter = dbAdapter
         this.modelName = options?.modelName || DEFAULT_MODEL
     }

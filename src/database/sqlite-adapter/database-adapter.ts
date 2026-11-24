@@ -68,7 +68,7 @@ export class DatabaseAdapter extends AdapterDelegates implements IDatabaseAdapte
         workspaceId?: string,
         projectNumber?: number,
         offset?: number
-    ): { entries: JournalEntry[]; nextCursor?: string } {
+    ): { entries: JournalEntry[]; nextCursor?: string | undefined } {
         return this.entriesMgr.getRecentEntries(
             limit ?? 10,
             isPersonal,
@@ -284,11 +284,11 @@ export class DatabaseAdapter extends AdapterDelegates implements IDatabaseAdapte
         }
     ): {
         entries: JournalEntry[]
-        nextCursor?: string
-        degraded?: boolean
-        highlights?: { id: number; snippet: string }[]
-        suggestions?: string[]
-        correctedQuery?: string
+        nextCursor?: string | undefined
+        degraded?: boolean | undefined
+        highlights?: { id: number; snippet: string }[] | undefined
+        suggestions?: string[] | undefined
+        correctedQuery?: string | undefined
     } {
         return this.entriesMgr.searchEntries(query, options)
     }

@@ -34,7 +34,7 @@ export interface EntriesSharedContext {
     ctx: NativeConnectionManager
     tagsMgr: TagsManager
     db: Database
-    config?: ToolHandlerConfig
+    config?: ToolHandlerConfig | undefined
 }
 
 /**

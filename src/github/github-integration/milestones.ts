@@ -169,10 +169,10 @@ export class MilestonesManager {
         repo: string,
         milestoneNumber: number,
         updates: {
-            title?: string
-            description?: string
-            dueOn?: string | null
-            state?: 'open' | 'closed'
+            title?: string | undefined
+            description?: string | undefined
+            dueOn?: string | null | undefined
+            state?: 'open' | 'closed' | undefined
         }
     ): Promise<GitHubMilestone | null> {
         if (!this.client.octokit) {

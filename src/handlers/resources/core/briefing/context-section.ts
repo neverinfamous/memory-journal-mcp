@@ -33,11 +33,11 @@ export function cleanPreview(content: string | undefined | null, length: number)
 export interface JournalContext {
     totalEntries: number
     latestEntries: { id: number; timestamp: string; type: string; preview: string }[]
-    latestSessionSummary?: { id: number; timestamp: string; type: string; preview: string }
-    sessionSummaries?: { id: number; timestamp: string; type: string; preview: string }[]
+    latestSessionSummary?: { id: number; timestamp: string; type: string; preview: string } | undefined
+    sessionSummaries?: { id: number; timestamp: string; type: string; preview: string }[] | undefined
     lastModified: string
-    workspaceId?: string
-    mirrorCandidates?: MirrorCandidate[]
+    workspaceId?: string | undefined
+    mirrorCandidates?: MirrorCandidate[] | undefined
 }
 
 export function extractEntries(result: JournalEntry[] | { entries: JournalEntry[] }): JournalEntry[] {
