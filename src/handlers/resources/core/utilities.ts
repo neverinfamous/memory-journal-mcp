@@ -76,9 +76,11 @@ export const significantResource: InternalResourceDef = {
                 CAUSAL_REL_TYPES.has(r.relationshipType)
             ).length
 
-            const timestampMs = new Date(entry.timestamp).getTime()
-            const daysSince = Math.floor((now - timestampMs) / MS_PER_DAY)
-            const recency = Math.max(0, 1 - daysSince / RECENCY_WINDOW_DAYS)
+            const rawTimestampMs = new Date(entry.timestamp).getTime()
+            const hasValidTimestamp = Number.isFinite(rawTimestampMs)
+            const timestampMs = hasValidTimestamp ? rawTimestampMs : 0
+            const daysSince = hasValidTimestamp ? Math.floor((now - timestampMs) / MS_PER_DAY) : RECENCY_WINDOW_DAYS
+            const recency = hasValidTimestamp ? Math.max(0, 1 - daysSince / RECENCY_WINDOW_DAYS) : 0
 
             const importance =
                 Math.round(

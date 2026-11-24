@@ -8,19 +8,55 @@ import {
     resolveEffectiveProjectRegistry,
 } from '../../../codemode/normalizers/project-alias-helpers.js'
 import { findCanonicalRegistryKey, loadProjectRegistryFromConfig } from '../../../utils/workspace-resolver.js'
-import { parseCanonicalPositiveInt } from '../../../utils/safe-positive-int.js'
+import { parseCanonicalPositiveInt, parsePositiveProjectNumber } from '../../../utils/safe-positive-int.js'
 import { isRecord } from '../../../codemode/normalizers/shared-utils.js'
+
+/** Return the first defined, non-null, non-blank value matching `keys` on `primary` then `fallback`. */
+export function firstNonBlankAlias(
+    primary: Record<string, unknown>,
+    fallback: Record<string, unknown> | undefined,
+    keys: readonly string[]
+): unknown {
+    for (const src of fallback !== undefined ? [primary, fallback] : [primary]) {
+        for (const k of keys) {
+            const v = src[k]
+            if (v !== undefined && v !== null && !(typeof v === 'string' && v.trim() === '')) {
+                return v
+            }
+        }
+    }
+    return undefined
+}
+
+/** Resolves `entry_id` / `entryId` / `id` from a JSON recovery record without blank-string shadowing. */
+export function readEntryIdField(target: Record<string, unknown>): {
+    entryId: number | undefined
+    invalidExplicitEntryId: number | string | undefined
+} {
+    const raw = firstNonBlankAlias(target, undefined, ['entry_id', 'entryId', 'id'])
+    if (raw === undefined) return { entryId: undefined, invalidExplicitEntryId: undefined }
+    const parsed = parsePositiveProjectNumber(raw)
+    if (parsed !== undefined) return { entryId: parsed, invalidExplicitEntryId: undefined }
+    if (typeof raw === 'number') {
+        return { entryId: undefined, invalidExplicitEntryId: Number.isFinite(raw) ? raw : String(raw) }
+    }
+    if (typeof raw === 'string') return { entryId: undefined, invalidExplicitEntryId: raw.trim() }
+    const invalidExplicitEntryId =
+        typeof raw === 'boolean' ? String(raw) : typeof raw === 'object' ? (JSON.stringify(raw) ?? 'invalid') : 'invalid'
+    return { entryId: undefined, invalidExplicitEntryId }
+}
 
 /** Resolves `project_number` / aliases from a JSON recovery payload record. */
 export function readProjectNumber(target: Record<string, unknown>): number | string | undefined {
-    const raw =
-        target['project_number'] ??
-        target['projectNumber'] ??
-        target['project_id'] ??
-        target['projectId'] ??
-        target['project_name'] ??
-        target['projectName'] ??
-        target['project']
+    const raw = firstNonBlankAlias(target, undefined, [
+        'project_number',
+        'projectNumber',
+        'project_id',
+        'projectId',
+        'project_name',
+        'projectName',
+        'project',
+    ])
     if (typeof raw === 'number') {
         if (Number.isSafeInteger(raw) && raw > 0) return raw
         return Number.isFinite(raw) ? raw : String(raw)
@@ -53,10 +89,10 @@ export function resolveRepoWorkspace(repo: unknown): string | undefined {
 
 /** Resolves explicit workspace or registered repo workspace from a JSON recovery payload record. */
 export function readWorkspaceId(target: Record<string, unknown>): string | undefined {
-    const raw = target['workspace_id'] ?? target['workspaceId'] ?? target['workspace']
-    if (typeof raw === 'string' && raw.trim() !== '') return raw.trim()
+    const raw = firstNonBlankString(target['workspace_id'], target['workspaceId'], target['workspace'])
+    if (raw !== undefined) return raw
     return resolveRepoWorkspace(
-        target['repo'] ?? target['repo_name'] ?? target['repoName'] ?? target['repository']
+        firstNonBlankString(target['repo'], target['repo_name'], target['repoName'], target['repository'])
     )
 }
 
@@ -104,12 +140,14 @@ export function assignMissingScope(
 ): void {
     const hasWsParam = params['workspace_id'] !== undefined || params['workspaceId'] !== undefined
     const hasProjParam = params['project_number'] !== undefined || params['projectNumber'] !== undefined
+    const wsForScope = firstNonBlankString(params['workspace_id'], params['workspaceId'])
+    const projForScope = firstNonBlankAlias(params, undefined, ['project_number', 'projectNumber'])
     const effectiveTarget =
         hasWsParam || hasProjParam
             ? {
                   ...target,
-                  ...(hasWsParam ? { workspace_id: params['workspace_id'] ?? params['workspaceId'] } : {}),
-                  ...(hasProjParam ? { project_number: params['project_number'] ?? params['projectNumber'] } : {}),
+                  ...(hasWsParam ? { workspace_id: wsForScope ?? params['workspace_id'] ?? params['workspaceId'] } : {}),
+                  ...(hasProjParam ? { project_number: projForScope ?? params['project_number'] ?? params['projectNumber'] } : {}),
               }
             : target
     const scope = resolveCompatibleInheritedScope(effectiveTarget, original)

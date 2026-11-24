@@ -264,7 +264,8 @@ function createCliAuditLogger(
 export async function auditAction(options: z.infer<typeof auditSchema>, command: Command): Promise<void> {
     try {
         let resolver: ConfigResolver
-        const configPath = options.config ?? process.env['MEMORY_JOURNAL_CONFIG']
+        const envConfig = process.env['MEMORY_JOURNAL_CONFIG']?.trim()
+        const configPath = options.config ?? (envConfig !== undefined && envConfig !== '' ? envConfig : undefined)
         const configErrors: string[] = []
         try {
             resolver = new ConfigResolver(command, options, configPath)

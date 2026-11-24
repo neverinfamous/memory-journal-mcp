@@ -394,7 +394,7 @@ describe('Pass 71 Audit — Code Mode Normalization, Authz Sequencing, Registry 
         const res = (await listBackupsTool?.handler({ project_number: 5 })) as { scopeNote?: string }
         expect(res.scopeNote).toBe('Database-wide team backups')
 
-        expect(AUDIT_PROMPT_REVISION).toBe('2026-11-24-audit-pass81')
+        expect(AUDIT_PROMPT_REVISION).toBe('2026-11-24-audit-pass82')
         const def = getCodeQualityAuditPromptDefinition()
         const promptDb = new DatabaseAdapter(':memory:')
         await promptDb.initialize()
@@ -405,7 +405,7 @@ describe('Pass 71 Audit — Code Mode Normalization, Authz Sequencing, Registry 
         } finally {
             promptDb.close()
         }
-        expect(text).toContain('Prompt revision: 2026-11-24-audit-pass81')
+        expect(text).toContain('Prompt revision: 2026-11-24-audit-pass82')
         expect(text).toContain('worker-safe reader callbacks')
     })
 })

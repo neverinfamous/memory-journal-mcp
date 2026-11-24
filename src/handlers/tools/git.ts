@@ -37,6 +37,9 @@ export {
     GitUnreleasedOptionsSchema,
 } from './git-schemas.js'
 
+const MaxUnreleasedCountSchema = z.number().int().positive().max(5000)
+const MaxPatternCommitsSchema = z.number().int().positive().max(10000)
+
 export function getGitTools(context: ToolContext): ToolDefinition[] {
     return [
         {
@@ -155,7 +158,7 @@ export function getGitTools(context: ToolContext): ToolDefinition[] {
                     const parsedMcp = GitUnreleasedOptionsSchema.parse(params ?? {})
                     const maxCount =
                         parsedMcp.maxCount !== undefined
-                            ? z.number().int().positive().max(5000).parse(parsedMcp.maxCount)
+                            ? MaxUnreleasedCountSchema.parse(parsedMcp.maxCount)
                             : undefined
                     const projectNumber = StrictProjectNumberSchema.optional().parse(
                         parsedMcp.project_number
@@ -206,7 +209,7 @@ export function getGitTools(context: ToolContext): ToolDefinition[] {
                     const cwd = resolveGitWorkingDir(input, context.config)
                     const progress = context.progress
                     await sendProgress(progress, 0, 2, 'Fetching commits for analysis...')
-                    const max = z.number().int().positive().max(10000).parse(input.maxCount)
+                    const max = MaxPatternCommitsSchema.parse(input.maxCount)
                     const commits = await fetchCommits({ maxCount: max }, cwd)
                     await sendProgress(progress, 1, 2, 'Analyzing commits...')
 

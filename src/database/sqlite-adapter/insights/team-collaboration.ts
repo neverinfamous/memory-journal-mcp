@@ -151,7 +151,7 @@ function queryAuthorActivityAndTotals(
             GROUP BY mj.author, mj.workspace_id, period
         ) raw
         GROUP BY author, raw.period
-        ORDER BY raw.period DESC, entryCount DESC`
+        ORDER BY raw.period DESC, entryCount DESC, author ASC`
 
     const rows = connection.getNativeDb().prepare(sql).all(...clause.params) as {
         author: string
@@ -197,7 +197,7 @@ function queryRelationshipMetrics(
             GROUP BY m1.author, m1.workspace_id, m2.author, m2.workspace_id
         ) raw
         GROUP BY fromAuthor, toAuthor
-        ORDER BY linkCount DESC`
+        ORDER BY linkCount DESC, fromAuthor ASC, toAuthor ASC`
 
     const rows = connection.getNativeDb().prepare(sql).all(...c1.params, ...c2.params) as {
         fromAuthor: string
@@ -217,7 +217,7 @@ function queryRelationshipMetrics(
         author,
         inboundLinks,
     }))
-        .sort((a, b) => b.inboundLinks - a.inboundLinks)
+        .sort((a, b) => b.inboundLinks - a.inboundLinks || (a.author < b.author ? -1 : a.author > b.author ? 1 : 0))
         .slice(0, limit)
 
     return {

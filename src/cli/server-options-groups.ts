@@ -92,18 +92,28 @@ export const CANONICAL_SERVER_ENV_KEYS = [
     'STATELESS',
 ] as const
 
+function resolveCliDatabaseFlag(
+    resolver: ConfigResolver,
+    catchConfig: CatchConfig,
+    key: string,
+    flagLabel: string
+): string | undefined {
+    return catchConfig(() => {
+        if (!resolver.isCliProvided(key)) return undefined
+        const val = resolver.resolve<string>(key)
+        if (typeof val === 'string' && val.trim() === '') {
+            throw new Error(`Invalid blank --${flagLabel} database path.`)
+        }
+        return val
+    }, undefined)
+}
+
 export function resolveDatabasePaths(
     resolver: ConfigResolver,
     catchConfig: CatchConfig
 ): { db: string | undefined; testDb: string | undefined; teamDb: string | undefined; testTeamDb: string | undefined } {
-    const cliDb = catchConfig(
-        () => (resolver.isCliProvided('db') ? resolver.resolve<string>('db') : undefined),
-        undefined
-    )
-    const cliDatabase = catchConfig(
-        () => (resolver.isCliProvided('database') ? resolver.resolve<string>('database') : undefined),
-        undefined
-    )
+    const cliDb = resolveCliDatabaseFlag(resolver, catchConfig, 'db', 'db')
+    const cliDatabase = resolveCliDatabaseFlag(resolver, catchConfig, 'database', 'database')
     const envDb = process.env['DB_PATH'] !== undefined && process.env['DB_PATH'] !== '' ? process.env['DB_PATH'] : undefined
     const hasExplicitDb = cliDb !== undefined || cliDatabase !== undefined || envDb !== undefined
     const configDbPath = catchConfig(() => resolver.resolve<string>('dbPath'), undefined)
@@ -116,18 +126,13 @@ export function resolveDatabasePaths(
         db = configDbPath
     }
 
+    const cliTestDb = resolveCliDatabaseFlag(resolver, catchConfig, 'testDb', 'test-db')
     const configTestDbPath = catchConfig(() => resolver.resolve<string>('testDbPath'), undefined)
     const rawTestDb = catchConfig(() => resolver.resolve<string>('testDb', 'TEST_DB_PATH'), undefined)
-    const testDb = rawTestDb ?? configTestDbPath
+    const testDb = cliTestDb ?? rawTestDb ?? configTestDbPath
 
-    const cliTeamDb = catchConfig(
-        () => (resolver.isCliProvided('teamDb') ? resolver.resolve<string>('teamDb') : undefined),
-        undefined
-    )
-    const cliTeamDatabase = catchConfig(
-        () => (resolver.isCliProvided('teamDatabase') ? resolver.resolve<string>('teamDatabase') : undefined),
-        undefined
-    )
+    const cliTeamDb = resolveCliDatabaseFlag(resolver, catchConfig, 'teamDb', 'team-db')
+    const cliTeamDatabase = resolveCliDatabaseFlag(resolver, catchConfig, 'teamDatabase', 'team-database')
     const envTeamDb =
         process.env['TEAM_DB_PATH'] !== undefined && process.env['TEAM_DB_PATH'] !== ''
             ? process.env['TEAM_DB_PATH']
@@ -144,9 +149,10 @@ export function resolveDatabasePaths(
         teamDb = configTeamDbPath
     }
 
+    const cliTestTeamDb = resolveCliDatabaseFlag(resolver, catchConfig, 'testTeamDb', 'test-team-db')
     const configTestTeamDbPath = catchConfig(() => resolver.resolve<string>('testTeamDbPath'), undefined)
     const rawTestTeamDb = catchConfig(() => resolver.resolve<string>('testTeamDb', 'TEST_TEAM_DB_PATH'), undefined)
-    const testTeamDb = rawTestTeamDb ?? configTestTeamDbPath
+    const testTeamDb = cliTestTeamDb ?? rawTestTeamDb ?? configTestTeamDbPath
 
     return { db, testDb, teamDb, testTeamDb }
 }

@@ -119,8 +119,37 @@ function formatTextHelp(cmd: Command, helper: Help): string {
     return output
 }
 
+function resolveJsonHelpFlag(argv: readonly string[], rootProgram: Command): boolean {
+    const valueFlags = collectValueTakingFlags(argv, rootProgram)
+    let isJsonHelp = false
+    let expectValue = false
+    for (let i = 2; i < argv.length; i++) {
+        const tok = argv[i]
+        if (tok === undefined) break
+        if (expectValue) { expectValue = false; continue }
+        if (tok === '--') break
+        if (tok.startsWith('--')) {
+            const eqIdx = tok.indexOf('=')
+            const rawFlag = eqIdx === -1 ? tok : tok.slice(0, eqIdx)
+            const normFlag = rawFlag.replace(/_/g, '-')
+            if (eqIdx === -1 && valueFlags.has(normFlag)) { expectValue = true; continue }
+            if (normFlag === '--no-json') isJsonHelp = false
+            else if (normFlag === '--json') {
+                const rhs = eqIdx === -1 ? 'true' : tok.slice(eqIdx + 1).toLowerCase()
+                if (rhs === 'true') isJsonHelp = true
+                else if (rhs === 'false') isJsonHelp = false
+            }
+            continue
+        }
+        if (/^-[^-]$/.test(tok) && valueFlags.has(tok)) expectValue = true
+    }
+    return isJsonHelp
+}
+
 function formatProgramHelp(cmd: Command, helper: Help): string {
-    const isJsonHelp = process.argv.includes('--json') || process.argv.includes('--json=true')
+    let root: Command = cmd
+    while (root.parent !== null) root = root.parent
+    const isJsonHelp = resolveJsonHelpFlag(process.argv, root)
     if (isJsonHelp) {
         return (
             JSON.stringify({

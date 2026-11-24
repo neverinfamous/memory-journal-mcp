@@ -129,7 +129,7 @@ describe('audit pass74 negative anchor caching, default-command argv normalizati
     })
 
     it('AP1-AP2: exports pass74 revision and portable guardrails', async () => {
-        expect(AUDIT_PROMPT_REVISION).toBe('2026-11-24-audit-pass81')
+        expect(AUDIT_PROMPT_REVISION).toBe('2026-11-24-audit-pass82')
         const db = new DatabaseAdapter(':memory:')
         await db.initialize()
         try {
@@ -140,9 +140,9 @@ describe('audit pass74 negative anchor caching, default-command argv normalizati
                 (await getCodeQualityAuditPromptDefinition().handler({ target: 'src', copilot: 'false' }, db))
                     .messages[0]?.content.text ?? ''
 
-            expect(perfText).toContain('Prompt revision: 2026-11-24-audit-pass81')
+            expect(perfText).toContain('Prompt revision: 2026-11-24-audit-pass82')
             expect(perfText).toContain('negative `[]` hits')
-            expect(cqText).toContain('Prompt revision: 2026-11-24-audit-pass81')
+            expect(cqText).toContain('Prompt revision: 2026-11-24-audit-pass82')
             expect(cqText).toContain('isDefault: true')
             expect(cqText).toContain('received NaN')
             expect(cqText).toContain('explore')

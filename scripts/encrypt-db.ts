@@ -24,13 +24,19 @@ if (key.includes('\0')) {
     process.exit(1)
 }
 
-if (!fs.existsSync(inPath)) {
+const inStat = fs.lstatSync(inPath, { throwIfNoEntry: false })
+if (inStat === undefined) {
     console.error(`Input database not found: ${inPath}`)
     process.exit(1)
 }
+if (inStat.isSymbolicLink() || !inStat.isFile()) {
+    console.error(`Refusing symlink or non-regular input database: ${inPath}`)
+    process.exit(1)
+}
 
-if (fs.existsSync(outPath)) {
-    console.error(`Output database already exists: ${outPath}`)
+const outStat = fs.lstatSync(outPath, { throwIfNoEntry: false })
+if (outStat !== undefined) {
+    console.error(`Output database already exists (or is a symlink): ${outPath}`)
     process.exit(1)
 }
 
@@ -69,9 +75,11 @@ const tmpPath = `${outPath}.tmp-${String(process.pid)}-${crypto.randomBytes(6).t
 function copyPlaintextSecurely(srcPath: string, destPath: string): void {
     const flags = fs.constants.O_WRONLY | fs.constants.O_CREAT | fs.constants.O_EXCL | (fs.constants.O_NOFOLLOW ?? 0)
     const dstFd = fs.openSync(destPath, flags, 0o600)
-    const srcFd = fs.openSync(srcPath, fs.constants.O_RDONLY)
+    let srcFd: number | undefined
     const buf = Buffer.allocUnsafe(64 * 1024)
     try {
+        const srcFlags = fs.constants.O_RDONLY | (fs.constants.O_NOFOLLOW ?? 0)
+        srcFd = fs.openSync(srcPath, srcFlags)
         for (;;) {
             const bytesRead = fs.readSync(srcFd, buf, 0, buf.length, null)
             if (bytesRead === 0) break
@@ -81,7 +89,7 @@ function copyPlaintextSecurely(srcPath: string, destPath: string): void {
             }
         }
     } finally {
-        fs.closeSync(srcFd)
+        if (srcFd !== undefined) fs.closeSync(srcFd)
         fs.closeSync(dstFd)
     }
 }

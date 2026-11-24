@@ -331,8 +331,7 @@ export async function callTool(
     const mapToUse = config?.runtime?.toolMapCache ?? toolMapCache ?? EMPTY_TOOL_MAP
     const preTool = mapToUse.get(name)
     const rewriteUri = getEntryToResourceRewriteUri(name, args, mapToUse, config)
-    const isRewrite = rewriteUri !== undefined
-    const preGuard = enforcePreHealingToolGuards(name, preTool, isRewrite, config)
+    const preGuard = enforcePreHealingToolGuards(name, preTool, config)
     if (preGuard.blocked) return preGuard.result
 
     const healed = applyToolHealingArgs(name, args, config)

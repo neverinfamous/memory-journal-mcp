@@ -154,7 +154,8 @@ export function normalizeExecuteCodeAliases(obj: Record<string, unknown>): void 
     delete obj['read_only']
     if (obj['code'] !== undefined) return
 
-    if (typeof obj['query'] === 'string' && obj['query'].trim().length > 0) {
+    const hasDiscriminator = DISCRIMINATOR_KEYS.some((k) => obj[k] !== undefined)
+    if (!hasDiscriminator && typeof obj['query'] === 'string' && obj['query'].trim().length > 0) {
         const hasExplicitCodeAlias = EXPLICIT_CODE_ALIAS_KEYS.some(
             (key) => typeof obj[key] === 'string'
         )
@@ -163,7 +164,6 @@ export function normalizeExecuteCodeAliases(obj: Record<string, unknown>): void 
         }
     }
 
-    const hasDiscriminator = DISCRIMINATOR_KEYS.some((k) => obj[k] !== undefined)
     if (hasDiscriminator) {
         const explicitCodeAlias = EXPLICIT_CODE_ALIAS_KEYS.map((key) => obj[key]).find(
             (val): val is string => typeof val === 'string' && val.length > 0

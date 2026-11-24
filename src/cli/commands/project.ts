@@ -129,12 +129,16 @@ function buildValidatedProjectServerOptions(
     })
 }
 
+function isValidExplicitProjectName(name: string): boolean {
+    return name !== '' && name.trim() !== '' && name === name.trim() && !isForbiddenProjectKey(name)
+}
+
 function validateAndRegisterProjectEntry(
     name: string,
     options: Record<string, unknown>,
     command: Command
 ): { absPath: string; serverOptions: ServerOptions; effectiveProjNum: number | undefined } | undefined {
-    if (!name || name.trim() === '' || isForbiddenProjectKey(name)) {
+    if (!isValidExplicitProjectName(name)) {
         process.stderr.write('Invalid project name.\n')
         process.exit(1)
     }
@@ -346,7 +350,7 @@ function applyProjectUpdateFields(
 
 export function projectUpdateAction(name: string, options: Record<string, unknown>, command: Command): void {
     handleProjectDumpConfig(options, command)
-    if (!name || name.trim() === '' || isForbiddenProjectKey(name)) {
+    if (!isValidExplicitProjectName(name)) {
         process.stderr.write('Invalid project name.\n')
         process.exit(1)
     }
@@ -415,7 +419,7 @@ export function projectUpdateAction(name: string, options: Record<string, unknow
 
 export function projectDeleteAction(name: string, options: Record<string, unknown>, command: Command): void {
     handleProjectDumpConfig(options, command)
-    if (!name || name.trim() === '' || isForbiddenProjectKey(name)) {
+    if (!isValidExplicitProjectName(name)) {
         process.stderr.write('Project name is required.\n')
         process.exit(1)
     }

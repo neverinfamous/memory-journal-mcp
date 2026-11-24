@@ -180,15 +180,13 @@ function buildActiveSandboxStatusResponse(start: number): { earlyReturn: Record<
             success: true,
             result: {
                 status: 'active',
-                message:
-                    'Code Mode sandbox is active. Provide JavaScript code in the `code` parameter to execute.',
+                message: 'Code Mode sandbox is active. Provide JavaScript code in the `code` parameter to execute.',
                 availableNamespaces: [
                     'mj.core', 'mj.search', 'mj.admin', 'mj.analytics', 'mj.relationships',
                     'mj.io', 'mj.git', 'mj.team', 'mj.backup', 'mj.github',
                 ],
                 example: 'return await mj.searchEntries({ query: "example" })',
-                discovery:
-                    'Use mj.help() or return await mj.core.searchEntries.schema() to inspect parameters.',
+                discovery: 'Use mj.help() or return await mj.core.searchEntries.schema() to inspect parameters.',
             },
             _healing_note:
                 '🛠️ AUTONOMOUS HEALING: `mj_execute_code` was called without a `code` parameter or with an empty payload. Returned active sandbox status, available namespaces, and execution examples.',
@@ -201,13 +199,8 @@ function buildActiveSandboxStatusResponse(start: number): { earlyReturn: Record<
 function validationFailure(error: string): { earlyReturn: Record<string, unknown> } {
     return {
         earlyReturn: {
-            success: false,
-            error,
-            code: 'VALIDATION_ERROR',
-            category: 'validation',
-            recoverable: true,
-            project_id: undefined,
-            executionTimeMs: 0,
+            success: false, error, code: 'VALIDATION_ERROR', category: 'validation',
+            recoverable: true, project_id: undefined, executionTimeMs: 0,
         },
     }
 }
@@ -257,6 +250,12 @@ function transformInitialExecutionCode(
     const looksLikeSqlQuery = RAW_SQL_QUERY_RE.test(trimmedInitial)
 
     if (sourceKey === 'query' && !hasExplicitContent) {
+        if (isRecord(params) && hasStructuredDiscriminator(params)) {
+            const recRecovered = extractAndRecoverRecordCode(params)
+            return recRecovered !== null
+                ? { executionCode: recRecovered }
+                : validationFailure(UNRECOVERABLE_PAYLOAD_MSG)
+        }
         if (looksLikeSqlQuery) {
             return validationFailure(
                 'Could not translate raw SQL in `query`. Use `mj.search.searchEntries({ query: "..." })` or a supported `mj.*` method.'

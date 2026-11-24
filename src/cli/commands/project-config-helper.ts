@@ -2,6 +2,7 @@ import * as fs from 'node:fs'
 import * as os from 'node:os'
 import * as path from 'node:path'
 import { CANONICAL_SERVER_ENV_KEYS } from '../server-options-groups.js'
+import { ConfigurationError } from '../../types/errors.js'
 
 const DEFAULT_PROJECT_CONFIG_PATH = path.resolve(
     os.homedir(),
@@ -14,8 +15,10 @@ const AMBIENT_PROJECT_CONFIG_ENV_KEYS = CANONICAL_SERVER_ENV_KEYS
 
 export function resolveProjectConfigPath(options?: Record<string, unknown>): string {
     const rawOpt = options?.['config']
-    const cliConfig =
-        typeof rawOpt === 'string' && rawOpt.trim() !== '' ? rawOpt.trim() : undefined
+    if (typeof rawOpt === 'string' && rawOpt.trim() === '') {
+        throw new ConfigurationError('Invalid blank --config path.')
+    }
+    const cliConfig = typeof rawOpt === 'string' ? rawOpt.trim() : undefined
     const envConfig = process.env['MEMORY_JOURNAL_CONFIG']?.trim()
     const custom = cliConfig ?? (envConfig !== undefined && envConfig !== '' ? envConfig : undefined)
     return custom !== undefined ? path.resolve(custom) : DEFAULT_PROJECT_CONFIG_PATH
@@ -30,8 +33,10 @@ export function withIsolatedProjectConfigEnv<T>(
     fn: (isolatedConfigPath: string | undefined) => T
 ): T {
     const rawOpt = options['config']
-    const explicitConfig =
-        typeof rawOpt === 'string' && rawOpt.trim() !== '' ? path.resolve(rawOpt.trim()) : undefined
+    if (typeof rawOpt === 'string' && rawOpt.trim() === '') {
+        throw new ConfigurationError('Invalid blank --config path.')
+    }
+    const explicitConfig = typeof rawOpt === 'string' ? path.resolve(rawOpt.trim()) : undefined
     if (explicitConfig === undefined) {
         const envConfig = process.env['MEMORY_JOURNAL_CONFIG']?.trim()
         return fn(envConfig !== undefined && envConfig !== '' ? envConfig : undefined)

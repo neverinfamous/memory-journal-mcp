@@ -13,6 +13,10 @@ import {
     parseStringContextPayload,
 } from '../shared-context-parsers.js'
 
+const NESTED_DISCRIMINATORS = ['action', 'operation', 'op', 'tool', 'method', 'function'] as const
+const hasNestedDiscriminator = (arg: object): boolean =>
+    NESTED_DISCRIMINATORS.some((k) => Reflect.get(arg, k) !== undefined)
+
 /**
  * Extracts executable JS code from nested `executeCode` arguments, returning `null`
  * only when explicit entry fields (`content`, `text`, `description`, `title`) indicate an entry payload.
@@ -23,24 +27,11 @@ export function readExecutableCode(arg: unknown): string | null {
     const codeProp = Reflect.get(arg, 'code') as unknown
     const scriptProp = Reflect.get(arg, 'script') as unknown
     const codeToExec =
-        typeof codeProp === 'string'
-            ? codeProp
-            : typeof scriptProp === 'string'
-              ? scriptProp
-              : ''
+        typeof codeProp === 'string' ? codeProp : typeof scriptProp === 'string' ? scriptProp : ''
     if (codeToExec !== '') return codeToExec
+    if (hasNestedDiscriminator(arg)) return ''
     const queryProp = Reflect.get(arg, 'query') as unknown
-    if (typeof queryProp === 'string' && queryProp.trim() !== '') {
-        return queryProp
-    }
-    const hasDiscriminator =
-        Reflect.get(arg, 'action') !== undefined ||
-        Reflect.get(arg, 'operation') !== undefined ||
-        Reflect.get(arg, 'op') !== undefined ||
-        Reflect.get(arg, 'tool') !== undefined ||
-        Reflect.get(arg, 'method') !== undefined ||
-        Reflect.get(arg, 'function') !== undefined
-    if (hasDiscriminator) return ''
+    if (typeof queryProp === 'string' && queryProp.trim() !== '') return queryProp
     const hasEntryText =
         typeof Reflect.get(arg, 'content') === 'string' ||
         typeof Reflect.get(arg, 'text') === 'string' ||
@@ -75,39 +66,37 @@ export function isSyntacticallyValidJs(trimmed: string): boolean {
 const DANGEROUS_NESTED_QUERY_TOKEN_RE =
     /\b(?:process|require|eval|Function|Reflect|Proxy|global|globalThis|__proto__)\b/
 
-/**
- * Extracts a nested `{ query: "..." }` search request when no explicit `code`/`script`
- * is present and the `query` text is not dangerous or an explicit `return` / `await mj.` snippet.
- */
+/** Extracts a nested `{ query: "..." }` search request when no `code`/`script`/discriminator is present. */
 export function readNestedQuerySearch(
     arg: unknown
 ): ({ query: string; workspace_id?: string; project_number?: number; limit?: unknown } & Record<string, unknown>) | undefined {
     if (typeof arg !== 'object' || arg === null || Array.isArray(arg)) return undefined
+    if (hasNestedDiscriminator(arg)) return undefined
     const codeProp = Reflect.get(arg, 'code') as unknown
     const scriptProp = Reflect.get(arg, 'script') as unknown
-    if (typeof codeProp === 'string' && codeProp.trim() !== '') return undefined
-    if (typeof scriptProp === 'string' && scriptProp.trim() !== '') return undefined
+    if ((typeof codeProp === 'string' && codeProp.trim() !== '') || (typeof scriptProp === 'string' && scriptProp.trim() !== '')) {
+        return undefined
+    }
     const queryProp = Reflect.get(arg, 'query') as unknown
     if (typeof queryProp !== 'string' || queryProp.trim() === '') return undefined
     const trimmedQuery = queryProp.trim()
-    if (
-        DANGEROUS_NESTED_QUERY_TOKEN_RE.test(trimmedQuery) ||
-        EXPLICIT_QUERY_CODE_RE.test(trimmedQuery)
-    ) {
-        return undefined
-    }
+    if (DANGEROUS_NESTED_QUERY_TOKEN_RE.test(trimmedQuery) || EXPLICIT_QUERY_CODE_RE.test(trimmedQuery)) return undefined
 
     const searchPayload: { query: string; workspace_id?: string; project_number?: number; limit?: unknown } & Record<string, unknown> = {
         query: queryProp,
     }
-    const wsProp = (Reflect.get(arg, 'workspace_id') ?? Reflect.get(arg, 'workspaceId')) as unknown
-    if (typeof wsProp === 'string' && wsProp.trim() !== '') {
-        searchPayload.workspace_id = wsProp.trim()
-    }
-    const projProp = (Reflect.get(arg, 'project_number') ?? Reflect.get(arg, 'projectNumber')) as unknown
-    if (typeof projProp === 'number' && Number.isSafeInteger(projProp) && projProp > 0) {
-        searchPayload.project_number = projProp
-    }
+    const wsCandidates: unknown[] = [
+        Reflect.get(arg, 'workspace_id'),
+        Reflect.get(arg, 'workspaceId'),
+        Reflect.get(arg, 'workspace'),
+    ]
+    const wsProp = wsCandidates.find((v): v is string => typeof v === 'string' && v.trim() !== '')
+    if (wsProp !== undefined) searchPayload.workspace_id = wsProp.trim()
+    const projCandidates: unknown[] = [Reflect.get(arg, 'project_number'), Reflect.get(arg, 'projectNumber')]
+    const projProp = projCandidates.find(
+        (v) => v !== undefined && v !== null && !(typeof v === 'string' && v.trim() === '')
+    )
+    if (typeof projProp === 'number' && Number.isSafeInteger(projProp) && projProp > 0) searchPayload.project_number = projProp
     appendOptionalQuerySearchFields(searchPayload, arg as Record<string, unknown>)
     return searchPayload
 }

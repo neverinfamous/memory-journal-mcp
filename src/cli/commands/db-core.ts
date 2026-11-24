@@ -30,7 +30,8 @@ export async function getCliCommandDb(
     }
 
     let resolver: ConfigResolver
-    const configPath = options.config ?? process.env['MEMORY_JOURNAL_CONFIG']
+    const envConfig = process.env['MEMORY_JOURNAL_CONFIG']?.trim()
+    const configPath = options.config ?? (envConfig !== undefined && envConfig !== '' ? envConfig : undefined)
     const configErrors: string[] = []
 
     try {

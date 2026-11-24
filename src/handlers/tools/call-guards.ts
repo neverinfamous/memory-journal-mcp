@@ -81,11 +81,10 @@ export function getEntryToResourceRewriteUri(
 export function enforcePreHealingToolGuards(
     name: string,
     preTool: ToolDefinition | undefined,
-    isRewrite: boolean,
     config?: ToolHandlerConfig
 ): { blocked: boolean; result?: unknown } {
     if (preTool === undefined) return { blocked: false }
-    if (!isRewrite && config?.filterConfig) {
+    if (config?.filterConfig) {
         const preDisabled = assertToolFilterAllowsCall(
             name,
             preTool.annotations.readOnlyHint,

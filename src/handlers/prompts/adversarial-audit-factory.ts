@@ -18,7 +18,7 @@ import {
     validateAdversarialPromptScope,
 } from './adversarial-helpers.js'
 
-export const AUDIT_PROMPT_REVISION = '2026-11-24-audit-pass81'
+export const AUDIT_PROMPT_REVISION = '2026-11-24-audit-pass82'
 
 export interface SharedAuditPreambleOptions {
     label?: 'Target' | 'Topic'

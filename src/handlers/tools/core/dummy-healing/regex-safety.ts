@@ -5,7 +5,6 @@
 export const MAX_USER_REGEX_LENGTH = 256
 const MAX_UNBOUNDED_QUANTIFIERS = 5
 const MAX_UNBOUNDED_WILDCARDS = 2
-const NESTED_QUANTIFIER_REGEX = /(?:[+*?}]|\{\d+,?\d*\})\s*\)[+*?{]/
 const BACKREFERENCE_REGEX = /\\[1-9]|\\k</
 const REPEATED_WILDCARD_REGEX = /(?:\.\*|\.\+){2,}/
 
@@ -200,24 +199,32 @@ function readAtomToken(pattern: string, i: number): { token: string; next: numbe
 }
 
 interface QuantGroupFrame {
-    entryPrev: string | null
+    entryPrev: readonly string[]
     hasAlternation: boolean
     zeroWidth: boolean
     singleAtom: string | null
     tokenCount: number
     hasInnerQuant: boolean
-    branchEnds: (string | null)[]
+    branchEnds: (readonly string[])[]
 }
 
-function mergeGroupEndAtoms(atoms: (string | null)[]): string | null {
-    const nonNull = atoms.filter((a): a is string => a !== null)
-    if (nonNull.length === 0) return null
-    const first = nonNull[0] ?? null
-    if (nonNull.every((a) => !areAtomsProvablyDisjoint(first ?? '', a))) {
-        return nonNull.find((a) => isUniversalWildcardAtom(a)) ?? first
+function mergeQuantAtomSets(sets: readonly (readonly string[])[]): string[] {
+    const merged: string[] = []
+    for (const atoms of sets) {
+        for (const atom of atoms) {
+            if (isUniversalWildcardAtom(atom)) return ['.']
+            if (!merged.includes(atom)) merged.push(atom)
+        }
     }
-    // Multiple distinct quantified branches (e.g. (a+|b+)): treat as wildcard if followed by repeating atom that overlaps any branch.
-    return '.'
+    return merged.length > 6 ? ['.'] : merged
+}
+
+function anyAtomOverlaps(atoms: readonly string[], token: string): boolean {
+    return atoms.some((atom) => !areAtomsProvablyDisjoint(atom, token))
+}
+
+function retainOverlappingAtoms(atoms: readonly string[], token: string): string[] {
+    return atoms.filter((atom) => !areAtomsProvablyDisjoint(atom, token))
 }
 
 function groupPrefixSkipLength(pattern: string, idx: number): { skip: number; zeroWidth: boolean } {
@@ -240,7 +247,7 @@ function groupPrefixSkipLength(pattern: string, idx: number): { skip: number; ze
 interface QuantScannerState {
     repeatingCount: number
     wildcardCount: number
-    prevQuantAtom: string | null
+    prevQuantAtoms: readonly string[]
     groupStack: QuantGroupFrame[]
 }
 
@@ -248,14 +255,14 @@ function stepClosingParenGroup(pattern: string, i: number, state: QuantScannerSt
     const popped = state.groupStack.pop()
     const groupQuant = readQuantifierAt(pattern, i + 1)
     if (popped === undefined) {
-        state.prevQuantAtom = null
+        state.prevQuantAtoms = []
         return { nextIdx: groupQuant !== null ? groupQuant.end : i + 1, unsafe: false }
     }
     if (popped.zeroWidth) {
         if (groupQuant?.repeating === true) {
             return { nextIdx: pattern.length, unsafe: true }
         }
-        state.prevQuantAtom = popped.entryPrev
+        state.prevQuantAtoms = popped.entryPrev
         return { nextIdx: groupQuant !== null ? groupQuant.end : i + 1, unsafe: false }
     }
     if (groupQuant !== null && groupQuant.repeating && popped.tokenCount === 1 && popped.singleAtom !== null) {
@@ -264,58 +271,55 @@ function stepClosingParenGroup(pattern: string, i: number, state: QuantScannerSt
         if (state.repeatingCount > MAX_UNBOUNDED_QUANTIFIERS || state.wildcardCount > MAX_UNBOUNDED_WILDCARDS) {
             return { nextIdx: pattern.length, unsafe: true }
         }
-        if (popped.entryPrev !== null && !areAtomsProvablyDisjoint(popped.entryPrev, popped.singleAtom)) {
+        if (anyAtomOverlaps(popped.entryPrev, popped.singleAtom)) {
             return { nextIdx: pattern.length, unsafe: true }
         }
-        state.prevQuantAtom = !groupQuant.nullable || popped.entryPrev === null ? popped.singleAtom : popped.entryPrev
+        state.prevQuantAtoms = !groupQuant.nullable
+            ? [popped.singleAtom]
+            : mergeQuantAtomSets([popped.entryPrev, [popped.singleAtom]])
         return { nextIdx: groupQuant.end, unsafe: false }
     }
     if (groupQuant?.repeating === true) {
-        if (popped.entryPrev !== null) {
+        if (popped.entryPrev.length > 0) {
             return { nextIdx: pattern.length, unsafe: true }
         }
         state.repeatingCount++
         if (state.repeatingCount > MAX_UNBOUNDED_QUANTIFIERS) {
             return { nextIdx: pattern.length, unsafe: true }
         }
-        state.prevQuantAtom = '.'
+        state.prevQuantAtoms = ['.']
         return { nextIdx: groupQuant.end, unsafe: false }
     }
-    if (popped.hasAlternation) {
-        popped.branchEnds.push(state.prevQuantAtom)
-        const mergedEnd = mergeGroupEndAtoms(popped.branchEnds)
-        state.prevQuantAtom =
-            groupQuant?.nullable === true && popped.entryPrev !== null && mergedEnd === null
-                ? popped.entryPrev
-                : mergedEnd
-    } else if (groupQuant?.nullable === true && state.prevQuantAtom === null && popped.entryPrev !== null) {
-        state.prevQuantAtom = popped.entryPrev
-    }
+    const branchMerged = popped.hasAlternation
+        ? mergeQuantAtomSets([...popped.branchEnds, state.prevQuantAtoms])
+        : state.prevQuantAtoms
+    state.prevQuantAtoms =
+        groupQuant?.nullable === true ? mergeQuantAtomSets([branchMerged, popped.entryPrev]) : branchMerged
     return { nextIdx: groupQuant !== null ? groupQuant.end : i + 1, unsafe: false }
 }
 
 /** Reject ungrouped overlapping/adjacent quantifiers, group-boundary chains, and excessive wildcards. */
 function hasUnsafeUngroupedQuantifiers(pattern: string): boolean {
-    const state: QuantScannerState = { repeatingCount: 0, wildcardCount: 0, prevQuantAtom: null, groupStack: [] }
+    const state: QuantScannerState = { repeatingCount: 0, wildcardCount: 0, prevQuantAtoms: [], groupStack: [] }
     let i = 0
     while (i < pattern.length) {
         const ch = pattern[i] ?? ''
-        if (ch === '^' || ch === '$') { state.prevQuantAtom = null; i++; continue }
+        if (ch === '^' || ch === '$') { state.prevQuantAtoms = []; i++; continue }
         if (ch === '(') {
             const prefix = groupPrefixSkipLength(pattern, i)
             state.groupStack.push({
-                entryPrev: state.prevQuantAtom, hasAlternation: false, zeroWidth: prefix.zeroWidth,
+                entryPrev: state.prevQuantAtoms, hasAlternation: false, zeroWidth: prefix.zeroWidth,
                 singleAtom: null, tokenCount: 0, hasInnerQuant: false, branchEnds: [],
             })
-            if (prefix.zeroWidth) state.prevQuantAtom = null
+            if (prefix.zeroWidth) state.prevQuantAtoms = []
             i += prefix.skip; continue
         }
         if (ch === '|') {
             const top = state.groupStack.at(-1)
             if (top !== undefined) {
-                top.hasAlternation = true; top.branchEnds.push(state.prevQuantAtom)
-                state.prevQuantAtom = top.zeroWidth ? null : top.entryPrev
-            } else { state.prevQuantAtom = null }
+                top.hasAlternation = true; top.branchEnds.push(state.prevQuantAtoms)
+                state.prevQuantAtoms = top.zeroWidth ? [] : top.entryPrev
+            } else { state.prevQuantAtoms = [] }
             i++; continue
         }
         if (ch === ')') {
@@ -332,9 +336,7 @@ function hasUnsafeUngroupedQuantifiers(pattern: string): boolean {
         }
         const quant = readQuantifierAt(pattern, next)
         if (quant === null) {
-            if (state.prevQuantAtom !== null && areAtomsProvablyDisjoint(state.prevQuantAtom, token)) {
-                state.prevQuantAtom = null
-            }
+            state.prevQuantAtoms = retainOverlappingAtoms(state.prevQuantAtoms, token)
             i = next
             continue
         }
@@ -343,8 +345,10 @@ function hasUnsafeUngroupedQuantifiers(pattern: string): boolean {
         state.repeatingCount++
         if (isUniversalWildcardAtom(token)) state.wildcardCount++
         if (state.repeatingCount > MAX_UNBOUNDED_QUANTIFIERS || state.wildcardCount > MAX_UNBOUNDED_WILDCARDS) return true
-        if (state.prevQuantAtom !== null && !areAtomsProvablyDisjoint(state.prevQuantAtom, token)) return true
-        if (!quant.nullable || state.prevQuantAtom === null) state.prevQuantAtom = token
+        if (anyAtomOverlaps(state.prevQuantAtoms, token)) return true
+        state.prevQuantAtoms = quant.nullable
+            ? mergeQuantAtomSets([state.prevQuantAtoms, [token]])
+            : [token]
         i = quant.end
     }
     return false
@@ -353,7 +357,6 @@ function hasUnsafeUngroupedQuantifiers(pattern: string): boolean {
 /** Reject over-long regexes, nested quantifiers (ReDoS), repeated wildcards, ungrouped quantifier chains, and backreferences. */
 export function isSafeUserRegex(pattern: string): boolean {
     if (pattern.length > MAX_USER_REGEX_LENGTH) return false
-    if (NESTED_QUANTIFIER_REGEX.test(pattern)) return false
     if (BACKREFERENCE_REGEX.test(pattern)) return false
     if (REPEATED_WILDCARD_REGEX.test(pattern)) return false
     if (hasUnsafeGroupNesting(pattern)) return false

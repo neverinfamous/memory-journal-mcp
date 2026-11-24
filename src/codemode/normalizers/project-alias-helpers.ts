@@ -240,7 +240,14 @@ export function normalizeProjectAliases(
     if (obj['workspace_id'] !== undefined) {
         Reflect.deleteProperty(obj, 'workspace')
     }
-    if (obj['project_number'] === undefined && obj['projectNumber'] !== undefined) {
+    if (obj['project_number'] === undefined) {
+        if (obj['projectNumber'] !== undefined) obj['project_number'] = obj['projectNumber']
+    } else if (
+        typeof obj['project_number'] === 'string' &&
+        obj['project_number'].trim() === '' &&
+        obj['projectNumber'] !== undefined &&
+        !(typeof obj['projectNumber'] === 'string' && obj['projectNumber'].trim() === '')
+    ) {
         obj['project_number'] = obj['projectNumber']
     }
     Reflect.deleteProperty(obj, 'projectNumber')
@@ -262,7 +269,14 @@ export function resolveCreateEntryProjectContext(obj: Record<string, unknown>): 
     if (obj['workspace_id'] === undefined && typeof obj['workspaceId'] === 'string') {
         obj['workspace_id'] = obj['workspaceId']
     }
-    if (obj['project_number'] === undefined && obj['projectNumber'] !== undefined) {
+    const rawProj = obj['project_number']
+    if (
+        (rawProj === undefined || (typeof rawProj === 'string' && rawProj.trim() === '')) &&
+        obj['projectNumber'] !== undefined &&
+        !(typeof obj['projectNumber'] === 'string' && obj['projectNumber'].trim() === '')
+    ) {
+        obj['project_number'] = obj['projectNumber']
+    } else if (rawProj === undefined && obj['projectNumber'] !== undefined) {
         obj['project_number'] = obj['projectNumber']
     }
     let projNum =

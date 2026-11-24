@@ -58,16 +58,20 @@ export class ConfigResolver {
                 // Highest-priority source wins (OS env > repo .env > repo secrets.env > global ~/.gemini/config/*).
                 if (!(key in process.env)) {
                     // Strip surrounding quotes
-                    process.env[key] = val.replace(/^["'](.*)["']$/, '$1')
+                    process.env[key] = val.replace(/^(["'])(.*)\1$/, '$2')
                 }
             }
         }
     }
 
     private loadConfigFile(configPathOverride?: string): void {
-        const pathsToTry = configPathOverride
-            ? [path.resolve(configPathOverride)]
-            : [
+        if (configPathOverride?.trim() === '') {
+            throw new ConfigurationError('Invalid blank configuration file path.')
+        }
+        const pathsToTry =
+            configPathOverride !== undefined
+                ? [path.resolve(configPathOverride.trim())]
+                : [
                   path.resolve(process.cwd(), 'memory-journal.config.yaml'),
                   path.resolve(process.cwd(), 'memory-journal.config.yml'),
                   path.resolve(process.cwd(), 'memory-journal.config.json'),

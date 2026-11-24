@@ -34,17 +34,17 @@ function detectRecoverableEntryCall(
     // Reject multi-call scripts so scope/id fields from an earlier statement are never stolen.
     const strippedCode = stripCommentsAndStrings(code)
     const callMatches = strippedCode.match(
-        /\b(?:createEntry|teamCreateEntry|appendEntry|create_entry|team_create_entry|addMemory|createMemory|saveMemory|updateEntry|teamUpdateEntry|update_entry|team_update_entry|updateMemory|searchEntries|deleteEntry|getEntryById|listTags|getRecentEntries)\s*\(/gi
+        /\b(?:createEntry|teamCreateEntry|appendEntry|create_entry|team_create_entry|addMemory|createMemory|saveMemory|save_memory|updateEntry|teamUpdateEntry|update_entry|team_update_entry|updateMemory|searchEntries|deleteEntry|getEntryById|listTags|getRecentEntries)\s*\(/gi
     )
     if (callMatches !== null && callMatches.length > 1) return null
 
     const isCreate =
-        /\b(?:createEntry|teamCreateEntry|appendEntry|create_entry|team_create_entry|addMemory|createMemory|saveMemory)\b/i.test(
+        /\b(?:createEntry|teamCreateEntry|appendEntry|create_entry|team_create_entry|addMemory|createMemory)\b/i.test(
             strippedCode
         )
     const isStrictUpdate =
         /\b(?:updateEntry|teamUpdateEntry|update_entry|team_update_entry)\b/i.test(strippedCode)
-    const isLegacyUpdateAlias = !isStrictUpdate && /\bupdateMemory\b/i.test(strippedCode)
+    const isLegacyUpdateAlias = !isStrictUpdate && /\b(?:updateMemory|saveMemory|save_memory)\b/i.test(strippedCode)
     const isUpdate =
         isStrictUpdate || (isLegacyUpdateAlias && /\b(?:entry_id|entryId|id)\s*:\s*-?\d+/i.test(strippedCode))
     const isTeamCall =
@@ -270,12 +270,17 @@ function populateRecoveredArrayAndContextFields(
     }
 
     const autoContextCandidates = scanCode.match(/\bauto_context\s*:/gi)
-    const rawAutoContext =
+    const autoContextStartMatch =
         autoContextCandidates !== null && autoContextCandidates.length > MAX_ENTRY_FIELD_CANDIDATES
-            ? undefined
-            : /\bauto_context\s*:\s*(\{[\s\S]*?\})(?=[ \t\r]*,\s*\n|[ \t\r]*\n\s*\})/i.exec(
-                  scanCode
-              )?.[1]
+            ? null
+            : /\bauto_context\s*:\s*(\{)/i.exec(scanCode)
+    let rawAutoContext: string | undefined
+    if (autoContextStartMatch !== null) {
+        const openBraceIdx = autoContextStartMatch.index + autoContextStartMatch[0].length - 1
+        const endBraceIdx = findBalancedDelimitedBlockEnd(scanCode, openBraceIdx, '{', '}')
+        const candidateSlice = scanCode.slice(openBraceIdx, endBraceIdx)
+        if (candidateSlice.endsWith('}')) rawAutoContext = candidateSlice
+    }
     if (rawAutoContext !== undefined) {
         const parsedAutoContext = parseRelaxedAutoContext(rawAutoContext)
         if (parsedAutoContext !== undefined) payload['auto_context'] = parsedAutoContext

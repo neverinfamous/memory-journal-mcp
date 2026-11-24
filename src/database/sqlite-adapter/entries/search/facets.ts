@@ -9,6 +9,7 @@ import {
 import { sanitizeSearchQuery } from '../../../../utils/security-utils.js'
 import { chunkedInPredicate, DUAL_IN_PARAM_BUCKETS } from '../../row-helpers.js'
 import { expandTagFilterValues } from '../../tags.js'
+import { ValidationError } from '../../../../types/errors.js'
 import {
     excludesCommitNarrative,
     legacyCommitExclusionSql,
@@ -35,25 +36,23 @@ export function getSearchFacets(
     queryStr: string,
     options?: SearchFacetOptions
 ): { tags: { name: string; count: number }[]; entryTypes: { name: string; count: number }[]; degraded?: boolean } {
+    if (queryStr.length > 500) {
+        throw new ValidationError('Search query exceeds maximum length of 500 characters. Please refine your search.')
+    }
     const { db } = context
     const params: unknown[] = []
     const conditions: string[] = ['e.deleted_at IS NULL']
-
     const targetWs = effectiveWorkspace(options?.workspaceId)
     if (targetWs !== '*') {
         conditions.push('e.workspace_id = ?')
         params.push(targetWs)
     }
-
-    if (options?.includeArchived !== true) {
-        conditions.push('e.is_archived = 0')
-    }
+    if (options?.includeArchived !== true) conditions.push('e.is_archived = 0')
 
     const useFts = queryStr.length > 0
     const sanitizedQuery = useFts ? sanitizeFtsQuery(queryStr) : ''
     const escapedLikeQuery = useFts ? sanitizeSearchQuery(queryStr) : ''
     const fallbackToLike = useFts && sanitizedQuery === ''
-
     if (useFts && !fallbackToLike) {
         conditions.push(`fts_content MATCH ?`)
         params.push(sanitizedQuery)
@@ -63,15 +62,10 @@ export function getSearchFacets(
     }
 
     const expandedFilterTags =
-        options?.tags !== undefined && options.tags.length > 0
-            ? expandTagFilterValues(options.tags)
-            : []
+        options?.tags !== undefined && options.tags.length > 0 ? expandTagFilterValues(options.tags) : []
     const baseConditions = [...conditions]
     const baseParams = [...params]
-    appendFacetFilterConditions(baseConditions, baseParams, {
-        ...options,
-        tags: undefined,
-    })
+    appendFacetFilterConditions(baseConditions, baseParams, { ...options, tags: undefined })
 
     const entryTypeConditions = [...conditions]
     const entryTypeParams = [...params]
@@ -87,22 +81,11 @@ export function getSearchFacets(
     }
 
     appendFacetFilterConditions(conditions, params, options)
-    appendFacetFilterConditions(entryTypeConditions, entryTypeParams, {
-        ...options,
-        tags: undefined,
-    })
+    appendFacetFilterConditions(entryTypeConditions, entryTypeParams, { ...options, tags: undefined })
 
     const result = executeFacetCountQueries(
-        db,
-        useFts && !fallbackToLike,
-        conditions,
-        params,
-        entryTypeConditions,
-        entryTypeParams,
-        escapedLikeQuery,
-        baseConditions,
-        baseParams,
-        expandedFilterTags
+        db, useFts && !fallbackToLike, conditions, params, entryTypeConditions,
+        entryTypeParams, escapedLikeQuery, baseConditions, baseParams, expandedFilterTags
     )
     return fallbackToLike ? { ...result, degraded: true } : result
 }

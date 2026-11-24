@@ -5,12 +5,12 @@
 
 import { appendOptionalQuerySearchFields } from '../../../codemode/shared-context-parsers.js'
 import { isRecord } from '../../../codemode/normalizers/shared-utils.js'
-import { parsePositiveProjectNumber } from '../../../utils/safe-positive-int.js'
 import {
     assignMissingScope,
     firstDefinedAlias,
     hasStructuredDiscriminator,
     hasUseTestDbFlag,
+    readEntryIdField,
     readProjectNumber,
     readWorkspaceId,
     resolveCompatibleInheritedScope,
@@ -79,22 +79,40 @@ function unwrapPayloadTarget(parsed: Record<string, unknown>): Record<string, un
 /** [BOUNDARY] Only plain `[mj.]group.method` identifiers may be spliced into recovered code. */
 const SAFE_TOOL_IDENTIFIER = /^(?:mj[._])?[A-Za-z_][\w]*(?:\.[A-Za-z_][\w]*)?$/
 
+function resolveNamedToolIdentifier(
+    target: Record<string, unknown>,
+    original: Record<string, unknown>
+): string | undefined {
+    const sources = original !== target ? [target, original] : [target]
+    for (const rec of sources) {
+        for (const key of ['tool', 'method', 'function'] as const) {
+            const val = rec[key]
+            if (typeof val === 'string') {
+                if (val.trim() !== '') return val.trim()
+                continue
+            }
+            if (val !== undefined) return undefined
+        }
+    }
+    return undefined
+}
+
 function recoverNamedToolCall(target: Record<string, unknown>, original: Record<string, unknown>): string | null {
-    const toolName =
-        typeof target['tool'] === 'string'
-            ? target['tool']
-            : typeof target['method'] === 'string'
-              ? target['method']
-              : typeof target['function'] === 'string'
-                ? target['function']
-                : undefined
-    if (toolName === undefined || toolName === '') return null
-    if (!SAFE_TOOL_IDENTIFIER.test(toolName)) return null
-    const toolParams: Record<string, unknown> = isRecord(target['params'])
-        ? { ...target['params'] }
+    const toolName = resolveNamedToolIdentifier(target, original)
+    if (toolName === undefined || !SAFE_TOOL_IDENTIFIER.test(toolName)) return null
+    const explicitParams = isRecord(target['params'])
+        ? target['params']
         : isRecord(target['args'])
-          ? { ...target['args'] }
-          : {}
+          ? target['args']
+          : undefined
+    const toolParams: Record<string, unknown> = explicitParams !== undefined ? { ...explicitParams } : {}
+    if (explicitParams === undefined && original !== target) {
+        for (const [k, v] of Object.entries(target)) {
+            if (k !== 'tool' && k !== 'method' && k !== 'function' && k !== 'params' && k !== 'args' && v !== undefined) {
+                toolParams[k] = v
+            }
+        }
+    }
     assignMissingScope(toolParams, target, original)
     if (hasUseTestDbFlag(target, original)) toolParams['use_test_db'] = true
     const cleanTool = toolName.replace(/^mj[._]/, '')
@@ -102,9 +120,13 @@ function recoverNamedToolCall(target: Record<string, unknown>, original: Record<
 }
 
 function recoverSearchCall(target: Record<string, unknown>, original: Record<string, unknown>): string | null {
-    const isSearchAction =
-        target['action'] === 'search' || target['operation'] === 'search' || target['op'] === 'search'
+    const rawOp = readOperation(target) || (original !== target ? readOperation(original) : '')
+    const op = rawOp.trim().toLowerCase()
+    const isSearchAction = op === 'search'
+    const hasExplicitNonSearchDiscriminator =
+        op !== '' || hasStructuredDiscriminator(target) || (original !== target && hasStructuredDiscriminator(original))
     const looksLikeQuery =
+        !hasExplicitNonSearchDiscriminator &&
         typeof target['query'] === 'string' &&
         target['content'] === undefined &&
         target['notes'] === undefined &&
@@ -127,31 +149,6 @@ function recoverSearchCall(target: Record<string, unknown>, original: Record<str
     return `return await mj.search.searchEntries(${JSON.stringify(searchParams)});`
 }
 
-function readEntryIdField(target: Record<string, unknown>): {
-    entryId: number | undefined
-    invalidExplicitEntryId: number | string | undefined
-} {
-    const raw = target['entry_id'] ?? target['entryId'] ?? target['id']
-    if (raw === undefined || raw === null || (typeof raw === 'string' && raw.trim() === '')) {
-        return { entryId: undefined, invalidExplicitEntryId: undefined }
-    }
-    const parsed = parsePositiveProjectNumber(raw)
-    if (parsed !== undefined) return { entryId: parsed, invalidExplicitEntryId: undefined }
-    if (typeof raw === 'number') {
-        return { entryId: undefined, invalidExplicitEntryId: Number.isFinite(raw) ? raw : String(raw) }
-    }
-    if (typeof raw === 'string') {
-        return { entryId: undefined, invalidExplicitEntryId: raw.trim() }
-    }
-    const invalidExplicitEntryId =
-        typeof raw === 'boolean'
-            ? String(raw)
-            : typeof raw === 'object'
-              ? (JSON.stringify(raw) ?? 'invalid')
-              : 'invalid'
-    return { entryId: undefined, invalidExplicitEntryId }
-}
-
 function readOperation(target: Record<string, unknown>): string {
     if (typeof target['operation'] === 'string') return target['operation']
     if (typeof target['op'] === 'string') return target['op']
@@ -161,14 +158,25 @@ function readOperation(target: Record<string, unknown>): string {
 
 const SUPPORTED_READ_BY_ID_OPS = new Set(['', 'get', 'read', 'get_entry', 'get_entry_by_id', 'team_get_entry_by_id'])
 const SUPPORTED_ENTRY_MUTATION_OPS = new Set([
-    'create_entry',
-    'add_entry',
-    'create',
-    'update_entry',
-    'update',
-    'team_create_entry',
-    'team_update_entry',
+    'create_entry', 'add_entry', 'create', 'update_entry', 'update', 'team_create_entry', 'team_update_entry',
 ])
+const UPDATE_META_KEYS = [
+    'tags', 'significance_type', 'significanceType', 'validation_status', 'validationStatus',
+    'impact_score', 'impactScore', 'impact', 'trust_score', 'trustScore', 'trust',
+    'target_workspace_id', 'targetWorkspaceId', 'is_personal', 'isPersonal',
+    'share_with_team', 'shareWithTeam', 'relationships', 'anchors',
+] as const
+
+function hasEntryUpdateMetadata(
+    signals: PayloadSignals,
+    target: Record<string, unknown>,
+    original: Record<string, unknown>
+): boolean {
+    if (signals.hasType) return true
+    return UPDATE_META_KEYS.some(
+        (k) => target[k] !== undefined || (original !== target && original[k] !== undefined)
+    )
+}
 
 function formatScopedMutationOp(
     fnPath: string,
@@ -196,7 +204,11 @@ function recoverEntryMutation(
     original: Record<string, unknown>,
     target: Record<string, unknown>,
 ): string | null {
-    const { entryId, invalidExplicitEntryId } = readEntryIdField(target)
+    let idInfo = readEntryIdField(target)
+    if (idInfo.entryId === undefined && idInfo.invalidExplicitEntryId === undefined && original !== target) {
+        idInfo = readEntryIdField(original)
+    }
+    const { entryId, invalidExplicitEntryId } = idInfo
     const explicitIdForMutation = entryId ?? invalidExplicitEntryId
     const rawOp = readOperation(target) || (original !== target ? readOperation(original) : '')
     const op = rawOp.trim().toLowerCase()
@@ -215,12 +227,15 @@ function recoverEntryMutation(
         }
     }
     const signals = readPayloadSignals(target, op, original)
-    if (!hasJournalFields(signals) && explicitIdForMutation !== undefined) {
-        if (!SUPPORTED_READ_BY_ID_OPS.has(op)) return null
+    const canUpdateMeta =
+        explicitIdForMutation !== undefined &&
+        (op === '' || SUPPORTED_ENTRY_MUTATION_OPS.has(op)) &&
+        hasEntryUpdateMetadata(signals, target, original)
+    if (!hasJournalFields(signals) && !canUpdateMeta) {
+        if (explicitIdForMutation === undefined || !SUPPORTED_READ_BY_ID_OPS.has(op)) return null
         const readFn = op === 'team_get_entry_by_id' ? 'mj.team.teamGetEntryById' : 'mj.core.getEntryById'
         return formatScopedMutationOp(readFn, explicitIdForMutation, target, original)
     }
-    if (!hasJournalFields(signals)) return null
     if (op !== '' && !SUPPORTED_ENTRY_MUTATION_OPS.has(op)) return null
 
     const isTeamOp = op === 'team_create_entry' || op === 'team_update_entry'
@@ -330,16 +345,10 @@ function collectContent(target: Record<string, unknown>, signals: PayloadSignals
     return finalContent
 }
 
-function appendLabeledSection(
-    sections: string[],
-    value: unknown,
-    present: boolean,
-    label: string,
-): void {
+function appendLabeledSection(sections: string[], value: unknown, present: boolean, label: string): void {
     if (!present) return
     if (Array.isArray(value)) {
-        const list = value.map((item) => `- ${String(item)}`).join('\n')
-        sections.push(`**${label}:**\n${list}`)
+        sections.push(`**${label}:**\n${value.map((item) => `- ${String(item)}`).join('\n')}`)
         return
     }
     sections.push(`**${label}:**\n${String(value).trim()}`)
@@ -348,32 +357,25 @@ function appendLabeledSection(
 function resolveTitle(target: Record<string, unknown>, signals: PayloadSignals): string {
     if (signals.hasTitle) return String(target['title']).trim()
     if (signals.hasTask) return String(target['task']).trim()
-    if (signals.hasSummary) return String(target['summary']).trim().slice(0, 80)
-    return 'Journal Entry'
+    return signals.hasSummary ? String(target['summary']).trim().slice(0, 80) : 'Journal Entry'
 }
 
 function resolveEntryType(target: Record<string, unknown>, fallback?: Record<string, unknown>): string {
     const rawType = firstDefinedAlias(target, fallback, ['entry_type', 'type', 'category'])
     if (typeof rawType !== 'string') return 'technical_note'
     const low = rawType.toLowerCase()
-    if (low === 'code' || low === 'coding' || low === 'technical' || low === 'task') {
-        return 'technical_note'
-    }
-    return low
+    return low === 'code' || low === 'coding' || low === 'technical' || low === 'task' ? 'technical_note' : low
 }
 
 function appendTagItems(tags: string[], rawTags: unknown): void {
-    if (Array.isArray(rawTags)) {
-        for (const t of rawTags) {
-            if (typeof t === 'string' && t.trim().length > 0 && !tags.includes(t.trim())) {
-                tags.push(t.trim())
-            }
-        }
-    } else if (typeof rawTags === 'string') {
-        for (const t of rawTags.split(',')) {
-            const trimmedTag = t.trim()
-            if (trimmedTag.length > 0 && !tags.includes(trimmedTag)) tags.push(trimmedTag)
-        }
+    const items = Array.isArray(rawTags)
+        ? rawTags.filter((t): t is string => typeof t === 'string')
+        : typeof rawTags === 'string'
+          ? rawTags.split(',')
+          : []
+    for (const rawItem of items) {
+        const trimmedTag = rawItem.trim()
+        if (trimmedTag.length > 0 && !tags.includes(trimmedTag)) tags.push(trimmedTag)
     }
 }
 
@@ -395,9 +397,7 @@ const AUTO_CONTEXT_FIELDS = [
 
 function collectAutoContext(target: Record<string, unknown>): Record<string, unknown> {
     const autoContext: Record<string, unknown> = {}
-    for (const key of AUTO_CONTEXT_FIELDS) {
-        if (target[key] !== undefined) autoContext[key] = target[key]
-    }
+    for (const key of AUTO_CONTEXT_FIELDS) if (target[key] !== undefined) autoContext[key] = target[key]
     return autoContext
 }
 

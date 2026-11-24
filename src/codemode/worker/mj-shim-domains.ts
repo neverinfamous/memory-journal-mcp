@@ -380,7 +380,11 @@ export function createAppendInterceptor(
     if (typeof createEntry !== 'function') return undefined
     const callCreate = createEntry as (args: unknown) => unknown
     return (arg1: unknown, arg2?: unknown, arg3?: unknown): unknown => {
-        if (readAppendMetadata(arg1) !== undefined) return callCreate(arg1)
+        const firstMeta = readAppendMetadata(arg1)
+        if (firstMeta !== undefined) {
+            const secondMeta = arg3 === undefined ? readAppendMetadata(arg2) : undefined
+            return callCreate(secondMeta !== undefined ? { ...firstMeta, ...secondMeta } : arg1)
+        }
         if (typeof arg1 === 'string' && arg2 === undefined && arg3 === undefined) return callCreate(arg1)
         if (typeof arg1 === 'string' && arg3 === undefined) {
             const twoArgMeta = readAppendMetadata(arg2)

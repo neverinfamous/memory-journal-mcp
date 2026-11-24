@@ -30,6 +30,12 @@ const SELECT_UNSUPPORTED_KEYWORDS = new Set([
 
 const BY_FOLLOWED_KEYWORDS = new Set(['ORDER', 'GROUP'])
 
+function isSafePositiveLimitDigits(digits: string): boolean {
+    if (!/^[1-9]\d*$/.test(digits)) return false
+    const parsed = Number(digits)
+    return Number.isSafeInteger(parsed) && String(parsed) === digits
+}
+
 function isUnsupportedKeywordAt(
     cleanSql: string,
     upperToken: string,
@@ -45,8 +51,8 @@ function isUnsupportedKeywordAt(
         return true
     }
     if (statementKind === 'select' && upperToken === 'LIMIT') {
-        const afterLimit = cleanSql.slice(endIdx)
-        return !/^\s+[1-9]\d*\s*;?\s*$/.test(afterLimit)
+        const match = /^\s+(\S+)\s*;?\s*$/.exec(cleanSql.slice(endIdx))
+        return match?.[1] === undefined || !isSafePositiveLimitDigits(match[1])
     }
     return false
 }

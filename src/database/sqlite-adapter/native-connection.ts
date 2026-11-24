@@ -63,6 +63,9 @@ export class NativeConnectionManager implements IDatabaseConnection {
     private ftsRebuildTimer: ReturnType<typeof setTimeout> | null = null
 
     constructor(dbPath: string, backupsDir?: string) {
+        if (dbPath.trim() === '') {
+            throw new ConnectionError('Database path cannot be empty or whitespace-only.')
+        }
         this.dbPath = dbPath
         this.explicitBackupsDir = backupsDir
     }
@@ -431,19 +434,13 @@ export class NativeConnectionManager implements IDatabaseConnection {
         if (!Number.isInteger(dimensions) || dimensions <= 0 || dimensions > 8192) {
             throw new Error(`Invalid vector dimensions: ${String(dimensions)}`)
         }
-        const db = this.ensureDb()
-        // Wait, vec0 doesn't support parameterized dimensions via '?', we have to interpolate
-        db.exec(`
-            CREATE VIRTUAL TABLE IF NOT EXISTS vec_embeddings USING vec0(
-                chunk_size=256,
-                entry_id INTEGER PRIMARY KEY,
-                embedding float[${dimensions}]
-            )
-        `)
+        // vec0 does not support parameterized dimensions via '?'; validated positive int above
+        this.ensureDb().exec(
+            `CREATE VIRTUAL TABLE IF NOT EXISTS vec_embeddings USING vec0(chunk_size=256, entry_id INTEGER PRIMARY KEY, embedding float[${dimensions}])`
+        )
     }
 
     dropVecTable(): void {
-        const db = this.ensureDb()
-        db.exec('DROP TABLE IF EXISTS vec_embeddings')
+        this.ensureDb().exec('DROP TABLE IF EXISTS vec_embeddings')
     }
 }

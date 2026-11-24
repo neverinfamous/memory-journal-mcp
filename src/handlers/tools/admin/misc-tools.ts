@@ -26,6 +26,8 @@ function auditScopeWarning(
     }
 }
 
+const MergeTagNamesFallbackSchema = z.object({ source_tag: z.string(), target_tag: z.string() })
+
 export const MergeTagsSchemaMcp = z.preprocess(
     healAgentHallucinations,
     z
@@ -82,8 +84,9 @@ export function getMiscTools(context: ToolContext): ToolDefinition[] {
                 openWorldHint: false,
             },
             handler: (params: unknown) => {
+                let healedParams: unknown = params
                 try {
-                    const healedParams = healAgentHallucinations(params)
+                    healedParams = healAgentHallucinations(params)
                     const input = MergeTagsSchema.parse(healedParams)
                     const { source_tag, target_tag } = input
 
@@ -136,9 +139,7 @@ export function getMiscTools(context: ToolContext): ToolDefinition[] {
                     }
                     // [INTENT] L8: classify via formatHandlerError (never hardcode RESOURCE_NOT_FOUND)
                     // while preserving the merge output shape when tag names are recoverable.
-                    const parsed = z
-                        .object({ source_tag: z.string(), target_tag: z.string() })
-                        .safeParse(params)
+                    const parsed = MergeTagNamesFallbackSchema.safeParse(healedParams)
                     if (!parsed.success) return formatHandlerError(error)
                     return {
                         ...formatHandlerError(error),

@@ -84,14 +84,8 @@ export function readWorkspaceField(primary: Record<string, unknown>, secondary: 
     return (
         getNonEmptyString(primary, secondary, ['workspace_id', 'workspaceId', 'workspace']) ??
         resolveRepoWorkspace(
-            primary['repo'] ??
-                primary['repo_name'] ??
-                primary['repoName'] ??
-                primary['repository'] ??
-                secondary['repo'] ??
-                secondary['repo_name'] ??
-                secondary['repoName'] ??
-                secondary['repository']
+            getNonEmptyString(primary, {}, ['repo', 'repo_name', 'repoName', 'repository']) ??
+                getNonEmptyString(secondary, {}, ['repo', 'repo_name', 'repoName', 'repository'])
         )
     )
 }

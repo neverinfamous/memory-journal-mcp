@@ -147,7 +147,7 @@ describe('Pass 30 Quality, Prompts & Appendix B Regressions', () => {
     })
 
     it('AP1-AP6: verifies Pass 30 prompt revision, parameterized Topic preamble, detectors, and plan_draft recall', async () => {
-        expect(AUDIT_PROMPT_REVISION).toBe('2026-11-24-audit-pass81')
+        expect(AUDIT_PROMPT_REVISION).toBe('2026-11-24-audit-pass82')
 
         const cqText = (await getCodeQualityAuditPromptDefinition().handler({}, db)).messages[0]?.content.text ?? ''
         expect(cqText).toContain('UTF8Encoding')
