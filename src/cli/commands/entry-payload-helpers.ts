@@ -140,7 +140,7 @@ export function resolveAutoContext(
     metadata: Record<string, unknown>
 ): string | undefined {
     let autoContextStr = autoContext
-    if (autoContextFile) {
+    if (autoContextFile !== undefined) {
         try {
             autoContextStr = readBoundedCliInputFile(autoContextFile, '--auto-context-file')
         } catch (e) {

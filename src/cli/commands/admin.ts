@@ -189,12 +189,13 @@ export async function pruneAction(options: z.infer<typeof pruneSchema>, command:
 
     try {
         const rawExcludeTags = options.excludeTags ?? options.pruneExcludeTags
-        const parsedExcludeTags = rawExcludeTags
-            ? rawExcludeTags
-                  .split(',')
-                  .map((tag) => tag.trim())
-                  .filter((tag) => tag !== '')
-            : (serverOptions.pruneExcludeTags ?? [])
+        const parsedExcludeTags =
+            rawExcludeTags !== undefined
+                ? rawExcludeTags
+                      .split(',')
+                      .map((tag) => tag.trim())
+                      .filter((tag) => tag !== '')
+                : (serverOptions.pruneExcludeTags ?? [])
         const pruneScope = resolveCliPruneScope(options, serverOptions)
         const result = await runAutoPrune(
             db,
@@ -225,12 +226,24 @@ function createCliAuditLogger(
     const allowConfigLogPath =
         configPath !== undefined ||
         (process.env['NODE_ENV'] !== 'test' && process.env['VITEST'] !== 'true')
-    const auditLogPath =
-        options.auditLog ??
-        process.env['AUDIT_LOG_PATH'] ??
-        process.env['MEMORY_JOURNAL_AUDIT_LOG'] ??
-        (allowConfigLogPath ? auditDefaults?.logPath : undefined)
-    if (!auditLogPath) {
+    const isCliAuditLog = command.getOptionValueSource('auditLog') === 'cli'
+    if (isCliAuditLog) {
+        if (typeof options.auditLog !== 'string' || options.auditLog.trim() === '') {
+            throw new Error('Invalid blank --audit-log path.')
+        }
+    }
+    const envAuditLog =
+        process.env['AUDIT_LOG_PATH'] !== undefined && process.env['AUDIT_LOG_PATH'].trim() !== ''
+            ? process.env['AUDIT_LOG_PATH'].trim()
+            : process.env['MEMORY_JOURNAL_AUDIT_LOG'] !== undefined &&
+                process.env['MEMORY_JOURNAL_AUDIT_LOG'].trim() !== ''
+              ? process.env['MEMORY_JOURNAL_AUDIT_LOG'].trim()
+              : undefined
+    const rawAuditLog = isCliAuditLog
+        ? options.auditLog
+        : (envAuditLog ?? (allowConfigLogPath ? auditDefaults?.logPath : undefined))
+    const auditLogPath = typeof rawAuditLog === 'string' ? rawAuditLog.trim() : ''
+    if (auditLogPath === '') {
         throw new Error('Audit log path not configured (--audit-log or AUDIT_LOG_PATH)')
     }
     let maxSizeBytes = auditDefaults?.maxSizeBytes ?? DEFAULT_AUDIT_LOG_MAX_SIZE_BYTES

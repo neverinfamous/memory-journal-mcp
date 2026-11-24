@@ -97,6 +97,16 @@ function resolveNamedToolIdentifier(
     return undefined
 }
 
+/** Runner/wrapper keys excluded when recovering flat `{ tool | method | function, ... }` payloads. */
+const NAMED_TOOL_OMIT_KEYS = new Set([
+    'tool', 'method', 'function', 'params', 'args',
+    'dry_run', 'dryRun', 'readonly', 'readOnly', 'read_only',
+    'timeout', 'timeout_ms', 'timeoutMs',
+    'max_result_size', 'maxResultSize', 'max_result_size_bytes', 'maxResultSizeBytes',
+    'max_result_size_kb', 'maxResultSizeKb', 'max_bytes', 'maxBytes',
+    'auto_version', 'autoVersion', 'context', 'use_test_db', 'useTestDb',
+])
+
 function recoverNamedToolCall(target: Record<string, unknown>, original: Record<string, unknown>): string | null {
     const toolName = resolveNamedToolIdentifier(target, original)
     if (toolName === undefined || !SAFE_TOOL_IDENTIFIER.test(toolName)) return null
@@ -106,9 +116,9 @@ function recoverNamedToolCall(target: Record<string, unknown>, original: Record<
           ? target['args']
           : undefined
     const toolParams: Record<string, unknown> = explicitParams !== undefined ? { ...explicitParams } : {}
-    if (explicitParams === undefined && original !== target) {
+    if (explicitParams === undefined) {
         for (const [k, v] of Object.entries(target)) {
-            if (k !== 'tool' && k !== 'method' && k !== 'function' && k !== 'params' && k !== 'args' && v !== undefined) {
+            if (!NAMED_TOOL_OMIT_KEYS.has(k) && v !== undefined) {
                 toolParams[k] = v
             }
         }
@@ -164,7 +174,7 @@ const UPDATE_META_KEYS = [
     'tags', 'significance_type', 'significanceType', 'validation_status', 'validationStatus',
     'impact_score', 'impactScore', 'impact', 'trust_score', 'trustScore', 'trust',
     'target_workspace_id', 'targetWorkspaceId', 'is_personal', 'isPersonal',
-    'share_with_team', 'shareWithTeam', 'relationships', 'anchors',
+    'share_with_team', 'shareWithTeam', 'relationships', 'anchors', 'auto_context', 'autoContext',
 ] as const
 
 function hasEntryUpdateMetadata(
@@ -436,6 +446,16 @@ function copyOptionalEntryFields(
         if (typeof raw === 'boolean') entryParams[outKey] = raw
     }
     if (hasUseTestDbFlag(target, fallback)) entryParams['use_test_db'] = true
+    const rawExpectedVersion = firstDefinedAlias(target, fallback, ['expected_version', 'expectedVersion'])
+    if (typeof rawExpectedVersion === 'number' && Number.isSafeInteger(rawExpectedVersion) && rawExpectedVersion >= 1) {
+        entryParams['expected_version'] = rawExpectedVersion
+    }
+    if (entryParams['auto_context'] === undefined) {
+        const rawAutoCtx = firstDefinedAlias(target, fallback, ['auto_context', 'autoContext'])
+        if ((typeof rawAutoCtx === 'string' && rawAutoCtx.trim() !== '') || isRecord(rawAutoCtx)) {
+            entryParams['auto_context'] = rawAutoCtx
+        }
+    }
     for (const arrKey of ['relationships', 'anchors'] as const) {
         const raw = firstDefinedAlias(target, fallback, [arrKey])
         if (Array.isArray(raw)) entryParams[arrKey] = raw

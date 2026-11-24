@@ -62,6 +62,9 @@ export class VectorOperations {
         workspaceId?: string,
         projectNumber?: number
     ): { entry_id: number; distance: number }[] {
+        if (!Number.isSafeInteger(limit) || limit <= 0) {
+            return []
+        }
         const db = this.connection.getNativeDb()
         const scopeId = effectiveWorkspace(workspaceId)
         const wsScoped = scopeId !== '*'

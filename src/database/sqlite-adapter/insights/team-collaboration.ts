@@ -46,7 +46,7 @@ export function getAuthorStatistics(
                  ) raw
              ) resolved
              GROUP BY resolved.author
-             ORDER BY count DESC`
+             ORDER BY count DESC, resolved.author ASC`
         return connection.getNativeDb().prepare(sql).all(...params) as {
             author: string
             count: number

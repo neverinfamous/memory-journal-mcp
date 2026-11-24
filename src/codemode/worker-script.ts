@@ -264,13 +264,14 @@ async function executeCode(
     const { registryPayload, pinnedWorkspaceRaw, pinnedProjectRaw } = extractScopeContext(contextObj)
     setActiveProjectRegistry(readProjectRegistryPayload(registryPayload))
 
+    const vmTimeoutMs = Math.max(1, Math.ceil(timeoutMs))
     try {
         const context = createVmExecutionContext({
             rpcFn: bridge.rpcCall,
             sendRpcRequest: bridge.sendRpcRequest,
             methodList,
             schemaList,
-            timeoutMs,
+            timeoutMs: vmTimeoutMs,
             ...(maxResultSize !== undefined ? { maxResultSize } : {}),
             contextObj,
             ...(readonlyMode !== undefined ? { readonlyMode } : {}),
@@ -287,7 +288,7 @@ async function executeCode(
             return makeZeroMetricError(prepared.error)
         }
         const script = getOrCompileVmScript(`"use strict";\n(async () => {\n${prepared.transformed}\n})()`)
-        const resultPromise = script.runInContext(context, { timeout: timeoutMs }) as Promise<unknown>
+        const resultPromise = script.runInContext(context, { timeout: vmTimeoutMs }) as Promise<unknown>
         const result = await resultPromise
         const endTime = performance.now()
         const endCpu = process.cpuUsage(startCpu)

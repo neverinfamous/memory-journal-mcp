@@ -195,7 +195,8 @@ function computeStaleProjects(db: Database, s: DigestScope): StaleProject[] {
         FROM memory_journal
         WHERE deleted_at IS NULL AND project_number IS NOT NULL${s.filter}
         GROUP BY project_number
-        HAVING days_silent > ?`,
+        HAVING days_silent > ?
+        ORDER BY days_silent DESC, project_number ASC`,
         ...s.params,
         STALE_PROJECT_THRESHOLD_DAYS
     )

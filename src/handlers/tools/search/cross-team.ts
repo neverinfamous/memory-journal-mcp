@@ -195,8 +195,9 @@ function resolveCrossTeamTargetLabels(
     context: ToolContext,
     additionalDbs: Record<string, string>
 ): string[] {
-    const configuredLabels = Object.keys(additionalDbs)
-    if (context.teamDb) configuredLabels.push('primary')
+    const configuredSet = new Set(Object.keys(additionalDbs))
+    if (context.teamDb) configuredSet.add('primary')
+    const configuredLabels = Array.from(configuredSet)
     if (configuredLabels.length === 0) {
         throw new ConfigurationError(
             'Cross-team search requires ADDITIONAL_TEAM_DBS environment variable to be configured.'
@@ -204,7 +205,7 @@ function resolveCrossTeamTargetLabels(
     }
     const targetLabels =
         args.team_dbs && args.team_dbs.length > 0
-            ? args.team_dbs.filter((label) => configuredLabels.includes(label))
+            ? Array.from(new Set(args.team_dbs)).filter((label) => configuredSet.has(label))
             : configuredLabels
     if (targetLabels.length === 0 && args.team_dbs && args.team_dbs.length > 0) {
         throw new ValidationError('None of the requested team DBs are configured.', {

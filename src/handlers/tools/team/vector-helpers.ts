@@ -212,7 +212,14 @@ export async function executeTeamSemanticSearch(
         const { teamDb, teamVectorManager } = context
         if (!teamDb) return { ...TEAM_DB_ERROR_RESPONSE }
 
-        const input = TeamSemanticSearchSchema.parse(params)
+        const rawInput = TeamSemanticSearchSchema.parse(params)
+        const trimmedQuery = rawInput.query?.trim()
+        const input = { ...rawInput }
+        if (trimmedQuery !== undefined && trimmedQuery !== '') {
+            input.query = trimmedQuery
+        } else {
+            Reflect.deleteProperty(input, 'query')
+        }
         if (
             input.start_date !== undefined &&
             input.end_date !== undefined &&

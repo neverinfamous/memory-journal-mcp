@@ -50,7 +50,7 @@ const NESTED_WS_ALIAS_KEYS = [
 const NESTED_REPO_ALIAS_KEYS = ['repo', 'repo_name', 'repoName', 'repository'] as const
 const NESTED_PROJ_ALIAS_KEYS = ['project_number', 'projectNumber', 'project_id', 'projectId', 'project'] as const
 const NESTED_PROJ_NUM_RE = /^(?:#|p-)?([1-9]\d*)$/i
-const NESTED_PROJ_DIGITS_RE = /^(?:#|p-)?\d+$/i
+const NESTED_PROJ_DIGITS_RE = /^(?:#|p-)?-?\d+(?:\.\d+)?$/i
 const NESTED_PATH_SPLIT_RE = /[/\\]/
 
 function collectNestedScopeRecords(argRec: Record<string, unknown>): Record<string, unknown>[] {

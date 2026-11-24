@@ -217,6 +217,15 @@ interface TeamAutoRouteOptions {
     copyFnSchema: (source: unknown, wrapper: (...args: unknown[]) => unknown) => void
 }
 
+function firstNonBlankValue(...values: unknown[]): unknown {
+    for (const val of values) {
+        if (val !== undefined && val !== null && !(typeof val === 'string' && val.trim() === '')) {
+            return val
+        }
+    }
+    return undefined
+}
+
 function normalizeAutoRouteArg(
     args: unknown[],
     allowPositionalEntryId: boolean
@@ -225,35 +234,38 @@ function normalizeAutoRouteArg(
     if (allowPositionalEntryId && (typeof firstArg === 'number' || typeof firstArg === 'string')) {
         const extra = isRecord(args[1]) ? args[1] : undefined
         const entryId = firstArg
-        const workspaceExtra = extra?.['workspace_id'] ?? extra?.['workspaceId'] ?? extra?.['workspace']
-        const sessionExtra = extra?.['session_id'] ?? extra?.['sessionId']
+        const workspaceExtra = firstNonBlankValue(
+            extra?.['workspace_id'],
+            extra?.['workspaceId'],
+            extra?.['workspace']
+        )
+        const projectExtra = firstNonBlankValue(extra?.['project_number'], extra?.['projectNumber'])
+        const sessionExtra = firstNonBlankValue(extra?.['session_id'], extra?.['sessionId'])
         return {
             ...(extra ?? {}),
             entry_id: entryId,
-            ...(workspaceExtra !== undefined && extra?.['workspace_id'] === undefined
-                ? { workspace_id: workspaceExtra }
-                : {}),
-            ...(extra?.['projectNumber'] !== undefined && extra['project_number'] === undefined
-                ? { project_number: extra['projectNumber'] }
-                : {}),
+            ...(workspaceExtra !== undefined ? { workspace_id: workspaceExtra } : {}),
+            ...(projectExtra !== undefined ? { project_number: projectExtra } : {}),
             ...(extra?.['includeRelationships'] !== undefined &&
             extra['include_relationships'] === undefined
                 ? { include_relationships: extra['includeRelationships'] }
                 : {}),
-            ...(sessionExtra !== undefined && extra?.['session_id'] === undefined
-                ? { session_id: sessionExtra }
-                : {}),
+            ...(sessionExtra !== undefined ? { session_id: sessionExtra } : {}),
         }
     }
     if (!isRecord(firstArg)) return null
     const extra = isRecord(args[1]) ? args[1] : undefined
     const sourceRec: Record<string, unknown> = extra !== undefined ? { ...extra, ...firstArg } : firstArg
-    const entryId = sourceRec['entry_id'] ?? sourceRec['entryId'] ?? sourceRec['id']
-    const workspaceId = sourceRec['workspace_id'] ?? sourceRec['workspaceId'] ?? sourceRec['workspace']
-    const projectNumber = sourceRec['project_number'] ?? sourceRec['projectNumber']
+    const entryId = firstNonBlankValue(sourceRec['entry_id'], sourceRec['entryId'], sourceRec['id'])
+    const workspaceId = firstNonBlankValue(
+        sourceRec['workspace_id'],
+        sourceRec['workspaceId'],
+        sourceRec['workspace']
+    )
+    const projectNumber = firstNonBlankValue(sourceRec['project_number'], sourceRec['projectNumber'])
     const includeRelationships =
         sourceRec['include_relationships'] ?? sourceRec['includeRelationships']
-    const sessionId = sourceRec['session_id'] ?? sourceRec['sessionId']
+    const sessionId = firstNonBlankValue(sourceRec['session_id'], sourceRec['sessionId'])
     return {
         ...sourceRec,
         ...(entryId !== undefined ? { entry_id: entryId } : {}),

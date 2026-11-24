@@ -358,6 +358,39 @@ function applyAuditMergeTestGetByIdInterceptions(
     return { args }
 }
 
+const ALIAS_SYNONYMS = ['text', 'message', 'description', 'name', 'from', 'source']
+const CANONICAL_ALIAS_SYNONYMS = ['target', 'to', 'canonical', 'dest']
+
+function applyAuthorAliasInterception(methodName: string, obj: Record<string, unknown>): void {
+    const isResolve = methodName === 'team_resolve_author' || methodName === 'teamResolveAuthor'
+    const isRemove = methodName === 'team_remove_author_alias' || methodName === 'teamRemoveAuthorAlias'
+    const isAdd = methodName === 'team_add_author_alias' || methodName === 'teamAddAuthorAlias'
+    const searchTarget = isResolve ? 'author' : isRemove ? 'alias' : 'canonical_author'
+
+    for (const key of ['q', 'query', 'search']) {
+        if (obj[key] !== undefined) {
+            if (obj[searchTarget] === undefined) obj[searchTarget] = obj[key]
+            Reflect.deleteProperty(obj, key)
+        }
+    }
+    if (isResolve) {
+        remapKeys(obj, ALIAS_SYNONYMS, 'author')
+        return
+    }
+    if (isRemove) {
+        remapKeys(obj, ALIAS_SYNONYMS, 'alias')
+        return
+    }
+    if (isAdd) {
+        remapKeys(obj, ALIAS_SYNONYMS, 'alias')
+    }
+    remapKeys(obj, CANONICAL_ALIAS_SYNONYMS, 'canonical_author')
+    if (obj['author'] !== undefined) {
+        if (obj['canonical_author'] === undefined) obj['canonical_author'] = obj['author']
+        Reflect.deleteProperty(obj, 'author')
+    }
+}
+
 function applyTeamMemberAndAliasInterceptions(
     methodName: string,
     args: unknown[]
@@ -386,21 +419,7 @@ function applyTeamMemberAndAliasInterceptions(
     ) {
         const obj = { ...args[0] }
         args[0] = obj
-        for (const key of ['q', 'query', 'search']) {
-            if (obj[key] !== undefined) {
-                if (obj['canonical_author'] === undefined && obj['author'] === undefined && obj['alias'] === undefined) {
-                    obj['canonical_author'] = obj[key]
-                    obj['author'] = obj[key]
-                    obj['alias'] = obj[key]
-                }
-                Reflect.deleteProperty(obj, key)
-            }
-        }
-        remapKeys(obj, ['text', 'message', 'description', 'name', 'from', 'source'], 'alias')
-        remapKeys(obj, ['target', 'to', 'canonical', 'dest'], 'canonical_author')
-        if (obj['author'] !== undefined && obj['canonical_author'] === undefined && obj['alias'] === undefined) {
-            obj['canonical_author'] = obj['author']
-        }
+        applyAuthorAliasInterception(methodName, obj)
     }
     return { args }
 }

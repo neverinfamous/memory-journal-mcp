@@ -15,8 +15,8 @@ const POSITIVE_TIMEOUT = z.preprocess((val) => {
             : typeof val === 'string' && /^\d+(?:\.\d+)?$/.test(val.trim())
               ? Number(val.trim())
               : Number.NaN
-    return Number.isFinite(num) && num > 0 ? num : undefined
-}, z.number().positive().optional())
+    return Number.isFinite(num) && num > 0 ? Math.max(1, Math.ceil(num)) : undefined
+}, z.number().int().positive().optional())
 
 // ============================================================================
 // Tool Classification Sets

@@ -116,8 +116,11 @@ function buildNestedVmContextOptions(
 ): { vmOpts: VmExecutionContextOptions; nextTimeout: number; nextMaxResult: number | undefined } {
     const nextWs = outerWs ?? overrides?.workspaceId
     const nextProj = outerProj ?? overrides?.projectNumber
+    const safeOuterTimeout = Math.max(1, Math.ceil(options.timeoutMs))
     const nextTimeout =
-        overrides?.timeoutMs !== undefined ? Math.min(options.timeoutMs, overrides.timeoutMs) : options.timeoutMs
+        overrides?.timeoutMs !== undefined
+            ? Math.min(safeOuterTimeout, Math.max(1, Math.ceil(overrides.timeoutMs)))
+            : safeOuterTimeout
     const nextMaxResult =
         overrides?.maxResultSize !== undefined && options.maxResultSize !== undefined
             ? Math.min(options.maxResultSize, overrides.maxResultSize)
@@ -206,7 +209,9 @@ export function createIsolatedNestedRunner(
         const nestedContext = buildVmContext(vmOpts)
         const rawResult: unknown = await raceWithSandboxTimeout<unknown>(
             Promise.resolve(
-                getOrCompileVmScript(wrapped).runInContext(nestedContext, { timeout: nextTimeout })
+                getOrCompileVmScript(wrapped).runInContext(nestedContext, {
+                    timeout: Math.max(1, Math.ceil(nextTimeout)),
+                })
             ),
             nextTimeout,
             options.activeTimers

@@ -290,7 +290,7 @@ function buildProjectBreakdown(
             FROM memory_journal
             WHERE deleted_at IS NULL AND project_number IS NOT NULL${dateFilter}
             GROUP BY project_number
-            ORDER BY entry_count DESC`
+            ORDER BY entry_count DESC, project_number ASC`
         )
         .all(...dateParams) as {
         project_number: number

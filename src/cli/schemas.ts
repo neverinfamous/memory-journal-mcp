@@ -1,7 +1,7 @@
 import { z } from 'zod'
 
 export const safeCoerceNumber = z.preprocess((val) => {
-    if (val === undefined || val === null || val === '') return undefined
+    if (val === undefined || val === null) return undefined
     if (typeof val === 'number') return Number.isFinite(val) ? val : val
     if (typeof val === 'string') {
         const trimmed = val.trim()
@@ -15,7 +15,7 @@ export const safeCoerceNumber = z.preprocess((val) => {
 }, z.number().optional())
 
 const safeCoerceCanonicalDecimal = (val: unknown): unknown => {
-    if (val === undefined || val === null || val === '') return undefined
+    if (val === undefined || val === null) return undefined
     if (typeof val === 'number') return val
     if (typeof val === 'string') {
         const trimmed = val.trim()
@@ -83,7 +83,7 @@ export const databaseOptionsSchema = z.object({
 })
 
 export const safeCoerceDefaultProject = z.preprocess((val) => {
-    if (val === undefined || val === null || val === '') return undefined
+    if (val === undefined || val === null) return undefined
     if (typeof val === 'number') {
         return Number.isSafeInteger(val) && val > 0 ? val : val
     }

@@ -395,13 +395,17 @@ export function scopeFromSqlLiterals(cleanSql: string): Record<string, unknown> 
     for (const rawClause of splitTopLevelSqlAndClauses(whereClause)) {
         const clause = stripBalancedOuterParens(rawClause)
         const projMatch =
-            /^(?:[`"']?[a-zA-Z_][\w]*[`"']?\.)?[`"']?(?:project_number|project_id)[`"']?\s*=\s*['"]?([1-9]\d*)['"]?$/i.exec(
+            /^(?:[`"']?[a-zA-Z_][\w]*[`"']?\.)?[`"']?(?:project_number|project_id)[`"']?\s*=\s*(.+)$/i.exec(
                 clause
             )
         if (projMatch?.[1] !== undefined && scope['project_number'] === undefined) {
-            const parsed = Number(projMatch[1])
-            if (Number.isSafeInteger(parsed) && String(parsed) === projMatch[1]) {
-                scope['project_number'] = parsed
+            const rhs = projMatch[1].trim()
+            const rawNum = isSingleSqlStringLiteral(rhs) ? unquoteSqlLiteral(rhs).trim() : rhs
+            if (/^[1-9]\d*$/.test(rawNum)) {
+                const parsed = Number(rawNum)
+                if (Number.isSafeInteger(parsed) && String(parsed) === rawNum) {
+                    scope['project_number'] = parsed
+                }
             }
             continue
         }

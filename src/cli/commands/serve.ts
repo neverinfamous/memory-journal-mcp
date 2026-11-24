@@ -8,22 +8,9 @@ import { type z } from 'zod'
 import { serverOptionsSchema } from '../schemas.js'
 import { dumpConfigAndExit } from '../dump-config.js'
 
-export const serveSchema = serverOptionsSchema
+import { parseLogLevelOption } from '../server-options-parsers.js'
 
-function applyValidatedLogLevel(logLevel: string, configErrors: string[]): void {
-    if (
-        logLevel !== 'debug' &&
-        logLevel !== 'info' &&
-        logLevel !== 'warning' &&
-        logLevel !== 'error'
-    ) {
-        configErrors.push(
-            `Invalid log level '${logLevel}': expected one of debug, info, warning, error.`
-        )
-        return
-    }
-    logger.setLevel(logLevel)
-}
+export const serveSchema = serverOptionsSchema
 
 export async function serveAction(options: z.infer<typeof serveSchema>, command: Command): Promise<void> {
     let resolver: ConfigResolver
@@ -39,16 +26,15 @@ export async function serveAction(options: z.infer<typeof serveSchema>, command:
         resolver = new ConfigResolver(command, {}, undefined)
     }
 
-    // Set log level early
-    let logLevel = 'info'
+    // Set log level early using the same parser as buildServerOptions so whitespace/blank
+    // handling matches --dump-config (errors are recorded once by buildServerOptions).
     try {
-        logLevel = resolver.resolve<string>('logLevel', 'LOG_LEVEL') ?? 'info'
-    } catch (e) {
-        configErrors.push(e instanceof Error ? e.message : String(e))
-    }
-
-    if (options.dumpConfig !== true) {
-        applyValidatedLogLevel(logLevel, configErrors)
+        const earlyLogLevel = parseLogLevelOption(resolver.resolve<unknown>('logLevel', 'LOG_LEVEL'))
+        if (options.dumpConfig !== true) {
+            logger.setLevel(earlyLogLevel ?? 'info')
+        }
+    } catch {
+        // Validation error is recorded once by buildServerOptions via parseLogLevelOption.
     }
 
     // Validate against default placeholder secrets

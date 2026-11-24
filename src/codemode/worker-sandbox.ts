@@ -374,7 +374,11 @@ export class WorkerSandbox {
             }
         }
 
-        const effectiveTimeout = Math.min(timeoutMs ?? this.options.timeoutMs, 30000)
+        const rawTimeout = timeoutMs ?? this.options.timeoutMs
+        const effectiveTimeout =
+            Number.isFinite(rawTimeout) && rawTimeout > 0
+                ? Math.min(Math.max(1, Math.ceil(rawTimeout)), 30000)
+                : Math.min(Math.max(1, Math.ceil(this.options.timeoutMs)), 30000)
         if (!this.worker) this.initWorker()
         this.isBusy = true
         this.executionId++

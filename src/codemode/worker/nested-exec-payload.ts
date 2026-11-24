@@ -193,7 +193,9 @@ export function extractNestedTimeoutMs(
               ? Number(raw.trim())
               : Number.NaN
     if (!Number.isFinite(num) || num <= 0) return undefined
-    return Math.min(outerTimeoutMs, num)
+    const safeOuter =
+        Number.isFinite(outerTimeoutMs) && outerTimeoutMs > 0 ? Math.max(1, Math.ceil(outerTimeoutMs)) : 1
+    return Math.min(safeOuter, Math.max(1, Math.ceil(num)))
 }
 
 function isNestedPlainRecord(val: unknown): val is Record<string, unknown> {

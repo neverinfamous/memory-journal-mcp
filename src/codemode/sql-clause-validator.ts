@@ -51,7 +51,7 @@ function isUnsupportedKeywordAt(
         return true
     }
     if (statementKind === 'select' && upperToken === 'LIMIT') {
-        const match = /^\s+(\S+)\s*;?\s*$/.exec(cleanSql.slice(endIdx))
+        const match = /^\s+([^\s;]+)\s*;?\s*$/.exec(cleanSql.slice(endIdx))
         return match?.[1] === undefined || !isSafePositiveLimitDigits(match[1])
     }
     return false

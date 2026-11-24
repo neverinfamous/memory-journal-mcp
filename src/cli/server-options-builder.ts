@@ -248,11 +248,22 @@ function resolveEnvironmentOverrides(
     return { envUpdates, logLevel }
 }
 
+function parseAuditLogPathOption(val: unknown): string {
+    if (typeof val !== 'string') {
+        throw new Error(`Invalid --audit-log: expected string path, got ${typeof val}.`)
+    }
+    const trimmed = val.trim()
+    if (trimmed === '') {
+        throw new Error('Invalid blank --audit-log path.')
+    }
+    return trimmed
+}
+
 function buildAuditConfigOption(resolver: ConfigResolver, catchConfig: CatchConfig): AuditConfig | undefined {
     const auditLogPath = catchConfig(
         () =>
-            resolver.resolve<string>('auditLog', 'AUDIT_LOG_PATH') ??
-            resolver.resolve<string>('auditLog', 'MEMORY_JOURNAL_AUDIT_LOG'),
+            resolver.resolve<string>('auditLog', 'AUDIT_LOG_PATH', parseAuditLogPathOption) ??
+            resolver.resolve<string>('auditLog', 'MEMORY_JOURNAL_AUDIT_LOG', parseAuditLogPathOption),
         undefined
     )
     if (!auditLogPath) return undefined

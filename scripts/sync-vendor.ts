@@ -61,7 +61,13 @@ function classifyVendorSpecifiers(source: string): { relative: string[]; package
 }
 
 function resolveUpstreamRoot(cwd: string, explicit?: string): string {
-  const configured = explicit ?? process.env['VENDOR_UPSTREAM_ROOT'];
+  if (explicit !== undefined) {
+    if (explicit.trim() === '') {
+      throw new Error('Invalid blank --upstream-root path.');
+    }
+    return resolve(cwd, explicit);
+  }
+  const configured = process.env['VENDOR_UPSTREAM_ROOT'];
   if (configured !== undefined && configured.trim() !== '') {
     return resolve(cwd, configured);
   }

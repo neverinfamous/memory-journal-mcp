@@ -142,7 +142,16 @@ function buildSearchEntriesContext(
                 '🛠️ AUTONOMOUS HEALING: Provide a search query or filter, or use get_recent_entries (mj.core.getRecentEntries) to list recent entries for a workspace without a query.',
         })
     }
-    const { resolvedMode, isAuto } = resolveSearchMode(input.mode, query)
+    if (query === '' && input.mode === 'semantic') {
+        throw new ValidationError('Semantic search requires a non-empty query string', {
+            suggestion:
+                'Provide a text query for semantic search, or omit mode / use mode: "auto" when filtering without a query.',
+        })
+    }
+    const { resolvedMode, isAuto } =
+        query === '' && input.mode === 'hybrid'
+            ? { resolvedMode: 'fts' as const, isAuto: false }
+            : resolveSearchMode(input.mode, query)
     const effectiveFuzzyMatch = input.exact_match !== undefined ? !input.exact_match : input.fuzzy_match
     const effectiveAutoCorrect =
         input.exact_match !== undefined && !input.exact_match ? true : input.auto_correct

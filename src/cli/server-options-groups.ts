@@ -92,69 +92,86 @@ export const CANONICAL_SERVER_ENV_KEYS = [
     'STATELESS',
 ] as const
 
-function resolveCliDatabaseFlag(
+function resolveValidatedDatabaseKey(
     resolver: ConfigResolver,
     catchConfig: CatchConfig,
-    key: string,
-    flagLabel: string
+    cliKey: string,
+    envKey?: string,
+    fallback?: string
 ): string | undefined {
+    const label = resolver.isCliProvided(cliKey)
+        ? `--${cliKey.replace(/[A-Z]/g, (c) => `-${c.toLowerCase()}`)}`
+        : cliKey
     return catchConfig(() => {
-        if (!resolver.isCliProvided(key)) return undefined
-        const val = resolver.resolve<string>(key)
-        if (typeof val === 'string' && val.trim() === '') {
-            throw new Error(`Invalid blank --${flagLabel} database path.`)
+        const val = resolver.resolve<unknown>(cliKey, envKey)
+        if (val === undefined) return fallback
+        if (typeof val !== 'string') {
+            throw new Error(`Invalid ${label}: expected string path, got ${typeof val}.`)
         }
-        return val
-    }, undefined)
+        const trimmed = val.trim()
+        if (trimmed === '') {
+            throw new Error(`Invalid blank ${label} database path.`)
+        }
+        return trimmed
+    }, fallback)
+}
+
+function resolvePrimaryDatabasePath(
+    resolver: ConfigResolver,
+    catchConfig: CatchConfig,
+    primaryKey: string,
+    aliasKey: string,
+    envKey: string,
+    configPathKey: string,
+    defaultPath: string | undefined
+): string | undefined {
+    const hasCliPrimary = resolver.isCliProvided(primaryKey)
+    const cliPrimary = hasCliPrimary ? resolveValidatedDatabaseKey(resolver, catchConfig, primaryKey) : undefined
+    const hasCliAlias = resolver.isCliProvided(aliasKey)
+    const cliAlias = hasCliAlias ? resolveValidatedDatabaseKey(resolver, catchConfig, aliasKey) : undefined
+    const rawEnv = process.env[envKey]?.trim()
+    const hasExplicit = hasCliPrimary || hasCliAlias || (rawEnv !== undefined && rawEnv !== '')
+    const configPath = resolveValidatedDatabaseKey(resolver, catchConfig, configPathKey)
+    const fallbackAlias = hasCliAlias ? undefined : resolveValidatedDatabaseKey(resolver, catchConfig, aliasKey)
+    const rawPrimary = hasCliPrimary
+        ? defaultPath
+        : defaultPath !== undefined
+          ? resolveValidatedDatabaseKey(resolver, catchConfig, primaryKey, envKey, defaultPath)
+          : resolveValidatedDatabaseKey(resolver, catchConfig, primaryKey, envKey)
+    const resolved = cliPrimary ?? cliAlias ?? rawPrimary
+    if (!hasExplicit && (resolved === defaultPath || resolved === undefined) && fallbackAlias) {
+        return fallbackAlias
+    }
+    if (!hasExplicit && (resolved === defaultPath || resolved === undefined) && configPath) {
+        return configPath
+    }
+    return resolved
+}
+
+function resolveOptionalDatabasePath(
+    resolver: ConfigResolver,
+    catchConfig: CatchConfig,
+    cliKey: string,
+    envKey: string,
+    configPathKey: string
+): string | undefined {
+    const hasCli = resolver.isCliProvided(cliKey)
+    const cliVal = hasCli ? resolveValidatedDatabaseKey(resolver, catchConfig, cliKey) : undefined
+    const configPath = resolveValidatedDatabaseKey(resolver, catchConfig, configPathKey)
+    const raw = hasCli ? undefined : resolveValidatedDatabaseKey(resolver, catchConfig, cliKey, envKey)
+    return cliVal ?? raw ?? configPath
 }
 
 export function resolveDatabasePaths(
     resolver: ConfigResolver,
     catchConfig: CatchConfig
 ): { db: string | undefined; testDb: string | undefined; teamDb: string | undefined; testTeamDb: string | undefined } {
-    const cliDb = resolveCliDatabaseFlag(resolver, catchConfig, 'db', 'db')
-    const cliDatabase = resolveCliDatabaseFlag(resolver, catchConfig, 'database', 'database')
-    const envDb = process.env['DB_PATH'] !== undefined && process.env['DB_PATH'] !== '' ? process.env['DB_PATH'] : undefined
-    const hasExplicitDb = cliDb !== undefined || cliDatabase !== undefined || envDb !== undefined
-    const configDbPath = catchConfig(() => resolver.resolve<string>('dbPath'), undefined)
-    const fallbackDatabase = catchConfig(() => resolver.resolve<string>('database'), undefined)
-    const rawDb = catchConfig(() => resolver.resolve<string>('db', 'DB_PATH'), defaultDbPath)
-    let db = cliDb ?? cliDatabase ?? rawDb
-    if (!hasExplicitDb && (db === defaultDbPath || db === undefined) && fallbackDatabase) {
-        db = fallbackDatabase
-    } else if (!hasExplicitDb && (db === defaultDbPath || db === undefined) && configDbPath) {
-        db = configDbPath
+    return {
+        db: resolvePrimaryDatabasePath(resolver, catchConfig, 'db', 'database', 'DB_PATH', 'dbPath', defaultDbPath),
+        testDb: resolveOptionalDatabasePath(resolver, catchConfig, 'testDb', 'TEST_DB_PATH', 'testDbPath'),
+        teamDb: resolvePrimaryDatabasePath(resolver, catchConfig, 'teamDb', 'teamDatabase', 'TEAM_DB_PATH', 'teamDbPath', defaultTeamDbPath),
+        testTeamDb: resolveOptionalDatabasePath(resolver, catchConfig, 'testTeamDb', 'TEST_TEAM_DB_PATH', 'testTeamDbPath'),
     }
-
-    const cliTestDb = resolveCliDatabaseFlag(resolver, catchConfig, 'testDb', 'test-db')
-    const configTestDbPath = catchConfig(() => resolver.resolve<string>('testDbPath'), undefined)
-    const rawTestDb = catchConfig(() => resolver.resolve<string>('testDb', 'TEST_DB_PATH'), undefined)
-    const testDb = cliTestDb ?? rawTestDb ?? configTestDbPath
-
-    const cliTeamDb = resolveCliDatabaseFlag(resolver, catchConfig, 'teamDb', 'team-db')
-    const cliTeamDatabase = resolveCliDatabaseFlag(resolver, catchConfig, 'teamDatabase', 'team-database')
-    const envTeamDb =
-        process.env['TEAM_DB_PATH'] !== undefined && process.env['TEAM_DB_PATH'] !== ''
-            ? process.env['TEAM_DB_PATH']
-            : undefined
-    const hasExplicitTeamDb =
-        cliTeamDb !== undefined || cliTeamDatabase !== undefined || envTeamDb !== undefined
-    const configTeamDbPath = catchConfig(() => resolver.resolve<string>('teamDbPath'), undefined)
-    const fallbackTeamDatabase = catchConfig(() => resolver.resolve<string>('teamDatabase'), undefined)
-    const rawTeamDb = catchConfig(() => resolver.resolve<string>('teamDb', 'TEAM_DB_PATH'), defaultTeamDbPath)
-    let teamDb = cliTeamDb ?? cliTeamDatabase ?? rawTeamDb
-    if (!hasExplicitTeamDb && (teamDb === defaultTeamDbPath || teamDb === undefined) && fallbackTeamDatabase) {
-        teamDb = fallbackTeamDatabase
-    } else if (!hasExplicitTeamDb && (teamDb === defaultTeamDbPath || teamDb === undefined) && configTeamDbPath) {
-        teamDb = configTeamDbPath
-    }
-
-    const cliTestTeamDb = resolveCliDatabaseFlag(resolver, catchConfig, 'testTeamDb', 'test-team-db')
-    const configTestTeamDbPath = catchConfig(() => resolver.resolve<string>('testTeamDbPath'), undefined)
-    const rawTestTeamDb = catchConfig(() => resolver.resolve<string>('testTeamDb', 'TEST_TEAM_DB_PATH'), undefined)
-    const testTeamDb = cliTestTeamDb ?? rawTestTeamDb ?? configTestTeamDbPath
-
-    return { db, testDb, teamDb, testTeamDb }
 }
 
 /**
@@ -286,7 +303,9 @@ export function resolveInstructionLevelOption(
             throw new Error(`Invalid --instruction-level: expected string, got ${typeof raw}. Use essential, detailed, or full.`)
         }
         const trimmed = raw.trim()
-        if (trimmed === '') return undefined
+        if (trimmed === '') {
+            throw new Error('Invalid blank --instruction-level. Use essential, detailed, or full.')
+        }
         if (trimmed === 'essential' || trimmed === 'detailed' || trimmed === 'full') return trimmed
         throw new Error(`Invalid --instruction-level '${raw}'. Use essential, detailed, or full.`)
     }, undefined)
@@ -341,7 +360,7 @@ export function resolveMaxToolInputElementsOption(
 ): number | undefined {
     return catchConfig(() => {
         const raw = resolver.resolve<unknown>('maxToolInputElements', 'MAX_TOOL_INPUT_ELEMENTS')
-        if (raw === undefined || raw === null || raw === '') return undefined
+        if (raw === undefined || raw === null) return undefined
         if (raw === Infinity || (typeof raw === 'string' && raw.trim().toLowerCase() === 'infinity')) {
             return Infinity
         }

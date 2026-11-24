@@ -306,6 +306,9 @@ export class VectorSearchManager {
         workspaceId?: string,
         projectNumber?: number
     ): Promise<VectorCandidate[]> {
+        if (!Number.isSafeInteger(limit) || limit <= 0) {
+            return []
+        }
         await this.initialize()
         if (typeof this.dbAdapter?.hasVectors === 'function' && !this.dbAdapter.hasVectors()) {
             return []
@@ -338,6 +341,9 @@ export class VectorSearchManager {
         workspaceId?: string,
         projectNumber?: number
     ): Promise<SemanticSearchResult[]> {
+        if (!Number.isSafeInteger(limit) || limit <= 0) {
+            return []
+        }
         await this.initialize()
         if (typeof this.dbAdapter?.hasVectors === 'function' && !this.dbAdapter.hasVectors()) {
             return []

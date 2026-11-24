@@ -29,6 +29,7 @@ import {
 
 function isJsonOutput(options: Record<string, unknown>, command: Command): boolean {
     if (options['json'] === true) return true
+    if (options['json'] === false) return false
     const globals = command.optsWithGlobals<Record<string, unknown>>()
     return globals['json'] === true
 }

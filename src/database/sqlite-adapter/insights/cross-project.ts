@@ -80,7 +80,7 @@ export function getCrossProjectInsights(
         FROM memory_journal ${where}
         GROUP BY project_number
         HAVING entry_count >= ?
-        ORDER BY entry_count DESC
+        ORDER BY entry_count DESC, project_number ASC
         `
         )
         .all(...sqlParams, options.minEntries) as Record<string, unknown>[]
@@ -202,6 +202,7 @@ function queryInactiveProjects(
         WHERE deleted_at IS NULL AND project_number IS NOT NULL${wsFilter}
         GROUP BY project_number
         HAVING last_entry_date < ?
+        ORDER BY last_entry_date ASC, project_number ASC
         `
         )
         .all(...wsParams, cutoffDate) as { project_number: number; last_entry_date: string }[]

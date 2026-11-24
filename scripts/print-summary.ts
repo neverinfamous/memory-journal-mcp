@@ -8,9 +8,9 @@ async function main(): Promise<void> {
     const dbPath = path.join(os.tmpdir(), `mj-print-summary-${String(process.pid)}-${String(Date.now())}.db`)
     // Open the actual database
     const db = new DatabaseAdapter(dbPath)
-    await db.initialize()
 
     try {
+        await db.initialize()
         const result = await getPrompt('session-summary', {}, db)
         console.log(result.messages[0]?.content.text ?? '')
     } finally {

@@ -201,7 +201,9 @@ export function parseLogLevelOption(
         throw new Error(`Invalid log level type '${typeof raw}'. Use debug, info, warning, or error.`)
     }
     const str = raw.trim()
-    if (str === '') return undefined
+    if (str === '') {
+        throw new Error("Invalid blank log level ''. Use debug, info, warning, or error.")
+    }
     if (str === 'debug' || str === 'info' || str === 'warning' || str === 'error') return str
     throw new Error(`Invalid log level '${str}'. Use debug, info, warning, or error.`)
 }

@@ -36,7 +36,8 @@ function validateSemanticSearchPreconditions(
     input: SemanticSearchInput,
     vectorManager: ToolContext['vectorManager']
 ): Record<string, unknown> | undefined {
-    if (!input.query && input.entry_id === undefined) {
+    const trimmedQuery = input.query?.trim()
+    if ((trimmedQuery === undefined || trimmedQuery === '') && input.entry_id === undefined) {
         return {
             success: false,
             error: 'Either query or entry_id must be provided',
@@ -331,7 +332,14 @@ export async function executeSemanticSearch(
 ): Promise<Record<string, unknown> | ReturnType<typeof formatHandlerError>> {
     const { vectorManager } = context
     try {
-        const input = SemanticSearchSchema.parse(params)
+        const rawInput = SemanticSearchSchema.parse(params)
+        const trimmedQuery = rawInput.query?.trim()
+        const input: SemanticSearchInput = { ...rawInput }
+        if (trimmedQuery !== undefined && trimmedQuery !== '') {
+            input.query = trimmedQuery
+        } else {
+            Reflect.deleteProperty(input, 'query')
+        }
         const wsId = resolveWorkspaceId(input.workspace_id, input.project_number, context.config)
         const projectNumber = alignedProjectFilter(
             wsId,

@@ -42,8 +42,10 @@ const NON_CODE_PARAM_KEYS = new Set([
     'maxResultSize', 'max_result_size_bytes', 'maxResultSizeBytes', 'max_result_size_kb',
     'maxResultSizeKb', 'dry_run', 'dryRun', 'use_test_db', 'useTestDb', 'owner', 'cwd', 'branch',
     'group_name', 'groupName', 'entry_type', 'entryType', 'type', 'significance_type',
-    'significanceType', 'validation_status', 'validationStatus', 'title', 'tags', 'author',
-    'is_personal', 'isPersonal', 'share_with_team', 'shareWithTeam', 'learned_context',
+    'significanceType', 'validation_status', 'validationStatus', 'validation', 'title', 'tags', 'author',
+    'is_personal', 'isPersonal', 'share_with_team', 'shareWithTeam', 'expectedVersion', 'auto_context',
+    'autoContext', 'impact_score', 'impactScore', 'impact', 'trust_score', 'trustScore', 'trust',
+    'relationships', 'anchors', 'learned_context',
     'learnedContext', 'lesson', 'learning', 'insight', 'knowledge', 'rule', 'takeaway',
     'finding', 'discovery', 'search', 'q', 'term', 'keyword', 'category', 'topic', 'mode',
     'limit', 'offset', 'operation', 'op', 'action', 'task', 'tool', 'method', 'function',
@@ -314,6 +316,21 @@ export function resolveExecutionPayload(
         if (recovered !== undefined) {
             executionCode = recovered.code
             if (recovered.synthesized) recoveredJs = true
+        }
+    }
+
+    if (
+        healingEnabled &&
+        (executionCode === undefined || executionCode === '') &&
+        isRecord(params) &&
+        (params['entry_id'] !== undefined || params['entryId'] !== undefined || params['id'] !== undefined)
+    ) {
+        const recovered = extractAndRecoverRecordCode(params)
+        if (recovered !== null) {
+            executionCode = recovered
+            recoveredJs = true
+        } else {
+            return validationFailure(UNRECOVERABLE_PAYLOAD_MSG)
         }
     }
 

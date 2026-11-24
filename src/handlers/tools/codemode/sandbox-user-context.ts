@@ -66,6 +66,7 @@ export function buildSandboxUserContext(
 
     const directSize = parseByteSizeValue(
         input.max_result_size ?? input.maxResultSize ?? input.max_result_size_bytes ?? input.maxResultSizeBytes ??
+        input['max_bytes'] ?? input['maxBytes'] ??
         userContext['max_result_size'] ?? userContext['maxResultSize'] ?? userContext['max_result_size_bytes'] ?? userContext['maxResultSizeBytes'] ??
         userContext['max_bytes'] ?? userContext['maxBytes']
     )
