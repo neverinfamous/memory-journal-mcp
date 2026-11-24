@@ -73,4 +73,28 @@ describe('formatPrometheusMetrics', () => {
         expect(output).toContain('mcp_resource_reads_total{resource="memory://briefing"} 2')
         expect(output).toContain('mcp_resource_reads_total{resource="memory://recent"} 1')
     })
+
+    it('omits empty metric families and query/fragment suffixes from resource labels', () => {
+        const emptyOutput = formatPrometheusMetrics(metrics)
+        const lines = emptyOutput.split('\n')
+        for (let i = 0; i < lines.length; i++) {
+            const line = lines[i] ?? ''
+            if (line.startsWith('# TYPE ')) {
+                const metricName = line.slice('# TYPE '.length).split(' ')[0] ?? ''
+                const nextLine = lines[i + 1] ?? ''
+                expect(nextLine.startsWith(metricName)).toBe(true)
+            }
+        }
+        expect(emptyOutput).not.toContain('mcp_resource_reads_total')
+        expect(emptyOutput).not.toContain('mcp_tool_calls_by_name_total')
+
+        metrics.recordResourceRead('memory://agent-context/adamic?session_id=123#anchor')
+        metrics.recordResourceRead('memory://agent-context/adamic?session_id=456')
+
+        const normalizedOutput = formatPrometheusMetrics(metrics)
+        expect(normalizedOutput).not.toContain('session_id=')
+        expect(normalizedOutput).toContain(
+            'mcp_resource_reads_total{resource="memory://agent-context/adamic"} 2'
+        )
+    })
 })

@@ -1,0 +1,50 @@
+// Grafana Alloy log pipeline for memory-journal-mcp JSONL audit logs
+
+local.file_match "mcp_logs" {
+  path_targets = [{
+    "__path__" = "/var/log/memory-journal/mcp-audit.jsonl",
+    "job"      = "memory_journal_mcp_logs",
+    "service"  = "memory_journal_mcp",
+  }]
+  sync_period = "10s"
+}
+
+loki.source.file "mcp_logs" {
+  targets       = local.file_match.mcp_logs.targets
+  forward_to    = [loki.process.mcp_logs.receiver]
+  tail_from_end = true
+  file_watch {
+    min_poll_frequency = "1s"
+    max_poll_frequency = "5s"
+  }
+}
+
+loki.process "mcp_logs" {
+  forward_to = [loki.write.loki_server.receiver]
+
+  stage.json {
+    expressions = {
+      tool       = "tool",
+      category   = "category",
+      scope      = "scope",
+      success    = "success",
+      durationMs = "durationMs",
+      requestId  = "requestId",
+    }
+  }
+
+  stage.labels {
+    values = {
+      tool     = "",
+      category = "",
+      scope    = "",
+      success  = "",
+    }
+  }
+}
+
+loki.write "loki_server" {
+  endpoint {
+    url = "http://loki:3100/loki/api/v1/push"
+  }
+}

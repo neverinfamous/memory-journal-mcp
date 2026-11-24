@@ -247,7 +247,7 @@ This exposes only `mj_execute_code` and `update_configuration` to the client's `
 
 ## 🚀 Quick Start & Deployment
 
-_Note: Configuration is resolved using strict precedence: `CLI flags > Environment Variables > Config File > Defaults` (see [`memory-journal-config-example.json`](memory-journal-config-example.json), [`mcp-config-example.json`](mcp-config-example.json), and [`.env.example`](.env.example))._
+_Note: Configuration is resolved using strict precedence: `CLI flags > Environment Variables > Config File > Defaults` (see [`memory-journal-config-example.json`](memory-journal-config-example.json), [`examples/configs/memory-journal.config.yaml`](examples/configs/memory-journal.config.yaml), [`mcp-config-example.json`](mcp-config-example.json), and [`examples/`](examples/README.md))._
 
 > 🛠️ **Debugging Configuration:** Run `memory-journal-mcp --dump-config` (or pass `--dump-config` as an arg) to print the fully resolved configuration payload with automatically redacted secrets. This is the primary method for diagnosing overriding issues.
 
@@ -561,7 +561,7 @@ export OAUTH_CLOCK_TOLERANCE=60
 memory-journal-mcp --transport http --port 3000
 ```
 
-> **Note:** OAuth is opt-in. When not enabled, the server falls back to simple token authentication via `MCP_AUTH_TOKEN` environment variable, or runs without authentication.
+> **Note:** OAuth is opt-in. When not enabled, the server falls back to simple token authentication via `MCP_AUTH_TOKEN` environment variable, or runs without authentication. For a turnkey local Keycloak 26.4.7 OAuth 2.1 Compose setup, see [`examples/oauth-keycloak/`](examples/oauth-keycloak/README.md).
 
 ### 🔄 Session Management
 
@@ -791,6 +791,7 @@ pnpm run test:e2e  # End-to-end HTTP/SSE transport tests
 ## 📚 Documentation & Resources
 
 - **[GitHub Wiki](https://github.com/neverinfamous/memory-journal-mcp/wiki)** - Complete documentation
+- **[Examples & Deployment Templates](examples/README.md)** - Prometheus/Grafana/Loki/Datadog stack, Keycloak 2.1 OAuth, and YAML config
 - **[Automations Guide](https://github.com/neverinfamous/memory-journal-mcp/wiki/Automations)** - Nightly CMS consolidation (`CMS-02`), REM self-healing supervisor (`CMS-04`), and cross-client scheduling
 - **[Deployment Guide](https://github.com/neverinfamous/memory-journal-mcp/wiki/Deployment)** - CI/CD pipeline, environments, and version bump checklist
 - **[Docker Hub](https://hub.docker.com/r/writenotenow/memory-journal-mcp)** - Container images

@@ -571,7 +571,7 @@
     },
     {
       "definition": {
-        "description": "Note: The Error Logs widget only displays audited errors (Writes/Admin) unless the server is started with the `--audit-reads` flag.\"",
+        "description": "Note: The Error Logs widget only displays audited errors (Writes/Admin) unless the server is started with the `--audit-reads` flag.",
         "requests": [
           {
             "columns": [

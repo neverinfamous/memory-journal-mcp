@@ -1,0 +1,108 @@
+{
+  "realm": "mcp",
+  "displayName": "Memory Journal MCP Development Realm",
+  "enabled": true,
+  "sslRequired": "none",
+  "accessTokenLifespan": 3600,
+  "clientScopes": [
+    {
+      "name": "read",
+      "description": "Read-only access to personal journal entries, search, analytics, and git resources",
+      "protocol": "openid-connect",
+      "attributes": {
+        "include.in.token.scope": "true",
+        "display.on.consent.screen": "true"
+      }
+    },
+    {
+      "name": "write",
+      "description": "Read and write access including GitHub tool operations",
+      "protocol": "openid-connect",
+      "attributes": {
+        "include.in.token.scope": "true",
+        "display.on.consent.screen": "true"
+      }
+    },
+    {
+      "name": "team",
+      "description": "Shared team database operations and team collaboration resources",
+      "protocol": "openid-connect",
+      "attributes": {
+        "include.in.token.scope": "true",
+        "display.on.consent.screen": "true"
+      }
+    },
+    {
+      "name": "audit",
+      "description": "Prometheus /metrics, memory://audit, and memory://metrics/users access",
+      "protocol": "openid-connect",
+      "attributes": {
+        "include.in.token.scope": "true",
+        "display.on.consent.screen": "true"
+      }
+    },
+    {
+      "name": "admin",
+      "description": "Administrative operations, backups, Code Mode sandbox, and audit search",
+      "protocol": "openid-connect",
+      "attributes": {
+        "include.in.token.scope": "true",
+        "display.on.consent.screen": "true"
+      }
+    },
+    {
+      "name": "full",
+      "description": "Unrestricted access across all tools, prompts, resources, and scopes",
+      "protocol": "openid-connect",
+      "attributes": {
+        "include.in.token.scope": "true",
+        "display.on.consent.screen": "true"
+      }
+    }
+  ],
+  "clients": [
+    {
+      "clientId": "memory-journal-client",
+      "name": "Memory Journal MCP Dev Client",
+      "description": "Confidential service-account client for local OAuth 2.1 testing",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "secret": "dev-local-client-secret-replace-me",
+      "serviceAccountsEnabled": true,
+      "standardFlowEnabled": true,
+      "directAccessGrantsEnabled": false,
+      "implicitFlowEnabled": false,
+      "redirectUris": [
+        "http://localhost/*"
+      ],
+      "webOrigins": [
+        "http://localhost:3000"
+      ],
+      "defaultClientScopes": [
+        "read"
+      ],
+      "optionalClientScopes": [
+        "write",
+        "team",
+        "audit",
+        "admin",
+        "full"
+      ],
+      "protocolMappers": [
+        {
+          "name": "memory-journal-audience",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "consentRequired": false,
+          "config": {
+            "included.custom.audience": "memory-journal-mcp",
+            "id.token.claim": "false",
+            "access.token.claim": "true",
+            "introspection.token.claim": "true"
+          }
+        }
+      ]
+    }
+  ]
+}

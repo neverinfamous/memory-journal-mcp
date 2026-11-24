@@ -92,6 +92,15 @@ export interface SystemMetrics {
 const MAX_METRIC_KEYS = 1000
 const MAX_DEPRECATION_WARNINGS = 500
 
+function normalizeResourceUri(uri: string): string {
+    const queryIdx = uri.indexOf('?')
+    const hashIdx = uri.indexOf('#')
+    if (queryIdx === -1 && hashIdx === -1) return uri
+    const cutIdx =
+        queryIdx === -1 ? hashIdx : hashIdx === -1 ? queryIdx : Math.min(queryIdx, hashIdx)
+    return uri.slice(0, cutIdx)
+}
+
 export class MetricsAccumulator {
     private readonly toolData = new Map<string, ToolMetrics>()
     private readonly resourceData = new Map<string, ResourceMetrics>()
@@ -165,10 +174,12 @@ export class MetricsAccumulator {
      * Record a single resource read.
      */
     recordResourceRead(uri: string, isError = false): void {
+        const normalizedUri = normalizeResourceUri(uri)
+        if (FORBIDDEN_KEYS.has(normalizedUri)) return
         const metricUri =
-            !this.resourceData.has(uri) && this.resourceData.size >= MAX_METRIC_KEYS
+            !this.resourceData.has(normalizedUri) && this.resourceData.size >= MAX_METRIC_KEYS
                 ? 'other'
-                : uri
+                : normalizedUri
         const existing = this.resourceData.get(metricUri)
         const m: ResourceMetrics = existing ?? {
             readCount: 0,
@@ -346,11 +357,16 @@ export class MetricsAccumulator {
     }
 
     private mergeResourceMetrics(entries: [string, ResourceMetrics][]): void {
-        for (const [key, val] of entries) {
+        for (const [rawKey, val] of entries) {
+            const key = normalizeResourceUri(rawKey)
             if (FORBIDDEN_KEYS.has(key)) continue
-            const existing = this.resourceData.get(key)
+            const metricUri =
+                !this.resourceData.has(key) && this.resourceData.size >= MAX_METRIC_KEYS
+                    ? 'other'
+                    : key
+            const existing = this.resourceData.get(metricUri)
             if (!existing) {
-                this.resourceData.set(key, { ...val })
+                this.resourceData.set(metricUri, { ...val })
                 continue
             }
             existing.readCount += val.readCount

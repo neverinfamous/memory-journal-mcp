@@ -126,6 +126,11 @@ Development is optimized for **Windows Native Orchestration** using PowerShell. 
 ```text
 memory-journal-mcp/
 ├── .github/ (19 files)                      # GitHub Actions CI, Docker, CodeQL, and Dependabot workflows
+├── examples/                                # Portable monitoring, Keycloak OAuth, and YAML config templates
+│   ├── configs/ (2 files)                   # Annotated YAML configuration example and precedence guide
+│   ├── oauth-keycloak/ (3 files)            # Local Keycloak 26.4.7 OAuth 2.1 Compose stack and realm export
+│   ├── observability/ (15 files)            # Prometheus, Grafana, Loki, Alloy, and Datadog AD templates
+│   └── README.md                            # Examples index and deployment cross-links
 ├── releases/ (45 files)                     # Release notes archive
 ├── scripts/                                 # Codegen, vendor sync, DB encryption, and QA automation scripts
 │   ├── check-orphans.mjs                    # Scans readonly SQLite DB for orphaned journal entries
@@ -187,7 +192,7 @@ memory-journal-mcp/
 │   ├── handlers/ (64 files)                 # Tool, resource, prompt, and schema handler tests
 │   ├── integration/ (5 files)               # End-to-end database/server integration specs
 │   ├── markdown/ (6 files)                  # Markdown export/import round-trip tests
-│   ├── observability/ (5 files)             # Metrics and telemetry endpoint tests
+│   ├── observability/ (6 files)             # Metrics and telemetry endpoint tests
 │   ├── security/ (3 files)                  # Injection, path traversal, and SSRF guard tests
 │   ├── server/ (8 files)                    # Server wiring, briefing, and startup tests
 │   ├── transports/ (6 files)                # HTTP/SSE/stdio transport tests

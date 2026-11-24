@@ -861,7 +861,7 @@
             "type": "prometheus",
             "uid": "prometheus_datasource"
           },
-          "expr": "(sum(mcp_tool_errors_by_name_total{tool=~\"$tool\"}) by (tool) / clamp_min(sum(mcp_tool_calls_by_name_total{tool=~\"$tool\"}) by (tool), 1e-9)) * 100",
+          "expr": "(sum(mcp_tool_errors_by_name_total{tool=~\"$tool\"}) by (tool) / clamp_min(sum(mcp_tool_calls_by_name_total{tool=~\"$tool\"}) by (tool), 1)) * 100",
           "legendFormat": "{{tool}}",
           "refId": "A"
         }

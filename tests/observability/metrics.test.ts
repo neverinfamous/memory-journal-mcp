@@ -280,5 +280,50 @@ describe('MetricsAccumulator', () => {
             expect(summary[1]?.toolName).toBe('fast')
         })
     })
+
+    describe('recordResourceRead() & importState() URI normalization', () => {
+        it('strips query strings and fragments before counting resource reads', () => {
+            acc.recordResourceRead('memory://agent-context/adamic?session_id=abc#section', false)
+            acc.recordResourceRead('memory://agent-context/adamic?session_id=xyz', true)
+            acc.recordResourceRead('memory://graph/adamic#hubs', false)
+
+            const summary = acc.getSummary()
+            expect(summary.totalResourceReads).toBe(3)
+            expect(Object.keys(summary.resourceBreakdown)).toEqual([
+                'memory://agent-context/adamic',
+                'memory://graph/adamic',
+            ])
+            expect(summary.resourceBreakdown['memory://agent-context/adamic']?.readCount).toBe(2)
+            expect(summary.resourceBreakdown['memory://agent-context/adamic']?.errorCount).toBe(1)
+        })
+
+        it('normalizes and merges persisted legacy resource keys on importState()', () => {
+            const legacySnapshot = JSON.stringify({
+                toolData: [],
+                resourceData: [
+                    [
+                        'memory://agent-context/adamic?session_id=sess-1',
+                        { readCount: 3, errorCount: 1, lastReadAt: '2026-11-24T01:00:00.000Z' },
+                    ],
+                    [
+                        'memory://agent-context/adamic?session_id=sess-2#top',
+                        { readCount: 2, errorCount: 0, lastReadAt: '2026-11-24T02:00:00.000Z' },
+                    ],
+                ],
+                userCounts: [],
+            })
+
+            acc.importState(legacySnapshot)
+
+            const summary = acc.getSummary()
+            expect(Object.keys(summary.resourceBreakdown)).toEqual([
+                'memory://agent-context/adamic',
+            ])
+            const entry = summary.resourceBreakdown['memory://agent-context/adamic']
+            expect(entry?.readCount).toBe(5)
+            expect(entry?.errorCount).toBe(1)
+            expect(entry?.lastReadAt).toBe('2026-11-24T02:00:00.000Z')
+        })
+    })
 })
 

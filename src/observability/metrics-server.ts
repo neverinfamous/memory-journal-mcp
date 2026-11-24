@@ -294,6 +294,9 @@ export function startMetricsServer(
     const server = http.createServer((req, res) => {
         handleMetricsRequest(req, res, runtime, config);
     });
+    server.requestTimeout = 30_000;
+    server.keepAliveTimeout = 65_000;
+    server.headersTimeout = 66_000;
 
     server.on('error', (error: unknown) => {
         if (!server.listening) {

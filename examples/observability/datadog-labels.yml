@@ -1,0 +1,36 @@
+# Datadog OpenMetrics Autodiscovery v2 Labels for memory-journal-mcp
+#
+# Use this overlay when a Datadog Agent container monitors the same Docker network:
+#   docker compose -f examples/observability/docker-compose.monitoring.yml \
+#     -f examples/observability/datadog-labels.yml up -d
+#
+# Important: Use Docker AD v2 labels as your single Datadog collection source — never
+# pair them with a duplicate static openmetrics.d/conf.yaml check pointing at the same target.
+
+services:
+  memory-journal-mcp:
+    labels:
+      tags.datadoghq.com/env: production
+      tags.datadoghq.com/service: memory_journal_mcp
+      com.datadoghq.ad.check_names: '["openmetrics"]'
+      com.datadoghq.ad.init_configs: '[{}]'
+      com.datadoghq.ad.instances: |-
+        [{
+          "reported_hostname": "${DD_REPORTED_HOSTNAME:-memory-journal-mcp-host}",
+          "openmetrics_endpoint": "http://%%host%%:9465/metrics",
+          "namespace": "memory_journal_mcp",
+          "metrics": [".*"],
+          "max_returned_metrics": 10000,
+          "send_monotonic_counter": true,
+          "timeout": 10,
+          "min_collection_interval": 15,
+          "headers": {
+            "Authorization": "Bearer ${MCP_AUTH_TOKEN}"
+          },
+          "tags": ["service:memory_journal_mcp", "env:production"]
+        }]
+      com.datadoghq.ad.logs: |-
+        [{
+          "source": "memory_journal_mcp",
+          "service": "memory_journal_mcp"
+        }]

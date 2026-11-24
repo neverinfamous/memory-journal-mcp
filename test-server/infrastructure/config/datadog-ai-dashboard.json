@@ -288,11 +288,13 @@
             ],
             "queries": [
               {
+                "aggregator": "sum",
                 "data_source": "metrics",
                 "name": "calls",
                 "query": "sum:memory_journal_mcp.mcp_tool_calls_by_name.count{*} by {tool}.as_count()"
               },
               {
+                "aggregator": "avg",
                 "data_source": "metrics",
                 "name": "latency",
                 "query": "avg:memory_journal_mcp.mcp_tool_latency_ms_p50{*} by {tool}"
@@ -335,6 +337,7 @@
             ],
             "queries": [
               {
+                "aggregator": "sum",
                 "data_source": "metrics",
                 "name": "query1",
                 "query": "sum:memory_journal_mcp.mcp_tool_tokens_by_name.count{*} by {tool}.as_count()"
@@ -426,16 +429,18 @@
             ],
             "formulas": [
               {
-                "formula": "default_zero(a) / (default_zero(b) + 0.0000001)"
+                "formula": "default_zero(a / b)"
               }
             ],
             "queries": [
               {
+                "aggregator": "sum",
                 "data_source": "metrics",
                 "name": "a",
                 "query": "sum:memory_journal_mcp.mcp_tool_tokens_by_name.count{*}.as_count()"
               },
               {
+                "aggregator": "sum",
                 "data_source": "metrics",
                 "name": "b",
                 "query": "sum:memory_journal_mcp.mcp_tool_calls.count{*}.as_count()"
@@ -485,16 +490,18 @@
             ],
             "formulas": [
               {
-                "formula": "(default_zero(a) / (default_zero(b) + 0.0000001)) * 100"
+                "formula": "default_zero((a / b) * 100)"
               }
             ],
             "queries": [
               {
+                "aggregator": "sum",
                 "data_source": "metrics",
                 "name": "a",
                 "query": "sum:memory_journal_mcp.mcp_tool_errors_by_name.count{*}.as_count()"
               },
               {
+                "aggregator": "sum",
                 "data_source": "metrics",
                 "name": "b",
                 "query": "sum:memory_journal_mcp.mcp_tool_calls.count{*}.as_count()"

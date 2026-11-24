@@ -29,6 +29,6 @@ Whenever you pass `--metrics-export prometheus` (`METRICS_EXPORT=prometheus`), t
 `mj-prometheus` (`:9091`) and `mj-datadog-unified` (`gcr.io/datadoghq/agent:7.86.0`, `DD_HOSTNAME=adamic-wsl2`, `DD_CONTAINER_INCLUDE=name:^mj-.*` / `DD_CONTAINER_EXCLUDE=name:.*`) scrape `host.docker.internal:9465` (`host-gateway`). On Windows + WSL2 `docker-ce` hosts, `pnpm infra:reset` (`scripts/recreate-ecosystem.mjs`) installs and restarts a lightweight user-systemd relay (`mj-metrics-relay.service` from `scripts/wsl-metrics-relay.mjs`) on WSL2 `docker0` (`172.17.0.1:9465`) to forward scrapes safely to Windows `127.0.0.1:9465` without opening Windows Firewall, while preserving `mj-dozzle-data:/data` (`:8082`) across stack recreations. Use `pnpm infra:status` (`scripts/check-status.mjs`, with automatic `docker exec` fallback for Prometheus/Grafana/Loki) to inspect health, and `scripts/backup-dashboards.mjs` / `scripts/upload-dashboards.mjs` (`pup` CLI) to sync Datadog dashboards (`my6-q9k-682`, `79q-b3r-jhu`).
 
 ## Included Dashboards
-- **Token & Tool Metrics:** Real-time visibility into LLM token consumption (`gen_ai.*`), latency percentiles, and tool usage distribution.
+- **Token & Tool Metrics:** Real-time visibility into tool/token telemetry (`mcp_*`), latency percentiles, and tool usage distribution.
 - **AI Efficiency:** Advanced metrics estimating token costs, agent quality scores, and session error recovery.
-- **Audit & Issue Logs:** Grafana Alloy (`grafana/alloy:v1.22.0`) streams `mcp-audit.jsonl` and `agent-issues.jsonl` into Loki (`:3102`).
+- **Audit Logs:** Grafana Alloy (`grafana/alloy:v1.22.0`) streams `mcp-audit.jsonl` into Loki (`:3102`).

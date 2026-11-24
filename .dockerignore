@@ -51,6 +51,8 @@ dist/
 # -----------------------------------------------------------------------------
 docker-compose.yml
 mcp-config-example.json
+memory-journal-config-example.json
+examples/
 tools.json
 server.json
 mcp-publisher.exe

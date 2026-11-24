@@ -1,0 +1,11 @@
+global:
+  scrape_interval: 15s
+
+scrape_configs:
+  - job_name: 'memory-journal-mcp'
+    metrics_path: '/metrics'
+    authorization:
+      type: Bearer
+      credentials_file: /etc/prometheus/metrics.token
+    static_configs:
+      - targets: ['memory-journal-mcp:9465']

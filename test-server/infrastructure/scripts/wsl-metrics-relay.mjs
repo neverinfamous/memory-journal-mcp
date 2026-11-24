@@ -34,7 +34,7 @@ function fetchFromWindowsLoopback(pathname) {
         execFile(
             WIN_CURL,
             ['-fsS', '--max-time', '3', '-H', `Host: 127.0.0.1:${UPSTREAM_PORT}`, url],
-            { encoding: 'utf8', maxBuffer: 4 * 1024 * 1024 },
+            { encoding: 'utf8', maxBuffer: 4 * 1024 * 1024, timeout: 5000 },
             (err, stdout) => {
                 if (err) {
                     reject(err);
@@ -48,8 +48,15 @@ function fetchFromWindowsLoopback(pathname) {
 
 const server = http.createServer(async (req, res) => {
     const method = req.method || 'GET';
-    const urlObj = new URL(req.url || '/', 'http://localhost');
-    const pathname = urlObj.pathname;
+    let pathname;
+    try {
+        const urlObj = new URL(req.url || '/', 'http://localhost');
+        pathname = urlObj.pathname;
+    } catch {
+        res.writeHead(400, { 'Content-Type': 'text/plain; charset=utf-8' });
+        res.end(method === 'HEAD' ? undefined : 'Bad Request');
+        return;
+    }
 
     if (method !== 'GET' && method !== 'HEAD') {
         res.writeHead(405, { 'Content-Type': 'text/plain; charset=utf-8' });
@@ -83,6 +90,30 @@ const server = http.createServer(async (req, res) => {
         );
     }
 });
+
+server.requestTimeout = 10_000;
+server.keepAliveTimeout = 65_000;
+server.headersTimeout = 66_000;
+
+server.on('error', (err) => {
+    console.error(
+        `[mj-metrics-relay] Server error: ${err instanceof Error ? err.message : String(err)}`
+    );
+});
+
+function shutdown(signal) {
+    console.log(`[mj-metrics-relay] Received ${signal}, shutting down...`);
+    const forceTimer = setTimeout(() => process.exit(0), 2000);
+    forceTimer.unref();
+    server.closeAllConnections?.();
+    server.close(() => {
+        clearTimeout(forceTimer);
+        process.exit(0);
+    });
+}
+
+process.once('SIGINT', () => shutdown('SIGINT'));
+process.once('SIGTERM', () => shutdown('SIGTERM'));
 
 server.listen(LISTEN_PORT, LISTEN_HOST, () => {
     console.log(

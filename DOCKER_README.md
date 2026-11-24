@@ -19,7 +19,7 @@
 - _"Commit the changes and record a structured journal entry with the `commit` prompt or `create_entry`."_ (Automated lifecycles)
 - _"Draw a visual graph showing how my last 10 architectural decisions relate to each other."_ (Knowledge graph)
 
-**[See complete examples & prompts →](https://github.com/neverinfamous/memory-journal-mcp/wiki/Examples)**
+**[See complete examples & prompts →](https://github.com/neverinfamous/memory-journal-mcp/wiki/Examples)** • **[Deployment Templates (Observability, Keycloak OAuth, YAML)](https://github.com/neverinfamous/memory-journal-mcp/tree/main/examples)**
 
 ---
 

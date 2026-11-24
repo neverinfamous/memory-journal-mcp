@@ -9,5 +9,6 @@ instances:
       - env:development
     timeout: 10
     min_collection_interval: 15
+    max_returned_metrics: 10000
     metrics:
       - '.*'

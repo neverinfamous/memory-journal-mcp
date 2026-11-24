@@ -1,0 +1,184 @@
+# Self-Hosted Monitoring Stack for memory-journal-mcp
+#
+# Runs memory-journal-mcp (HTTP + Prometheus metrics) alongside Prometheus, Loki,
+# Grafana Alloy (audit JSONL tailing), and Grafana (auto-provisioned dashboards).
+#
+# Quick Start:
+#   TOKEN=$(openssl rand -hex 32)
+#   printf 'MCP_AUTH_TOKEN=%s\nGF_ADMIN_PASSWORD=admin\nDD_REPORTED_HOSTNAME=memory-journal-mcp-host\n' "$TOKEN" > examples/observability/.env
+#   printf '%s' "$TOKEN" > examples/observability/metrics.token
+#   docker compose -f examples/observability/docker-compose.monitoring.yml up -d
+#
+# Access:
+#   - MCP HTTP Server: http://localhost:3000/health
+#   - MCP /metrics:    http://127.0.0.1:9465/metrics (Bearer auth via MCP_AUTH_TOKEN)
+#   - Prometheus UI:   http://localhost:9090
+#   - Grafana UI:      http://localhost:3001 (admin / $GF_ADMIN_PASSWORD)
+#   - Loki Ready API:  http://localhost:3100/ready
+
+services:
+  memory-journal-mcp:
+    image: writenotenow/memory-journal-mcp:latest
+    container_name: mj-monitoring-server
+    restart: unless-stopped
+    stop_grace_period: 30s
+    mem_limit: 512m
+    logging:
+      driver: json-file
+      options:
+        max-size: '10m'
+        max-file: '3'
+    environment:
+      - NODE_ENV=production
+      - DB_PATH=/app/data/memory_journal.db
+      - ALLOWED_IO_ROOTS=/app/data
+      - MCP_AUTH_TOKEN=${MCP_AUTH_TOKEN:?Set MCP_AUTH_TOKEN in .env (e.g. openssl rand -hex 32)}
+      - MCP_AUTH_SCOPES=full
+      - METRICS_EXPORT=prometheus
+      - MJ_METRICS_HOST=0.0.0.0
+      - MJ_METRICS_PORT=9465
+      - AUDIT_LOG_PATH=/app/data/mcp-audit.jsonl
+      - AUDIT_READS=false
+    command:
+      [
+        '--transport',
+        'http',
+        '--port',
+        '3000',
+        '--server-host',
+        '0.0.0.0',
+        '--metrics-export',
+        'prometheus',
+      ]
+    volumes:
+      - mj_data:/app/data
+    ports:
+      - '3000:3000'
+      - '127.0.0.1:9465:9465'
+    healthcheck:
+      test: ['CMD', 'curl', '-f', 'http://localhost:3000/health']
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - mj-monitoring-net
+
+  prometheus:
+    image: prom/prometheus:v3.16.0
+    container_name: mj-monitoring-prometheus
+    restart: unless-stopped
+    stop_grace_period: 30s
+    mem_limit: 256m
+    logging:
+      driver: json-file
+      options:
+        max-size: '10m'
+        max-file: '3'
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./metrics.token:/etc/prometheus/metrics.token:ro
+      - prometheus_data:/prometheus
+    ports:
+      - '9090:9090'
+    healthcheck:
+      test: ['CMD', 'wget', '--spider', '-q', 'http://localhost:9090/-/healthy']
+      interval: 15s
+      timeout: 5s
+      retries: 3
+    depends_on:
+      memory-journal-mcp:
+        condition: service_healthy
+    networks:
+      - mj-monitoring-net
+
+  loki:
+    image: grafana/loki:3.7.1
+    container_name: mj-monitoring-loki
+    command: -config.file=/etc/loki/local-config.yaml
+    restart: unless-stopped
+    stop_grace_period: 30s
+    mem_limit: 512m
+    logging:
+      driver: json-file
+      options:
+        max-size: '10m'
+        max-file: '3'
+    environment:
+      - GOMEMLIMIT=400MiB
+    volumes:
+      - loki_data:/loki
+    ports:
+      - '3100:3100'
+    healthcheck:
+      test: ['CMD', 'wget', '--spider', '-q', 'http://localhost:3100/ready']
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    networks:
+      - mj-monitoring-net
+
+  alloy:
+    image: grafana/alloy:v1.15.1
+    container_name: mj-monitoring-alloy
+    command: run --server.http.listen-addr=0.0.0.0:12345 /etc/alloy/config.alloy
+    restart: unless-stopped
+    stop_grace_period: 30s
+    mem_limit: 128m
+    logging:
+      driver: json-file
+      options:
+        max-size: '10m'
+        max-file: '3'
+    volumes:
+      - ./alloy-config.alloy:/etc/alloy/config.alloy:ro
+      - mj_data:/var/log/memory-journal:ro
+    depends_on:
+      loki:
+        condition: service_healthy
+    networks:
+      - mj-monitoring-net
+
+  grafana:
+    image: grafana/grafana:13.3.1
+    container_name: mj-monitoring-grafana
+    restart: unless-stopped
+    stop_grace_period: 30s
+    mem_limit: 512m
+    logging:
+      driver: json-file
+      options:
+        max-size: '10m'
+        max-file: '3'
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=${GF_ADMIN_PASSWORD:-admin}
+      - GF_USERS_ALLOW_SIGN_UP=false
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./grafana/provisioning/datasources:/etc/grafana/provisioning/datasources:ro
+      - ./grafana/provisioning/dashboards:/etc/grafana/provisioning/dashboards:ro
+      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
+    ports:
+      - '3001:3000'
+    healthcheck:
+      test: ['CMD', 'curl', '-s', '--fail', 'http://localhost:3000/api/health']
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    depends_on:
+      prometheus:
+        condition: service_healthy
+    networks:
+      - mj-monitoring-net
+
+volumes:
+  mj_data:
+  prometheus_data:
+  loki_data:
+  grafana_data:
+
+networks:
+  mj-monitoring-net:
+    driver: bridge
