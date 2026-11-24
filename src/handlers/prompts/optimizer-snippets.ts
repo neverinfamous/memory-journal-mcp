@@ -156,12 +156,21 @@ export function buildUnverifiedSnippet(
                     (e.trustScore !== undefined && e.trustScore < 0.9)
             )
             .slice(0, lookback)
+        const MAX_OPTIMIZER_ENTRY_CHARS = 1200
+        const MAX_OPTIMIZER_SNIPPET_CHARS = 60_000
         if (unverified.length > 0) {
             unverifiedSnippet = unverified
                 .map((e) => {
-                    return `ID: ${String(e.id)} | Type: ${e.entryType} | Tags: ${e.tags.join(', ')}\nTrust: ${String(e.trustScore)} | Impact: ${String(e.impactScore)} | Validation: ${String(e.validationStatus)}\nContent:\n${e.content}\n---`
+                    const body =
+                        e.content.length > MAX_OPTIMIZER_ENTRY_CHARS
+                            ? `${e.content.slice(0, MAX_OPTIMIZER_ENTRY_CHARS)}... [truncated]`
+                            : e.content
+                    return `ID: ${String(e.id)} | Type: ${e.entryType} | Tags: ${e.tags.join(', ')}\nTrust: ${String(e.trustScore)} | Impact: ${String(e.impactScore)} | Validation: ${String(e.validationStatus)}\nContent:\n${body}\n---`
                 })
                 .join('\n')
+            if (unverifiedSnippet.length > MAX_OPTIMIZER_SNIPPET_CHARS) {
+                unverifiedSnippet = `${unverifiedSnippet.slice(0, MAX_OPTIMIZER_SNIPPET_CHARS)}\n... [additional entries truncated]`
+            }
         }
     } catch {
         unverifiedSnippet = '_Could not fetch unverified entries_'

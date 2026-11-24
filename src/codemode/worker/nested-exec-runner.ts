@@ -198,6 +198,25 @@ function invokeChildCleanups(
     parentCleanupSet?.delete(cleanupFn)
 }
 
+function createChildLifecycleState(
+    parentLifecycle: ExecutionLifecycleState | undefined
+): ExecutionLifecycleState {
+    let childPostClose = false
+    return {
+        ended: false,
+        get postCloseActivity(): boolean {
+            return childPostClose
+        },
+        set postCloseActivity(value: boolean) {
+            childPostClose = value
+            if (value && parentLifecycle !== undefined) {
+                parentLifecycle.postCloseActivity = true
+            }
+        },
+        childCleanups: new Set<() => void>(),
+    }
+}
+
 export function createIsolatedNestedRunner(
     options: VmExecutionContextOptions,
     sendRpcRequest: SendRpcRequestFn,
@@ -233,11 +252,8 @@ export function createIsolatedNestedRunner(
             throw new Error('Nested sandbox execution has already ended')
         }
         const childTimers = new Set<NodeJS.Timeout>()
-        const childLifecycle: ExecutionLifecycleState = {
-            ended: false,
-            postCloseActivity: false,
-            childCleanups: new Set<() => void>(),
-        }
+        const parentLifecycle = options.executionLifecycle
+        const childLifecycle = createChildLifecycleState(parentLifecycle)
         const parentCleanupSet =
             options.executionLifecycle !== undefined
                 ? (options.executionLifecycle.childCleanups ??= new Set<() => void>())

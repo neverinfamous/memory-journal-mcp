@@ -381,15 +381,15 @@ describe('Pass 80 Audit — Code Mode, ReDoS, Authz Ordering, Importer & CLI', (
         expect(encSrc).toContain('randomBytes')
         expect(encSrc).toContain('O_EXCL')
 
-        expect(AUDIT_PROMPT_REVISION).toBe('2026-11-24-audit-pass86')
-        expect(CODE_QUALITY_PROMPT_REVISION).toBe('2026-11-24-audit-pass86')
+        expect(AUDIT_PROMPT_REVISION).toBe('2026-11-24-audit-pass87')
+        expect(CODE_QUALITY_PROMPT_REVISION).toBe('2026-11-24-audit-pass87')
         const cqDef = getCodeQualityAuditPromptDefinition()
         const cqRes = await cqDef.handler(
             { target: 'src', copilot: 'false' },
             { searchByDateRange: () => [] } as unknown as Parameters<typeof cqDef.handler>[1]
         )
         const cqText = (cqRes as { messages?: { content?: { text?: string } }[] }).messages?.[0]?.content?.text ?? ''
-        expect(cqText).toContain('Prompt revision: 2026-11-24-audit-pass86')
+        expect(cqText).toContain('Prompt revision: 2026-11-24-audit-pass87')
         expect(cqText).toContain('overlapping unquantified atoms')
         expect(cqText).toContain('O_CREAT|O_EXCL|O_NOFOLLOW')
     })

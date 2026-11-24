@@ -3,7 +3,7 @@ import type { IDatabaseAdapter } from '../../database/core/interfaces.js'
 import type { JournalEntry } from '../../types/index.js'
 import type { ProgressContext } from '../../utils/progress-utils.js'
 
-import { DEFAULT_MODEL, type SemanticSearchResult } from './types.js'
+import { DEFAULT_MODEL, REBUILD_BATCH_SIZE, type SemanticSearchResult } from './types.js'
 import { rebuildIndex, verifyVecTableSchema } from './rebuild.js'
 import { effectiveWorkspace } from '../../database/workspace-scope.js'
 import {
@@ -23,6 +23,7 @@ import {
     resolveCandidates,
     runPipelineBatchEmbeddingsSettled,
     searchSimilarEntriesById,
+    upsertEntryChunksSequentially,
     type VectorCandidate,
 } from './candidate-search.js'
 import {
@@ -50,6 +51,7 @@ export class VectorSearchManager {
     private pipeline: unknown = null
     private transformers: TransformersPipelineModule | null = null
     private initializationPromise: Promise<void> | null = null
+    private rebuildTail: Promise<void> = Promise.resolve()
     private ready = false
 
     constructor(dbAdapter: IDatabaseAdapter, options?: { modelName?: string | undefined }) {
@@ -275,7 +277,7 @@ export class VectorSearchManager {
         }
     }
 
-    /** Batch-embed and upsert multiple entries in one database transaction. */
+    /** Batch-embed and upsert entries in bounded chunks to avoid single-tensor OOM spikes. */
     public async addEntries(entries: readonly JournalEntry[]): Promise<void> {
         if (entries.length === 0) return
         if (entries.length === 1 && entries[0] !== undefined) {
@@ -283,20 +285,19 @@ export class VectorSearchManager {
             return
         }
         await this.initialize()
-
-        const embeddings = await this.generateEmbeddings(entries.map(formatEntryForEmbedding))
-        const items: { entryId: number; embedding: Float32Array }[] = []
-        for (let i = 0; i < entries.length; i++) {
-            const entry = entries[i]
-            const embedding = embeddings[i]
-            if (entry && embedding) items.push({ entryId: entry.id, embedding })
-        }
-        if (items.length === 0) return
-        if (typeof this.dbAdapter.upsertVectors === 'function') {
-            this.dbAdapter.upsertVectors(items)
-        } else {
-            for (const item of items) this.dbAdapter.upsertVector(item.entryId, item.embedding)
-        }
+        await upsertEntryChunksSequentially(
+            entries,
+            REBUILD_BATCH_SIZE,
+            (texts) => this.generateEmbeddingsSettled(texts),
+            typeof this.dbAdapter.upsertVectors === 'function'
+                ? (items) => {
+                      this.dbAdapter.upsertVectors(items)
+                  }
+                : undefined,
+            (entryId, embedding) => {
+                this.dbAdapter.upsertVector(entryId, embedding)
+            }
+        )
     }
 
     /** Remove an entry from the vector index. */
@@ -447,6 +448,15 @@ export class VectorSearchManager {
         }
     }
 
+    private enqueueRebuild<T>(fn: () => Promise<T>): Promise<T> {
+        const next = this.rebuildTail.then(fn, fn)
+        this.rebuildTail = next.then(
+            () => undefined,
+            () => undefined
+        )
+        return next
+    }
+
     public async rebuildIndex(
         progress?: ProgressContext,
         options?: {
@@ -457,16 +467,18 @@ export class VectorSearchManager {
             workspaceId?: string
         }
     ): Promise<{ success: boolean; indexed: number; failed: number; firstError: string | null; warning?: string }> {
-        const wasReady = this.ready
-        await this.initialize()
-        if (
-            wasReady &&
-            this.dimensions !== null &&
-            typeof this.dbAdapter.getVectorMetadata === 'function' &&
-            typeof this.dbAdapter.createVecTable === 'function'
-        ) {
-            this.verifyAndCreateVecTable()
-        }
-        return rebuildIndex(this, this.dbAdapter, progress, options)
+        return this.enqueueRebuild(async () => {
+            const wasReady = this.ready
+            await this.initialize()
+            if (
+                wasReady &&
+                this.dimensions !== null &&
+                typeof this.dbAdapter.getVectorMetadata === 'function' &&
+                typeof this.dbAdapter.createVecTable === 'function'
+            ) {
+                this.verifyAndCreateVecTable()
+            }
+            return rebuildIndex(this, this.dbAdapter, progress, options)
+        })
     }
 }

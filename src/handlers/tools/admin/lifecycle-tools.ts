@@ -1,5 +1,6 @@
 
 import type { ToolDefinition, ToolContext } from '../../../types/index.js'
+import { ValidationError } from '../../../types/errors.js'
 import { formatHandlerError } from '../../../utils/error-helpers.js'
 import { resolveAutoPruneScope } from '../../../utils/workspace-resolver.js'
 import { RunAutoPruneSchema, RunAutoPruneSchemaMcp, RunAutoPruneOutputSchema } from './schemas.js'
@@ -10,7 +11,11 @@ function resolveLifecyclePruneScope(
     parsed: ReturnType<typeof RunAutoPruneSchema.parse>,
     config: ToolContext['config']
 ): { workspaceId: string; projectNumber?: number } {
-    const explicitWs = parsed.workspace_id?.trim()
+    const rawWs = parsed.workspace_id
+    const explicitWs = rawWs?.trim()
+    if (rawWs !== undefined && explicitWs === '') {
+        throw new ValidationError('workspace_id cannot be empty or whitespace.')
+    }
     const explicitProj = parsed.project_number
     if (explicitWs === '*') {
         return {

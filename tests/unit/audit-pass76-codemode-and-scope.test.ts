@@ -351,8 +351,8 @@ describe('Pass 76 Audit — Code Mode, Proxies, Audit Scope & Prompts', () => {
     })
 
     it('AP*: bumps AUDIT_PROMPT_REVISION to 2026-11-22-audit-pass76 with Pass 76 portable rules', async () => {
-        expect(AUDIT_PROMPT_REVISION).toBe('2026-11-24-audit-pass86')
-        expect(CODE_QUALITY_PROMPT_REVISION).toBe('2026-11-24-audit-pass86')
+        expect(AUDIT_PROMPT_REVISION).toBe('2026-11-24-audit-pass87')
+        expect(CODE_QUALITY_PROMPT_REVISION).toBe('2026-11-24-audit-pass87')
         const def = getCodeQualityAuditPromptDefinition()
         const rendered = await def.handler(
             { target: 'memory-journal-mcp' },

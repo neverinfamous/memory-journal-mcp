@@ -107,8 +107,17 @@ export function parseProjectRegistryOption(
 }
 
 /** Validate ADDITIONAL_TEAM_DBS (label -> absolute path, no symlinks). */
-export function parseAdditionalTeamDbsOption(raw: unknown): Record<string, string> | undefined {
-    if (raw === undefined || raw === null || raw === '') return undefined
+export function parseAdditionalTeamDbsOption(
+    raw: unknown,
+    options?: { rejectBlank?: boolean }
+): Record<string, string> | undefined {
+    if (raw === undefined || raw === null) return undefined
+    if (typeof raw === 'string' && raw.trim() === '') {
+        if (options?.rejectBlank === true || raw !== '') {
+            throw new Error('Failed to parse ADDITIONAL_TEAM_DBS: value cannot be empty or whitespace.')
+        }
+        return undefined
+    }
     if (typeof raw === 'string' && raw.length > 51200) throw new Error('ADDITIONAL_TEAM_DBS exceeds size limit')
     try {
         const dbSchema = z.record(z.string().min(1), z.string().min(1))
@@ -127,8 +136,17 @@ export function parseAdditionalTeamDbsOption(raw: unknown): Record<string, strin
 }
 
 /** Validate ALLOWED_IO_ROOTS (JSON array or comma-separated list of absolute paths). */
-export function parseAllowedIoRootsOption(raw: unknown): string[] | undefined {
-    if (raw === undefined || raw === null || raw === '') return undefined
+export function parseAllowedIoRootsOption(
+    raw: unknown,
+    options?: { rejectBlank?: boolean }
+): string[] | undefined {
+    if (raw === undefined || raw === null) return undefined
+    if (typeof raw === 'string' && raw.trim() === '') {
+        if (options?.rejectBlank === true || raw !== '') {
+            throw new Error('Invalid ALLOWED_IO_ROOTS configuration: value cannot be empty or whitespace.')
+        }
+        return undefined
+    }
     if (typeof raw === 'string' && raw.length > 51200) throw new Error('ALLOWED_IO_ROOTS configuration exceeds size limit (50KB)')
     try {
         let parsed: unknown = raw
@@ -140,6 +158,9 @@ export function parseAllowedIoRootsOption(raw: unknown): string[] | undefined {
             }
         }
         if (Array.isArray(parsed)) {
+            if (parsed.length === 0 && options?.rejectBlank === true) {
+                throw new Error('Must contain at least one absolute path')
+            }
             const validPaths: string[] = []
             for (const p of parsed) {
                 if (typeof p !== 'string' || !path.isAbsolute(p)) {

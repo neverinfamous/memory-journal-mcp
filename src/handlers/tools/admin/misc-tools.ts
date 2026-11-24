@@ -5,7 +5,7 @@ import { formatHandlerError } from '../../../utils/error-helpers.js'
 import { sanitizeAuditEntryForEgress } from '../../../audit/audit-resource.js'
 import { ValidationError } from '../../../types/errors.js'
 import { resolveWriteWorkspaceId } from '../write-workspace.js'
-import { activeProjectRegistry, alignedProjectFilter } from '../../../utils/write-scope.js'
+import { activeProjectRegistry, alignedProjectFilter, pairStoredScope } from '../../../utils/write-scope.js'
 import { relaxedNumber, StrictProjectNumberSchema } from '../schemas.js'
 import { healAgentHallucinations } from '../schemas/hallucination-healer.js'
 import {
@@ -136,12 +136,71 @@ function executeMergeTags(
     }
 }
 
+const AUDIT_DATE_ONLY_RE = /^(\d{4})-(\d{2})-(\d{2})$/
+const AUDIT_ISO_DATETIME_RE =
+    /^(\d{4})-(\d{2})-(\d{2})T\d{2}:\d{2}(?::\d{2}(?:\.\d{1,9})?)?(?:Z|[+-]\d{2}:?\d{2})?$/i
+
+function parseAuditDateBoundaryMs(raw: string, fieldName: string): number {
+    const trimmed = raw.trim()
+    const dateMatch = AUDIT_DATE_ONLY_RE.exec(trimmed)
+    const dtMatch = dateMatch ?? AUDIT_ISO_DATETIME_RE.exec(trimmed)
+    if (dtMatch === null) {
+        throw new ValidationError(
+            `Invalid ${fieldName} '${raw}': expected YYYY-MM-DD or ISO-8601 datetime.`
+        )
+    }
+    const year = Number(dtMatch[1])
+    const month = Number(dtMatch[2])
+    const day = Number(dtMatch[3])
+    const cal = new Date(Date.UTC(year, month - 1, day))
+    if (
+        cal.getUTCFullYear() !== year ||
+        cal.getUTCMonth() !== month - 1 ||
+        cal.getUTCDate() !== day
+    ) {
+        throw new ValidationError(`Invalid ${fieldName} '${raw}': calendar date does not exist.`)
+    }
+    const parsedMs = Date.parse(dateMatch !== null ? `${trimmed}T00:00:00.000Z` : trimmed)
+    if (!Number.isFinite(parsedMs)) {
+        throw new ValidationError(`Invalid ${fieldName} '${raw}'.`)
+    }
+    return parsedMs
+}
+
+function validateAuditSearchInput(
+    input: ReturnType<typeof SearchAuditLogSchema.parse>,
+    registry: NonNullable<ToolContext['config']>['projectRegistry'] | undefined
+): string | undefined {
+    const startRaw = input.date_range?.start
+    const endRaw = input.date_range?.end
+    const startMs = startRaw !== undefined ? parseAuditDateBoundaryMs(startRaw, 'start_date') : undefined
+    const endMs = endRaw !== undefined ? parseAuditDateBoundaryMs(endRaw, 'end_date') : undefined
+    if (startMs !== undefined && endMs !== undefined && startMs > endMs) {
+        throw new ValidationError('Invalid date range: start_date cannot be after end_date.', {
+            suggestion: 'Ensure start_date is before or equal to end_date.',
+        })
+    }
+    if (input.workspace_id !== undefined) {
+        const trimmedWs = input.workspace_id.trim()
+        if (trimmedWs === '') {
+            throw new ValidationError('workspace_id cannot be empty or whitespace.')
+        }
+        if (trimmedWs !== '*' && input.project_number !== undefined) {
+            const paired = pairStoredScope(trimmedWs, input.project_number, activeProjectRegistry(registry))
+            return paired.workspaceId ?? trimmedWs
+        }
+        return trimmedWs
+    }
+    return undefined
+}
+
 async function executeSearchAuditLog(
     params: unknown,
     context: ToolContext
 ): Promise<Record<string, unknown> | ErrorResponse> {
     try {
         const input = SearchAuditLogSchema.parse(params)
+        const validatedWs = validateAuditSearchInput(input, context.config?.projectRegistry)
 
         if (!context.config?.runtime?.auditLogger) {
             return {
@@ -152,15 +211,17 @@ async function executeSearchAuditLog(
             }
         }
 
+        const effectiveFilters =
+            validatedWs !== undefined ? { ...input, workspace_id: validatedWs } : input
         // Map to the internal type AuditSearchFilters
-        const results = (await context.config.runtime.auditLogger.search(input)).map(
+        const results = (await context.config.runtime.auditLogger.search(effectiveFilters)).map(
             sanitizeAuditEntryForEgress
         )
         return {
             success: true,
             count: results.length,
             results,
-            ...auditScopeWarning(input.project_number, input.workspace_id),
+            ...auditScopeWarning(effectiveFilters.project_number, effectiveFilters.workspace_id),
         }
     } catch (err) {
         return formatHandlerError(err)

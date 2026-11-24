@@ -1,6 +1,6 @@
 import type { Database } from 'better-sqlite3'
 import type { Relationship, RelationshipType } from '../../types/index.js'
-import { ResourceNotFoundError } from '../../types/errors.js'
+import { ResourceNotFoundError, ValidationError } from '../../types/errors.js'
 import type { NativeConnectionManager } from './native-connection.js'
 import { effectiveWorkspace } from '../workspace-scope.js'
 import { bucketInParams, DUAL_IN_PARAM_BUCKETS, runImmediateWriteTx } from './row-helpers.js'
@@ -34,6 +34,11 @@ export class RelationshipsManager {
         description?: string,
         workspaceId?: string
     ): Relationship {
+        if (fromEntryId === toEntryId) {
+            throw new ValidationError(
+                'Cannot create a self-referential relationship (from_entry_id === to_entry_id).'
+            )
+        }
         const db = this.db
 
         // [INVARIANT] A supplied workspace, including '', scopes both endpoints ('' is default).

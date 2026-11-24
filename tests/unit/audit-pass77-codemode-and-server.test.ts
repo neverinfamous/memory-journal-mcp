@@ -400,8 +400,8 @@ describe('Pass 77 Audit — Code Mode, Server Config, Proxies & Prompts', () => 
         expect(execErr).toBeInstanceOf(Error)
         expect(splitSqlValueList('`col,1`, 2, "a,b"')).toEqual(['`col,1`', '2', '"a,b"'])
 
-        expect(AUDIT_PROMPT_REVISION).toBe('2026-11-24-audit-pass86')
-        expect(CODE_QUALITY_PROMPT_REVISION).toBe('2026-11-24-audit-pass86')
+        expect(AUDIT_PROMPT_REVISION).toBe('2026-11-24-audit-pass87')
+        expect(CODE_QUALITY_PROMPT_REVISION).toBe('2026-11-24-audit-pass87')
         const def = getCodeQualityAuditPromptDefinition()
         const rendered = await def.handler(
             { target: 'memory-journal-mcp' },

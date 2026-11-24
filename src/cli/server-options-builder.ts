@@ -2,10 +2,7 @@ import * as path from 'node:path'
 import type { AuditConfig } from '../audit/index.js'
 import type { CliCommandLike, ConfigResolver } from '../utils/config-resolver.js'
 import { defaultDbPath } from './default-paths.js'
-import { activeProjectRegistry, pairStoredScope } from '../utils/write-scope.js'
-import { isForbiddenProjectKey } from '../utils/project-registry-guards.js'
 import { logger } from '../utils/logger.js'
-import { parsePositiveProjectNumber } from '../utils/safe-positive-int.js'
 import { parseByteSizeValue } from '../codemode/shared-context-parsers.js'
 import type { ServerOptions } from '../server/mcp-server/types.js'
 import {
@@ -14,8 +11,6 @@ import {
     parseAllowedIoRootsOption,
     parseImportanceThresholdOption,
     parseLogLevelOption,
-    resolveUnconflictedDefaultProject,
-    resolveUnconflictedDefaultWorkspace,
     resolveTransportOption,
     validateProjectRegistryObject,
 } from './server-options-parsers.js'
@@ -31,80 +26,13 @@ import {
     resolveTeamDefaultRoleOption,
     type CatchConfig,
 } from './server-options-groups.js'
+import {
+    resolveConfiguredDefaultScope,
+    resolveServerHostOption,
+    resolveToolFilterOption,
+} from './server-options-scope.js'
 
 export { assertAdditionalTeamDbIsNotSymlink }
-
-function resolveDefaultProjectNumberOption(
-    resolver: ConfigResolver,
-    catchConfig: CatchConfig
-): number | undefined {
-    const rejectBlank =
-        resolver.isCliProvided('defaultProject') ||
-        ((resolver.hasConfigFileKey('defaultProject') ||
-            resolver.hasConfigFileKey('defaultProjectNumber')) &&
-            (process.env['DEFAULT_PROJECT_NUMBER']?.trim() ?? '') === '')
-    return catchConfig(() => {
-        const configVal = resolver.resolveStringOrNumber('defaultProjectNumber')
-        const raw =
-            resolver.resolveStringOrNumber('defaultProject', 'DEFAULT_PROJECT_NUMBER') ?? configVal
-        if (raw === undefined || raw === null) return undefined
-        const str = String(raw).trim()
-        if (str === '') {
-            if (rejectBlank) throw new Error('Invalid blank --default-project / defaultProjectNumber.')
-            return undefined
-        }
-        const parsed = parsePositiveProjectNumber(str.replace(/^p/i, ''))
-        if (parsed === undefined || !/^p?[1-9]\d*$/i.test(str)) {
-            throw new Error(
-                `Invalid defaultProjectNumber '${str}'. Expected a positive integer.`
-            )
-        }
-        return parsed
-    }, undefined)
-}
-
-function resolveDefaultWorkspaceIdOption(
-    resolver: ConfigResolver,
-    catchConfig: CatchConfig,
-    allowWorkspaceAsDefault: boolean
-): string | undefined {
-    return catchConfig(() => {
-        if (allowWorkspaceAsDefault) {
-            const ws = resolver.resolve('workspace')
-            if (ws !== undefined && ws !== null && typeof ws !== 'string') {
-                throw new Error(`Invalid workspace: expected string, got ${typeof ws}.`)
-            }
-            const trimmedWs = typeof ws === 'string' ? ws.trim() : undefined
-            if (trimmedWs === '' && resolver.isCliProvided('workspace')) {
-                throw new Error("Invalid workspace '': cannot be empty or whitespace.")
-            }
-            if (trimmedWs === '*') {
-                throw new Error("Invalid workspace '*': default workspace cannot be a wildcard.")
-            }
-            if (trimmedWs !== undefined && trimmedWs !== '') return trimmedWs
-        }
-        const defWs = resolver.resolve('defaultWorkspaceId', 'DEFAULT_WORKSPACE_ID')
-        if (defWs !== undefined && defWs !== null && typeof defWs !== 'string') {
-            throw new Error(`Invalid defaultWorkspaceId: expected string, got ${typeof defWs}.`)
-        }
-        const trimmedDefWs = typeof defWs === 'string' ? defWs.trim() : undefined
-        if (
-            trimmedDefWs === '' &&
-            (resolver.isCliProvided('defaultWorkspaceId') || resolver.hasConfigFileKey('defaultWorkspaceId'))
-        ) {
-            throw new Error("Invalid defaultWorkspaceId '': cannot be empty or whitespace.")
-        }
-        if (
-            trimmedDefWs === '*' ||
-            (trimmedDefWs !== undefined && trimmedDefWs !== '' && isForbiddenProjectKey(trimmedDefWs))
-        ) {
-            throw new Error(
-                `Invalid defaultWorkspaceId '${trimmedDefWs}': cannot be '*' or a reserved key.`
-            )
-        }
-        return trimmedDefWs !== undefined && trimmedDefWs !== '' ? trimmedDefWs : undefined
-    }, undefined)
-}
 
 function resolveOptionalPathOption(
     resolver: ConfigResolver,
@@ -304,53 +232,15 @@ function buildAuditConfigOption(resolver: ConfigResolver, catchConfig: CatchConf
     }
 }
 
-function resolveConfiguredDefaultScope(
+function hasExplicitCliOrConfigWithoutEnv(
     resolver: ConfigResolver,
-    command: CliCommandLike,
-    catchConfig: CatchConfig,
-    projectRegistry: ServerOptions['projectRegistry']
-): { defaultWorkspaceId: string | undefined; defaultProjectNumber: number | undefined } {
-    const commandName = command.name()
-    const allowWorkspaceAsDefault =
-        commandName === 'serve' || commandName === 'memory-journal-mcp'
-    let defaultProjectNumber = resolveDefaultProjectNumberOption(resolver, catchConfig)
-    let defaultWorkspaceId = resolveDefaultWorkspaceIdOption(
-        resolver,
-        catchConfig,
-        allowWorkspaceAsDefault
-    )
-    const wsFromCli =
-        resolver.isCliProvided('defaultWorkspaceId') ||
-        (allowWorkspaceAsDefault && resolver.isCliProvided('workspace'))
-    const projectFromCli = resolver.isCliProvided('defaultProject')
-    defaultWorkspaceId = resolveUnconflictedDefaultWorkspace(
-        defaultWorkspaceId,
-        defaultProjectNumber,
-        projectRegistry,
-        wsFromCli,
-        projectFromCli
-    )
-    defaultProjectNumber = resolveUnconflictedDefaultProject(
-        defaultWorkspaceId,
-        defaultProjectNumber,
-        projectRegistry,
-        wsFromCli,
-        projectFromCli
-    )
-    if (defaultWorkspaceId !== undefined && defaultProjectNumber !== undefined) {
-        catchConfig(() => {
-            const paired = pairStoredScope(
-                defaultWorkspaceId,
-                defaultProjectNumber,
-                activeProjectRegistry(projectRegistry)
-            )
-            defaultWorkspaceId = paired.workspaceId
-            if (typeof paired.projectNumber === 'number') {
-                defaultProjectNumber = paired.projectNumber
-            }
-        }, undefined)
-    }
-    return { defaultWorkspaceId, defaultProjectNumber }
+    key: string,
+    envKey: string
+): boolean {
+    if (resolver.isCliProvided(key)) return true
+    const rawEnv = process.env[envKey]
+    if (rawEnv !== undefined && rawEnv !== '') return true
+    return resolver.hasConfigFileKey(key)
 }
 
 function assembleServerOptions(params: {
@@ -393,8 +283,31 @@ function assembleServerOptions(params: {
         autoRebuildIndex: catchConfig(() => resolver.resolveBool('autoRebuildIndex', 'AUTO_REBUILD_INDEX') ?? false, false),
         codemodeInternalFullAccess: catchConfig(() => resolver.resolveBool('codemodeInternalFullAccess', 'CODEMODE_INTERNAL_FULL_ACCESS') ?? false, false),
         projectRegistry,
-        additionalTeamDbs: catchConfig(() => parseAdditionalTeamDbsOption(resolver.resolve('additionalTeamDbs', 'ADDITIONAL_TEAM_DBS')), undefined),
-        allowedIoRoots: catchConfig(() => parseAllowedIoRootsOption(resolver.resolve('allowedIoRoots', 'ALLOWED_IO_ROOTS')), undefined),
+        additionalTeamDbs: catchConfig(
+            () =>
+                parseAdditionalTeamDbsOption(
+                    resolver.resolve('additionalTeamDbs', 'ADDITIONAL_TEAM_DBS'),
+                    {
+                        rejectBlank: hasExplicitCliOrConfigWithoutEnv(
+                            resolver,
+                            'additionalTeamDbs',
+                            'ADDITIONAL_TEAM_DBS'
+                        ),
+                    }
+                ),
+            undefined
+        ),
+        allowedIoRoots: catchConfig(
+            () =>
+                parseAllowedIoRootsOption(resolver.resolve('allowedIoRoots', 'ALLOWED_IO_ROOTS'), {
+                    rejectBlank: hasExplicitCliOrConfigWithoutEnv(
+                        resolver,
+                        'allowedIoRoots',
+                        'ALLOWED_IO_ROOTS'
+                    ),
+                }),
+            undefined
+        ),
         briefingConfig,
         ...(briefingOverrides !== undefined ? { briefingOverrides } : {}),
         cliEnvBaseline,
@@ -407,38 +320,6 @@ function assembleServerOptions(params: {
         ...buildOAuthOptionsGroup(resolver, catchConfig),
         ...buildLifecycleOptionsGroup(resolver, catchConfig),
     }
-}
-
-function resolveServerHostOption(resolver: ConfigResolver, catchConfig: CatchConfig): string | undefined {
-    return catchConfig(() => {
-        if (resolver.isCliProvided('serverHost')) {
-            const explicitHost = resolver.resolveString('serverHost')
-            if (explicitHost !== undefined) {
-                const trimmed = explicitHost.trim()
-                if (trimmed === '') throw new Error('Invalid blank --server-host.')
-                return trimmed
-            }
-        }
-        const rawMcpHost = process.env['MCP_HOST']
-        if (rawMcpHost !== undefined && rawMcpHost.trim() !== '') {
-            return rawMcpHost.trim()
-        }
-        const rawHostEnv = process.env['HOST']
-        if (rawHostEnv !== undefined && rawHostEnv.trim() !== '') {
-            return rawHostEnv.trim()
-        }
-        if (resolver.hasConfigFileKey('serverHost')) {
-            const configHost = resolver.resolveString('serverHost')
-            if (configHost !== undefined) {
-                const trimmed = configHost.trim()
-                if (trimmed === '') {
-                    throw new Error('Invalid blank serverHost in configuration file.')
-                }
-                return trimmed
-            }
-        }
-        return undefined
-    }, undefined)
 }
 
 export function buildServerOptions(
@@ -473,7 +354,7 @@ export function buildServerOptions(
         return reg
     }, undefined)
     const { defaultWorkspaceId, defaultProjectNumber } = resolveConfiguredDefaultScope(resolver, command, catchConfig, projectRegistry)
-    const toolFilter = catchConfig(() => resolver.resolveString('toolFilter', 'MEMORY_JOURNAL_MCP_TOOL_FILTER'), undefined)
+    const toolFilter = resolveToolFilterOption(resolver, catchConfig)
     const briefingConfig = buildBriefingConfigOptions(resolver, catchConfig, defaultProjectNumber, defaultWorkspaceId, projectRegistry)
     const briefingOverrides = collectCliEnvBriefingOverrides(resolver, briefingConfig)
     const cliEnvBaseline = collectCliEnvServerBaseline(resolver, command, {

@@ -268,3 +268,44 @@ export async function searchSimilarEntriesById(
     const candidates = collectCandidates(results, threshold, entryId)
     return resolveCandidates(dbAdapter, candidates, safeLimit, targetWs, projectNumber)
 }
+
+/** Batch-embed and upsert entries in bounded chunks without discarding successful chunks on partial failure. */
+export async function upsertEntryChunksSequentially(
+    entries: readonly JournalEntry[],
+    batchSize: number,
+    embedSettled: (texts: readonly string[]) => Promise<PromiseSettledResult<Float32Array>[]>,
+    upsertBatch: ((items: { entryId: number; embedding: Float32Array }[]) => void) | undefined,
+    upsertSingle: (entryId: number, embedding: Float32Array) => void
+): Promise<void> {
+    let firstRejection: unknown = undefined
+    let hasRejection = false
+
+    const processFrom = async (offset: number): Promise<void> => {
+        if (offset >= entries.length) return
+        const chunk = entries.slice(offset, offset + batchSize)
+        const settled = await embedSettled(chunk.map(formatEntryForEmbedding))
+        const items: { entryId: number; embedding: Float32Array }[] = []
+        for (let i = 0; i < chunk.length; i++) {
+            const entry = chunk[i]
+            const outcome = settled[i]
+            if (entry === undefined || outcome === undefined) continue
+            if (outcome.status === 'fulfilled') {
+                items.push({ entryId: entry.id, embedding: outcome.value })
+            } else if (!hasRejection) {
+                hasRejection = true
+                firstRejection = outcome.reason
+            }
+        }
+        if (items.length > 0) {
+            if (upsertBatch !== undefined) {
+                upsertBatch(items)
+            } else {
+                for (const item of items) upsertSingle(item.entryId, item.embedding)
+            }
+        }
+        await processFrom(offset + batchSize)
+    }
+
+    await processFrom(0)
+    if (hasRejection) throw firstRejection
+}

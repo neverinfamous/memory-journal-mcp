@@ -57,6 +57,63 @@ function parseEntryProjectNumber(
     return typeof rec['projectNumber'] === 'number' ? rec['projectNumber'] : undefined
 }
 
+function resolveRepoAliasKey(
+    rawRepo: unknown,
+    registry?: Record<string, ProjectRegistryEntry>
+): { rawLeaf: string; matchedKey?: string } | undefined {
+    if (typeof rawRepo !== 'string' || rawRepo.trim() === '') return undefined
+    const trimmed = rawRepo.trim()
+    const leaf = trimmed.split(/[/\\]/).filter(Boolean).pop()?.trim() ?? trimmed
+    if (registry === undefined) return { rawLeaf: leaf }
+    const matchedKey =
+        findCanonicalRegistryKey(trimmed, registry) ?? findCanonicalRegistryKey(leaf, registry)
+    return matchedKey !== undefined ? { rawLeaf: leaf, matchedKey } : { rawLeaf: leaf }
+}
+
+function getEffectiveEntryWorkspace(
+    rec: Record<string, unknown>,
+    itemRepoRaw: unknown,
+    activeReg: Record<string, ProjectRegistryEntry> | undefined,
+    fallbackWs: unknown,
+    fallbackProj: unknown
+): { hasExplicitWs: boolean; trimmedWs: string } {
+    const itemWs = rec['workspace_id'] ?? rec['workspaceId']
+    const repoInfo = itemWs === undefined ? resolveRepoAliasKey(itemRepoRaw, activeReg) : undefined
+    const effectiveWs = itemWs ?? repoInfo?.matchedKey
+    const itemWsNorm =
+        typeof effectiveWs === 'string' && effectiveWs.trim() !== ''
+            ? effectiveWs.trim().toLowerCase()
+            : repoInfo !== undefined
+              ? repoInfo.rawLeaf.toLowerCase()
+              : ''
+    const fallbackWsNorm = typeof fallbackWs === 'string' ? fallbackWs.trim().toLowerCase() : ''
+    const itemNamesOtherWs =
+        itemWsNorm !== '' &&
+        (itemWsNorm === 'default' ? fallbackWsNorm !== 'default' : itemWsNorm !== fallbackWsNorm)
+    if (itemWs === undefined && repoInfo !== undefined) {
+        if (repoInfo.matchedKey !== undefined) rec['workspace_id'] = repoInfo.matchedKey
+    } else if (itemWs === undefined && fallbackWs !== undefined) {
+        rec['workspace_id'] = fallbackWs
+    }
+    // [INVARIANT] Never propagate the batch root project_number onto an item that names another workspace or repo.
+    if (
+        rec['project_number'] === undefined &&
+        rec['projectNumber'] === undefined &&
+        fallbackProj !== undefined &&
+        !itemNamesOtherWs &&
+        (repoInfo === undefined || repoInfo.matchedKey !== undefined || itemWsNorm === fallbackWsNorm)
+    ) {
+        rec['project_number'] = fallbackProj
+    }
+    const currentWsRaw = rec['workspace_id'] ?? rec['workspaceId']
+    const hasExplicitWs =
+        typeof currentWsRaw === 'string' && currentWsRaw.trim() !== '' && currentWsRaw.trim() !== '*'
+    return {
+        hasExplicitWs,
+        trimmedWs: typeof currentWsRaw === 'string' ? currentWsRaw.trim() : '',
+    }
+}
+
 export function enrichEntryRecord(
     rec: Record<string, unknown>,
     registryProvider?: ProjectRegistryProvider,
@@ -65,39 +122,27 @@ export function enrichEntryRecord(
     preloadedRegistry?: Record<string, ProjectRegistryEntry> | null
 ): void {
     const itemWs = rec['workspace_id'] ?? rec['workspaceId']
-    const itemWsNorm = typeof itemWs === 'string' ? itemWs.trim().toLowerCase() : ''
-    const fallbackWsNorm = typeof fallbackWs === 'string' ? fallbackWs.trim().toLowerCase() : ''
-    const itemNamesOtherWs =
-        itemWsNorm !== '' &&
-        (itemWsNorm === 'default' ? fallbackWsNorm !== 'default' : itemWsNorm !== fallbackWsNorm)
-    if (itemWs === undefined && fallbackWs !== undefined) {
-        rec['workspace_id'] = fallbackWs
-    }
-    // [INVARIANT] Never propagate the batch root project_number onto an item that names another workspace.
-    if (
-        rec['project_number'] === undefined &&
-        rec['projectNumber'] === undefined &&
-        fallbackProj !== undefined &&
-        !itemNamesOtherWs
-    ) {
-        rec['project_number'] = fallbackProj
-    }
-    const currentWsRaw = rec['workspace_id'] ?? rec['workspaceId']
-    const hasExplicitWs =
-        typeof currentWsRaw === 'string' && currentWsRaw.trim() !== '' && currentWsRaw.trim() !== '*'
-    const needsRegistry = typeof rec['project_number'] === 'string' || hasExplicitWs
+    const itemRepoRaw = rec['repo'] ?? rec['repo_name'] ?? rec['repoName'] ?? rec['repository']
+    const hasInitialWs =
+        typeof (itemWs ?? fallbackWs) === 'string' &&
+        String(itemWs ?? fallbackWs).trim() !== '' &&
+        String(itemWs ?? fallbackWs).trim() !== '*'
+    const needsRegistry =
+        typeof rec['project_number'] === 'string' || hasInitialWs || typeof itemRepoRaw === 'string'
     const providerRegistry = !needsRegistry
         ? undefined
         : preloadedRegistry !== undefined
           ? (preloadedRegistry ?? undefined)
           : readProjectRegistryPayload(registryProvider?.())
     const activeReg = activeProjectRegistry(providerRegistry)
+    const { hasExplicitWs, trimmedWs } = getEffectiveEntryWorkspace(
+        rec, itemRepoRaw, activeReg, fallbackWs, fallbackProj
+    )
     const projNum = parseEntryProjectNumber(rec, activeReg)
     // [INVARIANT] No content/tag/CWD guessing: defer project-only workspace resolution
     // to `secure-dispatcher` so session scope pair-checking runs first.
     if (!hasExplicitWs) return
 
-    const trimmedWs = currentWsRaw.trim()
     const resolved = resolveProjectContext(
         {
             workspace_id: trimmedWs,

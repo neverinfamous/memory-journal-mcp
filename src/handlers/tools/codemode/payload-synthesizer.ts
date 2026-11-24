@@ -442,8 +442,7 @@ function recoverFromContextField(
         }
         const outerFallback = outerParams ?? {}
         if (hasStructuredDiscriminator(ctxVal)) {
-            const combined = outerParams !== undefined ? { ...outerFallback, ...ctxVal } : ctxVal
-            const recoveredCtx = extractAndRecoverRecordCode(combined)
+            const recoveredCtx = extractAndRecoverRecordCode(ctxVal, outerParams)
             return recoveredCtx ?? validationFailure(UNRECOVERABLE_PAYLOAD_MSG)
         }
         const { wsVal, projVal } = resolveCompatibleInheritedScope(ctxVal, outerFallback)

@@ -64,6 +64,7 @@ export class NativeConnectionManager implements IDatabaseConnection {
     private readonly explicitBackupsDir: string | undefined
     private initialized = false
     private initializingPromise: Promise<void> | null = null
+    private initEpoch = 0
     private teamSchemaApplied = false
     private ftsRebuildTimer: ReturnType<typeof setTimeout> | null = null
 
@@ -92,10 +93,14 @@ export class NativeConnectionManager implements IDatabaseConnection {
 
     private async performInitialize(): Promise<void> {
         if (this.initialized) return
+        const epoch = this.initEpoch
 
         const dir = path.dirname(this.dbPath)
         if (dir && !fs.existsSync(dir)) {
             await fs.promises.mkdir(dir, { recursive: true })
+        }
+        if (this.initEpoch !== epoch) {
+            throw new ConnectionError('Database closed during initialization.')
         }
 
         let initDb: Database | undefined
@@ -111,8 +116,8 @@ export class NativeConnectionManager implements IDatabaseConnection {
             installStatementCache(db)
 
             // Load sqlite-vec extension for vector search
-            const loaded = await loadVecExtensionOnDb(db, () => this.db === db)
-            if (!loaded || this.db !== db) {
+            const loaded = await loadVecExtensionOnDb(db, () => this.db === db && this.initEpoch === epoch)
+            if (!loaded || this.db !== db || this.initEpoch !== epoch) {
                 throw new ConnectionError('Database closed during initialization.')
             }
 
@@ -334,6 +339,7 @@ export class NativeConnectionManager implements IDatabaseConnection {
     }
 
     close(): void {
+        this.initEpoch++
         if (this.ftsRebuildTimer !== null) {
             clearTimeout(this.ftsRebuildTimer)
             this.ftsRebuildTimer = null

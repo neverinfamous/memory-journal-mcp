@@ -10,6 +10,7 @@ import type { CliCommandLike, ConfigResolver } from '../utils/config-resolver.js
 import { isPlaceholderAuthToken } from '../utils/security-utils.js'
 import { defaultDbPath, defaultTeamDbPath } from './default-paths.js'
 import { parseImportanceThresholdOption } from './server-options-parsers.js'
+import { resolveOAuthJwksUriOption } from './server-options-scope.js'
 
 export type CatchConfig = <T>(fn: () => T, fallback: T) => T
 
@@ -207,10 +208,12 @@ export function resolveAuthTokenOption(resolver: ConfigResolver): string | undef
         }
         return rawEnv
     }
+    // [INVARIANT] Treat exact "" in config like unset MCP_AUTH_TOKEN for stdio/CLI/OAuth-only configs;
+    // whitespace-only values and placeholders still fail closed here, and unauthenticated HTTP binds fail in assertHttpBindIsSafe.
     const cfgVal = resolver.resolveString('authToken')
     if (typeof cfgVal === 'string' && cfgVal !== '') {
         if (cfgVal.trim() === '') {
-            throw new Error('FATAL: Authentication token cannot be whitespace-only.')
+            throw new Error('FATAL: Authentication token cannot be empty or whitespace-only.')
         }
         if (isPlaceholderAuthToken(cfgVal)) {
             throw new Error(
@@ -242,7 +245,7 @@ export function buildOAuthOptionsGroup(resolver: ConfigResolver, catchConfig: Ca
         oauthEnabled: catchConfig(() => resolver.resolveBool('oauthEnabled', 'OAUTH_ENABLED') ?? false, false),
         oauthIssuer: catchConfig(() => resolver.resolveString('oauthIssuer', 'OAUTH_ISSUER'), undefined),
         oauthAudience: catchConfig(() => resolver.resolveString('oauthAudience', 'OAUTH_AUDIENCE'), undefined),
-        oauthJwksUri: catchConfig(() => resolver.resolveString('oauthJwksUri', 'OAUTH_JWKS_URI'), undefined),
+        oauthJwksUri: catchConfig(() => resolveOAuthJwksUriOption(resolver), undefined),
         oauthClockTolerance: catchConfig(() => resolver.resolveInt('oauthClockTolerance', 'OAUTH_CLOCK_TOLERANCE', 0) ?? 60, 60),
         allowPlaintextLoopbackOAuth: catchConfig(() => resolver.resolveBool('oauthAllowPlaintextLoopback', 'OAUTH_ALLOW_PLAINTEXT_LOOPBACK') ?? false, false),
         trustProxy: catchConfig(() => resolver.resolveBool('trustProxy', 'TRUST_PROXY') ?? false, false),

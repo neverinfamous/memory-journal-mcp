@@ -115,13 +115,21 @@ function toCommitSummary(commit: EnrichedCommit): {
     }
 }
 
+const MAX_COMMIT_BODY_CHARS = 4000
+
 export function fenceEnrichedCommits(commits: EnrichedCommit[]): EnrichedCommit[] {
     return commits.map((commit) => ({
         ...commit,
         subject: fenceUntrustedInline(commit.subject),
         authorName: fenceUntrustedInline(commit.authorName),
         ...(typeof commit.body === 'string' && commit.body.trim() !== ''
-            ? { body: markUntrustedContent(commit.body) }
+            ? {
+                  body: markUntrustedContent(
+                      commit.body.length > MAX_COMMIT_BODY_CHARS
+                          ? `${commit.body.slice(0, MAX_COMMIT_BODY_CHARS)}... [truncated]`
+                          : commit.body
+                  ),
+              }
             : {}),
         references: commit.references.map((ref) => ({
             ...ref,

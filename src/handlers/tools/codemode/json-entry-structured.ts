@@ -9,6 +9,7 @@ import {
     assignMissingScope,
     assignScopedOpExtraFields,
     firstDefinedAlias,
+    firstNonBlankString,
     hasStructuredDiscriminator,
     hasUseTestDbFlag,
     parseExpectedVersionValue,
@@ -19,27 +20,23 @@ import {
     resolveRepoWorkspace,
     STRUCTURED_DISCRIMINATOR_KEYS,
 } from './json-entry-scope.js'
+import {
+    collectEntryContent,
+    collectEntryTags,
+    resolveEntryTitle,
+    resolveEntryType,
+    type PayloadSignals,
+} from './json-entry-content.js'
 
 export { hasStructuredDiscriminator, resolveRepoWorkspace, STRUCTURED_DISCRIMINATOR_KEYS }
 
-interface PayloadSignals {
-    hasContent: boolean
-    hasNotes: boolean
-    hasChanges: boolean
-    hasTask: boolean
-    hasTitle: boolean
-    hasSummary: boolean
-    hasDescription: boolean
-    hasFindings: boolean
-    hasDetails: boolean
-    hasStatus: boolean
-    hasType: boolean
-    hasOp: boolean
-}
-
 /** Recover executable JS directly from an already-parsed structured record. */
-export function recoverStructuredRecord(parsed: Record<string, unknown>): string | null {
+export function recoverStructuredRecord(
+    parsed: Record<string, unknown>,
+    outerFallback?: Record<string, unknown>
+): string | null {
     const target = unwrapPayloadTarget(parsed)
+    const original = target !== parsed ? parsed : (outerFallback ?? parsed)
     if (
         target['tool'] !== undefined ||
         target['method'] !== undefined ||
@@ -48,11 +45,11 @@ export function recoverStructuredRecord(parsed: Record<string, unknown>): string
         parsed['method'] !== undefined ||
         parsed['function'] !== undefined
     ) {
-        return recoverNamedToolCall(target, parsed)
+        return recoverNamedToolCall(target, original)
     }
-    const searchCall = recoverSearchCall(target, parsed)
+    const searchCall = recoverSearchCall(target, original)
     if (searchCall !== null) return searchCall
-    return recoverEntryMutation(parsed, target)
+    return recoverEntryMutation(original, target)
 }
 
 export function recoverStructuredJsonCode(code: string): string | null {
@@ -113,7 +110,46 @@ const NAMED_TOOL_OMIT_KEYS = new Set([
 const OUTER_SCOPE_OMIT_KEYS = new Set([
     'project_number', 'projectNumber', 'project_id', 'projectId', 'project_name', 'projectName',
     'project', 'workspace_id', 'workspaceId', 'workspace', 'repo', 'repo_name', 'repoName', 'repository',
+    'target_workspace_id', 'targetWorkspaceId',
 ])
+
+const NAMED_TOOL_REPO_KEYS = ['repo', 'repo_name', 'repoName', 'repository'] as const
+
+function preserveUnregisteredNamedRepo(
+    toolParams: Record<string, unknown>,
+    explicitParams: Record<string, unknown>,
+    target: Record<string, unknown>,
+    original: Record<string, unknown>
+): void {
+    const hasRepo = NAMED_TOOL_REPO_KEYS.some((k) => toolParams[k] !== undefined)
+    if (
+        hasRepo ||
+        toolParams['workspace_id'] !== undefined ||
+        toolParams['workspaceId'] !== undefined ||
+        toolParams['project_number'] !== undefined ||
+        toolParams['projectNumber'] !== undefined
+    ) {
+        return
+    }
+    const targetRepo = firstNonBlankString(
+        target['repo'], target['repo_name'], target['repoName'], target['repository']
+    )
+    const targetHasScope =
+        readWorkspaceId(target) !== undefined ||
+        readProjectNumber(target) !== undefined ||
+        targetRepo !== undefined
+    const explicitHasScope =
+        readWorkspaceId(explicitParams) !== undefined ||
+        readProjectNumber(explicitParams) !== undefined
+    const fallbackRepo =
+        !targetHasScope && !explicitHasScope && original !== target
+            ? firstNonBlankString(
+                  original['repo'], original['repo_name'], original['repoName'], original['repository']
+              )
+            : undefined
+    const preserved = targetRepo ?? fallbackRepo
+    if (preserved !== undefined) toolParams['repo'] = preserved
+}
 
 function recoverNamedToolCall(target: Record<string, unknown>, original: Record<string, unknown>): string | null {
     const toolName = resolveNamedToolIdentifier(target, original)
@@ -149,6 +185,9 @@ function recoverNamedToolCall(target: Record<string, unknown>, original: Record<
         }
     } else {
         assignMissingScope(toolParams, explicitParams ?? target, original)
+    }
+    if (explicitParams !== undefined) {
+        preserveUnregisteredNamedRepo(toolParams, explicitParams, target, original)
     }
     if (hasUseTestDbFlag(target, original)) toolParams['use_test_db'] = true
     const cleanTool = toolName.replace(/^mj[._]/, '')
@@ -341,87 +380,18 @@ function buildEntryParams(
     const fb = original !== target ? original : undefined
     const entryParams: Record<string, unknown> = {}
     if (!isUpdate || signals.hasTitle || signals.hasTask || signals.hasSummary) {
-        entryParams['title'] = resolveTitle(target, signals)
+        entryParams['title'] = resolveEntryTitle(target, signals)
     }
-    const collectedContent = collectContent(target, signals, isUpdate)
+    const collectedContent = collectEntryContent(target, signals, isUpdate)
     if (!isUpdate || collectedContent !== '') entryParams['content'] = collectedContent
     if (!isUpdate || signals.hasType) entryParams['entry_type'] = resolveEntryType(target, fb)
     if (!isUpdate || target['tags'] !== undefined || fb?.['tags'] !== undefined) {
-        entryParams['tags'] = collectTags(target, fb)
+        entryParams['tags'] = collectEntryTags(target, fb)
     }
     const autoContext = collectAutoContext(target)
     if (Object.keys(autoContext).length > 0) entryParams['auto_context'] = autoContext
     copyOptionalEntryFields(target, entryParams, fb, isUpdate)
     return entryParams
-}
-
-function collectContent(target: Record<string, unknown>, signals: PayloadSignals, isUpdate = false): string {
-    const contentSections: string[] = []
-    if (signals.hasContent) contentSections.push(String(target['content']).trim())
-    if (signals.hasNotes) contentSections.push(String(target['notes']).trim())
-    if (
-        signals.hasSummary &&
-        target['summary'] !== target['title'] &&
-        target['summary'] !== target['task']
-    ) {
-        contentSections.push(String(target['summary']).trim())
-    }
-    if (signals.hasDescription) contentSections.push(String(target['description']).trim())
-    if (signals.hasDetails) contentSections.push(String(target['details']).trim())
-    appendLabeledSection(contentSections, target['changes'], signals.hasChanges, 'Changes')
-    appendLabeledSection(contentSections, target['findings'], signals.hasFindings, 'Findings')
-    if (signals.hasStatus) contentSections.push(`**Status:** ${String(target['status']).trim()}`)
-
-    let finalContent = contentSections.filter(Boolean).join('\n\n')
-    if (!isUpdate && finalContent === '' && (signals.hasTask || signals.hasTitle)) {
-        finalContent = String(target['task'] ?? target['title'])
-    }
-    return finalContent
-}
-
-function appendLabeledSection(sections: string[], value: unknown, present: boolean, label: string): void {
-    if (!present) return
-    if (Array.isArray(value)) {
-        sections.push(`**${label}:**\n${value.map((item) => `- ${String(item)}`).join('\n')}`)
-        return
-    }
-    sections.push(`**${label}:**\n${String(value).trim()}`)
-}
-
-function resolveTitle(target: Record<string, unknown>, signals: PayloadSignals): string {
-    if (signals.hasTitle) return String(target['title']).trim()
-    if (signals.hasTask) return String(target['task']).trim()
-    return signals.hasSummary ? String(target['summary']).trim().slice(0, 80) : 'Journal Entry'
-}
-
-function resolveEntryType(target: Record<string, unknown>, fallback?: Record<string, unknown>): string {
-    const rawType = firstDefinedAlias(target, fallback, ['entry_type', 'type', 'category'])
-    if (typeof rawType !== 'string') return 'technical_note'
-    const low = rawType.toLowerCase()
-    return low === 'code' || low === 'coding' || low === 'technical' || low === 'task' ? 'technical_note' : low
-}
-
-function appendTagItems(tags: string[], rawTags: unknown): void {
-    const items = Array.isArray(rawTags)
-        ? rawTags.filter((t): t is string => typeof t === 'string')
-        : typeof rawTags === 'string'
-          ? rawTags.split(',')
-          : []
-    for (const rawItem of items) {
-        const trimmedTag = rawItem.trim()
-        if (trimmedTag.length > 0 && !tags.includes(trimmedTag)) tags.push(trimmedTag)
-    }
-}
-
-function collectTags(target: Record<string, unknown>, fallback?: Record<string, unknown>): string[] {
-    const tags: string[] = []
-    appendTagItems(tags, target['tags'])
-    if (fallback !== undefined) appendTagItems(tags, fallback['tags'])
-    const projRaw = target['project'] ?? fallback?.['project']
-    if (typeof projRaw === 'string' && projRaw.trim().length > 0 && !tags.includes(projRaw.trim())) {
-        tags.push(projRaw.trim())
-    }
-    return tags
 }
 
 const AUTO_CONTEXT_FIELDS = [

@@ -5,6 +5,7 @@
 import type { ToolDefinition, ToolContext } from '../../../types/index.js'
 import { ValidationError } from '../../../types/errors.js'
 import { isRecord } from '../../../codemode/normalizers/shared-utils.js'
+import { findCanonicalRegistryKey } from '../../../utils/workspace-resolver.js'
 import { pairStoredScope } from '../../../utils/write-scope.js'
 import { lookupRegistryEntry } from './session-context.js'
 
@@ -29,6 +30,28 @@ function trimmedStringField(obj: Record<string, unknown>, key: string): string |
     return typeof raw === 'string' && raw.trim() !== '' ? raw.trim() : undefined
 }
 
+function trimmedRepoField(obj: Record<string, unknown>): string | undefined {
+    for (const key of ['repo', 'repo_name', 'repoName', 'repository']) {
+        const val = trimmedStringField(obj, key)
+        if (val !== undefined) return val
+    }
+    return undefined
+}
+
+function resolveBatchItemRepoKey(
+    rawRepo: string,
+    reg: NonNullable<ToolContext['config']>['projectRegistry']
+): string | undefined {
+    if (!reg) return undefined
+    const direct = findCanonicalRegistryKey(rawRepo, reg)
+    if (direct !== undefined) return direct
+    if (/[/\\]/.test(rawRepo)) {
+        const leaf = rawRepo.split(/[/\\]/).filter(Boolean).pop()?.trim() ?? ''
+        if (leaf !== '') return findCanonicalRegistryKey(leaf, reg)
+    }
+    return undefined
+}
+
 function applyBatchAliasWorkspaceOverride(
     nextItem: Record<string, unknown>,
     itemProjNum: number | undefined,
@@ -49,6 +72,46 @@ function applyBatchAliasWorkspaceOverride(
     nextItem['workspace_id'] = workspaceId
 }
 
+function pairBatchItemWorkspaceProject(
+    nextItem: Record<string, unknown>,
+    batchArrayKey: 'entries' | 'updates',
+    reg: NonNullable<ToolContext['config']>['projectRegistry'],
+    ctx: BatchScopeHelpersContext,
+    hasItemWs: boolean,
+    itemCrossWsMove: boolean,
+    itemProjNum: number | undefined
+): void {
+    const callerItemWs = trimmedStringField(nextItem, 'workspace_id')
+    const itemTargetWs = trimmedStringField(nextItem, 'target_workspace_id')
+    if (itemTargetWs !== undefined && itemProjNum !== undefined) {
+        pairStoredScope(itemTargetWs, itemProjNum, reg)
+    } else if (callerItemWs !== undefined && callerItemWs !== '*' && !itemCrossWsMove) {
+        const wsReg = lookupRegistryEntry(reg, callerItemWs)
+        if (itemProjNum !== undefined) {
+            pairStoredScope(callerItemWs, itemProjNum, reg)
+        } else if (
+            hasItemWs &&
+            batchArrayKey === 'entries' &&
+            !ctx.isDefaultWorkspaceName(callerItemWs) &&
+            wsReg?.project_number !== undefined &&
+            nextItem['project_number'] === undefined
+        ) {
+            nextItem['project_number'] = wsReg.project_number
+        }
+    }
+    if (
+        !itemCrossWsMove &&
+        ctx.explicitWorkspace === true &&
+        !hasItemWs &&
+        itemProjNum !== undefined &&
+        typeof ctx.workspaceId === 'string' &&
+        ctx.workspaceId !== '*'
+    ) {
+        pairStoredScope(ctx.workspaceId, itemProjNum, reg)
+        nextItem['workspace_id'] = ctx.workspaceId
+    }
+}
+
 function resolveBatchItemAliasAndTarget(
     nextItem: Record<string, unknown>,
     batchArrayKey: 'entries' | 'updates',
@@ -56,7 +119,6 @@ function resolveBatchItemAliasAndTarget(
     ctx: BatchScopeHelpersContext,
     itemAliasDerivedWs: boolean
 ): { errorResult: Record<string, unknown> } | undefined {
-    const { workspaceId, explicitWorkspace, isDefaultWorkspaceName } = ctx
     const itemProjNum =
         typeof nextItem['project_number'] === 'number' && Number.isFinite(nextItem['project_number'])
             ? nextItem['project_number']
@@ -64,7 +126,6 @@ function resolveBatchItemAliasAndTarget(
     if (itemAliasDerivedWs) {
         applyBatchAliasWorkspaceOverride(nextItem, itemProjNum, reg, ctx)
     }
-
     const callerItemWs = trimmedStringField(nextItem, 'workspace_id')
     const hasItemWs = callerItemWs !== undefined && !itemAliasDerivedWs
     const itemTargetWs = trimmedStringField(nextItem, 'target_workspace_id')
@@ -81,37 +142,38 @@ function resolveBatchItemAliasAndTarget(
     }
     const itemCrossWsMove =
         itemTargetWs !== undefined &&
-        (typeof workspaceId !== 'string' || itemTargetWs.toLowerCase() !== workspaceId.toLowerCase())
-
-    if (itemTargetWs !== undefined && itemProjNum !== undefined) {
-        pairStoredScope(itemTargetWs, itemProjNum, reg)
-    } else if (callerItemWs !== undefined && callerItemWs !== '*' && !itemCrossWsMove) {
-        const wsReg = lookupRegistryEntry(reg, callerItemWs)
-        if (itemProjNum !== undefined) {
-            pairStoredScope(callerItemWs, itemProjNum, reg)
-        } else if (
-            hasItemWs &&
-            batchArrayKey === 'entries' &&
-            !isDefaultWorkspaceName(callerItemWs) &&
-            wsReg?.project_number !== undefined &&
-            nextItem['project_number'] === undefined
-        ) {
-            nextItem['project_number'] = wsReg.project_number
-        }
-    }
-
-    if (
-        !itemCrossWsMove &&
-        explicitWorkspace === true &&
-        !hasItemWs &&
-        itemProjNum !== undefined &&
-        typeof workspaceId === 'string' &&
-        workspaceId !== '*'
-    ) {
-        pairStoredScope(workspaceId, itemProjNum, reg)
-        nextItem['workspace_id'] = workspaceId
-    }
+        (typeof ctx.workspaceId !== 'string' ||
+            itemTargetWs.toLowerCase() !== ctx.workspaceId.toLowerCase())
+    pairBatchItemWorkspaceProject(
+        nextItem, batchArrayKey, reg, ctx, hasItemWs, itemCrossWsMove, itemProjNum
+    )
     return undefined
+}
+
+function shouldApplyBatchItemDefaultProject(
+    nextItem: Record<string, unknown>,
+    ctx: BatchScopeHelpersContext,
+    callerItemWs: string | undefined,
+    callerItemRepo: string | undefined,
+    itemCrossWsMove: boolean,
+    parentIsWildcardUpdate: boolean
+): boolean {
+    if (
+        itemCrossWsMove ||
+        parentIsWildcardUpdate ||
+        nextItem['project_number'] !== undefined ||
+        typeof ctx.projectId !== 'number'
+    ) {
+        return false
+    }
+    const defaultWsAllowed =
+        !ctx.isDefaultWorkspaceName(callerItemWs) ||
+        (ctx.isDefaultWorkspaceName(ctx.workspaceId) && ctx.explicitWorkspace === true)
+    const wsMatchesParent =
+        (callerItemWs === undefined && callerItemRepo === undefined) ||
+        (typeof ctx.workspaceId === 'string' &&
+            callerItemWs?.toLowerCase() === ctx.workspaceId.toLowerCase())
+    return defaultWsAllowed && wsMatchesParent
 }
 
 function applyBatchItemSessionDefaults(
@@ -122,16 +184,10 @@ function applyBatchItemSessionDefaults(
     batchArrayKey: 'entries' | 'updates'
 ): void {
     const { projectId, workspaceId, explicitWorkspace, isDefaultWorkspaceName } = ctx
-    const callerItemWs =
-        typeof nextItem['workspace_id'] === 'string' && nextItem['workspace_id'].trim() !== ''
-            ? nextItem['workspace_id'].trim()
-            : undefined
-    const hasItemWs = callerItemWs !== undefined && !itemAliasDerivedWs
-    const hasItemProj = nextItem['project_number'] !== undefined
-    const itemTargetWs =
-        typeof nextItem['target_workspace_id'] === 'string' && nextItem['target_workspace_id'].trim() !== ''
-            ? nextItem['target_workspace_id'].trim()
-            : undefined
+    const callerItemWs = trimmedStringField(nextItem, 'workspace_id')
+    const callerItemRepo = trimmedRepoField(nextItem)
+    const hasItemWs = (callerItemWs !== undefined && !itemAliasDerivedWs) || callerItemRepo !== undefined
+    const itemTargetWs = trimmedStringField(nextItem, 'target_workspace_id')
     const itemCrossWsMove =
         itemTargetWs !== undefined &&
         (typeof workspaceId !== 'string' || itemTargetWs.toLowerCase() !== workspaceId.toLowerCase())
@@ -143,7 +199,7 @@ function applyBatchItemSessionDefaults(
 
     if (
         !hasItemWs &&
-        !hasItemProj &&
+        nextItem['project_number'] === undefined &&
         !parentIsWildcardUpdate &&
         workspaceId !== undefined &&
         workspaceId !== '*' &&
@@ -152,15 +208,10 @@ function applyBatchItemSessionDefaults(
         nextItem['workspace_id'] = workspaceId
     }
     if (
-        !itemCrossWsMove &&
-        !parentIsWildcardUpdate &&
-        nextItem['project_number'] === undefined &&
-        typeof projectId === 'number' &&
-        (!isDefaultWorkspaceName(callerItemWs) ||
-            (isDefaultWorkspaceName(workspaceId) && explicitWorkspace === true)) &&
-        (callerItemWs === undefined ||
-            (typeof workspaceId === 'string' &&
-                callerItemWs.toLowerCase() === workspaceId.toLowerCase()))
+        shouldApplyBatchItemDefaultProject(
+            nextItem, ctx, callerItemWs, callerItemRepo, itemCrossWsMove, parentIsWildcardUpdate
+        ) &&
+        typeof projectId === 'number'
     ) {
         nextItem['project_number'] = projectId
     }
@@ -329,6 +380,11 @@ export function normalizeBatchDispatchItems(
         }
         const itemAliasDerivedWs = nextItem['_alias_derived_workspace'] === true
         delete nextItem['_alias_derived_workspace']
+        if (nextItem['workspace_id'] === undefined) {
+            const rawRepo = trimmedRepoField(nextItem)
+            const matchedRepoWs = rawRepo !== undefined ? resolveBatchItemRepoKey(rawRepo, reg) : undefined
+            if (matchedRepoWs !== undefined) nextItem['workspace_id'] = matchedRepoWs
+        }
 
         const itemProjErr = ctx.coerceProjectNumberField(nextItem, reg, true)
         if (itemProjErr !== undefined) return itemProjErr
@@ -392,6 +448,25 @@ export function buildPostRbacSideEffects(opts: {
     }
 }
 
+function detectBatchArrayKey(
+    toolName: string,
+    paramsObj: Record<string, unknown>
+): 'entries' | 'updates' | undefined {
+    if (
+        (toolName === 'batch_create_entries' || toolName === 'team_batch_create_entries') &&
+        Array.isArray(paramsObj['entries'])
+    ) {
+        return 'entries'
+    }
+    if (
+        (toolName === 'batch_update_entries' || toolName === 'team_batch_update_entries') &&
+        Array.isArray(paramsObj['updates'])
+    ) {
+        return 'updates'
+    }
+    return undefined
+}
+
 export function prepareBatchDispatch(
     tool: ToolDefinition,
     paramsObj: Record<string, unknown>,
@@ -402,34 +477,20 @@ export function prepareBatchDispatch(
 ):
     | { batchArrayKey?: 'entries' | 'updates'; batchCtx?: BatchScopeHelpersContext }
     | { errorResult: Record<string, unknown> } {
-    const batchArrayKey =
-        (tool.name === 'batch_create_entries' || tool.name === 'team_batch_create_entries') &&
-        Array.isArray(paramsObj['entries'])
-            ? 'entries'
-            : (tool.name === 'batch_update_entries' || tool.name === 'team_batch_update_entries') &&
-                Array.isArray(paramsObj['updates'])
-              ? 'updates'
-              : undefined
+    const batchArrayKey = detectBatchArrayKey(tool.name, paramsObj)
     if (batchArrayKey === undefined) return {}
     if (
-        (tool.name === 'batch_update_entries' || tool.name === 'team_batch_update_entries') &&
+        batchArrayKey === 'updates' &&
         paramsObj['project_number'] === undefined &&
         typeof baseCtx.projectId === 'number' &&
         (paramsObj['workspace_id'] === '*' || (paramsObj['workspace_id'] === undefined && baseCtx.workspaceId === '*'))
     ) {
         paramsObj['project_number'] = baseCtx.projectId
     }
-    const effectiveBatchSessionId =
-        typeof paramsObj['session_id'] === 'string' && paramsObj['session_id'].trim() !== ''
-            ? paramsObj['session_id'].trim()
-            : baseCtx.sessionId
+    const effectiveBatchSessionId = trimmedStringField(paramsObj, 'session_id') ?? baseCtx.sessionId
     const batchCtx: BatchScopeHelpersContext = {
-        ...baseCtx,
-        sessionId: effectiveBatchSessionId,
-        toolName: tool.name,
-        deferWildcardCheck: true,
+        ...baseCtx, sessionId: effectiveBatchSessionId, toolName: tool.name, deferWildcardCheck: true,
     }
     const batchError = normalizeBatchDispatchItems(batchArrayKey, paramsObj, reg, batchCtx)
-    if (batchError !== undefined) return batchError
-    return { batchArrayKey, batchCtx }
+    return batchError ?? { batchArrayKey, batchCtx }
 }

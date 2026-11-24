@@ -57,13 +57,19 @@ export const GitHistoryOptionsSchemaMcp = z.object({
     tech_debt_audit: z.boolean().optional().describe('Alias for techDebtAudit'),
     summary: z.boolean().optional().describe('Skip per-file diffstat computation for fast commit metadata queries'),
     uncommitted: z.boolean().optional().describe('Include uncommitted working-tree status and diffstat (staged, unstaged, untracked) in uncommitted field'),
-}).transform((d) => ({
-    ...d,
-    maxCount: coerceRelaxed(d.maxCount ?? d.max_count ?? d.limit),
-    project_number: coerceCanonicalProject(d.project_number),
-    sortBy: d.sortBy ?? d.sort_by,
-    techDebtAudit: d.techDebtAudit ?? d.tech_debt_audit,
-}))
+}).transform(({ max_count, limit, sort_by, tech_debt_audit, ...rest }) => {
+    const resolvedMaxCount = coerceRelaxed(rest.maxCount ?? max_count ?? limit)
+    const resolvedProject = coerceCanonicalProject(rest.project_number)
+    const resolvedSortBy = rest.sortBy ?? sort_by
+    const resolvedTechAudit = rest.techDebtAudit ?? tech_debt_audit
+    return {
+        ...rest,
+        ...(resolvedMaxCount !== undefined ? { maxCount: resolvedMaxCount } : {}),
+        ...(resolvedProject !== undefined ? { project_number: resolvedProject } : {}),
+        ...(resolvedSortBy !== undefined ? { sortBy: resolvedSortBy } : {}),
+        ...(resolvedTechAudit !== undefined ? { techDebtAudit: resolvedTechAudit } : {}),
+    }
+})
 
 export const GitSearchOptionsSchema = z.object({
     query: z.string().min(1).max(500),
@@ -97,13 +103,19 @@ export const GitSearchOptionsSchemaMcp = z.object({
     techDebtAudit: z.boolean().optional().describe('Filter for high impact commits with low trust or missing validation'),
     tech_debt_audit: z.boolean().optional().describe('Alias for techDebtAudit'),
     summary: z.boolean().optional().describe('Skip per-file diffstat computation for fast commit search queries'),
-}).transform((d) => ({
-    ...d,
-    maxCount: coerceRelaxed(d.maxCount ?? d.max_count ?? d.limit),
-    project_number: coerceCanonicalProject(d.project_number),
-    sortBy: d.sortBy ?? d.sort_by,
-    techDebtAudit: d.techDebtAudit ?? d.tech_debt_audit,
-}))
+}).transform(({ max_count, limit, sort_by, tech_debt_audit, ...rest }) => {
+    const resolvedMaxCount = coerceRelaxed(rest.maxCount ?? max_count ?? limit)
+    const resolvedProject = coerceCanonicalProject(rest.project_number)
+    const resolvedSortBy = rest.sortBy ?? sort_by
+    const resolvedTechAudit = rest.techDebtAudit ?? tech_debt_audit
+    return {
+        ...rest,
+        ...(resolvedMaxCount !== undefined ? { maxCount: resolvedMaxCount } : {}),
+        ...(resolvedProject !== undefined ? { project_number: resolvedProject } : {}),
+        ...(resolvedSortBy !== undefined ? { sortBy: resolvedSortBy } : {}),
+        ...(resolvedTechAudit !== undefined ? { techDebtAudit: resolvedTechAudit } : {}),
+    }
+})
 
 export const GitReleaseInfoOptionsSchema = z.object({
     ref: z.string().optional(), repo: z.string().optional(), repo_name: z.string().optional(),

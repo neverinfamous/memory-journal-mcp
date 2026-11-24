@@ -2,18 +2,24 @@
  * JSON and Entry payload recovery helpers for Code Mode execution payloads.
  */
 
-import { recoverStructuredJsonCode, recoverStructuredRecord } from './json-entry-structured.js'
+import {
+    recoverStructuredJsonCode,
+    recoverStructuredRecord,
+    resolveRepoWorkspace,
+} from './json-entry-structured.js'
+import {
+    findBalancedDelimitedBlockEnd,
+    scanFallbackContentField,
+    scanQuotedFieldLinear,
+    stripJsCommentsPreservingStrings,
+    stripNestedPropBlocks,
+    type FieldMatchSpan,
+} from './json-entry-field-scanner.js'
 import { stripCommentsAndStrings } from '../../../codemode/security.js'
-import { skipLineOrBlockComment } from '../../../codemode/security-stripper.js'
 import {
     parseCanonicalPositiveInt,
     parsePositiveProjectNumber,
 } from '../../../utils/safe-positive-int.js'
-
-const ARRAY_FIELD_RES: readonly (readonly ['relationships' | 'anchors', RegExp])[] = [
-    ['relationships', /\brelationships\s*:\s*(\[[\s\S]*?\])/i],
-    ['anchors', /\banchors\s*:\s*(\[[\s\S]*?\])/i],
-]
 
 /**
  * Auto-heals raw JSON objects or stringified JSON passed as Code Mode execution payloads,
@@ -24,8 +30,11 @@ export function extractAndRecoverJsonCode(code: string): string | null {
 }
 
 /** Auto-heals an already-parsed candidate record without JSON stringify/parse round-trip. */
-export function extractAndRecoverRecordCode(record: Record<string, unknown>): string | null {
-    return recoverStructuredRecord(record)
+export function extractAndRecoverRecordCode(
+    record: Record<string, unknown>,
+    outerFallback?: Record<string, unknown>
+): string | null {
+    return recoverStructuredRecord(record, outerFallback)
 }
 
 function detectRecoverableEntryCall(
@@ -63,42 +72,49 @@ function unescapeQuotes(value: string): string {
 const MAX_FUZZY_ENTRY_RECOVERY_LENGTH = 32_768
 const MAX_ENTRY_FIELD_CANDIDATES = 16
 
+function regexToSpan(content: string, match: RegExpExecArray): { content: string; span: FieldMatchSpan } {
+    return {
+        content,
+        span: { content, start: match.index, end: match.index + match[0].length },
+    }
+}
+
 function extractContentField(
     code: string
-): { content: string; match: RegExpExecArray } | null {
+): { content: string; span: FieldMatchSpan } | null {
     const backtickMatch =
         /\bcontent\s*:\s*`((?:[^`\\]|\\[\s\S])*)`(?=\s*(?:(?:,\s*|\s+)[a-zA-Z_$][\w$]*\s*:|,\s*\}|\}|\)))/i.exec(
             code
         )
-    if (backtickMatch?.[1] !== undefined) return { content: backtickMatch[1], match: backtickMatch }
+    if (backtickMatch?.[1] !== undefined) return regexToSpan(backtickMatch[1], backtickMatch)
     const singleMatch =
         /\bcontent\s*:\s*'((?:[^'\\]|\\[\s\S])*)'(?=\s*(?:(?:,\s*|\s+)[a-zA-Z_$][\w$]*\s*:|,\s*\}|\}|\)))/i.exec(
             code
         )
-    if (singleMatch?.[1] !== undefined) return { content: singleMatch[1], match: singleMatch }
+    if (singleMatch?.[1] !== undefined) return regexToSpan(singleMatch[1], singleMatch)
     const doubleMatch =
         /\bcontent\s*:\s*"((?:[^"\\]|\\[\s\S])*)"(?=\s*(?:(?:,\s*|\s+)[a-zA-Z_$][\w$]*\s*:|,\s*\}|\}|\)))/i.exec(
             code
         )
-    if (doubleMatch?.[1] !== undefined) return { content: doubleMatch[1], match: doubleMatch }
-    // Require matching closing quote before `,`/`}`/`)`, or an explicit next-property / `}` boundary so unclosed parenthetical prose like `(see note)` is not truncated at `)`.
-    const fallbackMatch =
-        /\bcontent\s*:\s*([`'"])([\s\S]*?)(?:\1(?=\s*(?:,|\}|\)))|(?=\s*,\s*[a-zA-Z_$][\w$]*\s*:|,\s*\}|\}))/i.exec(
-            code
-        )
-    if (fallbackMatch?.[2] !== undefined) return { content: fallbackMatch[2], match: fallbackMatch }
-    const altBacktick = /\bcontent\s*:\s*`([\s\S]*?)`(?=,\s*[\w$]+\s*:|\s*\})/i.exec(code)
-    if (altBacktick?.[1] !== undefined) return { content: altBacktick[1], match: altBacktick }
-    const descMatch =
-        /\b(?:description|summary)\s*:\s*(['"`])([\s\S]*?)\1(?=\s*(?:,\s*[a-zA-Z_$][\w$]*\s*:|,\s*\}|\}|\)))/i.exec(
-            code
-        )
-    if (descMatch?.[2] !== undefined) return { content: descMatch[2], match: descMatch }
+    if (doubleMatch?.[1] !== undefined) return regexToSpan(doubleMatch[1], doubleMatch)
+
+    const fallbackSpan = scanFallbackContentField(code)
+    if (fallbackSpan !== null) return { content: fallbackSpan.content, span: fallbackSpan }
+
+    const altBacktickSpan = scanQuotedFieldLinear(code, /\bcontent\s*:\s*(`)/i, 'prop-or-brace')
+    if (altBacktickSpan !== null) return { content: altBacktickSpan.content, span: altBacktickSpan }
+
+    const descSpan = scanQuotedFieldLinear(
+        code,
+        /\b(?:description|summary)\s*:\s*(['"`])/i,
+        'prop-brace-or-paren'
+    )
+    if (descSpan !== null) return { content: descSpan.content, span: descSpan }
     return null
 }
 
-function removeMatchSpan(text: string, match: RegExpExecArray): string {
-    return `${text.slice(0, match.index)}${text.slice(match.index + match[0].length)}`
+function removeSpan(text: string, span: { start: number; end: number }): string {
+    return `${text.slice(0, span.start)}${text.slice(span.end)}`
 }
 
 function extractRecoveredEntryContentAndTitle(
@@ -113,20 +129,31 @@ function extractRecoveredEntryContentAndTitle(
 
     // [C4] Field regexes scan the code with content and title match spans removed by exact index,
     // so `content: 'default', workspace_id: 'default'` never erases `workspace_id`.
-    const scanWithTitle = removeMatchSpan(code, extractedContent.match)
+    const scanWithTitle = removeSpan(code, extractedContent.span)
     const titleCandidates = scanWithTitle.match(/\btitle\s*:/gi)
-    const titleMatch =
-        titleCandidates !== null && titleCandidates.length > MAX_ENTRY_FIELD_CANDIDATES
-            ? null
-            : /\btitle\s*:\s*(['"`])([\s\S]*?)\1(?=\s*(?:,\s*[a-zA-Z_$][\w$]*\s*:|,\s*\}|\}|\)))/i.exec(
-                  scanWithTitle
-              ) ?? /\btitle\s*:\s*(['"])([^'"]+)\1/i.exec(scanWithTitle)
-    const scanCode =
-        titleMatch !== null ? removeMatchSpan(scanWithTitle, titleMatch) : scanWithTitle
+    let titleSpan: { content: string; start: number; end: number } | null = null
+    if (titleCandidates === null || titleCandidates.length <= MAX_ENTRY_FIELD_CANDIDATES) {
+        titleSpan = scanQuotedFieldLinear(
+            scanWithTitle,
+            /\btitle\s*:\s*(['"`])/i,
+            'prop-brace-or-paren'
+        )
+        if (titleSpan === null) {
+            const shortTitleMatch = /\btitle\s*:\s*(['"])([^'"]+)\1/i.exec(scanWithTitle)
+            if (shortTitleMatch?.[2] !== undefined) {
+                titleSpan = {
+                    content: shortTitleMatch[2],
+                    start: shortTitleMatch.index,
+                    end: shortTitleMatch.index + shortTitleMatch[0].length,
+                }
+            }
+        }
+    }
+    const scanCode = titleSpan !== null ? removeSpan(scanWithTitle, titleSpan) : scanWithTitle
 
     return {
         content: unescapeQuotes(extractedContent.content),
-        title: titleMatch?.[2] !== undefined ? unescapeQuotes(titleMatch[2]) : undefined,
+        title: titleSpan !== null ? unescapeQuotes(titleSpan.content) : undefined,
         scanCode,
     }
 }
@@ -168,88 +195,49 @@ function parseRelaxedAutoContext(rawAutoContext: string): unknown {
     }
 }
 
-function stripJsCommentsPreservingStrings(code: string): string {
-    const out: string[] = []
-    let quote: string | null = null
-    let escaped = false
-    for (let i = 0; i < code.length; i++) {
-        const ch = code[i] ?? ''
-        if (quote !== null) {
-            out.push(ch)
-            if (escaped) escaped = false
-            else if (ch === '\\') escaped = true
-            else if (ch === quote) quote = null
-            continue
-        }
-        if (ch === "'" || ch === '"' || ch === '`') {
-            quote = ch
-            out.push(ch)
-            continue
-        }
-        const comment = skipLineOrBlockComment(code, i, false)
-        if (comment !== null) {
-            out.push(comment.hasNewline === true ? '\n' : ' ')
-            i = comment.next - 1
-            continue
-        }
-        out.push(ch)
-    }
-    return out.join('')
+function extractBalancedArrayBlock(
+    source: string,
+    candidateRe: RegExp,
+    startRe: RegExp
+): string | undefined {
+    const candidates = source.match(candidateRe)
+    if (candidates !== null && candidates.length > MAX_ENTRY_FIELD_CANDIDATES) return undefined
+    const m = startRe.exec(source)
+    if (m === null) return undefined
+    const openIdx = m.index + m[0].length - 1
+    const endIdx = findBalancedDelimitedBlockEnd(source, openIdx, '[', ']')
+    const candidateSlice = source.slice(openIdx, endIdx)
+    return candidateSlice.endsWith(']') ? candidateSlice : undefined
 }
 
-function findBalancedDelimitedBlockEnd(
-    code: string,
-    openIdx: number,
-    openChar: string,
-    closeChar: string
-): number {
-    let depth = 1
-    let j = openIdx + 1
-    let quote: string | null = null
-    let escaped = false
-    while (j < code.length && depth > 0) {
-        const ch = code[j] ?? ''
-        if (quote !== null) {
-            if (escaped) escaped = false
-            else if (ch === '\\') escaped = true
-            else if (ch === quote) quote = null
-        } else if (ch === "'" || ch === '"' || ch === '`') {
-            quote = ch
-        } else if (ch === openChar) {
-            depth++
-        } else if (ch === closeChar) {
-            depth--
-        }
-        j++
+function populateRecoveredTags(payload: Record<string, unknown>, topLevelScanCode: string): void {
+    const rawTagsBlock = extractBalancedArrayBlock(topLevelScanCode, /\btags\s*:/gi, /\btags\s*:\s*\[/i)
+    if (rawTagsBlock === undefined) return
+    const parsedTags = parseRelaxedJsonArray(rawTagsBlock)
+    if (parsedTags?.every((t): t is string => typeof t === 'string') === true) {
+        payload['tags'] = parsedTags.map((t) => t.trim()).filter(Boolean)
+        return
     }
-    return j
+    payload['tags'] = rawTagsBlock
+        .slice(1, -1)
+        .split(',')
+        .map((s) => s.trim().replace(/^['"]|['"]$/g, ''))
+        .filter(Boolean)
 }
 
-function stripNestedPropBlocks(code: string): string {
-    const out: string[] = []
-    let i = 0
-    const propRe = /\b(?:auto_context|autoContext|relationships|anchors)\s*:\s*(?:JSON\.stringify\s*(\()|([{[]))/iy
-    while (i < code.length) {
-        propRe.lastIndex = i
-        const m = propRe.exec(code)
-        if (m?.[1] !== undefined) {
-            const endIdx = findBalancedDelimitedBlockEnd(code, i + m[0].length - 1, '(', ')')
-            out.push('""')
-            i = endIdx
-            continue
-        }
-        if (m?.[2] !== undefined) {
-            const openChar = m[2]
-            const closeChar = openChar === '{' ? '}' : ']'
-            const endIdx = findBalancedDelimitedBlockEnd(code, i + m[0].length - 1, openChar, closeChar)
-            out.push(`${openChar}${closeChar}`)
-            i = endIdx
-            continue
-        }
-        out.push(code[i] ?? '')
-        i++
-    }
-    return out.join('')
+function populateRecoveredAutoContext(payload: Record<string, unknown>, scanCode: string): void {
+    const autoContextCandidates = scanCode.match(/\b(?:auto_context|autoContext)\s*:/gi)
+    const autoContextStartMatch =
+        autoContextCandidates !== null && autoContextCandidates.length > MAX_ENTRY_FIELD_CANDIDATES
+            ? null
+            : /\b(?:auto_context|autoContext)\s*:\s*(\{)/i.exec(scanCode)
+    if (autoContextStartMatch === null) return
+    const openBraceIdx = autoContextStartMatch.index + autoContextStartMatch[0].length - 1
+    const endBraceIdx = findBalancedDelimitedBlockEnd(scanCode, openBraceIdx, '{', '}')
+    const candidateSlice = scanCode.slice(openBraceIdx, endBraceIdx)
+    if (!candidateSlice.endsWith('}')) return
+    const parsedAutoContext = parseRelaxedAutoContext(candidateSlice)
+    if (parsedAutoContext !== undefined) payload['auto_context'] = parsedAutoContext
 }
 
 function populateRecoveredArrayAndContextFields(
@@ -257,34 +245,18 @@ function populateRecoveredArrayAndContextFields(
     scanCode: string,
     topLevelScanCode: string
 ): void {
-    for (const [key, pattern] of ARRAY_FIELD_RES) {
-        const rawArr = pattern.exec(scanCode)?.[1]
+    const arraySpecs = [
+        ['relationships', /\brelationships\s*:/gi, /\brelationships\s*:\s*\[/i],
+        ['anchors', /\banchors\s*:/gi, /\banchors\s*:\s*\[/i],
+    ] as const
+    for (const [key, candRe, startRe] of arraySpecs) {
+        const rawArr = extractBalancedArrayBlock(scanCode, candRe, startRe)
         if (rawArr === undefined) continue
         const parsed = parseRelaxedJsonArray(rawArr)
         if (parsed !== undefined) payload[key] = parsed
     }
-
-    const rawTags = /\btags\s*:\s*\[([\s\S]*?)\]/i.exec(topLevelScanCode)?.[1]
-    if (rawTags !== undefined) {
-        payload['tags'] = rawTags.split(',').map((s) => s.trim().replace(/^['"]|['"]$/g, '')).filter(Boolean)
-    }
-
-    const autoContextCandidates = scanCode.match(/\b(?:auto_context|autoContext)\s*:/gi)
-    const autoContextStartMatch =
-        autoContextCandidates !== null && autoContextCandidates.length > MAX_ENTRY_FIELD_CANDIDATES
-            ? null
-            : /\b(?:auto_context|autoContext)\s*:\s*(\{)/i.exec(scanCode)
-    let rawAutoContext: string | undefined
-    if (autoContextStartMatch !== null) {
-        const openBraceIdx = autoContextStartMatch.index + autoContextStartMatch[0].length - 1
-        const endBraceIdx = findBalancedDelimitedBlockEnd(scanCode, openBraceIdx, '{', '}')
-        const candidateSlice = scanCode.slice(openBraceIdx, endBraceIdx)
-        if (candidateSlice.endsWith('}')) rawAutoContext = candidateSlice
-    }
-    if (rawAutoContext !== undefined) {
-        const parsedAutoContext = parseRelaxedAutoContext(rawAutoContext)
-        if (parsedAutoContext !== undefined) payload['auto_context'] = parsedAutoContext
-    }
+    populateRecoveredTags(payload, topLevelScanCode)
+    populateRecoveredAutoContext(payload, scanCode)
 }
 
 function populateRecoveredEntryFlags(payload: Record<string, unknown>, topLevelScanCode: string): void {
@@ -314,21 +286,65 @@ function populateRecoveredEntryFlags(payload: Record<string, unknown>, topLevelS
     }
 }
 
-function populateRecoveredEntryMetadata(
+function populateRecoveredEntryIdField(
     payload: Record<string, unknown>,
-    scanCode: string,
-    preStrippedTopLevel?: string
+    topLevelScanCode: string
 ): void {
-    const topLevelScanCode = preStrippedTopLevel ?? stripNestedPropBlocks(scanCode)
+    const entryIdMatch =
+        /\b(?:entry_id|entryId|id)\s*:\s*(?:(-?\d+(?:\.\d+)?)|(['"`])([^'"`]+)\2)/i.exec(
+            topLevelScanCode
+        )
+    const rawEntryId = entryIdMatch?.[1] ?? entryIdMatch?.[3]?.trim()
+    if (rawEntryId === undefined || rawEntryId === '') return
+    const eid = parseCanonicalPositiveInt(rawEntryId)
+    if (eid !== undefined) {
+        payload['entry_id'] = eid
+    } else if (entryIdMatch?.[1] !== undefined) {
+        const numEid = Number(rawEntryId)
+        payload['entry_id'] = Number.isFinite(numEid) ? numEid : rawEntryId
+    } else {
+        payload['entry_id'] = rawEntryId
+    }
+}
+
+function populateRecoveredIdsAndScope(payload: Record<string, unknown>, topLevelScanCode: string): void {
+    populateRecoveredEntryIdField(payload, topLevelScanCode)
     const projectMatch =
         /\b(?:project_number|projectNumber|project_id|projectId|project_name|projectName|project)\s*:\s*(?:(-?\d+(?:\.\d+)?)|(['"`])([^'"`]+)\2)/i.exec(
             topLevelScanCode
         )
     const workspaceMatch =
         /\b(?:workspace_id|workspaceId|workspace)\s*:\s*(['"`])([^'"`]+)\1/i.exec(topLevelScanCode)
+    const repoMatch =
+        /\b(?:repo|repo_name|repoName|repository)\s*:\s*(['"`])([^'"`]+)\1/i.exec(topLevelScanCode)
     const targetWorkspaceMatch =
         /\b(?:target_workspace_id|targetWorkspaceId)\s*:\s*(['"`])([^'"`]+)\1/i.exec(topLevelScanCode)
     const sessionMatch = /\b(?:session_id|sessionId)\s*:\s*(['"`])([^'"`]+)\1/i.exec(topLevelScanCode)
+    if (projectMatch?.[1] !== undefined) {
+        const parsedProj = parsePositiveProjectNumber(projectMatch[1])
+        if (parsedProj !== undefined) payload['project_number'] = parsedProj
+        else {
+            const numProj = Number(projectMatch[1])
+            payload['project_number'] = Number.isFinite(numProj) ? numProj : projectMatch[1]
+        }
+    } else if (projectMatch?.[3] !== undefined && projectMatch[3].trim() !== '') {
+        payload['project_number'] = projectMatch[3].trim()
+    }
+    if (workspaceMatch?.[2] !== undefined) payload['workspace_id'] = workspaceMatch[2]
+    else if (repoMatch?.[2] !== undefined) {
+        const resolvedRepoWs = resolveRepoWorkspace(repoMatch[2])
+        if (resolvedRepoWs !== undefined) payload['workspace_id'] = resolvedRepoWs
+    }
+    if (targetWorkspaceMatch?.[2] !== undefined && targetWorkspaceMatch[2].trim() !== '') {
+        payload['target_workspace_id'] = targetWorkspaceMatch[2].trim()
+    }
+    if (sessionMatch?.[2] !== undefined) payload['session_id'] = sessionMatch[2]
+}
+
+function populateRecoveredScoresAndStatuses(
+    payload: Record<string, unknown>,
+    topLevelScanCode: string
+): void {
     const impactMatch = /\b(?:impact_score|impactScore|impact)\s*:\s*([0-9.]+)/i.exec(topLevelScanCode)
     const trustMatch = /\b(?:trust_score|trustScore|trust)\s*:\s*([0-9.]+)/i.exec(topLevelScanCode)
     const validationMatch =
@@ -338,38 +354,7 @@ function populateRecoveredEntryMetadata(
     const isPersonalMatch = /\b(?:is_personal|isPersonal)\s*:\s*(true|false)\b/i.exec(topLevelScanCode)
     const shareTeamMatch = /\b(?:share_with_team|shareWithTeam)\s*:\s*(true|false)\b/i.exec(topLevelScanCode)
     const useTestDbMatch = /\b(?:use_test_db|useTestDb)\s*:\s*(true|false)\b/i.exec(topLevelScanCode)
-    const entryIdMatch = /\b(?:entry_id|entryId|id)\s*:\s*(?:(-?\d+(?:\.\d+)?)|(['"`])([^'"`]+)\2)/i.exec(
-        topLevelScanCode
-    )
 
-    const rawEntryId = entryIdMatch?.[1] ?? entryIdMatch?.[3]?.trim()
-    if (rawEntryId !== undefined && rawEntryId !== '') {
-        const eid = parseCanonicalPositiveInt(rawEntryId)
-        if (eid !== undefined) {
-            payload['entry_id'] = eid
-        } else if (entryIdMatch?.[1] !== undefined) {
-            const numEid = Number(rawEntryId)
-            payload['entry_id'] = Number.isFinite(numEid) ? numEid : rawEntryId
-        } else {
-            payload['entry_id'] = rawEntryId
-        }
-    }
-    if (projectMatch?.[1] !== undefined) {
-        const parsedProj = parsePositiveProjectNumber(projectMatch[1])
-        if (parsedProj !== undefined) {
-            payload['project_number'] = parsedProj
-        } else {
-            const numProj = Number(projectMatch[1])
-            payload['project_number'] = Number.isFinite(numProj) ? numProj : projectMatch[1]
-        }
-    } else if (projectMatch?.[3] !== undefined && projectMatch[3].trim() !== '') {
-        payload['project_number'] = projectMatch[3].trim()
-    }
-    if (workspaceMatch?.[2] !== undefined) payload['workspace_id'] = workspaceMatch[2]
-    if (targetWorkspaceMatch?.[2] !== undefined && targetWorkspaceMatch[2].trim() !== '') {
-        payload['target_workspace_id'] = targetWorkspaceMatch[2].trim()
-    }
-    if (sessionMatch?.[2] !== undefined) payload['session_id'] = sessionMatch[2]
     if (impactMatch?.[1] !== undefined) {
         const parsedImpact = Number(impactMatch[1])
         if (Number.isFinite(parsedImpact)) payload['impact_score'] = parsedImpact
@@ -383,8 +368,17 @@ function populateRecoveredEntryMetadata(
     if (isPersonalMatch?.[1] !== undefined) payload['is_personal'] = isPersonalMatch[1].toLowerCase() === 'true'
     if (shareTeamMatch?.[1] !== undefined) payload['share_with_team'] = shareTeamMatch[1].toLowerCase() === 'true'
     if (useTestDbMatch?.[1]?.toLowerCase() === 'true') payload['use_test_db'] = true
-    populateRecoveredEntryFlags(payload, topLevelScanCode)
+}
 
+function populateRecoveredEntryMetadata(
+    payload: Record<string, unknown>,
+    scanCode: string,
+    preStrippedTopLevel?: string
+): void {
+    const topLevelScanCode = preStrippedTopLevel ?? stripNestedPropBlocks(scanCode)
+    populateRecoveredIdsAndScope(payload, topLevelScanCode)
+    populateRecoveredScoresAndStatuses(payload, topLevelScanCode)
+    populateRecoveredEntryFlags(payload, topLevelScanCode)
     populateRecoveredArrayAndContextFields(payload, scanCode, topLevelScanCode)
 }
 
