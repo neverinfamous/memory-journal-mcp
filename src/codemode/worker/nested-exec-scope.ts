@@ -307,6 +307,84 @@ function validateAndWrapNestedCode(
     return { ok: true, wrapped: `"use strict";\n(async () => {\n${transformedCode}\n})()` }
 }
 
+interface ExecuteValidatedNestedParams {
+    arg: unknown
+    argRec: Record<string, unknown> | undefined
+    rawNestedCode: string | null
+    currentDepth: number
+    timeoutMs: number
+    maxResultSize: number | undefined
+    readonlyMode: boolean | undefined
+    dryRunMode: boolean | undefined
+    useTestDbMode: boolean | undefined
+    pinnedWorkspace: string | undefined
+    pinnedProjectNumber: number | undefined
+    projectRegistryRaw: unknown
+    shimMj: Record<string, unknown>
+    vmContextRef: { current?: vm.Context }
+    runIsolatedNestedCode: RunIsolatedNestedFn
+    activeTimers: Set<NodeJS.Timeout> | undefined
+    fastPathDepthStorage: AsyncLocalStorage<number>
+}
+
+async function runValidatedNestedCall(p: ExecuteValidatedNestedParams): Promise<unknown> {
+    const scopeErr = validateNestedExecScope(
+        p.argRec, p.pinnedWorkspace, p.pinnedProjectNumber, p.projectRegistryRaw
+    )
+    if (scopeErr !== null) return { success: false, error: scopeErr.error, code: 'VALIDATION_ERROR' }
+
+    const effectiveReadonly = p.readonlyMode === true || p.argRec?.['readonly'] === true || p.argRec?.['read_only'] === true || p.argRec?.['readOnly'] === true
+    const effectiveDryRun = p.dryRunMode === true || p.argRec?.['dry_run'] === true || p.argRec?.['dryRun'] === true
+    const effectiveUseTestDb = p.useTestDbMode === true || p.argRec?.['use_test_db'] === true || p.argRec?.['useTestDb'] === true
+    if (p.rawNestedCode !== null && p.rawNestedCode !== '' && Buffer.byteLength(p.rawNestedCode, 'utf-8') > 50 * 1024) {
+        return { success: false, error: 'Code exceeds maximum length of 51200 bytes', code: 'SECURITY_VIOLATION' }
+    }
+    const narrowed = resolveNestedNarrowedScope(p.argRec, p.pinnedWorkspace, p.pinnedProjectNumber, p.projectRegistryRaw)
+    const isolation = buildIsolationOverrides(p.argRec, p.timeoutMs, p.maxResultSize, narrowed)
+    const shortcutTimeoutMs = isolation?.timeoutMs ?? p.timeoutMs
+    const shortcutMaxResult = isolation?.maxResultSize ?? p.maxResultSize
+    const shortcut = await raceWithSandboxTimeout(
+        tryDispatchNestedShortcut({
+            arg: p.arg, argRec: p.argRec, rawNestedCode: p.rawNestedCode, narrowed,
+            pinnedWorkspace: p.pinnedWorkspace, pinnedProjectNumber: p.pinnedProjectNumber,
+            effectiveReadonly, effectiveDryRun, effectiveUseTestDb, shimMj: p.shimMj,
+            runIsolatedNestedCode: p.runIsolatedNestedCode, isolation, currentDepth: p.currentDepth,
+        }),
+        shortcutTimeoutMs,
+        p.activeTimers
+    )
+    if (shortcut.handled) return enforceNestedResultLimit(shortcut.value, shortcutMaxResult)
+
+    const compiled = validateAndWrapNestedCode(shortcut.codeToExec, shortcut.isQueryOnlyArg)
+    if (!compiled.ok) return compiled.errorResult
+    const currentVmCtx = p.vmContextRef.current
+    if (currentVmCtx === undefined) return { success: false, error: 'No code was executed', code: 'VALIDATION_ERROR' }
+
+    const escalates =
+        (effectiveReadonly && p.readonlyMode !== true) ||
+        (effectiveDryRun && p.dryRunMode !== true) ||
+        (effectiveUseTestDb && p.useTestDbMode !== true)
+    if (escalates || isolation !== undefined) {
+        const escalatedOverrides: NestedExecIsolationOverrides | undefined =
+            p.currentDepth > 0 || isolation !== undefined
+                ? { ...(isolation ?? {}), nestedDepth: p.currentDepth }
+                : undefined
+        return p.runIsolatedNestedCode(
+            compiled.wrapped, effectiveReadonly, effectiveDryRun, effectiveUseTestDb, escalatedOverrides
+        )
+    }
+    const rawResult: unknown = await p.fastPathDepthStorage.run(p.currentDepth + 1, () =>
+        raceWithSandboxTimeout<unknown>(
+            Promise.resolve(
+                getOrCompileVmScript(compiled.wrapped).runInContext(currentVmCtx, { timeout: p.timeoutMs })
+            ),
+            p.timeoutMs,
+            p.activeTimers
+        )
+    )
+    return enforceNestedResultLimit(rawResult, p.maxResultSize)
+}
+
 /**
  * Builds the sandboxed nested `executeCode` dispatcher enforcing pinned scope,
  * readonly/dryRun/useTestDb invariants, and code-security checks before `vm.runInContext`.
@@ -337,59 +415,24 @@ export function createSandboxExecutor(options: SandboxExecutorOptions): (...args
         }
         const snap = resolveSnapshottedNestedArgs(rawArgs)
         if ('error' in snap) return { success: false, error: snap.error, code: 'VALIDATION_ERROR' }
-        const { arg, argRec } = snap
-        const scopeErr = validateNestedExecScope(argRec, pinnedWorkspace, pinnedProjectNumber, projectRegistryRaw)
-        if (scopeErr !== null) return { success: false, error: scopeErr.error, code: 'VALIDATION_ERROR' }
-
-        const effectiveReadonly = readonlyMode === true || argRec?.['readonly'] === true || argRec?.['read_only'] === true || argRec?.['readOnly'] === true
-        const effectiveDryRun = dryRunMode === true || argRec?.['dry_run'] === true || argRec?.['dryRun'] === true
-        const effectiveUseTestDb = useTestDbMode === true || argRec?.['use_test_db'] === true || argRec?.['useTestDb'] === true
-        const rawNestedCode = readExecutableCode(arg)
-        if (rawNestedCode !== null && rawNestedCode !== '' && Buffer.byteLength(rawNestedCode, 'utf-8') > 50 * 1024) {
-            return { success: false, error: 'Code exceeds maximum length of 51200 bytes', code: 'SECURITY_VIOLATION' }
-        }
-        const narrowed = resolveNestedNarrowedScope(argRec, pinnedWorkspace, pinnedProjectNumber, projectRegistryRaw)
-        const isolation = buildIsolationOverrides(argRec, timeoutMs, maxResultSize, narrowed)
-        const shortcutTimeoutMs = isolation?.timeoutMs ?? timeoutMs
-        const shortcutMaxResult = isolation?.maxResultSize ?? maxResultSize
-        const shortcut = await raceWithSandboxTimeout(
-            tryDispatchNestedShortcut({
-                arg, argRec, rawNestedCode, narrowed, pinnedWorkspace, pinnedProjectNumber,
-                effectiveReadonly, effectiveDryRun, effectiveUseTestDb, shimMj,
-                runIsolatedNestedCode, isolation, currentDepth,
-            }),
-            shortcutTimeoutMs,
-            activeTimers
-        )
-        if (shortcut.handled) return enforceNestedResultLimit(shortcut.value, shortcutMaxResult)
-
-        const compiled = validateAndWrapNestedCode(shortcut.codeToExec, shortcut.isQueryOnlyArg)
-        if (!compiled.ok) return compiled.errorResult
-        const currentVmCtx = vmContextRef.current
-        if (currentVmCtx === undefined) return { success: false, error: 'No code was executed', code: 'VALIDATION_ERROR' }
-
-        const escalates =
-            (effectiveReadonly && readonlyMode !== true) ||
-            (effectiveDryRun && dryRunMode !== true) ||
-            (effectiveUseTestDb && useTestDbMode !== true)
-        if (escalates || isolation !== undefined) {
-            const escalatedOverrides: NestedExecIsolationOverrides | undefined =
-                currentDepth > 0 || isolation !== undefined
-                    ? { ...(isolation ?? {}), nestedDepth: currentDepth }
-                    : undefined
-            return runIsolatedNestedCode(
-                compiled.wrapped, effectiveReadonly, effectiveDryRun, effectiveUseTestDb, escalatedOverrides
-            )
-        }
-        const rawResult: unknown = await fastPathDepthStorage.run(currentDepth + 1, () =>
-            raceWithSandboxTimeout<unknown>(
-                Promise.resolve(
-                    getOrCompileVmScript(compiled.wrapped).runInContext(currentVmCtx, { timeout: timeoutMs })
-                ),
-                timeoutMs,
-                activeTimers
-            )
-        )
-        return enforceNestedResultLimit(rawResult, maxResultSize)
+        return runValidatedNestedCall({
+            arg: snap.arg,
+            argRec: snap.argRec,
+            rawNestedCode: readExecutableCode(snap.arg),
+            currentDepth,
+            timeoutMs,
+            maxResultSize,
+            readonlyMode,
+            dryRunMode,
+            useTestDbMode,
+            pinnedWorkspace,
+            pinnedProjectNumber,
+            projectRegistryRaw,
+            shimMj,
+            vmContextRef,
+            runIsolatedNestedCode,
+            activeTimers,
+            fastPathDepthStorage,
+        })
     }
 }

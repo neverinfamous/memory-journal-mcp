@@ -321,6 +321,11 @@ function executeGetStatistics(
             workspace_id,
             project_number,
         } = GetStatisticsSchema.parse(omitNonStrictStatisticsKeys(params))
+        if (start_date !== undefined && end_date !== undefined && start_date > end_date) {
+            throw new ValidationError(`Invalid date range: start_date (${start_date}) is after end_date (${end_date})`, {
+                suggestion: 'Ensure start_date is before or equal to end_date',
+            })
+        }
         const resolvedProjectNumber = coerceAnalyticsProjectNumber(project_number)
         // [INTENT] M1: project_breakdown spans all registered projects, so default the
         // scope to '*' unless the caller named a workspace/project explicitly.
@@ -355,6 +360,16 @@ function executeGetCrossProjectInsights(
 ): Record<string, unknown> | ErrorResponse {
     try {
         const input = CrossProjectInsightsInputSchema.parse(omitNonStrictCrossProjectKeys(params))
+        if (
+            input.start_date !== undefined &&
+            input.end_date !== undefined &&
+            input.start_date > input.end_date
+        ) {
+            throw new ValidationError(
+                `Invalid date range: start_date (${input.start_date}) is after end_date (${input.end_date})`,
+                { suggestion: 'Ensure start_date is before or equal to end_date' }
+            )
+        }
         const resolvedProjectNumber = coerceAnalyticsProjectNumber(input.project_number)
         // [INTENT] M1: cross-project insights span all projects unless workspace_id or
         // project_number is specified by the caller.

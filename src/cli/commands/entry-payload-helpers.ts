@@ -164,29 +164,25 @@ const NONE_STATUSES = ['none', 'null', 'undefined', 'skip', 'skipped', 'unknown'
 export function normalizeValidationStatus(
     valStatusRaw: unknown
 ): 'passed' | 'failed' | 'none' | undefined {
-    if (valStatusRaw === undefined || valStatusRaw === null) return undefined
+    if (valStatusRaw === undefined || valStatusRaw === null || valStatusRaw === '') return undefined
     if (typeof valStatusRaw === 'boolean') return valStatusRaw ? 'passed' : 'failed'
     if (typeof valStatusRaw === 'string') {
-        const trimmed = valStatusRaw.trim()
-        if (trimmed === '') return undefined
-        const lower = trimmed.toLowerCase()
+        const lower = valStatusRaw.trim().toLowerCase()
         if (PASSED_STATUSES.includes(lower)) return 'passed'
         if (FAILED_STATUSES.includes(lower)) return 'failed'
         if (NONE_STATUSES.includes(lower)) return 'none'
-        throw new ValidationError(
-            `Invalid validation_status '${trimmed}'. Expected passed, failed, or none.`,
-            { validationStatus: valStatusRaw }
-        )
-    }
-    if (typeof valStatusRaw === 'number') {
+    } else if (typeof valStatusRaw === 'number') {
         if (valStatusRaw === 1) return 'passed'
         if (valStatusRaw === 0) return 'failed'
-        throw new ValidationError(
-            `Invalid validation_status '${String(valStatusRaw)}'. Expected passed, failed, or none.`,
-            { validationStatus: valStatusRaw }
-        )
     }
-    return undefined
+    const label =
+        typeof valStatusRaw === 'string' || typeof valStatusRaw === 'number'
+            ? String(valStatusRaw).trim()
+            : typeof valStatusRaw
+    throw new ValidationError(
+        `Invalid validation_status '${label}'. Expected passed, failed, or none.`,
+        { validationStatus: valStatusRaw }
+    )
 }
 
 function stringifyMetadataValue(value: unknown): string {

@@ -7,7 +7,7 @@
 import type { z } from 'zod'
 import type { IDatabaseAdapter } from '../../../database/core/interfaces.js'
 import type { JournalEntry, ToolContext } from '../../../types/index.js'
-import { PermissionError } from '../../../types/errors.js'
+import { PermissionError, ValidationError } from '../../../types/errors.js'
 import { formatHandlerError } from '../../../utils/error-helpers.js'
 import { resolveWorkspaceId } from '../../../utils/workspace-resolver.js'
 import { activeProjectRegistry, alignedProjectFilter } from '../../../utils/write-scope.js'
@@ -360,6 +360,16 @@ export async function executeSemanticSearch(
         const preconditionError = validateSemanticSearchPreconditions(input, vectorManager)
         if (preconditionError !== undefined || !vectorManager) {
             return preconditionError ?? { success: false, error: 'Vector manager unavailable' }
+        }
+        if (
+            input.start_date !== undefined &&
+            input.end_date !== undefined &&
+            input.start_date > input.end_date
+        ) {
+            throw new ValidationError(
+                `Invalid date range: start_date (${input.start_date}) is after end_date (${input.end_date})`,
+                { suggestion: 'Ensure start_date is before or equal to end_date' }
+            )
         }
 
         const internalLimit = computeSemanticInternalLimit(input)

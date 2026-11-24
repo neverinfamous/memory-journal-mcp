@@ -38,13 +38,21 @@ function resolveDefaultProjectNumberOption(
     resolver: ConfigResolver,
     catchConfig: CatchConfig
 ): number | undefined {
+    const rejectBlank =
+        resolver.isCliProvided('defaultProject') ||
+        ((resolver.hasConfigFileKey('defaultProject') ||
+            resolver.hasConfigFileKey('defaultProjectNumber')) &&
+            (process.env['DEFAULT_PROJECT_NUMBER']?.trim() ?? '') === '')
     return catchConfig(() => {
         const configVal = resolver.resolveStringOrNumber('defaultProjectNumber')
         const raw =
             resolver.resolveStringOrNumber('defaultProject', 'DEFAULT_PROJECT_NUMBER') ?? configVal
         if (raw === undefined || raw === null) return undefined
         const str = String(raw).trim()
-        if (str === '') return undefined
+        if (str === '') {
+            if (rejectBlank) throw new Error('Invalid blank --default-project / defaultProjectNumber.')
+            return undefined
+        }
         const parsed = parsePositiveProjectNumber(str.replace(/^p/i, ''))
         if (parsed === undefined || !/^p?[1-9]\d*$/i.test(str)) {
             throw new Error(
@@ -210,12 +218,18 @@ function resolveEnvironmentOverrides(
     logLevel: ReturnType<typeof parseLogLevelOption> | undefined
 } {
     const envUpdates: Record<string, string> = {}
+    const rejectBlankMaxResult =
+        resolver.isCliProvided('codemodeMaxResultSize') ||
+        (resolver.hasConfigFileKey('codemodeMaxResultSize') &&
+            (process.env['CODE_MODE_MAX_RESULT_SIZE']?.trim() ?? '') === '')
     const codemodeMaxResultSize = catchConfig(() => {
         const raw = resolver.resolveStringOrNumber(
             'codemodeMaxResultSize',
             'CODE_MODE_MAX_RESULT_SIZE'
         )
-        if (raw === undefined || raw === null || (typeof raw === 'string' && raw.trim() === '')) {
+        if (raw === undefined || raw === null) return undefined
+        if (typeof raw === 'string' && raw.trim() === '') {
+            if (rejectBlankMaxResult) throw new Error('Invalid blank --codemode-max-result-size.')
             return undefined
         }
         const parsed = parseByteSizeValue(raw)
@@ -238,15 +252,20 @@ function resolveEnvironmentOverrides(
         envUpdates['MJ_METRICS_PORT'] = String(metricsPort).trim()
     }
 
+    const rejectBlankAuthScopes =
+        resolver.isCliProvided('authScopes') ||
+        (resolver.hasConfigFileKey('authScopes') &&
+            (process.env['MCP_AUTH_SCOPES']?.trim() ?? '') === '')
     const authScopes = catchConfig(() => {
-        const val = resolver.resolve('authScopes', 'MCP_AUTH_SCOPES')
-        if (val === undefined || val === null) return undefined
-        if (typeof val !== 'string') {
-            throw new Error(`Invalid authScopes: expected string, got ${typeof val}`)
+        const val = resolver.resolveString('authScopes', 'MCP_AUTH_SCOPES')
+        if (val === undefined) return undefined
+        if (val.trim() === '') {
+            if (rejectBlankAuthScopes) throw new Error('Invalid blank --auth-scopes.')
+            return undefined
         }
         return val
     }, undefined)
-    if (authScopes !== undefined && authScopes.trim() !== '') {
+    if (authScopes !== undefined) {
         envUpdates['MCP_AUTH_SCOPES'] = authScopes.trim()
     }
 
@@ -392,23 +411,31 @@ function assembleServerOptions(params: {
 
 function resolveServerHostOption(resolver: ConfigResolver, catchConfig: CatchConfig): string | undefined {
     return catchConfig(() => {
-        if (resolver.isCliProvided('serverHost') || resolver.hasConfigFileKey('serverHost')) {
+        if (resolver.isCliProvided('serverHost')) {
             const explicitHost = resolver.resolveString('serverHost')
             if (explicitHost !== undefined) {
                 const trimmed = explicitHost.trim()
-                if (trimmed === '') {
-                    throw new Error('Invalid blank --server-host.')
-                }
+                if (trimmed === '') throw new Error('Invalid blank --server-host.')
                 return trimmed
             }
         }
-        const envOrFallback = resolver.resolveString('serverHost', 'MCP_HOST')
-        if (envOrFallback !== undefined && envOrFallback.trim() !== '') {
-            return envOrFallback.trim()
+        const rawMcpHost = process.env['MCP_HOST']
+        if (rawMcpHost !== undefined && rawMcpHost.trim() !== '') {
+            return rawMcpHost.trim()
         }
         const rawHostEnv = process.env['HOST']
         if (rawHostEnv !== undefined && rawHostEnv.trim() !== '') {
             return rawHostEnv.trim()
+        }
+        if (resolver.hasConfigFileKey('serverHost')) {
+            const configHost = resolver.resolveString('serverHost')
+            if (configHost !== undefined) {
+                const trimmed = configHost.trim()
+                if (trimmed === '') {
+                    throw new Error('Invalid blank serverHost in configuration file.')
+                }
+                return trimmed
+            }
         }
         return undefined
     }, undefined)

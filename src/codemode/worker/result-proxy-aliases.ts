@@ -254,14 +254,6 @@ function deepFreezeContextRecord(
     value: object,
     seen: WeakMap<object, unknown>
 ): Record<string, unknown> {
-    if (seen.has(value)) {
-        const existing = seen.get(value)
-        if (isObjectOrFunction(existing) && !Array.isArray(existing)) {
-            const frozenExisting: Record<string, unknown> = {}
-            Object.setPrototypeOf(frozenExisting, null)
-            return Object.assign(frozenExisting, existing)
-        }
-    }
     const clone = createNullProtoRecord()
     seen.set(value, clone)
     for (const k of Object.keys(value)) {

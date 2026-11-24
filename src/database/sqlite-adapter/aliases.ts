@@ -4,6 +4,8 @@ import { isMissingTableError } from './schema-errors.js'
 import { bucketInParams, getSingleRow, runImmediateWriteTx, SCOPED_IN_PARAM_BUCKETS } from './row-helpers.js'
 import type { IDatabaseConnection, AuthorAlias } from '../core/interfaces.js'
 
+const AUTHOR_ALIAS_COLUMNS = 'id, alias, canonical_author, created_at, created_by'
+
 export class AliasManager {
     private db: IDatabaseConnection
 
@@ -35,17 +37,19 @@ export class AliasManager {
             const storedWorkspace = effectiveWorkspace(workspaceId)
             const nativeDb = this.db.getNativeDb?.()
             if (nativeDb !== undefined) {
-                nativeDb
-                    .prepare(
-                        `INSERT INTO author_aliases (alias, canonical_author, created_by, workspace_id)
-                         VALUES (?, ?, ?, ?)`
-                    )
-                    .run(alias, canonicalAuthor, createdBy ?? null, storedWorkspace)
-                const row = nativeDb
-                    .prepare<unknown[], Record<string, unknown>>(
-                        `SELECT * FROM author_aliases WHERE alias = ? COLLATE NOCASE AND workspace_id = ?`
-                    )
-                    .get(alias, storedWorkspace)
+                const row = runImmediateWriteTx(nativeDb, () => {
+                    nativeDb
+                        .prepare(
+                            `INSERT INTO author_aliases (alias, canonical_author, created_by, workspace_id)
+                             VALUES (?, ?, ?, ?)`
+                        )
+                        .run(alias, canonicalAuthor, createdBy ?? null, storedWorkspace)
+                    return nativeDb
+                        .prepare<unknown[], Record<string, unknown>>(
+                            `SELECT ${AUTHOR_ALIAS_COLUMNS} FROM author_aliases WHERE alias = ? COLLATE NOCASE AND workspace_id = ?`
+                        )
+                        .get(alias, storedWorkspace)
+                })
                 if (!row) {
                     throw new QueryError(`Failed to retrieve newly added alias: ${alias}`)
                 }
@@ -59,7 +63,7 @@ export class AliasManager {
             )
 
             const results = this.db.exec(
-                `SELECT * FROM author_aliases WHERE alias = ? COLLATE NOCASE AND workspace_id = ?`,
+                `SELECT ${AUTHOR_ALIAS_COLUMNS} FROM author_aliases WHERE alias = ? COLLATE NOCASE AND workspace_id = ?`,
                 [alias, storedWorkspace]
             )
             const row = getSingleRow(results)
@@ -115,7 +119,7 @@ export class AliasManager {
 
     listAliases(canonicalAuthor?: string, workspaceId?: string): AuthorAlias[] {
         try {
-            let query = `SELECT * FROM author_aliases`
+            let query = `SELECT ${AUTHOR_ALIAS_COLUMNS} FROM author_aliases`
             const params: unknown[] = []
             const clauses: string[] = []
 

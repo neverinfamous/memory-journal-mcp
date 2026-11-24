@@ -4,6 +4,7 @@ import { getSingleRow, runImmediateWriteTx } from './row-helpers.js'
 import type { IDatabaseConnection, TeamMember, TeamRole } from '../core/interfaces.js'
 
 const TEAM_ROLES: readonly TeamRole[] = ['admin', 'member', 'viewer']
+const TEAM_MEMBER_COLUMNS = 'id, author, role, display_name, added_by, created_at, updated_at'
 
 function parseTeamRole(raw: unknown): TeamRole {
     if (typeof raw === 'string') {
@@ -175,7 +176,7 @@ export class MembersManager {
 
     getMember(author: string): TeamMember | null {
         try {
-            const sql = `SELECT * FROM team_members WHERE author = ? COLLATE NOCASE`
+            const sql = `SELECT ${TEAM_MEMBER_COLUMNS} FROM team_members WHERE author = ? COLLATE NOCASE`
             const nativeDb = this.db.getNativeDb?.()
             if (nativeDb !== undefined) {
                 const row = nativeDb
@@ -201,7 +202,7 @@ export class MembersManager {
 
     listMembers(): TeamMember[] {
         try {
-            const sql = `SELECT * FROM team_members ORDER BY author ASC`
+            const sql = `SELECT ${TEAM_MEMBER_COLUMNS} FROM team_members ORDER BY author ASC`
             const nativeDb = this.db.getNativeDb?.()
             if (nativeDb !== undefined) {
                 const rows = nativeDb.prepare<unknown[], Record<string, unknown>>(sql).all()

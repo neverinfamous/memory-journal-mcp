@@ -287,7 +287,7 @@ function collectGeneratorAndIteratorPrototypes(): (object | null)[] {
 
 export function hardenOuterFunctionPrototypes(): string[] {
     const failures: string[] = []
-    const noopConstructor = Object.freeze(function ForbiddenConstructor(): never {
+    const noopConstructor = Object.freeze((): never => {
         throw new Error('Dynamic code generation is disabled in sandbox')
     })
     const protos = collectGeneratorAndIteratorPrototypes()
@@ -333,7 +333,7 @@ export function hardenOuterFunctionPrototypes(): string[] {
 
 const FREEZE_INNER_CONTEXT_SCRIPT = new vm.Script(`(function() {
     "use strict";
-    const noopCtor = Object.freeze(function ForbiddenConstructor() {
+    const noopCtor = Object.freeze(() => {
         throw new Error("Dynamic code generation is disabled in sandbox");
     });
     const AsyncFnProto = Object.getPrototypeOf(async function() {});

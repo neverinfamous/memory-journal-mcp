@@ -330,12 +330,17 @@ export function resolvePruneImportanceThresholdOption(
     resolver: ConfigResolver,
     catchConfig: CatchConfig
 ): number {
+    const rejectBlank =
+        resolver.isCliProvided('pruneImportanceThreshold') ||
+        (resolver.hasConfigFileKey('pruneImportanceThreshold') &&
+            (process.env['PRUNE_IMPORTANCE_THRESHOLD']?.trim() ?? '') === '')
     return catchConfig(
         () =>
             parseImportanceThresholdOption(
                 resolver.resolve('pruneImportanceThreshold', 'PRUNE_IMPORTANCE_THRESHOLD'),
                 'pruneImportanceThreshold',
-                0.15
+                0.15,
+                { rejectBlank }
             ),
         0.15
     )
@@ -345,13 +350,20 @@ export function resolveMetricsExportOption(
     resolver: ConfigResolver,
     catchConfig: CatchConfig
 ): 'prometheus' | undefined {
+    const rejectBlank =
+        resolver.isCliProvided('metricsExport') ||
+        (resolver.hasConfigFileKey('metricsExport') &&
+            (process.env['METRICS_EXPORT']?.trim() ?? '') === '')
     return catchConfig<'prometheus' | undefined>(() => {
         const raw = resolver.resolveString('metricsExport', 'METRICS_EXPORT')
-        if (raw) {
-            if (raw !== 'prometheus') throw new Error(`Unsupported metrics export format: ${raw}`)
-            return 'prometheus'
+        if (raw === undefined) return undefined
+        const trimmed = raw.trim()
+        if (trimmed === '') {
+            if (rejectBlank) throw new Error('Invalid blank --metrics-export.')
+            return undefined
         }
-        return undefined
+        if (trimmed !== 'prometheus') throw new Error(`Unsupported metrics export format: ${raw}`)
+        return 'prometheus'
     }, undefined)
 }
 

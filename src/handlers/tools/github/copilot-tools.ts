@@ -12,6 +12,14 @@ import { coerceIntString, relaxedNumber } from '../schemas.js'
 import { githubScopeInputFields, githubScopeParseFields, resolveOwnerRepo } from './helpers.js'
 import { ensureBlockFenced, ensureInlineFenced } from './fencing-helpers.js'
 
+const MAX_COPILOT_COMMENT_BODY_CHARS = 8000
+
+function truncateCopilotCommentBody(body: string): string {
+    return body.length > MAX_COPILOT_COMMENT_BODY_CHARS
+        ? `${body.slice(0, MAX_COPILOT_COMMENT_BODY_CHARS)}\n\n[Truncated... remaining ${String(body.length - MAX_COPILOT_COMMENT_BODY_CHARS)} chars]`
+        : body
+}
+
 // ============================================================================
 // Tool Definitions
 // ============================================================================
@@ -88,7 +96,7 @@ export function getCopilotReviewTools(context: ToolContext): ToolDefinition[] {
                         state: summary.state,
                         commentCount: summary.commentCount,
                         comments: summary.comments.map((c) => ({
-                            body: ensureBlockFenced(c.body),
+                            body: ensureBlockFenced(truncateCopilotCommentBody(c.body)),
                             path: ensureInlineFenced(c.path),
                             line: c.line,
                         })),

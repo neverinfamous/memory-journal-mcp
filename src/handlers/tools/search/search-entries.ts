@@ -152,6 +152,16 @@ function buildSearchEntriesContext(
         query === '' && input.mode === 'hybrid'
             ? { resolvedMode: 'fts' as const, isAuto: false }
             : resolveSearchMode(input.mode, query)
+    if (
+        input.start_date !== undefined &&
+        input.end_date !== undefined &&
+        input.start_date > input.end_date
+    ) {
+        throw new ValidationError(
+            `Invalid date range: start_date (${input.start_date}) is after end_date (${input.end_date})`,
+            { suggestion: 'Ensure start_date is before or equal to end_date' }
+        )
+    }
     const effectiveFuzzyMatch = input.exact_match !== undefined ? !input.exact_match : input.fuzzy_match
     const effectiveAutoCorrect =
         input.exact_match !== undefined && !input.exact_match ? true : input.auto_correct

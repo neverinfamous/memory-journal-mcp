@@ -300,10 +300,43 @@ function collectSettledTeamResults(
     return { sources, errors, searched_dbs, degraded }
 }
 
+function formatCrossTeamEntries(
+    merged: ReturnType<typeof mergeMultipleSources>
+): (z.infer<typeof EntryOutputSchema> & { team_db: string; author?: string | null })[] {
+    return merged.map((entry) => {
+        const rawAuthor = entry['author']
+        const author =
+            typeof rawAuthor === 'string'
+                ? sanitizeAuthor(rawAuthor)
+                : rawAuthor === null
+                  ? null
+                  : undefined
+        return {
+            ...entry,
+            id: typeof entry['id'] === 'number' ? entry['id'] : 0,
+            entryType: typeof entry['entryType'] === 'string' ? entry['entryType'] : 'other',
+            isPersonal: typeof entry['isPersonal'] === 'boolean' ? entry['isPersonal'] : false,
+            team_db: entry.team_db || '',
+            source: entry.source,
+            ...(author !== undefined ? { author } : {}),
+        }
+    })
+}
+
 export async function handleCrossTeamSearch(
     args: CrossTeamSearchArgs,
     context: ToolContext
 ): Promise<z.infer<typeof CrossTeamSearchOutputSchema>> {
+    if (
+        args.start_date !== undefined &&
+        args.end_date !== undefined &&
+        args.start_date > args.end_date
+    ) {
+        throw new ValidationError(
+            `Invalid date range: start_date (${args.start_date}) is after end_date (${args.end_date})`,
+            { suggestion: 'Ensure start_date is before or equal to end_date' }
+        )
+    }
     const { config } = context
     const wsId = resolveWorkspaceId(args.workspace_id, args.project_number, config)
     const activeRegistry = activeProjectRegistry(config?.projectRegistry)
@@ -345,28 +378,7 @@ export async function handleCrossTeamSearch(
         settled,
         targetLabels
     )
-    const merged = mergeMultipleSources(sources, args.limit, args.sort_by)
-    const finalEntries: (z.infer<typeof EntryOutputSchema> & {
-        team_db: string
-        author?: string | null
-    })[] = merged.map((entry) => {
-        const rawAuthor = entry['author']
-        const author =
-            typeof rawAuthor === 'string'
-                ? sanitizeAuthor(rawAuthor)
-                : rawAuthor === null
-                  ? null
-                  : undefined
-        return {
-            ...entry,
-            id: typeof entry['id'] === 'number' ? entry['id'] : 0,
-            entryType: typeof entry['entryType'] === 'string' ? entry['entryType'] : 'other',
-            isPersonal: typeof entry['isPersonal'] === 'boolean' ? entry['isPersonal'] : false,
-            team_db: entry.team_db || '',
-            source: entry.source,
-            ...(author !== undefined ? { author } : {}),
-        }
-    })
+    const finalEntries = formatCrossTeamEntries(mergeMultipleSources(sources, args.limit, args.sort_by))
 
     const everySearchFailed = searched_dbs.length === 0 && errors.length > 0
     return {

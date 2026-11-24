@@ -112,7 +112,7 @@ const NAMED_TOOL_OMIT_KEYS = new Set([
 /** Outer wrapper scope keys excluded when copying `original` onto nested `params`/`args` named calls. */
 const OUTER_SCOPE_OMIT_KEYS = new Set([
     'project_number', 'projectNumber', 'project_id', 'projectId', 'project_name', 'projectName',
-    'project', 'workspace_id', 'workspaceId', 'workspace',
+    'project', 'workspace_id', 'workspaceId', 'workspace', 'repo', 'repo_name', 'repoName', 'repository',
 ])
 
 function recoverNamedToolCall(target: Record<string, unknown>, original: Record<string, unknown>): string | null {
@@ -137,12 +137,19 @@ function recoverNamedToolCall(target: Record<string, unknown>, original: Record<
             if (v !== undefined) toolParams[k] = v
         }
     }
-    const innerTarget = explicitParams ?? target
-    const outerWrapper =
-        explicitParams !== undefined && original !== target
-            ? { ...original, ...target }
-            : original
-    assignMissingScope(toolParams, innerTarget, outerWrapper)
+    if (explicitParams !== undefined && original !== target) {
+        assignMissingScope(toolParams, explicitParams, target)
+        if (
+            readWorkspaceId(toolParams) === undefined &&
+            readProjectNumber(toolParams) === undefined &&
+            readWorkspaceId(target) === undefined &&
+            readProjectNumber(target) === undefined
+        ) {
+            assignMissingScope(toolParams, explicitParams, original)
+        }
+    } else {
+        assignMissingScope(toolParams, explicitParams ?? target, original)
+    }
     if (hasUseTestDbFlag(target, original)) toolParams['use_test_db'] = true
     const cleanTool = toolName.replace(/^mj[._]/, '')
     return `return await (mj.${cleanTool} || mj.core.${cleanTool})(${JSON.stringify(toolParams)});`

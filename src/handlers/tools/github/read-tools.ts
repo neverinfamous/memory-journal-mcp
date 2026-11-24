@@ -104,11 +104,14 @@ async function executeGetGitHubIssue(context: ToolContext, params: unknown): Pro
         if (commentsPromise !== undefined) {
             const commentsResult = await commentsPromise
             if (!commentsResult.ok) throw commentsResult.error
-            comments = commentsResult.value.map((c) => ({
-                ...c,
-                author: fenceUntrustedHandle(c.author),
-                body: ensureBlockFenced(c.body),
-            }))
+            comments = commentsResult.value.map((c) => {
+                const { body: boundedCommentBody } = truncateItemBody(c.body, input.truncate_body)
+                return {
+                    ...c,
+                    author: fenceUntrustedHandle(c.author),
+                    body: ensureBlockFenced(boundedCommentBody ?? ''),
+                }
+            })
         }
 
         return {

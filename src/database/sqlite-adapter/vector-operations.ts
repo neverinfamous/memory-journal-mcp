@@ -150,16 +150,18 @@ export class VectorOperations {
     deleteVectors(entryIds: number[]): number {
         if (entryIds.length === 0) return 0
         const db = this.connection.getNativeDb()
-        let deleted = 0
         try {
-            for (const { placeholders, params } of bucketInParams(entryIds)) {
-                const bigIds = params.map((id) => BigInt(Math.trunc(id)))
-                const result = db
-                    .prepare(`DELETE FROM vec_embeddings WHERE entry_id IN (${placeholders})`)
-                    .run(...bigIds)
-                deleted += result.changes
-            }
-            return deleted
+            return runImmediateWriteTx(db, () => {
+                let deleted = 0
+                for (const { placeholders, params } of bucketInParams(entryIds)) {
+                    const bigIds = params.map((id) => BigInt(Math.trunc(id)))
+                    const result = db
+                        .prepare(`DELETE FROM vec_embeddings WHERE entry_id IN (${placeholders})`)
+                        .run(...bigIds)
+                    deleted += result.changes
+                }
+                return deleted
+            })
         } catch (error) {
             if (isMissingTableError(error)) {
                 return 0

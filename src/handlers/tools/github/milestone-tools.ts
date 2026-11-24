@@ -12,6 +12,14 @@ import { formatHandlerError } from '../../../utils/error-helpers.js'
 import { milestoneCompletionPct, fenceUntrustedInline } from '../../resources/shared.js'
 import { markUntrustedContent } from '../../../utils/security-utils.js'
 
+const MAX_MILESTONE_DESC_CHARS = 4000
+
+function truncateMilestoneDesc(desc: string): string {
+    return desc.length > MAX_MILESTONE_DESC_CHARS
+        ? `${desc.slice(0, MAX_MILESTONE_DESC_CHARS)}... [truncated]`
+        : desc
+}
+
 function fenceMilestone<
     T extends { title: string; description?: string | null; creator?: string | null },
 >(ms: T): T {
@@ -19,7 +27,7 @@ function fenceMilestone<
         ...ms,
         title: fenceUntrustedInline(ms.title),
         ...(ms.description !== undefined && ms.description !== null
-            ? { description: markUntrustedContent(ms.description) }
+            ? { description: markUntrustedContent(truncateMilestoneDesc(ms.description)) }
             : {}),
         ...(ms.creator !== undefined && ms.creator !== null
             ? { creator: fenceUntrustedInline(ms.creator) }

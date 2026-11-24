@@ -12,6 +12,8 @@ import {
     withResourceTokenMeta,
 } from './shared.js'
 
+const MAX_MILESTONE_RESOURCE_DESC_CHARS = 4000
+
 function fenceMilestoneResource<
     T extends { title: string; description?: string | null; creator?: string | null },
 >(ms: T): T {
@@ -19,7 +21,13 @@ function fenceMilestoneResource<
         ...ms,
         title: fenceUntrustedInline(ms.title),
         ...(ms.description !== undefined && ms.description !== null
-            ? { description: markUntrustedContent(ms.description) }
+            ? {
+                  description: markUntrustedContent(
+                      ms.description.length > MAX_MILESTONE_RESOURCE_DESC_CHARS
+                          ? `${ms.description.slice(0, MAX_MILESTONE_RESOURCE_DESC_CHARS)}... [truncated]`
+                          : ms.description
+                  ),
+              }
             : {}),
         ...(ms.creator !== undefined && ms.creator !== null
             ? { creator: fenceUntrustedInline(ms.creator) }

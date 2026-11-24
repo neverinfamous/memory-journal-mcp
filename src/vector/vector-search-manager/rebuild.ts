@@ -282,9 +282,10 @@ async function processPageBatchesSequentially(
     entries: JournalEntry[],
     pageExistingVectorIds: ReadonlySet<number> | undefined,
     offset: number,
-    batchOffset: number
-): Promise<void> {
-    if (batchOffset >= entries.length) return
+    batchOffset: number,
+    anyEmbedded = false
+): Promise<boolean> {
+    if (batchOffset >= entries.length) return anyEmbedded
     const batch = entries.slice(batchOffset, batchOffset + ctx.batchSize)
     const didEmbed = await processBatch(
         ctx.manager,
@@ -310,7 +311,8 @@ async function processPageBatchesSequentially(
         entries,
         pageExistingVectorIds,
         offset,
-        batchOffset + ctx.batchSize
+        batchOffset + ctx.batchSize,
+        anyEmbedded || didEmbed
     )
 }
 
@@ -332,7 +334,16 @@ async function runRebuildPagesSequentially(
         ctx.skipExistenceCheck,
         ctx.projectNumber
     )
-    await processPageBatchesSequentially(ctx, entries, pageExistingVectorIds, offset, 0)
+    const pageEmbedded = await processPageBatchesSequentially(
+        ctx,
+        entries,
+        pageExistingVectorIds,
+        offset,
+        0
+    )
+    if (!pageEmbedded) {
+        await new Promise((resolve) => setTimeoutFn(resolve, 0))
+    }
 
     let nextCursor = cursor
     if (ctx.useKeyset) {
