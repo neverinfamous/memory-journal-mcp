@@ -41,13 +41,37 @@ test.describe('Rate Limiting', () => {
     test('should allow high throughput with default rate limit', async ({ baseURL: _baseURL }, testInfo) => {
         const baseUrl = getBaseURL(testInfo)
         const burstCount = 50
-        const promises = Array.from({ length: burstCount }, (_, i) =>
-            postInitialize(baseUrl, i + 1, 'default-test')
-        )
-        const results = await Promise.all(promises)
-        for (const res of results) {
-            expect(res.status).not.toBe(429)
+        const batchSize = 10
+        const sessionIds: string[] = []
+
+        // Send 50 requests in bounded batches of 10 so all 50 land well inside the 60s
+        // rate-limit window without starving the single-threaded accept queue past undici's 10s connect timeout.
+        for (let offset = 0; offset < burstCount; offset += batchSize) {
+            const count = Math.min(batchSize, burstCount - offset)
+            const results = await Promise.all(
+                Array.from({ length: count }, (_, i) =>
+                    postInitialize(baseUrl, offset + i + 1, 'default-test')
+                )
+            )
+            for (const res of results) {
+                expect(res.status).not.toBe(429)
+                const sid = res.headers.get('mcp-session-id')
+                if (sid !== null && sid !== '') {
+                    sessionIds.push(sid)
+                }
+                await res.body?.cancel()
+            }
         }
+
+        // Clean up initialized sessions on the shared worker server
+        await Promise.allSettled(
+            sessionIds.map((sid) =>
+                fetch(`${baseUrl}/mcp`, {
+                    method: 'DELETE',
+                    headers: { 'mcp-session-id': sid },
+                }).then((r) => r.body?.cancel())
+            )
+        )
     })
 
     test.describe('Low rate limit enforcement', () => {
