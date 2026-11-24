@@ -78,13 +78,17 @@ services:
     ports:
       - "3102:3100"
     command: -config.file=/etc/loki/local-config.yaml
+    environment:
+      - GOMEMLIMIT=400MiB
     stop_grace_period: 15s
-    mem_limit: 256m
+    mem_limit: 512m
     logging:
       driver: json-file
       options:
         max-size: "10m"
         max-file: "3"
+    healthcheck:
+      disable: true
 
   alloy:
     image: grafana/alloy:v1.22.0
@@ -109,7 +113,7 @@ services:
       start_period: 10s
 
   datadog-unified:
-    image: gcr.io/datadoghq/agent:7.85.5
+    image: gcr.io/datadoghq/agent:7.86.0
     container_name: mj-datadog-unified
     restart: unless-stopped
     pid: host
